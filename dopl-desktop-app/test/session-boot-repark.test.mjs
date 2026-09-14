@@ -131,6 +131,11 @@ function parkedRecord(over = {}) {
     ownPostSeq: 3,
     model: "opus",
     runtimeId: "claude",
+    // ⚠ PARKED JUST NOW, AND THAT IS LOAD-BEARING SINCE 2026-09-13. `reparkDormant` revives only a
+    // record inside `REPARK_WINDOW_MS`; the incident's own `startedAt` above is a YEAR old, so
+    // without this stamp every "comes back as Idle" case below would be asserting the ENDED lane by
+    // accident. The window cases pass their own `parkedAt`.
+    parkedAt: Date.now(),
     ...over,
   };
 }
@@ -162,7 +167,7 @@ function harness(over = {}) {
     "crypto", "store", "initialSessionState", "floorWindowlessMessage", "sessionModel",
     "sessionPark", "toolProfiles", "sessionSummary", "agentHistory", "sessionEffects",
     "runtimeRegistry", "runtimeCapability", "diag",
-    `${BOOT_BLOCK}\n return { bind, parkedSessionFromRecord, endInterrupted, reparkDormant };`
+    `${BOOT_BLOCK}\n return { bind, parkedSessionFromRecord, endInterrupted, reparkDormant, withinReparkWindow, REPARK_WINDOW_MS };`
   )(crypto, store, initialSessionState, PROFILES.floorWindowlessMessage, sessionModel,
     parkReaders, TOOL_PROFILES, sessionSummary, agentHistory, EFFECTS,
     RUNTIME, RUNTIME.capability, diag);
@@ -316,7 +321,10 @@ test("a parked record with NO sdk id is ENDED with a history entry, not dropped"
   assert.equal(hist.channelName, "Dopl");
   assert.ok(Number(hist.endedAt) > 0);
   assert.deepEqual(hist.entries, [], "the narration ring lived on a session object this process never had");
-  assert.ok(typeof hist.diag === "string" && hist.diag.length > 0, "the card says WHY it is Ended");
+  // ⚠ NO REASON LINE (2026-09-13, Samuel: "We don't need that line to be there … We can just put
+  // 'ended.'"). The card's own `AgentEndedPill` is the word; a `diag` here renders a red duplicate
+  // of it, and the sentence it used to carry is the one he asked to delete.
+  assert.equal(hist.diag, null, "the Ended card says 'Ended' and nothing else");
   assert.equal(h.calls.touch, 1, "the ended half needs the projection refreshed too");
 });
 
@@ -375,7 +383,7 @@ test("pruneRecords' REAL policy keeps a re-parked key, even one older than the T
   // ⚠ ANCIENT ON PURPOSE. `init()` runs the re-park BEFORE the prune, and the prune's `keep` is
   // the live registry's key set — so an agent parked longer than RECORD_TTL_MS must be protected
   // by having been re-parked, not by luck of its timestamp.
-  const rec = parkedRecord({ startedAt: 1 });
+  const rec = parkedRecord({ startedAt: 1 }); // ancient START, parked just now — the window reads the PARK
   const h = harness({ records: { [KEY]: rec }, ids: { [KEY]: "sdk-y1uun32v" } });
   h.boot.reparkDormant();
 
@@ -392,4 +400,94 @@ test("pruneRecords' REAL policy keeps a re-parked key, even one older than the T
     now: Date.now(), keep: new Set(), hasSdkId: () => false,
   });
   assert.deepEqual(drop2, [KEY]);
+});
+
+// ── 5. THE RECENCY WINDOW, AND THE ONE WORD (the 2026-09-13 REGRESSION) ──────────────────────
+//
+// MEASURED minutes after F-694's fix shipped: 66 records sat at `phase: 'parked'` (63 older than a
+// week, the oldest 46 days) because the F-694 bug ITSELF had left restart-killed agents in that
+// phase forever — so the first pass to read the phase honestly revived the whole backlog as Idle
+// pills. "a bunch of the agents that were ended are now marked as idle … that's kind of a serious
+// issue." ⚠ THESE CASES ARE WRITTEN AGAINST THE SHIPPED CONSTANT, in fractions of it, so widening
+// the window in production cannot leave a test agreeing with a number nobody ships.
+
+test("a record parked INSIDE the window comes back Idle; one parked OUTSIDE it is ENDED", () => {
+  const W = harness().boot.REPARK_WINDOW_MS;
+  assert.equal(W, 24 * 60 * 60 * 1000, "the window moved — decide deliberately, then fix this line");
+  const freshKey = `${CHANNEL}::fresh111`;
+  const staleKey = `${CHANNEL}::stale222`;
+  const records = {
+    [freshKey]: parkedRecord({ key: freshKey, agentId: "fresh111", parkedAt: Date.now() - W * (23 / 24) }),
+    [staleKey]: parkedRecord({ key: staleKey, agentId: "stale222", parkedAt: Date.now() - W * (25 / 24) }),
+  };
+  const h = harness({ records, ids: { [freshKey]: "sdk-fresh", [staleKey]: "sdk-stale" } });
+
+  assert.deepEqual(h.boot.reparkDormant(), { reparked: 1, ended: 1 });
+  assert.ok(h.sessions.has(freshKey), "23h parked: the operator is still coming back to this one");
+  assert.equal(h.sessions.has(staleKey), false, "25h parked: reviving it IS the regression");
+  // ⚠ AND THE STALE ONE ENDS — QUIETLY (2026-09-13 evening): the window NARROWS the
+  // revive lane, it does not add a third state. The phase flips and the card-making
+  // history entry is written, but NO channel post is made for a record parked
+  // weeks ago (65 of them across 12 channels on the first boot after the window).
+  assert.deepEqual(h.calls.phase, [[staleKey, "ended"]]);
+  assert.equal(h.calls.lifecycle.length, 0, "a stale end tells no channel anything");
+  assert.deepEqual(h.calls.history.map((r) => r.key), [staleKey]);
+});
+
+test("the window reads the MOST RECENT stamp, and startedAt is the FLOOR the 66 records were judged on", () => {
+  const W = harness().boot.REPARK_WINDOW_MS;
+  // A 46-day-old agent parked this morning is one he is still using.
+  const old = harness({ records: { [KEY]: parkedRecord({ startedAt: 1, parkedAt: Date.now() - W / 2 }) }, ids: { [KEY]: "sdk-y1uun32v" } });
+  assert.deepEqual(old.boot.reparkDormant(), { reparked: 1, ended: 0 });
+
+  // ⚠ NO `parkedAt` AT ALL — the shape of every record written before the field existed, which is
+  // all 66 measured. `startedAt` is then the only honest lower bound: an agent that STARTED inside
+  // the window cannot have been parked before it.
+  const recentKey = `${CHANNEL}::recent33`;
+  const ancientKey = `${CHANNEL}::ancient4`;
+  const h = harness({
+    records: {
+      [recentKey]: parkedRecord({ key: recentKey, agentId: "recent33", parkedAt: undefined, startedAt: Date.now() - W / 4 }),
+      [ancientKey]: parkedRecord({ key: ancientKey, agentId: "ancient4", parkedAt: undefined, startedAt: Date.now() - W * 46 }),
+    },
+    ids: { [recentKey]: "sdk-r", [ancientKey]: "sdk-a" },
+  });
+  assert.deepEqual(h.boot.reparkDormant(), { reparked: 1, ended: 1 });
+  assert.ok(h.sessions.has(recentKey));
+  assert.equal(h.sessions.has(ancientKey), false);
+});
+
+test("a record with NO usable stamp is OLD, never unknown-means-recent", () => {
+  const h0 = harness();
+  for (const over of [{ startedAt: 0 }, { startedAt: null }, { startedAt: "" }, { startedAt: NaN }, { startedAt: -1 }]) {
+    assert.equal(h0.boot.withinReparkWindow({ ...parkedRecord({ parkedAt: undefined }), ...over }, Date.now()), false, JSON.stringify(over));
+  }
+  const h = harness({ records: { [KEY]: parkedRecord({ parkedAt: undefined, startedAt: 0 }) }, ids: { [KEY]: "sdk-y1uun32v" } });
+  assert.deepEqual(h.boot.reparkDormant(), { reparked: 0, ended: 1 }, "and it ENDS, so it is still not invisible");
+  assert.equal(h.calls.history.length, 1);
+});
+
+test("ENDED IS THE WHOLE SENTENCE, on every surface a person reads", () => {
+  // 1. THE CHANNEL POST / the shared calm terminal one-liner.
+  assert.equal(EFFECTS.terminalBody({ interrupted: true }), "Ended", "Samuel 2026-09-13: \"We can just put 'ended.'\"");
+  assert.equal(EFFECTS.TERMINAL_BODIES.interrupted, "Ended");
+
+  // 2. THE HISTORY ENTRY -> the Agents-tab card, where `agents-tab-cards.tsx` renders `agent.diag`
+  // as a RED line under a pill that already says Ended. So the reason field is empty on this route.
+  const h = harness({ records: { [KEY]: parkedRecord({ parkedAt: Date.now() - harness().boot.REPARK_WINDOW_MS * 2 }) }, ids: { [KEY]: "sdk-y1uun32v" } });
+  h.boot.reparkDormant();
+  assert.equal(h.calls.history[0].diag, null);
+  assert.equal(h.calls.lifecycle[0].body, "Ended");
+
+  // 3. AND THE DELETED SENTENCE IS GONE FROM THE SOURCE, not merely unreachable — it was reachable
+  // through TWO reasons (no sdk id, and a runtime refusal), so pinning one call site would have let
+  // the other keep saying it. It may survive as PROSE in a comment: that is the record of a ruling.
+  const codeLines = BOOT_SRC.split("\n").filter((l) => {
+    const t = l.trim();
+    return t.length > 0 && !t.startsWith("//") && !t.startsWith("*") && !t.startsWith("/*");
+  });
+  assert.deepEqual(codeLines.filter((l) => l.includes("nothing to resume")), [], "never on a line this module executes");
+
+  // 4. THE ENGINEER'S LANE IS UNTOUCHED: the reason still reaches the diag log, which is not copy.
+  assert.ok(h.calls.diag.some((l) => l.includes("ended dormant agent") && l.includes("re-park window")), "a log still tells the end reasons apart");
 });

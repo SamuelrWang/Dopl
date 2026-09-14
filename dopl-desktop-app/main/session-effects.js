@@ -110,7 +110,13 @@ const INACTIVE_NOTE = 'This session went inactive.';
 // carries its reason", and it must already be true on the day a terminal kind posts again. A body
 // added later, under pressure, is how the generic failure came back the first time.
 const TERMINAL_BODIES = {
-  interrupted: 'Interrupted',
+  // ⚠ 'Interrupted' UNTIL 2026-09-13, WHEN SAMUEL TOOK THE EXPLANATION AWAY: "We don't need that
+  // line to be there … We can just put 'ended.' We don't need to give a reason why." The word is now
+  // the SAME word the Agents-tab pill uses (`agent-bits.tsx › AgentEndedPill`), which is the point
+  // — one ending, one word, wherever a person reads it. The FLAG is untouched: `{ interrupted: true }`
+  // still rides the metadata, and the web's own receipt chip still reads it (`lib/message-receipt.ts
+  // › RECEIPT_LABEL.interrupted`, a peer-side vocabulary that is reserved server-side, INVARIANTS §5).
+  interrupted: 'Ended',
   capped: 'Limit reached',
   declined: 'Request declined',
   dropped: 'Reply was not sent',

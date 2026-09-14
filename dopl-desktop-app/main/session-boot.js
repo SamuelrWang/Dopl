@@ -34,7 +34,9 @@
 //              re-projects its `channel_sessions` row, and the next addressed message wakes it
 //              through the EXISTING lazy path (`session-gate.js › feedInbound` → the reducer's
 //              `resumeQuery` → `resumeParked`). No query starts here and no runtime is acquired.
-//   ENDED      anything else takes the INTERRUPTED-END route — `setRecordPhase('ended')`, the
+//   ENDED      anything else — INCLUDING a record last parked longer ago than `REPARK_WINDOW_MS`
+//              (24h; the 2026-09-13 regression, see that constant's own section) — takes the
+//              INTERRUPTED-END route — `setRecordPhase('ended')`, the
 //              `task_failed {interrupted}` lifecycle, and an `agent-history.js` entry, which is
 //              what makes an **Ended** card exist at all (`session-summary.js` reads its ended
 //              set from that file). An agent the operator can see and read is the floor.
@@ -84,6 +86,55 @@ let deps = null;
  */
 function bind(d) {
   deps = d || null;
+}
+
+// ── ⚠ THE RECENCY WINDOW (2026-09-13, Samuel — THE REGRESSION F-694's FIX SHIPPED WITH) ───────
+//
+// THE MEASUREMENT, minutes after the fix went live: "a bunch of the agents that were ended are now
+// marked as idle and I'm really confused why that happened … that's kind of a serious issue."
+// `~/Library/Application Support/dopl-desktop/config.json › sessionRecords` held **66** records at
+// `phase: 'parked'` — 63 of them older than SEVEN DAYS, the oldest 46 days — and `reparkDormant`
+// revived EVERY one of them as an Idle pill.
+//
+// ⚠ WHY THE STORE WAS FULL OF THEM, which is the part that makes this a regression and not a new
+// bug: BEFORE the fix, a parked agent killed by a restart was left in `phase: 'parked'` FOREVER —
+// neither ended nor live (that IS F-694). So the store accumulated months of records for agents
+// Samuel ended in his head the day they stopped, and the first pass that read that phase honestly
+// resurrected the whole backlog. `store.pruneRecords` never swept them either: `protectedRecord`
+// retains any key with an sdk id in the resume map, which is every one of these.
+//
+// ⚠ THE WINDOW IS ABOUT THE OPERATOR, NOT ABOUT RESUMABILITY. Every one of those 66 is technically
+// resumable — the conversation handle is right there. The question this pass actually has to answer
+// is whether a person would recognise the pill: an agent parked this morning is one he is coming
+// back to, and one parked six weeks ago is one he considers over. 24h is that line, and a dormant
+// record outside it is not silently dropped — it takes the SAME interrupted-end route (Ended card +
+// history entry), because "two outcomes and never a third" is the rule the window narrows, not an
+// exception to it.
+const REPARK_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * WHEN THIS RECORD WAS LAST TOUCHED, or null when nothing on it says.
+ * ⚠ MOST RECENT OF THE THREE, not the first one found: `parkedAt` (written at both park writes,
+ * `session-store.js › stampParked`) is the true answer, `lastActivityAt` is honoured for any record
+ * shape that grows one, and `startedAt` is the FLOOR — it is the only stamp the 66 measured records
+ * carry, and for a record written before `parkedAt` existed it is the one honest lower bound on
+ * freshness available (an agent that STARTED within the window cannot have been parked before it).
+ * ⚠ null IS OLD at the caller, never unknown-means-recent.
+ */
+function recordFreshness(rec) {
+  let best = 0;
+  for (const field of ['parkedAt', 'lastActivityAt', 'startedAt']) {
+    const n = Number(rec && rec[field]);
+    if (Number.isFinite(n) && n > best) best = n;
+  }
+  return best > 0 ? best : null;
+}
+
+/** Is this dormant record one the operator could still have in mind? A missing stamp is OLD. */
+function withinReparkWindow(rec, now) {
+  const at = recordFreshness(rec);
+  if (at === null) return false;
+  return now - at <= REPARK_WINDOW_MS;
 }
 
 /**
@@ -196,9 +247,16 @@ function parkedSessionFromRecord(key, rec, sdkId) {
  * with no tombstone — the F-694 symptom by a shorter path. `entries: []` is the honest ring: the
  * narration lived on a session object this process never had.
  */
-function endInterrupted(key, rec, why) {
+// `opts.quiet` (2026-09-13 evening): a record parked OUTSIDE the re-park window
+// ends with its phase flip and its history entry but NO channel post — on the
+// first boot after F-694's window landed there were 65 such records across 12
+// channels, and telling every peer that agents parked weeks ago "Ended" would be
+// a second burst of noise about nothing that happened today. The card still
+// reads Ended; the history still says when it started.
+function endInterrupted(key, rec, why, opts) {
+  const quiet = !!(opts && opts.quiet);
   store.setRecordPhase(key, 'ended');
-  deps.runLifecycle(
+  if (!quiet) deps.runLifecycle(
     { channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId, side: rec.side, sessionId: rec.sessionId, key: key, sdkSessionId: store.getSdkSessionId(key) },
     'task_failed',
     { interrupted: true },
@@ -216,9 +274,18 @@ function endInterrupted(key, rec, why) {
     templateName: rec.templateName, // frozen like the rest of the identity (F-288)
     startedAt: rec.startedAt,
     endedAt: Date.now(),
-    // ⚠ WHY IT STOPPED, IN THE OPERATOR'S OWN SURFACE (F-692's field). A card that says only
-    // "Ended" for an agent that vanished over a restart is the question this wave was filed about.
-    diag: why,
+    // 🔒 `diag: why` STOOD HERE AND IS DELETED (2026-09-13, Samuel's ruling). The card rendered the
+    // reason as a red line under a pill that already reads **Ended** — "the app restarted before
+    // this agent started a conversation, so there was nothing to resume" — and the ruling is:
+    // "We don't need that line to be there … We can just put 'ended.' We don't need to give a
+    // reason why." `agent-bits.tsx › AgentEndedPill` is that word, so the card needs nothing here.
+    // ⚠ THE FIELD ITSELF IS UNTOUCHED AND SO IS F-692: `mcp-connect-guard.js` and the live ends
+    // still write a `diag`, because THEY say something a person cannot otherwise know (an MCP server
+    // that never connected). A restart is not that — the operator did it.
+    // ⚠ AND `why` IS STILL CARRIED, to the DIAG LOG below and nowhere else. It is how an engineer
+    // tells the three end reasons apart in a log; it is not copy. The machine-readable half is the
+    // `{ interrupted: true }` extra above, which every renderer keys the calm terminal off.
+    diag: null,
     entries: [],
   });
   diag('session-boot: ended dormant agent —', why, '| agent', String(rec.agentId || ''), 'channel', String(rec.channelId || '').slice(0, 8), 'thread', String(rec.taskId || '').slice(0, 8));
@@ -244,14 +311,26 @@ function reparkDormant() {
     // start, but a launch racing it (a deep link, a queued directive) would already own this
     // slot, and replacing the Map entry orphans a live query.
     if (deps.sessions.has(key)) continue;
+    // ⚠ THE RECENCY WINDOW, BEFORE ANY RESUMABILITY QUESTION (see its own section above). A
+    // record outside it is not resurrected however resumable it looks — it ENDS, visibly, like
+    // every other dormant record this pass cannot revive.
+    if (!withinReparkWindow(rec, Date.now())) {
+      endInterrupted(key, rec, 'this agent was parked longer ago than the re-park window, so the app ended it instead of reviving it', { quiet: true });
+      ended += 1;
+      continue;
+    }
     const sdkId = store.getSdkSessionId(key);
     // ⚠ NO SDK ID IS THE ORDINARY CASE, NOT A CORRUPTION: a SPAWN-IDLE agent ("New Agent") never
     // started a query, so nothing ever reported a conversation id for it — and the record carries
     // neither its launch goal nor its template body, so there is nothing to rebuild it from
-    // either. An Ended card with a reason is the honest answer; a silent disappearance is not.
+    // either. An Ended card is the honest answer; a silent disappearance is not.
+    // ⚠ THE REASON STRINGS BELOW ARE ENGINEER TEXT AND REACH ONLY THE DIAG LOG (2026-09-13,
+    // Samuel: "We don't need that line to be there … We can just put 'ended.'"). The one that used
+    // to stand here — "the app restarted before this agent started a conversation, so there was
+    // nothing to resume" — was rendered on the card, which is the line he deleted.
     const refusal = sdkId
       ? runtimeCapability.resumeRefusal(runtimeRegistry.descriptorFor(rec.runtimeId))
-      : 'the app restarted before this agent started a conversation, so there was nothing to resume';
+      : 'no conversation id in the resume map: this agent never started a query'; // LOG ONLY — see endInterrupted
     if (refusal) { endInterrupted(key, rec, refusal); ended += 1; continue; }
     const s = parkedSessionFromRecord(key, rec, sdkId);
     deps.sessions.set(key, s);
@@ -278,4 +357,6 @@ module.exports = {
   parkedSessionFromRecord, // exported for the suite; production reaches it through reparkDormant
   endInterrupted,
   reparkDormant,
+  REPARK_WINDOW_MS, // the suite pins the boundary against the SHIPPED number, not a copy of it
+  withinReparkWindow,
 };

@@ -132,6 +132,17 @@ function durableSessionRecord(rec) {
     mode: r.mode,
     phase: r.phase,
     startedAt: r.startedAt,
+    // ⚠ WHEN THIS RECORD WAS LAST PARKED (2026-09-13, F-694's REGRESSION). `startedAt` is the
+    // only other clock on a durable record and it answers a different question — a record can be
+    // 46 days old and have been parked five minutes ago. `session-boot.js › reparkDormant` needs
+    // the LATTER to decide whether an agent is one the operator still has in mind, so the stamp is
+    // whitelisted here and written by `saveRecord` / `setRecordPhase` below (both of which is why
+    // it is a PASSTHROUGH here: this function is in the PURE block and must stay deterministic).
+    // ⚠ NULL IS **OLD**, NOT UNKNOWN-MEANS-RECENT. Every record written before this field existed
+    // carries no stamp, and treating those as fresh is exactly the revival this field exists to
+    // stop (INVARIANTS §11 — a stale-cache field falls back to its EMPTY meaning, never a
+    // flattering one).
+    parkedAt: Number(r.parkedAt) > 0 ? Number(r.parkedAt) : null,
     // FIX L1: the task's OTHER party (responder -> the requester who addressed me;
     // requester -> the target I addressed). Persisted so a resumed session stays
     // counterparty-bound and only feeds on that member's replies.
@@ -323,8 +334,18 @@ function loadRecords() {
   return store.get(RECORDS_KEY) || {};
 }
 
+// ⚠ THE PARK STAMP IS WRITTEN HERE AND IN `setRecordPhase`, i.e. AT BOTH WRITES THAT CAN LEAVE A
+// RECORD PARKED (`session-engine.js`'s `persist` effect takes the first on a park — FIX #9 — and
+// `session-auth.js`'s sign-out park takes the second). Stamping it in the two CHOKEPOINTS rather
+// than in `session-park.js` is what makes it impossible to add a third park path that forgets it,
+// and `Date.now()` may not live in `durableSessionRecord` anyway (the PURE block).
+function stampParked(record) {
+  if (record.phase === 'parked') record.parkedAt = Date.now();
+  return record;
+}
+
 function saveRecord(rec) {
-  const record = durableSessionRecord(rec);
+  const record = stampParked(durableSessionRecord(rec));
   if (!record.key) return;
   const all = loadRecords();
   all[record.key] = record;
@@ -335,6 +356,7 @@ function setRecordPhase(key, phase) {
   const all = loadRecords();
   if (!all[key]) return;
   all[key].phase = phase;
+  if (phase === 'parked') all[key].parkedAt = Date.now(); // see stampParked: both park writes stamp
   store.set(RECORDS_KEY, all);
 }
 

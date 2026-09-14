@@ -8804,6 +8804,43 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   plus an `agent-history.js` entry, which is what makes an Ended card exist. Rule and consequences:
   INVARIANTS §11. Pinned by `dopl-desktop-app/test/session-boot-repark.test.mjs` (the F-694 bug
   itself and the dropped history entry are both mutation-verified).
+- ⚠ **THE REGRESSION THE FIX ABOVE SHIPPED WITH, AND THE WINDOW THAT CLOSES IT (same day, hours
+  later).** Samuel, minutes after the build went live: "a bunch of the agents that were ended are
+  now marked as idle and I'm really confused why that happened … that's kind of a serious issue."
+  **MEASURED** in `~/Library/Application Support/dopl-desktop/config.json › sessionRecords`: 95
+  records, **66 at `phase: 'parked'`** — 63 older than SEVEN DAYS, two 3-7 days old, exactly ONE
+  parked within 24h (5.2h) — and `reparkDormant` revived all 66 as Idle pills. ⚠ **THE BACKLOG IS
+  F-694 ITSELF.** Before the fix a parked agent killed by a restart stayed at `'parked'` forever
+  (neither ended nor live — that is the bug), so the store had been accumulating months of records
+  for agents Samuel ended in his head the day they stopped; the first pass to read that phase
+  honestly resurrected the whole pile. `pruneRecords` never swept them: `protectedRecord` retains
+  any key with an sdk id in the resume map, which is every one of these. **THE FIX:**
+  `session-boot.js › REPARK_WINDOW_MS` (24h) over `› recordFreshness` — the most recent of
+  `parkedAt` / `lastActivityAt` / `startedAt`, with **no usable stamp treated as OLD** — and a
+  record outside the window takes the SAME interrupted-end route (Ended card + history entry), so
+  the window NARROWS the revive lane rather than adding a third state. `parkedAt` is new and is
+  stamped at BOTH park writes (`session-store.js › stampParked` for the full-record park,
+  `setRecordPhase` for `session-auth.js`'s sign-out park); it is whitelisted in
+  `durableSessionRecord` as a passthrough because that function is in the PURE block and may not
+  read a clock. ⚠ **WHY `startedAt` IS A FLOOR RATHER THAN IGNORED:** none of the 66 measured
+  records carry ANY stamp but `startedAt`, and an agent that STARTED inside the window cannot have
+  been parked before it — so on this store the window ends 65 and revives 1, which is the answer
+  Samuel expected. Pinned by the boundary cases (23h re-parked / 25h ended, ancient-start +
+  fresh-park, no-stamp-is-old) in `test/session-boot-repark.test.mjs` and the stamp cases in
+  `test/session-store.test.mjs`; four mutations verified.
+- ⚠ **AND THE SECOND HALF OF THE SAME RULING: AN INTERRUPTED END SAYS ONLY "Ended".** On an
+  interrupted-ended card Samuel read "the app restarted before this agent started a conversation, so
+  there was nothing to resume" and ruled: "We don't need that line to be there … We can just put
+  'ended.' We don't need to give a reason why." The sentence was `endInterrupted`'s `why`, stored as
+  the history entry's `diag` and rendered by `agents-tab-cards.tsx` as a **red line directly under a
+  pill that already reads Ended** (`agent-bits.tsx › AgentEndedPill`). So: `diag: null` on this
+  route, and `session-effects.js › TERMINAL_BODIES.interrupted` moves from `'Interrupted'` to
+  `'Ended'` — the channel post and the pill now say one word, the same word. ⚠ **THE FLAG AND F-692
+  ARE UNTOUCHED:** `{ interrupted: true }` still rides the metadata (the web's own receipt chip
+  reads it — `lib/message-receipt.ts › RECEIPT_LABEL.interrupted`, a peer-side vocabulary reserved
+  server-side, INVARIANTS §5, deliberately NOT reworded here), and a real failure such as
+  `mcp-connect-guard.js` still writes a `diag`, because that one says something the operator cannot
+  otherwise know. The end reasons survive as ENGINEER text in the boot `diag` log only.
 - ⚠ **WHAT THIS FINDING DOES NOT CLAIM.** The narration ring for such a session is genuinely gone
   and no fix can recover it — `agent-history.js`'s header already states that a hard kill loses the
   ring for anything that never reached `settle`. The boot pass restores the agent, its identity,

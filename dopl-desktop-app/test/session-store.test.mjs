@@ -11,6 +11,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { fnOf } from "./helpers/source-probe.mjs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -154,11 +155,24 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     // 80 would have resumed capped at 24. Nothing bounds turns now, so persisting the bound would
     // be persisting a number with no reader — and this list is exactly where such a field goes
     // unnoticed. Its ABSENCE is pinned here rather than merely untested.
+    // "parkedAt" (2026-09-13) is the SIXTH of the family and the argument is a REGRESSION that
+    // shipped: `session-boot.js › reparkDormant` revives a dormant record only if it was parked
+    // inside `REPARK_WINDOW_MS`, and without this field the only clock on the record is
+    // `startedAt` — which answers a different question, so a 46-day-old agent parked this morning
+    // would be ended and a months-dead one whose start happened to be recent would be revived.
     "agentId", "bind", "channelId", "channelName", "costUsd", "counterpartyId",
-    "counterpartyName", "direct", "key", "mode", "model", "ownPostSeq", "phase", "profile",
-    "runtimeId", "sdkSessionId", "sessionId", "side", "startedAt", "taskId", "taskTitle",
-    "templateName", "turns", "workspaceId",
+    "counterpartyName", "direct", "key", "mode", "model", "ownPostSeq", "parkedAt", "phase",
+    "profile", "runtimeId", "sdkSessionId", "sessionId", "side", "startedAt", "taskId",
+    "taskTitle", "templateName", "turns", "workspaceId",
   ]);
+  // ⚠ A PASSTHROUGH, AND **NULL IS OLD** — `durableSessionRecord` is in the PURE block and may not
+  // read a clock; `saveRecord` / `setRecordPhase` stamp it at the two park writes.
+  assert.equal(rec.parkedAt, null, "a RUNNING record was never parked, so it carries no park stamp");
+  assert.equal(durableSessionRecord({ parkedAt: 1757900000000 }).parkedAt, 1757900000000);
+  for (const junk of [undefined, null, 0, -1, "x", NaN, {}]) {
+    assert.equal(durableSessionRecord({ parkedAt: junk }).parkedAt, null,
+      `a park stamp of ${JSON.stringify(junk)} must read as UNSTAMPED, which reparkDormant treats as OLD`);
+  }
   assert.equal("turnCap" in durableSessionRecord({ turnCap: 200 }), false,
     "a record written by an OLDER build carries a cap; the whitelist must drop it, not carry it");
   assert.equal(rec.ownPostSeq, 11);
@@ -260,4 +274,62 @@ test("durableSessionRecord defaults sdkSessionId->null and taskId->'' for a task
   const rec = durableSessionRecord({ key: "c1:", channelId: "c1", phase: "launching" });
   assert.equal(rec.sdkSessionId, null);
   assert.equal(rec.taskId, "");
+});
+
+// ── THE PARK STAMP (2026-09-13, F-694's REGRESSION) ──────────────────────────
+//
+// `session-boot.js › reparkDormant` revives a dormant record ONLY if it was parked inside
+// `REPARK_WINDOW_MS`, so the window is only as true as this write. The two functions that make it
+// are IMPURE (they hold the electron-store handle), so they are source-extracted and driven against
+// a fake store — the `main-audit-record-prune.test.mjs` idiom, one layer out.
+//
+// ⚠ WHY BOTH WRITES ARE COVERED RATHER THAN "the park path". There are TWO ways a record ends up
+// parked on disk — `session-engine.js`'s `persist` effect saves the FULL record (FIX #9) and
+// `session-auth.js`'s sign-out park flips the phase alone — and a stamp on one of them leaves the
+// other's agents looking dormant-since-`startedAt`, i.e. silently unrevivable.
+const storeWrites = (() => {
+  const fake = { data: {} };
+  const api = new Function(
+    "store", "RECORDS_KEY", "durableSessionRecord",
+    `${fnOf(SRC, "stampParked")}\n${fnOf(SRC, "loadRecords")}\n${fnOf(SRC, "saveRecord")}\n${fnOf(SRC, "setRecordPhase")}\n` +
+      ` return { saveRecord, setRecordPhase, stampParked };`
+  )(
+    { get: (k) => fake.data[k], set: (k, v) => { fake.data[k] = v; } },
+    "sessionRecords",
+    durableSessionRecord
+  );
+  return { ...api, fake };
+})();
+
+test("saveRecord stamps parkedAt when the phase it persists is 'parked' — and only then", () => {
+  const { saveRecord, fake } = storeWrites;
+  fake.data = {};
+  const base = { key: "c1:t1:a1", channelId: "c1", taskId: "t1", workspaceId: "w1", startedAt: 1 };
+
+  const before = Date.now();
+  saveRecord({ ...base, phase: "parked" });
+  const stamped = fake.data.sessionRecords["c1:t1:a1"].parkedAt;
+  assert.ok(stamped >= before && stamped <= Date.now(), `parkedAt must be the park's own clock, got ${stamped}`);
+
+  // ⚠ A RUNNING SAVE MUST NOT STAMP. `session-io.js` re-saves a LIVE record, and a stamp there
+  // would make "when was this parked" mean "when was it last touched" — the window would then keep
+  // reviving an agent that was busy yesterday and parked six weeks ago.
+  saveRecord({ ...base, key: "c1:t1:a2", phase: "running" });
+  assert.equal(fake.data.sessionRecords["c1:t1:a2"].parkedAt, null);
+});
+
+test("setRecordPhase stamps parkedAt on a park, and leaves it alone on every other flip", () => {
+  const { setRecordPhase, fake } = storeWrites;
+  fake.data = { sessionRecords: { k1: { key: "k1", phase: "running", startedAt: 1, parkedAt: null } } };
+
+  setRecordPhase("k1", "parked"); // session-auth.js's sign-out park
+  const at = fake.data.sessionRecords.k1.parkedAt;
+  assert.ok(at > 0, "the sign-out park is a park");
+
+  setRecordPhase("k1", "ended"); // the interrupted-end route, later
+  assert.equal(fake.data.sessionRecords.k1.phase, "ended");
+  assert.equal(fake.data.sessionRecords.k1.parkedAt, at, "ending a record must not restamp when it was parked");
+
+  setRecordPhase("missing", "parked"); // an unknown key is a no-op, not a new row
+  assert.equal("missing" in fake.data.sessionRecords, false);
 });
