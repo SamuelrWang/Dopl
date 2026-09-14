@@ -173,6 +173,12 @@ describe("the chrome's controls are feature-detected", () => {
     expect(page).toContain("canLaunchAgents");
     // ⚠ NOT the tab ops: the "+" spawns an agent, it does not close or list tabs, and gating it on
     // `canHostAgentTabs()` would be a second answer to a different question.
-    expect(page).not.toContain("canHostAgentTabs");
+    // ⚠ **NARROWED FROM `not.toContain("canHostAgentTabs")` ON 2026-09-14**, and the reason is
+    // that the file-wide form was asserting something this case is not about: the × on each tab
+    // IS gated on `canHostAgentTabs()` now (`agent-window-chrome.tsx` draws no × without an
+    // `onCloseTab`, and `closeOwnTab` answers `{ ok: false }` on a main without the ops — a
+    // control that looked live and did nothing). What must stay true is that the "+" is gated on
+    // the LAUNCH op and on nothing else, which is what this line now says.
+    expect(page).not.toMatch(/onNewAgent=\{canHostAgentTabs/);
   });
 });

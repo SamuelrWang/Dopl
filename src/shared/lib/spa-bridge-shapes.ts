@@ -225,6 +225,25 @@ export interface DesktopSessionSummary {
    */
   endedAt?: number | null;
   channelName: string | null;
+  /**
+   * **WHICH WORKSPACE THIS SESSION'S CHANNEL BELONGS TO** (2026-09-14).
+   *
+   * ⚠ **THE DEFECT IT CLOSES IS A ROUTE BUILT OUT OF THE WRONG HALF.** The agent window's rail
+   * lists RUNNING agents across every channel on this machine, and a click asks main to open
+   * that agent's tab — but the route is `#/w/<segment>/…` and the only segment the window had
+   * was its OWN. A rail row for an agent in another workspace therefore routed into the
+   * CURRENT workspace's segment: the page loads, the channel is not there, and the operator
+   * gets a not-found for an agent that is running.
+   *
+   * ⚠ **`null` IS "THIS MAIN DOES NOT REPORT IT", AND EVERY READER MUST TREAT IT AS UNKNOWN
+   * RATHER THAN AS "MINE"** (INVARIANTS §11). A caller resolving a segment falls back to its
+   * own window's only when the two are known-equal; guessing the current one on an absence is
+   * the bug restated.
+   * ⚠ **AN ID, NEVER A SEGMENT.** The slug is a workspace's display-ish name and it can be
+   * renamed; the id is what the roster read (`GET /api/workspaces`) keys on, and resolving
+   * id → segment is the RENDERER's job with a list it already has.
+   */
+  workspaceId?: string | null;
   threadTitle: string | null;
   /**
    * The AGENT TEMPLATE this session was launched as, by NAME (2026-08-22).

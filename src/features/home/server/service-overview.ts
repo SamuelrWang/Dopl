@@ -78,7 +78,7 @@ import { HOME_CHANNEL_LIMIT } from "./service-reads";
  */
 
 /** Bars in a `24h` series — one per hour, ending on the current hour. */
-export const HOURS_IN_DAY = 24;
+const HOURS_IN_DAY = 24;
 
 /** How many live agent sessions the board carries, across all channels. */
 const AGENT_ROWS = 24;
@@ -342,10 +342,11 @@ async function scanUsageHistogramBurns(
  * SUMMED from a ledger PostgREST cannot aggregate, so it hauls the window ONCE
  * and bins in memory, and it says `truncated` when the haul hit its ceiling.
  *
- * ⚠ **AN EMPTY CREDIT LEDGER ANSWERS `points: []`, NOT ZEROED BINS.** The ledger
- * only exists from `20260901120000_credit_usage_events.sql` forward, so a flat
- * month of zeroes would be a measurement nobody took drawn as fact. The empty
- * array is what lets the surface say "nothing yet" instead.
+ * ⚠ **EVERY ARM ZERO-FILLS, THE CREDITS ONE INCLUDED — AND THE SUPERSEDED LINE
+ * HERE SAID THE OPPOSITE.** It read "an empty credit ledger answers `points: []`,
+ * not zeroed bins", on the argument that the ledger only exists from its
+ * migration forward. Samuel overruled it the same day (he wants to SEE the
+ * month); the branch below carries the trade.
  *
  * ⚠ **`opts` CARRIES THE HISTOGRAM'S TWO CONTROLS AND THE CREDITS ARM IS THE
  * ONLY ONE THAT READS THEM (2026-09-13).** `scope` narrows to one channel's
@@ -362,7 +363,8 @@ export async function getHomeOverviewSeries(
   range: HomeOverviewRange,
   metric: HomeOverviewMetric,
   opts: {
-    /** A container id, `"desktop"`, or null for the whole wallet. */
+    /** A CHANNEL id (`HomeChannel.channelId`), `"desktop"`, or null for the
+     *  whole wallet. ⚠ It was a CONTAINER id until rule B (2026-09-13). */
     scope?: string | null;
     /** Any instant inside the month to plot, or null for the current one. */
     monthAnchor?: Date | null;

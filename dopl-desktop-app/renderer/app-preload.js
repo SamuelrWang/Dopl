@@ -63,8 +63,7 @@ ipcRenderer.on(AUTH_STATE_EVENT, (_event, state) => {
 
 // The app's public origin, injected by main (spa-window.js additionalArguments). A constant,
 // not a capability.
-const APP_ORIGIN_ARG = process.argv
-  .find((a) => a.startsWith('--dopl-app-origin='));
+const APP_ORIGIN_ARG = process.argv.find((a) => a.startsWith('--dopl-app-origin='));
 const APP_ORIGIN = APP_ORIGIN_ARG ? APP_ORIGIN_ARG.split('=')[1] : '';
 
 // ⚠ Channel-scoped input coercion — the bridge never forwards raw renderer values. (This said
@@ -81,8 +80,7 @@ contextBridge.exposeInMainWorld('dopl', {
   // -> { status, statusText, hasBody, body? }. ⚠ Never throws for an HTTP status — the
   //    renderer decodes the error envelope (apps/desktop-ui/src/lib/api.ts). Rejects only when
   //    the request never completed or the call was malformed.
-  apiRequest: (path, opts) =>
-    ipcRenderer.invoke('dopl:api-request', asStr(path), asRequestOpts(opts)),
+  apiRequest: (path, opts) => ipcRenderer.invoke('dopl:api-request', asStr(path), asRequestOpts(opts)),
 
   // Main-initiated navigation (notification click -> the channel's page). Path-only payload.
   onNavigate: (callback) => {
@@ -101,8 +99,7 @@ contextBridge.exposeInMainWorld('dopl', {
 
   // ⚠ Main arms the login-CSRF nonce and opens the browser — the renderer never builds the
   // URL.
-  beginSignIn: (provider) =>
-    ipcRenderer.invoke('dopl:begin-sign-in', provider === 'github' ? 'github' : 'google'),
+  beginSignIn: (provider) => ipcRenderer.invoke('dopl:begin-sign-in', provider === 'github' ? 'github' : 'google'),
 
   // Native email/password + magic link — main runs the GoTrue calls (the renderer has no
   // network). ⚠ The password crosses once, into one https request body; never stored or
@@ -139,12 +136,9 @@ contextBridge.exposeInMainWorld('dopl', {
   // and only the three FOLDER ops are label-only.
   // ⚠ Absolute paths never cross this bridge; folder ops return LABELS only.
   channels: {
-    getFolderLabel: (channelId) =>
-      ipcRenderer.invoke('channels:getFolderLabel', asId(channelId)),
-    chooseFolder: (channelId) =>
-      ipcRenderer.invoke('channels:chooseFolder', asId(channelId)),
-    clearFolder: (channelId) =>
-      ipcRenderer.invoke('channels:clearFolder', asId(channelId)),
+    getFolderLabel: (channelId) => ipcRenderer.invoke('channels:getFolderLabel', asId(channelId)),
+    chooseFolder: (channelId) => ipcRenderer.invoke('channels:chooseFolder', asId(channelId)),
+    clearFolder: (channelId) => ipcRenderer.invoke('channels:clearFolder', asId(channelId)),
     // ⚠ `getPermissionPreset` / `setPermissionPreset` STOOD HERE AND ARE DELETED
     // (2026-08-20). They were the single-use consent ARM; its web controls had already
     // stopped rendering (F-233), so the ops armed a record nothing could set.
@@ -293,13 +287,8 @@ contextBridge.exposeInMainWorld('dopl', {
     // the AGENT WINDOW, whose landing is a router path, and main holds the workspace UUID
     // while a route needs the slug. Main re-checks it through `isSafeSegment` and degrades
     // to the other reopen branches when it is absent or unusable.
-    reopen: (channelId, taskId, segment, agentId) =>
-      ipcRenderer.invoke('sessions:reopen', {
-        channelId: asId(channelId),
-        taskId: asId(taskId),
-        segment: asId(segment),
-        agentId: asId(agentId),
-      }),
+    reopen: (channelId, taskId, segment, agentId) => ipcRenderer.invoke('sessions:reopen',
+      { channelId: asId(channelId), taskId: asId(taskId), segment: asId(segment), agentId: asId(agentId) }),
     summaries: () => ipcRenderer.invoke('sessions:summaries'),
     onSummaries: (callback) => {
       if (typeof callback !== 'function') return () => {};
@@ -328,30 +317,18 @@ contextBridge.exposeInMainWorld('dopl', {
     // server-writable approval would let a credential-holding agent pre-approve itself on every
     // machine the operator owns (`main/channel-prefs.js` states the same rule for the
     // orchestrator toggle it lives beside).
-    approveTemplate: (templateId) =>
-      ipcRenderer.invoke('sessions:approveTemplate', { templateId: asId(templateId) }),
+    approveTemplate: (templateId) => ipcRenderer.invoke('sessions:approveTemplate', { templateId: asId(templateId) }),
 
     // ⚠ CALL THIS AFTER A THREAD DELETE SUCCEEDS (2026-08-22). Main cannot see the server's
     // cascade, so without it an ended agent's frozen history outlives its thread by up to
     // seven days and renders a card with a stale title. It deletes LOCAL history only —
     // `channel_messages` are the server's and are never touched.
-    forgetThread: (channelId, taskId) =>
-      ipcRenderer.invoke('agents:forgetThread', {
-        channelId: asId(channelId),
-        taskId: asId(taskId),
-      }),
-    pause: (channelId, taskId, agentId) =>
-      ipcRenderer.invoke('sessions:pause', {
-        channelId: asId(channelId),
-        taskId: asId(taskId),
-        agentId: asId(agentId),
-      }),
-    end: (channelId, taskId, agentId) =>
-      ipcRenderer.invoke('sessions:end', {
-        channelId: asId(channelId),
-        taskId: asId(taskId),
-        agentId: asId(agentId),
-      }),
+    forgetThread: (channelId, taskId) => ipcRenderer.invoke('agents:forgetThread',
+      { channelId: asId(channelId), taskId: asId(taskId) }),
+    pause: (channelId, taskId, agentId) => ipcRenderer.invoke('sessions:pause',
+      { channelId: asId(channelId), taskId: asId(taskId), agentId: asId(agentId) }),
+    end: (channelId, taskId, agentId) => ipcRenderer.invoke('sessions:end',
+      { channelId: asId(channelId), taskId: asId(taskId), agentId: asId(agentId) }),
 
     // ⚠ DELETE THE AGENT (2026-08-25) — `end` plus an ERASE. A live session stops through the
     // SAME reducer event `end` dispatches (one stop path, never two), then every LOCAL trace goes.
@@ -360,12 +337,8 @@ contextBridge.exposeInMainWorld('dopl', {
     // ⚠ `agentId` IS REQUIRED here and optional above — an omitted id resolves to the OLDEST live
     // agent on the thread, which for a DESTRUCTIVE verb is not the card that was clicked.
     // Full argument: `main/session-delete-op.js` and `test/preload-parity.test.mjs`.
-    delete: (channelId, taskId, agentId) =>
-      ipcRenderer.invoke('sessions:delete', {
-        channelId: asId(channelId),
-        taskId: asId(taskId),
-        agentId: asId(agentId),
-      }),
+    delete: (channelId, taskId, agentId) => ipcRenderer.invoke('sessions:delete',
+      { channelId: asId(channelId), taskId: asId(taskId), agentId: asId(agentId) }),
 
     // ── THE AGENT WINDOW (2026-08-20, F-212's closure) ─────────────────────────────
     // `openAgentWindow` ASKS MAIN for a second window on this same bundle, showing ONE of
@@ -373,13 +346,8 @@ contextBridge.exposeInMainWorld('dopl', {
     // creates the window and main registers it in `main/app-windows.js`; the answer is
     // `{ ok }`. That is the whole reason the widened sender binding is safe: a renderer
     // cannot enlarge the set of bound senders, only ask main to.
-    openAgentWindow: (segment, channelId, taskId, agentId) =>
-      ipcRenderer.invoke('sessions:openAgentWindow', {
-        segment: asId(segment),
-        channelId: asId(channelId),
-        taskId: asId(taskId),
-        agentId: asId(agentId),
-      }),
+    openAgentWindow: (segment, channelId, taskId, agentId) => ipcRenderer.invoke('sessions:openAgentWindow',
+      { segment: asId(segment), channelId: asId(channelId), taskId: asId(taskId), agentId: asId(agentId) }),
 
     // THE LIVE PERMISSION POSTURE (2026-08-20) — both axes, on a session already running,
     // applying from the very next gate decision rather than the next launch.
@@ -389,23 +357,14 @@ contextBridge.exposeInMainWorld('dopl', {
     // ASKED, the profile decides what is reachable at all and is checked first. Main
     // re-validates both strings against the frozen enums, and the reducer coerces again
     // fail-closed, so an unknown value lands on the most restrictive member of its axis.
-    setMode: (channelId, taskId, axis, mode, agentId) =>
-      ipcRenderer.invoke('sessions:setMode', {
-        channelId: asId(channelId),
-        taskId: asId(taskId),
-        axis: asMode(axis),
-        mode: asMode(mode),
-        agentId: asId(agentId),
-      }),
+    setMode: (channelId, taskId, axis, mode, agentId) => ipcRenderer.invoke('sessions:setMode',
+      { channelId: asId(channelId), taskId: asId(taskId), axis: asMode(axis), mode: asMode(mode), agentId: asId(agentId) }),
 
     // ⚠ WHAT THE OPERATOR CALLS THIS AGENT (2026-08-25). Display only: nothing resolves an
     // agent by it, and an EMPTY string clears the name rather than storing one. Main answers
     // with its OWN stored value, so a refused name reverts instead of painting.
-    rename: (agentId, name) =>
-      ipcRenderer.invoke('sessions:rename', {
-        agentId: asId(agentId),
-        name: typeof name === 'string' ? name : '',
-      }),
+    rename: (agentId, name) => ipcRenderer.invoke('sessions:rename',
+      { agentId: asId(agentId), name: typeof name === 'string' ? name : '' }),
 
     // ⚠ `rename`'s TWIN (2026-08-27): what the agent is FOR. Same contract; empty clears.
     describe: (agentId, description) => ipcRenderer.invoke('sessions:describe',
@@ -417,13 +376,8 @@ contextBridge.exposeInMainWorld('dopl', {
     // frozen list and converts to the argv-safe ALIAS, so an unknown string CLEARS the override
     // rather than reaching a child process. It moves ONE live session and records the pick; the
     // per-channel record governing the NEXT spawn is `channels.setLaunchPosture`'s `model` field.
-    setModel: (channelId, taskId, model, agentId) =>
-      ipcRenderer.invoke('sessions:setModel', {
-        channelId: asId(channelId),
-        taskId: asId(taskId),
-        model: asMode(model),
-        agentId: asId(agentId),
-      }),
+    setModel: (channelId, taskId, model, agentId) => ipcRenderer.invoke('sessions:setModel',
+      { channelId: asId(channelId), taskId: asId(taskId), model: asMode(model), agentId: asId(agentId) }),
 
     // ⚠ `message` IS THE ONE OP ON THIS BRIDGE THAT STARTS A TURN, and it is the only
     // reason this namespace's failure direction is not simply "an agent that stops".
@@ -434,13 +388,8 @@ contextBridge.exposeInMainWorld('dopl', {
     // composer always dispatched. It cannot grant a tool, widen a posture, reach another
     // machine, or post anything without the outbound gate. Capped here AND in main —
     // this bound is a convenience, main's is the fence.
-    message: (channelId, taskId, text, agentId) =>
-      ipcRenderer.invoke('sessions:message', {
-        channelId: asId(channelId),
-        taskId: asId(taskId),
-        text: String(text == null ? '' : text).slice(0, 4000),
-        agentId: asId(agentId),
-      }),
+    message: (channelId, taskId, text, agentId) => ipcRenderer.invoke('sessions:message',
+      { channelId: asId(channelId), taskId: asId(taskId), text: String(text == null ? '' : text).slice(0, 4000), agentId: asId(agentId) }),
 
     // The work lane: what this agent has been doing (its own text, its tool calls WITH
     // NAMES, their results, what it posted). `narration` is the read for a window's first
@@ -449,12 +398,8 @@ contextBridge.exposeInMainWorld('dopl', {
     // blank until the next event.
     // ⚠ Frames are keyed by `sessionKey`; a window filters to the agent it shows. Main
     // tracks no subscriptions, which is what stops the two sides going out of step.
-    narration: (channelId, taskId, agentId) =>
-      ipcRenderer.invoke('sessions:narration', {
-        channelId: asId(channelId),
-        taskId: asId(taskId),
-        agentId: asId(agentId),
-      }),
+    narration: (channelId, taskId, agentId) => ipcRenderer.invoke('sessions:narration',
+      { channelId: asId(channelId), taskId: asId(taskId), agentId: asId(agentId) }),
     onNarration: (callback) => {
       if (typeof callback !== 'function') return () => {};
       const listener = (_event, payload) => {
@@ -481,19 +426,14 @@ contextBridge.exposeInMainWorld('dopl', {
   // segment and thread id through `deep-link-target.js › isSafeSegment`, the one character
   // rule for a string entering a router path.
   threads: {
-    openWindow: (segment, channelId, threadId) =>
-      ipcRenderer.invoke('threads:openWindow', {
-        segment: asId(segment),
-        channelId: asId(channelId),
-        threadId: asId(threadId),
-      }),
+    openWindow: (segment, channelId, threadId) => ipcRenderer.invoke('threads:openWindow',
+      { segment: asId(segment), channelId: asId(channelId), threadId: asId(threadId) }),
   },
 
   // Live updates: main watches postgres_changes for the viewed workspace's content tables and
   // forwards coalesced change events; the renderer's shared-channel-registry turns them into
   // refetch signals. syncWatch tells main WHICH workspace the UI is on (null = none).
-  syncWatch: (workspaceId) =>
-    ipcRenderer.invoke('dopl:sync-watch', workspaceId == null ? null : String(workspaceId)),
+  syncWatch: (workspaceId) => ipcRenderer.invoke('dopl:sync-watch', workspaceId == null ? null : String(workspaceId)),
   onSyncEvent: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, payload) => {

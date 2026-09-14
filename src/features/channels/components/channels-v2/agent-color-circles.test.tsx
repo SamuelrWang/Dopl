@@ -182,6 +182,25 @@ describe("a colour another agent holds", () => {
     expect(onChange).toHaveBeenCalledWith(THIRD);
   });
 
+  /**
+   * 🔒 **A FULL BANK IS STILL REACHABLE BY KEYBOARD (2026-09-14).** Sixteen live agents in one
+   * room leaves `freeAgentColors` empty and `firstFreeAgentColor` `null`, so the roving
+   * `tabIndex` had NO stop to give: every circle carried `-1` and the row could not be focused
+   * at all — which also means its `title`, the only sentence saying why nothing is selectable,
+   * could never be read without a pointer. The launch is still allowed in that room (a
+   * seventeenth agent runs uncoloured), so the row is not decoration.
+   *
+   * 🔒 MUTATION-PROOF: restore `free[0] ?? null` in `tabStop` and this is the only failure.
+   */
+  it("keeps ONE tab stop when every key in the bank is out", () => {
+    control({ value: null, taken: new Set(AGENT_COLOR_KEYS) });
+    const stops = circles().filter((el) => el.getAttribute("tabindex") === "0");
+    expect(stops).toHaveLength(1);
+    expect(stops[0]!.getAttribute("data-agent-color")).toBe(FIRST);
+    // ⚠ AND IT IS STILL FENCED: reachable is not selectable.
+    expect(stops[0]!.getAttribute("aria-disabled")).toBe("true");
+  });
+
   it("wraps backwards onto the last free key rather than sticking", () => {
     const onChange = control({ value: FIRST, taken, takenBy });
     fireEvent.keyDown(circle(FIRST), { key: "ArrowLeft" });

@@ -33,17 +33,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import {
   RECENCY_WELLS,
-  RecencyWell,
   RecencyWells,
-  wellFor,
   type RecencyWellItem,
 } from "./recency-wells";
-import {
-  AGENT_WELLS,
-  AGENT_WELLS_STORAGE_KEY,
-  AgentWell,
-  wellFor as agentsWellFor,
-} from "./agents-wells";
+import { AGENT_WELLS_STORAGE_KEY } from "./agents-wells";
+import { THREAD_WELLS_STORAGE_KEY } from "./threads-tab";
 
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
@@ -122,13 +116,19 @@ describe("recency-wells — the module the two surfaces share", () => {
     expect(recent.textContent).toBe("Recentzuluyankeexray");
   });
 
-  it("is the machinery the Agents tab RE-EXPORTS, not a second copy of it", () => {
-    // ⚠ BY IDENTITY. A re-implementation with the same names would pass every
-    // behavioural assertion in `agents-wells.test.tsx` and fail these three.
-    expect(AGENT_WELLS).toBe(RECENCY_WELLS);
-    expect(AgentWell).toBe(RecencyWell);
-    expect(agentsWellFor).toBe(wellFor);
-    // ⚠ AND THE TWO KEYS ARE DISTINCT STRINGS, stated here where both are in scope.
+  /**
+   * ⚠ **THE THREE ALIAS-IDENTITY ASSERTIONS ARE DELETED (2026-09-14) BECAUSE THE ALIASES ARE.**
+   * They read `AGENT_WELLS === RECENCY_WELLS`, `AgentWell === RecencyWell` and
+   * `agentsWellFor === wellFor` — a suite proving that a re-export re-exports, which was the
+   * ONLY reader those three had. The Agents tab imports `AgentWells` and its two date
+   * expressions from `agents-wells.tsx` and everything else from this module, so there is no
+   * second copy left to catch. What survives is the fact that outlives them: the two surfaces
+   * keep SEPARATE keys, which is what makes collapsing a well on one tab not a statement about
+   * the other.
+   */
+  it("keeps the two tabs' storage keys distinct", () => {
     expect(AGENT_WELLS_STORAGE_KEY).toBe("dopl.agents.wells");
+    expect(THREAD_WELLS_STORAGE_KEY).toBe("dopl.threads.wells");
+    expect(AGENT_WELLS_STORAGE_KEY).not.toBe(THREAD_WELLS_STORAGE_KEY);
   });
 });

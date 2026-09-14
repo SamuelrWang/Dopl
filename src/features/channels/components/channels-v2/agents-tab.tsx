@@ -165,12 +165,14 @@ export function AgentsTab({
   // which is not the workspace's — a template shared by someone outside this
   // channel resolves to no name and the marker degrades to "by another member"
   // rather than disappearing (`template-picker.tsx › authorMarker`).
-  const memberNames = useMemo(
-    () =>
-      new Map(
-        members.map((m) => [m.userId, m.displayName || m.email || ""] as const)
-      ),
-    [members]
+  // ⚠ **NO `useMemo`**, on the precedent {@link colorOf} records below and for the
+  // same measured reason: wrapping this map made the React Compiler BAIL ON THIS
+  // COMPONENT — `npx eslint` reported *"Existing memoization could not be
+  // preserved"* against the `[members]` dependency (2026-09-14). The compiler
+  // memoizes it on its own, and `byUser` two lines up has always been written
+  // this way.
+  const memberNames = new Map(
+    members.map((m) => [m.userId, m.displayName || m.email || ""] as const)
   );
 
   /**
@@ -213,6 +215,32 @@ export function AgentsTab({
   // (2026-08-20): the tab-row badge counts the same rows this list draws, and a
   // second copy of the rule is how a badge comes to say 3 over a list of 2.
   const peerCards = peerCardsFor(peers, currentUserId, openThreadId);
+
+  /**
+   * **WHICH COLOUR EACH OF MY OWN AGENTS IS WEARING** (2026-09-14; docs/specs/agent-colors.md
+   * item 8: *"the Agents-tab card … show a small colour dot before the name for live agents"*).
+   *
+   * ⚠ **THE OWN CARDS HAD NO DOT AT ALL UNTIL THIS**, and the peer cards beside them did — the
+   * one shape a reader compares them against. `agents-tab-cards.tsx › AgentCard.color` was
+   * declared and nothing passed it, so the half of the ruling about the operator's own agents
+   * rendered nothing while the half about everybody else's rendered a dot: one list, two answers.
+   * ⚠ **OFF `peers`, WHICH IS THE UNFILTERED CHANNEL PROJECTION AND THEREFORE CARRIES MY OWN
+   * ROWS TOO** — the same source the colour circles fence against two screens up, and the same
+   * reason: only the SERVER assigns a key, so `sessions` (this machine's own feed) is the one
+   * source that cannot answer. `peerCardsFor` is where the own-exclusion happens, downstream.
+   * ⚠ **KEYED BY THE MINTED INSTANCE ID** (`ChannelSessionState.name`), which is what
+   * `DesktopSessionSummary.agentId` holds — the pairing `lib/live-agents.ts` already dedupes on.
+   * ⚠ **AN ENDED ROW NEVER REACHES THE WIRE** (`main/session-state-push.js › liveForWire`), so an
+   * ended agent simply has no entry here and draws no dot — the bank rule, without this file
+   * re-deciding it.
+   * ⚠ **A LINEAR SCAN AND NO `useMemo`**, which is `surface-agent-view.tsx`'s own precedent for
+   * the same lookup: both arrays are bounded by the agent cap (15 per workspace, 2026-09-01), and
+   * a `useMemo` here makes the React Compiler BAIL ON THIS COMPONENT — `npx eslint` reports it as
+   * *"Existing memoization could not be preserved"*, which is a NEW error in a tree that measures
+   * only new ones.
+   */
+  const colorOf = (agentId: string | null | undefined): AgentColorKey | null =>
+    (agentId && peers.find((p) => p.name === agentId)?.color) || null;
 
   /**
    * NEW AGENT — the 36px page button that OPENS THE POPUP (2026-09-08).
@@ -386,6 +414,10 @@ export function AgentsTab({
               node: (
                 <AgentCard
                   agent={agent}
+                  // ⚠ THE PROJECTION'S KEY, NEVER `agent.color` — that field is this machine's
+                  // ASK and the server may have substituted the next free one, so reading it
+                  // here would paint a card in a hue the transcript's boxes do not use.
+                  color={colorOf(agent.agentId)}
                   owner={me}
                   viewing={agentKey(agent) === openAgent}
                   onOpen={() => onOpenAgent(agentKey(agent))}

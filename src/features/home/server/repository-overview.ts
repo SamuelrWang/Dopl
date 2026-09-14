@@ -314,10 +314,10 @@ export type CreditChannelScope = { channelId: string } | "unattributed";
  * CREDITS_PER_MCP_CALL`) and a reader that assumed 1 would silently misreport
  * the day it changes.
  *
- * ⚠ **THE ANSWER IS A FLOOR, TWICE OVER.** The writer is fire-and-forget
- * (`billing/server/credit-ledger.ts`) so rows may be missing, and this scan is
- * capped so it may clip. Neither is a reason to hide the figure; both are a
- * reason the surface must not call it exact.
+ * ⚠ **A FLOOR, AND SINCE 2026-09-13 THE CAP IS THE ONLY REASON.** ⚠ **THE
+ * SUPERSEDED LINE SAID "TWICE OVER … the writer is fire-and-forget", AND THAT
+ * HALF IS DEAD** (F-693): the row is written by the wallet RPC inside the
+ * counter's transaction, so no row can be missing — but a clip still can.
  */
 export async function scanCreditEvents(
   userId: string,

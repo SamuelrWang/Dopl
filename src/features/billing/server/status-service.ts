@@ -1,6 +1,7 @@
 import "server-only";
 import type { WorkspaceKind } from "@/features/workspaces/types";
 import { getWorkspaceEntitlements } from "./entitlements";
+import { unmeteredSince } from "./credits-unmetered";
 import { ledgerDriftFor } from "./credits-audit";
 import { readPersonalBilling } from "./personal-wallet";
 import { getWorkspaceBilling } from "./workspace-billing";
@@ -57,7 +58,39 @@ export interface StatusCredits extends CreditsSummary {
    * `credits`, and a stale-cache case pins it.
    */
   ledgerDrift: number;
+  /**
+   * 🔒 **WHEN THIS SERVER PROCESS FIRST FAILED OPEN ON A CHARGE AND HAS NOT
+   * RECOVERED SINCE — ISO-8601, or `null` when it is metering normally
+   * (2026-09-14).** `POST /api/mcp/credits/consume` fails OPEN by decision, so a
+   * dead RPC — the `PGRST202` a web deploy gets between shipping and its
+   * migration applying — ran the whole estate UNMETERED while both meters showed
+   * the same `0` they show for a measured empty month. This is the field that
+   * tells those two apart.
+   *
+   * ⚠ **PROCESS-LOCAL, AND THAT IS A STATED LIMITATION** (`./credits-unmetered.ts`
+   * carries it in full): the answer describes the process that served THIS read,
+   * so on a multi-instance deployment a `null` means only "not this instance".
+   * It never falsely accuses, and the deploy-ordering case it exists for affects
+   * every instance at once.
+   *
+   * ⚠ **IT IS NOT `degraded`.** `degraded` is a decided posture the service
+   * reports about the ANSWER it just computed (a peer's meter, a container with
+   * no active owner); this is a fault in the CHARGE path, and the two render
+   * different words on the same surfaces.
+   *
+   * ⚠ **NEW ON THE WIRE, SO THE CLIENT MIRROR NEEDS A `?? null`** (INVARIANTS §8):
+   * the query cache is IndexedDB-persisted with a 24h gcTime, so a row stored
+   * before this field shipped replays after it with the key absent.
+   * `components/use-workspace-entitlements.ts` defaults it FIELD-WISE inside
+   * `credits`, and a stale-cache case pins it.
+   */
+  unmeteredSince: string | null;
 }
+
+/** The meter as `callerCredits` builds it. ⚠ `unmeteredSince` is stamped ONCE, at
+ *  the top, because it is a fact about the PROCESS and not about the wallet any
+ *  of these arms read — stamping it per arm is how one arm comes to omit it. */
+type WalletCredits = Omit<StatusCredits, "unmeteredSince">;
 
 export interface WorkspaceBillingStatusPayload {
   /**
@@ -109,10 +142,17 @@ export interface WorkspaceBillingStatusPayload {
  * — the container owner's standard workspace — and this payload carries plan,
  * member count, seat count, object cap and `objectsUsed`, so handing a peer
  * that target printed the operator's private workspace inside the relationship.
- * `resolveBillingTarget` now always answers the ADDRESSED container, so the
+ * `resolveBillingTarget` answers the ADDRESSED container **on this path**, so the
  * entitlements half reads the workspace the caller is already authorized into
  * and there is no other tenant's row on this path at all. What survives is the
  * CREDIT half of the fence, above: a peer's meter is not the owner's meter.
+ *
+ * ⚠ **"ALWAYS THE ADDRESSED CONTAINER" IS NO LONGER TRUE OF THAT FUNCTION —
+ * IT IS TRUE OF THIS CALLER (rule B, 2026-09-13).** Under a calling channel the
+ * resolver answers the CHANNEL's container; this route passes NO `channelId`,
+ * deliberately, because a meter is a question about a container a person is
+ * LOOKING AT rather than about a session that is spending. Adding one here would
+ * print a wallet the surrounding plan/member/seat block does not describe.
  *
  * ⚠ For a container the entitlements block therefore describes the CONTAINER
  * (free plan, its own member count, no objects) rather than some workspace the
@@ -144,7 +184,10 @@ export async function getWorkspaceBillingStatus(
     objectsUsed: entitlements.objectsUsed,
     canCreateObjects: entitlements.canCreateObjects,
     chatsWindowDays: entitlements.chatsWindowDays,
-    credits,
+    // ⚠ THE PROCESS STAMP RIDES ALONG HERE, NOT INSIDE `callerCredits`: every
+    // arm of that function would otherwise have to remember it, including the
+    // peer fence's early return (2026-09-14).
+    credits: { ...credits, unmeteredSince: unmeteredSince() },
     cancelAtPeriodEnd: billing?.cancelAtPeriodEnd ?? false,
     subscription_period_end: billing?.currentPeriodEnd ?? null,
     has_stripe_customer: !!billing?.stripeCustomerId,
@@ -165,7 +208,7 @@ async function callerCredits(
   caller: CreditCaller,
   billing: Awaited<ReturnType<typeof getWorkspaceBilling>>,
   entitlements: Awaited<ReturnType<typeof getWorkspaceEntitlements>>
-): Promise<StatusCredits> {
+): Promise<WalletCredits> {
   if (resolved.wallet === null) return reconciled(unmeteredSummary(), resolved);
   // 🔒 THE PEER FENCE. A personal wallet belongs to the container's owner; a
   // non-owner asking about it gets the same stamped zeroes the consume path
@@ -212,7 +255,7 @@ async function callerCredits(
 async function reconciled(
   credits: CreditsSummary,
   resolved: BillingTarget
-): Promise<StatusCredits> {
+): Promise<WalletCredits> {
   return {
     ...credits,
     ledgerDrift: await ledgerDriftFor(resolved, credits.periodStart),

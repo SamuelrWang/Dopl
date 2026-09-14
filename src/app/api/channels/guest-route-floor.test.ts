@@ -397,10 +397,14 @@ describe("the floors guard a real gate, not just a list", () => {
     // `loadVisibleChannel` and THROW on a null membership. Nothing was relaxed;
     // the same two facts are pinned one level in.
     const featureRoot = join(import.meta.dirname, "..", "..", "..", "features", "channels", "server");
+    // 2026-09-14: the channel-header lifecycle (the lane that names
+    // `loadVisibleChannel`) moved to `service-writes-channel.ts` in the 500-cap
+    // split; `service-writes.ts` keeps the message lane. Read the lane's file.
     const writes = readFileSync(join(featureRoot, "service-writes.ts"), "utf8");
+    const header = readFileSync(join(featureRoot, "service-writes-channel.ts"), "utf8");
     const fanout = readFileSync(join(featureRoot, "service-tasks-broadcast.ts"), "utf8");
     const shared = readFileSync(join(featureRoot, "service-shared.ts"), "utf8");
-    expect(writes).toMatch(/loadVisibleChannel/);
+    expect(header).toMatch(/loadVisibleChannel/);
     expect(writes).toMatch(/requireMemberChannel\([\s\S]*?"post to this channel"\s*\)/);
     expect(fanout).toMatch(/requireMemberChannel\([\s\S]*?"create a task in this channel"\s*\)/);
     expect(shared).toMatch(

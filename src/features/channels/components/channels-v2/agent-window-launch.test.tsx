@@ -173,13 +173,47 @@ describe("the pop-out page wires the + to the form", () => {
 
   it("holds one launch panel and hands its toggle to the strip", () => {
     expect(page).toContain("useAgentLaunch()");
-    expect(page).toMatch(/onNewAgent=\{launch\.toggle\}/);
+    // ⚠ **FEATURE-DETECTED SINCE `7ca22943`** (the home/shared review's *"gated + in the
+    // pop-out"*): the `+` is handed down only where the bridge can launch, on
+    // `agents-controls.ts › canLaunchAgents` — the same op the form gates its own Launch on.
+    // What this pin is about is unchanged: ONE panel, and the strip's `+` reaches ITS toggle.
+    expect(page).toMatch(/onNewAgent=\{canLaunchAgents\(\) \? launch\.toggle : undefined\}/);
   });
 
   it("mounts the form for the ACTIVE tab, keyed by it", () => {
     expect(page).toMatch(/<AgentWindowLaunch[\s\S]{0,400}key=\{active\.key\}/);
     expect(page).toMatch(/channelId=\{active\.channelId\}/);
     expect(page).toMatch(/taskId=\{active\.taskId\}/);
+  });
+
+  /**
+   * 🔒 **THE × IS GATED ON THE OP (2026-09-14).** `canHostAgentTabs` was written as this gate
+   * and had no caller: the strip drew its × unconditionally and `closeOwnTab` answered
+   * `{ ok: false }` into a void on a main without the ops, so the control looked live and did
+   * nothing (§11: absent, never disabled). The chrome's half is rendered in
+   * `agent-window-chrome.test.tsx`; this is the wiring that reaches it.
+   */
+  it("hands the strip no close handler when this main cannot close a tab", () => {
+    expect(page).toMatch(/onCloseTab=\{canHostAgentTabs\(\)[\s\S]{0,80}: undefined\}/);
+  });
+
+  /**
+   * 🔒 **A RAIL ROW ROUTES INTO ITS OWN WORKSPACE'S SEGMENT (2026-09-14).** The rail lists every
+   * running agent on this machine, ACROSS workspaces, and the route it asks main to open is
+   * `#/w/<segment>/…` — so passing this window's segment for a row in another workspace opened a
+   * page that cannot hold that channel: a not-found for an agent that is running.
+   *
+   * ⚠ **AND THE FALLBACK IS ONLY FOR AN UNKNOWN.** A main older than
+   * `spa-bridge-shapes.ts › DesktopSessionSummary.workspaceId` reports `null` and an unresolved
+   * roster maps nothing; both fall back to this window's segment, which is what EVERY row did
+   * before. What must never come back is passing `segment` unconditionally.
+   */
+  it("resolves the rail click's segment from the session's own workspace", () => {
+    expect(page).toMatch(/segmentFor\(session\.workspaceId \?\? null\)/);
+    // ⚠ THE ROSTER IS THE CACHED `/api/workspaces`, not a read of this window's own.
+    expect(page).toMatch(/workspaces\.data \?\? \[\][\s\S]{0,60}w\.id === sessionWorkspaceId/);
+    // ⚠ AND THE OWN-SEGMENT FALLBACK IS CONDITIONAL, never the only argument.
+    expect(page).not.toMatch(/agentId: session\.agentId \?\? undefined,\s*\},\s*segment,/);
   });
 });
 
@@ -219,6 +253,39 @@ describe("the popup's colour row, in the pop-out", () => {
         .find((el) => el.getAttribute("aria-checked") === "true")
         ?.getAttribute("data-agent-color")
     ).toBe(SECOND);
+  });
+
+  /**
+   * 🔒 **THE PICK REACHES THE BRIDGE, WHICH IS THE HALF THAT WAS MISSING (2026-09-14).** This
+   * window's `launchAgent` adapter declared FIVE parameters against a six-parameter contract —
+   * legal TypeScript, since a narrower implementation satisfies a wider function type — so the
+   * colour the operator chose in the pop-out's own popup was dropped between the dialog and
+   * `sessions.launch`, silently, on the one surface whose taken set is advisory to begin with.
+   *
+   * 🔒 MUTATION-PROOF: delete `color` from the payload object (or from the adapter's parameter
+   * list) in `agent-window-launch.tsx` and this fails — nothing else in this suite does.
+   */
+  it("puts the operator's chosen key on the launch payload", async () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "New agent" }));
+    await screen.findByRole("heading", { name: "New agent" });
+    // ⚠ NOT the preselected key: an untouched dialog sends nothing, so a test that clicked the
+    // default would pass against an adapter that forwards nothing at all.
+    fireEvent.click(screen.getByRole("radio", { name: THIRD }));
+    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
+    await waitFor(() => expect(launch).toHaveBeenCalledTimes(1));
+    expect((launch.mock.calls[0]![0] as Record<string, unknown>).color).toBe(THIRD);
+  });
+
+  /** ⚠ AND AN UNTOUCHED ROW SENDS NOTHING — absent is "the server picks the first free key",
+   *  never "no colour", so the one-click payload is byte-identical to what it always was. */
+  it("sends no colour when no circle was touched", async () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "New agent" }));
+    await screen.findByRole("heading", { name: "New agent" });
+    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
+    await waitFor(() => expect(launch).toHaveBeenCalledTimes(1));
+    expect((launch.mock.calls[0]![0] as Record<string, unknown>).color).toBeUndefined();
   });
 
   it("offers every key when the bridge could not answer — an empty feed is not a full bank", async () => {

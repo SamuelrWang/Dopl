@@ -6,6 +6,8 @@ import {
 } from "@/features/workspaces/types";
 import {
   CREDITS_PER_MCP_CALL,
+  PERSONAL_MONTHLY_CREDITS,
+  SEAT_MONTHLY_CREDITS,
   seatCreditsForPlan,
   type CreditPeriod,
   type WalletKind,
@@ -258,6 +260,22 @@ export interface CreditConsumeResult extends CreditsSummary {
    *  In the RESPONSE because the MCP server package cannot import the
    *  server-side `upgradeUrl()`. */
   upgradeUrl: string;
+  /**
+   * 🔒 **WHAT THE OFFER AT `upgradeUrl` BUYS, `0` WHEN THERE IS NO OFFER — HERE
+   * FOR THE SAME REASON `upgradeUrl` IS (2026-09-14, F-668 CLOSED).**
+   * `packages/mcp-server/src/tools/respond.ts › creditsExhausted` writes
+   * *"Upgrade to Team for 5,000 credits per member"* and cannot import
+   * `../credits.ts` (a separate build, external by `next.config.ts ›
+   * serverExternalPackages`), so the figure was a LITERAL in two places: a
+   * retune of `SEAT_MONTHLY_CREDITS.team` left the refusal advertising the old
+   * number to the caller who just hit the limit, and **no test could see it** —
+   * the package's pin asserted the literal against itself.
+   * ⚠ **THE NUMBER CROSSES THE WIRE, THE WORDING DOES NOT**: the MCP layer
+   * still owns the sentence and this carries the one fact it cannot know.
+   * ⚠ **IT IS NOT `limit`** — that is the allowance the caller just exhausted
+   * (100 on a free seat); this is what an upgrade would give them.
+   */
+  upgradeCredits: number;
 }
 
 /**
@@ -280,6 +298,25 @@ function upgradeUrlFor(wallet: WalletKind | null, plan: PlanId | null): string {
   if (plan !== "free") return "";
   if (wallet === "seat") return upgradeUrl();
   return wallet === "personal" ? upgradeUrl("pro") : "";
+}
+
+/**
+ * What the offer at `upgradeUrlFor`'s url BUYS, or `0` when there is none.
+ *
+ * 🔒 **THE ONE PLACE THE PAID FIGURE IS READ FOR THE MCP REFUSAL (F-668 CLOSED,
+ * 2026-09-14).** It reads `../credits.ts` — THE one retune spot — so retuning a
+ * paid allowance is a ONE-SITE edit again.
+ * ⚠ **THE ARMS TRACK `upgradeUrlFor` EXACTLY, AND MUST**: a figure beside no
+ * link is a promise with nowhere to buy it, and a link with no figure drops the
+ * fact that makes it persuasive. Same `(wallet, plan)` pair, same order.
+ */
+function upgradeCreditsFor(
+  wallet: WalletKind | null,
+  plan: PlanId | null
+): number {
+  if (plan !== "free") return 0;
+  if (wallet === "seat") return SEAT_MONTHLY_CREDITS.team;
+  return wallet === "personal" ? PERSONAL_MONTHLY_CREDITS.pro : 0;
 }
 
 /**
@@ -381,6 +418,7 @@ export async function consumeMcpCredits(
     limit: spend.limit,
     remaining: Math.max(0, spend.limit - spend.outcome.used),
     upgradeUrl: upgradeUrlFor(target.wallet, spend.plan),
+    upgradeCredits: upgradeCreditsFor(target.wallet, spend.plan),
   };
 }
 

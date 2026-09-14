@@ -86,6 +86,26 @@ export interface CreditsOutcome {
     limit?: number;
     periodEnd?: string;
     upgradeUrl?: string;
+    /**
+     * 🔒 **WHAT THE OFFER AT `upgradeUrl` BUYS — FROM THE SERVER, BECAUSE THIS
+     * PACKAGE CANNOT KNOW IT (2026-09-14, F-668 CLOSED).** The two upsell
+     * sentences below quoted a literal `5,000` against
+     * `src/features/billing/credits.ts › SEAT_MONTHLY_CREDITS.team` and
+     * `› PERSONAL_MONTHLY_CREDITS.pro`; this build cannot import `src/`, so
+     * retuning a paid allowance was a THREE-SITE edit and **no test could see the
+     * drift** — the pin here asserted the literal against itself while the
+     * app-side pin read the constant, and both stayed green while they disagreed.
+     * The figure rides the consume response now, exactly as `upgradeUrl` already
+     * does (`billing/server/credits-service.ts › upgradeCreditsFor`), so the
+     * number has ONE home again and the WORDING stays here where it belongs.
+     *
+     * ⚠ **ABSENT OR `0` DROPS THE FIGURE, NEVER GUESSES ONE.** An older server
+     * sends no such key — every field on this interface is optional because the
+     * wire makes it so — and a made-up allowance in an upsell is worse than an
+     * upsell without one. It is NOT `limit`: that is the caller's CURRENT
+     * allowance, which is the number they just exhausted.
+     */
+    upgradeCredits?: number;
 }
 /**
  * Credits refusal rendered exactly like an entitlement denial (message +

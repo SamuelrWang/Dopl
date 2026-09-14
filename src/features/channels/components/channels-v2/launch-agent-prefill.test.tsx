@@ -64,6 +64,7 @@ vi.mock("../../hooks/use-channel-launch-posture", () => ({
 
 import { LaunchAgentDialog } from "./launch-agent-dialog";
 import { useAgentLaunch } from "./use-agent-launch";
+import { DIALOG_TITLE_AS_TYPED } from "@/shared/ui/standard-dialog";
 import type { AgentLaunchControls } from "./use-agents-panel";
 import { member, ME } from "./test-fixtures";
 
@@ -263,6 +264,32 @@ describe("picking a template", () => {
 
 // ── 3. "None" ────────────────────────────────────────────────────────────────
 
+/**
+ * 🔒 **THE HEADING CARRIES A NAME THE OPERATOR TYPED, SO ITS CASING IS LEFT ALONE**
+ * (2026-09-14; `shared/ui/standard-dialog.tsx › DIALOG_TITLE_AS_TYPED`).
+ *
+ * ⚠ **THE KIT'S DEFAULT IS `text-transform: capitalize`** (Samuel's Title-Case ruling for
+ * AUTHORED headings), and it rewrites the first letter of EVERY word — so a template named
+ * "iOS Coder" rendered "New IOS Coder Agent": the dialog misspelling the row it is about. The
+ * string is never cased in JS (it is `ModalShell`'s `aria-label` too), so the fix is the opt-out
+ * prop, and the pin is the CLASS rather than the text.
+ *
+ * 🔒 MUTATION-PROOF: drop `titleCase={false}` from `launch-agent-dialog.tsx` and the heading
+ * takes `DIALOG_TITLE` — which carries `capitalize` — and this fails.
+ */
+describe("the heading's casing", () => {
+  it("renders the template's name as typed, never Title-Cased by CSS", async () => {
+    templateList.templates = [auditor({ id: "tpl-ios", name: "iOS Coder" })];
+    await open();
+    fireEvent.click(pill(/iOS Coder/));
+    const heading = await screen.findByRole("heading", { name: "New iOS Coder agent" });
+    // ⚠ THE CLASS, NOT THE RENDERED PIXELS: jsdom applies no `text-transform`, so an assertion
+    // on `textContent` would pass against the capitalising face and prove nothing.
+    expect(heading.className).not.toContain("capitalize");
+    expect(heading.className).toBe(DIALOG_TITLE_AS_TYPED);
+  });
+});
+
 describe("clearing the template", () => {
   it("keeps whatever is in the three fields, and takes the heading back", async () => {
     // 🔒 MUTATION-PROOF: make `applyTemplate(null)` prefill from an empty template (drop its early
@@ -283,5 +310,79 @@ describe("clearing the template", () => {
     const [, templateId, overrides] = vi.mocked(controls.launchAgent).mock.calls[0];
     expect(templateId).toBeNull();
     expect(overrides).toEqual({ instructions: "Mine now." });
+  });
+});
+
+// ── 4. CLOSING IS DISCARDING, BY WHICHEVER EXIT (2026-09-14) ─────────────────
+
+/**
+ * 🔒 **THE THREE EXITS ARE ONE PATH.** Escape and the backdrop reached `reset()`
+ * (`launch-agent-dialog.tsx › discard`); the Bot icon and the pop-out's `+` — the same control
+ * that OPENED the form — reached a bare `setOpen(false)`. So a dialog dismissed by its own
+ * button kept every typed field, the instructions BASELINE and the `touched` flags, and the
+ * reopen MINTED A SECOND ID under the first one's name.
+ *
+ * ⚠ **IT DRIVES THE HOOK, NOT THE DIALOG.** The defect is in `use-agent-launch.ts`'s two close
+ * paths; mounting the form would add a scrim and a portal to assert a state transition.
+ */
+function ToggleHarness() {
+  const panel = useAgentLaunch();
+  return (
+    <div>
+      <button type="button" onClick={panel.toggle}>
+        toggle
+      </button>
+      <button type="button" onClick={() => panel.applyTemplate?.(auditor())}>
+        pick
+      </button>
+      <output data-testid="state">
+        {panel.open ? "open" : "shut"}|{panel.name}|{panel.description}|
+        {panel.instructions ?? ""}|{panel.templateId ?? ""}|{panel.agentId ?? ""}
+      </output>
+    </div>
+  );
+}
+
+const state = () => screen.getByTestId("state").textContent ?? "";
+const toggle = () => fireEvent.click(screen.getByRole("button", { name: "toggle" }));
+
+describe("closing the popup with the control that opened it", () => {
+  /**
+   * 🔒 MUTATION-PROOF: put `setOpen(false)` back in `toggle`'s open branch and this fails on the
+   * very first assertion — the typed name survives a close it should not have survived.
+   */
+  it("discards the typed identity, exactly as Escape does", async () => {
+    mintAgentId.mockResolvedValue({ ok: true, agentId: MINTED });
+    render(<ToggleHarness />);
+    toggle();
+    await waitFor(() => expect(state()).toContain(`#${MINTED}`));
+    fireEvent.click(screen.getByRole("button", { name: "pick" }));
+    expect(state()).toContain("Code auditor");
+
+    toggle();
+    expect(state()).toBe("shut|||||");
+  });
+
+  /**
+   * 🔒 **AND THE REOPEN DOES NOT MINT A SECOND ID UNDER THE FIRST ONE'S NAME** — the 2026-08-27
+   * two-draw bug arriving by another road. With the state cleared, the fresh mint's `typed === ""`
+   * guard fires and the panel shows ONE agent's address over that same agent's name.
+   */
+  it("re-prefills from the new mint, and a template still fills the fields in", async () => {
+    mintAgentId.mockResolvedValue({ ok: true, agentId: MINTED });
+    render(<ToggleHarness />);
+    toggle();
+    await waitFor(() => expect(state()).toContain(`#${MINTED}`));
+    toggle();
+
+    mintAgentId.mockResolvedValue({ ok: true, agentId: "zz99yy88" });
+    toggle();
+    await waitFor(() => expect(state()).toContain("#zz99yy88"));
+    // ⚠ NO TRACE OF THE FIRST DRAW: the name and the id are the SAME agent's.
+    expect(state()).not.toContain(MINTED);
+    // ⚠ AND `touched` WENT WITH IT, so a template pick prefills again rather than finding a
+    // field the operator is believed to have typed.
+    fireEvent.click(screen.getByRole("button", { name: "pick" }));
+    expect(state()).toContain("Code auditor");
   });
 });

@@ -108,9 +108,17 @@ export function AgentWindowChrome({
   tabs: readonly AgentTabView[];
   activeKey: string;
   onSelect: (key: string) => void;
-  /** ⚠ MAIN CLOSES THE TAB AND THE WINDOW WITH THE LAST ONE — this only reports the click
-   *  (`spa-bridge-window.ts › closeOwnTab`). */
-  onClose: (key: string) => void;
+  /**
+   * ⚠ MAIN CLOSES THE TAB AND THE WINDOW WITH THE LAST ONE — this only reports the click
+   * (`spa-bridge-window.ts › closeOwnTab`).
+   *
+   * ⚠ **OPTIONAL SINCE 2026-09-14, AND ABSENT DRAWS NO × AT ALL** — the same
+   * feature-detection rule {@link onNewAgent} follows and the window buttons follow: a main
+   * without the tab ops (`spa-bridge-window.ts › canHostAgentTabs`) cannot close anything,
+   * and a × that reports into a void looks exactly like a working one. **Absent, never
+   * disabled** (INVARIANTS §11).
+   */
+  onClose?: (key: string) => void;
   /**
    * THE "+" — a new agent on the ACTIVE tab's channel.
    * ⚠ ABSENT MEANS NO "+" IS DRAWN, which is the same feature-detection rule the window buttons
@@ -181,18 +189,21 @@ export function AgentWindowChrome({
               </button>
               {/* ⚠ ON THE ACTIVE TAB ALWAYS, ON THE OTHERS ON HOVER (Samuel's *"a little X
                   button"*). It is `opacity`, never `hidden`: a control that appears on hover must
-                  still hold its place, or every tab's label reflows under the pointer. */}
-              <button
-                type="button"
-                aria-label={`Close ${tab.name}`}
-                onClick={() => onClose(tab.key)}
-                className={cn(
-                  "shrink-0 rounded-[6px] p-0.5 text-text-muted transition-opacity hover:text-text-primary",
-                  active ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus:opacity-100"
-                )}
-              >
-                <X size={12} aria-hidden="true" />
-              </button>
+                  still hold its place, or every tab's label reflows under the pointer.
+                  ⚠ AND NO × AT ALL WITHOUT AN `onClose` — see the prop. */}
+              {onClose ? (
+                <button
+                  type="button"
+                  aria-label={`Close ${tab.name}`}
+                  onClick={() => onClose(tab.key)}
+                  className={cn(
+                    "shrink-0 rounded-[6px] p-0.5 text-text-muted transition-opacity hover:text-text-primary",
+                    active ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus:opacity-100"
+                  )}
+                >
+                  <X size={12} aria-hidden="true" />
+                </button>
+              ) : null}
               {/* ⚠ `data-tab-underline` IS FOR THE PIN, and it is an attribute rather than a class
                   fragment on purpose: the rule's geometry is a constant now, and a test that
                   grepped its spelling would fail on every re-position of something it is not

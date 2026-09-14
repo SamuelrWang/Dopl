@@ -54,7 +54,7 @@ test("REPORT: an entry carries the session KEY and the WORKSPACE a row cannot do
   assert.equal(entry.templateName, null);
 });
 
-test("REPORT: `list()` narrows the two report-only fields back off — the wire is unchanged", () => {
+test("REPORT: `list()` narrows the report-only `key` back off — `workspaceId` rides the wire", () => {
   const m = load();
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
   // ⚠ The five measurement fields joined the wire in Phase 5 (2026-08-18) and they are
@@ -120,10 +120,14 @@ test("REPORT: `list()` narrows the two report-only fields back off — the wire 
     // column to receive it. It is still not REPORT-only, which is all this case claims.
     "templateName", "threadTitle", "tokensDelta", "tokensSpent", "toolLabel", "toolMode",
     "turns",
+    // ⚠ `workspaceId` joined the WIRE on 2026-09-14 (the tabbed pop-out's rail routes a
+    // cross-workspace row by it): sorted here, and no longer report-only.
+    "workspaceId",
   ]);
-  // The renderer has no use for either, and `DesktopSessionSummary` is a wire contract.
+  // `key` is report-only; `workspaceId` RIDES the wire since 2026-09-14 (the tabbed
+  // pop-out's rail routes a cross-workspace row by it) — `DesktopSessionSummary.workspaceId`.
   assert.equal("key" in m.list()[0], false);
-  assert.equal("workspaceId" in m.list()[0], false);
+  assert.equal(m.list()[0].workspaceId, "ws-1");
 });
 
 test("REPORT: it is ONE pass — the wire rows are the report rows, minus two fields", () => {

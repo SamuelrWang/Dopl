@@ -110,6 +110,22 @@ function periodEndDate(periodEnd) {
         return null;
     return Number.isNaN(Date.parse(periodEnd)) ? null : day;
 }
+/**
+ * ` for 5,000`, or `""` when the server sent no figure.
+ *
+ * ⚠ **THE WHOLE CLAUSE GOES, NOT JUST THE NUMBER.** The callers below append
+ * this to `Upgrade to Team` / `Upgrade to Pro`, so an empty return leaves
+ * *"Upgrade to Team: <url>"* — a shorter true sentence. Keeping the preposition
+ * and dropping the figure would leave *"for credits per member"*, which is the
+ * fabricated-denominator failure `usage-meter.tsx` records, in prose.
+ * ⚠ `0` IS "NO OFFER TO SIZE", not an allowance of zero: both degraded answers
+ * send it (`credits-meter.ts › unmetered`, the consume route's `failOpen`).
+ */
+function upgradeFigure(credits, unit) {
+    if (!Number.isFinite(credits) || credits <= 0)
+        return "";
+    return ` for ${credits.toLocaleString("en-US")} credits ${unit}`;
+}
 /** `(1,000/5,000)`, or "" when the server sent no usable counters. */
 function usageSpan(used, limit) {
     if (!Number.isFinite(used) || !Number.isFinite(limit))
@@ -147,23 +163,14 @@ function creditsExhausted(o) {
     const resets = day ? ` Resets ${day}.` : "";
     if (o.wallet === "seat") {
         const head = `Your seat in this workspace is out of credits for this period${span}.${resets}`;
-        return err(url
-            // ⚠ `5,000` IS THE SECOND HOME OF `SEAT_MONTHLY_CREDITS.team` AND IT IS
-            // TRACKED, NOT ACCEPTED (F-668): this package cannot import `src/`, so
-            // retuning the paid seat allowance is a TWO-SITE edit and no test can
-            // see the drift. The personal literal below is the SAME finding, not a
-            // third source.
-            ? `${head}\n\nUpgrade to Team for 5,000 credits per member: ${url}`
-            : head);
+        // ⚠ THE FIGURE COMES OFF THE WIRE, NOT OUT OF A LITERAL (F-668).
+        const buys = upgradeFigure(o.upgradeCredits, "per member");
+        return err(url ? `${head}\n\nUpgrade to Team${buys}: ${url}` : head);
     }
     if (o.wallet === "personal") {
         const head = `Your personal credits are used up for this month${span}.${resets}`;
-        return err(url
-            // ⚠ `5,000` IS `PERSONAL_MONTHLY_CREDITS.pro`, HERE FOR THE SEAT
-            // LITERAL'S REASON AND UNDER THE SAME FINDING (F-668) — one copy of the
-            // problem, now written twice.
-            ? `${head}\n\nUpgrade to Pro for 5,000 credits a month: ${url}`
-            : head);
+        const buys = upgradeFigure(o.upgradeCredits, "a month");
+        return err(url ? `${head}\n\nUpgrade to Pro${buys}: ${url}` : head);
     }
     return err(url
         ? `${CREDITS_EXHAUSTED_MESSAGE}\n\nUpgrade to continue: ${url}`

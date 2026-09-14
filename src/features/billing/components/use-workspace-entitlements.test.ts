@@ -63,6 +63,7 @@ function payload(): WorkspaceEntitlementsStatus {
       periodStart: "2026-09-01T00:00:00.000Z",
       periodEnd: "2026-10-01T00:00:00.000Z",
       ledgerDrift: 0,
+      unmeteredSince: null,
     },
     cancelAtPeriodEnd: false,
     subscription_period_end: null,
@@ -197,6 +198,34 @@ describe("a cached row from before a field shipped still renders", () => {
     expect(ent.credits.ledgerDrift).toBe(0);
     // ...and the rest of the cached `credits` object is kept, as ever.
     expect(ent.credits).toMatchObject({ used: 40, wallet: "seat" });
+  });
+
+  /**
+   * 🔒 **`unmeteredSince` SHIPPED 2026-09-14, SAME RULE AGAIN.** A row cached
+   * before it replays with the `credits` object present and this key absent.
+   * `undefined` is already falsy so no surface would print the word — but the
+   * FIELD-WISE `?? null` is what makes the type honest (`string | null`, never
+   * `undefined`), and this pins it before somebody drops the line as redundant.
+   */
+  it("replays a row whose `credits` has NO `unmeteredSince` key — null", () => {
+    const stale = payload();
+    delete (stale.credits as Partial<WorkspaceEntitlementsStatus["credits"]>)
+      .unmeteredSince;
+    state.data = stale;
+
+    const ent = useWorkspaceEntitlements();
+    expect(ent.credits.unmeteredSince).toBeNull();
+    expect(ent.credits).toMatchObject({ used: 40, wallet: "seat" });
+  });
+
+  it("an unmetered stamp the CURRENT server sends is passed through untouched", () => {
+    state.data = {
+      ...payload(),
+      credits: { ...payload().credits, unmeteredSince: "2026-09-14T10:00:00.000Z" },
+    };
+    expect(useWorkspaceEntitlements().credits.unmeteredSince).toBe(
+      "2026-09-14T10:00:00.000Z"
+    );
   });
 
   it("a non-zero drift the CURRENT server sends is passed through untouched", () => {

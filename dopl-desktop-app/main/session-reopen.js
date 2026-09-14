@@ -166,10 +166,7 @@ function reopenByTask(a) {
   // window is one-per-agent now, and keying it on what the caller happened to pass would open a
   // second window on the same agent whenever the caller named nothing.
   return deps.openAgentWindow({
-    segment: String((a && a.segment) || ''),
-    channelId,
-    taskId,
-    agentId: String(s.agentId || ''),
+    segment: String((a && a.segment) || ''), channelId, taskId, agentId: String(s.agentId || ''),
   });
 }
 
@@ -207,9 +204,7 @@ const CONTROL_EVENTS = { pause: 'interrupt', end: 'end' };
 function controlByTask(a) {
   const channelId = String((a && a.channelId) || '');
   const taskId = String((a && a.taskId) || '');
-  const type = Object.prototype.hasOwnProperty.call(CONTROL_EVENTS, a && a.action)
-    ? CONTROL_EVENTS[a.action]
-    : null;
+  const type = Object.prototype.hasOwnProperty.call(CONTROL_EVENTS, a && a.action) ? CONTROL_EVENTS[a.action] : null;
   if (!type || !deps.sessions || !deps.dispatch) return { ok: false };
   const s = resolveSession(a, channelId, taskId);
   if (!s || s.settled) return { ok: false, reason: 'no-session' };
@@ -280,14 +275,9 @@ function setModeByTask(a) {
   // exactly that, and a refusal would leave the select showing a value main is not enforcing
   // — the lie the note below is about. What comes back is main's post-dispatch truth either
   // way, so the UI renders the floored value rather than the requested one.
-  const mode = axis === 'messages' && s.windowless === true
-    ? floorWindowlessMessage(a && a.mode)
-    : (a && a.mode);
+  const mode = axis === 'messages' && s.windowless === true ? floorWindowlessMessage(a && a.mode) : (a && a.mode);
   try {
-    deps.dispatch(s, {
-      type: axis === 'tools' ? 'set_tool_mode' : 'set_message_mode',
-      mode: mode,
-    });
+    deps.dispatch(s, { type: axis === 'tools' ? 'set_tool_mode' : 'set_message_mode', mode: mode });
   } catch (_) {
     return { ok: false };
   }

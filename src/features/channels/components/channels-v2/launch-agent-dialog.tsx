@@ -352,6 +352,14 @@ export function LaunchAgentDialog({
         open={panel.open}
         onDiscard={discard}
         title={title}
+        /* 🔒 **THE NAME IN {@link title} IS THE OPERATOR'S, SO THE CASING IS LEFT ALONE**
+           (2026-09-14; `shared/ui/standard-dialog.tsx › DIALOG_TITLE_AS_TYPED`). The kit's
+           default `capitalize` rewrites the first letter of EVERY word, so "New iOS Coder agent"
+           rendered "New IOS Coder Agent" — the dialog misspelling the row it is about. Samuel's
+           Title-Case ruling is about AUTHORED headings, so it stays the default and this is the
+           opt-out; the trade is that the plain "New agent" keeps its lower-case a. The STRING is
+           untouched either way: it is `ModalShell`'s `aria-label` too, so nothing cases it in JS. */
+        titleCase={false}
         closeLabel="Close new agent"
         primary={{
           label: "Launch",

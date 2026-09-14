@@ -59,6 +59,7 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
     {
       sessionId: "sess-1",
       channelId: "chan-1",
+      workspaceId: "ws-1", // on the wire since 2026-09-14 — the pop-out rail routes by it
       taskId: "task-1",
       agentId: "a1b2c3d4",
       name: "a1b2c3d4",

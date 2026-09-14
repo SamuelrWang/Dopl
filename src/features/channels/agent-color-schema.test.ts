@@ -28,7 +28,7 @@
  *      the assignment ORDER.
  *   4. `packages/mcp-server/src/tools/channel-ops-launch-color.ts › AGENT_COLOR_KEYS` — the
  *      published `z.enum`'s members. That package cannot import `src/`.
- *   5. `dopl-desktop-app/main/{session-launch-op,session-state-push,launch-directive-wire}.js
+ *   5. `dopl-desktop-app/main/{session-launch-op,session-state-push-wire,launch-directive-wire}.js
  *      › AGENT_COLOR_RE` — three copies of the pattern on the boundary, in a tree that cannot
  *      see `src/` either.
  *
@@ -204,9 +204,15 @@ describe("the set, in the two trees that cannot import `src/`", () => {
     // These are the button lane, the wire row and the directive row; a pattern that drifted on
     // one of them would narrow a legal key to "no colour" on exactly one launch path.
     const expected = "/^agent-(0[1-9]|1[0-6])$/";
+    // ⚠ **`session-state-push.js` → `session-state-push-wire.js` (2026-09-14).** The push lane
+    // was split at the 500-line cap and the pattern moved with the WIRE half, which is where it
+    // belongs: this constant is about what crosses to the server, not about when a push fires.
+    // The list is the thing that must be re-derived — `grep -rn "AGENT_COLOR_RE" main/` — and a
+    // stale name here fails as "does not contain", i.e. exactly as a DROPPED copy would, which
+    // is why the file names are asserted rather than globbed.
     for (const file of [
       "session-launch-op.js",
-      "session-state-push.js",
+      "session-state-push-wire.js",
       "launch-directive-wire.js",
     ]) {
       const src = read("dopl-desktop-app", "main", file);

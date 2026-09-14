@@ -123,7 +123,13 @@ export function AgentWindowLaunch({
       // A `false` that never changes is honest; a spinner this file cannot drive would not be.
       launchBusy: false,
       launchError: null,
-      launchAgent: async (threadId, templateId, overrides, agentId, runtime) =>
+      // ⚠ **SIX ARGUMENTS, SPELLED OUT, AND THE SIXTH IS WHY THE COUNT IS IN THIS COMMENT**
+      // (2026-09-14). `color` was added to `AgentLaunchControls.launchAgent` on 2026-09-13 and
+      // this adapter still declared five — TypeScript accepts a narrower implementation of a
+      // wider function type, so the operator's colour pick reached here and was DROPPED with no
+      // error anywhere: the one row the popup asks this window about was the one row it threw
+      // away. The same failure shape `agents-tab.tsx` records beside its own spelled-out six.
+      launchAgent: async (threadId, templateId, overrides, agentId, runtime, color) =>
         launchAgentOnThread({
           channelId,
           // ⚠ THE DIALOG'S OWN ARGUMENT, PASSED THROUGH — never re-derived from `taskId` here. The
@@ -139,6 +145,10 @@ export function AgentWindowLaunch({
           overrides,
           agentId,
           runtime,
+          // ⚠ ABSENT WHEN THE OPERATOR TOUCHED NO CIRCLE — the server then assigns the first
+          // free key, which is what an untouched popup has always meant. Never `null`: the
+          // payload's absence IS the spelling of "pick for me".
+          color,
         }),
       approveTemplate,
     };

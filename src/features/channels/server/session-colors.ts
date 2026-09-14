@@ -1,9 +1,5 @@
 import "server-only";
-import {
-  AGENT_COLOR_KEYS,
-  agentColorOrNull,
-  firstFreeAgentColor,
-} from "../lib/agent-colors";
+import { agentColorOrNull, firstFreeAgentColor } from "../lib/agent-colors";
 import type { AgentColorKey } from "../types";
 import type { SessionStateUpsert } from "./collab-dto";
 
@@ -144,6 +140,9 @@ export function takenColorsFromRows(
   return taken;
 }
 
-/** ⚠ Re-exported so a caller needing "all sixteen" imports ONE module rather than
- *  reaching past this file into `lib/` for half the vocabulary. */
-export { AGENT_COLOR_KEYS };
+// ⚠ **THE `AGENT_COLOR_KEYS` RE-EXPORT IS DELETED (2026-09-14).** It stood here so "a caller
+// needing all sixteen imports ONE module rather than reaching past this file into `lib/`" — and
+// **no caller ever did**: every consumer in this tree (`schema-sessions.ts`, `schema-launch.ts`,
+// `agent-color-circles.tsx`, both suites) imports the bank from `lib/agent-colors.ts`, which is
+// where it is declared. A second import path for one array is how two modules come to look like
+// two vocabularies.

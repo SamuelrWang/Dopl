@@ -37,30 +37,20 @@
 
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import type { ChannelPeerSession } from "../../hooks/use-channel-agent-sessions";
-import {
-  RECENCY_WELLS,
-  RecencyWell,
-  RecencyWells,
-  useRecencyWells,
-  type RecencyWellId,
-  type RecencyWellItem,
-} from "./recency-wells";
+import { RecencyWells, type RecencyWellItem } from "./recency-wells";
 
-// ⚠ THE SPANS, THE BUCKETING FUNCTION, THE COLLAPSE TIMER AND THE WELL COMPONENT
-// ARE RE-EXPORTED UNDER THIS TAB'S OWN NAMES, not re-implemented — `agents-tab.tsx`
-// and this file's suite name them, and the Threads tab reads the generic module
-// directly. A renamed export here would be a second vocabulary for one recipe.
-export { wellFor, WELL_COLLAPSE_MS } from "./recency-wells";
+// ⚠ **THE PASS-THROUGH RE-EXPORTS ARE DELETED (2026-09-14).** This file briefly
+// re-exported `wellFor`, `WELL_COLLAPSE_MS`, `RECENCY_WELLS` (as `AGENT_WELLS`),
+// `RecencyWellId` (as `AgentWellId`), `RecencyWell` (as `AgentWell`) and a
+// `useAgentWells` wrapper, under a comment saying `agents-tab.tsx` and this file's
+// suite named them. **Measured: no non-test file imported ANY of them** — the tab
+// takes `AgentWells`, `agentActivityAt`, `peerActivityAt` and `AgentWellItem`, and
+// the Threads tab reads `recency-wells.ts` directly. A second name for one recipe,
+// with test-only readers asserting that the alias is an alias, is the vocabulary
+// this comment was written to prevent. **Import the generic module.**
 
-/** The four wells, in the order Samuel dictated them. ⚠ ONE ARRAY, SHARED — the
- *  Threads tab groups by the same spans, so a fifth span is one edit. */
-export const AGENT_WELLS = RECENCY_WELLS;
-export type AgentWellId = RecencyWellId;
 /** One agent card, with the stamp that files it. */
 export type AgentWellItem = RecencyWellItem;
-/** ⚠ RE-EXPORTED, NOT WRAPPED, AND UNDER THE NAME IT HAD — a surface that needs
- *  ONE well mounts the same component the generic module declares. */
-export const AgentWell = RecencyWell;
 
 /**
  * WHEN THIS AGENT LAST MATTERED — `max(startedAt, lastActivityAt ?? endedAt)`,
@@ -117,13 +107,9 @@ export function peerActivityAt(peer: Pick<ChannelPeerSession, "updatedAt">): num
  */
 export const AGENT_WELLS_STORAGE_KEY = "dopl.agents.wells";
 
-/** ⚠ THE HOOK KEEPS ITS NAME so this tab reads its own key once, in one place. */
-export function useAgentWells(): {
-  isOpen: (id: AgentWellId) => boolean;
-  toggle: (id: AgentWellId) => void;
-} {
-  return useRecencyWells(AGENT_WELLS_STORAGE_KEY);
-}
+// ⚠ `useAgentWells` STOOD HERE AND IS DELETED (2026-09-14) — a one-line wrapper over
+// `recency-wells.ts › useRecencyWells` with ZERO callers, test included. {@link AgentWells}
+// is the only thing that has ever read this tab's key, and it reads it directly.
 
 /**
  * THE FOUR WELLS OVER ONE ORDERED LIST OF AGENT CARDS.

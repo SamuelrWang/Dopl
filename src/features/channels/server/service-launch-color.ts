@@ -1,7 +1,14 @@
 import "server-only";
-import { firstFreeAgentColor, freeAgentColors } from "../lib/agent-colors";
+import {
+  agentColorOrNull,
+  firstFreeAgentColor,
+  freeAgentColors,
+} from "../lib/agent-colors";
 import { AgentColorTakenError } from "./errors";
-import { foreignLiveColorsByChannel } from "./repository-session-colors";
+import {
+  foreignLiveColorsByChannel,
+  pendingDirectiveColors,
+} from "./repository-session-colors";
 import type { AgentColorKey } from "../types";
 import type { ChannelContext } from "./service-shared";
 
@@ -40,14 +47,40 @@ import type { ChannelContext } from "./service-shared";
 export async function resolveDirectiveColor(
   ctx: ChannelContext,
   channelId: string,
-  wanted: AgentColorKey | undefined
+  wanted: AgentColorKey | undefined,
+  /** ⚠ A PARAMETER WITH A DEFAULT so a test can state an age instead of arranging for one —
+   *  `recency-wells.tsx › wellFor`'s own shape, and the reason the expiry cut is testable
+   *  without a clock. The create passes nothing. */
+  now: number = Date.now()
 ): Promise<AgentColorKey | null> {
-  const byChannel = await foreignLiveColorsByChannel(
-    ctx.workspaceId,
-    [channelId],
-    null
-  );
-  const taken = byChannel.get(channelId) ?? new Set<string>();
+  const [byChannel, directives] = await Promise.all([
+    foreignLiveColorsByChannel(ctx.workspaceId, [channelId], null),
+    // ⚠ **THE SECOND HALF OF THE TAKEN SET, ADDED 2026-09-14** — see
+    // `repository-session-colors.ts › pendingDirectiveColors` for the gap it closes. Issued
+    // TOGETHER rather than in sequence: they are independent reads on the create's critical
+    // path, and a caller is waiting on the answer.
+    pendingDirectiveColors(ctx.workspaceId, channelId),
+  ]);
+  /**
+   * **LIVE SESSIONS ∪ SPOKEN-FOR LAUNCHES**, in that order of certainty.
+   *
+   * ⚠ **THE EXPIRY CUT IS HERE BECAUSE EXPIRY IS LAZY AND LIVES AT THE SERVICE** (the rule
+   * `service-launch.ts › listPendingLaunchDirectives`'s docblock states, and which
+   * `toDirective` applies on the read lane). A directive nobody claimed before its TTL ran
+   * out has released its key, and holding it anyway would let one abandoned launch narrow
+   * the bank for two minutes.
+   * ⚠ **AN UNPARSEABLE STAMP COUNTS AS LIVE** — the direction every read of a stamp on this
+   * lane fails in: offering a key that is about to come back 409 is the cheap failure, and
+   * handing two agents one colour is the expensive one (`agent-color-circles.tsx ›
+   * agentColorsTaken` states the same preference for its own unknowns).
+   */
+  const taken = new Set<string>(byChannel.get(channelId) ?? []);
+  for (const row of directives) {
+    const at = Date.parse(row.expires_at);
+    if (Number.isFinite(at) && at <= now) continue;
+    const key = agentColorOrNull(row.color);
+    if (key) taken.add(key);
+  }
   if (!wanted) return firstFreeAgentColor(taken);
   if (taken.has(wanted)) {
     throw new AgentColorTakenError(wanted, freeAgentColors(taken));

@@ -341,6 +341,20 @@ function BillingSummary({
         over={ent.credits.remaining === 0 && ent.credits.limit > 0}
         overNote="Tool calls are paused until the next period."
       />
+      {/* 🔒 **THE FAIL-OPEN CAPTION — ONE MUTED WORD, AND NOTHING AT ALL WHEN
+          THIS PROCESS IS METERING (2026-09-14).** The consume route fails OPEN
+          by decision, so a dead RPC runs every MCP tool call UNMETERED and this
+          meter prints the same `0` a quiet month prints. The SAME word the /home
+          bar puts in its caption row (`apps/desktop-ui/src/pages/home/
+          overview-sections.tsx › CreditCapacityBar`), off the same field, so the
+          two surfaces cannot say different things about one outage.
+          ⚠ **MINIMAL COPY (INVARIANTS §5): the word, not the timestamp, and no
+          explainer sentence.** The ISO instant is on the payload and in the log.
+          ⚠ **NOT `degraded`** — that is a decided posture about the answer; this
+          is a fault on the charge path. */}
+      {ent.credits.unmeteredSince && (
+        <p className="mt-1.5 text-caption text-text-muted">Unmetered</p>
+      )}
 
       <div className="mt-4">
         {ent.isPaid ? (

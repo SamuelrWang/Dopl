@@ -142,9 +142,16 @@ export function ThreadsTab({
       ) : (
         /* ⚠ ONE `RecencyWells`, NOT A FLAT COLUMN, SINCE 2026-09-13 — and the
            items are built in the SERVER'S ORDER, which the grouping preserves
-           inside every well. ⚠ NO `useMemo` HERE: the array is one map over the
-           same `threads` identity the hook already memoises, and `RecencyWells`
-           memoises the grouping it drives. */
+           inside every well. ⚠ **NO `useMemo` HERE, AND IT BUYS NOTHING EITHER
+           WAY — corrected 2026-09-14.** This comment used to say the grouping
+           downstream was memoised for us; it is (`RecencyWells` keys on
+           `[items, now]`), but this `map` mints a FRESH ARRAY every render, so
+           that memo never hits and the grouping re-runs regardless. Memoising
+           here would not change that either: `onOpenThread` is the parent's
+           inline closure, so the deps move every render too. It is one pass over
+           a CLIPPED list (`constants.ts › CHANNEL_THREAD_LIST_LIMIT`), so none of that
+           matters — a memo whose deps always move is a cache that never hits and
+           a claim in a comment that is not true. */
         <RecencyWells
           storageKey={THREAD_WELLS_STORAGE_KEY}
           items={threads.map(

@@ -50,6 +50,7 @@ const FREE: WorkspaceEntitlementsStatus = {
     // instant flips a day west of UTC.
     periodEnd: "2026-09-01T12:00:00.000Z",
     ledgerDrift: 0,
+    unmeteredSince: null,
   },
   cancelAtPeriodEnd: false,
   subscription_period_end: null,

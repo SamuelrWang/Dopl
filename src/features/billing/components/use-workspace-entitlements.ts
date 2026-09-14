@@ -67,6 +67,24 @@ export interface WorkspaceCreditsStatus {
    * same value the server sends when it could not reconcile.
    */
   ledgerDrift: number;
+  /**
+   * 🔒 **WHEN THE SERVER PROCESS THAT ANSWERED THIS READ FIRST FAILED OPEN ON A
+   * CHARGE AND HAS NOT RECOVERED — ISO-8601, else `null` (2026-09-14).** The
+   * consume route fails OPEN by decision, so a dead RPC runs every MCP tool call
+   * UNMETERED while this meter reads the same `0` a quiet month reads. Two
+   * surfaces print one muted word off it — `pages/home/overview-sections.tsx ›
+   * CreditCapacityBar` and `shared/layout/settings-modal/sections/
+   * plans-billing-core.tsx` — and nothing derives a figure from it.
+   *
+   * ⚠ **PROCESS-LOCAL** (`billing/server/credits-unmetered.ts` states the
+   * limitation in full): a `null` means "not the instance that served this
+   * read", never "not happening".
+   *
+   * ⚠ **SHIPPED 2026-09-14, SO IT TAKES A `?? null` FALLBACK BELOW**
+   * (INVARIANTS §8): a cached row from before it replays with the key absent,
+   * and `null` is the same value the server sends when it is metering normally.
+   */
+  unmeteredSince: string | null;
 }
 
 export interface WorkspaceEntitlementsStatus {
@@ -141,6 +159,10 @@ const DEFAULT_STATUS: WorkspaceEntitlementsStatus = {
     // Nothing was read, so there is nothing that disagrees. 0 is "reconciled",
     // which is the only claim this pre-response default may make.
     ledgerDrift: 0,
+    // ⚠ `null` IS THE ONLY HONEST PRE-RESPONSE VALUE. This default renders
+    // before any server has spoken, and printing "Unmetered" on the strength of
+    // no answer at all would accuse a healthy deployment.
+    unmeteredSince: null,
   },
   cancelAtPeriodEnd: false,
   subscription_period_end: null,
@@ -182,6 +204,9 @@ export function useWorkspaceEntitlements(workspaceId?: string) {
           // ⚠ SHIPPED 2026-09-13 — same rule, same shape: a replayed row has the
           // `credits` object and not this key, and `0` is "reconciled".
           ledgerDrift: raw.credits.ledgerDrift ?? 0,
+          // ⚠ SHIPPED 2026-09-14 — same rule again, and `null` is "metering
+          // normally", so a replayed row never prints the word.
+          unmeteredSince: raw.credits.unmeteredSince ?? null,
         }
       : DEFAULT_STATUS.credits,
     cancelAtPeriodEnd: raw.cancelAtPeriodEnd ?? false,

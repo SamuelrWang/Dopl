@@ -29,6 +29,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { AgentWindowRail, ROW_SELECTED_FACE } from "./agent-window-rail";
+import { AgentWindowShell } from "./agent-window-shell";
 import { TILE } from "./agent-window-frame";
 
 afterEach(cleanup);
@@ -181,5 +182,59 @@ describe("the selected agent is shaded, and collapsed that shading is the SQUARE
     const tile = screen.getByRole("button", { name: /flint/ });
     expect(tile.getAttribute("title")).toBe("flint — Idle");
     expect(tile.textContent).toBe("F");
+  });
+});
+
+/**
+ * 🔒 **THE COLOUR DOT REACHES THE RAIL — the half that shipped as a declared prop and an empty
+ * screen** (2026-09-14; docs/specs/agent-colors.md item 8: *"the Agents-tab card and the pop-out
+ * rail row show a small colour dot before the name for live agents"*).
+ *
+ * ⚠ **THE PIN IS ON THE SHELL, NOT ON THE RAIL, BECAUSE THE RAIL WAS NEVER THE BUG.**
+ * `AgentWindowRail` has drawn `colorFor(session)` since the wave landed; what was missing is that
+ * NOTHING PASSED IT — `AgentWindowShell` neither took the prop nor supplied one, and the pop-out
+ * is the only host. A rail-only case would have passed a resolver by hand and proved the half
+ * that already worked.
+ *
+ * ⚠ **THE SOURCE IS THIS MACHINE'S OWN FEED** (`agent-window-shell.tsx › colorFromOwnFeed`), the
+ * only one this window has: it reads no channel projection by design.
+ */
+describe("the rail's colour dot, as the pop-out actually mounts it", () => {
+  function mountShell(sessions: DesktopSessionSummary[]) {
+    render(
+      <AgentWindowShell
+        tabs={[{ key: keyFor(sessions[0]!), name: "flint" }]}
+        activeKey={keyFor(sessions[0]!)}
+        onSelect={vi.fn()}
+        onCloseTab={vi.fn()}
+        sessions={sessions}
+        onOpenSession={vi.fn()}
+        keyFor={keyFor}
+      >
+        <div />
+      </AgentWindowShell>
+    );
+    // ⚠ THE RAIL OPENS COLLAPSED (the shell's own default), and the collapsed shape is one square
+    // holding one initial — no dot by ruling. Expanding is what the operator does to read names.
+    fireEvent.click(screen.getByRole("button", { name: "Expand agents" }));
+  }
+
+  /**
+   * 🔒 MUTATION-PROOF: drop `colorFor={colorFromOwnFeed}` from the shell's `AgentWindowRail`
+   * mount — the rail still renders every row and every state, and only this fails.
+   */
+  it("draws the key the feed reports", () => {
+    mountShell([session({ agentId: "abc123", color: "agent-07" })]);
+    expect(document.querySelector('[data-agent-color="agent-07"]')).toBeTruthy();
+  });
+
+  /** ⚠ NARROWED, NEVER CAST: a seventeenth key from a newer desktop must read as NO COLOUR, not
+   *  reach a `var(--agent-color-99)` that resolves to nothing and paints an invisible dot. */
+  it("draws nothing for a key outside the bank, and nothing for no key", () => {
+    mountShell([
+      session({ agentId: "abc123", color: "agent-99" }),
+      session({ sessionId: "s-2", taskId: "t2", agentId: "zzz999", name: "quill" }),
+    ]);
+    expect(document.querySelectorAll("[data-agent-color]")).toHaveLength(0);
   });
 });

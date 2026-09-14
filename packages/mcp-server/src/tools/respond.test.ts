@@ -129,6 +129,7 @@ describe("creditsExhausted — the personal wallet", () => {
     const text = creditsExhausted({
       ...spent,
       upgradeUrl: PERSONAL_PRO_URL,
+      upgradeCredits: 5000,
     }).content[0]?.text;
 
     expect(text).toBe(
@@ -150,5 +151,70 @@ describe("creditsExhausted — the personal wallet", () => {
       "Your personal credits are used up for this month (5,000/5,000). Resets 2026-10-01.",
     );
     expect(text).not.toContain("Upgrade");
+  });
+});
+
+/**
+ * 🔒 **F-668 — THE PAID FIGURE IN THE UPSELL COMES OFF THE WIRE, AND THESE PINS
+ * ARE WHY IT CANNOT GO BACK TO A LITERAL (2026-09-14).**
+ *
+ * ⚠ **THE OLD PINS COULD NOT SEE THE DRIFT, AND THAT IS THE WHOLE FINDING.**
+ * The sentences said `5,000` and so did the assertions, so they pinned the
+ * literal AGAINST ITSELF while `src/features/billing/credits.ts ›
+ * SEAT_MONTHLY_CREDITS.team` was free to move underneath them. **These cases
+ * feed a figure NO CONSTANT IN THE TREE HOLDS**: the only way they pass is by
+ * rendering what the server sent, so re-typing any literal into
+ * `creditsExhausted` turns them red.
+ *
+ * ⚠ **THE OTHER HALF OF THE CHAIN IS APP-SIDE** —
+ * `src/features/billing/server/credits-service.test.ts` pins that the figure
+ * ON the wire IS the constant. Neither half alone closes the finding: this one
+ * says the copy tracks the wire, that one says the wire tracks `credits.ts`.
+ */
+describe("creditsExhausted — the upgrade figure is the server's (F-668)", () => {
+  const URL = "https://www.usedopl.com/billing?billing=upgrade";
+
+  it("renders the SEAT figure it was given, with thousands separators", () => {
+    const text = creditsExhausted({
+      wallet: "seat",
+      upgradeUrl: URL,
+      upgradeCredits: 7777,
+    }).content[0]?.text;
+
+    expect(text).toContain(`Upgrade to Team for 7,777 credits per member: ${URL}`);
+    expect(text).not.toContain("5,000");
+  });
+
+  it("renders the PERSONAL figure it was given", () => {
+    const text = creditsExhausted({
+      wallet: "personal",
+      upgradeUrl: URL,
+      upgradeCredits: 12345,
+    }).content[0]?.text;
+
+    expect(text).toContain(`Upgrade to Pro for 12,345 credits a month: ${URL}`);
+  });
+
+  /**
+   * ⚠ **AN OLDER SERVER SENDS NO FIGURE, AND THE CLAUSE GOES WITH IT.** Every
+   * field on `CreditsOutcome` is optional because the wire makes it so, and a
+   * substituted `limit` would advertise the allowance the caller just
+   * exhausted as the thing an upgrade buys. `0` is the same case — it is what
+   * both degraded answers send.
+   */
+  it.each([
+    ["absent", undefined],
+    ["zero", 0],
+  ])("drops the whole clause when the figure is %s", (_label, upgradeCredits) => {
+    const text = creditsExhausted({
+      wallet: "seat",
+      used: 100,
+      limit: 100,
+      upgradeUrl: URL,
+      upgradeCredits,
+    }).content[0]?.text;
+
+    expect(text).toContain(`Upgrade to Team: ${URL}`);
+    expect(text).not.toContain("credits per member");
   });
 });

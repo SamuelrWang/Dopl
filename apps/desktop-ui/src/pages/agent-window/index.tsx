@@ -19,10 +19,13 @@ import {
 import { useAgentLaunch } from "@/features/channels/components/channels-v2/use-agent-launch";
 import { AgentWindowLaunch } from "@/features/channels/components/channels-v2/agent-window-launch";
 import {
+  canHostAgentTabs,
   closeOwnTab,
   onAgentWindowTabs,
   type AgentWindowTab,
 } from "@/shared/lib/spa-bridge-window";
+import { workspaceSegment } from "@/features/workspaces/url";
+import type { WorkspaceLike } from "@/shared/layout/app-shell/workspace-types";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
 // ⚠ `?inline` FOR THE SAME REASON `components/app-shell/account-rail.tsx` takes it: the packaged
 // renderer is a `file://` document, so the mark travels as a data URI rather than a URL. It is
@@ -37,6 +40,7 @@ import {
 } from "#/components/page-states";
 import { SignedOutScreen } from "#/pages/boot/signed-out-screen";
 import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
+import { useApiQuery } from "#/hooks/use-api-query";
 
 /**
  * `/:workspaceSegment/agent-window/:channelId?thread=` — THE AGENT WINDOW'S PAGE
@@ -165,6 +169,32 @@ function AgentWindowTabs({
   // agent VIEW subscribes separately because it is its own tree-shaped consumer; this is the same
   // hook, and `use-desktop-sessions.ts` is a shared subscription rather than a second wire.
   const { sessions } = useDesktopSessions();
+  /**
+   * **WHICH WORKSPACE SEGMENT A RAIL ROW ROUTES INTO** (2026-09-14).
+   *
+   * ⚠ **THE CACHED ROSTER, NOT A NEW READ.** `/api/workspaces` is the shell's own query and is
+   * IndexedDB-persisted, so this window reads what is already there and issues nothing on the
+   * click path. ⚠ `enabled` is unconditional because the answer is needed the moment a rail row
+   * is clicked, and a query that starts on the click is a click that routes on a fallback.
+   */
+  const workspaces = useApiQuery<{ workspaces?: WorkspaceLike[] }, WorkspaceLike[]>(
+    "/api/workspaces",
+    { select: (body) => body.workspaces ?? [] },
+  );
+  /**
+   * ⚠ **THE FALLBACK IS THIS WINDOW'S SEGMENT, AND IT IS ONLY EVER RIGHT WHEN THE ANSWER IS
+   * UNKNOWN.** A main older than the `workspaceId` field reports `null`, and a roster that has
+   * not resolved cannot map an id — in both cases the honest guess is the workspace this window
+   * is already in, which is what the rail did for EVERY row until this change. An id that IS
+   * known and is NOT in the roster (a workspace the operator has left) falls back too: the
+   * alternative is routing to a segment nobody can open.
+   */
+  const segmentFor = (sessionWorkspaceId: string | null): string => {
+    // ⚠ THE COMPONENT'S OWN `workspaceId` — what THIS window is open on.
+    if (!sessionWorkspaceId || sessionWorkspaceId === workspaceId) return segment;
+    const match = (workspaces.data ?? []).find((w) => w.id === sessionWorkspaceId);
+    return match ? workspaceSegment(match) : segment;
+  };
   // 🔒 THE "+"'s OWN STATE, HELD HERE BECAUSE THE BUTTON AND THE FORM ARE IN DIFFERENT SUBTREES —
   // the `+` is in the chrome (inside the shell), the dialog is a sibling of the shell. ⚠ ABOVE
   // EVERY BRANCH, like every hook in this file: the tab host has no early return today and must not
@@ -215,7 +245,11 @@ function AgentWindowTabs({
         // ⚠ MAIN CLOSES IT — and takes the window down with the last one. This side does not remove
         // the row itself: the push that follows is what re-renders the strip, so there is exactly one
         // account of which tabs exist.
-        onCloseTab={(key) => void closeOwnTab(key)}
+        // 🔒 **ABSENT ON A MAIN WITHOUT THE TAB OPS (2026-09-14)**, so the strip draws no ×.
+        // `closeOwnTab` answers `{ ok: false }` on such a build, which made the control look
+        // exactly like a working one and do nothing — §11's absent-not-disabled rule, applied
+        // where it was declared and never used: `canHostAgentTabs` had no caller until now.
+        onCloseTab={canHostAgentTabs() ? (key) => void closeOwnTab(key) : undefined}
         // 🔒 THE "+" OPENS THE New agent FORM for the ACTIVE tab's channel (the strip's own ruling).
         // ⚠ IT WAS WIRED TO NOTHING UNTIL 2026-09-13's second pass — the prop was passed, the chrome
         // drew the control, and no host mounted a dialog, so the click reported into a void.
@@ -248,6 +282,10 @@ function AgentWindowTabs({
         // (or fronts the one already open) and pushes the new set back, so opening from the rail and
         // opening from the Agents tab are the SAME path — and an agent the rail names but main has
         // not tabbed cannot be shown by a local selection that main knows nothing about.
+        // 🔒 **AND THE SEGMENT IS THE SESSION'S OWN WORKSPACE, NOT THIS WINDOW'S (2026-09-14).**
+        // The rail lists every running agent on this machine, ACROSS workspaces; the route it
+        // builds is `#/w/<segment>/…`, and passing this window's segment for a row in another
+        // workspace opened a page that cannot hold that channel.
         onOpenSession={(session) => {
           void openAgentWindow(
             {
@@ -255,7 +293,7 @@ function AgentWindowTabs({
               taskId: session.taskId ?? "",
               agentId: session.agentId ?? undefined,
             },
-            segment,
+            segmentFor(session.workspaceId ?? null),
           );
         }}
       >

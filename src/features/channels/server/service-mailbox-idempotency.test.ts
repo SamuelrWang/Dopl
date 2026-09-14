@@ -55,6 +55,10 @@ vi.mock("./repository-tasks", () => ({ findTaskByChannelAndId: vi.fn() }));
 // `service-launch-color.test.ts`.
 vi.mock("./repository-session-colors", () => ({
   foreignLiveColorsByChannel: vi.fn(async () => new Map()),
+  // ⚠ THE SECOND READ THE GATE MAKES SINCE 2026-09-14 (pending directives hold their key
+  // too). Stubbed for the same reason as the first: the POLICY stays real here, the READS
+  // do not. Its own cases are in `service-launch-color.test.ts`.
+  pendingDirectiveColors: vi.fn(async () => []),
 }));
 vi.mock("./service-shared", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./service-shared")>();

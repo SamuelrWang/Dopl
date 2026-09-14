@@ -169,6 +169,9 @@ export const BILLING_STATUS = {
     // renders one muted word on the capacity bar, and a fixture that drifted would
     // put it in front of every other assertion on this page.
     ledgerDrift: 0,
+    // ⚠ **METERING NORMALLY BY DEFAULT (2026-09-14)**, for the reason above: a
+    // non-null `unmeteredSince` puts a second muted word in the same caption row.
+    unmeteredSince: null,
   },
   cancelAtPeriodEnd: false,
   subscription_period_end: null,

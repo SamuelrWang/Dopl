@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { LAUNCH_DIRECTIVES_TABLE } from "./repository-launch";
 import { isMissingRelation } from "./repository-sessions";
 import { resolveReportedColors, takenColorsFromRows } from "./session-colors";
 import type { ForeignColorsByChannel } from "./session-colors";
@@ -99,6 +100,59 @@ export async function foreignLiveColorsByChannel(
     else byChannel.set(row.channel_id, keys);
   }
   return byChannel;
+}
+
+/**
+ * **A COLOUR A LAUNCH HAS ALREADY SPOKEN FOR BUT NO SESSION IS WEARING YET** (2026-09-14).
+ *
+ * ⚠ **THE GAP THIS CLOSES IS THE ORDINARY CASE, NOT A RACE BETWEEN MEMBERS.** A directive is
+ * filed, the operator's machine claims it, spawns, and only THEN does a `channel_sessions` row
+ * carrying the key exist — seconds later. Until then {@link foreignLiveColorsByChannel} reports
+ * that key as free, so an operator launching two agents back to back was offered (and could
+ * explicitly pick) the SAME key for both, got no 409, and had the second one silently
+ * substituted by the push lane — on the one lane whose whole contract is that it REFUSES rather
+ * than substitutes (`server/errors.ts › AgentColorTakenError`).
+ *
+ * ⚠ **THE PREDICATE IS THE CLAIM LANE'S, NOT A NEW ONE**: `status IN ('pending','claimed')`,
+ * exactly what `repository-launch.ts › listPendingLaunchDirectives` calls "still awaiting a
+ * decision". A `claimed` row is a machine that has said it will run this launch, so its key is
+ * MORE spoken for than a pending one, not less.
+ *
+ * ⚠ **EXPIRY IS NOT FILTERED HERE, AND THAT IS THE STANDING RULE RATHER THAN AN OMISSION.** It
+ * is LAZY and lives at the SERVICE (`repository-launch.ts › listPendingLaunchDirectives` states
+ * it: a `WHERE expires_at > now()` in a statement would be a SECOND expiry rule and the two
+ * would drift). So this hands back `expires_at` and `service-launch-color.ts` drops the dead
+ * rows — otherwise a refused or abandoned launch would hold a key hostage for the TTL.
+ *
+ * ⚠ **CHANNEL-WIDE AND MEMBER-BLIND, like the live read above**: uniqueness is cross-member by
+ * ruling, so an operator-fenced read here would reinstate exactly the bug. Two columns, and the
+ * answer crosses no audience boundary — a set of colour keys says nothing about whose machine.
+ */
+export async function pendingDirectiveColors(
+  workspaceId: string,
+  channelId: string
+): Promise<Array<{ color: string | null; expires_at: string }>> {
+  const { data, error } = await supabaseAdmin()
+    .from(LAUNCH_DIRECTIVES_TABLE)
+    .select("color, expires_at")
+    .eq("workspace_id", workspaceId)
+    .eq("channel_id", channelId)
+    .in("status", ["pending", "claimed"])
+    // ⚠ NULLS FILTERED IN SQL: a directive that named none is the ordinary row and can hold
+    // nothing. (It is never "no colour" — the create resolves first-free before the insert.)
+    .not("color", "is", null)
+    .limit(COLOR_ROWS_LIMIT);
+  if (error) {
+    // ⚠ `[]` ON A MISSING RELATION, on {@link foreignLiveColorsByChannel}'s own argument: before
+    // the migration the honest answer is "nothing is spoken for". Every other failure throws —
+    // an empty set conjured out of a network error hands two agents one key.
+    if (isMissingRelation(error)) return [];
+    throw error;
+  }
+  return (data ?? []) as unknown as Array<{
+    color: string | null;
+    expires_at: string;
+  }>;
 }
 
 /**

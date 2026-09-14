@@ -263,7 +263,12 @@ export type LaunchDirectiveInsert = {
    */
 };
 
-const TABLE = "channel_launch_directives";
+/** The directives table. ⚠ **EXPORTED SINCE 2026-09-14** so the colour lane
+ *  (`repository-session-colors.ts › pendingDirectiveColors`) names it by REFERENCE: a
+ *  second spelling of a table name is a read that silently returns nothing the day the
+ *  table is renamed. `TABLE` stays the local alias every statement below already uses. */
+export const LAUNCH_DIRECTIVES_TABLE = "channel_launch_directives";
+const TABLE = LAUNCH_DIRECTIVES_TABLE;
 
 export async function insertLaunchDirective(
   operatorUserId: string,

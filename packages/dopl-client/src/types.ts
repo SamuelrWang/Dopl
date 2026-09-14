@@ -278,5 +278,19 @@ export interface CreditConsumeResponse {
    * `wallet === "personal"` as proof that there is no link.
    */
   upgradeUrl: string;
+  /**
+   * 🔒 **WHAT THE OFFER AT `upgradeUrl` BUYS — THE PAID ALLOWANCE, NOT THE
+   * CALLER'S CURRENT ONE (2026-09-14, F-668 CLOSED).** The MCP refusal quotes it
+   * (*"Upgrade to Team for 5,000 credits per member"*) and cannot compute it:
+   * `packages/` is a separate build and cannot import
+   * `src/features/billing/credits.ts`, so the figure was a literal in two places
+   * with no test able to see it drift from the constant. It rides the response
+   * for exactly the reason `upgradeUrl` does.
+   *
+   * ⚠ **OPTIONAL, AND `0` MEANS "NO OFFER TO SIZE"** — a wallet already on its
+   * paid tier, and both degraded answers. A reader DROPS the figure rather than
+   * substituting `limit`, which is the allowance the caller just exhausted.
+   */
+  upgradeCredits?: number;
   degraded?: boolean;
 }

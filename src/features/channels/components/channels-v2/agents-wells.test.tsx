@@ -34,12 +34,14 @@ vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
 
 import { AgentsTab } from "./agents-tab";
 import {
-  AGENT_WELLS,
   AGENT_WELLS_STORAGE_KEY,
   agentActivityAt,
   peerActivityAt,
-  wellFor,
 } from "./agents-wells";
+// ⚠ THE SPANS AND THE BUCKETING FUNCTION COME FROM THE GENERIC MODULE (2026-09-14).
+// `agents-wells.tsx` used to re-export them under this tab's own names; those aliases had
+// no non-test reader and are deleted, so this suite names the one declaration.
+import { RECENCY_WELLS, wellFor } from "./recency-wells";
 import { CHANNEL_ID } from "./test-fixtures";
 
 const HOUR = 3_600_000;
@@ -383,6 +385,6 @@ describe("AgentsTab — the wells remember, per device", () => {
   });
 
   it("declares four wells and no more — the ids the stored object is filtered against", () => {
-    expect(AGENT_WELLS.map((w) => w.id)).toEqual(["recent", "week", "month", "earlier"]);
+    expect(RECENCY_WELLS.map((w) => w.id)).toEqual(["recent", "week", "month", "earlier"]);
   });
 });

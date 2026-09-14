@@ -196,3 +196,30 @@ describe("the chrome, left to right", () => {
     expect(CODE.match(/style=\{DRAG_REGION\}/g)?.length).toBe(1);
   });
 });
+
+/**
+ * 🔒 **NO × ON A MAIN THAT CANNOT CLOSE A TAB** (2026-09-14).
+ *
+ * ⚠ **`closeOwnTab` ANSWERS `{ ok: false }` ON SUCH A BUILD**, so the control rendered, reported
+ * a click into a void and looked exactly like the working one — §11's absent-not-disabled rule
+ * inverted. `spa-bridge-window.ts › canHostAgentTabs` had been written for precisely this gate
+ * and had NO CALLER; `pages/agent-window/index.tsx` now passes `onCloseTab` only when it answers
+ * true, and this prop is optional for that.
+ *
+ * 🔒 MUTATION-PROOF: make `onClose` required again (drop the `{onClose ? … : null}` branch) and
+ * the first case fails; the strip's other controls are untouched either way, which is the second.
+ */
+describe("the tab × is a capability, not furniture", () => {
+  it("draws no × at all without an onClose", () => {
+    mountChrome({ onClose: undefined });
+    expect(screen.queryByRole("button", { name: /^Close / })).toBeNull();
+    // ⚠ THE TABS THEMSELVES SURVIVE: a build without the close op still SWITCHES tabs, because
+    // selection is the renderer's own state and needs no main.
+    expect(screen.getAllByRole("tab")).toHaveLength(TABS.length);
+  });
+
+  it("draws one × per tab when it can close", () => {
+    mountChrome();
+    expect(screen.getAllByRole("button", { name: /^Close / })).toHaveLength(TABS.length);
+  });
+});

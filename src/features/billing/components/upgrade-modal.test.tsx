@@ -50,6 +50,7 @@ const STANDARD_FREE: Status = {
     periodStart: "2026-09-01T00:00:00.000Z",
     periodEnd: "2026-10-01T12:00:00.000Z",
     ledgerDrift: 0,
+    unmeteredSince: null,
   },
   cancelAtPeriodEnd: false,
   subscription_period_end: null,

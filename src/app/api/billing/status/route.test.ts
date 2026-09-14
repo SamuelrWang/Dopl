@@ -10,7 +10,7 @@
  * against 100/5,000, and the payload carries `credits.wallet` saying which counter that was.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 import type { WorkspaceAuthContext } from "@/shared/auth/with-workspace-auth";
 import type { WorkspaceBillingRow } from "@/features/billing/server/workspace-billing";
@@ -51,6 +51,10 @@ vi.mock("@/features/billing/server/credit-wallets", () => ({
 }));
 
 import { GET } from "./route";
+import {
+  recordUnmetered,
+  resetUnmeteredForTests,
+} from "@/features/billing/server/credits-unmetered";
 import * as repo from "@/features/billing/server/workspace-billing";
 import * as wallets from "@/features/billing/server/credit-wallets";
 
@@ -250,5 +254,61 @@ describe("GET /api/billing/status — credits.ledgerDrift", () => {
     expect((await res.json()).credits.ledgerDrift).toBe(0);
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+
+/**
+ * 🔒 **THE FAIL-OPEN IS ON THE PAYLOAD, BECAUSE NOTHING WEB-SIDE SHOWED IT
+ * (2026-09-14).** `POST /api/mcp/credits/consume` fails OPEN by decision, so a
+ * dead RPC runs every MCP tool call UNMETERED — and this endpoint, the single
+ * billing read every surface makes, reported the same `0` it reports for a
+ * quiet month. `credits.unmeteredSince` is what tells the two apart; the /home
+ * bar and the Settings meter each print one muted word off it.
+ *
+ * ⚠ **PROCESS-LOCAL** (`billing/server/credits-unmetered.ts` argues it in
+ * full), which is why the state is driven here through the module rather than
+ * through a fixture: the field IS the process's own answer.
+ */
+describe("credits.unmeteredSince — the charge path's fault, on the meter", () => {
+  beforeEach(() => resetUnmeteredForTests());
+  afterEach(() => resetUnmeteredForTests());
+
+  it("is null while this process is metering normally", async () => {
+    const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
+    expect(body.credits.unmeteredSince).toBeNull();
+  });
+
+  it("🔒 publishes the stamp once a charge has failed open", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    recordUnmetered("consume_failed", "workspace ws-1: PGRST202");
+
+    const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
+    expect(body.credits.unmeteredSince).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    // ⚠ THE METER ITSELF IS UNTOUCHED. This is a fault on the CHARGE path, not
+    // a claim about the wallet — the numbers beside it stay measured.
+    expect(body.credits).toMatchObject({ wallet: "seat", limit: 100 });
+    error.mockRestore();
+  });
+
+  /**
+   * 🔒 **STAMPED ONCE, AT THE TOP, SO NO ARM CAN OMIT IT.** `callerCredits` has
+   * four returns (peer fence, no-wallet posture, personal, seat) and only two
+   * pass through `reconciled`; a per-arm stamp is exactly how one surface comes
+   * to omit a field, which is the defect this field exists to fix one layer up.
+   * This case drives the arm that degrades INSIDE the payload and proves the
+   * stamp is orthogonal to it.
+   */
+  it("🔒 survives a degraded reconciliation — the two faults are independent", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    recordUnmetered("consume_failed", "workspace ws-1: PGRST202");
+    mockWallets.sumCreditLedger.mockRejectedValue(new Error("PGRST202"));
+
+    const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
+    expect(body.credits.ledgerDrift).toBe(0);
+    expect(body.credits.unmeteredSince).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    warn.mockRestore();
+    error.mockRestore();
   });
 });

@@ -109,7 +109,7 @@ backfill applies (`scripts/sql/backfill-credit-wallets-v2.sql`): rows where
 `src/features/home/server/repository-overview.ts › listOwnedPersonalContainerIds`). The plot
 therefore totals the bar again, but by a SECOND derivation of one quantity rather than by sharing an
 array: a wrong sum now shows up as a plot that disagrees with its own bar. ⚠ The bar is a counter and
-the plot is a fire-and-forget capped ledger, so the plot may read LOW — that direction is expected;
+the plot is a CAPPED ledger haul (the writer is transactional with the counter since 2026-09-13, F-693), so the plot may read LOW only when the cap clips it;
 the reverse is a bug.
 
 ## 3A. Attribution — RULE B (Samuel, 2026-09-13)
@@ -197,8 +197,8 @@ records the ADDRESSED container, so a per-workspace narrowing would drop every
 cross-container seat burn and read as drift.
 ⚠ **`ledgerDrift` extends the STATUS payload only** (`status-service.ts ›
 StatusCredits`), so the `POST /api/mcp/credits/consume` body is byte-identical.
-⚠ **Nothing corrects either side.** `scripts/sql/backfill-credit-wallets-v2.sql` still
-sets counters FROM the ledger and remains a person's decision; after this migration the
+⚠ **Nothing corrects either side.** `scripts/sql/backfill-credit-wallets-v2.sql`
+ADDS the legacy `wallet='workspace'` rows into the counters and labels them (additive upserts, one snapshot; never a whole-ledger `SET`) and remains a person's decision; after this migration the
 two cannot diverge, so it is a deploy-day catch-up and a hand repair, never a cron.
 ⚠ **WRITTEN, NOT APPLIED** — `supabase migration list`, joined ON THE NAME.
 
@@ -294,7 +294,7 @@ export function unmetered(): UnmeteredResult   // wallet: null, degraded: true �
 ```
 `caller` becomes REQUIRED (the seat wallet needs the user). `upgradeUrl` is **empty** when there is
 nothing to buy: personal wallet (no paid tier), or a seat on an already-paid plan. Non-empty only
-for a seat on a FREE-verdict workspace. Ledger write stays fire-and-forget, only on `allowed`.
+for a seat on a FREE-verdict workspace. The ledger row is written by the consume RPC inside the counter's transaction, only on `allowed` (F-693).
 
 ### `status-service.ts` — `GET /api/billing/status`
 `credits` = **the caller's own meter** for the addressed container (their seat, or the personal

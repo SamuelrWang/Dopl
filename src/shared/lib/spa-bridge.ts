@@ -198,8 +198,12 @@ export interface SpaBridgeSurface {
      * the profile decides what is reachable at all, is checked first, and no posture can widen
      * it. The answer carries MAIN's own post-dispatch values, never an echo of the request — the
      * reducer coerces fail-closed and a renderer that stamped its own ask would show a posture
-     * nothing is enforcing. / /** RENAME ONE AGENT — display only (2026-08-25). An EMPTY name
-     * CLEARS it, which is how the operator goes back to `Agent #<id>`.
+     * nothing is enforcing. ⚠ **IT DESCRIBES `setMode` BELOW — AN ORPHAN.** A 2026-09-13 reflow
+     * merged it into `rename`'s and left a literal `/ /**` mid-comment; re-split 2026-09-14.
+     */
+    /**
+     * RENAME ONE AGENT — display only (2026-08-25). An EMPTY name CLEARS it, which is how the
+     * operator goes back to `Agent #<id>`.
      *
      * ⚠ THE ANSWER CARRIES MAIN'S OWN STORED VALUE, never an echo of the ask: a refused name (too
      * long, or carrying control / zero-width / bidi characters) comes back `ok: false` so the

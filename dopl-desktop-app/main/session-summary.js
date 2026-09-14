@@ -101,7 +101,7 @@ function liveSummary(s, name) {
   const pill = pillState(s && s.state);
   return {
     sessionId: String((s && s.sessionId) || ''),
-    channelId: String((s && s.channelId) || ''),
+    channelId: String((s && s.channelId) || ''), workspaceId: (s && s.workspaceId) || null, // ⚠ THE CONTAINER THIS RUN BELONGS TO (2026-09-14) — a FIELD, never a handle, and `null` when the spawn shape carried none, which is the rule every other id on this row follows. The SPA's `DesktopSessionSummary` is gaining it on the other side. ⚠ IT DOES NOT REACH THE WIRE YET: `wireSummary` below still DELETES `workspaceId`, and `reportEntry` re-stamps its own string-coerced copy over this one, so lifting that strip is the decision this line is waiting on — not something to do silently.
     // Wire name `task` == domain name `thread`. '' is a real value: a responder with no
     // first-class thread collapses it.
     taskId: String((s && s.taskId) || ''),
@@ -169,7 +169,7 @@ function liveSummary(s, name) {
 function endedSummary(e, name) {
   return {
     sessionId: String((e && e.sessionId) || ''),
-    channelId: String((e && e.channelId) || ''),
+    channelId: String((e && e.channelId) || ''), workspaceId: (e && e.workspaceId) || null, // the frozen record's container — `agent-history.js` keeps it; same rule and same pending decision as `liveSummary`'s copy above
     taskId: String((e && e.taskId) || ''),
     agentId: name, // frozen with the rest of the identity — see `noteEnded`
     name: name,
@@ -218,11 +218,11 @@ function reportEntry(wire, key, workspaceId) {
   return { ...wire, key: String(key || ''), workspaceId: String(workspaceId || '') };
 }
 
-/** The wire shape, from a report entry: the two report-only fields removed. */
+/** The wire shape: report-only `key` removed; `workspaceId` STAYS since 2026-09-14
+ *  (the pop-out rail routes a cross-workspace row by it — `agent-window/index.tsx › segmentFor`). */
 function wireSummary(entry) {
   const out = { ...entry };
   delete out.key;
-  delete out.workspaceId;
   return out;
 }
 

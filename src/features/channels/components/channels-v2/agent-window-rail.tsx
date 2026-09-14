@@ -107,16 +107,19 @@ export function AgentWindowRail({
    * this file holds no copy of the rule (Samuel, 2026-09-13; docs/specs/agent-colors.md
    * item 8).
    *
-   * ⚠ **IT CANNOT BE READ OFF {@link sessions}, WHICH IS WHY IT IS A FUNCTION.** That prop is
-   * `spa-bridge-shapes.ts › DesktopSessionSummary` — this machine's own feed — and a colour is
-   * the SERVER's assignment against EVERY member's live agents
-   * (`20261005120000`'s per-channel unique index), so no local feed is in a position to know
-   * one. The host resolves it from the peer ∪ own union it already holds
-   * (`channel-surface-data.ts › liveAgents`).
+   * ⚠ **IT IS SUPPLIED, AND SINCE 2026-09-14 `agent-window-shell.tsx` SUPPLIES IT FROM THE OWN
+   * FEED.** This docblock said the opposite — *"it cannot be read off `sessions`"*, on the
+   * grounds that only the server assigns a key — and the consequence was that NOTHING passed
+   * the prop at all: the pop-out rail drew no dot, so half of item 8 shipped as a declared prop
+   * and an empty screen. **The ruling (2026-09-14) is that the own feed is the right source
+   * here**: `spa-bridge-shapes.ts › DesktopSessionSummary.color` is the key this machine ASKED
+   * for, `main/session-summary.js › liveSummary` has carried it since 2026-09-13, and it equals
+   * the assignment in every case except a push substitution — which is itself re-pushed into
+   * this same feed, so the rail agrees with the transcript after one push. A dot that is right
+   * always and momentarily stale once beats no dot.
    *
    * ⚠ **OPTIONAL, AND ABSENT DRAWS NO DOTS AT ALL** — the same absent-not-disabled rule every
-   * capability on this surface follows. A rail mounted by a host with no projection in hand
-   * (the pop-out opened standalone) renders exactly what it rendered before this wave.
+   * capability on this surface follows, kept for a host that mounts the rail directly.
    */
   colorFor?: (session: DesktopSessionSummary) => AgentColorKey | null;
 }) {

@@ -85,6 +85,10 @@ export function creditPeriodFor(
  * carried the billing link until this wave, which pointed a caller at a
  * checkout for a refusal that never happened — and the two degraded answers
  * differing at all is what makes one reader treat them differently.
+ * ⚠ **AND `upgradeCredits` IS `0` FOR THE SAME REASON (2026-09-14, F-668).** The
+ * figure exists to make the offer at `upgradeUrl` concrete; an allowance printed
+ * beside no link is an upsell to nowhere with a number attached. The two fields
+ * are set and cleared together on EVERY arm.
  */
 export function unmetered(): UnmeteredResult {
   return {
@@ -95,6 +99,7 @@ export function unmetered(): UnmeteredResult {
     limit: 0,
     remaining: 0,
     upgradeUrl: "",
+    upgradeCredits: 0,
     degraded: true,
   };
 }

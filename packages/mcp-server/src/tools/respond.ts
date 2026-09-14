@@ -165,6 +165,26 @@ export interface CreditsOutcome {
   limit?: number;
   periodEnd?: string;
   upgradeUrl?: string;
+  /**
+   * 🔒 **WHAT THE OFFER AT `upgradeUrl` BUYS — FROM THE SERVER, BECAUSE THIS
+   * PACKAGE CANNOT KNOW IT (2026-09-14, F-668 CLOSED).** The two upsell
+   * sentences below quoted a literal `5,000` against
+   * `src/features/billing/credits.ts › SEAT_MONTHLY_CREDITS.team` and
+   * `› PERSONAL_MONTHLY_CREDITS.pro`; this build cannot import `src/`, so
+   * retuning a paid allowance was a THREE-SITE edit and **no test could see the
+   * drift** — the pin here asserted the literal against itself while the
+   * app-side pin read the constant, and both stayed green while they disagreed.
+   * The figure rides the consume response now, exactly as `upgradeUrl` already
+   * does (`billing/server/credits-service.ts › upgradeCreditsFor`), so the
+   * number has ONE home again and the WORDING stays here where it belongs.
+   *
+   * ⚠ **ABSENT OR `0` DROPS THE FIGURE, NEVER GUESSES ONE.** An older server
+   * sends no such key — every field on this interface is optional because the
+   * wire makes it so — and a made-up allowance in an upsell is worse than an
+   * upsell without one. It is NOT `limit`: that is the caller's CURRENT
+   * allowance, which is the number they just exhausted.
+   */
+  upgradeCredits?: number;
 }
 
 /** `2026-09-01T00:00:00.000Z` → `2026-09-01`, or null when it is not a date.
@@ -175,6 +195,22 @@ function periodEndDate(periodEnd: string | undefined): string | null {
   const day = periodEnd.slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
   return Number.isNaN(Date.parse(periodEnd)) ? null : day;
+}
+
+/**
+ * ` for 5,000`, or `""` when the server sent no figure.
+ *
+ * ⚠ **THE WHOLE CLAUSE GOES, NOT JUST THE NUMBER.** The callers below append
+ * this to `Upgrade to Team` / `Upgrade to Pro`, so an empty return leaves
+ * *"Upgrade to Team: <url>"* — a shorter true sentence. Keeping the preposition
+ * and dropping the figure would leave *"for credits per member"*, which is the
+ * fabricated-denominator failure `usage-meter.tsx` records, in prose.
+ * ⚠ `0` IS "NO OFFER TO SIZE", not an allowance of zero: both degraded answers
+ * send it (`credits-meter.ts › unmetered`, the consume route's `failOpen`).
+ */
+function upgradeFigure(credits: number | undefined, unit: string): string {
+  if (!Number.isFinite(credits) || (credits as number) <= 0) return "";
+  return ` for ${(credits as number).toLocaleString("en-US")} credits ${unit}`;
 }
 
 /** `(1,000/5,000)`, or "" when the server sent no usable counters. */
@@ -215,27 +251,14 @@ export function creditsExhausted(o: CreditsOutcome): ToolResponse {
 
   if (o.wallet === "seat") {
     const head = `Your seat in this workspace is out of credits for this period${span}.${resets}`;
-    return err(
-      url
-        // ⚠ `5,000` IS THE SECOND HOME OF `SEAT_MONTHLY_CREDITS.team` AND IT IS
-        // TRACKED, NOT ACCEPTED (F-668): this package cannot import `src/`, so
-        // retuning the paid seat allowance is a TWO-SITE edit and no test can
-        // see the drift. The personal literal below is the SAME finding, not a
-        // third source.
-        ? `${head}\n\nUpgrade to Team for 5,000 credits per member: ${url}`
-        : head,
-    );
+    // ⚠ THE FIGURE COMES OFF THE WIRE, NOT OUT OF A LITERAL (F-668).
+    const buys = upgradeFigure(o.upgradeCredits, "per member");
+    return err(url ? `${head}\n\nUpgrade to Team${buys}: ${url}` : head);
   }
   if (o.wallet === "personal") {
     const head = `Your personal credits are used up for this month${span}.${resets}`;
-    return err(
-      url
-        // ⚠ `5,000` IS `PERSONAL_MONTHLY_CREDITS.pro`, HERE FOR THE SEAT
-        // LITERAL'S REASON AND UNDER THE SAME FINDING (F-668) — one copy of the
-        // problem, now written twice.
-        ? `${head}\n\nUpgrade to Pro for 5,000 credits a month: ${url}`
-        : head,
-    );
+    const buys = upgradeFigure(o.upgradeCredits, "a month");
+    return err(url ? `${head}\n\nUpgrade to Pro${buys}: ${url}` : head);
   }
   return err(
     url

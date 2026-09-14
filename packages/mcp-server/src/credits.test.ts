@@ -375,7 +375,7 @@ describe("which wallet the refusal names", () => {
   it("a SEAT on a free workspace — names the seat, the counters, the reset, and the upgrade", async () => {
     const { map, client } = build({ sole: true });
     client.consumeCredits.mockResolvedValue(
-      exhaustedOn("seat", { used: 5000, limit: 5000 }),
+      exhaustedOn("seat", { used: 5000, limit: 5000, upgradeCredits: 5000 }),
     );
 
     const text = textOf(await map({}));
@@ -424,7 +424,7 @@ describe("which wallet the refusal names", () => {
   ])("a PERSONAL wallet %s", async (_label, upgradeUrl, spent, tail) => {
     const { map, client } = build({ sole: true });
     client.consumeCredits.mockResolvedValue(
-      exhaustedOn("personal", { used: spent, limit: spent, upgradeUrl }),
+      exhaustedOn("personal", { used: spent, limit: spent, upgradeUrl, upgradeCredits: 5000 }),
     );
 
     const n = (spent as number).toLocaleString("en-US");

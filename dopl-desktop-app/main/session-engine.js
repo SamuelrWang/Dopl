@@ -57,39 +57,14 @@ const { denyPendingPermissions, resolvePerm } = sessionPermissions;
 const sessionLaunch = require('./session-launch');
 const { launch, launchResponderSession, launchRequesterSession, hasLiveSession, counterpartyFor } = sessionLaunch;
 
-// settings.js owns the window-mode switch + caps; required defensively so the engine still
-// loads if it is momentarily absent (unit/E2E harnessing), defaulting to ON.
-let settings = null;
-try { settings = require('./settings'); } catch (_) { /* absent -> defaults (window-mode ON) */ }
+// ⚠ THE HOST SEAMS — the settings read (`readCaps`), the tray rebuild and the LIFECYCLE ECHO
+// (`runLifecycle` / `setLifecycleHandlers`, and the handler pair they hold) — live in
+// `session-engine-host.js` (§2 SPLIT, 2026-09-14). Unchanged, and still exported from here.
+const { readCaps, refreshTray, runLifecycle, setLifecycleHandlers } = require('./session-engine-host');
 
 const sessions = new Map(); // sessionKey -> live session object (in-memory only)
-let lifecycle = { onLaunched: null, onEnded: null };
 let selfUserId = null; // operator's own user id (item 1: the self avatar); set by channel-listener
 function setSelfIdentity(id) { selfUserId = id || null; }
-
-// ⚠ TAKES THE SPEC, FOR TWO REASONS, AND BOTH ARE ABOUT THE TURN CAP (2026-09-05, task 9a).
-// (1) ISSUER: `spec.launchDepth` keys which documented default applies when the operator has set
-// no cap — 0 is the New Agent button (200), anything else, absent included, is the agent number
-// (24). Forwarded, never invented, exactly as the launch funnel forwards it.
-// (2) REHYDRATE: a recreate / crash resume passes NO depth (the guard is explicit that a recreate
-// must not resurrect a depth it cannot verify), so without this a 200-turn operator session that
-// crashed at turn 80 would come back capped at 24 with 80 already spent and end on its first
-// `result`. `spec.turnCap` is the cap that session was launched under, persisted beside the turn
-// and cost counters it bounds (FIX #9's argument, one field wider), and it wins here for the same
-// reason those two do. A fresh launch carries none and reads the setting.
-// 🔒 2026-09-07: this read THREE settings and now reads ONE. The turn cap and the cost cap are
-// deleted (Samuel's ruling), so there is nothing to resume, nothing to key on `launchDepth`, and
-// no reason for a launched session to carry either number. The rehydrate argument above applied
-// to a cap that no longer exists; the idle TTL never had it, because parking is not ending.
-// ⚠ THE FUNCTION IS KEPT RATHER THAN INLINED so the one remaining read still has a named home and
-// the next setting to arrive has somewhere obvious to go.
-function readCaps(spec) { // eslint-disable-line no-unused-vars -- `spec` kept: see above
-  if (!settings) return {};
-  return { idleMs: settings.getIdleTtlMs() };
-}
-
-// Rebuild the tray after a session is hidden / reopened / settled. Lazy-required so the engine holds no top-level tray dependency (tray requires nothing back).
-function refreshTray() { try { require('./tray').refresh(); } catch (_) { /* tray optional */ } }
 
 // Resume machinery (session-park.js) is fed the engine handles it can't require: the registry, the runtime acquire (it THROWS where the old SDK loader threw — `main/runtime/index.js › acquire` carries that argument, and why it is neither the binary probe nor the credential one), buildLaunchSpec (the v1.9 security path, NEVER duplicated), plus consume/dispatch/startSession. Hoisted, so bind order does not matter.
 // ⚠ FOUR HANDLES LEFT WITH THE SHELL-RECREATE FAMILY (2026-08-20, F-228): `windowFactoryReady`,
@@ -243,17 +218,6 @@ function scheduleIdle(s) {
 // answered every deny with `'Denied by operator'`, including the WINDOWLESS auto-deny where nobody
 // was asked; that sentence cost ~8 messages of wasted agent diagnosis and two operator escalations
 // in live testing. `session-permissions.js` carries the argument and the two messages.
-function runLifecycle(s, kind, extra, body) {
-  const info = { channelId: s.channelId, taskId: s.taskId, workspaceId: s.workspaceId, side: s.side, sessionId: s.sessionId, key: s.key, sdkSessionId: s.sdkSessionId }; // FIX #2: key+sdkSessionId (cycle) -> echoTargets dedup
-  try {
-    if (kind === 'task_started') {
-      if (lifecycle.onLaunched) lifecycle.onLaunched(info);
-    } else if (lifecycle.onEnded) {
-      // P3: `body` is the calm one-liner a capped/ended lifecycle carries (undefined -> the handler derives one).
-      lifecycle.onEnded(info, kind, extra || {}, body);
-    }
-  } catch (err) { diag('session-engine: lifecycle handler error', err && err.message); }
-}
 
 // ⚠ `settle(s, outcome, keepWindow)` STOOD HERE AND MOVED TO `main/session-teardown.js`
 // (2026-08-22, the §2 cap). Nothing about it changed: it is still the ONE teardown every terminal
@@ -261,7 +225,6 @@ function runLifecycle(s, kind, extra, body) {
 // ring into `agent-history` before the registry entry disappears. The engine executes it through
 // the `settle` effect exactly as before. Its sibling, `session-close-task.js`'s status flip, was
 // deleted with thread closing (Phase 4, 2026-08-18).
-function setLifecycleHandlers(h) { lifecycle = { onLaunched: h && h.onLaunched, onEnded: h && h.onEnded }; }
 
 // ⚠ `narrationFor(a)` MOVED WITH IT, for the reason its own docblock now states: it is the one
 // read whose correctness depends on what `settle` wrote a moment earlier.

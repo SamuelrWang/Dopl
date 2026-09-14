@@ -210,10 +210,21 @@ export function AgentColorCircles({
     [free, value, onChange]
   );
 
-  /** Which circle Tab reaches — the selected one, else the first selectable one. ⚠ ONE
-   *  stop for the whole group (roving `tabIndex`), because sixteen tab stops in the
-   *  middle of a five-field form is what a radiogroup exists to avoid. */
-  const tabStop = value && free.includes(value) ? value : (free[0] ?? null);
+  /**
+   * Which circle Tab reaches — the selected one, else the first selectable one. ⚠ ONE
+   * stop for the whole group (roving `tabIndex`), because sixteen tab stops in the
+   * middle of a five-field form is what a radiogroup exists to avoid.
+   *
+   * ⚠ **A FULL BANK STILL HAS A TAB STOP, AND THE FALLBACK IS THE LAST TERM (2026-09-14).**
+   * With all sixteen keys out, `free` is empty and `value` is `null` (`firstFreeAgentColor`
+   * answers none), so every circle would have carried `tabIndex={-1}` and the row would have
+   * been unreachable by keyboard ENTIRELY — no focus, and therefore no `title`, which is the
+   * one sentence saying WHY nothing can be picked. Landing on a held circle whose Enter does
+   * nothing is the honest version of a control that cannot act (the same reading
+   * `aria-disabled` already gives assistive tech); an unreachable group is the silent one.
+   */
+  const tabStop =
+    value && free.includes(value) ? value : (free[0] ?? AGENT_COLOR_KEYS[0]);
 
   return (
     <FormSection label="Colour">

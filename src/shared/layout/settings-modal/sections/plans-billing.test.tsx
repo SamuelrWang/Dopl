@@ -49,6 +49,7 @@ const STANDARD_FREE: WorkspaceEntitlementsStatus = {
     periodStart: "2026-09-01T00:00:00.000Z",
     periodEnd: "2026-10-01T12:00:00.000Z",
     ledgerDrift: 0,
+    unmeteredSince: null,
   },
   cancelAtPeriodEnd: false,
   subscription_period_end: null,
@@ -331,5 +332,55 @@ describe("a personal upgrade arrival (?billing=upgrade&plan=pro)", () => {
     expect(markup).toContain("Subscribe to Pro");
     expect(markup).toContain(`${formatMoney(PRO_PRICE)} / month`);
     expect(markup).not.toContain("seats ·");
+  });
+});
+
+/**
+ * 🔒 **THE FAIL-OPEN CAPTION ON THE SETTINGS METER (2026-09-14).**
+ * `POST /api/mcp/credits/consume` fails OPEN by decision, so a dead RPC — the
+ * `PGRST202` a web deploy gets before its migration applies — runs every MCP
+ * tool call UNMETERED while this meter prints the same `0` a quiet month
+ * prints. **Nothing web-side showed it at all** until
+ * `credits.unmeteredSince`, and this pane is the other surface that reads it —
+ * the /home bar (`apps/desktop-ui/src/pages/home/
+ * overview-unmetered-caption.test.tsx`) is the first. The two must say the
+ * SAME word off the SAME field, or one outage reads two ways.
+ */
+describe("the credits meter's fail-open caption", () => {
+  const unmetered = (since: string | null): WorkspaceEntitlementsStatus => ({
+    ...STANDARD_FREE,
+    credits: { ...STANDARD_FREE.credits, unmeteredSince: since },
+  });
+
+  it("says NOTHING while the server is metering", () => {
+    const markup = paint(
+      <PlansBillingCore
+        role="owner"
+        workspaceId="ws-1"
+        onUpgrade={() => {}}
+        onManage={() => {}}
+      />,
+      unmetered(null)
+    );
+    expect(markup).not.toContain("Unmetered");
+  });
+
+  it("🔒 prints one muted word once a charge has failed open", () => {
+    const markup = paint(
+      <PlansBillingCore
+        role="owner"
+        workspaceId="ws-1"
+        onUpgrade={() => {}}
+        onManage={() => {}}
+      />,
+      unmetered("2026-09-14T10:00:00.000Z")
+    );
+    expect(markup).toContain("Unmetered");
+    // ⚠ MINIMAL COPY (INVARIANTS §5): the word, not the instant, and no
+    // explainer sentence. The ISO value is on the payload and in the log.
+    expect(markup).not.toContain("2026-09-14T10:00");
+    // ⚠ AND THE METER ITSELF IS UNTOUCHED — this is a fault on the CHARGE path,
+    // not a claim about the wallet.
+    expect(markup).toContain(String(SEAT_MONTHLY_CREDITS.free));
   });
 });

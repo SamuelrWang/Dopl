@@ -46,10 +46,11 @@ const SOURCE = "api/home/overview-series";
  * EXIST.** That was true of `workspace_credit_usage`, a one-row-per-period
  * COUNTER; it is not true of `credit_usage_events`, the attribution ledger added
  * beside it (`20260901120000_credit_usage_events.sql`, closing F-328). The arm
- * SUMS rather than counts, so it hauls the window once and reports `truncated`,
- * and it answers an EMPTY `points` array — never zeroed bins — when the ledger
- * holds nothing for the window, because there is no history behind the
- * migration.
+ * SUMS rather than counts, so it hauls the window once and reports `truncated`.
+ * ⚠ **AND IT ZERO-FILLS LIKE THE OTHER TWO** — the superseded sentence here said
+ * it "answers an EMPTY `points` array — never zeroed bins" on an empty window;
+ * Samuel overruled that (`service-overview.ts › getHomeOverviewSeries`: the axis
+ * is the frame and the page never loses it).
  *
  * 🔒 **AND THE `credits` METRIC IS THE READER'S OWN PERSONAL WALLET, NOT EVERY
  * CONTAINER THEY BURNED IN (Samuel, 2026-09-12: "is the credits usage wired in?

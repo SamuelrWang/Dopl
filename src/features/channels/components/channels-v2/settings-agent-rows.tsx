@@ -40,7 +40,7 @@ import { MetaRowDivider } from "./bits";
 // COPY lives in `settings-help.tsx` so the table and the components that use it
 // change on one clock.
 import { SETTINGS_HELP, SettingHelp } from "./settings-help";
-import type { AgentToolProfile } from "../../types";
+import type { AgentToolProfile, ResolvedAgentToolProfile } from "../../types";
 
 /**
  * WHAT EACH TOOL PROFILE MEANS. ⚠ Source of truth is
@@ -249,6 +249,36 @@ export function SettingRow({
  * secondary line; a caption on every row would be the explainer paragraph that
  * ruling deleted.
  */
+/**
+ * "TOOL ACCESS" AS `SelectMenu` OPTIONS, AT THE STORED LABELS.
+ *
+ * ⚠ **DERIVED FROM `TOOL_PROFILE_OPTIONS`, NEVER RE-LISTED** — that table is the one place the
+ * three profiles and their containment lines live, and its docblock is the review that bought
+ * each line's wording. A second list here would be the two-readers-one-fact defect with a
+ * CONTAINMENT CLAIM as the thing that drifts. The LABEL half is `AGENT_TOOL_PROFILE_LABELS`.
+ * ⚠ **MODULE LEVEL**, so an unnarrowed row hands the menu the same array on every render.
+ */
+const TOOL_ACCESS_OPTIONS: ReadonlyArray<SelectMenuOption<AgentToolProfile>> =
+  TOOL_PROFILE_OPTIONS.map((option) => ({
+    value: option.value,
+    label: AGENT_TOOL_PROFILE_LABELS[option.value],
+    description: option.description,
+  }));
+
+/** The same list with the SELECTED option wearing the RESOLVED profile's words. ⚠ ONLY the
+ *  option the resolution lands on is relabelled — relabelling every one would claim the
+ *  narrowing applies to picks the operator has not made. */
+function relabelled(
+  profile: AgentToolProfile,
+  resolved: ResolvedAgentToolProfile
+): ReadonlyArray<SelectMenuOption<AgentToolProfile>> {
+  return TOOL_ACCESS_OPTIONS.map((option) =>
+    option.value === profile
+      ? { ...option, label: AGENT_TOOL_PROFILE_LABELS[resolved] }
+      : option
+  );
+}
+
 export function ToolAccessRow({
   profile,
   shared,
@@ -268,17 +298,14 @@ export function ToolAccessRow({
 }) {
   const resolved = profileForChannel(profile, shared);
   const narrowed = resolved !== profile;
-  const options: ReadonlyArray<SelectMenuOption<AgentToolProfile>> =
-    TOOL_PROFILE_OPTIONS.map((option) => ({
-      value: option.value,
-      // ⚠ ONLY the option the resolution LANDS ON is relabelled. Relabelling every
-      // option would claim the narrowing applies to picks the operator has not made.
-      label:
-        option.value === profile
-          ? AGENT_TOOL_PROFILE_LABELS[resolved]
-          : AGENT_TOOL_PROFILE_LABELS[option.value],
-      description: option.description,
-    }));
+  // ⚠ **THE STORED LIST IS ONE IDENTITY FOR EVERY RENDER, AND ONLY A NARROWED ROW PAYS FOR A
+  // NEW ONE** (2026-09-14). The docblock this row inherited from `settings-agent.tsx` argued
+  // MODULE LEVEL — *"so the options are one identity for every render … it matters more here
+  // because the value is compared against the list on each open"* — and the move to a
+  // per-render `map` dropped that without retiring the argument. The labels only move when the
+  // resolution moves, which is the shared-channel case alone, so the ordinary room reads the
+  // module constant and nothing is rebuilt behind a menu that is open.
+  const options = narrowed ? relabelled(profile, resolved) : TOOL_ACCESS_OPTIONS;
   return (
     <>
       <SettingRow name="Tool access">

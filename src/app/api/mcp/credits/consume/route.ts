@@ -6,6 +6,10 @@ import {
   type CreditConsumeResult,
 } from "@/features/billing/server/credits-service";
 import { creditPeriodFor } from "@/features/billing/server/credits-meter";
+import {
+  clearUnmetered,
+  recordUnmetered,
+} from "@/features/billing/server/credits-unmetered";
 
 /**
  * POST /api/mcp/credits/consume — charge ONE MCP tool call to a workspace. The ONLY caller is
@@ -51,21 +55,35 @@ export const POST = withWorkspaceAuth(
       // `packages/dopl-client/src/transport.ts`), so the consume POST already
       // carried it. ⚠ NO SESSION ⇒ NO CHANNEL ⇒ the resource's container pays,
       // which is what a Claude Desktop / Claude Code connection looks like.
-      return NextResponse.json(
-        await consumeMcpCredits(workspaceId, {
-          userId,
-          workspaceKind,
-          channelId: sessionChannelId(sessionId),
-        })
-      );
+      const result = await consumeMcpCredits(workspaceId, {
+        userId,
+        workspaceKind,
+        channelId: sessionChannelId(sessionId),
+      });
+      // ⚠ **THE RECOVERY EDGE, AND IT IS THE ANSWER ITSELF RATHER THAN A
+      // PROBE.** A consume that returned — degraded posture included — is this
+      // process measuring again, so the `unmeteredSince` stamp the surfaces
+      // render comes down on the next real call and not on a timer nobody
+      // armed (`credits-unmetered.ts › clearUnmetered`).
+      clearUnmetered();
+      return NextResponse.json(result);
     } catch (err) {
       // ⚠ FAIL OPEN, DECIDED NOT INHERITED. Failing closed on a DB blip bricks every agent:
       // the registrar refuses the call and the operator sees "out of credits" for a workspace
       // that is not. Only a genuinely exhausted counter may hard-block.
       // (Contrast `shared/auth/mcp-session.ts › checkAndRecordRateLimitSubject`, which fails
       // CLOSED — abuse limiting and billing want opposite defaults.)
-      console.error(
-        `[credits] consume failed for workspace ${workspaceId}: ${
+      // ⚠ **ONE LINE PER PROCESS PER REASON, NOT ONE PER CALL (2026-09-14).**
+      // The superseded `console.error` here fired on EVERY call: under the
+      // deploy-ordering outage this branch exists for (a `PGRST202` from a
+      // migration that has not applied yet) that is a line per tool call per
+      // agent, which buries itself. `credits-unmetered.ts` also makes the state
+      // READABLE — `GET /api/billing/status › credits.unmeteredSince` — because
+      // until now nothing web-side showed a fail-open at all and both meters
+      // printed a `0` nobody could tell from a measured one.
+      recordUnmetered(
+        "consume_failed",
+        `workspace ${workspaceId}: ${
           err instanceof Error ? err.message : String(err)
         }`
       );
@@ -89,6 +107,9 @@ function failOpen(): CreditConsumeResult & { degraded: true } {
     limit: 0,
     remaining: 0,
     upgradeUrl: "",
+    // ⚠ `0`, BYTE FOR BYTE WITH `credits-meter.ts › unmetered` (2026-09-14,
+    // F-668). Nothing was measured, so there is no offer to size.
+    upgradeCredits: 0,
     degraded: true,
   };
 }

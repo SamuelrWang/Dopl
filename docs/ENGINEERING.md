@@ -5691,7 +5691,7 @@ exactly why raising one meant revisiting the others by hand.
   therefore could never be woken by an unaddressed human message. **A silent, order-dependent hole
   in the wake path is a worse bug than a bigger bill.**
 
-`MAX_LAUNCH_DEPTH` (1), `MAX_AGENT_WINDOWS` (4) and `SESSION_REPORT_MAX` (32) are deliberately
+`MAX_LAUNCH_DEPTH` (1), `MAX_AGENT_TABS` (4; was `MAX_AGENT_WINDOWS` until the 2026-09-13 tabbed pop-out) and `SESSION_REPORT_MAX` (32) are deliberately
 unchanged. The last one is worth a sentence: its docblock justified 32 as "over five times" a cap of
 6, and at 15 it is a little over twice. **The number stays because its JOB is unchanged** — it is
 the "a caller cannot write a table here" fence, not a mirror of the desktop ceiling. What the

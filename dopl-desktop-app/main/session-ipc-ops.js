@@ -202,29 +202,10 @@ function register(opts = {}) {
   ipcMain.handle('sessions:openAgentWindow', appWindowOnly('sessions:openAgentWindow', { ok: false }, (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
-    const { isSafeSegment } = require('./deep-link-target');
-    // ⚠ A CHANNEL-LEVEL AGENT HAS NO THREAD (2026-08-21), so an EMPTY `taskId` is legitimate
-    // here — but only when an agent id names the target instead. A payload naming neither is
-    // asking for a window onto nothing and is refused in the same `{ok:false}` shape as
-    // everything else. A NON-empty taskId still passes the ONE character rule.
-    const agentId = asAgentId(p.agentId);
-    const taskId = p.taskId == null ? '' : String(p.taskId);
-    if (!isSafeSegment(p.segment)) return { ok: false };
-    if (taskId ? !isSafeSegment(taskId) : !agentId) return { ok: false };
-    try {
-      if (require('./version-gate').isBlocked()) {
-        diag('session ipc: refused sessions:openAgentWindow — the version floor is blocking');
-        return { ok: false };
-      }
-    } catch (_err) { /* mid-wave / harness: no gate is not a block */ }
-    return require('./agent-window').openAgentWindow({
-      segment: p.segment,
-      channelId: p.channelId,
-      taskId,
-      // ⚠ ONE WINDOW PER AGENT since 2026-08-21: without this, opening the second agent on a
-      // thread silently FRONTED the first one's window.
-      agentId,
-    });
+    // ⚠ THE BODY LIVES IN `main/session-ipc-window-op.js` SINCE 2026-09-14 (a §2 split at the
+    // 500-line cap, on `session-launch-op.js`’s precedent). What stays HERE is the IPC SURFACE:
+    // the op name, the sender binding, the refusal shape and the `channelId` UUID gate.
+    return require('./session-ipc-window-op').openAgentWindow(p);
   }));
 
   // THE LIVE PERMISSION POSTURE (Samuel, 2026-08-20) — both axes, on a session ALREADY
@@ -505,4 +486,6 @@ function register(opts = {}) {
   }));
 }
 
-module.exports = { register, MESSAGE_CAP };
+// ⚠ `asAgentId` IS EXPORTED SINCE 2026-09-14 (the §2 split below this file): the agent-window
+// op's body reads it from here rather than respelling the coercion — one statement, two files.
+module.exports = { register, MESSAGE_CAP, asAgentId };

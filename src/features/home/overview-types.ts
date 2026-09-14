@@ -18,14 +18,14 @@
  * LEDGER beside the counter, written per burn by
  * `billing/server/credit-ledger.ts`. The counter is still the only authority on
  * enforcement.
- *   - ⚠ **THE LEDGER'S FIGURES ARE A FLOOR, NOT A TOTAL**, twice over: its
- *     writer is fire-and-forget (a dropped insert costs an attribution row, not
- *     a credit) and this page's read of it is capped. Nothing here may be
- *     labelled "exact".
+ *   - ⚠ **THE LEDGER'S FIGURES ARE A FLOOR, NOT A TOTAL** — because this page's
+ *     read of it is CAPPED. ⚠ The superseded line said "twice over", the second
+ *     reason being a fire-and-forget writer; that writer is gone (F-693, the row
+ *     is written inside the counter's transaction). Nothing here is "exact".
  *   - ⚠ **AND IT STARTS EMPTY.** There is no history behind the migration, so
- *     every credit figure reads zero until traffic accrues. The series answers
- *     an EMPTY array rather than zeroed bins for exactly this reason — see
- *     {@link HomeOverviewSeries.points}.
+ *     every credit figure reads zero until traffic accrues. ⚠ The superseded
+ *     line said the series answers an EMPTY array for that reason; it ZERO-FILLS
+ *     instead (Samuel, 2026-09-01) — see {@link HomeOverviewSeries.points}.
  */
 
 import type { Role } from "@/features/workspaces/types";
@@ -123,12 +123,14 @@ export interface HomeOverviewSeries {
    * Always the full bin count for the range, oldest first, ZERO-FILLED — a bin
    * with no rows was counted and really is zero.
    *
-   * ⚠ **THAT SENTENCE IS TRUE OF `mcp` AND `messages` AND CONDITIONAL FOR
-   * `credits`**: those two are counted per bin, so a zero was measured. The
-   * credit ledger only exists from its migration forward, so the service sends
-   * an EMPTY array — not zeroed bins — when the window holds no ledger rows at
-   * all, and the surface says "nothing yet" rather than drawing a flat month
-   * that claims nothing was spent.
+   * ⚠ **IT IS UNCONDITIONAL ON ALL THREE METRICS SINCE 2026-09-01 (Samuel: he
+   * wants to SEE the month), AND THE SUPERSEDED PARAGRAPH HERE SAID THE
+   * OPPOSITE.** It said `credits` sends an EMPTY array on an empty window so the
+   * surface can say "nothing yet" — an honesty argument that cost him the chart
+   * entirely while the ledger is young. `service-overview.ts ›
+   * getHomeOverviewSeries` zero-fills the credits arm too; the axis is the frame
+   * and the page never loses it. The trade he took knowingly: a zero bar on a day
+   * before the ledger existed is unmeasured, and the axis cannot say so.
    */
   points: HomeSeriesPoint[];
   /** TRUE when the `credits` haul came back AT its ceiling; always false for
@@ -167,8 +169,7 @@ export interface HomePersonUsage {
   /** `null` when the caller no longer shares a container with them (a departed
    *  member's spend survives them). */
   role: Role | null;
-  /** Summed `credit_usage_events.amount`. ⚠ A FLOOR — the ledger's writer is
-   *  fire-and-forget and this scan is capped. */
+  /** Summed `credit_usage_events.amount`. ⚠ A FLOOR — this scan is capped. */
   credits: number;
 }
 
@@ -269,8 +270,9 @@ export interface HomeOverview {
   scanned: number;
   /** TRUE when a scan came back AT its ceiling — the breakdowns are then a
    *  FLOOR, and the surface has to say so (§9: a clipped read SAYS SO).
-   *  ⚠ The credit rails are a floor even when this is false, because their
-   *  writer is fire-and-forget; `credit-ledger.ts` carries that. */
+   *  ⚠ **AND WHEN IT IS FALSE THE CREDIT RAILS ARE A TOTAL SINCE 2026-09-13**:
+   *  the superseded note said they were a floor regardless because the ledger's
+   *  writer was fire-and-forget, and that writer is gone (F-693). */
   truncated: boolean;
 }
 

@@ -95,12 +95,25 @@ export function ComposerTint({
   // reason this offset walk is exact rather than approximate. Every part is rendered from the
   // ORIGINAL text at its own offset, so a masked region shows the author's real characters and
   // only its TINTABILITY was decided against the mask.
+  // ⚠ **THE OFFSET WALK RUNS BEFORE THE JSX, NOT INSIDE IT (2026-09-14).** Accumulating `at`
+  // inside the children callback reassigns a variable the render function has already returned
+  // past, which the React Compiler refuses outright — `npx eslint` reported
+  // *"Cannot reassign `at` after render completes"* (`react-hooks/immutability`) and bailed.
+  // Pairing every part with its ORIGINAL slice up front is the SAME walk, in the same order,
+  // over the same length-preserving mask; nothing is re-derived and nothing is left to mutate
+  // while the tree is being built.
+  // ⚠ A PLAIN `for`, NOT `.map()`: the compiler refuses the accumulator inside a CALLBACK too
+  // (it cannot prove the closure does not outlive the render), and this walk must stay one pass
+  // — it runs on every keystroke, so re-deriving each part's offset would make it quadratic.
+  const parts: { part: string; raw: string }[] = [];
   let at = 0;
+  for (const part of masked.split(MENTION_TOKEN_RE)) {
+    parts.push({ part, raw: text.slice(at, at + part.length) });
+    at += part.length;
+  }
   return (
     <>
-      {masked.split(MENTION_TOKEN_RE).map((part, i) => {
-        const raw = text.slice(at, at + part.length);
-        at += part.length;
+      {parts.map(({ part, raw }, i) => {
         if (!part.startsWith("@")) return <span key={i}>{raw}</span>;
         const userId = resolveMentionToken(part, memberIndex);
         const agentId =

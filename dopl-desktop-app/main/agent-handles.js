@@ -240,8 +240,17 @@ function handleIndexFor(agentIds, nameFor) {
   return buildAgentHandleIndex(entries);
 }
 
+// ⚠ THE SECOND DOOR THAT NAMES A LIVE AGENT — `escalationAnswerAgentIds`, §2-SPLIT out of
+// `session-dispatch.js` on 2026-09-14 (the 500-line cap) into `agent-handles-escalation.js`.
+// It reads `metadata.escalationAnswer` rather than the body, and intersects with `liveIds`
+// exactly as the handle door above does; that file carries the whole argument for it. It is
+// RE-EXPORTED here because this module is the one the dispatch block already reads its doors
+// off, so the routing table gains no new free var.
+const { escalationAnswerAgentIds } = require('./agent-handles-escalation');
+
 module.exports = {
   agentSlug,
+  escalationAnswerAgentIds,
   handleOf,
   buildAgentHandleIndex,
   slugMentionedAgentIds,

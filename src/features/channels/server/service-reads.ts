@@ -14,7 +14,6 @@ import { mapAgentRow } from "./agents-dto";
 import {
   mapChannelRow,
   mapMemberRow,
-  mapMessageRow,
   mapTaskRow,
   type ChannelMemberRow,
   type ChannelRow,
@@ -27,7 +26,6 @@ import * as collab from "./repository-collab";
 import * as workspaceRepo from "@/features/workspaces/server/repository";
 import type { MemberPresence } from "./dto";
 import {
-  agentNamesFor,
   hydrateMessages,
   loadVisibleChannel,
   mayReadPublicChannels,

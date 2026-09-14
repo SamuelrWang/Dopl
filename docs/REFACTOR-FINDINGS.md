@@ -6304,7 +6304,7 @@ row and the Info tab both read. **The record pane's HEADER reads a different der
 `channels-v2/channel-surface.tsx`, and that one returns the peer's display name whenever
 `channels.is_direct`. So a container whose channel was minted before the 2026-08-24 channel-first
 inversion — the era when a home container really was a two-party relationship, and the row came out
-of `channels/server/service-writes.ts › createDirectChannel` — showed **the peer's name at the top of the pane, under a
+of `channels/server/service-writes-direct.ts › createDirectChannel` — showed **the peer's name at the top of the pane, under a
 list row and an Info card that both said the channel's**.
 
 **Masked, not fixed at the source, and that is deliberate.** `channel-display.ts` is the ONE
@@ -7227,7 +7227,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-449 — the ceiling `channels.agent_*` now records has NO editing surface, so the server's clamp is armed and unarmed (2026-09-02)
 
-- Location: `supabase/migrations/20260912120000_channel_delivery_verdict.sql` §2 (the three columns), `src/features/channels/schema.ts › ChannelUpdateSchema.agentPosture` and `server/service-writes.ts › MANAGED_CHANNEL_FIELDS` (the manage-gated write), against the desktop's own Settings tab (`main/channel-prefs.js › getLaunchPosture`, `AGENT_CHAIN_KEY = 'channelAgentChain'`) and `apps/desktop-ui`, which has no control for the new columns.
+- Location: `supabase/migrations/20260912120000_channel_delivery_verdict.sql` §2 (the three columns), `src/features/channels/schema.ts › ChannelUpdateSchema.agentPosture` and `server/service-writes-channel.ts › MANAGED_CHANNEL_FIELDS` (the manage-gated write), against the desktop's own Settings tab (`main/channel-prefs.js › getLaunchPosture`, `AGENT_CHAIN_KEY = 'channelAgentChain'`) and `apps/desktop-ui`, which has no control for the new columns.
 - Found during: v2 wave A slice A9, closing G6 and G7.
 - Severity: incomplete feature, deliberately, and it is **fail-open by construction** — `null` on every axis means "no ceiling recorded", so the clamp and the chain refusal do nothing until somebody writes one, and the desktop's own clamp remains the fence exactly as before. Nothing regresses; nothing is enforced either.
 - **WHY IT SHIPPED THIS WAY.** G6/G7 record that the ceiling was an `electron-store` record no server could read, so a launch's requested posture "decided nothing" server-side and an offline or older desktop enforced nothing at all. Closing that needs (a) a server-side ceiling, (b) a clamp against it, and (c) a way for an operator to set one. A9 owns the server (`service-writes*.ts`, `service-launch*.ts`, a migration); the Settings surface is `apps/desktop-ui` and `main/channel-prefs.js`, neither of which is in that slice's ownership, and inventing a control there inside a server slice is how a UI change lands in a commit nobody reviewed for one.
@@ -8882,3 +8882,26 @@ would also delete the evidence that this disagreement exists.
   `prompt-framing-template.js › instructionsOnlyFraming` frames it as the role block minus its role
   line ("YOUR INSTRUCTIONS FOR THIS RUN, written by your operator in the launch form."). Nothing
   typed → still no template.
+
+### F-696 — an MCP-connect failure on a RESUMED (parked) session relaunched it on the COLD path and dropped the wake message (found 2026-09-14 review, RULED same day)
+`main/mcp-connect-guard.js › relaunch` re-entered `startQuery` for every failed session, including one that
+had been woken from park: a new push iterator and a stale `firstTurn`, so the peer message that woke it was
+never delivered; the pre-flight also never ran on the resume path (its comment claimed the route was warm,
+false after a boot re-park). Ruling (Desktop Agent, 2026-09-14): a session that reached the failure via the
+resume path is relaunched via `resumeParked` with the same wake input; the pre-flight runs on both paths.
+Behavioural tests for `handleMcpStatus` / `relaunch` / `failVisibly` (cold + resume arms) landed with the fix.
+
+- **F-689 — RESOLVED 2026-09-14 by SPLITTING, not exempting.** `packages/mcp-server/src/tools/channel-schema.ts` → `channel-vocab.ts` + `channel-schema-launch-fields.ts` (673→496); `packages/dopl-client/src/channel-types.ts` → `channel-artifact-types.ts` (545→485); `channel.ts` → `channel-directives.ts` (568→454). Pure moves; served schema bytes unchanged (the exact-equality ratchets stayed green). `ALLOW` is still `__no_exemptions__`.
+
+### F-697 — the 2026-09-14 review's cross-area residue (OPEN, small)
+1. `channels-v2/agent-window-rail.tsx › colorFor` had no passer (rail dot never drew) — being wired from `DesktopSessionSummary.color` in the same review (channels follow-up).
+2. `service-launch-color.ts › resolveDirectiveColor` read only live sessions, so two launches seconds apart could pick one key with no 409 — pending directives now hold their key (same follow-up).
+3. `use-agent-launch.ts › toggle` closed without `reset()` (typed state + `touched` survived, a new id was minted over a standing name) — one `close()` path now (same follow-up).
+4. `pages/agent-window/index.tsx › onOpenSession` routed a rail row for another workspace to THIS window's segment; `DesktopSessionSummary` gains `workspaceId` (desktop + SPA) and the page resolves the segment (same follow-up + the desktop split).
+5. `home-skeleton.tsx › PanelGhost` header ghost is ~3px shorter than the loaded `text-display` heading — below the threshold of restating a number; left.
+
+- **F-668 — RESOLVED 2026-09-14 via the WIRE.** `credits-service.ts › upgradeCreditsFor` reads
+  `SEAT_MONTHLY_CREDITS.team` / `PERSONAL_MONTHLY_CREDITS.pro`; the figure rides
+  `CreditConsumeResult.upgradeCredits` (also on the SDK's `CreditConsumeResponse`) and
+  `packages/mcp-server/src/tools/respond.ts › upgradeFigure` formats it. A retune is ONE site, not three;
+  a mutation of the constant moves the copy (`credits-upgrade-offer.test.ts`).

@@ -218,6 +218,25 @@ export function CreditCapacityBar({
             the two client-side would flag every clipped month. Only the server can
             subtract the ledger from the counter. */}
         {credits.ledgerDrift !== 0 && <span>Unreconciled</span>}
+        {/* 🔒 **THE FAIL-OPEN CAPTION — ONE MUTED WORD, IN THE RECONCILIATION
+            SLOT, AND BOTH CAN SHOW AT ONCE (2026-09-14).** `POST /api/mcp/credits/
+            consume` fails OPEN by decision, so a dead RPC — the `PGRST202` a web
+            deploy gets before its migration applies — runs every agent's tool
+            calls UNMETERED, and this bar reads the same `0` a quiet month reads.
+            Nothing web-side said so until this field
+            (`billing/server/credits-unmetered.ts`).
+            ⚠ **IT IS NOT `degraded`, AND IT MUST NOT BE FOLDED INTO IT.**
+            `degraded` is a posture the server DECIDED and reports about the
+            answer it computed (a peer's meter, a container with no active
+            owner) — an ordinary state on this bar. This is a FAULT on the
+            charge path.
+            ⚠ **MINIMAL COPY (INVARIANTS §5): the word, not the timestamp.** The
+            ISO instant is on the payload and in the log, for the operator who
+            goes looking; a date on this card would be a second number fighting
+            the meter's own.
+            ⚠ **NEVER DERIVED FROM `used === 0`.** A quiet month and an outage
+            read identically from here; only the server knows which it is. */}
+        {credits.unmeteredSince && <span>Unmetered</span>}
         {/* ⚠ THE SAME LINE THE BILLING PANE PRINTS, and the same guard: the
             period bounds are blank on the degraded fallback status, and a date
             nobody measured must not be invented here. */}

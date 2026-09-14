@@ -89,6 +89,12 @@ export async function closeOwnWindow(): Promise<{ ok: boolean }> {
  * a strip that goes stale on every open.
  * ⚠ **A `false` HERE IS NOT AN ERROR STATE.** The window falls back to the ONE tab its own route
  * carries — which is exactly what it showed before tabs existed (INVARIANTS §11).
+ *
+ * ⚠ **IT HAD NO CALLER UNTIL 2026-09-14, WHICH MADE IT A GATE THAT READ AS ONE AND WAS NOT.** The
+ * strip drew its × unconditionally and `closeOwnTab` answered `{ ok: false }` into a void, so on a
+ * main without the op the control looked live and did nothing — §11's absent-not-disabled rule
+ * inverted. `pages/agent-window/index.tsx` now passes `onCloseTab` only when this answers true,
+ * and `agent-window-shell.tsx` takes it optional for exactly that.
  */
 export function canHostAgentTabs(): boolean {
   const ns = appWindow();

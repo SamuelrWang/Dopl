@@ -29,6 +29,10 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { cn } from "@/shared/lib/utils";
+// ⚠ THE ONE MEMBERSHIP TEST FOR A COLOUR KEY. The feed's `color` is a plain `string` on the wire
+// (`src/shared/` may not import `features/channels`, and a closed union there would let a newer
+// desktop's seventeenth key typecheck past the gate), so this file narrows rather than casts.
+import { agentColorOrNull } from "../../lib/agent-colors";
 import { AgentWindowChrome, type AgentTabView } from "./agent-window-chrome";
 import { AgentWindowRail } from "./agent-window-rail";
 import {
@@ -38,11 +42,34 @@ import {
   RAIL_EXPANDED,
 } from "./agent-window-frame";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import type { AgentColorKey } from "../../types";
 
 /** ⚠ RE-EXPORTED, NOT RESTATED — the face moved into `agent-window-frame.ts` (which is also where
  *  the `min-w-0` argument now lives, because the chrome and this file are two halves of it) and
  *  `pages/agent-window/frame.test.ts` still reads the shell for the ground. */
 export { INSET_PANEL };
+
+/**
+ * 🔒 **THE RAIL'S COLOUR DOT, FROM THIS MACHINE'S OWN FEED** (2026-09-14 ruling;
+ * docs/specs/agent-colors.md item 8).
+ *
+ * ⚠ **THE PROP EXISTED AND NOTHING PASSED IT**, so the pop-out rail drew no dot at all — half
+ * the ruling shipped as a declared prop over an empty screen. This window reads no channel
+ * projection BY DESIGN (`agent-window-launch.tsx › NO_ROSTER` carries that argument: no roster
+ * request and no presence poll), so the own feed is the only source it has — and it is a good
+ * one. `spa-bridge-shapes.ts › DesktopSessionSummary.color` is the key this machine ASKED for
+ * and has held since (`main/session-summary.js › liveSummary` reports it), which EQUALS the
+ * server's assignment in every case except a push substitution — and a substituted key is
+ * re-pushed into this same feed, so the rail agrees with the transcript after one push.
+ *
+ * ⚠ **NARROWED, NEVER CAST** — an unrecognised key must read as "no colour" rather than reach a
+ * `var(--agent-color-…)` that resolves to nothing and paints an invisible dot.
+ * ⚠ **MODULE SCOPE, NOT AN INLINE ARROW**: one identity for every render, so the rail's rows do
+ * not see a new resolver on each of the feed's ~5-per-second telemetry pushes.
+ */
+function colorFromOwnFeed(session: DesktopSessionSummary): AgentColorKey | null {
+  return agentColorOrNull(session.color);
+}
 
 export function AgentWindowShell({
   tabs,
@@ -60,7 +87,10 @@ export function AgentWindowShell({
   tabs: readonly AgentTabView[];
   activeKey: string;
   onSelect: (key: string) => void;
-  onCloseTab: (key: string) => void;
+  /** ⚠ **OPTIONAL SINCE 2026-09-14, LIKE {@link onNewAgent}** — a main without the tab ops
+   *  (`spa-bridge-window.ts › canHostAgentTabs`) cannot close a tab, and the chrome then draws
+   *  NO ×: absent, never disabled (INVARIANTS §11). */
+  onCloseTab?: (key: string) => void;
   onNewAgent?: () => void;
   status?: ReactNode;
   logoSrc?: string;
@@ -113,6 +143,7 @@ export function AgentWindowShell({
           onToggle={() => setCollapsed((on) => !on)}
           onOpen={onOpenSession}
           keyFor={keyFor}
+          colorFor={colorFromOwnFeed}
         />
         <section className={INSET_PANEL} aria-label="Agent">
           {children}

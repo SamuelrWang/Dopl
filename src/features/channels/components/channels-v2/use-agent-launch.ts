@@ -337,13 +337,29 @@ export function useAgentLaunch(): AgentLaunchPanel {
     });
   }, []);
 
+  /**
+   * 🔒 **CLOSING IS DISCARDING, BY WHICHEVER OF THE THREE EXITS (2026-09-14 ruling).**
+   *
+   * ⚠ **THE BUG WAS THAT THE FORM HAD TWO KINDS OF CLOSE AND LOOKED LIKE ONE.** Escape and the
+   * backdrop went through {@link reset} (`launch-agent-dialog.tsx › discard`), while the Bot
+   * icon and the pop-out's `+` — the SAME control that opened it — went through a bare
+   * `setOpen(false)`. So a dialog dismissed by its own button kept the name, the description,
+   * the instructions, the template, the instructions BASELINE and the `touched` flags, and
+   * reopening then MINTED A SECOND AGENT ID underneath the first one's typed name: the panel
+   * showed one agent's address over another's name, which is the 2026-08-27 two-draw bug
+   * arriving by a different road. It also meant a template pick after such a reopen prefilled
+   * nothing, because `touched` still said the operator had typed.
+   *
+   * ⚠ **SO `toggle`, `close` AND THE DIALOG'S DISCARD ARE ONE PATH**, and it is {@link reset}.
+   * A form that remembers a decision the operator undid has no way to say so on screen.
+   */
   const toggle = useCallback(() => {
     if (open) {
-      setOpen(false);
+      reset();
       return;
     }
     openPanel();
-  }, [open, openPanel]);
+  }, [open, openPanel, reset]);
 
   /**
    * PICK A TEMPLATE AND FILL IN WHAT IT CARRIES — see {@link AgentLaunchPanel.applyTemplate} for
@@ -407,7 +423,11 @@ export function useAgentLaunch(): AgentLaunchPanel {
     applyTemplate,
     openWithTemplate,
     toggle,
-    close: () => setOpen(false),
+    // ⚠ **`reset`, NOT `setOpen(false)` — ONE CLOSE PATH** (see {@link toggle}). Its one caller
+    // is `composer.tsx › onNewThread`, on its way to the thread popup: two forms may not stand
+    // at once, and leaving a half-typed agent identity behind a form the operator navigated away
+    // from is the same remembered-undone-decision this hook now refuses everywhere else.
+    close: reset,
     reset,
   };
 }

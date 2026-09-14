@@ -187,8 +187,10 @@ export function isPersonalWalletBurn(
  * ⚠ **IT TALLIED `mcp_tool_calls` UNTIL 2026-09-01.** That table counts loopback
  * REQUESTS — `dopl_map` fans out, the await ops poll — so it was never a cost,
  * and `credits.ts` says so from the other side. It now sums the
- * `credit_usage_events` ledger. ⚠ Which means the figure is a FLOOR: the
- * ledger's writer is fire-and-forget and this scan is capped.
+ * `credit_usage_events` ledger. ⚠ Which means the figure is a FLOOR — **because
+ * this scan is CAPPED, and since 2026-09-13 for no other reason**: the
+ * superseded line also blamed a fire-and-forget writer, and that writer is gone
+ * (F-693, the row is written inside the counter's transaction).
  *
  * ⚠ **A ROW WITH NO `user_id` IS DROPPED, NOT BUCKETED AS "UNKNOWN".** The
  * column is `ON DELETE SET NULL`, so a null means the account is GONE — there is
