@@ -255,6 +255,15 @@ function wireSpaServices(deps) {
       getUserId: () => (deps.authTokens.getAuthState() || {}).userId || null,
       summary: deps.sessionSummary,
     });
+    // ⚠ ONE RECONCILE CYCLE AT BOOT, TOO (2026-09-13 evening). The writer fires on
+    // STATE CHANGE and on the sign-in transition; a boot that is ALREADY signed in
+    // and registers nothing (every dormant record ended quietly, `session-boot.js`)
+    // makes neither, so the previous run's rows stayed on the server as Idle pills
+    // on every surface that reads `channel_sessions` (Samuel: "why do i see so
+    // many agents in the overview … i should not see ended agents"). `kick` is a
+    // no-op until armed and signed in, so this costs nothing on a signed-out boot.
+    try { deps.sessionStatePush.kick(); }
+    catch (err) { deps.diag('session-state push boot kick error', err && err.message); }
   };
   let stash = null; // { workspaceId, userId } — what the feed was watching when it stopped
   let lastUserId = null; // the operator it was watching FOR (signed-out carries no id)

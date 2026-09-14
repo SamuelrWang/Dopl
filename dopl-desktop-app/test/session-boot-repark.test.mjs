@@ -477,7 +477,12 @@ test("ENDED IS THE WHOLE SENTENCE, on every surface a person reads", () => {
   const h = harness({ records: { [KEY]: parkedRecord({ parkedAt: Date.now() - harness().boot.REPARK_WINDOW_MS * 2 }) }, ids: { [KEY]: "sdk-y1uun32v" } });
   h.boot.reparkDormant();
   assert.equal(h.calls.history[0].diag, null);
-  assert.equal(h.calls.lifecycle[0].body, "Ended");
+  // A stale-window end is QUIET (no channel post at all), so the "Ended" body is
+  // pinned on the effect above and on a no-sdk-id end below, not here.
+  assert.equal(h.calls.lifecycle.length, 0);
+  const noSdk = harness({ records: { [KEY]: parkedRecord({ parkedAt: Date.now() }) }, ids: {} });
+  noSdk.boot.reparkDormant();
+  assert.equal(noSdk.calls.lifecycle[0].body, "Ended");
 
   // 3. AND THE DELETED SENTENCE IS GONE FROM THE SOURCE, not merely unreachable — it was reachable
   // through TWO reasons (no sdk id, and a runtime refusal), so pinning one call site would have let
