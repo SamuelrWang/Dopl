@@ -90,33 +90,20 @@ async function startQuery(s, rt) {
   // ⚠ `session-audience-ceiling.test.mjs` pins BOTH sites by source scan: deleting either one
   // is silent otherwise, and the half it deletes is a whole spawn shape.
   await sessionCredential.ensureContainerCredential(s, diag);
-  // ── ⚠ THE MCP PRE-FLIGHT (F-692, 2026-09-13) ───────────────────────────────────────────────
-  //
-  // MEASURED: `MCP_URL` is `APP_ORIGIN + /api/mcp`, and on a local Next dev server the COLD route
-  // answered `POST /api/mcp 200 in 12.4s / 10.0s / 16.2s / 14.7s` — every one of them past the
-  // CLI's connect budget, which is `MCP_CONNECT_TIMEOUT_MS` and defaults to 5000. So the child
-  // gave up on the `dopl` server before the route had finished COMPILING, and the session ran
-  // with no delivery path. The compile is a once-per-route cost that only the first caller pays;
-  // this is the desktop volunteering to be that caller, on a request whose timeout it controls.
-  //
-  // ⚠ IT CANNOT FAIL A LAUNCH — `warmMcpRoute` resolves a word for the log on every outcome,
-  // 401 and timeout included (its header carries the argument). The ASSERTION is the init
-  // message's `mcp_servers`; this is only what makes the assertion usually pass.
-  // ⚠ HERE, at the ONE deferred launch, so it covers the cold spawn, the post-sign-in relaunch and
-  // the MCP retry alike. A parked RESUME (`session-park.js › startResumedConsumer`) does not pass
-  // through here and does not need to: its route was warmed by the launch it is resuming.
-  const warm = await mcpConnect.warmMcpRoute({
-    url: config.MCP_URL,
-    token: mcpTokenFor(s),
-    workspaceId: s.workspaceId,
-    fetchImpl: typeof fetch === 'function' ? fetch : null,
-  });
-  diag('session-query: mcp pre-flight', config.MCP_URL, '->', warm);
+  // ⚠ THE MCP PRE-FLIGHT (F-692) AND THE SETTLED RE-CHECK IT MADE NECESSARY — `preflightMcp`
+  // below carries both arguments. It is a FUNCTION and not four lines here because the RESUME
+  // lane needs the identical pair (`session-park.js › startResumedConsumer`, through `deps`).
+  if (await preflightMcp(s)) return;
   s.abortController = new AbortController();
   s.pushIterator = io.makePushIterator();
   // ⚠ SYNCHRONOUS BY CONTRACT. The handle is assigned to the session IMMEDIATELY; an await
   // between "the child exists" and "something points at it" is the two-children bug above,
   // reintroduced at a different layer.
+  // ⚠ WHICH LANE STARTED THIS STREAM, STAMPED WHERE THE CHILD IS ACTUALLY MADE (F-696,
+  // 2026-09-14). `mcp-connect-guard.js › relaunch` has to retry on the lane that LAUNCHED, and
+  // `s.resumeSdkId` cannot answer that: `session-park.js › startResume` re-enters HERE carrying
+  // one, so the handle says "there is a conversation" and never "this came back by `rt.resume`".
+  s.launchVia = 'start';
   const q = rt.start(buildLaunchSpec(s));
   s.query = q;
   s.pushIterator.push(io.userMessage(s.firstTurn));
@@ -221,6 +208,54 @@ function mcpTokenFor(s) {
   try { return require('./mcp-config').deviceTokenForSpawn() || ''; } catch (_) { return ''; }
 }
 
+/**
+ * WARM THE DOPL MCP ROUTE, THEN SAY WHETHER THE LAUNCH IS STILL WANTED. Answers TRUE when the
+ * caller must ABANDON the launch.
+ *
+ * ── ⚠ THE PRE-FLIGHT (F-692, 2026-09-13) ────────────────────────────────────────────────────
+ * MEASURED: `MCP_URL` is `APP_ORIGIN + /api/mcp`, and on a local Next dev server the COLD route
+ * answered `POST /api/mcp 200 in 12.4s / 10.0s / 16.2s / 14.7s` — every one of them past the
+ * CLI's connect budget, which is `MCP_CONNECT_TIMEOUT_MS` and defaults to 5000. So the child gave
+ * up on the `dopl` server before the route had finished COMPILING, and the session ran with no
+ * delivery path. The compile is a once-per-route cost that only the first caller pays; this is
+ * the desktop volunteering to be that caller, on a request whose timeout it controls.
+ *
+ * ⚠ IT CANNOT FAIL A LAUNCH — `warmMcpRoute` resolves a word for the log on every outcome, 401
+ * and timeout included (its header carries the argument). The ASSERTION is the init message's
+ * `mcp_servers`; this is only what makes the assertion usually pass.
+ *
+ * ⚠ **BOTH LAUNCH LANES CALL IT (F-696, 2026-09-14), AND THE RESUME ONE IS NOT A LUXURY.** This
+ * used to say a parked RESUME *"does not need to: its route was warmed by the launch it is
+ * resuming"* — **which is false after a restart.** `session-boot.js › reparkDormant` re-parks a
+ * record from DISK, so the first thing that session does in this process is resume against a
+ * route no launch in this process has ever touched. `session-park.js › startResumedConsumer`
+ * reaches this through `deps.preflightMcp`, because its PURE block may not require.
+ *
+ * ⚠ **AND THE SETTLED RE-CHECK IS PART OF THE SAME FUNCTION, BECAUSE THE WAIT IS WHAT CREATED
+ * THE HOLE.** The caller has already torn the old query down, so between its decision to launch
+ * and `rt.start` / `rt.resume` there is now up to `WARM_TIMEOUT_MS` (25s) in which an operator
+ * interrupt, a delete or an abandonment timeout can settle this session — and `settle` has
+ * nothing left to abort, because the handle it would abort does not exist yet. Without this the
+ * spawn lands anyway: a child holding this session's PRE-APPROVED channel access, still able to
+ * post, with nothing pointing at it to stop it. That is H1's two-children shape reached by
+ * waiting instead of by racing. ⚠ `settled` AND NOT `parked`: a park keeps the session and its
+ * next wake is a resume, so only the TERMINAL bit may cancel a launch.
+ */
+async function preflightMcp(s) {
+  const warm = await mcpConnect.warmMcpRoute({
+    url: config.MCP_URL,
+    token: mcpTokenFor(s),
+    workspaceId: s.workspaceId,
+    fetchImpl: typeof fetch === 'function' ? fetch : null,
+  });
+  diag('session-query: mcp pre-flight', config.MCP_URL, '->', warm);
+  if (s.settled) {
+    diag('session-query: launch abandoned — the session settled during the pre-flight');
+    return true;
+  }
+  return false;
+}
+
 function isAbortError(err) {
   return !!err && (err.name === 'AbortError' || /abort/i.test(String(err.message || '')));
 }
@@ -229,6 +264,7 @@ module.exports = {
   bind,
   buildLaunchSpec,
   abortInFlight,
+  preflightMcp, // F-696: the RESUME lane reaches it through `session-park.js`'s `deps`
   startQuery,
   consume,
   isAbortError,

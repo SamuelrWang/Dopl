@@ -10,199 +10,17 @@
 // every wake path resolves against the in-memory registry) nor ENDED (no phase flip, no
 // lifecycle, no history). The rule is TWO OUTCOMES AND NEVER A THIRD.
 //
-// METHOD: source extraction with injection, the `session-park.test.mjs` idiom. The
-// SESSION-BOOT-PURE block references its leaf deps as free vars and takes the engine's handles
-// through `bind()`; we slice it, prove it is electron/require-free, and inject.
+// METHOD, AND WHAT IS REAL RATHER THAN FAKED: `_session-boot-harness.mjs`, which carries the rig
+// and the argument for every injection choice in it.
 //
-// ⚠ WHAT IS REAL RATHER THAN FAKED, and each choice is about a test that could otherwise agree
-// with itself:
-//   `reloadDisposition` / `resumedPostSeq` / `prunableKeys`  sliced from `session-store.js`. The
-//        disposition IS the bug, so a fake one would pin nothing; `prunableKeys` is the retention
-//        policy the re-parked key has to survive.
-//   `knownProfile` / `contextFromRecord`  sliced from `session-park.js`. They are the OTHER
-//        record-driven rebuild's readers, exported for this lane precisely so there is no second
-//        copy — and `knownProfile` is fail-restrictive, which a stub would quietly not be.
-//   `resumeParked`  the REAL function, sliced from the same file and driven with the object
-//        `session-boot.js` built. "Resumable" is not a field check: it is that the shipped resume
-//        accepts this shape and rebuilds the query through `buildLaunchSpec`.
-//   `pillState` / `listeningState`  the real `session-pill.js` (it requires nothing), so "published
-//        as Idle" is the shipped derivation rather than this file's opinion.
-//   `initialSessionState` / `floorWindowlessMessage` / `session-effects` / `tool-profiles` / the
-//        runtime REGISTRY  all required for real; they load in plain node.
-// FAKED: `sessionModel.normalizeModel` (it requires `diag`, i.e. electron; the frozen-enum
-// coercion is `session-model.test.mjs`'s), the electron-store shells (`sessionRecords`,
-// `sessionIds`, `agentHistory`), and `session-summary.touch` — counted, because registration is a
-// projection move and a pill that waits for a first dispatch is the invisibility bug again.
+// ⚠ THE RIG MOVED OUT ON 2026-09-14 (`_session-boot-harness.mjs`) — this file was at 498 of the
+// 500-line cap on the day it shipped, which is room for no further case. The rig is unchanged and
+// injected from there; everything below is cases.
 
-import { test } from "node:test";
-import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
-import { fnOf } from "./helpers/source-probe.mjs";
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-const MAIN = join(HERE, "..", "main");
-const require_ = createRequire(import.meta.url);
-
-const BOOT_SRC = readFileSync(join(MAIN, "session-boot.js"), "utf8");
-const PARK_SRC = readFileSync(join(MAIN, "session-park.js"), "utf8");
-const STORE_SRC = readFileSync(join(MAIN, "session-store.js"), "utf8");
-
-const RUNTIME = require_(join(MAIN, "runtime", "index.js"));
-const PILL = require_(join(MAIN, "session-pill.js"));
-const EFFECTS = require_(join(MAIN, "session-effects.js"));
-const PROFILES = require_(join(MAIN, "session-profiles.js"));
-const TOOL_PROFILES = require_(join(MAIN, "tool-profiles.js"));
-const { initialSessionState } = require_(join(MAIN, "session-state.js"));
-
-function slice(src, label) {
-  const from = src.indexOf(`// ─── BEGIN ${label}`);
-  const to = src.indexOf(`// ─── END ${label}`);
-  assert.notEqual(from, -1, `BEGIN ${label} sentinel missing`);
-  assert.notEqual(to, -1, `END ${label} sentinel missing`);
-  assert.ok(to > from, `${label} sentinels out of order`);
-  return src.slice(from, to);
-}
-
-const BOOT_BLOCK = slice(BOOT_SRC, "SESSION-BOOT-PURE");
-const PARK_BLOCK = slice(PARK_SRC, "SESSION-PARK-PURE");
-
-// The purity assertion is what makes the block sliceable at all — and it matters more here than
-// almost anywhere, because this code runs BEFORE anything else in a restarted app.
-for (const banned of ["require(", "electron", "process.", "child_process", "@anthropic"]) {
-  assert.ok(!BOOT_BLOCK.includes(banned), `SESSION-BOOT-PURE block must not reference ${banned}`);
-}
-
-// ⚠ THE EXPORTS ARE PINNED BY SOURCE SCAN, not only used. `session-boot.js` reaches
-// `contextFromRecord` / `knownProfile` through `session-park.js`'s module.exports precisely so no
-// third copy of either exists; dropping them from that list is a production break this file
-// could otherwise slice straight past.
-const PARK_EXPORTS = PARK_SRC.slice(PARK_SRC.lastIndexOf("module.exports"));
-for (const name of ["contextFromRecord", "knownProfile"]) {
-  assert.ok(new RegExp(`^\\s*${name},`, "m").test(PARK_EXPORTS), `session-park.js must export ${name} for session-boot.js`);
-}
-
-// The REAL store rules the boot pass turns on.
-const storePure = new Function(
-  `${fnOf(STORE_SRC, "isTerminalPhase")}\n${fnOf(STORE_SRC, "reloadDisposition")}\n` +
-    `${fnOf(STORE_SRC, "resumedPostSeq")}\n${fnOf(STORE_SRC, "protectedRecord")}\n${fnOf(STORE_SRC, "prunableKeys")}\n` +
-    `${(STORE_SRC.match(/^const RESUME_POST_SEQ_SLACK = [^\n]*$/m) || [])[0]}\n` +
-    `${(STORE_SRC.match(/^const RECORD_TTL_MS = [^\n]*$/m) || [])[0]}\n` +
-    `${(STORE_SRC.match(/^const MAX_RECORDS = [^\n]*$/m) || [])[0]}\n` +
-    ` return { reloadDisposition, resumedPostSeq, prunableKeys };`
-)();
-
-// ...and the REAL record readers the two record-driven rebuilds share.
-const parkReaders = new Function(
-  `${fnOf(PARK_SRC, "knownProfile")}\n${fnOf(PARK_SRC, "contextFromRecord")}\n` +
-    `${(PARK_SRC.match(/^const KNOWN_PROFILES = [^\n]*$/m) || [])[0]}\n` +
-    ` return { knownProfile, contextFromRecord };`
-)();
-
-const CHANNEL = "bb0f57db-1111-4222-8333-444455556666";
-const KEY = `${CHANNEL}::y1uun32v`; // ⚠ the INCIDENT's own key shape: a CHANNEL-LEVEL agent, so the thread segment is empty
-
-/** The record `@agent-y1uun32v` left on disk, as `durableSessionRecord` would have written it. */
-function parkedRecord(over = {}) {
-  return {
-    key: KEY,
-    sessionId: "11111111-2222-3333-4444-555555555555",
-    sdkSessionId: "sdk-y1uun32v",
-    channelId: CHANNEL,
-    taskId: "",
-    workspaceId: "a5b5a013-d2dc-4387-a41b-e08b47d68e79",
-    side: "responder",
-    profile: "channel_agent",
-    mode: "interactive",
-    phase: "parked",
-    startedAt: 1757000000000,
-    counterpartyId: "peer-1",
-    direct: false,
-    bind: "pair",
-    agentId: "y1uun32v",
-    counterpartyName: "Samuel",
-    channelName: "Dopl",
-    taskTitle: null,
-    templateName: "Coder",
-    turns: 7,
-    costUsd: 0.42,
-    ownPostSeq: 3,
-    model: "opus",
-    runtimeId: "claude",
-    // ⚠ PARKED JUST NOW, AND THAT IS LOAD-BEARING SINCE 2026-09-13. `reparkDormant` revives only a
-    // record inside `REPARK_WINDOW_MS`; the incident's own `startedAt` above is a YEAR old, so
-    // without this stamp every "comes back as Idle" case below would be asserting the ENDED lane by
-    // accident. The window cases pass their own `parkedAt`.
-    parkedAt: Date.now(),
-    ...over,
-  };
-}
-
-function harness(over = {}) {
-  const cfg = { records: {}, ids: {}, ...over };
-  const calls = { lifecycle: [], scheduleIdle: [], history: [], touch: 0, diag: [], phase: [], consume: [], buildLaunchSpec: [] };
-  const sessions = new Map();
-
-  // The two electron-store shells, with the REAL rules spliced in.
-  const store = {
-    loadRecords: () => cfg.records,
-    getSdkSessionId: (k) => cfg.ids[k] || null,
-    setRecordPhase: (k, phase) => { calls.phase.push([k, phase]); if (cfg.records[k]) cfg.records[k].phase = phase; },
-    reloadDisposition: storePure.reloadDisposition,
-    resumedPostSeq: storePure.resumedPostSeq,
-    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && a.taskId) || ""}:${(a && a.agentId) || ""}`,
-  };
-  const crypto = { randomBytes: () => ({ toString: () => "cafebabe" }) };
-  const diag = (...parts) => calls.diag.push(parts.join(" "));
-  const sessionSummary = { touch: () => { calls.touch += 1; } };
-  const agentHistory = { record: (r) => calls.history.push(r) };
-  // ⚠ FAKED FOR ONE REASON ONLY (`session-model.js` requires `diag`, i.e. electron) and it still
-  // RECORDS what it was handed, so "the operator's model pick survives the restart" is asserted
-  // against the record rather than against a constant.
-  const sessionModel = { normalizeModel: (m) => (m == null ? "default" : String(m)) };
-
-  const boot = new Function(
-    "crypto", "store", "initialSessionState", "floorWindowlessMessage", "sessionModel",
-    "sessionPark", "toolProfiles", "sessionSummary", "agentHistory", "sessionEffects",
-    "runtimeRegistry", "runtimeCapability", "diag",
-    `${BOOT_BLOCK}\n return { bind, parkedSessionFromRecord, endInterrupted, reparkDormant, withinReparkWindow, REPARK_WINDOW_MS };`
-  )(crypto, store, initialSessionState, PROFILES.floorWindowlessMessage, sessionModel,
-    parkReaders, TOOL_PROFILES, sessionSummary, agentHistory, EFFECTS,
-    RUNTIME, RUNTIME.capability, diag);
-
-  boot.bind({
-    sessions,
-    runLifecycle: (info, kind, extra, body) => calls.lifecycle.push({ info, kind, extra, body }),
-    scheduleIdle: (s) => calls.scheduleIdle.push(s),
-  });
-
-  // The REAL `resumeParked`, so "resumable" is the shipped function accepting this shape.
-  const park = new Function(
-    "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "privateTurn",
-    "directedTurn", "sessionWindowless", "diag", "sessionCredential", "runtimeRegistry", "runtimeCapability",
-    `${PARK_BLOCK}\n return { bind, resumeParked };`
-  )({ makePushIterator: () => ({ __iter: true, pushed: [], push(m) { this.pushed.push(m); }, close() { this.closed = true; } }) },
-    store, crypto, () => "zzzzzzzz", () => true, null,
-    require_(join(MAIN, "session-private.js")), require_(join(MAIN, "session-directed.js")),
-    { MAX_CONCURRENT_SESSIONS: 15, liveCount: (m) => { let n = 0; for (const s of m.values()) if (!s.settled) n += 1; return n; } },
-    diag, { ensureContainerCredential: async () => null }, RUNTIME, RUNTIME.capability);
-  park.bind({
-    sessions,
-    acquireRuntime: async () => ({ resume: () => ({ __query: true }) }),
-    buildLaunchSpec: (s) => { calls.buildLaunchSpec.push(s); return { prompt: s.pushIterator, options: { resume: s.resumeSdkId } }; },
-    consume: (s, q) => calls.consume.push({ s, q }),
-    dispatch: () => {},
-    startSession: async () => null,
-    hasLiveSession: () => false,
-    emit: () => {},
-  });
-
-  return { boot, park, sessions, calls, cfg, storePure };
-}
-
-const flush = () => new Promise((r) => setImmediate(r));
+import {
+  test, assert, harness, parkedRecord, flush, CHANNEL, KEY, storePure,
+  BOOT_SRC, STORE_SRC, PILL, EFFECTS, PROFILES, RUNTIME,
+} from "./_session-boot-harness.mjs";
 
 // ── 1. PARKED + AN SDK ID -> re-registered, published Idle, resumable ────────────────────────
 
@@ -495,4 +313,50 @@ test("ENDED IS THE WHOLE SENTENCE, on every surface a person reads", () => {
 
   // 4. THE ENGINEER'S LANE IS UNTOUCHED: the reason still reaches the diag log, which is not copy.
   assert.ok(h.calls.diag.some((l) => l.includes("ended dormant agent") && l.includes("re-park window")), "a log still tells the end reasons apart");
+});
+
+// ── 6. ONE BAD RECORD MUST NOT TAKE THE PASS DOWN (2026-09-14 review) ────────────────────────
+//
+// The docblock said "each record is independent" over a bare loop with no guard. It was not true:
+// one throw — a history write that fails, a store handle that is gone, an unbound `deps` —
+// abandoned the scan where it stood, and EVERY record after it was left in the third state F-694
+// exists to forbid: no session, no Ended card, no history entry, nothing in the product. `init()`'s
+// own try/catch cannot help; by the time it catches, the pass is over.
+
+test("a record that THROWS is skipped and every other record is still decided", () => {
+  const boomKey = `${CHANNEL}::boom0000`;  // ends, and its history write explodes
+  const freshKey = `${CHANNEL}::fresh111`; // must still come back Idle
+  const staleKey = `${CHANNEL}::stale222`; // must still end quietly
+  const records = {
+    [boomKey]: parkedRecord({ key: boomKey, agentId: "boom0000", parkedAt: Date.now() }),
+    [freshKey]: parkedRecord({ key: freshKey, agentId: "fresh111", parkedAt: Date.now() }),
+    [staleKey]: parkedRecord({ key: staleKey, agentId: "stale222", parkedAt: 1 }),
+  };
+  const h = harness({
+    records,
+    ids: { [freshKey]: "sdk-fresh", [staleKey]: "sdk-stale" }, // boom has no sdk id, so it ENDS
+    throwHistoryFor: boomKey,
+  });
+
+  const out = h.boot.reparkDormant();
+
+  // ⚠ COUNTED AS NEITHER. A thrown record did not land either outcome, and a tally that claimed
+  // it did would be the pass lying about the one thing it is for.
+  assert.deepEqual(out, { reparked: 1, ended: 1 });
+  assert.ok(h.sessions.has(freshKey), "the record AFTER the throw was still re-parked");
+  assert.deepEqual(h.calls.history.map((r) => r.key), [staleKey], "…and the stale one still ended");
+  assert.equal(h.calls.touch, 1, "the projection is still refreshed for the records that moved");
+  assert.ok(
+    h.calls.diag.some((l) => l.includes("threw and the pass CONTINUED") && l.includes("boom0000")),
+    "the failing key must be nameable from the log"
+  );
+});
+
+test("an UNBOUND harness does not abandon the scan either", () => {
+  // `bind()` is called at `session-engine.js` load, so this is the mid-wave / harness shape — and
+  // it is the cheapest proof that the guard wraps the WHOLE decision and not just the history write.
+  const h = harness({ records: { [KEY]: parkedRecord() }, ids: { [KEY]: "sdk-y1uun32v" } });
+  h.boot.bind(null);
+  assert.deepEqual(h.boot.reparkDormant(), { reparked: 0, ended: 0 }, "it answers rather than throwing");
+  assert.equal(h.calls.touch, 0, "nothing moved, so nothing is published");
 });

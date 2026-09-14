@@ -290,9 +290,12 @@ if (!gotLock) {
     // rollback shell). With the remote shell deleted there is no second refresher, so this
     // is now the only one and runs unconditionally. wireSpaServices owns the ONE
     // uiBridge.register call.
+    // ⚠ IT HANDS BACK ONE THING — `bootReconcile` — and that call is DELIBERATELY not made in
+    // this block: it must see the registry `sessionEngine.init()` fills (see its own site below).
+    let spaServices = null;
     {
       try { authTokens.start(); } catch (err) { diag('authTokens.start error', err && err.message); }
-      wireSpaServices({
+      spaServices = wireSpaServices({
         uiBridge, authTokens, uiSync, diag,
         sessionSummary: require('./session-summary'), // §3.3: the session-pill push
         sessionNarration: require('./session-narration'), // the agent window's work lane (F-212)
@@ -330,6 +333,15 @@ if (!gotLock) {
       agentRetention.start();
     } catch (err) { diag('agentRetention.start error', err && err.message); }
     try { sessionEngine.init(); } catch (err) { diag('sessionEngine.init error', err && err.message); }
+    // 🔒 **THE BOOT RECONCILE, AFTER `init()` AND NEVER BEFORE IT (2026-09-14).** It used to run
+    // inside `wireSpaServices` above, which is wired before the engine reloads its records — so the
+    // run's FIRST push reported an EMPTY registry, the server deleted every row for the workspace,
+    // and `session-boot.js › reparkDormant`'s `touch()` then posted the re-parked ones back. Two
+    // writes and a visible flap on every surface that reads `channel_sessions`, to say what ONE
+    // write here says correctly the first time. `shell-mode.js › wireSpaServices` returns it for
+    // exactly this reason; `test/shell-mode.test.mjs` pins the order.
+    try { if (spaServices) spaServices.bootReconcile(); }
+    catch (err) { diag('session-state push boot reconcile error', err && err.message); }
 
     // Q11: the legacy-reply registry is durable now. targeting.js stays
     // dependency-free (its truth tables slice the block into a bare `new

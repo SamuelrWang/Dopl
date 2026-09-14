@@ -296,7 +296,15 @@ function endInterrupted(key, rec, why, opts) {
  * through. Called from `session-engine.js › init` in one line, AFTER the interrupted-record scan
  * (disjoint — that one takes `'resume'`, this one `'dormant'`) and BEFORE `store.pruneRecords`,
  * so a re-parked key is in the registry the prune is handed as `keep`.
- * Returns `{ reparked, ended }`; it never throws at its caller (each record is independent).
+ * Returns `{ reparked, ended }`.
+ *
+ * ⚠ **EACH RECORD IS INDEPENDENT, AND SINCE 2026-09-14 THE CODE SAYS SO RATHER THAN THE
+ * DOCBLOCK.** This claim stood over a bare loop: ONE throw — a history write that fails, a store
+ * handle that is gone, an unbound `deps` — abandoned the pass mid-scan and left every record
+ * AFTER it in exactly the third state F-694 exists to forbid, neither re-parked nor ended.
+ * `init()`'s own try/catch cannot help, because by the time it catches, the pass is over. A
+ * record that throws is counted as NEITHER outcome, so the tally stays honest about what landed,
+ * and the diag names the key an engineer has to open.
  */
 function reparkDormant() {
   const records = store.loadRecords();
@@ -304,43 +312,19 @@ function reparkDormant() {
   let reparked = 0;
   let ended = 0;
   for (const key of keys) {
-    const rec = records[key];
-    if (!rec || typeof rec !== 'object') continue;
-    if (store.reloadDisposition(rec.phase) !== 'dormant') continue;
-    // ⚠ ALREADY LIVE IS NOT AN ERROR AND MUST NOT BE OVERWRITTEN. `init()` runs once at app
-    // start, but a launch racing it (a deep link, a queued directive) would already own this
-    // slot, and replacing the Map entry orphans a live query.
-    if (deps.sessions.has(key)) continue;
-    // ⚠ THE RECENCY WINDOW, BEFORE ANY RESUMABILITY QUESTION (see its own section above). A
-    // record outside it is not resurrected however resumable it looks — it ENDS, visibly, like
-    // every other dormant record this pass cannot revive.
-    if (!withinReparkWindow(rec, Date.now())) {
-      endInterrupted(key, rec, 'this agent was parked longer ago than the re-park window, so the app ended it instead of reviving it', { quiet: true });
-      ended += 1;
+    let outcome = '';
+    try {
+      outcome = reparkOne(key, records[key]);
+    } catch (err) {
+      // ⚠ THE WHOLE KEY, BOUNDED AT 80 AND NOT AT THE 8 THE OTHER LINES HERE USE. A session key is
+      // `<channel uuid>::<agentId>` (or `<channel>:<thread>:<agentId>`), so a short slice keeps the
+      // channel and drops the AGENT — the only half that says which card is missing.
+      diag('session-boot: a dormant record threw and the pass CONTINUED — key', String(key).slice(0, 80),
+        '|', (err && err.message) || String(err));
       continue;
     }
-    const sdkId = store.getSdkSessionId(key);
-    // ⚠ NO SDK ID IS THE ORDINARY CASE, NOT A CORRUPTION: a SPAWN-IDLE agent ("New Agent") never
-    // started a query, so nothing ever reported a conversation id for it — and the record carries
-    // neither its launch goal nor its template body, so there is nothing to rebuild it from
-    // either. An Ended card is the honest answer; a silent disappearance is not.
-    // ⚠ THE REASON STRINGS BELOW ARE ENGINEER TEXT AND REACH ONLY THE DIAG LOG (2026-09-13,
-    // Samuel: "We don't need that line to be there … We can just put 'ended.'"). The one that used
-    // to stand here — "the app restarted before this agent started a conversation, so there was
-    // nothing to resume" — was rendered on the card, which is the line he deleted.
-    const refusal = sdkId
-      ? runtimeCapability.resumeRefusal(runtimeRegistry.descriptorFor(rec.runtimeId))
-      : 'no conversation id in the resume map: this agent never started a query'; // LOG ONLY — see endInterrupted
-    if (refusal) { endInterrupted(key, rec, refusal); ended += 1; continue; }
-    const s = parkedSessionFromRecord(key, rec, sdkId);
-    deps.sessions.set(key, s);
-    // ⚠ THE ABANDONMENT BOUND IS ARMED HERE, DELIBERATELY, exactly as the spawn-idle lane arms
-    // it: `session-state.js › idleTimeout` reads `parked === true` and answers `abandon_timeout`,
-    // so an agent nobody comes back to ENDS on its own instead of holding a slot forever. No
-    // reducer event has run on this object, so nothing else would ever arm one.
-    deps.scheduleIdle(s);
-    reparked += 1;
-    diag('session-boot: re-parked dormant agent (Idle; resumes on the next addressed message)', 'agent', String(s.agentId || ''), 'channel', String(s.channelId || '').slice(0, 8), 'thread', String(s.taskId || '').slice(0, 8));
+    if (outcome === 'reparked') reparked += 1;
+    else if (outcome === 'ended') ended += 1;
   }
   // §3.3: REGISTRATION IS A PROJECTION MOVE — the pill must not wait for a first dispatch. One
   // touch for the whole pass (`touch` coalesces anyway), and the ENDED half needs it too: the
@@ -348,6 +332,50 @@ function reparkDormant() {
   if (reparked || ended) sessionSummary.touch();
   diag('session-boot: dormant records', String(reparked + ended), '→ re-parked', String(reparked), 'ended', String(ended));
   return { reparked: reparked, ended: ended };
+}
+
+/**
+ * ONE RECORD'S WHOLE DECISION: `'reparked'`, `'ended'`, or `''` for a record this pass does not
+ * own. ⚠ A NAMED UNIT RATHER THAN A LOOP BODY, so the per-record try/catch above wraps something
+ * with ONE exit vocabulary — three `continue`s that each had to remember to increment a counter
+ * is the shape that made "independent" untrue in the first place.
+ */
+function reparkOne(key, rec) {
+  if (!rec || typeof rec !== 'object') return '';
+  if (store.reloadDisposition(rec.phase) !== 'dormant') return '';
+  // ⚠ ALREADY LIVE IS NOT AN ERROR AND MUST NOT BE OVERWRITTEN. `init()` runs once at app
+  // start, but a launch racing it (a deep link, a queued directive) would already own this
+  // slot, and replacing the Map entry orphans a live query.
+  if (deps.sessions.has(key)) return '';
+  // ⚠ THE RECENCY WINDOW, BEFORE ANY RESUMABILITY QUESTION (see its own section above). A
+  // record outside it is not resurrected however resumable it looks — it ENDS, visibly, like
+  // every other dormant record this pass cannot revive.
+  if (!withinReparkWindow(rec, Date.now())) {
+    endInterrupted(key, rec, 'this agent was parked longer ago than the re-park window, so the app ended it instead of reviving it', { quiet: true });
+    return 'ended';
+  }
+  const sdkId = store.getSdkSessionId(key);
+  // ⚠ NO SDK ID IS THE ORDINARY CASE, NOT A CORRUPTION: a SPAWN-IDLE agent ("New Agent") never
+  // started a query, so nothing ever reported a conversation id for it — and the record carries
+  // neither its launch goal nor its template body, so there is nothing to rebuild it from
+  // either. An Ended card is the honest answer; a silent disappearance is not.
+  // ⚠ THE REASON STRINGS BELOW ARE ENGINEER TEXT AND REACH ONLY THE DIAG LOG (2026-09-13,
+  // Samuel: "We don't need that line to be there … We can just put 'ended.'"). The one that used
+  // to stand here — "the app restarted before this agent started a conversation, so there was
+  // nothing to resume" — was rendered on the card, which is the line he deleted.
+  const refusal = sdkId
+    ? runtimeCapability.resumeRefusal(runtimeRegistry.descriptorFor(rec.runtimeId))
+    : 'no conversation id in the resume map: this agent never started a query'; // LOG ONLY — see endInterrupted
+  if (refusal) { endInterrupted(key, rec, refusal); return 'ended'; }
+  const s = parkedSessionFromRecord(key, rec, sdkId);
+  deps.sessions.set(key, s);
+  // ⚠ THE ABANDONMENT BOUND IS ARMED HERE, DELIBERATELY, exactly as the spawn-idle lane arms
+  // it: `session-state.js › idleTimeout` reads `parked === true` and answers `abandon_timeout`,
+  // so an agent nobody comes back to ENDS on its own instead of holding a slot forever. No
+  // reducer event has run on this object, so nothing else would ever arm one.
+  deps.scheduleIdle(s);
+  diag('session-boot: re-parked dormant agent (Idle; resumes on the next addressed message)', 'agent', String(s.agentId || ''), 'channel', String(s.channelId || '').slice(0, 8), 'thread', String(s.taskId || '').slice(0, 8));
+  return 'reparked';
 }
 
 // ─── END SESSION-BOOT-PURE ────────────────────────────────────────────────────────

@@ -181,10 +181,23 @@ async function startResumedConsumer(s) {
     // a session that 401s on its first tool call). The case this site exists for is a WOKEN
     // SPAWN-IDLE SHELL, which was registered without ever starting a query and so has none.
     await sessionCredential.ensureContainerCredential(s, diag);
+    // ⚠ **THE MCP PRE-FLIGHT RUNS ON THIS LANE TOO (F-696, 2026-09-14), AND IT IS INJECTED**
+    // because this block may not `require`. `session-query.js › preflightMcp` carries the whole
+    // argument; what is new here is that the old reason for SKIPPING it — "its route was warmed
+    // by the launch it is resuming" — is FALSE after a restart: `session-boot.js › reparkDormant`
+    // re-parks a record off DISK, so this resume is the first thing in the process to touch
+    // `/api/mcp`, and it met the CLI's 5s connect budget against a cold route with no warm call
+    // in front of it. It also carries the SETTLED re-check, which is what makes a 25s wait safe.
+    if (deps.preflightMcp && (await deps.preflightMcp(s))) { s.resuming = false; return; }
+    if (s.settled) { s.resuming = false; return; }
     // ⚠ `resume`, NOT `start`, AND THE SECOND ARGUMENT IS THE HANDLE BEING SUPERSEDED. On the
     // runtime registered today a resume is a fresh child carrying the conversation id, so that
     // argument is ignored; a runtime that RE-ATTACHES to a live conversation needs it, and
     // declaring the signature now is what keeps that from being a core change later.
+    // ⚠ WHICH LANE STARTED THIS STREAM (F-696) — the twin of `session-query.js › startQuery`'s
+    // stamp, and the ONE fact `mcp-connect-guard.js › relaunch` needs to retry on the lane that
+    // launched rather than always on the cold one.
+    s.launchVia = 'resume';
     const q = rt.resume(deps.buildLaunchSpec(s), s.query);
     s.query = q;
     s.resuming = false;

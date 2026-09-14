@@ -149,7 +149,26 @@ test("the guard is BOUND by the engine and CONSULTED by the consume loop", () =>
   const query = readMain("session-query.js");
   assert.match(query, /signal\.type === 'mcp_status'/, "the consume loop stopped branching on the signal");
   assert.match(query, /mcpGuard\.handleMcpStatus\(s, signal\.status\)/, "the guard is not consulted");
-  assert.match(query, /warmMcpRoute\(\{/, "the pre-flight left startQuery");
+  assert.match(query, /warmMcpRoute\(\{/, "the pre-flight left session-query");
+  // ⚠ AND THE PRE-FLIGHT'S OWN COST IS FENCED (2026-09-14 review). It puts up to WARM_TIMEOUT_MS
+  // between the caller's decision to launch and the spawn, with the old query already torn down —
+  // so a session settled in that window (an interrupt, a delete, an abandonment timeout) would
+  // otherwise still spawn a child holding its pre-approved channel access, with nothing left
+  // pointing at it. ⚠ ASSERTED AS THE PAIR, in order, INSIDE `preflightMcp`: a guard that stands
+  // ABOVE the warm call is a guard about a moment that has passed.
+  const pre = query.indexOf("async function preflightMcp(s) {");
+  assert.ok(pre > 0, "preflightMcp is gone — both launch lanes reach the pre-flight through it");
+  assert.ok(query.indexOf("warmMcpRoute({", pre) < query.indexOf("if (s.settled) {", pre),
+    "preflightMcp must re-check `s.settled` AFTER the warm call, not before it");
+  assert.ok(query.indexOf("if (await preflightMcp(s)) return;") < query.indexOf("rt.start(buildLaunchSpec(s))"),
+    "startQuery must abandon the launch when the pre-flight says the session is gone");
+  // ⚠ AND THE RESUME LANE REACHES THE SAME FUNCTION (F-696). It used to skip the pre-flight on the
+  // claim that "its route was warmed by the launch it is resuming" — false after a boot re-park,
+  // which resumes off DISK against a route nothing in this process has touched.
+  assert.match(readMain("session-park.js"), /deps\.preflightMcp && \(await deps\.preflightMcp\(s\)\)/,
+    "startResumedConsumer stopped warming the route before it resumes");
+  assert.match(readMain("session-engine.js"), /preflightMcp: sessionQuery\.preflightMcp/,
+    "…and the engine must still inject it, or the guard above is a dead branch");
   // The adapter must keep FORWARDING the field, or core has nothing to read.
   assert.match(readMain("runtime", "claude", "normalize.js"),
     /events\.launched\(msg\.session_id, msg\.model, msg\.mcp_servers\)/,

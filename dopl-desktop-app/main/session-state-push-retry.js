@@ -32,6 +32,28 @@
 // the reconcile off the CURRENT projection and never replays a stale set. That is also why the
 // retry needs no payload of its own: it is the same cycle, later.
 
+// ⚠ **AND THE QUARANTINE (2026-09-14) — ONE POISONED ROW MAY NOT WEDGE A WORKSPACE.** A 4xx is
+// NOT retryable, deliberately, and the digest is not recorded on a failure — so a single row the
+// SERVER refuses for a reason no client predicate can restate (its channel was deleted, this
+// credential is no longer in it) makes EVERY later push for that workspace fail identically:
+// `read_sessions` answers [] for the machine, valid rows included, and stale rows are never
+// cleared. The three predicates in `session-state-push-wire.js` cover the refusals a client CAN
+// restate; this covers the ones only the server knows.
+//
+// ⚠ **WHY A SWEEP AND NOT A BISECT, MEASURED.** The endpoint is REPLACE-BY-OMISSION, so a probe
+// is not free: any subset that SUCCEEDS becomes the stored set. A bisect isolates in ⌈log2 32⌉ = 5
+// probes but every successful one WRITES a knowingly truncated projection — the exact failure this
+// exists to end, on every reading surface, for as long as it takes to send the next one. The sweep
+// probes FULL-SET-MINUS-ONE, so every POST it makes is either a 4xx that writes nothing or the
+// CORRECT final set: at most `SESSION_REPORT_MAX` (32) probes, each a single non-retryable attempt
+// that 400s immediately (no 15s timeout, no `MAX_ATTEMPTS` doubling), run ONCE because the key is
+// then remembered and filtered out up front. 32 fast POSTs on a wedged workspace, never on a
+// healthy one, against a wrong projection that does not decay.
+//
+// ⚠ **TWO BAD ROWS ARE NOT FIXED AND MUST NOT PRETEND TO BE.** No single removal succeeds, the
+// sweep spends its probes and answers null, and the cycle fails exactly as it does today — with
+// the diag line saying so. Quarantining a row on a guess is how a live agent stops being reported.
+
 // ⚠ THE LADDER IS FIVE STEPS AND THEN A FLOOR AT ITS LAST ONE (every 300s, indefinitely). It
 // must outlive a local-API outage of any length — the incident's cost is a WRONG projection on
 // every reading surface, which does not decay — while the 5-minute floor keeps a machine that is
@@ -51,6 +73,61 @@ function retryable(status) {
 }
 
 const short = (id) => String(id || '').slice(0, 8);
+
+
+/**
+ * ONE WORKSPACE'S QUARANTINE: the rows the SERVER refuses, kept out of later payloads.
+ * ⚠ MINTED WITH THE LANE because it remembers, and pruned to the LIVE key set every cycle for
+ * `loggedAdHoc`'s reason — an agent that ends takes its quarantine with it, so a row is never
+ * banished for longer than the session that owned it.
+ */
+function makeQuarantine(diag, probe) {
+  const banished = new Set(); // `${workspaceId}|${sessionKey}`
+  const at = (ws, key) => String(ws) + '|' + String(key);
+
+  /** Rows this workspace may still send. */
+  function allowed(workspaceId, rows) {
+    if (banished.size === 0) return rows;
+    return rows.filter((r) => !banished.has(at(workspaceId, (r && r.sessionKey) || '')));
+  }
+
+  /**
+   * FIND THE ONE ROW THE SERVER REFUSES, by sending the whole set MINUS each candidate in turn.
+   * Answers the banished `sessionKey`, or null when no single removal is enough.
+   * ⚠ THE WINNING PROBE IS THE REAL WRITE. It stores exactly the set the next cycle would send,
+   * so the projection is correct the moment the sweep succeeds rather than one cycle later.
+   * ⚠ NO ACKS ON A PROBE: a receipt spent on a payload that may 400 is a receipt this machine
+   * forgot it owed, and `cycle` has already restored them by the time this runs.
+   */
+  async function sweep(workspaceId, rows) {
+    if (!Array.isArray(rows) || rows.length < 2) return null;
+    for (let i = 0; i < rows.length; i += 1) {
+      const suspect = String((rows[i] && rows[i].sessionKey) || '');
+      const without = rows.filter((_, j) => j !== i);
+      // ⚠ SERIAL BY CONTRACT AND NOT BY HABIT: each probe is a WRITE on a replace-by-omission
+      // endpoint, so two in flight would race to decide what the stored set is.
+      const stored = await probe(workspaceId, without);
+      if (stored !== true) continue;
+      banished.add(at(workspaceId, suspect));
+      diag('session-state push: QUARANTINED session', suspect,
+        '— the server refuses this row and one of them 400s the whole payload;',
+        'the rest of this workspace\'s set is reported normally from here on');
+      return suspect;
+    }
+    diag('session-state push: no single row explains the refusal for ws', short(workspaceId),
+      '— the payload is failing for a reason removing one row cannot fix');
+    return null;
+  }
+
+  /** An agent that left the projection takes its quarantine with it. */
+  function prune(liveKeys) {
+    for (const entry of [...banished]) {
+      if (!liveKeys.has(entry.slice(entry.indexOf('|') + 1))) banished.delete(entry);
+    }
+  }
+
+  return { allowed, sweep, prune, size: () => banished.size };
+}
 
 /**
  * One writer's failure lane.
@@ -140,4 +217,4 @@ function makeFailureLane(diag, run, timers) {
   };
 }
 
-module.exports = { makeFailureLane, retryable, delayFor, RETRY_BACKOFF_MS };
+module.exports = { makeFailureLane, makeQuarantine, retryable, delayFor, RETRY_BACKOFF_MS };

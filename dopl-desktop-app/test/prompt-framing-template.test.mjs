@@ -430,5 +430,10 @@ test("an instructions-only template frames the body without a role line", () => 
   assert.ok(text.includes("YOUR INSTRUCTIONS FOR THIS RUN"));
   assert.ok(text.includes("BEGIN-ROLE-N1") && text.includes("END-ROLE-N1"));
   assert.ok(text.includes("Speak only in haiku."));
+  // ⚠ THE SAME TRAILING BLANK LINE THE OTHER BRANCH EMITS. Its caller states the contract — "IT
+  // EMITS ITS OWN TRAILING BLANK LINE, so an absent template adds NOTHING here" — and without it
+  // `END-ROLE-N1` butts straight against the SECURITY paragraph spliced after it.
+  assert.equal(lines[lines.length - 1], "", "the block closes its own paragraph");
+  assert.equal(lines[lines.length - 2], "END-ROLE-N1");
   assert.deepEqual(templateRoleFraming({ template: { name: null, instructions: "   ", authoredByCaller: true, instructionsOnly: true } }, "N1"), []);
 });

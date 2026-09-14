@@ -93,7 +93,7 @@ const NARRATION_MAX = 200;
  * that constant's own note does the arithmetic — "the worst case rises from 200 × 300 = 60k to
  * 200 × 2000 = 400k chars per session per flush". What the note leaves out is the FAN-OUT: the
  * payload is cloned once per live window, and there can be nine (the SPA plus
- * `popout-window.js › MAX_POPOUTS` plus `agent-window.js › MAX_AGENT_WINDOWS`). 400k × 6
+ * `popout-window.js › MAX_POPOUTS` plus `agent-window.js › MAX_AGENT_TABS`). 400k × 6
  * sessions × 9 windows × 5 Hz is a rate, not a size, and nothing in this file bounded a rate.
  * That note ALSO named the two acceptable fixes — "tighten `NARRATION_MAX` or send a delta
  * instead of the ring" — and this is the first of them, generalized.

@@ -255,16 +255,28 @@ function wireSpaServices(deps) {
       getUserId: () => (deps.authTokens.getAuthState() || {}).userId || null,
       summary: deps.sessionSummary,
     });
-    // ⚠ ONE RECONCILE CYCLE AT BOOT, TOO (2026-09-13 evening). The writer fires on
-    // STATE CHANGE and on the sign-in transition; a boot that is ALREADY signed in
-    // and registers nothing (every dormant record ended quietly, `session-boot.js`)
-    // makes neither, so the previous run's rows stayed on the server as Idle pills
-    // on every surface that reads `channel_sessions` (Samuel: "why do i see so
-    // many agents in the overview … i should not see ended agents"). `kick` is a
-    // no-op until armed and signed in, so this costs nothing on a signed-out boot.
-    // ⚠ AND ITS FAILURE IS REPAIRED BY THE WRITER'S OWN BACKOFF (2026-09-14,
-    // `session-state-push-retry.js`) — this is the one cycle with no next state change to wait
-    // for, and on 2026-09-14 01:02 it aborted against a slow local API and left the run's rows wrong.
+  };
+  // ⚠ ONE RECONCILE CYCLE AT BOOT, AND IT IS **NOT** CALLED HERE (2026-09-13 evening; MOVED
+  // 2026-09-14). The writer fires on STATE CHANGE and on the sign-in transition; a boot that is
+  // ALREADY signed in and registers nothing (every dormant record ended quietly,
+  // `session-boot.js`) makes neither, so the previous run's rows stayed on the server as Idle
+  // pills on every surface that reads `channel_sessions` (Samuel: *"why do i see so many agents
+  // in the overview … i should not see ended agents"*). `kick` is a no-op until armed and signed
+  // in, so this costs nothing on a signed-out boot.
+  //
+  // 🔒 **IT RUNS AFTER `sessionEngine.init()`, WHICH IS WHY IT IS RETURNED RATHER THAN CALLED.**
+  // `wireSpaServices` is wired from `index.js` BEFORE the engine reloads its records, so a kick
+  // in this function reconciles an EMPTY registry — it posts a set with no rows, the server
+  // deletes every row for the workspace, and then `session-boot.js › reparkDormant`'s `touch()`
+  // posts the re-parked ones straight back. Two writes and a visible flap on every reading
+  // surface, to say what ONE write after `init()` says correctly the first time. The boot
+  // reconcile's whole job is to be the run's first honest set, and before `init()` it cannot be.
+  //
+  // ⚠ AND ITS FAILURE IS REPAIRED BY THE WRITER'S OWN BACKOFF (2026-09-14,
+  // `session-state-push-retry.js`) — this is the one cycle with no next state change to wait
+  // for, and on 2026-09-14 01:02 it aborted against a slow local API and left the run's rows wrong.
+  const bootReconcile = () => {
+    if (!deps.sessionStatePush || !deps.sessionSummary) return; // mid-wave / harness
     try { deps.sessionStatePush.kick(); }
     catch (err) { deps.diag('session-state push boot kick error', err && err.message); }
   };
@@ -303,6 +315,9 @@ function wireSpaServices(deps) {
   startUiSync();
   startSessionSummary();
   startSessionStatePush();
+  // The ONE thing this function hands back, and the reason is above `bootReconcile`: the boot
+  // reconcile must see the registry `sessionEngine.init()` fills, so `index.js` calls it there.
+  return { bootReconcile };
 }
 
 // Tray sign-out, SPA shape: drop the credential and PUSH the transition —

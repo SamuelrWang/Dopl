@@ -310,6 +310,12 @@ function instructionsOnlyFraming(t, nonce) {
     begin,
     body,
     end,
+    // ⚠ THE TRAILING BLANK LINE IS PART OF THE CONTRACT, NOT A FLOURISH (2026-09-14 review). Both
+    // this block's caller and `templateRoleFraming`'s other branch state it — `prompt-framing.js`:
+    // *"IT EMITS ITS OWN TRAILING BLANK LINE, so an absent template adds NOTHING here"* — and this
+    // branch shipped without one, so an instructions-only role put `END-ROLE-<nonce>` hard against
+    // the SECURITY paragraph that follows it, with no blank line between the fence and the prose.
+    '',
   ];
 }
 

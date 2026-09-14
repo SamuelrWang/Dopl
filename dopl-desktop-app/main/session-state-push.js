@@ -116,25 +116,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // (`session-telemetry-cadence.test.mjs` pins that as a source fact).
 const { noteFailure, clearFailures, forgetFailures, retryable, armRetry, clearRetry } =
   retryLane.makeFailureLane(diag, () => kick(true));
-
-/**
- * **ONE OF THE SIXTEEN AGENT COLOUR KEYS, OR `null`** (2026-09-13;
- * docs/specs/agent-colors.md).
- *
- * ⚠ **A MEMBERSHIP TEST AND NOT A SANITIZER**, which is why it is not `telemetry.labelOrNull`:
- * the set is OURS (sixteen CSS tokens), so the honest answer to anything outside it is "no
- * colour", not "a shorter version of what you sent". A value that is not a key would be
- * substituted into a `var(--agent-color-…)` on the far side and paint nothing.
- *
- * ⚠ **A LOCAL COPY OF THE PATTERN, FORCED RATHER THAN CHOSEN** — `main/` cannot import from
- * `src/`. The same regex is in `session-launch-op.js › colorKey`, in both column CHECKs in
- * `20261005120000_agent_session_colors.sql`, and as a key list in
- * `src/features/channels/lib/agent-colors.ts › AGENT_COLOR_KEYS`.
- */
-const AGENT_COLOR_RE = /^agent-(0[1-9]|1[0-6])$/;
-function colorKey(value) {
-  return typeof value === 'string' && AGENT_COLOR_RE.test(value) ? value : null;
-}
+// THE QUARANTINE (2026-09-14) — the rows the SERVER refuses for a reason no client predicate can
+// restate. Minted per writer for the lane's own reason (it remembers), and its probe is `send`
+// with NO acks: every probe is a real WRITE on a replace-by-omission endpoint, so the winning one
+// stores exactly the set the next cycle would have sent. Its header carries the sweep-vs-bisect
+// measurement.
+const quarantine = retryLane.makeQuarantine(diag, (ws, rows) => send(ws, rows));
 
 /**
  * ONE REPORT ENTRY -> THE WIRE ROW. The only mapping here, and it is a rename: `key` is the
@@ -188,7 +175,7 @@ function reportRow(e) {
     // by omission, because omission is not a value on this lane.
     // ⚠ NOT `labelOrNull`: this is a CLOSED SET, not operator prose, so it is membership-tested
     // rather than length-bounded — a sanitizer would pass `agent-99` through as a legal label.
-    color: colorKey(e && e.color),
+    color: wire.colorKey(e && e.color),
     ...telemetry.telemetryFields(e),
   };
 }
@@ -346,7 +333,11 @@ async function cycle(entries) {
   // ⚠ Ad-hoc rows are dropped HERE, before grouping, so the digest, the empty-set delete and
   // the bounded retry all operate on exactly the set that goes on the wire. Filtering inside
   // `send` leaves the digest recording a payload that was never sent.
-  const groups = groupByWorkspace(reportable(ownedBy(entries, userId)));
+  const reported = reportable(ownedBy(entries, userId));
+  // ⚠ PRUNED TO THE LIVE SET FIRST, like `loggedAdHoc`: an agent that ends takes its quarantine
+  // with it, so a row is never banished for longer than the session that owned it.
+  quarantine.prune(new Set(reported.map((e) => String((e && e.key) || ''))));
+  const groups = groupByWorkspace(reported);
   for (const ws of reportedWorkspaces(userId)) {
     if (!groups.has(ws)) groups.set(ws, []);
   }
@@ -359,7 +350,10 @@ async function cycle(entries) {
     if (!groups.has(ws)) groups.set(ws, []);
   }
   let wantsRetry = false; // any workspace whose POST failed on a shape that may answer differently
-  for (const [ws, rows] of groups) {
+  for (const [ws, all] of groups) {
+    // ⚠ THE QUARANTINE IS APPLIED HERE, ABOVE THE DIGEST, so a banished row cannot make a set look
+    // NEW every cycle and re-send a payload that is known to 400.
+    const rows = quarantine.allowed(ws, all);
     // ⚠ TAKEN BEFORE THE GATES BELOW MAY `continue`, and PUT BACK on every path that does not
     // send: a receipt held past a skipped cycle is a receipt this machine forgot it owed.
     const acks = deliveryAck.take(ws, userId);
@@ -379,10 +373,14 @@ async function cycle(entries) {
     // ⚠ No `restore` on this branch: it is only reachable with an EMPTY `acks`.
     if (!stateMoved && acks.length === 0 && !telemetry.floorAllows(pushedAt.get(ws), Date.now())) continue;
     // Serial on purpose: a burst of parallel writes is what this design exists to avoid.
-    const stored = await send(ws, rows, acks);
+    let stored = await send(ws, rows, acks);
     if (stored !== true) { // NOT recorded, so ANY later cycle re-sends this set
       deliveryAck.restore(ws, acks, userId);
       if (stored === 'retry') wantsRetry = true;
+      // ⚠ A NON-RETRYABLE REFUSAL IS SWEPT ONCE: a 4xx will not answer differently in 15s, so
+      // without this ONE poisoned row wedges the whole workspace's projection for the run. The
+      // winning probe stores the good set, so the retry armed below only has to carry the acks.
+      else if (await quarantine.sweep(ws, rows)) wantsRetry = true;
       continue;
     }
     pushedDigest.set(ws, digest);

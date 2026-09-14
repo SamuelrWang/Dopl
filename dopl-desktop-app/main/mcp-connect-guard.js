@@ -26,7 +26,7 @@ const { diag } = require('./diag');
 const store = require('./session-store');
 const mcpConnect = require('./mcp-connect');
 
-let deps = null; // { acquireRuntime, startQuery, dispatch, emit, denyPending }
+let deps = null; // { acquireRuntime, startQuery, dispatch, emit, denyPending, resumeParked, abortInFlight }
 
 /**
  * The engine binds its internals here at load, exactly as it does for `session-auth.js`:
@@ -66,20 +66,39 @@ function handleMcpStatus(s, status) {
 }
 
 /**
- * THE ONE RETRY. ⚠ THE SAME PATH THE LAUNCH WOULD HAVE TAKEN — `session-auth.js ›
- * resumeAfterSignIn`'s preflight branch, to the letter: reset the phase to 'launching' so the
- * watchdog re-arms, acquire the runtime, and re-enter the engine's `startQuery`, which supersedes
- * the dead child and re-pushes `s.firstTurn`.
+ * THE ONE RETRY, **ON THE LANE THAT LAUNCHED** (F-692; the lane split is F-696, 2026-09-14).
  *
- * ⚠ FAIL CLOSED FIRST. Every awaited `canUseTool` promise is denied before the teardown, so no
- * resolver dangles on a child that is about to be aborted. The reason is `session-auth.js`'s (P1
- * discipline) and not a new one.
+ * ⚠ **THERE ARE TWO LANES AND SENDING A RESUME DOWN THE COLD ONE LOSES THE MESSAGE THAT WOKE
+ * IT.** `startQuery` re-pushes `s.firstTurn` onto a FRESH iterator — correct for a cold launch,
+ * which is what `s.firstTurn` is. A woken parked session has no `firstTurn` worth pushing (a
+ * boot re-park sets it to `''`); its input was the framed peer message, pushed onto the iterator
+ * `startQuery` is about to replace. So the cold path silently started a resumed conversation with
+ * an empty turn while the peer waited forever. The lane is read off `s.launchVia`, stamped at the
+ * two sites that actually make a child (`session-query.js › startQuery`, `session-park.js ›
+ * startResumedConsumer`) — NOT off `s.resumeSdkId`, which `startResume` also sets on a lane that
+ * really did launch cold.
+ *
+ * ⚠ **THE COLD ARM IS UNCHANGED AND STILL `session-auth.js › resumeAfterSignIn`'s, TO THE
+ * LETTER:** reset the phase to 'launching' so the watchdog re-arms, acquire the runtime, re-enter
+ * the engine's `startQuery`, which supersedes the dead child and re-pushes `s.firstTurn`.
+ *
+ * ⚠ **THE RESUME ARM MUST ABORT THE CHILD ITSELF**, which is the one place this file departs from
+ * that model and the reason is structural: `startQuery` opens with `abortInFlight`, and
+ * `resumeParked` does NOT — it is normally called after a park has already torn the query down.
+ * Reached from here there has been no park, so without this the dead child keeps running with
+ * this session's pre-approved channel access. The input is READ OFF THE OLD ITERATOR FIRST
+ * (`session-io.js › makePushIterator().replayable()`) and re-pushed onto the fresh one.
+ *
+ * ⚠ FAIL CLOSED FIRST, ON BOTH ARMS. Every awaited `canUseTool` promise is denied before the
+ * teardown, so no resolver dangles on a child that is about to be aborted. The reason is
+ * `session-auth.js`'s (P1 discipline) and not a new one.
  *
  * ⚠ A THROW HERE ENDS THE SESSION VISIBLY rather than leaving it in phase 'launching' with no
  * query behind it — the shape H1(b) records as unparkable, un-timeout-able and unsettleable.
  */
 async function relaunch(s) {
   try { if (deps.denyPending) deps.denyPending(s, 'Reconnecting the Dopl MCP server'); } catch (_) { /* best effort */ }
+  if (s.launchVia === 'resume' && typeof deps.resumeParked === 'function') return resumeArm(s);
   if (s.state) { s.state.phase = 'launching'; s.state.parked = false; s.state.activity = 'working'; }
   try {
     const rt = await deps.acquireRuntime(s.runtimeId);
@@ -88,6 +107,40 @@ async function relaunch(s) {
     diag('mcp-connect: retry launch failed', err && err.message);
     failVisibly(s, 'relaunch-failed', attemptOf(s));
   }
+}
+
+/**
+ * RE-RUN THE RESUME, CARRYING THE SAME INPUT.
+ *
+ * ⚠ **THE FRESH ITERATOR IS THE PROOF THAT IT RESTARTED.** `resumeParked` mints one
+ * SYNCHRONOUSLY on every path it takes and returns silently on the ones it refuses (a settled or
+ * already-resuming session, and `runtimeCapability.resumeRefusal` — an unverified usage meter).
+ * Comparing the handle is therefore an exact answer, where a flag would be a second one.
+ * ⚠ **A REFUSED RESUME ENDS VISIBLY RATHER THAN STAYING PARKED.** `resumeParked`'s own refusal
+ * leaves a session parked for the next wake, and that is right when its query is intact — here it
+ * is not: the child has just been aborted, so "parked" would mean a pill that is Idle, addressable
+ * and permanently unwakeable. Ending is the floor this whole lane is built on.
+ */
+function resumeArm(s) {
+  const pending = (s.pushIterator && typeof s.pushIterator.replayable === 'function')
+    ? s.pushIterator.replayable() : [];
+  const before = s.pushIterator;
+  try { if (deps.abortInFlight) deps.abortInFlight(s); } catch (_) { /* best effort */ }
+  try {
+    deps.resumeParked(s);
+  } catch (err) {
+    diag('mcp-connect: retry resume failed', err && err.message);
+    return failVisibly(s, 'relaunch-failed', attemptOf(s));
+  }
+  if (!s.pushIterator || s.pushIterator === before) {
+    diag('mcp-connect: the resume refused the retry — ending rather than leaving an unwakeable pill');
+    return failVisibly(s, 'resume-refused', attemptOf(s));
+  }
+  for (const msg of pending) {
+    try { s.pushIterator.push(msg); } catch (_) { /* best effort */ }
+  }
+  diag('mcp-connect: retried on the RESUME lane, replaying', String(pending.length), 'input message(s)');
+  return undefined;
 }
 
 /**

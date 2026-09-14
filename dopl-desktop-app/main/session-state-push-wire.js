@@ -133,4 +133,30 @@ function makeWireFilter(diag) {
   return { serverReportable, nameReportable, liveForWire, reportable };
 }
 
-module.exports = { makeWireFilter };
+// ⚠ **`colorKey` JOINED THIS FILE ON 2026-09-14, FROM `session-state-push.js`** — the move is the
+// seam, not the line count that prompted it. Every predicate here restates a CONTRACT the endpoint
+// enforces (`SESSION_KEY_RE`, the `name` CHECK, the array bound); `channel_sessions.color`'s CHECK
+// is one more of exactly that kind, and it sat in the file that owns the PUSH. ⚠ IT IS NOT PART OF
+// `makeWireFilter` because it REMEMBERS NOTHING: the factory exists for `reportable`'s
+// `loggedAdHoc` set, and a stateless membership test does not need a per-writer copy.
+
+/**
+ * **ONE OF THE SIXTEEN AGENT COLOUR KEYS, OR `null`** (2026-09-13;
+ * docs/specs/agent-colors.md).
+ *
+ * ⚠ **A MEMBERSHIP TEST AND NOT A SANITIZER**, which is why it is not `telemetry.labelOrNull`:
+ * the set is OURS (sixteen CSS tokens), so the honest answer to anything outside it is "no
+ * colour", not "a shorter version of what you sent". A value that is not a key would be
+ * substituted into a `var(--agent-color-…)` on the far side and paint nothing.
+ *
+ * ⚠ **A LOCAL COPY OF THE PATTERN, FORCED RATHER THAN CHOSEN** — `main/` cannot import from
+ * `src/`. The same regex is in `session-launch-op.js › colorKey`, in both column CHECKs in
+ * `20261005120000_agent_session_colors.sql`, and as a key list in
+ * `src/features/channels/lib/agent-colors.ts › AGENT_COLOR_KEYS`.
+ */
+const AGENT_COLOR_RE = /^agent-(0[1-9]|1[0-6])$/;
+function colorKey(value) {
+  return typeof value === 'string' && AGENT_COLOR_RE.test(value) ? value : null;
+}
+
+module.exports = { makeWireFilter, colorKey };

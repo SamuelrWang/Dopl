@@ -71,6 +71,16 @@ const MAX_AGENT_TABS = 4;
 let host = null;
 /** key -> tab descriptor, in INSERTION ORDER: the strip reads left to right. */
 const openTabs = new Map();
+/**
+ * THE TAB MAIN LAST TOLD THE RENDERER TO SHOW. ⚠ IT EXISTS FOR `did-finish-load`, WHICH FIRES
+ * MORE THAN ONCE AND MUST NOT REPLAY A KEY FROM THE PAST. A handler closing over the FIRST
+ * tab's key (what stood here until this was fixed) got three things wrong: a second agent
+ * opened before the window finished loading had its push DROPPED and then lost the focus to
+ * tab one; any later load (a renderer reload, a crash recovery) yanked the operator back to
+ * tab one; and if tab one had since been closed, the replay named a tab that is not in the set
+ * and the panel rendered empty.
+ */
+let lastFocusKey = '';
 
 // ─── BEGIN AGENT-ROUTE-PURE (unit-tested via source extraction) ──────────────
 // No electron/require refs below.
@@ -128,6 +138,7 @@ function sweep() {
   if (host && !appWindows.isLiveWindow(host)) {
     host = null;
     openTabs.clear();
+    lastFocusKey = '';
   }
   return openTabs;
 }
@@ -148,10 +159,16 @@ function isHostWindow(win) {
  */
 function pushTabs(focusKey) {
   if (!host) return;
+  // ⚠ REMEMBERED EVEN IF THE SEND IS DROPPED, which is the case this field is FOR: a push that
+  // arrives before the renderer has attached its listener is lost silently, and `did-finish-load`
+  // is what replays it. A key that is no longer a tab falls back to the LAST one rather than to
+  // nothing, on `closeAgentTab`'s rule — a window whose active tab has gone renders an empty panel.
+  const asked = focusKey || '';
+  lastFocusKey = openTabs.has(asked) ? asked : (Array.from(openTabs.keys()).pop() || '');
   try {
     host.webContents.send('agent-window:tabs', {
       tabs: Array.from(openTabs.values()),
-      focusKey: focusKey || '',
+      focusKey: lastFocusKey,
     });
   } catch (err) {
     diag('agent-window: could not push the tab set —', (err && err.message) || String(err));
@@ -335,17 +352,21 @@ function openAgentWindow(target) {
   host = win;
   openTabs.clear();
   openTabs.set(key, tab);
+  lastFocusKey = key;
   try {
     // ⚠ THE WINDOW'S OWN ROUTE SEEDS ITS FIRST TAB, so the renderer has one before any push
     // arrives — and `did-finish-load` is when a push can be HEARD. A send before the listener
     // is attached is dropped silently, which is how a tab set arrives empty.
-    win.webContents.on('did-finish-load', () => pushTabs(key));
+    // ⚠ IT REPLAYS `lastFocusKey`, NEVER THE KEY THIS CALL OPENED. This handler fires on every
+    // load, not only the first, and a captured key is a message from the past — see that field.
+    win.webContents.on('did-finish-load', () => pushTabs(lastFocusKey));
   } catch (_err) { /* not an emitter — the route already carries the first tab */ }
   try {
     win.on('closed', () => {
       if (host === win) {
         host = null;
         openTabs.clear();
+        lastFocusKey = '';
       }
     });
   } catch (_err) { /* not an emitter — the sweep still collects it */ }
@@ -371,6 +392,7 @@ function closeAgentTab(key) {
   if (remaining.length === 0) {
     const win = host;
     host = null;
+    lastFocusKey = '';
     try {
       win.close();
     } catch (err) {
@@ -411,18 +433,16 @@ function count() {
   return sweep().size;
 }
 
-/** Is the agent window up at all — one window by construction. */
-function hasWindow() {
-  sweep();
-  return host !== null;
-}
+// ⚠ `hasWindow()` STOOD HERE AND IS DELETED (2026-09-14 review). It shipped with the tabbed
+// ruling and had ZERO readers — not in `main/`, not in `test/`, not in the SPA. An exported
+// predicate nobody asks is a second answer to "is the agent window up" waiting to disagree with
+// `count()`; `sweep()` + `count()` is the one answer, and `isHostWindow` is the security fence.
 
 module.exports = {
   openAgentWindow,
   closeAgentWindow,
   closeAgentTab,
   isHostWindow,
-  hasWindow,
   count,
   MAX_AGENT_TABS,
   AGENT_WINDOW_PAGE,

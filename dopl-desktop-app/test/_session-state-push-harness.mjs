@@ -88,9 +88,16 @@ export function load(opts = {}) {
   const clock = opts.clock || null;
   const fakeDate = clock ? { now: () => clock.now } : Date;
   let answers = opts.answers ? [...opts.answers] : [];
+  // ⚠ `opts.server` IS A SECOND MODE AND THE QUARANTINE NEEDS IT (2026-09-14): a scripted list
+  // answers by POSITION, and the sweep's whole subject is a server that answers by CONTENT — it
+  // refuses exactly the payloads containing one poisoned row and accepts the rest. A positional
+  // list would make the sweep's first probe "succeed" for a reason the case invented.
+  const server = typeof opts.server === "function" ? opts.server : null;
   const apiFetch = async (pathname, options) => {
     posts.push({ pathname, options });
-    const next = answers.length > 1 ? answers.shift() : answers[0];
+    const next = server
+      ? server(options.body, options)
+      : (answers.length > 1 ? answers.shift() : answers[0]);
     const answer = next || { ok: true, status: 200 };
     if (answer.throws) throw new Error(answer.throws);
     return answer;

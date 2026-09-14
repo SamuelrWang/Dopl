@@ -97,7 +97,7 @@ function refreshTray() { try { require('./tray').refresh(); } catch (_) { /* tra
 // and `resolveChannelContext` fed the record-less shell alone.
 sessionPark.bind({
   sessions, acquireRuntime, buildLaunchSpec, consume, dispatch, startSession, hasLiveSession,
-  emit,
+  emit, preflightMcp: sessionQuery.preflightMcp, // F-696: the RESUME lane warms `/api/mcp` too — a boot re-park resumes against a route nothing in this process has touched — and the same call carries the settled re-check
 }); sessionBoot.bind({ sessions, runLifecycle, scheduleIdle }); // F-694: the boot pass takes the registry it re-registers into, the lifecycle runner a VISIBLE end needs, and the timer that arms a re-parked session's abandonment bound. It starts no query and acquires no runtime, so it takes neither
 // §3 split: session-query owns the query LIFECYCLE (the assembly is the runtime's since 2026-08-31) and needs the engine's dispatch + replay-aware quiet emit; neither module requires back into the engine.
 sessionQuery.bind({ dispatch, emitQuiet, scheduleIdle }); // C-4: startQuery arms the launch watchdog through the ONE timer
@@ -105,7 +105,7 @@ sessionQuery.bind({ dispatch, emitQuiet, scheduleIdle }); // C-4: startQuery arm
 // same terms. `startQuery` is the SHARED deferred launch (session-query), so neither assembles a
 // second query and both inherit H1's supersede-before-relaunch; `denyPending` fail-closes first.
 sessionAuth.bind({ sessions, acquireRuntime, startQuery, dispatch, emit, denyPending: denyPendingPermissions });
-mcpGuard.bind({ acquireRuntime, startQuery, dispatch, emit, denyPending: denyPendingPermissions }); // F-692: an init message saying the `dopl` MCP server did not connect re-runs the launch ONCE, then ends the session visibly. No registry — it acts on the one session whose stream reported it
+mcpGuard.bind({ acquireRuntime, startQuery, dispatch, emit, denyPending: denyPendingPermissions, resumeParked: sessionPark.resumeParked, abortInFlight: sessionQuery.abortInFlight }); // F-692: an init message saying the `dopl` MCP server did not connect re-runs the launch ONCE, then ends the session visibly. No registry — it acts on the one session whose stream reported it
 // v2.5 D1/D3: same for the inbound gate + history loader (neither imports back into the engine).
 sessionGate.bind({ sessions, dispatch });
 // Reopen helpers (session-reopen.js): live registry + tray refresh + the P2 shell fallback (item 2).

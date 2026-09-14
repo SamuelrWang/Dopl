@@ -246,7 +246,7 @@ test("NOTHING renderer-reachable can register a window", () => {
   //       • it takes `spa-window.js › spaWebPreferences` and `› policeNavigation` VERBATIM,
   //         so sandbox, contextIsolation, the `setWindowOpenHandler` deny and the exact-path
   //         navigation lock cannot drift from the shell's;
-  //       • it is capped (`MAX_AGENT_WINDOWS`) and refuses in the one `{ ok: false }` shape;
+  //       • it is capped (`agent-window.js › MAX_AGENT_TABS`, `MAX_AGENT_WINDOWS` until 2026-09-13) and refuses in the one `{ ok: false }` shape;
   //       • its route is in NEITHER `WORKSPACE_PAGES` nor `ROOT_ROUTES`, so no `dopl://`
   //         link can mint one.
   //     ⚠ What is genuinely NEW is that this window's renderer can reach an op that STARTS

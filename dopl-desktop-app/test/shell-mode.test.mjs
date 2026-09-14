@@ -415,3 +415,49 @@ test("the proactive token timer starts, and is the only refresher left", () => {
     "the authority starts before the services that read from it"
   );
 });
+
+// ── THE BOOT RECONCILE RUNS AFTER THE ENGINE RELOADS ITS RECORDS (2026-09-14) ────────────────
+//
+// The writer fires on a STATE CHANGE and on the sign-in transition, so a boot that is ALREADY
+// signed in makes neither and the PREVIOUS run's rows stand — which is why a kick exists at all
+// (2026-09-13). But it shipped INSIDE `wireSpaServices`, which `index.js` wires BEFORE
+// `sessionEngine.init()` reloads the durable records: the run's first push therefore reported an
+// EMPTY registry, the server deleted every row for the workspace, and `session-boot.js ›
+// reparkDormant`'s `touch()` posted the re-parked ones straight back. Two writes and a visible
+// flap on every surface that reads `channel_sessions`, to say what ONE write after `init()` says
+// correctly the first time.
+//
+// ⚠ PINNED AS THE PAIR — the return AND the ordered call — because either half alone restores it:
+// a `kick()` left in `wireSpaServices` is the flap, and a `bootReconcile` nobody calls is the
+// 2026-09-13 bug (stale Idle pills for the whole run).
+
+test("wireSpaServices RETURNS the boot reconcile instead of kicking it", () => {
+  const fn = fnOf(SHELL, "wireSpaServices");
+  assert.match(fn, /return \{ bootReconcile \};/, "the reconcile is handed to the caller");
+  const armOnly = between(fn, "const startSessionStatePush", "const bootReconcile");
+  assert.equal(/sessionStatePush\.kick\(\)/.test(armOnly), false,
+    "arming the writer must not also kick it — that kick sees an empty registry");
+  assert.match(fn, /const bootReconcile = \(\) => \{[\s\S]*?sessionStatePush\.kick\(\)/,
+    "the reconcile IS the kick, just not here");
+});
+
+test("index.js calls the boot reconcile AFTER sessionEngine.init()", () => {
+  // ⚠ THE MARKERS ARE CODE, NEVER PROSE. `sessionEngine.init()` also appears in index.js's own
+  // comment ABOVE the wiring, and matching that read the order backwards — which is how an
+  // ordering pin passes while pinning nothing.
+  assert.match(INDEX, /spaServices = wireSpaServices\(\{/, "the handle is kept");
+  // ⚠ THE WHOLE STATEMENT, NOT THE CALL TEXT. `session-auth-recovery.test.mjs`'s rule: a looser
+  // regex matches a call that is never reached, and `if (false) spaServices.bootReconcile();`
+  // passes any scan for the name — which is the 2026-09-13 bug (stale Idle pills for the run)
+  // restored under a green test.
+  assert.match(INDEX, /try \{ if \(spaServices\) spaServices\.bootReconcile\(\); \}/,
+    "…and the reconcile is actually called, guarded only on the handle existing");
+  assert.ok(
+    orderOf(INDEX, "try { sessionEngine.init();", "spaServices.bootReconcile()", "boot reconcile"),
+    "the first push must report the re-parked set, not the empty one that precedes init()"
+  );
+  assert.ok(
+    orderOf(INDEX, "spaServices = wireSpaServices({", "try { sessionEngine.init();", "boot reconcile"),
+    "…and the writer is still ARMED before init(), or the reconcile would be a no-op"
+  );
+});

@@ -333,6 +333,52 @@ test("TABS: the last tab takes the window with it", () => {
   assert.equal(api.closeAgentTab("nonsense"), false);
 });
 
+/**
+ * 🔒 **`did-finish-load` REPLAYS THE CURRENT FOCUS, NEVER A KEY FROM THE PAST** (2026-09-14
+ * review). It shipped closing over the FIRST tab's key, and that handler fires on EVERY load.
+ * Three failures, none of which throws — which is the whole reason they are pinned:
+ *   • a second agent opened while the window is still loading has its push DROPPED (the renderer
+ *     has attached no listener yet) and then loses the focus to tab one when the load lands;
+ *   • any later load — a renderer reload, a crash recovery — yanks the operator back to tab one;
+ *   • if tab one has since been CLOSED, the replay names a tab that is not in the set and the
+ *     panel renders nothing.
+ */
+test("TABS: the first load focuses the tab asked for LAST, not the one the window was built for", () => {
+  const { api, created } = load();
+  api.openAgentWindow(TARGET);
+  api.openAgentWindow({ ...TARGET, taskId: "task-2" }); // before the renderer can hear anything
+  const second = api.agentWindowKey(TARGET.channelId, "task-2", TARGET.agentId);
+
+  created[0].wcHandlers["did-finish-load"](); // the renderer is ready and the push can land
+  const last = created[0].webContents.sent.filter((s) => s.channel === "agent-window:tabs").at(-1);
+  assert.deepEqual(last.payload.tabs.map((t) => t.taskId), [TARGET.taskId, "task-2"]);
+  assert.equal(last.payload.focusKey, second, "the agent the operator just asked for is shown");
+});
+
+test("TABS: a RELOAD never focuses a tab that has been closed, or an earlier one", () => {
+  const { api, created } = load();
+  api.openAgentWindow(TARGET);
+  api.openAgentWindow({ ...TARGET, taskId: "task-2" });
+  const first = api.agentWindowKey(TARGET.channelId, TARGET.taskId, TARGET.agentId);
+  const second = api.agentWindowKey(TARGET.channelId, "task-2", TARGET.agentId);
+
+  created[0].wcHandlers["did-finish-load"]();
+  api.openAgentWindow(TARGET); // the operator picks tab one
+  api.closeAgentTab(first); // …and then closes it
+  created[0].wcHandlers["did-finish-load"](); // the renderer reloads
+
+  const last = created[0].webContents.sent.filter((s) => s.channel === "agent-window:tabs").at(-1);
+  assert.deepEqual(last.payload.tabs.map((t) => t.key), [second], "one tab left");
+  assert.equal(last.payload.focusKey, second, "a focus key must always name a LIVE tab");
+});
+
+/** ⚠ AN EXPORT NOBODY ASKS IS A SECOND ANSWER WAITING TO DISAGREE. `hasWindow()` shipped with the
+ *  tabbed ruling with zero readers in `main/`, `test/` or the SPA; `count()` is the one answer. */
+test("SURFACE: the module exports no unread predicate about the window", () => {
+  const { api } = load();
+  assert.equal("hasWindow" in api, false, "hasWindow had no reader — count() is the one answer");
+});
+
 test("BUDGET: a CLOSED window frees its slot", () => {
   const { api, created } = load();
   api.openAgentWindow(TARGET);

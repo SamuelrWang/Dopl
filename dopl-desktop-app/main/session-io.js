@@ -57,20 +57,48 @@ function shiftInbound(s) {
 // A push-based AsyncIterable<SDKUserMessage>: the SDK consumes it as the live
 // prompt; the engine `push()`es the first framed turn, steer text, and fed inbound
 // replies (research §6). `close()` ends the stream so a `for await` completes.
+// ⚠ **AND IT REMEMBERS WHAT IT HANDED OUT, SINCE 2026-09-14 (F-696)** — `replayable()`. An
+// iterator is minted PER LAUNCH (`session-query.js › startQuery`, `session-park.js ›
+// resumeParked`), so what it has carried is exactly this launch's input: the framed wake message,
+// the first turn, any steer. That matters because a launch can be SUPERSEDED after the child has
+// already drained the queue — `mcp-connect-guard.js` kills a launch whose Dopl MCP server did not
+// connect — and the cold path re-pushes `s.firstTurn` for itself while the RESUME path has no
+// such thing to re-push: the peer message that woke the agent was consumed by a child that is
+// about to be aborted, and without this the retry starts a resumed conversation with NO input and
+// the peer waits forever.
+// ⚠ BOUNDED AT `REPLAY_MAX`, OLDEST DROPPED. It is not a transcript and must never become one:
+// one launch's input is one or two messages, and an unbounded copy of every turn a long session
+// pushes is a leak with a plausible-sounding name.
+const REPLAY_MAX = 8;
 function makePushIterator() {
   const queue = [];
+  const handed = []; // what has LEFT this iterator, oldest first — see replayable()
   let waiting = null;
   let closed = false;
+  const remember = (msg) => {
+    handed.push(msg);
+    if (handed.length > REPLAY_MAX) handed.shift();
+  };
   return {
     push(msg) {
       if (closed) return;
       if (waiting) {
         const w = waiting;
         waiting = null;
+        remember(msg);
         w({ value: msg, done: false });
       } else {
         queue.push(msg);
       }
+    },
+    /**
+     * EVERYTHING THIS ITERATOR WAS GIVEN, in order — delivered AND still queued.
+     * ⚠ IT IS THE INPUT, NOT THE OUTPUT, so replaying it onto a fresh iterator re-states the
+     * launch rather than the conversation. `close()` does not clear it: the whole point is to read
+     * it off an iterator that is being torn down.
+     */
+    replayable() {
+      return [...handed, ...queue].slice(-REPLAY_MAX);
     },
     close() {
       closed = true;
@@ -84,7 +112,11 @@ function makePushIterator() {
       return this;
     },
     next() {
-      if (queue.length) return Promise.resolve({ value: queue.shift(), done: false });
+      if (queue.length) {
+        const msg = queue.shift();
+        remember(msg);
+        return Promise.resolve({ value: msg, done: false });
+      }
       if (closed) return Promise.resolve({ value: undefined, done: true });
       return new Promise((resolve) => {
         waiting = resolve;
