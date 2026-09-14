@@ -40,81 +40,8 @@
  * bound, both ends.
  */
 import { z } from "zod";
-/**
- * THE SIX OPS AN AGENT SEES, and the only six it may pick from.
- *
- * ⚠ THE ORDER IS THE READING ORDER a model skims: the one write it makes most, the two reads,
- * then the three dispatchers.
- *
- * ⚠ **`artifact` IS THE SIXTH, ADDED 2026-09-06 (design #1220 §5, accepted at #1222), AND IT IS
- * AN OP RATHER THAN A `send` KIND** — it writes no message. It folds messages that ALREADY EXIST
- * into one card, which is a different verb on a different row, and hanging it off the send lane
- * would have put a non-delivery on the one op whose whole contract is that it delivers.
- */
-export declare const CHANNEL_OPS: readonly ["send", "read", "status", "manage", "rooms", "artifact"];
-export type ChannelOp = (typeof CHANNEL_OPS)[number];
-/**
- * THE ONE REFUSAL FOR A WORD THAT IS NOT AN OP, written once and used twice (slice B16): the
- * schema's own zod error, and `channel.ts`'s exhaustive `default` for a build where that
- * validation did not run.
- *
- * ⚠ **WITHOUT IT, RETIREMENT IS A `-32602 invalid enum value`** — the opaque failure B8's one-
- * release redirect window existed to prevent, arriving one release later. ⚠ **ONE LINE, AND IT
- * NAMES THE WHOLE VOCABULARY** — six words since `artifact` landed (A4, 2026-09-06), derived from
- * {@link CHANNEL_OPS} and never counted here; anything longer is `rooms(action="help")`'s
- * doctrine.
- *
- * ⚠ The caller's own word is echoed BOUNDED AND ON ONE LINE — it is the only part of this
- * sentence they wrote, and an unbounded multi-line echo is structure a caller can forge inside
- * our narration.
- */
-export declare function unknownOpRefusal(op: unknown): string;
-/**
- * THE SUB-VERBS, per dispatching op.
- *
- * ⚠ **THE THREE VOCABULARIES ARE DISJOINT BY CONSTRUCTION**, and a test asserts it: one flat
- * `action` enum is what a client introspects, so an overlapping word would make the same string
- * mean two things one op apart. Disjointness is also what lets `gating.ts › WRITE_OPS` name a
- * single write action (`rooms.open`) without the pair ever being ambiguous.
- *
- * ⚠ **THE THIRD LIST ARRIVED WITH `artifact` (2026-09-06) AND THE DISJOINTNESS RULE IS WHY ITS
- * WORDS ARE WHAT THEY ARE.** `create` was the obvious name for opening a room too, and `open` for
- * a card; both were rejected here rather than disambiguated later, because the pairing refusals
- * below can only say "that word belongs to <op>" while every word belongs to exactly one.
- *
- * ⚠ **`rooms` CARRIES BOTH READS AND WRITES, AND THAT IS WHY THE WRITE GATE IS PER-ACTION.**
- * Classifying the whole op as a write would refuse a read-only token the very calls it exists to
- * make — `list`, `members`, `help` — and classifying it as a read would open `open` / `invite` /
- * `update` to one.
- */
-export declare const CHANNEL_ACTIONS: {
-    readonly manage: readonly ["launch", "end", "rename", "posture", "direct"];
-    readonly rooms: readonly ["list", "open", "invite", "members", "threads", "thread_mode", "update", "help"];
-    readonly artifact: readonly ["create", "add", "remove", "dissolve"];
-};
-/** Every action name, as the published enum. ⚠ Derived, never restated. */
-export declare const CHANNEL_ACTION_NAMES: [string, ...string[]];
-export type ManageAction = (typeof CHANNEL_ACTIONS.manage)[number];
-export type RoomsAction = (typeof CHANNEL_ACTIONS.rooms)[number];
-export type ArtifactAction = (typeof CHANNEL_ACTIONS.artifact)[number];
-/** The ops that take an `action`, in the reading order above. */
-type DispatchOp = keyof typeof CHANNEL_ACTIONS;
-/**
- * THE ONE REFUSAL FOR A WORD THAT BELONGS TO ANOTHER OP — written once here, used by all three
- * dispatch arms in `channel.ts`.
- *
- * ⚠ **IT WAS TWO HAND-WRITTEN SENTENCES UNTIL 2026-09-06, AND THE THIRD VOCABULARY IS WHY IT IS
- * DERIVED NOW.** Each arm said "that word belongs to" and then NAMED the other op, which is a
- * claim only true while there are exactly two lists: the moment `artifact` arrived,
- * `manage(action="create")` would have told the caller to try `rooms`, confidently and wrongly.
- * The owner is looked up in the same table the enum is built from, so a fourth vocabulary cannot
- * make this sentence lie.
- *
- * ⚠ The offered list is the op's OWN vocabulary, joined with "or" — the same shape as {@link
- * unknownOpRefusal}, and the one thing a caller cannot read off a flat `action` enum that
- * publishes all three lists as one.
- */
-export declare function unknownActionRefusal(op: DispatchOp, action: string): string;
+export { CHANNEL_OPS, CHANNEL_ACTIONS, CHANNEL_ACTION_NAMES, unknownOpRefusal, unknownActionRefusal, } from "./channel-vocab";
+export type { ChannelOp, ManageAction, RoomsAction, ArtifactAction, } from "./channel-vocab";
 /**
  * THE INPUT-SCHEMA BUDGET, and it is the same budget as the description's (A6, 2026-09-02). A
  * tool's `inputSchema` is PUSHED on every connection exactly as its description is, and
@@ -143,6 +70,45 @@ export declare const SCHEMA_MAX_CHARS = 8634;
  */
 export declare const PARAM_DESCRIPTION_MAX_CHARS = 400;
 export declare const CHANNEL_INPUT_SHAPE: {
+    model: z.ZodOptional<z.ZodString>;
+    template: z.ZodOptional<z.ZodString>;
+    color: z.ZodOptional<z.ZodEnum<{
+        "agent-01": "agent-01";
+        "agent-02": "agent-02";
+        "agent-03": "agent-03";
+        "agent-04": "agent-04";
+        "agent-05": "agent-05";
+        "agent-06": "agent-06";
+        "agent-07": "agent-07";
+        "agent-08": "agent-08";
+        "agent-09": "agent-09";
+        "agent-10": "agent-10";
+        "agent-11": "agent-11";
+        "agent-12": "agent-12";
+        "agent-13": "agent-13";
+        "agent-14": "agent-14";
+        "agent-15": "agent-15";
+        "agent-16": "agent-16";
+    }>>;
+    posture: z.ZodOptional<z.ZodObject<{
+        tools: z.ZodOptional<z.ZodEnum<{
+            manual: "manual";
+            accept_edits: "accept_edits";
+            auto: "auto";
+            bypass: "bypass";
+        }>>;
+        messages: z.ZodOptional<z.ZodEnum<{
+            ask: "ask";
+            auto_inbound: "auto_inbound";
+            auto_outbound: "auto_outbound";
+            auto_both: "auto_both";
+        }>>;
+        chain: z.ZodOptional<z.ZodEnum<{
+            on: "on";
+            off: "off";
+            inherit: "inherit";
+        }>>;
+    }, z.core.$strip>>;
     response_format: z.ZodOptional<z.ZodEnum<{
         concise: "concise";
         detailed: "detailed";
@@ -209,44 +175,4 @@ export declare const CHANNEL_INPUT_SHAPE: {
         waiting: "waiting";
         rooms: "rooms";
     }>>;
-    model: z.ZodOptional<z.ZodString>;
-    template: z.ZodOptional<z.ZodString>;
-    color: z.ZodOptional<z.ZodEnum<{
-        "agent-01": "agent-01";
-        "agent-02": "agent-02";
-        "agent-03": "agent-03";
-        "agent-04": "agent-04";
-        "agent-05": "agent-05";
-        "agent-06": "agent-06";
-        "agent-07": "agent-07";
-        "agent-08": "agent-08";
-        "agent-09": "agent-09";
-        "agent-10": "agent-10";
-        "agent-11": "agent-11";
-        "agent-12": "agent-12";
-        "agent-13": "agent-13";
-        "agent-14": "agent-14";
-        "agent-15": "agent-15";
-        "agent-16": "agent-16";
-    }>>;
-    posture: z.ZodOptional<z.ZodObject<{
-        tools: z.ZodOptional<z.ZodEnum<{
-            manual: "manual";
-            accept_edits: "accept_edits";
-            auto: "auto";
-            bypass: "bypass";
-        }>>;
-        messages: z.ZodOptional<z.ZodEnum<{
-            ask: "ask";
-            auto_inbound: "auto_inbound";
-            auto_outbound: "auto_outbound";
-            auto_both: "auto_both";
-        }>>;
-        chain: z.ZodOptional<z.ZodEnum<{
-            on: "on";
-            off: "off";
-            inherit: "inherit";
-        }>>;
-    }, z.core.$strip>>;
 };
-export {};

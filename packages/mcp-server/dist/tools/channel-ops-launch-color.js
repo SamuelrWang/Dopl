@@ -39,7 +39,13 @@ const respond_1 = require("./respond");
  * in `20261005120000_agent_session_colors.sql`. ⚠ **THIS COPY CANNOT IMPORT ANY OF
  * THEM**: `packages/` does not reach into `src/`, and `@dopl/contracts` is TYPE-ONLY
  * by rule — one runtime export makes it a build input for four toolchains. So it is a
- * hand-mirror, and `agent-color-wire.test.ts` is what holds it to the union.
+ * hand-mirror, and **THE `satisfies readonly AgentColorKey[]` CLAUSE BELOW IS WHAT HOLDS
+ * IT TO THE UNION** — a compile error, which is stronger than a test.
+ * ⚠ **THIS SENTENCE NAMED `agent-color-wire.test.ts` UNTIL 2026-09-14 AND THAT FILE HAS
+ * NEVER EXISTED** — `check-doc-refs.mjs` resolves anchors in `docs/`, not in source
+ * comments, so the citation went unchecked. The MEMBERS and their order are pinned by
+ * `channel-ops-launch-color.test.ts`; the SQL halves by
+ * `src/features/channels/agent-color-schema.test.ts`.
  *
  * ⚠ ORDER IS THE BANK'S ORDER, because the refusal lists what is free and "the first
  * one in that list" must be the key the server would itself have picked.
@@ -113,9 +119,12 @@ function colorTaken(wanted, free) {
  * (2026-09-13; docs/specs/agent-colors.md).
  *
  * ⚠ **IT IS DECLARED HERE RATHER THAN IN THE SHAPE FOR TWO REASONS AND THE SECOND IS THE
- * STRONGER ONE.** (1) §1's cap: `channel-schema.ts` measured 674 lines before this wave and is
- * the largest file in `packages/` — the `size-check` job names it — so 44 lines of field and
- * argument there would deepen an existing overage. (2) **ONE FILE, ONE RULE**: the sixteen keys,
+ * STRONGER ONE.** (1) §1's cap: `channel-schema.ts` was the largest file in `packages/` and was
+ * OVER the cap when this landed, so 44 lines of field and argument there would have deepened an
+ * existing overage. ⚠ **THAT OVERAGE IS GONE SINCE 2026-09-14** — F-689's three files were split
+ * (`channel-vocab.ts`, `channel-schema-launch-fields.ts`) and `size-check` is green — so reason
+ * (1) is now history rather than a live constraint; re-derive with `wc -l`, never quote.
+ * (2) **ONE FILE, ONE RULE**: the sixteen keys,
  * the narrowing and the 409 that refuses a taken one already live here, and the published field
  * is the fourth face of the same rule. A colour change is now one file.
  *

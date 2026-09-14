@@ -24,6 +24,10 @@ Object.defineProperty(exports, "WORKSPACE_ARG_OPS", { enumerable: true, get: fun
 Object.defineProperty(exports, "acceptsWorkspaceArg", { enumerable: true, get: function () { return workspace_arg_js_2.acceptsWorkspaceArg; } });
 Object.defineProperty(exports, "workspaceArgTargets", { enumerable: true, get: function () { return workspace_arg_js_2.workspaceArgTargets; } });
 const status_footer_js_1 = require("./status-footer.js");
+// 🔒 A CALL THAT WAS NOT CHARGED SAYS SO — once in the log, and on the call's own
+// `_dopl_status` footer. The fail-open decision below is unchanged; this only makes
+// its consequence legible (`credits-unmetered.ts`).
+const credits_unmetered_js_1 = require("./credits-unmetered.js");
 /**
  * Optional per-call `workspace` arg injected into every domain tool's schema by
  * `registerTool`. Slug or UUID; routes via the transport's AsyncLocalStorage
@@ -64,10 +68,27 @@ function createCharger(client) {
             const outcome = await client.consumeCredits(workspaceId);
             // ⚠ THE WHOLE OUTCOME, not just the URL: which WALLET stopped decides the
             // sentence, and the counters + reset date are on the same answer.
-            return outcome?.allowed === false ? (0, respond_js_1.creditsExhausted)(outcome) : null;
+            if (outcome?.allowed === false)
+                return (0, respond_js_1.creditsExhausted)(outcome);
+            // 🔒 **`degraded` IS AN ANSWER, NOT AN ERROR, AND IT USED TO VANISH HERE.**
+            // The route fails open on any throw (`route.ts › failOpen`) and answers
+            // `{ allowed: true, degraded: true }` — so `allowed !== false` let the call
+            // run FREE with nothing said. Ship the web ahead of the migration and a
+            // `PGRST202` puts the WHOLE estate on that branch. The charge still fails
+            // open; it just stops being silent.
+            if (outcome?.degraded === true) {
+                (0, credits_unmetered_js_1.recordUnmetered)("degraded", `The consume endpoint answered degraded for workspace ${workspaceId}. ` +
+                    `Check that the credit RPCs are applied — a signature the schema cache ` +
+                    `cannot find answers PGRST202, which is the deploy-before-migrate shape.`);
+            }
+            return null;
         }
         catch (err) {
-            console.error(`[credits] consume call failed for workspace ${workspaceId}; allowing the tool call: ${err instanceof Error ? err.message : String(err)}`);
+            // ⚠ ONCE PER PROCESS PER REASON, not once per CALL. Under a real outage the
+            // old per-call line was one error per tool call per agent, which buries the
+            // line that says what broke — and a deploy-ordering bug is a STATE, not an
+            // event.
+            (0, credits_unmetered_js_1.recordUnmetered)("consume_failed", `Consume call failed for workspace ${workspaceId}; allowing the tool call: ${err instanceof Error ? err.message : String(err)}`);
             return null;
         }
     };
@@ -208,18 +229,23 @@ function createToolRegistrars(deps) {
                     source: "per-call arg",
                 };
                 const result = await runWithCredits(resolved.id, () => client_1.workspaceContext.run(resolved.id, () => handler(innerArgs)));
-                return (0, status_footer_js_1.appendDoplStatus)(result, effective, caller);
+                return (0, status_footer_js_1.appendDoplStatus)(result, effective, caller, (0, credits_unmetered_js_1.unmeteredNote)());
             }
             // ⚠ NO HONOURED `workspace=`. The call runs in this connection's
             // container, and when the connection names none the SERVER resolves the
             // caller's own — there is no guess to make here and nothing to refuse.
             const ignored = workspaceRef === undefined ? null : (0, workspace_arg_js_1.ignoredWorkspaceNote)(op, supplied);
             const result = await runWithCredits(await billingTarget(), () => handler(innerArgs));
-            return (0, status_footer_js_1.appendDoplStatus)(result, sessionEffective(), caller, ignored);
+            // ⚠ BOTH NOTES, NOT ONE: an ignored `workspace=` and an unmetered call are
+            // independent facts about the same call, and dropping either is a silence.
+            return (0, status_footer_js_1.appendDoplStatus)(result, sessionEffective(), caller, (0, credits_unmetered_js_1.joinNotes)(ignored, (0, credits_unmetered_js_1.unmeteredNote)()));
         };
         server.registerTool(name, { description, inputSchema: strictInput(enhancedSchema) }, 
+        // ⚠ THE SCOPE ENCLOSES THE HANDLER **AND** THE FOOTER, which is what makes
+        // `dopl_search`'s PER-LEG charge reportable: it fires deep inside a handler
+        // and its return value never reaches `appendDoplStatus`.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        wrapped);
+        ((args) => (0, credits_unmetered_js_1.withUnmeteredScope)(() => wrapped(args))));
     }
     // Meta-tools skip the `workspace` arg — an account-wide lookup is user-scoped,
     // so ALS routing adds noise without changing behavior. The workspace arg is
@@ -261,9 +287,13 @@ function createToolRegistrars(deps) {
             }
             return handler(args);
         };
+        // ⚠ SAME TWO PIECES AS THE DOMAIN PATH — the opt-in charge above is a
+        // `chargeCredit` call like any other, so it reports through the same scope.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const framed = (0, status_footer_js_1.withDoplStatus)(gated, sessionEffective, caller, credits_unmetered_js_1.unmeteredNote);
         server.registerTool(name, { description, inputSchema: strictInput(schema) }, 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (0, status_footer_js_1.withDoplStatus)(gated, sessionEffective, caller));
+        ((args) => (0, credits_unmetered_js_1.withUnmeteredScope)(() => framed(args))));
     }
     return { registerTool, registerMetaTool, chargeCredit };
 }

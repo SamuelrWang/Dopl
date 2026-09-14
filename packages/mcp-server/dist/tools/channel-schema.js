@@ -41,130 +41,28 @@
  * bound, both ends.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CHANNEL_INPUT_SHAPE = exports.PARAM_DESCRIPTION_MAX_CHARS = exports.SCHEMA_MAX_CHARS = exports.CHANNEL_ACTION_NAMES = exports.CHANNEL_ACTIONS = exports.CHANNEL_OPS = void 0;
-exports.unknownOpRefusal = unknownOpRefusal;
-exports.unknownActionRefusal = unknownActionRefusal;
+exports.CHANNEL_INPUT_SHAPE = exports.PARAM_DESCRIPTION_MAX_CHARS = exports.SCHEMA_MAX_CHARS = exports.unknownActionRefusal = exports.unknownOpRefusal = exports.CHANNEL_ACTION_NAMES = exports.CHANNEL_ACTIONS = exports.CHANNEL_OPS = void 0;
 const zod_1 = require("zod");
 const response_size_1 = require("./response-size");
 const channel_doctrine_1 = require("./channel-doctrine");
-// ⚠ THE SET, FROM THE MODULE THAT ALSO OWNS ITS REFUSAL — one file, one rule.
-const channel_ops_launch_color_1 = require("./channel-ops-launch-color");
+// ⚠ THE LAUNCH LANE'S FIELDS — their own module since 2026-09-14 (§1's cap).
+const channel_schema_launch_fields_1 = require("./channel-schema-launch-fields");
 const channel_hold_budget_1 = require("./channel-hold-budget");
 /**
- * THE SIX OPS AN AGENT SEES, and the only six it may pick from.
- *
- * ⚠ THE ORDER IS THE READING ORDER a model skims: the one write it makes most, the two reads,
- * then the three dispatchers.
- *
- * ⚠ **`artifact` IS THE SIXTH, ADDED 2026-09-06 (design #1220 §5, accepted at #1222), AND IT IS
- * AN OP RATHER THAN A `send` KIND** — it writes no message. It folds messages that ALREADY EXIST
- * into one card, which is a different verb on a different row, and hanging it off the send lane
- * would have put a non-delivery on the one op whose whole contract is that it delivers.
+ * ⚠ **THE OP / ACTION VOCABULARY AND ITS TWO REFUSALS MOVED TO `channel-vocab.ts`
+ * (2026-09-14)** and are re-exported here unchanged, so **NO IMPORTER MOVED**. The seam is a
+ * REASON TO CHANGE — a word in those lists moves when an OP does, this file when a PARAMETER
+ * does — and what forced it was the 500-line cap (§1, the `size-check` CI job, F-689).
  */
-exports.CHANNEL_OPS = [
-    "send",
-    "read",
-    "status",
-    "manage",
-    "rooms",
-    "artifact",
-];
-/**
- * THE ONE REFUSAL FOR A WORD THAT IS NOT AN OP, written once and used twice (slice B16): the
- * schema's own zod error, and `channel.ts`'s exhaustive `default` for a build where that
- * validation did not run.
- *
- * ⚠ **WITHOUT IT, RETIREMENT IS A `-32602 invalid enum value`** — the opaque failure B8's one-
- * release redirect window existed to prevent, arriving one release later. ⚠ **ONE LINE, AND IT
- * NAMES THE WHOLE VOCABULARY** — six words since `artifact` landed (A4, 2026-09-06), derived from
- * {@link CHANNEL_OPS} and never counted here; anything longer is `rooms(action="help")`'s
- * doctrine.
- *
- * ⚠ The caller's own word is echoed BOUNDED AND ON ONE LINE — it is the only part of this
- * sentence they wrote, and an unbounded multi-line echo is structure a caller can forge inside
- * our narration.
- */
-function unknownOpRefusal(op) {
-    const raw = typeof op === "string" ? op : (JSON.stringify(op) ?? String(op));
-    const shown = raw.replace(/\s+/g, " ").slice(0, 40);
-    // ⚠ Same sentence shape as the two `action` refusals in `channel.ts` — one
-    // vocabulary, listed and then joined with "or", derived from the enum so a
-    // sixth op cannot arrive without appearing here.
-    const quoted = exports.CHANNEL_OPS.map((o) => `"${o}"`);
-    const offered = `${quoted.slice(0, -1).join(", ")} or ${quoted[quoted.length - 1]}`;
-    return `dopl_channel has no op "${shown}" — it takes ${offered}. Nothing was done.`;
-}
-/**
- * THE SUB-VERBS, per dispatching op.
- *
- * ⚠ **THE THREE VOCABULARIES ARE DISJOINT BY CONSTRUCTION**, and a test asserts it: one flat
- * `action` enum is what a client introspects, so an overlapping word would make the same string
- * mean two things one op apart. Disjointness is also what lets `gating.ts › WRITE_OPS` name a
- * single write action (`rooms.open`) without the pair ever being ambiguous.
- *
- * ⚠ **THE THIRD LIST ARRIVED WITH `artifact` (2026-09-06) AND THE DISJOINTNESS RULE IS WHY ITS
- * WORDS ARE WHAT THEY ARE.** `create` was the obvious name for opening a room too, and `open` for
- * a card; both were rejected here rather than disambiguated later, because the pairing refusals
- * below can only say "that word belongs to <op>" while every word belongs to exactly one.
- *
- * ⚠ **`rooms` CARRIES BOTH READS AND WRITES, AND THAT IS WHY THE WRITE GATE IS PER-ACTION.**
- * Classifying the whole op as a write would refuse a read-only token the very calls it exists to
- * make — `list`, `members`, `help` — and classifying it as a read would open `open` / `invite` /
- * `update` to one.
- */
-exports.CHANNEL_ACTIONS = {
-    manage: ["launch", "end", "rename", "posture", "direct"],
-    rooms: [
-        "list",
-        "open",
-        "invite",
-        "members",
-        "threads",
-        "thread_mode",
-        "update",
-        "help",
-    ],
-    // ⚠ FOUR ACTS, AND `dissolve` IS NOT A DELETE — it clears the column from
-    // every member and retires the card, leaving every body, author and `seq`
-    // exactly where it was. That is what keeps a fold reversible, and it is why
-    // this op sits inside the tool's published "no delete op" policy.
-    artifact: ["create", "add", "remove", "dissolve"],
-};
-/** Every action name, as the published enum. ⚠ Derived, never restated. */
-exports.CHANNEL_ACTION_NAMES = [
-    ...exports.CHANNEL_ACTIONS.manage,
-    ...exports.CHANNEL_ACTIONS.rooms,
-    ...exports.CHANNEL_ACTIONS.artifact,
-];
-/**
- * THE ONE REFUSAL FOR A WORD THAT BELONGS TO ANOTHER OP — written once here, used by all three
- * dispatch arms in `channel.ts`.
- *
- * ⚠ **IT WAS TWO HAND-WRITTEN SENTENCES UNTIL 2026-09-06, AND THE THIRD VOCABULARY IS WHY IT IS
- * DERIVED NOW.** Each arm said "that word belongs to" and then NAMED the other op, which is a
- * claim only true while there are exactly two lists: the moment `artifact` arrived,
- * `manage(action="create")` would have told the caller to try `rooms`, confidently and wrongly.
- * The owner is looked up in the same table the enum is built from, so a fourth vocabulary cannot
- * make this sentence lie.
- *
- * ⚠ The offered list is the op's OWN vocabulary, joined with "or" — the same shape as {@link
- * unknownOpRefusal}, and the one thing a caller cannot read off a flat `action` enum that
- * publishes all three lists as one.
- */
-function unknownActionRefusal(op, action) {
-    const shown = action.replace(/\s+/g, " ").slice(0, 40);
-    const owner = Object.keys(exports.CHANNEL_ACTIONS).find((candidate) => candidate !== op &&
-        exports.CHANNEL_ACTIONS[candidate].includes(action));
-    // ⚠ THE OWNER CLAUSE IS OMITTED RATHER THAN GUESSED when no vocabulary has
-    // the word. Unreachable through the published schema — `action` is an enum
-    // over all three lists — and kept for the same reason `channel.ts` keeps its
-    // exhaustive default: a build where that validation did not run must refuse,
-    // and must not invent an op to send the caller to.
-    const belongs = owner ? ` — that word belongs to op="${owner}"` : "";
-    const quoted = exports.CHANNEL_ACTIONS[op].map((a) => `"${a}"`);
-    const offered = `${quoted.slice(0, -1).join(", ")} or ${quoted[quoted.length - 1]}`;
-    return `op="${op}" has no action "${shown}"${belongs}. Nothing was done. op="${op}" takes ${offered}.`;
-}
+// ⚠ IMPORTED **AND** RE-EXPORTED: the shape below spends three of these, and every
+// existing importer reads them off this module.
+const channel_vocab_1 = require("./channel-vocab");
+var channel_vocab_2 = require("./channel-vocab");
+Object.defineProperty(exports, "CHANNEL_OPS", { enumerable: true, get: function () { return channel_vocab_2.CHANNEL_OPS; } });
+Object.defineProperty(exports, "CHANNEL_ACTIONS", { enumerable: true, get: function () { return channel_vocab_2.CHANNEL_ACTIONS; } });
+Object.defineProperty(exports, "CHANNEL_ACTION_NAMES", { enumerable: true, get: function () { return channel_vocab_2.CHANNEL_ACTION_NAMES; } });
+Object.defineProperty(exports, "unknownOpRefusal", { enumerable: true, get: function () { return channel_vocab_2.unknownOpRefusal; } });
+Object.defineProperty(exports, "unknownActionRefusal", { enumerable: true, get: function () { return channel_vocab_2.unknownActionRefusal; } });
 /**
  * THE INPUT-SCHEMA BUDGET, and it is the same budget as the description's (A6, 2026-09-02). A
  * tool's `inputSchema` is PUSHED on every connection exactly as its description is, and
@@ -209,13 +107,13 @@ exports.CHANNEL_INPUT_SHAPE = {
     // older desktop still reads one line naming the five instead of an opaque
     // `-32602 invalid enum value`.
     op: zod_1.z
-        .enum(exports.CHANNEL_OPS, { error: (issue) => unknownOpRefusal(issue.input) })
+        .enum(channel_vocab_1.CHANNEL_OPS, { error: (issue) => (0, channel_vocab_1.unknownOpRefusal)(issue.input) })
         .describe("Operation to perform."),
     // ⚠ ONE SUB-VERB PARAM FOR BOTH DISPATCHERS, not two. The vocabularies are
     // disjoint, so one field can never be ambiguous — and two spellings for "which
     // act" is how a caller learns to guess which one an op wants.
     action: zod_1.z
-        .enum(exports.CHANNEL_ACTION_NAMES)
+        .enum(channel_vocab_1.CHANNEL_ACTION_NAMES)
         .optional()
         .describe('op="manage" (required): "launch", "end", "rename", "posture" or "direct" — all on YOUR OWN operator\'s machine. op="rooms" (required): "list", "open", "invite", "members", "threads", "thread_mode", "update" or "help". op="artifact" (required): "create", "add", "remove" or "dissolve".'),
     channel: zod_1.z
@@ -520,69 +418,8 @@ exports.CHANNEL_INPUT_SHAPE = {
         .enum(channel_doctrine_1.DOCTRINE_SECTION_NAMES)
         .optional()
         .describe('op="rooms" action="help" (optional): ONE section instead of the whole document. Omit for everything, index of section names included.'),
-    // ── op="manage" action="launch" ──────────────────────────────────────────
-    model: zod_1.z
-        .string()
-        .trim()
-        .min(1)
-        .max(120)
-        .optional()
-        .describe(
-    // ⚠ Its silent-fallback sentence moved to `channel-doctrine.ts › MANAGE` (2026-09-13; why:
-    // `SCHEMA_MAX_CHARS`).
-    'op="manage" action="launch" (optional): the model to run the agent on. Omit it for whatever the operator set for that channel.'),
-    // ⚠ ID **OR** EXACT NAME, in ONE param — `dopl_kb`'s `base` already works this
-    // way (`knowledge-shared.ts`), so this reuses the tree's idiom rather than
-    // inventing a second convention.
-    template: zod_1.z
-        .string()
-        .trim()
-        .min(1)
-        .max(120)
-        .optional()
-        .describe(
-    // ⚠ THE AMBIGUITY REFUSAL MOVED TO THE DOCTRINE'S `manage` SECTION, beside
-    // the rest of the launch contract and the refusal table it belongs to. It
-    // is the one genuine MOVE in this slice — the sentence had no second home,
-    // so it was WRITTEN there before it was cut here.
-    // ⚠ "THIS CHANNEL'S container" IS PINNED on this describe by
-    // `channel-ops-launch-body.test.ts:232` and stays verbatim.
-    'op="manage" action="launch" (optional): the AGENT TEMPLATE the new agent runs as — its id, or its exact name. It resolves in THIS CHANNEL\'S container under THE OPERATOR\'S visibility. Omit it to start a blank agent.'),
-    // ⚠ Declared in `channel-ops-launch-color.ts` (one file, one rule; §1's cap). Argument there.
-    color: channel_ops_launch_color_1.AGENT_COLOR_FIELD,
-    // ── ⚠ THE PERMISSION AXES, IN ONE OBJECT (B8; 2026-09-01's T24 axes) ───────
-    //
-    // ⚠ **ONE PARAM BECAUSE THE CODE ALREADY TREATS THEM AS ONE THING** —
-    // `channel-facts.ts › postureFacts` renders the trio together, the desktop
-    // clamps them together, and `action="posture"` exists to set them together.
-    // Three top-level params for one concept is what made this shape 35 fields.
-    // ⚠ **THE ENUM MEMBERS ARE ORDERED NARROWEST FIRST AND THAT ORDER IS THE
-    // CONTRACT.** The operator's machine clamps by INDEXING into a copy of these
-    // sequences, so re-ordering either one silently inverts the bound.
-    // ⚠ **`chain` HAS THREE VALUES BECAUSE THERE ARE THREE STATES** (C11): it was
-    // an optional boolean whose describe had to spend a paragraph saying that
-    // omitting it was NOT `false`, and that exact confusion was a live wire bug
-    // (GAP C: `directiveFrom` flattened `false` to `null`).
-    posture: zod_1.z
-        .object({
-        tools: zod_1.z
-            .enum(["manual", "accept_edits", "auto", "bypass"])
-            .optional()
-            .describe("How much TOOL freedom to ask for — values ordered narrowest first."),
-        messages: zod_1.z
-            .enum(["ask", "auto_inbound", "auto_outbound", "auto_both"])
-            .optional()
-            .describe("How much MESSAGE freedom to ask for — narrowest first, floored for a windowless session."),
-        chain: zod_1.z
-            .enum(["inherit", "on", "off"])
-            .optional()
-            .describe('Launch only: may the new agent launch further agents? "on" is REFUSED rather than quietly narrowed when the channel forbids it.'),
-    })
-        .optional()
-        .describe(
-    // ⚠ **THE CLAMP SENTENCE IS PINNED BY PHRASE AND MAY NOT MOVE TO THE PULLED DOCTRINE** —
-    // `channel-ops-agent-mode.test.ts` / `channel-session-handle.test.ts` assert
-    // `narrows whatever you ask for to their own ceiling` here; it is the only place a caller
-    // learns its ASK is not the SET before it asks (moved 2026-09-13, both suites caught it).
-    'op="manage" action="launch" / action="posture" (optional): how much freedom to ASK FOR. Your operator\'s machine narrows whatever you ask for to their own ceiling and never widens past it; omit an axis to run at that setting.'),
+    // ⚠ **THE LAUNCH LANE'S FIELDS MOVED TO `channel-schema-launch-fields.ts` (2026-09-14)**
+    // and are spread here IN THEIR ORIGINAL POSITION, so the published schema is unchanged.
+    // What forced it was this file passing the 500-line cap (§1, `size-check`, F-689).
+    ...channel_schema_launch_fields_1.LAUNCH_INPUT_FIELDS,
 };

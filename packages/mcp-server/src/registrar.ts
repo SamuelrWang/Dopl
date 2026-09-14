@@ -39,6 +39,15 @@ export {
 import type { CallerIdentity } from "./tools/identity.js";
 import type { Gates } from "./gating.js";
 import { appendDoplStatus, withDoplStatus } from "./status-footer.js";
+// 🔒 A CALL THAT WAS NOT CHARGED SAYS SO — once in the log, and on the call's own
+// `_dopl_status` footer. The fail-open decision below is unchanged; this only makes
+// its consequence legible (`credits-unmetered.ts`).
+import {
+  joinNotes,
+  recordUnmetered,
+  unmeteredNote,
+  withUnmeteredScope,
+} from "./credits-unmetered.js";
 import type {
   ActiveWorkspaceState,
   EffectiveWorkspace,
@@ -136,10 +145,30 @@ function createCharger(client: DoplClient): ChargeCredit {
       const outcome = await client.consumeCredits(workspaceId);
       // ⚠ THE WHOLE OUTCOME, not just the URL: which WALLET stopped decides the
       // sentence, and the counters + reset date are on the same answer.
-      return outcome?.allowed === false ? creditsExhausted(outcome) : null;
+      if (outcome?.allowed === false) return creditsExhausted(outcome);
+      // 🔒 **`degraded` IS AN ANSWER, NOT AN ERROR, AND IT USED TO VANISH HERE.**
+      // The route fails open on any throw (`route.ts › failOpen`) and answers
+      // `{ allowed: true, degraded: true }` — so `allowed !== false` let the call
+      // run FREE with nothing said. Ship the web ahead of the migration and a
+      // `PGRST202` puts the WHOLE estate on that branch. The charge still fails
+      // open; it just stops being silent.
+      if (outcome?.degraded === true) {
+        recordUnmetered(
+          "degraded",
+          `The consume endpoint answered degraded for workspace ${workspaceId}. ` +
+            `Check that the credit RPCs are applied — a signature the schema cache ` +
+            `cannot find answers PGRST202, which is the deploy-before-migrate shape.`,
+        );
+      }
+      return null;
     } catch (err) {
-      console.error(
-        `[credits] consume call failed for workspace ${workspaceId}; allowing the tool call: ${
+      // ⚠ ONCE PER PROCESS PER REASON, not once per CALL. Under a real outage the
+      // old per-call line was one error per tool call per agent, which buries the
+      // line that says what broke — and a deploy-ordering bug is a STATE, not an
+      // event.
+      recordUnmetered(
+        "consume_failed",
+        `Consume call failed for workspace ${workspaceId}; allowing the tool call: ${
           err instanceof Error ? err.message : String(err)
         }`,
       );
@@ -350,7 +379,7 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
         const result = await runWithCredits(resolved.id, () =>
           workspaceContext.run(resolved.id, () => handler(innerArgs)),
         );
-        return appendDoplStatus(result, effective, caller);
+        return appendDoplStatus(result, effective, caller, unmeteredNote());
       }
 
       // ⚠ NO HONOURED `workspace=`. The call runs in this connection's
@@ -361,14 +390,24 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
       const result = await runWithCredits(await billingTarget(), () =>
         handler(innerArgs),
       );
-      return appendDoplStatus(result, sessionEffective(), caller, ignored);
+      // ⚠ BOTH NOTES, NOT ONE: an ignored `workspace=` and an unmetered call are
+      // independent facts about the same call, and dropping either is a silence.
+      return appendDoplStatus(
+        result,
+        sessionEffective(),
+        caller,
+        joinNotes(ignored, unmeteredNote()),
+      );
     };
 
     server.registerTool(
       name,
       { description, inputSchema: strictInput(enhancedSchema) },
+      // ⚠ THE SCOPE ENCLOSES THE HANDLER **AND** THE FOOTER, which is what makes
+      // `dopl_search`'s PER-LEG charge reportable: it fires deep inside a handler
+      // and its return value never reaches `appendDoplStatus`.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      wrapped as any,
+      ((args: EnhancedArgs) => withUnmeteredScope(() => wrapped(args))) as any,
     );
   }
 
@@ -416,11 +455,15 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
       }
       return handler(args);
     };
+    // ⚠ SAME TWO PIECES AS THE DOMAIN PATH — the opt-in charge above is a
+    // `chargeCredit` call like any other, so it reports through the same scope.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const framed = withDoplStatus(gated as any, sessionEffective, caller, unmeteredNote);
     server.registerTool(
       name,
       { description, inputSchema: strictInput(schema) },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      withDoplStatus(gated as any, sessionEffective, caller) as any,
+      ((args: any) => withUnmeteredScope(() => framed(args))) as any,
     );
   }
 

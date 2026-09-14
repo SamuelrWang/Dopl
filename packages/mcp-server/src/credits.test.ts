@@ -16,6 +16,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { resetUnmeteredLogForTests } from "./credits-unmetered";
 import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 
 type Handler = (args: Record<string, unknown>) => Promise<{
@@ -272,20 +273,16 @@ describe("fail direction", () => {
 
   /**
    * 🔒 ⚠ THE FAIL-OPEN IS FOR TRANSPORT FAILURES, AND A GUEST IS NOT ONE
-   * (2026-08-26, F-325). Until the consume route's floor came down to `guest`,
-   * a guest-scoped call 403'd — and this `catch` turned that 403 into a FREE
-   * tool call plus one `[credits] consume call failed` line per call. The route
-   * now answers 200, and an unbillable container answers 200 `degraded` (the
-   * service decides that, and LOGS it server-side).
-   *
-   * So the assertion is about the ERROR LOG, not about the tool result: a
-   * degraded 200 must proceed like any other allowed answer and leave NO trace
-   * here, because a trace here means the charge did not happen for a reason
-   * this layer did not understand. Re-raising the route's floor puts the 403
-   * back and this goes red — a plain "the call proceeded" test would not.
+   * (2026-08-26, F-325): a re-raised consume floor 403s, THROWS, and takes the
+   * other arm — which the headline assertion below is what discriminates.
+   * ⚠ **THIS ASSERTED "AND LOGS NOTHING HERE" UNTIL 2026-09-14, AND THAT WAS THE
+   * HOLE** — a degraded answer means the call ran UNCHARGED, so the one
+   * deploy-ordering bug that unmeters the whole estate was silent. It now says so
+   * ONCE per process (`credits-unmetered.ts`).
    */
-  it("a degraded-but-ALLOWED 200 proceeds and logs NOTHING here", async () => {
+  it("a degraded-but-ALLOWED 200 proceeds, and says so ONCE", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    resetUnmeteredLogForTests();
     const { map, client } = build({ sole: true });
     client.consumeCredits.mockResolvedValue({
       ...allowed(0),
@@ -299,7 +296,10 @@ describe("fail direction", () => {
     expect(res.isError).toBeFalsy();
     expect(textOf(res)).not.toContain("out of credits");
     expect(client.listKbBases).toHaveBeenCalled();
-    expect(error).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledTimes(1);
+    const line = String(error.mock.calls[0]?.[0] ?? "");
+    expect(line).toContain("answered DEGRADED");
+    expect(line).not.toContain("FAILED");
     error.mockRestore();
   });
 });

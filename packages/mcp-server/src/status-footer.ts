@@ -82,9 +82,14 @@ export function withDoplStatus<A extends object>(
   handler: (args: A) => Promise<ToolResponse>,
   getEffective: () => EffectiveWorkspace | null,
   caller: CallerIdentity,
+  /** ⚠ READ **AFTER** THE HANDLER, never before — the note it returns is a fact
+   *  about what the call just did (today: whether it went unmetered,
+   *  `credits-unmetered.ts › unmeteredNote`). Omitted means "no note", which is
+   *  what every meta tool answered before 2026-09-14. */
+  getNote?: () => string | null,
 ): (args: A) => Promise<ToolResponse> {
   return async (args: A) => {
     const result = await handler(args);
-    return appendDoplStatus(result, getEffective(), caller);
+    return appendDoplStatus(result, getEffective(), caller, getNote?.() ?? null);
   };
 }

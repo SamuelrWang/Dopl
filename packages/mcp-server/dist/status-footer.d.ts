@@ -26,4 +26,9 @@ export declare function appendDoplStatus(response: ToolResponse, effective: Effe
  * Wrap a meta-tool handler so every successful response ends with the
  * `_dopl_status` footer reporting the connection's container (if any).
  */
-export declare function withDoplStatus<A extends object>(handler: (args: A) => Promise<ToolResponse>, getEffective: () => EffectiveWorkspace | null, caller: CallerIdentity): (args: A) => Promise<ToolResponse>;
+export declare function withDoplStatus<A extends object>(handler: (args: A) => Promise<ToolResponse>, getEffective: () => EffectiveWorkspace | null, caller: CallerIdentity, 
+/** ⚠ READ **AFTER** THE HANDLER, never before — the note it returns is a fact
+ *  about what the call just did (today: whether it went unmetered,
+ *  `credits-unmetered.ts › unmeteredNote`). Omitted means "no note", which is
+ *  what every meta tool answered before 2026-09-14. */
+getNote?: () => string | null): (args: A) => Promise<ToolResponse>;

@@ -118,9 +118,11 @@ export async function dispatchManageAction(
         clientMsgId: args.client_msg_id,
         // ⚠ PASSED THROUGH UNTOUCHED, like `template`: whether the key is free is a
         // fact about EVERY member's live agents, which this process cannot see.
-        // ⚠ NARROWED, NOT CAST — the published field is a `z.string()` carrying the set
-        // as a PATTERN (a `z.enum` cost 153 chars on a schema with eight to spare), so
-        // the KEY type is recovered here rather than in the shape.
+        // ⚠ NARROWED, NOT CAST — the published field IS a `z.enum` over the sixteen
+        // keys (`channel-ops-launch-color.ts › AGENT_COLOR_FIELD`; the 153-cheaper
+        // `pattern` was measured and REFUSED by `tool-style.test.ts`), but the arg type
+        // arrives widened through `CHANNEL_INPUT_SHAPE`'s `ZodObject` inference, so the
+        // KEY type is recovered here rather than asserted.
         color: asAgentColorKey(args.color),
         waitMs: args.wait_ms,
       });

@@ -72,9 +72,14 @@ async function appendDoplStatus(response, effective, caller, note) {
  * Wrap a meta-tool handler so every successful response ends with the
  * `_dopl_status` footer reporting the connection's container (if any).
  */
-function withDoplStatus(handler, getEffective, caller) {
+function withDoplStatus(handler, getEffective, caller, 
+/** ⚠ READ **AFTER** THE HANDLER, never before — the note it returns is a fact
+ *  about what the call just did (today: whether it went unmetered,
+ *  `credits-unmetered.ts › unmeteredNote`). Omitted means "no note", which is
+ *  what every meta tool answered before 2026-09-14. */
+getNote) {
     return async (args) => {
         const result = await handler(args);
-        return appendDoplStatus(result, getEffective(), caller);
+        return appendDoplStatus(result, getEffective(), caller, getNote?.() ?? null);
     };
 }

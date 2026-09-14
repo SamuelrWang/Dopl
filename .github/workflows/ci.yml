@@ -187,8 +187,19 @@ jobs:
         shell: bash
         run: |
           set -eu
-          # Files explicitly exempted in ENGINEERING.md §2 (Known files >500 lines).
-          # When a new file lands here, add it to that table too.
+          # ⚠ **NOTHING IS EXEMPT, AND THE TABLE THIS COMMENT USED TO CITE DOES NOT
+          # EXIST** — it said "ENGINEERING.md §2 (Known files >500 lines)" and
+          # `grep -n 'Known files >500' docs/ENGINEERING.md` answers nothing
+          # (F-689, 2026-09-10). The exemption list for the WEB tree lives in
+          # `eslint.config.mjs`'s `max-lines: off` block; `packages/` has none and
+          # must not acquire one — adding a name here is how a cap stops being a cap.
+          # ⚠ **THIS JOB WAS RED ON THREE FILES FROM 2026-09-10 TO 2026-09-14**
+          # (`dopl-client/src/channel-types.ts`, `dopl-client/src/channel.ts`,
+          # `mcp-server/src/tools/channel-schema.ts`) and was closed by SPLITTING
+          # all three into re-export shims — `channel-artifact-types.ts`,
+          # `channel-directives.ts`, `channel-vocab.ts` and
+          # `channel-schema-launch-fields.ts` — with no importer moved and no
+          # published schema character changed. That is the only way to close it.
           # 2026-08-09: server.ts and client.ts were split under the cap and
           # left this list. The placeholder keeps `grep -vF` safe — an empty
           # ALLOW would filter every line and let any overage pass silently.
@@ -390,15 +401,23 @@ jobs:
       # ⚠ NAMED FILES, NOT A GLOB. `RLS_REDTEAM_LIVE=1` changes the behaviour of
       # exactly these suites; running the whole root suite under it would
       # spend ten minutes to re-run 5,600 tests that do not read the flag.
-      # ⚠ **SIX SINCE 2026-09-09** — the ontology one joined with the home-share
-      # wave (slice S1). A named list means a new suite that is not added here
-      # has a live half that NEVER EXECUTES, which is F-523's whole lesson.
+      # ⚠ **SEVEN SINCE 2026-09-14** — the ontology one joined with the home-share
+      # wave (slice S1), and `rls-redteam-personal-container.test.ts` was found
+      # MISSING from this list in the 2026-09-14 review: it landed at `fee04723`
+      # with the 1.26.0 smoke fix, has been on disk ever since, and its live half
+      # had never executed once. A named list means a new suite that is not added
+      # here has a live half that NEVER EXECUTES, which is F-523's whole lesson —
+      # and this is the second time that lesson has been paid for.
+      # ⚠ RE-DERIVE, NEVER TRUST THE NUMBER:
+      #   find src -name 'rls-redteam*.test.ts' | sort
+      # against the list below.
       - name: Run the redteam suites with the live half ARMED
         env:
           RLS_REDTEAM_LIVE: "1"
         run: >-
           npx vitest run
           src/features/knowledge/server/rls-redteam.test.ts
+          src/features/knowledge/server/rls-redteam-personal-container.test.ts
           src/features/skills/server/rls-redteam.test.ts
           src/features/chats/server/rls-redteam.test.ts
           src/features/agent-templates/server/rls-redteam.test.ts

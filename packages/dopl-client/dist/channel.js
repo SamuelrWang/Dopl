@@ -12,7 +12,7 @@
  * op, by re-issuing with the same cursor.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DEFAULT_AWAIT_TIMEOUT_MS = exports.AWAIT_TIMEOUT_MS = void 0;
+exports.listAgentDirections = exports.getAgentDirection = exports.createAgentDirection = exports.getLaunchDirective = exports.createAgentDirective = exports.createLaunchDirective = exports.DEFAULT_AWAIT_TIMEOUT_MS = exports.AWAIT_TIMEOUT_MS = void 0;
 exports.listChannels = listChannels;
 exports.getChannel = getChannel;
 exports.listChannelMembers = listChannelMembers;
@@ -31,12 +31,6 @@ exports.listChannelSessions = listChannelSessions;
 exports.getChannelThread = getChannelThread;
 exports.createChannelThread = createChannelThread;
 exports.setChannelThreadMode = setChannelThreadMode;
-exports.createLaunchDirective = createLaunchDirective;
-exports.createAgentDirective = createAgentDirective;
-exports.getLaunchDirective = getLaunchDirective;
-exports.createAgentDirection = createAgentDirection;
-exports.getAgentDirection = getAgentDirection;
-exports.listAgentDirections = listAgentDirections;
 const enc = encodeURIComponent;
 /** Network read-timeout for the long-poll — above the server cap.
  *  ⚠ EXPORTED for the DEADLINE CHAIN's gate, not for the deleted `ping.ts`:
@@ -296,84 +290,16 @@ async function setChannelThreadMode(t, channelId, threadId, input) {
     });
     return data.task;
 }
-// ─── Launch directives (launch-over-MCP, 2026-08-22) ────────────────
-/**
- * ASK THE OPERATOR'S OWN DESKTOP TO START AN AGENT.
- *
- * ⚠ A REQUEST, NOT A COMMAND. The server files a row; the machine decides. The
- * `offline` branch means the machine is not listening and NOTHING WAS FILED.
- * ⚠ There is no operator argument, by design — see
- * {@link LaunchDirectiveCreateInput}.
- */
-async function createLaunchDirective(t, input) {
-    return t.request("/api/channels/launch-directives", {
-        method: "POST",
-        body: input,
-        toolName: "channel_launch_agent",
-    });
-}
-/**
- * ASK THE OPERATOR'S OWN DESKTOP TO **END** OR **RENAME** ONE OF ITS AGENTS
- * (2026-09-01).
- *
- * ⚠ **THE SAME MAILBOX, A DIFFERENT KIND — so the result is a `LaunchDirective`
- * and `getLaunchDirective` polls it.** There is no second lane and no second poll
- * endpoint; only the CREATE body differs, because a launch's shape (goal, model,
- * template) and an end's (which agent) have nothing in common.
- * ⚠ A REQUEST, NOT A COMMAND, exactly as a launch is. `offline` means the machine
- * is not listening and NOTHING WAS FILED.
- * ⚠ **NO LAUNCH TOGGLE APPLIES TO THESE TWO.** The desktop's launch-over-MCP
- * setting gates `launch_agent` and neither of these; do not tell a caller to turn
- * it on because an end was refused.
- */
-async function createAgentDirective(t, input) {
-    return t.request("/api/channels/launch-directives/agent", {
-        method: "POST",
-        body: input,
-        toolName: "channel_agent_directive",
-    });
-}
-/**
- * POLL ONE DIRECTIVE — what a bounded hold reads while the desktop decides.
- *
- * ⚠ COARSE POLLING ONLY (1-2s). A directive lives at most two minutes and the
- * decision is a human-scale toggle plus a process spawn; polling faster buys
- * nothing and multiplies requests across every armed launch.
- * ⚠ Another operator's directive answers 404, indistinguishable from absent.
- */
-async function getLaunchDirective(t, id) {
-    const data = await t.request(`/api/channels/launch-directives/${enc(id)}`, { toolName: "channel_launch_poll" });
-    return data.directive;
-}
-// ── THE PRIVATE DIRECT LANE (2026-08-31) ───────────────────────────────────
+// ─── Launch directives + the private direct lane ────────────────────
 //
-// ⚠ THE SIBLING OF THE LAUNCH MAILBOX ABOVE, AND NOT A MODE OF IT. A launch asks
-// for a PROCESS; a direction asks an EXISTING one to hear something privately.
-// ⚠ `claim` AND `decide` ARE DELIBERATELY ABSENT, exactly as they are for
-// launches: those two routes are consumed only by the DESKTOP, which addresses
-// them by path from `main/agent-direction-wire.js`. Binding them on this client
-// would publish verbs the MCP surface must never be able to reach.
-async function createAgentDirection(t, input) {
-    return t.request("/api/channels/agent-directions", {
-        method: "POST",
-        body: input,
-        toolName: "channel_direct_agent",
-    });
-}
-async function getAgentDirection(t, id) {
-    const data = await t.request(`/api/channels/agent-directions/${enc(id)}`, { toolName: "channel_direct_poll" });
-    return data.direction;
-}
-/** The caller's own recent directions — what `op="read_directions"` renders.
- *  ⚠ TERMINAL ROWS INCLUDED, unlike the desktop's backstop read: the `reply` is
- *  the whole reason this op exists. */
-async function listAgentDirections(t, query = {}) {
-    const params = new URLSearchParams();
-    if (query.channel)
-        params.set("channel", query.channel);
-    if (query.agent)
-        params.set("agent", query.agent);
-    const qs = params.toString();
-    const data = await t.request(`/api/channels/agent-directions/recent${qs ? `?${qs}` : ""}`, { toolName: "channel_read_directions" });
-    return data.directions;
-}
+// ⚠ **MOVED TO `channel-directives.ts` (2026-09-14) AND RE-EXPORTED UNCHANGED**, so no
+// caller moved. The seam is the banner this file already drew: above it is a channel's
+// OWN rows, there is a REQUEST TO A MACHINE the server only files. What forced it was
+// this file passing the 500-line cap (§1, the `size-check` CI job, F-689).
+var channel_directives_js_1 = require("./channel-directives.js");
+Object.defineProperty(exports, "createLaunchDirective", { enumerable: true, get: function () { return channel_directives_js_1.createLaunchDirective; } });
+Object.defineProperty(exports, "createAgentDirective", { enumerable: true, get: function () { return channel_directives_js_1.createAgentDirective; } });
+Object.defineProperty(exports, "getLaunchDirective", { enumerable: true, get: function () { return channel_directives_js_1.getLaunchDirective; } });
+Object.defineProperty(exports, "createAgentDirection", { enumerable: true, get: function () { return channel_directives_js_1.createAgentDirection; } });
+Object.defineProperty(exports, "getAgentDirection", { enumerable: true, get: function () { return channel_directives_js_1.getAgentDirection; } });
+Object.defineProperty(exports, "listAgentDirections", { enumerable: true, get: function () { return channel_directives_js_1.listAgentDirections; } });
