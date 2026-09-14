@@ -24,7 +24,7 @@ const { diag } = require('./diag');
 // task_started/task_finished/task_failed are just channel_messages with
 // kind=task_* and author_kind=agent, grouped by a per-spawn metadata.taskId.
 // ⚠ The web renders the three task_* LIFECYCLE kinds as NOTHING since wiring plan
-// Phase 5 (`channels-v2/view-model.ts › isLifecycleEcho`); the surface that drew them,
+// Phase 5 (`channels/components/view-model.ts › isLifecycleEcho`); the surface that drew them,
 // components/activity-event-row.tsx, was deleted at the Phase 12 cutover. The calm
 // `task_progress` milestone below is the one that still renders. Best-effort, single attempt (non-critical
 // telemetry); the deterministic clientMsgId lets the server dedupe on a crash

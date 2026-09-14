@@ -19,7 +19,7 @@
  * sessions, reopened shells, crash resumes and directed turns at once.
  *
  * WHERE THE SETTING IS NOW: the **Messaging** row on the Settings tab
- * (`components/channels-v2/settings-agent-launch-rows.tsx`), written through
+ * (`channels/components/settings-agent-launch-rows.tsx`), written through
  * `use-channel-launch-posture.ts`. Its eye popover states the one asymmetry this fold created —
  * Messaging is read live while the rest of that group is read at launch.
  *

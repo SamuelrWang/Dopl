@@ -2,7 +2,7 @@
  * THE ONE @-MENTION PARSER. Shared by the SERVER's resolution at insert
  * (`server/service-writes-metadata-mentions.ts`, which stamps the resolved id
  * set into reserved `metadata.mentionedUserIds`) and by the CLIENT's transcript
- * highlight (`components/channels-v2/transcript.tsx`).
+ * highlight (`channels/components/transcript.tsx`).
  *
  * ⚠ ONE PARSER, DELIBERATELY. A second copy is how the two ends disagree about
  * what counts as a tag: the server stamps nobody, the transcript tints a name,

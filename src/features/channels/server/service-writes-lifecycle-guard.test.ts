@@ -7,7 +7,7 @@
  * the desktop runtime's own echoes stop (`main/session-window.js` posts on
  * Electron's Supabase cookies, so `source:"user"`); too narrow and an agent's
  * answer posted as `task_finished` renders nowhere — since wiring plan Phase 5
- * (2026-08-18) because `components/channels-v2/view-model.ts › isLifecycleEcho`
+ * (2026-08-18) because `channels/components/view-model.ts › isLifecycleEcho`
  * drops the three kinds outright; before that because a session card folded the
  * marker into its `endEvent`. Asserted in both directions.
  *

@@ -46,7 +46,7 @@ export interface ChannelFolderState {
  * (`window.dopl.channels`) — the detect / load-label / pick dance, in one place.
  *
  * ⚠ IT HAS EXACTLY ONE CONSUMER TODAY: the Settings tab's Agent-folder row
- * (`channels-v2/settings-agent.tsx › ChannelAgentSettings`). Verify before
+ * (`channels/components/settings-agent.tsx › ChannelAgentSettings`). Verify before
  * assuming otherwise — `grep -rn 'useChannelFolder' src apps`. It was shared
  * twice and is no longer: a header POPOVER (`channel-folder-control.tsx`) went
  * on 2026-08-19 for the tab's inline row, and the launch panel's folder pill

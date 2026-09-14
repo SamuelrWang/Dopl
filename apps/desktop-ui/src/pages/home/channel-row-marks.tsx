@@ -36,7 +36,7 @@ export const HOME_CARD_FACE = "auth-btn-3d-light rounded-[14px]";
  * ink the palette has.
  *
  * ⚠ **IT IS A COUNT, WHICH IS WHY IT MAY BE A BADGE AT ALL.** The channels
- * sidebar deliberately has no numeric badge (`channels-v2/sidebar-rows.tsx`:
+ * sidebar deliberately has no numeric badge (`channels/components/sidebar-rows.tsx`:
  * `Channel.unread` is a BOOLEAN and the wiring plan forbids inventing a number
  * for it) — this one is backed by a real aggregate, `HomeChannel.unreadMentions`.
  * The BOOLEAN half of the same payload still renders as a dot, below.

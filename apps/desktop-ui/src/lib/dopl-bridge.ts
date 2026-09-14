@@ -130,7 +130,7 @@ export interface DoplBridge {
   };
   /**
    * Per-channel durable settings, all of them read by the SETTINGS TAB
-   * (`channels-v2/settings-agent.tsx`): the label-only folder ops, the launch
+   * (`channels/components/settings-agent.tsx`): the label-only folder ops, the launch
    * posture, and auto-send.
    *
    * ⚠ THIS BLOCK DRIFTED IN BOTH DIRECTIONS AND WAS CORRECTED 2026-08-20. It

@@ -207,7 +207,7 @@ export function useChannelPreferenceWrites({
    * ⚠ THE SURFACES MOVED AGAIN ON 2026-08-25 (Samuel — INVARIANTS §6). The Inbox
    * pane is DELETED; the mutation's callers are now `thread-consent.tsx ›
    * ThreadSendBox` (Send / Cancel, on the thread) and the work stream's held-draft
-   * card (`channels-v2/agent-stream.tsx › SentToChannelBox`), which sends `"allow"`
+   * card (`channels/components/agent-stream.tsx › SentToChannelBox`), which sends `"allow"`
    * ONLY — Samuel's ruling gives that card one button. **`"deny"` is deliberately
    * still on this mutation and on the route**: the send box is the surviving
    * Cancel, and the desktop cancels its own row when a park closes the tool call.

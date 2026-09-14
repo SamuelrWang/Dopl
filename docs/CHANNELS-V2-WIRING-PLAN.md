@@ -223,11 +223,11 @@ cover the SPA has — treat a red there as a P0, not an afterthought.
 addressees = N `channel_tasks` rows rendered as one card.
 
 **Files/symbols.**
-- `src/features/channels/components/channels-v2/composer.tsx` ← mock
-  `channels-v2/new-thread-dialog.tsx › NewThreadDialog` (the inline
+- `src/features/channels/components/composer.tsx` ← mock
+  `channels/components/new-thread-dialog.tsx › NewThreadDialog` (the inline
   `AgentRequestPanel` this plan named was DELETED on 2026-09-08 — thread creation
   is a popup, reached from the Threads tab and the composer glyph alike); the
-  posted card ← `channels-v2/thread-card-row.tsx › ThreadCardMessage`, which wears
+  posted card ← `channels/components/thread-card-row.tsx › ThreadCardMessage`, which wears
   its own dark shell. ⚠ **This line anchored a `MESSAGE_CARD` constant in `bits.tsx`
   until 2026-09-09; that constant was DELETED on 2026-08-20 when the card moved off
   it, and the anchor survived only because a comment still named it.** ⚠ **This line said `message-pane.tsx ›
@@ -593,7 +593,7 @@ the duplication this port exists to remove.
   last-writer-wins.
 - **Two files were SPLIT before the feature, both at the 500-line cap:**
   `main/ui-sync-core.js` (the pure decision core, sentinels moved byte-for-byte) and
-  `src/features/channels/components/channels-v2/live.ts` (the realtime→refetch wiring).
+  `src/features/channels/components/live.ts` (the realtime→refetch wiring).
 
 **Size: L.** The riskiest desktop phase. Do not fold it into Phase 9.
 
@@ -674,7 +674,7 @@ happened, plus four the plan did not list — `activity-event-row.tsx` and
 `hooks/use-channel-agents.ts` + `lib/agent-display.ts` (the historical agent-attribution
 chain, whose only reader was the deleted transcript — **F-218**). Every KEEP needed an
 entry point rebuilt, because each was reachable only from the deleted page:
-`components/channels-v2/channel-manage.tsx` hosts the management cluster on the pane
+`channels/components/channel-manage.tsx` hosts the management cluster on the pane
 header, the sidebar's two `+` buttons open the create and DM dialogs, and the first-run
 explainer moved to the no-channels branch. Two more keeps the plan did not name were
 carried over on the same argument rather than orphaned: `channel-settings-popover.tsx`
@@ -692,6 +692,11 @@ tree the cutover produced and was read as a promise it never kept.** The COMPONE
 every symbol anchor in INVARIANTS on the same day the surface changed, and it is a
 component-family name under a feature already called `channels`, not a route. INVARIANTS §5
 records that decision and the file count with its date.
+⚠ **AND THAT DECISION WAS REVERSED ON 2026-09-14** (Samuel: *"nothing should be named channels
+v2, it's just channels now"*). The folder was folded up into
+`src/features/channels/components/` and every `ChannelsV2*` symbol renamed to `Channels*`.
+**Every `channels-v2` path below is HISTORY, not a live location** — this doc is the record of
+the 2026-08-18 port, and INVARIANTS §5 is where the tree is stated.
 
 **Deletes.** `apps/desktop-ui/src/pages/channels-v2/` in full (including `MAPPING.md`,
 whose rulings have by then moved into INVARIANTS and ENGINEERING); the `channels-v2` rows in

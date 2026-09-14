@@ -1,5 +1,5 @@
-import { PanelHeading } from "@/features/channels/components/channels-v2/bits";
-import { ThreadActivityStrip } from "@/features/channels/components/channels-v2/thread-activity";
+import { PanelHeading } from "@/features/channels/components/bits";
+import { ThreadActivityStrip } from "@/features/channels/components/thread-activity";
 import { useOverviewSeries } from "@/features/workspaces/hooks/use-overview-series";
 
 /**

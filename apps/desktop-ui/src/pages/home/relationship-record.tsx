@@ -1,5 +1,5 @@
 import { UserRoundX } from "lucide-react";
-import { StandaloneChannelSurface } from "@/features/channels/components/channels-v2/channel-surface-standalone";
+import { StandaloneChannelSurface } from "@/features/channels/components/channel-surface-standalone";
 import { useChannels } from "@/features/channels/hooks/use-channels";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { PageError } from "#/components/page-states";
@@ -8,7 +8,7 @@ import { ChannelRecordSkeleton } from "./channel-record-skeleton";
 import { PersonInfoTab } from "./person-info-tab";
 
 /**
- * A home channel's RECORD — the whole channels-v2 surface, pinned to the one
+ * A home channel's RECORD — the whole channels surface, pinned to the one
  * channel inside the link container.
  *
  * ⚠ THE CHANNEL ROW COMES FROM THE CHANNELS FEATURE'S OWN READ, not a new
@@ -33,7 +33,7 @@ export function RelationshipRecord({
    * A thread to raise on MOUNT — how an Overview activity row lands
    * (`use-activity-jump.ts`, 2026-09-01). ⚠ **INITIAL, NOT CONTROLLED**: the
    * surface seeds its own selection from it once
-   * (`use-channels-v2-selection.ts`), so a later value only takes effect on a
+   * (`use-channels-selection.ts`), so a later value only takes effect on a
    * remount — which is exactly what happens here, because /home keys this pane
    * by the row and swaps the whole element when the face changes.
    */

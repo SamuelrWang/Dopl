@@ -94,7 +94,7 @@ export const UNKNOWN_STATE = "(unrecognized state)";
  * ⚠ **IT IS THE PRESENCE WINDOW ON PURPOSE, AND THE REUSE IS THE POINT**: a
  * second staleness number would let one surface call a member's machine offline
  * while another still reports their agent as busily working. The web's peer
- * cards already reuse it (`components/channels-v2/agents-model.ts ›
+ * cards already reuse it (`channels/components/agents-model.ts ›
  * peerRowStale`), and this is the third reader of the same rule.
  *
  * ⚠ **WHAT IT IS NOT: A HEARTBEAT.** `updatedAt` moves on a projection CHANGE,
@@ -109,7 +109,7 @@ export const SESSION_STALE_WINDOW_MS = 120_000;
  * THE SIX SITUATION KEYS, AS PHRASES AN AGENT CAN ACT ON.
  *
  * ⚠ **THE KEY CROSSES THE WIRE, THE SENTENCE IS WRITTEN HERE** — the same split
- * the web makes (`components/channels-v2/agents-model.ts › agentDetailLabel`),
+ * the web makes (`channels/components/agents-model.ts › agentDetailLabel`),
  * and for the same reason: `main/session-detail.js` owns "which of six
  * situations is this" because that is a fact about the engine and must have one
  * answer; what a reader is told is copy, and copy must not need a desktop

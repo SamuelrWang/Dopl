@@ -1,5 +1,5 @@
 import { useParams, useSearchParams } from "react-router";
-import { ChannelsV2ThreadWindow } from "@/features/channels/components/channels-v2/thread-window";
+import { ChannelsThreadWindow } from "@/features/channels/components/thread-window";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
 import { PageError, PageLoading, isUnauthorized } from "#/components/page-states";
 import { SignedOutScreen } from "#/pages/boot/signed-out-screen";
@@ -62,7 +62,7 @@ export default function ThreadWindowPage() {
 
   return (
     <Frame>
-      <ChannelsV2ThreadWindow
+      <ChannelsThreadWindow
         workspaceId={access.workspaceId}
         channelId={channelId}
         threadId={threadId}

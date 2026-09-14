@@ -126,7 +126,7 @@ test("an explicit `seq` still wins over everything (the live-trigger path)", () 
 //
 // ⚠ THE SERVER'S ACCEPTANCE OF THE THREE KINDS IS NOT TIGHTENED AND MUST NOT BE. Every
 // installed build still posts them (INVARIANTS §13, desktop floor); the reader dropped them
-// (`channels-v2/view-model.ts › isLifecycleEcho`), which is the half that can ship alone.
+// (`channels/components/view-model.ts › isLifecycleEcho`), which is the half that can ship alone.
 
 // ⚠ THE STUB LIST IS AN ASSERTION, NOT PLUMBING. An unlisted require THROWS by name, so a
 // future edit that reaches for a new dependency from this file fails here and is reviewed —

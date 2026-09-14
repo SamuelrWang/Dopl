@@ -31,7 +31,7 @@ import { safeLabel, safeOptionalProse } from "@/shared/lib/safe-label";
  * notify anybody; the six `kind` values are a column CHECK plus four
  * hand-mirrored unions and every one of those lanes is already owned; and the
  * transcript's own card precedent is metadata-keyed rather than kind-keyed
- * (`components/channels-v2/view-model.ts › threadIdOf`).
+ * (`channels/components/view-model.ts › threadIdOf`).
  *
  * ⚠ THE MESSAGE `body` STILL CARRIES THE HUMAN-READABLE RENDER, per
  * `schema.ts › ChannelMessageCreateSchema`'s own contract. That is what makes

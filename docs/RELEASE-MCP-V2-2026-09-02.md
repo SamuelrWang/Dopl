@@ -185,7 +185,7 @@ expand set and one-way for the contract set.**
 - Expand: old code never names the new columns, and the dual-read fallbacks hold
   — `shared/auth/mcp-access-token.ts` carries a sticky `42703` catch for the
   `mcp_tokens` axes, and the `?? EMPTY_X` inline fallbacks are intact at head
-  (`knowledge/client/api.ts`, `src/features/channels/components/channels-v2/knowledge-lane.ts`, `home/types.ts`).
+  (`knowledge/client/api.ts`, `src/features/channels/components/knowledge-lane.ts`, `home/types.ts`).
 - Contract: `agent_template_teams`, `team_resource_access`,
   `channel_resource_grants` and `ensure_default_workspace` are **gone**. Old code
   reads all four. **Reverting past phase 2 requires restoring them from the

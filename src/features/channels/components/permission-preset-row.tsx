@@ -87,7 +87,7 @@ export const MESSAGE_OPTIONS: ReadonlyArray<SelectMenuOption<MessageMode>> = [
  *
  * ⚠ THE VIEW WENT BECAUSE THE CLAIM ABOVE IT WAS FALSE. Its docblock said it was
  * "still the presentation both surfaces share"; neither surface used it.
- * `channels-v2/settings-agent.tsx` and `channels-v2/agent-posture.tsx` each render
+ * `channels/components/settings-agent.tsx` and `channels/components/agent-posture.tsx` each render
  * their own two `SelectMenu`s — the axes are the same, but the chrome around them
  * is not (one sits in a settings group, the other in a live control strip), and a
  * shared component that neither caller reached was a claim about reuse rather than

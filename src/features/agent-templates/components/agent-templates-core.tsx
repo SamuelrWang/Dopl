@@ -53,7 +53,7 @@ export interface AgentTemplatesCoreProps {
    * ⚠ A SLOT, NOT AN IMPORT, AND IT HAS TO BE. This core is Next-free and
    * router-free so BOTH trees mount it, which means it cannot reach into
    * `apps/desktop-ui/` — the desktop's per-page skeleton lives there. Same
-   * idiom as `channels-v2-core.tsx`'s `Link` and `shared/ui/skeleton.tsx ›
+   * idiom as `channels-core.tsx`'s `Link` and `shared/ui/skeleton.tsx ›
    * TwoPaneListSkeleton`'s `detail`: the host supplies what only the host can
    * know.
    *

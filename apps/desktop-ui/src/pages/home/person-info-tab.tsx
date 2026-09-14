@@ -6,16 +6,16 @@ import {
   MetaRow,
   MetaRowDivider,
   PanelHeading,
-} from "@/features/channels/components/channels-v2/bits";
+} from "@/features/channels/components/bits";
 import {
   InfoCardAddRow,
   InfoCardCustomRow,
   InfoCardSection,
-} from "@/features/channels/components/channels-v2/info-card-rows";
+} from "@/features/channels/components/info-card-rows";
 import { useChannelInfoCardWrite } from "@/features/channels/hooks/use-channel-info-card-writes";
 import { useChannelMembers } from "@/features/channels/hooks/use-channel-members";
 import { memberLabel } from "@/features/channels/lib/channel-display";
-import { memberPerson } from "@/features/channels/components/channels-v2/view-model";
+import { memberPerson } from "@/features/channels/components/view-model";
 import { Avatar } from "@/shared/ui/avatar";
 import {
   EMPTY_INFO_CARD,
@@ -117,7 +117,7 @@ export function PersonInfoTab({
   // same read `PersonMembers` makes one section down — one cache entry, not a
   // second request). A creator who is no longer a member has no roster row and
   // an id is not a name, so the row says it does not know — the same answer the
-  // workspace channels page gives (`channels-v2/info-tab.tsx`).
+  // workspace channels page gives (`channels/components/info-tab.tsx`).
   const { members } = useChannelMembers(
     homeChannel.channelId,
     homeChannel.workspaceId
@@ -190,7 +190,7 @@ export function PersonInfoTab({
           The channel's name is a FIELD of the card — the first row under "Channel info",
           the subject before its facts — not a title floating over it. This block used to
           print the name in title type here; the same ruling had already landed on the
-          workspace channels page (`channels-v2/info-tab.tsx`) and not here, because the two
+          workspace channels page (`channels/components/info-tab.tsx`) and not here, because the two
           panes are separate compositions of the same rows. ⚠ THEY ARE MEANT TO MATCH: a
           ruling on this card applies to both unless Samuel says which one it is for. */}
       {/* ⚠ "Channel info", NOT "Main info" (Samuel, live review 2026-08-28). The card is about

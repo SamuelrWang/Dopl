@@ -58,7 +58,7 @@ export declare const UNKNOWN_STATE = "(unrecognized state)";
  * ⚠ **IT IS THE PRESENCE WINDOW ON PURPOSE, AND THE REUSE IS THE POINT**: a
  * second staleness number would let one surface call a member's machine offline
  * while another still reports their agent as busily working. The web's peer
- * cards already reuse it (`components/channels-v2/agents-model.ts ›
+ * cards already reuse it (`channels/components/agents-model.ts ›
  * peerRowStale`), and this is the third reader of the same rule.
  *
  * ⚠ **WHAT IT IS NOT: A HEARTBEAT.** `updatedAt` moves on a projection CHANGE,

@@ -83,7 +83,7 @@ export type {
  * `collab-dto.ts › narrowSessionDetail`, which is what stops one.
  *
  * ⚠ The COPY for each key is written on the reader's side
- * (`components/channels-v2/agents-model.ts › agentDetailLabel`), never carried
+ * (`channels/components/agents-model.ts › agentDetailLabel`), never carried
  * on the wire — a copy change must not need a desktop release.
  */
 export type SessionDetailKey = NonNullable<DesktopSessionSummary["detail"]>;

@@ -10,7 +10,7 @@
  * we just made, we should make a design system for this."*
  *
  * ⚠ IT IS AN EXTRACTION, NOT A NEW FACE. Every rule below was
- * `channels-v2/launch-agent-dialog.tsx` an hour ago and moved unchanged — the CSS module came
+ * `channels/components/launch-agent-dialog.tsx` an hour ago and moved unchanged — the CSS module came
  * with it, verbatim, exactly as its own docblock said it would when the experiment was ruled in.
  * `launch-agent-dialog.test.tsx` passes with no edit, and that is the proof the move cost nothing.
  *
@@ -27,7 +27,7 @@
  *
  * ⚠ THE TWO SCALES ARE NOT INTERCHANGEABLE. Everything INSIDE a popup form is the 30px
  * small-action scale (`--action-h-sm`); the 36px scale belongs to the PAGE buttons that open one
- * (`channels-v2/bits.tsx › TAB_ACTION`, the Agents tab's New agent). A dialog cut to 36px is the
+ * (`channels/components/bits.tsx › TAB_ACTION`, the Agents tab's New agent). A dialog cut to 36px is the
  * drift this file exists to stop.
  *
  * ⚠ ESCAPE AND THE BACKDROP **ARE** DISCARD, so {@link FormDialog} takes ONE exit and not two.

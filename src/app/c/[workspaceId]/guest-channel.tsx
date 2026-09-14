@@ -53,7 +53,7 @@ import dynamic from "next/dynamic";
 import { MessageSquareOff, TriangleAlert } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useChannels } from "@/features/channels/hooks/use-channels";
-import { useChannelWebView } from "@/features/channels/components/channels-v2/use-channel-web-view";
+import { useChannelWebView } from "@/features/channels/components/use-channel-web-view";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { DetailPaneSkeleton, TranscriptSkeleton } from "@/shared/ui/skeleton";
 import type { HomeChannel } from "@/features/home/types";
@@ -61,7 +61,7 @@ import type { HomeChannel } from "@/features/home/types";
 const StandaloneChannelSurface = dynamic(
   () =>
     import(
-      "@/features/channels/components/channels-v2/channel-surface-standalone"
+      "@/features/channels/components/channel-surface-standalone"
     ).then((mod) => mod.StandaloneChannelSurface),
   { ssr: false }
 );

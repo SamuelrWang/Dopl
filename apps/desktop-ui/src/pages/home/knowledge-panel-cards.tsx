@@ -66,7 +66,7 @@ export function BaseCell({
   return (
     <div className={home.kbCell}>
       {badge && (
-        // The `RolePill` shape at its least-privileged face (`channels-v2/
+        // The `RolePill` shape at its least-privileged face (`channels/components/
         // bits.tsx › RolePill`'s guest branch), raised because it sits on the
         // section's INSET body (docs/DESIGN-SYSTEM.md § Pills/chips).
         <span className="w-fit shrink-0 rounded-full border border-border-strong bg-bg-elevated px-2 py-px text-micro font-medium text-text-muted">

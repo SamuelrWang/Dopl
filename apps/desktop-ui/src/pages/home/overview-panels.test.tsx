@@ -25,7 +25,7 @@ import { HOME_OVERVIEW, renderHome, routes } from "./home-test-harness";
 const apiRequest = vi.hoisted(() => vi.fn());
 
 vi.mock(
-  "@/features/channels/components/channels-v2/channel-surface-standalone",
+  "@/features/channels/components/channel-surface-standalone",
   () => ({
     // ⚠ `initialThreadId` IS REFLECTED, because it is the whole assertion of the
     // activity jump: the page hands the surface a thread to raise.

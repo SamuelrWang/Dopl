@@ -4,8 +4,8 @@
 --
 -- WHY THIS EXISTS (the regression this closes). The guest web lane
 -- (`src/app/c/[workspaceId]`) mounts `StandaloneChannelSurface`, whose live loop
--- is `channel-surface-data.ts › useChannelSurfaceData` → `channels-v2/live.ts ›
--- useChannelsV2Live` → `channels/client/realtime.ts` → `shared-channel-registry.ts`
+-- is `channel-surface-data.ts › useChannelSurfaceData` → `channels/components/live.ts ›
+-- useChannelsLive` → `channels/client/realtime.ts` → `shared-channel-registry.ts`
 -- → `getSupabaseBrowser()`. That is a USER client, so the `postgres_changes`
 -- binding is filtered by RLS — unlike every guest-reachable HTTP read, which runs
 -- through `channels/server/repository.ts` on the service-role client and bypasses

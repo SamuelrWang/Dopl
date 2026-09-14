@@ -43,7 +43,7 @@ import { HomeAgentPanelsSkeleton } from "./home-skeleton";
  *
  * ⚠ "AGENTS" NAMES TWO THINGS AND BOTH NAMES STAY (Samuel's ruling Q6,
  * 2026-08-26): THIS face lists template IDENTITIES, the channel info column's
- * **Agents** tab (`channels-v2/agents-tab.tsx`) lists RUNNING SESSIONS. The
+ * **Agents** tab (`channels/components/agents-tab.tsx`) lists RUNNING SESSIONS. The
  * collision is RECORDED (INVARIANTS §5A), not resolved; a rename needs his word.
  *
  * ⚠ NO LAUNCH CONTROL, DELIBERATELY (§4.6, §5A) — the Channels face's

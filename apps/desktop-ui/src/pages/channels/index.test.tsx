@@ -10,7 +10,7 @@ import { SEGMENT } from "#/test-utils/bridge";
  * Channels page smoke test, AFTER THE CUTOVER (wiring plan Phase 12,
  * 2026-08-18). This file used to mount the two-pane `ChannelsViewCore`; that
  * tree is deleted and `/:workspaceSegment/channels` now mounts the three-column
- * surface (`components/channels-v2/channels-v2-core.tsx`) that lived behind a
+ * surface (`channels/components/channels-core.tsx`) that lived behind a
  * temporary `channels-v2` route until the rename.
  *
  * What is pinned here is the SEAM, not the surface — every column has its own

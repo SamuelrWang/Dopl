@@ -4,7 +4,7 @@
 // holdIfNoCredential` preflights a windowless launch and HOLDS it rather than burning a session,
 // `session-query.js` turns an auth-shaped mid-session failure into that same hold, and the
 // channels surface says so out loud ("Your agent is waiting for you to sign in to Claude Code.",
-// `channels-v2/agent-composer.tsx`). The REMEDY existed too — `claude-auth.js › startSignInFlow`
+// `channels/components/agent-composer.tsx`). The REMEDY existed too — `claude-auth.js › startSignInFlow`
 // (native dialog, then `claude setup-token` under a pty against the bundled binary, Terminal as
 // tier 1) and `session-auth.js › resumeAfterSignIn` (idempotent, test-covered).
 //

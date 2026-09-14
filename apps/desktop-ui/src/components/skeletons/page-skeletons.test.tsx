@@ -267,17 +267,17 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
    * height — so the ghost imports it and the rest is byte-shared.
    */
   it("the channels ghost byte-shares the surface's columns, rows and composer", () => {
-    const sidebar = shared("features/channels/components/channels-v2/sidebar.tsx");
-    const rows = shared("features/channels/components/channels-v2/sidebar-rows.tsx");
-    const header = shared("features/channels/components/channels-v2/bits.tsx");
-    const pane = shared("features/channels/components/channels-v2/message-pane.tsx");
+    const sidebar = shared("features/channels/components/sidebar.tsx");
+    const rows = shared("features/channels/components/sidebar-rows.tsx");
+    const header = shared("features/channels/components/bits.tsx");
+    const pane = shared("features/channels/components/message-pane.tsx");
     // ⚠ THE HEADER MOVED OUT OF THE PANE ON 2026-09-01 (`message-pane.tsx` hit
     // the 500-line cap when the transcript gained scroll-up paging). The ghost
     // still byte-shares that ONE strip; only the file it is read from changed.
     const paneHeader = shared(
-      "features/channels/components/channels-v2/message-pane-header.tsx"
+      "features/channels/components/message-pane-header.tsx"
     );
-    const composer = shared("features/channels/components/channels-v2/composer.tsx");
+    const composer = shared("features/channels/components/composer.tsx");
 
     for (const [source, geometry] of [
       [sidebar, "flex w-[260px] shrink-0 flex-col border-r border-border-default"],

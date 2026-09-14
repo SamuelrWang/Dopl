@@ -18,7 +18,7 @@
  *     the security property depends on, not the mechanism around it.
  *     ⚠ THE HOST MOVED at the cutover (wiring plan Phase 12, 2026-08-18): it
  *     was `channels-view-core.tsx`, which is deleted; it is now
- *     `channels-v2/channel-manage.tsx`, the header cluster the v2 pane mounts.
+ *     `channels/components/channel-manage.tsx`, the header cluster the v2 pane mounts.
  *     The assertion follows the host, because what it pins is the branch.
  */
 
@@ -74,7 +74,7 @@ describe("the host wires the toggle THROUGH the confirm", () => {
   const view = readFileSync(
     path.join(
       process.cwd(),
-      "src/features/channels/components/channels-v2/channel-manage.tsx"
+      "src/features/channels/components/channel-manage.tsx"
     ),
     "utf8"
   );

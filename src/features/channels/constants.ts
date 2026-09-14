@@ -29,7 +29,7 @@ export const PRESENCE_TABLES = ["agent_presence"] as const;
  * an idle focused tab, not 900 at 4s.
  *
  * ⚠ Passed only by the surfaces that RENDER a pending draft
- * (`components/channels-v2/channel-surface-data.ts`, `.../agent-window.tsx`) — an
+ * (`channels/components/channel-surface-data.ts`, `.../agent-window.tsx`) — an
  * interval belongs to a surface that can act on the rows. The always-mounted nav
  * badge this rule once exempted is DELETED (Samuel, 2026-08-25 — INVARIANTS §6).
  */
@@ -94,7 +94,7 @@ export const PRESENCE_REFETCH_DEBOUNCE_MS = 10_000;
 /**
  * How a thread is worked, as a word (`types.ts › ThreadMode`).
  *
- * ⚠ ONE MAP, TWO SURFACES (2026-08-21): `channels-v2/thread-info-tab.tsx` DISPLAYS
+ * ⚠ ONE MAP, TWO SURFACES (2026-08-21): `channels/components/thread-info-tab.tsx` DISPLAYS
  * the mode and the thread Settings tab CHOOSES it, and a second copy of the labels
  * is how the read-out and the control come to word one value differently.
  * ⚠ NO DESCRIPTIONS BESIDE THEM — a name plus a control (INVARIANTS §5, the
@@ -109,7 +109,7 @@ export const THREAD_MODE_LABELS: Record<ThreadMode, string> = {
  * Human labels for the per-channel agent tool scope.
  *
  * ⚠ ONE CONSUMER TODAY, and this docblock claimed two until 2026-08-21:
- * `channels-v2/settings-agent.tsx` (re-measure: `grep -rn
+ * `channels/components/settings-agent.tsx` (re-measure: `grep -rn
  * AGENT_TOOL_PROFILE_LABELS src`). The second was the consent card, and both halves
  * of that claim had expired — `components/consent-card.tsx` is DELETED (INVARIANTS
  * §6) and no surface has said "Allow" since the affirmative became **Launch agent**.
@@ -219,7 +219,7 @@ export const MAX_MESSAGE_LIMIT = 200;
  *
  * ⚠ **A SMALLER FIRST PAGE IS A SMALLER DERIVATION WINDOW, AND THAT IS THE TRADE.**
  * Thread and escalation cards and the outbound send-box join are derived from the
- * messages ON SCREEN (`components/channels-v2/channel-surface-data.ts`), so a thread
+ * messages ON SCREEN (`channels/components/channel-surface-data.ts`), so a thread
  * older than this page has no card until the reader pages back; "what threads exist"
  * is the Threads tab's question, with its own ceiling
  * ({@link CHANNEL_THREAD_LIST_LIMIT}). 300 is roughly two screens of prose.

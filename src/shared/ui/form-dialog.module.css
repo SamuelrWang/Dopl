@@ -4,7 +4,7 @@
  * the user would click on the line, and the line will turn from gray to black,
  * in an animation that makes it turn color from left to right"*).
  *
- * ⚠ IT WAS `channels-v2/launch-agent-dialog.module.css` AND IT MOVED VERBATIM
+ * ⚠ IT WAS `channels/components/launch-agent-dialog.module.css` AND IT MOVED VERBATIM
  * (2026-09-08, Samuel: *"i want to … start conforming all pop ups to the UI of
  * the one we just made, we should make a design system for this"*). The old
  * file's own docblock said this is what would happen when he ruled the

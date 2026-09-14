@@ -51,7 +51,7 @@
    unlayered rules outrank every layered one.
 
    ⚠ WHY IT SELECTS ON UTILITY CLASS NAMES. The dividers are Tailwind classes on
-   files in `features/channels/components/channels-v2/` — `border-border-default`
+   files in `features/channels/components/` — `border-border-default`
    is the STRUCTURAL rule (the info column's `border-l`, the pane headers'
    `border-b`), `border-border-subtle` the softer internal ones. If those class
    names change there, this stops applying: it degrades to the neutral hairline,
@@ -70,7 +70,7 @@
   border-left-width: 2px;
 }
 /* ⚠ THE SAME 2px, TOLD TO THE RESIZE PILL (Samuel, 2026-09-13: *"I want it to be
-   perfectly on the vertical line"*). `channels-v2/info-resize-handle.tsx ›
+   perfectly on the vertical line"*). `channels/components/info-resize-handle.tsx ›
    DIVIDER_WIDTH_VAR` centres the pill on the divider by offsetting it half a
    border width; its fallback is the kit hairline the workspace channels page
    wears, so THIS host has to say that its structural `border-l` above is wider.

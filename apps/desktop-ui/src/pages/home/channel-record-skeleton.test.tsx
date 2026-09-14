@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { COMPOSER_BOTTOM } from "@/features/channels/components/channels-v2/composer-input";
-import { channelPaneTabs } from "@/features/channels/components/channels-v2/info-panel";
-import { INFO_WIDTH_DEFAULT } from "@/features/channels/components/channels-v2/use-info-resize";
+import { COMPOSER_BOTTOM } from "@/features/channels/components/composer-input";
+import { channelPaneTabs } from "@/features/channels/components/info-panel";
+import { INFO_WIDTH_DEFAULT } from "@/features/channels/components/use-info-resize";
 import { ChannelRecordSkeleton } from "./channel-record-skeleton";
 
 /**
@@ -17,12 +17,12 @@ import { ChannelRecordSkeleton } from "./channel-record-skeleton";
  * pin for what a reader gets, and a SOURCE pin for geometry shared with the real
  * surface — a Tailwind arbitrary value is a STRING and cannot be imported, so a
  * byte-share is the only comparable thing, and the scan is BIDIRECTIONAL: it fails
- * when the ghost drifts AND when channels-v2 does, which is the half that matters.
+ * when the ghost drifts AND when channels does, which is the half that matters.
  *
  * ⚠ THE BYTE-SHARES LIVE HERE AND THE GENERIC RULES DO NOT. This shape IS a row
  * in that file's `SHAPES` table — that is what puts it under the announce /
  * one-pulse-recipe / reduced-motion rules every shape owes — but its pins are all
- * reads of ONE feature tree (`channels-v2/`), and that file sits at the 500-line
+ * reads of ONE feature tree (`channels/components/`), and that file sits at the 500-line
  * cap (INVARIANTS §1). One file per reason to change.
  */
 const file = (rel: string) =>
@@ -38,7 +38,7 @@ const code = (rel: string) =>
 const GHOST = file("./channel-record-skeleton.tsx");
 const GHOST_CODE = code("./channel-record-skeleton.tsx");
 const v2 = (name: string) =>
-  file(`../../../../../src/features/channels/components/channels-v2/${name}`);
+  file(`../../../../../src/features/channels/components/${name}`);
 
 /** Every visible string on the surface. A skeleton's only text is `sr-only`. */
 function visibleText(container: HTMLElement) {
@@ -73,7 +73,7 @@ describe("the channel record ghost announces itself and paints a shape", () => {
 describe("the ghost is the surface's two columns, not a bare transcript", () => {
   /**
    * 🔒 THE INFO COLUMN IS DRAWN, AND ITS WIDTH IS THE REAL ONE. It is OPEN at
-   * mount on this host (`use-channels-v2-selection.ts` seeds `infoOpen` true), so
+   * mount on this host (`use-channels-selection.ts` seeds `infoOpen` true), so
    * the ghost that omitted it resolved into a pane that then grew a 380px column.
    * ⚠ THE WIDTH IS THE VAR *AND* ITS FALLBACK — the operator drags `--info-w`
    * (`use-info-resize.ts`), and {@link INFO_WIDTH_DEFAULT} is the number that

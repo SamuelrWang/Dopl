@@ -20,7 +20,7 @@ import { BILLING_STATUS, renderHome, routes } from "./home-test-harness";
 const apiRequest = vi.hoisted(() => vi.fn());
 
 vi.mock(
-  "@/features/channels/components/channels-v2/channel-surface-standalone",
+  "@/features/channels/components/channel-surface-standalone",
   () => ({
     StandaloneChannelSurface: () => <div data-testid="channel-surface" />,
   })

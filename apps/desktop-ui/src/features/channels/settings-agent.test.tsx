@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ChannelAgentSettings } from "@/features/channels/components/channels-v2/settings-agent";
+import { ChannelAgentSettings } from "@/features/channels/components/settings-agent";
 import { installBridge } from "#/test-utils/bridge";
 
 /**
@@ -39,7 +39,7 @@ import { installBridge } from "#/test-utils/bridge";
  *
  * The folder is `window.dopl.channels.chooseFolder/clearFolder`; Tools is a CLOUD
  * write and belongs to the caller. Copy and the bridge-free rendering are pinned
- * in the ROOT suite (`channels-v2/settings-agent-posture.test.tsx` and
+ * in the ROOT suite (`channels/components/settings-agent-posture.test.tsx` and
  * `› settings-tab.test.tsx`); what needs a real bridge and a real DOM is here.
  *
  * ⚠ THE TAB'S EXPLAINER COPY WAS CUT ON 2026-08-19 (Samuel, live review, third

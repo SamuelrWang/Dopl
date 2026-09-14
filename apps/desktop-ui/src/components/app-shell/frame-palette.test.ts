@@ -172,7 +172,7 @@ describe("the channel info column is fixed-width, and paints above the transcrip
     // transcript's `auto`, low enough that opening an agent still covers this.
     // A future bump here silently puts the info column over the agent pane.
     expect(
-      code(read("src/features/channels/components/channels-v2/agent-panel.tsx"))
+      code(read("src/features/channels/components/agent-panel.tsx"))
     ).toContain("z-20");
   });
 
@@ -180,7 +180,7 @@ describe("the channel info column is fixed-width, and paints above the transcrip
     // The pairing `agent-panel.tsx` names in as many words — a mismatch makes
     // the divider jump sideways the moment an agent view opens.
     // ⚠ IT IS A VARIABLE SINCE 2026-09-13 AND THE PAIRING IS UNCHANGED — the operator
-    // DRAGS this width (`channels-v2/use-info-resize.ts`), so a literal in either place
+    // DRAGS this width (`channels/components/use-info-resize.ts`), so a literal in either place
     // is the same jump for a resized column. What is pinned is that all three sites state
     // the SAME expression, fallback included: the two kit copies here, `info-panel.tsx`'s
     // own `w-[…]`, and the agent overlay's.
@@ -193,8 +193,8 @@ describe("the channel info column is fixed-width, and paints above the transcrip
     }
     // The TSX halves carry it without the space Prettier puts in the CSS one.
     for (const file of [
-      "src/features/channels/components/channels-v2/agent-panel.tsx",
-      "src/features/channels/components/channels-v2/info-panel.tsx",
+      "src/features/channels/components/agent-panel.tsx",
+      "src/features/channels/components/info-panel.tsx",
     ]) {
       expect(code(read(file)), `${file} drifted off --info-w`).toContain(
         "w-[var(--info-w,380px)]"
@@ -202,7 +202,7 @@ describe("the channel info column is fixed-width, and paints above the transcrip
     }
     // And the hook's floor is the same number, so "never narrower than today" stays true.
     expect(
-      code(read("src/features/channels/components/channels-v2/use-info-resize.ts"))
+      code(read("src/features/channels/components/use-info-resize.ts"))
     ).toContain("INFO_WIDTH_DEFAULT = 380");
   });
 });
@@ -297,7 +297,7 @@ describe("ONE gray panel, with the page floating inside it", () => {
     // `--home-panel` for the hour the page float WAS the gray panel, which is
     // what put a gray pane against a white transcript.
     expect(
-      code(read("src/features/channels/components/channels-v2/agent-panel.tsx"))
+      code(read("src/features/channels/components/agent-panel.tsx"))
     ).toContain("bg-[var(--home-card)]");
   });
 
@@ -314,17 +314,17 @@ describe("ONE gray panel, with the page floating inside it", () => {
    * visible ground — which is why the value stays here: the day it changes, a window that fails to
    * cover it shows the wrong colour at its edges.
    * ⚠ **THE THREAD-WINDOW POP-OUT DID NOT MOVE.** It has no rail and no tabs, so nothing about
-   * Samuel's ruling reaches it; `pages/thread-window/` is deliberately not read here. ⚠ **THE GROUND AND THE CARD ARE MEASURED IN TWO FILES SINCE 2026-09-13's SECOND PASS**: the inset face is `channels-v2/agent-window-frame.ts › INSET_PANEL` (the chrome had to read the window's rail width to align the tab strip, so the shared geometry became its own module and the card face went with it; the shell re-exports it). This file is AT the 500-line cap — say the next thing on an existing line.
+   * Samuel's ruling reaches it; `pages/thread-window/` is deliberately not read here. ⚠ **THE GROUND AND THE CARD ARE MEASURED IN TWO FILES SINCE 2026-09-13's SECOND PASS**: the inset face is `channels/components/agent-window-frame.ts › INSET_PANEL` (the chrome had to read the window's rail width to align the tab strip, so the shared geometry became its own module and the card face went with it; the shell re-exports it). This file is AT the 500-line cap — say the next thing on an existing line.
    */
   it("the agent pop-out follows the frame model now: gray ground, white inset card", () => {
     const shellSrc = code(
-      read("src/features/channels/components/channels-v2/agent-window-shell.tsx")
+      read("src/features/channels/components/agent-window-shell.tsx")
     );
     expect(shellSrc).toContain("bg-home-panel");
-    expect(read("src/features/channels/components/channels-v2/agent-window-frame.ts")).toContain("bento");
+    expect(read("src/features/channels/components/agent-window-frame.ts")).toContain("bento");
     // ⚠ AND THE VIEW INSIDE IT PAINTS NOTHING — one painter per surface.
     expect(
-      code(read("src/features/channels/components/channels-v2/agent-window.tsx"))
+      code(read("src/features/channels/components/agent-window.tsx"))
     ).not.toContain("bg-[var(--panel-surface)]");
     expect(rule(shellCss, "\n.windowSurface {")).toContain("var(--panel-surface)");
   });
@@ -472,7 +472,7 @@ describe("the float geometry is shared, not copied", () => {
     for (const page of [
       "apps/desktop-ui/src/pages/overview/index.tsx",
       "apps/desktop-ui/src/pages/settings/index.tsx",
-      "src/features/channels/components/channels-v2/channels-v2-core.tsx",
+      "src/features/channels/components/channels-core.tsx",
       "src/features/members/components/members-v2/members-v2-view.tsx",
       "src/features/agent-templates/components/agent-templates-core.tsx",
     ]) {

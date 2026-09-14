@@ -16,7 +16,7 @@
  *
  * ⚠ OFF `process.cwd()` (the vitest root), NOT `import.meta.url`. Under the jsdom
  * environment these suites declare, a module-relative URL misses the tree — the same
- * rule and the same reason `channels-v2/settings-agent-harness.tsx › desktopSource`
+ * rule and the same reason `channels/components/settings-agent-harness.tsx › desktopSource`
  * states over its own read.
  *
  * ⚠ NOT A `*.test.ts` NAME ON PURPOSE — `vitest.config.ts` includes exactly

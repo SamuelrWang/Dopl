@@ -88,11 +88,11 @@
    `dopl_channel manage launch` gains optional `color`; server assigns first free
    / 409 on taken; end frees by the index predicate (no code). Peer projection
    (`channel_sessions` push) carries `color`.
-4. Rendering: `channels-v2/transcript.tsx` + a new `message-box-agent.tsx`
+4. Rendering: `channels/components/transcript.tsx` + a new `message-box-agent.tsx`
    (box + bar + pill-left) dispatched for posts with a live/ended channel-agent
    session; tokens by reference; both channel surfaces.
 5. Pop-out "posted to channel" bar colour.
-6. Filter dropdown (`channels-v2/transcript-filter.tsx`), left of the collapse
+6. Filter dropdown (`channels/components/transcript-filter.tsx`), left of the collapse
    toggle, All / People / agents.
 7. New agent popup: "None" + colour circles + taken-set rule.
 8. Dots on the Agents-tab cards + pop-out rail rows.

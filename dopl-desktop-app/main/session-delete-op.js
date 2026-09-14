@@ -16,7 +16,7 @@
 // the work happened: the frozen narration ring, the durable record, the resume map, the ended
 // card, the queued-notice guard, the display name, and any window opened onto it. A reader
 // meeting a deleted agent's messages still sees `Agent #<id>` on every one, because the id rides
-// the MESSAGE (`components/channels-v2/agents-model.ts › parseAgentPostStamp` reads it off
+// the MESSAGE (`channels/components/agents-model.ts › parseAgentPostStamp` reads it off
 // `client_msg_id`) and never a local table. INVARIANTS §5 / §11.
 //
 // ⚠ **THERE IS ONE STOP PATH AND THIS IS NOT A SECOND ONE.** A LIVE agent is ended through

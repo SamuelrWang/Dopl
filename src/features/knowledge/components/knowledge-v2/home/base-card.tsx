@@ -122,7 +122,7 @@ export function BaseCard({
 
         <div className={styles.cardFoot}>
           {/* ⚠ Icon and COPY are Bookmark — one save affordance across the app,
-              matching channels (`channels-v2/message-pane.tsx`, lucide
+              matching channels (`channels/components/message-pane.tsx`, lucide
               `Bookmark` at size 14). The DATA verb stays "star"
               (`onToggleStar`, `/knowledge/bases/[baseId]/star`): that is the
               route/service vocabulary and it did not change with the icon. */}

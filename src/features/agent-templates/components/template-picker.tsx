@@ -11,16 +11,16 @@ import { SECTIONS, groupByVisibility } from "../lib/visibility";
 
 /**
  * WHICH IDENTITY THE NEXT AGENT WEARS — one popover, with ONE live mount:
- * `channels-v2/agents-tab.tsx`'s New Agent split button.
+ * `channels/components/agents-tab.tsx`'s New Agent split button.
  *
  * ⚠ **IT CHOOSES; IT NO LONGER LAUNCHES (2026-09-13, Samuel's ruling over the
  * deleted `launch-sheet.tsx`).** A pick closes this popover and OPENS
- * `channels-v2/launch-agent-dialog.tsx › LaunchAgentDialog` with the template
+ * `channels/components/launch-agent-dialog.tsx › LaunchAgentDialog` with the template
  * preselected and its fields prefilled — *"the popup should essentially be the
  * same as that of a normal agent launch, except the template is pre-selected"*.
  * So `sessions.launch` is not reached from this file at all, the row CHEVRON is
  * gone with the sheet it opened, and the first-use approval question belongs to
- * the popup's runner (`channels-v2/use-agent-launch-run.ts › useLaunchRunner`).
+ * the popup's runner (`channels/components/use-agent-launch-run.ts › useLaunchRunner`).
  * ⚠ **THE ONE-CLICK TEMPLATE LAUNCH WENT WITH IT**, which SUPERSEDES the
  * *one lane, one-click launch* half of the 2026-08-22 ruling exactly as the
  * popup already superseded it for the BLANK lane on 2026-09-08 (INVARIANTS §5A):
@@ -28,9 +28,9 @@ import { SECTIONS, groupByVisibility } from "../lib/visibility";
  * and it is now one FORM for both.
  *
  * ⚠ THIS DOCBLOCK SAID "mounted by BOTH launch surfaces … and
- * `channels-v2/composer.tsx`'s Bot icon" UNTIL 2026-08-30, AND THAT MOUNT WAS
+ * `channels/components/composer.tsx`'s Bot icon" UNTIL 2026-08-30, AND THAT MOUNT WAS
  * RETIRED ON 2026-08-27. The composer's Bot icon and the chevron beside it are
- * both replaced by `channels-v2/composer-launch-panel.tsx`, whose **Template
+ * both replaced by `channels/components/composer-launch-panel.tsx`, whose **Template
  * row is this picker's whole function**; `composer.tsx` imports
  * `TemplateApprovalDialog` and `ComposerLaunch` and no picker at all. INVARIANTS
  * §5A carried the same stale sentence and is corrected in the same change.
@@ -81,7 +81,7 @@ export const SEARCH_THRESHOLD = 8;
  * template launch the POPUP's act, so this popover chooses and the popup launches. What left with
  * the launch: `TemplateLaunchOutcome`, the row CHEVRON (its only job was the sheet; the popup's
  * Model and Instructions rows are what it opened for), the held overrides, and the FIRST-USE
- * APPROVAL modal — `channels-v2/use-agent-launch-run.ts › useLaunchRunner` owns that question now,
+ * APPROVAL modal — `channels/components/use-agent-launch-run.ts › useLaunchRunner` owns that question now,
  * on the one lane, so it cannot be asked two ways.
  * ⚠ **ONE HANDLER, NOT TWO.** `null` is a BLANK agent and is the first row's own act; there is no
  * second entry point for "with options", because the popup IS the options.

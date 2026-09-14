@@ -4,7 +4,7 @@ import {
   SkeletonLine,
   TranscriptSkeleton,
 } from "@/shared/ui/skeleton";
-import { COMPOSER_BOTTOM } from "@/features/channels/components/channels-v2/composer-input";
+import { COMPOSER_BOTTOM } from "@/features/channels/components/composer-input";
 import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
 
 /**

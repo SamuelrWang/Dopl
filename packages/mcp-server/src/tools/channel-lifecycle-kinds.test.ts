@@ -1,7 +1,7 @@
 /**
  * THE AGENT'S WRITE SURFACE. ⚠ A terminal `kind` is structurally unrenderable
  * on the requester's side — the web reader drops the three kinds outright
- * (`channels-v2/view-model.ts › isLifecycleEcho`, wiring plan Phase 5,
+ * (`channels/components/view-model.ts › isLifecycleEcho`, wiring plan Phase 5,
  * 2026-08-18; before that a session card folded the marker into its `endEvent`)
  * — so an ANSWER posted as
  * `kind:"task_finished"` appears NOWHERE. Two guards pinned here:

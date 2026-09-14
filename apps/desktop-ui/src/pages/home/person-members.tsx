@@ -1,5 +1,5 @@
-import { PanelHeading } from "@/features/channels/components/channels-v2/bits";
-import { MemberRoster } from "@/features/channels/components/channels-v2/member-roster";
+import { PanelHeading } from "@/features/channels/components/bits";
+import { MemberRoster } from "@/features/channels/components/member-roster";
 import { useChannelMembers } from "@/features/channels/hooks/use-channel-members";
 import type { HomeChannel } from "@/features/home/types";
 import { AddPersonDialog } from "./add-person-dialog";
@@ -14,7 +14,7 @@ import { LinkOutPanel } from "./link-out-panel";
  * first pass here drew a home-local row: `xs` avatar, name only, `h-9`. It
  * exists because `MemberRow` was module-private in `info-tab.tsx` and copying
  * looked cheaper than exporting. Both surfaces now render
- * `channels-v2/member-roster.tsx › MemberRoster` — same `sm` avatar with its
+ * `channels/components/member-roster.tsx › MemberRoster` — same `sm` avatar with its
  * presence ring, same `h-[46px]`, name over EMAIL, same role pill, same
  * online/offline partition. **Adapt data wiring here; never the row.**
  *

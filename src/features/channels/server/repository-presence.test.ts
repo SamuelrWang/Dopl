@@ -25,7 +25,7 @@ import { join } from "node:path";
  *
  * ⚠ **AND IT IS THE SERVER'S BECAUSE THE CLIENT CANNOT SEE `status`.** `agent_presence.status`
  * is never on the wire; a client that re-derived `online` from `lastSeenAt` was structurally
- * unable to agree with this function. `components/channels-v2/view-model.test.ts` holds the
+ * unable to agree with this function. `channels/components/view-model.test.ts` holds the
  * other end of that.
  */
 

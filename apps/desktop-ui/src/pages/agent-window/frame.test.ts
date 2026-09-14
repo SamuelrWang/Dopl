@@ -42,7 +42,7 @@ const shellCss = readFileSync(
 const windowComponent = readFileSync(
   join(
     HERE,
-    "../../../../../src/features/channels/components/channels-v2/agent-window.tsx"
+    "../../../../../src/features/channels/components/agent-window.tsx"
   ),
   "utf8"
 )
@@ -96,7 +96,7 @@ describe("the pop-out's painted stack", () => {
     const shellComponent = readFileSync(
       join(
         HERE,
-        "../../../../../src/features/channels/components/channels-v2/agent-window-shell.tsx"
+        "../../../../../src/features/channels/components/agent-window-shell.tsx"
       ),
       "utf8"
     )
@@ -107,7 +107,7 @@ describe("the pop-out's painted stack", () => {
     // The GROUND is the site gray, by token — the SHELL's, and it stays there.
     expect(shellComponent).toContain("bg-home-panel");
     expect(shellComponent).not.toContain("page-float");
-    // ⚠ **THE INSET FACE IS `channels-v2/agent-window-frame.ts › INSET_PANEL` SINCE 2026-09-13's
+    // ⚠ **THE INSET FACE IS `channels/components/agent-window-frame.ts › INSET_PANEL` SINCE 2026-09-13's
     // SECOND PASS** (the shell re-exports it): the chrome had to read the window's rail width to
     // align the tab strip, so the window's shared geometry became its own module and the card face
     // went with it. A ground and a card are different layers and are now measured in different
@@ -115,7 +115,7 @@ describe("the pop-out's painted stack", () => {
     const frameModule = readFileSync(
       join(
         HERE,
-        "../../../../../src/features/channels/components/channels-v2/agent-window-frame.ts"
+        "../../../../../src/features/channels/components/agent-window-frame.ts"
       ),
       "utf8"
     );

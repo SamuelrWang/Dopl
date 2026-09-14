@@ -71,8 +71,8 @@ export const TEMPLATE_NAME_TEXT = "text-title font-medium text-text-primary";
  * SAME DAY.** Samuel then ruled the face onto EVERY section heading, so it lives
  * in `shared/ui/section-heading.ts › SECTION_HEADING_TEXT` and `SectionPanel`
  * applies it — the Usage heading included. This alias survives only as the NAME
- * three files argue against by (`channels-v2/agent-window-frame.ts`,
- * `channels-v2/recency-wells.tsx`, `pages/home/overview-usage-filter.tsx` all say
+ * three files argue against by (`channels/components/agent-window-frame.ts`,
+ * `channels/components/recency-wells.tsx`, `pages/home/overview-usage-filter.tsx` all say
  * "not `TEMPLATE_NAME_TEXT_LG`"); delete it together with those references, not
  * before them.
  *

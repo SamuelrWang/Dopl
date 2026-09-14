@@ -28,7 +28,7 @@ import {
 const apiRequest = vi.hoisted(() => vi.fn());
 
 vi.mock(
-  "@/features/channels/components/channels-v2/channel-surface-standalone",
+  "@/features/channels/components/channel-surface-standalone",
   () => ({
     StandaloneChannelSurface: (props: {
       slots?: {

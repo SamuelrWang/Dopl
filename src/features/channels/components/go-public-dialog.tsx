@@ -24,7 +24,7 @@ import type { ChannelVisibility } from "../types";
  * intent upward and the host renders the dialog beside the others
  * (`CreateChannelDialog`, `DirectMessageDialog`, `InviteDialog`). ⚠ The host
  * MOVED at the v2 cutover (2026-08-18) — it is
- * `channels-v2/channel-manage.tsx` now, and the same cap argument applies
+ * `channels/components/channel-manage.tsx` now, and the same cap argument applies
  * there for the same reason.
  *
  * THE SERVER DOES NOT TRUST IT. `PATCH /api/channels/[channelId]` refuses the
@@ -40,7 +40,7 @@ export function needsGoPublicConfirm(visibility: ChannelVisibility): boolean {
  * itself in from an effect — a static render of an open dialog is the empty
  * string, so there is no other way for a test to hold this wording to account.
  * Same split `GroupChannelRoutingNote` and
- * `channels-v2/settings-agent.tsx › ChannelAgentSettingsView` use.
+ * `channels/components/settings-agent.tsx › ChannelAgentSettingsView` use.
  * (`ChannelActionsMenuItems` was the third until its kebab was deleted for the
  * Settings tab's explicit rows, 2026-08-19; `ChannelSettingsMenuView` was the
  * fourth until the settings popover was deleted for the tab's inline controls

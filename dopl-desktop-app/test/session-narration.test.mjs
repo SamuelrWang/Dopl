@@ -112,7 +112,7 @@ test("SAFETY: every text field is bounded and single-line", () => {
  * (`agent-stream-consent.test.tsx` re-slices at a hand-written 1000, which still passes if both
  * caps drop together).
  *
- * ⚠ AND THE DIRECTION THAT BREAKS IS *THIS* SIDE GOING SHORTER. `channels-v2/agent-stream-model.ts
+ * ⚠ AND THE DIRECTION THAT BREAKS IS *THIS* SIDE GOING SHORTER. `channels/components/agent-stream-model.ts
  * › postEcho` runs the frame text (already cut HERE) and the untruncated server body through one
  * normalizer and joins them on equality. If this cap drops below the web's, a long post gives the
  * two chains different prefixes, the join never matches, and the Post card reads **Pending
@@ -123,7 +123,7 @@ test("POST: the outbound echo cap is the SPA's join constant, character for char
   assert.equal(
     m.POST_CAP,
     1000,
-    "`channels-v2/agent-stream-model.ts › POST_CAP` joins against this — change both or neither"
+    "`channels/components/agent-stream-model.ts › POST_CAP` joins against this — change both or neither"
   );
   // ⚠ AND IT IS THE CAP THE POST BRANCH ACTUALLY APPLIES, not just a constant that agrees with
   // the SPA while the code uses another one.

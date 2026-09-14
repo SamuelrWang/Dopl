@@ -3,7 +3,7 @@
  *
  * THE BUG THIS PINS, in one sentence: the guest web lane's live loop
  * (`GuestChannel` → `StandaloneChannelSurface` → `channel-surface-data.ts` →
- * `channels-v2/live.ts` → `client/realtime.ts` → `shared-channel-registry.ts` →
+ * `channels/components/live.ts` → `client/realtime.ts` → `shared-channel-registry.ts` →
  * `getSupabaseBrowser()`) is a USER-client `postgres_changes` subscription, so
  * RLS applies — unlike every guest-reachable HTTP read, which runs service-role
  * and bypasses RLS entirely. All five channel-family SELECT policies gated on

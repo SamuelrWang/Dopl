@@ -1,23 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
-import { ChannelsV2AgentWindow } from "@/features/channels/components/channels-v2/agent-window";
-import { AgentWindowShell } from "@/features/channels/components/channels-v2/agent-window-shell";
-import type { AgentTabView } from "@/features/channels/components/channels-v2/agent-window-chrome";
+import { ChannelsAgentWindow } from "@/features/channels/components/agent-window";
+import { AgentWindowShell } from "@/features/channels/components/agent-window-shell";
+import type { AgentTabView } from "@/features/channels/components/agent-window-chrome";
 import {
   AgentEndedPill,
   AgentLiveness,
-} from "@/features/channels/components/channels-v2/agent-bits";
+} from "@/features/channels/components/agent-bits";
 import {
   agentDisplayName,
   agentLiveness,
-} from "@/features/channels/components/channels-v2/agents-model";
-import { useDesktopSessions } from "@/features/channels/components/channels-v2/use-desktop-sessions";
+} from "@/features/channels/components/agents-model";
+import { useDesktopSessions } from "@/features/channels/components/use-desktop-sessions";
 import {
   canLaunchAgents,
   openAgentWindow,
-} from "@/features/channels/components/channels-v2/agents-controls";
-import { useAgentLaunch } from "@/features/channels/components/channels-v2/use-agent-launch";
-import { AgentWindowLaunch } from "@/features/channels/components/channels-v2/agent-window-launch";
+} from "@/features/channels/components/agents-controls";
+import { useAgentLaunch } from "@/features/channels/components/use-agent-launch";
+import { AgentWindowLaunch } from "@/features/channels/components/agent-window-launch";
 import {
   canHostAgentTabs,
   closeOwnTab,
@@ -30,7 +30,7 @@ import shell from "@/shared/layout/app-shell/app-shell.module.css";
 // ⚠ `?inline` FOR THE SAME REASON `components/app-shell/account-rail.tsx` takes it: the packaged
 // renderer is a `file://` document, so the mark travels as a data URI rather than a URL. It is
 // handed DOWN to the window because `src/**` has no `#/` alias
-// (`channels-v2/agent-window-shell.tsx › logoSrc` carries the argument; it was the agent VIEW's prop
+// (`channels/components/agent-window-shell.tsx › logoSrc` carries the argument; it was the agent VIEW's prop
 // until the mark moved into the window's chrome on 2026-09-13).
 import doplMark from "#/assets/dopl-mark.png?inline";
 import {
@@ -297,7 +297,7 @@ function AgentWindowTabs({
           );
         }}
       >
-        <ChannelsV2AgentWindow
+        <ChannelsAgentWindow
           // ⚠ KEYED BY THE TAB: a switch must REMOUNT the view, or the previous agent's narration
           // ring and composer draft would be handed to the next one.
           key={active.key}

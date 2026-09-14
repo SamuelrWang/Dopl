@@ -6,7 +6,7 @@
  *
  * ⚠ THE SCENE IS /home, NOT THE WORKSPACE CHANNELS PAGE (Samuel, 2026-08-30,
  * over a screenshot of the old scene: *"the /home channel view instead — that
- * UI, not this one"*). What was here was `ChannelsV2Sidebar` — the workspace
+ * UI, not this one"*). What was here was `ChannelsSidebar` — the workspace
  * tree, with Assistant / Drafts / Saved items over DIRECT MESSAGES and
  * CHANNELS. It is gone. The frame is now the ACCOUNT surface: the dark
  * `--home-frame` slab with the account rail, ONE gray `--home-panel` float
@@ -37,14 +37,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
-import { ChannelsV2MessagePane } from "@/features/channels/components/channels-v2/message-pane";
-import { ChannelsV2InfoPanel } from "@/features/channels/components/channels-v2/info-panel";
-import { indexMembers } from "@/features/channels/components/channels-v2/view-model";
+import { ChannelsMessagePane } from "@/features/channels/components/message-pane";
+import { ChannelsInfoPanel } from "@/features/channels/components/info-panel";
+import { indexMembers } from "@/features/channels/components/view-model";
 import {
   channelRows,
   threadRows,
-} from "@/features/channels/components/channels-v2/view-model-rows";
-import { agentKey } from "@/features/channels/components/channels-v2/agents-model";
+} from "@/features/channels/components/view-model-rows";
+import { agentKey } from "@/features/channels/components/agents-model";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { CANVAS_H, CANVAS_W, at, reached } from "./demo-steps";
 import {
@@ -291,7 +291,7 @@ export function BannerDemo() {
                     agent view's containing block, exactly as
                     `channel-surface-standalone.tsx` states. */}
                 <div className="lp-demo-record" ref={paneRef}>
-                  <ChannelsV2MessagePane
+                  <ChannelsMessagePane
                     key={`pane-${run}`}
                     channelId={CHANNEL_ID}
                     workspaceId={WORKSPACE_ID}
@@ -312,7 +312,7 @@ export function BannerDemo() {
                     onOpenThread={() => setThreadClicked(true)}
                   />
                   <div className="channel-info-slide" data-open="true">
-                    <ChannelsV2InfoPanel
+                    <ChannelsInfoPanel
                       key={`info-${run}`}
                       channel={SALES_CHANNEL}
                       channelName="q4-outbound"

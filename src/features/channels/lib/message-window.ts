@@ -214,7 +214,7 @@ function addArtifacts(
  * option (a): totalize and dedupe).
  *
  * The server folds ONE page; the transcript renders that page PLUS history PLUS
- * every optimistic patch, and `channels-v2/derivations.ts` builds its rows from
+ * every optimistic patch, and `channels/components/derivations.ts` builds its rows from
  * the message arms ALONE — so one page's envelope beside that array drops every
  * row it does not mention.
  *

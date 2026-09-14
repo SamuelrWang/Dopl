@@ -585,7 +585,7 @@
    while the shell narrows — the shell clips it, the content never squashes.
 
    ⚠ 380px SINCE 2026-08-25 (Samuel), AND THE NUMBER IS A MATCH, NOT A TASTE.
-   The agent panel (`channels-v2/agent-panel.tsx`) is `w-[380px]`, absolutely
+   The agent panel (`channels/components/agent-panel.tsx`) is `w-[380px]`, absolutely
    positioned against the same right edge, so at 340 the divider JUMPED 40px
    left the moment an agent view opened over the info column. Both dividers now
    land on the same x. **Change one and change the other**, or the jump is back.
@@ -605,7 +605,7 @@
    — the F-074 drift rule above is why it is not enough to fix globals.css.
    THE TRACK WAS NEVER THE PROBLEM: `flex: 0 0 auto` plus the panel's own
    `w-[380px] shrink-0` already make this column unshrinkable, and the transcript
-   beside it already carries `min-w-0` (`channels-v2/message-pane.tsx › section`),
+   beside it already carries `min-w-0` (`channels/components/message-pane.tsx › section`),
    so the BOX MATH is right at every width — the main area takes all of the
    shrinking, exactly as ruled. What went wrong was PAINT ORDER. The transcript's
    own children are POSITIONED (the composer and its popovers, the sticky
@@ -630,7 +630,7 @@
      itself sized to its min-content (1809px in a 656px viewport) because one long
      `<pre>` line propagated up — `min-w-0` on the transcript never zeroed that
      contribution. The real fix is `contain: inline-size` on
-     `channels-v2/message-pane.tsx › section`. This layer is left in place: it is
+     `channels/components/message-pane.tsx › section`. This layer is left in place: it is
      harmless and still correct paint order, but it fixed nothing on its own. */
   position: relative;
   z-index: 1;
@@ -638,10 +638,10 @@
 }
 .channel-info-slide[data-open="true"] {
   /* ⚠ THE OPERATOR DRAGS THIS (Samuel, 2026-09-13). `--info-w` is written on the
-     SURFACE ROOT by `channels-v2/use-info-resize.ts`, which owns both limits (never
+     SURFACE ROOT by `channels/components/use-info-resize.ts`, which owns both limits (never
      narrower than the 380px fallback, never wider than half the surface) and the
-     per-device memory. ⚠ THE FALLBACK IS THE PAIRING: `channels-v2/agent-panel.tsx`
-     and `channels-v2/info-panel.tsx` state the same `var(--info-w, 380px)`, because
+     per-device memory. ⚠ THE FALLBACK IS THE PAIRING: `channels/components/agent-panel.tsx`
+     and `channels/components/info-panel.tsx` state the same `var(--info-w, 380px)`, because
      that overlay is positioned against the SAME right edge and a mismatch makes the
      divider jump sideways the moment an agent view opens. Change one, change all
      three (pinned: `app-shell/frame-palette.test.ts`). */
@@ -649,7 +649,7 @@
 }
 /* ⚠ NO TRANSITION WHILE DRAGGING, or the column lags the pointer by 200ms. The
    attribute is set on the surface ROOT for the length of the gesture —
-   `channels-v2/use-info-resize.ts › INFO_RESIZING_ATTR`. */
+   `channels/components/use-info-resize.ts › INFO_RESIZING_ATTR`. */
 [data-info-resizing="true"] .channel-info-slide {
   transition: none;
 }
@@ -676,7 +676,7 @@
    ⚠ 200ms ON THE APP'S OWN CURVE — the same `cubic-bezier(0.22,0.61,0.36,1)` at
    the same duration as `.channel-info-slide` above and `.menu-card`'s unfold. A
    consumer that UNMOUNTS its content on close must wait exactly this long
-   (`channels-v2/agents-wells.tsx › WELL_COLLAPSE_MS`), and drop the wait under
+   (`channels/components/agents-wells.tsx › WELL_COLLAPSE_MS`), and drop the wait under
    reduced motion, where the block below turns the transition off. */
 .collapse-grid {
   display: grid;

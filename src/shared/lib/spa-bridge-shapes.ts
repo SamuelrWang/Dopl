@@ -22,7 +22,7 @@
 /**
  * ONE LIVE SESSION as the desktop projects it — wire shape emitted by
  * `dopl-desktop-app/main/session-summary.js`. **The AGENTS TAB renders from
- * these** (`components/channels-v2/agents-tab.tsx` over `› agents-model.ts`,
+ * these** (`channels/components/agents-tab.tsx` over `› agents-model.ts`,
  * INVARIANTS §5). ⚠ It used to be the channel pane's session pills; those and
  * `channel-pane.tsx` were deleted in wiring plan Phase 5 / the Phase 12 cutover.
  *
@@ -410,7 +410,7 @@ export interface DesktopNarrationEntry {
    * ⚠ **`"directed"` NAMES THE LANE, NOT THE DIRECTION** — inbound and outbound share it, and
    * only `kind` (`directed` vs `directed-reply`) says which. That does not weaken the rule
    * below: the two kinds differ in SPEAKER, never in AUDIENCE, so a kind rename can still not
-   * change who could see the line. `channels-v2/agent-stream-model.ts › frameLane` is the one
+   * change who could see the line. `channels/components/agent-stream-model.ts › frameLane` is the one
    * reader that splits them.
    *
    * A kind can be renamed, aliased or added; this cannot drift into meaning something else, so
@@ -434,7 +434,7 @@ export interface DesktopNarrationEntry {
    * `post`** (a MESSAGE, but one the transcript is the real record of, and the UI dedupes it),
    * and **8000 for the agent's own PROSE** — `assistant` / `thinking` / the operator's 1:1 text,
    * where this ring is the only copy that exists anywhere.
-   * ⚠ **8000 IS THE UI's OWN EXPANDED CEILING** (`channels-v2/agent-stream-log.tsx ›
+   * ⚠ **8000 IS THE UI's OWN EXPANDED CEILING** (`channels/components/agent-stream-log.tsx ›
    * EXPANDED_CHARS`), and that is the point of the number: prose was capped at 300 until
    * 2026-08-27, so "Show more" raised a display clamp over a string main had already cut
    * mid-word, with nothing saying so. **A cap below what the UI will show is a silent lie.**

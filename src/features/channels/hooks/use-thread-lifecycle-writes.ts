@@ -22,7 +22,7 @@ import type { ChannelThread, ThreadMode } from "../types";
 /**
  * THE THREAD'S OWN LIFECYCLE WRITES — set mode, and DELETE (Samuel, 2026-08-21).
  * The two writes behind the right panel's Settings tab while a thread is open
- * (`components/channels-v2/thread-settings-tab.tsx`).
+ * (`channels/components/thread-settings-tab.tsx`).
  *
  * ⚠ SEPARATE FROM `use-thread-writes.ts`, which is the SEND family (send, open a
  * thread, fan out) — the flagship optimistic path, keyed on a `clientMsgId` and

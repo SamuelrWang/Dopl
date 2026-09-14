@@ -7,7 +7,7 @@ import {
 /**
  * Channels skeleton — mirrors the loaded `.page-float` chrome (a list column
  * plus a detail column) so the swap to live data doesn't reflow. Rendered by
- * the initial-load branch of `channels-v2/channels-v2-core.tsx`. ⚠ It was
+ * the initial-load branch of `channels/components/channels-core.tsx`. ⚠ It was
  * built for the two-pane page (`channels-view-core.tsx`, deleted at the v2
  * cutover 2026-08-18) and is a rough fit for the three-column surface —
  * a redesign is F-220, not a reason to hand-roll a second recipe.

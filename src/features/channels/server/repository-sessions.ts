@@ -275,7 +275,7 @@ export async function agentDisplayNames(
  * Agents tab drops it (no `threadId` to match), a channel-scoped one keeps it,
  * because the agent IS still running. ⚠ **This sentence claimed "the card's
  * freshness guard is what stops a stale row rendering" until 2026-08-22 — there
- * is no such guard any more.** `components/channels-v2/agents-model.ts ›
+ * is no such guard any more.** `channels/components/agents-model.ts ›
  * peerCardsFor` filters on membership, not on age (Samuel: the card stays until
  * the session goes away); age only DIMS a card now.
  *

@@ -1,9 +1,9 @@
 /**
- * The banner demo's SCRIPTED ACCOUNT SURFACE — real channels-v2 data shapes,
+ * The banner demo's SCRIPTED ACCOUNT SURFACE — real channels data shapes,
  * hand authored, revealed step by step.
  *
  * ⚠ NOTHING IN HERE IS A UI COMPONENT. The demo's RECORD PANE renders the
- * PRODUCT's own channels-v2 components (`banner-demo.tsx`); this file only
+ * PRODUCT's own channels components (`banner-demo.tsx`); this file only
  * builds the `Channel` / `ChannelMember` / `ChannelMessage` / session rows
  * those components are fed everywhere else, so the pane cannot drift from the
  * real surface's face.
@@ -34,7 +34,7 @@ import type {
   DesktopNarrationEntry,
   DesktopSessionSummary,
 } from "@/shared/lib/spa-bridge";
-import type { AgentIdentity } from "@/features/channels/components/channels-v2/view-model";
+import type { AgentIdentity } from "@/features/channels/components/view-model";
 import { reached, type StepId } from "./demo-steps";
 
 export const WORKSPACE_ID = "demo-workspace";
@@ -130,7 +130,7 @@ function channel(
  * The one channel the scene plays.
  *
  * ⚠ `ROOMS` / `DIRECT` STOOD HERE AND ARE DELETED (2026-08-30). They fed
- * `ChannelsV2Sidebar` — the WORKSPACE channel tree — which the /home scene does
+ * `ChannelsSidebar` — the WORKSPACE channel tree — which the /home scene does
  * not have: the account surface's left column is one flat channel list with no
  * sections, and it is `HOME_ROWS` at the foot of this file. Do not re-add a
  * rooms/DMs split here; it is the shape Samuel rejected.

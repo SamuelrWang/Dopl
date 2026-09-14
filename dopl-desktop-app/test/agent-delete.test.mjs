@@ -13,7 +13,7 @@
 //    one card at a time. The purge therefore goes THROUGH that module rather than beside it.
 //  - **⚠ THE CHANNEL RECORD IS IMMUTABLE BY THIS OP.** Nothing here can reach `channel_messages`
 //    — the SPA half of that claim is pinned in
-//    `src/features/channels/components/channels-v2/agent-delete.test.tsx`, which renders a
+//    `src/features/channels/components/agent-delete.test.tsx`, which renders a
 //    transcript before and after a deletion. What is asserted HERE is the other half: this lane
 //    performs no network call and touches no server store, and the ONLY server-visible effect is
 //    the one an ordinary `end` already has.

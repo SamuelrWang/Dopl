@@ -39,7 +39,7 @@ const { mcpShortName } = require('./mcp-tool-names');
 // `mcpShortName` is a free var from here down.
 
 // The vocabulary. A closed set, like PILL_STATES — the renderer maps these to copy
-// (`components/channels-v2/agents-model.ts › agentDetailLabel`) and an unknown value there
+// (`channels/components/agents-model.ts › agentDetailLabel`) and an unknown value there
 // renders NOTHING rather than a raw key.
 const DETAIL_THINKING = 'thinking';
 const DETAIL_TOOL = 'tool';

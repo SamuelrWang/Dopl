@@ -46,7 +46,7 @@ import { monthKey, monthLabel } from "./overview-usage-filter";
 const apiRequest = vi.hoisted(() => vi.fn());
 
 vi.mock(
-  "@/features/channels/components/channels-v2/channel-surface-standalone",
+  "@/features/channels/components/channel-surface-standalone",
   () => ({
     StandaloneChannelSurface: () => <div data-testid="channel-surface" />,
   })

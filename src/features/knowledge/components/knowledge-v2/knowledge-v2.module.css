@@ -640,7 +640,7 @@
    scrollbar rules and the reduced-motion block) STOOD HERE AND ARE DELETED
    (2026-08-30, ledger ASK-5). They dressed `home/hero-chat.tsx`, which is gone;
    nothing else has ever used them. The grid-rows 0fr→1fr auto-height idiom they
-   carried is not lost — `channels-v2/composer.tsx` and `composer-launch-panel.tsx`
+   carried is not lost — `channels/components/composer.tsx` and `composer-launch-panel.tsx`
    spell it inline, which is where a live surface needs it. */
 
 /* Hairline sits ABOVE the filters (hero↔pills), not between pills and grid. */

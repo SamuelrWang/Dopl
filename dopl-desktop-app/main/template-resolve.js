@@ -310,7 +310,7 @@ function isSafeLabel(value) {
  * so unlike `fields` it takes NO charset rule: `agent-templates/schema.ts › InstructionsSchema` is
  * `safeOptionalProse` and a newline is legal in it. What it takes is the COLUMN's own bound, and
  * `''` is "no override" — the popup sends the key only when the operator's text differs from the
- * template's own (`channels-v2/use-agent-launch-run.ts › launchOverridesOf`).
+ * template's own (`channels/components/use-agent-launch-run.ts › launchOverridesOf`).
  *
  * Answers `{ model: '' | <alias>, instructions: '' | <prose>, fields: null | [{key, value}] }` —
  * `model` already coerced onto the alias vocabulary, `''` meaning "the chain continues".

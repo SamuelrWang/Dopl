@@ -45,7 +45,7 @@ Five things the brief assumes are not what the tree does. **Three of them change
 
 1. 🔒 **"MCP READS THE PANEL" IS THE WRONG SHAPE, AND THE BRIEF ALREADY SUSPECTED IT — HERE IS THE
    MEASUREMENT.** The private panel is not a server projection with a client on it. It is
-   `src/features/channels/components/channels-v2/agent-stream.tsx › AgentStream` merging **two** sources
+   `src/features/channels/components/agent-stream.tsx › AgentStream` merging **two** sources
    in `› agent-stream-model.ts › buildAgentStream`: the **narration ring** (machine-local IPC —
    `dopl-desktop-app/main/session-narration.js › flush` is `webContents.send` on channel
    `'dopl:session-narration'`, and NOTHING in `main/session-state-push.js` or `main/api.js` names
@@ -97,7 +97,7 @@ Five things the brief assumes are not what the tree does. **Three of them change
 Measurements taken 2026-08-31, re-derive rather than quoting: `dopl_channel` publishes **15** ops
 (`CHANNEL_INPUT_SHAPE.op`'s options — INVARIANTS §10 says 14 @ 2026-08-22, before `update` landed);
 `supabase/migrations/` holds **190** files, newest `20260901120000_agent_template_home_scoped.sql`;
-`src/features/channels/components/channels-v2/` holds **141** entries.
+`src/features/channels/components/` holds **141** entries.
 
 ---
 
@@ -595,7 +595,7 @@ reversible; building the wide one first is not.**
   `previous = null`** exactly as the thread-card branch does, or `isContinuation` silently absorbs the
   next row into the card's run (F-251's rule; the pill cannot fix a row that has none).
 - Branch in `transcript.tsx › Transcript`'s `row.kind` chain.
-- **Component: its own file** — `channels-v2/escalation-card-row.tsx › EscalationCardMessage`, modelled
+- **Component: its own file** — `channels/components/escalation-card-row.tsx › EscalationCardMessage`, modelled
   on `thread-card-row.tsx › ThreadCardMessage` **verbatim in structure**: `AuthoredRow` shell (so side,
   attribution pill, agent-name resolution and the flash tint all come for free and cannot fork), with a
   card `<div>` as its child instead of `MessageMarkdown`. Same dark-shell recipe
@@ -667,8 +667,8 @@ key-deleted object directly (`pages/home/knowledge-panels.test.tsx`'s §8 block 
 | `packages/mcp-server/src/tools/channel-law.test.ts` | unchanged budget — re-measure, do not quote |
 | `src/features/channels/server/service-writes-metadata.test.ts` | `escalation` / `escalationAnswer` stripped from caller input and re-stamped only from validated fields; a non-answerer's `escalationAnswer` 403s |
 | `src/features/channels/server/service-directions.test.ts` | `operator_user_id` is `ctx.userId` and a payload key cannot shadow it; the claim CAS is single-winner; a retried decide 409s |
-| `src/features/channels/components/channels-v2/escalation-card.test.tsx` | four fields render; buttons ABSENT for a non-answerer and for a missing callback; answered state; the stale-cache fixture with the key deleted |
-| `.../channels-v2/escalation-agent-stream.test.tsx` | the card renders in the agent stream too, full width, no `AuthoredRow` |
+| `src/features/channels/components/escalation-card.test.tsx` | four fields render; buttons ABSENT for a non-answerer and for a missing callback; answered state; the stale-cache fixture with the key deleted |
+| `.../channels/components/escalation-agent-stream.test.tsx` | the card renders in the agent stream too, full width, no `AuthoredRow` |
 | `dopl-desktop-app/test/session-directed-turn.test.mjs` | `frameDirectedTurn` ≠ `frameOperatorTurn`; the directions lane reaches only the former; the private turn is opened BEFORE the dispatch |
 | `dopl-desktop-app/test/agent-directions.test.mjs` | toggle OFF ⇒ silent, zero server writes; owner re-check; 409/404 stand-down; no `agentId` fallback; reply capture dropped on abort/deny/resume |
 | `dopl-desktop-app/test/agent-direction-wire.test.mjs` | the literal whitelist; an unnamed field never reaches this machine |
@@ -758,7 +758,7 @@ a new desktop against an old server is the direction that breaks.
 
 ## 7. Drifts found while scoping (file as `F-NNN`, do not fix in place)
 
-- `channels-v2/agent-panel.tsx`'s file header says the panel has no composer and offers "Open window"
+- `channels/components/agent-panel.tsx`'s file header says the panel has no composer and offers "Open window"
   instead; the file renders `<AgentComposer>` and `agent-panel-composer.test.tsx` pins its presence.
   Code wins; the header is stale.
 - `src/app/api/channels/[channelId]/sessions/route.ts`'s docblock cites a per-channel
@@ -775,7 +775,7 @@ a new desktop against an old server is the direction that breaks.
 - `dopl-desktop-app/main/launch-directives.js` + `main/launch-directive-wire.js` (the wire pattern to copy)
 - `supabase/migrations/20260822160000_channel_launch_directives.sql` (the migration to copy)
 - `src/features/channels/server/service-writes-metadata.ts` › `resolvePostMetadata` (both reserved keys)
-- `src/features/channels/components/channels-v2/view-model-rows.ts` + `thread-card-row.tsx` (the card precedent)
-- `src/features/channels/components/channels-v2/agent-stream-model.ts` + `agent-stream.tsx` (pipeline B)
+- `src/features/channels/components/view-model-rows.ts` + `thread-card-row.tsx` (the card precedent)
+- `src/features/channels/components/agent-stream-model.ts` + `agent-stream.tsx` (pipeline B)
 - `dopl-desktop-app/main/targeting.js` › `classify` + `main/session-wake-tiers.js` (why the kind is `message`)
 - `packages/mcp-server/src/tools/channel-ops-launch.ts` (the op to copy) + `src/gating.ts` › `WRITE_OPS`

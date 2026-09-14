@@ -377,7 +377,7 @@ export interface SpaBridgeSurface {
       };
       /** THIS SPAWN's runtime, and THIS AGENT's COLOUR. Same contract: forwarded raw, re-narrowed
        *  in `main/` (`session-launch-op.js`), absence means the machine/server decides. Argument +
-       *  absence rule for both: `channels-v2/agents-controls.ts › launchAgentOnThread`. ⚠ `color` is
+       *  absence rule for both: `channels/components/agents-controls.ts › launchAgentOnThread`. ⚠ `color` is
        *  a STRING, not the key union — `main/` cannot import it. */
       runtime?: string;
       color?: string;
@@ -429,7 +429,7 @@ export interface SpaBridgeSurface {
      *
      * ⚠ **DELETION IS LOCAL. THE CHANNEL RECORD IS IMMUTABLE BY IT.** Everything the agent
      * POSTED stays in the channel, attributed exactly as before — the id rides the MESSAGE
-     * (`channels-v2/agents-model.ts › parseAgentPostStamp`, off `client_msg_id`), never a
+     * (`channels/components/agents-model.ts › parseAgentPostStamp`, off `client_msg_id`), never a
      * local table, so a deleted agent's messages keep reading `Agent #<id>`. The only
      * server-side effect is the one `end` already has: the session projects as `ended`.
      *

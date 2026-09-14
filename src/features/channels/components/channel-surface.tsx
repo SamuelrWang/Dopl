@@ -1,0 +1,377 @@
+"use client";
+
+/**
+ * ONE CHANNEL, WHOLE — everything right of the channel tree: the breadcrumb
+ * header, the transcript, the composer, and the Info / Threads / Agents /
+ * Settings column beside them.
+ *
+ * ⚠ EXTRACTED FROM `channels-core.tsx` ON 2026-08-23 SO A SECOND HOST CAN
+ * MOUNT IT: the workspace page, and `channel-surface-standalone.tsx` for a
+ * surface pinned to ONE channel with no tree beside it. **It is a FRAGMENT, not a
+ * wrapper** — two flex siblings — so composing it changed no DOM.
+ *
+ * ⚠ IT RENDERS, IT DOES NOT FETCH. Every read, the refetch coordinator and the
+ * writes are `channel-surface-data.ts`, mounted by the HOST: the coordinator must
+ * stay registered while the page shows something other than a channel (INVARIANTS
+ * §7), and a hook here would unmount with the branch.
+ *
+ * ⚠ TWO KNOBS, AND BOTH DEFAULT TO THE WORKSPACE PAGE'S BEHAVIOUR — see
+ * {@link ChannelSurfaceSlots} and {@link ChannelSurfaceCapabilities}. A host that
+ * passes neither gets the surface the channels page has always rendered.
+ */
+
+import type { ReactNode } from "react";
+import type { MutationGate } from "@/shared/hooks/use-api-mutation";
+import type { Role } from "@/features/workspaces/types";
+import { channelDisplayName } from "../lib/channel-display";
+import { ChannelsMessagePane } from "./message-pane";
+import { PopOutThreadButton } from "./pop-out";
+import { AgentActivityRows, ownAgentsWorking } from "./agent-activity";
+import { ChannelSingleColumn } from "./channel-single-column";
+import { SurfaceAgentView } from "./surface-agent-view";
+import { SurfaceInfoPanel } from "./surface-info-panel";
+import { InfoResizeHandle } from "./info-resize-handle";
+import { useInfoSlide } from "./use-info-slide";
+import type { TabKey } from "./info-panel";
+import type { ChannelWebView } from "./use-channel-web-view";
+import { PeerActivityRow, peerWorkingOn } from "./peer-activity";
+import type { ChannelSurfaceData } from "./channel-surface-data";
+import type { ChannelsSelection } from "./use-channels-selection";
+import type { Channel } from "../types";
+
+/**
+ * What this surface hands an injected Info tab.
+ *
+ * ⚠ IT CARRIES THE GATE AND THAT IS WHY THE SLOT IS A FUNCTION (2026-08-25). The
+ * person card is WRITE-BEARING, and INVARIANTS §7/§8 allow exactly ONE
+ * `useRefetchGate` per live surface — a slot handed a finished `ReactNode` could
+ * only mint a second one, which coordinates with nothing.
+ */
+export interface ChannelInfoTabContext {
+  /** THE surface's refetch gate — hand it to every write the tab makes. */
+  gate: MutationGate;
+}
+
+export interface ChannelSurfaceSlots {
+  /**
+   * REPLACES the Info tab's body in CHANNEL view — an account-level 1:1 shows a
+   * person card where a workspace channel shows its metadata and roster.
+   * ⚠ A RENDER FUNCTION, not a node — see {@link ChannelInfoTabContext}.
+   *
+   * ⚠ THE TAB ROW IS NOT A SLOT and never becomes one: a host that could delete a
+   * tab could ship a surface missing one with nothing saying so. ⚠ THREAD VIEW
+   * IGNORES IT — the column is already thread-scoped (Samuel, 2026-08-21;
+   * `info-panel.tsx` owns the rule).
+   */
+  infoTab?: (ctx: ChannelInfoTabContext) => ReactNode;
+}
+
+export interface ChannelSurfaceCapabilities {
+  /**
+   * Whether this container's membership can be CHANGED. Default `true` — the
+   * workspace page's behaviour. `false` hides the invite affordance and the
+   * Settings tab's delete row, for a fixed two-person container where "add
+   * members" cannot happen and deleting the one channel would strand it.
+   */
+  memberManagement?: boolean;
+  /**
+   * Whether this surface's HEADER may name the channel after its counterpart.
+   * Default `true` — `channel-display.ts › channelDisplayName`.
+   *
+   * 🔒 **`false` PINS THE HEADER TO `channel.name`, AND /home PASSES IT (Samuel,
+   * 2026-09-01).** A home container is a CHANNEL, not a DM. Its row and Info tab
+   * were fixed at their own derivation (`pages/home/home-rows.ts › channelTitle`),
+   * but this header reads a DIFFERENT one — so a container carrying
+   * `is_direct = true` (every one minted before the 2026-08-24 channel-first
+   * inversion) still showed the peer's name over a row that said the channel's.
+   *
+   * ⚠ **REAL DMs ARE UNAFFECTED, WHICH IS WHY THIS IS A FLAG AND NOT AN EDIT TO
+   * `channel-display.ts`** — that module is the ONE counterpart derivation for the
+   * workspace surfaces. What changed is which surfaces ASK it.
+   */
+  peerNamedHeader?: boolean;
+  /**
+   * Whether the VIEWER'S OWN STAKE — their membership row and the agent they run
+   * here — is theirs to manage HERE. Default `true`; `false` hides "Leave channel"
+   * AND the whole `ChannelAgentSettings` block.
+   *
+   * ⚠ ONE FLAG, TWO CONTROLS, BECAUSE THERE IS ONE STORY (Samuel, ruling R2/R3,
+   * 2026-08-25): the GUEST LANE (`src/app/c/[workspaceId]`) runs no agent, so a
+   * tool profile governs a session that does not exist, and leaving is a one-way
+   * exit from their only surface. Two flags would let a host ship the other half's
+   * dead control. ⚠ IT IS ABOUT THE VIEWER, WHERE `memberManagement` IS ABOUT THE
+   * CONTAINER: /home passes `memberManagement: false` and leaves this one alone.
+   */
+  selfManagement?: boolean;
+  /**
+   * Draw the KNOWLEDGE tab — bases granted INTO this channel, read-only unless the
+   * grant carries `guest_write` (Home Knowledge Panels M4, `knowledge-tab.tsx`).
+   * ⚠ DEFAULT `false`, WHICH INVERTS THE OTHER TWO: they REMOVE something, this
+   * ADDS a tab.
+   *
+   * ⚠ EXACTLY ONE HOST PASSES IT SINCE 2026-08-27 — THE GUEST LANE (Samuel's
+   * F-340 ruling). Both container surfaces did from M4, costing the info column a
+   * FIFTH tab on a width budget measured for four. **The duplicate view gave way,
+   * not the capability:** /home carries a full Knowledge FACE over the same bases
+   * (`pages/home/knowledge-panels.tsx`), whereas for a guest this tab is the ONLY
+   * way to read a base granted into the channel. Pinned both ways by
+   * `knowledge-tab.test.tsx › the capability, per host`.
+   *
+   * ⚠ THE WORKSPACE CHANNEL PAGE DELIBERATELY DOES NOT PASS IT (this wave): it
+   * already carries the full knowledge surface, and a narrower read one tab away
+   * would be a second answer with nothing saying which is complete. ⚠ SAFE ON
+   * EVERY HOST REGARDLESS — the tab reads the guest-floored lane
+   * (`knowledge-lane.ts`), never `/api/knowledge/**`.
+   */
+  knowledge?: boolean;
+}
+
+export interface ChannelSurfaceProps {
+  workspaceId: string;
+  /** The workspace SEGMENT — the pop-out's route and the agent window's. */
+  workspaceSlug: string;
+  /** The RESOLVED row, not an id: the host owns which channel this is, and
+   *  asking for both is how the two come to disagree. */
+  channel: Channel;
+  currentUserId: string;
+  role: Role;
+  data: ChannelSurfaceData;
+  selection: ChannelsSelection;
+  /** A host read the roster can invalidate — the workspace page's channel list.
+   *  This surface always refetches its OWN roster beside it. */
+  onRosterChanged?: () => void;
+  /** The channel was DELETED from the Settings tab. A host that pins the surface
+   *  to one channel has to stop rendering it, and this is its only notice. */
+  onDeselect?: () => void;
+  slots?: ChannelSurfaceSlots;
+  capabilities?: ChannelSurfaceCapabilities;
+  /**
+   * SINGLE COLUMN, AND WHICH FACE IS ON IT — the **WEB** channel page (Samuel,
+   * 2026-09-04): one full-width main area with the faces behind a header dropdown
+   * (`channel-single-column.tsx`; `use-channel-web-view.ts` says why the HOST owns
+   * the state — it is in the URL and this file is router-free by construction).
+   * ⚠ ABSENT IS EVERY DESKTOP MOUNT, byte for byte.
+   */
+  webView?: ChannelWebView;
+}
+
+export function ChannelSurface({
+  workspaceId,
+  workspaceSlug,
+  channel,
+  currentUserId,
+  role,
+  data,
+  selection: sel,
+  onRosterChanged,
+  onDeselect,
+  slots,
+  capabilities,
+  webView,
+}: ChannelSurfaceProps) {
+  const {
+    members,
+    agentSessions,
+    agentsPanel,
+    liveAgents,
+    index,
+    openThread,
+    rows,
+    recentAgentIds,
+    gate,
+  } = data;
+  // 🔒 THE HEADER NAME, AND `peerNamedHeader: false` IS THE /home ANSWER — see
+  // the capability's own docblock for the ruling.
+  const channelName =
+    capabilities?.peerNamedHeader === false
+      ? channel.name
+      : channelDisplayName(channel, members, currentUserId);
+  // ⚠ THE PANEL OUTLIVES `infoOpen` BY ONE TRANSITION, so the closing slide has
+  // something to clip — `use-info-slide.ts` owns the timer and the reasons.
+  const infoMounted = useInfoSlide(sel.infoOpen);
+
+  // ⚠ THE DESIRED STATE IS COMPUTED HERE, from the row the header is rendering —
+  // never a flip inside the mutation: two fast clicks send `true` then `false` and
+  // converge, where a toggle verb would race. Named because BOTH layouts fire it.
+  const toggleFavorite = () =>
+    data.favorite.mutate({
+      channelId: channel.id,
+      favorite: channel.myFavoritedAt == null,
+    });
+  const messagePane = (viewSelect?: ReactNode) => (
+    <ChannelsMessagePane
+      channelId={channel.id}
+      workspaceId={workspaceId}
+      channelName={channelName}
+      thread={openThread}
+      rows={rows}
+      // RR3 arm 3's input for the composer's recipient line — derived once in
+      // `derivations.ts` from the transcript this page has already read.
+      recentAgentIds={recentAgentIds}
+      index={index}
+      members={members}
+      loading={data.messagesLoading}
+      // ⚠ RULE 1'S OTHER HALF (`use-stick-to-bottom.ts`): through a channel switch these rows
+      // are still the PREVIOUS channel's, and `messagesLoading` is false the whole time.
+      stale={data.messagesStale}
+      outboundAsk={openThread ? (data.outboundByThread.get(openThread.id) ?? null) : null}
+      outboundBusy={data.consentBusy}
+      onDecideOutbound={data.decideOutbound}
+      scrollTarget={sel.scrollTarget}
+      // The Threads tab's "New thread", arriving from the OTHER column
+      // (2026-08-24) through the selection hook, where cross-surface asks live —
+      // so both hosts of this surface get it without a second wiring.
+      newThreadSignal={sel.newThreadSignal}
+      infoOpen={sel.infoOpen}
+      favorited={channel.myFavoritedAt != null}
+      onToggleFavorite={toggleFavorite}
+      gate={gate}
+      // THE @-PICKER'S AND THE RECIPIENT LINE'S FACTS (2026-09-02, slice B10): every member's
+      // live sessions in this room, off the poll the Agents tab already makes. Handed down —
+      // a second mount of that hook is a second poll of an unpublished table.
+      // ⚠ **AND IT IS THE POLL *UNION* THIS MACHINE'S OWN FEED SINCE 2026-09-13**
+      // (`channel-surface-data.ts › liveAgents`, over `lib/live-agents.ts ›
+      // liveAgentsKey`). The projection ALONE is what made a just-launched agent
+      // un-taggable for a full 30s poll period — Samuel's *"I have to wait a minute"*.
+      // Never narrow this back to `agentsPanel.peerSessions`.
+      liveAgents={liveAgents}
+      // The composer's New Agent icon (2026-08-21) — handed down whole,
+      // never re-mounted: a second `useAgentsPanel` is a second peer poll.
+      newAgent={agentsPanel}
+      // THE POP-OUT (Phase 10). Thread view only, and it hides ITSELF outside
+      // the desktop shell (feature detection).
+      popOut={
+        openThread ? (
+          <PopOutThreadButton
+            workspaceSlug={workspaceSlug}
+            channelId={channel.id}
+            threadId={openThread.id}
+          />
+        ) : null
+      }
+      // ⚠ MY OWN agents mid-turn, off the SAME bridge feed this surface already
+      // reads. Rendered in CHANNEL view too, and scoped so it tracks the
+      // composer's own target. `null` sessions render nothing.
+      agentActivity={
+        <AgentActivityRows
+          agents={ownAgentsWorking(
+            agentSessions,
+            channel.id,
+            openThread?.id ?? null
+          )}
+        />
+      }
+      // "Anthony's agent is working…", off the peer projection the Agents tab
+      // already polls. Thread view only — the row is about ONE exchange.
+      peerActivity={
+        openThread ? (
+          <PeerActivityRow
+            peers={peerWorkingOn(
+              agentsPanel.peerSessions,
+              currentUserId,
+              openThread.id
+            )}
+            byUser={index.byId}
+            currentUserId={currentUserId}
+          />
+        ) : null
+      }
+      // SCROLL-UP PAGING — the pane owns the trigger and the anchor, the hook
+      // owns the cursor.
+      hasOlder={data.hasOlderMessages}
+      loadingOlder={data.loadingOlderMessages}
+      onLoadOlder={data.loadOlderMessages}
+      viewSelect={viewSelect}
+      onToggleInfo={sel.toggleInfo}
+      onExitThread={() => sel.openThread(null)}
+      // AN AGENT'S SENDER PILL OPENS THAT AGENT'S PANE (Samuel, 2026-08-28).
+      // ⚠ THE AGENTS TAB'S OWN OPEN MECHANISM, NOT A SECOND ONE — the same
+      // function `onOpenAgent` gets below, so the card's Open button and the
+      // transcript's pill cannot mean different things. Both hosts mount the pane
+      // this moves.
+      onOpenAgent={sel.setOpenAgent}
+      // ANSWER AN ESCALATION — the transcript's one WRITE. The pop-out hands
+      // none, so a card there is read-only.
+      onAnswerEscalation={data.answerEscalation}
+      answerBusy={data.answerBusy}
+      onOpenThread={sel.openThread}
+    />
+  );
+
+  /** The tab column, or — with `fullTab` — ONE of its faces as the main area.
+   *  ⚠ `surface-info-panel.tsx` owns the wiring; this file owns which pane. */
+  const infoPanel = (fullTab?: TabKey) => (
+    <SurfaceInfoPanel
+      channel={channel}
+      channelName={channelName}
+      workspaceId={workspaceId}
+      workspaceSlug={workspaceSlug}
+      currentUserId={currentUserId}
+      role={role}
+      data={data}
+      selection={sel}
+      slots={slots}
+      capabilities={capabilities}
+      onDeselect={onDeselect}
+      onRosterChanged={onRosterChanged}
+      webView={webView}
+      fullTab={fullTab}
+    />
+  );
+
+  // ⚠ ONE COLUMN ON THE WEB, TWO ON THE DESKTOP — see the `webView` prop. The
+  // slide-out shell is not merely closed here, it is NOT RENDERED: a column
+  // reserving width is what kept the chat off the page edge.
+  if (webView) {
+    return (
+      <ChannelSingleColumn
+        channelName={channelName}
+        threadTitle={openThread?.title ?? null}
+        threadView={openThread !== null}
+        favorited={channel.myFavoritedAt != null}
+        onToggleFavorite={toggleFavorite}
+        view={webView.view}
+        onSelectView={webView.setView}
+        openAgent={sel.openAgent}
+        sessions={agentSessions}
+        onCloseAgent={() => sel.setOpenAgent(null)}
+        onExitThread={() => sel.openThread(null)}
+        messagePane={messagePane}
+        tabBody={webView.view === "channel" ? null : infoPanel(webView.view)}
+        agentView={
+          <SurfaceAgentView
+            data={data}
+            openAgent={sel.openAgent}
+            onClose={() => sel.setOpenAgent(null)}
+            currentUserId={currentUserId}
+            workspaceSlug={workspaceSlug}
+            full
+          />
+        }
+      />
+    );
+  }
+
+  return (
+    <>
+      {messagePane()}
+      {/* THE DIVIDER IS DRAGGABLE (Samuel, 2026-09-13) — `info-resize-handle.tsx`
+          owns the pill and `use-info-resize.ts` the width, its two limits and the
+          per-device memory. ⚠ IT IS A ZERO-WIDTH FLEX SIBLING, so this row's box
+          math did not move; and it is GONE while the column is collapsed, because a
+          grab handle for a pane that is not there can only resize nothing. */}
+      {sel.infoOpen && <InfoResizeHandle />}
+      {/* THE INFO COLUMN SLIDES (Samuel, 2026-08-24). The shell is ALWAYS
+          rendered — a column mounting at its open width has no 0-width start
+          state — and the panel inside stays one transition past close so the
+          closing slide has content to clip. */}
+      <div
+        className="channel-info-slide"
+        data-open={sel.infoOpen}
+        aria-hidden={!sel.infoOpen}
+      >
+        {infoMounted && infoPanel()}
+      </div>
+    </>
+  );
+}

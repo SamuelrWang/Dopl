@@ -5,14 +5,14 @@
  *
  * ⚠ THE BUG THIS PINS WAS A COLLISION BETWEEN TWO WAVES, AND EACH WAS RIGHT ALONE. The 2026-08-27
  * ruling made the agent surfaces render the BAR unconditionally, at 0, so a spawn-idle agent got a
- * box instead of nothing — `channels-v2/agent-panel.tsx › AgentStats` and
- * `channels-v2/agent-window.tsx › AgentWindowStats` therefore call this with `used ?? 0` and
+ * box instead of nothing — `channels/components/agent-panel.tsx › AgentStats` and
+ * `channels/components/agent-window.tsx › AgentWindowStats` therefore call this with `used ?? 0` and
  * `limit ?? 0`, on the stated grounds that *"`UsageMeter` handles the missing denominator itself"*.
  * It handled it for the ARITHMETIC (`limit > 0 ? … : 0`, an empty track rather than a division) and
  * not for the READOUT, which printed `{fmt(limit)}` regardless.
  *
  * So the reachable case — `contextUsed` reported, `contextWindow` absent, which
- * `channels-v2/agent-metrics.ts › metric` names outright (*"a model this build has no window for
+ * `channels/components/agent-metrics.ts › metric` names outright (*"a model this build has no window for
  * has no denominator"*) — rendered **"84k / 0k"** over an empty bar. A fabricated denominator, and
  * an empty track that reads as headroom, for an agent that may be nearly full. That file's own
  * words: *"NONE of them means zero — a context meter reading 0% of a window that is nearly full is
@@ -30,7 +30,7 @@ import { UsageMeter } from "./usage-meter";
 
 afterEach(cleanup);
 
-/** `84_000` → `"84k"` — `channels-v2/agent-metrics.ts › formatTokens`, restated so this suite does
+/** `84_000` → `"84k"` — `channels/components/agent-metrics.ts › formatTokens`, restated so this suite does
  *  not reach across features for a formatter it only needs as a sample. */
 const tokens = (v: number) => `${Math.round(v / 1000)}k`;
 

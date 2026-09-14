@@ -54,7 +54,7 @@
 -- containers.ts › listContainerPeers` takes the FIRST other member with no
 -- `ORDER BY`, so `HomeChannel.peer` above two members is non-deterministic —
 -- REFACTOR-FINDINGS **F-307**, filed in advance for exactly this day and now
--- LIVE. The ROSTER (`channels-v2/member-roster.tsx`) shows every member and is
+-- LIVE. The ROSTER (`channels/components/member-roster.tsx`) shows every member and is
 -- unaffected; `peer` is a display convenience on the row, not a fence.
 --
 -- ── VERIFICATION (AFTER APPLYING) ─────────────────────────────────────────

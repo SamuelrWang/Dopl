@@ -460,7 +460,7 @@ test("REGISTERED IN MAIN, AT CREATION — never behind an ipcMain handler", () =
 // ⚠ WHAT THIS PINS CHANGED ON 2026-08-29, AND THE NEW VERSION IS THE WEAKER CLAIM. It used to pin
 // a SILENT failure: the row was `flex-wrap`, so a window too narrow for the three controls did not
 // clip — it WRAPPED the third onto a second line and the pop-out opened looking like it had two
-// rows of chrome. The row is `flex-nowrap` now (`channels-v2/agent-posture.tsx` carries why), so
+// rows of chrome. The row is `flex-nowrap` now (`channels/components/agent-posture.tsx` carries why), so
 // that failure mode no longer exists: a narrow window ellipsizes a label instead of breaking the
 // line. What is left to protect is the LOOK — three pills, one line, none of them squeezed — and
 // the number below is the row's honest measurement with 4px of breathing, nothing more.
@@ -479,10 +479,10 @@ test("the agent window opens wide enough for Tools / Messages / Model on ONE row
   // Samuel could SEE to the right of Model.
   // ⚠ THE 34px THAT WENT WAS A LABEL BUDGET, AND ITS JOB MOVED RATHER THAN VANISHING. It existed
   // so a long free-form model name could not re-wrap the row; the row is `flex-nowrap` now and the
-  // trigger truncates instead (pinned in `channels-v2/agent-posture.test.tsx`). **Do not restore
+  // trigger truncates instead (pinned in `channels/components/agent-posture.test.tsx`). **Do not restore
   // slack here for a label** — that is the control's problem and it is solved there.
   // ⚠ AND DO NOT RAISE IT WITHOUT THE VARIANT MOVING. This width is a measurement of
-  // `channels-v2/agent-posture.tsx`'s trigger size; a bigger number is empty space, not safety.
+  // `channels/components/agent-posture.tsx`'s trigger size; a bigger number is empty space, not safety.
   //
   // ⚠ THESE ARE LOGICAL POINTS, AND A SCREENSHOT IS NOT (measured 2026-08-29). A 540pt window
   // photographed on a 2× Retina display is ~1080 DEVICE pixels wide, ~1090 with the macOS window

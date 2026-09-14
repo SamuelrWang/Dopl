@@ -2,7 +2,7 @@
 --
 -- Samuel's ruling, 2026-08-19: the sidebar's Favorites section goes REAL. It was
 -- the last piece of hardcoded design furniture with a plausible backing store
--- (`channels-v2/fixtures.ts › HARDCODED_FAVORITE_ROWS`, deleted in the same
+-- (`channels/components/fixtures.ts › HARDCODED_FAVORITE_ROWS`, deleted in the same
 -- change); the rest of the furniture — the activity heatmap, Linked threads, the
 -- Assistant / Drafts / Saved-items nav rows — stays hardcoded.
 --

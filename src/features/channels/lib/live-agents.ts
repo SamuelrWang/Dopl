@@ -35,7 +35,7 @@ export interface OwnAgentSessionRow {
    *  machine ASKED FOR — a colour is ASSIGNED by the server (`20261005120000`'s per-channel
    *  live unique index), which may have substituted the next free one — so {@link
    *  liveAgentsKey} still lets ONLY the peer projection speak about colour. An own row's ask
-   *  is read directly in exactly one place, `channels-v2/agent-window-launch.tsx`, which has
+   *  is read directly in exactly one place, `channels/components/agent-window-launch.tsx`, which has
    *  no projection to prefer and says so.
    *  ⚠ `unknown`, on `view-model.ts › indexAgents`'s argument: it is narrowed against a
    *  CLOSED SET, and the union type here would delete that refusal branch. */

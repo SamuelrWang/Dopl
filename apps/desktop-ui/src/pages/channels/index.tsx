@@ -1,5 +1,5 @@
 import { useParams, useSearchParams } from "react-router";
-import { ChannelsV2Core } from "@/features/channels/components/channels-v2/channels-v2-core";
+import { ChannelsCore } from "@/features/channels/components/channels-core";
 import { PageError } from "#/components/page-states";
 import { RouterLink } from "#/components/app-shell";
 import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
@@ -15,19 +15,20 @@ import { ChannelsSkeleton } from "./channels-skeleton";
  * folder, its nav row and its deep-link entry are GONE and the ported surface
  * took this path; `components/channels-view-core.tsx`, `channel-pane.tsx`,
  * `channels-list-pane.tsx`, `rooms-sidebar.tsx`, `channel-transcript.tsx` and
- * `message-composer.tsx` were deleted in the same change. **`ChannelsV2Core`
- * keeps its name deliberately** — it is a component family under
- * `components/channels-v2/`, not a route string, and renaming the whole
- * directory buys a word (wiring plan Phase 12, § the string sweep). ⚠ THE FILE
+ * `message-composer.tsx` were deleted in the same change. ⚠ **AND THE `channels-v2`
+ * COMPONENT FOLDER IS GONE TOO, 2026-09-14** (Samuel: *"nothing should be named
+ * channels v2, it's just channels now"*): its files were folded up into
+ * `src/features/channels/components/` and `ChannelsV2*` became `Channels*`. The
+ * name survives below only where it names the RETIRED ROUTE. ⚠ THE FILE
  * COUNT IS A MEASUREMENT, NOT A FACT ABOUT THIS PAGE — run it, never quote it
  * (this docblock carried a stale "35 files" for two days):
- * `ls src/features/channels/components/channels-v2 | wc -l`.
+ * `ls src/features/channels/components | wc -l`.
  *
  * ⚠ THE `:channelId` ROW IS THE DESKTOP NOTIFICATION'S LANDING SPOT (wiring
  * plan Phase 9). Main focuses the window and pushes
  * `/{segment}/channels/{channelId}` over the navigate bridge
  * (`main/shell-mode.js › CHANNELS_PAGE`); this file is the ONLY place that
- * reads the param, because `ChannelsV2Core` is Next-free AND router-free by
+ * reads the param, because `ChannelsCore` is Next-free AND router-free by
  * construction (it is imported by the web tree too). The param is an INITIAL
  * selection handed down as a plain prop — never a router dependency inside the
  * shared tree.
@@ -37,7 +38,7 @@ import { ChannelsSkeleton } from "./channels-skeleton";
  * rides the SAME `:channelId` row the cutover built, adds no `WORKSPACE_PAGES`
  * entry, and leaves the deep-link hand copy in
  * `main/deep-link-target.js › WORKSPACE_PAGES` and its drift test untouched.
- * Read here for the same reason `:channelId` is: `ChannelsV2Core` is router-free
+ * Read here for the same reason `:channelId` is: `ChannelsCore` is router-free
  * by construction, so the param becomes a plain prop.
  *   ⚠ **THE POP-OUT WINDOW NO LONGER LANDS HERE (2026-08-19).** It opened a
  *   second window on THIS page until then, which meant a window opened to read
@@ -46,7 +47,7 @@ import { ChannelsSkeleton } from "./channels-skeleton";
  *   shell — and `main/popout-window.js › threadRoute` builds that instead.
  *
  * ⚠ ONLY A SEAM. The whole tree is REUSED by import from
- * `@/features/channels/components/channels-v2/`, already client-side over
+ * `@/features/channels/components/`, already client-side over
  * `apiRequest`, which transports over the Electron IPC bridge unchanged. This
  * file resolves the workspace and hands over; it owns no state and no fetching.
  * `RouterLink` is passed for the SAME single consumer it always had — the
@@ -79,7 +80,7 @@ export default function ChannelsPage() {
   }
 
   return (
-    <ChannelsV2Core
+    <ChannelsCore
       workspaceId={access.workspaceId}
       workspaceSlug={access.workspaceSlug}
       currentUserId={access.currentUserId}

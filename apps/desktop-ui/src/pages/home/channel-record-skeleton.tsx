@@ -1,7 +1,7 @@
 import { cn } from "@/shared/lib/utils";
 import { Skeleton, SkeletonLine } from "@/shared/ui/skeleton";
-import { COMPOSER_BOTTOM } from "@/features/channels/components/channels-v2/composer-input";
-import { channelPaneTabs } from "@/features/channels/components/channels-v2/info-panel";
+import { COMPOSER_BOTTOM } from "@/features/channels/components/composer-input";
+import { channelPaneTabs } from "@/features/channels/components/info-panel";
 import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
 
 /**
@@ -17,7 +17,7 @@ import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
  * left-aligned column of attribution-pill rows, a composer CARD pinned at the
  * bottom, the draggable divider, and the **Info / Threads / Agents / Settings**
  * column at `--info-w` — which is OPEN at mount here
- * (`use-channels-v2-selection.ts` seeds `infoOpen` true), so a ghost that omitted
+ * (`use-channels-selection.ts` seeds `infoOpen` true), so a ghost that omitted
  * it resolved into a pane that then grew a 380px column under the reader.
  *
  * 🔑 **GEOMETRY BY REFERENCE, NEVER RESTATED (INVARIANTS §1A).** Every box below

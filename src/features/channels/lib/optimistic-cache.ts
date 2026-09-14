@@ -74,7 +74,7 @@ export interface PendingMessageInput {
   authorName?: string | null;
   authorAvatarUrl?: string | null;
   /** `taskId` binds the row into its THREAD — the transcript's thread card
-   *  (`channels-v2/view-model.ts › threadIdOf`); it bound a session card until
+   *  (`channels/components/view-model.ts › threadIdOf`); it bound a session card until
    *  wiring plan Phase 5 deleted that. `to_user_id` renders the addressee line.
    *  ⚠ Wire spellings, as the transcript reads them. */
   metadata?: Record<string, unknown>;

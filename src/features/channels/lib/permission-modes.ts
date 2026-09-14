@@ -7,7 +7,7 @@
  * §11). The arm was the vocabulary's original home only by accident of being the
  * first surface to need it; the DURABLE LAUNCH POSTURE
  * (`hooks/use-channel-launch-posture.ts`) and the Settings tab
- * (`components/channels-v2/settings-agent.tsx`) speak exactly the same two axes and
+ * (`channels/components/settings-agent.tsx`) speak exactly the same two axes and
  * outlive it. Deleting the arm with this attached would have taken the posture's
  * type, its normalizer and its default with it.
  *

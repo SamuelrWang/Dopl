@@ -97,7 +97,7 @@ export function assertMayDeleteThread(
  * thread; the agent itself lives in another operator's main process, which this
  * server cannot address, and it stops on its own idle/abandon timer. The
  * OPERATOR'S OWN agents are ended client-side before this call
- * (`components/channels-v2/thread-manage.tsx`), which is the only side that can.
+ * (`channels/components/thread-manage.tsx`), which is the only side that can.
  *
  * ⚠ THE DOORBELL IS `channel_messages`, AND IT HAD TO BE BOUGHT — 2026-08-22.
  * `channel_tasks` stays out of the publication (§7) and so does `channel_sessions`,

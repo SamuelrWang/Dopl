@@ -19,7 +19,7 @@ import { channelThreadsPath } from "../client/query-keys";
 // about the set being complete. **Any surface that presents this as A LIST OF
 // THE CHANNEL'S THREADS must read `truncated` and say so** (INVARIANTS §9: a
 // cap that renders identically to an exhausted list is the bug), and the v2
-// Threads tab (`components/channels-v2/threads-tab.tsx`) is that surface. The
+// Threads tab (`channels/components/threads-tab.tsx`) is that surface. The
 // server orders by last activity and bounds the page at
 // `constants.ts › CHANNEL_THREAD_LIST_LIMIT`.
 //

@@ -24,21 +24,21 @@ interface Props {
  * agent is asking", a "Launching runs a Claude session on this machine." line,
  * and a two-click disclosure that expanded into the launch settings before the
  * second click decided. **None of it had rendered since the 2026-08-18 consent
- * rewrite**: the panel's one consumer is `channels-v2/thread-consent.tsx ›
+ * rewrite**: the panel's one consumer is `channels/components/thread-consent.tsx ›
  * ThreadSendBox`, which always passes an OUTBOUND request, so
  * `request.kind === "inbound"` was never true in production. Measured, not
  * assumed — `grep -rn 'kind: "inbound"' src apps --glob '!*.test.*'` returned
  * zero, which is what F-233 records.
  *
  * ⚠ THAT PARAGRAPH'S SUCCESSOR — "an inbound decision is still made, just not
- * here", naming `thread-consent.tsx › ThreadAwaitingStrip`, `channels-v2/
+ * here", naming `thread-consent.tsx › ThreadAwaitingStrip`, `channels/components/
  * transcript.tsx › ThreadCardMessage` and the Inbox pane's `InboxRow` — IS
  * ITSELF EXPIRED. There is no inbound decision anywhere (2026-08-22), and the
  * Inbox pane is deleted (2026-08-25, INVARIANTS §6).
  *
  * ⚠ THIS PANEL IS THE THREAD VIEW'S SEND BOX AND NOTHING ELSE, and it is now the
  * only surface in the product carrying a **Cancel**. The work stream's held-draft
- * card (`channels-v2/agent-stream.tsx › SentToChannelBox`) is the other outbound
+ * card (`channels/components/agent-stream.tsx › SentToChannelBox`) is the other outbound
  * review surface and it has ONE button, Post — Samuel's ruling. **Do not add a
  * Cancel there, and do not remove this one**: a draft whose `message_seq` places
  * it on a thread is reachable here even after its agent's session (and its
@@ -50,7 +50,7 @@ interface Props {
  * `useSyncExternalStore` bridge probe, `components/permission-preset-row.tsx ›
  * RequestPermissionRow` and the whole of `components/request-folder-row.tsx`.
  * The DURABLE launch posture and the per-channel working folder both survive on
- * the Settings tab (`channels-v2/settings-agent.tsx`) — they are a different
+ * the Settings tab (`channels/components/settings-agent.tsx`) — they are a different
  * record with a different consumer, and `main/channel-prefs.js` says why the two
  * must never merge.
  *

@@ -39,7 +39,7 @@
  * ⚠ SOURCE READ, NOT IMPORT, for trees 3 and 4. Neither is in the root vitest
  * project's module graph; the root project runs with `process.cwd()` at the
  * repo root, so a `readFileSync` resolves with no alias and no second config —
- * the same seam `channels-v2/settings-agent-harness.tsx › desktopSource` uses
+ * the same seam `channels/components/settings-agent-harness.tsx › desktopSource` uses
  * for the desktop main modules.
  *
  * ⚠ MUTATION-VERIFIED (2026-08-30): changing the migration's `32768`, the MCP

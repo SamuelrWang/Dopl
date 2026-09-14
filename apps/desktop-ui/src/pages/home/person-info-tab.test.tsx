@@ -39,7 +39,7 @@ import {
 const apiRequest = vi.hoisted(() => vi.fn());
 
 vi.mock(
-  "@/features/channels/components/channels-v2/channel-surface-standalone",
+  "@/features/channels/components/channel-surface-standalone",
   () => ({
     StandaloneChannelSurface: (props: {
       slots?: {
@@ -285,7 +285,7 @@ describe("Members", () => {
    * ⚠ THE ROW IS THE CHANNELS PAGE'S ROW, and these are the marks the
    * home-local copy was missing when Samuel saw it (*"I don't know why you're
    * making it different"*): the EMAIL subline and the role pill. Both surfaces
-   * render `channels-v2/member-roster.tsx › MemberRoster`, so a regression here
+   * render `channels/components/member-roster.tsx › MemberRoster`, so a regression here
    * is a change to that shared component and shows up on both pages at once.
    */
   it("renders the channels-page row — name, EMAIL and role — for a peer channel", async () => {

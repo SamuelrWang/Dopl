@@ -33,7 +33,7 @@ import {
   buildAgentMentionIndex,
   resolveAgentHandle,
 } from "./agent-mentions";
-import { member, ME, PEER } from "../components/channels-v2/test-fixtures";
+import { member, ME, PEER } from "../components/test-fixtures";
 
 const other = member({
   userId: PEER,

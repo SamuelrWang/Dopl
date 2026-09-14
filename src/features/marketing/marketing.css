@@ -3056,7 +3056,7 @@
 
 /* ── Banner demo — the /home account surface in the slot ──────────────
    Markup: components/banner-demo/. The RECORD PANE is the product's own
-   channels-v2 surface (which is what /home itself mounts) styled by
+   channels surface (which is what /home itself mounts) styled by
    globals.css tokens; the /home CHROME around it is mock markup in
    `banner-demo/demo-home-chrome.tsx`, because /home lives in `apps/desktop-ui`
    and the Next tree cannot import it. This file owns the demo's stage — the
@@ -3206,7 +3206,7 @@
    pane's own class and nothing else can opt in.
 
    ⚠ These select on Tailwind UTILITY class names, as the module does. If those
-   change in `features/channels/components/channels-v2/`, this degrades to the
+   change in `features/channels/components/`, this degrades to the
    neutral hairline — the old look, not a broken one. */
 .lp-demo-record .border-border-default,
 .lp-demo-record .border-border-subtle {

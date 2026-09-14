@@ -30,7 +30,7 @@ import {
  * that F-331 resolved.
  *
  * ⚠ THE CHANNEL SURFACE IS STUBBED. The page opens on Chat, so the real
- * channels-v2 surface would mount (and fetch) before a single assertion ran. It
+ * channels surface would mount (and fetch) before a single assertion ran. It
  * ALSO removes the second thing on this page called "Agents" (the info column's
  * live-session tab, Q6), so the header selector is unambiguous.
  */
@@ -38,7 +38,7 @@ import {
 const apiRequest = vi.hoisted(() => vi.fn());
 
 vi.mock(
-  "@/features/channels/components/channels-v2/channel-surface-standalone",
+  "@/features/channels/components/channel-surface-standalone",
   () => ({
     StandaloneChannelSurface: () => <div data-testid="channel-surface" />,
   })

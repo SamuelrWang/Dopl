@@ -65,7 +65,7 @@ function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
 /**
  * ⚠ `await`ed because `ModalShell` mounts a FRAME after `open` flips (it
  * animates in), so nothing is in the DOM on the render that asked for it — the
- * same reason `channels-v2/thread-manage.test.tsx` awaits its confirm.
+ * same reason `channels/components/thread-manage.test.tsx` awaits its confirm.
  */
 async function open(over: Partial<React.ComponentProps<typeof TemplateEditor>> = {}) {
   const onSave = vi.fn();
@@ -248,7 +248,7 @@ describe("the popup-form kit's anatomy", () => {
    * `shared/ui/form-dialog.tsx`'s and is asserted here only because THIS dialog
    * is claimed Done in `docs/DESIGN-SYSTEM.md`'s conformance table — a claim a
    * later edit could quietly falsify. The recipes themselves are pinned once, in
-   * `channels-v2/launch-agent-dialog.test.tsx`.
+   * `channels/components/launch-agent-dialog.test.tsx`.
    */
   it("puts a BOLD label ABOVE every control, from ONE class", async () => {
     await open();

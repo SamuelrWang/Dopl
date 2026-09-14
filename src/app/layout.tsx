@@ -110,7 +110,7 @@ export const metadata: Metadata = {
  * padding, no scroll offset: any of those add movement ON TOP of the browser's own and that
  * doubled shift is what tore the layout. The declaration is the whole mechanism.
  * ⚠ NO `maximumScale` / `userScalable: false` here. Focus-zoom is killed at the FIELD, by
- * giving it a ≥16px font size on coarse pointers (`channels-v2/composer-input.tsx`); killing
+ * giving it a ≥16px font size on coarse pointers (`channels/components/composer-input.tsx`); killing
  * it here would take pinch-zoom away from every reader on every page.
  */
 export const viewport: Viewport = {

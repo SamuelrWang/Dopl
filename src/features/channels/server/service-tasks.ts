@@ -207,7 +207,7 @@ export async function createTask(
   // and target may post, and here they are one person. Closes the AGENT path
   // (`to` is whatever user id the model resolved); the web composer already
   // filters the caller out of its addressee list
-  // (`components/channels-v2/composer.tsx`, off `indexMembers`).
+  // (`channels/components/composer.tsx`, off `indexMembers`).
   //
   // ⚠ SITS BEFORE THE IDEMPOTENCY SHORT-CIRCUIT ON PURPOSE. Behind it, a retry
   // with the same `client_msg_id` finds the stored dead thread and returns it as

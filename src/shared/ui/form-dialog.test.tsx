@@ -3,7 +3,7 @@
  * THE POPUP FORM KIT (2026-09-08) — the four pieces of the recipe Samuel approved on the New agent
  * popup, pinned HERE so the next dialog inherits them instead of re-deriving them.
  *
- * `channels-v2/launch-agent-dialog.test.tsx` is the OTHER half of this proof and the more
+ * `channels/components/launch-agent-dialog.test.tsx` is the OTHER half of this proof and the more
  * interesting one: it drives the real dialog through the kit and passes UNEDITED across the
  * extraction. What belongs in THIS file is what that one cannot say — the properties a SECOND
  * caller depends on:

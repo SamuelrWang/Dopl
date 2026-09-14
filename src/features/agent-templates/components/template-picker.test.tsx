@@ -8,19 +8,19 @@
  * sections left this file with the act: **the launch sheet** (six cases — the
  * file is deleted and its three jobs are the popup's Model row, its
  * **Instructions** field and the kit's footer), **the first-use approval modal**
- * (seven cases — that question is `channels-v2/use-agent-launch-run.ts ›
+ * (seven cases — that question is `channels/components/use-agent-launch-run.ts ›
  * useLaunchRunner`'s now, on the ONE lane, and is pinned where the lane is), and
  * the two payload cases. What replaces them is one case: a pick hands the ROW up
  * and starts nothing. The WIRING — that the row opens the popup, prefilled, on
- * the tab's thread — is `channels-v2/agents-tab-launch.test.tsx`, because it is a
+ * the tab's thread — is `channels/components/agents-tab-launch.test.tsx`, because it is a
  * fact about the surface that mounts both.
  *
  * The properties pinned here are the ones a redesign loses quietly:
  *
  *  - **`Blank agent` IS ROW ONE AND IT IS THE SURFACE'S OWN DEFAULT ACT.** The
  *    picker never becomes the only way to start an agent; the halves that start
- *    one are pinned on their own surfaces (`channels-v2/agents-tab-launch.test.tsx`,
- *    `channels-v2/composer.test.tsx`).
+ *    one are pinned on their own surfaces (`channels/components/agents-tab-launch.test.tsx`,
+ *    `channels/components/composer.test.tsx`).
  *  - **A ROW CLICK HANDS UP THE WHOLE TEMPLATE**, not its id — the popup prefills
  *    from the row, so a projection here would silently empty three fields.
  *  - **THE AUTHORSHIP MARKER IS IN THE ACCESSIBLE NAME**, not only on the face.
@@ -135,7 +135,7 @@ describe("what the popover offers", () => {
     // 🔒 MUTATION-PROOF: hand up `template.id` instead of the row and the first expectation
     // fails; leave the popover open and the second does. **Handing up the id is the regression
     // that matters**: the popup prefills Name / Description / Instructions FROM THIS OBJECT
-    // (`channels-v2/use-agent-launch.ts › applyTemplate`), so an id arrives as three empty fields
+    // (`channels/components/use-agent-launch.ts › applyTemplate`), so an id arrives as three empty fields
     // and a title that cannot name the template.
     templates = [template({ id: "tpl-9" })];
     const { onPick, onClose } = mount();
@@ -310,6 +310,6 @@ describe("no concave surfaces on the launch path", () => {
   // ⚠ **"uses the kit's RAISED input recipe for the sheet's fields" LEFT WITH THE SHEET
   // (2026-09-13).** The popup's fields are the POPUP kit's underline
   // (`shared/ui/form-dialog.tsx › UnderlineField`), which is a different recipe with its own pins
-  // in `channels-v2/launch-agent-dialog.test.tsx`; asserting `RAISED_INPUT` over a file that no
+  // in `channels/components/launch-agent-dialog.test.tsx`; asserting `RAISED_INPUT` over a file that no
   // longer exists is not a weaker version of that, it is a `readFileSync` throw.
 });

@@ -45,7 +45,7 @@
 --
 -- ⚠ **DAYS ARE DERIVED, NOT STORED.** The row carries the run's own
 -- `started_at`, so the reader buckets by LOCAL day (the precedent is
--- `channels-v2/thread-activity.tsx › ThreadActivityStrip`, 31 local-day
+-- `channels/components/thread-activity.tsx › ThreadActivityStrip`, 31 local-day
 -- buckets). Storing a `spend_date` would have frozen one time zone into the
 -- ledger, and a stored UTC day is the wrong bucket for most of the operators
 -- who read it.

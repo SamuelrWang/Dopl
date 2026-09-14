@@ -21,7 +21,7 @@
 import { describe, expect, it } from "vitest";
 import { channelDisplayName, memberLabel } from "./channel-display";
 import { buildMentionIndex, insertableHandle } from "./mentions";
-import { channel, member, ME, PEER } from "../components/channels-v2/test-fixtures";
+import { channel, member, ME, PEER } from "../components/test-fixtures";
 
 const BLANKS = ["", "   ", "\t", "\n  "];
 

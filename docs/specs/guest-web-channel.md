@@ -26,7 +26,7 @@ operator's agent. Friction target: link → Google sign-in → talking, under a 
    session model — web cookie session already exists for the claim flow), resolves the
    caller's membership in that container (404 when not a member — the home fence
    idiom), and mounts the shared channel surface
-   (`src/features/channels/components/channels-v2/channel-surface-standalone.tsx`)
+   (`src/features/channels/components/channel-surface-standalone.tsx`)
    full-viewport with `capabilities={{ memberManagement: false }}`.
 3. **Realtime on the web.** The shared registry
    (`src/shared/realtime/shared-channel-registry.ts`) has a non-bridge (websocket)

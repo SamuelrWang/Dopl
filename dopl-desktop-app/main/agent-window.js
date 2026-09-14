@@ -205,7 +205,7 @@ function frontHost() {
 // ⚠ 510 WIDE SINCE 2026-08-29, AND THE NUMBER IS STILL THE POSTURE ROW'S — it is a MEASUREMENT of
 // the controls, never a taste preference, so it moves when and only when they do. The three live
 // controls — Tools, Messages, Model — are one flex row of `SelectMenu` triggers
-// (`channels-v2/agent-posture.tsx`). 460 wrapped that row; 660, then 600, were derived over the
+// (`channels/components/agent-posture.tsx`). 460 wrapped that row; 660, then 600, were derived over the
 // `raised` (`h-9`) trigger; 540 was the first pass at the smaller one.
 // ⚠ WHAT CHANGED: the three adopted `select-menu.tsx › TRIGGER_FACE.raisedField` (Samuel,
 // 2026-08-29) — the app's consolidated dropdown size, the one the composer launch panel's
@@ -232,7 +232,7 @@ function frontHost() {
 // `min-w-0 truncate` on the label span) instead of breaking the line. Overflow is handled where the
 // overflow is. **So do not re-add slack here for a label — fix the control if it ever stops
 // truncating**, and do not restore `flex-wrap` there without widening this back: they are one
-// decision in two trees, and `channels-v2/agent-posture.tsx` carries the other half.
+// decision in two trees, and `channels/components/agent-posture.tsx` carries the other half.
 // ⚠ `minWidth` MOVES WITH IT. Default size IS the floor here (the rule the deleted
 // `session-window.js` established), and a floor below the width the content needs would let the
 // operator drag the window back into the wrapped state this number exists to prevent.
@@ -250,7 +250,7 @@ function frontHost() {
 // content. `'customButtonsOnHover'` is frameless but paints them again on hover — which is not
 // "removed" either. `frame: false` draws no bar and no buttons at all.
 // ⚠ SO THE RENDERER OWES THE DRAG REGION. A frameless window has nothing to grab:
-// `channels-v2/agent-window-chrome.tsx › AgentWindowChrome` carries `-webkit-app-region: drag`
+// `channels/components/agent-window-chrome.tsx › AgentWindowChrome` carries `-webkit-app-region: drag`
 // and its controls — the TABS included — carry `no-drag`, and `window-chrome.js` is where the
 // close/zoom buttons it grew reach main. ⚠ IT WAS `agent-window.tsx › AgentWindowHeader` until
 // the tabbed ruling later the same day; the bar belongs to the WINDOW now and outlives any one

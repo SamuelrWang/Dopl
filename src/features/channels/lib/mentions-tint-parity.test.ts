@@ -3,7 +3,7 @@
  *
  * `lib/mentions.ts` is called "one parser" and it is — but it is consumed by two
  * DIFFERENT predicates. The server masks text and tokenizes it. The transcript
- * (`components/channels-v2/message-markdown.tsx`) never masks anything: `marked`
+ * (`channels/components/message-markdown.tsx`) never masks anything: `marked`
  * lexes the body and `MentionText` runs the token regex on whatever survives in a
  * `text` / `escape` leaf. Everything markdown does in between — emphasis, links,
  * escapes, inline HTML — decides which of them sees a handle at all.
@@ -205,7 +205,6 @@ describe("TOKEN ARMS — the tripwire on this mirror going stale", () => {
       __dirname,
       "..",
       "components",
-      "channels-v2",
       "message-markdown.tsx"
     ),
     "utf8"

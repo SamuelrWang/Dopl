@@ -25,7 +25,7 @@ vi.mock("@/features/channels/hooks/use-channels", () => ({
 // The real surface would open a realtime subscription and need a query client;
 // the stub records what the mount decided, which is the whole subject here.
 vi.mock(
-  "@/features/channels/components/channels-v2/channel-surface-standalone",
+  "@/features/channels/components/channel-surface-standalone",
   () => ({
     StandaloneChannelSurface: (props: Record<string, unknown>) => {
       mocks.surfaceProps = props;
@@ -107,7 +107,7 @@ describe("the mount", () => {
    * way to read one. The web channel page's ruling overrides that in as many
    * words: *"There should be no Knowledge tab at all for the web: just Info,
    * Threads, and Agents."* ⚠ THE LANE IS UNTOUCHED and still guest-floored
-   * (`channels-v2/guest-surface-reads.test.tsx` pins it against the routes
+   * (`channels/components/guest-surface-reads.test.tsx` pins it against the routes
    * themselves); what is gone is the FACE. This assertion is where the guest's
    * whole capability posture is stated in one place, so an ADDITION lands here
    * as loudly as a removal — including a re-addition of that flag.

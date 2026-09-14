@@ -102,7 +102,7 @@ describe("no page-local copy of either recipe is left in pages/home", () => {
    * ⚠ **SKELETONS ARE OUT OF THE `h-6` SCAN, AND THE REASON IS THE SCAN'S OWN
    * SUBJECT (2026-09-13).** The banned thing is a 24px BUTTON; a skeleton paints
    * no button at all (INVARIANTS §1A: *"NO TEXT, NOTHING PRESSABLE"*), and what
-   * its `h-6` blocks stand for are controls that live in `channels-v2/` and are
+   * its `h-6` blocks stand for are controls that live in `channels/components/` and are
    * genuinely 24px there — the channel header's bookmark `IconButton
    * className="h-6 w-6"` and the composer toolbar's six glyphs. Restating those
    * as `h-[24px]` to satisfy a text scan would paint the same pixels while

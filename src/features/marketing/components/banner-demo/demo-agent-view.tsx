@@ -2,9 +2,9 @@
 
 /**
  * The banner demo's AGENT VIEW — the product's slide-out agent panel, rebuilt
- * from the SAME exported parts `channels-v2/agent-panel.tsx` composes.
+ * from the SAME exported parts `channels/components/agent-panel.tsx` composes.
  *
- * ⚠ WHY NOT MOUNT `ChannelsV2AgentPanel` ITSELF: its stream and liveness come
+ * ⚠ WHY NOT MOUNT `ChannelsAgentPanel` ITSELF: its stream and liveness come
  * off the desktop bridge (`useAgentNarration`), which a plain browser cannot
  * feed — the real panel would honestly render "This build cannot show what
  * your agent is doing", which is the truth and also not a demo. This wrapper
@@ -26,23 +26,23 @@ import type {
   DesktopSessionSummary,
 } from "@/shared/lib/spa-bridge";
 import type { ChannelMessage } from "@/features/channels/types";
-import { IconButton } from "@/features/channels/components/channels-v2/bits";
-import { AgentLiveness } from "@/features/channels/components/channels-v2/agent-bits";
+import { IconButton } from "@/features/channels/components/bits";
+import { AgentLiveness } from "@/features/channels/components/agent-bits";
 import {
   NO_THREAD_LABEL,
   agentDisplayName,
   agentLiveness,
-} from "@/features/channels/components/channels-v2/agents-model";
+} from "@/features/channels/components/agents-model";
 import {
   formatTokens,
   metric,
-} from "@/features/channels/components/channels-v2/agent-metrics";
-import { AgentStream } from "@/features/channels/components/channels-v2/agent-stream";
-import { agentSentMessages } from "@/features/channels/components/channels-v2/agent-panel";
+} from "@/features/channels/components/agent-metrics";
+import { AgentStream } from "@/features/channels/components/agent-stream";
+import { agentSentMessages } from "@/features/channels/components/agent-panel";
 import {
   COMPOSER_BOTTOM,
   ComposerInputRow,
-} from "@/features/channels/components/channels-v2/composer-input";
+} from "@/features/channels/components/composer-input";
 
 export function DemoAgentView({
   open,

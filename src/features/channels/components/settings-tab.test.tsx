@@ -1,0 +1,293 @@
+// @vitest-environment jsdom
+/**
+ * THE RIGHT PANEL'S SETTINGS TAB — every setting INLINE (Samuel, 2026-08-19,
+ * live review). The tab layout, the Channel action rows, and the agent half's
+ * copy + controls are all asserted here.
+ *
+ * ⚠ THIS FILE INHERITS TWO DELETED SUITES, AND IT INHERITED THEM IN THAT ORDER.
+ *
+ * FROM `components/channel-actions-menu.test.tsx` (deleted with the kebab):
+ *  - **Q2 — A DM MAY NEVER OFFER "Leave channel".** Leaving deletes one of the
+ *    pair's two `channel_members` rows, which destroys the conversation
+ *    permanently (the live row keeps the pair's `direct_key` reserved, so a
+ *    fresh DM cannot be opened either) — and the non-creator, whose `role` is
+ *    `member`, was the one being offered it, one click, no confirmation. Both DM
+ *    participants get the reversible "Delete conversation" instead.
+ *  - **A DM has no visibility toggle** — it is private by DB CHECK.
+ *  - **A non-member viewing a public channel has nothing to manage**, and must
+ *    not be shown a heading over an empty section.
+ *
+ * FROM `components/channel-settings-popover.test.tsx` (deleted with the popover
+ * the inlining ruling replaced) — its assertions were about COPY, and ⚠ **most
+ * of that copy is gone (Samuel, 2026-08-19 — minimal copy): "we should not be
+ * explaining everything to the user."** Every explainer paragraph was cut and
+ * its assertion with it; `› a settings panel, not documentation` replaces the
+ * lot with a MEASUREMENT — a word bound over the tab's `text-caption` nodes —
+ * which goes red for a new explainer under ANY control, including one nobody
+ * thought to forbid. **A new `expect(text).toContain(<a sentence>)` here is a
+ * regression.** What stayed is load-bearing: the HEADINGS (now the only
+ * statement of the backing-store-and-lifetime split), Tools' few-word GRANTS
+ * lines, trust's SCOPE, and the desktop SOURCE cross-checks (code vs code).
+ *
+ * ⚠ AND THE RULE NEITHER OF THEM HAD: **NO DEAD ROWS** (INVARIANTS §5 — every
+ * row on this surface functions) and **NOTHING BEHIND A CLICK**. jsdom has no
+ * `window.dopl`, so the default case below is a plain browser: the arm and the
+ * folder are absent, headings included.
+ *
+ * The rows report INTENT; `channel-manage.tsx` owns the confirm dialogs and the
+ * writes, exactly as it did when the intent came from a menu item.
+ *
+ * ⚠ THE AGENT HALF SPLIT OFF ON 2026-09-14 (500-line cap) into
+ * `settings-tab-agent.test.tsx` — Tool access, the Working Folder row and the
+ * Launch-agents control — and the two shared helpers into
+ * `_settings-tab-fixtures.ts`. Everything above holds for both halves.
+ */
+
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { ChannelsSettingsTab } from "./settings-tab";
+import { channel } from "./test-fixtures";
+import { ChannelAgentSettings } from "./settings-agent";
+import { agentView, copy } from "./settings-agent-harness";
+import { noop, row } from "./_settings-tab-fixtures";
+import { UNRESOLVED_TOOL_PROFILE } from "../constants";
+import type { Channel } from "../types";
+
+afterEach(cleanup);
+
+const dm = { isDirect: true, visibility: "private" as const };
+
+/** The whole tab, with the agent half mounted through its REAL bridge-detecting
+ *  wrapper (jsdom = a plain browser). */
+function mount(over: Partial<Channel>, canManage: boolean, handlers = {}) {
+  const props = {
+    onInvite: vi.fn(),
+    onToggleVisibility: vi.fn(),
+    onToggleArchive: vi.fn(),
+    onRequestDelete: vi.fn(),
+    onRequestLeave: vi.fn(),
+    ...handlers,
+  };
+  const ch = channel(over);
+  render(
+    <ChannelsSettingsTab
+      channel={ch}
+      canManage={canManage}
+      agent={
+        ch.isMember ? (
+          <ChannelAgentSettings
+            channelId={ch.id}
+            profile={ch.myAgentToolProfile ?? UNRESOLVED_TOOL_PROFILE}
+            onSetToolProfile={vi.fn()}
+            toolProfileBusy={false}
+          />
+        ) : null
+      }
+      {...props}
+    />
+  );
+  return props;
+}
+
+
+describe("the DM has no Leave", () => {
+  it("offers the non-owner DM peer Delete conversation, never Leave channel", () => {
+    // The DM's non-creator, so `role: "member"` → canManage false. This is the
+    // exact user the destructive item used to be rendered for.
+    mount({ ...dm, role: "member" }, false);
+    expect(row("Leave channel")).toBeNull();
+    expect(row("Delete conversation")).not.toBeNull();
+  });
+
+  it("offers the DM creator the same Delete conversation", () => {
+    mount({ ...dm, role: "owner" }, true);
+    expect(row("Leave channel")).toBeNull();
+    expect(row("Delete conversation")).not.toBeNull();
+    // A DM is private by DB CHECK — no visibility toggle either.
+    expect(row("Make public")).toBeNull();
+    expect(row("Make private")).toBeNull();
+    // And a fixed 1:1 pair has no invite (the server also rejects one).
+    expect(row("Add members")).toBeNull();
+  });
+
+  it("still offers Leave channel in a NON-direct channel", () => {
+    mount({ role: "member" }, false);
+    expect(row("Leave channel")).not.toBeNull();
+    expect(row("Delete conversation")).toBeNull();
+  });
+});
+
+describe("the owner's manage set", () => {
+  it("keeps all four items on a non-direct channel", () => {
+    mount({ role: "owner", visibility: "private" }, true);
+    expect(row("Add members")).not.toBeNull();
+    expect(row("Make public")).not.toBeNull();
+    expect(row("Archive")).not.toBeNull();
+    expect(row("Delete channel")).not.toBeNull();
+    expect(row("Leave channel")).toBeNull();
+  });
+
+  it("flips the visibility label to match the current state", () => {
+    mount({ role: "owner", visibility: "public" }, true);
+    expect(row("Make private")).not.toBeNull();
+    expect(row("Make public")).toBeNull();
+  });
+
+  it("offers Unarchive on an archived channel", () => {
+    mount({ role: "owner", archivedAt: "2026-08-01T00:00:00.000Z" }, true);
+    expect(row("Unarchive")).not.toBeNull();
+    expect(row("Archive")).toBeNull();
+  });
+
+  it("hides the manage half from a plain member", () => {
+    mount({ role: "member" }, false);
+    expect(row("Make public")).toBeNull();
+    expect(row("Archive")).toBeNull();
+    expect(row("Delete channel")).toBeNull();
+  });
+});
+
+describe("the rows report intent — they never write", () => {
+  it("hands the destructive pair to the confirm dialogs", () => {
+    const props = mount({ role: "owner" }, true);
+    fireEvent.click(row("Delete channel")!);
+    expect(props.onRequestDelete).toHaveBeenCalledTimes(1);
+
+    cleanup();
+    const member = mount({ role: "member" }, false);
+    fireEvent.click(row("Leave channel")!);
+    expect(member.onRequestLeave).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens the invite dialog from its own row", () => {
+    const props = mount({ role: "owner" }, true);
+    fireEvent.click(row("Add members")!);
+    expect(props.onInvite).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("no dead rows, and nothing behind a click", () => {
+  it("renders NO agent-folder row and NO arm without the desktop bridge", () => {
+    // ⚠ Both are desktop-only. A labelled row around a control that renders
+    // nothing is a heading over an empty right-hand side; jsdom has no
+    // `window.dopl`, so this is the plain-browser case.
+    mount({ role: "owner" }, true);
+    // ⚠ NAMES REPOINTED 2026-09-06 (settings overhaul): "Agent folder" → "Working
+    // Folder", "Permissions" → "Tool use", "Sends" → "Messaging". Renames only —
+    // what this case pins is that a bridgeless browser renders NONE of them.
+    expect(screen.queryByText("Working Folder")).toBeNull();
+    expect(screen.queryByText("For the next request you allow")).toBeNull();
+    expect(screen.queryByText("Tool use")).toBeNull();
+    expect(screen.queryByText("Messaging")).toBeNull();
+    // ⚠ THE MACHINE-SCOPED SWITCH AND THE PER-CHANNEL CHAINING SWITCH ARE BOTH
+    // DELETED (item 9) — one "Launch agents" dropdown replaces them, and it needs
+    // BOTH bridges, so a plain browser renders nothing here either. The old
+    // group heading went with item 2.
+    expect(screen.queryByText("Orchestrator launches")).toBeNull();
+    expect(screen.queryByText("On this Mac, every channel")).toBeNull();
+    expect(screen.queryByText("Launch agents")).toBeNull();
+    // ⚠ AND THE REPLIES ROW IS GONE FOR GOOD (item 8), not merely bridgeless: its
+    // axis is Messaging's now, and its whole record was deleted.
+    expect(screen.queryByText("Replies")).toBeNull();
+    expect(screen.queryByText("Send automatically")).toBeNull();
+    // The DURABLE half is a cloud write and is there either way. ⚠ IT IS A
+    // DROPDOWN NAMED "Tool access" SINCE 2026-09-06 (item 6), not a radiogroup:
+    // the three containment lines ride into the `SelectMenu` rather than sitting
+    // under the row, which is where this tab already keeps per-option copy.
+    expect(screen.getByText("Tool access")).toBeTruthy();
+    expect(screen.queryByRole("radiogroup", { name: "Tools" })).toBeNull();
+  });
+
+  it("says so, rather than heading an empty tab, for a non-member", () => {
+    render(
+      <ChannelsSettingsTab
+        channel={channel({ isMember: false, role: null })}
+        canManage={false}
+        agent={null}
+        onInvite={vi.fn()}
+        onToggleVisibility={vi.fn()}
+        onToggleArchive={vi.fn()}
+        onRequestDelete={vi.fn()}
+        onRequestLeave={vi.fn()}
+      />
+    );
+    expect(screen.getByText("Nothing to manage")).toBeTruthy();
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("puts no setting behind a menu — the tab owns no `role=menu`", () => {
+    // ⚠ The ruling this file records: the popover and its drill-down panels are
+    // gone. A `menu` here would mean one came back.
+    mount({ role: "owner" }, true);
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(screen.queryByRole("menuitem")).toBeNull();
+  });
+});
+
+/**
+ * ⚠ THE TRUST SUITE STOOD HERE AND IS DELETED (Samuel, 2026-08-22). "Always
+ * allow <teammate>" was standing consent for an INBOUND ask — the decision that
+ * ruling retired everywhere — so the section, its scope hint, its empty-roster
+ * line, its switches and the four tests pinning them all went together. Kept as
+ * an ABSENCE below, because a section nobody asserts is a section that quietly
+ * comes back.
+ */
+describe("the tab offers no standing approval", () => {
+  it("renders no Always-allow section and no trust switch", () => {
+    const text = copy();
+    expect(text).not.toContain("Always allow");
+    expect(text).not.toContain("Applies across the whole workspace");
+    expect(screen.queryByRole("switch", { name: /Always allow/ })).toBeNull();
+  });
+});
+
+describe("a settings panel, not documentation", () => {
+  /** The whole agent half with both desktop-only groups present. */
+  const fullTab = () =>
+    agentView({
+      folder: {
+        label: "~/repo",
+        custom: true,
+        busy: false,
+        onChoose: noop,
+        onClear: noop,
+      },
+      orchestrator: { on: false, busy: false, onToggle: noop },
+    }).container;
+
+  it("keeps every secondary line short, and prints none of the cut copy", () => {
+    // ⚠ SAMUEL'S 2026-08-19 RULING AS A MEASUREMENT (live review): "we should
+    // not be explaining everything to the user." Every secondary line is
+    // `text-caption`, so the rule is a bound on those nodes — red for a new
+    // explainer under ANY control (a mid-string ". " is the paragraph shape it
+    // names; ellipses are not). The four named pins are the SHORT deletions the
+    // bound cannot catch; each is still TRUE and lives on as a docblock in
+    // `settings-agent.tsx` — the tab just stopped PRINTING it.
+    const tab = fullTab();
+    const lines = Array.from(
+      tab.querySelectorAll<HTMLElement>('[class*="text-caption"]')
+    )
+      .map((el) => el.textContent?.trim() ?? "")
+      .filter(Boolean);
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) {
+      expect(line.split(/\s+/).length).toBeLessThanOrEqual(8);
+      expect(line).not.toMatch(/\.\s+\S/);
+    }
+    const text = tab.textContent ?? "";
+    expect(text).not.toContain("expires after 30 minutes");
+    expect(text).not.toContain("Which tools the session has at all");
+    expect(text).not.toContain("Context, not a sandbox");
+    expect(text).not.toContain("skip the approval card");
+  });
+
+  it("uses tokens and the type scale, never a raw hex or px", () => {
+    const html = fullTab().innerHTML;
+    expect(html).not.toMatch(/#[0-9a-f]{3,6}/i);
+    expect(html).not.toMatch(/text-\[\d/);
+    expect(html).not.toMatch(/\btext-(xs|sm|base|lg)\b/);
+    expect(html).toContain("text-caption");
+    expect(html).toContain("text-body");
+    expect(html).toContain("text-text-primary");
+  });
+});

@@ -19,7 +19,7 @@ import type { AgentTemplate, TemplateField } from "../client/types";
  * is the field the 2026-08-22 wave explicitly refused. See
  * {@link TemplateLaunchOverrides.instructions}.
  *
- * ⚠ **THE ONE PRODUCER IS `channels-v2/use-agent-launch.ts › launchOverridesOf`
+ * ⚠ **THE ONE PRODUCER IS `channels/components/use-agent-launch.ts › launchOverridesOf`
  * SINCE THE LAUNCH SHEET WAS DELETED (2026-09-13).** It builds `model` and
  * `instructions`; **nothing in the renderer produces `fields` any more**, and
  * {@link overridesFor} / {@link boundOverrideFields} therefore have no component
@@ -88,7 +88,7 @@ export interface TemplateLaunchOverrides {
    * The editor is still the only AUTHORING surface; this is one run's copy.
    * ⚠ **ABSENT IS STILL THE ONLY SPELLING OF "NO OVERRIDE"**, and the popup
    * measures against the TEMPLATE'S OWN PROSE rather than against empty
-   * (`channels-v2/use-agent-launch.ts › launchOverridesOf`) — otherwise every
+   * (`channels/components/use-agent-launch.ts › launchOverridesOf`) — otherwise every
    * template launch would carry a redundant copy of text main is about to read
    * from the row anyway.
    * ⚠ **NO CLIENT-SIDE CHARSET RULE, AND NOT AN OVERSIGHT** — the module header's

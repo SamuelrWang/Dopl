@@ -4,7 +4,7 @@
  * user can use it to drag … right now it's sitting to the left. I want it to be
  * perfectly on the vertical line."*).
  *
- * ⚠ **WHY THIS IS A TEST AND NOT A COMMENT.** `channels-v2/info-resize-handle.tsx`
+ * ⚠ **WHY THIS IS A TEST AND NOT A COMMENT.** `channels/components/info-resize-handle.tsx`
  * centres the pill on the divider by offsetting the hit strip half a border width,
  * read from `--channel-divider-w` with a **1px fallback** — the kit hairline the
  * workspace channels page wears. /home widens exactly that structural `border-l` to

@@ -218,7 +218,7 @@ surface ships.
 ### 1.5 The two launch lanes, and why only one of them is MCP's
 
 Nothing in `apps/desktop-ui/**` writes a launch directive. The **UI lane** goes
-`channels-v2/agents-tab.tsx` → `channels-v2/agents-controls.ts › launchAgentOnThread` → the Electron
+`channels/components/agents-tab.tsx` → `channels/components/agents-controls.ts › launchAgentOnThread` → the Electron
 IPC bridge → `dopl-desktop-app/main/session-engine.js › launchRequesterSession`, and the row it
 eventually records is a `channel_sessions` projection the desktop PUSHES. The **directive lane** is
 MCP's alone: `dopl_channel(op="launch_agent")` →

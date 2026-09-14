@@ -83,7 +83,7 @@ import type { ChannelContext } from "./service-shared";
  * sat listening in the room.
  * ⚠ **THIS IS SAMUEL'S 2026-08-22 AGENTS-TAB RULING, REACHING THE SURFACE THAT
  * NEVER TOOK IT** — *"the card STAYS until the session actually goes away"*. See
- * `components/channels-v2/agents-model.ts › peerCardsFor`, which deleted the
+ * `channels/components/agents-model.ts › peerCardsFor`, which deleted the
  * identical guard for the identical reason and states the argument in full. A
  * liveness rule built on a stamp that is not a heartbeat cannot be tuned; it has
  * to go.

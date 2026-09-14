@@ -34,7 +34,7 @@ const TEXT_CAP = 300;
 const TOOL_CAP = 40;
 // ⚠ A POST IS A MESSAGE, NOT A CAPTION — see the `outbound_post` branch for the arithmetic that
 // picks 1000 rather than the UI's 2000.
-// ⚠ AND DO NOT MOVE IT: `channels-v2/agent-stream-model.ts › POST_CAP` is the SAME 1000 and the
+// ⚠ AND DO NOT MOVE IT: `channels/components/agent-stream-model.ts › POST_CAP` is the SAME 1000 and the
 // held-draft join is character-for-character against it. Changing one silently breaks every
 // pending Post card.
 const POST_CAP = 1000;
@@ -49,7 +49,7 @@ const POST_CAP = 1000;
  * long line revealed nothing and left the reader looking at "…or I'll pi". Two truncations, one
  * of them silent — and the silent one was upstream of the control meant to undo it.
  *
- * ⚠ 2000 IS THE UI'S OWN CEILING, DELIBERATELY — `channels-v2/agent-stream-log.tsx ›
+ * ⚠ 2000 IS THE UI'S OWN CEILING, DELIBERATELY — `channels/components/agent-stream-log.tsx ›
  * EXPANDED_CHARS`. Matching it makes the renderer's clip the ONLY truncation an operator can
  * ever meet, and that one SAYS it clipped (INVARIANTS §9). Main is out of the business of
  * cutting text nobody is told about.
@@ -80,7 +80,7 @@ const POST_CAP = 1000;
  * REPLY_CAP`'s. A private reply crossed to an MCP orchestrator whole at 8000 while the operator's
  * OWN panel lost everything past 2000 — the machine told a remote agent more than it told the
  * human it answers to. The two caps now agree, and `EXPANDED_CHARS`
- * (`channels-v2/agent-stream-log.tsx`) moved with it — raise them together or the silent cut is
+ * (`channels/components/agent-stream-log.tsx`) moved with it — raise them together or the silent cut is
  * back.
  * ⚠ AND A CUT NOW SAYS SO ON THE FRAME: {@link prose} stamps `truncated: true` on a line this cap
  * shortened, because a cap EQUAL to the UI's ceiling means the renderer's own `length >` check

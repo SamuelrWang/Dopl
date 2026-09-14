@@ -263,7 +263,7 @@ describe("dropThreadFromWindow", () => {
  * THE ARTIFACT ENVELOPE OVER THE MERGED ARRAY — the ONE invariant this half of
  * the file exists for: **`entries` is TOTAL over the `messages` it sits beside.**
  * Every message is a `message` arm or a member of an `artifact` arm, never
- * neither, because `channels-v2/derivations.ts` builds its ordinary rows from the
+ * neither, because `channels/components/derivations.ts` builds its ordinary rows from the
  * arms ALONE and a message the envelope forgets is a row the reader never sees.
  *
  * ⚠ THE TWO HAZARDS ARE FIRST, and they are the reason the wire was stopped once

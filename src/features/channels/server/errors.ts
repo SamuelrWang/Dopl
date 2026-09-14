@@ -157,7 +157,7 @@ export class ChannelChatAddressedError extends ChannelError {
  * them either (`main/session-window.js`), though the server deliberately still
  * ACCEPTS them because installed builds do (INVARIANTS §13). Either way an
  * answer posted as `task_finished` renders NOWHERE: the reader drops the three
- * kinds on sight (`components/channels-v2/view-model.ts › isLifecycleEcho`),
+ * kinds on sight (`channels/components/view-model.ts › isLifecycleEcho`),
  * body and all. The old reason — a session card folding the marker into its
  * `endEvent` — went with the card.
  *

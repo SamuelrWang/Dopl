@@ -1,7 +1,7 @@
 /**
  * THE AGENT-INSTANCE STAMP ON A `client_msg_id` — one parser, framework-free.
  *
- * ⚠ SPLIT OUT OF `components/channels-v2/agents-model.ts` ON 2026-08-31 AND
+ * ⚠ SPLIT OUT OF `channels/components/agents-model.ts` ON 2026-08-31 AND
  * RE-EXPORTED THROUGH IT, so no import moved — the same move `lib/mentions.ts`
  * made for `lib/mentions-mask.ts`. The reason is a NEW READER ON THE SERVER:
  * `server/service-writes-metadata-escalation.ts` derives the asking agent's id
@@ -272,7 +272,7 @@ export function recentAgentPosters(
     metadata?: Record<string, unknown> | null;
   }[],
   /** ⚠ `now` DEFAULTS HERE RATHER THAN AT THE CALL SITE, the same arrangement
-   *  `components/channels-v2/agents-model.ts` uses for the same reason: a
+   *  `channels/components/agents-model.ts` uses for the same reason: a
    *  component may not read a clock during render, and a model may. The SERVER
    *  passes its own write-time clock explicitly. */
   opts: { now?: number; windowMs: number }

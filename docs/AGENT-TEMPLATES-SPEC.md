@@ -125,8 +125,8 @@ Everything below is unbuilt.
 
 | surface | anchor | payload |
 |---|---|---|
-| Agents tab "New Agent" button | `channels-v2/agents-tab.tsx › launchRow` | `use-agents-panel.ts › launchAgent(threadId)` |
-| Composer Bot icon | `channels-v2/composer.tsx › ChannelsV2Composer` | same object, handed down — never a second `useAgentsPanel` mount |
+| Agents tab "New Agent" button | `channels/components/agents-tab.tsx › launchRow` | `use-agents-panel.ts › launchAgent(threadId)` |
+| Composer Bot icon | `channels/components/composer.tsx › ChannelsComposer` | same object, handed down — never a second `useAgentsPanel` mount |
 
 Both funnel through `agents-controls.ts › launchAgentOnThread` → `window.dopl.sessions.launch`.
 
@@ -875,7 +875,7 @@ Inert until Phase 2: a `sessions.launch` with no `templateId` behaves byte-ident
 
 **New:** `features/agent-templates/components/template-picker.tsx`,
 `…/launch-sheet.tsx`.
-**Changed:** `channels-v2/agents-tab.tsx › launchRow`, `channels-v2/composer.tsx › ChannelsV2Composer`,
+**Changed:** `channels/components/agents-tab.tsx › launchRow`, `channels/components/composer.tsx › ChannelsComposer`,
 `use-agents-panel.ts › launchAgent` signature (`threadId, templateId?, overrides?`),
 `agents-controls.ts › launchAgentOnThread`.
 

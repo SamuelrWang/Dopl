@@ -24,7 +24,7 @@ import {
  * would hand the panel static props and pass with every one of those broken.
  *
  * ⚠ THE CHANNEL SURFACE IS STUBBED. The page opens on Channels, so the real
- * channels-v2 surface would mount (and fetch) before a single Agents assertion
+ * channels surface would mount (and fetch) before a single Agents assertion
  * ran. `vi.mock` is hoisted per file and its factory may not close over imports
  * — hence a local stub rather than one in the harness. It ALSO removes the
  * second thing on this page called "Agents" (the info column's live-session
@@ -47,7 +47,7 @@ import {
 const apiRequest = vi.hoisted(() => vi.fn());
 
 vi.mock(
-  "@/features/channels/components/channels-v2/channel-surface-standalone",
+  "@/features/channels/components/channel-surface-standalone",
   () => ({
     StandaloneChannelSurface: () => <div data-testid="channel-surface" />,
   })

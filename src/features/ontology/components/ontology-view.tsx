@@ -12,7 +12,7 @@ import { pendingRow } from "@/shared/ui/pending";
 // downstream `apps/desktop-ui` tree, which this one cannot import — so "+ Object"
 // reads the shared constant rather than re-cutting a third copy of `auth-btn-3d
 // h-9 rounded-full px-[15px]`.
-import { TAB_ACTION } from "@/features/channels/components/channels-v2/bits";
+import { TAB_ACTION } from "@/features/channels/components/bits";
 import { useOntology } from "../hooks/use-ontology";
 import { useObjectDraft } from "../hooks/use-object-draft";
 import { OntologyResourcesProvider } from "../hooks/use-workspace-resources";
