@@ -420,3 +420,15 @@ test("the pinned ORDERING constraints are unmoved by the splice", () => {
     assert.ok(out.indexOf("VOCABULARY (use these words") < out.indexOf("Deliver every message"));
   }
 });
+
+// F-695 RULED 2026-09-13: a blank launch's typed instructions reach the agent as a role block
+// with NO role line; nothing typed, nothing emitted.
+test("an instructions-only template frames the body without a role line", () => {
+  const lines = templateRoleFraming({ template: { name: null, instructions: "Speak only in haiku.", authoredByCaller: true, instructionsOnly: true } }, "N1");
+  const text = lines.join("\n");
+  assert.ok(!text.includes("YOUR ROLE FOR THIS RUN"), "no role to name");
+  assert.ok(text.includes("YOUR INSTRUCTIONS FOR THIS RUN"));
+  assert.ok(text.includes("BEGIN-ROLE-N1") && text.includes("END-ROLE-N1"));
+  assert.ok(text.includes("Speak only in haiku."));
+  assert.deepEqual(templateRoleFraming({ template: { name: null, instructions: "   ", authoredByCaller: true, instructionsOnly: true } }, "N1"), []);
+});

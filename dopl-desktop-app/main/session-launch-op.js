@@ -171,6 +171,8 @@ async function launchFromButton(payload) {
     // nothing about the approval and would put renderer text in front of the question.
     template = require('./template-resolve').applyOverrides(template, overrides);
   }
+  // A BLANK launch with typed instructions still runs as an instructions-only role (F-695).
+  if (!template) template = require('./template-resolve').applyOverrides(null, overrides);
 
   const title = typeof p.threadTitle === 'string' ? p.threadTitle.slice(0, 200) : '';
   // ⚠ THE GOAL IS DISPLAY/SEED TEXT ONLY ON THIS LANE and is never sent as a turn — a SPAWN-IDLE

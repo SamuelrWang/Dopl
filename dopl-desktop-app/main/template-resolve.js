@@ -349,12 +349,10 @@ function narrowOverrides(overrides) {
  * instructions overrides substituted. ⚠ MODEL IS NOT APPLIED HERE — it belongs to the PRECEDENCE
  * CHAIN, which is computed once in `session-launch-op.js` and must not be half-resolved in two
  * places.
- * ⚠ `null` template in, `null` out: a BLANK agent may still carry a model override, and that is
- * the chain's business, not this function's. ⚠ **SO A BLANK AGENT'S `instructions` OVERRIDE IS
- * DROPPED, AND THAT IS A KNOWN GAP RATHER THAN A DECISION (F-695).** `prompt-framing-template.js ›
- * templateRoleFraming` emits nothing without a role NAME, so an instructions-only role needs a
- * ruling on what that heading says; until then the popup's field is honoured on a TEMPLATE launch
- * and inert on a blank one.
+ * ⚠ `null` template in: a BLANK agent may still carry a model override (the chain's business,
+ * not this function's) — and, since F-695 was RULED on 2026-09-13, its typed `instructions`
+ * come out as an INSTRUCTIONS-ONLY template (`instructionsOnly: true`, no name) that
+ * `prompt-framing-template.js › instructionsOnlyFraming` frames without a role line.
  * ⚠ **THE INSTRUCTIONS ARE SUBSTITUTED AFTER THE APPROVAL GATE — the ordering that gate's own
  * comment demands, and it is what keeps the question honest.** What a foreign template's first use
  * asks the operator to accept is the text THEY DID NOT WRITE; splicing their own edit in first
@@ -362,9 +360,17 @@ function narrowOverrides(overrides) {
  * by an edit either: it is the SERVER's boolean about the ROW, and the framing fails FOREIGN.
  */
 function applyOverrides(template, narrowed) {
-  if (!template) return null;
-  const fields = narrowed && narrowed.fields;
   const instructions = (narrowed && narrowed.instructions) || '';
+  if (!template) {
+    // F-695 RULED (Samuel, 2026-09-13): the field starts EMPTY on a blank launch, and
+    // whatever the operator types is carried as an instructions-only role — no name,
+    // no fields, no knowledge; `prompt-framing-template.js › instructionsOnlyFraming`
+    // frames it without a role line. Nothing typed → still no template.
+    return instructions
+      ? { name: null, instructions, authoredByCaller: true, instructionsOnly: true, fields: null }
+      : null;
+  }
+  const fields = narrowed && narrowed.fields;
   const next = fields ? { ...template, fields } : template;
   return instructions ? { ...next, instructions } : next;
 }

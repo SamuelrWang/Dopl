@@ -286,6 +286,34 @@ function knowledgeLines(bases, profile, scopes) {
 }
 
 /**
+ * A BLANK launch's typed instructions (F-695, ruled 2026-09-13: *"blank template
+ * instructions should just not have any pre filled instructions … it just has an
+ * empty field"* — the field starts empty; what the operator TYPES into it still has
+ * to reach the agent). There is no role to name, so this is the role block minus
+ * its role line: the operator's own header, the precedence paragraph, and the
+ * body inside the same ROLE fence `stripFence` guards. Nothing else — no fields, no
+ * knowledge — because a blank launch carries none.
+ */
+function instructionsOnlyFraming(t, nonce) {
+  const begin = `BEGIN-ROLE-${nonce}`;
+  const end = `END-ROLE-${nonce}`;
+  const body = stripFence(
+    t.instructions == null ? '' : String(t.instructions),
+    begin, end, `BEGIN-REQUEST-${nonce}`, `END-REQUEST-${nonce}`
+  );
+  if (!body.trim()) return [];
+  return [
+    'YOUR INSTRUCTIONS FOR THIS RUN, written by your operator in the launch form.',
+    ...OWN_HEADER,
+    ...PRECEDENCE,
+    '',
+    begin,
+    body,
+    end,
+  ];
+}
+
+/**
  * The TEMPLATE ROLE block, as plain lines the caller splices into a turn.
  *
  * ⚠ `[]` WHEN `ctx.template` IS ABSENT, and that emptiness is the contract. Every blank launch
@@ -304,6 +332,7 @@ function knowledgeLines(bases, profile, scopes) {
 function templateRoleFraming(ctx, nonce) {
   const t = ctx && ctx.template;
   if (!t || typeof t !== 'object') return [];
+  if (t.instructionsOnly === true) return instructionsOnlyFraming(t, nonce);
   // ⚠ 120, THE NAME'S OWN BOUND — NOT the display default (F-287). A template name is an
   // IDENTITY, and `session-summary.js › displayText(value, max)` already takes a per-field bound
   // for exactly this reason: "clipping an identity to fit a display default would report a name

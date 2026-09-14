@@ -8875,3 +8875,10 @@ surface; its value reaches main on both lanes; it changes the run on a TEMPLATE 
 renderer half is not the gap and must not be "fixed" by hiding the field for `None` — a field that
 disappears when a selector moves is a worse surface than one honoured on one lane, and hiding it
 would also delete the evidence that this disagreement exists.
+
+- **F-695 — RESOLVED 2026-09-13 (ruled).** Samuel: the field starts EMPTY on a blank launch; what
+  is typed is carried. `main/template-resolve.js › applyOverrides` (called with a null template) answers an instructions-only
+  template (`instructionsOnly: true`, no name, `authoredByCaller: true`), and
+  `prompt-framing-template.js › instructionsOnlyFraming` frames it as the role block minus its role
+  line ("YOUR INSTRUCTIONS FOR THIS RUN, written by your operator in the launch form."). Nothing
+  typed → still no template.
