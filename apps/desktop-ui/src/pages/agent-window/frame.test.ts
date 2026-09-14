@@ -153,3 +153,26 @@ describe("the pop-out's painted stack", () => {
     expect(surface).toMatch(/margin:/);
   });
 });
+
+/**
+ * 🔒 **EVERY CONTROL IN THIS WINDOW'S CHROME IS FEATURE-DETECTED** (INVARIANTS §11 — a control
+ * that cannot act must be ABSENT, never dead or disabled).
+ *
+ * ⚠ **THE "+" WAS THE ONE THAT WAS NOT.** The window buttons read `canControlOwnWindow()` and the
+ * form's own Launch reads `canLaunchAgents()` — but the "+" that OPENS that form was wired
+ * unconditionally, so a browser or a main predating the launch ops drew a "+" whose dialog had no
+ * Launch button in it. The chrome already drops the "+" when `onNewAgent` is absent
+ * (`agent-window-chrome.tsx`), so passing `undefined` is the whole gate.
+ *
+ * ⚠ SOURCE, like the rest of this file: mounting the page needs the whole bridge, the workspace
+ * read and a router, and what is being pinned is the STATEMENT — which op this control is gated on.
+ */
+describe("the chrome's controls are feature-detected", () => {
+  it("the tab strip's + is gated on the LAUNCH op, the same one the form gates on", () => {
+    expect(page).toMatch(/onNewAgent=\{canLaunchAgents\(\)\s*\?/);
+    expect(page).toContain("canLaunchAgents");
+    // ⚠ NOT the tab ops: the "+" spawns an agent, it does not close or list tabs, and gating it on
+    // `canHostAgentTabs()` would be a second answer to a different question.
+    expect(page).not.toContain("canHostAgentTabs");
+  });
+});

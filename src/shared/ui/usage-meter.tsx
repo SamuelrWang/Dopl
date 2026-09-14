@@ -17,7 +17,8 @@ export interface UsageMeterProps {
    * ⚠ **OPTIONAL SINCE 2026-09-13, and only because ONE caller has no word to
    * put there** (Samuel, over the /home Usage card: *"remove the credits and the
    * 'Credits used' text"*). Omitting it drops the SPAN, not the row — the number
-   * stays where it is, right-aligned above the track. Every other caller labels
+   * stays where it is, right-aligned above the track (`ml-auto` below is what
+   * holds it there). Every other caller labels
    * its meter; a meter on a surface that does not already say what is being
    * measured must.
    */
@@ -93,7 +94,17 @@ export function UsageMeter({
     <div className={className}>
       <div className="mb-1.5 flex items-baseline justify-between text-caption">
         {label ? <span className="text-text-secondary">{label}</span> : null}
-        <span className={cn("font-medium", over ? "text-warning" : "text-text-primary")}>
+        {/* ⚠ `ml-auto` IS WHAT MAKES THE LABEL OPTIONAL WITHOUT MOVING THE NUMBER.
+            `justify-between` parks a LONE child at the START, so dropping the
+            label slid the readout to the left edge of the card — the one thing the
+            /home Usage ruling did not ask for. It is a no-op while a label is
+            there, which is why it lives here rather than in a branch. */}
+        <span
+          className={cn(
+            "ml-auto font-medium",
+            over ? "text-warning" : "text-text-primary"
+          )}
+        >
           {hasLimit ? `${fmt(used)} / ${fmt(limit)}` : fmt(used)}
         </span>
       </div>

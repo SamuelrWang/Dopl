@@ -78,6 +78,28 @@ export function HomeOntologyPanels({
   const [sharing, setSharing] = useState<ShareTarget | null>(null);
   const [deleting, setDeleting] = useState<ShareTarget | null>(null);
   const [creating, setCreating] = useState(false);
+  /**
+   * 🔒 **THE BOARD'S MOUNT GENERATION — bumped when a row is CREATED or DELETED
+   * OUTSIDE the board, which on this face is both of them.**
+   *
+   * ⚠ **IT EXISTS BECAUSE THE BOARD'S STORE STOPS ACCEPTING SNAPSHOTS ONCE THE
+   * OPERATOR HAS TYPED.** `use-ontology.ts › dirtyRef` is the guard that keeps a
+   * background refetch from clobbering a half-typed field: after ANY local
+   * dispatch the reducer ignores every later `SNAPSHOT_SET` for the life of the
+   * mount. /home writes through the API and moves its PIN to the id the server
+   * minted — so on an edited board the pin named a cluster the reducer had never
+   * heard of, and `ontology-view.tsx` answered with **"This ontology is no
+   * longer here."**, its sentence for a DELETED ontology, over one created a
+   * moment earlier. A delete was the milder half of the same drift: the removed
+   * row stayed in the switcher's list until something else remounted the board.
+   *
+   * ⚠ **A REMOUNT IS THE ONLY LEVER THE HOST HAS, and it is safe**: the store
+   * FLUSHES its debounced PATCHes on unmount rather than dropping them
+   * (`use-ontology.ts`, the timers cleanup), so nothing typed is lost. ⚠ It is
+   * NOT keyed on `active.id` — switching ontologies must keep one board and one
+   * snapshot read, which is the whole reason the pin is a prop.
+   */
+  const [boardEpoch, setBoardEpoch] = useState(0);
   const { rows, resolved, error, refetch } = useOntologies(homeWorkspaceId);
 
   // ⚠ SELECTION PERSISTS, BUT NEVER DANGLES: a deleted or not-yet-chosen id
@@ -101,6 +123,9 @@ export function HomeOntologyPanels({
       });
       setChangelogOpen(false);
       setSelectedId(cluster.id);
+      // ⚠ AFTER the invalidate, so the fresh mount seeds from a snapshot that
+      // already holds the new row. See `boardEpoch`.
+      setBoardEpoch((n) => n + 1);
     } finally {
       setCreating(false);
     }
@@ -169,6 +194,8 @@ export function HomeOntologyPanels({
   return (
     <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
       <OntologyView
+        // ⚠ THE MOUNT GENERATION, NOT THE SELECTION — see `boardEpoch` above.
+        key={boardEpoch}
         // ⚠ THE PANE IS THE PANEL. No second float inside it (Samuel, 2026-09-10).
         frameless
         workspaceId={homeWorkspaceId}
@@ -220,9 +247,14 @@ export function HomeOntologyPanels({
             setSelectedId(rows[at + 1]?.id ?? rows[at - 1]?.id ?? null);
             setDeleting(null);
             setChangelogOpen(false);
-            void queryClient.invalidateQueries({
-              queryKey: ontologySnapshotKey(homeWorkspaceId),
-            });
+            void queryClient
+              .invalidateQueries({
+                queryKey: ontologySnapshotKey(homeWorkspaceId),
+              })
+              // ⚠ Same reason as the create: an edited board's reducer will not
+              // take the post-delete snapshot, so the removed row would sit in
+              // the switcher until something else remounted it.
+              .finally(() => setBoardEpoch((n) => n + 1));
           }}
         />
       )}

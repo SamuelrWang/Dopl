@@ -65,8 +65,16 @@ export const TEMPLATE_NAME_TEXT = "text-title font-medium text-text-primary";
  * and `font-semibold`, same ink.
  *
  * 🔒 **SAMUEL, 2026-09-13: *"increase the font size for usage … let's bold it as
- * well"*. ONE READER — the /home Overview's **Usage** panel heading**
- * (`pages/home/overview-panels.tsx › HomeOverviewPanels`).
+ * well"*.** It began as the /home Overview's **Usage** heading alone.
+ *
+ * ⚠ **IT HAS NO READERS LEFT, AND THAT IS BECAUSE THE TRIAL WAS PROMOTED THE
+ * SAME DAY.** Samuel then ruled the face onto EVERY section heading, so it lives
+ * in `shared/ui/section-heading.ts › SECTION_HEADING_TEXT` and `SectionPanel`
+ * applies it — the Usage heading included. This alias survives only as the NAME
+ * three files argue against by (`channels-v2/agent-window-frame.ts`,
+ * `channels-v2/recency-wells.tsx`, `pages/home/overview-usage-filter.tsx` all say
+ * "not `TEMPLATE_NAME_TEXT_LG`"); delete it together with those references, not
+ * before them.
  *
  * ⚠ **IT WAS APPLIED TO FOUR THINGS FOR ONE PASS AND THREE OF THEM WERE A
  * MISREAD — Samuel, same day, rejecting it: *"You changed the font size of the

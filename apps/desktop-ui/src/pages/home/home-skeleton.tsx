@@ -123,13 +123,14 @@ export function HomeKnowledgePanelsSkeleton({
 
 /**
  * /home → Agents, while the container template list is in flight. The SAME two
- * flat sections, over the templates' own auto-fill grid.
+ * flat sections, over the templates' own four-column grid.
  *
  * ⚠ NOT THE KNOWLEDGE GRID. The two faces really do differ here: Knowledge is
  * `home.kbCards` (3 fixed columns, 224px rows), Agents is
- * `template-section.tsx › TemplateGrid`'s `auto-fill` at a 196px minimum over
- * `min-h-[92px]` cards. A skeleton that shared one grid would resolve into the
- * wrong one on whichever face it did not come from.
+ * `template-section.tsx › TEMPLATE_GRID` (FOUR fixed columns since 2026-09-13 —
+ * Samuel's ruling; it was `auto-fill` at a 196px minimum) over `min-h-[92px]`
+ * cards. A skeleton that shared one grid would resolve into the wrong one on
+ * whichever face it did not come from.
  */
 export function HomeAgentPanelsSkeleton({
   label = "Loading agents",
@@ -212,9 +213,11 @@ function KbCardsGhost() {
   );
 }
 
-/** ⚠ `TemplateGrid`'s grid class VERBATIM — a Tailwind arbitrary value cannot
- *  be imported, so it is copied as one string and pinned by the source scan in
- *  `components/skeletons/page-skeletons.test.tsx`. */
+/** ⚠ `TemplateGrid`'s grid class **BY IMPORT** — `TEMPLATE_GRID`, exported when
+ *  the grid became a fixed four columns (2026-09-13). The source scan in
+ *  `components/skeletons/page-skeletons.test.tsx` pins the import, so the count
+ *  and the gap cannot move on one surface only. It was a copied string while the
+ *  value was an un-exported Tailwind arbitrary. */
 function TemplateCardsGhost() {
   return (
     <div className={TEMPLATE_GRID}>
@@ -370,7 +373,13 @@ function HomeHeaderGhost() {
  */
 function OverviewFaceGhost() {
   return (
-    <div className="min-w-0 flex-1 overflow-y-auto p-3">
+    // ⚠ `data-overview-face` IS GEOMETRY HERE, NOT A HOOK FOR NOTHING. The kit
+    // scopes the deeper `--shadow-card` to `[data-overview-face] .bento`
+    // (Samuel, 2026-09-13: the shadow is the Overview's alone), and
+    // `overview-panels.tsx` stamps it on the very element this ghost stands in
+    // for — so without it the ghost's two cards wear the shallow `.bento`
+    // shadow and every card deepens the instant the read lands.
+    <div className="min-w-0 flex-1 overflow-y-auto p-3" data-overview-face>
       <div className="flex flex-col gap-3">
         {/* USAGE — ONE well holding TWO `.bento` cards, `gap-3` between them:
             the capacity bar, then the plot (Samuel, 2026-09-13). ⚠ **NO

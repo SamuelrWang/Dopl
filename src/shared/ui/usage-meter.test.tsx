@@ -73,3 +73,30 @@ describe("a missing denominator", () => {
     expect(container.querySelector(".concave-track")).toBeTruthy();
   });
 });
+
+/**
+ * 🔒 THE LABEL IS OPTIONAL SINCE 2026-09-13 (the /home Usage card, Samuel:
+ * *"remove the credits and the 'Credits used' text"*) — and the READOUT MUST NOT
+ * MOVE when it goes. The row is `flex justify-between`; with the label dropped it
+ * holds ONE item, and `space-between` parks a lone item at the START — so the
+ * `used / limit` pair silently jumped to the LEFT edge of the card while the
+ * component's own docblock claimed it "stays where it is, right-aligned above the
+ * track". The `ml-auto` on the readout is what makes that claim true, and it is a
+ * no-op in the two-child case.
+ */
+describe("the optional label", () => {
+  it("keeps the readout pinned right when there is no label", () => {
+    render(<UsageMeter used={120} limit={500} />);
+    const readout = screen.getByText("120 / 500");
+    expect(readout.parentElement?.children.length).toBe(1);
+    expect(readout.className).toContain("ml-auto");
+  });
+
+  it("still renders the label when one is given, and the pair still splits", () => {
+    render(<UsageMeter label="Storage" used={120} limit={500} />);
+    const row = screen.getByText("120 / 500").parentElement;
+    expect(row?.children.length).toBe(2);
+    expect(row?.className).toContain("justify-between");
+    expect(screen.getByText("Storage")).toBeTruthy();
+  });
+});

@@ -215,6 +215,7 @@ export function FormDialog({
   open,
   onDiscard,
   title,
+  titleCase,
   closeLabel,
   discardLabel = "Discard",
   primary,
@@ -224,6 +225,10 @@ export function FormDialog({
   onDiscard: () => void;
   /** Visible heading AND the dialog's accessible name (`StandardDialog`'s own rule). */
   title: string;
+  /** ⚠ `false` when the title interpolates a name the operator typed — CSS
+   *  `capitalize` would rewrite "iPhone leads" to "IPhone Leads"
+   *  (`standard-dialog.tsx › DIALOG_TITLE_AS_TYPED`). */
+  titleCase?: boolean;
   /** Accessible name for the ×, where a surface has more than one open dialog. */
   closeLabel?: string;
   discardLabel?: string;
@@ -231,7 +236,13 @@ export function FormDialog({
   children: ReactNode;
 }) {
   return (
-    <StandardDialog open={open} onClose={onDiscard} title={title} closeLabel={closeLabel}>
+    <StandardDialog
+      open={open}
+      onClose={onDiscard}
+      title={title}
+      titleCase={titleCase}
+      closeLabel={closeLabel}
+    >
       {children}
       <DialogActions>
         <button type="button" className={SMALL_TEXT_BUTTON} onClick={onDiscard}>

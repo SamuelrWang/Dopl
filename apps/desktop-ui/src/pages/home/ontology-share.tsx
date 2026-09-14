@@ -92,6 +92,11 @@ export function OntologyShareDialog({
       open
       onDiscard={onClose}
       title={`Share ${ontology.name}`}
+      // ⚠ THE TITLE CARRIES A NAME THE OPERATOR TYPED, so the kit's CSS
+      // `capitalize` is wrong here: it would render an ontology called
+      // "iPhone leads" as "Share IPhone Leads"
+      // (`shared/ui/standard-dialog.tsx › DIALOG_TITLE_AS_TYPED`).
+      titleCase={false}
       primary={{
         label: "Save",
         onClick: () => void commit(),

@@ -12,7 +12,10 @@ import {
   agentLiveness,
 } from "@/features/channels/components/channels-v2/agents-model";
 import { useDesktopSessions } from "@/features/channels/components/channels-v2/use-desktop-sessions";
-import { openAgentWindow } from "@/features/channels/components/channels-v2/agents-controls";
+import {
+  canLaunchAgents,
+  openAgentWindow,
+} from "@/features/channels/components/channels-v2/agents-controls";
 import { useAgentLaunch } from "@/features/channels/components/channels-v2/use-agent-launch";
 import { AgentWindowLaunch } from "@/features/channels/components/channels-v2/agent-window-launch";
 import {
@@ -216,7 +219,13 @@ function AgentWindowTabs({
         // 🔒 THE "+" OPENS THE New agent FORM for the ACTIVE tab's channel (the strip's own ruling).
         // ⚠ IT WAS WIRED TO NOTHING UNTIL 2026-09-13's second pass — the prop was passed, the chrome
         // drew the control, and no host mounted a dialog, so the click reported into a void.
-        onNewAgent={launch.toggle}
+        // ⚠ **AND IT IS FEATURE-DETECTED, NOT ALWAYS DRAWN** — `agents-controls.ts ›
+        // canLaunchAgents`, the SAME op the form itself gates its Launch button on
+        // (`agent-window-launch.tsx`: *"ABSENT, NOT DISABLED, when the bridge cannot launch"*).
+        // Without that gate a browser or an older main drew a "+" that opened a dialog with no
+        // Launch in it — a control that cannot act, on screen, which INVARIANTS §11 refuses. The
+        // chrome already hides the "+" when this prop is absent, so `undefined` is the whole fix.
+        onNewAgent={canLaunchAgents() ? launch.toggle : undefined}
         status={
           activeAgent ? (
             activeAgent.state === "ended" ? (

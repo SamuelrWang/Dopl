@@ -22,9 +22,12 @@ import { SkeletonChrome } from "./skeleton-surface";
  *
  * ⚠ THE CHROME IS THE SHELL'S OWN MODULE, CLASS FOR CLASS (§1A, geometry by
  * reference): `.root` / `.body` / `.surface` / `cn("page-float", .panel)` /
- * `.sidebar` / `.pageCard` are the SAME five boxes `app-shell.tsx` composes, in
+ * `.sidebar` / `.pageCard` are the SAME SIX boxes `app-shell.tsx` composes, in
  * the same nesting, so the paint-over is a fade of the sidebar's and the card's
  * CONTENTS and nothing moves. A re-tune of the frame moves this with it.
+ * ⚠ **SIX, NOT FIVE** — `docs/INVARIANTS.md` §1A says "five" and lists five
+ * because it omits `.sidebar`, which this ghost draws and `frame-skeletons.test.tsx`
+ * pins. Count the boxes below, not the adjective.
  *
  * ⚠ THE RAIL IS RENDERED FOR REAL WHEN IT CAN BE. `GET /api/workspaces` is
  * cached and IndexedDB-persisted, so on a switch the tile strip is already known

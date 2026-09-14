@@ -2,18 +2,23 @@ import { useRef } from "react";
 import { Search } from "lucide-react";
 
 /**
- * Home's people search — the landing nav's collapsing pill, at app scale
- * (kit: `.search-expand*`). Collapsed it is a round icon button; clicking it
- * grows the pill leftward and focuses the field.
+ * Home's search — the landing nav's pill at app scale (kit: `.search-expand*`),
+ * **ALWAYS OPEN** (Samuel, 2026-09-13).
+ *
+ * ⚠ **THE COLLAPSE IS GONE FROM THIS COMPONENT, NOT FROM THE KIT.** There is no
+ * `open` state, no toggle button and no grow animation here; `.search-expand`
+ * still has a 36px closed face, which the landing banner's chrome renders
+ * (`marketing/…/banner-demo/demo-home-chrome.tsx`). Pinned by `home-search.test.ts`.
  *
  * ⚠ THE QUERY IS THE PAGE'S, not this component's. The page filters the
  * relationship rows AND resolves the record pane's selection from the same
  * filtered set — a query private to the search box would let the pane keep a
  * row the list had already dropped.
  *
- * ⚠ Collapsing CLEARS the query, so a collapsed pill never hides an active
- * filter. Escape always collapses; blur only collapses an empty field, or
- * clicking away mid-search would throw the search away.
+ * ⚠ **ESCAPE CLEARS AND BLURS; NOTHING ELSE CLEARS.** With no collapse there is
+ * no state a stale query could hide behind, so the old blur-clears-an-empty-field
+ * rule went with the toggle — clicking away now keeps what was typed, which is
+ * what a permanently visible field should do.
  */
 export function HomeSearch({
   query,

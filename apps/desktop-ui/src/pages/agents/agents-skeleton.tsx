@@ -13,10 +13,12 @@ import { TEMPLATE_GRID } from "@/features/agent-templates/components/template-se
  * per row (`agent-templates/lib/visibility.ts`). A two-panel ghost would jump a
  * panel's height when the read lands.
  *
- * ⚠ THE GRID CLASS IS `TemplateGrid`'S, VERBATIM. It is a Tailwind arbitrary
- * value and cannot be imported, so it is one copied string pinned by the source
- * scan in `components/skeletons/page-skeletons.test.tsx` — the card minimum,
- * the auto-fill and the gap move together or the pin fails.
+ * ⚠ THE GRID CLASS IS `TemplateGrid`'S, **BY IMPORT** — `template-section.tsx ›
+ * TEMPLATE_GRID` (exported 2026-09-13, when the grid became a FIXED four
+ * columns; it was `auto-fill` at a 196px minimum and a copied string until
+ * then). The source scan in `components/skeletons/page-skeletons.test.tsx` now
+ * pins the IMPORT rather than the bytes, so the column count and the gap cannot
+ * move on one surface.
  *
  * ⚠ IT STANDS AT **BOTH** OF THIS PAGE'S GATES (2026-08-28). A cold /agents
  * crosses two pending states back to back — the workspace resolve in
@@ -53,7 +55,7 @@ export function AgentsPageSkeleton({
 
 /**
  * One `TemplatePanel` — `SectionPanel`'s box on the workspace default ground,
- * over `TemplateGrid`'s auto-fill card grid.
+ * over `TemplateGrid`'s four-column card grid (`TEMPLATE_GRID`).
  *
  * ⚠ NOT `SectionPanel` ITSELF: it takes a `label` STRING and paints it as an
  * `<h2>`, and a skeleton must carry no text. What it keeps is the box

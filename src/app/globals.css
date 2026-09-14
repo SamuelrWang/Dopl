@@ -1171,19 +1171,26 @@ html {
    only gets wider — never swapped for a field. 36px is THE control height for
    this header: Invite and both segmented selectors are cut to it too.
 
-   ⚠ OVERLAY, NOT RESERVED LAYOUT. `.search-expand` stays one button wide and
-   the shell is absolutely pinned `right: 0` inside it, so the pill grows
-   LEFTWARD and no sibling moves. Reserving the open width instead shoves the
-   CTA sideways while the pill is still closed.
+   ⚠ THE BOX IS THE PILL'S CURRENT WIDTH, AND `[data-open]` IS WHAT SAYS WHICH.
+   CLOSED it is one button wide and the shell — absolutely pinned `right: 0` —
+   would grow LEFTWARD over its siblings; OPEN the box reserves the full 260px so
+   nothing is overlaid (Samuel, 2026-09-13: /home's pill is always open, and an
+   overlay there sat on the New-channel button). ⚠ **BOTH STATES ARE LOAD-BEARING:
+   /home passes `data-open="true"` unconditionally, and the landing banner's
+   chrome (`marketing/components/banner-demo/demo-home-chrome.tsx`) renders the
+   CLOSED pill — a flat 260px here leaves 224px of dead space in that header.
 
    ⚠ The `[data-open]` rules must stay AFTER `.auth-btn-3d-light` — they
    override its hover/press face for the span where the pill is a field. */
 .search-expand {
   position: relative;
-  /* FIXED OPEN (2026-09-13): the pill no longer grows — layout reserves the
-     open width, so nothing overlays a sibling. */
-  width: 260px;
+  width: 36px;
   height: 36px;
+}
+/* OPEN = RESERVED LAYOUT (2026-09-13): the box takes the shell's open width, so
+   the pill sits in the row instead of over the control beside it. */
+.search-expand[data-open="true"] {
+  width: 260px;
 }
 
 .search-expand-shell {

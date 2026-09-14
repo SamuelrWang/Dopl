@@ -405,6 +405,29 @@ describe("creating", () => {
     await waitFor(() => expect(ontologyName()).toBe("New cluster"));
     expect(NEW_CLUSTER_ID).toBe("cluster-new");
   });
+
+  /**
+   * 🔒 **AND IT LANDS THERE AFTER THE BOARD HAS BEEN EDITED, WHICH IS THE CASE
+   * THAT BROKE.** One keystroke sets `use-ontology.ts › dirtyRef`, after which the
+   * reducer ignores every later snapshot — so the pin /home moves to the minted id
+   * named a cluster the board had never heard of, and the pane read "This ontology
+   * is no longer here.", its sentence for a DELETED one. The host's `boardEpoch`
+   * `key` is the fix and its docblock carries why a remount is safe.
+   * ⚠ MUTATION-VERIFIED — one revert (drop that `key`), one failure.
+   */
+  it("lands on the new ontology even when the board has unsaved local edits", async () => {
+    renderHome();
+    await openOntologyFace();
+
+    // One keystroke is all it takes: every dispatch sets the store's dirty flag.
+    fireEvent.change(await screen.findByLabelText("Description"), {
+      target: { value: "Deals in flight, edited" },
+    });
+    await createOntologyFromSwitcher();
+
+    await waitFor(() => expect(ontologyName()).toBe("New cluster"));
+    expect(screen.queryByText("This ontology is no longer here.")).toBeNull();
+  });
 });
 
 /**

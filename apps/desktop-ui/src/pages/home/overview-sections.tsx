@@ -134,10 +134,13 @@ import { PAGE_ACTION_BTN } from "./panel-buttons";
  * for. ⚠ **"Not counted this period" STAYS GONE**: the sentence always has a
  * number in it now.
  * ⚠ **THE FIGURE IS A COUNTER AND THE PLOT IS A LEDGER, AND THE LEDGER IS THE
- * LOOSER OF THE TWO.** Its writer is fire-and-forget and its scan is capped
- * (`scanCreditEvents`), and an unreadable ledger degrades to zero rows — so the
- * plot can sit BELOW this bar without the bar being wrong. That direction is
- * expected; the reverse would be a bug.
+ * LOOSER OF THE TWO** — its scan is capped (`scanCreditEvents`) and an unreadable
+ * ledger degrades to zero rows, so the plot can sit BELOW this bar without the
+ * bar being wrong. That direction is expected; the reverse would be a bug.
+ * ⚠ **"Its writer is fire-and-forget" IS DELETED, NOT SOFTENED (F-693):** the
+ * row is written inside the counter's own transaction now, which is why a
+ * residual difference is worth PRINTING (`Unreconciled`, below) rather than
+ * shrugging at.
  *
  * ⚠ **A DENOMINATOR IS NOT A MEASUREMENT (INVARIANTS §11)** — hence the
  * personal-wallet constant standing in for a 0 `limit`, above.
@@ -257,7 +260,7 @@ export function seriesTotal(points: readonly HomeSeriesPoint[]): number {
  * `charts/bar-series.tsx › monthDayLabel`, the ONE `m/d` formatter (the other
  * caller is `pages/overview/activity-chart.tsx`).
  */
-export function binLabel(at: string, bucket: HomeOverviewBucket): string {
+function binLabel(at: string, bucket: HomeOverviewBucket): string {
   if (bucket === "hour") return `${at.slice(11, 13)}:00`;
   return monthDayLabel(at);
 }

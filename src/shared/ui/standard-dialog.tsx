@@ -43,6 +43,29 @@ export const DIALOG_TITLE =
   // the casing in CSS, so callers keep writing "New agent".
   cn("px-9 text-center capitalize", SECTION_HEADING_TEXT);
 
+/**
+ * THE SAME HEADING WITH THE CASING LEFT ALONE — for a title that INTERPOLATES A
+ * NAME SOMEBODY TYPED (`titleCase={false}`).
+ *
+ * 🔒 **`text-transform: capitalize` REWRITES THE FIRST LETTER OF EVERY WORD, AND
+ * IT CANNOT BE TOLD WHICH WORDS ARE THE OPERATOR'S.** An ontology called
+ * "iPhone leads" renders as "IPhone Leads" under the rule above, and "macOS
+ * notes" as "MacOS Notes" — a dialog quietly misspelling the row it is about.
+ * Samuel's ruling is about the AUTHORED titles ("New agent", "Add field"), which
+ * is every title in the app but the handful that carry a name, so Title Case
+ * stays the DEFAULT and the exception is opted into at the one call site that
+ * needs it.
+ *
+ * ⚠ **STILL NOT A `.toUpperCase()`/`.toLowerCase()` IN THE STRING, EITHER WAY.**
+ * `title` is `ModalShell`'s `aria-label` as well as the visible text, so casing
+ * done in JS changes what a screen reader says and what every
+ * `getByRole("dialog", { name })` matches. Both faces are CSS-only.
+ */
+export const DIALOG_TITLE_AS_TYPED = cn(
+  "px-9 text-center",
+  SECTION_HEADING_TEXT
+);
+
 /** Shared geometry of the footer pair. FULLY ROUNDED (Samuel, 2026-08-27) —
  *  both buttons, on every standard dialog, no square-cornered exception. */
 const DIALOG_BTN = "h-10 rounded-full px-4 text-body font-medium";
@@ -65,6 +88,7 @@ export function StandardDialog({
   open,
   onClose,
   title,
+  titleCase = true,
   closeLabel = "Close",
   children,
 }: {
@@ -72,6 +96,12 @@ export function StandardDialog({
   onClose: () => void;
   /** Visible heading AND the dialog's accessible name — see the docblock. */
   title: string;
+  /**
+   * `false` for a title that carries a name the operator typed — see
+   * {@link DIALOG_TITLE_AS_TYPED}. Default `true`: every AUTHORED title is
+   * Title Case (Samuel, 2026-09-13).
+   */
+  titleCase?: boolean;
   /** Accessible name for the X, where a page has more than one open dialog. */
   closeLabel?: string;
   children: ReactNode;
@@ -89,7 +119,9 @@ export function StandardDialog({
       {/* ⚠ The body owns the scroll, not `.cardNarrow`: the heading and the
           footer must not scroll away from a long form. */}
       <div className="flex max-h-[76vh] flex-col gap-4 overflow-y-auto p-6">
-        <h2 className={DIALOG_TITLE}>{title}</h2>
+        <h2 className={titleCase ? DIALOG_TITLE : DIALOG_TITLE_AS_TYPED}>
+          {title}
+        </h2>
         {children}
       </div>
     </ModalShell>

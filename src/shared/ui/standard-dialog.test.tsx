@@ -62,6 +62,32 @@ describe("the heading", () => {
     // size (`docs/DESIGN-SYSTEM.md` § Type scale).
     expect(heading.className).not.toContain("text-title");
   });
+
+  /**
+   * 🔒 **A TITLE THAT CARRIES A NAME SOMEBODY TYPED KEEPS ITS OWN CASING.** CSS
+   * `capitalize` uppercases the first letter of EVERY word and cannot be told
+   * which words are the operator's, so "Share iPhone leads" rendered as "Share
+   * IPhone Leads" — the dialog misspelling the row it is about. Samuel's Title
+   * Case ruling is about the AUTHORED titles, which is why the default stays
+   * `true` and `titleCase={false}` is the exception (`pages/home/ontology-share.tsx`).
+   */
+  it("drops `capitalize` — and nothing else — when `titleCase` is false", async () => {
+    render(
+      <StandardDialog open onClose={vi.fn()} title="Share iPhone leads" titleCase={false}>
+        <p>body</p>
+      </StandardDialog>
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.getAttribute("aria-label")).toBe("Share iPhone leads");
+    const heading = screen.getByRole("heading", { name: "Share iPhone leads" });
+    expect(heading.className).not.toMatch(/\bcapitalize\b/);
+    expect(heading.className).not.toMatch(/\buppercase\b/);
+    // Same centring and the same type — only the casing is opted out of.
+    expect(heading.className).toContain("text-center");
+    for (const token of SECTION_HEADING_TEXT.split(" ")) {
+      expect(heading.className).toContain(token);
+    }
+  });
 });
 
 describe("the footer pair", () => {
