@@ -244,11 +244,17 @@ describe("the accent, rendered", () => {
     expect(container.querySelector("[data-agent-color]")).toBeNull();
   });
 
-  it("RINGS the pill in the agent's colour, rounded to the pill's own shape", () => {
+  it("RINGS the pill in the agent's colour — a stadium on the outer sides, SQUARE where it meets the bar", () => {
+    // 🔒 Samuel, 2026-09-14, twice: "where it connects with the bar, it should be a
+    // straight, not rounded" → the ring's bar-side edge is a straight vertical line.
     const { container } = renderRow();
     const wrap = ring(container)!;
     expect(wrap.className).toContain("ring-2");
-    expect(wrap.className).toContain("rounded-full");
+    expect(wrap.className).not.toMatch(/\brounded-full\b/);
+    expect(wrap.className).toMatch(/rounded-(l|r)-full/);
+    expect(wrap.className).toMatch(/rounded-(l|r)-none/);
+    // Peer post (left-aligned, bar on the left): the LEFT side is the square one.
+    expect(wrap.className).toContain("rounded-r-full rounded-l-none");
     // ⚠ THE TOKEN BY REFERENCE — `lib/agent-colors.ts › agentColorVar` is the only place the
     // name is spelled, and Tailwind cannot carry a colour chosen by a runtime key.
     expect(wrap.style.getPropertyValue("--tw-ring-color")).toBe("var(--agent-color-07)");

@@ -99,7 +99,12 @@ const ACCENT_BAR = "w-[3px] shrink-0 self-stretch rounded-b-full";
  * ⚠ **NO `ring-offset-*`.** The offset is exactly what the selected colour circle wants and
  * exactly what this must not have: the ring has to REACH the bar (see {@link GUTTER}).
  */
-const ACCENT_RING = "inline-flex max-w-full rounded-full ring-2";
+// ⚠ **SQUARE ON THE BAR SIDE (Samuel, 2026-09-14, over the first cut: "where it connects
+// with the bar, it should be a straight, not rounded" — "it was not fixed?"): the ring
+// is a stadium on the OUTER three sides and a straight vertical edge on the side that
+// meets the bar, so ring and bar read as one continuous line of colour.
+const ACCENT_RING = "inline-flex max-w-full ring-2";
+const ACCENT_RING_SHAPE = { me: "rounded-l-full rounded-r-none", peer: "rounded-r-full rounded-l-none" } as const;
 
 /**
  * **WHY THE PILL AND THE BAR TOUCH, IN TWO NUMBERS.**
@@ -284,7 +289,7 @@ export function AuthoredRow({
       >
         {pill && (
           <span
-            className={cn(ACCENT_RING, GUTTER_PULL[edge])}
+            className={cn(ACCENT_RING, ACCENT_RING_SHAPE[edge], GUTTER_PULL[edge])}
             /* ⚠ THE ONE VALUE TAILWIND CANNOT CARRY FOR A RUNTIME KEY — see
                {@link ACCENT_RING}. */
             style={{ ["--tw-ring-color" as string]: accent.paint }}
