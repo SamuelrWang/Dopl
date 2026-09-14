@@ -262,6 +262,9 @@ function wireSpaServices(deps) {
     // on every surface that reads `channel_sessions` (Samuel: "why do i see so
     // many agents in the overview … i should not see ended agents"). `kick` is a
     // no-op until armed and signed in, so this costs nothing on a signed-out boot.
+    // ⚠ AND ITS FAILURE IS REPAIRED BY THE WRITER'S OWN BACKOFF (2026-09-14,
+    // `session-state-push-retry.js`) — this is the one cycle with no next state change to wait
+    // for, and on 2026-09-14 01:02 it aborted against a slow local API and left the run's rows wrong.
     try { deps.sessionStatePush.kick(); }
     catch (err) { deps.diag('session-state push boot kick error', err && err.message); }
   };

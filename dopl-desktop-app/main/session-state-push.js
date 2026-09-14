@@ -12,6 +12,11 @@
 // wall-clock value inside `setDigest`'s input turns the digest gate this module is built around into a writer for sets
 // that did not move (`session-telemetry.js` argues the same hazard for `lastActivityAt`). A future wave that still needs
 // it needs a reason this one did not have, and must state it HERE.
+// ⚠ AND A FAILED CYCLE RETRIES ON A BACKOFF SINCE 2026-09-14 (`session-state-push-retry.js` carries
+// the incident), WHICH IS NOT THE TIMER THIS FORBIDS: armed by a FAILURE and by nothing else,
+// cleared by a success, absent on a machine whose pushes land — so "no heartbeat" is unchanged. It
+// replaces "the session's next real state change is the retry", which was true of a SESSION and
+// false of a BOOT RECONCILE — that cycle has no next state change to wait for.
 // ⚠ THE TRIGGER IS NOT DERIVED HERE. session-summary.js is the ONE place engine state becomes a pill state, and it
 // already coalesces and fires only when the digest moved. This SUBSCRIBES and re-derives nothing. Anything else is the
 // two-readers-one-fact defect. ⚠ SEPARATE MODULE because session-summary.js is network-free above `module.exports` —
@@ -52,6 +57,9 @@ const telemetry = require('./session-telemetry');
 // list would delete this machine's projection every time it spoke. `delivery-ack.js` therefore
 // HOLDS receipts and this drains them into the payload it was going to send anyway.
 const deliveryAck = require('./delivery-ack');
+// THE FAILURE LANE (2026-09-14) — the once-per-shape log line, `retryable`, and the BACKOFF that
+// re-runs a FAILED reconcile until one lands. ABOVE THE SENTINEL like every dep; its header carries the incident.
+const retryLane = require('./session-state-push-retry');
 const Store = require('electron-store');
 
 const store = new Store();
@@ -69,9 +77,11 @@ const HTTP_TIMEOUT_MS = 15000;
 // a process that is gone.
 const REPORTED_WORKSPACES_KEY = 'sessionReportWorkspaces';
 
-// ⚠ BOUNDED RETRY, deliberately small (ui-sync's ~39 000-attempt storm is the cautionary tale). Two attempts, one fixed
-// gap, then STOP — the digest is NOT recorded on failure, so the session's next real state change is the retry. Bounded
-// by the session's life, not a timer.
+// ⚠ THE INNER, PER-POST RETRY, deliberately small (ui-sync's ~39 000-attempt storm is the cautionary tale). Two
+// attempts, one fixed gap, then this POST gives up and the CYCLE is failed. ⚠ WHAT HAPPENS NEXT IS THE OUTER LANE'S
+// (`session-state-push-retry.js`): a failed cycle re-runs off the CURRENT projection on a backoff until one lands,
+// because "the next state change is the retry" left a whole run's rows wrong on 2026-09-14. The digest rule is what
+// makes both safe — nothing is recorded on failure, so any later cycle re-sends the set.
 const MAX_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 2000;
 
@@ -94,12 +104,18 @@ const pushedDigest = new Map();
 // question — that map says "is this set new", these say "is what is new worth a write NOW".
 const pushedStateDigest = new Map();
 const pushedAt = new Map();
-// One line per (workspace, failure shape). A subsystem that dies must say so ONCE, not once
-// per state change.
-const loggedFailures = new Set();
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const short = (id) => String(id || '').slice(0, 8);
+
+// THE FAILURE LANE, MINTED PER WRITER because it REMEMBERS (the shapes it has said, the
+// consecutive-failure count, its one timer) — the same reason `makeWireFilter` is a factory. ⚠ The
+// retry's run is `kick(true)`: a normal cycle off the CURRENT projection, coalesced through
+// `schedule` like any state change, and the `true` is what keeps it from resetting its own ladder.
+// ⚠ NO TIMER FUNCTION IS NAMED HERE — the lane defaults to the real clock and the suites inject a
+// hand-driven one at ITS seam, so the timer count in THIS file is still just the gap above
+// (`session-telemetry-cadence.test.mjs` pins that as a source fact).
+const { noteFailure, clearFailures, forgetFailures, retryable, armRetry, clearRetry } =
+  retryLane.makeFailureLane(diag, () => kick(true));
 
 /**
  * **ONE OF THE SIXTEEN AGENT COLOUR KEYS, OR `null`** (2026-09-13;
@@ -260,31 +276,13 @@ function rememberWorkspace(userId, workspaceId, hasRows) {
   }
 }
 
-// ── Failure reporting: once per distinct shape, and it says what it costs ────────────────
-function noteFailure(workspaceId, shape, detail) {
-  const key = String(workspaceId) + '|' + shape;
-  if (loggedFailures.has(key)) return;
-  loggedFailures.add(key);
-  diag('session-state push failed —', detail, 'ws', short(workspaceId),
-    '— read_sessions will not see this machine until a later state change succeeds');
-}
-
-function clearFailures(workspaceId) {
-  const prefix = String(workspaceId) + '|';
-  for (const key of [...loggedFailures]) {
-    if (key.startsWith(prefix)) loggedFailures.delete(key);
-  }
-}
-
-// A 5xx or a 429 may differ next time; a 4xx will not (a bad payload, a workspace this
-// credential is not in, an expired session api-repair already retried once).
-function retryable(status) {
-  return status === 429 || status >= 500;
-}
-
 /**
- * POST one workspace's whole set, plus any delivery receipts riding along. Returns whether the
- * server stored it.
+ * POST one workspace's whole set, plus any delivery receipts riding along.
+ *
+ * ⚠ THREE ANSWERS, NOT TWO (2026-09-14): `true` stored; `'retry'` failed on a shape that may answer
+ * differently (a network throw — the incident's aborted fetch — or an exhausted 429/5xx); `false`
+ * failed on one that will not (a 4xx). Only `'retry'` may arm the outer lane, because a timer over
+ * a bad payload is the ui-sync storm with a longer period.
  *
  * ⚠ `acks` IS OMITTED WHEN EMPTY, not sent as `[]`. The key is optional on the endpoint
  * (`schema-sessions.ts › SessionStateReportSchema`) and every build in the field posts without
@@ -305,15 +303,15 @@ async function send(workspaceId, rows, acks) {
       });
     } catch (err) {
       if (attempt < MAX_ATTEMPTS) { await sleep(RETRY_DELAY_MS); continue; }
-      noteFailure(workspaceId, 'network', (err && err.message) || 'network error'); return false;
+      noteFailure(workspaceId, 'network', (err && err.message) || 'network error'); return 'retry';
     }
     if (res && res.ok) { discardBody(res); clearFailures(workspaceId); return true; }
     const status = (res && res.status) || 0; discardBody(res); // nothing below reads it
     if (retryable(status) && attempt < MAX_ATTEMPTS) { await sleep(RETRY_DELAY_MS); continue; }
     noteFailure(workspaceId, 'http-' + status, 'HTTP ' + status);
-    return false;
+    return retryable(status) ? 'retry' : false;
   }
-  return false;
+  return 'retry';
 }
 
 /**
@@ -324,7 +322,8 @@ async function send(workspaceId, rows, acks) {
 async function cycle(entries) {
   const userId = (deps.getUserId && deps.getUserId()) || null;
   trackOrigin(entries, userId);
-  if (!userId) return; // signed out: nothing here is ours to assert
+  // ⚠ SIGNED OUT DISARMS THE LANE: nothing here is ours, and the sign-in transition kicks its own cycle.
+  if (!userId) { clearRetry(); return; }
   if (userId !== lastUserId) {
     // A different operator's server state is unknown here and their failures are not ours.
     // ⚠ Nothing carries across except the origin stamps, which are the whole point.
@@ -335,7 +334,7 @@ async function cycle(entries) {
     // the one carrying its whole set.
     pushedStateDigest.clear();
     pushedAt.clear();
-    loggedFailures.clear();
+    forgetFailures(); // …and the ladder with them: a new operator starts at the first rung
     // ⚠ THE RECEIPTS ARE NOT CLEARED HERE, AND THAT IS DELIBERATE (2026-09-02, A9). They carry
     // the identity that earned them (`delivery-ack.js`), and `take` hands back only this
     // operator's — so the cross-account rule holds whether or not anything noticed the
@@ -359,6 +358,7 @@ async function cycle(entries) {
   for (const ws of deliveryAck.pendingWorkspaces(userId)) {
     if (!groups.has(ws)) groups.set(ws, []);
   }
+  let wantsRetry = false; // any workspace whose POST failed on a shape that may answer differently
   for (const [ws, rows] of groups) {
     // ⚠ TAKEN BEFORE THE GATES BELOW MAY `continue`, and PUT BACK on every path that does not
     // send: a receipt held past a skipped cycle is a receipt this machine forgot it owed.
@@ -380,7 +380,11 @@ async function cycle(entries) {
     if (!stateMoved && acks.length === 0 && !telemetry.floorAllows(pushedAt.get(ws), Date.now())) continue;
     // Serial on purpose: a burst of parallel writes is what this design exists to avoid.
     const stored = await send(ws, rows, acks);
-    if (!stored) { deliveryAck.restore(ws, acks, userId); continue; } // NOT recorded, so the next real change retries
+    if (stored !== true) { // NOT recorded, so ANY later cycle re-sends this set
+      deliveryAck.restore(ws, acks, userId);
+      if (stored === 'retry') wantsRetry = true;
+      continue;
+    }
     pushedDigest.set(ws, digest);
     pushedStateDigest.set(ws, state);
     // ⚠ STAMPED AFTER THE SEND. `send` can hold 15s plus a retry, and a stamp taken before it
@@ -388,12 +392,19 @@ async function cycle(entries) {
     pushedAt.set(ws, Date.now());
     rememberWorkspace(userId, ws, rows.length > 0);
   }
+  // ⚠ THE WHOLE CYCLE IS THE UNIT, and a CLEAN one arms NOTHING — including a cycle where nothing
+  // was due (every set inside the digest gate), so a quiet machine holds no timer.
+  if (wantsRetry) armRetry();
+  else clearRetry();
 }
 
 /** Coalesce: a cycle already running takes the newest entries when it comes round again,
  *  so a state change during a slow POST can never start a second overlapping run. */
-function schedule(entries) {
+function schedule(entries, fromRetry) {
   if (!armed) return;
+  // ⚠ A REAL STATE CHANGE RESETS THE LADDER AND RUNS AT ONCE — its set supersedes the one that
+  // failed. A retry's own re-run passes `true`, or it would reset itself to 15s forever: a poll.
+  if (!fromRetry) clearRetry();
   queued = Array.isArray(entries) ? entries : [];
   if (running) return;
   running = true;
@@ -440,9 +451,9 @@ function start(opts) {
  * credential is not a state change, so nothing fires on its own — yet a run that starts signed
  * out then signs in has a previous run's rows to clear and possibly a live session to report.
  */
-function kick() {
+function kick(fromRetry) {
   if (!armed || !deps.summary || typeof deps.summary.reportList !== 'function') return;
-  schedule(deps.summary.reportList());
+  schedule(deps.summary.reportList(), fromRetry === true);
 }
 
 /**
@@ -463,6 +474,7 @@ function stop() {
   unsubscribe = null;
   armed = false;
   queued = null;
+  clearRetry(); // a disarmed writer holds no timer — `schedule` would refuse the re-run anyway
 }
 
 // ─── END SESSION-STATE-PUSH ─────────────────────────────────────────────────────────────
@@ -483,5 +495,6 @@ module.exports = {
   setDigest,
   TELEMETRY_MIN_INTERVAL_MS: telemetry.TELEMETRY_MIN_INTERVAL_MS, // 2026-08-22, the floor
   retryable,
+  RETRY_BACKOFF_MS: retryLane.RETRY_BACKOFF_MS, // 2026-09-14: the outer lane's ladder
   reportedWorkspaces,
 };

@@ -67,6 +67,12 @@ export const wire = createRequire(import.meta.url)(join(MAIN, "session-state-pus
 // ships. `load()` resets it per case because it is MODULE state.
 export const deliveryAck = createRequire(import.meta.url)(join(MAIN, "delivery-ack.js"));
 
+// ⚠ AND THE REAL FAILURE LANE (2026-09-14): the once-per-shape log line, `retryable`, and the
+// BACKOFF that re-runs a failed reconcile. Injected real for the same reason as the three above —
+// a stubbed ladder is a second program — and `load()` hands it a HAND-DRIVEN clock at its own
+// `timers` seam (see below), because that lane's whole subject is WHEN it fires.
+export const retryLane = createRequire(import.meta.url)(join(MAIN, "session-state-push-retry.js"));
+
 /**
  * A fresh copy of the module, with a fake transport, a fake log, a fake store and a CLOCK.
  *
@@ -95,6 +101,24 @@ export function load(opts = {}) {
   };
   // Immediate, so RETRY_DELAY_MS costs nothing here. It shadows the global inside the block.
   const fakeSetTimeout = (fn) => { Promise.resolve().then(fn); return { unref() {} }; };
+  // ⚠ THE RETRY LANE'S CLOCK IS HAND-DRIVEN, NOT IMMEDIATE — the opposite choice from the line
+  // above, and deliberately: the send gap is a detail a case does not care about, while the
+  // BACKOFF is the subject (`m.retries.pending()` is the delay ladder, `fire()` is a case deciding
+  // the gap elapsed). An immediate one here would also spin a failing cycle forever.
+  const retryTimers = [];
+  let retryId = 0;
+  const retryClock = {
+    set: (fn, ms) => { retryId += 1; retryTimers.push({ id: retryId, fn, ms }); return retryId; },
+    clear: (id) => {
+      const i = retryTimers.findIndex((t) => t.id === id);
+      if (i >= 0) retryTimers.splice(i, 1);
+    },
+  };
+  // The REAL lane, with only its injectable `timers` replaced — one program, a driveable clock.
+  const lane = {
+    ...retryLane,
+    makeFailureLane: (log, run) => retryLane.makeFailureLane(log, run, retryClock),
+  };
   // THE WAKE-ACK BUFFER (2026-09-02, A9) — the REAL module, not a stub. `delivery-ack.js` is
   // pure (no electron, no store, no network), so injecting it keeps these suites testing ONE
   // program; the only thing a case has to remember is that it holds MODULE state, which
@@ -102,6 +126,7 @@ export function load(opts = {}) {
   deliveryAck.reset();
   const api = new Function(
     "apiFetch", "diag", "store", "telemetry", "setTimeout", "Date", "discardBody", "wire", "deliveryAck",
+    "retryLane",
     `${BLOCK}\n return { ${EXPORTED.join(", ")} };`
   )(
     apiFetch, (...parts) => logged.push(parts.join(" ")), store, telemetry, fakeSetTimeout, fakeDate,
@@ -110,7 +135,8 @@ export function load(opts = {}) {
     // test/unread-body-seams.test.mjs; this harness only has to let the code run.
     (res) => res,
     wire,
-    deliveryAck
+    deliveryAck,
+    lane
   );
   return {
     ...api,
@@ -119,6 +145,17 @@ export function load(opts = {}) {
     disk,
     clock,
     setAnswers: (list) => { answers = [...list]; },
+    /** THE BACKOFF, as a case sees it: what is armed, and a way to say "that gap elapsed". */
+    retries: {
+      pending: () => retryTimers.map((t) => t.ms),
+      count: () => retryTimers.length,
+      fire: async () => {
+        const t = retryTimers.shift();
+        assert.ok(t, "no retry was armed");
+        t.fn();
+        await drained();
+      },
+    },
   };
 }
 
