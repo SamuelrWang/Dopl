@@ -111,7 +111,12 @@ const RING = "ring-2 ring-offset-2 ring-offset-bg-elevated";
  */
 export function agentColorsTaken(
   sessions: ReadonlyArray<{
-    state: string;
+    /** ⚠ **OPTIONAL SINCE 2026-09-13, AND ABSENT READS AS LIVE** — which is what this block
+     *  already said about a row that has not reported a state. It is what lets the COMPOSER's
+     *  mount hand over `lib/live-agents.ts`'s peer ∪ own union, whose rows carry no `state`
+     *  because that function has already dropped every ended one. Narrowing them into a fake
+     *  `state` at the call site would be a second liveness rule. */
+    state?: string | null;
     color?: AgentColorKey | null;
     agentId?: string | null;
     name?: string | null;

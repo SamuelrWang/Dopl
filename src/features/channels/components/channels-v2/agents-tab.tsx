@@ -174,24 +174,6 @@ export function AgentsTab({
   );
 
   /**
-   * The picker's launch, adapted from the flat prop the tab already takes.
-   *
-   * ⚠ IT NEVER INVENTS A SUCCESS. A caller that hands down a void-returning
-   * `onLaunchAgent` (an older mount, a test double) leaves the picker with
-   * nothing to read, and reporting that as `{ ok: true }` would swallow a
-   * refusal — this whole family's oldest bug. `no-bridge` is the honest answer
-   * and it already has copy.
-   */
-  async function launchFromPicker(
-    threadId: string | null,
-    templateId: string | null,
-    overrides?: TemplateLaunchOverrides
-  ): Promise<AgentLaunchOutcome> {
-    const res = await onLaunchAgent?.(threadId, templateId, overrides);
-    return res ?? { ok: false, reason: "no-bridge" };
-  }
-
-  /**
    * THE POPUP'S CONTROLS, ASSEMBLED FROM THE FLAT PROPS THIS TAB ALREADY TAKES.
    *
    * ⚠ NOT A SECOND LAUNCH PATH — every face reaches `use-agents-panel.ts ›
@@ -237,12 +219,15 @@ export function AgentsTab({
    *
    * ⚠ **THIS SUPERSEDES THE ONE-CLICK FACE OF 2026-08-22.** Samuel, verbatim: *"i want to make a
    * pop up for the threads creation as well. And put in the new agent button in the agents tab."*
-   * The popup is preselected to Blank agent, so the same launch is one click plus one Launch.
+   * The popup is preselected to None, so the same launch is one click plus one Launch.
    * **There is still exactly ONE launch lane**: it submits through `onLaunchAgent`, the prop the
-   * face called and the chevron still calls.
+   * face called and the chevron used to call itself.
    *
-   * ⚠ THE CHEVRON IS UNTOUCHED — `TemplateLaunchPicker` is its own adjacent hit target with its
-   * own accessible name, never a menu in front of the button.
+   * ⚠ **AND SINCE 2026-09-13 THE CHEVRON OPENS THE SAME FORM** (Samuel, over the deleted
+   * `launch-sheet.tsx`): `TemplateLaunchPicker` CHOOSES a template and `launch.openWithTemplate`
+   * opens this popup on it. So the split button has two hit targets, two accessible names and
+   * **one form** — the zone is still distinct (never a menu in front of the button), and the
+   * template roster is what it buys.
    * ⚠ BOTH VIEWS GO THROUGH IT, reading `openThreadId ?? null`: thread view lands the agent on
    * that exchange, channel view on the ROOM (2026-08-31, the channel-level lane).
    * ⚠ THE ONLY GATES ARE `canLaunch` (feature detection over the bridge) and a launch already in
@@ -343,13 +328,15 @@ export function AgentsTab({
           currentUserId={currentUserId}
           memberNames={memberNames}
           busy={launchBusy}
-          // ⚠ `openThreadId ?? null` — BYTE-FOR-BYTE THE FACE'S OWN ARGUMENT.
-          // The two halves of the split button must not disagree about where
-          // they launch, so the thread is read the same way on both.
-          launch={(templateId, overrides) =>
-            launchFromPicker(openThreadId ?? null, templateId, overrides)
-          }
-          approve={onApproveTemplate}
+          /* ⚠ **IT CHOOSES AND THE POPUP LAUNCHES (2026-09-13, Samuel's ruling over the
+             deleted launch sheet).** `openWithTemplate` opens the ONE form with the row
+             preselected and its Name / Description / Instructions prefilled — so the two
+             halves of the split button reach the SAME dialog and cannot disagree about where
+             they launch, which is what the `openThreadId ?? null` argument used to buy by hand.
+             ⚠ **`null` IS THE BLANK ROW** and lands on the popup's `None`, the same state the
+             face's own click opens on. ⚠ `approve` LEFT WITH THE LAUNCH: the first-use question
+             is `use-agent-launch-run.ts › useLaunchRunner`'s, on the one lane. */
+          onPick={(template) => launch.openWithTemplate?.(template)}
         />
       )}
     </div>

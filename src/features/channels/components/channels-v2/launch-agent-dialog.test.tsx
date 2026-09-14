@@ -83,11 +83,11 @@ import {
   REAL_DESCRIPTORS,
 } from "../../lib/runtime-descriptors-harness";
 import { LaunchAgentDialog } from "./launch-agent-dialog";
-import {
-  launchWithIdentity,
-  useAgentLaunch,
-  type AgentLaunchPanel,
-} from "./use-agent-launch";
+import { useAgentLaunch, type AgentLaunchPanel } from "./use-agent-launch";
+// ⚠ THE ACT MOVED TO ITS OWN FILE ON 2026-09-13 (`use-agent-launch-run.ts`), on the seam
+// `use-agent-launch.ts`'s header had already named: the Instructions field's prefill and its
+// baseline pushed that file past the §1 cap. The lane is unchanged, which is what §3 below asserts.
+import { launchWithIdentity } from "./use-agent-launch-run";
 import type { AgentLaunchControls } from "./use-agents-panel";
 import { member, ME, PEER } from "./test-fixtures";
 

@@ -305,15 +305,25 @@ function isSafeLabel(value) {
  * would be a second reconciliation rule for a set that already agrees; and a partial merge over
  * a set the operator can edit is how two field lists silently diverge.
  *
- * Answers `{ model: '' | <alias>, fields: null | [{key, value}] }` — `model` already coerced
- * onto the alias vocabulary, `''` meaning "the chain continues".
+ * ⚠ `instructions` JOINED 2026-09-13 (Samuel: *"we should add an Instructions field in the New agent
+ * popup"* — the field that replaced the deleted launch sheet's read-only disclosure). It is PROSE,
+ * so unlike `fields` it takes NO charset rule: `agent-templates/schema.ts › InstructionsSchema` is
+ * `safeOptionalProse` and a newline is legal in it. What it takes is the COLUMN's own bound, and
+ * `''` is "no override" — the popup sends the key only when the operator's text differs from the
+ * template's own (`channels-v2/use-agent-launch-run.ts › launchOverridesOf`).
+ *
+ * Answers `{ model: '' | <alias>, instructions: '' | <prose>, fields: null | [{key, value}] }` —
+ * `model` already coerced onto the alias vocabulary, `''` meaning "the chain continues".
  */
 function narrowOverrides(overrides) {
   const o = overrides && typeof overrides === 'object' ? overrides : {};
   const sessionModel = require('./session-model');
   const asked = typeof o.model === 'string' ? o.model : '';
   const alias = asked ? sessionModel.normalizeModel(asked) : 'default';
-  const out = { model: alias === 'default' ? '' : alias, fields: null };
+  const instructions = typeof o.instructions === 'string'
+    ? o.instructions.slice(0, MAX_INSTRUCTIONS).trim()
+    : '';
+  const out = { model: alias === 'default' ? '' : alias, instructions, fields: null };
   if (!Array.isArray(o.fields)) return out;
   const kept = [];
   const seen = new Set();
@@ -335,16 +345,28 @@ function narrowOverrides(overrides) {
 }
 
 /**
- * The template this spawn actually runs as: the resolved row with the sheet's field overrides
- * substituted. ⚠ MODEL IS NOT APPLIED HERE — it belongs to the PRECEDENCE CHAIN, which is
- * computed once in `session-launch-op.js` and must not be half-resolved in two places.
- * ⚠ `null` template in, `null` out: a BLANK agent may still carry a model override (the sheet
- * opens on `Blank agent` too), and that is the chain's business, not this function's.
+ * The template this spawn actually runs as: the resolved row with the popup's field and
+ * instructions overrides substituted. ⚠ MODEL IS NOT APPLIED HERE — it belongs to the PRECEDENCE
+ * CHAIN, which is computed once in `session-launch-op.js` and must not be half-resolved in two
+ * places.
+ * ⚠ `null` template in, `null` out: a BLANK agent may still carry a model override, and that is
+ * the chain's business, not this function's. ⚠ **SO A BLANK AGENT'S `instructions` OVERRIDE IS
+ * DROPPED, AND THAT IS A KNOWN GAP RATHER THAN A DECISION (F-695).** `prompt-framing-template.js ›
+ * templateRoleFraming` emits nothing without a role NAME, so an instructions-only role needs a
+ * ruling on what that heading says; until then the popup's field is honoured on a TEMPLATE launch
+ * and inert on a blank one.
+ * ⚠ **THE INSTRUCTIONS ARE SUBSTITUTED AFTER THE APPROVAL GATE — the ordering that gate's own
+ * comment demands, and it is what keeps the question honest.** What a foreign template's first use
+ * asks the operator to accept is the text THEY DID NOT WRITE; splicing their own edit in first
+ * would put renderer text in front of that question. `authoredByCaller` is deliberately NOT flipped
+ * by an edit either: it is the SERVER's boolean about the ROW, and the framing fails FOREIGN.
  */
 function applyOverrides(template, narrowed) {
   if (!template) return null;
   const fields = narrowed && narrowed.fields;
-  return fields ? { ...template, fields } : template;
+  const instructions = (narrowed && narrowed.instructions) || '';
+  const next = fields ? { ...template, fields } : template;
+  return instructions ? { ...next, instructions } : next;
 }
 
 module.exports = {

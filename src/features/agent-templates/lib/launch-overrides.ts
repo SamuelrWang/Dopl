@@ -15,6 +15,20 @@ import type { AgentTemplate, TemplateField } from "../client/types";
  * OQ-2, which recommended model-only for the first wave). The product statement
  * is that a launch may re-point both, so shipping model-only would have meant a
  * second form and a second wave for the half already designed.
+ * ⚠ **AND INSTRUCTIONS SINCE 2026-09-13** (Samuel, over the launch sheet), which
+ * is the field the 2026-08-22 wave explicitly refused. See
+ * {@link TemplateLaunchOverrides.instructions}.
+ *
+ * ⚠ **THE ONE PRODUCER IS `channels-v2/use-agent-launch.ts › launchOverridesOf`
+ * SINCE THE LAUNCH SHEET WAS DELETED (2026-09-13).** It builds `model` and
+ * `instructions`; **nothing in the renderer produces `fields` any more**, and
+ * {@link overridesFor} / {@link boundOverrideFields} therefore have no component
+ * caller left. They are KEPT rather than deleted for two measured reasons: the
+ * `fields` key is still honoured end-to-end by `main/template-resolve.js ›
+ * narrowOverrides`, so the wire contract is live whether or not a form produces
+ * it; and the four `MAX_OVERRIDE_*` numbers are mirror-pinned against the schema's
+ * own bounds by `../schema-sql.test.ts`. **Deleting them is a ruling about the
+ * WIRE, not a cleanup of this file.**
  *
  * ⚠ THE CHARSET RULE IS NOT RE-STATED HERE, DELIBERATELY, AND THE BOUNDS BELOW
  * ARE ONLY THE NUMBERS. `SAFE_LABEL_RE` lives in `@/shared/lib/safe-label`,
@@ -32,6 +46,16 @@ import type { AgentTemplate, TemplateField } from "../client/types";
  * way the durable row could never have held.
  */
 
+/**
+ * The instructions bound, mirroring `../schema.ts › MAX_INSTRUCTIONS_CHARS` and
+ * `main/template-resolve.js › MAX_INSTRUCTIONS` — the COLUMN's own CHECK.
+ *
+ * ⚠ **THE SAME NUMBER, DELIBERATELY.** `main/prompt-framing-template.js`'s F-287
+ * block is the argument: a smaller bound at a later layer is not extra safety, it
+ * is one layer quietly deciding the operator's configuration says less than it
+ * says while every other surface keeps showing the whole thing.
+ */
+export const MAX_OVERRIDE_INSTRUCTIONS_CHARS = 32_768;
 export const MAX_OVERRIDE_KEY_CHARS = 80;
 export const MAX_OVERRIDE_VALUE_CHARS = 1000;
 export const MAX_OVERRIDE_FIELD_COUNT = 50;
@@ -50,6 +74,34 @@ export interface TemplateLaunchOverrides {
   /** An SDK model id. Absent ⇒ the template's `model`, or the desktop's own
    *  default when the template carries none. */
   model?: string;
+  /**
+   * WHAT THIS RUN IS TOLD TO DO, REPLACING the template's own `instructions` for
+   * this spawn alone (2026-09-13, Samuel: *"we should add an Instructions field
+   * in the New agent popup"*).
+   *
+   * ⚠ **THE LAUNCH SHEET'S READ-ONLY DISCLOSURE IS WHAT THIS REPLACED, AND THAT
+   * IS THE RULING THAT DELETED IT.** This module's header said *"MODEL AND
+   * FIELDS, both … an editable instructions box at launch is a SECOND AUTHORING
+   * SURFACE for the durable thing"* — Samuel overruled the second half on
+   * 2026-09-13 and the first half is untouched: nothing here is written back, so
+   * the durable template is exactly as unaffected as a model re-point leaves it.
+   * The editor is still the only AUTHORING surface; this is one run's copy.
+   * ⚠ **ABSENT IS STILL THE ONLY SPELLING OF "NO OVERRIDE"**, and the popup
+   * measures against the TEMPLATE'S OWN PROSE rather than against empty
+   * (`channels-v2/use-agent-launch.ts › launchOverridesOf`) — otherwise every
+   * template launch would carry a redundant copy of text main is about to read
+   * from the row anyway.
+   * ⚠ **NO CLIENT-SIDE CHARSET RULE, AND NOT AN OVERSIGHT** — the module header's
+   * F-281 note: instructions are PROSE (`../schema.ts › InstructionsSchema` is
+   * `safeOptionalProse`, newlines legal), the `<textarea>` bound is the length
+   * cap below, and MAIN re-validates (`main/template-resolve.js ›
+   * narrowOverrides`) before any of it reaches a prompt.
+   * ⚠ **A LAUNCH CARRYING THIS AND NO `templateId` IS NOT HONOURED TODAY** —
+   * `main/template-resolve.js › applyOverrides` answers `null` for a null
+   * template, so a BLANK agent's instructions are dropped in main. Filed as
+   * F-695; Samuel owes the ruling on what a nameless role block says.
+   */
+  instructions?: string;
   /** REPLACES the template's `fields` for this spawn — never merged. A partial
    *  merge over a set the operator can edit is how two field lists silently
    *  diverge (`../schema.ts`'s replace-set rule, same argument). */

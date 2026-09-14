@@ -54,6 +54,13 @@ const descriptionForAgent = () => names.description;
 // exactly as they did when the mapping lived in the sliced block.
 const pill = req(join(MAIN, "session-pill.js"));
 const { PILL_STATES, ACTIVITY_PILL, PILL_ENDED, pillState, queryTornDown, listeningState } = pill;
+// ⚠ `displayText` / `TEMPLATE_NAME_MAX` MOVED OUT ON 2026-09-13 (`main/session-summary-text.js`),
+// when the agent-colour field met the 500-line cap. Injected REAL and MERGED into the returned api
+// below, exactly as the pill mapping is, so `m.displayText` still resolves for every case that
+// drives it — and they left `EXPORTED` in the same change, because that list is a NAME LIST for a
+// `new Function` return and a name the block no longer declares is a ReferenceError at LOAD.
+const summaryText = req(join(MAIN, "session-summary-text.js"));
+const { displayText, TEMPLATE_NAME_MAX } = summaryText;
 
 const BEGIN = "// ─── BEGIN SESSION-SUMMARY-PURE";
 const from = SRC.indexOf(BEGIN);
@@ -75,7 +82,7 @@ for (const banned of ["require(", "electron", "child_process", "@anthropic", "fe
 // exactly what happened. ⚠ Anything added here must be a real declaration inside the block;
 // there is no such thing as a "mostly right" entry.
 const EXPORTED = [
-  "displayText", "liveSummary", "endedSummary",
+  "liveSummary", "endedSummary",
   "nameOf", "summariesDigest", "SESSIONS_EVENT", "PUSH_COALESCE_MS",
   // ⚠ `MAX_ENDED` and `sweepEnded` LEFT THIS LIST ON 2026-08-22 (Samuel's ended-agent ruling):
   // retained ended cards are read from the DURABLE history (`agent-history.js`), bounded by
@@ -101,6 +108,8 @@ export function load() {
     "detailFor",
     "displayNameFor",
     "descriptionForAgent",
+    "displayText",
+    "TEMPLATE_NAME_MAX",
     "PILL_STATES",
     "ACTIVITY_PILL",
     "PILL_ENDED",
@@ -111,6 +120,7 @@ export function load() {
     `${BLOCK}\n return { ${EXPORTED.join(", ")} };`
   )(
     metricOrNull, metrics, noteEvent, detailFor, displayNameFor, descriptionForAgent,
+    displayText, TEMPLATE_NAME_MAX,
     PILL_STATES, ACTIVITY_PILL, PILL_ENDED, pillState, queryTornDown, listeningState,
     (...parts) => logged.push(parts.join(" "))
   );
@@ -125,7 +135,7 @@ export function load() {
   };
   // ⚠ The mapping's names are merged in, not re-declared: `m.pillState` and friends resolve to
   // the REAL `session-pill.js`, which is what keeps the split invisible to every case here.
-  return { ...pill, ...api, sent, logged, spaWindow };
+  return { ...pill, ...summaryText, ...api, sent, logged, spaWindow };
 }
 
 /**

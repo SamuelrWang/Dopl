@@ -86,7 +86,13 @@ test("REPORT: `list()` narrows the two report-only fields back off — the wire 
     // operator calls an agent never reaches `channel_sessions` — whose `name` CHECK
     // (`^[a-z][a-z0-9-]{1,30}$`) would refuse a human name anyway. A peer's card still shows
     // what THEIR machine reports.
-    "agentId", "channelId", "channelName", "contextUsed", "contextWindow",
+    "agentId", "channelId", "channelName",
+    // ⚠ `color` joined 2026-09-13 (Samuel's agent-colours ruling) and, like `templateName` below,
+    // is NOT local-only: `reportRow` names it on purpose and `channel_sessions.color` receives it
+    // — PEER-VISIBLE by design, since a colour is drawn on every member's transcript. It is not
+    // REPORT-only either, which is all this case claims: the popup's taken set reads it too.
+    "color",
+    "contextUsed", "contextWindow",
     // ⚠ THE HEALTH HALF joined 2026-09-01 (T25 / T50 / T51 / T83). Like `templateName` below,
     // these are NOT local-only — all seven are named in `reportRow` on purpose, with
     // OPERATOR-ONLY columns to receive them. They are not REPORT-only either, which is all this

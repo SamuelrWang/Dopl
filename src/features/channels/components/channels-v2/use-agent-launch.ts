@@ -54,12 +54,10 @@
  * reaches `sessions.rename` the same way, which is the precedent these two follow.
  */
 
-import { useCallback, useState } from "react";
-import type { TemplateApprovalRequest } from "@/features/agent-templates/components/template-approval";
+import { useCallback, useRef, useState } from "react";
 import { getSpaBridge } from "@/shared/lib/spa-bridge";
 import type { AgentColorKey } from "../../types";
 import { AGENT_MODEL_DEFAULT } from "../../lib/agent-models";
-import { LAUNCH_APPROVAL_REASON, type AgentLaunchControls } from "./use-agents-panel";
 
 /**
  * Whether this build honours a pre-assigned instance id.
@@ -83,15 +81,17 @@ export async function mintAgentId(): Promise<string | null> {
   return typeof res?.agentId === "string" && res.agentId ? res.agentId : null;
 }
 
-/** Store what the operator calls this agent. `''` clears it. */
-async function renameAgent(agentId: string, name: string): Promise<boolean> {
+/** Store what the operator calls this agent. `''` clears it. ⚠ EXPORTED for
+ *  `use-agent-launch-run.ts` alone — the ACT half of the §1 split, which is the only caller. */
+export async function renameAgent(agentId: string, name: string): Promise<boolean> {
   const sessions = getSpaBridge()?.sessions;
   if (typeof sessions?.rename !== "function") return false;
   return (await sessions.rename(agentId, name))?.ok === true;
 }
 
-/** Store what the operator says this agent is FOR. `''` clears it. */
-async function describeAgent(agentId: string, description: string): Promise<boolean> {
+/** Store what the operator says this agent is FOR. `''` clears it. ⚠ EXPORTED for
+ *  `use-agent-launch-run.ts` alone, like {@link renameAgent}. */
+export async function describeAgent(agentId: string, description: string): Promise<boolean> {
   const sessions = getSpaBridge()?.sessions;
   if (typeof sessions?.describe !== "function") return false;
   return (await sessions.describe(agentId, description))?.ok === true;
@@ -104,12 +104,58 @@ export function defaultAgentName(agentId: string | null): string {
   return agentId ? `#${agentId}` : "";
 }
 
+/**
+ * WHAT A TEMPLATE HANDS THE POPUP WHEN IT IS PICKED (2026-09-13, Samuel: *"when a user clicks a
+ * template, all of those fields would be pre-filled"*).
+ *
+ * ⚠ **A SHAPE, NOT `AgentTemplate` BY NAME**, exactly as `agents-model.ts › agentLiveness` takes
+ * one: this hook is `features/channels`' and the type is `features/agent-templates`'. The popup
+ * already imports that feature's HOOK, so an import would resolve — but a structural subset is
+ * what lets the picker, the pill row and a test fixture all satisfy it without an adapter, and it
+ * keeps this file honest about the four fields it actually reads.
+ * ⚠ **NO `fields` AND NO KNOWLEDGE.** Those ride the TEMPLATE ID on the wire — main resolves the
+ * row at spawn (`main/session-launch-op.js`) — so a copy here would be a second, staler account
+ * of the same configuration. What is prefilled is what the operator can SEE and CHANGE.
+ */
+export interface AgentTemplatePrefill {
+  id: string;
+  name: string;
+  description?: string | null;
+  instructions?: string | null;
+}
+
 export interface AgentLaunchPanel {
   open: boolean;
   /** The pre-assigned address, or `null` on a build that cannot pre-assign. */
   agentId: string | null;
   name: string;
   description: string;
+  /**
+   * WHAT THIS RUN IS TOLD TO DO — the template's instructions, editable per spawn (Samuel,
+   * 2026-09-13: *"we should add an Instructions field in the New agent popup. That should be a
+   * field under description"*).
+   *
+   * ⚠ **IT REPLACED THE LAUNCH SHEET'S READ-ONLY "Read" DISCLOSURE**, which is the ruling that
+   * deleted that file: a launch had a place to SHOW instructions and no place to change them, and
+   * Samuel asked for the field rather than the disclosure.
+   * ⚠ **OPTIONAL FOR {@link AgentLaunchPanel.color}'s REASON** — the two hand-built panel
+   * literals (`runtime-refusals.test.tsx › panelStub`, `launch-agent-dialog.test.tsx ›
+   * oldPanelState`) are not this hook, and absent reads as "this panel carries no instructions",
+   * which is what those surfaces mean.
+   */
+  instructions?: string;
+  setInstructions?: (next: string) => void;
+  /**
+   * THE TEXT {@link AgentLaunchPanel.applyTemplate} LAST WROTE INTO `instructions` — the BASELINE
+   * the wire is measured against, never a second copy of the value.
+   *
+   * ⚠ **IT IS WHY A TEMPLATE LAUNCH SENDS NO `instructions` OVERRIDE UNLESS THE OPERATOR TYPED
+   * ONE.** `launch-overrides.ts › overridesFor`'s rule — *a pick equal to the template's own is
+   * not an override* — applied to a third field: sending the template's own prose back to main
+   * would be a payload that only LOOKS like a decision, and it would go stale the moment the
+   * template was edited between this dialog opening and Launch being pressed.
+   */
+  instructionsBaseline?: string;
   /** `null` is a BLANK agent — the template selector's first option. */
   templateId: string | null;
   /** `AGENT_MODEL_DEFAULT` (`""`) is "whatever the chain decides". */
@@ -159,6 +205,35 @@ export interface AgentLaunchPanel {
   setTemplateId: (next: string | null) => void;
   setModel: (next: string) => void;
   setRuntime: (next: string) => void;
+  /**
+   * PICK A TEMPLATE **AND PREFILL WHAT IT CARRIES** — one act, because Samuel's ruling is that
+   * the two happen together: *"when a user clicks a template, all of those fields would be
+   * pre-filled."*
+   *
+   * ⚠ **`null` IS "None" AND IT PREFILLS NOTHING.** Clearing the template keeps whatever the
+   * operator typed — a field they can see is theirs, and blanking three of them because a
+   * selector went back to its first option is data loss with no undo.
+   * ⚠ **IT NEVER OVERWRITES A FIELD THE OPERATOR HAS EDITED**, which is the only rule under
+   * which *"the name field … an individual agent from that template might have a different name
+   * the user might want to set"* and *"all of those fields would be pre-filled"* are both true.
+   * The test is per field and it is EDITED-SINCE-THE-LAST-PREFILL, not "non-empty": the Name
+   * arrives already holding the mint's `#<id>`, so a non-empty test would never prefill it at all.
+   * ⚠ **MODEL IS DELIBERATELY NOT IN THE SET.** `launch-agent-dialog.tsx › effectiveModel`
+   * already DISPLAYS the template's model, and `panel.model` staying `''` is what keeps the
+   * precedence chain in main (`session-launch-op.js`) the one authority — stamping the template's
+   * id here would turn a default into a per-spawn pick that then stops following the template.
+   * ⚠ OPTIONAL for {@link AgentLaunchPanel.color}'s reason; the hook always supplies it.
+   */
+  applyTemplate?: (template: AgentTemplatePrefill | null) => void;
+  /**
+   * OPEN THE POPUP ALREADY HOLDING A TEMPLATE — the ONE entry point a "launch from a template"
+   * affordance uses (2026-09-13; INVARIANTS §5A: one launch surface).
+   *
+   * ⚠ **NOT {@link AgentLaunchPanel.toggle}**: a toggle called while the form is open CLOSES it,
+   * so a second template click would dismiss the dialog it was meant to re-point. This opens if
+   * shut, applies either way, and mints on exactly the same terms `toggle` does.
+   */
+  openWithTemplate?: (template: AgentTemplatePrefill | null) => void;
   toggle: () => void;
   close: () => void;
   reset: () => void;
@@ -167,8 +242,10 @@ export interface AgentLaunchPanel {
 export function useAgentLaunch(): AgentLaunchPanel {
   const [open, setOpen] = useState(false);
   const [agentId, setAgentId] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
+  const [name, setNameState] = useState("");
+  const [description, setDescriptionState] = useState("");
+  const [instructions, setInstructionsState] = useState("");
+  const [instructionsBaseline, setInstructionsBaseline] = useState("");
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [model, setModel] = useState<string>(AGENT_MODEL_DEFAULT);
   // ⚠ `""` = follow the channel's pick, NOT "the default adapter" — see the
@@ -178,12 +255,41 @@ export function useAgentLaunch(): AgentLaunchPanel {
   // server assigns the first free key — see the field's docblock on `AgentLaunchPanel`.
   const [color, setColor] = useState<AgentColorKey | null>(null);
   const [identityError, setIdentityError] = useState<string | null>(null);
+  /**
+   * WHICH OF THE THREE TEXT FIELDS THE OPERATOR HAS TOUCHED — a REF, because nothing renders off
+   * it and a state update per keystroke would re-render the whole dialog to record a fact only
+   * {@link applyTemplate} ever asks about.
+   *
+   * ⚠ **THE MINT'S NAME PREFILL MUST NOT SET IT**, which is why the three public setters are
+   * wrappers and the hook's own writes go to the raw `useState` setters. The mint writes
+   * `#<agentId>`; if that counted as the operator typing, a template pick would never fill the
+   * Name in — the single case the whole prefill exists for.
+   */
+  const touched = useRef({ name: false, description: false, instructions: false });
+
+  const setName = useCallback((next: string) => {
+    touched.current.name = true;
+    setNameState(next);
+  }, []);
+  const setDescription = useCallback((next: string) => {
+    touched.current.description = true;
+    setDescriptionState(next);
+  }, []);
+  const setInstructions = useCallback((next: string) => {
+    touched.current.instructions = true;
+    setInstructionsState(next);
+  }, []);
 
   const reset = useCallback(() => {
     setOpen(false);
     setAgentId(null);
-    setName("");
-    setDescription("");
+    setNameState("");
+    setDescriptionState("");
+    setInstructionsState("");
+    setInstructionsBaseline("");
+    // ⚠ CLEARED WITH THE VALUES. A reopened dialog is a fresh form, so every field is prefillable
+    // again — leaving these `true` would make the next template pick fill in nothing.
+    touched.current = { name: false, description: false, instructions: false };
     setTemplateId(null);
     setModel(AGENT_MODEL_DEFAULT);
     setRuntime("");
@@ -211,29 +317,75 @@ export function useAgentLaunch(): AgentLaunchPanel {
    * machine, but the panel must not wait on it to appear.
    * ⚠ A MINT THAT ANSWERS NULL IS NOT AN ERROR. It is an older desktop, or a plain browser, and
    * the panel simply carries no pre-assigned id — the launch reply supplies one.
+   *
+   * ⚠ **THE OPEN LANE IS ITS OWN CALLBACK SINCE 2026-09-13** so `openWithTemplate` reaches it
+   * without going through `toggle` (which would CLOSE an open dialog). One mint site, one set of
+   * rules above it; a second copy is how the two-draw bug comes back on the other opener.
    */
-  const toggle = useCallback(() => {
-    if (open) {
-      setOpen(false);
-      return;
-    }
+  const openPanel = useCallback(() => {
     setOpen(true);
     setIdentityError(null);
     void mintAgentId().then((minted) => {
       if (!minted) return;
       setAgentId(minted);
       // ⚠ THE NAME AND THE ID COME FROM THE SAME `minted`, IN ONE STATEMENT. Deriving the
-      // prefill from a second read of `agentId` would reintroduce the split below by another
+      // prefill from a second read of `agentId` would reintroduce the split above by another
       // road: that state is not yet committed here.
-      setName((typed) => (typed === "" ? defaultAgentName(minted) : typed));
+      // ⚠ AND IT IS THE RAW SETTER, so the prefill does not count as the operator typing —
+      // `touched` is what a template pick consults before filling this field in.
+      setNameState((typed) => (typed === "" ? defaultAgentName(minted) : typed));
     });
-  }, [open]);
+  }, []);
+
+  const toggle = useCallback(() => {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    openPanel();
+  }, [open, openPanel]);
+
+  /**
+   * PICK A TEMPLATE AND FILL IN WHAT IT CARRIES — see {@link AgentLaunchPanel.applyTemplate} for
+   * the ruling and the three rules (None prefills nothing, an edited field is never overwritten,
+   * Model is not in the set).
+   *
+   * ⚠ **FUNCTIONAL UPDATES, NOT A READ OF `name` / `description` / `instructions`.** This callback
+   * must stay stable across every keystroke — `openWithTemplate` depends on it and the dialog
+   * hands it to a `SegmentedControl` — and closing over those three values would rebuild it about
+   * as often as the operator types.
+   */
+  const applyTemplate = useCallback((template: AgentTemplatePrefill | null) => {
+    setTemplateId(template?.id ?? null);
+    if (!template) return;
+    const nextInstructions = template.instructions ?? "";
+    if (!touched.current.name) setNameState(template.name);
+    if (!touched.current.description) setDescriptionState(template.description ?? "");
+    if (!touched.current.instructions) setInstructionsState(nextInstructions);
+    // ⚠ THE BASELINE MOVES WITH THE TEMPLATE EVEN WHERE THE FIELD DID NOT. It is what the wire is
+    // measured against, and an operator who has typed their own prose is measured against the
+    // template they are now launching — not against one they clicked past.
+    setInstructionsBaseline(nextInstructions);
+  }, []);
+
+  const openWithTemplate = useCallback(
+    (template: AgentTemplatePrefill | null) => {
+      // ⚠ OPEN FIRST, APPLY SECOND, AND NEVER `toggle`: see the field's docblock. Both are state
+      // updates in one handler, so React batches them and the mint's own `typed === ""` guard
+      // sees the prefilled name rather than racing it.
+      if (!open) openPanel();
+      applyTemplate(template);
+    },
+    [open, openPanel, applyTemplate]
+  );
 
   return {
     open,
     agentId,
     name,
     description,
+    instructions,
+    instructionsBaseline,
     templateId,
     model,
     runtime,
@@ -248,157 +400,14 @@ export function useAgentLaunch(): AgentLaunchPanel {
     setIdentityError,
     setName,
     setDescription,
+    setInstructions,
     setTemplateId,
     setModel,
     setRuntime,
+    applyTemplate,
+    openWithTemplate,
     toggle,
     close: () => setOpen(false),
     reset,
-  };
-}
-
-/**
- * THE LAUNCH ITSELF — spawn, then name, then describe. Exported apart from the hook because it
- * is the ACT and the hook is the STATE (§1); `composer.tsx` runs it and owns what to do with the
- * outcome (the template-approval modal is the caller's, exactly as it was for the picker).
- *
- * ⚠ THE ORDER IS NOT NEGOTIABLE. Both writes are keyed by the instance address, so neither can
- * happen until main has answered with one.
- * ⚠ THE ADDRESS IS MAIN'S REPLY, FALLING BACK TO THE PRE-ASSIGNED ONE. On a current build they
- * are the same string; on an older one the reply is the true one and the pre-assigned one was
- * never used. Writing the metadata against the pre-assigned id there would file it under an
- * agent that does not exist.
- */
-export async function launchWithIdentity(
-  newAgent: AgentLaunchControls,
-  panel: AgentLaunchPanel,
-  threadId: string | null
-): Promise<{
-  ok: boolean;
-  reason?: string;
-  /** ⚠ Rides `template-approval` only, forwarded from main UNTOUCHED — it is what the approval
-   *  dialog shows verbatim, and nothing here interprets it. */
-  template?: { name?: string | null; instructions?: string | null } | null;
-  agentId: string | null;
-  identityRefused: boolean;
-}> {
-  const outcome = await newAgent.launchAgent(
-    threadId,
-    panel.templateId,
-    // ⚠ ABSENT WHEN THE MODEL IS THE DEFAULT, so an untouched panel puts the same payload on the
-    // wire a one-click launch always did (`launch-overrides.ts › overridesFor`'s own rule).
-    panel.model === AGENT_MODEL_DEFAULT ? undefined : { model: panel.model },
-    panel.agentId ?? undefined,
-    // ⚠ `undefined` WHEN THE PANEL EXPRESSED NO PREFERENCE, so an untouched panel puts the
-    // same payload on the wire a one-click launch always did — `overridesFor`'s own rule,
-    // applied to the field main resolves FIRST in its precedence chain.
-    panel.runtime || undefined,
-    /**
-     * **THE COLOUR — THE SIXTH ARGUMENT, ON `runtime`'s EXACT ARGUMENT** (2026-09-13;
-     * docs/specs/agent-colors.md item 3).
-     *
-     * ⚠ **`undefined` WHEN THE OPERATOR TOUCHED NO CIRCLE**, so an untouched popup and a
-     * one-click launch put the same payload on the wire — `overridesFor`'s rule, applied
-     * again. ⚠ AND ABSENT IS NOT "NO COLOUR": the server assigns the FIRST FREE key
-     * (`lib/agent-colors.ts › firstFreeAgentColor`), which is what the circles row already
-     * PREVIEWS as its default selection. The popup's taken set is advisory — uniqueness is a
-     * fact about every member's live agents and only `20261005120000`'s index can decide it.
-     * ⚠ **`TemplateLaunchOverrides` IS THE WRONG HOME AND WAS NOT USED** — that object is the
-     * TEMPLATE's re-points (`launch-overrides.ts`), and a colour is a property of the SESSION
-     * IN THE CHANNEL. A template cannot carry one: the key is unique among a channel's live
-     * agents, so a stored default would collide the second time it was used.
-     */
-    panel.color ?? undefined
-  );
-  if (!outcome.ok) {
-    return {
-      ok: false,
-      reason: outcome.reason,
-      template: outcome.template,
-      agentId: null,
-      identityRefused: false,
-    };
-  }
-  const address = outcome.agentId ?? panel.agentId;
-  if (!address) {
-    // The agent started and this build cannot say where. Nothing to key metadata to; the launch
-    // is still a success and is reported as one.
-    return { ok: true, agentId: null, identityRefused: false };
-  }
-  const wanted = panel.name.trim();
-  // ⚠ THE PREFILL IS NOT A RENAME. Writing `Agent #<id>` into the store would file a "custom"
-  // name identical to the fallback, so the operator could never get back to a nameless agent and
-  // `agent-names.js`'s bounded set would fill with rows that say nothing.
-  const named = wanted === "" || wanted === defaultAgentName(address)
-    ? true
-    : await renameAgent(address, wanted);
-  const described = panel.description.trim() === ""
-    ? true
-    : await describeAgent(address, panel.description.trim());
-  return { ok: true, agentId: address, identityRefused: !named || !described };
-}
-
-/**
- * RUNNING A LAUNCH — the three-step act, the foreign-template question, and the relaunch that
- * answers it. Split from `composer.tsx` at the 500-line cap; the seam is §1's own — that file is
- * about SENDING, and this is the launch panel's business end.
- *
- * ⚠ THE RELAUNCH GOES BACK THROUGH {@link launchWithIdentity}, NOT THROUGH A SHORTER RETRY. An
- * approval answers a question and starts nothing, so the second attempt is a whole launch — and
- * a retry path that skipped the rename/describe would silently drop the operator's name and
- * description on exactly the launches that needed two clicks.
- */
-export function useLaunchRunner({
-  newAgent,
-  panel,
-  openThreadId,
-}: {
-  newAgent?: AgentLaunchControls;
-  panel: AgentLaunchPanel;
-  openThreadId: string | null;
-}) {
-  const [approval, setApproval] = useState<TemplateApprovalRequest | null>(null);
-
-  const run = useCallback(async () => {
-    if (!newAgent || !panel.ready) return;
-    const res = await launchWithIdentity(newAgent, panel, openThreadId);
-    if (res.reason === LAUNCH_APPROVAL_REASON && panel.templateId) {
-      // ⚠ MAIN'S OWN RESOLVED TEXT, read tolerantly — the dialog shows the INSTRUCTIONS the
-      // operator is being asked to accept. The local cache's name is only the fallback for a
-      // build that sends none; the instructions have no fallback and must not get one, because
-      // inventing them is precisely what the question exists to prevent.
-      // ⚠ MAIN'S OWN RESOLVED NAME, and no local fallback beyond the generic. The template LIST
-      // is no longer in scope here (it is read inside `ComposerLaunch`, which mounts only where a
-      // launch is possible), and reaching for it would drag a react-query hook up to the composer
-      // — which is exactly the mount the templates read was gated behind.
-      setApproval({
-        templateId: panel.templateId,
-        name: res.template?.name ?? "this template",
-        instructions: res.template?.instructions ?? null,
-      });
-      return;
-    }
-    if (!res.ok) return; // every other refusal is already said by `newAgent.launchError`
-    if (res.identityRefused) {
-      // ⚠ THE AGENT IS RUNNING. Closing the panel here would drop the report with it, so the
-      // panel stays open holding one line — a launch that succeeded and a write that did not.
-      panel.setIdentityError("The agent started, but its name or description was not saved.");
-      return;
-    }
-    panel.reset();
-  }, [newAgent, panel, openThreadId]);
-
-  return {
-    approval,
-    launch: () => void run(),
-    cancelApproval: () => setApproval(null),
-    confirmApproval: () => {
-      const templateId = approval?.templateId;
-      setApproval(null);
-      if (!templateId || !newAgent) return;
-      void newAgent.approveTemplate(templateId).then((res) => {
-        if (res.ok) void run();
-      });
-    },
   };
 }

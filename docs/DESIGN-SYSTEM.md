@@ -299,13 +299,22 @@ The kit: `src/shared/ui/form-dialog.tsx › FormDialog` (shell + footer) ·
 `› FormSection` (label above control) · `› UnderlineField` (text, `multiline` swaps the element and
 nothing else) · `› PillChoice` (the fixed `plain`/`md` row).
 
+7. **A LONG-PROSE FIELD IS ONE ROW TALL AND GROWS WITH ITS OWN TEXT** — `UnderlineField`
+   `multiline` at `minRows={1}`, over `form-dialog.module.css › .inputMultiline`'s
+   `field-sizing: content` (Samuel, 2026-09-08 and again on 2026-09-13 over the New agent popup's
+   **Instructions** field: *"don't make it like multiple lines as the default height. it will only
+   increase in height if the user types more"*). ⚠ **NO MEASURING SCRIPT AND NO `useAutoGrow` ON A
+   POPUP FORM** — the composer's mechanism exists because that card caps and scrolls its own body;
+   here the CSS does it, capped at `40vh` so a pasted essay cannot push the footer off screen.
+   ⚠ `minRows` IS A STARTING HEIGHT, NOT A MINIMUM MEANING: raising it is how a field announces it
+   expects a paragraph, and the default of 1 is what makes it read as a line.
+
 ### Conformance — measured 2026-09-08
 
 Re-derive rather than trusting the rows: `grep -rln 'FormDialog' src apps`.
 
 | File | Class | Status |
 | ---- | ----- | ------ |
-| `agent-templates/components/launch-sheet.tsx` | INPUT FORM | Todo |
 | `agent-templates/components/template-approval.tsx` | CONFIRMATION | Done |
 | `agent-templates/components/template-editor.tsx` | INPUT FORM | **Done** |
 | `agent-templates/components/knowledge-scope-picker.tsx` | PICKER | Done (out of scope — a popover, not a dialog) |
@@ -348,8 +357,14 @@ Re-derive rather than trusting the rows: `grep -rln 'FormDialog' src apps`.
 | `apps/desktop-ui/src/pages/home/ontology-share.tsx › OntologyShareDialog` | INPUT FORM † | **Done** |
 | `apps/desktop-ui/src/pages/home/ontology-share.tsx › DeleteOntologyConfirm` | CONFIRMATION | Done |
 
-Paths are under `src/features/` unless they start with `apps/`. **15 INPUT FORM (5 done), 20
-CONFIRMATION, 5 MENU** — re-counted 2026-09-09 over the rows above, when the home-ontology wave
+Paths are under `src/features/` unless they start with `apps/`. **14 INPUT FORM (5 done), 20
+CONFIRMATION, 5 MENU** — re-counted 2026-09-13, when Samuel's one-launch-surface ruling DELETED the
+launch sheet rather than conforming it: its row was the table's oldest `Todo`, and its three jobs
+are the New agent popup's Model row, its new **Instructions** field and this kit's own footer at the
+30px scale (*"the buttons aren't the right size, the title is off too. The popup as a whole doesn't
+match our popup UI"*). ⚠ **A `Todo` ROW CAN LEAVE THIS TABLE BY BEING DELETED, AND THAT IS THE
+CHEAPEST CONFORMANCE THERE IS** — a second form for a lane that already has one is drift wearing a
+checklist. It was 15/20/5 on 2026-09-09, when the home-ontology wave
 added the two `ontology-share.tsx` dialogs (14/18/5 on 2026-09-08) and the CHANGELOG lane added the
 restore confirm (19 CONFIRMATION earlier the same day). ⚠ The changelog's Restore is a
 `ConfirmDialog` and NOT a `FormDialog`, which is this section's own first rule applied: it collects

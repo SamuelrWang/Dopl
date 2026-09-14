@@ -246,6 +246,26 @@ export interface DesktopSessionSummary {
    * a different question.
    */
   templateName?: string | null;
+  /**
+   * **THIS AGENT'S COLOUR IN ITS CHANNEL — the key it ASKED FOR** (2026-09-13;
+   * docs/specs/agent-colors.md), emitted by `main/session-summary.js › liveSummary`.
+   *
+   * ⚠ **AN ASK, NOT THE ASSIGNMENT, AND THE DIFFERENCE IS THE WHOLE FIELD.** Uniqueness is per
+   * channel across EVERY member, which no machine can evaluate — two desktops cannot see each
+   * other's registries — so the SERVER resolves it (`channels/server/session-colors.ts ›
+   * resolveReportedColors`) and may have substituted the next free key. What this carries is what
+   * this machine requested at launch and has held since.
+   * ⚠ **SO THE PEER PROJECTION OUTRANKS IT WHEREVER BOTH EXIST**, which is the precedence
+   * `channels/lib/live-agents.ts › liveAgentsKey` already states and enforces. The one place this
+   * value is read alone is the agent window's own New-agent popup, which reads NO projection at
+   * all: an advisory taken set there beats no taken set, and the server's 409 is the correction.
+   * ⚠ **A STRING, NARROWED BY THE READER** (`channels/lib/agent-colors.ts › agentColorOrNull`),
+   * not the closed union: `src/shared/` may not import `features/channels`, and a union here would
+   * also let a newer desktop's seventeenth key typecheck its way past the one membership test.
+   * ⚠ `null`/absent IS "no colour reported" and NEVER "no colour": an older main omits it, and the
+   * push cannot erase a stored key by omission.
+   */
+  color?: string | null;
   // ── THE AGENT-VIEW NUMBERS (wiring plan Phase 5, 2026-08-18) ───────────────
   //
   // ⚠ **"Runtime metrics the SERVER STORES NONE OF" IS WHAT THIS BLOCK SAID

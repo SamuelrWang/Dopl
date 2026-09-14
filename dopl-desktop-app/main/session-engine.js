@@ -364,6 +364,14 @@ async function startSession(spec, rt) {
     // fallback every other shape carries. Coerced against the frozen enum HERE, so a hand-edited
     // store can only land on 'default'. NOT reducer state: buildSdkOptions is its one reader.
     model: sessionModel.normalizeModel(spec.model),
+    // ⚠ **THE AGENT COLOUR THIS SPAWN ASKED FOR** (Samuel, 2026-09-13; docs/specs/agent-colors.md).
+    // ⚠ **FORWARDED THE WHOLE WAY DOWN THE FUNNEL AND DROPPED ON THIS LITERAL UNTIL 2026-09-13** —
+    // `session-launch.js › launch`'s whitelist note names the failure mode (F-510's shape) and this
+    // was the layer below it with the same hole, so `session-summary.js › liveSummary` had no value
+    // to report and every push asked for nothing. ⚠ NOT normalized here (two boundary `colorKey`s
+    // already do it; a third copy is what INVARIANTS §5's nine-places warning is about) and NOT
+    // reducer state — its one reader is the summary, and the SERVER resolves the ask.
+    color: spec.color || null,
     state,
     context, // display identity + the channel/workspace ids the framing addresses
     nonce,

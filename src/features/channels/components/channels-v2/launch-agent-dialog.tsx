@@ -15,13 +15,13 @@
  * ⚠ **THE RECIPE LEFT THIS FILE THE SAME DAY** (`shared/ui/form-dialog.tsx`). Samuel: *"i want to
  * start conforming all pop ups to the UI of the one we just made, we should make a design system
  * for this."* Shell, section label, underline field, pill row and footer pair are the KIT's; what
- * is left here is this dialog's five rows and its launch lane.
+ * is left here is this dialog's six rows and its launch lane.
  * ⚠ **THE SLIDE-OUT IS STILL IN THE TREE.** `composer-launch-panel.tsx` is unreferenced from the
  * Bot icon and keeps its own pins (`runtime-refusals.test.tsx`) until Samuel rules.
  * **Delete it when he does; do not let two launch forms live.**
  *
  * ⚠ **NOTHING ABOUT THE LAUNCH LANE CHANGED — the point of reusing {@link useLaunchRunner}.** The
- * act is still `use-agent-launch.ts › launchWithIdentity`. This file is a FACE: if a payload
+ * act is still `use-agent-launch-run.ts › launchWithIdentity`. This file is a FACE: if a payload
  * assertion in `composer-launch.test.tsx` ever has to change for it, the change is wrong.
  *
  * ⚠ **THE SUBMIT MOVED BACK INSIDE THE FORM, SUPERSEDING THE 2026-08-27 RULING** that the panel
@@ -29,9 +29,26 @@
  * on ONE CARD; a dialog whose verb lived behind its own scrim would be unreachable. The composer's
  * control is plain "Send" while this is open — still exactly one Launch on screen.
  *
+ * ── ⚠ **IT IS THE ONE LAUNCH FORM, AND `launch-sheet.tsx` IS DELETED (2026-09-13)** ──────────
+ *
+ * Samuel, over the old "Launch — Coder" sheet: *"the popup should essentially be the same as that
+ * of a normal agent launch, except the template is pre-selected, and any options/descriptions …
+ * instead of the popup saying New Agent, it should say New (name of template) Agent."* So a
+ * template launch OPENS THIS DIALOG preselected (`use-agent-launch.ts › openWithTemplate`, from
+ * `agent-templates/components/template-picker.tsx`) and the sheet's three jobs live here: its model
+ * dropdown is the Model row, its read-only instructions disclosure is the **Instructions** field,
+ * and its Cancel/Launch pair is the kit's footer. The heading is {@link title}.
+ *
+ * ⚠ **PREFILL IS THE PICK, NOT A SECOND SCREEN** (*"when a user clicks a template, all of those
+ * fields would be pre-filled"*; *"the name prefilled and the user can change the name if they
+ * want"*): `applyTemplate` fills Name, Description and Instructions and never overwrites a field
+ * the operator edited. **Model is NOT prefilled and must not become so** — {@link effectiveModel}
+ * DISPLAYS the template's model while `panel.model` stays `''`, which is what keeps main's
+ * precedence chain the one authority.
+ *
  * ⚠ **THE RUNTIME ROW SITS UNDER MODEL HERE.** The slide-out put it between Template and Model
  * because it *"decides what the two rows under it mean"*; Samuel's popup ordering is Name,
- * Description, Template, Model, Runtime — and since 2026-09-13 **Colour** under that
+ * Description, **Instructions** (2026-09-13), Template, Model, Runtime — and **Colour** under that
  * (`agent-color-circles.tsx`, docs/specs/agent-colors.md item 7: *"At the bottom, under Runtime,
  * add multiple little circles"*), the only row whose data is the ROOM's rather than this
  * desktop's or this workspace's.
@@ -43,23 +60,13 @@
  * (`use-channel-launch-posture.ts › runtimes`), and the selection is always sent. **One reported
  * runtime still RENDERS the row**, so the operator sees what will run.
  *
- * ⚠ **EVERY REPORTED RUNTIME IS AN OPTION, CONNECTED OR NOT — SUPERSEDING THE PASS THAT NARROWED
- * THIS ROW TO THE CONNECTED ONES (2026-09-08, Samuel's correction):** *"No, even if the user does
- * not have codex or cursor connected, I still want them to be options there so that the user knows
- * that those are options, so they can connect them. It should just be logged in, like it is just
- * put in their default, right? I did not say to remove them."* Connectivity buys only (a) the muted
- * **"not connected"** hint and (b) where the PRESELECT lands. ⚠ **AN UNCONNECTED PILL STAYS
- * SELECTABLE** — a setup step, not a missing capability, and `acquire`'s spawn-time refusal
- * explains the rest.
- *
- * ⚠ **THE PRESELECT IS A FOUR-LINK CHAIN AND EACH LINK IS LOAD-BEARING** ({@link pickRuntime}):
- * the operator's own pick → the channel's stored pick IF connected (or if this desktop did not
- * say) → the first CONNECTED reported runtime → the first reported. Link 2's guard is the
- * correction's *"it should just be what the user is already connected to"*; its `or` is INVARIANTS
- * §8 — an older desktop reporting no connectivity keeps its stored pick. Link 4 is the
- * nothing-is-connected floor. `defaultRuntime` is deliberately not consulted: `main/runtime/
- * index.js › DEFAULT_ID` IS link 4 by construction, and a second authority could only disagree
- * with the pill on screen.
+ * ⚠ **EVERY REPORTED RUNTIME IS AN OPTION, CONNECTED OR NOT, AND THE PRESELECT IS A FOUR-LINK
+ * CHAIN** — both rules, Samuel's 2026-09-08 correction verbatim, and every link's argument live in
+ * `launch-agent-dialog-runtime.ts`'s header ({@link runtimeRowOptions}, {@link pickRuntime}).
+ * Stated there and not restated here: a rule written twice drifts in one of the copies.
+ * Connectivity buys only (a) the muted **"not connected"** hint and (b) where the preselect lands;
+ * an unconnected pill stays SELECTABLE, because it is a setup step rather than a missing
+ * capability, and `acquire`'s spawn-time refusal explains the rest.
  *
  * ⚠ **NOTHING IS REPORTED ⇒ NO ROW AND NO RUNTIME KEY** — a plain browser, and every desktop older
  * than the adapter port (`runtimeSupported` false). The only lane left where this popup sends no
@@ -86,7 +93,8 @@ import { AgentColorCircles, agentColorsTaken } from "./agent-color-circles";
 import { firstFreeAgentColor } from "../../lib/agent-colors";
 import type { AgentColorKey } from "../../types";
 import type { AgentLaunchControls } from "./use-agents-panel";
-import { useLaunchRunner, type AgentLaunchPanel } from "./use-agent-launch";
+import type { AgentLaunchPanel } from "./use-agent-launch";
+import { useLaunchRunner } from "./use-agent-launch-run";
 
 /** The blank-agent option's key. ⚠ `""` because `SegmentedControl` is `<K extends string>`; it
  *  maps to `templateId: null` at the boundary, which is the wire's own spelling of "no
@@ -131,19 +139,25 @@ export function LaunchAgentDialog({
    * (2026-09-13; docs/specs/agent-colors.md item 7: *"The taken set comes from the channel's
    * live sessions projection (peer + own), refreshed by the same push the @-picker uses"*).
    *
-   * ⚠ **OPTIONAL AND EMPTY BY DEFAULT, AND THAT IS A WIRING DEBT, NOT A DESIGN CHOICE.** All
-   * three mounts of this dialog — `agents-tab.tsx`, `composer.tsx`, `agent-window-launch.tsx` —
-   * already hold the projection (`use-agents-panel.ts › peerSessions`, plus the desktop's own
-   * feed), and none of those files is this slice's to edit; the prop is declared here so the
-   * thread is one argument each when they are. Until then the row renders EVERY key as free and
-   * the server's partial unique index corrects a collision with a 409 (spec item 3) — which is
-   * the same authority that would be corrected anyway, just later and with a worse tooltip.
+   * ⚠ **ALL THREE MOUNTS PASS IT SINCE 2026-09-13, AND THEY PASS THREE DIFFERENT SOURCES** —
+   * which is why the prop is a SHAPE. `agents-tab.tsx` hands the unfiltered channel projection
+   * (`use-agents-panel.ts › peerSessions`); `composer.tsx` hands the peer ∪ own union its
+   * @-picker already holds (`lib/live-agents.ts › liveAgentsKey`, ended rows already dropped, so
+   * those rows carry no `state` — `agentColorsTaken` reads an absent one as LIVE); and
+   * `agent-window-launch.tsx` hands the pop-out's own feed narrowed to the active tab's channel,
+   * which is the ONLY source that window has (it reads no channel projection).
+   * ⚠ **IT STAYS OPTIONAL AND EMPTY BY DEFAULT.** Empty means "nothing known to be taken", never
+   * "nothing is taken": the server's partial unique index is the authority and answers 409 with
+   * the free set (spec item 3), so an unwired caller offers every key and is corrected at launch
+   * rather than rendering no row at all.
    * ⚠ Shaped as a STRUCTURAL SUBSET of `ChannelSessionState` rather than that type by name, so
    * the peer projection, the own-session feed and a test fixture all satisfy it without an
    * adapter — the same reason `agents-model.ts › agentLiveness` takes a shape.
    */
   liveSessions?: ReadonlyArray<{
-    state: string;
+    /** ⚠ ABSENT READS AS LIVE (`agent-color-circles.tsx › agentColorsTaken`) — the composer's
+     *  union has already dropped every ended row, so it carries none. */
+    state?: string | null;
     color?: AgentColorKey | null;
     name?: string | null;
     displayName?: string | null;
@@ -243,6 +257,54 @@ export function LaunchAgentDialog({
   /** `''` only where the desktop reported nothing — the no-row, no-key lane. */
   const selectedRuntime = effectiveRuntime?.id ?? "";
 
+  /**
+   * THE SELECTED TEMPLATE'S ROW, or `null` for None — the TITLE's one input and the PREFILL's.
+   *
+   * ⚠ **IT RESOLVES OFF THE SAME LIST THE PILL ROW RENDERS**, so a template the roster has not
+   * loaded yet (or one this operator may no longer see) leaves the title reading "New agent"
+   * rather than naming a row this dialog cannot show. UNKNOWN is not a name.
+   */
+  const selectedTemplate = useMemo(
+    () => templates.find((t) => t.id === panel.templateId) ?? null,
+    [templates, panel.templateId]
+  );
+
+  /**
+   * **THE HEADING NAMES THE TEMPLATE** (Samuel, 2026-09-13: *"instead of the popup saying New
+   * Agent, it should say New (name of template) Agent"*).
+   *
+   * ⚠ **LOWER CASE IN THE STRING, TITLE CASE ON SCREEN.** `standard-dialog.tsx › DIALOG_TITLE`
+   * carries `capitalize`, so "New Coder agent" is rendered "New Coder Agent" and the ACCESSIBLE
+   * NAME stays the string — `StandardDialog`'s own rule, and the reason a `.toUpperCase()` there
+   * was refused: this value is `ModalShell`'s `aria-label` as well as its text.
+   * ⚠ **"New agent" WHENEVER THERE IS NO TEMPLATE**, which includes None *and* a `templateId`
+   * this roster cannot resolve — see {@link selectedTemplate}.
+   */
+  const title = selectedTemplate ? `New ${selectedTemplate.name} agent` : "New agent";
+
+  /**
+   * THE TEMPLATE ROW'S ONE HANDLER — **pick AND prefill, which is one act** (Samuel, 2026-09-13:
+   * *"when a user clicks a template, all of those fields would be pre-filled"*). The three prefill
+   * rules are `use-agent-launch.ts › applyTemplate`'s and are stated there.
+   *
+   * ⚠ **`setTemplateId` IS THE DEGRADATION, NOT A SECOND LANE.** A hand-built panel literal
+   * carrying no `applyTemplate` (the two in the suites) still SELECTS a template and still launches
+   * it — it simply prefills nothing, which is exactly what "this panel has no prefill" means.
+   * ⚠ **AN ID THIS ROSTER CANNOT RESOLVE STILL SELECTS.** It cannot arrive from this row (the
+   * options ARE the roster), but routing it through `applyTemplate(null)` would silently turn the
+   * operator's pick into None — a selector that answers a different value than it was given.
+   */
+  const pickTemplate = (next: string) => {
+    if (next === BLANK_TEMPLATE) {
+      if (panel.applyTemplate) panel.applyTemplate(null);
+      else panel.setTemplateId(null);
+      return;
+    }
+    const picked = templates.find((t) => t.id === next) ?? null;
+    if (picked && panel.applyTemplate) panel.applyTemplate(picked);
+    else panel.setTemplateId(next);
+  };
+
   /** WHICH KEYS THIS ROOM'S LIVE AGENTS HOLD — one derivation, in `agent-color-circles.tsx ›
    *  agentColorsTaken`, because the circles' fence and their tooltips have to be the same read. */
   const { taken, takenBy } = useMemo(() => agentColorsTaken(liveSessions), [liveSessions]);
@@ -289,7 +351,7 @@ export function LaunchAgentDialog({
       <FormDialog
         open={panel.open}
         onDiscard={discard}
-        title="New agent"
+        title={title}
         closeLabel="Close new agent"
         primary={{
           label: "Launch",
@@ -316,12 +378,31 @@ export function LaunchAgentDialog({
           onChange={panel.setDescription}
           ariaLabel="Agent description"
         />
+        {/* ⚠ **UNDER DESCRIPTION, ONE LINE TALL, GROWING WITH THE TEXT** (Samuel, 2026-09-13:
+            *"That should be a field under description, but don't make it like multiple lines as the
+            default height. it will only increase in height if the user types more"*) —
+            `minRows={1}` plus the kit's `field-sizing: content`
+            (`shared/ui/form-dialog.module.css › .inputMultiline`), which is the same mechanism
+            the Description field above it already uses. There is no measuring script.
+            ⚠ **AND IT REPLACED THE LAUNCH SHEET'S READ-ONLY "Read" DISCLOSURE**, which is why that
+            file is deleted: a launch could SHOW a template's instructions and not change them. */}
+        <UnderlineField
+          id="launch-agent-instructions"
+          label="Instructions"
+          multiline
+          minRows={1}
+          value={panel.instructions ?? ""}
+          // ⚠ OPTIONAL FOR `AgentLaunchPanel.color`'s REASON (its docblock names the two hand-built
+          // panel literals). Absent ⇒ the field is inert rather than a control that looks live.
+          onChange={(next) => panel.setInstructions?.(next)}
+          ariaLabel="Agent instructions"
+        />
 
         <PillChoice
           label="Template"
           options={templateOptions}
           value={panel.templateId ?? BLANK_TEMPLATE}
-          onChange={(next) => panel.setTemplateId(next === BLANK_TEMPLATE ? null : next)}
+          onChange={pickTemplate}
           ariaLabel="Agent template"
           // ⚠ THE LAYOUT IS THIS FILE'S, exactly as the kit's docblock says: a template roster
           // has no width budget the kit can promise.

@@ -57,25 +57,13 @@ const { noteEvent, detailFor } = require('./session-detail');
 // projection, one answer. The reasoning is `agent-names.js`'s own header.
 const { displayNameFor, descriptionForAgent } = require('./agent-names');
 const { diag } = require('./diag');
+// ⚠ `displayText` AND `TEMPLATE_NAME_MAX` MOVED OUT ON 2026-09-13 (`session-summary-text.js`) —
+// one file, one reason to change, and the split was FORCED: this file sat exactly at the 500-line
+// cap, which INVARIANTS §1 says cannot absorb a comment. Injected by the harness like the rest.
+const { displayText, TEMPLATE_NAME_MAX } = require('./session-summary-text');
 
 // ─── BEGIN SESSION-SUMMARY-PURE (injectable; unit-tested via source extraction) ──────
 // The names above are free vars from here down.
-
-
-// Display string for the wire: one line, whitespace collapsed, bounded, or null. ⚠ Same
-// discipline as session-store's `durableName`: channel name and thread title are
-// counterparty-influenced text on their way to a renderer.
-// ⚠ THE BOUND IS A PARAMETER SINCE 2026-08-22, defaulting to the 80 every existing caller had.
-// `templateName` takes 120 — the COLUMN's bound on both ends — because clipping an identity to
-// fit a display default would report a name no template has.
-function displayText(value, max = 80) {
-  if (typeof value !== 'string') return null;
-  const s = value.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max).trim();
-  return s || null;
-}
-
-// The AGENT TEMPLATE a session runs as, as a NAME and never an id. `null` for a blank agent.
-const TEMPLATE_NAME_MAX = 120;
 
 /**
  * A SESSION'S NAME IS ITS AGENT ID — the whole derivation, since 2026-08-21.
@@ -159,6 +147,16 @@ function liveSummary(s, name) {
     // (`session-launch-op.js`) and never re-resolved, which is what makes it free to carry in
     // the STATE half of the server digest rather than the quantized churn half.
     templateName: displayText(ctx.template && ctx.template.name, TEMPLATE_NAME_MAX),
+    // ⚠ **THE AGENT COLOUR — THE KEY THIS SESSION ASKED FOR, NOT THE ONE IT WAS GRANTED**
+    // (Samuel, 2026-09-13; docs/specs/agent-colors.md). It rides `templateName` above: an IDENTITY,
+    // quantization-exempt, on `session-telemetry.js › STATE_FIELDS` so a change PUSHES.
+    // ⚠ **THIS LINE IS WHAT THE COLOURS WAVE OWED.** `session-state-push.js › reportRow` has read
+    // `e.color` since that wave and the summary carried none, so every push asked for nothing and
+    // the server assigned FIRST FREE on all of them; `session-engine.js` now stamps `spec.color`
+    // on the session and this reports it. ⚠ NO BOUND, NO SANITIZER: a CLOSED SET, membership-tested
+    // at the two boundaries that can produce one, so `labelOrNull` would pass `agent-99` through.
+    // ⚠ `null` IS "NONE REPORTED" AND CANNOT ERASE ONE (`server/session-colors.ts` rule 1).
+    color: (s && s.color) || null,
     ...metrics(s),
   };
 }

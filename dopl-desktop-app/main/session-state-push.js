@@ -162,10 +162,11 @@ function reportRow(e) {
     // see each other's registries — so the server resolves this rather than storing it:
     // `src/features/channels/server/session-colors.ts › resolveReportedColors` rule 1 KEEPS
     // whatever the stored row already holds. **So a push that reports no colour cannot erase
-    // one**, which is what makes it correct to put the field on the wire today while
-    // `session-summary.js › liveSummary` (the parked-session lane's file) does not yet carry it:
-    // every row reports `undefined`, the server assigns FIRST FREE on the first push and keeps
-    // it on every push after. ⚠ THIS IS ALSO WHY IT IS NOT THE `templateName` HAZARD
+    // one**, which is what made it correct to put the field on the wire before the summary
+    // carried it. ⚠ **IT CARRIES ONE SINCE 2026-09-13** (`session-summary.js › liveSummary`,
+    // over `session-engine.js`'s new `color: spec.color || null`): until then every row here
+    // reported `undefined` and the server assigned FIRST FREE on every push, so the operator's
+    // pick in the New agent popup reached the column by luck rather than by request. ⚠ THIS IS ALSO WHY IT IS NOT THE `templateName` HAZARD
     // (`session-store.js`'s durable-whitelist block): that column is stored VERBATIM, so a
     // resume that rebuilt context without it nulled the server's copy. A colour cannot be nulled
     // by omission, because omission is not a value on this lane.

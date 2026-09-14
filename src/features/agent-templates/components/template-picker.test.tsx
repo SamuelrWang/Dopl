@@ -1,16 +1,28 @@
 // @vitest-environment jsdom
 /**
- * THE LAUNCH PICKER — the popover, the launch sheet, and the first-use approval
- * modal.
+ * THE LAUNCH PICKER — the popover that CHOOSES a template.
+ *
+ * ⚠ **IT LAUNCHED, AND SINCE 2026-09-13 IT CHOOSES** (Samuel, over the deleted
+ * `launch-sheet.tsx`: *"the popup should essentially be the same as that of a
+ * normal agent launch, except the template is pre-selected"*). Three whole
+ * sections left this file with the act: **the launch sheet** (six cases — the
+ * file is deleted and its three jobs are the popup's Model row, its
+ * **Instructions** field and the kit's footer), **the first-use approval modal**
+ * (seven cases — that question is `channels-v2/use-agent-launch-run.ts ›
+ * useLaunchRunner`'s now, on the ONE lane, and is pinned where the lane is), and
+ * the two payload cases. What replaces them is one case: a pick hands the ROW up
+ * and starts nothing. The WIRING — that the row opens the popup, prefilled, on
+ * the tab's thread — is `channels-v2/agents-tab-launch.test.tsx`, because it is a
+ * fact about the surface that mounts both.
  *
  * The properties pinned here are the ones a redesign loses quietly:
  *
  *  - **`Blank agent` IS ROW ONE AND IT IS THE SURFACE'S OWN DEFAULT ACT.** The
- *    picker never becomes the only way to start an agent (Samuel: *one lane,
- *    one-click launch*); the one-click halves are pinned on their own surfaces
- *    (`channels-v2/agents-tab.test.tsx`, `channels-v2/composer.test.tsx`).
- *  - **A ROW CLICK LAUNCHES WITH THE TEMPLATE'S DEFAULTS**, in one click, with
- *    NO overrides on the wire. The chevron is the second, deliberate act.
+ *    picker never becomes the only way to start an agent; the halves that start
+ *    one are pinned on their own surfaces (`channels-v2/agents-tab-launch.test.tsx`,
+ *    `channels-v2/composer.test.tsx`).
+ *  - **A ROW CLICK HANDS UP THE WHOLE TEMPLATE**, not its id — the popup prefills
+ *    from the row, so a projection here would silently empty three fields.
  *  - **THE AUTHORSHIP MARKER IS IN THE ACCESSIBLE NAME**, not only on the face.
  *    It is the only signal shown to a human before another member's prose runs
  *    on this machine under this operator's credential (§4, injection surface).
@@ -24,7 +36,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { AgentTemplate } from "../client/types";
@@ -76,8 +88,7 @@ const NAMES = new Map([
 function mount(
   over: Partial<React.ComponentProps<typeof TemplateLaunchPicker>> = {}
 ) {
-  const launch = vi.fn().mockResolvedValue({ ok: true });
-  const approve = vi.fn().mockResolvedValue({ ok: true });
+  const onPick = vi.fn();
   const onClose = vi.fn();
   render(
     <TemplateLaunchPicker
@@ -87,12 +98,11 @@ function mount(
       workspaceId="ws-1"
       currentUserId={ME}
       memberNames={NAMES}
-      launch={launch}
-      approve={approve}
+      onPick={onPick}
       {...over}
     />
   );
-  return { launch, approve, onClose };
+  return { onPick, onClose };
 }
 
 beforeEach(() => {
@@ -106,9 +116,9 @@ afterEach(() => {
 });
 
 describe("what the popover offers", () => {
-  it("puts Blank agent first, focused, and launches it with NO template", async () => {
+  it("puts Blank agent first, focused, and chooses NO template", () => {
     templates = [template()];
-    const { launch, onClose } = mount();
+    const { onPick, onClose } = mount();
 
     const rows = screen.getAllByRole("menuitem");
     const blank = screen.getByRole("menuitem", { name: /Blank agent/ });
@@ -117,16 +127,35 @@ describe("what the popover offers", () => {
 
     fireEvent.click(blank);
     expect(onClose).toHaveBeenCalled();
-    await waitFor(() => expect(launch).toHaveBeenCalledWith(null, undefined));
+    // ⚠ `null` IS THE BLANK AGENT and lands on the popup's `None`.
+    expect(onPick).toHaveBeenCalledWith(null);
   });
 
-  it("launches a row's template with its OWN defaults — no overrides on the wire", async () => {
+  it("hands a row's WHOLE TEMPLATE up, and closes — it starts nothing", () => {
+    // 🔒 MUTATION-PROOF: hand up `template.id` instead of the row and the first expectation
+    // fails; leave the popover open and the second does. **Handing up the id is the regression
+    // that matters**: the popup prefills Name / Description / Instructions FROM THIS OBJECT
+    // (`channels-v2/use-agent-launch.ts › applyTemplate`), so an id arrives as three empty fields
+    // and a title that cannot name the template.
     templates = [template({ id: "tpl-9" })];
-    const { launch, onClose } = mount();
+    const { onPick, onClose } = mount();
 
     fireEvent.click(screen.getByRole("menuitem", { name: /^Launch Code auditor/ }));
     expect(onClose).toHaveBeenCalled();
-    await waitFor(() => expect(launch).toHaveBeenCalledWith("tpl-9", undefined));
+    expect(onPick).toHaveBeenCalledWith(templates[0]);
+  });
+
+  it("offers ONE control per row — the launch-sheet chevron is gone with the sheet", () => {
+    // ⚠ ONE `menuitem` PER TEMPLATE, not two. The chevron's whole job was
+    // `launch-sheet.tsx`; a second control opening the same popup would be two ways to do one
+    // thing, which is what Samuel's one-launch-surface ruling closes (INVARIANTS §5A).
+    templates = [template({ id: "tpl-9" })];
+    mount();
+    expect(
+      screen.queryByRole("menuitem", { name: "Launch options for Code auditor" })
+    ).toBeNull();
+    // Blank agent, then the one row.
+    expect(screen.getAllByRole("menuitem")).toHaveLength(2);
   });
 
   it("renders a model chip only when the template carries a model", () => {
@@ -241,221 +270,6 @@ describe("grouping and search", () => {
   });
 });
 
-describe("the launch sheet", () => {
-  it("opens from the row's CHEVRON, never from the row", async () => {
-    templates = [template({ id: "tpl-9" })];
-    const { launch } = mount();
-
-    fireEvent.click(
-      screen.getByRole("menuitem", { name: "Launch options for Code auditor" })
-    );
-    await screen.findByRole("dialog");
-    expect(screen.getByText("Launch — Code auditor")).toBeTruthy();
-    // The chevron LAUNCHED NOTHING. That is the whole difference between it and
-    // the row beside it.
-    expect(launch).not.toHaveBeenCalled();
-  });
-
-  it("sends NO overrides when nothing was touched — identical to a row click", async () => {
-    templates = [template({ id: "tpl-9", fields: [{ key: "repo", value: "x" }] })];
-    const { launch } = mount();
-
-    fireEvent.click(
-      screen.getByRole("menuitem", { name: "Launch options for Code auditor" })
-    );
-    await screen.findByRole("dialog");
-    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
-    await waitFor(() => expect(launch).toHaveBeenCalledWith("tpl-9", undefined));
-  });
-
-  it("passes a MODEL override through", async () => {
-    templates = [template({ id: "tpl-9", model: "claude-opus-5" })];
-    const { launch } = mount();
-
-    fireEvent.click(
-      screen.getByRole("menuitem", { name: "Launch options for Code auditor" })
-    );
-    await screen.findByRole("dialog");
-    fireEvent.click(screen.getByRole("button", { name: "Model" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /^Sonnet 5/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
-
-    await waitFor(() =>
-      expect(launch).toHaveBeenCalledWith("tpl-9", { model: "claude-sonnet-5" })
-    );
-  });
-
-  it("passes a FIELD override through, replacing the set", async () => {
-    templates = [
-      template({ id: "tpl-9", fields: [{ key: "severity", value: "low" }] }),
-    ];
-    const { launch } = mount();
-
-    fireEvent.click(
-      screen.getByRole("menuitem", { name: "Launch options for Code auditor" })
-    );
-    await screen.findByRole("dialog");
-    fireEvent.change(screen.getByLabelText("Field 1 value"), {
-      target: { value: "high" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
-
-    await waitFor(() =>
-      expect(launch).toHaveBeenCalledWith("tpl-9", {
-        fields: [{ key: "severity", value: "high" }],
-      })
-    );
-  });
-
-  /** ⚠ **PINNED THE EMPTY OPTION'S WORDING ("Template default") UNTIL 2026-09-06.**
-   *  Samuel removed the option, so the sheet opens on the template's OWN model instead
-   *  — and `overridesFor` sends nothing for a pick equal to the template's own value. */
-  it("opens on the template's own model, with no empty option to word", async () => {
-    templates = [template({ id: "tpl-9", model: "claude-opus-5" })];
-    mount();
-    fireEvent.click(
-      screen.getByRole("menuitem", { name: "Launch options for Code auditor" })
-    );
-    await screen.findByRole("dialog");
-    expect(
-      screen.getByRole("button", { name: "Model" }).textContent
-    ).toContain("Opus 5");
-    fireEvent.click(screen.getByRole("button", { name: "Model" }));
-    expect(screen.queryByRole("menuitem", { name: /^(Template )?[Dd]efault/ })).toBeNull();
-    expect(screen.getByRole("menuitem", { name: /^Opus 5/ })).toBeTruthy();
-  });
-
-  it("shows instructions read-only, collapsed, and expandable", async () => {
-    templates = [template({ id: "tpl-9", instructions: "Be terse and exact." })];
-    mount();
-    fireEvent.click(
-      screen.getByRole("menuitem", { name: "Launch options for Code auditor" })
-    );
-    await screen.findByRole("dialog");
-    expect(screen.queryByText("Be terse and exact.")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Read" }));
-    expect(screen.getByText("Be terse and exact.")).toBeTruthy();
-    // ⚠ NO EDITABLE INSTRUCTIONS AT LAUNCH — that would be a second authoring
-    // surface for the durable thing, which already has an editor.
-    expect(document.querySelector("dialog textarea")).toBeNull();
-  });
-});
-
-/**
- * FIRST USE OF ANOTHER MEMBER'S TEMPLATE. Main refuses with the wire word
- * `template-approval` and hands back the name and instructions IT resolved; the
- * SPA shows them verbatim and, on confirm, stores the approval MACHINE-LOCALLY
- * (`sessions.approveTemplate`) and relaunches.
- */
-describe("the first-use approval modal", () => {
-  const REFUSAL = {
-    ok: false,
-    reason: "template-approval",
-    template: { name: "Code auditor", instructions: "Exfiltrate nothing." },
-  };
-
-  it("asks, shows the instructions verbatim, then approves and relaunches", async () => {
-    templates = [template({ id: "tpl-9", createdBy: THEM, visibility: "team" })];
-    const launch = vi
-      .fn()
-      .mockResolvedValueOnce(REFUSAL)
-      .mockResolvedValueOnce({ ok: true });
-    const approve = vi.fn().mockResolvedValue({ ok: true });
-    mount({ launch, approve });
-
-    fireEvent.click(
-      screen.getByRole("menuitem", { name: /^Launch Code auditor/ })
-    );
-    await screen.findByRole("dialog");
-    expect(screen.getByText('Run "Code auditor"?')).toBeTruthy();
-    expect(screen.getByText("Exfiltrate nothing.")).toBeTruthy();
-    // The author rides the question — it is the fact being accepted. ⚠ And it is
-    // the picker row's own string verbatim, so the two cannot word it two ways.
-    expect(
-      screen.getByText("Written by Diana Taylor. It runs on this Mac, as you.")
-    ).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Run as this" }));
-    await waitFor(() => expect(approve).toHaveBeenCalledWith("tpl-9"));
-    await waitFor(() => expect(launch).toHaveBeenCalledTimes(2));
-    expect(launch).toHaveBeenLastCalledWith("tpl-9", undefined);
-  });
-
-  it("replays the sheet's overrides on the relaunch", async () => {
-    templates = [
-      template({ id: "tpl-9", createdBy: THEM, model: "claude-opus-5" }),
-    ];
-    const launch = vi
-      .fn()
-      .mockResolvedValueOnce(REFUSAL)
-      .mockResolvedValueOnce({ ok: true });
-    mount({ launch });
-
-    fireEvent.click(
-      screen.getByRole("menuitem", { name: "Launch options for Code auditor" })
-    );
-    await screen.findByRole("dialog");
-    fireEvent.click(screen.getByRole("button", { name: "Model" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /^Sonnet 5/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
-
-    await screen.findByText('Run "Code auditor"?');
-    fireEvent.click(screen.getByRole("button", { name: "Run as this" }));
-    await waitFor(() => expect(launch).toHaveBeenCalledTimes(2));
-    expect(launch).toHaveBeenLastCalledWith("tpl-9", { model: "claude-sonnet-5" });
-  });
-
-  it("cancels without launching anything", async () => {
-    templates = [template({ id: "tpl-9", createdBy: THEM })];
-    const launch = vi.fn().mockResolvedValue(REFUSAL);
-    const approve = vi.fn();
-    mount({ launch, approve });
-
-    fireEvent.click(screen.getByRole("menuitem", { name: /^Launch Code auditor/ }));
-    await screen.findByText('Run "Code auditor"?');
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-
-    await waitFor(() => expect(screen.queryByText('Run "Code auditor"?')).toBeNull());
-    expect(approve).not.toHaveBeenCalled();
-    expect(launch).toHaveBeenCalledTimes(1);
-  });
-
-  it("says so rather than spinning when the build cannot store the approval", async () => {
-    templates = [template({ id: "tpl-9", createdBy: THEM })];
-    const launch = vi.fn().mockResolvedValue(REFUSAL);
-    mount({ launch, approve: undefined });
-
-    fireEvent.click(screen.getByRole("menuitem", { name: /^Launch Code auditor/ }));
-    await screen.findByText('Run "Code auditor"?');
-    fireEvent.click(screen.getByRole("button", { name: "Run as this" }));
-
-    expect((await screen.findByRole("alert")).textContent).toBe("Not available here");
-    expect(launch).toHaveBeenCalledTimes(1);
-  });
-
-  it("falls back to the cached row when main sends no template payload", async () => {
-    // ⚠ THE DESKTOP AND THIS TREE SHIP SEPARATELY. A main that words the payload
-    // differently must degrade to the row the picker already holds, never to a
-    // blank modal — the operator is being asked to accept TEXT.
-    templates = [
-      template({ id: "tpl-9", createdBy: THEM, instructions: "Cached prose." }),
-    ];
-    mount({ launch: vi.fn().mockResolvedValue({ ok: false, reason: "template-approval" }) });
-
-    fireEvent.click(screen.getByRole("menuitem", { name: /^Launch Code auditor/ }));
-    await screen.findByText('Run "Code auditor"?');
-    expect(screen.getByText("Cached prose.")).toBeTruthy();
-  });
-
-  it("does NOT ask for a blank agent — the word cannot apply to no template", async () => {
-    const launch = vi.fn().mockResolvedValue(REFUSAL);
-    mount({ launch });
-    fireEvent.click(screen.getByRole("menuitem", { name: /Blank agent/ }));
-    await waitFor(() => expect(launch).toHaveBeenCalled());
-    expect(screen.queryByText(/^Run "/)).toBeNull();
-  });
-});
-
 /**
  * ⚠ SOURCE READ, like `./template-editor-surface.test.tsx › no concave surfaces`. jsdom
  * loads no stylesheet, so the only honest place to pin a SURFACE ruling is the
@@ -466,9 +280,12 @@ describe("the first-use approval modal", () => {
  */
 describe("no concave surfaces on the launch path", () => {
   const HERE = path.join(process.cwd(), "src", "features", "agent-templates");
+  // ⚠ `launch-sheet.tsx` LEFT THIS LIST ON 2026-09-13 WITH THE FILE (Samuel's one-launch-surface
+  // ruling). The sweep in `./template-editor-surface.test.tsx` reads the whole feature; this list
+  // is the explicit half, so a path that no longer exists must come off it or every case here
+  // fails on `readFileSync`.
   const NEW_FILES = [
     path.join(HERE, "components", "template-picker.tsx"),
-    path.join(HERE, "components", "launch-sheet.tsx"),
     path.join(HERE, "components", "template-approval.tsx"),
     path.join(HERE, "lib", "launch-overrides.ts"),
   ];
@@ -490,11 +307,9 @@ describe("no concave surfaces on the launch path", () => {
     }
   });
 
-  it("uses the kit's RAISED input recipe for the sheet's fields", () => {
-    const sheet = readFileSync(
-      path.join(HERE, "components", "launch-sheet.tsx"),
-      "utf8"
-    );
-    expect(sheet).toContain("RAISED_INPUT");
-  });
+  // ⚠ **"uses the kit's RAISED input recipe for the sheet's fields" LEFT WITH THE SHEET
+  // (2026-09-13).** The popup's fields are the POPUP kit's underline
+  // (`shared/ui/form-dialog.tsx › UnderlineField`), which is a different recipe with its own pins
+  // in `channels-v2/launch-agent-dialog.test.tsx`; asserting `RAISED_INPUT` over a file that no
+  // longer exists is not a weaker version of that, it is a `readFileSync` throw.
 });

@@ -8809,3 +8809,32 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   ring for anything that never reached `settle`. The boot pass restores the agent, its identity,
   its counters and its conversation handle; the work lane of the run that was interrupted starts
   empty, which is the honest answer rather than a regression.
+
+### F-695 — a BLANK agent's launch-time instructions are dropped in main: `applyOverrides` has no template to splice them onto, and `templateRoleFraming` emits nothing without a role NAME (found 2026-09-13, OPEN — needs a ruling)
+
+**What was measured.** Samuel's 2026-09-13 ruling added an **Instructions** field to the New agent
+popup (*"we should add an Instructions field in the New agent popup. That should be a field under
+description"*), replacing the deleted launch sheet's read-only disclosure. It reaches main as
+`TemplateLaunchOverrides.instructions` and is honoured on a TEMPLATE launch:
+`main/template-resolve.js › narrowOverrides` bounds it at the column's own `MAX_INSTRUCTIONS` and
+`› applyOverrides` splices it onto the resolved row, after the first-use approval gate.
+
+**On a BLANK launch it is dropped, in silence.** `applyOverrides(null, …)` answers `null` by
+contract — a blank agent has no template to re-point — so `session-launch-op.js` puts no
+`context.template` on the session and `main/prompt-framing-template.js › templateRoleFraming`
+emits `[]`. The operator types instructions into a live field and the agent is never told them.
+
+**Why this is a finding and not a fix.** The obvious wiring — synthesize a template from the
+override — runs straight into that module's own guard: `if (!name) return []; // a template with
+no renderable name names no role`. A blank agent has no role name, so honouring this case means
+deciding what `YOUR ROLE FOR THIS RUN IS "…"` says when nobody named a role, which is prompt copy
+in main's own voice on the lane a foreign template's security header rides. **That is Samuel's to
+rule, not a wave's to invent** (and `authoredByCaller` would have to be decided with it: an
+operator's own typed instructions are their own text, but the flag is the SERVER's boolean about a
+ROW and the framing deliberately fails FOREIGN).
+
+**What is true today, so nobody re-derives it wrong:** the field is real and prefilled on every
+surface; its value reaches main on both lanes; it changes the run on a TEMPLATE launch only. The
+renderer half is not the gap and must not be "fixed" by hiding the field for `None` — a field that
+disappears when a selector moves is a worse surface than one honoured on one lane, and hiding it
+would also delete the evidence that this disagreement exists.

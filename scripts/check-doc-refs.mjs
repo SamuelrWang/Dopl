@@ -244,6 +244,15 @@ const DATED_CAPTURES = new Map([
   // numbered claims about that tree. Repointing them at today's code would delete the record of
   // what was audited.
   ['docs/CHANNELS-AUDIT-2026-08-07.md', 'audited 2026-08-07'],
+  // ⚠ Added 2026-09-13, when Samuel's one-launch-surface ruling deleted
+  // `agent-templates/components/launch-sheet.tsx` and three of this ledger's references — one
+  // `›` anchor and two plain paths — went dead with it. It qualifies on this list's own terms
+  // rather than on convenience: it is TITLED with its measurement date, its first lines name the
+  // commit and the tag it read (`master` @ `6b3b1ead`, v1.22.0) and the seven audits it
+  // synthesises, and every claim in it is a numbered verdict about THAT tree. Repointing them at
+  // today's code would delete the record of what was measured — the CHANNELS-AUDIT precedent
+  // above, for the same reason.
+  ['docs/DRIFT-LEDGER-2026-08-30.md', 'measured 2026-08-30 @ 6b3b1ead'],
   ['docs/CLEANUP.md', 'generated + executed 2026-06-12'],
   ['docs/DATA-LOADING-AUDIT.md', 'audited 2026-06-20'],
   ['docs/M5-M6-M10-AUDIT-FINDINGS.md', 'captured 2026-05-04'],

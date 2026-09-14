@@ -28,14 +28,15 @@ export interface OwnAgentSessionRow {
   name?: string | null;
   displayName?: string | null;
   state?: string | null;
-  /** ⚠ **PRESENT ON THE TYPE AND NOT YET ON THE WIRE, WHICH IS DELIBERATE RATHER THAN
-   *  ASPIRATIONAL.** A colour is ASSIGNED BY THE SERVER (`20261005120000`'s per-channel
-   *  live unique index), so no machine's local feed is in a position to know one — and
-   *  `main/session-state-push.js › reportRow` puts the key on the wire while
-   *  `main/session-summary.js › liveSummary` (the parked-session lane's file, 2026-09-13)
-   *  is what will one day put it on THIS shape. Declaring it now is what makes
-   *  {@link liveAgentsKey}'s precedence rule below expressible and testable; until then
-   *  every own row reports `undefined` and the peer half supplies every colour.
+  /** ⚠ **ON THE WIRE SINCE 2026-09-13, AND THE PRECEDENCE RULE BELOW IS WHY IT STILL
+   *  LOSES.** This docblock said "not yet on the wire": `main/session-summary.js ›
+   *  liveSummary` now reports it (and `main/session-engine.js` stamps `spec.color` on the
+   *  session, which is the half that was missing under it). What it carries is the key this
+   *  machine ASKED FOR — a colour is ASSIGNED by the server (`20261005120000`'s per-channel
+   *  live unique index), which may have substituted the next free one — so {@link
+   *  liveAgentsKey} still lets ONLY the peer projection speak about colour. An own row's ask
+   *  is read directly in exactly one place, `channels-v2/agent-window-launch.tsx`, which has
+   *  no projection to prefer and says so.
    *  ⚠ `unknown`, on `view-model.ts › indexAgents`'s argument: it is narrowed against a
    *  CLOSED SET, and the union type here would delete that refusal branch. */
   color?: unknown;

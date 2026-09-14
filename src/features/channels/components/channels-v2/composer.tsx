@@ -306,6 +306,17 @@ export function ChannelsV2Composer({
             <LaunchAgentDialog
               panel={launch}
               newAgent={newAgent}
+              /* ⚠ **THE TAKEN SET, OFF THE SET THIS CARD ALREADY HOLDS** (2026-09-13;
+                 docs/specs/agent-colors.md item 7). `liveAgents` is `lib/live-agents.ts ›
+                 liveAgentsKey`'s peer ∪ own union — the same rows the @-picker, the recipient
+                 line and the tint read — so the circles answer the same question the composer's
+                 other three surfaces do, one push later than nothing. ⚠ **THE UNION, NOT
+                 `peerSessions`**: a colour is unique across members AND across this operator's
+                 own agents, and the projection alone lags a launch by up to a 30s poll (the bug
+                 that union exists to fix). ⚠ Its rows carry NO `state` because that function has
+                 already dropped every ended one; `agentColorsTaken` reads an absent state as
+                 LIVE, which is the same answer. */
+              liveSessions={liveAgents}
               openThreadId={openThreadId ?? null}
               channelId={channelId}
               workspaceId={workspaceId}

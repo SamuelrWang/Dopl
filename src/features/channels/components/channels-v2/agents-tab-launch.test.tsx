@@ -36,8 +36,11 @@ afterEach(() => {
  * the click must reach the FORM (a face still wired to `onLaunchAgent` would spawn an agent the
  * operator was about to name) and it must reach NOTHING ELSE (a face wired to both would spawn
  * one AND open the form over it).
- * ⚠ THE CHEVRON IS UNTOUCHED, payload included — the picker's own launch is still a THREE-argument
- * call, which is what `passes the picker's template through` pins.
+ * ⚠ **AND THE CHEVRON OPENS THE SAME POPUP SINCE 2026-09-13** (Samuel, over the deleted
+ * `launch-sheet.tsx`: *"the popup should essentially be the same as that of a normal agent launch,
+ * except the template is pre-selected"*). The picker no longer launches at all, so what this file
+ * pins about that half is the WIRING: a row click opens the ONE form with the template PRESELECTED
+ * and its heading naming it, on this tab's thread, and it launches nothing on the way.
  * ⚠ THE POPUP'S OWN CONTRACT IS `launch-agent-dialog.test.tsx` (the five fields, the defaults, the
  * payload's parity with the slide-out's). What belongs HERE is the WIRING — that this tab's button
  * opens it, on this tab's thread.
@@ -189,61 +192,66 @@ describe("the Launch agent split button", () => {
     expect(screen.queryByRole("button", { name: "Launch from template" })).toBeNull();
   });
 
-  it("passes the picker's template through to the launch", async () => {
-    templateList.templates = [
-      {
-        id: "tpl-9",
-        workspaceId: WS,
-        name: "Code auditor",
-        description: null,
-        instructions: null,
-        model: null,
-        fields: [],
-        visibility: "private",
-        teamIds: [],
-        knowledgeBases: [],
-        createdBy: ME,
-        createdAt: "2026-08-01T00:00:00Z",
-        updatedAt: "2026-08-01T00:00:00Z",
-      },
-    ];
+  /** One template row, shaped as the roster hands it over. */
+  function auditor(over: Record<string, unknown> = {}) {
+    return {
+      id: "tpl-9",
+      workspaceId: WS,
+      name: "Code auditor",
+      description: "Audits the diff.",
+      instructions: "Read the diff. Report findings.",
+      model: null,
+      fields: [],
+      visibility: "private",
+      teamIds: [],
+      knowledgeBases: [],
+      createdBy: ME,
+      createdAt: "2026-08-01T00:00:00Z",
+      updatedAt: "2026-08-01T00:00:00Z",
+      ...over,
+    };
+  }
+
+  it("OPENS THE POPUP PREFILLED on the picker's row, and launches nothing itself", async () => {
+    // 🔒 MUTATION-PROOF: re-point `onPick` at a launch (the pre-2026-09-13 `launchFromPicker`) and
+    // the dialog never appears AND `onLaunchAgent` fires — both halves of this case invert.
+    templateList.templates = [auditor()];
     const { onLaunchAgent } = mountLaunch();
     fireEvent.click(screen.getByRole("button", { name: "Launch from template" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /^Launch Code auditor/ }));
+    // ⚠ THE HEADING NAMES THE TEMPLATE — the accessible name IS the string (`StandardDialog`'s
+    // rule), so the Title Case an operator reads is CSS and this matches the value.
     await waitFor(() =>
-      expect(onLaunchAgent).toHaveBeenCalledWith("t-1", "tpl-9", undefined)
+      expect(screen.getByRole("dialog", { name: "New Code auditor agent" })).toBeTruthy()
     );
+    expect((screen.getByLabelText("Agent name") as HTMLInputElement).value).toBe("Code auditor");
+    expect((screen.getByLabelText("Agent description") as HTMLInputElement).value).toBe(
+      "Audits the diff."
+    );
+    expect((screen.getByLabelText("Agent instructions") as HTMLInputElement).value).toBe(
+      "Read the diff. Report findings."
+    );
+    expect(onLaunchAgent).not.toHaveBeenCalled();
     templateList.templates = [];
   });
 
-  // 🔒 A TEMPLATE LAUNCH IN CHANNEL VIEW IS THE SAME LAUNCH, THREADLESS. The
-  // picker's half must read `openThreadId` exactly as the face does — a chevron
-  // that rendered but sent a stale or fabricated thread id would be worse than
-  // the absence it replaced.
-  it("with no thread open, the picker launches the template CHANNEL-LEVEL", async () => {
-    templateList.templates = [
-      {
-        id: "tpl-9",
-        workspaceId: WS,
-        name: "Code auditor",
-        description: null,
-        instructions: null,
-        model: null,
-        fields: [],
-        visibility: "private",
-        teamIds: [],
-        knowledgeBases: [],
-        createdBy: ME,
-        createdAt: "2026-08-01T00:00:00Z",
-        updatedAt: "2026-08-01T00:00:00Z",
-      },
-    ];
+  // 🔒 A TEMPLATE LAUNCH IN CHANNEL VIEW IS THE SAME LAUNCH, THREADLESS. The popup the chevron
+  // opens is the SAME mount the face opens, so it reads `openThreadId` exactly once — which is
+  // what makes the two halves unable to disagree about where they launch, and is now structural
+  // rather than a pair of matching arguments.
+  it("with no thread open, the picker's popup launches the template CHANNEL-LEVEL", async () => {
+    templateList.templates = [auditor()];
     const { onLaunchAgent } = mountLaunch({ openThreadId: null });
     fireEvent.click(screen.getByRole("button", { name: "Launch from template" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /^Launch Code auditor/ }));
     await waitFor(() =>
-      expect(onLaunchAgent).toHaveBeenCalledWith(null, "tpl-9", undefined)
+      expect(screen.getByRole("dialog", { name: "New Code auditor agent" })).toBeTruthy()
     );
+    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
+    await waitFor(() => expect(onLaunchAgent).toHaveBeenCalled());
+    const [threadId, templateId] = vi.mocked(onLaunchAgent).mock.calls[0];
+    expect(threadId).toBeNull();
+    expect(templateId).toBe("tpl-9");
     templateList.templates = [];
   });
 });

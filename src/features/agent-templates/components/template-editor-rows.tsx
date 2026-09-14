@@ -34,8 +34,11 @@ import type { TemplateField } from "../client/types";
  * `--action-h-sm`, so this dialog closes like every other popup form.
  *
  * ⚠ `RAISED_INPUT` and `Field` are RE-EXPORTED from here (promoted to the kit
- * 2026-08-27) so `launch-sheet.tsx` and `template-approval.tsx` keep one import
- * path.
+ * 2026-08-27) so this feature's dialogs keep one import path. ⚠ **THAT WAS TWO
+ * READERS AND IS ONE SINCE 2026-09-13** — `template-approval.tsx`; the launch
+ * sheet was DELETED by Samuel's one-launch-surface ruling (INVARIANTS §5A), and
+ * the New agent popup wears the POPUP kit's underline instead
+ * (`shared/ui/form-dialog.tsx › UnderlineField`), which is a different recipe.
  */
 export { RAISED_INPUT };
 export { DialogField as Field };

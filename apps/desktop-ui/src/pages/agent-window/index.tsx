@@ -272,6 +272,11 @@ function AgentWindowTabs({
         currentUserId={currentUserId}
         channelId={active.channelId}
         taskId={active.taskId}
+        /* ⚠ **THE POPUP'S COLOUR ROW READS THIS AND NOTHING ELSE IN THIS WINDOW** (2026-09-13):
+           the whole own feed, narrowed to the active tab's channel inside the component. This
+           window reads no channel projection, so the operator's own live agents are the taken set
+           it can know — `agent-window-launch.tsx › sessions` carries the trade. */
+        sessions={sessions}
         agent={activeAgent}
       />
     </>

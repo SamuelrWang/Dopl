@@ -29,6 +29,7 @@
 
 import { useMemo } from "react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import { agentColorOrNull } from "../../lib/agent-colors";
 import { LaunchAgentDialog } from "./launch-agent-dialog";
 import type { AgentLaunchPanel } from "./use-agent-launch";
 import type { AgentLaunchControls } from "./use-agents-panel";
@@ -53,6 +54,10 @@ const NO_ROSTER: ReadonlyArray<{
   email: string | null;
 }> = [];
 
+/** ⚠ ONE OBJECT AT MODULE SCOPE, so a browser's `null` feed hands the same array every render and
+ *  the memo below does not rebuild the taken set per keystroke in the popup's Name field. */
+const NO_SESSIONS: ReadonlyArray<DesktopSessionSummary> = [];
+
 /**
  * The `+`'s dialog, for the ACTIVE tab's channel.
  *
@@ -66,6 +71,7 @@ export function AgentWindowLaunch({
   currentUserId,
   channelId,
   taskId,
+  sessions = NO_SESSIONS,
   agent,
 }: {
   panel: AgentLaunchPanel;
@@ -75,6 +81,23 @@ export function AgentWindowLaunch({
   /** The ACTIVE tab's thread. ⚠ `""` means this tab's agent has no first-class thread, and the new
    *  agent then starts on the ROOM — `null` on the wire, which is the channel-level lane. */
   taskId: string;
+  /**
+   * **THIS MACHINE'S WHOLE SESSION FEED — the colour row's taken set, and the only source this
+   * window has for it** (2026-09-13; docs/specs/agent-colors.md item 7).
+   *
+   * ⚠ **THE OWN FEED IS ADVISORY HERE AND THAT IS THE MEASURED TRADE.** A colour is unique per
+   * channel across EVERY member, and this window reads no channel projection — it deliberately has
+   * neither a roster request nor a presence poll ({@link NO_ROSTER}) — so what it can fence off is
+   * the operator's OWN live agents in this room. A peer's key therefore looks free until the
+   * server's partial unique index answers 409 with the free set, which is the same authority that
+   * would have corrected it anyway (spec item 3). Fencing the half it KNOWS beats fencing nothing:
+   * the common collision is the operator's own second agent.
+   * ⚠ **AND THE KEY ON THESE ROWS IS AN ASK, NOT AN ASSIGNMENT** — `spa-bridge-shapes.ts ›
+   * DesktopSessionSummary.color` carries that argument in full.
+   * ⚠ `null` IS "COULD NOT ASK" (no bridge) and reads as an EMPTY set, which the popup already
+   * means by "nothing known to be taken".
+   */
+  sessions?: readonly DesktopSessionSummary[] | null;
   /**
    * The ACTIVE tab's own feed row, for the room's NAME and the thread's TITLE.
    *
@@ -121,10 +144,34 @@ export function AgentWindowLaunch({
     };
   }, [channelId, workspaceId, agent?.channelName, agent?.threadTitle]);
 
+  /**
+   * THIS ROOM'S OWN LIVE AGENTS, in the shape the colour row reads.
+   *
+   * ⚠ **NARROWED, NOT CAST.** `color` arrives as a plain `string` on the wire shape (a newer
+   * desktop may know a seventeenth key), and `lib/agent-colors.ts › agentColorOrNull` is the one
+   * membership test — the same gate `lib/live-agents.ts` puts on the peer projection's copy.
+   * ⚠ **ENDED ROWS ARE LEFT IN AND `agentColorsTaken` DROPS THEM**, because that function is where
+   * Samuel's *"once the agent has ended, that color needs to be returned to the color bank"* lives.
+   * A second liveness filter here is a second place for that rule to drift.
+   */
+  const liveSessions = useMemo(
+    () =>
+      (sessions ?? []).
+        filter((s) => s.channelId === channelId).
+        map((s) => ({
+          state: s.state,
+          color: agentColorOrNull(s.color),
+          name: s.name,
+          displayName: s.displayName ?? null,
+        })),
+    [sessions, channelId]
+  );
+
   return (
     <LaunchAgentDialog
       panel={panel}
       newAgent={newAgent}
+      liveSessions={liveSessions}
       // ⚠ `""` IS A ROOM, NOT A THREAD (`agents-controls.ts › launchAgentOnThread`: `null` is the
       // channel-level lane, `''` is a legacy responder thread) — so an agent whose exchange never
       // became first-class spawns its sibling on the CHANNEL rather than on a thread that is not

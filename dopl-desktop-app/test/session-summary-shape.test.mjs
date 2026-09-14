@@ -137,6 +137,22 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       //     that side (`collab-dto.ts › mapOwnSessionStateRow` builds a narrow object, so a new
       //     column fails CLOSED for peers). `null` here: the fixture is a blank agent.
       templateName: null,
+      // ⚠ WIDENED 2026-09-13 BY ONE FIELD, `color` (Samuel's agent-colours ruling;
+      // docs/specs/agent-colors.md). The pin failed on the ADD, which is the review this
+      // comment records:
+      //   • `null` IS THE ORDINARY ANSWER and this fixture's: a session that asked for no key
+      //     carries none, and the SERVER assigns the first free one (`server/session-colors.ts`).
+      //     Absent could never mean "no colour" — omission is not a value on the push lane.
+      //   • IT IS THE ASK, NOT THE ASSIGNMENT. Uniqueness is per channel across EVERY member and
+      //     no machine can evaluate that, so what this reports is what `session-engine.js` stamped
+      //     from `spec.color` and the server may have substituted.
+      //   • ⚠ UNLIKE `displayName` and the metrics, it DOES reach the server — deliberately,
+      //     onto `channel_sessions.color`, which is PEER-VISIBLE by design (a colour is drawn on
+      //     every member's transcript, which is the whole ruling).
+      //   • ⚠ **AND UNTIL THIS FIELD EXISTED THE PUSH ASKED FOR NOTHING.**
+      //     `session-state-push.js › reportRow` has read `e.color` off this summary since the
+      //     colours wave; the summary carried none, so the ask was `undefined` on every push.
+      color: null,
       contextUsed: 84000,
       contextWindow: 200000, // the frozen table's row for claude-haiku-4-5
       tokensSpent: 1200000,
