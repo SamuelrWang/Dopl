@@ -179,13 +179,14 @@ async function backoff(entry) {
 // (+3s timer) can both await the network and then both start loops for the same
 // channel (dup long-polls + double ask notifications). Coalesce concurrent calls
 // onto one in-flight promise; subsequent callers await the running pass.
+// ⚠ WATCHDOGGED 2026-09-14 — an unbounded guard is a permanent OFF SWITCH: `listener-heal.js › watchPass`
 function reconcile() {
   if (reconciling) return reconciling;
-  reconciling = reconcileInner()
-    .catch((err) => console.error('[listener] reconcile error:', err && err.message))
-    .finally(() => {
-      reconciling = null;
-    });
+  reconciling = heal.watchPass(
+    reconcileInner().catch((e) => console.error('[listener] reconcile error:', e && e.message)),
+    (ms) => diag('reconcile: pass still running after', ms / 1000, 's — RELEASING the',
+      'single-flight guard so the next tick can run. The hung pass is abandoned, not cancelled.')
+  ).then(() => { reconciling = null; });
   return reconciling;
 }
 

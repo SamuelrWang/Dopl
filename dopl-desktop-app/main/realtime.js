@@ -486,6 +486,8 @@ module.exports = {
   stop,
   setWorkspaces,
   setDirectives, // 2026-08-22: arm/disarm the launch-directive binding on the SAME per-ws WS
+  // ⚠ MISSING SINCE IT WAS WRITTEN — every boot logged `realtime arm failed` and armed nothing;
+  setDirections, // the PRIVATE DIRECT mailbox. `test/realtime-mailbox-exports.test.mjs` (2026-09-14)
   refreshAuth,
   isHealthy,
   isWorkspaceHealthy,

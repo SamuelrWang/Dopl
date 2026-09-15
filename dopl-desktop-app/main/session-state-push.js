@@ -60,6 +60,10 @@ const deliveryAck = require('./delivery-ack');
 // THE FAILURE LANE (2026-09-14) — the once-per-shape log line, `retryable`, and the BACKOFF that
 // re-runs a FAILED reconcile until one lands. ABOVE THE SENTINEL like every dep; its header carries the incident.
 const retryLane = require('./session-state-push-retry');
+// THE WATCHDOG (2026-09-14, F-698) — `listener-heal.js › watchPass`, the same deadline the listener's guard took.
+const heal = require('./listener-heal');
+// THE REPORTED-WORKSPACE RECORD (2026-09-14) — moved out at the cap; its header carries the rule.
+const record = require('./session-state-push-record');
 const Store = require('electron-store');
 
 const store = new Store();
@@ -84,6 +88,9 @@ const REPORTED_WORKSPACES_KEY = 'sessionReportWorkspaces';
 // makes both safe — nothing is recorded on failure, so any later cycle re-sends the set.
 const MAX_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 2000;
+// ⚠ A DEADLOCK DETECTOR, NOT A LATENCY BUDGET (2026-09-14, F-698). The worst HONEST cycle is a quarantine sweep —
+// up to 32 probes × (15s + 2s + 15s) — so a healthy cycle never comes near this; tripping it is always a defect.
+const CYCLE_WATCHDOG_MS = 20 * 60 * 1000;
 
 let armed = false;
 let deps = { getUserId: null, summary: null };
@@ -235,33 +242,8 @@ function groupByWorkspace(entries) {
   return out;
 }
 
-// ── The persisted "workspaces this machine has rows in" record ──────────────────────────
-// ⚠ KEYED BY OPERATOR (`{ userId: [workspaceId, …] }`), because a ROW is. A machine-wide list
-// would make the next operator to sign in clear a workspace they may not be a member of, and
-// would forget that the PREVIOUS operator still has rows there — the one thing this remembers.
-// Empty entries are dropped, so it is bounded by accounts that signed in on this Mac.
-function reportedRecord() {
-  let raw = null;
-  try { raw = store.get(REPORTED_WORKSPACES_KEY); } catch (_err) { return {}; }
-  return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-}
-
-function reportedWorkspaces(userId) {
-  const list = reportedRecord()[String(userId || '')];
-  return Array.isArray(list) ? list.filter((x) => typeof x === 'string' && x) : [];
-}
-
-function rememberWorkspace(userId, workspaceId, hasRows) {
-  const record = reportedRecord();
-  const next = new Set(reportedWorkspaces(userId));
-  if (hasRows) next.add(workspaceId);
-  else next.delete(workspaceId);
-  if (next.size > 0) record[String(userId)] = [...next];
-  else delete record[String(userId)];
-  try { store.set(REPORTED_WORKSPACES_KEY, record); } catch (err) {
-    diag('session-state push: could not persist the reported-workspace set —', err && err.message);
-  }
-}
+// ── The persisted "workspaces this machine has rows in" record — `session-state-push-record.js` ──
+const { reportedWorkspaces, rememberWorkspace } = record.makeReportedRecord(store, diag, REPORTED_WORKSPACES_KEY);
 
 /**
  * POST one workspace's whole set, plus any delivery receipts riding along.
@@ -383,6 +365,10 @@ async function cycle(entries) {
       else if (await quarantine.sweep(ws, rows)) wantsRetry = true;
       continue;
     }
+    // ⚠ ONE LINE PER LANDED PUSH (2026-09-14, F-698). Success was SILENT and failure logged once per shape, so a lane
+    // that never ran and a lane that ran fine read identically in the log — nine hours of it. Bounded by the cadence
+    // floor and the digest gate, so it is one line per real state change, not a storm.
+    diag('session-state push: stored', rows.length, 'row(s) ws', String(ws).slice(0, 8));
     pushedDigest.set(ws, digest);
     pushedStateDigest.set(ws, state);
     // ⚠ STAMPED AFTER THE SEND. `send` can hold 15s plus a retry, and a stamp taken before it
@@ -409,12 +395,21 @@ function schedule(entries, fromRetry) {
   draining = drain();
 }
 
+function onHungCycle(ms) {
+  diag('session-state push: cycle still running after', ms / 1000, 's — RELEASING the single-flight guard so the',
+    'next state change can push. The hung cycle is abandoned, not cancelled (F-698).');
+}
+
 async function drain() {
   try {
     while (queued) {
       const entries = queued;
       queued = null;
-      await cycle(entries); // the loop IS the serialization
+      // ⚠ WATCHDOGGED (2026-09-14, F-698). `running` had no deadline, so ONE cycle that never settled — the boot cycle
+      // of 09:11:00Z, wedged behind an unbounded token refresh — was a permanent OFF SWITCH: every later `schedule`
+      // took `if (running) return`, and this machine wrote no row for nine hours. Same shape, same fix as
+      // `channel-listener.js › reconcile`. The hung cycle is abandoned, not cancelled; the NEXT one runs.
+      await heal.watchPass(cycle(entries), onHungCycle, CYCLE_WATCHDOG_MS); // the loop IS the serialization
     }
   } catch (err) {
     diag('session-state push: cycle error —', (err && err.message) || String(err));

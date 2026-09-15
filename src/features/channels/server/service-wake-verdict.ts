@@ -266,6 +266,55 @@ export async function resolveWakeVerdict(
   const addressed =
     (namedAgentIds !== null && namedAgentIds.length > 0) || toUserId !== null;
 
+  /**
+   * **THE AUTHOR TYPED A HANDLE AND THIS SERVER COULD NOT SAY WHOSE IT IS** —
+   * `resolveAgentRecipients`' third outcome, which is `null` and means "you
+   * decide", NOT "nobody" (2026-09-14, Samuel's `@prime` report).
+   *
+   * ⚠ **IT IS NOT "ADDRESSED NOBODY", AND CONFLATING THE TWO IS WHAT RE-AIMED A
+   * POST AT A DIFFERENT AGENT THAN THE ONE ITS AUTHOR NAMED.** `addressed` above
+   * reads `namedAgentIds.length > 0`, so a body whose only handle failed to
+   * resolve fell through it exactly like a body with no handle at all — and the
+   * resilience arms then REPAIRED an address that was never missing. Row #1698
+   * (channel `dopl`, 2026-09-14 18:28:32Z) is what that costs: the body reads
+   * `@prime hey`, `prime` had no `channel_sessions` row yet, and the post stored
+   * `recipient_agent_ids=["y1uun32v"]` with `wake_reason="only agent"` — RR3
+   * naming the room's OTHER agent, whose display name is not `prime` and whom the
+   * author had not written to. The desktop then executes the stored answer
+   * (`main/session-dispatch.js › planFor` narrows to it and sets `context:false`),
+   * so the agent the author DID name cannot be reached even by the fan-out.
+   *
+   * ⚠ **THE REPAIR'S OWN CHARTER IS THE ARGUMENT** (INVARIANTS §5 › THE
+   * RESILIENCE ARMS): they exist because "a forgotten `@` must never stall a
+   * conversation" and are "reached ONLY when the author addressed nobody". A
+   * typed handle is the opposite of a forgotten one — there is nothing to repair,
+   * and repairing it replaces the author's stated intent with a guess that the
+   * stored `wake_reason` then presents as the server's considered choice.
+   *
+   * ⚠ **THE HONEST ANSWER IS `delivery: "unreachable"` AND `recipientAgentIds:
+   * null`**, which is what the terms below already produce once no arm fires:
+   * `null` sends the machine back to its own parse (the ONE place a
+   * not-yet-pushed session row is knowable) and `unreachable` is G15's
+   * anti-silent-miss — a name that reached nobody SAYS so, instead of a wrong
+   * name reaching somebody quietly.
+   *
+   * ⚠ **IT GATES RR3 AND NOTHING ELSE — see the note at that branch.** Read as a
+   * general "the author addressed somebody" it is WRONG for an AGENT author,
+   * whose own-scoped door answers `null` for a peer's agent it is merely not
+   * permitted to name; RR2 must still repair those, and four production rows say
+   * what happens when it does not.
+   *
+   * ⚠ **IT IS NOT SPELLED `bodyAgentIds === null` ALONE, THOUGH THAT WOULD BE
+   * EQUIVALENT TODAY.** `bodyAgentIds` is also `null` when the parse never RAN
+   * (`to=` won, or a non-`message` kind), and those two nulls are the same
+   * distinction `recipientAgentIds` is documented not to collapse. Both other
+   * cases already fail `repairable` for their own reasons, so naming the
+   * condition here keeps this term true to what it claims rather than true by
+   * coincidence.
+   */
+  const namedButUnresolved =
+    isMessage && toAgentId === null && bodyAgentIds === null;
+
   // ── THE THREE RESILIENCE ARMS (B1) ──────────────────────────────────────
   // Reached only when the author addressed NOBODY. Each answers a member id, an
   // agent id, or nothing; `resilience` stays null when no arm applies.
@@ -300,7 +349,25 @@ export async function resolveWakeVerdict(
     if (party !== null) {
       resilience = { verdict: "reciprocal", userIds: [party], agentIds: [] };
     }
-  } else if (repairable) {
+  } else if (repairable && !namedButUnresolved) {
+    // ⚠ **`!namedButUnresolved` IS ON RR3 ALONE, AND THE ASYMMETRY IS THE WHOLE
+    // POINT** (2026-09-14). RR1 and RR2 answer with a **MEMBER**; RR3 is the only
+    // arm that answers with an **AGENT**, so it is the only one that can replace
+    // *the agent you named* with *a different agent* — which is exactly the harm
+    // reported ("it's set to send to the most recent agent even though I tagged a
+    // completely different agent"). A member repair takes nothing away from a
+    // handle in the prose: that member's side still decides what runs, and the
+    // named agent was never going to be reached by this server either way.
+    // ⚠ **AND GATING RR2 ON IT WOULD RE-OPEN #963 / #965 / #969 / #973.** An
+    // AGENT author's door is own-scoped by the same-account carve, so a body
+    // naming a PEER's agent answers `null` — *"I may not resolve that"*, not
+    // *"nobody answers to that"*. Those four rows were stamped `unreachable` for
+    // a delivery that had happened, and `service-wake-verdict-resilience.test.ts
+    // › never reports unreachable for a delivery that happened` is the case that
+    // holds that line. The two nulls look identical in this variable and are not
+    // the same claim; RR3's door is the channel-wide one, where `null` really
+    // does mean the room holds nobody by that name.
+
     // RR3 — who answers an untagged message, now **the AUTHOR'S OWN setting** (2026-09-06,
     // Samuel's ruling on items 10 and 11). It was the channel's room-wide pin.
     //

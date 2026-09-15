@@ -54,6 +54,11 @@ const EXPORTED = [
 // apart from the code that ships, which is the failure the source-extraction idiom exists to
 // avoid in the first place.
 export const telemetry = createRequire(import.meta.url)(join(MAIN, "session-telemetry.js"));
+// ⚠ AND SO ARE THE WATCHDOG AND THE REPORTED-WORKSPACE RECORD (2026-09-14, F-698). Both are pure
+// factories/functions — `listener-heal.js › watchPass`, `session-state-push-record.js ›
+// makeReportedRecord` — so the real modules are injected on the same one-program argument.
+export const heal = createRequire(import.meta.url)(join(MAIN, "listener-heal.js"));
+export const record = createRequire(import.meta.url)(join(MAIN, "session-state-push-record.js"));
 
 // ⚠ AND SO IS THE WIRE FILTER (2026-08-31, the §1 split). `session-state-push-wire.js` is pure —
 // no electron, no store, no network — and it is a FACTORY taking the logger, so injecting the
@@ -100,6 +105,8 @@ export function load(opts = {}) {
       : (answers.length > 1 ? answers.shift() : answers[0]);
     const answer = next || { ok: true, status: 200 };
     if (answer.throws) throw new Error(answer.throws);
+    // `{ hang: true }` never settles — a dead socket, for the watchdog suite (2026-09-14, F-698).
+    if (answer.hang) return new Promise(() => {});
     return answer;
   };
   const store = {
@@ -131,9 +138,13 @@ export function load(opts = {}) {
   // program; the only thing a case has to remember is that it holds MODULE state, which
   // `load()` clears here so one case's receipts cannot leak into the next.
   deliveryAck.reset();
+  // THE WATCHDOG IS THE REAL `listener-heal.js › watchPass` UNLESS A CASE SAYS OTHERWISE (2026-09-14,
+  // F-698). Its deadline is 20 minutes of real clock — invisible to every ordinary case, which is the
+  // point — and `test/session-state-push-watchdog.test.mjs` passes its own `heal` to fire it by hand.
+  const healImpl = opts.heal || heal;
   const api = new Function(
     "apiFetch", "diag", "store", "telemetry", "setTimeout", "Date", "discardBody", "wire", "deliveryAck",
-    "retryLane",
+    "retryLane", "heal", "record",
     `${BLOCK}\n return { ${EXPORTED.join(", ")} };`
   )(
     apiFetch, (...parts) => logged.push(parts.join(" ")), store, telemetry, fakeSetTimeout, fakeDate,
@@ -143,7 +154,9 @@ export function load(opts = {}) {
     (res) => res,
     wire,
     deliveryAck,
-    lane
+    lane,
+    healImpl,
+    record
   );
   return {
     ...api,

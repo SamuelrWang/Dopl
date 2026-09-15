@@ -252,3 +252,142 @@ describe("arm 3 / arm 4 — several live agents still get an answer", () => {
   });
 });
 });
+
+/**
+ * **A HANDLE THE SERVER COULD NOT RESOLVE IS NOT A FORGOTTEN `@`** (2026-09-14, Samuel's
+ * `@prime` report: *"I just addressed a message to a new agent I created, but for some reason
+ * it's set to send to the most recent agent even though I tagged a completely different
+ * agent."*).
+ *
+ * ⚠ **THE INCIDENT, AS THE ROW RECORDS IT.** Channel `dopl`, seq 1698, 2026-09-14 18:28:32Z:
+ * `body='@prime hey'`, `recipient_agent_ids=['y1uun32v']`, `wake_verdict='responder'`,
+ * `metadata.wake_reason='only agent'`, `delivery='woken'`. `y1uun32v` is the room's OTHER agent
+ * ("coder for Overview usage polish"); `prime` had been spawned nine seconds earlier and its
+ * `channel_sessions` row had not been pushed yet, so the index held no handle for it.
+ *
+ * ⚠ **WHAT WENT WRONG IS A CONFLATION, NOT A LOOKUP.** `resolveAgentRecipients` answered `null`
+ * correctly — "handles were named and I cannot say whose they are" — and `resolveWakeVerdict`
+ * read that as "addressed nobody", which is the ONE precondition the resilience arms have
+ * (INVARIANTS §5 › THE RESILIENCE ARMS: *"reached ONLY when the author addressed nobody"*). RR3
+ * then repaired an address that was never missing.
+ *
+ * ⚠ **THESE CASES PIN THE PRECONDITION, NOT THE ARM.** RR3's own picking rules are measured
+ * above and are unchanged; what is measured here is that the arm is never ASKED.
+ */
+describe("🔒 an unresolved handle blocks the repair — it is not an unaddressed post", () => {
+  /** The room as it stood: ONE pushed session, which is what made `reason: "only agent"`
+   *  available to fire. A second live agent would have produced the same defect via arm 3/4. */
+  function onlyTheOtherAgent(): void {
+    roomProjection(sessionRow({ name: "y1uun32v", display_name: "coder for Overview usage polish" }));
+  }
+
+  it("🔒 `@prime hey` does not become a wake for the room's only other agent", async () => {
+    onlyTheOtherAgent();
+    const out = await resolve("@prime hey");
+    // ⚠ THE WHOLE REGRESSION IN ONE FIELD: this was `['y1uun32v']`.
+    expect(out.recipientAgentIds).toBeNull();
+    expect(out.verdict).toBe("none");
+    // ⚠ AND THE REASON MUST BE ABSENT, because `metadata.wake_reason` is the server saying "I
+    // chose this one, and here is why" — a sentence it has no business writing about a post
+    // whose author named somebody.
+    expect(out.reason).toBeNull();
+  });
+
+  /**
+   * ⚠ **`unreachable` IS THE POINT, NOT A CONSOLATION.** G15's silent-miss rule: a name that
+   * reached nobody must SAY so. The alternative this replaces was a DIFFERENT name reaching
+   * somebody quietly, which no surface could have told the author about — the composer's own
+   * line printed `→ @coder-for-overview-usage-polish` and looked deliberate.
+   * ⚠ AND `recipientAgentIds: null` above is the other half: it hands the question back to the
+   * machine, which is the only place a not-yet-pushed session row is knowable.
+   */
+  it("🔒 it is reported `unreachable`, so the miss is visible rather than silent", async () => {
+    onlyTheOtherAgent();
+    expect((await resolve("@prime hey")).delivery).toBe("unreachable");
+  });
+
+  /**
+   * ⚠ **TWO LIVE AGENTS, DELIBERATELY** — with one, arm 2 answers before arm 3 issues its read
+   * and the assertion below would hold for the wrong reason (the arm-3 read is LAZY; the case
+   * above this describe pins that). Two is also the shape that makes the defect general: the
+   * incident room happened to hold one agent, but `most recent` / `most recently launched` would
+   * have re-aimed `@prime` just as confidently.
+   */
+  it("🔒 RR3 is never even ASKED — no responder read on a post that named somebody", async () => {
+    roomProjection(
+      sessionRow({ id: "s-1", name: "y1uun32v", started_at: new Date(NOW - 60_000).toISOString() }),
+      sessionRow({ id: "s-2", name: "m8q1zzzz", started_at: new Date(NOW - 10_000).toISOString() })
+    );
+    const out = await resolve("@prime hey");
+    expect(vi.mocked(repoMessages.listRecentRoomTagsBy)).not.toHaveBeenCalled();
+    expect(out.recipientAgentIds).toBeNull();
+  });
+
+  /**
+   * ⚠ **THE REPAIR ITSELF IS UNTOUCHED, AND THIS IS THE CASE THAT PROVES THE GATE IS NARROW.**
+   * B1 is Samuel's standing ruling — a forgotten `@` must never stall a conversation — and a
+   * fix that bought the `@prime` case by turning RR3 off would be reversing it silently, which
+   * is the defect class this whole wave exists to remove. Same room, same single agent, a body
+   * with no handle in it: still woken.
+   */
+  it("🔒 a body that names NOBODY still gets the repair — B1 is not reversed", async () => {
+    onlyTheOtherAgent();
+    const out = await resolve("hey");
+    expect(out).toMatchObject({
+      verdict: "responder",
+      recipientAgentIds: ["y1uun32v"],
+      delivery: "woken",
+      reason: "only agent",
+    });
+  });
+
+  /**
+   * ⚠ **A HANDLE THAT RESOLVED TO ONLY THE AUTHOR IS STILL AN UNADDRESSED POST**, and that is
+   * the distinction `resolveAgentRecipients` draws between `[]` and `null` — the one this gate
+   * must not flatten. `service-wake-verdict.ts`'s self-address drop says so in as many words:
+   * *"the prose is read, and the resilience arms get their turn"*.
+   */
+  /**
+   * 🔒 **THE GATE IS ON RR3 ALONE, AND THIS IS THE CASE THAT KEEPS IT THERE.**
+   *
+   * ⚠ **AN AGENT AUTHOR'S `null` IS A SCOPE REFUSAL, NOT AN UNKNOWN NAME.** Its door is
+   * own-scoped by the same-account carve, so a body naming a PEER's agent answers `null`
+   * meaning *"I may not resolve that"* — where a HUMAN's door reads the whole room and `null`
+   * really does mean nobody here answers to it. The two are the same value and different
+   * claims.
+   *
+   * ⚠ **AND RR2 REPAIRS A MEMBER, WHICH TAKES NOTHING FROM THE HANDLE IN THE PROSE** — that
+   * member's side decides what runs. Only RR3 answers with an AGENT, i.e. only RR3 can
+   * substitute one agent for another, which is the harm the gate exists for. Widening the gate
+   * to `repairable` re-stamps rows #963 / #965 / #969 / #973 `unreachable` for deliveries that
+   * happened; `service-wake-verdict-resilience.test.ts › never reports 'unreachable' for a
+   * delivery that happened` is the other end of this wire, and it went red when the gate sat
+   * there for the first time.
+   */
+  it("🔒 an AGENT naming a PEER's agent still gets RR2 — the gate is not on `repairable`", async () => {
+    projection(sessionRow({ name: "k3v7d2mq" }));
+    lastAddress({ author_user_id: "user-9" });
+    const out = await resolve(
+      "done — over to @agent-deynelz3",
+      { session_id: "chan-1::k3v7d2mq" },
+      { authorKind: "agent", clientMsgId: "my-own-idempotency-key" }
+    );
+    expect(out).toMatchObject({ verdict: "reciprocal", delivery: "delivered" });
+    expect(out.recipientAgentIds).toEqual([]);
+  });
+
+  it("🔒 a self-tag resolves to `[]`, which still reaches the repair", async () => {
+    roomProjection(
+      sessionRow({ id: "s-1", name: "k3v7d2mq" }),
+      sessionRow({ id: "s-2", name: "y1uun32v" })
+    );
+    projection(sessionRow({ id: "s-1", name: "k3v7d2mq" }));
+    const out = await resolve(
+      "@agent-k3v7d2mq noted",
+      { session_id: "chan-1:task-1:k3v7d2mq" },
+      { authorKind: "agent" }
+    );
+    // The body named only the author, so nothing was addressed — RR2's lane, not `unreachable`.
+    expect(out.delivery).not.toBe("unreachable");
+  });
+});

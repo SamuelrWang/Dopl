@@ -39,6 +39,7 @@ const {
 } = require('./auth-store');
 const { diag } = require('./diag');
 const { SUPABASE_URL, SUPABASE_ANON_KEY } = require('./config');
+const refreshTransport = require('./auth-refresh-transport'); // 2026-09-14: the bounded refresh POST
 
 const PENDING_AUTH_KEY = 'pendingAuth'; // [{ nonce, ts, requireState?, ttlMs? }]
 const PENDING_AUTH_TTL_MS = 10 * 60 * 1000;
@@ -360,18 +361,12 @@ async function refreshInner() {
   const s = loadSession();
   if (!s || !s.refresh_token) return null;
   try {
-    const res = await fetch(
-      `${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,
-      {
-        method: 'POST',
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ refresh_token: s.refresh_token }),
-      }
-    );
+    // ⚠ BOUNDED SINCE 2026-09-14 (F-698). This was a bare `fetch` with no signal; on a dead
+    // post-wake socket it hung ~25 minutes, and because `refresh()` is single-flight every lane
+    // that needed a credential at boot hung with it. The deadline lives in the transport module.
+    const res = await refreshTransport.postRefresh({
+      supabaseUrl: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY, refreshToken: s.refresh_token,
+    });
     if (!res.ok) {
       // The CODE, not just the status — see auth-token-rules.js › refreshFailureCode for why
       // "HTTP 400" alone cost a three-incident investigation, and for the no-token guarantee.

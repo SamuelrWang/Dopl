@@ -8905,3 +8905,77 @@ Behavioural tests for `handleMcpStatus` / `relaunch` / `failVisibly` (cold + res
   `CreditConsumeResult.upgradeCredits` (also on the SDK's `CreditConsumeResponse`) and
   `packages/mcp-server/src/tools/respond.ts › upgradeFigure` formats it. A retune is ONE site, not three;
   a mutation of the constant moves the copy (`credits-upgrade-offer.test.ts`).
+
+### F-698 — the desktop projection push has written NOTHING since the app restarted, so a brand-new agent is unaddressable server-side and no surface says so (found 2026-09-14, RESOLVED 2026-09-14 — root cause determined, three fixes)
+
+**RESOLUTION (2026-09-14, same day).** Candidate 1 below was right, and the thing the cycle hung on
+was found: `auth.js › refreshInner` called `fetch` with **no signal**. At the 09:11:00Z boot the
+access token was expired and the jar empty, so the boot cycle's `apiFetch → getAuthCookie →
+ensureFresh → refresh()` went to Supabase on a dead post-wake socket and sat there ~25 minutes
+(`presence: superseding the in-flight beat` at 09:11:29Z; the beat's own abort error not logged
+until 09:37:40Z). `refresh()` is single-flight, so the listener's first reconcile and presence's
+first beat awaited the SAME promise — one hang, three lanes, which is why F-698 and the reconcile
+wedge share a boot. The API server's log confirms the other end: zero `POST /api/channels/sessions`
+since its last restart. Fixes, each with a reproducing test:
+1. `main/auth-refresh-transport.js` — the refresh POST has a 20s deadline (`test/auth-refresh-transport.test.mjs`).
+2. `main/session-state-push.js › drain` — the writer's guard is watchdogged like the listener's
+   (`heal.watchPass`, 20 min, loud) so a hung cycle can never be a permanent off switch
+   (`test/session-state-push-watchdog.test.mjs`). The reported-workspace record moved to
+   `main/session-state-push-record.js` at the cap.
+3. A landed push now logs one line (`session-state push: stored N row(s) ws …`), so a silent lane
+   and a working lane no longer read the same. Original entry kept below for the record.
+
+
+**Measured, not inferred.** `channel_sessions` holds TWO rows in the entire table, the newest
+stamped `updated_at = 2026-09-14 01:22:17Z`. The Electron main process restarted at 09:11:00Z,
+logged `session-state push: armed (on state change — no heartbeat)`, spawned a new agent
+`shyu9bzg` at 18:28:23Z (`session spawned IDLE`, `session-engine.js › launch`) — and that agent
+has **no row anywhere**, in any channel or workspace. There is no `session-state push failed`
+line and no `cycle error` line in `listener.log` for the whole nine-hour window: the lane is
+silent in BOTH directions, which is the shape a lane that never RAN makes, not one that failed.
+
+**Why it matters, and it is the other half of the `@prime` incident (F-699 / the RR3 gate).**
+`service-wake-verdict-handles.ts › resolveAgentRecipients` builds its handle index from
+`liveChannelSessions`, i.e. from this projection. An agent whose row never lands is unnameable by
+the server no matter how correct the resolver is — and the desktop composer DOES know it (the
+renderer tinted `@prime` blue off its own live-agents feed), so the two surfaces disagree about
+who exists in the room. The RR3 gate makes the miss HONEST (`delivery='unreachable'`); it does
+not make `@prime` reachable, and nothing will until this lane writes.
+
+**Candidates, none confirmed — this is why it is OPEN.**
+1. ⚠ **THE SAME STRUCTURAL DEFECT THE LISTENER HAD** (see the watchdog, `listener-heal.js ›
+   watchPass`): `session-state-push.js › schedule` sets `running = true; draining = drain();`
+   and every later `schedule` returns early while `running` holds. A `cycle()` that never settles
+   wedges the writer for the life of the process exactly as the reconcile guard did — same shape,
+   same silence, same boot. **This is the leading candidate and would be fixed the same way.**
+2. `cycle`'s first branch: `if (!userId) { clearRetry(); return; }` over
+   `authTokens.getAuthState().userId`. Returns with NO diag, on every cycle, which also matches
+   the observed silence.
+
+**What would settle it** is one diag line on each of those two early exits — the lane currently
+cannot be told apart from a lane with nothing to say. NOT taken here because the fix belongs with
+whoever can restart the app and watch it (a main-process change needs an Electron restart, and
+this session was scoped not to restart the live one).
+
+### F-699 — a verdict-bearing row with `recipientAgentIds: null` now feeds NOBODY on the desktop, which is the 2026-09-07 mask trade meeting the 2026-09-14 RR3 gate (found 2026-09-14, OPEN — needs a ruling)
+
+`main/session-dispatch.js › planFor` runs the machine's own body parse **only** when
+`storedVerdict(m) === ''` (a row no server ever ruled on). That was bought on 2026-09-07 to stop
+an unmasked regex waking an agent whose handle sat inside BACKTICKS, and its own header states
+the cost plainly: *"the token may name an agent whose session row has not been PUSHED yet … That
+case now goes unfed on a verdict-bearing row. It is accepted here as the smaller harm."*
+
+**The RR3 gate (2026-09-14, INVARIANTS §5) makes that case common rather than exotic.** Before
+it, a `@newagent` whose row had not been pushed was silently re-aimed at another agent — wrong,
+but it reached somebody. Now it correctly stores `recipientAgentIds: null` + `unreachable`, and
+`planFor` answers `ids: []`, so the post reaches nobody at all. **That is the right answer and a
+worse experience**, and the honesty is the point (the operator sees `unreachable` instead of a
+wrong name), but it should be a ruling rather than a side effect of two independent changes.
+
+**The repair is already named in `session-dispatch.js`'s own header and is NOT taken here:** have
+the server stamp the token set it actually saw (masked, by the one parser), so this parse can
+INTERSECT with it rather than re-derive it. That gets the not-yet-pushed agent fed without a
+second masker in a second language — the drift `lib/mentions.ts` spends its header forbidding.
+Schema + desktop + server, i.e. a wave, not a patch. ⚠ Fixing F-698 removes most of the
+motivation: an agent whose row lands promptly is resolvable server-side and never reaches this
+path.

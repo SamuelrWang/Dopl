@@ -246,6 +246,65 @@ function createReconcileHealer(opts = {}) {
   };
 }
 
+// ── THE RECONCILE WATCHDOG (2026-09-14) ─────────────────────────────────────────────────────
+//
+// ⚠ **AN UNBOUNDED SINGLE-FLIGHT GUARD IS A PERMANENT OFF SWITCH, AND THAT IS WHAT IT WAS.**
+// `channel-listener.js › reconcile` coalesces concurrent callers onto one in-flight promise (M1:
+// the startup call and a deep-link restart both await the network, then both start loops for the
+// same channel). It had no deadline, so a pass that never SETTLES left `reconciling` non-null for
+// the life of the process and every later caller took the `return reconciling` line.
+//
+// ⚠ **MEASURED, ON SAMUEL'S MACHINE (the "neither agent woke" report).** After the 2026-09-14
+// 09:11:00Z boot the process logged `presence: started`, `realtime directives ARMED`, and then
+// NOT ONE reconcile line for nine hours: no `namecache loaded`, `want=0` on every realtime health
+// line, zero channel loops. `start()`'s first pass never returned — the API was not answering in
+// that window, and the same second logged `version gate: floor fetch failed` — so the 5-minute
+// interval, `wake()` on four separate powerMonitor resumes and `restart()` all no-opped. **A
+// message posted into a watched channel at 18:28:32Z reached no agent on that machine at all**,
+// because nothing was watching. The server's verdict is a stored answer a MACHINE executes
+// (INVARIANTS §5 › THE DELIVERY KEYSTONE), and there was no machine listening to execute it.
+//
+// ⚠ **IT BELONGS ON THE GUARD, NOT ON THE AWAITS INSIDE THE PASS.** Every recovery path funnels
+// through that guard — the healer above only heals a pass that RAN and answered badly — so it is
+// the one place "this is never coming back" is observable at all. Per-await timeouts would have
+// to be exhaustive to be sufficient; a deadline on the guard is sufficient by construction. And
+// nothing else could have recovered it: `status()` reports "watching 0 channels" for a wedged
+// listener AND for a signed-out one, so no surface said so either.
+//
+// ⚠ **IT ABANDONS THE PASS; IT CANNOT CANCEL IT.** A hung `await` is not cancellable from here,
+// so the old pass may still land beside a newer one — which is the M1 re-entrancy the guard was
+// built for, and which is already defended one layer down (the start path re-checks
+// `loops.get(id)` immediately before creating a loop; the crash handler compare-and-deletes). A
+// brief overlap is bounded and self-correcting; a listener that is off until somebody notices is
+// neither. ⚠ AND THE ABANDONED PROMISE IS NEVER REJECTED — an unhandled rejection in the main
+// process is a worse failure than the overlap it would be warning about.
+//
+// ⚠ **A DEADLOCK DETECTOR, NOT A LATENCY BUDGET.** A healthy cold pass enumerates every workspace
+// and refreshes each name cache serially — ~14s across 13 workspaces (2026-09-14, the
+// 08:48:58Z–08:49:12Z `namecache loaded` run) — so the bound sits well clear of slow-but-working.
+// Tripping it is always a defect, which is why `onDeadline` is loud rather than a diag-if-enabled.
+const RECONCILE_WATCHDOG_MS = 3 * 60 * 1000;
+
+/**
+ * Race one in-flight pass against a deadline, so the caller's guard ALWAYS clears.
+ * ⚠ `timers` is injected for the suites (`test/listener-reconcile-watchdog.test.mjs`); production
+ * passes nothing and gets the real clock, the same arrangement `createReconcileHealer` takes.
+ * ⚠ `unref` so a pending watchdog never holds the process open on the quit path.
+ */
+function watchPass(pass, onDeadline, ms = RECONCILE_WATCHDOG_MS, timers = null) {
+  const set = (timers && timers.setTimeout) || setTimeout;
+  const clear = (timers && timers.clearTimeout) || clearTimeout;
+  let timer = null;
+  const deadline = new Promise((resolve) => {
+    timer = set(() => { try { onDeadline(ms); } finally { resolve(); } }, ms);
+    if (timer && typeof timer.unref === 'function') timer.unref();
+  });
+  return Promise.race([pass, deadline]).then(
+    () => { clear(timer); },
+    () => { clear(timer); }
+  );
+}
+
 module.exports = {
   MISS_RECONCILE_WINDOW_MS,
   MISS_GIVE_UP_COUNT,
@@ -257,5 +316,7 @@ module.exports = {
   enumerationRetryDelay,
   keepLoopOnPrune,
   shouldReapplyWorkspaces,
+  RECONCILE_WATCHDOG_MS,
+  watchPass,
   createReconcileHealer,
 };
