@@ -114,6 +114,9 @@ export function UnderlineField({
   caption,
   multiline = false,
   minRows = 1,
+  maxLength,
+  onEnter,
+  autoFocus = false,
 }: {
   label: string;
   value: string;
@@ -126,6 +129,30 @@ export function UnderlineField({
    *  "shouldn't be a one line default"). Grows past it with the text; 1 = as tall as a
    *  one-line field. */
   minRows?: number;
+  /**
+   * The SERVER'S OWN CEILING, felt at the keyboard rather than as a 400 after the fact.
+   * ⚠ ADDITIVE AND OPTIONAL (2026-09-15): every existing caller omits it and is unchanged.
+   * ⚠ It is a MIRROR of a zod `.max()`, so a caller that passes one owes a comment naming
+   * the schema it copies — a cap only this file knows is a cap that silently drifts.
+   */
+  maxLength?: number;
+  /**
+   * ENTER SUBMITS — for a SINGLE-LINE field whose dialog has one obvious verb.
+   * ⚠ IGNORED WHEN `multiline`, and that is the kit's standing rule rather than this
+   * prop's caution: Enter breaks the line in a body field and only the verb raises the
+   * write (the composer's rule since 2026-08-26, restated in {@link UnderlineField}'s
+   * own docblock). Wiring it on both would make one popup disagree with the others.
+   * ⚠ The caller's handler must re-check its own guard — a disabled-looking button a
+   * keystroke can still fire is the bug this shape invites.
+   */
+  onEnter?: () => void;
+  /**
+   * THE FIELD THE CARET LANDS IN. ⚠ At most ONE per dialog — `StandardDialog` does no
+   * focus management of its own, so two would race and the loser's field would look
+   * focused to nobody. Additive and default-`false`: every existing caller opens with
+   * no field focused, exactly as it did.
+   */
+  autoFocus?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   const shared = {
@@ -135,6 +162,8 @@ export function UnderlineField({
     onFocus: () => setFocused(true),
     onBlur: () => setFocused(false),
     spellCheck: false,
+    maxLength,
+    autoFocus,
     "aria-label": ariaLabel,
   };
   return (
@@ -143,7 +172,20 @@ export function UnderlineField({
         {multiline ? (
           <textarea {...shared} rows={minRows} className={cn(styles.input, styles.inputMultiline)} />
         ) : (
-          <input {...shared} type="text" className={styles.input} />
+          <input
+            {...shared}
+            type="text"
+            onKeyDown={
+              onEnter
+                ? (event) => {
+                    if (event.key !== "Enter") return;
+                    event.preventDefault();
+                    onEnter();
+                  }
+                : undefined
+            }
+            className={styles.input}
+          />
         )}
       </span>
     </FormSection>

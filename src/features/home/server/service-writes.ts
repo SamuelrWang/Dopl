@@ -98,7 +98,11 @@ export async function createHomeChannel(
         role: "owner",
         credentialSubjectUserId: userId,
       }),
-      { name: input.name, visibility: "private" }
+      // ⚠ **`topic` IS THE PRODUCT'S "DESCRIPTION" (ruling, Samuel, 2026-09-15)**
+      // — the New-channel popup's second field, written into the EXISTING
+      // `channels.topic` column and NOT a new one. Absent ⇒ `createChannel`
+      // pins `""`, which is what this call passed unconditionally until now.
+      { name: input.name, topic: input.topic, visibility: "private" }
     );
   } catch (err) {
     // ⚠ Roll the container back. A container with no channel is a BRICK:

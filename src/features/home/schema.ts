@@ -1,4 +1,8 @@
 import { z } from "zod";
+// ⚠ THE CHARSET GATE IS THE CHANNELS FEATURE'S, IMPORTED AND NOT RESTATED. A
+// second copy of a neutralizer drifts, and the copy that drifts is the one that
+// stops neutralizing (`shared/lib/safe-label.ts`'s own header).
+import { safeOptionalLabel } from "@/shared/lib/safe-label";
 
 /**
  * Request shapes for the home surface.
@@ -14,9 +18,25 @@ import { z } from "zod";
  * the container's name both: the container is plumbing nobody navigates to, so
  * a second name for it would be a second thing to keep in sync and a second
  * thing to get wrong.
+ *
+ * ⚠ **`topic` IS THE FIELD THE PRODUCT CALLS "DESCRIPTION" (ruling, Samuel,
+ * 2026-09-15).** The New-channel popup gained a Description field; it writes the
+ * EXISTING `channels.topic` column (2000 chars, `channels/schema.ts ›
+ * ChannelTopicSchema`, already on the `Channel` DTO and already rendered on the
+ * MCP `rooms list` line). **There is no new column and there must not be one** —
+ * the user-facing word is "Description" everywhere, the wire and DB field stays
+ * `topic`. `createHomeChannel` used to pin `""` here and now passes this through.
+ *
+ * ⚠ THE CAP AND THE CHARSET GATE ARE THE CHANNELS FEATURE'S, not a looser local
+ * pair: the value lands in the same column, is spliced into the same MCP server
+ * narration, and `ChannelTopicSchema` is `safeOptionalLabel("Channel topic",
+ * 2000)`. It is restated rather than imported only because that const is
+ * module-private there; the ARGUMENTS must stay identical.
+ * ⚠ `.optional()`, and `""` stays legal — the column is `NOT NULL DEFAULT ''`.
  */
 export const HomeChannelCreateSchema = z.object({
   name: z.string().trim().min(1).max(80),
+  topic: safeOptionalLabel("Channel description", 2000).optional(),
 });
 
 export type HomeChannelCreateInput = z.infer<typeof HomeChannelCreateSchema>;

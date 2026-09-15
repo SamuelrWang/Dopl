@@ -40,6 +40,13 @@ const LINK_READS = [
  * a sort the server already owns — a refetch of one small payload is cheaper
  * than a rule that can disagree.
  *
+ * ⚠ **THE DRAFT CARRIES `topic`, AND THAT IS THE FIELD THE UI CALLS
+ * "DESCRIPTION"** (ruling, Samuel, 2026-09-15). The type is INFERRED from
+ * `HomeChannelCreateSchema`, so the optional second field arrived here with no
+ * edit; it is named only so nobody reads the popup's Description label as a
+ * missing column. The wire and DB field is `channels.topic` — do not add a
+ * second one.
+ *
  * ⚠ `onCreated` GETS THE WORKSPACE ID, not the channel: what the caller does
  * with it is select the new row, and `home-rows.ts › channelRowId` keys rows by
  * exactly that. The row itself arrives with the refetch.

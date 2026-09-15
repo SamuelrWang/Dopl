@@ -17,6 +17,7 @@ import { ok, err, isAlreadyExists, type ToolResponse } from "./respond";
 import {
   inlineOr,
   isErr,
+  neutralizeInline,
   resolveChannelOr,
   resolveMemberOr,
 } from "./channel-shared";
@@ -77,12 +78,26 @@ export async function opOpen(
     channel.visibility === "private"
       ? "Private — only invited members can see it."
       : "Public — visible to the whole workspace.";
+  // ⚠ **THE ROOM'S DESCRIPTION, ECHOED BACK (ruling, Samuel, 2026-09-15).** The
+  // PRODUCT'S WORD IS "Description" and the WIRE FIELD IS `topic` — the same
+  // 2000-char `channels.topic` `formatChannelLine` renders on a listing and both
+  // Info cards show; there is no second column and there must not be one. It is
+  // echoed because `summary` carries four meanings on this tool and a creator
+  // who set the wrong one should see which room they actually described.
+  // ⚠ NEUTRALIZED like every other value on this surface: it is the caller's own
+  // text one argument old, and per-site judgement about who could have authored
+  // a string is what leaves a peer-typed one raw. Silent when empty.
+  // ⚠ `neutralizeInline` DIRECTLY, not `inlineOr`: a description that neutralizes
+  // to nothing is a description this line should not print at all, and NO_NAME
+  // ("(unnamed)") is an answer to a different question.
+  const safeTopic = channel.topic ? neutralizeInline(channel.topic) : null;
+  const description = safeTopic ? ` Description: ${safeTopic}` : "";
   return ok(
     [
       // ⚠ Caller's own name, one argument old — neutralized on the same FLAT
       // rule as everything else. Per-site judgement about who could have
       // authored a value is what leaves a peer-typed string raw.
-      `Created channel **${inlineOr(channel.name, NO_NAME)}** (slug: \`${channel.slug}\` · id: \`${channel.id}\`). ${visNote}`,
+      `Created channel **${inlineOr(channel.name, NO_NAME)}** (slug: \`${channel.slug}\` · id: \`${channel.id}\`). ${visNote}${description}`,
       `Post with dopl_channel(op="send", channel="${channel.slug}", body="..."); add members with op="rooms" action="invite".`,
     ].join("\n"),
   );

@@ -1,5 +1,12 @@
 import type { ReactNode } from "react";
-import { CalendarDays, Clock3, Hash, UserRound, type LucideIcon } from "lucide-react";
+import {
+  AlignLeft,
+  CalendarDays,
+  Clock3,
+  Hash,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
 import { formatChannelTimestamp, formatDate } from "@/shared/lib/format-time";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import {
@@ -106,8 +113,9 @@ export function PersonInfoTab({
     gate,
   });
 
-  // 🔒 **THE FOUR SHIPPED ROWS ARE FIXED AND PERMANENT (Samuel, 2026-09-12):
-  // Name, Creator, Created, Last activity.** No × on any of them, and a stored
+  // 🔒 **THE SHIPPED ROWS ARE FIXED AND PERMANENT (Samuel, 2026-09-12): Name,
+  // Creator, Created, Last activity — and DESCRIPTION since 2026-09-15, which is
+  // why this no longer says "the four".** No × on any of them, and a stored
   // `hidden` key is INERT — the card renders every built-in regardless. `hidden`
   // stays in `info-card.ts` because stored cards carry it (and `"email"`, whose
   // row was deleted 2026-09-01); dropping the union would fail validation on
@@ -124,6 +132,29 @@ export function PersonInfoTab({
   );
   const creator = members.find((m) => m.userId === channel.createdBy) ?? null;
   const builtIns: BuiltInRow[] = [
+    // ⚠ **"DESCRIPTION" IS THE PRODUCT'S WORD FOR `channels.topic` (ruling,
+    // Samuel, 2026-09-15)** — the New-channel popup's second field, the same
+    // 2000-char column the MCP `rooms list` line renders. **No new column.**
+    // ⚠ DISPLAY ONLY: editing a channel's header lives where channel management
+    // does (`PATCH /api/channels/{id}` already accepts `topic`).
+    // ⚠ It is FIXED like the other four — no ×, and a stored `hidden` key would
+    // be inert here as it is for them.
+    // ⚠ THE SAME ROW IS ON THE WORKSPACE CHANNELS PAGE
+    // (`channels/components/info-tab.tsx`). The two panes are separate
+    // compositions of one ladder and are MEANT TO MATCH.
+    {
+      key: "description",
+      icon: AlignLeft,
+      label: "Description",
+      value: channel.topic ? (
+        <span className="truncate text-body text-text-primary">
+          {channel.topic}
+        </span>
+      ) : (
+        // ⚠ ONE WORD, NO EXPLAINER SENTENCE (minimal-copy ruling).
+        <span className="text-body text-text-muted">None</span>
+      ),
+    },
     {
       key: "creator",
       icon: UserRound,

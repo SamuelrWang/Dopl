@@ -21,6 +21,48 @@ describe("HomeChannelCreateSchema", () => {
       HomeChannelCreateSchema.parse({ name: "x".repeat(81) })
     ).toThrow();
   });
+
+  /**
+   * ⚠ **`topic` IS THE FIELD THE PRODUCT CALLS "DESCRIPTION" (ruling, Samuel,
+   * 2026-09-15).** The New-channel popup's second field writes the EXISTING
+   * `channels.topic` column; there is no new one and there must not be one. The
+   * cap and the charset gate are the channels feature's, restated — a looser
+   * pair here would let a value the channels surface refuses into the same
+   * column, and that column is spliced into MCP server narration.
+   */
+  it("takes an OPTIONAL description on the `topic` field, trimmed, at 2000", () => {
+    expect(HomeChannelCreateSchema.parse({ name: "A" }).topic).toBeUndefined();
+    expect(
+      HomeChannelCreateSchema.parse({ name: "A", topic: "  Fundraising  " })
+        .topic
+    ).toBe("Fundraising");
+    // ⚠ `""` STAYS LEGAL — the column is `NOT NULL DEFAULT ''` and the popup's
+    // own cleared field is the ordinary case.
+    expect(HomeChannelCreateSchema.parse({ name: "A", topic: "" }).topic).toBe(
+      ""
+    );
+    expect(
+      HomeChannelCreateSchema.parse({ name: "A", topic: "x".repeat(2000) }).topic
+    ).toHaveLength(2000);
+    expect(() =>
+      HomeChannelCreateSchema.parse({ name: "A", topic: "x".repeat(2001) })
+    ).toThrow();
+  });
+
+  it("keeps the CHARSET GATE — a description cannot forge a line", () => {
+    // ⚠ The value is spliced into `dopl_channel` results as SERVER NARRATION, so
+    // a line separator forges a line and a length bound alone is not enough
+    // (`shared/lib/safe-label.ts`, and `channels/schema.ts › ChannelTopicSchema`
+    // which this restates). The four codes are LF, NUL, zero-width space and
+    // U+2028 — written as code points so this file holds no control character
+    // of its own.
+    for (const code of [0x0a, 0x00, 0x200b, 0x2028]) {
+      const bad = `a${String.fromCharCode(code)}b`;
+      expect(() =>
+        HomeChannelCreateSchema.parse({ name: "A", topic: bad })
+      ).toThrow();
+    }
+  });
 });
 
 describe("HomeLinkMintSchema", () => {

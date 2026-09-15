@@ -37,7 +37,7 @@ import type {
   DoplClient,
 } from "@dopl/client";
 import { randomUUID } from "node:crypto";
-import { inlineOr } from "./narration";
+import { inlineOr, neutralizeInline } from "./narration";
 import { ok, err, type ToolResponse } from "./respond";
 import { isErr, resolveChannelOr } from "./channel-shared";
 
@@ -68,6 +68,14 @@ const BUILT_IN_KEYS: readonly ChannelInfoCardBuiltInKey[] = [
   "created",
   "lastActivity",
 ];
+
+/** The channel's DESCRIPTION line, or nothing. ⚠ The wire field is `topic`; the
+ *  product's word is "Description" (ruling, Samuel, 2026-09-15) and the two are
+ *  one column. An array so the caller can splice it away when it is empty. */
+function descriptionLine(topic: string | null | undefined): string[] {
+  const safe = topic ? neutralizeInline(topic) : null;
+  return safe ? [`Description: ${safe}`] : [];
+}
 
 function renderCard(card: ChannelInfoCard): string[] {
   const hidden = card.hidden ?? [];
@@ -151,6 +159,20 @@ export async function opUpdate(
     return ok(
       [
         `Info card for **${label}** — READ ONLY, nothing was changed.`,
+        // ⚠ **THE CHANNEL'S DESCRIPTION, ON THE ONE OP THAT READS A CHANNEL
+        // ROW (ruling, Samuel, 2026-09-15).** The PRODUCT'S WORD is
+        // "Description" and the WIRE FIELD is `topic` — the same 2000-char
+        // `channels.topic` `formatChannelLine` renders on a listing and both
+        // Info cards show; **there is no second column.**
+        // ⚠ IT COSTS NOTHING: `resolveChannelOr` above already fetched the row,
+        // so this is a field of an answer we had. `op="read"` is DELIBERATELY
+        // left alone — it is the poll-loop path and skips the channel resolve on
+        // purpose (`channel-ops-read.ts › opRead`), and buying one line of
+        // metadata with a second round trip on every hold is the trade that file
+        // exists to refuse.
+        // ⚠ Neutralized, and SILENT when empty — a description that flattens to
+        // nothing prints no line rather than an empty span.
+        ...descriptionLine(channel.topic),
         ...renderCard(channel.infoCard ?? EMPTY_CARD),
         "",
         `⚠ The card is REPLACED WHOLE on a write. To add a row, re-issue op="rooms" action="update" with \`info_card\` carrying EVERY row above plus the new one — a write that omits a row deletes it. Send \`info_card={}\` to clear the card deliberately.`,

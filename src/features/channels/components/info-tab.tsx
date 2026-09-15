@@ -16,6 +16,7 @@
 
 import { useState } from "react";
 import {
+  AlignLeft,
   Calendar,
   ChevronDown,
   ChevronRight,
@@ -103,6 +104,25 @@ export function InfoTab({
           <span className="truncate text-body text-text-primary">
             {channelName}
           </span>
+        </MetaRow>
+        <MetaRowDivider />
+        {/* ⚠ **"DESCRIPTION" IS THE PRODUCT'S WORD FOR `channels.topic` (ruling,
+            Samuel, 2026-09-15).** No new column: the value is the same 2000-char
+            `topic` the New-channel popup writes and the MCP `rooms list` line
+            renders. ⚠ DISPLAY ONLY — editing a channel's header lives where
+            channel management does (`PATCH /api/channels/{id}`, already accepts
+            `topic`). ⚠ "None" and no explainer sentence (minimal-copy ruling).
+            ⚠ THE SAME ROW IS ON /home's own card — `apps/desktop-ui ›
+            person-info-tab.tsx`; the two panes are separate compositions of one
+            ladder and a ruling on it lands on both. */}
+        <MetaRow icon={AlignLeft} label="Description">
+          {channel.topic ? (
+            <span className="truncate text-body text-text-primary">
+              {channel.topic}
+            </span>
+          ) : (
+            <span className="text-body text-text-muted">None</span>
+          )}
         </MetaRow>
         <MetaRowDivider />
         <MetaRow icon={UserRound} label="Creator">
