@@ -17,6 +17,11 @@ const { API_BASE } = require('./config');
 
 async function sendOnce(pathname, opts) {
   const { method = 'GET', workspaceId, body, headers: extra, timeoutMs, noStore, signal } = opts;
+  // ⚠ AHEAD OF THE TIMER BELOW, so it is bounded UPSTREAM — cookie store 5s (`auth-cookies.js ›
+  // jarCall`, F-700), refresh POST 20s (`auth-refresh-transport.js`, F-698). On the 2026-09-15
+  // 08:22:33Z boot Chromium's network service crashed, a `cookies.get` was dropped, and every
+  // request path sat HERE with its AbortController not yet armed — which is why that boot's
+  // 30s-in-flight presence beat logged no abort at all.
   const cookie = await auth.getAuthCookie();
   // Q10: this build's version rides on the TRANSPORT, not on each post site, so a
   // new caller cannot forget it. The server stamps it as the reserved

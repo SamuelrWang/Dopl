@@ -210,7 +210,7 @@ function isFeatureAvailable() {
 // long-poll depends on.
 async function sendOnce(pathname, opts) {
   const { method = 'GET', workspaceId, body, timeoutMs, signal } = opts;
-  const cookie = await auth.getAuthCookie();
+  const cookie = await auth.getAuthCookie(); // ⚠ BOUNDED UPSTREAM, not by `timeoutMs` — this runs BEFORE the controller arms (F-700; see api.js)
   // Q10: this build's version rides on the TRANSPORT (see api.js for the same
   // line, and app-version.js for why the header — not the body — carries it).
   // channel-post.js posts every task lifecycle event and headless reply through

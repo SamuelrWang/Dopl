@@ -28,6 +28,7 @@ const spawner = require('./session-spawner');
 const { probeMcpEntry, removeMcpEntry, addMcpEntry } = require('./mcp-cli-add');
 const { apiFetch } = require('./api');
 const { diag } = require('./diag');
+const { withDeadline, DEADLINE } = require('./deadline');
 // ⚠ THE CLAUDE ADAPTER'S, not core's — `~/.claude/skills` is one runtime's convention and
 // core may not name one (test/core-vocabulary.test.mjs). This file is already on that scan's
 // deferred census because it drives that runtime's CLI, which is the same lane and the same
@@ -73,16 +74,15 @@ function deviceLabel() {
 // Bound a promise that may not settle. apiFetch's AbortController covers the fetch, but
 // getAuthCookie() ahead of it can await a token refresh, so the whole call needs an outer stop.
 // null on timeout; the loser settles on its own (its rejection is handled by the race).
+//
+// ⚠ THE BODY IS NOW `deadline.js`, NOT A SECOND COPY (2026-09-15, F-700). This local race was
+// the only such bound in the tree and it named the hazard correctly — the cookie read AHEAD of
+// the fetch — one call site at a time. F-700 bounds the store itself (`auth-cookies.js ›
+// jarCall`) with the same primitive, so this delegates rather than forking it. The 3s value
+// and the null-on-timeout contract its one caller checks are UNCHANGED; only the sentinel is
+// translated here.
 function withTimeout(promise, ms) {
-  let timer = null;
-  return Promise.race([
-    promise,
-    new Promise((resolve) => {
-      timer = setTimeout(() => resolve(null), ms);
-    }),
-  ]).finally(() => {
-    if (timer) clearTimeout(timer);
-  });
+  return withDeadline(promise, ms).then((v) => (v === DEADLINE ? null : v));
 }
 
 // ── Spawn-config file: NOT WRITTEN ANY MORE, AND REMOVED ON SIGHT ────────────

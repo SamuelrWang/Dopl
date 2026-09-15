@@ -33,9 +33,13 @@
 // captureFromFragment's CSRF gate defends. auth-state.js adds the second half of
 // the belt — a jar whose identity disagrees with the blob is never adopted.
 
+// ⚠ EVERY CALL INTO THE STORE IS BOUNDED SINCE 2026-09-15 (F-700) — see `jarCall` below for
+// the boot this cost and why the store, not the network, was the thing that hung.
+
 const { session } = require('electron');
 const { APP_ORIGIN, SUPABASE_REF } = require('./config');
 const { diag } = require('./diag');
+const { withDeadline, DEADLINE } = require('./deadline');
 
 const COOKIE_BASE = `sb-${SUPABASE_REF}-auth-token`;
 const BASE64_PREFIX = 'base64-';
@@ -48,6 +52,55 @@ const MAX_CHUNKS = 10;
 const APP_HOST = (() => {
   try { return new URL(APP_ORIGIN).hostname; } catch (_) { return ''; }
 })();
+
+// ── THE COOKIE STORE HAS A DEADLINE (F-700, 2026-09-15) ─────────────────────
+//
+// THE BOOT. Electron's stdout at 08:22:33Z: `ERROR:…network_service_instance_impl.cc:721]
+// Network service crashed or was terminated, restarting service.` listener.log the same
+// second: `presence: started` at 08:22:33.624 — then `presence: superseding the in-flight
+// beat` at 08:23:05, i.e. the FIRST beat was STILL in flight after 30 seconds, and not one
+// `reconcile:` / `namecache loaded` / `session-state push` / `auth-tokens` line followed. A
+// healthy boot aborts that superseded beat in ~12s and loads the name cache in ~15s. The
+// 2026-09-14 09:11:00Z boot has the identical shape (first beat superseded at +29s, silence
+// for 25 minutes).
+//
+// WHY IT WAS NOT F-698's HANG. The Supabase refresh POST is bounded at 20s since F-698, and a
+// FRESH process has a FRESH undici pool — so the remaining unbounded await on every request
+// path was this file: `api.js › sendOnce` and `listener-io.js › sendOnce` both
+// `await auth.getAuthCookie()` BEFORE they arm their AbortController, `auth-state.js ›
+// refreshSignedInState` awaits `readCookieSession()` (which is why realtime health reports
+// `cred=none` at boot), and all of them bottom out in `session.defaultSession.cookies.*` with
+// no deadline. Chromium's NETWORK SERVICE owns that store: when it crashes and restarts, an
+// in-flight `cookies.get` promise can be dropped and never settle. `mcp-config.js` already
+// documented this exact hazard ("getAuthCookie() ahead of it can await a token refresh, so the
+// whole call needs an outer stop") — it just fenced one call site instead of the store.
+//
+// 5 SECONDS because this is a local IPC hop to Chromium, not a network call: a healthy answer
+// is milliseconds, so anything past 5s is a broken store rather than a slow one. Every caller
+// below already has a "the jar told us nothing" branch, so a timeout costs one degraded cycle
+// and the NEXT one re-asks — as opposed to a lane wedged for the life of the process.
+const COOKIE_STORE_TIMEOUT_MS = 5000;
+
+// ⚠ ONE DIAG LINE PER FUNCTION PER PROCESS, not per call. A boot with a dead network service
+// would otherwise log on every 30s presence beat, every reconcile and every post, for hours —
+// noise that buries the one line that matters. The first timeout in each function is the
+// signal; the rest are the same fact.
+const stalledReported = new Set();
+function cookieStoreStalled(where) {
+  if (stalledReported.has(where)) return;
+  stalledReported.add(where);
+  diag(
+    `auth: cookie store did not answer in ${COOKIE_STORE_TIMEOUT_MS / 1000}s —`,
+    `${where} gave up (Chromium network service restarting?); logged once per process`
+  );
+}
+
+// Every `session.defaultSession.cookies.*` await in this file goes through here. Resolves the
+// store's own answer, or `DEADLINE` when it never answers — the sentinel is what lets a caller
+// tell "the jar is empty" from "the jar never replied", which is the whole point.
+function jarCall(where, promise) {
+  return withDeadline(promise, COOKIE_STORE_TIMEOUT_MS, () => cookieStoreStalled(where));
+}
 
 // Every cookie name the session can occupy: the base plus `.0`…`.9` chunks.
 function cookieNames() {
@@ -81,7 +134,10 @@ function cookieChunkIndex(name) {
 // The refresh_token is the load-bearing part — it is what lets auth.js rebuild a
 // dead session blob without any server round trip.
 async function readCookieSession() {
-  const jar = await session.defaultSession.cookies.get({ url: APP_ORIGIN });
+  // F-700: a store that never answers reads as "nothing usable in the jar" — the same contract
+  // the unparseable-chunk branch below already uses — rather than hanging every caller.
+  const jar = await jarCall('readCookieSession', session.defaultSession.cookies.get({ url: APP_ORIGIN }));
+  if (jar === DEADLINE || !Array.isArray(jar)) return null;
   const authCookies = jar
     .filter(isOurAuthCookie)
     .sort((a, b) => cookieChunkIndex(a.name) - cookieChunkIndex(b.name));
@@ -115,6 +171,8 @@ async function readCookieSession() {
 
 // The raw access_token JWT string from the jar (or null). Realtime is the only
 // consumer that needs a raw user JWT; every HTTP caller forwards the cookies.
+// ⚠ F-700: bounded THROUGH readCookieSession — no second deadline here, or a stalled store
+// would cost 10s on this path and 5s on every other one.
 async function readCookieAccessToken() {
   const s = await readCookieSession();
   return (s && s.access_token) || null;
@@ -124,7 +182,13 @@ async function readCookieAccessToken() {
 // Empty string when signed out / no cookies yet.
 async function getSessionCookieHeader() {
   try {
-    const jar = await session.defaultSession.cookies.get({ url: APP_ORIGIN });
+    // ⚠ F-700 — THE HANG THE WHOLE APP AWAITED. `api.js › sendOnce` and `listener-io.js ›
+    // sendOnce` call this BEFORE arming their AbortController, so an unanswered store was an
+    // unbounded await on every request path. Timing out returns '' — the same answer as
+    // "signed out / no cookies yet", which sends `getAuthCookie` on to the stored-blob path
+    // (already bounded by auth-refresh-transport's 20s) instead of stopping the lane dead.
+    const jar = await jarCall('getSessionCookieHeader', session.defaultSession.cookies.get({ url: APP_ORIGIN }));
+    if (jar === DEADLINE || !Array.isArray(jar)) return '';
     const authCookies = jar.filter(isOurAuthCookie); // FIX S3: host-only, not name-only
     if (authCookies.length === 0) return '';
     return authCookies.map((c) => `${c.name}=${c.value}`).join('; ');
@@ -141,7 +205,11 @@ async function getSessionCookieHeader() {
 async function clearSessionCookies() {
   try {
     for (const name of cookieNames()) {
-      await session.defaultSession.cookies.remove(APP_ORIGIN, name).catch(() => {});
+      // ⚠ F-700 — BAIL ON THE FIRST STALL, do not pay the deadline ELEVEN TIMES. A per-name
+      // 5s bound over `cookieNames()` would be a 55s clear on a dead store, which is its own
+      // wedge; one stalled remove means the store is gone, so the whole best-effort clear is.
+      const r = await jarCall('clearSessionCookies', session.defaultSession.cookies.remove(APP_ORIGIN, name).catch(() => {}));
+      if (r === DEADLINE) return false;
     }
     return true;
   } catch (err) {
@@ -196,7 +264,12 @@ async function writeSessionCookies(sessionObj) {
       }
     }
     for (const c of chunks) {
-      await session.defaultSession.cookies.set({
+      // ⚠ F-700 — `ensureFresh → refresh → writeSessionCookies` sits on the SAME boot path as
+      // the reads, so an unanswered `cookies.set` wedges it just as an unanswered `get` does.
+      // A stalled write is a failed writeback (the function's existing best-effort contract:
+      // the live page normally keeps these fresh, this only repairs gaps) and it stops the
+      // loop for the reason the clear does — 11 × 5s is not a bound.
+      const w = await jarCall('writeSessionCookies', session.defaultSession.cookies.set({
         url: APP_ORIGIN,
         name: c.name,
         value: c.value,
@@ -205,7 +278,8 @@ async function writeSessionCookies(sessionObj) {
         httpOnly: false,
         sameSite: 'lax',
         expirationDate,
-      });
+      }));
+      if (w === DEADLINE) return false;
     }
     // PRUNE last. A stale chunk left behind would reassemble into a half-old
     // session (the L5 hazard clearSessionCookies exists for), so the names this
@@ -213,7 +287,10 @@ async function writeSessionCookies(sessionObj) {
     const written = new Set(chunks.map((c) => c.name));
     for (const name of cookieNames()) {
       if (written.has(name)) continue;
-      await session.defaultSession.cookies.remove(APP_ORIGIN, name).catch(() => {});
+      // F-700: bounded like the write above; a stalled prune leaves the (correctly written)
+      // session in place rather than holding the caller.
+      const p = await jarCall('writeSessionCookies', session.defaultSession.cookies.remove(APP_ORIGIN, name).catch(() => {}));
+      if (p === DEADLINE) return false;
     }
     return true;
   } catch (err) {
@@ -225,6 +302,7 @@ async function writeSessionCookies(sessionObj) {
 module.exports = {
   COOKIE_BASE,
   APP_HOST,
+  COOKIE_STORE_TIMEOUT_MS, // F-700: the store's deadline, exported so it is greppable, not magic
   isOurAuthCookie, // FIX S3: the host-only predicate both readers share
   readCookieSession,
   readCookieAccessToken,

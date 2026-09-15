@@ -8979,3 +8979,58 @@ second masker in a second language — the drift `lib/mentions.ts` spends its he
 Schema + desktop + server, i.e. a wave, not a patch. ⚠ Fixing F-698 removes most of the
 motivation: an agent whose row lands promptly is resolvable server-side and never reaches this
 path.
+
+### F-700 — every request path awaited Chromium's cookie store with NO deadline, so a crashed network service at boot wedged the desktop exactly as the unbounded refresh POST did (found 2026-09-15, RESOLVED 2026-09-15)
+
+**The boot, measured.** `~/Library/Application Support/dopl-desktop/listener.log` and Electron's
+own stdout for the 2026-09-15 08:22:33Z start:
+
+- stdout, that second: `ERROR:content/browser/network_service_instance_impl.cc:721] Network
+  service crashed or was terminated, restarting service.`
+- `presence: started` at 08:22:33.624 → `presence: superseding the in-flight beat` at 08:23:05.
+  The FIRST beat was still in flight after **30 seconds**.
+- Nothing followed: no `reconcile:`, no `namecache loaded`, no `session-state push`, no
+  `auth-tokens` line. A healthy boot in the same log (2026-09-14 01:05 / 01:19 / 01:22) aborts
+  that superseded beat within ~12s and loads the name cache within ~15s. The 2026-09-14
+  09:11:00Z boot — F-698's own incident — has the identical shape (first beat superseded at
+  +29s, then silence for 25 minutes).
+
+**Why F-698's fix did not cover it.** F-698 bounded the Supabase refresh POST
+(`dopl-desktop-app/main/auth-refresh-transport.js › postRefresh`, 20s) and watchdogged the two
+single-flight guards (`dopl-desktop-app/main/listener-heal.js › watchPass`,
+`dopl-desktop-app/main/session-state-push.js › drain`). A FRESH process also has a fresh undici
+pool, so neither the POST nor a dead keepalive socket can explain a 30s beat at +0s. The
+remaining unbounded await is upstream of both: `dopl-desktop-app/main/api.js › sendOnce` and
+`dopl-desktop-app/main/listener-io.js › sendOnce` each `await auth.getAuthCookie()` **before**
+their AbortController timer starts, and that bottoms out in
+`session.defaultSession.cookies.get()` — as do `writeSessionCookies`'s `cookies.set` on the
+`ensureFresh → refresh` path and `dopl-desktop-app/main/auth-state.js › refreshSignedInState`'s
+`readCookieSession()` (which is what leaves realtime health reporting `cred=none` at boot).
+**Chromium's network service owns the cookie store**, so when it crashes and restarts, an
+in-flight `cookies.get` promise can be dropped and never settle — and a timer that has not armed
+yet cannot abort anything, which is why the wedged beat logged no abort error.
+`dopl-desktop-app/main/mcp-config.js › withTimeout` had already named this hazard in its own
+header ("getAuthCookie() ahead of it can await a token refresh, so the whole call needs an outer
+stop") and fenced exactly one call site with a local copy of the primitive.
+
+**Fix.**
+1. `dopl-desktop-app/main/deadline.js › withDeadline` — ONE dependency-free bound (resolves the
+   exported `DEADLINE` sentinel on timeout, clears and `unref`s its timer, swallows a throwing
+   logger so a bound can never become an uncaughtException in a timer callback). Driven directly
+   by `dopl-desktop-app/test/deadline.test.mjs`.
+2. `dopl-desktop-app/main/auth-cookies.js › jarCall` — every `cookies.get` / `cookies.set` /
+   `cookies.remove` await in the file goes through it at `COOKIE_STORE_TIMEOUT_MS` (5s: a local
+   IPC hop to Chromium, where a healthy answer is milliseconds). A timeout degrades to each
+   caller's existing "the jar told us nothing" branch — `getSessionCookieHeader` → `''` (so
+   `auth.js › getAuthCookie` falls through to the already-bounded stored-blob path),
+   `readCookieSession`/`readCookieAccessToken` → `null`, `writeSessionCookies` /
+   `clearSessionCookies` → `false` without throwing. The loops over `cookieNames()` **stop at
+   the first stall** rather than paying 5s eleven times. `cookieStoreStalled` logs ONE line per
+   function per process, so a boot with a dead network service cannot log on every 30s beat.
+   Pinned by `dopl-desktop-app/test/auth-cookie-store-deadline.test.mjs`, which also fails on any
+   bare `await session.defaultSession.cookies.*` reintroduced into the file.
+3. `dopl-desktop-app/main/mcp-config.js › withTimeout` now DELEGATES to the helper instead of
+   forking it; its 3s value and null-on-timeout contract are unchanged.
+
+⚠ **A main-process change: it takes effect on the next Electron restart, not on the running
+app.** Suite at the time of writing (2026-09-15): `npm test` in `dopl-desktop-app` 3220/3220.

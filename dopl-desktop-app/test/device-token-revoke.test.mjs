@@ -26,12 +26,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
+// ⚠ THE REAL BOUND, NOT A STUB (2026-09-15, F-700): `withTimeout` below now delegates to
+// `main/deadline.js`, which is dependency-free and therefore injectable as the shipped module —
+// the same one-program argument `_session-state-push-harness.mjs` makes for `watchPass`.
+const deadline = createRequire(import.meta.url)(join(HERE, "..", "main", "deadline.js"));
 const MCP = M("mcp-config.js");
 const STATE = M("auth-state.js");
 
@@ -63,11 +68,12 @@ function loadRevoke({ token = "dopl_at_x", label = "Dopl Desktop CLI (Minted-Hos
   ].join("\n");
   const fn = new Function(
     "apiFetch", "loadDeviceToken", "diag", "MCP_DEVICE_TOKEN_PATH", "REVOKE_TIMEOUT_MS", "require",
+    "withDeadline", "DEADLINE",
     `${src}\n return revokeDeviceToken;`
   )(apiFetch, loadDeviceToken, diag, TOKEN_PATH, FAST_TIMEOUT, (id) => {
     if (id === "os") return { hostname: () => "This-Host" };
     throw new Error(`unexpected require(${id})`);
-  });
+  }, deadline.withDeadline, deadline.DEADLINE);
   return { fn, calls };
 }
 
