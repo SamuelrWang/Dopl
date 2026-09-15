@@ -13,6 +13,16 @@ import { FENCE_HEADER } from "./untrusted-fence";
 /** ⚠ The row `dopl_kb`'s description teaches first — one declaration, both uses. */
 const BASE_NOT_FOUND = KB_ERRORS[0];
 
+/** ⚠ Same one-declaration rule as {@link BASE_NOT_FOUND}: the literal
+ *  `reason=ambiguous_slug` reaches the wire only through {@link refusal}, so the
+ *  description and the refusal are the same characters by construction. */
+const AMBIGUOUS_SLUG = KB_ERRORS[2];
+
+/** How many matches an ambiguity refusal spells out before it summarises the
+ *  rest. ⚠ A cap, not a page: the refusal is already a dead end, and thirty
+ *  lines of it buys nothing the first ten did not. */
+const MAX_LISTED_MATCHES = 10;
+
 /** ⚠ Local, like `agent-shared.ts` and `channel-addressing.ts` — this package
  *  already carries several copies and unifying them is not this change. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -42,30 +52,195 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * ⚠ **ONLY AN API REFUSAL IS SWALLOWED.** A transport failure must not read as
  * "no such base" — that is how an outage becomes a deletion in an agent's notes.
  */
-async function resolveBase(client: DoplClient, ref: string): Promise<KnowledgeBase | null> {
+export type BaseRefResolution =
+  | { kind: "found"; base: KnowledgeBase }
+  | { kind: "not-found" }
+  | { kind: "ambiguous"; matches: KnowledgeBase[] };
+
+/**
+ * 🔒 **A SLUG THAT NAMES TWO CONTAINERS IS REFUSED, NOT PICKED (F-701).**
+ *
+ * ⚠ **THIS IS WHERE THE `dopl-development` LOSS CAME FROM, AND NOTHING WAS
+ * EVER DELETED.** `knowledge_bases` is unique on `(workspace_id, slug)` — per
+ * CONTAINER, which is the correct constraint and not the one an agent assumes.
+ * `listKbBases` answers for the bound container PLUS the caller's own personal
+ * shelf, so one slug legitimately names several rows, and the old body took
+ * `Array.find` — FIRST WINS, silently. On 2026-09-05 three live bases shared
+ * `dopl-development`; the one `.find` reached was an empty shell in the personal
+ * container, and every op reported cheerful success against it for ten days
+ * (`KB-LOSS-TRACE.md`). A silent pick cannot be diagnosed from its own answer:
+ * an empty tree is what an empty base looks like.
+ *
+ * ⚠ **AND THE TIE-BREAKS ARE ALL WRONG, WHICH IS WHY THERE IS NONE.** "Newest
+ * wins" would have picked the same empty shell; "the bound container wins" is
+ * the rule an agent holding a personal-shelf slug is already violating. Every
+ * natural ordering acts on an identity the caller did not choose and reports
+ * success — the argument `agent-shared.ts › ambiguousTemplate` makes for names,
+ * which slugs now share.
+ *
+ *   1. UUID → **ID FIRST, ALWAYS**: the visible list, then the server's own id
+ *      door (F-470, "an id resolves its own container"). ⚠ An id is unique
+ *      workspace-wide, so **by-id addressing can never be ambiguous** and this
+ *      arm is untouched by this change — that is the whole escape hatch the
+ *      refusal points at.
+ *   2. Then, and only then, EXACT slug match. ⚠ The uuid-shaped-slug fallback
+ *      is deliberate: the old `.find` matched `slug` OR `id` in one pass, so
+ *      dropping through here is what keeps a base whose slug looks like a UUID
+ *      addressable at all.
+ *   3. More than one → AMBIGUOUS, listing each. 4. Zero → not found.
+ *
+ * ⚠ **THE HAPPY PATH IS BYTE-IDENTICAL TO WHAT IT WAS.** Same one
+ * `listKbBases` call, same rows, same answer whenever the ref is unambiguous —
+ * which is every call that was already correct. The shelf labels the refusal
+ * wants come from a SECOND read inside {@link ambiguousBase}, deliberately: a
+ * resolver twelve ops share is the wrong place to widen a request for the
+ * benefit of an error path none of them reach.
+ */
+async function resolveBaseRef(
+  client: DoplClient,
+  ref: string,
+): Promise<BaseRefResolution> {
+  const needle = ref.trim();
+  if (needle === "") return { kind: "not-found" };
   const bases = await client.listKbBases();
-  const here = bases.find((b) => b.slug === ref || b.id === ref);
-  if (here) return here;
-  if (!UUID_RE.test(ref)) return null;
+
+  // ⚠ **AN ID ANSWERS BEFORE ANY SLUG QUESTION, AND ITS SHAPE IS NOT THE TEST.**
+  // Matching `id` only for UUID-shaped refs regressed every non-UUID id the old
+  // `.find(b => b.slug === ref || b.id === ref)` reached — the fixtures' `kb-1`
+  // among them, and with it the whole `set_visibility` confirm flow. What makes
+  // this arm safe is UNIQUENESS, which every id has whatever it looks like; the
+  // UUID test below is about the ID DOOR, a different question.
+  const byId = bases.find((b) => b.id === needle);
+  if (byId) return { kind: "found", base: byId };
+
+  if (UUID_RE.test(needle)) {
+    try {
+      return { kind: "found", base: await client.getKbBase(needle) };
+    } catch (e) {
+      // ⚠ ONLY AN API REFUSAL IS SWALLOWED. A transport failure must not read
+      // as "no such base" — that is how an outage becomes a deletion in an
+      // agent's notes.
+      if (!isApiError(e, 404, "KNOWLEDGE_BASE_NOT_FOUND")) throw e;
+    }
+  }
+
+  const matches = bases.filter((b) => b.slug === needle);
+  if (matches.length === 0) return { kind: "not-found" };
+  if (matches.length === 1) return { kind: "found", base: matches[0] };
+  return {
+    kind: "ambiguous",
+    // ⚠ Container-ordered so a caller re-reading the refusal sees a stable list
+    // and can act on "the second one".
+    matches: [...matches].sort((a, b) => a.workspaceId.localeCompare(b.workspaceId)),
+  };
+}
+
+/** resolveBaseRef + its two refusals; caller short-circuits on `isError`. */
+export async function resolveBaseOr(client: DoplClient, ref: string): Promise<KnowledgeBase | ToolResponse> {
+  const res = await resolveBaseRef(client, ref);
+  if (res.kind === "found") return res.base;
+  if (res.kind === "ambiguous") return ambiguousBase(client, ref, res.matches);
+  return err(
+    refusal(
+      BASE_NOT_FOUND,
+      `Ref: ${inlineOr(ref, "`(unreadable ref)`")}. Deleting is permanent, so a base you deleted is not recoverable.`,
+    ),
+  );
+}
+
+/**
+ * THE AMBIGUITY REFUSAL — **it lists, and it does not pick.**
+ *
+ * ⚠ **THE LIST IS THE WHOLE VALUE.** "That slug is ambiguous" alone sends the
+ * agent back to `op="list_bases"` for ids it was already holding. Each row
+ * carries the three things that tell the containers apart: the ID to re-issue
+ * with, the CONTAINER it lives in, and the ENTRY COUNT — the count being what
+ * would have told Samuel in one line that the base he was addressing was the
+ * empty one.
+ *
+ * ⚠ **THE LIST IS NOT AN ORACLE.** Every row already came back from this
+ * caller's own `listKbBases`, so it discloses exactly what `op="list_bases"`
+ * would — the same argument `ambiguousTemplate` makes. ⚠ **AND THE CONTAINER IS
+ * NAMED BY ID, NEVER LOOKED UP.** Resolving container NAMES here would mean
+ * `client.listWorkspaces()`, which walks straight past the session lock in
+ * `workspace-directory.ts › getWorkspaceList` — a locked session must not learn
+ * that other containers exist. The id is also the `workspace=` handle, so it is
+ * the more useful half anyway.
+ *
+ * ⚠ **A COUNT THAT FAILS IS OMITTED, NOT GUESSED, AND NEVER THROWS.** This is
+ * already the error path; an exception here would replace a precise refusal
+ * with a stack trace.
+ */
+async function ambiguousBase(
+  client: DoplClient,
+  ref: string,
+  matches: KnowledgeBase[],
+): Promise<ToolResponse> {
+  const shown = matches.slice(0, MAX_LISTED_MATCHES);
+  const [personal, counts] = await Promise.all([
+    personalBaseIds(client),
+    Promise.all(shown.map((b) => entryCount(client, b.id))),
+  ]);
+  const rest = matches.length - shown.length;
+  return err(
+    [
+      refusal(
+        AMBIGUOUS_SLUG,
+        `Nothing was read or written — ${inlineOr(ref, "`(unreadable ref)`")} names ${matches.length} knowledge bases you can see, in different containers, and this call refuses rather than picking one. A slug is unique only WITHIN a container, so this is a legitimate state. Re-issue with the ID of the one you meant — an id resolves its own container.`,
+      ),
+      "",
+      ...shown.map((b, i) => matchLine(b, counts[i], personal.has(b.id))),
+      ...(rest > 0 ? [`- …and ${rest} more; op="list_bases" has them all.`] : []),
+    ].join("\n"),
+  );
+}
+
+function matchLine(
+  base: KnowledgeBase,
+  count: number | null,
+  isPersonal: boolean,
+): string {
+  // ⚠ The container id IS the `workspace=` handle, so the line an agent reads
+  // is also the line it can act on.
+  const where = isPersonal
+    ? `your personal container \`${base.workspaceId}\``
+    : `container \`${base.workspaceId}\``;
+  const entries =
+    count === null
+      ? "entry count unavailable"
+      : `${count} ${count === 1 ? "entry" : "entries"}`;
+  return `- \`${base.id}\` — ${inlineOr(base.name, "`(unnamed)`")} · ${where} · ${entries}`;
+}
+
+/**
+ * Ids of the caller's PERSONAL-container bases, for the shelf label — empty
+ * when the sibling key is absent or the read fails.
+ *
+ * ⚠ **`?? []` IS THE CONTRACT, NOT A SHORTCUT (INVARIANTS §8).** An older
+ * server sends no `homeScopedBaseIds`, and the fail-safe reading of "I do not
+ * know which shelf this row is on" is NO LABEL — never "not personal", and
+ * never "personal". The refusal is still correct without the label; it is one
+ * word less helpful.
+ */
+async function personalBaseIds(client: DoplClient): Promise<Set<string>> {
   try {
-    return await client.getKbBase(ref);
-  } catch (e) {
-    if (isApiError(e, 404, "KNOWLEDGE_BASE_NOT_FOUND")) return null;
-    throw e;
+    const payload = await client.listKbBasesPayload();
+    return new Set(payload.homeScopedBaseIds ?? []);
+  } catch {
+    return new Set();
   }
 }
 
-/** resolveBase + the standard not-found error; caller short-circuits on `isError`. */
-export async function resolveBaseOr(client: DoplClient, ref: string): Promise<KnowledgeBase | ToolResponse> {
-  const base = await resolveBase(client, ref);
-  if (!base)
-    return err(
-      refusal(
-        BASE_NOT_FOUND,
-        `Ref: ${inlineOr(ref, "`(unreadable ref)`")}. Deleting is permanent, so a base you deleted is not recoverable.`,
-      ),
-    );
-  return base;
+/** Entries in one base, or null when the count cannot be had. ⚠ `entryLimit`
+ *  is what makes the server send `entryTotal` at all, and 1 is the cheapest
+ *  page that does it — the ROWS are thrown away, only the total is read. */
+async function entryCount(client: DoplClient, baseId: string): Promise<number | null> {
+  try {
+    const tree = await client.getKbTree(baseId, { entryLimit: 1 });
+    return tree.entryTotal ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export function isErr(x: KnowledgeBase | ToolResponse): x is ToolResponse {

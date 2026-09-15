@@ -9034,3 +9034,66 @@ stop") and fenced exactly one call site with a local copy of the primitive.
 
 ⚠ **A main-process change: it takes effect on the next Electron restart, not on the running
 app.** Suite at the time of writing (2026-09-15): `npm test` in `dopl-desktop-app` 3220/3220.
+
+### F-701 — one slug naming bases in two containers resolved to whichever `Array.find` reached first, so a KB read "0 folders, 0 entries" for ten days against an empty shell (found 2026-09-15, RESOLVED 2026-09-15)
+
+**The symptom, as Samuel reported it.** `dopl_kb(op="get_tree", base="dopl-development")` answered
+0 folders / 0 entries for a base he had filled. Nothing had been deleted, and the forensic trace
+(`KB-LOSS-TRACE.md`, read-only, service-role) found every row present: THREE live bases share the
+slug `dopl-development`, in three different containers.
+
+- `7f943a28-…` — personal container `c7841eeb-…`, **0 entries, 0 folders, `storage_bytes` 0,
+  `updated_at == created_at` to the microsecond**. Created in the app 2026-09-05T07:53:15Z after an
+  agent's `create_base` into the channel's workspace was refused; never written to once.
+- `6e77d236-…` — Mobile Command Center, 4 entries, 28,528 bytes, channel grant — the real one.
+- `0105b016-…` — the Original workspace, 43 entries, 4 folders, zero soft-deleted rows.
+
+**The code.** `packages/mcp-server/src/tools/knowledge-shared.ts › resolveBase` was
+`bases.find((b) => b.slug === ref || b.id === ref)` over `listKbBases()`, which answers for the
+bound container PLUS the caller's own personal shelf. `knowledge_bases` is unique on
+`(workspace_id, slug)` — per CONTAINER, which is the right constraint and not the one an agent
+assumes — so several rows legitimately match and FIRST WON, silently.
+
+**Why it survived ten days.** A silent pick cannot be diagnosed from its own answer: an empty tree
+is exactly what an empty base looks like. The Desktop Agent's own build ledger flagged the
+duplicate the same evening (2026-09-05T23:03Z, "D1 … 0 entries; slug resolves to it") and the
+reads kept succeeding, so nothing escalated.
+
+**The fix.** `resolveBaseRef` returns found / not-found / **ambiguous**, and the ambiguous arm
+refuses with `reason=ambiguous_slug`, listing every match as id + container + ENTRY COUNT — the
+count being what says in one line which of them is the empty one. By-id addressing is untouched
+and is the escape hatch the refusal points at; an id is unique workspace-wide and can never be
+ambiguous. No tie-break was added on purpose: "newest wins" picks the same empty shell, and
+"bound container wins" is the rule a caller holding a personal-shelf slug is already violating.
+Same shape as `agent-shared.ts › ambiguousTemplate` for template names.
+
+⚠ **THE ID ARM IS SHAPE-AGNOSTIC, AND GATING IT ON `UUID_RE` IS A TRAP THIS FIX FELL INTO ONCE.**
+Matching `id` only for UUID-shaped refs regressed every non-UUID id the old `.find` reached and
+broke the whole `set_visibility` confirm flow (`acknowledge-shared.test.ts`). What makes the arm
+safe is UNIQUENESS, not shape. Pinned in `knowledge-ambiguous-slug.test.ts`.
+
+**Cost.** The pushed error row is ~84 chars; ~74 came from three de-duplications inside that one
+description and the remaining +10 is recorded on `DESCRIPTION_CEILINGS.dopl_kb`. Two further cuts
+were made and reverted by gates that were right: `tool-style.ts` requires the `deletion is
+app-only` boundary clause in the first 200 chars, and `tool-scope-claims.test.ts` requires a
+truncating op to name its `entry_cursor`.
+
+### F-702 — `dopl_agent`'s description teaches `reason=ambiguous_name`, and no code path emits that literal (found 2026-09-15, OPEN)
+
+`AGENT_ERRORS` (`packages/mcp-server/src/tools/tool-errors.ts`) declares
+`{ reason: "ambiguous_name", … }`, so `renderErrors` teaches it in `dopl_agent`'s description and
+an agent is invited to string-match it. But `agent-shared.ts › ambiguousTemplate` returns bare
+prose through `err(...)` and never goes through `refusal()`, so **the wire carries no
+`reason=ambiguous_name` anywhere**. `grep -rn "ambiguous_name" packages/mcp-server/src` returns
+the table row and one docblock; nothing else.
+
+This is the exact break `tool-errors.ts`'s own docblock exists to prevent, pointed the other way:
+*"the agent reads a remedy it can never match."* The `entry_not_found` row was REMOVED from
+`KB_ERRORS` before it shipped for precisely this reason, which makes this one an inconsistency
+rather than a judgement call.
+
+Noticed while adding `ambiguous_slug` (F-701), which routes through `refusal()` and therefore does
+emit its literal. **Left alone deliberately** — per `CLAUDE.md`, code that looks wrong is filed
+here rather than edited in a change that was not scoped to it. The fix is one line in
+`ambiguousTemplate` (wrap the first line in `refusal(AMBIGUOUS_NAME, …)`), plus a budget re-measure
+because the description already sits at its ceiling.

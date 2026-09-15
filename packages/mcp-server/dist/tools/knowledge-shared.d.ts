@@ -4,7 +4,41 @@
  */
 import type { DoplClient, KnowledgeBase } from "@dopl/client";
 import { type ToolResponse } from "./respond";
-/** resolveBase + the standard not-found error; caller short-circuits on `isError`. */
+/**
+ * Base reference (slug or UUID) → `KnowledgeBase` row, null when nothing
+ * matches. ⚠ Calls `listKbBases` once per invocation — not for tight loops.
+ *
+ * 🔒 **AND A UUID GETS A SECOND, ID-ONLY LOOKUP (F-470).** `listKbBases` answers
+ * for the container this connection is bound to, so matching a ref against that
+ * list made every `dopl_kb` op container-keyed — including the ops whose whole
+ * argument is an ID. A base on the caller's own personal shelf, or in another
+ * container they belong to, answered `base_not_found` for an id that
+ * `GET /api/knowledge/bases/<id>` resolves, which is the wave's headline claim
+ * ("an id resolves its own container") being untrue on this surface.
+ *
+ * ⚠ **THE SECOND LOOKUP IS NOT A SECOND FENCE AND ADDS NO REACH.** It is the
+ * server's own id door, which runs the resolver's four clauses, the M-10 matrix
+ * and the agent audience ceiling in the container the id names. A ref this
+ * caller may not name comes back a refusal and is reported as `base_not_found`,
+ * the same answer as before.
+ *
+ * ⚠ **UUID ONLY, AND NO NAME FALLBACK.** A slug is scoped to a container by
+ * definition, so asking the id door about one would be asking a different
+ * question; and an id lookup that degraded into a name lookup would make "no
+ * such id" and "no such name" answer through each other.
+ * ⚠ **ONLY AN API REFUSAL IS SWALLOWED.** A transport failure must not read as
+ * "no such base" — that is how an outage becomes a deletion in an agent's notes.
+ */
+export type BaseRefResolution = {
+    kind: "found";
+    base: KnowledgeBase;
+} | {
+    kind: "not-found";
+} | {
+    kind: "ambiguous";
+    matches: KnowledgeBase[];
+};
+/** resolveBaseRef + its two refusals; caller short-circuits on `isError`. */
 export declare function resolveBaseOr(client: DoplClient, ref: string): Promise<KnowledgeBase | ToolResponse>;
 export declare function isErr(x: KnowledgeBase | ToolResponse): x is ToolResponse;
 /**

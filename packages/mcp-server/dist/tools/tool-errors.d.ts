@@ -86,8 +86,8 @@ export declare function versionConflict(readOp: string): ToolError;
  * list.
  */
 /**
- * ⚠ **TWO ROWS, AND `entry_not_found` IS NOT THE THIRD.** It was drafted as one
- * and removed before it shipped: no code path emits that literal — a missing
+ * ⚠ **THREE ROWS, AND `entry_not_found` IS NOT ONE OF THEM.** It was drafted as
+ * one and removed before it shipped: no code path emits that literal — a missing
  * PATH comes back through the same resolver that answers `base_not_found` — so
  * teaching it would promise an agent a string it can never match, which is the
  * break this whole table exists to prevent, pointed the other way. Where to
@@ -95,6 +95,12 @@ export declare function versionConflict(readOp: string): ToolError;
  * ⚠ `MISSING_PARAMS` is not here either: it is raised by `respond.ts` for every
  * op on every tool, so pushing it into one description buys nothing an agent
  * could act on differently.
+ *
+ * ⚠ **`ambiguous_slug` IS THIRD AND LAST, WHICH PUTS IT EXACTLY ON THE CUT.**
+ * `renderErrors` pushes three, so it is taught — and it must be, because it is
+ * the one KB failure an agent CANNOT diagnose from the successful-looking
+ * answer it used to get instead (`knowledge-shared.ts › resolveBaseRef`). A
+ * fourth row added here silently drops it.
  */
 export declare const KB_ERRORS: readonly ToolError[];
 export declare const SKILL_ERRORS: readonly ToolError[];
