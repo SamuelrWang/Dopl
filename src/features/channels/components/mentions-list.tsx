@@ -3,6 +3,10 @@
 /**
  * Channels — the Tags row's disclosure: a MENTIONS INBOX.
  *
+ * ⚠ TWO SURFACES RENDER IT SINCE 2026-09-15: the workspace channels page and a
+ * HOME channel's Info tab, through the one disclosure in
+ * `mentions-disclosure.tsx`. Nothing here knows which host it is in.
+ *
  * WIRED (Phase 6). Rows are `GET /api/channels/[id]/mentions` — the messages of
  * this channel whose SERVER-STAMPED `metadata.mentionedUserIds` names the
  * viewer (`lib/mentions.ts` is the one parser behind that stamp and behind the
@@ -18,8 +22,11 @@
  * (`message-pane.tsx › ScrollTarget`) so re-clicking the same mention
  * re-scrolls.
  *
- * The label stays "Tags" (the reference design's word); the content is every
- * message that @-tags the viewer. An accordion inside the Info tab, not a
+ * ⚠ THE ROW'S LABEL IS "Mentions" SINCE 2026-09-15 (Samuel's ruling; it read
+ * "Tags", the reference design's word). The label lives in
+ * `mentions-disclosure.tsx`, which is also where that history is recorded. THIS
+ * file's body copy still says "tag you", which is the act and is correct English;
+ * the content is every message that @-tags the viewer. An accordion inside the Info tab, not a
  * popover — the panel is 380px (2026-08-25) and a floating card would cover the rows it
  * answers to.
  */

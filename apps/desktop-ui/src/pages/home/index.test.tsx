@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ChannelInfoTabContext } from "@/features/channels/components/channel-surface";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import {
   USER_ID,
@@ -46,9 +47,13 @@ const apiRequest = vi.hoisted(() => vi.fn());
  *  inside it heads the channel picker, outside it is a page control. */
 const LIST_CELL = ".w-\\[var\\(--home-list-w\\)\\]";
 
+// ⚠ ASYNC FACTORY so it can reach `surface-slot-fixtures`: `vi.mock` is hoisted above
+// every import, so a top-level binding is not in scope when this runs.
 vi.mock(
   "@/features/channels/components/channel-surface-standalone",
-  () => ({
+  async () => {
+   const { infoTabContext } = await import("./surface-slot-fixtures");
+   return ({
     StandaloneChannelSurface: (props: {
       workspaceId: string;
       workspaceSlug: string;
@@ -60,7 +65,9 @@ vi.mock(
         // refetch gate — the person card writes now (`channel-surface.tsx ›
         // ChannelInfoTabContext`). The stub supplies an inert one: this suite
         // owns that Home MOUNTS the slot, not what the gate coordinates.
-        infoTab?: (ctx: { gate: { begin: () => void; end: () => void } }) => React.ReactNode;
+        // ⚠ THE REAL CONTEXT TYPE, not a hand-written shape: it gained the Tags
+        // inbox on 2026-09-15, and a structural copy cannot fail when that happens.
+        infoTab?: (ctx: ChannelInfoTabContext) => React.ReactNode;
       };
     }) => (
       <div
@@ -71,10 +78,11 @@ vi.mock(
         data-user={props.currentUserId}
         data-member-management={String(props.capabilities?.memberManagement)}
       >
-        {props.slots?.infoTab?.({ gate: { begin: () => {}, end: () => {} } })}
+        {props.slots?.infoTab?.(infoTabContext())}
       </div>
     ),
-  })
+   });
+  }
 );
 
 describe("home page", () => {

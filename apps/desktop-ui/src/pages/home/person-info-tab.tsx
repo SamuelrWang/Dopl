@@ -19,6 +19,10 @@ import {
   InfoCardCustomRow,
   InfoCardSection,
 } from "@/features/channels/components/info-card-rows";
+import {
+  MentionsDisclosure,
+  type MentionsBundle,
+} from "@/features/channels/components/mentions-disclosure";
 import { useChannelInfoCardWrite } from "@/features/channels/hooks/use-channel-info-card-writes";
 import { useChannelMembers } from "@/features/channels/hooks/use-channel-members";
 import { memberLabel } from "@/features/channels/lib/channel-display";
@@ -84,6 +88,7 @@ export function PersonInfoTab({
   homeChannel,
   channel,
   gate,
+  mentions,
 }: {
   homeChannel: HomeChannel;
   /**
@@ -97,6 +102,10 @@ export function PersonInfoTab({
   /** THE surface's refetch gate — see `channel-surface.tsx ›
    *  ChannelInfoTabContext`. Never a second one minted here. */
   gate: MutationGate;
+  /** THIS CHANNEL'S TAGS INBOX, already read by the surface and handed down with
+   *  the gate — see `channel-surface.tsx › ChannelInfoTabContext.mentions` for
+   *  why a tab may not fetch it or mint its handlers itself. */
+  mentions: MentionsBundle;
 }) {
   // 🔒 THE CHANNEL'S OWN NAME. `channelTitle` returns `channel.name` and nothing
   // else since 2026-09-01 — the roster-derived title is gone, and that function's
@@ -267,6 +276,29 @@ export function PersonInfoTab({
           }
         />
       </InfoCardSection>
+
+      {/* ⚠ **THE TAGS INBOX — THE SAME COMPONENT THE WORKSPACE CHANNELS PAGE
+          RENDERS** (`channels/components/mentions-disclosure.tsx`), added
+          2026-09-15 because this tab had no Tags section at all while the
+          workspace one has had it since Phase 6. A HOME-SPACE PARITY GAP, and a
+          pure wiring one: the surface was already reading this channel's
+          mentions for every mount, and the injected tab dropped them.
+          ⚠ **NOT A SECOND LIST.** Same page, same server order, same 50-row cap,
+          same click — mark read, land the centre pane, nonced scroll — because
+          the handlers come down from the surface that owns the pane.
+          ⚠ **THE TENANCY IS THE CONTAINER'S BY CONSTRUCTION**: the read is keyed
+          on the surface's `workspaceId`, which for a home channel IS the home
+          container id (`relationship-record.tsx` passes
+          `homeChannel.workspaceId`), so it can only ever answer with this
+          container's messages.
+          ⚠ **IT SITS AT THE END OF CHANNEL INFO, OUTSIDE `InfoCardSection`** —
+          the section's hover reveals the add-a-row affordance and its list is
+          the CURATED rows, which this is not. Same relative position as the
+          workspace tab, where it is the last thing in the block. */}
+      <div className="px-2">
+        <MetaRowDivider />
+        <MentionsDisclosure channelName={name} bundle={mentions} />
+      </div>
 
       {/* ⚠ THREAD ACTIVITY SITS ABOVE MEMBERS (Samuel, 2026-08-25). The card
           reads facts → what has been happening → who is here and how to add

@@ -144,7 +144,22 @@ export function SurfaceInfoPanel({
       knowledge={capabilities?.knowledge}
       // ⚠ CALLED, not passed. The tab is a render function so it can be
       // handed THIS surface's refetch gate — see `ChannelInfoTabContext`.
-      infoTab={slots?.infoTab?.({ gate })}
+      // ⚠ THE BUNDLE GOES WITH THE GATE (2026-09-15). The slot REPLACES the tab
+      // body, so a host that injects one used to lose the Tags section even
+      // though this component had already fetched it — that was the home space's
+      // missing-mentions gap, and nothing about the query had to change. Same
+      // page, same handlers, same centre-pane scroll.
+      infoTab={slots?.infoTab?.({
+        gate,
+        mentions: {
+          mentions,
+          truncated: data.mentionsTruncated,
+          loading: data.mentionsLoading,
+          index,
+          onOpen: openMention,
+          onMarkAllRead: markAllMentionsRead,
+        },
+      })}
       // THE SETTINGS TAB (Samuel, 2026-08-19) — this cluster hung off the pane
       // HEADER until then. ⚠ THREAD-SCOPED WHILE A THREAD IS OPEN (2026-08-21):
       // the branch is `settings-slot.tsx`, which owns why it lives at the MOUNT.

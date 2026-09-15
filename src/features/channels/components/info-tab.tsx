@@ -1,12 +1,17 @@
 "use client";
 
 /**
- * Channels — the right panel's INFO tab: channel metadata, the Tags
- * (mentions) disclosure, Linked threads, the activity heatmap and the roster.
+ * Channels — the right panel's INFO tab: channel metadata, the Mentions
+ * disclosure, Linked threads, the activity heatmap and the roster.
+ *
+ * ⚠ THE MENTIONS ROW IS SHARED WITH /home's OWN INFO TAB since 2026-09-15
+ * (`mentions-disclosure.tsx`), which also carries the "Tags" -> "Mentions"
+ * rename. The two panes are separate compositions of one ladder and are MEANT
+ * TO MATCH — this file's Description row says the same thing.
  *
  * WIRED: channel info (creator / created / status / thread count) off the channel
  * row and its thread list, MEMBERS off `use-channel-members` (presence is the
- * server's verdict — `view-model.ts › isPresentForViewer`, 2026-09-08), the TAGS
+ * server's verdict — `view-model.ts › isPresentForViewer`, 2026-09-08), the MENTIONS
  * inbox off `use-channel-mentions` (Phase 6), and the activity strip since
  * 2026-09-05 (F-316).
  *
@@ -14,22 +19,17 @@
  * the site carries the marker where it renders.
  */
 
-import { useState } from "react";
 import {
   AlignLeft,
   Calendar,
-  ChevronDown,
-  ChevronRight,
   CircleDot,
   Hash,
   ListChecks,
   ListFilter,
-  Tag,
   UserPlus,
   UserRound,
 } from "lucide-react";
 import { Avatar } from "@/shared/ui/avatar";
-import { cn } from "@/shared/lib/utils";
 import { formatShortDate } from "@/shared/lib/format-time";
 import {
   CountBadge,
@@ -41,7 +41,7 @@ import {
 } from "./bits";
 import { MemberRoster } from "./member-roster";
 import { ThreadActivityStrip, type ActivityBin } from "./thread-activity";
-import { MentionsList } from "./mentions-list";
+import { MentionsDisclosure } from "./mentions-disclosure";
 import { HARDCODED_LINKED_THREADS } from "./fixtures";
 import { memberPerson, type AuthorIndex } from "./view-model";
 import { memberLabel } from "../lib/channel-display";
@@ -76,14 +76,10 @@ export function InfoTab({
   onOpenMention: (mention: ChannelMention) => void;
   onMarkAllMentionsRead: () => void;
 }) {
-  // The Tags disclosure is the ONE expandable row here; its open state is nobody
-  // else's business.
-  const [tagsOpen, setTagsOpen] = useState(false);
-  // ⚠ LIVE UNREAD, computed HERE from the projection's own `read` flag — one
-  // derivation for the badge and the list, so they cannot disagree (wiring plan
-  // Phase 6, decision 3).
-  const unreadCount = mentions.filter((m) => !m.read).length;
-
+  // ⚠ THE TAGS ROW MOVED TO `mentions-disclosure.tsx` (2026-09-15) — its open
+  // state, its unread arithmetic and its markup went with it, because a SECOND
+  // Info tab (the home space's) now renders the same row and two spellings of
+  // one control drift on the first change. Nothing about it changed here.
   const creator = members.find((m) => m.userId === channel.createdBy) ?? null;
 
   return (
@@ -158,42 +154,19 @@ export function InfoTab({
           )}
         </MetaRow>
         <MetaRowDivider />
-        {/* The mentions inbox — label kept "Tags" from the reference design.
-            WIRED (Phase 6): the count is LIVE UNREAD over the list, not a total. */}
-        <button
-          type="button"
-          onClick={() => setTagsOpen((open) => !open)}
-          aria-expanded={tagsOpen}
-          className="flex h-9 w-full items-center gap-2 rounded-[8px] px-2 text-left transition-colors hover:bg-surface-raised-1"
-        >
-          <Tag size={14} className="shrink-0 text-text-muted" />
-          <span className="text-small text-text-secondary">Tags</span>
-          <span className="flex-1" />
-          <span
-            className={cn(
-              "text-body",
-              unreadCount > 0 ? "font-semibold text-link" : "text-text-primary"
-            )}
-          >
-            {unreadCount}
-          </span>
-          {tagsOpen ? (
-            <ChevronDown size={13} className="shrink-0 text-text-disabled" />
-          ) : (
-            <ChevronRight size={13} className="shrink-0 text-text-disabled" />
-          )}
-        </button>
-        {tagsOpen && (
-          <MentionsList
-            mentions={mentions}
-            truncated={mentionsTruncated}
-            loading={mentionsLoading}
-            channelName={channelName}
-            index={index}
-            onOpenMention={onOpenMention}
-            onMarkAllRead={onMarkAllMentionsRead}
-          />
-        )}
+        {/* The mentions inbox — ONE component, shared with the home space's Info
+            tab (`mentions-disclosure.tsx`), which owns the label and the badge. */}
+        <MentionsDisclosure
+          channelName={channelName}
+          bundle={{
+            mentions,
+            truncated: mentionsTruncated,
+            loading: mentionsLoading,
+            index,
+            onOpen: onOpenMention,
+            onMarkAllRead: onMarkAllMentionsRead,
+          }}
+        />
         <MetaRowDivider />
         {/* The channel's thread count, off the same bounded list the Threads tab
             renders. */}

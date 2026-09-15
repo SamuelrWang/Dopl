@@ -32,21 +32,13 @@ import {
 
 const apiRequest = vi.hoisted(() => vi.fn());
 
-vi.mock(
-  "@/features/channels/components/channel-surface-standalone",
-  () => ({
-    StandaloneChannelSurface: (props: {
-      slots?: {
-        infoTab?: (ctx: {
-          gate: { begin: () => void; end: () => void };
-        }) => React.ReactNode;
-      };
-    }) => (
-      <div data-testid="channel-surface">
-        {props.slots?.infoTab?.({ gate: { begin: () => {}, end: () => {} } })}
-      </div>
-    ),
-  })
+// ⚠ ONE STUB, FIVE FILES (`surface-slot-fixtures.tsx`). It imports the REAL
+// `ChannelInfoTabContext`, so a slot contract that grows a field fails to compile here
+// instead of passing against a hand-written shape that has quietly gone stale.
+// ⚠ THE FACTORY IMPORTS IT ITSELF: `vi.mock` is hoisted above every import, so a
+// top-level binding is not in scope yet when this runs.
+vi.mock("@/features/channels/components/channel-surface-standalone", async () =>
+  (await import("./surface-slot-fixtures")).standaloneSurfaceStub()
 );
 
 describe("home link lifecycle", () => {

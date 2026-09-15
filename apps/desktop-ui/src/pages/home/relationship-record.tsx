@@ -83,8 +83,17 @@ export function RelationshipRecord({
       // surface. The surface hands its own down rather than the slot minting a
       // second one that coordinates with nothing.
       slots={{
-        infoTab: ({ gate }) => (
-          <PersonInfoTab homeChannel={homeChannel} channel={channel} gate={gate} />
+        // ⚠ `mentions` RIDES WITH THE GATE (2026-09-15): the surface has already
+        // read this channel's Tags inbox, scoped to THIS home container, and the
+        // tab renders the same disclosure the workspace page does. Before this it
+        // was fetched and dropped — see `ChannelInfoTabContext.mentions`.
+        infoTab: ({ gate, mentions }) => (
+          <PersonInfoTab
+            homeChannel={homeChannel}
+            channel={channel}
+            gate={gate}
+            mentions={mentions}
+          />
         ),
       }}
       // ⚠ `memberManagement: false` IS NOT A HEADCOUNT — a container takes MORE

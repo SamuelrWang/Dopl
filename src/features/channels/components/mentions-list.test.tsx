@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 /**
- * The Tags mentions inbox, NOW WIRED (Phase 6). Its interaction has three
+ * The MENTIONS inbox (the row read "Tags" until Samuel renamed it 2026-09-15 —
+ * `mentions-disclosure.tsx` carries that ruling), NOW WIRED (Phase 6). Its interaction has three
  * moving parts — mark-read, navigate, scroll — and this is where they are
  * pinned.
  *
@@ -87,7 +88,7 @@ function Harness({
 function open(props: { truncated?: boolean; rows?: ChannelMention[] } = {}) {
   const onOpen = vi.fn();
   render(<Harness {...props} onOpen={onOpen} />);
-  const tagsRow = screen.getByRole("button", { name: /^Tags/ });
+  const tagsRow = screen.getByRole("button", { name: /^Mentions/ });
   fireEvent.click(tagsRow);
   return { tagsRow, onOpen };
 }
@@ -133,9 +134,9 @@ describe("channels mentions inbox", () => {
 
   it("mark-all zeroes the badge and then hides itself", () => {
     const { tagsRow } = open();
-    const panel = within(screen.getByRole("button", { name: /^Tags/ }).parentElement!);
+    const panel = within(screen.getByRole("button", { name: /^Mentions/ }).parentElement!);
     fireEvent.click(panel.getByRole("button", { name: "Mark all read" }));
-    expect(tagsRow.textContent).toMatch(/^Tags0$/);
+    expect(tagsRow.textContent).toMatch(/^Mentions0$/);
     expect(screen.queryByRole("button", { name: "Mark all read" })).toBeNull();
   });
 

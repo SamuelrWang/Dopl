@@ -37,6 +37,7 @@ import type { ChannelWebView } from "./use-channel-web-view";
 import { PeerActivityRow, peerWorkingOn } from "./peer-activity";
 import type { ChannelSurfaceData } from "./channel-surface-data";
 import type { ChannelsSelection } from "./use-channels-selection";
+import type { MentionsBundle } from "./mentions-disclosure";
 import type { Channel } from "../types";
 
 /**
@@ -50,6 +51,27 @@ import type { Channel } from "../types";
 export interface ChannelInfoTabContext {
   /** THE surface's refetch gate — hand it to every write the tab makes. */
   gate: MutationGate;
+  /**
+   * THIS SURFACE'S TAGS INBOX, ALREADY READ (2026-09-15).
+   *
+   * ⚠ **IT IS HANDED DOWN BECAUSE THE SLOT REPLACES THE BODY, AND THAT IS WHAT
+   * LOST IT.** `surface-info-panel.tsx` fetches the mentions for EVERY mount,
+   * home space included, and passes them to the default Info tab — so a surface
+   * that injected its own tab paid for the read and then dropped the section on
+   * the floor. The home space's Info tab had no Tags row for that reason alone,
+   * not because the data was unavailable or wrongly scoped.
+   *
+   * ⚠ **THE HANDLERS CANNOT BE MINTED BY A TAB.** `onOpen` marks read, lands the
+   * CENTRE PANE on the right transcript and then fires the nonced scroll signal;
+   * only the surface holds the selection state that last step needs. A tab that
+   * built its own would mark read and scroll nothing.
+   *
+   * ⚠ **THE QUERY IS SCOPED BY THE SURFACE'S `workspaceId`,** which for a home
+   * channel IS the home CONTAINER id (`pages/home/relationship-record.tsx` passes
+   * `homeChannel.workspaceId`). So the tenancy is the container's by
+   * construction, and no caller may narrow or widen it here.
+   */
+  mentions: MentionsBundle;
 }
 
 export interface ChannelSurfaceSlots {

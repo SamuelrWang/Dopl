@@ -38,21 +38,13 @@ import {
 
 const apiRequest = vi.hoisted(() => vi.fn());
 
-vi.mock(
-  "@/features/channels/components/channel-surface-standalone",
-  () => ({
-    StandaloneChannelSurface: (props: {
-      slots?: {
-        infoTab?: (ctx: {
-          gate: { begin: () => void; end: () => void };
-        }) => React.ReactNode;
-      };
-    }) => (
-      <div data-testid="channel-surface">
-        {props.slots?.infoTab?.({ gate: { begin: () => {}, end: () => {} } })}
-      </div>
-    ),
-  })
+// ⚠ ONE STUB, FIVE FILES (`surface-slot-fixtures.tsx`). It imports the REAL
+// `ChannelInfoTabContext`, so a slot contract that grows a field fails to compile here
+// instead of passing against a hand-written shape that has quietly gone stale.
+// ⚠ THE FACTORY IMPORTS IT ITSELF: `vi.mock` is hoisted above every import, so a
+// top-level binding is not in scope yet when this runs.
+vi.mock("@/features/channels/components/channel-surface-standalone", async () =>
+  (await import("./surface-slot-fixtures")).standaloneSurfaceStub()
 );
 
 /** The stored card — the stub's whole database. */
@@ -463,5 +455,61 @@ describe("a cache entry written before the info card existed", () => {
     expect(screen.getByText("Created")).toBeInTheDocument();
     // And the add affordance still works off the empty card.
     expect(screen.getByTestId("info-card-add")).toBeInTheDocument();
+  });
+});
+
+/**
+ * THE MENTIONS SECTION — THE HOME-SPACE PARITY GAP (2026-09-15, Samuel: the
+ * workspace channel's Info tab has had this since Phase 6 and a home channel's
+ * had nothing).
+ *
+ * ⚠ WHAT WAS ACTUALLY BROKEN WAS THE SLOT, NOT THE QUERY. The surface reads
+ * mentions for EVERY mount, home included and already scoped to the home
+ * container; the injected tab replaced the panel body and dropped them. So these
+ * cases assert the tab RENDERS the section and FORWARDS the surface's handler —
+ * the two halves that were missing — and deliberately not the list's own
+ * behaviour, which `channels/components/mentions-list.test.tsx` owns.
+ */
+describe("home info tab — Mentions", () => {
+  // ⚠ NO LOCAL `beforeEach`: this file's top-level one installs the stateful
+  // stub server and resets the request spy for every case in it.
+  it("renders the Mentions row, collapsed, with the unread count", async () => {
+    renderHome();
+    await openChannelRecord();
+    const row = await screen.findByRole("button", { name: /^Mentions/ });
+    // ⚠ COLLAPSED IS THE RULING (Samuel, 2026-09-15): the panel is 380px and the
+    // page is capped at 50, so the count is the affordance.
+    expect(row.getAttribute("aria-expanded")).toBe("false");
+    // The stub surface hands an empty inbox, so the badge is an honest 0.
+    expect(row.textContent).toMatch(/^Mentions0$/);
+  });
+
+  it("opens the list on click, exactly as the workspace tab does", async () => {
+    renderHome();
+    await openChannelRecord();
+    const row = await screen.findByRole("button", { name: /^Mentions/ });
+    fireEvent.click(row);
+    expect(row.getAttribute("aria-expanded")).toBe("true");
+    // The empty state is `mentions-list.tsx`'s own copy — proof the REAL list
+    // mounted here rather than a second one written for this pane.
+    expect(
+      screen.getByText("No messages tag you in this channel yet.")
+    ).toBeTruthy();
+  });
+
+  it("sits inside Channel info, above the activity section", async () => {
+    // ⚠ THE ORDER IS THE TAB'S RULING (HEADER → CHANNEL INFO → THREAD ACTIVITY →
+    // MEMBERS). A section appended at the foot would still 'render' and would be
+    // in the wrong place, so position is asserted rather than presence alone.
+    renderHome();
+    await openChannelRecord();
+    const row = await screen.findByRole("button", { name: /^Mentions/ });
+    // ⚠ The section's heading is "Channel activity" (`person-thread-activity.tsx`),
+    // which is not what the tab's own docblock calls it. Matched on the shipped
+    // string rather than the prose.
+    const activity = await screen.findByText("Channel activity");
+    expect(
+      row.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 });
