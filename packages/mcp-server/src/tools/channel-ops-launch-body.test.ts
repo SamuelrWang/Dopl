@@ -68,7 +68,7 @@ function client(over: Record<string, unknown> = {}): DoplClient {
 }
 
 const text = async (c: DoplClient, opts = {}) =>
-  (await opLaunchAgent(c, "general", opts)).content[0].text as string;
+  (await opLaunchAgent(c, "general", { name: "Scout", ...opts })).content[0].text as string;
 
 /** A client whose CREATE already answers with this directive (no poll needed). */
 const created = (over: Partial<LaunchDirective>) =>
@@ -84,6 +84,7 @@ describe("the call itself", () => {
       directive: directive({ status: "launched", agentId: "abcd1234" }),
     }));
     await opLaunchAgent(client({ createLaunchDirective }), "general", {
+      name: "Scout",
       thread: "44444444-4444-4444-4444-444444444444",
       goal: "ship the parser",
       model: "claude-opus-5",
@@ -98,6 +99,10 @@ describe("the call itself", () => {
       goal: "ship the parser",
       model: "claude-opus-5",
       template: "Code Auditor",
+      // ⚠ **THE NAME IS ON THE BODY SINCE 2026-09-15**, and TRIMMED rather than passed raw: the
+      // refusal above it measured the trimmed value, so filing the raw one would send a string
+      // the check never looked at.
+      agentName: "Scout",
     });
   });
 
@@ -106,7 +111,7 @@ describe("the call itself", () => {
       offline: false,
       directive: directive({ status: "launched", agentId: "abcd1234" }),
     }));
-    await opLaunchAgent(client({ createLaunchDirective }), "general");
+    await opLaunchAgent(client({ createLaunchDirective }), "general", { name: "Scout" });
     const body = createLaunchDirective.mock.calls[0][0] as Record<string, unknown>;
     expect(Object.keys(body)).toEqual([
       "channel",
@@ -139,6 +144,13 @@ describe("the call itself", () => {
       // is precisely why this process only asks), and a taken one comes back as a
       // 409 rather than as somebody else's agent recoloured.
       "color",
+      // ⚠ **THE AGENT'S NAME (2026-09-15), A SIXTH CONSCIOUS EDIT, AND IT PASSES THE GUARD FOR
+      // THE SAME REASON EVERY OTHER KEY DOES**: it says what the new agent is CALLED, never
+      // whose machine runs it. Samuel: *"if agents are spinning up agents, they should be the
+      // ones that are naming the agent."* ⚠ It is the only REQUIRED one of the six — omitting it
+      // is refused before the create is reached — which is why this list can assert it
+      // unconditionally where `color` and `clientMsgId` would be `undefined`.
+      "agentName",
     ]);
   });
 
@@ -171,7 +183,7 @@ describe("the call itself", () => {
         }),
       }),
       "general",
-      { template: "Researcher" },
+      { name: "Scout", template: "Researcher" },
     );
     const out = res.content[0].text as string;
     expect(res.isError).toBe(true);
@@ -192,7 +204,7 @@ describe("the call itself", () => {
     const res = await opLaunchAgent(
       client({ createLaunchDirective: vi.fn(async () => { throw apiError(404, "AGENT_TEMPLATE_NOT_FOUND"); }) }),
       "general",
-      { template: "Ghost" },
+      { name: "Scout", template: "Ghost" },
     );
     const out = res.content[0].text as string;
     expect(res.isError).toBe(true);
@@ -205,7 +217,7 @@ describe("the call itself", () => {
     const res = await opLaunchAgent(
       client({ createLaunchDirective: vi.fn(async () => { throw apiError(404, "LAUNCH_DIRECTIVE_NOT_FOUND"); }) }),
       "general",
-      { template: "Code Auditor" },
+      { name: "Scout", template: "Code Auditor" },
     );
     expect(res.content[0].text).toContain("general");
     expect(res.content[0].text).not.toContain("agent template");
@@ -252,7 +264,9 @@ describe("the call itself", () => {
   });
 
   it("an unknown channel comes back as a clean not-found", async () => {
-    const res = await opLaunchAgent(client({ listChannels: vi.fn(async () => []) }), "nope");
+    const res = await opLaunchAgent(client({ listChannels: vi.fn(async () => []) }), "nope", {
+      name: "Scout",
+    });
     expect(res.content[0].text).toContain("nope");
   });
 

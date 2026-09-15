@@ -28,7 +28,8 @@
 // different clock from how a turn is ASSEMBLED. Nothing is interpolated into any of them.
 const { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, REPLY_ROUTING, PERSONAL_KNOWLEDGE_CONFIDENTIALITY } = require('./prompt-framing-text');
 // The id charset, so a value that is not one is never printed as though it were an address.
-const { AGENT_ID_RE } = require('./agent-id');
+// ⚠ `AGENT_ID_RE` MOVED WITH `agentIdentityFraming` (§2 split, 2026-09-15) — it was this file's
+// only reader, and a require left standing is how the next reader concludes the grammar lives here.
 
 // ⚠ THE NEUTRALIZERS MOVED TO `prompt-sanitize.js` ON 2026-08-22 — a §1 split, argued in
 // that file's header. Four functions, one subject, and the TEMPLATE ROLE block needs the same
@@ -72,40 +73,15 @@ function counterpartyFraming({ authorName, authorKind, channelName } = {}) {
   ];
 }
 
-// ── THIS AGENT'S OWN ID (2026-08-21; the claim protocol deleted 2026-09-02) ────────────────
-//
-// One line. It is the id the agent signs with and the id a peer addresses it by, and there is
-// nothing else a session needs told about who else is in the room.
-//
-// ⚠ **THE ~870-CHARACTER VOLUNTARY CLAIM PROTOCOL IS DELETED, AND THE FAN-OUT PAID FOR IT**
-// (v2 wave B, G13's other half). It read: a message naming no agent id is not automatically
-// yours · check whether a sibling has already claimed it · CLAIM IT IN ONE SHORT LINE first ·
-// COORDINATE IN THE OPEN · other sessions may be active as the same person. Every sentence of it
-// answers ONE question — "is this message mine?" — which the agent had to answer by hand because
-// an unaddressed message was handed to EVERY live agent on the thread.
-//
-// **That question is now answered before the message is sent.** The server resolves the recipient
-// at write time and stores the verdict on the row (`service-wake-verdict.ts`, RR1/RR2/RR3), and
-// the desktop feeds only that recipient (`session-dispatch.js`). A session that was not named is
-// not fed; a message that resolves to nobody wakes nobody. So the protocol asked a live session
-// to re-derive, in prose, a fact the row already carried — and it is the same defect the deleted
-// per-turn stand-down preamble was (`session-seed.js › addressingLines`), one scope up.
-//
-// ⚠ **IT WAS ALSO MEASURED NOT TO WORK.** The 2026-08-22 note recorded the reason the default was
-// flipped in the first place: across 40 real messages in live testing the claim protocol fired
-// ZERO times and every sibling answered everything. A rule no agent ever executed is not a fence;
-// deleting it removes prose, not enforcement — and what enforcement there is has moved into the
-// server, where it does not depend on a model's discipline.
-//
-// ⚠ WHAT MUST NOT COME BACK: a sentence here that tells an agent to decide whether a message is
-// for it. If addressing is ever wrong, the fix is the verdict, not a paragraph asking the reader
-// to double-check the delivery it just received.
-function agentIdentityFraming(ctx) {
-  const c = ctx || {};
-  const mine = AGENT_ID_RE.test(String(c.agentId || '')) ? String(c.agentId) : '';
-  if (!mine) return [];
-  return [`YOUR AGENT ID IS ${mine}.`];
-}
+// ⚠ **`agentIdentityFraming` MOVED TO `prompt-framing-identity.js` (§2 SPLIT, 2026-09-15)** —
+// this file went over the 500-line cap when Samuel's id-visibility ruling gave that block its
+// BOUNDARY (three lines: the id is internal, address by name, and the one case that spends an
+// id). The seam is a real one rather than arithmetic: that file changes when WHO THIS AGENT IS
+// and HOW IT NAMES A PEER change, and this one when the SHAPE of a turn does. Same arrangement
+// `prompt-framing-startup.js`, `-ontology.js`, `-template.js` and `-text.js` already have.
+// ⚠ RE-EXPORTED BELOW, so `prompt-framing.js` stays the import path of record and no caller or
+// suite moved.
+const { agentIdentityFraming } = require('./prompt-framing-identity');
 
 // ── THE CHANNEL-LEVEL AGENT (2026-08-21, Samuel's channel-agent ruling) ────────────────────
 //

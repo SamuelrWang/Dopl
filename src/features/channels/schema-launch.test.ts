@@ -65,6 +65,8 @@ describe("the mode vocabularies are ORDERED narrowest first", () => {
 describe("LaunchCreateSchema — the posture a launch may ASK for", () => {
   it("takes both axes and the chain", () => {
     const parsed = LaunchCreateSchema.parse({
+      // ⚠ REQUIRED SINCE 2026-09-15 — an agent that launches an agent NAMES it.
+      agentName: "Scout",
       channel: "general",
       tools: "auto",
       messages: "auto_both",
@@ -76,7 +78,9 @@ describe("LaunchCreateSchema — the posture a launch may ASK for", () => {
   });
 
   it("omitting all three is legal — the pre-T24 shape still parses", () => {
-    const parsed = LaunchCreateSchema.parse({ channel: "general" });
+    const parsed = LaunchCreateSchema.parse({
+      // ⚠ REQUIRED SINCE 2026-09-15 — an agent that launches an agent NAMES it.
+      agentName: "Scout", channel: "general" });
     expect(parsed.tools).toBeUndefined();
     expect(parsed.messages).toBeUndefined();
     expect(parsed.chain).toBeUndefined();
@@ -90,17 +94,67 @@ describe("LaunchCreateSchema — the posture a launch may ASK for", () => {
     // `main/launch-posture.js › resolveChain` grants `false` unconditionally —
     // it wins even over a channel set to ON. A schema that dropped the value
     // would now delete a real request, not just a record.
-    expect(LaunchCreateSchema.parse({ channel: "general", chain: false }).chain)
+    expect(LaunchCreateSchema.parse({ channel: "general", agentName: "Scout", chain: false }).chain)
       .toBe(false);
+  });
+
+  /**
+   * 🔒 **AN AGENT THAT LAUNCHES AN AGENT MUST NAME IT** (Samuel, 2026-09-15, verbatim: *"if
+   * agents are spinning up agents, they should be the ones that are naming the agent. Shouldn't
+   * be a nameless agent."*).
+   *
+   * ⚠ **THE ARGUMENT DID NOT EXIST BEFORE THIS WAVE, WHICH IS THE WHOLE DEFECT** — a launch
+   * filed over MCP could carry a goal, a model, a template, a colour and a posture, and no name,
+   * so every agent an agent launched was nameless BY CONSTRUCTION and rendered on every human
+   * surface as its own instance id. Adding the field as OPTIONAL would have left the defect
+   * reachable by omission, and the caller is a model that omits whatever it can.
+   * ⚠ **THE ID-SHAPED REFUSAL IS THE TOOL'S, NOT THIS SCHEMA'S** — see
+   * `packages/mcp-server/src/tools/channel-ops-launch-name.ts`. A zod message cannot say what to
+   * pass instead, and a refusal an orchestrator cannot act on is a retry loop.
+   */
+  it("🔒 REFUSES a launch with no name, and a whitespace-only one", () => {
+    expect(LaunchCreateSchema.safeParse({ channel: "general" }).success).toBe(false);
+    expect(
+      LaunchCreateSchema.safeParse({ channel: "general", agentName: "" }).success,
+    ).toBe(false);
+    // ⚠ TRIMMED FIRST, so `"   "` is refused rather than stored as a name nobody typed. The
+    // empty string is meaningful on the RENAME arm (it clears) and meaningless here.
+    expect(
+      LaunchCreateSchema.safeParse({ channel: "general", agentName: "   " }).success,
+    ).toBe(false);
+  });
+
+  it("refuses the invisibles rather than stripping them, as `agent-names.js` does", () => {
+    // ⚠ STRIPPING WOULD STORE SOMETHING OTHER THAN WHAT WAS SENT AND SAY NOTHING ABOUT IT. A bidi
+    // override in an agent name renders a card that reads backwards; a zero-width joiner makes
+    // two names look identical. The desktop's `sanitizeName` is the authority at the far end and
+    // refuses, so accepting them here would file a directive the machine will only bounce.
+    for (const bad of ["Bug\u200bReviewer", "Bug\u202eReviewer", "Bug\nReviewer"]) {
+      expect(
+        LaunchCreateSchema.safeParse({ channel: "general", agentName: bad }).success,
+        JSON.stringify(bad),
+      ).toBe(false);
+    }
+  });
+
+  it("refuses a name past 60 — `main/agent-names.js › MAX_NAME`, not the template's 120", () => {
+    // ⚠ A name legal here that the desktop then refuses is a 200 followed by a refusal the
+    // orchestrator cannot explain.
+    expect(
+      LaunchCreateSchema.safeParse({ channel: "general", agentName: "x".repeat(61) }).success,
+    ).toBe(false);
+    expect(
+      LaunchCreateSchema.safeParse({ channel: "general", agentName: "x".repeat(60) }).success,
+    ).toBe(true);
   });
 
   it("refuses a mode outside the enum, rather than passing it to the column CHECK", () => {
     expect(
-      LaunchCreateSchema.safeParse({ channel: "general", tools: "yolo" })
+      LaunchCreateSchema.safeParse({ channel: "general", agentName: "Scout", tools: "yolo" })
         .success,
     ).toBe(false);
     expect(
-      LaunchCreateSchema.safeParse({ channel: "general", messages: "auto" })
+      LaunchCreateSchema.safeParse({ channel: "general", agentName: "Scout", messages: "auto" })
         .success,
     ).toBe(false);
   });

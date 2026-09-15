@@ -287,6 +287,10 @@ export function draftReach({
 
   const recipients: DraftRecipient[] = [];
   const seen = new Set<string>();
+  // ⚠ **NO CONTESTED-TAG PASS (2026-09-15, Samuel's uniqueness ruling).** A draft briefly carried
+  // a `contested` list and the line rendered *"@coder names two agents — use @agent-<id>"*; the
+  // collision is now prevented where the name is COMMITTED (`main/agent-name-unique.js` auto-
+  // resolves a second "Coder" to `Coder-1`), so there is nothing for a diagnostic to describe.
   for (const token of mentionTokensOf(body)) {
     const handle = mentionHandleOf(token);
     const agentId = resolveAgentHandle(handle, index);

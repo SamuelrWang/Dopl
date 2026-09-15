@@ -55,7 +55,7 @@ test("NO agent id -> no block at all (a value that is not an address is never pr
   }
 });
 
-test("the identity block is ONE LINE — the id, and nothing else", () => {
+test("the identity block is the id, its BOUNDARY, and how to address a peer", () => {
   // ⚠ **THE ~870-CHARACTER CLAIM PROTOCOL IS DELETED (2026-09-02, G13's other half).** It was
   // the standing half of the same rule the per-turn stand-down preamble was, one scope up:
   // "a message naming no agent id is not automatically yours · check whether a sibling has
@@ -64,8 +64,49 @@ test("the identity block is ONE LINE — the id, and nothing else", () => {
   // server now answers BEFORE the message is sent (`service-wake-verdict.ts`, RR1/RR2/RR3) and
   // the desktop honours by feeding only the resolved recipient. A session that was not named is
   // not fed, so the question the protocol existed to ask cannot arise.
+  // ⚠ **IT WAS ONE LINE — the id and nothing else — UNTIL 2026-09-15, AND THAT IS WHY IT
+  // LEAKED.** Samuel, verbatim: *"that ID is only internal for agents to be able to differentiate
+  // and for agents to see. But they don't need to be telling that or posting the id in the
+  // channel, in fact its a bad user experience."* An agent told its id and NOTHING ELSE signs
+  // with it, quotes it back, and writes it into channel posts — every one of which puts eight
+  // machine characters in front of a person.
+  // ⚠ **WHAT IS ADDED IS A FACT AND A PROHIBITION, NOT A PARAGRAPH.** The deleted claim protocol
+  // (below) and the deleted per-turn stand-down were both prose asking a session to RE-DERIVE
+  // something the system already knew. These three lines state a boundary on a value the agent
+  // holds and the spelling of the address that replaces it — neither is derivable from anything
+  // else in the prompt, and neither asks the reader to decide anything.
+  // ⚠ **THE FOURTH LINE CHANGED LATER THE SAME DAY AND THE CHANGE IS THE SECOND RULING.** It read
+  // *"Write an id ONLY when two ACTIVE agents share a name; then use @agent-<id>"* — a carve-out
+  // Samuel removed by removing the CASE: *"no two agents that are addressable can have the same
+  // name … it will automatically auto-resolve to coder-1."* ⚠ **A LINE TEACHING AN ID "for the
+  // rare case" IS A LINE AN AGENT WILL USE IN THE COMMON ONE**, so what replaces it is the reason
+  // the id is never needed rather than a narrower licence to write one.
   const lines = framing.agentIdentityFraming({ agentId: ME });
-  assert.deepEqual(lines, [`YOUR AGENT ID IS ${ME}.`]);
+  assert.deepEqual(lines, [
+    `YOUR AGENT ID IS ${ME}.`,
+    "THE ID IS INTERNAL: read it, never write it in a message.",
+    "ADDRESS AN AGENT BY ITS NAME, as a tag: lower case, spaces as dashes (@bug-reviewer).",
+    "Names are unique among live agents, so a tag reaches exactly one.",
+  ]);
+});
+
+test("it SPEAKS THE AGENT'S OWN NAME when the caller supplies one, and never invents one", () => {
+  // ⚠ **OPTIONAL, BECAUSE THIS MODULE IS PURE.** The name lives in `agent-names.js`, which is
+  // electron-store backed, and this file may not require it (its header's first line). A caller
+  // that has the name passes it; one that does not gets the shorter line. ⚠ **INVENTING A NAME,
+  // OR ASSERTING THE AGENT HAS NONE, WOULD BOTH BE CLAIMS THIS MODULE CANNOT CHECK** — and the
+  // second is the worse one, because an agent told it is nameless will say so in the channel.
+  const named = framing.agentIdentityFraming({ agentId: ME, agentName: "Bug Reviewer" });
+  assert.equal(named[0], `YOU ARE "Bug Reviewer". YOUR AGENT ID IS ${ME}.`);
+  assert.deepEqual(named.slice(1), framing.agentIdentityFraming({ agentId: ME }).slice(1));
+  // ⚠ A BLANK OR WHITESPACE-ONLY NAME IS AN ABSENT ONE, never a quoted empty string.
+  for (const blank of ["", "   ", null, 42]) {
+    assert.equal(
+      framing.agentIdentityFraming({ agentId: ME, agentName: blank })[0],
+      `YOUR AGENT ID IS ${ME}.`,
+      JSON.stringify(blank),
+    );
+  }
 });
 
 test("SIBLINGS are no longer named, and nothing asks the agent to adjudicate delivery", () => {
@@ -86,13 +127,23 @@ test("SIBLINGS are no longer named, and nothing asks the agent to adjudicate del
   }
 });
 
-test("…and it stays cheap: the whole block is under 60 characters", () => {
-  // ⚠ IT IS PAID ON EVERY SESSION'S FIRST TURN. The ratchet is the point of the deletion, and a
-  // paragraph is how this grows back one sentence at a time.
+test("…and it stays cheap: the whole block is under 300 characters", () => {
+  // ⚠ IT IS PAID ON EVERY SESSION'S FIRST TURN. The ratchet is the point, and a paragraph is how
+  // this grows back one sentence at a time.
+  // ⚠ **60 → 300 ON 2026-09-15, AND A RISE IS A DECISION RECORDED HERE RATHER THAN ABSORBED.**
+  // The old number bounded a block that said only `YOUR AGENT ID IS <id>.` — and a value handed
+  // over with no boundary is what produced the leak Samuel's ruling removes. The three added
+  // lines measure 246 (270 with a name), and what they buy is that an agent stops writing its id
+  // into messages a person reads and starts addressing peers by the tag that actually works.
+  // ⚠ **THE HEADROOM IS DELIBERATELY SMALL** — under a hundred characters over the measurement —
+  // so the next sentence still has to be argued for, which is the property the 60 had.
   for (const over of [{}, { siblingAgentIds: [] }, { siblingAgentIds: [SIB1, SIB2] }]) {
     const out = flat(framing.agentIdentityFraming({ agentId: ME, ...over }));
-    assert.ok(out.length < 60, `${out.length} chars: ${out}`);
+    assert.ok(out.length < 300, `${out.length} chars: ${out}`);
   }
+  // ⚠ AND THE NAMED FORM IS MEASURED TOO — it is the common one now that every launch names.
+  const withName = flat(framing.agentIdentityFraming({ agentId: ME, agentName: "Bug Reviewer" }));
+  assert.ok(withName.length < 300, `${withName.length} chars: ${withName}`);
 });
 
 test("no agent id, no block — an unidentified session is told nothing it cannot use", () => {

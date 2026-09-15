@@ -126,20 +126,17 @@ describe("the agent namespace", () => {
     });
   });
 
-  // ⚠ **THIS PINNED THE OPPOSITE UNTIL 2026-09-07** — *"an AMBIGUOUS slug fails closed — two
-  // agents, one name, neither resolves"* — and the red WAS the ruling arriving. Samuel, verbatim:
-  // *"if coder exists, then other slugs will be coder-1, coder-2, coder-3"*. Failing closed cost
-  // an address a RENAME could take from an agent that was never renamed, and across members:
-  // the server builds this index over the room's live rows whoever runs them, so one member
-  // could withdraw another's agent from addressing by naming their own agent after it. The rule
-  // and its argument live in `lib/agent-mentions.ts › buildAgentMentionIndex` PASS 2, pinned in
-  // `lib/agent-handle-shadowing.test.ts`; this is the SERVER end of the same contract.
-  it("a contested slug MINTS rather than failing closed — first claimant keeps it, second wears `-1`", async () => {
+  // ⚠ **THIS CASE HAS ANSWERED FOUR WAYS, AND THE FOURTH MOVED THE RULE OFF THIS LAYER.** It
+  // pinned fail-closed ambiguity to 2026-09-07, the suffix mint to 2026-09-15, fail-closed again
+  // for part of that day — and then Samuel ruled the collision out of existence: *"no two agents
+  // that are addressable can have the same name … it will automatically auto-resolve to coder-1
+  // … coder-2 and so on and so forth."* The second "Bot" is STORED as `Bot-1`
+  // (`main/agent-name-unique.js`), so `to="@bot"` and `to="@bot-1"` are two ordinary names.
+  it("resolves a name SUFFIXED AT LAUNCH like any other name", async () => {
     vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([
       sessionRow({ id: "s-1", name: "k3v7d2mq", display_name: "Bot" }),
-      sessionRow({ id: "s-2", name: "m8q1zzzz", display_name: "Bot" }),
+      sessionRow({ id: "s-2", name: "m8q1zzzz", display_name: "Bot-1" }),
     ]);
-    // ⚠ CLAIM ORDER IS THE CALLER'S, which here is the session-row order the repository answered.
     expect(await resolveToRecipient(HUMAN, CHANNEL, "@bot")).toEqual({
       kind: "agent",
       agentId: "k3v7d2mq",
@@ -148,8 +145,26 @@ describe("the agent namespace", () => {
       kind: "agent",
       agentId: "m8q1zzzz",
     });
-    // ⚠ AND THE ID FORM IS UNMOVED — pass 1 claims it before any name is looked at, so neither
-    // agent can lose the handle that "cannot stop working".
+  });
+
+  it("names the FIRST claimant on a cross-machine duplicate, and refuses no spelling it minted", async () => {
+    // ⚠ **THE ONE CASE THE COMMIT RULE CANNOT COVER** — names are minted on the machine that owns
+    // the id, so two MEMBERS can each run a "Bot" in one room. ⚠ AND NOTHING IS MINTED HERE: the
+    // refusal for `@bot-1` proves the 2026-09-07 resolve-time suffix stayed withdrawn.
+    vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([
+      sessionRow({ id: "s-1", name: "k3v7d2mq", display_name: "Bot" }),
+      sessionRow({ id: "s-2", name: "m8q1zzzz", display_name: "Bot" }),
+    ]);
+    expect(await resolveToRecipient(HUMAN, CHANNEL, "@bot")).toEqual({
+      kind: "agent",
+      agentId: "k3v7d2mq",
+    });
+    // ⚠ AND THE REFUSAL LISTS ID FORMS, never slugs — `liveAgentHandles`'s own rule, so a refusal
+    // can never name a handle that resolves to nobody.
+    await expect(resolveToRecipient(HUMAN, CHANNEL, "@bot-1")).rejects.toMatchObject({
+      liveHandles: ["agent-k3v7d2mq", "agent-m8q1zzzz"],
+    });
+    // ⚠ THE LOSER IS STILL REACHABLE BY THE HANDLE THAT IS NEVER WITHDRAWN.
     expect(await resolveToRecipient(HUMAN, CHANNEL, "@agent-m8q1zzzz")).toEqual({
       kind: "agent",
       agentId: "m8q1zzzz",

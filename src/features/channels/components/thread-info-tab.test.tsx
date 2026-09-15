@@ -149,23 +149,26 @@ describe("the two parties", () => {
 
 describe("the agents on this thread", () => {
   it("lists SEVERAL of my own agents on one thread, each by its own NAME", () => {
-    // ⚠ `Agent #<id>`, NOT the bare id (Samuel, 2026-08-27 — INVARIANTS §11, the raw agent id is
-    // never user-visible). This case asserted the eight-character token on its own, which is
-    // exactly what the rows were rendering and exactly what the ruling forbade; the rows resolve
-    // `agents-model.ts › agentDisplayName` now. The id is still what makes the two rows distinct
-    // — that is the multiplayer property this case exists for — it is just no longer the string
-    // a person reads.
+    // ⚠ **IT ASSERTED `#<id>` UNTIL 2026-09-15 AND THAT WAS THE LEAK, NOT THE FIX.** The case
+    // was written on 2026-08-27 against INVARIANTS §11 ("the raw agent id is never
+    // user-visible") and satisfied it with `#a1b2c3d4` — the raw id with a `#` glued on, which
+    // that row then defended as "a NAME the operator accepted at launch". Samuel withdrew the
+    // carve-out on 2026-09-15: *"I want to make it so that the user really doesnt see it"*.
+    // ⚠ **SO THE AGENTS ARE NAMED, WHICH IS WHAT THE PRODUCT NOW DOES AT LAUNCH** — a human
+    // launch submitted blank is named `New Agent`, and an agent launching an agent must supply
+    // one. The multiplayer property this case exists for is unchanged: two sessions on one
+    // thread, two distinct rows. What tells them apart is a name rather than a machine token.
     renderTab({
       agentSessions: [
-        summary({ sessionId: "s-1", agentId: "a1b2c3d4" }),
-        summary({ sessionId: "s-2", agentId: "e5f6g7h8" }),
+        summary({ sessionId: "s-1", agentId: "a1b2c3d4", displayName: "Scout" }),
+        summary({ sessionId: "s-2", agentId: "e5f6g7h8", displayName: "Rover" }),
       ],
     });
-    expect(screen.getByText("#a1b2c3d4")).toBeTruthy();
-    expect(screen.getByText("#e5f6g7h8")).toBeTruthy();
-    // ⚠ AND THE BARE TOKEN IS NOWHERE — a row that rendered both would satisfy the two lines
-    // above while still leaking the id.
+    expect(screen.getByText("Scout")).toBeTruthy();
+    expect(screen.getByText("Rover")).toBeTruthy();
+    // ⚠ AND THE ID IS NOWHERE, IN EITHER SPELLING — bare, or with the `#` this tab used to wear.
     expect(screen.queryByText("a1b2c3d4")).toBeNull();
+    expect(screen.queryByText("#a1b2c3d4")).toBeNull();
     expect(screen.queryByText("e5f6g7h8")).toBeNull();
   });
 

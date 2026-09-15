@@ -90,8 +90,12 @@ describe("ownAgentsWorking — what the strip is allowed to claim", () => {
 
 describe("the rows themselves", () => {
   it("renders one working agent, named", () => {
+    // ⚠ **THE UNNAMED FACE IS `New Agent` SINCE 2026-09-15** (Samuel: *"if a user launches an
+    // agent with no name, just give it the name, New Agent"*). It read `#ab12cd34` — the raw
+    // instance id — which is the leak `shared/lib/agent-name.ts` removes; the next case names
+    // its two agents, because that is how the product now tells two rows apart.
     render(<AgentActivityRows agents={ownAgentsWorking([session()], CHANNEL_ID)} />);
-    expect(screen.getByText("#ab12cd34 is working…")).toBeTruthy();
+    expect(screen.getByText("New Agent is working…")).toBeTruthy();
   });
 
   it("STACKS two, one row each — never a count", () => {
@@ -101,14 +105,17 @@ describe("the rows themselves", () => {
     render(
       <AgentActivityRows
         agents={ownAgentsWorking(
-          [session(), session({ sessionId: "s-2", agentId: "zz99yy88" })],
+          [
+            session({ displayName: "Scout" }),
+            session({ sessionId: "s-2", agentId: "zz99yy88", displayName: "Rover" }),
+          ],
           CHANNEL_ID
         )}
       />
     );
     expect(screen.getAllByRole("status")).toHaveLength(2);
-    expect(screen.getByText("#ab12cd34 is working…")).toBeTruthy();
-    expect(screen.getByText("#zz99yy88 is working…")).toBeTruthy();
+    expect(screen.getByText("Scout is working…")).toBeTruthy();
+    expect(screen.getByText("Rover is working…")).toBeTruthy();
     expect(screen.queryByText(/2 agents/)).toBeNull();
   });
 

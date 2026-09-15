@@ -47,6 +47,7 @@ import { TENANCY_FIX, TENANCY_RULE } from "./channel-doctrine";
 // ⚠ THE COLOUR REFUSAL IS A NEIGHBOUR, not a branch in here — this file is at the §1
 // cap and a refusal is prose about one server code (`channel-ops-launch-color.ts`).
 import { colorTaken, freeColors } from "./channel-ops-launch-color";
+import { isNameRefusal, launchName, launchedTag } from "./channel-ops-launch-name";
 
 /** Peer-influenced display text, neutralized — never an empty span. */
 const NO_NAME = "(unnamed)";
@@ -287,9 +288,21 @@ export async function opLaunchAgent(
      *  untouched — the taken set spans every member's live agents and only the server
      *  can see it. Omitted means "first free", never "no colour". */
     color?: AgentColorKey;
+    /** **WHAT TO CALL THE NEW AGENT — REQUIRED** (Samuel, 2026-09-15: *"if agents are spinning
+     *  up agents, they should be the ones that are naming the agent … certainly shouldn't be an
+     *  agent with the id as the name."*). ⚠ OPTIONAL IN THE TYPE AND REFUSED AT RUNTIME: the
+     *  argument arrives off an MCP wire as unvalidated JSON, so the type says what may ARRIVE and
+     *  the refusal below is what the caller is TOLD — and only that layer can say what to pass. */
+    name?: string;
     waitMs?: number;
   } = {},
 ): Promise<ToolResponse> {
+  // ⚠ THE NAME RULE AND ITS TWO REFUSALS LIVE IN `channel-ops-launch-name.ts` (§1's cap; the
+  // one-field-one-file seam `channel-ops-launch-color.ts` already draws). It answers the trimmed
+  // name or the refusal to return, so this lane files the string that was actually measured.
+  const named = launchName(opts.name);
+  if (isNameRefusal(named)) return named;
+
   // ⚠ PRE-RESOLVED, unlike the hot read paths: this op is cold (one call, then a
   // hold), and the result text names the channel repeatedly. Resolving once buys
   // a neutralized display name and a clean not-found instead of an opaque 404
@@ -315,6 +328,8 @@ export async function opLaunchAgent(
       chain: opts.chain,
       clientMsgId: opts.clientMsgId,
       color: opts.color,
+      // ⚠ THE TRIMMED VALUE, not `opts.name` — see `channel-ops-launch-name.ts`.
+      agentName: named.name,
     });
   } catch (e) {
     // ⚠ THE TEMPLATE ARMS COME FIRST, AND THE DISCRIMINATOR IS THE **CODE**, NOT
@@ -404,10 +419,14 @@ export async function opLaunchAgent(
     // claim, and the weaker one leaves a caller waiting on an agent that never
     // started.
     //
-    // ⚠ THE HANDLE IS PUBLISHED IN THE PREFIXED FORM, always. The desktop parser
-    // takes both `@<id>` and `@agent-<id>`, so this is a convention question —
-    // and publishing the bare form while the app tints the prefixed one is how a
-    // caller writes a token the reader does not highlight.
+    // ⚠ **`name=` IS THE ADDRESS AND `agent=` IS THE RECORD (Samuel, 2026-09-15).** The NAME is
+    // what a body tags now, and the machine may not have stored the one that was asked for: a
+    // second "Coder" is stored `Coder-1`. A caller that never learned the applied name would go on
+    // tagging `@coder` and reach the OTHER agent — which is why this is the MACHINE's value and
+    // the request is only the older-desktop fallback (`channel-ops-launch-name.ts › launchedTag`).
+    // ⚠ **THE ID FORM IS STILL PUBLISHED, UNCHANGED**: the handle that never stops working and the
+    // third coordinate of every other agent op. Nothing TELLS the caller to address with it — that
+    // is what `name=` is for — but withdrawing it would be a different and worse decision.
     //
     // ⚠ A FUTURE TIER ADDS FIELDS HERE, NOT PARAGRAPHS: the resolved posture and
     // chain state the desktop applied (T24) are facts about this launch and
@@ -415,6 +434,7 @@ export async function opLaunchAgent(
     return ok(
       factsLine("launched", {
         agent: `@agent-${directive.agentId}`,
+        name: launchedTag(directive.appliedAgentName ?? named.name),
         thread: directive.threadId ?? undefined,
         template: directive.templateName ?? undefined,
         model: directive.model ?? undefined,

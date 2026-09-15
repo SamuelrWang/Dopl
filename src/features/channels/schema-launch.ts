@@ -43,28 +43,19 @@ import type {
  * ⚠ EXPORTED because the MCP surface publishes the same two enums to its callers
  * and a second literal there is the drift this declaration exists to prevent.
  */
-export const LAUNCH_TOOL_MODES = [
-  "manual",
-  "accept_edits",
-  "auto",
-  "bypass",
-] as const;
-/**
- * ⚠ **THIS ONE IS NOT A LADDER, AND ITS ORDER IS NOT A CLAMP RULE** (2026-09-02).
- * `LAUNCH_TOOL_MODES` above really is narrowest-first — manual ⊂ accept_edits ⊂
- * auto ⊂ bypass — and an index comparison is the right clamp for it. Here
- * `auto_inbound` and `auto_outbound` are two INDEPENDENT capabilities and
- * neither is wider than the other; the array order is only a stable spelling for
- * the zod enum and the column CHECK. Clamping this axis by index WIDENED on two
- * of sixteen pairs. `lib/agent-posture.ts › narrowMessageMode` intersects
- * capability bits instead, and `main/launch-posture.js` does the same.
- */
-export const LAUNCH_MESSAGE_MODES = [
-  "ask",
-  "auto_inbound",
-  "auto_outbound",
-  "auto_both",
-] as const;
+// ⚠ **THE TWO MODE ARRAYS MOVED TO `schema-launch-modes.ts` (§1 SPLIT, 2026-09-15)** — a LEAF,
+// so this file and `schema-launch-decide.ts` can both read them without a module-eval cycle (that
+// file's header carries the measurement). ⚠ RE-EXPORTED, so every existing importer is unchanged,
+// and the NARROWEST-FIRST order is documented there beside the arrays the clamp indexes into.
+export {
+  LAUNCH_MESSAGE_MODES,
+  LAUNCH_TOOL_MODES,
+} from "./schema-launch-modes";
+import {
+  LAUNCH_MESSAGE_MODES,
+  LAUNCH_TOOL_MODES,
+  LAUNCH_REFUSAL_REASONS,
+} from "./schema-launch-modes";
 
 const ToolModeSchema = closedEnum<LaunchToolMode>()(LAUNCH_TOOL_MODES);
 const MessageModeSchema = closedEnum<LaunchMessageMode>()(LAUNCH_MESSAGE_MODES);
@@ -216,6 +207,45 @@ export const LaunchCreateSchema = z.object({
    * error worth naming rather than a newer machine's vocabulary to tolerate.
    */
   color: closedEnum<AgentColorKey>()(AGENT_COLOR_KEYS).optional(),
+  /**
+   * **WHAT TO CALL THE NEW AGENT — REQUIRED, BECAUSE THE CALLER IS AN AGENT**
+   * (Samuel, 2026-09-15, verbatim: *"if agents are spinning up agents, they should be the ones
+   * that are naming the agent. Shouldn't be a nameless agent. And certainly shouldn't be an
+   * agent with the id as the name."*).
+   *
+   * ⚠ **IT DID NOT EXIST AT ALL UNTIL THIS WAVE, WHICH IS THE WHOLE DEFECT.** There was no way
+   * for an agent-filed launch to carry a name, so every agent an agent launched was nameless by
+   * construction and rendered as its own instance id on every card. Adding the field and making
+   * it REQUIRED are one change: an optional one would have left the defect reachable by omission,
+   * and the caller here is a model that will omit whatever it can.
+   *
+   * ⚠ **REQUIRED HERE AND ONLY HERE — a HUMAN launch is a different lane and stays optional.**
+   * The dialog opens blank and a blank submit is named `New Agent`
+   * (`components/use-agent-launch-run.ts`), because a person who left the field alone has said
+   * something; an agent that omitted a required argument has said nothing. Different actors,
+   * different defaults, one face.
+   *
+   * ⚠ **60, NOT 120**, matching {@link AgentDirectiveCreateSchema}'s rename arm and
+   * `main/agent-names.js › MAX_NAME` — the store that will actually hold it. A name legal here
+   * that the desktop then refuses is a 200 followed by a refusal the orchestrator cannot explain.
+   * ⚠ **`.min(1)` AFTER THE TRIM**, so `"   "` is refused rather than stored as a name nobody
+   * typed: the empty string is meaningful on the RENAME arm (it clears) and meaningless here.
+   * ⚠ **THE INVISIBLES ARE REFUSED, NOT STRIPPED**, character for character with that arm —
+   * `agent-names.js › sanitizeName` is the authority at the far end and refuses rather than
+   * strips, so accepting them here would file a directive the machine will only bounce.
+   * ⚠ **AN ID-SHAPED NAME IS REFUSED BY THE TOOL, NOT HERE.** `packages/mcp-server ›
+   * channel-ops-launch.ts` is where a caller can be told what to pass instead; a zod message is
+   * not a place to teach.
+   */
+  agentName: z
+    .string()
+    .trim()
+    .min(1, "An agent you launch needs a name")
+    .max(60)
+    .refine(
+      (v) => !/[\u0000-\u001f\u007f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/.test(v),
+      "Control, zero-width and bidi characters are refused, not stripped",
+    ),
 });
 export type LaunchCreateInput = z.infer<typeof LaunchCreateSchema>;
 
@@ -262,18 +292,8 @@ export type LaunchClaimInput = z.infer<typeof LaunchClaimSchema>;
 // named setting is off — so an orchestrator that read the first retried somewhere else
 // instead of asking for one toggle. ⚠ THE COLUMN CHECK LANDS IN THE SAME WAVE
 // (`20260910120000_channel_launch_directives_posture.sql` §3A).
-export const LaunchRefusalReasonSchema = closedEnum<LaunchRefusalReason>()([
-  "cap",
-  "busy",
-  "no-sdk",
-  "auth-hold",
-  "no-bridge",
-  "no-counterparty",
-  "no-template",
-  "no-session",
-  "bad-name",
-  "no-chain",
-]);
+export const LaunchRefusalReasonSchema =
+  closedEnum<LaunchRefusalReason>()(LAUNCH_REFUSAL_REASONS);
 
 /**
  * THE AGENT INSTANCE ID, AS A PARAM.
@@ -388,70 +408,11 @@ export type AgentDirectiveCreateInput = z.infer<
   typeof AgentDirectiveCreateSchema
 >;
 
-/**
- * The desktop's terminal decision. ⚠ A DISCRIMINATED UNION, not an object with
- * two optional fields: `launched` REQUIRES an agent id and `refused` REQUIRES a
- * reason, and the column CHECK says the same thing at rest. An object shape
- * would let a machine post `refused` with no reason, leaving the MCP result
- * nothing honest to say about the one outcome that most needs wording.
- */
-export const LaunchDecideSchema = z.discriminatedUnion("status", [
-  z.object({
-    directiveId: z.string().uuid(),
-    status: z.literal("launched"),
-    /** ⚠ Mirrors `dopl-desktop-app/main/agent-id.js` and the column CHECK
-     *  character for character — it renders as `@<id>` in an MCP result, so a
-     *  bad value must be a 400 that NAMES the field rather than a constraint
-     *  violation surfacing as an opaque 500. */
-    agentId: z.string().regex(/^[a-z][a-z0-9]{7}$/, "Invalid agent id"),
-    /**
-     * **THE ECHO TRIO — WHAT THE MACHINE SAYS IT ACTUALLY APPLIED** (2026-09-01,
-     * T24's second half). The columns landed with the posture request and
-     * nothing wrote them; these three fields are the writer.
-     *
-     * ⚠ **OPTIONAL, AND THE OPTIONALITY IS THE OLDER-DESKTOP CONTRACT**
-     * (INVARIANTS §13 — an older peer is supported). A desktop that predates
-     * this wave reports nothing, its decide body carries none of these keys, and
-     * the columns stay `null` — which `channel-ops-launch.ts › postureFacts`
-     * renders as `not reported`. Making any of them REQUIRED would 400 every
-     * decide such a machine posts, i.e. it would turn "I cannot tell you what I
-     * applied" into "I could not report at all", and the row would then expire
-     * with a running agent behind it.
-     * ⚠ **`null` MUST KEEP MEANING "NOT REPORTED".** Absent stays absent all the
-     * way to the column (`service-launch.ts › decideLaunchDirective` maps an
-     * undefined field to `null`) — it is NEVER filled in from the REQUEST
-     * columns, which would be right whenever nothing was clamped and confidently
-     * wrong exactly when it mattered.
-     * ⚠ THE SAME FROZEN ENUMS THE REQUEST PAIR USES, and deliberately the same
-     * declarations: a second literal here is the drift {@link LAUNCH_TOOL_MODES}
-     * exists to prevent, and the column CHECK holds the echo columns to the same
-     * members at rest.
-     * ⚠ NOT ON THE `done` ARM. Only a LAUNCH resolves a start posture; an `end`
-     * or a `rename` applies none, and a machine that reported one would be
-     * asserting a fact about a session it did not start.
-     */
-    appliedTools: ToolModeSchema.optional(),
-    appliedMessages: MessageModeSchema.optional(),
-    /** ⚠ A REAL `false` — "this session may NOT launch workers" — and it is a
-     *  DIFFERENT fact from an absent field. Absent is "not reported"; `false` is
-     *  the machine saying it settled the chain OFF, which is what an orchestrator
-     *  needs in order to stop planning for workers. */
-    appliedChain: z.boolean().optional(),
-  }),
-  // ⚠ THE NON-LAUNCH KINDS' SUCCESS, 2026-09-01. It carries NO agent id: an end
-  // and a rename both NAME their target in the row already (`target_agent_id`),
-  // so a second id on the decide would be a field the machine could get wrong
-  // about a row it did not write. The column CHECK pairs `done` with the
-  // non-launch kinds and `launched` with `launch`, so the two successes can never
-  // be confused for one another at rest.
-  z.object({
-    directiveId: z.string().uuid(),
-    status: z.literal("done"),
-  }),
-  z.object({
-    directiveId: z.string().uuid(),
-    status: z.literal("refused"),
-    refusalReason: LaunchRefusalReasonSchema,
-  }),
-]);
-export type LaunchDecideInput = z.infer<typeof LaunchDecideSchema>;
+// ⚠ **THE DESKTOP'S TERMINAL DECISION MOVED TO `schema-launch-decide.ts` (§1 SPLIT, 2026-09-15)**
+// — this file went over the 500-line cap when the launch gained a required `agentName` and the
+// decide gained the `appliedAgentName` echo. The seam is a real one rather than arithmetic: this
+// file is what a CALLER MAY ASK FOR and changes when the launch lane's arguments do; that file is
+// what the MACHINE REPORTS BACK and changes when the echo does. ⚠ RE-EXPORTED so no importer moved
+// (`schema.ts` re-exports both from here).
+export { LaunchDecideSchema } from "./schema-launch-decide";
+export type { LaunchDecideInput } from "./schema-launch-decide";

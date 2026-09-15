@@ -155,23 +155,24 @@ describe("the session LINE carries the handle, and only for an own row", () => {
  * BOTH directions — in the product, and not re-transmitted per call.
  */
 describe("the handle rule survived the move to the doctrine, clause for clause", () => {
-  it("names the form, and says a CUSTOM NAME is machine-local", () => {
-    // A rename lives in `main/agent-names.js`, on ONE machine, keyed by an id
-    // minted there. No server holds it, so it is not addressable from here —
-    // and a caller who saw a friendly name in the Dopl app must not assume it is.
-    // ⚠ RE-POINTED (B8): the form and its exclusivity are now one LAW bullet —
-    // the prefixed form is the only address it names, and "ONLY BY NAME" /
-    // "never without naming one" is the exclusivity clause.
-    expect(CHANNEL_DOCTRINE).toContain(
-      'to="@agent-<id>" or `@agent-<id>` in a body wakes THAT agent',
-    );
+  it("names the form, and says a CUSTOM NAME **is** the address", () => {
+    // ⚠ **THIS CASE ASSERTED THE OPPOSITE UNTIL 2026-09-15, AND WHAT IT ASSERTED WAS FALSE.** It
+    // pinned *"No server holds it, so it is not addressable from here"* and *"is invisible to
+    // every other member"* — both untrue since `20260905120000` made `channel_sessions.
+    // display_name` peer-visible BY DESIGN, and since 2026-08-28 gave the name its own resolver
+    // in all three trees. Samuel's 2026-09-15 ruling makes the name the PRIMARY address, and the
+    // doctrine says so. **A pinned sentence is how a false claim survives review**, which is why
+    // the correction is a change here and not only to the prose.
+    // ⚠ WHAT THE CASE IS STILL FOR IS UNCHANGED: the form is NAMED, and its exclusivity clause
+    // ("ONLY BY NAME" / "never without naming one") travels with it, so a reader cannot take the
+    // capability without its boundary.
+    expect(CHANNEL_DOCTRINE).toContain("that tag, in a body or in `to`, wakes THAT agent");
     expect(CHANNEL_DOCTRINE).toContain("AND ONLY BY NAME");
     expect(CHANNEL_DOCTRINE).toContain("never without naming one");
-    expect(CHANNEL_DOCTRINE).toContain("reaches no server");
-    // ⚠ PEER-INVISIBILITY WAS RESTORED ON 2026-09-02 after this tier found it had
-    // stopped appearing in ANY shipped prose. It is the half a caller cannot
-    // infer: a name they can see, nobody else can.
-    expect(CHANNEL_DOCTRINE).toContain("is invisible to every other member");
+    expect(CHANNEL_DOCTRINE).toContain("what people see and what agents tag it by");
+    // ⚠ AND THE ID RULE IS PINNED BESIDE IT, because it is the half a caller cannot infer: the
+    // id still exists, still addresses, and must not be written into a message.
+    expect(CHANNEL_DOCTRINE).toContain("NEVER WRITE AN AGENT ID IN A MESSAGE");
   });
 
   it("⚠ SAYS THE HANDLE WAKES, AND NAMES IT AS A WAKE RATHER THAN A TAG", () => {
@@ -195,11 +196,13 @@ describe("the handle rule survived the move to the doctrine, clause for clause",
     // ⚠ RE-POINTED (B8): the ordering is carried by the two sentences that
     // survived — the launch takes the goal as its FIRST INSTRUCTION, and the
     // wake is what happens THEREAFTER, to an agent that already exists.
+    // ⚠ RE-SPELLED 2026-09-15 when the launch clause gained the NAMING rule. The ordering this
+    // case is about — goal first, wake THEREAFTER — is carried by the same two sentences.
+    expect(CHANNEL_DOCTRINE).toContain("its `body` is its FIRST INSTRUCTION");
+    // ⚠ RE-SPELLED AGAIN 2026-09-15 — the bullet now also says the launch ANSWERS the name it
+    // got, which is the half a caller acts on when the uniqueness rule appended a `-1`.
     expect(CHANNEL_DOCTRINE).toContain(
-      "its `body` is the FIRST INSTRUCTION it runs",
-    );
-    expect(CHANNEL_DOCTRINE).toContain(
-      'op="manage" action="launch" starts one, and thereafter',
+      'op="manage" action="launch" starts one and answers the name it got; that tag, in a body or in `to`, wakes THAT agent',
     );
   });
 
@@ -228,8 +231,11 @@ describe("the handle rule survived the move to the doctrine, clause for clause",
     // pin moved to the property it was protecting: the capability and its
     // boundary are stated in ONE breath, so a reader cannot take the first
     // without the second.
+    // ⚠ THE TRAILING FULL STOP WENT ON 2026-09-15 — the bullet now continues into HOW the name
+    // is spelled. The property is the one this pin has always protected: the capability and its
+    // boundary in ONE breath.
     expect(DOCTRINE_SECTIONS.law).toContain(
-      "YOUR OWN AGENTS ARE THE ONE EXCEPTION, AND ONLY BY NAME.",
+      "YOUR OWN AGENTS ARE THE ONE EXCEPTION, AND ONLY BY NAME",
     );
   });
 

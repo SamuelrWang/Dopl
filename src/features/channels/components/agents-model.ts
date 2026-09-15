@@ -34,72 +34,15 @@ import { PRESENCE_ONLINE_WINDOW_MS } from "../constants";
 import { normalizeAgentModel } from "../lib/agent-models";
 import { metric } from "./agent-metrics";
 import type { ChannelPeerSession } from "../hooks/use-channel-agent-sessions";
-
-/**
- * IS THIS AGENT STILL RUNNING — the ONE ended-state rule, shared by the own list
- * and the peer list (Samuel, 2026-08-20).
- *
- * ⚠ IT EXISTS BECAUSE THE TWO LISTS USED TO DISAGREE. `peerCardsFor` dropped
- * `ended` and `ownAgentsFor` did not, so the Agents tab's badge — which sums both
- * — counted MY stopped agents and not my teammates'. One number over two rules is
- * the F-142 defect in miniature, and a badge is exactly where it goes unnoticed.
- *
- * ⚠ THE LIST AND THE BADGE ANSWER DIFFERENT QUESTIONS, DELIBERATELY. The badge
- * counts what is ACTIVE; the own LIST still renders an ended agent as a stopped
- * card, because "my agent just finished" is something the operator opened the tab
- * to see. A peer's ended row is not shown either way — the server row outlives the
- * run it describes, so it is not evidence of anything.
- */
-function isAgentActive(state: DesktopSessionSummary["state"]): boolean {
-  return state !== "ended";
-}
-
-/**
- * THE AGENT'S OWN ID — what every surface in this family SHOWS where a stone
- * handle used to be (Samuel, 2026-08-21, multiplayer agents).
- *
- * ⚠ THE STONE-NAME POOL IS DELETED, and the reason is not taste. `quartz` / `flint` / `onyx`
- * named ONE agent per channel — a promise multiplayer cannot keep, since every launch mints a NEW
- * instance and several sit on one thread. Main mints a random 8-char id per instance instead, and
- * that id is the only thing an operator can say out loud to tell two of their own agents apart.
- *
- * ⚠ READ OPTIONALLY, AND IT FALLS BACK TO `name`. A main older than the id emits a handle and
- * nothing else, and the card must read exactly as it did before this existed — a blank header is
- * strictly worse than a legacy name (INVARIANTS §11). It is read off the summary rather than
- * declared on `spa-bridge.ts › DesktopSessionSummary`, which is the DESKTOP's to widen.
- */
-export function agentDisplayId(session: {
-  agentId?: string | null;
-  name?: string | null;
-}): string {
-  const id = typeof session.agentId === "string" ? session.agentId.trim() : "";
-  return id || session.name || "Agent";
-}
-
-/**
- * THE SAME AGENT, SAID IN FULL: `#<id>` (Samuel, 2026-08-31; it was `Agent #<id>` from
- * 2026-08-24) — what the transcript pill renders (`attribution-pill.tsx › attributionName`),
- * so one agent reads the same in both.
- * ⚠ THE WORD "agent" LEFT THE NAME AND MOVED INTO CHROME (Samuel's ruling): agent-ness is
- * stated by a grey borderless chip beside the name (`attribution-pill.tsx › AgentChip`), so
- * the NAME is just the id — or whatever the operator renamed it to. A name that carries the
- * word "agent" next to a chip that says "agent" says it twice.
- * ⚠ The `#` is LITERAL and belongs to the id, not a separator; one text node.
- * ⚠ A LEGACY `name` IS NOT AN ID and gets no prefix: `#flint` asserts a shape no main minted.
- * ⚠ PRECEDENCE, 2026-08-25 (unchanged): operator's OWN name, then `#<id>`, then the legacy
- * handle — where both are reported the ID wins, since a pool handle was re-issued after its
- * session left.
- */
-export function agentDisplayName(session: {
-  agentId?: string | null;
-  name?: string | null;
-  displayName?: string | null;
-}): string {
-  const own = typeof session.displayName === "string" ? session.displayName.trim() : "";
-  if (own) return own;
-  const id = typeof session.agentId === "string" ? session.agentId.trim() : "";
-  return id ? `#${id}` : agentDisplayId(session);
-}
+// ⚠ THE IDENTITY VOCABULARY MOVED TO `agents-model-identity.ts` AT THE §1 CAP (2026-09-15) —
+// `isAgentActive`, `agentDisplayId` and `agentDisplayName`. They are RE-EXPORTED below because
+// this file is the path every caller already imports them from.
+import { isAgentActive } from "./agents-model-identity";
+export {
+  agentDisplayId,
+  agentDisplayName,
+  isAgentActive,
+} from "./agents-model-identity";
 
 /**
  * THE PER-INSTANCE POST STAMP, as `dopl-desktop-app/main/session-outbound-tag.js

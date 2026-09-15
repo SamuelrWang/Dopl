@@ -115,7 +115,8 @@ describe("the channels doctrine is published as an MCP resource", () => {
       // every hold result now points at instead of restating.
       ["the hold stop rule", "STOP when nothing has come from the MEMBER YOU ADDRESSED"],
       ["hold, not poll", "WAITING — A HOLD, NOT A POLL"],
-      ["the agent-handle limits", "it reaches no server, is invisible to every other member and is never addressable from here"],
+      // ⚠ RE-POINTED 2026-09-15 — 2026-09-15: the rename clause's three FALSE claims (it reaches no server / is invisible to every other member / is never addressable from here) are DELETED — `channel_sessions.display_name` is peer-visible by design (`20260905120000`) and the name door has resolved in all three trees since 2026-08-28. The doctrine now says what is true: the name is what people see and what agents tag it by.
+      ["the agent-name rule", "what people see and what agents tag it by"],
       ["the refusal words", "A REFUSAL IS A NORMAL ANSWER"],
       ["the session columns", 'op="status" reads your own machine\'s live sessions'],
       ["the home-channel rule", "across every workspace and home container"],

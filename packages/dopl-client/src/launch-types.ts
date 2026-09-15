@@ -79,6 +79,15 @@ export interface LaunchDirective {
    *  member's agent may hold the key, and the agent's own state push then resolves the
    *  collision to the next free one. Absent on a server older than 2026-09-13. */
   color?: AgentColorKey | null;
+  /** WHAT THE LAUNCH ASKED THE NEW AGENT TO BE CALLED (Samuel, 2026-09-15).
+   *  ⚠ An agent that launches an agent NAMES it — the tool refuses a nameless launch. `null`
+   *  here is an older client's row, which the claiming machine names `New Agent`.
+   *  ⚠ Absent on a server older than 2026-09-15, and on every kind but `launch`. */
+  agentName?: string | null;
+  /** WHAT THE AGENT IS ACTUALLY CALLED — the machine's own answer (2026-09-15).
+   *  ⚠ **THIS, NOT `agentName`, IS THE TAG TO ADDRESS IT BY.** A second agent asking for "Coder"
+   *  is stored as `Coder-1`, and `@coder` would reach the first one. `null` = not reported. */
+  appliedAgentName?: string | null;
   /** ⚠ `done` IS THE NON-LAUNCH KINDS' SUCCESS and `launched` IS THE LAUNCH'S.
    *  They are two words because this row is rendered into an agent-facing
    *  sentence, and "launched" on the record of an agent being STOPPED is the one
@@ -232,6 +241,16 @@ export interface LaunchDirectiveCreateInput {
    * one they want.
    */
   color?: AgentColorKey;
+  /**
+   * **WHAT TO CALL THE AGENT YOU ARE LAUNCHING — REQUIRED** (Samuel, 2026-09-15).
+   *
+   * ⚠ An agent that spins up an agent names it. A nameless launch is REFUSED rather than
+   * silently filed, and the id is not a name: one to sixty visible characters on one line.
+   * ⚠ It is DISPLAY, not an address — but it is what every human surface shows and what other
+   * agents @-tag (`@<name>` slugged: "Bug Reviewer" → `@bug-reviewer`). Two ACTIVE agents with
+   * the same name are addressable only by their id forms, so pick names that differ.
+   */
+  agentName: string;
 }
 
 /**

@@ -1,5 +1,5 @@
 import "server-only";
-import { LAUNCH_DIRECTIVE_TTL_MS, PRESENCE_ONLINE_WINDOW_MS } from "../constants";
+import { LAUNCH_DIRECTIVE_TTL_MS } from "../constants"; // ⚠ `PRESENCE_ONLINE_WINDOW_MS` moved with `operatorIsOnline` (§1 split, 2026-09-15)
 import type {
   AgentColorKey,
   LaunchDirective,
@@ -18,7 +18,6 @@ import { resolveDirectiveColor } from "./service-launch-color";
 // in one place with a parity test rather than inline in a service.
 import { resolveDirectivePosture } from "./service-launch-posture";
 import * as launchRepo from "./repository-launch";
-import * as collab from "./repository-collab";
 import * as repoTasks from "./repository-tasks";
 import { loadVisibleChannel, type ChannelContext } from "./service-shared";
 // ⚠ THE RACE HALF OF G10, SHARED WITH THE DIRECTION LANE — see that module for
@@ -53,43 +52,14 @@ export { LAUNCH_REFUSAL_REASONS, toDirective } from "./service-launch-dto";
  * argument. The type signatures below are the enforcement, not a convention.
  */
 
-/**
- * IS THE OPERATOR'S MACHINE EVEN THERE?
- *
- * ⚠ **A HINT, AND THE RESULT MUST SAY SO.** `agent_presence` is per-(user,
- * workspace), not per-machine and not per-channel: it says some listener of this
- * operator's heartbeat recently, not that the machine which would run this agent
- * is up, not that the desktop's launch toggle is on, and not that it has an SDK.
- * So an ONLINE reading proves nothing and the flow continues to the real
- * decision, which is the desktop's.
- * ⚠ What it DOES buy is the OFFLINE case, which is the common one and the one
- * worth short-circuiting: filing a directive against a machine that is provably
- * not listening produces a row nobody will ever claim, a 15-second hold, and a
- * timeout the agent has to interpret. Refusing before the row exists turns that
- * into an immediate, honest answer.
- * ⚠ THE WINDOW IS `PRESENCE_ONLINE_WINDOW_MS`, deliberately reused — a second
- * liveness number would let the roster call a member offline while this path
- * happily filed a directive for them.
- */
-// ⚠ EXPORTED SINCE 2026-09-01 for `service-launch-agent.ts` — the SAME question,
-// the SAME window, and a second copy would let one lane call a machine online
-// while the other filed nothing for it.
-export async function operatorIsOnline(
-  ctx: ChannelContext
-): Promise<boolean> {
-  const presence = await collab.presenceForWorkspace(ctx.workspaceId);
-  const mine = presence.get(ctx.userId);
-  // ⚠ NO ROW AND NO STAMP BOTH READ AS OFFLINE — the fail-safe direction. A
-  // presence projection that cannot say when it last heard from a machine is not
-  // evidence the machine is up, and the cost of being wrong this way is one
-  // honest refusal instead of a directive nobody will ever claim.
-  if (!mine?.lastSeenAt) return false;
-  // ⚠ Recomputed from the stamp rather than trusting `online`, so this path
-  // cannot drift from the window even if that projection is later re-derived.
-  const seenAt = Date.parse(mine.lastSeenAt);
-  if (Number.isNaN(seenAt)) return false;
-  return Date.now() - seenAt < PRESENCE_ONLINE_WINDOW_MS;
-}
+// ⚠ **`operatorIsOnline` MOVED TO `service-launch-presence.ts` (§1 SPLIT, 2026-09-15)** — this
+// file went over the 500-line cap when the launch gained its required `agentName`. The seam is
+// the one this lane already draws five times (`-color`, `-dto`, `-posture`, `-template`,
+// `-agent`): that file changes when what PRESENCE means changes, this one when the CREATE
+// contract does. It was already exported for `service-launch-agent.ts`, so it had two readers
+// before it had its own file. ⚠ RE-EXPORTED so no importer moved.
+import { operatorIsOnline } from "./service-launch-presence";
+export { operatorIsOnline };
 
 export type CreateLaunchInput = {
   /** Channel slug or id. ⚠ Resolved through the ordinary visibility gate. */
@@ -138,6 +108,7 @@ export type CreateLaunchInput = {
   /** THE NEW AGENT'S COLOUR. ⚠ Omitted is "pick for me" (first free), never "no colour"; a taken
    *  key is a 409 with the free set — `service-launch-color.ts`. */
   color?: AgentColorKey;
+  agentName?: string; // ⚠ **WHAT THE NEW AGENT IS CALLED** (2026-09-15) — REQUIRED by `schema-launch.ts › LaunchCreateSchema`, optional here on §13: an older `@dopl/mcp-server` posts none, and the claiming machine names that one `New Agent`
 };
 
 /**
@@ -313,6 +284,7 @@ export async function createLaunchDirective(
       // ⚠ THE RESOLVED KEY, NEVER `input.color`: a caller who named nothing gets the first free
       // one, and the row records what the machine will APPLY.
       color,
+      agent_name: input.agentName ?? null, // ⚠ VERBATIM (2026-09-15); `agent-names.js › sanitizeName` is the authority on what is stored
       expires_at: new Date(now + LAUNCH_DIRECTIVE_TTL_MS).toISOString(),
       client_msg_id: input.clientMsgId ?? null,
     }),
@@ -418,6 +390,9 @@ export type DecideLaunchInput =
       appliedTools?: LaunchToolMode;
       appliedMessages?: LaunchMessageMode;
       appliedChain?: boolean;
+      /** ⚠ THE MACHINE'S OWN VALUE (2026-09-15) — the uniqueness rule may have stored `Coder-1`,
+       *  and that is the name the launcher must address from now on. */
+      appliedAgentName?: string;
     }
   /** ⚠ THE NON-LAUNCH KINDS' SUCCESS (2026-09-01). No agent id: the row already
    *  NAMES its target, so a second id on the decide would be a field the machine
@@ -481,6 +456,8 @@ export async function decideLaunchDirective(
         input.status === "launched" ? input.appliedMessages ?? null : null,
       applied_chain:
         input.status === "launched" ? input.appliedChain ?? null : null,
+      applied_agent_name:
+        input.status === "launched" ? input.appliedAgentName ?? null : null,
       decided_at: new Date(now).toISOString(),
     }
   );

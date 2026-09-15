@@ -185,7 +185,15 @@ const selected = (row: string) =>
 async function open(over: Partial<React.ComponentProps<typeof Harness>> = {}) {
   const controls = over.newAgent ?? launcher();
   render(<Harness {...over} newAgent={controls} />);
-  await waitFor(() => expect(nameField().value).toBe(`#${MINTED}`));
+  // ⚠ **THE MINT NO LONGER SHOWS UP IN THE NAME FIELD (Samuel, 2026-09-15: *"The name should be
+  // blank"*), so this waited on a prefill that is gone.** The id is still minted and still
+  // forwarded on the launch — it is the agent's ADDRESS — it is simply not rendered, so the
+  // readiness signal is the CALL plus its settle rather than a value on screen.
+  await waitFor(() => expect(mintAgentId).toHaveBeenCalled());
+  // ⚠ AND THE DIALOG'S OWN MOUNT — `ModalShell` reveals on a rAF, which the old prefill
+  // assertion happened to wait out as a side effect. The Launch button is the one control every
+  // one of these popups has.
+  await waitFor(() => expect(screen.getByRole("button", { name: "Launch" })).toBeTruthy());
   return controls;
 }
 
@@ -418,12 +426,16 @@ describe("Discard and Escape close without launching", () => {
     expect(controls.launchAgent).not.toHaveBeenCalled();
   });
 
-  it("is NOT LAUNCHABLE with no name, and says why", async () => {
-    // ⚠ DISABLED WITH A REASON (INVARIANTS §8, rule 4) moved WITH the button when the submit
-    // came back inside the form.
+  it("IS LAUNCHABLE WITH NO NAME — a blank one becomes `New Agent`", async () => {
+    // ⚠ **THIS ASSERTED THE OPPOSITE UNTIL 2026-09-15** — `disabled` plus the INVARIANTS §8
+    // rule-4 sentence *"An agent needs a name"*. Samuel: *"if a user launches an agent with no
+    // name, just give it the name, New Agent"*, and the field now OPENS blank, so a gate on it
+    // would make a freshly opened dialog un-launchable until somebody typed. The naming happens
+    // on the way out (`use-agent-launch-run.ts › launchWithIdentity`), which is where every
+    // launch path goes through it rather than each dialog re-deciding.
     await open();
     fireEvent.change(nameField(), { target: { value: "" } });
-    expect(launchButton().disabled).toBe(true);
-    expect(launchButton().title).toBe("An agent needs a name");
+    expect(launchButton().disabled).toBe(false);
+    expect(launchButton().title).toBe("Launch");
   });
 });

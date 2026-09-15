@@ -426,3 +426,70 @@ describe("⚠ RR2 is predicted by NOBODY, and that is the recorded gap (F-551)",
     expect(server.recipientUserIds).toEqual([PEER]);
   });
 });
+
+/**
+ * 🔒 **A SHARED NAME CANNOT REACH THIS LAYER — IT IS RESOLVED WHERE THE NAME IS COMMITTED**
+ * (Samuel, 2026-09-15, verbatim: *"I think we should enforce a rule where no two agents that are
+ * addressable can have the same name … it will automatically auto-resolve to coder-1 … coder-2
+ * and so on and so forth."*).
+ *
+ * ⚠ **THIS BLOCK BRIEFLY PINNED THE OPPOSITE, EARLIER THE SAME DAY**: a contested `@coder`
+ * reached NEITHER agent and `DraftReach.contested` carried the handle so the composer could say
+ * *"names two agents — use @agent-<id>"*. Samuel ruled the collision out of existence instead —
+ * the second "Coder" is STORED as `Coder-1` by `main/agent-name-unique.js` — so the field, the
+ * line and the fail-closed branch are all deleted, and what is pinned here is that a suffixed
+ * name resolves like any other.
+ *
+ * ⚠ **THE SUFFIX IS A STORED NAME, NOT A SPELLING THIS LAYER KNOWS ABOUT.** Nothing here parses
+ * `-1`; `Coder-1` slugs to `coder-1` by the ordinary rule, which is exactly why the ruling needed
+ * no resolver change at all.
+ */
+describe("draftReach — names are unique before they get here", () => {
+  const reach = (
+    body: string,
+    sessions: { name: string; displayName: string | null }[]
+  ) =>
+    draftReach({
+      body,
+      members: MEMBERS,
+      sessions,
+      currentUserId: ME,
+      unaddressedResponder: "none",
+      recentAgentIds: [],
+      threadOtherParty: null,
+    });
+
+  it("resolves a SUFFIXED name like any other — it is just a name", () => {
+    const out = reach("@coder-1 ship it", [
+      { name: "k3v7d2mq", displayName: "Coder" },
+      { name: "m8q1zzzz", displayName: "Coder-1" },
+    ]);
+    expect(out.recipients.map((r) => (r.kind === "agent" ? r.agentId : null))).toEqual([
+      "m8q1zzzz",
+    ]);
+  });
+
+  it("and the BARE name still reaches the agent that holds it", () => {
+    const out = reach("@coder ship it", [
+      { name: "k3v7d2mq", displayName: "Coder" },
+      { name: "m8q1zzzz", displayName: "Coder-1" },
+    ]);
+    expect(out.recipients.map((r) => (r.kind === "agent" ? r.agentId : null))).toEqual([
+      "k3v7d2mq",
+    ]);
+  });
+
+  it("names the FIRST claimant if a duplicate somehow reaches it — never neither", () => {
+    // ⚠ **REACHABLE ONLY BY SOMETHING THE COMMIT RULE CANNOT SEE** — a legacy row, a PEER's agent
+    // (names are minted on the machine that owns them), or a push this build has not received.
+    // ⚠ **THE WEAKEST HONEST ANSWER IS THE FIRST CLAIMANT**: it never re-points an address and
+    // never withdraws one, where "neither" would silently drop a message the author watched tint.
+    const out = reach("@coder ship it", [
+      { name: "k3v7d2mq", displayName: "Coder" },
+      { name: "m8q1zzzz", displayName: "Coder" },
+    ]);
+    expect(out.recipients.map((r) => (r.kind === "agent" ? r.agentId : null))).toEqual([
+      "k3v7d2mq",
+    ]);
+  });
+});

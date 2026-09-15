@@ -49,54 +49,80 @@ describe("resolveAgentRecipients — the scope a body handle resolves against", 
 });
 
 /**
- * **A SHARED NAME MINTS A SUFFIX — IT NO LONGER REFUSES THE POST** (2026-09-07, Samuel,
- * verbatim: *"if coder exists, then other slugs will be coder-1, coder-2, coder-3"*).
+ * **A SHARED NAME CANNOT REACH THIS DOOR — IT IS RESOLVED WHERE THE NAME IS COMMITTED**
+ * (Samuel, 2026-09-15, verbatim: *"I think we should enforce a rule where no two agents that are
+ * addressable can have the same name … it will automatically auto-resolve to coder-1 … coder-2
+ * and so on and so forth."*).
  *
- * ⚠ **THESE CASES REPLACE THE AMBIGUITY REFUSAL, AND THE REPLACEMENT IS THE RULING, NOT A
- * RELAXATION.** The old answer threw `ChannelAgentHandleAmbiguousError` over a slug two agents
- * claimed, listing the claimants AS THEIR ID FORMS — so the refusal told the writer to retry
- * with a handle it had just refused, and channel-wide resolution made the collision the ordinary
- * case rather than the exotic one. What is measured now is that BOTH agents keep an address.
+ * ⚠ **THESE CASES HAVE ANSWERED FOUR DIFFERENT WAYS IN TWO WEEKS, AND EVERY ONE BEFORE THIS WAS
+ * A RESOLVE-TIME ANSWER TO A COMMIT-TIME PROBLEM.** (1) To 2026-09-07 a slug two agents claimed
+ * threw `ChannelAgentHandleAmbiguousError`, listing its claimants AS THEIR ID FORMS — a refusal
+ * that told the writer to retry with the handle it had just refused, over the WHOLE post. (2) To
+ * 2026-09-15 it minted `bot-1` for the second claimant, positionally over the live set, so the
+ * suffix re-pointed whenever an agent ended. (3) For part of that day it resolved to NEITHER and
+ * told the author to use the id form. (4) It now resolves to the FIRST claimant, and that branch
+ * is unreachable in the ordinary case because the second "Bot" is STORED as `Bot-1`
+ * (`main/agent-name-unique.js`).
  *
- * ⚠ **THE THROW IS GONE FROM THE SOURCE, NOT MERELY UNREACHED**, so there is no refusal left to
- * pin: `AgentMentionIndex` is `ReadonlyMap<string, string>` and no handle maps to two agents by
- * construction. `errors-recipient.ts` keeps the error CLASS — a wire-visible code is retired on
- * its own schedule — and nothing here should resurrect a driver for it.
+ * ⚠ **THE THROW IS STILL GONE FROM THE SOURCE AND MUST STAY GONE.** There is no ambiguity left
+ * for an error to describe. `errors-recipient.ts` keeps the error CLASS — a wire-visible code is
+ * retired on its own schedule — and nothing here should resurrect a driver for it.
  */
-describe("resolveAgentRecipients — a contested handle is minted, not refused", () => {
-  it("gives the FIRST claimant the bare slug", async () => {
+describe("resolveAgentRecipients — one handle, one agent", () => {
+  /**
+   * ⚠ **DRIVEN DIRECTLY RATHER THAN THROUGH `resolve`, ON PURPOSE** — the reason the member case
+   * below gives: a body whose tag resolves no agent sends `resolveWakeVerdict` on into the
+   * resilience arms and measures RR3 instead of the grammar this block is about.
+   */
+  const door = (body: string) =>
+    resolveAgentRecipients(CTX, "chan-1", body, null, "user");
+
+  it("resolves a name SUFFIXED AT LAUNCH like any other name", () => {
+    // ⚠ THIS IS WHAT THE RULING ACTUALLY PRODUCES ON THE WIRE — `display_name` IS `Bot-1`, and
+    // nothing in this lane parses a `-1`: it slugs by the ordinary rule.
+    projection(
+      sessionRow({ id: "s-1", name: "k3v7d2mq", display_name: "Bot" }),
+      sessionRow({ id: "s-2", name: "m8q1zzzz", display_name: "Bot-1" })
+    );
+    return Promise.all([
+      expect(door("@bot go")).resolves.toEqual(["k3v7d2mq"]),
+      expect(door("@bot-1 go")).resolves.toEqual(["m8q1zzzz"]),
+    ]);
+  });
+
+  it("names the FIRST claimant if a duplicate somehow arrives — never neither", async () => {
+    // ⚠ **REACHABLE ONLY ACROSS MACHINES.** Names are minted on the machine that owns the id, so
+    // this lane (which reads the ROOM's rows, whoever runs them) can still see two members' agents
+    // both called "Bot". ⚠ Naming the first never re-points an address and never withdraws one,
+    // where "neither" silently drops a message whose tag the author watched tint.
     projection(
       sessionRow({ id: "s-1", name: "k3v7d2mq", display_name: "Bot" }),
       sessionRow({ id: "s-2", name: "m8q1zzzz", display_name: "Bot" })
     );
-    const out = await resolve("@bot go");
-    expect(out).toMatchObject({ verdict: "agent", recipientAgentIds: ["k3v7d2mq"] });
+    expect(await door("@bot go")).toEqual(["k3v7d2mq"]);
   });
 
-  it("keeps the SECOND addressable at `-1` rather than resolving to neither", async () => {
-    // ⚠ THIS IS THE HALF THE OLD BEHAVIOUR HAD NO ANSWER FOR. A rename could take a working
-    // handle away from an agent that was never renamed; the second claimant now simply wears a
-    // different spelling and is still reachable.
+  it("mints NO suffixed spelling of its own", async () => {
+    // ⚠ THE 2026-09-07 MINT IS WITHDRAWN AND NOTHING REPLACES IT AT RESOLVE TIME. `@bot-1` names
+    // an agent only when an agent is STORED as `Bot-1`.
     projection(
       sessionRow({ id: "s-1", name: "k3v7d2mq", display_name: "Bot" }),
       sessionRow({ id: "s-2", name: "m8q1zzzz", display_name: "Bot" })
     );
-    const out = await resolve("@bot-1 go");
-    expect(out).toMatchObject({ verdict: "agent", recipientAgentIds: ["m8q1zzzz"] });
+    expect(await door("@bot-1 go")).toBeNull();
   });
 
-  it("🔒 never outbids an ID FORM — a name that spells one is minted around it", async () => {
+  it("🔒 never outbids an ID FORM — a name that spells one claims nothing at all", async () => {
     // ⚠ THE PERMANENT HANDLE IS THE ONE THAT CANNOT STOP WORKING (`lib/agent-mentions.ts`
-    // header). Pass 1 claims every id form before any name is looked at, so an agent an operator
-    // named "Agent K3v7d2mq" cannot withdraw ANOTHER member's agent from addressing.
+    // header). Pass 1 claims every id form before any name is looked at, and the `idForms` guard
+    // keeps pass 2 off those keys — so an agent an operator named "Agent K3v7d2mq" can neither
+    // take nor withdraw another member's agent's address.
     projection(
       sessionRow({ id: "s-1", name: "k3v7d2mq" }),
       sessionRow({ id: "s-2", name: "m4x8p1qr", display_name: "Agent K3v7d2mq" })
     );
-    const owner = await resolve("@agent-k3v7d2mq go");
-    expect(owner.recipientAgentIds).toEqual(["k3v7d2mq"]);
-    const namer = await resolve("@agent-k3v7d2mq-1 go");
-    expect(namer.recipientAgentIds).toEqual(["m4x8p1qr"]);
+    expect(await door("@agent-k3v7d2mq go")).toEqual(["k3v7d2mq"]);
+    expect(await door("@agent-k3v7d2mq-1 go")).toBeNull();
   });
 
   /**
@@ -105,13 +131,18 @@ describe("resolveAgentRecipients — a contested handle is minted, not refused",
    * names a MEMBER resolves no agent — which sends the verdict into the resilience arms and
    * measures RR3 instead of the precedence this case is about.
    */
-  it("🔒 a MEMBER keeps the bare tag and the agent named after them is minted `-1`", async () => {
+  it("🔒 a MEMBER keeps the bare tag and the agent named after them gets no spelling at all", async () => {
+    // ⚠ CHANGED 2026-09-15 WITH THE MINT'S WITHDRAWAL — `@diana-1` was the agent's minted
+    // spelling and is now nobody's. The agent keeps its id form, which is the line below.
     projection(sessionRow({ name: "k3v7d2mq", display_name: "Diana" }));
     expect(
       await resolveAgentRecipients(CTX, "chan-1", "@diana hello", null, "user", ["diana"])
     ).toBeNull();
     expect(
       await resolveAgentRecipients(CTX, "chan-1", "@diana-1 hello", null, "user", ["diana"])
+    ).toBeNull();
+    expect(
+      await resolveAgentRecipients(CTX, "chan-1", "@agent-k3v7d2mq hello", null, "user", ["diana"])
     ).toEqual(["k3v7d2mq"]);
   });
 

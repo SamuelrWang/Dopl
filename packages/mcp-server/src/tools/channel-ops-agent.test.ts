@@ -291,8 +291,8 @@ describe('manage action="rename" — display only, on one machine', () => {
     expect(out).toContain("handle=unchanged");
     expect(out).toContain("name=Research");
     // ⚠ And the boundary a caller needs before believing a peer can see it.
-    expect(CHANNEL_DOCTRINE).toContain("is invisible to every other member");
-    expect(CHANNEL_DOCTRINE).toContain("reaches no server");
+    // ⚠ RE-POINTED 2026-09-15 — 2026-09-15: the rename clause's three FALSE claims (it reaches no server / is invisible to every other member / is never addressable from here) are DELETED — `channel_sessions.display_name` is peer-visible by design (`20260905120000`) and the name door has resolved in all three trees since 2026-08-28. The doctrine now says what is true: the name is what people see and what agents tag it by.
+    expect(CHANNEL_DOCTRINE).toContain("what people see and what agents tag it by");
   });
 
   /**
@@ -312,8 +312,11 @@ describe('manage action="rename" — display only, on one machine', () => {
     // — the session table included — could ever show it. 🔴 The "and that is
     // correct rather than a stale read" half was RETIRED BY RULING and is pinned
     // ABSENT in `channel-ops-agent-doctrine.test.ts › RETIRED_BY_RULING`.
-    expect(CHANNEL_DOCTRINE).toContain("stored on that one machine, it reaches no server");
-    expect(CHANNEL_DOCTRINE).toContain("is never addressable from here");
+    expect(CHANNEL_DOCTRINE).toContain("what people see and what agents tag it by");
+    // ⚠ RE-POINTED 2026-09-15 — "never addressable from here" was FALSE (the name door has
+    // resolved in all three trees since 2026-08-28). What op="status" prints is still the id,
+    // and `confirm=none` is still what says nothing here can verify a rename took.
+    expect(CHANNEL_DOCTRINE).toContain("what people see and what agents tag it by");
   });
 
   it("a name with a SPACE is quoted, so it cannot invent a field", async () => {
@@ -343,7 +346,9 @@ describe('manage action="rename" — display only, on one machine', () => {
     // default it falls back to is spelled out in the rename arm's own missing-param
     // refusal (`channel-dispatch-agents.ts`), which is where a caller that omitted
     // it reads it.
-    expect(ARG_PROSE).toContain('or "" to clear it');
+    // ⚠ RE-SPELLED 2026-09-15 when `name` gained the LAUNCH clause and the describe was
+    // tightened to pay for it: the CLEAR gesture is unchanged and is still stated.
+    expect(ARG_PROSE).toContain('"" clears');
   });
 
   it("bad-name says exactly what would be accepted, so one retry can fix it", async () => {

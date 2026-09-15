@@ -97,12 +97,18 @@ export async function describeAgent(agentId: string, description: string): Promi
   return (await sessions.describe(agentId, description))?.ok === true;
 }
 
-/** The canonical name an unnamed agent wears — `agents-model.ts › agentDisplayName`'s shape.
- *  ⚠ `#<id>` since 2026-08-31 (Samuel's ruling): the word "agent" moved out of the NAME and
- *  into the grey chip (`attribution-pill.tsx › AgentChip`); the two must not both say it. */
-export function defaultAgentName(agentId: string | null): string {
-  return agentId ? `#${agentId}` : "";
-}
+// ⚠ **`defaultAgentName` IS DELETED (Samuel, 2026-09-15, verbatim: *"for new agents, right now
+// it auto fills the name with the ID. The name should be blank"*).** It answered `#<agentId>`
+// and {@link openPanel} wrote it into the Name field the instant the mint came back, so every
+// launch dialog opened showing the operator eight machine characters where their own words go.
+// ⚠ **AND IT WAS THE ARGUMENT THAT KEPT THE ID ON EVERY OTHER SURFACE.** INVARIANTS §11 defended
+// the `#<id>` FACE as *"a NAME the operator was shown at launch and accepted"* — a defence whose
+// entire evidence was this prefill. Removing the prefill removes the defence; the face is
+// `shared/lib/agent-name.ts › NEW_AGENT_NAME` now.
+// ⚠ **NOTHING REPLACES IT AS A FUNCTION.** Its second reader
+// (`use-agent-launch-run.ts › launchWithIdentity`) compared the typed name against it to decide
+// "this is the prefill, not a rename"; with a blank field that question IS `wanted === ""`, and
+// a helper for the empty string is a helper for nothing.
 
 /**
  * WHAT A TEMPLATE HANDS THE POPUP WHEN IT IS PICKED (2026-09-13, Samuel: *"when a user clicks a
@@ -195,7 +201,15 @@ export interface AgentLaunchPanel {
   /** ⚠ OPTIONAL for {@link AgentLaunchPanel.color}'s reason, and consumed as
    *  `panel.setColor?.(…)`. The hook always supplies it. */
   setColor?: (next: AgentColorKey) => void;
-  /** A name is the only required field; a blank agent with no description is legitimate. */
+  /**
+   * **NOTHING IS REQUIRED SINCE 2026-09-15** — the dialog is launchable the moment it can reach
+   * main (Samuel: *"if a user launches an agent with no name, just give it the name, New
+   * Agent"*). A name, a description, a template, a model and a runtime are all optional.
+   *
+   * ⚠ **IT IS KEPT AS A FIELD RATHER THAN DELETED**, because the dialog, the one-click launch
+   * row and `useLaunchRunner` all consult it and because the next required thing will want the
+   * same door. It is the LAUNCHABILITY of the form, not an assertion about the name.
+   */
   ready: boolean;
   /** A rename/describe that main refused AFTER the agent started. Never a launch failure. */
   identityError: string | null;
@@ -328,12 +342,15 @@ export function useAgentLaunch(): AgentLaunchPanel {
     void mintAgentId().then((minted) => {
       if (!minted) return;
       setAgentId(minted);
-      // ⚠ THE NAME AND THE ID COME FROM THE SAME `minted`, IN ONE STATEMENT. Deriving the
-      // prefill from a second read of `agentId` would reintroduce the split above by another
-      // road: that state is not yet committed here.
-      // ⚠ AND IT IS THE RAW SETTER, so the prefill does not count as the operator typing —
-      // `touched` is what a template pick consults before filling this field in.
-      setNameState((typed) => (typed === "" ? defaultAgentName(minted) : typed));
+      // ⚠ **THE NAME IS NOT PREFILLED (Samuel, 2026-09-15: *"The name should be blank"*).** This
+      // line read `setNameState((typed) => (typed === "" ? defaultAgentName(minted) : typed))`,
+      // which put `#<id>` in front of the operator before they had typed anything — and made
+      // the id look like a name the product had chosen, which is what let it spread to every
+      // other surface. **The mint still happens and the id is still forwarded**: it is the
+      // ADDRESS the launch returns and the third coordinate of every session op. What changed is
+      // that it is no longer SHOWN.
+      // ⚠ **A BLANK SUBMIT IS NOT A NAMELESS AGENT** — `use-agent-launch-run.ts` names it
+      // `New Agent` on the way out, which is the rest of the same sentence.
     });
   }, []);
 
@@ -407,11 +424,14 @@ export function useAgentLaunch(): AgentLaunchPanel {
     runtime,
     color,
     setColor,
-    // ⚠ THE NAME IS THE ONLY GATE. A blank agent is a real configuration (no template), so is a
-    // model of "Default", and so is an agent with no description — none of those may block a
-    // launch. An unnamed one is refused only because the field is prefilled: an empty one means
-    // the operator deliberately cleared it, and `Agent #<id>` is what they would get anyway.
-    ready: name.trim().length > 0,
+    // ⚠ **THE NAME GATE IS GONE (Samuel, 2026-09-15).** It read `name.trim().length > 0`, and
+    // its own note said why that was defensible: *"an unnamed one is refused only because the
+    // field is PREFILLED"* — an empty field could only mean the operator had deliberately
+    // cleared the `#<id>` put there for them. The field opens BLANK now, so the same gate would
+    // mean a freshly opened dialog is un-launchable until somebody types, which is the opposite
+    // of the ruling it came from. A blank submit is named `New Agent`
+    // (`use-agent-launch-run.ts › launchWithIdentity`).
+    ready: true,
     identityError,
     setIdentityError,
     setName,

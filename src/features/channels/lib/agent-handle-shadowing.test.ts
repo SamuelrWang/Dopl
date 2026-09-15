@@ -19,13 +19,22 @@
  * told the writer to retry with the very handle it had just refused. An unactionable error is
  * how a denial-of-addressing looks from the inside.
  *
- * ⚠ **THE LAST BLOCK CHANGED ITS ANSWER ON 2026-09-07 AND THE RED WAS THE RULING ARRIVING.** It
- * used to assert that two agents genuinely sharing a NAME fail closed — "not shadowing, real
- * ambiguity, the rule this file has always had". Samuel then ruled the other way, verbatim: *"if
- * coder exists, then other slugs will be coder-1, coder-2, coder-3"*. Failing closed cost an
- * address that a rename could take from an agent never renamed, so the shared name now MINTS:
- * first claimant keeps the bare slug, the second wears `-1`, and both stay reachable. What the
- * fix still may not cost is the id form, which is the first three blocks and is unmoved.
+ * ⚠ **THE LAST TWO BLOCKS HAVE CHANGED THEIR ANSWER THREE TIMES, AND EVERY RED WAS A RULING
+ * ARRIVING.** Fail-closed ambiguity until 2026-09-07; a MINTED suffix (*"if coder exists, then
+ * other slugs will be coder-1, coder-2, coder-3"*) until 2026-09-15; fail-closed again for part
+ * of that day; and now **neither**, because Samuel moved the rule off this layer entirely:
+ * *"I think we should enforce a rule where no two agents that are addressable can have the same
+ * name … it will automatically auto-resolve to coder-1 … coder-2 and so on and so forth."*
+ *
+ * ⚠ **THE SUFFIX IS STORED AT COMMIT NOW, NOT COMPUTED AT RESOLVE** — `main/agent-name-unique.js`,
+ * through `main/agent-identity-commit.js › commitRename`, the one door every rename and launch
+ * path shares. That is what makes it DURABLE: the 2026-09-07 mint was positional over the live
+ * set, so when the agent holding `coder` ended the next one moved up and `@coder-1` came to name
+ * a different agent than it did an hour ago. `docs/specs/agent-id-visibility.md` carries the arc.
+ *
+ * ⚠ **SO THIS FILE'S SUBJECT NARROWS BACK TO SHADOWING, WHICH IS WHAT ITS NAME SAYS.** The id
+ * form must survive a name that spells one; whether two agents may share a name is now answered
+ * before anything reaches this index.
  */
 
 import { describe, expect, it } from "vitest";
@@ -59,10 +68,14 @@ describe("an id form survives a name that spells it", () => {
     expect(resolveAgentHandle(agentIdHandle(IMPOSTOR), shadowed)).toBe(IMPOSTOR);
   });
 
-  it("and the name they chose is MINTED around the id form rather than dropped", () => {
-    // ⚠ THE OLD ANSWER DROPPED IT, so the namer's chosen name reached nobody at all. Under the
-    // suffix ruling the collision costs a spelling, not an address.
-    expect(resolveAgentHandle(`${agentIdHandle(OWNER)}-1`, shadowed)).toBe(IMPOSTOR);
+  it("and the name they chose is DROPPED — it may not take or contest a permanent handle", () => {
+    // ⚠ **THE MINTED `-1` SPELLING IS GONE WITH THE MINT (2026-09-15) AND NOTHING REPLACES IT.**
+    // A name that spells another agent's id form claims nothing: `buildAgentMentionIndex`'s
+    // `idForms` guard keeps pass 2 off those keys entirely, so the handle this whole file exists
+    // to protect can be neither overwritten nor withdrawn by a rename.
+    expect(resolveAgentHandle(`${agentIdHandle(OWNER)}-1`, shadowed)).toBeNull();
+    // ⚠ AND THE COST IS A SPELLING, NEVER AN ADDRESS — the namer's own id form still works,
+    // which is the assertion two cases up.
   });
 
   it("holds regardless of which order the candidates arrive in", () => {
@@ -93,23 +106,57 @@ describe("an agent named after its own id keeps working", () => {
   });
 });
 
-describe("a shared NAME mints a suffix — claim order decides who keeps the bare slug", () => {
+/**
+ * 🔒 **A SHARED NAME IS NOT SUPPOSED TO REACH THIS INDEX, AND IF IT DOES THE FIRST CLAIMANT KEEPS
+ * IT** (Samuel, 2026-09-15).
+ *
+ * ⚠ **PINNED IN BOTH DIRECTIONS**, because half of it would pass over either predecessor: "the
+ * first claimant is reached" is the answer, and "nothing was minted in its place" is what keeps
+ * the 2026-09-07 suffix from growing back at resolve time.
+ *
+ * ⚠ **WHAT MAKES FIRST-COME SAFE IS THAT THE COLLISION IS PREVENTED UPSTREAM.** A second "Coder"
+ * is STORED as `Coder-1` (`main/agent-name-unique.js`), so this branch is reachable only by a
+ * legacy row, a PEER's agent (names are minted on the machine that owns them), or a push this
+ * build has not received yet. For those, naming the first claimant never re-points an address and
+ * never withdraws one — where "neither" silently drops a message the author watched tint.
+ */
+describe("a shared NAME names the FIRST claimant, and mints nothing", () => {
   const shared = index(
     { agentId: OWNER, displayName: "Bug Reviewer" },
     { agentId: IMPOSTOR, displayName: "Bug Reviewer" }
   );
 
-  it("gives the FIRST claimant the bare slug", () => {
+  it("resolves the bare slug to the first claimant", () => {
     expect(resolveAgentHandle("bug-reviewer", shared)).toBe(OWNER);
   });
 
-  it("mints `-1` for the second instead of resolving to neither", () => {
-    expect(resolveAgentHandle("bug-reviewer-1", shared)).toBe(IMPOSTOR);
+  it("mints NO suffixed spelling — the suffix is a STORED name, not a resolve-time one", () => {
+    expect(resolveAgentHandle("bug-reviewer-1", shared)).toBeNull();
+    expect(resolveAgentHandle("bug-reviewer-2", shared)).toBeNull();
   });
 
-  it("and both are still reachable by their id forms", () => {
+  it("resolves a name that was SUFFIXED AT LAUNCH like any other name", () => {
+    // ⚠ THIS IS WHAT THE RULING ACTUALLY PRODUCES, and nothing here knows about `-1`: the second
+    // agent's `displayName` IS `Bug Reviewer-1`, and it slugs by the ordinary rule.
+    const stored = index(
+      { agentId: OWNER, displayName: "Bug Reviewer" },
+      { agentId: IMPOSTOR, displayName: "Bug Reviewer-1" }
+    );
+    expect(resolveAgentHandle("bug-reviewer", stored)).toBe(OWNER);
+    expect(resolveAgentHandle("bug-reviewer-1", stored)).toBe(IMPOSTOR);
+  });
+
+  it("leaves both reachable by their id forms — the handle that is never withdrawn", () => {
     expect(resolveAgentHandle(agentIdHandle(OWNER), shared)).toBe(OWNER);
     expect(resolveAgentHandle(agentIdHandle(IMPOSTOR), shared)).toBe(IMPOSTOR);
+  });
+
+  it("is not disturbed by the SAME agent reported twice", () => {
+    const twice = index(
+      { agentId: OWNER, displayName: "Bug Reviewer" },
+      { agentId: OWNER, displayName: "Bug Reviewer" }
+    );
+    expect(resolveAgentHandle("bug-reviewer", twice)).toBe(OWNER);
   });
 });
 
@@ -132,8 +179,13 @@ describe("an agent named after a member does not take the member's tag", () => {
     expect(resolveAgentHandle("diana", reserved)).toBeNull();
   });
 
-  it("keeps the agent addressable at its minted spelling", () => {
-    expect(resolveAgentHandle("diana-1", reserved)).toBe(OWNER);
+  it("mints the agent NO spelling around the member's tag", () => {
+    // ⚠ CHANGED 2026-09-15 WITH THE MINT'S WITHDRAWAL. A reserved handle is one somebody else
+    // owns; the agent loses the NAME door here and keeps the id form, which is the case below.
+    // ⚠ **THE COMMIT-TIME RULE DOES NOT COVER THIS CASE AND IS NOT MEANT TO** — it makes agent
+    // names unique among AGENTS, and the member namespace is not its to rewrite. `@diana-1` would
+    // still be a handle no human agreed to wear.
+    expect(resolveAgentHandle("diana-1", reserved)).toBeNull();
   });
 
   it("and its id form is untouched by any of it", () => {

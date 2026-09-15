@@ -60,7 +60,7 @@ describe("the template ref", () => {
         }),
       }),
       "general",
-      { template: "Researcher" },
+      { name: "Scout", template: "Researcher" },
     );
     const out = res.content[0].text as string;
     expect(res.isError).toBe(true);
@@ -85,7 +85,7 @@ describe("the template ref", () => {
         }),
       }),
       "general",
-      { template: "Ghost" },
+      { name: "Scout", template: "Ghost" },
     );
     const out = res.content[0].text as string;
     expect(res.isError).toBe(true);
@@ -121,7 +121,7 @@ describe("the template ref", () => {
         }),
       }),
       "general",
-      { template: "Code Auditor" },
+      { name: "Scout", template: "Code Auditor" },
     )).content[0].text as string;
     expect(out).toContain("`Code Auditor`");
     expect(out).toContain("lives in `your personal shelf`, not in this channel's own container");
@@ -147,7 +147,7 @@ describe("the template ref", () => {
         }),
       }),
       "general",
-      { template: "Someone Elses Auditor" },
+      { name: "Scout", template: "Someone Elses Auditor" },
     )).content[0].text as string;
     expect(out).toContain("ONE answer here on purpose");
     expect(out).not.toContain("not in this channel's own container");
@@ -165,7 +165,7 @@ describe("the template ref", () => {
           }),
         }),
         "general",
-        { template: "Ghost" },
+        { name: "Scout", template: "Ghost" },
       )).content[0].text as string;
       expect(out, JSON.stringify(bad)).toContain("ONE answer here on purpose");
       expect(out, JSON.stringify(bad)).not.toContain("not in this channel's own container");

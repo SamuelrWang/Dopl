@@ -9078,6 +9078,39 @@ were made and reverted by gates that were right: `tool-style.ts` requires the `d
 app-only` boundary clause in the first 200 chars, and `tool-scope-claims.test.ts` requires a
 truncating op to name its `entry_cursor`.
 
+### F-703 — `read_sessions` publishes a handle and no NAME, so an MCP agent cannot spell the tag it is now told to use (found 2026-09-15, OPEN)
+
+Samuel's 2026-09-15 ruling makes an agent's DISPLAY NAME the address — *"In messages the agents
+should address by the tag which would be the name"* — and `channel-doctrine.ts`'s LAW now teaches
+exactly that. **But the one op that lists a room's agents shows no name at all.**
+`packages/mcp-server/src/tools/channel-session-table.ts › sessionRow` prints
+`addressableHandle(s.name)`, i.e. `@agent-<id>`, and `@dopl/client › ChannelSessionState`
+(`packages/dopl-client/src/session-types.ts`) declares no `displayName` field for it to print.
+
+**The data exists and stops one type short.** `channel_sessions.display_name` has been peer-visible
+BY DESIGN since `20260905120000`, `channels/server/collab-dto.ts › mapPeerSessionStateRow` maps it,
+and `src/features/channels/types-sessions.ts › ChannelSessionState` declares it — but the SDK's
+copy of that interface does not, so `read_sessions` cannot render it.
+
+So an MCP caller is told to address agents by name and given only ids to read. The two doors that
+DO work (`@agent-<id>` in a body, and `to="@agent-<id>"`) are the ones the same ruling asks it to
+stop writing into messages. Today the gap is survivable because an agent launching an agent now
+supplies the name itself (`channel-ops-launch-name.ts`) and therefore knows it — it is a PEER's
+agent, and its own agents after a restart, that it cannot name.
+
+**The fix is additive and small**: add `displayName?: string | null` to the SDK's
+`ChannelSessionState` (optional and nullable, §13), then render it as the row's first column with
+the handle beside it. It was left out of the 2026-09-15 wave deliberately — that wave was already
+touching the resolver, three prose surfaces, the launch lane and a migration, and widening a
+published DTO is a separate decision with its own budget row
+(`tool-budget.test.ts › SCHEMA_CEILINGS`).
+
+⚠ **`channel-session-handle.ts › addressableHandle`'s docblock ALSO states the stale reason** —
+*"A CUSTOM NAME IS NEVER A HANDLE HERE … No server holds it and this projection never carries
+it"* — which has been false since `20260905120000` and is corrected only in the doctrine so far.
+Fix the comment with the field, not before: a comment that promises a column the type does not
+carry is the same defect one layer up.
+
 ### F-702 — `dopl_agent`'s description teaches `reason=ambiguous_name`, and no code path emits that literal (found 2026-09-15, OPEN)
 
 `AGENT_ERRORS` (`packages/mcp-server/src/tools/tool-errors.ts`) declares

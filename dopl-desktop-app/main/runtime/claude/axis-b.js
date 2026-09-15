@@ -106,7 +106,10 @@ function applyRename(target, value) {
     return agentOps.refuse('Name refused: 1-60 visible characters on one line; control, zero-width and bidi characters are rejected, not stripped.');
   }
   if (res.name === null) {
-    return agentOps.txt('Display name for agent ' + target + ' cleared — it reads as "Agent #' + target + '" again.');
+    // ⚠ **THE CLEARED FACE IS "New Agent" SINCE 2026-09-15**, not `Agent #<id>` (Samuel: *"I want
+    // to make it so that the user really doesnt see it"*). Naming the old face here would tell an
+    // agent its operator is now looking at an id, which is exactly what stopped being true.
+    return agentOps.txt('Display name for agent ' + target + ' cleared — it reads as "New Agent" again.');
   }
   return agentOps.txt('Display name for agent ' + target + ' is now "' + res.name + '". Display only — @agent-' + target + ' is unchanged and remains the only address.');
 }
@@ -127,8 +130,10 @@ function makeAgentOpsServer(s) {
   const rename = sdk.tool(
     'rename_agent',
     'Set the display name of one of your operator\'s agents on this machine — yourself by default. ' +
-    'Use it to label agents by role (e.g. "Research", "Verifier"). Display only: the @agent-<id> ' +
-    'handle is unchanged and remains the only address. An empty name clears back to "Agent #<id>". ' +
+    'Use it to label agents by role (e.g. "Research", "Verifier"). The name is what every person ' +
+    'sees AND the tag other agents address it by, slugged (@bug-reviewer); the @agent-<id> handle ' +
+    'still works and is what disambiguates two ACTIVE agents wearing one name. An empty name ' +
+    'clears back to "New Agent". ' +
     'Own-operator agents only; a peer\'s agents are not reachable from this machine at all.',
     {
       name: z.string().max(200).describe('The display name (1-60 visible chars; empty string clears). One line.'),

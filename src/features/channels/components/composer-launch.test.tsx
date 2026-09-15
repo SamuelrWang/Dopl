@@ -149,7 +149,9 @@ const launchButton = () => screen.getByRole("button", { name: "Launch" }) as HTM
 /** ⚠ `waitFor` covers TWO async steps since 2026-09-08: the mint AND `ModalShell`'s rAF. */
 async function openPanel() {
   fireEvent.click(botIcon());
-  await waitFor(() => expect(nameField().value).toBe(`#${MINTED}`));
+  // ⚠ THE MINT NO LONGER SHOWS IN THE NAME FIELD (2026-09-15): the signal is the CALL, then the rAF mount the prefill assertion used to wait out for free.
+  await waitFor(() => expect(mintAgentId).toHaveBeenCalled());
+  await waitFor(() => expect(screen.getByRole("button", { name: "Launch" })).toBeTruthy());
 }
 
 /** On a build that pre-assigns NO id there is no prefill to wait on — the wait is the dialog. */
@@ -212,7 +214,7 @@ describe("the Bot icon opens a panel — it no longer launches on the click", ()
 // ── 2. THE PRE-ASSIGNED ID ───────────────────────────────────────────────────
 
 describe("the ID is assigned before the spawn", () => {
-  it("mints EXACTLY ONCE per open, and the prefill is THAT id", async () => {
+  it("mints EXACTLY ONCE per open, and the field stays blank", async () => {
     // ⚠ THE BUG THIS PINS (Samuel, 2026-08-27, from a screenshot reading Name `#k3wpf7c5` over
     // ID `uyxw3rdv`): the mint lived inside the `setOpen` UPDATER, which React runs twice under
     // StrictMode, so two ids were drawn — the second won `agentId`, the first kept the name.
@@ -220,9 +222,8 @@ describe("the ID is assigned before the spawn", () => {
     mountStrict({ newAgent: launcher() });
     await openPanel();
     expect(mintAgentId).toHaveBeenCalledTimes(1);
-    // ⚠ AND THE NAME IS THAT id. With two draws these disagreed — the second won `agentId` and
-    // the first kept the name — which is exactly what the screenshot showed.
-    expect(nameField().value).toBe(`#${MINTED}`);
+    // ⚠ **THE NAME HALF OF THE 2026-08-27 CASE IS RETIRED (2026-09-15)** — no name to compare against. The CALL COUNT caught the bug; the blank assertion keeps a prefill out.
+    expect(nameField().value).toBe("");
   });
 
   it("does not re-mint while the panel stays open", async () => {
@@ -386,16 +387,16 @@ describe("name and description are written AFTER the spawn", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it("does NOT re-write the prefilled name as a custom one", async () => {
-    // ⚠ `Agent #<id>` IS THE FALLBACK, not a name. Storing it would file a "custom" name
-    // identical to the default, so the operator could never get back to a nameless agent.
+  it("names a BLANK launch `New Agent` rather than leaving it nameless", async () => {
+    // ⚠ **THIS ASSERTED `rename` WAS NOT CALLED UNTIL 2026-09-15** — `#<id>` was the fallback and storing it filed a "custom" name identical to it; both halves are gone.
+    // ⚠ **THE STORE PUTS IT IN THE HANDLE NAMESPACE**: two blank launches CONTEST `@new-agent` and get a diagnostic, where two nameless ones reach nobody in silence.
     const controls = launcher();
     mount({ newAgent: controls });
     await openPanel();
     fireEvent.click(launchButton());
 
     await waitFor(() => expect(controls.launchAgent).toHaveBeenCalled());
-    expect(rename).not.toHaveBeenCalled();
+    await waitFor(() => expect(rename).toHaveBeenCalledWith(MINTED, "New Agent"));
   });
 
   it("an empty description writes nothing — absent is not the empty string", async () => {
@@ -463,15 +464,15 @@ describe("the two composer forms never stand at once", () => {
     expect((screen.getByLabelText("Message") as HTMLTextAreaElement).value).toBe("morning, all");
   });
 
-  it("is NOT LAUNCHABLE with no name, and says why", async () => {
-    // ⚠ DISABLED WITH A REASON survived the move onto the kit's send face — `SendButton` grew a
-    // `title` for exactly this (INVARIANTS §8, rule 4).
+  it("IS LAUNCHABLE WITH NO NAME — a blank one becomes `New Agent`", async () => {
+    // ⚠ **THIS ASSERTED THE OPPOSITE UNTIL 2026-09-15** — `disabled` plus INVARIANTS §8 rule 4's *"An agent needs a name"*. The field OPENS blank now, so that gate would leave a freshly opened dialog un-launchable; naming happens once on the way out (`use-agent-launch-run.ts › launchWithIdentity`).
+    // ⚠ AND THIS IS THE OLD-DESKTOP ARM — no `mintAgentId`, no pre-assigned address, still launchable.
     stubBridge({ mintAgentId: undefined });
     mount({ newAgent: launcher() });
     await openPanelBare();
 
-    expect(launchButton().disabled).toBe(true);
-    expect(launchButton().title).toBe("An agent needs a name");
+    expect(launchButton().disabled).toBe(false);
+    expect(launchButton().title).toBe("Launch");
   });
 
   it("there is exactly ONE Launch on screen — the dialog's", async () => {

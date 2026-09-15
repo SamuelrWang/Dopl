@@ -109,11 +109,14 @@ test("CONTRACT: an unknown skip shape becomes `no-bridge`, never an eleventh wor
 // object with two optionals would be refused, and that union is exactly why `decideBody` has two
 // shapes and no third.
 test("CONTRACT: the claim and decide bodies are `schema-launch.ts`'s, field for field", () => {
-  const SCHEMA = readFileSync(
-    join(HERE, "..", "..", "src", "features", "channels", "schema-launch.ts"), "utf8"
-  );
+  const CHANNELS = join(HERE, "..", "..", "src", "features", "channels");
+  const SCHEMA = readFileSync(join(CHANNELS, "schema-launch.ts"), "utf8");
+  // ⚠ **THE DECIDE UNION MOVED TO `schema-launch-decide.ts` (§1 SPLIT, 2026-09-15)** when that
+  // file went over the 500-line cap; `schema-launch.ts` re-exports it, so nothing that IMPORTS it
+  // moved — but a source sweep reads files, not exports, and this one has to follow.
+  const DECIDE = readFileSync(join(CHANNELS, "schema-launch-decide.ts"), "utf8");
   assert.match(SCHEMA, /LaunchClaimSchema = z\.object\(\{\s*directiveId: z\.string\(\)\.uuid\(\)/);
-  assert.match(SCHEMA, /LaunchDecideSchema = z\.discriminatedUnion\("status"/);
+  assert.match(DECIDE, /LaunchDecideSchema = z\.discriminatedUnion\("status"/);
   assert.deepEqual(Object.keys(wire.claimBody(DID)), ["directiveId"]);
   assert.deepEqual(Object.keys(wire.decideBody(DID, { agentId: "a1b2c3d4" })).sort(),
     ["agentId", "directiveId", "status"]);
@@ -121,7 +124,7 @@ test("CONTRACT: the claim and decide bodies are `schema-launch.ts`'s, field for 
     ["directiveId", "refusalReason", "status"]);
   // ⚠ THE AGENT ID REGEX IS THE COLUMN'S CHECK AND `agent-id.js`'s charset, character for
   // character — a bad value must be a 400 that NAMES the field, not an opaque 500.
-  assert.match(SCHEMA, /\/\^\[a-z\]\[a-z0-9\]\{7\}\$\//);
+  assert.match(DECIDE, /\/\^\[a-z\]\[a-z0-9\]\{7\}\$\//);
   assert.match(wire.decideBody(DID, { agentId: "a1b2c3d4" }).agentId, /^[a-z][a-z0-9]{7}$/);
 });
 
@@ -259,6 +262,13 @@ test("CONTRACT: a directive in the DTO's spelling survives `handle`'s owner chec
     resolvedMessageMode: null,
     resolvedChain: null,
     resolvedModel: null,
+    // ⚠ WHAT THE LAUNCH ASKED THE NEW AGENT TO BE CALLED (2026-09-15). `null` here is an OLDER
+    // CLIENT's row, which is a real and supported shape (§13) — the machine names it `New Agent`
+    // rather than launching a nameless agent (`launch-directive-spawn.js`).
+    agentName: null,
+    // ⚠ WHAT THE MACHINE STORED (2026-09-15) — `null` on a row nothing has decided yet, which is
+    // what a PENDING fixture is. It differs from `agentName` whenever the uniqueness rule fired.
+    appliedAgentName: null,
     status: "pending",
     refusalReason: null,
     agentId: null,
@@ -325,8 +335,14 @@ test("CONTRACT: a row is NARROWED, so a widened table cannot start influencing t
   // feature over this lane and have it do nothing. ⚠ `color` IS EXACTLY THAT RISK REALISED ONCE
   // ALREADY: the migration's own header argues that a colour the server accepts and cannot hand
   // to the spawning machine is worse than no colour at all.
+  // ⚠ `agentName` JOINED ON 2026-09-15 (Samuel: *"if agents are spinning up agents, they should
+  // be the ones that are naming the agent"*) and it is `color`'s risk again, one wave later: the
+  // MCP op now REFUSES a nameless launch, so a name the server accepts and this whitelist does
+  // not name would leave every agent-launched agent nameless anyway — the exact defect the
+  // requirement exists to close, shipped as a no-op.
   assert.deepEqual(Object.keys(d).sort(),
-    ["agentId", "channelId", "color", "goal", "id", "kind", "model", "operatorUserId", "status",
+    ["agentId", "agentName", "channelId", "color", "goal", "id", "kind", "model",
+      "operatorUserId", "status",
       "chain", "startMessageMode", "startToolMode",
       "targetAgentId", "targetMessageMode", "targetName", "targetToolMode", "taskId",
       "templateId", "templateName", "workspaceId"].sort());

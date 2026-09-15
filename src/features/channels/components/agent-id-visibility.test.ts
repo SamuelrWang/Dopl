@@ -1,11 +1,25 @@
 /**
- * 🔒 THE RAW AGENT ID IS NEVER USER-VISIBLE (Samuel, 2026-08-27) — a SOURCE SWEEP.
+ * 🔒 THE RAW AGENT ID IS NEVER USER-VISIBLE (Samuel, 2026-08-27; **SHARPENED 2026-09-15**) — a
+ * SOURCE SWEEP.
  *
  * An agent id is an eight-character machine token (`main/agent-id.js`, `^[a-z][a-z0-9]{7}$`).
  * Every surface that shows an agent shows its DISPLAY NAME instead: the operator's own name from
- * `main/agent-names.js`, falling back to `Agent #<id>` — which is a NAME the operator was shown at
- * launch and accepted, not a raw id leaking through. `agents-model.ts › agentDisplayName` is that
- * one resolution and every surface runs it.
+ * `main/agent-names.js`, falling back to `New Agent`. `agents-model-identity.ts ›
+ * agentDisplayName` is that one resolution and every surface runs it.
+ *
+ * ⚠ **THE `#<id>` FALLBACK IS GONE AND ITS DEFENCE WENT WITH IT.** This file used to say the
+ * fallback was *"a NAME the operator was shown at launch and accepted, not a raw id leaking
+ * through"* — true only because the launch dialog PREFILLED the field with it, which is itself
+ * the thing Samuel asked to stop: *"for new agents, right now it auto fills the name with the
+ * ID. The name should be blank … if a user launches an agent with no name, just give it the
+ * name, New Agent."* The defence and the defect were one mechanism, so both are removed and the
+ * interpolation ban below is now unconditional.
+ *
+ * ⚠ **AND THE EXEMPTION WAS WHERE IT LEAKED FROM.** `attribution-pill.tsx` was excused from the
+ * interpolation ban below, on the 2026-08-31 reading that `` `#${agentId}` `` was a name — so the
+ * TRANSCRIPT, the surface an operator reads most, rendered the raw id under a green sweep for a
+ * fortnight. **A sweep with a named exemption tests the exemption's argument, not the rule**, and
+ * that argument was the one Samuel later withdrew. There is no exemption now.
  *
  * ⚠ IT SHIPPED WRONG ON THREE SURFACES AT ONCE, which is why this is a sweep and not three cases:
  * the pop-out's OS window title read "Dopl — aczfk4p8", its header read "rpa6kq24", and the direct
@@ -70,15 +84,34 @@ describe("no surface renders a raw agent id", () => {
       const box = codeOf(file);
       // A JSX text child — literally what the chip did: `<span …>{agentId}</span>`.
       expect(box, `${file} renders the raw id as text`).not.toMatch(/>\s*\{\s*agentId\b/);
-      // ⚠ THE PILL IS THE ONE EXEMPTION, because its interpolation IS the display name.
-      // `attribution-pill.tsx › attributionName` builds `Agent #<id>` — the same string
-      // `agents-model.ts › agentDisplayName` falls back to — which §11 states is a NAME the
-      // operator accepted at launch, not an id leaking through.
-      if (file === "attribution-pill.tsx") continue;
+      // ⚠ **NO EXEMPTION SINCE 2026-09-15.** `attribution-pill.tsx` was excused here while its
+      // `` `#${agentId}` `` was ruled a name; Samuel withdrew that ruling, and the pill now asks
+      // `shared/lib/agent-name.ts › agentFaceName` like everything else. The header carries why
+      // an exempted file is the one place a sweep cannot see.
       expect(box, `${file} interpolated the raw id into a string`).not.toMatch(
         /\$\{\s*agentId\s*\}/
       );
     }
+  });
+
+  it("🔒 the unnamed FACE has one source, and the two surfaces that faked it ask for it", () => {
+    // ⚠ **THE STRING WAS WRITTEN OUT TWICE AND THAT WAS THE BUG** (2026-09-15).
+    // `agents-model.ts` and `attribution-pill.tsx` each carried their own `` `#${agentId}` ``,
+    // and a third reader had since appeared on the SERVER (`home/server/overview-tally.ts`,
+    // falling back to `channel_sessions.name`, which IS the id). Three copies of one face is how
+    // one of them goes on leaking after the other two are fixed; `shared/lib/agent-name.ts` is
+    // the one source, and it is shared with the server precisely because the server had its own.
+    //
+    // ⚠ **THIS IS A POSITIVE ASSERTION RATHER THAN A BAN ON THE WORDS, AND THE ATTEMPT THAT WAS
+    // NOT IS WORTH RECORDING.** A blanket `not.toMatch(/"New Agent"/)` over every surface failed
+    // on `composer-toolbar.tsx`, whose `label="New Agent"` is the LAUNCH BUTTON (INVARIANTS §11
+    // names it) — a different thing that happens to be the same two words. A sweep that cannot
+    // tell a button's label from an agent's face would be answered by renaming one of them,
+    // which is the tail wagging the product.
+    expect(
+      codeOf("attribution-pill.tsx"),
+      "the transcript pill stopped asking for the shared face"
+    ).toContain("agentFaceName(");
   });
 
   it("the three surfaces that shipped it wrong resolve the NAME", () => {

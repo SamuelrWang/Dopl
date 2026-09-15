@@ -79,9 +79,17 @@ export async function dispatchManageAction(
     // stamps the authenticated caller, because the only machine an agent may
     // ask is its own operator's, and no argument here could say otherwise.
     case "launch": {
-      const miss = missingParams('manage action="launch"', args, ["channel"]);
+      // ⚠ **`name` JOINED `channel` AS REQUIRED ON 2026-09-15** (Samuel: *"if agents are
+      // spinning up agents, they should be the ones that are naming the agent"*). ⚠ The op
+      // ALSO refuses a blank and an id-shaped name, with a sentence that says what to pass —
+      // this check is the missing-param shape every action here shares, not a second rule.
+      const miss = missingParams('manage action="launch"', args, ["channel", "name"]);
       if (miss) return miss;
       return opLaunchAgent(client, args.channel as string, {
+        // ⚠ THE SHARED `name` PARAM, which `rooms action="open"`, `manage action="rename"` and
+        // `artifact action="create"` already use — a fifth top-level argument for "what is this
+        // called" is what made this shape 35 fields (`channel-schema.ts › SCHEMA_MAX_CHARS`).
+        name: args.name,
         thread: args.thread,
         // ⚠ **`goal` BECAME `body` (B8), AND IT IS THE SAME FIELD IT ALWAYS
         // WAS**: the text you send an agent. One surface had two names for

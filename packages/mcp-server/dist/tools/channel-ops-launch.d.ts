@@ -61,5 +61,11 @@ export declare function opLaunchAgent(client: DoplClient, ref: string, opts?: {
      *  untouched — the taken set spans every member's live agents and only the server
      *  can see it. Omitted means "first free", never "no colour". */
     color?: AgentColorKey;
+    /** **WHAT TO CALL THE NEW AGENT — REQUIRED** (Samuel, 2026-09-15: *"if agents are spinning
+     *  up agents, they should be the ones that are naming the agent … certainly shouldn't be an
+     *  agent with the id as the name."*). ⚠ OPTIONAL IN THE TYPE AND REFUSED AT RUNTIME: the
+     *  argument arrives off an MCP wire as unvalidated JSON, so the type says what may ARRIVE and
+     *  the refusal below is what the caller is TOLD — and only that layer can say what to pass. */
+    name?: string;
     waitMs?: number;
 }): Promise<ToolResponse>;

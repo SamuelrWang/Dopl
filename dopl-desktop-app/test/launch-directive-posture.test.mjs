@@ -124,9 +124,12 @@ test("LANE: a directive naming NO posture launches exactly as it did before T24"
     // EVERY launch, not only a clamped one — otherwise silence would mean two things at once
     // ("an older desktop said nothing" and "a current one agreed with you") and `postureFacts` has
     // one word for it. What must not move is `handed()` above: the posture the session runs at.
+    // ⚠ `appliedAgentName` JOINED THE BODY ON 2026-09-15 (Samuel's uniqueness ruling) — a FOURTH
+    // echo of the same kind, and `New Agent` here because this fixture's row carries no name.
     assert.deepEqual(decided(h), [{
       directiveId: DID, status: "launched", agentId: "a1b2c3d4",
       appliedTools: "bypass", appliedMessages: "auto_both", appliedChain: false,
+      appliedAgentName: "New Agent",
     }]);
   });
 });
@@ -149,6 +152,7 @@ test("LANE: a WIDER request is CLAMPED to the operator's stored pair, and still 
   assert.deepEqual(decided(h), [{
     directiveId: DID, status: "launched", agentId: "a1b2c3d4",
     appliedTools: "accept_edits", appliedMessages: "auto_inbound", appliedChain: false,
+    appliedAgentName: "New Agent",
   }]);
   assert.ok(h.logged.some((l) => l.includes("CLAMPED")), "and the clamp is recorded, not hidden");
 });

@@ -126,7 +126,10 @@ describe("THE LAW is stated, in full, in the doctrine", () => {
     expect(CHANNEL_LAW).toContain(
       "YOUR OWN AGENTS ARE THE ONE EXCEPTION, AND ONLY BY NAME",
     );
-    expect(CHANNEL_LAW).toContain("`@agent-<id>` in a body wakes THAT agent");
+    // ⚠ RE-SPELLED 2026-09-15 (Samuel): the address is the NAME tag; the id form is what the
+    // bullet reserves for two ACTIVE agents sharing a name, and it still names both.
+    expect(CHANNEL_LAW).toContain("that tag, in a body or in `to`, wakes THAT agent");
+    expect(CHANNEL_LAW).toContain("NEVER WRITE AN AGENT ID IN A MESSAGE");
     expect(CHANNEL_LAW).toContain(
       "Never another member's agent, and never without naming one",
     );

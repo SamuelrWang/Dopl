@@ -3,11 +3,13 @@ import { agentIdHandle, buildAgentMentionIndex } from "../lib/agent-mentions";
 import { agentIdOfSessionKey } from "../lib/agent-post-stamp";
 import { mentionHandleOf, mentionTokensOf } from "../lib/mentions";
 import type { SessionStateRow } from "./collab-dto";
-// ⚠ `ChannelAgentHandleAmbiguousError` NO LONGER IMPORTED (2026-09-07): its one throw site here
-// is deleted with the ambiguity it refused — suffix minting means no handle names two agents.
-// The CLASS is left standing in `errors-recipient.ts` on purpose; it is a public error shape
-// that older clients and the error-mapping table may still name, and retiring a wire-visible
-// code is a separate decision from removing the branch that raised it.
+// ⚠ `ChannelAgentHandleAmbiguousError` IS STILL NOT IMPORTED, AND 2026-09-15 SETTLED THAT FOR
+// GOOD. Its throw site went on 2026-09-07 with the suffix mint; the mint itself is now withdrawn,
+// and what replaced BOTH is Samuel's commit-time rule — no two ADDRESSABLE agents in a channel
+// share a name, because the second one is stored as `Coder-1` (`main/agent-name-unique.js`).
+// **There is no ambiguity left for an error to describe.** The CLASS is left standing in
+// `errors-recipient.ts` on purpose; it is a public error shape older clients and the
+// error-mapping table may still name, and retiring a wire-visible code is a separate decision.
 import * as repoSessions from "./repository-sessions";
 import { isFresh } from "./service-wake-freshness";
 import { liveChannelSessions } from "./service-wake-verdict-resilience";
@@ -141,14 +143,19 @@ export async function ownLiveAgentIds(
  * routes an UNADDRESSED human post channel-wide: a person who typed a handle is
  * asking for less reach than a person who typed nothing.
  *
- * ⚠ **AN AMBIGUOUS DISPLAY-NAME HANDLE IS NO LONGER A REFUSAL — IT IS A MINTED
- * SUFFIX** (2026-09-07, Samuel: *"if coder exists, then other slugs will be
- * coder-1, coder-2, coder-3"*). Channel-wide resolution is what makes the
- * collision ordinary rather than exotic — two operators, two agents both renamed
- * "Main" — and the old answer refused the WHOLE POST over it, listing claimants
- * as the id forms it had just refused. `buildAgentMentionIndex` gives the first
- * claimant `main` and the second `main-1`, so each handle names exactly one
- * agent and no pick is being made on the author's behalf.
+ * ⚠ **THERE IS NO AMBIGUOUS DISPLAY-NAME HANDLE ANY MORE** (Samuel, 2026-09-15:
+ * *"no two agents that are addressable can have the same name"*). Two operators
+ * each renaming an agent "Main" used to be the ordinary collision this function
+ * had to answer, and it answered it three different ways inside two weeks — a
+ * WHOLE-POST REFUSAL that cost the body its other recipients, a MINTED SUFFIX
+ * that re-pointed `main-1` whenever an agent ended, and a fail-closed `null`.
+ * The rule moved to where the name is COMMITTED instead
+ * (`main/agent-name-unique.js`), so the second "Main" is STORED as `Main-1` and
+ * this lane has one agent per handle by construction.
+ * ⚠ **THE ONE CASE THE COMMIT RULE CANNOT COVER IS A CROSS-MACHINE ONE** — names
+ * are minted on the machine that owns the id, so two MEMBERS can still each run a
+ * "Main" in one room. `buildAgentMentionIndex` names the first claimant there,
+ * which never re-points an address and never withdraws one.
  */
 export async function resolveAgentRecipients(
   ctx: ChannelContext,
@@ -219,20 +226,12 @@ export async function resolveAgentRecipients(
     // handle.
     const handle = index.has(written) ? written : (bareId(written) ?? written);
     if (!index.has(handle)) continue;
-    // 🔒 **THE AMBIGUITY REFUSAL IS DELETED, AND THE TYPE IS THE PROOF** (2026-09-07, Samuel's
-    // suffix ruling). `AgentMentionIndex` is `ReadonlyMap<string, string>` now: a contested
-    // handle is MINTED (`coder`, `coder-1`, `coder-2`) rather than mapped to `null`, so there
-    // is no value here that could mean "two agents claim this" and no branch left to take.
-    //
-    // ⚠ **IT WAS UNREACHABLE-BY-CONSTRUCTION, NOT MERELY UNOBSERVED, WHICH IS WHY IT GOES
-    // RATHER THAN STAYING AS A GUARD.** `buildAgentMentionIndex` never writes a handle twice —
-    // `claim` refuses an occupied key instead of overwriting it — so `index.get` on a key
-    // `index.has` just confirmed returns a string. A defensive `if (id === null) throw` kept
-    // here would be a refusal no input can produce, and this file already carries the lesson
-    // that a refusal nobody can trigger is indistinguishable from one nobody has tested.
-    //
-    // ⚠ **AND THE REFUSAL IT REPLACED WAS ITSELF A LOOP** — the error listed its claimants AS
-    // THEIR ID FORMS, so it told the writer to retry with the exact handle it had just refused.
+    // 🔒 **A HANDLE NAMES EXACTLY ONE AGENT, AND THE TYPE IS THE PROOF** (Samuel, 2026-09-15).
+    // `AgentMentionIndex` is `ReadonlyMap<string, string>`: there is no value here that could
+    // mean "two agents claim this" and no branch left to take, because the COLLISION is prevented
+    // where the name is committed — a second "Coder" is stored as `Coder-1`
+    // (`main/agent-name-unique.js`). ⚠ `buildAgentMentionIndex` never writes a handle twice, so
+    // `index.get` on a key `index.has` just confirmed returns a string.
     const id = index.get(handle) as string;
     resolvedAny = true;
     if (id === selfAgentId) continue;
@@ -241,14 +240,6 @@ export async function resolveAgentRecipients(
   if (out.length > 0) return out;
   return resolvedAny ? [] : null;
 }
-
-// ⚠ **`claimants` IS DELETED (2026-09-07), NOT LEFT FOR A FUTURE CALLER.** It listed every live
-// agent contesting one handle, as the id forms that still reached each — the list
-// `ChannelAgentHandleAmbiguousError` carried to be actionable. Suffix minting removed the
-// refusal, which was its only caller: a handle now names exactly one agent, so there is no
-// contested set left to enumerate. Keeping it would have been a helper whose whole subject no
-// longer exists, and the next reader would have had to reconstruct the deleted branch to find
-// out why nothing called it.
 
 /**
  * **THE SESSION THAT WROTE THIS POST** — `metadata.session_id`'s agent segment,

@@ -121,6 +121,12 @@ export function toDirective(
     // stale-cache rule this file states twice already: a payload cached against an
     // older PostgREST schema arrives without the field.
     color: (row.color ?? null) as LaunchDirective["color"],
+    // ⚠ ON THE DTO OR THE DESKTOP NEVER SEES IT, exactly as `color` above — the CLAIM's answer
+    // IS this mapper's output, and a name mapped nowhere is a launch argument the spawn cannot
+    // read. ⚠ `?? null` on this file's stale-cache rule: a payload cached against an older
+    // PostgREST schema arrives without the field, and `undefined` would reach `sanitizeName` as
+    // a non-string and be refused as if the caller had sent rubbish.
+    agentName: row.agent_name ?? null,
     // ⚠ THE INPUT PAIR, beside the template pair and never confused with
     // `agentId` below, which is the OUTPUT. `?? null` rather than a bare read for
     // the stale-cache reason the `kind` note above states: a cached payload from
@@ -162,6 +168,10 @@ export function toDirective(
     appliedMessageMode: (row.applied_message_mode ??
       null) as LaunchDirective["appliedMessageMode"],
     appliedChain: row.applied_chain ?? null,
+    // ⚠ ON THE DTO OR THE LAUNCHER NEVER LEARNS THE NAME IT MUST ADDRESS (2026-09-15). The
+    // uniqueness rule may have stored `Coder-1`; an orchestrator still tagging `@coder` would
+    // reach the OTHER agent. ⚠ `?? null` on this file's stale-cache rule.
+    appliedAgentName: row.applied_agent_name ?? null,
     // ── THE SERVER'S RESOLVED POSTURE (2026-09-02, A9 — G6/G7/G8) ──────────
     // ⚠ SAME `?? null` DISCIPLINE, SAME REASON, DIFFERENT MEANING FROM BOTH
     // NEIGHBOURS: `null` here is "did not ask" (or, on `resolvedModel`, "not

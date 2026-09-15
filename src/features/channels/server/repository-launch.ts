@@ -55,6 +55,7 @@ export type LaunchDirectiveRow = {
    *  kind, and on every row written before the migration — the DTO reads it `?? null`
    *  for the stale-cache reason `service-launch-dto.ts` states. */
   color: string | null;
+  agent_name: string | null; // ⚠ WHAT THE LAUNCH ASKED THE AGENT TO BE CALLED (`20261006120000`); `null` on a non-launch kind, and on a launch from a client older than that wave
   /**
    * WHICH AGENT an `end` / `rename` acts on — an INPUT (2026-09-01).
    *
@@ -103,6 +104,7 @@ export type LaunchDirectiveRow = {
   applied_tool_mode?: string | null;
   applied_message_mode?: string | null;
   applied_chain?: boolean | null;
+  applied_agent_name?: string | null; // ⚠ WHAT THE AGENT IS ACTUALLY CALLED, as the launching machine reported it (2026-09-15) — `-1` where the uniqueness rule fired
   /**
    * **THE SERVER'S RESOLVED POSTURE — the request clamped to the channel's
    * stored ceiling, decided at CREATION** (2026-09-02, A9 — G6/G7/G8).
@@ -174,6 +176,7 @@ export type LaunchDirectiveInsert = {
    *  resolution and never raw caller input — `service-launch.ts` takes the free set
    *  from `repository-session-colors.ts` and 409s a taken key before reaching here. */
   color?: string | null;
+  agent_name?: string | null; // ⚠ WHAT TO CALL THE NEW AGENT (2026-09-15) — OPTIONAL on `color`'s courtesy, refused on any kind but `launch` by the CHECK, safe on `template_id`'s rule (WHAT, never WHOSE)
   /**
    * ⚠ CALLER-SUPPLIED, LIKE `template_id` AND FOR THE SAME REASON THAT IS SAFE:
    * it names WHAT the verb acts on, never WHOSE MACHINE acts. The authorization
@@ -413,6 +416,7 @@ export type LaunchDecision = {
   applied_tool_mode: string | null;
   applied_message_mode: string | null;
   applied_chain: boolean | null;
+  applied_agent_name: string | null; // the machine's own name for the launched agent; `null` on a non-launch kind, a refusal, and a desktop older than 2026-09-15
   decided_at: string;
 };
 

@@ -130,20 +130,21 @@ describe("the removed ops are absent from the published op set", () => {
     // ⚠ **THE OP IS NOW AN ACTION** (B8): the description names the DISPATCHER
     // and `action`'s describe carries the verbs. The MEANING did not move.
     expect(DESCRIPTION).toContain('"manage"');
-    expect(ARG_PROSE).toContain("DISPLAY ONLY");
-    // The handle is unchanged and is still the only thing that addresses an agent.
-    expect(ARG_PROSE).toContain(
-      "`@agent-<id>` stays the only address, nothing resolves an agent by its name",
-    );
-    // …and it never leaves the operator's own machine, so no peer can even see
-    // it. ⚠ Said in BOTH places, because a reader who took either door alone
-    // would otherwise get the capability without its boundary.
-    expect(ARG_PROSE).toContain("reaches no server");
-    // ⚠ THREE FACTS, PINNED SEPARATELY — not one sentence fragment. A single
-    // `toContain` over the clause breaks the moment any of the three is
-    // sharpened, as happened when "is invisible to every other member" was
-    // restored on 2026-09-02. Pin the facts, not the punctuation.
-    for (const fact of ["reaches no server", "is invisible to every other member", "is never addressable from here"])
+    // ⚠ **RE-POINTED 2026-09-15 (Samuel's id-visibility ruling).** The three clauses this used to
+  // pin — `reaches no server`, `is invisible to every other member`, `is never addressable from
+  // here` — were FALSE and are deleted: `channel_sessions.display_name` is peer-visible BY DESIGN
+  // (`20260905120000`) and the name door has resolved in all three trees since 2026-08-28. What
+  // is pinned in their place is the true contract, and it is a STRONGER one for a caller: a
+  // rename changes how every person AND every agent reaches that session.
+    // ⚠ **AND THE TEST'S OWN NAME IS NOW WRONG IN ONE WORD**: a rename teaches a label AND an
+    // ADDRESS. It is left standing so the change is visible in a diff rather than renamed away.
+    expect(ARG_PROSE).toContain("what to call that agent");
+    expect(ARG_PROSE).toContain("an id is not a name");
+    // ⚠ FACTS, NOT PUNCTUATION — the reason the old list was three separate pins, kept.
+    for (const fact of [
+      "what people see and what agents tag it by",
+      "NEVER WRITE AN AGENT ID IN A MESSAGE",
+    ])
       expect(CHANNEL_DOCTRINE).toContain(fact);
   });
 

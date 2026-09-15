@@ -100,6 +100,34 @@ export type LaunchDirective = {
    */
   color: AgentColorKey | null;
   /**
+   * **WHAT THE NEW AGENT IS CALLED** (Samuel, 2026-09-15, verbatim: *"if agents are spinning
+   * up agents, they should be the ones that are naming the agent. Shouldn't be a nameless
+   * agent."*).
+   *
+   * ⚠ **REQUIRED BY THE TOOL, NULLABLE HERE, AND THE ASYMMETRY IS §13.** `schema-launch.ts ›
+   * LaunchCreateSchema.agentName` refuses a launch without one and
+   * `packages/mcp-server › channel-ops-launch.ts` is where a caller is told what to pass. An
+   * OLDER `@dopl/mcp-server` build in the field files rows with no name at all, and those rows
+   * must still land — so the type admits `null` and the CLAIMING MACHINE supplies the face
+   * (`main/launch-directive-spawn.js`, `New Agent`).
+   * ⚠ **IT IS AN INPUT, NOT AN ECHO.** It is what was ASKED for; the desktop's `sanitizeName`
+   * is the authority on what is actually stored, and it refuses rather than strips.
+   * ⚠ Absent on every kind but `launch`, which the column CHECK enforces at rest.
+   */
+  agentName: string | null;
+  /**
+   * **WHAT THE AGENT IS ACTUALLY CALLED** — the machine's own answer (Samuel, 2026-09-15).
+   *
+   * ⚠ **READ IT, NOT {@link LaunchDirective.agentName}, WHEN YOU MEAN "how do I address this
+   * agent".** That field is the REQUEST; this is what was stored, and the two differ whenever the
+   * uniqueness rule fired: *"If a user launches an agent with the same name, let's just have the
+   * name auto-renamed to that name and -1."* An orchestrator that asked for "Coder", got
+   * `Coder-1`, and went on tagging `@coder` would reach the other agent.
+   * ⚠ `null` IS "NOT REPORTED" — a non-launch kind, a refusal, or a desktop older than the wave —
+   * and never "unnamed".
+   */
+  appliedAgentName: string | null;
+  /**
    * ⚠ `done` IS THE NON-LAUNCH KINDS' SUCCESS AND `launched` IS THE LAUNCH'S,
    * and the split is not fussiness (2026-09-01). This row is read back by the
    * orchestrator that filed it and rendered into an agent-facing sentence;

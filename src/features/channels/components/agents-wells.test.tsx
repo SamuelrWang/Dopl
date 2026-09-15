@@ -48,6 +48,12 @@ const HOUR = 3_600_000;
 const DAY = 86_400_000;
 const NOW = Date.UTC(2026, 8, 13, 12, 0, 0);
 
+// ⚠ **EVERY FIXTURE CARRIES A `displayName` SINCE 2026-09-15**, and that is not decoration.
+// These cases locate a card BY ITS TITLE, and the title used to be `#<agentId>` — eight machine
+// characters, unique per fixture, which made the id a convenient locator AND was the leak
+// Samuel's ruling removed (`shared/lib/agent-name.ts`). Every unnamed agent now reads
+// `New Agent`, so a suite that wants to say WHICH card it found has to name the agents, exactly
+// as the product now expects a launch to.
 function summary(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSummary {
   return {
     sessionId: "s-1",
@@ -129,13 +135,13 @@ describe("agents-wells — the bucketing expression", () => {
 describe("AgentsTab — the four wells", () => {
   /** One agent per bucket, plus the two cases Samuel named. */
   const fixture: DesktopSessionSummary[] = [
-    summary({ sessionId: "s-now", agentId: "aaaa1111", taskId: "t-1", startedAt: NOW - 2 * HOUR }),
+    summary({ sessionId: "s-now", agentId: "aaaa1111", displayName: "Alpha", taskId: "t-1", startedAt: NOW - 2 * HOUR }),
     // ⚠ AN ENDED AGENT, LAST ACTIVE THREE DAYS AGO → Last 7 days. Verbatim: "if
     // it's an ended agent but they were active last thirty days … that should be
     // in … the respective gray boxes."
     summary({
       sessionId: "s-ended",
-      agentId: "bbbb2222",
+      agentId: "bbbb2222", displayName: "Bravo",
       taskId: "t-2",
       state: "ended",
       startedAt: NOW - 4 * DAY,
@@ -143,14 +149,14 @@ describe("AgentsTab — the four wells", () => {
     }),
     summary({
       sessionId: "s-month",
-      agentId: "cccc3333",
+      agentId: "cccc3333", displayName: "Charlie",
       taskId: "t-3",
       startedAt: NOW - 12 * DAY,
       lastActivityAt: NOW - 12 * DAY,
     }),
     summary({
       sessionId: "s-old",
-      agentId: "dddd4444",
+      agentId: "dddd4444", displayName: "Delta",
       taskId: "t-4",
       startedAt: NOW - 200 * DAY,
       lastActivityAt: NOW - 120 * DAY,
@@ -173,14 +179,14 @@ describe("AgentsTab — the four wells", () => {
     expect(headers()).toEqual(["Recent", "Last 7 days", "Last 30 days", "Earlier"]);
 
     // Recent is open, so its card is mounted; the other three are collapsed.
-    expect(screen.getByText("#aaaa1111")).toBeTruthy();
-    expect(screen.queryByText("#bbbb2222")).toBeNull();
+    expect(screen.getByText("Alpha")).toBeTruthy();
+    expect(screen.queryByText("Bravo")).toBeNull();
 
     // Open each in turn and the right agent is inside it.
     for (const [label, name] of [
-      ["Last 7 days", "#bbbb2222"],
-      ["Last 30 days", "#cccc3333"],
-      ["Earlier", "#dddd4444"],
+      ["Last 7 days", "Bravo"],
+      ["Last 30 days", "Charlie"],
+      ["Earlier", "Delta"],
     ] as const) {
       fireEvent.click(screen.getByRole("heading", { name: label }));
       const well = screen.getByRole("heading", { name: label }).closest("section")!;
@@ -190,15 +196,15 @@ describe("AgentsTab — the four wells", () => {
 
   it("files a CREATED-TODAY idle agent in Recent — an idle agent is not an old one", () => {
     // Verbatim: "They might be idle but they just show up there."
-    renderTab([summary({ agentId: "eeee5555", state: "idle", startedAt: NOW - 10 * 60_000 })]);
+    renderTab([summary({ agentId: "eeee5555", displayName: "Echo", state: "idle", startedAt: NOW - 10 * 60_000 })]);
     expect(headers()).toEqual(["Recent"]);
-    expect(screen.getByText("#eeee5555")).toBeTruthy();
+    expect(screen.getByText("Echo")).toBeTruthy();
   });
 
   it("files an UNDATED agent in Recent, where it is visible", () => {
-    renderTab([summary({ agentId: "ffff6666", startedAt: null, lastActivityAt: null })]);
+    renderTab([summary({ agentId: "ffff6666", displayName: "Foxtrot", startedAt: null, lastActivityAt: null })]);
     expect(headers()).toEqual(["Recent"]);
-    expect(screen.getByText("#ffff6666")).toBeTruthy();
+    expect(screen.getByText("Foxtrot")).toBeTruthy();
   });
 
   it("does NOT render a well with no agents in it", () => {
@@ -219,7 +225,7 @@ describe("AgentsTab — the well's face and its collapse", () => {
   function renderOne() {
     return render(
       <AgentsTab
-        sessions={[summary({ agentId: "aaaa1111" })]}
+        sessions={[summary({ agentId: "aaaa1111", displayName: "Alpha" })]}
         channelId={CHANNEL_ID}
         openAgent={null}
         onOpenAgent={() => {}}
@@ -277,7 +283,7 @@ describe("AgentsTab — the well's face and its collapse", () => {
     const box = () =>
       row.parentElement!.querySelector<HTMLElement>(".collapse-grid")!;
     expect(box().getAttribute("data-open")).toBe("true");
-    expect(screen.getByText("#aaaa1111")).toBeTruthy();
+    expect(screen.getByText("Alpha")).toBeTruthy();
 
     fireEvent.click(row);
     expect(row.getAttribute("aria-expanded")).toBe("false");
@@ -286,10 +292,10 @@ describe("AgentsTab — the well's face and its collapse", () => {
     expect(box().getAttribute("data-open")).toBe("false");
     // ⚠ STILL MOUNTED FOR THE LENGTH OF THE SHRINK — a closing box with nothing
     // inside it has no content to clip and would snap shut.
-    expect(screen.getByText("#aaaa1111")).toBeTruthy();
+    expect(screen.getByText("Alpha")).toBeTruthy();
     expect(box().getAttribute("aria-hidden")).toBe("true");
     // ⚠ AND THEN GONE: collapsed still means UNMOUNTED, not hidden (§5).
-    await waitFor(() => expect(screen.queryByText("#aaaa1111")).toBeNull());
+    await waitFor(() => expect(screen.queryByText("Alpha")).toBeNull());
   });
 
   it("keeps the cards the WHITE CARDS they were, directly inside the well's column", () => {
@@ -302,7 +308,7 @@ describe("AgentsTab — the well's face and its collapse", () => {
       el.className.startsWith(PANEL_ROWS)
     );
     expect(column).toBeTruthy();
-    const card = screen.getByText("#aaaa1111").closest(".bento")!;
+    const card = screen.getByText("Alpha").closest(".bento")!;
     // ⚠ NO WRAPPER BOX between the column and the card (the `Fragment` key) — a
     // `div` per card would be a second layout owner inside the well.
     expect(card.parentElement).toBe(column);
@@ -314,8 +320,8 @@ describe("AgentsTab — the wells remember, per device", () => {
     render(
       <AgentsTab
         sessions={[
-          summary({ agentId: "aaaa1111" }),
-          summary({ sessionId: "s-2", agentId: "bbbb2222", taskId: "t-2", startedAt: NOW - 3 * DAY, lastActivityAt: NOW - 3 * DAY }),
+          summary({ agentId: "aaaa1111", displayName: "Alpha" }),
+          summary({ sessionId: "s-2", agentId: "bbbb2222", displayName: "Bravo", taskId: "t-2", startedAt: NOW - 3 * DAY, lastActivityAt: NOW - 3 * DAY }),
         ]}
         channelId={CHANNEL_ID}
         openAgent={null}
@@ -331,7 +337,7 @@ describe("AgentsTab — the wells remember, per device", () => {
   it("round-trips the choice through localStorage", () => {
     const tab = (
       <AgentsTab
-        sessions={[summary({ agentId: "aaaa1111" })]}
+        sessions={[summary({ agentId: "aaaa1111", displayName: "Alpha" })]}
         channelId={CHANNEL_ID}
         openAgent={null}
         onOpenAgent={() => {}}
@@ -348,14 +354,14 @@ describe("AgentsTab — the wells remember, per device", () => {
     expect(screen.getByRole("button", { name: "Recent" }).getAttribute("aria-expanded")).toBe(
       "false"
     );
-    expect(screen.queryByText("#aaaa1111")).toBeNull();
+    expect(screen.queryByText("Alpha")).toBeNull();
   });
 
   it("ignores a corrupt or foreign write rather than crashing on it", () => {
     window.localStorage.setItem(AGENT_WELLS_STORAGE_KEY, "{not json");
     render(
       <AgentsTab
-        sessions={[summary({ agentId: "aaaa1111" })]}
+        sessions={[summary({ agentId: "aaaa1111", displayName: "Alpha" })]}
         channelId={CHANNEL_ID}
         openAgent={null}
         onOpenAgent={() => {}}
@@ -373,7 +379,7 @@ describe("AgentsTab — the wells remember, per device", () => {
     );
     render(
       <AgentsTab
-        sessions={[summary({ agentId: "aaaa1111" })]}
+        sessions={[summary({ agentId: "aaaa1111", displayName: "Alpha" })]}
         channelId={CHANNEL_ID}
         openAgent={null}
         onOpenAgent={() => {}}

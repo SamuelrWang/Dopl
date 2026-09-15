@@ -124,9 +124,13 @@ const MOVED_DOCTRINE = [
   'it gates "launch" and "posture", never "end" or "rename"',
   // …and the one word a caller could FIX on a retry, with the shape it accepts.
   "`bad-name` the label was not one line of 1-60 visible characters",
-  // …a rename is display-only on ONE machine, so nothing here confirms it.
-  "is invisible to every other member",
-  "is never addressable from here",
+  // ⚠ ⚠ **RE-POINTED 2026-09-15 (Samuel's id-visibility ruling).** The three clauses this used to
+  // pin — `reaches no server`, `is invisible to every other member`, `is never addressable from
+  // here` — were FALSE and are deleted: `channel_sessions.display_name` is peer-visible BY DESIGN
+  // (`20260905120000`) and the name door has resolved in all three trees since 2026-08-28. What
+  // is pinned in their place is the true contract, and it is a STRONGER one for a caller: a
+  // rename changes how every person AND every agent reaches that session.
+  "what people see and what agents tag it by",
   // …and a timed-out request is still filed. ⚠ **BACKED BY CODE SINCE A10/G10
   // (2026-09-02), AND THE SENTENCE MOVED WITH IT**: "do NOT issue it again" was
   // the only answer available while this lane had no idempotency key.

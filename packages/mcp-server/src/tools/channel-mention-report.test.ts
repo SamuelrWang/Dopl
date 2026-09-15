@@ -145,7 +145,8 @@ describe("postMentionFacts — says what it knows and nothing past it", () => {
   it("says an agent handle stamps nobody, so no inbox is involved", () => {
     expect(facts("@k3v7d2mq", []).tags).toBeUndefined();
     expect(facts("@k3v7d2mq", []).wake).toBe("@agent-k3v7d2mq");
-    expect(CHANNEL_DOCTRINE).toContain("it stamps nobody and lands in no Tags inbox");
+    // ⚠ RE-POINTED 2026-09-15 — the cause names the rule that DOES reach an agent.
+    expect(CHANNEL_DOCTRINE).toContain("an agent is reached by the LAW's rule");
     // ⚠ RE-POINTED: "starts no inbox entry" and "lands in no Tags inbox" were
     // two spellings of one claim in the old text; the compressed list keeps the
     // one that names WHICH inbox, which is the half a reader can act on.

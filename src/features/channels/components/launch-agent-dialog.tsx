@@ -366,9 +366,11 @@ export function LaunchAgentDialog({
           onClick: runner.launch,
           disabled: !panel.ready,
           busy: newAgent?.launchBusy,
-          // ⚠ A DISABLED SUBMIT SAYS WHY (INVARIANTS §8, rule 4) — the same sentence the
-          // composer's context-labeled control carried, moved with the button.
-          hint: panel.ready ? "Launch" : "An agent needs a name",
+          // ⚠ **NOTHING DISABLES THIS BUTTON ANY MORE (Samuel, 2026-09-15).** It read
+          // `panel.ready ? "Launch" : "An agent needs a name"` — INVARIANTS §8 rule 4 — and the
+          // condition is withdrawn: a blank name is a launch that is named `New Agent`.
+          // ⚠ `disabled`/`panel.ready` STAY WIRED so the next real blocker has a door.
+          hint: "Launch",
         }}
       >
         <UnderlineField

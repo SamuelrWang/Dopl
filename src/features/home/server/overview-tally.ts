@@ -1,4 +1,5 @@
 import type { Role } from "@/features/workspaces/types";
+import { agentFaceName } from "@/shared/lib/agent-name";
 import type {
   HomeAgentRow,
   HomeChannelUsage,
@@ -301,8 +302,18 @@ export function tallyChannels(
  *
  * ⚠ `mine` REPLACES THE `user_id`, and that is the privacy shape: the caller
  * needs to tell their own agents from a peer's, and does not need the peer's id
- * to do it. ⚠ `channel_sessions.display_name` is preferred over `name` because
- * it is what the operator renamed the agent to.
+ * to do it.
+ *
+ * ⚠ **`name` FELL BACK TO `channel_sessions.name` UNTIL 2026-09-15, AND THAT COLUMN IS THE RAW
+ * AGENT ID** (`main/session-summary.js › nameOf` answers `s.agentId` and nothing else). So the
+ * Home pane's agent board printed eight machine characters as the card's title for every agent
+ * nobody had named — the same leak `channels/components/agents-model.ts › agentDisplayName`
+ * carried on the channels surface, reached through a SERVER projection instead of a component,
+ * which is why the `.tsx` source sweep could never have caught it. Samuel, 2026-09-15: *"I want
+ * to make it so that the user really doesnt see it"*.
+ * ⚠ **THE FALLBACK IS THE SHARED FACE** (`shared/lib/agent-name.ts › agentFaceName`), not a
+ * local `|| "New Agent"`: three readers spelling one string is what produced this in the first
+ * place.
  */
 export function mapAgents(
   rows: RunningSessionRow[],
@@ -315,7 +326,7 @@ export function mapAgents(
     // The container's own channel name is authoritative; the denormalised
     // `channel_name` on the session can lag a rename.
     channelName: names.get(row.workspace_id) ?? row.channel_name ?? "",
-    name: row.display_name || row.name,
+    name: agentFaceName(row.display_name),
     state: row.state,
     detail: narrowDetail(row.detail),
     // ⚠ THE ID AND THE TITLE ARE TWO DIFFERENT ANSWERS AND BOTH RIDE. The title

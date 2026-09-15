@@ -64,8 +64,10 @@ test("KIND: `done` is the non-launch success and `launched` is NOT reused for it
   // that filed it and rendered into an agent-facing sentence. "launched" on the record of an
   // agent being STOPPED is the one kind of wrong nothing downstream can detect, so the two words
   // must stay distinct on the wire, in the column CHECK and in the TS union.
+  // ⚠ **THE DECIDE UNION MOVED TO `schema-launch-decide.ts` (§1 SPLIT, 2026-09-15)** — a source
+  // sweep reads FILES, not exports, so it follows even though `schema-launch.ts` re-exports it.
   const SCHEMA = readFileSync(
-    join(HERE, "..", "..", "src", "features", "channels", "schema-launch.ts"), "utf8");
+    join(HERE, "..", "..", "src", "features", "channels", "schema-launch-decide.ts"), "utf8");
   assert.match(SCHEMA, /status: z\.literal\("done"\)/);
   const TYPES = readFileSync(
     join(HERE, "..", "..", "src", "features", "channels", "types-launch.ts"), "utf8");

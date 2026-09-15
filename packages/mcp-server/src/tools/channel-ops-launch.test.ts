@@ -58,8 +58,14 @@ function client(over: Record<string, unknown> = {}): DoplClient {
   } as unknown as DoplClient;
 }
 
-const text = async (c: DoplClient, opts = {}) =>
-  (await opLaunchAgent(c, "general", opts)).content[0].text as string;
+/**
+ * ⚠ **`name` IS SUPPLIED BY DEFAULT SINCE 2026-09-15** (Samuel: *"if agents are spinning up
+ * agents, they should be the ones that are naming the agent"*). It is REQUIRED, and a case that
+ * omitted it would measure the missing-param refusal instead of the terminal shape it is about
+ * — so the default is here and the two cases that measure the REFUSAL pass their own value.
+ */
+const text = async (c: DoplClient, opts: Record<string, unknown> = {}) =>
+  (await opLaunchAgent(c, "general", { name: "Scout", ...opts })).content[0].text as string;
 
 /** A client whose CREATE already answers with this directive (no poll needed). */
 const created = (over: Partial<LaunchDirective>) =>
@@ -126,19 +132,61 @@ describe("LAUNCHED — the id, and how to direct it", () => {
     // ⚠ MOVED, NOT DELETED — the rule that makes the prefixed form the only one
     // that means anything off the operator's own machine.
     expect(out).not.toContain("ITS HANDLE IS");
-    // ⚠ RE-POINTED onto the LAW bullet that now carries the rule: the prefixed
-    // form is what `to=` and a body both take, and it is the only address.
-    expect(CHANNEL_DOCTRINE).toContain(
-      'to="@agent-<id>" or `@agent-<id>` in a body wakes THAT agent',
-    );
+    // ⚠ **RE-POINTED TWICE ON 2026-09-15, AND THE SECOND TIME THE CARVE-OUT WENT.** The bullet
+    // taught the ID form as THE address; Samuel's first ruling made the NAME the address and kept
+    // the id for a duplicate name; his second removed the duplicate — *"no two agents that are
+    // addressable can have the same name"* — so there is no case left to teach an id for.
+    // ⚠ **THE RESULT STILL PUBLISHES THE PREFIXED ID AND THAT IS NOT A CONTRADICTION**: it is the
+    // agent's permanent handle and the third coordinate of every other agent op. What it no
+    // longer does is tell the caller to ADDRESS with it — `name=` beside it is for that.
+    expect(CHANNEL_DOCTRINE).toContain("NEVER WRITE AN AGENT ID IN A MESSAGE");
+    expect(CHANNEL_DOCTRINE).toContain("NAMES ARE UNIQUE among addressable agents");
+    expect(CHANNEL_DOCTRINE).not.toContain("is then the address");
   });
 
-  it("says a custom NAME is machine-local and never addressable from here", async () => {
-    // A rename lives in `main/agent-names.js` on ONE machine and nothing here
-    // carries it — which is why the fact line publishes the ID, never a name.
+  /**
+   * 🔒 **THE LAUNCHER LEARNS THE NAME IT ACTUALLY GOT** (Samuel, 2026-09-15: *"it will
+   * automatically auto-resolve to coder-1 … coder-2 and so on and so forth"*).
+   *
+   * ⚠ **WITHOUT THIS FIELD THE UNIQUENESS RULE WOULD BE A SILENT MIS-DELIVERY MACHINE.** The
+   * whole point of the ruling is that the NAME is the address; an orchestrator that asked for
+   * "Coder", was stored as `Coder-1`, and went on tagging `@coder` would reach the OTHER agent
+   * on every subsequent post — and nothing on either side would say so.
+   * ⚠ **IT IS THE MACHINE'S VALUE, NOT THE REQUEST.** Echoing the ask would be right whenever
+   * nothing collided and confidently wrong exactly when it mattered, which is the argument the
+   * posture echo (T24/F-410) already made on this same result line.
+   */
+  it("🔒 publishes the name the MACHINE stored, as a tag, not the one that was asked for", async () => {
+    const out = await text(
+      created({ status: "launched", agentId: "abcd1234", appliedAgentName: "Coder-1" }),
+      { name: "Coder" }
+    );
+    // ⚠ SLUGGED, because it is a TAG the caller will type — `@Coder-1` is not one.
+    expect(out).toContain("name=@coder-1");
+    expect(out).not.toContain("name=@coder ");
+  });
+
+  it("falls back to the REQUESTED name only when the machine reported none", async () => {
+    // ⚠ A DESKTOP OLDER THAN THIS WAVE SENDS NO `appliedAgentName` (§13, a supported peer), and
+    // the honest thing to print is the name that was asked for — it is what that machine stored.
+    const out = await text(created({ status: "launched", agentId: "abcd1234" }), {
+      name: "Bug Reviewer",
+    });
+    expect(out).toContain("name=@bug-reviewer");
+  });
+
+  it("says a custom NAME is what people see AND what agents tag it by", async () => {
+    // ⚠ **THIS ASSERTED THE OPPOSITE UNTIL 2026-09-15, AND THE CLAIM IT PINNED WAS FALSE.** The
+    // doctrine said a rename is *"stored on that one machine, it reaches no server, is invisible
+    // to every other member and is never addressable from here"*. Every clause had been untrue
+    // for weeks: `channel_sessions.display_name` carries the name to the server and to peers
+    // (`20260905120000`, peer-visible BY DESIGN), and the name door has resolved in all three
+    // trees since 2026-08-28. **A pinned sentence is how a false claim survives a review**, which
+    // is why the correction is a change to this assertion and not only to the prose.
     const out = await text(launched);
     expect(out).not.toContain("lives on their machine alone");
-    expect(CHANNEL_DOCTRINE).toContain("stored on that one machine, it reaches no server");
+    expect(CHANNEL_DOCTRINE).toContain("what people see and what agents tag it by");
+    expect(CHANNEL_DOCTRINE).not.toContain("it reaches no server");
   });
 
   it("⚠ KEEPS THE WAKE **WITH ITS THREE LIMITS** — the sentence the repro bought", async () => {
@@ -154,9 +202,8 @@ describe("LAUNCHED — the id, and how to direct it", () => {
     // headline and the limits were one paragraph; they are the loop brake and
     // the own-agents exception, and the redirect route is stated on the second.
     expect(CHANNEL_DOCTRINE).toContain("THE LOOP BRAKE, AND IT IS ABSOLUTE");
-    expect(CHANNEL_DOCTRINE).toContain(
-      'thereafter to="@agent-<id>" or `@agent-<id>` in a body wakes THAT agent',
-    );
+    // ⚠ RE-SPELLED 2026-09-15 — the redirect route is the NAME tag now, and the bullet says so.
+    expect(CHANNEL_DOCTRINE).toContain("that tag, in a body or in `to`, wakes THAT agent");
     // (1) ADDRESSED ONLY — tiers 2 and 3 stay shut to every agent-authored post.
     expect(CHANNEL_DOCTRINE).toContain(
       "an AGENT-authored UNADDRESSED message starts nobody",
@@ -183,7 +230,9 @@ describe("LAUNCHED — the id, and how to direct it", () => {
     // ⚠ RE-POINTED: `goal` became `body` at the seam, so the doctrine states the
     // same two outcomes about `body`.
     expect(CHANNEL_DOCTRINE).toContain(
-      '"launch" starts one, and its `body` is the FIRST INSTRUCTION it runs',
+      // ⚠ RE-SPELLED 2026-09-15 WHEN THE CLAUSE GAINED THE NAMING RULE — the `body` fact is
+      // unchanged and is still what this case is about.
+      '`name` it (never an id; nameless is refused) and its `body` is its FIRST INSTRUCTION',
     );
   });
 

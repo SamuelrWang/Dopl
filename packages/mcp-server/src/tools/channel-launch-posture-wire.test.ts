@@ -90,6 +90,9 @@ const LAUNCH = {
   op: "manage",
   action: "launch",
   channel: "general",
+  // ⚠ REQUIRED SINCE 2026-09-15 — an agent that launches an agent names it, and a call without
+  // this measures the missing-param refusal instead of the subject of these cases.
+  name: "Scout",
   body: "ship it",
   wait_ms: 0,
 };

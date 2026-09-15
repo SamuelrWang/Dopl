@@ -46,6 +46,7 @@
 
 import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
 import { cn } from "@/shared/lib/utils";
+import { agentFaceName } from "@/shared/lib/agent-name";
 import { agentAccent } from "./bits";
 
 /**
@@ -100,13 +101,16 @@ export function attributionName({
   agentName?: string | null;
 }): string {
   if (!agent) return authorLabel;
-  const named = agentName?.trim();
-  if (named) return named;
-  // ⚠ `#<id>`, NOT `Agent #<id>` (Samuel, 2026-08-31): the word "agent" left the name and is
-  // stated by the grey chip beside it ({@link AgentChip}), so saying it in the name too says
-  // it twice. UNSTAMPED still reads the bare noun — there is no id to say and a chip alone
-  // with no name line is a blank claim (INVARIANTS §11).
-  return agentId ? `#${agentId}` : "Agent";
+  // ⚠ **`#<id>` IS GONE (Samuel, 2026-09-15: *"I want to make it so that the user really doesnt
+  // see it"*).** This was the TRANSCRIPT half of the unnamed face — the surface an operator
+  // reads most — and it was the one site `agent-id-visibility.test.ts` EXEMPTED from its own
+  // interpolation ban, on the 2026-08-31 reading that `#<id>` was a name rather than an id.
+  // That exemption is what let this stand while the sweep around it stayed green; it is
+  // removed, and `shared/lib/agent-name.ts` is the one face all three readers share.
+  // ⚠ **THE UNSTAMPED ROW IS UNCHANGED AND IS A DIFFERENT FACT.** `agentId` absent means the
+  // post carries no per-agent stamp at all, so there is no agent to name — the bare noun is the
+  // honest claim there, and `New Agent` would assert a session that was never identified.
+  return agentId ? agentFaceName(agentName) : "Agent";
 }
 
 /**

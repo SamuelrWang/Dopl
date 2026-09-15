@@ -226,7 +226,8 @@ describe(`every write result is one line and fits ${WRITE_RESULT_MAX_CHARS} char
         })),
       }),
       CHANNEL_ID,
-      { thread: THREAD_ID, goal: "Audit the migration and post a milestone." },
+      // ⚠ `name` IS REQUIRED SINCE 2026-09-15 — an agent that launches an agent names it.
+      { name: "Auditor", thread: THREAD_ID, goal: "Audit the migration and post a milestone." },
     );
     const text = textOf(res as never);
     expect(text.split("\n")).toHaveLength(1);

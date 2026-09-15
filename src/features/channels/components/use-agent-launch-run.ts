@@ -16,6 +16,7 @@
 
 import { useCallback, useState } from "react";
 import type { TemplateApprovalRequest } from "@/features/agent-templates/components/template-approval";
+import { NEW_AGENT_NAME } from "@/shared/lib/agent-name";
 import {
   MAX_OVERRIDE_INSTRUCTIONS_CHARS,
   type TemplateLaunchOverrides,
@@ -23,7 +24,6 @@ import {
 import { AGENT_MODEL_DEFAULT } from "../lib/agent-models";
 import { LAUNCH_APPROVAL_REASON, type AgentLaunchControls } from "./use-agents-panel";
 import {
-  defaultAgentName,
   describeAgent,
   renameAgent,
   type AgentLaunchPanel,
@@ -131,17 +131,37 @@ export async function launchWithIdentity(
     // is still a success and is reported as one.
     return { ok: true, agentId: null, identityRefused: false };
   }
-  const wanted = panel.name.trim();
-  // ⚠ THE PREFILL IS NOT A RENAME. Writing `Agent #<id>` into the store would file a "custom"
-  // name identical to the fallback, so the operator could never get back to a nameless agent and
-  // `agent-names.js`'s bounded set would fill with rows that say nothing.
-  const named = wanted === "" || wanted === defaultAgentName(address)
-    ? true
-    : await renameAgent(address, wanted);
+  // **A BLANK NAME IS NAMED `New Agent`, IT IS NOT LEFT NAMELESS** (Samuel, 2026-09-15,
+  // verbatim: *"if a user launches an agent with no name, just give it the name, New Agent"*).
+  //
+  // ⚠ **THIS LINE USED TO DO THE OPPOSITE, AND ITS REASONING WAS SOUND FOR THE PRODUCT IT WAS
+  // WRITTEN FOR.** It read *"THE PREFILL IS NOT A RENAME. Writing `Agent #<id>` into the store
+  // would file a 'custom' name identical to the fallback, so the operator could never get back
+  // to a nameless agent"* — true while the field was PREFILLED with the id and while the unnamed
+  // face WAS that id. Both premises are gone: the field opens blank (`use-agent-launch.ts ›
+  // openPanel`), so a blank submit is now a deliberate "I have no name for this", and the answer
+  // Samuel gave to that is a word rather than an absence.
+  //
+  // ⚠ **WHY STORE IT RATHER THAN LEAN ON THE DISPLAY FALLBACK**, which would look identical on
+  // every card: a STORED name is what puts the agent in the handle namespace. Two blank launches
+  // then CONTEST `@new-agent` and the author is told to use the id form
+  // (`server/service-wake-verdict-handles.ts › contestedAgentHandles`); two NAMELESS ones would
+  // claim nothing, and `@new-agent` would resolve to nobody with nothing to say about why.
+  //
+  // ⚠ **IT IS STILL RECOVERABLE.** Clearing the field on an existing agent sends `""`, which
+  // `agent-names.js › clear` honours — the agent goes back to having no stored name and wears
+  // the same face by fallback. This path is about LAUNCH, where Samuel asked for a name.
+  // ⚠ **A REFUSAL IS ONLY REPORTED FOR A NAME THE OPERATOR ACTUALLY TYPED.** `renameAgent`
+  // answers FALSE on a desktop with no `sessions.rename` op (INVARIANTS §13, a supported peer),
+  // and reporting that as `identityRefused` would put an error banner under EVERY blank launch on
+  // an older build — for a name nobody asked for. The agent still wears `New Agent` there, by the
+  // display fallback, which is the same face; what is lost is only the handle-namespace claim.
+  const typed = panel.name.trim();
+  const named = await renameAgent(address, typed || NEW_AGENT_NAME);
   const described = panel.description.trim() === ""
     ? true
     : await describeAgent(address, panel.description.trim());
-  return { ok: true, agentId: address, identityRefused: !named || !described };
+  return { ok: true, agentId: address, identityRefused: (typed !== "" && !named) || !described };
 }
 
 /**

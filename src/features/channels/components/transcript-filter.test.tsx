@@ -220,12 +220,22 @@ describe("§ the options come from the loaded rows", () => {
     expect(rover).toMatchObject({ label: "Rover", color: null });
   });
 
-  it("falls back to `#<id>` for an agent this machine has no name for", () => {
+  it("falls back to the canonical unnamed FACE for an agent this machine has no name for", () => {
     // A peer's agent in a web tree: the index is empty, the post is still theirs.
+    // ⚠ **IT WAS `#<id>` UNTIL 2026-09-15** — the raw instance id, in a dropdown a person reads.
+    // Samuel: *"I want to make it so that the user really doesnt see it"*, so both unnamed rows
+    // now read `New Agent` (`attribution-pill.tsx › attributionName`, the ONE face this list
+    // shares with the transcript beneath it).
+    // ⚠ **AND YES, THE TWO OPTIONS NOW READ THE SAME**, which is honest rather than a
+    // regression: this index knows nothing about either agent, so there is nothing to tell them
+    // apart with. ⚠ **IT IS ALSO THE PEER CASE ONLY.** This machine's own agents cannot both be
+    // `New Agent` — Samuel's uniqueness ruling stores the second as `New Agent-1`
+    // (`main/agent-name-unique.js`) — so an unnamed pair here is two agents whose names live on
+    // a machine this web tree cannot ask.
     const bare = indexMembers(MEMBERS, ME);
     expect(transcriptFilterAgents(ROWS, bare).map((a) => a.label)).toEqual([
-      `#${SCOUT}`,
-      `#${ROVER}`,
+      "New Agent",
+      "New Agent",
     ]);
   });
 });

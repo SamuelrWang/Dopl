@@ -71,20 +71,44 @@ describe("a token tints when it would route", () => {
   });
 });
 
-describe("both agents of a shared name tint — the suffix is a real address", () => {
-  const coders: LiveAgentSession[] = [
+/**
+ * 🔒 **A SUFFIXED NAME TINTS LIKE ANY OTHER, BECAUSE IT IS ANY OTHER** (Samuel, 2026-09-15).
+ *
+ * ⚠ **THIS BLOCK HAS PINNED THREE DIFFERENT ANSWERS.** Under the 2026-09-07 mint `@coder` tinted
+ * for the first claimant and `@coder-1` for the second; for part of 2026-09-15 NEITHER tinted;
+ * and now the collision is prevented where the name is COMMITTED — the second "Coder" is STORED
+ * as `Coder-1` (`main/agent-name-unique.js`) — so both tint, as two distinct names.
+ *
+ * ⚠ **THE PROPERTY THIS BLOCK EXISTS FOR IS UNCHANGED AND IS THE REASON IT IS DRIVEN BY THE REAL
+ * INDEX**: a tint over a token that stamps nobody is F-266. Which is why the cross-machine
+ * duplicate — the one case the commit rule cannot reach — is pinned below it.
+ */
+describe("a name suffixed at launch tints like any other", () => {
+  const stored: LiveAgentSession[] = [
     { name: AGENT, displayName: "Coder" },
-    { name: OTHER, displayName: "Coder" },
+    { name: OTHER, displayName: "Coder-1" },
   ];
 
-  it("tints the bare slug the first claimant holds", () => {
-    expect(tinted("@coder go", coders)).toEqual(["@coder"]);
+  it("tints the bare name and the suffixed one, each to its own agent", () => {
+    expect(tinted("@coder go", stored)).toEqual(["@coder"]);
+    expect(tinted("@coder-1 go", stored)).toEqual(["@coder-1"]);
   });
 
-  it("tints the minted `-1` the second holds", () => {
-    // ⚠ THE CASE AN OVERLAY BUILT ON `agentMentionHandle` WOULD FAIL: that function answers
-    // `coder` for both candidates, so the second agent's only working handle would render dead.
-    expect(tinted("@coder-1 go", coders)).toEqual(["@coder-1"]);
+  it("tints ONLY the first claimant when a cross-machine duplicate arrives", () => {
+    // ⚠ **NAMES ARE MINTED ON THE MACHINE THAT OWNS THE ID**, so two members can each run a
+    // "Coder" and this machine cannot rename theirs. The loser's slug tints for NOBODY — the
+    // missing highlight IS the signal that the token does not reach them — and it stays reachable
+    // by its id form, which is the assertion below.
+    const clash: LiveAgentSession[] = [
+      { name: AGENT, displayName: "Coder" },
+      { name: OTHER, displayName: "Coder" },
+    ];
+    expect(tinted("@coder go", clash)).toEqual(["@coder"]);
+    expect(tinted(`@agent-${OTHER} go`, clash)).toEqual([`@agent-${OTHER}`]);
+  });
+
+  it("tints no spelling nothing holds — the resolve-time mint is withdrawn", () => {
+    expect(tinted("@coder-2 go", stored)).toEqual([]);
   });
 });
 

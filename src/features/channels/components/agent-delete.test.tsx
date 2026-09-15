@@ -73,7 +73,10 @@ function summary(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSumma
 
 // ⚠ `Delete #<id>` since 2026-08-31 — the word "agent" left the display name (Samuel's
 // ruling; `agents-model.ts › agentDisplayName`), so the accessible label follows it.
-const trash = () => screen.queryByRole("button", { name: /^Delete #/ });
+// ⚠ **THE LABEL IS `Delete <name>` AND THE NAME IS NO LONGER `#<id>`** (Samuel, 2026-09-15):
+// an unnamed agent reads `New Agent`, so a `/^Delete #/` matcher anchored on the old face
+// matched nothing and every case below failed on a null button rather than on its own claim.
+const trash = () => screen.queryByRole("button", { name: /^Delete / });
 
 // ── 1. THE CONTROL ───────────────────────────────────────────────────────────
 
@@ -188,16 +191,16 @@ describe("the Agents tab after a deletion", () => {
     del.mockResolvedValue({ ok: true, ended: true });
     withBridge({ delete: del });
     const { rerender } = render(tab([summary()]));
-    expect(screen.getByText(`#${AGENT_ID}`)).toBeTruthy();
+    expect(screen.getByText("New Agent")).toBeTruthy();
 
     fireEvent.click(trash() as HTMLElement);
     fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
     await waitFor(() => expect(del).toHaveBeenCalled());
-    expect(screen.getByText(`#${AGENT_ID}`)).toBeTruthy();
+    expect(screen.getByText("New Agent")).toBeTruthy();
 
     // The next push from main omits it — the card goes with the feed.
     rerender(tab([]));
-    expect(screen.queryByText(`#${AGENT_ID}`)).toBeNull();
+    expect(screen.queryByText("New Agent")).toBeNull();
     expect(screen.getByText("No agents on this thread yet.")).toBeTruthy();
   });
 });
@@ -273,7 +276,7 @@ describe("the transcript is untouched by a deletion", () => {
     render(transcript());
     expect(screen.getByText("Kicking this off.")).toBeTruthy();
     expect(screen.getByText("Working on the kit now.")).toBeTruthy();
-    const pill = screen.getByText(`#${AGENT_ID}`).closest("[data-agent-id]");
+    const pill = screen.getByText("New Agent").closest("[data-agent-id]");
     expect(pill?.getAttribute("data-agent-id")).toBe(AGENT_ID);
   });
 
@@ -282,7 +285,7 @@ describe("the transcript is untouched by a deletion", () => {
     // renamed agent's rows read as the canonical form afterwards. That is what an agent nobody
     // renamed has always rendered as, and the id is still exactly right.
     render(transcript());
-    const pill = screen.getByText(`#${AGENT_ID}`).closest("[data-agent-id]");
+    const pill = screen.getByText("New Agent").closest("[data-agent-id]");
     expect(pill?.getAttribute("data-agent-id")).toBe(AGENT_ID);
   });
 });

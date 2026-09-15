@@ -156,7 +156,8 @@ describe("the sibling verbs keep their own answers (the two maps stay two)", () 
     expect(text).not.toContain("asked=");
     // ⚠ RE-POINTED onto the clause that gives the REASON no listing can show it:
     // the label never leaves that machine.
-    expect(CHANNEL_DOCTRINE).toContain("stored on that one machine, it reaches no server");
+    // ⚠ RE-POINTED 2026-09-15 — 2026-09-15: the rename clause's three FALSE claims (it reaches no server / is invisible to every other member / is never addressable from here) are DELETED — `channel_sessions.display_name` is peer-visible by design (`20260905120000`) and the name door has resolved in all three trees since 2026-08-28. The doctrine now says what is true: the name is what people see and what agents tag it by.
+    expect(CHANNEL_DOCTRINE).toContain("what people see and what agents tag it by");
   });
 });
 

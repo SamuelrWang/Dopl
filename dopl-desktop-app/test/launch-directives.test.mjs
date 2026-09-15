@@ -341,9 +341,17 @@ test("DECIDE: a successful launch writes `launched` and the AGENT ID", async () 
   // says it APPLIED, after its clamp. It is asserted whole here rather than key by key because
   // this case is the shape of the decide; `launch-directive-echo.test.mjs` is where the echo's own
   // rules live (clamped-not-requested, `false` is a report, a refusal carries none).
+  // ⚠ **`appliedAgentName` JOINED IT ON 2026-09-15 (Samuel's uniqueness ruling)** and it is a
+  // FOURTH echo of the same kind: what was ASKED for is on the row (`agent_name`), what was
+  // STORED is this. They differ whenever a second agent asked for a name already taken — *"it
+  // will automatically auto-resolve to coder-1"* — and since the NAME is now the address, an
+  // orchestrator that never learned it would tag the wrong agent on its next post.
+  // ⚠ **`New Agent` HERE BECAUSE THIS FIXTURE'S DIRECTIVE CARRIES NO NAME** — an older client's
+  // row, which the claiming machine names rather than launching nameless.
   assert.deepEqual(decidePosts(h)[0].body, {
     directiveId: DID, status: "launched", agentId: "a1b2c3d4",
     appliedTools: "bypass", appliedMessages: "auto_both", appliedChain: false,
+    appliedAgentName: "New Agent",
   });
   assert.equal(decidePosts(h)[0].workspaceId, WS, "fenced on the workspace, like every write here");
 });

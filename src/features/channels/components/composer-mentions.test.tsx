@@ -342,20 +342,24 @@ describe("who the picker offers", () => {
     expect(rows.map((r) => r.handle)).toEqual(["research-bot", "agent-zzzzzzzz"]);
   });
 
-  // ⚠ **THIS PINNED `[]` — "drops an agent whose name is contested, fail closed, as members do" —
-  // UNTIL 2026-09-07**, and the red was Samuel's ruling arriving: *"if coder exists, then other
-  // slugs will be coder-1, coder-2, coder-3"*. Agents and MEMBERS deliberately differ here now:
-  // a member can genuinely run out of spellings, an agent cannot, because the id form is claimed
-  // before any name is looked at. See `lib/agent-mentions.ts › buildAgentMentionIndex`.
-  it("offers BOTH agents of a contested name — the suffix is a real address", () => {
+  // ⚠ **THIS CASE HAS ANSWERED FOUR WAYS, AND THE FOURTH IS THE ONE THAT MOVED THE RULE OFF THIS
+  // LAYER.** It pinned `[]` (fail closed, as members do) to 2026-09-07, then `["twin", "twin-1"]`
+  // under the suffix mint, then both at their ID FORMS under the fail-closed hour of 2026-09-15.
+  // Samuel then ruled the collision out of existence — *"no two agents that are addressable can
+  // have the same name … it will automatically auto-resolve to coder-1"* — so the SECOND "Twin"
+  // is STORED as `Twin-1` and the picker offers two ordinary, distinct names.
+  //
+  // ⚠ **THE UNSUFFIXED PAIR IS STILL PINNED, ONE CASE DOWN**, because it is reachable across
+  // MACHINES (names are minted where the id is) and the picker must not offer a tag that reaches
+  // the other agent.
+  it("offers each agent at its own STORED name — the suffix is just a name", () => {
     const agents = [
       { agentId: "k3v7d2mq", displayName: "Twin" },
-      { agentId: "zzzzzzzz", displayName: "Twin" },
+      { agentId: "zzzzzzzz", displayName: "Twin-1" },
     ];
     const rows = mentionSuggestions({ members: [], agents, currentUserId: ME, query: "twin" });
     // ⚠ THE PICKER INSERTS WHAT THE INDEX SAYS THIS AGENT WON, never `agentMentionHandle` —
-    // that function answers `twin` for BOTH, so inserting it would tag the OTHER agent (F-210
-    // in the agent namespace). Claim order is the caller's, so the first keeps the bare slug.
+    // that function is per-candidate and knows nothing of the room.
     expect(rows.map((r) => r.handle)).toEqual(["twin", "twin-1"]);
     // ⚠ NARROWED ON `kind` RATHER THAN CAST: `agentId` is on the agent arm of
     // `MentionSuggestion` only, and asserting the arm is part of the claim.
@@ -363,6 +367,19 @@ describe("who the picker offers", () => {
       "k3v7d2mq",
       "zzzzzzzz",
     ]);
+  });
+
+  it("offers a cross-machine duplicate at the FIRST claimant's name and the other's ID FORM", () => {
+    // ⚠ **THE ONE CASE THE COMMIT-TIME RULE CANNOT COVER** — `main/agent-name-unique.js` makes
+    // this machine's agents unique among themselves, and a peer's agent is named on THEIR
+    // machine. The picker must never offer the loser a tag that reaches the winner (F-210), so
+    // it falls back to the handle that never fails.
+    const agents = [
+      { agentId: "k3v7d2mq", displayName: "Twin" },
+      { agentId: "zzzzzzzz", displayName: "Twin" },
+    ];
+    const rows = mentionSuggestions({ members: [], agents, currentUserId: ME, query: "twin" });
+    expect(rows.map((r) => r.handle)).toEqual(["twin", "agent-zzzzzzzz"]);
   });
 });
 

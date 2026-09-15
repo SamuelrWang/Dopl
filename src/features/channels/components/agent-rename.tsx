@@ -24,8 +24,8 @@ import { agentDisplayName } from "./agents-model";
  * machine stored, and a refusal (too long, control / zero-width / bidi characters) reverts the
  * text rather than leaving a name nothing is holding. Same rule `setMode` / `setModel` follow.
  *
- * ⚠ AN EMPTY NAME CLEARS, going back to the canonical `Agent #<id>` — the same op, because
- * "unname" is not a second thing to say.
+ * ⚠ AN EMPTY NAME CLEARS, going back to the canonical unnamed face (`New Agent` since
+ * 2026-09-15; `#<id>` before it) — the same op, because "unname" is not a second thing to say.
  *
  * ⚠ DESKTOP-ONLY, FEATURE-DETECTED. With no bridge (a plain browser) or an older main with no
  * handler, there is no pencil at all: a control that cannot save is worse than an absent one.
@@ -128,6 +128,13 @@ export function AgentName({
       <span className="min-w-0 truncate text-body font-semibold text-text-primary">
         {shown}
       </span>
+      {/* ⚠ **NO `#<id>` TIE-BREAK HERE, AND THE CASE IT ANSWERED IS GONE RATHER THAN HIDDEN**
+          (Samuel, 2026-09-15). A `discriminator` prop rendered a muted id beside the name where
+          two ADDRESSABLE agents in one list shared a face; his uniqueness ruling means the second
+          one is STORED as `Coder-1` (`main/agent-name-unique.js`), so the collision cannot occur.
+          ENDED agents may still share a name and are shown unsuffixed on purpose — there is
+          nothing to choose between, and an id on a finished run is exactly the leak this wave
+          removed. */}
       {canRename && (
         <button
           type="button"

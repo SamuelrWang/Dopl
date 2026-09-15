@@ -53,10 +53,14 @@ function summary(over: Partial<Summary> = {}): Summary {
 }
 
 /** Three of mine, all on t-1 — the shape a triple-click of New Agent produces. */
+// ⚠ **NAMED SINCE 2026-09-15**, because that is what the product now guarantees: every agent has
+// a name (a blank launch is `New Agent`), and no two ADDRESSABLE agents in one channel share one
+// (`main/agent-name-unique.js` stores the second as `Scout-1`). A fixture of three unnamed agents
+// would have all three cards reading `New Agent`, which is a state the commit path cannot produce.
 const THREE = [
-  summary({ sessionId: "s-1", agentId: "a1b2c3d4" }),
-  summary({ sessionId: "s-2", agentId: "e5f6g7h8", state: "idle" }),
-  summary({ sessionId: "s-3", agentId: "i9j0k1l2" }),
+  summary({ sessionId: "s-1", agentId: "a1b2c3d4", displayName: "Scout" }),
+  summary({ sessionId: "s-2", agentId: "e5f6g7h8", state: "idle", displayName: "Rover" }),
+  summary({ sessionId: "s-3", agentId: "i9j0k1l2", displayName: "Probe" }),
 ];
 
 describe("agentKey — one key per AGENT, not per thread", () => {
@@ -118,13 +122,19 @@ describe("the Agents tab with three of mine on one thread", () => {
     return onOpenAgent;
   }
 
-  it("draws one card per agent, each under its own id", () => {
+  it("draws one card per agent, each under its own NAME", () => {
     mount();
-    // ⚠ `Agent #<id>`, the full name the transcript pill uses (2026-08-24) —
-    // the bare id would also match a substring of it, so this asserts the
-    // WHOLE label and would catch the prefix silently disappearing.
+    // ⚠ **IT ASSERTED `#<id>` UNTIL 2026-09-15** — the raw instance id with a `#` glued on, which
+    // is exactly the leak Samuel's ruling removed. The multiplayer property this case exists for
+    // is unchanged: three sessions on one thread, three distinct cards. What tells them apart is
+    // a name, which the product now guarantees is distinct among addressable agents.
+    for (const name of ["Scout", "Rover", "Probe"]) {
+      expect(screen.getByText(name)).toBeTruthy();
+    }
+    // ⚠ AND NO ID ANYWHERE, IN EITHER SPELLING.
     for (const id of ["a1b2c3d4", "e5f6g7h8", "i9j0k1l2"]) {
-      expect(screen.getByText(`#${id}`)).toBeTruthy();
+      expect(screen.queryByText(id)).toBeNull();
+      expect(screen.queryByText(`#${id}`)).toBeNull();
     }
     // Three cards, so three ways in — not one row standing for the thread.
     expect(screen.getAllByRole("button", { name: /^Open$/ })).toHaveLength(3);

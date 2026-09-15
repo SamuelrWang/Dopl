@@ -146,11 +146,15 @@ async function openTemplateMenu() {
     />
   );
   fireEvent.click(screen.getByRole("button", { name: "New Agent" }));
-  await waitFor(() =>
-    expect((screen.getByLabelText("Agent name") as HTMLInputElement).value).toBe(
-      `#${MINTED}`
-    )
-  );
+  // ⚠ **THE MINT NO LONGER SHOWS UP IN THE NAME FIELD (Samuel, 2026-09-15: *"The name should be
+  // blank"*), so this waited on a prefill that is gone.** The id is still minted and still
+  // forwarded on the launch — it is the agent's ADDRESS — it is simply not rendered, so the
+  // readiness signal is the CALL plus its settle rather than a value on screen.
+  await waitFor(() => expect(mintAgentId).toHaveBeenCalled());
+  // ⚠ AND THE DIALOG'S OWN MOUNT — `ModalShell` reveals on a rAF, which the old prefill
+  // assertion happened to wait out as a side effect. The Launch button is the one control every
+  // one of these popups has.
+  await waitFor(() => expect(screen.getByRole("button", { name: "Launch" })).toBeTruthy());
 }
 
 describe("the launch popup's Template row carries the authorship marker", () => {

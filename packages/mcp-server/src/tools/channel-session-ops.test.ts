@@ -46,12 +46,14 @@ import { CHANNEL_DOCTRINE, DOCTRINE_URI } from "./channel-doctrine";
  */
 const NOTE_PHRASES = [
   // …the handle, and the limits on spending it (was SESSION_HANDLE_NOTE).
-  'to="@agent-<id>" or `@agent-<id>` in a body wakes THAT agent',
-  "reaches no server",
+  // ⚠ RE-SPELLED 2026-09-15 — the address is the NAME tag, and the rename clause's
+  // `reaches no server` was false and is gone. See `channel-ops-launch.test.ts`.
+  "that tag, in a body or in `to`, wakes THAT agent",
+  "what people see and what agents tag it by",
   "wakes THAT agent",
   "Tagging is not addressing and starts no agent",
-  "its `body` is the FIRST INSTRUCTION it runs",
-  'op="manage" action="launch" starts one, and thereafter',
+  "its `body` is its FIRST INSTRUCTION",
+  '"launch" starts one: `name` it (never an id; nameless is refused)',
   "an AGENT-authored UNADDRESSED message starts nobody",
   "YOUR OWN OPERATOR'S AGENTS, AND ONLY THEIR MACHINE",
   "`delivery=` IS THE ACK AND THE ONLY ONE",
