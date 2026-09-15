@@ -41,6 +41,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 const require = createRequire(import.meta.url);
 const heal = require("../main/listener-heal.js"); // dependency-free: the REAL module
+const sessionStamp = require("../main/session-id-header.js"); // likewise: pure, so the transport gets the shipped rule
 
 const REPAIR = M("api-repair.js");
 const IO = M("listener-io.js");
@@ -122,11 +123,11 @@ function transport(opts = {}) {
     return Promise.resolve(r === undefined ? { ok: true, status: 200 } : r);
   };
 
+  // ⚠ `sessionStamp` IS THE REAL MODULE, NOT A STUB: a stub returning `{}` would prove only that the stub does (2026-09-15, AGENT-BADGE-TRACE.md).
   const apiFetch = new Function(
-    "auth", "appVersion", "API_BASE", "fetch", "fetchWithAuthRepair",
+    "auth", "appVersion", "sessionStamp", "API_BASE", "fetch", "fetchWithAuthRepair",
     `${asyncFnOf(IO, "sendOnce")}\n${fnOf(IO, "apiFetch")}\n return apiFetch;`
-  )(auth, { versionHeaders: () => ({ "X-Dopl-App-Version": "1.8.4" }) },
-    "https://app.test", fakeFetch, fetchWithAuthRepair);
+  )(auth, { versionHeaders: () => ({ "X-Dopl-App-Version": "1.8.4" }) }, sessionStamp, "https://app.test", fakeFetch, fetchWithAuthRepair);
 
   return { apiFetch, calls, jar: () => cookie };
 }
@@ -224,6 +225,17 @@ test("the request the listener sends is byte-for-byte what it sent before", asyn
   assert.equal(init.headers["X-Dopl-App-Version"], "1.8.4", "Q10's transport stamp survives");
   assert.equal(init.body, undefined);
   assert.ok(init.signal, "the abort wiring is still there");
+  // ⚠ AND NO SESSION HEADER: this caller named none, `{}` spreads to nothing, so the long-poll's request is byte-identical across the 2026-09-15 stamp.
+  assert.equal("X-Dopl-Session-Id" in init.headers, false, "a caller with no session sends none");
+});
+
+test("a caller that NAMES its session puts the slot key on the real request", async () => {
+  // The header is the ONLY door (`resolvePostMetadata` strips a caller-supplied `metadata.session_id`), so an unstamped post is anonymous whatever its body says. Shape rule and `{}` case: `session-id-header.test.mjs`. This is the wire.
+  const t = transport({ responses: [ok] });
+  await t.apiFetch("/api/channels/c1/messages", {
+    method: "POST", workspaceId: "w1", body: { body: "Session ended" }, sessionId: "c1:t1:deynelz3",
+  });
+  assert.equal(t.calls.fetch[0].init.headers["X-Dopl-Session-Id"], "c1:t1:deynelz3");
 });
 
 test("the caller's abort signal still cuts a long-poll short — the wake kick", async () => {

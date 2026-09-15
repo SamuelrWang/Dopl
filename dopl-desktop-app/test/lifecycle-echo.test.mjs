@@ -189,3 +189,48 @@ test("C-5 survives: the calm note is said ONCE per (thread, cycle)", () => {
   api.lifecycleHandlers.onEnded(INFO, "task_progress", { session_ended: true });
   assert.equal(posts.length, 1, "an eviction reaching a held session must not say it twice");
 });
+
+// ── WHICH SESSION WROTE IT (2026-09-15, AGENT-BADGE-TRACE.md) ────────────────────────────
+//
+// THE DEFECT. This note is ABOUT one session and arrived saying nothing about which. The server
+// strips a caller-supplied `metadata.session_id` and re-stamps the reserved key ONLY from the
+// `X-Dopl-Session-Id` header (`service-writes-metadata.ts` fold 6b), and main's HTTP path never
+// set it — so `authorAgentIdOf` answered null, the `channel_sessions.display_name` join was
+// never attempted, and every "Session ended" row rendered as the bare noun "Agent" over a
+// session the operator had named. Samuel's report: *"a message that says agent ended … the badge
+// says just Agent … I'm not sure what's prompting that."*
+//
+// What is pinned here is the seam: the slot key reaches `postTaskEvent`, and it is the SLOT key
+// rather than the per-launch one.
+
+test("the calm note carries the SLOT KEY, so the row can say which agent it is about", () => {
+  const { api, posts } = loadLifecycleEcho();
+  api.lifecycleHandlers.onEnded(INFO, "task_progress", { session_ended: true });
+  const opts = posts[0][6];
+  assert.ok(opts, "postTaskEvent's opts is where the header value rides");
+  assert.equal(opts.sessionId, "c1:t1", "the key `session-store.js › sessionKey` builds");
+});
+
+test("it is `key` and NOT the ephemeral `sessionId` — the reader wants the AGENT segment", () => {
+  // `key` is `<channelId>:<taskId>:<agentId>` and survives a park+resume; `sessionId` is minted
+  // per launch and carries no agent id at all. Stamping the ephemeral one would produce a header
+  // the server accepts and `lib/agent-post-stamp.ts › agentIdOfSessionKey` cannot resolve, which
+  // is the same bare "Agent" with a longer chain of custody.
+  const { api, posts } = loadLifecycleEcho();
+  const info = { ...INFO, key: "c1:t1:deynelz3", sessionId: "sess-EPHEMERAL" };
+  api.lifecycleHandlers.onEnded(info, "task_progress", { session_ended: true });
+  const { sessionId } = posts[0][6];
+  assert.equal(sessionId, "c1:t1:deynelz3");
+  assert.ok(!sessionId.includes("EPHEMERAL"), "the per-launch id is never the attribution");
+  assert.equal(sessionId.split(":").pop(), "deynelz3", "the agent id is the segment readers take");
+});
+
+test("a session with no key stamps NOTHING rather than a value no reader can resolve", () => {
+  // ⚠ UNKNOWN IS NOT EMPTY AND IS NOT A GUESS (INVARIANTS §11). The honest rendering of "cannot
+  // say which agent" is the bare noun; inventing a key would attribute the post to a session
+  // that does not exist.
+  const { api, posts } = loadLifecycleEcho();
+  api.lifecycleHandlers.onEnded({ ...INFO, key: undefined }, "task_progress", { session_ended: true });
+  assert.equal(posts.length, 1, "the note still goes out — attribution is not a precondition");
+  assert.equal(posts[0][6].sessionId, undefined);
+});

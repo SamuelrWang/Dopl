@@ -74,11 +74,17 @@ test("an UNKNOWN version sends no header rather than a blank one", () => {
 // stamping at the transport instead of at each caller.
 
 test("both shared fetch helpers put the version on every request", () => {
+  // ⚠ THE PIN STOPS AT THE VERSION SPREAD (widened 2026-09-15). It used to require the literal
+  // to CLOSE immediately after `versionHeaders()`, which asserted the absence of every other
+  // seam-level stamp as a side effect — so adding one (`session-id-header.js › sessionHeaders`,
+  // AGENT-BADGE-TRACE.md) failed this case without touching the version at all. What this file
+  // owns is that the version rides on the seam; which OTHER stamps ride beside it is that
+  // stamp's own test (`session-id-header.test.mjs`), not a fact to re-assert here by omission.
   for (const f of ["api.js", "listener-io.js"]) {
     const src = M(f);
     assert.match(
       src,
-      /const headers = \{ Accept: 'application\/json', \.\.\.appVersion\.versionHeaders\(\) \};/,
+      /const headers = \{ Accept: 'application\/json', \.\.\.appVersion\.versionHeaders\(\)/,
       `${f} does not stamp the version`
     );
     assert.match(src, /require\('\.\/app-version'\)/, `${f} does not require app-version`);

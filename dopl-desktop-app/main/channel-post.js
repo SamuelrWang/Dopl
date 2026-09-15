@@ -36,12 +36,21 @@ const { diag } = require('./diag');
 // don't describe the outcome well on their own. Local-only fields (mode /
 // toolProfile) stay in diag(), never in the shared metadata.
 //
-// `opts` (optional) carries the two wire fields the per-(kind,channel,seq) default
+// `opts` (optional) carries the wire fields the per-(kind,channel,seq) default
 // cannot express: `clientMsgId` for a caller whose idempotency unit is NOT the
 // message (queued-notice.js keys on the THREAD, so a peer's resend under a new seq
-// dedupes against the first notice instead of posting a second copy), and `summary`
+// dedupes against the first notice instead of posting a second copy), `summary`
 // — a TOP-LEVEL schema field, not a metadata key, which the server persists into
-// metadata itself and the receiver's notification reads.
+// metadata itself and the receiver's notification reads — and `sessionId`.
+//
+// ⚠ `sessionId` IS THE SLOT KEY AND IT RIDES ON THE HEADER, NEVER IN `metadata`
+// (2026-09-15, AGENT-BADGE-TRACE.md). `resolvePostMetadata` strips a caller-supplied
+// `metadata.session_id` unconditionally — a caller able to set it could attribute its own post
+// to somebody else's session — and re-stamps the reserved key from `X-Dopl-Session-Id` alone.
+// So passing it here is what makes a lifecycle note ATTRIBUTABLE: with it the transcript prints
+// the agent's name or `#<id>` and the pill opens that agent's pane, without it the row honestly
+// reads "Agent" and opens nothing.
+// ⚠ ONLY WHERE A SESSION REALLY WROTE IT. A post about the machine passes none; see listener-io.
 //
 // Returns true only on a confirmed post, so a caller that reports its own outcome
 // can say "posted" or "post failed" honestly. Still best-effort: it never throws.
@@ -66,6 +75,7 @@ async function postTaskEvent(entry, m, kind, taskId, extra, bodyText, opts) {
       workspaceId: entry.workspaceId,
       body,
       timeoutMs: 15000,
+      ...(opts && opts.sessionId ? { sessionId: opts.sessionId } : {}),
     });
     diag('task event', kind, res.ok ? 'ok' : `failed ${res.status}`, entry.channel.id.slice(0, 8));
     return res.ok === true;

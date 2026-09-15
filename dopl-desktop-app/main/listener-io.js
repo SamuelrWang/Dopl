@@ -15,6 +15,7 @@ const { Notification } = require('electron');
 const Store = require('electron-store');
 const auth = require('./auth');
 const appVersion = require('./app-version');
+const sessionStamp = require('./session-id-header'); // which SESSION a post is about (a label, never a lock)
 const heal = require('./listener-heal');
 const { fetchWithAuthRepair, discardBody } = require('./api-repair');
 const budget = require('./listener-budget'); // poll budgets + what an abort means (split 2026-08-30)
@@ -209,13 +210,13 @@ function isFeatureAvailable() {
 // unchanged: same headers, same abort wiring, same timeout semantics the
 // long-poll depends on.
 async function sendOnce(pathname, opts) {
-  const { method = 'GET', workspaceId, body, timeoutMs, signal } = opts;
+  const { method = 'GET', workspaceId, body, timeoutMs, signal, sessionId } = opts;
   const cookie = await auth.getAuthCookie(); // ⚠ BOUNDED UPSTREAM, not by `timeoutMs` — this runs BEFORE the controller arms (F-700; see api.js)
   // Q10: this build's version rides on the TRANSPORT (see api.js for the same
   // line, and app-version.js for why the header — not the body — carries it).
   // channel-post.js posts every task lifecycle event and headless reply through
-  // here, so those are the messages a peer can read a version off.
-  const headers = { Accept: 'application/json', ...appVersion.versionHeaders() };
+  // here, so those are the messages a peer can read a version off. ⚠ The SESSION stamp rides beside it, at the seam and for its reason; `{}` when the caller named none (session-id-header.js).
+  const headers = { Accept: 'application/json', ...appVersion.versionHeaders(), ...sessionStamp.sessionHeaders(sessionId) };
   if (cookie) headers.Cookie = cookie;
   if (workspaceId) headers['X-Workspace-Id'] = workspaceId;
   if (body !== undefined) headers['Content-Type'] = 'application/json';

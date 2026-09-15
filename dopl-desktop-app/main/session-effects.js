@@ -91,6 +91,50 @@ function endedEmit(state, outcome, reason, summary) {
 // the citation was not.
 const INACTIVE_NOTE = 'This session went inactive.';
 
+// ── ⚠ THE AUTH HOLD STOPPED BORROWING THAT SENTENCE (2026-09-15, Samuel's ruling via the
+// badge trace: *"should an auth-hold park post 'went inactive' at all? it reads as agent death
+// when it's a credential pause"*) ─────────────────────────────────────────────────────────────
+//
+// A HOLD IS A PARK, NOT AN END. `session-reducer.js › auth_hold` keeps the session durable and
+// REOPENABLE — it relaunches through `startQuery` the moment the operator signs in — so the one
+// sentence it was posting described a state the session was not in. The peer read "went
+// inactive" and reasonably stopped waiting.
+//
+// ⚠ IT STILL POSTS, AND THAT HALF IS C-5's AND UNCHANGED. Deleting the note outright was the
+// other candidate and it reinstates the exact defect C-5 was raised to fix on THIS path: a
+// preflight hold runs no query at all, so without a post there is nothing on the wire and the
+// requester's card pulses "Working…" over a machine nobody has signed in on. What changes is
+// the CLAIM, not the courtesy.
+// ⚠ NO LOCAL DETAIL, the same fence `INACTIVE_NOTE` carries: it says this side is paused and
+// needs a person, never which vendor's credential lapsed or what the operator must click. That
+// is the LOCAL notification's job.
+// ⚠ IT IS NOT THE SAME STRING AS `AUTH_HELD_REPLY` (trigger-outcomes.js) AND MUST NOT BE
+// FACTORED INTO ONE. That one is a REPLY this machine sends to a peer whose request it is
+// declining to pick up ("I'll pick it up once that's sorted"); this is a STATUS NOTE about a
+// session already under way. Two audiences, two moments, and merging them would put a promise
+// to answer on a session that has already stopped answering.
+// ⚠ No em dash (Samuel's copy rule).
+const AUTH_HELD_NOTE = 'This session is paused: the agent sign-in on this machine needs attention.';
+
+// ── ⚠ AN END NOBODY ASKED FOR SAYS SO (2026-09-15, Samuel's ruling via the badge trace:
+// *"should park-on-claim ends say WHY in the post? that's the 'random' feeling, name the
+// cause"*) ────────────────────────────────────────────────────────────────────────────────────
+//
+// `session-park-on-claim.js` ends every live session in a container that has just gained a
+// person. It reached the reducer's `{type:'end'}` — the OPERATOR's own End — so the transcript
+// said `Session ended` and was indistinguishable from a click nobody made, minutes after an
+// unrelated membership change. That is the largest single source of the "it happens at random"
+// report (AGENT-BADGE-TRACE.md §3.1, T5).
+//
+// ⚠ THE CAUSE IS SAYABLE HERE AND THE OTHER TWO SILENT ENDS' CAUSES ARE NOT, which is why this
+// is not a reversal of the no-blame rule above. "Nobody came back" and "this machine has no
+// credential" are facts about the OPERATOR that a counterparty is not owed; "a person joined
+// this channel" is a fact about the CHANNEL, already visible to everyone reading the note, and
+// it is the one that explains an ending the operator did not choose either.
+// ⚠ It names no member: WHO joined is not what makes the ending make sense, and naming them
+// would put a person's arrival in a sentence about an agent stopping.
+const CLAIMED_NOTE = 'Session ended because a person joined this channel.';
+
 // ── ⚠ A TERMINAL POST MUST SAY WHY, AND THE METADATA ALREADY KNOWS (2026-08-22, Samuel) ──────
 //
 // A `task_failed` shipped with NO BODY while its own metadata carried the reason — `{interrupted}`,
@@ -141,12 +185,51 @@ function terminalBody(extra) {
 // ⚠ THE `capped: true` LIFECYCLE EXTRA GOES WITH THEM. It was the peer-visible half — a card on
 // the counterparty's thread saying this side stopped at a limit — and no producer sets it now.
 
+// ── ⚠ WHICH END THIS IS, DECIDED ONCE (2026-09-15) ───────────────────────────────────────────
+//
+// The reducer's `{type:'end'}` is reached by six callers (AGENT-BADGE-TRACE.md §3.1) and only
+// one of them is the operator pressing End. A caller may therefore NAME its end, and this is the
+// closed set of names plus the fallback — in the PURE block, beside the two tables that have to
+// have a sentence for every value it can return, so a name added without copy fails the suite
+// rather than shipping a session that ends in a word nobody wrote.
+//
+// ⚠ ONE VALIDATOR, NOT TWO. `session-reopen.js › controlByTask` FORWARDS a caller's reason and
+// does not police it: a second closed set there would be a second vocabulary, and the two would
+// disagree the first time one of them gained a member.
+// ⚠ AN UNKNOWN NAME IS THE OPERATOR'S OWN End, never silence. `endLifecycle` returns null for a
+// reason it does not know, and null is NO POST — so failing toward `operator` is what keeps a
+// mislabelled end from quietly telling the waiting peer nothing at all.
+// ⚠ IT MAY ONLY CHOOSE COPY. Nothing downstream branches on the reason except the two wording
+// tables and `keepWindow` (the abandonment's, which no caller can name), so naming one widens
+// nothing and ends nothing an unnamed call could not already end.
+const END_EVENT_REASONS = ['claimed']; // `session-park-on-claim.js`'s sweep, and nothing else yet
+function endReasonOf(event) {
+  const named = event && typeof event.reason === 'string' ? event.reason : null;
+  return named && END_EVENT_REASONS.indexOf(named) !== -1 ? named : 'operator';
+}
+
 function endLifecycle(reason, state) {
   if (reason === 'operator') return { type: 'lifecycle', kind: 'task_progress', extra: { session_ended: true }, body: 'Session ended' };
+  // 2026-09-15: the park-on-claim sweep, which is an END the operator did not ask for. Same
+  // shape as the operator's own End (it IS terminal, and it keeps no window); only the sentence
+  // differs, because only this one has a cause a counterparty may be told. See CLAIMED_NOTE.
+  if (reason === 'claimed') {
+    return { type: 'lifecycle', kind: 'task_progress', extra: { session_ended: true }, body: CLAIMED_NOTE };
+  }
   // C-5: the 12h abandonment and the launch watchdog (C-4). ⚠ "and the LRU eviction" stood
   // here until 2026-08-20; there is no eviction (see the header).
   if (reason === 'abandoned' || reason === 'inactive') {
     return { type: 'lifecycle', kind: 'task_progress', extra: { session_ended: true }, body: INACTIVE_NOTE };
+  }
+  // 2026-09-15: the AUTH HOLD, which is a PARK and no longer borrows the sentence above.
+  // ⚠ IT KEEPS `session_ended: true`, and that is deliberate rather than an oversight: the flag
+  // is RESERVED SERVER-SIDE and has no client reader left (`session-inactive-notice.test.mjs`
+  // pins that `SESSION_ENDED_KEY` is gone), so it makes no claim a person can read — what it
+  // still does is drive `trigger-outcomes.js › firstInactiveNote`, the once-per-(thread, cycle)
+  // guard. Dropping it would silently un-dedupe this note and a converging hold could say it
+  // twice, which is the failure C-5 spent its own guard preventing.
+  if (reason === 'auth_hold') {
+    return { type: 'lifecycle', kind: 'task_progress', extra: { session_ended: true }, body: AUTH_HELD_NOTE };
   }
   return null;
 }
@@ -180,6 +263,10 @@ function endedStatusText(reason, state) {
   if (!reason || typeof reason !== 'string') return null;
   // 2026-09-07: `turn_cap` and `cost_cap` arms deleted with the caps.
   if (reason === 'operator') return 'Ended by you';
+  // 2026-09-15: the park-on-claim sweep. ⚠ The operator's OWN window gets the fuller sentence —
+  // the privacy argument that keeps the channel note short does not apply on this side, and
+  // "why did my agent stop" is the whole question this line exists to answer.
+  if (reason === 'claimed') return 'Ended because a person joined this channel';
   if (reason === 'inactive') return 'Ended after going inactive';
   // ⚠ NOT "after 12 hours": the bound is `ABANDONED_MS` and a number spelled here is a second
   // place to change, which is how the cap line went wrong before #1179.
@@ -235,6 +322,11 @@ function postureWasReset(state) {
 //                         abandonment bound already posts if they are not. Idempotent for
 //                         free — the reducer's auth_hold branch returns no effects once
 //                         `authHeld` is set.
+//                         ⚠ SINCE 2026-09-15 THE NOTE IT PUSHES IS THE HOLD'S OWN
+//                         (`AUTH_HELD_NOTE`), not `INACTIVE_NOTE`. The flag is still spelled
+//                         `lifecycle` rather than renamed to the reason: it is the only park
+//                         that posts at all, so the boolean still answers the question the call
+//                         sites ask, and `endLifecycle('auth_hold')` is where the wording lives.
 //   `armAbandon: true`    RE-ARMS the timer instead of clearing it. session-engine's
 //                         scheduleIdle reads `parked` off the state just stored, so this arms
 //                         the hours-scale ABANDONMENT bound (`abandon_timeout`), never another
@@ -249,7 +341,7 @@ function parkEffects(state, opts) {
     o.armAbandon === true ? { type: 'scheduleIdle' } : { type: 'clearIdle' },
     { type: 'persist', phase: 'parked' },
   ];
-  if (o.lifecycle === true) effects.push(endLifecycle('inactive')); // the peer is told, once
+  if (o.lifecycle === true) effects.push(endLifecycle('auth_hold')); // the peer is told, once — a PAUSE, not an ending (2026-09-15)
   if (resetPosture) {
     // ⚠ A park that DISARMS both axes says so — a silent reset leaves the control reading "on"
     // over a session that will ask again.
@@ -281,11 +373,18 @@ module.exports = {
   TERMINAL_BODIES,
   endedEmit,
   endLifecycle,
+  endReasonOf, // which end this is, from the event that caused it
+  END_EVENT_REASONS, // the closed set a caller may name (the suite enumerates it)
   endedStatusText, // A9: the same end, worded for the operator's own window
   endEffects,
   modesEmit,
   parkEffects,
   postureWasReset, // did this park actually take a posture away?
   POSTURE_RESET_NOTE,
-  INACTIVE_NOTE, // the one wording all three silent terminals use
+  // ⚠ "the one wording all three silent terminals use" UNTIL 2026-09-15: the AUTH HOLD took its
+  // own sentence, so this is now the abandonment's and the launch watchdog's — the two that
+  // really are endings with nothing sayable about their cause.
+  INACTIVE_NOTE,
+  AUTH_HELD_NOTE, // a PARK that needs a person, said without claiming an end
+  CLAIMED_NOTE, // an end the operator did not ask for, saying what caused it
 };

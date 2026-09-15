@@ -51,6 +51,7 @@ const PARK = M("session-park.js");
 
 const {
   initialSessionState, sessionReducer, endLifecycle, endEffects, parkEffects, INACTIVE_NOTE,
+  AUTH_HELD_NOTE, CLAIMED_NOTE,
 } = loadReducer();
 
 const running = (opts) =>
@@ -162,12 +163,80 @@ test("ABANDONMENT: M2b's kept window is unchanged — the note did not cost the 
 
 // ── 2. THE AUTH-PREFLIGHT HOLD ───────────────────────────────────────────────────────
 
-test("AUTH HOLD: the park that runs no query at all now posts the same note", () => {
+// ⚠ THIS CASE READ "…now posts the SAME note" AND PINNED `INACTIVE_NOTE` UNTIL 2026-09-15.
+// C-5's half that it was really defending — the park that runs no query at all must still reach
+// the wire — is UNCHANGED and is asserted first below. What Samuel overruled is the SENTENCE: a
+// hold is a credential pause that relaunches on sign-in, and "went inactive" read as the agent
+// having died, on a session the operator could revive with one click. The two halves are
+// asserted apart here so a future edit cannot satisfy this file by deleting the post.
+test("AUTH HOLD: the park that runs no query at all still posts, and no longer claims an end", () => {
   const r = sessionReducer(running(), { type: "auth_hold" });
   const lc = lifecycleOf(r.effects);
-  assert.ok(lc, "nothing else on this path ever reaches the wire");
+  assert.ok(lc, "nothing else on this path ever reaches the wire — C-5's whole point");
+  assert.equal(lc.kind, "task_progress", "the MILESTONE lane: a hold can never be a thread outcome");
+  assert.equal(lc.body, AUTH_HELD_NOTE);
+  assert.notEqual(lc.body, INACTIVE_NOTE, "a PARK must not borrow an ENDING's sentence");
+  assert.ok(!/inactive|ended|stopped/i.test(lc.body), "it may not say this session finished, in any wording");
+  // ⚠ THE MARKER SURVIVES THE REWORDING, and that is load-bearing rather than incidental:
+  // `trigger-outcomes.js › firstInactiveNote` keys the once-per-(thread, cycle) guard on it, so
+  // dropping it would let hold-then-abandon post twice on one exchange.
+  assert.equal(lc.extra.session_ended, true, "the dedupe guard keys on this marker, not on the body");
+});
+
+test("AUTH HOLD: the note says the session needs a PERSON, and nothing about this machine", () => {
+  // Same fence `INACTIVE_NOTE` carries: a counterparty is owed the state, never the operator's
+  // circumstances. No vendor, no account, no error text, no instruction to go and click.
+  for (const leak of ["claude", "anthropic", "token", "credential", "keychain", "sign in to"]) {
+    assert.ok(!AUTH_HELD_NOTE.toLowerCase().includes(leak), `the peer must not be told about ${leak}`);
+  }
+  assert.ok(!AUTH_HELD_NOTE.includes("—"), "Samuel's copy rule: no em dashes");
+});
+
+// ── 2b. THE PARK-ON-CLAIM SWEEP ──────────────────────────────────────────────────────
+// 2026-09-15, Samuel's ruling off AGENT-BADGE-TRACE.md §3.1 (T5): *"should park-on-claim ends
+// say WHY in the post? that's the 'random' feeling, name the cause."* The sweep ends every live
+// session in a container that just gained a person, and it reached the reducer's `{type:'end'}`
+// — the OPERATOR's own End — so the transcript said `Session ended` for something nobody
+// clicked, minutes after an unrelated membership change.
+
+test("PARK-ON-CLAIM: an end nobody asked for says what caused it", () => {
+  const r = sessionReducer(running(), { type: "end", reason: "claimed" });
+  const lc = lifecycleOf(r.effects);
+  assert.ok(lc, "the peer is still told, exactly as an operator End tells them");
   assert.equal(lc.kind, "task_progress");
-  assert.equal(lc.body, INACTIVE_NOTE);
+  assert.equal(lc.body, CLAIMED_NOTE);
+  assert.notEqual(lc.body, "Session ended", "the whole point is that it reads differently");
+  assert.equal(r.state.phase, "ended", "it is a REAL end: only the sentence changed");
+});
+
+test("PARK-ON-CLAIM: it settles identically to the operator's own End", () => {
+  // ⚠ THE REASON MAY ONLY CHOOSE COPY. If it started choosing TEARDOWN too, this sweep would be
+  // a second end path and a second set of teardown bugs — the thing `controlByTask` and
+  // `directive-agent-ops.js` both refuse to become.
+  const claimed = endEffects(running(), "ended", "claimed").map((e) => e.type);
+  const operator = endEffects(running(), "ended", "operator").map((e) => e.type);
+  assert.deepEqual(claimed, operator, "same effects, same order");
+  const settle = endEffects(running(), "ended", "claimed").find((e) => e.type === "settle");
+  assert.equal(settle.keepWindow, false, "only an ABANDONMENT keeps its painted transcript");
+});
+
+test("PARK-ON-CLAIM: an UNRECOGNISED reason falls back to the End's own wording, never to silence", () => {
+  // The reason rides in from a caller (`session-reopen.js › controlByTask`, closed set). A value
+  // that reached here anyway must not mint copy nobody wrote, and must not post NOTHING either:
+  // the peer is owed the ending regardless of how well this machine can explain it.
+  for (const bogus of ["", "whatever", "claimed-by-someone", null, undefined]) {
+    const lc = lifecycleOf(sessionReducer(running(), { type: "end", reason: bogus }).effects);
+    assert.ok(lc, `reason ${JSON.stringify(bogus)} must still tell the peer`);
+    assert.equal(lc.body, "Session ended");
+  }
+});
+
+test("PARK-ON-CLAIM: the note names the CHANNEL's fact and never the person who joined", () => {
+  assert.ok(!CLAIMED_NOTE.includes("—"), "Samuel's copy rule: no em dashes");
+  assert.match(CLAIMED_NOTE, /joined/, "the cause is the point");
+  // A member's name is not what makes the ending make sense, and it would put somebody's
+  // arrival inside a sentence about an agent stopping.
+  assert.ok(!/\b(member|user)\b/i.test(CLAIMED_NOTE), "it describes an event, not a person");
 });
 
 test("AUTH HOLD: it is IDEMPOTENT, so a converging second hold cannot post twice", () => {

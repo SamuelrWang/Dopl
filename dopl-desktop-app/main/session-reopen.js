@@ -209,7 +209,10 @@ function controlByTask(a) {
   const s = resolveSession(a, channelId, taskId);
   if (!s || s.settled) return { ok: false, reason: 'no-session' };
   try {
-    deps.dispatch(s, { type: type });
+    // ⚠ AN `end`'s REASON IS FORWARDED, NEVER POLICED HERE (2026-09-15): `session-effects.js ›
+    // endReasonOf` owns the closed set, and a second one in this file would be a second
+    // vocabulary. It labels the end (`park-on-claim` says so); it widens nothing.
+    deps.dispatch(s, type === 'end' && a && a.reason ? { type: type, reason: a.reason } : { type: type });
   } catch (_) {
     return { ok: false };
   }

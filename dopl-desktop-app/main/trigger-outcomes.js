@@ -116,12 +116,21 @@ function echoSeq(info) {
   const cycle = i.sdkSessionId || i.sessionId || 'init';
   return base + '#' + cycle;
 }
+// ⚠ `sessionId` IS THE SLOT KEY `i.key`, NOT `i.sessionId` (2026-09-15, AGENT-BADGE-TRACE.md).
+// The flat info object carries both and they are different facts: `sessionId` is the PER-LAUNCH
+// ephemeral id (fresh on every resume, a React key on the wire) and `key` is
+// `<channelId>:<taskId>:<agentId>` — `session-store.js › sessionKey`, the same value
+// `runtime/claude/launch-spec.js:159` stamps onto a spawned session's own posts. The AGENT id is
+// the segment every reader wants (`lib/agent-post-stamp.ts › agentIdOfSessionKey` reads it from
+// the END), and the ephemeral id does not carry one at all, so stamping that would produce a
+// header the server accepts and no reader can resolve.
 function echoTargets(info) {
   const i = info || {};
   return {
     entry: { channel: { id: i.channelId }, workspaceId: i.workspaceId },
     m: { seq: echoSeq(i) },
     taskId: i.taskId || undefined,
+    sessionId: i.key || undefined,
   };
 }
 
@@ -131,6 +140,11 @@ function echoTargets(info) {
 // where previously none did, and two of them can reach the same session: a held session is
 // PARKED, and a park can be followed by an abandonment. The operator would then see the note
 // twice on one exchange.
+// ⚠ THE AUTH HOLD NOW POSTS A DIFFERENT SENTENCE (2026-09-15) AND THIS GUARD STILL COVERS IT —
+// deliberately. The guard keys on the `session_ended` MARKER and the (thread, cycle) echo id,
+// never on the body, so hold-then-abandon still says ONE thing on one exchange. That is the
+// point: the second post would be the calm "went inactive" arriving under a note that already
+// told the peer this side is waiting on a person.
 //
 // The key is the echo id the post would carry, so the local guard and the server's own
 // `client_msg_id` uniqueness agree BY CONSTRUCTION rather than by coincidence — and a genuinely
@@ -183,7 +197,7 @@ function onEnded(info, kind, extra, bodyOverride) {
   // it is now dropped, because the coercion's only remaining job would be to manufacture a
   // terminal row this module no longer posts.
   if (kind !== 'task_progress') return;
-  const { entry, m, taskId } = echoTargets(info);
+  const { entry, m, taskId, sessionId } = echoTargets(info);
   if (!entry.channel.id) return;
   // C-5: the calm status note is said once per (thread, cycle); see firstInactiveNote.
   if (meta.session_ended === true && !firstInactiveNote(entry.channel.id, m.seq)) {
@@ -191,7 +205,9 @@ function onEnded(info, kind, extra, bodyOverride) {
     return;
   }
   const body = bodyOverride || (meta.session_ended ? 'Session ended' : undefined);
-  Promise.resolve(postTaskEvent(entry, m, 'task_progress', taskId, meta, body))
+  // ⚠ THE SLOT KEY RIDES WITH IT. This note is ABOUT one session, so the row must say which —
+  // see `echoTargets` above and `channel-post.js › postTaskEvent`'s `sessionId` note.
+  Promise.resolve(postTaskEvent(entry, m, 'task_progress', taskId, meta, body, { sessionId }))
     .catch((err) => diag('session onEnded echo error', err && err.message));
 }
 

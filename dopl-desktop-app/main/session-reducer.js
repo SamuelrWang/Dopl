@@ -14,7 +14,7 @@
 // here at module scope, ABOVE the sentinel, so inside the block below they are free vars —
 // which is what lets test/_reducer-block.mjs prepend those modules' blocks and evaluate the set
 // with no `require` in scope, exactly as before the splits.
-const { gatePhase, gateActivity, endedEmit, endEffects, modesEmit, parkEffects, terminalBody } = require('./session-effects');
+const { gatePhase, gateActivity, endedEmit, endEffects, endReasonOf, modesEmit, parkEffects, terminalBody } = require('./session-effects');
 const {
   DEFAULT_IDLE_MS, TOOL_MODES, MESSAGE_MODES,
   // 2026-09-07: `DEFAULT_TURN_CAP`, `DEFAULT_COST_CAP_USD`, `turnCapReached` and `costCapReached`
@@ -363,7 +363,8 @@ function sessionReducer(state, event) {
   }
 
   if (type === 'end') {
-    return { state: clone(state, { phase: 'ended' }), effects: endEffects(state, 'ended', 'operator') };
+    // ⚠ ONE TERMINAL, SIX CAUSES (2026-09-15): the reason chooses the SENTENCE and nothing else, and an unknown one is the operator's own End — `session-effects.js › endReasonOf`.
+    return { state: clone(state, { phase: 'ended' }), effects: endEffects(state, 'ended', endReasonOf(event)) };
   }
 
   // ⚠ A `close_task` branch sat here — the operator's Close in the session window. It flipped

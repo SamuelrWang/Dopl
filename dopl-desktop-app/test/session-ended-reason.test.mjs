@@ -33,7 +33,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
 const M = (p) => readFileSync(join(MAIN, p), "utf8");
 
-const { endedStatusText, endLifecycle, endEffects, initialSessionState, sessionReducer } = loadReducer();
+const {
+  endedStatusText, endLifecycle, endEffects, initialSessionState, sessionReducer,
+  endReasonOf, END_EVENT_REASONS,
+} = loadReducer();
 
 const running = (opts) =>
   sessionReducer(initialSessionState(opts), { type: "launched", payload: { type: "init" } }).state;
@@ -46,11 +49,20 @@ test("every reason `endEffects` can be called with has a face — none of them i
   // ⚠ THE COUNT WAS FIVE AND IS NOW THREE (2026-09-07): `turn_cap` and `cost_cap` went with the
   // caps themselves. The floor is kept — an EMPTY discovery would make this case vacuous, which
   // is the failure mode a hard-coded five was guarding against in the first place.
+  // ⚠ TWO DISCOVERY ROUTES SINCE 2026-09-15, because the `end` branch stopped passing a
+  // LITERAL. A caller may now NAME its end (`session-park-on-claim.js`'s sweep says `claimed`),
+  // so the reducer calls `endEffects(state, 'ended', endReasonOf(event))` and a source scan for
+  // quoted arguments could no longer see `operator` at all — it found two reasons where there
+  // were four and failed, which is exactly the blindness this case is supposed to have.
+  // The second route EXERCISES the mapper over its own closed set instead of grepping it, so a
+  // reason added to `END_EVENT_REASONS` with no copy behind it fails here on the next run.
   const reasons = new Set();
   for (const src of [M("session-reducer.js"), M("session-effects.js")]) {
     for (const m of src.matchAll(/endEffects\([^)]*?,\s*'[a-z_]+',\s*'([a-z_]+)'/g)) reasons.add(m[1]);
   }
-  assert.ok(reasons.size >= 3, `expected the known ends, found ${[...reasons].join(", ")}`);
+  reasons.add(endReasonOf(undefined)); // the fallback every unnamed end takes
+  for (const named of END_EVENT_REASONS) reasons.add(endReasonOf({ reason: named }));
+  assert.ok(reasons.size >= 4, `expected the known ends, found ${[...reasons].join(", ")}`);
   for (const reason of reasons) {
     const text = endedStatusText(reason, { turnCap: 24 });
     assert.ok(text && typeof text === "string", `${reason} ends in silence`);

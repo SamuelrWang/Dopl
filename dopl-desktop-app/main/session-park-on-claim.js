@@ -133,7 +133,13 @@ function noteWorkspaces(workspaces, diag) {
     const targets = sessionsToStop(engine.listLiveSessions(), newly);
     for (const s of targets) {
       try {
-        engine.controlByTask({ channelId: s.channelId, taskId: s.taskId, agentId: s.agentId, action: 'end' });
+        // ⚠ `reason: 'claimed'` IS WHAT MAKES THE TRANSCRIPT HONEST (2026-09-15, Samuel's
+        // ruling). Without it this sweep posted the operator's own `Session ended` — an end
+        // nobody clicked, arriving minutes after an unrelated membership change, which is the
+        // single largest source of the "agents end at random" report. The reason is validated
+        // against a closed set in `session-reopen.js › controlByTask`; it changes the SENTENCE
+        // and nothing about what is ended.
+        engine.controlByTask({ channelId: s.channelId, taskId: s.taskId, agentId: s.agentId, action: 'end', reason: 'claimed' });
         ended += 1;
       } catch (err) {
         log('park-on-claim: could not end session', s.key, err && err.message);
