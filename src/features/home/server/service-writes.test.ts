@@ -107,7 +107,7 @@ const CHANNEL = {
   workspaceId: WS,
   workspaceSegment: "ada-grace-abc123def456",
   channelId: "44444444-4444-4444-8444-444444444444",
-  name: "Ada & Grace",
+  name: "Ada & Grace", topic: "",
   // ⚠ `peer` IS `peers[0]`, not a second fact — `hydrateChannels` derives it, so
   // a fixture where the two disagree is a shape the server cannot produce.
   peers: [ADA],

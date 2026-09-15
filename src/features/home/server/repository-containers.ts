@@ -334,6 +334,20 @@ export async function listContainerPeers(
 export interface ContainerChannel {
   id: string;
   name: string;
+  /**
+   * `channels.topic` — what the product calls the channel's DESCRIPTION
+   * (`channels/components/info-tab.tsx` carries that ruling: the wire and storage
+   * word stays `topic`, the word a reader sees is "Description").
+   *
+   * ⚠ IT RIDES ALONG FOR THE SAME REASON THE NAME DOES — /home's channel picker
+   * is the only surface that has it, and a SOLO channel's row shows it in place
+   * of the roster faces it has none of (`relationship-list.tsx`, Samuel
+   * 2026-09-15). Without it the row would have to fetch a second payload per
+   * channel to print one line.
+   * ⚠ NEVER NULL: the column is `NOT NULL DEFAULT ''`, so "no description" is the
+   * EMPTY STRING and the renderer tests for emptiness rather than for absence.
+   */
+  topic: string;
 }
 
 /**
@@ -358,7 +372,7 @@ export async function listContainerChannels(
   if (workspaceIds.length === 0) return out;
   const { data, error } = await supabaseAdmin()
     .from("channels")
-    .select("id, workspace_id, name")
+    .select("id, workspace_id, name, topic")
     .in("workspace_id", workspaceIds)
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -366,9 +380,18 @@ export async function listContainerChannels(
     id: string;
     workspace_id: string;
     name: string;
+    topic: string | null;
   }>) {
     if (!out.has(row.workspace_id)) {
-      out.set(row.workspace_id, { id: row.id, name: row.name });
+      // ⚠ `?? ""` THOUGH THE COLUMN IS `NOT NULL DEFAULT ''`: this row is shaped
+      // by hand off an untyped select, so the fallback is the one that keeps a
+      // null from a hand-written fixture or a future nullable migration out of
+      // the payload as the string `"null"`.
+      out.set(row.workspace_id, {
+        id: row.id,
+        name: row.name,
+        topic: row.topic ?? "",
+      });
     }
   }
   return out;

@@ -155,7 +155,35 @@ describe("listContainerChannels", () => {
     const map = await listContainerChannels([WS]);
 
     expect(rec.order).toEqual([["created_at", true]]);
-    expect(map.get(WS)).toEqual({ id: "chan-old", name: "Fundraise" });
+    // ⚠ THESE ROWS CARRY NO `topic` AT ALL, which is the absent-column case the
+    // `?? ""` in `listContainerChannels` is for — "no description" is the EMPTY
+    // STRING everywhere downstream, never `undefined` and never `null`.
+    expect(map.get(WS)).toEqual({ id: "chan-old", name: "Fundraise", topic: "" });
+  });
+
+  /**
+   * THE DESCRIPTION RIDES ALONG WITH THE NAME (Samuel, 2026-09-15) — /home's
+   * channel picker prints it under a SOLO channel's name, so it has to reach the
+   * payload from this one read rather than from a second per-channel fetch.
+   *
+   * ⚠ IT PINS THE SELECTED COLUMN TOO. The row is shaped by hand off an untyped
+   * `.select()`, so a `topic` dropped from that string would fail NOTHING else in
+   * this file — the map would simply carry `""` forever and the picker would go
+   * quietly blank.
+   */
+  it("carries the channel's topic — the DESCRIPTION the picker renders", async () => {
+    primeSupabase([
+      { id: "chan-old", workspace_id: WS, name: "Fundraise", topic: "Series B prep" },
+    ]);
+
+    const map = await listContainerChannels([WS]);
+
+    expect(map.get(WS)).toEqual({
+      id: "chan-old",
+      name: "Fundraise",
+      topic: "Series B prep",
+    });
+    expect(rec.select).toContain("topic");
   });
 
   it("short-circuits on an empty id list rather than asking for everything", async () => {

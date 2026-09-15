@@ -51,6 +51,32 @@ export interface HomeChannel {
    *  peer to name it after. */
   name: string;
   /**
+   * **THE CHANNEL'S DESCRIPTION — `channels.topic`** (Samuel, 2026-09-15).
+   *
+   * ⚠ **THE WIRE WORD IS `topic` AND THE READER'S WORD IS "Description"**, which
+   * is not drift: `channels/components/info-tab.tsx` carries the ruling that the
+   * product says "Description" over the column the New-channel popup and the MCP
+   * both write as `topic`. Spelling it `topic` here keeps this payload saying what
+   * the `Channel` DTO already says (`channels/types.ts`), so one fact has one name
+   * on the wire.
+   *
+   * ⚠ **`""` IS "NO DESCRIPTION", NOT `null`.** The column is `NOT NULL DEFAULT ''`
+   * and this mirrors it, so every reader tests emptiness — a second spelling of
+   * absence (`null`) would mean two checks for one state.
+   *
+   * 🔒 **ITS ONE RENDERER IS THE PICKER ROW'S SECOND LINE, AND ONLY WHEN THE
+   * CHANNEL IS SOLO** (`pages/home/relationship-list.tsx`): a channel with other
+   * people in it shows their FACES there instead. That is Samuel's rule, and it is
+   * the renderer's to state — this field is simply the fact.
+   *
+   * 🔒 ⚠ **NEW KEY ON AN INDEXEDDB-PERSISTED PAYLOAD — EVERY READ SPELLS `?? ""`
+   * INLINE (INVARIANTS §8).** `GET /api/home/channels` is cached with a 24h
+   * `gcTime`, so an entry written by the previous bundle survives the upgrade
+   * WITHOUT this key. `""` is the fail-safe reading: the row keeps today's look
+   * rather than printing `undefined` under a channel name.
+   */
+  topic: string;
+  /**
    * EVERY other member of the container, OLDEST JOIN FIRST — F-307's fix
    * (Samuel's ruling, 2026-08-26: a home channel takes more than two people).
    * Empty for a solo channel. The order is TOTAL and comes from the repository

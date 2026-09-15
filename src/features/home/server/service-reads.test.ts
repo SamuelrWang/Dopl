@@ -92,7 +92,7 @@ describe("getHomeChannels", () => {
     mocked.listLinkContainers.mockResolvedValue([CONTAINER]);
     mocked.listContainerPeers.mockResolvedValue(new Map([[WS, [PEER]]]));
     mocked.listContainerChannels.mockResolvedValue(
-      new Map([[WS, { id: CHANNEL, name: "Ada & Grace" }]])
+      new Map([[WS, { id: CHANNEL, name: "Ada & Grace", topic: "" }]])
     );
     mockProfiles.mockResolvedValue(
       new Map([
@@ -117,6 +117,11 @@ describe("getHomeChannels", () => {
         workspaceSegment: "ada-grace-abc123def456",
         channelId: CHANNEL,
         name: "Ada & Grace",
+        // ⚠ THE DESCRIPTION, UNDER ITS WIRE NAME (2026-09-15). `""` is what the
+        // fixture's channel carries and is what "nobody wrote one" looks like all
+        // the way to the picker — this key being PRESENT is the contract, because
+        // /home reads it per row and an absent key would read `undefined`.
+        topic: "",
         peers: [
           {
             userId: PEER,
@@ -152,7 +157,7 @@ describe("getHomeChannels", () => {
   it("RENDERS a solo channel with no peers — a channel with nobody in it is finished, not broken", async () => {
     mocked.listContainerPeers.mockResolvedValue(new Map());
     mocked.listContainerChannels.mockResolvedValue(
-      new Map([[WS, { id: CHANNEL, name: "Fundraise" }]])
+      new Map([[WS, { id: CHANNEL, name: "Fundraise", topic: "" }]])
     );
 
     const [row] = (await getHomeChannels(ME)).channels;
@@ -290,7 +295,7 @@ describe("getHomeChannel", () => {
   beforeEach(() => {
     mocked.listContainerPeers.mockResolvedValue(new Map([[WS, [PEER]]]));
     mocked.listContainerChannels.mockResolvedValue(
-      new Map([[WS, { id: CHANNEL, name: "Ada & Grace" }]])
+      new Map([[WS, { id: CHANNEL, name: "Ada & Grace", topic: "" }]])
     );
   });
 

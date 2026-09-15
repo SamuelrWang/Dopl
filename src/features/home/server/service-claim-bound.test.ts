@@ -69,6 +69,7 @@ const CHANNEL = {
   workspaceSegment: "q3-fundraise-abc123def456",
   channelId: CHANNEL_ID,
   name: "Q3 Fundraise",
+  topic: "",
   peers: [],
   peer: null,
   createdAt: "2026-08-24T00:00:00.000Z",
@@ -124,7 +125,7 @@ beforeEach(() => {
   mocked.insertContainerMember.mockResolvedValue(undefined);
   mocked.deleteContainerMember.mockResolvedValue(undefined);
   mocked.listContainerChannels.mockResolvedValue(
-    new Map([[WS, { id: CHANNEL_ID, name: "Q3 Fundraise" }]])
+    new Map([[WS, { id: CHANNEL_ID, name: "Q3 Fundraise", topic: "" }]])
   );
   mocked.insertClaim.mockResolvedValue(true);
   mocked.markLinkRevoked.mockResolvedValue(true);

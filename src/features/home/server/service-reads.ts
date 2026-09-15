@@ -144,6 +144,10 @@ export async function hydrateChannels(
       }),
       channelId: channel.id,
       name: channel.name,
+      // ⚠ THE DESCRIPTION, UNDER ITS WIRE NAME (2026-09-15) — see the field's own
+      // docblock in `home/types.ts` for why it is `topic` here and "Description"
+      // on screen, and why `""` rather than `null` means nobody wrote one.
+      topic: channel.topic,
       peers: roster,
       // ⚠ DERIVED, never a second read (see the docblock). Back-compat for a
       // cache written before `peers` existed, and now a STATED rule: the member

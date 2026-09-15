@@ -119,6 +119,7 @@ export const HOME: HomeChannelsPayload = {
       workspaceId: LINK_WORKSPACE_ID,
       workspaceSegment: LINK_SEGMENT,
       channelId: CHANNEL_ID,
+      topic: "",
       // ⚠ `peer` IS `peers[0]` — the server derives it, so a fixture where the
       // two disagree is a payload the API cannot emit.
       peers: [PRIYA],

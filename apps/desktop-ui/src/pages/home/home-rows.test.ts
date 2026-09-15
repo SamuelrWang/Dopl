@@ -43,6 +43,7 @@ function channel(over: Partial<HomeChannel> = {}): HomeChannel {
     workspaceSegment: "link-one-aa11",
     channelId: "chan-1",
     name: "Q3 Fundraise",
+    topic: "",
     peers: [],
     peer: null,
     createdAt: "2026-08-20T09:00:00.000Z",

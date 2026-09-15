@@ -206,6 +206,32 @@ function RelationshipRow({
   const mentions = channel?.unreadMentions ?? 0;
   const unread = channel?.unread ?? false;
   const faces = channel ? channelPeople(channel) : [];
+  /**
+   * 🔒 **THE CHANNEL'S DESCRIPTION, AND IT IS THE SOLO ROW'S SECOND LINE
+   * (Samuel, 2026-09-15): a channel with other people in it keeps the profile
+   * icons exactly as today; a channel with NOBODY else shows its description
+   * instead, in italic.**
+   *
+   * ⚠ **THE TWO ARE ALTERNATIVES, NEVER STACKED**, which is the whole of the
+   * ruling. The faces and this line occupy ONE slot on line two, so a row says
+   * either who else is in the room or what the room is for — never both, and the
+   * row's height (which Samuel fixed: *"I like the current size of it"*) cannot
+   * grow by a line.
+   * ⚠ **`faces.length` IS THE TEST, NOT `peers.length`** — `channelPeople` is the
+   * page's one answer to "who else is here" and carries the stale-cache merge
+   * that keeps a pre-`peers` payload from reading as solo. Asking the raw field
+   * here would paint a populated channel as solo for one paint after an upgrade,
+   * which is the exact bug that helper exists to prevent.
+   * ⚠ **EMPTY STAYS EMPTY.** `topic` is `""` when nobody wrote a description
+   * (`home/types.ts` — the column is `NOT NULL DEFAULT ''`), and a solo channel
+   * with no description renders NOTHING here rather than an italic blank. That
+   * keeps today's look for every channel until a description exists, and it is
+   * why this is a truthiness test and not just a presence one.
+   * ⚠ `?? ""` INLINE (INVARIANTS §8): a new key on an IndexedDB-persisted payload,
+   * so the first paint after this bundle ships reads entries that lack it.
+   */
+  const description = channel?.topic ?? "";
+  const showDescription = faces.length === 0 && description.length > 0;
 
   return (
     <button
@@ -351,6 +377,29 @@ function RelationshipRow({
                   avatarUrl: person.avatarUrl,
                 }))}
               />
+            </span>
+          )}
+          {/* 🔒 **THE SOLO ROW'S DESCRIPTION (Samuel, 2026-09-15)** — the faces'
+              ALTERNATIVE in this one slot, never a second line beside them. The
+              rule and its three guards live on `showDescription` above.
+              ⚠ **`truncate` AND `min-w-0`, BECAUSE A DESCRIPTION IS FREE TEXT UP
+              TO 2000 CHARS** (`channels/schema.ts › ChannelTopicSchema`). The
+              faces it replaces are a fixed 20px stack, so this is the only thing
+              on line two that could size the row — it must clip, not wrap, or the
+              picker's fixed row height goes with it.
+              ⚠ **ITALIC IS THE RULING, AND IT IS THE ONLY THING THAT MAKES IT
+              ITALIC** — no second font and no colour of its own beyond the muted
+              ink every quiet line on this row already uses, inverted on the black
+              selected face exactly as the timestamp and the pending line are
+              (`channel-row-marks.tsx` carries why there is one on-dark ink). */}
+          {showDescription && (
+            <span
+              className={cn(
+                "min-w-0 truncate text-caption italic",
+                selected ? "text-text-on-cta/70" : "text-text-muted"
+              )}
+            >
+              {description}
             </span>
           )}
           <span className="ml-auto flex shrink-0 items-center gap-1.5">

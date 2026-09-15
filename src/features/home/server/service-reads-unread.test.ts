@@ -68,8 +68,8 @@ beforeEach(() => {
   mocked.listContainerPeers.mockResolvedValue(new Map());
   mocked.listContainerChannels.mockResolvedValue(
     new Map([
-      [WS_A, { id: CHAN_A, name: "Alpha" }],
-      [WS_B, { id: CHAN_B, name: "Beta" }],
+      [WS_A, { id: CHAN_A, name: "Alpha", topic: "" }],
+      [WS_B, { id: CHAN_B, name: "Beta", topic: "" }],
     ])
   );
   mocked.listLastMessages.mockResolvedValue(new Map());

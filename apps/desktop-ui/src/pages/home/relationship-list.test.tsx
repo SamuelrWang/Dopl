@@ -168,6 +168,90 @@ describe("the channel ROW's second line", () => {
   });
 });
 
+/**
+ * 🔒 **THE DESCRIPTION LINE, AND THE RULE THAT DECIDES WHEN IT APPEARS AT ALL**
+ * (Samuel, 2026-09-15): under the channel name, italic — but only on a channel
+ * with NOBODY else in it. A channel with other people keeps the profile icons it
+ * has today.
+ *
+ * ⚠ **THE TWO ARE ALTERNATIVES AND BOTH DIRECTIONS ARE PINNED**, because the
+ * cheap half-implementation passes a one-sided test: printing the description
+ * ALWAYS still satisfies "a solo channel shows it". The crowded case below is the
+ * one that fails that.
+ * ⚠ RENDERED THROUGH THE REAL PAGE, on this file's own standing rule — the value
+ * is a NEW key on the wire payload, and a hand-built prop would prove the markup
+ * while saying nothing about whether the read reaches it.
+ */
+describe("the row's DESCRIPTION line", () => {
+  /** SOLO plus a description — the only shape that draws the line. */
+  const DESCRIBED = {
+    ...SOLO_CHANNEL,
+    topic: "Series B prep and the diligence room",
+  };
+
+  it("prints the description under the name when nobody else is in the channel", async () => {
+    apiRequest.mockImplementation(withHome(onlyChannel(DESCRIBED)));
+    renderHome();
+    await openChannels();
+
+    expect(
+      await screen.findByText("Series B prep and the diligence room")
+    ).toBeInTheDocument();
+  });
+
+  it("renders it ITALIC, which is the whole of the styling ruling", async () => {
+    apiRequest.mockImplementation(withHome(onlyChannel(DESCRIBED)));
+    renderHome();
+    await openChannels();
+
+    const line = await screen.findByText("Series B prep and the diligence room");
+    expect(line.className).toContain("italic");
+  });
+
+  it("shows the FACES and not the description when the channel has other people", async () => {
+    // ⚠ THE FIXTURE CARRIES A DESCRIPTION ON PURPOSE. The rule is about the
+    // ROSTER, not about whether a description exists — a crowded channel with one
+    // written must still show icons, or the line would be "print it when you have
+    // one", which is a different feature.
+    apiRequest.mockImplementation(
+      withHome(onlyChannel({ ...CROWDED_CHANNEL, topic: "Series B prep" }))
+    );
+    renderHome();
+    await openChannels();
+
+    expect(screen.getAllByTitle("Priya Shah").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Series B prep")).not.toBeInTheDocument();
+  });
+
+  it("draws no line at all for a solo channel nobody described", async () => {
+    // ⚠ `""` IS THE COLUMN DEFAULT, so this is every channel until somebody writes
+    // one — the row must keep today's look rather than open an empty italic slot.
+    apiRequest.mockImplementation(withHome(onlyChannel({ ...SOLO_CHANNEL, topic: "" })));
+    renderHome();
+    await openChannels();
+
+    const row = (await screen.findByText("Q3 Fundraise")).closest("button");
+    expect(row?.querySelector(".italic")).toBeNull();
+  });
+
+  it("survives a cached payload written before `topic` existed", async () => {
+    // 🔒 INVARIANTS §8: `GET /api/home/channels` is IndexedDB-persisted with a 24h
+    // `gcTime`, so the first paint after this bundle ships reads entries with NO
+    // such key. The read spells `?? ""`, so the row degrades to today's look
+    // instead of printing `undefined` under the channel name.
+    const stale = { ...SOLO_CHANNEL } as Partial<typeof SOLO_CHANNEL>;
+    delete stale.topic;
+    apiRequest.mockImplementation(
+      withHome(onlyChannel(stale as typeof SOLO_CHANNEL))
+    );
+    renderHome();
+    await openChannels();
+
+    expect(await screen.findByText("Q3 Fundraise")).toBeInTheDocument();
+    expect(screen.queryByText(/undefined/)).not.toBeInTheDocument();
+  });
+});
+
 describe("the row's UNREAD MARKS", () => {
   it("prints `@ 3` for three unread mentions", async () => {
     apiRequest.mockImplementation(withHome(onlyChannel(MENTIONED_CHANNEL)));
