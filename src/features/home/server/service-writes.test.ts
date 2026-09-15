@@ -115,7 +115,8 @@ const CHANNEL = {
   createdAt: "2026-08-23T00:00:00.000Z",
   lastMessageAt: null,
   lastMessagePreview: null, unread: false, unreadMentions: 0,
-  linkOut: null,
+  favoritedAt: null,
+      linkOut: null,
 };
 
 beforeEach(() => {

@@ -259,26 +259,29 @@ describe("the mention scroll target and the pin", () => {
 });
 
 /**
- * THE HEADER BOOKMARK — the favourite toggle for the OPEN CHANNEL.
+ * THE HEADER PIN — the favourite toggle for the OPEN CHANNEL.
  *
- * ⚠ The wording is pinned deliberately, not incidentally: it matches the
- * knowledge card's family verbatim ("Bookmark {name}" / "Remove bookmark from
- * {name}", `knowledge-v2/home/base-card.tsx`), because one save affordance
- * across the app should be one sentence. A drift here is a drift there.
+ * 🔒 **IT WAS A BOOKMARK UNTIL 2026-09-15 (Samuel):** *"replace the bookmark icon
+ * next to the channel name with the pin icon."* ⚠ **THE GLYPH AND THE WORDING
+ * MOVED; THE FACT DID NOT** — same control, same `channel_members.favorited_at`.
+ * The label is the ACT now ("Pin {name}" / "Unpin {name}"), and the knowledge
+ * card keeps "Bookmark {name}" on purpose: it saves a BASE, a different object
+ * with its own verb.
+ * ⚠ **AND THE PIN IS THE ONLY ONE** — /home's channel list had grown a second,
+ * per-device pin that afternoon; the ruling deleted it, so this toggle is the one
+ * writer of a channel's pinned-ness on either surface.
  */
-describe("the header's favourite toggle", () => {
-  it("reads UNFAVOURITED as an unpressed, unfilled Bookmark naming the channel", () => {
+describe("the header's pin toggle", () => {
+  it("reads UNPINNED as an unpressed, unfilled Pin naming the channel", () => {
     mount();
-    const button = screen.getByRole("button", { name: "Bookmark Website" });
+    const button = screen.getByRole("button", { name: "Pin Website" });
     expect(button.getAttribute("aria-pressed")).toBe("false");
     expect(button.querySelector("svg")?.getAttribute("fill")).toBe("none");
   });
 
-  it("reads FAVOURITED as pressed, filled, and offering the removal", () => {
+  it("reads PINNED as pressed, filled, and offering the removal", () => {
     mount({ favorited: true });
-    const button = screen.getByRole("button", {
-      name: "Remove bookmark from Website",
-    });
+    const button = screen.getByRole("button", { name: "Unpin Website" });
     expect(button.getAttribute("aria-pressed")).toBe("true");
     // The fill IS the state — the outline is always drawn so the glyph does not
     // change size between the two.
@@ -289,14 +292,12 @@ describe("the header's favourite toggle", () => {
 
   it("calls back on click, in both directions", () => {
     const { props } = mount();
-    fireEvent.click(screen.getByRole("button", { name: "Bookmark Website" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pin Website" }));
     expect(props.onToggleFavorite).toHaveBeenCalledTimes(1);
     cleanup();
 
     const on = mount({ favorited: true });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Remove bookmark from Website" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Unpin Website" }));
     expect(on.props.onToggleFavorite).toHaveBeenCalledTimes(1);
   });
 
@@ -306,7 +307,7 @@ describe("the header's favourite toggle", () => {
     // when a thread opens.
     mount({ thread: thread({ id: "t-1", title: "UI-kit design" }) });
     expect(
-      screen.getByRole("button", { name: "Bookmark Website" })
+      screen.getByRole("button", { name: "Pin Website" })
     ).not.toBeNull();
   });
 

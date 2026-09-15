@@ -354,15 +354,6 @@
      `scripts/check-css-token-drift.ts` fails on one copy. */
   --home-panel-line: var(--border-default);
   --home-card: #fbfcfc;
-  /* THE SELECTED CHANNEL ROW'S LINE (Samuel, 2026-09-09: *"the gray bordering
-     for the selected channel"* should be *"slightly darker"*). ONE STEP DOWN
-     FROM `--focus-line` (rgba(24,24,24,.22)) — a SECOND NAME rather than an edit
-     to that token, which `.selected-ring` shares with the search pill's open
-     state. Consumed by exactly one rule,
-     `apps/desktop-ui/src/pages/home/home.module.css › .rowSelected`; only the
-     LINE moved, the halo is still `.selected-ring`'s. Change it HERE and in the
-     other copy — `scripts/check-css-token-drift.ts` fails on one. */
-  --home-row-line-selected: rgba(24, 24, 24, 0.34);
   /* ⚠ `--home-frame-ink` / `--home-frame-hover` WERE ADDED AND REMOVED ON
      2026-08-30, both within Samuel's review of the same ruling. They existed so
      the workspace sidebar's nav chips could stand on the DARK frame beside the

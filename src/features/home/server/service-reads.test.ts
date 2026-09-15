@@ -140,6 +140,10 @@ describe("getHomeChannels", () => {
         // exact-shape assertion rather than left to `toMatchObject`.
         unread: false,
         unreadMentions: 0,
+        // ⚠ AND THE PIN IS OFF FOR THE SAME REASON (2026-09-15) — `favoritedAt`
+        // rides the SAME `channel_members` read, so an absent row means "not
+        // pinned" exactly as it means "no marks".
+        favoritedAt: null,
         linkOut: null,
       },
     ]);

@@ -45,6 +45,16 @@ export interface HomeChannelRead {
   channelId: string;
   /** null = never read. */
   lastReadAt: string | null;
+  /**
+   * 🔒 **WHEN THE CALLER PINNED THIS CHANNEL — `channel_members.favorited_at`,
+   * null when they have not (2026-09-15).** ⚠ **THE PIN AND THE BOOKMARK ARE ONE
+   * FACT** (Samuel: *"replace the bookmark icon next to the channel name with the
+   * pin icon"*), so this is the column the channels header's own toggle writes
+   * (`channels/server/service-writes-members.ts › updateMyMemberSettings`) and
+   * NOT a second per-device store. ⚠ An absent ROW still means "no pin", exactly
+   * as it means "no marks" — a non-member has nothing pinned.
+   */
+  favoritedAt: string | null;
 }
 
 /**
@@ -72,17 +82,24 @@ export async function listMyChannelReads(
   if (workspaceIds.length === 0) return out;
   const { data, error } = await supabaseAdmin()
     .from("channel_members")
-    .select("channel_id, last_read_at")
+    // ⚠ `favorited_at` RIDES THIS READ AND ADDS NO QUERY (2026-09-15, Samuel's
+    // *"replace the bookmark icon next to the channel name with the pin icon"*):
+    // the pin IS the favourite, it lives on the SAME `channel_members` row this
+    // already selects for the watermark, and a second round trip for a second
+    // column of one row is the cost this file exists to avoid.
+    .select("channel_id, last_read_at, favorited_at")
     .in("workspace_id", workspaceIds)
     .eq("user_id", userId);
   if (error) throw error;
   for (const row of (data ?? []) as Array<{
     channel_id: string;
     last_read_at: string | null;
+    favorited_at: string | null;
   }>) {
     out.set(row.channel_id, {
       channelId: row.channel_id,
       lastReadAt: row.last_read_at,
+      favoritedAt: row.favorited_at,
     });
   }
   return out;

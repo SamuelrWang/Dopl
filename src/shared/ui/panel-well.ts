@@ -33,11 +33,52 @@
 import { cn } from "@/shared/lib/utils";
 import { SECTION_PANEL_SHELL } from "@/shared/ui/section-panel";
 
+// ⚠ **`WELL_ON_PANEL_FILL` STOOD HERE AND IS DELETED (2026-09-15)** — it existed so
+// a TAB lifted out of the box could wear the body's colour by pointing at it. The
+// tab is gone (Samuel retracted it the same day; `channels/components/
+// collapse-wells.tsx` records what went with it), so the fill had exactly one
+// reader left: the constant below, in this file. A separately-named export with no
+// caller outside its own module is the vocabulary `agents-wells.tsx` deleted three
+// aliases for on 2026-09-14.
+
+/** The well's GEOMETRY and its column, with no fill — the half both fills share,
+ *  stated once so the two can never differ by a radius. */
+const WELL_BOX = cn(SECTION_PANEL_SHELL, "flex min-w-0 flex-col gap-2");
+
 /** The gray box the label AND the content sit in. */
-export const PANEL_WELL = cn(
-  SECTION_PANEL_SHELL,
-  "bg-home-panel flex min-w-0 flex-col gap-2"
-);
+export const PANEL_WELL = cn(WELL_BOX, "bg-home-panel");
+
+/**
+ * 🔒 **THE SAME WELL FOR A SURFACE THAT IS ALREADY STANDING ON `--home-panel`
+ * (2026-09-15).**
+ *
+ * **SAMUEL, over /home's channel column, verbatim: *"there's no gray background
+ * on this at all"*.** The cause was not a missing class — it was `bg-home-panel`
+ * doing exactly what it says on a page that is ALREADY `--home-panel`:
+ * `pages/home/index.tsx` paints its `<main>` with that very token, so a
+ * `PANEL_WELL` drawn in the left column is `#f1f3f5` on `#f1f3f5` and there is
+ * nothing to see. ⚠ **IT IS A FILL AND NOT A SECOND LOOK** — Samuel's follow-up
+ * the same day was *"just make the gray dropdowns match exactly those"* (the
+ * Agents tab's), so the geometry, the header and the collapse are shared and only
+ * the colour moves. ⚠ **EVERY OTHER READER OF `PANEL_WELL` SITS ON WHITE** — the
+ * Agents and Threads tabs and the Overview's usage well all render inside /home's
+ * record pane or a workspace page card, which is what makes that token read as
+ * "the gray behind the white pane" in Samuel's original ruling.
+ *
+ * ⚠ **THE FILL IS `--seg-fill` (#e9eaec), MEASURED AND NOT INVENTED.** It is the
+ * ONE gray this app already draws ON `--home-panel` and it is on /home already:
+ * the page header's own tab selector is `SegmentedControl variant="plain"`, whose
+ * unselected pills wear `bg-[var(--seg-fill)]` against this exact ground
+ * (`shared/ui/segmented-control.tsx`, Samuel's 2026-09-08 review). ⚠ **NOT
+ * `--bg-inset` (#f1f1f1)**, which is 0/2/4 from the panel and would have shipped
+ * the same complaint back; ⚠ **NOT `--card-surface-subtle` (#f4f6f9)**, which is
+ * LIGHTER than the ground; ⚠ **NOT a newly minted hex** — a fourth gray for one
+ * box is the drift `--seg-fill`'s own comment was written to stop.
+ *
+ * ⚠ **THE GEOMETRY IS `PANEL_WELL`'s, BY CONSTRUCTION** (`WELL_BOX` above): the
+ * radius and padding move for both fills at once, or this is a second well.
+ */
+export const PANEL_WELL_ON_PANEL = cn(WELL_BOX, "bg-[var(--seg-fill)]");
 
 /** THE CONTENT COLUMN inside the well — direction and gap only, no surface. */
 export const PANEL_ROWS = "flex min-w-0 flex-col gap-2";

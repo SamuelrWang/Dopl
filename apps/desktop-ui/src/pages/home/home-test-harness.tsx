@@ -95,6 +95,24 @@ export const OMAR: HomePeer = {
   avatarUrl: null,
 };
 
+/**
+ * ⚠ **THE DEFAULT FIXTURE'S STAMPS MOVE WITH THE CLOCK SINCE 2026-09-15, AND THAT
+ * IS A CONSEQUENCE OF SAMUEL'S THREE WELLS** (`channel-wells.ts`): the list files
+ * a row by *"activity in the last 24 hours"* and **Earlier** is CLOSED by default,
+ * so a fixture frozen at `2026-08-22` put every row of every home suite inside a
+ * collapsed well — where the rows are UNMOUNTED, not hidden (INVARIANTS §5). The
+ * two stamps were arbitrary dates; what they were ALWAYS standing in for is "this
+ * channel is the one the operator is looking at", which is a RELATIVE fact.
+ *
+ * ⚠ **NO SUITE ASSERTS EITHER VALUE** — measured before moving them (nothing greps
+ * `2026-08-22` / `2026-07-12`, and `formatChannelTimestamp`'s output is never
+ * pinned). A case that wants an OLD row states its own age, as
+ * `relationship-list.test.tsx`'s wells cases do.
+ */
+const MINUTES_AGO = new Date(Date.now() - 5 * 60_000).toISOString();
+/** ⚠ OLDER THAN THE CHANNEL, so `homeRows`' newest-first order is unchanged. */
+const HOUR_AGO = new Date(Date.now() - 60 * 60_000).toISOString();
+
 export const HOME: HomeChannelsPayload = {
   channels: [
     {
@@ -106,8 +124,8 @@ export const HOME: HomeChannelsPayload = {
       peers: [PRIYA],
       peer: PRIYA,
       name: "Priya Shah",
-      createdAt: "2026-07-12T10:00:00.000Z",
-      lastMessageAt: "2026-08-22T14:19:00.000Z",
+      createdAt: MINUTES_AGO,
+      lastMessageAt: MINUTES_AGO,
       // ⚠ STILL ON THE FIXTURE THOUGH NOTHING RENDERS IT (2026-09-13) — the field
       // is still on the wire, and `relationship-list.test.tsx` asserts its ABSENCE
       // from the row, which needs a payload that actually carries it.
@@ -116,6 +134,9 @@ export const HOME: HomeChannelsPayload = {
       // no existing suite grows a dot or a badge it never asked about.
       unread: false,
       unreadMentions: 0,
+      // ⚠ NOT PINNED BY DEFAULT — the **Pinned** well is opt-in per case, so no
+      // existing suite grows a row in a well it never asked about.
+      favoritedAt: null,
       linkOut: null,
     },
   ],
@@ -124,7 +145,7 @@ export const HOME: HomeChannelsPayload = {
       id: "link-1",
       url: "https://dopl.link/c/x7Kd92mQ",
       label: null,
-      createdAt: "2026-08-19T09:00:00.000Z",
+      createdAt: HOUR_AGO,
       expiresAt: "2026-08-28T09:00:00.000Z",
       grantedRole: "guest",
       maxUses: 1,

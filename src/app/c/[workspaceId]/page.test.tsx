@@ -54,7 +54,8 @@ const CHANNEL: HomeChannel = {
   lastMessagePreview: null,
   unread: false,
   unreadMentions: 0,
-  linkOut: null,
+  favoritedAt: null,
+      linkOut: null,
 };
 
 interface MountProps {

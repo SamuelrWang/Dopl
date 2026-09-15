@@ -140,17 +140,29 @@ describe("no page-local copy of either recipe is left in pages/home", () => {
     }
   });
 
-  it("🔒 the black recipe is spelled ONCE, in panel-buttons.tsx", () => {
+  it("🔒 the black recipe is spelled in TWO places, and each is a different SHAPE", () => {
     // It stood, byte-identically, on /home's "New channel" button, on "Add
     // person" and (from 2026-09-09) would have stood on the four section
     // creates — four copies of one page action. `auth-btn-3d` followed by a
     // SPACE is the black face; `auth-btn-3d-light` is the raised WHITE one the
     // rows and the search pill wear, and that is a different recipe with its
     // own home in the kit.
+    //
+    // 🔒 **THE SECOND ENTRY ARRIVED 2026-09-15 (Samuel):** *"for the channel
+    // picker, for the selected channel, can we have it turn into like the black
+    // button UI?"* — `channel-row-marks.tsx › HOME_CARD_FACE_SELECTED`. ⚠ **THIS
+    // LIST MAY ONLY EVER HOLD A NEW SHAPE, NEVER A SECOND SPELLING OF AN OLD
+    // ONE.** What this case protects is that the page's black PILL is declared
+    // once; the selected row is the black CARD — the kit face at the row's own
+    // radius, carrying the row's ink — and the two share the kit class, which is
+    // the point, rather than a copied gradient. **A third entry is a bug unless
+    // it is a third shape, and a copy of either of these two is the defect this
+    // case was written for.**
     const declaring = sources
       .filter(([, text]) => /"auth-btn-3d /.test(text))
-      .map(([file]) => file);
-    expect(declaring).toEqual(["panel-buttons.tsx"]);
+      .map(([file]) => file)
+      .sort();
+    expect(declaring).toEqual(["channel-row-marks.tsx", "panel-buttons.tsx"]);
   });
 
   it("🔒 `CreateButton` is declared exactly once", () => {

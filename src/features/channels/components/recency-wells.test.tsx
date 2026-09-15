@@ -15,7 +15,7 @@
  *
  *  - **THE KEY IS A PARAMETER, NOT A CONSTANT.** Two surfaces, two
  *    `localStorage` keys, no shared state: collapsing **Earlier** over agents must
- *    not collapse it over threads. Were `useRecencyWells` to ignore its argument
+ *    not collapse it over threads. Were `collapse-wells.tsx › useWells` to ignore its argument
  *    and read one hard-coded key, BOTH consumer suites would still pass — each one
  *    only ever mounts its own surface.
  *  - **THE BUCKETS ARE EXHAUSTIVE, SO NO ITEM CAN BE DROPPED BY ARITHMETIC.** Every

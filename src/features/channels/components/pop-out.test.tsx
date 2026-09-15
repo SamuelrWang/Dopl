@@ -197,9 +197,10 @@ describe("the header slot", () => {
     ]) {
       expect(screen.queryByRole("button", { name: gone })).toBeNull();
     }
-    // The crumb's bookmark STAYS — and since 2026-08-19 it is the real
-    // favourite toggle, so it names the channel rather than saying "channel"
-    // (`message-pane.test.tsx › the header's favourite toggle` owns its states).
-    expect(screen.getByRole("button", { name: "Bookmark general" })).toBeTruthy();
+    // The crumb's PIN STAYS — the real favourite toggle since 2026-08-19, a
+    // `Pin` glyph since Samuel's 2026-09-15 ruling, and it names the channel
+    // rather than saying "channel" (`message-pane.test.tsx › the header's pin
+    // toggle` owns its states).
+    expect(screen.getByRole("button", { name: "Pin general" })).toBeTruthy();
   });
 });

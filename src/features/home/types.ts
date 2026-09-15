@@ -137,6 +137,28 @@ export interface HomeChannel {
    */
   unreadMentions: number;
   /**
+   * 🔒 **WHEN THE CALLER PINNED THIS CHANNEL, OR null — AND THE PIN IS THE
+   * BOOKMARK (Samuel, 2026-09-15):** *"remove the pin icon that appears when i
+   * hover over the picker. instead replace the bookmark icon next to the channel
+   * name with the pin icon."* ⚠ **ONE FACT, SERVER-BACKED, WRITTEN FROM ONE
+   * PLACE**: `channel_members.favorited_at`, set by the channel header's toggle
+   * through `channels/server/service-writes-members.ts › updateMyMemberSettings`
+   * — the SAME write the workspace channels page makes, so pinning on /home and
+   * bookmarking on the channels page are the same act on the same row.
+   * ⚠ **IT REPLACED A PER-DEVICE `localStorage` SET** (`dopl.home.channels.pinned`,
+   * alive for one afternoon) that this ruling deleted: a pin nobody else could see
+   * and that did not survive a second machine was the wrong model, and Samuel's
+   * own screenshot named the control that already held the right one.
+   *
+   * 🔒 ⚠ **NEW KEY ON AN INDEXEDDB-PERSISTED PAYLOAD — EVERY READ SPELLS
+   * `?? null` INLINE (INVARIANTS §8).** `GET /api/home/channels` is cached with a
+   * 24h `gcTime`, so an entry written by the previous bundle survives the upgrade
+   * WITHOUT this key. `null` is the fail-safe reading: the row files under its own
+   * recency instead of appearing in **Pinned**, which is the answer that was true
+   * for every row before this field existed.
+   */
+  favoritedAt: string | null;
+  /**
    * The open BOUND link, when this channel has an invitation out. Rendered as a
    * chip ON this channel's row — a pending peer is a STATE of the channel, not
    * a second row beside it.

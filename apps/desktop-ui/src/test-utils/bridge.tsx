@@ -146,16 +146,23 @@ export function bridgeCalls(mock: { mock: { calls: unknown[][] } }) {
   }));
 }
 
-/** Render `routes` under the app's query client and a memory router. */
+/** Render `routes` under the app's query client and a memory router.
+ *
+ *  ⚠ **THE `client` IS RETURNED (2026-09-15), and it is not a convenience.** Two
+ *  of /home's facts live in a SECOND cache that a different feature's write owns
+ *  — the channel pin is the worked case (`pages/home/use-home-favorite-sync.ts`)
+ *  — and the only honest way to pin a bridge between two caches is to seed the
+ *  one this page does not fetch. Additive: both existing keys are unchanged. */
 export function renderWithProviders(
   routes: RouteObject[],
   initialEntries: string[]
 ) {
   const router = createMemoryRouter(routes, { initialEntries });
+  const client = createQueryClient();
   const view = render(
-    <QueryClientProvider client={createQueryClient()}>
+    <QueryClientProvider client={client}>
       <RouterProvider router={router} />
     </QueryClientProvider>
   );
-  return { router, view };
+  return { router, view, client };
 }

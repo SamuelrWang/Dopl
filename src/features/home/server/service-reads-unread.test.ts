@@ -75,8 +75,8 @@ beforeEach(() => {
   mocked.listLastMessages.mockResolvedValue(new Map());
   mocked.listMyChannelReads.mockResolvedValue(
     new Map([
-      [CHAN_A, { channelId: CHAN_A, lastReadAt: READ_AT }],
-      [CHAN_B, { channelId: CHAN_B, lastReadAt: READ_AT }],
+      [CHAN_A, { channelId: CHAN_A, lastReadAt: READ_AT, favoritedAt: null }],
+      [CHAN_B, { channelId: CHAN_B, lastReadAt: READ_AT, favoritedAt: null }],
     ])
   );
   mocked.listMyMentionStamps.mockResolvedValue([]);
@@ -142,8 +142,8 @@ describe("unreadMentions — the `@ N` badge's aggregate", () => {
   it("goes to ZERO once everything is read", async () => {
     mocked.listMyChannelReads.mockResolvedValue(
       new Map([
-        [CHAN_A, { channelId: CHAN_A, lastReadAt: "2026-09-13T00:00:00.000Z" }],
-        [CHAN_B, { channelId: CHAN_B, lastReadAt: "2026-09-13T00:00:00.000Z" }],
+        [CHAN_A, { channelId: CHAN_A, lastReadAt: "2026-09-13T00:00:00.000Z", favoritedAt: null }],
+        [CHAN_B, { channelId: CHAN_B, lastReadAt: "2026-09-13T00:00:00.000Z", favoritedAt: null }],
       ])
     );
     mocked.listMyMentionStamps.mockResolvedValue([
@@ -159,7 +159,7 @@ describe("unreadMentions — the `@ N` badge's aggregate", () => {
 
   it("counts EVERY mention in a channel the caller has never opened", async () => {
     mocked.listMyChannelReads.mockResolvedValue(
-      new Map([[CHAN_A, { channelId: CHAN_A, lastReadAt: null }]])
+      new Map([[CHAN_A, { channelId: CHAN_A, lastReadAt: null, favoritedAt: null }]])
     );
     mocked.listMyMentionStamps.mockResolvedValue([
       { channelId: CHAN_A, createdAt: "2026-09-02T09:00:00.000Z" },
@@ -178,9 +178,9 @@ describe("unreadMentions — the `@ N` badge's aggregate", () => {
   it("floors the scan at the OLDEST cutoff, and at a never-read channel's container date", async () => {
     mocked.listMyChannelReads.mockResolvedValue(
       new Map([
-        [CHAN_A, { channelId: CHAN_A, lastReadAt: READ_AT }],
+        [CHAN_A, { channelId: CHAN_A, lastReadAt: READ_AT, favoritedAt: null }],
         // Never opened → its cutoff is container B's birth, which is older.
-        [CHAN_B, { channelId: CHAN_B, lastReadAt: null }],
+        [CHAN_B, { channelId: CHAN_B, lastReadAt: null, favoritedAt: null }],
       ])
     );
 

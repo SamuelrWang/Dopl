@@ -418,26 +418,24 @@ describe("the selected channel row's line is its own step", () => {
   const HOME_CSS = "apps/desktop-ui/src/pages/home/home.module.css";
   const ROW_TSX = "apps/desktop-ui/src/pages/home/relationship-list.tsx";
 
-  it("darkens the row's border WITHOUT moving the shared focus line", () => {
-    // 🔒 Samuel, 2026-09-09: *"the gray bordering for the selected channel"*
-    // should be *"slightly darker"*. The row wears the kit's `.selected-ring`,
-    // whose `border-color` is `--focus-line` — and so does the header's search
-    // pill while it is open, so darkening THAT token would have moved a control
-    // nobody named. A second name is the whole fix.
+  /** 🔒 **SAMUEL RETRACTED THE RULING THIS CASE PINNED (2026-09-15):** /home's
+   *  selected row is the page's BLACK BUTTON now, so `--home-row-line-selected`,
+   *  `.rowSelected` and the row's `selected-ring` are deleted. ⚠ **THE HALF THAT
+   *  WAS ALWAYS THE POINT SURVIVES** — /home's selection must not move
+   *  `--focus-line`, which the search pill and the landing demo wear.
+   *  `docs/DESIGN-SYSTEM.md › .selected-ring` carries it. */
+  it("leaves the shared focus line untouched, /home's second name deleted", () => {
     for (const file of [SPA_TOKENS, WEB_KIT_CSS]) {
       const src = code(read(file));
-      expect(src).toContain("--home-row-line-selected: rgba(24, 24, 24, 0.34)");
-      // …and the ring the rest of the app shares is untouched.
       expect(src).toContain("--focus-line: rgba(24, 24, 24, 0.22)");
+      expect(src).not.toContain("--home-row-line-selected:");
     }
-    expect(rule(read(HOME_CSS), "\n.rowSelected {")).toContain(
-      "border-color: var(--home-row-line-selected)"
-    );
-    // ⚠ COMPOSED, NOT REPLACED. The halo, the raised face and the hover lift are
-    // still `.selected-ring`'s — only the LINE is /home's.
-    expect(code(read(ROW_TSX))).toContain(
-      'cn("selected-ring", home.rowSelected)'
-    );
+    expect(read(HOME_CSS)).not.toContain(".rowSelected {");
+    // ⚠ AND THE ROW WEARS THE BLACK BUTTON, BY THE CONSTANT.
+    const row = code(read(ROW_TSX));
+    expect(row).toContain("HOME_CARD_FACE_SELECTED");
+    expect(row).not.toContain("selected-ring");
+    expect(row).not.toContain("rowSelected");
   });
 });
 

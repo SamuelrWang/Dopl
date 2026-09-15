@@ -12,7 +12,7 @@
  */
 
 import type { ReactNode } from "react";
-import { Bookmark, ChevronRight, Hash, PanelRight } from "lucide-react";
+import { ChevronRight, Hash, PanelRight, Pin } from "lucide-react";
 // ⚠ CROSS-FEATURE, AND THE SAME "SMALLER OF TWO EVILS" `agents-wells.tsx` RECORDS
 // (INVARIANTS §1 forbids it; F-275 records that this tree has never obeyed the
 // rule). `TEMPLATE_NAME_TEXT` was exported on 2026-09-13 so a second surface could
@@ -72,9 +72,9 @@ export function PaneHeader({
    * ⚠ **SCOPED TO ONE FACE, NEVER THE HEADER WHOLESALE.** This same header
    * serves the conversation, and there the crumb is the only thing saying which
    * room you are typing into.
-   * ⚠ **VISIBLE TEXT ONLY.** The bookmark's accessible name still says WHICH
-   * channel it bookmarks — a control that reads "Bookmark" with no object is a
-   * regression for exactly the readers who cannot see the pane it sits on.
+   * ⚠ **VISIBLE TEXT ONLY.** The pin's accessible name still says WHICH channel
+   * it pins — a control that reads "Pin" with no object is a regression for
+   * exactly the readers who cannot see the pane it sits on.
    * ⚠ **IGNORED IN A THREAD**, where the crumb's first half is the way BACK out
    * of the thread and deleting it would strand the reader.
    */
@@ -160,22 +160,31 @@ export function PaneHeader({
           </>
         )}
       </nav>
-      {/* THE FAVOURITE TOGGLE. Stays with the crumb because it acts on what the
-          crumb NAMES; the right-hand cluster acts on the pane.
+      {/* THE PIN. Stays with the crumb because it acts on what the crumb NAMES;
+          the right-hand cluster acts on the pane.
 
-          ⚠ THE LABEL NAMES THE CHANNEL, matching the knowledge card's wording
-          family exactly (`knowledge-v2/home/base-card.tsx`: "Bookmark {name}" /
-          "Remove bookmark from {name}") — one save affordance across the app
-          means one sentence for it, and a screen-reader user in a thread needs
-          the label to say WHICH thing gets bookmarked, since the crumb reads
-          two. `aria-pressed` and the fill both come off the same boolean. */}
+          🔒 **IT WAS A `Bookmark` GLYPH UNTIL 2026-09-15 (Samuel, verbatim):**
+          *"remove the pin icon that appears when i hover over the picker. instead
+          replace the bookmark icon next to the channel name with the pin icon."*
+          ⚠ **THE GLYPH MOVED AND THE FACT DID NOT** — same control, same
+          `channel_members.favorited_at`, same write. What the ruling settles is
+          that **the pin IS the bookmark**: /home's channel list had grown a
+          second, per-device pin that afternoon, and one channel cannot have two
+          pinned-nesses. That store is deleted; this toggle is the only writer.
+          ⚠ **AND IT IS THE SAME CONTROL ON BOTH SURFACES** — the workspace
+          channels page and /home's record pane mount this one header, so pinning
+          in either place is the same row (INVARIANTS §7: one surface, two hosts).
+
+          ⚠ THE LABEL NAMES THE CHANNEL and is now the ACT, not the state —
+          "Pin {name}" / "Unpin {name}". A screen-reader user in a thread needs it
+          to say WHICH thing gets pinned, since the crumb reads two.
+          ⚠ **THE KNOWLEDGE CARD KEEPS "Bookmark {name}"** and that is not drift:
+          it saves a BASE, a different object with its own verb, and Samuel's
+          ruling named this control. `aria-pressed` and the fill both come off the
+          same boolean. */}
       <IconButton
-        icon={Bookmark}
-        label={
-          favorited
-            ? `Remove bookmark from ${channelName}`
-            : `Bookmark ${channelName}`
-        }
+        icon={Pin}
+        label={favorited ? `Unpin ${channelName}` : `Pin ${channelName}`}
         size={14}
         className="h-6 w-6"
         active={favorited}

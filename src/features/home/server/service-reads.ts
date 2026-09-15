@@ -166,6 +166,10 @@ export async function hydrateChannels(
       // both live in `unread-tally.ts` and `repository-unread.ts`.
       unread: isChannelUnread(last?.at ?? null, reads.get(channel.id)),
       unreadMentions: mentions.get(channel.id) ?? 0,
+      // 🔒 THE PIN, WHICH IS THE BOOKMARK (2026-09-15) — the caller's own
+      // `channel_members.favorited_at`, off the read this fan already made. ⚠ AN
+      // ABSENT ROW IS "not pinned", the same `isMember` clause the marks take.
+      favoritedAt: reads.get(channel.id)?.favoritedAt ?? null,
       // ⚠ Claimability is judged by the SAME predicate the claim gate uses — a
       // chip that says "invite out" over a link that 410s is the disagreement
       // `isClaimable` exists to prevent.

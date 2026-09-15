@@ -1,9 +1,31 @@
+import { useMemo } from "react";
 import { cn } from "@/shared/lib/utils";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { AvatarStack } from "@/shared/ui/avatar-stack";
+// ⚠ AN APP READING A FEATURE COMPONENT, which is the direction /home already
+// takes eleven times (`person-members.tsx`, `person-info-tab.tsx`, …) and NOT the
+// feature→feature import INVARIANTS §1 forbids. The well's machinery cannot live
+// in `shared/` while its heading face lives in `agent-templates` —
+// `collapse-wells.tsx`'s own import comment carries that argument.
+import {
+  WellsColumn,
+  type WellItem,
+} from "@/features/channels/components/collapse-wells";
+import { PANEL_WELL_ON_PANEL } from "@/shared/ui/panel-well";
 import { channelPeople, channelTitle, hasLinkOut, type HomeRow } from "./home-rows";
-import { HOME_CARD_FACE, MentionBadge, UnreadDot } from "./channel-row-marks";
-import home from "./home.module.css";
+import {
+  HOME_CARD_FACE,
+  HOME_CARD_FACE_SELECTED,
+  MentionBadge,
+  UnreadDot,
+} from "./channel-row-marks";
+import { useHomeFavoriteSync } from "./use-home-favorite-sync";
+import {
+  HOME_CHANNEL_WELLS,
+  HOME_CHANNEL_WELLS_KEY,
+  channelWellOf,
+  type HomeChannelWellId,
+} from "./channel-wells";
 
 /**
  * Home's left pane — the CHANNEL list. Deliberately not the workspace channels
@@ -25,6 +47,25 @@ import home from "./home.module.css";
  * and the narrowed set, because the RECORD PANE resolves its selection from the
  * same set — narrowing privately here let the pane fall back to a row the list
  * was no longer showing, so typing into search left a stranger's card open.
+ *
+ * 🔒 **IT IS THREE COLLAPSIBLE GRAY WELLS SINCE 2026-09-15, NOT A FLAT COLUMN
+ * (Samuel, verbatim):** *"look on the agents tab, there is the gray box, for
+ * recents, 7 days, etc. I want to bring that over. Basically, one for Pinned, one
+ * for Recents (this will be in effect channels with activity in the last 24
+ * hours), and Earlier. Also, notice how in the agents tab, those the top gray,
+ * kinda extends over the entire width. Can you make the channels one looks more
+ * like a tab, meaning, it will be, Recent (arrow), then the gray drops. Each
+ * corner needs to be curved."* Three parts, three owners:
+ *   - the BOX and its collapse — `channels/components/collapse-wells.tsx`, the
+ *     same module the Agents and Threads tabs read, at its **`"tab"`** variant;
+ *   - the SET and the 24h cut — `channel-wells.ts`, which asks
+ *     `recency-wells.tsx › wellFor` rather than owning a second clock;
+ *   - the PIN — `channel-pins.ts`, per device, and the one fact in this list the
+ *     server knows nothing about.
+ *
+ * ⚠ **THE "no sections to manage" NOTE ABOVE WAS ABOUT THE WORKSPACE CHANNELS
+ * TREE AND STILL IS.** These wells are not folders: nothing is filed by hand
+ * except a pin, nothing nests, and a well with no rows is not drawn at all.
  *
  * 🔒 **THE EMPTY LINE SAID "No matches" UNCONDITIONALLY UNTIL 2026-09-10, AND
  * WAS WRONG FOR EVERY NEW ACCOUNT** (the new-user flow). Zero rows has two
@@ -51,6 +92,29 @@ export function RelationshipList({
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
+  // 🔒 THE PIN IS THE BOOKMARK, SO THE WELL MOVES WHEN THE HEADER'S TOGGLE FIRES
+  // (Samuel, 2026-09-15). That write owns the CHANNELS cache; this page's list is
+  // a different payload carrying the same fact, and the bridge is what tells it —
+  // `use-home-favorite-sync.ts` carries the bug it fixes and why it lives here.
+  useHomeFavoriteSync();
+  /** ⚠ THE NARROWED ROWS ARE FILED, NEVER RE-ORDERED — `visibleRows` has already
+   *  run (the page owns it, see above) and `homeRows`' newest-first order survives
+   *  inside each well, because the grouping pass sorts nothing. */
+  const filed = useMemo<WellItem<HomeChannelWellId>[]>(
+    () =>
+      rows.map((row) => ({
+        key: row.id,
+        well: channelWellOf(row),
+        node: (
+          <RelationshipRow
+            row={row}
+            selected={row.id === selectedId}
+            onSelect={() => onSelect(row.id)}
+          />
+        ),
+      })),
+    [rows, selectedId, onSelect]
+  );
   return (
     // ⚠ Width from `home.module.css › .page --home-list-w`, NOT a local 290:
     // the header's selector is indented by the same var so it lands on the
@@ -59,14 +123,31 @@ export function RelationshipList({
       {/* Rows are floating cards now — they need a gutter between them, or the
           drop shadows stack into one smudge. */}
       <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 pb-3 pt-1">
-        {rows.map((row) => (
-          <RelationshipRow
-            key={row.id}
-            row={row}
-            selected={row.id === selectedId}
-            onSelect={() => onSelect(row.id)}
-          />
-        ))}
+        {/* ⚠ THE EMPTY SENTENCE IS A SIBLING OF THE WELLS, NOT INSIDE ONE, AND
+            SINCE `showEmpty` THE TWO ARE ON SCREEN TOGETHER. That is deliberate
+            and it is NOT the placeholder copy the minimal-copy ruling forbids:
+            three empty boxes cannot say WHICH emptiness this is, and the 2026-09-10
+            ruling that separates "No channels yet" from "No matches" is still
+            live (see this component's docblock). The boxes are the structure; the
+            one line is the reason. */}
+        <WellsColumn
+          wells={HOME_CHANNEL_WELLS}
+          items={filed}
+          storageKey={HOME_CHANNEL_WELLS_KEY}
+          // 🔒 THE AGENTS TAB'S WELL, EXACTLY (Samuel, 2026-09-15: *"just make
+          // the gray dropdowns match exactly those instead"*) — same full-width
+          // header inside the box, same chevron, same collapse. ⚠ **ONLY THE FILL
+          // DIFFERS, AND ONLY SO THE SAME BOX IS VISIBLE HERE**: this page's
+          // `<main>` IS `bg-home-panel`, so `PANEL_WELL` would paint the page's
+          // own colour (his *"there's no gray background on this at all"*).
+          face={PANEL_WELL_ON_PANEL}
+          // 🔒 ALL THREE ALWAYS DRAWN — *"I want there to be something there, like
+          // the gray box. Basically, it will just be empty until the user actually
+          // puts something in it, but I still want it to be there."* The wells are
+          // this column's STRUCTURE: a **Pinned** box you can see is how you learn
+          // there is a pin.
+          showEmpty
+        />
         {rows.length === 0 && (
           <p className="px-3 py-6 text-center text-caption text-text-muted">
             {totalRows > 0 ? "No matches" : "No channels yet"}
@@ -142,20 +223,24 @@ function RelationshipRow({
         // ⚠ THE FACE IS `HOME_CARD_FACE` (2026-09-13) — the elevation and the
         // radius, shared with the header's "{Name}'s Home" bar rather than
         // spelled out in both files (`channel-row-marks.tsx` carries why).
-        HOME_CARD_FACE,
-        "flex w-full cursor-pointer items-start gap-2.5 px-2.5 py-2.5 text-left",
-        // Selection is a RING, not a fill and no longer a black line (Samuel,
-        // 2026-08-24): the same darkened hairline + soft halo the search pill
-        // wears while it is open, held permanently. It rides ON the raised face
-        // rather than replacing it, so a selected row stays the same KIND of
-        // thing as its neighbours — just the one you are in.
-        // ⚠ AND ITS LINE IS ONE STEP DARKER THAN THE SHARED RING'S (Samuel,
-        // 2026-09-09). `home.rowSelected` overrides the `border-color` ONLY,
-        // off `--home-row-line-selected`; the halo, the face and the hover
-        // lift stay `.selected-ring`'s, so the two cannot fork. The module
-        // class must come AFTER — it wins by being unlayered, not by order,
-        // but reading it in this order is how the override is meant to scan.
-        selected && cn("selected-ring", home.rowSelected)
+        //
+        // 🔒 **AND THE SELECTED ROW IS THE PAGE'S BLACK BUTTON SINCE 2026-09-15
+        // (Samuel, verbatim):** *"for the channel picker, for the selected
+        // channel, can we have it turn into like the black button UI? And drop
+        // the shadow that currently goes on the selected?"*
+        // ⚠ **THE TWO FACES ARE ALTERNATIVES, NEVER LAYERS**, and that IS the
+        // "drop the shadow". Selection used to be `HOME_CARD_FACE` PLUS
+        // `.selected-ring` (a darkened hairline and a 3px halo) PLUS
+        // `home.rowSelected` for the line — three elevations arguing over one
+        // row. `.auth-btn-3d` sets `background`, `border` and `box-shadow` in one
+        // rule, so swapping the face leaves nothing of the old selection behind.
+        // **`selected-ring` and the module rule are DELETED here; do not re-add a
+        // ring.** (`.selected-ring` itself is untouched — the landing page's
+        // scripted /home demo still wears it.)
+        // ⚠ **SAME BOX EITHER WAY** — both faces are a 1px border on this radius,
+        // so selecting a row cannot shift the list.
+        selected ? HOME_CARD_FACE_SELECTED : HOME_CARD_FACE,
+        "flex w-full cursor-pointer items-start gap-2.5 px-2.5 py-2.5 text-left"
       )}
     >
       {/* 🔒 ⚠ **NO IDENTITY GLYPH IN THE ROW'S LEADING SLOT — DELETED 2026-09-01
@@ -174,15 +259,32 @@ function RelationshipRow({
           the NAME. */}
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline justify-between gap-2">
+          {/* ⚠ **ON THE BLACK FACE EVERY INK IS `--text-on-cta`, DIMMED — NEVER
+              A SECOND COLOUR (2026-09-15).** There is exactly ONE on-dark ink
+              token in either token file (measured: `--text-on-cta`), so the
+              quieter lines take it at an alpha rather than naming a grey the
+              palette does not have. `agents-tab.tsx` already holds that idiom
+              (`text-text-on-cta/75`). */}
           <span
             className={cn(
               "truncate text-body font-medium",
-              pending ? "text-text-secondary" : "text-text-primary"
+              selected
+                ? pending
+                  ? "text-text-on-cta/70"
+                  : "text-text-on-cta"
+                : pending
+                  ? "text-text-secondary"
+                  : "text-text-primary"
             )}
           >
             {name}
           </span>
-          <span className="shrink-0 text-micro text-text-muted">
+          <span
+            className={cn(
+              "shrink-0 text-micro",
+              selected ? "text-text-on-cta/70" : "text-text-muted"
+            )}
+          >
             {formatChannelTimestamp(row.at)}
           </span>
         </span>
@@ -214,12 +316,24 @@ function RelationshipRow({
             printing both reads as two separate facts. */}
         <span className="mt-0.5 flex min-h-[18px] items-center gap-1.5">
           {linkOut && (
-            <span className="shrink-0 rounded-full border border-border-strong bg-bg-inset px-1.5 text-micro font-medium text-text-secondary">
+            <span
+              className={cn(
+                "shrink-0 rounded-full border px-1.5 text-micro font-medium",
+                selected
+                  ? "border-text-on-cta/30 bg-text-on-cta/15 text-text-on-cta"
+                  : "border-border-strong bg-bg-inset text-text-secondary"
+              )}
+            >
               Link out
             </span>
           )}
           {pendingLine && (
-            <span className="truncate text-caption text-text-muted">
+            <span
+              className={cn(
+                "truncate text-caption",
+                selected ? "text-text-on-cta/70" : "text-text-muted"
+              )}
+            >
               {pendingLine}
             </span>
           )}
@@ -240,8 +354,8 @@ function RelationshipRow({
             </span>
           )}
           <span className="ml-auto flex shrink-0 items-center gap-1.5">
-            {mentions === 0 && unread && <UnreadDot />}
-            <MentionBadge count={mentions} />
+            {mentions === 0 && unread && <UnreadDot onDark={selected} />}
+            <MentionBadge count={mentions} onDark={selected} />
           </span>
         </span>
       </span>

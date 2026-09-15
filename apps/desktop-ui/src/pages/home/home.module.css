@@ -14,25 +14,21 @@
   --home-list-w: 290px;
 }
 
-/* THE SELECTED CHANNEL ROW'S LINE, one step darker than the shared
-   `.selected-ring` (Samuel, 2026-09-09). Colour ONLY — the row keeps
-   `.auth-btn-3d-light` + `.selected-ring` in the TSX, so the raised face, the
-   soft focus halo and the hover lift are all still the kit's and this cannot
-   fork them.
+/* 🔒 ⚠ **`.rowSelected` STOOD HERE AND IS DELETED (Samuel, 2026-09-15):** *"for
+   the channel picker, for the selected channel, can we have it turn into like
+   the black button UI? And drop the shadow that currently goes on the
+   selected?"* It darkened the selected row's `border-color` one step past the
+   shared `.selected-ring` (his 2026-09-09 ruling) — a rule that only means
+   anything while the selection IS a ring on a white card. The selected row is
+   now the page's black button face outright
+   (`channel-row-marks.tsx › HOME_CARD_FACE_SELECTED`, `.auth-btn-3d`), which
+   brings its own 1px black edge, so there is no line left to darken and nothing
+   left to beat the kit about.
 
-   ⚠ WHY A MODULE RULE AND NOT A DARKER `--focus-line`. That token is the kit's
-   one "this is the live one" line and the header's search pill wears it too
-   (`kit.css › .selected-ring`, `.search-expand`), so darkening it would have
-   moved a control Samuel did not name. The value is a TOKEN all the same
-   (`--home-row-line-selected`, in both token files) — the design system forbids
-   a raw colour here.
-
-   ⚠ WHY THIS BEATS THE KIT. Same reason the `.frame` rules below give: a CSS
-   module is UNLAYERED and `.selected-ring` lives in a `@layer`, and a layer
-   loses to an unlayered rule outright regardless of specificity. */
-.rowSelected {
-  border-color: var(--home-row-line-selected);
-}
+   ⚠ **`--home-row-line-selected` WENT WITH IT, FROM BOTH TOKEN FILES** — this
+   rule was its only consumer in either tree. `--focus-line` is untouched: it is
+   still the kit's shared "this is the live one" line, and the header's search
+   pill and the landing page's scripted /home demo still wear it. */
 
 /* ── The record pane's frame around the pinned channel surface ────────────
    Colour/weight only; the card itself (radius, shadow, fill) is the kit's

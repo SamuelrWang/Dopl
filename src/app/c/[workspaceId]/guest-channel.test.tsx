@@ -52,7 +52,8 @@ const HOME_CHANNEL: HomeChannel = {
   lastMessagePreview: null,
   unread: false,
   unreadMentions: 0,
-  linkOut: null,
+  favoritedAt: null,
+      linkOut: null,
 };
 
 const ROW = { id: CHANNEL_ID, name: "Ada & Grace" };
