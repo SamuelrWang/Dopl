@@ -157,9 +157,50 @@ function patched(map, agentId, field, value) {
 
 // ─── END AGENT-NAMES-PURE ──────────────────────────────────────────────────────
 
+// ⚠⚠ PROTOTYPE — UNCOMMITTED, 2026-09-15 (docs/specs/desktop-main-cpu.md, step 1).
+// TICK-SCOPED MEMO OF THE NAME MAP. `store` is an electron-store, and `conf`'s `get store`
+// getter does `fs.readFileSync(path)` + `JSON.parse` of the WHOLE config file on EVERY `.get()`
+// — there is no cache in that library. `all()` is called TWICE PER SESSION ROW by
+// `session-summary.js › liveSummary` / `endedSummary` (`displayNameFor` + `descriptionForAgent`),
+// inside `reportList()`'s loop over every live session AND every retained ended record
+// (`agent-history.js › MAX_HISTORY` = 200). At the cap that is 400 full reads and parses of a
+// ~200 KB file per projection — 142 ms of main-thread CPU against a 200 ms `PUSH_COALESCE_MS`
+// timer, i.e. ~71% of a core doing nothing but re-reading the same file.
+//
+// ⚠ THIS RESTORES WHAT `displayNameFor`'s OWN DOCBLOCK ALREADY CLAIMS — "Reads the whole map
+// once per flush, not once per session". That sentence has been false since the description
+// field joined it on 2026-08-27; this makes it true again without moving the seam or changing
+// one signature, which is why it is the first step rather than a refactor of the projection.
+//
+// ⚠ SEMANTICALLY IDENTICAL WITHIN A PROJECTION. `reportList()` is fully SYNCHRONOUS, so the map
+// cannot change between its first and last read — a memo that expires on the next macrotask is
+// not a staleness window, it is the same value the old code re-derived N times. The name stays
+// READ LIVE across flushes (200 ms apart), which is the property `endedSummary` documents.
+// ⚠ THIS MODULE IS THE ONLY WRITER OF `NAMES_KEY`, and every one of its writes invalidates
+// below, so a rename is visible to the very next read rather than on the next tick.
+// KILL SWITCH: `DOPL_NAMES_CACHE=0` restores the old read-every-time behaviour.
+const NAMES_CACHE_ON = process.env.DOPL_NAMES_CACHE !== '0';
+let cachedNames = null;
+let cacheArmed = false;
+
+/** Drop the memo. Called after every write this module makes. */
+function invalidateNames() {
+  cachedNames = null;
+}
+
 function all() {
+  if (NAMES_CACHE_ON && cachedNames) return cachedNames;
   const map = store.get(NAMES_KEY);
-  return map && typeof map === 'object' ? map : {};
+  const out = map && typeof map === 'object' ? map : {};
+  if (NAMES_CACHE_ON) {
+    cachedNames = out;
+    if (!cacheArmed) {
+      cacheArmed = true;
+      const t = setImmediate(() => { cachedNames = null; cacheArmed = false; });
+      if (t && typeof t.unref === 'function') t.unref();
+    }
+  }
+  return out;
 }
 
 /** The rename write. Returns the stored name, or null when the input was refused —
@@ -172,6 +213,7 @@ function rename(agentId, value) {
   const name = sanitizeName(value);
   if (name === null) return null;
   store.set(NAMES_KEY, patched(all(), id, 'name', name));
+  invalidateNames(); // PROTOTYPE 2026-09-15: this module is the only writer of NAMES_KEY, so a rename is visible to the very next read
   return name;
 }
 
@@ -190,6 +232,7 @@ function describe(agentId, value) {
   const description = sanitizeDescription(value);
   if (description === null) return null;
   store.set(NAMES_KEY, patched(all(), id, 'description', description));
+  invalidateNames(); // PROTOTYPE 2026-09-15: see rename()
   return description;
 }
 
@@ -202,6 +245,7 @@ function clear(agentId) {
   const id = String(agentId || '');
   if (!id) return;
   store.set(NAMES_KEY, patched(all(), id, 'name', ''));
+  invalidateNames(); // PROTOTYPE 2026-09-15: see rename()
 }
 
 /** What the summary projects. Reads the whole map once per flush, not once per session. */
