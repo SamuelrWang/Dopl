@@ -215,10 +215,17 @@ function noteDenied(s, tool) {
 // costing a peer's listener a decision. The FIRST denial is the one that carries information —
 // "this agent has started being refused" — and every one after it is the same sentence.
 //
-// ⚠ IT SAYS THE MODE, BECAUSE THE MODE IS THE REMEDY. `denied Bash (tool mode auto)` tells the
+// ⚠ IT SAYS THE MODE ONLY WHEN THE MODE IS THE REMEDY. `denied Bash (tool mode auto)` tells the
 // reader which of two different things happened: a posture too narrow for the work (the operator
 // can widen it), or a tool nothing widens (`bypass` is a positive allow-list, so an unclassified
 // name gates in every mode). Without the mode the line is a complaint; with it, it is an action.
+//
+// ⚠ BUT A `dopl_channel` OP IS DECIDED ON AXIS B, AND NAMING THE TOOL MODE FOR ONE OF THOSE IS A
+// LIE (GATE-BUG-REPORT 2026-09-15, fix 1). Every `dopl_channel` call is classified per-OP on the
+// MESSAGE axis; `denied mcp__dopl__dopl_channel (tool mode bypass)` reads as "bypass is broken"
+// and sends the operator to widen a posture that never decided the call. The real code is already
+// on the payload — `session-gate-bridge.js:119` sets `gateReason` from the verdict — so the line
+// prints THE REASON when there is one and falls back to the mode only when there is not.
 //
 // ⚠ IT IS `task_progress`, NOT A `message`. A lifecycle kind reaches no session at all
 // (`session-dispatch.js › feedLiveSession`'s kind filter), so this cannot start a turn, cannot
@@ -233,10 +240,10 @@ function noteDenied(s, tool) {
 // ⚠ BEST-EFFORT AND NEVER IN THE WAY OF THE DENY. `postTaskEvent` never throws and the deny is
 // already dispatched by the time this runs; a channel that cannot be posted into costs the
 // visibility, never the decision.
-function announceDenial(s, tool) {
+function announceDenial(s, tool, gateReason) {
   try {
     if (!s || !s.channelId) return;
-    const mode = (s.state && s.state.toolMode) || 'manual';
+    const why = gateReason || `tool mode ${(s.state && s.state.toolMode) || 'manual'}`;
     const entry = { channel: { id: s.channelId }, workspaceId: s.workspaceId };
     Promise.resolve(channelPost.postTaskEvent(
       entry,
@@ -244,7 +251,7 @@ function announceDenial(s, tool) {
       'task_progress',
       s.taskId || undefined,
       undefined,
-      `denied ${tool} (tool mode ${mode}); further denials counted`,
+      `denied ${tool} (${why}); further denials counted`,
       { clientMsgId: `denied-${s.channelId}-${s.sessionId}` }
     )).catch((err) => diag('windowless denial notice failed —', err && err.message));
   } catch (err) {
@@ -253,8 +260,8 @@ function announceDenial(s, tool) {
 }
 
 /** Both deny paths funnel here: count it, and announce the FIRST one only. */
-function recordDenial(s, tool) {
-  if (noteDenied(s, tool)) announceDenial(s, tool);
+function recordDenial(s, tool, gateReason) {
+  if (noteDenied(s, tool)) announceDenial(s, tool, gateReason);
 }
 
 function bridgeToolGate(s, payload, decide) {
@@ -285,7 +292,7 @@ function bridgeToolGate(s, payload, decide) {
     decide(rid, 'deny');
     diag('windowless session: gated tool denied (no surface to ask on)', tool);
     notifyDenied(s, payload);
-    recordDenial(s, tool); // T25: after the deny — the ledger never delays a decision
+    recordDenial(s, tool, payload.gateReason); // T25: after the deny — the ledger never delays a decision
     return;
   }
   diag('windowless tool gated — operator notified', tool, 'req', String(rid).slice(0, 8));
@@ -301,7 +308,7 @@ function bridgeToolGate(s, payload, decide) {
     // T25: an unanswered prompt is the MODERN shape of the silent denial this ticket is about —
     // the operator was asked, said nothing, and the orchestrator waiting on the agent still has
     // no way to know. Counted and announced on exactly the same terms as the no-surface deny.
-    recordDenial(s, tool);
+    recordDenial(s, tool, payload.gateReason);
     try { notif.close(); } catch (_) { /* best-effort */ }
   }, TOOL_GATE_TTL_MS);
   if (timer && typeof timer.unref === 'function') timer.unref();

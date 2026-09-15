@@ -261,6 +261,8 @@ test("T25: the FIRST denial counts AND posts one task_progress naming tool and m
   assert.equal(p.bodyText, "denied Bash (tool mode auto); further denials counted");
   // ⚠ THE MODE IS ON THE LINE BECAUSE THE MODE IS THE REMEDY — it tells a reader whether a
   // posture is too narrow (widenable) or the tool is unclassified (nothing widens it).
+  // ⚠ ...AND ONLY WHEN IT IS: the payload here carries no `gateReason`, so the mode is the whole
+  // account of the refusal. The case below is the other half (GATE-BUG-REPORT 2026-09-15, fix 1).
   assert.equal(p.kind, "task_progress",
     "never `message`: a lifecycle kind wakes nobody, so this cannot feed back into the session");
   assert.deepEqual(p.entry, { channel: { id: "chan-1" }, workspaceId: "ws-1" });
@@ -268,6 +270,37 @@ test("T25: the FIRST denial counts AND posts one task_progress naming tool and m
   // ⚠ PER SESSION, NOT PER MESSAGE: the server's own client_msg_id uniqueness then guarantees the
   // same bound a second time, rather than a different one keyed on whatever seq happened to be up.
   assert.equal(p.opts.clientMsgId, "denied-chan-1-sess-1");
+});
+
+// ── GATE-BUG-REPORT fix 1 (2026-09-15): THE LINE NAMES THE REASON, NOT THE AXIS THAT WAS ────
+//
+// ⚠ THE DEFECT WAS A LINE THAT BLAMED THE WRONG AXIS AND SENT THE OPERATOR TO WIDEN A POSTURE
+// THAT NEVER DECIDED THE CALL. A `dopl_channel` op is classified per-OP on the MESSAGE axis
+// (`session-profiles.js`), so `denied mcp__dopl__dopl_channel (tool mode bypass)` reads as
+// "bypass is broken" — it cost a whole investigation. `session-gate-bridge.js:119` had already
+// put the real code on the payload; this only prints it.
+test("fix 1: a payload carrying a gateReason says THAT, never the tool mode", async () => {
+  timers.reset();
+  const m = load({ notifyToolGate: () => null });
+  const s = denialSession(); // toolMode "auto", which must NOT appear on the line
+  m.claimGate(s, { ...REQ, name: "mcp__dopl__dopl_channel", gateReason: "channel-op-approval-required" }, () => {});
+  await flush();
+  assert.equal(
+    m.posts[0].bodyText,
+    "denied mcp__dopl__dopl_channel (channel-op-approval-required); further denials counted"
+  );
+  assert.ok(!/tool mode/.test(m.posts[0].bodyText), "the axis that did not decide is not named");
+});
+
+test("fix 1: the UNANSWERED path carries the reason too — same payload, same line", async () => {
+  timers.reset();
+  const m = load(); // the banner IS shown; the deny comes from the TTL
+  const s = denialSession();
+  m.claimGate(s, { ...REQ, gateReason: "message-approval-required" }, () => {});
+  await flush();
+  timers.fire();
+  await flush();
+  assert.equal(m.posts[0].bodyText, "denied Bash (message-approval-required); further denials counted");
 });
 
 test("T25: further denials are COUNTED and say nothing — one post per session, ever", async () => {
