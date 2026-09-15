@@ -291,7 +291,7 @@ function HomeRowGhost() {
 /**
  * THE HEADER STRIP — `home-header.tsx`'s OWN three boxes, in its nesting.
  *
- * ⚠ THE CELL HOLDS A BAR, NOT A FACE (2026-09-13) — see the ghost itself.
+ * ⚠ THE CELL HOLDS "New channel" (2026-09-15) — see the ghost itself.
  *
  * ⚠ THE LIST-WIDTH PAD IS A CELL, NOT A `pl-`. That strip stopped being
  * `pl-[var(--home-list-w)]` on 2026-08-30, when the operator's face moved INTO
@@ -312,20 +312,18 @@ function HomeHeaderGhost() {
     <div className="flex items-center justify-between gap-3 py-3 pr-5">
       <div className="flex min-w-0 items-center">
         <div className="flex w-[var(--home-list-w)] min-w-0 shrink-0 items-center px-3">
-          {/* 🔒 **THE SETTINGS CONTROL IS A BAR SINCE 2026-09-13** (Samuel: the
-              bare face left "empty space [that] looks weird"), so the ghost is the
-              bar — `HOME_CARD_FACE` at `h-9`, the 32px `Avatar size="sm"` inside
-              it, and a line where "{Name}'s Home" lands. A 32px circle alone here
-              would resolve into a full-width card. */}
-          <div
-            className={cn(
-              HOME_CARD_FACE,
-              "flex h-9 w-full items-center gap-2 pl-0.5 pr-3"
-            )}
-          >
-            <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
-            <SkeletonLine w="52%" h={11} />
-          </div>
+          {/* 🔒 **THE CELL IS THE "New channel" PILL SINCE 2026-09-15** (Samuel:
+              "move the new channel button to be where the search bar now is. It
+              will be left aligned basically"). It ghosted a `HOME_CARD_FACE` bar
+              with an avatar in it, then the search field for one revision — three
+              shapes in one cell, which is why this ghost is the first thing to
+              re-check when the strip moves.
+              ⚠ **HUG-WIDTH AND LEFT-ALIGNED, NOT `w-full`.** The real pill is
+              `PAGE_ACTION_BTN`'s `px-[15px]` around its label, so a full-width
+              block here would collapse to a short button the instant the read
+              lands. 112px is the same number the right group's ghost used for this
+              button when it lived there — one label, one width. */}
+          <Skeleton className="h-9 w-[112px] rounded-full" />
         </div>
         <div className="flex items-center gap-1.5">
           {HOME_TABS.map(({ key, label }) => (
@@ -339,10 +337,18 @@ function HomeHeaderGhost() {
         </div>
       </div>
       <div className="flex items-center gap-2.5">
-        {/* The collapsed search pill, then the one primary action
-            (`panel-buttons.tsx › PAGE_ACTION_BTN`, `h-9 rounded-full`). */}
-        <Skeleton className="h-9 w-9 rounded-full" />
-        <Skeleton className="h-9 w-[112px] rounded-full" />
+        {/* THE SEARCH PILL AT ITS OPEN WIDTH, then the "Profile" pill — that
+            order since 2026-09-15 (Samuel: "move the search bar back … turn the
+            profile button to be black, and have it say Profile"). ⚠ **260px IS
+            `kit.css › .search-expand[data-open="true"]`'s OWN NUMBER** — /home
+            renders the pill open, so the ghost reserves what the real box
+            reserves; a 36px circle here was the CLOSED pill's ghost and left 224px
+            of the row unaccounted for. ⚠ The Profile pill is TEXT ONLY since
+            Samuel dropped its glyph the same day ("remove the profile icon"), so
+            it is the page's narrowest `PAGE_ACTION_BTN`: `px-[15px]` around one
+            short word. */}
+        <Skeleton className="h-9 w-[260px] rounded-full" />
+        <Skeleton className="h-9 w-[72px] rounded-full" />
       </div>
     </div>
   );

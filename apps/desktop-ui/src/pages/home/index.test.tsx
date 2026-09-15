@@ -42,6 +42,10 @@ import {
 
 const apiRequest = vi.hoisted(() => vi.fn());
 
+/** The header's list-width CELL (`home-header.tsx`) as a `closest` selector —
+ *  inside it heads the channel picker, outside it is a page control. */
+const LIST_CELL = ".w-\\[var\\(--home-list-w\\)\\]";
+
 vi.mock(
   "@/features/channels/components/channel-surface-standalone",
   () => ({
@@ -139,16 +143,19 @@ describe("home page", () => {
    * shell reaches it through the sidebar's gear; this page has no sidebar, and
    * before this it had no settings entry at all.
    *
-   * ⚠ PINNED AS "THE CONTROL OPENS THE MODAL", not as an avatar rendering. The
-   * face degrades to initials while `/api/user/profile` is in flight or on the
-   * day it fails, which is fine; a control that does not open settings is not.
-   */
-  it("opens settings from the operator's own face in the left column", async () => {
+   * ⚠ PINNED AS "THE CONTROL OPENS THE MODAL", not as a face rendering — but the
+   * SHAPE is Samuel's own words now (2026-09-15: "turn the profile button to be
+   * black, and have it say Profile"). ⚠ **IT ANSWERS TO "Profile", NOT "Settings",
+   * SINCE THAT SAME REVIEW**: it has visible text now, and an `aria-label` that did
+   * not contain it would break voice control. */
+  it("opens settings from the operator's Profile pill", async () => {
     renderHome();
-    const control = await screen.findByRole("button", { name: "Settings" });
-    // It lives in the LIST COLUMN, above the rows — the cell is exactly the
-    // column's width, which is what keeps the selector on the record pane's edge.
-    expect(control.closest(".w-\\[var\\(--home-list-w\\)\\]")).not.toBeNull();
+    // Black face, ONE WORD, no glyph (Samuel, 2026-09-15: "remove the profile
+    // icon"), RIGHT GROUP. The role query proves text IS the accessible name.
+    const control = await screen.findByRole("button", { name: "Profile" });
+    expect(control.className).toMatch(/auth-btn-3d\b/);
+    expect(control.querySelector("svg")).toBeNull();
+    expect(control.closest(LIST_CELL)).toBeNull();
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     fireEvent.click(control);
@@ -229,6 +236,9 @@ describe("home page", () => {
     // at once and reads "Search…".
     expect(screen.queryByRole("button", { name: "Search" })).toBeNull();
     expect(screen.getByLabelText("Search")).toHaveAttribute("placeholder", "Search…");
+    // 🔒 AND IT IS A PAGE CONTROL, NOT THE COLUMN'S HEAD (Samuel, 2026-09-15:
+    // "move the search bar back") — it spent one revision in the list-width cell.
+    expect(screen.getByLabelText("Search").closest(LIST_CELL)).toBeNull();
 
     // ⚠ SEARCH STILL REACHES MEMBERS (2026-09-01, deliberately): finding a
     // channel by who is in it is a QUERY, not a presentation of identity, and

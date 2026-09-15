@@ -6,8 +6,8 @@ import { HOME_TABS, type HomeTab } from "./home-tabs";
 import { PAGE_ACTION_BTN } from "./panel-buttons";
 
 /**
- * /home's HEADER STRIP — the operator's face, the four-face selector, search
- * and the page's one primary action.
+ * /home's HEADER STRIP — the page's one primary action over the channel picker,
+ * the four-face selector, search, and the operator's own face.
  *
  * ⚠ ITS OWN FILE SINCE 2026-09-09, and the reason is the same one
  * `home-settings-control.tsx` gives: `index.tsx` sits AT the 500-line cap
@@ -40,24 +40,52 @@ export function HomeHeader({
       {/* ⚠ THE LEFT PAD IS THE LIST COLUMN'S WIDTH, NOT A SPACER, AND IT BECAME
           A REAL CELL ON 2026-08-30. It puts the selector's left edge on the
           record pane's (Samuel, 2026-08-24) — same var the column is sized from
-          (`home.module.css › .page`) — and the operator's face needed to live IN
-          that column, so the pad is now a cell of exactly that width holding it.
+          (`home.module.css › .page`) — and whatever heads that column lives IN
+          the cell, not beside it.
           ⚠ THE TWO ARE ONE GROUP, or `justify-between` would spread three
           children and walk the selector off that edge. */}
       <div className="flex min-w-0 items-center">
-        {/* ⚠ THE CELL IS UNCHANGED AND THE CONTROL INSIDE IT IS NOT (2026-09-13).
-            `HomeSettingsControl` is a full-width BAR now — same card face as the
-            channel rows, reading "{first name}'s Home" (Samuel: the bare face left
-            "empty space [that] looks weird"). It is 36px like every other control
-            in this strip, so this row's height did not move; the `px-3` is still
-            the LIST's own inset, which is what puts the bar's edges on the rows'.
-            ⚠ `min-w-0` on the cell, or a long name would push the selector off the
-            record pane's left edge — the one alignment this cell exists for. */}
+        {/* ⚠ **THE CELL HOLDS "New channel" SINCE 2026-09-15 (Samuel, live
+            review: "ok actually, move the new channel button to be where the
+            search bar now is. It will be left aligned basically. And move the
+            search bar back").** This cell has now held three things in three
+            weeks — a bare avatar, a "{Name}'s Home" bar, the search field for one
+            revision — and what it holds is the only thing that has changed: the
+            cell, its width, its `px-3` and its `min-w-0` are untouched through all
+            of it.
+            ⚠ **LEFT-ALIGNED, NOT STRETCHED (Samuel's own word).** The pill hugs
+            its label — `PAGE_ACTION_BTN` is `px-[15px]`, not `w-full` — and the
+            cell's `flex` lays it out from the leading edge, so the button's LEFT
+            edge lands on the channel rows' left edge and its right edge falls
+            wherever "New channel" ends. Do not add `w-full`, `justify-center` or
+            `justify-between` here: a stretched black pill reads as a banner over
+            the column, and a centred one aligns with nothing.
+            ⚠ **THE CELL'S ONLY CHILD.** A second control in here is a second
+            thing claiming to head the channel picker.
+            ⚠ **36px, WHICH IS WHY THE STRIP'S HEIGHT DID NOT MOVE** — `h-9` is
+            this row's one control height, the same as the bar's and the field's
+            before it.
+            ⚠ `min-w-0` on the cell, or its content could push the selector off
+            the record pane's left edge — the one alignment this cell exists for.
+            ⚠ **ONE PRIMARY ACTION, AND IT IS "New channel" (Samuel, 2026-08-25).
+            THAT RULING TRAVELLED WITH THE BUTTON AND IS ABOUT THE PAGE, NOT ABOUT
+            THIS CELL.** The mint popover was beside it as an interim while links
+            were still page-level; it now lives on the channel it binds to
+            (`person-info-tab.tsx`), because that is the thing it acts on. Do not
+            put a second black pill in this cell — and note the action group on
+            the right now has one (Profile), which is the exception Samuel made,
+            not a licence for a third.
+            ⚠ THE FACE IS `PAGE_ACTION_BTN` (2026-09-09) — this button's own class
+            list, extracted so the four /home section-create buttons could wear
+            the SAME string rather than a copy of it. */}
         <div className="flex w-[var(--home-list-w)] min-w-0 shrink-0 items-center px-3">
-          <HomeSettingsControl
-            identity={identity}
-            onWorkspaceChanged={onWorkspaceChanged}
-          />
+          <button
+            type="button"
+            onClick={onNewChannel}
+            className={PAGE_ACTION_BTN}
+          >
+            New channel
+          </button>
         </div>
         {/* The selector REPLACES the page title. ⚠ PLAIN PILLS, semibold, 36px
             (`lg`) since 2026-09-08 — Samuel: "individual pills … unselected grayed
@@ -72,22 +100,25 @@ export function HomeHeader({
         />
       </div>
       <div className="flex items-center gap-2.5">
+        {/* ⚠ **SEARCH IS BACK IN THIS GROUP (Samuel, 2026-09-15: "And move the
+            search bar back").** It headed the list column for one revision; at
+            its own fixed width beside the selector it is a PAGE control again,
+            which is what it was before and what its kit face is built for — the
+            `[data-fill]` variant that revision needed is gone from the kit with
+            it, since nothing else ever set the attribute. */}
         <HomeSearch query={query} onQueryChange={onQueryChange} />
-        {/* ⚠ ONE PRIMARY ACTION, AND IT IS "New channel" (Samuel, 2026-08-25).
-            The mint popover was here as an interim while links were still
-            page-level; it now lives on the channel it binds to
-            (`person-info-tab.tsx`), because that is the thing it acts on. Do not
-            put a second black pill back here.
-            ⚠ THE FACE IS `PAGE_ACTION_BTN` (2026-09-09) — this button's own
-            class list, extracted so the four /home section-create buttons could
-            wear the SAME string rather than a copy of it. */}
-        <button
-          type="button"
-          onClick={onNewChannel}
-          className={PAGE_ACTION_BTN}
-        >
-          New channel
-        </button>
+        {/* ⚠ **THE OPERATOR'S FACE IS THE LAST THING IN THE ROW, AND IT IS A
+            BLACK PILL READING "Profile" SINCE 2026-09-15 (Samuel: "turn the
+            profile button to be black, and have it say Profile").** It was a white
+            circle for one revision and a bar in the list column before that; what
+            has never changed is that it is the ONLY way into settings from this
+            page. `HomeSettingsControl` renders it, because the modal and the
+            `openHomeSettings` registry are its and a control split from the thing
+            it opens is two files to keep in step. */}
+        <HomeSettingsControl
+          identity={identity}
+          onWorkspaceChanged={onWorkspaceChanged}
+        />
       </div>
     </div>
   );

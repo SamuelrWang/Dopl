@@ -1,26 +1,34 @@
 import { useEffect, useState } from "react";
-import { cn } from "@/shared/lib/utils";
-import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
-import { HOME_CARD_FACE } from "./channel-row-marks";
-import { useApiQuery } from "#/hooks/use-api-query";
+import { PAGE_ACTION_BTN } from "./panel-buttons";
 import { SettingsModal, type SettingsSection } from "#/components/settings-modal";
 import type { BootPayload } from "#/pages/boot/use-boot-state";
 
 /**
  * THE SETTINGS ENTRY /home NEVER HAD (Samuel, live review 2026-08-30) — the
- * operator's own face in the left column, opening the SAME modal the workspace
- * sidebar's gear opens.
+ * operator's own profile control, opening the SAME modal the workspace sidebar's
+ * gear opens.
  *
  * ⚠ WHY /home HAD NONE. Settings is reached from the app sidebar, and this page
  * has no sidebar: it is the ACCOUNT surface, one panel wide, whose left column
- * is the channel list. So the entry goes where a person's own identity already
- * belongs — the top of that column, above the rows, on the list's own `px-3`
- * inset so the face lines up with every avatar under it.
+ * is the channel list. So the page has to carry its own entry.
+ *
+ * ⚠ **IT IS A BLACK PILL READING "Profile" SINCE 2026-09-15 (Samuel, live
+ * review: "turn the profile button to be black, and have it say Profile").** It
+ * sat at the top of the LIST COLUMN from 2026-08-30 — a bare avatar, then a
+ * full-width "{first name}'s Home" bar — then spent one revision as a white
+ * circle in the action group. That was the same day: the circle and this pill are
+ * two halves of one live review, so do not read the circle's absence as a rule
+ * about round controls. What has not changed through any of it: one control, one
+ * modal, and this page's only way into settings.
  *
  * ⚠ ITS OWN FILE, not thirty lines inside `index.tsx`. That page is at the
  * 500-line cap (INVARIANTS §1) and this is one coherent responsibility: a
- * profile read, a control, and a modal that only this control opens. The page
- * hands it the boot payload it already has and knows nothing else about it.
+ * control, and a modal that only this control opens. The page hands it the boot
+ * payload it already has and knows nothing else about it. ⚠ **AND IT READS NO
+ * PROFILE SINCE 2026-09-15** — the face became a glyph, so `/api/user/profile`
+ * had no renderer left here; if an avatar ever returns, the read comes back
+ * UNGATED on `open`, which is the rule that kept the control from popping into
+ * existence after a round trip.
  */
 /**
  * OPEN /home's SETTINGS MODAL FROM ANYWHERE ON THE PAGE — the credit bar's
@@ -80,15 +88,6 @@ export function HomeSettingsControl({
     };
   }, []);
 
-  // ⚠ THE FACE COMES FROM THE PROFILE, NOT FROM BOOT. `POST /api/boot` answers
-  // `userId` and nothing renderable — no display name, no avatar — so an
-  // `Avatar` built off boot alone is a permanent "?" initial. This route is the
-  // caller's own row (`withUserAuth`, no workspace, so /home may ask it) and
-  // returns exactly the fields `AvatarPerson` takes.
-  //
-  // ⚠ NOT GATED ON `open`: it paints the control itself, not the modal.
-  const profile = useApiQuery<HomeProfile>(PROFILE_PATH);
-
   /**
    * ⚠ SETTINGS NEEDS A WORKSPACE AND /home IS NOT ONE. Three of the modal's four
    * sections are workspace-scoped, so the control binds to the caller's DEFAULT
@@ -101,60 +100,46 @@ export function HomeSettingsControl({
    */
   if (!identity.workspace || !identity.segment) return null;
 
-  // The fallbacks are the point: this renders while the profile read is in
-  // flight and on the day it fails, where `Avatar` degrades to its initials. A
-  // face that is briefly an initial is fine; a control that pops into existence
-  // after a network round trip is not.
-  const me: AvatarPerson = {
-    userId: identity.userId,
-    email: profile.data?.email ?? null,
-    displayName: profile.data?.display_name ?? null,
-    avatarUrl: profile.data?.avatar_url ?? null,
-  };
-
   return (
     <>
       {/**
-       * ⚠ **THE CONTROL IS A BAR SINCE 2026-09-13, NOT A BARE FACE (Samuel, live
-       * review: "I want to make like where the profile image is, like a longer
-       * bar. Right now that empty space looks weird … Maybe like it can say
-       * Name's Home?").** It was a 32px round avatar alone in a 290px cell, so
-       * the column's top read as a gap with a face in the corner. The BAR is the
-       * cell, and the face rides in it.
+       * ⚠ **THE SAME FACE "New channel" WEARS, DELIBERATELY (Samuel, 2026-09-15:
+       * "turn the profile button to be black, and have it say Profile").** It is
+       * `PAGE_ACTION_BTN` itself — not a copy of its class list — so a restyle of
+       * the page action lands on both. ⚠ **THIS IS THE SECOND BLACK PILL ON THE
+       * PAGE AND IT IS AN EXCEPTION SAMUEL ASKED FOR, NOT A PRECEDENT**: the
+       * "one primary action" ruling (`home-header.tsx`, Samuel 2026-08-25) still
+       * governs what may be ADDED here. A third would make all three look like
+       * none.
        *
-       * ⚠ **SAME CARD FACE AS THE ROWS UNDER IT** (`HOME_CARD_FACE`, shared —
-       * `channel-row-marks.tsx` carries why it is a constant), so the column reads
-       * as one stack of cards rather than a header of a different kind.
+       * ⚠ **ONE WORD AND NOTHING ELSE (Samuel, 2026-09-15: "remove the profile
+       * icon").** This control has been an `Avatar`, a "{Name}'s Home" bar, a
+       * glyph-only circle and a glyph-plus-label pill, all inside three weeks, and
+       * it is TEXT NOW. Do not put a face back in it on the reasoning that a
+       * profile control should have one: an avatar beside a page action is an
+       * identity BADGE, and it would flicker from an initial to a photo one round
+       * trip after paint — which is why this file reads no profile at all.
+       * ⚠ **AND THEREFORE NO `gap-1.5` AND NO `PAGE_ACTION_ICON`.** `PAGE_ACTION_BTN`
+       * is worn BARE here; the gap and the 13px glyph belong to
+       * `panel-buttons.tsx › CreateButton`, which is the glyph-plus-label pill and
+       * is still the place to copy from if a glyph ever returns.
        *
-       * ⚠ **36px TALL, WHICH IS WHY THE HEADER ROW DID NOT MOVE.** That is the
-       * height of every other control in the strip (the selector's `lg` pills, the
-       * search pill, the black action) — the avatar keeps its own `sm` 32px inside
-       * it, so nothing about the face changed and the strip's geometry is
-       * untouched.
-       *
-       * ⚠ **BEHAVIOUR AND LABEL ARE UNCHANGED**: same `onClick`, same
-       * `aria-label="Settings"`, same modal. The bar is this button's FACE, not a
-       * new control beside it — `index.test.tsx` finds it by that label, and a
-       * second clickable thing in this cell would give the column two settings
-       * entries.
+       * ⚠ **THE ACCESSIBLE NAME IS "Profile" NOW, AND THAT IS THE POINT OF THE
+       * CHANGE.** It was `aria-label="Settings"` over an iconic control with no
+       * text; the control has a VISIBLE label now, and an `aria-label` that does
+       * not contain it breaks voice control ("click Profile" would match nothing)
+       * and reads one thing to a screen reader while showing another. So the label
+       * is the text, `title` agrees with it, and `index.test.tsx` /
+       * `relationship-list.test.tsx` find it by "Profile". ⚠ What it OPENS did not
+       * change: the same `SettingsModal`, seeded at `account`.
        */}
       <button
         type="button"
-        title="Settings"
-        aria-label="Settings"
+        title="Profile"
         onClick={() => setOpen(true)}
-        className={cn(
-          HOME_CARD_FACE,
-          "flex h-9 w-full cursor-pointer items-center gap-2 pl-0.5 pr-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2"
-        )}
+        className={PAGE_ACTION_BTN}
       >
-        <Avatar person={me} size="sm" />
-        {/* ⚠ MINIMAL COPY — a name and nothing else (the standing /home ruling:
-            label + control, no explainer). `text-body font-medium` is the CHANNEL
-            ROW TITLE's own type, so the bar and the rows read as one ladder. */}
-        <span className="truncate text-body font-medium text-text-primary">
-          {homeBarLabel(profile.data?.display_name ?? null)}
-        </span>
+        Profile
       </button>
       <SettingsModal
         open={open}
@@ -173,31 +158,28 @@ export function HomeSettingsControl({
 /**
  * `"{first name}'s Home"`, or `"Home"` when there is no name to use.
  *
- * ⚠ **THE FIRST WORD, NOT THE WHOLE DISPLAY NAME.** The bar is 290px minus the
- * face and its padding; a full name truncates on plenty of real accounts, and
- * `"Alexandra Fernández-Mo…'s Home"` is worse than no possessive at all.
+ * 🔒 **NOTHING RENDERS THIS AS OF 2026-09-15, AND IT IS KEPT ON PURPOSE.** The
+ * bar it labelled lived for two days (2026-09-13 → 2026-09-15) and Samuel
+ * replaced it with the search field; `relationship-list.test.tsx` still imports
+ * and pins the helper, so deleting it here is a test change as well as a code
+ * change and that was not this session's call to make. **If /home never grows a
+ * possessive label again, delete BOTH** — a helper alive only because its own
+ * test imports it is dead code with a witness, not a used function.
  *
- * ⚠ **"Home" ALONE IS THE HONEST FALLBACK, and it is a state that really
- * happens** — not only a nameless account, but every first paint, since
- * `/api/user/profile` is in flight then (the same moment the avatar shows an
- * initial). A possessive built from an EMAIL was the other option and is refused
- * for the reason the channel row refuses it: an address is not a name.
+ * ⚠ **THE FIRST WORD, NOT THE WHOLE DISPLAY NAME**, which is the rule worth
+ * keeping if it ever comes back: the bar was 290px minus a face and its padding,
+ * and `"Alexandra Fernández-Mo…'s Home"` is worse than no possessive at all.
+ *
+ * ⚠ **"Home" ALONE IS THE HONEST FALLBACK, and it was a state that really
+ * happened** — not only a nameless account, but every first paint, since
+ * `/api/user/profile` was in flight then. A possessive built from an EMAIL was
+ * the other option and is refused for the reason the channel row refuses it: an
+ * address is not a name.
  *
  * ⚠ NO `'s` DOUBLING GUARD. A name ending in "s" still takes `'s` here
- * ("Chris's Home") — that is a style choice, not a bug, and a name-dependent
- * apostrophe rule is not something this bar should own.
+ * ("Chris's Home") — a style choice, not a bug.
  */
 export function homeBarLabel(displayName: string | null): string {
   const first = (displayName ?? "").trim().split(/\s+/)[0];
   return first ? `${first}'s Home` : "Home";
-}
-
-/** `GET /api/user/profile` — the three fields `AvatarPerson` needs off it. The
- *  route answers the row bare (no envelope); its other columns are the settings
- *  form's business, not this control's. */
-const PROFILE_PATH = "/api/user/profile";
-interface HomeProfile {
-  display_name: string | null;
-  avatar_url: string | null;
-  email: string | null;
 }

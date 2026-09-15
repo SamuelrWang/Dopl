@@ -15,8 +15,8 @@ import {
 import { homeBarLabel } from "./home-settings-control";
 
 /**
- * THE LIST COLUMN AS SAMUEL RE-SPECIFIED IT (live review 2026-09-13): a header
- * BAR where a bare avatar used to float in empty space, and channel rows whose
+ * THE LIST COLUMN AS SAMUEL RE-SPECIFIED IT (live reviews 2026-09-13 and
+ * 2026-09-15): the page's one primary action at its head, and channel rows whose
  * second line is the ROSTER plus an unread signal instead of a paraphrase of the
  * last message.
  *
@@ -40,6 +40,9 @@ vi.mock(
   })
 );
 
+/** The header's list-width CELL (`home-header.tsx`) as a `closest` selector. */
+const CELL = ".w-\\[var\\(--home-list-w\\)\\]";
+
 /** One channel and no legacy link row, so a case owns the whole column. */
 function onlyChannel(
   channel: HomeChannelsPayload["channels"][number]
@@ -52,39 +55,53 @@ beforeEach(() => {
   installBridge({ apiRequest });
 });
 
-describe("the list column's HEADER BAR", () => {
-  it("is one bar reading the operator's first name, and it is still the settings trigger", async () => {
+/**
+ * ⚠ **THE HEAD OF THIS COLUMN HAS BEEN FOUR THINGS AND THE LAST TWO WERE THE
+ * SAME DAY.** A bare avatar (2026-08-30), a "{Name}'s Home" bar (2026-09-13), the
+ * SEARCH FIELD for one revision, and — 2026-09-15, Samuel: *"ok actually, move
+ * the new channel button to be where the search bar now is. It will be left
+ * aligned basically. And move the search bar back"* — the "New channel" pill.
+ * What is pinned here is what this suite owns: WHAT HEADS THE COLUMN. The
+ * operator's own control is `index.test.tsx`'s, where the settings entry has
+ * always been pinned.
+ */
+describe("the list column's HEAD", () => {
+  it("is the New channel pill, left-aligned, and nothing else", async () => {
     apiRequest.mockImplementation(withHome(HOME));
     renderHome();
 
-    // ⚠ FOUND BY THE SETTINGS LABEL, which is the whole point: the bar is that
-    // button's FACE, not a second control beside it.
-    const bar = await screen.findByRole("button", { name: "Settings" });
-    // `/api/user/profile` answers "Sam Operator" — the FIRST word, possessive.
-    await waitFor(() => expect(bar).toHaveTextContent("Sam's Home"));
-    // It spans the cell, so the "empty space [that] looks weird" is gone.
-    expect(bar.className).toMatch(/w-full/);
-    // ⚠ THE SAME CARD FACE THE ROWS WEAR — asserted as the kit recipe rather
-    // than as a colour, since that is the thing shared with the rows.
-    expect(bar.className).toMatch(/auth-btn-3d-light/);
-    expect(bar.className).toMatch(/rounded-\[14px\]/);
+    // In the list-width cell, so its LEFT edge lands on the rows' left edge.
+    const create = await screen.findByRole("button", { name: "New channel" });
+    expect(create.closest(CELL)).not.toBeNull();
+    // ⚠ HUGGING ITS LABEL, NOT STRETCHED (Samuel's "left aligned basically").
+    expect(create.className).not.toMatch(/w-full/);
+    // 🚫 AND THE TWO THINGS THAT USED TO HEAD IT ARE NOT BACK — bidirectional, or
+    // this suite would pass on a page that grew the bar or the field back above
+    // the rows.
+    expect(screen.queryByText(/'s Home$/)).toBeNull();
+    expect(screen.getByLabelText("Search").closest(CELL)).toBeNull();
   });
 
-  it("opens settings from the bar", async () => {
+  it("opens settings from the operator's Profile pill, which is NOT in the column", async () => {
     apiRequest.mockImplementation(withHome(HOME));
     renderHome();
-    const bar = await screen.findByRole("button", { name: "Settings" });
+    // ⚠ "Profile", NOT "Settings", since 2026-09-15 — the control has a visible
+    // label now and the accessible name is it.
+    const control = await screen.findByRole("button", { name: "Profile" });
+    expect(control.closest(CELL)).toBeNull();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    bar.click();
+    control.click();
     await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
   });
 
   /**
-   * ⚠ THE NAMELESS CASE IS NOT HYPOTHETICAL — it is EVERY FIRST PAINT, because
-   * `/api/user/profile` is still in flight then. "Home" alone is the answer; a
-   * possessive built from an email address is the thing this must never print.
+   * 🔒 **THE HELPER HAS NO RENDERER AS OF 2026-09-15 AND THIS IS THE ONLY THING
+   * HOLDING IT** (`home-settings-control.tsx › homeBarLabel` carries the same
+   * note). Kept because the RULE is the part worth not re-deriving if /home ever
+   * grows a possessive label again — the first word, and never one built from an
+   * email address. **Delete both together, or neither.**
    */
-  it("says just `Home` with no display name, and never builds one from the email", () => {
+  it("`homeBarLabel` still takes the first word, and never builds one from the email", () => {
     expect(homeBarLabel(null)).toBe("Home");
     expect(homeBarLabel("   ")).toBe("Home");
     expect(homeBarLabel("Sam Operator")).toBe("Sam's Home");

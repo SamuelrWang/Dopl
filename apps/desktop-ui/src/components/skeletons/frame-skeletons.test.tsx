@@ -205,9 +205,12 @@ describe("the /home shapes are /home's own geometry", () => {
     expect(
       container.querySelectorAll(".w-\\[var\\(--home-list-w\\)\\]")
     ).toHaveLength(2);
-    // ⚠ `min-w-0` JOINED IT ON 2026-09-13, when the cell's content became a
-    // full-width BAR: without it a long "{Name}'s Home" would push the selector
-    // off the record pane's left edge, which is the one alignment this cell is for.
+    // ⚠ `min-w-0` JOINED IT ON 2026-09-13, when the cell's content became
+    // full-width, and it stayed on 2026-09-15 when the content became the SEARCH
+    // FIELD (Samuel: "move the search bar at the top, to replace the Samuel's home
+    // button on top of the channel picker"): without it the cell's content could
+    // push the selector off the record pane's left edge, which is the one
+    // alignment this cell is for.
     const CELL =
       'className="flex w-[var(--home-list-w)] min-w-0 shrink-0 items-center px-3"';
     expect(file("../../pages/home/home-header.tsx")).toContain(CELL);
