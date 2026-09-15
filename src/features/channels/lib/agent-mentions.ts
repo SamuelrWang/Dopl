@@ -76,6 +76,9 @@
  */
 
 import { mentionHandleOf, mentionSlug } from "./mentions";
+// ⚠ THE ONE UNNAMED-AGENT FACE, shared with the transcript pill and the server
+// projection — see `routedTagLabel`, which is the reader that needs it.
+import { agentFaceName } from "@/shared/lib/agent-name";
 
 /**
  * **DOES THIS HANDLE SURVIVE THE TOKEN STRIP?** — the agent-side half of the round trip
@@ -237,7 +240,40 @@ export function routedTagLabel(
     face: agentIds
       .map((id) => {
         const named = agentMentionFace(id, identities);
-        return named === null ? address(id) : `@${named}`;
+        if (named !== null) return `@${named}`;
+        // 🔒 **THE NAME, NEVER THE ID — THE LAST RAW-ID LEAK ON THE TRANSCRIPT
+        // (Samuel, 2026-09-15: the arrow under a sent message "shows the raw
+        // slug/ID; show the proper agent name it was sent to").**
+        //
+        // ⚠ **THIS LINE IS A REPORT, NOT A TAG, AND THAT IS WHY IT MAY DIVERGE
+        // FROM {@link agentMentionFace}'S CALLER CONTRACT.** That contract says
+        // `null` ⇒ "render the RAW token", and it is right for a TYPED mention:
+        // there the token is *what the writer actually wrote* and rewriting it
+        // would put words in their mouth. A ROUTED tag has no authored text to
+        // preserve — the server picked the address after the fact, and
+        // `authored-row.tsx` draws it as chrome for exactly that reason. So the
+        // honest face here is the agent's NAME, and nothing is lost: **the raw
+        // ids are still on the `title` hover** (below, unchanged), which this
+        // file's own docblock calls the place "a hover exists to show the thing
+        // the face replaced".
+        //
+        // ⚠ **IT IS `attributionName`'S TREATMENT, TO THE LETTER** — the pill on
+        // the very same row answers `agentFaceName(name)` for a stamped agent,
+        // so an unnamed one reads `New Agent` in both places instead of `New
+        // Agent` above its own `@agent-k3v7d2mq`. Two faces for one agent in one
+        // row is the defect this repairs.
+        // ⚠ **THE 2026-09-15 NAMING REWORK MOVED EVERY OTHER FACE AND MISSED
+        // THIS ONE** (`agent-id-visibility.md`'s sweep): `attributionName`,
+        // `agentDisplayName` and the server projection all took
+        // `shared/lib/agent-name.ts`; this function kept the pre-ruling fallback,
+        // which is why the id survived here and nowhere else.
+        //
+        // ⚠ **NO `@`, AND THE ABSENCE IS THE INFORMATION.** `@` promises a handle
+        // a reader may retype; this branch is reached precisely when there is NO
+        // retypable handle (no name, a COLLIDING name, or one the slugger cannot
+        // spell), so prefixing it would render an address that resolves to
+        // nobody — the misfire the collision rule above exists to prevent.
+        return agentFaceName(identities.get(id)?.displayName);
       })
       .join(" "),
     title: agentIds.map(address).join(" "),

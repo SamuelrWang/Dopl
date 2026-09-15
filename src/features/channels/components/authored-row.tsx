@@ -216,6 +216,13 @@ export function AuthoredRow({
       agent={agent}
       agentId={agentId}
       agentName={agentName}
+      // 🔒 **THE CHIP'S FILL COMES OFF THE ROW'S OWN ACCENT (Samuel, 2026-09-15)**
+      // — no new prop on this shell, because the paint it would carry is the paint
+      // it is ALREADY handed. One value reaches the ring, the side bar and now the
+      // `agent` chip, so the three cannot disagree about one agent's colour, and an
+      // accent-less row (a person, a channel-less MCP post) hands `null` and keeps
+      // the grey chip.
+      agentPaint={accent?.paint ?? null}
       time={time}
       onOpenAgent={onOpenAgent}
     />

@@ -92,17 +92,38 @@ describe("the resolved tag on a message that named nobody", () => {
     );
   });
 
-  it("falls back to the id for an agent with no name — degradation, not breakage", () => {
-    // An agent that was never renamed, and every agent that has ENDED: the
-    // identity map is the live feed plus the peer projection and both drop a
-    // stopped session, so an old row re-faces as its id. The id is always true.
+  /**
+   * 🔒 **AN UNNAMED AGENT FACES `New Agent`, NOT ITS ID (Samuel, 2026-09-15:
+   * the arrow "shows the raw slug/ID; show the proper agent name it was sent
+   * to").**
+   *
+   * ⚠ **THIS CASE ASSERTED THE OPPOSITE UNTIL THIS FIX, AND IT WAS NOT WRONG WHEN
+   * IT WAS WRITTEN** — "falls back to the id, degradation not breakage" was the
+   * 2026-09-05 contract, back when `#<id>` was still a face an operator was
+   * expected to read. The 2026-09-15 ruling withdrew that everywhere
+   * (`shared/lib/agent-name.ts`), and `routedTagLabel` was the one reader the
+   * sweep missed, so this expectation is what kept the miss green.
+   * ⚠ **NOTHING IS LOST, AND THE NEXT CASE IS THE PROOF**: the id is still one
+   * hover away on `title`.
+   * ⚠ **NO `@`** — this branch is reached precisely when there is no retypable
+   * handle, so an `@`-prefixed face would render an address resolving to nobody.
+   */
+  it("faces an agent with no name as `New Agent`, never as its id", () => {
     renderWith(routed("ship it", [B]));
-    expect(screen.getByText("→ @agent-h1anog51")).toBeTruthy();
+    expect(screen.getByText("→ New Agent")).toBeTruthy();
+    expect(screen.queryByText(/agent-h1anog51/)).toBeNull();
+  });
+
+  it("keeps the unnamed agent's raw address on the hover too", () => {
+    renderWith(routed("ship it", [B]));
+    expect(screen.getByText("→ New Agent").getAttribute("title")).toBe(
+      "@agent-h1anog51"
+    );
   });
 
   it("names BOTH when the server resolved two", () => {
     renderWith(routed("ship it", [A, B]));
-    expect(screen.getByText("→ @dopl-worker @agent-h1anog51")).toBeTruthy();
+    expect(screen.getByText("→ @dopl-worker New Agent")).toBeTruthy();
   });
 });
 

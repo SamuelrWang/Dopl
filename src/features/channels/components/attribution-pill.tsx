@@ -121,9 +121,60 @@ export function attributionName({
  * carries the elevated shadow, and this chip must read as a label, not a card.
  * ⚠ Lower-case "agent", one word, never pluralized — it is a type marker, not a title.
  */
-export function AgentChip() {
+export function AgentChip({ paint }: { paint?: string | null }) {
+  /**
+   * 🔒 **THE CHIP WEARS THE AGENT'S OWN IDENTITY COLOUR (Samuel, 2026-09-15):
+   * background = that agent's assigned `agent-01…16` key, the word in white.**
+   *
+   * ⚠ **`paint` IS A `var()` REFERENCE THE CALLER RESOLVED, NEVER A KEY AND NEVER
+   * A COLOUR.** `lib/agent-colors.ts › agentColorVar` is the only place the token
+   * name is spelled and the sixteen `oklch()` values live in the two CSS palettes —
+   * so no colour appears in this component, which is docs/DESIGN-SYSTEM.md's rule
+   * honoured rather than bent. The inline `style` is forced and the reason is
+   * written out in `agent-box-rule.ts`: the palette member is chosen by DATA, and
+   * `bg-[var(--agent-color-${key})]` is a dynamic class the JIT never sees, so the
+   * alternatives are sixteen literal classes or a safelist.
+   * ⚠ **IT IS THE SAME `paint` THE ROW'S SIDE BAR AND RING ALREADY USE**
+   * (`agentPostAccent`), so the chip cannot drift to a second hue for one agent —
+   * and an ENDED agent's neutral `--border-strong` flows here too, which is the
+   * ruling ("once the agent has ended, that color needs to" go back to the bank).
+   *
+   * ⚠ **ABSENT `paint` KEEPS THE GREY CHIP, BYTE FOR BYTE.** A "Desktop agent"
+   * post belongs to no channel session, has no colour to wear, and must go on
+   * reading exactly as it does today — the chip says THAT it is an agent, and the
+   * colour says WHICH, so the second fact may be missing without disturbing the
+   * first.
+   * ⚠ **WHITE INK IS `--text-on-cta`, THE APP'S ONE ON-DARK TOKEN**, not
+   * `text-white`: a literal white is a colour a restyle cannot follow, and this is
+   * the same pair every filled pill in the tree already uses.
+   */
+  /**
+   * 🔒 **THE WORD IS CENTRED IN THE PILL, WHICH IT WAS NOT (Samuel, 2026-09-15:
+   * *"the text 'agent' in the pill in the badge isnt vertically centered"*).**
+   *
+   * ⚠ **CAUSE: THIS WAS A PLAIN INLINE `<span>`, SO THE WORD SAT ON A BASELINE
+   * RATHER THAN IN A BOX.** `py-px` + `leading-tight` built the pill's height out
+   * of a LINE BOX, and a line box distributes half-leading around a font's
+   * ASYMMETRIC ascent/descent — with a descender in "agent" the ink lands visibly
+   * high. No padding tweak fixes that honestly; it has to stop being inline.
+   * ⚠ **THE FIX IS THIS FILE'S NEIGHBOURS' OWN IDIOM, NOT A NEW RECIPE**:
+   * `bits.tsx › CountBadge` is `inline-flex h-[16px] items-center justify-center`
+   * and `channel-row-marks.tsx › MentionBadge` is `flex h-[18px] items-center`.
+   * An explicit height plus `items-center` centres the text BOX, which is the one
+   * arrangement that is correct at every font size.
+   * ⚠ **`leading-none` GOES WITH IT**: with the flex box owning the height, a
+   * line-height over 1 only re-introduces the half-leading this is removing.
+   * ⚠ **16px KEEPS THE PILL THE SIZE IT ALREADY WAS** (`text-micro` at
+   * `leading-tight` + 2px of padding measured ≈15.75px), so nothing on the name
+   * line reflows.
+   */
+  const shape =
+    "inline-flex h-[16px] shrink-0 items-center justify-center rounded-full px-1.5 text-micro leading-none";
+  if (!paint) {
+    return <span className={cn(shape, "bg-bg-inset text-text-muted")}>agent</span>;
+  }
   return (
-    <span className="shrink-0 rounded-full bg-bg-inset px-1.5 py-px text-micro leading-tight text-text-muted">
+    <span style={{ backgroundColor: paint }} className={cn(shape, "text-text-on-cta")}>
       agent
     </span>
   );
@@ -160,6 +211,7 @@ export function AttributionPill({
   agent,
   agentId = null,
   agentName = null,
+  agentPaint = null,
   time,
   onOpenAgent,
 }: {
@@ -171,6 +223,21 @@ export function AttributionPill({
   agentId?: string | null;
   /** Its CURRENT operator-given name, resolved at render from `AuthorIndex.agents`. */
   agentName?: string | null;
+  /**
+   * **THIS AGENT'S IDENTITY COLOUR AS A `var()` REFERENCE** — what {@link AgentChip}
+   * paints its background with (Samuel, 2026-09-15).
+   *
+   * ⚠ **THE CALLER RESOLVES IT, EXACTLY AS IT RESOLVES {@link agentName}**, and for
+   * the same reason: the colour is read at render off the live projection and is
+   * NEVER on the message row, because the key goes back to the channel's bank when
+   * the session ends (`view-model.ts › AgentIdentity.color`). This component takes
+   * no index and must not learn to read one.
+   * ⚠ **IT IS `agent-box-rule.ts › agentPostAccent`'S `paint`, THE SAME VALUE THE
+   * ROW'S BAR AND RING WEAR** — one agent, one hue, resolved once by the caller.
+   * `null` is the ordinary answer for a post with no channel session behind it and
+   * keeps the grey chip.
+   */
+  agentPaint?: string | null;
   /** Already formatted by the transcript's own `formatTime`. */
   time: string;
   /**
@@ -208,7 +275,7 @@ export function AttributionPill({
             keeps the chip on the name's own line; the flex row wraps if a long rename must. */}
         <span className="flex min-w-0 flex-wrap items-center gap-1.5">
           <span className="wrap-anywhere text-body font-semibold leading-tight">{label}</span>
-          {agent && <AgentChip />}
+          {agent && <AgentChip paint={agentPaint} />}
         </span>
         <span className="text-micro leading-tight text-text-muted">{time}</span>
       </span>

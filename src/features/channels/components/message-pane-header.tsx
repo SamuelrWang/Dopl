@@ -182,11 +182,41 @@ export function PaneHeader({
           it saves a BASE, a different object with its own verb, and Samuel's
           ruling named this control. `aria-pressed` and the fill both come off the
           same boolean. */}
+      {/* 🔒 **NO BUTTON FACE, AND PINNED IS A DULL YELLOW (Samuel, 2026-09-15).**
+          Two changes, one control:
+
+          ⚠ **`bare` KILLS THE ELEVATED FACE, WHICH IS THE POINT.** `active` alone
+          wore `.raised-tab` — a filled, raised toggle face — so a pinned channel
+          grew a button under its glyph while every other control in this header
+          stayed flat. `bare` is `IconButton`'s existing "no surface at all"
+          variant (it already suppresses the `active` raise as well as the resting
+          hover fill, which is exactly what is wanted here), so this borrows the
+          one idiom rather than adding a third pin face. **`aria-pressed` still
+          carries the state** — nothing is lost but paint, and the neighbouring
+          info toggle has been `bare` since 2026-08-25, so the header now reads as
+          one family.
+
+          ⚠ **THE COLOUR IS THE AFFORDANCE NOW, so it has to be a token and not a
+          hex** (docs/DESIGN-SYSTEM.md). `--warning` is the palette's DARKER, duller
+          yellow (`oklch(0.62 0.13 75)`) where `--caution` is the brighter one, which
+          is what "dull / dark-dull yellow" names. ⚠ **IT IS ON THE SEVERITY RAMP AND
+          THAT IS A DELIBERATE, NARROW EXCEPTION**: `bits.tsx › AGENT_ACCENTS` refuses
+          the ramp because keying an IDENTITY off it would RANK an operator's agents,
+          and there is no such reading here — a pin is one boolean with no severity to
+          imply, the ramp is simply where this tree's only two yellows live, and
+          minting a third would be the drift that rule is actually about.
+          ⚠ **`filled` RIDES THE SAME BOOLEAN**, unchanged: a filled pin reads as
+          pinned, and the outline is always drawn so the glyph does not resize
+          between states.
+          ⚠ **`className` LAST WINS** (`cn` is `tailwind-merge`), which is how this
+          keeps its 24px box against `bare`'s 32px and puts the yellow over the
+          `active` branch's `text-text-primary`. */}
       <IconButton
         icon={Pin}
         label={favorited ? `Unpin ${channelName}` : `Pin ${channelName}`}
         size={14}
-        className="h-6 w-6"
+        bare
+        className={cn("h-6 w-6", favorited && "text-warning")}
         active={favorited}
         filled={favorited}
         onClick={onToggleFavorite}
