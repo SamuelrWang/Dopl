@@ -24,6 +24,9 @@ import type { ReactNode } from "react";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import type { Role } from "@/features/workspaces/types";
 import { channelDisplayName } from "../lib/channel-display";
+// ⚠ THE MISS PATH IS A PURE FUNCTION so it can be tested without mounting this
+// surface — see its docblock for the silent-return bug that bought it.
+import { citationScrollTargetId } from "../lib/message-refs";
 import { ChannelsMessagePane } from "./message-pane";
 import { PopOutThreadButton } from "./pop-out";
 import { AgentActivityRows, ownAgentsWorking } from "./agent-activity";
@@ -237,20 +240,40 @@ export function ChannelSurface({
    * could resolve — but its jump would have nowhere to land, and a second resolver
    * is a second answer to "which message is #1759" for the two to disagree over.
    *
-   * ⚠ **AN UNRESOLVABLE SEQ DOES NOTHING, LOUDLY NOWHERE.** The pill's own gate
-   * already refused anything above the ceiling, so a miss here means the row is
-   * real but outside the loaded window — and the pane's existing
-   * `SCROLL_TARGET_MISSING_NOTE` is the surface that says so. Inventing a second
-   * failure path here would be two voices for one miss.
+   * 🔒 **A MISS STILL FIRES THE SIGNAL, AND THAT IS A CORRECTION TO THIS
+   * FUNCTION'S FIRST CUT (2026-09-15).** It used to `return` when the seq was not
+   * among the loaded rows, on the reasoning that the pane's
+   * `SCROLL_TARGET_MISSING_NOTE` would explain the miss. **It cannot**: that notice
+   * is derived from a LIVE scroll target whose id matches nothing
+   * (`message-pane.tsx › missing`), so a bare return set no target, left `live`
+   * false, and the click did nothing at all — no scroll, no sentence, no error.
+   * A control that silently does nothing is the exact failure this feature was
+   * built to refuse, and it had been reintroduced one layer above the pill.
+   *
+   * ⚠ **SO A MISS SENDS A TARGET THAT CANNOT MATCH, WHICH IS THE HONEST SHAPE.**
+   * The pill's gate already proved the seq is one this channel could hold, so a
+   * miss means the message is real and simply not in the loaded window — which is
+   * precisely the state the Tags inbox reaches when its mention is older than the
+   * page, and it reuses that exact notice rather than minting a second one.
+   * ⚠ **THE SENTINEL IS NOT A MESSAGE ID AND MUST NEVER BE READ AS ONE.** It is
+   * compared against `row.id` and used in one `[data-message-id]` DOM query, both
+   * of which simply fail to match — the same behaviour a real-but-unloaded id
+   * produces. Anything that starts treating `ScrollTarget.messageId` as a
+   * guaranteed-real id has to account for this case first.
+   * ⚠ **THE NOTICE'S WORDING IS RIGHT FOR THE COMMON MISS AND LOOSE FOR ONE
+   * OTHER**: a cited message that lives inside a THREAD is not in the channel
+   * view's rows either, and reads as "older than the loaded history" when it is
+   * merely elsewhere. Still true that the transcript did not move, so it beats
+   * silence — but it is the next thing to sharpen if citations across threads
+   * become common.
+   *
    * ⚠ **THE THREAD ARGUMENT IS THE VIEW WE ARE IN**, so a jump inside the channel
    * view stays in the channel view and one inside a thread stays in that thread.
    * These rows ARE that view's rows; passing anything else would re-point the
    * surface at a thread the reader never asked for.
    */
   const jumpToSeq = (seq: number) => {
-    const row = rows.find((candidate) => candidate.seq === seq);
-    if (!row) return;
-    sel.jumpToMessage(openThread?.id ?? null, row.id);
+    sel.jumpToMessage(openThread?.id ?? null, citationScrollTargetId(rows, seq));
   };
   const messagePane = (viewSelect?: ReactNode) => (
     <ChannelsMessagePane

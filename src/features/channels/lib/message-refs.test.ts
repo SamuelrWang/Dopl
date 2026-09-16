@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   MESSAGE_REF_TOKEN_RE,
   isCitableSeq,
+  citationScrollTargetId,
   messageRefSeq,
 } from "./message-refs";
 
@@ -73,5 +74,45 @@ describe("the second gate: could this channel hold that seq", () => {
     // A pane that has not loaded a page knows no ceiling; guessing one would draw
     // pills it cannot stand behind (INVARIANTS §11 — unknown is not empty).
     expect(isCitableSeq(1759, null)).toBe(false);
+  });
+});
+
+describe("citationScrollTargetId — the host's half, including the miss", () => {
+  const ROWS = [
+    { id: "m-a", seq: 10 },
+    { id: "m-b", seq: 1759 },
+  ];
+
+  it("resolves a loaded seq to that message's id", () => {
+    expect(citationScrollTargetId(ROWS, 1759)).toBe("m-b");
+  });
+
+  /**
+   * 🔒 **THE REGRESSION THIS FUNCTION WAS EXTRACTED FOR.** `channel-surface.tsx`
+   * first `return`ed on a miss, expecting the pane's "older than the loaded
+   * history" notice to cover it. That notice is derived from a LIVE scroll target
+   * that matches nothing, so returning early set no target and the click did
+   * NOTHING AT ALL — a pill that silently does nothing, which is the one thing the
+   * citation design refuses.
+   *
+   * ⚠ The property is that a miss still produces a TARGET, not that it produces
+   * any particular string: what matters downstream is only that it cannot match a
+   * real `row.id`, which is what makes the pane say so out loud.
+   */
+  it("still returns a target when the seq is outside the loaded page", () => {
+    const target = citationScrollTargetId(ROWS, 12);
+    expect(target).not.toBe("");
+    expect(ROWS.some((row) => row.id === target)).toBe(false);
+  });
+
+  it("cannot collide with a real message id", () => {
+    // ⚠ Real ids are message uuids; the sentinel is namespaced so no row can wear
+    // it. A collision would scroll to the WRONG message with full confidence.
+    expect(citationScrollTargetId([{ id: "seq:12", seq: 99 }], 12)).toBe("seq:12");
+    expect(citationScrollTargetId(ROWS, 12).startsWith("seq:")).toBe(true);
+  });
+
+  it("returns a target against an empty page rather than nothing", () => {
+    expect(citationScrollTargetId([], 1759)).toBe("seq:1759");
   });
 });

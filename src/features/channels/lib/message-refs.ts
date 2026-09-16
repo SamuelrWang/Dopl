@@ -72,3 +72,36 @@ export function messageRefSeq(token: string): number | null {
 export function isCitableSeq(seq: number, newestSeq: number | null): boolean {
   return newestSeq !== null && seq > 0 && seq <= newestSeq;
 }
+
+/**
+ * **WHICH MESSAGE A CITATION SHOULD SCROLL TO, INCLUDING WHEN THERE ISN'T ONE**
+ * (2026-09-15) — the host's half of the pill, as a pure function.
+ *
+ * ⚠ **IT ALWAYS RETURNS A TARGET, AND THAT IS THE WHOLE REASON IT EXISTS.** The
+ * first cut of `channel-surface.tsx › jumpToSeq` returned early when the seq was
+ * not in the loaded rows, expecting the pane's `SCROLL_TARGET_MISSING_NOTE` to
+ * explain the miss. It cannot: that notice is derived from a LIVE scroll target
+ * that matches nothing (`message-pane.tsx › missing`), so returning early set no
+ * target and the click did nothing whatsoever — no scroll, no sentence. **A
+ * citation pill that silently does nothing is the precise failure this feature
+ * was built to refuse**, so the miss has to travel rather than be swallowed.
+ *
+ * ⚠ **THE MISS SENTINEL IS NOT A MESSAGE ID.** `seq:<n>` cannot collide with a
+ * real id and is only ever compared against `row.id` / queried as
+ * `[data-message-id]`, both of which simply fail to match — exactly what a real
+ * but unloaded id does. Nothing may start treating `ScrollTarget.messageId` as a
+ * guaranteed-real id without handling this case first.
+ * ⚠ **A MISS IS NOT AN ERROR.** `isCitableSeq` already proved the seq is one this
+ * channel could hold, so "not in `rows`" means the message is real and simply
+ * outside the loaded window — the same state a Tags-inbox mention reaches when it
+ * is older than the page, and it reuses that notice rather than minting a second.
+ *
+ * Pure and exported so the miss path is testable without mounting a surface —
+ * which is what let the silent-return bug exist behind a green suite.
+ */
+export function citationScrollTargetId(
+  rows: ReadonlyArray<{ id: string; seq: number }>,
+  seq: number
+): string {
+  return rows.find((row) => row.seq === seq)?.id ?? `seq:${seq}`;
+}
