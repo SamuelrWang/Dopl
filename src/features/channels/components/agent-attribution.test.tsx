@@ -423,22 +423,35 @@ describe("the attribution pill", () => {
     expect(within(pill).getByText("You")).not.toBeNull();
   });
 
-  it("puts the per-agent accent on the BORDER and leaves the card face alone", () => {
+  /**
+   * 🔒 **AN ACCENTED PILL DRAWS NO STROKE OF ITS OWN SINCE 2026-09-16 (Samuel)**:
+   * *"it looks like, the borderline, the badge, and the vertical line, are 3 different
+   * components, is it possible to make it a single component? Because here, you see that
+   * the lines overlap and cause it to be darker."*
+   *
+   * ⚠ **THIS CASE ASSERTED THE OPPOSITE UNTIL THEN** — `agentAccent`'s border half ON the
+   * pill, over `.bento`'s hairline — and that pair WAS the third component he counted:
+   * a 1px tinted hairline inside a 3px coloured frame inside a 3px bar. The frame
+   * (`authored-row.tsx › ACCENT_FRAME`) is the one stroke now, so what this file pins is
+   * the ABSENCE, plus the half that did not change: the fill and the ink are the card's.
+   * ⚠ **THE FILL/INK NEUTRALISERS ARE STILL THE POINT.** `agentAccent` returns a
+   * border/fill/ink triple built for a CHIP; if a refactor ever lets the fill through, the
+   * pill silently becomes four differently-coloured boxes — which is why the sweep below
+   * survives the border half's deletion.
+   * ⚠ `agentAccent` ITSELF IS UNTOUCHED and still has readers; the determinism cases below
+   * are about the function, not about this call site.
+   */
+  it("leaves an ACCENTED pill unbordered — one stroke, and the row's frame owns it", () => {
     renderThread([byAgent("m-1", { agentId: B })]);
     const pill = pillIn(rowFor("BODY-m-1"));
-    // The border half of this agent's accent survived the merge…
-    const border = agentAccent(B)
-      .split(" ")
-      .find((c) => c.startsWith("border-")) as string;
-    expect(pill.className).toContain(border);
-    // …and the fill/ink halves did NOT: the pill keeps the elevated card face
-    // and primary ink, or the name is unreadable and the capsule is a chip.
+    expect(pill.className).not.toMatch(/\bborder-/);
+    expect(pill.className).not.toMatch(/\bbento\b/);
+    // …and the fill/ink halves are the card's, or the name is unreadable and the
+    // capsule is a chip.
     expect(pill.className).toContain("bg-bg-elevated");
     expect(pill.className).toContain("text-text-primary");
     for (const cls of agentAccent(B).split(" ")) {
-      if (cls.startsWith("bg-") || cls.startsWith("text-")) {
-        expect(pill.className).not.toContain(cls);
-      }
+      expect(pill.className).not.toContain(cls);
     }
   });
 

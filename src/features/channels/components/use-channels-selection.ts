@@ -40,6 +40,15 @@ export interface ChannelsSelection {
   requestedThreadId: string | null;
   /** `agentsModel › agentKey` of the open agent view, or `null`. */
   openAgent: string | null;
+  /**
+   * NONCED ASK for the info column to land back on its DEFAULT face (Info).
+   *
+   * ⚠ **SAME SHAPE AND SAME REASON AS {@link newThreadSignal}**: the active tab is
+   * `info-panel.tsx`'s own `useState` and must stay there — a boolean here would be a
+   * SECOND source of truth for a choice that component owns, and the two would drift.
+   * A nonce only ever says "somebody asked, again".
+   */
+  infoTabSignal: number;
   infoOpen: boolean;
   scrollTarget: ScrollTarget | null;
   /**
@@ -53,6 +62,24 @@ export interface ChannelsSelection {
   createOpen: boolean;
   directOpen: boolean;
   setOpenAgent: (key: string | null) => void;
+  /**
+   * 🔒 **THE SENDER PILL IS A TOGGLE (Samuel, 2026-09-16)**: *"if a user clicks on the
+   * badge and opens the agent view, i want to make it so that if they click the badge
+   * again/aka click the badge of an agent already opened up in view, it goes back to the
+   * channel info view, basically resets."*
+   *
+   * ⚠ **THE SAME KEY CLOSES, A DIFFERENT KEY SWITCHES.** Clicking another agent's pill
+   * while one is open is unchanged — it opens that one, which is what the multiplayer
+   * case needs.
+   * ⚠ **AND CLOSING RESETS THE COLUMN, NOT ONLY THE OVERLAY** — *"basically resets"*. The
+   * agent view is drawn OVER the info column, so a bare `setOpenAgent(null)` would reveal
+   * whatever tab happened to be underneath; this bumps {@link infoTabSignal} with it.
+   * ⚠ **IT IS THE PILL'S VERB AND NOT THE AGENTS TAB's.** A card there already renders
+   * "Viewing" for the open agent and says what it does; `setOpenAgent` stays its handler,
+   * so a press on a card that is already open is still a no-op rather than a surprise
+   * close.
+   */
+  toggleAgent: (key: string) => void;
   setInfoOpen: (open: boolean) => void;
   setCreateOpen: (open: boolean) => void;
   setDirectOpen: (open: boolean) => void;
@@ -84,6 +111,7 @@ export function useChannelsSelection({
   const [infoOpen, setInfoOpen] = useState(true);
   const [scrollTarget, setScrollTarget] = useState<ScrollTarget | null>(null);
   const [newThreadSignal, setNewThreadSignal] = useState(0);
+  const [infoTabSignal, setInfoTabSignal] = useState(0);
 
   // A SECOND notification, with the page already mounted, changes the route but
   // not the component — the initial `useState` above would never see it. So the
@@ -125,6 +153,23 @@ export function useChannelsSelection({
   );
   const toggleInfo = useCallback(() => setInfoOpen((open) => !open), []);
 
+  // ⚠ READ OUTSIDE THE UPDATER, deliberately. The obvious spelling is a functional
+  // `setOpenAgent(open => …)` that bumps the nonce from inside — but a state updater
+  // must be pure and React re-invokes it under StrictMode, so the bump would fire
+  // twice. `openAgent` is already in this scope; comparing it here is one render
+  // behind nothing.
+  const toggleAgent = useCallback(
+    (key: string) => {
+      if (openAgent !== key) {
+        setOpenAgent(key);
+        return;
+      }
+      setOpenAgent(null);
+      setInfoTabSignal((n) => n + 1);
+    },
+    [openAgent]
+  );
+
   // ⚠ THE SCROLL SIGNAL IS NONCED, so clicking the same mention twice
   // re-scrolls — a plain `{messageId}` object would be swallowed the moment
   // somebody "optimizes" the state update with an equality check
@@ -144,9 +189,11 @@ export function useChannelsSelection({
     infoOpen,
     scrollTarget,
     newThreadSignal,
+    infoTabSignal,
     createOpen,
     directOpen,
     setOpenAgent,
+    toggleAgent,
     setInfoOpen,
     setCreateOpen,
     setDirectOpen,

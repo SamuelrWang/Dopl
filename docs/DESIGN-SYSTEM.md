@@ -89,7 +89,7 @@ Utilities generated from `@theme` (values live in `:root`):
 | `bg-home-panel`                               | `#f1f3f5`        | THE PANEL — `.page-float`'s fill, i.e. every full-page card in the app |
 | `border-home-panel-line`                      | `#7a7a7a`        | THE PANEL LINE — `.page-float`'s 2px edge and the /home record pane's. ⚠ The header selector's track is `--seg-fill` now, so the token's `bg-` variant has NO consumer (`grep -rn 'bg-home-panel-line' src apps` is empty); only the `border-` utility is live. ⚠ It was `#e2ecf0` until 2026-09-08, when Samuel ruled the light-blue panel edge to a neutral DARK GRAY; the value is a first guess to be tuned live, and the token's own comment in `globals.css` names the two neighbours (`--raised-light-line`, `--border-active`). |
 | `bg-home-card`                                | `#fbfcfc`        | THE CARD — the /home record pane's fill, one step warmer than the panel |
-| `--agent-color-01 … -16` (no utility) | `oklch(0.62 0.17 H)`, H every 22.5° | **THE AGENT COLOUR BANK** — one hue per LIVE agent in a channel (Samuel, 2026-09-13; docs/specs/agent-colors.md). ⚠ **THEY ARE IDENTITY, NEVER STATUS**: the severity RAMP two rows up (`success` → `danger`) says how an agent is DOING, and `agent-01` being red says nothing about its health. ⚠ **NO `text-*` / `bg-*` UTILITY, AND THAT IS DELIBERATE** — the member is chosen by DATA (a key off a peer's projection), and a Tailwind class cannot be built from a runtime key. `src/features/channels/lib/agent-colors.ts › agentColorVar` is the ONLY place the token name is spelled; consumers pass its `var(--agent-color-NN)` into an inline `style`. ⚠ ONE SATURATION AND ONE LIGHTNESS, HUE ONLY, so no two read as "the same colour, darker" and all sixteen carry equal weight against the transcript's white ground. ⚠ NO `-soft` COMPANION SET: since 2026-09-14 the colour is a RING and a 3px BAR with no filled area at all, so a tint would have no consumer. ⚠ SIXTEEN is one more than the agent cap (15, 2026-09-01), so a full room still has a spare. ⚠ The key set is mirrored in four more places — re-derive with `src/features/channels/agent-color-schema.test.ts`, never by hand. |
+| `--agent-color-01 … -16` (no utility) | `oklch(0.62 0.17 H)`, H every 22.5° | **THE AGENT COLOUR BANK** — one hue per LIVE agent in a channel (Samuel, 2026-09-13; docs/specs/agent-colors.md). ⚠ **THEY ARE IDENTITY, NEVER STATUS**: the severity RAMP two rows up (`success` → `danger`) says how an agent is DOING, and `agent-01` being red says nothing about its health. ⚠ **NO `text-*` / `bg-*` UTILITY, AND THAT IS DELIBERATE** — the member is chosen by DATA (a key off a peer's projection), and a Tailwind class cannot be built from a runtime key. `src/features/channels/lib/agent-colors.ts › agentColorVar` is the ONLY place the token name is spelled; consumers pass its `var(--agent-color-NN)` into an inline `style`. ⚠ ONE SATURATION AND ONE LIGHTNESS, HUE ONLY, so no two read as "the same colour, darker" and all sixteen carry equal weight against the transcript's white ground. ⚠ NO `-soft` COMPANION SET: since 2026-09-14 the colour is a STROKE and a 3px BAR with no filled area at all, so a tint would have no consumer (⚠ the stroke was a `ring` until 2026-09-16 and is a 3px `border` now — one drawn shape, see "The AGENT POST ACCENT" below). ⚠ SIXTEEN is one more than the agent cap (15, 2026-09-01), so a full room still has a spare. ⚠ The key set is mirrored in four more places — re-derive with `src/features/channels/agent-color-schema.test.ts`, never by hand. |
 
 **These are the APP FRAME palette, and the old "/home ONLY" note on them is
 SUPERSEDED** — Samuel, live review 2026-08-30: *"the workspace pages adopt
@@ -265,7 +265,7 @@ the shell overrides rather than the pages dropping it.
 | `.raised-tab`    | White-gradient raised face for the ACTIVE item inside a `.concave-track` — also composed onto the active `.nav-chip`, the active `.seg-pill` option and the `Switch` thumb. ONE elevation with `.auth-btn-3d-light` (2026-08-15): identical gradient (`#fff → #f2f2f2`), hairline (`#d4d4d4`), bevel and drops. Its hairline is an `inset 0 0 0 1px` RING, not a `border`, because the class is toggled onto content-sized elements whose resting face has none — a real border would make every active chip 2px wider than its siblings. THE selected state app-wide (2026-08-17) — toggled chrome (History/Rooms toggles, doc-toolbar marks) and open-menu triggers (session pills, composer intent pill) wear it too; there is no pressed-in selected face. ⚠ It supplies the FILL, so a consumer's resting `bg-*`/`hover:bg-*` utilities must be conditional on NOT-active: Tailwind's utility layer outranks the kit layer and a stray `bg-bg-elevated` flattens the gradient to nothing. Resting face only; behavioural states belong to the consumer. |
 | `.nav-chip`      | Hug-width sidebar/nav chip (`--shell-chip` fill — `#e8e8e8`, lightened one step 2026-08-30 on Samuel's *"the grayed resting backgrounds one step lighter"*; it is this class's ONLY consumer, and both mounts wanted the shift — radius 10, h36) for `<a>` and `<button>`. Active = `.nav-chip-active` + `.raised-tab`. THE nav recipe — app sidebar + settings modal both compose it; never fork it locally. ⚠ **BOTH grounds are a light gray panel and the recipe is written for exactly that** — the settings modal's `--shell-surface` rail and, since 2026-08-30, the app sidebar's `--home-panel` panel. A dark-ground rebind of this class existed for one iteration of the frame ruling and was **deleted** when the sidebar became a panel instead of a slab of frame; do not re-add one. The resting/active pair IS the alternation at chip scale: flat chip on gray, `.raised-tab` white when active. |
 | `.btn-light`     | Small raised light button (toolbar / compact chrome).                   |
-| `.auth-btn-3d`   | Raised black primary CTA. (`.auth-btn-3d-light` = white variant.) `.auth-btn-3d-light` is THE white-raised elevation reference: `.raised-tab` and the app-shell's `.brandPill` are the same face at other scales. **Since 2026-08-24 both are BUILT FROM `--raised-light-face` / `--raised-light-line` / `--raised-light-bevel` / `--raised-light-shadow`** (`:root`, tokens.css + globals.css), so the "one elevation" rule is enforced by construction rather than by matching two hex lists — and a scoped override can wear the face without forking the recipe (/home's sender pills do exactly that). Change the face in ONE place: the vars. |
+| `.auth-btn-3d`   | Raised black primary CTA. (`.auth-btn-3d-light` = white variant.) ⚠ **ITS HOVER AMBIENT DROP IS `--shadow-raised-hover` SINCE 2026-09-16** — extracted, not copied, because the transcript's agent badge had to wear the same step (Samuel: *"when I hover over like one of the black buttons, it translates up, and the shadow gets darker/larger … Can we add the same functionality"*). The rule keeps its own two INSET bevel lines; only the two drops moved to the token. Declared in `globals.css` and mirrored in `tokens.css` (gated by `scripts/check-css-token-drift.ts`). `.auth-btn-3d-light` is THE white-raised elevation reference: `.raised-tab` and the app-shell's `.brandPill` are the same face at other scales. **Since 2026-08-24 both are BUILT FROM `--raised-light-face` / `--raised-light-line` / `--raised-light-bevel` / `--raised-light-shadow`** (`:root`, tokens.css + globals.css), so the "one elevation" rule is enforced by construction rather than by matching two hex lists — and a scoped override can wear the face without forking the recipe (/home's sender pills do exactly that). Change the face in ONE place: the vars. |
 | `.selected-ring` | THE selected face for a raised-light control (2026-08-24) — `--focus-line` hairline + `--focus-halo`, i.e. the signal the search pill wears while OPEN, held permanently instead of only while focused. Compose onto `.auth-btn-3d-light`; it re-states itself on `:hover` so a pointer cannot wash the selection out. ⚠ Not a border of its own and not a fill swap. 🔒 ⚠ **/home's CHANNEL LIST NO LONGER WEARS IT — ITS SELECTED ROW IS THE PAGE'S BLACK BUTTON (Samuel, 2026-09-15):** *"for the channel picker, for the selected channel, can we have it turn into like the black button UI? And drop the shadow that currently goes on the selected?"* `pages/home/channel-row-marks.tsx › HOME_CARD_FACE_SELECTED` is `.auth-btn-3d` + the row's radius + `text-text-on-cta` — **the same kit recipe `pages/home/panel-buttons.tsx › PAGE_ACTION_BTN` wears**, by reference and never a copied gradient. ⚠ **THE TWO FACES ARE ALTERNATIVES, NEVER LAYERS, AND THAT *IS* THE "drop the shadow"**: the row was `HOME_CARD_FACE` + this ring + a module rule for the line, three elevations over one row; `.auth-btn-3d` sets `background`, `border` and `box-shadow` in one rule, so swapping the face leaves nothing to layer. **Do not re-add a ring there.** ⚠ Same 1px border on the same radius, so selection cannot shift the list. ⚠ **THE ROW'S INK TRAVELS WITH THE FACE**: there is exactly ONE on-dark ink token in either file (`--text-on-cta`), so the quieter lines take it at an ALPHA (`text-text-on-cta/70`, the idiom `channels/components/agents-tab.tsx` already holds) rather than naming a grey the palette does not have, and the two unread marks INVERT their token pair (`MentionBadge`, `UnreadDot`) because a black pill on a black card is an invisible badge, not a quiet one. ⚠ **THE RING ITSELF IS UNTOUCHED AND STILL HAS READERS** — the header's open search pill, and the landing page's scripted /home demo (`marketing/components/banner-demo/demo-home-chrome.tsx`), which is why this ruling changed a CALL SITE and not the recipe. ⚠ **`--home-row-line-selected` and `home.module.css › .rowSelected` (the 2026-09-09 darker line) are DELETED with it** — that rule was the token's only consumer, and a darker line means nothing on a face that brings its own black edge. |
 | `.menu-card` / `.menu-row` / `.menu-divider` | THE dropdown surface, its row face and its section rule (2026-08-15). Ported from the landing Menu dropdown — `src/features/marketing/marketing.css › .lp-nav-menu-card` / `.lp-nav-menu-item` / `.lp-nav-menu-divider` plus the `lpMenuIn`/`lpMenuOut` keyframes, replicated in the global layer as `menuCardIn`/`menuCardOut` (marketing.css is page-scoped and the app never loads it — edit both together). Card: 16px radius, 7px padding, white→`#f6f6f6` gradient, `#dcdcdc` hairline, top inset bevel + three drops, unfolding on a 7° `rotateX`. Row: 10px radius, and its face is the GLOBAL OPTION-HOVER RULE below — **option hover = `--menu-item-hover-bg`, the Add-item gray; never an elevated face** (Samuel, 2026-09-10; `:focus-visible` is the same face, `:active` one step down the ramp). It was a white→`#f0f0f0` gradient with a 1px lift and a drop shadow until then — *"when I hover over options in a dropdown, it turns this like white elevated button looking thing"*. The token is `var(--surface-raised-1)` BY REFERENCE — the same gray `info-card-rows.tsx › InfoCardAddRow` wears — and `bg-menu-item-hover-bg` is its Tailwind alias for option rows that miss `.menu-row` (the mention list, `scope-share-popover.tsx`). ⚠ The landing nav's `.lp-nav-menu-item` KEEPS the elevated face: marketing is exempt from this kit, so that copy deliberately no longer matches. **Only `Popover` composes these** — never hand-roll a menu surface. |
 | `.graph-substrate` | Dotted world surface (24px pitch) behind a board or graph view. THE dot recipe. ⚠ **THE ONTOLOGY BOARD LEFT IT ON 2026-09-10 AND CAME BACK ON 2026-09-11** (Samuel: *"I don't see the dots, the dotted grid. I want to bring that dotted grid back"*). The 09-10 removal read the grid as the inner panel of a *"double panel"*; what he objected to was the FILL, and this recipe paints dots and no background — so `kanban-board.tsx` and `ontology-skeleton.tsx` compose it again on a board that is still the page panel itself. Consumers, measured 2026-09-11: `grep -rn 'graph-substrate' src apps`. |
@@ -469,7 +469,7 @@ Reference implementations: `src/features/knowledge/components/knowledge-v2/`
 tokens).
 
 
-### The AGENT POST ACCENT — a ringed pill and a side bar, and who does NOT get one (2026-09-14)
+### The AGENT POST ACCENT — ONE framed pill and a side bar, and who does NOT get one (2026-09-14; one shape 2026-09-16)
 
 Samuel's ruling (docs/specs/agent-colors.md; `channels/components/authored-row.tsx ›
 AuthoredRowAccent`). ⚠ **It REPLACED the 2026-09-13 box** — a `rounded-[14px]` 2px frame with a
@@ -480,14 +480,39 @@ vertical bar, that travels the length/amount of lines of the messages from that 
 **There is no frame, no top bar and no second row component** — the 2026-09-13
 message-box-agent component is deleted: an agent's post is a person's post plus the two marks below.
 
-- **The ring** — a `ring-2` in the agent's colour on a `rounded-full` WRAPPER around the
-  attribution pill, with **no `ring-offset`**. A wrapper rather than a fork, because
-  `attribution-pill.tsx › AttributionPill` is one face for humans and agents alike and
-  docs/DESIGN-SYSTEM forbids a second border recipe for it; a ring rather than a border because a
-  ring is a `box-shadow` and costs no layout, so the pill stays exactly where it sits on a
-  person's row. The colour rides `--tw-ring-color` as an inline custom property — the recipe
-  `channels/components/agent-color-circles.tsx › RING` already uses, and the only way a palette
-  member chosen by a runtime key can reach a Tailwind ring.
+- 🔒 **The frame** — `authored-row.tsx › ACCENT_FRAME`, a `border-[3px]` in the agent's colour on
+  a WRAPPER around the attribution pill, **square and BORDERLESS on the side the bar is on**
+  (`› ACCENT_FRAME_EDGE`). ⚠ **IT WAS A `ring-[3px]` UNTIL 2026-09-16 AND SAMUEL COUNTED THREE
+  OBJECTS**: *"it looks like, the borderline, the badge, and the vertical line, are 3 different
+  components, is it possible to make it a single component? Because here, you see that the lines
+  overlap and cause it to be darker. And also, since the shadow is attached to the badge, it gets
+  covered behind the borderline."* He was describing the geometry exactly — the bar's fill, the
+  wrapper's ring laid ON TOP of it, and the PILL's own `.bento` hairline tinted by `bits.tsx ›
+  agentAccent`. **THE OVERLAP IS WHY THE NEUTRAL FACE READ DARKER AT THE JOIN**: `--border-strong`
+  is 12% black, so two translucent paints over one 3px band composited. Now the bar-side border is
+  DROPPED and the bar IS that edge — no band is painted twice, and the 376c654f "one straight
+  line" ruling is the result rather than a second constant. ⚠ **THE PILL DRAWS NOTHING**
+  (`attribution-pill.tsx`'s `framed` prop drops `.bento` and `agentAccent` on an accented row), so
+  there is ONE stroke; and because a border IS the outer edge, `--shadow-bento` falls from it into
+  open air instead of under an opaque ring. 🔒 ⚠ **ITS TOP EDGE IS NOT PULLED UP, AND THAT IS THE COROLLARY OF DROPPING THE RING** — a ring
+  wrapped the CORNER (it painted above the bar's top end as well as beside it), a three-sided
+  border does not, so the frame's top stroke and the bar's top end must begin at the same y or the
+  corner opens a 3px notch with the two marks offset diagonally. The frame is the content column's
+  first child and the bar is `self-stretch` over the same box, so leaving the top margin alone is
+  what aligns them; a `-mt-[3px]` "to keep the ring's layout" is the bug. The BOTTOM is still
+  pulled (`-mb-[3px]`) because nothing has to meet there. The row is 3px taller at the top than it
+  was and identical everywhere else. The colour is an inline `style` `borderColor`: a
+  palette member chosen by a runtime key cannot be a Tailwind class.
+- 🔒 **Its hover is the BLACK BUTTON'S** (Samuel, 2026-09-16: *"when I hover over like one of the
+  black buttons, it translates up, and the shadow gets darker/larger. And that's what makes it
+  clearly visible. Can we add the same functionality, when it translates up, it like has more
+  shadowing?"*) — the existing 2px lift PLUS `--shadow-raised-hover`, which is
+  `.auth-btn-3d:hover`'s own ambient drop pair **extracted to a token** (`globals.css`, mirrored in
+  `tokens.css`) so that rule NAMES it and the two cannot drift to two hover weights. The button
+  keeps its two INSET bevel lines, which mean nothing on a white capsule.
+  ⚠ `transition-[transform,box-shadow]`, not `transition-transform`, or the shadow snaps while the
+  lift animates; `motion-reduce` turns both off. ⚠ The motion is gated `has-[button:hover]`, so an
+  INERT pill (the pop-out, the guest lane) does not animate.
 - **The bar** — `w-[3px] self-stretch rounded-b-full`, the SAME colour, on the post's **OUTER**
   edge: right for a right-aligned post, left for a left-aligned one (*"For messages that are
   right aligned, this bar should sit to the right"*). `self-stretch` is the whole of *"travels
@@ -498,15 +523,19 @@ message-box-agent component is deleted: an agent's post is a person's post plus 
   with the bar, it should be a straight, not rounded"*) — the top is the end the pill's ring
   joins, and a cap there tapers to a point exactly where one colour must run into the other.
   Only the far end keeps a cap.
-- **They touch, and that is two numbers that must move together.** The content column is inset
-  from the bar by 8px (`pl-2`/`pr-2`) so prose never runs into it; the pill's wrapper takes an
-  equal NEGATIVE margin on the same side, so the pill alone reaches back out and its 2px ring is
-  painted over the bar's inner 2px — ring plus the bar's remaining 1px reads as one unbroken 3px
-  of colour.
+- **They JOIN, and that is two numbers that must move together.** The content column is inset from
+  the bar by 8px (`pl-2`/`pr-2`) so prose never runs into it; the pill's wrapper takes an equal
+  NEGATIVE margin on the same side, so the frame's box ends exactly at the bar's inner edge and its
+  top and bottom strokes run out of the bar at the bar's own width. ⚠ **NOTHING IS PAINTED TWICE
+  SINCE 2026-09-16** — this bullet described a 2px ring over a 3px bar, then a 3px ring over the
+  same 3px bar, and BOTH were overlaps; the frame's bar-side border is dropped instead.
+  ⚠ **3px IS ONE NUMBER, NOT TWO** — stroke width and bar width are the two halves of one line of
+  colour and any difference reappears as a step; `agent-post-accent-face.test.tsx` pins them as a
+  PAIR.
 - **One post, one bar.** A run by one agent does NOT merge. A CONTINUATION row drops the pill (and
   the ring with it) exactly as a person's does, and still carries its own bar.
 - **Ended → neutral.** `agent-box-rule.ts › AGENT_ACCENT_NEUTRAL` (`var(--border-strong)`), still
-  a ring and a bar. The colour returns to the channel's bank when the session ends, but the post
+  a frame and a bar. The colour returns to the channel's bank when the session ends, but the post
   is still an agent's — and "white, no accent" is a rule about the AUTHOR (a person, or a
   channel-less MCP "Desktop agent"), never about liveness.
 - **The pop-out did NOT follow.** `channels/components/agent-stream-sent-box.tsx › AGENT_BAR` is a

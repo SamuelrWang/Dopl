@@ -195,8 +195,12 @@ describe("the bubble transcript is gone, and the row shape is the real one", () 
         // is stated in its own slot and the GEOMETRY is what the ghost byte-shares.
         // The radius is asserted separately below, because the two can now differ on
         // purpose: an accented row squares one side, this ghost never does.
+        // ⚠ **`.bento` LEFT THIS LITERAL ON 2026-09-16**, for the same reason the radius
+        // did: an ACCENTED pill draws no stroke, so the real one states the face in its
+        // own conditional slot. The GEOMETRY is what is byte-shared; the face is asserted
+        // just below, on the arm this ghost is actually in.
         "attribution-pill.tsx",
-        "bento inline-flex max-w-full items-center gap-2 py-1 pl-1 pr-3.5",
+        "inline-flex max-w-full items-center gap-2 py-1 pl-1 pr-3.5",
       ],
       ["transcript.tsx", "wrap-anywhere max-w-[92%]"],
       ["transcript.tsx", '"flex flex-col gap-5"'],
@@ -209,6 +213,9 @@ describe("the bubble transcript is gone, and the row shape is the real one", () 
       expect(v2(source)).toContain(geometry);
       expect(GHOST).toContain(geometry);
     }
+    // ⚠ THE UNFRAMED FACE, which is the arm this ghost renders: both spell `.bento`.
+    expect(v2("attribution-pill.tsx")).toContain('!framed && "bento"');
+    expect(GHOST).toContain("bento inline-flex");
     // The pill's avatar slot is the size the pill asks for — `avatar.tsx › SIZE.sm`.
     expect(file("../../../../../src/shared/ui/avatar.tsx")).toContain('sm: "w-8 h-8');
     expect(GHOST).toContain("w-8 h-8");

@@ -75,7 +75,7 @@ import { StreamWorkingRow } from "./agent-stream-working";
 // moves. It is RE-EXPORTED here so no importer changed.
 import { SentToChannelBox } from "./agent-stream-sent-box";
 import type { AgentColorKey } from "../types"; // the sent banner's fill
-import type { AgentLivenessState } from "./agents-model";
+import type { AgentLivenessState, PostDestination } from "./agents-model";
 export {
   SentToChannelBox,
   POST_PENDING_LABEL,
@@ -121,7 +121,7 @@ export function AgentStream({
   answerBusy = false,
   answeredEscalations,
   escalationAnswerable = true,
-  threadTitle,
+  destination,
   viewer,
   agentNameFor,
   liveness = null,
@@ -206,7 +206,7 @@ export function AgentStream({
    * naming somebody else) passes false, and the server refuses regardless.
    */
   escalationAnswerable?: boolean;
-  threadTitle?: string | null;
+  destination?: PostDestination | null; // ⚠ 2026-09-16: `agent-stream-model.ts › StreamItem.to`
   /**
    * THE VIEWER'S OWN FACE, for the turns they typed (Samuel, 2026-08-27).
    * `view-model.ts › viewerPerson` resolves it off the transcript the host is
@@ -239,7 +239,7 @@ export function AgentStream({
     // threadless post does not carry, so it cannot answer "did this land".
     delivered,
     pending,
-    threadTitle,
+    destination,
   });
   // Follow the stream. Simpler than the transcript's stick-to-bottom rules on
   // purpose: this is a log, not a conversation with a reading position to

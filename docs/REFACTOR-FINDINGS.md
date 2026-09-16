@@ -9416,3 +9416,28 @@ was filed into the closed well rendered nothing at all, which is a defect under 
 (`collapse-wells.tsx › WellsColumn.forceOpen`, pinned in `channel-wells-render.test.tsx`). What is
 left is the DEFAULT, and `channel-wells.ts` names it as the open question in its own words:
 *"Earlier is closed, and that is the one part of this Samuel did not state."*
+
+### F-711 — `bits.tsx › agentAccent` has no reachable call site left
+
+**Found:** 2026-09-16, building Samuel's one-drawn-shape ruling for the transcript's agent badge.
+**Status:** OPEN — recorded, not acted on. Deleting it is a judgment call about a four-face palette
+that predates the sixteen-colour bank, and it is not this wave's ruling to make.
+
+`attribution-pill.tsx › AttributionPill` reads it as `!framed && agentId && agentAccent(agentId)` —
+a per-id border tint on the capsule's `.bento` hairline. Samuel's 2026-09-16 ruling (*"the
+borderline, the badge, and the vertical line, are 3 different components"*) makes an ACCENTED row's
+pill draw no stroke at all, so that arm is now gated on **unframed AND stamped**, and no production
+mount produces it:
+
+- `transcript.tsx › Message` always hands an `accent` for a stamped agent row (`agent-box-rule.ts ›
+  agentBoxOf` accents on `agent && agentId !== null`, which is the same predicate the pill's own
+  `agentId` test uses), so every framed case is the accented one;
+- `thread-card-row.tsx` and `escalation-card-row.tsx` mount `AuthoredRow` with `agent={false}` and
+  no `agentId` at all.
+
+So the function is live only from `agent-attribution.test.tsx`'s determinism cases, which test the
+function rather than a call site. ⚠ **It is NOT unreferenced**, which is why no lint or gate says
+anything: the import, the arm and the four-entry `AGENT_ACCENTS` table all still compile.
+⚠ **Measure before deleting** — `grep -rn 'agentAccent' src apps` — because the arm is a `false`
+away from being live again, and a host that mounts an agent pill without a row accent would lose
+its only per-agent mark.

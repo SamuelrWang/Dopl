@@ -73,6 +73,7 @@ import {
   agentKey,
   agentLiveness,
   agentRunningModel,
+  postDestination,
   parseAgentPostStamp,
 } from "./agents-model";
 import { formatTokens, metric } from "./agent-metrics";
@@ -373,7 +374,7 @@ export function ChannelsAgentPanel({
             answeredEscalations={answeredEscalations}
             onAnswerEscalation={onAnswerEscalation}
             answerBusy={answerBusy}
-            threadTitle={agent.threadTitle}
+            destination={postDestination(agent)}
             // ⚠ THE VIEWER'S FACE for their own turns, resolved off the SAME
             // transcript the Sent lane reads (`view-model.ts › viewerPerson`) —
             // no roster prop to thread through two hosts, and no second read.

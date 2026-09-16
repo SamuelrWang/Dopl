@@ -54,7 +54,7 @@ function renderStream(
       entries={[]}
       supported
       sent={[]}
-      threadTitle="UI-kit design"
+      destination={{ kind: "thread", name: "UI-kit design" }}
       {...over}
     />
   );
@@ -124,13 +124,14 @@ describe("the private direct lane — another of my agents spoke to this one", (
 
   it("does NOT wear the sent box's banner — nothing here left the machine", () => {
     renderStream({
-      threadTitle: "UI-kit design",
+      destination: { kind: "thread" as const, name: "UI-kit design" },
       entries: [
         { ...frame({ kind: "directed", text: "ship the audit" }), lane: "directed" },
       ] as unknown as AgentNarrationEntry[],
     });
-    expect(screen.queryByText(/^Sent to /)).toBeNull();
-    expect(screen.queryByText("Posted to channel")).toBeNull();
+    // ⚠ ONE VERB SINCE 2026-09-16 (`agent-stream-sent-box.tsx › postedToLabel`), so
+    // ONE pattern covers every settled face rather than two spellings of it.
+    expect(screen.queryByText(/^Posted to /)).toBeNull();
     // ⚠ AND IT IS NOT THE OPERATOR EITHER. Rendering a direction as an operator
     // turn puts words in the operator's mouth on their own screen, under their
     // own avatar — the impersonation `session-seed.js › frameDirectedTurn` solves
@@ -215,7 +216,7 @@ describe("markdown in the message faces", () => {
     expect(container.querySelector("pre code")?.textContent).toBe("npm test");
     // ⚠ AND THE §6 SEAM DID NOT MOVE. The banner is the card's whole claim about
     // whether the counterparty has these words; only the body's renderer changed.
-    expect(screen.getByText("Sent to UI-kit design")).toBeTruthy();
+    expect(screen.getByText("Posted to UI-kit design thread")).toBeTruthy();
   });
 
   it("leaves the LOG lane plain, so its slice-and-clip still works", () => {

@@ -15,6 +15,7 @@
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
 import { agentColorVar } from "../lib/agent-colors";
+import type { PostDestination } from "./agents-model";
 import { StreamProse } from "./agent-stream-prose";
 import type { AgentColorKey } from "../types";
 import { TAB_ACTION } from "./bits";
@@ -36,6 +37,34 @@ export const POST_ACTION_LABEL = "Post";
  *  of this than you are being shown". Exported for the tests. */
 export const POST_EXPAND_LABEL = "Show more";
 export const POST_COLLAPSE_LABEL = "Show less";
+
+/**
+ * **WHAT THE SETTLED BANNER SAYS — THE PLACE, BY NAME (Samuel, 2026-09-16)**: *"these
+ * currently say, posted to channel. I want it to say the name of the channel, or the
+ * thread, that it is posted to. Aka, Posted to Dopl channel. Or, posted to Yada Yada
+ * thread."*
+ *
+ * ⚠ **"Sent to <thread>" IS GONE, AND THAT IS THE RULING, NOT A TIDY-UP.** The card had
+ * TWO verbs for one event — `Sent to Alpha audit` for a thread and `Posted to channel`
+ * for the room — so the same delivery read as two different kinds of thing depending on
+ * where the agent happened to be launched. One verb, one shape, the place named in both.
+ * ⚠ **THE BARE NOUN IS THE FALLBACK AND IT IS NEVER A BLANK** (INVARIANTS §11). An older
+ * main reports no `channelName`, and `Posted to  channel` with a hole in it is the one
+ * output this must not produce — so an absent name drops the slot rather than filling it.
+ * ⚠ **THE KIND STILL COMES THROUGH WHEN THE NAME DOES NOT**, which is why the fallback has
+ * two spellings: *"Posted to thread"* is a true statement about a thread-scoped agent
+ * whose title did not arrive, and calling it the channel would be a wrong one.
+ * ⚠ **NO ESCAPING HERE, DELIBERATELY.** The name is rendered as a React TEXT CHILD, which
+ * is the same neutralisation every other name render in this tree relies on
+ * (`message-pane-header.tsx` prints `threadTitle ?? channelName` the same way); the banner
+ * is a single `truncate` line, so a name carrying newlines cannot forge a second one.
+ * Exported for the tests, beside the three faces it is the fourth of.
+ */
+export function postedToLabel(to: PostDestination | null | undefined): string {
+  const kind = to?.kind ?? "channel";
+  const name = to?.name?.trim();
+  return name ? `Posted to ${name} ${kind}` : `Posted to ${kind}`;
+}
 
 /**
  * HOW MUCH OF A POSTED BODY SHOWS BEFORE THE OPERATOR ASKS FOR THE REST
@@ -175,8 +204,10 @@ function SentBody({ text, collapsible }: { text: string; collapsible: boolean })
  *   - **`border-active` + `card-surface-subtle`**, radius 12, and a `pre-wrap`
  *     body that breaks anywhere — a posted body is somebody's real words and must
  *     wrap rather than escape the column.
- *   - **The label says where it went** ("Sent to <thread>" / "Posted to channel",
- *     v1 › `outboundLabel`), and the timestamp rides in the banner's trailing tag.
+ *   - **The label says where it went** (v1 › `outboundLabel`), and the timestamp rides in
+ *     the banner's trailing tag. ⚠ THE WORDING IS {@link postedToLabel}'S SINCE 2026-09-16:
+ *     v1's two verbs ("Sent to <thread>" / "Posted to channel") are one, and the PLACE is
+ *     named in both cases.
  *
  * ── ⚠ v1'S PENDING FACE IS BACK, AND SO IS THE DECISION (Samuel, 2026-08-25) ──
  *
@@ -219,7 +250,9 @@ export function SentToChannelBox({
   color = null,
 }: {
   text: string;
-  to?: string | null;
+  /** WHERE IT WENT — see {@link postedToLabel}. `null` is "cannot say", which reads as
+   *  the bare noun and never as a blank. */
+  to?: PostDestination | null;
   /** Epoch ms. `0` means the stamp was unreadable — the tag drops rather than
    *  printing an epoch date at somebody. */
   at?: number;
@@ -265,9 +298,7 @@ export function SentToChannelBox({
     ? expired
       ? POST_NOT_SENT_LABEL
       : POST_PENDING_LABEL
-    : to
-      ? `Sent to ${to}`
-      : "Posted to channel";
+    : postedToLabel(to);
   const stamp = at ? formatChannelTimestamp(new Date(at).toISOString()) : "";
   /* ⚠ **THE COLOUR IS GATED ON `!pending`, NOT ON `color` ALONE** — see the prop. That is
      the same boundary `label` above is drawn on, and it is drawn twice on purpose: a face
@@ -299,8 +330,8 @@ export function SentToChannelBox({
           one message wearing two faces. ⚠ THE §6 SEAM IS UNTOUCHED: the banner,
           the four faces, the Post button and the expiry rule are what this card
           owns, and none of them moved — only the body's renderer did. */}
-      {/* ⚠ ONLY THE SETTLED FACES COLLAPSE — `Sent to <thread>` and `Posted to
-          channel`. A body still under review is the one an operator is deciding
+      {/* ⚠ ONLY THE SETTLED FACES COLLAPSE — every {@link postedToLabel} wording.
+          A body still under review is the one an operator is deciding
           about, and hiding two thirds of it behind a control that sits beside
           the Post button would be this card asking for a press on words it had
           folded away. `pending` covers {@link POST_NOT_SENT_LABEL} too: an

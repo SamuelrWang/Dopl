@@ -86,7 +86,7 @@ function renderStream(
       entries={[]}
       supported
       sent={[]}
-      threadTitle="UI-kit design"
+      destination={{ kind: "thread", name: "UI-kit design" }}
       {...over}
     />
   );
@@ -209,7 +209,7 @@ describe("a delivered draft converges to the posted face", () => {
       pending: [],
       onPost: vi.fn(),
     });
-    expect(screen.getByText("Sent to UI-kit design")).toBeTruthy();
+    expect(screen.getByText("Posted to UI-kit design thread")).toBeTruthy();
     expect(screen.queryByText(POST_NOT_SENT_LABEL)).toBeNull();
     expect(screen.queryByRole("button", { name: POST_ACTION_LABEL })).toBeNull();
   });
@@ -391,8 +391,9 @@ describe("the card is the outbound review surface", () => {
     expect(screen.getByText(POST_PENDING_LABEL)).toBeTruthy();
     expect(screen.getByText(DRAFT)).toBeTruthy();
     // ⚠ THE LIE THIS REPLACED. Neither posted face may appear over a held draft.
-    expect(screen.queryByText("Posted to channel")).toBeNull();
-    expect(screen.queryByText(/^Sent to /)).toBeNull();
+    // ⚠ ONE VERB SINCE 2026-09-16 (`agent-stream-sent-box.tsx › postedToLabel`), so
+    // ONE pattern covers every settled face rather than two spellings of it.
+    expect(screen.queryByText(/^Posted to /)).toBeNull();
     // ⚠ ONE VERB. Samuel asked for "Post" and nothing beside it — no Cancel, no
     // Deny. A pending row's only other exit is the server's 24h expiry.
     const buttons = screen.getAllByRole("button");
@@ -433,7 +434,7 @@ describe("the card is the outbound review surface", () => {
         delivered={[]}
         pending={[]}
         onPost={vi.fn()}
-        threadTitle="UI-kit design"
+        destination={{ kind: "thread", name: "UI-kit design" }}
       />
     );
     expect(screen.getByText(POST_PENDING_LABEL)).toBeTruthy();
@@ -448,7 +449,7 @@ describe("the card is the outbound review surface", () => {
       pending: [],
       onPost: vi.fn(),
     });
-    expect(screen.getByText("Sent to UI-kit design")).toBeTruthy();
+    expect(screen.getByText("Posted to UI-kit design thread")).toBeTruthy();
     expect(screen.queryByText(POST_PENDING_LABEL)).toBeNull();
     expect(screen.queryByRole("button", { name: POST_ACTION_LABEL })).toBeNull();
   });

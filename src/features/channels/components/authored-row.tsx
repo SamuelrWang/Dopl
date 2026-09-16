@@ -80,100 +80,130 @@ export type AuthoredRowAccent = {
 const ACCENT_BAR = "w-[3px] shrink-0 self-stretch rounded-b-full";
 
 /**
- * **THE RING AROUND THE PILL** (Samuel: *"have the colored box … make it just around the pill,
- * like a bordering, rounded to fit"*).
+ * **THE ACCENT FRAME — THE PILL'S BORDER AND THE BAR'S TOP, AS ONE DRAWN SHAPE**
+ * (Samuel: *"have the colored box … make it just around the pill, like a bordering,
+ * rounded to fit"*).
  *
- * ⚠ **A WRAPPER, NOT A FORK OF THE PILL.** `attribution-pill.tsx › AttributionPill` is
- * untouched — one face for a human and an agent, one `data-attribution-pill`, one set of
- * `/home` overrides. A ring drawn on a wrapper is the only way to add a border to that capsule
- * without a second recipe for it (docs/DESIGN-SYSTEM.md forbids a local one).
+ * 🔒 **IT WAS A `ring-[3px]` ON THIS WRAPPER UNTIL 2026-09-16, AND SAMUEL READ THE
+ * RESULT AS THREE OBJECTS**: *"it looks like, the borderline, the badge, and the
+ * vertical line, are 3 different components, is it possible to make it a single
+ * component? Because here, you see that the lines overlap and cause it to be darker.
+ * And also, since the shadow is attached to the badge, it gets covered behind the
+ * borderline."*
  *
- * ⚠ **A RING, WHICH IS A `box-shadow` AND THEREFORE COSTS NO LAYOUT.** A `border` would
- * grow the wrapper on every side and push the pill off the row's edge; the ring is
- * painted OUTSIDE the border box, so the wrapper stays exactly the pill's size and the ring
- * lands in the gutter the negative margin below opens for it. `rounded-full` so it follows the
- * capsule's own shape rather than boxing it. The colour rides `--tw-ring-color` as an inline
- * custom property — `agent-color-circles.tsx › RING`'s recipe, and the only way a palette
- * member chosen by DATA can reach a Tailwind ring at all.
+ * ⚠ **AND HE WAS DESCRIBING THE GEOMETRY EXACTLY.** There were THREE strokes on an
+ * agent's row: {@link ACCENT_BAR}'s fill, this wrapper's ring, and the PILL's own
+ * `.bento` hairline tinted by `bits.tsx › agentAccent`. {@link GUTTER} then laid the
+ * ring ON TOP OF the bar's full 3px — two paints over one band, which reads as one
+ * unbroken line only while both are opaque and IDENTICAL. The NEUTRAL face is neither:
+ * `--border-strong` is 12% black, so ended-agent rows composited 12% over 12% and the
+ * join came out visibly darker than either half. That is the *"lines overlap and cause
+ * it to be darker"*.
  *
- * 🔒 **3px, AND IT IS 3px BECAUSE {@link ACCENT_BAR} IS (Samuel, 2026-09-15, choosing
- * between thinning the bar and thickening the ring: option (b), "every agent message
- * reads heavier" accepted).** It was `ring-2` against a 3px bar, and that ONE PIXEL was
- * the whole defect: {@link GUTTER}'s geometry lays the ring over the bar's inner edge, so
- * a 2px ring covered 2px of a 3px bar and left the outer 1px standing beside it — the
- * STEP along the join, and the little triangular gaps where the ring's curve pulls away
- * from that leftover sliver.
- * ⚠ **THE TWO NUMBERS ARE ONE NUMBER AND MUST MOVE TOGETHER.** Ring width and bar width
- * are not independent styling choices; they are the two halves of a single unbroken line
- * of colour, and any difference between them reappears as a step. `agent-post-accent.test.tsx`
- * pins them as a PAIR for that reason — change one, change the other.
- * ⚠ `ring-[3px]` RATHER THAN `ring-3`: the arbitrary value is the spelling that cannot
- * depend on which widths the preset happens to ship.
- *
- * ⚠ **NO `ring-offset-*`.** The offset is exactly what the selected colour circle wants and
- * exactly what this must not have: the ring has to REACH the bar (see {@link GUTTER}).
- *
- * ⚠ **SQUARE ON THE BAR SIDE (Samuel, 2026-09-14, over the first cut: "where it connects
- * with the bar, it should be a straight, not rounded" — "it was not fixed?"): the ring
- * is a stadium on the OUTER three sides and a straight vertical edge on the side that
- * meets the bar, so ring and bar read as one continuous line of colour.
+ * ⚠ **SO THE STROKE IS A REAL `border`, ON THREE SIDES, AND THE BAR IS THE FOURTH.**
+ * The bar-side border is dropped ({@link ACCENT_FRAME_EDGE}) and the wrapper's box
+ * ends at the bar's inner edge, so the two never overlap at all: the top and bottom
+ * edges run out of the bar at exactly the bar's own width and close around the
+ * capsule. **ONE stroke everywhere, no doubled band, and the 376c654f ruling is the
+ * visual result rather than a second constant** — ring and bar still join in one
+ * straight line, and the corner they meet at is still square.
+ * ⚠ **THE PILL NO LONGER DRAWS ONE** (`attribution-pill.tsx`'s `framed` prop): on an
+ * accented row it drops `.bento` and the legacy `agentAccent` hairline, which is the
+ * third component Samuel counted. Pinned in `agent-post-accent.test.tsx`.
+ * ⚠ **AND THE SHADOW IS ON THE OUTERMOST BOX BY CONSTRUCTION NOW.** A ring is painted
+ * OVER the element's own shadow, which is why the badge's elevation had to be lifted
+ * here in the first place and why it still looked clipped where the ring met the bar;
+ * a border IS the outer edge, so `--shadow-bento` falls from it into open air on every
+ * side. Nothing is left to cover it.
+ 🔒 **THE TOP EDGE IS NOT PULLED UP, AND THAT IS THE COROLLARY OF DROPPING THE RING.** A
+ * ring wrapped the corner — it painted the 3px band ABOVE the bar's top end as well as
+ * beside it — so the two met however the wrapper was positioned. A three-sided border does
+ * not: its top stroke starts at the bar's INNER edge, so the bar's top end and the stroke
+ * have to begin at the SAME y or the corner opens a 3px notch with the two marks offset
+ * diagonally. The frame is the content column's first child and {@link ACCENT_BAR} is
+ * `self-stretch` over the same box, so **leaving the top margin alone is what aligns them**
+ * — and a `-mt-[3px]` here (the obvious "keep the ring's layout" move) is exactly the bug.
+ * ⚠ **THE BOTTOM IS STILL PULLED**, because nothing has to meet there: `-mb-[3px]` keeps
+ * the 3px gap to the body that the ring's own overhang produced. The row is therefore 3px
+ * taller at the TOP than the ring era and identical everywhere else — the honest cost of a
+ * stroke that occupies layout, paid where it buys the join.
+ * ⚠ **3px IS STILL {@link ACCENT_BAR}'S 3px AND THE TWO ARE ONE NUMBER** — they are the
+ * two halves of one line of colour and any difference between them reappears as a step
+ * at the join. `agent-post-accent.test.tsx` pins them as a PAIR.
+ * ⚠ **`border-solid` IS EXPLICIT** because Tailwind's base sets `border-style: solid`
+ * through the `*` reset only; stating it is what keeps a width class from painting
+ * nothing if that reset is ever scoped.
  *
  * 🔒 **AND IT CARRIES THE PILL'S PRESS, BECAUSE IT IS THE THING THE BORDER IS ON
  * (Samuel, 2026-09-15: the border "detaches" from the badge on hover).**
  *
- * ⚠ **CAUSE: THE LIFT WAS ON THE PILL, THE RING IS ON THIS WRAPPER, AND A
+ * ⚠ **CAUSE: THE LIFT WAS ON THE PILL, THE STROKE IS ON THIS WRAPPER, AND A
  * TRANSFORM MOVES ONLY THE ELEMENT IT IS ON.** `attribution-pill.tsx` stated the
  * app's raised affordance as `hover:-translate-y-px` on the `<button>` INSIDE this
- * span, so hovering slid the capsule up one pixel and left its own border behind —
- * the gap Samuel saw. Matching the two with a second transform here would be a 2px
- * lift; the fix is that exactly ONE element moves, and it has to be this one.
+ * span, so hovering slid the capsule up one pixel and left its own border behind.
+ * Matching the two with a second transform here would be a 2px lift; the fix is that
+ * exactly ONE element moves, and it has to be this one.
  *
  * ⚠ **`has-[button:hover]` READS THE CONDITION OFF THE DOM RATHER THAN RESTATING
  * THE PREDICATE.** The pill renders as a `<button>` when it is openable and a
  * `<span>` when it is not (`AttributionPill`'s own gate), so "there is a pressable
  * pill in here" is already expressed in the markup. Spelling `openable` a second
- * time in this file would be two copies of one rule in two components — the drift
- * `agent-box-rule.ts` exists to prevent — and this shell deliberately takes no
- * index and answers no identity questions.
+ * time in this file would be two copies of one rule in two components.
  * ⚠ **AN UNOPENABLE PILL THEREFORE DOES NOT MOVE, WHICH IS CORRECT**: the pop-out
  * window and the guest lane hand no callback, and a capsule that cannot open
  * anything must not animate as though it can (the absent-not-disabled rule).
  *
- * 🔒 **AND IT CASTS THE BADGE'S SHADOW, BECAUSE THE RING WAS EATING IT (Samuel,
- * 2026-09-15: the shadow must cover the ENTIRE badge including the ring — on a
- * ringed badge it is blocked, while the ringless "You" badge shows it fine).**
+ * 🔒 **AND THE HOVER DEEPENS THE SHADOW, WHICH IS WHAT MAKES THE LIFT LEGIBLE**
+ * (Samuel, 2026-09-16): *"when I hover over like one of the black buttons, it
+ * translates up, and the shadow gets darker/larger. And that's what makes it clearly
+ * visible. Can we add the same functionality, when it translates up, it like has more
+ * shadowing?"*
  *
- * ⚠ **CAUSE: TWO ELEMENTS, AND THE OUTER ONE HAD THE RING.** The pill's elevation
- * comes from `.bento`, cast from the PILL's border box — and this wrapper's ring
- * is an opaque 3px band occupying exactly that first 3px. The shadow was being
- * laid down underneath the ring and never reached open air, which is why only the
- * unringed badge looked elevated. Nothing was missing; it had nowhere to fall.
- * ⚠ **SO THE ELEVATION MOVES OUT ONE ELEMENT, TO THE THING THAT IS ACTUALLY THE
- * BADGE'S OUTER EDGE.** `--shadow-bento` is `.bento`'s own pair, extracted to a
- * token (`globals.css`, mirrored in `tokens.css`) rather than copied, so a ringed
- * badge and a ringless one cast the IDENTICAL shadow and a restyle moves both.
- * ⚠ **THE COMPOSITION ORDER IS WHAT MAKES IT ONE SILHOUETTE, AND IT IS TAILWIND'S,
- * NOT OURS**: `box-shadow` is emitted ring-first, shadow-last, so the ring paints
- * ON TOP and the shadow falls from the ring's outer edge outward. Badge and ring
- * read as a single raised object with a single shadow under it.
- * ⚠ **THE PILL KEEPS `.bento` AND THAT IS NOT A SECOND SHADOW ANYONE SEES** — on a
- * ringed row it is hidden beneath the ring exactly as before, and on an UNRINGED
- * row (a person's pill, the "You" badge Samuel used as his reference) it is still
- * the only elevation there is. That case must not change.
+ * ⚠ **IT IS THE BLACK BUTTON'S OWN HOVER DROP, BY REFERENCE.** `--shadow-raised-hover`
+ * is `.auth-btn-3d:hover`'s ambient pair extracted to a token in `globals.css` (mirrored
+ * in `tokens.css`), and that rule NAMES it rather than spelling the two drops — so this
+ * badge and every black button in the app share one hover weight and a retune moves both.
+ * A literal shadow here would be the drift docs/DESIGN-SYSTEM.md forbids.
+ * ⚠ **`transition-[transform,box-shadow]`, NOT `transition-transform`** — it was the
+ * latter, so a shadow change would have SNAPPED while the lift animated. Both properties
+ * or neither, on one duration, and `motion-reduce` still turns the whole thing off.
  *
  * 🔒 **THE LIFT IS 2px, NOT THE KIT'S 1px, AND THE DEVIATION IS DELIBERATE**
  * (Samuel: 1px is "too subtle to read as clickable"). `.btn-light`,
  * `.auth-btn-3d` and `.menu-row` all lift 1px (`globals.css`) — but every one of
- * them changes its FILL on hover as well, so the motion is one cue among several.
- * This badge has no hover fill at all: its face is the agent's colour and must
- * stay that colour, so the lift is carrying the entire affordance alone and needs
- * to be legible by itself. 2px is the next real step on the scale rather than an
- * invented number, and with the shadow above now travelling with it the pair
- * reads as a press without the pill jumping.
+ * them changes its FILL on hover as well. This badge has no hover fill at all: its
+ * face is the agent's colour and must stay that colour, so the lift and the deeper
+ * shadow carry the whole affordance between them.
  */
-const ACCENT_RING =
-  "inline-flex max-w-full ring-[3px] shadow-[var(--shadow-bento)] transition-transform duration-150 has-[button:hover]:-translate-y-0.5 has-[button:active]:translate-y-0.5 motion-reduce:transition-none";
-const ACCENT_RING_SHAPE = { me: "rounded-l-full rounded-r-none", peer: "rounded-r-full rounded-l-none" } as const;
+const ACCENT_FRAME =
+  "inline-flex max-w-full border-[3px] border-solid -mb-[3px] shadow-[var(--shadow-bento)] transition-[transform,box-shadow] duration-150 has-[button:hover]:-translate-y-0.5 has-[button:hover]:shadow-[var(--shadow-raised-hover)] has-[button:active]:translate-y-0.5 motion-reduce:transition-none";
+
+/**
+ * **THE CAPSULE'S CORNERS ON AN ACCENTED ROW** — square on the side that meets the bar,
+ * a stadium on the other three (Samuel, 2026-09-14, twice: *"where it connects with the
+ * bar, it should be a straight, not rounded"*; 2026-09-15 over the pill inside it).
+ *
+ * ⚠ **THE FRAME AND THE PILL TAKE THE SAME CONSTANT**, which is what stops the crescent
+ * Samuel called *"two empty gaps with these triangles in between"*: one radius, one
+ * corner, drawn once now that the pill has no stroke of its own.
+ */
+const ACCENT_RADIUS = {
+  me: "rounded-l-full rounded-r-none",
+  peer: "rounded-r-full rounded-l-none",
+} as const;
+
+/**
+ * **THE SIDE THE BAR IS ON — NO BORDER THERE, AND THE 3px PULLED BACK.**
+ *
+ * ⚠ The dropped border is the join: {@link ACCENT_BAR} supplies that edge, so ring and
+ * bar are one stroke rather than two paints over one band. The negative margin is the
+ * layout half — with no border on this side there is no width to compensate on it, so
+ * the pull is the OUTER side's, restoring the box the ring occupied.
+ */
+const ACCENT_FRAME_EDGE = {
+  me: "border-r-0 -ml-[3px]",
+  peer: "border-l-0 -mr-[3px]",
+} as const;
 
 /**
  * **WHY THE PILL AND THE BAR TOUCH, IN TWO NUMBERS.**
@@ -317,14 +347,17 @@ export function AuthoredRow({
       // the grey chip.
       agentPaint={accent?.paint ?? null}
       // 🔬 **THE BADGE'S BAR-SIDE CORNER IS SQUARE ON AN ACCENTED ROW — SAMUEL'S
-      // FLUSH EXPERIMENT (2026-09-15).** The SAME constant the ring wears, so the
-      // capsule and the border around it turn the same corner: the ring has been
-      // square on this side since 2026-09-14 while the pill inside stayed a full
-      // capsule, and the crescent between them is the *"two empty gaps with these
-      // triangles"*.
+      // FLUSH EXPERIMENT (2026-09-15).** The SAME constant the frame wears, so the
+      // capsule and the stroke around it turn the same corner.
       // ⚠ **ONLY WHEN THERE IS AN ACCENT**, because the square edge only makes sense
       // against a bar. A person's row has none and keeps its capsule.
-      radius={accent ? ACCENT_RING_SHAPE[edge] : undefined}
+      radius={accent ? ACCENT_RADIUS[edge] : undefined}
+      // ⚠ **AND IT DRAWS NO STROKE OF ITS OWN** (Samuel, 2026-09-16: *"the borderline,
+      // the badge, and the vertical line, are 3 different components … is it possible
+      // to make it a single component?"*). `.bento`'s hairline and the legacy
+      // `agentAccent` tint on it were the third; {@link ACCENT_FRAME} is the one stroke
+      // now, and the pill keeps only its fill and its type.
+      framed={accent !== null}
       time={time}
       onOpenAgent={onOpenAgent}
     />
@@ -398,10 +431,16 @@ export function AuthoredRow({
       >
         {pill && (
           <span
-            className={cn(ACCENT_RING, ACCENT_RING_SHAPE[edge], GUTTER_PULL[edge])}
-            /* ⚠ THE ONE VALUE TAILWIND CANNOT CARRY FOR A RUNTIME KEY — see
-               {@link ACCENT_RING}. */
-            style={{ ["--tw-ring-color" as string]: accent.paint }}
+            className={cn(
+              ACCENT_FRAME,
+              ACCENT_RADIUS[edge],
+              ACCENT_FRAME_EDGE[edge],
+              GUTTER_PULL[edge]
+            )}
+            /* ⚠ THE ONE VALUE TAILWIND CANNOT CARRY FOR A RUNTIME KEY — the palette
+               member is chosen by DATA, so `border-[var(--agent-color-NN)]` is a class
+               the JIT never sees. See {@link ACCENT_FRAME}. */
+            style={{ borderColor: accent.paint }}
           >
             {pill}
           </span>

@@ -32,6 +32,7 @@ import {
   NO_THREAD_LABEL,
   agentDisplayName,
   agentLiveness,
+  postDestination,
 } from "@/features/channels/components/agents-model";
 import {
   formatTokens,
@@ -132,7 +133,7 @@ export function DemoAgentView({
           agent.agentId,
         )}
         delivered={messages}
-        threadTitle={agent.threadTitle}
+        destination={postDestination(agent)}
         viewer={viewer}
         className="px-3.5"
       />

@@ -29,6 +29,7 @@
 
 import { escalationStreamPayload } from "./view-model-escalation";
 import type { AgentNarrationEntry } from "./use-agent-narration";
+import type { PostDestination } from "./agents-model";
 import type { ChannelEscalation } from "../escalation";
 import type { ChannelConsentRequest, ChannelMessage } from "../types";
 
@@ -54,8 +55,16 @@ export interface StreamItem {
   tool?: string;
   /** `tool` rows only — `false` on a result that failed. */
   ok?: boolean;
-  /** `sent` rows only — where it went, for the box's banner. */
-  to?: string | null;
+  /**
+   * `sent` rows only — WHERE IT WENT, for the box's banner (Samuel, 2026-09-16:
+   * *"I want it to say the name of the channel, or the thread, that it is posted to"*).
+   *
+   * ⚠ **IT WAS A BARE THREAD TITLE UNTIL THEN, AND THAT SHAPE COULD NOT SAY WHAT HE
+   * ASKED FOR**: `null` meant both "the main channel" and "a thread I have no title
+   * for", so the channel wording was a fallback rather than a destination.
+   * {@link PostDestination} carries the KIND beside the NAME — see `agents-model.ts`.
+   */
+  to?: PostDestination | null;
   /**
    * `sent` rows only — THE STRUCTURED ESCALATION this post carries, when it is
    * one (2026-08-31). Set from the TRANSCRIPT row's server-stamped metadata and
@@ -280,7 +289,7 @@ export function buildAgentStream({
   sent,
   delivered,
   pending = [],
-  threadTitle,
+  destination = null,
   now = Date.now(),
 }: {
   entries: readonly AgentNarrationEntry[] | null;
@@ -304,8 +313,10 @@ export function buildAgentStream({
    * scope this function could apply.
    */
   pending?: readonly ChannelConsentRequest[];
-  /** Where a post went, for the sent box's banner. */
-  threadTitle?: string | null;
+  /** WHERE A POST WENT, for the sent box's banner — `agents-model.ts ›
+   *  postDestination` off the session this stream belongs to. ⚠ `null` is "this host
+   *  cannot say", and the banner then says the bare noun rather than a blank. */
+  destination?: PostDestination | null;
   /** Injectable clock — the TTL comparison below is the only reader. */
   now?: number;
 }): StreamItem[] {
@@ -352,7 +363,7 @@ export function buildAgentStream({
       text,
       tool: entry.tool,
       ok: entry.ok,
-      to: lane === "sent" ? (threadTitle ?? null) : undefined,
+      to: lane === "sent" ? destination : undefined,
       // ⚠ Read like `framePending`: only an explicit `true` counts, and the field
       // rides through so every face can confess the cut (INVARIANTS §9).
       ...(entry.truncated === true ? { truncated: true } : {}),
@@ -373,7 +384,7 @@ export function buildAgentStream({
       lane: "sent",
       at: epoch(message.createdAt),
       text: message.body,
-      to: threadTitle ?? null,
+      to: destination,
       // ⚠ OFF THE STORED ROW, never off a frame — see `escalationPayload`.
       escalation: escalationStreamPayload(message),
     });

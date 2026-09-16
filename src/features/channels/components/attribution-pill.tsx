@@ -213,6 +213,7 @@ export function AttributionPill({
   agentName = null,
   agentPaint = null,
   radius,
+  framed = false,
   time,
   onOpenAgent,
 }: {
@@ -259,6 +260,26 @@ export function AttributionPill({
    * would let a host restyle the one face `/home` and the channels page share.
    */
   radius?: string;
+  /**
+   * 🔒 **SOMETHING ELSE IS ALREADY DRAWING THIS BADGE'S BORDER — DRAW NONE**
+   * (Samuel, 2026-09-16, over a transcript screenshot): *"it looks like, the
+   * borderline, the badge, and the vertical line, are 3 different components, is it
+   * possible to make it a single component? Because here, you see that the lines
+   * overlap and cause it to be darker. And also, since the shadow is attached to the
+   * badge, it gets covered behind the borderline."*
+   *
+   * ⚠ **IT DROPS `.bento` AND THE LEGACY `agentAccent` HAIRLINE, AND NOTHING ELSE.**
+   * `authored-row.tsx › ACCENT_FRAME` is the one stroke on an accented row and it
+   * carries `--shadow-bento` as well, so a framed capsule keeps exactly its FILL and
+   * its TYPE — the face does not fork, the `data-attribution-pill` hook and the
+   * `/home` overrides that select on it are untouched, and an unframed pill (a
+   * person's row, the "You" badge Samuel used as his reference) is byte-identical to
+   * what it always was.
+   * ⚠ **`false` IS THE DEFAULT AND THE ORDINARY ANSWER.** A host that draws no frame
+   * must get the elevated capsule, which is why this is an opt-OUT asked for by the
+   * row rather than a new default.
+   */
+  framed?: boolean;
   /** Already formatted by the transcript's own `formatTime`. */
   time: string;
   /**
@@ -283,8 +304,13 @@ export function AttributionPill({
     // does not drop the parent — so which one wins would come down to the order Tailwind
     // happened to emit two equal-specificity utilities in. One slot, one answer.
     radius ?? "rounded-full",
-    "bento inline-flex max-w-full items-center gap-2 py-1 pl-1 pr-3.5",
-    agentId && agentAccent(agentId),
+    "inline-flex max-w-full items-center gap-2 py-1 pl-1 pr-3.5",
+    // ⚠ THE CAPSULE'S OWN STROKE, AND IT IS CONDITIONAL SINCE 2026-09-16 — see
+    // {@link framed}. `.bento` is the elevated card face; `agentAccent` tints its
+    // hairline per id. On a FRAMED row both are the second and third strokes Samuel
+    // counted, and the row's own frame draws the one that survives.
+    !framed && "bento",
+    !framed && agentId && agentAccent(agentId),
     // ⚠ NEUTRALISERS LAST, and only these two — see the docblock.
     "bg-bg-elevated text-text-primary",
     // ⚠ THE PRESSABLE HALF, AND ONLY ON THE BUTTON. `text-left` and `cursor-pointer`

@@ -45,7 +45,7 @@ import { agentSentMessages } from "./agent-panel";
 import { AgentStream } from "./agent-stream";
 import { splitEndNote } from "./agent-stream-lanes";
 import { AgentEndedPill, AgentLiveness } from "./agent-bits";
-import { NO_THREAD_LABEL, agentDisplayName, agentLiveness } from "./agents-model";
+import { NO_THREAD_LABEL, agentDisplayName, agentLiveness, postDestination } from "./agents-model";
 import { formatTokens, metric } from "./agent-metrics";
 import { viewerPerson } from "./view-model";
 import { useDesktopSessions } from "./use-desktop-sessions";
@@ -284,7 +284,9 @@ export function ChannelsAgentWindow({
         pending={pendingPosts}
         onPost={(id) => consent.mutate({ id, decision: "allow" })}
         postBusy={consent.pending}
-        threadTitle={agent?.threadTitle}
+        // ⚠ THE BANNER NAMES THE PLACE (Samuel, 2026-09-16); `null` while no agent
+        // has resolved, which reads as the bare noun rather than a blank.
+        destination={agent ? postDestination(agent) : null}
         viewer={viewer}
         className="px-4"
       />

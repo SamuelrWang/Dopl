@@ -42,7 +42,9 @@ import {
   POST_EXPAND_LABEL,
   POST_PENDING_LABEL,
   SentToChannelBox,
+  postedToLabel,
 } from "./agent-stream-sent-box";
+import { postDestination } from "./agents-model";
 
 /** What the collapsed box is worth in this environment. A stand-in for the real
  *  `calc()` clamp, which jsdom does not resolve. */
@@ -193,5 +195,65 @@ describe("a body still under review is never folded away", () => {
     box({ pending: true, expired: true, requestId: "c-1", onPost: () => {} });
     expect(screen.queryByRole("button", { name: POST_EXPAND_LABEL })).toBeNull();
     expect(screen.getByText(BODY)).toBeTruthy();
+  });
+});
+
+/**
+ * **THE BANNER NAMES THE PLACE (Samuel, 2026-09-16, verbatim)**: *"in the agent view, these
+ * currently say, posted to channel. I want it to say the name of the channel, or the thread,
+ * that it is posted to. Aka, Posted to Dopl channel. Or, posted to Yada Yada thread."*
+ *
+ * ⚠ **THE PROPERTY IS THAT THE KIND AND THE NAME ARE INDEPENDENT.** The card carried ONE
+ * string before this — the thread title, or `null` — so "the main channel" and "a thread
+ * whose title did not arrive" were the same value and the channel wording could only ever be
+ * a fallback. Both cases below are real: an older main reports no `channelName` at all, and a
+ * thread-scoped session can be pushed before its title is resolved.
+ * ⚠ **A BLANK IS THE ONE OUTPUT THIS MAY NOT PRODUCE** (INVARIANTS §11) — `Posted to
+ * channel` with a hole in it is worse than the bare noun, and it is what a naive
+ * `Posted to ${name} ${kind}` gives on an absent name.
+ */
+describe("the settled banner says WHERE, by name", () => {
+  it("names the CHANNEL for a channel post", () => {
+    box({ to: { kind: "channel", name: "Dopl" } });
+    expect(screen.getByText("Posted to Dopl channel")).toBeTruthy();
+  });
+
+  it("names the THREAD for a thread post", () => {
+    box({ to: { kind: "thread", name: "Yada Yada" } });
+    expect(screen.getByText("Posted to Yada Yada thread")).toBeTruthy();
+  });
+
+  it("falls back to the bare noun — of the RIGHT kind — and never to a blank", () => {
+    expect(postedToLabel({ kind: "channel", name: null })).toBe("Posted to channel");
+    // ⚠ THE HALF A SINGLE FALLBACK LOSES: calling an untitled thread "the channel" is a
+    // wrong statement, where "Posted to thread" is a true one.
+    expect(postedToLabel({ kind: "thread", name: null })).toBe("Posted to thread");
+    expect(postedToLabel(null)).toBe("Posted to channel");
+    expect(postedToLabel(undefined)).toBe("Posted to channel");
+    // ⚠ WHITESPACE-ONLY IS ABSENT. It is peer/operator prose on its way through main.
+    expect(postedToLabel({ kind: "thread", name: "   " })).toBe("Posted to thread");
+  });
+
+  it("keeps the PENDING faces free of any destination — nothing went anywhere", () => {
+    box({ to: { kind: "channel", name: "Dopl" }, pending: true });
+    expect(screen.getByText(POST_PENDING_LABEL)).toBeTruthy();
+    expect(screen.queryByText(/^Posted to /)).toBeNull();
+  });
+
+  /** ⚠ THE PROJECTION IS `agents-model.ts › postDestination` AND IT IS THE ONE PLACE the
+   *  `taskId === ""` wire spelling becomes a place (`spa-bridge-shapes.ts`). */
+  it("reads the place off the session, not off the presence of a title", () => {
+    expect(
+      postDestination({ taskId: "", channelName: "Dopl", threadTitle: null })
+    ).toEqual({ kind: "channel", name: "Dopl" });
+    expect(
+      postDestination({ taskId: "t-1", channelName: "Dopl", threadTitle: "Yada Yada" })
+    ).toEqual({ kind: "thread", name: "Yada Yada" });
+    // A thread-scoped agent whose title has not arrived is still on a THREAD.
+    expect(
+      postDestination({ taskId: "t-1", channelName: "Dopl", threadTitle: null })
+    ).toEqual({ kind: "thread", name: null });
+    // An older main reports no channel name; "cannot say" is not "the channel is unnamed".
+    expect(postDestination({ taskId: "" })).toEqual({ kind: "channel", name: null });
   });
 });

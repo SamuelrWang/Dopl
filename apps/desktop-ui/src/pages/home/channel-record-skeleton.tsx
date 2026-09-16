@@ -142,7 +142,12 @@ function MessageRowGhost({
           squares the capsule on the bar side — so `rounded-full` moved out of the
           geometry literal into its own slot (`radius ?? "rounded-full"`). This ghost
           is never accented, so it keeps the capsule; it just has to spell it the same
-          way, or the byte-share test below cannot match the two. */}
+          way, or the byte-share test below cannot match the two.
+          ⚠ **AND `.bento` LEFT THE SHARED STRING THE SAME WAY ON 2026-09-16.** An ACCENTED
+          row's pill draws no stroke at all now — the row's own frame is the one stroke
+          (Samuel: *"the borderline, the badge, and the vertical line, are 3 different
+          components"*) — so the real pill states `.bento` in its own conditional slot
+          (`!framed && "bento"`). This ghost is UNFRAMED, which is the case that keeps it. */}
       <span className="bento inline-flex max-w-full items-center gap-2 py-1 pl-1 pr-3.5 rounded-full">
         {/* `avatar.tsx › SIZE.sm` — the size the pill asks for. */}
         <Skeleton className="w-8 h-8 shrink-0 rounded-full" />

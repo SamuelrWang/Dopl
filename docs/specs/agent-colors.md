@@ -67,12 +67,20 @@
   colored box, instead of this long box, make it just around the pill, like a bordering, rounded
   to fit. and it's attached to a vertical bar, that travels the length/amount of lines of the
   messages from that agent."* **What ships**: an agent's post is a person's post — same pill,
-  same side, same continuation rule — wearing (a) a `ring-2` in the agent's colour on a
-  `rounded-full` wrapper around the attribution pill, no ring-offset, and (b) a
+  same side, same continuation rule — wearing (a) a `border-[3px]` in the agent's colour on a
+  wrapper around the attribution pill (`authored-row.tsx › ACCENT_FRAME`), and (b) a
   `w-[3px] self-stretch rounded-b-full` bar in the same colour on the post's OUTER edge — the
   bar's TOP end is SQUARE, per Samuel's same-day addendum *"where it connects with the bar, it
-  should be a straight, not rounded"*, and only its far end is capped. The two touch: the column is inset 8px from the bar and the pill's wrapper takes an equal negative
-  margin, so the ring is painted over the bar's inner 2px and the join reads as one 3px line.
+  should be a straight, not rounded"*, and only its far end is capped. The two JOIN: the column
+  is inset 8px from the bar and the pill's wrapper takes an equal negative margin, so the
+  frame's box ends at the bar's inner edge. 🔒 ⚠ **(a) WAS A `ring` (2px, then 3px) UNTIL
+  2026-09-16 AND BOTH SPELLINGS PAINTED THE BAR'S BAND TWICE** — Samuel: *"it looks like, the
+  borderline, the badge, and the vertical line, are 3 different components … the lines overlap
+  and cause it to be darker. And also, since the shadow is attached to the badge, it gets
+  covered behind the borderline."* The bar-side border is now DROPPED (`› ACCENT_FRAME_EDGE`)
+  so the bar IS that edge, the PILL's own `.bento` + `agentAccent` hairline is dropped too
+  (`attribution-pill.tsx`'s `framed`), and the badge's `--shadow-bento` falls from the frame's
+  own outer edge instead of from under an opaque ring. ONE stroke, one silhouette, one shadow.
   **One post, one bar** — a run does not merge, and a continuation keeps its bar without a pill.
   The frame, the top bar and the second row component (message-box-agent) are DELETED.
 - **Pop-out**: the "posted to channel" bar takes the agent's colour. ⚠ **It did NOT follow the
@@ -109,7 +117,7 @@
    / 409 on taken; end frees by the index predicate (no code). Peer projection
    (`channel_sessions` push) carries `color`.
 4. Rendering: `channels/components/transcript.tsx` + `authored-row.tsx ›
-   AuthoredRowAccent` (ring on the pill + outer-edge bar) for posts with a
+   AuthoredRowAccent` (3px frame on the pill + outer-edge bar) for posts with a
    live/ended channel-agent session; tokens by reference; both channel surfaces
    (the web/desktop workspace pages and /home's `StandaloneChannelSurface` import
    the same tree, so this is one implementation). ⚠ 2026-09-13 shipped this as a

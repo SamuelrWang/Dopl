@@ -209,7 +209,11 @@ describe("an agent's sender pill opens that agent's view", () => {
     expect(pill.tagName).toBe("BUTTON");
     expect(pill.getAttribute("type")).toBe("button");
     expect(pill.getAttribute("data-agent-id")).toBe(A);
-    expect(pill.className).toContain("bento");
+    // ⚠ **NO `.bento` ON AN ACCENTED ROW SINCE 2026-09-16** (Samuel: *"the borderline, the
+    // badge, and the vertical line, are 3 different components"*). The row's own frame is
+    // the one stroke and carries the elevation; the capsule keeps its FILL and its type,
+    // which is the part /home's account palette actually reaches.
+    expect(pill.className).not.toMatch(/\bbento\b/);
     // 🔬 Flush-corner experiment (Samuel, 2026-09-15): an ACCENTED row's capsule is a
     // stadium on the outer side and SQUARE where the bar meets it, so this no longer
     // reads a bare `rounded-full`. The face is otherwise untouched, which is what the

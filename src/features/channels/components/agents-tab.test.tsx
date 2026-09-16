@@ -252,7 +252,7 @@ describe("ChannelsAgentPanel", () => {
     // ⚠ THE POST WEARS THE v1 SENT BOX (2026-08-22), whose banner says where it
     // went — the "→ sent to X · date" meta line under each item is DELETED, and
     // its one useful fact moved into the banner rather than being lost.
-    expect(screen.getByText("Sent to UI-kit design")).toBeTruthy();
+    expect(screen.getByText("Posted to UI-kit design thread")).toBeTruthy();
     // ⚠ THE FOOTER EXPLAINER IS GONE (Samuel's minimal-copy ruling, 2026-08-22).
     // It pointed at another surface for lanes this one now renders itself.
     expect(screen.queryByText(/only what it sent/i)).toBeNull();

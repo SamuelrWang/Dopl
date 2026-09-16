@@ -55,7 +55,7 @@ function renderStream(
       entries={[]}
       supported
       sent={[]}
-      threadTitle="UI-kit design"
+      destination={{ kind: "thread", name: "UI-kit design" }}
       {...over}
     />
   );
@@ -186,13 +186,13 @@ describe("the two absences are worded differently", () => {
 describe("the lanes look different, and the sent box is the loud one", () => {
   it("wraps a post in the v1 box, banner naming where it went", () => {
     renderStream({ sent: [message({ id: "m-1", body: "shipped it" })] });
-    expect(screen.getByText("Sent to UI-kit design")).toBeTruthy();
+    expect(screen.getByText("Posted to UI-kit design thread")).toBeTruthy();
     expect(screen.getByText("shipped it")).toBeTruthy();
   });
 
   it("names the CHANNEL when there is no thread title to name", () => {
     renderStream({
-      threadTitle: null,
+      destination: null,
       sent: [message({ id: "m-1", body: "shipped it" })],
     });
     expect(screen.getByText("Posted to channel")).toBeTruthy();
@@ -228,8 +228,9 @@ describe("the lanes look different, and the sent box is the loud one", () => {
     expect(agentLine.className).not.toMatch(/border-l/);
     expect(agentLine.className).toMatch(/text-text-primary/);
     // ⚠ THE WHOLE POINT: a private line must not wear the sent box's banner.
-    expect(screen.queryByText(/^Sent to /)).toBeNull();
-    expect(screen.queryByText("Posted to channel")).toBeNull();
+    // ⚠ ONE VERB SINCE 2026-09-16 (`agent-stream-sent-box.tsx › postedToLabel`), so
+    // ONE pattern covers every settled face rather than two spellings of it.
+    expect(screen.queryByText(/^Posted to /)).toBeNull();
   });
 
   /**

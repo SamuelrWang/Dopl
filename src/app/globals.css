@@ -486,6 +486,22 @@
    * (`[data-overview-face] .bento`). Do not merge the two.
    */
   --shadow-bento: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 18px rgba(0, 0, 0, 0.05);
+  /**
+   * 🔒 THE RAISED CONTROL'S HOVER DROP — THE BLACK BUTTON'S, AS ONE DECLARATION
+   * (Samuel, 2026-09-16, over the transcript's agent badge): *"when I hover over
+   * like one of the black buttons, it translates up, and the shadow gets
+   * darker/larger. And that's what makes it clearly visible. Can we add the same
+   * functionality, when it translates up, it like has more shadowing?"*
+   * ⚠ IT IS `.auth-btn-3d:hover`'S OWN AMBIENT PAIR, EXTRACTED RATHER THAN
+   * COPIED — that rule now names this token instead of spelling the two drops, so
+   * the badge and the black button cannot drift to two hover weights. The rule
+   * keeps its own two INSET lines: those are the black gradient's bevel and mean
+   * nothing on a white capsule.
+   * ⚠ THE RESTING STEP IS THE CONSUMER'S. `--shadow-bento` is what the badge
+   * rests at and `.auth-btn-3d`'s own four-part recipe is what the button rests
+   * at; this token is the HOVER step alone, which is the half Samuel pointed at.
+   */
+  --shadow-raised-hover: 0 4px 7px rgba(0, 0, 0, 0.24), 0 10px 24px rgba(0, 0, 0, 0.24);
   --shadow-floating: 0 16px 48px -12px oklch(0 0 0 / 70%),
     0 4px 16px -4px oklch(0 0 0 / 50%);
   --glow-accent: 0 0 24px oklch(0.68 0.22 250 / 50%),
@@ -720,11 +736,13 @@ html {
 .auth-btn-3d:hover:not(:disabled) {
   filter: brightness(1.1);
   transform: translateY(-1px);
+  /* ⚠ THE AMBIENT PAIR IS `--shadow-raised-hover` NOW (Samuel, 2026-09-16) — the
+     transcript's agent badge wears the SAME hover step, by reference, so the two
+     cannot drift. The two INSET lines stay here: they are this gradient's bevel. */
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
     inset 0 -1px 0 rgba(0, 0, 0, 0.45),
-    0 4px 7px rgba(0, 0, 0, 0.24),
-    0 10px 24px rgba(0, 0, 0, 0.24);
+    var(--shadow-raised-hover);
 }
 .auth-btn-3d:active:not(:disabled) {
   transform: translateY(1px);

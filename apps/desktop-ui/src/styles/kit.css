@@ -18,11 +18,13 @@
 .auth-btn-3d:hover:not(:disabled) {
   filter: brightness(1.1);
   transform: translateY(-1px);
+  /* ⚠ THE AMBIENT PAIR IS `--shadow-raised-hover` NOW (Samuel, 2026-09-16) — the
+     transcript's agent badge wears the SAME hover step, by reference, so the two
+     cannot drift. The two INSET lines stay here: they are this gradient's bevel. */
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
     inset 0 -1px 0 rgba(0, 0, 0, 0.45),
-    0 4px 7px rgba(0, 0, 0, 0.24),
-    0 10px 24px rgba(0, 0, 0, 0.24);
+    var(--shadow-raised-hover);
 }
 .auth-btn-3d:active:not(:disabled) {
   transform: translateY(1px);

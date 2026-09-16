@@ -355,6 +355,45 @@ export function agentRunningModel(
  *  (`agents-controls.ts`: `taskId: null`). ⚠ ONE STATEMENT; THREE callers each spelled it out — the third (`agents-tab-cards.tsx › AgentCard`) was missed by the 2026-08-27 wave and converted 2026-08-28, so the card and the panel it opens no longer disagree. */
 export const NO_THREAD_LABEL = "main channel";
 
+/**
+ * **WHERE THIS AGENT'S POSTS GO** — the CHANNEL, or the THREAD it was launched onto
+ * (Samuel, 2026-09-16, over the agent view's stream): *"these currently say, posted to
+ * channel. I want it to say the name of the channel, or the thread, that it is posted to.
+ * Aka, Posted to Dopl channel. Or, posted to Yada Yada thread."*
+ *
+ * ⚠ **KIND AND NAME ARE SEPARATE FACTS AND MUST STAY SO.** The stream used to carry ONE
+ * string — the thread title, or `null` — so "a thread whose title did not come through"
+ * and "the main channel" were the same value, and the second wording could only ever be a
+ * fallback. `taskId` is what actually says WHICH PLACE (`""` is the wire spelling of "no
+ * first-class thread", `spa-bridge-shapes.ts`), so the kind is read off it and the name is
+ * allowed to be missing on its own.
+ * ⚠ **`name: null` IS "CANNOT SAY", NEVER A BLANK** (INVARIANTS §11). An older main reports
+ * no `channelName` at all; the face then says the bare noun rather than rendering
+ * `Posted to  channel` with a hole in it.
+ * ⚠ **WHITESPACE-ONLY IS ABSENT.** Both fields are operator/peer prose on their way through
+ * main, and `agentDisplayName` takes the same view of its own input.
+ */
+export interface PostDestination {
+  kind: "channel" | "thread";
+  /** The place's own name, or `null` when this host cannot say. */
+  name: string | null;
+}
+
+/** Read {@link PostDestination} off a session summary. ⚠ Pure, and the ONE place the
+ *  `taskId === ""` spelling is turned into a place — two readings of it is how the banner
+ *  and the header come to name different destinations for one post. */
+export function postDestination(session: {
+  taskId: string;
+  channelName?: string | null;
+  threadTitle?: string | null;
+}): PostDestination {
+  const trim = (v: string | null | undefined) =>
+    (typeof v === "string" ? v.trim() : "") || null;
+  return session.taskId.trim()
+    ? { kind: "thread", name: trim(session.threadTitle) }
+    : { kind: "channel", name: trim(session.channelName) };
+}
+
 export type AgentLivenessTone = "working" | "waiting" | "idle" | "ended";
 
 export interface AgentLivenessState {
