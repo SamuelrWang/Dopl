@@ -77,6 +77,34 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
       // starting a second agent on the same work. Absent is the ordinary case and
       // is the pre-A10 behaviour byte for byte.
       clientMsgId: input.clientMsgId,
+      // ⚠ **THE COLOUR AND THE NAME, AND THEY ARE HERE BECAUSE THEY WERE NOT**
+      // (F-708, 2026-09-16). This handler enumerates the service input FIELD BY
+      // FIELD, so a field added to `LaunchCreateSchema` and to
+      // `CreateLaunchDirectiveInput` is validated on the way in, typed at the
+      // far end, and DROPPED HERE — silently, because a missing optional
+      // property is not a type error. `color` (2026-09-13) and `agentName`
+      // (2026-09-15) both landed that way.
+      //
+      // ⚠ **WHAT THE OMISSION LOOKED LIKE IN THE FIELD, because it is the
+      // reason this comment is long.** `agentName` reached the zod schema, the
+      // service, the column, the claim DTO, the wire narrowing and the spawn's
+      // `commitRename` — every layer was built — and the row still stored
+      // `NULL`. The desktop therefore applied its older-client fallback,
+      // `New Agent` (`main/launch-directive-spawn.js`), the uniqueness rule
+      // suffixed the second and third of them, and the @-picker minted
+      // `new-agent`, `new-agent-1` FROM THAT — a slug derived from a default
+      // nobody asked for, which is the inversion Samuel's ruling forbids (the
+      // NAME is authoritative, the slug is derived from it, never the reverse).
+      // Meanwhile `channel-ops-launch.ts` reported `name=@dopl-reader-main`,
+      // because its echo falls back to the REQUEST when the machine reports no
+      // applied name — so the launch looked like it had worked.
+      //
+      // ⚠ **THE GUARD IS `launch-directives-route-forwards.test.ts`**, which
+      // reads THIS file's source and fails when a `LaunchCreateSchema` key is
+      // not forwarded. A field list in a handler is a place fields go missing
+      // once; the test is what makes it once.
+      color: input.color,
+      agentName: input.agentName,
     });
     // ⚠ 200 WITH `offline: true`, NOT AN ERROR STATUS. Nothing failed: the
     // server looked, the operator's machine is not listening, and NO ROW WAS

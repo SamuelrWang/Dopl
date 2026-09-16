@@ -66,9 +66,19 @@ import {
 // a closed detail map, and digits. So no cell can forge a column.
 
 /** Header + alignment row for {@link sessionRow}. ⚠ Column order is the row's. */
+/**
+ * Header + alignment row for {@link sessionRow}. ⚠ Column order is the row's.
+ *
+ * ⚠ **`name` LEADS, AND IT IS A SECOND COLUMN RATHER THAN A RELABELLED `handle`** (F-708,
+ * 2026-09-16). The two are different facts about one agent — what a person calls it, and the
+ * string an MCP caller can address it by — and the grid had only the second, so an operator
+ * whose three agents were named `Dopl Reader Main` / `Dopl Reader Server` / `Dopl UI Fixes`
+ * read three eight-character ids. Folding the name INTO `handle` would publish a cell that is
+ * sometimes an address and sometimes not, which is the one thing that column may never be.
+ */
 export const SESSION_TABLE_HEAD: readonly string[] = [
-  `| handle | state | thread | channel | template | model | tool | idle |`,
-  `| --- | --- | --- | --- | --- | --- | --- | --- |`,
+  `| name | handle | state | thread | channel | template | model | tool | idle |`,
+  `| --- | --- | --- | --- | --- | --- | --- | --- | --- |`,
 ];
 
 /** A cell with nothing in it. ⚠ NOT REPORTED — see the legend, and never a zero. */
@@ -110,6 +120,14 @@ export function sessionRow(
   // an agent id prints its name rather than a plausible-looking handle.
   const at = opts.handle ? addressableHandle(s.name) : null;
   const handle = at ? `\`${at}\`` : inlineOr(s.name, NO_NAME);
+  // ⚠ **THE NAME CELL — `channel_sessions.display_name`, the launch's or the rename's own
+  // value** (F-708, 2026-09-16; the head's note carries why it is its own column). ⚠ A DASH
+  // WHEN NOTHING WAS REPORTED, never the id and never a blank: the legend already defines `—`
+  // as NOT REPORTED, and repeating the handle here would make an unnamed agent look named.
+  // ⚠ Neutralized like every other peer-written cell.
+  const name = s.displayName?.trim()
+    ? inlineOr(s.displayName, NO_NAME)
+    : NOT_REPORTED;
 
   const thread = s.threadTitle
     ? inlineOr(s.threadTitle, NO_TITLE)
@@ -137,7 +155,7 @@ export function sessionRow(
   // fail-safe `ageMs` and `sessionIsStale` already take.
   const idle = age === null ? NOT_REPORTED : coarseAge(age);
 
-  return `| ${handle} | ${stateFull} | ${thread} | ${channel} | ${template} | ${model} | ${tool} | ${idle} |`;
+  return `| ${name} | ${handle} | ${stateFull} | ${thread} | ${channel} | ${template} | ${model} | ${tool} | ${idle} |`;
 }
 
 /**

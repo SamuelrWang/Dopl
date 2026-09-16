@@ -330,9 +330,19 @@ function formatSessionLine(s, opts = {}) {
     // extra rather than a plausible-looking handle — see {@link addressableHandle}.
     const at = opts.handle ? (0, channel_session_handle_1.addressableHandle)(s.name) : null;
     const address = at ? ` (\`${at}\`)` : "";
+    // ⚠ **THE NAME IS WHAT A PERSON CALLS IT; `s.name` IS AN ADDRESS** (F-708, 2026-09-16).
+    // The bold head used to print `s.name`, which on every current desktop is the agent-instance
+    // id — so an operator's three NAMED agents rendered as three eight-character ids and the
+    // launch name appeared on no surface at all. The name leads and the id stays in the
+    // parentheses beside it, because the id is still the only handle an MCP caller can spend
+    // (`channel-session-handle.ts`).
+    // ⚠ NEUTRALIZED, never spliced raw: it is a string another machine wrote.
+    // ⚠ AND IT FALLS BACK TO `s.name`, not to `NO_NAME` — an unnamed row still has an address
+    // worth printing, and that is the pre-F-708 line byte for byte.
+    const named = s.displayName?.trim() ? (0, channel_shared_1.inlineOr)(s.displayName, exports.NO_NAME) : null;
     // ⚠ `bullet` DEFAULTS TO TRUE, so every existing caller's bytes are unchanged.
     const lead = opts.bullet === false ? "" : "- ";
-    return `${lead}**${(0, channel_shared_1.inlineOr)(s.name, exports.NO_NAME)}**${address} — ${head}${detail}${on}${where}${tail}`;
+    return `${lead}**${named ?? (0, channel_shared_1.inlineOr)(s.name, exports.NO_NAME)}**${address} — ${head}${detail}${on}${where}${tail}`;
 }
 /**
  * THE LEGEND under a set of session lines. One sentence per thing a reader

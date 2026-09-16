@@ -78,9 +78,25 @@ const VOCABULARY = [
   '  changes what somebody else is doing, or an answer to something asked in the room. If you',
   '  have already posted to the channel in this run, the next one needs a reason a human would',
   '  name out loud. Work traffic stays in the thread.',
+  // ⚠ **THE HANDLE IS THE WHOLE DISPLAY NAME, SLUGGED, AND THIS PARAGRAPH IS WHY AN AGENT
+  // WROTE `@samuel`** (F-708, 2026-09-16; Samuel's ruling: the display NAME is authoritative
+  // and the handle is DERIVED from it, never the reverse). This copy taught the squashed and
+  // first-word forms and named no canonical one, so every agent picked a shortening — and
+  // `@samuel` is the FIRST-WORD door, which is real but is not the person's handle. The
+  // canonical form is `lib/mentions.ts › mentionSlug` (spaces to dashes: "Samuel Wang" →
+  // `samuel-wang`), which is what the composer's own picker inserts
+  // (`components/composer-mentions.tsx › insertableHandle`), what the MCP doctrine publishes
+  // (`channel-doctrine.ts`), and what the transcript tints.
+  // ⚠ THE OLDER FORMS ARE STILL RECOGNISED AND THE COPY STILL SAYS SO — they resolve for
+  // bodies already written (`lib/mentions.ts › handlesOf` keeps them, deliberately) — but they
+  // are named as fallbacks rather than as choices, because an agent offered three spellings
+  // with no preference will not pick the one the product writes everywhere else.
   '- @-TAG A PERSON when you need one. Write `@` and then their handle, in the BODY of the',
-  '  post: their name or the name part of their email, lowercased, either whole with the',
-  '  spaces squeezed out (`@dianataylor`) or just its first word (`@diana`). The match is',
+  '  post: their display name, lowercased, with spaces as dashes — "Samuel Wang" is',
+  '  `@samuel-wang`. That is the handle the app itself inserts and tints, so it is the one to',
+  '  write. (The squashed form `@samuelwang`, the first word `@samuel`, and the same three',
+  '  forms of an email\'s local part all still resolve, but they are fallbacks, not the',
+  '  handle.) The match is',
   '  exact, so a misspelled tag reaches nobody; the result of the post says how many readers',
   '  the server resolved, or that it resolved none, so read it. Tag for a decision only',
   '  a person can make, a summary worth their minutes, or "I am blocked". A tag puts the',

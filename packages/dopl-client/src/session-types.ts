@@ -62,8 +62,31 @@ export interface ChannelSessionState {
   channelId: string;
   /** Thread (task) this session is on, or null. */
   threadId: string | null;
-  /** Friendly handle the pills show (flint / onyx / …). */
+  /**
+   * THE ADDRESS, not the name. On any current desktop this is the AGENT-INSTANCE ID
+   * (`main/session-summary.js › nameOf` answers `s.agentId` and nothing else); the column's
+   * wider CHECK is a leftover from the pool handles it used to hold (flint / onyx / …), which
+   * `channel-session-handle.ts › addressableHandle` still recognises for an older peer.
+   * ⚠ WHAT A PERSON CALLS THIS AGENT IS {@link ChannelSessionState.displayName}.
+   */
   name: string;
+  /**
+   * **WHAT THIS AGENT IS CALLED — the name its launch or its rename gave it** (F-708,
+   * 2026-09-16; `channel_sessions.display_name`, migration `20260905120000`).
+   *
+   * ⚠ **IT WAS ON THE WIRE AND NOT ON THIS TYPE, WHICH IS WHY THE MCP SURFACE COULD NOT SHOW
+   * IT.** `collab-dto.ts › mapPeerSessionStateRow` has mapped `displayName` since 2026-08-31
+   * and the desktop has pushed it since (`main/session-state-push.js`), but this package types
+   * the wire for `@dopl/mcp-server`, so a field missing HERE is a field the renderer cannot
+   * read: `op="status"` printed nothing but `@agent-<id>` for agents the operator had named,
+   * and an orchestrator could not tell its own three agents apart.
+   * ⚠ **OPTIONAL AND NULLABLE, the rule `detail` above states**: ABSENT is an older server
+   * that does not carry the field, `null` is a machine that reported no name. Neither is a
+   * name, and neither may be rendered as one.
+   * ⚠ **PEER-TYPED TEXT.** Every render of it goes through `inlineOr` → `neutralizeInline`,
+   * like `channelName` and `threadTitle` — it is a string somebody else's machine wrote.
+   */
+  displayName?: string | null;
   state: SessionPillState;
   /**
    * WHICH OF SIX SITUATIONS this session is in — see {@link SessionDetailKey}.

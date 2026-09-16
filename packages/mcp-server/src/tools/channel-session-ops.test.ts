@@ -147,14 +147,18 @@ function cells(text: string, handle: string): string[] {
 
 /** Column order — the row's, and `SESSION_TABLE_HEAD`'s. */
 const COL = {
-  handle: 0,
-  state: 1,
-  thread: 2,
-  channel: 3,
-  template: 4,
-  model: 5,
-  tool: 6,
-  idle: 7,
+  // ⚠ `name` JOINED AT THE FRONT (F-708, 2026-09-16) — `channel_sessions.display_name`, the
+  // launch's own value, which the grid could not show while `@dopl/client`'s
+  // `ChannelSessionState` had no field for it. Every index below moved by one.
+  name: 0,
+  handle: 1,
+  state: 2,
+  thread: 3,
+  channel: 4,
+  template: 5,
+  model: 6,
+  tool: 7,
+  idle: 8,
 } as const;
 
 describe('op="status" — the summary shape (rollback §3.5)', () => {

@@ -402,9 +402,19 @@ export function formatSessionLine(
   // extra rather than a plausible-looking handle — see {@link addressableHandle}.
   const at = opts.handle ? addressableHandle(s.name) : null;
   const address = at ? ` (\`${at}\`)` : "";
+  // ⚠ **THE NAME IS WHAT A PERSON CALLS IT; `s.name` IS AN ADDRESS** (F-708, 2026-09-16).
+  // The bold head used to print `s.name`, which on every current desktop is the agent-instance
+  // id — so an operator's three NAMED agents rendered as three eight-character ids and the
+  // launch name appeared on no surface at all. The name leads and the id stays in the
+  // parentheses beside it, because the id is still the only handle an MCP caller can spend
+  // (`channel-session-handle.ts`).
+  // ⚠ NEUTRALIZED, never spliced raw: it is a string another machine wrote.
+  // ⚠ AND IT FALLS BACK TO `s.name`, not to `NO_NAME` — an unnamed row still has an address
+  // worth printing, and that is the pre-F-708 line byte for byte.
+  const named = s.displayName?.trim() ? inlineOr(s.displayName, NO_NAME) : null;
   // ⚠ `bullet` DEFAULTS TO TRUE, so every existing caller's bytes are unchanged.
   const lead = opts.bullet === false ? "" : "- ";
-  return `${lead}**${inlineOr(s.name, NO_NAME)}**${address} — ${head}${detail}${on}${where}${tail}`;
+  return `${lead}**${named ?? inlineOr(s.name, NO_NAME)}**${address} — ${head}${detail}${on}${where}${tail}`;
 }
 
 /**

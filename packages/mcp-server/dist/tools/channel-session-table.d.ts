@@ -15,6 +15,16 @@
 import type { ChannelSessionState, ChannelSessionStateOwn } from "@dopl/client";
 import { type SessionRenderOpts } from "./channel-session-render";
 /** Header + alignment row for {@link sessionRow}. ⚠ Column order is the row's. */
+/**
+ * Header + alignment row for {@link sessionRow}. ⚠ Column order is the row's.
+ *
+ * ⚠ **`name` LEADS, AND IT IS A SECOND COLUMN RATHER THAN A RELABELLED `handle`** (F-708,
+ * 2026-09-16). The two are different facts about one agent — what a person calls it, and the
+ * string an MCP caller can address it by — and the grid had only the second, so an operator
+ * whose three agents were named `Dopl Reader Main` / `Dopl Reader Server` / `Dopl UI Fixes`
+ * read three eight-character ids. Folding the name INTO `handle` would publish a cell that is
+ * sometimes an address and sometimes not, which is the one thing that column may never be.
+ */
 export declare const SESSION_TABLE_HEAD: readonly string[];
 /**
  * ONE session as a TABLE ROW — the grid form of {@link formatSessionLine},
