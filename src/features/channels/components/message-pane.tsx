@@ -125,6 +125,7 @@ export function ChannelsMessagePane({
   onAnswerEscalation,
   answerBusy = false,
   onOpenThread = NOOP,
+  onJumpToSeq,
   hasOlder = false,
   loadingOlder = false,
   onLoadOlder = NOOP,
@@ -215,6 +216,20 @@ export function ChannelsMessagePane({
   answerBusy?: boolean;
   /** Set by an in-transcript thread card — the channel view's way IN. */
   onOpenThread?: (id: string) => void;
+  /**
+   * **JUMP TO A CITED MESSAGE, BY SEQ.** The pill hands up the number on its face;
+   * the HOST resolves it to a message id and moves the transcript
+   * (`channel-surface.tsx`, which owns the page AND `jumpToMessage`).
+   *
+   * ⚠ **ABSENT MAKES EVERY CITATION PLAIN TEXT** — the absent-not-disabled rule
+   * this pane's other callbacks follow. `thread-window.tsx` mounts this same pane
+   * in the pop-out with no selection to move, so a `#1759` there is the author's
+   * text rather than a control that does nothing.
+   * ⚠ **THE PANE DOES NOT RESOLVE IT**, though it holds `rows`: the jump has to
+   * land in the surface's scroll state, and a second resolver is a second answer
+   * to "which message is #1759" for the two to disagree over.
+   */
+  onJumpToSeq?: (seq: number) => void;
   /** SCROLL-UP PAGING — `use-channel-messages.ts`'s three values, handed down
    *  because a second mount is a second transcript read. ⚠ ALL THREE DEFAULT TO
    *  INERT: a host that knows nothing about paging requests nothing. */
@@ -290,6 +305,20 @@ export function ChannelsMessagePane({
     () => filterTranscriptRows(rows, index, filter),
     [rows, index, filter]
   );
+
+  /**
+   * **THE CITATION CEILING — THE NEWEST SEQ THIS PANE HOLDS** (2026-09-15).
+   *
+   * ⚠ **`rows`, NOT `visibleRows`**: the ceiling is what the pane HOLDS, not what
+   * the filter shows. Keying it to the filtered view would make a citation stop
+   * being a pill the moment somebody picked "People" — a claim about the message
+   * that the filter has no business making.
+   * ⚠ **ASCENDING, so the LAST row is the newest** (`use-stick-to-bottom.ts` reads
+   * the same order): reversed, this would hand back the oldest seq and gate every
+   * real citation out. ⚠ **`null` when empty** — an empty pane knows no ceiling,
+   * and `message-refs.ts` reads that as "cannot say" and draws nothing.
+   */
+  const newestSeq = rows.length > 0 ? (rows[rows.length - 1]?.seq ?? null) : null;
 
   // The flash is DERIVED: a target flashes until its nonce is spent by the
   // timeout. No synchronous setState in the effect.
@@ -424,6 +453,11 @@ export function ChannelsMessagePane({
             onAnswerEscalation={onAnswerEscalation}
             answerBusy={answerBusy}
             onOpenThread={onOpenThread}
+            // 🔒 THE CITATION PILL'S TWO GATES (2026-09-15) — the ceiling this pane
+            // measured above, and the host's jump. Absent `onJumpToSeq` leaves every
+            // `#1759` as plain text, which is the pop-out's correct behaviour.
+            newestSeq={newestSeq}
+            onJumpToSeq={onJumpToSeq}
           />
         )}
       </div>

@@ -220,6 +220,38 @@ export function ChannelSurface({
       channelId: channel.id,
       favorite: channel.myFavoritedAt == null,
     });
+  /**
+   * 🔒 **A CITATION PILL'S JUMP — THE HOST HALF OF THE FACE/ADDRESS CONTRACT**
+   * (2026-09-15, finishing a553a9ff).
+   *
+   * ⚠ **THE PILL HANDS UP A SEQ AND THIS RESOLVES IT TO A MESSAGE ID.** The number
+   * is the FACE a reader typed and read; the id is the ADDRESS the transcript
+   * moves to. Nothing below this line navigates by number, which is what keeps the
+   * feature correct whichever way the per-channel numbering ruling goes — a seq is
+   * only ever resolved against the rows THIS surface is holding, never used as a
+   * global coordinate.
+   *
+   * ⚠ **IT LIVES HERE BECAUSE THIS IS THE ONE PLACE THAT HOLDS BOTH HALVES**: the
+   * loaded page (`rows`) and the scroll state (`sel.jumpToMessage`, the nonced
+   * signal `use-channels-selection.ts` owns). `message-pane.tsx` has the rows and
+   * could resolve — but its jump would have nowhere to land, and a second resolver
+   * is a second answer to "which message is #1759" for the two to disagree over.
+   *
+   * ⚠ **AN UNRESOLVABLE SEQ DOES NOTHING, LOUDLY NOWHERE.** The pill's own gate
+   * already refused anything above the ceiling, so a miss here means the row is
+   * real but outside the loaded window — and the pane's existing
+   * `SCROLL_TARGET_MISSING_NOTE` is the surface that says so. Inventing a second
+   * failure path here would be two voices for one miss.
+   * ⚠ **THE THREAD ARGUMENT IS THE VIEW WE ARE IN**, so a jump inside the channel
+   * view stays in the channel view and one inside a thread stays in that thread.
+   * These rows ARE that view's rows; passing anything else would re-point the
+   * surface at a thread the reader never asked for.
+   */
+  const jumpToSeq = (seq: number) => {
+    const row = rows.find((candidate) => candidate.seq === seq);
+    if (!row) return;
+    sel.jumpToMessage(openThread?.id ?? null, row.id);
+  };
   const messagePane = (viewSelect?: ReactNode) => (
     <ChannelsMessagePane
       channelId={channel.id}
@@ -240,6 +272,10 @@ export function ChannelSurface({
       outboundBusy={data.consentBusy}
       onDecideOutbound={data.decideOutbound}
       scrollTarget={sel.scrollTarget}
+      // 🔒 THE CITATION PILL'S JUMP — resolved above, into the SAME nonced scroll
+      // signal the Tags inbox already uses, so a `#1759` in a body and a mention
+      // click move the transcript by one mechanism rather than two.
+      onJumpToSeq={jumpToSeq}
       // The Threads tab's "New thread", arriving from the OTHER column
       // (2026-08-24) through the selection hook, where cross-surface asks live —
       // so both hosts of this surface get it without a second wiring.

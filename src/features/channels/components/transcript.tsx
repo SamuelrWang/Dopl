@@ -62,6 +62,8 @@ export function Transcript({
   onAnswerEscalation,
   answerBusy = false,
   onOpenThread,
+  newestSeq = null,
+  onJumpToSeq,
 }: {
   rows: TranscriptRow[];
   index: AuthorIndex;
@@ -114,6 +116,28 @@ export function Transcript({
   /** An answer is in flight — the double-submit guard, not a capability. */
   answerBusy?: boolean;
   onOpenThread: (id: string) => void;
+  /**
+   * **THE CEILING A MESSAGE CITATION IS CHECKED AGAINST** — the newest seq the
+   * PANE has loaded (`lib/message-refs.ts › isCitableSeq`).
+   *
+   * ⚠ **`null`/ABSENT DRAWS NO PILLS AT ALL, AND THAT IS THE FIRST GATE**: a host
+   * that cannot say what the newest message is cannot say whether `#1759` names
+   * one, and a pill that might jump nowhere teaches a reader to distrust every
+   * pill. Handed down rather than derived here — `message-pane.tsx` owns the page
+   * and is the only thing that knows what "loaded" means.
+   */
+  newestSeq?: number | null;
+  /**
+   * **JUMP TO A CITED MESSAGE — THE SECOND GATE, AND THE ADDRESS HALF OF THE
+   * CONTRACT.** The pill hands up a SEQ, which is its FACE; the host resolves it
+   * to a message ID, which is the address. This component never navigates by
+   * number and must not learn to.
+   *
+   * ⚠ **ABSENT MAKES A CITATION PLAIN TEXT**, the same absent-not-disabled rule
+   * `onOpenAgent` and `onAnswerEscalation` above follow: the pop-out thread window
+   * has no transcript of its own to move, so it hands none.
+   */
+  onJumpToSeq?: (seq: number) => void;
 }) {
   if (rows.length === 0) {
     return (
@@ -195,6 +219,11 @@ export function Transcript({
             index={index}
             flash={row.id === flashId}
             onOpenAgent={onOpenAgent}
+            // ⚠ BOTH GATES TRAVEL TOGETHER AND NEITHER IS RE-DERIVED HERE — see
+            // the two props' docblocks. A row decides nothing about citability;
+            // it only carries the pane's answer down to the body.
+            newestSeq={newestSeq}
+            onJumpToSeq={onJumpToSeq}
           />
         );
       })}
@@ -321,11 +350,17 @@ function Message({
   index,
   flash,
   onOpenAgent,
+  newestSeq = null,
+  onJumpToSeq,
 }: {
   row: MessageRow;
   index: AuthorIndex;
   flash: boolean;
   onOpenAgent?: (agentId: string) => void;
+  /** The citation ceiling and the jump, both handed straight to the body — see
+   *  `Transcript`'s own props for the two gates they express. */
+  newestSeq?: number | null;
+  onJumpToSeq?: (seq: number) => void;
 }) {
   const agentId = row.agentId;
   const openAgent =
@@ -351,6 +386,18 @@ function Message({
       mentionsMe={row.mentionsMe}
       blockClassName={MESSAGE_BLOCK}
       textClassName={MESSAGE_TEXT}
+      // 🔒 **THE CITATION PILL'S TWO GATES, WIRED (2026-09-15)** — until this line
+      // `message-markdown.tsx` defaulted both to nothing and every `#1759` in a
+      // body rendered as the text the author typed. The leaf, the parser and the
+      // refusal rules all landed in a553a9ff; this is the host finally answering
+      // the two questions it alone can answer.
+      // ⚠ **PASSED THROUGH, NEVER DECIDED HERE.** Whether a seq is citable is
+      // `lib/message-refs.ts › isCitableSeq`'s call against the ceiling, and the
+      // ceiling is the PANE's (`message-pane.tsx`). A row that started guessing —
+      // "this seq looks recent enough" — is exactly the confident-wrong-jump the
+      // whole design refuses.
+      newestSeq={newestSeq}
+      onJumpToSeq={onJumpToSeq}
     />
   );
   /**
