@@ -37,7 +37,9 @@ const HOST = "app.usedopl.test";
 const BASE = "sb-testref-auth-token";
 
 // ⚠ The deadline is a PARAMETER of the slice, not a rewrite of it: the shipped constant is 5s
-// and a suite must not wait 5s, so the same source runs against a 25ms clock.
+// and a suite must not wait 5s, so the same source runs against a 25ms one. ⚠ NOTHING WAITS IT
+// OUT — `fakeTimers` below fires it by hand; the value is here so the armed deadline is a
+// checkable number rather than a magic one.
 const TEST_DEADLINE_MS = 25;
 
 // ⚠ `fnOf` anchors on the `function` keyword, so it drops a leading `async` and the slice then
@@ -45,12 +47,36 @@ const TEST_DEADLINE_MS = 25;
 const asyncFnOf = (src, name) =>
   (new RegExp(`async\\s+function\\s+${name}\\s*\\(`).test(src) ? "async " : "") + fnOf(src, name);
 
+// ⚠ A HAND-DRIVEN CLOCK, NOT THE WALL CLOCK (2026-09-16). `withDeadline` arms its timer with
+// `unref()` — correct in production, where a pending deadline must never hold the process open on
+// the quit path — but under Node 22's `node --test` an unref'd timer lets the event loop drain, so
+// a case that AWAITS a real deadline is `cancelledByParent` before the timer can fire (Node 24
+// keeps the loop alive differently, which is why this suite was green locally and red in CI). The
+// REAL shipped `withDeadline` still runs; only the `timers` seam it already exposes is injected,
+// so the deadline fires when a case says so — deterministically, on both runtimes, with no wait.
+function fakeTimers() {
+  const armed = [];
+  return {
+    setTimeout: (fn, ms) => {
+      const t = { fn, ms, cleared: false, unreffed: false, unref() { this.unreffed = true; } };
+      armed.push(t);
+      return t;
+    },
+    clearTimeout: (t) => { if (t) t.cleared = true; },
+    armed,
+    // ⚠ A REAL `setTimeout` FIRES ONCE. Marking it spent here is what keeps "logs once" a claim
+    // about the code rather than about this fake.
+    fire: () => { for (const t of armed) if (!t.cleared) { t.cleared = true; t.fn(); } },
+  };
+}
+
 /**
  * One fresh instance of the bound per test — including a fresh `stalledReported` set, so
  * "logs once" is a claim about one process rather than about the order of these tests.
  */
 function load(cookiesImpl) {
   const logged = [];
+  const timers = fakeTimers();
   const make = new Function(
     "session", "APP_ORIGIN", "APP_HOST", "COOKIE_BASE", "diag",
     "withDeadline", "DEADLINE", "COOKIE_STORE_TIMEOUT_MS", "stalledReported",
@@ -64,10 +90,23 @@ function load(cookiesImpl) {
     { defaultSession: { cookies: cookiesImpl } },
     ORIGIN, HOST, BASE,
     (...parts) => logged.push(parts.join(" ")),
-    deadline.withDeadline, deadline.DEADLINE, TEST_DEADLINE_MS,
+    // ⚠ THE REAL FUNCTION, ONE ARGUMENT WIDER. `jarCall` calls `withDeadline(promise, ms,
+    // onDeadline)` with no timers of its own, so the seam is closed here rather than in source:
+    // production keeps its `unref`'d global timer, the slice keeps its exact three-argument call.
+    (promise, ms, onDeadline) => deadline.withDeadline(promise, ms, onDeadline, timers),
+    deadline.DEADLINE, TEST_DEADLINE_MS,
     new Set()
   );
-  return { ...api, logged };
+  return { ...api, logged, timers };
+}
+
+/** Start a read against a store that never answers, then fire its deadline by hand. */
+function stall(api) {
+  const pending = api.getSessionCookieHeader();
+  const live = api.timers.armed.filter((t) => !t.cleared);
+  assert.equal(live.length, 1, "exactly one deadline is armed per store call");
+  api.timers.fire();
+  return pending;
 }
 
 /** A store whose `get` never settles and never rejects — the dropped-promise shape. */
@@ -75,9 +114,12 @@ const deadStore = { get: () => new Promise(() => {}) };
 
 test("a store that NEVER ANSWERS returns '' instead of hanging the caller", async () => {
   const api = load(deadStore);
-  const t0 = Date.now();
-  assert.equal(await api.getSessionCookieHeader(), "");
-  assert.ok(Date.now() - t0 < 2000, "it answered on the deadline, not on the store");
+  const pending = api.getSessionCookieHeader();
+  assert.equal(api.timers.armed.length, 1, "the read is armed with a deadline before it is awaited");
+  assert.equal(api.timers.armed[0].ms, TEST_DEADLINE_MS, "…at the file's own constant");
+  assert.ok(api.timers.armed[0].unreffed, "…and unref'd, so a pending deadline cannot hold the quit path");
+  api.timers.fire();
+  assert.equal(await pending, "", "it answered on the deadline, not on the store");
 });
 
 // ⚠ '' is deliberately the SAME answer as "signed out / no cookies yet": `auth.js ›
@@ -85,13 +127,13 @@ test("a store that NEVER ANSWERS returns '' instead of hanging the caller", asyn
 test("the timeout answer is the signed-out answer, so getAuthCookie falls through to the blob path", async () => {
   const empty = load({ get: async () => [] });
   const dead = load(deadStore);
-  assert.equal(await dead.getSessionCookieHeader(), await empty.getSessionCookieHeader());
+  assert.equal(await stall(dead), await empty.getSessionCookieHeader());
 });
 
 test("ONE diag line per process, not one per call — a dead store must not log on every 30s beat", async () => {
   const api = load(deadStore);
-  await api.getSessionCookieHeader();
-  await api.getSessionCookieHeader();
+  await stall(api);
+  await stall(api);
   const stalls = api.logged.filter((l) => l.includes("cookie store did not answer"));
   assert.equal(stalls.length, 1, `logged once across two stalled calls, got ${api.logged.length} line(s)`);
   assert.ok(stalls[0].includes("getSessionCookieHeader"), "the line names the function that gave up");

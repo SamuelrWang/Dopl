@@ -51,10 +51,32 @@ function asyncFnOf(src, name) {
   return `async ${fnOf(src, name)}`;
 }
 
+// ⚠ A HAND-DRIVEN CLOCK, NOT THE WALL CLOCK (2026-09-16). `withDeadline` arms its timer with
+// `unref()` — correct in production, where a pending deadline must never hold the process open on
+// the quit path — but under Node 22's `node --test` an unref'd timer lets the event loop drain, so
+// the hung-request case below was `cancelledByParent` before its deadline could fire, taking every
+// later case in the file with it (Node 24 keeps the loop alive differently, which is why this was
+// green locally and red in CI). The REAL shipped `withDeadline` still runs; only the `timers` seam
+// it already exposes is injected, so the bound fires when the case says so, on both runtimes.
+function fakeTimers() {
+  const armed = [];
+  return {
+    setTimeout: (fn, ms) => {
+      const t = { fn, ms, cleared: false, unreffed: false, unref() { this.unreffed = true; } };
+      armed.push(t);
+      return t;
+    },
+    clearTimeout: (t) => { if (t) t.cleared = true; },
+    armed,
+    fire: () => { for (const t of armed) if (!t.cleared) { t.cleared = true; t.fn(); } },
+  };
+}
+
 // ── the revoke call itself ──────────────────────────────────────────────────
 
 function loadRevoke({ token = "dopl_at_x", label = "Dopl Desktop CLI (Minted-Host)", fetch }) {
   const calls = { fetches: [], logged: [] };
+  const timers = fakeTimers();
   const apiFetch = (path, opts) => {
     calls.fetches.push({ path, opts });
     return fetch(path, opts);
@@ -73,8 +95,13 @@ function loadRevoke({ token = "dopl_at_x", label = "Dopl Desktop CLI (Minted-Hos
   )(apiFetch, loadDeviceToken, diag, TOKEN_PATH, FAST_TIMEOUT, (id) => {
     if (id === "os") return { hostname: () => "This-Host" };
     throw new Error(`unexpected require(${id})`);
-  }, deadline.withDeadline, deadline.DEADLINE);
-  return { fn, calls };
+  },
+  // ⚠ THE REAL FUNCTION, ONE ARGUMENT WIDER. `withTimeout` calls `withDeadline(promise, ms)` with
+  // no timers of its own, so the seam is closed here rather than in source: production keeps its
+  // `unref`'d global timer and the slice keeps its exact two-argument call.
+  (promise, ms, onDeadline) => deadline.withDeadline(promise, ms, onDeadline, timers),
+  deadline.DEADLINE);
+  return { fn, calls, timers };
 }
 
 const ok = async () => ({ ok: true, status: 200 });
@@ -127,10 +154,14 @@ test("FIX M4: no cached token reports 'none', never a revoke we did not perform"
 // ── it can never hold the click ─────────────────────────────────────────────
 
 test("a hung request is bounded, and the residual is named in the log", async () => {
-  const started = Date.now();
-  const { fn, calls } = loadRevoke({ fetch: () => new Promise(() => {}) }); // never settles
-  assert.equal(await fn(), "failed");
-  assert.ok(Date.now() - started < 1_000, "the outer bound fired, not some 15s network timeout");
+  const { fn, calls, timers } = loadRevoke({ fetch: () => new Promise(() => {}) }); // never settles
+  const pending = fn();
+  assert.equal(timers.armed.length, 1, "the whole call is armed with ONE outer bound before it is awaited");
+  assert.equal(timers.armed[0].ms, FAST_TIMEOUT + 500,
+    "…and it OUTLASTS the request's own abort, or the outer bound would always fire first");
+  assert.ok(timers.armed[0].unreffed, "…and it is unref'd, so a pending bound cannot hold the quit path");
+  timers.fire();
+  assert.equal(await pending, "failed", "the outer bound fired, not some 15s network timeout");
   assert.match(calls.logged.join("\n"), /TIMED OUT/);
   assert.match(calls.logged.join("\n"), /stays valid server-side/, "the operator is told what is left");
 });
