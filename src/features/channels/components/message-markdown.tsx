@@ -78,6 +78,8 @@ export function MessageMarkdown({
   mentionsMe,
   blockClassName = "",
   textClassName = "",
+  newestSeq = null,
+  onJumpToSeq,
 }: {
   text: string;
   index: AuthorIndex;
@@ -87,6 +89,10 @@ export function MessageMarkdown({
   blockClassName?: string;
   /** The caller's body TYPE — see rule 5. */
   textClassName?: string;
+  /** The ceiling a `#<seq>` citation is checked against; `null` draws no pills. */
+  newestSeq?: number | null;
+  /** Jump the transcript to a cited message. ⚠ ABSENT = citations stay plain text. */
+  onJumpToSeq?: (seq: number) => void;
 }) {
   const ctx: BodyContext = {
     handles: buildMentionIndex([...index.byId.values()]),
@@ -101,6 +107,8 @@ export function MessageMarkdown({
     mentionsMe,
     block: blockClassName,
     text: textClassName,
+    newestSeq,
+    onJumpToSeq,
   };
   // ⚠ `lexer`, NEVER `parse`. GFM on for tables / strikethrough / autolinks;
   // `breaks` OFF so the markdown's own line rules hold — a chat body's single

@@ -10,6 +10,7 @@ import {
 } from "../lib/mentions";
 import { agentMentionFace, resolveAgentHandle } from "../lib/agent-mentions";
 import { cn } from "@/shared/lib/utils";
+import { MessageRefText } from "./message-markdown-refs";
 import type { BodyContext } from "./message-markdown-context";
 
 /**
@@ -42,7 +43,10 @@ export function MentionText({ text, ctx }: { text: string; ctx: BodyContext }) {
   return (
     <>
       {text.split(MENTION_TOKEN_RE).map((part, i) => {
-        if (!part.startsWith("@")) return <span key={i}>{part}</span>;
+        // ⚠ PLAIN TEXT IS NOT THE END OF THE LINE: it goes through the CITATION leaf,
+        // so `#1759` inside ordinary prose becomes a jump. Mentions are resolved FIRST
+        // because `@` and `#` are different namespaces and a handle never contains one.
+        if (!part.startsWith("@")) return <MessageRefText key={i} text={part} ctx={ctx} />;
         const userId = resolveMentionToken(part, ctx.handles);
         // ⚠ AN AGENT MENTION TINTS THE SAME BLUE (Samuel, 2026-08-27) and is a SEPARATE
         // namespace — `@agent-<id>`, or the agent's slugged custom name. It is asked only when
@@ -55,7 +59,7 @@ export function MentionText({ text, ctx }: { text: string; ctx: BodyContext }) {
           userId === null
             ? resolveAgentHandle(mentionHandleOf(part), ctx.agentHandles)
             : null;
-        if (!userId && !agentId) return <span key={i}>{part}</span>;
+        if (!userId && !agentId) return <MessageRefText key={i} text={part} ctx={ctx} />;
         // ⚠ AN AGENT TAG WEARS THE AGENT'S NAME, NOT ITS ID (Samuel, 2026-09-04). The id is the
         // ADDRESS — stored, on the wire, and what the desktop routes on — but nobody should have
         // to read `@agent-h1anog51` to know who was tagged. The face is resolved live off the
