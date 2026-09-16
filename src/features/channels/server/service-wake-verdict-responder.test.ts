@@ -260,17 +260,32 @@ describe("arm 3 / arm 4 — several live agents still get an answer", () => {
     ]);
   });
 
-  // ⚠ TITLE CORRECTED 2026-09-06: there is no window on this arm any more, and the condition was
-  // never "inside" one — arm 4 answers when this author has tagged NOBODY who is still live.
-  it("arm 4: this author has tagged nobody → the most recently LAUNCHED", async () => {
+  /**
+   * 🔒 **TAGGED NOBODY WHO IS STILL LIVE → NOBODY** (2026-09-15, Samuel's ruling — F-705, in his
+   * words: *"when the last-tagged agent has ENDED, the fallback answers NOBODY — auto-address
+   * resets to none-selected and stays there until the user tags someone new"*).
+   *
+   * ⚠ **THIS CASE ASSERTED THE OPPOSITE UNTIL TODAY, AND THE OLD ANSWER IS NOW THE BUG.** It
+   * expected `m8q1zzzz` with `reason: "most recently launched"` — the newest of the live
+   * sessions. That arm handed the room to a target the asker never chose and RE-POINTED ITSELF
+   * every time an agent launched or ended, which is the complaint that outlived F-704's fix. The
+   * two were different defects wearing one symptom: F-704 was arm 3's EVIDENCE (an agent's tag
+   * counted as its operator's), this is the tertiary arm's ANSWER.
+   * ⚠ **`m8q1zzzz` IS STILL THE NEWEST LAUNCH IN `twoLive`, WHICH IS WHAT MAKES THIS MEASURE
+   * THE CHANGE.** If any name comes back here, the launch-order guess is back.
+   * ⚠ **IT IS A DELIBERATE EDIT TO B1** ("a forgotten `@` must never stall", 2026-09-04): a
+   * guess that wanders is worse than a stall, because the operator cannot tell a wrong recipient
+   * from a right one until the wrong agent answers. B1 still holds in arms 2 and 3.
+   */
+  it("🔒 arm 4 is NOBODY — tagged no live agent, so nothing is woken", async () => {
     twoLive();
     recentAgentPosts();
     const out = await resolve("morning");
-    expect(out).toMatchObject({
-      verdict: "responder",
-      recipientAgentIds: ["m8q1zzzz"],
-      reason: "most recently launched",
-    });
+    expect(out.verdict).toBe("none");
+    expect(out.recipientAgentIds ?? []).toEqual([]);
+    // ⚠ `null`, not a reason word: nothing was picked, so there is nothing to explain, and
+    // `service-writes.ts` stamps no `wake_reason` onto the row at all.
+    expect(out.reason ?? null).toBeNull();
   });
 
   // 🔒 "the CONFIGURED responder still wins — an operator is never second-guessed by recency"
@@ -289,14 +304,26 @@ describe("arm 3 / arm 4 — several live agents still get an answer", () => {
     ).not.toHaveBeenCalled();
   });
 
-  it("a stale agent the author tagged, no longer live, cannot be the answer", async () => {
+  /**
+   * 🔒 **THE TAGGED AGENT HAS ENDED → NOBODY, AND THAT IS THE RULING'S OWN SENTENCE.**
+   *
+   * ⚠ **WHAT THIS CASE GUARDS HAS NOT CHANGED: `deadbeef` IS NOT WOKEN.** A wake aimed at a
+   * session that is gone is the defect it was written for, and that assertion is kept explicitly
+   * below rather than left implied by the new one.
+   * ⚠ **WHAT CHANGED IS THE ARM UNDER IT** (2026-09-15, F-705): it expected `["m8q1zzzz"]` —
+   * the newest launch — and the answer is NOBODY now. This is the exact shape Samuel described:
+   * the agent he last tagged has ended, so auto-address resets to none-selected and waits for
+   * him to tag somebody new rather than quietly choosing a stranger.
+   */
+  it("🔒 a stale agent the author tagged, no longer live → nobody, and never it", async () => {
     twoLive();
     // ⚠ THE ROW IS THE AUTHOR'S OWN TAG SINCE 2026-09-04 — `recipient_agent_ids`, not a post
     // stamp. The agent it names has since ended.
     recentAgentPosts({ seq: 42, recipient_agent_ids: ["deadbeef"] });
-    // The recency list names an agent the room no longer holds, so arm 3 skips
-    // it and arm 4 answers — never a wake aimed at a session that is gone.
-    expect((await resolve("morning")).recipientAgentIds).toEqual(["m8q1zzzz"]);
+    const out = await resolve("morning");
+    expect(out.recipientAgentIds ?? []).not.toContain("deadbeef");
+    expect(out.recipientAgentIds ?? []).toEqual([]);
+    expect(out.verdict).toBe("none");
   });
 });
 });

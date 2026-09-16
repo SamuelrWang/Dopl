@@ -17,6 +17,29 @@ then the table, the archaeology, and the fix.
 > Each new case was verified to **fail with the one-line predicate removed** and pass with it.
 > Gates: channels suite 207 files / 3113 tests green, root `tsc --noEmit` exit 0, eslint clean on
 > every changed file.
+>
+> ### ⚠ AND THERE WAS A SECOND CAUSE — F-705, fixed the same day
+>
+> Samuel reported the symptom again **~24 minutes after this fix went live**, which was verified
+> live in both halves (the dev server's compiled send route and the running vite server each
+> carried the predicate), so staleness was ruled out. The remaining mover was **not a writer this
+> document missed** — it was RR3's *tertiary arm*: when none of the agents he had addressed was
+> still live, the room answered **whichever session launched last**, a target he never chose that
+> re-pointed itself every time any agent launched or ended.
+>
+> **Two independent defects wearing one complaint**, which is exactly why three earlier rounds
+> and this one each "fixed it" and it kept coming back:
+> - **F-704** (this document) — arm 3's *evidence*: an agent's tag counted as its operator's.
+> - **F-705** — the tertiary arm's *answer*: a launch-order guess where there should have been
+>   none.
+>
+> Samuel's ruling: **when the last-tagged agent has ended, the fallback answers NOBODY** —
+> auto-address resets to none-selected until he tags someone new. A deliberate narrowing of B1
+> ("a forgotten `@` must never stall"), on the grounds that a guess which wanders is worse than a
+> stall. Arms 2 and 3 are untouched, so a one-agent room still auto-answers. See `F-705` in
+> `docs/REFACTOR-FINDINGS.md` for the full record, including the orchestrator-based fallback that
+> was built, proven green and then discarded on product grounds — *"orchestrator" is one
+> operator's setup, and this rule ships to every user.*
 
 ---
 

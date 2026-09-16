@@ -235,3 +235,142 @@ describe("F-704 — my own agent's tag moves neither the line nor the verdict", 
     expect(server.recipientAgentIds ?? []).toEqual([WORKER]);
   });
 });
+
+/**
+ * 🔒 **THE TERTIARY ARM IS NOBODY — ON BOTH ENDS** (F-705, 2026-09-15; Samuel's words: *"when
+ * the last-tagged agent has ENDED, the fallback answers NOBODY — auto-address resets to
+ * none-selected and stays there until the user tags someone new"*).
+ *
+ * ⚠ **IT LIVES BESIDE F-704's CASES BECAUSE THE TWO DEFECTS WORE ONE COMPLAINT.** "It sends to
+ * an agent I never addressed" had two independent causes: arm 3 counting an AGENT's tag as its
+ * operator's (F-704, fixed in `bb39ac61`), and the tertiary arm answering *whichever session
+ * launched last* once nobody the asker addressed was still alive (this). Fixing the first left
+ * the second visible, which is why Samuel saw the symptom survive the fix and asked a fifth
+ * time. Keeping both sets in one file keeps that history legible to whoever comes sixth.
+ * ⚠ **AN ORCHESTRATOR-SHAPED FALLBACK WAS BUILT, GREEN, AND THROWN AWAY THE SAME DAY** — it
+ * answered the asker's own `Orchestrator` template. Rejected on PRODUCT grounds: that is one
+ * operator's setup and this rule ships to every user. Re-proposing a named fallback needs a
+ * concept that exists for all users first.
+ */
+describe("F-705 — nobody I addressed is alive, so nobody answers", () => {
+  /** One human tag, naming whoever the case wants, plus nothing else. */
+  const taggedBy = (agentId: string) => [
+    {
+      seq: 101,
+      createdAt: new Date(NOW - 60_000).toISOString(),
+      authorUserId: ME,
+      authorKind: "user",
+      recipientAgentIds: [agentId],
+      metadata: {},
+    },
+  ];
+
+  /** Both halves over one fixture — the sibling describe's arrangement, factored. */
+  async function bothEnds(
+    rows: ReturnType<typeof taggedBy>,
+    sessions: SessionStateRow[]
+  ) {
+    const recentAgentIds = recentAgentsAddressedBy(ME, rows);
+    const client = draftReach({
+      body: "what is left to do?",
+      members: MEMBERS,
+      sessions: sessions.map((s) => ({
+        name: s.name,
+        displayName: s.display_name,
+      })),
+      currentUserId: ME,
+      unaddressedResponder: "last_addressed",
+      recentAgentIds,
+      threadOtherParty: null,
+    });
+    vi.mocked(repoSessions.listSessionStates).mockResolvedValue(sessions);
+    vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue(sessions);
+    vi.mocked(repo.findUnaddressedResponder).mockResolvedValue("last_addressed");
+    vi.mocked(repoMessages.listRecentRoomTagsBy).mockResolvedValue(
+      rows.map(
+        (row) =>
+          ({
+            seq: row.seq,
+            created_at: row.createdAt,
+            author_user_id: row.authorUserId,
+            author_kind: row.authorKind,
+            recipient_agent_ids: row.recipientAgentIds,
+            metadata: row.metadata,
+          }) as never
+      )
+    );
+    const server = await resolveWakeVerdict(
+      CTX,
+      { id: CHAN, workspace_id: WS } as ChannelRow,
+      { body: "what is left to do?", kind: "message" } as ChannelMessageCreateInput,
+      {},
+      { authorKind: "user", toAgentId: null },
+      NOW
+    );
+    return { client, server };
+  }
+
+  /**
+   * 🔒 **THE PRIMARY RULE IS UNTOUCHED, AND THIS IS THE CASE THAT PROVES IT** — Samuel's #1 in
+   * his own words: *"tagged messages sent from me go to the agent that was tagged by me last."*
+   *
+   * ⚠ **IT IS HERE BECAUSE THE FIX HAD ONE WAY TO GO WRONG.** The tertiary arm now answers
+   * `null`, and `defaultResponder`'s laziness gate used to return early on a `null` settle — so
+   * an implementation that kept that gate would skip arm 3 entirely and answer NOBODY even when
+   * the asker's last-tagged agent is alive and well. That would break the primary rule while
+   * every "fallback is nobody" test stayed green. `WORKER` is live and addressed; it must win.
+   */
+  it("🔒 a LIVE last-tagged agent still wins — the tertiary arm never outranks it", async () => {
+    const { client, server } = await bothEnds(taggedBy(WORKER), [
+      sessionRow(PRIME, NOW - 60 * 60_000),
+      sessionRow(WORKER, NOW),
+    ]);
+    expect(client.reason, "client reason").toBe("most recent");
+    expect(
+      client.recipients.filter((r) => r.kind === "agent").map((r) => r.agentId)
+    ).toEqual([WORKER]);
+    expect(server.reason, "server reason").toBe("most recent");
+    expect(server.recipientAgentIds ?? []).toEqual([WORKER]);
+  });
+
+  /**
+   * 🔒 **THE LAST-TAGGED AGENT HAS ENDED → NOBODY, AND THE LINE SAYS SO TOO.**
+   *
+   * ⚠ `deadbeef` was tagged and is gone, so arm 3 has nothing live to offer. TWO agents are
+   * live and one of them launched most recently — the old arm would have named it, which is the
+   * wander Samuel kept seeing. Both ends must now answer silence, and the parity half is what
+   * makes the silence honest: a composer line naming an agent the server will not wake is the
+   * overstatement this suite exists to catch.
+   */
+  it("🔒 last-tagged agent ended → nobody, on both ends", async () => {
+    const { client, server } = await bothEnds(taggedBy("deadbeef"), [
+      sessionRow(PRIME, NOW - 60 * 60_000),
+      sessionRow(WORKER, NOW),
+    ]);
+    expect(client.via, "client via").toBe("none");
+    expect(client.recipients, "client recipients").toEqual([]);
+    expect(server.verdict, "server verdict").toBe("none");
+    expect(server.recipientAgentIds ?? []).toEqual([]);
+    expect(server.reason ?? null, "server reason").toBeNull();
+  });
+
+  /**
+   * 🔒 **AND ONE LIVE AGENT STILL ANSWERS — B1 IS NARROWED, NOT DELETED.**
+   *
+   * ⚠ Arm 2 ("only agent") sits ABOVE the tertiary arm and is untouched: a room holding exactly
+   * one live agent needs no guess, so a forgotten `@` still does not stall there. Without this
+   * case, "the fallback is nobody" could be read as "untagged messages never route", and the
+   * next change would implement that.
+   */
+  it("🔒 a room with ONE live agent still answers, tag or no tag", async () => {
+    const { client, server } = await bothEnds(taggedBy("deadbeef"), [
+      sessionRow(PRIME, NOW - 60 * 60_000),
+    ]);
+    expect(client.reason, "client reason").toBe("only agent");
+    expect(
+      client.recipients.filter((r) => r.kind === "agent").map((r) => r.agentId)
+    ).toEqual([PRIME]);
+    expect(server.reason, "server reason").toBe("only agent");
+    expect(server.recipientAgentIds ?? []).toEqual([PRIME]);
+  });
+});

@@ -23,7 +23,21 @@ export type ResponderReason =
   | "only agent"
   /** Several are live; this one the ASKING PERSON addressed most recently. */
   | "most recent"
-  /** Several are live and none was addressed lately; this one launched last. */
+  // ⚠ **RETIRED 2026-09-15 (Samuel's ruling, F-705) — NOTHING PRODUCES IT ANY MORE.** It named
+  // the LAUNCH-ORDER arm: several agents live, none of them one the asker had addressed, so the
+  // room answered *whichever session started last*. That is a target the asker never chose and
+  // it MOVED ON ITS OWN — an orchestrator launching and retiring workers re-pointed it all day —
+  // which is the complaint that outlived the F-704 fix ("it will change my auto message to an
+  // agent i havent addressed"). His replacement is NOBODY: when the agent you last tagged has
+  // ended, auto-address resets to none-selected and stays there until you tag someone new.
+  // ⚠ **AN ORCHESTRATOR-SHAPED FALLBACK WAS BUILT AND THROWN AWAY ON THE SAME DAY, AND THE
+  // REASON IS WORTH KEEPING**: it read the asker's own `Orchestrator` template off the live
+  // session and answered that. It works, but "orchestrator" is ONE OPERATOR'S SETUP, not a
+  // product concept — this code ships to every user — so a rule naming it would have shipped a
+  // private convention as a default. Samuel caught that after the build was green.
+  // ⚠ **THE MEMBER OF THIS UNION IS KEPT** so a stored `metadata.wake_reason` written before
+  // today still renders as something rather than as an unknown code. Same arrangement, and same
+  // reason, as `"default"` above.
   | "most recently launched";
 
 /**
@@ -176,5 +190,35 @@ export function resolveDefaultResponder(
   for (const id of recentAgentIds) {
     if (ids.includes(id)) return { agentId: id, reason: "most recent" };
   }
-  return { agentId: ids[0], reason: "most recently launched" };
+  // ⚠ **NOBODY, AND THIS `null` IS SAMUEL'S 2026-09-15 RULING IN ITS ENTIRETY** (F-705, in his
+  // words: *"when the last-tagged agent has ENDED, the fallback answers NOBODY — auto-address
+  // resets to none-selected and stays there until the user tags someone new"*).
+  //
+  // ⚠ **WHAT STOOD HERE AND WHY IT HAD TO GO.** `return { agentId: ids[0], reason: "most
+  // recently launched" }` — the caller's first candidate, which both callers order as *most
+  // recently launched*. So when none of the live agents was one the asker had addressed, the room
+  // handed the message to whichever session started last: a target the asker never chose, that
+  // RE-POINTED ITSELF every time any agent launched or ended. That is the symptom that survived
+  // F-704's fix, and the two were never the same defect — F-704 was "my agent's tag is not my
+  // addressing" (arm 3's EVIDENCE); this is "nobody I addressed is alive" (this arm's ANSWER).
+  // Two bugs, one complaint, which is why fixing the first did not stop the reports.
+  //
+  // ⚠ **IT IS A DELIBERATE EDIT TO B1, NOT AN OVERSIGHT OF IT.** "A forgotten `@` must never
+  // stall a conversation" (2026-09-04, row #966) is what put a guess here. The 2026-09-15 ruling
+  // narrows that: a guess that WANDERS is worse than a stall, because the operator cannot tell a
+  // wrong recipient from a right one and only finds out when the wrong agent answers. B1 still
+  // holds wherever the room can answer without guessing — one live agent (arm 2), or an agent the
+  // asker actually addressed (arm 3).
+  //
+  // ⚠ **AND A ROLE-BASED FALLBACK WAS REJECTED ON PRODUCT GROUNDS, NOT TECHNICAL ONES.** A
+  // version answering the asker's own `Orchestrator` template was built, green and cheap; it was
+  // thrown away because "orchestrator" is one operator's setup and this rule ships to every user.
+  // Anyone re-proposing a named fallback needs a concept that exists for ALL users first.
+  //
+  // ⚠ **THE CALLER MUST NOT READ THIS `null` AS "NO OPINION".** It is the same answer `"none"`
+  // gives on the first line: nobody is woken, the row stores `verdict=none`, and every surface
+  // already renders that as "reached nobody". `service-wake-verdict-resilience.ts ›
+  // defaultResponder` therefore may NOT return early on it — arm 3 still gets its turn, or the
+  // tertiary arm would outrank the primary rule.
+  return null;
 }

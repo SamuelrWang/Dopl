@@ -289,10 +289,26 @@ describe("the server decides, the machine executes", () => {
     // and is already the only WAKE today.
     // ⚠ **IT WAS THE CHANNEL'S NOMINEE UNTIL 2026-09-06 AND IS NOW THE RULE'S OWN ANSWER.**
     // This case passed `channel: { default_responder_agent_name: 'agent-<A2>' }` — a manager's
-    // room-wide pin, retired with items 10/11. With nobody pinned and no recent tag by this
-    // author, RR3 answers its last arm (the most recently launched of the live agents). What
-    // this case is about is unchanged and is the part that would regress silently: ONE agent is
-    // woken and its sibling hears nothing.
+    // room-wide pin, retired with items 10/11. What this case is about is unchanged and is the
+    // part that would regress silently: ONE agent is woken and its sibling hears nothing.
+    // ⚠ **THE AUTHOR'S OWN TAG OF `A1` IS SEEDED AS OF 2026-09-15 (F-705), AND WITHOUT IT THIS
+    // CASE WOULD MEASURE NOTHING.** It used to rely on the tertiary arm — "the most recently
+    // launched of the live agents" — so two bare rows and no history were enough to get a pick.
+    // Samuel's ruling makes that arm answer NOBODY, so the honest verdict for an author who has
+    // tagged no live agent is now `none`: a delivery test with no delivery in it. Arm 3 is the
+    // arm that still answers a name, so the fixture gives it its evidence — the asker addressed
+    // `A1` here earlier, and `A1` is still live.
+    vi.mocked(repoMessages.listRecentRoomTagsBy).mockResolvedValue([
+      {
+        seq: 40,
+        created_at: new Date(NOW - 60_000).toISOString(),
+        author_user_id: ME,
+        // ⚠ `"user"` — a HUMAN's own tag is the only evidence arm 3 accepts (F-704, `bb39ac61`).
+        author_kind: "user",
+        recipient_agent_ids: [A1],
+        metadata: {},
+      },
+    ] as never);
     vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([
       sessionRow(A1),
       sessionRow(A2),

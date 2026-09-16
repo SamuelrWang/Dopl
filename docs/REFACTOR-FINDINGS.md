@@ -9204,3 +9204,76 @@ what made this stomp possible; this change makes the human's thread authoritativ
 none, which is what the stated ruling says. A per-session variant would be a new ruling.
 
 Full trace, including the writer/reader table and the line-by-line repro: `AUTO-ADDRESS-TRACE.md`.
+
+### F-705 — RR3's tertiary arm answered "whichever agent launched last", so a person's auto-address wandered on its own; it answers NOBODY now (found 2026-09-15, RESOLVED 2026-09-15 — Samuel's ruling)
+
+**It is the SECOND cause of one complaint, and that is why the complaint outlived F-704's fix.**
+"It sends my untagged messages to an agent I never addressed" had two independent causes:
+
+1. **F-704** — arm 3 counted an AGENT's typed tag as its operator's own addressing, because an
+   agent posts under its operator's `author_user_id`. Fixed in `bb39ac61`.
+2. **This** — when NONE of the agents the asker had addressed was still live, the tertiary arm
+   answered `{ agentId: ids[0], reason: "most recently launched" }`: the caller's first candidate,
+   which both callers order as *most recently launched*. So the room handed the message to
+   whichever session had started last — a target the asker never chose, which **re-pointed itself
+   every time any agent launched or ended**. In a room where an orchestrator launches and retires
+   workers all day, that moves continuously with nothing the operator did.
+
+Samuel reported the symptom again ~24 minutes after F-704 went live; the fix was verified live in
+both halves (the dev server's compiled send route and the running vite server both carried the
+predicate), which is what ruled out staleness and pointed here.
+
+**The ruling, in his words:** *"when the last-tagged agent has ENDED, the fallback answers NOBODY —
+auto-address resets to none-selected and stays there until the user tags someone new."*
+
+⚠ **IT IS A DELIBERATE EDIT TO B1, MADE OUT LOUD.** "A forgotten `@` must never stall a
+conversation" (2026-09-04, row #966) is what put a guess here. The narrowing: a guess that WANDERS
+is worse than a stall, because the operator cannot distinguish a wrong recipient from a right one
+and only finds out when the wrong agent answers. **B1 still holds wherever the room can answer
+without guessing** — arm 2 (exactly one live agent) and arm 3 (an agent the asker actually
+addressed) are untouched, and a case pins that a one-agent room still auto-answers.
+
+⚠ **AN ORCHESTRATOR-SHAPED FALLBACK WAS BUILT, GREEN, AND DISCARDED THE SAME DAY — the reason is
+the useful part.** It read the asker's own `Orchestrator` template off the live session row
+(`template_name`, on the row since `20260823130000`) and answered that: no new column, no picker,
+no migration, and it scoped itself for free, because `template_name` is operator-only
+(`collab-dto.ts › OPERATOR_ONLY_SESSION_COLUMNS`) so a peer's candidate could never match. It was
+thrown away on PRODUCT grounds, which nobody in the thread had raised: **"orchestrator" is one
+operator's setup, not a product concept, and this rule ships to every user.** Anyone re-proposing
+a named fallback needs a concept that exists for all users first. (Earlier in the same thread a
+configurable role-pinned setting was also costed at ~a day and rejected once it was shown that it
+does not actually guarantee "never nobody" either — it only relocates the cliff from "was launched
+from the template" to "is running at all".)
+
+**The change is two lines and one of them is not obvious.**
+
+1. `lib/agent-mentions-responder.ts › resolveDefaultResponder` — the tertiary arm returns `null`.
+   `"most recently launched"` stays in the `ResponderReason` union, unproduced, so rows stamped
+   before today still render as a reason rather than an unknown code (the arrangement `"default"`
+   already had).
+2. ⚠ **`server/service-wake-verdict-resilience.ts › defaultResponder`'s LAZINESS GATE had to
+   change with it, and missing that would have broken the PRIMARY rule silently.** The gate read
+   `if (settled === null || settled.reason !== "most recently launched") return settled`, which was
+   exact while the arm always answered a name — `null` could then only mean "no agents at all".
+   With the arm answering `null` for "nobody you addressed is alive", an early return there skips
+   arm 3 entirely, so a person's last-tagged LIVE agent stops being their default: exactly what
+   Samuel's #1 forbids (*"tagged messages sent from me go to the agent that was tagged by me
+   last"*). The gate now short-circuits on `"only agent"` alone. **Verified by restoring the old
+   gate: three cases go red, including two of F-704's own.**
+
+**Pinned by five cases, each confirmed RED with the old arm restored:** the server's "tagged no
+live agent → nothing woken" and "tagged agent has ended → nobody, and never it"
+(`service-wake-verdict-responder.test.ts`), the composer line saying `nobody`
+(`composer-recipients.test.tsx`), the both-ends table case (`draft-reach-parity.test.ts`), and the
+both-ends "last-tagged agent ended" case (`draft-reach-parity-author-kind.test.ts`). Three more
+guard the edges rather than the change: a LIVE last-tagged agent still wins (the gate trap above),
+a ONE-agent room still answers (B1 narrowed, not deleted), and the composer still names an
+addressed agent rather than reading `nobody` for a post that will route.
+
+⚠ **TWO SUITES NEEDED A FIXTURE CHANGE TO KEEP MEASURING ANYTHING**, which is worth knowing before
+the next change here: `delivery-composed.test.ts › RR3 repairs a forgotten @` relied on the
+tertiary arm to produce ANY pick, so with nobody as the answer it became a delivery test with no
+delivery — it now seeds the asker's own earlier tag of `A1` and drives arm 3. The parity table's
+launch-order case became the NOBODY case for the same reason.
+
+Full history of both defects and the writer/reader table: `AUTO-ADDRESS-TRACE.md`.

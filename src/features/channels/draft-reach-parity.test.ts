@@ -181,18 +181,22 @@ const CASES: Case[] = [
     // take the FIRST candidate in the order they hold them — the server sorts by
     // `started_at`, the composer takes the projection's own order, and the
     // fixture hands them the same list.
-    name: "TWO live agents, neither has spoken — RR3 arm 4, the newest launched",
+    // ⚠ **EXPECTED `most recently launched` UNTIL 2026-09-15 (Samuel's ruling, F-705).** That arm
+    // handed the room to whichever session started last — a target the asker never chose, which
+    // moved by itself as agents launched and ended — and it answers NOBODY now. The case stays
+    // because the parity point is unchanged: both ends must agree, silence included.
+    name: "TWO live agents, neither addressed — nobody, on both ends",
     body: "can someone look at the build?",
     sessions: [
       sessionRow("m8q1zzzz", null, NOW),
       sessionRow("k3v7d2mq", null, NOW - 60_000),
     ],
     expect: {
-      via: "responder",
-      verdict: "responder",
-      agentIds: ["m8q1zzzz"],
+      via: "none",
+      verdict: "none",
+      agentIds: [],
       userIds: [],
-      reason: "most recently launched",
+      reason: null,
     },
   },
   {

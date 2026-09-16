@@ -174,12 +174,37 @@ describe("the recipient line — always on, whatever the draft says", () => {
     expect(line()).toContain(REACH_NOBODY);
   });
 
-  it("🔒 names an agent with TWO live and no nomination — the line must not say `nobody` for a post that will route", () => {
-    // ⚠ THIS SAID `nobody` UNTIL 2026-09-04, and so did the server (row #966).
-    // Samuel's B1 is that a forgotten `@` must never stall, so RR3 now answers
-    // with the agent that spoke here last — else the one launched last, which is
-    // the first candidate in the order this surface holds them.
+  /**
+   * 🔒 **TWO LIVE, NEITHER ADDRESSED → THE LINE SAYS `nobody`** (2026-09-15, Samuel's ruling —
+   * F-705).
+   *
+   * ⚠ **THIS CASE ASSERTED THE OPPOSITE BETWEEN 2026-09-04 AND TODAY, AND BOTH VERSIONS WERE
+   * RIGHT ON THEIR DAY.** B1 said a forgotten `@` must never stall (row #966), so the arm
+   * answered *the one launched last* — which is what made this line name `@research-bot`. That
+   * guess is what wandered: it re-pointed itself whenever an agent launched or ended, and the
+   * operator had no way to tell a wrong recipient from a right one. The ruling narrows B1: a
+   * wandering guess is worse than a stall, so with no addressed agent alive the answer is
+   * nobody, and auto-address waits to be pointed somewhere by a tag.
+   * ⚠ **AND THE LINE MUST SAY IT — that half is not negotiable.** Naming an agent the server
+   * will not wake tells a person their message was seen when it was not. Silence predicted,
+   * silence delivered; the server half of this exact fixture is in `draft-reach-parity.test.ts`.
+   */
+  it("🔒 says `nobody` with TWO live and neither addressed", () => {
     const body = mount({ liveAgents: [PEER_AGENT, BARE_AGENT] });
+    type(body, "who is around");
+    expect(line()).toContain(REACH_NOBODY);
+  });
+
+  /**
+   * 🔒 **AND A POST THAT WILL ROUTE STILL MUST NOT READ AS `nobody`** — the 2026-09-04 intent of
+   * the case above, kept where it still applies: the asker HAS addressed one of these two, so
+   * arm 3 answers and the line names it.
+   */
+  it("🔒 names the addressed agent when one is live — not `nobody`", () => {
+    const body = mount({
+      liveAgents: [PEER_AGENT, BARE_AGENT],
+      recentAgentIds: [PEER_AGENT.name],
+    });
     type(body, "who is around");
     expect(line()).not.toContain(REACH_NOBODY);
     expect(line()).toContain("@research-bot");

@@ -319,13 +319,23 @@ export async function defaultResponder(
     agentId: row.name,
     displayName: row.display_name,
   }));
+  // ⚠ NOTHING LIVE, NOTHING TO ASK — and no read to pay for. Previously implied by the arms,
+  // because a `null` settle returned below; stated now that it no longer does.
+  if (candidates.length === 0) return null;
   const settled = resolveDefaultResponder(setting, candidates);
-  // ⚠ `most recently launched` IS THE ONLY ANSWER ARM 3 CAN IMPROVE ON — every
-  // other reason means the room settled it without needing to know who the author
-  // addressed last, so the read is not issued at all.
-  if (settled === null || settled.reason !== "most recently launched") {
-    return settled;
-  }
+  // ⚠ **ONLY `only agent` SHORT-CIRCUITS THE READ, AND THE WIDENING IS THE 2026-09-15 RULING'S
+  // ONE COST** (F-705). This gate read `settled === null || settled.reason !== "most recently
+  // launched"`, which was exact while the tertiary arm ALWAYS answered a name: any other reason
+  // meant the room had settled without needing to know who the asker addressed, and `null` could
+  // only mean "no agents at all".
+  // ⚠ **`null` MEANS SOMETHING ELSE NOW — "nobody I addressed is alive" — AND RETURNING ON IT
+  // WOULD BREAK THE PRIMARY RULE.** With two live agents the settle-without-recency answer is
+  // `null`, so an early return there would skip arm 3 entirely and a person's last-tagged LIVE
+  // agent would stop being the default: exactly what Samuel's #1 forbids (*"tagged messages sent
+  // from me go to the agent that was tagged by me last"*). The tertiary arm must never outrank
+  // the primary one, and this line is where that is enforced.
+  // ⚠ THE COMMON ROOM IS UNAFFECTED: one live agent still settles with no round trip at all.
+  if (settled !== null && settled.reason === "only agent") return settled;
   return resolveDefaultResponder(setting, candidates, await recent());
 }
 
