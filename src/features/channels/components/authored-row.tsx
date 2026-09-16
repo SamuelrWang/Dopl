@@ -199,6 +199,24 @@ const GUTTER = { me: "pr-2", peer: "pl-2" } as const;
 const GUTTER_PULL = { me: "-mr-2", peer: "-ml-2" } as const;
 
 /**
+ * **WHAT THE JUMP-TO-MESSAGE FLASH PAINTS — A LIGHT GREY, NOT THE LINK BLUE** (Samuel,
+ * 2026-09-16: *"the highlight is in blue. I would like that highlight to be in like a
+ * light gray. not blue."*).
+ *
+ * ⚠ **IT IS THE ELEVATION RAMP'S OWN TINT, NOT A NEW GREY.** `--surface-raised-3` is the
+ * app's 5% black wash (docs/DESIGN-SYSTEM.md), one step above the `bg-surface-raised-2`
+ * every hover row wears — so a flashed row reads as lifted rather than as hovered, and no
+ * component here mints a colour of its own.
+ * ⚠ **BLUE WAS SAYING SOMETHING IT DID NOT MEAN.** `--link` is this surface's ROUTING
+ * colour — a tinted `@handle` in a body, the composer's live tint, the unread dot — so
+ * tinting a row blue for 1.6s claimed the message had been addressed to somebody. Grey is
+ * the honest reading: *"here it is"*, and nothing more.
+ * ⚠ **ONE CONSTANT, BOTH FACES.** The bare row and the accented row flash from this
+ * string; two spellings is how they came to disagree about geometry twice already.
+ */
+export const FLASH_TINT = "bg-surface-raised-3";
+
+/**
  * The shell every authored row shares: the ATTRIBUTION PILL as the group header,
  * the body blocks under it, and the side.
  *
@@ -339,7 +357,7 @@ export function AuthoredRow({
           // shifting layout: the row always owns the strip it may highlight.
           "-mx-2 flex flex-col gap-1.5 rounded-[10px] px-2 py-1 transition-colors duration-700",
           mine ? "items-end" : "items-start",
-          flash && "bg-link/10 duration-150"
+          flash && `${FLASH_TINT} duration-150`
         )}
       >
         {pill}
@@ -367,7 +385,7 @@ export function AuthoredRow({
         // in the DOM either way — a screen reader meets the row's content, not a decoration,
         // and there is exactly one place the side can be got wrong.
         mine ? "flex-row-reverse" : "flex-row",
-        flash && "bg-link/10 duration-150"
+        flash && `${FLASH_TINT} duration-150`
       )}
     >
       <span aria-hidden className={ACCENT_BAR} style={{ backgroundColor: accent.paint }} />

@@ -70,6 +70,7 @@ import type { AuthorIndex } from "./view-model";
 // ⚠ SPLIT ON THE 500-LINE CAP (2026-09-05): the shared shape and the mention leaf.
 import type { BodyContext } from "./message-markdown-context";
 import { MentionText } from "./message-markdown-mentions";
+import { normalizePipeTables } from "./message-markdown-tables";
 
 
 export function MessageMarkdown({
@@ -113,7 +114,13 @@ export function MessageMarkdown({
   // ⚠ `lexer`, NEVER `parse`. GFM on for tables / strikethrough / autolinks;
   // `breaks` OFF so the markdown's own line rules hold — a chat body's single
   // newlines still separate blocks through the paragraph tokens themselves.
-  const tokens = marked.lexer(text, { gfm: true, breaks: false });
+  // ⚠ ONE SOURCE-TEXT PASS FIRST (2026-09-16): an agent's pipe grid with no
+  // `|---|` row is not GFM and lexes to a paragraph of raw pipes, which is what
+  // Samuel was looking at. `message-markdown-tables.ts` supplies the row the
+  // author omitted and refuses everything it is not sure about — the wire
+  // format's `A→B | KIND | body` above all. It returns MARKDOWN, so rule 1 is
+  // untouched and the table branch below is unchanged.
+  const tokens = marked.lexer(normalizePipeTables(text), { gfm: true, breaks: false });
   return (
     <>
       {tokens.map((token, i) => (

@@ -60,7 +60,13 @@
  * the last three times and the one `composer-input.test.ts` pins.
  */
 
-import { useRef, type KeyboardEvent, type ReactNode, type RefObject } from "react";
+import {
+  useLayoutEffect,
+  useRef,
+  type KeyboardEvent,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { cn } from "@/shared/lib/utils";
 import { SendButton } from "@/shared/ui/send-button";
 
@@ -114,6 +120,27 @@ const PILL_FACE = "raised-tab rounded-[10px] p-1.5 pl-3";
  * whole mechanism.
  */
 const FIELD_TEXT = "py-[4px] text-lead leading-[22px] pointer-coarse:text-[16px]";
+
+/**
+ * **EVERY FACT THAT DECIDES WHERE A LINE BREAKS** — worn by the field AND by the mirror, from
+ * one string, for the same reason {@link FIELD_TEXT} is one string (2026-09-16).
+ *
+ * 🔒 **`scrollbar-gutter: stable` IS THE LOAD-BEARING HALF AND IT IS NOT COSMETIC.** The field
+ * is `overflow-y-auto`, so the moment a draft passes one line it may grow a CLASSIC scrollbar —
+ * always, on Windows and on any Mac set to *"Show scroll bars: Always"* — and a classic
+ * scrollbar takes its width out of the CONTENT BOX. The mirror has no scrollbar, so it kept the
+ * full width: the two layers then wrapped at DIFFERENT columns, and every line after the first
+ * divergence sat a line off the caret that steers it. `stable` makes both reserve the same
+ * gutter (zero on overlay scrollbars, the scrollbar's width on classic ones) — the gutter is
+ * reserved on BOTH or on NEITHER, which is the only property that matters here.
+ * ⚠ **`break-words` IS IN IT BECAUSE THE TEXTAREA BREAKS LONG WORDS AND A `<div>` DOES NOT.**
+ * One unbroken 200-character token — a pasted URL, which is most of what gets pasted here —
+ * overflows the mirror and wraps the field, and that is the same divergence by another route.
+ * ⚠ **NOTHING TYPOGRAPHIC IS IN HERE.** Size, leading and vertical inset are `FIELD_TEXT`'s;
+ * two constants, two questions, so neither can be edited "while I am in there" for the other's
+ * reason.
+ */
+const FIELD_WRAP = "break-words [scrollbar-gutter:stable]";
 
 /** THE ARROW'S WIRING — what it does, never how it looks. */
 export type ComposerSendWiring = {
@@ -201,6 +228,18 @@ export function ComposerInputRow(props: ComposerInputRowProps) {
   // caller's. A field scrolled to line 3 over a layer still at line 1 is the tint on the wrong
   // words — the one failure mode of a mirror that a static test would never catch.
   const mirrorRef = useRef<HTMLDivElement>(null);
+  // 🔒 **THE SCROLL OFFSET IS RE-SYNCED ON EVERY VALUE CHANGE, NOT ONLY ON A SCROLL EVENT**
+  // (2026-09-16, with the caret fix). TYPING scrolls the field — the browser keeps the caret in
+  // view — and that scroll is applied to a field whose new text React has not committed to the
+  // mirror yet. The `onScroll` handler below therefore copied an offset that was correct for
+  // the OLD content, and nothing corrected it afterwards: the layers stayed a line apart until
+  // the next wheel. LAYOUT effect, before paint, so no frame is ever shown misaligned.
+  // ⚠ IT RUNS ONLY WHERE THERE IS A MIRROR; an untinted mount holds no layer to sync.
+  useLayoutEffect(() => {
+    const mirror = mirrorRef.current;
+    const field = inputRef?.current;
+    if (mirror && field) mirror.scrollTop = field.scrollTop;
+  }, [value, inputRef]);
   return (
     <div className={cn(ROW_GEOMETRY, face === "pill" && PILL_FACE)}>
       {/* ⚠ THE FIELD SITS IN A POSITIONED BOX IN BOTH MODES, UNBRANCHED. The mirror is absolute
@@ -217,7 +256,11 @@ export function ComposerInputRow(props: ComposerInputRowProps) {
             // twice, and a pointer meeting them first could not place a caret.
             aria-hidden
             className={cn(
-              "pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words text-text-primary",
+              "pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap text-text-primary",
+              // ⚠ THE WRAP RULES ARE THE FIELD'S OWN, FROM ONE CONSTANT — see {@link FIELD_WRAP}.
+              // `overflow-hidden` is still a scroll container, so the reserved gutter applies here
+              // exactly as it does under the field.
+              FIELD_WRAP,
               FIELD_TEXT
             )}
           >
@@ -260,6 +303,7 @@ export function ComposerInputRow(props: ComposerInputRowProps) {
         // constant, which is what keeps the two layers on the same glyph positions.
         className={cn(
           "h-[30px] w-full resize-none overflow-y-auto bg-transparent outline-none placeholder:text-text-muted",
+          FIELD_WRAP,
           FIELD_TEXT,
           // ⚠ THE TEXT GOES TRANSPARENT ONLY WHERE SOMETHING IS PAINTED UNDER IT, AND THE CARET
           // NEVER DOES. `caret-text-primary` is the one thing that must stay opaque: it is the

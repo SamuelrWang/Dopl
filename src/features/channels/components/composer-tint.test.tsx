@@ -166,6 +166,27 @@ describe("a handle the tagging rule does not read is not tinted", () => {
     ]);
   });
 
+  it("🔒 closes a trailing newline on BOTH paths — the caret bug (2026-09-16)", () => {
+    // ⚠ `white-space: pre-wrap` collapses a FINAL break and a textarea does not, so a mirror
+    // without something after it stands one line short and every scroll offset past it is wrong
+    // by a line — the caret floating above the words. The tinted path has paid this since
+    // 2026-09-07; the @-LESS FAST PATH did not, and the @-less draft is the common one.
+    const sentinel = "​";
+    const plain = render(
+      <ComposerTint text={"two lines\n"} members={MEMBERS} sessions={[]} />
+    );
+    expect(plain.container.textContent).toBe(`two lines\n${sentinel}`);
+    const tagged = render(
+      <ComposerTint text={"hi @diana-taylor\n"} members={MEMBERS} sessions={[]} />
+    );
+    expect(tagged.container.textContent).toBe(`hi @diana-taylor\n${sentinel}`);
+  });
+
+  it("adds nothing at all to a draft that does not end in a break", () => {
+    const view = render(<ComposerTint text="two lines" members={MEMBERS} sessions={[]} />);
+    expect(view.container.textContent).toBe("two lines");
+  });
+
   it("renders the author's own characters in the masked run, never the mask's spaces", () => {
     // ⚠ THE MASK DECIDES TINTABILITY AND NOTHING ELSE. It blanks with SPACES of equal length,
     // and a mirror that painted those spaces would blank the operator's own code span on screen.

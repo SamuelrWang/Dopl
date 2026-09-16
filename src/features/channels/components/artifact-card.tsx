@@ -219,7 +219,12 @@ export function ArtifactCard({
       data-artifact-id={id}
       className={cn(
         "min-w-0 overflow-hidden rounded-[12px] border border-border-active bg-card-surface-subtle",
-        flash && "ring-2 ring-link"
+        // ⚠ **GREY, THE SAME RULING THE ROW TINT TOOK** (Samuel, 2026-09-16 — see
+        // `authored-row.tsx › FLASH_TINT`). One click path lands on either a row or a
+        // folded card, so one flash colour: a blue ring here and a grey wash there would
+        // read as two different events. The RING is kept because a card already owns a
+        // border — a wash inside it would fight the header strip.
+        flash && "ring-2 ring-border-strong"
       )}
     >
       <div className="flex items-center gap-1.5 bg-surface-cta px-2.5 py-[5px]">

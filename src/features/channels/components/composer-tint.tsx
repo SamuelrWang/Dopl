@@ -72,7 +72,15 @@ export function ComposerTint({
   );
   // ⚠ **THE CHEAP EXIT IS `mentionTokensOf`'S OWN**, and on this surface it is what keeps the
   // masking off the hot path: this runs on every keystroke and the common draft holds no `@`.
-  if (!text.includes("@")) return <>{text}</>;
+  // 🔒 **IT STILL PAYS THE TRAILING-NEWLINE SENTINEL, AND SKIPPING IT WAS THE CARET BUG**
+  // (Samuel, 2026-09-16: *"for some random lines, my cursor will like not be aligned with the
+  // text as im typing … it will show further up and like in between the lines"*). This branch
+  // returned the bare string and NOTHING ELSE, so the guard below — written for exactly this
+  // failure — was reachable only from the tinted path. A draft with no `@` in it and a line
+  // break at the end therefore mirrored one line SHORT, every scroll offset past it was wrong
+  // by 22px, and what the operator saw was the caret they steer by floating a line above the
+  // text they can see. The @-less draft is the COMMON one, which is why it read as random.
+  if (!text.includes("@")) return <>{text}{trailingLine(text)}</>;
   // 🔒 **THE MASK RUNS FIRST, AND SKIPPING IT WAS A REAL DEFECT (fixed 2026-09-07, blocker 8).**
   // This split ran over the RAW draft, so `MENTION_TOKEN_RE` saw handles the tagging rule
   // deliberately does not: a backticked `@handle`, a fenced block, an escaped `\@handle`, a link
@@ -132,11 +140,20 @@ export function ComposerTint({
           </span>
         );
       })}
-      {/* ⚠ A TRAILING NEWLINE NEEDS SOMETHING AFTER IT. `white-space: pre-wrap` collapses a final
-          line break, so a draft ending in Enter would make the mirror one line shorter than the
-          field and every scroll offset after it wrong by a line. The textarea itself does not
-          collapse it, which is precisely the disagreement this closes. */}
-      {text.endsWith("\n") && <span>{"​"}</span>}
+      {trailingLine(text)}
     </>
   );
+}
+
+/**
+ * **THE EMPTY LAST LINE A TEXTAREA HAS AND A `<div>` DOES NOT.**
+ *
+ * ⚠ `white-space: pre-wrap` collapses a FINAL line break, so a draft ending in Enter makes the
+ * mirror one line shorter than the field and every scroll offset after it wrong by a line. The
+ * textarea does not collapse it, which is precisely the disagreement this closes.
+ * ⚠ **IT IS A FUNCTION SO BOTH RETURNS CAN PAY IT** — see the cheap exit above, which for two
+ * weeks did not, and put the caret a line off the words in every untagged multi-line draft.
+ */
+function trailingLine(text: string) {
+  return text.endsWith("\n") ? <span>{"​"}</span> : null;
 }
