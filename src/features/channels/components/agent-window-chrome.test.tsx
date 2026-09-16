@@ -14,8 +14,13 @@
  *    badge/thinking badges and stuff to the left of the expand and X buttons"*). A reshuffle
  *    renders perfectly well; it is only WRONG.
  *  - **THE ACTIVE TAB IS UNDERLINED AND THE OTHERS ARE NOT** (*"the active tab is underlined"*).
- *  - **A TAB IS FIXED WIDTH AND TRUNCATES** (*"It's a fixed size, and it does not get cut off"*) —
- *    a long agent name must not stretch the strip.
+ *  - **A TAB HUGS ITS LABEL, CAPS, AND TRUNCATES** (Samuel, 2026-09-15: *"Make it unfixed so that
+ *    the tab will only go as long as the name is and the X will just be to the right of that"* —
+ *    superseding the 2026-09-13 `w-[180px]` reading of *"It's a fixed size"*, whose surviving half
+ *    is *"and it does not get cut off"*, i.e. the `truncate`). A long agent name must still not
+ *    stretch the strip.
+ *  - **THE LABEL IS BOLD AND AN INACTIVE TAB LIGHTS UP GRAY** (2026-09-15). Both are invisible to
+ *    jsdom and both are the kind of thing a refactor silently drops.
  *  - **THE BAR IS THE DRAG REGION AND THE CONTROLS OPT OUT.** Asserted over SOURCE: jsdom silently
  *    drops `-webkit-app-region`, so a render assertion would pass while the window sat frozen.
  *  - **THE BUTTONS RENDER ONLY WHEN THEY CAN ACT** — the feature-detection rule (INVARIANTS §11).
@@ -26,6 +31,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { AgentWindowChrome } from "./agent-window-chrome";
+import { AGENT_TAB_TEXT } from "./agent-window-frame";
 
 afterEach(() => {
   cleanup();
@@ -114,15 +120,67 @@ describe("the chrome, left to right", () => {
     expect(document.querySelectorAll("[data-tab-underline]").length).toBe(1);
   });
 
-  it("gives every tab a FIXED width and a truncated label", () => {
+  /**
+   * 🔒 *"Looking at the top you can see I want the name of the tab, like 'New Agent', to be bolded.
+   * Right now you see all this blank space between where the name is and where the X is. That is
+   * too much blank space. I notice that right now the tab looks like it's a fixed size. Make it
+   * unfixed so that the tab will only go as long as the name is and the X will just be to the right
+   * of that. Of course if the name is super long then you should fix it to a certain width so we
+   * don't have too much overflow."* (Samuel, 2026-09-15)
+   *
+   * 🔒 MUTATION-PROOF: put `w-[180px]` back on `TAB_WIDTH` and the first expectation fails; drop
+   * the cap entirely and the second does; drop `truncate` and the third.
+   */
+  it("hugs its label up to a CAP, and truncates rather than stretching the strip", () => {
     installWindowOps();
     mountChrome({
       tabs: [{ key: TABS[0]!.key, name: "an agent with a very long operator-given name" }],
     });
     const tab = screen.getByRole("tab");
+    const box = tab.parentElement!;
+    // ⚠ NO WIDTH AT ALL — the blank space before the × was a fixed box, not padding.
+    // ⚠ `(^|\s)` AND NOT `\b` — a word boundary matches INSIDE `max-w-[200px]`, so the naive
+    // pattern would fail on exactly the class this ruling asks for.
+    expect(box.className).not.toMatch(/(^|\s)w-\[\d+px\]/);
+    // ⚠ AND A CEILING, so *"if the name is super long"* ends in an ellipsis inside the tab.
+    expect(box.className).toMatch(/\bmax-w-\[\d+px\]/);
+    expect(box.className).toContain("shrink-0");
     expect(tab.className).toContain("truncate");
-    expect(tab.parentElement?.className).toContain("w-[180px]");
-    expect(tab.parentElement?.className).toContain("shrink-0");
+    // ⚠ `flex-1` IS WHAT PADDED A SHORT NAME OUT TO THE OLD BOX. `min-w-0` is what still lets the
+    // label shrink once the cap is reached — the two look alike and only one of them is the bug.
+    expect(tab.className).not.toContain("flex-1");
+    expect(tab.className).toContain("min-w-0");
+  });
+
+  /** 🔒 *"I want the name of the tab, like 'New Agent', to be bolded."* — read off the CONSTANT so
+   *  the case cannot pass on a hand-typed weight the frame module does not own. */
+  it("bolds the label, through the frame's own tab recipe", () => {
+    installWindowOps();
+    mountChrome();
+    const tab = screen.getByRole("tab", { name: "#aaa" });
+    for (const part of AGENT_TAB_TEXT.split(" ")) {
+      expect(tab.className).toContain(part);
+    }
+    expect(tab.className).toContain("font-semibold");
+  });
+
+  /**
+   * 🔒 *"On the tabs when I hover over a different tab, it should highlight gray or something so I
+   * know that I can click on it."* (Samuel, 2026-09-15)
+   *
+   * ⚠ **ON THE INACTIVE ONES ONLY** — the active tab is where you already are, and a hover fill on
+   * it promises a state change that will not happen.
+   * ⚠ **THE FILL IS THE RAIL'S**, which is the one hover gray this window already draws; asserted
+   * by name so a second gray for the same act fails here rather than on screen.
+   */
+  it("lights an INACTIVE tab gray under the pointer, and leaves the active one alone", () => {
+    installWindowOps();
+    mountChrome();
+    const [active, idle] = screen.getAllByRole("tab").map((t) => t.parentElement!);
+    expect(idle!.className).toContain("hover:bg-surface-raised-2");
+    expect(idle!.className).toContain("cursor-pointer");
+    expect(active!.className).not.toContain("hover:bg-");
+    expect(active!.className).not.toContain("cursor-pointer");
   });
 
   it("selects on click and closes on the tab's own ×", () => {
@@ -158,14 +216,31 @@ describe("the chrome, left to right", () => {
     expect(screen.queryByRole("button", { name: "New agent" })).toBeNull();
   });
 
-  it("puts the ACTIVE tab's status to the LEFT of expand and close", () => {
+  /**
+   * 🔒 **THE CHROME CARRIES NOTHING ABOUT AN AGENT'S STATE, IN ANY STATE** (Samuel, 2026-09-15:
+   * *"I don't want the badges to be there"*, then — on seeing the Ended badge at the foot —
+   * *"for where you see 'running', 'thinking', or 'working' (all of those little things), put
+   * that in the same spot, basically on the same line as 'in main channel', but to the right"*).
+   *
+   * ⚠ **THIS CASE USED TO PIN THE OPPOSITE** — *"puts the ACTIVE tab's status to the LEFT of
+   * expand and close"*, the 2026-09-13 reading of *"move the ended badge/thinking badges … to the
+   * left of the expand and X buttons"*. That ruling is superseded: the badges left the bar
+   * entirely, and the right group is the two WINDOW buttons.
+   * ⚠ **THE PROP IS GONE, NOT EMPTY** (delete-don't-disarm), which is why this is a SOURCE read
+   * as well as a render: a re-added `status` slot would render nothing until somebody passed it,
+   * and then it would be back with no ruling behind it.
+   *
+   * 🔒 MUTATION-PROOF: re-add `{status}` to the right group and the source half fails; have the
+   * page pass a badge again and `agent-ended.test.tsx`'s page pin fails.
+   */
+  it("carries no agent status at all — the right group is the window's two buttons", () => {
     installWindowOps();
-    mountChrome({ status: <span>Thinking</span> });
-    const status = screen.getByText("Thinking");
-    const expand = screen.getByRole("button", { name: "Expand" });
-    expect(
-      status.compareDocumentPosition(expand) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    mountChrome();
+    expect(CODE).not.toContain("status");
+    expect(CODE).not.toContain("AgentLiveness");
+    const group = screen.getByRole("button", { name: "Expand" }).parentElement!;
+    expect(group.children).toHaveLength(2);
+    expect(group.textContent).toBe("");
   });
 
   it("renders no window buttons at all when the bridge cannot close or zoom", () => {

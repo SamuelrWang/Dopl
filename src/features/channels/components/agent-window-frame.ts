@@ -53,7 +53,36 @@ export const TILE_RADIUS = "rounded-[10px]";
  */
 export const RAIL_PAD = "px-2.5";
 
-/** Collapsed: one tile wide plus `RAIL_PAD`. ⚠ `w-14` IS 56px — the spec's number, unchanged. */
+/**
+ * 🔒 **THE COLLAPSED RAIL'S PADDING IS DELIBERATELY ASYMMETRIC, BECAUSE THE GUTTER IT HAS TO
+ * BALANCE IS** (Samuel, 2026-09-15: *"In the collapsed sidebar, there's still more spacing to the
+ * right of the individual agent icons. On the left side, I want the right side to have the same
+ * amount of distance to the icon as it is from the left side."*).
+ *
+ * ⚠ **`RAIL_PAD` WAS ALREADY SYMMETRIC (`px-2.5`), SO THE PADDING WAS NEVER WHAT HE WAS LOOKING
+ * AT.** What sits to the RIGHT of a collapsed tile is the rail's own padding PLUS {@link FRAME_GAP}
+ * before the white panel's edge — 10 + 12 = 22px against 10px on the left. The eye measures a tile
+ * against the two things that bound it (the window's edge and the panel's edge), and by that
+ * measure the icon was 12px off centre.
+ *
+ * ⚠ **THE ARITHMETIC, AND IT KEEPS THE RAIL AT 56px SO NOTHING ELSE MOVES.** Window edge → panel
+ * edge is `RAIL_COLLAPSED` (56) + `FRAME_GAP` (12) = 68; centring a 36px `TILE` in it wants 16 on
+ * each side, so the rail carries `pl-4` (16) and `pr-1` (4) — and 4 + 12 = 16 on the right.
+ * **16 + 36 + 4 = 56**: the column width, the frame's grid and therefore the panel's left edge are
+ * all untouched, which is the only version of this fix that does not re-open *"the right side just
+ * gets completely cut off"*.
+ * ⚠ **THE MARK TAKES IT TOO.** `agent-window-chrome.tsx` puts the Dopl logo in a slot of the rail's
+ * width with the rail's padding (*"That kind of needs to be normalized"*), so the chrome reads this
+ * through its `railPad` prop rather than deriving collapsed-ness — the same rule `railWidth`
+ * follows.
+ * ⚠ **EXPANDED KEEPS `RAIL_PAD`.** Samuel looked at the expanded rail in the same pass and ruled it
+ * fine (*"Actually, that looks fine"*); a 140px rail's rows are wide enough that the 12px gap does
+ * not read as a lopsided gutter around a 36px mark.
+ */
+export const RAIL_PAD_COLLAPSED = "pl-4 pr-1";
+
+/** Collapsed: one tile wide plus `RAIL_PAD_COLLAPSED`. ⚠ `w-14` IS 56px — the spec's number,
+ *  unchanged, and {@link RAIL_PAD_COLLAPSED} is asymmetric precisely so it stays that way. */
 export const RAIL_COLLAPSED = "w-14";
 
 /**
@@ -93,6 +122,41 @@ export const CHROME_ROW = "h-[44px]";
  * docblock records at its own call site).
  */
 export const AGENT_NAME_TEXT = "text-body font-normal";
+
+/**
+ * 🔒 **THE TAB'S LABEL IS THE SAME SIZE AND A HEAVIER WEIGHT** (Samuel, 2026-09-15: *"Looking at
+ * the top you can see I want the name of the tab, like 'New Agent', to be bolded."*).
+ *
+ * ⚠ **THIS NARROWS THE 2026-09-13 "ONE TYPE RECIPE FOR A TAB LABEL AND A RAIL ROW" EQUALITY TO THE
+ * SIZE, AND ONLY TO THE SIZE.** `text-body` is still the shared step — the ruling that rejected
+ * `TEMPLATE_NAME_TEXT`'s 14px face stands — and the rail row keeps {@link AGENT_NAME_TEXT}'s
+ * regular weight. What changed is that a TAB is the window's own title row, which is what Samuel
+ * asked to read as one.
+ * ⚠ **A SECOND CONSTANT RATHER THAN `font-semibold` BESIDE `AGENT_NAME_TEXT` AT THE CALL SITE.**
+ * Both are `font-weight` utilities, so which one wins is Tailwind's EMIT order and not the class
+ * attribute's — the same trap `select-menu.tsx › TRIGGER_FACE` records ("font size/padding live in
+ * the variant so a caller's `className` never fights them in Tailwind's emit order").
+ * ⚠ **SIZE AND WEIGHT ONLY, NO INK** — for {@link AGENT_NAME_TEXT}'s own reason: an active tab and
+ * an idle one are two colours of one recipe.
+ */
+export const AGENT_TAB_TEXT = "text-body font-semibold";
+
+/**
+ * 🔒 **A TAB HUGS ITS LABEL, UP TO THIS** (Samuel, 2026-09-15: *"Right now you see all this blank
+ * space between where the name is and where the X is. That is too much blank space. … Make it
+ * unfixed so that the tab will only go as long as the name is and the X will just be to the right
+ * of that. Of course if the name is super long then you should fix it to a certain width so we
+ * don't have too much overflow."*).
+ *
+ * ⚠ **IT SUPERSEDES THE FIXED `w-[180px]`** that carried the 2026-09-13 reading of *"It's a fixed
+ * size, and it does not get cut off"* — the second half of that sentence is what survives, and it
+ * is the `truncate` on the label, not the box. A three-letter handle no longer buys 180px of dead
+ * space before its ×.
+ * ⚠ **A MAX, NOT A WIDTH**: past it the LABEL ellipsizes inside the tab and the × stays on screen,
+ * which is the whole of *"we don't have too much overflow"*. 200px is one step over the 180 it
+ * replaces, so the longest name that used to fit still fits.
+ */
+export const TAB_MAX = "max-w-[200px]";
 
 /** The second line of a rail row — the agent's STATE, never a timestamp. One step down the scale. */
 export const AGENT_STATE_TEXT = "text-caption text-text-secondary";

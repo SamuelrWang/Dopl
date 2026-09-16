@@ -155,6 +155,64 @@ completely cut off … the top right, all of those things just get pushed out"*)
 Pinned in `channels/components/agent-window-frame.test.ts` and
 `apps/desktop-ui/src/pages/agent-window/frame.test.ts`.
 
+🔒 **AND SAMUEL'S 2026-09-15 PASS OVER THAT WINDOW MOVED FIVE OF ITS RULES.** Each is still an
+equality or an absence, and each is pinned in
+`channels/components/agent-window-frame.test.ts` / `› agent-window-chrome.test.tsx` /
+`› agent-window-rail.test.tsx` / `› agent-window-ended.test.tsx`:
+
+- **A tab label and a rail row are one type SIZE, in TWO weights.** `AGENT_TAB_TEXT`
+  (`text-body font-semibold`) is the tab, `AGENT_NAME_TEXT` (`text-body font-normal`) is the rail
+  row — *"I want the name of the tab, like 'New Agent', to be bolded."* ⚠ **A second constant, not
+  `font-semibold` beside `AGENT_NAME_TEXT` at the call site**: two `font-weight` utilities on one
+  element are resolved by Tailwind's EMIT order, which is the trap `SelectMenu`'s variant row
+  already records.
+- **A tab HUGS its label and caps at `TAB_MAX` (200px).** *"Make it unfixed so that the tab will
+  only go as long as the name is and the X will just be to the right of that. … if the name is
+  super long then you should fix it to a certain width."* ⚠ This **supersedes the `w-[180px]`
+  reading of the 2026-09-13 *"It's a fixed size"*** — the surviving half of that sentence is *"and
+  it does not get cut off"*, i.e. the `truncate` on the label, not the box. The active tab's
+  underline is `inset-x-0`, so it follows the new width for free.
+- **An INACTIVE tab's hover fill is `bg-surface-raised-2`** (*"it should highlight gray or
+  something so I know that I can click on it"*), with `cursor-pointer`. ⚠ **Measured off this
+  window, not picked**: that is the rail's hover AND its `ROW_SELECTED_FACE`, and a tab and a rail
+  row are already one object in two places. The ACTIVE tab takes neither.
+- 🔒 **The collapsed rail's padding is asymmetric — `RAIL_PAD_COLLAPSED` (`pl-4 pr-1`) — and that
+  is the fix, not the bug.** *"In the collapsed sidebar, there's still more spacing to the right of
+  the individual agent icons. … I want the right side to have the same amount of distance to the
+  icon as it is from the left side."* ⚠ **`RAIL_PAD`'s `px-2.5` was ALREADY symmetric**, so the
+  padding was never what he was looking at: `FRAME_GAP` sits to the right of the column, so the
+  gutter measured 10px left against 10 + 12 right. `16 + 36 + 4 = 56` keeps the rail at its
+  spec width and `4 + 12 = 16` balances it — the panel's left edge does not move. **Expanded keeps
+  `RAIL_PAD`** (*"Actually, that looks fine"*).
+- **No "AGENTS" heading in the expanded rail** (*"remove the line that says the word 'agents.' …
+  It's obvious to the user."*) — the minimal-copy rule over a label above a list of agent names in
+  a `<nav aria-label="Other agents">`, which is what still carries the fact for a screen reader.
+- 🔒 **THE AGENT'S BADGE — ENDED *AND* LIVE — RIDES THE THREAD LINE, RIGHT-ALIGNED, AND THE
+  CHROME'S CORNER SAYS NOTHING ABOUT AN AGENT.** Samuel moved it twice on 2026-09-15: *"I don't
+  want the badges to be there. … 'Ended by you' should be the badge"*, then, on seeing it at the
+  foot, *"put it on the right of the line where it says 'in main channel'. Similarly, for where you
+  see 'running', 'thinking', or 'working' (all of those little things), put that in the same spot …
+  but to the right, aligned to the right."* `channels/components/agent-window.tsx › AgentWorkingOn`
+  is now a `flex items-center` row: the `↳ in <thread>` half is `min-w-0 flex-1` and TRUNCATES, the
+  badge is `shrink-0` — `agent-bits.tsx › AgentLiveness` for a live agent, `› AgentEndedPill`
+  (`bg-surface-cta` / `text-text-on-cta`) for a dead one, over **main's own end sentence**
+  (`dopl-desktop-app/main/session-effects.js › endedStatusText`), which `agent-stream-lanes.ts ›
+  splitEndNote` lifts out of the work log so the end is stated once. ⚠ **The chrome's `status` prop
+  is DELETED, not passed empty** (delete-don't-disarm) — the right group is Expand + Close. ⚠ **The
+  short-lived `AgentEndedFooter` is deleted with it**; do not re-derive a bottom-left badge from
+  this row. ⚠ The other surfaces are unchanged: the Agents-tab cards and the slide-out header still
+  say the bare "Ended" (`AgentEndedPill` took a `label` prop, not a second face), and the slide-out
+  panel ALREADY right-aligns its badge on the header row carrying its own `in <thread>` line
+  (`agent-panel.tsx › AgentPanelHeader`) — which is exactly the shape this ruling asks for, so it
+  was not touched. ⚠ The stream's live tail (`agent-stream-working.tsx`) stays: Samuel's 2026-09-14
+  *"not only in the header's corner"*.
+- **The pickers row sits the same distance from the line above it and the meter below it**
+  (*"Decrease the amount of padding there so that it is the same as the distance between the
+  pickers and the top"*) — `agent-posture.tsx`'s own `py-2.5` above, `mt-2.5` below. ⚠ **The
+  20px he saw was not a padding**: `shared/ui/usage-meter.tsx` defaults its `className` to `mt-3`
+  and that stacked on the block's margin, so the caller now passes `className=""` and one owner
+  holds the gap.
+
 The sidebar is a **region of level 1**, not a level of its own: it paints
 nothing — no fill, no border, no margin, no radius — and the nav chips stand
 directly on the panel gray.
@@ -456,11 +514,22 @@ message-box-agent component is deleted: an agent's post is a person's post plus 
   ringed-pill/side-bar language has nothing to attach to there. It keeps the agent's colour
   (ruling item 5) and its own geometry, which is why that constant now lives in that file rather
   than being imported from the transcript's side.
-- **The dot** — `channels/components/agent-color-dot.tsx`, `size-2`, `aria-hidden`, drawn
-  immediately before an agent's NAME on the Agents-tab cards and the pop-out rail
+- **The dot** — `channels/components/agent-color-dot.tsx › AgentColorDot`, `size-2`, `aria-hidden`,
+  drawn immediately before an agent's NAME on the Agents-tab cards and the EXPANDED pop-out rail
   rows. It renders NOTHING when there is no colour rather than a grey placeholder;
   the one surface that draws a grey dot is the transcript filter, where the row must
   stay aligned with its siblings.
+- 🔒 **The disc** — same file, `› AgentColorInitial`, `size-5`: the COLLAPSED pop-out rail's mark,
+  one agent's INITIAL inside a filled circle of that agent's colour (Samuel, 2026-09-15: *"I don't
+  like that it just looks like letters on the black background because there's nothing around it.
+  … Maybe it should be the color of the agents, so set a thing around it to that color."*). It
+  **supersedes the "collapsed draws no dot" half of the 2026-09-13 ruling** without breaking it:
+  there is still exactly one mark in the 36px tile, the letter just moved inside it. ⚠ **`size-5`
+  is the palette's own circle step** (`agent-color-circles.tsx › CIRCLE`), and the ink is
+  `--text-on-cta` — correct for the WHOLE bank by construction, because all sixteen
+  `--agent-color-NN` values are `oklch(0.44 …)`, one lightness. ⚠ **`null` keeps the LETTER and
+  drops the disc**, which is the opposite of the dot's rule and deliberately so: collapsed, that
+  letter is the only thing identifying the row.
 - **The filter** — `channels/components/transcript-filter.tsx`, immediately LEFT of the
   info-pane collapse toggle: **All** · **People** · one row per agent that has posted.
   "People" is the literal complement of the accent, so both it and the paint ask ONE

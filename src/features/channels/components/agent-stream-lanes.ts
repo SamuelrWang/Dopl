@@ -117,3 +117,61 @@ export function frameLane(entry: AgentNarrationEntry): StreamLane {
   if (lane === "channel" || lane === "sent") return "sent";
   return LANE_BY_KIND[kind] ?? "note";
 }
+
+/**
+ * 🔒 **MAIN'S OWN END NOTICE, LIFTED OUT OF THE LOG SO THE WINDOW CAN WEAR IT AS A BADGE**
+ * (Samuel, 2026-09-15: *"You see 'Ended by you.' Have 'Ended by you' be that black badge, right?
+ * 'Ended by you' should be the badge, and then there won't have to be a badge on the top right
+ * anymore."*).
+ *
+ * ⚠ **WHAT HE WAS POINTING AT IS A `status` FRAME, NOT A FOOTER THAT EXISTED.** `main/
+ * session-narration.js › noteEnded` pushes one line when a session ends, worded by
+ * `main/session-effects.js › endedStatusText` ("Ended by you" / "Ended after going inactive" /
+ * "Ended because a person joined this channel" / "Ended after being left parked"), and it lands in
+ * the `note` lane as the last muted row of the stream. So the badge's WORDS are already on the
+ * wire; what this does is take that one row out of the scrolling log and hand it to the window.
+ *
+ * ⚠ **IT MATCHES ON MAIN'S TEXT, WHICH IS A KNOWN COST AND THE SAME ONE `agent-stream-model.ts ›
+ * GATE_NOTE` ALREADY PAYS** — read that constant's note for the argument. **It fails in the safe
+ * direction:** an end notice this predicate does not recognise (a future reason, or
+ * `endedStatusText`'s raw-reason fallback, which returns the bare word for a reason its table has
+ * not learned) simply stays in the log as the muted line it is today. Nothing is ever hidden
+ * without being shown somewhere else.
+ *
+ * ⚠ **AND IT IS A PREFIX RATHER THAN THE FOUR SENTENCES**, because the four are main's to reword
+ * and "Ended…" is the shape all of them share. Listing them here would be a second copy of that
+ * table — the defect `agent-bits.tsx` opens with.
+ */
+const END_NOTE_PREFIX = "Ended";
+
+/**
+ * SPLIT ONE END NOTICE OFF THE FEED — `{ entries, endNote }`.
+ *
+ * ⚠ **THE LAST MATCH WINS AND EVERY MATCH IS REMOVED.** A retained ring can hold an earlier end
+ * (a reopened key), and two black pills for one agent is exactly the doubling the badge's own
+ * docblock refuses. The newest is the one that describes the agent on screen.
+ * ⚠ **`null` IN IS `null` OUT** — "could not ask" is not "no end notice", and collapsing the two
+ * here would make a browser render the window as a live agent's (INVARIANTS §11).
+ * ⚠ **IT ALLOCATES NOTHING WHEN THERE IS NO END**, which is every live agent on a surface that
+ * re-renders at telemetry rate: the array identity is returned unchanged so the stream's own
+ * memos do not invalidate.
+ */
+export function splitEndNote(entries: AgentNarrationEntry[] | null): {
+  entries: AgentNarrationEntry[] | null;
+  endNote: string | null;
+} {
+  if (!entries) return { entries, endNote: null };
+  let endNote: string | null = null;
+  for (const entry of entries) {
+    const text = typeof entry.text === "string" ? entry.text.trim() : "";
+    if (text.startsWith(END_NOTE_PREFIX) && frameLane(entry) === "note") endNote = text;
+  }
+  if (endNote === null) return { entries, endNote: null };
+  return {
+    entries: entries.filter((entry) => {
+      const text = typeof entry.text === "string" ? entry.text.trim() : "";
+      return !(text.startsWith(END_NOTE_PREFIX) && frameLane(entry) === "note");
+    }),
+    endNote,
+  };
+}

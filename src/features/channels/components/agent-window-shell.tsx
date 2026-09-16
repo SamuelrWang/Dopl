@@ -40,6 +40,8 @@ import {
   INSET_PANEL,
   RAIL_COLLAPSED,
   RAIL_EXPANDED,
+  RAIL_PAD,
+  RAIL_PAD_COLLAPSED,
 } from "./agent-window-frame";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import type { AgentColorKey } from "../types";
@@ -77,7 +79,6 @@ export function AgentWindowShell({
   onSelect,
   onCloseTab,
   onNewAgent,
-  status,
   logoSrc,
   sessions,
   onOpenSession,
@@ -92,7 +93,10 @@ export function AgentWindowShell({
    *  NO ×: absent, never disabled (INVARIANTS §11). */
   onCloseTab?: (key: string) => void;
   onNewAgent?: () => void;
-  status?: ReactNode;
+  /** ⚠ **THERE IS NO `status` SLOT SINCE 2026-09-15.** Samuel moved both badges — Ended and
+   *  liveness — onto the agent view's thread line (`agent-window.tsx › AgentWorkingOn`), and the
+   *  prop was DELETED rather than left empty, which is his own delete-don't-disarm rule. The
+   *  chrome's right group is the two window buttons and nothing about an agent. */
   logoSrc?: string;
   sessions: readonly DesktopSessionSummary[] | null;
   onOpenSession: (session: DesktopSessionSummary) => void;
@@ -108,6 +112,12 @@ export function AgentWindowShell({
   // a worse default than one that always opens the same way.
   const [collapsed, setCollapsed] = useState(true);
   const railWidth = collapsed ? RAIL_COLLAPSED : RAIL_EXPANDED;
+  // 🔒 THE PAD TRAVELS WITH THE WIDTH (2026-09-15). The collapsed rail's padding is asymmetric so
+  // the icon reads centred in the gutter between the window's edge and the panel's
+  // (`agent-window-frame.ts › RAIL_PAD_COLLAPSED`), and the Dopl mark sits in that same column —
+  // so the chrome has to be TOLD, for the same reason it is told the width rather than deriving
+  // collapsed-ness.
+  const railPad = collapsed ? RAIL_PAD_COLLAPSED : RAIL_PAD;
   return (
     // 🔒 THE GRAY GROUND — `bg-home-panel`, the site's own panel gray, by token.
     //
@@ -126,11 +136,11 @@ export function AgentWindowShell({
         onSelect={onSelect}
         onClose={onCloseTab}
         onNewAgent={onNewAgent}
-        status={status}
         logoSrc={logoSrc}
         // 🔒 THE ALIGNMENT: the strip starts at `railWidth + FRAME_GAP`, which IS the panel's left
         // edge, and the mark sits in the rail's own column above the toggle.
         railWidth={railWidth}
+        railPad={railPad}
       />
       {/* ⚠ THE INSET IS THE GAP, and it is `gap-3` on three sides plus the chrome above: the panel
           is "condensed to the right and under a little bit" exactly as asked, with the rail

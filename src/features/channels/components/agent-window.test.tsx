@@ -112,38 +112,43 @@ describe("the window names itself", () => {
 });
 
 /**
- * 🔒 **THE NAME AND THE STATUS BADGE LEFT THIS VIEW ON 2026-09-13 AND THE PIN FOLLOWED THEM.**
- * This case read *"carries the finer detail, not just Running"* off the window's own top bar; that
- * bar is the WINDOW's chrome now (`agent-window-chrome.tsx`), the name is the TAB's label and the
- * badge is the ACTIVE tab's — both built by the host page from the same
- * `agents-model.ts › agentLiveness` this case was really about, and asserted in
- * `agent-window-chrome.test.tsx` (status LEFT of expand/close) plus `agents-model`'s own suite
- * (the `detail` → "Running Bash" mapping).
+ * 🔒 **THE NAME LEFT THIS VIEW ON 2026-09-13; THE STATUS BADGE CAME BACK TO IT ON 2026-09-15.**
  *
- * ⚠ **WHAT IS PINNED HERE INSTEAD IS THE ABSENCE**, because that is this file's subject: the agent
- * VIEW must not restate either fact. A second copy of the name beside a tab that already says it is
- * the same fact twice — and it is the regression a re-added header would be.
- * ⚠ **AND THE THREAD LINE, WHICH IS THE ONE THING THE VIEW GAINED** (`AgentWorkingOn`): where this
- * agent is working was never said in the bar, and it is said here now.
+ * The 2026-09-13 pass moved both into the window's chrome — the name became the TAB's label and the
+ * badge the ACTIVE tab's — and this case was rewritten as an ABSENCE. Samuel then moved the badge
+ * twice in one day: off the top right (*"I don't want the badges to be there"*), to the foot, and
+ * finally onto the thread line — *"for where you see 'running', 'thinking', or 'working' (all of
+ * those little things), put that in the same spot, basically on the same line as 'in main channel',
+ * but to the right, aligned to the right."*
+ *
+ * ⚠ **SO THE ABSENCE THAT SURVIVES IS THE NAME'S, AND ONLY THE NAME'S.** A second copy of the name
+ * beside a tab that already says it is the same fact twice; the STATE is not — the chrome no longer
+ * says it at all (`agent-window-chrome.test.tsx`), so this row is its one home.
+ * ⚠ **THE STREAM'S LIVE TAIL IS THE SECOND SIGHTING AND IT IS SAMUEL'S 2026-09-14 RULING, NOT A
+ * DUPLICATION THIS PASS ADDED** (*"not only in the header's corner"* — `agent-stream-working.tsx`).
+ * The pair is the same pair as before; the corner moved down one row.
  */
-describe("the view says WHERE the agent is working, and restates nothing the chrome owns", () => {
-  it("shows the thread line and neither the name nor the status badge", async () => {
+describe("the thread line says WHERE the agent is working and HOW it is", () => {
+  it("carries the liveness on its right, and still not the agent's name", async () => {
     installBridge();
     await mount();
     expect(await screen.findByText("in UI-kit design")).toBeTruthy();
     // ⚠ THE COMPOSER STILL *ADDRESSES* THE AGENT ("Message flint"), which is an accessible name
     // and not a rendered label — so this is `queryByText`, the narrow claim.
     expect(screen.queryByText("flint")).toBeNull();
-    // ⚠ **THE STATUS HALF IS NARROWED BY SAMUEL'S 2026-09-14 RULING, NOT DROPPED.** This read
-    // `queryByText("Running Bash") === null` — "the view says nothing about liveness at all" —
-    // and the ruling supersedes exactly that: the working state must be visible AT THE POINT THE
-    // REPLY WILL APPEAR, so the stream now carries a live tail (`agent-stream-working.tsx`).
-    // What this file's subject still forbids is the CHROME's badge being restated here, so the
-    // claim becomes a COUNT plus a place: the word appears ONCE, and it is the stream's row
-    // (`role="status"`) rather than a second `agent-bits.tsx › AgentLiveness` pill.
+    // ⚠ TWO SIGHTINGS, EACH IN ITS OWN PLACE, AND THE TEST NAMES BOTH rather than counting: the
+    // thread row's `AgentLiveness` (a plain span) and the stream's live tail (`role="status"`).
+    // A count alone would pass if one of them silently became two of the other.
     const said = screen.queryAllByText("Running Bash");
-    expect(said).toHaveLength(1);
-    expect(said[0].getAttribute("role")).toBe("status");
+    expect(said).toHaveLength(2);
+    expect(said.filter((el) => el.getAttribute("role") === "status")).toHaveLength(1);
+    // 🔒 RIGHT-ALIGNED ON THE SAME ROW AS THE THREAD LINE — the ruling's own geometry: the badge
+    // and the "in <thread>" text share one parent, and the thread half is what truncates.
+    const badge = said.find((el) => el.getAttribute("role") !== "status")!;
+    const row = badge.parentElement!;
+    expect(row.textContent).toContain("in UI-kit design");
+    expect(row.className).toContain("items-center");
+    expect(row.querySelector(".truncate")).toBeTruthy();
   });
 });
 
@@ -382,6 +387,15 @@ describe("the 1:1 composer", () => {
     ).toBeTruthy();
   });
 });
+
+/**
+ * ⚠ **THE ENDED FACE LIVES IN `agent-window-ended.test.tsx` (§1 split, 2026-09-15).** This file was
+ * at the 500-line cap when Samuel's *"'Ended by you' should be the badge"* ruling landed, and the
+ * cap did what it is for: the end is a coherent surface of its own (the foot's pill, the notice
+ * lifted out of the log, the corner left empty) with its own reason to change. Both suites drive
+ * `agent-window-harness.tsx`; the `vi.mock` block is duplicated because those calls are hoisted per
+ * FILE and cannot be shared.
+ */
 
 describe("an agent that is not running", () => {
   it("says so once the feed has ANSWERED, and not before", async () => {

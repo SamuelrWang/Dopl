@@ -39,10 +39,11 @@ import {
   RAIL_COLLAPSED,
   RAIL_EXPANDED,
   RAIL_PAD,
+  RAIL_PAD_COLLAPSED,
   TILE,
   TILE_RADIUS,
 } from "./agent-window-frame";
-import { AgentColorDot } from "./agent-color-dot";
+import { AgentColorDot, AgentColorInitial } from "./agent-color-dot";
 import type { AgentColorKey } from "../types";
 
 /** ⚠ RE-EXPORTED, NOT RESTATED. The two widths moved into `agent-window-frame.ts` when the chrome
@@ -132,7 +133,11 @@ export function AgentWindowRail({
         // TRUNCATES (see `RAIL_EXPANDED`) — it must not be able to scroll sideways instead, which
         // would be the rail quietly granting itself the width Samuel took away.
         "flex shrink-0 flex-col gap-1 overflow-y-auto overflow-x-hidden pb-3 transition-[width]",
-        RAIL_PAD,
+        // 🔒 THE COLLAPSED PAD IS ASYMMETRIC ON PURPOSE (Samuel, 2026-09-15) — `FRAME_GAP` sits to
+        // the right of this column, so equal padding put the icon 12px left of centre in the
+        // gutter the eye actually measures. `agent-window-frame.ts › RAIL_PAD_COLLAPSED` carries
+        // the arithmetic and the reason the rail is still 56px wide.
+        collapsed ? RAIL_PAD_COLLAPSED : RAIL_PAD,
         collapsed ? RAIL_COLLAPSED : RAIL_EXPANDED
       )}
     >
@@ -152,11 +157,11 @@ export function AgentWindowRail({
         <PanelLeft size={14} aria-hidden="true" className="shrink-0" />
         {collapsed ? null : <span className="truncate">Collapse</span>}
       </button>
-      {collapsed ? null : (
-        <h2 className="px-2 pt-1.5 text-label font-semibold uppercase tracking-wide text-text-secondary">
-          Agents
-        </h2>
-      )}
+      {/* 🔒 **NO "AGENTS" HEADING** (Samuel, 2026-09-15: *"When I expand it, remove the line that
+          says the word 'agents.' I need that. It's obvious to the user."*) — the minimal-copy
+          ruling (INVARIANTS §5) applied to a label over a list of agent names in a panel whose own
+          accessible name is already "Other agents". ⚠ The `aria-label` on the `<nav>` is what
+          carries that fact for a screen reader, so nothing was lost by deleting the words. */}
       {rows.map((session) => {
         const key = keyFor(session);
         const name = agentDisplayName(session);
@@ -182,9 +187,20 @@ export function AgentWindowRail({
               // that re-inked a dot itself would be a second mapping from state to colour.
               // ⚠ THE SPAN NO LONGER SIZES ANYTHING — the ROW is the square now, so this is the
               // glyph alone. A `h-6 w-full` here was half of why the tint was not square.
-              <span aria-hidden="true" className={cn(AGENT_NAME_TEXT, "text-text-secondary")}>
-                {name.replace(/^#/, "").charAt(0).toUpperCase() || "?"}
-              </span>
+              //
+              // 🔒 **AND SINCE 2026-09-15 THE LETTER SITS IN THE AGENT'S OWN COLOUR** (Samuel:
+              // *"I don't like that it just looks like letters on the black background because
+              // there's nothing around it. I think we should have it be a color. Maybe it should
+              // be the color of the agents, so set a thing around it to that color."*).
+              // ⚠ **THIS SUPERSEDES THE "COLLAPSED DRAWS NO DOT" HALF OF THE 2026-09-13 RULING**
+              // (kept in the expanded branch below): there is no second mark here — the circle IS
+              // the mark, and the initial is inside it, so the square still holds exactly one.
+              // ⚠ **THE SAME KEY THE EXPANDED ROW'S DOT TAKES** — `colorFor`, one resolver, so the
+              // two shapes of this row cannot name two hues for one agent.
+              <AgentColorInitial
+                color={colorFor?.(session) ?? null}
+                initial={name.replace(/^#/, "").charAt(0).toUpperCase() || "?"}
+              />
             ) : (
               <span className="flex min-w-0 flex-col">
                 {/* 🔒 THE TAB LABEL'S OWN TYPE, one constant (`AGENT_NAME_TEXT`) — a tab and a rail

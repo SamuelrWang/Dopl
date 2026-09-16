@@ -12,8 +12,16 @@
  * The three properties, each of which fails silently:
  *
  *  - **THE PILL, IN ALL THREE PLACES AN AGENT IS NAMED** — the Agents tab's card,
- *    the slide-out panel's header, the agent window's header. A surface that
- *    forgets it shows a dead agent as a live one.
+ *    the slide-out panel's header, and the agent window. A surface that forgets it
+ *    shows a dead agent as a live one.
+ *    🔒 ⚠ **IN THE POP-OUT IT IS THE THREAD LINE, NOT THE HEADER, SINCE 2026-09-15.**
+ *    Samuel moved it off the top right (*"I don't want the badges to be there"*), saw it
+ *    at the foot, and moved it again: *"put it on the right of the line where it says 'in
+ *    main channel'. Similarly, for where you see 'running', 'thinking', or 'working' …
+ *    put that in the same spot … but to the right, aligned to the right."* So BOTH badges
+ *    live on `agent-window.tsx › AgentWorkingOn` and the chrome's `status` slot is
+ *    DELETED. The RENDER half is `agent-window-ended.test.tsx`; what is pinned here is
+ *    that the page builds no badge for the chrome at all.
  *  - **THE COMPOSER IS GONE, NOT DISABLED.** A disabled box reads as "not right
  *    now" — a state that will pass — which is the opposite of what ended means.
  *  - **AN IN-FLIGHT SEND STILL GETS ITS ANSWER.** If the agent ends between Send
@@ -22,6 +30,8 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { AgentsTab } from "./agents-tab";
@@ -291,5 +301,42 @@ describe("the agent window picks the agent the URL names", () => {
   it("finds nothing when the named agent is gone", () => {
     // Better than silently showing a different agent's window under its id.
     expect(pick([A, B], "zzzzzzzz")).toBeNull();
+  });
+});
+
+
+/**
+ * 🔒 **AND THE POP-OUT'S CORNER IS EMPTY IN EVERY STATE** (Samuel, 2026-09-15).
+ *
+ * ⚠ **SOURCE, BECAUSE THE SLOT IS BUILT IN THE SPA PAGE** — `apps/desktop-ui/src/pages/
+ * agent-window/index.tsx` composes the `status` node and hands it to the chrome, and that tree is
+ * outside this suite's mount. The same argument `agent-window-chrome.test.tsx`'s drag-region case
+ * and `pages/agent-window/frame.test.ts` both give.
+ *
+ * 🔒 MUTATION-PROOF: hand the shell a badge again — either one — and a `status=` prop comes back
+ * with it, which is what the third expectation is for. The chrome's own half is
+ * `agent-window-chrome.test.tsx`.
+ */
+describe("the agent window's chrome carries no agent badge", () => {
+  /** ⚠ CODE ONLY — the page argues about the move in prose, and a raw read matches the comment
+   *  recording the decision rather than the JSX making it. */
+  const page = readFileSync(
+    join(import.meta.dirname, "../../../../apps/desktop-ui/src/pages/agent-window/index.tsx"),
+    "utf8"
+  )
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n")
+    .filter((line) => !/^\s*\/\//.test(line))
+    .join("\n");
+
+  it("builds no badge of either kind, and hands the shell no status at all", () => {
+    expect(page).not.toContain("AgentEndedPill");
+    // ⚠ **THE LIVENESS WENT WITH IT**, which is the half the first version of this move kept:
+    // `agentLiveness` answers `{ tone: "ended", label: "Ended" }`, so a chrome that still drew
+    // liveness put the very word Samuel moved back in the very corner he moved it out of.
+    expect(page).not.toContain("AgentLiveness");
+    expect(page).not.toContain("agentLiveness");
+    // ⚠ DELETED, NOT PASSED `null` — a slot nothing fills is the seam the next edit fills back in.
+    expect(page).not.toMatch(/\bstatus=/);
   });
 });

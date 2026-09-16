@@ -63,3 +63,71 @@ export function AgentColorDot({
     />
   );
 }
+
+/**
+ * 🔒 **THE COLLAPSED RAIL'S MARK — one agent's INITIAL inside a disc of that agent's colour**
+ * (Samuel, 2026-09-15: *"I don't like that it just looks like letters on the black background
+ * because there's nothing around it. I think we should have it be a color. Maybe it should be the
+ * color of the agents, so set a thing around it to that color. That's the color of the agents."*).
+ *
+ * ⚠ **IT LIVES HERE AND NOT IN THE RAIL FOR {@link AgentColorDot}'s OWN REASON** — this file is
+ * where a key becomes a list mark, and a second local `rounded-full` painted from
+ * `agentColorVar` is exactly the drift that argument is about. Same module, two scales of one
+ * mark: the 8px dot beside a name, this disc when the name is gone.
+ *
+ * ⚠ **THE DISC IS `size-5` (20px), WHICH IS THE PALETTE'S OWN CIRCLE STEP** —
+ * `agent-color-circles.tsx › CIRCLE` is `h-5 w-5`, the size Samuel's *"multiple little circles"*
+ * ruling minted for the launch popup's colour row. Measured on the tree's spacing scale, not an
+ * arbitrary `w-[20px]`, and it sits inside the rail's 36px `TILE` with room for the selected
+ * row's tint to read around it.
+ *
+ * ⚠ **THE INK IS `--text-on-cta`, THE APP'S ONE ON-DARK TOKEN** — `attribution-pill.tsx ›
+ * AgentChip` states the rule (*"not `text-white`: a literal white is a colour a restyle cannot
+ * follow"*), and it is safe across the WHOLE bank rather than per hue: all sixteen
+ * `--agent-color-NN` values are `oklch(0.44 …)`, one lightness, so one on-colour ink is correct
+ * for every key by construction.
+ */
+const INITIAL_DISC =
+  "inline-flex size-5 shrink-0 items-center justify-center rounded-full text-caption font-medium leading-none";
+
+export function AgentColorInitial({
+  color,
+  initial,
+  className,
+}: {
+  /**
+   * ⚠ **`null` KEEPS THE LETTER AND DROPS THE DISC — it does NOT render nothing.** That is the
+   * opposite of {@link AgentColorDot}'s rule and the difference is what the mark is FOR: a dot is
+   * redundant decoration beside a name the reader can already see, so an uncoloured one is noise;
+   * this letter is the ONLY thing identifying the row in a collapsed rail, so an agent with no
+   * colour must still be recognisable and clickable. Same box either way, so nothing shifts when
+   * a key arrives.
+   */
+  color: AgentColorKey | null;
+  /** Already reduced to one character by the caller — the rail owns its `#` handling. */
+  initial: string;
+  className?: string;
+}) {
+  return (
+    <span
+      /* ⚠ THE KEY AS DATA, never read back by this tree — {@link AgentColorDot}'s own precedent,
+         and it is what lets the rail's suite assert WHICH agent this disc belongs to. */
+      data-agent-color={color ?? undefined}
+      /* ⚠ **`aria-hidden`, AND THE CALLER OWES THE NAME** — {@link AgentColorDot}'s rule, for the
+         same reason plus a sharper one. A single letter is not a name: "F" announced at a screen
+         reader identifies nothing, and a rail of single letters would be a list of alphabet. The
+         collapsed rail carries `title={`${name} — ${live.label}`}` on the button precisely so the
+         accessible name is the agent's, and an un-hidden letter here would OUTRANK that title in
+         the accessible-name computation and replace it with the initial. */
+      aria-hidden
+      className={cn(
+        INITIAL_DISC,
+        color ? "text-text-on-cta" : "text-text-secondary",
+        className
+      )}
+      style={color ? { backgroundColor: agentColorVar(color) } : undefined}
+    >
+      {initial}
+    </span>
+  );
+}

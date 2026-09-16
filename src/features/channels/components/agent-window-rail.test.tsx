@@ -28,9 +28,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import type { AgentColorKey } from "../types";
 import { AgentWindowRail, ROW_SELECTED_FACE } from "./agent-window-rail";
 import { AgentWindowShell } from "./agent-window-shell";
-import { TILE } from "./agent-window-frame";
+import { FRAME_GAP, RAIL_PAD, RAIL_PAD_COLLAPSED, TILE } from "./agent-window-frame";
 
 afterEach(cleanup);
 
@@ -137,12 +138,56 @@ describe("the toggle is one control in both states", () => {
     expect(shut.textContent).toBe("");
   });
 
-  it("heads the list with Agents only when there is room for the word", () => {
+  /**
+   * 🔒 *"When I expand it, remove the line that says the word 'agents.' I need that. It's obvious
+   * to the user."* (Samuel, 2026-09-15)
+   *
+   * ⚠ **IT WAS PINNED THE OTHER WAY UNTIL TODAY** — this case asserted the heading was PRESENT
+   * when expanded. The minimal-copy ruling (INVARIANTS §5) reaches a label over a list of agent
+   * names inside a panel already named "Other agents", and the `aria-label` on the `<nav>` is what
+   * keeps that fact reachable without any visible words.
+   * 🔒 MUTATION-PROOF: put the `<h2>` back and this fails in BOTH states.
+   */
+  it("heads the list with nothing — no AGENTS label, expanded or collapsed", () => {
     mountRail({ collapsed: false });
-    expect(screen.getByRole("heading", { name: "Agents" })).toBeTruthy();
+    expect(screen.queryByRole("heading")).toBeNull();
+    expect(screen.queryByText(/agents/i)).toBeNull();
     cleanup();
     mountRail({ collapsed: true });
-    expect(screen.queryByRole("heading", { name: "Agents" })).toBeNull();
+    expect(screen.queryByRole("heading")).toBeNull();
+    // ⚠ THE PANEL'S OWN NAME SURVIVES, which is what the heading was standing in for.
+    expect(screen.getByRole("navigation", { name: "Other agents" })).toBeTruthy();
+  });
+});
+
+/**
+ * 🔒 **THE COLLAPSED COLUMN IS PADDED SO THE ICON READS CENTRED BETWEEN THE WINDOW'S EDGE AND THE
+ * PANEL'S** (Samuel, 2026-09-15: *"In the collapsed sidebar, there's still more spacing to the
+ * right of the individual agent icons. On the left side, I want the right side to have the same
+ * amount of distance to the icon as it is from the left side."*).
+ *
+ * ⚠ **THE ARITHMETIC IS PINNED IN `agent-window-frame.test.ts`** — what is pinned HERE is that the
+ * rail actually WEARS the collapsed pad in one state and the expanded pad in the other, which is
+ * the half that can silently regress to one constant for both.
+ */
+describe("the collapsed rail's padding is the gutter's, not the column's", () => {
+  it("swaps the pad with the state", () => {
+    mountRail({ collapsed: true });
+    const rail = screen.getByRole("navigation", { name: "Other agents" });
+    for (const part of RAIL_PAD_COLLAPSED.split(" ")) {
+      expect(rail.className.split(/\s+/)).toContain(part);
+    }
+    expect(rail.className.split(/\s+/)).not.toContain(RAIL_PAD);
+    cleanup();
+    mountRail({ collapsed: false });
+    const open = screen.getByRole("navigation", { name: "Other agents" });
+    // 🔒 EXPANDED IS UNTOUCHED — *"Actually, that looks fine."*
+    expect(open.className.split(/\s+/)).toContain(RAIL_PAD);
+    for (const part of RAIL_PAD_COLLAPSED.split(" ")) {
+      expect(open.className.split(/\s+/)).not.toContain(part);
+    }
+    // The gap this asymmetry is balancing is the shell's, and it is a real constant.
+    expect(FRAME_GAP).toMatch(/^gap-\d/);
   });
 });
 
@@ -226,6 +271,61 @@ describe("the rail's colour dot, as the pop-out actually mounts it", () => {
   it("draws the key the feed reports", () => {
     mountShell([session({ agentId: "abc123", color: "agent-07" })]);
     expect(document.querySelector('[data-agent-color="agent-07"]')).toBeTruthy();
+  });
+
+  /**
+   * 🔒 **COLLAPSED, THE INITIAL SITS IN A DISC OF THAT AGENT'S COLOUR** (Samuel, 2026-09-15: *"I
+   * don't like that it just looks like letters on the black background because there's nothing
+   * around it. I think we should have it be a color. Maybe it should be the color of the agents,
+   * so set a thing around it to that color."*).
+   *
+   * ⚠ **THIS SUPERSEDES THE 2026-09-13 "COLLAPSED DRAWS NO DOT" HALF** — there is still exactly one
+   * mark in the square; the letter moved inside it.
+   * ⚠ **THE PAINT IS A `var()` REFERENCE, NEVER A HEX** (`lib/agent-colors.ts › agentColorVar` is
+   * the only place the token name is spelled), and the INK is the app's one on-dark token rather
+   * than `text-white`.
+   * 🔒 MUTATION-PROOF: put the bare `<span>` back in the rail's collapsed branch and this fails
+   * while every other case in this file passes.
+   */
+  it("wraps the collapsed initial in the agent's own colour", () => {
+    render(
+      <AgentWindowRail
+        sessions={[session({ agentId: "abc123", displayName: "flint", color: "agent-07" })]}
+        activeKey=""
+        collapsed
+        onToggle={vi.fn()}
+        onOpen={vi.fn()}
+        keyFor={keyFor}
+        colorFor={(s) => (s.color as AgentColorKey | undefined) ?? null}
+      />
+    );
+    const disc = document.querySelector('[data-agent-color="agent-07"]') as HTMLElement;
+    expect(disc).toBeTruthy();
+    expect(disc.textContent).toBe("F");
+    expect(disc.className).toContain("rounded-full");
+    expect(disc.className).toContain("text-text-on-cta");
+    expect(disc.getAttribute("style")).toContain("var(--agent-color-07)");
+    // ⚠ THE NAME IS STILL THE BUTTON'S, not the letter's — a rail of single letters announced as
+    // names is unusable, which is why the disc stays `aria-hidden`.
+    expect(screen.getByRole("button", { name: /flint/ })).toBeTruthy();
+  });
+
+  /** ⚠ AN AGENT WITH NO COLOUR KEEPS ITS LETTER — the opposite of the DOT's rule, because
+   *  collapsed the letter is the only thing identifying the row. */
+  it("keeps the collapsed initial readable when there is no colour to wear", () => {
+    render(
+      <AgentWindowRail
+        sessions={[session({ agentId: "abc123", displayName: "flint" })]}
+        activeKey=""
+        collapsed
+        onToggle={vi.fn()}
+        onOpen={vi.fn()}
+        keyFor={keyFor}
+        colorFor={() => null}
+      />
+    );
+    expect(document.querySelectorAll("[data-agent-color]")).toHaveLength(0);
+    expect(screen.getByRole("button", { name: /flint/ }).textContent).toBe("F");
   });
 
   /** ⚠ NARROWED, NEVER CAST: a seventeenth key from a newer desktop must read as NO COLOUR, not

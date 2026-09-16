@@ -43,6 +43,8 @@ import { useChannelPreferenceWrites } from "../hooks/use-channel-preference-writ
 import { useChannelsLive } from "./live";
 import { agentSentMessages } from "./agent-panel";
 import { AgentStream } from "./agent-stream";
+import { splitEndNote } from "./agent-stream-lanes";
+import { AgentEndedPill, AgentLiveness } from "./agent-bits";
 import { NO_THREAD_LABEL, agentDisplayName, agentLiveness } from "./agents-model";
 import { formatTokens, metric } from "./agent-metrics";
 import { viewerPerson } from "./view-model";
@@ -128,7 +130,21 @@ export function ChannelsAgentWindow({
   // `agentId` above is the URL's, which main does not emit yet; `agent.agentId`
   // is what the FEED says the agent on screen is, so the work lane keys on the
   // agent whose header is above it either way.
-  const { entries, supported } = useAgentNarration(channelId, taskId, agent?.agentId);
+  const { entries: narration, supported } = useAgentNarration(
+    channelId,
+    taskId,
+    agent?.agentId
+  );
+  // 🔒 **THE END NOTICE LEAVES THE LOG AND BECOMES THE THREAD LINE'S BADGE** (Samuel, 2026-09-15 —
+  // see {@link AgentWorkingOn} and `agent-stream-lanes.ts › splitEndNote`).
+  // ⚠ **ONLY FOR AN AGENT THE FEED CALLS ENDED.** A retained ring can still hold an end from a
+  // key that was reopened; splitting unconditionally would delete a line about a PAST life of a
+  // LIVE agent and show it nowhere, which is the one outcome this move must not produce.
+  const ended = agent?.state === "ended";
+  const { entries, endNote } = useMemo(
+    () => (ended ? splitEndNote(narration) : { entries: narration, endNote: null }),
+    [ended, narration]
+  );
   // The Sent lane reads the channel transcript, exactly as the panel's does.
   const { messages, refetch: refetchMessages } = useChannelMessages(
     channelId,
@@ -243,8 +259,10 @@ export function ChannelsAgentWindow({
     // ALL of them are needed: the chain is only as good as its weakest.
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* ⚠ WHICH THREAD, KEPT — it moved OUT of the chrome with the tabs (the strip already says
-          which agent, so the name was said twice; where it is WORKING was not said at all). */}
-      <AgentWorkingOn agent={agent} />
+          which agent, so the name was said twice; where it is WORKING was not said at all).
+          🔒 **AND SINCE 2026-09-15 IT CARRIES THE AGENT'S BADGE ON ITS RIGHT** — see the
+          component. */}
+      <AgentWorkingOn agent={agent} endNote={endNote} />
       {agent ? (
         <PostureControls
           agent={agent}
@@ -275,21 +293,73 @@ export function ChannelsAgentWindow({
         taskId={taskId}
         agentId={agent?.agentId}
         name={agent ? agentDisplayName(agent) : null}
-        ended={agent?.state === "ended"}
+        ended={ended}
         className="px-4"
       />
     </div>
   );
 }
 
-/** WHERE THIS AGENT IS WORKING — one quiet line at the top of the panel. ⚠ It was the second line
- *  of the window's top bar until the tab strip took that row (2026-09-13). */
-function AgentWorkingOn({ agent }: { agent: DesktopSessionSummary | null }) {
+
+/**
+ * WHERE THIS AGENT IS WORKING, AND HOW IT IS — one row at the top of the panel.
+ *
+ * ⚠ It was the second line of the window's top bar until the tab strip took that row (2026-09-13).
+ *
+ * 🔒 **THE BADGE JOINED IT ON 2026-09-15, RIGHT-ALIGNED** (Samuel, after seeing the badge at the
+ * foot: *"Instead of putting the ended badge on the bottom left, put it on the right of the line
+ * where it says 'in main channel'. Similarly, for where you see 'running', 'thinking', or 'working'
+ * (all of those little things), put that in the same spot, basically on the same line as 'in main
+ * channel', but to the right, aligned to the right."*).
+ *
+ * ⚠ **THIS IS THE SECOND MOVE OF ONE BADGE IN ONE DAY, AND THE FIRST ONE'S CODE IS GONE.** The
+ * `AgentEndedFooter` that carried it to the bottom left is DELETED, not hidden — one marker, one
+ * place. What the two moves have in common is the ruling that survives: the chrome's top-right
+ * corner shows nothing about an agent (`agent-window-chrome.tsx`).
+ *
+ * ⚠ **BOTH STATES RIDE THE SAME SLOT AND `agents-model.ts › agentLiveness` IS STILL THE ONE
+ * MAPPING.** Live → `AgentLiveness` (Thinking / Running <tool> / Waiting / Idle); ended → the black
+ * `AgentEndedPill` over MAIN's own sentence, which `agent-stream-lanes.ts › splitEndNote` lifted
+ * out of the work log so the end is stated exactly once. The pill REPLACES the liveness rather than
+ * joining it — `agent-bits.tsx` carries why, and `agentLiveness` would otherwise say "Ended" beside
+ * a pill saying "Ended by you".
+ *
+ * ⚠ **THE STREAM'S LIVE TAIL IS UNTOUCHED** (`agent-stream-working.tsx`, Samuel 2026-09-14: the
+ * working state must be visible *"where the reply will appear, not only in the header's corner"*).
+ * That ruling assumed a badge in the corner; the corner moved, the pair did not become a
+ * duplication this pass introduced.
+ *
+ * ⚠ **THE LINE TRUNCATES AND THE BADGE DOES NOT.** `min-w-0 flex-1` on the thread half is what
+ * makes a long thread title ellipsize instead of pushing the badge off a 510px window; both badges
+ * are already `shrink-0` in their own files.
+ * ⚠ **NO AGENT RESOLVED DRAWS NO BADGE** — the feed has not said, and an invented state is worse
+ * than an empty right edge (INVARIANTS §11).
+ * ⚠ **THE VERTICAL PADDING IS UNCHANGED** (`pt-3`, no `pb`): the gap under this row is the posture
+ * block's `py-2.5`, which is the equality Samuel set earlier the same day and
+ * `agent-window-frame.test.ts` pins.
+ */
+function AgentWorkingOn({
+  agent,
+  endNote,
+}: {
+  agent: DesktopSessionSummary | null;
+  /** Main's own end sentence, or `null` for the bare "Ended" — see `AgentEndedPill`'s `label`. */
+  endNote: string | null;
+}) {
   return (
-    <p className="flex min-w-0 items-center gap-1 px-4 pt-3 text-caption text-text-secondary">
-      <CornerDownRight size={11} aria-hidden className="shrink-0 text-text-muted" />
-      <span className="truncate">in {agent?.threadTitle ?? NO_THREAD_LABEL}</span>
-    </p>
+    <div className="flex min-w-0 items-center gap-2 px-4 pt-3">
+      <p className="flex min-w-0 flex-1 items-center gap-1 text-caption text-text-secondary">
+        <CornerDownRight size={11} aria-hidden className="shrink-0 text-text-muted" />
+        <span className="truncate">in {agent?.threadTitle ?? NO_THREAD_LABEL}</span>
+      </p>
+      {agent ? (
+        agent.state === "ended" ? (
+          <AgentEndedPill label={endNote ?? undefined} />
+        ) : (
+          <AgentLiveness {...agentLiveness(agent)} />
+        )
+      ) : null}
+    </div>
   );
 }
 
@@ -359,7 +429,13 @@ function AgentWindowStats({ agent }: { agent: DesktopSessionSummary | null }) {
           gated on a reported `contextWindow`, which a spawn-idle agent does not have, so the box
           rendered nothing at all. `UsageMeter` handles the missing denominator itself (empty
           track, no division), so this is one unconditional call. */}
+      {/* ⚠ **`className=""` IS LOAD-BEARING (Samuel, 2026-09-15)** — `shared/ui/usage-meter.tsx`
+          defaults it to `mt-3`, which stacked on `agent-posture.tsx`'s own margin and made the
+          20px gap he asked to close. It is also plain wrong INSIDE this column: the wrapper is a
+          `flex-col gap-1.5`, so the meter's spacing is the gap's job and a margin of its own is a
+          second opinion about it. The gap above this block is the posture row's to own. */}
       <UsageMeter
+        className=""
         label="Context tokens"
         used={used ?? 0}
         limit={window ?? 0}
