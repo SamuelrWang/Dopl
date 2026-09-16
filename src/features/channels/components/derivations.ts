@@ -277,6 +277,19 @@ export function useChannelsDerivations({
    * ⚠ **IT IS NOT SCOPED TO THE OPEN THREAD**, on purpose: a thread composer
    * predicts RR1, which needs none of this, and the helper drops threaded rows
    * itself.
+   *
+   * ⚠ **`authorKind` ON THESE ROWS IS LOAD-BEARING AS OF 2026-09-15 (F-704), AND
+   * THIS CALL SITE PAYS NOTHING FOR IT.** The rule now discards rows this user's
+   * own AGENTS wrote, because an agent posts under its operator's
+   * `author_user_id` (`server/service-writes.ts`) and so was indistinguishable
+   * from the operator on the only field the walk filtered — an orchestrator
+   * tagging a worker moved Samuel's own default responder, four rounds running.
+   * The transcript DTO has always carried `authorKind` (`server/dto.ts ›
+   * mapMessageRow`), so `messages` satisfies the widened row type as written and
+   * there is no second fetch and no new prop. ⚠ **A FUTURE PROJECTION THAT TRIMS
+   * `authorKind` OUT OF THESE ROWS SILENTLY RESTORES THE BUG** on this half only,
+   * and the composer's line would then name an agent the server's verdict does
+   * not — which `draft-reach-parity.test.ts` is the wire against.
    */
   const recentAgentIds = useMemo(
     () => recentAgentsAddressedBy(currentUserId, messages),

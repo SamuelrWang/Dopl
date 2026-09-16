@@ -9130,3 +9130,77 @@ emit its literal. **Left alone deliberately** — per `CLAUDE.md`, code that loo
 here rather than edited in a change that was not scoped to it. The fix is one line in
 `ambiguousTemplate` (wrap the first line in `refusal(AMBIGUOUS_NAME, …)`), plus a budget re-measure
 because the description already sits at its ceiling.
+
+### F-704 — an agent posts under its OPERATOR'S `author_user_id`, so an agent-to-agent handoff re-pointed its operator's own "last addressed" default (found 2026-09-15, RESOLVED 2026-09-15 — Samuel's FOURTH round on this bug)
+
+**The symptom, reported four times.** Samuel addresses Prime in channel `bb0f57db`; Prime posts to
+a worker agent; Samuel's next UNADDRESSED message auto-routes to **the worker**. The rule is
+supposed to track *the USER'S own most recent addressing only*.
+
+**The root cause is an omitted field, not a wrong rule.** There is no stored "last addressed
+agent" anywhere — no column, no desktop pref, no cache; `channel_members.unaddressed_responder`
+stores a RULE (`'last_addressed' | 'none'`), deliberately never a name (`20260928130000`). The
+identity is re-derived on every unaddressed post by walking `channel_messages` for rows the asking
+person authored that carry a typed agent tag. And **`service-writes.ts` stamps
+`author_user_id: ctx.userId` on every row, an agent's included** — one insert for people and
+agents alike — so on the only field the walk filtered, *Samuel tagged an agent* and *Samuel's
+agent tagged an agent* were the same row. `author_kind` is the sole discriminator, and **no layer
+read it**: not the projection (`repository-messages-recent.ts`), not the row type, not the
+predicate (`lib/agent-post-stamp.ts › recentAgentsAddressedBy`). Eleven days.
+
+**Why three fixes did not stick — the delta IS the root cause.**
+
+- `c0794ed3` (09-04) **created it**: arm 3 was fed "the agent that POSTED here most recently", so
+  ANY agent post moved EVERY member's default. Widest form.
+- the fix for that (rule landed via `9da20c5b`) **re-fed the arm from `recentAgentsAddressedBy`,
+  scoped to `author_user_id`, and deleted `.eq("author_kind","agent")` in the same stroke.** A
+  REPLACE where an INTERSECT was wanted. It fixed "an agent *posted*" and left "an agent
+  *addressed*" wide open, because scoping by USER does not exclude that user's own agents. The
+  read's docblock then argued FOR the omission — *"`author_user_id`, NOT `author_kind`"* — which is
+  what each later round read and moved on from.
+- `f5035e66` (09-06) removed the 15-minute window. Orthogonal, but it **made the stomp permanent**
+  instead of self-healing in fifteen minutes, which is why round 3 felt like a regression.
+- `a48d073a` (09-15) gated RR3 on `!namedButUnresolved`. Adjacent symptom: it guards the case where
+  a handle WAS typed; this is the case where none was.
+
+**Why every regression test was blind, which is the structural half.** `RecentAuthorTagRow` is a
+`Pick<>` over the projection, so while `author_kind` was unselected the type **FORBADE the field**
+and no fixture in the tree could describe an agent-authored history row. Each prior fix shipped
+with a test; none of them could express the failing case. The two `authorKind: "agent"` occurrences
+in those suites describe the author of the message BEING ROUTED (RR2's lane), never a history row.
+
+**The fix.** One predicate in the shared rule — `if (row.authorKind === "agent") continue;`, beside
+the author filter it belongs with — plus `author_kind` restored to the projection, the row type and
+the server's row mapping, and `.neq("author_kind","agent")` on the read. The `.neq` is not
+redundant with the predicate: the read is capped at 50 rows, so without it an agent-heavy room
+spends its whole budget on rows the rule discards and the look-back shortens invisibly. Tested
+`=== "agent"` rather than `!== "user"` so a legacy row with no kind degrades to the OLD behaviour
+(INVARIANTS §11 — UNKNOWN is not EMPTY); `!== "user"` would read every pre-projection row as an
+agent's and delete the stickiness the 09-06 ruling protects.
+
+⚠ **THE CLIENT NEEDED NO NEW DATA.** `server/dto.ts › mapMessageRow` has always carried
+`authorKind`, so `components/derivations.ts` satisfies the widened row type as written — no second
+fetch, no new prop. Both trees drive the ONE rule, so server verdict and composer line cannot
+drift.
+
+**Pinned by four cases**, each of which goes red with the predicate removed (verified by removing
+it): the rule's own unit case and a legacy-row degrade case
+(`components/composer-recipients.test.tsx`), the server end-to-end repro
+(`server/service-wake-verdict-responder.test.ts`), and a both-ends parity case in its own file
+(`draft-reach-parity-author-kind.test.ts` — the parent suite sat exactly at the 500-line cap, so
+this is a split; it is also outside that file's TABLE on purpose, because the table hands the
+client an already-resolved id list and the defect lives one step earlier, in DERIVING it). The
+query shape itself is pinned in a new `server/repository-messages-recent.test.ts`, projection
+included, so the field cannot silently leave and make the bug inexpressible again.
+
+⚠ **NOT WRITERS, CHECKED SO A FIFTH ROUND NEED NOT RE-CHECK**: the desktop main process holds NO
+last-addressed state at all (it executes the server's STORED verdict — `0e53a140`); the MCP tree
+holds no second spelling of the rule; `channels.default_responder_agent_name` is retired and read
+by nothing; arm 2 ("only agent") never consults history and cannot be stomped.
+
+⚠ **OPEN, AND IT IS A RULING NOT A FIX**: should an agent posting on its operator's behalf keep its
+OWN thread of address, rather than sharing its operator's? Today it shares it entirely, which is
+what made this stomp possible; this change makes the human's thread authoritative and gives agents
+none, which is what the stated ruling says. A per-session variant would be a new ruling.
+
+Full trace, including the writer/reader table and the line-by-line repro: `AUTO-ADDRESS-TRACE.md`.

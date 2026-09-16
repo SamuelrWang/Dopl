@@ -67,8 +67,27 @@ export async function listRecentRoomAgentPosts(
  * `lib/agent-post-stamp.ts › isAuthorTypedAgentTag`, and it needs `recipient_agent_ids` (who the
  * row reached) AND `metadata` (whether `wake_reason` is present, i.e. whether the SERVER chose
  * rather than the author) — which is why the projection carries both.
- * ⚠ **`author_user_id`, NOT `author_kind`.** The old read filtered to agent authors; this one
- * filters to ONE PERSON, because the rule is per-author stickiness.
+ * ⚠ **`author_user_id` *AND* `author_kind`, AND THE `AND` COST FOUR ROUNDS OF THIS BUG**
+ * (2026-09-15, F-704). This line read *"`author_user_id`, NOT `author_kind` — the old read
+ * filtered to agent authors; this one filters to ONE PERSON"* from 2026-09-04 until today, and
+ * the word that was wrong is **NOT**: the change swapped one filter for the other where it
+ * needed both. **An agent posts under its OPERATOR'S `author_user_id`** — `service-writes.ts`
+ * writes `author_user_id: ctx.userId` and `author_kind: authorKind` in ONE insert for people and
+ * agents alike — so filtering to "one person" silently includes that person's own agents, and an
+ * orchestrator tagging a worker landed a row indistinguishable from its operator tagging the
+ * worker. Reproduced in `bb0f57db`: Samuel→Prime, Prime→`k2k2q9fh`, Samuel's next untagged
+ * message auto-routed to `k2k2q9fh`. The rule is per-author stickiness AND the author is a
+ * person: **two conditions, not a choice between them.**
+ * ⚠ **THE `.neq` HERE IS BELT-AND-BRACES, AND IT IS NOT REDUNDANT.**
+ * `lib/agent-post-stamp.ts › recentAgentsAddressedBy` now skips agent-authored rows itself and is
+ * the single source of truth both trees drive — but this read is capped at
+ * {@link RECENT_AGENT_POSTS_LIMIT} rows, so WITHOUT the `.neq` a busy agent-to-agent room spends
+ * its whole 50-row budget on rows the rule will discard and the look-back silently shortens to
+ * nothing. The SQL bound and the rule have to agree about what is even a candidate.
+ * ⚠ **AND THE PROJECTION MUST CARRY `author_kind` REGARDLESS OF THE `.neq`.** The predicate is
+ * the enforcement; a filter that is only in the query is one mock away from being absent, which
+ * is exactly how every prior regression test for this bug came to be blind — the `Pick<>` below
+ * forbade the field, so no fixture could express an agent-authored history row.
  *
  * ⚠ **NO `sinceIso`, AND THE PARAMETER IS GONE RATHER THAN DEFAULTED** (Samuel, 2026-09-06).
  * It took `now - RESILIENCE_WINDOW_MS` until then, which is the read half of the bug: the rule
@@ -89,7 +108,12 @@ export async function listRecentRoomAgentPosts(
  */
 export type RecentAuthorTagRow = Pick<
   ChannelMessageRow,
-  "seq" | "created_at" | "author_user_id" | "recipient_agent_ids" | "metadata"
+  | "seq"
+  | "created_at"
+  | "author_user_id"
+  | "author_kind"
+  | "recipient_agent_ids"
+  | "metadata"
 >;
 
 export async function listRecentRoomTagsBy(
@@ -99,9 +123,14 @@ export async function listRecentRoomTagsBy(
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("channel_messages")
-    .select("seq, created_at, author_user_id, recipient_agent_ids, metadata")
+    .select(
+      "seq, created_at, author_user_id, author_kind, recipient_agent_ids, metadata"
+    )
     .eq("channel_id", channelId)
     .eq("author_user_id", authorUserId)
+    // ⚠ THE AUTHOR'S OWN AGENTS SHARE THIS `author_user_id` — see the header. Without this the
+    // 50-row budget fills with rows the rule discards and the look-back shortens invisibly.
+    .neq("author_kind", "agent")
     .is("metadata->>taskId", null)
     .order("seq", { ascending: false })
     .limit(RECENT_AGENT_POSTS_LIMIT);

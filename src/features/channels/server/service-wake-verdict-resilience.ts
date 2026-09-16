@@ -432,6 +432,10 @@ export async function recentRoomAgents(
       seq: Number(row.seq),
       createdAt: row.created_at,
       authorUserId: row.author_user_id,
+      // ⚠ **CARRIED SO THE RULE CAN DROP THIS AUTHOR'S OWN AGENTS** (2026-09-15, F-704). The read
+      // already excludes them in SQL; the mapping hands the field over anyway because the
+      // PREDICATE is the enforcement and a mocked read is one fixture away from not filtering.
+      authorKind: row.author_kind,
       recipientAgentIds: row.recipient_agent_ids ?? null,
       metadata: (row.metadata ?? null) as Record<string, unknown> | null,
     })),

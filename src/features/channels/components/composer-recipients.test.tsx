@@ -317,6 +317,82 @@ describe("the rule itself", () => {
     expect(out.recipients.map((r) => r.label)).toEqual(["@agent-z9q1w4er"]);
   });
 
+  /**
+   * 🔒 **MY OWN AGENT'S POST MUST NOT MOVE MY DEFAULT — THE SENTENCE NO TEST IN THIS TREE COULD
+   * SAY UNTIL 2026-09-15** (F-704, Samuel's fourth round on this bug).
+   *
+   * ⚠ **BOTH ROWS BELOW CARRY THE SAME `author_user_id`, AND THAT IS THE BUG, NOT A QUIRK OF THE
+   * FIXTURE.** `server/service-writes.ts` stamps `author_user_id: ctx.userId` on EVERY row —
+   * an agent's included — so on the only field the walk filtered, *I tagged an agent* and *my
+   * agent tagged an agent* were the same row. `author_kind` is the sole discriminator.
+   * ⚠ **AND IT IS THE `wake_reason`-ABSENT CASE, DELIBERATELY.** The agent TYPED its tag, so the
+   * server stamped nothing and `isAuthorTypedAgentTag` answers `true` — the existing "the server's
+   * own picks are not evidence" guard cannot see this row. Seeding it with a `wake_reason` would
+   * pass against the OLD code and prove nothing.
+   * ⚠ **THE AGENT'S ROW IS THE NEWEST (`seq` 11 over 10) ON PURPOSE.** It must lose to an OLDER
+   * human tag; a fixture where it merely ties would pass on ordering luck.
+   *
+   * Repro in channel `bb0f57db`: Samuel addresses Prime, Prime posts to `k2k2q9fh`, and Samuel's
+   * next untagged message auto-routed to `k2k2q9fh`. Three prior fixes each changed which rows
+   * the arm selects and none added this predicate, which is why it kept coming back.
+   */
+  it("🔒 my own agent addressing another agent never becomes my last-addressed", () => {
+    const recent = recentAgentsAddressedBy(ME, [
+      {
+        // The human's own tag — older, and it must still win.
+        seq: 10,
+        createdAt: new Date(Date.now() - 60_000).toISOString(),
+        authorUserId: ME,
+        authorKind: "user",
+        recipientAgentIds: [BARE_AGENT.name],
+        metadata: {},
+      },
+      {
+        // My orchestrator handing work to a worker, under MY user id.
+        seq: 11,
+        createdAt: new Date(Date.now() - 1_000).toISOString(),
+        authorUserId: ME,
+        authorKind: "agent",
+        recipientAgentIds: [PEER_AGENT.name],
+        metadata: {},
+      },
+    ]);
+    expect(recent).toEqual([BARE_AGENT.name]);
+    expect(recent).not.toContain(PEER_AGENT.name);
+
+    const out = draftReach({
+      body: "what is left",
+      members: MEMBERS,
+      sessions: [PEER_AGENT, BARE_AGENT],
+      currentUserId: ME,
+      unaddressedResponder: "last_addressed",
+      recentAgentIds: recent,
+    });
+    expect(out.reason).toBe("most recent");
+    expect(out.recipients.map((r) => r.label)).toEqual(["@agent-z9q1w4er"]);
+  });
+
+  /**
+   * 🔒 **AN ABSENT `author_kind` DEGRADES TO THE OLD BEHAVIOUR, NEVER TO SILENCE** (INVARIANTS
+   * §11 — UNKNOWN is not EMPTY). Rows read before the field was projected have no kind at all,
+   * and the predicate is spelled `=== "agent"` rather than `!== "user"` exactly so those rows
+   * keep counting. A `!== "user"` test would read every legacy row as an agent's and delete the
+   * stickiness the 2026-09-06 ruling exists to protect — a silent regression in the opposite
+   * direction, which is the kind this file's other pins keep getting written for.
+   */
+  it("🔒 a legacy row with no `author_kind` still counts as the author's own tag", () => {
+    const recent = recentAgentsAddressedBy(ME, [
+      {
+        seq: 10,
+        createdAt: new Date(Date.now() - 60_000).toISOString(),
+        authorUserId: ME,
+        recipientAgentIds: [BARE_AGENT.name],
+        metadata: {},
+      },
+    ]);
+    expect(recent).toEqual([BARE_AGENT.name]);
+  });
+
   it("an EMPTY room is still `nobody` — the arm that answers nothing is the one with nothing to answer with", () => {
     expect(
       draftReach({

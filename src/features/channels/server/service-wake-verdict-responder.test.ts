@@ -169,6 +169,54 @@ describe("arm 3 / arm 4 — several live agents still get an answer", () => {
   });
 
   /**
+   * 🔒 **AN AGENT-AUTHORED TAG IS NOT ITS OPERATOR'S ADDRESSING — THE FOURTH ROUND ON THIS BUG**
+   * (F-704, 2026-09-15, Samuel: *"the last addressed agent must track the USER'S own most recent
+   * addressing ONLY"*).
+   *
+   * ⚠ **THE TWO ROWS SHARE AN `author_user_id` AND THAT IS THE DEFECT ITSELF.**
+   * `service-writes.ts` writes `author_user_id: ctx.userId` on every row, an agent's included, so
+   * arm 3's author filter — correct on the identity axis — silently swept in the author's OWN
+   * agents. An orchestrator handing work to a worker re-pointed its operator's default responder.
+   * ⚠ **`metadata` IS EMPTY ON THE AGENT ROW, DELIBERATELY.** The agent typed its own tag, so the
+   * server stamped no `wake_reason` and the existing "the server's own picks are not evidence"
+   * guard (`isAuthorTypedAgentTag`) answers `true` for it. A fixture with a `wake_reason` would
+   * pass against the broken code and prove nothing.
+   * ⚠ **THE AGENT ROW IS NEWEST (`seq` 43 over 42)** — it must lose to an older HUMAN tag, or the
+   * test passes on ordering luck rather than on the predicate.
+   *
+   * This is channel `bb0f57db`, exactly: Samuel addresses Prime (`k3v7d2mq` here), Prime posts to
+   * a worker (`m8q1zzzz`), and Samuel's next untagged message must still reach Prime. Three
+   * earlier fixes each changed WHICH ROWS the arm selects (`c0794ed3` fed it "who posted last";
+   * its fix swapped `author_kind` FOR `author_user_id` instead of intersecting them; `f5035e66`
+   * removed the window, making the stomp permanent rather than self-healing) and none added the
+   * predicate this pins. If arm 3 ever reads an agent-authored row as evidence again, this goes
+   * red.
+   */
+  it("🔒 my own agent's tag never becomes my last-addressed — the bb0f57db repro", async () => {
+    twoLive();
+    recentAgentPosts(
+      {
+        // Samuel → Prime. The human's own act, and older.
+        seq: 42,
+        author_kind: "user",
+        recipient_agent_ids: ["k3v7d2mq"],
+      },
+      {
+        // Prime → a worker, under Samuel's user id, tag typed by the agent.
+        seq: 43,
+        author_kind: "agent",
+        recipient_agent_ids: ["m8q1zzzz"],
+        metadata: {},
+      }
+    );
+    const out = await resolve("what is left to do?");
+    expect(out).toMatchObject({
+      recipientAgentIds: ["k3v7d2mq"],
+      reason: "most recent",
+    });
+  });
+
+  /**
    * 🔒 **"…OR THAT AGENT ENDS" — the ruling's own exit, and the only one.** The newest tag names an
    * agent that has since ended, so the pick falls to the NEXT-MOST-RECENT TAG rather than to arm 4:
    * stickiness ends with the session, not with a stopwatch. Both rows are hours old, which is what

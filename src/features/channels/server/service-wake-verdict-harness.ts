@@ -101,9 +101,17 @@ export function roomProjection(...rows: SessionStateRow[]): void {
  * configured responder — a suite that forgot it would fail on a TypeError
  * rather than on the rule it was measuring.
  *
- * ⚠ THE DEFAULTS ARE AN AUTHOR-TYPED TAG: `author_user_id` is the caller, and `metadata` is EMPTY
- * so no `wake_reason` rides along. A case that wants the other half — a row the SERVER aimed,
- * which must NOT count as evidence — passes `metadata: { wake_reason: … }` explicitly.
+ * ⚠ THE DEFAULTS ARE AN AUTHOR-TYPED TAG: `author_user_id` is the caller, `author_kind` is
+ * `"user"`, and `metadata` is EMPTY so no `wake_reason` rides along. A case that wants the other
+ * half — a row the SERVER aimed, which must NOT count as evidence — passes
+ * `metadata: { wake_reason: … }` explicitly.
+ *
+ * ⚠ **`author_kind` IS DEFAULTED HERE AS OF 2026-09-15 (F-704) SO THE FOURTH-ROUND BUG IS
+ * EXPRESSIBLE AT ALL.** It was absent from the projection, so `RecentAuthorTagRow`'s `Pick<>`
+ * FORBADE the field and **no fixture in this tree could describe a history row written by the
+ * author's own AGENT** — which is precisely the row that stomped the default responder, and why
+ * a regression test written for each of the three prior fixes was blind to it by construction.
+ * Pass `author_kind: "agent"` to seed one now; it must NOT count as the author's own addressing.
  */
 export function recentAgentPosts(
   ...rows: Array<Partial<ChannelMessageRow>>
@@ -117,6 +125,9 @@ export function recentAgentPosts(
           // ⚠ `CTX.userId` — the arm reads the ROUTED MESSAGE'S AUTHOR, and every case here
           // resolves as that context. A row authored by anyone else is correctly invisible.
           author_user_id: CTX.userId,
+          // ⚠ A PERSON BY DEFAULT — an agent shares the `author_user_id` above, so this is the
+          // only field that says whose act the row was. See the header.
+          author_kind: "user",
           recipient_agent_ids: [],
           metadata: {},
           ...row,

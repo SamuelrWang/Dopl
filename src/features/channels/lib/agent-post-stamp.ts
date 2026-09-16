@@ -196,6 +196,26 @@ export function serverRoutedAgentIds(row: {
  * ⚠ **SCOPED TO ONE AUTHOR AND ONE ROOM.** The server keys on the routed message's author, the
  * composer on the current user; two people in a channel each keep their own thread of address, which
  * is what "intuitive" means here — my default must not move because a colleague tagged someone else.
+ *
+ * ⚠ **AND SCOPED TO ONE AUTHOR *KIND*, WHICH IS A SEPARATE CONDITION AND NOT A RESTATEMENT**
+ * (2026-09-15, F-704 — the fourth round on this bug). The author filter is necessary and was
+ * never sufficient: **an agent posts under its OPERATOR'S `author_user_id`**
+ * (`server/service-writes.ts` — `author_user_id: ctx.userId`, `author_kind: authorKind`, one
+ * insert for both), so on the only field this walk filtered, *Samuel addressing an agent* and
+ * *Samuel's agent addressing an agent* were the same row. One orchestrator handing work to a
+ * worker therefore stomped its own operator's default — reproduced in channel `bb0f57db` as
+ * Samuel→Prime, Prime→`k2k2q9fh`, Samuel's next untagged message→`k2k2q9fh`.
+ * ⚠ **THE THREE PRIOR FIXES ALL CHANGED THE SELECTOR AND NONE ADDED THIS PREDICATE**, which is
+ * why it kept coming back. `c0794ed3` (09-04) fed the arm "who POSTED here last", so any agent
+ * post moved everybody's default; the fix for it swapped `author_kind = 'agent'` **for**
+ * `author_user_id = <person>` — a REPLACE where an INTERSECT was wanted, which deleted the only
+ * "a human did this" signal in the walk; `f5035e66` (09-06) then removed the 15-minute window,
+ * which did not cause the stomp but made it permanent instead of self-healing. The rule wants
+ * BOTH halves: **this person, and this person themselves.**
+ * ⚠ **THE DOCBLOCKS SAID SO BEFORE THE CODE DID.** {@link isAuthorTypedAgentTag} has claimed
+ * *"evidence must be the human's own act"* since it was written, and this one has said *"per
+ * PERSON"* throughout — the prose was the spec and the predicate was two-thirds of it. Anyone
+ * widening this walk again: the sentence is not enforced by being written down.
  * ⚠ **MAIN-ROOM ROWS ONLY**, `seq`-descending: {@link recentAgentPosters}'s rules on those two
  * points and for its reasons — a threaded post is RR1's business, and `seq` is a total order so no
  * tie is representable.
@@ -232,6 +252,11 @@ export function recentAgentsAddressedBy(
     seq: number;
     createdAt: string;
     authorUserId?: string | null;
+    /** ⚠ **REQUIRED BY THE RULE, OPTIONAL IN THE TYPE, AND THE ASYMMETRY IS DELIBERATE** — see
+     *  the `authorKind` note in the header. It is `string` rather than the `MessageAuthorKind`
+     *  union so this file stays framework- and import-free for both trees, which is the whole
+     *  reason it was split out. */
+    authorKind?: string | null;
     recipientAgentIds?: readonly string[] | null;
     metadata?: Record<string, unknown> | null;
   }[],
@@ -248,6 +273,22 @@ export function recentAgentsAddressedBy(
   const out: string[] = [];
   for (const row of [...rows].sort((a, b) => b.seq - a.seq)) {
     if (row.authorUserId !== authorUserId) continue;
+    // ⚠ **MY OWN AGENTS POST AS ME, AND THIS LINE IS THE WHOLE OF THE 2026-09-15 FIX (F-704).**
+    // `server/service-writes.ts` stamps EVERY row `author_user_id: ctx.userId` — an agent's
+    // included — so the author filter above cannot tell *Samuel tagged @coder* from *Samuel's
+    // orchestrator tagged @coder*. `author_kind` is the only field that can, and this walk did not
+    // read it for eleven days: an agent-to-agent handoff re-pointed its operator's default
+    // responder, which is the reported bug, four rounds running.
+    // ⚠ **IT IS TESTED `=== "agent"`, NOT `!== "user"`, AND THAT IS NOT A STYLE CHOICE.** The
+    // field is absent on rows read before it was projected, and an absent value must degrade to
+    // the OLD behaviour rather than silently empty the list — INVARIANTS §11, UNKNOWN is not
+    // EMPTY. `!== "user"` would read every legacy row as an agent's and delete the stickiness the
+    // 2026-09-06 ruling exists to protect.
+    // ⚠ **IT IS HERE, NOT IN `isAuthorTypedAgentTag`.** That predicate answers "was this tag
+    // typed rather than server-picked" for ONE row and has other readers
+    // (`serverRoutedAgentIds`'s complement); WHOSE habit is being read is this function's
+    // question, and it already owns the author filter one line up. One question, one place.
+    if (row.authorKind === "agent") continue;
     if (typeof row.metadata?.taskId === "string") continue;
     if (windowMs !== undefined) {
       const at = Date.parse(row.createdAt);
