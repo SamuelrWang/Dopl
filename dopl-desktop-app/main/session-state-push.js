@@ -158,6 +158,10 @@ function reportRow(e) {
     // migration 20260905120000 + `schema-sessions.ts › displayName`). Rides the summary's
     // `displayName` (`session-summary.js › liveSummary` ← `agent-names.js`), so a RENAME
     // changes the digest and pushes like any state change — that is how the peer sees it.
+    // ⚠ **THAT SENTENCE WAS FALSE UNTIL 2026-09-16 (F-708)**: the field was not in
+    // `session-telemetry.js › STATE_FIELDS`, the floor's whole definition of a state change, so
+    // a rename waited on the cadence floor for a move a quiet machine never makes. A field is
+    // state because THAT LITERAL names it, never because a docblock here says so.
     // 60 is `agent-names.js › MAX_NAME`, which is the column CHECK's own bound; sanitized
     // through the same labelOrNull every other operator-authored field crosses with, so a
     // pathological stored name can never 400 the whole payload (INVARIANTS §11).

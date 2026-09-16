@@ -305,9 +305,27 @@ function telemetryFields(e) {
 // oscillate. ⚠ **THAT IS ALSO WHY IT DOES NOT INHERIT `session-store.js`'s DURABLE-WHITELIST
 // HAZARD.** A resume that rebuilds context without `templateName` NULLS a column the server
 // stores verbatim; a resume that reports no colour is overruled by rule 1 and changes nothing.
+// ⚠ `displayName` JOINED 2026-09-16 (F-708) AND IT WAS MISSING BY OVERSIGHT, NOT BY
+// CLASSIFICATION — this block's own instruction says a new field must be classified
+// DELIBERATELY, and this one never was: it landed on `reportRow` on 2026-08-31 whose docblock
+// then CLAIMED it "changes the digest and pushes like any state change", which was false the
+// day it was written. It is the plainest member of the set by this list's own definition — WHAT
+// A PERSON CALLS THIS SESSION is a fact about WHICH SESSION THIS IS, beside `name` and
+// `templateName`.
+// ⚠ **WHAT THE OVERSIGHT COST, because it is not the ten-second delay the floor is for.** A
+// rename moves the FULL-row digest and nothing else, so `cycle` cleared the first gate and then
+// needed `floorAllows` — and a churn-only set inside the window "is not written and its digest
+// is NOT recorded", i.e. it waits for the session's NEXT PROJECTION MOVE. On a machine that has
+// gone quiet there is no next move: three agents renamed at 18:31 could sit unpushed
+// indefinitely while every peer's card, the Agents tab and the @-picker showed the name they
+// were launched with. "Nothing wakes up to it" is this file's own sentence.
+// ⚠ AND IT IS FREE, for `templateName`'s reason rather than `color`'s: the value moves only
+// when a HUMAN OR AN AGENT RENAMES — an operator gesture, not a counter — so bypassing the
+// floor cannot oscillate and cannot storm. A rename is precisely the kind of news the floor
+// was written to let through.
 const STATE_FIELDS = [
   'sessionKey', 'channelId', 'threadId', 'name', 'state', 'channelName', 'threadTitle',
-  'templateName', 'color',
+  'templateName', 'color', 'displayName',
 ];
 
 /** One stable string over the STATE half of a whole row set. ⚠ SET MEMBERSHIP IS PART OF IT:

@@ -309,7 +309,7 @@ test("FIELDS: display strings are collapsed and bounded before they cross", () =
 // ⚠ THE LIST IS THE FLOOR'S WHOLE DEFINITION OF "A STATE CHANGE". A field added to `reportRow`
 // and defaulted into this half bypasses the floor forever; defaulted out of it, something a
 // peer's card is about can be delayed. So the membership is pinned, not derived.
-test("STATE: the state half is the seven pre-orchestrator fields, plus two IDENTITIES", () => {
+test("STATE: the state half is the seven pre-orchestrator fields, plus three IDENTITIES", () => {
   assert.deepEqual([...t.STATE_FIELDS].sort(), [
     // ⚠ `templateName` JOINED THE STATE HALF ON 2026-08-22 (agent templates), deliberately
     // and not by default: it is a fact about WHICH SESSION THIS IS, so it belongs beside
@@ -323,9 +323,21 @@ test("STATE: the state half is the seven pre-orchestrator fields, plus two IDENT
     // be past the floor because the colour is what the operator's own transcript paints with: a
     // key held behind the cadence floor is a box that reads NEUTRAL for up to
     // `TELEMETRY_MIN_INTERVAL_MS` after the agent starts.
-    "channelId", "channelName", "color", "name", "sessionKey", "state", "templateName",
-    "threadId", "threadTitle",
+    // ⚠ `displayName` JOINED ON 2026-09-16 (F-708) AND IT IS A CORRECTION, NOT A NEW
+    // FEATURE: the field has been on `reportRow` since 2026-08-31 and was never classified, so a
+    // RENAME moved the full-row digest, missed `stateDigest`, and waited on the cadence floor for
+    // a projection move that a quiet machine never makes. Peers, the Agents tab and the @-picker
+    // kept the launch name indefinitely. It is free past the floor for `templateName`'s reason:
+    // the value moves only when somebody renames, which is a gesture and not a counter.
+    "channelId", "channelName", "color", "displayName", "name", "sessionKey", "state",
+    "templateName", "threadId", "threadTitle",
   ]);
+  // ⚠ THE ASSERTION THE OVERSIGHT WOULD HAVE FAILED, stated as the RULE rather than as a
+  // member of a sorted list: every operator-authored IDENTITY on the row is state, because a
+  // name a peer cannot see is a rename that did not happen.
+  for (const identity of ["displayName", "templateName", "color", "name"]) {
+    assert.equal(t.STATE_FIELDS.includes(identity), true, `${identity} is identity, not churn`);
+  }
   for (const churn of ["detail", "toolLabel", "model", "contextUsed", "contextWindow",
     "tokensSpent", "startedAt", "lastActivityAt"]) {
     assert.equal(t.STATE_FIELDS.includes(churn), false, `${churn} is churn, not state`);
