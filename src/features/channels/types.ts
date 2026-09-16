@@ -362,34 +362,11 @@ export type ChannelMessagePosted = ChannelMessage & {
 };
 
 /**
- * ONE ROW OF THE TAGS (MENTIONS) INBOX — a message whose server-stamped
- * `metadata.mentionedUserIds` names the viewer, plus whether they marked it read.
- *
- * ⚠ A PROJECTION, NOT A MESSAGE. It carries a clipped `snippet`, never the body: the
- * transcript row is the record and the inbox a pointer at it — which is why
- * `messageId` + `threadId` are the load-bearing fields. ⚠ `read` is per-viewer, from
- * `channel_mention_reads`; the UNREAD COUNT is client-side arithmetic over this list
- * and never a second server derivation (wiring plan Phase 6, design decision 3).
+ * ⚠ `ChannelMention` MOVED TO `types-mentions.ts` at the 500-line cap
+ * (2026-09-15), re-exported below exactly like the SESSION and LAUNCH families —
+ * no import path changed and there is still one path to the symbol.
  */
-export type ChannelMention = {
-  /** The message row this mention lives in — the scroll target. */
-  messageId: string;
-  /** Per-channel monotonic identity; the list's order. */
-  seq: number;
-  channelId: string;
-  /** `metadata.taskId`, or null for a channel-level post — the navigate target. */
-  threadId: string | null;
-  authorUserId: string | null;
-  /** Display claim only, same rule as the transcript's chip (INVARIANTS §5). */
-  authorKind: MessageAuthorKind;
-  authorName: string | null;
-  authorAvatarUrl: string | null;
-  /** Preview text, CLIPPED server-side. The transcript row is the record. */
-  snippet: string;
-  createdAt: string;
-  /** True when this viewer has marked it read. */
-  read: boolean;
-};
+export type { ChannelMention } from "./types-mentions";
 
 export type ChannelMember = {
   channelId: string;

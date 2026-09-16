@@ -101,7 +101,7 @@ export function message(over: Partial<ChannelMessage> = {}): ChannelMessage {
   };
 }
 
-/** One row of the Tags inbox projection. ⚠ Defaults to UNREAD and to a
+/** One row of the Mentions inbox projection. ⚠ Defaults to UNREAD and to a
  *  channel-level post — the two states the inbox's interaction is about. */
 export function mention(over: Partial<ChannelMention> = {}): ChannelMention {
   return {
@@ -113,6 +113,10 @@ export function mention(over: Partial<ChannelMention> = {}): ChannelMention {
     authorKind: "user",
     authorName: "Diana Taylor",
     authorAvatarUrl: null,
+    // ⚠ A HUMAN's row by default, so both are null — "cannot say which agent" is
+    // the honest value for a message no agent wrote.
+    authorAgentId: null,
+    authorAgentName: null,
     snippet: "can you take a look at this before the freeze?",
     createdAt: "2026-08-18T12:00:00.000Z",
     read: false,

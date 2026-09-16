@@ -22,7 +22,7 @@ import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { InfoTab } from "./info-tab";
-import { MENTIONS_CLIPPED_NOTE } from "./mentions-list";
+import { MENTIONS_CLIPPED_NOTE, agentPillLabel } from "./mentions-list";
 import { indexMembers } from "./view-model";
 import { channel, member, mention, ME, PEER } from "./test-fixtures";
 import type { ChannelMention } from "../types";
@@ -190,5 +190,78 @@ describe("channels mentions inbox", () => {
       screen.getByText("No messages tag you in this channel yet.")
     ).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Mark all read" })).toBeNull();
+  });
+});
+
+/**
+ * THE ROW'S SHAPE (Samuel, 2026-09-15, three rulings in one pass): no avatar,
+ * the agent's NAME in the black pill, and the channel name on the last line.
+ */
+describe("the mention row", () => {
+  it("carries NO avatar — every row tagged the same one person", () => {
+    // The face was a constant repeated fifty times down a 380px panel. The name
+    // still identifies the author and the transcript one click away has the face.
+    // ⚠ The row's accessible name comes from `shortName`, which is the ROSTER's
+    // label for the author — `mention.authorName` is only the fallback for an
+    // author who has left. PEER is in `MEMBERS`, so query on what is rendered.
+    open({ rows: [mention()] });
+    const row = screen.getByRole("button", { name: /unread mention/ });
+    expect(row.querySelector("img")).toBeNull();
+    // ⚠ NOT just `<img>`: the kit's Avatar falls back to an initials SPAN when
+    // there is no url, so a check for the image alone would pass on a row that
+    // still draws a face.
+    expect(row.querySelector("[data-avatar]")).toBeNull();
+  });
+
+  it("names the AGENT in the pill, not the noun", () => {
+    open({
+      rows: [
+        mention({
+          authorKind: "agent",
+          authorAgentId: "deynelz3",
+          authorAgentName: "Bug reviewer",
+        }),
+      ],
+    });
+    expect(screen.getByText("Bug reviewer")).toBeTruthy();
+    expect(screen.queryByText("Agent")).toBeNull();
+  });
+
+  it("falls back name -> #id -> the bare noun, and never renders a blank pill", () => {
+    // The same ladder the transcript's pill walks. `null` is CANNOT SAY, which is
+    // the common case on older rows — it is not "not an agent".
+    expect(
+      agentPillLabel(mention({ authorAgentName: "Bug reviewer", authorAgentId: "deynelz3" }))
+    ).toBe("Bug reviewer");
+    expect(agentPillLabel(mention({ authorAgentName: null, authorAgentId: "deynelz3" }))).toBe(
+      "#deynelz3"
+    );
+    expect(agentPillLabel(mention({ authorAgentName: null, authorAgentId: null }))).toBe("Agent");
+    // A name that is only whitespace is not a name.
+    expect(agentPillLabel(mention({ authorAgentName: "   ", authorAgentId: "deynelz3" }))).toBe(
+      "#deynelz3"
+    );
+  });
+
+  it("wears the SAME black face as the Agents-tab ended pill", () => {
+    // One recipe, two meanings (`agent-bits.tsx › AgentPill`). Pinned by the
+    // token, not by a hex: a second hand-rolled pill is what this prevents.
+    open({
+      rows: [
+        mention({ authorKind: "agent", authorAgentId: "deynelz3", authorAgentName: "Prober" }),
+      ],
+    });
+    const pill = screen.getByText("Prober");
+    expect(pill.className).toContain("bg-surface-cta");
+    expect(pill.className).toContain("text-text-on-cta");
+  });
+
+  it("puts the channel name on the LAST line, after the snippet", () => {
+    open({ rows: [mention({ authorKind: "agent", authorAgentName: "Prober" })] });
+    const snippet = screen.getByText(/can you take a look at this/);
+    const channel = screen.getByText(/in # /);
+    expect(
+      snippet.compareDocumentPosition(channel) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 });

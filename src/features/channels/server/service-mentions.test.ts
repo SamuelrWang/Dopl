@@ -11,9 +11,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository");
 vi.mock("./repository-mentions");
+// ⚠ THE SESSION REPOSITORY, NOT `service-shared`: `agentNamesFor` lives in shared
+// beside `loadVisibleChannel` and `profilesById`, which this suite needs REAL.
+// Mocking the module would stub the gate it depends on; mocking the one query it
+// makes leaves the derivation under test.
+vi.mock("./repository-sessions");
 
 import * as repo from "./repository";
 import * as repoMentions from "./repository-mentions";
+import * as repoSessions from "./repository-sessions";
 import { listMyChannelMentions, markMentionsRead } from "./service-mentions";
 import { CHANNEL_MENTION_LIST_LIMIT, MENTION_SNIPPET_MAX_CHARS } from "../constants";
 import type { ChannelMemberRow, ChannelRow, ProfileRef } from "./dto";
@@ -69,6 +75,7 @@ function messageRow(over: Partial<MentionMessageRow> = {}): MentionMessageRow {
     id: "m-9",
     seq: 9,
     channel_id: "chan-1",
+    client_msg_id: null,
     author_user_id: PEER,
     author_kind: "user",
     body: "@sam can you look at this?",
@@ -92,6 +99,7 @@ beforeEach(() => {
   vi.mocked(repo.fetchProfiles).mockResolvedValue([PROFILE]);
   vi.mocked(repoMentions.listMentionReads).mockResolvedValue(new Set());
   vi.mocked(repoMentions.insertMentionReads).mockResolvedValue(undefined);
+  vi.mocked(repoSessions.agentDisplayNames).mockResolvedValue(new Map());
 });
 
 describe("listMyChannelMentions", () => {
@@ -112,6 +120,10 @@ describe("listMyChannelMentions", () => {
         authorKind: "user",
         authorName: "Diana Taylor",
         authorAvatarUrl: null,
+        // ⚠ A HUMAN's row: both agent fields are null, and that is CANNOT SAY
+        // rather than "not an agent" — `authorKind` is what answers that.
+        authorAgentId: null,
+        authorAgentName: null,
         snippet: "@sam can you look at this?",
         createdAt: "2026-08-18T12:00:00Z",
         read: false,
@@ -223,5 +235,70 @@ describe("markMentionsRead", () => {
     const second = await markMentionsRead(ctx, "room", ["m-9"]);
     expect(first).toEqual({ marked: 1 });
     expect(second).toEqual({ marked: 1 });
+  });
+});
+
+/**
+ * WHICH AGENT TAGGED YOU (2026-09-15) — the inbox row names the agent, so the
+ * projection has to carry its id and its operator's name for it.
+ *
+ * ⚠ THE ID COMES FROM THE ONE PARSER (`lib/agent-post-stamp.ts ›
+ * authorAgentIdOf`: the `client_msg_id` stamp, else the server's own
+ * `metadata.session_id`), and the NAME from the same page-wide join the
+ * transcript makes. Two readers of one fact would let the inbox and the message
+ * it points at name the agent differently, which is the drift this whole
+ * feature carries warnings about.
+ */
+describe("listMyChannelMentions — which agent wrote it", () => {
+  it("names the agent off the post stamp, with its operator's name for it", async () => {
+    vi.mocked(repoMentions.listMentionMessages).mockResolvedValue({
+      rows: [
+        messageRow({
+          author_kind: "agent",
+          client_msg_id: "agent-deynelz3-41",
+        }),
+      ],
+      truncated: false,
+    });
+    vi.mocked(repoSessions.agentDisplayNames).mockResolvedValue(
+      new Map([["deynelz3", "Bug reviewer"]])
+    );
+    const { mentions } = await listMyChannelMentions(ctx, "room");
+    expect(mentions[0]!.authorAgentId).toBe("deynelz3");
+    expect(mentions[0]!.authorAgentName).toBe("Bug reviewer");
+  });
+
+  it("falls back to the SESSION KEY when the post carried its own idempotency key", async () => {
+    // The Mobile Command Center case: an agent that passes its own
+    // `client_msg_id` is anonymous to the stamp, and `metadata.session_id` is the
+    // stronger fact anyway — server-stamped, so it cannot be posed.
+    vi.mocked(repoMentions.listMentionMessages).mockResolvedValue({
+      rows: [
+        messageRow({
+          author_kind: "agent",
+          client_msg_id: "reply-2",
+          metadata: { session_id: "chan-1::o9wj5bzn" },
+        }),
+      ],
+      truncated: false,
+    });
+    vi.mocked(repoSessions.agentDisplayNames).mockResolvedValue(new Map());
+    const { mentions } = await listMyChannelMentions(ctx, "room");
+    expect(mentions[0]!.authorAgentId).toBe("o9wj5bzn");
+    // ⚠ NO NAME IS NOT NO AGENT: the id still renders, as `#o9wj5bzn`.
+    expect(mentions[0]!.authorAgentName).toBeNull();
+  });
+
+  it("a HUMAN's row is never given an agent id, whatever its client_msg_id looks like", async () => {
+    // ⚠ THE GUARD THAT MATTERS: `client_msg_id` is caller-supplied, so a person
+    // whose client happened to pick the stamp shape must not be attributed to an
+    // agent that does not exist.
+    vi.mocked(repoMentions.listMentionMessages).mockResolvedValue({
+      rows: [messageRow({ author_kind: "user", client_msg_id: "agent-deynelz3-41" })],
+      truncated: false,
+    });
+    const { mentions } = await listMyChannelMentions(ctx, "room");
+    expect(mentions[0]!.authorAgentId).toBeNull();
+    expect(mentions[0]!.authorAgentName).toBeNull();
   });
 });

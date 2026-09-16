@@ -473,43 +473,47 @@ describe("a cache entry written before the info card existed", () => {
 describe("home info tab — Mentions", () => {
   // ⚠ NO LOCAL `beforeEach`: this file's top-level one installs the stateful
   // stub server and resets the request spy for every case in it.
-  it("renders the Mentions row, collapsed, with the unread count", async () => {
+  //
+  // ⚠ THESE THREE CASES PINNED A COLLAPSED DISCLOSURE FOR ABOUT AN HOUR
+  // (aria-expanded, a click to open, a position inside Channel info) and Samuel
+  // superseded it the same day: Mentions is a TOP-LEVEL CATEGORY here, a peer of
+  // Channel info and Channel activity, and the list renders OPEN. They are
+  // rewritten rather than deleted so the overruled shape is on the record.
+
+  it("is a TOP-LEVEL CATEGORY with its own heading, not a row inside Channel info", async () => {
     renderHome();
     await openChannelRecord();
-    const row = await screen.findByRole("button", { name: /^Mentions/ });
-    // ⚠ COLLAPSED IS THE RULING (Samuel, 2026-09-15): the panel is 380px and the
-    // page is capped at 50, so the count is the affordance.
-    expect(row.getAttribute("aria-expanded")).toBe("false");
-    // The stub surface hands an empty inbox, so the badge is an honest 0.
-    expect(row.textContent).toMatch(/^Mentions0$/);
+    const heading = await screen.findByText("Mentions");
+    // ⚠ NOT A DISCLOSURE: no button wearing the label, so nothing to expand.
+    expect(screen.queryByRole("button", { name: /^Mentions/ })).toBeNull();
+    // It is a PEER of the other two headings, which is what "top-level" means
+    // here — same element, same level, not nested in the card above it.
+    const channelInfo = await screen.findByText("Channel info");
+    expect(heading.tagName).toBe(channelInfo.tagName);
   });
 
-  it("opens the list on click, exactly as the workspace tab does", async () => {
+  it("renders the list OPEN — no dropdown, nothing to click first", async () => {
     renderHome();
     await openChannelRecord();
-    const row = await screen.findByRole("button", { name: /^Mentions/ });
-    fireEvent.click(row);
-    expect(row.getAttribute("aria-expanded")).toBe("true");
-    // The empty state is `mentions-list.tsx`'s own copy — proof the REAL list
-    // mounted here rather than a second one written for this pane.
+    // The empty state is `mentions-list.tsx`'s own copy, visible with no
+    // interaction at all: proof the REAL list mounted, already open.
     expect(
-      screen.getByText("No messages tag you in this channel yet.")
+      await screen.findByText("No messages tag you in this channel yet.")
     ).toBeTruthy();
   });
 
-  it("sits inside Channel info, above the activity section", async () => {
-    // ⚠ THE ORDER IS THE TAB'S RULING (HEADER → CHANNEL INFO → THREAD ACTIVITY →
-    // MEMBERS). A section appended at the foot would still 'render' and would be
-    // in the wrong place, so position is asserted rather than presence alone.
+  it("sits between Channel info and the activity section", async () => {
+    // ⚠ THE ORDER IS THE TAB'S RULING (HEADER → CHANNEL INFO → MENTIONS →
+    // CHANNEL ACTIVITY → MEMBERS). A section merely PRESENT is not the same as a
+    // section in the right place, so position is asserted, not existence.
     renderHome();
     await openChannelRecord();
-    const row = await screen.findByRole("button", { name: /^Mentions/ });
-    // ⚠ The section's heading is "Channel activity" (`person-thread-activity.tsx`),
-    // which is not what the tab's own docblock calls it. Matched on the shipped
-    // string rather than the prose.
+    const channelInfo = await screen.findByText("Channel info");
+    const mentions = await screen.findByText("Mentions");
     const activity = await screen.findByText("Channel activity");
-    expect(
-      row.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    const follows = (a: HTMLElement, b: HTMLElement) =>
+      a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING;
+    expect(follows(channelInfo, mentions)).toBeTruthy();
+    expect(follows(mentions, activity)).toBeTruthy();
   });
 });

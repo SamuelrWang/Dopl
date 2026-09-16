@@ -19,10 +19,8 @@ import {
   InfoCardCustomRow,
   InfoCardSection,
 } from "@/features/channels/components/info-card-rows";
-import {
-  MentionsDisclosure,
-  type MentionsBundle,
-} from "@/features/channels/components/mentions-disclosure";
+import { MentionsList } from "@/features/channels/components/mentions-list";
+import type { MentionsBundle } from "@/features/channels/components/mentions-disclosure";
 import { useChannelInfoCardWrite } from "@/features/channels/hooks/use-channel-info-card-writes";
 import { useChannelMembers } from "@/features/channels/hooks/use-channel-members";
 import { memberLabel } from "@/features/channels/lib/channel-display";
@@ -79,10 +77,13 @@ import { PersonThreadActivity } from "./person-thread-activity";
  *   ⚠ REMOVING A ROW REMOVES IT FROM THE CARD, NOT FROM THE WORLD. What changed
  *   is what this card shows. Do not "finish the job" by nulling anything.
  *
- * ⚠ THE ORDER IS HEADER → CHANNEL INFO → THREAD ACTIVITY → MEMBERS (+ ADD PERSON)
- * (Samuel, 2026-08-25 — corrected the same day; the first pass put Members
- * second). Add person moved out of the tab's foot and under the roster it
- * changes, which is what keeps the tab's one ACTION at its end.
+ * ⚠ THE ORDER IS HEADER → CHANNEL INFO → MENTIONS → CHANNEL ACTIVITY → MEMBERS
+ * (+ ADD PERSON). The spine is Samuel's, 2026-08-25 — corrected the same day, the
+ * first pass put Members second — and Add person moved out of the tab's foot and
+ * under the roster it changes, which is what keeps the tab's one ACTION at its
+ * end. ⚠ MENTIONS joined it 2026-09-15 as a TOP-LEVEL CATEGORY (his ruling,
+ * superseding the collapsed row that shipped hours earlier), between the card and
+ * the activity strip.
  */
 export function PersonInfoTab({
   homeChannel,
@@ -102,7 +103,7 @@ export function PersonInfoTab({
   /** THE surface's refetch gate — see `channel-surface.tsx ›
    *  ChannelInfoTabContext`. Never a second one minted here. */
   gate: MutationGate;
-  /** THIS CHANNEL'S TAGS INBOX, already read by the surface and handed down with
+  /** THIS CHANNEL'S MENTIONS INBOX, already read by the surface and handed down with
    *  the gate — see `channel-surface.tsx › ChannelInfoTabContext.mentions` for
    *  why a tab may not fetch it or mint its handlers itself. */
   mentions: MentionsBundle;
@@ -277,28 +278,34 @@ export function PersonInfoTab({
         />
       </InfoCardSection>
 
-      {/* ⚠ **THE TAGS INBOX — THE SAME COMPONENT THE WORKSPACE CHANNELS PAGE
-          RENDERS** (`channels/components/mentions-disclosure.tsx`), added
-          2026-09-15 because this tab had no Tags section at all while the
-          workspace one has had it since Phase 6. A HOME-SPACE PARITY GAP, and a
-          pure wiring one: the surface was already reading this channel's
-          mentions for every mount, and the injected tab dropped them.
-          ⚠ **NOT A SECOND LIST.** Same page, same server order, same 50-row cap,
-          same click — mark read, land the centre pane, nonced scroll — because
-          the handlers come down from the surface that owns the pane.
-          ⚠ **THE TENANCY IS THE CONTAINER'S BY CONSTRUCTION**: the read is keyed
-          on the surface's `workspaceId`, which for a home channel IS the home
-          container id (`relationship-record.tsx` passes
-          `homeChannel.workspaceId`), so it can only ever answer with this
-          container's messages.
-          ⚠ **IT SITS AT THE END OF CHANNEL INFO, OUTSIDE `InfoCardSection`** —
-          the section's hover reveals the add-a-row affordance and its list is
-          the CURATED rows, which this is not. Same relative position as the
-          workspace tab, where it is the last thing in the block. */}
-      <div className="px-2">
-        <MetaRowDivider />
-        <MentionsDisclosure channelName={name} bundle={mentions} />
-      </div>
+      {/* ⚠ **A TOP-LEVEL CATEGORY, NOT A ROW INSIDE CHANNEL INFO** (Samuel,
+          2026-09-15, superseding the collapsed disclosure that shipped hours
+          earlier): it is a PEER of "Channel info" and "Channel activity", with
+          its own heading and no dropdown, and the list renders OPEN.
+          ⚠ **WHICH IS WHY /home DOES NOT USE `MentionsDisclosure`.** That
+          component is the workspace panel's collapsed row and still is; a
+          `defaultOpen` flag on it would have made one component mean two
+          layouts, and the thing they genuinely share — the LIST — is shared
+          directly. `mentions-disclosure.tsx` owns the collapsed row, this owns
+          the category, and `MentionsList` is the one list under both.
+          ⚠ **NO UNREAD BADGE HERE, AND NOTHING IS LOST**: the count existed to
+          describe a list you could not see. Open, every unread row carries its
+          own dot and tint (`mentions-list.tsx`), which is the same fact per row
+          instead of summed into a number.
+          ⚠ **THE DATA IS THE SURFACE'S** — same page, same server order, same
+          50-row cap, same click (mark read, land the centre pane, nonced
+          scroll), and the read is keyed on the surface's `workspaceId`, which
+          for a home channel IS the home container id. */}
+      <PanelHeading title="Mentions" />
+      <MentionsList
+        mentions={mentions.mentions}
+        truncated={mentions.truncated}
+        loading={mentions.loading}
+        channelName={name}
+        index={mentions.index}
+        onOpenMention={mentions.onOpen}
+        onMarkAllRead={mentions.onMarkAllRead}
+      />
 
       {/* ⚠ THREAD ACTIVITY SITS ABOVE MEMBERS (Samuel, 2026-08-25). The card
           reads facts → what has been happening → who is here and how to add

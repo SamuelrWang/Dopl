@@ -4,8 +4,14 @@ import {
   MENTION_SNIPPET_MAX_CHARS,
 } from "../constants";
 import type { ChannelMention, MessageAuthorKind } from "../types";
+import { authorAgentIdOf } from "../lib/agent-post-stamp";
 import * as repoMentions from "./repository-mentions";
-import { profilesById, loadVisibleChannel, type ChannelContext } from "./service-shared";
+import {
+  agentNamesFor,
+  profilesById,
+  loadVisibleChannel,
+  type ChannelContext,
+} from "./service-shared";
 
 /**
  * THE MENTIONS INBOX — read and write.
@@ -70,7 +76,12 @@ export async function listMyChannelMentions(
   // Both reads are bounded BY THE PAGE: the read-state lookup is `IN` the ids
   // just fetched, and the profile hydration is the distinct authors of those
   // same rows. Neither is sized by the workspace.
-  const [read, profiles] = await Promise.all([
+  // ⚠ THE AGENT NAMES ARE THE SAME PAGE-WIDE JOIN THE TRANSCRIPT MAKES
+  // (`service-shared.ts › agentNamesFor`, read by `dto.ts › agentNameOf`), not a
+  // second derivation: one answer to "which of this operator's agents wrote the
+  // row", so the inbox and the message it points at can never name it
+  // differently. Bounded by the page like the two reads beside it.
+  const [read, profiles, agentNames] = await Promise.all([
     repoMentions.listMentionReads(
       ctx.userId,
       channel.id,
@@ -81,12 +92,30 @@ export async function listMyChannelMentions(
         .map((row) => row.author_user_id)
         .filter((id): id is string => id !== null)
     ),
+    agentNamesFor(
+      [channel.workspace_id],
+      rows.map((row) => ({
+        author_kind: row.author_kind,
+        client_msg_id: row.client_msg_id,
+        metadata: row.metadata,
+      }))
+    ),
   ]);
 
   const mentions = rows.map((row): ChannelMention => {
     const profile = row.author_user_id
       ? profiles.get(row.author_user_id)
       : undefined;
+    const agentId =
+      row.author_kind === "agent"
+        ? authorAgentIdOf({
+            clientMsgId: row.client_msg_id,
+            metadata:
+              row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+                ? (row.metadata as Record<string, unknown>)
+                : null,
+          })
+        : null;
     return {
       messageId: row.id,
       seq: Number(row.seq),
@@ -96,6 +125,14 @@ export async function listMyChannelMentions(
       authorKind: row.author_kind as MessageAuthorKind,
       authorName: profile?.display_name || profile?.email || null,
       authorAvatarUrl: profile?.avatar_url ?? null,
+      // ⚠ WHICH agent, and WHAT ITS OPERATOR CALLS IT — the id off the ONE parser
+      // (`authorAgentIdOf`: the post stamp, else the server's own session key), the
+      // name off the page join above. BOTH may be null and they are independent:
+      // `null` is CANNOT SAY, never "not an agent" — `authorKind` answers that — and
+      // every renderer falls back through name -> `#id` -> the bare noun
+      // (INVARIANTS §11).
+      authorAgentId: agentId,
+      authorAgentName: agentId === null ? null : (agentNames.get(agentId) ?? null),
       snippet: snippetOf(row.body),
       createdAt: row.created_at,
       read: read.has(row.id),

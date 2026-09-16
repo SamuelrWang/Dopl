@@ -15,6 +15,7 @@
  * defect, and a status word is exactly where it goes unnoticed.
  */
 
+import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 import type { AgentLivenessState, AgentLivenessTone } from "./agents-model";
 
@@ -78,7 +79,26 @@ export function AgentLiveness({
  * reading "Ended" beside a dot reading "Ended" is one fact said twice, and a
  * redundant pair drifts.
  */
-export function AgentEndedPill({ className }: { className?: string }) {
+/**
+ * THE BLACK PILL'S FACE, and nothing about what it MEANS (extracted 2026-09-15).
+ *
+ * ⚠ **IT EXISTS BECAUSE A SECOND SURFACE NEEDED THE FACE AND NOT THE WORD.** The
+ * Mentions inbox names the AGENT that tagged you in this same pill (Samuel:
+ * *"black pill, styled exactly like the ended pill"*), and there were only two
+ * ways to get it: render `AgentEndedPill` with a label that is not an ending —
+ * a component whose name would then be a lie at every call site — or copy four
+ * utility classes into another file and let the two drift. This is the third.
+ *
+ * ⚠ **IT DECIDES NOTHING AND SAYS NOTHING.** No default label, no state, no
+ * vocabulary: callers bring the words, exactly as they already did here.
+ */
+export function AgentPill({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <span
       className={cn(
@@ -86,7 +106,34 @@ export function AgentEndedPill({ className }: { className?: string }) {
         className
       )}
     >
-      Ended
+      {children}
     </span>
   );
+}
+
+export function AgentEndedPill({
+  label = "Ended",
+  className,
+}: {
+  /**
+   * 🔒 **THE WORDS, WHEN THE SURFACE HAS FULLER ONES** (Samuel, 2026-09-15, over the pop-out:
+   * *"You see 'Ended by you.' Have 'Ended by you' be that black badge, right? 'Ended by you'
+   * should be the badge."*).
+   *
+   * ⚠ **THE DEFAULT IS THE ONLY THING THE LIST SURFACES MAY SAY, AND IT IS WHY THIS IS A PROP
+   * RATHER THAN A SECOND PILL.** An Agents-tab card and the slide-out header know only
+   * `state === "ended"`; the agent WINDOW additionally has main's own sentence for WHICH end it
+   * was (`main/session-effects.js › endedStatusText` — "Ended by you", "Ended after going
+   * inactive", "Ended because a person joined this channel", "Ended after being left parked").
+   * One face, two amounts of knowledge — not two faces.
+   * ⚠ **THIS FILE STILL DECIDES NOTHING.** The wording arrives already chosen, exactly as
+   * {@link AgentLiveness}'s does: a second table mapping an end REASON to words is the
+   * two-readers-one-fact defect this module's header is about.
+   */
+  label?: string;
+  className?: string;
+}) {
+  // ⚠ THE FACE IS {@link AgentPill}'s since 2026-09-15 — one recipe, two meanings.
+  // What is left here is the WORDING rule, which is all this component ever owned.
+  return <AgentPill className={className}>{label}</AgentPill>;
 }

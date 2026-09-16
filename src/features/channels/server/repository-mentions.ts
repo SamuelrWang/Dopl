@@ -14,12 +14,22 @@ import { MENTIONS_METADATA_KEY } from "../lib/mentions";
 
 /**
  * The columns the inbox reads off `channel_messages`. ⚠ Not `*` (INVARIANTS
- * §9): `client_msg_id` is an idempotency key and `workspace_id` is already
- * decided by the gate. `body` IS selected and IS the heavy field — it is also
- * the answer, since the row's whole point is a snippet; the SERVICE clips it.
+ * §9): `workspace_id` is already decided by the gate. `body` IS selected and IS
+ * the heavy field — it is also the answer, since the row's whole point is a
+ * snippet; the SERVICE clips it.
+ *
+ * ⚠ THIS NOTE USED TO EXCLUDE `client_msg_id` AS "an idempotency key", which was
+ * true and is no longer the whole truth: it is ALSO the older half of the agent
+ * stamp, and the inbox now names the agent that tagged you. It is still never
+ * read AS an identity — `authorAgentIdOf` is the one parser, and the value is
+ * caller-supplied.
  */
+// ⚠ `client_msg_id` JOINED THE LIST ON 2026-09-15 and it is not decoration: with
+// `metadata` beside it, it is what `lib/agent-post-stamp.ts › authorAgentIdOf` needs to say
+// WHICH of an operator's agents wrote the row. Without it a mention from an agent could only
+// ever render the bare noun, which is the defect AGENT-BADGE-TRACE.md is about, one surface over.
 const CHANNEL_MENTION_MESSAGE_COLS =
-  "id,seq,channel_id,author_user_id,author_kind,body,metadata,created_at";
+  "id,seq,channel_id,author_user_id,author_kind,client_msg_id,body,metadata,created_at";
 
 export type MentionMessageRow = {
   id: string;
@@ -27,6 +37,8 @@ export type MentionMessageRow = {
   channel_id: string;
   author_user_id: string | null;
   author_kind: string;
+  /** ⚠ CALLER-SUPPLIED and read ONLY through `authorAgentIdOf`, never trusted as identity. */
+  client_msg_id: string | null;
   body: string;
   metadata: unknown;
   created_at: string;

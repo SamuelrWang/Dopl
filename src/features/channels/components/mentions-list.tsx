@@ -31,10 +31,10 @@
  * answers to.
  */
 
-import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
+import type { AvatarPerson } from "@/shared/ui/avatar";
 import { cn } from "@/shared/lib/utils";
 import { formatRelativeTime } from "@/shared/lib/format-time";
-import { AgentChip } from "./bits";
+import { AgentPill } from "./agent-bits";
 import { shortName, type AuthorIndex } from "./view-model";
 import type { ChannelMention } from "../types";
 
@@ -124,6 +124,24 @@ export function MentionsList({
   );
 }
 
+/**
+ * WHAT THE ROW'S BLACK PILL SAYS — the agent's name, else its id, else the noun.
+ *
+ * ⚠ **THE SAME LADDER AS THE TRANSCRIPT'S PILL** (`attribution-pill.tsx ›
+ * attributionName`), deliberately: one agent, two surfaces, one answer. A rename
+ * the operator made must not show up in the transcript and not in the inbox.
+ *
+ * ⚠ **`#<id>` KEEPS THE `#`** — Samuel's own way of saying an id out loud — and
+ * the bare noun is the honest floor for a row that carries neither
+ * (INVARIANTS §11: render what IS known, never a blank standing in for it).
+ * ⚠ Exported for its test; it is wording, and wording is worth pinning.
+ */
+export function agentPillLabel(mention: ChannelMention): string {
+  const named = mention.authorAgentName?.trim();
+  if (named) return named;
+  return mention.authorAgentId ? `#${mention.authorAgentId}` : "Agent";
+}
+
 /** An `AvatarPerson` for a mention's author: the roster when it has them, the
  *  projection's own hydrated fields when it does not (a departed member still
  *  owns the message that tagged you). */
@@ -164,18 +182,18 @@ function MentionItem({
         unread ? "bg-link/5 hover:bg-link/10" : "hover:bg-surface-raised-1"
       )}
     >
+      {/* ⚠ NO AVATAR (Samuel, 2026-09-15): *"drop the viewer's profile image from
+          row line 1"*. Every row in this list is a message that tagged ONE person
+          — the viewer — so a face on each was the same face fifty times, spending
+          the row's scarcest axis on a constant. The NAME still identifies the
+          author, and the transcript one click away carries the face. */}
       <span className="flex w-full items-center gap-1.5">
         {unread && (
           <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-link" />
         )}
-        <Avatar person={person} size="xs" className="h-[18px] w-[18px] text-micro" />
         <span className="truncate text-small font-semibold text-text-primary">
           {shortName(person, index.currentUserId)}
         </span>
-        {/* DISPLAY CLAIM ONLY (INVARIANTS §5) — `authorKind` is
-            caller-assertable and earns a chip, never a side and never a
-            claim about who was reached. */}
-        {mention.authorKind === "agent" && <AgentChip />}
         <span className="ml-auto shrink-0 text-micro text-text-muted">
           {formatRelativeTime(mention.createdAt)}
         </span>
@@ -184,7 +202,28 @@ function MentionItem({
       <span className="line-clamp-2 text-caption text-text-secondary">
         {mention.snippet}
       </span>
-      <span className="text-micro text-text-muted">in # {channelName}</span>
+      {/* THE LAST LINE: the agent pill, and the channel name at its bottom-right.
+          ⚠ MY READING OF THE BRIEF (Samuel: *"channel name on the row's LAST line,
+          bottom-right of the agent pill"*) — one row, pill LEFT, channel name
+          pushed RIGHT by `ml-auto`, which is what "bottom-right of" describes on a
+          line that already starts with the pill. It is recorded here because the
+          phrasing also admits a stacked reading, and a layout decision taken from
+          an ambiguous sentence should say which way it went.
+          ⚠ THE LINE RENDERS FOR A HUMAN AUTHOR TOO — with no pill, the channel
+          name simply sits alone on the right, so every row keeps the same
+          three-line shape and the list does not comb. */}
+      <span className="flex w-full items-center gap-1.5">
+        {mention.authorKind === "agent" && (
+          // ⚠ THE AGENT'S NAME, NOT THE NOUN (Samuel, 2026-09-15). Falls back
+          // through the operator's rename -> `#<id>` -> "Agent": the same ladder
+          // `attribution-pill.tsx › attributionName` walks, for the same reason —
+          // `null` is CANNOT SAY and a blank pill would be a claim about nothing.
+          <AgentPill>{agentPillLabel(mention)}</AgentPill>
+        )}
+        <span className="ml-auto truncate text-micro text-text-muted">
+          in # {channelName}
+        </span>
+      </span>
     </button>
   );
 }
