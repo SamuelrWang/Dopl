@@ -96,4 +96,3 @@ export function threadsFaceOption(
     ? { key: option.key, label: "Artifacts" }
     : option;
 }
-

@@ -9441,3 +9441,30 @@ anything: the import, the arm and the four-entry `AGENT_ACCENTS` table all still
 ⚠ **Measure before deleting** — `grep -rn 'agentAccent' src apps` — because the arm is a `false`
 away from being live again, and a host that mounts an agent pill without a row accent would lose
 its only per-agent mark.
+
+### F-712 — `artifactSpans` counts a busy room's artifacts off a PostgREST-capped page
+
+**Found:** 2026-09-16, reviewing `master..e7da893e`. **Status:** OPEN — recorded, NOT fixed. The fix
+is a server-side aggregation and that is a migration plus an RPC, which is not this wave's change.
+
+`repository-artifacts.ts › artifactSpans` derives `count` / `firstSeq` / `lastSeq` by selecting the
+member rows themselves — `select("artifact_id, seq")` over `channel_messages`, filtered
+`.eq("channel_id", …).in("artifact_id", …)` — and folding them in JS. **The select is unbounded and
+PostgREST is not**: `supabase/config.toml › max_rows = 1000` clips the response, no error is raised,
+and every number the fold produces is then computed over whatever survived the clip.
+
+⚠ **IT IS A WRONG ANSWER, NOT A MISSING ONE, AND NOTHING ON THE PAGE SAYS SO.** The card's whole
+value is "which box does #1119 live in" (the function's own docblock), so a clipped `lastSeq` points
+a reader at the wrong artifact and a clipped `count` under-reports it — silently, and differently
+each time the page moves.
+
+⚠ **PRE-EXISTING, AMPLIFIED BY `8aa774d7`.** The fold path is older than the browse read, but the
+fold itself asked for ONE artifact's span. The Artifacts face asks for up to
+`CHANNEL_ARTIFACT_LIST_LIMIT` (50) at once, so the 1000-row ceiling is now ~20 folded messages per
+artifact rather than 1000 — inside the range a real room reaches.
+
+**Fix** = server-side aggregation: an RPC (or a grouped `count`/`min`/`max` view) that returns one
+row per artifact, so the ceiling applies to ARTIFACTS — a set this read already bounds — instead of
+to their members. ⚠ **Do not "fix" it with a larger `max_rows` or a page loop**: the first moves the
+number and keeps the silence, and the second pulls the same rows to do arithmetic Postgres will do
+once.

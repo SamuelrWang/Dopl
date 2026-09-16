@@ -47,7 +47,7 @@ import { TENANCY_FIX, TENANCY_RULE } from "./channel-doctrine";
 // ⚠ THE COLOUR REFUSAL IS A NEIGHBOUR, not a branch in here — this file is at the §1
 // cap and a refusal is prose about one server code (`channel-ops-launch-color.ts`).
 import { colorTaken, freeColors } from "./channel-ops-launch-color";
-import { isNameRefusal, launchName, launchedTag } from "./channel-ops-launch-name";
+import { isNameRefusal, launchName, launchedName } from "./channel-ops-launch-name";
 
 /** Peer-influenced display text, neutralized — never an empty span. */
 const NO_NAME = "(unnamed)";
@@ -420,10 +420,10 @@ export async function opLaunchAgent(
     // started.
     //
     // ⚠ **`name=` IS THE ADDRESS AND `agent=` IS THE RECORD (Samuel, 2026-09-15).** The NAME is
-    // what a body tags now, and the machine may not have stored the one that was asked for: a
-    // second "Coder" is stored `Coder-1`. A caller that never learned the applied name would go on
-    // tagging `@coder` and reach the OTHER agent — which is why this is the MACHINE's value and
-    // the request is only the older-desktop fallback (`channel-ops-launch-name.ts › launchedTag`).
+    // what a body tags now; a second "Coder" is stored `Coder-1`, so a caller that went on
+    // tagging `@coder` would reach the OTHER agent. ⚠ THE THREE CASES ARE THE NEIGHBOUR'S
+    // (`channel-ops-launch-name.ts › launchedName`): the machine's value; the ABSENT-field
+    // fallback; carried-but-`null` → `(not applied)`, NEVER the request (`4782677b`).
     // ⚠ **THE ID FORM IS STILL PUBLISHED, UNCHANGED**: the handle that never stops working and the
     // third coordinate of every other agent op. Nothing TELLS the caller to address with it — that
     // is what `name=` is for — but withdrawing it would be a different and worse decision.
@@ -434,7 +434,7 @@ export async function opLaunchAgent(
     return ok(
       factsLine("launched", {
         agent: `@agent-${directive.agentId}`,
-        name: launchedTag(directive.appliedAgentName ?? named.name),
+        name: launchedName(directive.appliedAgentName, named.name),
         thread: directive.threadId ?? undefined,
         template: directive.templateName ?? undefined,
         model: directive.model ?? undefined,

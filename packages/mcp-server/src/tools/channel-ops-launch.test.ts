@@ -166,13 +166,36 @@ describe("LAUNCHED — the id, and how to direct it", () => {
     expect(out).not.toContain("name=@coder ");
   });
 
-  it("falls back to the REQUESTED name only when the machine reported none", async () => {
+  it("falls back to the REQUESTED name only when the field is ABSENT", async () => {
     // ⚠ A DESKTOP OLDER THAN THIS WAVE SENDS NO `appliedAgentName` (§13, a supported peer), and
     // the honest thing to print is the name that was asked for — it is what that machine stored.
     const out = await text(created({ status: "launched", agentId: "abcd1234" }), {
       name: "Bug Reviewer",
     });
     expect(out).toContain("name=@bug-reviewer");
+  });
+
+  /**
+   * 🔒 **A CARRIED-BUT-`null` FIELD IS NOT THE OLDER-DESKTOP CASE** (found reviewing
+   * `4782677b`, 2026-09-16).
+   *
+   * ⚠ **`?? named.name` COLLAPSED THE TWO AND PUBLISHED A TAG NOTHING ANSWERS TO.** `null`
+   * means the machine CARRIES the field and reported no name — the store's refusal arm, which
+   * `4782677b` says must now be impossible — and the launch it describes is exactly the one
+   * where the caller's own request is the wrong answer. An orchestrator handed `@coder` for an
+   * agent the machine filed as `New Agent` addresses nobody, silently, forever.
+   * ⚠ **AN "IMPOSSIBLE" CASE STILL GETS A SPELLING** rather than a fallback: the previous
+   * version relied on it not happening, and six launches on one machine on 2026-09-16 are
+   * what that cost.
+   */
+  it("🔒 says (not applied) when the machine CARRIES the field and it is null", async () => {
+    const out = await text(
+      created({ status: "launched", agentId: "abcd1234", appliedAgentName: null }),
+      { name: "Coder" }
+    );
+    expect(out).toContain('name="(not applied)"');
+    // ⚠ THE WHOLE POINT: the REQUEST is not echoed as an address on this arm.
+    expect(out).not.toContain("@coder");
   });
 
   it("says a custom NAME is what people see AND what agents tag it by", async () => {

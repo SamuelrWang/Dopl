@@ -48,12 +48,12 @@
   server assigns the FIRST FREE key when omitted, and answers 409 with the free
   set when the chosen one is taken.
 - **Ended agents**: their past posts lose the colour (the key is back in the
-  bank) and render with a neutral `--border-strong` ring + bar
+  bank) and render with a neutral `--border-strong` frame + bar
   (`agent-box-rule.ts › AGENT_ACCENT_NEUTRAL`), so they still read as agent posts.
   Live = not ended (Thinking / Idle / Waiting all keep it).
 - **Who gets an accent**: posts whose author is a CHANNEL AGENT session (has a
   session id). People and channel-less MCP posts ("Desktop agent") stay white,
-  no ring and no bar, pill as today. The predicate is `agent-box-rule.ts › agentBoxOf`
+  no frame and no bar, pill as today. The predicate is `agent-box-rule.ts › agentBoxOf`
   — its "box" name is history and was deliberately not renamed with the face, because
   the filter's "People" option is its literal complement.
 - **The post's face** — ⚠ **SUPERSEDED 2026-09-14, and the first paragraph is kept only so the
@@ -85,7 +85,7 @@
   The frame, the top bar and the second row component (message-box-agent) are DELETED.
 - **Pop-out**: the "posted to channel" bar takes the agent's colour. ⚠ **It did NOT follow the
   2026-09-14 restyle** (measured): it is a full-width delivery record with no side, no author
-  and no pill, so a ringed pill and an outer-edge bar have nothing to attach to. Its geometry
+  and no pill, so a framed pill and an outer-edge bar have nothing to attach to. Its geometry
   constant moved back into `agent-stream-sent-box.tsx › AGENT_BAR` when the transcript's top bar
   it was paired with was deleted.
 - **Filter**: a `SelectMenu` (text face, chevron) immediately LEFT of the

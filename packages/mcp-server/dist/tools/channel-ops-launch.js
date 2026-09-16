@@ -348,10 +348,10 @@ async function opLaunchAgent(client, ref, opts = {}) {
         // started.
         //
         // ⚠ **`name=` IS THE ADDRESS AND `agent=` IS THE RECORD (Samuel, 2026-09-15).** The NAME is
-        // what a body tags now, and the machine may not have stored the one that was asked for: a
-        // second "Coder" is stored `Coder-1`. A caller that never learned the applied name would go on
-        // tagging `@coder` and reach the OTHER agent — which is why this is the MACHINE's value and
-        // the request is only the older-desktop fallback (`channel-ops-launch-name.ts › launchedTag`).
+        // what a body tags now; a second "Coder" is stored `Coder-1`, so a caller that went on
+        // tagging `@coder` would reach the OTHER agent. ⚠ THE THREE CASES ARE THE NEIGHBOUR'S
+        // (`channel-ops-launch-name.ts › launchedName`): the machine's value; the ABSENT-field
+        // fallback; carried-but-`null` → `(not applied)`, NEVER the request (`4782677b`).
         // ⚠ **THE ID FORM IS STILL PUBLISHED, UNCHANGED**: the handle that never stops working and the
         // third coordinate of every other agent op. Nothing TELLS the caller to address with it — that
         // is what `name=` is for — but withdrawing it would be a different and worse decision.
@@ -361,7 +361,7 @@ async function opLaunchAgent(client, ref, opts = {}) {
         // belong in this record the moment the wire carries them.
         return (0, respond_1.ok)((0, channel_facts_1.factsLine)("launched", {
             agent: `@agent-${directive.agentId}`,
-            name: (0, channel_ops_launch_name_1.launchedTag)(directive.appliedAgentName ?? named.name),
+            name: (0, channel_ops_launch_name_1.launchedName)(directive.appliedAgentName, named.name),
             thread: directive.threadId ?? undefined,
             template: directive.templateName ?? undefined,
             model: directive.model ?? undefined,

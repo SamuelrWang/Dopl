@@ -56,7 +56,6 @@ const channel_session_render_1 = require("./channel-session-render");
 // row goes through `inlineOr` → `neutralizeInline`, whose structure class
 // already contains `|` and blanks it. Our own literals are a closed state set,
 // a closed detail map, and digits. So no cell can forge a column.
-/** Header + alignment row for {@link sessionRow}. ⚠ Column order is the row's. */
 /**
  * Header + alignment row for {@link sessionRow}. ⚠ Column order is the row's.
  *

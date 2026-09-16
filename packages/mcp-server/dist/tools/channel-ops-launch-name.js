@@ -1,8 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.NAME_NOT_APPLIED = void 0;
 exports.launchName = launchName;
 exports.isNameRefusal = isNameRefusal;
 exports.launchedTag = launchedTag;
+exports.launchedName = launchedName;
 const channel_agent_id_1 = require("./channel-agent-id");
 const respond_1 = require("./respond");
 /**
@@ -85,4 +87,36 @@ function isNameRefusal(answer) {
  */
 function launchedTag(name) {
     return `@${name.trim().toLowerCase().replace(/\s+/g, "-")}`;
+}
+/**
+ * What the launch result prints when the machine reported NO name (found reviewing
+ * `4782677b`, 2026-09-16).
+ *
+ * ⚠ **NOT A TAG, AND DELIBERATELY UNTYPEABLE.** Every other value of `name=` is an address a
+ * caller copies; this one says the address is not known, so it carries no `@` and no slug.
+ * `channel-facts.ts › renderValue` quotes it for the space, which is what keeps the
+ * `key=value` pairs parseable.
+ */
+exports.NAME_NOT_APPLIED = "(not applied)";
+/**
+ * **THE `name=` FIELD ON A LAUNCHED RESULT** — the machine's value, the older-desktop fallback,
+ * and the third case that used to be silently folded into the second (found reviewing
+ * `4782677b`, 2026-09-16).
+ *
+ * ⚠ **`null` AND `undefined` ARE DIFFERENT ANSWERS AND `??` COLLAPSED THEM.** The field is
+ * OPTIONAL on the SDK's `LaunchDirective`, so:
+ *   · `undefined` — the desktop/server predates the field. The name it stored IS the one that was
+ *     asked for, and echoing the request is the honest answer. This is the only fallback.
+ *   · `null` — the field IS carried and the machine reported no name. `4782677b` closed the two
+ *     desktop arms that produced it, so it should now be unreachable; echoing the REQUEST here
+ *     published a tag nothing answers to, on exactly the launch that went wrong.
+ * ⚠ **AN UNREACHABLE CASE STILL GETS A SPELLING.** "Cannot happen" is what the previous version
+ * relied on, and the six unnamed launches of 2026-09-16 are what it cost.
+ */
+function launchedName(applied, requested) {
+    if (applied === undefined)
+        return launchedTag(requested);
+    if (applied === null)
+        return exports.NAME_NOT_APPLIED;
+    return launchedTag(applied);
 }

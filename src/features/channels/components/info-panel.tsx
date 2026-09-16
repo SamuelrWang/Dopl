@@ -237,6 +237,15 @@ export function ChannelsInfoPanel({
   const openThreadId = openThread?.id ?? null;
   const threadView = openThread !== null;
   const options = channelPaneTabs(threadView, knowledge);
+  /**
+   * 🔒 **IS THE THREADS SLOT ON ITS ARTIFACTS FACE?** — ONE boolean, read by the
+   * label, the body and the badge rule below.
+   *
+   * ⚠ **THE CAPABILITY IS ANDed IN HERE AND NOWHERE ELSE.** It was spelled
+   * `artifacts && artifactsFace` at three sites; a fourth that forgot the left half
+   * would draw a face the host does not offer.
+   */
+  const onArtifactsFace = artifacts && artifactsFace;
 
   // ⚠ THE DEAD-SELECTION FALLBACK. Opening a thread removes the very tab that is
   // selected, and a `value` matching no option leaves `SegmentedControl` with
@@ -320,14 +329,14 @@ export function ChannelsInfoPanel({
               // FACE is forced back to threads when it is off — a host that turns
               // the capability off mid-mount cannot be left on a face it no longer
               // offers, which is the dead-selection rule above in miniature.
-              artifactsFace={artifacts && artifactsFace}
+              artifactsFace={onArtifactsFace}
               onToggleFace={
                 artifacts ? () => setArtifactsFace((v) => !v) : undefined
               }
               // ⚠ MOUNTED WITH THE FACE — the reads go with it, so a reader who
               // never toggles requests nothing (the Settings/Knowledge slot rule).
               artifacts={
-                artifacts && artifactsFace ? (
+                onArtifactsFace ? (
                   <ArtifactsTab
                     channelId={channel.id}
                     workspaceId={channel.workspaceId}
@@ -413,8 +422,16 @@ export function ChannelsInfoPanel({
           options={options.map((t) => {
             // 🔒 THE THREADS SLOT ANSWERS TO ITS FACE — heading and badge both,
             // see `threadsFaceOption`.
-            const option = threadsFaceOption(t, artifacts && artifactsFace);
-            return option.label === "Artifacts"
+            //
+            // ⚠ **THE BADGE IS DROPPED ON THE FACE AND THE SLOT, NEVER ON THE
+            // RENDERED LABEL** (found in review, 2026-09-16). This read
+            // `option.label === "Artifacts"`, so renaming that heading — a copy
+            // decision, made in `info-panel-tabs.ts` with no reason to think about
+            // this line — would put the THREAD count back under it, which is the
+            // one number `threadsFaceOption` exists to suppress.
+            const artifactsSlot = onArtifactsFace && t.key === "threads";
+            const option = threadsFaceOption(t, onArtifactsFace);
+            return artifactsSlot
               ? option
               : { ...option, count: tabCount(option.key, threads, agentCount) };
           })}

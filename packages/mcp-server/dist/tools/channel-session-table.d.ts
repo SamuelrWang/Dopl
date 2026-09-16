@@ -14,7 +14,6 @@
  */
 import type { ChannelSessionState, ChannelSessionStateOwn } from "@dopl/client";
 import { type SessionRenderOpts } from "./channel-session-render";
-/** Header + alignment row for {@link sessionRow}. ⚠ Column order is the row's. */
 /**
  * Header + alignment row for {@link sessionRow}. ⚠ Column order is the row's.
  *

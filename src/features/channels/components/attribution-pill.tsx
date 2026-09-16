@@ -319,10 +319,10 @@ export function AttributionPill({
     // 🔒 **THE 1px LIFT USED TO LIVE HERE AND IT HAD TO LEAVE (Samuel, 2026-09-15:
     // the border "detaches" from the badge on hover).** The app's raised affordance
     // was stated as `hover:-translate-y-px` ON THIS ELEMENT — but on an agent row
-    // this element is WRAPPED, and the wrapper is what paints the accent ring
+    // this element is WRAPPED, and the wrapper is what paints the accent FRAME
     // (`authored-row.tsx › ACCENT_FRAME`). A transform moves the element it is on and
     // nothing else, so hovering lifted the capsule out from under its own border and
-    // opened a 1px gap. **The motion now sits on the ring-bearing wrapper**, which is
+    // opened a 1px gap. **The motion now sits on the frame-bearing wrapper**, which is
     // the only element that can move the pill AND its border as one shape.
     //
     // ⚠ **NOTHING IS STRANDED BY THAT MOVE, AND THE REASON IS AN INVARIANT RATHER

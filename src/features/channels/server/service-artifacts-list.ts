@@ -81,4 +81,3 @@ export async function listChannelArtifacts(
   }
   return { artifacts, truncated: rows.length >= CHANNEL_ARTIFACT_LIST_LIMIT };
 }
-

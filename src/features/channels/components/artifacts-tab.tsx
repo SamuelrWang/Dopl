@@ -55,7 +55,7 @@ export const ARTIFACTS_EMPTY_NOTE =
 
 /**
  * ⚠ A DISSOLVED CARD IS ABSENT, AND SO IS ONE THAT FOLDED NOTHING — the SERVER's
- * rule (`service-artifacts.ts › listChannelArtifacts`, which carries why). Named
+ * rule (`service-artifacts-list.ts › listChannelArtifacts`, which carries why). Named
  * here because it explains a face that never renders a member-less card; it is
  * NOT re-applied below, because a second copy of a rule is a second thing to drift.
  */

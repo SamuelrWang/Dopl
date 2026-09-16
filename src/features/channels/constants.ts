@@ -162,7 +162,7 @@ export const MAX_METADATA_SERIALIZED_BYTES = 16_384;
 export const CHANNEL_THREAD_LIST_LIMIT = 200;
 
 /**
- * Ceiling on ONE channel's ARTIFACT list (`service-artifacts.ts ›
+ * Ceiling on ONE channel's ARTIFACT list (`service-artifacts-list.ts ›
  * listChannelArtifacts`) — the Artifacts face of the /home threads panel (Samuel,
  * 2026-09-16).
  *
