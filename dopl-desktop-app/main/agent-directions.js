@@ -23,9 +23,31 @@
 // It is a SECOND toggle rather than a reuse of the launch one because the two capabilities are
 // different: launching buys COMPUTE, directing reaches a running agent's PRIVATE lane. An
 // operator who wants one may not want the other, and a single flag cannot say so.
-// ⚠ **OFF MEANS SILENT.** No claim, no decide, no diag per row — the row expires and the
-// orchestrator sees that. A refusal from a machine that has not opted in would itself admit
-// the machine is listening.
+// ⚠ **OFF MEANS REFUSED, AND IT USED TO MEAN SILENT** (Samuel's ruling, 2026-09-16). The
+// original rule here read: *"OFF MEANS SILENT. No claim, no decide, no diag per row — the row
+// expires and the orchestrator sees that. A refusal from a machine that has not opted in would
+// itself admit the machine is listening."* **That argument is retired, and the reason it was
+// wrong on THIS lane is the whole of why it cost fifteen days.**
+//
+// Concealment is worth something only where a STRANGER can probe. Nobody can probe here:
+// `operator_user_id` is `ctx.userId` and is never a parameter — no schema in
+// `schema-direction.ts` has such a field and none may ever get one
+// (`service-directions.ts`'s header states it as the whole authorization story) — so **the only
+// party who can file a direction against this machine is the operator themselves.** There was
+// never a third party to hide from. What the silence actually concealed was the operator's own
+// misconfiguration, from the operator.
+//
+// ⚠ **THE COST IS ON RECORD: 38 of 38 directions filed between 2026-08-31 and 2026-09-15
+// expired unclaimed**, because the consent this lane reads had no UI and so was never written
+// (`DIRECTION-DROP-TRACE.md`). Every one of them read `pending, claimed=no` to its sender and
+// named no cause. A lane that drops silently is how that ran for fifteen days without anyone
+// being able to see it.
+//
+// SO: a direction arriving at a machine whose operator has not armed the lane is CLAIMED and
+// REFUSED `blocked`, which the MCP surface renders as the operator having declined and points
+// at the switch. ⚠ Refusing costs the sender one round trip instead of a ten-minute expiry, and
+// `blocked` carries `retry=no` — correct, since asking again changes nothing until a human
+// flips the control.
 
 const { apiFetch } = require('./api');
 const realtime = require('./realtime');
@@ -146,12 +168,32 @@ async function post(workspaceId, path, payload) {
   }
 }
 
-/** THE POLL BACKSTOP — only for workspaces whose push is unhealthy. */
+/**
+ * THE POLL BACKSTOP — for workspaces whose push is unhealthy, AND for every workspace when the
+ * lane is OFF.
+ *
+ * ⚠ **WHEN THE LANE IS OFF THIS IS THE ONLY WAY A ROW IS EVER SEEN, WHICH IS WHY THE REFUSAL
+ * RIDES HERE AND NOT ON REALTIME.** `refresh()` binds `realtime.setDirections(armed &&
+ * enabled())`, so an un-armed machine has NO `postgres_changes` binding on
+ * `channel_agent_directions` at all — it cannot be woken by an INSERT and therefore cannot
+ * refuse one. Arming the binding to refuse would break the invariant
+ * `realtime-mailboxes.js` states in as many words — *"a machine that never opts in names no
+ * table on the wire"* — so it is NOT armed, and the HTTP backstop (a route this machine already
+ * calls, naming no table) carries the refusal instead.
+ *
+ * ⚠ THE PRICE IS LATENCY AND IT IS THE RIGHT TRADE: up to `POLL_MS` to answer, against a
+ * ten-minute silent expiry. A sender holding with `wait_ms` usually still collects it.
+ *
+ * ⚠ **AN OFF LANE POLLS EVERY WORKSPACE, NOT ONLY THE UNHEALTHY ONES.** `isWorkspaceHealthy`
+ * answers whether PUSH is working, which is irrelevant when nothing is subscribed — skipping a
+ * "healthy" workspace while off would skip the only pass that will ever see its rows.
+ */
 async function poll() {
-  if (!armed || !enabled() || pollUnavailable) return;
+  if (!armed || pollUnavailable) return;
+  const off = !enabled();
   const list = (deps.workspaces && deps.workspaces()) || [];
   for (const wsId of list) {
-    if (realtime.isWorkspaceHealthy(wsId)) continue;
+    if (!off && realtime.isWorkspaceHealthy(wsId)) continue;
     await pollWorkspace(wsId);
   }
 }
@@ -188,14 +230,28 @@ async function pollWorkspace(wsId) {
 /**
  * THE ONE FUNNEL. Gate order, and gates 1-4 are SILENT by design.
  *
+ * ⚠ **THE OPERATOR'S CONSENT IS NO LONGER GATE 1 — IT IS A DECISION AFTER THE CLAIM**
+ * (Samuel, 2026-09-16). It sat here, and a machine that had not armed the lane returned before
+ * touching the row, so the sender got a ten-minute expiry naming no cause. It now sits beside
+ * the rate bound below, for the identical reason that one is placed there: **AFTER the claim so
+ * the caller gets an ANSWER rather than an expiry, and BEFORE any delivery so no turn is
+ * started.** The file header carries why the old silence was wrong on this lane specifically.
+ *
+ * ⚠ **`armed` STAYS A SILENT RETURN AND IS A DIFFERENT FACT.** It means this MODULE is not
+ * running — no identity, no delivery funnel, `stop()` called — so there is nothing to answer
+ * *with* and no credential to answer *through*. An un-armed module refusing rows would be a
+ * process claiming it can speak for a machine that is not listening.
+ *
  * 🔒 **GATE 3 IS THE LOCAL OWNER RE-CHECK AND IT IS NOT REDUNDANT.** The realtime filter is
  * `workspace_id=eq.<id>` — WORKSPACE-WIDE, not operator-scoped — so a raw frame for another
  * member's direction reaches this handler under a subscription rather than under a per-row
  * auth answer. The server's SELECT policy and the claim CAS both fence on `operator_user_id`
  * as well; this is the belt that keeps a foreign row from ever reaching the claim at all.
+ * ⚠ **IT IS LOAD-BEARING TWICE OVER NOW THAT AN OFF LANE ACTS**: it is what stops this machine
+ * refusing another member's direction on their behalf.
  */
 async function handle(raw, workspaceId) {
-  if (!armed || !enabled()) return; // 1. armed + the operator's own toggle
+  if (!armed) return; // 1. this module is running at all — see the docblock on why consent left
   const d = wire.directionFrom(raw, workspaceId);
   if (!d || d.status !== wire.STATUS_PENDING) return; // 2. narrow + pending only
   const me = (deps.getUserId && deps.getUserId()) || null;
@@ -211,6 +267,22 @@ async function handle(raw, workspaceId) {
     // ⚠ REMEMBERED BEFORE THE DELIVERY, deliberately: a crash mid-delivery must not let a
     // later frame re-deliver the same words into the same agent.
     remember(claimed.id);
+    // ── ⚠ THE OPERATOR'S STANDING CONSENT, DECIDED RATHER THAN OBEYED IN SILENCE (2026-09-16) ──
+    // Read HERE, at decision time and never cached, exactly as it was when it was gate 1 — an
+    // operator may withdraw the grant while a row is in flight and the next one must see it.
+    // ⚠ `blocked` IS THE EXISTING CLOSED-VOCABULARY WORD FOR "the operator declined"
+    // (`channel-doctrine.ts`), so this mints no sixth word — which would have been a schema
+    // change in both trees plus a column CHECK, for a fact one of the five already states.
+    // ⚠ NOT `no-bridge`: the doctrine pins that one to the LAUNCH toggle, and two settings
+    // answering with one word is how a reader comes to flip the wrong control.
+    // ⚠ THE ROW IS CLAIMED FIRST AND THAT IS DELIBERATE — the claim CAS is what makes exactly
+    // one machine answer when the operator runs two Macs, both of them un-armed.
+    if (!enabled()) {
+      diag('agent-direction: the direct lane is not armed on this machine — refusing',
+        String(claimed.id).slice(0, 8), '(Settings › Agents › Direct agents)');
+      await decide(claimed, { refused: 'blocked' });
+      return;
+    }
     // ── ⚠ THE INBOUND RATE BOUND (2026-08-31, Samuel's same-owner directions ruling; F-374) ──
     // AFTER the claim so the caller gets an ANSWER rather than a ten-minute expiry, and BEFORE
     // the delivery so no turn is started. `busy` is the existing word and its existing sentence
@@ -325,6 +397,11 @@ module.exports = {
   refresh, // the toggle moved: rebind realtime
   deliver, // main/realtime.js's handler
   handle, // the one funnel — exported for the suite
+  // ⚠ EXPORTED FOR THE SUITE ONLY, on `handle`'s terms. It matters more than a backstop
+  // normally would: while the lane is OFF there is no realtime binding, so this sweep is the
+  // ONLY thing that can ever see a row to refuse it (2026-09-16). A change that quietly made it
+  // skip workspaces again would restore the silent drop with every other test still green.
+  poll,
   reportDelivered, // session-engine.js's terminal write
   POLL_MS,
   MAX_REMEMBERED,

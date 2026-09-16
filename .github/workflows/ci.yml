@@ -281,6 +281,25 @@ jobs:
       - name: Pair every canSee* predicate with a live SELECT policy
         run: npx tsx scripts/check-rls-pair-gate.ts
 
+      # 🔒 A PRELOAD BRIDGE WITH NO CALLER IS A CAPABILITY NOBODY CAN REACH
+      # (2026-09-16, DIRECTION-DROP-TRACE.md). `dopl.orchestratorDirect` shipped
+      # on 2026-08-31 with its store key, its `appWindowOnly` IPC pair, its
+      # `SpaBridgeSurface` type and its preload member all present and correct —
+      # and nothing in the SPA ever called it, so the consent it gated was never
+      # writable and 38 of 38 private directions expired unclaimed over fifteen
+      # days, each reporting `pending, claimed=no` and naming no cause. Every
+      # layer was individually tested; `_ipc-ops-table.mjs` asserted both ops
+      # existed and `preload-parity.test.mjs` asserted the preload matched. NO
+      # TEST ASKED WHETHER ANYTHING CALLED IT, because each owned one layer and
+      # the gap was between two of them. ⚠ Declaration files are excluded from
+      # the caller search BY NAME — `spa-bridge.ts` names every member by
+      # construction, so counting it would make this gate pass on precisely the
+      # bug it exists for. Mutation-verified both ways: removing the caller
+      # turns it red, and it was RED against the pre-fix tree before it was
+      # green against the fixed one.
+      - name: Every preload bridge member has a caller in the SPA
+        run: node scripts/check-bridge-caller-drift.mjs
+
       # 🔒 A MIGRATION THAT RE-STAMPS A PARENT'S `workspace_id` RE-STAMPS EVERY
       # CHILD THAT COPIES IT (2026-09-03, F-664). `20260920120000` moved the
       # personal rows into their author's container and left the folders,

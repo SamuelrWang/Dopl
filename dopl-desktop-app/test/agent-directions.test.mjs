@@ -130,13 +130,55 @@ const decidePosts = (h) => h.posts.filter((p) => p.path === wire.ROUTES.decide);
 
 // ── THE CONSENT ───────────────────────────────────────────────────────────────
 
-test("CONSENT: with the toggle OFF nothing is claimed, decided, or delivered — and nothing is said", async () => {
-  // ⚠ SILENCE IS THE DESIGN. A refusal from a machine that has not opted in would itself admit
-  // the machine is listening, which is the one thing an un-opted-in machine must not disclose.
+// ⚠ **THIS TEST ASSERTED THE OPPOSITE UNTIL 2026-09-16 AND IT WAS WRONG, GREEN, AND EXPENSIVE.**
+// It read: *"CONSENT: with the toggle OFF nothing is claimed, decided, or delivered — and nothing
+// is said … SILENCE IS THE DESIGN. A refusal from a machine that has not opted in would itself
+// admit the machine is listening, which is the one thing an un-opted-in machine must not
+// disclose."* It passed every run for fifteen days while **38 of 38 real directions expired
+// unclaimed and nobody could see why** (`DIRECTION-DROP-TRACE.md`).
+//
+// The premise was false ON THIS LANE. `operator_user_id` is `ctx.userId` and is never a
+// parameter, so the only party who can file a direction against a machine is that machine's own
+// operator. There was no third party to conceal anything from; the silence hid the operator's own
+// unset switch from the operator. Samuel's ruling, 2026-09-16: **OFF MEANS REFUSED.**
+test("CONSENT: with the toggle OFF the row is CLAIMED and REFUSED `blocked` — never silently dropped", async () => {
   const h = harness({ enabled: false });
   await h.api.handle(row(), WS);
-  assert.equal(h.posts.length, 0, "a machine that has not opted in wrote NOTHING to the server");
-  assert.equal(h.directs.length, 0);
+
+  assert.equal(claimPosts(h).length, 1, "the row is claimed, so exactly one machine answers it");
+  const decided = decidePosts(h);
+  assert.equal(decided.length, 1, "and it is ANSWERED rather than left to expire");
+  assert.equal(decided[0].body.status, "refused");
+  assert.equal(
+    decided[0].body.refusalReason,
+    "blocked",
+    "`blocked` is the closed vocabulary's existing word for 'the operator declined' — this mints no sixth word"
+  );
+
+  assert.equal(h.directs.length, 0, "and NOTHING is delivered: the refusal starts no turn");
+});
+
+test("CONSENT: the refusal names the switch in the local log, so the operator can find it", async () => {
+  // ⚠ THE WIRE CARRIES THE WORD, THE SENTENCE IS THE MCP's (`channel-doctrine.ts` names the
+  // "Direct agents" setting). This machine's own diag has to name it too, because the operator
+  // reading listener.log is the person who has to go flip it.
+  const h = harness({ enabled: false });
+  await h.api.handle(row(), WS);
+  assert.ok(
+    h.logged.some((l) => l.includes("Direct agents")),
+    "the diag line points at the control, not just at the refusal"
+  );
+});
+
+test("CONSENT: an UN-ARMED module is still silent — that is a different fact from a declined one", async () => {
+  // ⚠ `armed` MEANS THIS MODULE IS NOT RUNNING (no identity, no delivery funnel, `stop()` called).
+  // There is nothing to answer with and no credential to answer through, so it must NOT refuse:
+  // a stopped module writing verdicts would be a process speaking for a machine that is not
+  // listening. Only the OPERATOR'S CONSENT moved out of gate 1.
+  const h = harness({ enabled: false });
+  h.api.stop();
+  await h.api.handle(row(), WS);
+  assert.equal(h.posts.length, 0, "a stopped module writes nothing at all");
 });
 
 test("CONSENT: the realtime binding is armed only while the toggle is on", () => {
@@ -180,10 +222,50 @@ test("CONSENT: a disarm really drops the handler, so a stale frame reaches nothi
 });
 
 test("CONSENT: it is read at DECISION time, never cached at arm time", async () => {
+  // ⚠ THE INTENT OF THIS TEST IS UNCHANGED AND IS THE POINT: an operator may WITHDRAW the grant
+  // while the lane is armed, and the very next row must see it. What changed on 2026-09-16 is
+  // only what a withdrawn grant DOES — it refuses instead of vanishing — so the assertion moved
+  // from "nothing happened" to "the refusal reflects the flipped value".
   const h = harness({ enabled: true });
   h.cfg.enabled = false; // the operator flips it after the lane armed
   await h.api.handle(row(), WS);
-  assert.equal(h.posts.length, 0);
+  const decided = decidePosts(h);
+  assert.equal(decided.length, 1, "the withdrawal is honoured immediately, not at the next arm");
+  assert.equal(decided[0].body.refusalReason, "blocked");
+  assert.equal(h.directs.length, 0, "and the turn that would have run does NOT");
+});
+
+// ── THE BACKSTOP, WHICH IS LOAD-BEARING WHILE THE LANE IS OFF ─────────────────
+//
+// ⚠ **AN OFF LANE HAS NO REALTIME BINDING AT ALL**, so nothing pushes it a row:
+// `refresh()` binds `realtime.setDirections(armed && enabled())`. Arming the binding to refuse
+// would break `realtime-mailboxes.js`'s stated invariant — *"a machine that never opts in names
+// no table on the wire"* — so the HTTP sweep carries the refusal instead. These two cases are
+// what keep the refusal reachable; without them the honest-refusal work above is unreachable
+// code and every other test still passes.
+
+test("BACKSTOP: while OFF it sweeps EVERY workspace, not just the unhealthy ones", async () => {
+  // ⚠ `isWorkspaceHealthy` answers whether PUSH works, which is meaningless when nothing is
+  // subscribed. Skipping a "healthy" workspace while off would skip the only pass that will
+  // ever see its rows — which is precisely the fifteen-day silence.
+  const h = harness({ enabled: false, healthy: true, pending: [] });
+  await h.api.poll();
+  assert.equal(h.gets.length, 1, "a healthy workspace is STILL swept while the lane is off");
+});
+
+test("BACKSTOP: while ON it stays a backstop — a healthy workspace is left to push", async () => {
+  const h = harness({ enabled: true, healthy: true, pending: [] });
+  await h.api.poll();
+  assert.equal(h.gets.length, 0, "realtime owns the healthy case; the sweep does not double it");
+});
+
+test("BACKSTOP: a row found by the OFF sweep is claimed and refused, end to end", async () => {
+  const h = harness({ enabled: false, healthy: true, pending: [row()] });
+  await h.api.poll();
+  const decided = decidePosts(h);
+  assert.equal(decided.length, 1, "the sweep is what makes the refusal reachable");
+  assert.equal(decided[0].body.refusalReason, "blocked");
+  assert.equal(h.directs.length, 0);
 });
 
 // ── THE FENCES ────────────────────────────────────────────────────────────────

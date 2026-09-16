@@ -256,6 +256,85 @@ export function LaunchAgentsRow({
   );
 }
 
+export const DIRECT_AGENTS_OFF = "off";
+export const DIRECT_AGENTS_EVERY = "every";
+
+/** The two picks. ⚠ There is no per-channel middle pick and there must not be one
+ *  — the record is a single machine-wide boolean
+ *  (`main/orchestrator-consent.js › ORCHESTRATOR_DIRECT_KEY`), so a third option
+ *  would be a label with no storage behind it. */
+export type DirectAgentsValue = typeof DIRECT_AGENTS_OFF | typeof DIRECT_AGENTS_EVERY;
+
+/**
+ * ⚠ **THE OPTION TEXT IS "In every channel" ON PURPOSE, WORD FOR WORD FROM
+ * {@link LAUNCH_AGENTS_OPTIONS}.** It is the phrase the row above already uses for
+ * ITS machine-wide pick, and the two flags have the same scope — so the operator
+ * learns "in every channel = this whole Mac" once and reads it correctly in both
+ * rows. A second phrasing for one scope is how a control comes to look per-channel.
+ */
+const DIRECT_AGENTS_OPTIONS: ReadonlyArray<SelectMenuOption<DirectAgentsValue>> = [
+  { value: DIRECT_AGENTS_OFF, label: "Cannot direct agents" },
+  { value: DIRECT_AGENTS_EVERY, label: "In every channel" },
+];
+
+/**
+ * DIRECT AGENTS — may an outside session of the operator's own send PRIVATE
+ * instructions to agents already running on this Mac? (Samuel approved
+ * 2026-09-16, off the `DIRECTION-DROP-TRACE.md` finding.)
+ *
+ * ⚠ **THIS ROW IS THE FIX FOR A FIFTEEN-DAY SILENT FAILURE, NOT A NEW FEATURE.**
+ * The lane, its store key, its IPC pair and its preload bridge all shipped on
+ * 2026-08-31; nothing ever rendered a control, so the flag was never written, so
+ * every direction filed against this machine was dropped at
+ * `main/agent-directions.js`'s first gate and expired unclaimed — 38 of 38. The
+ * capability was unreachable, not broken.
+ *
+ * ⚠ **A SELECTMENU, NOT A SWITCH, AND THAT IS THIS TAB'S RULE NOT A PREFERENCE.**
+ * This file's header records that `Switch` left with the two launch toggles on
+ * 2026-09-06: every control here is a `SelectMenu` or the folder button. A switch
+ * reintroduced for one row is how a deleted recipe comes back.
+ *
+ * ⚠ **NO SUB-LINE, NO NOTE, AND THE EXPLANATION LIVES IN THE EYE POPOVER.**
+ * INVARIANTS §5: a row is a NAME and a CONTROL; the `Note` recipe was deleted and
+ * must not come back for this. What the grant actually buys is spelled out in
+ * `settings-help.tsx › SETTINGS_HELP["Direct agents"]`, which is where
+ * {@link LaunchAgentsRow} puts the same kind of sentence.
+ *
+ * ⚠ **IT IS A SEPARATE ROW FROM "Launch agents" AND MAY NOT BE FOLDED INTO IT.**
+ * Item 9 collapsed two LAUNCH records into one control because they answered one
+ * question at two scopes. This answers a DIFFERENT question — launching buys
+ * COMPUTE, directing starts a turn inside a session that already exists — and
+ * `main/orchestrator-consent.js` holds the ruling that the two consents are never
+ * one flag. A single control over both would make "In every channel" grant a
+ * capability the operator did not ask about.
+ *
+ * ⚠ NO ROW WITHOUT THE BRIDGE — the caller passes `null` and this never renders
+ * (no dead rows). ⚠ AND OFF IS THE FAILURE DIRECTION: the control mirrors a store
+ * that reads `false` for every "cannot say" (`hooks/use-orchestrator-direct.ts`).
+ */
+export function DirectAgentsRow({
+  orchestratorDirect,
+}: {
+  orchestratorDirect: { on: boolean; busy: boolean; onToggle: (on: boolean) => void };
+}) {
+  const value = orchestratorDirect.on ? DIRECT_AGENTS_EVERY : DIRECT_AGENTS_OFF;
+  return (
+    <SettingRow name="Direct agents">
+      <SelectMenu<DirectAgentsValue>
+        variant="text"
+        value={value}
+        options={DIRECT_AGENTS_OPTIONS}
+        onChange={(next) => {
+          if (next === value) return;
+          orchestratorDirect.onToggle(next === DIRECT_AGENTS_EVERY);
+        }}
+        ariaLabel="Whether your other sessions may send private instructions to agents running on this Mac"
+        disabled={orchestratorDirect.busy}
+      />
+    </SettingRow>
+  );
+}
+
 // ⚠ `AgentChainRows` IS DELETED (2026-09-06, item 9). Its record is untouched and
 // still per-channel; only the control moved, into {@link LaunchAgentsRow}'s "In this
 // channel" pick. Its docblock's warning — that a reader must not confuse the

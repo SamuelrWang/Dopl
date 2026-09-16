@@ -184,6 +184,21 @@ export const SETTINGS_HELP: Readonly<Record<string, SettingHelpCopy>> = {
       { label: "In every channel", text: "also lets an outside session launch on this Mac" },
     ],
   },
+  // ⚠ THE MACHINE-WIDE FACT IS VERBATIM HERE TOO, for the reason above: this row's
+  // only scope statement is its option text, and the popover is where the tab is
+  // allowed to spend a sentence (INVARIANTS §5 keeps the row itself to a name and a
+  // control, so there is no sub-line under the dropdown and must not be one).
+  // ⚠ IT NAMES WHAT A DIRECTION *IS* — a private turn inside an agent that is
+  // already running — because the operator is granting something different from a
+  // launch, and "directions" alone does not say that.
+  "Direct agents": {
+    body:
+      "Whether your other Claude sessions can send private instructions to agents already running here. It starts a turn inside an agent that exists; it never launches one. In every channel flips a machine-wide switch — it is not limited to this room.",
+    options: [
+      { label: "Cannot direct agents", text: "directions are refused and the sender is told why" },
+      { label: "In every channel", text: "your outside sessions may direct agents on this Mac" },
+    ],
+  },
   Model: {
     body: "Which model agents you launch in this channel run on.",
   },

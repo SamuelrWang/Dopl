@@ -85,11 +85,14 @@
 // a record the gate has stopped consulting.
 import { useChannelAgentChain } from "../hooks/use-channel-agent-chain";
 import { useOrchestratorLaunch } from "../hooks/use-orchestrator-launch";
+// ⚠ A SEPARATE GRANT, NEVER A SECOND SPELLING OF THE LAUNCH ONE (2026-09-16) —
+// `hooks/use-orchestrator-direct.ts` carries the ruling and what it cost.
+import { useOrchestratorDirect } from "../hooks/use-orchestrator-direct";
 // ⚠ THREE ROW COMPONENTS BECAME ONE (2026-09-06, items 8 and 9). `AutoSendRows`,
 // `AgentChainRows` and `OrchestratorLaunchRows` are deleted; `LaunchAgentsRow` is the
 // single control over the two launch records. `settings-desktop-rows.tsx` carries the
 // tombstone for each.
-import { AgentFolderRows, LaunchAgentsRow } from "./settings-desktop-rows";
+import { AgentFolderRows, DirectAgentsRow, LaunchAgentsRow } from "./settings-desktop-rows";
 import { isSharedChannel } from "../lib/tool-profile-resolve";
 import { type PermissionPreset } from "../lib/permission-modes";
 import type { RuntimeDescriptor } from "../lib/runtime-capability";
@@ -164,6 +167,18 @@ export interface ChannelAgentSettingsProps {
  * with the arm (2026-08-20), the rule did not: the view renders (and is asserted
  * on) with no window and no bridge, and this wrapper is the only thing needing one.
  */
+/** ONE MAPPING FOR BOTH PER-MACHINE CONSENTS — bridge-state to row-prop. ⚠ The two
+ *  hooks return the same shape and must map the same way; written out twice when the
+ *  second consent landed (2026-09-16), which is two places for "an absent bridge
+ *  renders NO ROW" to be got right and one of them to later be got wrong. */
+function consentRow(state: {
+  bridge: unknown; enabled: boolean; busy: boolean; update: (next: boolean) => Promise<void>;
+}) {
+  return state.bridge
+    ? { on: state.enabled, busy: state.busy, onToggle: (n: boolean) => void state.update(n) }
+    : null;
+}
+
 export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
   const launchPosture = useChannelLaunchPosture(props.channelId);
   const folder = useChannelFolder(props.channelId);
@@ -171,6 +186,8 @@ export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
   const agentChain = useChannelAgentChain(props.channelId);
   // ⚠ NO `channelId` — this one is per-MACHINE (`use-orchestrator-launch.ts`).
   const orchestrator = useOrchestratorLaunch();
+  // ⚠ ALSO PER-MACHINE, and a DIFFERENT record from the one above.
+  const orchestratorDirect = useOrchestratorDirect();
 
   return (
     <ChannelAgentSettingsView
@@ -208,15 +225,8 @@ export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
             }
           : null
       }
-      orchestrator={
-        orchestrator.bridge
-          ? {
-              on: orchestrator.enabled,
-              busy: orchestrator.busy,
-              onToggle: (next) => void orchestrator.update(next),
-            }
-          : null
-      }
+      orchestrator={consentRow(orchestrator)}
+      orchestratorDirect={consentRow(orchestratorDirect)}
     />
   );
 }
@@ -313,6 +323,14 @@ export interface ChannelAgentSettingsViewProps {
     busy: boolean;
     onToggle: (on: boolean) => void;
   } | null;
+  /** DIRECT AGENTS (Samuel, 2026-09-16), or null without the bridge (row absent).
+   *  ⚠ PER-MACHINE like `orchestrator` and a SEPARATE record from it, on a THIRD
+   *  bridge member. `settings-desktop-rows.tsx › DirectAgentsRow` has the why. */
+  orchestratorDirect?: {
+    on: boolean;
+    busy: boolean;
+    onToggle: (on: boolean) => void;
+  } | null;
 }
 
 export function ChannelAgentSettingsView({
@@ -333,6 +351,7 @@ export function ChannelAgentSettingsView({
   folder,
   agentChain = null,
   orchestrator = null,
+  orchestratorDirect = null,
 }: ChannelAgentSettingsViewProps) {
   // ⚠ BOTH WRITES GO THROUGH THE WARNING, never around it — either axis can be
   // the flip into `auto_both` + `full` + a peer. `posture-warning.tsx` holds the
@@ -442,6 +461,12 @@ export function ChannelAgentSettingsView({
             mapping between them and the three picks is written. */}
         {agentChain && orchestrator && (
           <LaunchAgentsRow agentChain={agentChain} orchestrator={orchestrator} />
+        )}
+        {/* ⚠ IT RENDERS EVEN WHEN THE LAUNCH ROW ABOVE DOES NOT — the two consents are
+            independent, and gating this on the launch bridges would hide the control
+            for a lane that is armed: the failure this row exists to end. */}
+        {orchestratorDirect && (
+          <DirectAgentsRow orchestratorDirect={orchestratorDirect} />
         )}
       </div>
       {warning.dialog}
