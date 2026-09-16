@@ -32,10 +32,17 @@ const KIT = readFileSync(join(HERE, "..", "..", "apps", "desktop-ui", "src", "st
 
 // Every `prop: value` in one rule body, whitespace-normalized, as a Set. Enough
 // to compare two hand-transcribed copies of the same recipe; not a CSS parser.
+// Comments come OUT before the split: kit.css explains its recipes inline (the
+// hover rule's `--shadow-raised-hover` note, 2026-09-16), and on a naive split
+// that prose rides along on the declaration that follows it, so a rule would
+// read as drifted purely for being commented. Only the comments are forgiven —
+// the declarations themselves still have to match character for character.
 function rule(css, selector) {
   const at = css.indexOf(selector + " {");
   assert.notEqual(at, -1, `no rule for ${selector}`);
-  const body = css.slice(at + selector.length + 2, css.indexOf("}", at));
+  const body = css
+    .slice(at + selector.length + 2, css.indexOf("}", at))
+    .replace(/\/\*[\s\S]*?\*\//g, "");
   return new Set(
     body.split(";").map((d) => d.replace(/\s+/g, " ").trim()).filter(Boolean)
   );
