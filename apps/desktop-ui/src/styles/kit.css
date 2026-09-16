@@ -167,9 +167,13 @@
   background: var(--panel-surface);
   border: 1px solid var(--border-default);
   border-radius: 14px;
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.04),
-    0 6px 18px rgba(0, 0, 0, 0.05);
+  /* ⚠ THE VALUE MOVED TO `--shadow-bento` (2026-09-15, mirrored from
+     `globals.css`) AND THIS IS NOW ITS ONE REFERENCE. The transcript's ringed
+     agent badge has to cast the SAME elevation without taking this fill or
+     border — its ring is painted on a wrapper and was sitting on top of the
+     pill's shadow and swallowing it. Two copies of a shadow pair in two trees is
+     the drift `tokens.css` exists to prevent. */
+  box-shadow: var(--shadow-bento);
 }
 
 /* THE OVERVIEW'S DEEPER CARD SHADOW — scoped, not global (Samuel, 2026-09-13,

@@ -138,9 +138,41 @@ const ACCENT_BAR = "w-[3px] shrink-0 self-stretch rounded-b-full";
  * ⚠ **AN UNOPENABLE PILL THEREFORE DOES NOT MOVE, WHICH IS CORRECT**: the pop-out
  * window and the guest lane hand no callback, and a capsule that cannot open
  * anything must not animate as though it can (the absent-not-disabled rule).
+ *
+ * 🔒 **AND IT CASTS THE BADGE'S SHADOW, BECAUSE THE RING WAS EATING IT (Samuel,
+ * 2026-09-15: the shadow must cover the ENTIRE badge including the ring — on a
+ * ringed badge it is blocked, while the ringless "You" badge shows it fine).**
+ *
+ * ⚠ **CAUSE: TWO ELEMENTS, AND THE OUTER ONE HAD THE RING.** The pill's elevation
+ * comes from `.bento`, cast from the PILL's border box — and this wrapper's ring
+ * is an opaque 3px band occupying exactly that first 3px. The shadow was being
+ * laid down underneath the ring and never reached open air, which is why only the
+ * unringed badge looked elevated. Nothing was missing; it had nowhere to fall.
+ * ⚠ **SO THE ELEVATION MOVES OUT ONE ELEMENT, TO THE THING THAT IS ACTUALLY THE
+ * BADGE'S OUTER EDGE.** `--shadow-bento` is `.bento`'s own pair, extracted to a
+ * token (`globals.css`, mirrored in `tokens.css`) rather than copied, so a ringed
+ * badge and a ringless one cast the IDENTICAL shadow and a restyle moves both.
+ * ⚠ **THE COMPOSITION ORDER IS WHAT MAKES IT ONE SILHOUETTE, AND IT IS TAILWIND'S,
+ * NOT OURS**: `box-shadow` is emitted ring-first, shadow-last, so the ring paints
+ * ON TOP and the shadow falls from the ring's outer edge outward. Badge and ring
+ * read as a single raised object with a single shadow under it.
+ * ⚠ **THE PILL KEEPS `.bento` AND THAT IS NOT A SECOND SHADOW ANYONE SEES** — on a
+ * ringed row it is hidden beneath the ring exactly as before, and on an UNRINGED
+ * row (a person's pill, the "You" badge Samuel used as his reference) it is still
+ * the only elevation there is. That case must not change.
+ *
+ * 🔒 **THE LIFT IS 2px, NOT THE KIT'S 1px, AND THE DEVIATION IS DELIBERATE**
+ * (Samuel: 1px is "too subtle to read as clickable"). `.btn-light`,
+ * `.auth-btn-3d` and `.menu-row` all lift 1px (`globals.css`) — but every one of
+ * them changes its FILL on hover as well, so the motion is one cue among several.
+ * This badge has no hover fill at all: its face is the agent's colour and must
+ * stay that colour, so the lift is carrying the entire affordance alone and needs
+ * to be legible by itself. 2px is the next real step on the scale rather than an
+ * invented number, and with the shadow above now travelling with it the pair
+ * reads as a press without the pill jumping.
  */
 const ACCENT_RING =
-  "inline-flex max-w-full ring-[3px] transition-transform duration-150 has-[button:hover]:-translate-y-px has-[button:active]:translate-y-px motion-reduce:transition-none";
+  "inline-flex max-w-full ring-[3px] shadow-[var(--shadow-bento)] transition-transform duration-150 has-[button:hover]:-translate-y-0.5 has-[button:active]:translate-y-0.5 motion-reduce:transition-none";
 const ACCENT_RING_SHAPE = { me: "rounded-l-full rounded-r-none", peer: "rounded-r-full rounded-l-none" } as const;
 
 /**

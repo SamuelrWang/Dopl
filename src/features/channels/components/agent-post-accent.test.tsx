@@ -337,12 +337,40 @@ describe("the accent, rendered", () => {
     const wrap = ring(container)!;
     const pill = container.querySelector<HTMLElement>("[data-attribution-pill]")!;
 
-    expect(wrap.className).toContain("has-[button:hover]:-translate-y-px");
-    expect(wrap.className).toContain("has-[button:active]:translate-y-px");
+    expect(wrap.className).toContain("has-[button:hover]:-translate-y-0.5");
+    expect(wrap.className).toContain("has-[button:active]:translate-y-0.5");
     expect(wrap.className).toContain("transition-transform");
     // ⚠ AND THE PILL ITSELF STAYS PUT — the half that fails if the motion is ever
     // copied back onto the button "so the pill still feels pressable".
     expect(pill.className).not.toMatch(/translate-y/);
+  });
+
+  /**
+   * 🔒 **THE SHADOW IS ON THE RING, NOT ON THE PILL (Samuel, 2026-09-15: the shadow
+   * must cover the ENTIRE badge including the ring; on ringed badges it is blocked
+   * while the ringless "You" badge shows it fine).**
+   *
+   * ⚠ **THE PROPERTY IS *WHICH ELEMENT* CASTS IT.** The pill's `.bento` elevation is
+   * cast from the pill's border box, and the ring is an opaque 3px band sitting on
+   * exactly that band — so the shadow had nowhere to fall. Moving it to the outer
+   * element is the fix, and asserting it HERE (rather than asserting "a shadow
+   * exists somewhere") is what would catch a well-meaning revert that puts the
+   * elevation back on the capsule.
+   * ⚠ **THE TOKEN BY REFERENCE.** `--shadow-bento` is `.bento`'s own pair extracted
+   * rather than copied, so a ringed badge and a ringless one cannot drift apart —
+   * a literal shadow here would be the drift docs/DESIGN-SYSTEM.md forbids.
+   */
+  it("casts the badge's elevation from the RING, so the ring cannot swallow it", () => {
+    const { container } = renderRow();
+    expect(ring(container)!.className).toContain("shadow-[var(--shadow-bento)]");
+  });
+
+  it("leaves an UNRINGED pill's own elevation alone — Samuel's reference case", () => {
+    // ⚠ The "You" badge is the control in his report: it already showed a shadow
+    // correctly, so `.bento` must still be the elevation on a row with no ring.
+    const { container } = renderRow({ agent: false, agentId: null }, null);
+    const pill = container.querySelector<HTMLElement>("[data-attribution-pill]")!;
+    expect(pill.className).toContain("bento");
   });
 
   it("hangs the bar on the RIGHT of a right-aligned post", () => {

@@ -136,7 +136,14 @@ function MessageRowGhost({
 }) {
   return (
     <div className="-mx-2 flex flex-col items-start gap-1.5 rounded-[10px] px-2 py-1">
-      <span className="bento inline-flex max-w-full items-center gap-2 rounded-full py-1 pl-1 pr-3.5">
+      {/* ⚠ **THE RADIUS LEFT THE SHARED STRING ON 2026-09-15 AND IS NOW STATED
+          SEPARATELY, EXACTLY AS THE REAL PILL STATES IT.** `AttributionPill` takes a
+          `radius` override for Samuel's flush-corner experiment — an ACCENTED row
+          squares the capsule on the bar side — so `rounded-full` moved out of the
+          geometry literal into its own slot (`radius ?? "rounded-full"`). This ghost
+          is never accented, so it keeps the capsule; it just has to spell it the same
+          way, or the byte-share test below cannot match the two. */}
+      <span className="bento inline-flex max-w-full items-center gap-2 py-1 pl-1 pr-3.5 rounded-full">
         {/* `avatar.tsx › SIZE.sm` — the size the pill asks for. */}
         <Skeleton className="w-8 h-8 shrink-0 rounded-full" />
         <span className="flex min-w-0 flex-col gap-1">

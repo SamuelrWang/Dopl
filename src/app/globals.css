@@ -474,6 +474,18 @@
   /* Tightened 2026-09-13 (Samuel: the wide 32px blur read as "a gradient" on
      the gray — the ground must stay solid): a darker but SHORT shadow. */
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.1), 0 6px 14px rgba(0, 0, 0, 0.12);
+  /**
+   * THE BENTO ELEVATION, as a token so a second element can cast it (2026-09-15).
+   * ⚠ IT IS `.bento`'S OWN PAIR, MOVED RATHER THAN REDESIGNED — every surface
+   * wearing `.bento` is byte-identical to before. It exists because the
+   * transcript's AGENT BADGE is a pill inside a ring-bearing wrapper, and the
+   * ring (a box-shadow on the wrapper) painted over the pill's shadow and hid it.
+   * The wrapper now casts this same elevation, composed BEHIND its own ring, so
+   * badge and ring read as one silhouette with one shadow under it.
+   * ⚠ DISTINCT FROM `--shadow-card`, which is the heavier overview-face step
+   * (`[data-overview-face] .bento`). Do not merge the two.
+   */
+  --shadow-bento: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 18px rgba(0, 0, 0, 0.05);
   --shadow-floating: 0 16px 48px -12px oklch(0 0 0 / 70%),
     0 4px 16px -4px oklch(0 0 0 / 50%);
   --glow-accent: 0 0 24px oklch(0.68 0.22 250 / 50%),
@@ -859,9 +871,15 @@ html {
   background: var(--panel-surface);
   border: 1px solid var(--border-default);
   border-radius: 14px;
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.04),
-    0 6px 18px rgba(0, 0, 0, 0.05);
+  /* ⚠ THE VALUE MOVED TO `--shadow-bento` (2026-09-15) AND THIS IS NOW ITS ONE
+     REFERENCE. A second element has to cast THE SAME elevation without taking
+     `.bento`'s fill or border: the transcript's ringed agent badge, where the ring
+     is painted on a WRAPPER and would otherwise sit on top of the pill's own
+     shadow and swallow it (Samuel: the shadow is blocked on ringed badges while
+     the ringless "You" badge shows it fine). Copying two shadow pairs into a
+     component is exactly the drift docs/DESIGN-SYSTEM.md forbids, so the pair is
+     a token and both readers name it. */
+  box-shadow: var(--shadow-bento);
 }
 
 /* THE OVERVIEW'S DEEPER CARD SHADOW — scoped, not global (Samuel, 2026-09-13,

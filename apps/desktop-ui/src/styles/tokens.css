@@ -481,6 +481,17 @@
   /* Tightened 2026-09-13 (Samuel: the wide 32px blur read as "a gradient" on
      the gray — the ground must stay solid): a darker but SHORT shadow. */
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.1), 0 6px 14px rgba(0, 0, 0, 0.12);
+  /**
+   * THE BENTO ELEVATION, as a token so a second element can cast it (2026-09-15).
+   * ⚠ MIRRORED FROM `src/app/globals.css`, same change — this file's standing
+   * instruction. It is `.bento`'s own pair, MOVED rather than redesigned, so every
+   * surface wearing `.bento` is unchanged. It exists because the transcript's
+   * AGENT BADGE is a pill inside a ring-bearing wrapper, and the ring (a
+   * box-shadow on that wrapper) painted over the pill's shadow and hid it; the
+   * wrapper now casts this elevation BEHIND its own ring, one silhouette.
+   * ⚠ DISTINCT FROM `--shadow-card`, the heavier overview-face step. Do not merge.
+   */
+  --shadow-bento: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 18px rgba(0, 0, 0, 0.05);
   --shadow-floating: 0 16px 48px -12px oklch(0 0 0 / 70%),
     0 4px 16px -4px oklch(0 0 0 / 50%);
   --glow-accent: 0 0 24px oklch(0.68 0.22 250 / 50%),

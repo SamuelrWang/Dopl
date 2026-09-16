@@ -190,8 +190,13 @@ describe("the bubble transcript is gone, and the row shape is the real one", () 
       ["authored-row.tsx", "rounded-[10px] px-2 py-1"],
       ["authored-row.tsx", "flex w-full min-w-0 flex-col gap-1.5"],
       [
+        // ⚠ **`rounded-full` IS NO LONGER IN THIS LITERAL (2026-09-15).** The pill
+        // takes a `radius` override for the flush-corner experiment, so the capsule
+        // is stated in its own slot and the GEOMETRY is what the ghost byte-shares.
+        // The radius is asserted separately below, because the two can now differ on
+        // purpose: an accented row squares one side, this ghost never does.
         "attribution-pill.tsx",
-        "bento inline-flex max-w-full items-center gap-2 rounded-full py-1 pl-1 pr-3.5",
+        "bento inline-flex max-w-full items-center gap-2 py-1 pl-1 pr-3.5",
       ],
       ["transcript.tsx", "wrap-anywhere max-w-[92%]"],
       ["transcript.tsx", '"flex flex-col gap-5"'],
