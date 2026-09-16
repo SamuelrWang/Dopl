@@ -62,8 +62,15 @@ function agentSlug(source) {
  * `› TRAILING_PUNCTUATION`. The punctuation class carries `*`, `_` and `~` for F-266's reason:
  * `**@research-bot**` is how a person writes "look at this", it TINTS, and a class without them
  * would leave it stamping nobody — the same defect this whole file exists to close.
+ *
+ * 🔒 **AN `@` INSIDE A WORD STARTS NO TOKEN** (F-706, 2026-09-16). `sam@example.com` yielded the
+ * handle `example.com`; on the server that turned the wake repair off and stamped the post
+ * `unreachable`. `session-dispatch.js › mentionedAgentIds` has carried the same boundary as
+ * `(?<![a-z0-9-])` since it was written. ⚠ THE CLASS OMITS `_` ON PURPOSE: it is markdown's other
+ * emphasis delimiter, and `__@research-bot__` must still tag (F-266, measured). ⚠ THE COPIES ARE PINNED FIXTURE-FOR-FIXTURE by
+ * `src/features/channels/lib/mentions-boundary.test.ts`, which reads THIS file's source.
  */
-const TOKEN_RE = /@[^\s@]+/g;
+const TOKEN_RE = /(?<![A-Za-z0-9])@[^\s@]+/g;
 const TRAILING_HTML_TAG = /<\/?[A-Za-z][A-Za-z0-9-]*\s*\/?>$/;
 // ⚠ THE THREE QUOTE CHARACTERS ARE WRITTEN AS ESCAPES — `\u0027` `'`, `\u0022` `"`, `\u0060`
 // backtick — AND MUST STAY THAT WAY. They are the same class members either spelling; what the

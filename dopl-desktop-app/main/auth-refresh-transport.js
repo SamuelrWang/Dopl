@@ -1,20 +1,16 @@
 // THE SUPABASE REFRESH POST, BOUNDED — the one network call in `auth.js` that had no deadline.
 //
-// WHAT IT COST (2026-09-14, F-698 / Samuel's "neither agent woke" report). `auth.js › refreshInner`
-// called the global `fetch` with no `signal`. After a sleep/wake the main process's undici pool can
-// hold a dead socket (`api.js › resetPool` carries the field notes), and a POST on one hangs until
-// the OS gives up — ~25 minutes on the 09:11:00Z boot: `presence: superseding the in-flight beat`
-// at 09:11:29Z, and the beat's own abort error not logged until 09:37:40Z. `auth.js › refresh` is
-// single-flight, so EVERY caller that needed a credential in that window awaited the same promise:
-// the session-state push's boot cycle, the listener's first reconcile, presence's first beat. The
-// two lanes with a single-flight guard (`session-state-push.js › running`, `channel-listener.js ›
-// reconciling`) stayed wedged for the life of the process; the projection push wrote nothing for
-// nine hours, so a freshly spawned agent had no server row and could not be addressed.
+// 🔒 **`refresh()` IS SINGLE-FLIGHT, SO AN UNBOUNDED POST HERE WEDGES EVERY LANE THAT NEEDS A
+// CREDENTIAL** (F-698, 2026-09-14). After a sleep/wake the undici pool can hold a dead socket
+// (`api.js › resetPool`) and a POST on one hangs until the OS gives up — measured at ~25 minutes,
+// during which the session-state push, the listener's first reconcile and presence's first beat
+// all awaited the same promise, and the two with their own single-flight guard stayed wedged for
+// the life of the process.
 //
-// ⚠ WHY A MODULE. `auth.js` sits at the 500-line cap, and this is a real seam rather than
-// arithmetic: it is the TRANSPORT (url, headers, body, deadline) and nothing about what the answer
-// means — the status/code rules stay in `auth.js` beside `auth-token-rules.js`. Dependency-free, so
-// `test/auth-refresh-transport.test.mjs` drives the REAL function with a fake fetch and a fake clock.
+// ⚠ WHY A MODULE. `auth.js` sits at the 500-line cap, and the seam is real: this is the TRANSPORT
+// (url, headers, body, deadline) and nothing about what the answer MEANS — the status/code rules
+// stay in `auth.js` beside `auth-token-rules.js`. Dependency-free, so
+// `test/auth-refresh-transport.test.mjs` drives the REAL function with a fake fetch and clock.
 //
 // ⚠ THE DEADLINE IS GENEROUS ON PURPOSE. A refresh that takes 20s is broken, not slow — the same
 // call answers in well under a second on a working network — and a false abort is only a transient

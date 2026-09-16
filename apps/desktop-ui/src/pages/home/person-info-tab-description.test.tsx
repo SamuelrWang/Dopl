@@ -17,17 +17,13 @@ import {
 /**
  * THE HOME INFO CARD's DESCRIPTION ROW (ruling, Samuel, 2026-09-15).
  *
- * ⚠ **"DESCRIPTION" IS THE PRODUCT'S WORD FOR `channels.topic`.** No new column:
- * the New-channel popup writes it, both Info cards show it, and the MCP surface
- * renders it. The pairing is what a later wave is most likely to "fix" by adding
- * a second field, so it is pinned on every surface that shows it — here, in
- * `src/features/channels/components/info-tab.test.tsx` (the workspace channels
- * page's composition of the same ladder) and in the popup's own suite.
+ * ⚠ **"DESCRIPTION" IS THE PRODUCT'S WORD FOR `channels.topic`** — no new
+ * column, and the same row is pinned on the workspace pane in
+ * `src/features/channels/components/info-tab.test.tsx`.
  *
  * ⚠ **SPLIT OUT OF `person-info-tab.test.tsx`, WHICH IS AT THE 500-LINE CAP**
- * (INVARIANTS §1), on `person-info-tab-peers.test.tsx`'s precedent and for its
- * reason: a file at the cap cannot absorb a case, let alone the paragraph
- * explaining one. Read-only stub — nothing here writes.
+ * (INVARIANTS §1), on `person-info-tab-peers.test.tsx`'s precedent. Read-only
+ * stub — nothing here writes.
  *
  * ⚠ MOUNTED THROUGH `HomePage`, not the component: the row reads `channel.topic`
  * off the `/api/channels` cache, so a direct mount would hand it a static prop

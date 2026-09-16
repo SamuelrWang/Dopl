@@ -6,14 +6,10 @@
  * caller hands it, filed by ONE timestamp per item.
  *
  * ⚠ **THE BOX ITSELF IS `collapse-wells.tsx` SINCE 2026-09-15, AND THIS FILE IS
- * NOW THE TIME MODEL ALONE.** The header, the animated `.collapse-grid` body, the
- * spinning chevron, the per-surface `localStorage` key and the `"tab"` variant all
- * live there; what stays here is **the four spans, {@link wellFor}, and the
- * `at`-shaped item the two tabs hand in**. The split is the seam this docblock
- * already named below — a THIRD surface (/home's channel list) wanted the box with
- * a well set that is not these four spans at all (**Pinned / Recent / Earlier**,
- * where Pinned is a per-device CHOICE and not a stamp), and the machinery could
- * not be generalised in the file that also owns the calendar.
+ * NOW THE TIME MODEL ALONE** — the four spans, {@link wellFor}, and the
+ * `at`-shaped item the two tabs hand in. A THIRD surface (/home's channel list)
+ * wanted the box with a well set that is not these spans at all, and the machinery
+ * could not be generalised in the file that also owns the calendar.
  *
  * 🔒 **SAMUEL, 2026-09-13, over the Agents tab:** *"On the overview page we see
  * that gray background thing. I like that gray background right behind the white
@@ -117,13 +113,10 @@ export interface RecencyWellItem {
   node: ReactNode;
 }
 
-// ⚠ **`useRecencyWells` STOOD HERE AND IS NOT BEING KEPT (2026-09-15)** — after the
-// split it would be a one-line bind of `collapse-wells.tsx › useWells` to
-// `RECENCY_WELLS` with **ZERO callers**, test included: `RecencyWells` below reaches
-// the hook through `WellsColumn`, and no other file has ever named it. That is
-// exactly the shape `agents-wells.tsx` deleted `useAgentWells` for on 2026-09-14,
-// under a comment saying so. **Import `useWells` and pass `RECENCY_WELLS`** the day a
-// surface wants the open state without the column.
+// ⚠ **NO `useRecencyWells` HERE, DELIBERATELY (2026-09-15)** — it would be a
+// one-line bind of `well-state.ts › useWells` to `RECENCY_WELLS` with zero
+// callers. **Import `useWells` and pass `RECENCY_WELLS`** the day a surface wants
+// the open state without the column.
 
 /**
  * THE FOUR WELLS OVER ONE ORDERED LIST OF ITEMS.
@@ -135,8 +128,8 @@ export interface RecencyWellItem {
  * is CLIPPED against it) each reach their box intact. Nothing here sorts.
  * ⚠ **`now` IS A PARAMETER WITH A DEFAULT**, so a test can state an age instead of
  * arranging for one; the render passes nothing.
- * ⚠ **THE VARIANT IS NOT PASSED AND MUST NOT BE** — the two tabs are the
- * `"panel"` well Samuel ruled on in September and did not ask to restyle.
+ * ⚠ **NO `face` IS PASSED AND NONE MAY BE** — the two tabs wear the default
+ * `PANEL_WELL` Samuel ruled on in September and did not ask to restyle.
  */
 export function RecencyWells({
   items,
@@ -144,7 +137,7 @@ export function RecencyWells({
   now,
 }: {
   items: readonly RecencyWellItem[];
-  /** This surface's `localStorage` key — see `collapse-wells.tsx › useWells`. */
+  /** This surface's `localStorage` key — see `well-state.ts › useWells`. */
   storageKey: string;
   /** ⚠ NO `= Date.now()` DEFAULT HERE — that is an impure call during render
    *  (`react-hooks/purity`). The clock's default lives on {@link wellFor}, the

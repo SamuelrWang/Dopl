@@ -145,6 +145,57 @@ describe("UnderlineField — gray at rest, ink on focus", () => {
     fireEvent.change(field({ onChange }), { target: { value: "ship it" } });
     expect(onChange).toHaveBeenCalledWith("ship it");
   });
+
+  it("mirrors the caller's ceiling onto the control, single-line AND multiline", () => {
+    // ⚠ A MIRROR OF A ZOD `.max()`, felt at the keyboard rather than as a 400.
+    expect(field({ maxLength: 80 }).getAttribute("maxlength")).toBe("80");
+    cleanup();
+    expect(field({ maxLength: 2000, multiline: true }).getAttribute("maxlength")).toBe(
+      "2000"
+    );
+  });
+
+  it("puts the caret in the field the caller marks, and nowhere otherwise", () => {
+    // ⚠ `StandardDialog` does NO focus management, so this prop is the only thing
+    // that decides where a popup opens. Default `false` keeps every pre-2026-09-15
+    // caller opening with no field focused.
+    const plain = field();
+    expect(document.activeElement).not.toBe(plain);
+    cleanup();
+    const focused = field({ autoFocus: true });
+    expect(document.activeElement).toBe(focused);
+  });
+
+  describe("onEnter — the single-line verb key", () => {
+    it("fires on a single-line field and swallows the keystroke", () => {
+      const onEnter = vi.fn();
+      const input = field({ onEnter });
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(onEnter).toHaveBeenCalledTimes(1);
+      fireEvent.keyDown(input, { key: "a" });
+      expect(onEnter).toHaveBeenCalledTimes(1);
+    });
+
+    it("is IGNORED on a `multiline` field — Enter breaks the line there", () => {
+      // ⚠ The composer's rule since 2026-08-26, and the kit's since it was
+      // extracted: only the verb raises the write from a body field. Wiring it on
+      // both would make one popup disagree with the others.
+      const onEnter = vi.fn();
+      fireEvent.keyDown(field({ onEnter, multiline: true }), { key: "Enter" });
+      expect(onEnter).not.toHaveBeenCalled();
+    });
+
+    it("does NOT fire while an IME is composing", () => {
+      // ⚠ THE SAME GUARD EVERY OTHER ENTER HANDLER IN THE TREE KEEPS
+      // (`channels/components/agent-composer.tsx`, `use-composer-mentions.ts`,
+      // `shared/ui/inline-editable-row.tsx`): a CJK operator presses Enter to
+      // COMMIT A CANDIDATE, and a handler that submits there both raises a write
+      // they did not ask for and `preventDefault`s the confirmation away.
+      const onEnter = vi.fn();
+      fireEvent.keyDown(field({ onEnter }), { key: "Enter", isComposing: true });
+      expect(onEnter).not.toHaveBeenCalled();
+    });
+  });
 });
 
 // ── 3. THE PILL ROW ──────────────────────────────────────────────────────────

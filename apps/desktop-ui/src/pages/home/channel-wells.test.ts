@@ -1,11 +1,9 @@
 /**
- * /home's THREE WELLS AS PURE FUNCTIONS — which well a row falls in, and the pin
- * store the first well reads.
+ * /home's THREE WELLS AS A PURE FUNCTION — which well a row falls in.
  *
- * ⚠ **THE RENDERED HALF IS `relationship-list.test.tsx`**, through the real page,
- * where the column's own suite lives. What is here is the two things a rendered
- * case cannot STATE: an age (the page has no `now` to pass — deliberately, so the
- * component holds no clock) and a `localStorage` round trip across two mounts.
+ * ⚠ **THE RENDERED HALF IS `channel-wells-render.test.tsx`**, through the real
+ * page. What is here is the thing a rendered case cannot STATE: an AGE. The page
+ * has no `now` to pass, deliberately, so the component holds no clock.
  */
 
 import { describe, expect, it } from "vitest";
@@ -106,15 +104,3 @@ describe("channelWellOf — Samuel's 24h cut", () => {
     ]);
   });
 });
-
-/**
- * ⚠ **THE PIN-STORE SUITE STOOD HERE AND IS DELETED WITH ITS MODULE (2026-09-15).**
- * It pinned a `localStorage` round trip for `channel-pins.ts ›
- * storedChannelPins` — a per-device set invented because nothing in the product
- * pinned a channel. Samuel's ruling that day named the control that already did
- * (`channel_members.favorited_at`, the channel header's bookmark), so the store,
- * its key `dopl.home.channels.pinned`, the row's hover toggle and these cases went
- * together. **What replaced the coverage** is the favourite's own write suite
- * (`channels/hooks/use-channel-favorite.test.tsx`, which had none at all) and the
- * cache bridge's cases in `relationship-list.test.tsx`.
- */

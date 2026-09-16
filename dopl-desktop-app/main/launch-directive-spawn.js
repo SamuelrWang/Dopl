@@ -274,33 +274,22 @@ async function spawn(d, deps) {
   // machine said nothing" (an older desktop), so a machine that CAN report and stays silent
   // whenever it agrees would make silence ambiguous.
   if (res && res.agentId) {
-    // ── ⚠ THE NAME, WRITTEN ONCE THE AGENT HAS AN ADDRESS TO KEY IT TO (Samuel, 2026-09-15) ──
-    //
-    // Verbatim: *"if agents are spinning up agents, they should be the ones that are naming the
-    // agent. Shouldn't be a nameless agent. And certainly shouldn't be an agent with the id as
-    // the name."* The MCP op refuses a nameless launch, so on any current client `d.agentName` is
-    // set; this is what makes it real on the machine that runs the agent.
+    // ── ⚠ THE NAME (Samuel, 2026-09-15: *"if agents are spinning up agents, they should be
+    // the ones that are naming the agent … certainly shouldn't be an agent with the id as the
+    // name."*) ────────────────────────────────────────────────────────────────────────────────
     //
     // ⚠ **AFTER THE LAUNCH, NOT BEFORE, BECAUSE THE NAME IS KEYED ON THE AGENT ID** and there is
     // no id until `deps.launch` answers. `agent-names.js` is keyed by the INSTANCE address, which
-    // is the whole reason a rename survives a park, a lazy resume and a crash resume.
-    //
-    // ⚠ **`New Agent` IS THE FALLBACK AND IT IS NOT A GUESS.** A directive with no name is a
-    // client older than `20261006120000` — §13's supported peer — and the honest answer is the
-    // same face every unnamed agent wears (`src/shared/lib/agent-name.ts › NEW_AGENT_NAME`,
-    // hand-copied here because main cannot import `src/`). The alternative was a nameless agent
-    // rendering as its own instance id, which is the defect this whole wave removes.
-    //
-    // ⚠ **IT GOES THROUGH `commitRename`, NEVER `agent-names.js` DIRECTLY**, because that wrapper
-    // is what also touches the summary — and a name that never reaches the projection is a name
-    // the @-picker and every peer's card do not have (the bug that file exists for). ⚠ A REFUSAL
-    // IS NOT A FAILED LAUNCH: `sanitizeName` refuses rather than strips, and an agent running
-    // under the unnamed face is strictly better than a spawn reported as refused after it started.
-    // ⚠ **AND THE STORED NAME IS REPORTED BACK, BECAUSE IT MAY NOT BE THE ONE THAT WAS ASKED
-    // FOR** (Samuel, 2026-09-15: *"it will automatically auto-resolve to coder-1 … coder-2"*).
-    // `commitRename` answers main's OWN value — the never-echo-the-ask rule — so `stored.name`
-    // is `Coder-1` exactly when the uniqueness rule fired, and `decideBody` puts it on the
-    // LAUNCHED body where `channel-ops-launch.ts` renders it as the launch's `name=`.
+    // is why a rename survives a park, a lazy resume and a crash resume.
+    // ⚠ **`New Agent` IS THE FALLBACK** for a directive with no name — a client older than
+    // `20261006120000`, §13's supported peer — and is the same face every unnamed agent wears.
+    // ⚠ **THROUGH `commitRename`, NEVER `agent-names.js` DIRECTLY**: that wrapper also touches
+    // the summary, and a name that never reaches the projection is a name the @-picker and every
+    // peer's card do not have. ⚠ A REFUSAL IS NOT A FAILED LAUNCH — an agent under the unnamed
+    // face beats a spawn reported as refused after it started.
+    // ⚠ **THE STORED NAME IS REPORTED BACK, BECAUSE IT MAY NOT BE THE ONE ASKED FOR** (the
+    // uniqueness rule may have stored `Coder-1`). `commitRename` answers main's OWN value, and
+    // `decideBody` puts it on the LAUNCHED body as the launch's `name=`.
     let applied = null;
     try {
       const stored = require('./agent-identity-commit')
@@ -327,13 +316,11 @@ async function spawn(d, deps) {
 const STARTUP_CONTEXT_TIMEOUT_MS = 5000;
 
 /**
- * THE FACE AN UNNAMED AGENT WEARS — ⚠ **HAND-COPIED FROM
- * `src/shared/lib/agent-name.ts › NEW_AGENT_NAME`**, which main cannot import (no shared source
- * tree), on the same arrangement every cross-tree constant in this repo lives under. Samuel,
- * 2026-09-15: *"if a user launches an agent with no name, just give it the name, New Agent."*
- * ⚠ Its only reader here is the directive lane's older-client arm; the SPA's own launch sends the
- * string itself (`components/use-agent-launch-run.ts`), so the two copies are one behaviour and
- * neither is a default the other can drift away from silently.
+ * THE FACE AN UNNAMED AGENT WEARS (Samuel, 2026-09-15: *"if a user launches an agent with no
+ * name, just give it the name, New Agent."*) — ⚠ **HAND-COPIED FROM
+ * `src/shared/lib/agent-name.ts › NEW_AGENT_NAME`**, which main cannot import. Its only reader
+ * here is the directive lane's older-client arm; the SPA's own launch sends the string itself
+ * (`components/use-agent-launch-run.ts`).
  */
 const NEW_AGENT_NAME = 'New Agent';
 

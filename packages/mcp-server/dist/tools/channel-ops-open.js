@@ -56,18 +56,14 @@ async function opOpen(client, opts) {
     const visNote = channel.visibility === "private"
         ? "Private — only invited members can see it."
         : "Public — visible to the whole workspace.";
-    // ⚠ **THE ROOM'S DESCRIPTION, ECHOED BACK (ruling, Samuel, 2026-09-15).** The
-    // PRODUCT'S WORD IS "Description" and the WIRE FIELD IS `topic` — the same
-    // 2000-char `channels.topic` `formatChannelLine` renders on a listing and both
-    // Info cards show; there is no second column and there must not be one. It is
-    // echoed because `summary` carries four meanings on this tool and a creator
-    // who set the wrong one should see which room they actually described.
-    // ⚠ NEUTRALIZED like every other value on this surface: it is the caller's own
-    // text one argument old, and per-site judgement about who could have authored
-    // a string is what leaves a peer-typed one raw. Silent when empty.
-    // ⚠ `neutralizeInline` DIRECTLY, not `inlineOr`: a description that neutralizes
-    // to nothing is a description this line should not print at all, and NO_NAME
-    // ("(unnamed)") is an answer to a different question.
+    // ⚠ **THE ROOM'S DESCRIPTION, ECHOED BACK (ruling, Samuel, 2026-09-15)** — the
+    // product's word for the wire field `topic`. ECHOED because `summary` carries
+    // four meanings on this tool and a creator who set the wrong one should see
+    // which room they actually described.
+    // ⚠ NEUTRALIZED on the same FLAT rule as everything else on this surface, and
+    // `neutralizeInline` DIRECTLY rather than `inlineOr`: a description that
+    // flattens to nothing is one this line should not print at all, where NO_NAME
+    // ("(unnamed)") answers a different question.
     const safeTopic = channel.topic ? (0, channel_shared_1.neutralizeInline)(channel.topic) : null;
     const description = safeTopic ? ` Description: ${safeTopic}` : "";
     return (0, respond_1.ok)([

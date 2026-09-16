@@ -93,10 +93,9 @@ export function AgentWindowShell({
    *  NO ×: absent, never disabled (INVARIANTS §11). */
   onCloseTab?: (key: string) => void;
   onNewAgent?: () => void;
-  /** ⚠ **THERE IS NO `status` SLOT SINCE 2026-09-15.** Samuel moved both badges — Ended and
-   *  liveness — onto the agent view's thread line (`agent-window.tsx › AgentWorkingOn`), and the
-   *  prop was DELETED rather than left empty, which is his own delete-don't-disarm rule. The
-   *  chrome's right group is the two window buttons and nothing about an agent. */
+  // ⚠ **THERE IS NO `status` SLOT SINCE 2026-09-15** — both badges moved onto the agent view's
+  // thread line (`agent-window.tsx › AgentWorkingOn`) and the prop was DELETED rather than left
+  // empty (delete-don't-disarm). A `//` note, not a docblock: it belongs to no prop below it.
   logoSrc?: string;
   sessions: readonly DesktopSessionSummary[] | null;
   onOpenSession: (session: DesktopSessionSummary) => void;

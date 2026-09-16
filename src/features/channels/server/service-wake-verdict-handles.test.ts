@@ -135,9 +135,14 @@ describe("resolveAgentRecipients — one handle, one agent", () => {
     // ⚠ CHANGED 2026-09-15 WITH THE MINT'S WITHDRAWAL — `@diana-1` was the agent's minted
     // spelling and is now nobody's. The agent keeps its id form, which is the line below.
     projection(sessionRow({ name: "k3v7d2mq", display_name: "Diana" }));
+    // ⚠ **`[]`, NOT `null`, SINCE 2026-09-15 — and this assertion is the bug it was hiding.**
+    // The two were interchangeable when this case was written; `service-wake-verdict.ts ›
+    // namedButUnresolved` made them different claims, and `null` here said "the author named an
+    // agent I cannot place" about a body that named a MEMBER — turning RR3 off and stamping
+    // `unreachable`. `[]` is this docblock's own sentence: no agent, on to the resilience arms.
     expect(
       await resolveAgentRecipients(CTX, "chan-1", "@diana hello", null, "user", ["diana"])
-    ).toBeNull();
+    ).toEqual([]);
     expect(
       await resolveAgentRecipients(CTX, "chan-1", "@diana-1 hello", null, "user", ["diana"])
     ).toBeNull();

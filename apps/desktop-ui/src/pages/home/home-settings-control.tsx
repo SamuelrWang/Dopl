@@ -13,22 +13,15 @@ import type { BootPayload } from "#/pages/boot/use-boot-state";
  * is the channel list. So the page has to carry its own entry.
  *
  * ⚠ **IT IS A BLACK PILL READING "Profile" SINCE 2026-09-15 (Samuel, live
- * review: "turn the profile button to be black, and have it say Profile").** It
- * sat at the top of the LIST COLUMN from 2026-08-30 — a bare avatar, then a
- * full-width "{first name}'s Home" bar — then spent one revision as a white
- * circle in the action group. That was the same day: the circle and this pill are
- * two halves of one live review, so do not read the circle's absence as a rule
- * about round controls. What has not changed through any of it: one control, one
- * modal, and this page's only way into settings.
+ * review: "turn the profile button to be black, and have it say Profile").**
+ * Through every restyle it has stayed ONE control, ONE modal, and this page's
+ * only way into settings.
  *
- * ⚠ ITS OWN FILE, not thirty lines inside `index.tsx`. That page is at the
- * 500-line cap (INVARIANTS §1) and this is one coherent responsibility: a
- * control, and a modal that only this control opens. The page hands it the boot
- * payload it already has and knows nothing else about it. ⚠ **AND IT READS NO
- * PROFILE SINCE 2026-09-15** — the face became a glyph, so `/api/user/profile`
- * had no renderer left here; if an avatar ever returns, the read comes back
- * UNGATED on `open`, which is the rule that kept the control from popping into
- * existence after a round trip.
+ * ⚠ ITS OWN FILE, not thirty lines inside `index.tsx` — one coherent
+ * responsibility, and that page is at the 500-line cap (INVARIANTS §1).
+ * ⚠ **IT READS NO PROFILE (2026-09-15)** — the face is gone, so `/api/user/profile`
+ * has no renderer here; if an avatar ever returns, the read comes back UNGATED on
+ * `open`, or the control pops into existence a round trip after paint.
  */
 /**
  * OPEN /home's SETTINGS MODAL FROM ANYWHERE ON THE PAGE — the credit bar's
@@ -103,35 +96,19 @@ export function HomeSettingsControl({
   return (
     <>
       {/**
-       * ⚠ **THE SAME FACE "New channel" WEARS, DELIBERATELY (Samuel, 2026-09-15:
-       * "turn the profile button to be black, and have it say Profile").** It is
-       * `PAGE_ACTION_BTN` itself — not a copy of its class list — so a restyle of
-       * the page action lands on both. ⚠ **THIS IS THE SECOND BLACK PILL ON THE
-       * PAGE AND IT IS AN EXCEPTION SAMUEL ASKED FOR, NOT A PRECEDENT**: the
-       * "one primary action" ruling (`home-header.tsx`, Samuel 2026-08-25) still
-       * governs what may be ADDED here. A third would make all three look like
-       * none.
-       *
-       * ⚠ **ONE WORD AND NOTHING ELSE (Samuel, 2026-09-15: "remove the profile
-       * icon").** This control has been an `Avatar`, a "{Name}'s Home" bar, a
-       * glyph-only circle and a glyph-plus-label pill, all inside three weeks, and
-       * it is TEXT NOW. Do not put a face back in it on the reasoning that a
-       * profile control should have one: an avatar beside a page action is an
-       * identity BADGE, and it would flicker from an initial to a photo one round
-       * trip after paint — which is why this file reads no profile at all.
-       * ⚠ **AND THEREFORE NO `gap-1.5` AND NO `PAGE_ACTION_ICON`.** `PAGE_ACTION_BTN`
-       * is worn BARE here; the gap and the 13px glyph belong to
-       * `panel-buttons.tsx › CreateButton`, which is the glyph-plus-label pill and
-       * is still the place to copy from if a glyph ever returns.
-       *
-       * ⚠ **THE ACCESSIBLE NAME IS "Profile" NOW, AND THAT IS THE POINT OF THE
-       * CHANGE.** It was `aria-label="Settings"` over an iconic control with no
-       * text; the control has a VISIBLE label now, and an `aria-label` that does
-       * not contain it breaks voice control ("click Profile" would match nothing)
-       * and reads one thing to a screen reader while showing another. So the label
-       * is the text, `title` agrees with it, and `index.test.tsx` /
-       * `relationship-list.test.tsx` find it by "Profile". ⚠ What it OPENS did not
-       * change: the same `SettingsModal`, seeded at `account`.
+       * ⚠ **`PAGE_ACTION_BTN` ITSELF — the face "New channel" wears** (Samuel,
+       * 2026-09-15), never a copy of its class list, so a restyle of the page
+       * action lands on both. ⚠ **THE SECOND BLACK PILL ON THE PAGE IS AN
+       * EXCEPTION SAMUEL ASKED FOR, NOT A PRECEDENT** — the "one primary action"
+       * ruling (`home-header.tsx`, 2026-08-25) still governs what may be ADDED.
+       * ⚠ **ONE WORD AND NOTHING ELSE** (*"remove the profile icon"*), so
+       * `PAGE_ACTION_BTN` is worn BARE — no `gap-1.5`, no `PAGE_ACTION_ICON`;
+       * those belong to `panel-buttons.tsx › CreateButton`. **Do not put a face
+       * back in it**: an avatar beside a page action is an identity BADGE and it
+       * would flicker from an initial to a photo a round trip after paint.
+       * ⚠ **NO `aria-label`** — the control has a VISIBLE label, and a name that
+       * does not contain it breaks voice control and reads one thing while showing
+       * another. `title` agrees with the text.
        */}
       <button
         type="button"
@@ -153,33 +130,4 @@ export function HomeSettingsControl({
       />
     </>
   );
-}
-
-/**
- * `"{first name}'s Home"`, or `"Home"` when there is no name to use.
- *
- * 🔒 **NOTHING RENDERS THIS AS OF 2026-09-15, AND IT IS KEPT ON PURPOSE.** The
- * bar it labelled lived for two days (2026-09-13 → 2026-09-15) and Samuel
- * replaced it with the search field; `relationship-list.test.tsx` still imports
- * and pins the helper, so deleting it here is a test change as well as a code
- * change and that was not this session's call to make. **If /home never grows a
- * possessive label again, delete BOTH** — a helper alive only because its own
- * test imports it is dead code with a witness, not a used function.
- *
- * ⚠ **THE FIRST WORD, NOT THE WHOLE DISPLAY NAME**, which is the rule worth
- * keeping if it ever comes back: the bar was 290px minus a face and its padding,
- * and `"Alexandra Fernández-Mo…'s Home"` is worse than no possessive at all.
- *
- * ⚠ **"Home" ALONE IS THE HONEST FALLBACK, and it was a state that really
- * happened** — not only a nameless account, but every first paint, since
- * `/api/user/profile` was in flight then. A possessive built from an EMAIL was
- * the other option and is refused for the reason the channel row refuses it: an
- * address is not a name.
- *
- * ⚠ NO `'s` DOUBLING GUARD. A name ending in "s" still takes `'s` here
- * ("Chris's Home") — a style choice, not a bug.
- */
-export function homeBarLabel(displayName: string | null): string {
-  const first = (displayName ?? "").trim().split(/\s+/)[0];
-  return first ? `${first}'s Home` : "Home";
 }

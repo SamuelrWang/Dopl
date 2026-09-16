@@ -185,16 +185,12 @@ export function AgentWindowRail({
               // the tooltip. ⚠ NOT a shrunken `AgentLiveness`: that component's tone faces are
               // module-private to `agent-bits.tsx` (rightly — one liveness recipe), and a rail
               // that re-inked a dot itself would be a second mapping from state to colour.
-              // ⚠ THE SPAN NO LONGER SIZES ANYTHING — the ROW is the square now, so this is the
-              // glyph alone. A `h-6 w-full` here was half of why the tint was not square.
               //
               // 🔒 **AND SINCE 2026-09-15 THE LETTER SITS IN THE AGENT'S OWN COLOUR** (Samuel:
               // *"I don't like that it just looks like letters on the black background because
-              // there's nothing around it. I think we should have it be a color. Maybe it should
-              // be the color of the agents, so set a thing around it to that color."*).
-              // ⚠ **THIS SUPERSEDES THE "COLLAPSED DRAWS NO DOT" HALF OF THE 2026-09-13 RULING**
-              // (kept in the expanded branch below): there is no second mark here — the circle IS
-              // the mark, and the initial is inside it, so the square still holds exactly one.
+              // there's nothing around it. … set a thing around it to that color."*). The disc IS
+              // the mark with the initial inside it, so the square still holds exactly one — which
+              // is what lets this supersede the 2026-09-13 "collapsed draws no dot" half.
               // ⚠ **THE SAME KEY THE EXPANDED ROW'S DOT TAKES** — `colorFor`, one resolver, so the
               // two shapes of this row cannot name two hues for one agent.
               <AgentColorInitial
@@ -210,9 +206,9 @@ export function AgentWindowRail({
                     read as a mark about the liveness — which is exactly the confusion the palette's
                     own token block warns about (identity, never status). `shrink-0` plus the name's
                     `truncate` keeps a long rename from pushing the dot out of a 140px rail.
-                    ⚠ COLLAPSED DRAWS NO DOT: that shape is one 24px tile holding a single initial,
-                    and a second mark in it would either shrink the initial or overflow the square
-                    the rail was explicitly rebuilt to keep square. */}
+                    ⚠ COLLAPSED DRAWS NO SEPARATE DOT: since 2026-09-15 that shape's one mark is
+                    the initial's own coloured disc (see the branch above), and a dot beside it
+                    would be a second mark in a square that holds one. */}
                 <span className="flex min-w-0 items-center gap-1.5">
                   <AgentColorDot color={colorFor?.(session) ?? null} />
                   <span className={cn("truncate text-text-primary", AGENT_NAME_TEXT)}>{name}</span>

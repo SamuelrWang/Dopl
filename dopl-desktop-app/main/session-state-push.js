@@ -405,17 +405,20 @@ async function drain() {
     while (queued) {
       const entries = queued;
       queued = null;
-      // ⚠ WATCHDOGGED (2026-09-14, F-698). `running` had no deadline, so ONE cycle that never settled — the boot cycle
-      // of 09:11:00Z, wedged behind an unbounded token refresh — was a permanent OFF SWITCH: every later `schedule`
-      // took `if (running) return`, and this machine wrote no row for nine hours. Same shape, same fix as
-      // `channel-listener.js › reconcile`. The hung cycle is abandoned, not cancelled; the NEXT one runs.
-      await heal.watchPass(cycle(entries), onHungCycle, CYCLE_WATCHDOG_MS); // the loop IS the serialization
+      // 🔒 WATCHDOGGED (2026-09-14, F-698): `running` had no deadline, so ONE cycle that never settled was a permanent
+      // OFF SWITCH — every later `schedule` took `if (running) return`, measured as nine hours with no row written.
+      // Same shape, same fix as `channel-listener.js › reconcile`; the hung cycle is abandoned, not cancelled.
+      // ⚠ THE `.catch` IS ON THE PASS, NOT ON THE WATCHDOG. `watchPass` RESOLVES on either arm — that is what lets the
+      // guard clear — so a rejection handled only by the try/catch below would be swallowed with no line at all.
+      await heal.watchPass(cycle(entries).catch(onCycleError), onHungCycle, CYCLE_WATCHDOG_MS); // the loop IS the serialization
     }
-  } catch (err) {
-    diag('session-state push: cycle error —', (err && err.message) || String(err));
   } finally {
     running = false;
   }
+}
+
+function onCycleError(err) {
+  diag('session-state push: cycle error —', (err && err.message) || String(err));
 }
 
 /**

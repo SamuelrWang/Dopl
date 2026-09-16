@@ -71,10 +71,7 @@ export const RAIL_PAD = "px-2.5";
  * **16 + 36 + 4 = 56**: the column width, the frame's grid and therefore the panel's left edge are
  * all untouched, which is the only version of this fix that does not re-open *"the right side just
  * gets completely cut off"*.
- * ⚠ **THE MARK TAKES IT TOO.** `agent-window-chrome.tsx` puts the Dopl logo in a slot of the rail's
- * width with the rail's padding (*"That kind of needs to be normalized"*), so the chrome reads this
- * through its `railPad` prop rather than deriving collapsed-ness — the same rule `railWidth`
- * follows.
+ * ⚠ **THE MARK TAKES IT TOO** — the chrome reads it through its `railPad` prop; see that prop.
  * ⚠ **EXPANDED KEEPS `RAIL_PAD`.** Samuel looked at the expanded rail in the same pass and ruled it
  * fine (*"Actually, that looks fine"*); a 140px rail's rows are wide enough that the 12px gap does
  * not read as a lopsided gutter around a 36px mark.
@@ -130,8 +127,7 @@ export const AGENT_NAME_TEXT = "text-body font-normal";
  * ⚠ **THIS NARROWS THE 2026-09-13 "ONE TYPE RECIPE FOR A TAB LABEL AND A RAIL ROW" EQUALITY TO THE
  * SIZE, AND ONLY TO THE SIZE.** `text-body` is still the shared step — the ruling that rejected
  * `TEMPLATE_NAME_TEXT`'s 14px face stands — and the rail row keeps {@link AGENT_NAME_TEXT}'s
- * regular weight. What changed is that a TAB is the window's own title row, which is what Samuel
- * asked to read as one.
+ * regular weight.
  * ⚠ **A SECOND CONSTANT RATHER THAN `font-semibold` BESIDE `AGENT_NAME_TEXT` AT THE CALL SITE.**
  * Both are `font-weight` utilities, so which one wins is Tailwind's EMIT order and not the class
  * attribute's — the same trap `select-menu.tsx › TRIGGER_FACE` records ("font size/padding live in
@@ -150,8 +146,7 @@ export const AGENT_TAB_TEXT = "text-body font-semibold";
  *
  * ⚠ **IT SUPERSEDES THE FIXED `w-[180px]`** that carried the 2026-09-13 reading of *"It's a fixed
  * size, and it does not get cut off"* — the second half of that sentence is what survives, and it
- * is the `truncate` on the label, not the box. A three-letter handle no longer buys 180px of dead
- * space before its ×.
+ * is the `truncate` on the label, not the box.
  * ⚠ **A MAX, NOT A WIDTH**: past it the LABEL ellipsizes inside the tab and the × stays on screen,
  * which is the whole of *"we don't have too much overflow"*. 200px is one step over the 180 it
  * replaces, so the longest name that used to fit still fits.

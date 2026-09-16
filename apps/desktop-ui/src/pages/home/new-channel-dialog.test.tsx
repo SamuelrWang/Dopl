@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import { bridgeCalls, installBridge, ok, renderWithProviders } from "#/test-utils/bridge";
+import { HomeChannelCreateSchema } from "@/features/home/schema";
 import { NewChannelDialog } from "./new-channel-dialog";
 
 /**
@@ -12,10 +13,8 @@ import { NewChannelDialog } from "./new-channel-dialog";
  * ups we have elsewhere"*).
  *
  * ⚠ **THE PAYLOAD IS WHAT THIS SUITE IS FOR.** "Description" is the word on the
- * screen and `topic` is the field on the wire — the EXISTING `channels.topic`
- * column, not a new one — and the pairing is the thing a later wave is most
- * likely to "fix" by adding a second column. It is pinned here, in
- * `src/features/home/schema.test.ts`, and in both Info tabs' suites.
+ * screen and `topic` is the field on the wire — the EXISTING column, not a new
+ * one.
  *
  * ⚠ AN EMPTY DESCRIPTION SENDS NO KEY AT ALL, which is also what keeps the
  * page-level flow in `index.test.tsx` asserting `{ name }` exactly: `""` and
@@ -104,15 +103,33 @@ describe("the form", () => {
     expect((create as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it("carries the server's own ceilings at the keyboard", async () => {
-    // ⚠ MIRRORS of `features/home/schema.ts › HomeChannelCreateSchema`. Felt at
-    // the keyboard rather than as a 400 after the fact; the schema suite is what
-    // pins the other half.
+  it("carries the server's own ceilings at the keyboard — the SCHEMA's, not a copy", async () => {
+    // ⚠ PINNED AGAINST THE PARSER ITSELF, not against two typed numbers: the
+    // field reads `HomeChannelCreateSchema`'s exported bounds, and what makes
+    // that worth anything is that the bound is the one the route enforces.
     await mount();
-    expect(screen.getByLabelText("Name").getAttribute("maxlength")).toBe("80");
+    const at = (label: string) =>
+      Number(screen.getByLabelText(label).getAttribute("maxlength"));
+    const name = at("Name");
+    const description = at("Description");
     expect(
-      screen.getByLabelText("Description").getAttribute("maxlength")
-    ).toBe("2000");
+      HomeChannelCreateSchema.safeParse({ name: "x".repeat(name) }).success
+    ).toBe(true);
+    expect(
+      HomeChannelCreateSchema.safeParse({ name: "x".repeat(name + 1) }).success
+    ).toBe(false);
+    expect(
+      HomeChannelCreateSchema.safeParse({
+        name: "A",
+        topic: "x".repeat(description),
+      }).success
+    ).toBe(true);
+    expect(
+      HomeChannelCreateSchema.safeParse({
+        name: "A",
+        topic: "x".repeat(description + 1),
+      }).success
+    ).toBe(false);
   });
 });
 

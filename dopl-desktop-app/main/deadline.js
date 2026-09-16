@@ -1,20 +1,6 @@
 // ONE bound for a promise that may never settle. The main process's "this await has no
-// deadline" primitive, in one place.
-//
-// WHAT IT IS FOR (2026-09-15 boot, F-700). F-698 bounded the Supabase refresh POST
-// (`auth-refresh-transport.js`) and watchdogged the two single-flight guards
-// (`listener-heal.js › watchPass`, `session-state-push.js › drain`), and the 08:22:33Z boot
-// still wedged in the SAME shape: Electron's stdout carried
-// `Network service crashed or was terminated, restarting service.` at that second,
-// `presence: started` at 08:22:33.624, and then `presence: superseding the in-flight beat` at
-// 08:23:05 — the FIRST beat was still in flight after THIRTY SECONDS. No `reconcile:`, no
-// `namecache loaded`, no `session-state push`, no `auth-tokens` line followed (a healthy boot
-// — 2026-09-14 01:05 / 01:19 / 01:22 — aborts the superseded beat within ~12s and loads the
-// name cache within ~15s). A fresh process has a fresh undici pool and the refresh POST is
-// bounded, so the hang was upstream of both: `session.defaultSession.cookies.get()`, which
-// EVERY request path awaits BEFORE its own AbortController timer starts. Chromium's network
-// service owns the cookie store; when it dies and restarts at boot, an in-flight `cookies.get`
-// promise can simply be dropped and never settle, and nothing downstream is ever reached.
+// deadline" primitive, in one place (F-700, 2026-09-15; the boot it was written for is in
+// `auth-cookies.js › jarCall`'s header).
 //
 // ⚠ DEPENDENCY-FREE ON PURPOSE (no electron, no store, no diag) — same argument as
 // `listener-heal.js`: `test/deadline.test.mjs` drives the REAL shipped function under

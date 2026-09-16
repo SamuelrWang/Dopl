@@ -59,6 +59,21 @@ export const HOME_CARD_FACE_SELECTED =
   "auth-btn-3d rounded-[14px] text-text-on-cta";
 
 /**
+ * A QUIET LINE'S INK ON EITHER FACE — `--text-on-cta` at an alpha on the black
+ * selected card, `--text-muted` on the white one (2026-09-15).
+ *
+ * ⚠ **ONE on-dark ink token exists in either token file (measured:
+ * `--text-on-cta`), so a quieter line DIMS it and never names a grey the palette
+ * does not have** — the idiom `channels/components/agents-tab.tsx` already holds.
+ * ⚠ **STATED ONCE BECAUSE THREE LINES READ IT** — the row's timestamp, its
+ * pending line and a solo channel's description (`relationship-list.tsx`). A
+ * fourth spelling of the ternary is how one of them comes to dim differently.
+ */
+export function rowQuietInk(selected: boolean): string {
+  return selected ? "text-text-on-cta/70" : "text-text-muted";
+}
+
+/**
  * THE `@ N` PILL — unread mentions of the viewer in this channel (Samuel: the
  * row should have "some notification system for new @s").
  *

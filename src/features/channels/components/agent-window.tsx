@@ -300,34 +300,21 @@ export function ChannelsAgentWindow({
   );
 }
 
-
 /**
  * WHERE THIS AGENT IS WORKING, AND HOW IT IS — one row at the top of the panel.
  *
- * ⚠ It was the second line of the window's top bar until the tab strip took that row (2026-09-13).
- *
- * 🔒 **THE BADGE JOINED IT ON 2026-09-15, RIGHT-ALIGNED** (Samuel, after seeing the badge at the
- * foot: *"Instead of putting the ended badge on the bottom left, put it on the right of the line
- * where it says 'in main channel'. Similarly, for where you see 'running', 'thinking', or 'working'
- * (all of those little things), put that in the same spot, basically on the same line as 'in main
- * channel', but to the right, aligned to the right."*).
- *
- * ⚠ **THIS IS THE SECOND MOVE OF ONE BADGE IN ONE DAY, AND THE FIRST ONE'S CODE IS GONE.** The
- * `AgentEndedFooter` that carried it to the bottom left is DELETED, not hidden — one marker, one
- * place. What the two moves have in common is the ruling that survives: the chrome's top-right
- * corner shows nothing about an agent (`agent-window-chrome.tsx`).
+ * 🔒 **THE BADGE RIDES THIS LINE, RIGHT-ALIGNED** (Samuel, 2026-09-15: *"put it on the right of the
+ * line where it says 'in main channel'. Similarly, for where you see 'running', 'thinking', or
+ * 'working' (all of those little things), put that in the same spot … but to the right, aligned to
+ * the right."*) — so the chrome's corner says nothing about an agent (`agent-window-chrome.tsx`).
  *
  * ⚠ **BOTH STATES RIDE THE SAME SLOT AND `agents-model.ts › agentLiveness` IS STILL THE ONE
- * MAPPING.** Live → `AgentLiveness` (Thinking / Running <tool> / Waiting / Idle); ended → the black
- * `AgentEndedPill` over MAIN's own sentence, which `agent-stream-lanes.ts › splitEndNote` lifted
- * out of the work log so the end is stated exactly once. The pill REPLACES the liveness rather than
- * joining it — `agent-bits.tsx` carries why, and `agentLiveness` would otherwise say "Ended" beside
- * a pill saying "Ended by you".
- *
- * ⚠ **THE STREAM'S LIVE TAIL IS UNTOUCHED** (`agent-stream-working.tsx`, Samuel 2026-09-14: the
- * working state must be visible *"where the reply will appear, not only in the header's corner"*).
- * That ruling assumed a badge in the corner; the corner moved, the pair did not become a
- * duplication this pass introduced.
+ * MAPPING.** Live → `AgentLiveness`; ended → the black `AgentEndedPill` over MAIN's own sentence,
+ * which `agent-stream-lanes.ts › splitEndNote` lifted out of the work log so the end is stated
+ * exactly once. The pill REPLACES the liveness rather than joining it — `agentLiveness` would
+ * otherwise say "Ended" beside a pill saying "Ended by you".
+ * ⚠ **THE STREAM'S LIVE TAIL STAYS** (`agent-stream-working.tsx`, Samuel 2026-09-14: the working
+ * state must be visible *"where the reply will appear, not only in the header's corner"*).
  *
  * ⚠ **THE LINE TRUNCATES AND THE BADGE DOES NOT.** `min-w-0 flex-1` on the thread half is what
  * makes a long thread title ellipsize instead of pushing the badge off a 510px window; both badges

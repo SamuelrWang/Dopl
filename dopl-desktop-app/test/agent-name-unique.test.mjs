@@ -104,6 +104,44 @@ test("an EMPTY name is returned unchanged — `''` is the CLEAR gesture, not a r
   }
 });
 
+/**
+ * 🔒 **THE SUFFIX MAKES ROOM FOR ITSELF — `agent-names.js › sanitizeName` REFUSES, IT DOES NOT
+ * TRIM** (2026-09-15).
+ *
+ * ⚠ **WITHOUT THE CAP A LEGAL NAME BECAME NO NAME AT ALL.** 60 is `MAX_NAME`, and it is also what
+ * `channel-ops-launch-name.ts` invites ("1-60 characters") and what
+ * `20261006120000_channel_launch_directives_agent_name.sql` admits — so a caller may send exactly
+ * 60. Suffixing that to 62 made `sanitizeName` answer `null`, which
+ * `agent-self-ops.js › applyRenameTo` turns into `{ ok: false, reason: 'bad-name' }`: on the
+ * launch lane `launch-directive-spawn.js` reports `appliedAgentName: null` and the agent runs
+ * NAMELESS, on the rename lane the operator is refused a string they were entitled to.
+ */
+test("🔒 a name at the 60-char cap still gets a suffix — the stem makes room", () => {
+  const base = "x".repeat(60);
+  const rows = [row({ agentId: "a1b2c3d4", displayName: base })];
+  const out = unique.uniqueAgentName(base, rivals(rows), 60);
+  assert.equal(out.length, 60, "the suffixed name must still fit MAX_NAME");
+  assert.equal(out, "x".repeat(58) + "-1");
+});
+
+test("the cap only bites when it has to — a short name is never trimmed", () => {
+  const rows = [row({ agentId: "a1b2c3d4", displayName: "Coder" })];
+  assert.equal(unique.uniqueAgentName("Coder", rivals(rows), 60), "Coder-1");
+});
+
+test("no cap is the default — every caller that holds no store is unchanged", () => {
+  const base = "x".repeat(60);
+  const rows = [row({ agentId: "a1b2c3d4", displayName: base })];
+  assert.equal(unique.uniqueAgentName(base, rivals(rows)).length, 62);
+});
+
+/** ⚠ A STEM TRIMMED AWAY TO NOTHING WOULD MAKE `-1` THE WHOLE NAME — a handle nobody can type. */
+test("an absurd cap never yields a bare suffix", () => {
+  const rows = [row({ agentId: "a1b2c3d4", displayName: "Coder" })];
+  const out = unique.uniqueAgentName("Coder", rivals(rows), 2);
+  assert.ok(out.replace(/-\d+$/, "").length > 0, `stem must survive: ${out}`);
+});
+
 // ── 2. WHO COUNTS AS A RIVAL ──────────────────────────────────────────────────
 
 test("🔒 an ENDED agent neither collides nor is renamed — its name is REUSABLE", () => {

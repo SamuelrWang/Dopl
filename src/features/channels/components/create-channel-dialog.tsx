@@ -255,11 +255,9 @@ export function CreateChannelDialog({
 
           <label className="flex flex-col gap-1.5">
             {/* ⚠ **"DESCRIPTION" IS THE LABEL; `topic` IS THE WIRE FIELD (ruling,
-                Samuel, 2026-09-15).** One word for one thing across the product —
-                the New-channel popup on /home, both Info cards and the MCP
-                surface say Description. The state, the payload key and the column
-                are UNCHANGED and must stay `topic`: this is a label change, not a
-                migration. The placeholder stays as the hint. */}
+                Samuel, 2026-09-15)** — one word for one thing across the product.
+                The state, the payload key and the column stay `topic`: a label
+                change, not a migration. */}
             <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
               Description{" "}
               <span className="font-normal normal-case text-text-muted">

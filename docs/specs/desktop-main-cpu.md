@@ -193,7 +193,7 @@ Target after step 1: **main CPU from this path is flat in both agent count and h
 size — under 1% of one core.** The sustainable agent count stops being bounded by this
 path at all; the next ceiling (§3, step 3) has not been measured yet.
 
-### Step 1 — memoize the name-map read per projection ✅ PROTOTYPED AND MEASURED
+### Step 1 — memoize the name-map read per projection ✅ SHIPPED (`8ac2cd63`, 2026-09-15)
 
 - **What:** `main/agent-names.js › all` caches the map for the current macrotask;
   invalidated explicitly after every write this module makes.
@@ -212,14 +212,15 @@ path at all; the next ceiling (§3, step 3) has not been measured yet.
   Narration ordering is untouched (different module). The windowless-session rules are
   untouched. `main/agent-handles.js › nameFor` also calls `displayNameFor` and gets the
   same speedup for free, with the same safety argument.
-- **Tests:** `npm test` in `dopl-desktop-app` — **3220/3220 pass**. `npx eslint
-  main/agent-names.js` — clean. File is 278 lines, under the 500 cap.
-- **Test strategy to add before shipping:** a regression test that pins the read count.
-  `test/_session-summary-harness.mjs` cannot host it (it stubs the store — that stub is
-  exactly why this shipped), so it needs a **new** suite that requires the real
-  `agent-names.js` with `electron` stubbed and asserts
-  `reads(reportList()) === 2` independent of record count. That test is the durable half
-  of this fix: without it the next field added beside `displayName` reintroduces the bug.
+- **Tests:** `npm test` in `dopl-desktop-app` — **3220/3220 pass** (measured 2026-09-15).
+  `npx eslint main/agent-names.js` — clean. Under the 500 cap.
+- **The read-count regression test ✅ ADDED 2026-09-15** (the review of this wave; it was
+  owed and `8ac2cd63` shipped without it): `test/agent-names-cache.test.mjs`. It
+  evaluates the REAL `main/agent-names.js` over a COUNTING `electron-store` and pins one
+  read per projection independent of row count, invalidation on all three writers, the
+  memo not surviving the tick, and the kill switch.
+  ⚠ `test/_session-summary-harness.mjs` cannot host it: **it stubs the store, which is
+  exactly why this cost was invisible to every suite that shared it.**
 
 ### Step 2 — same memo for `main/agent-history.js › loadAll` (small, do it with step 1)
 
@@ -275,9 +276,8 @@ change**, then **measure** before deciding whether step 3 is worth its risk.
 
 ## 4. Prototype — before / after
 
-Implemented behind a kill switch: **`DOPL_NAMES_CACHE=0` restores the old behaviour.**
-Default is ON. Marked in-file with `⚠⚠ PROTOTYPE — UNCOMMITTED, 2026-09-15`.
-**One file: `main/agent-names.js`.**
+Shipped behind a kill switch: **`DOPL_NAMES_CACHE=0` restores the old behaviour.**
+Default is ON. **One file: `main/agent-names.js`.**
 
 3 live agents, same harness, same store copies:
 
@@ -302,14 +302,11 @@ Gates: `npm test` **3220/3220 pass**; `npx eslint main/agent-names.js` clean; 27
 
 ## 5. Follow-up owed
 
-- **File a finding** for the code/comment disagreement: `agent-names.js › displayNameFor`
-  claims "once per flush, not once per session" and has done the opposite since
-  2026-08-27. Highest id on `master` is **F-700**, so **F-701** — but re-derive across
-  live branches first, per `docs/REFACTOR-FINDINGS.md`'s allocation rule.
-- **Add the read-count regression test** (§3 step 1). Without it this recurs.
-- The finding should also record the **harness blind spot**: a stub that replaces a
-  store-backed function with a constant hides an unbounded cost from every suite that
-  shares it.
+- ✅ **The read-count regression test is added** (§3 step 1): `test/agent-names-cache.test.mjs`.
+- ⚠ **The harness blind spot is the durable lesson**: a stub that replaces a store-backed
+  function with a constant hides an unbounded cost from every suite that shares it, which is
+  why the new suite drives the real module over a counting store.
+- **Step 2** (`main/agent-history.js › loadAll`) is still open.
 
 ---
 

@@ -4,10 +4,8 @@
  * 🔒 **SAMUEL, 2026-09-15, verbatim:** *"look on the agents tab, there is the gray
  * box, for recents, 7 days, etc. I want to bring that over. Basically, one for
  * Pinned, one for Recents (this will be in effect channels with activity in the
- * last 24 hours), and Earlier."* Three wells, not four: he named the set, and the
- * 7-day / 30-day spans he did **not** name are the Agents tab's, over a feed of
- * agents that end. A channel list is a place you navigate, and a fourth heading
- * between "today" and "everything else" is a distinction nobody asked to make.
+ * last 24 hours), and Earlier."* **Three wells, not four** — he named the set, and
+ * the 7-day / 30-day spans he did not name are the Agents tab's.
  *
  * ⚠ **THE 24h CUT IS `channels/components/recency-wells.tsx › wellFor`, BY
  * IMPORT, AND THERE IS NO SECOND CLOCK.** Samuel's *"activity in the last 24
@@ -30,10 +28,7 @@
  * instead replace the bookmark icon next to the channel name with the pin icon."*
  * `HomeChannel.favoritedAt` — `channel_members.favorited_at`, written by the
  * channel header's own toggle. ⚠ **THE PER-DEVICE `localStorage` SET THIS FILE
- * READ FOR ONE AFTERNOON IS DELETED** (`channel-pins.ts`, `dopl.home.channels.pinned`):
- * it was invented because nothing in the product pinned a channel, and Samuel's
- * screenshot named the control that had been doing it all along. **Do not mint a
- * second pin store.**
+ * READ FOR ONE AFTERNOON IS DELETED. Do not mint a second pin store.**
  */
 
 import { wellFor } from "@/features/channels/components/recency-wells";
@@ -51,13 +46,11 @@ export const HOME_CHANNEL_WELLS_KEY = "dopl.home.channels.wells";
  * THE THREE WELLS, IN SAMUEL'S ORDER. ⚠ **ORDER IS THE DATA** — the render maps
  * this array.
  *
- * ⚠ **PINNED AND RECENT OPEN, EARLIER CLOSED.** Pinned is a list the operator
- * built by hand and Recent is the day's traffic — both are what the column is FOR.
- * **Earlier is closed, and that is the one part of this Samuel did not state**: it
- * is the Agents tab's own default carried over (only the live span open), and it
- * means a list with no activity in 24h opens collapsed. Flagged rather than
- * assumed — a device that opens it once never sees it closed again
- * (`collapse-wells.tsx › useWells`).
+ * ⚠ **PINNED AND RECENT OPEN, EARLIER CLOSED.** **The closed Earlier is the one
+ * part of this Samuel did not state** — it is the Agents tab's default carried
+ * over, and it means a list whose every channel has been quiet for 24h opens with
+ * nothing visible. Flagged, not assumed; a device that opens it once never sees it
+ * closed again (`well-state.ts › useWells`).
  */
 export const HOME_CHANNEL_WELLS = [
   { id: "pinned", label: "Pinned", defaultOpen: true },
@@ -72,7 +65,7 @@ export type HomeChannelWellId = (typeof HOME_CHANNEL_WELLS)[number]["id"];
  *
  * ⚠ **`HomeRow.at` IS AN ISO STRING, NOT A NUMBER** (`home-rows.ts` sorts on
  * `localeCompare`), and `null` IS NEVER ZERO (INVARIANTS §11): a `NaN` fed to
- * `wellFor` would compare false against every ceiling and file the row under
+ * `wellFor` compares false against every ceiling and files the row under
  * **Earlier**, which is a fabricated fact about when the channel last spoke.
  */
 function rowStamp(at: string): number | null {
@@ -85,13 +78,10 @@ function rowStamp(at: string): number | null {
  *
  * ⚠ **PENDING LINK ROWS ARE FILED BY THEIR `at` LIKE ANY CHANNEL** and can never
  * be pinned — a link has no channel yet, so there is no membership row to carry a
- * `favorited_at`. The `kind` test below is that fact, not a policy. A
- * fresh invitation therefore sits in **Recent** exactly where a fresh message
- * would, which is the whole of `home-rows.ts › homeRows`'s one-list argument.
+ * `favorited_at`. The `kind` test below is that fact, not a policy.
  * ⚠ **`now` IS A PARAMETER WITH A DEFAULT**, so a test can state an age instead of
  * arranging for one; the render passes nothing. The default is `wellFor`'s, on the
- * pure function, and not a `Date.now()` evaluated during a render
- * (`react-hooks/purity`).
+ * pure function, not a `Date.now()` in a component body (`react-hooks/purity`).
  */
 export function channelWellOf(row: HomeRow, now?: number): HomeChannelWellId {
   // ⚠ `?? null` INLINE AT A NEW CACHED KEY (INVARIANTS §8): `favoritedAt` is new

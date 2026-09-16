@@ -112,14 +112,10 @@ describe("the window names itself", () => {
 });
 
 /**
- * 🔒 **THE NAME LEFT THIS VIEW ON 2026-09-13; THE STATUS BADGE CAME BACK TO IT ON 2026-09-15.**
- *
- * The 2026-09-13 pass moved both into the window's chrome — the name became the TAB's label and the
- * badge the ACTIVE tab's — and this case was rewritten as an ABSENCE. Samuel then moved the badge
- * twice in one day: off the top right (*"I don't want the badges to be there"*), to the foot, and
- * finally onto the thread line — *"for where you see 'running', 'thinking', or 'working' (all of
- * those little things), put that in the same spot, basically on the same line as 'in main channel',
- * but to the right, aligned to the right."*
+ * 🔒 **THE NAME LEFT THIS VIEW ON 2026-09-13; THE STATUS BADGE CAME BACK TO IT ON 2026-09-15**
+ * (Samuel: *"for where you see 'running', 'thinking', or 'working' (all of those little things),
+ * put that in the same spot, basically on the same line as 'in main channel', but to the right,
+ * aligned to the right."*).
  *
  * ⚠ **SO THE ABSENCE THAT SURVIVES IS THE NAME'S, AND ONLY THE NAME'S.** A second copy of the name
  * beside a tab that already says it is the same fact twice; the STATE is not — the chrome no longer
@@ -388,15 +384,9 @@ describe("the 1:1 composer", () => {
   });
 });
 
-/**
- * ⚠ **THE ENDED FACE LIVES IN `agent-window-ended.test.tsx` (§1 split, 2026-09-15).** This file was
- * at the 500-line cap when Samuel's *"'Ended by you' should be the badge"* ruling landed, and the
- * cap did what it is for: the end is a coherent surface of its own (the foot's pill, the notice
- * lifted out of the log, the corner left empty) with its own reason to change. Both suites drive
- * `agent-window-harness.tsx`; the `vi.mock` block is duplicated because those calls are hoisted per
- * FILE and cannot be shared.
- */
-
+/** ⚠ **THE ENDED FACE LIVES IN `agent-window-ended.test.tsx` (§1 split, 2026-09-15)** — its own
+ *  surface with its own reason to change. Both suites drive `agent-window-harness.tsx`; the
+ *  `vi.mock` block is duplicated because those calls are hoisted per FILE and cannot be shared. */
 describe("an agent that is not running", () => {
   it("says so once the feed has ANSWERED, and not before", async () => {
     installBridge({ sessions: [] });

@@ -253,18 +253,12 @@ function AgentWindowTabs({
         // Launch in it — a control that cannot act, on screen, which INVARIANTS §11 refuses. The
         // chrome already hides the "+" when this prop is absent, so `undefined` is the whole fix.
         onNewAgent={canLaunchAgents() ? launch.toggle : undefined}
-        // 🔒 **THE CHROME CARRIES NO AGENT STATUS AT ALL SINCE 2026-09-15.** Samuel first moved
-        // the ENDED badge off the top right (*"I don't want the badges to be there"*) and then, on
-        // seeing it at the foot, moved BOTH badges onto the thread line: *"Instead of putting the
-        // ended badge on the bottom left, put it on the right of the line where it says 'in main
-        // channel'. Similarly, for where you see 'running', 'thinking', or 'working' (all of those
-        // little things), put that in the same spot, basically on the same line as 'in main
-        // channel', but to the right, aligned to the right."*
-        // ⚠ **THE `status` PROP IS DELETED, NOT PASSED `null`** — his own delete-don't-disarm
-        // ruling. A slot no caller fills is a seam the next edit fills back in, and the chrome's
-        // right group is the WINDOW's now (Expand, Close) with nothing about an agent in it.
-        // ⚠ **THE VERDICT ITSELF IS UNMOVED** — `agent-window.tsx › AgentWorkingOn` renders the
-        // same `agentLiveness` mapping and the same `AgentEndedPill`, one row down.
+        // 🔒 **THE CHROME CARRIES NO AGENT STATUS AT ALL SINCE 2026-09-15** (Samuel: *"I don't want
+        // the badges to be there"*, then *"put that in the same spot, basically on the same line as
+        // 'in main channel', but to the right, aligned to the right"*). Both badges are built one
+        // row down, by `agent-window.tsx › AgentWorkingOn`, off the same `agentLiveness` mapping.
+        // ⚠ **THE `status` PROP IS DELETED, NOT PASSED `null`** — delete-don't-disarm: a slot no
+        // caller fills is a seam the next edit fills back in.
         logoSrc={doplMark}
         sessions={sessions}
         keyFor={(session) =>

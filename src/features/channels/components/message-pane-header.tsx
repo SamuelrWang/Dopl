@@ -163,25 +163,19 @@ export function PaneHeader({
       {/* THE PIN. Stays with the crumb because it acts on what the crumb NAMES;
           the right-hand cluster acts on the pane.
 
-          🔒 **IT WAS A `Bookmark` GLYPH UNTIL 2026-09-15 (Samuel, verbatim):**
-          *"remove the pin icon that appears when i hover over the picker. instead
-          replace the bookmark icon next to the channel name with the pin icon."*
-          ⚠ **THE GLYPH MOVED AND THE FACT DID NOT** — same control, same
-          `channel_members.favorited_at`, same write. What the ruling settles is
-          that **the pin IS the bookmark**: /home's channel list had grown a
-          second, per-device pin that afternoon, and one channel cannot have two
-          pinned-nesses. That store is deleted; this toggle is the only writer.
-          ⚠ **AND IT IS THE SAME CONTROL ON BOTH SURFACES** — the workspace
-          channels page and /home's record pane mount this one header, so pinning
-          in either place is the same row (INVARIANTS §7: one surface, two hosts).
-
-          ⚠ THE LABEL NAMES THE CHANNEL and is now the ACT, not the state —
-          "Pin {name}" / "Unpin {name}". A screen-reader user in a thread needs it
-          to say WHICH thing gets pinned, since the crumb reads two.
-          ⚠ **THE KNOWLEDGE CARD KEEPS "Bookmark {name}"** and that is not drift:
-          it saves a BASE, a different object with its own verb, and Samuel's
-          ruling named this control. `aria-pressed` and the fill both come off the
-          same boolean. */}
+          🔒 **A `Pin` GLYPH SINCE 2026-09-15 (Samuel, verbatim):** *"remove the
+          pin icon that appears when i hover over the picker. instead replace the
+          bookmark icon next to the channel name with the pin icon."* ⚠ **THE GLYPH
+          MOVED AND THE FACT DID NOT** — same control, same
+          `channel_members.favorited_at`, same write. **The pin IS the bookmark**,
+          and this toggle is its only writer.
+          ⚠ **THE SAME CONTROL ON BOTH SURFACES** — the workspace channels page and
+          /home's record pane mount this one header (INVARIANTS §7).
+          ⚠ THE LABEL NAMES THE CHANNEL and is the ACT, not the state — a
+          screen-reader user in a thread needs it to say WHICH thing gets pinned,
+          since the crumb reads two. ⚠ **THE KNOWLEDGE CARD KEEPS "Bookmark {name}"**
+          and that is not drift: it saves a BASE, a different object with its own
+          verb. `aria-pressed` and the fill come off the same boolean. */}
       {/* 🔒 **NO BUTTON FACE, AND PINNED IS A DULL YELLOW (Samuel, 2026-09-15).**
           Two changes, one control:
 

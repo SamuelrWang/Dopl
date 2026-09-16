@@ -49,9 +49,9 @@ const BUILT_IN_KEYS = [
     "created",
     "lastActivity",
 ];
-/** The channel's DESCRIPTION line, or nothing. ⚠ The wire field is `topic`; the
- *  product's word is "Description" (ruling, Samuel, 2026-09-15) and the two are
- *  one column. An array so the caller can splice it away when it is empty. */
+/** The channel's DESCRIPTION line, or nothing. ⚠ "Description" is the product's
+ *  word for the wire field `topic` (ruling, Samuel, 2026-09-15). An array so the
+ *  caller can splice it away when it is empty. */
 function descriptionLine(topic) {
     const safe = topic ? (0, narration_1.neutralizeInline)(topic) : null;
     return safe ? [`Description: ${safe}`] : [];
@@ -123,19 +123,12 @@ async function opUpdate(client, ref, card) {
     if (card === undefined) {
         return (0, respond_1.ok)([
             `Info card for **${label}** — READ ONLY, nothing was changed.`,
-            // ⚠ **THE CHANNEL'S DESCRIPTION, ON THE ONE OP THAT READS A CHANNEL
-            // ROW (ruling, Samuel, 2026-09-15).** The PRODUCT'S WORD is
-            // "Description" and the WIRE FIELD is `topic` — the same 2000-char
-            // `channels.topic` `formatChannelLine` renders on a listing and both
-            // Info cards show; **there is no second column.**
-            // ⚠ IT COSTS NOTHING: `resolveChannelOr` above already fetched the row,
-            // so this is a field of an answer we had. `op="read"` is DELIBERATELY
-            // left alone — it is the poll-loop path and skips the channel resolve on
-            // purpose (`channel-ops-read.ts › opRead`), and buying one line of
-            // metadata with a second round trip on every hold is the trade that file
-            // exists to refuse.
-            // ⚠ Neutralized, and SILENT when empty — a description that flattens to
-            // nothing prints no line rather than an empty span.
+            // ⚠ IT COSTS NO ROUND TRIP: `resolveChannelOr` above already fetched
+            // the row. `op="read"` is DELIBERATELY left without it — that is the
+            // poll-loop path and skips the channel resolve on purpose
+            // (`channel-ops-read.ts › opRead`), and buying one line of metadata with
+            // a second round trip on every hold is the trade that file exists to
+            // refuse.
             ...descriptionLine(channel.topic),
             ...renderCard(channel.infoCard ?? EMPTY_CARD),
             "",

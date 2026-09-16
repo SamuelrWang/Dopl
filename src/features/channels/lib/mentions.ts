@@ -45,6 +45,10 @@
  *     words is blanked, so an escaped `\@diana`, a link/image DESTINATION and a
  *     link reference definition tag nobody. Every case is a MEASURED
  *     disagreement with the transcript's tint, not a guess — F-266.
+ *  8. 🔒 **AN `@` INSIDE A WORD IS NOT A TAG** ({@link MENTION_TOKEN_RE}'s `(?<![A-Za-z0-9])`, F-706,
+ *     2026-09-16). `sam@example.com` used to yield the handle `example.com`, and on the write
+ *     path an unresolvable handle turns the wake repair OFF — so an email address in a message
+ *     woke nobody and stored `delivery='unreachable'`. A tag begins a word or begins the line.
  *
  * The author's own id is dropped by the SERVER resolver, not here: "who does
  * this text name" and "who should be told" are different questions, and the
@@ -112,8 +116,30 @@ export interface MentionCandidate {
  * so the `g` flag cannot leak a `lastIndex` between calls. Do not `.exec()` it.
  * The capture group is load-bearing: `split` keeps the delimiters, which is how
  * the transcript rebuilds the line with the tokens still in place.
+ *
+ * 🔒 **AN `@` INSIDE A WORD STARTS NO TOKEN** (F-706, 2026-09-16) — the `(?<!\w)` is the whole
+ * of rule 8. Without it `sam@example.com` yielded the handle `example.com`, which nothing in
+ * the roster or the agent index answers to — so **an ordinary email address in a message
+ * turned the wake repair off and stamped the post `unreachable`**
+ * (`server/service-wake-verdict.ts › namedButUnresolved`, which reads an unresolved handle as
+ * "the author named somebody"). This module's own rule 3 already named the hazard from the
+ * other side (*"guessing where a handle starts is how `@…` inside a URL becomes a tag"*); the
+ * boundary is that sentence enforced.
+ * ⚠ **THE CLASS IS `[A-Za-z0-9]` AND THE MISSING `_` IS DELIBERATE — `\w` WAS TRIED AND IT
+ * BROKE RULE 7.** An underscore is markdown's other EMPHASIS delimiter, so `__@diana__` and
+ * `_@diana_` are wrappers that must still tag; `\w` blocked both, and F-266 records those exact
+ * forms as MEASURED. The cost is a local part ending in `_` (`sam_@example.com`), which is legal
+ * and rare, against emphasis, which is how people write. Every other wrapper is unaffected:
+ * `**@diana**`, `(@diana)`, `<b>@diana</b>`, a newline, `@@diana`. ⚠ **AND THE MASKS ARE
+ * UNAFFECTED** — `mentions-mask.ts` blanks with SPACES, never with letters, so a handle straight
+ * after a masked region still tokenizes.
+ * ⚠ **THE SAME LOOKBEHIND SHIPS IN TWO OTHER TREES**, which cannot import this one:
+ * `dopl-desktop-app/main/agent-handles.js › TOKEN_RE` and `main/session-dispatch.js ›
+ * mentionedAgentIds` (which has carried its own `(?<![a-z0-9-])` all along, and is the reason
+ * the desktop never had this bug). `src/features/channels/lib/mentions-boundary.test.ts` drives
+ * all three over one fixture table.
  */
-export const MENTION_TOKEN_RE = /(@[^\s@]+)/g;
+export const MENTION_TOKEN_RE = /((?<![A-Za-z0-9])@[^\s@]+)/g;
 
 /**
  * Stripped from the END of a token. A handle cannot end in one of these, and

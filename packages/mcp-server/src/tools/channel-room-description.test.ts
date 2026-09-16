@@ -1,23 +1,15 @@
 /**
- * THE CHANNEL'S **DESCRIPTION** ON THE `dopl_channel` SURFACE.
+ * THE ROOM'S **DESCRIPTION** ON THE `dopl_channel` SURFACE — `action="open"` and
+ * the `action="update"` READ arm. ⚠ NOT `channel-description.ts`, which is this
+ * tool's own agent-facing prose; this suite is about `channels.topic`.
  *
  * ⚠ **"DESCRIPTION" IS THE PRODUCT'S WORD FOR `channels.topic` (ruling, Samuel,
- * 2026-09-15).** One 2000-char column, one label everywhere — the /home
- * New-channel popup, the workspace create dialog, both Info cards and this tool.
- * **There is no second column and there must not be one**; the wire field stays
- * `topic`, which is why every assertion below feeds `topic` and reads
- * "Description".
+ * 2026-09-15)** — the wire field stays `topic`, which is why every assertion
+ * below feeds `topic` and reads "Description".
  *
- * ⚠ THE GAP THIS CLOSES: the description was rendered ONLY on a listing
- * (`channel-render.ts › formatChannelLine`'s ` — <topic>` tail). An agent that
- * opened a room, or read one room's card, was told everything about it except
- * what it was for.
- *
- * ⚠ `op="read"` IS DELIBERATELY NOT HERE. That is the poll/hold path and it
- * skips `resolveChannelOr` on purpose (`channel-ops-read.ts › opRead`, "hot
- * path"); buying one line of metadata with a second round trip on every hold is
- * the trade that file exists to refuse. The two sites that already HAVE the row
- * in hand are the two that print it.
+ * ⚠ `op="read"` IS DELIBERATELY NOT HERE — the poll/hold path skips
+ * `resolveChannelOr` on purpose (`channel-ops-read.ts › opRead`). The two sites
+ * that already HAVE the row in hand are the two that print it.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -59,8 +51,7 @@ const cardStub = (over: Record<string, unknown> = {}) =>
 describe('rooms action="open" states the description it just stored', () => {
   it("echoes it back under the created-channel line", async () => {
     // ⚠ ECHOED because `summary` carries FOUR meanings on this tool, and a
-    // creator who set the wrong one should see which room they actually
-    // described.
+    // creator who set the wrong one should see which room they described.
     const text = await run(openStub(), {
       op: "rooms",
       action: "open",
@@ -82,7 +73,7 @@ describe('rooms action="open" states the description it just stored', () => {
   });
 
   it("NEUTRALIZES it — the description is peer text one argument old", async () => {
-    // ⚠ The same flat rule every other value on this surface gets. Per-site
+    // ⚠ The same FLAT rule every other value on this surface gets: per-site
     // judgement about who could have authored a string is what leaves a
     // peer-typed one raw.
     const text = await run(

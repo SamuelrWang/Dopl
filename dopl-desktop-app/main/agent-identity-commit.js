@@ -3,21 +3,16 @@
 // **WRITING AN AGENT'S NAME OR DESCRIPTION, AND TELLING THE REST OF THE WORLD** (Samuel's
 // report, 2026-09-05: *"I rename an agent and the @-picker still offers the old name"*).
 //
-// ⚠ THE BUG THIS FILE EXISTS FOR. `agent-names.js` is a LOCAL electron-store. The @-picker is
-// not local — since the B10 slice it reads the SERVER's peer projection
-// (`channel_sessions.display_name`, polled by `use-agents-panel.ts`). The name crosses that gap
-// exactly once: `session-state-push.js › reportRow` carries the summary's `displayName`, and the
-// push only fires when the summary DIGEST moves. A rename moves the store, not the digest — and
-// no rename caller asked the summary to re-read itself. So the new name sat on the machine until
-// some UNRELATED engine event happened to flush, which on a quiet machine is never: the operator
-// renames an agent, nothing else happens because nothing else is running, and the picker offers
-// the old name until the app is restarted and every session re-registers.
+// 🔒 **A NAME THAT NEVER REACHES THE PROJECTION IS A NAME NO PEER HAS.** `agent-names.js` is a
+// LOCAL electron-store; the @-picker reads the SERVER's `channel_sessions.display_name`, and the
+// name crosses that gap only when `session-state-push.js` fires — which is when the summary
+// DIGEST moves. A rename moves the store, not the digest, so without the `touch()` below the new
+// name sits on the machine until some unrelated engine event flushes, i.e. on a quiet machine
+// never.
 //
-// ⚠ WHY A WRAPPER AND NOT A LINE IN EACH CALLER. There are THREE rename paths — the IPC op
-// (`session-ipc-ops.js › sessions:rename`), the in-process tool (`runtime/claude/axis-b.js ›
-// applyRename`) and the external directive (`directive-agent-ops.js`) — and this bug is what a
-// missing line in ONE of them looks like. Three call sites that must each remember a follow-up
-// call is the same shape as the defect. One function, and the follow-up is not forgettable.
+// ⚠ WHY A WRAPPER AND NOT A LINE IN EACH CALLER: there are THREE rename paths
+// (`session-ipc-ops.js › sessions:rename`, `runtime/claude/axis-b.js › applyRename`,
+// `directive-agent-ops.js`), and this bug is what a missing line in ONE of them looks like.
 //
 // ⚠ AND WHY NOT IN `agent-self-ops.js`. That module's core is deliberately PURE and
 // electron-free, with `names` injected, so `test/agent-self-ops.test.mjs` evaluates it verbatim.
@@ -38,29 +33,22 @@
  * the touch on a non-empty name is the bug in miniature, so the gate is `res.ok`, never
  * `res.name`.
  *
- * ── ⚠ AND IT IS WHERE THE UNIQUENESS RULE IS ENFORCED (Samuel, 2026-09-15) ──────────────────
+ * ── ⚠ AND IT IS WHERE THE UNIQUENESS RULE IS ENFORCED (Samuel, 2026-09-15: *"no two agents that
+ * are addressable can have the same name … it will automatically auto-resolve to coder-1 …
+ * coder-2"*) ─────────────────────────────────────────────────────────────────────────────────
  *
- * *"I think we should enforce a rule where no two agents that are addressable can have the same
- * name … it will automatically auto-resolve to coder-1 … coder-2 and so on."*
- *
- * ⚠ **HERE, BECAUSE THIS IS ALREADY THE ONE DOOR ALL THREE RENAME PATHS GO THROUGH** — the IPC op
- * (`session-ipc-ops.js › sessions:rename`, which the SPA's launch dialog and the Agents-tab
- * pencil both reach), the in-process tool (`runtime/claude/axis-b.js › applyRename`) and the
- * external directive (`directive-agent-ops.js`). This module's own header states why that door
- * exists: three call sites that must each remember a follow-up is the same shape as the defect.
- * The LAUNCH lanes reach it too — `launch-directive-spawn.js` commits the directive's name, and
- * the SPA renames straight after its launch — so "every launch path" and "the rename path" are
- * one place rather than five.
+ * ⚠ **HERE, BECAUSE THIS IS ALREADY THE ONE DOOR EVERY RENAME AND EVERY LAUNCH LANE GOES
+ * THROUGH** — the IPC op, the in-process tool, the external directive, and both launch lanes
+ * (`launch-directive-spawn.js` commits the directive's name; the SPA renames straight after its
+ * launch). One place rather than five.
  *
  * ⚠ **THE SUFFIX IS APPLIED TO WHAT IS STORED, AND THE ANSWER CARRIES IT BACK.** `res.name` is
- * main's own value and always was (the never-echo-the-ask rule `rename`/`setMode`/`setModel`
- * share), so a caller that renders it already shows `coder-1` with no change — which is how the
- * launcher learns the final name.
+ * main's OWN value (the never-echo-the-ask rule), so a caller that renders it already shows
+ * `coder-1` — which is how the launcher learns the final name.
  *
- * ⚠ **THE RULE RUNS BEFORE THE SANITIZER, NOT AFTER**, because `sanitizeName` is what decides
- * whether the string is storable at all: suffixing a name that is about to be REFUSED would make
- * the refusal about a string nobody sent. `applyRenameTo` still owns both the clear gesture and
- * the refusal, unchanged.
+ * ⚠ **THE RULE RUNS BEFORE THE SANITIZER, NOT AFTER**: suffixing a name that is about to be
+ * REFUSED would make the refusal about a string nobody sent. `applyRenameTo` still owns both the
+ * clear gesture and the refusal.
  *
  * @returns `agent-self-ops.js › applyRenameTo`'s own verdict, untouched — callers already answer
  * in their own shapes and this must not become a second vocabulary.
@@ -99,7 +87,11 @@ function uniqueFor(agentId, value) {
     const rows = require('./session-summary').reportList();
     return unique.uniqueAgentName(
       value,
-      unique.addressableSiblings(rows, agentId, channelOf(rows, agentId))
+      unique.addressableSiblings(rows, agentId, channelOf(rows, agentId)),
+      // ⚠ THE STORE'S OWN CAP, HANDED DOWN RATHER THAN RE-TYPED. `sanitizeName` REFUSES a name
+      // over it, so a 60-character name that collided would be suffixed to 62 and refused —
+      // nameless agent on the launch lane, `bad-name` on the rename lane.
+      require('./agent-names').MAX_NAME
     );
   } catch (err) {
     try {

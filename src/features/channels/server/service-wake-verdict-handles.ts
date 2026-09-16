@@ -3,13 +3,11 @@ import { agentIdHandle, buildAgentMentionIndex } from "../lib/agent-mentions";
 import { agentIdOfSessionKey } from "../lib/agent-post-stamp";
 import { mentionHandleOf, mentionTokensOf } from "../lib/mentions";
 import type { SessionStateRow } from "./collab-dto";
-// ⚠ `ChannelAgentHandleAmbiguousError` IS STILL NOT IMPORTED, AND 2026-09-15 SETTLED THAT FOR
-// GOOD. Its throw site went on 2026-09-07 with the suffix mint; the mint itself is now withdrawn,
-// and what replaced BOTH is Samuel's commit-time rule — no two ADDRESSABLE agents in a channel
-// share a name, because the second one is stored as `Coder-1` (`main/agent-name-unique.js`).
-// **There is no ambiguity left for an error to describe.** The CLASS is left standing in
-// `errors-recipient.ts` on purpose; it is a public error shape older clients and the
-// error-mapping table may still name, and retiring a wire-visible code is a separate decision.
+// ⚠ `ChannelAgentHandleAmbiguousError` IS DELIBERATELY NOT IMPORTED (2026-09-15). Samuel's
+// commit-time rule means no two ADDRESSABLE agents in a channel share a name — the second is
+// stored as `Coder-1` (`main/agent-name-unique.js`) — so there is no ambiguity left for an error
+// to describe. The CLASS stays in `errors-recipient.ts`: it is a wire-visible code older clients
+// may still name, and retiring one is a separate decision.
 import * as repoSessions from "./repository-sessions";
 import { isFresh } from "./service-wake-freshness";
 import { liveChannelSessions } from "./service-wake-verdict-resilience";
@@ -40,35 +38,19 @@ import type { ChannelContext } from "./service-shared";
  */
 
 /**
- * THE AUTHOR'S OWN SESSIONS IN THIS CHANNEL — **PRESENT ONLY, which is every
- * one of them**.
+ * THE AUTHOR'S OWN SESSIONS IN THIS CHANNEL — **PRESENT ONLY, which is every one of them**.
  *
- * ⚠ **OWN-SCOPED, AND THAT IS THE SAME-ACCOUNT CARVE GETTING ENFORCED FOR
- * FREE.** Every agent posts under its OPERATOR'S account (INVARIANTS §11), so
- * "sessions belonging to the author" is exactly the set Samuel's 2026-08-31 carve
- * permits an agent-authored message to wake. A peer's agent is not in it, cannot
- * be resolved here, and is therefore left to the machine that owns it —
- * `recipientAgentIds: null`, and the desktop's own parse decides. That is a
- * strictly weaker server answer, never a wrong one.
- * ⚠ **SCOPE IS NOW THE ONLY THING THIS FENCE ENFORCES**, and that is the point:
- * the carve is about WHOSE machine may be woken, never about how recently it
- * spoke.
+ * ⚠ **OWN-SCOPED, AND THAT IS THE SAME-ACCOUNT CARVE ENFORCED BY WHICH READ IS ISSUED.** Every
+ * agent posts under its OPERATOR'S account (INVARIANTS §11), so this is exactly the set Samuel's
+ * 2026-08-31 carve permits an agent-authored message to wake. A peer's agent is left to the
+ * machine that owns it — `recipientAgentIds: null` — a strictly weaker answer, never a wrong one.
  *
- * ⚠ **THE FRESHNESS FILTER LEFT ON 2026-09-05 AND THE DOCTRINE IT LEFT UNDER IS
- * ONE LINE: PRESENCE LICENSES RESOLUTION, FRESHNESS LICENSES ONLY REFUSAL.** It
- * read `updated_at` as a heartbeat. `channel_sessions` is a PROJECTION pushed on
- * state CHANGE — *"an agent thinking for four minutes writes nothing at all"* —
- * so a quiet row means nobody said anything, and filtering on it made a live
- * agent that had been idle five minutes unaddressable BY ITS OWN OPERATOR'S
- * AGENTS. Absence is carried by the push being a FULL-SET REPLACE, not by age.
- * Same ruling, same day, same reason as
- * `service-wake-verdict-resilience.ts › liveChannelSessions`; see that grave
- * block and Samuel's 2026-08-22 original (`agents-model.ts › peerCardsFor`).
- * ⚠ **WHERE `isFresh` STILL LIVES IS {@link ownLiveAgentIds}'s `projectionFresh`**
- * — the half that licenses a REFUSAL, which may only ever stand on positive
- * evidence. The two answers now come off the same rows and say different things,
- * which is exactly what F-418's asymmetry always claimed and what a single
- * filter could not express.
+ * 🔒 **PRESENCE LICENSES RESOLUTION; FRESHNESS LICENSES ONLY REFUSAL** (2026-09-05).
+ * `channel_sessions` is a PROJECTION pushed on state CHANGE — *"an agent thinking for four
+ * minutes writes nothing at all"* — so a quiet row means nobody said anything, and filtering on
+ * `updated_at` made an operator's own idle agent unaddressable. Absence is carried by the push
+ * being a FULL-SET REPLACE, not by age. `isFresh` survives only in {@link ownLiveAgentIds}'s
+ * `projectionFresh`, the half that licenses a REFUSAL (F-418's asymmetry).
  */
 async function ownSessions(
   ctx: ChannelContext,
@@ -78,25 +60,17 @@ async function ownSessions(
 }
 
 /**
- * **EVERY AGENT ID THE CALLER'S OWN LIVE SESSIONS ANSWER TO, IN THIS CHANNEL**
- * — the id door (`@agent-<id>` / `@<id>`) and the name door (`@<slug>`), through
- * the one index builder both web surfaces already use.
+ * **EVERY AGENT ID THE CALLER'S OWN LIVE SESSIONS ANSWER TO, IN THIS CHANNEL** — the id door
+ * (`@agent-<id>` / `@<id>`) and the name door (`@<slug>`), through the one index builder both
+ * web surfaces already use.
  *
- * ⚠ EXPORTED FOR `service-directions.ts`, WHICH ASKS THE SAME QUESTION ABOUT A
- * BARE ID RATHER THAN A BODY (G3 / F-418). One projection read, one freshness
- * rule, one place that decides what "a live agent of mine" means.
+ * ⚠ EXPORTED FOR `service-directions.ts`, which asks the same question about a BARE ID rather
+ * than a body (G3 / F-418) — one read, one place that decides what "a live agent of mine" means.
  *
- * ⚠ **TWO ANSWERS OFF ONE READ, AND THEY ARE DIFFERENT CLAIMS (2026-09-05).**
- * `ids` is PRESENCE — who is running — and licenses RESOLUTION.
- * `projectionFresh` is FRESHNESS — whether the projection has said anything
- * lately — and is the ONLY half a caller may REFUSE on. They used to be one
- * filtered list, which forced the weaker claim onto the stronger one: an
- * operator's own agent went unaddressable after five quiet minutes because the
- * set that answers "who is here" was being computed by the rule that answers "is
- * this evidence recent enough to turn somebody away".
- * ⚠ **F-589 IS UNTOUCHED.** The stamp check is `ids.includes(claim)` and `ids`
- * is still OWN-SCOPED by the read's fence; nothing cross-operator widens. What
- * changes is only that a quiet agent of MINE still counts as mine.
+ * ⚠ **TWO ANSWERS OFF ONE READ, AND THEY ARE DIFFERENT CLAIMS** (2026-09-05). `ids` is PRESENCE
+ * and licenses RESOLUTION; `projectionFresh` is FRESHNESS and is the ONLY half a caller may
+ * REFUSE on. ⚠ **F-589 IS UNTOUCHED** — the stamp check is `ids.includes(claim)` over a set the
+ * read's own fence keeps own-scoped.
  */
 export async function ownLiveAgentIds(
   ctx: ChannelContext,
@@ -122,40 +96,25 @@ export async function ownLiveAgentIds(
  * THREE OUTCOMES, AND THE THIRD IS THE ONE THAT MATTERS:
  *   - no handles at all      → `[]`. A complete answer: this body names no agent.
  *   - handles that resolve   → the ids. Authoritative; the desktop executes it.
+ *   - handles the MEMBER namespace holds → `[]` too. `@samuel` names a member, so this body
+ *     names no AGENT; see the drop inside the loop for why the distinction is load-bearing.
  *   - handles that DO NOT    → `null`. The token may name an agent whose row has
  *     not been pushed yet, or a stale one. Answering `[]` here would tell the
  *     desktop "nobody", and it would stop feeding an agent it can see. `null`
  *     means "you decide", which is today's behaviour exactly.
  *
- * ⚠ **THE CANDIDATE SET IS THE AUTHOR'S KIND, AND THAT IS THE WHOLE OF THE
- * 2026-09-04 PEER-TAG FIX.** It read the AUTHOR'S OWN fresh sessions for both
- * kinds of author, so a HUMAN's `@agent-<id>` for a PEER's agent resolved to
- * nothing: #964, #967 and #970 of the Mobile Command Center incident carried the
- * tag and stored `wake_verdict=none`, `recipient_agent_ids=NULL`, and reached
- * the agent only because the desktop's own body parse repaired them one layer
- * down. A second live agent in the room, or a peer whose machine is not the one
- * that wrote the row, and the tag routed to nobody at all.
+ * 🔒 **THE CANDIDATE SET IS THE AUTHOR'S KIND** (2026-09-04, the peer-tag fix). An AGENT author
+ * reads its OWN sessions — the same-account carve (F-589, Samuel 2026-08-31), not being widened —
+ * and a PERSON reads the ROOM's, which is strictly narrower than RR3 already routing an
+ * UNADDRESSED human post channel-wide. Reading own-scoped rows for BOTH kinds is what made a
+ * human's `@agent-<id>` for a PEER's agent resolve to nothing.
  *
- * ⚠ **THE AGENT-AUTHOR DOOR STAYS OWN-SCOPED — that is the same-account carve
- * (F-589, Samuel 2026-08-31) and it is not being widened.** An agent-authored
- * message may still only reach its own operator's agents. What changes is
- * strictly the HUMAN arm, and it is strictly narrower than RR3, which already
- * routes an UNADDRESSED human post channel-wide: a person who typed a handle is
- * asking for less reach than a person who typed nothing.
- *
- * ⚠ **THERE IS NO AMBIGUOUS DISPLAY-NAME HANDLE ANY MORE** (Samuel, 2026-09-15:
- * *"no two agents that are addressable can have the same name"*). Two operators
- * each renaming an agent "Main" used to be the ordinary collision this function
- * had to answer, and it answered it three different ways inside two weeks — a
- * WHOLE-POST REFUSAL that cost the body its other recipients, a MINTED SUFFIX
- * that re-pointed `main-1` whenever an agent ended, and a fail-closed `null`.
- * The rule moved to where the name is COMMITTED instead
- * (`main/agent-name-unique.js`), so the second "Main" is STORED as `Main-1` and
- * this lane has one agent per handle by construction.
- * ⚠ **THE ONE CASE THE COMMIT RULE CANNOT COVER IS A CROSS-MACHINE ONE** — names
- * are minted on the machine that owns the id, so two MEMBERS can still each run a
- * "Main" in one room. `buildAgentMentionIndex` names the first claimant there,
- * which never re-points an address and never withdraws one.
+ * ⚠ **THERE IS NO AMBIGUOUS DISPLAY-NAME HANDLE ANY MORE** (Samuel, 2026-09-15: *"no two agents
+ * that are addressable can have the same name"*). The rule lives where the name is COMMITTED
+ * (`main/agent-name-unique.js`), so the second "Main" is STORED as `Main-1` and this lane has one
+ * agent per handle by construction. ⚠ **THE ONE CASE IT CANNOT COVER IS CROSS-MACHINE** — names
+ * are minted on the machine that owns the id, so two MEMBERS can still each run a "Main";
+ * `buildAgentMentionIndex` names the first claimant, which never re-points or withdraws one.
  */
 export async function resolveAgentRecipients(
   ctx: ChannelContext,
@@ -168,26 +127,17 @@ export async function resolveAgentRecipients(
   authorKind: string,
   /**
    * **THE MEMBER HANDLES THIS ROOM'S ROSTER OCCUPIES — the reserved set that makes MEMBERS
-   * OUTRANK AGENTS on the SERVER too** (2026-09-07, closing the parity gap me53qc4y named).
+   * OUTRANK AGENTS on the SERVER too** (2026-09-07, closing a client/server parity gap:
+   * `lib/draft-recipients.ts › draftReach` had reserved them and this door had not, so one token
+   * had two answers).
    *
-   * ⚠ **THE CLIENT HAS RESERVED SINCE THE SUFFIX RULING AND THIS DOOR DID NOT**, which left one
-   * body answered two ways: `lib/draft-recipients.ts › draftReach` builds its index with
-   * `memberHandlesOf(members)`, so an agent an operator named "Diana" is `@diana-1` in the
-   * composer's line while this index handed it the bare `@diana` and woke it. The composer
-   * UNDERSTATED the reach — its stated safe direction — but the room still had two answers to
-   * one token.
-   *
-   * ⚠ **IT COSTS NO READ, AND THAT IS THE ONLY REASON IT IS TAKEN HERE.** The handles are the
-   * ones `service-writes-metadata-mentions.ts › resolveBodyMentions` already derived from the
-   * roster and profiles it read one fold earlier on this same request, threaded down through
-   * `PostMetadataResult`. This function issues no roster read of its own and must not grow one:
-   * the member namespace is worth reserving, not worth two round trips on the hot write path
+   * ⚠ **IT COSTS NO READ, AND THAT IS THE ONLY REASON IT IS TAKEN HERE** — the handles are the
+   * ones `service-writes-metadata-mentions.ts › resolveBodyMentions` already derived one fold
+   * earlier on this same request. This function issues no roster read and must not grow one
    * (INVARIANTS §12).
    *
-   * ⚠ **EMPTY MEANS "NO MEMBER NAMESPACE TO RESPECT", NOT "NO MEMBERS"** — the same reading
-   * `buildAgentMentionIndex` documents for the parameter. Every caller that has no roster in
-   * hand (the harness, `service-directions.ts`) is unchanged, and the fail-safe direction is
-   * today's behaviour rather than a new hazard.
+   * ⚠ **EMPTY MEANS "NO MEMBER NAMESPACE TO RESPECT", NOT "NO MEMBERS"** — every caller without
+   * a roster in hand (the harness, `service-directions.ts`) is unchanged.
    */
   reservedHandles: readonly string[] = []
 ): Promise<string[] | null> {
@@ -195,6 +145,11 @@ export async function resolveAgentRecipients(
     .map(mentionHandleOf)
     .filter((handle): handle is string => handle !== null);
   if (handles.length === 0) return [];
+  const reserved = new Set(
+    Array.from(reservedHandles, (handle) => handle.trim().toLowerCase()).filter(
+      (handle) => handle.length > 0
+    )
+  );
 
   // ⚠ **BOTH DOORS ARE PRESENCE-KEYED SINCE 2026-09-05, AND THE ONLY DIFFERENCE
   // LEFT BETWEEN THEM IS SCOPE — which is the only difference there was ever
@@ -225,7 +180,15 @@ export async function resolveAgentRecipients(
     // that happens to slug to eight id-shaped characters still wins its own
     // handle.
     const handle = index.has(written) ? written : (bareId(written) ?? written);
-    if (!index.has(handle)) continue;
+    if (!index.has(handle)) {
+      // ⚠ **A MEMBER'S HANDLE IS A RESOLVED ADDRESS, NOT AN UNRESOLVED AGENT ONE** (2026-09-15).
+      // The member namespace outranks the agent one, so `@samuel` is deliberately absent from
+      // this index — but answering `null` for it tells `service-wake-verdict.ts` the author typed
+      // a handle this server cannot place, which turns off RR3 and stamps the post `unreachable`.
+      // `resolveBodyMentions` already resolved this token one fold earlier, on the same request.
+      if (reserved.has(handle)) resolvedAny = true;
+      continue;
+    }
     // 🔒 **A HANDLE NAMES EXACTLY ONE AGENT, AND THE TYPE IS THE PROOF** (Samuel, 2026-09-15).
     // `AgentMentionIndex` is `ReadonlyMap<string, string>`: there is no value here that could
     // mean "two agents claim this" and no branch left to take, because the COLLISION is prevented
@@ -270,21 +233,15 @@ export function selfAgentIdOf(
 /**
  * `@<id>` → the `agent-<id>` handle the index claims.
  *
- * ⚠ **THE PREFIX IS OPTIONAL ON THE MACHINE AND MANDATORY IN THE WEB INDEX, AND
- * THAT DISAGREEMENT IS REAL — see F-448.** `main/session-dispatch.js ›
- * mentionedAgentIds` matches `@(?:agent-)?([a-z][a-z0-9]{7})` because *"the bare
- * `@<id>` form is what every message written before [2026-08-27] carries"*, while
- * `lib/agent-mentions.ts › buildAgentMentionIndex` claims only `agent-<id>` and
- * the slug. A server that resolved only the index's forms would answer
- * `unreachable` for a bare id the desktop routes happily, which is a WORSE lie
- * than the one this slice exists to remove.
+ * ⚠ **THE PREFIX IS OPTIONAL ON THE MACHINE AND MANDATORY IN THE WEB INDEX — F-448.**
+ * `main/session-dispatch.js › mentionedAgentIds` matches `@(?:agent-)?([a-z][a-z0-9]{7})`, while
+ * `buildAgentMentionIndex` claims only `agent-<id>` and the slug; resolving only the index's
+ * forms would answer `unreachable` for a bare id the desktop routes happily.
  *
- * ⚠ **IT IS A NORMALISATION, NOT A SECOND PARSER.** The token still comes from
- * `mentionTokensOf`/`mentionHandleOf` and the lookup is still the one index; all
- * this does is try the canonical spelling of a handle that is already a
- * well-formed agent id. The fix belongs in the index (so the transcript TINTS
- * the form it routes on) and is filed rather than taken, because that is a
- * rendering change and this slice is not a rendering slice.
+ * ⚠ **IT IS A NORMALISATION, NOT A SECOND PARSER** — the token still comes from
+ * `mentionTokensOf`/`mentionHandleOf` and the lookup is still the one index. The proper fix
+ * belongs in the index (so the transcript TINTS the form it routes on) and is filed as F-448,
+ * because that is a rendering change.
  */
 const BARE_AGENT_ID_RE = /^[a-z][a-z0-9]{7}$/;
 function bareId(handle: string): string | null {

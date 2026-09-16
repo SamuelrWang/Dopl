@@ -154,6 +154,9 @@ export interface ResolveOpts {
   threadTagStripped?: boolean;
   clientMsgId?: string;
   channel?: Partial<ChannelRow>;
+  /** The room's MEMBER handles, as the metadata fold hands them down
+   *  (`PostMetadataResult.memberHandles`). Empty is "no member namespace to respect". */
+  reservedHandles?: readonly string[];
 }
 
 /** One post, resolved. `metadata` is the fold's OUTPUT, which is what the
@@ -195,6 +198,7 @@ export function resolve(
       authorKind: opts.authorKind ?? "user",
       toAgentId: opts.toAgentId ?? null,
       threadTagStripped: opts.threadTagStripped,
+      reservedHandles: opts.reservedHandles,
     },
     NOW
   );

@@ -142,25 +142,21 @@ export function PersonInfoTab({
   const creator = members.find((m) => m.userId === channel.createdBy) ?? null;
   const builtIns: BuiltInRow[] = [
     // ⚠ **"DESCRIPTION" IS THE PRODUCT'S WORD FOR `channels.topic` (ruling,
-    // Samuel, 2026-09-15)** — the New-channel popup's second field, the same
-    // 2000-char column the MCP `rooms list` line renders. **No new column.**
-    // ⚠ DISPLAY ONLY: editing a channel's header lives where channel management
-    // does (`PATCH /api/channels/{id}` already accepts `topic`).
-    // ⚠ It is FIXED like the other four — no ×, and a stored `hidden` key would
-    // be inert here as it is for them.
+    // Samuel, 2026-09-15)** — no new column. DISPLAY ONLY: editing a channel's
+    // header is channel management's (`PATCH /api/channels/{id}`).
     // ⚠ THE SAME ROW IS ON THE WORKSPACE CHANNELS PAGE
-    // (`channels/components/info-tab.tsx`). The two panes are separate
-    // compositions of one ladder and are MEANT TO MATCH.
+    // (`channels/components/info-tab.tsx`) — two compositions of one ladder, and
+    // a ruling on it lands on both.
     {
       key: "description",
       icon: AlignLeft,
       label: "Description",
+      // ⚠ "None", one word, no explainer sentence (minimal-copy ruling).
       value: channel.topic ? (
         <span className="truncate text-body text-text-primary">
           {channel.topic}
         </span>
       ) : (
-        // ⚠ ONE WORD, NO EXPLAINER SENTENCE (minimal-copy ruling).
         <span className="text-body text-text-muted">None</span>
       ),
     },

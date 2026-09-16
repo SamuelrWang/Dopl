@@ -74,6 +74,37 @@ test("FAIL CLOSED: an UNKNOWN slug names nobody", () => {
   assert.deepEqual(handles.slugMentionedAgentIds("no handles at all", index), []);
 });
 
+/**
+ * 🔒 **AN `@` INSIDE A WORD STARTS NO TOKEN** (F-706, 2026-09-16) — the boundary this file's
+ * `TOKEN_RE` gained, hand-copied from `lib/mentions.ts › MENTION_TOKEN_RE`.
+ *
+ * ⚠ **THE COST WAS THE SERVER'S, NOT THIS TREE'S**, which is why it is worth a case here anyway:
+ * `sam@example.com` yielded the handle `example.com`, and on the write path an unresolvable
+ * handle turns the wake repair OFF, so an email address in a message woke nobody and stored
+ * `delivery='unreachable'`. The copies must not drift apart —
+ * `src/features/channels/lib/mentions-boundary.test.ts` reads THIS file and drives both over one
+ * fixture table.
+ */
+test("🔒 an EMAIL ADDRESS names nobody — a tag begins a word", () => {
+  // ⚠ **THE AGENT IS NAMED AFTER THE DOMAIN ON PURPOSE**, or this case passes for the wrong
+  // reason: with any other name the lookup misses anyway and the boundary is never exercised.
+  // Slugged, `example.com` IS the handle the old tokenizer handed the index — so without the
+  // boundary this body WAKES that agent off somebody's email signature.
+  const index = indexFor({ [A1]: "example.com" });
+  assert.deepEqual(
+    handles.slugMentionedAgentIds("mail me at sam@example.com", index),
+    [],
+    "the local part must not make `@example.com` a tag"
+  );
+  // …and the same handle typed as an address still reaches it.
+  assert.deepEqual(handles.slugMentionedAgentIds("@example.com go", index), [A1]);
+  // ⚠ AND THE WRAPPED FORMS STILL TAG — the boundary is `\w`, not "any punctuation".
+  const bot = indexFor({ [A1]: "Research Bot" });
+  assert.deepEqual(handles.slugMentionedAgentIds("**@research-bot**", bot), [A1]);
+  assert.deepEqual(handles.slugMentionedAgentIds("(@research-bot)", bot), [A1]);
+  assert.deepEqual(handles.slugMentionedAgentIds("look\n@research-bot", bot), [A1]);
+});
+
 test("FAIL CLOSED: an UNNAMED agent has no slug door — only its id form", () => {
   // ⚠ THE COMMON CASE, and it must produce an EMPTY index rather than an entry under `''`.
   const index = indexFor({ [A1]: null, [A2]: "" });

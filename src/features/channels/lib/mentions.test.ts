@@ -42,13 +42,23 @@ describe("tokenizing", () => {
     expect(mentionTokensOf("no tags in this one")).toEqual([]);
   });
 
-  it("does not treat an email in prose as two tags", () => {
-    // `[^\s@]+` stops at the second `@`, so `diana@example.com` yields the one
-    // token `@example.com`, which resolves to nobody.
-    expect(mentionTokensOf("write to diana@example.com")).toEqual([
-      "@example.com",
-    ]);
+  /**
+   * 🔒 **AN EMAIL IN PROSE IS NOT A TAG AT ALL** (rule 8, F-706, 2026-09-16).
+   *
+   * ⚠ **THIS CASE ASSERTED ONE TOKEN UNTIL TODAY, AND THAT TOKEN WAS THE BUG.** It read
+   * *"`[^\s@]+` stops at the second `@`, so `diana@example.com` yields the one token
+   * `@example.com`, which resolves to nobody"* — true, and "resolves to nobody" turned out not
+   * to be harmless. On the write path an UNRESOLVABLE handle is how
+   * `server/service-wake-verdict.ts › namedButUnresolved` knows the author named somebody, so
+   * this token turned the wake repair off and stored `delivery='unreachable'`: an email address
+   * in a message woke nobody. The token is now never produced.
+   */
+  it("🔒 does not treat an email in prose as a tag at all", () => {
+    expect(mentionTokensOf("write to diana@example.com")).toEqual([]);
     expect(resolveMentions("write to diana@example.com", ROSTER)).toEqual([]);
+    // ⚠ AND THE SAME HANDLE TYPED AS AN ADDRESS IS UNAFFECTED — the boundary is about where the
+    // `@` sits, never about what follows it.
+    expect(mentionTokensOf("write to @diana")).toEqual(["@diana"]);
   });
 
   it("strips TRAILING punctuation and never leading", () => {

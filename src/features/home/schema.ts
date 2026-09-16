@@ -2,7 +2,7 @@ import { z } from "zod";
 // ⚠ THE CHARSET GATE IS THE CHANNELS FEATURE'S, IMPORTED AND NOT RESTATED. A
 // second copy of a neutralizer drifts, and the copy that drifts is the one that
 // stops neutralizing (`shared/lib/safe-label.ts`'s own header).
-import { safeOptionalLabel } from "@/shared/lib/safe-label";
+import { safeLabel, safeOptionalLabel } from "@/shared/lib/safe-label";
 
 /**
  * Request shapes for the home surface.
@@ -13,6 +13,12 @@ import { safeOptionalLabel } from "@/shared/lib/safe-label";
  * request types instead of re-declaring them.
  */
 
+/** ⚠ EXPORTED so the popup's `maxLength` is the SERVER's number rather than a
+ *  hand-copy of it (`apps/desktop-ui › new-channel-dialog.tsx`). */
+export const HOME_CHANNEL_NAME_MAX = 80;
+/** The DESCRIPTION's ceiling — `channels/schema.ts › ChannelTopicSchema`'s. */
+export const HOME_CHANNEL_DESCRIPTION_MAX = 2000;
+
 /**
  * `POST /api/home/channels` — "New channel". The name is the CHANNEL's name and
  * the container's name both: the container is plumbing nobody navigates to, so
@@ -20,23 +26,26 @@ import { safeOptionalLabel } from "@/shared/lib/safe-label";
  * thing to get wrong.
  *
  * ⚠ **`topic` IS THE FIELD THE PRODUCT CALLS "DESCRIPTION" (ruling, Samuel,
- * 2026-09-15).** The New-channel popup gained a Description field; it writes the
- * EXISTING `channels.topic` column (2000 chars, `channels/schema.ts ›
- * ChannelTopicSchema`, already on the `Channel` DTO and already rendered on the
- * MCP `rooms list` line). **There is no new column and there must not be one** —
- * the user-facing word is "Description" everywhere, the wire and DB field stays
- * `topic`. `createHomeChannel` used to pin `""` here and now passes this through.
+ * 2026-09-15).** It writes the EXISTING `channels.topic` column (`channels/
+ * schema.ts › ChannelTopicSchema`); **there is no new column and there must not
+ * be one.** `""` stays legal — the column is `NOT NULL DEFAULT ''`.
  *
- * ⚠ THE CAP AND THE CHARSET GATE ARE THE CHANNELS FEATURE'S, not a looser local
- * pair: the value lands in the same column, is spliced into the same MCP server
- * narration, and `ChannelTopicSchema` is `safeOptionalLabel("Channel topic",
- * 2000)`. It is restated rather than imported only because that const is
- * module-private there; the ARGUMENTS must stay identical.
- * ⚠ `.optional()`, and `""` stays legal — the column is `NOT NULL DEFAULT ''`.
+ * ⚠ **BOTH GATES ARE THE CHANNELS FEATURE'S, and `name`'s was MISSING until
+ * 2026-09-15.** These two doors write the same two columns as `POST
+ * /api/channels`, and both columns carry the charset CHECK
+ * (`channels_name_check`, `workspaces_name_charset_check`) — so a length-only
+ * gate here did not let a forged name through, it turned it into a 23514 from
+ * `insertSoloContainer` and an opaque 500 where the channels route answers 400.
+ * The bounds must stay `safe-label.ts`'s; `schema.test.ts` pins the two doors
+ * against each other. ⚠ The LENGTH differs on purpose — 80, not the channel's
+ * 120, because this name is the CONTAINER's too.
  */
 export const HomeChannelCreateSchema = z.object({
-  name: z.string().trim().min(1).max(80),
-  topic: safeOptionalLabel("Channel description", 2000).optional(),
+  name: safeLabel("Channel name", HOME_CHANNEL_NAME_MAX),
+  topic: safeOptionalLabel(
+    "Channel description",
+    HOME_CHANNEL_DESCRIPTION_MAX
+  ).optional(),
 });
 
 export type HomeChannelCreateInput = z.infer<typeof HomeChannelCreateSchema>;

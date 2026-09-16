@@ -12,40 +12,35 @@ import { HOME_CHANNELS_PATH } from "./home-rows";
  *
  * 🔒 **SAMUEL, 2026-09-15:** *"replace the bookmark icon next to the channel name
  * with the pin icon. Also, i noticed that the bookmark icon like alway breaks and
- * is super buggy."* **The pin IS the bookmark** —
- * `channel_members.favorited_at`, one server-backed fact — and the concrete bug
- * behind "super buggy" is that **it lives in TWO client caches and the write only
- * ever told one of them**: the header's toggle patches and invalidates
- * `GET /api/channels` (`channels/hooks/use-channel-preference-writes.ts ›
- * favorite`), while this page's list is `GET /api/home/channels`, which nothing
- * touched. Pinning filled the icon and left the row exactly where it was.
+ * is super buggy."* **The pin IS the bookmark** — `channel_members.favorited_at`,
+ * one server-backed fact — and the concrete bug behind "super buggy" is that **it
+ * lives in TWO client caches and the write only ever told one of them**: the
+ * header's toggle patches and invalidates `GET /api/channels`
+ * (`channels/hooks/use-channel-preference-writes.ts › favorite`), while this
+ * page's list is `GET /api/home/channels`, which nothing touched.
  *
  * ⚠ **THE BRIDGE IS HERE AND NOT IN THE WRITE, AND THAT IS `docs/INVARIANTS.md`
- * §1.** `channels → home` is a forbidden import, and that write is the WORKSPACE
- * channels page's too — a home-shaped cache key inside it would be a second host's
- * concern in a shared hook. **`use-home-unread-refresh.ts` drew this exact line
- * first** (a cache subscription rather than a callback threaded through
- * `StandaloneChannelSurface`); this is the same shape with one difference, below.
+ * §1** — `channels → home` is a forbidden import, and that write is the WORKSPACE
+ * channels page's too. `use-home-unread-refresh.ts` drew this line first.
  *
- * ⚠ **IT PATCHES RATHER THAN INVALIDATES, AND THE DIFFERENCE IS THE POINT.** The
- * unread bridge reacts to a read that has ALREADY changed the server's answer, so
- * a refetch is the whole job. A pin has to move the row while the request is still
- * in flight — the channels cache is patched optimistically, so copying the value
- * across paints /home at the same instant the icon fills. The write's own
- * `invalidate` still re-reads `/api/channels` on settle and this fires again with
- * the server's answer, so an optimistic guess cannot survive a failure: a rollback
- * is an `updated` event like any other.
+ * ⚠ **IT PATCHES RATHER THAN INVALIDATES, AND THE DIFFERENCE IS THE POINT.** A pin
+ * has to move the row while the request is still in flight, so copying the
+ * optimistically-patched value across paints /home at the instant the icon fills.
+ * A ROLLBACK is an `updated` event like any other, so a failed write moves the row
+ * back; the write's own `invalidate` then re-reads `/api/channels` and this fires
+ * once more with the server's answer.
  *
  * ⚠ **KEYED ON THE PATH SEGMENT, off the same minter the reader registers with**
  * (`channelKeys.list().path`). A hand-typed key here is a silent no-op — nothing
- * fails, the well just never moves (the failure mode `shared/api/query-keys.ts`
- * opens with).
+ * fails, the well just never moves.
  * ⚠ **IT ONLY EVER COPIES, NEVER INVENTS.** A channel absent from the channels
- * cache leaves its home row untouched: /home holds rows from MANY link containers
- * and any one `/api/channels` entry knows about one of them.
- * ⚠ **AND IT WRITES NOTHING WHEN NOTHING CHANGED** — `setQueriesData` with a new
- * object on every event would re-render the whole column on each of the channels
- * cache's own updates, which the transcript alone produces several of a minute.
+ * cache leaves its home row untouched: /home holds rows from MANY containers and
+ * any one `/api/channels` entry knows about one of them. ⚠ And it reaches only
+ * cache entries that EXIST — `setQueriesData` builds nothing, so a /home list that
+ * has never loaded cannot grow a half-populated row.
+ * ⚠ **AND IT RETURNS `prev` WHEN NOTHING CHANGED**, so the column does not
+ * re-render on each of the channels cache's own updates — several a minute from
+ * the transcript alone.
  */
 export function useHomeFavoriteSync(): void {
   const client = useQueryClient();

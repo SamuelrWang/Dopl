@@ -144,6 +144,11 @@ export function UnderlineField({
    * own docblock). Wiring it on both would make one popup disagree with the others.
    * ⚠ The caller's handler must re-check its own guard — a disabled-looking button a
    * keystroke can still fire is the bug this shape invites.
+   * ⚠ IME-GUARDED (2026-09-15), the same guard every other Enter handler in the tree
+   * keeps (`channels/components/agent-composer.tsx`, `use-composer-mentions.ts`,
+   * `shared/ui/inline-editable-row.tsx`): a CJK operator presses Enter to COMMIT A
+   * CANDIDATE, so an unguarded handler raises a write they did not ask for AND
+   * `preventDefault`s the confirmation away.
    */
   onEnter?: () => void;
   /**
@@ -178,7 +183,8 @@ export function UnderlineField({
             onKeyDown={
               onEnter
                 ? (event) => {
-                    if (event.key !== "Enter") return;
+                    if (event.key !== "Enter" || event.nativeEvent.isComposing)
+                      return;
                     event.preventDefault();
                     onEnter();
                   }

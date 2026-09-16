@@ -14,14 +14,13 @@
  *  - **THE PILL, IN ALL THREE PLACES AN AGENT IS NAMED** — the Agents tab's card,
  *    the slide-out panel's header, and the agent window. A surface that forgets it
  *    shows a dead agent as a live one.
- *    🔒 ⚠ **IN THE POP-OUT IT IS THE THREAD LINE, NOT THE HEADER, SINCE 2026-09-15.**
- *    Samuel moved it off the top right (*"I don't want the badges to be there"*), saw it
- *    at the foot, and moved it again: *"put it on the right of the line where it says 'in
- *    main channel'. Similarly, for where you see 'running', 'thinking', or 'working' …
- *    put that in the same spot … but to the right, aligned to the right."* So BOTH badges
- *    live on `agent-window.tsx › AgentWorkingOn` and the chrome's `status` slot is
- *    DELETED. The RENDER half is `agent-window-ended.test.tsx`; what is pinned here is
- *    that the page builds no badge for the chrome at all.
+ *    🔒 ⚠ **IN THE POP-OUT IT IS THE THREAD LINE, NOT THE HEADER, SINCE 2026-09-15**
+ *    (Samuel: *"put it on the right of the line where it says 'in main channel'. Similarly,
+ *    for where you see 'running', 'thinking', or 'working' … put that in the same spot …
+ *    but to the right, aligned to the right."*). So BOTH badges live on `agent-window.tsx ›
+ *    AgentWorkingOn` and the chrome's `status` slot is DELETED. The RENDER half is
+ *    `agent-window-ended.test.tsx`; what is pinned here is that the page builds no badge
+ *    for the chrome at all.
  *  - **THE COMPOSER IS GONE, NOT DISABLED.** A disabled box reads as "not right
  *    now" — a state that will pass — which is the opposite of what ended means.
  *  - **AN IN-FLIGHT SEND STILL GETS ITS ANSWER.** If the agent ends between Send
@@ -304,18 +303,15 @@ describe("the agent window picks the agent the URL names", () => {
   });
 });
 
-
 /**
  * 🔒 **AND THE POP-OUT'S CORNER IS EMPTY IN EVERY STATE** (Samuel, 2026-09-15).
  *
- * ⚠ **SOURCE, BECAUSE THE SLOT IS BUILT IN THE SPA PAGE** — `apps/desktop-ui/src/pages/
- * agent-window/index.tsx` composes the `status` node and hands it to the chrome, and that tree is
- * outside this suite's mount. The same argument `agent-window-chrome.test.tsx`'s drag-region case
- * and `pages/agent-window/frame.test.ts` both give.
+ * ⚠ **SOURCE, BECAUSE THE SLOT WAS BUILT IN THE SPA PAGE** — `apps/desktop-ui/src/pages/
+ * agent-window/index.tsx` is outside this suite's mount, the same argument
+ * `agent-window-chrome.test.tsx`'s drag-region case gives.
  *
  * 🔒 MUTATION-PROOF: hand the shell a badge again — either one — and a `status=` prop comes back
- * with it, which is what the third expectation is for. The chrome's own half is
- * `agent-window-chrome.test.tsx`.
+ * with it, which is what the last expectation is for.
  */
 describe("the agent window's chrome carries no agent badge", () => {
   /** ⚠ CODE ONLY — the page argues about the move in prose, and a raw read matches the comment

@@ -4,13 +4,11 @@
  * WHICH WELLS A SURFACE HAS, AND WHICH OF THEM ARE OPEN ON THIS DEVICE — **the
  * well set as DATA, with no box and no render.**
  *
- * ⚠ **SPLIT OUT OF `collapse-wells.tsx` ON 2026-09-15, WHEN THAT FILE CROSSED THE
- * 500-LINE CAP** (INVARIANTS §1: a file at the cap is a split, never a comment
- * trim). **The seam is DATA vs BOX** — this module answers "which wells exist and
- * which are open", that one answers "what one well looks like and how it grows" —
- * and it is a real reason-to-change, not a line count: the storage rules below
- * move when a surface gains a well, the geometry there moves when Samuel rules on
- * a shape. Neither has ever moved with the other.
+ * ⚠ **SPLIT OUT OF `collapse-wells.tsx` ON 2026-09-15 — the seam is DATA vs BOX.**
+ * This module answers "which wells exist and which are open"; that one answers
+ * "what one well looks like and how it grows". A real reason-to-change, not a line
+ * count: the storage rules below move when a surface gains a well, the geometry
+ * there moves when Samuel rules on a shape.
  */
 
 import { useCallback, useState } from "react";
@@ -19,11 +17,10 @@ import { useCallback, useState } from "react";
  * ONE WELL IN A CALLER'S SET — its id, the word on its header, and whether a
  * device that has never chosen finds it open.
  *
- * ⚠ **`defaultOpen` IS PART OF THE SET, NOT A CONSTANT IN THIS FILE.** It was
- * `WELLS_DEFAULT`, a hard-coded `{recent: true, …}` map, which is exactly the
- * thing a second well set cannot reuse — /home's defaults are Pinned AND Recent
- * open. ⚠ **ORDER IS THE DATA**: the render maps the caller's array, so there is
- * no second list to keep in step.
+ * ⚠ **`defaultOpen` IS PART OF THE SET, NOT A CONSTANT IN THIS FILE** — a
+ * hard-coded map is exactly what a second well set cannot reuse (/home opens two).
+ * ⚠ **ORDER IS THE DATA**: the render maps the caller's array, so there is no
+ * second list to keep in step.
  */
 export interface WellSpec<Id extends string = string> {
   readonly id: Id;
@@ -87,24 +84,15 @@ function storedWells<Id extends string>(
  * chose under `storageKey`.
  *
  * ⚠ **PER DEVICE, NOT PER ACCOUNT, AND `localStorage` IS THE HONEST STORE FOR
- * THAT.** The Agents tab is an OPERATOR surface over one machine's own session
- * feed (§5), a collapsed well on the Threads tab is a reading posture, not a fact
- * about the channel, and a collapsed **Earlier** on /home's list is a posture over
- * a list the server knows nothing about the shape of — the server stores nothing
- * about any of the three, so a server-side preference would be the only
- * cross-machine claim on the panel.
+ * THAT** — a collapsed well is a reading posture, not a fact about the channel or
+ * the list, and the server stores nothing about any of the three surfaces.
  * ⚠ **READ IN A LAZY INITIALISER, NOT IN AN EFFECT, AND NO WELL EVER RENDERS ON A
- * SERVER.** `setState` inside an effect body is a cascading render this tree's lint
- * forbids outright (`react-hooks/set-state-in-effect`), so the usual "paint the
- * defaults, then correct them" shape is not available — and it is not needed,
- * because **no consuming surface has any item to file during a server render**:
- * `agents-tab.tsx` returns its desktop-only sentence whenever `sessions === null`
- * (which is what SSR always sees), the Threads tab's list arrives from
- * `hooks/use-channel-threads.ts` (a client fetch, empty until it resolves), and
- * /home's list is the SPA's, which has no server render at all. An empty list
- * renders no well, so there is no `aria-expanded` for a hydration pass to disagree
- * about. The initialiser still guards `typeof window` so the hook is honest on its
- * own.
+ * SERVER.** `setState` in an effect body is a cascading render this tree's lint
+ * forbids (`react-hooks/set-state-in-effect`), so "paint the defaults, then
+ * correct them" is not available — and is not needed: no consuming surface has an
+ * item to file during a server render, and an empty list renders no well, so there
+ * is no `aria-expanded` for a hydration pass to disagree about. The initialiser
+ * still guards `typeof window` so the hook is honest on its own.
  * ⚠ The read itself, its `try` and its key filtering are {@link storedWells}.
  */
 export function useWells<Id extends string>(

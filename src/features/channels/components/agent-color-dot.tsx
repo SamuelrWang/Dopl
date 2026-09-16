@@ -71,15 +71,13 @@ export function AgentColorDot({
  * color of the agents, so set a thing around it to that color. That's the color of the agents."*).
  *
  * ⚠ **IT LIVES HERE AND NOT IN THE RAIL FOR {@link AgentColorDot}'s OWN REASON** — this file is
- * where a key becomes a list mark, and a second local `rounded-full` painted from
- * `agentColorVar` is exactly the drift that argument is about. Same module, two scales of one
- * mark: the 8px dot beside a name, this disc when the name is gone.
+ * where a key becomes a list mark, and a second local `rounded-full` painted from `agentColorVar`
+ * is exactly the drift that argument is about. Two scales of one mark: the 8px dot beside a name,
+ * this disc when the name is gone.
  *
  * ⚠ **THE DISC IS `size-5` (20px), WHICH IS THE PALETTE'S OWN CIRCLE STEP** —
- * `agent-color-circles.tsx › CIRCLE` is `h-5 w-5`, the size Samuel's *"multiple little circles"*
- * ruling minted for the launch popup's colour row. Measured on the tree's spacing scale, not an
- * arbitrary `w-[20px]`, and it sits inside the rail's 36px `TILE` with room for the selected
- * row's tint to read around it.
+ * `agent-color-circles.tsx › CIRCLE` is `h-5 w-5`. On the tree's spacing scale, not an arbitrary
+ * `w-[20px]`, and it sits inside the rail's 36px `TILE` with room for the selected row's tint.
  *
  * ⚠ **THE INK IS `--text-on-cta`, THE APP'S ONE ON-DARK TOKEN** — `attribution-pill.tsx ›
  * AgentChip` states the rule (*"not `text-white`: a literal white is a colour a restyle cannot
@@ -113,12 +111,9 @@ export function AgentColorInitial({
       /* ⚠ THE KEY AS DATA, never read back by this tree — {@link AgentColorDot}'s own precedent,
          and it is what lets the rail's suite assert WHICH agent this disc belongs to. */
       data-agent-color={color ?? undefined}
-      /* ⚠ **`aria-hidden`, AND THE CALLER OWES THE NAME** — {@link AgentColorDot}'s rule, for the
-         same reason plus a sharper one. A single letter is not a name: "F" announced at a screen
-         reader identifies nothing, and a rail of single letters would be a list of alphabet. The
-         collapsed rail carries `title={`${name} — ${live.label}`}` on the button precisely so the
-         accessible name is the agent's, and an un-hidden letter here would OUTRANK that title in
-         the accessible-name computation and replace it with the initial. */
+      /* ⚠ **`aria-hidden`, AND THE CALLER OWES THE NAME.** A single letter is not a name, and an
+         un-hidden one would OUTRANK the button's `title` in the accessible-name computation —
+         turning a rail of agents into a list of alphabet. */
       aria-hidden
       className={cn(
         INITIAL_DISC,

@@ -12,7 +12,6 @@ import {
   renderHome,
   withHome,
 } from "./home-test-harness";
-import { homeBarLabel } from "./home-settings-control";
 import {
   HOME_CARD_FACE,
   HOME_CARD_FACE_SELECTED,
@@ -24,16 +23,14 @@ import {
  * second line is the ROSTER plus an unread signal instead of a paraphrase of the
  * last message.
  *
- * ⚠ **ITS OWN SUITE, not more cases in `index.test.tsx`** — that file is a page
- * SHAPE smoke test and has already crossed the 500-line cap twice (its own
- * docblock, and `home-links.test.tsx` is the first split). What lives here is the
- * ROW: the column's head, the row's two lines, its marks, and its selected face.
+ * ⚠ **ITS OWN SUITE, not more cases in `index.test.tsx`** (a page SHAPE smoke
+ * test, already at the §1 cap). What lives here is the ROW: the column's head, the
+ * row's two lines, its marks, and its selected face.
  *
- * ⚠ **AND THE WELLS ARE NEXT DOOR SINCE 2026-09-15** — `channel-wells-render.test.tsx`,
- * split off when Samuel's black-selection ruling took this file to 640 lines
- * against the §1 cap. **The seam is the ROW versus the COLUMN'S STRUCTURE**: what
- * one row looks like here, which gray box it lands in there. Both render through
- * the real page and share `home-test-harness.tsx`.
+ * ⚠ **THE WELLS ARE NEXT DOOR SINCE 2026-09-15** — `channel-wells-render.test.tsx`.
+ * **The seam is the ROW versus the COLUMN'S STRUCTURE**: what one row looks like
+ * here, which gray box it lands in there. Both render through the real page and
+ * share `home-test-harness.tsx`.
  *
  * ⚠ RENDERED THROUGH THE REAL PAGE, not by mounting `RelationshipList` with
  * props. The row reads two NEW keys off a cached payload, and the thing worth
@@ -66,14 +63,10 @@ beforeEach(() => {
 });
 
 /**
- * ⚠ **THE HEAD OF THIS COLUMN HAS BEEN FOUR THINGS AND THE LAST TWO WERE THE
- * SAME DAY.** A bare avatar (2026-08-30), a "{Name}'s Home" bar (2026-09-13), the
- * SEARCH FIELD for one revision, and — 2026-09-15, Samuel: *"ok actually, move
- * the new channel button to be where the search bar now is. It will be left
- * aligned basically. And move the search bar back"* — the "New channel" pill.
- * What is pinned here is what this suite owns: WHAT HEADS THE COLUMN. The
- * operator's own control is `index.test.tsx`'s, where the settings entry has
- * always been pinned.
+ * ⚠ **WHAT HEADS THE COLUMN** — the "New channel" pill since 2026-09-15 (Samuel:
+ * *"ok actually, move the new channel button to be where the search bar now is.
+ * It will be left aligned basically. And move the search bar back"*). The
+ * operator's own control is `index.test.tsx`'s.
  */
 describe("the list column's HEAD", () => {
   it("is the New channel pill, left-aligned, and nothing else", async () => {
@@ -102,21 +95,6 @@ describe("the list column's HEAD", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     control.click();
     await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
-  });
-
-  /**
-   * 🔒 **THE HELPER HAS NO RENDERER AS OF 2026-09-15 AND THIS IS THE ONLY THING
-   * HOLDING IT** (`home-settings-control.tsx › homeBarLabel` carries the same
-   * note). Kept because the RULE is the part worth not re-deriving if /home ever
-   * grows a possessive label again — the first word, and never one built from an
-   * email address. **Delete both together, or neither.**
-   */
-  it("`homeBarLabel` still takes the first word, and never builds one from the email", () => {
-    expect(homeBarLabel(null)).toBe("Home");
-    expect(homeBarLabel("   ")).toBe("Home");
-    expect(homeBarLabel("Sam Operator")).toBe("Sam's Home");
-    // One word is already the first word.
-    expect(homeBarLabel("Priya")).toBe("Priya's Home");
   });
 });
 

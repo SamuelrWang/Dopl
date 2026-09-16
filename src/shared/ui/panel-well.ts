@@ -33,14 +33,6 @@
 import { cn } from "@/shared/lib/utils";
 import { SECTION_PANEL_SHELL } from "@/shared/ui/section-panel";
 
-// ⚠ **`WELL_ON_PANEL_FILL` STOOD HERE AND IS DELETED (2026-09-15)** — it existed so
-// a TAB lifted out of the box could wear the body's colour by pointing at it. The
-// tab is gone (Samuel retracted it the same day; `channels/components/
-// collapse-wells.tsx` records what went with it), so the fill had exactly one
-// reader left: the constant below, in this file. A separately-named export with no
-// caller outside its own module is the vocabulary `agents-wells.tsx` deleted three
-// aliases for on 2026-09-14.
-
 /** The well's GEOMETRY and its column, with no fill — the half both fills share,
  *  stated once so the two can never differ by a radius. */
 const WELL_BOX = cn(SECTION_PANEL_SHELL, "flex min-w-0 flex-col gap-2");

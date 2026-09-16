@@ -9277,3 +9277,142 @@ delivery — it now seeds the asker's own earlier tag of `A1` and drives arm 3. 
 launch-order case became the NOBODY case for the same reason.
 
 Full history of both defects and the writer/reader table: `AUTO-ADDRESS-TRACE.md`.
+
+---
+
+### F-706 — an `@` inside a word invented a tag, and an unresolvable tag turns the wake repair off
+
+**Found:** 2026-09-15, reviewing `a48d073a` before push. **Status:** ✅ **RESOLVED 2026-09-16.**
+
+`service-wake-verdict.ts › namedButUnresolved` (2026-09-14, the `@prime` fix) turns the resilience
+repair off for a body whose `@`-tokens the server could not resolve to an agent. That is right for
+a typed address. It was catastrophic for a token the author never typed.
+
+**Measured before the fix** (`lib/mentions.ts › mentionTokensOf` + `mentionHandleOf`):
+
+| body | handles produced |
+|---|---|
+| `email me at sam@example.com` | `["example.com"]` |
+| `ship it @here` | `["here"]` |
+| `let's sync @ 3pm` | `[]` |
+
+`example.com` resolves to nobody, so `namedButUnresolved` was true, **RR3 was never asked and the
+row stored `delivery='unreachable'` — an ordinary email address in a message woke nobody and
+reported a miss that had not happened.** On the DESKTOP the same tokenizer was worse than a
+non-match: an agent named `example.com` is woken off somebody's email signature
+(`test/agent-handles.test.mjs › an EMAIL ADDRESS names nobody`, red before the fix).
+
+**THE FIX IS THE TOKENIZER, IN ALL THREE TREES.** A tag now begins a word or begins the line:
+
+- `src/features/channels/lib/mentions.ts › MENTION_TOKEN_RE` — `/((?<!\w)@[^\s@]+)/g`, and rule 8
+  of that module's header states it. Every consumer inherits it (`mentionTokensOf`,
+  `composer-tint.tsx`, `message-markdown-mentions.tsx`, `draft-recipients.ts`).
+- `dopl-desktop-app/main/agent-handles.js › TOKEN_RE` — the hand copy, same boundary.
+- `dopl-desktop-app/main/session-dispatch.js › mentionedAgentIds` — **already had it**
+  (`(?<![a-z0-9-])@(?:agent-)?…`) since it was written, which is why only the server surface
+  carried the defect. Asserted now so the three cannot drift apart.
+- `packages/mcp-server` carries no tokenizer (`channel-post-guidance.ts › AGENT_HANDLE_RE` is an
+  anchored whole-string test), so there is no fourth copy.
+
+⚠ **IT IS `\w`, NOT "ANY PUNCTUATION"**, so every wrapper that must still tag does: `**@diana**`,
+`(@diana)`, `<b>@diana</b>`, a newline, `@@diana`. And the masks blank with SPACES, never letters,
+so a handle straight after a code span still tags. Lookbehind is already shipped in this feature's
+browser code (`lib/message-refs.ts`, the `#1759` citation's own boundary).
+
+**Pinned in every tree, each confirmed RED with the boundary removed:**
+`src/features/channels/lib/mentions-boundary.test.ts` (one fixture table driven through all three
+parsers — 5 red), `dopl-desktop-app/test/agent-handles.test.mjs` (1 red), and the end of the wire
+in `service-wake-verdict-responder.test.ts › a body carrying an EMAIL ADDRESS still gets the
+repair`.
+
+⚠ **`@here` AND `@todo` STILL REPORT `unreachable`, AND THAT IS DELIBERATE — pinned rather than
+left to omission** (`service-wake-verdict-responder.test.ts › `@here` still reports unreachable`).
+The gate was asked to fire only for "a token that looks like an agent handle"; **there is no such
+shape test and there cannot be one.** `prime` was a real agent whose `channel_sessions` row had
+not been pushed; `here` is a word; both are well-formed slugs, because `agent-names.js ›
+sanitizeName` lets an operator name an agent `here`. Any rule separating them would be a third
+spelling of the handle grammar, which `service-wake-verdict.ts`'s own header forbids (F-266). For
+a token the author actually TYPED, `unreachable` is also the right answer — G15: a name that
+reached nobody says so, rather than a different name reaching somebody quietly. **What was wrong
+was never the gate; it was the tokenizer inventing a tag nobody typed.** Narrowing it further is a
+product ruling, not a bug fix.
+
+### F-707 — the launch-name `CHECK` does not forbid control characters, though its own header says it does
+
+**Found:** 2026-09-15, reviewing `36bd2c67`. **Status:** OPEN.
+
+`20261006120000_channel_launch_directives_agent_name.sql`'s header states the charset rule as
+*"control / zero-width / bidi characters are REFUSED rather than stripped"*, and its `CHECK`
+forbids only `[​-‏ - ⁠-⁯﻿]` — the zero-width/bidi class. `\x00`
+–`\x1f` and `\x7f` are not in it. `main/agent-names.js › sanitizeName` DOES refuse them, and
+`packages/mcp-server` refuses them at the tool, so nothing in the field can reach the column today;
+the column is simply weaker than the sentence above it claims.
+
+⚠ **IT IS INHERITED, NOT INTRODUCED.** The rule is `20260907120000_channel_launch_directives_kind.sql`
+§3's `target_name` class, copied character for character as that migration's header instructs — so
+`target_name` has the same gap, and closing one without the other re-creates the drift the copy was
+meant to prevent. Filed rather than fixed for that reason: it is one decision about two columns in
+two migrations, and this wave changed neither rule.
+
+⚠ **THE OTHER HALF OF THIS CHARACTER CLASS WAS A REAL BUG AND IS FIXED**, see the report on
+`36bd2c67`: the literal-character twin of both new `CHECK`s had reached disk with `U+2028`/`U+202F`
+flattened to plain spaces, which made the class read ` - ` and **forbade a space in an
+agent name** — `Bug reviewer`, `New Agent` and the tool's own copy examples would all have failed
+with `23514` on the INSERT. Pinned by `src/features/channels/agent-name-schema.test.ts` (six cases
+go red against the corrupted file).
+
+### F-708 — the agent window's tab strip and collapsed rail are not reachable as the widgets they claim to be
+
+**Found:** 2026-09-16, reviewing `c7c65284`. **Status:** OPEN. **Pre-existing** — the shape dates
+from the 2026-09-13 tab pass, not from the reviewed commit; filed because the review touched both
+files and the defect is invisible to every gate.
+
+1. `src/features/channels/components/agent-window-chrome.tsx` — the strip is
+   `role="tablist"` → a plain `<div>` → `role="tab"`. A tab must be OWNED by its tablist (directly,
+   or via `aria-owns`), so assistive tech cannot announce position: a reader hears "tab" with no
+   "2 of 4". Nothing in the suites or in `eslint-plugin-jsx-a11y` asserts ownership, so this is
+   green today and will stay green.
+2. `src/features/channels/components/agent-window-rail.tsx` — a COLLAPSED row's only accessible
+   name is its `title`. Title-only names are unreliable across screen readers and invisible to a
+   keyboard user, who gets a focus ring on an unnamed control. The `aria-hidden` on the new colour
+   disc is correct given that shape; what is missing is a real name (`aria-label`, or visually
+   hidden text).
+
+Neither is a behaviour change to make inside a review of a styling commit; both are small.
+
+### F-709 — a failed optimistic write rolls back every CONCURRENT optimistic write on the same cache key
+
+**Found:** 2026-09-16, reviewing `dce0030a`'s favourite bridge. **Status:** OPEN. **Pre-existing and
+generic** — it is not introduced by the reviewed commit; the commit is where the symptom became
+visible on `/home`.
+
+`src/shared/hooks/use-api-mutation.ts › buildApiMutationOptions.onError` restores a WHOLE-PAYLOAD
+snapshot taken before the mutation. Two writes in flight against one cache key therefore interfere:
+the second snapshots the first's optimistic state, and the FIRST failing restores a snapshot that
+predates the second.
+
+**Measured** (throwaway probe, 2026-09-16): pin channel A, pin channel B, fail A → both
+`myFavoritedAt` values are `null`, and through
+`apps/desktop-ui/src/pages/home/use-home-favorite-sync.ts` **B's row also leaves the Pinned well**
+even though B's write succeeded.
+
+⚠ **IT SELF-HEALS ON THE SETTLE INVALIDATE**, so it is one round trip of visibly wrong state rather
+than a permanent one — which is why it has survived. The fix is a per-field rollback (restore only
+what this mutation changed) or a mutation-scoped key, and it touches every optimistic write in the
+app, so it is a slice of its own.
+
+### F-710 — a quiet account opens `/home` to three collapsed boxes and no sentence
+
+**Found:** 2026-09-16, reviewing `dce0030a`. **Status:** OPEN — needs a ruling from Samuel, not a
+fix.
+
+`Earlier` is closed by default and a collapsed well unmounts its rows, so an operator whose channels
+have all been quiet more than 24 hours opens the page to three empty gray boxes with no rows and no
+sentence under them (`rows.length > 0`, so neither "No matches" nor "No channels yet" draws — both
+would be lies). The `Earlier` header is visible and openable, so nothing is unreachable.
+
+⚠ **THE SEARCH HALF OF THIS IS FIXED, AND DELIBERATELY SEPARATED FROM IT** — a query whose only hit
+was filed into the closed well rendered nothing at all, which is a defect under any default
+(`collapse-wells.tsx › WellsColumn.forceOpen`, pinned in `channel-wells-render.test.tsx`). What is
+left is the DEFAULT, and `channel-wells.ts` names it as the open question in its own words:
+*"Earlier is closed, and that is the one part of this Samuel did not state."*

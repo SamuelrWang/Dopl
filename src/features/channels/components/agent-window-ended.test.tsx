@@ -31,8 +31,12 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { cleanup, screen } from "@testing-library/react";
 import { installBridge, mount, summary } from "./agent-window-harness";
+import { splitEndNote } from "./agent-stream-lanes";
+import type { AgentNarrationEntry } from "./use-agent-narration";
 
 const { live, refetchMessages, refetchPending, consentMutate } = vi.hoisted(() => ({
   live: vi.fn<
@@ -80,19 +84,13 @@ afterEach(() => {
 });
 
 /**
- * 🔒 **THE END IS ONE BLACK PILL AT THE FOOT, AND NOWHERE ELSE** (Samuel, 2026-09-15: *"On the top
- * right you see the 'Ended' badge. I don't want the badges to be there. I want that 'Ended' badge
- * instead to be on the bottom left. You see 'Ended by you.' Have 'Ended by you' be that black
- * badge, right? … Instead, the badge would be right there. That's going to free up some space."*).
+ * 🔒 **THE END IS ONE BLACK PILL, AND NOWHERE ELSE** (Samuel, 2026-09-15: *"I don't want the badges
+ * to be there. … You see 'Ended by you.' Have 'Ended by you' be that black badge, right?"* — see
+ * the file header for the second move, onto the thread line).
  *
- * ⚠ **THE WORDS ARE MAIN'S AND THE ROW THEY CAME FROM IS GONE.** `main/session-narration.js ›
- * noteEnded` pushes one `status` frame worded by `main/session-effects.js › endedStatusText`; it
- * used to render as the last muted line of the log. Leaving it there AND adding a pill would be
- * one fact twice — the defect `agent-bits.tsx` opens with — so the window lifts it out
- * (`agent-stream-lanes.ts › splitEndNote`).
- *
- * 🔒 MUTATION-PROOF: drop `AgentEndedFooter` and the first case fails; drop `splitEndNote` and the
- * sentence comes back as a log row beside the pill; drop the `ended` gate and the third fails.
+ * 🔒 MUTATION-PROOF: draw the pill anywhere but the thread row and the first case fails; drop
+ * `splitEndNote` and the sentence comes back as a log row beside the pill; drop the `ended` gate
+ * and the third fails.
  */
 describe("an ended agent wears its end as the thread line's badge", () => {
   const ENDED_NOTE = "Ended by you";
@@ -141,5 +139,48 @@ describe("an ended agent wears its end as the thread line's badge", () => {
     await mount();
     const note = await screen.findByText(ENDED_NOTE);
     expect(note.className).not.toContain("bg-surface-cta");
+  });
+});
+
+/**
+ * 🔒 **THE CROSS-TREE PIN: EVERY SENTENCE MAIN CAN END WITH REACHES THE BADGE.**
+ *
+ * ⚠ **`splitEndNote` MATCHES MAIN'S TEXT, AND THE TWO TREES CANNOT IMPORT EACH OTHER** — so a
+ * reword in `dopl-desktop-app/main/session-effects.js › endedStatusText` would silently stop the
+ * lift and put the raw sentence back in the log with no badge and nothing red. The splitter fails
+ * SAFE either way; what it cannot do is tell anyone it stopped working. This reads main's own
+ * table and drives every sentence in it through the splitter, the same source-read seam
+ * `agent-color-schema.test.ts` uses for the desktop's colour pattern.
+ *
+ * ⚠ **THE COUNT IS ASSERTED TOO** — a table this extraction cannot read (renamed function,
+ * sentences moved to a constant) must fail here rather than pass over an empty list.
+ *
+ * 🔒 MUTATION-PROOF: reword any arm of `endedStatusText` away from "Ended…" and this fails while
+ * every render case above keeps passing.
+ */
+describe("main's end sentences and the splitter agree", () => {
+  /** The arms of `endedStatusText` — its quoted returns. The bare-`reason` fallback is not one and
+   *  is not meant to be: an unlearned reason stays in the log as today's muted line. */
+  const SENTENCES = (() => {
+    const src = readFileSync(
+      join(import.meta.dirname, "../../../../dopl-desktop-app/main/session-effects.js"),
+      "utf8"
+    );
+    const from = src.indexOf("function endedStatusText");
+    const body = src.slice(from, src.indexOf("\n}", from));
+    return [...body.matchAll(/return '([^']+)'/g)].map((m) => m[1]!);
+  })();
+
+  it("lifts every one of main's four end sentences out of the log", () => {
+    expect(SENTENCES, "main's end table moved or was renamed").toHaveLength(4);
+    for (const text of SENTENCES) {
+      const entries: AgentNarrationEntry[] = [
+        { at: 1, kind: "assistant", text: "all done" },
+        { at: 2, kind: "status", text },
+      ];
+      const split = splitEndNote(entries);
+      expect(split.endNote, text).toBe(text);
+      expect(split.entries, text).toHaveLength(1);
+    }
   });
 });

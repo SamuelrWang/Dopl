@@ -155,8 +155,8 @@ completely cut off … the top right, all of those things just get pushed out"*)
 Pinned in `channels/components/agent-window-frame.test.ts` and
 `apps/desktop-ui/src/pages/agent-window/frame.test.ts`.
 
-🔒 **AND SAMUEL'S 2026-09-15 PASS OVER THAT WINDOW MOVED FIVE OF ITS RULES.** Each is still an
-equality or an absence, and each is pinned in
+🔒 **AND SAMUEL'S 2026-09-15 PASS OVER THAT WINDOW MOVED THE RULES BELOW** — the list is the count,
+which is why none is given here. Each is still an equality or an absence, and each is pinned in
 `channels/components/agent-window-frame.test.ts` / `› agent-window-chrome.test.tsx` /
 `› agent-window-rail.test.tsx` / `› agent-window-ended.test.tsx`:
 

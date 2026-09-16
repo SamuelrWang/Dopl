@@ -18,6 +18,7 @@ import {
   HOME_CARD_FACE_SELECTED,
   MentionBadge,
   UnreadDot,
+  rowQuietInk,
 } from "./channel-row-marks";
 import { useHomeFavoriteSync } from "./use-home-favorite-sync";
 import {
@@ -57,23 +58,23 @@ import {
  * like a tab, meaning, it will be, Recent (arrow), then the gray drops. Each
  * corner needs to be curved."* Three parts, three owners:
  *   - the BOX and its collapse — `channels/components/collapse-wells.tsx`, the
- *     same module the Agents and Threads tabs read, at its **`"tab"`** variant;
+ *     same module the Agents and Threads tabs read. ⚠ **ONE SHAPE**: the `"tab"`
+ *     variant he asked for that morning was retracted the same day.
  *   - the SET and the 24h cut — `channel-wells.ts`, which asks
  *     `recency-wells.tsx › wellFor` rather than owning a second clock;
- *   - the PIN — `channel-pins.ts`, per device, and the one fact in this list the
- *     server knows nothing about.
+ *   - the PIN — `HomeChannel.favoritedAt`, i.e. `channel_members.favorited_at`,
+ *     written by the channel header's own toggle and mirrored into this page's
+ *     cache by `use-home-favorite-sync.ts`. ⚠ **NOT a per-device store** — the
+ *     one this file read for an afternoon is deleted; do not mint a second.
  *
  * ⚠ **THE "no sections to manage" NOTE ABOVE WAS ABOUT THE WORKSPACE CHANNELS
  * TREE AND STILL IS.** These wells are not folders: nothing is filed by hand
- * except a pin, nothing nests, and a well with no rows is not drawn at all.
+ * except a pin and nothing nests.
  *
- * 🔒 **THE EMPTY LINE SAID "No matches" UNCONDITIONALLY UNTIL 2026-09-10, AND
- * WAS WRONG FOR EVERY NEW ACCOUNT** (the new-user flow). Zero rows has two
- * causes and they are not the same sentence: nothing to show, or nothing MATCHING
- * to show. A person with no channels yet — every account on its first day — read
- * "No matches" beside a search box they had never typed in, i.e. a report about a
- * filter that was not applied. `home-panes.tsx` already drew this distinction for
- * the RECORD PANE; the list is now the mirror of it, keyed on the same value.
+ * 🔒 **ZERO ROWS HAS TWO CAUSES AND THEY ARE NOT THE SAME SENTENCE (2026-09-10)**
+ * — nothing to show, or nothing MATCHING to show. `home-panes.tsx` draws the same
+ * distinction for the RECORD PANE, keyed on the same value, so the two surfaces
+ * cannot disagree.
  */
 export function RelationshipList({
   rows,
@@ -123,13 +124,10 @@ export function RelationshipList({
       {/* Rows are floating cards now — they need a gutter between them, or the
           drop shadows stack into one smudge. */}
       <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 pb-3 pt-1">
-        {/* ⚠ THE EMPTY SENTENCE IS A SIBLING OF THE WELLS, NOT INSIDE ONE, AND
-            SINCE `showEmpty` THE TWO ARE ON SCREEN TOGETHER. That is deliberate
-            and it is NOT the placeholder copy the minimal-copy ruling forbids:
-            three empty boxes cannot say WHICH emptiness this is, and the 2026-09-10
-            ruling that separates "No channels yet" from "No matches" is still
-            live (see this component's docblock). The boxes are the structure; the
-            one line is the reason. */}
+        {/* ⚠ THE EMPTY SENTENCE IS A SIBLING OF THE WELLS, AND SINCE `showEmpty`
+            THE TWO ARE ON SCREEN TOGETHER — deliberate, and NOT the placeholder
+            copy minimal-copy forbids: three empty boxes cannot say WHICH
+            emptiness this is, and the 2026-09-10 ruling is still live. */}
         <WellsColumn
           wells={HOME_CHANNEL_WELLS}
           items={filed}
@@ -147,6 +145,15 @@ export function RelationshipList({
           // this column's STRUCTURE: a **Pinned** box you can see is how you learn
           // there is a pin.
           showEmpty
+          // 🔒 **A SEARCH THAT MATCHES MUST SHOW WHAT IT MATCHED** (2026-09-16). `Earlier` is
+          // closed by default, so a query whose only hit was filed there rendered an EMPTY
+          // column with no sentence under it — `rows.length > 0`, so neither "No matches" nor
+          // "No channels yet" drew, and the matched row was unmounted behind the closed well.
+          // ⚠ **DERIVED, NOT THREADED**: `rows.length < totalRows` IS "the page narrowed this
+          // list", and both numbers are already props — see `totalRows`' own note. It leaves the
+          // `Earlier`-is-closed default alone, which is the one part of this Samuel did not
+          // state.
+          forceOpen={rows.length < totalRows}
         />
         {rows.length === 0 && (
           <p className="px-3 py-6 text-center text-caption text-text-muted">
@@ -180,17 +187,12 @@ function RelationshipRow({
   const name =
     row.kind === "channel" ? channelTitle(row.channel) : (row.link.label ?? "Link");
   /**
-   * 🔒 **THE LAST-MESSAGE PREVIEW IS GONE (Samuel, live review 2026-09-13:
-   * *"having the most recent message being in there just doesn't make sense
-   * imo"*).** It stood here as the channel arm of a `lastLine` that a LINK row
-   * still needs, so the two arms have separated: a link row has no channel, no
-   * roster and no read-state, so its second line is still the one sentence it has
-   * to say. ⚠ **`HomeChannel.lastMessagePreview` IS STILL ON THE WIRE and this is
-   * still its only possible renderer** — see that field's docblock for why it was
-   * not dropped from the payload. Do not put it back on the row.
-   *
-   * ⚠ THE LINK ROW IS UNCHANGED by every 2026-09-13 ruling: the marks below are
-   * facts about a CHANNEL, and this row is a channel that does not exist yet.
+   * 🔒 **NO LAST-MESSAGE PREVIEW ON A CHANNEL ROW (Samuel, 2026-09-13: *"having
+   * the most recent message being in there just doesn't make sense imo"*).** Only
+   * a LINK row keeps a second sentence — it has no channel, roster or read-state,
+   * so the marks below have nothing to say about it. ⚠ `HomeChannel.lastMessagePreview`
+   * is still on the wire and this is still its only possible renderer; do not put
+   * it back on the row.
    */
   const pendingLine = row.kind === "link" ? "Not yet claimed" : null;
   /**
@@ -212,23 +214,15 @@ function RelationshipRow({
    * icons exactly as today; a channel with NOBODY else shows its description
    * instead, in italic.**
    *
-   * ⚠ **THE TWO ARE ALTERNATIVES, NEVER STACKED**, which is the whole of the
-   * ruling. The faces and this line occupy ONE slot on line two, so a row says
-   * either who else is in the room or what the room is for — never both, and the
-   * row's height (which Samuel fixed: *"I like the current size of it"*) cannot
-   * grow by a line.
-   * ⚠ **`faces.length` IS THE TEST, NOT `peers.length`** — `channelPeople` is the
-   * page's one answer to "who else is here" and carries the stale-cache merge
-   * that keeps a pre-`peers` payload from reading as solo. Asking the raw field
-   * here would paint a populated channel as solo for one paint after an upgrade,
-   * which is the exact bug that helper exists to prevent.
-   * ⚠ **EMPTY STAYS EMPTY.** `topic` is `""` when nobody wrote a description
-   * (`home/types.ts` — the column is `NOT NULL DEFAULT ''`), and a solo channel
-   * with no description renders NOTHING here rather than an italic blank. That
-   * keeps today's look for every channel until a description exists, and it is
-   * why this is a truthiness test and not just a presence one.
-   * ⚠ `?? ""` INLINE (INVARIANTS §8): a new key on an IndexedDB-persisted payload,
-   * so the first paint after this bundle ships reads entries that lack it.
+   * ⚠ **THE TWO ARE ALTERNATIVES, NEVER STACKED** — they share ONE slot on line
+   * two, so the row's height (which Samuel fixed: *"I like the current size of
+   * it"*) cannot grow by a line.
+   * ⚠ **`faces.length` IS THE TEST, NOT `peers.length`** — `channelPeople` carries
+   * the stale-cache merge, and the raw field would paint a populated channel as
+   * solo for one paint after an upgrade.
+   * ⚠ **EMPTY STAYS EMPTY** — `topic` is `""` when nobody wrote one (`home/types.ts`,
+   * `NOT NULL DEFAULT ''`), so this is a truthiness test, not a presence one.
+   * ⚠ `?? ""` INLINE (INVARIANTS §8): a new key on an IndexedDB-persisted payload.
    */
   const description = channel?.topic ?? "";
   const showDescription = faces.length === 0 && description.length > 0;
@@ -239,58 +233,37 @@ function RelationshipRow({
       onClick={onSelect}
       aria-current={selected ? "true" : undefined}
       className={cn(
-        // EVERY row is a RAISED BUTTON, the same face and the same press as the
-        // header's search pill (Samuel, 2026-08-24): `.auth-btn-3d-light` gives
-        // the white gradient, the hairline, the hover lift and the pressed-in
-        // `:active` — these rows ARE interactive, and they now say so.
-        // ⚠ NO `bg-*` UTILITY HERE. The recipe's fill is a GRADIENT and a
-        // utility background would flatten it (the hazard `.raised-tab`'s note
-        // spells out: utilities outrank the kit layer).
-        // ⚠ THE FACE IS `HOME_CARD_FACE` (2026-09-13) — the elevation and the
-        // radius, shared with the header's "{Name}'s Home" bar rather than
-        // spelled out in both files (`channel-row-marks.tsx` carries why).
+        // EVERY row is a RAISED BUTTON (Samuel, 2026-08-24) — these rows ARE
+        // interactive and say so. ⚠ NO `bg-*` UTILITY HERE: the kit fill is a
+        // GRADIENT and a utility background flattens it (utilities outrank the
+        // kit layer). ⚠ THE FACES COME BY CONSTANT (`channel-row-marks.tsx`),
+        // never re-typed here.
         //
-        // 🔒 **AND THE SELECTED ROW IS THE PAGE'S BLACK BUTTON SINCE 2026-09-15
+        // 🔒 **THE SELECTED ROW IS THE PAGE'S BLACK BUTTON SINCE 2026-09-15
         // (Samuel, verbatim):** *"for the channel picker, for the selected
         // channel, can we have it turn into like the black button UI? And drop
         // the shadow that currently goes on the selected?"*
         // ⚠ **THE TWO FACES ARE ALTERNATIVES, NEVER LAYERS**, and that IS the
-        // "drop the shadow". Selection used to be `HOME_CARD_FACE` PLUS
-        // `.selected-ring` (a darkened hairline and a 3px halo) PLUS
-        // `home.rowSelected` for the line — three elevations arguing over one
-        // row. `.auth-btn-3d` sets `background`, `border` and `box-shadow` in one
-        // rule, so swapping the face leaves nothing of the old selection behind.
-        // **`selected-ring` and the module rule are DELETED here; do not re-add a
-        // ring.** (`.selected-ring` itself is untouched — the landing page's
-        // scripted /home demo still wears it.)
-        // ⚠ **SAME BOX EITHER WAY** — both faces are a 1px border on this radius,
-        // so selecting a row cannot shift the list.
+        // "drop the shadow": `.auth-btn-3d` sets `background`, `border` and
+        // `box-shadow` in one rule, so swapping the face leaves nothing of the
+        // old selection behind. **Do not re-add `selected-ring` or a module
+        // line here.** ⚠ **SAME BOX EITHER WAY** — both faces are a 1px border on
+        // this radius, so selecting a row cannot shift the list.
         selected ? HOME_CARD_FACE_SELECTED : HOME_CARD_FACE,
         "flex w-full cursor-pointer items-start gap-2.5 px-2.5 py-2.5 text-left"
       )}
     >
-      {/* 🔒 ⚠ **NO IDENTITY GLYPH IN THE ROW'S LEADING SLOT — DELETED 2026-09-01
-          (Samuel).** The row carried THREE identity faces chosen by roster size:
-          a `Bot` glyph when solo, one `Avatar` with a peer, an `AvatarStack`
-          with several. That made a channel's ICON a function of its MEMBERSHIP,
-          which is the same defect as the member-derived title beside it — a
-          channel you had been working in grew a stranger's face the moment they
-          claimed a link. **A channel is not a DM and must not be dressed as
-          one.** Real DMs keep their faces; their code is
-          `channels.is_direct` / `Channel.directPeer`, in the channels feature,
-          and nothing here ever touched it.
-          ⚠ **Do not put a "channel avatar" back in its place either** —
-          initials generated from a channel's name read as a person who does not
-          exist, which is the one thing this list must never invent. The row is
-          the NAME. */}
+      {/* 🔒 ⚠ **NO IDENTITY GLYPH IN THE ROW'S LEADING SLOT (Samuel, 2026-09-01).**
+          A glyph chosen by roster size makes a channel's ICON a function of its
+          MEMBERSHIP — **a channel is not a DM and must not be dressed as one**
+          (real DMs are `channels.is_direct` / `Channel.directPeer`, untouched).
+          ⚠ **Nor a "channel avatar"**: initials from a channel's name read as a
+          person who does not exist. The row is the NAME. */}
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline justify-between gap-2">
           {/* ⚠ **ON THE BLACK FACE EVERY INK IS `--text-on-cta`, DIMMED — NEVER
-              A SECOND COLOUR (2026-09-15).** There is exactly ONE on-dark ink
-              token in either token file (measured: `--text-on-cta`), so the
-              quieter lines take it at an alpha rather than naming a grey the
-              palette does not have. `agents-tab.tsx` already holds that idiom
-              (`text-text-on-cta/75`). */}
+              A SECOND COLOUR (2026-09-15).** The quiet lines below say it once,
+              through `channel-row-marks.tsx › rowQuietInk`. */}
           <span
             className={cn(
               "truncate text-body font-medium",
@@ -308,7 +281,7 @@ function RelationshipRow({
           <span
             className={cn(
               "shrink-0 text-micro",
-              selected ? "text-text-on-cta/70" : "text-text-muted"
+              rowQuietInk(selected)
             )}
           >
             {formatChannelTimestamp(row.at)}
@@ -316,30 +289,19 @@ function RelationshipRow({
         </span>
         {/* LINE TWO — **the ROSTER on the left, the UNREAD MARKS on the right**
             (Samuel, live review 2026-09-13: the row wants "some notification
-            system for new @s" and "something else in there that makes it look
-            cleaner", at the size it already is).
+            system for new @s", at the size it already is).
 
-            🔒 **THE FACES ARE BACK HERE AND THAT DOES NOT REOPEN THE 2026-09-01
-            RULING.** What was deleted then was identity STANDING IN FOR THE
-            CHANNEL — a leading glyph chosen by roster size, beside a title
-            derived from the roster, so adding a person renamed and re-faced a
-            channel you had been working in. The title is still the CHANNEL's
-            (`channelTitle`, untouched) and the leading slot is still empty; this
-            stack is a plain statement of who else is in the room, on the line
-            that used to paraphrase one of their messages. A SOLO channel shows
-            nothing — `AvatarStack` renders `null` for an empty list, which is
-            why there is no "Just you" here.
+            🔒 **THE FACES HERE DO NOT REOPEN THE 2026-09-01 RULING** — what that
+            deleted was identity STANDING IN FOR THE CHANNEL (a leading glyph, a
+            roster-derived title). The title is still `channelTitle` and the
+            leading slot is still empty. A SOLO channel shows nothing, so there is
+            no "Just you".
 
-            ⚠ **20px FACES — `size="2xs"`, A REAL KEY ON THE KIT COMPONENT and
-            not a class override here.** `xs` (24px) grows this row, whose height
-            Samuel fixed ("I like the current size of it"), and shrinking a shared
-            component by selecting on its internal `h-6`/`w-6` utilities is the
-            drift `home.module.css`'s own notes warn about. The key and why it has
-            no `Avatar` twin live in `shared/ui/avatar-stack.tsx › SIZE`.
-
-            ⚠ **THE TWO MARKS ARE EXCLUSIVE, and that is the design's rule**: the
-            `@ N` pill already says the louder version of what the dot says, and
-            printing both reads as two separate facts. */}
+            ⚠ **20px FACES — `size="2xs"`, A REAL KEY ON THE KIT COMPONENT** and
+            never a class override here: `xs` (24px) grows this row, whose height
+            Samuel fixed (*"I like the current size of it"*).
+            ⚠ **THE TWO MARKS ARE EXCLUSIVE** — the `@ N` pill already says the
+            louder version of what the dot says. */}
         <span className="mt-0.5 flex min-h-[18px] items-center gap-1.5">
           {linkOut && (
             <span
@@ -357,7 +319,7 @@ function RelationshipRow({
             <span
               className={cn(
                 "truncate text-caption",
-                selected ? "text-text-on-cta/70" : "text-text-muted"
+                rowQuietInk(selected)
               )}
             >
               {pendingLine}
@@ -380,23 +342,18 @@ function RelationshipRow({
             </span>
           )}
           {/* 🔒 **THE SOLO ROW'S DESCRIPTION (Samuel, 2026-09-15)** — the faces'
-              ALTERNATIVE in this one slot, never a second line beside them. The
-              rule and its three guards live on `showDescription` above.
+              ALTERNATIVE in this one slot; the rule lives on `showDescription`.
               ⚠ **`truncate` AND `min-w-0`, BECAUSE A DESCRIPTION IS FREE TEXT UP
-              TO 2000 CHARS** (`channels/schema.ts › ChannelTopicSchema`). The
-              faces it replaces are a fixed 20px stack, so this is the only thing
-              on line two that could size the row — it must clip, not wrap, or the
-              picker's fixed row height goes with it.
-              ⚠ **ITALIC IS THE RULING, AND IT IS THE ONLY THING THAT MAKES IT
-              ITALIC** — no second font and no colour of its own beyond the muted
-              ink every quiet line on this row already uses, inverted on the black
-              selected face exactly as the timestamp and the pending line are
-              (`channel-row-marks.tsx` carries why there is one on-dark ink). */}
+              TO 2000 CHARS** (`channels/schema.ts › ChannelTopicSchema`) — it is
+              the only thing on line two that could size the row, so it must clip.
+              ⚠ **ITALIC IS THE RULING AND THE ONLY THING THAT MAKES IT ITALIC** —
+              no second font, and the ink is `rowQuietInk` like every other quiet
+              line. */}
           {showDescription && (
             <span
               className={cn(
                 "min-w-0 truncate text-caption italic",
-                selected ? "text-text-on-cta/70" : "text-text-muted"
+                rowQuietInk(selected)
               )}
             >
               {description}

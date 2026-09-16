@@ -20,14 +20,11 @@ import { Search } from "lucide-react";
  * rule went with the toggle — clicking away now keeps what was typed, which is
  * what a permanently visible field should do.
  *
- * ⚠ **IT LIVED IN THE LIST COLUMN FOR EXACTLY ONE REVISION (2026-09-15) AND THE
- * KIT STILL HAS TO CARE.** Samuel moved it there ("move the search bar at the
- * top, to replace the Samuel's home button on top of the channel picker") and
- * back in the same review ("And move the search bar back"), so the pill is a
- * PAGE control at its own fixed width again. The `[data-fill]` variant that
- * stretch needed is DELETED from both kit copies rather than left unused — an
- * orphan rule in a hand-mirrored stylesheet is the drift `home-search.test.ts`
- * was written for. Put it back only with a caller.
+ * ⚠ **A PAGE CONTROL AT ITS OWN FIXED WIDTH (Samuel, 2026-09-15: "And move the
+ * search bar back").** It spent one revision stretched across the list column;
+ * the `[data-fill]` variant that needed is DELETED from both kit copies rather
+ * than left unused — an orphan rule in a hand-mirrored stylesheet is the drift
+ * `home-search.test.ts` was written for. Put it back only with a caller.
  */
 export function HomeSearch({
   query,

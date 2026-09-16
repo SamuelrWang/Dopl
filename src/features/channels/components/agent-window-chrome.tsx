@@ -18,12 +18,11 @@
  * thread line moved into the inset panel's own head (`agent-window.tsx`). What stays here is what
  * belongs to the WINDOW rather than to an agent: the mark, the strip and the two window buttons.
  *
- * 🔒 **AND THE ACTIVE TAB'S STATUS LEFT TOO, ON 2026-09-15.** Samuel moved the Ended badge off the
- * top right (*"I don't want the badges to be there"*) and then moved the LIVENESS after it:
- * *"for where you see 'running', 'thinking', or 'working' (all of those little things), put that in
- * the same spot, basically on the same line as 'in main channel', but to the right, aligned to the
- * right."* Both now ride the agent view's thread line (`agent-window.tsx › AgentWorkingOn`), which
- * is the row that already says WHERE the agent is — so where it is and how it is are read together.
+ * 🔒 **AND THE ACTIVE TAB'S STATUS LEFT TOO, ON 2026-09-15** (Samuel: *"I don't want the badges to
+ * be there"*, then *"for where you see 'running', 'thinking', or 'working' (all of those little
+ * things), put that in the same spot, basically on the same line as 'in main channel', but to the
+ * right, aligned to the right."*). Both badges now ride the agent view's thread line
+ * (`agent-window.tsx › AgentWorkingOn`), the row that already says WHERE the agent is.
  * ⚠ **THE `status` PROP IS DELETED RATHER THAN LEFT EMPTY** (his delete-don't-disarm ruling): a
  * slot nothing fills is the seam the next edit fills back in.
  *
@@ -113,10 +112,11 @@ const TAB_ACTIVE = "text-text-primary";
  * it."* — the same instinct as his 2026-09-13 *"Anything that can be clicked"*).
  *
  * ⚠ **`bg-surface-raised-2` IS MEASURED OFF THIS WINDOW, NOT PICKED.** It is the ONE hover fill the
- * agent window already draws: `agent-window-rail.tsx` wears `hover:bg-surface-raised-2` on every
- * row AND on the collapse toggle, and it is that file's `ROW_SELECTED_FACE` too. A tab and a rail
- * row are already one object in two places (this file's padding and type constants are shared with
- * it), so a second gray for the same act is exactly the drift those constants exist to stop.
+ * agent window already draws — `agent-window-rail.tsx` wears it on every row, on the collapse
+ * toggle, and as that file's `ROW_SELECTED_FACE` — so a second gray for the same act would be drift.
+ * ⚠ **AND IT IS SPELLED OUT HERE RATHER THAN IMPORTED**, which is not an oversight: Tailwind
+ * extracts CLASS LITERALS from source, so a `hover:${SOME_CONSTANT}` would emit no rule at all.
+ * The equality is pinned in `agent-window-chrome.test.tsx` instead.
  * ⚠ **THE ACTIVE TAB TAKES NEITHER THE FILL NOR THE CURSOR.** It is already where you are; a
  * highlight that says "clickable" on the thing you are looking at is a promise of a state change
  * that will not happen.
@@ -172,10 +172,8 @@ export function AgentWindowChrome({
    * sits at the rail's own x (*"That kind of needs to be normalized"*), and the collapsed rail's
    * padding is now asymmetric (`agent-window-frame.ts › RAIL_PAD_COLLAPSED`, Samuel 2026-09-15).
    *
-   * ⚠ **THE CHROME STILL DOES NOT DERIVE COLLAPSED-NESS** — that is the SHELL's state, and this is
-   * the second half of the one class the shell already hands down rather than a new inference. The
-   * default is the expanded pad, so a caller that predates this prop renders the alignment it
-   * always did.
+   * ⚠ **THE CHROME STILL DOES NOT DERIVE COLLAPSED-NESS** — that is the SHELL's state. The default
+   * is the expanded pad, so a caller that predates this prop renders the alignment it always did.
    */
   railPad?: string;
 }) {
@@ -267,8 +265,9 @@ export function AgentWindowChrome({
       </div>
       {/* 🔒 THE RIGHT GROUP NEVER LEAVES THE WINDOW (*"the top right, all of those things just get
           pushed out. That needs to be fixed."*). ⚠ IT IS THE TWO WINDOW BUTTONS AND NOTHING ELSE
-          SINCE 2026-09-15 — the agent's badge moved to the thread line; see the file header. `shrink-0` is what it always wore; what was
-          missing is the `min-w-0` chain that lets the STRIP and the PANEL give way instead — see
+          SINCE 2026-09-15 — the agent's badge moved to the thread line; see the file header.
+          `shrink-0` is what it always wore; what was missing is the `min-w-0` chain that lets the
+          STRIP and the PANEL give way instead — see
           `agent-window-frame.ts › INSET_PANEL`. Two halves of one bug: without the second, this
           group is pushed past a root that clips. */}
       <span style={NO_DRAG_REGION} className="flex shrink-0 items-center gap-0.5">

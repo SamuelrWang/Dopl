@@ -223,19 +223,14 @@ function directiveFrom(raw, workspaceId) {
     // ⚠ `''` IS "DID NOT ASK", which `session-launch.js`'s funnel forwards as falsy and the
     // server reads as "assign the first free key" — never as "no colour".
     color: colorKey(r.color || r.colorKey),
-    // ⚠ **WHAT THE LAUNCH ASKED THE NEW AGENT TO BE CALLED** (Samuel, 2026-09-15:
-    // *"if agents are spinning up agents, they should be the ones that are naming the agent"*;
+    // ⚠ **WHAT THE LAUNCH ASKED THE NEW AGENT TO BE CALLED** (Samuel, 2026-09-15;
     // `20261006120000_channel_launch_directives_agent_name.sql`).
-    // ⚠ **BOTH SPELLINGS READ**, like `template_name` and `color` above and for the identical
-    // reason: this row reaches the machine as the CLAIM's DTO (camel) and, on some replay lanes,
-    // closer to the column (snake). A field read in one spelling is a field that is silently
-    // absent on the other lane — which here would mean an agent named over MCP arriving nameless.
-    // ⚠ **`text()`-BOUNDED AND NOT SANITISED.** `agent-names.js › sanitizeName` is the authority
-    // and REFUSES rather than strips, which is what produces the honest `bad-name`; what this
-    // does is refuse to carry an absurd length into main at all. ⚠ `''` IS "NOT ASKED", which
-    // `launch-directive-spawn.js` answers with `New Agent` — the same face every unnamed agent
-    // wears — rather than with a nameless launch. A row from a client older than this wave
-    // carries neither spelling and lands on exactly that arm.
+    // ⚠ **BOTH SPELLINGS READ**, like `template_name` and `color` above: the row reaches the
+    // machine as the CLAIM's DTO (camel) and, on some replay lanes, closer to the column (snake).
+    // ⚠ **`text()`-BOUNDED AND NOT SANITISED** — `agent-names.js › sanitizeName` is the authority
+    // and REFUSES rather than strips. ⚠ `''` IS "NOT ASKED", which `launch-directive-spawn.js`
+    // answers with `New Agent`; a client older than this wave carries neither spelling and lands
+    // on exactly that arm.
     agentName: text(r.agent_name || r.agentName, TARGET_NAME_MAX),
     // ⚠ SHAPE-CHECKED HERE, not merely carried: it is about to be handed to
     // `session-engine.js › controlByTask` as an address and printed into a diag.
@@ -377,11 +372,10 @@ function decideBody(directiveId, outcome) {
     if (MESSAGE_MODES.indexOf(o.appliedMessages) !== -1) body.appliedMessages = o.appliedMessages;
     if (typeof o.appliedChain === 'boolean') body.appliedChain = o.appliedChain;
     // ⚠ **WHAT THE AGENT IS ACTUALLY CALLED** (Samuel, 2026-09-15). The uniqueness rule may have
-    // stored `Coder-1` rather than the `Coder` the directive asked for, and the whole point of
-    // that ruling is that the NAME is the address — an orchestrator still tagging `@coder` would
-    // reach the other agent. ⚠ ONLY WHEN THERE IS ONE: absent means "not reported", which is also
-    // what a desktop older than this wave sends, and `''` would be this machine claiming to
-    // report and reporting nothing (this function's own rule for the posture echo).
+    // stored `Coder-1`, and the NAME is the address — an orchestrator still tagging `@coder`
+    // would reach the other agent. ⚠ ONLY WHEN THERE IS ONE: absent means "not reported", which
+    // is what a desktop older than this wave sends; `''` would be this machine claiming to report
+    // and reporting nothing (this function's own rule for the posture echo).
     if (typeof o.appliedAgentName === 'string' && o.appliedAgentName.trim() !== '') {
       body.appliedAgentName = o.appliedAgentName.trim();
     }

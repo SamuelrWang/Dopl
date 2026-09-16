@@ -2,16 +2,12 @@
 /**
  * THE CHANNEL INFO TAB's DESCRIPTION ROW (ruling, Samuel, 2026-09-15).
  *
- * ⚠ **THE ROW IS `channels.topic` WEARING THE PRODUCT'S WORD.** "Description" is
- * what every surface says — the /home New-channel popup, the workspace create
- * dialog, both Info cards and the MCP `rooms` surface — and `topic` is what the
- * wire and the column say. **There is no second field**, and this suite pins the
- * pairing so a later wave cannot "fix" the mismatch by adding one.
+ * ⚠ **THE ROW IS `channels.topic` WEARING THE PRODUCT'S WORD** — pinned here so
+ * a later wave cannot "fix" the label/field mismatch by adding a second field.
  *
  * ⚠ THE EMPTY CASE IS THE ONE THAT ROTS QUIETLY: the column is `NOT NULL DEFAULT
- * ''`, every home channel and every DM is created with `""`, so an absent
- * description is the COMMON row and a blank cell would read as a render bug.
- * "None", muted, and no explainer sentence (minimal-copy ruling).
+ * ''`, so an absent description is the COMMON row and a blank cell would read as
+ * a render bug. "None", muted, no explainer sentence (minimal-copy ruling).
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";

@@ -9,11 +9,10 @@ import { HOME, openChannels, renderHome, withHome } from "./home-test-harness";
 /**
  * /home's CHANNEL COLUMN AS THREE GRAY WELLS — the structure, not the row.
  *
- * ⚠ **SPLIT OUT OF `relationship-list.test.tsx` ON 2026-09-15**, when Samuel's
- * black-selection ruling took that file past the §1 500-line cap. **The seam is
- * the ROW versus the COLUMN'S STRUCTURE**: what one row looks like belongs there,
- * which gray box it lands in belongs here. Both render through the real page and
- * share `home-test-harness.tsx`; nothing moved but the cases.
+ * ⚠ **SPLIT OUT OF `relationship-list.test.tsx` ON 2026-09-15** (the §1 cap).
+ * **The seam is the ROW versus the COLUMN'S STRUCTURE**: what one row looks like
+ * belongs there, which gray box it lands in belongs here. Both render through the
+ * real page and share `home-test-harness.tsx`.
  */
 
 const apiRequest = vi.hoisted(() => vi.fn());
@@ -39,9 +38,9 @@ beforeEach(() => {
  * width. Can you make the channels one looks more like a tab, meaning, it will
  * be, Recent (arrow), then the gray drops. Each corner needs to be curved."*
  *
- * ⚠ **THE BOUNDARY AND THE PIN STORE ARE `channel-wells.test.ts`'s** — a rendered
- * case cannot state an age (the page holds no clock to pass) or a second mount's
- * read. What is pinned here is what the RENDER does with those answers.
+ * ⚠ **THE BOUNDARY IS `channel-wells.test.ts`'s** — a rendered case cannot state
+ * an age (the page holds no clock to pass). What is pinned here is what the RENDER
+ * does with that answer.
  */
 describe("the list column's THREE WELLS", () => {
   /** A second channel, last spoken in months ago — the **Earlier** row. ⚠ Its own
@@ -79,6 +78,53 @@ describe("the list column's THREE WELLS", () => {
     fireEvent.click(screen.getByRole("button", { name: "Earlier" }));
     const earlier = screen.getByRole("heading", { name: "Earlier" }).closest("section")!;
     expect(within(earlier).getByText("Cold Storage")).toBeInTheDocument();
+  });
+
+  /**
+   * 🔒 **A SEARCH THAT MATCHES MUST SHOW WHAT IT MATCHED** (2026-09-16, found reviewing
+   * `dce0030a` before push).
+   *
+   * ⚠ **THE COLUMN WENT BLANK AND SAID NOTHING.** `Earlier` is closed by default and a
+   * collapsed well UNMOUNTS its rows (§5), so a query whose only hit was filed there rendered
+   * three empty boxes — and the empty sentence did not draw either, because `rows.length > 0`
+   * is true: neither "No matches" nor "No channels yet" is the honest answer when there IS a
+   * match. The operator types a name they can see in the list and the list empties.
+   * ⚠ **THE FIX DOES NOT TOUCH THE `Earlier`-IS-CLOSED DEFAULT**, which `channel-wells.ts`
+   * flags as the one part Samuel did not state: `WellsColumn`'s `forceOpen` opens the non-empty
+   * wells while the list is NARROWED and writes nothing to the stored state.
+   */
+  it("🔒 a search whose only hit is filed under CLOSED Earlier still shows it", async () => {
+    apiRequest.mockImplementation(withHome(SPREAD));
+    renderHome();
+    await openChannels();
+    await screen.findByRole("heading", { name: "Recent" });
+    expect(screen.queryByText("Cold Storage")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Search"), {
+      target: { value: "Cold" },
+    });
+
+    expect(await screen.findByText("Cold Storage")).toBeInTheDocument();
+    // ⚠ AND NO SENTENCE BESIDE IT — a match is not "No matches".
+    expect(screen.queryByText("No matches")).not.toBeInTheDocument();
+  });
+
+  /** ⚠ **AND CLEARING THE QUERY RESTORES THE OPERATOR'S OWN SHAPE** — `forceOpen` is not a
+   *  write, so `Earlier` closes again rather than staying open from a search. */
+  it("🔒 clearing the search re-closes Earlier — forceOpen never persists", async () => {
+    apiRequest.mockImplementation(withHome(SPREAD));
+    renderHome();
+    await openChannels();
+    await screen.findByRole("heading", { name: "Recent" });
+
+    const search = screen.getByLabelText("Search");
+    fireEvent.change(search, { target: { value: "Cold" } });
+    await screen.findByText("Cold Storage");
+    fireEvent.change(search, { target: { value: "" } });
+
+    await waitFor(() =>
+      expect(screen.queryByText("Cold Storage")).not.toBeInTheDocument()
+    );
   });
 
   /**

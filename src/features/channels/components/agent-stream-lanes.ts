@@ -124,19 +124,19 @@ export function frameLane(entry: AgentNarrationEntry): StreamLane {
  * 'Ended by you' should be the badge, and then there won't have to be a badge on the top right
  * anymore."*).
  *
- * ⚠ **WHAT HE WAS POINTING AT IS A `status` FRAME, NOT A FOOTER THAT EXISTED.** `main/
- * session-narration.js › noteEnded` pushes one line when a session ends, worded by
- * `main/session-effects.js › endedStatusText` ("Ended by you" / "Ended after going inactive" /
- * "Ended because a person joined this channel" / "Ended after being left parked"), and it lands in
- * the `note` lane as the last muted row of the stream. So the badge's WORDS are already on the
- * wire; what this does is take that one row out of the scrolling log and hand it to the window.
+ * ⚠ **THE WORDS ARE ALREADY ON THE WIRE.** `main/session-narration.js › noteEnded` pushes one
+ * `status` frame when a session ends, worded by `main/session-effects.js › endedStatusText`, and it
+ * lands in the `note` lane as the last muted row; this takes that row out of the scrolling log and
+ * hands it to the window.
  *
  * ⚠ **IT MATCHES ON MAIN'S TEXT, WHICH IS A KNOWN COST AND THE SAME ONE `agent-stream-model.ts ›
  * GATE_NOTE` ALREADY PAYS** — read that constant's note for the argument. **It fails in the safe
  * direction:** an end notice this predicate does not recognise (a future reason, or
  * `endedStatusText`'s raw-reason fallback, which returns the bare word for a reason its table has
  * not learned) simply stays in the log as the muted line it is today. Nothing is ever hidden
- * without being shown somewhere else.
+ * without being shown somewhere else — but nothing goes red either, so
+ * `agent-window-ended.test.tsx` reads main's own table and drives every sentence in it through
+ * {@link splitEndNote}.
  *
  * ⚠ **AND IT IS A PREFIX RATHER THAN THE FOUR SENTENCES**, because the four are main's to reword
  * and "Ended…" is the shape all of them share. Listing them here would be a second copy of that

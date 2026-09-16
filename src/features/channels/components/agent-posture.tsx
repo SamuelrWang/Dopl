@@ -239,19 +239,15 @@ export function PostureControls({
           )}
         </div>
       )}
-      {/* 🔒 **THE GAP UNDER THE PICKERS EQUALS THE GAP ABOVE THEM** (Samuel, 2026-09-15: *"I'm
-          noticing that there's a lot of space between the pickers for the tools, messages, and
-          model, and the 'Context tokens' line. Decrease the amount of padding there so that it is
-          the same as the distance between the pickers and the top, where it says 'In main
-          channel.'"*).
+      {/* 🔒 **THE GAP UNDER THE PICKERS EQUALS THE GAP ABOVE THEM** (Samuel, 2026-09-15: *"Decrease
+          the amount of padding there so that it is the same as the distance between the pickers and
+          the top, where it says 'In main channel.'"*).
           ⚠ **THE UPPER GAP IS THIS BLOCK'S OWN `py-2.5`** — `agent-window.tsx › AgentWorkingOn`
           carries no bottom padding, so the thread line's distance to the pickers IS this row's top
-          padding. `mt-2.5` is the same step, which is what makes the two equal by VALUE rather than
-          by two numbers that happen to look alike.
-          ⚠ **AND IT WAS NOT `mt-2` THAT MADE THE SPACE HE SAW.** `shared/ui/usage-meter.tsx`
-          defaults its own `className` to `mt-3`, so the real gap was 8 + 12 = 20px against 10
-          above. The caller now passes an empty `className` (`agent-window.tsx ›
-          AgentWindowStats`) and this margin is the only one left — one owner for one gap. */}
+          padding, and `mt-2.5` is the same step: equal by VALUE, not by two look-alike numbers.
+          ⚠ **AND THE MEASURED GAP WAS 20px, NOT 8** — `shared/ui/usage-meter.tsx` defaults its own
+          `className` to `mt-3`, which stacked here. The caller now passes an empty `className`
+          (`agent-window.tsx › AgentWindowStats`) so this margin is the only one left. */}
       {stats && <div className={canPosture ? "mt-2.5" : undefined}>{stats}</div>}
       {notice && (
         <p role="status" className="mt-1.5 text-caption text-text-muted">

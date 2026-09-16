@@ -129,7 +129,8 @@ describe("the chrome, left to right", () => {
    * don't have too much overflow."* (Samuel, 2026-09-15)
    *
    * 🔒 MUTATION-PROOF: put `w-[180px]` back on `TAB_WIDTH` and the first expectation fails; drop
-   * the cap entirely and the second does; drop `truncate` and the third.
+   * the cap entirely and the second does; drop `truncate` and the third; drop the ×'s `shrink-0`
+   * and the last does.
    */
   it("hugs its label up to a CAP, and truncates rather than stretching the strip", () => {
     installWindowOps();
@@ -150,6 +151,12 @@ describe("the chrome, left to right", () => {
     // label shrink once the cap is reached — the two look alike and only one of them is the bug.
     expect(tab.className).not.toContain("flex-1");
     expect(tab.className).toContain("min-w-0");
+    // 🔒 **AND THE × SURVIVES THE TRUNCATION** — the cap makes the LABEL give way, so the close
+    // control must be the one thing in the tab that cannot: a shrinking × at the longest name is
+    // *"it does not get cut off"* failing on the half that is a control rather than text.
+    const close = screen.getByRole("button", { name: /^Close / });
+    expect(close.className).toContain("shrink-0");
+    expect(close.parentElement).toBe(box);
   });
 
   /** 🔒 *"I want the name of the tab, like 'New Agent', to be bolded."* — read off the CONSTANT so
@@ -222,10 +229,8 @@ describe("the chrome, left to right", () => {
    * *"for where you see 'running', 'thinking', or 'working' (all of those little things), put
    * that in the same spot, basically on the same line as 'in main channel', but to the right"*).
    *
-   * ⚠ **THIS CASE USED TO PIN THE OPPOSITE** — *"puts the ACTIVE tab's status to the LEFT of
-   * expand and close"*, the 2026-09-13 reading of *"move the ended badge/thinking badges … to the
-   * left of the expand and X buttons"*. That ruling is superseded: the badges left the bar
-   * entirely, and the right group is the two WINDOW buttons.
+   * ⚠ **IT SUPERSEDES THE 2026-09-13 RULING** this case used to pin (*"move the ended badge/
+   * thinking badges … to the left of the expand and X buttons"*): the badges left the bar entirely.
    * ⚠ **THE PROP IS GONE, NOT EMPTY** (delete-don't-disarm), which is why this is a SOURCE read
    * as well as a render: a re-added `status` slot would render nothing until somebody passed it,
    * and then it would be back with no ruling behind it.

@@ -308,22 +308,16 @@ describe("a tab label and a rail row are one type SIZE, in two weights", () => {
   });
 });
 
-
 /**
- * 🔒 **THE HEADER BLOCK'S TWO GAPS ARE ONE NUMBER** (Samuel, 2026-09-15: *"I'm noticing that there's
- * a lot of space between the pickers for the tools, messages, and model, and the 'Context tokens'
- * line. Decrease the amount of padding there so that it is the same as the distance between the
- * pickers and the top, where it says 'In main channel.'"*).
+ * 🔒 **THE HEADER BLOCK'S TWO GAPS ARE ONE NUMBER** (Samuel, 2026-09-15: *"Decrease the amount of
+ * padding there so that it is the same as the distance between the pickers and the top, where it
+ * says 'In main channel.'"*).
  *
  * ⚠ **IT IS AN EQUALITY ACROSS THREE FILES THAT DO NOT IMPORT EACH OTHER**, which is this module's
  * whole subject: the UPPER gap is `agent-posture.tsx`'s own `py-2.5` (the thread line above it,
  * `agent-window.tsx › AgentWorkingOn`, carries no bottom padding), the LOWER one is that file's
- * margin under the pickers, and a THIRD margin was arriving from
- * `shared/ui/usage-meter.tsx`'s `className` default.
- *
- * ⚠ **THE DEFAULT WAS THE ACTUAL DEFECT.** `mt-2` + the meter's `mt-3` measured 20px against 10 —
- * so "decrease the padding" was not a padding at all, and halving `mt-2` would have left 8 + 12.
- * The caller now passes an empty `className` and the posture row owns the gap alone.
+ * margin under the pickers, and a THIRD margin was arriving from `shared/ui/usage-meter.tsx`'s
+ * `className` default — which measured 20px against 10, so it was never a padding at all.
  *
  * 🔒 MUTATION-PROOF: drop `className=""` from the meter and the second expectation fails; change
  * either `2.5` and the first does.
@@ -345,9 +339,7 @@ describe("the pickers sit the same distance from the line above and the meter be
 
   /** ⚠ AND THE ROW ABOVE STILL CONTRIBUTES NOTHING — the moment `AgentWorkingOn` grows a bottom
    *  padding, the upper gap stops being the posture row's `py` and this equality is a fiction.
-   *  ⚠ THE PADDING MOVED ONTO THE ROW WRAPPER ON 2026-09-15 when the badge joined the line
-   *  (`flex min-w-0 items-center gap-2 px-4 pt-3` around a `min-w-0 flex-1` thread half); the
-   *  claim is the same one and the element it is made about is the outer box now. */
+   *  ⚠ THE ELEMENT IS THE ROW WRAPPER SINCE 2026-09-15, when the badge joined the line. */
   it("keeps the thread row's own bottom padding at zero", () => {
     const row = view.match(/className="flex min-w-0 items-center gap-2 px-4 ([^"]*)"/);
     expect(row?.[1], "the thread row's box moved").toBeTruthy();

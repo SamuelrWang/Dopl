@@ -1,17 +1,13 @@
 import { useState } from "react";
+// ⚠ THE CEILINGS ARE THE SERVER'S OWN CONSTANTS, IMPORTED AND NOT RESTATED, so
+// the limit felt at the keyboard cannot drift from the one that answers 400.
+import {
+  HOME_CHANNEL_DESCRIPTION_MAX,
+  HOME_CHANNEL_NAME_MAX,
+} from "@/features/home/schema";
 import { FormDialog, UnderlineField } from "@/shared/ui/form-dialog";
 import { errorMessage } from "#/components/page-states";
 import { useCreateHomeChannel } from "./home-writes";
-
-/** The server's own ceiling (`features/home/schema.ts › HomeChannelCreateSchema`),
- *  restated as the field's `maxLength` so the limit is felt at the keyboard
- *  rather than as a 400 after the fact. ⚠ Keep the two in step. */
-const NAME_MAX = 80;
-
-/** The DESCRIPTION's ceiling, same rule, same duty to stay in step —
- *  `features/home/schema.ts › HomeChannelCreateSchema.topic`, which is
- *  `channels/schema.ts › ChannelTopicSchema`'s 2000 restated. */
-const DESCRIPTION_MAX = 2000;
 
 /**
  * "New channel" — the account surface's ONE creation act (Samuel, 2026-08-24).
@@ -20,19 +16,14 @@ const DESCRIPTION_MAX = 2000;
  * *"we need to overhaul to match it to the other pop ups UI, like the new agent
  * pop up. So it should have name, also, I want to add description as a new
  * field … match the buttons dimensions to be right according to the pop ups we
- * have elsewhere"*).** `StandardDialog` + `DialogField` + `RAISED_INPUT` +
- * `DIALOG_BTN_PRIMARY/SECONDARY` (36px pills) are GONE from this file;
- * `shared/ui/form-dialog.tsx` is the whole chrome now, so the footer is
- * `SMALL_TEXT_BUTTON` (Discard) + `PRIMARY_BTN` (`auth-btn-3d`,
- * `--action-h-sm`, `rounded-[8px]`) — the 30px scale, by construction rather
- * than by this file's taste. See docs/DESIGN-SYSTEM.md's "Popup forms".
+ * have elsewhere"*).** `shared/ui/form-dialog.tsx` is the whole chrome, so the
+ * 30px footer scale is by construction rather than by this file's taste — see
+ * docs/DESIGN-SYSTEM.md's "Popup forms".
  *
  * ⚠ **DESCRIPTION IS THE EXISTING `channels.topic` COLUMN AND NOTHING NEW
- * (ruling, 2026-09-15).** The USER-FACING word is "Description" everywhere; the
- * wire and DB field stays `topic` (2000 chars, `channels/schema.ts ›
- * ChannelTopicSchema`, already on the `Channel` DTO and already rendered by the
- * MCP `rooms list` line). **DO NOT ADD A SECOND COLUMN.** The same mismatch is
- * `new-thread-dialog.tsx`'s, stated there for `body`.
+ * (ruling, 2026-09-15)** — the argument, and the gate both fields wear, are at
+ * `features/home/schema.ts › HomeChannelCreateSchema`. The same label/field
+ * mismatch is `new-thread-dialog.tsx`'s, stated there for `body`.
  *
  * ⚠ ONE PERSON, STILL. A home channel starts SOLO: it is the operator and their
  * agents, and adding a person is a separate, later act against a channel that
@@ -107,7 +98,7 @@ export function NewChannelDialog({
         value={name}
         onChange={setName}
         ariaLabel="New channel name"
-        maxLength={NAME_MAX}
+        maxLength={HOME_CHANNEL_NAME_MAX}
         autoFocus
         // Enter reaches the same guard the button does — see `canCreate`.
         onEnter={submit}
@@ -118,7 +109,7 @@ export function NewChannelDialog({
         value={description}
         onChange={setDescription}
         ariaLabel="New channel description"
-        maxLength={DESCRIPTION_MAX}
+        maxLength={HOME_CHANNEL_DESCRIPTION_MAX}
         // ⚠ ENTER BREAKS THE LINE HERE AND DOES NOT SUBMIT — the kit's rule for
         // every `multiline` field; `Create` is the only thing that raises the
         // channel.
