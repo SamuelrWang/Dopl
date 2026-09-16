@@ -210,7 +210,12 @@ describe("an agent's sender pill opens that agent's view", () => {
     expect(pill.getAttribute("type")).toBe("button");
     expect(pill.getAttribute("data-agent-id")).toBe(A);
     expect(pill.className).toContain("bento");
-    expect(pill.className).toContain("rounded-full");
+    // 🔬 Flush-corner experiment (Samuel, 2026-09-15): an ACCENTED row's capsule is a
+    // stadium on the outer side and SQUARE where the bar meets it, so this no longer
+    // reads a bare `rounded-full`. The face is otherwise untouched, which is what the
+    // rest of this case is checking.
+    expect(pill.className).toMatch(/rounded-(l|r)-full/);
+    expect(pill.className).toMatch(/rounded-(l|r)-none/);
     expect(pill.className).toContain("bg-bg-elevated");
     // The pressable half is MOTION plus a pointer — no local shadow or colour recipe.
     expect(pill.className).toContain("cursor-pointer");

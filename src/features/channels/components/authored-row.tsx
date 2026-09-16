@@ -266,6 +266,15 @@ export function AuthoredRow({
       // accent-less row (a person, a channel-less MCP post) hands `null` and keeps
       // the grey chip.
       agentPaint={accent?.paint ?? null}
+      // 🔬 **THE BADGE'S BAR-SIDE CORNER IS SQUARE ON AN ACCENTED ROW — SAMUEL'S
+      // FLUSH EXPERIMENT (2026-09-15).** The SAME constant the ring wears, so the
+      // capsule and the border around it turn the same corner: the ring has been
+      // square on this side since 2026-09-14 while the pill inside stayed a full
+      // capsule, and the crescent between them is the *"two empty gaps with these
+      // triangles"*.
+      // ⚠ **ONLY WHEN THERE IS AN ACCENT**, because the square edge only makes sense
+      // against a bar. A person's row has none and keeps its capsule.
+      radius={accent ? ACCENT_RING_SHAPE[edge] : undefined}
       time={time}
       onOpenAgent={onOpenAgent}
     />

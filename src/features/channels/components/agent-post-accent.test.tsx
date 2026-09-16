@@ -291,6 +291,41 @@ describe("the accent, rendered", () => {
    * ⚠ Pinned as a PAIR in one case on purpose: a future retune that moves the bar to 4px
    * and forgets the ring fails HERE, in a case whose name says what is wrong.
    */
+  /**
+   * 🔬 **THE FLUSH EXPERIMENT (Samuel, 2026-09-15)** — *"on the left side it is still
+   * rounded but on the right side (or basically wherever side it is that meets the
+   * vertical line), I want it to actually be a sharp corner."*
+   *
+   * ⚠ **THE PROPERTY IS THAT THE PILL AND ITS RING TURN THE SAME CORNER.** The ring has
+   * been square on the bar side since 2026-09-14; the capsule inside it was not, and the
+   * crescent between a straight border and a curved edge is the *"two empty gaps with
+   * these triangles"*. So this asserts the PAIR, not the pill alone — squaring one and
+   * not the other is the bug in either direction.
+   * ⚠ **THIS WHOLE CASE REVERTS WITH THE EXPERIMENT.** It is pinned in its own `it` and
+   * its own commit so Samuel can look at it and say no without unpicking items 1 and 2.
+   */
+  it("squares the BADGE on the bar side too, so it sits flush with the line", () => {
+    const { container } = renderRow();
+    const pill = container.querySelector<HTMLElement>("[data-attribution-pill]")!;
+    // Peer post: bar on the LEFT, so the LEFT corner is the square one — on both.
+    expect(pill.className).toContain("rounded-l-none");
+    expect(pill.className).toContain("rounded-r-full");
+    expect(pill.className).not.toMatch(/\brounded-full\b/);
+    expect(ring(container)!.className).toContain("rounded-l-none");
+  });
+
+  it("leaves a person's pill a full capsule — nothing to sit flush against", () => {
+    // ⚠ THE OTHER HALF OF THE OVERRIDE: `radius` is asked for by an ACCENTED row, it is
+    // not a new default. A human row has no bar, so squaring it would be a corner cut
+    // against nothing.
+    // ⚠ THE SECOND ARG IS THE BOX AND IT MUST BE `null` HERE — `renderRow` defaults it to
+    // a real colour, so omitting it renders an ACCENTED row and proves nothing about the
+    // unaccented one.
+    const { container } = renderRow({ agent: false, agentId: null }, null);
+    const pill = container.querySelector<HTMLElement>("[data-attribution-pill]")!;
+    expect(pill.className).toMatch(/\brounded-full\b/);
+  });
+
   it("matches the ring's width to the bar's, or the join shows a step", () => {
     const { container } = renderRow();
     expect(bar(container)!.className).toContain("w-[3px]");

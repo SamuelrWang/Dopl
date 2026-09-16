@@ -212,6 +212,7 @@ export function AttributionPill({
   agentId = null,
   agentName = null,
   agentPaint = null,
+  radius,
   time,
   onOpenAgent,
 }: {
@@ -238,6 +239,26 @@ export function AttributionPill({
    * keeps the grey chip.
    */
   agentPaint?: string | null;
+  /**
+   * 🔬 **THE CAPSULE'S CORNERS, WHEN THE CALLER NEEDS THEM SQUARED ON ONE SIDE**
+   * (Samuel, 2026-09-15, verbatim): *"for the badge, on the left side it is still
+   * rounded but on the right side (or basically wherever side it is that meets the
+   * vertical line), I want it to actually be a sharp corner. That way it looks like
+   * it's sitting flush with the vertical line."*
+   *
+   * ⚠ **THE RING WAS ALREADY SQUARE ON THAT SIDE AND THE PILL WAS NOT — THAT
+   * MISMATCH IS THE REPORTED DEFECT.** `authored-row.tsx › ACCENT_RING_SHAPE` has
+   * squared the ring's bar-side edge since 2026-09-14, but the capsule inside it kept
+   * `rounded-full`, so the ring ran straight past a corner that curved away from it.
+   * The crescent between the two is what Samuel describes as *"two empty gaps with
+   * these triangles in between"*.
+   * ⚠ **OMITTED MEANS THE CAPSULE, UNCHANGED.** A person's row and any unaccented
+   * row have no bar to sit against, so they keep `rounded-full` — this is not a new
+   * default, it is an override an accented row asks for.
+   * ⚠ IT IS A RADIUS AND NOTHING ELSE. Not a `className` escape hatch: widening it
+   * would let a host restyle the one face `/home` and the channels page share.
+   */
+  radius?: string;
   /** Already formatted by the transcript's own `formatTime`. */
   time: string;
   /**
@@ -253,7 +274,16 @@ export function AttributionPill({
   const openable = agent && agentId !== null && onOpenAgent !== undefined;
   /* ⚠ ONE CLASS STRING FOR BOTH ELEMENTS. The face may not fork — see the docblock. */
   const face = cn(
-    "bento inline-flex max-w-full items-center gap-2 rounded-full py-1 pl-1 pr-3.5",
+    // 🔬 **THE RADIUS IS THE CALLER'S WHEN IT HAS AN OPINION — SAMUEL'S FLUSH-CORNER
+    // EXPERIMENT (2026-09-15).** Default `rounded-full` is the capsule this has always
+    // been; an ACCENTED row hands the bar-side square instead, so the badge sits flush
+    // against the vertical line. ⚠ **IT REPLACES THE CLASS RATHER THAN LAYERING OVER
+    // IT**, deliberately: `rounded-full` plus a later `rounded-r-none` leaves BOTH in the
+    // output — `tailwind-merge` treats corner-side groups as narrower than `rounded` and
+    // does not drop the parent — so which one wins would come down to the order Tailwind
+    // happened to emit two equal-specificity utilities in. One slot, one answer.
+    radius ?? "rounded-full",
+    "bento inline-flex max-w-full items-center gap-2 py-1 pl-1 pr-3.5",
     agentId && agentAccent(agentId),
     // ⚠ NEUTRALISERS LAST, and only these two — see the docblock.
     "bg-bg-elevated text-text-primary",

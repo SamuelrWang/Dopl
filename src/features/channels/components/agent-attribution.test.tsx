@@ -400,7 +400,13 @@ describe("the attribution pill", () => {
   it("carries the avatar, the name and the message TIME in one capsule", () => {
     renderThread([byAgent("m-1", { agentId: A })]);
     const pill = pillIn(rowFor("BODY-m-1"));
-    expect(pill.className).toContain("rounded-full");
+    // 🔬 **A STADIUM ON THE OUTER SIDE, SQUARE WHERE THE BAR MEETS IT** — Samuel's
+    // flush-corner experiment (2026-09-15). This asserted a bare `rounded-full` until
+    // then, which is the shape an UNACCENTED pill still has; an agent's row is accented,
+    // so its bar-side corner is squared to sit flush against the vertical line.
+    // `agent-post-accent.test.tsx` owns the ruling and the revert.
+    expect(pill.className).toMatch(/rounded-(l|r)-full/);
+    expect(pill.className).toMatch(/rounded-(l|r)-none/);
     // The reference's subtitle slot holds the transcript's own time format.
     const time = formatChannelTimestamp("2026-08-18T12:00:00.000Z");
     expect(within(pill).getByText("New Agent")).not.toBeNull();
