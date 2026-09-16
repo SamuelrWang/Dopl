@@ -135,6 +135,9 @@ export function SurfaceInfoPanel({
       onApproveTemplate={agentsPanel.approveTemplate}
       openAgent={sel.openAgent}
       onOpenAgent={sel.setOpenAgent}
+      // ⚠ THE PILL'S SECOND PRESS ASKS THIS COLUMN TO RESET (Samuel, 2026-09-16) —
+      // `use-channels-selection.ts › toggleAgent` bumps it when it closes the view.
+      infoTabSignal={sel.infoTabSignal}
       mentions={mentions}
       mentionsTruncated={data.mentionsTruncated}
       mentionsLoading={data.mentionsLoading}
@@ -142,6 +145,8 @@ export function SurfaceInfoPanel({
       onMarkAllMentionsRead={markAllMentionsRead}
       // THE KNOWLEDGE TAB (M4) — opt-in, see `ChannelSurfaceCapabilities`.
       knowledge={capabilities?.knowledge}
+      // THE ARTIFACTS FACE (Samuel, 2026-09-16) — opt-in, /home only; same place.
+      artifacts={capabilities?.artifacts}
       // ⚠ CALLED, not passed. The tab is a render function so it can be
       // handed THIS surface's refetch gate — see `ChannelInfoTabContext`.
       // ⚠ THE BUNDLE GOES WITH THE GATE (2026-09-15). The slot REPLACES the tab

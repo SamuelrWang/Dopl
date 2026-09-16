@@ -162,6 +162,24 @@ export const MAX_METADATA_SERIALIZED_BYTES = 16_384;
 export const CHANNEL_THREAD_LIST_LIMIT = 200;
 
 /**
+ * Ceiling on ONE channel's ARTIFACT list (`service-artifacts.ts ›
+ * listChannelArtifacts`) — the Artifacts face of the /home threads panel (Samuel,
+ * 2026-09-16).
+ *
+ * ⚠ A BOUND BECAUSE ARTIFACTS NEVER LEAVE EITHER: a dissolved card is RETIRED and
+ * excluded, and every other one stays forever, so an unbounded read grows with the
+ * room's whole history. AT the ceiling counts as CLIPPED (INVARIANTS §9) and the
+ * face says so beside the rows.
+ *
+ * ⚠ IT IS {@link CHANNEL_MENTION_LIST_LIMIT}'s 50 AND FOR THE SAME REASON, NOT
+ * {@link CHANNEL_THREAD_LIST_LIMIT}'s 200: this draws into the same 380px column
+ * the mentions accordion does, and nobody pages through it. ⚠ NOT from a production
+ * measurement — check
+ * `SELECT channel_id, count(*) FROM channel_artifacts GROUP BY 1 ORDER BY 2 DESC` first.
+ */
+export const CHANNEL_ARTIFACT_LIST_LIMIT = 50;
+
+/**
  * Ceiling on ONE channel's mentions-of-me page (`service-mentions.ts ›
  * listMyChannelMentions`). Mentions never leave the inbox — it is a record, not a
  * to-do pile — so the read needs a bound (INVARIANTS §9) and AT the ceiling counts as

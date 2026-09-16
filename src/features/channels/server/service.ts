@@ -67,6 +67,11 @@ export {
   readArtifact,
   ArtifactNotFoundError,
 } from "./service-artifacts";
+// THE BROWSE READ (Samuel, 2026-09-16) — the same route's GET with no
+// `?artifact=`. ⚠ ITS OWN MODULE because `service-artifacts.ts` is at the §1 cap;
+// that file's docblock carries the seam, and the function's carries why the
+// design's "not offered" line gave way.
+export { listChannelArtifacts } from "./service-artifacts-list";
 // `revalidateAwaitAccess` / `pollChannelMessages` / `hasNewMessages` are NOT
 // re-exported: `service-await.ts` imports them directly, and a second name for a
 // long-poll internal only invites a handler to call one.

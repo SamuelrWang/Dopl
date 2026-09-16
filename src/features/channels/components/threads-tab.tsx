@@ -32,6 +32,7 @@
  * span, and a clip note inside **Recent** would read as a claim about 24 hours.
  */
 
+import type { ReactNode } from "react";
 import { Avatar } from "@/shared/ui/avatar";
 import { cn } from "@/shared/lib/utils";
 import { CARD_BUTTON, PANEL_CARD, TAB_ACTION } from "./bits";
@@ -88,6 +89,14 @@ export function threadActivityAt(thread: ChannelThread): number | null {
 export const THREADS_CLIPPED_NOTE =
   "Showing the most recently active threads, up to this list's limit. Nothing here was closed or archived; anything not listed is simply below the cut.";
 
+/**
+ * THE FACE TOGGLE'S TWO LABELS — each one says where the press GOES, never where
+ * you are (Samuel, 2026-09-16: *"the tab itself flips to say 'Threads' — acts as a
+ * toggle back"*). Exported for the tests, so a label change cannot pass silently.
+ */
+export const ARTIFACTS_FACE_LABEL = "Artifacts";
+export const THREADS_FACE_LABEL = "Threads";
+
 export function ThreadsTab({
   threads,
   truncated,
@@ -96,6 +105,9 @@ export function ThreadsTab({
   openThreadId,
   onOpenThread,
   onNewThread,
+  artifactsFace,
+  onToggleFace,
+  artifacts,
 }: {
   threads: ChannelThread[];
   truncated: boolean;
@@ -116,14 +128,81 @@ export function ThreadsTab({
    * reach the composer must not draw a control that does nothing.
    */
   onNewThread?: () => void;
+  /**
+   * WHICH FACE IS ON — `true` renders the channel's ARTIFACTS in place of the
+   * thread list (Samuel, 2026-09-16).
+   *
+   * ⚠ **THE STATE IS THE PANEL'S, NOT THIS TAB'S, AND THAT IS THE HEADING'S
+   * DOING**: the ruling flips the tab-row heading from "Threads" to "Artifacts"
+   * too, and that row lives in `info-panel.tsx`. Owning the flag here would put
+   * the label and the body under two owners, which is how they come to disagree.
+   * ⚠ ABSENT IS THE THREAD LIST, byte for byte — every host that passes neither
+   * this nor {@link onToggleFace} renders what it always did.
+   */
+  artifactsFace?: boolean;
+  /** Flip the face. ⚠ ABSENT MEANS NO TOGGLE AT ALL — the capability is off on
+   *  this host, and a control that cannot switch anything must not be drawn. */
+  onToggleFace?: () => void;
+  /** The artifacts face's own body, built by the panel (`artifacts-tab.tsx`).
+   *  ⚠ INJECTED rather than mounted here: it opens READS, and a face nobody has
+   *  switched to must not fetch — the Settings/Knowledge slot rule (INVARIANTS §5). */
+  artifacts?: ReactNode;
 }) {
+  /* 🔒 **ONE LINE, TOGGLE LEFT, "New thread" RIGHT** (Samuel, 2026-09-16: the tab
+     sits *"on the SAME LINE as the New Thread button, LEFT-aligned"*). The row was
+     `justify-end` with one button in it; it is now a real row with a spacer, so the
+     create keeps the corner every tab's action lives in and the face control reads
+     as a switcher rather than as a second action.
+     ⚠ **"New thread" IS ABSENT IN THE ARTIFACTS FACE (Samuel's approval of the
+     coder's default, 2026-09-16)** — nothing on that face is creatable FROM here:
+     an artifact is folded out of messages in the transcript (`op="artifact"`), so a
+     live create button under a list it cannot add to buys a wrong click. It is the
+     BUTTON that goes, not the callback: the host keeps passing it, and flipping back
+     restores it without re-wiring anything. */
+  const showNewThread = onNewThread !== undefined && artifactsFace !== true;
+  const toggle = onToggleFace !== undefined && (
+    <button
+      type="button"
+      onClick={onToggleFace}
+      // ⚠ **THE SWITCHER'S FACE, BY REFERENCE AND NOT BY EYE** — Samuel asked for
+      // the /home Overview / Channel / Knowledge pills, which are
+      // `shared/ui/segmented-control.tsx`'s `plain` form at `lg`
+      // (`pages/home/home-header.tsx`). The PRIMITIVE cannot be reused whole here:
+      // it is a `role="tablist"` over a controlled value, and this is ONE button
+      // whose label is the face you are going TO. So the two lines it actually
+      // paints are taken from that form verbatim — `--seg-fill`, the same variable
+      // the pill and the track read, and its `h-9 px-3 text-small` option scale.
+      // ⚠ A LOCAL GRAY HERE WOULD BE THE DRIFT: the fill is read through the token,
+      // so a palette change moves this control with the pills it is meant to match.
+      className="flex h-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-[var(--seg-fill)] px-3 text-small font-normal text-text-secondary transition-colors hover:text-text-primary"
+    >
+      {artifactsFace ? THREADS_FACE_LABEL : ARTIFACTS_FACE_LABEL}
+    </button>
+  );
+
+  if (artifactsFace) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        {/* ⚠ THE FACE'S TOP GAP LIVES ON THIS ROW, not on the body below it —
+            `ArtifactsTab`'s root carries no `pt` for exactly that reason, or the
+            two would stack into a gap twice the thread face's. */}
+        <div className="flex items-center px-3.5 pb-3 pt-4">{toggle}</div>
+        {artifacts}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-3.5 pb-6 pt-4">
-      {onNewThread && (
-        <div className="mb-3 flex justify-end">
-          <button type="button" onClick={onNewThread} className={TAB_ACTION}>
-            New thread
-          </button>
+      {(toggle || showNewThread) && (
+        <div className="mb-3 flex items-center gap-2">
+          {toggle}
+          <span className="flex-1" />
+          {showNewThread && (
+            <button type="button" onClick={onNewThread} className={TAB_ACTION}>
+              New thread
+            </button>
+          )}
         </div>
       )}
       {truncated && (

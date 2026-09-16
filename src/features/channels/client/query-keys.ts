@@ -64,6 +64,16 @@ export function channelMentionsPath(channelId: string): string {
   return channelPath(channelId, "/mentions");
 }
 
+/**
+ * The channel's ARTIFACTS — the browse list, and the single card behind
+ * `?artifact=<id>`. ONE path, because it is one route: the query param is what
+ * picks the arm, so the two reads register as two variants under one prefix key
+ * and a future fold write can patch both with `.all`.
+ */
+export function channelArtifactsPath(channelId: string): string {
+  return channelPath(channelId, "/artifacts");
+}
+
 export const CHANNEL_CONSENT_PATH = "/api/channels/consent";
 // ⚠ `CHANNEL_TRUST_PATH` IS DELETED (Samuel, 2026-08-22) with the inbound consent
 // lane, reader (`use-trust-rules.ts`) and writer alike — a client path constant
@@ -80,6 +90,9 @@ export const channelKeys = {
     apiResource(channelMembersPath(channelId)),
   mentions: (channelId: string): ApiResourceKeys =>
     apiResource(channelMentionsPath(channelId)),
+  /** ⚠ `.all` covers BOTH arms — the list and every `?artifact=<id>` card. */
+  artifacts: (channelId: string): ApiResourceKeys =>
+    apiResource(channelArtifactsPath(channelId)),
   consent: (): ApiResourceKeys => apiResource(CHANNEL_CONSENT_PATH),
 };
 

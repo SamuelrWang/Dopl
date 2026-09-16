@@ -131,6 +131,44 @@ export async function listArtifactsByIds(
 }
 
 /**
+ * EVERY LIVE ARTIFACT IN ONE CHANNEL, newest first — the Artifacts face's list
+ * (Samuel, 2026-09-16: *"list shows this channel's artifacts"*).
+ *
+ * ⚠ **BOUNDED BY THE CHANNEL, WHICH IS EXACTLY WHAT {@link listArtifactsByIds} IS
+ * NOT**, and the two are kept apart rather than merged: that one is priced by the
+ * PAGE (the ids a transcript read actually saw, so a room with ten thousand cards
+ * costs the same as one with three) and this one is priced by the ROOM. A caller
+ * that wants the page's cards must keep using the by-ids read — passing `[]` here
+ * would quietly buy the whole room.
+ *
+ * ⚠ **DISSOLVED CARDS ARE EXCLUDED, AND THAT IS NOT THE SAME AS DELETED.** Dissolve
+ * un-folds every member BEFORE it retires the row (`service-artifacts.ts ›
+ * dissolveArtifact`, in that order), so a dissolved artifact holds nothing and has
+ * nothing to open — a row in this list would be a card standing in for no messages.
+ * It still RESOLVES by id (`findArtifactByChannelAndId` has no such predicate), so an
+ * old citation keeps its honest answer; it is only the BROWSE list it leaves.
+ *
+ * ⚠ **THE CALLER ASKS FOR ONE MORE THAN IT WILL SHOW.** The clip signal is the
+ * service's (INVARIANTS §9), and `limit` is passed through verbatim so the two ends
+ * cannot disagree about where the ceiling sits.
+ */
+export async function listArtifactsByChannel(
+  channelId: string,
+  limit: number
+): Promise<ChannelArtifactRow[]> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_artifacts")
+    .select("*")
+    .eq("channel_id", channelId)
+    .is("dissolved_at", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as ChannelArtifactRow[];
+}
+
+/**
  * COUNT AND SEQ SPAN PER ARTIFACT — the numbers the folded card carries
  * (design §4: "artifact id, name, summary, message COUNT, and the seq SPAN it
  * covers").

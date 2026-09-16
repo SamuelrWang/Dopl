@@ -32,9 +32,22 @@ import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { InfoTab } from "./info-tab";
 import { ThreadInfoTab } from "./thread-info-tab";
 import { ThreadsTab } from "./threads-tab";
+import { ArtifactsTab } from "./artifacts-tab";
 import { AgentsTab } from "./agents-tab";
 import { ChannelKnowledgeTab } from "./knowledge-tab";
 import { activeAgentCount } from "./agents-model";
+// THE ROW'S VOCABULARY — `info-panel-tabs.ts` (split 2026-09-16 at the §1 cap).
+// ⚠ `TabKey` and `channelPaneTabs` are RE-EXPORTED below, so every importer that
+// took them from this file still does and there is one path to each symbol.
+import {
+  channelPaneTabs,
+  tabCount,
+  threadsFaceOption,
+  type TabKey,
+} from "./info-panel-tabs";
+
+export { channelPaneTabs };
+export type { TabKey };
 import type { ChannelPeerSession } from "../hooks/use-channel-agent-sessions";
 import type { AgentLaunchOutcome } from "./use-agents-panel";
 import type { TemplateLaunchOverrides } from "@/features/agent-templates/lib/launch-overrides";
@@ -45,65 +58,6 @@ import type {
   ChannelMention,
   ChannelThread,
 } from "../types";
-
-const TABS = [
-  { key: "info", label: "Info" },
-  { key: "threads", label: "Threads" },
-  { key: "agents", label: "Agents" },
-  { key: "knowledge", label: "Knowledge" },
-  { key: "settings", label: "Settings" },
-] as const;
-
-export type TabKey = (typeof TABS)[number]["key"];
-
-/**
- * THE ROW IS SHORTER IN THREAD VIEW (Samuel, 2026-08-21).
- *
- * ⚠ THREADS IS A CHANNEL-VIEW TAB: with a thread open, a list of the channel's
- * OTHER threads is the one control here that navigates away from what the reader
- * is looking at. The sidebar's tree covers thread-to-thread movement meanwhile.
- *
- * ⚠ KNOWLEDGE IS OPT-IN AND IS THE ROW'S ONLY CAPABILITY-GATED TAB (Home
- * Knowledge Panels M4) — ABSENT by default, inverting this file's usual "the
- * default is the workspace page's behaviour" rule; see
- * {@link ChannelSurfaceCapabilities.knowledge}. ⚠ THREAD VIEW KEEPS IT: a base is
- * granted onto the CHANNEL, so it is as true inside one exchange as outside it.
- */
-export function channelPaneTabs(
-  threadView: boolean,
-  knowledge: boolean
-): ReadonlyArray<(typeof TABS)[number]> {
-  return TABS.filter(
-    (t) =>
-      (t.key !== "threads" || !threadView) && (t.key !== "knowledge" || knowledge)
-  );
-}
-
-/**
- * THE TAB-ROW BADGES (2026-08-20), on `SegmentedControl`'s existing optional
- * `count`.
- *
- * ⚠ `undefined` IS THE "CANNOT SAY" ANSWER AND IT IS LOAD-BEARING: no badge is
- * drawn for it, which is what `agentSessions === null` needs — "could not ask"
- * must NOT render as a confident `0` (INVARIANTS §11, UNKNOWN is not EMPTY).
- *
- * ⚠ KNOWLEDGE GETS NO BADGE EITHER: its list is read by the TAB BODY only while
- * the tab is open, and a row count would mount that read for every viewer of every
- * channel. ⚠ INFO AND SETTINGS GET NONE: Info already carries the mentions unread
- * count INSIDE it (`info-tab.tsx`), and two numbers leave the reader guessing.
- *
- * ⚠ THREADS COUNTS THE LOADED LIST — count what is displayed and say when the
- * display clipped (`threadsTruncated`), never a wider count nothing renders.
- */
-function tabCount(
-  key: TabKey,
-  threads: readonly unknown[],
-  agentCount: number | undefined
-): number | undefined {
-  if (key === "threads") return threads.length;
-  if (key === "agents") return agentCount;
-  return undefined;
-}
 
 export function ChannelsInfoPanel({
   channel,
@@ -133,6 +87,8 @@ export function ChannelsInfoPanel({
   onOpenMention,
   onMarkAllMentionsRead,
   knowledge = false,
+  artifacts = false,
+  infoTabSignal = 0,
   fullTab,
   infoTab,
   settings,
@@ -207,6 +163,22 @@ export function ChannelsInfoPanel({
    *  CLOSED. ⚠ Its reads mount with the tab, so `false` requests nothing at all. */
   knowledge?: boolean;
   /**
+   * Draw the ARTIFACTS FACE toggle in the Threads tab (Samuel, 2026-09-16).
+   *
+   * ⚠ DEFAULT `false`, INVERTING THE USUAL RULE for the same reason `knowledge`
+   * does: it ADDS a control rather than removing one, so a host that passes
+   * nothing renders the Threads tab byte for byte as before.
+   *
+   * ⚠ **EXACTLY ONE HOST PASSES IT — /home** (`pages/home/relationship-record.tsx`),
+   * under Samuel's standing home-space ruling for new surfaces. The workspace
+   * channel page and the guest lane are deliberately untouched: the toggle mounts
+   * the artifact READS, so a host that does not pass it asks for nothing.
+   *
+   * ⚠ IT IS NOT A FIFTH TAB, and that is the width budget above talking: the row
+   * is measured for four options, so the two lists share one slot and one heading.
+   */
+  artifacts?: boolean;
+  /**
    * SINGLE-COLUMN MODE (Samuel, 2026-09-04 — the WEB channel page). Render ONE
    * tab's body as the main area, full width, with NO tab row: the header's
    * dropdown is the switcher (`channel-single-column.tsx`).
@@ -236,8 +208,32 @@ export function ChannelsInfoPanel({
    * SLOT'S, for the same reason — a branch inside either host runs its hooks anyway.
    */
   settings?: ReactNode;
+  /**
+   * 🔒 **A NONCED ASK TO LAND BACK ON THE DEFAULT FACE (Samuel, 2026-09-16)**: *"if they
+   * click the badge of an agent already opened up in view, it goes back to the channel
+   * info view, basically resets."*
+   *
+   * ⚠ **THE TAB STAYS THIS COMPONENT'S STATE AND MUST.** The agent view is drawn OVER this
+   * column, so closing it reveals whatever tab was underneath — which is not a reset. A
+   * boolean or a controlled `tab` prop would move the choice to the page and leave two
+   * owners for one value; a NONCE only ever says "somebody asked, again", which is the
+   * same shape `use-channels-selection.ts › newThreadSignal` uses for the composer panel.
+   * ⚠ **DEFAULTS TO `0` AND A HOST THAT NEVER CHANGES IT CHANGES NOTHING** — the pop-out,
+   * the harnesses and every test mount are unaffected.
+   */
+  infoTabSignal?: number;
 }) {
   const [tab, setTab] = useState<TabKey>("info");
+  /**
+   * WHICH FACE THE THREADS SLOT IS SHOWING (Samuel, 2026-09-16).
+   *
+   * ⚠ IT LIVES HERE BECAUSE THE HEADING DOES — the tab row below reads it for the
+   * label, the body reads it for the list, and one owner is what keeps those two
+   * from disagreeing.
+   * ⚠ IT IS NOT PERSISTED AND HAS NO ROUTE, exactly like `tab` itself: a face is
+   * where you are looking right now, not a preference.
+   */
+  const [artifactsFace, setArtifactsFace] = useState(false);
   const openThreadId = openThread?.id ?? null;
   const threadView = openThread !== null;
   const options = channelPaneTabs(threadView, knowledge);
@@ -252,7 +248,17 @@ export function ChannelsInfoPanel({
   // the row and the fallback come to disagree about which tabs exist.
   const dead = !options.some((t) => t.key === tab);
   if (dead) setTab("info");
-  const activeTab: TabKey = dead ? "info" : tab;
+  // ⚠ THE RESET, ADJUSTED DURING RENDER on the same idiom as the fallback above — an
+  // effect would paint the agent's tab for one frame after the pane closed. The nonce
+  // is stored rather than compared against a previous prop, because "asked twice" has
+  // to reset twice (`use-channels-selection.ts › infoTabSignal`).
+  const [seenTabSignal, setSeenTabSignal] = useState(infoTabSignal);
+  const reset = infoTabSignal !== seenTabSignal;
+  if (reset) {
+    setSeenTabSignal(infoTabSignal);
+    setTab("info");
+  }
+  const activeTab: TabKey = dead || reset ? "info" : tab;
 
   // ⚠ THE BADGE RUNS ONE EXPORTED DERIVATION (`agents-model.ts ›
   // activeAgentCount`), never a sum written here — two derivations of one list is
@@ -310,6 +316,25 @@ export function ChannelsInfoPanel({
               openThreadId={openThreadId}
               onOpenThread={onOpenThread}
               onNewThread={onNewThread}
+              // ⚠ THE CONTROL IS DRAWN ONLY WHERE THE CAPABILITY IS ON, and the
+              // FACE is forced back to threads when it is off — a host that turns
+              // the capability off mid-mount cannot be left on a face it no longer
+              // offers, which is the dead-selection rule above in miniature.
+              artifactsFace={artifacts && artifactsFace}
+              onToggleFace={
+                artifacts ? () => setArtifactsFace((v) => !v) : undefined
+              }
+              // ⚠ MOUNTED WITH THE FACE — the reads go with it, so a reader who
+              // never toggles requests nothing (the Settings/Knowledge slot rule).
+              artifacts={
+                artifacts && artifactsFace ? (
+                  <ArtifactsTab
+                    channelId={channel.id}
+                    workspaceId={channel.workspaceId}
+                    index={index}
+                  />
+                ) : undefined
+              }
             />
           ) : shown === "agents" ? (
             <AgentsTab
@@ -385,10 +410,14 @@ export function ChannelsInfoPanel({
         )}
       >
         <SegmentedControl
-          options={options.map((t) => ({
-            ...t,
-            count: tabCount(t.key, threads, agentCount),
-          }))}
+          options={options.map((t) => {
+            // 🔒 THE THREADS SLOT ANSWERS TO ITS FACE — heading and badge both,
+            // see `threadsFaceOption`.
+            const option = threadsFaceOption(t, artifacts && artifactsFace);
+            return option.label === "Artifacts"
+              ? option
+              : { ...option, count: tabCount(option.key, threads, agentCount) };
+          })}
           value={activeTab}
           onChange={setTab}
           // ⚠ THE 36px CONTROL SCALE (Samuel, 2026-08-25) — the page header's button

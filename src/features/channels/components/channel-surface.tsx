@@ -149,6 +149,23 @@ export interface ChannelSurfaceCapabilities {
    * (`knowledge-lane.ts`), never `/api/knowledge/**`.
    */
   knowledge?: boolean;
+  /**
+   * Draw the ARTIFACTS FACE toggle in the Threads tab — this channel's folded runs
+   * as openable cards (Samuel, 2026-09-16; `artifacts-tab.tsx`).
+   *
+   * ⚠ DEFAULT `false`, WHICH INVERTS THE FIRST THREE exactly as `knowledge` does:
+   * they REMOVE something, this ADDS a control.
+   *
+   * ⚠ **EXACTLY ONE HOST PASSES IT — /home**, under Samuel's standing home-space
+   * ruling for a new surface (2026-09-16). The workspace channel page and the guest
+   * lane are LEFT ALONE rather than forgotten: this is not a tab (the row's width
+   * budget is measured for four) and the reads mount with the face, so a host that
+   * passes nothing fetches nothing and renders the Threads tab byte for byte.
+   *
+   * ⚠ SAFE ON ANY HOST REGARDLESS — the face reads the channel's own artifact route
+   * at the same visibility gate the transcript already passed.
+   */
+  artifacts?: boolean;
 }
 
 export interface ChannelSurfaceProps {
@@ -365,12 +382,18 @@ export function ChannelSurface({
       viewSelect={viewSelect}
       onToggleInfo={sel.toggleInfo}
       onExitThread={() => sel.openThread(null)}
-      // AN AGENT'S SENDER PILL OPENS THAT AGENT'S PANE (Samuel, 2026-08-28).
-      // ⚠ THE AGENTS TAB'S OWN OPEN MECHANISM, NOT A SECOND ONE — the same
-      // function `onOpenAgent` gets below, so the card's Open button and the
-      // transcript's pill cannot mean different things. Both hosts mount the pane
-      // this moves.
-      onOpenAgent={sel.setOpenAgent}
+      // AN AGENT'S SENDER PILL OPENS THAT AGENT'S PANE (Samuel, 2026-08-28) — AND
+      // CLOSES IT AGAIN ON A SECOND PRESS (Samuel, 2026-09-16: *"if they click the
+      // badge of an agent already opened up in view, it goes back to the channel
+      // info view, basically resets"*).
+      // ⚠ THE TOGGLE IS THE PILL'S ALONE, which is why this is `toggleAgent` and the
+      // tab column below still hands `setOpenAgent`: an Agents-tab card renders
+      // "Viewing" for the open agent and pressing it must stay a no-op, where a pill
+      // is the one control whose second press has nothing else to mean.
+      // ⚠ ONE SELECTION HOOK, SO BOTH SURFACES GET IT — the workspace channels page
+      // (`channels-core.tsx`) and /home's pane (`channel-surface-standalone.tsx`)
+      // mount this same component.
+      onOpenAgent={sel.toggleAgent}
       // ANSWER AN ESCALATION — the transcript's one WRITE. The pop-out hands
       // none, so a card there is read-only.
       onAnswerEscalation={data.answerEscalation}

@@ -35,6 +35,14 @@ vi.mock("./knowledge-tab", () => ({
   ChannelKnowledgeTab: () => <div data-testid="knowledge-tab" />,
 }));
 
+// Same rule, same reason, for the ARTIFACTS FACE (2026-09-16): its body opens the
+// channel's artifact reads and has its own suite (`artifacts-tab.test.tsx`). What
+// is under test HERE is the ROW — the heading the slot wears and whether the face
+// is mounted at all — which an inert stub answers.
+vi.mock("./artifacts-tab", () => ({
+  ArtifactsTab: () => <div data-testid="artifacts-tab" />,
+}));
+
 afterEach(cleanup);
 
 const INDEX = indexMembers(
@@ -402,5 +410,81 @@ describe("the Knowledge tab is opt-in", () => {
     view.rerender(panel({ knowledge: false }));
     expect(screen.queryByRole("tab", { name: /^Knowledge/ })).toBeNull();
     expect(selected("Info")).toBe(true);
+  });
+});
+
+/* ───────────────────────────── THE ARTIFACTS FACE ────────────────────────── */
+
+/**
+ * 🔒 **THE THREADS SLOT HAS TWO FACES AND ONE HEADING** (Samuel, 2026-09-16:
+ * *"heading 'Threads' becomes 'Artifacts' … the tab itself flips to say
+ * 'Threads'"*). The TOGGLE CONTROL and the two bodies are pinned in
+ * `artifacts-tab.test.tsx`; what is pinned HERE is the row it changes — that the
+ * heading follows the face, that the thread BADGE does not follow it into a face
+ * it does not count, and that a host without the capability sees none of it.
+ *
+ * ⚠ IT IS NOT A FIFTH TAB, and the first case says so out loud: the row's width
+ * budget is measured for four options (`channelPaneTabs`), which is the whole
+ * reason the two lists share a slot.
+ *
+ * MUTATION-VERIFY: label the slot from `TABS` unconditionally and the heading case
+ * fails; keep `tabCount` on the artifacts face and the badge case fails; draw the
+ * toggle without the capability and the last case fails.
+ */
+describe("the threads slot's two faces", () => {
+  const threadsTab = () => screen.getByRole("tab", { name: /^Threads/ });
+
+  it("flips the HEADING to Artifacts, and back", async () => {
+    renderPanel({ artifacts: true });
+    fireEvent.click(threadsTab());
+    fireEvent.click(await screen.findByRole("button", { name: "Artifacts" }));
+    expect(screen.getByRole("tab", { name: /^Artifacts/ })).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: /^Threads/ })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Threads" }));
+    expect(screen.getByRole("tab", { name: /^Threads/ })).toBeTruthy();
+  });
+
+  it("adds no tab — the row is the same four options either way", async () => {
+    renderPanel({ artifacts: true });
+    const before = screen.getAllByRole("tab").length;
+    fireEvent.click(threadsTab());
+    fireEvent.click(await screen.findByRole("button", { name: "Artifacts" }));
+    expect(screen.getAllByRole("tab")).toHaveLength(before);
+  });
+
+  /** ⚠ THE BADGE COUNTS THREADS. Under the word "Artifacts" it would be a
+   *  confident wrong number, so it goes rather than being repurposed. */
+  it("drops the thread count instead of printing it under Artifacts", async () => {
+    renderPanel({ artifacts: true });
+    expect(threadsTab().textContent).toContain(String(THREADS.length));
+    fireEvent.click(threadsTab());
+    fireEvent.click(await screen.findByRole("button", { name: "Artifacts" }));
+    expect(
+      screen.getByRole("tab", { name: /^Artifacts/ }).textContent
+    ).not.toContain(String(THREADS.length));
+  });
+
+  it("mounts the face's body only once it is switched to", async () => {
+    renderPanel({ artifacts: true });
+    fireEvent.click(threadsTab());
+    // The toggle being on screen is the thread face having rendered — so the
+    // absence below is a measured absence, not a body that had not arrived yet.
+    const toggle = await screen.findByRole("button", { name: "Artifacts" });
+    expect(screen.queryByTestId("artifacts-tab")).toBeNull();
+    fireEvent.click(toggle);
+    expect(screen.getByTestId("artifacts-tab")).toBeTruthy();
+  });
+
+  /** 🔒 ONE HOST PASSES THE CAPABILITY (/home). Everywhere else the tab is what
+   *  it always was, with no control and no reads. */
+  it("offers nothing at all where the capability is off", async () => {
+    renderPanel();
+    fireEvent.click(threadsTab());
+    // Wait for the thread list itself, for the same reason: no control can be
+    // called absent from a body that has not been drawn.
+    expect(await screen.findByText("Alpha audit")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Artifacts" })).toBeNull();
+    expect(screen.queryByTestId("artifacts-tab")).toBeNull();
+    expect(screen.getByRole("tab", { name: /^Threads/ })).toBeTruthy();
   });
 });
