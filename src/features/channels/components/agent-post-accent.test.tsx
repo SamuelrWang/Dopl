@@ -27,7 +27,7 @@
  * agent/user identification pill to the right again, And basically, have the colored box,
  * instead of this long box, make it just around the pill, like a bordering, rounded to fit.
  * and it's attached to a vertical bar, that travels the length/amount of lines of the
- * messages from that agent."* The rendered cases therefore pin a RING on the pill, a BAR on
+ * messages from that agent."* The rendered cases therefore pin a BORDER on the pill, a BAR on
  * the OUTER side, and the ABSENCE of the frame — the last one because a leftover wrapper
  * border is invisible to every other assertion in this file.
  *

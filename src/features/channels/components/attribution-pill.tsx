@@ -248,7 +248,7 @@ export function AttributionPill({
    * it's sitting flush with the vertical line."*
    *
    * ⚠ **THE RING WAS ALREADY SQUARE ON THAT SIDE AND THE PILL WAS NOT — THAT
-   * MISMATCH IS THE REPORTED DEFECT.** `authored-row.tsx › ACCENT_RING_SHAPE` has
+   * MISMATCH IS THE REPORTED DEFECT.** `authored-row.tsx › ACCENT_RADIUS` has
    * squared the ring's bar-side edge since 2026-09-14, but the capsule inside it kept
    * `rounded-full`, so the ring ran straight past a corner that curved away from it.
    * The crescent between the two is what Samuel describes as *"two empty gaps with
@@ -320,7 +320,7 @@ export function AttributionPill({
     // the border "detaches" from the badge on hover).** The app's raised affordance
     // was stated as `hover:-translate-y-px` ON THIS ELEMENT — but on an agent row
     // this element is WRAPPED, and the wrapper is what paints the accent ring
-    // (`authored-row.tsx › ACCENT_RING`). A transform moves the element it is on and
+    // (`authored-row.tsx › ACCENT_FRAME`). A transform moves the element it is on and
     // nothing else, so hovering lifted the capsule out from under its own border and
     // opened a 1px gap. **The motion now sits on the ring-bearing wrapper**, which is
     // the only element that can move the pill AND its border as one shape.

@@ -520,7 +520,7 @@ message-box-agent component is deleted: an agent's post is a person's post plus 
   measures it. **The side is one class**, `mine ? "flex-row-reverse" : "flex-row"`, so the bar
   stays the article's FIRST DOM child either way and there is exactly one place to get it wrong.
   ⚠ **`rounded-b-full`, so the TOP end is SQUARE** (Samuel, 2026-09-14: *"where it connects
-  with the bar, it should be a straight, not rounded"*) — the top is the end the pill's ring
+  with the bar, it should be a straight, not rounded"*) — the top is the end the pill's frame
   joins, and a cap there tapers to a point exactly where one colour must run into the other.
   Only the far end keeps a cap.
 - **They JOIN, and that is two numbers that must move together.** The content column is inset from
@@ -533,14 +533,14 @@ message-box-agent component is deleted: an agent's post is a person's post plus 
   colour and any difference reappears as a step; `agent-post-accent-face.test.tsx` pins them as a
   PAIR.
 - **One post, one bar.** A run by one agent does NOT merge. A CONTINUATION row drops the pill (and
-  the ring with it) exactly as a person's does, and still carries its own bar.
+  the frame with it) exactly as a person's does, and still carries its own bar.
 - **Ended → neutral.** `agent-box-rule.ts › AGENT_ACCENT_NEUTRAL` (`var(--border-strong)`), still
   a frame and a bar. The colour returns to the channel's bank when the session ends, but the post
   is still an agent's — and "white, no accent" is a rule about the AUTHOR (a person, or a
   channel-less MCP "Desktop agent"), never about liveness.
 - **The pop-out did NOT follow.** `channels/components/agent-stream-sent-box.tsx › AGENT_BAR` is a
-  full-width banner on a delivery RECORD with no side, no author and no pill to ring, so the
-  ringed-pill/side-bar language has nothing to attach to there. It keeps the agent's colour
+  full-width banner on a delivery RECORD with no side, no author and no pill to frame, so the
+  framed-pill/side-bar language has nothing to attach to there. It keeps the agent's colour
   (ruling item 5) and its own geometry, which is why that constant now lives in that file rather
   than being imported from the transcript's side.
 - **The dot** — `channels/components/agent-color-dot.tsx › AgentColorDot`, `size-2`, `aria-hidden`,

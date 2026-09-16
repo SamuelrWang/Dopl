@@ -115,7 +115,7 @@ const ACCENT_BAR = "w-[3px] shrink-0 self-stretch rounded-b-full";
  * here in the first place and why it still looked clipped where the ring met the bar;
  * a border IS the outer edge, so `--shadow-bento` falls from it into open air on every
  * side. Nothing is left to cover it.
- 🔒 **THE TOP EDGE IS NOT PULLED UP, AND THAT IS THE COROLLARY OF DROPPING THE RING.** A
+ * 🔒 **THE TOP EDGE IS NOT PULLED UP, AND THAT IS THE COROLLARY OF DROPPING THE RING.** A
  * ring wrapped the corner — it painted the 3px band ABOVE the bar's top end as well as
  * beside it — so the two met however the wrapper was positioned. A three-sided border does
  * not: its top stroke starts at the bar's INNER edge, so the bar's top end and the stroke

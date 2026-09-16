@@ -182,35 +182,35 @@ describe("the accent, rendered", () => {
    * "detaches" from the badge on hover).**
    *
    * ⚠ **THE PROPERTY IS "EXACTLY ONE ELEMENT MOVES, AND IT IS THE ONE WEARING THE
-   * RING" — NOT "the wrapper has a translate class".** A transform moves only the
+   * FRAME" — NOT "the wrapper has a translate class".** A transform moves only the
    * element it is on, so the bug and its two plausible bad fixes are all shapes of
    * the same mistake: the lift on the INNER pill (what shipped, leaving the border
    * behind) or on BOTH (a 2px lift). Pinning the pill's side is what makes this
    * suite catch the second one.
-   * ⚠ THE RING-SIDE ASSERTION USES `has-[button:…]` ON PURPOSE: that variant is the
+   * ⚠ THE FRAME-SIDE ASSERTION USES `has-[button:…]` ON PURPOSE: that variant is the
    * thing carrying "only when the pill is actually pressable", so a refactor that
    * lifts the wrapper unconditionally — animating an inert capsule in the pop-out
    * window — fails here too.
    */
   /**
-   * 🔒 **THE RING AND THE BAR ARE THE SAME WIDTH (Samuel, 2026-09-15, option (b): the
+   * 🔒 **THE FRAME AND THE BAR ARE THE SAME WIDTH (Samuel, 2026-09-15, option (b): the
    * ring thickens to the bar's 3px rather than the bar thinning to the ring's 2px).**
    *
-   * ⚠ **THE PROPERTY IS THE MATCH, NOT EITHER NUMBER.** `GUTTER`'s geometry lays the ring
+   * ⚠ **THE PROPERTY IS THE MATCH, NOT EITHER NUMBER.** `GUTTER`'s geometry lays the frame
    * over the bar, so the two are halves of ONE line of colour and any difference between
    * them reappears as the step Samuel reported — with the little triangular gaps where the
-   * ring's curve pulls off the leftover sliver. Asserting `ring-2` alone (which this suite
+   * frame's curve pulls off the leftover sliver. Asserting `ring-2` alone (which this suite
    * did) pins a number while saying nothing about the relationship that actually has to
    * hold, which is why the 1px mismatch lived here through two reviews.
    * ⚠ Pinned as a PAIR in one case on purpose: a future retune that moves the bar to 4px
-   * and forgets the ring fails HERE, in a case whose name says what is wrong.
+   * and forgets the frame fails HERE, in a case whose name says what is wrong.
    */
   /**
    * 🔬 **THE FLUSH EXPERIMENT (Samuel, 2026-09-15)** — *"on the left side it is still
    * rounded but on the right side (or basically wherever side it is that meets the
    * vertical line), I want it to actually be a sharp corner."*
    *
-   * ⚠ **THE PROPERTY IS THAT THE PILL AND ITS RING TURN THE SAME CORNER.** The ring has
+   * ⚠ **THE PROPERTY IS THAT THE PILL AND ITS FRAME TURN THE SAME CORNER.** The frame has
    * been square on the bar side since 2026-09-14; the capsule inside it was not, and the
    * crescent between a straight border and a curved edge is the *"two empty gaps with
    * these triangles"*. So this asserts the PAIR, not the pill alone — squaring one and
@@ -246,7 +246,7 @@ describe("the accent, rendered", () => {
     expect(ring(container)!.className).toContain("border-[3px]");
   });
 
-  it("moves the RING, not the pill, so the border cannot detach on hover", () => {
+  it("moves the FRAME, not the pill, so the border cannot detach on hover", () => {
     const { container } = renderRow();
     const wrap = ring(container)!;
     const pill = container.querySelector<HTMLElement>("[data-attribution-pill]")!;
@@ -281,7 +281,7 @@ describe("the accent, rendered", () => {
   });
 
   /**
-   * 🔒 **THE SHADOW IS ON THE RING, NOT ON THE PILL (Samuel, 2026-09-15: the shadow
+   * 🔒 **THE SHADOW IS ON THE FRAME, NOT ON THE PILL (Samuel, 2026-09-15: the shadow
    * must cover the ENTIRE badge including the ring; on ringed badges it is blocked
    * while the ringless "You" badge shows it fine).**
    *
@@ -292,7 +292,7 @@ describe("the accent, rendered", () => {
    * exists somewhere") is what would catch a well-meaning revert that puts the
    * elevation back on the capsule.
    * ⚠ **THE TOKEN BY REFERENCE.** `--shadow-bento` is `.bento`'s own pair extracted
-   * rather than copied, so a ringed badge and a ringless one cannot drift apart —
+   * rather than copied, so a framed badge and an unframed one cannot drift apart —
    * a literal shadow here would be the drift docs/DESIGN-SYSTEM.md forbids.
    */
   it("casts the badge's elevation from the FRAME, so nothing can swallow it", () => {
@@ -302,7 +302,7 @@ describe("the accent, rendered", () => {
 
   it("leaves an UNFRAMED pill's own elevation alone — Samuel's reference case", () => {
     // ⚠ The "You" badge is the control in his report: it already showed a shadow
-    // correctly, so `.bento` must still be the elevation on a row with no ring.
+    // correctly, so `.bento` must still be the elevation on a row with no frame.
     const { container } = renderRow({ agent: false, agentId: null }, null);
     const pill = container.querySelector<HTMLElement>("[data-attribution-pill]")!;
     expect(pill.className).toContain("bento");
@@ -339,7 +339,7 @@ describe("the accent, rendered", () => {
 
   it("cuts the bar SQUARE at the end that meets the pill, rounded only at the far end", () => {
     // ⚠ Samuel, 2026-09-14, over the first build of this face: *"where it connects with the
-    // bar, it should be a straight, not rounded"*. The TOP is the end the ring joins, and a
+    // bar, it should be a straight, not rounded"*. The TOP is the end the frame joins, and a
     // cap there tapers to a point exactly where one colour has to run into the other — so the
     // join reads as two marks that nearly touch. `rounded-full` on this element is the
     // regression, and it is invisible to every other case in this file.
@@ -358,8 +358,8 @@ describe("the accent, rendered", () => {
     expect(container.querySelector('[class*="rounded-[14px]"]')).toBeNull();
   });
 
-  it("keeps the BAR on a continuation and drops the ring with the pill", () => {
-    // ⚠ Samuel's run rule, unchanged: a continuation has no pill, so there is nothing to ring
+  it("keeps the BAR on a continuation and drops the frame with the pill", () => {
+    // ⚠ Samuel's run rule, unchanged: a continuation has no pill, so there is nothing to frame
     // — but the bar is a fact about the post's LINES and must still run its height.
     const { container } = renderRow({ continuation: true });
     expect(container.querySelector("[data-attribution-pill]")).toBeNull();
@@ -367,7 +367,7 @@ describe("the accent, rendered", () => {
     expect(bar(container)!.className).toContain("self-stretch");
   });
 
-  it("paints an ENDED agent's ring and bar NEUTRALLY", () => {
+  it("paints an ENDED agent's frame and bar NEUTRALLY", () => {
     const { container } = renderRow({}, { color: null });
     expect(bar(container)!.style.backgroundColor).toBe(AGENT_ACCENT_NEUTRAL);
     expect(ring(container)!.style.borderColor).toBe(AGENT_ACCENT_NEUTRAL);
@@ -376,7 +376,7 @@ describe("the accent, rendered", () => {
   it("leaves a PERSON's row with no bar and an unframed pill", () => {
     const { container } = renderRow({ agent: false, agentId: null }, null);
     expect(bar(container)).toBeNull();
-    // ⚠ THE PILL IS UNWRAPPED, which is the stronger claim than "no ring class": the ring is
+    // ⚠ THE PILL IS UNWRAPPED, which is the stronger claim than "no frame class": the frame is
     // a WRAPPER, so its absence must mean the pill sits directly on the row as it always has.
     expect(ring(container)!.tagName).toBe("ARTICLE");
   });
