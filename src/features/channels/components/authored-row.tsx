@@ -88,22 +88,59 @@ const ACCENT_BAR = "w-[3px] shrink-0 self-stretch rounded-b-full";
  * `/home` overrides. A ring drawn on a wrapper is the only way to add a border to that capsule
  * without a second recipe for it (docs/DESIGN-SYSTEM.md forbids a local one).
  *
- * ⚠ **`ring-2`, WHICH IS A `box-shadow` AND THEREFORE COSTS NO LAYOUT.** A `border-2` would
- * grow the wrapper by 2px on every side and push the pill off the row's edge; the ring is
+ * ⚠ **A RING, WHICH IS A `box-shadow` AND THEREFORE COSTS NO LAYOUT.** A `border` would
+ * grow the wrapper on every side and push the pill off the row's edge; the ring is
  * painted OUTSIDE the border box, so the wrapper stays exactly the pill's size and the ring
  * lands in the gutter the negative margin below opens for it. `rounded-full` so it follows the
  * capsule's own shape rather than boxing it. The colour rides `--tw-ring-color` as an inline
  * custom property — `agent-color-circles.tsx › RING`'s recipe, and the only way a palette
  * member chosen by DATA can reach a Tailwind ring at all.
  *
+ * 🔒 **3px, AND IT IS 3px BECAUSE {@link ACCENT_BAR} IS (Samuel, 2026-09-15, choosing
+ * between thinning the bar and thickening the ring: option (b), "every agent message
+ * reads heavier" accepted).** It was `ring-2` against a 3px bar, and that ONE PIXEL was
+ * the whole defect: {@link GUTTER}'s geometry lays the ring over the bar's inner edge, so
+ * a 2px ring covered 2px of a 3px bar and left the outer 1px standing beside it — the
+ * STEP along the join, and the little triangular gaps where the ring's curve pulls away
+ * from that leftover sliver.
+ * ⚠ **THE TWO NUMBERS ARE ONE NUMBER AND MUST MOVE TOGETHER.** Ring width and bar width
+ * are not independent styling choices; they are the two halves of a single unbroken line
+ * of colour, and any difference between them reappears as a step. `agent-post-accent.test.tsx`
+ * pins them as a PAIR for that reason — change one, change the other.
+ * ⚠ `ring-[3px]` RATHER THAN `ring-3`: the arbitrary value is the spelling that cannot
+ * depend on which widths the preset happens to ship.
+ *
  * ⚠ **NO `ring-offset-*`.** The offset is exactly what the selected colour circle wants and
  * exactly what this must not have: the ring has to REACH the bar (see {@link GUTTER}).
+ *
+ * ⚠ **SQUARE ON THE BAR SIDE (Samuel, 2026-09-14, over the first cut: "where it connects
+ * with the bar, it should be a straight, not rounded" — "it was not fixed?"): the ring
+ * is a stadium on the OUTER three sides and a straight vertical edge on the side that
+ * meets the bar, so ring and bar read as one continuous line of colour.
+ *
+ * 🔒 **AND IT CARRIES THE PILL'S PRESS, BECAUSE IT IS THE THING THE BORDER IS ON
+ * (Samuel, 2026-09-15: the border "detaches" from the badge on hover).**
+ *
+ * ⚠ **CAUSE: THE LIFT WAS ON THE PILL, THE RING IS ON THIS WRAPPER, AND A
+ * TRANSFORM MOVES ONLY THE ELEMENT IT IS ON.** `attribution-pill.tsx` stated the
+ * app's raised affordance as `hover:-translate-y-px` on the `<button>` INSIDE this
+ * span, so hovering slid the capsule up one pixel and left its own border behind —
+ * the gap Samuel saw. Matching the two with a second transform here would be a 2px
+ * lift; the fix is that exactly ONE element moves, and it has to be this one.
+ *
+ * ⚠ **`has-[button:hover]` READS THE CONDITION OFF THE DOM RATHER THAN RESTATING
+ * THE PREDICATE.** The pill renders as a `<button>` when it is openable and a
+ * `<span>` when it is not (`AttributionPill`'s own gate), so "there is a pressable
+ * pill in here" is already expressed in the markup. Spelling `openable` a second
+ * time in this file would be two copies of one rule in two components — the drift
+ * `agent-box-rule.ts` exists to prevent — and this shell deliberately takes no
+ * index and answers no identity questions.
+ * ⚠ **AN UNOPENABLE PILL THEREFORE DOES NOT MOVE, WHICH IS CORRECT**: the pop-out
+ * window and the guest lane hand no callback, and a capsule that cannot open
+ * anything must not animate as though it can (the absent-not-disabled rule).
  */
-// ⚠ **SQUARE ON THE BAR SIDE (Samuel, 2026-09-14, over the first cut: "where it connects
-// with the bar, it should be a straight, not rounded" — "it was not fixed?"): the ring
-// is a stadium on the OUTER three sides and a straight vertical edge on the side that
-// meets the bar, so ring and bar read as one continuous line of colour.
-const ACCENT_RING = "inline-flex max-w-full ring-2";
+const ACCENT_RING =
+  "inline-flex max-w-full ring-[3px] transition-transform duration-150 has-[button:hover]:-translate-y-px has-[button:active]:translate-y-px motion-reduce:transition-none";
 const ACCENT_RING_SHAPE = { me: "rounded-l-full rounded-r-none", peer: "rounded-r-full rounded-l-none" } as const;
 
 /**
@@ -112,10 +149,16 @@ const ACCENT_RING_SHAPE = { me: "rounded-l-full rounded-r-none", peer: "rounded-
  * The content column is inset from the bar by 8px (`pl-2` / `pr-2`) so real prose never runs
  * into it; the pill's wrapper then takes an equal NEGATIVE margin on the same side, so the
  * pill alone reaches back out and its border box ends exactly at the bar's inner edge. Its
- * 2px ring is painted from there OUTWARD, over the bar's inner 2px, leaving the bar's outer
- * 1px beside it — **so the ring and the bar are one unbroken 3px of colour with no seam and
- * no step**, which is the *"attached to a vertical bar"* half of the ruling and the only part
- * of this geometry a reader can actually see.
+ * 3px ring is painted from there OUTWARD, across the bar's FULL 3px — **so the ring and the
+ * bar are one unbroken 3px of colour with no seam and no step**, which is the *"attached to a
+ * vertical bar"* half of the ruling and the only part of this geometry a reader can actually
+ * see.
+ *
+ * 🔒 **THIS PARAGRAPH DESCRIBED A 2px RING OVER A 3px BAR UNTIL 2026-09-15, AND IT WAS
+ * HONEST ABOUT THE DEFECT WITHOUT NAMING IT ONE**: it said the ring left "the bar's outer
+ * 1px beside it" and then called the result unbroken, which it could not be. That leftover
+ * pixel is exactly what Samuel reported as a step with triangular gaps at the corners.
+ * Widening the ring to the bar's own 3px is what makes the sentence true.
  *
  * ⚠ **THE TWO HALVES MUST MOVE TOGETHER OR THE JOIN OPENS**, which is why they are one
  * constant apiece and not two numbers in two class strings a hundred lines apart.

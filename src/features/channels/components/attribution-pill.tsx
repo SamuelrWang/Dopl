@@ -257,14 +257,26 @@ export function AttributionPill({
     agentId && agentAccent(agentId),
     // ⚠ NEUTRALISERS LAST, and only these two — see the docblock.
     "bg-bg-elevated text-text-primary",
-    // ⚠ THE PRESSABLE HALF, AND ONLY ON THE BUTTON. `.btn-light` / `.auth-btn-3d` /
-    // `.menu-row` all express this app's raised affordance as a 1px lift on hover and a
-    // 1px press on active (globals.css); stating it as utilities borrows that MOTION
-    // without forking their fill/shadow recipes onto a `.bento` face
-    // (docs/DESIGN-SYSTEM.md forbids a local recipe). `text-left` and `cursor-pointer`
+    // ⚠ THE PRESSABLE HALF, AND ONLY ON THE BUTTON. `text-left` and `cursor-pointer`
     // undo the two `<button>` defaults that would otherwise change this capsule.
-    openable &&
-      "cursor-pointer text-left transition-transform duration-150 hover:-translate-y-px active:translate-y-px motion-reduce:transition-none"
+    //
+    // 🔒 **THE 1px LIFT USED TO LIVE HERE AND IT HAD TO LEAVE (Samuel, 2026-09-15:
+    // the border "detaches" from the badge on hover).** The app's raised affordance
+    // was stated as `hover:-translate-y-px` ON THIS ELEMENT — but on an agent row
+    // this element is WRAPPED, and the wrapper is what paints the accent ring
+    // (`authored-row.tsx › ACCENT_RING`). A transform moves the element it is on and
+    // nothing else, so hovering lifted the capsule out from under its own border and
+    // opened a 1px gap. **The motion now sits on the ring-bearing wrapper**, which is
+    // the only element that can move the pill AND its border as one shape.
+    //
+    // ⚠ **NOTHING IS STRANDED BY THAT MOVE, AND THE REASON IS AN INVARIANT RATHER
+    // THAN A COINCIDENCE**: `openable` is `agent && agentId !== null && onOpenAgent`,
+    // and `agent-box-rule.ts › agentBoxOf` accents a row on `agent && agentId !== null`
+    // — a strict superset. So every pill that can be pressed is already inside a
+    // wrapper, and there is no openable-but-unwrapped case to keep a second copy of
+    // the motion for. **Do not add one back here**: two transforms on nested elements
+    // is a 2px lift, which is the other way this bug can be written.
+    openable && "cursor-pointer text-left"
   );
   const body = (
     <>

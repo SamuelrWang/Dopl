@@ -249,7 +249,7 @@ describe("the accent, rendered", () => {
     // straight, not rounded" → the ring's bar-side edge is a straight vertical line.
     const { container } = renderRow();
     const wrap = ring(container)!;
-    expect(wrap.className).toContain("ring-2");
+    expect(wrap.className).toContain("ring-[3px]");
     expect(wrap.className).not.toMatch(/\brounded-full\b/);
     expect(wrap.className).toMatch(/rounded-(l|r)-full/);
     expect(wrap.className).toMatch(/rounded-(l|r)-none/);
@@ -261,6 +261,53 @@ describe("the accent, rendered", () => {
     // ⚠ NO OFFSET: the ring has to REACH the bar, which is what makes the two read as one
     // shape. `ring-offset-2` would open a 2px hole between them.
     expect(wrap.className).not.toContain("ring-offset");
+  });
+
+  /**
+   * 🔒 **THE PRESS AND THE BORDER ARE ON ONE ELEMENT (Samuel, 2026-09-15: the border
+   * "detaches" from the badge on hover).**
+   *
+   * ⚠ **THE PROPERTY IS "EXACTLY ONE ELEMENT MOVES, AND IT IS THE ONE WEARING THE
+   * RING" — NOT "the wrapper has a translate class".** A transform moves only the
+   * element it is on, so the bug and its two plausible bad fixes are all shapes of
+   * the same mistake: the lift on the INNER pill (what shipped, leaving the border
+   * behind) or on BOTH (a 2px lift). Pinning the pill's side is what makes this
+   * suite catch the second one.
+   * ⚠ THE RING-SIDE ASSERTION USES `has-[button:…]` ON PURPOSE: that variant is the
+   * thing carrying "only when the pill is actually pressable", so a refactor that
+   * lifts the wrapper unconditionally — animating an inert capsule in the pop-out
+   * window — fails here too.
+   */
+  /**
+   * 🔒 **THE RING AND THE BAR ARE THE SAME WIDTH (Samuel, 2026-09-15, option (b): the
+   * ring thickens to the bar's 3px rather than the bar thinning to the ring's 2px).**
+   *
+   * ⚠ **THE PROPERTY IS THE MATCH, NOT EITHER NUMBER.** `GUTTER`'s geometry lays the ring
+   * over the bar, so the two are halves of ONE line of colour and any difference between
+   * them reappears as the step Samuel reported — with the little triangular gaps where the
+   * ring's curve pulls off the leftover sliver. Asserting `ring-2` alone (which this suite
+   * did) pins a number while saying nothing about the relationship that actually has to
+   * hold, which is why the 1px mismatch lived here through two reviews.
+   * ⚠ Pinned as a PAIR in one case on purpose: a future retune that moves the bar to 4px
+   * and forgets the ring fails HERE, in a case whose name says what is wrong.
+   */
+  it("matches the ring's width to the bar's, or the join shows a step", () => {
+    const { container } = renderRow();
+    expect(bar(container)!.className).toContain("w-[3px]");
+    expect(ring(container)!.className).toContain("ring-[3px]");
+  });
+
+  it("moves the RING, not the pill, so the border cannot detach on hover", () => {
+    const { container } = renderRow();
+    const wrap = ring(container)!;
+    const pill = container.querySelector<HTMLElement>("[data-attribution-pill]")!;
+
+    expect(wrap.className).toContain("has-[button:hover]:-translate-y-px");
+    expect(wrap.className).toContain("has-[button:active]:translate-y-px");
+    expect(wrap.className).toContain("transition-transform");
+    // ⚠ AND THE PILL ITSELF STAYS PUT — the half that fails if the motion is ever
+    // copied back onto the button "so the pill still feels pressable".
+    expect(pill.className).not.toMatch(/translate-y/);
   });
 
   it("hangs the bar on the RIGHT of a right-aligned post", () => {
