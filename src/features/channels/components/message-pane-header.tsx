@@ -12,7 +12,7 @@
  */
 
 import type { ReactNode } from "react";
-import { ChevronRight, Hash, PanelRight, Pin } from "lucide-react";
+import { ChevronRight, PanelRight, Pin } from "lucide-react";
 // ⚠ CROSS-FEATURE, AND THE SAME "SMALLER OF TWO EVILS" `agents-wells.tsx` RECORDS
 // (INVARIANTS §1 forbids it; F-275 records that this tree has never obeyed the
 // rule). `TEMPLATE_NAME_TEXT` was exported on 2026-09-13 so a second surface could
@@ -119,7 +119,10 @@ export function PaneHeader({
   if (chrome === "window") {
     return (
       <header className="flex h-[56px] shrink-0 items-center gap-1.5 border-b border-border-default px-4">
-        <Hash size={14} className="shrink-0 text-text-muted" />
+        {/* ⚠ NO `Hash` GLYPH (Samuel, 2026-09-16). The crumb already names the
+            channel and the sidebar row still carries the glyph; a second one
+            here was decoration in front of a title, not a control. Removed in
+            BOTH chromes so the page header and the pop-out cannot disagree. */}
         <h1 className="truncate text-body font-semibold text-text-primary">
           {threadTitle ?? channelName}
         </h1>
@@ -129,7 +132,7 @@ export function PaneHeader({
 
   return (
     <header className="flex h-[56px] shrink-0 items-center gap-1 border-b border-border-default px-4">
-      <Hash size={14} className="shrink-0 text-text-muted" />
+      {/* ⚠ THE GLYPH IS GONE HERE TOO — see the window chrome above. */}
       <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1">
         {threadTitle === null ? (
           hideChannelCrumb ? null : (

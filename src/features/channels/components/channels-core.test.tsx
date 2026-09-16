@@ -107,6 +107,16 @@ vi.mock("./use-agents-panel", () => ({
     launchAgent: async () => {},
   }),
 }));
+// The Info tab's click-to-edit name + description (2026-09-16) — mocked for the
+// same reason the three above are: it says nothing about which channel is open,
+// and unmocked it pulls the real `useApiMutationWith` out of the stub below.
+vi.mock("../hooks/use-channel-header-writes", () => ({
+  useChannelHeaderWrite: () => ({
+    saveName: () => {},
+    saveTopic: () => {},
+    pending: false,
+  }),
+}));
 vi.mock("../client/realtime", () => ({
   useChannelsRealtime: () => {},
   usePresenceRealtime: () => {},

@@ -30,6 +30,7 @@ import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { Crossfade } from "@/shared/ui/crossfade";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { InfoTab } from "./info-tab";
+import type { ChannelHeaderEdit } from "./info-inline-edit";
 import { ThreadInfoTab } from "./thread-info-tab";
 import { ThreadsTab } from "./threads-tab";
 import { ArtifactsTab } from "./artifacts-tab";
@@ -88,6 +89,7 @@ export function ChannelsInfoPanel({
   onMarkAllMentionsRead,
   knowledge = false,
   artifacts = false,
+  headerEdit,
   infoTabSignal = 0,
   fullTab,
   infoTab,
@@ -178,6 +180,19 @@ export function ChannelsInfoPanel({
    * is measured for four options, so the two lists share one slot and one heading.
    */
   artifacts?: boolean;
+  /**
+   * CLICK-TO-EDIT NAME + DESCRIPTION on the Info tab (Samuel, 2026-09-16).
+   *
+   * ⚠ PASSED STRAIGHT THROUGH — this panel decides nothing about the write and
+   * must not start to: the permission and the stored-vs-derived-name rule are
+   * both resolved by the host (`surface-info-panel.tsx`). Absent is the display
+   * face.
+   * ⚠ CHANNEL VIEW ONLY, like everything else on `InfoTab`: with a thread open
+   * the column renders `ThreadInfoTab`, which is about the exchange. A host that
+   * REPLACES the body ({@link infoTab}) never sees it either — that body is its
+   * own composition.
+   */
+  headerEdit?: ChannelHeaderEdit;
   /**
    * SINGLE-COLUMN MODE (Samuel, 2026-09-04 — the WEB channel page). Render ONE
    * tab's body as the main area, full width, with NO tab row: the header's
@@ -314,6 +329,7 @@ export function ChannelsInfoPanel({
                 index={index}
                 onOpenMention={onOpenMention}
                 onMarkAllMentionsRead={onMarkAllMentionsRead}
+                headerEdit={headerEdit}
               />
             )
           ) : shown === "threads" ? (

@@ -15,7 +15,8 @@
  * HOST (INVARIANTS §7).
  */
 
-import type { Role } from "@/features/workspaces/types";
+import { meetsMinRole, type Role } from "@/features/workspaces/types";
+import { useChannelHeaderWrite } from "../hooks/use-channel-header-writes";
 import { ChannelsSettingsSlot } from "./settings-slot";
 import { ChannelsInfoPanel, type TabKey } from "./info-panel";
 import type { ChannelSurfaceData } from "./channel-surface-data";
@@ -64,6 +65,21 @@ export function SurfaceInfoPanel({
 }) {
   const { members, threads, mentions, agentSessions, agentsPanel, index, openThread, gate } =
     data;
+
+  /**
+   * THE INFO TAB'S CLICK-TO-EDIT NAME + DESCRIPTION (Samuel, 2026-09-16).
+   *
+   * ⚠ IT TAKES THIS SURFACE'S ONE `gate`, like every other write wired here
+   * (INVARIANTS §7/§8: one `useRefetchGate` per live surface). A second
+   * coordinator would let the realtime doorbell repaint the old name mid-write.
+   * ⚠ NO NEW ENDPOINT — `PATCH /api/channels/[channelId]`, the same route the
+   * Settings tab's lifecycle writes and the info card already use.
+   */
+  const headerWrite = useChannelHeaderWrite({
+    channelId: channel.id,
+    workspaceId,
+    gate,
+  });
 
   // ⚠ ON ONE COLUMN, OPENING A TRANSCRIPT HAS TO MOVE THE FACE TOO — a picked
   // thread, a jumped-to mention and a new-thread ask all land in the
@@ -147,6 +163,20 @@ export function SurfaceInfoPanel({
       knowledge={capabilities?.knowledge}
       // THE ARTIFACTS FACE (Samuel, 2026-09-16) — opt-in, /home only; same place.
       artifacts={capabilities?.artifacts}
+      // CLICK-TO-EDIT NAME + DESCRIPTION (Samuel, 2026-09-16).
+      // ⚠ **THE SAME PAIR THE SERVER'S GATE READS** (`service-shared.ts ›
+      // canManageChannel`): channel owner, or workspace admin. Mirrored rather
+      // than guessed, exactly as `settings-slot.tsx` mirrors it two blocks down,
+      // so the line's editable face matches the answer the PATCH will give —
+      // an affordance that always 403s is a dead control (INVARIANTS §5).
+      // ⚠ THE DERIVED-NAME HALF IS `info-tab.tsx`'s (`headerEditable`), because
+      // it is a fact about the ROW rather than about the reader.
+      headerEdit={{
+        canEdit: channel.role === "owner" || meetsMinRole(role, "admin"),
+        onSaveName: headerWrite.saveName,
+        onSaveTopic: headerWrite.saveTopic,
+        busy: headerWrite.pending,
+      }}
       // ⚠ CALLED, not passed. The tab is a render function so it can be
       // handed THIS surface's refetch gate — see `ChannelInfoTabContext`.
       // ⚠ THE BUNDLE GOES WITH THE GATE (2026-09-15). The slot REPLACES the tab

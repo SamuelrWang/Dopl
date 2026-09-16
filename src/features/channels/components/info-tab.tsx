@@ -26,6 +26,7 @@ import {
   Hash,
   ListChecks,
   ListFilter,
+  Type,
   UserPlus,
   UserRound,
 } from "lucide-react";
@@ -39,6 +40,7 @@ import {
   PanelHeading,
   StatusPill,
 } from "./bits";
+import { InlineEditText, type ChannelHeaderEdit } from "./info-inline-edit";
 import { MemberRoster } from "./member-roster";
 import { ThreadActivityStrip, type ActivityBin } from "./thread-activity";
 import { MentionsDisclosure } from "./mentions-disclosure";
@@ -60,6 +62,7 @@ export function InfoTab({
   index,
   onOpenMention,
   onMarkAllMentionsRead,
+  headerEdit,
 }: {
   channel: Channel;
   channelName: string;
@@ -75,12 +78,32 @@ export function InfoTab({
   index: AuthorIndex;
   onOpenMention: (mention: ChannelMention) => void;
   onMarkAllMentionsRead: () => void;
+  /**
+   * CLICK-TO-EDIT NAME + DESCRIPTION (Samuel, 2026-09-16). ABSENT is the
+   * display face and the default, so a host that has not wired the write —
+   * every test harness, and any surface without a refetch gate — renders
+   * exactly what this tab rendered before. The host resolves both halves of
+   * "may this line open" (`surface-info-panel.tsx`).
+   */
+  headerEdit?: ChannelHeaderEdit;
 }) {
   // ⚠ THE TAGS ROW MOVED TO `mentions-disclosure.tsx` (2026-09-15) — its open
   // state, its unread arithmetic and its markup went with it, because a SECOND
   // Info tab (the home space's) now renders the same row and two spellings of
   // one control drift on the first change. Nothing about it changed here.
   const creator = members.find((m) => m.userId === channel.createdBy) ?? null;
+  /**
+   * 🔒 **ONLY A STORED NAME OPENS** (Samuel, 2026-09-16). A 1:1 is TITLED after
+   * the other member — `channel-display.ts › channelDisplayName` answers the
+   * peer's name and `channel.name` is not what anybody reads — so a field bound
+   * to the stored column on a DM would let somebody type over a value no surface
+   * shows, and a field bound to the DERIVED one would write the peer's name into
+   * the room. Neither is an edit, so the DM keeps the display face on BOTH rows.
+   * ⚠ IT IS `channel.isDirect` AND NOT `channelName !== channel.name`: those two
+   * strings are equal whenever a DM's peer cannot be resolved, which is exactly
+   * the moment the row must not become editable.
+   */
+  const headerEditable = headerEdit?.canEdit === true && !channel.isDirect;
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto pb-6">
@@ -88,34 +111,65 @@ export function InfoTab({
           said where the block sat rather than what it was about. */}
       <PanelHeading title="Channel info" />
       <div className="px-2">
-        {/* ⚠ FIRST, ABOVE CREATOR — the subject before its facts. ⚠ IT IS
-            `channelName`, THE DERIVED ONE, never `channel.name`: a 1:1 is titled
-            after the other member (`peerNamedHeader` decides it, upstream), so the
-            stored column would name a DM after nobody. */}
-        {/* ⚠ AT EVERY WIDTH (Samuel, 2026-09-05, second ruling): the header above
+        {/* ⚠ FIRST, ABOVE CREATOR — the subject before its facts. ⚠ THE READ FACE
+            IS `channelName`, THE DERIVED ONE, never `channel.name`: a 1:1 is
+            titled after the other member (`peerNamedHeader` decides it, upstream),
+            so the stored column would name a DM after nobody. **The EDITOR binds
+            to `channel.name`**, which is the only writable half — and it opens on
+            a stored-name channel only, see `headerEditable` above.
+            ⚠ AT EVERY WIDTH (Samuel, 2026-09-05, second ruling): the header above
             the CHAT is fine and the name is ALSO a field of this card, always. The
             duplicate he reported was a title inside the /home pane
-            (`apps/desktop-ui › person-info-tab.tsx`). */}
-        <MetaRow icon={Hash} label="Name">
-          <span className="truncate text-body text-text-primary">
-            {channelName}
-          </span>
+            (`apps/desktop-ui › person-info-tab.tsx`).
+            ⚠ NO `Hash` GLYPH IN FRONT OF THE NAME (Samuel, 2026-09-16) — the same
+            ruling that took it off the pane header. `Type` is the row's icon now;
+            the Linked-threads rows below keep theirs, which name THREADS. */}
+        <MetaRow icon={Type} label="Name">
+          <InlineEditText
+            label="Channel name"
+            // ⚠ THE TWO FACES READ FROM DIFFERENT COLUMNS ON PURPOSE — see above.
+            value={headerEditable ? channel.name : channelName}
+            editable={headerEditable}
+            busy={headerEdit?.busy === true}
+            // `schema.ts › ChannelNameSchema` — `safeLabel("Channel name", 120)`.
+            maxLength={120}
+            onCommit={(next) => {
+              // ⚠ AN EMPTY NAME IS A CANCEL, NOT AN EMPTY ROOM. The server
+              // refuses it (`safeLabel` has a min), and a channel with no name
+              // cannot be found again in anybody's sidebar.
+              if (next !== "") headerEdit?.onSaveName(next);
+            }}
+          />
         </MetaRow>
         <MetaRowDivider />
         {/* ⚠ **"DESCRIPTION" IS THE PRODUCT'S WORD FOR `channels.topic` (ruling,
-            Samuel, 2026-09-15)** — no new column. DISPLAY ONLY: editing a
-            channel's header is channel management's (`PATCH /api/channels/{id}`).
-            "None", no explainer sentence (minimal-copy ruling). ⚠ THE SAME ROW IS
-            ON /home's own card — `apps/desktop-ui › person-info-tab.tsx`, two
-            compositions of one ladder, and a ruling on it lands on both. */}
+            Samuel, 2026-09-15)** — no new column.
+            ⚠ **SUPERSEDED, NOT DELETED (Samuel, 2026-09-16).** This said *"DISPLAY
+            ONLY: editing a channel's header is channel management's (`PATCH
+            /api/channels/{id}`)"*. The ROUTE half is still true and is the one this
+            row writes through — there is no new endpoint — but the row is no longer
+            display only: **name and description are click-to-edit here**, for a
+            member who may manage the channel, on a channel whose name is stored.
+            The management surface is unchanged and adds no editor of its own.
+            "None", no explainer sentence (minimal-copy ruling) — and it is the
+            CLICK TARGET, so an empty description opens on the empty string rather
+            than on the word. ⚠ THE SAME ROW IS ON /home's own card —
+            `apps/desktop-ui › person-info-tab.tsx`, two compositions of one ladder,
+            and a ruling on it lands on both. */}
         <MetaRow icon={AlignLeft} label="Description">
-          {channel.topic ? (
-            <span className="truncate text-body text-text-primary">
-              {channel.topic}
-            </span>
-          ) : (
-            <span className="text-body text-text-muted">None</span>
-          )}
+          <InlineEditText
+            label="Channel description"
+            value={channel.topic}
+            editable={headerEditable}
+            busy={headerEdit?.busy === true}
+            // `schema.ts › ChannelTopicSchema` — `safeOptionalLabel(…, 2000)`.
+            // ⚠ EMPTY IS LEGAL HERE and clears the description, which is why this
+            // one has no non-empty guard: the column is NOT NULL default ''.
+            maxLength={2000}
+            placeholder="None"
+            emptyClassName="text-text-muted"
+            onCommit={(next) => headerEdit?.onSaveTopic(next)}
+          />
         </MetaRow>
         <MetaRowDivider />
         <MetaRow icon={UserRound} label="Creator">
