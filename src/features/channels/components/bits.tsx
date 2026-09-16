@@ -415,7 +415,15 @@ export function PanelHeading({
   trailing?: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-2 px-3.5 pb-1.5 pt-4">
+    /* ⚠ `pt-6`, UP FROM `pt-4` (Samuel, 2026-09-15: *"add slightly more spacing
+       between the end of a section, and the header for the next section"*). It is
+       TOP padding on the HEADING rather than bottom margin on each section, so the
+       gap is stated once and every panel that stacks sections inherits it — the
+       workspace Info tab, /home's, Threads, Agents. A margin per section would be
+       the same number in five places, drifting.
+       ⚠ The leading `pb-1.5` is untouched: the distance from a heading to ITS OWN
+       rows is a different measurement and Samuel did not move it. */
+    <div className="flex items-center gap-2 px-3.5 pb-1.5 pt-6">
       <h2 className="text-body font-semibold text-text-primary">{title}</h2>
       {trailing}
     </div>

@@ -7,7 +7,7 @@
  * same reason and with the same rule.
  */
 
-import type { MessageAuthorKind } from "./types";
+import type { AgentColorKey, MessageAuthorKind } from "./types";
 
 /**
  * ONE ROW OF THE TAGS (MENTIONS) INBOX — a message whose server-stamped
@@ -46,6 +46,15 @@ export type ChannelMention = {
    */
   authorAgentId: string | null;
   authorAgentName: string | null;
+  /**
+   * THAT AGENT'S IDENTITY COLOUR — the hue the Agents tab and the transcript have
+   * already taught this reader (`lib/agent-colors.ts`).
+   *
+   * ⚠ `null` IS LEGITIMATE AND IS NOT AN ERROR: a seventeenth live agent in one
+   * room runs UNCOLOURED because refusing to start an agent over a decoration
+   * would be the tail wagging the dog. Renderers degrade to the neutral mark.
+   */
+  authorAgentColor: AgentColorKey | null;
   /** Preview text, CLIPPED server-side. The transcript row is the record. */
   snippet: string;
   createdAt: string;

@@ -2,20 +2,20 @@ import type { ReactNode } from "react";
 import {
   AlignLeft,
   CalendarDays,
-  Clock3,
   Hash,
   UserRound,
   type LucideIcon,
 } from "lucide-react";
-import { formatChannelTimestamp, formatDate } from "@/shared/lib/format-time";
+import { formatDate } from "@/shared/lib/format-time";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import {
   MetaRow,
   MetaRowDivider,
   PanelHeading,
 } from "@/features/channels/components/bits";
+// ⚠ `InfoCardAddRow` LEFT THIS LIST 2026-09-15 with the add affordance (see the
+// commented sketch below). The component still exists for the workspace card.
 import {
-  InfoCardAddRow,
   InfoCardCustomRow,
   InfoCardSection,
 } from "@/features/channels/components/info-card-rows";
@@ -28,8 +28,6 @@ import { memberPerson } from "@/features/channels/components/view-model";
 import { Avatar } from "@/shared/ui/avatar";
 import {
   EMPTY_INFO_CARD,
-  INFO_CARD_MAX_ROWS,
-  newInfoCardRowId,
   removeInfoCardRow,
   upsertInfoCardRow,
 } from "@/features/channels/info-card";
@@ -77,13 +75,13 @@ import { PersonThreadActivity } from "./person-thread-activity";
  *   ⚠ REMOVING A ROW REMOVES IT FROM THE CARD, NOT FROM THE WORLD. What changed
  *   is what this card shows. Do not "finish the job" by nulling anything.
  *
- * ⚠ THE ORDER IS HEADER → CHANNEL INFO → MENTIONS → CHANNEL ACTIVITY → MEMBERS
+ * ⚠ THE ORDER IS HEADER → CHANNEL INFO → CHANNEL ACTIVITY → MENTIONS → MEMBERS
  * (+ ADD PERSON). The spine is Samuel's, 2026-08-25 — corrected the same day, the
  * first pass put Members second — and Add person moved out of the tab's foot and
  * under the roster it changes, which is what keeps the tab's one ACTION at its
  * end. ⚠ MENTIONS joined it 2026-09-15 as a TOP-LEVEL CATEGORY (his ruling,
- * superseding the collapsed row that shipped hours earlier), between the card and
- * the activity strip.
+ * superseding the collapsed row that shipped hours earlier), and moved BELOW the
+ * activity strip the same hour on his live review.
  */
 export function PersonInfoTab({
   homeChannel,
@@ -123,9 +121,10 @@ export function PersonInfoTab({
     gate,
   });
 
-  // 🔒 **THE SHIPPED ROWS ARE FIXED AND PERMANENT (Samuel, 2026-09-12): Name,
-  // Creator, Created, Last activity — and DESCRIPTION since 2026-09-15, which is
-  // why this no longer says "the four".** No × on any of them, and a stored
+  // 🔒 **THE SHIPPED ROWS ARE FIXED AND PERMANENT: Name, Description, Creator,
+  // Created.** ⚠ "Last activity" WAS one of them and is DELETED (Samuel,
+  // 2026-09-15, live review) — the strip one section down is what says when this
+  // channel was last busy, and a timestamp above it was the same fact twice.** No × on any of them, and a stored
   // `hidden` key is INERT — the card renders every built-in regardless. `hidden`
   // stays in `info-card.ts` because stored cards carry it (and `"email"`, whose
   // row was deleted 2026-09-01); dropping the union would fail validation on
@@ -194,18 +193,6 @@ export function PersonInfoTab({
         </span>
       ),
     },
-    {
-      key: "lastActivity",
-      icon: Clock3,
-      label: "Last activity",
-      value: (
-        <span className="text-body text-text-primary">
-          {homeChannel.lastMessageAt
-            ? formatChannelTimestamp(homeChannel.lastMessageAt)
-            : "No messages yet"}
-        </span>
-      ),
-    },
   ];
 
   return (
@@ -268,15 +255,38 @@ export function PersonInfoTab({
             />
           </div>
         ))}
+        {/* ⚠ **THE ADD-A-ROW AFFORDANCE IS COMMENTED OUT, NOT DELETED, AT SAMUEL'S
+            EXPLICIT INSTRUCTION (2026-09-15): *"comment out the UI of the add item
+            button. Cuz I might reuse the UI down the line. But remove all other
+            code."* So the MARKUP stays here as a parked sketch and every line that
+            made it work is gone — `InfoCardAddRow`'s import, the `onAdd` handler and
+            the `upsertInfoCardRow` call behind it.
+            ⚠ **READING AND REMOVING ARE UNTOUCHED.** Custom rows already stored on
+            `channels.info_card` still render and still carry their hover ×: the
+            ability to CREATE one went, nothing that exists was hidden or nulled —
+            the same rule this card's own docblock states about removal.
+            ⚠ Reviving it means restoring the import and a write; the handler is not
+            hiding anywhere.
         <InfoCardAddRow
           full={card.rows.length >= INFO_CARD_MAX_ROWS}
           onAdd={(label, value) =>
-            save(
-              upsertInfoCardRow(card, { id: newInfoCardRowId(), label, value })
-            )
+            save(upsertInfoCardRow(card, { id: newInfoCardRowId(), label, value }))
           }
         />
+        */}
       </InfoCardSection>
+
+      {/* ⚠ ACTIVITY SITS ABOVE MEMBERS (Samuel, 2026-08-25) — the card reads facts
+          → what has been happening → who is here and how to add somebody, so the one
+          ACTION on the tab is the last thing on it.
+          ⚠ AND ABOVE MENTIONS (Samuel, 2026-09-15, live review): Mentions arrived
+          between the card and this strip and he moved it below. The spine is
+          unchanged in shape — facts, then activity, then what is addressed to YOU,
+          then people. */}
+      <PersonThreadActivity
+        channelId={channel.id}
+        workspaceSegment={homeChannel.workspaceSegment}
+      />
 
       {/* ⚠ **A TOP-LEVEL CATEGORY, NOT A ROW INSIDE CHANNEL INFO** (Samuel,
           2026-09-15, superseding the collapsed disclosure that shipped hours
@@ -305,14 +315,6 @@ export function PersonInfoTab({
         index={mentions.index}
         onOpenMention={mentions.onOpen}
         onMarkAllRead={mentions.onMarkAllRead}
-      />
-
-      {/* ⚠ THREAD ACTIVITY SITS ABOVE MEMBERS (Samuel, 2026-08-25). The card
-          reads facts → what has been happening → who is here and how to add
-          somebody, so the one ACTION on the tab is the last thing on it. */}
-      <PersonThreadActivity
-        channelId={channel.id}
-        workspaceSegment={homeChannel.workspaceSegment}
       />
 
       <PersonMembers homeChannel={homeChannel} />

@@ -15,11 +15,11 @@ vi.mock("./repository-mentions");
 // beside `loadVisibleChannel` and `profilesById`, which this suite needs REAL.
 // Mocking the module would stub the gate it depends on; mocking the one query it
 // makes leaves the derivation under test.
-vi.mock("./repository-sessions");
+vi.mock("./repository-agent-facets");
 
 import * as repo from "./repository";
 import * as repoMentions from "./repository-mentions";
-import * as repoSessions from "./repository-sessions";
+import * as repoSessions from "./repository-agent-facets";
 import { listMyChannelMentions, markMentionsRead } from "./service-mentions";
 import { CHANNEL_MENTION_LIST_LIMIT, MENTION_SNIPPET_MAX_CHARS } from "../constants";
 import type { ChannelMemberRow, ChannelRow, ProfileRef } from "./dto";
@@ -99,7 +99,9 @@ beforeEach(() => {
   vi.mocked(repo.fetchProfiles).mockResolvedValue([PROFILE]);
   vi.mocked(repoMentions.listMentionReads).mockResolvedValue(new Set());
   vi.mocked(repoMentions.insertMentionReads).mockResolvedValue(undefined);
-  vi.mocked(repoSessions.agentDisplayNames).mockResolvedValue(new Map());
+  vi.mocked(repoSessions.agentFacets).mockResolvedValue(
+      new Map([["o9wj5bzn", { displayName: null, color: null, live: true }]])
+    );
 });
 
 describe("listMyChannelMentions", () => {
@@ -124,6 +126,7 @@ describe("listMyChannelMentions", () => {
         // rather than "not an agent" — `authorKind` is what answers that.
         authorAgentId: null,
         authorAgentName: null,
+        authorAgentColor: null,
         snippet: "@sam can you look at this?",
         createdAt: "2026-08-18T12:00:00Z",
         read: false,
@@ -260,8 +263,8 @@ describe("listMyChannelMentions — which agent wrote it", () => {
       ],
       truncated: false,
     });
-    vi.mocked(repoSessions.agentDisplayNames).mockResolvedValue(
-      new Map([["deynelz3", "Bug reviewer"]])
+    vi.mocked(repoSessions.agentFacets).mockResolvedValue(
+      new Map([["deynelz3", { displayName: "Bug reviewer", color: "agent-03", live: true }]])
     );
     const { mentions } = await listMyChannelMentions(ctx, "room");
     expect(mentions[0]!.authorAgentId).toBe("deynelz3");
@@ -282,7 +285,9 @@ describe("listMyChannelMentions — which agent wrote it", () => {
       ],
       truncated: false,
     });
-    vi.mocked(repoSessions.agentDisplayNames).mockResolvedValue(new Map());
+    vi.mocked(repoSessions.agentFacets).mockResolvedValue(
+      new Map([["o9wj5bzn", { displayName: null, color: null, live: true }]])
+    );
     const { mentions } = await listMyChannelMentions(ctx, "room");
     expect(mentions[0]!.authorAgentId).toBe("o9wj5bzn");
     // ⚠ NO NAME IS NOT NO AGENT: the id still renders, as `#o9wj5bzn`.
@@ -300,5 +305,66 @@ describe("listMyChannelMentions — which agent wrote it", () => {
     const { mentions } = await listMyChannelMentions(ctx, "room");
     expect(mentions[0]!.authorAgentId).toBeNull();
     expect(mentions[0]!.authorAgentName).toBeNull();
+  });
+});
+
+/**
+ * AN ENDED AGENT'S MENTIONS LEAVE THE LIST (Samuel, 2026-09-15) — filtered at
+ * READ, never deleted. The message keeps its tag and its place in the transcript;
+ * only this list changes.
+ */
+describe("listMyChannelMentions — ended agents", () => {
+  it("drops a row whose agent is no longer live", async () => {
+    vi.mocked(repoMentions.listMentionMessages).mockResolvedValue({
+      rows: [messageRow({ author_kind: "agent", client_msg_id: "agent-deynelz3-41" })],
+      truncated: false,
+    });
+    vi.mocked(repoSessions.agentFacets).mockResolvedValue(
+      new Map([["deynelz3", { displayName: "Gone", color: null, live: false }]])
+    );
+    const { mentions } = await listMyChannelMentions(ctx, "room");
+    expect(mentions).toEqual([]);
+  });
+
+  it("an agent with NO session row at all is ended too — that is how the table says it", async () => {
+    // `channel_sessions` is a projection of LIVE registries; an ended session is
+    // dropped from it, so absence is the ending rather than a lookup miss.
+    vi.mocked(repoMentions.listMentionMessages).mockResolvedValue({
+      rows: [messageRow({ author_kind: "agent", client_msg_id: "agent-deynelz3-41" })],
+      truncated: false,
+    });
+    vi.mocked(repoSessions.agentFacets).mockResolvedValue(new Map());
+    const { mentions } = await listMyChannelMentions(ctx, "room");
+    expect(mentions).toEqual([]);
+  });
+
+  it("NEVER drops a row it cannot attribute — unknown is not ended", async () => {
+    // ⚠ THE GUARD THAT MATTERS (INVARIANTS §11). A human post, and an older agent
+    // post carrying neither stamp nor session key, both survive: dropping those
+    // would silently empty the inbox of exactly the rows this feature cannot explain.
+    vi.mocked(repoMentions.listMentionMessages).mockResolvedValue({
+      rows: [
+        messageRow({ id: "m-human", author_kind: "user" }),
+        messageRow({ id: "m-unstamped", author_kind: "agent", client_msg_id: "reply-2" }),
+      ],
+      truncated: false,
+    });
+    vi.mocked(repoSessions.agentFacets).mockResolvedValue(new Map());
+    const { mentions } = await listMyChannelMentions(ctx, "room");
+    expect(mentions.map((m) => m.messageId)).toEqual(["m-human", "m-unstamped"]);
+  });
+
+  it("keeps `truncated` describing THE READ, not what survived the filter", async () => {
+    // The 50-cap is the query's and the filter trims after it, so a page can come
+    // back shorter than the cap. `truncated` still means "more rows exist below the
+    // cut", which stays true either way.
+    vi.mocked(repoMentions.listMentionMessages).mockResolvedValue({
+      rows: [messageRow({ author_kind: "agent", client_msg_id: "agent-deynelz3-41" })],
+      truncated: true,
+    });
+    vi.mocked(repoSessions.agentFacets).mockResolvedValue(new Map());
+    const { mentions, truncated } = await listMyChannelMentions(ctx, "room");
+    expect(mentions).toEqual([]);
+    expect(truncated).toBe(true);
   });
 });

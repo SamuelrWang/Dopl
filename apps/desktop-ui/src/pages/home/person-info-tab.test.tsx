@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import { bridgeCalls, installBridge, ok } from "#/test-utils/bridge";
@@ -121,19 +121,19 @@ beforeEach(() => {
   serve(HOME);
 });
 
-describe("Channel info — the four fixed rows", () => {
+describe("Channel info — the fixed rows", () => {
   /**
    * 🔒 NAME · CREATOR · CREATED · LAST ACTIVITY ARE FIXED AND PERMANENT (Samuel,
    * 2026-09-12: *"add Creator as a field, under name. Remove the ability to
    * remove the created and last activity fields, the 4 fields there will now be
    * fixed and permanent"*). No × on any of them; only custom rows carry one.
    */
-  it("renders Name, Creator, Created, Last activity in that order, none removable", async () => {
+  it("renders Name, Creator, Created in that order, none removable", async () => {
     renderHome();
     await openChannelRecord();
     await screen.findByText("Created");
 
-    const labels = ["Name", "Creator", "Created", "Last activity"].map(
+    const labels = ["Name", "Creator", "Created"].map(
       (label) => screen.getByText(label)
     );
     // Pairwise the list is ascending in document order.
@@ -143,7 +143,7 @@ describe("Channel info — the four fixed rows", () => {
           Node.DOCUMENT_POSITION_FOLLOWING
       ).toBeTruthy();
     }
-    for (const label of ["Name", "Creator", "Created", "Last activity"]) {
+    for (const label of ["Name", "Creator", "Created"]) {
       expect(
         screen.queryByRole("button", { name: `Remove ${label} from this card` })
       ).toBeNull();
@@ -179,96 +179,34 @@ describe("Channel info — the four fixed rows", () => {
     renderHome();
     await openChannelRecord();
     expect(await screen.findByText("Created")).toBeInTheDocument();
-    expect(screen.getByText("Last activity")).toBeInTheDocument();
+    expect(screen.getByText("Created")).toBeInTheDocument();
     expect(screen.queryByText("Email")).toBeNull();
     expect(lastCardSent()).toBeNull();
   });
 });
 
-describe("Channel info — the discreet add", () => {
-  it("is present but INVISIBLE until the section is hovered", async () => {
+describe("Channel info — the add affordance is GONE", () => {
+  /**
+   * ⚠ **DELETED 2026-09-15 (Samuel): *"remove the ability to add an item … make
+   * sure code cleanly deleted. EXCEPT, I want you to comment out the UI of the add
+   * item button. Cuz I might reuse the UI down the line."*** Three cases stood here
+   * and pinned the whole interaction — the affordance invisible until hover, a
+   * custom item added in place and persisted, ESCAPE cancelling the draft without
+   * writing. They are replaced by one case pinning the DELETION, because the thing
+   * most likely to go wrong now is a revival nobody asked for.
+   *
+   * ⚠ **READING AND REMOVING SURVIVE AND ARE PINNED ELSEWHERE**: stored custom rows
+   * still render and still carry their hover ×. What went is CREATE.
+   */
+  it("draws no add row, and writes nothing", async () => {
     renderHome();
     await openChannelRecord();
-    const add = await screen.findByTestId("info-card-add");
-    // ⚠ CLASS ASSERTIONS, because jsdom applies no stylesheet: the contract is
-    // that the wrapper rests at zero opacity and is lifted by the SECTION's
-    // hover (`group/infocard`) or by focus landing inside it — never that it is
-    // absent from the tree, which would cost a reflow when it appeared.
-    expect(add.className).toContain("opacity-0");
-    expect(add.className).toContain("group-hover/infocard:opacity-100");
-    expect(add.className).toContain("focus-within:opacity-100");
-    // The hover group it waits for is the ROW LIST, not the whole tab.
-    expect(add.closest(".group\\/infocard")).not.toBeNull();
-  });
-
-  it("adds a custom item in place and persists it", async () => {
-    renderHome();
-    await openChannelRecord();
-    fireEvent.click(await screen.findByText("Add item"));
-
-    fireEvent.change(screen.getByLabelText("Item label"), {
-      target: { value: "Phone" },
-    });
-    fireEvent.change(screen.getByLabelText("Item value"), {
-      target: { value: "+1 555 0101" },
-    });
-    fireEvent.keyDown(screen.getByLabelText("Item value"), { key: "Enter" });
-
-    await waitFor(() => expect(lastCardSent()?.rows).toHaveLength(1));
-    expect(lastCardSent()?.rows[0]).toMatchObject({
-      label: "Phone",
-      value: "+1 555 0101",
-    });
-    expect(await screen.findByText("Phone")).toBeInTheDocument();
-    expect(screen.getByText("+1 555 0101")).toBeInTheDocument();
-  });
-
-  it("ESCAPE cancels the draft and writes nothing", async () => {
-    renderHome();
-    await openChannelRecord();
-    fireEvent.click(await screen.findByText("Add item"));
-    fireEvent.change(screen.getByLabelText("Item label"), {
-      target: { value: "Phone" },
-    });
-    fireEvent.keyDown(screen.getByLabelText("Item label"), { key: "Escape" });
-
-    await waitFor(() => expect(screen.queryByLabelText("Item label")).toBeNull());
+    await screen.findByText("Channel info");
+    expect(screen.queryByTestId("info-card-add")).toBeNull();
+    // ⚠ NOT a blanket /add/i sweep: "Add person" lives under the roster one section
+    // down and is a different control Samuel did not touch. Asserting its absence
+    // here would make this case fail the day that button is renamed.
     expect(lastCardSent()).toBeNull();
-    expect(screen.queryByText("Phone")).toBeNull();
-  });
-
-  it("edits an existing custom item in place, keeping its id", async () => {
-    stored = { hidden: [], rows: [{ id: "row-1", label: "Phone", value: "old" }] };
-    serve(HOME);
-    renderHome();
-    await openChannelRecord();
-
-    fireEvent.click(await screen.findByRole("button", { name: "Edit Phone" }));
-    fireEvent.change(screen.getByLabelText("Item value"), {
-      target: { value: "+1 555 0202" },
-    });
-    fireEvent.keyDown(screen.getByLabelText("Item value"), { key: "Enter" });
-
-    await waitFor(() => expect(lastCardSent()?.rows[0].value).toBe("+1 555 0202"));
-    // ⚠ THE ID SURVIVES AN EDIT. A new id per save would make the row a new row
-    // — the × would target something that no longer exists, and the list would
-    // reorder under the cursor.
-    expect(lastCardSent()?.rows).toHaveLength(1);
-    expect(lastCardSent()?.rows[0].id).toBe("row-1");
-  });
-
-  it("removes a custom item with the same × the built-ins carry", async () => {
-    stored = { hidden: [], rows: [{ id: "row-1", label: "Phone", value: "x" }] };
-    serve(HOME);
-    renderHome();
-    await openChannelRecord();
-    await screen.findByText("Phone");
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Remove Phone from this card" })
-    );
-    await waitFor(() => expect(lastCardSent()).toEqual({ hidden: [], rows: [] }));
-    await waitFor(() => expect(screen.queryByText("Phone")).toBeNull());
   });
 });
 
@@ -453,67 +391,8 @@ describe("a cache entry written before the info card existed", () => {
     await openChannelRecord();
     expect(await screen.findByText("Channel info")).toBeInTheDocument();
     expect(screen.getByText("Created")).toBeInTheDocument();
-    // And the add affordance still works off the empty card.
-    expect(screen.getByTestId("info-card-add")).toBeInTheDocument();
-  });
-});
-
-/**
- * THE MENTIONS SECTION — THE HOME-SPACE PARITY GAP (2026-09-15, Samuel: the
- * workspace channel's Info tab has had this since Phase 6 and a home channel's
- * had nothing).
- *
- * ⚠ WHAT WAS ACTUALLY BROKEN WAS THE SLOT, NOT THE QUERY. The surface reads
- * mentions for EVERY mount, home included and already scoped to the home
- * container; the injected tab replaced the panel body and dropped them. So these
- * cases assert the tab RENDERS the section and FORWARDS the surface's handler —
- * the two halves that were missing — and deliberately not the list's own
- * behaviour, which `channels/components/mentions-list.test.tsx` owns.
- */
-describe("home info tab — Mentions", () => {
-  // ⚠ NO LOCAL `beforeEach`: this file's top-level one installs the stateful
-  // stub server and resets the request spy for every case in it.
-  //
-  // ⚠ THESE THREE CASES PINNED A COLLAPSED DISCLOSURE FOR ABOUT AN HOUR
-  // (aria-expanded, a click to open, a position inside Channel info) and Samuel
-  // superseded it the same day: Mentions is a TOP-LEVEL CATEGORY here, a peer of
-  // Channel info and Channel activity, and the list renders OPEN. They are
-  // rewritten rather than deleted so the overruled shape is on the record.
-
-  it("is a TOP-LEVEL CATEGORY with its own heading, not a row inside Channel info", async () => {
-    renderHome();
-    await openChannelRecord();
-    const heading = await screen.findByText("Mentions");
-    // ⚠ NOT A DISCLOSURE: no button wearing the label, so nothing to expand.
-    expect(screen.queryByRole("button", { name: /^Mentions/ })).toBeNull();
-    // It is a PEER of the other two headings, which is what "top-level" means
-    // here — same element, same level, not nested in the card above it.
-    const channelInfo = await screen.findByText("Channel info");
-    expect(heading.tagName).toBe(channelInfo.tagName);
-  });
-
-  it("renders the list OPEN — no dropdown, nothing to click first", async () => {
-    renderHome();
-    await openChannelRecord();
-    // The empty state is `mentions-list.tsx`'s own copy, visible with no
-    // interaction at all: proof the REAL list mounted, already open.
-    expect(
-      await screen.findByText("No messages tag you in this channel yet.")
-    ).toBeTruthy();
-  });
-
-  it("sits between Channel info and the activity section", async () => {
-    // ⚠ THE ORDER IS THE TAB'S RULING (HEADER → CHANNEL INFO → MENTIONS →
-    // CHANNEL ACTIVITY → MEMBERS). A section merely PRESENT is not the same as a
-    // section in the right place, so position is asserted, not existence.
-    renderHome();
-    await openChannelRecord();
-    const channelInfo = await screen.findByText("Channel info");
-    const mentions = await screen.findByText("Mentions");
-    const activity = await screen.findByText("Channel activity");
-    const follows = (a: HTMLElement, b: HTMLElement) =>
-      a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING;
-    expect(follows(channelInfo, mentions)).toBeTruthy();
-    expect(follows(mentions, activity)).toBeTruthy();
+    // ⚠ And NO add affordance — deleted 2026-09-15; a stale cache entry must not
+    // resurrect it either.
+    expect(screen.queryByTestId("info-card-add")).toBeNull();
   });
 });

@@ -6,8 +6,8 @@ import {
 import type { ChannelMention, MessageAuthorKind } from "../types";
 import { authorAgentIdOf } from "../lib/agent-post-stamp";
 import * as repoMentions from "./repository-mentions";
+import * as repoSessions from "./repository-agent-facets";
 import {
-  agentNamesFor,
   profilesById,
   loadVisibleChannel,
   type ChannelContext,
@@ -61,6 +61,22 @@ function threadIdOf(metadata: unknown): string | null {
  * ⚠ NOTHING DOWNSTREAM RE-SORTS THE PAGE. The LIMIT clipped against `seq DESC`,
  * so a re-sorted page is the wrong rows in a plausible order.
  */
+/**
+ * WHICH AGENT WROTE ONE INBOX ROW — the ONE parser, applied to this table's shape.
+ * ⚠ Its own function so the id the FILTER keys on and the id the ROW renders are
+ * the same derivation; two call sites spelling it apart is how a row gets dropped
+ * for an agent it is not actually attributed to.
+ */
+function agentIdOfRow(row: repoMentions.MentionMessageRow): string | null {
+  return authorAgentIdOf({
+    clientMsgId: row.client_msg_id,
+    metadata:
+      row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+        ? (row.metadata as Record<string, unknown>)
+        : null,
+  });
+}
+
 export async function listMyChannelMentions(
   ctx: ChannelContext,
   ref: string
@@ -76,12 +92,15 @@ export async function listMyChannelMentions(
   // Both reads are bounded BY THE PAGE: the read-state lookup is `IN` the ids
   // just fetched, and the profile hydration is the distinct authors of those
   // same rows. Neither is sized by the workspace.
-  // ⚠ THE AGENT NAMES ARE THE SAME PAGE-WIDE JOIN THE TRANSCRIPT MAKES
-  // (`service-shared.ts › agentNamesFor`, read by `dto.ts › agentNameOf`), not a
-  // second derivation: one answer to "which of this operator's agents wrote the
-  // row", so the inbox and the message it points at can never name it
+  // ⚠ ONE PAGE-WIDE JOIN FOR THE AGENT HALF — name, colour and liveness together
+  // (`repository-sessions.ts › agentFacets`). The id still comes off the ONE
+  // parser, so the inbox and the message it points at cannot name one agent
   // differently. Bounded by the page like the two reads beside it.
-  const [read, profiles, agentNames] = await Promise.all([
+  const agentIds = rows
+    .filter((row) => row.author_kind === "agent")
+    .map((row) => agentIdOfRow(row))
+    .filter((id): id is string => id !== null);
+  const [read, profiles, agents] = await Promise.all([
     repoMentions.listMentionReads(
       ctx.userId,
       channel.id,
@@ -92,30 +111,15 @@ export async function listMyChannelMentions(
         .map((row) => row.author_user_id)
         .filter((id): id is string => id !== null)
     ),
-    agentNamesFor(
-      [channel.workspace_id],
-      rows.map((row) => ({
-        author_kind: row.author_kind,
-        client_msg_id: row.client_msg_id,
-        metadata: row.metadata,
-      }))
-    ),
+    repoSessions.agentFacets([channel.workspace_id], agentIds),
   ]);
 
   const mentions = rows.map((row): ChannelMention => {
     const profile = row.author_user_id
       ? profiles.get(row.author_user_id)
       : undefined;
-    const agentId =
-      row.author_kind === "agent"
-        ? authorAgentIdOf({
-            clientMsgId: row.client_msg_id,
-            metadata:
-              row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-                ? (row.metadata as Record<string, unknown>)
-                : null,
-          })
-        : null;
+    const agentId = row.author_kind === "agent" ? agentIdOfRow(row) : null;
+    const facet = agentId === null ? undefined : agents.get(agentId);
     return {
       messageId: row.id,
       seq: Number(row.seq),
@@ -132,13 +136,40 @@ export async function listMyChannelMentions(
       // every renderer falls back through name -> `#id` -> the bare noun
       // (INVARIANTS §11).
       authorAgentId: agentId,
-      authorAgentName: agentId === null ? null : (agentNames.get(agentId) ?? null),
+      authorAgentName: facet?.displayName ?? null,
+      // ⚠ THE AGENT'S IDENTITY COLOUR, the one the Agents tab and the transcript
+      // already taught the reader. `null` is legitimate — a seventeenth live agent
+      // in one room runs UNCOLOURED (`lib/agent-colors.ts`), so a renderer must
+      // degrade rather than invent a hue.
+      authorAgentColor: (facet?.color ?? null) as ChannelMention["authorAgentColor"],
       snippet: snippetOf(row.body),
       createdAt: row.created_at,
       read: read.has(row.id),
     };
   });
-  return { mentions, truncated };
+  // ⚠ **AN ENDED AGENT'S MENTIONS LEAVE THE LIST — FILTERED AT READ, NEVER
+  // DELETED** (Samuel, 2026-09-15). The MESSAGE is untouched and still sits in the
+  // transcript with its tag intact; what changes is what this list shows. A delete
+  // would destroy a record to tidy a view, and `channel_mention_reads` rows would
+  // outlive the thing they point at.
+  //
+  // ⚠ **"ENDED" IS "NOT LIVE IN `channel_sessions`"** — that table is a projection
+  // of live desktop registries and an ended session is dropped from it
+  // (`repository-sessions.ts › agentFacets` carries the argument).
+  //
+  // ⚠ **ONLY A ROW WE CAN ATTRIBUTE IS ELIGIBLE.** No agent id means CANNOT SAY,
+  // not ENDED (INVARIANTS §11), so an older unstamped agent post and every human
+  // post stay — dropping those would silently empty the inbox of exactly the rows
+  // this feature could not explain.
+  //
+  // ⚠ **THE 50-CAP IS THE QUERY'S AND THIS TRIMS AFTER IT**, so a page can come
+  // back shorter than the cap. `truncated` still describes the READ, which is the
+  // honest thing for it to describe: it says more rows exist below the cut, and
+  // that remains true whether or not this filter removed any.
+  const live = mentions.filter(
+    (m) => m.authorAgentId === null || (agents.get(m.authorAgentId)?.live ?? false)
+  );
+  return { mentions: live, truncated };
 }
 
 /**

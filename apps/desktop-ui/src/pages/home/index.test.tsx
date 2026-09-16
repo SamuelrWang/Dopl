@@ -43,17 +43,12 @@ import {
 
 const apiRequest = vi.hoisted(() => vi.fn());
 
-/** The header's list-width CELL (`home-header.tsx`) as a `closest` selector —
- *  inside it heads the channel picker, outside it is a page control. */
+/** The header's list-width CELL (`home-header.tsx`) as a `closest` selector: inside it heads the channel picker, outside it is a page control. */
 const LIST_CELL = ".w-\\[var\\(--home-list-w\\)\\]";
 
-// ⚠ ASYNC FACTORY so it can reach `surface-slot-fixtures`: `vi.mock` is hoisted above
-// every import, so a top-level binding is not in scope when this runs.
-vi.mock(
-  "@/features/channels/components/channel-surface-standalone",
-  async () => {
-   const { infoTabContext } = await import("./surface-slot-fixtures");
-   return ({
+vi.mock("@/features/channels/components/channel-surface-standalone", async () => {
+  const { infoTabContext } = await import("./surface-slot-fixtures");
+  return {
     StandaloneChannelSurface: (props: {
       workspaceId: string;
       workspaceSlug: string;
@@ -61,12 +56,10 @@ vi.mock(
       currentUserId: string;
       capabilities?: { memberManagement?: boolean };
       slots?: {
-        // ⚠ A RENDER FUNCTION since 2026-08-25, taking the surface's own
-        // refetch gate — the person card writes now (`channel-surface.tsx ›
-        // ChannelInfoTabContext`). The stub supplies an inert one: this suite
-        // owns that Home MOUNTS the slot, not what the gate coordinates.
-        // ⚠ THE REAL CONTEXT TYPE, not a hand-written shape: it gained the Tags
-        // inbox on 2026-09-15, and a structural copy cannot fail when that happens.
+        // ⚠ A RENDER FUNCTION since 2026-08-25 taking the surface's own refetch gate; the
+        // fixture supplies an inert context. This suite owns that Home MOUNTS the slot.
+        // ⚠ ASYNC FACTORY above because `vi.mock` is hoisted over every import.
+        // ⚠ THE REAL CONTEXT TYPE, not a hand-written shape: a structural copy cannot fail when it grows a field.
         infoTab?: (ctx: ChannelInfoTabContext) => React.ReactNode;
       };
     }) => (
@@ -81,9 +74,8 @@ vi.mock(
         {props.slots?.infoTab?.(infoTabContext())}
       </div>
     ),
-   });
-  }
-);
+  };
+});
 
 describe("home page", () => {
   beforeEach(() => {
@@ -226,7 +218,7 @@ describe("home page", () => {
     expect(surface).toHaveAttribute("data-member-management", "false");
     // The person card is the INFO slot, not the channel's own metadata tab.
     expect(screen.getByText("Created")).toBeInTheDocument();
-    expect(screen.getByText("Last activity")).toBeInTheDocument();
+    expect(screen.getByText("Created")).toBeInTheDocument();
 
     // The channels read is addressed to the CONTAINER, over the workspace header.
     const call = bridgeCalls(apiRequest).find((c) =>
@@ -353,7 +345,7 @@ describe("home page", () => {
     await openChannelRecord();
     expect(screen.queryByText("Email")).not.toBeInTheDocument();
     expect(screen.getByText("Created")).toBeInTheDocument();
-    expect(screen.getByText("Last activity")).toBeInTheDocument();
+    expect(screen.getByText("Created")).toBeInTheDocument();
   });
 
   it("creates a channel from the header and lands on the new row", async () => {

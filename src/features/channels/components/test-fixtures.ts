@@ -117,6 +117,7 @@ export function mention(over: Partial<ChannelMention> = {}): ChannelMention {
     // the honest value for a message no agent wrote.
     authorAgentId: null,
     authorAgentName: null,
+    authorAgentColor: null,
     snippet: "can you take a look at this before the freeze?",
     createdAt: "2026-08-18T12:00:00.000Z",
     read: false,

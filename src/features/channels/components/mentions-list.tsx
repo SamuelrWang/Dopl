@@ -39,45 +39,45 @@ import { shortName, type AuthorIndex } from "./view-model";
 import type { ChannelMention } from "../types";
 
 /**
- * THE mentions-inbox clip wording. FOURTH surface in the family after
- * `ontology-clipped.ts › clippedNote`, `channel-render-threads.ts ›
- * threadsClippedNote` and `threads-tab.tsx › THREADS_CLIPPED_NOTE`; its own
- * because the REMEDY differs again — this pane has no page argument, and what
- * it can honestly offer is "the most recent" plus the assurance that nothing
- * was dismissed or removed, only pushed below the cut.
+ * ⚠ **`MENTIONS_CLIPPED_NOTE` STOOD HERE AND IS DELETED (Samuel, 2026-09-15):
+ * *"delete both explainer lines"*.** It was two careful sentences about a bound
+ * — that the page is the most recent N, and that nothing below the cut was
+ * dismissed — and the list now SCROLLS, so the cut it explained is no longer
+ * something the reader bumps into.
  *
- * ⚠ It may NOT let the clip pass as an absence: "nothing else tags you here" is
- * an assertion this read never established.
- *
- * ⚠ NOR MAY IT OVER-ASSERT THE CLIP. It used to say "there are more than one
- * page", which the read never established: a page AT the ceiling counts as
- * clipped (INVARIANTS §9) exactly because a full page and an exhausted one are
- * indistinguishable from here, so an inbox holding precisely the limit was
- * being told there was more. The wording now states what IS shown and stops.
+ * ⚠ **THE BOUND ITSELF IS UNTOUCHED** (`CHANNEL_MENTION_LIST_LIMIT`, server-side)
+ * and `truncated` still rides the wire. What went is the paragraph, not the fact;
+ * a future surface that needs to say it should say it in its own words rather
+ * than resurrect this one.
  */
-export const MENTIONS_CLIPPED_NOTE =
-  "Showing your most recent tags in this channel, up to this list's limit. Nothing here was dismissed; anything not listed is simply below the cut.";
 
 export function MentionsList({
   mentions,
-  truncated,
   loading,
   channelName,
   index,
   onOpenMention,
-  onMarkAllRead,
 }: {
   /** THE WHOLE bounded page, in the server's `seq DESC` order. ⚠ Never
    *  re-sorted here — the LIMIT clipped against that order. */
   mentions: ChannelMention[];
+  /** ⚠ CARRIED, NOT RENDERED (2026-09-15): the clip is a real fact the read
+   *  establishes and the prop stays on the wire, but the paragraph that stated it
+   *  is deleted and the list scrolls instead. A surface that wants to say it again
+   *  should say it in its own words. */
   truncated: boolean;
   loading: boolean;
   channelName: string;
   index: AuthorIndex;
   onOpenMention: (mention: ChannelMention) => void;
+  /** ⚠ ACCEPTED AND UNUSED since 2026-09-15: the bulk button is deleted, and the
+   *  prop stays so the two hosts keep one call shape. Its handler is still the
+   *  surface's, still correct, and still wired for whatever asks next. */
   onMarkAllRead: () => void;
 }) {
-  const unread = mentions.filter((m) => !m.read).length;
+  // ⚠ "Mark all read" STOOD HERE AND IS DELETED (Samuel, 2026-09-15, item 7). The
+  // WRITE path is untouched — `use-mention-writes.ts › markRead` still fires on a
+  // row's own click, which is how a mention becomes read now.
 
   if (loading && mentions.length === 0) {
     return (
@@ -96,21 +96,14 @@ export function MentionsList({
   }
 
   return (
-    <div className="flex flex-col gap-1 pb-2 pl-7 pr-1 pt-0.5">
-      {truncated && (
-        <p className="rounded-[8px] border border-border-default bg-card-surface-subtle px-2 py-1.5 text-caption text-text-secondary">
-          {MENTIONS_CLIPPED_NOTE}
-        </p>
-      )}
-      {unread > 0 && (
-        <button
-          type="button"
-          onClick={onMarkAllRead}
-          className="self-end rounded-[6px] px-1.5 py-0.5 text-caption font-medium text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
-        >
-          Mark all read
-        </button>
-      )}
+    /* ⚠ **THREE ROWS TALL, THEN IT SCROLLS** (Samuel, 2026-09-15). The cap stays
+       SERVER-side at 50; this is the viewport, not the bound. `max-h` is measured
+       in `rem` against the row's own two lines rather than given a pixel height,
+       so it keeps its ~3 rows if the type scale is retuned — the same discipline
+       `agent-color-dot.tsx` states for its `size-2`.
+       ⚠ `overscroll-contain` so reaching the end does not start scrolling the Info
+       panel behind it, which on a 380px column reads as the whole tab jumping. */
+    <div className="flex max-h-[13.5rem] flex-col gap-1 overflow-y-auto overscroll-contain pb-2 pl-7 pr-1 pt-0.5">
       {mentions.map((mention) => (
         <MentionItem
           key={mention.messageId}
@@ -177,23 +170,41 @@ function MentionItem({
       data-unread={unread || undefined}
       className={cn(
         "flex w-full flex-col gap-1 rounded-[8px] px-2 py-1.5 text-left transition-colors",
-        // Unread wears a soft link tint + dot; read rows are plain. The tint is
-        // conditional so hover can own the background on read rows.
-        unread ? "bg-link/5 hover:bg-link/10" : "hover:bg-surface-raised-1"
+        // ⚠ **NO BACKGROUND ON A MENTION ROW, READ OR UNREAD** (Samuel, 2026-09-15,
+        // looking at it live: *"right now there is no background color around each
+        // mention, I actually like this better"*). The blue unread tint and the
+        // agent-coloured shade that briefly replaced it are BOTH gone; hover is the
+        // only fill this row ever wears.
+        // ⚠ UNREAD IS STILL SAID, just not in paint: the row keeps its screen-reader
+        // word, and the agent's colour now rides the PILL, which is where a reader
+        // looks for whose ask it is.
+        "hover:bg-surface-raised-1"
       )}
     >
-      {/* ⚠ NO AVATAR (Samuel, 2026-09-15): *"drop the viewer's profile image from
-          row line 1"*. Every row in this list is a message that tagged ONE person
-          — the viewer — so a face on each was the same face fifty times, spending
-          the row's scarcest axis on a constant. The NAME still identifies the
-          author, and the transcript one click away carries the face. */}
+      {/* ⚠ **LINE 1 IS: WHO · WHERE · WHEN** (Samuel, 2026-09-15, round 3 + his live
+          correction the same hour, which removed the unread dot that briefly led it).
+          ⚠ **"You" IS GONE AND THE AGENT PILL TOOK ITS PLACE.** An agent posts under
+          its OPERATOR's user id, so `shortName` correctly answered "You" for every
+          agent row in the viewer's own channels — technically true and useless: it
+          named the account, when the question the row answers is WHICH AGENT tagged
+          me. The pill moved up from the last line into that slot.
+          ⚠ **A HUMAN AUTHOR STILL GETS THEIR NAME.** The swap is keyed on
+          `authorKind`, not on the word: a peer who tags you is a person, and
+          replacing their name with a pill would lose the only thing identifying
+          them. Only the self-authored/agent case changes.
+          ⚠ **AND THE OLD LAST LINE IS DELETED, NOT HIDDEN** — its two contents both
+          moved here, so keeping an empty third line would leave every row taller
+          than its content. */}
       <span className="flex w-full items-center gap-1.5">
-        {unread && (
-          <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-link" />
+        {mention.authorKind === "agent" ? (
+          <AgentPill color={mention.authorAgentColor}>{agentPillLabel(mention)}</AgentPill>
+        ) : (
+          <span className="truncate text-small font-semibold text-text-primary">
+            {shortName(person, index.currentUserId)}
+          </span>
         )}
-        <span className="truncate text-small font-semibold text-text-primary">
-          {shortName(person, index.currentUserId)}
-        </span>
+        {/* ⚠ **RIGHT OF THE PILL** (item 3), not on a line of its own. */}
+        <span className="truncate text-micro text-text-muted">in # {channelName}</span>
         <span className="ml-auto shrink-0 text-micro text-text-muted">
           {formatRelativeTime(mention.createdAt)}
         </span>
@@ -201,28 +212,6 @@ function MentionItem({
       </span>
       <span className="line-clamp-2 text-caption text-text-secondary">
         {mention.snippet}
-      </span>
-      {/* THE LAST LINE: the agent pill, and the channel name at its bottom-right.
-          ⚠ MY READING OF THE BRIEF (Samuel: *"channel name on the row's LAST line,
-          bottom-right of the agent pill"*) — one row, pill LEFT, channel name
-          pushed RIGHT by `ml-auto`, which is what "bottom-right of" describes on a
-          line that already starts with the pill. It is recorded here because the
-          phrasing also admits a stacked reading, and a layout decision taken from
-          an ambiguous sentence should say which way it went.
-          ⚠ THE LINE RENDERS FOR A HUMAN AUTHOR TOO — with no pill, the channel
-          name simply sits alone on the right, so every row keeps the same
-          three-line shape and the list does not comb. */}
-      <span className="flex w-full items-center gap-1.5">
-        {mention.authorKind === "agent" && (
-          // ⚠ THE AGENT'S NAME, NOT THE NOUN (Samuel, 2026-09-15). Falls back
-          // through the operator's rename -> `#<id>` -> "Agent": the same ladder
-          // `attribution-pill.tsx › attributionName` walks, for the same reason —
-          // `null` is CANNOT SAY and a blank pill would be a claim about nothing.
-          <AgentPill>{agentPillLabel(mention)}</AgentPill>
-        )}
-        <span className="ml-auto truncate text-micro text-text-muted">
-          in # {channelName}
-        </span>
       </span>
     </button>
   );

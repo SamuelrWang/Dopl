@@ -22,7 +22,7 @@ import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { InfoTab } from "./info-tab";
-import { MENTIONS_CLIPPED_NOTE, agentPillLabel } from "./mentions-list";
+import { agentPillLabel } from "./mentions-list";
 import { indexMembers } from "./view-model";
 import { channel, member, mention, ME, PEER } from "./test-fixtures";
 import type { ChannelMention } from "../types";
@@ -132,38 +132,32 @@ describe("channels mentions inbox", () => {
     expect(tagsRow.textContent).toContain(String(UNREAD_AT_MOUNT - 1));
   });
 
-  it("mark-all zeroes the badge and then hides itself", () => {
-    const { tagsRow } = open();
-    const panel = within(screen.getByRole("button", { name: /^Mentions/ }).parentElement!);
-    fireEvent.click(panel.getByRole("button", { name: "Mark all read" }));
-    expect(tagsRow.textContent).toMatch(/^Mentions0$/);
+  it("has NO mark-all button — a row is marked read by opening it", () => {
+    // ⚠ DELETED 2026-09-15 (Samuel, item 7). This case pinned the bulk button's
+    // whole behaviour: it zeroed the badge, sent only the unread ids, and hid
+    // itself. Rewritten to pin the DELETION, because the WRITE path is untouched —
+    // `use-mention-writes.ts › markRead` still fires on a row's own click — and a
+    // future reader should see that the button went deliberately.
+    open({ rows: [mention(), mention({ messageId: "m-2" })] });
     expect(screen.queryByRole("button", { name: "Mark all read" })).toBeNull();
   });
 
   /**
-   * INVARIANTS §9: the read is bounded and a page AT the ceiling counts as
-   * clipped, so the surface that LISTS it must say so. The note may not let a
-   * clip pass as an absence.
+   * ⚠ **THE CLIP EXPLAINER IS DELETED (Samuel, 2026-09-15) AND THESE TWO CASES ARE
+   * REWRITTEN INTO ONE.** They pinned that a clipped page SAYS so, and that the
+   * sentence never over-asserts what is below the cut — careful rules about a
+   * paragraph the list no longer draws, now that it scrolls.
+   * ⚠ WHAT SURVIVES IS THE HALF THAT IS STILL TRUE: the BOUND is real and
+   * `truncated` still crosses the wire (INVARIANTS §9). Deleting the copy must not
+   * quietly delete the fact, so this asserts the prop is still accepted and that
+   * NOTHING is rendered for it — which is what makes the deletion visible to the
+   * next reader instead of looking like the feature was never there.
    */
-  it("says so when the page clipped, and stays silent when it did not", () => {
+  it("renders no clip explainer, clipped or not — the bound stayed, the paragraph went", () => {
     open({ truncated: true });
-    expect(screen.getByText(MENTIONS_CLIPPED_NOTE)).not.toBeNull();
-    cleanup();
-    open();
-    expect(screen.queryByText(MENTIONS_CLIPPED_NOTE)).toBeNull();
-  });
-
-  /**
-   * ⚠ THE CLIP NOTE MAY NOT OVER-ASSERT EITHER. It used to say "there are more
-   * than one page", which this read never established: a page AT the ceiling
-   * counts as clipped precisely because a full page and an exhausted one are
-   * indistinguishable from here (INVARIANTS §9).
-   */
-  it("the clipped note claims nothing about what is NOT shown", () => {
-    open({ truncated: true });
-    const note = screen.getByText(MENTIONS_CLIPPED_NOTE);
-    expect(note.textContent).not.toMatch(/more than one page/i);
-    expect(note.textContent).not.toMatch(/there are more/i);
+    expect(screen.queryByText(/Showing your most recent tags/i)).toBeNull();
+    expect(screen.queryByText(/Nothing here was dismissed/i)).toBeNull();
+    expect(screen.queryByText(/below the cut/i)).toBeNull();
   });
 
   /**
@@ -256,12 +250,57 @@ describe("the mention row", () => {
     expect(pill.className).toContain("text-text-on-cta");
   });
 
-  it("puts the channel name on the LAST line, after the snippet", () => {
+  it("puts the channel name RIGHT OF THE PILL on line 1, not on a line of its own", () => {
+    // ⚠ SUPERSEDED THE SAME DAY (round 3). This case pinned the channel name on the
+    // row's LAST line, under the snippet; Samuel moved both the pill and the channel
+    // up into line 1. Rewritten rather than deleted so the earlier shape is on the
+    // record — and it still asserts ORDER, which is the part that can regress.
     open({ rows: [mention({ authorKind: "agent", authorAgentName: "Prober" })] });
-    const snippet = screen.getByText(/can you take a look at this/);
+    const pill = screen.getByText("Prober");
     const channel = screen.getByText(/in # /);
-    expect(
-      snippet.compareDocumentPosition(channel) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    const snippet = screen.getByText(/can you take a look at this/);
+    const follows = (a: HTMLElement, b: HTMLElement) =>
+      a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING;
+    expect(follows(pill, channel)).toBeTruthy();
+    // ...and BOTH are above the snippet now, which is what "line 1" means here.
+    expect(follows(channel, snippet)).toBeTruthy();
+    expect(pill.parentElement).toBe(channel.parentElement);
+  });
+
+  it("drops \"You\" for an agent row, and keeps a PERSON's name", () => {
+    // An agent posts under its operator's user id, so `shortName` answered "You"
+    // for every agent row in the viewer's own channels — true about the account and
+    // useless about which agent. ⚠ The swap is keyed on `authorKind`: a peer who
+    // tags you is still named, because a pill would lose the only thing identifying
+    // them.
+    open({ rows: [mention({ authorKind: "agent", authorAgentName: "Prober", authorUserId: ME })] });
+    expect(screen.queryByText("You")).toBeNull();
+    expect(screen.getByText("Prober")).toBeTruthy();
+    cleanup();
+    open({ rows: [mention({ authorKind: "user" })] });
+    expect(screen.getByText("Diana Taylor")).toBeTruthy();
+  });
+
+  it("wears the AGENT'S colour ON THE PILL, and no background on the row", () => {
+    // ⚠ SUPERSEDED WITHIN THE HOUR by Samuel watching it live: the unread DOT and
+    // the agent-tinted row background are both gone — *"no background color around
+    // each mention, I actually like this better"*, *"have the black pill be in the
+    // color of that agent"*. Rewritten rather than deleted so the tint experiment is
+    // on the record.
+    open({ rows: [mention({ authorKind: "agent", authorAgentName: "Prober", authorAgentColor: "agent-03" })] });
+    const pill = screen.getByText("Prober");
+    expect(pill.getAttribute("style")).toContain("--agent-color-03");
+    const row = screen.getByRole("button", { name: /unread mention/ });
+    expect(row.getAttribute("style")).toBeNull();
+    expect(row.className).not.toContain("bg-link");
+  });
+
+  it("an UNCOLOURED agent keeps the black pill — that is a real state, not a failure", () => {
+    // A room with all sixteen keys out runs the next agent uncoloured, and an ended
+    // agent is deliberately uncoloured everywhere. Both get the CTA face.
+    open({ rows: [mention({ authorKind: "agent", authorAgentName: "Prober", authorAgentColor: null })] });
+    const pill = screen.getByText("Prober");
+    expect(pill.getAttribute("style")).toBeNull();
+    expect(pill.className).toContain("bg-surface-cta");
   });
 });

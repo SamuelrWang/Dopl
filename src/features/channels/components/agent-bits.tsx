@@ -18,6 +18,8 @@
 import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 import type { AgentLivenessState, AgentLivenessTone } from "./agents-model";
+import { agentColorVar } from "../lib/agent-colors";
+import type { AgentColorKey } from "../types";
 
 /**
  * LIVENESS of one agent — a dot and a word, no pill chrome.
@@ -94,9 +96,24 @@ export function AgentLiveness({
  */
 export function AgentPill({
   children,
+  color = null,
   className,
 }: {
   children: ReactNode;
+  /**
+   * **THAT AGENT'S IDENTITY COLOUR, WORN AS THE PILL'S FILL** (Samuel,
+   * 2026-09-15: *"have the black pill be in the color of that agent"*).
+   *
+   * ⚠ **`null` IS THE BLACK ONE, AND IT IS NOT A FALLBACK FOR A FAILURE.** The
+   * Agents-tab ended pill has no agent colour to wear and must not acquire one —
+   * an ENDED agent is deliberately uncoloured everywhere (`agent-color-dot.tsx`
+   * states that rule) — and a live agent in a room whose sixteen keys are all out
+   * runs uncoloured too. Both are ordinary, both get the CTA face.
+   * ⚠ **THE INK DOES NOT MOVE.** `--agent-color-NN` is a dark ramp (L 0.44), the
+   * same one the transcript already puts white on, so `text-text-on-cta` reads on
+   * either fill and there is no second ink rule to keep in step.
+   */
+  color?: AgentColorKey | null;
   className?: string;
 }) {
   return (
@@ -105,6 +122,10 @@ export function AgentPill({
         "shrink-0 rounded-[6px] bg-surface-cta px-2 py-px text-micro font-medium text-text-on-cta",
         className
       )}
+      // ⚠ A CSS VARIABLE, NOT A CLASS: the sixteen keys are runtime data off
+      // `channel_sessions.color`, so a Tailwind class per key could not be
+      // statically extracted and would ship as sixteen dead rules.
+      style={color ? { backgroundColor: agentColorVar(color) } : undefined}
     >
       {children}
     </span>
