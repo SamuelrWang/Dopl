@@ -292,9 +292,33 @@ async function spawn(d, deps) {
     // `decideBody` puts it on the LAUNCHED body as the launch's `name=`.
     let applied = null;
     try {
+      // ⚠ **THE FALLBACK IS LOGGED, BECAUSE A NAMELESS AGENT USED TO BE INDISTINGUISHABLE FROM
+      // A NAMED ONE HERE** (F-708, 2026-09-16). `'' -> New Agent` is the older-client arm and
+      // is legitimate, but it is ALSO what a NAME LOST UPSTREAM looks like — and that is what
+      // had actually happened: the API route dropped `agentName` before the row was written, so
+      // this line ran the fallback on every launch and said nothing. The name the directive
+      // carried is the one fact that separates the two, so it is the one printed.
+      const asked = d.agentName || '';
+      if (!asked) {
+        diag('launch-directive: directive carried NO agent name — falling back to',
+          NEW_AGENT_NAME, '(an older client sends none; a NEWER one that asked for a name and'
+          + ' landed here has lost it upstream of this machine)');
+      }
       const stored = require('./agent-identity-commit')
-        .commitRename(res.agentId, d.agentName || NEW_AGENT_NAME);
+        .commitRename(res.agentId, asked || NEW_AGENT_NAME);
       applied = stored && stored.ok ? stored.name : null;
+      // ⚠ **THE REFUSAL ARM, WHICH LOGGED NOTHING AT ALL.** `commitRename` answers
+      // `agent-self-ops.js › applyRenameTo`'s verdict, and a sanitizer refusal is `ok: false`
+      // — so an agent could run unnamed with no line anywhere, and `appliedAgentName` went
+      // back as null, which `channel-ops-launch.ts` renders by ECHOING THE REQUEST. The
+      // launcher then reads the name it asked for while the machine stored none: the one
+      // reading this whole change exists to make impossible.
+      // ⚠ STILL NOT A FAILED LAUNCH (the note above) — it is a line, not a verdict.
+      if (!applied) {
+        diag('launch-directive: the agent name was REFUSED by the store —',
+          (stored && stored.reason) || 'no reason given',
+          '— agent', res.agentId, 'is running UNNAMED');
+      }
     } catch (err) {
       diag('launch-directive: could not store the agent name —', err && err.message);
     }
