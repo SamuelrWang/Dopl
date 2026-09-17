@@ -28,25 +28,25 @@ const ACCOUNT_ROWS: SearchItem[] = [
     id: "ch-q4",
     kind: "channels",
     title: "q4-outbound",
-    subtitle: "You, Priya Shah, Marcus Webb",
+    // ⚠ THE CHANNEL'S DESCRIPTION — `channels.topic`, which is what the server
+    // sends as a channel row's subtitle (`server/repository-channel-rows.ts ›
+    // searchChannels`). It is NOT a roster: the row draws one line.
+    subtitle: "Outbound sequences and replies for the quarter",
     containerId: "ws-orig",
     containerName: "Original",
     channelId: "ch-q4",
-    avatarUrls: [
-      "https://avatars.dopl.app/priya-shah.png",
-      "https://avatars.dopl.app/marcus-webb.png",
-    ],
     updatedAt: new Date(Date.now() - 12 * 60_000).toISOString(),
   },
   {
     id: "ch-weekly",
     kind: "channels",
     title: "weekly-review",
-    subtitle: "You, Dana Okoro",
+    // ⚠ AND ONE WITH NO DESCRIPTION IS THE ORDINARY CASE — `topic` is NOT NULL
+    // DEFAULT `''`, so most channels ride out with no subtitle at all and the
+    // row omits the span.
     containerId: "ws-orig",
     containerName: "Original",
     channelId: "ch-weekly",
-    avatarUrls: ["https://avatars.dopl.app/dana-okoro.png"],
     updatedAt: new Date(Date.now() - 3 * 3_600_000).toISOString(),
   },
   {
@@ -88,7 +88,9 @@ const ACCOUNT_ROWS: SearchItem[] = [
     id: "th-221",
     kind: "threads",
     title: "Pricing page rewrite",
-    subtitle: "14 replies · q4-outbound",
+    // ⚠ THE PARENT CHANNEL, which is what `service-groups.ts › toItem` fills a
+    // thread's subtitle with — never a reply count and never "Direct message".
+    subtitle: "q4-outbound",
     containerId: "ws-orig",
     containerName: "Original",
     channelId: "ch-q4",
@@ -99,7 +101,7 @@ const ACCOUNT_ROWS: SearchItem[] = [
     id: "th-198",
     kind: "threads",
     title: "Desktop sign-out loop",
-    subtitle: "6 replies · weekly-review",
+    subtitle: "weekly-review",
     containerId: "ws-orig",
     containerName: "Original",
     channelId: "ch-weekly",

@@ -61,8 +61,23 @@ export interface SearchHit {
  */
 const SEARCHABLE_MESSAGE_KIND: ChannelMessageKind = "message";
 
-/** Channels the caller is in whose NAME matches. ⚠ Archived rooms are kept —
- *  a search is where somebody goes to find one. */
+/**
+ * Channels the caller is in whose NAME matches. ⚠ Archived rooms are kept —
+ * a search is where somebody goes to find one.
+ *
+ * 🔒 **`topic` IS THE CHANNEL'S DESCRIPTION AND IT IS THIS ROW'S SUBTITLE
+ * (Samuel, 2026-09-17:** *"For channels … it should be the name of the channel
+ * in black, and then to the right the description of the channel in gray
+ * italics."*). It is the column the channel header and the info panel already
+ * draw as the description — there is no `description` column on `channels`
+ * (`supabase/migrations/20260725120000_channels.sql`), and inventing a client
+ * join for one would be a second answer to the same question.
+ * ⚠ **NOT NULL DEFAULT `''`** (that migration; bounded by
+ * `20260731100000_channels_name_topic_bounds.sql`), so an EMPTY topic is the
+ * ordinary case and rides out as NO subtitle at all rather than as an empty
+ * one: the popup omits the span, and a `""` would leave the gap where a
+ * description goes.
+ */
 export async function searchChannels(
   channelIds: string[],
   query: string
@@ -71,7 +86,7 @@ export async function searchChannels(
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("channels")
-    .select("id, name, workspace_id, updated_at")
+    .select("id, name, topic, workspace_id, updated_at")
     .in("id", channelIds)
     // ⚠ A tombstoned channel is NOT-FOUND everywhere else; the reach read
     // already dropped it, and stating it twice costs nothing and survives a
@@ -81,18 +96,23 @@ export async function searchChannels(
     .order("updated_at", { ascending: false })
     .limit(SEARCH_GROUP_TOTAL_CAP);
   if (error) throw error;
-  return ((data ?? []) as ChannelNameRow[]).map((row) => ({
-    id: row.id,
-    title: row.name,
-    containerId: row.workspace_id,
-    channelId: row.id,
-    updatedAt: row.updated_at,
-  }));
+  return ((data ?? []) as ChannelNameRow[]).map((row) => {
+    const hit: SearchHit = {
+      id: row.id,
+      title: row.name,
+      containerId: row.workspace_id,
+      channelId: row.id,
+      updatedAt: row.updated_at,
+    };
+    if (row.topic !== "") hit.subtitle = row.topic;
+    return hit;
+  });
 }
 
 interface ChannelNameRow {
   id: string;
   name: string;
+  topic: string;
   workspace_id: string;
   updated_at: string;
 }

@@ -109,11 +109,38 @@ export function toGroup(
 }
 
 /**
+ * 🔒 **A DM'S STORED NAME IS A PLACEHOLDER, NOT A LABEL.**
+ * `channels/server/service-writes-direct.ts` inserts the literal below because
+ * the column is NOT NULL and the DM surfaces render the PEER instead
+ * (`channels/components/sidebar.tsx` resolves it per viewer). A search row has
+ * no roster to resolve against, so it says NOTHING rather than telling every
+ * reader that their thread lives in "Direct message" (Samuel, 2026-09-17, over
+ * the live card: THREADS rows all read that).
+ */
+const DIRECT_CHANNEL_PLACEHOLDER_NAME = "Direct message";
+
+/** The channel's name when it has one a reader would recognise. */
+function channelLabel(name: string | undefined): string | undefined {
+  if (name === undefined || name === DIRECT_CHANNEL_PLACEHOLDER_NAME) {
+    return undefined;
+  }
+  return name;
+}
+
+/**
  * ⚠ **THE SUBTITLE IS DECIDED HERE AND IN ONE PLACE.** A repository sets it only
  * when the label is a column it already read (a knowledge base's name, a
- * member's email); everything else is the CHANNEL it lives in, or — for a
- * container-level row with no channel — nothing, because `containerName` already
- * rides beside it and saying the same word twice is not a subtitle.
+ * member's email, a channel's TOPIC); everything else is the CHANNEL it lives
+ * in, or — for a container-level row with no channel — nothing, because
+ * `containerName` already rides beside it and saying the same word twice is not
+ * a subtitle.
+ *
+ * 🔒 **AND A CHANNEL HIT TAKES NO FALLBACK AT ALL (Samuel, 2026-09-17:** *"For
+ * channels it like repeats the name of the channel in like 3 places it doesn't
+ * make any sense."*). The generic arm resolves `channelById` for the hit's own
+ * `channelId`, which for a CHANNEL row is the row itself — so a channel with no
+ * topic was handed its own name as its subtitle and drew it twice. A channel's
+ * subtitle is its description or nothing.
  */
 function toItem(
   kind: SearchGroupKind,
@@ -136,7 +163,10 @@ function toItem(
     containerId: hit.containerId,
   };
   const subtitle =
-    hit.subtitle ?? (hit.title !== "" ? channel?.name : containerName);
+    kind === "channels"
+      ? hit.subtitle
+      : (hit.subtitle ??
+        (hit.title !== "" ? channelLabel(channel?.name) : containerName));
   if (subtitle !== undefined) item.subtitle = subtitle;
   const snippet = buildSnippet(hit.body, pattern);
   if (snippet !== undefined) item.snippet = snippet;
