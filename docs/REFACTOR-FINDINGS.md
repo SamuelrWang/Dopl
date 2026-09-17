@@ -4522,7 +4522,30 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   in passing.
 - Severity: **misleading affordance, not a widened fence.** Every write named above is refused
   server-side today.
-  Status: **open.**
+- ✅ **RESOLVED 2026-09-17 in `5d9f215d`** (Samuel: proceed; wave 0b of the workspace-parity
+  roadmap, `docs/specs/workspace-parity/00-MASTER.md` §5 Wave 0).
+  - **The field.** `home/types.ts › HomeChannel.role` — the caller's own
+    `workspace_members.role`, caller-relative like `unread` / `favoritedAt`, in the SAME role
+    vocabulary the workspace uses (`workspaces/types.ts › Role`, read through `meetsMinRole`;
+    no second predicate and no boolean pair, because the two floors below are different).
+    Derived server-side from the membership row by
+    `home/server/repository-containers.ts › listMyContainerRoles` — ONE bounded query in the
+    tier that already reads peers, never a client param.
+  - **The hardcode is gone.** `pages/home/knowledge-panels.tsx › containerTarget` takes the real
+    role, so the base settings modal stops believing every reader is an owner.
+  - **The four controls, each mirroring the floor the server already applies:** Add person
+    (`member`+, `service-writes.ts › mintContainerLink`), the Knowledge face's shared create
+    (`POST /api/knowledge/bases`, member+), the Agents face's shared create
+    (`POST /api/agent-templates`, member+) — all three HIDDEN below the floor rather than
+    disabled — and the header's click-to-edit, which becomes honest because
+    `relationship-record.tsx` now passes the role the surface was defaulting to `"member"`.
+  - 🔒 **THE CONTESTED FALLBACK WAS RULED DOWN.** `types.ts › EMPTY_ROLE` is `guest` (rank 0):
+    a payload cached by the previous bundle carries no key, and a member loses two buttons for
+    one paint rather than the surface asserting a permission nobody read. Pinned by
+    `pages/home/home-caller-role.test.tsx`, whose stale fixtures DELETE the key (§8).
+  - ⚠ **NO MEMBER MANAGEMENT WAS BUILT HERE** — that is R-09 / Wave 7, and it was blocked on
+    this field rather than part of it.
+  Status: **RESOLVED.**
 
 ### F-344 — the tiered wake governs DORMANT sessions only, so tier 3's "only one agent answers" is not true of RUNNING ones (2026-08-28)
 

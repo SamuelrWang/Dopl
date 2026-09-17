@@ -74,7 +74,8 @@ spend, a range switcher) is the one place the home space is genuinely ahead in *
 
 **5. Nothing here is safe to start today — gates before ports.** The **root lint is red** at HEAD
 (F-688, sixteen unexempted files over the 500-line cap), **/home cannot tell a member from a guest**
-inside a container (F-343, `containerTarget.role` hardcoded `"owner"`), and a ruling that changes
+inside a container (F-343, `containerTarget.role` hardcoded `"owner"` — ✅ **fixed 2026-09-17 in
+`5d9f215d`**, after this capture was taken), and a ruling that changes
 **workspace** behaviour is recorded but unexecuted (F-513: three sites still gate on the kind —
 `mcp-server/src/factory.ts › lockedTo`, `tools/confirm-token.ts › sharedContainer`,
 `workspaces/server/shared-publish.ts › assertSharedPublishAcknowledged` — while a fourth spelling,
@@ -1095,7 +1096,7 @@ next five waves being re-audited in six weeks.
 | Item | Source |
 |---|---|
 | **F-688** — sixteen unexempted files over the 500-line cap; the **root lint is RED at HEAD**. A parity branch starts non-green today | 06 §C.0 |
-| **F-343** — `HomeChannel` carries no caller role; `containerTarget.role` is hardcoded `"owner"`; two live buttons 403. **Every role-shaped affordance on /home is a guess until this lands** | 04 §0.6-ii |
+| ✅ **F-343 — DONE 2026-09-17 in `5d9f215d`.** `HomeChannel.role` carries the caller's membership role per container; the hardcoded `"owner"` is gone and four /home controls gate on it. The rule is INVARIANTS §4A; the finding carries the shape | 04 §0.6-ii |
 | **F-513** — execute the ruling (needs **R-08**): three copies of `kind === 'link' && memberCount !== 1` become one member-count question | 04 §E-11 |
 | **F-712** — `artifactSpans` counts off a PostgREST-capped page; silently wrong above ~20 members × 50 artifacts. **Blocks Wave 2** | 02 A.2 R12 |
 | **The slot-replacing-host audit** — walk every `slots.*` host and assert nothing the surface already minted is dropped. Three capabilities have been lost this way in three weeks | 06 "The one hazard…" |
