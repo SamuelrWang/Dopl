@@ -1,4 +1,4 @@
-import { useParams, useSearchParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import { ChannelsCore } from "@/features/channels/components/channels-core";
 import { PageError } from "#/components/page-states";
 import { RouterLink } from "#/components/app-shell";
@@ -63,6 +63,10 @@ import { ChannelsSkeleton } from "./channels-skeleton";
  */
 export default function ChannelsPage() {
   const { access, isPending, error, refetch } = useWorkspaceAccess();
+  // ⚠ THE SEARCH POPUP'S ONE ROUTER DEPENDENCY, and it is read HERE for the same
+  // reason `:channelId` is: the shared tree is router-free by construction, so a
+  // row that names another page of this workspace comes back out as a path.
+  const navigate = useNavigate();
   // Absent on the index row, which is the "no channel named" case the core
   // already answers with its own first-row fallback.
   const { channelId } = useParams<{ channelId: string }>();
@@ -88,6 +92,7 @@ export default function ChannelsPage() {
       Link={RouterLink}
       initialChannelId={channelId ?? null}
       initialThreadId={threadId}
+      onNavigatePath={(path) => navigate(path)}
     />
   );
 }

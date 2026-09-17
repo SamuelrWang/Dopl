@@ -81,50 +81,32 @@ describe("the list column's THREE WELLS", () => {
   });
 
   /**
-   * 🔒 **A SEARCH THAT MATCHES MUST SHOW WHAT IT MATCHED** (2026-09-16, found reviewing
-   * `dce0030a` before push).
+   * 🔒 **NEITHER OF THE TWO SEARCH CASES THAT STOOD HERE SURVIVES (2026-09-17)** — "a
+   * search whose only hit is filed under CLOSED `Earlier` still shows it" (2026-09-16) and
+   * "clearing the search re-closes `Earlier`". **They described `forceOpen`, and `forceOpen`
+   * is DELETED with the narrowing it existed for** (Samuel's popup ruling: *"during search …
+   * it like removes channel on the left sidebar"*). A query cannot empty this column any
+   * more, so a hit it could hide behind a closed well is not a state the page has.
    *
-   * ⚠ **THE COLUMN WENT BLANK AND SAID NOTHING.** `Earlier` is closed by default and a
-   * collapsed well UNMOUNTS its rows (§5), so a query whose only hit was filed there rendered
-   * three empty boxes — and the empty sentence did not draw either, because `rows.length > 0`
-   * is true: neither "No matches" nor "No channels yet" is the honest answer when there IS a
-   * match. The operator types a name they can see in the list and the list empties.
-   * ⚠ **THE FIX DOES NOT TOUCH THE `Earlier`-IS-CLOSED DEFAULT**, which `channel-wells.ts`
-   * flags as the one part Samuel did not state: `WellsColumn`'s `forceOpen` opens the non-empty
-   * wells while the list is NARROWED and writes nothing to the stored state.
+   * ⚠ **WHAT REPLACES THEM IS THE OPPOSITE ASSERTION**, and it lives in `index.test.tsx`
+   * (`typing leaves the list alone`): the wells keep the operator's own open/closed shape
+   * while a query runs, because the query no longer touches them.
    */
-  it("🔒 a search whose only hit is filed under CLOSED Earlier still shows it", async () => {
+  it("🔒 typing does not open, close or empty a well", async () => {
     apiRequest.mockImplementation(withHome(SPREAD));
     renderHome();
     await openChannels();
     await screen.findByRole("heading", { name: "Recent" });
+    // `Earlier` is closed, so its row is unmounted — and a query does not change that.
     expect(screen.queryByText("Cold Storage")).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Search"), {
-      target: { value: "Cold" },
-    });
-
-    expect(await screen.findByText("Cold Storage")).toBeInTheDocument();
-    // ⚠ AND NO SENTENCE BESIDE IT — a match is not "No matches".
-    expect(screen.queryByText("No matches")).not.toBeInTheDocument();
-  });
-
-  /** ⚠ **AND CLEARING THE QUERY RESTORES THE OPERATOR'S OWN SHAPE** — `forceOpen` is not a
-   *  write, so `Earlier` closes again rather than staying open from a search. */
-  it("🔒 clearing the search re-closes Earlier — forceOpen never persists", async () => {
-    apiRequest.mockImplementation(withHome(SPREAD));
-    renderHome();
-    await openChannels();
-    await screen.findByRole("heading", { name: "Recent" });
-
     const search = screen.getByLabelText("Search");
+    fireEvent.focus(search);
     fireEvent.change(search, { target: { value: "Cold" } });
-    await screen.findByText("Cold Storage");
-    fireEvent.change(search, { target: { value: "" } });
 
-    await waitFor(() =>
-      expect(screen.queryByText("Cold Storage")).not.toBeInTheDocument()
-    );
+    expect(screen.queryByText("Cold Storage")).not.toBeInTheDocument();
+    expect(within(screen.getByRole("heading", { name: "Recent" }).closest("section")!)
+      .getByText("Priya Shah")).toBeInTheDocument();
   });
 
   /**

@@ -1,39 +1,59 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Search } from "lucide-react";
+import { SearchPopup } from "@/features/search/components/search-popup";
+import { apiSearchFetcher } from "@/features/search/search-client";
+import type { SearchItem } from "@/features/search/contracts";
 
 /**
  * Home's search — the landing nav's pill at app scale (kit: `.search-expand*`),
- * **ALWAYS OPEN** (Samuel, 2026-09-13).
+ * **ALWAYS OPEN** (Samuel, 2026-09-13), and **THE SEARCH POPUP'S HOST SINCE
+ * 2026-09-17**.
  *
- * ⚠ **THE COLLAPSE IS GONE FROM THIS COMPONENT, NOT FROM THE KIT.** There is no
- * `open` state, no toggle button and no grow animation here; `.search-expand`
- * still has a 36px closed face, which the landing banner's chrome renders
- * (`marketing/…/banner-demo/demo-home-chrome.tsx`). Pinned by `home-search.test.ts`.
+ * 🔒 **TYPING NO LONGER NARROWS THE CHANNEL LIST (Samuel, 2026-09-17:** *"right
+ * now, during search, it just filters by channel name, and it like removes
+ * channel on the left sidebar. that doesnt make sense, it should be a pop up
+ * like this."*). The page's `visibleRows` narrowing and the list's "No matches"
+ * line are DELETED, not disarmed; the left column is what it always is and the
+ * answer arrives in a card under this pill.
  *
- * ⚠ THE QUERY IS THE PAGE'S, not this component's. The page filters the
- * relationship rows AND resolves the record pane's selection from the same
- * filtered set — a query private to the search box would let the pane keep a
- * row the list had already dropped.
+ * ⚠ **THE QUERY IS STILL THE PAGE'S**, though nothing but this pill reads it
+ * now: the field is a page control and the page owns its state, the same as the
+ * face and the selection. Moving it in here would put one control's state in two
+ * places the day anything else wants to read it.
  *
- * ⚠ **ESCAPE CLEARS AND BLURS; NOTHING ELSE CLEARS.** With no collapse there is
- * no state a stale query could hide behind, so the old blur-clears-an-empty-field
- * rule went with the toggle — clicking away now keeps what was typed, which is
- * what a permanently visible field should do.
+ * ⚠ **THE POPUP IS A CHILD OF `.search-expand`, WHICH IS `position: relative`**
+ * — that is what puts the card's right edge on the pill's with a plain
+ * `right-0`, rather than on a measurement.
+ *
+ * ⚠ **ESCAPE CLEARS AND BLURS** — here for a closed popup, and in the popup for
+ * an open one (its handler is on the WINDOW, because the caret never leaves this
+ * input). Both land on the same `close`.
  *
  * ⚠ **A PAGE CONTROL AT ITS OWN FIXED WIDTH (Samuel, 2026-09-15: "And move the
- * search bar back").** It spent one revision stretched across the list column;
- * the `[data-fill]` variant that needed is DELETED from both kit copies rather
- * than left unused — an orphan rule in a hand-mirrored stylesheet is the drift
- * `home-search.test.ts` was written for. Put it back only with a caller.
+ * search bar back").** The `[data-fill]` variant is DELETED from both kit
+ * copies; put it back only with a caller.
  */
 export function HomeSearch({
   query,
   onQueryChange,
+  onNavigate,
+  userId,
 }: {
   query: string;
   onQueryChange: (next: string) => void;
+  /** Open the thing a result row names — the PAGE's job (`index.tsx`), because
+   *  a /home jump is a selection plus a face, never a route. */
+  onNavigate: (item: SearchItem) => void;
+  userId?: string;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [focused, setFocused] = useState(false);
+
+  const close = () => {
+    onQueryChange("");
+    setFocused(false);
+    inputRef.current?.blur();
+  };
 
   // ⚠ ALWAYS EXPANDED, NO GROW ANIMATION (Samuel, 2026-09-13: "remove the
   // expanding animation, just have the bar always be expanded fixed. Instead of
@@ -56,15 +76,34 @@ export function HomeSearch({
           placeholder="Search…"
           aria-label="Search"
           value={query}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           onChange={(event) => onQueryChange(event.target.value)}
           onKeyDown={(event) => {
             if (event.key !== "Escape") return;
             event.preventDefault();
-            onQueryChange("");
-            inputRef.current?.blur();
+            close();
           }}
         />
       </div>
+      <SearchPopup
+        query={query}
+        focused={focused}
+        scope="account"
+        onNavigate={onNavigate}
+        onClose={close}
+        onQueryChange={(next) => {
+          onQueryChange(next);
+          inputRef.current?.focus();
+        }}
+        userId={userId}
+        /* ⚠ **THE REAL ENDPOINT SINCE 2026-09-17**, when `feat/search-api`
+           merged — `GET /api/search?scope=account`. It spent one afternoon on
+           `search-fixtures.ts › fixtureSearchFetcher` so the card could be
+           reviewed before the route existed; that table is TEST AND DEV DATA
+           now, and swapping back is the same one import. */
+        fetcher={apiSearchFetcher}
+      />
     </div>
   );
 }

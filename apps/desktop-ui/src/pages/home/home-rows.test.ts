@@ -12,7 +12,6 @@ import {
   hasLinkOut,
   homeRows,
   linkGrantLabel,
-  visibleRows,
 } from "./home-rows";
 
 /**
@@ -77,32 +76,31 @@ describe("hasLinkOut", () => {
   });
 });
 
-describe("visibleRows — the SEARCH narrowing, and nothing else", () => {
-  const rows = homeRows({ channels: [PLAIN, INVITED], pendingLinks: [LINK] });
-
-  it("shows EVERY row on an empty query — there is no filter axis left", () => {
-    // ⚠ 2026-08-27, Samuel: the "All | Links" segmented filter is DELETED —
-    // links are no longer a filterable state. A channel carrying an open
-    // invitation and a legacy unbound link fold into this one list exactly like
-    // a plain channel does; only the row's own chip tells them apart.
-    expect(
-      visibleRows(rows, "")
-        .map((row) => row.id)
-        .sort()
-    ).toEqual(["link:link-legacy", "rel:ws-1", "rel:ws-2"]);
-  });
-
-  it("narrows by query across BOTH row kinds", () => {
-    // The link matches on its URL, the channels on their name.
-    expect(visibleRows(rows, "legacy1").map((row) => row.id)).toEqual([
-      "link:link-legacy",
-    ]);
-    expect(visibleRows(rows, "fundraise")).toHaveLength(2);
-    expect(visibleRows(rows, "nobody")).toHaveLength(0);
-  });
-
-  it("is trimmed and case-insensitive", () => {
-    expect(visibleRows(rows, "  LEGACY1 ")).toHaveLength(1);
+/**
+ * 🔒 **THE SEARCH NARROWING IS GONE, AND THIS IS THE PIN THAT SAYS SO
+ * (2026-09-17).** `visibleRows` and its `searchText` are DELETED — Samuel:
+ * *"during search … it like removes channel on the left sidebar. that doesnt
+ * make sense, it should be a pop up like this."* The three cases that stood here
+ * (empty query shows all, narrows across both row kinds, trimmed and
+ * case-insensitive) went with the function they described.
+ *
+ * ⚠ **A SOURCE SCAN, because the absence is the assertion** and there is no
+ * symbol left to call. It fails the day this page grows a second answer to a
+ * query — which is exactly how the deleted filter and the popup would start
+ * disagreeing.
+ */
+describe("🔒 this page holds NO search narrowing", () => {
+  it("no `visibleRows`, no `searchText`, anywhere under pages/home", () => {
+    const dir = import.meta.dirname;
+    const offenders = readdirSync(dir)
+      .filter((name) => name.endsWith(".ts") || name.endsWith(".tsx"))
+      .filter((name) => name !== "home-rows.test.ts")
+      .filter((name) =>
+        /\b(visibleRows|searchText)\s*\(/.test(
+          readFileSync(join(dir, name), "utf8").replace(/\/\*[\s\S]*?\*\//g, "")
+        )
+      );
+    expect(offenders).toEqual([]);
   });
 });
 
@@ -226,20 +224,6 @@ describe("channelTitle — the CHANNEL's name, never the roster's", () => {
   // ignores both, so the upgrade cannot flash a peer-derived name either.
   it("ignores the roster on a STALE-CACHE row too", () => {
     expect(channelTitle(staleCached({ peer: GRACE }))).toBe("Q3 Fundraise");
-  });
-});
-
-describe("search reaches EVERY member, not just the first", () => {
-  it("finds a four-person channel by the name of somebody buried in it", () => {
-    // ⚠ THE BUG THIS PINS: search read `peer` alone, which was the whole roster
-    // only while the two-member cap held. Querying "Omar" would have returned
-    // "No matches" over a channel he is in, and the operator has no way to tell
-    // that from the channel not existing.
-    const crowded = channel({ peers: [GRACE, PRIYA, DANA, OMAR], peer: GRACE });
-    const rows = homeRows({ channels: [crowded], pendingLinks: [] });
-    expect(visibleRows(rows, "omar")).toHaveLength(1);
-    expect(visibleRows(rows, "dana@x.dev")).toHaveLength(1);
-    expect(visibleRows(rows, "nobody")).toHaveLength(0);
   });
 });
 

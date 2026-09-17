@@ -48,6 +48,7 @@ const DIRECT = [
 
 function renderSidebar(over: Partial<React.ComponentProps<typeof ChannelsSidebar>> = {}) {
   const props: React.ComponentProps<typeof ChannelsSidebar> = {
+    workspaceId: "ws-1",
     rooms: ROOMS,
     direct: DIRECT,
     threads: [],
@@ -60,6 +61,7 @@ function renderSidebar(over: Partial<React.ComponentProps<typeof ChannelsSidebar
     canCreate: true,
     onCreateChannel: vi.fn(),
     onCreateDirect: vi.fn(),
+    onSearchNavigate: vi.fn(),
     ...over,
   };
   render(<ChannelsSidebar {...props} />);

@@ -228,51 +228,15 @@ describe("home page", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("searching filters the list by name and email", async () => {
-    renderHome();
-    await openChannels();
-
-    // 🔒 ALWAYS EXPANDED (Samuel, 2026-09-13): no toggle, the field is reachable
-    // at once and reads "Search…".
-    expect(screen.queryByRole("button", { name: "Search" })).toBeNull();
-    expect(screen.getByLabelText("Search")).toHaveAttribute("placeholder", "Search…");
-    // 🔒 AND IT IS A PAGE CONTROL, NOT THE COLUMN'S HEAD (Samuel, 2026-09-15:
-    // "move the search bar back") — it spent one revision in the list-width cell.
-    expect(screen.getByLabelText("Search").closest(LIST_CELL)).toBeNull();
-
-    // ⚠ SEARCH STILL REACHES MEMBERS (2026-09-01, deliberately): finding a
-    // channel by who is in it is a QUERY, not a presentation of identity, and
-    // the row that comes back is still titled by the channel.
-    fireEvent.change(screen.getByLabelText("Search"), {
-      target: { value: "shahco" },
-    });
-    expect(screen.getAllByText("Priya Shah").length).toBeGreaterThan(0);
-    expect(screen.queryByText("Link out")).not.toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText("Search"), {
-      target: { value: "nobody" },
-    });
-    // ⚠ BOTH PANES. The list says "No matches" and so does the record — the
-    // pane resolves its selection from the same filtered set the list renders,
-    // so it can no longer sit on a person the list has already dropped.
-    // ⚠ `waitFor`, not a synchronous read: the pane is a `Crossfade`, so the
-    // outgoing record stays mounted for one 150ms fade after the token moves to
-    // the empty one. Asserting immediately measures the fade, not the answer.
-    await waitFor(() =>
-      expect(screen.getAllByText("No matches")).toHaveLength(2)
-    );
-    expect(screen.queryByText("Priya Shah")).not.toBeInTheDocument();
-  });
-
   /**
-   * 🔒 **ZERO ROWS HAS TWO SENTENCES AND THE LIST SAID THE WRONG ONE UNTIL
-   * 2026-09-10** (the new-user flow). Its empty line was an unconditional "No
-   * matches", so a person with no channels yet — every account on its first day —
-   * read a report about a filter they had never applied. `home-panes.tsx` already
-   * told the two apart for the RECORD PANE; the list now mirrors it, keyed on the
-   * same value (the UNNARROWED count), so the two halves cannot disagree.
+   * 🔒 **ZERO ROWS HAS ONE SENTENCE AGAIN (2026-09-17).** It had two — "No
+   * matches" and "No channels yet" — and the list said the wrong one to every
+   * new account until 2026-09-10, which is what bought the distinction. **The
+   * search narrowing is now deleted** (Samuel's popup ruling), so there is no
+   * filter for a sentence to report on: "No matches" is gone from both halves
+   * and this case pins that it cannot come back under a typed query.
    */
-  it("🔒 says No channels yet with nothing to show, and No matches only under a filter", async () => {
+  it("🔒 says No channels yet with nothing to show — and a typed query never says No matches", async () => {
     apiRequest.mockImplementation(
       (path: string, opts: BridgeRequestOpts = {}) =>
         path.split("?")[0] === "/api/home/channels"
@@ -291,9 +255,9 @@ describe("home page", () => {
     );
     expect(screen.queryByText("No matches")).not.toBeInTheDocument();
 
-    // 🔒 AND A TYPED QUERY DOES NOT CHANGE IT. The test is the TOTAL, not "is a
-    // query active": with no channels at all there is nothing a filter could have
-    // excluded, so "No matches" would still be a false report.
+    // 🔒 AND A TYPED QUERY DOES NOT CHANGE IT — it cannot: nothing on this page
+    // narrows this list any more.
+    fireEvent.focus(screen.getByLabelText("Search"));
     fireEvent.change(screen.getByLabelText("Search"), {
       target: { value: "nobody" },
     });

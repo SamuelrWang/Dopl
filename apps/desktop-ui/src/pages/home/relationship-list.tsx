@@ -63,25 +63,19 @@ import {
  * TREE AND STILL IS.** These wells are not folders: nothing is filed by hand
  * except a pin and nothing nests.
  *
- * 🔒 **ZERO ROWS HAS TWO CAUSES AND THEY ARE NOT THE SAME SENTENCE (2026-09-10)**
- * — nothing to show, or nothing MATCHING to show. `home-panes.tsx` draws the same
- * distinction for the RECORD PANE, keyed on the same value, so the two surfaces
- * cannot disagree.
+ * 🔒 **ZERO ROWS HAS ONE CAUSE AGAIN (2026-09-17).** It had two — nothing to
+ * show, or nothing MATCHING to show — and the second is DELETED with the search
+ * narrowing itself (Samuel's popup ruling; `index.tsx` carries it). This column
+ * shows every row the operator has, always, and the only sentence it can owe is
+ * "No channels yet". `home-panes.tsx` lost the same twin in the same change.
  */
 export function RelationshipList({
   rows,
-  totalRows,
   selectedId,
   onSelect,
 }: {
-  /** Already narrowed — the page's `visibleRows`. */
+  /** Every row the operator has — ⚠ NOT narrowed by anything since 2026-09-17. */
   rows: HomeRow[];
-  /** ⚠ The UNNARROWED count (`homeRows`), and it is what separates the two empty
-   *  sentences. Deliberately the TOTAL rather than "is a query active": with no
-   *  channels at all, typing into search still means "No channels yet" — there is
-   *  nothing for a filter to have excluded. This is `home-panes.tsx`'s own test
-   *  (`rows.length > 0`), so the two surfaces cannot disagree. */
-  totalRows: number;
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
@@ -92,9 +86,8 @@ export function RelationshipList({
   // is what tells it — `use-home-channel-sync.ts` carries the bug it fixes and why
   // it lives here.
   useHomeChannelSync();
-  /** ⚠ THE NARROWED ROWS ARE FILED, NEVER RE-ORDERED — `visibleRows` has already
-   *  run (the page owns it, see above) and `homeRows`' newest-first order survives
-   *  inside each well, because the grouping pass sorts nothing. */
+  /** ⚠ THE ROWS ARE FILED, NEVER RE-ORDERED — `homeRows`' newest-first order
+   *  survives inside each well, because the grouping pass sorts nothing. */
   const filed = useMemo<WellItem<HomeChannelWellId>[]>(
     () =>
       rows.map((row) => ({
@@ -139,19 +132,15 @@ export function RelationshipList({
           // this column's STRUCTURE: a **Pinned** box you can see is how you learn
           // there is a pin.
           showEmpty
-          // 🔒 **A SEARCH THAT MATCHES MUST SHOW WHAT IT MATCHED** (2026-09-16). `Earlier` is
-          // closed by default, so a query whose only hit was filed there rendered an EMPTY
-          // column with no sentence under it — `rows.length > 0`, so neither "No matches" nor
-          // "No channels yet" drew, and the matched row was unmounted behind the closed well.
-          // ⚠ **DERIVED, NOT THREADED**: `rows.length < totalRows` IS "the page narrowed this
-          // list", and both numbers are already props — see `totalRows`' own note. It leaves the
-          // `Earlier`-is-closed default alone, which is the one part of this Samuel did not
-          // state.
-          forceOpen={rows.length < totalRows}
+          // ⚠ **`forceOpen` STOOD HERE AND IS DELETED WITH THE NARROWING
+          // (2026-09-17).** It existed for ONE case — a query whose only hit was
+          // filed in the default-closed `Earlier` well (2026-09-16) — and no
+          // query narrows this column any more, so the prop had no live reader.
+          // `Earlier`-is-closed is the plain default again.
         />
         {rows.length === 0 && (
           <p className="px-3 py-6 text-center text-caption text-text-muted">
-            {totalRows > 0 ? "No matches" : "No channels yet"}
+            No channels yet
           </p>
         )}
       </div>

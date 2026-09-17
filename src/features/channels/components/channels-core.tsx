@@ -13,6 +13,7 @@ import { ChannelsSidebar } from "./sidebar";
 import { ChannelSurface } from "./channel-surface";
 import { useChannelSurfaceData } from "./channel-surface-data";
 import type { Channel } from "../types";
+import type { SearchItem } from "@/features/search/contracts";
 // Kept on one line each: this file has repeatedly sat within a handful of lines
 // of the 500-line cap, and CROSSED it on 2026-08-20 (re-measure, do not quote).
 import { splitChannels } from "./view-model";
@@ -51,6 +52,16 @@ export interface ChannelsCoreProps {
    * channel's list falls back to the channel view rather than an empty thread.
    */
   initialThreadId?: string | null;
+  /**
+   * WHERE A SEARCH-POPUP ROW GOES WHEN IT IS NOT IN THIS PAGE (2026-09-17).
+   *
+   * ⚠ **A PATH, NOT A ROUTER.** This tree is router-free by construction (see
+   * `Link` above), and the popup's Knowledge / Agents / Members / Skills / Chats
+   * rows NAME a different PAGE of this workspace — so the host navigates and this
+   * file only says where. A host that passes nothing simply does not move for
+   * those rows; the channel, thread and message rows are answered here.
+   */
+  onNavigatePath?: (path: string) => void;
 }
 
 /**
@@ -135,6 +146,7 @@ export function ChannelsCore({
   Link,
   initialChannelId = null,
   initialThreadId = null,
+  onNavigatePath,
 }: ChannelsCoreProps) {
   // WHAT THIS PAGE HAS OPEN — `use-channels-selection.ts`, including the
   // render-time re-application of a routed `initialChannelId` (a second
@@ -146,6 +158,29 @@ export function ChannelsCore({
     workspaceId,
     false
   );
+
+  /**
+   * OPENING WHAT A SEARCH-POPUP ROW NAMES (2026-09-17).
+   *
+   * ⚠ **THE THREE CONVERSATION KINDS ARE ANSWERED WITH THE SELECTION THIS PAGE
+   * ALREADY OWNS** — `sel.selectChannel` / `sel.openThread` — so a search hit and
+   * a sidebar click land through one mechanism. Everything else is another PAGE
+   * and goes out through the host's `onNavigatePath`.
+   *
+   * ⚠ **`item.seq` IS NOT HONOURED YET (F-714).** Scroll-to-message lives inside
+   * the surface (`channel-surface.tsx › jumpToSeq`) and is reachable only from a
+   * citation pill or a mention; a message row therefore opens its CHANNEL (its
+   * thread when it has one) and leaves the transcript where the surface puts it.
+   */
+  const openSearchHit = (item: SearchItem) => {
+    if (item.kind === "knowledge") return onNavigatePath?.(`/${workspaceSlug}/knowledge`);
+    if (item.kind === "agentTemplates") return onNavigatePath?.(`/${workspaceSlug}/agents`);
+    if (item.kind === "members") return onNavigatePath?.(`/${workspaceSlug}/members`);
+    if (item.kind === "skills") return onNavigatePath?.(`/${workspaceSlug}/skills`);
+    if (item.kind === "chats") return onNavigatePath?.(`/${workspaceSlug}/chats`);
+    if (item.channelId) sel.selectChannel(item.channelId);
+    if (item.threadId) sel.openThread(item.threadId);
+  };
 
   // Explicit pick that still exists wins, else the first row — the same rule the
   // deleted `channels-view-core.tsx` used, so a deleted channel cannot strand the pane.
@@ -198,6 +233,7 @@ export function ChannelsCore({
     // clips it to the page card's radius on the way in and out.
     <div className="page-float relative flex antialiased">
       <ChannelsSidebar
+        workspaceId={workspaceId}
         rooms={rooms}
         direct={direct}
         threads={data.treeThreads}
@@ -210,6 +246,7 @@ export function ChannelsCore({
         canCreate={canCreate}
         onCreateChannel={() => sel.setCreateOpen(true)}
         onCreateDirect={() => sel.setDirectOpen(true)}
+        onSearchNavigate={openSearchHit}
       />
 
       {channel ? (

@@ -26,6 +26,9 @@ interface SearchFieldProps {
   size?: keyof typeof SIZE;
   autoFocus?: boolean;
   onFocus?: () => void;
+  /** ⚠ Added 2026-09-17 for the SEARCH POPUP's hosts: the card is open while the
+   *  field has focus, so a host needs both edges of that state. */
+  onBlur?: () => void;
   /** Renders a clear (×) affordance while there's a value. */
   onClear?: () => void;
   /** Layout-only (margins, width) — recipes stay in the kit. */
@@ -43,6 +46,7 @@ export function SearchField({
   size = "md",
   autoFocus,
   onFocus,
+  onBlur,
   onClear,
   className,
 }: SearchFieldProps) {
@@ -60,6 +64,7 @@ export function SearchField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onFocus={onFocus}
+        onBlur={onBlur}
         placeholder={placeholder}
         autoFocus={autoFocus}
         spellCheck={false}

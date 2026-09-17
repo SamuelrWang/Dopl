@@ -1,4 +1,5 @@
 import { SegmentedControl } from "@/shared/ui/segmented-control";
+import type { SearchItem } from "@/features/search/contracts";
 import type { BootPayload } from "#/pages/boot/use-boot-state";
 import { HomeSettingsControl } from "./home-settings-control";
 import { HomeSearch } from "./home-search";
@@ -21,6 +22,7 @@ export function HomeHeader({
   onTabChange,
   query,
   onQueryChange,
+  onSearchNavigate,
   onNewChannel,
 }: {
   identity: BootPayload;
@@ -29,6 +31,8 @@ export function HomeHeader({
   onTabChange: (next: HomeTab) => void;
   query: string;
   onQueryChange: (next: string) => void;
+  /** A search-popup row was taken — the page opens what it names. */
+  onSearchNavigate: (item: SearchItem) => void;
   onNewChannel: () => void;
 }) {
   return (
@@ -87,7 +91,15 @@ export function HomeHeader({
             search bar back")** — a PAGE control at its own fixed width, which is
             what its kit face is built for. The `[data-fill]` variant the one
             revision in the list column needed left the kit with it. */}
-        <HomeSearch query={query} onQueryChange={onQueryChange} />
+        {/* ⚠ **AND IT HOSTS THE SEARCH POPUP SINCE 2026-09-17** — the card
+            hangs off the pill's own relative slot, so it is inside this group
+            and right-aligned to the pill by construction. */}
+        <HomeSearch
+          query={query}
+          onQueryChange={onQueryChange}
+          onNavigate={onSearchNavigate}
+          userId={identity.userId}
+        />
         {/* ⚠ **THE OPERATOR'S CONTROL IS LAST IN THE ROW, A BLACK PILL READING
             "Profile" SINCE 2026-09-15 (Samuel: "turn the profile button to be
             black, and have it say Profile")** — and it is the ONLY way into

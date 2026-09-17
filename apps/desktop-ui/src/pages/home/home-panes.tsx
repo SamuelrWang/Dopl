@@ -1,4 +1,4 @@
-import { Link2, Search } from "lucide-react";
+import { Link2 } from "lucide-react";
 import { EmptyState } from "@/shared/ui/empty-state";
 import type { BootPayload } from "#/pages/boot/use-boot-state";
 import { RelationshipRecord } from "./relationship-record";
@@ -64,9 +64,9 @@ export function paneToken(tab: HomeTab, selectedId: string | null): string {
 export interface HomePaneProps {
   /** The token currently ON SCREEN — which lags the selection by one fade. */
   shown: string;
-  /** Every row, narrowed and unnarrowed: the two empty sentences differ. */
+  /** Every row the operator has. ⚠ **ONE LIST SINCE 2026-09-17** — the page's
+   *  narrowed `visible` twin went with the search filter (`index.tsx`). */
   rows: HomeRow[];
-  visible: HomeRow[];
   identity: BootPayload;
   jump: ActivityJump;
   /** The selected channel was deleted — the page drops the selection and
@@ -90,7 +90,6 @@ export interface HomePaneProps {
 export function HomePane({
   shown,
   rows,
-  visible,
   identity,
   jump,
   onChannelDeleted,
@@ -100,7 +99,7 @@ export function HomePane({
    *  lets the outgoing channel's panels finish their fade against their own
    *  data. */
   const rowFor = (id: string) =>
-    visible.find((candidate) => candidate.id === id) ?? null;
+    rows.find((candidate) => candidate.id === id) ?? null;
 
   if (shown === OVERVIEW_PANE) {
     // ⚠ NO ROW IS READ OUT OF THIS TOKEN and there is none in it — the face is
@@ -198,17 +197,20 @@ export function HomePane({
   }
   const row = rowFor(shown);
   if (row === null) {
-    // ⚠ Two reasons for an empty pane, and they are not the same sentence:
-    // nothing to show, or nothing MATCHING to show.
-    return rows.length > 0 ? (
-      <EmptyState icon={Search} title="No matches" />
-    ) : (
+    // 🔒 **ONE SENTENCE SINCE 2026-09-17.** There were two — "No matches" over
+    // the SEARCH narrowing, and "No channels yet" over an empty account — and
+    // the first is DELETED with the narrowing itself (Samuel's popup ruling;
+    // `index.tsx` carries it). A token with no row now means either that there
+    // are no channels, or that the selected one was deleted and the crossfade
+    // is still showing its token: the first is a fact worth a line, the second
+    // resolves within the fade and must not claim the account is empty.
+    return rows.length === 0 ? (
       <EmptyState
         icon={Link2}
         title="No channels yet"
         description="Create one and launch an agent into it."
       />
-    );
+    ) : null;
   }
   if (row.kind === "link") return <PendingLinkCard key={row.id} link={row.link} />;
   return (

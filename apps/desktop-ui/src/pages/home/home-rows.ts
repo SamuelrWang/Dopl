@@ -58,26 +58,6 @@ export function homeRows(payload: HomeChannelsPayload): HomeRow[] {
 }
 
 /**
- * EVERY member's name and email for a channel with people in it; label + URL for
- * a link nobody has taken yet. A solo channel searches by its own name.
- *
- * ⚠ **ALL OF THEM, NOT THE FIRST (2026-08-26).** This read `peer` alone, which
- * was the whole roster while the two-member cap held. Searching only the head of
- * a four-person channel would hide it from a query naming anybody else in it —
- * and the operator has no way to tell a missing match from a missing channel.
- */
-function searchText(row: HomeRow): string {
-  if (row.kind === "channel") {
-    const people = channelPeople(row.channel);
-    const faces = people
-      .map((p) => `${p.displayName ?? ""} ${p.email ?? ""}`)
-      .join(" ");
-    return `${row.channel.name} ${faces}`.toLowerCase();
-  }
-  return `${row.link.label ?? ""} ${row.link.url}`.toLowerCase();
-}
-
-/**
  * Does this row have an invitation OUT — one minted, unclaimed and not revoked?
  *
  * ⚠ TWO SHAPES, ONE QUESTION (2026-08-25). A BOUND link is a state of a channel
@@ -92,13 +72,16 @@ export function hasLinkOut(row: HomeRow): boolean {
   return row.kind === "link" || row.channel.linkOut !== null;
 }
 
-/** The list is SEARCH-narrowed and nothing else (2026-08-27). ⚠ Still a
- *  function, and still the page's — the record pane resolves its selection from
- *  the same set the list renders, so both read one narrowing. */
-export function visibleRows(rows: HomeRow[], query: string): HomeRow[] {
-  const q = query.trim().toLowerCase();
-  return rows.filter((row) => !q || searchText(row).includes(q));
-}
+/**
+ * 🔒 **`visibleRows` AND ITS `searchText` ARE DELETED (Samuel, 2026-09-17:**
+ * *"right now, during search, it just filters by channel name, and it like
+ * removes channel on the left sidebar. that doesnt make sense, it should be a
+ * pop up like this."*). The header pill drives a popup now
+ * (`@/features/search/components/search-popup`) and this column shows every row,
+ * always — so there is no narrowing to own here, and `index.tsx` hands the list
+ * and the record pane the SAME `homeRows` output. **Do not re-derive a filter
+ * for this list**: two answers to one query is the bug the popup replaced.
+ */
 
 /**
  * EVERYBODY ELSE IN THIS CHANNEL, oldest join first — the ONE read of

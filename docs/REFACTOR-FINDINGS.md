@@ -9518,6 +9518,37 @@ declarations, not rules.
 
 ---
 
+### F-714 — a search hit on a MESSAGE cannot land on the message: the transcript's seq jump is reachable only from inside the surface
+
+**Found:** 2026-09-17, wiring the search popup's two hosts. **Status:** OPEN — the popup ships
+opening the message's CHANNEL, which is correct but coarse.
+
+`GET /api/search` returns a message row carrying `seq`
+(`src/features/search/contracts.ts › SearchItem`), and Samuel's ruling for the row is *"open channel
+at that seq so the transcript jumps"*. **The transcript CAN do that and cannot be asked from
+outside.** `src/features/channels/components/channel-surface.tsx › jumpToSeq` resolves a seq to a
+nonced scroll signal through `use-channels-selection.ts › jumpToMessage`, and both of its callers —
+the citation pill and the Tags inbox mention — are INSIDE the surface. A host that has only a
+`channelId` and a `seq` (the /home page, the workspace channels page) has no way in: the surface
+takes an `initialThreadId` but no initial seq, and the selection hook's signal is created after
+mount.
+
+So both hosts do the honest half today and say so at the call site:
+
+- `apps/desktop-ui/src/pages/home/index.tsx › openSearchHit` — selects the row and raises the
+  Channels face through `use-activity-jump.ts`, plus the thread when the hit names one.
+- `src/features/channels/components/channels-core.tsx › openSearchHit` — `sel.selectChannel`, plus
+  `sel.openThread` when the hit names one.
+
+**The fix is an INITIAL scroll target on the surface, not a second jump mechanism** — one more
+plain prop beside `initialChannelId` / `initialThreadId`, resolved through the same
+`citationScrollTargetId` + `jumpToMessage` pair, so a citation, a mention and a search hit stay one
+mechanism. ⚠ The sharp part is a seq OUTSIDE the loaded page of history: `channel-surface.tsx`
+already has the "older than the loaded history" notice for exactly that miss, and an initial target
+must reuse it rather than scrolling nowhere in silence.
+
+---
+
 ### F-715 — `/api/search`'s message arm scans every message body until `20261007120000` applies
 
 **Found:** 2026-09-17, building the global search route. **Status:** ✅ **RESOLVED 2026-09-17** —

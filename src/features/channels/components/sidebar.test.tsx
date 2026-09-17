@@ -18,7 +18,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { ChannelsSidebar, SIDEBAR_NO_MATCHES } from "./sidebar";
+import { ChannelsSidebar } from "./sidebar";
 import { SIDEBAR_THREAD_ACTIVE_WINDOW_MS } from "../constants";
 import { channel, member, thread, ME, PEER } from "./test-fixtures";
 import { sidebarThreads } from "./view-model-requested";
@@ -41,6 +41,7 @@ const THREADS = [thread({ id: "t-kit", title: "UI-kit design" })];
 
 function renderSidebar(over: Partial<React.ComponentProps<typeof ChannelsSidebar>> = {}) {
   const props: React.ComponentProps<typeof ChannelsSidebar> = {
+    workspaceId: "ws-1",
     rooms: ROOMS,
     direct: DIRECT,
     threads: THREADS,
@@ -53,6 +54,7 @@ function renderSidebar(over: Partial<React.ComponentProps<typeof ChannelsSidebar
     canCreate: true,
     onCreateChannel: vi.fn(),
     onCreateDirect: vi.fn(),
+    onSearchNavigate: vi.fn(),
     ...over,
   };
   render(<ChannelsSidebar {...props} />);
@@ -136,55 +138,40 @@ describe("channels sidebar", () => {
     expect(screen.queryByRole("button", { name: "Website" })).toBeNull();
   });
 
-  it("filters the tree from the header search", () => {
-    renderSidebar();
-    fireEvent.click(screen.getByRole("button", { name: "Search" }));
-    fireEvent.change(screen.getByPlaceholderText("Filter channels"), {
-      target: { value: "front" },
-    });
-    expect(screen.getByRole("button", { name: "Front-end" })).not.toBeNull();
-    expect(screen.queryByRole("button", { name: "Website" })).toBeNull();
-  });
-
   /**
-   * ⚠ A SECTION THAT MATCHES NOTHING MUST SAY SO. The empty-state guards read
-   * the UNFILTERED arrays, so a non-matching query rendered NEITHER rows nor an
-   * empty line — a blank column that looks broken rather than one that has
-   * answered. And "none exist" is not "none match": the two are different
-   * facts and are worded differently.
+   * 🔒 **THE HEADER'S FIELD NO LONGER FILTERS THIS COLUMN (Samuel, 2026-09-17:**
+   * *"right now, during search, it just filters by channel name, and it like
+   * removes channel on the left sidebar. that doesnt make sense, it should be a
+   * pop up like this."*). **THREE CASES DIED HERE** — "filters the tree from the
+   * header search", "says NO MATCHES when the filter empties a section that has
+   * rows", and "keeps the genuinely-empty wording even under a query" — because
+   * the predicate they described is deleted. What replaces them is the opposite
+   * assertion: every row stays put, and the query goes to the popup.
    */
-  it("says NO MATCHES when the filter empties a section that has rows", () => {
+  it("🔒 typing keeps every row and opens the search popup instead", async () => {
     renderSidebar();
     fireEvent.click(screen.getByRole("button", { name: "Search" }));
-    fireEvent.change(screen.getByPlaceholderText("Filter channels"), {
-      target: { value: "zzz-nothing" },
-    });
-    expect(screen.queryByRole("button", { name: "Website" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Diana Taylor" })).toBeNull();
-    // Once per emptied section — Channels and Direct messages both.
-    expect(screen.getAllByText(SIDEBAR_NO_MATCHES)).toHaveLength(2);
-    // ⚠ And NOT the genuinely-empty wording: nothing was established about
-    // whether this workspace has channels.
-    expect(screen.queryByText("No channels yet.")).toBeNull();
-    expect(screen.queryByText("No direct messages yet.")).toBeNull();
+    const field = screen.getByPlaceholderText("Search");
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "zzz-nothing" } });
+
+    // ⚠ NOTHING LEFT THE COLUMN — not even under a query that matches no
+    // channel name, which is precisely the case that used to empty it.
+    expect(screen.getByRole("button", { name: "Website" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Front-end" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Diana Taylor" })).not.toBeNull();
+    expect(screen.queryByText("No matches.")).toBeNull();
+    expect(
+      await screen.findByRole("listbox", { name: "Search results" })
+    ).not.toBeNull();
   });
 
   it("keeps the genuinely-empty wording when there is no query at all", () => {
     renderSidebar({ rooms: [], direct: [] });
     expect(screen.getByText("No channels yet.")).not.toBeNull();
     expect(screen.getByText("No direct messages yet.")).not.toBeNull();
-    expect(screen.queryByText(SIDEBAR_NO_MATCHES)).toBeNull();
-  });
-
-  it("keeps the genuinely-empty wording even under a query", () => {
-    // An empty section cannot have been emptied BY the filter.
-    renderSidebar({ rooms: [], direct: [] });
-    fireEvent.click(screen.getByRole("button", { name: "Search" }));
-    fireEvent.change(screen.getByPlaceholderText("Filter channels"), {
-      target: { value: "anything" },
-    });
-    expect(screen.getByText("No channels yet.")).not.toBeNull();
-    expect(screen.queryByText(SIDEBAR_NO_MATCHES)).toBeNull();
+    // 🔒 AND THERE IS NO SECOND WORDING TO CONFUSE IT WITH ANY MORE (2026-09-17).
+    expect(screen.queryByText("No matches.")).toBeNull();
   });
 
   it("selects a channel and opens a thread through its callbacks", () => {
@@ -310,9 +297,8 @@ describe("the sidebar's real Favorites section", () => {
   });
 
   it("keeps the EMPTIED home section's header and its 'none yet' line", () => {
-    // Everything favourited → Channels has nothing to show and nobody typed
-    // anything, so it says what it says with no channels at all. ⚠ NOT
-    // `SIDEBAR_NO_MATCHES`: "none match" is a claim about a query.
+    // Everything favourited → Channels has nothing to show, which is the one
+    // reason a section can be empty since 2026-09-17.
     renderSidebar({
       rooms: [
         channel({ id: "ch-only", name: "Only", myFavoritedAt: "2026-08-19T10:00:00.000Z" }),
@@ -321,7 +307,7 @@ describe("the sidebar's real Favorites section", () => {
     });
     expect(screen.getByRole("button", { name: "Channels" })).not.toBeNull();
     expect(screen.getByText("No channels yet.")).not.toBeNull();
-    expect(screen.queryByText(SIDEBAR_NO_MATCHES)).toBeNull();
+    expect(screen.queryByText("No matches.")).toBeNull();
   });
 
   it("nests the OPEN channel's threads under its favourite row", () => {
@@ -391,20 +377,20 @@ describe("the sidebar's real Favorites section", () => {
     expect(screen.getByRole("button", { name: "Favorites" })).not.toBeNull();
   });
 
-  it("KEEPS its header and says NO MATCHES when the filter empties it", () => {
-    // ⚠ The exception to the absent-section rule, and the same
-    // two-different-facts rule the sections below follow: "you have no
-    // favourites" and "none of them match what you typed" are opposite claims
-    // that look identical as a blank space.
+  /**
+   * 🔒 **"KEEPS its header and says NO MATCHES when the filter empties it" IS
+   * DELETED (2026-09-17)** — the filter it described is gone, so a Favorites
+   * section with rows can no longer be emptied by anything but un-favouriting.
+   */
+  it("🔒 a query empties no section, Favorites included", () => {
     renderSidebar(NO_THREADS);
     fireEvent.click(screen.getByRole("button", { name: "Search" }));
-    fireEvent.change(screen.getByPlaceholderText("Filter channels"), {
+    fireEvent.change(screen.getByPlaceholderText("Search"), {
       target: { value: "front" },
     });
     expect(screen.getByRole("button", { name: "Favorites" })).not.toBeNull();
-    // Two emptied sections: Favorites and Direct messages — and not Channels,
-    // which still has the one channel that never moved.
-    expect(screen.getAllByText(SIDEBAR_NO_MATCHES)).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Website" })).not.toBeNull();
+    expect(screen.queryByText("No matches.")).toBeNull();
   });
 });
 

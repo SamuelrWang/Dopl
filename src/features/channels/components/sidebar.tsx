@@ -23,8 +23,18 @@
  * selecting nothing.
  *
  * INTERACTION COMPLETENESS (Samuel, 2026-08-18): the section chevrons COLLAPSE
- * for real and the header's search FILTERS the list. Nothing in this column is
- * inert chrome except the furniture explicitly marked hardcoded.
+ * for real. Nothing in this column is inert chrome except the furniture
+ * explicitly marked hardcoded.
+ *
+ * 🔒 **THE HEADER'S SEARCH NO LONGER FILTERS THIS LIST — IT OPENS THE SEARCH
+ * POPUP (Samuel, 2026-09-17:** *"right now, during search, it just filters by
+ * channel name, and it like removes channel on the left sidebar. that doesnt
+ * make sense, it should be a pop up like this."* … *"It's basically doing a text
+ * search across the home space."*). The `matches` predicate, the three filtered
+ * lists and `SIDEBAR_NO_MATCHES` are DELETED, not disarmed; the column shows
+ * every channel the caller has, always, and the query is answered in a card
+ * under the field by `@/features/search/components/search-popup` — the SAME
+ * component /home's header pill hosts, at `scope="container"`.
  *
  * ⚠ FAVORITES IS REAL (Samuel, 2026-08-19), superseding the keep-hardcoded
  * ruling for THIS section only — the Assistant / Drafts / Saved-items nav rows
@@ -56,16 +66,17 @@
  *     below, which always say "No channels yet.", an empty Favorites section is
  *     not a fact worth a line: favouriting is optional organisation, and a
  *     header for a feature you have never used is noise in the one column that
- *     has to stay scannable. ⚠ THE FILTER IS THE EXCEPTION and it is the same
- *     two-different-facts rule the sections below follow: a query that empties a
- *     section which HAS rows keeps its header and says `SIDEBAR_NO_MATCHES`,
- *     because "you have no favourites" and "none of them match what you typed"
- *     are opposite claims that look identical as a blank space.
+ *     has to stay scannable. ⚠ **THE FILTER WAS THE EXCEPTION TO THIS AND THE
+ *     EXCEPTION IS GONE (2026-09-17)** — no query empties a section any more, so
+ *     an empty section has exactly one meaning again.
  */
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Plus, Search } from "lucide-react";
 import { SearchField } from "@/shared/ui/search-field";
+import { SearchPopup } from "@/features/search/components/search-popup";
+import { apiSearchFetcher } from "@/features/search/search-client";
+import type { SearchItem } from "@/features/search/contracts";
 import { IconButton, NewPill, SectionHeader } from "./bits";
 import { NavRow } from "./sidebar-rows";
 import { ChannelBranch } from "./sidebar-branch";
@@ -77,6 +88,8 @@ import {
 import type { Channel, ChannelMember, ChannelThread } from "../types";
 
 export interface ChannelsSidebarProps {
+  /** THE CONTAINER THE SEARCH POPUP RUNS IN — `scope="container"` is this id. */
+  workspaceId: string;
   rooms: Channel[];
   direct: Channel[];
   /** Threads of the OPEN channel, already windowed to the sidebar's rule
@@ -94,17 +107,24 @@ export interface ChannelsSidebarProps {
   onCreateChannel: () => void;
   /** The Direct messages section's `+` — opens `direct-message-dialog.tsx`. */
   onCreateDirect: () => void;
+  /** A search-popup row was taken. ⚠ THE HOST OPENS IT: this tree is router-free
+   *  by construction (`channels-core.tsx`), so "go to the Knowledge page" cannot
+   *  be decided here. Channel, thread and message rows are answered by the core
+   *  itself through the selection it already owns. */
+  onSearchNavigate: (item: SearchItem) => void;
 }
 
 type SectionKey = "favorites" | "direct" | "rooms";
 
-/** What a section says when the FILTER emptied it — distinct from what it says
- *  when the section is genuinely empty. ⚠ Exported for the test: a silent
- *  section and a section saying "nothing matches" look identical to a
- *  screenshot and are opposite facts. */
-export const SIDEBAR_NO_MATCHES = "No matches.";
+/**
+ * 🔒 **`SIDEBAR_NO_MATCHES` IS DELETED (2026-09-17).** It was what a section said
+ * when the FILTER emptied it, and there is no filter: the header's field opens
+ * the search popup now. **Do not re-mint it** — a section can only be empty for
+ * one reason again, and each already has its own sentence for that.
+ */
 
 export function ChannelsSidebar({
+  workspaceId,
   rooms,
   direct,
   threads,
@@ -117,6 +137,7 @@ export function ChannelsSidebar({
   canCreate,
   onCreateChannel,
   onCreateDirect,
+  onSearchNavigate,
 }: ChannelsSidebarProps) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<SectionKey>>(
     () => new Set()
@@ -130,6 +151,7 @@ export function ChannelsSidebar({
   );
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
 
   const toggle = (key: SectionKey) =>
     setCollapsed((prev) => {
@@ -148,13 +170,6 @@ export function ChannelsSidebar({
     });
 
   const name = (c: Channel) => channelDisplayName(c, members, currentUserId);
-  const matches = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return () => true;
-    return (c: Channel) => name(c).toLowerCase().includes(needle);
-    // `name` closes over `members`/`currentUserId`, both listed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, members, currentUserId]);
 
   // A thread the tree cannot show leaves the channel row selected rather than
   // selecting nothing at all. ⚠ THE INBOX USED TO OUTRANK BOTH and is deleted
@@ -171,18 +186,14 @@ export function ChannelsSidebar({
   // channels both, ordered by name (see the docblock). `localeCompare` rather
   // than `<`, so accented and non-ASCII names sort where a reader expects.
   const favorites = [...direct, ...rooms].filter(isFavorite);
-  // A MOVE, so each home list is what did NOT move. The guards below read these
-  // and not `direct` / `rooms`: an all-favourited section is empty for the same
-  // reason an unpopulated one is, and says the same thing.
+  // A MOVE, so each home list is what did NOT move. ⚠ **AND THESE ARE THE LISTS
+  // THE SECTIONS RENDER — there is no second, narrowed set since 2026-09-17**
+  // (the `matches` predicate and the three `*Shown` lists went with the filter).
   const directHome = direct.filter((c) => !isFavorite(c));
   const roomsHome = rooms.filter((c) => !isFavorite(c));
-  // Filtered ONCE, per section, and read by both the rows and the empty line —
-  // two `.filter()` calls would let the guard and the list disagree.
-  const directShown = directHome.filter(matches);
-  const roomsShown = roomsHome.filter(matches);
-  const favoritesShown = favorites
-    .filter(matches)
-    .sort((a, b) => name(a).localeCompare(name(b)));
+  const favoritesSorted = [...favorites].sort((a, b) =>
+    name(a).localeCompare(name(b))
+  );
 
   const branch = (channel: Channel) => (
     <ChannelBranch
@@ -205,12 +216,20 @@ export function ChannelsSidebar({
       aria-label="Channels"
       className="flex w-[260px] shrink-0 flex-col border-r border-border-default"
     >
-      <div className="flex h-[52px] shrink-0 items-center gap-2 px-3">
+      {/* ⚠ `relative` IS WHAT ANCHORS THE POPUP, exactly as `.search-expand`'s
+          own `position: relative` anchors /home's — the card is a child of the
+          field's row and lands on its edges with a plain `left-0 right-0`. */}
+      <div className="relative flex h-[52px] shrink-0 items-center gap-2 px-3">
         {searchOpen ? (
           <SearchField
             value={query}
             onChange={setQuery}
-            placeholder="Filter channels"
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            autoFocus
+            /* ⚠ **NOT "Filter channels" ANY MORE** — it filters nothing; it
+                searches the workspace. */
+            placeholder="Search"
             size="sm"
             className="min-w-0 flex-1"
           />
@@ -226,6 +245,28 @@ export function ChannelsSidebar({
             setQuery("");
           }}
         />
+        {searchOpen && (
+          <SearchPopup
+            query={query}
+            focused={searchFocused}
+            scope="container"
+            containerId={workspaceId}
+            onNavigate={onSearchNavigate}
+            onClose={() => {
+              setQuery("");
+              setSearchFocused(false);
+            }}
+            onQueryChange={setQuery}
+            /* ⚠ **THE REAL ENDPOINT SINCE 2026-09-17**, when `feat/search-api`
+               merged — `GET /api/search?scope=container&container=<id>`, which
+               is the ONE thing this host passes that /home's does not. The
+               fixture table it opened on is test and dev data now. */
+            fetcher={apiSearchFetcher}
+            /* The column is 260px and the card is wider: pinned to the column's
+               LEFT edge so it opens into the page rather than off-screen. */
+            className="!right-auto left-3 !w-[420px]"
+          />
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-6">
@@ -269,10 +310,7 @@ export function ChannelsSidebar({
                     (2026-08-19) this section is the channel's only row, so
                     dropping the nesting here would drop the open channel's
                     threads out of the column altogether. */}
-                {favoritesShown.map(branch)}
-                {favoritesShown.length === 0 && (
-                  <EmptyRow label={SIDEBAR_NO_MATCHES} />
-                )}
+                {favoritesSorted.map(branch)}
               </div>
             )}
           </>
@@ -296,23 +334,13 @@ export function ChannelsSidebar({
         />
         {!collapsed.has("direct") && (
           <div className="flex flex-col gap-px px-2">
-            {directShown.map(branch)}
-            {/* ⚠ THE GUARD READS THE FILTERED LIST, NOT THE RAW ONE. Reading
-                the unfiltered length meant a query that matched nothing rendered
-                NEITHER rows nor an empty line — a section that looked broken
-                rather than one that had answered. The two absences are also
-                different facts and are worded differently: "none exist" is not
-                "none match what you typed". ⚠ And the wording reads `directHome`,
-                not `direct`: with everything favourited the section has nothing
-                to show and nobody typed anything, so it is the "none yet" line. */}
-            {directShown.length === 0 && (
-              <EmptyRow
-                label={
-                  directHome.length === 0
-                    ? "No direct messages yet."
-                    : SIDEBAR_NO_MATCHES
-                }
-              />
+            {directHome.map(branch)}
+            {/* ⚠ THE WORDING READS `directHome`, NOT `direct`: with everything
+                favourited the section has nothing to show, and "none yet" is the
+                honest line for it. ⚠ **ITS `SIDEBAR_NO_MATCHES` TWIN IS DELETED
+                (2026-09-17)** — no query can empty this section any more. */}
+            {directHome.length === 0 && (
+              <EmptyRow label="No direct messages yet." />
             )}
           </div>
         )}
@@ -338,14 +366,8 @@ export function ChannelsSidebar({
         />
         {!collapsed.has("rooms") && (
           <div className="flex flex-col gap-px px-2">
-            {roomsShown.map(branch)}
-            {roomsShown.length === 0 && (
-              <EmptyRow
-                label={
-                  roomsHome.length === 0 ? "No channels yet." : SIDEBAR_NO_MATCHES
-                }
-              />
-            )}
+            {roomsHome.map(branch)}
+            {roomsHome.length === 0 && <EmptyRow label="No channels yet." />}
           </div>
         )}
       </div>

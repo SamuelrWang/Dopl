@@ -27,12 +27,8 @@ import { useActivityJump } from "./use-activity-jump";
 // watches the transcript's cache entry rather than this page's own click.
 import { useHomeUnreadRefresh } from "./use-home-unread-refresh";
 
-import {
-  HOME_CHANNELS_PATH,
-  channelRowId,
-  homeRows,
-  visibleRows,
-} from "./home-rows";
+import { HOME_CHANNELS_PATH, channelRowId, homeRows } from "./home-rows";
+import type { SearchItem } from "@/features/search/contracts";
 // ⚠ THE FACE VOCABULARY LIVES IN ITS OWN MODULE (2026-09-01) — see
 // `home-tabs.ts`, which carries the disjointness rule the prefixes rely on.
 import { HOME_DEFAULT_TAB, type HomeTab } from "./home-tabs";
@@ -86,6 +82,35 @@ export default function HomePage() {
     onRaise: () => setTab("channels"),
   });
 
+  /**
+   * OPENING WHAT A SEARCH ROW NAMES (2026-09-17).
+   *
+   * ⚠ **THE HOST DECIDES WHAT "OPEN" MEANS, AND ON /home IT IS A SELECTION PLUS
+   * A FACE — NEVER A ROUTE.** A home channel lives in a `kind='link'` CONTAINER
+   * and containers have no page (`use-activity-jump.ts` carries the whole
+   * argument); the popup hands over an item and this is the page's answer to it.
+   *
+   * ⚠ **THE JUMP MECHANISM IS THE OVERVIEW ROW'S, REUSED** — same hook, same
+   * three moves (pick the row, raise the face, hand the surface the thread) — so
+   * an activity row and a search row land identically.
+   *
+   * ⚠ **`item.seq` IS NOT HONOURED YET (F-714).** The transcript's
+   * scroll-to-message lives INSIDE the channel surface
+   * (`channels/components/channel-surface.tsx › jumpToSeq`), reached today only
+   * by a citation pill and a mention; carrying a seq in from outside is a
+   * selection-hook signal that does not exist. A message row therefore opens its
+   * CHANNEL (and its thread, when it has one) and leaves the transcript where the
+   * surface puts it.
+   */
+  const openSearchHit = (item: SearchItem) => {
+    if (item.kind === "knowledge" || item.kind === "agentTemplates") {
+      setSelectedId(channelRowId(item.containerId));
+      setTab(item.kind === "knowledge" ? "knowledge" : "agents");
+      return;
+    }
+    jump.open(item.containerId, item.threadId ?? null);
+  };
+
   const workspacesQuery = useApiQuery<
     { workspaces?: WorkspaceLike[] },
     WorkspaceLike[]
@@ -100,11 +125,17 @@ export default function HomePage() {
     () => (channelsQuery.data ? homeRows(channelsQuery.data) : []),
     [channelsQuery.data]
   );
-  // ⚠ THE NARROWING LIVES HERE, not in the list. The record pane falls back to
-  // the first row when nothing is selected, and it has to be the first row the
-  // reader can SEE — with it private to the list, typing into search left the
-  // pane on a person the list had already dropped.
-  const visible = useMemo(() => visibleRows(rows, query), [rows, query]);
+  /**
+   * 🔒 **THE SEARCH NARROWING IS DELETED (Samuel, 2026-09-17:** *"right now,
+   * during search, it just filters by channel name, and it like removes channel
+   * on the left sidebar. that doesnt make sense, it should be a pop up like
+   * this."*). `visibleRows`, its `searchText`, the list's `totalRows` prop and
+   * its "No matches" line went with it — DELETED, not disarmed. The list is
+   * every row the operator has, always; what a query answers arrives in the
+   * header pill's popup (`@/features/search/components/search-popup`).
+   * ⚠ **The record pane therefore falls back to the first REAL row again**,
+   * which is what the narrowing had to be lifted here to keep true.
+   */
 
   /**
    * The row the record pane is showing — the explicit selection, else the first
@@ -116,7 +147,7 @@ export default function HomePage() {
    * list's one answer.
    */
   const selected =
-    visible.find((row) => row.id === selectedId) ?? visible[0] ?? null;
+    rows.find((row) => row.id === selectedId) ?? rows[0] ?? null;
   useHomeUnreadRefresh(
     selected?.kind === "channel" ? selected.channel.channelId : null
   );
@@ -212,6 +243,7 @@ export default function HomePage() {
               onTabChange={setTab}
               query={query}
               onQueryChange={setQuery}
+              onSearchNavigate={openSearchHit}
               onNewChannel={() => setNewChannelOpen(true)}
             />
             {/* ⚠ ONE LAYOUT FOR ALL FOUR TABS (Samuel, 2026-08-24). The
@@ -228,11 +260,7 @@ export default function HomePage() {
                 channels page keeps its neutral hairlines. */}
             <div className="flex min-h-0 flex-1">
               <RelationshipList
-                rows={visible}
-                // ⚠ THE UNNARROWED COUNT, so the list can tell "no channels yet"
-                // from "no matches" — the same test `home-panes.tsx` applies to
-                // the record pane, from the one place that holds both sets.
-                totalRows={rows.length}
+                rows={rows}
                 selectedId={selected?.id ?? null}
                 // ⚠ A MANUAL PICK DROPS ANY HELD THREAD — "take me to this
                 // channel", not "take me back to that thread".
@@ -299,7 +327,6 @@ export default function HomePage() {
                     <HomePane
                       shown={shown}
                       rows={rows}
-                      visible={visible}
                       identity={identity.data}
                       jump={jump}
                       onChannelDeleted={() => {
