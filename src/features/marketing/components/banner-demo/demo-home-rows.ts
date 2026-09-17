@@ -32,7 +32,7 @@
 import type { HomeChannelWellId } from "@/features/channels/components/home-channel-wells";
 import type { HomeChannelRowFacts } from "@/shared/ui/home-channel-row";
 import type { AvatarPerson } from "@/shared/ui/avatar";
-import { CURRENT_USER_ID, MEMBERS, messagesAt, minsAgo } from "./demo-data";
+import { CURRENT_USER_ID, FACE, MEMBERS, messagesAt, minsAgo } from "./demo-data";
 
 /** ONE row of /home's channel list: what it says, and which well it is filed in. */
 export type HomeRowMock = HomeChannelRowFacts & {
@@ -61,16 +61,28 @@ export const VIEWER: AvatarPerson = {
   avatarUrl: "/img/avatars/sam.jpg",
 };
 
-/** ⚠ THE ACTIVE ROW'S FACES ARE THE CHANNEL'S OWN ROSTER, read out of `MEMBERS`
- *  rather than retyped: the stack in the list and the avatars in the transcript
- *  beside it are then the same two people by construction.
- *  ⚠ `displayName` is nullable on `ChannelMember` and NON-nullable on the row's
- *  face — it feeds both the initials and the hover title — so the fallback
- *  happens here, exactly as `relationship-list.tsx` does it. */
+/**
+ * ⚠ THE ACTIVE ROW'S FACES ARE THE CHANNEL'S OWN ROSTER, read out of `MEMBERS`
+ * rather than retyped: the stack in the list and the avatars in the transcript
+ * beside it are then the same two people by construction.
+ *
+ * 🔒 **EVERY FACE IN THIS COLUMN IS A PHOTOGRAPH (Samuel, 2026-09-17:** *"use
+ * bundled placeholder avatar images for the fictional people; initials chips are
+ * not the product's face"*). The rejected scene drew `DW OH LZ +1` — an
+ * `AvatarStack` of four nameless people, initialled and then overflowed. **No row
+ * below carries more faces than there are photographs**, so neither the initial
+ * fallback nor the `+N` bite can appear.
+ *
+ * ⚠ `displayName` is nullable on `ChannelMember` and NON-nullable on the row's
+ * face — it feeds both the title and the fallback — so the resolution happens
+ * here, exactly as `relationship-list.tsx` does it.
+ */
 const PEERS = MEMBERS.filter((m) => m.userId !== CURRENT_USER_ID).map((m) => ({
   userId: m.userId,
   displayName: m.displayName || m.email || "Member",
-  avatarUrl: m.avatarUrl,
+  // ⚠ READ OFF `FACE`, NOT OFF THE ROW, so a member that ever loses its photo
+  // fails the lookup here instead of silently degrading to initials.
+  avatarUrl: FACE[m.userId as keyof typeof FACE] ?? m.avatarUrl,
 }));
 
 /** A row with nothing to say on either mark. Spelled once so a row states only
@@ -118,12 +130,7 @@ const HOME_ROWS: ReadonlyArray<HomeRowMock> = [
     id: "rel:demo-ws-renewals",
     well: "recent",
     name: "renewals-q3",
-    faces: [
-      { userId: "demo-u-dana", displayName: "Dana Whitfield", avatarUrl: null },
-      { userId: "demo-u-omar", displayName: "Omar Haddad", avatarUrl: null },
-      { userId: "demo-u-lin", displayName: "Lin Zhou", avatarUrl: null },
-      { userId: "demo-u-rae", displayName: "Rae Duarte", avatarUrl: null },
-    ],
+    faces: [PEERS[0]],
     // The `@ N` pill and the dot are EXCLUSIVE — this row takes the louder one.
     mentions: 2,
     at: minsAgo(52),
@@ -133,13 +140,7 @@ const HOME_ROWS: ReadonlyArray<HomeRowMock> = [
     id: "rel:demo-ws-acme",
     well: "recent",
     name: "acme-migration",
-    faces: [
-      {
-        userId: "demo-u-anthony",
-        displayName: "Anthony Reyes",
-        avatarUrl: "/img/avatars/anthony.jpg",
-      },
-    ],
+    faces: [PEERS[1]],
     linkOut: true,
     unread: true,
     at: minsAgo(60 * 5),
@@ -149,15 +150,7 @@ const HOME_ROWS: ReadonlyArray<HomeRowMock> = [
     id: "rel:demo-ws-design",
     well: "earlier",
     name: "design-partners",
-    faces: [
-      {
-        userId: "demo-u-grace",
-        displayName: "Grace Okafor",
-        avatarUrl: "/img/avatars/grace.jpg",
-      },
-      { userId: "demo-u-theo", displayName: "Theo Marchetti", avatarUrl: null },
-      { userId: "demo-u-ada", displayName: "Ada Nwosu", avatarUrl: null },
-    ],
+    faces: PEERS,
     at: minsAgo(60 * 50),
   },
   {
@@ -172,6 +165,7 @@ const HOME_ROWS: ReadonlyArray<HomeRowMock> = [
     at: minsAgo(60 * 74),
   },
 ];
+
 
 /**
  * The list at this beat. ⚠ ONLY the ACTIVE row moves, and only its STAMP: the

@@ -32,6 +32,7 @@ import { PANEL_WELL_ON_PANEL } from "@/shared/ui/panel-well";
 import { HOME_TABS } from "@/features/home/tabs";
 import { HOME_CHANNEL_WELLS } from "@/features/channels/components/home-channel-wells";
 import { DemoChannelList, DemoHomeHeader } from "./demo-home-chrome";
+import { DemoScene } from "./demo-scene";
 import { HOME_ROW_ID, homeRowsAt } from "./demo-home-rows";
 import { stepIndex } from "./demo-steps";
 import { messagesAt } from "./demo-data";
@@ -223,3 +224,86 @@ describe("the agent view is the product's panel, minus what needs a bridge", () 
     expect(view).toContain("liveness={agentLiveness(agent)}");
   });
 });
+
+/**
+ * 🔒 **THE RECORD PANE IS /home's CHANNEL RECORD, NOT A THREAD (Samuel,
+ * 2026-09-17):** *"the demo is super off … a majority of it is matching like the
+ * workspace pages. I want it to match the home space pages."* He was looking at a
+ * THREAD view — a breadcrumb header, a thread-scoped info column with "Thread
+ * info" and "Parties", and a composer addressed to a thread. Every case here pins
+ * one half of the correction, and each pins the ABSENCE of what it replaced.
+ */
+describe("the record pane plays /home's channel record", () => {
+  const scene = () => render(<DemoScene step={stepIndex("hold")} />);
+
+  it("🔒 the info column is Info · Threads · Agents · Settings, in channel view", () => {
+    const { container } = scene();
+    const tabs = [...container.querySelectorAll('[role="tab"]')].map(
+      (t) => t.textContent ?? ""
+    );
+    // The five FACE tabs are the header's; the four after them are the column's.
+    expect(tabs.slice(-4)).toEqual(["Info", "Threads0", "Agents3", "Settings"]);
+    // 🚫 AND THE THREAD COLUMN IS NOT THERE — `channelPaneTabs` drops Threads in
+    // thread view and `ThreadInfoTab` heads itself "Thread info".
+    expect(screen.queryByText("Thread info")).toBeNull();
+    expect(screen.queryByText("Parties")).toBeNull();
+  });
+
+  it("🔒 the Info tab is the account card's four sections, in Samuel's order", () => {
+    scene();
+    const headings = screen
+      .getAllByRole("heading", { level: 2 })
+      .map((h) => h.textContent);
+    expect(headings).toEqual([
+      "Channel info",
+      "Channel activity",
+      "Mentions",
+      "Members",
+    ]);
+    // The card's four fixed rows (Samuel, 2026-09-15 — Last activity deleted).
+    for (const row of ["Name", "Description", "Creator", "Created"]) {
+      expect(screen.getByText(row)).toBeTruthy();
+    }
+    // …and the one ACTION on the tab, under the roster it changes.
+    expect(screen.getByText("Add person").className).toBe(PAGE_ACTION_BTN);
+  });
+
+  it("🔒 the composer addresses nobody and carries the Bot glyph", () => {
+    const { container } = scene();
+    // `composer-recipients.tsx › REACH_NOBODY` — a channel post with no tag.
+    // It read "→ Priya Shah thread" while a thread was open.
+    expect(screen.getByLabelText("Recipients").textContent).toContain("nobody");
+    // 🔒 `composer-toolbar.tsx` draws the Bot ONLY on `newAgent?.canLaunch`, so a
+    // scene that passed nothing rendered a BROWSER's composer.
+    for (const label of ["New Agent", "New thread", "Mention", "Emoji"]) {
+      expect(
+        container.querySelector(`[aria-label="${label}"]`)
+      ).not.toBeNull();
+    }
+  });
+
+  it("🚫 every face in the scene is a photograph, never an initial or a `+N`", () => {
+    const { container } = scene();
+    const srcs = [...container.querySelectorAll("img")].map((i) =>
+      i.getAttribute("src")
+    );
+    // Three avatars and three workspace icons, all bundled `public/` assets.
+    expect(srcs.filter((s) => s?.startsWith("/img/avatars/")).length)
+      .toBeGreaterThan(5);
+    // 🔒 THE RAIL IS IMAGE TILES (Samuel, 2026-09-17) — `WorkspaceGlyph`
+    // initials a workspace only when it has NO icon.
+    for (const icon of DEMO_RAIL_ICONS) expect(srcs).toContain(icon);
+    // 🚫 AND NO OVERFLOW BITE: `AvatarStack` prints `+N` past its cap, which is
+    // what "DW OH LZ +1" was.
+    expect(container.textContent).not.toMatch(/\+\d/);
+  });
+});
+
+/** The three bundled images the rail's workspace tiles wear. ⚠ Asserted, not
+ *  imported: the point is that the scene renders IMAGES, and a list that came
+ *  from the component could not fail when the component stops passing them. */
+const DEMO_RAIL_ICONS = [
+  "/img/dev-clouds.jpg",
+  "/img/framework-banner.jpg",
+  "/img/site_thumbnail.jpg",
+];

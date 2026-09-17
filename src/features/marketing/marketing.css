@@ -3086,7 +3086,9 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 1480px;
+  /* ⚠ THE DESKTOP WINDOW'S WIDTH — `demo-steps.ts › CANVAS_W` carries the
+     measurement and the ruling; keep the two in step. */
+  width: 1280px;
   display: flex;
   opacity: 1;
   transition: opacity 400ms ease;
@@ -3131,9 +3133,17 @@
   flex-direction: column;
   align-items: center;
   gap: 7px;
-  padding: 7px 0 20px;
+  /* ⚠ THE SUM, NOT A NUMBER — `account-rail.module.css › .rail` is
+     `calc(var(--shell-gap-top) + var(--page-float-gap-top)) 0 20px`, which is
+     what puts the Home tile's top edge on the panel's (Samuel, 2026-09-09). Both
+     halves are tokens with other readers, so a literal here is the drift that
+     produced the misalignment in the first place. */
+  padding: calc(var(--shell-gap-top) + var(--page-float-gap-top)) 0 20px;
   overflow: hidden;
   background: var(--home-frame);
+  /* `account-rail.module.css › .rail` — THE ONE INK A TILE LIGHTS UP WITH, hover
+     and selection alike (Samuel, 2026-09-09). */
+  --rail-tile-fill: rgba(255, 255, 255, 0.1);
 }
 .lp-demo-rail-tile {
   width: 40px;
@@ -3145,6 +3155,14 @@
   border-radius: 13px;
   background: transparent;
   color: rgba(255, 255, 255, 0.78);
+}
+/* 🔒 THE SELECTED TILE, `account-rail.module.css › .tile[aria-current="page"]`.
+   ⚠ **NOT `.raised-tab`** — that face was deleted from this rail on 2026-09-09
+   because its 2px white bevel reads as a ring thicker at the top on a dark
+   ground; this scene kept it until 2026-09-17 and was showing a face the product
+   no longer has. */
+.lp-demo-rail-tile.is-active {
+  background: var(--rail-tile-fill);
 }
 /* The glyph FILLS its tile: 36px inside 40px is an even 2px ring, and an 11px
    radius makes glyph and tile corners concentric with the tile's 13px. */

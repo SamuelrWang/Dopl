@@ -4,83 +4,35 @@
  * Scripted product demo for the hero banner's slot (hero-banner.tsx).
  * Decorative and non-interactive — the slot keeps `pointer-events: none`.
  *
- * ⚠ THE SCENE IS /home, NOT THE WORKSPACE CHANNELS PAGE (Samuel, 2026-08-30,
- * over a screenshot of the old scene: *"the /home channel view instead — that
- * UI, not this one"*). What was here was `ChannelsSidebar` — the workspace
- * tree, with Assistant / Drafts / Saved items over DIRECT MESSAGES and
- * CHANNELS. It is gone. The frame is now the ACCOUNT surface: the dark
- * `--home-frame` slab with the account rail, ONE gray `--home-panel` float
- * carrying the Chat/Knowledge/Agents header and the 290px channel list, and
- * the conversation inside a white `--home-card` record pane.
+ * ⚠ THE SCENE IS /home, AND SINCE 2026-09-17 IT IS /home's CHANNEL RECORD
+ * (Samuel, over the hero beside the live pane: *"a majority of it is matching
+ * like the workspace pages. I want it to match the home space pages"*). The
+ * TREE is `demo-scene.tsx`, which carries that ruling and what it deleted; this
+ * file owns the CLOCK, the design box, the scripted cursor and its ripple.
  *
- * ⚠ THE RECORD PANE IS STILL THE PRODUCT'S OWN SURFACE, and that is not a
- * leftover — it is what /home actually mounts. `relationship-record.tsx` puts
- * `StandaloneChannelSurface` in that pane, i.e. exactly the message pane, info
- * column and agent view composed below.
+ * The scripted cursor presses the REAL buttons — the info column's Agents tab
+ * and an agent card's "Open" — via programmatic `.click()`, so every transition
+ * runs the product's own handlers and state. ⚠ **THE THREAD BEATS ARE GONE**
+ * (`demo-steps.ts`): opening one put the pane on the workspace shape.
  *
- * ⚠ AND SINCE 2026-09-17 THE CHROME AROUND IT IS THE PRODUCT'S RECIPES TOO, not
- * a hand-built look-alike (`demo-home-chrome.tsx` carries the list). /home's own
- * PAGES still live in `apps/desktop-ui/`, which the Next tree cannot import at
- * all — so what this scene composes is every piece of them that moved into the
- * root tree for that reason: the black page pill, the face selector's options,
- * the three gray wells and the channel ROW itself. A restyle of any of those
- * lands here without an edit.
- *
- * The scripted cursor still presses the REAL buttons — the thread card's "Open
- * thread", the info column's Agents tab, an agent card's "Open" — via
- * programmatic `.click()`, so every transition runs the product's own handlers
- * and state.
- *
- * ⚠ THE CANVAS FILLS THE SLOT EDGE TO EDGE (Samuel, same review: the white
+ * ⚠ THE CANVAS FILLS THE SLOT EDGE TO EDGE (Samuel, 2026-08-30: the white
  * gutters at the left and right had to go). CANVAS_W is fixed and the scale is
  * `slotWidth / CANVAS_W` — never a `min()` contain-fit, which is what left the
- * gutters: the slot is ~1.93:1 and the canvas was 1.85:1, so height won and
- * ~27px of white showed down each side. The canvas HEIGHT is derived from that
- * scale instead, so the design box is exactly the slot in design units and the
- * scene is a normal flex column inside it. See `fit()`.
+ * gutters. The canvas HEIGHT is derived from that scale, so the design box is
+ * exactly the slot in design units and the scene is a normal flex column inside
+ * it. See `fit()`.
+ *
+ * 🔒 ⚠ **CANVAS_W IS THE DESKTOP WINDOW'S WIDTH (1280) SINCE 2026-09-17, AND
+ * THAT IS WHAT SETS THE SCENE'S SCALE** — Samuel read the hero as *"the denser
+ * workspace scale"* against the live pane. A wider design canvas in the same
+ * slot makes every control land smaller; `demo-steps.ts › CANVAS_W` carries the
+ * measurement. **Nothing here shrinks a component and nothing may start to.**
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { MutationGate } from "@/shared/hooks/use-api-mutation";
-import { ChannelsMessagePane } from "@/features/channels/components/message-pane";
-import { ChannelsInfoPanel } from "@/features/channels/components/info-panel";
-import { indexMembers } from "@/features/channels/components/view-model";
-import {
-  channelRows,
-  threadRows,
-} from "@/features/channels/components/view-model-rows";
-import { agentKey } from "@/features/channels/components/agents-model";
-import { formatChannelTimestamp } from "@/shared/lib/format-time";
+import { useEffect, useRef, useState } from "react";
 import { CANVAS_H, CANVAS_W, at, reached } from "./demo-steps";
-import {
-  AGENT_INDEX,
-  CHANNEL_ID,
-  CURRENT_USER_ID,
-  MEMBERS,
-  MY_SESSION,
-  PEER_ANALYST,
-  PEER_ENRICHER,
-  SALES_CHANNEL,
-  THREAD,
-  THREAD_ID,
-  WORKSPACE_ID,
-  messagesAt,
-  narrationAt,
-} from "./demo-data";
-import { HOME_ROW_ID, VIEWER, homeRowsAt } from "./demo-home-rows";
-import {
-  DemoAccountRail,
-  DemoChannelList,
-  DemoHomeHeader,
-} from "./demo-home-chrome";
-import { DemoAgentView } from "./demo-agent-view";
+import { DemoScene } from "./demo-scene";
 import { useDemoTimeline } from "./use-demo-timeline";
-
-/** The composer's writes never fire (the slot is inert), so the gate is a stub. */
-const DEMO_GATE: MutationGate = { begin() {}, end() {} };
-
-const NOOP = () => {};
 
 type Cursor = { x: number; y: number; shown: boolean; instant: boolean };
 
@@ -108,13 +60,13 @@ export function BannerDemo() {
   /** Design box + its scale, as one write: `w` is fixed, `h` is derived so the
    *  scaled canvas is EXACTLY the slot (see the file docblock). */
   const [box, setBox] = useState({ scale: 1, h: CANVAS_H });
-  const [qc] = useState(() => new QueryClient());
 
   // Set by the REAL components' own callbacks when the cursor clicks them;
   // gated on the step so a loop reset closes everything without an effect.
-  const [threadClicked, setThreadClicked] = useState(false);
+  // 🔒 **THERE IS NO `threadClicked` ANY MORE (Samuel, 2026-09-17)** — the scene
+  // never leaves the CHANNEL record, so the only thing the cursor opens is an
+  // agent. See the file docblock.
   const [agentClicked, setAgentClicked] = useState(false);
-  const threadOpen = threadClicked && reached(step, "click-thread");
   const agentOpen = agentClicked && reached(step, "click-agent");
 
   const [cursor, setCursor] = useState<Cursor>({
@@ -150,36 +102,6 @@ export function BannerDemo() {
     return () => ro.disconnect();
   }, [rootRef]);
 
-  /* ── The scene's data at this step — real shapes, real derivations ── */
-
-  const messages = useMemo(() => messagesAt(step), [step]);
-  const index = useMemo(
-    () => indexMembers(MEMBERS, CURRENT_USER_ID, AGENT_INDEX),
-    [],
-  );
-  const threads = useMemo(
-    () => (reached(step, "thread-card") ? [THREAD] : []),
-    [step],
-  );
-  const thread = threadOpen ? THREAD : null;
-  const rows = useMemo(
-    () =>
-      thread
-        ? threadRows(messages, THREAD_ID, index, formatChannelTimestamp)
-        : channelRows(messages, threads, index, formatChannelTimestamp),
-    [messages, thread, threads, index],
-  );
-  const sessions = useMemo(
-    () => (reached(step, "launch-2") ? [MY_SESSION] : []),
-    [step],
-  );
-  const peers = useMemo(() => {
-    const out = [];
-    if (reached(step, "launch-1")) out.push(PEER_ENRICHER);
-    if (reached(step, "launch-3")) out.push(PEER_ANALYST);
-    return out;
-  }, [step]);
-  const homeRows = useMemo(() => homeRowsAt(step), [step]);
 
   /* ── Cursor choreography — glide to and press the REAL controls ──── */
 
@@ -188,8 +110,6 @@ export function BannerDemo() {
     // ⚠ SEARCHED IN THE PANE, MEASURED AGAINST THE CANVAS — see `paneRef`.
     const pane = paneRef.current;
     const target = (): HTMLElement | null => {
-      if (at(step, "cursor-to-thread") || at(step, "click-thread"))
-        return findButton(pane, (l) => l === "Open thread");
       if (at(step, "cursor-to-tab") || at(step, "click-tab"))
         // ⚠ The count badge concatenates into textContent ("Agents3").
         return findButton(pane, (l) => l.startsWith("Agents"));
@@ -213,11 +133,7 @@ export function BannerDemo() {
     // and the choreography needs the step's DOM committed anyway.
     let raf = 0;
     const t = window.setTimeout(() => {
-      if (
-        at(step, "cursor-to-thread") ||
-        at(step, "cursor-to-tab") ||
-        at(step, "cursor-to-agent")
-      ) {
+      if (at(step, "cursor-to-tab") || at(step, "cursor-to-agent")) {
         const el = target();
         const to = el && locate(el);
         if (!to) return;
@@ -236,27 +152,18 @@ export function BannerDemo() {
         return;
       }
 
-      if (
-        at(step, "click-thread") ||
-        at(step, "click-tab") ||
-        at(step, "click-agent")
-      ) {
+      if (at(step, "click-tab") || at(step, "click-agent")) {
         const { x, y } = cursorPos.current;
         setRipple((r) => ({ x, y, n: r.n + 1 }));
         const el = target();
         // The REAL control's own handler runs — this is the product reacting,
         // not the demo repainting.
         el?.click();
-        if (at(step, "click-thread")) setThreadClicked(true);
         if (at(step, "click-agent")) setAgentClicked(true);
         return;
       }
 
-      if (
-        at(step, "thread-open") ||
-        at(step, "tab-open") ||
-        at(step, "agent-open")
-      ) {
+      if (at(step, "tab-open") || at(step, "agent-open")) {
         setCursor((c) => (c.shown ? { ...c, shown: false } : c));
       }
     }, 0);
@@ -278,88 +185,13 @@ export function BannerDemo() {
           transform: `translate(-50%, -50%) scale(${box.scale})`,
         }}
       >
-        <QueryClientProvider client={qc}>
-          {/* /home's frame: the dark slab, the rail, and ONE gray panel butting
-              flush-left against the rail — `pages/home/index.tsx`'s `!ml-0`,
-              here as `.lp-demo-panel`'s own zeroed left margin. */}
-          <div className="lp-demo-home antialiased">
-            <DemoAccountRail />
-            <main className="page-float lp-demo-panel">
-              <DemoHomeHeader />
-              <div className="flex min-h-0 flex-1">
-                <DemoChannelList rows={homeRows} selectedId={HOME_ROW_ID} />
-                {/* THE RECORD PANE — a white card bounded by the account
-                    palette's 2px line, NOT an elevation (`index.tsx`: no
-                    `.bento`, the drop had nowhere to fall). `.lp-demo-record`
-                    also carries `home.module.css › .frame`'s overrides, which
-                    are what put the account palette on the shared surface's own
-                    dividers, sender pills and composer panel. `relative` is the
-                    agent view's containing block, exactly as
-                    `channel-surface-standalone.tsx` states. */}
-                <div className="lp-demo-record" ref={paneRef}>
-                  <ChannelsMessagePane
-                    key={`pane-${run}`}
-                    channelId={CHANNEL_ID}
-                    workspaceId={WORKSPACE_ID}
-                    channelName="q4-outbound"
-                    thread={thread}
-                    rows={rows}
-                    index={index}
-                    members={MEMBERS}
-                    loading={false}
-                    scrollTarget={null}
-                    infoOpen
-                    favorited
-                    gate={DEMO_GATE}
-                    onToggleInfo={NOOP}
-                    onToggleFavorite={NOOP}
-                    onExitThread={NOOP}
-                    onOpenAgent={() => setAgentClicked(true)}
-                    onOpenThread={() => setThreadClicked(true)}
-                  />
-                  <div className="channel-info-slide" data-open="true">
-                    <ChannelsInfoPanel
-                      key={`info-${run}`}
-                      channel={SALES_CHANNEL}
-                      channelName="q4-outbound"
-                      members={MEMBERS}
-                      threads={threads}
-                      threadsTruncated={false}
-                      threadsLoading={false}
-                      index={index}
-                      openThread={thread}
-                      onOpenThread={() => setThreadClicked(true)}
-                      agentSessions={sessions}
-                      peerSessions={peers}
-                      openAgent={agentOpen ? agentKey(MY_SESSION) : null}
-                      onOpenAgent={() => setAgentClicked(true)}
-                      mentions={[]}
-                      mentionsTruncated={false}
-                      mentionsLoading={false}
-                      onOpenMention={NOOP}
-                      onMarkAllMentionsRead={NOOP}
-                    />
-                  </div>
-                  <DemoAgentView
-                    open={agentOpen}
-                    agent={MY_SESSION}
-                    entries={narrationAt(step)}
-                    messages={messages}
-                    currentUserId={CURRENT_USER_ID}
-                    viewer={VIEWER}
-                    // ⚠ OFF THE INDEX, exactly as the real panel resolves it —
-                    // the colour is a live fact about the SESSION and is never
-                    // stamped on a message row.
-                    color={
-                      index.agents.get(MY_SESSION.agentId ?? "")?.color ?? null
-                    }
-                    onClose={NOOP}
-                  />
-                </div>
-              </div>
-            </main>
-          </div>
-        </QueryClientProvider>
+        <DemoScene
+          step={step}
+          run={run}
+          paneRef={paneRef}
+          agentOpen={agentOpen}
+          onOpenAgent={() => setAgentClicked(true)}
+        />
 
         <div
           className={`lp-demo-cursor${cursor.shown ? " is-shown" : ""}`}

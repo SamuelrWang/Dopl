@@ -6,13 +6,18 @@
  * one integer and reset is `index = 0`.
  */
 
+/**
+ * 🔒 **NO THREAD BEATS SINCE 2026-09-17 (Samuel):** *"Render THAT composition …
+ * No thread view."* Four steps are deleted — `thread-card`, `cursor-to-thread`,
+ * `click-thread`, `thread-open` — because opening a thread put the pane on the
+ * WORKSPACE shape: a breadcrumb header and a thread-scoped info column, which is
+ * what he was looking at when he rejected the scene. The opener they existed for
+ * is now an ordinary channel message on `channel-request`.
+ */
 export type StepId =
   | "channel-base"
   | "channel-samuel"
-  | "thread-card"
-  | "cursor-to-thread"
-  | "click-thread"
-  | "thread-open"
+  | "channel-request"
   | "launch-1"
   | "launch-2"
   | "launch-3"
@@ -38,10 +43,7 @@ export type StepId =
 export const STEPS: ReadonlyArray<{ id: StepId; dur: number }> = [
   { id: "channel-base", dur: 1500 },
   { id: "channel-samuel", dur: 1600 },
-  { id: "thread-card", dur: 1200 },
-  { id: "cursor-to-thread", dur: 1300 },
-  { id: "click-thread", dur: 550 },
-  { id: "thread-open", dur: 1500 },
+  { id: "channel-request", dur: 1800 },
   { id: "launch-1", dur: 1100 },
   { id: "launch-2", dur: 1100 },
   { id: "launch-3", dur: 1200 },
@@ -88,5 +90,23 @@ export const at = (step: number, id: StepId): boolean => step === INDEX[id];
  * before the slot has one (first paint, a hidden tab). It is the old fixed
  * height and any plausible number would do; nothing lays out against it.
  */
-export const CANVAS_W = 1480;
-export const CANVAS_H = 800;
+/**
+ * 🔒 **1280 — THE DESKTOP WINDOW'S OWN WIDTH (Samuel, 2026-09-17).** He put the
+ * hero beside the live /home pane and the scene read as *"the denser workspace
+ * scale"*: *"Product is the home 30px scale: larger type, taller rows, bigger
+ * radii, more padding … the frame's fixed size may need the scene's viewport
+ * widened/scaled rather than the components shrunk."*
+ *
+ * ⚠ **NOTHING WAS SHRUNK — THE DESIGN VIEWPORT WAS TOO WIDE.** Every control in
+ * this scene is the product's own component at the product's own size; the
+ * canvas is then scaled by `slotWidth / CANVAS_W`, so a WIDER canvas in the same
+ * slot makes every one of those controls land SMALLER on the reader's screen.
+ * At 1480 the scene was 1480/1280 = **1.16× denser** than the real window.
+ * ⚠ **1280 IS MEASURED, NOT PICKED**:
+ * `dopl-desktop-app/main/spa-window.js › createSpaWindow` opens the SPA at
+ * `width: 1280`. Match it and the hero is the product at 1:1 in design units.
+ * ⚠ CANVAS_W is mirrored by `marketing.css › .lp-demo-canvas`; keep the two in
+ * step.
+ */
+export const CANVAS_W = 1280;
+export const CANVAS_H = 820;

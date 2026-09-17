@@ -27,7 +27,6 @@ import type {
   Channel,
   ChannelMember,
   ChannelMessage,
-  ChannelThread,
 } from "@/features/channels/types";
 import type { ChannelPeerSession } from "@/features/channels/hooks/use-channel-agent-sessions";
 import type {
@@ -39,20 +38,40 @@ import { reached, type StepId } from "./demo-steps";
 
 export const WORKSPACE_ID = "demo-workspace";
 export const CHANNEL_ID = "demo-ch-sales";
-export const THREAD_ID = "demo-thread-q4";
 export const CURRENT_USER_ID = "demo-u-samuel";
 
+/**
+ * 🔒 **THE CAST IS EXACTLY AS LARGE AS THE PHOTOGRAPHS WE SHIP (Samuel,
+ * 2026-09-17, over the rejected scene):** *"use bundled placeholder avatar
+ * images for the fictional people; initials chips are not the product's face."*
+ * Three faces, three files in `public/img/avatars/`. **Do not add a fourth
+ * person without a fourth photo** — a nameless member degrades to initials, and
+ * an `AvatarStack` over four of them degrades to `+N`, which is the exact
+ * artefact he pointed at.
+ */
 const U = {
   samuel: CURRENT_USER_ID,
-  priya: "demo-u-priya",
-  marcus: "demo-u-marcus",
+  grace: "demo-u-grace",
+  anthony: "demo-u-anthony",
 };
+
+/** The bundled photograph for each of the three. ⚠ A `public/` path, which
+ *  `useBridgedImageSrc` returns verbatim on the web — no bridge, no request
+ *  beyond the asset. */
+export const FACE = {
+  [U.samuel]: "/img/avatars/sam.jpg",
+  [U.grace]: "/img/avatars/grace.jpg",
+  [U.anthony]: "/img/avatars/anthony.jpg",
+} as const;
 
 /** Anchored once per load so relative stamps ("2m ago") stay plausible.
  *  ⚠ EXPORTED so `demo-home-rows.ts` stamps its rows off the SAME anchor — a
  *  second `Date.now()` there would drift the list's timestamps off the
  *  transcript's by however long the module graph took to evaluate. */
 const NOW = Date.now();
+/** ⚠ THE SAME ANCHOR, FOR THE MODULES THAT NEED EPOCH MS RATHER THAN AN ISO
+ *  STRING (`demo-info-data.ts`'s day keys). One clock, two presenters. */
+export const NOW_MS = NOW;
 export const minsAgo = (m: number) =>
   new Date(NOW - m * 60_000).toISOString();
 
@@ -79,14 +98,15 @@ function member(
     joinedAt: minsAgo(60 * 24 * 12),
     displayName,
     email,
-    avatarUrl: null,
+    // ⚠ EVERY MEMBER HAS A PHOTOGRAPH — see `U`'s docblock.
+    avatarUrl: FACE[userId as keyof typeof FACE] ?? null,
   };
 }
 
 export const MEMBERS: ChannelMember[] = [
   member(U.samuel, "Samuel Wang", "srwang@usc.edu", true),
-  member(U.priya, "Priya Shah", "priya@shahco.tax"),
-  member(U.marcus, "Marcus Lee", "marcus@northwind.dev"),
+  member(U.grace, "Grace Okafor", "grace@vermillion.io"),
+  member(U.anthony, "Anthony Reyes", "anthony@lattice.build"),
 ];
 
 /* ── Channels (sidebar) ───────────────────────────────────────────── */
@@ -139,22 +159,18 @@ export const SALES_CHANNEL = channel(CHANNEL_ID, "q4-outbound");
 
 /* ── The thread ───────────────────────────────────────────────────── */
 
-export const THREAD: ChannelThread = {
-  id: THREAD_ID,
-  channelId: CHANNEL_ID,
-  workspaceId: WORKSPACE_ID,
-  title: "Q4 Outbound Push",
-  status: "open",
-  outcome: null,
-  mode: "interactive",
-  createdBy: U.priya,
-  targetUserId: U.samuel,
-  createdAt: minsAgo(4),
-  updatedAt: minsAgo(1),
-  closedAt: null,
-  outcomeSummary: null,
-  lastActivityAt: minsAgo(0),
-};
+/**
+ * 🔒 **THE THREAD FIXTURE IS DELETED (Samuel, 2026-09-17):** *"Render THAT
+ * composition … No thread view."* The scene opened `Q4 Outbound Push`, which put
+ * a BREADCRUMB in the pane header, replaced the info column's four tabs with the
+ * thread's three, and made the composer address the thread — the WORKSPACE shape
+ * on the surface that is supposed to be /home's channel record.
+ *
+ * ⚠ **`THREAD_ID` GOES WITH IT.** Nothing in this scene carries a `taskId` now,
+ * which is what keeps `channelRows` from collapsing the conversation into a
+ * card (see `agentPost` below). **Do not reintroduce either to "show threads"** —
+ * the Threads tab reading `0` is the ruling, not a gap.
+ */
 
 /* ── Agents — templates as roles, one per member ──────────────────── */
 
@@ -186,13 +202,15 @@ export const AGENT_INDEX: ReadonlyMap<string, AgentIdentity> = new Map([
 export const MY_SESSION: DesktopSessionSummary = {
   sessionId: "demo-session-writer",
   channelId: CHANNEL_ID,
-  taskId: THREAD_ID,
+  // ⚠ `""` IS THE CHANNEL (`agents-model.ts › postDestination`) — the scene has
+  // no thread since 2026-09-17, so the sent banner reads "Posted to channel".
+  taskId: "",
   agentId: AGENT_IDS.writer,
   name: AGENT_IDS.writer,
   displayName: "Outreach Writer",
   state: "working",
   channelName: "q4-outbound",
-  threadTitle: "Q4 Outbound Push",
+  threadTitle: null,
   templateName: "Outreach Writer",
   contextUsed: 38_000,
   contextWindow: 200_000,
@@ -207,18 +225,18 @@ function peer(
 ): ChannelPeerSession {
   return {
     channelId: CHANNEL_ID,
-    threadId: THREAD_ID,
+    threadId: null,
     name,
     state: "working",
     channelName: "q4-outbound",
-    threadTitle: "Q4 Outbound Push",
+    threadTitle: null,
     updatedAt: minsAgo(0),
     userId,
   };
 }
 
-export const PEER_ENRICHER = peer(U.priya, AGENT_IDS.enricher);
-export const PEER_ANALYST = peer(U.marcus, AGENT_IDS.analyst);
+export const PEER_ENRICHER = peer(U.grace, AGENT_IDS.enricher);
+export const PEER_ANALYST = peer(U.anthony, AGENT_IDS.analyst);
 
 /* ── The transcript, revealed step by step ────────────────────────── */
 
@@ -252,11 +270,21 @@ function msg(
   };
 }
 
-const inThread = { metadata: { taskId: THREAD_ID } };
+/**
+ * 🔒 **EVERY POST IS CHANNEL-LEVEL (Samuel, 2026-09-17):** *"Render THAT
+ * composition … No thread view."* The scene used to open a THREAD, so the pane
+ * wore a breadcrumb and the column wore the thread's tabs — the workspace
+ * shape, not /home's channel record.
+ *
+ * ⚠ **A `taskId` IS WHAT MADE IT ONE, SO THERE ARE NONE.** `view-model-rows.ts ›
+ * channelRows` COLLAPSES every threaded post into a single thread CARD, so a
+ * channel view over a threaded script would have shown three lines and a card
+ * instead of the conversation. ⚠ `postDestination` reads `taskId === ""` as the
+ * channel, which is what makes the agent's sent banner say "Posted to channel".
+ */
 const agentPost = (agentId: string, n: number) => ({
   authorKind: "agent" as const,
   clientMsgId: `agent-${agentId}-${n}`,
-  metadata: { taskId: THREAD_ID },
 });
 
 /**
@@ -267,13 +295,13 @@ const SCRIPT: ReadonlyArray<{ step: StepId; message: ChannelMessage }> = [
   // Channel view.
   msg(
     "channel-base",
-    U.priya,
+    U.grace,
     "Fresh list from the conference just landed — 240 leads.",
     26,
   ),
   msg(
     "channel-base",
-    U.marcus,
+    U.anthony,
     "Half of them are missing titles in the CRM again.",
     24,
   ),
@@ -283,34 +311,32 @@ const SCRIPT: ReadonlyArray<{ step: StepId; message: ChannelMessage }> = [
     "Big quarter push starts today — let's line up outbound.",
     5,
   ),
-  // The request — its opener is what the channel view draws as the card.
+  // The request that sets the room going — an ordinary channel post since
+  // 2026-09-17 (it was a thread OPENER, and the card it drew is what put this
+  // pane on the workspace's thread shape).
   msg(
-    "thread-card",
-    U.priya,
+    "channel-request",
+    U.grace,
     "Kicking off Q4 outbound — enrich the list, draft the sequences, cut the segment. Everyone bring your agent.",
     4,
-    { metadata: { taskId: THREAD_ID, fanoutGroup: "demo-g1" } },
   ),
   // Launch lines — the thread narrating itself, one per member.
-  msg("launch-1", null, "Priya launched Lead Enricher from a template", 3, {
+  msg("launch-1", null, "Grace launched Lead Enricher from a template", 3, {
     kind: "system",
     authorKind: "system",
-    ...inThread,
   }),
   msg("launch-2", null, "Samuel launched Outreach Writer from a template", 3, {
     kind: "system",
     authorKind: "system",
-    ...inThread,
   }),
-  msg("launch-3", null, "Marcus launched Pipeline Analyst from a template", 3, {
+  msg("launch-3", null, "Anthony launched Pipeline Analyst from a template", 3, {
     kind: "system",
     authorKind: "system",
-    ...inThread,
   }),
   // The agents collaborate — each posts under its operator's account, stamped.
   msg(
     "agent-msg-1",
-    U.priya,
+    U.grace,
     "Pulled the 240 conference leads — 186 have verified emails. Tagging seniority and industry now.",
     2,
     agentPost(AGENT_IDS.enricher, 1),
@@ -324,14 +350,14 @@ const SCRIPT: ReadonlyArray<{ step: StepId; message: ChannelMessage }> = [
   ),
   msg(
     "agent-msg-3",
-    U.marcus,
+    U.anthony,
     "Director+ at 50–500 headcount closed 3× faster last quarter. That's 74 of the 186.",
     1,
     agentPost(AGENT_IDS.analyst, 1),
   ),
   msg(
     "agent-msg-4",
-    U.priya,
+    U.grace,
     "Segment tagged Q4-A and synced to the CRM.",
     1,
     agentPost(AGENT_IDS.enricher, 2),
@@ -339,7 +365,7 @@ const SCRIPT: ReadonlyArray<{ step: StepId; message: ChannelMessage }> = [
   msg(
     "agent-msg-5",
     U.samuel,
-    "Variant A personalized for all 74 — queued for Priya's review.",
+    "Variant A personalized for all 74 — queued for Grace's review.",
     0,
     agentPost(AGENT_IDS.writer, 2),
   ),

@@ -74,7 +74,13 @@ const NOOP = () => {};
 export function DemoAccountRail() {
   return (
     <nav className="lp-demo-rail" aria-label="Account">
-      <span className="lp-demo-rail-tile raised-tab">
+      {/* 🔒 **THE SELECTED TILE IS THE RAIL'S OWN FILL, NOT `.raised-tab`**
+          (Samuel, 2026-09-09: the kit face's 2px white bevel *"is thicker at the
+          top than at the bottom … just have it be that [the hover fill], and
+          instead of white, make it a gray bordering"*). This scene wore
+          `.raised-tab` until 2026-09-17 and was therefore showing a face the
+          product deleted. `.is-active` below carries `--rail-tile-fill`. */}
+      <span className="lp-demo-rail-tile is-active">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/favicons/android-chrome-512x512.png"
@@ -87,18 +93,37 @@ export function DemoAccountRail() {
           divider that used to sit here is deleted (`account-rail.module.css`);
           the only line in this rail belongs to the selected tile. */}
       <div className="lp-demo-rail-group">
-        {["Northwind", "Vermillion", "Lattice"].map((name) => (
-          <span key={name} className="lp-demo-rail-tile">
-            <WorkspaceGlyph name={name} iconUrl={null} size="md" />
+        {/* 🔒 **IMAGE TILES, NOT LETTER TILES (Samuel, 2026-09-17).**
+            `WorkspaceGlyph` initials a workspace only when it has NO icon, and
+            every real workspace in the product has one — so a rail of letters was
+            the scene showing the product's fallback as if it were its face. The
+            photographs are the ones this site already ships; `WorkspaceGlyph`
+            crops them `object-cover` into its own 36px rounded square, which is
+            exactly what it does with a Supabase-hosted icon. */}
+        {DEMO_WORKSPACES.map((ws) => (
+          <span key={ws.name} className="lp-demo-rail-tile">
+            <WorkspaceGlyph name={ws.name} iconUrl={ws.iconUrl} size="md" />
           </span>
         ))}
       </div>
-      <span className="lp-demo-rail-tile lp-demo-rail-create">
+      {/* ⚠ **`lp-demo-rail-create` IS DELETED (2026-09-17)** — it was emitted here
+          and DEFINED NOWHERE, which `demo-class-coverage.test.tsx` found on its
+          first run. The product's create tile is `.tile` with a `Plus` in it and
+          nothing else (`account-rail.module.css`), so the extra hook was never
+          carrying anything. */}
+      <span className="lp-demo-rail-tile">
         <Plus size={18} strokeWidth={1.8} />
       </span>
     </nav>
   );
 }
+
+/** The rail's workspace tiles. ⚠ EVERY ONE HAS AN ICON — see the note above. */
+const DEMO_WORKSPACES = [
+  { name: "Northwind", iconUrl: "/img/dev-clouds.jpg" },
+  { name: "Vermillion", iconUrl: "/img/framework-banner.jpg" },
+  { name: "Lattice", iconUrl: "/img/site_thumbnail.jpg" },
+] as const;
 
 /**
  * The panel's header strip — `home-header.tsx`, control for control.
