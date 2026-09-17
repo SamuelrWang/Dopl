@@ -2203,3 +2203,38 @@ Why/history: ENGINEERING.md §18 (Commands, updater, F-125, F-193), §9.3.
 - **`no-redeclare` is on at `error` in the desktop config.** A duplicate declaration wins silently, and `max-lines` cannot catch it — a duplicate makes a file BIGGER.
 
 Why/history: ENGINEERING.md §13, §0 (Known debt), §18 (F-146).
+
+---
+
+## 15. Standing rulings — Samuel, cross-cutting
+
+Rules that are not one feature's. Each carries the date it was ruled. A rule here outranks a
+recommendation in any spec; a spec that disagrees is the thing that is wrong.
+
+- 🔴 **DEAD CODE IS DELETED (2026-09-17).** Not disarmed, not parked, not left behind a flag nobody
+  passes. **The one exception is something Samuel built and forgot: ASK ONCE, then delete.** One
+  question, not a standing hold — an unanswered ask does not convert a dead lane into a live one.
+  ⚠ This is the rule the `delete-don't-disarm` bullets have been applying case by case; it is now
+  general, and it is why an unreachable component with a width budget attached is a defect rather
+  than inventory. ⚠ **"Dead" is a MEASUREMENT** — re-derive the call sites before you delete, because
+  `bits.tsx › agentAccent` was called an orphan and still had a live call site.
+
+- 🔴 **THE HOME SPACE IS STRUCTURAL — CONTAINER KIND IS A TYPED FIELD, NEVER A PROMPT (2026-09-17).**
+  Samuel: *home must be structurally distinct, never just a prompt line.* Every container is
+  **addressable**: personal = the reserved name **`home`**, resolved per caller · a home-channel
+  container = **its channel slug** · a workspace = **its slug**. **One `container=` parameter**
+  addresses all three, and an unaddressed call resolves to **home**. The **KIND** travels as a typed
+  field on every MCP row and list, and `dopl_map` renders **"Home space" as its own top-level node**.
+  ⚠ **A sentence in a system prompt is not an implementation of this rule.** If an agent can only
+  learn which kind of container it is in by reading prose, the field is missing. ⚠ It also means
+  the home space is **auto-created per account and permanent**: there is no MCP door onto its
+  existence — nothing creates or deletes it via a tool (R-34). And **signup mints exactly a home
+  space — no default standard workspace** (R-35).
+
+- 🔒 **THE SETTINGS PAGE IS FROZEN (2026-09-17), pending Samuel's own overhaul.** No restyle, no
+  header migration, no section-language sweep, no dialog conformance pass touches `/settings` or the
+  body it shares with the settings modal. ⚠ **It is shared** — `WorkspaceSectionBody` is mounted by
+  both the page and the modal, and the modal is reachable from /home, so "I only touched the modal"
+  is not an exemption. A wave that needs a settings change waits for the overhaul or asks.
+
+Why/history: `docs/specs/workspace-parity/00-MASTER.md` §2.4 (the 49 rulings recorded 2026-09-17).
