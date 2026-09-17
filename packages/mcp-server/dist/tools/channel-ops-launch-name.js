@@ -5,6 +5,7 @@ exports.launchName = launchName;
 exports.isNameRefusal = isNameRefusal;
 exports.launchedTag = launchedTag;
 exports.launchedName = launchedName;
+const agent_display_name_1 = require("./agent-display-name");
 const channel_agent_id_1 = require("./channel-agent-id");
 const respond_1 = require("./respond");
 /**
@@ -42,7 +43,10 @@ function launchName(raw) {
     if (looksLikeAgentId(name)) {
         return (0, respond_1.err)(`op="manage" action="launch": name="${name}" is an agent id, not a name. An id is internal plumbing and is never shown to a person; pass what the agent is FOR ("Research", "Bug reviewer").`);
     }
-    return { name };
+    // ⚠ **A SLUG IS REPAIRED RATHER THAN REFUSED, AND ONLY AFTER THE TWO REFUSALS ABOVE**
+    // (Samuel, 2026-09-17): `agent-display-name.ts` explains why this arm normalizes, and why
+    // casing an id-shaped string BEFORE `looksLikeAgentId` would walk it past its own check.
+    return { name: (0, agent_display_name_1.agentDisplayName)(name) };
 }
 /**
  * **IS THIS STRING AN ADDRESS SOMEBODY PASTED RATHER THAN A NAME SOMEBODY CHOSE?**

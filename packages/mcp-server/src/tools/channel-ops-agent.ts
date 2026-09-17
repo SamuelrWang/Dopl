@@ -41,6 +41,7 @@ import type {
 } from "@dopl/client";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
 import { channelNotFound, isErr, resolveChannelOr } from "./channel-shared";
+import { agentDisplayName } from "./agent-display-name";
 import { bareAgentId } from "./channel-agent-id";
 // ⚠ ONE write-result renderer, shared with post / create_thread / launch / direct.
 import { factsLine, type FactValue } from "./channel-facts";
@@ -426,12 +427,15 @@ export async function opRenameAgent(
   // fact line keyed on the AGENT, which is what the caller acts on; the channel
   // is the caller's own argument from this call and echoing it bought nothing.
   const agent = bareAgentId(agentId);
-  const clearing = name.trim() === "";
+  // ⚠ A SLUG IS NORMALIZED TO A DISPLAY NAME HERE — `agent-display-name.ts`, Samuel
+  // 2026-09-17. It files and reports the string it measured, never the raw argument.
+  const display = agentDisplayName(name);
+  const clearing = display === "";
 
   const filed = await fileAndHold(
     client,
     ref,
-    { kind: "rename", channel: channel.id, agentId: agent, name },
+    { kind: "rename", channel: channel.id, agentId: agent, name: display },
     opts.waitMs,
   );
   if (filed.done) return filed.response;
@@ -458,7 +462,7 @@ export async function opRenameAgent(
         agent: `@agent-${agent}`,
         // ⚠ CLEARED IS ITS OWN OUTCOME, not an empty name: the display falls
         // back to `Agent #<id>`, which is a different thing from "unnamed".
-        name: clearing ? "cleared" : name,
+        name: clearing ? "cleared" : display,
         handle: "unchanged",
         confirm: "none",
       }),

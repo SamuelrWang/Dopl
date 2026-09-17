@@ -39,6 +39,7 @@ exports.opEndAgent = opEndAgent;
 exports.opRenameAgent = opRenameAgent;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
+const agent_display_name_1 = require("./agent-display-name");
 const channel_agent_id_1 = require("./channel-agent-id");
 // ⚠ ONE write-result renderer, shared with post / create_thread / launch / direct.
 const channel_facts_1 = require("./channel-facts");
@@ -346,8 +347,11 @@ async function opRenameAgent(client, ref, agentId, name, opts = {}) {
     // fact line keyed on the AGENT, which is what the caller acts on; the channel
     // is the caller's own argument from this call and echoing it bought nothing.
     const agent = (0, channel_agent_id_1.bareAgentId)(agentId);
-    const clearing = name.trim() === "";
-    const filed = await fileAndHold(client, ref, { kind: "rename", channel: channel.id, agentId: agent, name }, opts.waitMs);
+    // ⚠ A SLUG IS NORMALIZED TO A DISPLAY NAME HERE — `agent-display-name.ts`, Samuel
+    // 2026-09-17. It files and reports the string it measured, never the raw argument.
+    const display = (0, agent_display_name_1.agentDisplayName)(name);
+    const clearing = display === "";
+    const filed = await fileAndHold(client, ref, { kind: "rename", channel: channel.id, agentId: agent, name: display }, opts.waitMs);
     if (filed.done)
         return filed.response;
     const d = filed.directive;
@@ -371,7 +375,7 @@ async function opRenameAgent(client, ref, agentId, name, opts = {}) {
             agent: `@agent-${agent}`,
             // ⚠ CLEARED IS ITS OWN OUTCOME, not an empty name: the display falls
             // back to `Agent #<id>`, which is a different thing from "unnamed".
-            name: clearing ? "cleared" : name,
+            name: clearing ? "cleared" : display,
             handle: "unchanged",
             confirm: "none",
         }));

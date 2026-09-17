@@ -1,3 +1,4 @@
+import { agentDisplayName } from "./agent-display-name";
 import { bareAgentId, isAgentId } from "./channel-agent-id";
 import { err, type ToolResponse } from "./respond";
 
@@ -41,7 +42,10 @@ export function launchName(raw: string | undefined): { name: string } | ToolResp
       `op="manage" action="launch": name="${name}" is an agent id, not a name. An id is internal plumbing and is never shown to a person; pass what the agent is FOR ("Research", "Bug reviewer").`,
     );
   }
-  return { name };
+  // ⚠ **A SLUG IS REPAIRED RATHER THAN REFUSED, AND ONLY AFTER THE TWO REFUSALS ABOVE**
+  // (Samuel, 2026-09-17): `agent-display-name.ts` explains why this arm normalizes, and why
+  // casing an id-shaped string BEFORE `looksLikeAgentId` would walk it past its own check.
+  return { name: agentDisplayName(name) };
 }
 
 /**

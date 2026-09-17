@@ -364,13 +364,13 @@ exports.CHANNEL_INPUT_SHAPE = {
         .string()
         .optional()
         .describe(
-    // ⚠ THE 1:1 CLAUSE CAME OFF ON 2026-09-06 TO PAY FOR THE ARTIFACT ONE,
-    // under this file's own no-fact-twice rule: `to`'s describe already says
-    // op="rooms" takes it for "the one to open a 1:1 with", and both strings
-    // are pushed on the same connection. The three pinned facts about a
-    // rename (DISPLAY ONLY, the handle is the only address, it reaches no
-    // server) are untouched.
-    'op="rooms" action="open" (required for a NAMED channel): the channel name. op="manage" action="launch" (REQUIRED), action="rename": what to call that agent — 1-60 visible characters on ONE line, an id is not a name, "" clears. It is what people see and the tag agents use, slugged (`@bug-reviewer`); a launch answers the name it GOT — read its `name=`. op="artifact" action="create": the card\'s name.'),
+    // ⚠ THE 1:1 CLAUSE CAME OFF ON 2026-09-06 TO PAY FOR THE ARTIFACT ONE:
+    // `to`'s describe already says op="rooms" takes it for "the one to open a
+    // 1:1 with", and both are pushed on the same connection. ⚠ **AND IT TEACHES
+    // TITLE CASE RATHER THAN "slugged" SINCE 2026-09-17** — that word read as an
+    // instruction to PASS `picker-fix`. The tag is DERIVED, and
+    // `agent-display-name.ts` repairs a slug that arrives anyway.
+    'op="rooms" action="open" (required for a NAMED channel): the channel name. op="manage" action="launch" (REQUIRED), action="rename": what to call that agent — a DISPLAY NAME in Title Case ("Picker Fix" → `@picker-fix`), never a slug. 1-60 visible characters on ONE line, an id is not a name, "" clears; a launch answers the name it GOT — read `name=`. op="artifact" action="create": the card\'s name.'),
     visibility: zod_1.z
         .enum(["private", "public"])
         .optional()
