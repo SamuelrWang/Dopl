@@ -222,6 +222,31 @@ export const APP_OPS = [
   //     else here, and why the store it writes is machine-local: a SERVER-writable approval
   //     would let a credential-holding agent pre-approve itself across the whole fleet, which
   //     is the escalation `orchestratorLaunchEnabled` exists to not have either.
+  // ⚠ ONE JOINED HERE ON 2026-09-17 (Samuel's inline-approval ruling: *"i dont see like a surface
+  // where I can approve the permission either inline"*). `sessions.answerPermission` carries the
+  // operator's Approve / Deny for ONE tool call this machine is HOLDING at the gate. The review,
+  // because the pin fails on the ADD:
+  //
+  //   • The main-process handler EXISTS and was checked before this list was edited —
+  //     `main/session-ipc-ops.js › sessions:answerPermission`, `appWindowOnly` written literally
+  //     at the site, delegating to `main/session-answer-permission.js › answerPermission`, which
+  //     re-validates the payload (UUID channel, coerced task, charset-gated agent id, bounded
+  //     request id) because the split moved the code and not the boundary.
+  //   • IT DECIDES NOTHING AND WIDENS NOTHING. The GATE already ruled "hold and ask"; this only
+  //     carries a human's answer to a resolver already parked in THIS process for a session in
+  //     main's own registry. ALLOW-ONCE only, so it mints no standing grant; it moves neither
+  //     permission axis, starts no turn, wakes no parked shell and reaches no other machine. A
+  //     `deny` VERDICT parks no resolver at all, so a call the PROFILE refused cannot be answered
+  //     here — this op cannot make a hard-denied tool run.
+  //   • EXACTLY ONCE, PROVED BY THE RESOLVER MAP rather than by a flag: `session-permissions.js ›
+  //     resolvePerm` deletes as it answers, and the engine dispatch returns FIX-F1's "did a live
+  //     resolver really take it". A second click, or one racing the 10-minute TTL or a park's
+  //     fail-close, answers `{ ok: false }` with a reason instead of a blanket success.
+  //   • The failure direction of a FORGED call is one held question answered inside the
+  //     containment that session already launched under — the same shape `sessions.approveTemplate`
+  //     below carries, and why the sender binding matters anyway: a forged ALLOW skips a question
+  //     the operator should have been asked.
+  "sessions.answerPermission",
   "sessions.approveTemplate",
   // ⚠ ONE JOINED HERE ON 2026-08-25 (Samuel's delete ruling): `sessions.delete`, the Agents-tab
   // card's trash icon. The pin failed on the ADD, which is the review this comment records:

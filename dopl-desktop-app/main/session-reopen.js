@@ -235,13 +235,13 @@ function controlByTask(a) {
 // ⚠ WHAT IT DOES NOT DO: RE-DECIDE ANYTHING ALREADY PENDING. The reducer's own branch has
 // carried that argument since v2.9 — `pendingPermissions` holds requestIds only, so it cannot
 // tell a queued Bash from a queued `op=open`, and a blanket drain would let the TOOL axis
-// answer a MESSAGE operation. ⚠ IN THE WINDOWLESS SHAPE THE QUESTION IS MOOT ANYWAY, which is
-// worth stating because it is not obvious: `session-windowless.js › claimGate` DENIES a gated
-// tool immediately (`setImmediate(() => decide(rid, 'deny'))`) and bridges an outbound post to
-// a consent row the server decides. Nothing is ever HELD locally waiting for a posture to
-// change, so "re-evaluate pending gates" has no pending gates to re-evaluate. The inbound
-// half's `drainInbound` went with the v1 purge for the same reason (`session-gate.js`: a
-// windowless session's message axis is floored at `auto_inbound`, so the queue never holds).
+// answer a MESSAGE operation. ⚠ THIS USED TO GO ON "AND IN THE WINDOWLESS SHAPE THE QUESTION IS
+// MOOT ANYWAY", because `claimGate` denied a gated tool immediately — FALSE SINCE 2026-08-31,
+// when Samuel's tool-gate ruling made `session-windowless.js › bridgeToolGate` HOLD the call
+// behind a notification. Gated calls ARE held locally, routinely, and since 2026-09-17 the
+// operator answers them on the agent panel (`session-answer-permission.js`). The rule above is
+// unchanged and is the one that matters. `drainInbound` went with the v1 purge for the matching
+// reason (`session-gate.js`: a windowless message axis floored at `auto_inbound` never holds).
 //
 // ⚠ AND THAT FLOOR USED TO BE A LAUNCH-ONLY FACT, WHICH MADE THE SENTENCE ABOVE FALSE FROM
 // THIS VERY FUNCTION (2026-08-20, F-236). `channel-prefs.js › windowlessMessageMode` floors
@@ -496,4 +496,4 @@ function endLiveSessions() {
 
 // ─── END SESSION-REOPEN-PURE ──────────────────────────────────────────────────────
 
-module.exports = { bind, listLiveSessions, reopenByTask, controlByTask, setModeByTask, setModelByTask, messageByTask, listOrphanRisk, endLiveSessions };
+module.exports = { bind, listLiveSessions, reopenByTask, controlByTask, setModeByTask, setModelByTask, messageByTask, listOrphanRisk, endLiveSessions, resolveSession }; // ⚠ `resolveSession` IS EXPORTED SO IT IS NOT COPIED (2026-09-17): `main/session-answer-permission.js` is a sibling of the ops above that this file had no room for, and the ONE thing it must not restate is the multiplayer address rule — see the block over the function

@@ -329,6 +329,10 @@ contextBridge.exposeInMainWorld('dopl', {
       { channelId: asId(channelId), taskId: asId(taskId), agentId: asId(agentId) }),
     end: (channelId, taskId, agentId) => ipcRenderer.invoke('sessions:end',
       { channelId: asId(channelId), taskId: asId(taskId), agentId: asId(agentId) }),
+    // ⚠ ANSWER ONE HELD TOOL CALL (2026-09-17) — the agent panel's inline Approve / Deny, the surface the retired session window took with it.
+    // ALLOW-ONCE, grants nothing standing, starts no turn (`main/session-answer-permission.js`); `allow` fails closed here AND in main.
+    answerPermission: (channelId, taskId, requestId, allow, agentId) => ipcRenderer.invoke('sessions:answerPermission',
+      { channelId: asId(channelId), taskId: asId(taskId), requestId: asId(requestId), allow: allow === true, agentId: asId(agentId) }),
 
     // ⚠ DELETE THE AGENT (2026-08-25) — `end` plus an ERASE. A live session stops through the
     // SAME reducer event `end` dispatches (one stop path, never two), then every LOCAL trace goes.

@@ -154,6 +154,23 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       //     `session-state-push.js › reportRow` has read `e.color` off this summary since the
       //     colours wave; the summary carried none, so the ask was `undefined` on every push.
       color: null,
+      // ⚠ WIDENED 2026-09-17 BY ONE FIELD, `heldGates` (Samuel's inline-approval ruling:
+      // *"i dont see like a surface where I can approve the permission either inline"*). The pin
+      // failed on the ADD, which is the review this comment records:
+      //   • `[]` IS THE ORDINARY ANSWER and this fixture's — a session holding nothing. It is
+      //     UNIFORM rather than omitted, so no reader branches on absence to decide whether this
+      //     build reports held calls at all; an older main answers `undefined` and the SPA's
+      //     reader (`agents-held-gates.ts`) treats that as "cannot say", which is the same
+      //     widened-local-type rule `agentEndedAt` and `agentRunningModel` already follow.
+      //   • IT IS A PROJECTION OF `state.pendingPermissions`, NEVER A SECOND SET.
+      //     `session-held-gates.js › heldGatesFor` walks the reducer's own array and looks each
+      //     id up in a bounded per-session ledger, so an answered, parked or expired request is
+      //     invisible by construction and there is no "is it still pending" opinion to drift.
+      //   • ⚠ IT DOES NOT REACH THE SERVER, by the property every field above it relies on:
+      //     `session-state-push.js › reportRow` picks its columns BY NAME. That matters more
+      //     here than elsewhere — an entry carries a one-line summary of a TOOL INPUT, which is
+      //     a fact about this machine and nobody else's business.
+      heldGates: [],
       contextUsed: 84000,
       contextWindow: 200000, // the frozen table's row for claude-haiku-4-5
       tokensSpent: 1200000,

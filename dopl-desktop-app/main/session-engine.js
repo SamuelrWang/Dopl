@@ -20,6 +20,7 @@ const io = require('./session-io');
 const store = require('./session-store');
 const avatarCache = require('./avatar-cache');
 const sessionReopen = require('./session-reopen');
+const sessionAnswerPermission = require('./session-answer-permission'); // the held-gate answer — a `session-reopen` sibling that file had no room for (2026-09-17)
 const sessionSummary = require('./session-summary'); // §3.3: THE session-pill projection
 const sessionPark = require('./session-park'); const sessionBoot = require('./session-boot'); // F-694: what a DORMANT record becomes at app start — Idle or Ended, never NOTHING (that file carries the incident and the whole argument)
 const framing = require('./prompt-framing');
@@ -85,6 +86,7 @@ mcpGuard.bind({ acquireRuntime, startQuery, dispatch, emit, denyPending: denyPen
 sessionGate.bind({ sessions, dispatch });
 // Reopen helpers (session-reopen.js): live registry + tray refresh + the P2 shell fallback (item 2).
 sessionReopen.bind({ sessions, refreshTray, dispatch, openAgentWindow: (t) => require('./agent-window').openAgentWindow(t) }); // C-8: quit ends live sessions through the reducer; 2026-08-20: a live session's VIEW is the agent window
+sessionAnswerPermission.bind({ resolveSession: sessionReopen.resolveSession, dispatch }); // 2026-09-17: the operator's answer to ONE held gate, through `session-reopen`'s OWN address resolver (never a copy) and this funnel, so it lands as a `permission_decision` like every other one
 // §3.3: the pill projection reads the SAME registry (it derives, it never mutates); index.js arms its push.
 sessionSummary.bind({ sessions, endedRecords: agentHistory.listEnded }); sessionNarration.bind({ sessions }); sessionRegistry.bind({ sessions });
 sessionLaunch.bind({ sessions, acquireRuntime, startSession, liveOnThread, sessionOn }); // the funnel cannot require the engine back // ...and the narration ring + the addressing reads take the same registry
@@ -488,6 +490,7 @@ module.exports = {
   listLiveSessions: sessionReopen.listLiveSessions, listOrphanRisk: sessionReopen.listOrphanRisk, endLiveSessions: sessionReopen.endLiveSessions, // item 10 tray + C-8 quit guard
   reopenByTask: sessionReopen.reopenByTask, controlByTask: sessionReopen.controlByTask, setModeByTask: sessionReopen.setModeByTask, messageByTask: sessionReopen.messageByTask,
   setModelByTask: sessionReopen.setModelByTask, // 2026-08-22: the LIVE model switch (Query.setModel)
+  answerPermissionByTask: sessionAnswerPermission.answerPermissionByTask, // 2026-09-17: the inline Approve / Deny on a HELD tool call
   // ⚠ IT TAKES AN ADDRESS, NOT A KEY (2026-08-21). It used to be `(k) => ringFor(sessions.get(k))`
   // and its ONE caller built `${channelId}:${taskId}` by hand — a second, now-wrong statement of
   // the key format sitting in the IPC layer. It takes `{channelId, taskId, agentId?}` and goes

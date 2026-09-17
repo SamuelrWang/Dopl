@@ -46,6 +46,13 @@ export const LAUNCH_OP_SRC = M("session-launch-op.js");
 // the id predicate and `diag`; everything destructive is required LAZILY, after both gates, so a
 // payload refused at the boundary never reaches a store.
 export const DELETE_OP_SRC = M("session-delete-op.js");
+// ⚠ THE HELD-GATE ANSWER IS REAL FOR EXACTLY THE SAME REASON (2026-09-17). `sessions:answer
+// Permission` validates its payload inside `main/session-answer-permission.js` — the split moved
+// the code, not the boundary — so a stub would make the indistinguishable-refusal arm assert a
+// shape the shipped code does not produce. Its module-scope requires are the guards and the id
+// predicate, both stubbed REAL below; everything else it touches arrives through `bind`, which
+// this harness never calls, so an unbound module fails CLOSED — which is the answer under test.
+export const ANSWER_PERM_SRC = M("session-answer-permission.js");
 // ⚠ BOTH SOURCES, BECAUSE THE FILE SPLIT AND THE BINDING DID NOT (2026-08-20, F-226). Every
 // structural assertion reads the CONCATENATION: an op that dodges the wrapper fails the belt
 // whichever half it was added to, which is the property the split must not cost.
@@ -215,6 +222,7 @@ export function bootIpc({ blocked = false } = {}) {
     if (id === "./agent-id") return realAgentId;
     if (id === "./session-launch-op") return launchOpModule;
     if (id === "./session-delete-op") return deleteOpModule;
+  if (id === "./session-answer-permission") return answerPermModule;
     if (id === "./session-ipc-ops") return opsModule;
     // ⚠ A SECOND `./channel-prefs` AND A SECOND `./channel-runtime` STOOD HERE AND ARE DELETED
     // (2026-09-05). Both were UNREACHABLE — the branches above match first — so the members only
@@ -231,6 +239,7 @@ export function bootIpc({ blocked = false } = {}) {
   // construction and failed every case in this harness, not only the turn-cap ones.
   const launchOpModule = evalModule(LAUNCH_OP_SRC, stubRequire);
   const deleteOpModule = evalModule(DELETE_OP_SRC, stubRequire);
+  const answerPermModule = evalModule(ANSWER_PERM_SRC, stubRequire);
   const opsModule = evalModule(OPS_SRC, stubRequire);
   const mod = { exports: {} };
   new Function("require", "module", "exports", SRC)(stubRequire, mod, mod.exports);

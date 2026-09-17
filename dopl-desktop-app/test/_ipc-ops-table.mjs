@@ -110,6 +110,15 @@ export const OPS = [
   // reason this list is asserted by COUNT as well as by name.
   ["sessions:pause", { channelId: CH, taskId: "t1" }, { ok: false }],
   ["sessions:end", { channelId: CH, taskId: "t1" }, { ok: false }],
+  // ⚠ ONE JOINED 2026-09-17 (Samuel's inline-approval ruling): the operator answering ONE tool
+  // call this machine is HOLDING at the gate. It is the same shape as the two stop verbs above —
+  // sender-bound, `channelId` UUID-gated, resolved against main's OWN registry — and it is the
+  // one op on this list that carries a DECISION rather than a control. It still widens nothing:
+  // ALLOW-ONCE mints no standing grant, neither axis moves, no turn starts, and a `deny` VERDICT
+  // parks no resolver, so a hard-denied tool has nothing here to be answered with. `{ok:false}`
+  // is also the honest answer for the ordinary miss (no such session, unknown or already-answered
+  // request id), which is why a refused call and a real miss are indistinguishable here too.
+  ["sessions:answerPermission", { channelId: CH, taskId: "t1", requestId: "r1", allow: true }, { ok: false }],
   // ⚠ JOINED 2026-08-25 (Samuel's delete ruling): `sessions:end` PLUS A LOCAL ERASE — a live
   // agent stops through the SAME reducer event (one stop path, never two) and then every local
   // store keyed to it is dropped. It starts no query, grants no tool, posts nothing, and reaches

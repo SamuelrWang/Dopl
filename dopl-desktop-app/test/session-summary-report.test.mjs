@@ -109,6 +109,13 @@ test("REPORT: `list()` narrows the report-only `key` back off — `workspaceId` 
     // server never connected — which is the one state the three-value pill cannot express.
     "diag",
     "displayName", "endedAt",
+    // ⚠ `heldGates` joined 2026-09-17 (Samuel's inline-approval ruling) and is LOCAL-only on
+    // exactly `diag`'s terms: `reportRow` picks the server columns BY NAME and
+    // `channel_sessions` has none to receive it. That is stronger than a convenience here — an
+    // entry carries a one-line summary of a TOOL INPUT, which is a fact about this machine and
+    // is nobody else's business. It is not REPORT-only either, which is all this case claims:
+    // the agent panel's approve/deny card is its whole audience.
+    "heldGates",
     "lastActivityAt", "lastDeniedTool", "lastWakeAt", "lastWakeSeq", "listening", "messageMode",
     // ⚠ `model` joined 2026-08-22 (Samuel's model-selection ruling) and is LOCAL-only on the same
     // terms as `detail` / `toolMode` / `messageMode`: `session-state-push.js › reportRow` picks

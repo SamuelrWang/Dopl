@@ -60,7 +60,7 @@ const { diag } = require('./diag');
 // ⚠ `displayText` AND `TEMPLATE_NAME_MAX` MOVED OUT ON 2026-09-13 (`session-summary-text.js`) —
 // one file, one reason to change, and the split was FORCED: this file sat exactly at the 500-line
 // cap, which INVARIANTS §1 says cannot absorb a comment. Injected by the harness like the rest.
-const { displayText, TEMPLATE_NAME_MAX } = require('./session-summary-text');
+const { displayText, TEMPLATE_NAME_MAX } = require('./session-summary-text'); const { heldGatesFor } = require('./session-held-gates'); // ⚠ THE SECOND REQUIRE SHARES THIS LINE BECAUSE THE FILE IS AT THE §1 CAP: `heldGatesFor` (2026-09-17) projects WHAT A HELD CALL IS ASKING off the reducer's own `pendingPermissions` — never a second opinion about what is live — and takes no requires of its own precisely so this file's source-extraction harness keeps loading
 
 // ─── BEGIN SESSION-SUMMARY-PURE (injectable; unit-tested via source extraction) ──────
 // The names above are free vars from here down.
@@ -157,6 +157,7 @@ function liveSummary(s, name) {
     // at the two boundaries that can produce one, so `labelOrNull` would pass `agent-99` through.
     // ⚠ `null` IS "NONE REPORTED" AND CANNOT ERASE ONE (`server/session-colors.ts` rule 1).
     color: (s && s.color) || null,
+    heldGates: heldGatesFor(s), // ⚠ **THE CALLS THIS SESSION IS BLOCKED ON, WITH ENOUGH TO DECIDE THEM** (Samuel, 2026-09-17: *"i dont see like a surface where I can approve the permission either inline"*). `[]` is the ordinary answer and the field is UNIFORM so no reader branches on absence. ⚠ **LOCAL ONLY** — `session-state-push.js › reportRow` is an allowlist and does not name it, so a tool input summary never reaches the server; the answering op is `sessions:answerPermission`
     ...metrics(s),
   };
 }

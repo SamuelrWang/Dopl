@@ -61,6 +61,12 @@ const { PILL_STATES, ACTIVITY_PILL, PILL_ENDED, pillState, queryTornDown, listen
 // `new Function` return and a name the block no longer declares is a ReferenceError at LOAD.
 const summaryText = req(join(MAIN, "session-summary-text.js"));
 const { displayText, TEMPLATE_NAME_MAX } = summaryText;
+// ⚠ THE HELD-GATE PROJECTION (2026-09-17). Injected REAL, like every dependency here and for
+// the same reason: these cases are about the summary CARRYING the held calls, not about
+// re-deriving them — `session-held-gates.test.mjs` owns the ledger's own rules. It is safe to
+// `req` because that module takes NO requires of its own (its header says why), so it cannot
+// drag an `electron-store` into this loader the way `agent-names.js` would.
+const { heldGatesFor } = req(join(MAIN, "session-held-gates.js"));
 
 const BEGIN = "// ─── BEGIN SESSION-SUMMARY-PURE";
 const from = SRC.indexOf(BEGIN);
@@ -110,6 +116,7 @@ export function load() {
     "descriptionForAgent",
     "displayText",
     "TEMPLATE_NAME_MAX",
+    "heldGatesFor",
     "PILL_STATES",
     "ACTIVITY_PILL",
     "PILL_ENDED",
@@ -120,7 +127,7 @@ export function load() {
     `${BLOCK}\n return { ${EXPORTED.join(", ")} };`
   )(
     metricOrNull, metrics, noteEvent, detailFor, displayNameFor, descriptionForAgent,
-    displayText, TEMPLATE_NAME_MAX,
+    displayText, TEMPLATE_NAME_MAX, heldGatesFor,
     PILL_STATES, ACTIVITY_PILL, PILL_ENDED, pillState, queryTornDown, listeningState,
     (...parts) => logged.push(parts.join(" "))
   );

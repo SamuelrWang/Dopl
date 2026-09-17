@@ -22,6 +22,11 @@ const { isOutboundPost, outboundConsentShape } = outboundTag;
 const postSurface = require('./session-post-surface');
 const { withPostSurface, postKindOf } = postSurface;
 const { denyMessageFor } = require('./session-permissions');
+// ⚠ WHAT A HELD CALL IS, recorded beside the id the reducer keeps (2026-09-17, Samuel's
+// inline-approval ruling). A LEDGER, not a decision: that module's header carries the whole
+// argument, including why it takes this file's finished label + op key rather than computing
+// its own. Nothing below it may consult the ledger to decide anything.
+const heldGates = require('./session-held-gates');
 // ⚠ `grantArgs` AND THE TWO INPUT SUMMARIZERS STAY IN `session-io.js`, AND THIS FILE ASKS FOR
 // THEM RATHER THAN COPYING THEM. `grantArgs` is the ONE place both axes are read off a live
 // session, so the prediction the stream paints and the decision the gate makes can never drift;
@@ -177,6 +182,20 @@ function gateCall(s, name, input, opts, dispatch, log) {
         outboundTag.wrapAllow(resolve, tag, outbound ? function () { outboundTag.markOwnPost(s); } : null),
       );
       s.pendingNames.set(requestId, grantName);
+      // ⚠ WHAT THE OPERATOR IS BEING ASKED, beside the opaque id (2026-09-17). ONLY the DOCK
+      // shape: an `outbound_gate` already has a surface — the held post's own card in the
+      // thread's send box — and offering it a second set of buttons is two answers to one
+      // question. The label and the op key are the SAME ones `logGateVerdict` prints, so the
+      // card and the audit line can never name different calls.
+      if (payload.type === 'permission_request') {
+        heldGates.note(s, {
+          requestId: requestId,
+          tool: shortToolLabel(name),
+          op: channelOpLabel(name, input),
+          summary: payload.inputSummary,
+          reason: verdict.reason,
+        });
+      }
       dispatch(s, { type: 'permission_request', requestId, name: grantName, payload });
     },
   };

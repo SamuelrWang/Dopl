@@ -32,7 +32,8 @@
 //   sessions:message         ⚠ THE OTHER OP THAT STARTS A TURN — see its own block
 //   sessions:narration       reads my own agent's work ring, for that window's first paint
 //   sessions:pause           interrupts the turn my agent is running on a thread
-//   sessions:end             ends my agent on a thread — terminal, and never the thread
+//   sessions:end             ends my agent on a thread — terminal, and never the thread; and
+//                            sessions:answerPermission answers ONE tool call HELD at the gate
 //   sessions:delete          ⚠ ends it if live, then DESTROYS every LOCAL trace of it — never
 //                            a channel message, which is the server's
 //   sessions:rename          what the operator calls one agent — display only, never an address
@@ -351,6 +352,12 @@ function register(opts = {}) {
   };
   ipcMain.handle('sessions:pause', appWindowOnly('sessions:pause', { ok: false }, control('pause')));
   ipcMain.handle('sessions:end', appWindowOnly('sessions:end', { ok: false }, control('end')));
+
+  // ANSWER ONE HELD TOOL CALL — Approve / Deny, inline (2026-09-17, Samuel's ruling). ⚠ THE BODY, THE PAYLOAD GATES AND THE WHOLE ARGUMENT LIVE IN `main/session-answer-permission.js`:
+  // why it is ALLOW-ONCE, why it widens nothing (a `deny` VERDICT parks no resolver, so there is nothing here to answer for one), and why "exactly once" is proved by the resolver map, not a flag.
+  ipcMain.handle('sessions:answerPermission', appWindowOnly('sessions:answerPermission', { ok: false }, (_event, payload) => (
+    require('./session-answer-permission').answerPermission(payload)
+  )));
 
   // DELETE MY OWN AGENT (2026-08-25, Samuel's ruling) — the Agents-tab card's trash icon.
   //
