@@ -153,30 +153,27 @@ const ACCENT_BAR = "w-[3px] shrink-0 self-stretch rounded-b-full";
  * window and the guest lane hand no callback, and a capsule that cannot open
  * anything must not animate as though it can (the absent-not-disabled rule).
  *
- * 🔒 **AND THE HOVER DEEPENS THE SHADOW, WHICH IS WHAT MAKES THE LIFT LEGIBLE**
- * (Samuel, 2026-09-16): *"when I hover over like one of the black buttons, it
- * translates up, and the shadow gets darker/larger. And that's what makes it clearly
- * visible. Can we add the same functionality, when it translates up, it like has more
- * shadowing?"*
+ * 🔒 **THE HOVER IS THE LIFT AND NOTHING ELSE — THE SHADOW DOES NOT DEEPEN**
+ * (Samuel, 2026-09-16, reverting his own earlier ask for *"more shadowing"* on the
+ * lift). The badge's drop stays `--shadow-bento` at rest AND on hover; the motion is
+ * the translate, the way it was before the deepening landed in `16a1575d`.
  *
- * ⚠ **IT IS THE BLACK BUTTON'S OWN HOVER DROP, BY REFERENCE.** `--shadow-raised-hover`
- * is `.auth-btn-3d:hover`'s ambient pair extracted to a token in `globals.css` (mirrored
- * in `tokens.css`), and that rule NAMES it rather than spelling the two drops — so this
- * badge and every black button in the app share one hover weight and a retune moves both.
- * A literal shadow here would be the drift docs/DESIGN-SYSTEM.md forbids.
- * ⚠ **`transition-[transform,box-shadow]`, NOT `transition-transform`** — it was the
- * latter, so a shadow change would have SNAPPED while the lift animated. Both properties
- * or neither, on one duration, and `motion-reduce` still turns the whole thing off.
+ * ⚠ **SO THE TRANSITION IS `transition-transform`, NOT `transition-[transform,box-shadow]`.**
+ * With no shadow change to animate, naming `box-shadow` here would be a transition over a
+ * property that never moves. One property, one duration, and `motion-reduce` still turns
+ * the whole thing off.
+ * ⚠ **`--shadow-raised-hover` STAYS DECLARED IN `globals.css`** — `.auth-btn-3d:hover`
+ * names it, so the token is the black button's own step and is not this badge's to delete.
  *
  * 🔒 **THE LIFT IS 2px, NOT THE KIT'S 1px, AND THE DEVIATION IS DELIBERATE**
  * (Samuel: 1px is "too subtle to read as clickable"). `.btn-light`,
  * `.auth-btn-3d` and `.menu-row` all lift 1px (`globals.css`) — but every one of
  * them changes its FILL on hover as well. This badge has no hover fill at all: its
- * face is the agent's colour and must stay that colour, so the lift and the deeper
- * shadow carry the whole affordance between them.
+ * face is the agent's colour and must stay that colour, so the 2px lift carries the
+ * whole affordance on its own.
  */
 const ACCENT_FRAME =
-  "inline-flex max-w-full border-[3px] border-solid -mb-[3px] shadow-[var(--shadow-bento)] transition-[transform,box-shadow] duration-150 has-[button:hover]:-translate-y-0.5 has-[button:hover]:shadow-[var(--shadow-raised-hover)] has-[button:active]:translate-y-0.5 motion-reduce:transition-none";
+  "inline-flex max-w-full border-[3px] border-solid -mb-[3px] shadow-[var(--shadow-bento)] transition-transform duration-150 has-[button:hover]:-translate-y-0.5 has-[button:active]:translate-y-0.5 motion-reduce:transition-none";
 
 /**
  * **THE CAPSULE'S CORNERS ON AN ACCENTED ROW** — square on the side that meets the bar,

@@ -253,9 +253,9 @@ describe("the accent, rendered", () => {
 
     expect(wrap.className).toContain("has-[button:hover]:-translate-y-0.5");
     expect(wrap.className).toContain("has-[button:active]:translate-y-0.5");
-    // ⚠ BOTH PROPERTIES TRANSITION (2026-09-16). It was `transition-transform`, so the
-    // hover shadow below would have SNAPPED while the lift animated.
-    expect(wrap.className).toContain("transition-[transform,box-shadow]");
+    // ⚠ THE TRANSFORM IS THE ONLY THING THAT MOVES (2026-09-16 revert), so `box-shadow`
+    // is NOT in the transition list — see the hover-shadow case below.
+    expect(wrap.className).toContain("transition-transform");
     expect(wrap.className).toContain("motion-reduce:transition-none");
     // ⚠ AND THE PILL ITSELF STAYS PUT — the half that fails if the motion is ever
     // copied back onto the button "so the pill still feels pressable".
@@ -263,21 +263,22 @@ describe("the accent, rendered", () => {
   });
 
   /**
-   * 🔒 **THE HOVER DEEPENS THE SHADOW, AND IT IS THE BLACK BUTTON'S OWN STEP (Samuel,
-   * 2026-09-16)**: *"when I hover over like one of the black buttons, it translates up,
-   * and the shadow gets darker/larger. And that's what makes it clearly visible. Can we
-   * add the same functionality, when it translates up, it like has more shadowing?"*
+   * 🔒 **THE HOVER DOES NOT DEEPEN THE SHADOW — IT ONLY LIFTS (Samuel, 2026-09-16,
+   * reverting his own earlier ask for *"more shadowing"* on the lift).** The deepening
+   * shipped in `16a1575d` as `has-[button:hover]:shadow-[var(--shadow-raised-hover)]`;
+   * this case is what stops it coming back.
    *
-   * ⚠ **THE PROPERTY IS THE TOKEN, NOT "A SHADOW CHANGES".** `--shadow-raised-hover` is
-   * `.auth-btn-3d:hover`'s ambient pair EXTRACTED — that rule names the token now — so a
-   * literal here, or a second hand-tuned pair, is the drift docs/DESIGN-SYSTEM.md forbids
-   * and is exactly what this case exists to fail.
+   * ⚠ **THE ASSERTION IS THE ABSENCE OF ANY HOVER SHADOW, not the absence of one token.**
+   * A hand-tuned literal pair would read as "less shadow" and still be a hover shadow, so
+   * the case fails on the whole shape rather than on the name `--shadow-raised-hover`.
+   * ⚠ **THE RESTING DROP IS UNTOUCHED** — `--shadow-bento` still falls from the frame at
+   * every state, which is the other half: no shadow change is not no shadow.
    */
-  it("deepens the badge's shadow on hover, on the black button's own token", () => {
+  it("lifts on hover WITHOUT deepening the drop — no hover shadow at all", () => {
     const { container } = renderRow();
-    expect(ring(container)!.className).toContain(
-      "has-[button:hover]:shadow-[var(--shadow-raised-hover)]"
-    );
+    const cls = ring(container)!.className;
+    expect(cls).not.toMatch(/hover[^\s]*:shadow-/);
+    expect(cls).toContain("shadow-[var(--shadow-bento)]");
   });
 
   /**
