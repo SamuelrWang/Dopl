@@ -635,21 +635,57 @@ message-box-agent component is deleted: an agent's post is a person's post plus 
   `src/features/search/components/search-popup.tsx`, mounted by /home's header pill and
   by the workspace channels column's field.
   - **THE CARD HANGS OFF THE FIELD'S OWN RELATIVE SLOT** — `absolute top-full right-0
-    mt-3` inside `.search-expand` (which is `position: relative` already), so "aligned
+    mt-2` inside `.search-expand` (which is `position: relative` already), so "aligned
     with the bar's edge" is true by construction rather than by a measurement. `!p-0` +
     `overflow-hidden`, because the legend bar runs edge to edge and clips to the card's
     corners.
+  - 🔒 **IT IS THE PILL'S WIDTH PLUS ITS OWN PADDING, AND THE WHOLE CARD IS ONE STEP
+    SMALLER THAN IT SHIPPED (Samuel, 2026-09-17:** *"right now, the search bar, i feel
+    like it's too big. Can we scale it down in its entirety, meaning, I think we scale
+    down fontsizes and stuff like that too."*) — `search-popup.tsx › SEARCH_CARD_W` is
+    **280px**: the kit's open pill is a flat 260px (`.search-expand[data-open="true"]`)
+    and the body carries `px-2.5` a side, so the ROWS land on the pill's own edges. It
+    was `w-[420px]`, i.e. the card overhung the control it hangs from by 160px, and the
+    channels sidebar carried a SECOND copy of that number (`!w-[420px]`, now the pin
+    only). **No new token and no new size** — every step is one rung down the ramp
+    above: title `text-body` → `text-small`, the right-hand facts `text-caption` →
+    `text-micro`, tile 24 → 20px, legend bar 44 → 36px, row pad `py-1.5` → `py-1`.
+  - 🔒 **EACH SECTION IS A FIXED HEIGHT AND SCROLLS ITSELF (Samuel, same review:**
+    *"each section is a fixed height, and if there's more items in it, it's
+    scrollable."*) — `search-popup.tsx › SEARCH_SECTION_MAX_H` (`max-h-[160px]`, five
+    one-line rows) + `overflow-y-auto` + the kit's `.scrollbar-discreet`, on the LIST
+    and not on the section: the hairline heading is a sibling ABOVE it and stays put
+    while its rows move. The card keeps its own ceiling under that, because enough
+    matching sections still stack past the screen. ⚠ The keyboard cursor's
+    `scrollIntoView({block:"nearest"})` walks every scrollable ancestor, so one call
+    serves the section and the card.
   - **SECTION RULE**: a hairline with the section's name sitting IN it, gaps either side
     — `h-px flex-1 bg-border-subtle` on both sides of a `text-label` uppercase
     `text-text-muted`. That is the reference's own divider at the kit's label face.
-  - **ROW**: `.menu-row` + `px-2 py-1.5`, a 24px `rounded-[6px] bg-surface-raised-2` glyph
-    tile, a `text-body font-semibold` title over a `text-caption` second line, then
-    `AvatarStack` (`2xs`) and one right-aligned `text-caption text-text-muted` fact.
-    ⚠ **THE KEYBOARD CURSOR WEARS `bg-menu-item-hover-bg`** — the token the kit's own
+  - **ROW**: `.menu-row` + `px-1.5 py-1`, a 20px `rounded-[5px] bg-surface-raised-2` glyph
+    tile, a `text-small font-semibold` title, then `AvatarStack` (`2xs`) and the trailing
+    chip. ⚠ **THE KEYBOARD CURSOR WEARS `bg-menu-item-hover-bg`** — the token the kit's own
     `:hover` paints, never a second gray, so an ↓ landing and a pointer hover are one face.
-  - **KEYCAP**: `h-[22px] min-w-[22px] rounded-[6px] border-border-default bg-bg-elevated`
-    at `text-caption` — the legend bar's `Enter / ↑ ↓ / Esc` hints, on
-    `bg-card-surface-subtle` flush to the card's edges.
+  - 🔒 **TWO ROW SHAPES, AND WHICH ONE A KIND TAKES IS A SET (Samuel, 2026-09-17:**
+    *"For channels it like repeats the name of the channel in like 3 places it doesn't
+    make any sense. For channels and threads, it should be one line, it should be the
+    name of the channel in black, and then to the right the description of the channel
+    in gray italics."*) — `search-popup-rows.tsx › ONE_LINE_KINDS` is `channels` +
+    `threads`: the title in `text-text-primary`, then the row's own description beside
+    it at `text-caption italic text-text-muted`, truncated, **and omitted entirely when
+    there is none** (an empty span still eats the row's free space). Every other kind
+    keeps the stacked title + `text-caption` snippet, so prose found by its body still
+    shows the words that matched.
+  - 🔒 **THE CONTAINER IS A TRAILING CHIP, ONLY WHERE IT ANSWERS A QUESTION** —
+    `search-popup-rows.tsx › containerChip`: account scope AND a container other than
+    the host's own. In container scope every row is in the container being looked at,
+    so naming it is the third copy of a word the row already carries. The chip is the
+    Pills/chips recipe at `text-micro`; a relative time takes the slot only on a
+    stacked row that has no chip.
+  - **KEYCAP**: `h-[18px] min-w-[18px] rounded-[5px] border-border-default bg-bg-elevated`
+    at `text-micro` — the legend bar's `Enter / ↑ ↓ / Esc` hints, on
+    `bg-card-surface-subtle` flush to the card's edges. ⚠ It was 22px at `text-caption`
+    until 2026-09-17; the legend came down with the card.
   - **MINIMAL COPY.** Section labels are nouns, never counts; an empty answer is the one
     line `No results`; loading is a DIM over the previous answer, not a spinner and not a
     cleared card. ⚠ **AND THE SECTION ORDER IS THE WIRE'S, NOT THE CARD'S**

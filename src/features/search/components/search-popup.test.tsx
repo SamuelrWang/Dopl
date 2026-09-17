@@ -263,6 +263,39 @@ describe("the keyboard", () => {
       expect.objectContaining({ kind: "knowledge", id: "kb-1" })
     );
   });
+
+  /**
+   * 🔒 **THE CURSOR IS SCROLLED INTO VIEW, WHICH IS WHAT KEEPS ↓ USABLE NOW THAT
+   * EACH SECTION HOLDS ITS OWN SCROLL (2026-09-17).** `block: "nearest"` walks
+   * every scrollable ancestor, so the one call serves the section's list and the
+   * card under it.
+   *
+   * ⚠ **jsdom IMPLEMENTS NO `scrollIntoView`**, which is why the card calls it
+   * with `?.` — this case INSTALLS one for the length of the test and takes it
+   * off again, so nothing else in the suite sees a method the browser build
+   * would not have.
+   */
+  it("🔒 ↓ scrolls the row it lands on into view", async () => {
+    const scrollIntoView = vi.fn();
+    const proto = Element.prototype as unknown as { scrollIntoView?: unknown };
+    proto.scrollIntoView = scrollIntoView;
+    try {
+      const { fetcher } = stubFetcher();
+      render(<Host fetcher={fetcher} />);
+      type("orch");
+      await card();
+      await waitFor(() =>
+        expect(document.querySelector('[data-active="true"]')).not.toBeNull()
+      );
+
+      scrollIntoView.mockClear();
+      fireEvent.keyDown(window, { key: "ArrowDown" });
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+    } finally {
+      delete proto.scrollIntoView;
+    }
+  });
 });
 
 describe("recents", () => {

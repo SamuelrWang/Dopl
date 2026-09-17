@@ -262,9 +262,14 @@ export function ChannelsSidebar({
                is the ONE thing this host passes that /home's does not. The
                fixture table it opened on is test and dev data now. */
             fetcher={apiSearchFetcher}
-            /* The column is 260px and the card is wider: pinned to the column's
-               LEFT edge so it opens into the page rather than off-screen. */
-            className="!right-auto left-3 !w-[420px]"
+            /* ⚠ **THE PIN ONLY — THE WIDTH IS THE CARD'S OWN SINCE 2026-09-17**
+               (`search-popup.tsx › SEARCH_CARD_W`, 280px). This read
+               `!w-[420px]`, which is a second declaration of a width the card
+               states for itself; the card came down a step and this copy would
+               have kept the old one. The column is 260px and the card is
+               slightly wider, so it stays pinned to the column's LEFT edge and
+               opens into the page rather than off-screen. */
+            className="!right-auto left-3"
           />
         )}
       </div>
