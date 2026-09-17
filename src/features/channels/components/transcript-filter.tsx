@@ -9,6 +9,25 @@
  * users, which would include desktop agents as well: all of the messages that don't
  * have a colored box around them … Individual agents"*.
  *
+ * ── ⚠ MULTI-SELECT SINCE 2026-09-16, AND "All" IS NO LONGER AN OPTION ─────────────
+ *
+ * Samuel, on this control: *"single-select today — make CHECKBOX multi-select"* and
+ * *"'All' option redundant vs per-item rows"*. Both are answered by ONE decision:
+ *
+ * 🔒 **AN EMPTY SELECTION IS "All". "All" IS NOT A VALUE.** The filter is a SET
+ * ({@link TranscriptFilter}: the People bucket, plus zero or more agent ids), and the
+ * unfiltered transcript is that set being empty. The row still reading "All" at the top
+ * of the menu is therefore a CLEAR — it selects nothing and shows everything — and it
+ * can never disagree with the rows under it, which is exactly the redundancy Samuel
+ * named. The alternative (keep "All" as a fourth, mutually exclusive value) has to
+ * answer "what does checking All *and* Scout mean", and there is no honest answer.
+ * ⚠ **THE CHECK ON THE "All" ROW IS DERIVED, NEVER STORED**: it is on precisely when
+ * nothing else is, so it reads as a state and acts as a verb without being a member of
+ * the set. ⚠ **AND SELECTING EVERY ROW BY HAND IS NOT NORMALISED BACK TO EMPTY** — it
+ * filters to the same transcript by construction (People plus every agent is the whole
+ * partition, 🔒 `transcript-filter.test.tsx › § People`), and rewriting the reader's
+ * ticks under them would be the control editing their choice.
+ *
  * ── ⚠ "PEOPLE" IS THE COMPLEMENT OF THE ACCENT, AND IT IS NOT RE-SPELLED HERE ──────
  *
  * Samuel defined the option by the PAINT rather than by the data, so this file asks
@@ -34,21 +53,19 @@
  * same two kit primitives `SelectMenu` itself composes, `Popover` + `MenuItem`, and
  * `MenuItem` already has an `icon` slot for exactly this (fifteen callers do the same
  * — `ontology/components/pick-menu.tsx`, `knowledge/components/tree-context-menu.tsx`).
- * ⚠ **THE ONE-LINE FIX IS TO WIDEN THE KIT, NOT TO FORK IT**: an optional
- * `icon?: ReactNode` on `SelectMenuOption` (passed straight to `MenuItem`'s own) and
- * {@link TranscriptFilterSelect} collapses into a `SelectMenu` call with
- * `variant="text"`. It was not done in this change because that file is a shared kit
- * module being edited by another surface of this same wave.
+ * ⚠ **AND SINCE THE MULTI-SELECT CHANGE IT IS NOT A `SelectMenu` FOR A SECOND REASON**:
+ * that kit closes on pick and reports ONE option, which is the wrong contract for a menu
+ * whose whole point is ticking several rows in one opening.
  * ⚠ **THE TRIGGER THEREFORE STATES ITS FACE**, and it is `TRIGGER_FACE.text`'s
  * vocabulary deliberately (label + chevron, no pill, `--menu-item-hover-bg` on hover —
  * Samuel, 2026-09-06 and 2026-09-13) rather than a new one. It is a COPY under protest,
- * and the sentence above is how it stops being one.
+ * and widening the kit is what un-copies it.
  */
 
 import { useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { MenuItem, Popover } from "@/shared/ui/popover-menu";
+import { MenuDivider, MenuItem, Popover } from "@/shared/ui/popover-menu";
 import { agentColorVar } from "../lib/agent-colors";
 import { agentBoxOf } from "./agent-box-rule";
 import { attributionName } from "./attribution-pill";
@@ -57,27 +74,38 @@ import type { AuthorIndex } from "./view-model";
 import type { TranscriptRow } from "./view-model-rows";
 
 /**
- * THE SELECTION: All, People, or ONE agent.
+ * THE SELECTION: a SET — the People bucket and any number of agents, together.
  *
- * ⚠ **A SHAPED UNION AND NOT A STRING**, which closes two questions at once. (1) An
- * agent id could never be read as a keyword — it is eight characters of `[a-z0-9]`
- * (`lib/agent-post-stamp.ts › AGENT_ID_RE`), so a `"people"` collision is impossible
- * TODAY and a `kind` field makes it impossible by construction rather than by luck.
- * (2) A string form would have to interpolate an id, and 🔒 `agent-id-visibility.test.ts`
- * sweeps this directory for exactly that shape — a ban worth honouring even where the
- * string is a state key rather than chrome, because the sweep cannot tell the two apart
- * and the day it could is the day the rule has an exception.
+ * ⚠ **A SHAPED RECORD AND NOT A LIST OF STRINGS**, which closes the same two questions
+ * the old union closed. (1) An agent id lives in its own FIELD, so it could never be
+ * read as a keyword — no `"people"` collision is expressible. (2) No string form has to
+ * interpolate an id, and 🔒 `agent-id-visibility.test.ts` sweeps this directory for
+ * exactly that shape.
+ * ⚠ **EMPTY IS "All"** — see the file docblock. {@link transcriptFilterIsAll} is the one
+ * place that is spelled, so no caller re-derives it.
  */
-export type TranscriptFilter =
-  | { kind: "all" }
-  | { kind: "people" }
-  | { kind: "agent"; agentId: string };
+export interface TranscriptFilter {
+  /** The unboxed posts: humans and Desktop agents (`transcriptRowAgentId === null`). */
+  readonly people: boolean;
+  /** ⚠ FIRST-POST ORDER IS NOT PRESERVED HERE and is not needed — this is a membership
+   *  test ({@link filterTranscriptRows}); the MENU's order comes from the rows. */
+  readonly agentIds: readonly string[];
+}
 
-/** ⚠ ONE REFERENCE EACH, not a fresh literal per render: the selection is a `useMemo`
+/** ⚠ ONE REFERENCE, not a fresh literal per render: the selection is a `useMemo`
  *  dependency of the pane's filtered rows (`message-pane.tsx › visibleRows`), and a new
- *  object every render would re-filter the whole transcript forever. */
-export const TRANSCRIPT_FILTER_ALL: TranscriptFilter = { kind: "all" };
-const TRANSCRIPT_FILTER_PEOPLE: TranscriptFilter = { kind: "people" };
+ *  object every render would re-filter the whole transcript forever. Every path that
+ *  lands back on "nothing selected" returns THIS object. */
+export const TRANSCRIPT_FILTER_ALL: TranscriptFilter = {
+  people: false,
+  agentIds: [],
+};
+
+/** People alone. ⚠ A constructor rather than an inline literal at each call site. */
+export const TRANSCRIPT_FILTER_PEOPLE: TranscriptFilter = {
+  people: true,
+  agentIds: [],
+};
 
 /** ONE agent's entry in the dropdown — the id it filters by, the face it wears, and
  *  the colour it is wearing RIGHT NOW. ⚠ The colour is READ, never stored: it returns
@@ -89,18 +117,47 @@ export interface TranscriptFilterAgent {
   color: AgentColorKey | null;
 }
 
-/** One agent's selection. ⚠ A constructor rather than an inline literal at each call
- *  site, so the shape is stated once. */
+/** One agent selected and nothing else. */
 export function agentTranscriptFilter(agentId: string): TranscriptFilter {
-  return { kind: "agent", agentId };
+  return { people: false, agentIds: [agentId] };
 }
 
-/** Two selections name the same thing. ⚠ NOT `===`: {@link agentTranscriptFilter}
- *  mints a fresh object per call, so identity would report "changed" on a re-pick of
- *  the option already active. */
-function sameFilter(a: TranscriptFilter, b: TranscriptFilter): boolean {
-  if (a.kind === "agent") return b.kind === "agent" && a.agentId === b.agentId;
-  return a.kind === b.kind;
+/** **NOTHING SELECTED, WHICH IS THE UNFILTERED TRANSCRIPT** — the file docblock's
+ *  decision, spelled once so no caller re-derives it. */
+export function transcriptFilterIsAll(filter: TranscriptFilter): boolean {
+  return !filter.people && filter.agentIds.length === 0;
+}
+
+/** How many rows are ticked — the trigger's label needs the COUNT, not the members. */
+export function transcriptFilterCount(filter: TranscriptFilter): number {
+  return (filter.people ? 1 : 0) + filter.agentIds.length;
+}
+
+/** ⚠ RETURNS THE SHARED `ALL` CONSTANT when the last tick comes off, for the identity
+ *  reason on {@link TRANSCRIPT_FILTER_ALL}. */
+function narrow(people: boolean, agentIds: readonly string[]): TranscriptFilter {
+  return !people && agentIds.length === 0
+    ? TRANSCRIPT_FILTER_ALL
+    : { people, agentIds };
+}
+
+/** Tick or untick People. Pure — the pane owns the state. */
+export function toggleTranscriptPeople(filter: TranscriptFilter): TranscriptFilter {
+  return narrow(!filter.people, filter.agentIds);
+}
+
+/** Tick or untick ONE agent, leaving every other tick alone. */
+export function toggleTranscriptAgent(
+  filter: TranscriptFilter,
+  agentId: string
+): TranscriptFilter {
+  const on = filter.agentIds.includes(agentId);
+  return narrow(
+    filter.people,
+    on
+      ? filter.agentIds.filter((id) => id !== agentId)
+      : [...filter.agentIds, agentId]
+  );
 }
 
 /**
@@ -139,8 +196,8 @@ export function transcriptRowAgentId(
  * ⚠ **FIRST-POST ORDER, NOT THE INDEX'S AND NOT ALPHABETICAL.** The reader is looking
  * at the transcript; the order they already scrolled past is the one they can predict.
  * ⚠ **THE FACE IS `attribution-pill.tsx › attributionName`**, so the dropdown and the
- * post's own pill cannot disagree about what an agent is called — including the `#<id>`
- * fallback for an agent this machine has no name for (a peer's, in a web tree).
+ * post's own pill cannot disagree about what an agent is called — including the fallback
+ * face for an agent this machine has no name for (a peer's, in a web tree).
  */
 export function transcriptFilterAgents(
   rows: readonly TranscriptRow[],
@@ -173,9 +230,12 @@ export function transcriptFilterAgents(
 /**
  * **THE FILTER ITSELF — one comparison, so People cannot drift from the box.**
  *
- * ⚠ `"all"` RETURNS THE SAME ARRAY, NOT A COPY: `rows` is a `useMemo` value upstream
- * (`derivations.ts`) and the transcript's pin and paging memoize on its identity, so a
- * fresh array on the default selection would re-run all of that on every render.
+ * ⚠ AN EMPTY SELECTION RETURNS THE SAME ARRAY, NOT A COPY: `rows` is a `useMemo` value
+ * upstream (`derivations.ts`) and the transcript's pin and paging memoize on its
+ * identity, so a fresh array on the default selection would re-run all of that on every
+ * render.
+ * ⚠ **A ROW PASSES IF ANY TICK CLAIMS IT** — union, never intersection: a row is one
+ * author's, so an "and" across two ticked rows is empty by construction.
  * ⚠ **MUTABLE IN AND MUTABLE OUT, WHICH IS NOT THIS FILE'S PREFERENCE**: the answer goes
  * straight into `transcript.tsx › Transcript`'s `rows: TranscriptRow[]`, and a `readonly`
  * return would be un-assignable there. Narrowing that prop is the correct fix and is one
@@ -186,12 +246,14 @@ export function filterTranscriptRows(
   index: AuthorIndex,
   filter: TranscriptFilter
 ): TranscriptRow[] {
-  if (filter.kind === "all") return rows;
-  // ⚠ **PEOPLE IS `null` AND THAT IS THE WHOLE PREDICATE** — the complement of the box,
-  // asked as one comparison against `agent-box-rule.ts`'s own answer rather than as a
-  // second rule about authors.
-  const wanted = filter.kind === "agent" ? filter.agentId : null;
-  return rows.filter((row) => transcriptRowAgentId(row, index) === wanted);
+  if (transcriptFilterIsAll(filter)) return rows;
+  return rows.filter((row) => {
+    // ⚠ **PEOPLE IS `null` AND THAT IS THE WHOLE PREDICATE** — the complement of the box,
+    // asked as one comparison against `agent-box-rule.ts`'s own answer rather than as a
+    // second rule about authors.
+    const agentId = transcriptRowAgentId(row, index);
+    return agentId === null ? filter.people : filter.agentIds.includes(agentId);
+  });
 }
 
 /**
@@ -201,20 +263,28 @@ export function filterTranscriptRows(
  * transcript is a WINDOW (`lib/transcript-line-budget.ts`), so a refetch can page that
  * agent's last post out from under the choice. Filtering on a name the dropdown no
  * longer offers shows an EMPTY transcript under a trigger reading someone else's label,
- * which is the pane lying about why it is blank. Falling back to `"all"` is the only
- * answer a reader can act on.
+ * which is the pane lying about why it is blank.
+ * ⚠ **ONLY THE DEAD TICKS ARE DROPPED, NOT THE WHOLE SELECTION** — that is what
+ * multi-select changes here: People and every agent still in the window survive a
+ * neighbour paging out, and only when NOTHING survives does this fall all the way back
+ * to the shared `All`.
  * ⚠ **AND IT DOES NOT WRITE THE FALLBACK BACK INTO STATE.** The stored value is the
  * reader's CHOICE and the window widens again (`use-load-older.ts` prepends pages), so
- * scrolling up restores their filter instead of having silently discarded it.
+ * scrolling up restores their filter instead of having silently discarded it. ⚠ WHICH
+ * IS ALSO WHY THE CALLER MEMOISES THIS: a prune mints a new object, and re-running it
+ * every render would re-filter the transcript every render.
  */
 export function resolveTranscriptFilter(
   filter: TranscriptFilter,
   agents: readonly TranscriptFilterAgent[]
 ): TranscriptFilter {
-  if (filter.kind !== "agent") return filter;
-  return agents.some((agent) => agent.agentId === filter.agentId)
-    ? filter
-    : TRANSCRIPT_FILTER_ALL;
+  if (filter.agentIds.length === 0) return filter;
+  const live = filter.agentIds.filter((id) =>
+    agents.some((agent) => agent.agentId === id)
+  );
+  // ⚠ IDENTITY IS THE POINT: nothing pruned, nothing new.
+  if (live.length === filter.agentIds.length) return filter;
+  return narrow(filter.people, live);
 }
 
 /** Label + control, nothing else (INVARIANTS §5's minimal-copy ruling): no descriptions
@@ -222,9 +292,14 @@ export function resolveTranscriptFilter(
  *  description. */
 const ALL_LABEL = "All";
 const PEOPLE_LABEL = "People";
-/** The trigger's accessible name. ⚠ It says MESSAGES, not "agents": two of the three
- *  options are not an agent. */
+/** The trigger's accessible name. ⚠ It says MESSAGES, not "agents": most of what it
+ *  filters is not an agent. */
 const FILTER_LABEL = "Filter messages";
+/** The trigger's face when several rows are ticked. ⚠ A COUNT rather than a joined list:
+ *  the header has one truncating line, and "Scout, Rover, Peop…" says less than "3". */
+function triggerCountLabel(n: number) {
+  return `${n} selected`;
+}
 
 /**
  * THE DOT. ⚠ **AN INLINE `style` FOR BOTH FACES, INCLUDING THE NEUTRAL ONE.** The
@@ -252,9 +327,63 @@ function AgentDot({ color }: { color: AgentColorKey | null }) {
 }
 
 /**
+ * **THE ROW'S LEADING COLUMN — AND IT IS THE SAME WIDTH ON EVERY ROW** (Samuel,
+ * 2026-09-16: *"agent entries start at different x-offsets; align every row to one
+ * consistent column"*).
+ *
+ * 🔒 **THE MISALIGNMENT WAS STRUCTURAL, NOT A MARGIN.** "All" and "People" were
+ * `MenuItem`s with a check column and no `icon`; the agents' rows had the check column
+ * AND a dot, so `MenuItem`'s `gap-2` flex put their labels one dot-plus-gap further
+ * right. Nudging the two keywords over with padding would have "fixed" it until the day
+ * the dot changed size.
+ * ⚠ **SO THE FIX IS ONE NODE IN ONE SLOT**: every row hands `MenuItem` this same
+ * checkbox-then-dot cluster, and a row with no agent (All, People) passes an EMPTY dot
+ * of the dot's exact size rather than nothing. One column, one origin, by construction —
+ * there is no branch left that could make two rows differ.
+ * ⚠ **`showCheck` IS GONE WITH IT**: the kit's tick column said "this one option is
+ * current", which is a single-select sentence, and keeping it beside a checkbox would
+ * have been two marks for one state (and a THIRD x-offset).
+ */
+function RowMark({ checked, dot }: { checked: boolean; dot: AgentColorKey | null | false }) {
+  return (
+    // ⚠ `data-row-mark` IS FOR THE TEST THAT HOLDS THE ALIGNMENT, and it is the cheapest
+    // honest hook for it: 🔒 `transcript-filter.test.tsx › § one column` asserts every row
+    // has exactly one of these with the same two slots, which is the property itself
+    // rather than a screenshot of it.
+    <span data-row-mark className="flex items-center gap-2">
+      {/* ⚠ THE BOX IS `create-team-dialog.tsx`'s, TOKEN FOR TOKEN — the tree's existing
+          checkbox face, so a second one is not minted here. `aria-hidden` because the
+          ROW carries the state: `MenuItem`'s `checked` makes it a `menuitemcheckbox`
+          with `aria-checked`, and a second checkbox inside it would be announced twice. */}
+      <span
+        aria-hidden
+        className={cn(
+          "flex h-4 w-4 items-center justify-center rounded border transition-colors",
+          checked
+            ? "bg-accent-primary border-accent-primary text-accent-on"
+            : "border-border-strong text-transparent"
+        )}
+      >
+        <Check size={10} strokeWidth={3} />
+      </span>
+      {dot === false ? (
+        // ⚠ THE SPACER, and it is the dot's OWN class so the two can never drift apart.
+        <span aria-hidden className={DOT} />
+      ) : (
+        <AgentDot color={dot} />
+      )}
+    </span>
+  );
+}
+
+/**
  * THE CONTROL, placed by `message-pane-header.tsx` immediately LEFT of the info-pane
  * collapse toggle (the ruling, in those words). It owns the popover and NOTHING else:
  * the selection lives in `message-pane.tsx`, which is also what applies it.
+ *
+ * ⚠ **IT DOES NOT CLOSE ON A PICK.** Ticking is the interaction now, and a menu that
+ * shut after one tick would make selecting three agents three round trips through the
+ * trigger. It closes on the backdrop, on Escape (`Popover` owns both) and on the trigger.
  */
 export function TranscriptFilterSelect({
   value,
@@ -272,9 +401,14 @@ export function TranscriptFilterSelect({
   // header above an overflow-clipping pane, where a trigger-anchored panel renders as a
   // clipped sliver.
   const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
-  const selected =
-    value.kind === "agent"
-      ? agents.find((agent) => agent.agentId === value.agentId)
+
+  const isAll = transcriptFilterIsAll(value);
+  const count = transcriptFilterCount(value);
+  /** The ONE ticked agent, when that is the whole selection — the only case the trigger
+   *  can wear a dot and a name for. */
+  const lone =
+    count === 1 && !value.people
+      ? agents.find((agent) => agent.agentId === value.agentIds[0])
       : undefined;
 
   function toggle() {
@@ -284,13 +418,6 @@ export function TranscriptFilterSelect({
     }
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) setAnchor({ x: rect.left, y: rect.bottom + 4 });
-  }
-
-  function pick(next: TranscriptFilter) {
-    return () => {
-      setAnchor(null);
-      if (!sameFilter(next, value)) onChange(next);
-    };
   }
 
   return (
@@ -310,13 +437,15 @@ export function TranscriptFilterSelect({
           "transition-colors hover:bg-menu-item-hover-bg"
         )}
       >
-        {selected && <AgentDot color={selected.color} />}
+        {lone && <AgentDot color={lone.color} />}
         <span className="min-w-0 truncate">
-          {selected
-            ? selected.label
-            : value.kind === "people"
-              ? PEOPLE_LABEL
-              : ALL_LABEL}
+          {isAll
+            ? ALL_LABEL
+            : lone
+              ? lone.label
+              : count === 1
+                ? PEOPLE_LABEL
+                : triggerCountLabel(count)}
         </span>
         {/* ⚠ THE CHEVRON IS THE ONLY HINT OF A MENU on a trigger with no pill, so it
             may never be dropped (the kit's own note on that face). */}
@@ -328,29 +457,36 @@ export function TranscriptFilterSelect({
         onClose={() => setAnchor(null)}
         className="min-w-[180px] max-w-[280px]"
       >
+        {/* **"All" IS A CLEAR, NOT A MEMBER** (file docblock). Its tick is derived —
+            on exactly when nothing else is — and picking it while it is already on is a
+            no-op rather than a state write nothing can see. */}
         <MenuItem
-          showCheck
-          active={value.kind === "all"}
-          onSelect={pick(TRANSCRIPT_FILTER_ALL)}
+          checked={isAll}
+          icon={<RowMark checked={isAll} dot={false} />}
+          onSelect={() => {
+            if (!isAll) onChange(TRANSCRIPT_FILTER_ALL);
+          }}
         >
           {ALL_LABEL}
         </MenuItem>
+        {/* ⚠ THE RULE ABOVE THE SET IT CLEARS — the divider is the whole of what says
+            "All" is a different kind of row from the ticks beneath it. */}
+        <MenuDivider />
         <MenuItem
-          showCheck
-          active={value.kind === "people"}
-          onSelect={pick(TRANSCRIPT_FILTER_PEOPLE)}
+          checked={value.people}
+          icon={<RowMark checked={value.people} dot={false} />}
+          onSelect={() => onChange(toggleTranscriptPeople(value))}
         >
           {PEOPLE_LABEL}
         </MenuItem>
         {agents.map((agent) => {
-          const next = agentTranscriptFilter(agent.agentId);
+          const checked = value.agentIds.includes(agent.agentId);
           return (
             <MenuItem
               key={agent.agentId}
-              showCheck
-              active={sameFilter(next, value)}
-              icon={<AgentDot color={agent.color} />}
-              onSelect={pick(next)}
+              checked={checked}
+              icon={<RowMark checked={checked} dot={agent.color} />}
+              onSelect={() => onChange(toggleTranscriptAgent(value, agent.agentId))}
             >
               {agent.label}
             </MenuItem>

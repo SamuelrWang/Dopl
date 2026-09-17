@@ -1,9 +1,13 @@
-// @vitest-environment jsdom
 /**
- * **THE TRANSCRIPT FILTER — AND THE ONE PROPERTY IT CANNOT BE ALLOWED TO LOSE:
+ * **THE TRANSCRIPT FILTER'S RULE — AND THE ONE PROPERTY IT CANNOT BE ALLOWED TO LOSE:
  * "People" IS EXACTLY THE SET OF POSTS WITH NO COLOURED BOX** (Samuel, 2026-09-13;
  * docs/specs/agent-colors.md item 6: *"Just users, which would include desktop agents
  * as well: all of the messages that don't have a colored box around them"*).
+ *
+ * ⚠ THE PURE HALF, AND IT NEEDS NO DOM — the CONTROL (its menu, its ticks, its one
+ * column, where it sits, the pane around it) is `transcript-filter-menu.test.tsx`,
+ * split off 2026-09-16 at the 500-line cap. Fixtures are shared, not copied:
+ * `_transcript-filter-fixtures.ts`.
  *
  * What fails SILENTLY here, and is therefore what this file is for:
  *
@@ -14,33 +18,20 @@
  *    People, and nothing on the painting side would notice: a neutral box and a
  *    boxless row are one line of CSS apart and the screenshot still looks plausible.
  *    `§ People` below is that MUTATION-VERIFY case, and each case says what it catches.
+ *  - **A UNION READ AS AN INTERSECTION** now that several rows can be ticked at once:
+ *    two ticks would show NOTHING, and an empty pane reads as a loading state.
  *  - **THE OPTION LIST IS THE LOADED ROWS', NOT THE SESSION INDEX'.** An option that
  *    matches no row filters to a blank transcript, and the index is full of agents that
  *    never spoke in this room.
  *  - **A SELECTION CAN OUTLIVE ITS AGENT.** The transcript is a window; paging can drop
- *    the last post of the agent being filtered on, and the pane would then be blank
- *    under a trigger naming that agent.
- *  - **PLACEMENT IS A RULING, NOT A DETAIL** — *"next to the left of the toggle bar for
- *    collapsing the right-side panel"* — and DOM order is invisible to every other test.
+ *    the last post of an agent that is ticked, and only THAT tick may be dropped.
  */
 
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 
-// ⚠ THE PANE CARRIES THE COMPOSER ALONG and its write layer has its own suite — the
-// mock `message-pane.test.tsx` uses, for that file's reason.
-vi.mock("../hooks/use-thread-writes", () => ({
-  useThreadWrites: () => ({
-    send: { mutate: vi.fn() },
-    fanOutThreads: { mutate: vi.fn() },
-    pending: false,
-  }),
-}));
-
-import { formatChannelTimestamp } from "@/shared/lib/format-time";
+import { indexMembers } from "./view-model";
 import {
   TRANSCRIPT_FILTER_ALL,
-  TranscriptFilterSelect,
   agentTranscriptFilter,
   filterTranscriptRows,
   resolveTranscriptFilter,
@@ -48,81 +39,17 @@ import {
   transcriptRowAgentId,
   type TranscriptFilter,
 } from "./transcript-filter";
-import { ChannelsMessagePane } from "./message-pane";
-import { PaneHeader } from "./message-pane-header";
-import { indexMembers } from "./view-model";
-import { channelRows } from "./view-model-rows";
-import { CHANNEL_ID, ME, PEER, member, message, thread } from "./test-fixtures";
-import type { AgentIdentity } from "./view-model";
-import type { TranscriptRow } from "./view-model-rows";
-import type { ChannelMessage } from "../types";
-
-/** LIVE, wearing a colour. */
-const SCOUT = "k3v7d2mq";
-/** ENDED — its key is back in the bank, so its posts wear the NEUTRAL box. */
-const ROVER = "a1b2c3d4";
-/** In the machine's index and has posted NOTHING in this room. */
-const IDLE = "z9y8x7w6";
-
-const AGENTS: ReadonlyMap<string, AgentIdentity> = new Map([
-  [SCOUT, { displayName: "Scout", description: null, ended: false, color: "agent-03" }],
-  [ROVER, { displayName: "Rover", description: null, ended: true, color: null }],
-  [IDLE, { displayName: "Idle hands", description: null, ended: false, color: "agent-07" }],
-]);
-
-const MEMBERS = [
-  member({ userId: ME, displayName: "Sam Wang" }),
-  member({ userId: PEER, displayName: "Diana Taylor", role: "member" }),
-];
-const INDEX = indexMembers(MEMBERS, ME, AGENTS);
-
-/**
- * An AGENT post. ⚠ `id === null` is the **"Desktop agent"** case and the reason this
- * helper takes a nullable: an MCP write from a session that belongs to no channel
- * carries no instance id, which is exactly the population Samuel put on the PEOPLE side
- * (`agent-box-rule.ts › agentBoxOf`). The session-key shape is
- * `lib/agent-post-stamp.ts › agentIdOfSessionKey`'s.
- */
-function byAgent(id: string | null, over: Partial<ChannelMessage>): ChannelMessage {
-  return message({
-    authorKind: "agent",
-    metadata: id === null ? {} : { session_id: `${CHANNEL_ID}::${id}` },
-    ...over,
-  });
-}
-
-const THREAD = thread({ id: "t-1", title: "UI-kit design" });
-
-const MESSAGES: ChannelMessage[] = [
-  message({ id: "m-1", seq: 1, body: "sam line" }),
-  byAgent(SCOUT, { id: "m-2", seq: 2, body: "scout line" }),
-  byAgent(ROVER, { id: "m-3", seq: 3, body: "rover line" }),
-  byAgent(null, { id: "m-4", seq: 4, body: "desktop line" }),
-  byAgent(SCOUT, { id: "m-5", seq: 5, body: "scout again" }),
-  message({ id: "m-6", seq: 6, authorUserId: PEER, body: "diana line" }),
-  // ⚠ A THREAD CARD OPENED BY AN AGENT — the "threads follow the same author rule" case.
-  byAgent(SCOUT, {
-    id: "m-7",
-    seq: 7,
-    body: "opened a thread",
-    metadata: { session_id: `${CHANNEL_ID}::${SCOUT}`, taskId: THREAD.id },
-  }),
-];
-
-const ROWS = channelRows(MESSAGES, [THREAD], INDEX, formatChannelTimestamp);
-
-const PEOPLE: TranscriptFilter = { kind: "people" };
-
-/** A row's body, or its KIND in brackets for the rows that are not somebody's words —
- *  so a case that drops a card fails on the card rather than on a length. */
-const bodies = (rows: readonly TranscriptRow[]) =>
-  rows.map((row) => (row.kind === "message" ? row.body : `[${row.kind}]`));
-
-beforeAll(() => {
-  // ⚠ jsdom HAS NO `Element.prototype.scrollTo`, and the pane's pin calls it on mount.
-  Element.prototype.scrollTo = vi.fn() as unknown as Element["scrollTo"];
-});
-afterEach(cleanup);
+import { ME } from "./test-fixtures";
+import {
+  INDEX,
+  IDLE,
+  MEMBERS,
+  PEOPLE,
+  ROVER,
+  ROWS,
+  SCOUT,
+  bodies,
+} from "./_transcript-filter-fixtures";
 
 describe("§ People — the complement of the coloured box", () => {
   it("excludes EVERY boxed post, the ENDED agent's included", () => {
@@ -199,6 +126,48 @@ describe("§ one agent", () => {
   });
 });
 
+/**
+ * **§ SEVERAL AT ONCE — and the decision that "All" is an EMPTY SET, not a value**
+ * (Samuel, 2026-09-16: multi-select, and *"'All' option redundant vs per-item rows"*).
+ *
+ * What fails silently here: a UNION read as an intersection (two ticks would show
+ * NOTHING, since a row has one author, and an empty pane under two ticks looks like a
+ * loading state); and the empty selection losing its identity, which re-filters the
+ * whole transcript on every render forever and shows up as lag rather than as a bug.
+ */
+describe("§ several at once", () => {
+  const scoutAndPeople: TranscriptFilter = { people: true, agentIds: [SCOUT] };
+
+  it("is a UNION: People's posts and the ticked agent's, in transcript order", () => {
+    expect(bodies(filterTranscriptRows(ROWS, INDEX, scoutAndPeople))).toEqual([
+      "sam line",
+      "scout line",
+      "desktop line",
+      "scout again",
+      "diana line",
+      "[thread-card]",
+    ]);
+  });
+
+  it("two agents together, and nobody else", () => {
+    const both: TranscriptFilter = { people: false, agentIds: [SCOUT, ROVER] };
+    expect(bodies(filterTranscriptRows(ROWS, INDEX, both))).toEqual([
+      "scout line",
+      "rover line",
+      "scout again",
+    ]);
+  });
+
+  it("every row ticked is the same transcript as none ticked — which is why All is empty", () => {
+    // ⚠ THE PROPERTY BEHIND THE DECISION: People plus every agent IS the partition, so a
+    // fourth mutually-exclusive "All" value would be a second spelling of this set.
+    const everything: TranscriptFilter = { people: true, agentIds: [SCOUT, ROVER] };
+    expect(bodies(filterTranscriptRows(ROWS, INDEX, everything))).toEqual(
+      bodies(filterTranscriptRows(ROWS, INDEX, TRANSCRIPT_FILTER_ALL))
+    );
+  });
+});
+
 describe("§ the options come from the loaded rows", () => {
   it("names each agent that POSTED, once, in first-post order", () => {
     expect(transcriptFilterAgents(ROWS, INDEX).map((a) => a.agentId)).toEqual([
@@ -243,201 +212,29 @@ describe("§ the options come from the loaded rows", () => {
 describe("§ a selection that outlived its agent", () => {
   const agents = transcriptFilterAgents(ROWS, INDEX);
 
-  it("falls back to All rather than leaving the pane blank", () => {
+  it("falls back to All when NOTHING in the selection survives", () => {
     expect(resolveTranscriptFilter(agentTranscriptFilter(IDLE), agents)).toBe(
       TRANSCRIPT_FILTER_ALL
     );
   });
 
-  it("leaves both keywords alone", () => {
+  it("drops only the DEAD tick and keeps the rest — the multi-select case", () => {
+    // ⚠ THE MUTATION THIS CATCHES: falling back to All wholesale, as the single-select
+    // version had to, which would silently throw away ticks the window still answers.
+    expect(
+      resolveTranscriptFilter({ people: true, agentIds: [SCOUT, IDLE] }, agents)
+    ).toEqual({ people: true, agentIds: [SCOUT] });
+  });
+
+  it("leaves an empty-agent selection alone, by IDENTITY", () => {
     expect(resolveTranscriptFilter(PEOPLE, agents)).toBe(PEOPLE);
     expect(resolveTranscriptFilter(TRANSCRIPT_FILTER_ALL, [])).toBe(TRANSCRIPT_FILTER_ALL);
   });
 
-  it("honours a selection the loaded rows still answer", () => {
-    expect(resolveTranscriptFilter(agentTranscriptFilter(SCOUT), agents)).toEqual(
-      agentTranscriptFilter(SCOUT)
-    );
-  });
-});
-
-describe("§ the control", () => {
-  const agents = transcriptFilterAgents(ROWS, INDEX);
-
-  function open(value: TranscriptFilter = TRANSCRIPT_FILTER_ALL) {
-    const onChange = vi.fn();
-    render(
-      <TranscriptFilterSelect value={value} agents={agents} onChange={onChange} />
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Filter messages" }));
-    return { onChange };
-  }
-
-  it("offers All, People and one entry per agent, in that order", () => {
-    open();
-    expect(screen.getAllByRole("menuitem").map((el) => el.textContent)).toEqual([
-      "All",
-      "People",
-      "Scout",
-      "Rover",
-    ]);
-  });
-
-  it("paints a live agent's dot from its COLOUR TOKEN and never a literal", () => {
-    open();
-    const scoutDot = screen
-      .getByRole("menuitem", { name: "Scout" })
-      .querySelector<HTMLElement>("[data-agent-color]")!;
-    // `lib/agent-colors.ts › agentColorVar` is the only place the token name is spelled.
-    expect(scoutDot.style.backgroundColor).toBe("var(--agent-color-03)");
-    expect(scoutDot.dataset.agentColor).toBe("agent-03");
-  });
-
-  it("gives an agent with no colour a GRAY dot, by token", () => {
-    open();
-    const roverDot = screen
-      .getByRole("menuitem", { name: "Rover" })
-      .querySelector<HTMLElement>("span[style]")!;
-    // ⚠ THE SAME TOKEN `agent-box-rule.ts › AGENT_ACCENT_NEUTRAL` gives the ring and the
-    // bar, so the dot in this menu and the accent in the transcript read as one state.
-    expect(roverDot.style.backgroundColor).toBe("var(--border-strong)");
-    expect(roverDot.dataset.agentColor).toBeUndefined();
-  });
-
-  it("reports a SHAPED value, so an agent id can never be read as a keyword", () => {
-    const { onChange } = open();
-    fireEvent.click(screen.getByRole("menuitem", { name: "Scout" }));
-    expect(onChange).toHaveBeenCalledWith({ kind: "agent", agentId: SCOUT });
-  });
-
-  it("says nothing when the current option is re-picked", () => {
-    const { onChange } = open({ kind: "people" });
-    fireEvent.click(screen.getByRole("menuitem", { name: "People" }));
-    expect(onChange).not.toHaveBeenCalled();
-  });
-
-  it("wears the selected agent's dot on the TRIGGER, not just in the menu", () => {
-    render(
-      <TranscriptFilterSelect
-        value={agentTranscriptFilter(SCOUT)}
-        agents={agents}
-        onChange={vi.fn()}
-      />
-    );
-    const trigger = screen.getByRole("button", { name: "Filter messages" });
-    expect(trigger.textContent).toContain("Scout");
-    expect(
-      trigger.querySelector<HTMLElement>("[data-agent-color]")!.style.backgroundColor
-    ).toBe("var(--agent-color-03)");
-  });
-});
-
-describe("§ where it sits", () => {
-  it("renders immediately LEFT of the info-pane collapse toggle", () => {
-    // ⚠ Samuel placed it against that control by name, and DOM ORDER is the whole of
-    // that ruling — no other case in this tree can see it.
-    const { container } = render(
-      <PaneHeader
-        channelName="Website"
-        threadTitle={null}
-        favorited={false}
-        chrome="page"
-        transcriptFilter={<button type="button">FILTER</button>}
-        onToggleFavorite={vi.fn()}
-        onExitThread={vi.fn()}
-      />
-    );
-    const buttons = [...container.querySelectorAll("button")];
-    const filter = buttons.findIndex((b) => b.textContent === "FILTER");
-    const toggle = buttons.findIndex(
-      (b) => b.getAttribute("aria-label") === "Channel info"
-    );
-    expect(filter).toBeGreaterThanOrEqual(0);
-    expect(toggle).toBe(filter + 1);
-  });
-
-  it("is absent from the pop-out window's header, which carries no controls", () => {
-    const { container } = render(
-      <PaneHeader
-        channelName="Website"
-        threadTitle="UI-kit design"
-        favorited={false}
-        chrome="window"
-        transcriptFilter={<button type="button">FILTER</button>}
-        onToggleFavorite={vi.fn()}
-        onExitThread={vi.fn()}
-      />
-    );
-    expect(container.textContent).not.toContain("FILTER");
-  });
-});
-
-describe("§ in the pane", () => {
-  type Props = React.ComponentProps<typeof ChannelsMessagePane>;
-
-  function paneProps(over: Partial<Props> = {}): Props {
-    return {
-      channelId: CHANNEL_ID,
-      workspaceId: "ws-1",
-      channelName: "Website",
-      thread: null,
-      rows: ROWS,
-      index: INDEX,
-      members: MEMBERS,
-      loading: false,
-      scrollTarget: null,
-      favorited: false,
-      gate: { begin: vi.fn(), end: vi.fn() },
-      onToggleFavorite: vi.fn(),
-      onToggleInfo: vi.fn(),
-      onExitThread: vi.fn(),
-      onOpenThread: vi.fn(),
-      ...over,
-    };
-  }
-
-  it("hides every boxed post when People is picked", () => {
-    render(<ChannelsMessagePane {...paneProps()} />);
-    expect(screen.getByText("scout line")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Filter messages" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "People" }));
-    expect(screen.queryByText("scout line")).toBeNull();
-    expect(screen.queryByText("rover line")).toBeNull();
-    expect(screen.getByText("sam line")).toBeTruthy();
-    expect(screen.getByText("desktop line")).toBeTruthy();
-  });
-
-  it("shows one agent's posts and drops the rest", () => {
-    render(<ChannelsMessagePane {...paneProps()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Filter messages" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Scout" }));
-    expect(screen.getByText("scout line")).toBeTruthy();
-    expect(screen.queryByText("sam line")).toBeNull();
-    expect(screen.queryByText("rover line")).toBeNull();
-  });
-
-  it("offers NO control in a room where no agent has posted", () => {
-    // Label + control only — and a control whose two answers are one set is neither.
-    const humansOnly = channelRows(
-      [message({ id: "m-1", seq: 1, body: "sam line" })],
-      [],
-      INDEX,
-      formatChannelTimestamp
-    );
-    render(<ChannelsMessagePane {...paneProps({ rows: humansOnly })} />);
-    expect(screen.queryByRole("button", { name: "Filter messages" })).toBeNull();
-  });
-
-  it("keeps the selection PER CHANNEL — another room opens unfiltered", () => {
-    const { rerender } = render(<ChannelsMessagePane {...paneProps()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Filter messages" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "People" }));
-    expect(screen.queryByText("scout line")).toBeNull();
-    // The same mount, a different channel: the filter must not travel.
-    rerender(<ChannelsMessagePane {...paneProps({ channelId: "ch-2" })} />);
-    expect(screen.getByText("scout line")).toBeTruthy();
-    // ⚠ AND COMING BACK RESTORES IT — that is what "persists per channel" buys.
-    rerender(<ChannelsMessagePane {...paneProps()} />);
-    expect(screen.queryByText("scout line")).toBeNull();
+  it("honours a selection the loaded rows still answer, by IDENTITY", () => {
+    // ⚠ `toBe`, not `toEqual`: a fresh object on the untouched path is a new `useMemo`
+    // key in the pane and re-filters the transcript every render.
+    const live = agentTranscriptFilter(SCOUT);
+    expect(resolveTranscriptFilter(live, agents)).toBe(live);
   });
 });

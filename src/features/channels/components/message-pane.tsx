@@ -288,10 +288,14 @@ export function ChannelsMessagePane({
     () => transcriptFilterAgents(rows, index),
     [rows, index]
   );
-  const filter = resolveTranscriptFilter(
-    // ⚠ THE SHARED `all` CONSTANT, never a literal: the value below is a `useMemo` key.
-    filterByChannel[channelId] ?? TRANSCRIPT_FILTER_ALL,
-    filterAgents
+  // ⚠ THE SHARED `all` CONSTANT, never a literal: this value is a `useMemo` key below.
+  const stored = filterByChannel[channelId] ?? TRANSCRIPT_FILTER_ALL;
+  // ⚠ MEMOISED, AND LOAD-BEARING SINCE THE FILTER BECAME A SET: pruning a paged-out
+  // agent out of a multi-row selection mints a NEW object, so calling this bare would
+  // hand `visibleRows` a fresh key every render and re-filter the whole transcript.
+  const filter = useMemo(
+    () => resolveTranscriptFilter(stored, filterAgents),
+    [stored, filterAgents]
   );
   /**
    * ⚠ **ONLY `Transcript` SEES THIS — THE PIN, THE PAGING AND THE SCROLL TARGET ALL

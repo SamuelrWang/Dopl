@@ -200,6 +200,7 @@ export function MenuItem({
   children,
   description,
   showCheck,
+  checked,
   icon,
   destructive,
 }: {
@@ -209,6 +210,15 @@ export function MenuItem({
   description?: string;
   /** Reserve a leading check column (option-list style menus). */
   showCheck?: boolean;
+  /**
+   * MULTI-SELECT ROW: the row becomes a `menuitemcheckbox` carrying `aria-checked`.
+   *
+   * ⚠ STATE ONLY, NEVER PAINT — the caller draws its own box (through `icon`), because
+   * a checkbox face is a per-surface decision and `showCheck`'s tick is a SINGLE-select
+   * sentence ("this option is current"). Omitted, the row is an ordinary `menuitem` and
+   * nothing about the existing callers changes.
+   */
+  checked?: boolean;
   icon?: ReactNode;
   /** Danger-token styling for irreversible actions. */
   destructive?: boolean;
@@ -216,7 +226,8 @@ export function MenuItem({
   return (
     <button
       type="button"
-      role="menuitem"
+      role={checked === undefined ? "menuitem" : "menuitemcheckbox"}
+      aria-checked={checked}
       onClick={onSelect}
       className={cn(
         // `.menu-row` owns radius + the hover/press FACE; only colour + density here.
