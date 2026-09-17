@@ -77,6 +77,11 @@ export const HOME_MENTION_SCAN_LIMIT = 500;
  * the channel ids and the watermarks that tier resolves, so it runs in the
  * SECOND, beside profiles and last messages. **It is still two tiers and still
  * no per-row query** — which is the shape §9's home bullet states.
+ *
+ * ⚠ **THE CALLER'S ROLE JOINED THE FIRST TIER THE SAME WAY (2026-09-17, F-343)**
+ * — `listMyContainerRoles` is keyed on `(workspace_id, user_id)`, so it needs
+ * nothing this tier resolves and adds no round trip. It is the ONE source of
+ * `HomeChannel.role`, and the reason /home no longer hardcodes `"owner"`.
  */
 export async function hydrateChannels(
   containers: LinkContainerRow[],
@@ -84,13 +89,16 @@ export async function hydrateChannels(
 ): Promise<HomeChannel[]> {
   if (containers.length === 0) return [];
   const ids = containers.map((c) => c.id);
-  const [peers, channels, links, reads] = await Promise.all([
+  const [peers, channels, links, reads, roles] = await Promise.all([
     repo.listContainerPeers(ids, viewerId),
     repo.listContainerChannels(ids),
     repo.listLinksByWorkspaces(ids, HOME_CHANNEL_LIMIT),
     // ⚠ IN THIS TIER, NOT A THIRD ONE — it is keyed on `workspace_id`, so it does
     // not wait for the channel ids the tier resolves (`listMyChannelReads`).
     repo.listMyChannelReads(ids, viewerId),
+    // ⚠ THE CALLER'S OWN ROLE PER CONTAINER (2026-09-17, F-343) — same tier and
+    // same key as the reads above, so the payload stops guessing at no cost.
+    repo.listMyContainerRoles(ids, viewerId),
   ]);
   const channelIds = [...channels.values()].map((c) => c.id);
   // The per-channel cutoffs, and the ONE floor the scan may carry. Built here
@@ -173,6 +181,12 @@ export async function hydrateChannels(
       // 🔒 THE PIN, WHICH IS THE BOOKMARK (2026-09-15) — the caller's own
       // `channel_members.favorited_at`, off the read this fan already made. ⚠ AN
       // ABSENT ROW IS "not pinned", the same `isMember` clause the marks take.
+      // 🔒 **THE CALLER'S REAL MEMBERSHIP ROLE, DERIVED FROM THE ROW AND NEVER
+      // FROM A CLIENT PARAM (F-343).** ⚠ `?? "guest"` is the FAIL-CLOSED floor
+      // for a container whose membership row did not come back — the caller
+      // reached this container THROUGH that row, so an absent entry is a torn
+      // read rather than a state, and rank 0 is the answer that offers nothing.
+      role: roles.get(container.id) ?? "guest",
       favoritedAt: reads.get(channel.id)?.favoritedAt ?? null,
       // ⚠ Claimability is judged by the SAME predicate the claim gate uses — a
       // chip that says "invite out" over a link that 410s is the disagreement

@@ -115,7 +115,7 @@ const CHANNEL = {
   createdAt: "2026-08-23T00:00:00.000Z",
   lastMessageAt: null,
   lastMessagePreview: null, unread: false, unreadMentions: 0,
-  favoritedAt: null,
+  favoritedAt: null, role: "owner" as const, // F-343's field: the creator's own
       linkOut: null,
 };
 

@@ -10,8 +10,8 @@ import {
 } from "@/features/knowledge/client/hooks";
 import { CreateBaseDialog } from "@/features/knowledge/components/create-base-dialog";
 import type { KnowledgeBase } from "@/features/knowledge/types";
-import type { HomeChannel } from "@/features/home/types";
-import type { Role } from "@/features/workspaces/types";
+import { EMPTY_ROLE, type HomeChannel } from "@/features/home/types";
+import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { PageError } from "#/components/page-states";
 import { HomeKnowledgeBaseView } from "./knowledge-base-view";
 import { HomeKnowledgePanelsSkeleton } from "./home-skeleton";
@@ -162,10 +162,25 @@ export function HomeKnowledgePanels({
   // nowhere on screen and no way to make one. `channel === null` means there is
   // no CONTAINER to read shared bases from; it says nothing about the home shelf.
 
-  // Where a base opened from THIS section lives, and who the caller is there.
-  // ⚠ The container mount takes `role="owner"`: a home container is the
-  // caller's own (plan §5.3), and the settings modal is the only thing role
-  // gates. The home mount takes boot's real membership role.
+  // 🔒 **THE CALLER'S REAL ROLE IN THIS CONTAINER (2026-09-17, F-343), AND IT IS
+  // THE HALF OF THAT FINDING THAT HAS BEEN WRONG SINCE M3.** This read
+  // `role: "owner"` under the comment *"a home container is the caller's own
+  // (plan §5.3)"* — **a sentence that is true of the container the caller CREATED
+  // and false of every one they JOINED**, where a bound claim seats them at the
+  // link's `granted_role` (default `guest`, ceiling `member`). It feeds
+  // `HomeKnowledgeBaseView`'s `role` prop, i.e. what the base settings modal
+  // believes about this viewer, and `accessSegment: null` means `MyAccessProvider`
+  // resolves nothing behind it (F-330's fall-open) — so a guest peer opening a
+  // shared base was shown edit affordances the API then refused.
+  // ⚠ §8 STALE-CACHE, SPELLED INLINE: a payload cached by the previous bundle
+  // carries no `role` key; `EMPTY_ROLE` is rank 0, so the modal opens display-only
+  // for one paint rather than claiming a permission nobody read.
+  const containerRole: Role = channel?.role ?? EMPTY_ROLE;
+  /** The SHARED section's create, mirroring `POST /api/knowledge/bases`'s
+   *  `minRole: "member"`. See the button for why it is a mirror and not a fence. */
+  const canCreateShared = meetsMinRole(containerRole, "member");
+  // ⚠ Where a base opened from THIS section lives, and who the caller is there.
+  // The home mount takes boot's real membership role, as it always did.
   // ⚠ NULLABLE SINCE 2026-09-10, for the same reason `homeTarget` always was:
   // there may be no container. It is the SHARED section's target, so its absence
   // takes that section and nothing else.
@@ -175,7 +190,7 @@ export function HomeKnowledgePanels({
       : {
           workspaceId: channel.workspaceId,
           segment: channel.workspaceSegment,
-          role: "owner",
+          role: containerRole,
           // ⚠ NO `my-access` READ AGAINST A CONTAINER: it has no teams, so the
           // answer is the plain role default and the request buys nothing. See
           // `knowledge-base-view.tsx`'s docblock for what that costs and why it
@@ -271,14 +286,22 @@ export function HomeKnowledgePanels({
           // back together if either half fails (`createBase`). A create that
           // landed ungranted would be invisible on this very surface, which is
           // the rule the removed private scope used to hide.
-          // 🔒 SERVER-FENCED ONLY, AND KNOWINGLY. `POST /api/knowledge/bases`
-          // is `minRole: "member"`, so a GUEST peer standing in this channel is
-          // refused with a 403 the dialog surfaces — but this pane cannot tell
-          // a member from a guest (`HomeChannel` carries no viewer role, F-343),
-          // so the button is shown to both. Do not "fix" that by guessing.
-          <CreateButton onClick={() => setCreateOpen("channel")}>
-            Knowledge base
-          </CreateButton>
+          // 🔒 **GATED ON THE CALLER'S REAL ROLE (2026-09-17, F-343's
+          // consequence 1).** `POST /api/knowledge/bases` is `minRole: "member"`,
+          // so a GUEST peer's click was a 403 the dialog surfaced as an error —
+          // correct, and a dead control (INVARIANTS §5). The pane could not tell
+          // a member from a guest until `HomeChannel.role` existed; it can now, so
+          // it asks the SAME ladder the server asks (`meetsMinRole(…, "member")`)
+          // rather than restating the floor as a second predicate.
+          // ⚠ **THE SERVER FENCE IS UNCHANGED AND IS STILL THE FENCE** — this is
+          // the matching picture, never the reason a floor could move.
+          // ⚠ HIDDEN, NOT DISABLED: a guest is not being refused mid-act, they are
+          // simply not offered one.
+          canCreateShared ? (
+            <CreateButton onClick={() => setCreateOpen("channel")}>
+              Knowledge base
+            </CreateButton>
+          ) : null
         }
       >
         {shared.length === 0 ? (

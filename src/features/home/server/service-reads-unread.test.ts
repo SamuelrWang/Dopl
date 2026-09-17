@@ -22,6 +22,7 @@ vi.mock("./repository", () => ({
   listContainerChannels: vi.fn(),
   listLastMessages: vi.fn(),
   listMyChannelReads: vi.fn(),
+  listMyContainerRoles: vi.fn(),
   listMyMentionStamps: vi.fn(),
   findLinkByToken: vi.fn(),
 }));
@@ -77,6 +78,12 @@ beforeEach(() => {
     new Map([
       [CHAN_A, { channelId: CHAN_A, lastReadAt: READ_AT, favoritedAt: null }],
       [CHAN_B, { channelId: CHAN_B, lastReadAt: READ_AT, favoritedAt: null }],
+    ])
+  );
+  mocked.listMyContainerRoles.mockResolvedValue(
+    new Map([
+      [WS_A, "owner"],
+      [WS_B, "owner"],
     ])
   );
   mocked.listMyMentionStamps.mockResolvedValue([]);

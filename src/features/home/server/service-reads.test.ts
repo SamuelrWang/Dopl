@@ -18,6 +18,7 @@ vi.mock("./repository", () => ({
   listContainerChannels: vi.fn(),
   listLastMessages: vi.fn(),
   listMyChannelReads: vi.fn(),
+  listMyContainerRoles: vi.fn(),
   listMyMentionStamps: vi.fn(),
   findLinkByToken: vi.fn(),
 }));
@@ -75,6 +76,7 @@ beforeEach(() => {
   // marks are opted into by the cases that own them
   // (`service-reads-unread.test.ts`).
   mocked.listMyChannelReads.mockResolvedValue(new Map());
+  mocked.listMyContainerRoles.mockResolvedValue(new Map());
   mocked.listMyMentionStamps.mockResolvedValue([]);
   mocked.findLinkByToken.mockResolvedValue(null);
   mockProfiles.mockResolvedValue(new Map());
@@ -149,9 +151,51 @@ describe("getHomeChannels", () => {
         // rides the SAME `channel_members` read, so an absent row means "not
         // pinned" exactly as it means "no marks".
         favoritedAt: null,
+        // ⚠ **THE CALLER'S OWN ROLE, AND `"guest"` HERE IS THE FAIL-CLOSED FLOOR
+        // rather than a fixture choice** (F-343, 2026-09-17): this fixture's
+        // `listMyContainerRoles` answers an EMPTY map, exactly as it answers no
+        // channel read above, and the hydrate refuses to invent a rank for a
+        // membership row that did not come back. The cases below pin the real
+        // three answers.
+        role: "guest",
         linkOut: null,
       },
     ]);
+  });
+
+  /**
+   * F-343 — the /home surface could not tell a MEMBER from a GUEST inside a
+   * container, and **this is the read that ends that.** Three cases, one per rank, because the
+   * whole defect was a surface answering ONE of them for all three.
+   */
+  describe("role — the caller's own membership, carried per container", () => {
+    it("carries the ROW's role, which is `guest` for a claimed peer and `owner` for the creator", async () => {
+      mocked.listMyContainerRoles.mockResolvedValue(new Map([[WS, "guest"]]));
+      expect((await getHomeChannels(ME)).channels[0].role).toBe("guest");
+
+      mocked.listMyContainerRoles.mockResolvedValue(new Map([[WS, "owner"]]));
+      expect((await getHomeChannels(ME)).channels[0].role).toBe("owner");
+    });
+
+    it("is `member` for a member-grade claim — the rank the two create buttons need", async () => {
+      mocked.listMyContainerRoles.mockResolvedValue(new Map([[WS, "member"]]));
+      expect((await getHomeChannels(ME)).channels[0].role).toBe("member");
+    });
+
+    it("asks for the CALLER's own rows, and asks once for the whole page", async () => {
+      await getHomeChannels(ME);
+      // ⚠ THE VIEWER IS AN ARGUMENT, never a client param — and it is ONE
+      // bounded `.in()` over the page's containers, not a query per row (§9).
+      expect(mocked.listMyContainerRoles).toHaveBeenCalledTimes(1);
+      expect(mocked.listMyContainerRoles).toHaveBeenCalledWith([WS], ME);
+    });
+
+    it("FAILS CLOSED at rank 0 when the membership row does not come back", async () => {
+      // The caller reached this container THROUGH that row, so an absent entry
+      // is a torn read rather than a state. `guest` offers nothing.
+      mocked.listMyContainerRoles.mockResolvedValue(new Map());
+      expect((await getHomeChannels(ME)).channels[0].role).toBe("guest");
+    });
   });
 
   it("RENDERS a solo channel with no peers — a channel with nobody in it is finished, not broken", async () => {

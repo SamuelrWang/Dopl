@@ -75,6 +75,8 @@ const claimed = (existing: boolean): HomeLinkClaimResult => ({
     unread: false,
     unreadMentions: 0,
     favoritedAt: null,
+    // What the claimer lands at — the link's `granted_role`, default `guest`.
+    role: "guest",
       linkOut: null,
   },
   existing,

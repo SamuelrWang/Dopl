@@ -1,7 +1,8 @@
 import { PanelHeading } from "@/features/channels/components/bits";
 import { MemberRoster } from "@/features/channels/components/member-roster";
 import { useChannelMembers } from "@/features/channels/hooks/use-channel-members";
-import type { HomeChannel } from "@/features/home/types";
+import { EMPTY_ROLE, type HomeChannel } from "@/features/home/types";
+import { meetsMinRole } from "@/features/workspaces/types";
 import { AddPersonDialog } from "./add-person-dialog";
 import { LinkOutPanel } from "./link-out-panel";
 
@@ -45,6 +46,21 @@ import { LinkOutPanel } from "./link-out-panel";
  * length is not a capacity any more, and hiding the control would be this
  * surface asserting a limit the server no longer has.
  *
+ * 🔒 **AND IT IS NOW ROLE-GATED, WHICH IS NOT A CAPACITY GATE (2026-09-17,
+ * F-343).** Minting a bound link is `member`+ on the server — `service-writes.ts
+ * › mintContainerLink` refuses below it with `LINK_MINT_FORBIDDEN`, and that
+ * floor is *"the only thing standing here"* since the two-member cap came off:
+ * without it a guest somebody else let in could hand strangers links into the
+ * operator's transcript. Until this field existed the pane could not tell a
+ * guest from a member, so the button was shown to both and a guest's click
+ * 403'd (INVARIANTS §5: an affordance that always 403s is a dead control).
+ * ⚠ **HIDDEN, NOT DISABLED**: there is no refusal to explain to somebody who was
+ * never offered the act, and a disabled pill under an empty roster reads as a
+ * bug. ⚠ **AND IT IS A PICTURE, NOT A FENCE** — the 403 above is still the fence.
+ * ⚠ **THIS IS NOT THE `peer`-SHAPED GATE THE PARAGRAPH ABOVE FORBIDS.** That one
+ * asserted a CAPACITY the server does not have; this one mirrors a PERMISSION the
+ * server does.
+ *
  * ⚠ THE TWO-STATE RULE SURVIVES THAT, AND IS NOT THIS FILE'S TO RELAX. One
  * section, two states, NEVER BOTH: an invitation already out IS the answer to
  * "add a person", because a container may hold at most one OPEN link at a time
@@ -58,6 +74,10 @@ export function PersonMembers({ homeChannel }: { homeChannel: HomeChannel }) {
     homeChannel.channelId,
     homeChannel.workspaceId
   );
+  // ⚠ §8 STALE-CACHE, SPELLED INLINE: a payload cached by the previous bundle
+  // carries no `role` key, and `EMPTY_ROLE` (rank 0) takes the button off for one
+  // paint rather than offering a mint the server would refuse.
+  const canAddPerson = meetsMinRole(homeChannel.role ?? EMPTY_ROLE, "member");
 
   return (
     <>
@@ -81,7 +101,7 @@ export function PersonMembers({ homeChannel }: { homeChannel: HomeChannel }) {
             <LinkOutPanel link={linkOut} />
           </div>
         </>
-      ) : (
+      ) : canAddPerson ? (
         // ⚠ NO HEADING (Samuel, 2026-08-25). The control says what it does; a
         // label above it repeating the words is the explainer copy the
         // minimal-copy ruling deletes. The Link out state keeps its heading
@@ -89,7 +109,7 @@ export function PersonMembers({ homeChannel }: { homeChannel: HomeChannel }) {
         <div className="px-3.5 pt-2.5">
           <AddPersonDialog workspaceId={homeChannel.workspaceId} />
         </div>
-      )}
+      ) : null}
     </>
   );
 }

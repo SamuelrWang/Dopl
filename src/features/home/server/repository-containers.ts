@@ -329,6 +329,40 @@ export async function listContainerPeers(
   return out;
 }
 
+/**
+ * `workspaceId` → THE CALLER'S OWN ROLE in that container (`workspace_members.role`).
+ *
+ * ⚠ **THE MEMBERSHIP ROW IS THE ONLY SOURCE, WHICH IS THE WHOLE POINT OF F-343.**
+ * /home hardcoded `"owner"` because "a home container is the caller's own" — true
+ * of the one they CREATED, false of every one they JOINED, where a bound claim
+ * seats them at the link's `granted_role`. A role from anywhere but this row is a
+ * guess. ⚠ **A SEPARATE READ RATHER THAN A COLUMN ON `LinkContainerRow`**, which
+ * three non-viewer-relative writers also mint. ⚠ **ONE BOUNDED QUERY, never per
+ * row (§9)**, in the tier that already reads peers. ⚠ **AN ABSENT ENTRY IS A REAL
+ * ANSWER**, read as the fail-closed floor — `home/types.ts › EMPTY_ROLE`.
+ */
+export async function listMyContainerRoles(
+  workspaceIds: string[],
+  viewerId: string
+): Promise<Map<string, Role>> {
+  const out = new Map<string, Role>();
+  if (workspaceIds.length === 0) return out;
+  const { data, error } = await supabaseAdmin()
+    .from("workspace_members")
+    .select("workspace_id, role")
+    .in("workspace_id", workspaceIds)
+    .eq("user_id", viewerId)
+    .eq("status", "active");
+  if (error) throw error;
+  for (const row of (data ?? []) as Array<{
+    workspace_id: string;
+    role: Role;
+  }>) {
+    out.set(row.workspace_id, row.role);
+  }
+  return out;
+}
+
 /** The container's channel, as the home payload names it. ⚠ The NAME rides
  *  along because a SOLO channel has no peer to be named after. */
 export interface ContainerChannel {

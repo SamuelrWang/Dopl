@@ -39,6 +39,27 @@ export interface HomePeer {
  */
 export const EMPTY_PEERS: readonly HomePeer[] = Object.freeze([]);
 
+/**
+ * The absent-fallback for {@link HomeChannel.role} — INVARIANTS §8's `EMPTY_X`
+ * for the CALLER'S OWN ROLE in a container.
+ *
+ * 🔒 **IT IS `guest`, WHICH IS RANK 0, AND THAT DIRECTION IS THE RULING
+ * (Samuel, 2026-09-17, closing F-343).** The finding filed the trade rather than
+ * picking it: an entry cached by the previous bundle carries NO `role` key, so
+ * defaulting to `member` keeps today's buttons on screen for everybody and
+ * defaulting to `guest` takes them off every member's first paint after the
+ * upgrade. **A stale cache renders DISPLAY-ONLY**: one repaint restores the
+ * affordance, where the other direction is this surface asserting a permission
+ * it has not read — which is the exact defect F-343 is about.
+ *
+ * 🔒 **SPELL IT `?? EMPTY_ROLE` INLINE AT EVERY READ, never behind an
+ * accessor** — the wire type is non-optional, so the read site is the only place
+ * the optionality is visible (§8; the deleted `infoCardOf()` is the precedent).
+ * ⚠ `channel?.role` guards the CHANNEL being absent and does NOTHING about a
+ * live stale channel whose KEY is `undefined`.
+ */
+export const EMPTY_ROLE: Role = "guest";
+
 /** One home channel — addresses its container like any workspace. */
 export interface HomeChannel {
   /** The `kind='link'` container workspace. */
@@ -184,6 +205,32 @@ export interface HomeChannel {
    * for every row before this field existed.
    */
   favoritedAt: string | null;
+  /**
+   * 🔒 **THE CALLER'S OWN ROLE IN THIS CONTAINER — `workspace_members.role`,
+   * caller-relative like `unread` / `favoritedAt` and carrying no `my*` prefix
+   * for the same reason (a home payload is only ever the caller's own).**
+   * Added 2026-09-17, closing F-343.
+   *
+   * ⚠ **IT IS THE SAME ROLE VOCABULARY AND THE SAME LADDER THE WORKSPACE USES**
+   * — `workspaces/types.ts › Role` (`@dopl/contracts › WorkspaceRole`) read
+   * through `meetsMinRole`, never a second predicate and never a boolean pair.
+   * A claimed link seats its peer at the link's `granted_role` (default `guest`,
+   * ceiling `member`), so a container really does hold readers of three
+   * different ranks and `"owner"` is true only of the person who MADE it.
+   *
+   * 🔒 **IT IS A PICTURE OF THE SERVER'S ANSWER, NOT A FENCE.** Every write on
+   * this surface is floored server-side already (`POST /api/knowledge/bases` and
+   * `POST /api/agent-templates` at `member`, `mintContainerLink` at `member`
+   * plus grant-above-self, `canManageChannel` for the header). What this field
+   * buys is that /home stops OFFERING what the server will refuse — INVARIANTS
+   * §5's dead-control rule. **Do not read it as permission to drop a fence.**
+   *
+   * 🔒 ⚠ **NEW KEY ON AN INDEXEDDB-PERSISTED PAYLOAD — EVERY READ SPELLS
+   * `?? EMPTY_ROLE` INLINE (INVARIANTS §8).** `GET /api/home/channels` is cached
+   * with a 24h `gcTime`, so an entry written by the previous bundle survives the
+   * upgrade WITHOUT this key; `EMPTY_ROLE` carries why the fail-safe is `guest`.
+   */
+  role: Role;
   /**
    * The open BOUND link, when this channel has an invitation out. Rendered as a
    * chip ON this channel's row — a pending peer is a STATE of the channel, not

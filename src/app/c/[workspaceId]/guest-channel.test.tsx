@@ -54,6 +54,9 @@ const HOME_CHANNEL: HomeChannel = {
   unread: false,
   unreadMentions: 0,
   favoritedAt: null,
+  // ⚠ THE LANE'S OWN READER: a bound claim seats its peer at the link's
+  // `granted_role`, whose default is `guest` (F-343's field, 2026-09-17).
+  role: "guest",
       linkOut: null,
 };
 

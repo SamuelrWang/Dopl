@@ -78,6 +78,8 @@ const CHANNEL = {
   unread: false,
   unreadMentions: 0,
   favoritedAt: null,
+  // What a bound claim's default link seats its claimer at (F-343's field).
+  role: "guest" as const,
       linkOut: null,
 };
 

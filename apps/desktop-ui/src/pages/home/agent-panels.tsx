@@ -9,7 +9,8 @@ import {
   groupByVisibility,
 } from "@/features/agent-templates/lib/visibility";
 import type { AgentTemplate } from "@/features/agent-templates/client/types";
-import type { HomeChannel } from "@/features/home/types";
+import { EMPTY_ROLE, type HomeChannel } from "@/features/home/types";
+import { meetsMinRole } from "@/features/workspaces/types";
 import { PageError } from "#/components/page-states";
 import {
   PrivateAgentSection,
@@ -85,9 +86,11 @@ export function HomeAgentPanels({
   /** Same payload's `segment` — the canonical `{slug}-{publicId}` the home
    *  workspace's TEAMS read is keyed by, and the only reason this face needs it.
    *  Null with `homeWorkspaceId`.
-   *  ⚠ Boot's `role` is deliberately NOT taken. Nothing on this face is
-   *  role-gated: the template write floor is member+ and it is the SERVER's
-   *  (§5A), so a role prop here could only grow a second, weaker copy of it. */
+   *  ⚠ Boot's `role` is STILL deliberately not taken, and the reason narrowed
+   *  2026-09-17 (F-343): the PERSONAL section is the caller's own home shelf,
+   *  where a role prop would be a second, weaker copy of the server's floor. The
+   *  SHARED section is a different container and a different reader — its gate
+   *  rides on `channel.role`, which is the row the server itself reads. */
   homeWorkspaceSegment: string | null;
   currentUserId: string;
 }) {
@@ -99,6 +102,10 @@ export function HomeAgentPanels({
   // ⚠ A CONTAINER READ IS UNFILTERED. A shelf is a TENANCY and this container is
   // not the caller's personal one, so `?shelf=` here would be a question with one
   // possible answer.
+  // ⚠ §8 STALE-CACHE, SPELLED INLINE: a payload cached by the previous bundle
+  // carries no `role` key, and `EMPTY_ROLE` (rank 0) hides the create for one
+  // paint rather than offering a write the server would refuse.
+  const canCreateShared = meetsMinRole(channel?.role ?? EMPTY_ROLE, "member");
   const containerList = useAgentTemplates(channel?.workspaceId ?? null);
   // ⚠ NO LONGER LAZY (2026-08-27). It was gated on the scope pill; with the
   // pill gone Personal is ALWAYS on screen, so a deferred read would just be a
@@ -208,14 +215,20 @@ export function HomeAgentPanels({
         // table for templates, so "shared into this channel" IS that value, and
         // `ContainerTemplateEditor` now opens on it because
         // `SECTIONS_CONTAINER` offers nothing else (`lib/visibility.ts`).
-        // 🔒 SERVER-FENCED ONLY, AND KNOWINGLY: `POST /api/agent-templates` is
-        // `minRole: "member"`, so a GUEST peer is refused with a 403 the editor
-        // surfaces — but this pane cannot tell a member from a guest
-        // (`HomeChannel` carries no viewer role, F-343). Do not guess.
+        // 🔒 **GATED ON THE CALLER'S REAL ROLE (2026-09-17, F-343's consequence
+        // 1b).** `POST /api/agent-templates` is `minRole: "member"`, so a GUEST
+        // peer's click was a 403 the editor surfaced — a dead control (INVARIANTS
+        // §5) shown because the pane could not tell a member from a guest. It can
+        // now, and it asks the SAME ladder the server asks rather than restating
+        // the floor. ⚠ **THE SERVER FENCE IS UNCHANGED AND IS STILL THE FENCE.**
+        // ⚠ HIDDEN, NOT DISABLED — one fix, the same shape as the Knowledge face's
+        // (`knowledge-panels.tsx`), because it is the same finding.
         action={
-          <CreateButton onClick={() => setEditing({ where: "container", template: null })}>
-            Agent template
-          </CreateButton>
+          canCreateShared ? (
+            <CreateButton onClick={() => setEditing({ where: "container", template: null })}>
+              Agent template
+            </CreateButton>
+          ) : null
         }
       />
       )}

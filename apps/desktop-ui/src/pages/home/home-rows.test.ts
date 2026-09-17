@@ -51,6 +51,7 @@ function channel(over: Partial<HomeChannel> = {}): HomeChannel {
     unread: false,
     unreadMentions: 0,
     favoritedAt: null,
+    role: "owner",
     linkOut: null,
     ...over,
   };

@@ -4,6 +4,8 @@ import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import { installBridge, ok } from "#/test-utils/bridge";
 import { EMPTY_INFO_CARD } from "@/features/channels/info-card";
 import type { Channel } from "@/features/channels/types";
+import type { HomeChannelsPayload } from "@/features/home/types";
+import type { Role } from "@/features/workspaces/types";
 import {
   CHANNEL,
   CHANNEL_ID,
@@ -58,18 +60,27 @@ let patches: Record<string, unknown>[] = [];
  * home container minted before the 2026-08-24 channel-first inversion still
  * carries the flag, and the tab keeps the workspace tab's rule that only a STORED
  * name opens. The DM case below passes the harness fixture unchanged.
+ *
+ * ⚠ **`homeRole` IS THE SECOND HALF OF `canEdit` SINCE 2026-09-17 (F-343)** — the
+ * caller's role in the CONTAINER, which /home now reads off `HomeChannel.role`
+ * and hands the surface. The harness fixture is the container's OWNER, so a case
+ * about a reader who may not manage this channel has to say which reader.
  */
-function serve(over: Partial<Channel> = {}): void {
+function serve(over: Partial<Channel> = {}, homeRole: Role = "owner"): void {
   let channel: Channel = {
     ...CHANNEL,
     isDirect: false,
     infoCard: EMPTY_INFO_CARD,
     ...over,
   };
+  const home: HomeChannelsPayload = {
+    ...HOME,
+    channels: HOME.channels.map((row) => ({ ...row, role: homeRole })),
+  };
   apiRequest.mockImplementation(
     (path: string, opts: BridgeRequestOpts = {}): Promise<BridgeResponse> => {
       const bare = path.split("?")[0];
-      if (bare === "/api/home/channels") return Promise.resolve(ok(HOME));
+      if (bare === "/api/home/channels") return Promise.resolve(ok(home));
       if (bare === "/api/channels") {
         return Promise.resolve(ok({ channels: [channel] }));
       }
@@ -208,10 +219,13 @@ describe("home info tab — who may open them", () => {
   });
 
   it("keeps them display-only for a member who may not manage the channel", async () => {
-    // ⚠ THE MIRROR OF `service-shared.ts › canManageChannel`: /home passes no
-    // workspace role, so a channel `member` is the non-manager's face here and the
-    // PATCH would 403 — a dead control (INVARIANTS §5).
-    serve({ role: "member" });
+    // ⚠ THE MIRROR OF `service-shared.ts › canManageChannel`, WHICH IS A PAIR:
+    // channel OWNER **or** workspace ADMIN+. So the non-manager's face needs BOTH
+    // halves false — a channel `member` who is also a plain `member` of the
+    // container. ⚠ **THE SECOND HALF WAS A CONSTANT UNTIL 2026-09-17 (F-343)**:
+    // /home passed no role at all, the surface defaulted to `"member"`, and this
+    // case passed for a reader whose real rank nobody had read. It now states it.
+    serve({ role: "member" }, "member");
     renderHome();
     await openChannelRecord();
 

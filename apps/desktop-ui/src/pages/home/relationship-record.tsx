@@ -3,7 +3,7 @@ import { StandaloneChannelSurface } from "@/features/channels/components/channel
 import { useChannels } from "@/features/channels/hooks/use-channels";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { PageError } from "#/components/page-states";
-import type { HomeChannel } from "@/features/home/types";
+import { EMPTY_ROLE, type HomeChannel } from "@/features/home/types";
 import { ChannelRecordSkeleton } from "./channel-record-skeleton";
 import { PersonInfoTab } from "./person-info-tab";
 
@@ -85,6 +85,21 @@ export function RelationshipRecord({
       workspaceSlug={homeChannel.workspaceSegment}
       channel={channel}
       currentUserId={currentUserId}
+      // 🔒 **THE CALLER'S REAL ROLE IN THIS CONTAINER (2026-09-17, F-343).** The
+      // surface defaults this to `"member"` for a host that does not know, and
+      // /home was that host — so the manage half of Settings and the header's
+      // click-to-edit (`surface-info-panel.tsx › headerEdit.canEdit`, the mirror
+      // of `service-shared.ts › canManageChannel`) were answered by a CONSTANT
+      // rather than by this reader's membership. A guest peer and the container's
+      // owner got the same picture; the server gave them different answers.
+      // ⚠ **IT NARROWS AND WIDENS, AND BOTH ARE THE FIX.** A legacy unbound claim
+      // seats its claimer at workspace `admin` (`repository-containers.ts ›
+      // insertLinkContainer`), who the server WOULD let rename this channel and
+      // who the `"member"` default was hiding the control from.
+      // ⚠ §8 STALE-CACHE, SPELLED INLINE: a payload cached by the previous bundle
+      // carries no `role` key, and `EMPTY_ROLE` (rank 0) renders display-only for
+      // one paint rather than claiming a permission nobody read.
+      role={homeChannel.role ?? EMPTY_ROLE}
       initialThreadId={initialThreadId}
       initialSeq={initialSeq}
       onDeleted={onDeleted}

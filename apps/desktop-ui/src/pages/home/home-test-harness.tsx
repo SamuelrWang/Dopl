@@ -138,6 +138,12 @@ export const HOME: HomeChannelsPayload = {
       // ⚠ NOT PINNED BY DEFAULT — the **Pinned** well is opt-in per case, so no
       // existing suite grows a row in a well it never asked about.
       favoritedAt: null,
+      // ⚠ **THE DEFAULT READER OWNS THIS CONTAINER** (F-343's field, 2026-09-17)
+      // — they minted it, which is what every suite predating the field assumed
+      // when /home hardcoded `"owner"`. A case about a GUEST or a MEMBER peer
+      // states its own role (`person-members-role.test.tsx`), and a case about a
+      // payload cached BEFORE the field deletes the key outright (§8).
+      role: "owner",
       linkOut: null,
     },
   ],
@@ -388,9 +394,20 @@ export const CROWDED_CHANNEL: HomeChannelsPayload["channels"][number] = {
  * moment where it is absent, and typing the fixture as `HomeChannel` would make
  * that moment unrepresentable in the very test written to cover it.
  */
-export function staleCachedChannel(): HomeChannelsPayload["channels"][number] {
+export function staleCachedChannel(
+  /**
+   * WHICH KEY THE OLD BUNDLE DID NOT WRITE. Defaults to `peers`, the shape this
+   * helper was minted for; `role` is the 2026-09-17 one (F-343), whose fallback
+   * is a plain `?? EMPTY_ROLE` and whose fail-safe direction is DOWN.
+   *
+   * ⚠ ONE HELPER RATHER THAN A SECOND FIXTURE: §8's rule is that the test
+   * DELETES the key — not `null`, not `{}` — and two hand-rolled copies of that
+   * `delete` is how one of them quietly becomes `undefined` instead.
+   */
+  key: keyof HomeChannelsPayload["channels"][number] = "peers"
+): HomeChannelsPayload["channels"][number] {
   const stale: Record<string, unknown> = { ...HOME.channels[0] };
-  delete stale.peers;
+  delete stale[key];
   return stale as unknown as HomeChannelsPayload["channels"][number];
 }
 
