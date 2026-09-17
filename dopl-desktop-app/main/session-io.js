@@ -202,7 +202,16 @@ function grantArgs(s, toolName, input) {
     // vocabulary the runtime does not speak denies EVERYTHING on a surface-less session, so the
     // floor is declared per runtime and applied here. `s.runtimeId` is absent on a session record
     // written before this wave and resolves to the default runtime, which is what shipped.
-    toolMode: s && s.windowless === true ? floorWindowlessTool(st.toolMode, s.runtimeId) : st.toolMode,
+    // ⚠ **AND SINCE 2026-09-16 THE VALUE IT FLOORS IS READ LIVE, NOT FROZEN** —
+    // `session-private.js › effectiveToolMode`, the exact twin of the Axis-B read two fields
+    // below, whose docblock carries the whole argument. `st.toolMode` alone meant the operator's
+    // durable per-channel TOOLS pick reached a session ONLY through `spec.startModes` at spawn, so
+    // every shape that hands none (a recreate, a reopen, a crash resume, a peer wake, an abandoned
+    // shell rebuilt) gated at `manual` while the Settings tab read `bypass`. The floor still
+    // applies AFTER the read and still rewrites nothing back into the reducer.
+    toolMode: s && s.windowless === true
+      ? floorWindowlessTool(sessionPrivate.effectiveToolMode(s), s.runtimeId)
+      : sessionPrivate.effectiveToolMode(s),
     // WHICH RUNTIME'S VOCABULARY steps 1 and 4 of `grantDecision` are asked in. ⚠ IT DECIDES
     // NOTHING — the order, the verdicts and every Axis-B lane are the same on every runtime.
     runtime: (s && s.runtimeId) || null,

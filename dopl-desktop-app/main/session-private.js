@@ -270,6 +270,56 @@ function effectiveMessageMode(s) {
   return isPrivateTurn(s) ? privateTurnMessageMode(mode) : mode;
 }
 
+/**
+ * AXIS A AS THE GATE SHOULD SEE IT for this session, right now — the TOOLS half of what
+ * {@link effectiveMessageMode} does for MESSAGES, and it exists because for three weeks only one
+ * of the two axes had it (2026-09-16, F-... the permission-inheritance report).
+ *
+ * ⚠ **THE ASYMMETRY WAS THE DEFECT, NOT A DESIGN.** `effectiveMessageMode`'s own header lists the
+ * FOUR silent ways a durable setting fails to be in effect — *"a reopened/recreated shell drops
+ * its startModes (H2), a crash resume floors them, a running session never re-reads the store, and
+ * a private turn withdrew the half the toggle had granted"* — and fixed all four for Axis B by
+ * reading the store at DECISION time. Axis A was left frozen at `state.toolMode`, so every one of
+ * those ways still applied to TOOLS: an operator with `bypass` stored for the channel was prompted
+ * for `Bash` by any session that was recreated, resumed, woken by a peer (`trigger.js` hands
+ * `tools: 'manual'` on that lane) or abandoned and rebuilt (`session-reducer.js › abandon_timeout`:
+ * *"at manual/ask like every other spawn nobody approved"*). `manual` allows NO work tool
+ * (`runtime/claude/tools.js › toolModeAllows`), so on a windowed session every call gated — which
+ * reads exactly like a setting that did not stick, because it is one.
+ *
+ * ⚠ **H2 IS NOT REPEALED BY THIS, AND THE REASON IS THE SAME ONE THAT ADMITTED THE AXIS-B READ.**
+ * H2 forbids an AMBIENT posture read at a SPAWN no human is attending — the construction site
+ * (`session-engine.js › startSession`) still reads nothing, and `spec.startModes` is still the only
+ * thing that seeds `state.toolMode`. This is a READ AT DECISION TIME of a setting the operator can
+ * see and change right now, on their own machine, for their own channel. It is SUPERVISION, never
+ * CONTAINMENT: `SESSION_HARD_DENY`, the container-only path rules, the profile's `disallowedTools`
+ * and the Axis-A/Axis-B split are all checked BEFORE `grantDecision` consults this value, and no
+ * tool posture has ever been able to send a message.
+ *
+ * ⚠ **AN EXPLICIT PER-SESSION PICK WINS, WHICH IS THE ONE PLACE THIS IS STRICTER THAN AXIS B.**
+ * The agent view can move a LIVE session's tool posture (`session-reopen.js › setModeByTask`),
+ * and that is a decision about THIS agent made seconds ago; letting the channel-wide record
+ * override it would make the select lie in the other direction. `state.toolModeSet` is stamped by
+ * the reducer's `set_tool_mode` arm and by nothing else, so "the operator narrowed this one agent"
+ * and "this session inherited a default" stay distinguishable. Axis B needs no such flag because
+ * its own live read IS the channel-wide control it folded into (2026-09-06, item 8).
+ *
+ * ⚠ **NO FLOOR IS APPLIED HERE, DELIBERATELY.** The windowless Axis-A floor is the RUNTIME's
+ * (`floorWindowlessTool`, runtime-scoped since 2026-08-31) and is applied at the single read site
+ * in `session-io.js › grantArgs`. Re-applying it here would be the second spelling that
+ * `session-mode-floor.test.mjs` exists to prevent. Axis B floors inside `effectiveMessageMode`
+ * only because its floor is DOPL's own enum and its state-writing lanes need the same answer.
+ *
+ * ⚠ AN UNREADABLE STORE FALLS BACK TO THE FROZEN VALUE, NEVER TO A GRANT — `channelToolMode`
+ * answers `''` for "no opinion", exactly as `channelMessageMode` does.
+ */
+function effectiveToolMode(s) {
+  const st = (s && s.state) || {};
+  const frozen = st.toolMode || 'manual';
+  if (st.toolModeSet === true) return frozen; // the operator moved THIS session, seconds ago
+  return channelToolMode(s && s.channelId) || frozen;
+}
+
 // ─── END SESSION-PRIVATE-PURE ────────────────────────────────────────────────────
 
 /**
@@ -318,6 +368,31 @@ function channelMessageMode(channelId) {
   }
 }
 
+/**
+ * THE LIVE HALF OF AXIS A — the channel's durable TOOLS value, read at DECISION time, or `''`
+ * when there is none to read. `channelMessageMode`'s twin, and every clause of that function's
+ * header applies here for the same reasons: LAZY-REQUIRED (`channel-prefs.js` instantiates an
+ * electron-store at load and this module is required by plain-node tests), `''` rather than a mode
+ * when it cannot read (an unreadable store must not become a posture in EITHER direction), and the
+ * PRESENCE check first, because `getLaunchPosture` answers the restrictive DEFAULT for a channel
+ * nobody has configured — read alone it would make an unconfigured channel indistinguishable from
+ * one deliberately set to `manual`, and the session's frozen launch posture would be dead code.
+ *
+ * ⚠ COERCED BY THE STORE, NOT HERE — `channel-prefs.js › normalizePreset` validates this axis
+ * against the frozen `TOOL_MODES` list on WRITE, so what comes back is already a member or nothing.
+ */
+function channelToolMode(channelId) {
+  if (!channelId) return '';
+  try {
+    if (!require('./channel-prefs').hasLaunchPosture(channelId)) return '';
+    const preset = require('./channel-prefs').getLaunchPosture(channelId);
+    const mode = preset && preset.tools;
+    return typeof mode === 'string' && mode ? mode : '';
+  } catch (_err) {
+    return '';
+  }
+}
+
 module.exports = {
   turnInFlight,
   openPrivateTurn,
@@ -327,4 +402,6 @@ module.exports = {
   // ⚠ `autoSendMessageMode` REMOVED 2026-09-06 (item 8) — see the block above it.
   effectiveMessageMode,
   channelMessageMode, // 2026-09-06: the live read of the channel's Messaging value, for the suite
+  effectiveToolMode, // 2026-09-16: Axis A's decision-time read — the half that was missing
+  channelToolMode, //  ...and its live half, exported on `channelMessageMode`'s precedent
 };

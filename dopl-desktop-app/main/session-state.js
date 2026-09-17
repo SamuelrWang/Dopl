@@ -150,6 +150,13 @@ function initialSessionState(opts) {
     // NEVER a work tool. Per-session, never persisted, RESET on park (v2.3 FIX #3). v3.1: the START
     // may come from the channel preset (channel-context.startingModes), coerced fail-closed here.
     toolMode: coerceMode(TOOL_MODES, o.toolMode),
+    // ⚠ 2026-09-16: FALSE AT EVERY SPAWN, INCLUDING ONE HANDED A POSTURE. `spec.startModes` is a
+    // launch DEFAULT (the operator's stored pair, or a directive's narrower request); this flag
+    // marks only a LIVE `set_tool_mode` from the agent view, which is what makes an inherited
+    // posture re-readable from the channel record and a deliberate per-agent pick sticky. The
+    // reducer's `set_tool_mode` arm is its one producer; see `session-private.js ›
+    // effectiveToolMode`. Never persisted, like both axes.
+    toolModeSet: false,
     messageMode: coerceMode(MESSAGE_MODES, o.messageMode),
     // v2.5 D1/D4: the standing INBOUND grant ("Accept for this session") — when true an inbound turn
     // is fed with no Accept. Like allowForTask it lives for the life of the in-memory session

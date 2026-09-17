@@ -218,9 +218,9 @@ function sessionReducer(state, event) {
     // direct:true`, and a blanket drain would let the TOOL axis answer a MESSAGE operation — the
     // very invariant this contract establishes. A mode change governs the NEXT call; anything
     // already waiting keeps its buttons (fail-closed). The INBOUND half of Axis B still drains,
-    // because that queue holds messages and nothing else (the deleted session-ipc -> gate.drainInbound lane, F-228).
+    // because that queue holds messages and nothing else (the deleted session-ipc -> gate.drainInbound lane, F-228). ⚠ THE TOOL ARM ALSO STAMPS `toolModeSet` (2026-09-16) and is its ONE producer — a fact about WHO CHOSE, not a posture, and Axis B needs no twin; `session-private.js › effectiveToolMode` carries the whole argument, because this file is AT the §1 500-line cap.
     const patch = type === 'set_tool_mode'
-      ? { toolMode: coerceMode(TOOL_MODES, event.mode) }
+      ? { toolMode: coerceMode(TOOL_MODES, event.mode), toolModeSet: true }
       : { messageMode: coerceMode(MESSAGE_MODES, event.mode) };
     const next = clone(state, patch);
     return { state: next, effects: [modesEmit(next)] };
@@ -434,7 +434,7 @@ function sessionReducer(state, event) {
     return {
       state: clone(state, { phase: gatePhase(state, 'parked'), parked: true, activity: 'parked',
         authHeld: true, toolMode: 'manual', messageMode: 'ask', inboundForTask: false,
-        allowForTask: [], pendingPermissions: [], postedThisTurn: false, postedToolUseIds: [] }),
+        allowForTask: [], pendingPermissions: [], postedThisTurn: false, postedToolUseIds: [], toolModeSet: false }), // ⚠ `toolModeSet` CLEARS WITH THE AXES IT MARKS (2026-09-16): a hold ends the run that pick belonged to, so leaving it set would pin the relaunch to a `manual` nobody chose and lock out the channel's own value
       effects: parkEffects(state, { lifecycle: true }), // C-5: and the peer is told, once
     };
   }
