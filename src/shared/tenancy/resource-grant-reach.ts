@@ -24,12 +24,24 @@ import { meetsMinRole, type Role } from "@/features/workspaces/types";
  *
  * ── SCOPES: TWO HERE, THE THIRD SOMEWHERE ELSE ─────────────────────────────
  *
- * `channel` and `container` only. **`team` is deliberately absent**: it is
- * already an arm of `dopl_teams_mode_visible()` / `filterTeamVisibleBases`,
- * reached through `access_mode='teams'` and `visibility='team'`, and answering
- * it here as well would be a second copy of a rule that has a home (ruling B4
- * made team a SCOPE, not a second mechanism). It is also off the MCP surface
- * entirely (A8).
+ * {@link grantedResourceIds} answers `channel` and `container` only. **`team` is
+ * deliberately absent from IT**: it is already an arm of
+ * `dopl_teams_mode_visible()` / `filterTeamVisibleBases`, reached through
+ * `access_mode='teams'` and `visibility='team'`, and answering it there as well
+ * would be a second copy of a rule that has a home (ruling B4 made team a SCOPE,
+ * not a second mechanism). It is also off the MCP surface entirely (A8).
+ *
+ * ⚠ **{@link teamGrantedResourceIds} IS A SECOND DOOR ON THE SAME TABLE, NOT A
+ * SECOND COPY OF THE RULE (F-716, 2026-09-17).** It reads the team scope and
+ * answers only *"which of these ids is lent to a team I am in"*; the RULE — who
+ * that admits, and under which `visibility`/`access_mode` — stays in each
+ * feature's own `canSee*`, which takes the answer. It exists because the
+ * per-feature readers it mirrors (`teams/server/repository-grants.ts ›
+ * listGrantsForResources`, `agent-templates/server/repository.ts ›
+ * listTeamLinksForTemplates`) are **per-container**, and global search spans
+ * every container the caller is in: calling one of them per container is the
+ * per-container fan §9 forbids. Team membership is read ONCE for the caller,
+ * across containers, because a team id is unique.
  *
  * ── LEVEL IS NOT ONE LADDER, AND THIS IS WHERE THAT BITES ──────────────────
  *
@@ -207,4 +219,58 @@ async function reachableChannels(
       (r) => r.channel_id
     )
   );
+}
+
+/**
+ * 🔒 **WHICH OF `resourceIds` IS LENT TO A TEAM THE CALLER BELONGS TO** — the
+ * `scope_type='team'` door, batched across every container at once (F-716).
+ *
+ * ⚠ **IT ANSWERS MEMBERSHIP, NEVER VISIBILITY.** A row being lent to one of my
+ * teams does not by itself make it readable — `skills › canSeeSkill`,
+ * `chats › canSeeChat` and `agent-templates › canSeeTemplate` each decide that,
+ * and each has arms this knows nothing about. Handing a SET to a predicate is
+ * the shape that keeps the rule in one place.
+ *
+ * ⚠ **NO `workspace_id` TERM, AND THAT IS DELIBERATE — THE FENCE IS THE INPUT.**
+ * `resourceIds` is always a page the caller's container membership already
+ * proved (`search/server/repository-reach.ts`), and a team id is unique, so a
+ * container term would only re-state what the caller already narrowed. **Never
+ * call this with ids a membership read did not produce.**
+ *
+ * ⚠ TWO QUERIES, ALWAYS: the caller's teams, then the grants over them. Neither
+ * runs when there is nothing to ask about.
+ */
+export async function teamGrantedResourceIds(
+  userId: string,
+  resourceType: GrantResourceType,
+  resourceIds: readonly string[]
+): Promise<GrantedResourceIds> {
+  if (resourceIds.length === 0) return NO_GRANTS;
+  const db = supabaseAdmin();
+  const { data: teamRows, error: teamError } = await db
+    .from("team_members")
+    .select("team_id")
+    .eq("user_id", userId)
+    .limit(GRANT_REACH_LIMIT);
+  if (teamError) throw teamError;
+  const teamIds = [
+    ...new Set(
+      ((teamRows ?? []) as Array<{ team_id: string }>).map((r) => r.team_id)
+    ),
+  ];
+  if (teamIds.length === 0) return NO_GRANTS;
+
+  const { data, error } = await db
+    .from("resource_grants")
+    .select("resource_id")
+    .eq("resource_type", resourceType)
+    .eq("scope_type", "team")
+    .in("scope_id", teamIds)
+    .in("resource_id", [...new Set(resourceIds)])
+    .limit(GRANT_REACH_LIMIT);
+  if (error) throw error;
+  const granted = new Set(
+    ((data ?? []) as Array<{ resource_id: string }>).map((r) => r.resource_id)
+  );
+  return granted.size === 0 ? NO_GRANTS : granted;
 }

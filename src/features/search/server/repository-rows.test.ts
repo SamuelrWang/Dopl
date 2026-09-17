@@ -12,8 +12,12 @@
  *  - 🔒 **`ilike` IS A PATTERN MATCH AND THE QUERY IS ESCAPED.** Unescaped, a
  *    search for `100%` matches `100x` and `a_b` matches `axb`.
  *  - 🔒 **`.or()` VALUES ARE QUOTED.** Its grammar splits on `,` and `.`, so an
- *    unquoted value a person typed rewrites the filter's SHAPE — and on three of
- *    these tables that filter IS the visibility fence.
+ *    unquoted value a person typed rewrites the filter's SHAPE. ⚠ Since F-716
+ *    the only `.or()` left in this feature is the MEMBERS one — the four
+ *    visibility arms are gone, decided by each feature's own `canSee*` instead.
+ *  - 🔒 **THE VISIBILITY PROJECTION.** A predicate reads columns SQL no longer
+ *    filters on; a dropped column reads as its fail-closed default and narrows
+ *    silently.
  *  - 🔒 **THE FULL-TEXT ARM NAMES `simple` ON THE QUERY SIDE (F-717).** The
  *    generated column fixes the VECTOR's dictionary and says nothing about the
  *    QUERY's; omitted, PostgREST falls to the server's
@@ -51,8 +55,17 @@ import {
   searchSkills,
 } from "./repository-container-rows";
 import { SEARCH_GROUP_TOTAL_CAP } from "../contracts";
+import { SEARCH_CANDIDATE_ROW_LIMIT } from "./repository-visibility";
 
 const ME = "11111111-1111-1111-1111-111111111111";
+/** The caller, as the four predicates need them (F-716). ⚠ `ownerUserId: null`
+ *  is the SHARED-credential shape and keeps the cheap SQL arm. */
+const caller = (ownerUserId: string | null = ME) => ({
+  userId: ME,
+  ownerUserId,
+  credentialSubjectUserId: ownerUserId,
+  roleByContainer: new Map([[WS, "member" as const]]),
+});
 const WS = "33333333-3333-3333-3333-333333333333";
 const CH = "55555555-5555-5555-5555-555555555555";
 
@@ -99,9 +112,9 @@ describe("🔒 the ilike arms escape the query", () => {
     ["channels", () => searchChannels([CH], "100%_x"), "name"],
     ["threads", () => searchThreads([CH], "100%_x"), "title"],
     ["artifacts", () => searchArtifacts([CH], "100%_x"), "name"],
-    ["agent templates", () => searchAgentTemplates([WS], "100%_x", ME), "name"],
-    ["skills", () => searchSkills(WS, "100%_x", ME), "name"],
-    ["chats", () => searchChats(WS, "100%_x", ME), "title"],
+    ["agent templates", () => searchAgentTemplates([WS], "100%_x", caller()), "name"],
+    ["skills", () => searchSkills(WS, "100%_x", caller()), "name"],
+    ["chats", () => searchChats(WS, "100%_x", caller()), "title"],
   ])("%s", async (_label, run, column) => {
     const calls = recorder();
     await run();
@@ -111,27 +124,49 @@ describe("🔒 the ilike arms escape the query", () => {
   });
 });
 
-describe("🔒 the .or() visibility arms are quoted", () => {
+describe("🔒 the visibility narrowing is the PREDICATE's, not SQL's (F-716)", () => {
   it.each([
-    ["knowledge bases", () => listReadableBases([WS], ME), "visibility", "public", "created_by"],
-    ["agent templates", () => searchAgentTemplates([WS], "q", ME), "visibility", "workspace", "created_by"],
-    ["skills", () => searchSkills(WS, "q", ME), "visibility", "public", "created_by"],
-    ["chats", () => searchChats(WS, "q", ME), "visibility", "public", "owner_id"],
-  ])("%s", async (_label, run, column, widest, ownerColumn) => {
+    ["knowledge bases", () => listReadableBases([WS], caller()), "visibility, created_by"],
+    ["agent templates", () => searchAgentTemplates([WS], "q", caller()), "visibility, created_by"],
+    ["skills", () => searchSkills(WS, "q", caller()), "visibility, access_mode, created_by"],
+    ["chats", () => searchChats(WS, "q", caller()), "visibility, access_mode, owner_id"],
+  ])("%s: no visibility filter, and the columns the predicate reads", async (_l, run, cols) => {
     const calls = recorder();
     await run();
-    expect(of(calls, "or")[0]?.args[0]).toBe(
-      `${column}.eq."${widest}",${ownerColumn}.eq."${ME}"`
-    );
+    // ⚠ **NO `.or()` AND NO `visibility` `eq`.** A person's visibility is
+    // decided by the owning feature's `canSee*` over the fetched page
+    // (`repository-visibility.ts`); a SQL restatement here is the fifth copy
+    // F-716 exists to refuse.
+    expect(of(calls, "or")).toHaveLength(0);
+    expect(argOf(calls, "eq", "visibility")).toBeUndefined();
+    // 🔒 AND THE PROJECTION CARRIES WHAT THE PREDICATE ASKS FOR. Dropping one
+    // of these columns makes every row read as its fail-closed default, which
+    // is a silent narrowing no other case here would see.
+    const select = String(of(calls, "select")[0]?.args[0]);
+    for (const col of cols.split(", ")) expect(select).toContain(col);
   });
 
-  it("collapses to a one-armed eq for a credential with nobody behind it", async () => {
+  it.each([
+    ["knowledge bases", () => listReadableBases([WS], caller(null))],
+    ["agent templates", () => searchAgentTemplates([WS], "q", caller(null))],
+    ["skills", () => searchSkills(WS, "q", caller(null))],
+    ["chats", () => searchChats(WS, "q", caller(null))],
+  ])("%s: a SHARED credential gets NO cheaper SQL arm either", async (_l, run) => {
     const calls = recorder();
-    await searchSkills(WS, "q", null);
-    // ⚠ NOT a one-armed `.or()` — a filter shaped like a two-armed one invites
-    // the next editor to "complete" it with an owner that stands for nobody.
+    await run();
+    // 🔒 **THE SHORTCUT WAS TRIED AND IT WAS WRONG.** `visibility='public'`
+    // admits an `access_mode='teams'` row that `canSeeSkill`/`canSeeChat`
+    // refuse, so a "cheap arm equal to arm 2" is not equal on two of the four
+    // tables (`shared-rows.test.ts`'s sweep found the four combinations). One
+    // path, one authority.
+    expect(argOf(calls, "eq", "visibility")).toBeUndefined();
     expect(of(calls, "or")).toHaveLength(0);
-    expect(argOf(calls, "eq", "visibility")).toBe("public");
+  });
+
+  it("asks for a CANDIDATE page, which the predicate then cuts", async () => {
+    const calls = recorder();
+    await searchSkills(WS, "q", caller());
+    expect(of(calls, "limit")[0]?.args[0]).toBe(SEARCH_CANDIDATE_ROW_LIMIT);
   });
 });
 
@@ -235,7 +270,7 @@ describe("the lifecycle filters", () => {
     expect(of(artifactCalls, "is")[0]?.args).toEqual(["dissolved_at", null]);
 
     const skillCalls = recorder();
-    await searchSkills(WS, "q", ME);
+    await searchSkills(WS, "q", caller());
     expect(of(skillCalls, "is")[0]?.args).toEqual(["deleted_at", null]);
   });
 });
@@ -261,8 +296,8 @@ describe("the bounds", () => {
       searchMessages([], "q"),
       searchThreads([], "q"),
       searchArtifacts([], "q"),
-      searchAgentTemplates([], "q", ME),
-      listReadableBases([], ME),
+      searchAgentTemplates([], "q", caller()),
+      listReadableBases([], caller()),
       searchKnowledgeEntries(new Map(), "q"),
     ]);
     // ⚠ `.in("x", [])` is a legal filter that returns nothing; spending a round

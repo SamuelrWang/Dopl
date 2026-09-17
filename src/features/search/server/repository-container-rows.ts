@@ -9,41 +9,47 @@ import {
   orLiteral,
   prefixPattern,
 } from "./query-text";
+import {
+  SEARCH_CANDIDATE_ROW_LIMIT,
+  visibleBases,
+  visibleChats,
+  visibleSkills,
+  visibleTemplates,
+  type CandidateRow,
+  type SearchCaller,
+} from "./repository-visibility";
 
 /**
  * THE FIVE GROUPS FENCED BY **CONTAINER MEMBERSHIP** — knowledge, agent
  * templates, members, skills, chats (2026-09-17).
  *
- * 🔒 ── THE SECOND FENCE, AND WHY IT IS NARROWER THAN `canSee*` ON PURPOSE ──
+ * 🔒 ── THE SECOND FENCE, AND IT IS THE FEATURE'S OWN PREDICATE (F-716) ─────
  *
  * Container membership admits the caller to the CONTAINER; it does not admit
  * them to every row in it. Four of these tables carry their own visibility axis,
- * and each is narrowed here by **the arms of its own `canSee*` predicate that
- * can be stated as a `WHERE` clause**:
+ * and each is decided by **the predicate the owning feature already wrote** —
+ * `knowledge › canSeeBase`, `skills › canSeeSkill`, `chats › canSeeChat`,
+ * `agent-templates › canSeeTemplate` — called from
+ * `repository-visibility.ts`, which carries the whole argument.
  *
- *   * `knowledge_bases`  — `visibility='public' OR created_by = caller`
- *   * `agent_templates`  — `visibility='workspace' OR created_by = caller`
- *   * `skills`           — `visibility='public' OR created_by = caller`
- *   * `chats`            — `visibility='public' OR owner_id = caller`
+ * ⚠ **UNTIL 2026-09-17 IT WAS A HAND-WRITTEN `visibility = <widest> OR <owner> =
+ * caller`, AND THAT WAS WRONG IN BOTH DIRECTIONS.** It MISSED every row lent in
+ * by a `resource_grants` row or a team share (F-716's complaint), and it LEAKED
+ * `access_mode='teams'` rows, which `visibility='public'` admits and the real
+ * predicates refuse to a member of none of the granted teams. **The entry's
+ * "strict subset, so it can only be a miss" claim was half true and is
+ * corrected with the code.**
  *
- * ⚠ **THAT IS A STRICT SUBSET OF WHAT THE FEATURE'S OWN PREDICATE ADMITS, AND
- * THE DIRECTION IS THE WHOLE ARGUMENT (F-716).** `knowledge/server/service-shared.ts ›
- * canSeeBase`, `skills/server/service-shared.ts › canSeeSkill`,
- * `agent-templates/server/service-shared.ts › canSeeTemplate` and
- * `chats/server/service-shared.ts › canSeeChat` each have further arms — a team
- * grant, a workspace-admin arm, a `resource_grants` row — that can only ever ADD
- * rows. Every arm dropped here makes the answer SMALLER. **A search that misses
- * a lent row is a miss; a search that shows a foreign one is a leak**, and the
- * first is the failure a popup is allowed to have. The clauses kept are exactly
- * the ones `20260504030000_visibility_private_resources.sql` states as the RLS
- * SELECT policy, so the fence and the policy say the same thing on the two
- * tables that have both.
+ * ⚠ **SO THE VISIBILITY CLAUSE IS NO LONGER SQL AND THE CONTAINER FENCE STILL
+ * IS.** Each read below fetches a CANDIDATE page — `WHERE workspace_id IN
+ * (<the reach>)` plus the name match, capped at
+ * `repository-visibility.ts › SEARCH_CANDIDATE_ROW_LIMIT` — and the predicate
+ * cuts it. A container the caller does not belong to is still never NAMED.
  *
- * ⚠ **AND THE OWN-ROW ARM IS DROPPED ENTIRELY FOR A SHARED CREDENTIAL**, through
- * `shared/auth/credential-audience.ts › isSharedCredential` at the service. Arm 2
- * of every one of those predicates is that refusal (F-336/F-333): a credential
- * with nobody behind it inherits nobody's private rows, so passing
- * `ownerUserId: null` here is the search's spelling of the same rule.
+ * ⚠ **AND A SHARED CREDENTIAL TAKES THE SAME PATH, not a cheaper one** — see
+ * {@link CANDIDATE_LIMIT}'s note for the shortcut that was tried and was NOT
+ * equal to the predicate. What it does skip is the grant READS, which arm 2 of
+ * all four predicates (F-336/F-333) makes unreachable for it anyway.
  *
  * ⚠ **`members`, `skills` AND `chats` ARE NEVER CALLED IN ACCOUNT SCOPE**
  * (`contracts.ts › CONTAINER_ONLY_SEARCH_GROUPS`; Samuel 2026-09-17: *"those
@@ -54,11 +60,31 @@ import {
  */
 
 /**
- * The caller, as the visibility clauses need them. ⚠ `null` means **a credential
- * with no person behind it**, never "unknown": every own-row arm below is
- * skipped for it, which is the fail-closed direction.
+ * The caller's own-row axis. ⚠ `null` means **a credential with no person behind
+ * it**, never "unknown": every arm below the widest visibility is skipped for
+ * it, which is the fail-closed direction and is arm 2 of all four predicates.
  */
 export type OwnerRef = string | null;
+
+/**
+ * 🔒 **THERE IS NO SECOND PATH, AND THE ATTEMPT AT ONE IS WORTH RECORDING.**
+ * The first cut of F-716 kept the old `visibility = <widest>` SQL arm for a
+ * credential standing for nobody, on the reasoning that arm 2 of every
+ * predicate refuses such a caller everything else, so the `eq` WAS the
+ * predicate. **It is not, on two of the four tables:** `canSeeSkill` and
+ * `canSeeChat` admit `public` only when `access_mode !== 'teams'`, so the
+ * shortcut returned four combinations the predicate refuses. The combination
+ * sweep in `shared-rows.test.ts` failed on exactly those four before any of
+ * this shipped.
+ *
+ * ⚠ **SO EVERY CALLER TAKES THE SAME PATH: FETCH THE CANDIDATE PAGE, ASK THE
+ * PREDICATE.** The saving the shortcut was for is kept where it is free —
+ * `repository-visibility.ts › grantSets` reads NO grant table for a credential
+ * with nobody behind it, because that caller has no membership to read one
+ * through. A cheaper SQL arm that has to restate a predicate is the fifth copy
+ * again, wearing a performance argument.
+ */
+const CANDIDATE_LIMIT = SEARCH_CANDIDATE_ROW_LIMIT;
 
 /**
  * ⚠ A base ceiling distinct from the group cap: it bounds the FENCE, not the
@@ -75,24 +101,21 @@ export const SEARCH_REACH_ROW_LIMIT = 500;
  */
 export async function listReadableBases(
   containerIds: string[],
-  ownerUserId: OwnerRef
+  caller: SearchCaller
 ): Promise<Map<string, { name: string; containerId: string }>> {
   const out = new Map<string, { name: string; containerId: string }>();
   if (containerIds.length === 0) return out;
   const db = supabaseAdmin();
-  let query = db
+  const query = db
     .from("knowledge_bases")
-    .select("id, name, workspace_id")
+    .select("id, name, workspace_id, visibility, created_by")
     .in("workspace_id", containerIds)
     .is("deleted_at", null);
-  query = applyVisibilityArm(query, "visibility", "public", "created_by", ownerUserId);
   const { data, error } = await query.limit(SEARCH_REACH_ROW_LIMIT);
   if (error) throw error;
-  for (const row of (data ?? []) as Array<{
-    id: string;
-    name: string;
-    workspace_id: string;
-  }>) {
+  const rows = (data ?? []) as Array<CandidateRow & { name: string }>;
+  const visible = await visibleBases(caller, rows);
+  for (const row of visible) {
     out.set(row.id, { name: row.name, containerId: row.workspace_id });
   }
   return out;
@@ -196,27 +219,24 @@ interface KnowledgeRow {
 export async function searchAgentTemplates(
   containerIds: string[],
   query: string,
-  ownerUserId: OwnerRef
+  caller: SearchCaller
 ): Promise<SearchHit[]> {
   if (containerIds.length === 0) return [];
   const db = supabaseAdmin();
-  let builder = db
+  const builder = db
     .from("agent_templates")
-    .select("id, name, description, workspace_id, updated_at")
+    .select(
+      "id, name, description, workspace_id, updated_at, visibility, created_by"
+    )
     .in("workspace_id", containerIds)
     .ilike("name", containsPattern(query));
-  builder = applyVisibilityArm(
-    builder,
-    "visibility",
-    "workspace",
-    "created_by",
-    ownerUserId
-  );
   const { data, error } = await builder
     .order("updated_at", { ascending: false })
-    .limit(SEARCH_GROUP_TOTAL_CAP);
+    .limit(CANDIDATE_LIMIT);
   if (error) throw error;
-  return ((data ?? []) as TemplateRow[]).map((row) => ({
+  const rows = (data ?? []) as TemplateRow[];
+  const visible = await visibleTemplates(caller, rows);
+  return visible.slice(0, SEARCH_GROUP_TOTAL_CAP).map((row) => ({
     id: row.id,
     title: row.name,
     body: row.description,
@@ -225,11 +245,9 @@ export async function searchAgentTemplates(
   }));
 }
 
-interface TemplateRow {
-  id: string;
+interface TemplateRow extends CandidateRow {
   name: string;
   description: string | null;
-  workspace_id: string;
   updated_at: string;
 }
 
@@ -302,27 +320,24 @@ interface ProfileRow {
 export async function searchSkills(
   containerId: string,
   query: string,
-  ownerUserId: OwnerRef
+  caller: SearchCaller
 ): Promise<SearchHit[]> {
   const db = supabaseAdmin();
-  let builder = db
+  const builder = db
     .from("skills")
-    .select("id, name, description, workspace_id, updated_at")
+    .select(
+      "id, name, description, workspace_id, updated_at, visibility, access_mode, created_by"
+    )
     .eq("workspace_id", containerId)
     .is("deleted_at", null)
     .ilike("name", containsPattern(query));
-  builder = applyVisibilityArm(
-    builder,
-    "visibility",
-    "public",
-    "created_by",
-    ownerUserId
-  );
   const { data, error } = await builder
     .order("updated_at", { ascending: false })
-    .limit(SEARCH_GROUP_TOTAL_CAP);
+    .limit(CANDIDATE_LIMIT);
   if (error) throw error;
-  return ((data ?? []) as SkillRow[]).map((row) => ({
+  const rows = (data ?? []) as SkillRow[];
+  const visible = await visibleSkills(caller, rows);
+  return visible.slice(0, SEARCH_GROUP_TOTAL_CAP).map((row) => ({
     id: row.id,
     title: row.name,
     body: row.description,
@@ -331,11 +346,9 @@ export async function searchSkills(
   }));
 }
 
-interface SkillRow {
-  id: string;
+interface SkillRow extends CandidateRow {
   name: string;
   description: string | null;
-  workspace_id: string;
   updated_at: string;
 }
 
@@ -344,27 +357,24 @@ interface SkillRow {
 export async function searchChats(
   containerId: string,
   query: string,
-  ownerUserId: OwnerRef
+  caller: SearchCaller
 ): Promise<SearchHit[]> {
   const db = supabaseAdmin();
-  let builder = db
+  const builder = db
     .from("chats")
-    .select("id, title, overview, workspace_id, updated_at")
+    .select(
+      "id, title, overview, workspace_id, updated_at, visibility, access_mode, owner_id"
+    )
     .eq("workspace_id", containerId)
     .is("deleted_at", null)
     .ilike("title", containsPattern(query));
-  builder = applyVisibilityArm(
-    builder,
-    "visibility",
-    "public",
-    "owner_id",
-    ownerUserId
-  );
   const { data, error } = await builder
     .order("updated_at", { ascending: false })
-    .limit(SEARCH_GROUP_TOTAL_CAP);
+    .limit(CANDIDATE_LIMIT);
   if (error) throw error;
-  return ((data ?? []) as ChatRow[]).map((row) => ({
+  const rows = (data ?? []) as ChatRow[];
+  const visible = await visibleChats(caller, rows);
+  return visible.slice(0, SEARCH_GROUP_TOTAL_CAP).map((row) => ({
     id: row.id,
     title: row.title,
     body: row.overview === "" ? null : row.overview,
@@ -373,42 +383,8 @@ export async function searchChats(
   }));
 }
 
-interface ChatRow {
-  id: string;
+interface ChatRow extends CandidateRow {
   title: string;
   overview: string;
-  workspace_id: string;
   updated_at: string;
-}
-
-/** The minimum a PostgREST builder has to offer for {@link applyVisibilityArm}. */
-interface FilterableQuery<T> {
-  eq(column: string, value: string): T;
-  or(filter: string): T;
-}
-
-/**
- * 🔒 **THE ONE PLACE THE VISIBILITY ARM IS WRITTEN**, for all four tables that
- * carry one.
- *
- * ⚠ **A `null` OWNER COLLAPSES TO `eq`, NOT TO A ONE-ARMED `or`.** With no
- * person behind the credential the own-row arm cannot match anything, and
- * spelling it as `or(visibility.eq.public)` would leave a filter shaped like a
- * two-armed one for the next editor to "complete".
- * ⚠ `ownerUserId` is a `auth.users` UUID and could not carry an `.or()`
- * metacharacter today — it is quoted anyway, because that is a fact about the
- * CALLER and not about this function (`resolve-resource.ts › orLiteral`'s words).
- */
-function applyVisibilityArm<T extends FilterableQuery<T>>(
-  query: T,
-  visibilityColumn: string,
-  widestValue: string,
-  ownerColumn: string,
-  ownerUserId: OwnerRef
-): T {
-  if (ownerUserId === null) return query.eq(visibilityColumn, widestValue);
-  return query.or(
-    `${visibilityColumn}.eq.${orLiteral(widestValue)},` +
-      `${ownerColumn}.eq.${orLiteral(ownerUserId)}`
-  );
 }

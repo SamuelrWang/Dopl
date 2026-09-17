@@ -27,6 +27,7 @@ import {
   searchSkills,
   type OwnerRef,
 } from "./repository-container-rows";
+import type { SearchCaller } from "./repository-visibility";
 import { assembleGroups, type SearchLabels } from "./service-groups";
 
 /**
@@ -159,10 +160,23 @@ async function runGroupReads(
   const containerIds = reach.containers.map((c) => c.id);
   const channelIds = reach.channels.map((c) => c.id);
   // 🔒 RULE 3 — see the header. A credential with nobody behind it has no own
-  // rows to reach, so the arm is dropped before any clause is written.
+  // rows to reach, so every arm below the widest visibility is dropped before
+  // any clause is written.
   const ownerUserId: OwnerRef = isSharedCredential(ctx) ? null : ctx.userId;
+  /**
+   * 🔒 **THE CALLER, AS THE FOUR `canSee*` PREDICATES NEED THEM (F-716).** Built
+   * ONCE per request from the reach that proved access — never re-derived, and
+   * never from anything the caller sent. The role map is what makes the
+   * workspace-admin arms container-correct in account scope.
+   */
+  const caller: SearchCaller = {
+    userId: ctx.userId,
+    ownerUserId,
+    credentialSubjectUserId: ctx.credentialSubjectUserId,
+    roleByContainer: new Map(reach.containers.map((c) => [c.id, c.role])),
+  };
 
-  const bases = await listReadableBases(containerIds, ownerUserId);
+  const bases = await listReadableBases(containerIds, caller);
   const [channels, messages, threads, artifacts, knowledge, agentTemplates] =
     await Promise.all([
       searchChannels(channelIds, q),
@@ -170,7 +184,7 @@ async function runGroupReads(
       searchThreads(channelIds, q),
       searchArtifacts(channelIds, q),
       searchKnowledgeEntries(bases, q),
-      searchAgentTemplates(containerIds, q, ownerUserId),
+      searchAgentTemplates(containerIds, q, caller),
     ]);
 
   const byKind = new Map<SearchGroupKind, SearchHit[]>([
@@ -202,8 +216,8 @@ async function runGroupReads(
 
   const [members, skills, chats] = await Promise.all([
     searchMembers(container.id, container.name, q),
-    searchSkills(container.id, q, ownerUserId),
-    searchChats(container.id, q, ownerUserId),
+    searchSkills(container.id, q, caller),
+    searchChats(container.id, q, caller),
   ]);
   byKind.set("members", members);
   byKind.set("skills", skills);

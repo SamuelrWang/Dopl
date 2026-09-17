@@ -9520,9 +9520,9 @@ declarations, not rules.
 
 ### F-714 — a search hit on a MESSAGE cannot land on the message: the transcript's seq jump is reachable only from inside the surface
 
-**Found:** 2026-09-17, wiring the search popup's two hosts. **Status:** ✅ **RESOLVED 2026-09-17**
-— the surface takes an `initialSeq` and fires the EXISTING signal; see the discharge at the foot of
-this entry.
+**Found:** 2026-09-17, wiring the search popup's two hosts. **Status:** ✅ **RESOLVED 2026-09-17 in
+`0b57c446`** — the surface takes an `initialSeq` and fires the EXISTING signal; see the discharge at
+the foot of this entry.
 
 `GET /api/search` returns a message row carrying `seq`
 (`src/features/search/contracts.ts › SearchItem`), and Samuel's ruling for the row is *"open channel
@@ -9626,8 +9626,12 @@ next real regeneration should produce the same line, and if it does not, the reg
 
 ### F-716 — a row shared INTO a container is unfindable by search, by design, and nothing says so to the reader
 
-**Found:** 2026-09-17, building the global search route. **Status:** 🟡 **OPEN — A MISS, NOT A
-LEAK**, and the direction is the reason it shipped this way.
+**Found:** 2026-09-17, building the global search route. **Status:** ✅ **RESOLVED 2026-09-17**, in
+the commit that carries this line (*"Search asks the feature that owns the row who may see it"*) —
+and the entry's own headline was HALF WRONG: it was a miss **and** a leak. See the discharge at the
+foot. ⚠ **NO HASH ON THIS ONE AND THAT IS NOT AN OMISSION**: a commit cannot cite itself, and a hash
+written before the commit exists is a dangling reference the moment anything rebases. Resolve it by
+subject — `git log --oneline --grep 'F-716'`.
 
 `src/features/search/server/repository-container-rows.ts` narrows `knowledge_bases`,
 `agent_templates`, `skills` and `chats` with `visibility = <widest> OR <owner> = caller` — exactly
@@ -9660,6 +9664,63 @@ proves the arms that ARE there refuse a peer's private row; nothing asserts that
 MISSING could only have widened. A predicate that gains a NARROWING arm tomorrow would make this
 entry false with no test going red — `shared/tenancy/grant-read-arm.test.ts`'s mirror idiom is the
 shape a real pin would take.
+
+---
+
+✅ **DISCHARGED 2026-09-17 — AND THE FIRST THING THE PIN FOUND WAS THIS ENTRY'S OWN CLAIM.**
+
+🔒 **"EVERY ONE OF THOSE CAN ONLY ADD ROWS, SO THE FENCE IS A STRICT SUBSET AND CANNOT LEAK" WAS
+FALSE.** `visibility = 'public'` also admits an `access_mode = 'teams'` skill or chat — and
+`canSeeSkill` / `canSeeChat` **refuse** those to a member who is in none of the granted teams and is
+not a workspace admin. So the hand-written fence was a MISS on lent rows and a **LEAK on team-scoped
+ones**, in the one direction this entry argued was impossible. **The lesson is the one the entry
+itself named and then did not apply to itself: a restated predicate is not a subset of the original,
+it is a different predicate.**
+
+**THE FIX IS THAT THE PREDICATE IS CALLED, NOT RESTATED.**
+`search/server/repository-visibility.ts` imports `knowledge › canSeeBase`, `skills › canSeeSkill`,
+`chats › canSeeChat` and `agent-templates › canSeeTemplate` and calls each with a context built for
+the ROW's own container. Each read in `repository-container-rows.ts` now fetches a CANDIDATE page —
+still `WHERE workspace_id IN (<the reach>)` plus the name match, capped at
+`SEARCH_CANDIDATE_ROW_LIMIT` — and the predicate cuts it to the group cap. **The container fence did
+not move**; only the visibility clause did, out of SQL and into the feature that owns it.
+
+- **The grant context is batched, never fanned.** `shared/tenancy/resource-grant-reach.ts` gained
+  `teamGrantedResourceIds` — the `scope_type='team'` door, keyed on the caller and a resource-id
+  page — beside the existing `grantedResourceIds`. The per-feature readers it stands in for
+  (`teams/server/repository-grants.ts › listGrantsForResources`,
+  `agent-templates/server/repository.ts › listTeamLinksForTemplates`) are PER CONTAINER, and account
+  scope spans every container the caller is in; calling one of them per container is the fan §9
+  forbids. It answers MEMBERSHIP only — the rule stays in each `canSee*`.
+- **`repository-reach.ts` now carries the caller's ROLE per container**, off the membership row that
+  already proved the reach. The workspace-admin arms are about the ROW's container, so "an admin
+  somewhere" is not an answer; absent role reads as `viewer`.
+- 🔒 **ONE PATH FOR EVERY CALLER.** The first cut kept the old SQL arm for a credential standing for
+  nobody, arguing the `eq` *was* arm 2 of the predicate. The combination sweep failed it on four
+  cases (`public`/`teams`), before anything shipped. What a shared credential still skips is the
+  grant READS, which arm 2 makes unreachable for it anyway.
+- ⚠ **IT IS A CROSS-FEATURE IMPORT AND INVARIANTS §1 SAYS THERE ARE NONE.** Named rather than
+  smuggled (CLAUDE.md: *never silently pick a side*): a security predicate re-typed in a fifth
+  feature is a rule with two answers, which is worse than a layering rule with one recorded
+  exception. §1 carries the exception and its limits — predicates only, one way, no foreign
+  repository reached. `agent-templates › canSeeBaseRow` is the tree's standing example of the cost
+  of the other choice.
+- **The pin this entry asked for is `search/server/shared-rows.test.ts`**, in
+  `grant-read-arm.test.ts`'s idiom: over every (credential × role × visibility × access mode ×
+  author) combination, **what the repository returns EQUALS what `canSeeSkill` admits** — equality,
+  not subset, so a predicate that gains a narrowing arm tomorrow fails here instead of quietly
+  disagreeing with its own page. Plus the fence cases: a base lent in by a container grant IS found,
+  a peer's private un-granted base is NOT, an `agent_only` channel grant does not widen a person's
+  read, a lent row in ANOTHER container the caller is in IS found, and a grant into a container the
+  caller is NOT in never names the row.
+
+⚠ **ONE RESIDUAL, AND IT IS OLDER THAN THIS ENTRY (filed, not fixed here).** `canSeeBase` has no
+teams arm: a `access_mode='teams'` knowledge base is narrowed by `assertBaseVisible`'s
+`effectiveResourceAccess` call, which is a per-row async read and is NOT on the search path. So a
+teams-mode PUBLIC base can appear in the popup for a member of no granted team — the same behaviour
+the old fence had, unchanged by this work, and the one place the four tables still do not agree with
+their own pages. It needs a batched `effectiveResourceAccess` over a row set before it can be closed
+the way the other three were.
 
 ---
 

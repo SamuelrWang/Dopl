@@ -1,6 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import type { WorkspaceKind } from "@/features/workspaces/types";
+import type { Role, WorkspaceKind } from "@/features/workspaces/types";
 
 /**
  * 🔒 **THE PROOF OF ACCESS FOR EVERY SEARCH QUERY — one module, read once per
@@ -47,6 +47,15 @@ export interface SearchContainerRef {
   id: string;
   name: string;
   kind: WorkspaceKind;
+  /**
+   * 🔒 THE CALLER'S OWN ROLE IN THIS CONTAINER, off the membership row that
+   * proved the reach (F-716, 2026-09-17). The workspace-admin arm of
+   * `skills › canSeeSkill` and `agent-templates › canSeeTemplate` needs it, and
+   * account scope spans many containers — so it rides the ref rather than being
+   * a field on the request, which would answer "an admin somewhere" and admit a
+   * row in a container where the caller is a viewer.
+   */
+  role: Role;
 }
 
 /** Everything a search may name. ⚠ Built once; passed down; never re-derived. */
@@ -89,7 +98,7 @@ export async function loadSearchReach(
 
   let memberQuery = db
     .from("workspace_members")
-    .select("workspace_id")
+    .select("workspace_id, role")
     .eq("user_id", userId)
     // ⚠ `status='active'` — `workspaces/server/repository.ts › findMembership`
     // carries the scar of omitting it (a revoked admin still measured as one).
@@ -111,10 +120,17 @@ export async function loadSearchReach(
     .order("workspace_id", { ascending: true })
     .limit(SEARCH_REACH_LIMIT);
   if (memberError) throw memberError;
-  const containerIds = (
-    (memberships ?? []) as Array<{ workspace_id: string }>
-  ).map((r) => r.workspace_id);
+  const memberRows = (memberships ?? []) as Array<{
+    workspace_id: string;
+    role: Role | null;
+  }>;
+  const containerIds = memberRows.map((r) => r.workspace_id);
   if (containerIds.length === 0) return { containers: [], channels: [] };
+  // ⚠ ABSENT ROLE = `viewer`, the LEAST-PRIVILEGED reading. A narrowed
+  // projection or an older row must not be read as an admin.
+  const roleById = new Map(
+    memberRows.map((r) => [r.workspace_id, (r.role ?? "viewer") as Role])
+  );
 
   const { data: workspaceRows, error: workspaceError } = await db
     .from("workspaces")
@@ -134,6 +150,7 @@ export async function loadSearchReach(
     // ⚠ Absent `kind` = standard, the one reading `isStandardWorkspace` allows
     // (INVARIANTS §4A): a narrowed projection or an older row omits it.
     kind: (row.kind ?? "standard") as WorkspaceKind,
+    role: roleById.get(row.id) ?? ("viewer" as Role),
   }));
 
   return { containers, channels: await loadChannelReach(userId, containerIds) };
