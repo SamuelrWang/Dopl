@@ -60,6 +60,7 @@ function renderPage() {
     [
       { path: "/onboarding", element: <OnboardingPage /> },
       { path: "/", element: <div>BOOT ROUTE</div> },
+      { path: "/home", element: <div>HOME ROUTE</div> },
       { path: "/:workspaceSegment/overview", element: <div>OVERVIEW ROUTE</div> },
     ],
     { initialEntries: ["/onboarding"] }
@@ -134,6 +135,41 @@ describe("onboarding page", () => {
     expect(complete?.opts.body).toMatchObject({ mcpConnected: true, name: "Acme" });
     expect(window.localStorage.getItem("dopl:welcome")).toBe("1");
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  /**
+   * 🔒 **A NEW ACCOUNT HAS NO STANDARD WORKSPACE AT ALL** (Samuel's ruling R-35,
+   * 2026-09-17: *"New users should not be getting a workspace. It should be the
+   * home space."*). The claim this page owes is an ABSENCE — it must render and
+   * complete without one — so it is asserted as one: the flow reads onboarding
+   * paths and nothing workspace-shaped. A read of `/api/workspaces*` or
+   * `/api/boot` here would be a request with no answer for the population this
+   * page exists for, which is the 404-or-loop the ruling has to survive.
+   */
+  it("🔒 renders and completes with NO workspace in existence — it reads none", async () => {
+    apiRequest.mockImplementation((path: string) => {
+      if (path === "/api/onboarding/complete") {
+        // What the server actually answers for a personal container.
+        return Promise.resolve(ok({ redirectTo: "/home" }));
+      }
+      return bridge(false)(path);
+    });
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Engineering" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByText("Connected");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish" }));
+
+    // Lands on /home, not on a workspace route and not back on /onboarding.
+    expect(await screen.findByText("HOME ROUTE")).toBeInTheDocument();
+    expect(screen.queryByText("OVERVIEW ROUTE")).toBeNull();
+
+    const paths = calls().map((c) => c.path);
+    expect(paths.some((p) => p.startsWith("/api/workspaces"))).toBe(false);
+    expect(paths).not.toContain("/api/boot");
   });
 
   it("bounces an already-onboarded caller back to boot", async () => {

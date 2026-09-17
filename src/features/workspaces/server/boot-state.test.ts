@@ -41,6 +41,7 @@ vi.mock("@/features/teams/server/access", async () => {
 });
 
 import * as repo from "./repository";
+import { seedNewWorkspace } from "./seed-workspace";
 import { getOnboardingStatus } from "@/features/onboarding/server/service";
 import { listEffectiveAccess } from "@/features/teams/server/access";
 import { getBootState, resolveWorkspaceSegmentForUser } from "./segment";
@@ -181,6 +182,28 @@ describe("getBootState — launch mode", () => {
       role: "owner",
       userId: USER,
     });
+  });
+
+  it("🔒 mints the PERSONAL container and NOTHING ELSE — a new account gets no standard workspace (R-35)", async () => {
+    // Samuel, 2026-09-17: "New users should not be getting a workspace. It
+    // should be the home space. Home spaces are the only thing new users get."
+    // The claim is an ABSENCE, so it is asserted as one: boot's provisioning
+    // branch is the last surviving provisioning path (the auth callback is the
+    // other, and it calls the same function), and neither the workspace INSERT
+    // nor the starter-corpus seed may run from it.
+    mockRepo.ensurePersonalContainerRow.mockResolvedValue({
+      workspace: { ...WORKSPACE, kind: "personal" },
+      created: true,
+    });
+    mockRepo.findWorkspaceById.mockResolvedValue({ ...WORKSPACE, kind: "personal" });
+    mockRepo.findMembership.mockResolvedValue(membership("owner"));
+
+    const state = await getBootState(USER, null);
+
+    expect(state?.workspace?.kind).toBe("personal");
+    expect(mockRepo.ensurePersonalContainerRow).toHaveBeenCalledTimes(1);
+    expect(mockRepo.insertWorkspaceWithOwnerMembership).not.toHaveBeenCalled();
+    expect(seedNewWorkspace).not.toHaveBeenCalled();
   });
 
   it("does NOT provision for a caller who has not finished onboarding", async () => {
