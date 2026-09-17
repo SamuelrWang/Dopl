@@ -397,10 +397,20 @@ test("REPORT: the bridge declares the field and the op, in BOTH trees", () => {
   // green on a re-export that had quietly dropped a name.
   const shapes = readFileSync(join(root, "src", "shared", "lib", "spa-bridge-shapes.ts"), "utf8");
   const mirror = readFileSync(join(root, "apps", "desktop-ui", "src", "lib", "dopl-bridge.ts"), "utf8");
+  // ⚠ AND THE OPS MOVED TO `spa-bridge-sessions.ts` ON 2026-09-17, at the same 500-line cap and
+  // on the same terms as the shapes split above: `spa-bridge.ts` keeps the BRIDGE (the detector,
+  // the transport, the app-wide toggles) and RE-EXPORTS the namespace as the import path of
+  // record. Same rule as the shapes, so the same two assertions — the op where it is DECLARED,
+  // the re-export separately — because reading only one file goes green on a re-export that has
+  // quietly dropped a name.
+  const sessionOps = readFileSync(join(root, "src", "shared", "lib", "spa-bridge-sessions.ts"), "utf8");
   assert.match(shapes, /model\?: string \| null;/, "DesktopSessionSummary carries it");
   assert.match(shared, /export type \{\s*DesktopSessionSummary,\s*DesktopNarrationEntry,\s*\} from "\.\/spa-bridge-shapes";/,
     "…and `spa-bridge` stays the import path of record for both shapes");
-  assert.match(shared, /setModel\?\(/, "…and the shared declaration has the op");
+  assert.match(shared, /sessions\?: SpaBridgeSessions;/, "…and for the ops namespace");
+  assert.match(shared, /export type \{ SpaBridgeSessions \} from "\.\/spa-bridge-sessions";/,
+    "…which is re-exported from it, so one import path stays canonical");
+  assert.match(sessionOps, /setModel\?\(/, "…and the shared declaration has the op");
   assert.match(mirror, /setModel\?\(/, "…and so does the mirror");
   assert.match(mirror, /preset: \{ tools: string; messages: string; model\?: string \}/,
     "the durable posture's third field is declared where the SPA writes it");

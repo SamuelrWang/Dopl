@@ -26,6 +26,8 @@ import { PanelTop, Pause, Square } from "lucide-react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { useChannelLaunchPosture } from "../hooks/use-channel-launch-posture";
 import { interruptRefusal } from "../lib/runtime-capability";
+import { agentHeldGates } from "./agents-held-gates";
+import { canAnswerPermission } from "./agents-gate-controls";
 import {
   canControlAgents,
   canOpenAgentWindow,
@@ -33,6 +35,15 @@ import {
   type AgentControl,
   useAgentControls,
 } from "./agents-controls";
+// ⚠ THE HELD-GATE CARDS RENDER IN THIS BOX (2026-09-17, Samuel's inline-approval ruling), and
+// the reason is what this file IS: Approve / Deny is a CONTROL, and it belongs beside Pause /
+// End / Open window rather than in the stream, which is a RECORD of what the agent did. It
+// mounts here rather than in `agent-panel.tsx` for the same §1 reason that file's own split was
+// taken — it stands at exactly the 500-line cap — and the placement is the better one either
+// way. ⚠ IT LANDS ON BOTH CHANNEL SURFACES BY CONSTRUCTION: the workspace page
+// (`channel-surface.tsx`) and /home's standalone pane (`channel-surface-standalone.tsx`) both
+// mount `ChannelsAgentPanel`, which mounts this strip.
+import { AgentHeldGates } from "./agent-held-gate";
 
 /**
  * What a refused stop verb says. ⚠ Exported for the test: a swallowed refusal
@@ -150,7 +161,14 @@ export function AgentControls({
   // readout moved IN here (Samuel's one-box ruling), that early return would take it with it, and
   // the numbers have nothing to do with the bridge: they are the SUMMARY FEED's, and a plain
   // browser that can neither pause nor open a window can still say how much context is used.
-  if (!canControl && !canOpen && !stats) return null;
+  // ⚠ THE HELD CALLS ARE READ BEFORE THE EARLY RETURN, AND THEY COUNT TOWARD IT. A build with
+  // neither stop verb nor an open op and no stats can still be HOLDING a call, and returning
+  // null above the one control that would unblock it is the exact failure this box just gained
+  // a card to fix. ⚠ THE CAPABILITY IS PART OF THE CONDITION, not just of the card: `AgentHeldGates`
+  // renders nothing on a build that cannot answer, so counting held calls alone would keep this
+  // box alive as a bare hairline with nothing in it.
+  const canAnswerHeld = agentHeldGates(agent).length > 0 && canAnswerPermission();
+  if (!canControl && !canOpen && !stats && !canAnswerHeld) return null;
   const stopped = agent.state === "ended";
 
   /** Show one refusal line, replacing any that is already standing. */
@@ -234,6 +252,10 @@ export function AgentControls({
         )}
       </div>
       {stats}
+      {/* ⚠ UNDER THE BUTTONS AND THE NUMBERS, ABOVE THE NOTICES — it is the thing to ACT on, so
+          it sits with the actions rather than under the two transient lines. `AgentHeldGates`
+          renders nothing when this build cannot answer a gate (absent, never inert). */}
+      <AgentHeldGates agent={agent} onRefreshSessions={onRefreshSessions} />
       {/* ⚠ A STANDING NOTE, NOT THE SIX-SECOND NOTICE BELOW IT. The refusal is a FACT about
           this runtime, not the outcome of a click, so it must not time out — and it renders
           above `notice` so a genuine refusal from a press still lands last. */}

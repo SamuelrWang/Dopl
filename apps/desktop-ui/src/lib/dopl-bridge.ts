@@ -259,6 +259,20 @@ export interface DoplBridge {
       model: string,
       agentId?: string
     ): Promise<{ ok: boolean; reason?: string; model?: string }>;
+    /** ANSWER ONE TOOL CALL MAIN IS HOLDING AT THE GATE (2026-09-17) — the agent panel's inline
+     *  Approve / Deny, and the surface the retired session window took with it. ALLOW-ONCE: it
+     *  resolves THIS call and mints no standing grant, moves neither axis and starts no turn.
+     *  The card is drawn from `DesktopSessionSummary.heldGates`. `{ ok: false }` is a real
+     *  outcome (`unknown-request` / `already-decided` / `no-session`), never only an error — see
+     *  `@/shared/lib/spa-bridge-sessions` for the full shape; main owns it. */
+    answerPermission?(
+      channelId: string,
+      taskId: string,
+      requestId: string,
+      allow: boolean,
+      /** WHICH agent's question — every card is drawn from ONE row (2026-08-21's rule). */
+      agentId?: string
+    ): Promise<{ ok: boolean; reason?: string; decision?: string }>;
     /** The agent's work ring: read once on mount, then listen. */
     narration?(
       channelId: string,
