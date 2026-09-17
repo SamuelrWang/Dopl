@@ -39,6 +39,17 @@ const GATE_REASONS = [
   //                             postures its lane needs are not BOTH set (tools `bypass` AND
   //                             messages auto-outbound). Its own code because the operator's fix
   //                             is TWO settings, not the one `message-approval-required` names.
+  'manage-posture-required', //  2026-09-17 (Samuel's field report): an own-channel
+  //                             `manage.rename` / `manage.end` / `manage.posture` while the two
+  //                             postures its lane needs are not BOTH set — the launch lane's
+  //                             conjunction, so the launch lane's shape of answer. ⚠ **IT NAMES
+  //                             THE TWO POSTURES, NOT THE `posture` ACTION**: all three verbs
+  //                             stop on it, and `manage.posture` is merely the one whose name
+  //                             collides with the word. ⚠ ITS OWN CODE because the defect was a
+  //                             DISHONEST one: these three answered `channel-op-approval-required`
+  //                             ("message approval covers this channel's messages, not this
+  //                             operation"), which told an operator to go find an approval that
+  //                             does not exist on any surface — the F-320 dead end, one op later.
   'launch-depth-capped', //      ...and the DENY half: this session is at MAX_LAUNCH_DEPTH, so no
   //                             posture can open it (`session-own-launch.js`). ⚠ IT IS NOT
   //                             `hard-denied`: that code means the PROFILE refused a tool, and
@@ -72,6 +83,21 @@ const GATE_REASONS = [
   //                             `launch_agent` that BOTH axes covered — the audit answer to
   //                             "what asked this machine for a process with no click?", which no
   //                             outbound code can give, because nothing left as CONTENT.
+  'auto-rename-own-machine', //  2026-09-17: an own-channel `manage.rename` BOTH axes covered.
+  'auto-end-own-machine', //     ...an own-channel `manage.end`.
+  'auto-posture-own-machine', // ...and an own-channel `manage.posture`.
+  //                             ⚠ THREE CODES AND NOT ONE, WHERE THE FOUR `artifact.*` ACTIONS
+  //                             GOT ONE: this list's grain is the ARGUMENT, and the artifact four
+  //                             share a single one where these three do not. "an agent was
+  //                             STOPPED", "an agent was RELABELLED" and "an agent's POSTURE was
+  //                             asked to move" are three different answers to "what happened here
+  //                             with no click?", and the delivery end already separates them in
+  //                             code — the posture verb sits behind the operator's launch toggle
+  //                             and the other two do not (`launch-directives.js ›
+  //                             KINDS_NEEDING_LAUNCH_CONSENT`). The map is the LANE's
+  //                             (`session-own-manage.js › MANAGE_ALLOW_REASONS`), injected.
+  //                             ⚠ AND NONE OF THEM IS AN OUTBOUND CODE, for `auto-launch-own-
+  //                             machine`'s reason: nothing left this machine as CONTENT.
   'auto-outbound-escalate', //   2026-08-31 (Samuel's ruling): the same outbound half on an
   //                             own-channel `send(kind="decision")` — an agent asking a HUMAN a structured
   //                             question. Its own code because "the agent asked for a decision"
@@ -134,6 +160,15 @@ function makeGateReason(deps) {
     // message setting would send the operator to widen a posture that is already wide enough.
     // A launch naming ANOTHER channel is not this case and falls through, as a post's does.
     if (d.isOwnMachineLaunch(a.input, a.channelId)) return 'launch-posture-required';
+    // ⚠ 2026-09-17: AND THE THREE MANAGE VERBS STOP ON THE SAME FACT, WHICH IS WHY THIS ARM HAD
+    // TO EXIST. They fell through to `channel-op-approval-required` below, whose sentence is
+    // "message approval covers this channel's messages, not this operation" — false here twice
+    // over: the fix is TWO postures, and the approval that sentence sends the operator to has no
+    // surface to be given on. ⚠ ASKED AFTER THE LAUNCH ARM, MIRRORING `grantDecision`'s own order
+    // (launch, direct, manage); the predicates are disjoint, so the order buys nothing today and
+    // is kept because "mirror the gate" is the only rule that has ever kept this function honest.
+    // A manage op naming ANOTHER channel is not this case and falls through, as a launch's does.
+    if (d.isOwnMachineManage && d.isOwnMachineManage(a.input, a.channelId)) return 'manage-posture-required';
     // A SLUG lands here too, and that is the single most confusing gate in the product: the
     // agent addressed its own channel by name, isOwnChannelPost compares against the ID, and the
     // safe classification is "another channel". The renderer's copy names the fix (use the id).
@@ -224,6 +259,12 @@ function makeGateReason(deps) {
       // is the only one that is not a message: nothing left this machine as CONTENT, and an
       // audit line claiming otherwise would put a launch under "what did my agent say".
       if (d.isOwnMachineLaunch(a.input, a.channelId)) return 'auto-launch-own-machine';
+      // ⚠ 2026-09-17: the MANAGE lane is asked with it and for its reason — none of these three
+      // is a message either. WHICH verb ran is answered by the LANE's own map rather than by a
+      // branch per action here, so the explainer holds no second opinion about which code belongs
+      // to which action; `null` means this call was not an own-channel manage op at all.
+      const manageCode = d.manageAllowReason && d.manageAllowReason(a.input, a.channelId);
+      if (manageCode) return manageCode;
       // M3: the Axis-B allows are different rules and the diag must be able to tell them
       // apart — "your outbound setting sent this" vs "your inbound setting read this".
       if (d.isOwnChannelRead(a.input, a.channelId)) return 'auto-inbound-read';

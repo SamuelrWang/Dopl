@@ -58,6 +58,7 @@ const {
 const { channelOpKey } = require('./channel-op-key'); // <op>.<action>, the ONE spelling every classifier here asks (F-578)
 const { isOwnMachineLaunch, launchLaneVerdict } = require('./session-own-launch'); // THE OWN-MACHINE LAUNCH LANE (Samuel's ruling, 2026-08-25; F-320) — its own §2 file, on F-301's precedent
 const { isOwnMachineDirect, directLaneVerdict } = require('./session-own-direct'); // THE OWN-MACHINE DIRECT LANE (Samuel's ruling, 2026-08-31) — same conjunction, its own §2 file, and DELIBERATELY not a member of the launch list: that one carries the depth bound and folding this in would make private directions depend on the agent-chaining setting
+const { isOwnMachineManage, manageLaneVerdict, manageAllowReason, OWN_MACHINE_MANAGE_OPS } = require('./session-own-manage'); // THE OWN-MACHINE MANAGE LANE (Samuel's field report, 2026-09-17) — `rename` / `end` / `posture` on the SAME conjunction as the two lanes above, its own §2 file, and a SEPARATE list from both: `launch` carries the depth bound and the chaining setting (a rename must not depend on either), and `direct` buys a TURN where these three relabel, stop or re-posture one
 // DOPL'S OWN SURFACE, §2-SPLIT 2026-08-31 so BOTH sides of the runtime seam can read it without a
 // cycle. `mcp__dopl__*` names are runtime-independent; each adapter's `tools.js` composes them.
 const { DOPL_READ_TOOLS, DOPL_WRITE_TOOLS, DOPL_READ_REFERENCE } = require('./session-dopl-tools');
@@ -341,6 +342,8 @@ function grantDecision(args) {
     if (isOwnMachineLaunch(a.input, a.channelId)) return launchLaneVerdict(a, autoOutboundMode(a.messageMode));
     // ⚠ THE OWN-MACHINE DIRECT LANE (2026-08-31): SAME conjunction, SEPARATE list, NO depth question — `session-own-direct.js` carries all three arguments, including why sameness is not a reason to merge them. Its READ twin was `read_directions`, which B8 RETIRED into `status`; that op is on the inbound list above under its live name.
     if (isOwnMachineDirect(a.input, a.channelId)) return directLaneVerdict(a, autoOutboundMode(a.messageMode));
+    // ⚠ THE OWN-MACHINE MANAGE LANE (2026-09-17): `manage.rename` / `manage.end` / `manage.posture`, the SAME conjunction again and NO depth question — `session-own-manage.js` carries the argument, including why a depth question here would deny the very sessions the lane was filed for (a launched agent is AT the cap by construction, and the shipped Coder template has every coder rename itself on start).
+    if (isOwnMachineManage(a.input, a.channelId)) return manageLaneVerdict(a, autoOutboundMode(a.messageMode));
     // Own-channel READ follows the INBOUND half: a read sends nothing, it brings the peer's
     // words into context unseen — what auto_inbound consents to. `auto_outbound` alone does
     // NOT cover it.
@@ -382,6 +385,8 @@ const grantDecisionDetail = makeGrantDetail(grantDecision, {
   canonicalDoplName, isOwnChannelMarker, isOwnChannelThreadOpen, isOwnChannelEscalate, isOwnChannelOutbound,
   isOwnChannelArtifact, isOwnChannelOutboundCall, // 2026-09-06: the fold's ALLOW code, and the membership half its CROSS-channel arm asks
   OWN_CHANNEL_OUTBOUND_OPS, isOwnMachineLaunch, isOwnMachineDirect, // 2026-08-25 (F-320): the own-machine launch lane; 2026-08-31: its direct twin
+  // 2026-09-17: the MANAGE lane's membership half and its per-action ALLOW code. The CODE MAP is the lane's, injected like every other predicate, so the explainer cannot grow a second opinion about which verb ran.
+  isOwnMachineManage, manageAllowReason,
   // 2026-08-22 (OQ-1): the two the op-scoped knowledge allow is explained by. Injected, like
   // every other predicate here, so the explainer cannot grow its own copy of the rule.
   toolModeAllows, isKnowledgeReadCall,
@@ -411,6 +416,8 @@ module.exports = {
   isOwnChannelArtifact, OWN_CHANNEL_ARTIFACT_OPS, OWN_CHANNEL_SEND_OPS,
   isOwnChannelOutboundCall, // ...and its membership half, keyed <op>.<action> like the read twin
   isOwnChannelOutbound, OWN_CHANNEL_OUTBOUND_OPS, // the union grantDecision's Axis-B branch asks
+  // 2026-09-17: the OWN-MACHINE MANAGE LANE — re-exported from session-own-manage.js (§2 SPLIT), which carries the admission argument for `rename` / `end` / `posture` and why each keeps its own audit code.
+  isOwnMachineManage, OWN_MACHINE_MANAGE_OPS, manageAllowReason,
   isKnowledgeReadCall, // 2026-08-22 (OQ-1): re-exported from knowledge-ops, the op-scoped kb read
   DOPL_READ_REFERENCE, // the member the knowledge branch asks "where does a Dopl read resolve?"
   mcpShortName, canonicalDoplName, // re-exported from mcp-tool-names

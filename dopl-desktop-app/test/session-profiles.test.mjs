@@ -98,6 +98,10 @@ const LAUNCH = require(join(HERE, "..", "main", "session-own-launch.js"));
 // launch lane's two-axis conjunction while carrying NO depth bound (that one bounds how many
 // agents come into existence; a direction creates none). Injected REAL, like every predicate here.
 const DIRECT = require(join(HERE, "..", "main", "session-own-direct.js"));
+// 2026-09-17 (Samuel's field report): the OWN-MACHINE MANAGE LANE, a FIFTH §2 file on the same
+// precedent — `rename` / `end` / `posture` reach a live session on this Mac, so they take the launch
+// lane's conjunction and carry NO depth bound. Injected REAL, like every predicate here.
+const MANAGE = require(join(HERE, "..", "main", "session-own-manage.js"));
 const AUDIENCE = require(join(HERE, "..", "main", "session-audience.js")); // B2 belt (plan §4.4)
 
 // 2026-08-31 (runtime-adapter port, §0.1b): the AXIS-A TAIL LEFT THIS BLOCK. `buildSessionToolConfig`
@@ -121,6 +125,7 @@ const { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
   "isOwnChannelMarker", "isOwnChannelThreadOpen", "isOwnChannelOutbound",
   "isOwnMachineLaunch", "launchLaneVerdict",
   "isOwnMachineDirect", "directLaneVerdict",
+  "isOwnMachineManage", "manageLaneVerdict",
   // ⚠ 2026-09-06: `channelOpKey` WAS MISSING FROM THIS LIST SINCE F-578 (2026-09-02), and it is a
   // free variable inside the block — `isOwnChannelReadCall` calls it. It did not throw only
   // because `grantDecision` short-circuits (`autoInboundMode(...) && isOwnChannelRead(...)`) and
@@ -141,6 +146,7 @@ const { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
   OUT.isOwnChannelMarker, OUT.isOwnChannelThreadOpen, OUT.isOwnChannelOutbound,
   LAUNCH.isOwnMachineLaunch, LAUNCH.launchLaneVerdict,
   DIRECT.isOwnMachineDirect, DIRECT.directLaneVerdict,
+  MANAGE.isOwnMachineManage, MANAGE.manageLaneVerdict,
   require(join(HERE, "..", "main", "channel-op-key.js")).channelOpKey,
   AUDIENCE.containerOnlyDenies, NAMES.isDoplToolName, RUNTIME.runtimeFor,
   RUNTIME.capability.editScopedTools(RUNTIME.descriptorFor(null)));
@@ -332,6 +338,24 @@ test("v2.5 D2: EVERY dopl_channel op gates, own-channel post included (no 'preap
   assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: { op: "set_task_mode", channel: chan } }), "gate", "set_task_mode gates");
   // With no input at all it cannot be an own-channel post -> gate.
   assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan }), "gate");
+});
+
+test("2026-09-17: the OWN-MACHINE MANAGE LANE, through the EXTRACTED block", () => {
+  // ⚠ DRIVEN THROUGH THE HARNESS'S OWN COPY OF THE TABLE: a lane wired into `grantDecision` but
+  // never injected here throws a ReferenceError at the first call that reaches it — the 2026-09-06
+  // `channelOpKey` defect. Full table: `test/session-own-manage.test.mjs`.
+  const chan = "c-abc";
+  const call = (action, over, extra, room) => grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL,
+    channelId: chan, input: { op: "manage", action, channel: room || chan, to: "@agent-k3", ...extra }, ...over });
+  const BOTH = { toolMode: "bypass", messageMode: "auto_both" };
+  for (const [action, extra] of [["rename", { name: "coder" }], ["end", {}], ["posture", { posture: { tools: "auto" } }]]) {
+    assert.equal(call(action, BOTH, extra), "allow", `${action}: both axes, own room`);
+    assert.equal(call(action, { toolMode: "auto", messageMode: "auto_both" }, extra), "gate", action);
+    assert.equal(call(action, { toolMode: "bypass", messageMode: "ask" }, extra), "gate", action);
+    // ⚠ NO DEPTH QUESTION — every session it was filed for is a launched one, AT the cap already.
+    assert.equal(call(action, { ...BOTH, launchDepth: 1 }, extra), "allow", `${action} at the cap`);
+    assert.equal(call(action, BOTH, extra, "OTHER"), "gate", `${action}: cross-channel is unchanged`);
+  }
 });
 
 test("FIX H1: allow-for-task lets the operator grant a gated dopl_channel op for the task", () => {

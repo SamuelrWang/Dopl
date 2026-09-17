@@ -74,6 +74,18 @@ test("FIX 1: every gate/deny branch names WHY, with a code from the closed set",
       { toolName: DOPL_CHANNEL_TOOL, input: { op: "read" }, messageMode: "ask" }, "gate", "read-approval-required"],
     ["a slug-addressed read is classified cross-channel, and says READ, not POST",
       { toolName: DOPL_CHANNEL_TOOL, input: { op: "read", channel: "my-slug" }, messageMode: "auto_both" }, "gate", "cross-channel-read"],
+    // 2026-09-17 (Samuel's field report): THE THREE MANAGE VERBS STOP ON THE POSTURE PAIR, and
+    // said `channel-op-approval-required` until this wave — an approval with no surface to be
+    // given on, so the orchestrator that filed this waited forever. The honest fact is that BOTH
+    // axes are needed, exactly as the launch lane next door already said.
+    ["an own-channel manage.rename under a half-set posture names the PAIR, not an approval",
+      { toolName: DOPL_CHANNEL_TOOL, input: { op: "manage", action: "rename", channel: CH, to: "@agent-k3", name: "coder" }, toolMode: "auto", messageMode: "auto_both" }, "gate", "manage-posture-required"],
+    ["...and manage.end the same way, on the message half",
+      { toolName: DOPL_CHANNEL_TOOL, input: { op: "manage", action: "end", channel: CH, to: "@agent-k3" }, toolMode: "bypass", messageMode: "ask" }, "gate", "manage-posture-required"],
+    ["...and manage.posture, whose name collides with the word the code uses",
+      { toolName: DOPL_CHANNEL_TOOL, input: { op: "manage", action: "posture", channel: CH, to: "@agent-k3", posture: { tools: "auto" } }, toolMode: "manual", messageMode: "auto_outbound" }, "gate", "manage-posture-required"],
+    ["a manage op naming ANOTHER room is a different fact and keeps the old code",
+      { toolName: DOPL_CHANNEL_TOOL, input: { op: "manage", action: "rename", channel: "other-id", to: "@agent-k3", name: "x" }, toolMode: "bypass", messageMode: "auto_both" }, "gate", "channel-op-approval-required"],
   ];
   for (const [label, args, decision, reason] of cases) {
     const d = detail(args);
@@ -96,6 +108,19 @@ test("FIX 1: an ALLOW is explained too, so the diag can tell WHICH rule let it t
   // sent this" from "your inbound setting read this" without a source read.
   assert.deepEqual(detail({ toolName: DOPL_CHANNEL_TOOL, input: { op: "read" }, messageMode: "auto_inbound" }),
     { decision: "allow", reason: "auto-inbound-read" });
+  // 2026-09-17: the OWN-MACHINE MANAGE LANE carries ONE CODE PER VERB, because "an agent was
+  // STOPPED", "an agent was RELABELLED" and "an agent's POSTURE was asked to move" are three
+  // different answers to "what happened on this machine with no click?" — a distinction the
+  // delivery end already makes in code (only the posture verb sits behind the launch toggle).
+  // ⚠ NONE of them may be an outbound code: nothing left this machine as CONTENT.
+  const managed = (action, extra) => detail({ toolName: DOPL_CHANNEL_TOOL,
+    input: { op: "manage", action, channel: CH, to: "@agent-k3", ...extra },
+    toolMode: "bypass", messageMode: "auto_both" });
+  assert.deepEqual(managed("rename", { name: "coder" }),
+    { decision: "allow", reason: "auto-rename-own-machine" });
+  assert.deepEqual(managed("end"), { decision: "allow", reason: "auto-end-own-machine" });
+  assert.deepEqual(managed("posture", { posture: { tools: "auto" } }),
+    { decision: "allow", reason: "auto-posture-own-machine" });
 });
 
 test("FIX 1: the reason NEVER moves the verdict — grantDecision is byte-identical", () => {
@@ -130,7 +155,13 @@ test("FIX 1: the code set is CLOSED — nothing produces a reason the renderer h
           "mcp__dopl__dopl_kb", "NotebookRead", "WebFetch"]) {
           for (const input of [{}, { command: "ls" }, { op: "send", body: "b" },
             { op: "send", channel: "z" }, { op: "read" }, { op: "read", channel: "z" },
-            { op: "rooms", action: "open" }, { to: 1 }]) {
+            { op: "rooms", action: "open" }, { to: 1 },
+            // 2026-09-17: the manage lane's three verbs, own-channel and cross-channel, so the
+            // four codes it added are swept for membership like every other branch.
+            { op: "manage", action: "rename", channel: CH, to: "@agent-k3", name: "coder" },
+            { op: "manage", action: "end", channel: CH, to: "@agent-k3" },
+            { op: "manage", action: "posture", channel: CH, to: "@agent-k3", posture: { tools: "auto" } },
+            { op: "manage", action: "rename", channel: "z", to: "@agent-k3", name: "coder" }]) {
             const r = profiles.grantDecisionDetail({ profile, channelId: CH, toolMode, messageMode, toolName, input }).reason;
             if (r) seen.add(r);
           }

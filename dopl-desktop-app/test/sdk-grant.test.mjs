@@ -61,6 +61,12 @@ const LAUNCH = require(join(HERE, "..", "main", "session-own-launch.js"));
 // launch lane's two-axis conjunction while carrying NO depth bound (that one bounds how many
 // agents come into existence; a direction creates none). Injected REAL, like every predicate here.
 const DIRECT = require(join(HERE, "..", "main", "session-own-direct.js"));
+// 2026-09-17 (Samuel's field report): the OWN-MACHINE MANAGE LANE, a FIFTH §2 file on the same
+// precedent — `manage.rename` / `manage.end` / `manage.posture` reach a live session on the
+// operator's own Mac, so they take the launch lane's two-axis conjunction and carry NO depth bound
+// (a launched agent is AT the cap, and asking the depth here would DENY the very renames the lane
+// was filed for). Injected REAL, like every predicate here.
+const MANAGE = require(join(HERE, "..", "main", "session-own-manage.js"));
 const AUDIENCE = require(join(HERE, "..", "main", "session-audience.js")); // B2 belt (plan §4.4)
 
 // 2026-08-31 (runtime-adapter port, §0.1b): the AXIS-A TAIL LEFT THIS BLOCK. `buildSessionToolConfig`
@@ -89,6 +95,7 @@ const { grantDecision, grantKeyFor } = new Function(
   "isOwnChannelMarker", "isOwnChannelThreadOpen", "isOwnChannelOutbound",
   "isOwnMachineLaunch", "launchLaneVerdict",
   "isOwnMachineDirect", "directLaneVerdict",
+  "isOwnMachineManage", "manageLaneVerdict",
   "channelOpKey",
   // 🔒 2026-08-26 (plan §4.4 B2): the AUDIENCE BELT, injected REAL like every other predicate —
   // a fake would let the harness agree with itself while the shipped gate did something else.
@@ -102,6 +109,7 @@ const { grantDecision, grantKeyFor } = new Function(
   OUT.isOwnChannelMarker, OUT.isOwnChannelThreadOpen, OUT.isOwnChannelOutbound,
   LAUNCH.isOwnMachineLaunch, LAUNCH.launchLaneVerdict,
   DIRECT.isOwnMachineDirect, DIRECT.directLaneVerdict,
+  MANAGE.isOwnMachineManage, MANAGE.manageLaneVerdict,
   require(join(HERE, "..", "main", "channel-op-key.js")).channelOpKey,
   AUDIENCE.containerOnlyDenies, NAMES.isDoplToolName, RUNTIME.runtimeFor,
   RUNTIME.capability.editScopedTools(RUNTIME.descriptorFor(null)));
