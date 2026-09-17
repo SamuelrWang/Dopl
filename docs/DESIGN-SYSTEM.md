@@ -629,6 +629,32 @@ message-box-agent component is deleted: an agent's post is a person's post plus 
     body, an ontology association, a create/delete bundle, and every cluster row.
   - **MINIMAL COPY.** Label and control; no explainer paragraph about what a revision is. Empty,
     loading and error states are one `text-caption text-text-muted` line each.
+- **Search popup** (2026-09-17, Samuel: *"it should be a pop up like this"*, over a
+  reference card). **NO NEW RECIPE — it is `.menu-card` holding `.menu-row` rows**, which
+  is why a dropdown of results and every other dropdown in the app share one face.
+  `src/features/search/components/search-popup.tsx`, mounted by /home's header pill and
+  by the workspace channels column's field.
+  - **THE CARD HANGS OFF THE FIELD'S OWN RELATIVE SLOT** — `absolute top-full right-0
+    mt-3` inside `.search-expand` (which is `position: relative` already), so "aligned
+    with the bar's edge" is true by construction rather than by a measurement. `!p-0` +
+    `overflow-hidden`, because the legend bar runs edge to edge and clips to the card's
+    corners.
+  - **SECTION RULE**: a hairline with the section's name sitting IN it, gaps either side
+    — `h-px flex-1 bg-border-subtle` on both sides of a `text-label` uppercase
+    `text-text-muted`. That is the reference's own divider at the kit's label face.
+  - **ROW**: `.menu-row` + `px-2 py-1.5`, a 24px `rounded-[6px] bg-surface-raised-2` glyph
+    tile, a `text-body font-semibold` title over a `text-caption` second line, then
+    `AvatarStack` (`2xs`) and one right-aligned `text-caption text-text-muted` fact.
+    ⚠ **THE KEYBOARD CURSOR WEARS `bg-menu-item-hover-bg`** — the token the kit's own
+    `:hover` paints, never a second gray, so an ↓ landing and a pointer hover are one face.
+  - **KEYCAP**: `h-[22px] min-w-[22px] rounded-[6px] border-border-default bg-bg-elevated`
+    at `text-caption` — the legend bar's `Enter / ↑ ↓ / Esc` hints, on
+    `bg-card-surface-subtle` flush to the card's edges.
+  - **MINIMAL COPY.** Section labels are nouns, never counts; an empty answer is the one
+    line `No results`; loading is a DIM over the previous answer, not a spinner and not a
+    cleared card. ⚠ **AND THE SECTION ORDER IS THE WIRE'S, NOT THE CARD'S**
+    (`features/search/contracts.ts › SEARCH_GROUP_ORDER`) — the renderer draws the groups
+    in the order they arrive.
 - **Pills/chips**: `rounded-full border border-border-strong` +
   `bg-bg-elevated` (raised, on inset bodies) or `bg-bg-inset` (flat, on
   cards), `text-caption`/`text-small` medium.
