@@ -3110,10 +3110,21 @@
   background: var(--home-frame);
   /* ⚠ REBOUND, NOT INHERITED. `.lp` sets `--ink: #0d0d0d` for the landing;
      inside the scene it has to be the APP's ink or the demo prints the
-     marketing near-black wherever a kit recipe reads the alias. */
+     marketing near-black wherever a kit recipe reads the alias.
+     ⚠ MEASURED 2026-09-17: no rule in `globals.css` currently reads `--ink`,
+     `--muted` or `--line`, so this rebind is a fence rather than a fix — keep
+     it, because a kit recipe that starts reading the alias must not pick up the
+     landing's value. */
   --ink: var(--text-primary);
   color: var(--text-primary);
-  font-size: 15px;
+  /* ⚠ THE APP'S ROOT SIZE, WHICH IS THE BROWSER DEFAULT — neither `globals.css`
+     nor the SPA's `index.css` sets one on `html`/`body`. It was an unexplained
+     15px, i.e. the scene rendering every un-utilitied string 6% smaller than the
+     product does (2026-09-17). ⚠ The `--text-*` scale is absolute px, so this
+     moves only the text that wears no `text-*` utility; it is stated for the
+     same reason CANVAS_W is the window's width — the scene's units are the
+     product's units. */
+  font-size: 16px;
 }
 .lp-demo-home *,
 .lp-demo-home *::before,
