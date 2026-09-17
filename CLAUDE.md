@@ -124,6 +124,15 @@ second typecheck):
    INSERT, and a kind the union lacks is cast into it and takes every default branch.
 8. `npx tsx scripts/check-css-token-drift.ts` — the DESIGN TOKENS, `src/app/globals.css` vs the
    SPA's `apps/desktop-ui/src/styles/tokens.css`, which is a second copy with no shared module.
+   ⚠ **AND SINCE 2026-09-17 (Samuel's ruling R-41) IT ALSO COMPARES THE `@layer components` CLASS
+   SET** — `globals.css`'s kit vs `apps/desktop-ui/src/styles/kit.css`, which that file's own header
+   calls a *"verbatim hand-copy"* — in both directions, selector NAMES only. **The count above does
+   not move: it is the same script and the same CI step, guarding a SECOND declaration.** It was
+   bought by `.glass-panel`, declared in `globals.css` and absent from `kit.css` for weeks with every
+   gate green, so the SPA could not render `/link/{token}`'s card; a class name is not a `--*`
+   declaration and the token half could never have seen it. ⚠ **IT COMPARES ONLY WHAT IS INSIDE THE
+   LAYER** — the landing/login rules, the keyframes and the auth-adjacent rules that sit outside it
+   in both files are not covered, deliberately.
    ⚠ **And this list said "five" and omitted THIS one until 2026-09-01**, though it has been the
    `type-drift` job's THIRD step since `522f53df` (2026-08-31). **The same failure, a second time,
    one month apart: the wave that adds a gate does not add its doc row.** Twice is a coincidence;

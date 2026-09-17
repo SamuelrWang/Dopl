@@ -615,16 +615,6 @@ html {
   --app-panel-bottom: var(--shell-gap-bottom);
 }
 
-/* Hairline borders */
-
-.hairline {
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-.hairline-strong {
-  border-color: rgba(255, 255, 255, 0.15);
-}
-
 /* Login page fade-in */
 
 @keyframes loginFadeIn {
