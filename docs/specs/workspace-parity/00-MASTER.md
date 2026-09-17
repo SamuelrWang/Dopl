@@ -32,7 +32,9 @@ a reason some /home code must live in `src/` rather than `apps/`.
 they become **183**: **40 to port**, **41 to keep**, **34 to remove or change**, **49 rulings for
 you**, **19 reverse-map rows** — plus **63 UI/UX differences**, **9 waves**, and **≈1,600 lines** to
 move down into the shared tree against **≈8,200** lines of /home composition that stay where they
-are. **Eight rulings block wave 1: R-08, R-18, R-19, R-20, R-21, R-22, R-45, R-46.**
+are. **Seven rulings block wave 1: R-18, R-19, R-20, R-21, R-22, R-45, R-46.** R-08 was in that
+list and is **not** a wave-1 blocker — nothing in wave 1 asks whether a room is shared. It blocks
+**wave 0**, which is where the predicate is executed, so it is still the first thing you rule on.
 
 ---
 
@@ -67,8 +69,11 @@ spend, a range switcher) is the one place the home space is genuinely ahead in *
 **5. Nothing here is safe to start today — gates before ports.** The **root lint is red** at HEAD
 (F-688, sixteen unexempted files over the 500-line cap), **/home cannot tell a member from a guest**
 inside a container (F-343, `containerTarget.role` hardcoded `"owner"`), and a ruling that changes
-**workspace** behaviour is recorded but unexecuted (F-513, three copies of the predicate still ask
-`kind === 'link'`). Samuel's own standing rule: red CI is a P0, and the prior drift audit's advice
+**workspace** behaviour is recorded but unexecuted (F-513: three sites still gate on the kind —
+`mcp-server/src/factory.ts › lockedTo`, `tools/confirm-token.ts › sharedContainer`,
+`workspaces/server/shared-publish.ts › assertSharedPublishAcknowledged` — while a fourth spelling,
+`channels/lib/tool-profile-resolve.ts › isSharedChannel`, is **already kind-blind**, so the tree
+answers "is this room shared" two ways today). Samuel's own standing rule: red CI is a P0, and the prior drift audit's advice
 was *"Gates first… without them §4 is re-audited in six weeks."* *(06 §C.0, §C.1, P25; 04 §0.6)*
 
 ---
@@ -86,7 +91,7 @@ research doc it came from (e.g. "01 §A row 5").
 | # | Item | What home has | What workspace has | Mechanism | Size | Depends on | Ref |
 |---|---|---|---|---|---|---|---|
 | P1 | Agent pane colour banner | `color` resolved off `data.liveAgents` (`surface-agent-view.tsx:54-58`) | never passed (`overlays.tsx:73-86`) → `agent-panel.tsx:179` defaults `null` | collapse duplicate (C1) | S | — | 01 §A row 5; 02 A.4 P2 |
-| P2 | One wiring of `ChannelsAgentPanel` | `SurfaceAgentView` (12 props derived from `data`) | 14 forwarded props through `ChannelsOverlays` | collapse duplicate | S | — | 01 §C1; 02 §C1 |
+| P2 | One wiring of `ChannelsAgentPanel` | `SurfaceAgentView` (12 props derived from `data`) | the same 12 props forwarded by hand through `ChannelsOverlays`; **9 of `ChannelsOverlays`'s own 19 props disappear** with the collapse (counted at `overlays.tsx › ChannelsOverlays`, 2026-09-17 — the doc previously said "14 forwarded props") | collapse duplicate | S | — | 01 §C1; 02 §C1 |
 | P3 | Artifacts face (list + opened artifact) | `artifacts: true` (`relationship-record.tsx:143`) | flag never passed; default `false` (`info-panel.tsx:91`) | flag flip | S | R-16, F-712 | 01 §A row 49; 02 A.2 R1/R4/R5 |
 | P4 | Threads↔Artifacts toggle + tab-heading flip + badge drop | drawn (`threads-tab.tsx:163-181`, `info-panel-tabs.ts:91`) | never engages | rides P3 | S | R-16, R-17 | 02 A.2 R2/R3 |
 | P5 | Artifacts flat column + clip / member-ceiling notes | `artifacts-tab.tsx:111-123`, `:48`, `:222-227` | n/a | rides P3 | S | R-16 | 02 A.2 R8/R11 |
@@ -97,7 +102,7 @@ research doc it came from (e.g. "01 §A row 5").
 | P10 | Channel-record loading ghost, promoted to the shared tree | real two-column shape, tab count by import (`channel-record-skeleton.tsx:4,61`) | `channels-skeleton.tsx:8-12`, self-described *"a rough fit"*; GUEST uses kit generics (`guest-channel.tsx:115-117`) | move down + new call sites | S | — | 01 §C4; 06 P13; F-220 |
 | P11 | Recency wells on the channel picker (Pinned / Recent / Earlier) | `relationship-list.tsx:125-128` over `home-channel-wells.ts:48-52` (already in `src/`) | flat tree (`sidebar.tsx`) | new call site over a shared module | S | R-03 | 01 §A row 71; 03 §E1 |
 | P12 | Channel row card face + avatar stack + selected face | `home-channel-row.tsx:129` wearing `HOME_CARD_FACE` (`home-card-marks.tsx:37,68`) | flat 36px `raised-tab` (`sidebar-rows.tsx:52-63`) | new call site | M | R-03, R-40 | 03 §B4; 01 §A row 74 |
-| P13 | Unread **mention count** `@ N` on a channel row | `HomeChannel.unreadMentions` (`types.ts:164`) ← `repository-unread.ts › listMyMentionStamps` | boolean dot only; `sidebar-rows.tsx:27-31` forbids inventing a count | new code (server projection) | M | R-28 | 01 §A row 72; 05 A12 |
+| P13 | Unread **mention count** `@ N` on a channel row | `HomeChannel.unreadMentions` (`types.ts:164`) ← `repository-unread.ts › listMyMentionStamps` | boolean dot only; `sidebar-rows.tsx:69-73 › "NO UNREAD BADGE"` forbids inventing a count (the doc previously cited `:27-31`, which is the re-export docblock) | new code (server projection) | M | R-28 | 01 §A row 72; 05 A12 |
 | P14 | Last-message preview on a row | `lastMessagePreview` on the wire (`types.ts:128`) — **rendered by nothing since 2026-09-13** | absent | new code, or delete the field | S | R-28 | 01 §A row 73; 05 A15 |
 | P15 | Agents-tab recency wells recognised as a workspace surface | four wells (`agents-tab.tsx:417` → `agents-wells.tsx:123`) | **identical — already shared** | none (verify + keep) | S | — | 02 A.3 G4 |
 | P16 | Held-gate Approve/Deny reachable from the agent WINDOW | absent on both hosts (`agent-window.tsx:383-387`) | absent | new wiring | M | R-24 | 02 A.5 W3 |
@@ -110,7 +115,7 @@ research doc it came from (e.g. "01 §A row 5").
 | P23 | `FullScreenError` wrapper | `pages/home/index.tsx:135-148` | `app-shell.tsx:193-199` — byte-identical | collapse duplicate | S | — | 03 §A28, §D13 |
 | P24 | `.glass-panel` / `.hairline` / `.hairline-strong` in the SPA kit | n/a | in `globals.css:904,622,626`, **absent from `kit.css`** | move down + gate | S | R-41 | 03 §B22, §D12 |
 | P25 | `Crossfade` on in-page selection changes | `pages/home/index.tsx:294` | route remount, no transition | new call sites | S | R-05 | 03 §B14, §C2 |
-| P26 | `FormDialog` conformance for the 9 remaining input forms | 2 /home dialogs conform | 5 conform, **9 `Todo`** (`create-channel-dialog`, `direct-message-dialog`, `base-settings-modal`, `create-base-dialog`, `move-to-dialog`, `create-team-dialog`, `members/invite-dialog`, `create-skill-dialog`) | new code, 9 small rewrites | M | — | 03 §B16 |
+| P26 | `FormDialog` conformance for the 8 remaining input forms | 2 /home dialogs conform | 5 conform, **8 `Todo`** (`grep -c 'Todo' docs/DESIGN-SYSTEM.md` = 10, of which 2 are prose; the doc previously said 9) (`create-channel-dialog`, `direct-message-dialog`, `base-settings-modal`, `create-base-dialog`, `move-to-dialog`, `create-team-dialog`, `members/invite-dialog`, `create-skill-dialog`) | new code, 9 small rewrites | M | — | 03 §B16 |
 | P27 | Flat section language (`SectionPanel` on `--home-panel`) | `home.module.css:165-168`, no hairline | `SECTION_PANEL_GROUND` keeps a hairline; `SectionBox` (concave) live in 8 files | CSS + delete consumers | M | R-39 | 03 §B7/B8, §E5 |
 | P28 | The account palette skin over the shared channel surface | six `:global()` rules in `home.module.css:56-168`, attribute-hooked | neutral kit hairlines | CSS promotion (or keep the fence) | M | R-38 | 01 §D; 03 §B11, §E10 |
 | P29 | Knowledge card grid as a variant of `knowledge-v2` | `home.module.css:200-249 › .kbCards` (a 4th `--kv-*` rebind) | `.cardGrid` in `knowledge-v2` | collapse duplicate | S | — | 03 §A15, §D10 |
@@ -118,7 +123,7 @@ research doc it came from (e.g. "01 §A row 5").
 | P31 | Delete both cache-to-cache bridges | `use-home-channel-sync.ts` (113 lines) + `use-home-unread-refresh.ts` | n/a | rides P30 | S | P30 | 05 §B.2 |
 | P32 | ONE wire name for `channel_members.favorited_at` | `HomeChannel.favoritedAt` | `Channel.myFavoritedAt` | rename, cross-package | M | R-27 | 05 §A10, §R7 |
 | P33 | ONE overview **series** vocabulary (`metric`, `range`, zero-fill, `truncated`) | `credits\|mcp\|messages`, 4 ranges, `&channel=`, `&month=` | `messages\|mcp\|threads`, fixed 31-day, `&channelId=` | new adapter | M | R-29 | 05 §A19, §B.3 collapse 2 |
-| P34 | Credits / token-spend / agent-board rails on the workspace Overview | `overview-panels.tsx:334` `CreditsBar`, `:191` `TokenSpendPanel`, `overview-agent-board.tsx` | **no spend surface at all** (`grep -n credit pages/overview/*.tsx` → 0) | new code, fenced per container | L | R-29 | 02 A.8 C-2/C-3; 04 §B-8 |
+| P34 | Credits **by channel / person / tool**, token spend and the live agent board on the workspace Overview | `overview-panels.tsx:334` `CreditsBar`, `:191` `TokenSpendPanel`, `overview-agent-board.tsx` | ⚠ **CORRECTED 2026-09-17** — the workspace Overview is **not** spend-free: `pages/overview/index.tsx:94` reads `useWorkspaceEntitlements` and `:131` renders `<PeriodStats credits=…>` ("Credits used", this billing period). What is missing is the **breakdown** (by channel / person / tool), the token-spend panel and the agent board. 02 §A.8 C-2's `grep … → 0` was wrong | new code, fenced per container | L | R-29 | 02 A.8 C-2/C-3 (corrected); 04 §A-25, §B-8 |
 | P35 | `truncated` + one clipped-list wording on merged reads | three non-reporting ceilings (200/50/500) | reports `truncated` | collapse duplicate | S | P30 | 05 §B.3 collapse 3 |
 | P36 | `isSoleAudience` as one derivation | hand-spelled `memberCount === 1` | same, in five places | collapse duplicate | S | R-08 | 05 §D.3 |
 | P37 | `containerNoun(kind)` for agent-facing copy | `containerKindLabel` exists (`workspace-directory.ts:218`) | ~8 hardcoded "this workspace" strings in `tools/map.ts`, `tools/members.ts`, `channel-ops-hold-workspace.ts` | collapse duplicate | S | — | 05 §A44, §D.3 |
@@ -229,7 +234,11 @@ objects, 5 are doc repairs, 12 are changes.
 and §E questions, plus the drift ledger's unruled ASKs that this uplift triggers — deduplicated and
 numbered. One question in plain English, the options, a recommendation, and what it blocks.
 
-**⛔ = blocks Wave 1.** Eight of the forty-nine do.
+**⛔ here = blocks Wave 1.** **Seven** of the forty-nine do. (In §5 the same mark means "blocks the
+wave it is listed under" — that convention was already in the roadmap and is left alone.)
+R-08 carried a ⛔ in the first draft; it blocks **Wave 0**, not Wave 1, and the mark has moved with
+it. R-44 was merged into R-39 — they asked the same question — and R-50 was added, so the live total
+is still 49.
 
 #### Theme A — Surface and information architecture
 
@@ -265,14 +274,17 @@ is a different feature, and the `ui/search-panel` Cmd+K branch is not in this tr
 (a) Per-page filter, /home's shape, one line of wiring per page. (b) One workspace-wide panel.
 (c) Both. **Recommend (a) now, (b) as its own wave.** *Blocks: Wave 5.* — 03 §E3
 
-**R-05. Does the workspace shell crossfade?** **Recommend: no for route changes, yes for in-page
-selection changes** — which is what `Crossfade`'s three existing callers already do. Needs your word
-only because it is visible motion. *Blocks: nothing.* — 03 §E4
+**R-05. Does the workspace shell crossfade when you switch pages, or only when you pick a
+different row on one page?**
+(a) Crossfade route changes too. (b) In-page selection changes only. (c) No motion at all.
+**Recommend (b)** — which is what `Crossfade`'s three existing callers already do. Needs your word
+only because it is visible motion. *Blocks: Wave 5 (P25 only).* — 03 §E4
 
 **R-06. Skills, Chats and Ontology have no page skeleton.** `section-skeleton.tsx:15-19` argues that
 inventing three shapes is worse than `PageLoading`; /home has eleven bespoke shapes.
 (a) Uphold that argument — no new ghosts. (b) Build three.
-**Recommend (a)** unless you have seen one of the three flash and disliked it. — 03 §E8
+**Recommend (a)** unless you have seen one of the three flash and disliked it.
+*Blocks: nothing — it only decides whether Wave 5 adds three page ghosts.* — 03 §E8
 
 **R-07. Does "Agents" get disambiguated?** /home Agents = template **identities**; the channel info
 column's Agents tab = live **sessions**. The collision was recorded and deliberately not resolved,
@@ -282,16 +294,20 @@ on the argument that the two names live on different surfaces. **The uplift puts
 
 #### Theme B — Members and permissions
 
-**R-08. ⛔ Confirm F-513: "shared" means any channel with more than one member, whatever the
-container kind.** The ruling exists and three copies of the predicate still ask
-`kind === 'link' && memberCount !== 1`. Honouring it **changes workspace behaviour**: a two-member
+**R-08. Confirm F-513: "shared" means any channel with more than one member, whatever the
+container kind.** The ruling exists and **three sites still gate on the kind** —
+`mcp-server/src/factory.ts:186-191 › lockedTo`, `tools/confirm-token.ts:181-188 › sharedContainer`
+and `workspaces/server/shared-publish.ts:123` — while a fourth spelling,
+`channels/lib/tool-profile-resolve.ts › isSharedChannel`, is **already kind-blind**. The tree
+answers the question two ways today. Honouring the ruling **changes workspace behaviour**: a two-member
 private channel in a standard workspace becomes "shared", turning on the container-publish
 acknowledgement and tightening the knowledge audience ceiling.
 (a) Execute it as its own wave, first. (b) Execute it inside the first surface wave. (c) Amend the
 ruling to link containers only.
 **Recommend (a).** Every row in these audits that reasons about "shared" is currently reasoning
 about the wrong thing, and it is reversible in one predicate — so confirm before we build on it.
-*Blocks: Wave 0, therefore Wave 1.* — 04 §E-11; 06 §E11; 05 §D.2
+*Blocks: Wave 0 — where the predicate is executed. It is **not** a wave-1 blocker: nothing in
+wave 1 asks whether a room is shared.* — 04 §E-11; 06 §E11; 05 §D.2
 
 **R-09. What should a home container's member management be able to do?**
 🔒 **Unbuildable until F-343 lands** — /home carries no caller role (`containerTarget.role` is
@@ -300,40 +316,46 @@ hardcoded `"owner"`), so nothing can be gated.
 removed from /home. (b) Add remove/leave — the server already allows it, UI-only change.
 (c) (b) plus a role change after claim. (d) Full members-v2 on home.
 **Recommend (b).** "Departure is removal" is already ruled, and a container you cannot leave from
-its own surface is the sharper defect. — 04 §E-2
+its own surface is the sharper defect. *Blocks: Wave 7 (V9); itself blocked on F-343 in Wave 0.*
+— 04 §E-2
 
 **R-10. Should `/{segment}/settings` exist for a link container, and should it offer DELETE?**
 On a relationship container, "delete workspace" means "delete this relationship, and everyone in
 it". (a) R-01(a) makes it unreachable. (b) Make `WorkspaceSectionBody` kind-aware: rename yes,
 delete refused, naming the channel-deletion path instead. (c) Leave it.
 **Recommend R-01(a) first, then (b) as belt-and-braces** — the settings body is shared with the
-modal, and the modal is reachable from /home. — 04 §E-3
+modal, and the modal is reachable from /home. *Blocks: Wave 5 (it rides R-01).* — 04 §E-3
 
 **R-11. Is the member Activity tab worth its cost?** A table, a revoked grant, a server-side filter
 with an admin-only verb set and a fail-closed path — for one tab in a console with four unit tests.
 (a) Keep. (b) Keep and pair the presence rule (R-12). (c) Retire the tab, keep the ledger for `/admin`.
-**Recommend (a).** It is the only server-side-filtered audit surface in the product. — 04 §E-8
+**Recommend (a).** It is the only server-side-filtered audit surface in the product.
+*Blocks: nothing.* — 04 §E-8
 
 **R-12. `showPresence` has no server half.** The client hides `lastSeenAt`; the column still ships
 in the roster payload. (a) Scrub it per caller in the members DTO. (b) Drop the client rule.
-(c) Leave it. **Recommend (a), in the same wave that touches the members DTO and not before.** — 04 §E-10
+(c) Leave it. **Recommend (a), in the same wave that touches the members DTO and not before.**
+*Blocks: Wave 7 (it rides the members DTO).* — 04 §E-10
 
 **R-13. Does the guest's workspace CHROME get ported?** ASK-2 (2026-08-30) redirected a guest
 somewhere that works and explicitly left them *"still wearing a nav they cannot use."*
 (a) Port the chrome now. (b) R-01(a) subsumes it. (c) Leave.
-**Recommend (b) then (a)** — the residual is real and was recorded, not fixed. — 06 §E18
+**Recommend (b) then (a)** — the residual is real and was recorded, not fixed.
+*Blocks: Wave 5 (it rides R-01).* — 06 §E18
 
-**R-14. The four container product questions deferred to you and never answered.** F-296 deleting a
+**R-14. Do the four container product questions deferred to you get answered?** F-296 deleting a
 container blocks nobody · F-297 the public claim surface is unthrottled · F-298 no per-user mint
 quota · F-299 a claim reveals both parties' emails with no accept step.
-**Recommend: answer F-299 at least** — it is a live privacy item and a multi-member container makes
-it worse, not better. — 06 §E17
+(a) Answer all four now. (b) Answer F-299 only. (c) Defer all four again.
+**Recommend (b)** — F-299 is a live privacy item and a multi-member container makes it worse, not
+better. *Blocks: nothing in the nine waves.* — 06 §E17
 
 **R-15. Should the MCP container LOCK arm for a multi-member STANDARD workspace too?** Today it arms
 only for a shared home channel, so a session pinned to a shared standard workspace sees the
 operator's **entire** directory. (a) Keep — a workspace is not a private relationship. (b) Arm for
 any container with 2+ members. **Recommend: ask.** The argument that bought the home lock ("a peer's
-room must not be a directory oracle") is not obviously weaker here. — 05 §F R4
+room must not be a directory oracle") is not obviously weaker here.
+*Blocks: nothing in the nine waves — but it is an enumeration leak while it stands.* — 05 §F R4
 
 #### Theme C — Channel features
 
@@ -385,13 +407,26 @@ and hide the archive control there too. (c) Leave it.
 **R-22. ⛔ The Threads-count row duplicates the tab-row badge.** (a) Delete the row. (b) Keep it and
 add it to /home for symmetry. **Recommend (a).** *Blocks: Wave 1.* — 01 §E-8
 
+**R-50. Does a pre-2026-08-24 home container get its channel name and description back?** Those
+containers' channels still carry `is_direct = true`, and both info bodies spell
+`headerEditable = canEdit && !channel.isDirect` (`info-tab.tsx:106`, `person-info-tab.tsx:144`), so
+their Info card is **display-only** — you cannot rename the channel from it. The rule is right for a
+real 1:1 (the title is the other person, so a field bound to `channel.name` edits an invisible value)
+and wrong for these older rooms, which are ordinary channels wearing an old flag.
+(a) Lift `is_direct` on the pre-2026-08-24 containers with a one-line migration. (b) Keep the flag
+and make the rule ask something else. (c) Leave them display-only.
+**Recommend (a)** — INVARIANTS:151 already calls it *"a one-word ruling, not a code question."*
+*Blocks: nothing, but answer it with Wave 1 — P9 moves this exact line onto the shared context, and
+it is a one-word change while it is being moved.* — 06 §E12
+
 **R-23. Do the thread pop-out and the agent window actually open from a /home channel?** The button
 is drawn on every host and routes into `/{linkContainerSegment}/thread-window/…`;
 `resolveWorkspaceSegmentForUser` does not filter `kind` but applies a `viewer` floor, so a
 **guest-role peer may fail**. Nothing pins it.
 (a) Measure, then pin both windows for a link container. (b) Assume it works. (c) Fence both windows
 to standard workspaces. **Recommend (a)** — this is a measurement before it is a ruling, and it
-gates whether we keep the control. — 02 §R-3/§R-4
+gates whether we keep the control. *Blocks: nothing — but take the measurement in Wave 0.*
+— 02 §R-3/§R-4
 
 **R-24. Where do the held-gate card and the posture selects live?** The **panel** has Pause/End/
 Open-window + the held gate and no posture; the **window** has posture + model and neither. An
@@ -399,13 +434,13 @@ operator working in the agent window **cannot answer a held call from it**.
 (a) Both surfaces get both. (b) The held gate moves to the window too; Pause/End stays panel-only.
 (c) Leave it — the notification is the window's answer path.
 **Recommend (b)** — the held gate is the one control whose absence stops work; adding a destructive
-verb to a window that never had one is a new control. — 02 §R-5
+verb to a window that never had one is a new control. *Blocks: Wave 2 (P16).* — 02 §R-5
 
 **R-25. Peer-agent visibility on a 20-person workspace channel.** The Agents tab is an **operator**
 surface: own agents from this machine's feed, peers as state-only cards.
 (a) Leave it — `peerCardsFor` already thread-scopes and the agent cap is 15 per workspace, so the
 list is bounded. (b) Cap or group the peer section. (c) Opt-in above N members.
-**Recommend (a)**, revisit only if you report it as noise. — 02 §R-7
+**Recommend (a)**, revisit only if you report it as noise. *Blocks: nothing.* — 02 §R-7
 
 #### Theme D — Data and API
 
@@ -429,11 +464,15 @@ a stated reason**: `Channel.unread` is a BOOLEAN there, so a numeric badge would
 behind it. Carrying the badge means carrying the count — a server projection mirroring
 `home/server/service-reads.ts:169-172`, not a UI port.
 (a) Build the count and port the badge. (b) Port the wells only and leave the badge.
-(c) Neither. **Recommend (b) now, (a) as its own slice.** — 01 §E-9; 03 §B5; 06 §E3
+(c) Neither. **Recommend (b) now, (a) as its own slice.**
+*Blocks: Wave 3 (the field's fate, X18/V16) and Wave 4 (the badge).* — 01 §E-9; 03 §B5; 06 §E3
 
-**R-29. Does the workspace Overview show credits, tokens and a live agent board?** The two payloads
-are today **disjoint**: workspace = counts + activity + member load; home = credits by channel /
-person / tool + live agents + scanned. (a) No — the workspace Overview is an ACTIVITY page and /home
+**R-29. Does the workspace Overview show the credit BREAKDOWN, token spend and a live agent
+board?** ⚠ **Corrected 2026-09-17:** the workspace Overview already shows a credit figure —
+`pages/overview/index.tsx:94` reads `useWorkspaceEntitlements` and `:131` renders `PeriodStats`
+("Credits used", this billing period). The payloads are **near-disjoint, not disjoint**: workspace =
+counts + activity + member load + a period credit figure; home = credits by channel / person / tool
++ live agents + token spend + scanned. (a) No — the workspace Overview is an ACTIVITY page and /home
 is a SPEND page. (b) Yes, one set of sections, host-selected. (c) Unify the payload behind one
 service with a `scope` parameter.
 **Recommend (b) for the SERIES first**, and not (c) for the payload — the fences are genuinely
@@ -454,18 +493,24 @@ standard workspace channel) rather than leaving it as an early return in one fil
 (b) Extend the share row to workspace channels — one trigger clause, one audience arm.
 (c) Let each module answer for itself.
 **Recommend (a), stated once in INVARIANTS §4A.** It makes R-33's "no channel sharing in wave 1" a
-consequence rather than a separate judgement. — 04 §E-12; 05 §F R3; 06 §E1
+consequence rather than a separate judgement. *Blocks: nothing in the nine waves — it is deferred,
+and answering it early makes R-33 smaller.* — 04 §E-12; 05 §F R3; 06 §E1
 
 **R-31. Should the audience-change PREVIEW (the confirm token) fire in a standard workspace?**
 Today it fires only inside a shared link container. Publishing a KB, skill or template
 **workspace-wide** gets no preview, no token and no acknowledgement. **The workspace door is wider
-and quieter than the home door.** **Recommend: ask.** The stated reason ("a workspace publish is
-expected") is plausible but this is the single largest behavioural home-only gate on the MCP
-surface. — 05 §F R5
+and quieter than the home door.**
+(a) Fire it for any container with a second audience. (b) Keep it link-only. (c) Fire it above N
+members. **Recommend: ask.** The stated reason ("a workspace publish is expected") is plausible but
+this is the single largest behavioural home-only gate on the MCP surface.
+*Blocks: nothing in the nine waves.* — 05 §F R5
 
 **R-32. `workspace=` is slated for removal next release, and it is the only way to address a
-container.** Containers get no slug. **Recommend: block the removal** until a container has an
-address the other nine ops accept, or give containers slugs. — 05 §F R6
+container.** Containers get no slug.
+(a) Block the removal until a container has an address the other nine ops accept. (b) Give
+containers slugs, then remove it. (c) Remove it as planned and lose container addressing.
+**Recommend (a)**, with (b) as the real fix. *Blocks: Wave 3 (it decides what the one projection is
+addressed by).* — 05 §F R6
 
 **R-33. Do Skills and Chats come to the home space?** Both are plain `workspace_id`-scoped, both
 already work in a personal container via MCP, neither has a surface — and `dopl_chats(op="export")`
@@ -479,20 +524,26 @@ draws /home's tab strip) and it touches the tour. *Blocks: Wave 7.* — 04 §E-6
 
 **R-34. `dopl_workspaces(op="create_home_channel")` — confirm the shape.** F-621 is resolved on a
 Desktop-Agent default and its own entry says the SHAPE is what needs you: the op on the orientation
-tool, a dedicated write tool, or app-only. **Recommend: confirm the default.** — 04 §E-7
+tool, a dedicated write tool, or app-only. **Recommend: confirm the default.**
+*Blocks: nothing in the nine waves.* — 04 §E-7
 
 **R-35. Does a new user get a standard workspace at all?** Two statements in one wave document
 disagree, and one flags itself as the contradiction. If signup mints only a personal container,
 "workspace parity" describes a surface most users never reach — **which changes this roadmap's
-priority, not just its scope.** **Recommend: measure the code, then rule.** — 06 §E13, §D.4
+priority, not just its scope.**
+(a) Signup keeps minting a standard workspace. (b) Signup mints only a personal container and a
+standard workspace is opt-in. **Recommend: measure the code first, then rule.**
+*Blocks: nothing mechanically — but it re-prices every wave in §5.* — 06 §E13, §D.4
 
 **R-36. G20: land the eighth session-health field, or retire the guardrail?** A prohibition agents
 are told has no fence in the code, against your own standing rule that it must.
-**Recommend: land the field.** — 06 §E15
+**Recommend: land the field.** *Blocks: nothing in the nine waves.* — 06 §E15
 
 **R-37. Does a folder-scoped knowledge attachment NARROW an agent's reach, or only re-point it?**
 F-680: the 2026-09-08 ruling asked for folder/entry selection and did not say what it means for
-reach. **Recommend: ask.** — 06 §E14
+reach. (a) It NARROWS — the agent may read only the attached folder. (b) It only RE-POINTS — the
+agent still reaches the whole base. **Recommend: ask**; (a) is the safer default if you are unsure.
+*Blocks: nothing in the nine waves.* — 06 §E14
 
 #### Theme E — Design recipes
 
@@ -502,7 +553,7 @@ repaint the shared channel surface's dividers to 2px `--home-panel-line` and its
 disappears and six fragile utility-class selectors are deleted. (b) Keep two looks for one surface.
 **Recommend (a)** — it is the same argument the 2026-08-30 frame ruling already made.
 ⚠ Note that three of the six rules select on Tailwind utility class names in files /home does not
-own and admit they degrade silently. — 03 §E10; 01 §D
+own and admit they degrade silently. *Blocks: Wave 6.* — 03 §E10; 01 §D
 
 **R-39. Which section language wins — flat or concave?** /home is flat (your 2026-09-13: *"you're
 adding this extra border line around the gray. I did not ask for that"*). The workspace still uses
@@ -511,25 +562,37 @@ Contents, and `SECTION_PANEL_GROUND` keeps a hairline `PANEL_WELL` does not.
 (a) Flat everywhere; delete `SectionBox`'s consumers in a dedicated pass. (b) Keep both.
 **Recommend (a).** ⚠ This is also the Agents-page question (Q4): the spec that authorised /home's
 flat face says a reversal for visual parity *"is an ENGINEERING.md entry, not a styling choice"*,
-and Q4 was never reviewed. *Blocks: Wave 6.* — 03 §E5; 06 §E7
+and Q4 was never reviewed.
+⚠ **R-44 MERGED IN HERE (2026-09-17 review).** R-44 asked you to confirm the /home Agents-face
+defaults Q1–Q6 that were *"ruled by the orchestrator while Samuel slept"*. Its only parity half was
+**Q4, which is this question**; Q1–Q3, Q5 and Q6 are defaults that shipped and stand unless you say
+otherwise. Answering R-39 answers R-44. *Blocks: Wave 6.* — 03 §E5; 06 §E7, §D.9
 
 **R-40. Three home-only design asymmetries carry no recorded reason.** The credit bar dropping its
 `label`, `HOME_CARD_FACE_SELECTED` (the black selected row), and the Agents page staying
 "pixel-unchanged". The 2026-08-30 charter says the surfaces must match.
 **Which of these are asymmetries BY RULING and which are simply not-yet-ported?**
 **Recommend: port the selected-row face with R-03; leave the credit-bar label alone (it is a stated
-per-host difference on a shared recipe); the Agents-page flatness is R-39.** — 06 §E8, §D.1
+per-host difference on a shared recipe); the Agents-page flatness is R-39.**
+⚠ **The two audits disagree about the selected-row face.** 01 §A row 74 records it as
+*host-specific-in-kind*, ruled by you on 2026-09-15 (`home.module.css:17-31`); 06 §E8 lists it among
+the asymmetries with **no recorded reason**. Read the module before porting it — if 01 is right,
+this half of R-40 is already answered and P12 should keep the workspace's selection ring.
+*Blocks: Wave 4 (the selected-row face) and Wave 6 (the rest).* — 06 §E8, §D.1; 01 §A row 74
 
 **R-41. The kit class layer has no drift gate.** `check-css-token-drift.ts` compares `--*`
 declarations only; four recipes live in `globals.css` and not in `kit.css`, and nothing failed.
-**Recommend: extend the script to compare the `@layer components` class SET (names only) and add its
-row to CLAUDE.md § Definition of green in the same change** — the convention the last five gates
-followed. *Blocks: Wave 0 exit.* — 03 §E6
+(a) Extend the script to compare the `@layer components` class SET (names only) and add its row to
+CLAUDE.md § *Definition of green* in the same change. (b) Leave the class layer ungated and rely on
+review. **Recommend (a)** — the convention the last five gates followed.
+*Blocks: Wave 0 exit (and P24, which adds three classes to the SPA kit).* — 03 §E6
 
 **R-42. Does the workspace Knowledge page keep its audience picker?** Ruled **yes** in 2026-08-27
 for a stated reason — that page's create button names no audience, *"so it is the one place the
-question is still worth asking."* **Recommend: confirm the reason still holds after B10 collapsed
-the shelf axis.** — 06 §E9
+question is still worth asking."*
+(a) Keep the picker (confirm the 2026-08-27 reason still holds after B10 collapsed the shelf axis).
+(b) Remove it and let the page's scope name the audience. **Recommend (a), confirmed not assumed.**
+*Blocks: Wave 6 (P29 touches that page).* — 06 §E9
 
 **R-43. Do the 31 unruled ASKs from the 2026-08-30 drift audit get answered as a batch?** Only 5 of
 36 were ever ruled. Several are literally *"is this /home's or the app's?"* — ASK-11
@@ -538,12 +601,13 @@ loaders), ASK-20, ASK-24, ASK-25, ASK-26, ASK-27, ASK-35.
 ⚠ **Four of them block work, in this order:** ASK-9 → the shared skeleton promotion · ASK-32 → the
 DiffModal port · ASK-24 (with F-345's correction) → the icon-button batch · ASK-13 →
 `base-settings-form` · ASK-10 → the realtime wave · ASK-4 → whether the upgrade modal is in scope.
-**Recommend: answer ASK-9, ASK-12, ASK-24 and ASK-32 with this roadmap; batch the rest.** — 06 §E16
+**Recommend: answer ASK-9, ASK-12, ASK-24 and ASK-32 with this roadmap; batch the rest.**
+*Blocks: Wave 1 through **ASK-9**, which owns the shared-skeleton promotion (P10) — so ASK-9 is due
+with Wave 0, alongside ASK-12, ASK-24 and ASK-32.* — 06 §E16
 
-**R-44. Confirm the /home Agents-face defaults Q1–Q6, which were "ruled by the orchestrator while
-Samuel slept".** They are still flagged as reversals you *"may make on review"*, and there is no
-record of that review. **Q4 is a parity question (R-39).**
-**Recommend: confirm or reverse Q4 explicitly; the rest can stand.** — 06 §D.9
+**R-44. → MERGED INTO R-39 (2026-09-17 review).** It asked the same question in other words: its
+only live half was Q4, *"does the workspace Agents page adopt /home's flat face"*, which is R-39.
+The id is kept here so a reference to R-44 still lands somewhere. — 06 §D.9
 
 #### Theme F — Deletions that want a veto
 
@@ -562,11 +626,12 @@ and three **static mirror panes** of surfaces this refactor is about to change.
 (a) Retire with the site. (b) Keep, freeze the panes. (c) Keep and re-point the panes at real
 components. **Recommend (a).** (c) is the one to avoid — it makes a public anonymous surface depend
 on the modules under refactor. ⚠ The website-retirement direction is **not stated as a ruling in
-this tree**; treat this as a question. — 04 §E-9
+this tree**; treat this as a question. *Blocks: nothing — deferred, its own project.* — 04 §E-9
 
-**R-48. Drop `channel_personal_arming`?** Nothing writes it (you reversed task 11 on 2026-09-06);
-three live policies still count against the RLS surface.
-**Recommend: drop it in the parity wave**, per delete-don't-disarm. — 05 §F R8
+**R-48. Drop the `channel_personal_arming` table?** Nothing writes it (you reversed task 11 on
+2026-09-06; `shared/tenancy/personal-reach.ts:14-18` says so in place); three live policies still
+count against the RLS surface. (a) Drop the table and its policies. (b) Leave it inert.
+**Recommend (a)**, per delete-don't-disarm. *Blocks: Wave 3 (ledger row 17).* — 05 §F R8
 
 **R-49. Should /home mount the guidance layer?** Tour, join-request notices, the connect-agent
 banner and the welcome popup are workspace-only today and all four are host-agnostic. A first-run
@@ -574,11 +639,15 @@ user lands on /home and sees none of them.
 (a) Mount all four. (b) Mount `ConnectAgentBanner` and `WelcomePopup`; leave Tour on the workspace
 (its steps are keyed to `NavSection`). (c) None.
 **Recommend (b)**, and revisit the Tour once R-33 is answered — a tour that names Skills and Chats
-is either wrong for home or becomes right for free. — 03 §E7; 04 §E-4
+is either wrong for home or becomes right for free. *Blocks: Wave 7 (V5).* — 03 §E7; 04 §E-4
 
-**Row count — List 4: 49 rulings.** By theme: Surface/IA 7 · Members & permissions 8 · Channel
-features 10 · Data/API 12 · Design recipes 7 · Deletions 5.
-**Wave-1 blockers (8): R-08, R-18, R-19, R-20, R-21, R-22, R-45, R-46.**
+**Row count — List 4: 49 live rulings** — R-01–R-43 and R-45–R-50. (**50 ids**: R-44's id is kept
+as a pointer to R-39, which absorbed it.) By theme:
+Surface/IA 7 · Members & permissions 8 · Channel features 11 (R-50 added) · Data/API 12 ·
+Design recipes 6 (R-44 merged into R-39) · Deletions 5.
+**Wave-1 blockers (7): R-18, R-19, R-20, R-21, R-22, R-45, R-46.**
+**Wave-0 blockers (3): R-08, R-41, and R-43's ASK-9 arm** (ASK-9 owns P10's skeleton promotion,
+which lands in Wave 1).
 
 ### 2.5 — List 5: REVERSE MAP — what the workspace has that home lacks, and the orphan classes
 
@@ -600,11 +669,14 @@ features 10 · Data/API 12 · Design recipes 7 · Deletions 5.
 | V14 | **Personal shelf on a workspace** | **Leave** — the personal container is one per USER by construction | 04 §B-9 |
 | V15 | **Orphan: `HARDCODED_THREAD_ACTIVITY`** — no production reader (measured once, 2026-09-17) | **Delete after re-deriving.** `bits.tsx › agentAccent` (F-711) is the precedent for exactly this shape | 02 §C5 |
 | V16 | **Orphan: `HomeChannel.lastMessagePreview`** — on the wire, rendered by nothing since 2026-09-13, kept alive by the SDK mirror and a committed `dist/` | **Render it on the workspace row (P14) or delete the field.** R-28 | 05 §A15 |
-| V17 | **Orphan: `AppPanel`, `bits.tsx › agentAccent`, `.selected-ring`** — zero call sites each | **Delete** (delete-don't-disarm) | 03 §E11; 06 §C.3 |
+| V17 | **Orphan: `AppPanel`** — zero call sites (verified 2026-09-17: the only two matches in the tree are prose, `members/constants.ts:2` and `pages/overview/index.tsx:40`) | **Delete** (delete-don't-disarm) | 03 §E11 |
+| V17b | ⚠ **UNVERIFIED — `bits.tsx › agentAccent` is NOT an orphan.** F-711 says it *"has no call site left"*; at HEAD `attribution-pill.tsx:50` imports it and `:313` calls it (`!framed && agentId && agentAccent(agentId)`) | **Do not delete.** Code wins over the finding (CLAUDE.md § *Precedence*) — file the disagreement against F-711 instead. This also weakens X7/ledger row 6's use of it as a "measure once, delete" precedent: the lesson it actually teaches is **re-derive** | 06 §C.3 (F-711); measured 2026-09-17 |
+| V17c | ⚠ **`.selected-ring` is already DELETED, not an orphan** — Samuel 2026-09-17, from both kit copies, and the absence is **pinned by three tests** (`home-search.test.ts:83-85`, `frame-palette.test.ts:439`, `relationship-list.test.tsx:342`) | **Nothing to delete.** See X29 and K32 — deleting the *test* would delete the ruling | 06 §A.3/§D.6; measured 2026-09-17 |
 | V18 | **Orphan: `resource_grants scope_type='container'`** — schema with **no writer** | **Not obsolete; unfinished.** It is the natural home of any container-level sharing R-33(d) would grow, and costing it as a wiring job is wrong — it is a feature | 04 §C-7 |
 | V19 | **Orphan: `channel_personal_arming`, `home_scoped` columns, `mcp_tokens.workspace_lock_kind`, SDK `listKbBases(shelf)`, SDK `getHomeChannels`** | **Drop / hold per row** — see the deletions ledger §6 | 05 §C.1/§C.2/§A45/§A46 |
 
-**Row count — List 5: 19 rows.**
+**Row count — List 5: 19 rows** (V17 split into V17/V17b/V17c by the 2026-09-17 review; the three
+were one row that was wrong about two of its three items).
 
 ---
 
@@ -916,10 +988,13 @@ next five waves being re-audited in six weeks.
 | **The slot-replacing-host audit** — walk every `slots.*` host and assert nothing the surface already minted is dropped. Three capabilities have been lost this way in three weeks | 06 "The one hazard…" |
 | **Measure deploy state** — `npx supabase migration list --linked`, joined on the migration **NAME**, never the filename prefix. Two team migrations say *"WRITTEN, NOT APPLIED"* and `drop_home_scoped` is in `migrations-held/` | 04 §0.5; 05 §C.7 |
 | **R-41** — extend `check-css-token-drift.ts` to the `@layer components` class SET, and add its row to CLAUDE.md § Definition of green **in the same change** | 03 §E6 |
+| **Measure R-23** — does a /home pop-out and a /home agent window actually open for a guest-role peer? It is a measurement, it costs one run, and it decides whether Wave 2 keeps the control | 02 §R-3/§R-4 |
 | Free deletions and collapses: X9 `AppPanel` · X15 `FullScreenError` · X16 `RECORD_SURFACE` · X10 `TAB_ACTION` composes `PAGE_ACTION_BTN` · P24 `.glass-panel`/`.hairline` into `kit.css` | 03 §F.3 wave 0 |
 | Doc repairs, each in the change that touches the file: X30 `channel-surface.tsx`'s `knowledge` docblock · X31 `authz.ts`'s retired two-member cap · X32 `packages/contracts/src/workspaces.ts` · X33 `DESIGN-SYSTEM.md:13` (allocate **F-714** — highest claimed on this branch is F-713; re-derive across live branches) · X34 the two fixture comments | 02 §C5; 03 §E9; 05 §F-notes |
 
-**Rulings needed:** R-08 ⛔, R-41.
+**Rulings needed:** **R-08 ⛔ (this wave)**, **R-41 ⛔ (this wave's exit gate)**, and
+**R-43's ASK-9 arm ⛔** — ASK-9 owns the shared-skeleton promotion, which is Wave 1's item 6, so it
+has to be answered before Wave 1 opens, not with it.
 **Files touched:** ~40 (16 over-cap splits, 5 doc files, 4 deletions, 2 gate scripts).
 **Risk:** a cap split moves code without changing it — the risk is a moved export path. **Rollback:**
 each split is its own commit; revert individually.
@@ -941,7 +1016,10 @@ the three capability-losing slots closed for good.
 | 5 | **X4** — delete the `knowledge` capability, tab, width branch and `channelPaneTabs` arm (**R-18**) | it changes the tab set, so it must land with the body |
 | 6 | **P10 + X8** — move `ChannelRecordSkeleton` into `src/features/channels/components/`; GUEST adopts it; WS composes it beside its tree ghost | closes F-220 and the guest layout jump |
 
-**Rulings needed: R-08 ⛔, R-18 ⛔, R-19 ⛔, R-20 ⛔, R-21 ⛔, R-22 ⛔, R-45 ⛔, R-46 ⛔.**
+**Rulings needed: R-18 ⛔, R-19 ⛔, R-20 ⛔, R-21 ⛔, R-22 ⛔, R-45 ⛔, R-46 ⛔** — seven, all of
+which change the one info body this wave builds. **R-08 is NOT one of them** (it is Wave 0's; nothing
+here asks whether a room is shared) and **R-43's ASK-9 arm is Wave 0's** (it gates item 6).
+**Answer R-50 here if you can** — step 3 moves the exact line it turns on.
 **Files touched:** ~22 (7 in the shared channels tree, 6 under `pages/home`, 4 deletions, ~5 test files).
 **Gates:** `channels` suite · `page-skeletons.test.tsx` (TEN page shapes) + `channel-record-skeleton.test.tsx` byte-share pins · `knowledge-tab.test.tsx › the capability, per host` · `guest-channel.test.tsx` · `settings-tab.test.tsx › minimal copy` (8-word caption bound).
 **Risk:** the collapse breaks `person-info-tab*.test.tsx` (**6 files**) and `surface-slot-fixtures.tsx`; **nobody has counted the assertions that move** (01 gap 1). **Rollback:** the slot still exists — restoring `person-info-tab.tsx` as an `infoExtras` consumer is a one-file revert.
@@ -970,9 +1048,13 @@ artifacts.
 
 **Items:** P30 `?scope=container|account` · P32 one wire name for `favorited_at` · P31 delete
 `use-home-channel-sync.ts` + `use-home-unread-refresh.ts` · P35 one clipped/`truncated` vocabulary ·
-P36 `isSoleAudience` · P37 `containerNoun(kind)` · P38 one liveness mechanism · P33 one series
-vocabulary · X18/V16 decide `lastMessagePreview`'s fate.
-**Rulings needed:** R-26 ⛔(this wave), R-27, R-28, R-32.
+P36 `isSoleAudience` · P37 `containerNoun(kind)` · P38 one liveness mechanism ·
+X18/V16 decide `lastMessagePreview`'s fate · X21/R-48 drop `channel_personal_arming`.
+⚠ **P33 (one overview-series vocabulary) MOVED OUT OF THIS WAVE (2026-09-17 review):** it depends on
+**R-29**, which is scheduled for Wave 8, and no wave may depend on a ruling that lands later. P33 is
+Wave 8's first item and Wave 8 already says so.
+**Rulings needed:** R-26 ⛔(this wave), R-27, R-28, R-32, R-48. R-08 must already be ruled (Wave 0) —
+P36 collapses `isSoleAudience` onto its answer.
 **Files touched:** ~30 across `src/features/{home,channels,workspaces}`, `packages/contracts`,
 `packages/dopl-client` **and both committed `dist/` trees**.
 **Gates:** `check-role-drift.ts` (the `GET /api/workspaces` row shape) · `check-message-kind-drift.ts` · the committed-`dist` check · `home/server/*.test.ts` (10) · `channels/client` cache suites.
@@ -1101,17 +1183,17 @@ Everything the roadmap proposes deleting, so any line can be vetoed.
 
 | # | What | What makes it safe | Wave |
 |---|---|---|---|
-| 1 | `info-tab.tsx:229-244` "Linked threads" + `HARDCODED_LINKED_THREADS` | hardcoded at its render site since 2026-08-18, no `onClick`, no read behind it; INVARIANTS §5 dead-control rule. **R-45** | 1 |
-| 2 | The two inert `IconButton`s in the WS Members heading | Samuel 2026-08-25 deliberately did **not** copy them to /home: *"a port is not a transcription."* **R-46** | 1 |
-| 3 | `info-tab.tsx:224-226` Threads-count row | the tab row already badges Threads; minimal-copy ruling. **R-22** | 1 |
+| 1 | `info-tab.tsx:229-244` "Linked threads" + `HARDCODED_LINKED_THREADS` | hardcoded at its render site since 2026-08-18, no `onClick`, no read behind it; INVARIANTS §5 dead-control rule. **R-45** <span style="color:#c00">**⚠ TOUCHES DO-NOT-TOUCH**</span> (`src/features/channels/**`, 04 §F-5) | 1 |
+| 2 | The two inert `IconButton`s in the WS Members heading (`info-tab.tsx:271-272`) | Samuel 2026-08-25 deliberately did **not** copy them to /home: *"a port is not a transcription."* **R-46** <span style="color:#c00">**⚠ TOUCHES DO-NOT-TOUCH**</span> (`src/features/channels/**`, 04 §F-5) | 1 |
+| 3 | `info-tab.tsx:224-226` Threads-count row | the tab row already badges Threads (`info-panel-tabs.ts:75`); minimal-copy ruling. **R-22** <span style="color:#c00">**⚠ TOUCHES DO-NOT-TOUCH**</span> (`src/features/channels/**`, 04 §F-5) | 1 |
 | 4 | `person-info-tab.tsx` (395 lines) | absorbed by the one shared body; the fork is the bug INVARIANTS:151 names | 1 |
 | 5 | `person-thread-activity.tsx` (63 lines) | F-316 closed the data gap 2026-09-05; this is composition residue over the same query key | 1 |
-| 6 | `fixtures.ts › HARDCODED_THREAD_ACTIVITY` + 2 stale comments | no production reader, measured 2026-09-17. ⚠ **Re-derive before deleting** — `bits.tsx › agentAccent` (F-711) is the precedent | 1 |
-| 7 | `knowledge-tab.tsx`, `capabilities.knowledge`, the fifth-tab width branch, `channelPaneTabs`'s `knowledge` arm | **no host has passed it since 2026-09-04**; F-666 says re-adding needs Samuel's word. **R-18** | 1 |
+| 6 | `fixtures.ts › HARDCODED_THREAD_ACTIVITY` + 2 stale comments | no production reader, measured 2026-09-17. ⚠ **Re-derive before deleting — and the precedent is now a warning, not a licence:** `bits.tsx › agentAccent` (F-711) was called an orphan and **still has a live call site** at `attribution-pill.tsx:313` (V17b) <span style="color:#c00">**⚠ TOUCHES DO-NOT-TOUCH**</span> (`src/features/channels/**`, 04 §F-5) | 1 |
+| 7 | `knowledge-tab.tsx`, `capabilities.knowledge`, the fifth-tab width branch, `channelPaneTabs`'s `knowledge` arm | **no host has passed it since 2026-09-04**; F-666 says re-adding needs Samuel's word. **R-18.** 04 §F-5 allows `capabilities` explicitly; the other three files are not covered by that carve-out <span style="color:#c00">**⚠ TOUCHES DO-NOT-TOUCH**</span> (`src/features/channels/**`, 04 §F-5) | 1 |
 | 8 | `channels-skeleton.tsx`'s two-pane ghost | self-described *"a rough fit"*; replaced by the real shape; F-220 | 1 |
-| 9 | `overlays.tsx`'s second `ChannelsAgentPanel` wiring (14 props) | `SurfaceAgentView` exists exactly to prevent it, and the drift it predicted has already happened | 1 |
+| 9 | `overlays.tsx`'s second `ChannelsAgentPanel` wiring (**12 props at the call site**; 9 of `ChannelsOverlays`'s own 19 go with it — recounted 2026-09-17, the doc said 14) | `SurfaceAgentView` exists exactly to prevent it, and the drift it predicted has already happened (the colour prop) <span style="color:#c00">**⚠ TOUCHES DO-NOT-TOUCH**</span> (`src/features/channels/**`, 04 §F-5) | 1 |
 | 10 | `src/shared/layout/app-shell/app-panel.tsx` | zero call sites; delete-don't-disarm | 0 |
-| 11 | `channels/components/bits.tsx › TAB_ACTION` as an independent declaration | the tree-boundary workaround it records no longer applies since the 2026-09-17 move | 0 |
+| 11 | `channels/components/bits.tsx › TAB_ACTION` as an independent declaration | the tree-boundary workaround it records no longer applies since the 2026-09-17 move (`ontology-view.tsx:9-15`); `TAB_ACTION` composes `PAGE_ACTION_BTN` rather than disappearing <span style="color:#c00">**⚠ TOUCHES DO-NOT-TOUCH**</span> (`src/features/channels/**`, 04 §F-5) | 0 |
 | 12 | The duplicate full-screen error wrapper and the duplicate level-2 card declaration | byte-identical / same tokens, two spellings | 0 |
 | 13 | `use-home-channel-sync.ts` (113 lines) + `use-home-unread-refresh.ts` | they are bridges between two caches; one cache needs no bridge. **Only after P30 ships green** | 3 |
 | 14 | `home.module.css › .kbCards` / `.kbCell` (50 lines) | a fourth rebind of `--kv-*`; the grid becomes a variant of the card's own | 6 |
@@ -1123,6 +1205,14 @@ Everything the roadmap proposes deleting, so any line can be vetoed.
 | 20 | `mcp_tokens.workspace_lock_kind` | superseded by the credential axes; retires in B13 | deferred |
 | 21 | `src/features/playground/**` (18 files, 4,467 lines, 0 tests, an unauthenticated provisioning route, a reaper cron, 3 static mirror panes) | ⚠ **the website-retirement direction is not stated as a ruling in this tree.** **R-47** — treat as a question, not a finding | deferred |
 | 22 | `HomeChannel.lastMessagePreview` | on the wire, rendered by nothing since 2026-09-13 — **or** render it on the workspace row. **R-28 decides** | 3 or 4 |
+
+⚠ **On the red flags above.** 04 §F-5 lists `src/features/channels/**` (302 files) among the modules
+to *"leave alone entirely in a parity wave"*, with one carve-out: *"touch only `capabilities`"*.
+**Wave 1 is a channels-tree wave from end to end**, so seven ledger lines cross that fence on
+purpose. That is a decision, not an oversight — but it is yours to make, and it was not stated
+anywhere in the first draft. Either (a) you accept that the channels tree is the subject of this
+uplift and 04 §F-5's entry is narrowed to *"do not touch it for any other reason"*, or (b) Wave 1
+shrinks to the `capabilities` flag and the rest waits. **Recommend (a)**, said out loud.
 
 **Not deleted, recorded so a wave does not "restore" them:** the settings members pane (ASK-1) ·
 `variant="tab"` wells · the per-device `localStorage` pin · the `Agent · <id>` chip · the flat agent
@@ -1216,3 +1306,72 @@ where code and a ruling disagree the code wins, and the disagreement is recorded
 | `05-server-api-data.md` (783) | The substrate: 50 fork rows across containers, routes, projections, caches, RLS, credits, MCP and realtime; the duplicate-cache inventory; the container-kind adapter; 8 rulings. |
 | `06-rulings-archive.md` (709) | The decision archive: every ruling bearing on either surface, what is tabled and whether this uplift trips it, the open findings, twelve contradictions, 18 questions, and 25 distilled principles. |
 | `07-kb-tech-debt-snapshot.md` (23) | A verbatim snapshot of the Dopl KB entry "Tech Debt and Tabled Items", copied because the archive researcher could not reach that base. |
+
+
+---
+
+## Appendix — Review log (2026-09-17)
+
+A second pass over this document against its seven inputs and the worktree at `d86e916a`. Docs only;
+no source file was changed. Every claim below was re-measured, not remembered.
+
+**1. Coverage — 68 §E items and 20 `RULING` action rows checked; 1 was missing.**
+01 §E (10) · 02 §E (8) · 03 §E (12) · 04 §E (12) · 05 §F (8) · 06 §E (18) = 68, each traced to a
+List-4 ruling or a List-1/2/3 row. `RULING`-actioned inventory rows: 01 §A (8) · 02 (5) · 03 (3) ·
+04 (4) = 20, all traced.
+**Added: R-50** (06 §E12, the pre-2026-08-24 `is_direct = true` containers whose Info card is
+display-only). Nothing else was missing.
+Not promoted to an R-id, recorded here instead: 06 §D.11 (guest-web R4's blast radius was measured
+against a cap retired the next day — it asks for a re-measurement, not a ruling) and 05 §F-note 3
+(the third overview-series cache entry, already absorbed by P33).
+
+**2. Dedup — 1 merge.** **R-44 → R-39.** R-44 asked you to confirm the /home Agents-face defaults
+Q1–Q6; its only parity half was Q4, which is R-39 word for word. Lower id kept, merge noted in both
+places, R-44's id left standing as a pointer. Net ids 50, net live rulings 49.
+
+**3. Evidence — 31 citations opened; 6 rows corrected, 1 marked UNVERIFIED.**
+Held on opening: P1, P3, P6, P8, P11, P19, P21, P22, P23, P24, P30, P32, P37, K1, K30, K31, X1, X2,
+X3, X9, X10/X11, X21, X33, R-01, R-02, V6 (24).
+Corrected: **P2** (the second agent-pane wiring forwards **12** props, not 14; 9 of
+`ChannelsOverlays`'s 19 disappear) · **P13** (`sidebar-rows.tsx:27-31` is the re-export docblock; the
+"no unread badge" rule is `:69-73`) · **P26** (**8** `Todo` input forms in DESIGN-SYSTEM, not 9 — the
+row already listed 8 by name) · **P34 / R-29** (the workspace Overview is **not** spend-free:
+`pages/overview/index.tsx:94` + `:131` render a "Credits used" period figure; 02 §A.8 C-2's
+`grep … → 0` was wrong and is corrected in 02 as well) · **R-08** (the three kind-gated sites are
+`factory.ts:186-191`, `confirm-token.ts:181-188` and `shared-publish.ts:123`; a fourth spelling,
+`tool-profile-resolve.ts › isSharedChannel`, is **already kind-blind**) · **V17** (split into
+V17/V17b/V17c).
+Marked **UNVERIFIED**: **V17b** — F-711 says `bits.tsx › agentAccent` has no call site left; at HEAD
+`attribution-pill.tsx:50` imports it and `:313` calls it. Code wins; do not delete it, and stop
+using it as the "measure once, then delete" precedent. **V17c**: `.selected-ring` is already deleted
+and its absence is pinned by three tests, so it is not an orphan to delete either.
+
+**4. Safety — 7 deletion lines flagged.** 04 §F-5 lists `src/features/channels/**` among the modules
+to leave alone in a parity wave, carve-out *"touch only `capabilities`"*. Ledger rows **1, 2, 3, 6,
+7, 9, 11** are inside that tree and now carry **⚠ TOUCHES DO-NOT-TOUCH** in red, with one note under
+the table asking you to narrow 04 §F-5 out loud rather than crossing it silently. No line was
+removed: every one of the 22 still cites a ruling or a measurement.
+
+**5. Sequencing — 5 fixes.** (a) **P33 removed from Wave 3** — it depends on R-29, which is Wave 8's
+ruling, and Wave 8 already lists P33 first. (b) **R-08's ⛔ moved from Wave 1 to Wave 0** (see 7).
+(c) **R-43's ASK-9 arm added to Wave 0's rulings** — ASK-9 owns the shared-skeleton promotion, which
+is Wave 1's item 6. (d) **R-23's measurement added to Wave 0** as a row, since it is a one-run
+measurement that decides whether Wave 2 keeps a control. (e) **R-48 added to Wave 3's rulings** — the
+ledger already scheduled the `channel_personal_arming` drop there with no ruling listed.
+Wave 0 still carries all five named blockers: F-688, F-343, F-513, F-712, the slot-replacing-host
+audit.
+
+**6. Readability — 28 rulings tightened, none rewritten.** 26 gained the missing *"Blocks:"* line;
+9 gained explicit options (R-05, R-14, R-31, R-32, R-35, R-37, R-41, R-42, R-48). Every live ruling
+now carries a one-line question, options, a recommendation and a *Blocks:* line. No prose was added
+outside §0, §1, §2.4, §5, §6's flags and this appendix.
+
+**7. The wave-1 blocker set — 8 became 7.** R-18, R-19, R-20, R-21, R-22, R-45 and R-46 each change
+the one info body or the tab set Wave 1 builds, so each is a real blocker. **R-08 is not**: nothing
+in Wave 1 asks whether a room is shared — it blocks **Wave 0**, where the predicate is executed, and
+is still the first thing to rule on.
+
+**Checked and left alone:** the 63 §3 UI rows, §4's target structure, the move-down ledger's line
+counts, and §7's open questions. Two internal inconsistencies in the inputs are noted rather than
+edited: 01 §A's heading says "64 rows" over 74 (§7 already records it), and 01 §A's action tally says
+`RULING` 9 over 8 actual rows.
