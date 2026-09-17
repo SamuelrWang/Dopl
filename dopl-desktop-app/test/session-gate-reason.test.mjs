@@ -86,6 +86,15 @@ test("FIX 1: every gate/deny branch names WHY, with a code from the closed set",
       { toolName: DOPL_CHANNEL_TOOL, input: { op: "manage", action: "posture", channel: CH, to: "@agent-k3", posture: { tools: "auto" } }, toolMode: "manual", messageMode: "auto_outbound" }, "gate", "manage-posture-required"],
     ["a manage op naming ANOTHER room is a different fact and keeps the old code",
       { toolName: DOPL_CHANNEL_TOOL, input: { op: "manage", action: "rename", channel: "other-id", to: "@agent-k3", name: "x" }, toolMode: "bypass", messageMode: "auto_both" }, "gate", "channel-op-approval-required"],
+    // 2026-09-17: ...AND `manage.direct` STOPS ON THE SAME PAIR, which it had been falling
+    // through since its lane shipped on 2026-08-31. It SHARES the manage code rather than
+    // taking a fourth: the conjunction is identical, so the operator's fix is identical.
+    ["an own-channel manage.direct under a half-set posture names the PAIR, not an approval",
+      { toolName: DOPL_CHANNEL_TOOL, input: { op: "manage", action: "direct", channel: CH, agent_id: "a1", body: "go" }, toolMode: "auto", messageMode: "auto_both" }, "gate", "manage-posture-required"],
+    ["...and on the MESSAGE half, where the tools axis is already wide enough",
+      { toolName: DOPL_CHANNEL_TOOL, input: { op: "manage", action: "direct", channel: CH, agent_id: "a1", body: "go" }, toolMode: "bypass", messageMode: "ask" }, "gate", "manage-posture-required"],
+    ["a direct naming ANOTHER room falls through exactly as a launch's does",
+      { toolName: DOPL_CHANNEL_TOOL, input: { op: "manage", action: "direct", channel: "other-id", agent_id: "a1", body: "go" }, toolMode: "bypass", messageMode: "auto_both" }, "gate", "channel-op-approval-required"],
   ];
   for (const [label, args, decision, reason] of cases) {
     const d = detail(args);
@@ -121,6 +130,13 @@ test("FIX 1: an ALLOW is explained too, so the diag can tell WHICH rule let it t
   assert.deepEqual(managed("end"), { decision: "allow", reason: "auto-end-own-machine" });
   assert.deepEqual(managed("posture", { posture: { tools: "auto" } }),
     { decision: "allow", reason: "auto-posture-own-machine" });
+  // 2026-09-17: and the DIRECT lane gets the code it never had. It answered `auto-outbound`
+  // until this wave — the MESSAGE lane's code — so every private direction in the field read
+  // like a post into the room, which is the one distinction this lane's ruling rests on.
+  assert.deepEqual(detail({ toolName: DOPL_CHANNEL_TOOL,
+    input: { op: "manage", action: "direct", channel: CH, agent_id: "a1", body: "go" },
+    toolMode: "bypass", messageMode: "auto_both" }),
+    { decision: "allow", reason: "auto-direct-own-machine" });
 });
 
 test("FIX 1: the reason NEVER moves the verdict — grantDecision is byte-identical", () => {
@@ -161,7 +177,10 @@ test("FIX 1: the code set is CLOSED — nothing produces a reason the renderer h
             { op: "manage", action: "rename", channel: CH, to: "@agent-k3", name: "coder" },
             { op: "manage", action: "end", channel: CH, to: "@agent-k3" },
             { op: "manage", action: "posture", channel: CH, to: "@agent-k3", posture: { tools: "auto" } },
-            { op: "manage", action: "rename", channel: "z", to: "@agent-k3", name: "coder" }]) {
+            { op: "manage", action: "rename", channel: "z", to: "@agent-k3", name: "coder" },
+            // ...and the DIRECT lane's one op, both scopes, for the same membership sweep.
+            { op: "manage", action: "direct", channel: CH, agent_id: "a1", body: "go" },
+            { op: "manage", action: "direct", channel: "z", agent_id: "a1", body: "go" }]) {
             const r = profiles.grantDecisionDetail({ profile, channelId: CH, toolMode, messageMode, toolName, input }).reason;
             if (r) seen.add(r);
           }

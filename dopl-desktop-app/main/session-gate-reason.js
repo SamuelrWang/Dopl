@@ -50,6 +50,15 @@ const GATE_REASONS = [
   //                             ("message approval covers this channel's messages, not this
   //                             operation"), which told an operator to go find an approval that
   //                             does not exist on any surface — the F-320 dead end, one op later.
+  //                             ⚠ **AND `manage.direct` STOPS ON IT TOO, SINCE LATER THE SAME
+  //                             DAY** — the direct lane is the manage lane's conjunction exactly
+  //                             (tools `bypass` AND the outbound half), so the operator's fix is
+  //                             the SAME TWO SETTINGS and a fourth code would be a second name
+  //                             for one remedy. It had been narrated `channel-op-approval-
+  //                             required` since the lane shipped on 2026-08-31, which is the
+  //                             identical dead end one op sideways. ⚠ THE CODE IS NAMED FOR THE
+  //                             OP FAMILY, NOT FOR THE `posture` VERB, which is what lets it
+  //                             cover four actions honestly.
   'launch-depth-capped', //      ...and the DENY half: this session is at MAX_LAUNCH_DEPTH, so no
   //                             posture can open it (`session-own-launch.js`). ⚠ IT IS NOT
   //                             `hard-denied`: that code means the PROFILE refused a tool, and
@@ -83,6 +92,17 @@ const GATE_REASONS = [
   //                             `launch_agent` that BOTH axes covered — the audit answer to
   //                             "what asked this machine for a process with no click?", which no
   //                             outbound code can give, because nothing left as CONTENT.
+  'auto-direct-own-machine', //  2026-09-17: an own-channel `manage.direct` that BOTH axes
+  //                             covered — an agent steering ANOTHER of this operator's running
+  //                             agents through the private mailbox (`session-own-direct.js`,
+  //                             Samuel's 2026-08-31 ruling). ⚠ **ITS OWN CODE, AND THE LANE HAD
+  //                             NONE UNTIL THIS CHANGE**: it answered `auto-outbound`, the
+  //                             MESSAGE lane's code, so every private direction in the field was
+  //                             indistinguishable in `listener.log` from a post into the room —
+  //                             the one distinction this lane's whole ruling rests on. ⚠ AND IT
+  //                             IS NOT AN OUTBOUND CODE FOR `auto-launch-own-machine`'S REASON:
+  //                             a direction buys a TURN on a process on this Mac, and nothing
+  //                             left the room as CONTENT anybody in it can read.
   'auto-rename-own-machine', //  2026-09-17: an own-channel `manage.rename` BOTH axes covered.
   'auto-end-own-machine', //     ...an own-channel `manage.end`.
   'auto-posture-own-machine', // ...and an own-channel `manage.posture`.
@@ -160,6 +180,16 @@ function makeGateReason(deps) {
     // message setting would send the operator to widen a posture that is already wide enough.
     // A launch naming ANOTHER channel is not this case and falls through, as a post's does.
     if (d.isOwnMachineLaunch(a.input, a.channelId)) return 'launch-posture-required';
+    // ⚠ 2026-09-17: AND SO DOES `manage.direct`, WHICH HAD BEEN FALLING THROUGH SINCE THE LANE
+    // SHIPPED (2026-08-31). It stops on the conjunction, never on the message axis alone, so
+    // `channel-op-approval-required` was the F-320 sentence one op sideways: an approval with no
+    // surface, over a fix that is TWO settings. ⚠ IT SHARES THE MANAGE CODE RATHER THAN TAKING A
+    // FOURTH: the remedy is byte-identical, and a code an operator cannot act on differently is
+    // a code that should not exist. ⚠ ASKED BETWEEN THE LAUNCH ARM AND THE MANAGE ARM, MIRRORING
+    // `grantDecision`'s own order (launch, direct, manage) — the three predicates are disjoint,
+    // so the order buys nothing today and is kept because "mirror the gate" is the only rule that
+    // has ever kept this function honest. A direct naming ANOTHER channel falls through.
+    if (d.isOwnMachineDirect && d.isOwnMachineDirect(a.input, a.channelId)) return 'manage-posture-required';
     // ⚠ 2026-09-17: AND THE THREE MANAGE VERBS STOP ON THE SAME FACT, WHICH IS WHY THIS ARM HAD
     // TO EXIST. They fell through to `channel-op-approval-required` below, whose sentence is
     // "message approval covers this channel's messages, not this operation" — false here twice
@@ -259,6 +289,13 @@ function makeGateReason(deps) {
       // is the only one that is not a message: nothing left this machine as CONTENT, and an
       // audit line claiming otherwise would put a launch under "what did my agent say".
       if (d.isOwnMachineLaunch(a.input, a.channelId)) return 'auto-launch-own-machine';
+      // ⚠ 2026-09-17: the DIRECT lane is asked next and for the same reason — a direction is not
+      // a message either, and until this line it answered the `auto-outbound` fall-through below,
+      // which claims "the agent sent a message into its own channel". ⚠ A LITERAL AND NOT AN
+      // INJECTED MAP, where the manage lane below needs one: that lane has THREE codes over three
+      // verbs, this one has a single op and a single code, so the launch lane's shape above is
+      // the one that fits. The PREDICATE is still the lane's own, injected like every other.
+      if (d.isOwnMachineDirect && d.isOwnMachineDirect(a.input, a.channelId)) return 'auto-direct-own-machine';
       // ⚠ 2026-09-17: the MANAGE lane is asked with it and for its reason — none of these three
       // is a message either. WHICH verb ran is answered by the LANE's own map rather than by a
       // branch per action here, so the explainer holds no second opinion about which code belongs
