@@ -1,0 +1,1218 @@
+# 00 — MASTER: workspace parity with the desktop home space
+
+**Synthesis of the six area audits (01–06) plus the KB snapshot (07), built 2026-09-17 against
+`docs/workspace-parity` @ `03506fcd` (= `master`). Docs-only; no source file was changed.**
+
+> ⚠ **Every `path:line` in this document is a MEASUREMENT taken 2026-09-17, not an anchor.**
+> CLAUDE.md § *Standing rules for writing docs* rule 2 says a bare line number is wrong within a
+> day. The symbol is the reference; the number is a finding aid. Re-grep before acting.
+> The 500-line cap is a **code** rule (`eslint.config.mjs › "max-lines"` over `src/**`,
+> `packages/*/src/**`, `apps/*/src/**` — INVARIANTS §1); docs are not capped, so this is one file.
+
+---
+
+## 0. Read me first
+
+This is the master list for bringing **workspaces** up to the **desktop home space**, and the
+roadmap for getting there with less code than we have now, not more.
+
+**The premise in the brief was wrong in one way that changes the plan.** There is **no web
+workspace app**. `find src/app -name 'page.tsx'` returns 21–23 routes and not one is
+workspace-scoped (01 §0; 03 §0). The hosts that actually exist are:
+
+1. **WS** — the desktop workspace pages (`apps/desktop-ui/src/pages/*`), eight routed pages in a shell.
+2. **HOME** — the desktop `/home` account surface (`apps/desktop-ui/src/pages/home/**`).
+3. **GUEST** — the web `/c/{containerId}` lane, the only product surface left on the web.
+4. **DEMO** — the marketing hero, a fourth **read-only** host that re-renders /home's chrome.
+
+So parity is a **WS ↔ HOME** question, with GUEST as a genuinely different-in-kind lane and DEMO as
+a reason some /home code must live in `src/` rather than `apps/`.
+
+**Headline numbers.** The six audits carry well over 500 inventory rows between them; deduplicated
+they become **183**: **40 to port**, **41 to keep**, **34 to remove or change**, **49 rulings for
+you**, **19 reverse-map rows** — plus **63 UI/UX differences**, **9 waves**, and **≈1,600 lines** to
+move down into the shared tree against **≈8,200** lines of /home composition that stay where they
+are. **Eight rulings block wave 1: R-08, R-18, R-19, R-20, R-21, R-22, R-45, R-46.**
+
+---
+
+## 1. Executive summary
+
+**1. There is no web workspace app, so parity is a two-host question, not a three-host one.**
+The website is retiring; `src/features/workspaces/url.ts:16-18` already hands workspace deep links
+to `dopl://open/{segment}`. Anything scoped as "fix the web workspace pages" is scoped against a
+surface that does not exist. *(03 §0; 01 §0)*
+
+**2. The channel surface is already one implementation. What is broken is smaller and sharper than
+"the workspace page is old."** Three things: one capability switched off for workspaces
+(`artifacts`), **four hand-wirings of one component** that have already drifted (the agent pane on
+WS renders no colour), and **one slot that replaces a body** instead of adding to it — which is the
+exact mechanism that has now lost a capability on /home three times in three weeks. *(01 §A/§C;
+02 §0/§C; 06 "The one hazard this archive exists to prevent")*
+
+**3. The expensive fork is underneath the UI, not in it.** "Which channels am I in and what is
+their state" is answered by **three projections, two routes, two client caches and two hand-written
+cache-to-cache bridges** — and that has already produced a user-visible bug Samuel reported
+("the bookmark icon like alway breaks and is super buggy", `use-home-channel-sync.ts:23-34`). One
+projection with `scope=container|account` deletes both bridges. *(05 §A.2, §B.2)*
+
+**4. Parity runs both ways, and the home side has two live gaps plus an orphan class.** /home has
+no Chats face and no Skills face, while `dopl_chats(op="export")` with no `workspace=` already
+resolves the caller's personal container and files a chat **nothing in the product lists**. /home
+also mounts none of the guidance layer and no `MyAccessProvider`, so `canEdit` falls open there.
+Conversely /home's Overview analytics (credits by channel / person / tool, live agent board, token
+spend, a range switcher) is the one place the home space is genuinely ahead in **function**.
+*(04 §B-1, §B-2, §B-6, §B-8; 03 §A12, §C3)*
+
+**5. Nothing here is safe to start today — gates before ports.** The **root lint is red** at HEAD
+(F-688, sixteen unexempted files over the 500-line cap), **/home cannot tell a member from a guest**
+inside a container (F-343, `containerTarget.role` hardcoded `"owner"`), and a ruling that changes
+**workspace** behaviour is recorded but unexecuted (F-513, three copies of the predicate still ask
+`kind === 'link'`). Samuel's own standing rule: red CI is a P0, and the prior drift audit's advice
+was *"Gates first… without them §4 is re-audited in six weeks."* *(06 §C.0, §C.1, P25; 04 §0.6)*
+
+---
+
+## 2. Parity map — the five lists
+
+Rows are deduplicated across 01–06. Each keeps its strongest `path:line` evidence and names the
+research doc it came from (e.g. "01 §A row 5").
+
+### 2.1 — List 1: PORT to workspaces (functionality)
+
+**Size:** S ≤ 1 day · M = a few days · L = its own wave.
+**Mechanism:** flag flip · hand-wiring · collapse duplicate · new adapter · new code · move down.
+
+| # | Item | What home has | What workspace has | Mechanism | Size | Depends on | Ref |
+|---|---|---|---|---|---|---|---|
+| P1 | Agent pane colour banner | `color` resolved off `data.liveAgents` (`surface-agent-view.tsx:54-58`) | never passed (`overlays.tsx:73-86`) → `agent-panel.tsx:179` defaults `null` | collapse duplicate (C1) | S | — | 01 §A row 5; 02 A.4 P2 |
+| P2 | One wiring of `ChannelsAgentPanel` | `SurfaceAgentView` (12 props derived from `data`) | 14 forwarded props through `ChannelsOverlays` | collapse duplicate | S | — | 01 §C1; 02 §C1 |
+| P3 | Artifacts face (list + opened artifact) | `artifacts: true` (`relationship-record.tsx:143`) | flag never passed; default `false` (`info-panel.tsx:91`) | flag flip | S | R-16, F-712 | 01 §A row 49; 02 A.2 R1/R4/R5 |
+| P4 | Threads↔Artifacts toggle + tab-heading flip + badge drop | drawn (`threads-tab.tsx:163-181`, `info-panel-tabs.ts:91`) | never engages | rides P3 | S | R-16, R-17 | 02 A.2 R2/R3 |
+| P5 | Artifacts flat column + clip / member-ceiling notes | `artifacts-tab.tsx:111-123`, `:48`, `:222-227` | n/a | rides P3 | S | R-16 | 02 A.2 R8/R11 |
+| P6 | Curated `info_card` custom rows (hover ×) | `person-info-tab.tsx:305-314` | `grep -c infoCard info-tab.tsx` = **0**, though the column is validated and PATCH-writable | collapse duplicate | M | R-19 | 01 §A row 60 |
+| P7 | ONE info-tab body (absorb `person-info-tab.tsx`) | forked 395-line body | `info-tab.tsx` | collapse duplicate | M | R-19..R-22, R-45, R-46 | 01 §C2 |
+| P8 | `activity: {bins, loading}` on `ChannelInfoTabContext` | own hook wrapper `person-thread-activity.tsx:47` | handed down `info-tab.tsx:248-263` | collapse duplicate | S | — | 01 §A row 51; 02 §C4 |
+| P9 | `members` + `headerEditable` on the context | second `useChannelMembers` (`person-info-tab.tsx:166-169`); rule spelled twice (`:144` / `info-tab.tsx:106`) | one source | collapse duplicate | S | — | 01 §A rows 54/55 |
+| P10 | Channel-record loading ghost, promoted to the shared tree | real two-column shape, tab count by import (`channel-record-skeleton.tsx:4,61`) | `channels-skeleton.tsx:8-12`, self-described *"a rough fit"*; GUEST uses kit generics (`guest-channel.tsx:115-117`) | move down + new call sites | S | — | 01 §C4; 06 P13; F-220 |
+| P11 | Recency wells on the channel picker (Pinned / Recent / Earlier) | `relationship-list.tsx:125-128` over `home-channel-wells.ts:48-52` (already in `src/`) | flat tree (`sidebar.tsx`) | new call site over a shared module | S | R-03 | 01 §A row 71; 03 §E1 |
+| P12 | Channel row card face + avatar stack + selected face | `home-channel-row.tsx:129` wearing `HOME_CARD_FACE` (`home-card-marks.tsx:37,68`) | flat 36px `raised-tab` (`sidebar-rows.tsx:52-63`) | new call site | M | R-03, R-40 | 03 §B4; 01 §A row 74 |
+| P13 | Unread **mention count** `@ N` on a channel row | `HomeChannel.unreadMentions` (`types.ts:164`) ← `repository-unread.ts › listMyMentionStamps` | boolean dot only; `sidebar-rows.tsx:27-31` forbids inventing a count | new code (server projection) | M | R-28 | 01 §A row 72; 05 A12 |
+| P14 | Last-message preview on a row | `lastMessagePreview` on the wire (`types.ts:128`) — **rendered by nothing since 2026-09-13** | absent | new code, or delete the field | S | R-28 | 01 §A row 73; 05 A15 |
+| P15 | Agents-tab recency wells recognised as a workspace surface | four wells (`agents-tab.tsx:417` → `agents-wells.tsx:123`) | **identical — already shared** | none (verify + keep) | S | — | 02 A.3 G4 |
+| P16 | Held-gate Approve/Deny reachable from the agent WINDOW | absent on both hosts (`agent-window.tsx:383-387`) | absent | new wiring | M | R-24 | 02 A.5 W3 |
+| P17 | One `AgentStats` | `agent-panel.tsx:461-483` | `agent-window.tsx:403-439` (`AgentWindowStats`) | collapse duplicate | S | — | 02 §C2 |
+| P18 | One template save/remove orchestration | `agent-editor.tsx:222-275` | `agent-templates-core.tsx:141-176` | collapse duplicate → `use-template-save.ts` | S | — | 02 §C3 |
+| P19 | ONE page header strip (no title) | `home-header.tsx:37-102` — one 36px row | **five recipes**: H1 overview greeting, H2 agents 52px bar, H3 settings bar, H4 skills, H5 knowledge hero | move down + new adapter | L | R-02 | 03 §A.4, §D4 |
+| P20 | Per-page search | `home-search.tsx:44-67`, kit `.search-expand` pinned at 260px | none anywhere in the workspace shell | move down + one line per page | M | R-04 | 03 §A9, §E3 |
+| P21 | `PAGE_ACTION_BTN` as the one 36px black pill | `src/shared/ui/page-action-button.ts:29-30` | `TAB_ACTION` (`bits.tsx:66-73`) + ~20 hand-cut `auth-btn-3d` sites with `text-white` | collapse duplicate | M | — | 03 §B1–B3, §E12 |
+| P22 | `RECORD_SURFACE` — one declaration of the level-2 card | `pages/home/index.tsx:284-285` (utility string) | `app-shell.module.css:140-150` (CSS module) | collapse duplicate | S | — | 03 §A6, §D14 |
+| P23 | `FullScreenError` wrapper | `pages/home/index.tsx:135-148` | `app-shell.tsx:193-199` — byte-identical | collapse duplicate | S | — | 03 §A28, §D13 |
+| P24 | `.glass-panel` / `.hairline` / `.hairline-strong` in the SPA kit | n/a | in `globals.css:904,622,626`, **absent from `kit.css`** | move down + gate | S | R-41 | 03 §B22, §D12 |
+| P25 | `Crossfade` on in-page selection changes | `pages/home/index.tsx:294` | route remount, no transition | new call sites | S | R-05 | 03 §B14, §C2 |
+| P26 | `FormDialog` conformance for the 9 remaining input forms | 2 /home dialogs conform | 5 conform, **9 `Todo`** (`create-channel-dialog`, `direct-message-dialog`, `base-settings-modal`, `create-base-dialog`, `move-to-dialog`, `create-team-dialog`, `members/invite-dialog`, `create-skill-dialog`) | new code, 9 small rewrites | M | — | 03 §B16 |
+| P27 | Flat section language (`SectionPanel` on `--home-panel`) | `home.module.css:165-168`, no hairline | `SECTION_PANEL_GROUND` keeps a hairline; `SectionBox` (concave) live in 8 files | CSS + delete consumers | M | R-39 | 03 §B7/B8, §E5 |
+| P28 | The account palette skin over the shared channel surface | six `:global()` rules in `home.module.css:56-168`, attribute-hooked | neutral kit hairlines | CSS promotion (or keep the fence) | M | R-38 | 01 §D; 03 §B11, §E10 |
+| P29 | Knowledge card grid as a variant of `knowledge-v2` | `home.module.css:200-249 › .kbCards` (a 4th `--kv-*` rebind) | `.cardGrid` in `knowledge-v2` | collapse duplicate | S | — | 03 §A15, §D10 |
+| P30 | ONE channel-list resource (`?scope=container\|account`) | `GET /api/home/channels` → `HomeChannel` (15 fields) | `GET /api/channels` → `Channel` (26 fields) + a third, `AccountChannelStatus` | new adapter | L | R-26, R-27 | 05 §A.2, §B.3 collapse 1 |
+| P31 | Delete both cache-to-cache bridges | `use-home-channel-sync.ts` (113 lines) + `use-home-unread-refresh.ts` | n/a | rides P30 | S | P30 | 05 §B.2 |
+| P32 | ONE wire name for `channel_members.favorited_at` | `HomeChannel.favoritedAt` | `Channel.myFavoritedAt` | rename, cross-package | M | R-27 | 05 §A10, §R7 |
+| P33 | ONE overview **series** vocabulary (`metric`, `range`, zero-fill, `truncated`) | `credits\|mcp\|messages`, 4 ranges, `&channel=`, `&month=` | `messages\|mcp\|threads`, fixed 31-day, `&channelId=` | new adapter | M | R-29 | 05 §A19, §B.3 collapse 2 |
+| P34 | Credits / token-spend / agent-board rails on the workspace Overview | `overview-panels.tsx:334` `CreditsBar`, `:191` `TokenSpendPanel`, `overview-agent-board.tsx` | **no spend surface at all** (`grep -n credit pages/overview/*.tsx` → 0) | new code, fenced per container | L | R-29 | 02 A.8 C-2/C-3; 04 §B-8 |
+| P35 | `truncated` + one clipped-list wording on merged reads | three non-reporting ceilings (200/50/500) | reports `truncated` | collapse duplicate | S | P30 | 05 §B.3 collapse 3 |
+| P36 | `isSoleAudience` as one derivation | hand-spelled `memberCount === 1` | same, in five places | collapse duplicate | S | R-08 | 05 §D.3 |
+| P37 | `containerNoun(kind)` for agent-facing copy | `containerKindLabel` exists (`workspace-directory.ts:218`) | ~8 hardcoded "this workspace" strings in `tools/map.ts`, `tools/members.ts`, `channel-ops-hold-workspace.ts` | collapse duplicate | S | — | 05 §A44, §D.3 |
+| P38 | One liveness mechanism for the channel list | no doorbell; invalidates off the transcript cache entry | the channels doorbell (`live.ts › useChannelsLive`) | collapse duplicate | M | P30, F-222 | 05 §A50 |
+| P39 | Per-container `AccountRail` / shell assembly in the shared tree | `account-rail.tsx` (92+152) and `app-shell.tsx` (327) are SPA-only; the landing had to re-cut the rail | same files | move down behind the `*Core` idiom | L | — | 03 §D2 D1/D2/D3 |
+| P40 | `BarSeries` / `PLOT_HEIGHT_CLASS` in the shared tree | `apps/desktop-ui/src/components/charts/bar-series.tsx` (256) | same file | move down | S | — | 03 §D2 D5 |
+
+**Row count — List 1: 40 rows.** Mechanism: collapse duplicate 18 · new code 7 · move down 6 ·
+flag flip 1 · new adapter 3 · rides another row 3 · new call sites 2.
+Size: S 22 · M 12 · L 6.
+
+### 2.2 — List 2: KEEP in workspaces as-is (workspace-only, or different in kind)
+
+| # | Item | Why it stays | Risk the uplift poses | Guard (test / gate) | Ref |
+|---|---|---|---|---|---|
+| K1 | `memberManagement` defaulting `true` on WS | /home's `false` names an operation a link container cannot perform at any size (`LINK_CONTAINER_CLOSED`) | a "simplification" that makes the flag global kills Add members + Delete channel on WS | `workspaces/server/link-container-guard.test.ts` | 01 §A row 12; 04 §A-1 |
+| K2 | Create-channel / DM dialogs | /home's create mints a **container**; WS's creates a channel in one. Different acts | folding them loses the container mint | `home/server/service-writes.test.ts` | 01 §A row 6 |
+| K3 | First-run explainer (`ChannelsOnboardingCore`) | the only consumer of the `Link` prop; /home has no router link | deleting it takes the router-free rule with it | `channels-core` suite | 01 §A row 7 |
+| K4 | Channel tree nesting, Favorites and DM sections | a workspace tree nests threads and sections; a flat well column would lose that structure | R-03(a) would delete real structure | — (**gap**, see §7) | 03 §E1 |
+| K5 | `Link`, `initialChannelId`, `onRosterChanged` | workspace-only by construction — a pinned host owns no channel LIST to invalidate | removing them breaks list invalidation on roster change | `channels-core` suite | 01 §B; 02 §B |
+| K6 | `webView` single column + `selfManagement:false` (GUEST) | one flag, two controls, one story (Samuel R2/R3 2026-08-25) | splitting the flag ships a dead control | `guest-channel.test.tsx`, `app-shell-guest.test.tsx` | 01 §A row 13/19 |
+| K7 | Members console v2 (roster ∥ teams, 4 detail tabs) | home's members-lite is the **ruled** shape, not a stub; three of v2's capabilities have no referent in a link container | 37 files / 4,941 lines with **4** unit tests and no server or RLS suite — the least-covered module in the set | `members/activity-visibility.test.ts`, `members-v2/visibility.test.ts`, `pages/members/index.test.tsx` | 04 §A-1, §B-3 |
+| K8 | Teams + `resource_grants(scope_type='team')` | `offersTeamScope === (kind === "standard")`, Samuel 2026-09-08 | reading the two DROP migrations as a retirement deletes a **live capability** (B4 retires the AXIS, not the CAPABILITY) | `teams/server/repository-tables.test.ts` (L225), `agent-team-axis.test.ts` | 04 §A-2, §C-4 |
+| K9 | Email invitations + standing join link + join requests | a workspace grows by invitation; a container grows one person at a time by a bound single-use token. Two proofs, both correct | collapsing the two doors loses `assertMemberAddable`'s fence | `link-container-guard.test.ts`, `workspaces/components/{accept-invite,join-link}-card.test.tsx` | 04 §A-3/§A-4, §B-7; 05 §A36 |
+| K10 | `claimBoundLink` writing the member row itself | pinned as an **absence** — no mock would catch tidying it through the shared guard | a refactor that routes it through `assertMemberAddable` closes the only home admission door | `link-container-guard.test.ts` | 05 §A38 |
+| K11 | The workspace Knowledge create **audience picker** | ruled 2026-08-27 with a reason: that button names no audience, *"so it is the one place the question is still worth asking"* | removing it reverses a ruling rather than finishing a port | — (confirm, R-42) | 06 §A.4; 04 §A-8 |
+| K12 | The knowledge **audience ceiling** | link container with a peer → only bases carrying a channel grant, narrowed to the session's channel; a null member count **fails closed** | any merged read that loses the null-fails-closed arm widens agent reach | `knowledge/server/rls-redteam*.test.ts` (2 suites) | 04 §A-8; 05 §D.2 |
+| K13 | Ontology audience: `standard` → `unrestricted` | a workspace board is workspace-wide by definition; the share trigger RAISEs for any kind but `link` | rewriting the early return as `!== 'link'` silently admits `personal` (F-564 shape) | `ontology/server/rls-redteam.test.ts`, `guest-lane.test.ts` | 05 §A33, §C.5 |
+| K14 | `workspace_activity_events` + its admin-only verb set | the only server-side-filtered audit surface in the product; three of its verbs have no producer in a link container | extending it to home builds an oversight tool for a room with nothing to oversee | `members/activity-visibility.test.ts` | 04 §C-3, §E-8 |
+| K15 | Tour, onboarding flow, welcome popup on the workspace shell | the tour's five steps are keyed to `NavSection`; a home tour needs a second vocabulary | a shell refactor can silently break the first-run path | `deep-link-target.test.mjs` (the four-file page rule) | 04 §A-19/§A-21 |
+| K16 | Two plan sets picked by kind (`plansForKind`) | ruled explicitly: personal wallet vs seat wallet, *"I don't think it should be pooled"* | a surface reading the wrong set badges a plan the container cannot hold | `webhook-plan.test.ts › planFitsKind`, `checkout/route.test.ts` | 04 §A-14; 05 §E4 |
+| K17 | The wallet routing table (`containerTarget`) and rule B | `link`'s arm is a **fallthrough**, not a branch, so a fourth kind inherits the safe answer | rewriting it as `=== "link"` breaks that; moving where a call declares its channel **moves who pays** | 30 billing suites; `credits-link-reroute.test.ts`, `credits-channel-attribution.test.ts` | 04 §D-3; 05 §E1/E2 |
+| K18 | `resolveActiveWorkspace` auto-targeting **standard only** | a container is never auto-targeted | any "helpful" fallback writes rows nothing can find | `resolve-active-workspace.test.ts` | 05 §A6 |
+| K19 | `assertMemberAddable` read **negatively** | a fence must inherit: a fourth kind gets the refusal rather than opting in | the positive-form rule (G3.1) applies to LABELS, not to this fence | `link-container-guard.test.ts` | 05 §G3 rule 1 |
+| K20 | `GET /api/workspaces` unfiltered by contract | `main/channel-listener.js` fans over this exact list | "tidying" the route at the server breaks the desktop listener | INVARIANTS §4A; `check-role-drift.ts` | 05 §A3 |
+| K21 | Mentions as a collapsed disclosure with a badge on WS | ruled in kind — *"a `defaultOpen` flag would make one component mean two layouts"*; `inset` deliberately has **no default** | unifying the wrapper reverses a ruling | `mentions-list` suite | 01 §A row 62; 06 §D.1 |
+| K22 | `emptyLine` on `MemberRoster` (on for WS, off for HOME) | a home channel always has the caller in it | — | `person-members` suite | 01 §B |
+| K23 | Per-section create affordance on /home vs page-header create on WS | sections pre-decide the scope on purpose | one create button loses the scope decision | `agent-panels` suite | 02 A.6 E5 |
+| K24 | Template shelf (`"home"` vs `"workspace"`) | two PLACES over one table; the exclusion runs **both ways** | an omitted `?shelf=` **widens** — it means both shelves | `agent-templates/server/service-shelf.test.ts`, `check-knowledge-type-drift.ts` | 04 §A-10; 06 §A.4 |
+| K25 | Author marker (`by <member>`) on /home template cards only | a security signal specific to a shared container | — | `template-editor-surface.test.tsx › HOME_FILES` | 02 A.6 E7 |
+| K26 | Analytics write paths inside `withAuth` / `withWorkspaceAuth` | 617 lines, ONE test, instrumented in the hot wrappers | anything that touches a wrapper touches analytics | (**gap** — 1 test) | 04 §A-22 |
+| K27 | `/admin/**` (oldest UI in the tree) | out of scope; retires with the website | a kit sweep that "fixes" it wastes a wave | — | 04 §A-23 |
+| K28 | Get-started + marketing + auth glass/3D kit | DESIGN-SYSTEM exempts them; they retire with the site | a `text-white` sweep that includes them is noise | `docs/DESIGN-SYSTEM.md:30-31` | 03 §B3 note; 04 §F-5 |
+| K29 | The POP thread window as a deliberate subset | transcript + composer only; no info column | adding an info column makes it a second channel host | — | 01 §0 |
+| K30 | `PANEL_WELL` (no `face`) on the Threads and Agents tabs | `recency-wells.tsx:130-131` forbids a `face` there; `face` varies FILL and may never vary LAYOUT | a "consistency" pass that adds `PANEL_WELL_ON_PANEL` there breaks a ruling | `collapse-wells.test.tsx` | 02 §D |
+| K31 | Shared well **storage keys** across hosts | `well-state.ts:44-47` scopes by SURFACE, not by host — deliberate | per-host keys would make one surface remember two states | `well-state` suite | 02 §D |
+| K32 | Absence pins: no launch control on either Agents face; no `#<id>` tie-break; `HIDDEN_TOOLS` empty; `unarmed_room` with no producer | each is a ruling enforced as a "this does not exist" assertion | a wave that adds a surface will be tempted to delete the test — which deletes the ruling | `home-agents-tab` absence tests, `agent-id-visibility.test.ts`, `law-scan.test.ts` | 04 §F-5a |
+| K33 | `workspace_credit_usage` + `consume_workspace_credits`, `default_workspace_of` | marked retired-from-writes; the DROP is its own later migration | deleting a marked-retired object early acquires an unplanned migration | INVARIANTS §12 | 04 §C-8 |
+| K34 | The desktop `main/` tree | **already at parity by construction** — no "home" concept; every store key is channel-id-keyed and container-blind | introducing a kind branch there creates the fork that does not exist yet | `test/session-*.test.mjs` | 05 §G.4 |
+| K35 | Deletes permanent + confirmed + app-only; MCP deletes refused at one choke point | standing ruling, app-wide | any new destructive control in the uplift needs a confirm, and no MCP delete op may appear | `law-scan.test.ts`, `delete-block.test.ts` | 06 §A.9, P14 |
+| K36 | `channels.deleted_at` as a **DM-only** mechanic | a tombstoned DM is live product state | a tombstone-cleanup migration that includes `channels` destroys product state | `channels/schema-sql.test.ts` | 06 §A.9 |
+| K37 | `HomeAgentRow` carrying no `model` / `toolLabel` / `tokensSpent` | *"a peer learns THAT an agent is working, never what it costs its operator"* | porting the agent board to a workspace must port the fence, not just the panel | `20260822150000` operator-only telemetry fence | 05 §F R2 |
+| K38 | `workspace_token_spend` fenced per OPERATOR | a member-scoped read *"would leak a colleague's spend"* | a workspace token-spend strip must answer the privacy half first | migration `20260927120000` L149-153 | 05 §A21, §F R2 |
+| K39 | Guest floors (14) and the guest-role model | `guest` below `viewer`; the LINK carries the grant | a shell/route refactor that moves a floor re-opens the inverted blast radius | the guest floor set, 7 suites | 04 §F-2 |
+| K40 | `revisions` families (5) as a shared primitive | family-agnostic by design; **chats and skills are deliberately NOT in it** | extending revisions to skills/chats is a separate project | `revisions/server/service` suite | 04 §A-12 |
+| K41 | The seven `canSee*` predicates as **kind-blind** | RLS parity is already achieved by construction; not one SELECT policy reads `workspaces.kind` | letting a container capability become a visibility gate is the one way to break it | `check-rls-pair-gate.ts`, the 7-file `rls-redteam` job | 05 §C intro, §G.3 rule 2 |
+
+**Row count — List 2: 41 rows.**
+
+### 2.3 — List 3: REMOVE or CHANGE in workspaces
+
+"Does the reasoning hold for multi-member?" is the column Samuel asked for: it is where a home-shaped
+deletion could be wrong for a 20-person room.
+
+| # | Item | Home replacement | Ruling (date / source) | Holds for multi-member? | Ref |
+|---|---|---|---|---|---|
+| X1 | "Linked threads" section + `HARDCODED_LINKED_THREADS` (`info-tab.tsx:229-244`) | nothing — /home never had it | marked hardcoded at its render site since 2026-08-18; INVARIANTS §5 dead-control rule | **Yes** — a dead control is worse in a busy room | 01 §A row 59, §E-7 |
+| X2 | The two inert `IconButton`s in the WS Members heading (`info-tab.tsx:271-272`) | /home deliberately did not copy them | Samuel 2026-08-25, `ENGINEERING.md:3662`: *"a port is not a transcription"* | **Yes** | 01 §A row 63, §E-6 |
+| X3 | Threads-count row (`info-tab.tsx:224-226`) | the tab row already badges Threads (`info-panel-tabs.ts:75`) | minimal-copy ruling | **Yes** | 01 §A row 58, §E-8 |
+| X4 | `knowledge` capability + `knowledge-tab.tsx` + the fifth-tab width branch + `channelPaneTabs`'s `knowledge` arm | the knowledge SHELF (two /home sections) | F-340 (2026-08-27 desktop), Samuel 2026-09-04 (web) → F-666; *"re-adding the face needs Samuel's word"* | **Yes**, but it is a ruling either way — see R-18 | 01 §A row 15, §E-4; 02 §B |
+| X5 | `person-info-tab.tsx` (395 lines) | the one shared `info-tab.tsx` body | the slot-replaces-body defect, INVARIANTS:151 | **Yes** — the fork is the bug | 01 §C2 |
+| X6 | `person-thread-activity.tsx` (63 lines) | `info-tab.tsx:248-263` from context | F-316 closed the data gap 2026-09-05; this is its composition residue | **Yes** | 01 §C3; 02 §C4 |
+| X7 | `HARDCODED_THREAD_ACTIVITY` (`fixtures.ts:93`) + two stale comments | the wired strip on both hosts | *"keep the PICTURE and make it true"* (Samuel 2026-08-25); both sides are now wired | **Yes** — ⚠ re-derive first; `bits.tsx › agentAccent` (F-711) is the cautionary precedent | 02 §C5 |
+| X8 | `channels-skeleton.tsx`'s "rough fit" two-pane ghost | `ChannelRecordSkeleton`, geometry by reference | Samuel 2026-08-28 / 2026-09-10 / 2026-09-13, three complaints; F-220 | **Yes** — the 2026-09-10 complaint was explicitly about switching workspaces | 01 §C4; 06 §C.2 |
+| X9 | `AppPanel` (`src/shared/layout/app-shell/app-panel.tsx:20`) — zero call sites | none needed | delete-don't-disarm (P2) | **Yes** | 03 §E11 |
+| X10 | `TAB_ACTION` as a second declaration of the 36px black pill | `PAGE_ACTION_BTN` in `src/shared/ui/` since 2026-09-17 | `ontology-view.tsx:9-15` records the tree-boundary workaround that **no longer applies** | **Yes** | 03 §B2, §E12 |
+| X11 | ~20 hand-cut `auth-btn-3d` sites (4 heights, 5 radii, `text-white`) | the constant | `page-action-button.ts:21-24` names the exact violation | **Yes**; ⚠ exclude the auth/onboarding/billing exempt set | 03 §B3 |
+| X12 | Five page-header recipes (H1–H5) + the Knowledge hero band and its marketing paragraph | one header strip | minimal-copy ruling (2026-08-19, reaffirmed 2026-09-17) | **Yes** — but the hero deletion needs Samuel (R-02) | 03 §A.4, §E2 |
+| X13 | `SectionBox` (concave) consumers ×8 | flat `SectionPanel` | Samuel 2026-09-13: *"you're adding this extra border line around the gray. I did not ask for that"* | **Yes** — needs R-39 | 03 §B8, §E5 |
+| X14 | `home.module.css › .kbCards` / `.kbCell` (a fourth `--kv-*` rebind) | a grid variant of `knowledge-v2` | one-fact-one-place (P8) | **Yes** | 03 §D10 |
+| X15 | `pages/home/index.tsx` + `app-shell.tsx` duplicate error wrapper | `FullScreenError` | trivial | **Yes** | 03 §A28 |
+| X16 | Two declarations of the level-2 record card | `RECORD_SURFACE` | *"the single most load-bearing duplication in the document"* | **Yes** | 03 §A6 |
+| X17 | `use-home-channel-sync.ts` + `use-home-unread-refresh.ts` (cache bridges) | one projection | they exist **only** because there are two caches | **Yes** — a multi-member room makes the staleness worse | 05 §B.2 |
+| X18 | `HomeChannel.lastMessagePreview` on the wire with no renderer | either render it (P14) or delete it | Samuel 2026-09-13: on the list column a last message *"just doesn't make sense imo"* | **Re-ask** — a workspace row may want it | 05 §A15 |
+| X19 | The full workspace shell for a non-guest member of a `link` container | `/home` | `app-shell.tsx:84-87` fences only `personal`; L82-83 admits `link` **for guests** | **N/A → this IS the multi-member question.** R-01 | 04 §E-1 |
+| X20 | `/billing/[segment]` rendering Starter/Team for a `link` container | `/billing?plan=pro` | F-678 OPEN; its Team checkout 400s | **Yes** — closed by construction if R-01(a) wins | 04 §C-6 |
+| X21 | `channel_personal_arming` table + its three live policies | nothing writes it; Samuel reversed task 11 on 2026-09-06 | delete-don't-disarm | **Yes** | 05 §C.1, §F R8 |
+| X22 | `knowledge_bases.home_scoped` / `agent_templates.home_scoped` columns | `workspace_id = the personal container` | B10/#18 2026-09-02; drop is HELD in `supabase/migrations-held/` behind two `count(*) = 0` checks | **Yes**, but ⚠ the column is also the rollback path — once dropped the deploy is one-way | 04 §0.4; 05 §C.2 |
+| X23 | Playground (18 files, 4,467 lines, 0 tests, unauthenticated provisioning, 3 static mirror panes) | nothing; the website replaced it and is retiring | **not found as a ruling in this tree** — treat as a question | **Yes** if the site retires | 04 §C-5, §E-9 |
+| X24 | `mcp_tokens.workspace_lock_kind` | superseded, retires in B13 | stated in the migration | **Yes** | 05 §C.1 |
+| X25 | SDK `listKbBases(opts:{shelf?})` — no MCP call site passes it | the shelf resolves server-side (`resolveShelfScope`) | dead param | **Yes** | 05 §A45 |
+| X26 | SDK `getHomeChannels` binding — called nowhere in `packages/mcp-server/src` outside tests | — | `peers`, `peer`, `linkOut`, `pendingLinks` have no agent-facing surface | **Re-ask** — an account-wide agent read may want it | 05 §A46 |
+| X27 | `settings-modal-core.tsx`'s members pane | `/members` is the ONE console | ASK-1 RULED (a) 2026-08-30 — *"delete, don't disarm: there is no nav stub"* | **Yes** — recorded so a parity wave does not "restore" it | 04 §C-1; 06 §A.8 |
+| X28 | `dopl_home(op="create_channel")` | `dopl_workspaces(op="create_home_channel")` | F-621 RESOLVED (Desktop Agent default, Samuel may reverse); the SHAPE is still owed | **Stronger** in a multi-member container — minting a room and inviting into one are different acts | 04 §C-2, §E-7 |
+| X29 | `variant="tab"` wells; the per-device `localStorage` pin; the `channels-v2` name; the flat agent row; the `Agent · <id>` chip; `.selected-ring` | all deleted | six same-day or next-day reversals, each marked *"do not re-derive"* | **Yes** | 06 §A.3, §A.5, §D.6 |
+| X30 | Stale docblock: `channel-surface.tsx:152-160` (*"EXACTLY ONE HOST PASSES `knowledge`"*) | — | code wins; F-666 is the record | **Yes** — a doc bug, fix in the same change | 02 §B ⚠ |
+| X31 | Stale docblock: `authz.ts:34-53` describing the retired TWO-MEMBER CAP and a dropped trigger | — | cap retired 2026-08-26; trigger dropped by `20260830120000` | **Yes** — and it is exactly the multi-member sentence | 05 §F-note 1 |
+| X32 | Stale claims in `packages/contracts/src/workspaces.ts:47-64` (`link` = "ONE or TWO members"; `personal` = "NO ROW HAS THIS KIND YET") | — | both false; `TENANCY_PERSONAL_CONTAINER` is read by no code | **Yes** | 05 §F-note 2 |
+| X33 | `DESIGN-SYSTEM.md:13` claiming the two Overviews share `overview-bits.tsx` | they share only `BarSeries` | doc-vs-code; allocate **F-714** (highest claimed on this branch is F-713) | **Yes** | 03 §E9 |
+| X34 | Stale comments in `person-thread-activity.tsx:10-13` and `thread-activity.tsx:9` naming the fixture | F-316 closed 2026-09-05 | doc bug | **Yes** | 02 §C5 |
+
+**Row count — List 3: 34 rows.** Of these, 12 are deletions of code, 5 are deletions of data-model
+objects, 5 are doc repairs, 12 are changes.
+
+### 2.4 — List 4: NEEDS SAMUEL'S RULING
+
+**This is the section to read.** Every §E from the six audits, plus the archive's §D contradictions
+and §E questions, plus the drift ledger's unruled ASKs that this uplift triggers — deduplicated and
+numbered. One question in plain English, the options, a recommendation, and what it blocks.
+
+**⛔ = blocks Wave 1.** Eight of the forty-nine do.
+
+#### Theme A — Surface and information architecture
+
+**R-01. Should a member of a home-channel container be able to open the full workspace shell?**
+Today, typing `/{link-segment}/members` gives a non-guest member of a relationship container the
+whole eight-row nav, the Members console, Skills, Chats and a Settings page with an owner delete
+(`app-shell.tsx:84-87` fences only `personal`). Nothing links there.
+(a) Redirect any `link` segment to `/home`, like `personal`. (b) Make the nav kind-aware.
+(c) Leave it — it is URL-only.
+**Recommend (a).** One effect, deletes a redirect instead of adding a branch, and closes F-678 by
+construction. *Blocks: Wave 5 (the shell), and R-10.* — 04 §E-1
+
+**R-02. Does a workspace get one header strip, and lose its five page titles?**
+/home has no title at all; the workspace has "Overview", "Agents", "Skills", "Settings" and a
+Knowledge hero band with a marketing paragraph.
+(a) One strip, no titles — the sidebar already says where you are. (b) Keep titles, unify only the
+geometry. (c) Leave five recipes.
+**Recommend (a).** It is the minimal-copy ruling applied to chrome. ⚠ **The Knowledge hero band and
+its paragraph (`knowledge-home.tsx:122-145`) are the one deletion that needs your word.**
+*Blocks: Wave 5.* — 03 §E2
+
+**R-03. The channel picker: two designs, one app.**
+/home picks a channel from 290px of collapsible gray wells holding raised cards with avatar stacks
+and an `@ N` pill. The workspace picks one from a flat tree of 36px rows with no counts.
+(a) The workspace tree adopts /home's column outright. (b) It keeps the tree but adopts the ROW
+(card face, avatar stack, marks) and the well grouping. (c) They stay different — a workspace tree
+nests threads and sections that a flat column would lose.
+**Recommend (b), staged:** card face and wells now, the unread count as its own data change (R-28).
+*Blocks: Wave 4.* — 01 §E-9; 03 §E1; 06 §E2
+
+**R-04. What does search search?** /home's pill filters the channel column. A workspace-wide search
+is a different feature, and the `ui/search-panel` Cmd+K branch is not in this tree.
+(a) Per-page filter, /home's shape, one line of wiring per page. (b) One workspace-wide panel.
+(c) Both. **Recommend (a) now, (b) as its own wave.** *Blocks: Wave 5.* — 03 §E3
+
+**R-05. Does the workspace shell crossfade?** **Recommend: no for route changes, yes for in-page
+selection changes** — which is what `Crossfade`'s three existing callers already do. Needs your word
+only because it is visible motion. *Blocks: nothing.* — 03 §E4
+
+**R-06. Skills, Chats and Ontology have no page skeleton.** `section-skeleton.tsx:15-19` argues that
+inventing three shapes is worse than `PageLoading`; /home has eleven bespoke shapes.
+(a) Uphold that argument — no new ghosts. (b) Build three.
+**Recommend (a)** unless you have seen one of the three flash and disliked it. — 03 §E8
+
+**R-07. Does "Agents" get disambiguated?** /home Agents = template **identities**; the channel info
+column's Agents tab = live **sessions**. The collision was recorded and deliberately not resolved,
+on the argument that the two names live on different surfaces. **The uplift puts them on one.**
+(a) Rename one. (b) Keep both names and rely on context. (c) Rename the tab only.
+**Recommend: your word** — the original ruling says renaming needs it. *Blocks: Wave 5.* — 06 §E10
+
+#### Theme B — Members and permissions
+
+**R-08. ⛔ Confirm F-513: "shared" means any channel with more than one member, whatever the
+container kind.** The ruling exists and three copies of the predicate still ask
+`kind === 'link' && memberCount !== 1`. Honouring it **changes workspace behaviour**: a two-member
+private channel in a standard workspace becomes "shared", turning on the container-publish
+acknowledgement and tightening the knowledge audience ceiling.
+(a) Execute it as its own wave, first. (b) Execute it inside the first surface wave. (c) Amend the
+ruling to link containers only.
+**Recommend (a).** Every row in these audits that reasons about "shared" is currently reasoning
+about the wrong thing, and it is reversible in one predicate — so confirm before we build on it.
+*Blocks: Wave 0, therefore Wave 1.* — 04 §E-11; 06 §E11; 05 §D.2
+
+**R-09. What should a home container's member management be able to do?**
+🔒 **Unbuildable until F-343 lands** — /home carries no caller role (`containerTarget.role` is
+hardcoded `"owner"`), so nothing can be gated.
+(a) Roster + add only (today): a person admitted at `guest` is a guest forever and cannot be
+removed from /home. (b) Add remove/leave — the server already allows it, UI-only change.
+(c) (b) plus a role change after claim. (d) Full members-v2 on home.
+**Recommend (b).** "Departure is removal" is already ruled, and a container you cannot leave from
+its own surface is the sharper defect. — 04 §E-2
+
+**R-10. Should `/{segment}/settings` exist for a link container, and should it offer DELETE?**
+On a relationship container, "delete workspace" means "delete this relationship, and everyone in
+it". (a) R-01(a) makes it unreachable. (b) Make `WorkspaceSectionBody` kind-aware: rename yes,
+delete refused, naming the channel-deletion path instead. (c) Leave it.
+**Recommend R-01(a) first, then (b) as belt-and-braces** — the settings body is shared with the
+modal, and the modal is reachable from /home. — 04 §E-3
+
+**R-11. Is the member Activity tab worth its cost?** A table, a revoked grant, a server-side filter
+with an admin-only verb set and a fail-closed path — for one tab in a console with four unit tests.
+(a) Keep. (b) Keep and pair the presence rule (R-12). (c) Retire the tab, keep the ledger for `/admin`.
+**Recommend (a).** It is the only server-side-filtered audit surface in the product. — 04 §E-8
+
+**R-12. `showPresence` has no server half.** The client hides `lastSeenAt`; the column still ships
+in the roster payload. (a) Scrub it per caller in the members DTO. (b) Drop the client rule.
+(c) Leave it. **Recommend (a), in the same wave that touches the members DTO and not before.** — 04 §E-10
+
+**R-13. Does the guest's workspace CHROME get ported?** ASK-2 (2026-08-30) redirected a guest
+somewhere that works and explicitly left them *"still wearing a nav they cannot use."*
+(a) Port the chrome now. (b) R-01(a) subsumes it. (c) Leave.
+**Recommend (b) then (a)** — the residual is real and was recorded, not fixed. — 06 §E18
+
+**R-14. The four container product questions deferred to you and never answered.** F-296 deleting a
+container blocks nobody · F-297 the public claim surface is unthrottled · F-298 no per-user mint
+quota · F-299 a claim reveals both parties' emails with no accept step.
+**Recommend: answer F-299 at least** — it is a live privacy item and a multi-member container makes
+it worse, not better. — 06 §E17
+
+**R-15. Should the MCP container LOCK arm for a multi-member STANDARD workspace too?** Today it arms
+only for a shared home channel, so a session pinned to a shared standard workspace sees the
+operator's **entire** directory. (a) Keep — a workspace is not a private relationship. (b) Arm for
+any container with 2+ members. **Recommend: ask.** The argument that bought the home lock ("a peer's
+room must not be a directory oracle") is not obviously weaker here. — 05 §F R4
+
+#### Theme C — Channel features
+
+**R-16. Does the Artifacts face come to the workspace channels page?** Today it is /home-only under
+your 2026-09-16 home-space-first ruling — but the *inline* artifact card already renders in the
+workspace transcript, so a workspace reader can see an artifact and cannot browse the channel's
+artifacts. The reads mount with the face, so an unopened workspace channel pays nothing.
+(a) Pass `artifacts: true` from `channels-core.tsx` — one line. (b) Keep /home-only.
+(c) Also give it to the guest lane.
+**Recommend (a), after F-712 is fixed** — a browse list whose span numbers are silently wrong above
+~20 members per artifact is worse in a busy room than in a two-person channel. ⚠ The Artifacts
+design doc lists the **web renderer** among the things *deliberately not designed*, so (c) is
+building an undesigned half. *Blocks: Wave 2.* — 01 §E-1; 02 §R-1; 06 §E4
+
+**R-17. Artifacts: a toggle everywhere, or a fifth tab — and does the drag handle discharge the
+four-tab width budget (F-340)?** The 380px budget was a measurement for four tabs; 2026-09-13 made
+the width the operator's with 380px as fallback and floor. Whether that settles it is a judgment.
+(a) Toggle everywhere (the /home shape). (b) Toggle on desktop, a dropdown entry on the web.
+(c) Fifth tab. **Recommend (a)** — a face that is one control on one host and a tab on another is
+two mental models for one list. *Blocks: Wave 2.* — 02 §R-2; 06 §E6
+
+**R-18. ⛔ The `knowledge` capability has no host. Delete the lane, or restore it?** WS never passed
+it; /home stopped 2026-08-27 (F-340); GUEST stopped 2026-09-04 (F-666). The component, hook and four
+routes are live with no caller. (a) Delete the capability, `knowledge-tab.tsx`, the fifth-tab width
+branch and `channelPaneTabs`'s `knowledge` arm. (b) Restore it on GUEST. (c) Leave it parked.
+**Recommend (a)** — the ruling that took it off GUEST said re-adding needs your word, and
+unreachable UI with a width budget attached is exactly what this wave is for.
+*Blocks: Wave 1 (it changes the tab set and the record skeleton).* — 01 §E-4; 02 §B; 06 §E5
+
+**R-19. ⛔ The curated `info_card` on workspace channels.** Stored, validated and PATCH-writable —
+and rendered on exactly one surface. **A workspace channel can carry curated rows no workspace
+surface shows.** (a) Render it on the one shared body. (b) Gate it with an `infoCard` capability.
+(c) Leave the divergence.
+**Recommend (a)** — the column is on `channels`, not on a home type; a stored row nothing displays
+is a data trap. *Blocks: Wave 1.* — 01 §E-5; 06 §A.3
+
+**R-20. ⛔ "Created" vs "Date of creation".** Three differences on one row: label, formatter and
+source. Nothing records a ruling either way. (a) Both become "Created" + `formatDate`.
+(b) Both become "Date of creation" + `formatShortDate`. (c) Keep the divergence.
+**Recommend (a).** *Blocks: Wave 1.* — 01 §E-2
+
+**R-21. ⛔ The Status row (Active / Archived) on /home.** A home container's channel **can** be
+archived by the same lifecycle write, and /home's Info tab cannot show it.
+(a) Add the Status row to the one shared body. (b) Declare archive meaningless for a link container
+and hide the archive control there too. (c) Leave it.
+**Recommend (a)** — (b) is a second, larger ruling about link-container lifecycle.
+*Blocks: Wave 1.* — 01 §E-3
+
+**R-22. ⛔ The Threads-count row duplicates the tab-row badge.** (a) Delete the row. (b) Keep it and
+add it to /home for symmetry. **Recommend (a).** *Blocks: Wave 1.* — 01 §E-8
+
+**R-23. Do the thread pop-out and the agent window actually open from a /home channel?** The button
+is drawn on every host and routes into `/{linkContainerSegment}/thread-window/…`;
+`resolveWorkspaceSegmentForUser` does not filter `kind` but applies a `viewer` floor, so a
+**guest-role peer may fail**. Nothing pins it.
+(a) Measure, then pin both windows for a link container. (b) Assume it works. (c) Fence both windows
+to standard workspaces. **Recommend (a)** — this is a measurement before it is a ruling, and it
+gates whether we keep the control. — 02 §R-3/§R-4
+
+**R-24. Where do the held-gate card and the posture selects live?** The **panel** has Pause/End/
+Open-window + the held gate and no posture; the **window** has posture + model and neither. An
+operator working in the agent window **cannot answer a held call from it**.
+(a) Both surfaces get both. (b) The held gate moves to the window too; Pause/End stays panel-only.
+(c) Leave it — the notification is the window's answer path.
+**Recommend (b)** — the held gate is the one control whose absence stops work; adding a destructive
+verb to a window that never had one is a new control. — 02 §R-5
+
+**R-25. Peer-agent visibility on a 20-person workspace channel.** The Agents tab is an **operator**
+surface: own agents from this machine's feed, peers as state-only cards.
+(a) Leave it — `peerCardsFor` already thread-scopes and the agent cap is 15 per workspace, so the
+list is bounded. (b) Cap or group the peer section. (c) Opt-in above N members.
+**Recommend (a)**, revisit only if you report it as noise. — 02 §R-7
+
+#### Theme D — Data and API
+
+**R-26. Is the account surface a third host, or is it "the workspace host with `scope=account`"?**
+This decides whether the channel-list collapse is possible at all.
+(a) Third host with its own endpoints (today): every new channel-list field is built twice forever,
+two caches and a bridge per fact. (b) One resource family, `scope=container|account` as a parameter
+— the fence differs, the projection does not.
+**Recommend (b).** `GET /api/channels/account/status` already spans all three kinds with one type,
+and `?shelf=home|workspace` proves the pattern twice more. *Blocks: Wave 3.* — 05 §F R1
+
+**R-27. One wire name for `channel_members.favorited_at`.** `HomeChannel.favoritedAt` vs
+`Channel.myFavoritedAt`. Two names for one column is the whole of the pin bug you reported.
+(a) `myFavoritedAt` everywhere. (b) `favoritedAt` everywhere.
+**Recommend (a)** — the `my*` prefix states the caller-relativity an account-wide payload will stop
+being able to assume. ⚠ Cross-package: both SDK types and a committed `dist/` move with it.
+*Blocks: Wave 3.* — 05 §A10, §F R7
+
+**R-28. Does the workspace channel row get the `@ N` mention badge?** This was **ruled against, for
+a stated reason**: `Channel.unread` is a BOOLEAN there, so a numeric badge would have no count
+behind it. Carrying the badge means carrying the count — a server projection mirroring
+`home/server/service-reads.ts:169-172`, not a UI port.
+(a) Build the count and port the badge. (b) Port the wells only and leave the badge.
+(c) Neither. **Recommend (b) now, (a) as its own slice.** — 01 §E-9; 03 §B5; 06 §E3
+
+**R-29. Does the workspace Overview show credits, tokens and a live agent board?** The two payloads
+are today **disjoint**: workspace = counts + activity + member load; home = credits by channel /
+person / tool + live agents + scanned. (a) No — the workspace Overview is an ACTIVITY page and /home
+is a SPEND page. (b) Yes, one set of sections, host-selected. (c) Unify the payload behind one
+service with a `scope` parameter.
+**Recommend (b) for the SERIES first**, and not (c) for the payload — the fences are genuinely
+different and collapsing them is how a container leak gets built.
+⚠ **(b) has a privacy half that must be answered in the same breath:** `workspace_token_spend` is
+fenced per OPERATOR on purpose (*a member-scoped read "would leak a colleague's spend"*), and
+`HomeAgentRow` deliberately carries no `model` / `toolLabel` / `tokensSpent`.
+⚠ **And the meters must not mix** — a `seat` row is on no /home figure, and summing across wallets
+was the exact 2026-09-12 bug. *Blocks: Wave 8.* — 02 §R-6; 04 §E-5; 05 §F R2
+
+**R-30. Does a standard workspace get per-ontology sharing — and is the home/workspace boundary
+general?** Today every member of a standard workspace sees every board (`unrestricted`), while a
+link container has a full three-audience matrix per `(ontology, channel)` whose trigger RAISEs for
+any kind but `link`. Separately, `home-ontology.md › Q5` refuses a home ontology shared into a
+standard workspace channel with a 400 and freezes the workspace Ontology page.
+(a) Keep both — and **write the boundary down as a rule** (personal-shelf resources never reach a
+standard workspace channel) rather than leaving it as an early return in one file.
+(b) Extend the share row to workspace channels — one trigger clause, one audience arm.
+(c) Let each module answer for itself.
+**Recommend (a), stated once in INVARIANTS §4A.** It makes R-33's "no channel sharing in wave 1" a
+consequence rather than a separate judgement. — 04 §E-12; 05 §F R3; 06 §E1
+
+**R-31. Should the audience-change PREVIEW (the confirm token) fire in a standard workspace?**
+Today it fires only inside a shared link container. Publishing a KB, skill or template
+**workspace-wide** gets no preview, no token and no acknowledgement. **The workspace door is wider
+and quieter than the home door.** **Recommend: ask.** The stated reason ("a workspace publish is
+expected") is plausible but this is the single largest behavioural home-only gate on the MCP
+surface. — 05 §F R5
+
+**R-32. `workspace=` is slated for removal next release, and it is the only way to address a
+container.** Containers get no slug. **Recommend: block the removal** until a container has an
+address the other nine ops accept, or give containers slugs. — 05 §F R6
+
+**R-33. Do Skills and Chats come to the home space?** Both are plain `workspace_id`-scoped, both
+already work in a personal container via MCP, neither has a surface — and `dopl_chats(op="export")`
+with no `workspace=` is already filing chats nothing lists.
+(a) Both, as personal-shelf faces. (b) Chats only — it has the live defect. (c) Neither, and then
+answer what the export should do instead. (d) Both **plus channel sharing**, which drags in a
+publish acknowledgement chats has never had.
+**Recommend (a) without (d).** Two mounts against modules that are already tested, already
+MCP-reachable and independent of the channel world. ⚠ It changes the marketing hero (the landing
+draws /home's tab strip) and it touches the tour. *Blocks: Wave 7.* — 04 §E-6
+
+**R-34. `dopl_workspaces(op="create_home_channel")` — confirm the shape.** F-621 is resolved on a
+Desktop-Agent default and its own entry says the SHAPE is what needs you: the op on the orientation
+tool, a dedicated write tool, or app-only. **Recommend: confirm the default.** — 04 §E-7
+
+**R-35. Does a new user get a standard workspace at all?** Two statements in one wave document
+disagree, and one flags itself as the contradiction. If signup mints only a personal container,
+"workspace parity" describes a surface most users never reach — **which changes this roadmap's
+priority, not just its scope.** **Recommend: measure the code, then rule.** — 06 §E13, §D.4
+
+**R-36. G20: land the eighth session-health field, or retire the guardrail?** A prohibition agents
+are told has no fence in the code, against your own standing rule that it must.
+**Recommend: land the field.** — 06 §E15
+
+**R-37. Does a folder-scoped knowledge attachment NARROW an agent's reach, or only re-point it?**
+F-680: the 2026-09-08 ruling asked for folder/entry selection and did not say what it means for
+reach. **Recommend: ask.** — 06 §E14
+
+#### Theme E — Design recipes
+
+**R-38. Does the workspace adopt /home's account-palette skin?** Six scoped `:global()` rules
+repaint the shared channel surface's dividers to 2px `--home-panel-line` and its composer panels to
+`--home-panel`, **fenced to /home on purpose**. (a) Promote the skin to the app — the fence
+disappears and six fragile utility-class selectors are deleted. (b) Keep two looks for one surface.
+**Recommend (a)** — it is the same argument the 2026-08-30 frame ruling already made.
+⚠ Note that three of the six rules select on Tailwind utility class names in files /home does not
+own and admit they degrade silently. — 03 §E10; 01 §D
+
+**R-39. Which section language wins — flat or concave?** /home is flat (your 2026-09-13: *"you're
+adding this extra border line around the gray. I did not ask for that"*). The workspace still uses
+the concave `SectionBox` on Members ×5, Billing, Ontology's template editor and Knowledge's
+Contents, and `SECTION_PANEL_GROUND` keeps a hairline `PANEL_WELL` does not.
+(a) Flat everywhere; delete `SectionBox`'s consumers in a dedicated pass. (b) Keep both.
+**Recommend (a).** ⚠ This is also the Agents-page question (Q4): the spec that authorised /home's
+flat face says a reversal for visual parity *"is an ENGINEERING.md entry, not a styling choice"*,
+and Q4 was never reviewed. *Blocks: Wave 6.* — 03 §E5; 06 §E7
+
+**R-40. Three home-only design asymmetries carry no recorded reason.** The credit bar dropping its
+`label`, `HOME_CARD_FACE_SELECTED` (the black selected row), and the Agents page staying
+"pixel-unchanged". The 2026-08-30 charter says the surfaces must match.
+**Which of these are asymmetries BY RULING and which are simply not-yet-ported?**
+**Recommend: port the selected-row face with R-03; leave the credit-bar label alone (it is a stated
+per-host difference on a shared recipe); the Agents-page flatness is R-39.** — 06 §E8, §D.1
+
+**R-41. The kit class layer has no drift gate.** `check-css-token-drift.ts` compares `--*`
+declarations only; four recipes live in `globals.css` and not in `kit.css`, and nothing failed.
+**Recommend: extend the script to compare the `@layer components` class SET (names only) and add its
+row to CLAUDE.md § Definition of green in the same change** — the convention the last five gates
+followed. *Blocks: Wave 0 exit.* — 03 §E6
+
+**R-42. Does the workspace Knowledge page keep its audience picker?** Ruled **yes** in 2026-08-27
+for a stated reason — that page's create button names no audience, *"so it is the one place the
+question is still worth asking."* **Recommend: confirm the reason still holds after B10 collapsed
+the shelf axis.** — 06 §E9
+
+**R-43. Do the 31 unruled ASKs from the 2026-08-30 drift audit get answered as a batch?** Only 5 of
+36 were ever ruled. Several are literally *"is this /home's or the app's?"* — ASK-11
+(`CACHE-SHAPE FALLBACK` marker), ASK-12 (`.search-expand` app-wide or /home's), ASK-8 (text
+loaders), ASK-20, ASK-24, ASK-25, ASK-26, ASK-27, ASK-35.
+⚠ **Four of them block work, in this order:** ASK-9 → the shared skeleton promotion · ASK-32 → the
+DiffModal port · ASK-24 (with F-345's correction) → the icon-button batch · ASK-13 →
+`base-settings-form` · ASK-10 → the realtime wave · ASK-4 → whether the upgrade modal is in scope.
+**Recommend: answer ASK-9, ASK-12, ASK-24 and ASK-32 with this roadmap; batch the rest.** — 06 §E16
+
+**R-44. Confirm the /home Agents-face defaults Q1–Q6, which were "ruled by the orchestrator while
+Samuel slept".** They are still flagged as reversals you *"may make on review"*, and there is no
+record of that review. **Q4 is a parity question (R-39).**
+**Recommend: confirm or reverse Q4 explicitly; the rest can stand.** — 06 §D.9
+
+#### Theme F — Deletions that want a veto
+
+**R-45. ⛔ Delete the "Linked threads" section** (`info-tab.tsx:229-244`) — hardcoded since
+2026-08-18, buttons with no `onClick`, no relation to any read. (a) Delete section +
+`HARDCODED_LINKED_THREADS`. (b) Keep as a placeholder. **Recommend (a).**
+*Blocks: Wave 1.* — 01 §E-7
+
+**R-46. ⛔ Delete the two inert `IconButton`s in the WS Members heading.** (a) Delete both.
+(b) Wire "Add member" to the existing invite dialog and delete only the filter. (c) Leave.
+**Recommend (a)**, with (b) as a follow-up ticket. *Blocks: Wave 1.* — 01 §E-6
+
+**R-47. Does the playground retire with the website?** 18 files, 4,467 lines, zero tests, a
+deliberately unauthenticated provisioning route that creates real `auth.users` rows, a reaper cron,
+and three **static mirror panes** of surfaces this refactor is about to change.
+(a) Retire with the site. (b) Keep, freeze the panes. (c) Keep and re-point the panes at real
+components. **Recommend (a).** (c) is the one to avoid — it makes a public anonymous surface depend
+on the modules under refactor. ⚠ The website-retirement direction is **not stated as a ruling in
+this tree**; treat this as a question. — 04 §E-9
+
+**R-48. Drop `channel_personal_arming`?** Nothing writes it (you reversed task 11 on 2026-09-06);
+three live policies still count against the RLS surface.
+**Recommend: drop it in the parity wave**, per delete-don't-disarm. — 05 §F R8
+
+**R-49. Should /home mount the guidance layer?** Tour, join-request notices, the connect-agent
+banner and the welcome popup are workspace-only today and all four are host-agnostic. A first-run
+user lands on /home and sees none of them.
+(a) Mount all four. (b) Mount `ConnectAgentBanner` and `WelcomePopup`; leave Tour on the workspace
+(its steps are keyed to `NavSection`). (c) None.
+**Recommend (b)**, and revisit the Tour once R-33 is answered — a tour that names Skills and Chats
+is either wrong for home or becomes right for free. — 03 §E7; 04 §E-4
+
+**Row count — List 4: 49 rulings.** By theme: Surface/IA 7 · Members & permissions 8 · Channel
+features 10 · Data/API 12 · Design recipes 7 · Deletions 5.
+**Wave-1 blockers (8): R-08, R-18, R-19, R-20, R-21, R-22, R-45, R-46.**
+
+### 2.5 — List 5: REVERSE MAP — what the workspace has that home lacks, and the orphan classes
+
+| # | Item | Recommendation | Ref |
+|---|---|---|---|
+| V1 | **Chats** — no /home face; scoping is plain `workspace_id`, no kind awareness anywhere | **Extend (personal shelf).** Smallest job in the set: no migration, no new endpoint, no audience ceiling. R-33 | 04 §B-1 |
+| V2 | **Orphan class: exported chats nothing lists.** `dopl_chats(op="export")` with no `workspace=` resolves the caller's `personal` container; `ChatsView` has one mount (the workspace route); the rail filters to `isStandardWorkspace` | **Extend, or answer what the export should do instead.** This is a live defect, not a missing feature | 04 §B-1; R-33 |
+| V3 | **Skills** — no /home face; the MCP tool is *already* link-container aware (a public publish inside a shared container needs a one-time confirm token) | **Extend (personal shelf).** The hard half is built; only the surface is missing. ⚠ A home shelf opens empty, and that is the ruled outcome (*"a personal container is a shelf, not a workspace"*) | 04 §B-2 |
+| V4 | **`ConnectedAppsSection`** — reachable only from the workspace `/settings` PAGE; the modal passes no `extras` | **Extend (one prop).** An operator who works entirely in the home space cannot see or revoke their connected apps — security-relevant, not cosmetic | 04 §B-6 |
+| V5 | **The guidance layer** — `TourProviderCore`, `JoinRequestNoticesCore`, `ConnectAgentBanner`, `WelcomePopup`, none mounted on /home; all four already host-agnostic | **Ruling R-49** — a no-code-change parity win for two of the four | 03 §A12, §C3 |
+| V6 | **`MyAccessProvider`** — /home mounts it only inside the KB view, so any teams-mode gate elsewhere on /home resolves to a false edit affordance (F-330: `canEdit` **falls open**) | **Extend.** The prescribed fix shape is to report PROVIDERLESS distinctly from PENDING — **do not flip the default closed** | 03 §C3; 06 §C.1 |
+| V7 | **Members console** | **Do not extend.** Close the gap the other way: add remove/leave to /home's roster (R-09(b)). Three of v2's capabilities have no referent in a link container | 04 §B-3 |
+| V8 | **Member role change after claim** — the role is set once, by the link | **Ruling R-09(c); hold until asked** | 04 §B-3 |
+| V9 | **Member removal from /home** — `membership-admin.ts` leaves removal and departure open **server-side** and no /home surface calls them | **Extend (UI-only).** Blocked on F-343 | 04 §B-3 |
+| V10 | **Activity feed** (`workspace_activity_events`) | **Do not extend** — three of its verbs have no producer in a link container; the rest is legible from the channel | 04 §C-3 |
+| V11 | **Settings page** | **Not a gap** — the modal already serves both; the composition is already correct | 04 §B-4 |
+| V12 | **Email invitations / standing join link** | **Not a gap** — two admission models for two population shapes | 04 §B-7 |
+| V13 | **"Waiting on you" and "Recent threads" on /home Overview** | **Leave — these are DELETIONS, not gaps.** Both cards went with all their plumbing 2026-09-05; the channel-scoped overview panel was deleted as *"a duplication bug, not a preference"*. A wave that adds them back reverses two rulings | 04 §B-8 |
+| V14 | **Personal shelf on a workspace** | **Leave** — the personal container is one per USER by construction | 04 §B-9 |
+| V15 | **Orphan: `HARDCODED_THREAD_ACTIVITY`** — no production reader (measured once, 2026-09-17) | **Delete after re-deriving.** `bits.tsx › agentAccent` (F-711) is the precedent for exactly this shape | 02 §C5 |
+| V16 | **Orphan: `HomeChannel.lastMessagePreview`** — on the wire, rendered by nothing since 2026-09-13, kept alive by the SDK mirror and a committed `dist/` | **Render it on the workspace row (P14) or delete the field.** R-28 | 05 §A15 |
+| V17 | **Orphan: `AppPanel`, `bits.tsx › agentAccent`, `.selected-ring`** — zero call sites each | **Delete** (delete-don't-disarm) | 03 §E11; 06 §C.3 |
+| V18 | **Orphan: `resource_grants scope_type='container'`** — schema with **no writer** | **Not obsolete; unfinished.** It is the natural home of any container-level sharing R-33(d) would grow, and costing it as a wiring job is wrong — it is a feature | 04 §C-7 |
+| V19 | **Orphan: `channel_personal_arming`, `home_scoped` columns, `mcp_tokens.workspace_lock_kind`, SDK `listKbBases(shelf)`, SDK `getHomeChannels`** | **Drop / hold per row** — see the deletions ledger §6 | 05 §C.1/§C.2/§A45/§A46 |
+
+**Row count — List 5: 19 rows.**
+
+---
+
+## 3. UI/UX map — every difference a user would notice
+
+`CSS` = a paint or token swap. `BEH` = behaviour, a control, or data. **Wave** points into §5.
+
+### 3.1 Scale and recipes
+
+| # | Difference | Home | Workspace | Kind | Wave |
+|---|---|---|---|---|---|
+| U1 | The 36px black page action | `page-action-button.ts:29-30` worn at 5 sites | `TAB_ACTION` (`bits.tsx:66-73`) + ~20 hand-cut `auth-btn-3d` sites, 4 heights, 5 radii, `text-white` | CSS | 0, 5 |
+| U2 | Section ground | flat `--home-panel`, no hairline (`home.module.css:165-168`) | `SECTION_PANEL_GROUND` keeps a hairline | CSS | 6 |
+| U3 | Concave `SectionBox` | forbidden on /home (pinned) | live in members-v2 ×5, billing, ontology template editor, knowledge Contents | CSS | 6 |
+| U4 | Segmented control form | `plain` / `lg` / `semibold` (`home-header.tsx:76-83`) | 12 uses, never that form | CSS | 5 |
+| U5 | `.auth-btn-3d-light` re-stated | `home.module.css:102-106` sets the raised-light vars directly | `.auth-btn-3d-light` / `.raised-tab` in `globals.css` | CSS | 6 |
+| U6 | `[data-overview-face] .bento` deeper shadow | stamped on /home's Overview | no workspace surface stamps it | CSS | 8 |
+| U7 | Kit class parity | SPA `kit.css` | `globals.css` carries `.glass-panel`, `.hairline`, `.hairline-strong` the SPA lacks; the token gate does not see class names | CSS + gate | 0 |
+| U8 | Sidebar hardcoded type | n/a | `app-shell.module.css:289` `16px`, `:291` `13.5px` — outside the type scale | CSS | 6 |
+| U9 | Knowledge hero hardcoded ink | n/a | `knowledge-home.tsx:133` `text-white`, `:135` `text-[#e3e3e3]` | CSS | 5 |
+| U10 | Dark mode | none | none — `prefers-color-scheme`, `data-theme`, `.dark`, `dark:` all return **0 matches repo-wide**, and that is stated as a rule | — | n/a |
+
+### 3.2 Headers and navigation
+
+| # | Difference | Home | Workspace | Kind | Wave |
+|---|---|---|---|---|---|
+| U11 | Page title | **none** — the selector replaces it (`home-header.tsx:73`) | five titles, five heights, three ink treatments | BEH | 5 |
+| U12 | Header strip | one 36px row: action · selector · search · Profile | **no workspace header at all**; each page draws its own | BEH | 5 |
+| U13 | Search | `.search-expand` pinned open at 260px (`home-search.tsx:44-67`) | none; the channels sidebar has a private filter input | BEH | 5 |
+| U14 | Surface switch | local state, 5 pills, no routes (`index.tsx:81`) | 8 routes + a 232px sidebar mirrored in three places | BEH (in kind) | keep |
+| U15 | Settings entry | black "Profile" pill | a `.nav-chip` in the sidebar foot | BEH (in kind) | keep |
+| U16 | Knowledge chrome | two `SectionPanel`s over `.kbCards` | hero photo band + `LiquidGlass` + a marketing paragraph + a scope filter | BEH | 5 |
+| U17 | Guidance layer | absent | tour, join notices, connect banner, welcome popup | BEH | 7 |
+| U18 | Route transition | `Crossfade` on face swaps | `.pageCard` remounts, no transition | BEH | 5 |
+
+### 3.3 Cards and wells
+
+| # | Difference | Home | Workspace | Kind | Wave |
+|---|---|---|---|---|---|
+| U19 | Channel picker shape | three collapsible gray wells (Pinned / Recent / Earlier), 290px | flat nav tree with Favorites / DMs / Channels sections | BEH | 4 |
+| U20 | Channel row face | raised card, avatar stack, `HOME_CARD_FACE` | 36px `raised-tab` row | CSS + BEH | 4 |
+| U21 | Selected row | black 3D button face, no ring, no shadow | selection ring | CSS | 4 |
+| U22 | Row marks | `@ N` mention pill + 6px dot, exclusive | boolean dot only — **and a numeric badge there would be a lie** | BEH (data) | 4 |
+| U23 | Row subtitle | last-message preview on the wire, rendered by nothing | absent | BEH | 4 |
+| U24 | Well fill | `PANEL_WELL_ON_PANEL` on /home's column | `PANEL_WELL` on the info tabs; **no workspace PAGE uses either** | CSS | 4 |
+| U25 | Wells always render when empty | yes, both tabs and the column | yes (same module) | — | shipped |
+| U26 | Empty-well copy | none — the sentence sits **beside** the boxes | same | — | shipped |
+| U27 | Template card grid | three scoped `SectionPanel`s, per-section create | 52px header bar, `text-display` h1, white `.btn-light` pill, `max-w-[960px]` | CSS + BEH | 5, 6 |
+| U28 | Presence rings | bare `AvatarStack`, no presence | `AvatarWithPresence` in 5 places | BEH | 4 |
+
+### 3.4 The channel record
+
+| # | Difference | Home | Workspace | Kind | Wave |
+|---|---|---|---|---|---|
+| U29 | Pane frame | 2px `--home-panel-line` + `bg-home-card` card | `.page-float` white card | CSS | 6 |
+| U30 | Structural dividers | 2px (`home.module.css:65-81`) | kit hairline | CSS | 6 |
+| U31 | Resize pill | sits on a 2px line via `--channel-divider-w` | falls back to the hairline | CSS | 6 |
+| U32 | Attribution pill face | raised-light (`[data-attribution-pill]`) | flat `.bento` | CSS | 6 |
+| U33 | Composer panels | filled `--home-panel` (`[data-composer-panel]`) | neutral `bg-bg-inset` | CSS | 6 |
+| U34 | Info card: curated rows with a hover × | present | **not rendered at all** | BEH | 1 |
+| U35 | "Created" vs "Date of creation" | `formatDate`, `homeChannel.createdAt` | `formatShortDate`, `channel.createdAt` | BEH | 1 |
+| U36 | Status pill (Active / Archived) | absent | present | BEH | 1 |
+| U37 | "Linked threads" — 3 inert hash rows | absent | present, hardcoded | BEH | 1 |
+| U38 | Members heading | count only | count + two inert icon buttons | BEH | 1 |
+| U39 | Mentions | top-level category, always open, flush rows | collapsed disclosure with an unread badge, nested inset | BEH (ruled in kind) | keep |
+| U40 | Artifacts toggle in the Threads heading | present | absent | BEH | 2 |
+| U41 | Add person / Link out under the roster | present | absent (a link mint is not a member picker) | BEH (in kind) | keep |
+| U42 | Header hashtag glyph / info-toggle circle | gone | gone | — | shipped |
+| U43 | Click-to-edit name + description | live | live | — | shipped (markup still forked → Wave 1) |
+
+### 3.5 Agents and threads
+
+| # | Difference | Home | Workspace | Kind | Wave |
+|---|---|---|---|---|---|
+| U44 | Agent pane colour banner and stream accent | drawn | **not drawn** — the prop is never passed | BEH (drift) | 1 |
+| U45 | Agent pane geometry | 380px overlay, `--home-card` ground, 2px divider | 380px overlay, neutral hairline (GUEST: full main area) | CSS (in kind for GUEST) | 6 |
+| U46 | Agent window body | `AgentWorkingOn` → posture → stream → composer; **no Pause/End, no held gate** | identical | BEH (both) | 2 |
+| U47 | Agent post accent (framed pill + side bar) | one drawn shape | identical | — | shipped |
+| U48 | Agent card / peer card / launch row | identical | identical | — | shipped |
+| U49 | Thread cards in four recency wells | identical | identical | — | shipped |
+| U50 | Artifact list card / opened artifact | drawn | not drawn | BEH | 2 |
+| U51 | Artifact card inline in the transcript | drawn | **drawn** — so a workspace reader already sees artifacts inline | — | shipped |
+| U52 | Channel-activity strip | `PersonThreadActivity`, its own hook | `info-tab.tsx:248-263` from handed-down bins | duplicated, pixel-identical | 1 |
+| U53 | Info column width persistence | shared `--info-w` | same | — | shipped |
+
+### 3.6 Empty and loading states
+
+| # | Difference | Home | Workspace | Kind | Wave |
+|---|---|---|---|---|---|
+| U54 | Channel record ghost | exact two-column shape, tab count by import | `channels-skeleton.tsx` "a rough fit"; **GUEST draws kit generics** | BEH | 1 |
+| U55 | Page ghosts | 11 bespoke shapes across 8 files | 5 pages have one; **skills, chats and ontology have none** | BEH | R-06 |
+| U56 | Frame ghost | `home-skeleton.tsx` draws its own | `ShellChromeSkeleton` — the same six boxes, second implementation | BEH | 5 |
+| U57 | Error state | `PageError` in a full-screen wrapper | the identical wrapper and component, second copy | BEH | 0 |
+| U58 | "No channels at all" | a first-class state, ruled | an empty workspace has no equivalent statement | BEH | 4 |
+| U59 | Two-sentence empty rule ("No matches" vs "No channels yet") | `relationship-list.tsx:152-156` | not applied | BEH | 4 |
+| U60 | "This channel is gone" ending | `EmptyState` on a pinned host | falls back to the first row — never an ending | BEH (in kind) | keep |
+| U61 | Info-column tab bodies while loading | four tabs render nothing | same | BEH (both) | R-43 (ASK-35) |
+| U62 | Skeleton announces itself (`role="status"`) | 2 of 8 exports | same | BEH (a11y) | 0 |
+| U63 | Reduced-motion opt-out | on the surface, desktop only | **no web-tree rule stops `animate-pulse`** | BEH (a11y) | R-43 (ASK-9) |
+
+**Row count — §3: 63 rows.** CSS-only 20 · behaviour 35 · already shipped/unified 8.
+
+⚠ **The CSS fence is already correct architecture and should not be "fixed" by accident.**
+`home.module.css:33-54` states it: the shared surface keeps neutral hairlines, and only the copy
+mounted inside `.frame` wears the account palette, hooked on **attributes** rather than utility
+classes. R-38 decides whether that fence is promoted or kept — it must not be dissolved by a sweep.
+
+---
+
+## 4. Target clean code structure
+
+### 4.1 The host contract, keyed on CONTAINER KIND — never on the word "home"
+
+"Home" names four different things in the tree today (the account surface, a `kind='link'`
+container, the caller's default standard workspace, and the personal shelf) and three of them appear
+in the same files. **Any contract that keys on "home" inherits that ambiguity.** The axis is the
+closed set `WorkspaceKind = "standard" | "link" | "personal"`.
+
+```ts
+// ── LAYER 2 of §4.3: what a CONTAINER can do. Derived ONCE from the workspace row.
+//    Never by negation; never an authorization answer.
+interface ContainerCapabilities {
+  kind: WorkspaceKind;                       // the closed set, positive form
+  membership:                                // 1. roster shape + the one door in
+    | { model: "roles"; roles: Role[]; addVia: "invitation" | "join_link" }   // standard
+    | { model: "token"; addVia: "bound_link"; mintFloor: Role }               // link
+    | { model: "solo" };                                                      // personal
+  offersTeamScope: boolean;                  // 2. is `team` a grantable audience here
+  isSoleAudience: boolean;                   // 3. memberCount === 1, FAIL CLOSED when unknown
+  wallet: { kind: WalletKind; payer: "caller" | "owner" };                    // 4. whose credits
+  address: { slug: string | null; id: string };                               // 5.
+  noun: "workspace" | "home channel" | "personal container";                  // 6. agent-facing copy
+}
+```
+
+Four of the six already exist as one function each (`containerTarget`, `offersTeamScope`,
+`containerKind`, `assertMemberAddable`); two are hand-spelled in five and three places.
+
+```ts
+// ── The UI half. CAPABILITIES narrow or add; SLOTS add and never replace;
+//    CONTEXT carries what the surface has ALREADY paid for.
+interface ChannelSurfaceCapabilities {
+  memberManagement?: boolean;   // narrows, default true
+  selfManagement?: boolean;     // narrows, default true
+  peerNamedHeader?: boolean;    // narrows, default true
+  artifacts?: boolean;          // ADDS, default false  → R-16; delete the flag if it goes always-on
+  // knowledge?: boolean;       // → R-18: delete, no host passes it
+}
+
+interface ChannelSurfaceSlots {
+  infoExtras?: (ctx: ChannelInfoTabContext) => {   // ADDITIVE regions, never a body
+    belowCard?: ReactNode;      // /home: Add person / Link out
+    belowRoster?: ReactNode;
+  };
+}
+
+interface ChannelInfoTabContext {
+  gate: MutationGate;                        // 2026-08-25
+  mentions: MentionsBundle;                  // 2026-09-15  ← added after a slot dropped it
+  headerEdit: ChannelHeaderEdit;             // 2026-09-17  ← added after a slot dropped it
+  headerEditable: boolean;                   // ← MOVE HERE (kills two spellings of one rule)
+  members: ChannelMember[];                  // ← ADD (kills /home's second useChannelMembers)
+  activity: { bins: readonly ActivityBin[]; loading: boolean };  // ← ADD
+  mentionsLayout: "disclosure" | "category"; // the ONE ruled presentational fact
+}
+
+// ADAPTERS — what only a host can answer, as plain props:
+//   workspaceId · workspaceSlug · channel · currentUserId · role · kind
+//   onRosterChanged · onDeselect · webView · initialThreadId · Link
+```
+
+**A view never names its own surface.** `OntologyView`'s `frameless` prop is the model: *"`true` when
+the host already IS a floated page panel."* The float-collapse CSS rule
+(`app-shell.module.css:166-172`) exists because sixteen surfaces break that rule today.
+
+### 4.2 The four rules
+
+**G1 — One implementation per feature; a host NARROWS it, never forks it.** A capability is one flag
+per *story*; a face two trees render is **declared in `src/` and re-exported by the SPA**, never
+declared twice. *"A SECOND DECLARATION OF ANY OF THESE IS THE BUG."*
+
+**G2 — A slot may ADD, never REPLACE.** Every parity bug in the channel area has one cause: a
+body-replacing slot threw away something the surface had already paid for (`mentions` 2026-09-15,
+`headerEdit` 2026-09-17, `activity` today). Additive slots make that class of bug unexpressible.
+
+**G3 — A host passes `kind` and `role`, never a boolean `isHome`.** The kind is asked **positively**
+(`kind === "link"`, or a `switch` with a `default`), never `!isStandardWorkspace(…)`. The one
+exception is a **fence** (`assertMemberAddable`), which negates on purpose so a fourth kind inherits
+the refusal. A fence negates; a label does not. And a capability is **not** authorization — the
+seven `canSee*` predicates and their RLS twins stay kind-blind.
+
+**G4 — No cache-to-cache bridges: one projection.** Two names for `favorited_at`, two caches and two
+hand-written bridges is the shape that produced a user-visible bug. Before any field joins a merged
+projection it gets **one** name. A scope resolver **refuses** rather than falling back
+(`resolveShelfScope` is the worked example already in the tree).
+
+### 4.3 The shared-tree layout
+
+```
+BEFORE (today)                                  AFTER (target)
+──────────────────────────────────────────────  ──────────────────────────────────────────────
+src/shared/layout/app-shell/                    src/shared/layout/app-shell/
+  app-shell.module.css        (419)               app-shell.module.css
+  app-sidebar-core.tsx        (177)               app-sidebar-core.tsx
+  workspace-switcher-core.tsx (227)               workspace-switcher-core.tsx
+  app-panel.tsx               DEAD  ✗ delete      app-shell-core.tsx      ← moved down (327)
+                                                  account-rail.tsx/.css   ← moved down (244)
+                                                  chrome-skeleton.tsx     ← moved down (151)
+src/shared/ui/                                  src/shared/ui/
+  page-action-button.ts, home-channel-row.tsx,    + page-header-strip.tsx ← moved down (104)
+  home-card-marks.tsx, panel-well.ts,             + object-column.tsx     ← the generic half (~160)
+  section-panel.tsx, collapse-wells.tsx,          + record-surface.ts     ← ONE declaration (~10)
+  segmented-control.tsx, crossfade.tsx,           + page-states.tsx       ← moved down (86)
+  form-dialog.tsx, empty-state.tsx, skeleton.tsx  + charts/bar-series.tsx ← moved down (256)
+                                                  + search-field.tsx      ← moved down (70)
+src/features/channels/components/               src/features/channels/components/
+  channel-surface.tsx        (the FRAGMENT)       channel-surface.tsx          unchanged in shape
+  channel-surface-data.ts    (the ONE loop)       channel-surface-data.ts      unchanged
+  channel-surface-standalone.tsx                  channel-surface-standalone.tsx
+  surface-info-panel.tsx                          surface-info-panel.tsx       mints the context
+  info-panel.tsx / info-panel-tabs.ts             info-panel.tsx               (4 tabs, not 5)
+  info-tab.tsx                                    info-tab.tsx     *** THE ONE INFO BODY ***
+  knowledge-tab.tsx          NO HOST  ✗ delete    surface-agent-view.tsx *** THE ONE AGENT WIRING ***
+  overlays.tsx  (2nd agent wiring) ✗ collapse     channel-record-skeleton.tsx  ← moved in (254)
+  home-channel-wells.ts      (already here)       home-channel-wells.ts
+apps/desktop-ui/src/pages/home/                 apps/desktop-ui/src/pages/home/
+  person-info-tab.tsx        (395) ✗ delete       relationship-record.tsx  host: capabilities + extras
+  person-thread-activity.tsx  (63) ✗ delete       person-members.tsx, link-out-panel.tsx,
+  relationship-list.tsx      (253) → split          add-person-dialog.tsx    ← extras CONTENT
+  home-header.tsx            (104) → move down    home.module.css            the paint fence
+  home-search.tsx             (70) → move down    overview-*.tsx, *-panels.tsx  (≈2,200, stay)
+  channel-record-skeleton.tsx (254) → move in
+apps/desktop-ui/src/pages/**                    apps/desktop-ui/src/pages/**
+  thin wrappers + 868-line Overview + 8,241        HOSTS ONLY: pick the view, pass the
+  lines of /home composition                       capabilities, hand it the transport
+```
+
+**Move-down ledger (line counts measured 2026-09-17):** `AccountRail` 92 + 152 = **244** (blocker: a
+Vite `?inline` asset import — needs a `mark` prop) · `AppShellLayout` **327** (blocker: router +
+transport, solved by the `*Core` idiom) · `ShellChromeSkeleton` **151** · `ChannelRecordSkeleton`
+**254** · `BarSeries` **256** · `RelationshipList` **253** (only the generic ~160 moves; the row
+derivation stays) · `HomeHeader` **104** · `HomeSettingsControl` **133** (blocker: an SPA settings
+binding) · `page-states.tsx` **86** · `HomeSearch` **70** · `.kbCards`/`.kbCell` **50** ·
+`.glass-panel`/`.hairline`/`.hairline-strong` **~30** · `RECORD_SURFACE` **~10** ·
+`FullScreenError` **6 × 2**. **Total ≈ 1,600 lines down, against ≈ 8,200 lines of /home composition
+that stay.** The five /home faces (≈2,200 lines) move only if the web ever renders /home again.
+
+### 4.4 The duplicates that collapse, with both paths
+
+| Duplicate | Path A | Path B | Collapses to |
+|---|---|---|---|
+| The agent-pane wiring | `channels/components/surface-agent-view.tsx:44-80` | `channels/components/overlays.tsx:73-86` | `SurfaceAgentView`, rendered by `ChannelsOverlays` |
+| The Info tab body | `channels/components/info-tab.tsx` | `apps/desktop-ui/src/pages/home/person-info-tab.tsx` | `info-tab.tsx` + `infoExtras` |
+| The activity strip | `channels/components/info-tab.tsx:246-263` | `pages/home/person-thread-activity.tsx:55-60` | the shared strip, fed from context |
+| `headerEditable` | `info-tab.tsx:106` | `person-info-tab.tsx:144` | `ChannelInfoTabContext.headerEditable` |
+| The roster read | `info-tab.tsx:94` (prop) | `person-info-tab.tsx:166-169` (own hook) | `ChannelInfoTabContext.members` |
+| Agent stats | `channels/components/agent-panel.tsx:461-483` | `pages/agent-window/agent-window.tsx:403-439` | one `AgentStats({showStarted?, className?})` |
+| Template save/remove | `agent-templates-core.tsx:141-176` | `pages/home/agent-editor.tsx:222-275` | `agent-templates/hooks/use-template-save.ts` |
+| The level-2 record card | `pages/home/index.tsx:284-285` | `src/shared/layout/app-shell/app-shell.module.css:140-150` | `record-surface.ts` |
+| The full-screen error | `pages/home/index.tsx:137` | `components/app-shell/app-shell.tsx:195` | `FullScreenError` |
+| The 36px black pill | `src/shared/ui/page-action-button.ts:30` | `channels/components/bits.tsx:69` | `TAB_ACTION` composes `PAGE_ACTION_BTN` |
+| The frame ghost | `pages/home/home-skeleton.tsx` | `components/skeletons/shell-skeleton.tsx:38-60` | one `ChromeSkeleton` with the left column as a slot |
+| The channel ghost | `pages/home/channel-record-skeleton.tsx` | `pages/channels/channels-skeleton.tsx` + kit generics on GUEST | `ChannelRecordSkeleton` in `src/` |
+| The account rail | `components/app-shell/account-rail.tsx` | `marketing/components/banner-demo/demo-home-chrome.tsx:74-120` | one `AccountRail` in `src/shared/` |
+| The /home header strip | `pages/home/home-header.tsx:37-102` | `banner-demo/demo-home-chrome.tsx:46-73` (character for character) | `PageHeaderStrip` in `src/shared/ui/` |
+| The knowledge card grid | `home.module.css:200-249` | `knowledge-v2/home/knowledge-home.tsx` `.cardGrid` | a grid variant of `knowledge-v2` |
+| The channel list projection | `features/home/types.ts › HomeChannel` (15 fields) | `features/channels/types.ts › Channel` (26) + `types-account.ts › AccountChannelStatus` | one `Channel` + `?scope=` |
+| The overview series | `GET /api/home/overview-series` | `GET /api/workspaces/[slug]/overview-series` | one `metric` × `range` vocabulary, two fences |
+| `isSoleAudience` | 5 hand-spelled `memberCount === 1` sites | — | one derivation on `ContainerCapabilities` |
+| The container noun | `workspace-directory.ts:218 › containerKindLabel` | ~8 hardcoded strings in `tools/map.ts`, `tools/members.ts`, `channel-ops-hold-workspace.ts` | `containerNoun(kind)` |
+| `isStandardWorkspace` | `src/features/workspaces/types.ts:89` | `packages/dopl-client/src/types.ts:104` | one, gated (F-295 / G5) |
+
+
+---
+
+## 5. Roadmap
+
+Nine waves. Each is independently shippable, each makes the next smaller, and the order is chosen so
+**nothing workspace-only is deprecated by accident**. One worktree per wave.
+
+**Definition of green for every wave** (CLAUDE.md § *Definition of green*; re-derive with
+`grep -n 'run:' .github/workflows/ci.yml`): five suites, **two** lints, **two** typechecks (the SPA
+is outside the root tsconfig — `npm run typecheck -w @dopl/desktop-ui`), and **ten** non-suite gates
+including `node scripts/check-doc-refs.mjs`, the `size-check` job, the committed-`dist` check
+(`npm run build:packages` then `git status --porcelain -- 'packages/*/dist/*'` — the trailing `/*`
+**is** the gate) and the `rls-redteam` job over **seven named files, not a glob**.
+`npm run test:all` chains four suites and is **not** the definition.
+
+**Always green, in every wave** (04 §F-1, the substrate): `workspace-kind.test.ts` ·
+`link-container-guard.test.ts` · `resolve-active-workspace.test.ts` · `membership-admin.test.ts` ·
+`home-channel-derivation.test.ts` · `b10-no-derived-default.test.ts` · `shared-publish.test.ts` ·
+`check-role-drift.ts` · `check-rls-pair-gate.ts` · `check-tenancy-move-gate.ts` ·
+`deep-link-target.test.mjs` · the seven `rls-redteam` files.
+
+---
+
+### Wave 0 — Gates and blockers. Nothing visible moves.
+**Worktree `parity/w0-gates`.**
+
+**Goal:** make the tree green, make the three prerequisites true, and buy the gates that stop the
+next five waves being re-audited in six weeks.
+
+| Item | Source |
+|---|---|
+| **F-688** — sixteen unexempted files over the 500-line cap; the **root lint is RED at HEAD**. A parity branch starts non-green today | 06 §C.0 |
+| **F-343** — `HomeChannel` carries no caller role; `containerTarget.role` is hardcoded `"owner"`; two live buttons 403. **Every role-shaped affordance on /home is a guess until this lands** | 04 §0.6-ii |
+| **F-513** — execute the ruling (needs **R-08**): three copies of `kind === 'link' && memberCount !== 1` become one member-count question | 04 §E-11 |
+| **F-712** — `artifactSpans` counts off a PostgREST-capped page; silently wrong above ~20 members × 50 artifacts. **Blocks Wave 2** | 02 A.2 R12 |
+| **The slot-replacing-host audit** — walk every `slots.*` host and assert nothing the surface already minted is dropped. Three capabilities have been lost this way in three weeks | 06 "The one hazard…" |
+| **Measure deploy state** — `npx supabase migration list --linked`, joined on the migration **NAME**, never the filename prefix. Two team migrations say *"WRITTEN, NOT APPLIED"* and `drop_home_scoped` is in `migrations-held/` | 04 §0.5; 05 §C.7 |
+| **R-41** — extend `check-css-token-drift.ts` to the `@layer components` class SET, and add its row to CLAUDE.md § Definition of green **in the same change** | 03 §E6 |
+| Free deletions and collapses: X9 `AppPanel` · X15 `FullScreenError` · X16 `RECORD_SURFACE` · X10 `TAB_ACTION` composes `PAGE_ACTION_BTN` · P24 `.glass-panel`/`.hairline` into `kit.css` | 03 §F.3 wave 0 |
+| Doc repairs, each in the change that touches the file: X30 `channel-surface.tsx`'s `knowledge` docblock · X31 `authz.ts`'s retired two-member cap · X32 `packages/contracts/src/workspaces.ts` · X33 `DESIGN-SYSTEM.md:13` (allocate **F-714** — highest claimed on this branch is F-713; re-derive across live branches) · X34 the two fixture comments | 02 §C5; 03 §E9; 05 §F-notes |
+
+**Rulings needed:** R-08 ⛔, R-41.
+**Files touched:** ~40 (16 over-cap splits, 5 doc files, 4 deletions, 2 gate scripts).
+**Risk:** a cap split moves code without changing it — the risk is a moved export path. **Rollback:**
+each split is its own commit; revert individually.
+
+---
+
+### Wave 1 — One channel record surface, zero forks.
+**Worktree `parity/w1-channel-surface`.**
+
+**Goal:** the thing Samuel is looking at. One info body, one agent wiring, one loading ghost — and
+the three capability-losing slots closed for good.
+
+| Order | Items | Why here |
+|---|---|---|
+| 1 | **P2 + P1** — `ChannelsOverlays` renders `SurfaceAgentView`; 9 forwarded props disappear and the missing colour is fixed as a side effect, not a patch | smallest blast radius, closes a live visible drift |
+| 2 | **P8** — `activity` onto `ChannelInfoTabContext`; **X6** delete `person-thread-activity.tsx`; **X7** delete `HARDCODED_THREAD_ACTIVITY` after re-deriving | the context pattern's fourth application |
+| 3 | **P9** — `members` + `headerEditable` onto the context | kills /home's second roster hook and two spellings of one rule |
+| 4 | **P7 + P6** — one `info-tab.tsx` with `mentionsLayout` and `infoExtras`; **X5** delete `person-info-tab.tsx`. Land **R-19** (info card), **R-20** (Created), **R-21** (Status), **R-22** (threads row), **R-45** (linked threads), **R-46** (inert buttons) in this step | one body, three host facts |
+| 5 | **X4** — delete the `knowledge` capability, tab, width branch and `channelPaneTabs` arm (**R-18**) | it changes the tab set, so it must land with the body |
+| 6 | **P10 + X8** — move `ChannelRecordSkeleton` into `src/features/channels/components/`; GUEST adopts it; WS composes it beside its tree ghost | closes F-220 and the guest layout jump |
+
+**Rulings needed: R-08 ⛔, R-18 ⛔, R-19 ⛔, R-20 ⛔, R-21 ⛔, R-22 ⛔, R-45 ⛔, R-46 ⛔.**
+**Files touched:** ~22 (7 in the shared channels tree, 6 under `pages/home`, 4 deletions, ~5 test files).
+**Gates:** `channels` suite · `page-skeletons.test.tsx` (TEN page shapes) + `channel-record-skeleton.test.tsx` byte-share pins · `knowledge-tab.test.tsx › the capability, per host` · `guest-channel.test.tsx` · `settings-tab.test.tsx › minimal copy` (8-word caption bound).
+**Risk:** the collapse breaks `person-info-tab*.test.tsx` (**6 files**) and `surface-slot-fixtures.tsx`; **nobody has counted the assertions that move** (01 gap 1). **Rollback:** the slot still exists — restoring `person-info-tab.tsx` as an `infoExtras` consumer is a one-file revert.
+
+---
+
+### Wave 2 — Artifacts and the info-column capability set.
+**Worktree `parity/w2-artifacts`.**
+
+**Goal:** stop a workspace reader seeing an artifact inline and being unable to browse the channel's
+artifacts.
+
+**Items:** P3 · P4 · P5 (all ride one flag) · P16 held-gate in the agent window · P17 one
+`AgentStats` · P18 one template save orchestration.
+**Rulings needed:** R-16, R-17, R-24.
+**Files touched:** ~8 (one line in `channels-core.tsx`; the rest is de-dup).
+**Gates:** `agents-tab-launch.test.tsx` · `agent-post-accent*.test.tsx` · **F-712 must be fixed in Wave 0** — a browse list with silently wrong span numbers is worse in a busy room than in a two-person channel.
+**Risk:** low; the flag adds a face whose reads mount with it, so an unopened channel pays nothing. **Rollback:** flip the flag back.
+
+---
+
+### Wave 3 — One channel projection. The substrate.
+**Worktree `parity/w3-one-projection`.**
+
+**Goal:** one answer to "which channels am I in and what is their state"; delete both cache bridges.
+
+**Items:** P30 `?scope=container|account` · P32 one wire name for `favorited_at` · P31 delete
+`use-home-channel-sync.ts` + `use-home-unread-refresh.ts` · P35 one clipped/`truncated` vocabulary ·
+P36 `isSoleAudience` · P37 `containerNoun(kind)` · P38 one liveness mechanism · P33 one series
+vocabulary · X18/V16 decide `lastMessagePreview`'s fate.
+**Rulings needed:** R-26 ⛔(this wave), R-27, R-28, R-32.
+**Files touched:** ~30 across `src/features/{home,channels,workspaces}`, `packages/contracts`,
+`packages/dopl-client` **and both committed `dist/` trees**.
+**Gates:** `check-role-drift.ts` (the `GET /api/workspaces` row shape) · `check-message-kind-drift.ts` · the committed-`dist` check · `home/server/*.test.ts` (10) · `channels/client` cache suites.
+**Risk — the highest in the roadmap, and it is a CACHE migration.** `/api/home/channels` is
+IndexedDB-persisted with a 24h `gcTime` and **five documented per-field fallbacks**
+(`?? EMPTY_PEERS`, `?? ""`, `?? false`, `?? 0`, `?? null`). A cut-over must keep the old path
+answering for one release **or** bump the version gate, and every new cached field needs its
+`?? EMPTY_X` plus a stale-cache test.
+⚠ **/home structurally cannot be live on more than one container**: `main/ui-sync.js › watch` holds
+exactly ONE realtime channel filtered on ONE `workspace_id` (F-222), so an account-scoped surface
+spans N containers and can be live for at most one. **That is a substrate decision this wave cannot
+paper over** — state it, do not hide it.
+**Rollback:** keep `/api/home/channels` answering; the bridges stay deleted only after one green release.
+
+---
+
+### Wave 4 — The object column and the channel picker.
+**Worktree `parity/w4-object-column`.**
+
+**Goal:** "pick a thing" is one control on every page.
+
+**Items:** split `RelationshipList` into derivation + `ObjectColumn` (D8) · P11 wells on the
+workspace tree · P12 row card face + selected face · P28 presence rings · P13/P14 the unread count
+and preview (**the data half — its own slice**) · U58/U59 the empty-state sentences.
+**Rulings needed:** R-03 ⛔(this wave), R-28, R-40.
+**Files touched:** ~14.
+**Gates:** `collapse-wells.test.tsx` · `well-state` suite (keys are scoped by SURFACE, not by host — do not per-host them) · `home-channel-row` suites · `sidebar-rows` suites.
+**Risk:** R-03(a) would delete the tree's nesting and its Favorites/DM sections — **real structure**.
+Recommend (b). **Rollback:** the wells are a call site over a shared module; revert the call site.
+
+---
+
+### Wave 5 — The shell and the one header.
+**Worktree `parity/w5-shell-header`.**
+
+**Goal:** five header recipes become one; the shell assembly and the rail move into the shared tree.
+
+**Items:** P19 `PageHeaderStrip` (migrate H2 agents → H3 settings → H4 skills → H1 overview → H5
+knowledge) · P20 per-page search · P21 the ~20 hand-cut pill sweep · P25 `Crossfade` on in-page
+selection · P39 `AccountRail` + `AppShellLayout` + `ShellChromeSkeleton` move down behind the
+`*Core` idiom · P40 `BarSeries` moves down · U56 one frame ghost.
+**Rulings needed:** R-01, R-02 ⛔(this wave), R-04, R-05, R-07.
+**Files touched:** ~35.
+**Gates:** `frame-skeletons.test.tsx` (the shell ghost byte-shares five box expressions with `app-shell.tsx`; the rail ghost mounts `account-rail.module.css`'s own classes) · `demo-class-coverage.test.tsx` (the landing draws /home's chrome) · `deep-link-target.test.mjs`.
+**Risk:** **do the shell LAST of the chrome work** — moving it while five headers are in flight is
+the change that breaks everything at once. ⚠ Adding or removing a page is a **four-file** change
+(the `NavSection` union, `NAV`, `WORKSPACE_PAGES`, and the hand copy in
+`main/deep-link-target.js`). **Rollback:** per-page; each header migration is one file.
+
+---
+
+### Wave 6 — Section language, paint and dialogs.
+**Worktree `parity/w6-recipes`.**
+
+**Goal:** one section language, one dialog kit, one decision about the account palette.
+
+**Items:** P27 flat everywhere + X13 delete `SectionBox`'s 8 consumers · P29 fold `.kbCards` into
+`knowledge-v2` · P26 conform the 9 `Todo` input forms to `FormDialog` · P28 the palette decision
+(R-38) · U8/U9 the two type-scale and hardcoded-ink violations.
+**Rulings needed:** R-38, R-39 ⛔(this wave), R-40, R-42.
+**Files touched:** ~25.
+**Gates:** `template-editor.test.tsx` (the no-concave pin) · `frame-palette.test.ts` · `check-css-token-drift.ts` **plus the new class-set check from Wave 0**.
+**Risk:** three of `home.module.css`'s six `:global()` rules select on **Tailwind utility class names
+in files /home does not own** and admit they degrade silently. R-38(a) deletes them; R-38(b) keeps
+the fence. Either is fine — **dissolving the fence by accident is not.**
+**Rollback:** CSS-only; revert the module.
+
+---
+
+### Wave 7 — Reverse parity: what the home space is missing.
+**Worktree `parity/w7-reverse`.**
+
+**Goal:** close the home-side gaps, including one live orphan class.
+
+**Items:** V1/V3 Chats and Skills as personal-shelf faces (**closes V2, the orphan class**) ·
+V4 `ConnectedAppsSection` on /home · V5 the guidance layer · V6 `MyAccessProvider` on /home
+(report PROVIDERLESS distinctly from PENDING — **do not flip `canEdit` closed**) · V9 remove/leave
+on /home's roster.
+**Rulings needed:** R-33 ⛔(this wave), R-09 (blocked on F-343 from Wave 0), R-49.
+**Files touched:** ~18.
+**Gates — this is the wave most likely to break a workspace-only module, so name them (04 §F-3):**
+Chats (10): `chats/server/{repository,retention,rls-redteam,service-folders,service-reads,service-reads-resolve,service-writes}.test.ts`, `chats/lib/optimistic-cache.test.ts`, `chats/hooks/use-chat-writes.test.tsx`, `chats/components/detail-pane.test.tsx`, `pages/chats/index.test.tsx`. ⚠ **No `src/app/api/chats/**` route tests exist.**
+Skills (9): `skills/schema.test.ts`, `skills/server/{service,service-reads,service-reads-resolve,service-seed,rls-redteam}.test.ts`, `skills/components/{create-skill-dialog,skills-browser-core}.test.*`, `pages/skills/index.test.tsx`, `acknowledge-shared-skill.test.ts`.
+MCP: `workspace-arg.test.ts` · `tools/{delete-block,parity,tool-scope-claims,tool-scope-footers}.test.ts` · `tool-budget.test.ts`.
+Members/admission (04 §F-2): `activity-visibility.test.ts` · `members-v2/visibility.test.ts` · `write-configs.test.ts` · `optimistic-cache.test.ts` · `teams/server/repository-{resources,tables}.test.ts` (⚠ L225 asserts no `team_resource_access` reference survives) · `pages/members/index.test.tsx` · the guest-floor set (7 files) · `home/server/{service-claim-bound,service-writes-granted-role,guest-claim-f319-closure}.test.ts`.
+⚠ **Coverage gap, stated so the wave does not mistake green for safe:** there is **no** `rls-redteam`
+suite for `workspace_members`, `workspace_invitations`, `workspace_join_requests`, `teams`,
+`team_members` or `workspace_activity_events`, and no route test under
+`src/app/api/workspaces/[workspaceSlug]/members/**`.
+**Risk:** a sixth /home face **changes the marketing hero** (the landing draws /home's tab strip from
+`src/features/home/tabs.ts`) and touches the tour. **Rollback:** each face is one mount.
+
+---
+
+### Wave 8 — Overview parity.
+**Worktree `parity/w8-overview`.**
+
+**Goal:** give a workspace admin the thing they most obviously want and do not have — credits by
+channel, person and tool.
+
+**Items:** P33 the series first (one `metric` × `range` vocabulary, two fences) · P34 the rails,
+fenced to one container · resolve **F-652** ("Needs you" reads the ACCOUNT endpoint and discards
+most of it) in the same wave · U6 the overview-face shadow hook.
+**Rulings needed:** R-29 ⛔(this wave).
+**Files touched:** ~20.
+**Gates (04 §F-4 — this wave touches credits):** all 30 `src/features/billing/**` tests, specifically `credits-service.test.ts` · `credits-link-reroute.test.ts` · `personal-wallet.test.ts` · `credits-channel-attribution.test.ts` (rule B's forgeable-header fence) · `credits-unmetered.test.ts` (the fail-open posture) · `seats.test.ts` · `webhook-plan.test.ts` · `api/mcp/credits/consume/route{,-guest-floor}.test.ts` · `pages/home/overview-credit-bar.test.tsx` + `overview-unmetered-caption.test.tsx`.
+**Risk — two, both silent.** (1) **The meters must not mix**: a `seat` row is on no /home figure, and
+summing across wallets was the exact 2026-09-12 bug. (2) `20260930120000_credit_wallets.sql` says
+both failure modes of deploying the server ahead of it are **silent** — a missing `consume_*` makes
+every tool call free and unmetered, and a swallowed `42703` empties the credit rails quietly.
+**A parity wave must not be the thing that discovers this.** **Rollback:** the rails are additive panels.
+
+---
+
+### Deferred — each its own project
+R-47 playground retirement · R-30 the ontology boundary (a ruling, not an edit) · R-04(b) the
+workspace-wide search panel (`ui/search-panel` is a separate branch, not in this tree) · the notch
+bar (`ui/notch-bar`, likewise) · moving the five /home faces down (≈2,200 lines, only if the web
+ever renders /home again) · extending `revisions` to skills and chats.
+
+---
+
+## 6. Deletions ledger
+
+Everything the roadmap proposes deleting, so any line can be vetoed.
+
+| # | What | What makes it safe | Wave |
+|---|---|---|---|
+| 1 | `info-tab.tsx:229-244` "Linked threads" + `HARDCODED_LINKED_THREADS` | hardcoded at its render site since 2026-08-18, no `onClick`, no read behind it; INVARIANTS §5 dead-control rule. **R-45** | 1 |
+| 2 | The two inert `IconButton`s in the WS Members heading | Samuel 2026-08-25 deliberately did **not** copy them to /home: *"a port is not a transcription."* **R-46** | 1 |
+| 3 | `info-tab.tsx:224-226` Threads-count row | the tab row already badges Threads; minimal-copy ruling. **R-22** | 1 |
+| 4 | `person-info-tab.tsx` (395 lines) | absorbed by the one shared body; the fork is the bug INVARIANTS:151 names | 1 |
+| 5 | `person-thread-activity.tsx` (63 lines) | F-316 closed the data gap 2026-09-05; this is composition residue over the same query key | 1 |
+| 6 | `fixtures.ts › HARDCODED_THREAD_ACTIVITY` + 2 stale comments | no production reader, measured 2026-09-17. ⚠ **Re-derive before deleting** — `bits.tsx › agentAccent` (F-711) is the precedent | 1 |
+| 7 | `knowledge-tab.tsx`, `capabilities.knowledge`, the fifth-tab width branch, `channelPaneTabs`'s `knowledge` arm | **no host has passed it since 2026-09-04**; F-666 says re-adding needs Samuel's word. **R-18** | 1 |
+| 8 | `channels-skeleton.tsx`'s two-pane ghost | self-described *"a rough fit"*; replaced by the real shape; F-220 | 1 |
+| 9 | `overlays.tsx`'s second `ChannelsAgentPanel` wiring (14 props) | `SurfaceAgentView` exists exactly to prevent it, and the drift it predicted has already happened | 1 |
+| 10 | `src/shared/layout/app-shell/app-panel.tsx` | zero call sites; delete-don't-disarm | 0 |
+| 11 | `channels/components/bits.tsx › TAB_ACTION` as an independent declaration | the tree-boundary workaround it records no longer applies since the 2026-09-17 move | 0 |
+| 12 | The duplicate full-screen error wrapper and the duplicate level-2 card declaration | byte-identical / same tokens, two spellings | 0 |
+| 13 | `use-home-channel-sync.ts` (113 lines) + `use-home-unread-refresh.ts` | they are bridges between two caches; one cache needs no bridge. **Only after P30 ships green** | 3 |
+| 14 | `home.module.css › .kbCards` / `.kbCell` (50 lines) | a fourth rebind of `--kv-*`; the grid becomes a variant of the card's own | 6 |
+| 15 | `SectionBox`'s 8 remaining consumers | Samuel 2026-09-13 on the extra border line; one section language. **R-39** | 6 |
+| 16 | Five page-header recipes; the Knowledge hero band + its marketing paragraph | minimal-copy ruling. ⚠ **The hero is the one deletion that needs Samuel's word. R-02** | 5 |
+| 17 | `channel_personal_arming` table + its 3 live policies | nothing writes it; Samuel reversed task 11 on 2026-09-06; delete-don't-disarm. **R-48** | 3 |
+| 18 | `knowledge_bases.home_scoped` / `agent_templates.home_scoped` | nothing reads them; the shelf is a tenancy now. ⚠ **HELD**: the drop is in `migrations-held/` behind two `count(*) = 0` checks, its `DO $$` aborts a `db push` batch part-way, **and the column is the rollback path — once dropped the deploy is one-way** | after 3, on measurement |
+| 19 | SDK `listKbBases(opts:{shelf?})` param; SDK `getHomeChannels` binding | no MCP call site passes / calls either. ⚠ `getHomeChannels` is **re-ask**, not a clear delete — an account-wide agent read may want it | 3 |
+| 20 | `mcp_tokens.workspace_lock_kind` | superseded by the credential axes; retires in B13 | deferred |
+| 21 | `src/features/playground/**` (18 files, 4,467 lines, 0 tests, an unauthenticated provisioning route, a reaper cron, 3 static mirror panes) | ⚠ **the website-retirement direction is not stated as a ruling in this tree.** **R-47** — treat as a question, not a finding | deferred |
+| 22 | `HomeChannel.lastMessagePreview` | on the wire, rendered by nothing since 2026-09-13 — **or** render it on the workspace row. **R-28 decides** | 3 or 4 |
+
+**Not deleted, recorded so a wave does not "restore" them:** the settings members pane (ASK-1) ·
+`variant="tab"` wells · the per-device `localStorage` pin · the `Agent · <id>` chip · the flat agent
+row · `.selected-ring` · inbound consent · the session window · `channel_pings` · the LLM triage
+tier · per-message desktop notifications · "Waiting on you" and "Recent threads" on /home Overview ·
+the channel-scoped overview panel. And **do not delete an absence test** — several rulings are
+enforced as *"this control does not exist"* assertions (04 §F-5a).
+
+**Not deleted because they are marked-retired hold points:** `workspace_credit_usage`,
+`consume_workspace_credits`, `default_workspace_of`. Deleting a marked-retired object early is how a
+wave acquires a migration it did not plan.
+
+---
+
+## 7. Open questions the research could not settle
+
+**Measurement gaps.**
+1. **Deploy state is unmeasured.** No database was contacted (correct, per INVARIANTS §12). Two team
+   migrations say *"WRITTEN, NOT APPLIED"*; `drop_home_scoped` is in `migrations-held/`; whether
+   `workspace_kind_personal`, the ontology home-shares pair and `credit_wallets` are applied is
+   unknown. `npx supabase migration list --linked`, **joined on the NAME**, is the only answer —
+   `20260823150000` applied as `20260823205007` (F-304).
+2. **Nothing was run.** No build, no lint, no gate. F-688's "root lint is red" is read from the
+   finding; R-41's "the class layer is ungated" is read from the script's source.
+3. **Does a /home pop-out or agent window actually open?** The chain applies a `viewer` floor, so a
+   **guest-role peer may fail**. This is a measurement (R-23), not a ruling, and it gates whether we
+   keep the control.
+4. **No test-pin inventory.** The 47 `*.test.tsx` files in the shared channels tree were not read,
+   so which pins each wave breaks is unknown — and those pins are what a migration wave actually
+   fights. Wave 1 in particular breaks `person-info-tab*.test.tsx` (6 files) and
+   `surface-slot-fixtures.tsx`, and **nobody has counted the assertions that move**.
+5. **No screenshots, by standing rule.** Every visual claim in §3 is a reading of classes and tokens.
+   A live review could disagree with any CSS row.
+6. **The two Overviews were compared structurally, not visually.** Whether they are "the same page
+   twice" or two genuinely different reports is a product question (R-29), not a measurement.
+
+**Unreachable sources.**
+7. **Chat history.** Several rulings were made in a Dopl channel and never written into a doc, a
+   commit body or the KB — `dopl_search` cannot reach the chat archive. **That is the most likely
+   source of a missing row in List 4.**
+8. **The KB base "Dopl MCP Improvement Spec"** was unreachable to the archive researcher; 07 is a
+   verbatim snapshot of its "Tech Debt and Tabled Items" entry taken separately. A cross-scope search
+   was truncated at the 6-scope cap with 8 scopes unsearched — there may be more.
+9. **`docs/ENGINEERING.md` (~6,700 lines) was sampled by targeted grep**, never read whole (CLAUDE.md
+   forbids loading it wholesale). §A of 06 is dense but not provably exhaustive.
+10. **31 of the 36 drift-ledger ASKs are reported open because the document says so**, not because
+    each was re-verified (R-43). And §C.4's live defects were captured against `v1.22.0`, **eighteen
+    days and ~760 commits stale** — re-measure before scheduling any of them.
+
+**Where two research docs disagree, and which reading this document takes.**
+- **How many hosts?** 01 §0 counts four (WS, HOME, GUEST, POP) from a mount-chain census plus a grep
+  over 18 non-test files; 02 §0 says "three hosts of the channel surface" and treats the pop-out as a
+  satellite; 03 §0 counts three hosts of *product UI* and calls the landing demo the third.
+  **This document takes 01's census** — it is the only one that enumerated mount chains — and adds
+  DEMO as a fourth, read-only host because 03 §D.1 and 04 §D-6 both show it forcing code into `src/`.
+- **Is the home↔workspace CSS difference really "CSS-only"?** 02 §D marks the pane and card
+  differences CSS-only while its own gap 3 admits `home.module.css` was **not** read rule by rule;
+  01 §D cites the module's line ranges and states the attribute-hook fence. **01's reading wins**,
+  and it is why R-38 exists rather than a sweep.
+- **What comes first, the Overview panels or the series?** 02 §R-6 recommends deferring the Overview
+  entirely; 04 §E-5 recommends porting the rails; 05 §F R2 recommends **the series first, the panels
+  after the privacy half is ruled.** **This document takes 05's** — it is the only one that read both
+  payloads and both fences — and keeps 04's hard "do not restore the two cut cards".
+- **Internal inconsistency in 01:** its §A heading says "64 rows" and its own count line and row
+  numbering say **74**. The numbering wins.
+- **The charter itself is contested (06 §D.1):** *"the workspace pages adopt /home's frame model and
+  palette — the two surfaces must match"* (2026-08-30) is quoted as if it mandated every /home
+  affordance, but at least six later rulings are deliberately one-surface and three of those carry
+  **no recorded reason**. This document reads the charter as **frame + palette**, which did converge,
+  and routes the three unreasoned asymmetries to R-40 rather than assuming them.
+
+**Confidence.** The inventory rows, the host census, the capability/slot table, the duplicate list
+and the cross-feature import graph are **high confidence** — each was read on both sides and most
+were grepped to a definition. The **line counts** are `wc -l` at `03506fcd` with stated exclusions.
+The **sizes in List 1 and the file counts in §5 are estimates**, not measurements. The
+`ContainerCapabilities` shape in §4.1 is a **proposal derived from the questions the code asks
+today**; a seventh field may surface when someone writes it. Nothing in this document is a decision:
+where code and a ruling disagree the code wins, and the disagreement is recorded rather than settled
+(CLAUDE.md § *Precedence*).
+
+---
+
+## Appendix — the seven research documents
+
+| Doc | One line |
+|---|---|
+| `01-channel-surface.md` (513) | The channel record surface: 74 feature rows, 17 capability/slot knobs, 4 duplicated bodies, 23 UI rows, 10 rulings — and the finding that there is no web workspace channel page. |
+| `02-threads-artifacts-agents.md` (517) | Threads, Artifacts, Agents, templates and the launch flow: 79 rows across 9 tables; almost everything is already one implementation, and the gap is one capability, four hand-wirings and two duplicated bodies. |
+| `03-pages-and-ui.md` (510) | Page composition and the UI system: the page map, 26 recipe rows, the shared-tree readiness ledger (≈1,600 lines to move down), 12 rulings, and the six-wave chrome sequence. |
+| `04-workspace-only-modules.md` (964) | The 28 workspace-only modules and the reverse map: three container kinds, the two auth shapes, what is obsolete, the dependency graph, 12 rulings, and the per-wave "do not break" test lists. |
+| `05-server-api-data.md` (783) | The substrate: 50 fork rows across containers, routes, projections, caches, RLS, credits, MCP and realtime; the duplicate-cache inventory; the container-kind adapter; 8 rulings. |
+| `06-rulings-archive.md` (709) | The decision archive: every ruling bearing on either surface, what is tabled and whether this uplift trips it, the open findings, twelve contradictions, 18 questions, and 25 distilled principles. |
+| `07-kb-tech-debt-snapshot.md` (23) | A verbatim snapshot of the Dopl KB entry "Tech Debt and Tabled Items", copied because the archive researcher could not reach that base. |
