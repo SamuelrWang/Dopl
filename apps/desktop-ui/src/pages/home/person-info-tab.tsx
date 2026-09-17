@@ -372,6 +372,13 @@ export function PersonInfoTab({
         index={mentions.index}
         onOpenMention={mentions.onOpen}
         onMarkAllRead={mentions.onMarkAllRead}
+        // 🔒 **FLUSH WITH EVERY HEADING ON THIS TAB (Samuel, 2026-09-17):** *"each
+        // individual mention is starting further right … It should be moved a
+        // little bit to the left to start at the same place."* The list is a
+        // TOP-LEVEL CATEGORY here, not a disclosure's contents, and it had been
+        // wearing the disclosure's 28px hang (`mentions-list.tsx ›
+        // MentionsListInset` carries the arithmetic).
+        inset="flush"
       />
 
       <PersonMembers homeChannel={homeChannel} />

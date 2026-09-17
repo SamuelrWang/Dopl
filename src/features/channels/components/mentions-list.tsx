@@ -51,12 +51,41 @@ import type { ChannelMention } from "../types";
  * than resurrect this one.
  */
 
+/**
+ * 🔒 **WHERE THE LIST HANGS UNDER ITS HOST — the LEFT INSET, AND IT IS THE HOST'S
+ * FACT (Samuel, 2026-09-17, over /home's Info tab, verbatim):** *"For mentions,
+ * each individual mention is starting further right, so it is not saying flush
+ * with the rest of the things. It should be moved a little bit to the left to
+ * start at the same place."*
+ *
+ * ⚠ **THE LIST CARRIED ONE NUMBER FOR BOTH HOSTS AND IT WAS THE DISCLOSURE'S.**
+ * `pl-7` (28px) hangs the rows under `mentions-disclosure.tsx`'s own ROW LABEL —
+ * that row's `px-2`, its 14px `Tag` glyph and its `gap-2`, which is exactly what a
+ * disclosure's contents should line up with. **On /home the list is not inside a
+ * disclosure**: it is a TOP-LEVEL CATEGORY under a `PanelHeading` (2026-09-15), so
+ * those 28px indented it past every heading and every other section on the tab.
+ * ⚠ **`flush` IS ARITHMETIC, NOT A GUESS**: `bits.tsx › PanelHeading` is `px-3.5`
+ * and the activity strip and the roster below it are `px-3.5` too — 14px is the
+ * tab's column edge — and a mention row carries its own `px-2` hover inset, so the
+ * list needs 14 − 8 = 6px for the row's TEXT to start on that edge.
+ * ⚠ **NO DEFAULT, BECAUSE THE TWO HOSTS DISAGREE.** A default is how the next host
+ * silently inherits the other one's indent, which is the defect this prop exists
+ * to end.
+ */
+export type MentionsListInset = "nested" | "flush";
+
+const MENTIONS_INSET: Record<MentionsListInset, string> = {
+  nested: "pl-7",
+  flush: "pl-1.5",
+};
+
 export function MentionsList({
   mentions,
   loading,
   channelName,
   index,
   onOpenMention,
+  inset,
 }: {
   /** THE WHOLE bounded page, in the server's `seq DESC` order. ⚠ Never
    *  re-sorted here — the LIMIT clipped against that order. */
@@ -74,6 +103,9 @@ export function MentionsList({
    *  prop stays so the two hosts keep one call shape. Its handler is still the
    *  surface's, still correct, and still wired for whatever asks next. */
   onMarkAllRead: () => void;
+  /** Under a disclosure row, or on the panel's own column edge — see
+   *  {@link MentionsListInset}. */
+  inset: MentionsListInset;
 }) {
   // ⚠ "Mark all read" STOOD HERE AND IS DELETED (Samuel, 2026-09-15, item 7). The
   // WRITE path is untouched — `use-mention-writes.ts › markRead` still fires on a
@@ -103,7 +135,14 @@ export function MentionsList({
        `agent-color-dot.tsx` states for its `size-2`.
        ⚠ `overscroll-contain` so reaching the end does not start scrolling the Info
        panel behind it, which on a 380px column reads as the whole tab jumping. */
-    <div className="flex max-h-[13.5rem] flex-col gap-1 overflow-y-auto overscroll-contain pb-2 pl-7 pr-1 pt-0.5">
+    <div
+      className={cn(
+        "flex max-h-[13.5rem] flex-col gap-1 overflow-y-auto overscroll-contain pb-2 pr-1 pt-0.5",
+        // ⚠ THE LEFT INSET IS THE HOST'S — see {@link MentionsListInset}. It is the
+        // only class here that differs between the two surfaces.
+        MENTIONS_INSET[inset]
+      )}
+    >
       {mentions.map((mention) => (
         <MentionItem
           key={mention.messageId}

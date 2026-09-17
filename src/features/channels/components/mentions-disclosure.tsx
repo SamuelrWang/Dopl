@@ -114,6 +114,11 @@ export function MentionsDisclosure({
           index={bundle.index}
           onOpenMention={bundle.onOpen}
           onMarkAllRead={bundle.onMarkAllRead}
+          // ⚠ THE ROWS HANG UNDER THIS ROW'S LABEL — `px-2` + a 14px glyph +
+          // `gap-2`. **The number used to live in the list**, which is why /home's
+          // top-level Mentions section inherited a disclosure's indent
+          // (`mentions-list.tsx › MentionsListInset`, Samuel 2026-09-17).
+          inset="nested"
         />
       )}
     </>

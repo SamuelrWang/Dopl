@@ -295,6 +295,20 @@ describe("the mention row", () => {
     expect(row.className).not.toContain("bg-link");
   });
 
+  it("hangs its rows under the DISCLOSURE'S LABEL — the inset is the HOST's", () => {
+    // 🔒 **THE NUMBER MOVED OUT OF THE LIST ON 2026-09-17 AND THIS PAGE DID NOT.**
+    // Samuel, over /home's Info tab: *"each individual mention is starting further
+    // right, so it is not saying flush with the rest of the things."* The list was
+    // carrying ONE inset for two hosts and it was this one's — `px-2` + a 14px
+    // `Tag` glyph + `gap-2`, i.e. the row label these rows belong under. HERE it is
+    // right; there it was a disclosure's hang on a top-level section
+    // (`mentions-list.tsx › MentionsListInset`).
+    open();
+    const row = screen.getByText(ROWS[0].snippet).closest("button")!;
+    expect(row.parentElement!.className).toContain("pl-7");
+    expect(row.parentElement!.className).not.toContain("pl-1.5");
+  });
+
   it("an UNCOLOURED agent keeps the black pill — that is a real state, not a failure", () => {
     // A room with all sixteen keys out runs the next agent uncoloured, and an ended
     // agent is deliberately uncoloured everywhere. Both get the CTA face.
