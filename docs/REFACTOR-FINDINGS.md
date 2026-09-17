@@ -7567,16 +7567,6 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   shouldLockSession` and `newlySharedContainers` answer a question about a CLAIM, not about an
   audience.
 
-### F-718 — the AGENT AUDIENCE CEILING is the fifth "is this room shared" site and R-08 did not move it (2026-09-17)
-
-- Location: `src/features/knowledge/server/service-audience.ts › resolveAgentAudience` — `if (kind !== "link") return UNRESTRICTED;` immediately followed by `countActiveWorkspaceMembers` and `memberCount <= 1`.
-- Found during: wave 0a, executing R-08 (F-513). The census test written for that ruling flags this file, and it is carried as its one DOCUMENTED deviation rather than silently excluded.
-- **THE SHAPE IS EXACTLY THE ONE R-08 RETIRED** — a kind test in front of a member count, answering "is there a second audience here". `docs/specs/workspace-parity/00-MASTER.md` §2.4's R-08 text says honouring the ruling *"tightens the knowledge audience ceiling"*, so the ruling's own consequence sentence implicates this site.
-- ⚠ **IT WAS STILL NOT MOVED, AND THE REASON IS NOT SCOPE — IT IS THAT THE CEILING IS A DIFFERENT KIND OF FACT (F-524).** Every other reader of "shared" asks a property of the ROOM. This one is a per-REQUEST bound: it depends on the container kind, the live ACTIVE-member count AND an `X-Dopl-Session-Id` that may NARROW the channel set — a forgeable header whose safety comes entirely from being used to narrow an already-fenced set. Widening it to every multi-member standard workspace would put every colleague's agent behind a grant list overnight, which is a product change with a blast radius, not a predicate swap.
-- ⚠ **AND THE BLAST RADIUS IS THE POINT.** Under R-08's reading, a `source === "agent"` read in a nine-person standard workspace would answer `granted` with an EMPTY base set until somebody filed grants — i.e. every agent in every team workspace stops seeing every knowledge base on the day it ships. The fail direction is CLOSED, so it is an outage rather than a leak, and it is still an outage.
-- Proposed resolution: put it to Samuel as its own one-line ruling, the way R-08 itself was: does the audience ceiling follow the member count, and if so does it need a migration path (default-grant every existing container's bases) before it can arm? Until then the census entry is what keeps the disagreement visible.
-- Status: open. ⚠ **THE TREE THEREFORE ANSWERS "IS THIS ROOM SHARED" TWO WAYS AGAIN, DELIBERATELY AND IN ONE NAMED PLACE** — which is the state F-513 existed to end, so it does not get to be implicit.
-
 ### F-514 — G18's web residual survives the fourth profile, by ruling (2026-09-02)
 
 - Location: `dopl-desktop-app/main/tool-profiles.js` › `WEB_TOOLS`, reachable under `channel_agent` and `full`.
@@ -8511,6 +8501,36 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   module's own seam (a pre-write refusal about the CALLER) applied, the second time that file has paid
   this cap and the same line both times. Both names are RE-EXPORTED from the original, so the route,
   the `service.ts` barrel and `service-create-audience.test.ts` are unchanged. 366 and 378 lines.
+- ✅ **RESOLVED 2026-09-17 (wave 0a, item 3). MEASURED, NOT ASSUMED — THE ROOT LINT IS GREEN AND THE
+  SWEEP RETURNS THE EXEMPTION LIST EXACTLY.** Run at `cf87e6f6` before this wave changed anything:
+  - `npm run lint -- --max-warnings 0` at the root → **exit 0**, zero `max-lines` errors.
+  - the sweep in the Command line above, widened to `src packages apps` → **THREE rows**:
+    `src/shared/supabase/types.ts` 2706, `src/features/billing/server/webhook-handler.test.ts` 753,
+    `src/features/knowledge/server/seed-fixtures-data.ts` 660 — and `eslint.config.mjs`'s
+    `max-lines: "off"` block names those three and nothing else.
+  - the `size-check` CI job's own `find`/`awk`, replayed verbatim over `packages/` → *"All files
+    within the 500-line cap"*. `tools/channel-schema.ts` measures **500**, at the wall exactly.
+  - ⚠ **AND THE RULE WAS PROVED LIVE RATHER THAN ASSUMED**: a 520-line throwaway under
+    `src/shared/tenancy/` reports *"File has too many lines (520). Maximum allowed is 500"*, so the
+    green above is a green gate and not an unconfigured one.
+  **NO SPLIT WAS OWED AND NONE WAS TAKEN.** The sixteen were closed one at a time by the waves whose
+  contract changes met them — which is what this entry's own ⚠ asked for (*"the honest plan is to
+  take each as its next contract change arrives"*) — and F-689 took `packages/` the same way. The
+  exemption list SHRANK by one over the same window (`billing/components/upgrade-modal.tsx` left it).
+  ⚠ **THE CAP IS A WALL AND THIS WAVE PAID IT THREE TIMES, WHICH IS THE PART TO CARRY FORWARD.**
+  `acknowledge-shared.test.ts` (498), `confirm-class.test.ts` (497) and
+  `workspaces/server/shared-publish.test.ts` (499) each sat within three lines of it, so R-08's arms
+  could not be added at all until the files were funded. Each was funded by DE-DUPLICATION, never by
+  a cut: the two MCP suites' byte-identical `TEMPLATE`, near-identical `BASE`, and
+  `confirm-class.test.ts`'s second copy of `workspaceStub` / `sharedContainer` / `tokenIn` / `textOf`
+  all moved into `tools/acknowledge-shared-fixtures.ts` — the module whose header already said that a
+  second copy of "the room this class fires in" is two answers to one question — and
+  `shared-publish.test.ts` collapsed its two byte-identical context builders and its four copies of
+  one row fixture. Every assertion survived and four gained.
+  ⚠ **INVARIANTS §1 IS CORRECTED IN THE SAME CHANGE.** It led with the 2026-09-09 measurement
+  (*"TWENTY files exceed 500 … the root lint gate is red"*) and buried the 2026-09-14 correction at
+  the end of the same bullet, so a reader who stopped early got the opposite of the truth; it also
+  still said FOUR carve-outs and *"the two billing files"* against a list of three.
 
 ### F-667 — the POOLED credit counter is retired from writes but not dropped, and the drop needs a migration nobody has scheduled (2026-09-07)
 
@@ -9896,3 +9916,13 @@ nicety: `to_tsquery` is the one spelling that can RAISE on user text.
 FOLLOW-UP** — `docs/INVARIANTS.md` §9 and §12, this log's F-715 entry, the footer of
 `supabase/migrations/20261007120000_search_fulltext_indexes.sql`, and the two repository headers.
 The claim had been restated in five places from one sentence, which is how it survived review.
+
+### F-718 — the AGENT AUDIENCE CEILING is the fifth "is this room shared" site and R-08 did not move it (2026-09-17)
+
+- Location: `src/features/knowledge/server/service-audience.ts › resolveAgentAudience` — `if (kind !== "link") return UNRESTRICTED;` immediately followed by `countActiveWorkspaceMembers` and `memberCount <= 1`.
+- Found during: wave 0a, executing R-08 (F-513). The census test written for that ruling flags this file, and it is carried as its one DOCUMENTED deviation rather than silently excluded.
+- **THE SHAPE IS EXACTLY THE ONE R-08 RETIRED** — a kind test in front of a member count, answering "is there a second audience here". `docs/specs/workspace-parity/00-MASTER.md` §2.4's R-08 text says honouring the ruling *"tightens the knowledge audience ceiling"*, so the ruling's own consequence sentence implicates this site.
+- ⚠ **IT WAS STILL NOT MOVED, AND THE REASON IS NOT SCOPE — IT IS THAT THE CEILING IS A DIFFERENT KIND OF FACT (F-524).** Every other reader of "shared" asks a property of the ROOM. This one is a per-REQUEST bound: it depends on the container kind, the live ACTIVE-member count AND an `X-Dopl-Session-Id` that may NARROW the channel set — a forgeable header whose safety comes entirely from being used to narrow an already-fenced set. Widening it to every multi-member standard workspace would put every colleague's agent behind a grant list overnight, which is a product change with a blast radius, not a predicate swap.
+- ⚠ **AND THE BLAST RADIUS IS THE POINT.** Under R-08's reading, a `source === "agent"` read in a nine-person standard workspace would answer `granted` with an EMPTY base set until somebody filed grants — i.e. every agent in every team workspace stops seeing every knowledge base on the day it ships. The fail direction is CLOSED, so it is an outage rather than a leak, and it is still an outage.
+- Proposed resolution: put it to Samuel as its own one-line ruling, the way R-08 itself was: does the audience ceiling follow the member count, and if so does it need a migration path (default-grant every existing container's bases) before it can arm? Until then the census entry is what keeps the disagreement visible.
+- Status: open. ⚠ **THE TREE THEREFORE ANSWERS "IS THIS ROOM SHARED" TWO WAYS AGAIN, DELIBERATELY AND IN ONE NAMED PLACE** — which is the state F-513 existed to end, so it does not get to be implicit.
