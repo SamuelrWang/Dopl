@@ -9515,3 +9515,74 @@ a test failure rather than as a second orphan:
 `apps/desktop-ui/src/components/app-shell/frame-palette.test.ts` asserts neither kit copy declares
 the class. `scripts/check-css-token-drift.ts` was never going to catch it — it compares TOKEN
 declarations, not rules.
+
+---
+
+### F-715 — `/api/search`'s message arm scans every message body until `20261007120000` applies
+
+**Found:** 2026-09-17, building the global search route. **Status:** 🟡 **OPEN — LATENCY, NEVER
+CORRECTNESS**, and the discharge is a deploy step rather than a code change.
+
+`src/features/search/server/repository-channel-rows.ts › searchMessages` asks PostgREST for
+`body=wfts(simple).<q>`, which renders as
+`to_tsvector('simple', body) @@ websearch_to_tsquery('simple', $1)` — the EXPRESSION form, computed
+per row, with no index that can serve it. `supabase/migrations/20261007120000_search_fulltext_indexes.sql`
+adds `channel_messages.search_tsv` (generated, STORED) plus its GIN index and is **WRITTEN, NOT
+APPLIED** (INVARIANTS §12).
+
+**This is deliberate, not an oversight.** Naming a column that does not exist yet would make the
+route BROKEN rather than SLOW until somebody applied the file, and `20260822170000_overview_time_range_indexes.sql`
+states that rule for this directory in as many words. The same argument is why there is no
+`SECURITY DEFINER` search RPC and why `ts_rank` / `ts_headline` are computed in TypeScript instead
+(`service-groups.ts › rankHits`, `snippet.ts › buildSnippet` — the second of which is also the
+safer place, since `ts_headline` copies the source body through verbatim).
+
+**The discharge is one line, and the migration's own footer spells it out:** change
+`.textSearch("body", q, { type: "websearch", config: "simple" })` to
+`.textSearch("search_tsv", q, { type: "websearch" })`. ⚠ **Do NOT close this by making the
+repository probe for the column at runtime** — a per-request `information_schema` lookup buys a
+round trip to learn something the deploy already knows, and a cached probe is a stale answer with
+no invalidation.
+
+⚠ The blast radius is bounded meanwhile: the read is fenced to the caller's own channels and capped
+at 50 rows (`contracts.ts › SEARCH_GROUP_TOTAL_CAP`), so the scan is per-keystroke over one
+account's rooms rather than over the table.
+
+---
+
+### F-716 — a row shared INTO a container is unfindable by search, by design, and nothing says so to the reader
+
+**Found:** 2026-09-17, building the global search route. **Status:** 🟡 **OPEN — A MISS, NOT A
+LEAK**, and the direction is the reason it shipped this way.
+
+`src/features/search/server/repository-container-rows.ts` narrows `knowledge_bases`,
+`agent_templates`, `skills` and `chats` with `visibility = <widest> OR <owner> = caller` — exactly
+the clauses `20260504030000_visibility_private_resources.sql` states as the RLS SELECT policy. Each
+of those tables' real predicate has FURTHER arms that this does not reproduce:
+
+| predicate | arms search does not have |
+|---|---|
+| `knowledge/server/service-shared.ts › canSeeBase` | the `resource_grants` arm (F-604) |
+| `skills/server/service-shared.ts › canSeeSkill` | workspace-admin, and the team grant |
+| `agent-templates/server/service-shared.ts › canSeeTemplate` | the `resource_grants` arm, workspace-admin, and the team share |
+| `chats/server/service-shared.ts › canSeeChat` | the team grant |
+
+**Every one of those can only ADD rows**, so the fence is a strict SUBSET and cannot leak. What it
+costs is real: a base a teammate lent this container, or a skill shared with a team the caller is
+in, does not appear in the popup even though its own page lists it. **A search that misses a lent
+row is a miss; a search that shows a foreign one is a leak**, and only the second is unshippable —
+which is why this is filed rather than fixed under time pressure.
+
+**Why it was not simply fixed:** each missing arm needs its feature's own grant/team context built
+per container (`shared/tenancy/resource-grant-reach.ts › grantedResourceIds`, the team-id set, the
+role), and account scope spans every container the caller is in — so the honest fix is a per-arm
+batch read keyed on the whole container set, not four more `.or()` clauses. Doing it wrong would
+put a second, drifting copy of four visibility predicates in a fifth feature, which is the failure
+`knowledge/server/service-bases.ts`'s "a gate that one caller has to remember is not a gate"
+paragraph records.
+
+⚠ **THE SUBSET RELATIONSHIP IS THE CLAIM AND IT IS NOT PINNED.** `search/server/fence.test.ts`
+proves the arms that ARE there refuse a peer's private row; nothing asserts that the arms that are
+MISSING could only have widened. A predicate that gains a NARROWING arm tomorrow would make this
+entry false with no test going red — `shared/tenancy/grant-read-arm.test.ts`'s mirror idiom is the
+shape a real pin would take.
