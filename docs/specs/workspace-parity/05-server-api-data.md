@@ -27,8 +27,14 @@ in the tree today and three of them appear in the same files.
 |---|---|---|
 | **home space / `/home`** | The desktop's ACCOUNT surface: a five-tab face that spans every container the user is in. Not a workspace at all. | `apps/desktop-ui/src/components/app-shell/account-rail.tsx › HOME_PATH` (L12), `src/features/home/tabs.ts › HOME_TABS` (L51) |
 | **home channel** | A `workspaces.kind='link'` container holding exactly ONE channel and 1..N members. A real workspace row with a real membership. | `docs/INVARIANTS.md` §4A; `src/features/home/types.ts › HomeChannel` (L43) |
-| **home workspace** | The caller's DEFAULT STANDARD workspace, answered by `POST /api/boot › workspace`. A `kind='standard'` row. | `src/app/api/boot/route.ts` (L33), `src/features/workspaces/server/segment.ts › getBootState` (L326) |
+| **home workspace** | ⚠ **A DEAD WORD — THIS ROW WAS WRONG WHEN IT WAS MEASURED AND R-35 RETIRES THE CONCEPT** (corrected 2026-09-17). It said *"the caller's DEFAULT STANDARD workspace, answered by `POST /api/boot › workspace`"*. `getBootState`'s no-segment branch calls `ensurePersonalContainer` and has since wave B B14, so what boot answers is the **home shelf** row below — a `kind='personal'` container, never a `kind='standard'` row. Samuel's ruling R-35 (2026-09-17) makes that the rule rather than a leftover: a new account gets a home space and no standard workspace. **Do not reintroduce this sense of "home".** | `src/features/workspaces/server/segment.ts › getBootState`, `› ensurePersonalContainer`; `docs/INVARIANTS.md` §4A |
 | **home shelf (`?shelf=home`)** | The caller's `kind='personal'` container — one per user. | `src/shared/tenancy/personal-container.ts › resolveShelfScope` (L227) |
+
+⚠ **THREE ARE LIVE, NOT FOUR (2026-09-17, R-35).** The "home workspace" sense named a row
+`POST /api/boot` stopped answering at wave B B14, and R-35 retires the concept outright — a new
+account gets a home SPACE and no standard workspace at all, so there is no default standard
+workspace for the word to mean. The heading's count is left standing because the word still appears
+in the tree in that sense; it is a bug to fix, not a meaning to keep.
 
 Consequences already visible in the code:
 

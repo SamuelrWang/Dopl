@@ -486,6 +486,23 @@ Both sentences are in **one document**: `docs/specs/mcp-v2-wave-b.md:213` vs `:4
 🚩 **This decides whether a new user even HAS a workspace to reach parity with.** Later-wins cannot settle it:
 the two statements are a shipped behaviour and a spec, in the same wave. **Measure the code, then ask.**
 
+✅ **RESOLVED 2026-09-17 — MEASURED, THEN RULED. `:456` WAS RIGHT AND `:213`/`:584` WERE THE DRIFT.**
+The measurement: the ONLY two provisioning call sites are `src/app/auth/callback/route.ts` and
+`workspaces/server/segment.ts › getBootState`'s no-segment branch, and both call
+`workspaces/server/service.ts › ensurePersonalContainer`. `service.ts › createWorkspaceForUser` is
+the only remaining workspace INSERT and no signup path reaches it. **So a new user gets ONE
+`kind='personal'` container and no standard workspace, and has since wave B B14 shipped** — the
+sentence at `:213` described a plan the slice that implemented it deliberately did not follow, and
+`:456` recorded the contradiction rather than glossing it, which is the only reason this was
+answerable without a database.
+Samuel's ruling **R-35** (2026-09-17) makes it the rule: *"New users should not be getting a
+workspace. It should be the home space. Home spaces are the only thing new users get."* ⚠ **The
+ruling asked to "remove any code that mints one" and the answer is that there is none** — what it
+actually bought is **R-34's other half, PERMANENCE**, which nothing enforced: an owner could
+`DELETE /api/workspaces/{segment}` their own home space. See `docs/INVARIANTS.md` §4A.
+⚠ **THE TRANSITION IS NOT A DELETION ORDER:** existing standard workspaces stay, untouched; only the
+default-minting stops (and it had already stopped).
+
 ### D.5 — The home shelf as a PLACE vs. the personal container
 
 - 2026-08-26: `home_scoped` is a **noun and a place**, with a reciprocal workspace exclusion
