@@ -179,11 +179,39 @@ export async function listArtifactsByChannel(
  * #1119 live in" — a count that silently meant "of the members that happen to
  * be on this page" would answer a different question every time the page moved.
  *
- * ⚠ PROJECTED TO TWO SMALL COLUMNS. Bodies are the large half of
- * `channel_messages` and the answer is arithmetic; `select("*")` here would pull
- * every folded body on every transcript read. Served by
- * `channel_messages_artifact_idx` on `(artifact_id, seq) WHERE artifact_id IS
- * NOT NULL`.
+ * 🔒 **POSTGRES DOES THE ARITHMETIC, AND THAT IS A CORRECTNESS FIX RATHER THAN A
+ * SPEED ONE (F-712).** This used to `select("artifact_id, seq")` over
+ * `channel_messages` and fold the rows in JS. **The select was unbounded and
+ * PostgREST is not** — `supabase/config.toml › max_rows = 1000` clips the
+ * response and raises nothing — so in a busy room every number was computed over
+ * whatever survived the clip: a clipped `lastSeq` points a reader at the WRONG
+ * artifact and a clipped `count` under-reports it, silently, and differently each
+ * time the page moves. One row per artifact moves the ceiling onto a set the
+ * CALLER already bounds ({@link listArtifactsByChannel}'s limit, or a page's
+ * distinct ids). ⚠ **Never "fix" this with a larger `max_rows` or a page loop**:
+ * the first moves the number and keeps the silence, the second hauls the same
+ * rows across the wire to do arithmetic Postgres does once, indexed.
+ *
+ * ⚠ **THE MIGRATION IS A HARD DEPENDENCY, UNLIKE THE SEARCH INDEX'S.**
+ * `supabase/migrations/20261008120000_artifact_spans_rpc.sql` ships **WRITTEN,
+ * NOT APPLIED** (INVARIANTS §12) and this call answers `PGRST202` until it is
+ * applied BY NAME (`artifact_spans_rpc`). That is deliberate and it is stated
+ * rather than degraded: the fallback would be the JS fold, and the JS fold is the
+ * bug — a read that is quietly WRONG is worse than one that is loudly absent.
+ * `20261007120000_search_fulltext_indexes.sql` could ship unapplied precisely
+ * because its unapplied form was SLOW, NEVER WRONG; this one has no such form.
+ *
+ * ⚠ **`channelId` IS THE FENCE, NOT A NARROWING** — the same sentence
+ * {@link findArtifactByChannelAndId} carries, and the reason the RPC takes it as
+ * an argument instead of trusting that its ids were fenced upstream: the caller
+ * has been proved able to read THIS channel, so a member row that somehow carried
+ * a foreign artifact id still cannot be counted out of another room. The function
+ * is `SECURITY INVOKER` with `EXECUTE` granted to `service_role` alone, so the
+ * only way to reach it is the admin client this file already uses.
+ *
+ * ⚠ Served by `channel_messages_artifact_idx` on `(artifact_id, seq) WHERE
+ * artifact_id IS NOT NULL`, which is the grouping's own shape; the migration's
+ * `DO $$` RAISEs if it is missing rather than trusting it.
  */
 export interface ArtifactSpan {
   count: number;
@@ -191,32 +219,38 @@ export interface ArtifactSpan {
   lastSeq: number;
 }
 
+interface ArtifactSpanRow {
+  artifact_id: string;
+  count: number | string;
+  first_seq: number | string;
+  last_seq: number | string;
+}
+
 export async function artifactSpans(
   channelId: string,
   artifactIds: string[]
 ): Promise<Map<string, ArtifactSpan>> {
   const out = new Map<string, ArtifactSpan>();
+  // ⚠ NO ROUND TRIP FOR AN EMPTY SET, as before: `ANY('{}')` matches nothing at
+  // the price of a call, and every caller that has no artifacts on its page
+  // reaches this line.
   if (artifactIds.length === 0) return out;
   const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("channel_messages")
-    .select("artifact_id, seq")
-    .eq("channel_id", channelId)
-    .in("artifact_id", artifactIds);
+  const { data, error } = await db.rpc("channel_artifact_spans", {
+    p_channel_id: channelId,
+    p_artifact_ids: artifactIds,
+  });
   if (error) throw error;
-  for (const row of (data ?? []) as Array<{
-    artifact_id: string;
-    seq: number;
-  }>) {
-    const seq = Number(row.seq);
-    const cur = out.get(row.artifact_id);
-    if (cur === undefined) {
-      out.set(row.artifact_id, { count: 1, firstSeq: seq, lastSeq: seq });
-      continue;
-    }
-    cur.count += 1;
-    if (seq < cur.firstSeq) cur.firstSeq = seq;
-    if (seq > cur.lastSeq) cur.lastSeq = seq;
+  for (const row of (data ?? []) as ArtifactSpanRow[]) {
+    // ⚠ `Number(...)` ON ALL THREE: `count(*)`, `min(seq)` and `max(seq)` are
+    // `bigint`, which PostgREST may render as a STRING. The old fold coerced
+    // `seq` for exactly this reason and dropping the coercion here would make
+    // `firstSeq` a string that renders plausibly and compares wrongly.
+    out.set(row.artifact_id, {
+      count: Number(row.count),
+      firstSeq: Number(row.first_seq),
+      lastSeq: Number(row.last_seq),
+    });
   }
   return out;
 }

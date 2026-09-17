@@ -9444,14 +9444,27 @@ its only per-agent mark.
 
 ### F-712 — `artifactSpans` counts a busy room's artifacts off a PostgREST-capped page
 
-**Found:** 2026-09-16, reviewing `master..e7da893e`. **Status:** OPEN — recorded, NOT fixed. The fix
-is a server-side aggregation and that is a migration plus an RPC, which is not this wave's change.
+**Found:** 2026-09-16, reviewing `master..e7da893e`. **Status:** ⏳ **RESOLVED-PENDING-APPLY
+2026-09-17** (workspace-parity Wave 0c, branch `wave0/artifact-spans`, commit subject *"Artifact
+spans are counted by Postgres, not by a clipped page (F-712)"* — ⚠ a commit cannot cite its own
+hash; the hash is in that wave's report). The code half is DONE; the deploy half is a MEASUREMENT
+and is not done until `supabase/migrations/20261008120000_artifact_spans_rpc.sql` has been applied
+**BY NAME (`artifact_spans_rpc`), byte-exact, never by `db push`** — re-derive with
+`supabase migration list` / MCP `list_migrations` **joined on the NAME** (F-304), never on the
+filename prefix.
 
-`repository-artifacts.ts › artifactSpans` derives `count` / `firstSeq` / `lastSeq` by selecting the
+🔒 **THE MIGRATION IS A HARD DEPENDENCY, AND THAT IS THE ONE THING TO CARRY OUT OF THIS ENTRY.**
+Until it is applied, `artifactSpans` answers `PGRST202` and the card read FAILS — loudly. That is
+deliberate: the only available degrade was the JS fold, and the JS fold is this bug.
+`20261007120000_search_fulltext_indexes.sql` could ship unapplied for a release because its
+unapplied form was **slow, never wrong**; this one has no such form, so the apply is sequenced with
+the deploy rather than after it.
+
+`repository-artifacts.ts › artifactSpans` derived `count` / `firstSeq` / `lastSeq` by selecting the
 member rows themselves — `select("artifact_id, seq")` over `channel_messages`, filtered
-`.eq("channel_id", …).in("artifact_id", …)` — and folding them in JS. **The select is unbounded and
+`.eq("channel_id", …).in("artifact_id", …)` — and folding them in JS. **The select was unbounded and
 PostgREST is not**: `supabase/config.toml › max_rows = 1000` clips the response, no error is raised,
-and every number the fold produces is then computed over whatever survived the clip.
+and every number the fold produced was then computed over whatever survived the clip.
 
 ⚠ **IT IS A WRONG ANSWER, NOT A MISSING ONE, AND NOTHING ON THE PAGE SAYS SO.** The card's whole
 value is "which box does #1119 live in" (the function's own docblock), so a clipped `lastSeq` points
@@ -9468,6 +9481,46 @@ row per artifact, so the ceiling applies to ARTIFACTS — a set this read alread
 to their members. ⚠ **Do not "fix" it with a larger `max_rows` or a page loop**: the first moves the
 number and keeps the silence, and the second pulls the same rows to do arithmetic Postgres will do
 once.
+
+**What landed, exactly as that paragraph asked.**
+`supabase/migrations/20261008120000_artifact_spans_rpc.sql` adds
+`public.channel_artifact_spans(p_channel_id uuid, p_artifact_ids uuid[])` — `count(*)` / `min(seq)` /
+`max(seq)` grouped by `artifact_id`, one row per artifact — and `repository-artifacts.ts ›
+artifactSpans` is now that `.rpc()` call and the coercion of its three `bigint` columns. **The JS
+fold is deleted, not bypassed**: nothing in the repository selects the member rows any more, which
+is asserted rather than described (`server/artifact-spans-schema.test.ts`, *"no longer selects the
+member rows to count them"*).
+
+🔒 **IT TOOK A SECOND ARGUMENT AND THE FENCE IS WHY.** The sketch above said
+`channel_artifact_spans(artifact_ids uuid[])`; the read it replaces carried `.eq("channel_id", …)`,
+and that predicate is the whole authorization (`repository-artifacts.ts ›
+findArtifactByChannelAndId` states it for this file: the caller has been proved able to read THIS
+channel). Dropping it because "the ids are fenced upstream" would move a fence into a caller's
+habits, so `p_channel_id` is in the signature, in the `WHERE`, and pinned from both ends.
+
+🔒 **`SECURITY INVOKER`, service_role-only `EXECUTE`** — `20260823150000_home_link_channels.sql ›
+consume_channel_link`'s pairing, for its reason: DEFINER would be a second door into
+`channel_messages` that never consults RLS, reachable by anyone who can reach `/rest/v1/rpc`. The
+migration's own `DO $$` RAISEs on `prosecdef`, on an `anon`/`authenticated` EXECUTE, on a missing
+`channel_messages_artifact_idx`, and on the READ FENCE THIS FUNCTION INHERITS having gone —
+row security disabled on `channel_messages`, or no `FOR SELECT` policy left on it.
+
+⚠ **THAT LAST CHECK WAS WRONG ON THE FIRST TRY AND THE REAL APPLY CAUGHT IT, WHICH IS WORTH ONE
+LINE.** It asserted `has_table_privilege('authenticated', 'public.channel_messages', 'SELECT')` was
+FALSE — reading the table as `channel_artifacts`-shaped (deny-by-default, service-role only). It is
+not: `20260725130000_channels_rls_hardening.sql` revokes only INSERT/UPDATE/DELETE and leaves the
+`*_member_select` policies as "the direct-read model for Realtime and RLS reads", so SELECT is
+GRANTED to `authenticated` and `channel_messages_member_select`
+(`20260826120000_guest_channel_realtime_rls.sql`) narrows the ROWS. The apply aborted on a CORRECT
+database — **a tripwire that names the wrong model blocks a correct change while reading as
+vigilance**, which is the expensive direction to be wrong in. `server/artifact-spans-schema.test.ts`
+now pins the replacement AND the absence of the grant check.
+
+**The >`max_rows` case is executable now**, which it never was before:
+`server/repository-artifacts-spans.test.ts` reads `max_rows` out of `supabase/config.toml`, folds
+1,200 members of one artifact, and asserts the aggregate is exact **beside a control proving the
+same fake still clips the table read it replaced at 1,000** — without that control the exact count
+proves nothing.
 
 ### F-713 — `.selected-ring` is an orphan kit recipe: the two readers the design doc names are both gone
 
