@@ -783,22 +783,6 @@ html {
   cursor: not-allowed;
 }
 
-/* THE SELECTED FACE for a raised-light control (2026-08-24, /home's
-   conversation rows). Not a border of its own: the SAME darkened hairline and
-   soft halo the search pill wears while it is open, held permanently instead of
-   only while focused — one "this is the live one" signal, whether the thing is
-   focused or merely chosen.
-
-   ⚠ Declared AFTER `.auth-btn-3d-light` on purpose. Both live in this layer at
-   equal specificity, and the hover rule below re-states the ring so the pointer
-   passing over a selected row cannot wash the selection out — the lift still
-   happens, it is a `transform`. */
-.selected-ring,
-.selected-ring:hover:not(:disabled) {
-  border-color: var(--focus-line);
-  box-shadow: var(--raised-light-focus);
-}
-
 /* Concave field. `.concave-field` is the official kit name; `.auth-field-3d` a legacy alias. */
 .concave-field,
 .auth-field-3d {

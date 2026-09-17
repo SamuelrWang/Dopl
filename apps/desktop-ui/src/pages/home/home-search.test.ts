@@ -71,4 +71,20 @@ describe("🔒 the search pill's width lives on `[data-open]`, not on the box", 
     // the field two accessible entries (the 2026-09-13 ruling deleted the toggle).
     expect(src).not.toMatch(/<button/);
   });
+
+  /** 🔒 **`.selected-ring` IS DELETED FROM BOTH KIT COPIES (Samuel, 2026-09-17:
+   *  *"sure delete it"*; F-713 RESOLVED), AND THE PIN LIVES HERE BECAUSE THIS
+   *  PILL IS THE READER THE DESIGN DOC INVENTED FOR IT.** The row claimed the
+   *  open pill wore the recipe; it never did — the held-focus look is the kit's
+   *  own `:focus-within` rule below, which names the TOKENS. ⚠ **SO THE TOKENS
+   *  ARE ASSERTED POSITIVELY**: a later "clean up the orphan" pass must take the
+   *  rule and never `--focus-line` / `--raised-light-focus`. ⚠ BOTH COPIES —
+   *  a rule deleted from one kit and left in the other is F-074's drift. */
+  it.each(Object.entries(KIT))("%s: no `.selected-ring`, and the pill keeps the tokens", (_copy, rel) => {
+    const css = read(rel);
+    expect(css).not.toContain(".selected-ring");
+    const focus = rule(css, '.search-expand[data-open="true"] .search-expand-shell:focus-within');
+    expect(focus).toContain("var(--focus-line)");
+    expect(focus).toContain("var(--raised-light-focus)");
+  });
 });

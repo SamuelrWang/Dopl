@@ -425,7 +425,7 @@ describe("the selected channel row's line is its own step", () => {
    *  `.rowSelected` and the row's `selected-ring` are deleted. ⚠ **THE HALF THAT
    *  WAS ALWAYS THE POINT SURVIVES** — /home's selection must not move
    *  `--focus-line`, which the search pill and the landing demo wear.
-   *  `docs/DESIGN-SYSTEM.md › .selected-ring` carries it. */
+   *  `docs/DESIGN-SYSTEM.md › HOME_CARD_FACE_SELECTED` carries it. */
   it("leaves the shared focus line untouched, /home's second name deleted", () => {
     for (const file of [SPA_TOKENS, WEB_KIT_CSS]) {
       const src = code(read(file));

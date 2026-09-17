@@ -9471,9 +9471,9 @@ once.
 
 ### F-713 — `.selected-ring` is an orphan kit recipe: the two readers the design doc names are both gone
 
-**Found:** 2026-09-17, rebuilding the landing hero's /home scene. **Status:** OPEN — recorded, NOT
-fixed. Deleting a kit recipe is a design ruling, not a cleanup, and both copies of the stylesheet
-would have to lose it together.
+**Found:** 2026-09-17, rebuilding the landing hero's /home scene. **Status:** ✅ **RESOLVED
+2026-09-17** — Samuel ruled on the deletion this entry was waiting for (*"sure delete it"*), and
+both copies of the stylesheet lost the rule in the same change.
 
 `docs/DESIGN-SYSTEM.md`'s `.selected-ring` row said the recipe *"still has readers — the header's
 open search pill, and the landing page's scripted /home demo"*, which is how it survived Samuel's
@@ -9494,8 +9494,24 @@ Re-derive before acting on this, rather than trusting the measurement:
 2026-09-17 that returned three COMMENTS (`home-card-marks.tsx`, `home-channel-row.tsx`,
 `pages/home/home.module.css`) and no class usage.
 
-⚠ **THE RECIPE ITSELF IS STILL DECLARED TWICE** — `src/app/globals.css` and
+⚠ **THE RECIPE ITSELF WAS DECLARED TWICE** — `src/app/globals.css` and
 `apps/desktop-ui/src/styles/kit.css` — and `--focus-line` / `--focus-halo`, the tokens it composes,
-are NOT orphans: the search pill's focus rule reads both, so a deletion may take the recipe and must
+are NOT orphans: the search pill's focus rule reads both, so the deletion took the recipe and must
 not take the tokens. The DESIGN-SYSTEM row was corrected in the same change that found this; the
-recipe was left alone.
+recipe was left alone until the ruling.
+
+✅ **RESOLVED 2026-09-17, AS THE ENTRY ASKED — THE RULE AND NOTHING ELSE.** The
+`.selected-ring, .selected-ring:hover:not(:disabled)` block and its comment are gone from BOTH kit
+copies, the `.selected-ring` row is gone from `docs/DESIGN-SYSTEM.md`'s kit table, and the two
+sentences that named it in passing (`.concave-field`'s shared-pair row, `.collapse-grid`'s
+shadow-bleed measurement) now name only what survives. ⚠ **THE RULING THE ROW CARRIED DID NOT DIE
+WITH THE RECIPE**: Samuel's 2026-09-15 black-button selection is restated on its own row,
+`docs/DESIGN-SYSTEM.md › HOME_CARD_FACE_SELECTED`, which is where the code already lives. ⚠ **THE
+THREE TOKENS ARE UNTOUCHED AND THAT IS CHECKED, NOT ASSERTED**: `--focus-line`, `--focus-halo` and
+`--raised-light-focus` still have readers in both trees (`.concave-field`, `.search-expand`'s
+`:focus-within` rule, `.menu-row` / the rail) — `grep -rn 'focus-halo\|raised-light-focus' src apps`.
+⚠ **AND THE ABSENCE IS PINNED WHERE THE PARITY OF THE TWO COPIES ALREADY IS**, so a re-add lands as
+a test failure rather than as a second orphan:
+`apps/desktop-ui/src/components/app-shell/frame-palette.test.ts` asserts neither kit copy declares
+the class. `scripts/check-css-token-drift.ts` was never going to catch it — it compares TOKEN
+declarations, not rules.

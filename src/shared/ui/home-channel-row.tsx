@@ -87,7 +87,8 @@ export interface HomeChannelRowFacts {
  * ⚠ **THE TWO FACES ARE ALTERNATIVES, NEVER LAYERS**, and that IS the "drop the
  * shadow": `.auth-btn-3d` sets `background`, `border` and `box-shadow` in one
  * rule, so swapping the face leaves nothing of the old selection behind. **Do not
- * re-add `selected-ring` or a module line here.** ⚠ **SAME BOX EITHER WAY** —
+ * re-add a ring or a module line here** — and as of 2026-09-17 there is no
+ * `selected-ring` recipe left to re-add (F-713). ⚠ **SAME BOX EITHER WAY** —
  * both faces are a 1px border on this radius, so selecting a row cannot shift the
  * list.
  *

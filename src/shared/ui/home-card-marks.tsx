@@ -50,10 +50,12 @@ export const HOME_CARD_FACE = "auth-btn-3d-light rounded-[14px]";
  * selection with it.
  * ⚠ **IT REPLACES THE RAISED WHITE FACE OUTRIGHT, WHICH IS WHAT "drop the
  * shadow" BUYS.** The selected row used to be `HOME_CARD_FACE` **plus**
- * `.selected-ring`'s darkened hairline and 3px halo **plus** a module rule for
+ * the kit's `.selected-ring` hairline and halo **plus** a module rule for
  * the line — three elevations arguing over one row. `.auth-btn-3d` sets
  * `background`, `border` and `box-shadow` in one rule, so nothing of the old
- * selection survives to be layered on top. **Do not re-add a ring.**
+ * selection survives to be layered on top. **Do not re-add a ring** — the kit
+ * recipe itself was DELETED on 2026-09-17, its last reader having been this one
+ * (Samuel: *"sure delete it"*; F-713).
  * ⚠ **SAME BOX, SO THE LIST DOES NOT SHIFT** — both faces are a 1px border and
  * this radius; only the paint changes.
  * ⚠ **THE INK TRAVELS WITH IT**: `text-text-on-cta`, the token `PAGE_ACTION_BTN`
