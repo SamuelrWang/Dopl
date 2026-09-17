@@ -89,11 +89,20 @@ export function OntologySection() {
 
         <div className="lp-ont-banner" data-glass={glassMode} ref={bannerRef}>
           {/* Decorative; the window on top carries the meaning. Plain <img>:
-              static public/ file in a CSS-sized box. ⚠ Source is PORTRAIT —
-              `object-position` in marketing.css keeps the peak in frame. */}
+              static public/ file in a CSS-sized box.
+              🔬 **SWAPPED WITH THE HERO PANE'S PHOTO (Samuel, 2026-09-17:**
+              *"swap the pane 1 background image with that of the second, i want
+              to test what that looks like"*). This pane wore
+              `/img/framework-banner.jpg`; `hero-banner.tsx` now does.
+              ⚠ **THE `object-position` RULE IN `marketing.css › .lp-ont-banner-img`
+              IS UNTOUCHED AND IT WAS TUNED FOR THE PORTRAIT SOURCE** — the note
+              that stood here said so. Retuning it would change a second thing in
+              an experiment asked for as a straight swap; if he keeps the swap,
+              that rule is the follow-up. Revert this commit alone to put both
+              back. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/img/framework-banner.jpg"
+            src="/img/landscape-banner.jpg"
             alt=""
             className="lp-ont-banner-img"
             draggable={false}
