@@ -24,6 +24,7 @@ import {
   ensurePersonalContainerRow,
 } from "./repository";
 import { findPersonalContainerId } from "@/shared/tenancy/personal-container";
+import { assertWorkspacePermanent } from "./authz";
 
 export interface ResolvedMembership {
   workspace: Workspace;
@@ -329,12 +330,27 @@ export async function updateWorkspaceIcon(
   return updateWorkspace(workspaceId, { iconUrl });
 }
 
+/**
+ * Destroy a workspace. Owner-only.
+ *
+ * 🔒 ⚠ **AND IT REFUSES A `kind='personal'` CONTAINER OUTRIGHT (Samuel's ruling
+ * R-35, 2026-09-17).** The home space is permanent for the life of the account,
+ * so the one role that could delete it — its owner, who is also its only member
+ * — is exactly the caller this guard exists to stop. `assertWorkspacePermanent`
+ * is FREE here: `resolveMembershipOrThrow` already read the workspace row, so
+ * the kind is in hand and no second query is paid.
+ *
+ * ⚠ The guard runs AFTER the role gate on purpose. A non-owner must get the
+ * answer a non-owner gets for any workspace (403 `WORKSPACE_FORBIDDEN`), not a
+ * refusal that tells them which KIND of row they are looking at.
+ */
 export async function deleteWorkspaceForUser(
   workspaceId: string,
   userId: string
 ): Promise<void> {
-  const { membership } = await resolveMembershipOrThrow(workspaceId, userId);
+  const { workspace, membership } = await resolveMembershipOrThrow(workspaceId, userId);
   requireMinRole(membership.role, "owner");
+  assertWorkspacePermanent(workspace);
 
   await deleteWorkspace(workspaceId);
 }

@@ -90,3 +90,54 @@ export async function assertMemberAddableById(workspaceId: string): Promise<void
   const workspace = await findWorkspaceById(workspaceId);
   if (workspace) assertMemberAddable(workspace);
 }
+
+/**
+ * 🔒 THE HOME SPACE IS PERMANENT — ITS OWNER CANNOT DELETE IT (Samuel's ruling
+ * R-35/R-34, 2026-09-17: *"Each user has a home space, and that should be
+ * permanent. Every user will always have a home space, no matter what."*).
+ *
+ * ⚠ **POSITIVE ON `personal`, NOT `!isStandardWorkspace`, AND THAT IS THE WHOLE
+ * DIFFERENCE FROM `assertMemberAddable` ABOVE.** That guard is a FENCE over
+ * every container kind, so a fourth kind inherits its refusal. This one states a
+ * PROPERTY OF ONE KIND: a `kind='link'` home channel is deletable by its owner
+ * and must stay so (a relationship ends), and a fourth kind must opt IN rather
+ * than be frozen by accident. `shared-publish.ts › assertSharedPublishAcknowledged`
+ * asks `=== "link"` positively for the mirror-image reason.
+ *
+ * ⚠ **THIS IS THE APP FENCE; THE HARD ONE IS THE DATABASE.**
+ * `enforce_personal_container_permanent` (migration
+ * `20261009120000_personal_container_permanent.sql`) refuses the row delete
+ * itself, so a path that forgets this call cannot destroy a home space either.
+ * The DB guard exempts `pg_trigger_depth() > 1`, so ACCOUNT deletion still tears
+ * the container down through `workspaces.owner_id → auth.users ON DELETE
+ * CASCADE` — permanence is "for as long as the account exists", which is what
+ * the ruling says.
+ *
+ * ⚠ **LEAVING IS ALREADY REFUSED AND NOT BY THIS GUARD.** A personal container
+ * has exactly one member, its owner, so `membership-admin.ts › removeMember`
+ * hits the last-owner protection (409 `WORKSPACE_LAST_OWNER`) and the
+ * `enforce_last_active_owner` trigger (`20260720184806`) closes the race.
+ * `removeMember` states the personal refusal explicitly anyway, because
+ * "you happen to be the last owner" is an accident of the roster and
+ * "your home space is permanent" is the rule.
+ */
+export function assertWorkspacePermanent(workspace: { kind?: WorkspaceKind }): void {
+  if (workspace.kind !== "personal") return;
+  throw new HttpError(
+    403,
+    "PERSONAL_CONTAINER_PERMANENT",
+    "Your home space is permanent — it cannot be deleted or left."
+  );
+}
+
+/**
+ * Same refusal for a caller holding only an id. ⚠ One bounded read, and a
+ * MISSING workspace is not this guard's 404 to raise — mirrors
+ * {@link assertMemberAddableById}.
+ */
+export async function assertWorkspacePermanentById(
+  workspaceId: string
+): Promise<void> {
+  const workspace = await findWorkspaceById(workspaceId);
+  if (workspace) assertWorkspacePermanent(workspace);
+}

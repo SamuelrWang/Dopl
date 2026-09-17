@@ -6,7 +6,7 @@ import { canGrantRole, memberManageDenial } from "../member-policy";
 import { syncSeatQuantity } from "@/features/billing/server/seats";
 import { removeWorkspaceDepartedMember } from "@/features/channels/server/service";
 import { recordActivity } from "@/features/members/server/activity";
-import { requireWorkspaceRole } from "./authz";
+import { requireWorkspaceRole, assertWorkspacePermanentById } from "./authz";
 import { findMembership } from "./repository";
 
 /**
@@ -20,6 +20,12 @@ import { findMembership } from "./repository";
  * `removeMember` deletes one, and removal from a `kind='link'` container is
  * deliberately allowed (`authz.ts › assertMemberAddable`). A member-ADD write
  * added to this file would need the gate.
+ *
+ * ⚠ **`assertWorkspacePermanentById` IS HERE, THOUGH, AND IT IS A DIFFERENT
+ * QUESTION** (R-35, 2026-09-17): not "may this container gain a member" but
+ * "may this container lose its only one". A `kind='personal'` home space is
+ * permanent, so `removeMember` refuses it outright; `link` and `standard` are
+ * untouched.
  *
  * ⚠ TERMINATION IS A ROW DELETE, NOT A STATUS FLIP. Nothing writes
  * `workspace_members.status` to anything but `'active'`; the only exits are the
@@ -122,6 +128,19 @@ export async function removeMember(
   if (!target || target.status !== "active") {
     return; // Idempotent — nothing to remove.
   }
+
+  // 🔒 ⚠ NOBODY LEAVES A HOME SPACE (Samuel's ruling R-35, 2026-09-17). The
+  // last-owner protection below ALREADY refuses this — a personal container has
+  // exactly one member and that member is its owner — but it refuses for an
+  // accident of the roster, and the rule is about the KIND. Stated here so the
+  // refusal survives a roster that ever changes shape, and so the message says
+  // "permanent" rather than "transfer ownership first", which is advice nobody
+  // can take on a container that admits no second member
+  // (`authz.ts › assertMemberAddable`).
+  //
+  // ⚠ AFTER the idempotent no-op above: removing a member who is not there is
+  // still nothing, on every kind.
+  await assertWorkspacePermanentById(workspaceId);
 
   if (memberManageDenial(callerRole, target.role, targetUserId === callerId) !== null) {
     throw new HttpError(

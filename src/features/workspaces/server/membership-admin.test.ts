@@ -14,7 +14,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
-vi.mock("./authz", () => ({ requireWorkspaceRole: vi.fn() }));
+// ⚠ `assertWorkspacePermanentById` is a NO-OP here on purpose: every case in this
+// file is a STANDARD workspace, and the home-space refusal has its own suite
+// (`personal-container-permanence.test.ts`), which exercises the real guard.
+vi.mock("./authz", () => ({
+  requireWorkspaceRole: vi.fn(),
+  assertWorkspacePermanentById: vi.fn(),
+}));
 vi.mock("./repository", () => ({ findMembership: vi.fn() }));
 vi.mock("@/features/billing/server/seats", () => ({ syncSeatQuantity: vi.fn() }));
 vi.mock("@/features/channels/server/repository");
