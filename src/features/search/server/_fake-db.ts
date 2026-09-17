@@ -96,15 +96,33 @@ function textOf(row: FakeRow, column: string): string {
   return typeof value === "string" ? value : "";
 }
 
-/** `websearch_to_tsquery('simple', q)` reduced to "every bare term appears as a
- *  whole word". Quoted phrases and `-negation` are not modelled; no repository
- *  here depends on them and pretending otherwise would be the lying kind of
- *  fake. */
+/**
+ * `to_tsquery('simple', q)` reduced to "every `&` arm matches a word", with `:*`
+ * meaning PREFIX.
+ *
+ * ⚠ **IT MODELS THE RAW FORM, BECAUSE THAT IS THE ONLY FORM THE REPOSITORIES
+ * SEND (F-717).** `query-text.ts › buildPrefixTsQuery` hands over a `tsquery`
+ * it built itself — `a & b:*` — so there is no normalisation step to imitate.
+ * `|`, `!` and `<->` are not modelled: the builder's allow-list cannot emit one.
+ * ⚠ The real parser splits `a_b` into two lexemes and this keeps it whole; no
+ * case here turns on that, and pretending to split would be the lying kind of
+ * fake.
+ */
 function matchesTsQuery(haystack: string, query: string): boolean {
-  const words = new Set(haystack.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []);
-  const terms = query.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
-  if (terms.length === 0) return false;
-  return terms.every((t) => words.has(t));
+  const words = [...(haystack.toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? [])];
+  const arms = query
+    .toLowerCase()
+    .split("&")
+    .map((arm) => arm.trim())
+    .filter((arm) => arm.length > 0);
+  if (arms.length === 0) return false;
+  return arms.every((arm) => {
+    if (arm.endsWith(":*")) {
+      const stem = arm.slice(0, -2);
+      return words.some((w) => w.startsWith(stem));
+    }
+    return words.includes(arm);
+  });
 }
 
 type Predicate = (row: FakeRow) => boolean;
@@ -168,9 +186,22 @@ class FakeQuery implements PromiseLike<{ data: FakeRow[]; error: null }> {
     return this;
   }
 
-  textSearch(column: string, query: string, opts?: { type?: string }): this {
-    if (opts?.type !== "websearch") {
-      throw new Error("fake-db: only websearch textSearch is modelled");
+  textSearch(
+    column: string,
+    query: string,
+    opts?: { type?: string; config?: string }
+  ): this {
+    // ⚠ **THE FAKE REFUSES THE TWO SPELLINGS THAT WERE THE BUG (F-717).** A
+    // `type` means `plainto_`/`websearch_to_tsquery`, which normalise the
+    // builder's `:*` away; an absent `config` means the SERVER's
+    // `default_text_search_config` — `english` in production — against a
+    // `simple` vector, which is the mismatch that returned nothing and
+    // explained nothing. A fake that accepted either would go green on it.
+    if (opts?.type !== undefined) {
+      throw new Error("fake-db: only the RAW to_tsquery form is modelled");
+    }
+    if (opts?.config !== "simple") {
+      throw new Error("fake-db: the query side must NAME the simple dictionary");
     }
     this.log.filters.push(`fts:${column}`);
     this.predicates.push((r) => matchesTsQuery(textOf(r, column), query));

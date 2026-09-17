@@ -2,7 +2,11 @@ import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { ChannelMessageKind } from "@/features/channels/types";
 import { SEARCH_GROUP_TOTAL_CAP } from "../contracts";
-import { containsPattern } from "./query-text";
+import {
+  SEARCH_TSQUERY_CONFIG,
+  buildPrefixTsQuery,
+  containsPattern,
+} from "./query-text";
 
 /**
  * THE FOUR GROUPS FENCED BY **CHANNEL MEMBERSHIP** — channels, messages,
@@ -120,29 +124,41 @@ interface ChannelNameRow {
 /**
  * Messages whose BODY matches, by Postgres full text.
  *
- * 🔒 ⚠ **`.textSearch(…, {type:"websearch", config:"simple"})` IS THE CONTRACT'S
- * EXPRESSION FORM, VERBATIM.** PostgREST renders it as
- * `to_tsvector('simple', body) @@ websearch_to_tsquery('simple', $1)` — the
- * `simple` dictionary on both sides, so no stemming and no stopword list decides
- * what a person's own words mean.
+ * 🔒 ⚠ **THE DICTIONARY IS NAMED ON THE QUERY SIDE — `{config: "simple"}` — AND
+ * ITS ABSENCE WAS BUG-1 (Samuel, 2026-09-17: *"I only see channels coming up
+ * from the search. I don't see any messages"*; F-717).** PostgREST renders
+ * `search_tsv=fts(simple).<q>` as `search_tsv @@ to_tsquery('simple', $1)`:
+ * `config` parameterises the **tsquery FUNCTION**, it does NOT wrap the column
+ * in a second `to_tsvector`. ⚠ **THE PARAGRAPH THAT USED TO STAND HERE CLAIMED
+ * THE OPPOSITE AND THAT CLAIM IS FALSE** — it is why `config` was deleted along
+ * with the switch to the generated column, which left the query side on the
+ * server's `default_text_search_config` (`pg_catalog.english` here) against a
+ * `simple` vector. `query-text.ts › SEARCH_TSQUERY_CONFIG` carries the
+ * measurement. **The column fixing its own dictionary settles the VECTOR half
+ * and says nothing about the query half; the two are named independently or they
+ * do not agree.**
+ *
+ * ⚠ **RAW `fts`, NOT `wfts` — `query-text.ts › buildPrefixTsQuery` BUILDS THE
+ * `tsquery` ITSELF** so the last token can be a PREFIX (`pick:*` finds
+ * *picker*). `websearch_to_tsquery` would normalise the `:*` away, and a popup
+ * that only matches finished words is a popup that is empty while you type. The
+ * builder's allow-list is what makes the raw form safe: `to_tsquery` is the one
+ * spelling that can raise a syntax error on user text.
  *
  * ⚠ **IT READS `search_tsv`, THE GENERATED STORED COLUMN, SINCE 2026-09-17
  * (F-715, CLOSED).** `supabase/migrations/20261007120000_search_fulltext_indexes.sql`
  * — which adds that column and `channel_messages_search_tsv_idx` over it — was
- * APPLIED that day, by name and byte-exact, so the GIN index now serves this
- * predicate instead of a per-row `to_tsvector`.
- * ⚠ **NO `config` ON THIS ARM, AND ITS ABSENCE IS LOAD-BEARING.** The dictionary
- * is fixed INSIDE the generated column (`to_tsvector('simple', coalesce(body,
- * ''))`); passing one here would ask PostgREST to build a `to_tsvector` over a
- * value that already is one. `knowledge_entries.search_tsv` is read the same way,
- * one module over — the two arms are now spelled identically, which is the point.
- * ⚠ **THE EXPRESSION FORM IS WHAT THIS READ AND IT IS WHY THE MIGRATION COULD BE
- * "WRITTEN, NOT APPLIED" FOR A RELEASE.** `.textSearch("body", q, {config:
- * "simple"})` renders the same predicate computed per row — SLOW, NEVER WRONG.
- * Keep that property in mind before pointing a NEW search arm at a column a
- * migration has not landed yet: naming one makes the route BROKEN rather than
- * SLOW, which is the rule `20260822170000_overview_time_range_indexes.sql` states
- * for this directory. **Deploy state is a MEASUREMENT (CLAUDE.md doc rule 4) —
+ * APPLIED that day, by name and byte-exact, so the GIN index serves this
+ * predicate instead of a per-row `to_tsvector`. ⚠ **A PREFIX `tsquery` STILL USES
+ * THAT GIN INDEX** (`:*` is a GIN-supported operator on `tsvector`); it scans
+ * more entries, over a fenced and capped page.
+ * ⚠ **THE EXPRESSION FORM IS WHAT THIS READ BEFORE, AND IT IS WHY THE MIGRATION
+ * COULD BE "WRITTEN, NOT APPLIED" FOR A RELEASE.** `.textSearch("body", q, …)`
+ * renders the same predicate computed per row — SLOW, NEVER WRONG. Keep that
+ * property in mind before pointing a NEW search arm at a column a migration has
+ * not landed yet: naming one makes the route BROKEN rather than SLOW, which is
+ * the rule `20260822170000_overview_time_range_indexes.sql` states for this
+ * directory. **Deploy state is a MEASUREMENT (CLAUDE.md doc rule 4) —
  * re-derive rather than trusting this paragraph:**
  * `SELECT attname FROM pg_attribute WHERE attrelid = 'public.channel_messages'::regclass
  * AND attname = 'search_tsv';`
@@ -158,13 +174,17 @@ export async function searchMessages(
   query: string
 ): Promise<SearchHit[]> {
   if (channelIds.length === 0) return [];
+  // ⚠ NO TOKEN, NO QUERY. `to_tsquery('simple','')` is an empty tsquery that
+  // matches nothing; asking for it is a round trip to learn that.
+  const tsQuery = buildPrefixTsQuery(query);
+  if (tsQuery === null) return [];
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("channel_messages")
     .select("id, seq, body, channel_id, workspace_id, created_at")
     .in("channel_id", channelIds)
     .eq("kind", SEARCHABLE_MESSAGE_KIND)
-    .textSearch("search_tsv", query, { type: "websearch" })
+    .textSearch("search_tsv", tsQuery, { config: SEARCH_TSQUERY_CONFIG })
     .order("created_at", { ascending: false })
     .limit(SEARCH_GROUP_TOTAL_CAP);
   if (error) throw error;

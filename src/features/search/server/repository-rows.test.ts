@@ -14,20 +14,27 @@
  *  - 🔒 **`.or()` VALUES ARE QUOTED.** Its grammar splits on `,` and `.`, so an
  *    unquoted value a person typed rewrites the filter's SHAPE — and on three of
  *    these tables that filter IS the visibility fence.
- *  - **THE FULL-TEXT ARM IS `websearch` + `simple` ON BOTH SIDES.** A mismatched
- *    dictionary across `@@` returns nothing and explains nothing.
+ *  - 🔒 **THE FULL-TEXT ARM NAMES `simple` ON THE QUERY SIDE (F-717).** The
+ *    generated column fixes the VECTOR's dictionary and says nothing about the
+ *    QUERY's; omitted, PostgREST falls to the server's
+ *    `default_text_search_config` and a mismatched dictionary across `@@`
+ *    returns nothing and explains nothing. One case asserts the OPERATOR
+ *    postgrest-js actually renders, because that is the half the recorder
+ *    cannot see.
  *  - **THE SOFT-DELETE / RETIREMENT FILTERS** — `deleted_at`, `dissolved_at`.
  *
- * MUTATION-VERIFY: 4 reverts, 4 failures, 0 vacuous (2026-09-17) — dropping the
+ * MUTATION-VERIFY: 6 reverts, 6 failures, 0 vacuous (2026-09-17) — dropping the
  * `escapeLikeLiteral` call, dropping `orLiteral`, pointing the message arm back
- * at the `body` EXPRESSION form, and dropping `.is("dissolved_at", null)` each
- * turn a case here red.
+ * at the `body` EXPRESSION form, dropping `.is("dissolved_at", null)`, dropping
+ * `{config: "simple"}` from either full-text arm, and putting `type:
+ * "websearch"` back each turn a case here red.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
 
+import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import {
   searchArtifacts,
@@ -129,18 +136,47 @@ describe("🔒 the .or() visibility arms are quoted", () => {
 });
 
 describe("🔒 the full-text arms", () => {
-  it("reads the message GENERATED column, with no config", async () => {
+  it("🔒 reads the message GENERATED column, NAMING the dictionary", async () => {
     const calls = recorder();
     await searchMessages([CH], "zephyr ship");
     // ⚠ `search_tsv` since 2026-09-17, when `20261007120000_search_fulltext_
-    // indexes.sql` was APPLIED (F-715 closed). NO `config`: the dictionary is
-    // fixed inside the generated column, and passing one would ask PostgREST to
-    // build a `to_tsvector` over a value that already is one.
+    // indexes.sql` was APPLIED (F-715 closed).
+    // 🔒 **`config` IS THE FIX FOR F-717 AND IT IS NOT OPTIONAL.** PostgREST's
+    // `config` parameterises the tsquery FUNCTION, not the column: dropped, the
+    // query side falls to the server's `default_text_search_config` (english),
+    // and an english-stemmed query against a `simple` vector matches nothing.
+    // ⚠ NO `type` — the raw `fts` form is `to_tsquery`, the only one of the
+    // three that honours the `:*` the builder puts on the last token.
     expect(of(calls, "textSearch")[0]?.args).toEqual([
       "search_tsv",
-      "zephyr ship",
-      { type: "websearch" },
+      "zephyr & ship:*",
+      { config: "simple" },
     ]);
+  });
+
+  it("🔒 renders `fts(simple).` on the wire, through the REAL builder", async () => {
+    // ⚠ **THE RECORDER ABOVE CANNOT SEE THIS AND IT IS THE HALF THAT BROKE.**
+    // `{config}` and `{type}` are two spellings of one option object; what
+    // matters is the OPERATOR postgrest-js renders from them, and only
+    // postgrest-js can say. A captured `fetch` is the cheapest way to ask.
+    const seen: string[] = [];
+    const client = createClient("http://db.test", "service-role-key", {
+      global: {
+        fetch: ((input: RequestInfo | URL) => {
+          seen.push(String(input));
+          return Promise.resolve(
+            new Response("[]", {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            })
+          );
+        }) as typeof fetch,
+      },
+    });
+    vi.mocked(supabaseAdmin).mockReturnValue(client);
+    await searchMessages([CH], "pick");
+    const url = new URL(seen[0] as string);
+    expect(url.searchParams.get("search_tsv")).toBe("fts(simple).pick:*");
   });
 
   it("still selects `body` — the column the SNIPPET is cut from", async () => {
@@ -152,22 +188,31 @@ describe("🔒 the full-text arms", () => {
     expect(String(of(calls, "select")[0]?.args[0])).toContain("body");
   });
 
-  it("reads the LIVE generated column for knowledge, with no config", async () => {
+  it("🔒 reads the knowledge column the SAME way — one spelling, two arms", async () => {
     const calls = recorder([[], []]);
     await searchKnowledgeEntries(
       new Map([["kb", { name: "Handbook", containerId: WS }]]),
       "zephyr"
     );
-    // ⚠ The dictionary is fixed INSIDE `knowledge_entries.search_tsv`
-    // (`20260501020000_knowledge_fulltext.sql`); a second one here would ask
-    // PostgREST to build a `to_tsvector` over a value that already is one.
+    // 🔒 The knowledge arm carried the same omitted-`config` bug as the message
+    // arm (F-717) and is fixed the same way — the two are spelled identically,
+    // which is the point.
     expect(of(calls, "textSearch")[0]?.args).toEqual([
       "search_tsv",
-      "zephyr",
-      { type: "websearch" },
+      "zephyr:*",
+      { config: "simple" },
     ]);
-    // Two arms — the FTS one cannot prefix-match a half-typed word.
+    // Two arms — a prefix is not a CONTAINS, and `handbook` must still find
+    // *Knowledge handbook*.
     expect(of(calls, "ilike")[0]?.args).toEqual(["title", "%zephyr%"]);
+  });
+
+  it("runs NO full-text query when nothing survives the allow-list", async () => {
+    const calls = recorder();
+    await searchMessages([CH], "???");
+    // ⚠ An empty tsquery matches nothing; asking for it is a round trip to
+    // learn that.
+    expect(calls).toEqual([]);
   });
 
   it("restricts messages to the kind a person actually typed", async () => {

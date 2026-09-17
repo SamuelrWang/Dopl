@@ -2,7 +2,13 @@ import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { SEARCH_GROUP_TOTAL_CAP } from "../contracts";
 import type { SearchHit } from "./repository-channel-rows";
-import { containsPattern, orLiteral, prefixPattern } from "./query-text";
+import {
+  SEARCH_TSQUERY_CONFIG,
+  buildPrefixTsQuery,
+  containsPattern,
+  orLiteral,
+  prefixPattern,
+} from "./query-text";
 
 /**
  * THE FIVE GROUPS FENCED BY **CONTAINER MEMBERSHIP** — knowledge, agent
@@ -100,19 +106,25 @@ export async function listReadableBases(
  * STORED `tsvector` over `setweight(title,'A') || setweight(excerpt,'B') ||
  * setweight(body,'C')` with a GIN index, and it is present in
  * `src/shared/supabase/types.ts`, which is generated FROM THE DEPLOYED DATABASE.
- * So this half needs no migration and is the shape the messages half will take
- * once `20261007120000_search_fulltext_indexes.sql` is applied.
- * ⚠ No `config` option on this arm: the dictionary is fixed INSIDE the generated
- * column (`simple`), and passing a second one here would ask PostgREST to build
- * a `to_tsvector` over a value that is already one.
  *
- * ⚠ **TWO QUERIES, MERGED, AND THE TITLE ARM IS NOT REDUNDANT.** `search_tsv`
- * already carries the title at weight A, but a `tsquery` matches WHOLE LEXEMES:
- * a popup is typed one character at a time, so `kno` must find *Knowledge
- * handbook* and no `websearch_to_tsquery` will ever do that. The `ilike` arm is
- * the prefix/substring behaviour a search box is expected to have; the FTS arm
- * is what reaches into the body. Title hits come FIRST in the merge — somebody
- * typing a document's name is looking for the document.
+ * 🔒 ⚠ **`{config: "simple"}` IS NAMED HERE FOR THE SAME REASON IT IS NAMED ON
+ * THE MESSAGES ARM, AND FOR A WHILE NEITHER DID (F-717).** PostgREST's `config`
+ * parameterises the tsquery FUNCTION — `search_tsv=fts(simple).<q>` is
+ * `search_tsv @@ to_tsquery('simple', $1)` — it does NOT wrap the column in a
+ * second `to_tsvector`, which is what the comment that used to stand here
+ * claimed. Omitted, the query side falls to the server's
+ * `default_text_search_config` (`pg_catalog.english` on this deployment), and an
+ * english-stemmed query against a `simple` vector silently matches nothing.
+ * The generated column fixes the VECTOR's dictionary and says nothing about the
+ * QUERY's. See `query-text.ts › SEARCH_TSQUERY_CONFIG` for the measurement.
+ *
+ * ⚠ **TWO QUERIES, MERGED, AND THE TITLE ARM IS STILL NOT REDUNDANT.**
+ * `search_tsv` carries the title at weight A, and the FTS arm is now a PREFIX
+ * `tsquery` (`query-text.ts › buildPrefixTsQuery`), so `kno` does reach
+ * *Knowledge handbook* through it. The `ilike` arm survives because a prefix is
+ * not a CONTAINS: somebody typing `handbook` expects *Knowledge handbook*, and
+ * no `tsquery` matches the middle of a lexeme. Title hits come FIRST in the
+ * merge — somebody typing a document's name is looking for the document.
  */
 export async function searchKnowledgeEntries(
   bases: Map<string, { name: string; containerId: string }>,
@@ -122,6 +134,7 @@ export async function searchKnowledgeEntries(
   if (baseIds.length === 0) return [];
   const db = supabaseAdmin();
   const cols = "id, title, body, knowledge_base_id, workspace_id, updated_at";
+  const tsQuery = buildPrefixTsQuery(query);
   const [byTitle, byText] = await Promise.all([
     db
       .from("knowledge_entries")
@@ -131,23 +144,28 @@ export async function searchKnowledgeEntries(
       .ilike("title", containsPattern(query))
       .order("updated_at", { ascending: false })
       .limit(SEARCH_GROUP_TOTAL_CAP),
-    db
-      .from("knowledge_entries")
-      .select(cols)
-      .in("knowledge_base_id", baseIds)
-      .is("deleted_at", null)
-      .textSearch("search_tsv", query, { type: "websearch" })
-      .order("updated_at", { ascending: false })
-      .limit(SEARCH_GROUP_TOTAL_CAP),
+    // ⚠ NO TOKEN, NO QUERY — a query of `???` has no lexeme to ask for, and the
+    // title arm above still answers it. `null` here is a skipped round trip,
+    // never an unfiltered read.
+    tsQuery === null
+      ? null
+      : db
+          .from("knowledge_entries")
+          .select(cols)
+          .in("knowledge_base_id", baseIds)
+          .is("deleted_at", null)
+          .textSearch("search_tsv", tsQuery, { config: SEARCH_TSQUERY_CONFIG })
+          .order("updated_at", { ascending: false })
+          .limit(SEARCH_GROUP_TOTAL_CAP),
   ]);
   if (byTitle.error) throw byTitle.error;
-  if (byText.error) throw byText.error;
+  if (byText?.error) throw byText.error;
 
   const seen = new Set<string>();
   const hits: SearchHit[] = [];
   for (const row of [
     ...((byTitle.data ?? []) as KnowledgeRow[]),
-    ...((byText.data ?? []) as KnowledgeRow[]),
+    ...((byText?.data ?? []) as KnowledgeRow[]),
   ]) {
     if (seen.has(row.id)) continue;
     seen.add(row.id);

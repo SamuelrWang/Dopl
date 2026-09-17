@@ -9572,9 +9572,16 @@ copies the source body through verbatim). **A new search arm gets the same treat
 
 **The discharge was the one line the migration's footer spelled out:**
 `.textSearch("body", q, { type: "websearch", config: "simple" })` →
-`.textSearch("search_tsv", q, { type: "websearch" })`. ⚠ **`config` had to GO, not move**: the
-dictionary is fixed inside the generated column, so passing one would ask PostgREST to build a
-`to_tsvector` over a value that already is one. ⚠ **`body` STAYED in the projection** — the vector
+`.textSearch("search_tsv", q, { type: "websearch" })`.
+
+⚠ ⚠ **THE LINE ABOVE WAS WRONG IN ITS SECOND HALF AND THE CORRECTION IS F-717.** This entry
+said *"`config` had to GO, not move: the dictionary is fixed inside the generated column, so
+passing one would ask PostgREST to build a `to_tsvector` over a value that already is one"*.
+**PostgREST does no such thing** — `config` parameterises the tsquery FUNCTION. Dropping it left the
+query side on the server's `default_text_search_config` (english) against a `simple` vector, and the
+Messages section of the search popup was empty for a release. The discharge of F-715 — pointing the
+read at the generated column — was right; the sentence that travelled with it was not. The live
+spelling is `.textSearch("search_tsv", tsQuery, { config: "simple" })`. ⚠ **`body` STAYED in the projection** — the vector
 decides which rows and cannot be read back as prose, so the snippet still needs the column; both
 halves are pinned in `repository-rows.test.ts` (2 reverts, 2 failures, 0 vacuous).
 
@@ -9627,3 +9634,58 @@ proves the arms that ARE there refuse a peer's private row; nothing asserts that
 MISSING could only have widened. A predicate that gains a NARROWING arm tomorrow would make this
 entry false with no test going red — `shared/tenancy/grant-read-arm.test.ts`'s mirror idiom is the
 shape a real pin would take.
+
+---
+
+### F-717 — the search popup's Messages section was empty: `config` was dropped with the column switch, so an ENGLISH query ran against a SIMPLE vector
+
+**Found:** 2026-09-17, from Samuel live: *"I'm trying to search up channel messages … I only see
+channels coming up from the search. I don't see any messages."* **Status:** ✅ **RESOLVED
+2026-09-17** — both full-text arms name the dictionary, and the query side is built in TypeScript
+with a prefix on the last token.
+
+**ROOT CAUSE, IN ONE SENTENCE.** F-715's discharge moved
+`search/server/repository-channel-rows.ts › searchMessages` from
+`.textSearch("body", q, {type:"websearch", config:"simple"})` to
+`.textSearch("search_tsv", q, {type:"websearch"})` on the belief that a generated column makes
+`config` redundant — but PostgREST's `config` parameterises the **tsquery FUNCTION**, not the
+column, so the arm rendered `websearch_to_tsquery(<default_text_search_config>, $1)` against a
+vector built with `simple`.
+
+**MEASURED, NOT REASONED (2026-09-17, production, the reporter's own 17 rooms / 1,487
+`kind='message'` rows):**
+
+| expression | rows |
+|---|---|
+| `current_setting('default_text_search_config')` | `pg_catalog.english` |
+| `websearch_to_tsquery('each verified')` | `'verifi'` — **0 rows** |
+| `websearch_to_tsquery('simple','each verified')` | `'each' & 'verified'` — **45 rows** |
+| `websearch_to_tsquery('each')` | **0 rows** (an english STOPWORD) |
+| `websearch_to_tsquery('simple','each')` | **244 rows** |
+| `to_tsquery('simple','each & verif:*')` | **85 rows** |
+
+⚠ **A WORD THAT DOES NOT STEM HIDES THIS COMPLETELY.** `picker` matched 54 rows under BOTH
+dictionaries, so every one-word probe of the arm looked correct; what failed was the sentences
+people type. **That is why the pin is the RENDERED OPERATOR and not a row count** —
+`repository-rows.test.ts` drives the real postgrest-js builder through a captured `fetch` and
+asserts the wire reads `search_tsv=fts(simple).pick:*`, which no fake can be written around, and
+`_fake-db.ts › textSearch` now THROWS on a missing `config` or on any `type`.
+
+⚠ **IT WAS NEVER A 500 AND NEVER A LEAK.** PostgREST answered `200` with `[]`; the group was
+correctly OMITTED from the payload (`service-groups.ts › toGroup` returns `null` for no hits), and
+the popup correctly drew no Messages section. **Every layer behaved; the predicate was wrong.** No
+error path needed surfacing — each repository already `throw`s on `error`, so a rejected filter
+would have been a failed request rather than a silent omission.
+
+**SHIPPED WITH THE FIX, BECAUSE THE SAME KEYSTROKE PROVES IT:** the query side is now built by
+`search/server/query-text.ts › buildPrefixTsQuery` — tokens allow-listed to `\p{L}\p{N}_`, capped
+at `MAX_TSQUERY_TOKENS`, joined with `&`, **last token suffixed `:*`** — and sent through the RAW
+`fts` form, which is `to_tsquery` and the only one of the three that honours a prefix
+(`plainto_`/`websearch_to_tsquery` normalise it away). So `pick` finds *picker*, which is what an
+incremental search box is for. ⚠ The allow-list is a requirement of the raw form rather than a
+nicety: `to_tsquery` is the one spelling that can RAISE on user text.
+
+⚠ **THE DOCS THAT CARRIED THE FALSE CLAIM WERE CORRECTED IN THE SAME CHANGE, NOT LEFT TO
+FOLLOW-UP** — `docs/INVARIANTS.md` §9 and §12, this log's F-715 entry, the footer of
+`supabase/migrations/20261007120000_search_fulltext_indexes.sql`, and the two repository headers.
+The claim had been restated in five places from one sentence, which is how it survived review.

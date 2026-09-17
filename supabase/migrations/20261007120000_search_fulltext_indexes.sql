@@ -95,12 +95,26 @@ CREATE INDEX IF NOT EXISTS channel_messages_search_tsv_idx
 --
 -- `src/features/search/server/repository-channel-rows.ts › searchMessages` now
 -- reads:
---     .textSearch("search_tsv", query, { type: "websearch" })
+--     .textSearch("search_tsv", tsQuery, { config: "simple" })
 -- where it read `.textSearch("body", query, { type: "websearch", config:
--- "simple" })`. `config` is GONE, and its absence is load-bearing: the dictionary
--- is fixed inside the generated column, and passing one would ask PostgREST to
--- build a `to_tsvector` over a value that already is one. The predicate did not
--- change — only what computes it.
+-- "simple" })`.
+--
+-- ⚠ ⚠ **THIS FOOTER ONCE SAID `config` HAD TO GO AND THAT WAS FALSE. IT COST A
+-- RELEASE OF EMPTY MESSAGE RESULTS (F-717, 2026-09-17).** The sentence read:
+-- *"the dictionary is fixed inside the generated column, and passing one would
+-- ask PostgREST to build a `to_tsvector` over a value that already is one"*.
+-- PostgREST does no such thing: `config` parameterises the **tsquery
+-- FUNCTION**. `search_tsv=fts(simple).<q>` renders
+-- `search_tsv @@ to_tsquery('simple', $1)`; `search_tsv=wfts.<q>` renders
+-- `websearch_to_tsquery(<the server's default_text_search_config>, $1)`, which
+-- on this deployment is `pg_catalog.english`. So dropping `config` left an
+-- english-stemmed, english-stopworded query against a `simple` vector —
+-- `websearch_to_tsquery('each verified')` is `'verifi'` — and matched 0 rows
+-- where the `simple` spelling matched 45.
+-- ⚠ **THE GENERATED COLUMN SETTLES THE VECTOR HALF AND SAYS NOTHING ABOUT THE
+-- QUERY HALF.** Both sides of a `@@` name their dictionary independently, or
+-- they do not agree — which is the sentence this file already had, three
+-- paragraphs up, about mixing dictionaries.
 -- ⚠ **`body` STAYS IN THAT QUERY'S PROJECTION.** `search_tsv` decides WHICH rows;
 -- it is a lexeme vector and cannot be read back as prose, so the snippet still
 -- needs the column. Pinned by `repository-rows.test.ts`.
