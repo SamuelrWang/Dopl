@@ -223,12 +223,30 @@ export function Well({
           ⚠ **12px IS ALSO THE MOST IT MAY EVER BE** — the clip now lands on the
           well's BORDER box. ⚠ **TIED TO THE WELL'S `p-3`
           (`panel-well.ts › SECTION_PANEL_SHELL`): move one and move both.**
-          ⚠ **THE BOTTOM EDGE STILL CLIPS TIGHT AND THAT IS STRUCTURAL** — a `0fr`
-          collapse grows DOWNWARD, so the bottom clip IS the animation. It cuts a
-          soft 6% fade, and every fix either leaves the collapsed well taller than
-          its header or jumps its height on toggle. */}
+
+          🔒 ⚠ **AND THE BOTTOM EDGE TAKES THE SAME 12px SINCE 2026-09-17
+          (Samuel, over /home's channel column, verbatim):** *"the last box or last
+          channel in each box gets cut off at the bottom by the end of the thing.
+          The shadowing and the bottom border get cut off. … It should not be
+          getting cut off."* This note read *"the bottom still clips tight and that
+          is structural"* until then, and the fixes it ruled out — bottom padding
+          inside the box, a negative bottom margin on its own — all put the padding
+          INSIDE THE TRACK, where `box-sizing: border-box` floors a collapsed well
+          12px taller than its header (the `pt-2` note below is the same arithmetic).
+          **`pb-3` ON THE `.collapse-grid` ITSELF IS NOT INSIDE THE TRACK**:
+          `overflow: hidden` clips at the PADDING box, so the clip edge drops 12px
+          while the `0fr → 1fr` track is untouched, and `-mb-3` takes those 12px back
+          out of the flex column. **The pair is layout-neutral, exactly as
+          `-mx-3`/`px-3` is** — nothing moved, and the clip lands on the well's
+          BORDER box on this edge too.
+          ⚠ **ONLY WHILE OPEN, AND THAT IS WHAT KEEPS THE COLLAPSE HONEST.** The rows
+          outlive `open` by one transition ({@link useWellContent}), so a permanent
+          bottom bleed would paint a 12px strip of the FIRST card under the header
+          for the last frames of a close. `open` drops the pair on the click, before
+          the box shrinks; padding and margin cancel, so the toggle itself moves
+          nothing. */}
       <div
-        className="collapse-grid -mx-3 -mt-2"
+        className={cn("collapse-grid -mx-3 -mt-2", open && "-mb-3 pb-3")}
         data-open={open}
         aria-hidden={!open}
       >

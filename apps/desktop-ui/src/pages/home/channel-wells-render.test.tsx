@@ -177,6 +177,13 @@ describe("the list column's THREE WELLS", () => {
     expect(box.className).toContain("-mx-3");
     // …and the column puts the rows back on the well's own inset, so no row moved.
     expect(box.firstElementChild!.className).toContain("px-3");
+    // 🔒 **AND 12px BELOW THEM TOO (Samuel, 2026-09-17):** *"the last box or last
+    // channel in each box gets cut off at the bottom … The shadowing and the bottom
+    // border get cut off."* — the growth edge clipped flush with the last card, and
+    // /home is again where he saw it, because the SELECTED row here is the black
+    // button and carries the heaviest drop in the box.
+    expect(box.className).toContain("pb-3");
+    expect(box.className).toContain("-mb-3");
     // ⚠ AND THE ROW IS STILL THE RAISED FACE THAT NEEDED THE ROOM — bidirectional,
     // or this passes on a list whose shadow was simply removed.
     const card = within(box as HTMLElement).getByText("Priya Shah").closest("button")!;

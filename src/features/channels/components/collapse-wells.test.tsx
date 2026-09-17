@@ -209,6 +209,26 @@ describe("collapse-wells — the clip's bleed room and the empty body", () => {
     expect(columnOf("Live").className.startsWith(PANEL_ROWS)).toBe(true);
   });
 
+  it("drops the clip box 12px BELOW the cards while the well is open", () => {
+    renderSet();
+    // 🔒 *"the last box or last channel in each box gets cut off at the bottom by
+    // the end of the thing. The shadowing and the bottom border get cut off."*
+    // (Samuel, 2026-09-17) — the growth edge used to clip flush with the last
+    // card, so the selected row's `0 6px 16px` drop and its bottom edge were both
+    // sliced by the box they sit in.
+    expect(boxOf("Live").className).toContain("pb-3");
+    // ⚠ AND THE 12px COME STRAIGHT BACK OUT OF THE COLUMN, or the well would grow
+    // by them: the padding is on the CLIP box (`overflow: hidden` clips at the
+    // padding box, and the `0fr → 1fr` TRACK never sees it) and the margin is the
+    // layout. The same shape as `-mx-3`/`px-3` above, one edge round.
+    expect(boxOf("Live").className).toContain("-mb-3");
+    // ⚠ AND A CLOSED WELL CARRIES NEITHER — the rows outlive `open` by one
+    // transition, so a permanent bleed would paint a strip of the FIRST card under
+    // the header as the box shuts.
+    expect(boxOf("Old").className).not.toContain("pb-3");
+    expect(boxOf("Old").className).not.toContain("-mb-3");
+  });
+
   it("gives an EMPTY well no body padding — the header stays centered in the box", () => {
     render(
       <WellsColumn
