@@ -2,15 +2,16 @@
 -- ARTIFACT SPANS — ONE ROW PER ARTIFACT, COUNTED BY POSTGRES (F-712)
 -- ============================================================================
 --
--- ⚠ **WRITTEN, NOT APPLIED — apply by name, byte-exact** (`artifact_spans_rpc`),
--- this directory's standing gate (INVARIANTS §12). Replay is OWED and recorded
--- rather than glossed: Docker is unavailable on this machine, so
--- `supabase db reset` cannot start.
--- 🔒 **APPLY IT BY NAME, NEVER BY FILENAME VERSION, AND NEVER WITH `db push`**
--- — F-304's re-stamp means the history row's version is NOT this file's
--- `20261008120000` prefix, and nothing here records what it is. Deploy state is
--- a MEASUREMENT (CLAUDE.md doc rule 4): re-derive with `supabase migration list`
--- / MCP `list_migrations` and JOIN ON THE NAME.
+-- ✅ **APPLIED 2026-09-17 (by name, byte-exact, Supabase MCP).** It read
+-- "WRITTEN, NOT APPLIED" until then — this directory's standing gate — and the
+-- replay that was OWED has been paid.
+-- 🔒 **IT WAS APPLIED BY NAME, BYTE-EXACT, NEVER WITH `db push`** and never by
+-- filename version — F-304's re-stamp means the history row's version is NOT
+-- this file's `20261008120000` prefix, and the measurement confirmed that: it
+-- landed under a different one. Deploy state is a MEASUREMENT (CLAUDE.md doc
+-- rule 4), so what this header records is the COMMAND, not a claim — re-derive
+-- with `supabase migration list` / MCP `list_migrations`, JOINED ON THE NAME
+-- (`artifact_spans_rpc`), rather than trusting the line above it.
 --
 -- ── WHY IT EXISTS ───────────────────────────────────────────────────────────
 --

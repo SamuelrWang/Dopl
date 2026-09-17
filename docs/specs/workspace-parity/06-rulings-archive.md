@@ -530,9 +530,13 @@ later, *"✅ **REVERSED 2026-09-09 BY SAMUEL'S RULING (F-685).** Six floors ARE 
 
 The standing rule is `docs/specs/mcp-v2-architecture.md:168`: a prohibition told to an agent **must have a
 fence in the code**. `docs/specs/mcp-v2-wave-b.md:552` measures **two** residuals, not one: G18's web residual
-(kept by ruling — fine) and **G20/F-450 by default** (not fine — the eighth session-health field was never
-added). `:272` corrects a claim made earlier in the same document. 🚩 *"Needs Samuel: land the field in
+(kept by ruling — fine) and **G20/F-450 by default** (not fine — it read as an eighth session-health field
+still owed). `:272` corrects a claim made earlier in the same document. 🚩 *"Needs Samuel: land the field in
 batch 3, or retire the guardrail."*
+
+→ ✅ **RULED 2026-09-17 (R-36): NEITHER.** No eighth field is landed, and the sentence is **corrected to
+SEVEN** rather than deleted — the set is seven, `scripts/check-session-health-drift.ts` holds that number,
+and both wave-b rows now say so. G20 stays prose, recorded as a residual rather than glossed.
 
 ### D.9 — Rulings made by an orchestrator while Samuel slept, labelled as rulings
 

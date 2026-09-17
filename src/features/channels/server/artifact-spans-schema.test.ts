@@ -58,11 +58,24 @@ const statements = sql
 const body = statements.replace(/'(?:[^']|'')*'/g, "''");
 
 describe("the header carries what an operator needs before applying it", () => {
-  it("says WRITTEN, NOT APPLIED — this directory's standing gate", () => {
-    expect(sql).toContain("WRITTEN, NOT APPLIED");
+  /**
+   * ⚠ **THIS CASE PINNED `"WRITTEN, NOT APPLIED"` UNTIL 2026-09-17 AND NOW PINS
+   * THE OPPOSITE, WHICH IS THE ONLY WAY A DEPLOY-STATE PIN CAN WORK.** The
+   * migration was applied by NAME, byte-exact, so the header had to move or it
+   * would have been a standing gate reporting a replay that was already paid.
+   * 🔒 **WHAT IS PINNED IS NOT THE ANSWER — IT IS THAT THE HEADER STILL HANDS
+   * THE READER THE COMMAND** (CLAUDE.md doc rule 4: deploy state is a
+   * measurement). A header that said APPLIED and stopped naming
+   * `list_migrations` would be a claim nobody can check, which is the failure
+   * this file exists to prevent in the other direction.
+   */
+  it("says APPLIED, and still hands the reader the re-derive command", () => {
+    expect(sql).toContain("APPLIED 2026-09-17");
+    expect(sql).not.toContain("WRITTEN, NOT APPLIED — apply by name");
+    expect(sql).toContain("list_migrations");
   });
 
-  it("tells the operator to apply it BY NAME, byte-exact, never by db push", () => {
+  it("says it was applied BY NAME, byte-exact, never by db push", () => {
     expect(sql).toContain("artifact_spans_rpc");
     expect(sql).toContain("supabase migration list");
     expect(sql).toMatch(/NEVER WITH `db push`/i);

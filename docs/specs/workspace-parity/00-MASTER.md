@@ -625,7 +625,7 @@ standard workspace is opt-in. **Recommend: measure the code first, then rule.**
 are told has no fence in the code, against your own standing rule that it must.
 **Recommend: land the field.** *Blocks: nothing in the nine waves.* — 06 §E15
 
-→ ✅ RULED 2026-09-17 — Samuel: **delete the false eighth-field sentence** — it is a dead doc, not a guardrail. Do not land an eighth field.
+→ ✅ RULED 2026-09-17 — Samuel: **do not land an eighth field, and CORRECT the sentence to SEVEN** (not delete it). The session-health set is seven and `scripts/check-session-health-drift.ts` is what holds that number; the doc claimed an eighth was still owed. Executed 2026-09-17 in `docs/specs/mcp-v2-wave-b.md` (both G20 rows) and recorded in `06-rulings-archive.md` §D.8. G20 stays prose — recorded as a residual, not glossed.
 
 **R-37. Does a folder-scoped knowledge attachment NARROW an agent's reach, or only re-point it?**
 F-680: the 2026-09-08 ruling asked for folder/entry selection and did not say what it means for
@@ -1113,9 +1113,9 @@ R-41 → **(a)**, the exit gate. ⚠ **R-43 is EXPIRED**, so the ASK-9 arm is go
 promotion (Wave 1 item 6) proceeds on its own merits and nothing waits on a 2026-08-30 ASK batch.
 **R-23 is ANSWERED by measurement — both windows open** — so the "Measure R-23" row below is
 already discharged; keep the control and drop the fence question.
-**Added to this wave by the rulings:** **R-36** — delete the false eighth-field sentence (a dead doc,
-not a guardrail; do **not** land an eighth field); **R-35** — remove any code that mints a default
-standard workspace at signup; **R-32** — the container-address change lands as the addressing
+**Added to this wave by the rulings:** **R-36** — ✅ DONE 2026-09-17: the eighth-field sentence is
+**corrected to SEVEN**, not deleted (do **not** land an eighth field); **R-35** — remove any code that
+mints a default standard workspace at signup; **R-32** — the container-address change lands as the addressing
 contract Wave 3 is built on (see Wave 3).
 **Files touched:** ~40 (16 over-cap splits, 5 doc files, 4 deletions, 2 gate scripts).
 **Risk:** a cap split moves code without changing it — the risk is a moved export path. **Rollback:**

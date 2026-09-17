@@ -7267,7 +7267,8 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - **WHY IT IS SEPARABLE, AND IT IS NOT LAZINESS.** G20 is not a message fact at all — it is a SESSION fact, and every session fact on this lane is a hand-mirrored field across FOUR sites plus a column: `types-sessions.ts`, the zod block in `schema-sessions.ts`, the SDK's `session-health-types.ts`, its committed `dist/`, and the migration, held together by `scripts/check-session-health-drift.ts` (whose own doc row warns that every field there is `optional` AND `nullable` by design, so drift fails no build and no test — the field just never arrives). Adding an eighth means a second migration in a slice that already writes one, a desktop producer in `session-health.js`, and a gate change. None of that is delivery-verdict work.
 - ⚠ **AND ITS PRODUCER IS NOT OBVIOUS.** "A channel-fed turn ended with no send" needs the turn boundary, which `session-health.js` does not currently observe — it derives from the engine's state, not from a turn's outcome. The measurement has to be defined before it can be mirrored.
 - Proposed resolution: one slice — define the flag on the desktop first (what counts as a channel-fed turn, and when it is judged), then the field across the four mirrors + the column, in that order, with the drift gate updated in the SAME change (the remedy CLAUDE.md's warning has asked for three times).
-- Status: open.
+- Status: ✅ **CLOSED BY RULING 2026-09-17 (R-36, workspace-parity) — NOT BUILT, AND THAT IS THE ANSWER.** Samuel: **do not land an eighth field.** The session-health set is **SEVEN**, `scripts/check-session-health-drift.ts` is what holds that number, and the docs that read as "an eighth is still owed" were corrected to say seven rather than deleted (`docs/specs/mcp-v2-wave-b.md`'s two G20 rows; `docs/specs/workspace-parity/06-rulings-archive.md` §D.8).
+  ⚠ **WHAT THE RULING DOES NOT DO IS TURN G20 INTO A FENCE.** It is prose, it stays prose, and it is still a prohibition an agent is told with nothing in the code behind it — against the standing rule in `docs/specs/mcp-v2-architecture.md`. The wave-b residual table counts it for exactly that reason, and this entry closes as *"ruled unbuilt"*, never as *"closed because it shipped"*. ⚠ `mcp-v2-architecture.md`'s A9 row still reads *"Closes … G20"*, which is the overstatement this entry was filed against; it is a DATED plan doc and is left as written.
 
 ### F-451 — a launch's `resolved_*` is the third posture group on one table, and nothing structurally stops a reader taking it for the other two (2026-09-02)
 
@@ -9531,14 +9532,16 @@ its only per-agent mark.
 
 ### F-712 — `artifactSpans` counts a busy room's artifacts off a PostgREST-capped page
 
-**Found:** 2026-09-16, reviewing `master..e7da893e`. **Status:** ⏳ **RESOLVED-PENDING-APPLY
-2026-09-17** (workspace-parity Wave 0c, branch `wave0/artifact-spans`, commit subject *"Artifact
+**Found:** 2026-09-16, reviewing `master..e7da893e`. **Status:** ✅ **RESOLVED 2026-09-17, BOTH
+HALVES** (workspace-parity Wave 0c, branch `wave0/artifact-spans`, commit subject *"Artifact
 spans are counted by Postgres, not by a clipped page (F-712)"* — ⚠ a commit cannot cite its own
-hash; the hash is in that wave's report). The code half is DONE; the deploy half is a MEASUREMENT
-and is not done until `supabase/migrations/20261008120000_artifact_spans_rpc.sql` has been applied
-**BY NAME (`artifact_spans_rpc`), byte-exact, never by `db push`** — re-derive with
-`supabase migration list` / MCP `list_migrations` **joined on the NAME** (F-304), never on the
-filename prefix.
+hash; the hash is in that wave's report). The code half counts through `channel_artifact_spans`; the
+deploy half — `supabase/migrations/20261008120000_artifact_spans_rpc.sql` — was applied **BY NAME
+(`artifact_spans_rpc`), byte-exact, never by `db push`**. ⚠ **IT WAS ⏳ RESOLVED-PENDING-APPLY FOR A
+DAY AND THAT DISTINCTION IS THE ENTRY'S POINT**: the code half alone would have been a wrong answer
+traded for a `PGRST202`. 🔒 Deploy state is a MEASUREMENT (CLAUDE.md doc rule 4) — **re-derive rather
+than trust this line**: `supabase migration list` / MCP `list_migrations` **joined on the NAME**
+(F-304), never on the filename prefix, which is not the version it landed under.
 
 🔒 **THE MIGRATION IS A HARD DEPENDENCY, AND THAT IS THE ONE THING TO CARRY OUT OF THIS ENTRY.**
 Until it is applied, `artifactSpans` answers `PGRST202` and the card read FAILS — loudly. That is
