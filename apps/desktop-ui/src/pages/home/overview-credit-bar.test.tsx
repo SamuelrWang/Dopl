@@ -107,20 +107,6 @@ describe("the /home credit capacity bar", () => {
    * has to make this file red, which the positive half alone would not do (both
    * constants share `text-text-primary`).
    */
-  /**
-   * 🔒 THE DEEPER CARD SHADOW IS THE OVERVIEW FACE'S ALONE (Samuel, 2026-09-13:
-   * "the shadow should only apply for the overview page … the pane for agents in
-   * the agent tab also changed … it looks weird now"): the face stamps
-   * `data-overview-face` on its root and the kit scopes `--shadow-card` under it.
-   */
-  it("stamps data-overview-face on the Overview root so the deep card shadow is scoped", async () => {
-    renderHome();
-    await panel("Usage");
-    const root = document.querySelector("[data-overview-face]");
-    expect(root).not.toBeNull();
-    expect(root!.contains(screen.getByRole("heading", { name: "Usage" }))).toBe(true);
-  });
-
   it("puts the panel heading one step above the controls inside it", async () => {
     renderHome();
     const usage = await panel("Usage");

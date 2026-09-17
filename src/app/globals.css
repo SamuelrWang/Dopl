@@ -468,12 +468,6 @@
   /* Shadows / glows */
   --shadow-elevated: 0 8px 24px -8px oklch(0 0 0 / 60%),
     0 2px 8px -2px oklch(0 0 0 / 40%);
-  /* THE WHITE CARD ON A GRAY WELL (`.bento`). Deepened 2026-09-13 (Samuel, over
-     the Overview: "make each white pane cast more of a shadow and a darker
-     shadow onto the gray background"). */
-  /* Tightened 2026-09-13 (Samuel: the wide 32px blur read as "a gradient" on
-     the gray — the ground must stay solid): a darker but SHORT shadow. */
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.1), 0 6px 14px rgba(0, 0, 0, 0.12);
   /**
    * THE BENTO ELEVATION, as a token so a second element can cast it (2026-09-15).
    * ⚠ IT IS `.bento`'S OWN PAIR, MOVED RATHER THAN REDESIGNED — every surface
@@ -482,8 +476,12 @@
    * ring (a box-shadow on the wrapper) painted over the pill's shadow and hid it.
    * The wrapper now casts this same elevation, composed BEHIND its own ring, so
    * badge and ring read as one silhouette with one shadow under it.
-   * ⚠ DISTINCT FROM `--shadow-card`, which is the heavier overview-face step
-   * (`[data-overview-face] .bento`). Do not merge the two.
+   * ⚠ IT IS THE OVERVIEW'S STEP TOO, AND THERE IS NO SECOND ONE (2026-09-17).
+   * `--shadow-card` — the deeper `[data-overview-face] .bento` pair added
+   * 2026-09-13 — is DELETED, Samuel: *"on the overview page, we made it earlier
+   * where the white panels sitting on the gray background is more elevated and
+   * has more shadow. I want to revert it to the old amount of shadow."* One
+   * resting elevation for every white card on gray; do not re-add a heavier one.
    */
   --shadow-bento: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 18px rgba(0, 0, 0, 0.05);
   /**
@@ -882,14 +880,6 @@ html {
      component is exactly the drift docs/DESIGN-SYSTEM.md forbids, so the pair is
      a token and both readers name it. */
   box-shadow: var(--shadow-bento);
-}
-
-/* THE OVERVIEW'S DEEPER CARD SHADOW — scoped, not global (Samuel, 2026-09-13,
-   after a global pass: "the shadow should only apply for the overview page …
-   the pane for agents in the agent tab also changed … it looks weird now").
-   `pages/home/overview-panels.tsx` stamps `data-overview-face` on its root. */
-[data-overview-face] .bento {
-  box-shadow: var(--shadow-card);
 }
 
 /* Frosted glass panel — THE card a PUBLIC page standing on white renders into

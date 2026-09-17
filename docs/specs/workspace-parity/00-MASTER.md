@@ -693,7 +693,7 @@ were one row that was wrong about two of its three items).
 | U3 | Concave `SectionBox` | forbidden on /home (pinned) | live in members-v2 ×5, billing, ontology template editor, knowledge Contents | CSS | 6 |
 | U4 | Segmented control form | `plain` / `lg` / `semibold` (`home-header.tsx:76-83`) | 12 uses, never that form | CSS | 5 |
 | U5 | `.auth-btn-3d-light` re-stated | `home.module.css:102-106` sets the raised-light vars directly | `.auth-btn-3d-light` / `.raised-tab` in `globals.css` | CSS | 6 |
-| U6 | `[data-overview-face] .bento` deeper shadow | stamped on /home's Overview | no workspace surface stamps it | CSS | 8 |
+| U6 | ~~`[data-overview-face] .bento` deeper shadow~~ **RESOLVED BY DELETION 2026-09-17** | hook, rule and `--shadow-card` deleted — Samuel reverted the elevation | already matched: both wear `--shadow-bento` | none | — |
 | U7 | Kit class parity | SPA `kit.css` | `globals.css` carries `.glass-panel`, `.hairline`, `.hairline-strong` the SPA lacks; the token gate does not see class names | CSS + gate | 0 |
 | U8 | Sidebar hardcoded type | n/a | `app-shell.module.css:289` `16px`, `:291` `13.5px` — outside the type scale | CSS | 6 |
 | U9 | Knowledge hero hardcoded ink | n/a | `knowledge-home.tsx:133` `text-white`, `:135` `text-[#e3e3e3]` | CSS | 5 |
@@ -1157,7 +1157,7 @@ channel, person and tool.
 
 **Items:** P33 the series first (one `metric` × `range` vocabulary, two fences) · P34 the rails,
 fenced to one container · resolve **F-652** ("Needs you" reads the ACCOUNT endpoint and discards
-most of it) in the same wave · U6 the overview-face shadow hook.
+most of it) in the same wave. ⚠ U6 (the overview-face shadow hook) LEFT THIS WAVE 2026-09-17 — it was resolved by deletion, not by adoption.
 **Rulings needed:** R-29 ⛔(this wave).
 **Files touched:** ~20.
 **Gates (04 §F-4 — this wave touches credits):** all 30 `src/features/billing/**` tests, specifically `credits-service.test.ts` · `credits-link-reroute.test.ts` · `personal-wallet.test.ts` · `credits-channel-attribution.test.ts` (rule B's forgeable-header fence) · `credits-unmetered.test.ts` (the fail-open posture) · `seats.test.ts` · `webhook-plan.test.ts` · `api/mcp/credits/consume/route{,-guest-floor}.test.ts` · `pages/home/overview-credit-bar.test.tsx` + `overview-unmetered-caption.test.tsx`.

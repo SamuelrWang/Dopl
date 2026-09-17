@@ -162,14 +162,6 @@
   box-shadow: var(--shadow-bento);
 }
 
-/* THE OVERVIEW'S DEEPER CARD SHADOW — scoped, not global (Samuel, 2026-09-13,
-   after a global pass: "the shadow should only apply for the overview page …
-   the pane for agents in the agent tab also changed … it looks weird now").
-   `pages/home/overview-panels.tsx` stamps `data-overview-face` on its root. */
-[data-overview-face] .bento {
-  box-shadow: var(--shadow-card);
-}
-
 /* Recessed switcher track — pair active item with .raised-tab. */
 .concave-track {
   background: #e9eaec;

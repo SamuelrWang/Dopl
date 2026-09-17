@@ -379,13 +379,13 @@ function HomeHeaderGhost() {
  */
 function OverviewFaceGhost() {
   return (
-    // ⚠ `data-overview-face` IS GEOMETRY HERE, NOT A HOOK FOR NOTHING. The kit
-    // scopes the deeper `--shadow-card` to `[data-overview-face] .bento`
-    // (Samuel, 2026-09-13: the shadow is the Overview's alone), and
-    // `overview-panels.tsx` stamps it on the very element this ghost stands in
-    // for — so without it the ghost's two cards wear the shallow `.bento`
-    // shadow and every card deepens the instant the read lands.
-    <div className="min-w-0 flex-1 overflow-y-auto p-3" data-overview-face>
+    // ⚠ NO `data-overview-face` ANY MORE (2026-09-17). It existed for ONE
+    // reason — the kit scoped a deeper `--shadow-card` to
+    // `[data-overview-face] .bento` — and Samuel reverted that elevation
+    // (*"I want to revert it to the old amount of shadow"*), so the hook and the
+    // token are both deleted. The ghost and the page now wear the SAME `.bento`
+    // resting shadow by construction, which is what the hook was buying.
+    <div className="min-w-0 flex-1 overflow-y-auto p-3">
       <div className="flex flex-col gap-3">
         {/* USAGE — ONE well holding TWO `.bento` cards, `gap-3` between them:
             the capacity bar, then the plot (Samuel, 2026-09-13). ⚠ **NO
