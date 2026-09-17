@@ -82,7 +82,7 @@ describe("the favourite write — the cache the pin reads", () => {
    * behind Samuel's *"super buggy"*. ⚠ **THE FIX IS NOT HERE AND MUST NOT BE**:
    * INVARIANTS §1 forbids `channels → home`, and this write is the workspace
    * channels page's too. /home watches the cache this hook DOES own —
-   * `pages/home/use-home-favorite-sync.ts`, the shape `use-home-unread-refresh.ts`
+   * `pages/home/use-home-channel-sync.ts`, the shape `use-home-unread-refresh.ts`
    * already held — and its suite is `pages/home/relationship-list.test.tsx`.
    */
 });

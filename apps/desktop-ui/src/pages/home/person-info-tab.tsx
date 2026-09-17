@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import {
   AlignLeft,
   CalendarDays,
-  Hash,
+  Type,
   UserRound,
   type LucideIcon,
 } from "lucide-react";
@@ -19,6 +19,10 @@ import {
   InfoCardCustomRow,
   InfoCardSection,
 } from "@/features/channels/components/info-card-rows";
+import {
+  InlineEditText,
+  type ChannelHeaderEdit,
+} from "@/features/channels/components/info-inline-edit";
 import { MentionsList } from "@/features/channels/components/mentions-list";
 import type { MentionsBundle } from "@/features/channels/components/mentions-disclosure";
 import { useChannelInfoCardWrite } from "@/features/channels/hooks/use-channel-info-card-writes";
@@ -88,6 +92,7 @@ export function PersonInfoTab({
   channel,
   gate,
   mentions,
+  headerEdit,
 }: {
   homeChannel: HomeChannel;
   /**
@@ -105,6 +110,12 @@ export function PersonInfoTab({
    *  the gate — see `channel-surface.tsx › ChannelInfoTabContext.mentions` for
    *  why a tab may not fetch it or mint its handlers itself. */
   mentions: MentionsBundle;
+  /**
+   * THE HEADER WRITE AND ITS PERMISSION, minted by the surface with the gate —
+   * see `channel-surface.tsx › ChannelInfoTabContext.headerEdit`. ⚠ A tab may not
+   * mint its own: `useChannelHeaderWrite` takes THE surface's one refetch gate.
+   */
+  headerEdit: ChannelHeaderEdit;
 }) {
   // 🔒 THE CHANNEL'S OWN NAME. `channelTitle` returns `channel.name` and nothing
   // else since 2026-09-01 — the roster-derived title is gone, and that function's
@@ -114,6 +125,23 @@ export function PersonInfoTab({
   // channel rows minted before `infoCard` existed, so the field can be absent
   // on the first paint after an upgrade even though the API now always sends
   // it. Absent reads as the empty card, exactly as `{}` parses server-side.
+  /**
+   * 🔒 **MAY THIS READER OPEN THE TWO HEADER LINES (Samuel, 2026-09-17:** *"I
+   * want to be able to click where the name and description are. I want to click
+   * that, and then I should be able to edit the name and description of the
+   * channel."*)** — **the workspace tab's rule, not a second one**
+   * (`channels/components/info-tab.tsx › headerEditable`, INVARIANTS §3): the
+   * surface's mirror of `canManageChannel`, AND a channel whose name is STORED.
+   * ⚠ **`channel.isDirect` IS THE SECOND HALF THERE BECAUSE A 1:1 IS TITLED AFTER
+   * ITS PEER**, and it is kept here VERBATIM though this pane names every row by
+   * `channel.name` already (`peerNamedHeader: false`, `home-rows.ts ›
+   * channelTitle`): the two tabs are two compositions of ONE ladder and a rule
+   * that holds on one of them holds on both until Samuel says otherwise. **The
+   * consequence is worth knowing: a home container minted before the 2026-08-24
+   * channel-first inversion still carries `is_direct = true`, so its card stays
+   * display-only** — lifting that is a one-word ruling, not a code question.
+   */
+  const headerEditable = headerEdit.canEdit && !channel.isDirect;
   const card = channel.infoCard ?? EMPTY_INFO_CARD;
   const { save } = useChannelInfoCardWrite({
     channelId: channel.id,
@@ -142,22 +170,34 @@ export function PersonInfoTab({
   const creator = members.find((m) => m.userId === channel.createdBy) ?? null;
   const builtIns: BuiltInRow[] = [
     // ⚠ **"DESCRIPTION" IS THE PRODUCT'S WORD FOR `channels.topic` (ruling,
-    // Samuel, 2026-09-15)** — no new column. DISPLAY ONLY: editing a channel's
-    // header is channel management's (`PATCH /api/channels/{id}`).
-    // ⚠ THE SAME ROW IS ON THE WORKSPACE CHANNELS PAGE
-    // (`channels/components/info-tab.tsx`) — two compositions of one ladder, and
-    // a ruling on it lands on both.
+    // Samuel, 2026-09-15)** — no new column.
+    // ⚠ **SUPERSEDED, NOT DELETED (Samuel, 2026-09-17).** This said *"DISPLAY
+    // ONLY: editing a channel's header is channel management's (`PATCH
+    // /api/channels/{id}`)"*. The ROUTE half is still true and is the one this row
+    // writes through — there is no new endpoint — but the row is no longer display
+    // only. The workspace tab took the same correction on 2026-09-16 and this is
+    // the second composition of that ladder catching up.
+    // ⚠ "None", one word, no explainer sentence (minimal-copy ruling) — and it is
+    // the CLICK TARGET, so an empty description opens on the EMPTY STRING rather
+    // than on the word.
+    // ⚠ EMPTY IS LEGAL HERE and clears the description: the column is NOT NULL
+    // DEFAULT '', which is why this one has no non-empty guard.
     {
       key: "description",
       icon: AlignLeft,
       label: "Description",
-      // ⚠ "None", one word, no explainer sentence (minimal-copy ruling).
-      value: channel.topic ? (
-        <span className="truncate text-body text-text-primary">
-          {channel.topic}
-        </span>
-      ) : (
-        <span className="text-body text-text-muted">None</span>
+      value: (
+        <InlineEditText
+          label="Channel description"
+          value={channel.topic}
+          editable={headerEditable}
+          busy={headerEdit.busy}
+          // `channels/schema.ts › ChannelTopicSchema` — `safeOptionalLabel(…, 2000)`.
+          maxLength={2000}
+          placeholder="None"
+          emptyClassName="text-text-muted"
+          onCommit={(next) => headerEdit.onSaveTopic(next)}
+        />
       ),
     },
     {
@@ -228,10 +268,31 @@ export function PersonInfoTab({
           would reveal the control from a hover that never entered the list. */}
       <InfoCardSection className="px-2">
         {/* ⚠ FIRST, ABOVE EVERY BUILT-IN — and FIXED: no × on this row, because a card
-            with its subject removed is a card about nobody. It is `channelTitle`'s
-            answer, the same derived name the rows list and the tabs use. */}
-        <MetaRow icon={Hash} label="Name">
-          <span className="truncate text-body text-text-primary">{name}</span>
+            with its subject removed is a card about nobody.
+            ⚠ **THE READ FACE IS `channelTitle`'s ANSWER**, the same name the row in
+            the left column wears; **the EDITOR binds to `channel.name`**, which is
+            the writable half. On this pane those two are the same column
+            (`peerNamedHeader: false`), and they are still written separately
+            because the workspace tab's are not — one ladder, one spelling.
+            🔒 ⚠ **NO `Hash` GLYPH IN FRONT OF THE NAME (Samuel, 2026-09-16, mirrored
+            here 2026-09-17)** — the ruling that took the hashtag off the pane
+            header took it off this row too, on the workspace tab the same day.
+            `Type` is the row's icon now. */}
+        <MetaRow icon={Type} label="Name">
+          <InlineEditText
+            label="Channel name"
+            value={headerEditable ? channel.name : name}
+            editable={headerEditable}
+            busy={headerEdit.busy}
+            // `channels/schema.ts › ChannelNameSchema` — `safeLabel("Channel name", 120)`.
+            maxLength={120}
+            onCommit={(next) => {
+              // ⚠ AN EMPTY NAME IS A CANCEL, NOT AN UNNAMED ROOM. The server
+              // refuses it (`safeLabel` has a min), and a channel with no name
+              // cannot be found again in anybody's list.
+              if (next !== "") headerEdit.onSaveName(next);
+            }}
+          />
         </MetaRow>
         {builtIns.map((row) => (
           <div key={row.key}>

@@ -41,6 +41,7 @@ import { PeerActivityRow, peerWorkingOn } from "./peer-activity";
 import type { ChannelSurfaceData } from "./channel-surface-data";
 import type { ChannelsSelection } from "./use-channels-selection";
 import type { MentionsBundle } from "./mentions-disclosure";
+import type { ChannelHeaderEdit } from "./info-inline-edit";
 import type { Channel } from "../types";
 
 /**
@@ -75,6 +76,22 @@ export interface ChannelInfoTabContext {
    * construction, and no caller may narrow or widen it here.
    */
   mentions: MentionsBundle;
+  /**
+   * THIS SURFACE'S HEADER WRITE AND ITS PERMISSION, ALREADY RESOLVED (Samuel,
+   * 2026-09-17) — the click-to-edit Name and Description rows.
+   *
+   * ⚠ **IT RIDES WITH THE GATE FOR THE REASON `mentions` DOES.** Minted ONCE by
+   * `surface-info-panel.tsx`, from this surface's single `useRefetchGate`
+   * (§7/§8) and its mirror of `service-shared.ts › canManageChannel`, so ONE
+   * object reaches the default Info tab and an injected one. Before this, a host
+   * that replaced the body paid for the hook and dropped the edit — which is how
+   * /home had a display-only card while the workspace page's edited in place.
+   * ⚠ **A TAB MAY NOT MINT ITS OWN**: a second gate coordinates with nothing, and
+   * the realtime doorbell repaints the old name mid-write.
+   * ⚠ **THE DERIVED-NAME HALF IS STILL THE TAB'S** (`info-tab.tsx ›
+   * headerEditable`) — a fact about the ROW, not about the reader.
+   */
+  headerEdit: ChannelHeaderEdit;
 }
 
 export interface ChannelSurfaceSlots {

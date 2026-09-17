@@ -150,7 +150,7 @@ export function bridgeCalls(mock: { mock: { calls: unknown[][] } }) {
  *
  *  ⚠ **THE `client` IS RETURNED (2026-09-15), and it is not a convenience.** Two
  *  of /home's facts live in a SECOND cache that a different feature's write owns
- *  — the channel pin is the worked case (`pages/home/use-home-favorite-sync.ts`)
+ *  — the channel pin is the worked case (`pages/home/use-home-channel-sync.ts`)
  *  — and the only honest way to pin a bridge between two caches is to seed the
  *  one this page does not fetch. Additive: both existing keys are unchanged. */
 export function renderWithProviders(

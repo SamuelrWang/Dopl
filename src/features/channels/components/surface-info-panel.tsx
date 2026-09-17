@@ -80,6 +80,25 @@ export function SurfaceInfoPanel({
     workspaceId,
     gate,
   });
+  /**
+   * ⚠ **ONE BUNDLE, TWO CONSUMERS, AND THAT IS THE 2026-09-17 CHANGE.** It is
+   * handed to the DEFAULT Info tab below AND to an injected `infoTab` slot, so
+   * /home's own composition edits the same two rows through the same write and the
+   * same mirror rather than restating either (`ChannelInfoTabContext.headerEdit`).
+   * ⚠ **THE SAME PAIR THE SERVER'S GATE READS** (`service-shared.ts ›
+   * canManageChannel`): channel owner, or workspace admin. Mirrored rather than
+   * guessed, exactly as `settings-slot.tsx` mirrors it two blocks down, so the
+   * line's editable face matches the answer the PATCH will give — an affordance
+   * that always 403s is a dead control (INVARIANTS §5).
+   * ⚠ **THE DERIVED-NAME HALF IS THE TAB'S** (`info-tab.tsx › headerEditable`),
+   * because it is a fact about the ROW rather than about the reader.
+   */
+  const headerEdit = {
+    canEdit: channel.role === "owner" || meetsMinRole(role, "admin"),
+    onSaveName: headerWrite.saveName,
+    onSaveTopic: headerWrite.saveTopic,
+    busy: headerWrite.pending,
+  };
 
   // ⚠ ON ONE COLUMN, OPENING A TRANSCRIPT HAS TO MOVE THE FACE TOO — a picked
   // thread, a jumped-to mention and a new-thread ask all land in the
@@ -163,20 +182,9 @@ export function SurfaceInfoPanel({
       knowledge={capabilities?.knowledge}
       // THE ARTIFACTS FACE (Samuel, 2026-09-16) — opt-in, /home only; same place.
       artifacts={capabilities?.artifacts}
-      // CLICK-TO-EDIT NAME + DESCRIPTION (Samuel, 2026-09-16).
-      // ⚠ **THE SAME PAIR THE SERVER'S GATE READS** (`service-shared.ts ›
-      // canManageChannel`): channel owner, or workspace admin. Mirrored rather
-      // than guessed, exactly as `settings-slot.tsx` mirrors it two blocks down,
-      // so the line's editable face matches the answer the PATCH will give —
-      // an affordance that always 403s is a dead control (INVARIANTS §5).
-      // ⚠ THE DERIVED-NAME HALF IS `info-tab.tsx`'s (`headerEditable`), because
-      // it is a fact about the ROW rather than about the reader.
-      headerEdit={{
-        canEdit: channel.role === "owner" || meetsMinRole(role, "admin"),
-        onSaveName: headerWrite.saveName,
-        onSaveTopic: headerWrite.saveTopic,
-        busy: headerWrite.pending,
-      }}
+      // CLICK-TO-EDIT NAME + DESCRIPTION (Samuel, 2026-09-16) — see `headerEdit`
+      // above for the permission and why it is mirrored.
+      headerEdit={headerEdit}
       // ⚠ CALLED, not passed. The tab is a render function so it can be
       // handed THIS surface's refetch gate — see `ChannelInfoTabContext`.
       // ⚠ THE BUNDLE GOES WITH THE GATE (2026-09-15). The slot REPLACES the tab
@@ -184,8 +192,13 @@ export function SurfaceInfoPanel({
       // though this component had already fetched it — that was the home space's
       // missing-mentions gap, and nothing about the query had to change. Same
       // page, same handlers, same centre-pane scroll.
+      // ⚠ **AND THE HEADER EDIT GOES WITH THEM (2026-09-17)** — same argument,
+      // one ruling later: the slot REPLACES the body, so /home's Info tab drew
+      // display-only Name and Description rows while this surface had already
+      // minted the write for the tab it was not rendering.
       infoTab={slots?.infoTab?.({
         gate,
+        headerEdit,
         mentions: {
           mentions,
           truncated: data.mentionsTruncated,

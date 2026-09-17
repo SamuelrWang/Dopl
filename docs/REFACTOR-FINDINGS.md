@@ -9393,7 +9393,7 @@ predates the second.
 
 **Measured** (throwaway probe, 2026-09-16): pin channel A, pin channel B, fail A → both
 `myFavoritedAt` values are `null`, and through
-`apps/desktop-ui/src/pages/home/use-home-favorite-sync.ts` **B's row also leaves the Pinned well**
+`apps/desktop-ui/src/pages/home/use-home-channel-sync.ts` (the file was named for the favourite alone when this was measured; renamed 2026-09-17) **B's row also leaves the Pinned well**
 even though B's write succeeded.
 
 ⚠ **IT SELF-HEALS ON THE SETTLE INVALIDATE**, so it is one round trip of visibly wrong state rather

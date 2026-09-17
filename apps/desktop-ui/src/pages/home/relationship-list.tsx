@@ -11,7 +11,7 @@ import {
 } from "@/features/channels/components/collapse-wells";
 import { PANEL_WELL_ON_PANEL } from "@/shared/ui/panel-well";
 import { channelPeople, channelTitle, hasLinkOut, type HomeRow } from "./home-rows";
-import { useHomeFavoriteSync } from "./use-home-favorite-sync";
+import { useHomeChannelSync } from "./use-home-channel-sync";
 import {
   HOME_CHANNEL_WELLS,
   HOME_CHANNEL_WELLS_KEY,
@@ -55,7 +55,8 @@ import {
  *     `recency-wells.tsx › wellFor` rather than owning a second clock;
  *   - the PIN — `HomeChannel.favoritedAt`, i.e. `channel_members.favorited_at`,
  *     written by the channel header's own toggle and mirrored into this page's
- *     cache by `use-home-favorite-sync.ts`. ⚠ **NOT a per-device store** — the
+ *     cache by `use-home-channel-sync.ts` (the pin, and since 2026-09-17 the name and
+ *     description the Info tab edits in place). ⚠ **NOT a per-device store** — the
  *     one this file read for an afternoon is deleted; do not mint a second.
  *
  * ⚠ **THE "no sections to manage" NOTE ABOVE WAS ABOUT THE WORKSPACE CHANNELS
@@ -85,10 +86,12 @@ export function RelationshipList({
   onSelect: (id: string) => void;
 }) {
   // 🔒 THE PIN IS THE BOOKMARK, SO THE WELL MOVES WHEN THE HEADER'S TOGGLE FIRES
-  // (Samuel, 2026-09-15). That write owns the CHANNELS cache; this page's list is
-  // a different payload carrying the same fact, and the bridge is what tells it —
-  // `use-home-favorite-sync.ts` carries the bug it fixes and why it lives here.
-  useHomeFavoriteSync();
+  // (Samuel, 2026-09-15) — **and since 2026-09-17 the ROW'S TITLE follows the Info
+  // tab's click-to-edit rename the same way.** Those writes own the CHANNELS cache;
+  // this page's list is a different payload carrying the same facts, and the bridge
+  // is what tells it — `use-home-channel-sync.ts` carries the bug it fixes and why
+  // it lives here.
+  useHomeChannelSync();
   /** ⚠ THE NARROWED ROWS ARE FILED, NEVER RE-ORDERED — `visibleRows` has already
    *  run (the page owns it, see above) and `homeRows`' newest-first order survives
    *  inside each well, because the grouping pass sorts nothing. */

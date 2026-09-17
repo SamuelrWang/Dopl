@@ -293,7 +293,7 @@ describe("the list column's THREE WELLS", () => {
    * buggy"*, PINNED ON THE REAL PAGE.** The pin lives in TWO client caches —
    * `GET /api/channels` (what the header's toggle patches) and
    * `GET /api/home/channels` (what this list renders) — and the write only ever
-   * told the first. `use-home-favorite-sync.ts` is the bridge; this is the case
+   * told the first. `use-home-channel-sync.ts` is the bridge; this is the case
    * that fails without it.
    */
   it("moves the row into Pinned when the CHANNELS cache learns of a pin", async () => {

@@ -87,12 +87,18 @@ export function RelationshipRecord({
         // read this channel's Tags inbox, scoped to THIS home container, and the
         // tab renders the same disclosure the workspace page does. Before this it
         // was fetched and dropped — see `ChannelInfoTabContext.mentions`.
-        infoTab: ({ gate, mentions }) => (
+        // ⚠ `headerEdit` RIDES WITH THEM TOO (2026-09-17, Samuel: *"I want to be
+        // able to click where the name and description are"*) — the surface has
+        // ALREADY minted the write and mirrored `canManageChannel` for the tab it
+        // is not rendering, so the /home card takes that bundle rather than a
+        // second hook on a second gate.
+        infoTab: ({ gate, mentions, headerEdit }) => (
           <PersonInfoTab
             homeChannel={homeChannel}
             channel={channel}
             gate={gate}
             mentions={mentions}
+            headerEdit={headerEdit}
           />
         ),
       }}
