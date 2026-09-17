@@ -23,7 +23,12 @@ const ME = "user-1";
 const textOf = (res: { content: Array<{ text: string }> }) =>
   res.content.map((c) => c.text).join("\n");
 
-/** A standard workspace — nothing here is in the confirm class. */
+/**
+ * A SOLO standard workspace — nothing here is in the confirm class.
+ * ⚠ **`memberCount: 1` IS LOAD-BEARING SINCE 2026-09-17 (R-08).** The kind used
+ * to carry this fixture's promise; the member count carries it now, and the
+ * four-member version of this room previews every publish.
+ */
 function standardWorkspace(over: Record<string, unknown> = {}) {
   return {
     getWorkspaceId: vi.fn(() => "ws-1"),
@@ -35,7 +40,7 @@ function standardWorkspace(over: Record<string, unknown> = {}) {
           name: "Acme",
           kind: "standard",
           role: "owner",
-          memberCount: 4,
+          memberCount: 1,
         },
       ],
     })),

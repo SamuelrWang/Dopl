@@ -12,6 +12,7 @@ exports.bootServer = bootServer;
 const server_js_1 = require("./server.js");
 const identity_js_1 = require("./tools/identity.js");
 const workspace_directory_js_1 = require("./workspace-directory.js");
+const shared_room_js_1 = require("./shared-room.js");
 var server_js_2 = require("./server.js");
 Object.defineProperty(exports, "createServer", { enumerable: true, get: function () { return server_js_2.createServer; } });
 Object.defineProperty(exports, "buildInstructions", { enumerable: true, get: function () { return server_js_2.buildInstructions; } });
@@ -76,39 +77,39 @@ async function bootServer(client, opts = {}) {
             diag(`[dopl-mcp] X-Workspace-Id pin "${pin}" matched no active membership${directoryLoadFailed ? " (directory load had failed)" : ""}; ignoring it and resolving from memberships`);
         }
     }
-    // 🔒 THE CONTAINER LOCK (plan §4.4 B3). A session pinned to a SHARED link
+    // 🔒 THE CONTAINER LOCK (plan §4.4 B3). A session pinned to a SHARED
     // container — one with a PEER in it — sees and addresses that container
     // ALONE: no `list_workspaces` entry for the operator's other workspaces, no
     // `workspace=` that resolves to one, no instruction table naming any.
     //
-    // ⚠ **IT ASKS `kind === "link"`, NOT `!isStandardWorkspace(…)`** (F-564).
-    // The negation reads "not in the rail" as "therefore somebody's room", which
-    // `20260920120000`'s `personal` kind makes false for every user at once —
-    // each operator's OWN container would arm a lock built for a shared one.
+    // 🔒 ⚠ **IT ASKS THE MEMBER COUNT AND NOTHING ELSE SINCE 2026-09-17**
+    // (Samuel's ruling R-15, on R-08's predicate; F-513). It used to ask
+    // `containerKind(active) === "home channel"` FIRST, so a session pinned to a
+    // nine-member STANDARD workspace saw the operator's ENTIRE directory — the
+    // enumeration leak R-15 names. The argument that bought the lock ("a peer's
+    // room must not be a directory oracle") never depended on the kind of room.
+    //
+    // ⚠ F-564's WARNING IS HONOURED, NOT DROPPED. It was against
+    // `!isStandardWorkspace(…)`, whose NEGATIVE spelling armed a peer-shaped lock
+    // on every operator's own `personal` container. The member count excludes the
+    // personal shelf POSITIVELY — it has exactly one member — so nothing arms on
+    // a room with nobody else in it.
     //
     // ⚠ SHARED, NOT SOLO. A one-member container is the operator's own primary
     // agent surface and is deliberately untouched, exactly as the audience ceiling
     // leaves it (`knowledge/server/service-audience.ts`). The lock exists because
     // somebody ELSE is in the room.
     //
-    // 🔒 ⚠ `?? 0` AND ZERO IS NOT SOLO — this is §8's stale-field rule applied in
-    // the INVERTED direction, on purpose. `memberCount` is new on the cached
-    // `listWorkspaces` payload; an older server sends none, and the reflex
-    // fallback (treat unknown as the permissive case) would silently unlock every
-    // container across the release window in which a desktop build runs against a
-    // server that predates the field. Unknown = not solo = narrowed.
+    // 🔒 ⚠ AN ABSENT COUNT LOCKS, and the whole argument for that inversion is in
+    // `shared-room.ts` rather than restated here.
     //
     // ⚠ AND IT IS A TRIPWIRE. Bash can open a second, unpinned MCP connection or
     // issue the loopback HTTP directly; neither passes through this object. The
     // fences are the container-locked credential and the server-side audience
     // ceiling. Do not describe this line as containment.
-    const lockedTo = active &&
-        (0, workspace_directory_js_1.containerKind)(active) === "home channel" &&
-        (active.memberCount ?? 0) !== 1
-        ? active
-        : null;
+    const lockedTo = active && (0, shared_room_js_1.isSharedRoom)(active.memberCount) ? active : null;
     if (lockedTo) {
-        diag(`[dopl-mcp] directory LOCKED to shared container ${lockedTo.slug} (${lockedTo.memberCount ?? "unknown"} active members)`);
+        diag(`[dopl-mcp] directory LOCKED to shared ${(0, workspace_directory_js_1.containerKind)(lockedTo)} ${lockedTo.slug} (${lockedTo.memberCount ?? "unknown"} active members)`);
     }
     // ⚠ Clear an unresolved constructor pin so loopback calls never carry a bogus
     // X-Workspace-Id.

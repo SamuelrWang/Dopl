@@ -19,12 +19,16 @@
  * the call shows up here as a missing test, not as a passing one.
  *
  * FOUR REFUSAL-ADJACENT AXES, one arm each:
- *   1. the refusal itself (link + 2 members + shared visibility, no flag);
+ *   1. the refusal itself (2 members + shared visibility, no flag);
  *   2. the flag satisfying it;
  *   3. each clause of the predicate letting the write through on its own
- *      (standard workspace, solo container, private visibility);
+ *      (a SOLO room of either kind, private visibility);
  *   4. the UPDATE path, which is the other door to the same state (F-289's
  *      argument on a different axis).
+ *
+ * ⚠ **THE KIND CLAUSE LEFT ON 2026-09-17 (Samuel's ruling R-08; F-513)** and two
+ * arms INVERTED with it: a multi-member standard workspace, and a vanished
+ * workspace row whose carve rode on a read the ruling deleted.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -212,29 +216,31 @@ function templateCtx() {
   return templateFixtureCtx({ workspaceId: CONTAINER, role: "owner" });
 }
 
-function knowledgeCtx(): KnowledgeContext {
-  return {
-    workspaceId: CONTAINER,
-    userId: USER,
-    source: "user",
-    role: "owner",
-    apiKeyWorkspaceId: null,
-    credentialSubjectUserId: USER,
-  } as KnowledgeContext;
-}
+/** ⚠ ONE SHAPE, TWO NAMES — the two feature contexts differ only in their TYPE
+ *  on the axes this file drives, and two copies is two places to drift. */
+const userCtx = {
+  workspaceId: CONTAINER,
+  userId: USER,
+  source: "user",
+  role: "owner",
+  apiKeyWorkspaceId: null,
+  credentialSubjectUserId: USER,
+};
+const knowledgeCtx = () => userCtx as KnowledgeContext;
+const skillCtx = () => userCtx as SkillContext;
 
-function skillCtx(): SkillContext {
-  return {
-    workspaceId: CONTAINER,
-    userId: USER,
-    source: "user",
-    role: "owner",
-    apiKeyWorkspaceId: null,
-    credentialSubjectUserId: USER,
-  } as SkillContext;
-}
+/** The row an UPDATE door reads before it decides what is publishing. */
+const existingRow = (id: string, slug: string, visibility = "private") => ({
+  id,
+  slug,
+  visibility,
+  accessMode: "workspace",
+  createdBy: USER,
+  updatedAt: "2026-09-02T00:00:00Z",
+});
 
-/** What the room is, as the two DB facts the predicate reads. */
+/** What the room is. ⚠ **`kind` IS NO LONGER AN INPUT** (R-08): the count is
+ *  the whole question, and the row is primed only for the "never reads it" arm. */
 function room(kind: string, members: number): void {
   mockWorkspace.mockResolvedValue({ id: CONTAINER, kind } as never);
   mockCount.mockResolvedValue(members);
@@ -256,27 +262,15 @@ beforeEach(() => {
   mockSkills.insertSkill.mockResolvedValue({ id: "skill-1", slug: "ship-it" } as never);
   mockSkills.updateSkillRow.mockResolvedValue({ id: "skill-1", slug: "ship-it" } as never);
   mockSkills.readSkillBody.mockResolvedValue({ body: "" } as never);
-  mockGetSkill.mockResolvedValue({
-    id: "skill-1",
-    slug: "ship-it",
-    visibility: "private",
-    accessMode: "workspace",
-    createdBy: USER,
-    updatedAt: "2026-09-02T00:00:00Z",
-  } as never);
-  mockGetBase.mockResolvedValue({
-    id: "kb-1",
-    slug: "notes",
-    visibility: "private",
-    accessMode: "workspace",
-    createdBy: USER,
-    updatedAt: "2026-09-02T00:00:00Z",
-  } as never);
+  // ⚠ ONE SHAPE, TWO ROWS — the UPDATE doors read a PRIVATE row of the caller's
+  // own, and only the id and slug differ between them.
+  mockGetSkill.mockResolvedValue(existingRow("skill-1", "ship-it") as never);
+  mockGetBase.mockResolvedValue(existingRow("kb-1", "notes") as never);
 });
 
 // ── The refusal ──────────────────────────────────────────────────────
 
-describe("a publish into a shared link container without the flag", () => {
+describe("a publish into a shared room without the flag", () => {
   it("refuses an agent-template create, and writes NOTHING", async () => {
     await expect(
       createTemplate(templateCtx(), { name: "Scout", visibility: "workspace" })
@@ -366,7 +360,7 @@ describe("acknowledgeShared: true", () => {
 
   it("costs ZERO reads — the flag short-circuits before the room is looked up", async () => {
     // ⚠ THE QUERY BUDGET IS PART OF THE CONTRACT (`shared-publish.ts`): a
-    // precondition that read two rows on every acknowledged create would put
+    // precondition that counted the room on every acknowledged create would put
     // the cost on the common path to fence the rare one.
     await createTemplate(templateCtx(), {
       name: "Scout",
@@ -381,17 +375,34 @@ describe("acknowledgeShared: true", () => {
 // ── Each clause of the predicate, on its own ─────────────────────────
 
 describe("the predicate is narrow, and every clause is load-bearing", () => {
-  it("a STANDARD workspace publishes with no flag, and never counts members", async () => {
+  it("🔒 a FORTY-MEMBER STANDARD workspace is REFUSED without the flag (R-08)", async () => {
+    // ⚠ Read "publishes with no flag, and never counts members" until
+    // 2026-09-17: forty people are forty second audiences, whatever the kind.
     room("standard", 40);
-    await createTemplate(templateCtx(), { name: "Scout", visibility: "workspace" });
-    expect(mockTemplates.insertTemplate).toHaveBeenCalled();
-    expect(mockCount).not.toHaveBeenCalled();
+    await expect(
+      createTemplate(templateCtx(), { name: "Scout", visibility: "workspace" })
+    ).rejects.toBeInstanceOf(ContainerPublishUnacknowledgedError);
+    expect(mockTemplates.insertTemplate).not.toHaveBeenCalled();
   });
 
-  it("a SOLO container publishes with no flag — there is no second audience", async () => {
-    room("link", 1);
-    await createTemplate(templateCtx(), { name: "Scout", visibility: "workspace" });
-    expect(mockTemplates.insertTemplate).toHaveBeenCalled();
+  // ⚠ BOTH KINDS, because the carve is the COUNT and nothing else (R-08).
+  it.each(["link", "standard"])(
+    "a SOLO %s publishes with no flag — there is no second audience",
+    async (kind) => {
+      room(kind, 1);
+      await createTemplate(templateCtx(), { name: "Scout", visibility: "workspace" });
+      expect(mockTemplates.insertTemplate).toHaveBeenCalled();
+    }
+  );
+
+  it("🔒 never reads the workspace ROW at all — the kind went with the clause", async () => {
+    // ⚠ R-08 IMPROVED the query budget: `findWorkspaceById` existed only to
+    // learn the kind, so the gate costs one count instead of a row plus a count.
+    room("link", 2);
+    await expect(
+      createTemplate(templateCtx(), { name: "Scout", visibility: "workspace" })
+    ).rejects.toBeInstanceOf(ContainerPublishUnacknowledgedError);
+    expect(mockWorkspace).not.toHaveBeenCalled();
   });
 
   it("a PRIVATE create never asks the room anything", async () => {
@@ -400,13 +411,15 @@ describe("the predicate is narrow, and every clause is load-bearing", () => {
     expect(mockWorkspace).not.toHaveBeenCalled();
   });
 
-  it("a workspace row that vanished mid-request does not become a refusal", async () => {
-    // ⚠ `withWorkspaceAuth` proved the membership before this ran, so `null`
-    // means the row is gone and the write underneath fails on its own. Same
-    // reading as `knowledge/server/service-audience.ts`'s.
-    mockWorkspace.mockResolvedValue(null);
-    await createTemplate(templateCtx(), { name: "Scout", visibility: "workspace" });
-    expect(mockTemplates.insertTemplate).toHaveBeenCalled();
+  it("🔒 a room that counts ZERO refuses, and writes NOTHING", async () => {
+    // ⚠ Read "a workspace row that vanished mid-request does not become a
+    // refusal" until 2026-09-17; that carve rode on the `findWorkspaceById`
+    // read R-08 deleted. Same direction as the unreadable-count arm below.
+    mockCount.mockResolvedValue(0);
+    await expect(
+      createTemplate(templateCtx(), { name: "Scout", visibility: "workspace" })
+    ).rejects.toBeInstanceOf(ContainerPublishUnacknowledgedError);
+    expect(mockTemplates.insertTemplate).not.toHaveBeenCalled();
   });
 
   it("an UNREADABLE member count fails the request rather than passing it", async () => {
@@ -442,14 +455,7 @@ describe("the UPDATE path is fenced too", () => {
     // what the caller CHANGED, not where the row LANDS: a row already shared is
     // already seen by the room, and making a rename acknowledge an audience it
     // did not touch is a gate on the wrong verb.
-    mockGetBase.mockResolvedValue({
-      id: "kb-1",
-      slug: "notes",
-      visibility: "public",
-      accessMode: "workspace",
-      createdBy: USER,
-      updatedAt: "2026-09-02T00:00:00Z",
-    } as never);
+    mockGetBase.mockResolvedValue(existingRow("kb-1", "notes", "public") as never);
     await updateBase(knowledgeCtx(), "kb-1", { name: "Renamed" });
     expect(mockBases.updateBaseRow).toHaveBeenCalled();
     expect(mockWorkspace).not.toHaveBeenCalled();
@@ -465,14 +471,7 @@ describe("the UPDATE path is fenced too", () => {
   });
 
   it("lets a skill NARROW to private with no flag — that direction has no audience to warn", async () => {
-    mockGetSkill.mockResolvedValue({
-      id: "skill-1",
-      slug: "ship-it",
-      visibility: "public",
-      accessMode: "workspace",
-      createdBy: USER,
-      updatedAt: "2026-09-02T00:00:00Z",
-    } as never);
+    mockGetSkill.mockResolvedValue(existingRow("skill-1", "ship-it", "public") as never);
     await updateSkill(skillCtx(), "ship-it", { visibility: "private" });
     expect(mockSkills.updateSkillRow).toHaveBeenCalled();
   });

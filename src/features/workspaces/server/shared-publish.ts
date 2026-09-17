@@ -1,5 +1,5 @@
 import "server-only";
-import { findWorkspaceById } from "./repository";
+import { isSharedRoom } from "@/shared/tenancy/shared-room";
 import { countActiveMembers } from "./repository-overview";
 
 /**
@@ -25,13 +25,26 @@ import { countActiveMembers } from "./repository-overview";
  * unlike that token it is enforced by the server that owns the rows, so an
  * agent skipping the preview does not skip this.
  *
- * ⚠ **THE PREDICATE IS DELIBERATELY NARROW, AND EACH CLAUSE REMOVES A
- * POPULATION THAT HAS NO SECOND AUDIENCE.** A standard workspace publishes to
- * colleagues who chose to be there and has done so since long before this wave;
- * a SOLO container is the operator's own agent surface, where the audience is
- * one person and it is them (`knowledge/server/service-audience.ts` states the
- * same carve for the same reason). What is left is exactly the room a PEER
- * arrived in.
+ * ⚠ **THE PREDICATE IS ONE QUESTION SINCE 2026-09-17, AND IT IS THE MEMBER
+ * COUNT** (Samuel's ruling R-08; F-513). It used to ask `kind === 'link'` first,
+ * on the argument that *"a standard workspace publishes to colleagues who chose
+ * to be there"* — and that argument is about CONSENT TO THE ROOM, which is not
+ * the thing this gate buys. The gate buys that somebody was TOLD, and a
+ * two-member private channel in a standard workspace has the second audience
+ * that makes telling them worth doing. **A multi-member standard workspace now
+ * pays the acknowledgement it never used to**, which is the one user-visible
+ * behaviour change in the ruling. What is still carved out is exactly the SOLO
+ * room — the operator's own agent surface, audience of one and it is them —
+ * which `@/shared/tenancy/shared-room` states once for all four readers.
+ *
+ * ⚠ **AND THE WORKSPACE READ WENT WITH THE KIND.** The gate cost two reads
+ * (`findWorkspaceById`, then `countActiveMembers`) and the first one existed
+ * ONLY to learn the kind. It is one read now, and the "a missing workspace row
+ * passes" carve went with it: a vanished row counts zero members, zero is not
+ * one, and an unacknowledged publish into a room nobody can count refuses. That
+ * is the same direction the unreadable-count case already failed in, for the
+ * same reason — *"I could not count the people in this room" must never read as
+ * "there is nobody in it"* — and nothing is written on either path.
  *
  * ⚠ **THE FLAG IS IGNORED, NEVER REFUSED, OUTSIDE THE PREDICATE.** The MCP
  * surface refuses a stray `confirm_token` (`confirm-token.ts ›
@@ -42,7 +55,8 @@ import { countActiveMembers } from "./repository-overview";
  */
 
 /**
- * A publish into a shared link container arrived without `acknowledgeShared`.
+ * A publish into a SHARED room — any container with a second member in it —
+ * arrived without `acknowledgeShared`.
  * → **400 `CONTAINER_PUBLISH_UNACKNOWLEDGED`**.
  *
  * ⚠ 400, NOT 403, AND THE DIFFERENCE IS THE REMEDY. The caller is allowed to do
@@ -50,17 +64,24 @@ import { countActiveMembers } from "./repository-overview";
  * agent to look for a permission it will not find — this one names the field
  * that finishes the call, which is the only useful next action.
  *
- * ⚠ THE MESSAGE NAMES THE ROOM AS "this channel" AND NEVER ITS NAME OR ITS
- * MEMBERS. The caller can already list both; the error does not have to be the
- * thing that says so, and an error string is spliced into surfaces that do not
- * neutralize values.
+ * ⚠ THE MESSAGE NAMES NEITHER THE ROOM, ITS NAME, NOR ITS MEMBERS. The caller
+ * can already list all three; the error does not have to be the thing that says
+ * so, and an error string is spliced into surfaces that do not neutralize
+ * values.
+ *
+ * ⚠ **AND IT STOPPED SAYING "home channel" ON 2026-09-17** (R-08). The gate had
+ * one population and the copy could name it; it has every multi-member
+ * container now, so a sentence that says "home channel" is simply wrong to the
+ * member of a standard workspace who is reading it. "here" is the only word
+ * that is true of all of them, and `containerKind`'s three labels are what a
+ * surface uses when it wants to be specific.
  */
 export class ContainerPublishUnacknowledgedError extends Error {
   readonly code = "CONTAINER_PUBLISH_UNACKNOWLEDGED";
   constructor(noun: string) {
     super(
       `Nothing was written. Sharing this ${noun} here publishes it to everyone ` +
-        `in this home channel, including the other people standing in it. ` +
+        `else who is standing here, not just to you. ` +
         `Re-issue the same call with \`acknowledgeShared: true\` to confirm ` +
         `you mean to share it with them.`
     );
@@ -75,14 +96,12 @@ export class ContainerPublishUnacknowledgedError extends Error {
  * ```
  * not publishing            → pass  (0 reads)
  * acknowledged              → pass  (0 reads)
- * workspace is not 'link'   → pass  (1 read)
- * fewer than 2 active members → pass (2 reads)
+ * exactly 1 active member   → pass  (1 read)
  * else                      → 400 CONTAINER_PUBLISH_UNACKNOWLEDGED
  * ```
  *
- * ⚠ **THE ORDER IS THE QUERY BUDGET**, and it is the order
- * `service-audience.ts › resolveAgentAudience` uses for the same two reads. A
- * private create pays nothing; only an unacknowledged publish pays both.
+ * ⚠ **THE ORDER IS THE QUERY BUDGET.** A private create pays nothing; only a
+ * publish that named no acknowledgement pays the one count.
  *
  * ⚠ **`publishes` IS THE RESOLVED VALUE ON A CREATE AND THE REQUESTED ONE ON AN
  * UPDATE**, and the callers spell it, not this function. A create's visibility
@@ -90,11 +109,6 @@ export class ContainerPublishUnacknowledgedError extends Error {
  * subject; an update that does not name `visibility` is not publishing anything
  * — the row is already where it is, and asking a rename to acknowledge an
  * audience it did not change is a gate on the wrong verb.
- *
- * ⚠ **A MISSING WORKSPACE ROW PASSES.** `withWorkspaceAuth` proved an active
- * membership before this ran, so `null` means the row vanished mid-request and
- * the write underneath is about to fail on its own. Same reading, same
- * justification, as `resolveAgentAudience`'s.
  *
  * ⚠ **AN UNREADABLE MEMBER COUNT DOES NOT PASS** — `countActiveMembers` THROWS
  * on a database error rather than answering a number, so the request fails and
@@ -113,17 +127,12 @@ export async function assertSharedPublishAcknowledged(input: {
   if (!input.publishes) return;
   if (input.acknowledged === true) return;
 
-  const workspace = await findWorkspaceById(input.workspaceId);
-  // ⚠ `=== "link"`, NOT `!isStandardWorkspace(…)`. That predicate is the
-  // LISTING one and its negative spelling admits every kind nobody has designed
-  // yet (`workspaces/types.ts`); this asks whether the room is specifically the
-  // one a peer stands in, and a future kind must not inherit a refusal written
-  // before it existed. `service-audience.ts › findWorkspaceKind` states the
-  // same choice for the same axis.
-  if (workspace === null || workspace.kind !== "link") return;
-
+  // 🔒 THE ONE QUESTION (R-08, 2026-09-17). No kind term: a room with a second
+  // person in it is shared whether that room is a link container, a standard
+  // workspace or a kind nobody has designed yet. `isSharedRoom` also states the
+  // unknown rule — an uncountable room is SHARED, never empty.
   const members = await countActiveMembers(input.workspaceId);
-  if (members < 2) return;
+  if (!isSharedRoom(members)) return;
 
   throw new ContainerPublishUnacknowledgedError(input.noun);
 }

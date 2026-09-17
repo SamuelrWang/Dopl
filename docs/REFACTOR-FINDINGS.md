@@ -7532,6 +7532,50 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **THE HONEST ALTERNATIVE IS THE CHANNEL, NOT THE CONTAINER.** `Channel.memberCount` is already on the DTO `launch-directive-spawn.js` holds, and "this room has more than one person in it" is closer to what the ruling says than "this container is a claimed link". Not taken here because the slice's instruction named the container definition explicitly, and silently substituting a wider one would be a re-scope wearing a bug fix.
 - Proposed resolution: put the question to Samuel as a one-line ruling — container or channel — then move all three readers or none.
 - Status: **RULED 2026-09-02** (Desktop Agent default at the batch-1 integration; Samuel may reverse with one line). **"Shared" is ANY channel with more than one member, whatever kind of container it sits in — standard workspace channels included.** The fact moves off the container and onto the room: `targeting-window.js › isSharedChannel`, `memberCount !== 1` on the channel DTO, with an absent count reading as SHARED because the answer can only ever remove the shell. the container predicate `isSharedContainer` (retired from `dopl-desktop-app/main/session-park-on-claim.js` in this change) is DELETED — it answered the CLAIM lane's question and had no third reader once this one moved; `newlySharedContainers` and its two container readers (`session-credential.js › shouldLockSession`, the park-on-claim stop) are untouched, which is the "move all three or none" this entry asked for, resolved as *the two that mean containers keep meaning containers*. ⚠ **REVERSING IT IS ONE PREDICATE**, not a re-plumb: the rule (`tool-profiles.js › profileForChannel`) and the fact are separate functions and only the fact would change.
+- Status: **EXECUTED 2026-09-17 (Samuel confirmed R-08 and ruled R-15 yes), wave 0a.** The three
+  kind-gated copies are deleted and all four sites call one member-count predicate:
+  `src/shared/tenancy/shared-room.ts › isSharedRoom` for the web tree
+  (`features/channels/lib/tool-profile-resolve.ts › isSharedChannel` is now a RE-EXPORT of it, so no
+  importer moved, and `features/workspaces/server/shared-publish.ts › assertSharedPublishAcknowledged`
+  calls it directly) and `packages/mcp-server/src/shared-room.ts › isSharedRoom` for the package
+  (`factory.ts › lockedTo`, `tools/confirm-token.ts › resolveConfirmTarget`).
+  ⚠ **IT IS ONE PREDICATE PER TREE, NOT ONE MODULE, AND THAT IS THE LAYERING AND NOT A SHORTCUT.**
+  `packages/` cannot import `src/` (separate build, own tsconfig, kept external by
+  `next.config.ts › serverExternalPackages`), and `@dopl/contracts` — the module all three trees
+  already share — is TYPE-ONLY with no runtime export condition, so it cannot hold a function. What
+  closes the drift is `src/shared/tenancy/shared-room-parity.test.ts`, which SLICES the package's own
+  source and runs it against the web tree's over the full input domain, on
+  `tool-profile-resolve-parity.test.ts`'s argument.
+  ⚠ **THREE BEHAVIOURS CHANGED, AND EACH HAS AN ARM THAT USED TO ASSERT THE OPPOSITE.** (1) A
+  multi-member STANDARD workspace now pays the container-publish acknowledgement
+  (`shared-publish.test.ts`, `confirm-class.test.ts`, `acknowledge-shared.test.ts`). (2) **R-15**: the
+  MCP container lock ARMS on a pinned multi-member standard workspace — the enumeration leak R-15
+  names — and still does not arm on a one-member room of any kind (`container-lock.test.ts`).
+  (3) `assertSharedPublishAcknowledged` lost its `findWorkspaceById` read, which existed only to learn
+  the kind, so the gate costs ONE count and the old "a vanished workspace row PASSES" carve is now a
+  refusal: a room that counts zero is not a room with one person in it. Nothing is written on either
+  path, and it is the same direction the unreadable-count case already failed in.
+  ⚠ **F-564's WARNING SURVIVES THE RULING, POSITIVELY.** It was against `!isStandardWorkspace(…)`,
+  whose NEGATIVE spelling armed a peer-shaped lock on every operator's own `personal` container; the
+  member count excludes that container because it has exactly one member. `confirm-token.ts` called
+  that exclusion *"correct by accident"* — it is the rule now.
+  ⚠ **A FIFTH SITE WAS NOT MOVED AND IT IS FILED AS F-718**: `knowledge/server/service-audience.ts ›
+  resolveAgentAudience` still asks `kind !== 'link'` before it counts. The census test carries it as a
+  DOCUMENTED deviation with the reason, and fails if the entry ever goes stale.
+  ⚠ **THE DESKTOP'S CLAIM-LANE PREDICATES ARE STILL UNTOUCHED**, which is this entry's original
+  "move all three or none" resolved the same way it was in September: `session-credential.js ›
+  shouldLockSession` and `newlySharedContainers` answer a question about a CLAIM, not about an
+  audience.
+
+### F-718 — the AGENT AUDIENCE CEILING is the fifth "is this room shared" site and R-08 did not move it (2026-09-17)
+
+- Location: `src/features/knowledge/server/service-audience.ts › resolveAgentAudience` — `if (kind !== "link") return UNRESTRICTED;` immediately followed by `countActiveWorkspaceMembers` and `memberCount <= 1`.
+- Found during: wave 0a, executing R-08 (F-513). The census test written for that ruling flags this file, and it is carried as its one DOCUMENTED deviation rather than silently excluded.
+- **THE SHAPE IS EXACTLY THE ONE R-08 RETIRED** — a kind test in front of a member count, answering "is there a second audience here". `docs/specs/workspace-parity/00-MASTER.md` §2.4's R-08 text says honouring the ruling *"tightens the knowledge audience ceiling"*, so the ruling's own consequence sentence implicates this site.
+- ⚠ **IT WAS STILL NOT MOVED, AND THE REASON IS NOT SCOPE — IT IS THAT THE CEILING IS A DIFFERENT KIND OF FACT (F-524).** Every other reader of "shared" asks a property of the ROOM. This one is a per-REQUEST bound: it depends on the container kind, the live ACTIVE-member count AND an `X-Dopl-Session-Id` that may NARROW the channel set — a forgeable header whose safety comes entirely from being used to narrow an already-fenced set. Widening it to every multi-member standard workspace would put every colleague's agent behind a grant list overnight, which is a product change with a blast radius, not a predicate swap.
+- ⚠ **AND THE BLAST RADIUS IS THE POINT.** Under R-08's reading, a `source === "agent"` read in a nine-person standard workspace would answer `granted` with an EMPTY base set until somebody filed grants — i.e. every agent in every team workspace stops seeing every knowledge base on the day it ships. The fail direction is CLOSED, so it is an outage rather than a leak, and it is still an outage.
+- Proposed resolution: put it to Samuel as its own one-line ruling, the way R-08 itself was: does the audience ceiling follow the member count, and if so does it need a migration path (default-grant every existing container's bases) before it can arm? Until then the census entry is what keeps the disagreement visible.
+- Status: open. ⚠ **THE TREE THEREFORE ANSWERS "IS THIS ROOM SHARED" TWO WAYS AGAIN, DELIBERATELY AND IN ONE NAMED PLACE** — which is the state F-513 existed to end, so it does not get to be implicit.
 
 ### F-514 — G18's web residual survives the fourth profile, by ruling (2026-09-02)
 

@@ -17,19 +17,25 @@
  * now yields `acknowledgedShared: true`, which the caller puts on the write body
  * as `acknowledgeShared` — and `src/features/workspaces/server/
  * shared-publish.ts` answers **400 `CONTAINER_PUBLISH_UNACKNOWLEDGED`** to a
- * publish into a shared `kind='link'` container that arrives without it. That
+ * publish into any shared container that arrives without it. That
  * refusal is the SERVER'S, so skipping this module does not skip it. It still
  * does not mean a human approved anything — an agent can set the flag by
  * previewing and confirming alone — so every sentence above stands. What
  * changed is only that the act can no longer happen with NOTHING said about the
  * audience, anywhere in the stack.
  *
+ * ⚠ **AND SINCE 2026-09-17 THAT REFUSAL HAS NO KIND TERM** (Samuel's ruling
+ * R-08; F-513): a publish into ANY container with a second member in it pays
+ * it, standard workspaces included. The class below widened with it — see
+ * `resolveConfirmTarget`.
+ *
  * ⚠ SCOPED TO THE AUDIENCE-CHANGING WRITE CLASS AND NOTHING ELSE. A confirm on
  * every write trains the agent to skip it — the identical argument INVARIANTS
  * §10 makes for untrusted-content headers ("a header on every result trains
  * agents to skip headers"). Today the class is exactly: a template or a
- * knowledge base landing at an audience BEYOND THE CALLER inside a SHARED link
- * container, i.e. the room a peer is standing in.
+ * knowledge base landing at an audience BEYOND THE CALLER inside a SHARED
+ * container — any container with a second member in it, i.e. the room a peer is
+ * standing in (R-08, 2026-09-17; it read "a shared LINK container" until then).
  *
  * ── THE STORE, AND WHY ITS FAILURE MODE IS THE RIGHT ONE ───────────────────
  * ⚠ THE MCP SERVER BOOTS ONCE PER HTTP REQUEST (`factory.ts › bootServer`), so
@@ -47,7 +53,7 @@ exports.confirmGate = confirmGate;
 exports.__resetConfirmTokensForTest = __resetConfirmTokensForTest;
 const node_crypto_1 = require("node:crypto");
 const client_1 = require("@dopl/client");
-const workspace_directory_js_1 = require("../workspace-directory.js");
+const shared_room_js_1 = require("../shared-room.js");
 const narration_js_1 = require("./narration.js");
 const respond_js_1 = require("./respond.js");
 /** ⚠ SHORT-LIVED on purpose: the preview must be the thing the agent is still
@@ -147,21 +153,20 @@ async function resolveConfirmTarget(client) {
         const found = workspaces.find((w) => w.id === workspaceId);
         if (!found)
             return { ...UNKNOWN_TARGET, workspaceId };
-        // 🔒 **`kind === "link"`, ASKED POSITIVELY, NOT `!isStandardWorkspace(…)`**
-        // (F-564, closed here 2026-09-02). The negation answered "container" for
-        // ANY non-standard kind, and `20260920120000` mints a `personal` one for
-        // every user at once — a shelf with one member, which the member-count
-        // term below happens to exclude. **Correct by accident is not correct**:
-        // the class exists because a PEER arrived, and only a link container has
-        // peers. `containerKind`'s `default` arm keeps an unknown future kind out.
-        const container = (0, workspace_directory_js_1.containerKind)(found) === "home channel";
         return {
             workspaceId,
             label: (0, narration_js_1.inlineOr)(found.name, "`(unnamed workspace)`"),
-            // ⚠ SHARED, NOT SOLO, and `?? 0` is NOT SOLO. A one-member container is
-            // the operator's own agent surface with no second audience in it; the
-            // class exists because a PEER arrived.
-            sharedContainer: container && (found.memberCount ?? 0) !== 1,
+            // 🔒 **THE MEMBER COUNT, AND NO KIND TERM, SINCE 2026-09-17** (R-08;
+            // F-513). This used to ask `containerKind(found) === "home channel"`
+            // first and then excluded the one-member `personal` shelf by a term it
+            // called "correct by accident". The kind is gone and the accident is the
+            // rule: the class exists because a PEER arrived, a peer is a second
+            // member, and a second member means the same thing in a standard
+            // workspace as in a link container.
+            //
+            // ⚠ SHARED, NOT SOLO, and an UNREADABLE count is not solo either — the
+            // argument is stated once in `../shared-room.js`.
+            sharedContainer: (0, shared_room_js_1.isSharedRoom)(found.memberCount),
             unknown: false,
         };
     }

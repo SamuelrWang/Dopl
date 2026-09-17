@@ -4,8 +4,14 @@
  * A session pinned to a SHARED `kind='link'` container (one with a PEER in it)
  * sees and addresses that container ALONE. Pinned here:
  *
- *   - `bootServer` LOCKS on a shared container and does NOT lock on a solo one,
- *     on a standard workspace, or when there is no pin at all;
+ *   - `bootServer` LOCKS on a SHARED container and does NOT lock on a solo one
+ *     or when there is no pin at all;
+ *   - 🔒 **SHARED IS THE MEMBER COUNT, NOT THE KIND, SINCE 2026-09-17** (Samuel's
+ *     ruling R-15 over R-08's predicate; F-513). A pinned STANDARD workspace with
+ *     three members LOCKS — it used to be the named counter-example here, and it
+ *     was the enumeration leak R-15 names: a session pinned to a shared standard
+ *     workspace saw the operator's ENTIRE directory. A SOLO standard workspace
+ *     still does not lock, for the reason a solo container does not;
  *   - 🔒 an ABSENT `memberCount` LOCKS — §8's stale-field rule applied INVERTED,
  *     because unknown must read as "not solo" rather than as the permissive case;
  *   - `getWorkspaceList()` answers `[container]` and `resolveWorkspaceRef`
@@ -225,13 +231,30 @@ describe("bootServer — when the directory LOCKS", () => {
     expect(text).toContain("beta");
   });
 
-  it("does NOT lock on a pinned STANDARD workspace", async () => {
-    const { instructions } = await bootDirectory(
+  it("🔒 LOCKS on a pinned MULTI-MEMBER STANDARD workspace (R-15, 2026-09-17)", async () => {
+    // ⚠ **THIS ARM ASSERTED THE OPPOSITE UNTIL 2026-09-17** — "does NOT lock on
+    // a pinned STANDARD workspace" — which is exactly the enumeration leak R-15
+    // was asked about. `STANDARD` has three members, so it is a shared room and
+    // the lock arms on it.
+    const booted = await bootDirectory([STANDARD, OTHER_STANDARD], "id-std");
+
+    expect(booted.instructions).not.toContain("beta");
+    const text = await booted.listWorkspaces();
+    expect(text).toContain("alpha");
+    expect(text).not.toContain("beta");
+  });
+
+  it("does NOT lock on a pinned SOLO standard workspace — one member, no peer", async () => {
+    // 🔒 THE OTHER HALF OF R-15, and the reason F-564's warning survives the
+    // ruling: the count excludes a one-member room POSITIVELY, so the personal
+    // shelf and a solo standard workspace both stay unlocked without a kind term.
+    const booted = await bootDirectory(
       [STANDARD, OTHER_STANDARD],
-      "id-std",
+      "id-std2",
     );
 
-    expect(instructions).toContain("beta");
+    expect(booted.instructions).toContain("alpha");
+    expect(booted.instructions).toContain("beta");
   });
 
   it("🔒 an ABSENT memberCount LOCKS — unknown is not solo", async () => {

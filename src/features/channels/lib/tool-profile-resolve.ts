@@ -42,15 +42,15 @@ export function profileForChannel(
  * does? The fact behind {@link profileForChannel}, and the desktop's is
  * `targeting-window.js › isSharedChannel`.
  *
- * 🔒 ⚠ **AN ABSENT COUNT READS AS SHARED**, which is the desktop's rule verbatim and
- * not a defensive default: the only thing this answer can do is REMOVE the shell
- * from a launch, so an unknown that read "solo" would describe a stranger's room as
- * one that keeps its shell. `!== 1` says that in one term — `0`, `null` and
- * `undefined` are the unknown, and only an exact 1 is solo.
+ * ⚠ **THE BODY MOVED TO `@/shared/tenancy/shared-room` ON 2026-09-17** (R-08,
+ * F-513). It was the tree's only KIND-BLIND spelling of "is this room shared"
+ * while three other sites gated on `kind === 'link'`; the ruling made it the one
+ * that survives, so it became the shared module and this name stayed a re-export
+ * — the channel-shaped alias — rather than moving thirteen importers to prove a
+ * point. 🔒 ⚠ **AN ABSENT COUNT READS AS SHARED** and the argument for it is
+ * unchanged and now stated once, there.
  */
-export function isSharedChannel(memberCount: number | null | undefined): boolean {
-  return (typeof memberCount === "number" ? memberCount : 0) !== 1;
-}
+export { isSharedRoom as isSharedChannel } from "@/shared/tenancy/shared-room";
 
 /**
  * The caption under a narrowed "Tool access" row. ⚠ **SIX WORDS, NO PERIOD** — the

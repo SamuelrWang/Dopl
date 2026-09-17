@@ -18,7 +18,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
-import type { DoplClient, KnowledgeBase } from "@dopl/client";
+import type { DoplClient } from "@dopl/client";
 
 import { opCreate, opUpdate } from "./agent-ops-write";
 import { opCreateBase, opSetVisibility } from "./knowledge-ops-write";
@@ -29,40 +29,11 @@ import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 import type { RegisterTool, ToolResponse } from "./respond";
 import type { WorkspaceDirectory } from "../workspace-directory";
 import {
-  ME, apiError, sharedContainer, textOf, tokenIn, workspaceStub,
+  ME, apiError, base, sharedContainer, TEMPLATE, textOf, tokenIn, workspaceStub,
 } from "./acknowledge-shared-fixtures";
 
-const TEMPLATE = {
-  id: "11111111-1111-4111-8111-111111111111",
-  workspaceId: "ws-1",
-  name: "Researcher",
-  description: null,
-  instructions: null,
-  model: null,
-  fields: [],
-  visibility: "workspace" as const,
-  teamIds: [],
-  knowledgeBases: [],
-  createdBy: ME,
-  createdAt: "2026-01-01T00:00:00Z",
-  updatedAt: "2026-01-01T00:00:00Z",
-};
-
-const BASE: KnowledgeBase = {
-  id: "kb-1",
-  workspaceId: "ws-1",
-  name: "Notes",
-  slug: "notes",
-  publicId: "pub-1",
-  description: null,
-  agentWriteEnabled: true,
-  visibility: "public",
-  accessMode: "workspace",
-  createdBy: ME,
-  createdAt: "2026-01-01T00:00:00Z",
-  updatedAt: "2026-01-01T00:00:00Z",
-  deletedAt: null,
-};
+/** ⚠ Both rows live in `acknowledge-shared-fixtures.ts` — one definition each. */
+const BASE = base("public");
 
 afterEach(() => {
   __resetConfirmTokensForTest();
@@ -169,7 +140,23 @@ describe("dopl_kb — a spent token acknowledges the audience", () => {
     );
   });
 
-  it("op=set_visibility in a STANDARD workspace publishes with NO flag and no preview", async () => {
+  it("op=set_visibility in a SOLO room publishes with NO flag and no preview", async () => {
+    const update = vi.fn(async () => BASE);
+    const client = stub({
+      ...workspaceStub("standard", 1),
+      listKbBases: vi.fn(async () => [{ ...BASE, visibility: "private" as const }]),
+      updateKbBase: update,
+    }) as DoplClient;
+
+    await opSetVisibility(client, ME, BASE.id, "public");
+    expect(update.mock.calls[0][1].acknowledgeShared).toBeUndefined();
+  });
+
+  it("🔒 op=set_visibility in a MULTI-MEMBER STANDARD workspace now previews (R-08)", async () => {
+    // ⚠ **THE ROOM THIS ARM DESCRIBES USED TO BE OUT OF THE CLASS.** R-08
+    // (2026-09-17) took the kind term out of "shared", so nine colleagues in a
+    // standard workspace are nine people who get told before a private base
+    // becomes a public one.
     const update = vi.fn(async () => BASE);
     const client = stub({
       ...workspaceStub("standard", 9),
@@ -177,8 +164,13 @@ describe("dopl_kb — a spent token acknowledges the audience", () => {
       updateKbBase: update,
     }) as DoplClient;
 
-    await opSetVisibility(client, ME, BASE.id, "public");
-    expect(update.mock.calls[0][1].acknowledgeShared).toBeUndefined();
+    const preview = await opSetVisibility(client, ME, BASE.id, "public");
+    expect(update).not.toHaveBeenCalled();
+    await opSetVisibility(client, ME, BASE.id, "public", tokenIn(textOf(preview)));
+    expect(update).toHaveBeenCalledWith(
+      BASE.id,
+      expect.objectContaining({ visibility: "public", acknowledgeShared: true })
+    );
   });
 });
 
@@ -195,10 +187,15 @@ describe("a proceed that showed nobody anything sends NO flag", () => {
     expect(create.mock.calls[0][0]).toMatchObject({ acknowledgeShared: undefined });
   });
 
-  it("a STANDARD workspace — publishing to colleagues is not this class", async () => {
+  it("a SOLO STANDARD workspace — one member is one audience", async () => {
+    // ⚠ **THIS ARM READ "a STANDARD workspace — publishing to colleagues is not
+    // this class" UNTIL 2026-09-17.** R-08 deleted the kind from the question,
+    // so what carries it now is the member count and nothing else; the
+    // multi-member half of the old arm moved to `confirm-class.test.ts`, where
+    // it asserts a preview rather than the absence of one.
     const create = vi.fn(async () => TEMPLATE);
     await opCreate(
-      stub({ ...workspaceStub("standard", 9), createAgentTemplate: create }) as DoplClient,
+      stub({ ...workspaceStub("standard", 1), createAgentTemplate: create }) as DoplClient,
       ME,
       { name: "Researcher", visibility: "workspace" }
     );
@@ -261,7 +258,7 @@ describe("an omitted visibility is SENT as the documented default", () => {
   it("an EXPLICIT visibility is still the caller's, on both lanes", async () => {
     const create = vi.fn(async () => TEMPLATE);
     const client = stub({
-      ...workspaceStub("standard", 9),
+      ...workspaceStub("standard", 1),
       createAgentTemplate: create,
     }) as DoplClient;
     await opCreate(client, ME, { name: "Researcher", visibility: "workspace" });
@@ -274,7 +271,7 @@ describe("an omitted visibility is SENT as the documented default", () => {
 describe("400 CONTAINER_PUBLISH_UNACKNOWLEDGED reaches the agent as a next action", () => {
   it("on a previewed op it says to preview again — this can only be a race", async () => {
     const client = stub({
-      ...workspaceStub("standard", 9),
+      ...workspaceStub("standard", 1),
       createAgentTemplate: vi.fn(async () => {
         throw apiError(400, "CONTAINER_PUBLISH_UNACKNOWLEDGED");
       }),
@@ -292,8 +289,8 @@ describe("400 CONTAINER_PUBLISH_UNACKNOWLEDGED reaches the agent as a next actio
 
   it("on set_visibility it still lands legibly — a 400 AFTER a spent token is a race", async () => {
     // ⚠ **THIS ARM IS NOT DEAD CODE NOW THAT THE OP PREVIEWS (F-441).**
-    // `confirmGate` fires on the shape THIS PROCESS can see — a `kind='link'`
-    // container with a peer — and the server's predicate is the authority over
+    // `confirmGate` fires on the shape THIS PROCESS can see — a container with
+    // a peer, of any kind since R-08 — and the server's predicate is the authority over
     // facts this process cannot check. So a spent token can still meet a 400,
     // and the mapper is what keeps that answer legible rather than a raw
     // transport error. Driven through a REAL token so the gate is genuinely
@@ -322,7 +319,7 @@ describe("400 CONTAINER_PUBLISH_UNACKNOWLEDGED reaches the agent as a next actio
 
   it("leaves every OTHER 400 alone — the mapper is keyed on the code", async () => {
     const client = stub({
-      ...workspaceStub("standard", 9),
+      ...workspaceStub("standard", 1),
       createAgentTemplate: vi.fn(async () => {
         throw apiError(400, "VALIDATION_FAILED");
       }),

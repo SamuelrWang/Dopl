@@ -43,6 +43,11 @@ const WS: WorkspaceListItem = {
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-01T00:00:00Z",
   role: "owner",
+  // ⚠ **AN ABSENT `memberCount` READS AS SHARED SINCE 2026-09-17** (R-08,
+  // `shared-room.ts`), and this suite writes a template for real — so an
+  // unstated count put the one write it attempts behind a confirm preview. The
+  // subject here is served PROSE, not the confirm class: state the solo room.
+  memberCount: 1,
 };
 
 /**

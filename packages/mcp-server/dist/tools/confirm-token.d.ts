@@ -16,19 +16,25 @@
  * now yields `acknowledgedShared: true`, which the caller puts on the write body
  * as `acknowledgeShared` — and `src/features/workspaces/server/
  * shared-publish.ts` answers **400 `CONTAINER_PUBLISH_UNACKNOWLEDGED`** to a
- * publish into a shared `kind='link'` container that arrives without it. That
+ * publish into any shared container that arrives without it. That
  * refusal is the SERVER'S, so skipping this module does not skip it. It still
  * does not mean a human approved anything — an agent can set the flag by
  * previewing and confirming alone — so every sentence above stands. What
  * changed is only that the act can no longer happen with NOTHING said about the
  * audience, anywhere in the stack.
  *
+ * ⚠ **AND SINCE 2026-09-17 THAT REFUSAL HAS NO KIND TERM** (Samuel's ruling
+ * R-08; F-513): a publish into ANY container with a second member in it pays
+ * it, standard workspaces included. The class below widened with it — see
+ * `resolveConfirmTarget`.
+ *
  * ⚠ SCOPED TO THE AUDIENCE-CHANGING WRITE CLASS AND NOTHING ELSE. A confirm on
  * every write trains the agent to skip it — the identical argument INVARIANTS
  * §10 makes for untrusted-content headers ("a header on every result trains
  * agents to skip headers"). Today the class is exactly: a template or a
- * knowledge base landing at an audience BEYOND THE CALLER inside a SHARED link
- * container, i.e. the room a peer is standing in.
+ * knowledge base landing at an audience BEYOND THE CALLER inside a SHARED
+ * container — any container with a second member in it, i.e. the room a peer is
+ * standing in (R-08, 2026-09-17; it read "a shared LINK container" until then).
  *
  * ── THE STORE, AND WHY ITS FAILURE MODE IS THE RIGHT ONE ───────────────────
  * ⚠ THE MCP SERVER BOOTS ONCE PER HTTP REQUEST (`factory.ts › bootServer`), so
@@ -51,7 +57,7 @@ export interface ConfirmTarget {
     workspaceId: string | null;
     /** Neutralized display name, or a fallback — this is a VALUE. */
     label: string;
-    /** A `kind='link'` container with more than one active member. */
+    /** ⚠ ANY container with more than one active member — no kind term (R-08). */
     sharedContainer: boolean;
     unknown: boolean;
 }
