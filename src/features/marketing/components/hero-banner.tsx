@@ -15,20 +15,10 @@ export function HeroBanner() {
       <div className="lp-banner-stage">
         <div className="lp-banner" ref={pictureRef}>
           {/* Decorative — glass card carries the copy. Plain <img>: static
-              public/ asset, width-driven box.
-              🔬 **SWAPPED WITH THE ONTOLOGY PANE'S PHOTO (Samuel, 2026-09-17:**
-              *"swap the pane 1 background image with that of the second, i want
-              to test what that looks like"*). This pane wore
-              `/img/landscape-banner.jpg`; `ontology-section.tsx` now does.
-              ⚠ **AN EXPERIMENT, AND A STRAIGHT SWAP OF THE TWO REFERENCES** —
-              nothing else about either pane moved, which includes the CSS each
-              one crops its photo with. `framework-banner.jpg` is the PORTRAIT
-              source, so this box crops it differently than it cropped the
-              landscape one; that is part of what he is looking at, not a bug to
-              pre-empt. Revert this commit alone to put both back. */}
+              public/ asset, width-driven box. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/img/framework-banner.jpg"
+            src="/img/landscape-banner.jpg"
             alt=""
             className="lp-banner-img"
             draggable={false}
