@@ -221,6 +221,9 @@ export function HomePane({
       // ⚠ KEYED BY THE ROW, so a thread picked in channel A can never be raised
       // inside channel B — see `use-activity-jump.ts`.
       initialThreadId={jump.threadFor(row.id)}
+      // 🔒 THE MESSAGE A SEARCH ROW NAMED (F-714) — keyed by the row for the
+      // same reason the thread is.
+      initialSeq={jump.seqFor(row.id)}
       onDeleted={onChannelDeleted}
     />
   );

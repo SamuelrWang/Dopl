@@ -1,10 +1,17 @@
-import { fireEvent, screen } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChannelInfoTabContext } from "@/features/channels/components/channel-surface";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import { USER_ID, installBridge, ok } from "#/test-utils/bridge";
 import { fixtureSearchFetcher } from "@/features/search/search-fixtures";
-import { openChannels, renderHome, routes } from "./home-test-harness";
+import type { SearchResponse } from "@/features/search/contracts";
+import {
+  CHANNEL_ID,
+  LINK_WORKSPACE_ID,
+  openChannels,
+  renderHome,
+  routes,
+} from "./home-test-harness";
 
 /**
  * 🔒 **THE /home HEADER FIELD OPENS THE SEARCH POPUP AND NARROWS NOTHING (Samuel,
@@ -42,9 +49,16 @@ vi.mock("@/features/channels/components/channel-surface-standalone", async () =>
   return {
     StandaloneChannelSurface: (props: {
       channel: { id: string };
+      // 🔒 F-714: the seq a search row named, reported so the HOST's mapping is
+      // assertable without mounting the real transcript.
+      initialSeq?: number | null;
       slots?: { infoTab?: (ctx: ChannelInfoTabContext) => React.ReactNode };
     }) => (
-      <div data-testid="channel-surface" data-channel={props.channel.id}>
+      <div
+        data-testid="channel-surface"
+        data-channel={props.channel.id}
+        data-initial-seq={props.initialSeq ?? "none"}
+      >
         {props.slots?.infoTab?.(infoTabContext())}
       </div>
     ),
@@ -80,6 +94,17 @@ beforeEach(() => {
 /** ⚠ `LIST_CELL` is the header's list-width cell, escaped for `closest` — the
  *  pill is a PAGE control and must not sit inside it (Samuel, 2026-09-15). */
 const LIST_CELL = ".w-\\[var\\(--home-list-w\\)\\]";
+
+/** One search ROW, by the id the popup stamps on it (`search-popup-rows.tsx` ›
+ *  `data-search-row`). ⚠ The same peer NAME rides the relationship list beside
+ *  the popup, so a text query would take whichever the DOM happened to hold
+ *  first. */
+const findRow = (id: string) =>
+  waitFor(() => {
+    const el = document.querySelector(`[data-search-row="${id}"]`);
+    if (!el) throw new Error(`no search row ${id}`);
+    return el;
+  });
 
 describe("/home's search field", () => {
   /**
@@ -134,6 +159,77 @@ describe("/home's search field", () => {
 
     fireEvent.click(await screen.findByText("Desktop Orchestrator Protocol"));
     await screen.findByRole("tab", { name: "Knowledge", selected: true });
+  });
+
+  /**
+   * 🔒 **AND A MESSAGE ROW LANDS ON THE MESSAGE (F-714, 2026-09-17).** Samuel's
+   * ruling: *"open channel at that seq so the transcript jumps"*. On /home the
+   * jump is a selection plus a face, so the seq rides
+   * `use-activity-jump.ts › seqFor` down to the surface, keyed by the row.
+   *
+   * ⚠ **THE ROWS ARE THIS SUITE'S OWN, NOT THE FIXTURE TABLE'S.** The shared
+   * fixtures live in a container /home's harness does not have, so a click on one
+   * selects nothing and the pane never mounts — the assertion would pass
+   * vacuously. These two name THIS harness's container, which is the only way the
+   * surface renders at all.
+   *
+   * ⚠ **THE JUMP ITSELF IS NOT HERE** — firing the transcript's nonced signal is
+   * `channels/components/use-message-jump.ts`, pinned against real rows in its
+   * own file. What only the page can answer is which value it hands down.
+   */
+  it("🔒 a Messages hit carries its seq, and a Channels hit carries none", async () => {
+    const hit = (
+      kind: "messages" | "channels",
+      seq?: number
+    ): SearchResponse => ({
+      q: "seq-probe",
+      scope: "account",
+      tookMs: 1,
+      groups: [
+        {
+          kind,
+          total: 1,
+          items: [
+            {
+              id: `${kind}-row`,
+              kind,
+              title: "Priya Shah",
+              containerId: LINK_WORKSPACE_ID,
+              channelId: CHANNEL_ID,
+              ...(seq === undefined ? {} : { seq }),
+            },
+          ],
+        },
+      ],
+    });
+    let body = hit("messages", 4821);
+    apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) => {
+      if (path.startsWith("/api/search")) return Promise.resolve(ok(body));
+      return (
+        routes(path, opts) ??
+        Promise.reject(new Error(`unexpected request: ${path}`))
+      );
+    });
+
+    renderHome();
+    await openChannels();
+    const field = screen.getByLabelText("Search");
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "seq-probe" } });
+    // ⚠ BY THE ROW'S OWN ATTRIBUTE — the same name rides the relationship list
+    // beside the popup, and a text query would take whichever came first.
+    fireEvent.click(await findRow("messages-row"));
+    expect(
+      (await screen.findByTestId("channel-surface")).dataset.initialSeq
+    ).toBe("4821");
+
+    // ⚠ A CHANNEL ROW NAMES NO MESSAGE — a seq passed for one would scroll a
+    // reader somewhere they did not ask to be.
+    body = hit("channels");
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "seq-probe-2" } });
+    fireEvent.click(await findRow("channels-row"));
+    expect(screen.getByTestId("channel-surface").dataset.initialSeq).toBe("none");
   });
 
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { LinkLike } from "@/shared/ui/link-like";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
@@ -152,6 +152,10 @@ export function ChannelsCore({
   // render-time re-application of a routed `initialChannelId` (a second
   // notification changes the route but not the component).
   const sel = useChannelsSelection({ initialChannelId, initialThreadId });
+  // ⚠ THE SEQ A SEARCH ROW NAMED, held here rather than in the selection hook:
+  // it is not a SELECTION — the surface consumes it once and the transcript
+  // keeps whatever the reader does next (`use-message-jump.ts`).
+  const [searchSeq, setSearchSeq] = useState<number | null>(null);
   const queryClient = useQueryClient();
 
   const { channels, loading, refetch: refetchChannels } = useChannels(
@@ -167,10 +171,15 @@ export function ChannelsCore({
    * a sidebar click land through one mechanism. Everything else is another PAGE
    * and goes out through the host's `onNavigatePath`.
    *
-   * ⚠ **`item.seq` IS NOT HONOURED YET (F-714).** Scroll-to-message lives inside
-   * the surface (`channel-surface.tsx › jumpToSeq`) and is reachable only from a
-   * citation pill or a mention; a message row therefore opens its CHANNEL (its
-   * thread when it has one) and leaves the transcript where the surface puts it.
+   * 🔒 **`item.seq` IS HONOURED SINCE 2026-09-17 (F-714 RESOLVED).** A message
+   * row hands the surface an `initialSeq` and the transcript jumps to it
+   * (`channel-surface.tsx › initialSeq`, `use-message-jump.ts`) — the SAME
+   * nonced signal a citation pill and a Tags mention use, including its "older
+   * than the loaded history" notice when the seq is outside the loaded page.
+   * ⚠ **AND ONLY FOR `kind === "messages"`.** A channel row and a thread row name
+   * no message; carrying a stale seq into them would scroll a reader somewhere
+   * they did not ask to be, so the seq is CLEARED on every other kind rather
+   * than left standing.
    */
   const openSearchHit = (item: SearchItem) => {
     if (item.kind === "knowledge") return onNavigatePath?.(`/${workspaceSlug}/knowledge`);
@@ -180,6 +189,7 @@ export function ChannelsCore({
     if (item.kind === "chats") return onNavigatePath?.(`/${workspaceSlug}/chats`);
     if (item.channelId) sel.selectChannel(item.channelId);
     if (item.threadId) sel.openThread(item.threadId);
+    setSearchSeq(item.kind === "messages" ? (item.seq ?? null) : null);
   };
 
   // Explicit pick that still exists wins, else the first row — the same rule the
@@ -260,6 +270,7 @@ export function ChannelsCore({
           role={role}
           data={data}
           selection={sel}
+          initialSeq={searchSeq}
           onRosterChanged={refetchChannels}
         />
       ) : (

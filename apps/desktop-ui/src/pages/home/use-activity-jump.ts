@@ -35,7 +35,14 @@ import { channelRowId } from "./home-rows";
 export type OpenActivity = (
   workspaceId: string,
   /** `null` opens the channel with no thread raised. */
-  threadId: string | null
+  threadId: string | null,
+  /**
+   * A `channel_messages.seq` to land the transcript ON (F-714, 2026-09-17) —
+   * a SEARCH row on a message is the only caller that has one, and an Overview
+   * activity row never does. `null`/absent leaves the transcript where the
+   * surface puts it, which is every other jump byte for byte.
+   */
+  seq?: number | null
 ) => void;
 
 export interface ActivityJump {
@@ -43,6 +50,10 @@ export interface ActivityJump {
   open: OpenActivity;
   /** The thread to raise when THIS row's record pane mounts, or `null`. */
   threadFor: (rowId: string) => string | null;
+  /** The message seq to land on when THIS row's pane mounts, or `null`. ⚠ Keyed
+   *  by the row for `threadFor`'s reason: a seq is a coordinate INSIDE one
+   *  channel's transcript and means nothing in another's. */
+  seqFor: (rowId: string) => number | null;
   /** Drop the held thread — the operator picked a row themselves. */
   clear: () => void;
 }
@@ -59,19 +70,21 @@ export function useActivityJump({
   const [jump, setJump] = useState<{
     rowId: string;
     threadId: string | null;
+    seq: number | null;
   } | null>(null);
 
   return {
-    open: (workspaceId, threadId) => {
+    open: (workspaceId, threadId, seq = null) => {
       // ⚠ THE ROW ID IS MINTED, NEVER THE CONTAINER ID BARE. Home rows are
       // `rel:`/`link:`-prefixed (`home-rows.ts`), and the page's selection —
       // and its pane tokens — are keyed by that id.
       const rowId = channelRowId(workspaceId);
-      setJump({ rowId, threadId });
+      setJump({ rowId, threadId, seq });
       onSelect(rowId);
       onRaise();
     },
     threadFor: (rowId) => (jump?.rowId === rowId ? jump.threadId : null),
+    seqFor: (rowId) => (jump?.rowId === rowId ? jump.seq : null),
     clear: () => setJump(null),
   };
 }

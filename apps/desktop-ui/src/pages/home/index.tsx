@@ -94,13 +94,16 @@ export default function HomePage() {
    * three moves (pick the row, raise the face, hand the surface the thread) — so
    * an activity row and a search row land identically.
    *
-   * ⚠ **`item.seq` IS NOT HONOURED YET (F-714).** The transcript's
-   * scroll-to-message lives INSIDE the channel surface
-   * (`channels/components/channel-surface.tsx › jumpToSeq`), reached today only
-   * by a citation pill and a mention; carrying a seq in from outside is a
-   * selection-hook signal that does not exist. A message row therefore opens its
-   * CHANNEL (and its thread, when it has one) and leaves the transcript where the
-   * surface puts it.
+   * 🔒 **`item.seq` IS HONOURED SINCE 2026-09-17 (F-714 RESOLVED).** The jump
+   * carries it down the same three moves — `use-activity-jump.ts › seqFor`,
+   * `RelationshipRecord`, `StandaloneChannelSurface` — and the surface fires its
+   * OWN nonced scroll signal once the transcript has rows
+   * (`channels/components/use-message-jump.ts`), which is the mechanism a
+   * citation pill and a Tags mention already use, "older than the loaded
+   * history" notice included.
+   * ⚠ **ONLY A `kind === "messages"` ROW CARRIES ONE.** A channel or thread row
+   * names no message; passing a seq for one would scroll a reader somewhere they
+   * did not ask to be.
    */
   const openSearchHit = (item: SearchItem) => {
     if (item.kind === "knowledge" || item.kind === "agentTemplates") {
@@ -108,7 +111,11 @@ export default function HomePage() {
       setTab(item.kind === "knowledge" ? "knowledge" : "agents");
       return;
     }
-    jump.open(item.containerId, item.threadId ?? null);
+    jump.open(
+      item.containerId,
+      item.threadId ?? null,
+      item.kind === "messages" ? (item.seq ?? null) : null
+    );
   };
 
   const workspacesQuery = useApiQuery<

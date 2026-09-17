@@ -9520,8 +9520,9 @@ declarations, not rules.
 
 ### F-714 — a search hit on a MESSAGE cannot land on the message: the transcript's seq jump is reachable only from inside the surface
 
-**Found:** 2026-09-17, wiring the search popup's two hosts. **Status:** OPEN — the popup ships
-opening the message's CHANNEL, which is correct but coarse.
+**Found:** 2026-09-17, wiring the search popup's two hosts. **Status:** ✅ **RESOLVED 2026-09-17**
+— the surface takes an `initialSeq` and fires the EXISTING signal; see the discharge at the foot of
+this entry.
 
 `GET /api/search` returns a message row carrying `seq`
 (`src/features/search/contracts.ts › SearchItem`), and Samuel's ruling for the row is *"open channel
@@ -9546,6 +9547,31 @@ plain prop beside `initialChannelId` / `initialThreadId`, resolved through the s
 mechanism. ⚠ The sharp part is a seq OUTSIDE the loaded page of history: `channel-surface.tsx`
 already has the "older than the loaded history" notice for exactly that miss, and an initial target
 must reuse it rather than scrolling nowhere in silence.
+
+✅ **DISCHARGED EXACTLY THAT WAY, AND THE MECHANISM DID NOT FORK.**
+`channels/components/use-message-jump.ts › useMessageJump` now holds BOTH halves — the pill's
+resolver (moved out of `channel-surface.tsx`, which sat at 498 of its 500 lines) and the initial
+seq — and the second one calls the first's signal. So there is one answer to *"which message is
+#1759"*, one nonced scroll target, and the miss notice comes free: an initial seq outside the loaded
+page sends the same `seq:<n>` sentinel a pill's miss sends.
+
+- **`ChannelSurface.initialSeq`** is the new prop; `channel-surface-standalone.tsx` passes it
+  through. ⚠ **IT WAITS FOR ROWS AND THAT WAIT IS THE WHOLE HOOK** — firing against an empty page
+  resolves every seq to a miss, which lands the reader on the notice instead of on their message and
+  is indistinguishable, to them, from the bug this closes.
+- **Fired once per (channel, thread, seq)**, keyed rather than flagged: `rows` changes identity on
+  every refetch and grows as older history loads, so a boolean would re-jump and yank a reader who
+  had scrolled away. The THREAD is in the key because a hit that names one arrives as two host moves
+  — select the channel, open the thread — and the seq belongs to the second view.
+- **Both hosts pass it for `kind === "messages"` AND NO OTHER KIND**, and CLEAR it otherwise:
+  `channels-core.tsx › openSearchHit` holds it in its own `useState` (it is not a selection), and
+  `apps/desktop-ui/src/pages/home/index.tsx › openSearchHit` sends it through
+  `use-activity-jump.ts › seqFor`, keyed by the row for the reason `threadFor` already is — a seq is
+  a coordinate inside ONE channel's transcript and means nothing in another's.
+- **Pinned in three places, one per claim:** `use-message-jump.test.ts` (the wait, the miss, the
+  no-re-fire, the thread re-fire), `channels-core-search-seq.test.tsx` and the /home half of
+  `home-search-popup.test.tsx` (each host passes the seq for a message row, none for a channel row,
+  and CLEARS a held one).
 
 ---
 

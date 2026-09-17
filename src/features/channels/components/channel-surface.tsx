@@ -24,9 +24,7 @@ import type { ReactNode } from "react";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import type { Role } from "@/features/workspaces/types";
 import { channelDisplayName } from "../lib/channel-display";
-// ⚠ THE MISS PATH IS A PURE FUNCTION so it can be tested without mounting this
-// surface — see its docblock for the silent-return bug that bought it.
-import { citationScrollTargetId } from "../lib/message-refs";
+import { useMessageJump } from "./use-message-jump";
 import { ChannelsMessagePane } from "./message-pane";
 import { PopOutThreadButton } from "./pop-out";
 import { AgentActivityRows, ownAgentsWorking } from "./agent-activity";
@@ -202,6 +200,21 @@ export interface ChannelSurfaceProps {
   /** The channel was DELETED from the Settings tab. A host that pins the surface
    *  to one channel has to stop rendering it, and this is its only notice. */
   onDeselect?: () => void;
+  /**
+   * 🔒 **A MESSAGE TO LAND ON, BY `channel_messages.seq` (F-714, 2026-09-17).**
+   * A search hit on a message carries one (`search/contracts.ts › SearchItem`)
+   * and Samuel's ruling is *"open channel at that seq so the transcript jumps"*.
+   * ⚠ **INITIAL, NOT CONTROLLED, AND IT SITS BESIDE `initialThreadId` ON THE
+   * HOSTS RATHER THAN HERE** — the surface takes the number and
+   * `use-message-jump.ts` fires the existing nonced signal once the transcript
+   * has rows. A seq outside the loaded page reaches the pane's "older than the
+   * loaded history" notice by the same path a citation pill's miss does; there
+   * is no second mechanism and there must not be.
+   * ⚠ **ONLY A `kind === "messages"` ROW HAS ONE.** A channel or thread hit
+   * names no message, and a host that passed a stale seq with a channel change
+   * would scroll a reader somewhere they did not ask to be.
+   */
+  initialSeq?: number | null;
   slots?: ChannelSurfaceSlots;
   capabilities?: ChannelSurfaceCapabilities;
   /**
@@ -224,6 +237,7 @@ export function ChannelSurface({
   selection: sel,
   onRosterChanged,
   onDeselect,
+  initialSeq = null,
   slots,
   capabilities,
   webView,
@@ -258,57 +272,19 @@ export function ChannelSurface({
       favorite: channel.myFavoritedAt == null,
     });
   /**
-   * 🔒 **A CITATION PILL'S JUMP — THE HOST HALF OF THE FACE/ADDRESS CONTRACT**
-   * (2026-09-15, finishing a553a9ff).
-   *
-   * ⚠ **THE PILL HANDS UP A SEQ AND THIS RESOLVES IT TO A MESSAGE ID.** The number
-   * is the FACE a reader typed and read; the id is the ADDRESS the transcript
-   * moves to. Nothing below this line navigates by number, which is what keeps the
-   * feature correct whichever way the per-channel numbering ruling goes — a seq is
-   * only ever resolved against the rows THIS surface is holding, never used as a
-   * global coordinate.
-   *
-   * ⚠ **IT LIVES HERE BECAUSE THIS IS THE ONE PLACE THAT HOLDS BOTH HALVES**: the
-   * loaded page (`rows`) and the scroll state (`sel.jumpToMessage`, the nonced
-   * signal `use-channels-selection.ts` owns). `message-pane.tsx` has the rows and
-   * could resolve — but its jump would have nowhere to land, and a second resolver
-   * is a second answer to "which message is #1759" for the two to disagree over.
-   *
-   * 🔒 **A MISS STILL FIRES THE SIGNAL, AND THAT IS A CORRECTION TO THIS
-   * FUNCTION'S FIRST CUT (2026-09-15).** It used to `return` when the seq was not
-   * among the loaded rows, on the reasoning that the pane's
-   * `SCROLL_TARGET_MISSING_NOTE` would explain the miss. **It cannot**: that notice
-   * is derived from a LIVE scroll target whose id matches nothing
-   * (`message-pane.tsx › missing`), so a bare return set no target, left `live`
-   * false, and the click did nothing at all — no scroll, no sentence, no error.
-   * A control that silently does nothing is the exact failure this feature was
-   * built to refuse, and it had been reintroduced one layer above the pill.
-   *
-   * ⚠ **SO A MISS SENDS A TARGET THAT CANNOT MATCH, WHICH IS THE HONEST SHAPE.**
-   * The pill's gate already proved the seq is one this channel could hold, so a
-   * miss means the message is real and simply not in the loaded window — which is
-   * precisely the state the Tags inbox reaches when its mention is older than the
-   * page, and it reuses that exact notice rather than minting a second one.
-   * ⚠ **THE SENTINEL IS NOT A MESSAGE ID AND MUST NEVER BE READ AS ONE.** It is
-   * compared against `row.id` and used in one `[data-message-id]` DOM query, both
-   * of which simply fail to match — the same behaviour a real-but-unloaded id
-   * produces. Anything that starts treating `ScrollTarget.messageId` as a
-   * guaranteed-real id has to account for this case first.
-   * ⚠ **THE NOTICE'S WORDING IS RIGHT FOR THE COMMON MISS AND LOOSE FOR ONE
-   * OTHER**: a cited message that lives inside a THREAD is not in the channel
-   * view's rows either, and reads as "older than the loaded history" when it is
-   * merely elsewhere. Still true that the transcript did not move, so it beats
-   * silence — but it is the next thing to sharpen if citations across threads
-   * become common.
-   *
-   * ⚠ **THE THREAD ARGUMENT IS THE VIEW WE ARE IN**, so a jump inside the channel
-   * view stays in the channel view and one inside a thread stays in that thread.
-   * These rows ARE that view's rows; passing anything else would re-point the
-   * surface at a thread the reader never asked for.
+   * 🔒 **THE CITATION PILL'S JUMP, AND THE SEARCH HIT'S — ONE MECHANISM.**
+   * `use-message-jump.ts` holds the resolver, the miss path and the initial-seq
+   * wait, with the whole argument for each. It is a hook rather than three lines
+   * here because {@link initialSeq} needs an effect, and §1's cap on this file
+   * is the reason it is not FOUR lines here.
    */
-  const jumpToSeq = (seq: number) => {
-    sel.jumpToMessage(openThread?.id ?? null, citationScrollTargetId(rows, seq));
-  };
+  const jumpToSeq = useMessageJump({
+    rows,
+    openThreadId: openThread?.id ?? null,
+    initialSeq,
+    channelId: channel.id,
+    jumpToMessage: sel.jumpToMessage,
+  });
   const messagePane = (viewSelect?: ReactNode) => (
     <ChannelsMessagePane
       channelId={channel.id}

@@ -47,6 +47,7 @@ export function StandaloneChannelSurface({
   currentUserId,
   role = "member",
   initialThreadId = null,
+  initialSeq = null,
   onDeleted,
   slots,
   capabilities,
@@ -71,6 +72,13 @@ export function StandaloneChannelSurface({
    */
   role?: Role;
   initialThreadId?: string | null;
+  /**
+   * A message to land on, by `seq` — how a search hit on a MESSAGE lands
+   * (F-714, 2026-09-17). Passed straight through; `channel-surface.tsx ›
+   * initialSeq` carries the rule, including that only a `kind === "messages"`
+   * row may have one.
+   */
+  initialSeq?: number | null;
   /**
    * The Settings tab deleted this channel. ⚠ THE HOST HAS TO ACT ON IT: the
    * channel is a PROP here, so nothing below can stop rendering a row the server
@@ -141,6 +149,7 @@ export function StandaloneChannelSurface({
         role={role}
         data={data}
         selection={sel}
+        initialSeq={initialSeq}
         onDeselect={onDeleted}
         slots={slots}
         capabilities={capabilities}

@@ -25,6 +25,7 @@ export function RelationshipRecord({
   homeChannel,
   currentUserId,
   initialThreadId = null,
+  initialSeq = null,
   onDeleted,
 }: {
   homeChannel: HomeChannel;
@@ -38,6 +39,15 @@ export function RelationshipRecord({
    * by the row and swaps the whole element when the face changes.
    */
   initialThreadId?: string | null;
+  /**
+   * A message to land the transcript ON, by `channel_messages.seq` — how a
+   * SEARCH hit on a message lands here (F-714, 2026-09-17). ⚠ INITIAL for
+   * `initialThreadId`'s reason, and consumed once: `use-message-jump.ts` fires
+   * the surface's own nonced scroll signal as soon as the transcript has rows,
+   * and a seq outside the loaded page reaches the "older than the loaded
+   * history" notice rather than scrolling nowhere in silence.
+   */
+  initialSeq?: number | null;
   /** The container's channel was deleted from Settings — drop the selection. */
   onDeleted: () => void;
 }) {
@@ -76,6 +86,7 @@ export function RelationshipRecord({
       channel={channel}
       currentUserId={currentUserId}
       initialThreadId={initialThreadId}
+      initialSeq={initialSeq}
       onDeleted={onDeleted}
       // ⚠ A RENDER FUNCTION SINCE 2026-08-25, and the argument is the point:
       // the person card became write-bearing when the Main-info rows became
