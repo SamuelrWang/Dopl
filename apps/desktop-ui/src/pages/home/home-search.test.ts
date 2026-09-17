@@ -8,9 +8,15 @@
  * `data-open="true"` unconditionally); the KIT was also flattened, to
  * `.search-expand { width: 260px }` with no `[data-open]` on it — which reserves
  * the open width for the CLOSED pill too. The landing banner's home chrome
- * (`src/features/marketing/components/banner-demo/demo-home-chrome.tsx`) renders
+ * (`src/features/marketing/components/banner-demo/demo-home-chrome.tsx`) rendered
  * exactly that closed pill, so its header grew 224px of dead space beside a 36px
  * button. The width belongs on the state, not on the box.
+ *
+ * ⚠ **THAT SCENE RENDERS THE OPEN PILL SINCE 2026-09-17** (the hero demo was
+ * rebuilt on /home's current UI), so the CLOSED face has no caller today. **The
+ * cases below do not change with it**: the closed width is still the kit's, the
+ * next caller would inherit the same bug from a flattened rule, and a state whose
+ * width lives on the box is wrong whether or not anyone is currently in it.
  *
  * ⚠ SOURCE SCAN, AND BOTH COPIES. jsdom loads no stylesheet, so a mounted
  * assertion sees no width at all; and the kit is hand-copied into

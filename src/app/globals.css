@@ -1202,10 +1202,14 @@ html {
    CLOSED it is one button wide and the shell — absolutely pinned `right: 0` —
    would grow LEFTWARD over its siblings; OPEN the box reserves the full 260px so
    nothing is overlaid (Samuel, 2026-09-13: /home's pill is always open, and an
-   overlay there sat on the New-channel button). ⚠ **BOTH STATES ARE LOAD-BEARING:
-   /home passes `data-open="true"` unconditionally, and the landing banner's
-   chrome (`marketing/components/banner-demo/demo-home-chrome.tsx`) renders the
-   CLOSED pill — a flat 260px here leaves 224px of dead space in that header.
+   overlay there sat on the New-channel button). ⚠ **THE WIDTH BELONGS ON THE STATE,
+   NOT ON THE BOX, AND THAT SURVIVES THE CLOSED PILL HAVING NO RENDERER.** It had
+   one until 2026-09-17 — the landing banner's home chrome
+   (`marketing/components/banner-demo/demo-home-chrome.tsx`), which grew 224px of
+   dead space the day a flat `width: 260px` was put on `.search-expand` itself.
+   That scene renders the OPEN pill now, like /home; flattening the rule again
+   would still be wrong, because the closed face is the kit's and the next caller
+   would inherit the same bug. Pinned by `pages/home/home-search.test.ts`.
 
    ⚠ The `[data-open]` rules must stay AFTER `.auth-btn-3d-light` — they
    override its hover/press face for the span where the pill is a field. */

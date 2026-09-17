@@ -8,38 +8,39 @@
  * off the desktop bridge (`useAgentNarration`), which a plain browser cannot
  * feed — the real panel would honestly render "This build cannot show what
  * your agent is doing", which is the truth and also not a demo. This wrapper
- * keeps every rendered piece REAL (`AgentStream`, `AgentControls`,
- * `AgentLiveness`, `ComposerInputRow`, the model's own derivations) and
- * scripts only the entries the bridge would have pushed. The aside's classes
- * and the header's markup are copied verbatim from `agent-panel.tsx` —
- * change that file and change this one.
+ * scripts only the entries the bridge would have pushed.
+ *
+ * 🔑 **EVERY RENDERED PIECE IS THE PANEL'S OWN COMPONENT SINCE 2026-09-17** —
+ * `AgentPanelHeader`, `AgentStats`, `AgentStream` and `ComposerInputRow`, all
+ * imported. The header and the stats were TRANSCRIBED here until then and had
+ * drifted: the real header had grown the effective-model clause and the
+ * ended-agent pill, and the real stats a third clause. **The only thing this
+ * file still states is the aside's own class list** (verbatim from
+ * `agent-panel.tsx`, whose divider and slide notes live there) and the box
+ * around the stats that `AgentControls` would have drawn — that component is
+ * bridge-gated and correctly absent in a browser.
  */
 
 import { useState } from "react";
-import { Bot, CornerDownRight, X } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { UsageMeter } from "@/shared/ui/usage-meter";
-import { formatRelativeTime } from "@/shared/lib/format-time";
 import type { AvatarPerson } from "@/shared/ui/avatar";
 import type {
   DesktopNarrationEntry,
   DesktopSessionSummary,
 } from "@/shared/lib/spa-bridge";
 import type { ChannelMessage } from "@/features/channels/types";
-import { IconButton } from "@/features/channels/components/bits";
-import { AgentLiveness } from "@/features/channels/components/agent-bits";
+import type { AgentColorKey } from "@dopl/contracts";
 import {
-  NO_THREAD_LABEL,
   agentDisplayName,
   agentLiveness,
   postDestination,
 } from "@/features/channels/components/agents-model";
-import {
-  formatTokens,
-  metric,
-} from "@/features/channels/components/agent-metrics";
 import { AgentStream } from "@/features/channels/components/agent-stream";
-import { agentSentMessages } from "@/features/channels/components/agent-panel";
+import {
+  AgentPanelHeader,
+  AgentStats,
+  agentSentMessages,
+} from "@/features/channels/components/agent-panel";
 import {
   COMPOSER_BOTTOM,
   ComposerInputRow,
@@ -52,6 +53,7 @@ export function DemoAgentView({
   messages,
   currentUserId,
   viewer,
+  color,
   onClose,
 }: {
   open: boolean;
@@ -62,6 +64,9 @@ export function DemoAgentView({
   messages: ChannelMessage[];
   currentUserId: string;
   viewer: AvatarPerson;
+  /** This agent's identity colour, resolved by the MOUNT off the channel's own
+   *  bank (`view-model.ts › AgentIdentity.color`) — never stamped on a row. */
+  color: AgentColorKey | null;
   onClose: () => void;
 }) {
   // The demo's composer face — the REAL shared input row, never sendable.
@@ -78,54 +83,33 @@ export function DemoAgentView({
         open ? "translate-x-0" : "pointer-events-none translate-x-full",
       )}
     >
-      {/* agent-panel.tsx › AgentPanelHeader, verbatim (model line omitted —
-          the demo feed reports no model, and absent renders nothing there). */}
-      <header className="flex h-[56px] shrink-0 items-center gap-2 border-b border-border-default px-3.5">
-        <Bot size={15} aria-hidden className="shrink-0 text-text-secondary" />
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-body font-semibold text-text-primary">
-            {agentDisplayName(agent)}
-          </span>
-          <span className="flex min-w-0 items-center gap-1 text-caption text-text-secondary">
-            <CornerDownRight
-              size={11}
-              aria-hidden
-              className="shrink-0 text-text-muted"
-            />
-            <span className="truncate">
-              in {agent.threadTitle ?? NO_THREAD_LABEL}
-            </span>
-          </span>
-        </span>
-        <AgentLiveness {...agentLiveness(agent)} />
-        <IconButton icon={X} label="Close agent view" size={15} onClick={onClose} />
-      </header>
+      {/* 🔑 **THE PANEL'S OWN HEADER, MOUNTED — NOT COPIED (2026-09-17).** It was
+          transcribed here, and by the time this scene was rebuilt the real one had
+          grown the effective-model clause and the ended-agent pill that replaces the
+          liveness dot. `agent-panel.tsx › AgentPanelHeader` is exported for this
+          mount; it reads nothing but the session row, so it needs no bridge. */}
+      <AgentPanelHeader agent={agent} onClose={onClose} />
 
-      {/* agent-panel.tsx › AgentStats, verbatim — the controls strip itself is
-          bridge-gated and correctly absent in a browser. */}
-      <div className="flex flex-col gap-1.5 border-b border-border-default px-3.5 py-3">
-        <UsageMeter
-          label="Context tokens"
-          used={metric(agent.contextUsed) ?? 0}
-          limit={metric(agent.contextWindow) ?? 0}
-          tone="ramp"
-          formatValue={formatTokens}
-        />
-        <p className="text-caption text-text-muted">
-          {[
-            metric(agent.startedAt) !== null &&
-              `Started ${formatRelativeTime(new Date(metric(agent.startedAt) as number).toISOString())}`,
-            metric(agent.tokensSpent) !== null &&
-              `${formatTokens(metric(agent.tokensSpent) as number)} tokens spent`,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        </p>
+      {/* THE CONTROLS BOX, WITHOUT ITS BUTTONS. `AgentControls` is bridge-gated
+          (pause/end/open all actuate a desktop session) and correctly absent in a
+          browser, but the box it draws around the stats is chrome the scene needs —
+          so this states the box (`agent-panel-controls.tsx`'s own, class for class)
+          and mounts the REAL `AgentStats` inside it, exactly as the panel passes it
+          through that component's `stats` slot. */}
+      <div className="flex shrink-0 flex-col gap-1.5 border-b border-border-default px-3.5 py-2">
+        <AgentStats agent={agent} />
       </div>
 
       <AgentStream
         entries={entries}
         supported
+        // ⚠ THE AGENT'S OWN IDENTITY COLOUR, which the SENT banner boxes with —
+        // the same key the transcript beside it paints this agent's posts in.
+        color={color}
+        // ⚠ THE LIVE TAIL AT THE FOOT OF THE STREAM (Samuel, 2026-09-14) — the
+        // SAME `agentLiveness` verdict the header pill renders, handed down
+        // rather than re-derived, so the two cannot disagree.
+        liveness={agentLiveness(agent)}
         sent={agentSentMessages(
           messages,
           agent.taskId,

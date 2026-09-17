@@ -3056,11 +3056,14 @@
 
 /* ── Banner demo — the /home account surface in the slot ──────────────
    Markup: components/banner-demo/. The RECORD PANE is the product's own
-   channels surface (which is what /home itself mounts) styled by
-   globals.css tokens; the /home CHROME around it is mock markup in
-   `banner-demo/demo-home-chrome.tsx`, because /home lives in `apps/desktop-ui`
-   and the Next tree cannot import it. This file owns the demo's stage — the
-   scale wrapper, the frame geometry, the scripted cursor and its click ripple.
+   channels surface (which is what /home itself mounts); since 2026-09-17 the
+   /home CHROME around it composes the product's own recipes too — the black
+   page pill, the face selector's options, the three gray wells and the channel
+   ROW all moved into the root tree so this scene can read them
+   (`banner-demo/demo-home-chrome.tsx` lists them). /home's own PAGES still live
+   in `apps/desktop-ui`, which the Next tree cannot import. This file owns the
+   demo's stage — the scale wrapper, the frame geometry, the scripted cursor and
+   its click ripple.
 
    ⚠ NO COLOUR IS PICKED HERE. Every fill, line and radius below is a global
    token (`globals.css › THE APP FRAME PALETTE` and the kit), so the scene reads
@@ -3178,6 +3181,9 @@
   margin-left: 0;
   display: flex;
   flex-direction: column;
+  /* `index.tsx`'s own `overflow-hidden` on this `<main>`: the channel column's
+     wells grow with their content, and the panel is what clips them. */
+  overflow: hidden;
 }
 
 /* THE RECORD PANE — a white card bounded by the account palette's 2px line,
@@ -3218,6 +3224,15 @@
 .lp-demo-record .border-l.border-border-default {
   border-left-width: 2px;
 }
+/* ⚠ THE SAME 2px, TOLD TO THE RESIZE PILL. `channels/components/info-resize-handle.tsx ›
+   DIVIDER_WIDTH_VAR` centres the pill on the divider by offsetting it half a border
+   width; its fallback is the kit hairline the workspace channels page wears, so THIS
+   host has to say that its structural `border-l` above is wider. Declared in this block
+   on purpose, exactly as `home.module.css › .frame` declares it — one rule states the
+   width and the width it tells the handle. */
+.lp-demo-record {
+  --channel-divider-w: 2px;
+}
 .lp-demo-record .border-b.border-border-default:not(th) {
   border-bottom-width: 2px;
 }
@@ -3238,6 +3253,17 @@
    Hook: `composer-panel-fields.tsx › PANEL_HOOK`. */
 .lp-demo-record [data-composer-panel] {
   background-color: var(--home-panel);
+}
+
+/* THE RECORD PANE'S SECTION PANELS wear that SAME panel gray, FLAT — no border
+   line, no inset shadow, with the heading and the cards sitting directly on it
+   (`home.module.css › .frame [data-section-panel]`). ⚠ `border-color`, NOT
+   `border: none`: the background paints under the border box, so a transparent
+   hairline is seamless AND leaves the box model alone. Hook:
+   `shared/ui/section-panel.tsx › SectionPanel`'s attribute. */
+.lp-demo-record [data-section-panel] {
+  background-color: var(--home-panel);
+  border-color: transparent;
 }
 
 /* ── Scripted cursor + click ripple ── */

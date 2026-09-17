@@ -9468,3 +9468,34 @@ row per artifact, so the ceiling applies to ARTIFACTS — a set this read alread
 to their members. ⚠ **Do not "fix" it with a larger `max_rows` or a page loop**: the first moves the
 number and keeps the silence, and the second pulls the same rows to do arithmetic Postgres will do
 once.
+
+### F-713 — `.selected-ring` is an orphan kit recipe: the two readers the design doc names are both gone
+
+**Found:** 2026-09-17, rebuilding the landing hero's /home scene. **Status:** OPEN — recorded, NOT
+fixed. Deleting a kit recipe is a design ruling, not a cleanup, and both copies of the stylesheet
+would have to lose it together.
+
+`docs/DESIGN-SYSTEM.md`'s `.selected-ring` row said the recipe *"still has readers — the header's
+open search pill, and the landing page's scripted /home demo"*, which is how it survived Samuel's
+2026-09-15 ruling that took it off /home's channel row. **Neither reader exists, and they stopped
+existing on different days.**
+
+- **The search pill never wore it.** `apps/desktop-ui/src/pages/home/home-search.tsx` composes
+  `.search-expand` over `.auth-btn-3d-light`; the "held focus" look it borrows is the KIT's own
+  `.search-expand[data-open="true"] .search-expand-shell:focus-within`, which names `--focus-line`
+  and `--raised-light-focus` directly. The class is nowhere in that file or its kit rules. That half
+  of the claim appears never to have been true.
+- **The landing demo stopped wearing it on 2026-09-17**, when the hero scene was rebuilt on /home's
+  current UI: its channel rows are `shared/ui/home-card-marks.tsx › HOME_CARD_FACE` /
+  `› HOME_CARD_FACE_SELECTED`, which is the ruling that removed the ring in the first place.
+
+Re-derive before acting on this, rather than trusting the measurement:
+`grep -rn "selected-ring" src apps/desktop-ui/src | grep -v globals.css | grep -v kit.css` — on
+2026-09-17 that returned three COMMENTS (`home-card-marks.tsx`, `home-channel-row.tsx`,
+`pages/home/home.module.css`) and no class usage.
+
+⚠ **THE RECIPE ITSELF IS STILL DECLARED TWICE** — `src/app/globals.css` and
+`apps/desktop-ui/src/styles/kit.css` — and `--focus-line` / `--focus-halo`, the tokens it composes,
+are NOT orphans: the search pill's focus rule reads both, so a deletion may take the recipe and must
+not take the tokens. The DESIGN-SYSTEM row was corrected in the same change that found this; the
+recipe was left alone.

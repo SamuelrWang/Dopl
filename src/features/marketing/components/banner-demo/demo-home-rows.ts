@@ -1,53 +1,43 @@
 /**
- * /home's left column — the demo's channel rows. Pure data; the markup is
- * `demo-home-chrome.tsx`.
+ * /home's LEFT COLUMN — the demo's channel rows, and which gray well each sits
+ * in. Pure data; the markup is `demo-home-chrome.tsx`, and the ROW's face is the
+ * product's own (`shared/ui/home-channel-row.tsx`).
  *
  * ⚠ ITS OWN FILE, and not a preference: `demo-data.ts` is at the 500-line cap
  * the root lint enforces (`max-lines`), and these rows are the one part of the
- * demo's data that is NOT a product shape. Everything in that file is a real
+ * demo's data that is NOT a wire shape. Everything in that file is a real
  * `Channel` / `ChannelMessage` / session row the product's own components are
- * fed; everything here is a flattened mock, because /home's list lives in
- * `apps/desktop-ui/src/pages/home/relationship-list.tsx` — a separate app the
- * Next tree has no import path to (root `tsconfig.json` excludes `apps`). The
- * split is that line, so nobody has to read a docblock to know which half of
- * the scene is honest.
+ * fed; everything here is a flattened stand-in for `GET /api/home/channels`,
+ * which the marketing tree has nothing to call.
+ *
+ * ⚠ **THE FIELDS ARE `HomeChannelRowFacts` — THE OUTPUTS OF /home's ROW
+ * DERIVATIONS, NOT THEIR INPUT.** The real list feeds a `HomeChannel` through
+ * `channelTitle` / `channelPeople` / `hasLinkOut` and hands the answers to
+ * `HomeChannelRow`; the demo has no payload behind it, so it authors those
+ * answers and the SAME component renders them. The derivations are what the
+ * demo cannot host — the FACE is what it must not fork.
+ *
+ * ⚠ **THE WELL IS AUTHORED HERE TOO, AND THAT IS THE ONE HONEST DIFFERENCE.**
+ * `channel-wells.ts › channelWellOf` reads a `HomeRow`'s `favoritedAt` and its
+ * stamp against `wellFor`'s 24h cut; the demo has neither, so each row names its
+ * well. The SET those ids belong to is the product's own
+ * (`channels/components/home-channel-wells.ts`), so a fourth well or a renamed
+ * one reaches this scene without an edit.
  *
  * ⚠ ONE CLOCK. The stamps come from `demo-data.ts`'s `minsAgo`, anchored once
  * per load — a second `Date.now()` here would drift the list's timestamps off
  * the transcript's by however long the module graph took to evaluate.
  */
 
+import type { HomeChannelWellId } from "@/features/channels/components/home-channel-wells";
+import type { HomeChannelRowFacts } from "@/shared/ui/home-channel-row";
 import type { AvatarPerson } from "@/shared/ui/avatar";
 import { CURRENT_USER_ID, MEMBERS, messagesAt, minsAgo } from "./demo-data";
 
-/**
- * ONE row of /home's channel list, flattened.
- *
- * ⚠ THE FIELDS ARE THE OUTPUTS OF `home-rows.ts`, NOT ITS INPUT. The real list
- * feeds a `HomeChannel` through `channelPeople` / `channelTitle` /
- * `channelSubline` and renders what comes out; the demo has no payload behind
- * it, so it authors the ANSWERS those three give and the row markup consumes
- * them identically. The derivations are what the demo cannot host — the FACE
- * is what it has to be honest about.
- */
-export type HomeRowMock = {
+/** ONE row of /home's channel list: what it says, and which well it is filed in. */
+export type HomeRowMock = HomeChannelRowFacts & {
   id: string;
-  /** Everybody else in the channel. ⚠ EMPTY ⇒ a SOLO channel, which gets a
-   *  `Bot` glyph and never invented initials (`relationship-list.tsx`). */
-  people: ReadonlyArray<{
-    userId: string;
-    displayName: string;
-    avatarUrl: string | null;
-  }>;
-  title: string;
-  subline: string;
-  lastLine: string;
-  /** ISO — run through `formatChannelTimestamp`, same as the real row. */
-  at: string;
-  /** An invitation is out — the row's "Link out" chip. */
-  linkOut?: boolean;
-  /** An unclaimed LINK row: faded face, secondary title. */
-  pending?: boolean;
+  well: HomeChannelWellId;
 };
 
 /** The row the scene sits in — `q4-outbound`, the channel the record pane
@@ -55,8 +45,12 @@ export type HomeRowMock = {
 export const HOME_ROW_ID = "rel:demo-ws-q4";
 
 /**
- * The operator. ONE definition, two mounts: the header's settings face
- * (`home-settings-control.tsx`'s entry) and the agent view's viewer identity.
+ * The operator, as the agent view's VIEWER identity.
+ *
+ * ⚠ **ITS SECOND MOUNT IS GONE (2026-09-17)** — it fed the header's settings FACE
+ * until /home's operator control became a bare black pill reading "Profile"
+ * (Samuel, 2026-09-15: *"remove the profile icon"*), so the header takes no
+ * viewer now.
  * ⚠ `avatarUrl` is a bundled `public/` path, which `useBridgedImageSrc` returns
  * verbatim on the web — no bridge, no request beyond the asset.
  */
@@ -67,104 +61,133 @@ export const VIEWER: AvatarPerson = {
   avatarUrl: "/img/avatars/sam.jpg",
 };
 
-/** ⚠ THE ACTIVE ROW'S FACES ARE THE CHANNEL'S OWN ROSTER, read out of
- *  `MEMBERS` rather than retyped: the stack in the list and the avatars in the
- *  transcript beside it are then the same two people by construction. */
+/** ⚠ THE ACTIVE ROW'S FACES ARE THE CHANNEL'S OWN ROSTER, read out of `MEMBERS`
+ *  rather than retyped: the stack in the list and the avatars in the transcript
+ *  beside it are then the same two people by construction.
+ *  ⚠ `displayName` is nullable on `ChannelMember` and NON-nullable on the row's
+ *  face — it feeds both the initials and the hover title — so the fallback
+ *  happens here, exactly as `relationship-list.tsx` does it. */
 const PEERS = MEMBERS.filter((m) => m.userId !== CURRENT_USER_ID).map((m) => ({
   userId: m.userId,
-  // ⚠ `displayName` is nullable on `ChannelMember` and NON-nullable on the
-  // avatar stack's user — it feeds both the initials and the hover title — so
-  // the fallback happens here, exactly as `relationship-list.tsx` does it.
   displayName: m.displayName || m.email || "Member",
   avatarUrl: m.avatarUrl,
 }));
 
+/** A row with nothing to say on either mark. Spelled once so a row states only
+ *  what makes it different. */
+const QUIET = {
+  description: "",
+  linkOut: false,
+  pending: false,
+  pendingLine: null,
+  unread: false,
+  mentions: 0,
+} as const;
+
+/**
+ * THE LIST, one row per case the real column can draw — a pinned SOLO channel
+ * (its description takes line two), the live one, a mention count, an unread dot
+ * beside an open invitation, and an unclaimed link.
+ *
+ * ⚠ ORDER IS NEWEST-FIRST WITHIN A WELL, which is `homeRows`' own order: the
+ * grouping pass in `WellsColumn` sorts nothing.
+ */
 const HOME_ROWS: ReadonlyArray<HomeRowMock> = [
   {
+    ...QUIET,
+    id: "rel:demo-ws-weekly",
+    well: "pinned",
+    name: "weekly-review",
+    // 🔒 A SOLO channel shows its DESCRIPTION where a peopled one shows faces
+    // (Samuel, 2026-09-15) — one slot, never both.
+    faces: [],
+    description: "Friday sweep of the pipeline with the Analyst",
+    at: minsAgo(60 * 27),
+  },
+  {
+    ...QUIET,
     id: HOME_ROW_ID,
-    people: PEERS,
-    title: "Priya Shah, Marcus Lee",
-    subline: "2 people",
+    well: "recent",
+    name: "q4-outbound",
+    faces: PEERS,
     // Overwritten per step by `homeRowsAt` — see there.
-    lastLine: "Fresh list from the conference just landed.",
     at: minsAgo(0),
   },
   {
-    id: "rel:demo-ws-grace",
-    people: [
-      {
-        userId: "demo-u-grace",
-        displayName: "Grace Okafor",
-        avatarUrl: "/img/avatars/grace.jpg",
-      },
+    ...QUIET,
+    id: "rel:demo-ws-renewals",
+    well: "recent",
+    name: "renewals-q3",
+    faces: [
+      { userId: "demo-u-dana", displayName: "Dana Whitfield", avatarUrl: null },
+      { userId: "demo-u-omar", displayName: "Omar Haddad", avatarUrl: null },
+      { userId: "demo-u-lin", displayName: "Lin Zhou", avatarUrl: null },
+      { userId: "demo-u-rae", displayName: "Rae Duarte", avatarUrl: null },
     ],
-    title: "Grace Okafor",
-    subline: "grace@vermillion.io",
-    lastLine: "Countersigned SOW is in the thread.",
-    at: minsAgo(48),
+    // The `@ N` pill and the dot are EXCLUSIVE — this row takes the louder one.
+    mentions: 2,
+    at: minsAgo(52),
   },
   {
-    id: "rel:demo-ws-anthony",
-    people: [
+    ...QUIET,
+    id: "rel:demo-ws-acme",
+    well: "recent",
+    name: "acme-migration",
+    faces: [
       {
         userId: "demo-u-anthony",
         displayName: "Anthony Reyes",
         avatarUrl: "/img/avatars/anthony.jpg",
       },
     ],
-    title: "Anthony Reyes",
-    subline: "anthony@lattice.build",
-    lastLine: "My agent pushed the migration plan.",
-    at: minsAgo(60 * 5),
     linkOut: true,
+    unread: true,
+    at: minsAgo(60 * 5),
   },
   {
-    id: "rel:demo-ws-solo",
-    people: [],
-    title: "weekly-review",
-    subline: "Just you",
-    lastLine: "Pipeline Analyst cut the segment.",
-    at: minsAgo(60 * 27),
-  },
-  {
-    id: "rel:demo-ws-northwind",
-    people: [
-      { userId: "demo-u-dana", displayName: "Dana Whitfield", avatarUrl: null },
-      { userId: "demo-u-omar", displayName: "Omar Haddad", avatarUrl: null },
-      { userId: "demo-u-lin", displayName: "Lin Zhou", avatarUrl: null },
-      { userId: "demo-u-rae", displayName: "Rae Duarte", avatarUrl: null },
+    ...QUIET,
+    id: "rel:demo-ws-design",
+    well: "earlier",
+    name: "design-partners",
+    faces: [
+      {
+        userId: "demo-u-grace",
+        displayName: "Grace Okafor",
+        avatarUrl: "/img/avatars/grace.jpg",
+      },
+      { userId: "demo-u-theo", displayName: "Theo Marchetti", avatarUrl: null },
+      { userId: "demo-u-ada", displayName: "Ada Nwosu", avatarUrl: null },
     ],
-    // ⚠ TWO NAMES THEN A COUNT, which is `channelTitle`'s own form — a row is
-    // 290px wide and ends in a timestamp, so a third name deletes the first
-    // behind an ellipsis instead of shrinking anything.
-    title: "Dana Whitfield, Omar Haddad +2",
-    subline: "4 people",
-    lastLine: "Renewal deck ready for Thursday.",
     at: minsAgo(60 * 50),
   },
   {
+    ...QUIET,
     id: "link:demo-link-1",
-    people: [],
-    title: "Mira Castellanos",
-    subline: "dopl.app/c/8f2a…",
-    lastLine: "Not yet claimed",
-    at: minsAgo(60 * 74),
+    well: "earlier",
+    name: "Mira Castellanos",
+    faces: [],
     linkOut: true,
     pending: true,
+    pendingLine: "Not yet claimed",
+    at: minsAgo(60 * 74),
   },
 ];
 
 /**
- * The list at this beat. ⚠ ONLY the ACTIVE row moves: its last line is the
- * transcript's newest message, so the column visibly tracks the conversation
- * playing in the record pane beside it rather than sitting frozen under a
- * scene that is clearly live. Every other row is static — they are other
- * conversations, and nothing is happening in them.
+ * The list at this beat. ⚠ ONLY the ACTIVE row moves, and only its STAMP: the
+ * column visibly tracks the conversation playing in the record pane beside it
+ * rather than sitting frozen under a scene that is clearly live.
+ *
+ * 🔒 **AND IT IS THE STAMP RATHER THAN A PREVIEW, WHICH IS THE PRODUCT'S OWN
+ * RULING (Samuel, 2026-09-13: *"having the most recent message being in there
+ * just doesn't make sense imo"*).** The row carried the newest message's body
+ * until this scene was rebuilt on the real row; `HomeChannelRowFacts` has no slot
+ * for it, which is the fence working.
  */
 export function homeRowsAt(step: number): HomeRowMock[] {
   const script = messagesAt(step);
-  const newest = script[script.length - 1]?.body;
+  const newest = script[script.length - 1]?.createdAt;
   return HOME_ROWS.map((row) =>
-    row.id === HOME_ROW_ID && newest ? { ...row, lastLine: newest } : row,
+    row.id === HOME_ROW_ID && newest ? { ...row, at: newest } : row,
   );
 }

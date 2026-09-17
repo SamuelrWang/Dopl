@@ -16,9 +16,15 @@
  * ⚠ THE RECORD PANE IS STILL THE PRODUCT'S OWN SURFACE, and that is not a
  * leftover — it is what /home actually mounts. `relationship-record.tsx` puts
  * `StandaloneChannelSurface` in that pane, i.e. exactly the message pane, info
- * column and agent view composed below. Only the CHROME around it is mock
- * markup (`demo-home-chrome.tsx`), because /home's own chrome lives in
- * `apps/desktop-ui/`, which the Next tree cannot import at all.
+ * column and agent view composed below.
+ *
+ * ⚠ AND SINCE 2026-09-17 THE CHROME AROUND IT IS THE PRODUCT'S RECIPES TOO, not
+ * a hand-built look-alike (`demo-home-chrome.tsx` carries the list). /home's own
+ * PAGES still live in `apps/desktop-ui/`, which the Next tree cannot import at
+ * all — so what this scene composes is every piece of them that moved into the
+ * root tree for that reason: the black page pill, the face selector's options,
+ * the three gray wells and the channel ROW itself. A restyle of any of those
+ * lands here without an edit.
  *
  * The scripted cursor still presses the REAL buttons — the thread card's "Open
  * thread", the info column's Agents tab, an agent card's "Open" — via
@@ -279,7 +285,7 @@ export function BannerDemo() {
           <div className="lp-demo-home antialiased">
             <DemoAccountRail />
             <main className="page-float lp-demo-panel">
-              <DemoHomeHeader viewer={VIEWER} />
+              <DemoHomeHeader />
               <div className="flex min-h-0 flex-1">
                 <DemoChannelList rows={homeRows} selectedId={HOME_ROW_ID} />
                 {/* THE RECORD PANE — a white card bounded by the account
@@ -341,6 +347,12 @@ export function BannerDemo() {
                     messages={messages}
                     currentUserId={CURRENT_USER_ID}
                     viewer={VIEWER}
+                    // ⚠ OFF THE INDEX, exactly as the real panel resolves it —
+                    // the colour is a live fact about the SESSION and is never
+                    // stamped on a message row.
+                    color={
+                      index.agents.get(MY_SESSION.agentId ?? "")?.color ?? null
+                    }
                     onClose={NOOP}
                   />
                 </div>
