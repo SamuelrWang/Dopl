@@ -376,7 +376,15 @@ export function AgentsTab({
         {/* ⚠ THE SAME WELLS HERE — a peer card is an agent card and Samuel's
             ruling is about the PAGE, so the one list this branch can show sits on
             the same gray ground. With no peers nothing renders and the sentence
-            below stands alone, exactly as before. */}
+            below stands alone, exactly as before.
+            🔒 ⚠ **AND THIS GUARD SURVIVES THE 2026-09-17 "keep the gray boxes"
+            RULING, WHICH IS THE ONE PLACE IT DOES.** That ruling is about a
+            MEASURED empty list; this branch is `sessions === null` — no desktop
+            app, so this build has measured NOTHING about the operator's own agents
+            (§11: UNKNOWN is not EMPTY). Four empty time-span boxes under a browser
+            would read as *"you have no agents"*, which is the claim this file's
+            header comment exists to prevent. Every well still draws once there IS
+            a list, peers included. */}
         {peerCards.length > 0 && (
           <AgentWells items={peerWellItems(peerCards, byUser)} />
         )}
@@ -395,17 +403,17 @@ export function AgentsTab({
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-3.5 pb-6 pt-4">
       {launchRow}
-      {mine.length === 0 && peerCards.length === 0 ? (
-        <p className="py-6 text-center text-caption text-text-muted">
-          {openThreadId
-            ? "No agents on this thread yet."
-            : "No agents running in this channel."}
-        </p>
-      ) : (
+      {
         // ⚠ THE FOUR GRAY WELLS (Samuel, 2026-09-13) — `agents-wells.tsx` owns the
         // buckets, the collapse and the ground; this call owns only the ORDER, which
         // is unchanged: my own agents first (§5), then the peer rows, each card
         // exactly the component it was.
+        // 🔒 ⚠ **AND THEY DRAW WITH AN EMPTY FEED TOO, SINCE 2026-09-17 (Samuel,
+        // verbatim):** *"in the Threads and Agents view, i want to have the gray
+        // boxes kept there even if there's nothing in them. Same as the channel
+        // picker"* — an empty list used to render the sentence INSTEAD of the wells.
+        // The `showEmpty` that keeps the individually-empty boxes lives one file
+        // down, in `recency-wells.tsx`, so both tabs take the ruling from one call.
         <AgentWells
           items={[
             ...mine.map((agent) => ({
@@ -427,6 +435,20 @@ export function AgentsTab({
             ...peerWellItems(peerCards, byUser),
           ]}
         />
+      }
+      {/* ⚠ THE SENTENCE IS A SIBLING OF THE WELLS NOW, NOT THE OTHER HALF OF A
+          TERNARY — /home's channel column's shape exactly (`relationship-list.tsx`,
+          whose "No channels yet" has stood beside its empty wells since 2026-09-15).
+          **IT IS NOT DUPLICATE COPY AND IS NOT DROPPED:** the four headings are TIME
+          SPANS, so four empty boxes cannot say whether this channel has no agents or
+          this THREAD has none — which is the whole of what this line distinguishes.
+          ⚠ And it is not the placeholder copy minimal-copy forbids INSIDE a well. */}
+      {mine.length === 0 && peerCards.length === 0 && (
+        <p className="py-6 text-center text-caption text-text-muted">
+          {openThreadId
+            ? "No agents on this thread yet."
+            : "No agents running in this channel."}
+        </p>
       )}
     </div>
   );

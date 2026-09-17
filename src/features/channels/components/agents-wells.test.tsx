@@ -87,6 +87,21 @@ function headers(): string[] {
   return screen.queryAllByRole("heading").map((h) => h.textContent ?? "");
 }
 
+/**
+ * 🔒 **EVERY WELL, ALWAYS, SINCE 2026-09-17 (Samuel, verbatim):** *"in the Threads
+ * and Agents view, i want to have the gray boxes kept there even if there's nothing
+ * in them. Same as the channel picker"* — so the question a case asks is no longer
+ * WHICH headers rendered (always these four, in this order) but which well a card
+ * landed IN. The previous shape of these cases, `headers()` as a proxy for "where is
+ * the card", is what that ruling took away.
+ */
+const ALL_WELLS = ["Recent", "Last 7 days", "Last 30 days", "Earlier"];
+
+/** The gray box a heading belongs to. */
+function wellOf(label: string): HTMLElement {
+  return screen.getByRole("heading", { name: label }).closest("section")!;
+}
+
 describe("agents-wells — the bucketing expression", () => {
   it("is max(startedAt, lastActivityAt ?? endedAt), and never coerces a null to 0", () => {
     // The MAX is what makes Samuel's "active in the last 24 hours OR just created
@@ -197,27 +212,44 @@ describe("AgentsTab — the four wells", () => {
   it("files a CREATED-TODAY idle agent in Recent — an idle agent is not an old one", () => {
     // Verbatim: "They might be idle but they just show up there."
     renderTab([summary({ agentId: "eeee5555", displayName: "Echo", state: "idle", startedAt: NOW - 10 * 60_000 })]);
-    expect(headers()).toEqual(["Recent"]);
-    expect(screen.getByText("Echo")).toBeTruthy();
+    expect(headers()).toEqual(ALL_WELLS);
+    expect(within(wellOf("Recent")).getByText("Echo")).toBeTruthy();
   });
 
   it("files an UNDATED agent in Recent, where it is visible", () => {
     renderTab([summary({ agentId: "ffff6666", displayName: "Foxtrot", startedAt: null, lastActivityAt: null })]);
-    expect(headers()).toEqual(["Recent"]);
-    expect(screen.getByText("Foxtrot")).toBeTruthy();
+    expect(headers()).toEqual(ALL_WELLS);
+    expect(within(wellOf("Recent")).getByText("Foxtrot")).toBeTruthy();
   });
 
-  it("does NOT render a well with no agents in it", () => {
+  /**
+   * 🔒 **THE REVERSAL, AND THE CASE THAT USED TO ASSERT THE OPPOSITE.** This read
+   * *"does NOT render a well with no agents in it"* until 2026-09-17, when Samuel
+   * ruled the other way: *"in the Threads and Agents view, i want to have the gray
+   * boxes kept there even if there's nothing in them. Same as the channel picker"*.
+   * ⚠ **AN EMPTY WELL IS THE BOX AND ITS HEADER, WITH NO PLACEHOLDER SENTENCE** —
+   * the picker's empty face exactly (minimal copy, §5), which is why the empty ones
+   * are asserted to hold NO text of their own.
+   */
+  it("renders EVERY well, including the ones with no agents in them", () => {
     renderTab([fixture[2]!]);
-    expect(headers()).toEqual(["Last 30 days"]);
-    expect(screen.queryByRole("heading", { name: "Recent" })).toBeNull();
-    expect(screen.queryByRole("heading", { name: "Earlier" })).toBeNull();
+    expect(headers()).toEqual(ALL_WELLS);
+    // Open the three empty ones: an empty well is a header over an empty body.
+    for (const label of ["Last 7 days", "Earlier"]) {
+      fireEvent.click(screen.getByRole("button", { name: label }));
+      expect(wellOf(label).textContent).toBe(label);
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Last 30 days" }));
+    expect(within(wellOf("Last 30 days")).getByText("Charlie")).toBeTruthy();
   });
 
-  it("renders NO well at all when the feed is empty — the one sentence still stands", () => {
+  it("renders all four wells when the feed is empty, with the one sentence BESIDE them", () => {
     renderTab([]);
-    expect(headers()).toEqual([]);
-    expect(screen.getByText(/No agents running in this channel/i)).toBeTruthy();
+    expect(headers()).toEqual(ALL_WELLS);
+    // ⚠ BESIDE, NOT INSIDE — /home's channel column's shape: the sentence is a
+    // sibling of the wells, never placeholder copy in one of them.
+    const sentence = screen.getByText(/No agents running in this channel/i);
+    expect(sentence.closest("section")).toBeNull();
   });
 });
 

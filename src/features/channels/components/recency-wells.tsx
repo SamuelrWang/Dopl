@@ -130,6 +130,20 @@ export interface RecencyWellItem {
  * arranging for one; the render passes nothing.
  * ⚠ **NO `face` IS PASSED AND NONE MAY BE** — the two tabs wear the default
  * `PANEL_WELL` Samuel ruled on in September and did not ask to restyle.
+ *
+ * 🔒 ⚠ **EVERY WELL DRAWS, EMPTY OR NOT, SINCE 2026-09-17 (Samuel, verbatim):**
+ * *"in the Threads and Agents view, i want to have the gray boxes kept there even
+ * if there's nothing in them. Same as the channel picker"* — so `showEmpty` is
+ * passed HERE, once, and both tabs take it from the one call. **This is the
+ * reversal of the hide-when-empty rule the two tabs carried from 2026-09-13**,
+ * which had always been recorded as *"Samuel did not rule on it"*; he has now.
+ * ⚠ **THE PICKER IS THE MODEL AND THE SHAPE IS ALREADY SHARED** —
+ * `pages/home/relationship-list.tsx` passes the same flag to the same
+ * `WellsColumn`, so an empty well here is what an empty well is there: the box,
+ * its header, an empty body, the same collapse, **and no placeholder sentence**
+ * (minimal copy, §5). ⚠ **NOT A PROP ON THIS COMPONENT** — a `showEmpty?: boolean`
+ * here would be a knob with two callers that must both pass it, i.e. a way for the
+ * two tabs to disagree about a ruling that names them together.
  */
 export function RecencyWells({
   items,
@@ -154,6 +168,15 @@ export function RecencyWells({
     [items, now]
   );
   return (
-    <WellsColumn wells={RECENCY_WELLS} items={filed} storageKey={storageKey} />
+    <WellsColumn
+      wells={RECENCY_WELLS}
+      items={filed}
+      storageKey={storageKey}
+      // 🔒 THE FOUR BOXES ARE THE TAB'S STRUCTURE (Samuel, 2026-09-17) — see the
+      // ruling on this component. The tab's own empty sentence still draws BESIDE
+      // them, exactly as /home's does: four empty wells cannot say which emptiness
+      // this is.
+      showEmpty
+    />
   );
 }

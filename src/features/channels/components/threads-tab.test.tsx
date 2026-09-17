@@ -198,6 +198,18 @@ describe("channels threads tab — the four recency wells", () => {
     return screen.getByRole("heading", { name: title }).closest("section")!;
   }
 
+  function headings(): (string | null)[] {
+    return screen.queryAllByRole("heading").map((h) => h.textContent);
+  }
+
+  /**
+   * 🔒 **EVERY WELL DRAWS, EMPTY OR NOT, SINCE 2026-09-17 (Samuel):** *"in the
+   * Threads and Agents view, i want to have the gray boxes kept there even if
+   * there's nothing in them. Same as the channel picker"* — so the headings are
+   * this list, in this order, whatever the tab is holding.
+   */
+  const ALL_WELLS = ["Recent", "Last 7 days", "Last 30 days", "Earlier"];
+
   it("dates a thread by its LAST MESSAGE, and reads an absent or unparseable stamp as unknown", () => {
     expect(threadActivityAt(thread({ lastActivityAt: "2026-08-18T11:00:00.000Z" }))).toBe(
       Date.UTC(2026, 7, 18, 11, 0, 0)
@@ -208,12 +220,7 @@ describe("channels threads tab — the four recency wells", () => {
 
   it("files each thread in the well its last message falls in, and the undated one in Recent", () => {
     renderTab({ threads: SPREAD });
-    expect(screen.queryAllByRole("heading").map((h) => h.textContent)).toEqual([
-      "Recent",
-      "Last 7 days",
-      "Last 30 days",
-      "Earlier",
-    ]);
+    expect(headings()).toEqual(ALL_WELLS);
     // ⚠ EVERY WELL IS OPENED, because three of the four are collapsed by default
     // and a collapsed well holds no cards at all.
     for (const label of ["Last 7 days", "Last 30 days", "Earlier"]) {
@@ -244,19 +251,42 @@ describe("channels threads tab — the four recency wells", () => {
         }),
       ],
     });
-    expect(screen.queryAllByRole("heading").map((h) => h.textContent)).toEqual(["Earlier"]);
+    expect(headings()).toEqual(ALL_WELLS);
     fireEvent.click(screen.getByRole("button", { name: "Earlier" }));
     expect(within(wellOf("Earlier")).getByText("Mode flipped")).toBeTruthy();
+    // ⚠ AND NOWHERE ELSE — the other three drew (`showEmpty`) and hold nothing.
+    expect(within(wellOf("Recent")).queryByText("Mode flipped")).toBeNull();
   });
 
-  it("does NOT render a well with no threads in it", () => {
+  /**
+   * 🔒 **THE REVERSAL (Samuel, 2026-09-17, verbatim):** *"in the Threads and Agents
+   * view, i want to have the gray boxes kept there even if there's nothing in them.
+   * Same as the channel picker"*. This case read *"does NOT render a well with no
+   * threads in it"* — for the well AND for the whole list — until that ruling.
+   * ⚠ **AN EMPTY WELL IS THE BOX AND ITS HEADER AND NOTHING ELSE**, which is the
+   * picker's empty face (minimal copy, §5).
+   */
+  it("renders EVERY well, including the empty ones, and all four on an empty list", () => {
     renderTab({ threads: [SPREAD[1]] });
-    expect(screen.queryAllByRole("heading").map((h) => h.textContent)).toEqual(["Last 7 days"]);
-    // …and an empty list renders no well at all — the one sentence still stands.
+    expect(headings()).toEqual(ALL_WELLS);
+    for (const label of ["Last 30 days", "Earlier"]) {
+      fireEvent.click(screen.getByRole("button", { name: label }));
+      expect(wellOf(label).textContent).toBe(label);
+    }
+
     cleanup();
     renderTab({ threads: [] });
-    expect(screen.queryAllByRole("heading")).toEqual([]);
-    expect(screen.getByText("No threads in this channel yet.")).toBeTruthy();
+    expect(headings()).toEqual(ALL_WELLS);
+    // ⚠ THE SENTENCE IS BESIDE THE BOXES, NOT INSTEAD OF THEM AND NOT INSIDE ONE —
+    // /home's channel column's shape: four empty wells cannot say WHICH emptiness.
+    const sentence = screen.getByText("No threads in this channel yet.");
+    expect(sentence.closest("section")).toBeNull();
+  });
+
+  it("draws NO well while the first read is still in flight — unknown is not empty", () => {
+    renderTab({ threads: [], loading: true });
+    expect(headings()).toEqual([]);
+    expect(screen.queryByText("No threads in this channel yet.")).toBeNull();
   });
 
   it("is the /home Overview's well, and the New thread button stays OUTSIDE it", () => {

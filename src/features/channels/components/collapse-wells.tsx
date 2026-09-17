@@ -37,9 +37,15 @@
  * 🔒 ⚠ **AN EMPTY WELL IS HIDDEN BY DEFAULT AND SHOWN ON `showEmpty` (Samuel,
  * 2026-09-15):** *"Also, I want there to be something there, like the gray box.
  * Basically, it will just be empty until the user actually puts something in it,
- * but I still want it to be there."* ⚠ **THE DEFAULT STAYS `false` FOR THE TWO
- * TABS**, where he never ruled. ⚠ **NO PLACEHOLDER SENTENCE IN AN EMPTY WELL** —
- * minimal copy (INVARIANTS §5): the heading already names what is missing.
+ * but I still want it to be there."* ⚠ **AND EVERY SURFACE IN THIS TREE NOW PASSES
+ * IT (Samuel, 2026-09-17, over the two tabs):** *"in the Threads and Agents view,
+ * i want to have the gray boxes kept there even if there's nothing in them. Same
+ * as the channel picker"* — `recency-wells.tsx › RecencyWells` passes it for both
+ * of them. **THE DEFAULT STAYS `false` BECAUSE IT IS THE SAFE ONE**, not because a
+ * caller wants it: a new well set with nothing filed into it should not paint a
+ * column of empty boxes until somebody decides it should. ⚠ **NO PLACEHOLDER
+ * SENTENCE IN AN EMPTY WELL** — minimal copy (INVARIANTS §5): the heading already
+ * names what is missing.
  */
 
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -296,9 +302,12 @@ export function WellsColumn<Id extends string>({
    * 🔒 **DRAW A WELL WITH NOTHING IN IT (Samuel, 2026-09-15, over /home's channel
    * column):** *"I want there to be something there, like the gray box. Basically,
    * it will just be empty until the user actually puts something in it, but I
-   * still want it to be there."* ⚠ **DEFAULT `false` — the Agents and Threads
-   * tabs' rule unchanged.** ⚠ **AN EMPTY WELL IS THE BOX AND ITS HEADER, WITH NO
-   * PLACEHOLDER SENTENCE** (minimal copy, §5).
+   * still want it to be there."* ⚠ **AND THE AGENTS AND THREADS TABS PASS IT TOO
+   * SINCE 2026-09-17** — *"the gray boxes kept there even if there's nothing in
+   * them. Same as the channel picker"* — through `recency-wells.tsx`, so all three
+   * surfaces in this tree draw every well. **DEFAULT `false` is the SAFE default
+   * for a new caller, no longer a statement about the tabs.** ⚠ **AN EMPTY WELL IS
+   * THE BOX AND ITS HEADER, WITH NO PLACEHOLDER SENTENCE** (minimal copy, §5).
    */
   showEmpty?: boolean;
   /**

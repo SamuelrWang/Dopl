@@ -214,10 +214,6 @@ export function ThreadsTab({
         <p role="status" aria-busy="true" className="sr-only">
           Loading threads
         </p>
-      ) : threads.length === 0 ? (
-        <p className="px-1 pt-4 text-center text-caption text-text-muted">
-          No threads in this channel yet.
-        </p>
       ) : (
         /* ⚠ ONE `RecencyWells`, NOT A FLAT COLUMN, SINCE 2026-09-13 — and the
            items are built in the SERVER'S ORDER, which the grouping preserves
@@ -230,7 +226,22 @@ export function ThreadsTab({
            inline closure, so the deps move every render too. It is one pass over
            a CLIPPED list (`constants.ts › CHANNEL_THREAD_LIST_LIMIT`), so none of that
            matters — a memo whose deps always move is a cache that never hits and
-           a claim in a comment that is not true. */
+           a claim in a comment that is not true.
+
+           🔒 ⚠ **AND IT DRAWS WITH AN EMPTY LIST TOO, SINCE 2026-09-17 (Samuel,
+           verbatim):** *"in the Threads and Agents view, i want to have the gray
+           boxes kept there even if there's nothing in them. Same as the channel
+           picker"* — an empty `threads` used to render the sentence INSTEAD of the
+           wells, which is exactly the shape he named. The four boxes are this
+           tab's structure; `recency-wells.tsx` carries the `showEmpty` that keeps
+           the individually-empty ones. ⚠ **THE SENTENCE IS A SIBLING NOW, NOT A
+           BRANCH — /home's channel column's shape exactly** (`relationship-list.tsx`,
+           whose "No channels yet" has stood beside its empty wells since
+           2026-09-15): four empty wells cannot say WHICH emptiness this is, and
+           this is NOT the placeholder copy minimal-copy forbids INSIDE a well.
+           ⚠ **THE LOADING BRANCH ABOVE IS UNTOUCHED** — an empty well is a claim
+           that this span holds nothing, and a read still in flight has measured
+           no such thing (§11: UNKNOWN is not EMPTY). */
         <RecencyWells
           storageKey={THREAD_WELLS_STORAGE_KEY}
           items={threads.map(
@@ -248,6 +259,11 @@ export function ThreadsTab({
             })
           )}
         />
+      )}
+      {!loading && threads.length === 0 && (
+        <p className="px-1 pt-4 text-center text-caption text-text-muted">
+          No threads in this channel yet.
+        </p>
       )}
     </div>
   );

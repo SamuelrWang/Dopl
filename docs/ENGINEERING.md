@@ -6674,3 +6674,48 @@ about five times a second while an agent works.
 freshness, and it had quietly become the primary path for a fact this process owned locally. Reaching
 for a shorter interval, or a retry after launch, would have made the symptom smaller and left the
 shape intact — which is precisely what four green suites had already done to this bug once.
+
+## 2026-09-17 — The box that had to be there before it held anything: reversing hide-when-empty on the two tabs
+
+The Agents tab's four gray wells shipped on 2026-09-13 with a rule nobody had asked for and everybody
+wrote down: **an empty well is not rendered.** The reasoning was real — four headings over three empty
+boxes makes *"nothing older than a month"* and *"not scrolled to yet"* the same picture — and it was
+recorded honestly, in the code and in INVARIANTS, as **a decision Samuel had not ruled on**. It stayed
+that way through the Threads tab taking the same wells the same afternoon.
+
+Then /home's channel column took the same box on 2026-09-15 and Samuel *did* rule, for that surface:
+*"I want there to be something there, like the gray box. Basically, it will just be empty until the
+user actually puts something in it, but I still want it to be there."* That became `WellsColumn`'s
+`showEmpty`, defaulted `false` **specifically so the two tabs kept the rule he had not spoken to** —
+which is the careful thing to do, and which put the same question in front of him twice. Two days
+later he answered it: *"in the Threads and Agents view, i want to have the gray boxes kept there even
+if there's nothing in them. Same as the channel picker."*
+
+Three things about the fix are worth keeping.
+
+**The flag is passed ONCE, not twice.** Both tabs mount `recency-wells.tsx › RecencyWells`, which is
+the module that exists precisely because they share a recipe; `showEmpty` therefore lives on that one
+call and not as a prop each tab hands in. A `showEmpty?: boolean` on `RecencyWells` would have been a
+knob with exactly two callers who must both pass it — i.e. a way for two tabs to disagree about a
+ruling that names them in one sentence.
+
+**The empty sentence moved BESIDE the wells rather than being deleted.** Both tabs had rendered their
+"No threads in this channel yet." / "No agents running in this channel." as the *other half of a
+ternary* — the sentence INSTEAD of the wells — so keeping the boxes meant the sentence had to become a
+sibling. It is not duplicate copy and was not dropped, for the reason /home's own two sentences were
+kept beside its three empty boxes: **the headings are TIME SPANS**, so four empty wells cannot say
+whether this CHANNEL has no agents or this THREAD has none, which is the only thing that line says.
+The minimal-copy rule bans a placeholder sentence *inside* an empty well, and there still is none.
+
+**Two states are NOT empty and did not take the boxes.** A Threads read still in flight, and the
+Agents tab's `sessions === null` (no desktop app, so this build has measured nothing about the
+operator's own agents). An empty well is a claim that a span holds nothing; neither of those has
+measured that, and §11's UNKNOWN-is-not-EMPTY is the same rule that keeps an undated agent out of
+**Earlier**. The Agents tab's file header has said since the wells landed that an empty list under a
+browser *"would read as 'you have no agents', which is a claim"* — that sentence is why the carve-out
+is a carve-out and not an oversight.
+
+**The lesson is about how an unruled decision is recorded.** This one survived four days and two
+surfaces because it was written down as *"and Samuel did not rule on it"* rather than as a rule. That
+phrasing is what made the reversal a one-line change to a shared call instead of an argument about
+which of two surfaces was right.
