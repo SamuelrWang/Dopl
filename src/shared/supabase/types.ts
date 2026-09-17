@@ -350,6 +350,13 @@ export type Database = {
           id: string
           kind: string
           metadata: Json
+          // ⚠ HAND-ADDED 2026-09-17, NOT REGENERATED — `20261007120000_search_fulltext_indexes`
+          // APPLIED that day and this repo has no DB-free `gen types` path (the command is in
+          // this file's header and needs a linked project). Shape copied from
+          // `knowledge_entries.search_tsv`, the other GENERATED STORED tsvector, which is what
+          // the generator emits for the type. **The next real regeneration replaces this block
+          // and should produce the same line — if it does not, the regeneration is right.**
+          search_tsv: unknown
           seq: number
           workspace_id: string
         }
@@ -363,6 +370,7 @@ export type Database = {
           id?: string
           kind?: string
           metadata?: Json
+          search_tsv?: unknown
           seq?: never
           workspace_id: string
         }
@@ -376,6 +384,7 @@ export type Database = {
           id?: string
           kind?: string
           metadata?: Json
+          search_tsv?: unknown
           seq?: never
           workspace_id?: string
         }

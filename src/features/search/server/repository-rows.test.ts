@@ -19,9 +19,9 @@
  *  - **THE SOFT-DELETE / RETIREMENT FILTERS** — `deleted_at`, `dissolved_at`.
  *
  * MUTATION-VERIFY: 4 reverts, 4 failures, 0 vacuous (2026-09-17) — dropping the
- * `escapeLikeLiteral` call, dropping `orLiteral`, switching the message arm's
- * `config` to `english`, and dropping `.is("dissolved_at", null)` each turn a
- * case here red.
+ * `escapeLikeLiteral` call, dropping `orLiteral`, pointing the message arm back
+ * at the `body` EXPRESSION form, and dropping `.is("dissolved_at", null)` each
+ * turn a case here red.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -129,17 +129,27 @@ describe("🔒 the .or() visibility arms are quoted", () => {
 });
 
 describe("🔒 the full-text arms", () => {
-  it("asks for websearch + simple over the message BODY column", async () => {
+  it("reads the message GENERATED column, with no config", async () => {
     const calls = recorder();
     await searchMessages([CH], "zephyr ship");
-    // ⚠ `body`, NOT `search_tsv`: `20261007120000_search_fulltext_indexes.sql`
-    // is WRITTEN, NOT APPLIED, and naming a column that does not exist yet makes
-    // this route broken rather than slow.
+    // ⚠ `search_tsv` since 2026-09-17, when `20261007120000_search_fulltext_
+    // indexes.sql` was APPLIED (F-715 closed). NO `config`: the dictionary is
+    // fixed inside the generated column, and passing one would ask PostgREST to
+    // build a `to_tsvector` over a value that already is one.
     expect(of(calls, "textSearch")[0]?.args).toEqual([
-      "body",
+      "search_tsv",
       "zephyr ship",
-      { type: "websearch", config: "simple" },
+      { type: "websearch" },
     ]);
+  });
+
+  it("still selects `body` — the column the SNIPPET is cut from", async () => {
+    const calls = recorder();
+    await searchMessages([CH], "zephyr");
+    // ⚠ MUTATION CHECK. `search_tsv` decides WHICH rows; it is a lexeme vector
+    // and cannot be read back as prose, so dropping `body` from the projection
+    // would return hits with no snippet and no way to make one.
+    expect(String(of(calls, "select")[0]?.args[0])).toContain("body");
   });
 
   it("reads the LIVE generated column for knowledge, with no config", async () => {

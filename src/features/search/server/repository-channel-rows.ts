@@ -106,17 +106,26 @@ interface ChannelNameRow {
  * `simple` dictionary on both sides, so no stemming and no stopword list decides
  * what a person's own words mean.
  *
- * ⚠ **IT READS THE COLUMN `body` AND NOT A `tsvector` COLUMN, AND THAT IS
- * DELIBERATE AS OF 2026-09-17 (F-715).** `supabase/migrations/20261007120000_search_
- * fulltext_indexes.sql` adds `channel_messages.search_tsv` (generated, STORED)
- * plus its GIN index and is **WRITTEN, NOT APPLIED**. Naming a column that does
- * not exist yet would make this route BROKEN rather than SLOW until somebody
- * applies it, which `20260822170000_overview_time_range_indexes.sql` states as
- * the rule for this directory. **TO SWITCH once the migration is live: change
- * the first argument below from `"body"` to `"search_tsv"` and drop `config`
- * (the generated column already fixes the dictionary). Nothing else moves — the
- * predicate is the same one, and a probe to discover which is available would be
- * a per-request round trip to learn something a deploy already knows.**
+ * ⚠ **IT READS `search_tsv`, THE GENERATED STORED COLUMN, SINCE 2026-09-17
+ * (F-715, CLOSED).** `supabase/migrations/20261007120000_search_fulltext_indexes.sql`
+ * — which adds that column and `channel_messages_search_tsv_idx` over it — was
+ * APPLIED that day, by name and byte-exact, so the GIN index now serves this
+ * predicate instead of a per-row `to_tsvector`.
+ * ⚠ **NO `config` ON THIS ARM, AND ITS ABSENCE IS LOAD-BEARING.** The dictionary
+ * is fixed INSIDE the generated column (`to_tsvector('simple', coalesce(body,
+ * ''))`); passing one here would ask PostgREST to build a `to_tsvector` over a
+ * value that already is one. `knowledge_entries.search_tsv` is read the same way,
+ * one module over — the two arms are now spelled identically, which is the point.
+ * ⚠ **THE EXPRESSION FORM IS WHAT THIS READ AND IT IS WHY THE MIGRATION COULD BE
+ * "WRITTEN, NOT APPLIED" FOR A RELEASE.** `.textSearch("body", q, {config:
+ * "simple"})` renders the same predicate computed per row — SLOW, NEVER WRONG.
+ * Keep that property in mind before pointing a NEW search arm at a column a
+ * migration has not landed yet: naming one makes the route BROKEN rather than
+ * SLOW, which is the rule `20260822170000_overview_time_range_indexes.sql` states
+ * for this directory. **Deploy state is a MEASUREMENT (CLAUDE.md doc rule 4) —
+ * re-derive rather than trusting this paragraph:**
+ * `SELECT attname FROM pg_attribute WHERE attrelid = 'public.channel_messages'::regclass
+ * AND attname = 'search_tsv';`
  *
  * ⚠ **NEWEST-FIRST, NOT `ts_rank`.** `ts_rank` is an expression in a SELECT
  * list and PostgREST cannot ask for one; ranking is applied over the page
@@ -135,7 +144,7 @@ export async function searchMessages(
     .select("id, seq, body, channel_id, workspace_id, created_at")
     .in("channel_id", channelIds)
     .eq("kind", SEARCHABLE_MESSAGE_KIND)
-    .textSearch("body", query, { type: "websearch", config: "simple" })
+    .textSearch("search_tsv", query, { type: "websearch" })
     .order("created_at", { ascending: false })
     .limit(SEARCH_GROUP_TOTAL_CAP);
   if (error) throw error;

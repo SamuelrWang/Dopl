@@ -9520,33 +9520,43 @@ declarations, not rules.
 
 ### F-715 — `/api/search`'s message arm scans every message body until `20261007120000` applies
 
-**Found:** 2026-09-17, building the global search route. **Status:** 🟡 **OPEN — LATENCY, NEVER
-CORRECTNESS**, and the discharge is a deploy step rather than a code change.
+**Found:** 2026-09-17, building the global search route. **Status:** ✅ **RESOLVED 2026-09-17** —
+the migration was APPLIED (by name, byte-exact) and the one-line switch landed in the same change
+as the header, the ledger row and this line.
 
-`src/features/search/server/repository-channel-rows.ts › searchMessages` asks PostgREST for
+`src/features/search/server/repository-channel-rows.ts › searchMessages` asked PostgREST for
 `body=wfts(simple).<q>`, which renders as
 `to_tsvector('simple', body) @@ websearch_to_tsquery('simple', $1)` — the EXPRESSION form, computed
-per row, with no index that can serve it. `supabase/migrations/20261007120000_search_fulltext_indexes.sql`
-adds `channel_messages.search_tsv` (generated, STORED) plus its GIN index and is **WRITTEN, NOT
-APPLIED** (INVARIANTS §12).
+per row, with no index that could serve it. `supabase/migrations/20261007120000_search_fulltext_indexes.sql`
+adds `channel_messages.search_tsv` (generated, STORED) plus its GIN index, and shipped **WRITTEN,
+NOT APPLIED** (INVARIANTS §12).
 
-**This is deliberate, not an oversight.** Naming a column that does not exist yet would make the
-route BROKEN rather than SLOW until somebody applied the file, and `20260822170000_overview_time_range_indexes.sql`
-states that rule for this directory in as many words. The same argument is why there is no
-`SECURITY DEFINER` search RPC and why `ts_rank` / `ts_headline` are computed in TypeScript instead
-(`service-groups.ts › rankHits`, `snippet.ts › buildSnippet` — the second of which is also the
-safer place, since `ts_headline` copies the source body through verbatim).
+**That was deliberate, not an oversight, and it is the part worth keeping.** Naming a column that
+did not exist yet would have made the route BROKEN rather than SLOW until somebody applied the
+file, and `20260822170000_overview_time_range_indexes.sql` states that rule for this directory in
+as many words. The same argument is why there is no `SECURITY DEFINER` search RPC and why
+`ts_rank` / `ts_headline` are computed in TypeScript instead (`service-groups.ts › rankHits`,
+`snippet.ts › buildSnippet` — the second of which is also the safer place, since `ts_headline`
+copies the source body through verbatim). **A new search arm gets the same treatment.**
 
-**The discharge is one line, and the migration's own footer spells it out:** change
-`.textSearch("body", q, { type: "websearch", config: "simple" })` to
-`.textSearch("search_tsv", q, { type: "websearch" })`. ⚠ **Do NOT close this by making the
-repository probe for the column at runtime** — a per-request `information_schema` lookup buys a
-round trip to learn something the deploy already knows, and a cached probe is a stale answer with
-no invalidation.
+**The discharge was the one line the migration's footer spelled out:**
+`.textSearch("body", q, { type: "websearch", config: "simple" })` →
+`.textSearch("search_tsv", q, { type: "websearch" })`. ⚠ **`config` had to GO, not move**: the
+dictionary is fixed inside the generated column, so passing one would ask PostgREST to build a
+`to_tsvector` over a value that already is one. ⚠ **`body` STAYED in the projection** — the vector
+decides which rows and cannot be read back as prose, so the snippet still needs the column; both
+halves are pinned in `repository-rows.test.ts` (2 reverts, 2 failures, 0 vacuous).
 
-⚠ The blast radius is bounded meanwhile: the read is fenced to the caller's own channels and capped
-at 50 rows (`contracts.ts › SEARCH_GROUP_TOTAL_CAP`), so the scan is per-keystroke over one
-account's rooms rather than over the table.
+⚠ **IT WAS NOT CLOSED BY A RUNTIME PROBE, AND MUST NOT BE RE-OPENED WITH ONE.** A per-request
+`information_schema` lookup buys a round trip to learn something the deploy already knows, and a
+cached probe is a stale answer with no invalidation. What made the switch safe was the APPLY.
+
+⚠ **ONE RESIDUAL, AND IT IS DELIBERATE:** `src/shared/supabase/types.ts` gained the column BY HAND
+rather than by regeneration — that file is generated from the deployed database and this repo has
+no DB-free `gen types` path (its header's command needs a linked project). The shape is copied from
+`knowledge_entries.search_tsv` and the field carries a comment saying so. Nothing compiles against
+it (`supabaseAdmin()` is untyped), so the cost is honesty about deploy state, not correctness; the
+next real regeneration should produce the same line, and if it does not, the regeneration is right.
 
 ---
 

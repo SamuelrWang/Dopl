@@ -74,11 +74,17 @@ function splitArms(filter: string): string[] {
 }
 
 /**
- * ⚠ `search_tsv` IS SYNTHESISED, AND THE SPELLING MIRRORS THE REAL GENERATED
- * COLUMN (`20260501020000_knowledge_fulltext.sql`: title 'A', excerpt 'B',
- * body 'C'). Weights do not matter to a containment test; the SOURCE COLUMNS do,
- * because a repository that searched `search_tsv` expecting the body alone would
- * pass a fake that only held the body.
+ * ⚠ `search_tsv` IS SYNTHESISED, AND THE SPELLING MIRRORS **BOTH** REAL GENERATED
+ * COLUMNS. `knowledge_entries.search_tsv` is `setweight(title,'A') ||
+ * setweight(excerpt,'B') || setweight(body,'C')`
+ * (`20260501020000_knowledge_fulltext.sql`); `channel_messages.search_tsv` is
+ * `to_tsvector('simple', coalesce(body, ''))`
+ * (`20261007120000_search_fulltext_indexes.sql`, applied 2026-09-17). Joining
+ * whichever of the three a row HAS answers both — a message row carries only
+ * `body`, so it reduces to the body on its own.
+ * ⚠ Weights do not matter to a containment test; the SOURCE COLUMNS do, because a
+ * repository that searched `search_tsv` expecting the body alone would pass a
+ * fake that only held the body.
  */
 function textOf(row: FakeRow, column: string): string {
   if (column === "search_tsv") {

@@ -2,23 +2,30 @@
 -- `channel_messages`, for the global search popup (2026-09-17, Samuel's
 -- search-popup ruling; `src/features/search/`).
 --
--- ⚠️ **WRITTEN, NOT APPLIED** — this directory's standing gate. Replay is OWED
--- and recorded rather than glossed (Docker is unavailable on the authoring
--- machine; CI's `rls-redteam` job is the replay, INVARIANTS §14).
+-- ✅ **APPLIED 2026-09-17 (by name, byte-exact, Supabase MCP).** ⚠ This header
+-- said "WRITTEN, NOT APPLIED" while it was; the line moved in the same change
+-- that made the repository read the column. **`20260822170000_overview_time_
+-- range_indexes.sql` carries the scar of the opposite mistake** — it claimed
+-- "WRITTEN, NOT APPLIED" for two days AFTER it was live.
 --
--- 🔒 **APPLY IT BY NAME (`search_fulltext_indexes`), NEVER BY FILENAME VERSION**
--- (F-304's re-stamp, INVARIANTS §12). Byte-exact apply; no `db push`.
+-- 🔒 **IT WAS APPLIED BY NAME (`search_fulltext_indexes`), NOT BY FILENAME
+-- VERSION** (F-304's re-stamp, INVARIANTS §12), so the history row's version is
+-- NOT this file's `20261007120000` prefix and nothing here records what it is:
+-- deploy state is a MEASUREMENT (CLAUDE.md doc rule 4). Re-derive with
+-- `supabase migration list` / MCP `list_migrations` and JOIN ON THE NAME.
 --
 -- ── ⚠ WHAT THIS IS NOT ─────────────────────────────────────────────────────
 --
--- **NOT A CORRECTNESS DEPENDENCY.** `GET /api/search` was written to work with
--- this file UNAPPLIED and does so today: the messages arm asks PostgREST for
--- `body=wfts(simple).<q>`, which renders as
--- `to_tsvector('simple', body) @@ websearch_to_tsquery('simple', $1)` — the
--- EXPRESSION form, computed per row. That degrades to a sequential scan —
--- **SLOW, NEVER WRONG** — so the standing "written, not applied" gate costs
--- latency and nothing else. The same argument, in the same words, as
+-- **IT WAS NEVER A CORRECTNESS DEPENDENCY, AND THAT IS WHY IT COULD SIT
+-- UNAPPLIED FOR A RELEASE.** `GET /api/search` shipped against this file
+-- UNAPPLIED: the messages arm asked PostgREST for `body=wfts(simple).<q>`, which
+-- renders as `to_tsvector('simple', body) @@ websearch_to_tsquery('simple', $1)`
+-- — the EXPRESSION form, computed per row, degrading to a sequential scan:
+-- **SLOW, NEVER WRONG**. The same argument, in the same words, as
 -- `20260822170000_overview_time_range_indexes.sql`.
+-- ⚠ **KEEP THAT PROPERTY FOR THE NEXT SEARCH ARM.** The reason this paragraph
+-- survives the apply is that it is a rule about how to WRITE one, not a note
+-- about this file's status.
 --
 -- ⚠ **AND THERE IS DELIBERATELY NO `SECURITY DEFINER` SEARCH RPC HERE.** A route
 -- that called one — to get `ts_rank` or `ts_headline`, neither of which
@@ -84,19 +91,23 @@ ALTER TABLE public.channel_messages
 CREATE INDEX IF NOT EXISTS channel_messages_search_tsv_idx
   ON public.channel_messages USING gin (search_tsv);
 
--- ── AFTER THIS APPLIES: THE ONE-LINE SWITCH ────────────────────────────────
+-- ── THE ONE-LINE SWITCH: ✅ DONE 2026-09-17, IN THE SAME CHANGE AS THIS LINE ──
 --
--- `src/features/search/server/repository-channel-rows.ts › searchMessages`
--- currently reads:
---     .textSearch("body", query, { type: "websearch", config: "simple" })
--- Change it to:
+-- `src/features/search/server/repository-channel-rows.ts › searchMessages` now
+-- reads:
 --     .textSearch("search_tsv", query, { type: "websearch" })
--- and drop `config` — the dictionary is fixed inside the generated column, and
--- passing one would ask PostgREST to build a `to_tsvector` over a value that
--- already is one. That is the whole switch; the predicate does not change.
--- ⚠ **DO NOT make the repository probe for the column at runtime.** A per-request
--- `information_schema` lookup buys a round trip to learn something the deploy
--- already knows, and a cached probe is a stale answer with no invalidation.
+-- where it read `.textSearch("body", query, { type: "websearch", config:
+-- "simple" })`. `config` is GONE, and its absence is load-bearing: the dictionary
+-- is fixed inside the generated column, and passing one would ask PostgREST to
+-- build a `to_tsvector` over a value that already is one. The predicate did not
+-- change — only what computes it.
+-- ⚠ **`body` STAYS IN THAT QUERY'S PROJECTION.** `search_tsv` decides WHICH rows;
+-- it is a lexeme vector and cannot be read back as prose, so the snippet still
+-- needs the column. Pinned by `repository-rows.test.ts`.
+-- ⚠ **THE REPOSITORY STILL DOES NOT PROBE FOR THE COLUMN, AND MUST NOT START.**
+-- A per-request `information_schema` lookup buys a round trip to learn something
+-- the deploy already knows, and a cached probe is a stale answer with no
+-- invalidation. What made the switch safe was the APPLY, not a check.
 --
 -- ROLLBACK (a NEW migration, never an edit to this one):
 --   DROP INDEX IF EXISTS public.channel_messages_search_tsv_idx;
