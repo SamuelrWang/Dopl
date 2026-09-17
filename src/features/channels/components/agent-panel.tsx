@@ -402,7 +402,7 @@ export function ChannelsAgentPanel({
   );
 }
 
-function AgentPanelHeader({
+export function AgentPanelHeader({
   agent,
   onClose,
 }: {
@@ -458,7 +458,7 @@ function AgentPanelHeader({
  * `shared/ui/usage-meter.tsx` that keeps it — a reported `contextUsed` with no `contextWindow`
  * prints the number alone, never `84k / 0k`.
  */
-function AgentStats({ agent }: { agent: DesktopSessionSummary }) {
+export function AgentStats({ agent }: { agent: DesktopSessionSummary }) {
   const used = metric(agent.contextUsed);
   const window = metric(agent.contextWindow);
   const spent = metric(agent.tokensSpent);

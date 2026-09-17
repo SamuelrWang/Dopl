@@ -15,51 +15,15 @@
  */
 
 /**
- * The account surface's FIVE faces, all built.
- *
- * ⚠ `"agents"` here is the TEMPLATE face — the channel info column has a
- * different tab of the same name listing live SESSIONS, and both names stay by
- * Samuel's ruling (INVARIANTS §5A).
- *
- * ⚠ `"channels"` WAS `"chat"` UNTIL 2026-09-01 (Samuel). It is LOCAL state with
- * no route and no persistence, so the key moved with the label and there was
- * nothing to migrate. ⚠ Do not read that rename as licence to rename the
- * `channels` PAGE segment (`routes.tsx › WORKSPACE_PAGES`), which is a real
- * path with a hand copy in `dopl-desktop-app/main/deep-link-target.js`.
- *
- * ⚠ AND ITS LABEL IS SINGULAR — **"Channel"** SINCE 2026-09-09 (Samuel). The
- * face shows ONE channel, the one the list beside it has selected, so the
- * plural named the list rather than the pane. ⚠ THE KEY DID **NOT** MOVE WITH
- * it this time: `"channels"` is read by `use-activity-jump.ts`, by the page's
- * `paneToken` fallback and by four suites, and a key rename buys nothing a
- * label rename already bought. Label ≠ key here, deliberately.
+ * ⚠ **THE FACE SET AND ITS LABELS MOVED TO THE ROOT TREE ON 2026-09-17 AND ARE
+ * RE-EXPORTED HERE** (`src/features/home/tabs.ts`), because the landing page's
+ * hero demo renders the header selector and cannot import `apps/`. **The pane
+ * tokens below did NOT move** — they are this page's own crossfade machinery.
+ * Every SPA import path is unchanged.
  */
-export type HomeTab =
-  | "overview"
-  | "channels"
-  | "knowledge"
-  | "agents"
-  | "ontology";
+import { HOME_TABS, type HomeTab } from "@/features/home/tabs";
 
-/**
- * ⚠ OVERVIEW IS FIRST **AND** IS NOW THE DEFAULT (Samuel, 2026-09-01). The two
- * were separate decisions for one day — leftmost but not the landing — and the
- * second one moved: opening Dopl should answer "what needs me / what is
- * happening / what is running" before it answers "what did we say". They are
- * still stated separately below, because deriving one from the other is what
- * makes a row re-order silently move where the app lands.
- */
-export const HOME_TABS = [
-  { key: "overview", label: "Overview" },
-  { key: "channels", label: "Channel" },
-  { key: "knowledge", label: "Knowledge" },
-  { key: "agents", label: "Agents" },
-  // ⚠ FIFTH, AND TO THE RIGHT OF AGENTS (Samuel, 2026-09-09: the ontology page
-  // comes in "as a new tab, to the right of the Agents tab"). Position is the
-  // ruling; `HOME_DEFAULT_TAB` below did NOT move with it, because the leftmost
-  // tab and the landing tab are two decisions and this file states them apart.
-  { key: "ontology", label: "Ontology" },
-] as const satisfies ReadonlyArray<{ key: HomeTab; label: string }>;
+export { HOME_TABS, type HomeTab };
 
 /**
  * The face the page opens on — **and therefore the page Dopl opens on**, since

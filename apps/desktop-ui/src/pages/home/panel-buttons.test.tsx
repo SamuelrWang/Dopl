@@ -36,12 +36,16 @@ import { BaseCard } from "@/features/knowledge/components/knowledge-v2/home/base
 import type { KnowledgeBase } from "@/features/knowledge/types";
 import { ShareIntoChannelButton } from "./agent-share";
 import { CreateButton, PAGE_ACTION_BTN, PAGE_ACTION_ICON } from "./panel-buttons";
+import { HOME_CARD_FACE_SELECTED } from "./channel-row-marks";
 
 /** This directory, and the knowledge module up in the web tree. See the note
  *  in the scan below for why neither is written inline. */
 const HERE = "./";
 const KNOWLEDGE_CSS =
   "../../../../../src/features/knowledge/components/knowledge-v2/knowledge-v2.module.css";
+/** The ROOT tree's shared UI — where both black recipes are declared since
+ *  2026-09-17. ⚠ A variable for the same reason `HERE` is one, below. */
+const SHARED_UI_REL = "../../../../../src/shared/ui/";
 
 const BASE = {
   id: "kb-1",
@@ -95,6 +99,7 @@ describe("no page-local copy of either recipe is left in pages/home", () => {
   // that comes back as a non-`file:` scheme and `fileURLToPath` throws. Held
   // in a const, the call is left alone and resolves against this file.
   const dir = fileURLToPath(new URL(HERE, import.meta.url));
+  const SHARED_UI = fileURLToPath(new URL(SHARED_UI_REL, import.meta.url));
   const all = readdirSync(dir)
     .filter((f) => f.endsWith(".tsx") && !f.endsWith(".test.tsx"))
     .map((f) => [f, readFileSync(`${dir}${f}`, "utf8")] as const);
@@ -150,19 +155,42 @@ describe("no page-local copy of either recipe is left in pages/home", () => {
     //
     // 🔒 **THE SECOND ENTRY ARRIVED 2026-09-15 (Samuel):** *"for the channel
     // picker, for the selected channel, can we have it turn into like the black
-    // button UI?"* — `channel-row-marks.tsx › HOME_CARD_FACE_SELECTED`. ⚠ **THIS
-    // LIST MAY ONLY EVER HOLD A NEW SHAPE, NEVER A SECOND SPELLING OF AN OLD
-    // ONE.** What this case protects is that the page's black PILL is declared
-    // once; the selected row is the black CARD — the kit face at the row's own
-    // radius, carrying the row's ink — and the two share the kit class, which is
-    // the point, rather than a copied gradient. **A third entry is a bug unless
-    // it is a third shape, and a copy of either of these two is the defect this
-    // case was written for.**
-    const declaring = sources
+    // button UI?"* — `HOME_CARD_FACE_SELECTED`. ⚠ **THIS LIST MAY ONLY EVER HOLD
+    // A NEW SHAPE, NEVER A SECOND SPELLING OF AN OLD ONE.** What this case
+    // protects is that the page's black PILL is declared once; the selected row
+    // is the black CARD — the kit face at the row's own radius, carrying the
+    // row's ink — and the two share the kit class, which is the point, rather
+    // than a copied gradient. **A third entry is a bug unless it is a third
+    // shape, and a copy of either of these two is the defect this case was
+    // written for.**
+    //
+    // ⚠ **BOTH DECLARATIONS LEFT THIS DIRECTORY ON 2026-09-17 AND THE SCAN
+    // FOLLOWED THEM.** They live in the ROOT tree now
+    // (`src/shared/ui/page-action-button.ts`, `src/shared/ui/home-card-marks.tsx`)
+    // because the landing page's hero demo renders /home's chrome and the Next
+    // tree cannot import `apps/` at all. The claim is unchanged and is now
+    // stronger: `pages/home` may declare NEITHER, and the shared tree declares
+    // each exactly once.
+    const local = sources
       .filter(([, text]) => /"auth-btn-3d /.test(text))
       .map(([file]) => file)
       .sort();
-    expect(declaring).toEqual(["channel-row-marks.tsx", "panel-buttons.tsx"]);
+    expect(local).toEqual([]);
+
+    // ⚠ **NAMED FILES, NOT A SCAN OF `shared/ui`.** That directory holds black
+    // faces belonging to other surfaces (the form dialog's confirm, the
+    // composer's send); this case's subject is /home's page ACTION and /home's
+    // selected ROW, so it reads those two declarations and asserts they are
+    // still two different shapes of one kit class.
+    const declared = [
+      ["page-action-button.ts", PAGE_ACTION_BTN],
+      ["home-card-marks.tsx", HOME_CARD_FACE_SELECTED],
+    ] as const;
+    for (const [file, recipe] of declared) {
+      expect(`${file}: ${recipe.startsWith("auth-btn-3d ")}`).toBe(`${file}: true`);
+      expect(readFileSync(`${SHARED_UI}${file}`, "utf8")).toContain(`"${recipe}"`);
+    }
+    expect(PAGE_ACTION_BTN).not.toEqual(HOME_CARD_FACE_SELECTED);
   });
 
   it("🔒 `CreateButton` is declared exactly once", () => {

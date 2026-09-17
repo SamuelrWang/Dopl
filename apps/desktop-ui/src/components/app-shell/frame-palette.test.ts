@@ -416,7 +416,9 @@ describe("the rail reads the same on both hosts", () => {
 
 describe("the selected channel row's line is its own step", () => {
   const HOME_CSS = "apps/desktop-ui/src/pages/home/home.module.css";
-  const ROW_TSX = "apps/desktop-ui/src/pages/home/relationship-list.tsx";
+  /** ⚠ **THE ROW'S FACE LEFT `relationship-list.tsx` ON 2026-09-17** — the hero
+   *  demo renders the same row; the list still owns the column and the reads. */
+  const ROW_TSX = "src/shared/ui/home-channel-row.tsx";
 
   /** 🔒 **SAMUEL RETRACTED THE RULING THIS CASE PINNED (2026-09-15):** /home's
    *  selected row is the page's BLACK BUTTON now, so `--home-row-line-selected`,

@@ -1,7 +1,5 @@
 import { useMemo } from "react";
-import { cn } from "@/shared/lib/utils";
-import { formatChannelTimestamp } from "@/shared/lib/format-time";
-import { AvatarStack } from "@/shared/ui/avatar-stack";
+import { HomeChannelRow } from "@/shared/ui/home-channel-row";
 // ⚠ AN APP READING A FEATURE COMPONENT, which is the direction /home already
 // takes eleven times (`person-members.tsx`, `person-info-tab.tsx`, …) and NOT the
 // feature→feature import INVARIANTS §1 forbids. The well's machinery cannot live
@@ -13,13 +11,6 @@ import {
 } from "@/features/channels/components/collapse-wells";
 import { PANEL_WELL_ON_PANEL } from "@/shared/ui/panel-well";
 import { channelPeople, channelTitle, hasLinkOut, type HomeRow } from "./home-rows";
-import {
-  HOME_CARD_FACE,
-  HOME_CARD_FACE_SELECTED,
-  MentionBadge,
-  UnreadDot,
-  rowQuietInk,
-} from "./channel-row-marks";
 import { useHomeFavoriteSync } from "./use-home-favorite-sync";
 import {
   HOME_CHANNEL_WELLS,
@@ -174,6 +165,17 @@ function RelationshipRow({
   selected: boolean;
   onSelect: () => void;
 }) {
+  /**
+   * ⚠ **THE FACE IS `shared/ui/home-channel-row.tsx › HomeChannelRow` SINCE
+   * 2026-09-17, AND THIS FUNCTION IS NOW THE DERIVATION ALONE.** The two lines,
+   * their marks and both card faces moved to the root tree because the landing
+   * page's hero demo draws the same row and cannot import `apps/`. **Nothing
+   * about the rendered row changed** — what is below is exactly the set of
+   * answers the markup used to compute inline, in the same order, with the same
+   * rules and the same rulings.
+   * 🚫 **DO NOT RE-INLINE THE MARKUP.** A second copy of this row is a restyle
+   * that lands on whichever host the next reader opened.
+   */
   const pending = row.kind === "link";
   /** ⚠ THE CHIP IS THE SAME FACT ON BOTH ROW KINDS — an invitation is out. A
    *  bound link says it about the channel it rides on; a legacy unbound one is
@@ -196,175 +198,53 @@ function RelationshipRow({
    */
   const pendingLine = row.kind === "link" ? "Not yet claimed" : null;
   /**
-   * The CHANNEL row's own second line — the roster on the left, the unread marks
-   * on the right.
-   *
    * ⚠ `?? EMPTY_X` INLINE AT EVERY NEW KEY (INVARIANTS §8): both fields are new
    * on an IndexedDB-persisted payload with a 24h `gcTime`, so the first paint
    * after this bundle ships reads entries that HAVE NEITHER. `channelPeople` is
    * the one sanctioned exception and carries its own reason.
+   * ⚠ **THE FALLBACKS STAY HERE, WITH THE READER OF THE CACHE.** `HomeChannelRow`
+   * takes ANSWERS and owns no `?? EMPTY_X` of its own — a fallback applied twice
+   * is a fallback nobody can audit.
    */
   const channel = row.kind === "channel" ? row.channel : null;
   const mentions = channel?.unreadMentions ?? 0;
   const unread = channel?.unread ?? false;
-  const faces = channel ? channelPeople(channel) : [];
   /**
-   * 🔒 **THE CHANNEL'S DESCRIPTION, AND IT IS THE SOLO ROW'S SECOND LINE
-   * (Samuel, 2026-09-15): a channel with other people in it keeps the profile
-   * icons exactly as today; a channel with NOBODY else shows its description
-   * instead, in italic.**
-   *
-   * ⚠ **THE TWO ARE ALTERNATIVES, NEVER STACKED** — they share ONE slot on line
-   * two, so the row's height (which Samuel fixed: *"I like the current size of
-   * it"*) cannot grow by a line.
-   * ⚠ **`faces.length` IS THE TEST, NOT `peers.length`** — `channelPeople` carries
-   * the stale-cache merge, and the raw field would paint a populated channel as
-   * solo for one paint after an upgrade.
-   * ⚠ **EMPTY STAYS EMPTY** — `topic` is `""` when nobody wrote one (`home/types.ts`,
-   * `NOT NULL DEFAULT ''`), so this is a truthiness test, not a presence one.
+   * ⚠ **`channelPeople` CARRIES THE STALE-CACHE MERGE**, and the raw field would
+   * paint a populated channel as solo for one paint after an upgrade — which is
+   * also what decides whether the description takes line two.
+   * ⚠ `AvatarStack` takes a NON-NULL name and initials it; a nameless member
+   * degrades to their address exactly as `Avatar`'s own fallback does, never to
+   * "?" when we hold one.
+   */
+  const faces = (channel ? channelPeople(channel) : []).map((person) => ({
+    userId: person.userId,
+    displayName: person.displayName ?? person.email ?? "Member",
+    avatarUrl: person.avatarUrl,
+  }));
+  /**
+   * ⚠ **EMPTY STAYS EMPTY** — `topic` is `""` when nobody wrote one
+   * (`home/types.ts`, `NOT NULL DEFAULT ''`), so the row's own test is a
+   * truthiness one, not a presence one.
    * ⚠ `?? ""` INLINE (INVARIANTS §8): a new key on an IndexedDB-persisted payload.
    */
   const description = channel?.topic ?? "";
-  const showDescription = faces.length === 0 && description.length > 0;
 
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-current={selected ? "true" : undefined}
-      className={cn(
-        // EVERY row is a RAISED BUTTON (Samuel, 2026-08-24) — these rows ARE
-        // interactive and say so. ⚠ NO `bg-*` UTILITY HERE: the kit fill is a
-        // GRADIENT and a utility background flattens it (utilities outrank the
-        // kit layer). ⚠ THE FACES COME BY CONSTANT (`channel-row-marks.tsx`),
-        // never re-typed here.
-        //
-        // 🔒 **THE SELECTED ROW IS THE PAGE'S BLACK BUTTON SINCE 2026-09-15
-        // (Samuel, verbatim):** *"for the channel picker, for the selected
-        // channel, can we have it turn into like the black button UI? And drop
-        // the shadow that currently goes on the selected?"*
-        // ⚠ **THE TWO FACES ARE ALTERNATIVES, NEVER LAYERS**, and that IS the
-        // "drop the shadow": `.auth-btn-3d` sets `background`, `border` and
-        // `box-shadow` in one rule, so swapping the face leaves nothing of the
-        // old selection behind. **Do not re-add `selected-ring` or a module
-        // line here.** ⚠ **SAME BOX EITHER WAY** — both faces are a 1px border on
-        // this radius, so selecting a row cannot shift the list.
-        selected ? HOME_CARD_FACE_SELECTED : HOME_CARD_FACE,
-        "flex w-full cursor-pointer items-start gap-2.5 px-2.5 py-2.5 text-left"
-      )}
-    >
-      {/* 🔒 ⚠ **NO IDENTITY GLYPH IN THE ROW'S LEADING SLOT (Samuel, 2026-09-01).**
-          A glyph chosen by roster size makes a channel's ICON a function of its
-          MEMBERSHIP — **a channel is not a DM and must not be dressed as one**
-          (real DMs are `channels.is_direct` / `Channel.directPeer`, untouched).
-          ⚠ **Nor a "channel avatar"**: initials from a channel's name read as a
-          person who does not exist. The row is the NAME. */}
-      <span className="min-w-0 flex-1">
-        <span className="flex items-baseline justify-between gap-2">
-          {/* ⚠ **ON THE BLACK FACE EVERY INK IS `--text-on-cta`, DIMMED — NEVER
-              A SECOND COLOUR (2026-09-15).** The quiet lines below say it once,
-              through `channel-row-marks.tsx › rowQuietInk`. */}
-          <span
-            className={cn(
-              "truncate text-body font-medium",
-              selected
-                ? pending
-                  ? "text-text-on-cta/70"
-                  : "text-text-on-cta"
-                : pending
-                  ? "text-text-secondary"
-                  : "text-text-primary"
-            )}
-          >
-            {name}
-          </span>
-          <span
-            className={cn(
-              "shrink-0 text-micro",
-              rowQuietInk(selected)
-            )}
-          >
-            {formatChannelTimestamp(row.at)}
-          </span>
-        </span>
-        {/* LINE TWO — **the ROSTER on the left, the UNREAD MARKS on the right**
-            (Samuel, live review 2026-09-13: the row wants "some notification
-            system for new @s", at the size it already is).
-
-            🔒 **THE FACES HERE DO NOT REOPEN THE 2026-09-01 RULING** — what that
-            deleted was identity STANDING IN FOR THE CHANNEL (a leading glyph, a
-            roster-derived title). The title is still `channelTitle` and the
-            leading slot is still empty. A SOLO channel shows nothing, so there is
-            no "Just you".
-
-            ⚠ **20px FACES — `size="2xs"`, A REAL KEY ON THE KIT COMPONENT** and
-            never a class override here: `xs` (24px) grows this row, whose height
-            Samuel fixed (*"I like the current size of it"*).
-            ⚠ **THE TWO MARKS ARE EXCLUSIVE** — the `@ N` pill already says the
-            louder version of what the dot says. */}
-        <span className="mt-0.5 flex min-h-[18px] items-center gap-1.5">
-          {linkOut && (
-            <span
-              className={cn(
-                "shrink-0 rounded-full border px-1.5 text-micro font-medium",
-                selected
-                  ? "border-text-on-cta/30 bg-text-on-cta/15 text-text-on-cta"
-                  : "border-border-strong bg-bg-inset text-text-secondary"
-              )}
-            >
-              Link out
-            </span>
-          )}
-          {pendingLine && (
-            <span
-              className={cn(
-                "truncate text-caption",
-                rowQuietInk(selected)
-              )}
-            >
-              {pendingLine}
-            </span>
-          )}
-          {faces.length > 0 && (
-            <span className="flex shrink-0 items-center">
-              <AvatarStack
-                size="2xs"
-                max={3}
-                users={faces.map((person) => ({
-                  userId: person.userId,
-                  // ⚠ `AvatarStack` takes a NON-NULL name and initials it; a
-                  // nameless member degrades to their address exactly as
-                  // `Avatar`'s own fallback does, never to "?" when we hold one.
-                  displayName: person.displayName ?? person.email ?? "Member",
-                  avatarUrl: person.avatarUrl,
-                }))}
-              />
-            </span>
-          )}
-          {/* 🔒 **THE SOLO ROW'S DESCRIPTION (Samuel, 2026-09-15)** — the faces'
-              ALTERNATIVE in this one slot; the rule lives on `showDescription`.
-              ⚠ **`truncate` AND `min-w-0`, BECAUSE A DESCRIPTION IS FREE TEXT UP
-              TO 2000 CHARS** (`channels/schema.ts › ChannelTopicSchema`) — it is
-              the only thing on line two that could size the row, so it must clip.
-              ⚠ **ITALIC IS THE RULING AND THE ONLY THING THAT MAKES IT ITALIC** —
-              no second font, and the ink is `rowQuietInk` like every other quiet
-              line. */}
-          {showDescription && (
-            <span
-              className={cn(
-                "min-w-0 truncate text-caption italic",
-                rowQuietInk(selected)
-              )}
-            >
-              {description}
-            </span>
-          )}
-          <span className="ml-auto flex shrink-0 items-center gap-1.5">
-            {mentions === 0 && unread && <UnreadDot onDark={selected} />}
-            <MentionBadge count={mentions} onDark={selected} />
-          </span>
-        </span>
-      </span>
-    </button>
+    <HomeChannelRow
+      row={{
+        name,
+        at: row.at,
+        faces,
+        description,
+        linkOut,
+        pending,
+        pendingLine,
+        unread,
+        mentions,
+      }}
+      selected={selected}
+      onSelect={onSelect}
+    />
   );
 }

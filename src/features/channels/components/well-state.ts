@@ -85,14 +85,23 @@ function storedWells<Id extends string>(
  *
  * ⚠ **PER DEVICE, NOT PER ACCOUNT, AND `localStorage` IS THE HONEST STORE FOR
  * THAT** — a collapsed well is a reading posture, not a fact about the channel or
- * the list, and the server stores nothing about any of the three surfaces.
- * ⚠ **READ IN A LAZY INITIALISER, NOT IN AN EFFECT, AND NO WELL EVER RENDERS ON A
- * SERVER.** `setState` in an effect body is a cascading render this tree's lint
- * forbids (`react-hooks/set-state-in-effect`), so "paint the defaults, then
- * correct them" is not available — and is not needed: no consuming surface has an
- * item to file during a server render, and an empty list renders no well, so there
- * is no `aria-expanded` for a hydration pass to disagree about. The initialiser
- * still guards `typeof window` so the hook is honest on its own.
+ * the list, and the server stores nothing about any of the four surfaces.
+ * ⚠ **READ IN A LAZY INITIALISER, NOT IN AN EFFECT.** `setState` in an effect body
+ * is a cascading render this tree's lint forbids
+ * (`react-hooks/set-state-in-effect`), so "paint the defaults, then correct them"
+ * is not available. The initialiser guards `typeof window` so the hook is honest
+ * on its own.
+ * 🔒 ⚠ **ONE SURFACE DOES RENDER WELLS ON A SERVER, AND THIS BLOCK CLAIMED NONE DID
+ * UNTIL 2026-09-17.** The landing page's hero demo
+ * (`marketing/components/banner-demo/demo-home-chrome.tsx`) is a client component
+ * Next renders statically, it files items at step 0 and it passes `showEmpty`, so
+ * three `aria-expanded` attributes really do come off the server. **What keeps
+ * hydration honest there is the KEY, not the absence of a render**: that scene
+ * passes a demo-scoped key nothing ever writes, so the client initialiser reads
+ * `null` and lands on the same defaults the server used. ⚠ **A SERVER-RENDERED
+ * SURFACE PASSING A KEY THE OPERATOR CAN WRITE WOULD MISMATCH, and this hook
+ * cannot fix that** — it would need the defaults on the first client paint and the
+ * stored value after it.
  * ⚠ The read itself, its `try` and its key filtering are {@link storedWells}.
  */
 export function useWells<Id extends string>(

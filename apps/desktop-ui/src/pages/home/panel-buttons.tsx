@@ -1,31 +1,27 @@
 import type { ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import {
+  PAGE_ACTION_BTN,
+  PAGE_ACTION_ICON,
+} from "@/shared/ui/page-action-button";
 
 /**
- * /home's PAGE ACTION BUTTON — the black 36px pill (`docs/DESIGN-SYSTEM.md`:
- * `h-9` + `auth-btn-3d`), as ONE string.
+ * /home's PAGE ACTION BUTTON — **re-exported from
+ * `@/shared/ui/page-action-button`, which is where the black 36px pill is
+ * declared since 2026-09-17.**
  *
- * ⚠ IT IS THE "New channel" BUTTON'S OWN CLASS LIST, extracted rather than
- * copied (`index.tsx` renders this constant, so the two cannot drift). It was
- * spelled out verbatim at three call sites in this tree before 2026-09-09; a
- * class string repeated by hand is a restyle that lands on whichever file the
- * next reader opened.
+ * ⚠ **THE MOVE IS ABOUT A SECOND TREE, NOT ABOUT THIS PAGE.** The landing page's
+ * hero demo renders /home's own chrome
+ * (`src/features/marketing/components/banner-demo/`) and the Next tree cannot
+ * import `apps/` at all. apps → root `src/` is the direction that works, so the
+ * ONE declaration moved there and this module stays the path every /home reader
+ * already imports. **The class list is byte-identical to what it was.**
  *
- * ⚠ `text-text-on-cta`, NOT `text-white`. Same pixels (`--text-on-cta` is
- * `#ffffff`), but the design system's rule is that ink comes from a token
- * utility — a literal colour utility here is what a page-level restyle cannot
- * follow.
- *
- * ⚠ FACE AND SCALE ONLY. Behavioural states and inline spacing stay with the
- * caller through `cn` — the same division `open-scale-button.tsx` holds.
+ * ⚠ **DO NOT RE-DECLARE THE FACE HERE.** A second spelling of the page action is
+ * exactly the defect the original extraction (2026-09-09) was written to fix.
  */
-export const PAGE_ACTION_BTN =
-  "auth-btn-3d flex h-9 cursor-pointer items-center rounded-full px-[15px] text-small font-semibold text-text-on-cta";
-
-/** Glyph size inside {@link PAGE_ACTION_BTN}. ONE number: two icons at two
- *  sizes in the same pill is the drift in miniature. */
-export const PAGE_ACTION_ICON = 13;
+export { PAGE_ACTION_BTN, PAGE_ACTION_ICON };
 
 /**
  * /home's SECTION-HEADER CREATE BUTTON — the `action` slot of every

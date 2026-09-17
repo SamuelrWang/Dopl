@@ -32,33 +32,25 @@
  */
 
 import { wellFor } from "@/features/channels/components/recency-wells";
-import type { WellSpec } from "@/features/channels/components/well-state";
+import {
+  HOME_CHANNEL_WELLS,
+  HOME_CHANNEL_WELLS_KEY,
+  type HomeChannelWellId,
+} from "@/features/channels/components/home-channel-wells";
 import type { HomeRow } from "./home-rows";
 
 /**
- * THIS SURFACE'S PERSISTED OPEN STATE. ⚠ **ITS OWN KEY** — not the Agents tab's
- * `dopl.agents.wells` and not the Threads tab's `dopl.threads.wells`: collapsing
- * **Earlier** over a channel list is not a statement about either tab.
+ * ⚠ **THE SET AND ITS KEY MOVED TO THE ROOT TREE ON 2026-09-17 AND ARE
+ * RE-EXPORTED HERE** (`channels/components/home-channel-wells.ts`), because the
+ * landing page's hero demo draws this same column and cannot import `apps/`.
+ * **The filing rule below did NOT move** — it reads a `HomeRow`, which is this
+ * page's own shape over a cached payload. Every SPA import path is unchanged.
  */
-export const HOME_CHANNEL_WELLS_KEY = "dopl.home.channels.wells";
-
-/**
- * THE THREE WELLS, IN SAMUEL'S ORDER. ⚠ **ORDER IS THE DATA** — the render maps
- * this array.
- *
- * ⚠ **PINNED AND RECENT OPEN, EARLIER CLOSED.** **The closed Earlier is the one
- * part of this Samuel did not state** — it is the Agents tab's default carried
- * over, and it means a list whose every channel has been quiet for 24h opens with
- * nothing visible. Flagged, not assumed; a device that opens it once never sees it
- * closed again (`well-state.ts › useWells`).
- */
-export const HOME_CHANNEL_WELLS = [
-  { id: "pinned", label: "Pinned", defaultOpen: true },
-  { id: "recent", label: "Recent", defaultOpen: true },
-  { id: "earlier", label: "Earlier", defaultOpen: false },
-] as const satisfies readonly WellSpec[];
-
-export type HomeChannelWellId = (typeof HOME_CHANNEL_WELLS)[number]["id"];
+export {
+  HOME_CHANNEL_WELLS,
+  HOME_CHANNEL_WELLS_KEY,
+  type HomeChannelWellId,
+};
 
 /**
  * THE ROW'S STAMP AS EPOCH MS, OR `null` WHEN IT DOES NOT PARSE.
