@@ -1,0 +1,109 @@
+-- SEARCH FULL-TEXT INDEX — one generated `tsvector` column and one GIN index on
+-- `channel_messages`, for the global search popup (2026-09-17, Samuel's
+-- search-popup ruling; `src/features/search/`).
+--
+-- ⚠️ **WRITTEN, NOT APPLIED** — this directory's standing gate. Replay is OWED
+-- and recorded rather than glossed (Docker is unavailable on the authoring
+-- machine; CI's `rls-redteam` job is the replay, INVARIANTS §14).
+--
+-- 🔒 **APPLY IT BY NAME (`search_fulltext_indexes`), NEVER BY FILENAME VERSION**
+-- (F-304's re-stamp, INVARIANTS §12). Byte-exact apply; no `db push`.
+--
+-- ── ⚠ WHAT THIS IS NOT ─────────────────────────────────────────────────────
+--
+-- **NOT A CORRECTNESS DEPENDENCY.** `GET /api/search` was written to work with
+-- this file UNAPPLIED and does so today: the messages arm asks PostgREST for
+-- `body=wfts(simple).<q>`, which renders as
+-- `to_tsvector('simple', body) @@ websearch_to_tsquery('simple', $1)` — the
+-- EXPRESSION form, computed per row. That degrades to a sequential scan —
+-- **SLOW, NEVER WRONG** — so the standing "written, not applied" gate costs
+-- latency and nothing else. The same argument, in the same words, as
+-- `20260822170000_overview_time_range_indexes.sql`.
+--
+-- ⚠ **AND THERE IS DELIBERATELY NO `SECURITY DEFINER` SEARCH RPC HERE.** A route
+-- that called one — to get `ts_rank` or `ts_headline`, neither of which
+-- PostgREST can ask for — would be BROKEN, not slow, until the day somebody
+-- applied this file, and "broken until deployed" is not a degradation. Ranking
+-- and snippet-building therefore live in TypeScript
+-- (`src/features/search/server/service-groups.ts`, `› snippet.ts`), and the
+-- snippet half is better there anyway: `ts_headline` copies the source body
+-- through VERBATIM between its delimiters, so a message containing a tag would
+-- break the payload's "plain text, `<mark>` only" contract the first time
+-- somebody posted one.
+--
+-- ── 🔒 WHAT IS *NOT* HERE, AND WHY: `knowledge_entries` ─────────────────────
+--
+-- **IT ALREADY HAS ONE AND IT IS ALREADY LIVE.**
+-- `20260501020000_knowledge_fulltext.sql` created `knowledge_entries.search_tsv`
+-- as a GENERATED ALWAYS … STORED column —
+-- `setweight(to_tsvector('simple', title),'A') ||
+--  setweight(to_tsvector('simple', excerpt),'B') ||
+--  setweight(to_tsvector('simple', body),'C')` — with
+-- `knowledge_entries_search_tsv_idx` USING gin over it, and the column is
+-- present in `src/shared/supabase/types.ts`, which is generated FROM THE
+-- DEPLOYED DATABASE. So the knowledge half of the search reads `search_tsv`
+-- directly and needs nothing from this file.
+-- ⚠ **A SECOND COLUMN THERE WOULD BE A SECOND INDEX TO MAINTAIN ON EVERY
+-- KNOWLEDGE WRITE AND A SECOND ANSWER TO "what does this row match"** — the
+-- `mcp_tool_calls_workspace_created_idx` case the overview-index migration calls
+-- out by name ("so the `mcp` metric needs nothing here and gets nothing. Do not
+-- add a third").
+--
+-- ── THE SHAPE, AND WHY IT MIRRORS THE KNOWLEDGE ONE ────────────────────────
+--
+-- `simple`, not `english`: the knowledge column is `simple`, the query side is
+-- `websearch_to_tsquery('simple', …)` on both arms, and a search box must not
+-- decide that two of somebody's own words are the same word. Mixing dictionaries
+-- across the `@@` is the failure that returns nothing and explains nothing.
+-- `coalesce` because `body` is `NOT NULL DEFAULT ''` today and a generated
+-- expression that can return NULL indexes nothing the day that changes.
+--
+-- ── COST ───────────────────────────────────────────────────────────────────
+--
+-- `channel_messages` IS THE HOT WRITE PATH — every message and every agent
+-- narration row — so this is one stored tsvector per row plus one GIN
+-- maintenance per insert. That is the whole reason this file adds ONE column and
+-- ONE index and covers one table: the other eight search groups match on NAMES
+-- with `ilike` against a fenced, capped page, which needs no index to be fast
+-- enough and no column to be correct.
+--
+-- ⚠ **`ADD COLUMN` ON A GENERATED STORED COLUMN REWRITES THE TABLE** and holds
+-- an ACCESS EXCLUSIVE lock for the duration. If `channel_messages` has grown by
+-- the time this is applied, do NOT run it as written: split it, and prefer an
+-- expression index (`USING gin (to_tsvector('simple', body))`) built
+-- CONCURRENTLY outside a transaction — the repository's expression-form query
+-- can use that one with no code change at all.
+--
+-- ⚠ Plain (non-CONCURRENT) CREATE INDEX: the migration runner wraps statements
+-- in a transaction, which CONCURRENTLY cannot join. Same caveat, same remedy.
+
+ALTER TABLE public.channel_messages
+  ADD COLUMN IF NOT EXISTS search_tsv tsvector
+  GENERATED ALWAYS AS (to_tsvector('simple', coalesce(body, ''))) STORED;
+
+CREATE INDEX IF NOT EXISTS channel_messages_search_tsv_idx
+  ON public.channel_messages USING gin (search_tsv);
+
+-- ── AFTER THIS APPLIES: THE ONE-LINE SWITCH ────────────────────────────────
+--
+-- `src/features/search/server/repository-channel-rows.ts › searchMessages`
+-- currently reads:
+--     .textSearch("body", query, { type: "websearch", config: "simple" })
+-- Change it to:
+--     .textSearch("search_tsv", query, { type: "websearch" })
+-- and drop `config` — the dictionary is fixed inside the generated column, and
+-- passing one would ask PostgREST to build a `to_tsvector` over a value that
+-- already is one. That is the whole switch; the predicate does not change.
+-- ⚠ **DO NOT make the repository probe for the column at runtime.** A per-request
+-- `information_schema` lookup buys a round trip to learn something the deploy
+-- already knows, and a cached probe is a stale answer with no invalidation.
+--
+-- ROLLBACK (a NEW migration, never an edit to this one):
+--   DROP INDEX IF EXISTS public.channel_messages_search_tsv_idx;
+--   ALTER TABLE public.channel_messages DROP COLUMN IF EXISTS search_tsv;
+--
+-- VERIFY (a measurement, taken against the deployment — never recorded here):
+--   SELECT indexname FROM pg_indexes
+--    WHERE indexname = 'channel_messages_search_tsv_idx';
+--   SELECT attname FROM pg_attribute
+--    WHERE attrelid = 'public.channel_messages'::regclass AND attname = 'search_tsv';
