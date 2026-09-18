@@ -160,10 +160,18 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     // inside `REPARK_WINDOW_MS`, and without this field the only clock on the record is
     // `startedAt` — which answers a different question, so a 46-day-old agent parked this morning
     // would be ended and a months-dead one whose start happened to be recent would be revived.
+    // "launchDepth" / "launchChain" (2026-09-18, Samuel's ruling) are the SEVENTH of the family
+    // and the only pair that REVERSED a rule to get here. They were deliberately omitted — *a
+    // recreate cannot verify what it did not see* — and that held until parked agents began
+    // surviving a restart: a record-driven rebuild has nothing BUT this record, so an
+    // operator-launched orchestrator woke at `launchDepth: undefined`, which the gate reads as
+    // the CAP, and was denied `launch-depth-capped` for the rest of its life. ⚠ THE OMISSION IS
+    // STILL THE DEFAULT for a record written by an OLDER build — neither key is there, absent is
+    // the cap, and nothing migrates it.
     "agentId", "bind", "channelId", "channelName", "costUsd", "counterpartyId",
-    "counterpartyName", "direct", "key", "mode", "model", "ownPostSeq", "parkedAt", "phase",
-    "profile", "runtimeId", "sdkSessionId", "sessionId", "side", "startedAt", "taskId",
-    "taskTitle", "templateName", "turns", "workspaceId",
+    "counterpartyName", "direct", "key", "launchChain", "launchDepth", "mode", "model",
+    "ownPostSeq", "parkedAt", "phase", "profile", "runtimeId", "sdkSessionId", "sessionId",
+    "side", "startedAt", "taskId", "taskTitle", "templateName", "turns", "workspaceId",
   ]);
   // ⚠ A PASSTHROUGH, AND **NULL IS OLD** — `durableSessionRecord` is in the PURE block and may not
   // read a clock; `saveRecord` / `setRecordPhase` stamp it at the two park writes.

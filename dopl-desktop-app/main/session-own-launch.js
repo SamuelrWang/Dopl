@@ -59,17 +59,27 @@
 //   depth 1+   EVERYTHING ELSE, and it is AT the cap: it may not ask for another agent.
 //
 // ⚠ **ABSENT MEANS THE CAP, NOT ZERO** (`normalizeLaunchDepth`). Every lane that does not
-// explicitly say "a human started this" — the directive lane (`launch-directives.js › spawn`),
-// the peer-triggered responder (`trigger.js`), a CRASH RECREATE (`session-park.js › startResume`,
-// which rebuilds the spec from the durable record and passes none) — lands at the cap and cannot
-// launch. That is the fail-CLOSED direction and it is the same discipline Axis A already follows
-// (`manual` is its start value AND its park reset: an abandoned session must never resume
-// pre-authorized), and the same one `startResume` already applies to the stored PROFILE.
-// ⚠ **AN ORDINARY IDLE PARK + RESUME KEEPS IT, AND THAT IS NOT AN INCONSISTENCY.** `session-park
-// .js › resumeParked` restarts the QUERY on the SAME session object — nothing is rebuilt, so the
-// stamp is simply still there. What loses it is a RECREATE, where the only input is the durable
-// record, and `session-io.js › baseRecord` is a whitelist that does not carry this field. Neither
-// half needs a rule: one keeps the object, the other keeps nothing, and both fail safe.
+// explicitly say "a human started this" — the directive lane (`launch-directives.js › spawn`) and
+// the peer-triggered responder (`trigger.js`) — lands at the cap and cannot launch. That is the
+// fail-CLOSED direction and it is the same discipline Axis A already follows (`manual` is its
+// start value AND its park reset: an abandoned session must never resume pre-authorized), and the
+// same one `startResume` already applies to the stored PROFILE.
+// ⚠ **NEITHER RESUME SHAPE LOSES THE STAMP ANY MORE, AND THAT IS A REVERSAL (2026-09-18, Samuel's
+// ruling).** `session-park.js › resumeParked` never did: it restarts the QUERY on the SAME session
+// object, so the stamp is simply still there. A RECREATE did — `session-boot.js ›
+// parkedSessionFromRecord` and `session-park.js › startResume` have nothing but the durable
+// record, and `session-io.js › baseRecord` did not carry this field — and this file used to argue
+// that a recreate SHOULD land at the cap, because *a recreate cannot verify what it did not see*.
+// **What that argument cost, once parked agents began surviving a restart (7ecd3975 + 65c43e22):**
+// an operator's own orchestrator, launched at depth 0 at the New Agent button, came back after an
+// app restart at `launchDepth: undefined` — capped — and was denied `launch-depth-capped` for the
+// rest of its life. **The stamps are persisted now** (`baseRecord` + `session-store.js ›
+// durableSessionRecord`) and both rebuild sites RESTORE them.
+// ⚠ **RESTORE IS NOT MINT, AND THE COUNT OF MINTERS IS STILL ONE.** A rebuild may only hand back
+// what the record says; nothing there may write a `0` of its own, so "a human started this" is
+// still claimed at exactly one keyboard-bound lane. ⚠ **AND IT STILL FAILS CLOSED**: a record
+// written before the fields existed carries neither, reads as absent, and is capped — nothing
+// migrates it, because a migration would have to GUESS a depth nobody recorded.
 //
 // ⚠ **WHY THE CAP IS 1 AND NOT 2, STATED HONESTLY RATHER THAN CHOSEN FOR ROOM.** "parent depth
 // + 1" needs the PARENT's depth to survive the round trip, and it cannot: the ask leaves this
@@ -112,8 +122,10 @@
 // takes the stamp discipline `launchDepth` and `profile` already take: a session is bound by what
 // the room said when it started, and flipping the switch reaches the sessions started after it.
 // ⚠ ABSENT READS FALSE, so every lane that does not deliberately pass it keeps the ONE-GENERATION
-// bound — the same fail-CLOSED direction the depth stamp has, and the reason a resume, a recreate
-// or a peer-triggered wake cannot inherit chaining by forgetting a field.
+// bound — the same fail-CLOSED direction the depth stamp has, and the reason a peer-triggered wake
+// cannot inherit chaining by forgetting a field. ⚠ **A RECREATE RESTORES IT SINCE 2026-09-18**,
+// beside the depth and for the same measured reason: it is on the durable record, read `=== true`
+// at both rebuild sites, and a record written before the field still reads FALSE.
 //
 // ⚠ **WITH IT ON, THERE IS NO GENERATION BOUND LEFT. STATED, NOT IMPLIED.** Arithmetic over depth
 // is impossible here for the reason written above — the ask leaves this machine as a

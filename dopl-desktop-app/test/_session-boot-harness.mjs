@@ -148,7 +148,9 @@ function parkedRecord(over = {}) {
 
 function harness(over = {}) {
   const cfg = { records: {}, ids: {}, ...over };
-  const calls = { lifecycle: [], scheduleIdle: [], history: [], touch: 0, diag: [], phase: [], consume: [], buildLaunchSpec: [] };
+  // `startSession` records its SPEC (2026-09-18): `startResume` is the OTHER record-driven rebuild,
+  // and what a launch-depth round-trip has to assert is the spec it hands the construction site.
+  const calls = { lifecycle: [], scheduleIdle: [], history: [], touch: 0, diag: [], phase: [], consume: [], buildLaunchSpec: [], startSession: [] };
   const sessions = new Map();
 
   // The two electron-store shells, with the REAL rules spliced in.
@@ -195,7 +197,7 @@ function harness(over = {}) {
   const park = new Function(
     "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "privateTurn",
     "directedTurn", "sessionWindowless", "diag", "sessionCredential", "runtimeRegistry", "runtimeCapability",
-    `${PARK_BLOCK}\n return { bind, resumeParked };`
+    `${PARK_BLOCK}\n return { bind, resumeParked, startResume };`
   )({ makePushIterator: () => ({ __iter: true, pushed: [], push(m) { this.pushed.push(m); }, close() { this.closed = true; } }) },
     store, crypto, () => "zzzzzzzz", () => true, null,
     require_(join(MAIN, "session-private.js")), require_(join(MAIN, "session-directed.js")),
@@ -207,7 +209,7 @@ function harness(over = {}) {
     buildLaunchSpec: (s) => { calls.buildLaunchSpec.push(s); return { prompt: s.pushIterator, options: { resume: s.resumeSdkId } }; },
     consume: (s, q) => calls.consume.push({ s, q }),
     dispatch: () => {},
-    startSession: async () => null,
+    startSession: async (spec) => { calls.startSession.push(spec); return null; },
     hasLiveSession: () => false,
     emit: () => {},
   });

@@ -337,6 +337,14 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
     // corrupt / future-version value fall through normalizeProfile's global fallback and resume
     // at FULL access — the most permissive profile, from the least trustworthy input.
     side: rec.side, profile: knownProfile(rec.profile), mode: rec.mode,
+    // ⚠ THE LAUNCH STAMPS, RESTORED FROM THE RECORD (2026-09-18, Samuel's ruling) — the twin of
+    // `session-boot.js › parkedSessionFromRecord`'s restore, under the same two rules: this lane
+    // RESTORES and never MINTS a depth, and a record carrying none (or junk) still reads as the
+    // CAP. ⚠ PASSED THROUGH RATHER THAN NORMALIZED HERE, because the PURE block may not import the
+    // module that owns the cap (its own suite asserts so); `session-own-launch.js ›
+    // normalizeLaunchDepth` is the one statement of it and `session-io.js › grantArgs` asks it on
+    // every call.
+    launchDepth: rec.launchDepth, launchChain: rec.launchChain === true,
     // ⚠ A RESUMED SESSION IS WINDOWLESS, AND SAYING SO IS LOAD-BEARING (2026-08-22). It used to
     // pass nothing, so `spec.windowless` was undefined on every crash resume: the credential
     // preflight's ROLLBACK branch (`startSession`: `spec.windowless && holdIfNoCredential`) could

@@ -129,6 +129,25 @@ function durableSessionRecord(rec) {
     workspaceId: r.workspaceId,
     side: r.side,
     profile: r.profile,
+    // ── 2026-09-18 — THE LAUNCH STAMPS (Samuel's ruling; `session-io.js › baseRecord` carries the
+    // reversal and what it was measured on) ──────────────────────────────────────────────────
+    // ⚠ COERCED INLINE, for `model` and `runtimeId` below and their reason: this function is
+    // evaluated STANDALONE by the extraction tests, so it cannot ask `session-own-launch.js` what
+    // the cap is. It bounds the SHAPE only — a real, non-negative whole number of generations, or
+    // `null` — and deliberately does NOT re-spell `MAX_LAUNCH_DEPTH`. `null` is where junk, a
+    // hand-edited store and every record written before this field land, and the gate's own
+    // `normalizeLaunchDepth` reads absent as the CAP, so the fail-closed direction stands and the
+    // cap is still stated in exactly one place.
+    // ⚠ THE ONE WIDENING THIS BUYS, SAID OUT LOUD RATHER THAN DISCOVERED: a hand-edited store can
+    // now write `0` and claim a human started the session. That is inherent in persisting the
+    // stamp at all — clamping the upper bound would not touch it, since `0` is the value that
+    // matters — and it is what the ruling asked for. Every other durable containment field on this
+    // whitelist still fails restrictive.
+    launchDepth: typeof r.launchDepth === 'number' && Number.isFinite(r.launchDepth) && r.launchDepth >= 0
+      ? Math.floor(r.launchDepth) : null,
+    // ⚠ `=== true` AND NOTHING ELSE — the gate's own spelling (`launchChainEnabled`), so a missing
+    // field, a string, a 1 or a truthy object all keep the ONE-GENERATION bound.
+    launchChain: r.launchChain === true,
     mode: r.mode,
     phase: r.phase,
     startedAt: r.startedAt,

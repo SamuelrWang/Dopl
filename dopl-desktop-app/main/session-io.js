@@ -242,6 +242,21 @@ function baseRecord(s) {
     workspaceId: s.workspaceId,
     side: s.side,
     profile: s.profile,
+    // ⚠ THE LAUNCH STAMPS, PERSISTED SINCE 2026-09-18 (Samuel's ruling), AND THIS REVERSES WHAT
+    // THIS PROJECTION USED TO SAY. The omission was deliberate — *a recreate cannot verify what it
+    // did not see* — and it was measured wrong once parked agents began surviving a restart
+    // (7ecd3975 + 65c43e22): a record-driven REBUILD has nothing BUT this record, so an operator's
+    // own orchestrator, launched at depth 0 from the New Agent button, woke after an app restart
+    // with `launchDepth: undefined`, normalized to the cap, and was denied `launch-depth-capped`
+    // for the rest of its life. A session now remembers what started it across a restart.
+    // ⚠ A PLAIN COPY, FOR `model`'S REASON one screen down: this function is evaluated STANDALONE
+    // by the extraction tests, so it may not ask `session-own-launch.js` anything. The coercion is
+    // on the way OUT (`session-store.js › durableSessionRecord`) and the CAP is applied on the way
+    // back in by the gate's own `normalizeLaunchDepth`, which stays the one statement of it.
+    // ⚠ AND THE FAIL-CLOSED DIRECTION IS UNCHANGED: a record written before this change carries
+    // NEITHER field, reads as absent, and is therefore still capped. Nothing migrates it — a
+    // migration would have to GUESS a depth nobody recorded, which is the claim this lane refuses.
+    launchDepth: s.launchDepth, launchChain: s.launchChain === true,
     mode: s.mode,
     phase: s.state.phase,
     startedAt: s.startedAt,

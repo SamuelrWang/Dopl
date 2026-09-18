@@ -299,8 +299,13 @@ test("the AUTO-DENY remedy names BOTH axes — the old sentence was half an answ
 test("exactly ONE lane in main/ claims depth 0, and it is the New Agent button", () => {
   const opSrc = read("session-launch-op.js");
   assert.match(opSrc, /launchDepth: 0,/, "the button lane says a human started this");
+  // ⚠ `session-boot.js` JOINED THE CENSUS ON 2026-09-18, with `session-park.js` beside it, because
+  // both are RECORD-DRIVEN REBUILD lanes and both now read the stamps back off the record. A lane
+  // that may RESTORE a depth is exactly the lane that could most easily start MINTING one, so it
+  // has to be policed rather than merely left out of the list.
   const claimants = ["session-launch-op.js", "session-launch.js", "session-engine.js", "session-io.js",
-    "launch-directives.js", "trigger.js", "session-park.js", "session-reopen.js", "session-ipc-ops.js"]
+    "launch-directives.js", "trigger.js", "session-boot.js", "session-park.js", "session-reopen.js",
+    "session-ipc-ops.js"]
     .filter((f) => /launchDepth:\s*0\b/.test(read(f)));
   assert.deepEqual(claimants, ["session-launch-op.js"], "only the button may mint a depth-0 session");
 });
@@ -321,29 +326,48 @@ test("the AGENT-DRIVEN spawn lanes pass NO depth, so their sessions are at the c
   assert.match(read("session-io.js"), /launchDepth: s\.launchDepth,/);
 });
 
-test("a RECREATE lands at the cap; an ordinary park+resume keeps the stamp", () => {
-  // ⚠ TWO RESUME SHAPES, AND ONLY ONE OF THEM REBUILDS ANYTHING. `resumeParked` restarts the
-  // query on the SAME session object, so the stamp is still there and an operator's orchestrator
-  // survives going idle. `startResume` rebuilds the spec from the DURABLE RECORD — which does not
-  // carry this field — so a crash recreate comes back at the cap, exactly as it comes back with a
-  // fail-restrictive profile. Neither needs a rule; this pins that neither grew one.
+test("a RECREATE RESTORES the stamp from the record; an ordinary park+resume keeps it", () => {
+  // ⚠ THIS TEST WAS THE OPPOSITE UNTIL 2026-09-18, AND SAMUEL REVERSED THE RULING IT PINNED.
+  // It asserted that `baseRecord` carried no depth and that `session-park.js` never mentioned one
+  // — *a recreate cannot verify what it did not see* — which was defensible right up until parked
+  // agents began surviving a restart (7ecd3975 + 65c43e22). Then a depth-0 orchestrator the
+  // operator had started at the New Agent button woke as `launchDepth: undefined`, normalized to
+  // the cap, and could never staff itself again. The stamps are persisted now.
+  // ⚠ TWO RESUME SHAPES, AND ONLY ONE OF THEM REBUILDS ANYTHING. `resumeParked` restarts the query
+  // on the SAME session object, so the stamp was never at risk there; `startResume` and
+  // `session-boot.js › parkedSessionFromRecord` rebuild from the DURABLE RECORD and now read it
+  // back. ⚠ WHAT MAY NOT HAPPEN IS A MINT — see the census test above, which both files are on.
   // ⚠ THIS GUARD READS CODE, NOT PROSE (2026-09-05, first terminal run). It was written as a raw
-  // regex over the file text, so the 9a comments that EXPLAIN why the recreate passes no
-  // `launchDepth` reddened the very invariant they document. Comments are stripped before the
-  // assertion, and the record slice is bounded by the next top-level function rather than by a
-  // marker string that no longer exists — an `indexOf` miss returned -1 and silently widened the
-  // slice to most of the file, so this was pinning far more than `baseRecord`.
+  // regex over the file text, so the 9a comments that EXPLAIN the rule reddened the very invariant
+  // they document. Comments are stripped before the assertion, and the record slice is bounded by
+  // the next top-level function rather than by a marker string that no longer exists — an
+  // `indexOf` miss returned -1 and silently widened the slice to most of the file.
   const stripComments = (src) => src
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/(^|[^:])\/\/.*$/gm, "$1");
-  const park = stripComments(read("session-park.js"));
-  assert.ok(!/launchDepth/.test(park), "the recreate must not resurrect a depth it cannot verify");
-  assert.match(park, /function resumeParked\(s\)/, "the in-place resume still exists");
+  for (const f of ["session-park.js", "session-boot.js"]) {
+    const src = stripComments(read(f));
+    assert.match(src, /launchDepth: rec\.launchDepth,/, `${f} must restore the depth off the record`);
+    assert.match(src, /launchChain: rec\.launchChain === true,/, `${f} must restore the chain flag`);
+    // ⚠ RESTORE ONLY. A rebuild that read the depth from ANYTHING but its own record — a literal,
+    // a default, the chaining store — would be a second claimant for "a human started this", so
+    // EVERY assignment in the file is read out and compared, not merely the one above.
+    const depths = [...src.matchAll(/launchDepth:\s*([^,\n]+)/g)].map((m) => m[1].trim());
+    assert.deepEqual(depths, ["rec.launchDepth"], `${f} may restore a depth, never invent one`);
+    const chains = [...src.matchAll(/launchChain:\s*([^,\n]+)/g)].map((m) => m[1].trim());
+    assert.deepEqual(chains, ["rec.launchChain === true"], `${f} may restore the flag, never arm it`);
+    assert.ok(!/channelPrefs|getAgentChain/.test(src), `${f} must not read the chaining setting`);
+  }
+  assert.match(stripComments(read("session-park.js")), /function resumeParked\(s\)/,
+    "the in-place resume still exists");
   const io = read("session-io.js");
   const from = io.indexOf("function baseRecord(s) {");
   const to = io.indexOf("\nfunction ", from + 1);
   assert.ok(from >= 0 && to > from, "baseRecord is still a top-level function in session-io.js");
   const record = stripComments(io.slice(from, to));
-  assert.ok(record.length > 0 && !/launchDepth/.test(record),
-    "the durable projection carries no launch depth — that is WHY a recreate is capped");
+  assert.match(record, /launchDepth: s\.launchDepth, launchChain: s\.launchChain === true,/,
+    "the durable projection carries BOTH stamps — that is WHY a recreate is no longer capped");
+  // ⚠ AND IT IS STILL A PLAIN COPY WITH NO DEPENDENCY: `test/session-model.test.mjs` slices this
+  // function on its own and evaluates it, so a `require` here would break a suite two files over.
+  assert.ok(!/require\(/.test(record), "baseRecord takes no dependency to project a stamp");
 });

@@ -142,8 +142,12 @@ test("exactly ONE lane in main/ reads the channel's chaining setting", () => {
   // ⚠ THE SILENCE IS LOAD-BEARING, exactly as it is for `launchDepth`. If the peer-triggered
   // responder, a resume or a recreate ever read this setting, a peer's message or a crash would
   // start a chain-capable agent — the re-arming shape `channel-prefs.js`'s H2 block refuses.
-  const readers = ["launch-directive-spawn.js", "trigger.js", "session-park.js", "session-launch.js",
-    "session-engine.js", "session-reopen.js", "session-ipc-ops.js", "session-launch-op.js"]
+  // ⚠ `session-boot.js` JOINED THE CENSUS ON 2026-09-18, beside `session-park.js`: both are
+  // RECORD-DRIVEN REBUILD lanes and both now RESTORE the flag off the record, which is exactly
+  // why neither may be allowed to start READING the room's setting instead.
+  const readers = ["launch-directive-spawn.js", "trigger.js", "session-boot.js", "session-park.js",
+    "session-launch.js", "session-engine.js", "session-reopen.js", "session-ipc-ops.js",
+    "session-launch-op.js"]
     // ⚠ A CALL, NOT A MENTION. `session-launch.js` NAMES this function in the comment that says
     // it must never read it here — a bare `/getAgentChain/` would fail on the very sentence
     // that documents the rule.
@@ -163,13 +167,29 @@ test("the funnel FORWARDS the flag and never invents one", () => {
   assert.match(read("session-io.js"), /launchChain: s\.launchChain === true,/);
 });
 
-test("a RECREATE cannot resurrect a chain stamp, because nothing durable carries it", () => {
-  // Same argument as the depth stamp's: the durable projection is a whitelist, so a crash
-  // recreate comes back bounded. Neither half needs a rule; this pins that neither grew one.
-  assert.ok(!/launchChain/.test(read("session-park.js")));
+test("a RECREATE RESTORES the chain stamp off the durable record, and may not arm one", () => {
+  // ⚠ REVERSED 2026-09-18 (Samuel's ruling). This asserted the opposite — that nothing durable
+  // carried the flag, so a crash recreate came back bounded — which was the depth stamp's argument
+  // borrowed wholesale, and it failed for the depth stamp's measured reason: a restarted agent has
+  // NOTHING but its record, so an orchestrator woke unable to staff the room it was launched in.
+  // ⚠ WHAT THE REVERSAL DOES NOT TOUCH is the test above: RESTORING a flag the record carries is
+  // not READING the room's setting, and only `launch-directive-spawn.js` may do the latter.
+  const stripComments = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1");
+  for (const f of ["session-park.js", "session-boot.js"]) {
+    assert.match(stripComments(read(f)), /launchChain: rec\.launchChain === true,/,
+      `${f} must restore the flag with the gate's own \`=== true\``);
+  }
   const src = read("session-io.js");
   const record = src.slice(src.indexOf("function baseRecord(s) {"), src.indexOf("// The canUseTool bridge"));
-  assert.ok(record.length > 0 && !/launchChain/.test(record));
+  assert.ok(record.length > 0, "baseRecord still precedes the canUseTool bridge in session-io.js");
+  assert.match(record, /launchChain: s\.launchChain === true,/,
+    "the durable projection carries it — that is WHAT a recreate restores");
+  // ⚠ AND THE STORE WHITELIST IS THE THIRD FILE THAT HAS TO AGREE (the F-288 lesson): a field
+  // projected but not whitelisted is written and never read, and the symptom is the same false
+  // `false` either way.
+  assert.match(read("session-store.js"), /launchChain: r\.launchChain === true,/);
 });
 
 test("the setting is LOCAL and machine-only — no route, no op, no column may write it", () => {

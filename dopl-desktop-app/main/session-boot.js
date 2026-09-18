@@ -196,6 +196,18 @@ function parkedSessionFromRecord(key, rec, sdkId) {
     side: state.side,
     profile: profile,
     profileLabel: toolProfiles.profileLabel(profile),
+    // ⚠ THE LAUNCH STAMPS, RESTORED FROM THE RECORD (2026-09-18, Samuel's ruling). This rebuild
+    // and `session-park.js › startResume` are the two sites the persisted fields exist for: they
+    // are the only inputs a woken agent has after a restart, and without them an operator's own
+    // orchestrator came back capped and denied `launch-depth-capped` by its own button's stamp
+    // having been dropped on disk.
+    // ⚠ RESTORED, NEVER MINTED, and that distinction is the whole bound. Neither rebuild may write
+    // a depth of its own — a lane that could invent `0` would be a SECOND claimant for "a human
+    // started this", and there is exactly one (`session-launch-op.js › launchFromButton`).
+    // ⚠ STILL FAIL-CLOSED: the record's value is a number or `null` (`session-store.js ›
+    // durableSessionRecord`), and `null` — junk, or a record written before the fields existed —
+    // reads as the CAP at the gate, which is where `normalizeLaunchDepth` states it.
+    launchDepth: rec.launchDepth, launchChain: rec.launchChain === true,
     mode: state.mode,
     counterpartyId: rec.counterpartyId || null, // L1: the task's other party, so the feed stays bound
     bind: rec.bind === 'room' ? 'room' : 'pair', // D2: only a launch that ASKED widens the fence

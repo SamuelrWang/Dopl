@@ -224,7 +224,7 @@ async function launch(a) {
     // ⚠ THE LAUNCH DEPTH — F-320's RECURSION BOUND, and this funnel FORWARDS it without inventing
     // one (2026-08-25). Exactly ONE caller passes `0` and it is the New Agent button
     // (`session-launch-op.js › launchFromButton`, where a human is at the keyboard); the directive
-    // lane, the peer-triggered responder, a resume and a recreate all pass nothing and land at
+    // lane and the peer-triggered responder pass nothing and land at
     // `session-own-launch.js › MAX_LAUNCH_DEPTH`, which is the fail-CLOSED direction: a lane that
     // forgets this field loses the right to launch agents rather than gaining it. ⚠ DO NOT give it
     // a `|| 0` default here — that inverts the whole bound in one character.
@@ -234,8 +234,9 @@ async function launch(a) {
     // `channel-prefs.js › getAgentChain` per directive — and every other lane passes nothing,
     // which reads FALSE and keeps the one-generation bound. ⚠ DO NOT give it a `|| true` or read
     // the store here: an ambient read at the funnel would hand the flag to the peer-triggered
-    // wake, the resume and the recreate as well, which is precisely the re-arming shape
-    // `channel-prefs.js`'s H2 block exists to refuse.
+    // wake as well, which is precisely the re-arming shape `channel-prefs.js`'s H2 block exists to
+    // refuse. ⚠ A RECREATE IS NO LONGER ON THAT LIST and does not pass through this funnel either:
+    // it RESTORES the flag its own record carries (2026-09-18), which is not an ambient read.
     launchChain: a.launchChain === true,
     // 2026-08-21 ruling 3: SPAWN IDLE. Registers the agent with prepared context and starts no
     // query; the first inbound message for this agent is what launches it.
