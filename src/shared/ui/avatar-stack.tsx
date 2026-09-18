@@ -116,7 +116,10 @@ export function AvatarStack({
   max = 4,
   size = "xs",
 }: {
-  users: AvatarStackUser[];
+  /** ⚠ `readonly` so a caller holding a frozen or readonly roster hands it over
+   *  directly — this component only reads it, and a defensive `[...users]` at
+   *  every call site is a copy per row per render. */
+  users: readonly AvatarStackUser[];
   max?: number;
   size?: AvatarStackSize;
 }) {

@@ -164,9 +164,8 @@ export function HomeChannelRow({
             ⚠ **THE TWO MARKS ARE EXCLUSIVE** — the `@ N` pill already says the
             louder version of what the dot says. */}
         <span className="mt-0.5 flex min-h-[18px] items-center gap-1.5">
-          {/* ⚠ THE CHIP IS `home-card-marks.tsx › LinkOutChip` SINCE WAVE 4 —
-              the workspace channel row says the same fact off the same field,
-              and this markup was the only declaration of it. */}
+          {/* ⚠ THE CHIP LEFT THIS FILE IN WAVE 4 — the workspace row says the
+              same fact, and this markup was its only declaration. */}
           {row.linkOut && <LinkOutChip onDark={selected} />}
           {row.pendingLine && (
             <span className={cn("truncate text-caption", rowQuietInk(selected))}>

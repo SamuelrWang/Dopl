@@ -4,21 +4,16 @@
  * Channels — THE LEFT COLUMN'S SEARCH HEAD: the 52px strip, its toggle, the
  * field and the popup anchored under it.
  *
- * ⚠ **ITS OWN FILE SINCE WAVE 4, ON THE SEAM `sidebar-rows.tsx` ALREADY NAMED.**
- * That file split the column into "a LIST OF SECTIONS and a SET OF ROW FACES,
- * and those two change for different reasons"; `sidebar-branch.tsx` then took a
- * third reason off it. This is the fourth and it is the sharpest of them: the
- * strip is a SEARCH SURFACE that happens to sit above a list. It owns three
- * pieces of state (`open`, `query`, `focused`) that no section, row or branch
- * reads, and it changes when SEARCH changes — which it did twice in 2026-09-17
- * alone, once to delete the filter and once to repoint the popup at the real
- * endpoint. Neither edit was about channels.
- *
- * 🚫 **NO IMPORTER MOVED.** `ChannelsSidebar` and `ChannelsSidebarProps` are
- * still declared in `sidebar.tsx`; this is a private component of that column.
+ * ⚠ **ITS OWN FILE SINCE WAVE 4, ON THE SEAM `sidebar-rows.tsx` ALREADY NAMED**
+ * ("a LIST OF SECTIONS and a SET OF ROW FACES … those two change for different
+ * reasons"). This is the sharpest slice of it: the strip is a SEARCH SURFACE
+ * that happens to sit above a list. It owns three pieces of state (`open`,
+ * `query`, `focused`) that no section, row or branch reads, and it changes when
+ * SEARCH changes — which it did twice on 2026-09-17, once to delete the filter
+ * and once to repoint the popup at the real endpoint. Neither edit was about
+ * channels.
  * ⚠ **NOTHING ABOUT THE STRIP CHANGED IN THE SPLIT** — same markup, same state,
- * same props to the popup, same class expressions, pinned by the suites that
- * were already green.
+ * same props, same class expressions, pinned by suites that were already green.
  *
  * 🔒 **THE FIELD NARROWS NOTHING (Samuel, 2026-09-17:** *"right now, during
  * search, it just filters by channel name, and it like removes channel on the

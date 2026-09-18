@@ -892,8 +892,8 @@ were one row that was wrong about two of its three items).
 | U55 | Page ghosts | 11 bespoke shapes across 8 files | 5 pages have one; **skills, chats and ontology have none** | BEH | R-06 |
 | U56 | Frame ghost | `home-skeleton.tsx` draws its own | `ShellChromeSkeleton` — the same six boxes, second implementation | BEH | 5 |
 | U57 | Error state | `PageError` in a full-screen wrapper | the identical wrapper and component, second copy | BEH | 0 |
-| U58 | "No channels at all" | a first-class state, ruled | an empty workspace has no equivalent statement | BEH | 4 |
-| U59 | Two-sentence empty rule ("No matches" vs "No channels yet") | `relationship-list.tsx:152-156` | not applied | BEH | 4 |
+| U58 | 🟡 **OPEN, AND RE-MEASURED 2026-09-17 (wave 4): it is NOT a copy alignment.** "No channels at all" | one whole-column line — `pages/home/relationship-list.tsx` (`No channels yet`, no full stop) — plus the record pane's `EmptyState` (`pages/home/home-panes.tsx`) | **per-SECTION lines, no whole-column state**: `channels/components/sidebar.tsx › EmptyRow` says `No direct messages yet.` and `No channels yet.` (with the full stop), and a Favorites section with nothing in it is ABSENT, header included | BEH | 4 — **blocked**: a whole-column statement collides with the ruled *"a home section emptied by the move keeps its header and says its ordinary 'none yet' line"* (INVARIANTS §5A), so it is a DESIGN decision, and R-03 holds the picker's design for a later wave. The surviving one-line delta — the full stop — is not worth a ruling on its own |
+| U59 | ✅ **CLOSED 2026-09-17 BY DELETION ON BOTH SIDES, NOT BY A PORT (wave 4 review).** Two-sentence empty rule ("No matches" vs "No channels yet") | the "No matches" half went with the SEARCH NARROWING (`pages/home/home-rows.ts › hasLinkOut`'s neighbouring docblock records it; `home-panes.tsx` carries *"ONE SENTENCE SINCE 2026-09-17"*) | its twin `SIDEBAR_NO_MATCHES` was deleted the same day (`channels/components/sidebar.tsx › ChannelsSidebar` docblock) | — | **nothing to port**: neither picker has a second sentence any more, so there is no two-sentence rule left. What remains of the empty-state gap is U58 alone |
 | U60 | "This channel is gone" ending | `EmptyState` on a pinned host | falls back to the first row — never an ending | BEH (in kind) | keep |
 | U61 | Info-column tab bodies while loading | four tabs render nothing | same | BEH (both) | R-43 (ASK-35) |
 | U62 | Skeleton announces itself (`role="status"`) | 2 of 8 exports | same | BEH (a11y) | 0 |
@@ -1359,8 +1359,8 @@ Recommend (b). **Rollback:** the wells are a call site over a shared module; rev
 
 #### ✅ Wave 4 — the PICKER MARKS half
 
-🟢 **BUILT 2026-09-17** (branch `wave4/picker-marks`, 4 commits, full gate set). What landed, one
-commit each:
+🟢 **MERGED TO `master` 2026-09-17** (branch `wave4/picker-marks`, 4 build commits + 1 review
+commit, rebased onto master and fast-forwarded, full gate set). What landed, one commit each:
 
 1. **U28 / P12's stack — the roster rides the workspace channel row.** `sidebar-rows.tsx ›
    ChannelRow` takes `faces` and draws `@/shared/ui/avatar-stack` at /home's own `2xs` / `max=3`, in
@@ -1370,7 +1370,7 @@ commit each:
    ⚠ **A DM ROW IGNORES IT**: its leading slot already IS that person's face, which is
    `sidebar-rows.tsx`'s own rule since it was written. ⚠ **NO PRESENCE RING** — see the U28 row
    above; `AvatarStack` has an `online` key and the projection has no per-peer signal to fill it.
-   `?? EMPTY_PEERS` at the call site (§8). `sidebar-row-signals.test.tsx` 12 → 16.
+   `?? EMPTY_PEERS` at the call site (§8). `sidebar-row-signals.test.tsx` 11 → 15 (and → 19 with the chip suite and the review's layout pin).
 2. **U22 — the dot and the "Link out" chip stop being cut twice.** The PRECEDENCE was already right
    on both rows (R-28, Wave 3); what was wrong is where the marks were DECLARED. The workspace row
    hand-cut its own 6px span (its own geometry, accessible name and colour) and the chip existed only
@@ -1379,10 +1379,10 @@ commit each:
    IMPLEMENTATIONS**: `tone="link"` keeps the picker's blue (R-03 — its own design), `onDark`
    outranks both because the face the dot stands on decides before the surface's accent does. New
    `shared/ui/home-card-marks.test.tsx` (9) carries a SOURCE SCAN pinning one declaration of the dot;
-   `sidebar-row-signals.test.tsx` 16 → 19 for the chip.
+   `sidebar-row-signals.test.tsx` 15 → 18 for the chip.
 3. **D8's seam, taken on the WORKSPACE column.** `sidebar.tsx` carried two responsibilities — the
    list of SECTIONS, and a search surface with three pieces of private state no section, row or
-   branch reads — so the strip is `sidebar-search.tsx › SidebarSearchHeader` (385 → 326 + 110). Same
+   branch reads — so the strip is `sidebar-search.tsx › SidebarSearchHeader` (385 → 335 + 105, measured 2026-09-17 after the review's comment trim). Same
    seam `sidebar-rows.tsx` named at design time and `sidebar-branch.tsx` already took a third slice
    off. 🚫 **NO IMPORTER MOVED and NO BEHAVIOUR CHANGED**; pinned by the suites that were already
    green. `page-skeletons.test.tsx` reads the 52px strip's class expression from the new file — the
@@ -1394,9 +1394,17 @@ commit each:
    scopes, and each is drawn in the picker's own 36px layout with the picker's own ink. R-03 is about
    the CARD.
 
-⚠ **U58/U59 (the empty-state sentences) ARE NOT DONE** and stay open on this wave. U59's second
-sentence ("No matches") was deleted from /home with the search narrowing on 2026-09-17, so the item
-is now one sentence rather than two and should be re-read before it is built.
+⚠ **U58 STAYS OPEN; U59 IS CLOSED BY DELETION (re-measured at the wave 4 review).** U59's second
+sentence ("No matches") went from /home with the search narrowing and from the picker as
+`SIDEBAR_NO_MATCHES`, both on 2026-09-17 — there is no two-sentence rule left to port. **U58 is not
+the one-line copy alignment it reads as**: /home says ONE whole-column line, the picker says a line
+PER SECTION and drops an empty Favorites section entirely, and a whole-column statement would
+contradict the ruled "a section emptied by the move keeps its header and its 'none yet' line". That
+is a design decision, and R-03 holds the picker's design for a later wave. The rows above carry the
+measurement.
+
+> ✅ **REVIEWED + MERGED 2026-09-17.** Review fixes: **`UnreadDotTone` was declared BETWEEN the dot's docblock and the dot**, so the two-inks decision and the `onDark`-outranks-`tone` precedence documented the TYPE and every `{@link UnreadDot}` pointed at an undocumented component — the type moved above the block · **`channels/components/sidebar.tsx` still argued for the Favorites guard as what "keeps the header standing (and saying \"No matches.\")" when a query empties a section**, three lines from its own docblock recording that the filter and `SIDEBAR_NO_MATCHES` are DELETED · **the diff carried no layout pin**, and the trailing group grew from one 6px dot to a chip + three faces + a mark inside a FIXED 260px column, so `sidebar-row-signals.test.tsx` now renders a 54-character channel name wearing all three and asserts the label keeps `truncate` (it is the only flexible item in the row) and the ONE trailing group keeps `shrink-0` · **the suite counts in this section were off by one** — master holds ELEVEN, so it is 11 → 15 → 18, now 19 · `sidebar-rows.tsx › ChannelRow`'s `hasStack`/`stack` pair collapsed to one array (`AvatarStack` already returns null at zero, so the inner guard was the group guard said twice) and `shared/ui/avatar-stack.tsx` takes `readonly` users, which drops a `[...stack]` copy per row per render · 38 net comment lines removed, each restating a docblock, INVARIANTS or this file within a screen of itself. Verified rather than assumed: `sidebar-branch.tsx › ChannelBranch` is the ONLY `ChannelRow` call site in the tree (`playground/components/panes/channels-pane.tsx`'s `ChannelRow` is a file-local function of its own name) · `reserveTrailing`'s `pr-8` clears the disclosure chevron's `right-1 h-6 w-6`, so the roster cannot collide with it · the picker's `(channel.linkOut ?? null) !== null` is byte-for-byte `pages/home/home-rows.ts › hasLinkOut`'s channel arm, i.e. the same claim-gate predicate `types-list.ts › ChannelRowExtras.linkOut` names.
+
 
 ---
 

@@ -295,3 +295,42 @@ describe("the sidebar row's link-out chip", () => {
     expect(row("Website")).toBeTruthy();
   });
 });
+
+/**
+ * THE TRAILING GROUP CANNOT BE PUSHED OUT OF THE COLUMN — wave 4 review.
+ *
+ * ⚠ **THE COLUMN IS A FIXED 260px**, so "narrow" here is not a viewport
+ * question: it is a LONG CHANNEL NAME against a trailing group that grew from
+ * one 6px dot to a chip, three faces and a mark. The label is the only flexible
+ * item in the row, and `truncate` (which is `overflow-hidden`, so the flex item's
+ * automatic minimum size is 0) is what lets it shrink instead of shouldering the
+ * marks off the edge. Nothing else in the row may shrink.
+ */
+describe("🔒 a long channel name truncates rather than pushing the marks out", () => {
+  const LONG = "Front-end platform migration and design-system rollout";
+
+  it("keeps the label shrinkable and the trailing group rigid", () => {
+    renderSidebar({
+      rooms: [
+        channel({
+          id: "ch-long",
+          name: LONG,
+          unread: true,
+          mentionCount: 4,
+          peers: [
+            { userId: "u-a", displayName: "Ann Lee", email: null, avatarUrl: null },
+            { userId: "u-b", displayName: "Bo Ruiz", email: null, avatarUrl: null },
+          ],
+          linkOut: { id: "lk-1", token: "tok" } as never,
+        }),
+      ],
+    });
+    const label = screen.getByText(LONG);
+    expect(label.className).toContain("truncate");
+    // The chip, the faces and the `@ N` pill share ONE group, and it is the
+    // group — not each mark — that refuses to shrink.
+    const group = screen.getByText("Link out").parentElement;
+    expect(group?.className).toContain("shrink-0");
+    expect(group).toBe(screen.getByText("@ 4").parentElement);
+  });
+});

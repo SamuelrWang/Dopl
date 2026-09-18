@@ -98,19 +98,15 @@ function SidebarRow({
  * The dot was a hand-cut span here — its own geometry, its own accessible name
  * and its own colour — and the chip existed only inside `home-channel-row.tsx`.
  * Both are `home-card-marks.tsx` now: **one implementation per mark, two inks.**
- * ⚠ **`tone="link"` IS NOT A REGRESSION TO THE OLD SPAN** — R-03 keeps this
- * picker's own design, so the blue stays while the geometry, the name and the
- * precedence stop being re-typed. A third tone is a ruling, not a prop value.
- *
- * ⚠ The DM section's rows are people; a person is already a face, so they are
- * never tiled.
+ * `tone="link"` keeps this picker's blue (R-03), which is why the move is not a
+ * port of /home's card.
  *
  * 🔒 **THE ROSTER RIDES THIS ROW SINCE WAVE 4 (U28), AS `AvatarStack` — THE MARK
- * /home ALREADY DRAWS, NOT A NEW ONE.** Both surfaces show the same fact (who
- * else is in this channel) from the same projection field and the same
+ * /home ALREADY DRAWS, NOT A NEW ONE.** Same fact, same projection field, same
  * derivation (`lib/channel-display.ts › channelRowFaces`); only the LAYOUT is
- * each surface's own, which is R-03 — **the workspace picker keeps its own
- * design and ports none of /home's card.**
+ * this surface's own.
+ * ⚠ **THE DM SECTION'S ROWS ARE PEOPLE** — a person is already a face in the
+ * LEADING slot, so tiling them again on the right is one fact claimed twice.
  * ⚠ **NO PRESENCE RING, AND THAT IS THE MEASUREMENT RATHER THAN AN OMISSION.**
  * `AvatarStack` has an `online` key and `Channel` carries no PER-PEER presence —
  * only `onlineMemberCount`, a total. A ring driven by a total would say a named
@@ -131,16 +127,9 @@ export function ChannelRow({
   label: string;
   /** Present for a DM (the resolved peer); null for a normal channel. */
   person: AvatarPerson | null;
-  /**
-   * EVERYBODY ELSE IN THE CHANNEL — `Channel.peers` through
-   * `lib/channel-display.ts › channelRowFaces`, the one derivation both surfaces
-   * read.
-   *
-   * ⚠ **IGNORED ON A DM ROW, AND THAT IS THIS FILE'S OWN RULE** (the docblock
-   * below): a DM row's leading slot IS the peer's face, so tiling the same
-   * person again on the right is one fact claimed twice.
-   * ⚠ **`?? EMPTY_PEERS` AT THE CALL SITE (§8)** — this row takes answers.
-   */
+  /** EVERYBODY ELSE IN THE CHANNEL — `Channel.peers` through
+   *  `lib/channel-display.ts › channelRowFaces`. IGNORED on a DM row (docblock).
+   *  ⚠ **`?? EMPTY_PEERS` AT THE CALL SITE (§8)** — this row takes answers. */
   faces?: readonly HomeChannelRowFace[];
   /** An invitation is out on this channel — `Channel.linkOut !== null`, the
    *  SAME fact /home's row chips, judged by the same claim-gate predicate. */
@@ -166,27 +155,22 @@ export function ChannelRow({
   reserveTrailing?: boolean;
   onSelect: () => void;
 }) {
-  // ⚠ ONE TRAILING GROUP, AND IT IS ABSENT WHEN IT HOLDS NOTHING — the row's own
-  // `gap-2` would otherwise pad every quiet channel by an empty span's gutter.
-  const stack = person ? null : (faces ?? []);
-  const hasStack = stack !== null && stack.length > 0;
-  // ⚠ **THE BADGE SUPPRESSES THE DOT, IT DOES NOT JOIN IT** — /home's rule, and
-  // this row's own since R-28: a channel with unread mentions already says the
-  // louder thing, and two markers read as two facts. ⚠ `tone="link"` is the
-  // picker's own accent (R-03), not a second dot.
+  // A DM row's leading slot IS this person's face — see the docblock.
+  const stack = person ? [] : (faces ?? []);
+  // The badge SUPPRESSES the dot rather than joining it (docblock).
   const mark =
     mentions > 0 ? (
       <MentionBadge count={mentions} />
     ) : unread ? (
       <UnreadDot tone="link" />
     ) : null;
+  // ⚠ ONE TRAILING GROUP, AND IT IS ABSENT WHEN IT HOLDS NOTHING — the row's own
+  // `gap-2` would otherwise pad every quiet channel by an empty span's gutter.
   const trailing =
-    hasStack || linkOut || mark ? (
+    stack.length > 0 || linkOut || mark ? (
       <span className="ml-auto flex shrink-0 items-center gap-1.5">
         {linkOut && <LinkOutChip />}
-        {hasStack && (
-          <AvatarStack size={FACE_SIZE} max={FACE_MAX} users={[...stack]} />
-        )}
+        <AvatarStack size={FACE_SIZE} max={FACE_MAX} users={stack} />
         {mark}
       </span>
     ) : null;
@@ -213,9 +197,7 @@ export function ChannelRow({
       </span>
       {/* ⚠ THE ASK BADGE SHARED THIS CORNER UNTIL 2026-08-22 and is DELETED with
           the rest of the inbound consent lane (Samuel) — it counted threads
-          awaiting the viewer's ANSWER, a question the product no longer asks.
-          What occupies the corner now is the mention pill OR the unread dot,
-          never both: see this component's docblock. */}
+          awaiting the viewer's ANSWER, a question the product no longer asks. */}
       {trailing}
     </SidebarRow>
   );

@@ -26,14 +26,10 @@
  * for real. Nothing in this column is inert chrome except the furniture
  * explicitly marked hardcoded.
  *
- * ⚠ **THE COLUMN IS THE SECTIONS, AND THE SEARCH HEAD IS `sidebar-search.tsx`
- * SINCE WAVE 4.** This file was carrying two responsibilities: the list of
- * sections, and a search surface with three pieces of private state that no
- * section, row or branch reads. They change for different reasons — search
- * changed twice on 2026-09-17 and neither edit was about channels — which is the
- * same seam `sidebar-rows.tsx` and `sidebar-branch.tsx` were taken on. 🚫 **NO
- * IMPORTER MOVED**: `ChannelsSidebar` and `ChannelsSidebarProps` are still
- * declared here, and nothing about the strip changed in the split.
+ * ⚠ **THE COLUMN IS THE SECTIONS; THE SEARCH HEAD IS `sidebar-search.tsx` SINCE
+ * WAVE 4** — the same seam `sidebar-rows.tsx` and `sidebar-branch.tsx` were
+ * taken on, and that file's docblock carries the reasoning. 🚫 **NO IMPORTER
+ * MOVED**: `ChannelsSidebar` and `ChannelsSidebarProps` are still declared here.
  *
  * 🔒 **THE HEADER'S SEARCH NO LONGER FILTERS THIS LIST — IT OPENS THE SEARCH
  * POPUP (Samuel, 2026-09-17:** *"right now, during search, it just filters by
@@ -248,10 +244,12 @@ export function ChannelsSidebar({
               it. Do not re-add a row for a pane that does not exist. */}
         </nav>
 
-        {/* ⚠ THE WHOLE SECTION IS ABSENT WITH NO FAVOURITES — header included.
-            The guard reads the UNFILTERED list, which is what keeps the header
-            standing (and saying "No matches.") when a query emptied a section
-            that does have rows. */}
+        {/* ⚠ THE WHOLE SECTION IS ABSENT WITH NO FAVOURITES — header included,
+            unlike the two sections below, which always say their "none yet"
+            line. ⚠ **THE "UNFILTERED list" HALF OF THIS NOTE IS DELETED
+            (2026-09-17)**: it justified the guard against a query that could
+            empty a section with rows, and no query narrows this column any more
+            (see `SIDEBAR_NO_MATCHES` in this file's docblock). */}
         {favorites.length > 0 && (
           <>
             <SectionHeader

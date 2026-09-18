@@ -87,17 +87,14 @@ export function ChannelBranch({
           label={label}
           person={person}
           selected={selected}
-          // ⚠ `?? EMPTY_PEERS` INLINE (§8), like the `?? 0` below: `peers` is a
-          // key on an IndexedDB-persisted payload, and an entry written by an
-          // older bundle has none. The ROW takes answers, so the fallback is
-          // spelled here — once, where the cached payload is read.
+          // ⚠ THE THREE `?? EMPTY_X` FALLBACKS ARE SPELLED HERE, INLINE (§8) —
+          // this is where the IndexedDB-persisted payload is read, and an entry
+          // written by an older bundle carries none of these keys. The ROW takes
+          // answers. `0` hides the pill rather than printing `@ NaN`; an absent
+          // `linkOut` is NOT an open invitation.
           faces={channelRowFaces(channel.peers ?? EMPTY_PEERS)}
-          // ⚠ `?? null` INLINE (§8) — same reason as the two below. The chip is
-          // the FACT that an invitation is out, never the link itself.
           linkOut={(channel.linkOut ?? null) !== null}
           unread={channel.unread}
-          // ⚠ `?? 0` INLINE (§8): a new key on a persisted payload; `0` hides the
-          // pill rather than printing `@ NaN`.
           mentions={channel.mentionCount ?? 0}
           reserveTrailing={canCollapse}
           onSelect={() => onSelectChannel(channel.id)}

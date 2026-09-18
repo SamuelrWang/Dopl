@@ -197,12 +197,10 @@ function RelationshipRow({
   /**
    * ⚠ **`channelPeople` IS THE ONE READ OF `peers`** — a plain `?? EMPTY_PEERS`
    * since the second cache went — and what decides whether the description takes
-   * line two.
-   * ⚠ **THE PEER→FACE MAPPING IS `channels/lib/channel-display.ts ›
-   * channelRowFaces` SINCE WAVE 4 (U28), NOT AN INLINE `.map` HERE.** The
-   * workspace sidebar row draws the same stack from the same field, and a
-   * fallback chain written twice is how the two rosters come to name one member
-   * differently. **Nothing about this row's faces changed in the move.**
+   * line two. ⚠ **THE PEER→FACE MAPPING IS `channels/lib/channel-display.ts ›
+   * channelRowFaces` SINCE WAVE 4 (U28), NOT AN INLINE `.map` HERE** — the
+   * workspace row draws the same stack from the same field. **Nothing about
+   * this row's faces changed in the move.**
    */
   const faces = channelRowFaces(channel ? channelPeople(channel) : []);
   /**

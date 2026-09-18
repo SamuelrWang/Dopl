@@ -162,13 +162,9 @@ export function channelDisplayPeerPerson(
  * THE PEOPLE ON A CHANNEL ROW, in {@link AvatarStack}'s shape — **the ONE
  * peer→face derivation, read by both surfaces (Wave 4, U28).**
  *
- * ⚠ **IT IS A DERIVATION, WHICH IS WHY IT IS HERE AND NOT ON THE ROW.**
- * `shared/ui/home-channel-row.tsx` takes ANSWERS and forbids derivation moving
- * in; the workspace sidebar row takes the same answers. Two hosts computing one
- * fallback chain is how the two rosters come to name a member differently.
- * ⚠ **`displayName` IS NON-NULL** — `AvatarStack` initials and titles it, so a
- * nameless member degrades to their address exactly as `Avatar`'s own fallback
- * does, never to "?".
+ * ⚠ **IT IS A DERIVATION, WHICH IS WHY IT IS HERE AND NOT ON EITHER ROW.** Both
+ * rows take ANSWERS; two hosts computing one fallback chain is how the two
+ * rosters come to name a member differently.
  * ⚠ **NO `?? EMPTY_PEERS` IN HERE (INVARIANTS §8).** The cache fallback belongs
  * to whoever reads the cached payload; applied twice it is a fallback nobody can
  * audit.
