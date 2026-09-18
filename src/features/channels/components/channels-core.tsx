@@ -152,10 +152,11 @@ export function ChannelsCore({
   // render-time re-application of a routed `initialChannelId` (a second
   // notification changes the route but not the component).
   const sel = useChannelsSelection({ initialChannelId, initialThreadId });
-  // ⚠ THE SEQ A SEARCH ROW NAMED, held here rather than in the selection hook:
-  // it is not a SELECTION — the surface consumes it once and the transcript
-  // keeps whatever the reader does next (`use-message-jump.ts`).
-  const [searchSeq, setSearchSeq] = useState<number | null>(null);
+  // ⚠ THE SEQ A SEARCH ROW NAMED, **KEYED TO THE CHANNEL IT NAMED IT IN**. A bare
+  // number re-fired into whatever the reader opened next, because
+  // `use-message-jump.ts` keys on `channelId:threadId:seq` and a new channel is a
+  // new key. /home has always keyed it (`use-activity-jump.ts › seqFor(rowId)`).
+  const [searchSeq, setSearchSeq] = useState<{ channelId: string; seq: number } | null>(null);
   const queryClient = useQueryClient();
 
   const { channels, loading, refetch: refetchChannels } = useChannels(workspaceId);
@@ -186,7 +187,17 @@ export function ChannelsCore({
     if (item.kind === "chats") return onNavigatePath?.(`/${workspaceSlug}/chats`);
     if (item.channelId) sel.selectChannel(item.channelId);
     if (item.threadId) sel.openThread(item.threadId);
-    setSearchSeq(item.kind === "messages" ? (item.seq ?? null) : null);
+    setSearchSeq(
+      item.kind === "messages" && item.channelId && item.seq != null
+        ? { channelId: item.channelId, seq: item.seq }
+        : null
+    );
+  };
+
+  // A manual pick is the reader asking for a channel, not for a seq inside it.
+  const selectChannel = (id: string) => {
+    setSearchSeq(null);
+    sel.selectChannel(id);
   };
 
   // Explicit pick that still exists wins, else the first row — the same rule the
@@ -258,7 +269,7 @@ export function ChannelsCore({
         currentUserId={currentUserId}
         selectedChannelId={channel?.id ?? null}
         openThreadId={data.openThread?.id ?? null}
-        onSelectChannel={sel.selectChannel}
+        onSelectChannel={selectChannel}
         onOpenThread={sel.openThread}
         canCreate={canCreate}
         onCreateChannel={() => sel.setCreateOpen(true)}
@@ -277,7 +288,7 @@ export function ChannelsCore({
           role={role}
           data={data}
           selection={sel}
-          initialSeq={searchSeq}
+          initialSeq={searchSeq?.channelId === channel?.id ? searchSeq.seq : null}
           onRosterChanged={refetchChannels}
           // 🔒 `artifacts: true` — THE ARTIFACTS FACE COMES TO THIS PAGE (Samuel's
           // ruling R-16, 2026-09-17, after F-712): the inline artifact card already

@@ -275,6 +275,34 @@ describe("the direct peer", () => {
     // share it, so faces cost no second query.
     expect(listProfileSummaries).toHaveBeenCalledTimes(1);
   });
+
+  /**
+   * 🔒 `listChannelPeerIds` clips at `PEER_ROW_LIMIT` across the WHOLE page, so a
+   * DM's peer can fall out of the roster SAMPLE. Before the fix the profile read
+   * was built from that sample alone, the peer resolved with `displayName: null`,
+   * and `channel-display.ts` then named the DM from the OPEN channel's roster —
+   * a different person's name on the row.
+   */
+  it("🔒 names the DM peer even when the roster sample clipped them out", async () => {
+    const directKey = [USER, OTHER].sort().join(":");
+    vi.mocked(repo.listChannels).mockResolvedValue([
+      channelRow({ id: "dm-1", is_direct: true, direct_key: directKey }),
+    ]);
+    vi.mocked(collab.channelMemberUserIds).mockResolvedValue(
+      new Map([["dm-1", [USER, OTHER]]])
+    );
+    // The clip: the sample came back EMPTY for this channel.
+    vi.mocked(extras.listChannelPeerIds).mockResolvedValue(new Map());
+    vi.mocked(listProfileSummaries).mockResolvedValue(
+      new Map([
+        [OTHER, { email: "o@x.com", displayName: "Otto", avatarUrl: null }],
+      ])
+    );
+
+    const [row] = await listChannels(ctx);
+    expect(listProfileSummaries).toHaveBeenCalledWith([OTHER]);
+    expect(row.directPeer).toMatchObject({ userId: OTHER, displayName: "Otto" });
+  });
 });
 
 describe("the `@ N` mention count (R-28)", () => {

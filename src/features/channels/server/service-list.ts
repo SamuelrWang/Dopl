@@ -128,6 +128,22 @@ function toDto(
  * Resolve the rendered peer for every DIRECT channel, hydrated from the roster.
  * ⚠ Resolved LIVE, never stored as truth.
  */
+/** The other party in every DM on the page — identity, so never sampled. */
+function directPeerIds(
+  rows: ChannelRow[],
+  memberIds: Map<string, string[]>,
+  selfId: string
+): string[] {
+  const out: string[] = [];
+  for (const row of rows) {
+    if (!row.is_direct) continue;
+    const ids = memberIds.get(row.id) ?? [];
+    const peerId = ids.find((id) => id !== selfId) ?? ids[0];
+    if (peerId) out.push(peerId);
+  }
+  return out;
+}
+
 function buildDirectPeers(
   rows: ChannelRow[],
   memberIds: Map<string, string[]>,
@@ -206,8 +222,18 @@ async function hydrate(
     ]);
   // ONE profile read for the page: the roster samples and the direct peers share
   // it, so faces cost no second query.
+  // ⚠ **THE DIRECT PEERS ARE UNIONED IN EXPLICITLY, NOT INHERITED FROM THE ROSTER
+  // SAMPLE.** `listChannelPeerIds` clips at `PEER_ROW_LIMIT` across the WHOLE page,
+  // so in a container with more than that many memberships a DM's peer can fall
+  // out of the sample — and a peer with no profile row reads as `displayName:
+  // null`, which `channel-display.ts` then resolves through the OPEN channel's
+  // roster, labelling the DM with a different person's name. A DM's peer is
+  // identity, never a sample.
   const profiles = await listProfileSummaries([
-    ...new Set([...peerIds.values()].flat()),
+    ...new Set([
+      ...[...peerIds.values()].flat(),
+      ...directPeerIds(rows, memberIds, viewerId),
+    ]),
   ]);
   const peers = new Map<string, ChannelPeer[]>();
   for (const [channelId, userIds] of peerIds) {

@@ -45,7 +45,11 @@ const HITS: Record<string, SearchItem> = {
 };
 
 vi.mock("../hooks/use-channels", () => ({
-  useChannels: () => ({ channels: [channel()], loading: false, refetch: () => {} }),
+  useChannels: () => ({
+    channels: [channel(), channel({ id: "ch-2", slug: "ops", name: "Ops" })],
+    loading: false,
+    refetch: () => {},
+  }),
 }));
 // ⚠ ONE SEAM FOR EVERY READ THIS PAGE MAKES — the surface's own data module.
 vi.mock("./channel-surface-data", () => ({
@@ -60,8 +64,10 @@ vi.mock("./channel-manage", () => ({
 vi.mock("./sidebar", () => ({
   ChannelsSidebar: ({
     onSearchNavigate,
+    onSelectChannel,
   }: {
     onSearchNavigate: (item: SearchItem) => void;
+    onSelectChannel: (id: string) => void;
   }) => (
     <div>
       {Object.entries(HITS).map(([name, item]) => (
@@ -69,6 +75,8 @@ vi.mock("./sidebar", () => ({
           take {name}
         </button>
       ))}
+      <button onClick={() => onSelectChannel("ch-2")}>pick other channel</button>
+      <button onClick={() => onSelectChannel("ch-1")}>pick same channel</button>
     </div>
   ),
 }));
@@ -125,6 +133,32 @@ describe("a search row's seq reaches the surface", () => {
     fireEvent.click(screen.getByText("take channel"));
     // ⚠ A stale seq would scroll the next room's transcript to a coordinate
     // that means nothing in it.
+    expect(seq()).toBe("none");
+  });
+});
+
+describe("🔒 the seq belongs to the channel it was found in", () => {
+  /**
+   * `use-message-jump.ts` keys on `channelId:threadId:seq`, so a HELD seq is a
+   * NEW key in the next room and the effect fires again — scrolling a reader to
+   * a coordinate that means nothing there, or showing the "older than the loaded
+   * history" notice in a channel they never searched.
+   */
+  it("does not re-fire into a channel the reader picked manually", () => {
+    renderCore();
+    fireEvent.click(screen.getByText("take message"));
+    expect(seq()).toBe("4821");
+    fireEvent.click(screen.getByText("pick other channel"));
+    expect(seq()).toBe("none");
+  });
+
+  it("clears a held seq when the reader re-picks the SAME channel by hand", () => {
+    renderCore();
+    fireEvent.click(screen.getByText("take message"));
+    expect(seq()).toBe("4821");
+    // ⚠ Keying alone cannot catch this one — the channel matches, so only the
+    // manual pick clearing the seq stops the jump re-firing.
+    fireEvent.click(screen.getByText("pick same channel"));
     expect(seq()).toBe("none");
   });
 });

@@ -1,6 +1,6 @@
 // Background Channels listener.
 //
-// For every non-archived channel the signed-in user can see, runs an
+// For every channel the signed-in user can see, runs an
 // authenticated long-poll (`/api/channels/[id]/await`) with a persisted `since` cursor and
 // capped-exponential reconnect backoff. An ADDRESSED message from another member raises a native
 // notification whose button launches a windowless SDK session; that session posts its own reply
@@ -255,7 +255,11 @@ async function reconcileInner() {
     }
     for (const c of chans) {
       if (!c || !c.id) continue;
-      if (c.archivedAt) continue;
+      // R-21 (2026-09-17): there is no archive. `archived_at` is a vestigial
+      // column with no writer, and this was its last reader — a legacy stamp had
+      // been costing that channel its listener loop, so no long-poll, no
+      // auto-responder and no notification, while every other surface listed it
+      // as an ordinary channel.
       desired.set(c.id, { workspaceId: ws.id, workspaceSegment, channel: c });
     }
   }
