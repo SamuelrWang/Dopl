@@ -219,6 +219,49 @@ describe("one input row, two composers", () => {
     expect(box, "the card grew a gap again").not.toMatch(/raised-tab[^"]*\bgap-\d/);
   });
 
+  it("the MIRROR's box is the FIELD's box — the field is a block, and the wrapper holds nothing else", () => {
+    // 🔒 **THE THIRD CARET DRIFT, AND THE ONLY ONE THAT WAS GEOMETRY RATHER THAN CONTENT**
+    // (Samuel, 2026-09-18: *"the cursor like gets misaligned. Look at how far up it is"*).
+    // The mirror is `absolute inset-0` against the wrapper, so it is a mirror only while the
+    // wrapper is exactly as tall as the field. A textarea is `inline-block`, it sits on the
+    // wrapper's text baseline, and a SCROLLING inline-block takes its baseline at its own bottom
+    // edge — so the inherited strut's descent hung below the field and the wrapper measured 6px
+    // taller (Chrome, `line-height: 1.5` over 16px). Same content, same scrollHeight, 6px more
+    // room: `mirror.scrollTop = field.scrollTop` then clamped 6px short at the BOTTOM of the
+    // range, which is the offset typing always sits at, and the words drew 6px under the caret.
+    //
+    // ⚠ **A HEIGHT ASSERTION CANNOT CATCH THIS AND MUST NOT BE ATTEMPTED HERE.** jsdom has no
+    // layout — every box is 0px — so a rendered comparison of the two boxes is green against the
+    // broken tree and against the fixed one alike. Measured. The property that is actually
+    // checkable is the one that PRODUCES the equal boxes, and it is in the source.
+    const row = codeOf("composer-input.tsx");
+    const field = row.match(/<textarea[\s\S]*?\/>/)?.[0] ?? "";
+    expect(field, "the textarea is not a self-closing element any more").not.toBe("");
+    // (a) THE FIELD IS OFF THE LINE BOX. The mutation is deleting this one class: every other
+    // guard in this file stays green while the caret floats again.
+    expect(field, "the field went back on a text baseline — the mirror clamps short again").toMatch(
+      /className=\{cn\(\s*"block /
+    );
+    // (b) AND NOTHING ELSE SHARES THE WRAPPER TO PUT A LINE BOX BACK. The positioned box holds
+    // the mirror — which is `absolute`, so out of flow — and the field, and that is the whole of
+    // it. A stray icon, counter or chip dropped in beside the field is in-flow, generates the
+    // line box again, and the 6px comes back with it.
+    const OPEN = '<div className="relative min-w-0 flex-1">';
+    const open = row.indexOf(OPEN);
+    expect(open, "the positioned box was renamed or restyled").toBeGreaterThan(-1);
+    const beforeField = row.slice(open + OPEN.length, row.indexOf("<textarea", open));
+    expect(
+      beforeField.match(/<[a-z]/g) ?? [],
+      "something joined the mirror in front of the field"
+    ).toHaveLength(1); // the mirror's own <div>, and nothing else
+    // …and nothing trails it either: the field is the last thing in the box.
+    const afterField = row.slice(row.indexOf(field, open) + field.length);
+    expect(
+      afterField.trimStart().startsWith("</div>"),
+      "something was added after the field, inside the positioned box"
+    ).toBe(true);
+  });
+
   it("both composers hang off ONE bottom offset", () => {
     // ⚠ THE TWO BOXES SIT SIDE BY SIDE ACROSS THE PANE DIVIDER — the agent panel is `inset-y-0`
     // against the same bottom edge the message pane ends on — so their bottoms must be the same
