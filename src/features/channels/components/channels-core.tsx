@@ -272,6 +272,14 @@ export function ChannelsCore({
           selection={sel}
           initialSeq={searchSeq}
           onRosterChanged={refetchChannels}
+          // 🔒 `artifacts: true` — THE ARTIFACTS FACE COMES TO THIS PAGE (Samuel's
+          // ruling R-16, 2026-09-17, after F-712). The inline artifact card already
+          // renders in this transcript, so a reader here could SEE an artifact and
+          // not browse the channel's. ⚠ It is the Threads↔Artifacts TOGGLE, never a
+          // fifth tab (R-17): the face shares the Threads slot, so the tab row is
+          // still four options on one width budget. ⚠ The face's reads mount WITH
+          // it, so an unopened channel pays nothing.
+          capabilities={{ artifacts: true }}
         />
       ) : (
         // THE FIRST-RUN EXPLAINER, rehomed here at the cutover. It says what

@@ -142,8 +142,9 @@ export interface ChannelSurfaceCapabilities {
    * runs as openable cards (Samuel, 2026-09-16; `artifacts-tab.tsx`).
    *
    * ⚠ Default `false`, which inverts the others: they REMOVE, this ADDS.
-   * ⚠ /home is the one host that passes it; a host that passes nothing fetches
-   * nothing and renders the Threads tab byte for byte.
+   * ⚠ /home and the workspace channels page pass it (R-16, 2026-09-17); the
+   * guest lane does not. A host that passes nothing fetches nothing and renders
+   * the Threads tab byte for byte.
    * ⚠ `knowledge` stood beside this and is deleted with its whole lane
    * (Samuel's ruling R-18, 2026-09-17) — re-adding the face needs his word.
    */

@@ -177,10 +177,11 @@ export function ChannelsInfoPanel({
    * rather than removing one, so a host that passes nothing renders the Threads
    * tab byte for byte as before.
    *
-   * ⚠ **EXACTLY ONE HOST PASSES IT — /home** (`pages/home/relationship-record.tsx`),
-   * under Samuel's standing home-space ruling for new surfaces. The workspace
-   * channel page and the guest lane are deliberately untouched: the toggle mounts
-   * the artifact READS, so a host that does not pass it asks for nothing.
+   * ⚠ **TWO HOSTS PASS IT — /home and the workspace channels page** (Samuel's
+   * ruling R-16, 2026-09-17). The GUEST lane still does not: the route floor is
+   * `guest`, so it could read, but R-16 chose (a) over (c) and the web renderer
+   * is undesigned. The toggle mounts the artifact READS, so a host that does not
+   * pass it asks for nothing.
    *
    * ⚠ IT IS NOT A FIFTH TAB, and that is the width budget above talking: the row
    * is measured for four options, so the two lists share one slot and one heading.

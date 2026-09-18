@@ -192,7 +192,8 @@ export function SurfaceInfoPanel({
       mentionsLoading={data.mentionsLoading}
       onOpenMention={openMention}
       onMarkAllMentionsRead={markAllMentionsRead}
-      // THE ARTIFACTS FACE (Samuel, 2026-09-16) — opt-in, /home only.
+      // THE ARTIFACTS FACE (Samuel, 2026-09-16) — opt-in; /home and the
+      // workspace channels page since R-16 (2026-09-17).
       artifacts={capabilities?.artifacts}
       headerEdit={headerEdit}
       // THE CURATED `channels.info_card` ROWS (Samuel's ruling R-19, 2026-09-17).

@@ -134,13 +134,13 @@ export function RelationshipRecord({
       // the channel-first inversion — would have named the peer at the top of
       // the pane while the row and the card beside it named the channel. Real
       // DMs on the workspace page are untouched; see the capability's docblock.
-      // 🔒 `artifacts: true` — THE THREADS PANEL TOGGLES TO AN ARTIFACTS FACE HERE,
-      // AND ONLY HERE (Samuel, 2026-09-16, under his standing home-space ruling for
-      // a new surface). ⚠ IT IS NOT THE FIFTH TAB THE NOTE ABOVE REFUSES: the face
-      // shares the Threads slot and its heading, so the row is still four options on
-      // the same width budget. ⚠ The workspace channel page and the guest lane pass
-      // nothing and are unchanged — the face's reads mount with the face, so a host
-      // that never offers it never asks for a card.
+      // 🔒 `artifacts: true` — THE THREADS PANEL TOGGLES TO AN ARTIFACTS FACE
+      // (Samuel, 2026-09-16). ⚠ IT IS NOT THE FIFTH TAB THE NOTE ABOVE REFUSES: the
+      // face shares the Threads slot and its heading, so the row is still four
+      // options on the same width budget. ⚠ **NO LONGER "AND ONLY HERE"** — the
+      // workspace channels page passes it too (R-16, 2026-09-17); the guest lane
+      // still does not. The face's reads mount with it, so a host that never offers
+      // it never asks for a card.
       // 🔒 `mentionsLayout: "category"` — the ONE presentational difference
       // between the two channel record surfaces (Samuel, 2026-09-15; the
       // capability's docblock carries the ruling). A capability rather than a
