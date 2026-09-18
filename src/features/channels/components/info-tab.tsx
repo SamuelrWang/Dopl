@@ -2,7 +2,7 @@
 
 /**
  * Channels — the right panel's INFO tab: channel metadata, the Mentions
- * disclosure, Linked threads, the activity heatmap and the roster.
+ * disclosure, the activity heatmap and the roster.
  *
  * ⚠ THE MENTIONS ROW IS SHARED WITH /home's OWN INFO TAB since 2026-09-15
  * (`mentions-disclosure.tsx`), which also carries the "Tags" -> "Mentions"
@@ -15,15 +15,14 @@
  * inbox off `use-channel-mentions` (Phase 6), and the activity strip since
  * 2026-09-05 (F-316).
  *
- * HARDCODED — no backing data yet (Samuel 2026-08-18): Linked threads only, and
- * the site carries the marker where it renders.
+ * ⚠ NOTHING ON THIS TAB IS HARDCODED ANY MORE (2026-09-17). "Linked threads" was
+ * the last fixture-fed section; R-45 deleted it.
  */
 
 import {
   AlignLeft,
   Calendar,
   CircleDot,
-  Hash,
   ListChecks,
   ListFilter,
   Type,
@@ -33,7 +32,6 @@ import {
 import { Avatar } from "@/shared/ui/avatar";
 import { formatShortDate } from "@/shared/lib/format-time";
 import {
-  CountBadge,
   IconButton,
   MetaRow,
   MetaRowDivider,
@@ -44,7 +42,6 @@ import { InlineEditText, type ChannelHeaderEdit } from "./info-inline-edit";
 import { MemberRoster } from "./member-roster";
 import { ThreadActivityStrip, type ActivityBin } from "./thread-activity";
 import { MentionsDisclosure } from "./mentions-disclosure";
-import { HARDCODED_LINKED_THREADS } from "./fixtures";
 import { memberPerson, type AuthorIndex } from "./view-model";
 import { memberLabel } from "../lib/channel-display";
 import type { Channel, ChannelMember, ChannelMention } from "../types";
@@ -122,8 +119,7 @@ export function InfoTab({
             duplicate he reported was a title inside the /home pane
             (`apps/desktop-ui › person-info-tab.tsx`).
             ⚠ NO `Hash` GLYPH IN FRONT OF THE NAME (Samuel, 2026-09-16) — the same
-            ruling that took it off the pane header. `Type` is the row's icon now;
-            the Linked-threads rows below keep theirs, which name THREADS. */}
+            ruling that took it off the pane header. `Type` is the row's icon now. */}
         <MetaRow icon={Type} label="Name">
           <InlineEditText
             label="Channel name"
@@ -226,22 +222,13 @@ export function InfoTab({
         </MetaRow>
       </div>
 
-      <PanelHeading title="Linked threads" />
-      <div className="flex flex-col gap-px px-2">
-        {/* HARDCODED — no backing data yet (Samuel 2026-08-18): a thread belongs
-            to one channel and links to nothing, so there is no relation to read. */}
-        {HARDCODED_LINKED_THREADS.map(({ label, badge }) => (
-          <button
-            key={label}
-            type="button"
-            className="flex h-[34px] w-full items-center gap-2 rounded-[8px] px-2 text-left text-small text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
-          >
-            <Hash size={14} className="shrink-0 text-text-muted" />
-            <span className="truncate">{label}</span>
-            {badge !== undefined && <CountBadge value={badge} />}
-          </button>
-        ))}
-      </div>
+      {/* ⚠ **"LINKED THREADS" STOOD HERE AND IS DELETED (Samuel's ruling R-45,
+          2026-09-17).** Two hardcoded rows with no `onClick` and no relation
+          behind them, marked hardcoded at this site since 2026-08-18. A thread
+          belongs to one channel and links to nothing, so there was never a read
+          to wire — and a dead control on the surface that is meant to be the
+          reference is the thing INVARIANTS §5 forbids. `HARDCODED_LINKED_THREADS`
+          went with it. ⚠ Reviving the IDEA means a schema answer first. */}
 
       {/* ⚠ THE LABEL FOLLOWS THE SURFACE (Samuel, 2026-09-05): this tab is the
           CHANNEL's info, so the strip counts the channel. */}

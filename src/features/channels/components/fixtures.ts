@@ -5,7 +5,7 @@
  * port's intent doc, deleted at the Phase 12 cutover — the live statement is
  * INVARIANTS §5's hardcoded-furniture bullet): the activity heatmap,
  * Linked threads and the
- * Assistant / Drafts / Saved-items nav rows keep their mock UI through the
+ * Assistant / Drafts / Saved-items nav rows kept their mock UI through the
  * wiring. They have **no backing data of any kind** — not an empty table, not a
  * nullable column: nothing anywhere projects them. They are wired later as
  * their own work.
@@ -62,15 +62,13 @@ export const HARDCODED_NAV_ROWS: NavRowSpec[] = [
 // (`agent-stream.tsx › SentToChannelBox`), which a solo /home channel can reach
 // and this nav never was.
 
-/**
- * HARDCODED — no backing data yet (Samuel 2026-08-18).
- * "Linked threads" is a relationship the schema does not hold: a thread belongs
- * to one channel and links to nothing.
- */
-export const HARDCODED_LINKED_THREADS: Array<{ label: string; badge?: number }> = [
-  { label: "Front-end", badge: 4 },
-  { label: "UI-kit design standards" },
-];
+// ⚠ `HARDCODED_LINKED_THREADS` STOOD HERE AND IS DELETED (Samuel's ruling R-45,
+// 2026-09-17). "Linked threads" was a relationship the schema does not hold — a
+// thread belongs to one channel and links to nothing — so the section it fed had
+// no read to wait for and its rows had no `onClick`. It goes the way
+// `HARDCODED_FAVORITE_ROWS` went, minus the column: deleted outright, not kept
+// "for reference", because a fixture nothing renders is the next thing somebody
+// renders.
 
 /**
  * HARDCODED — no backing data yet (Samuel 2026-08-18).
