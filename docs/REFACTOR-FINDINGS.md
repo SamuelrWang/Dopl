@@ -4105,8 +4105,29 @@ which IS the channel dimension), `user_id`, `amount`, `period_start` — written
   5. `agent_only` needs a MEANING for a template or must be refused at the API — it has no referent
      today (a template has ONE consumer: main, at spawn).
 - Severity: **feature gap, not a bug.** Nothing is broken; a scope simply cannot be expressed.
-  Status: **open** — build it when a standard workspace needs per-channel template sharing, and
-  build all five parts in one change.
+  Status: ✅ **CLOSED-BY-RULING 2026-09-17. DO NOT BUILD THE FIVE PARTS.**
+
+🔒 **THE RULING IS THE OPPOSITE OF THE WIDENING THIS ENTRY COSTED** (Samuel, 2026-09-17, verbatim in
+INVARIANTS §4A): *"for workspaces, I don't want knowledge bases to be scoped to specific channels …
+There's no such thing as a knowledge base being shared to just a channel, because the whole workspace
+is scoped … In workspaces, resource access is not scoped by channels. It's instead scoped by teams."*
+
+**So the gap this entry named is not a gap.** "This channel's people only" is not a sentence a
+standard workspace says; the sentence it says is "this TEAM's people only", and that mechanism exists
+(`resource_grants` at `scope_type='team'`, `access_mode='teams'`). The five-part widening would have
+bought a scope the product does not have.
+
+⚠ **AND THE ENTRY'S PREMISE ABOUT KNOWLEDGE TURNED OUT TO BE THE BUG, NOT THE BASELINE.** It reasoned
+from *"a knowledge base is shared by a `(kb, channel)` GRANT ROW"* being correct in a standard
+workspace. It was not: `PUT /api/knowledge/bases/{id}/channel-grants` and `PUT /api/resource-grants`
+both accepted a channel scope in ANY container, and `canSeeBase`'s grant arm honoured it. Both doors
+now refuse with **400 `SCOPE_NOT_ALLOWED_IN_WORKSPACE`** outside a home/personal container, the read
+arm ignores the rows, and `supabase/migrations/20261011120000_channel_scope_workspace_fence.sql`
+converts the ones already written. **The template feature was RIGHT to have no grant table** — it was
+the knowledge feature that had the wrong one. Census: `src/shared/tenancy/channel-scope-census.test.ts`.
+
+**Re-opening this needs a NEW ruling from Samuel, not a plan** — the five parts above stay written
+down as what it would cost, and as the record of a widening that was correctly never built.
 
 ### F-335 — the workspace list-item type is hand-mirrored across server and SDK, and `iconUrl` has been drifted the whole time
 
@@ -9882,6 +9903,33 @@ the way the other three were.
 
 ---
 
+✅ **RESIDUAL DISCHARGED 2026-09-17, LATER THE SAME DAY**, in the change that carries Samuel's
+resource-scope ruling (*"In workspaces, resource access is not scoped by channels. It's instead scoped
+by teams."*). A teams-mode base leaking into search is that ruling failing at its own edge, so it is
+closed with it. Resolve by subject — `git log --oneline --grep 'F-716'`.
+
+- **`canSeeBase` STILL HAS NO TEAMS ARM, AND THAT IS THE FIX RATHER THAN A CONCESSION.** The knowledge
+  feature spends its teams question in `teams/server/access.ts › listEffectiveAccess` +
+  `› resolveLevel` (through `filterTeamVisibleBases` / `assertBaseVisible`), and
+  `search/server/repository-visibility.ts › teamsModeVisible` calls **those two**. Bolting a fifth arm
+  onto the predicate would have needed a teams SET supplied at every knowledge call site as well —
+  two data paths for one rule, which is the failure this entry's own discharge is about.
+- **THE FAN IS BOUNDED BY THE PAGE, NOT BY THE CALLER'S CONTAINERS** — one call per DISTINCT container
+  holding an `access_mode='teams'` base among the candidates, which is normally ZERO because a
+  workspace-mode row never reaches the function. That is why it is not the per-container fan
+  `teamGrantedResourceIds` exists to avoid for the three predicates that ask on every row.
+- **AND IT IS AND-ED AFTER THE PREDICATE, IN `assertBaseVisible`'s OWN ORDER**: M-10 + the grant arm
+  first, the teams question second. A base `canSeeBase` already refuses costs no teams read.
+- **PINNED, AND MUTATION-VERIFIED**: `search/server/shared-rows.test.ts` — granted-team member finds
+  it, non-granted member does not, creator does, container admin does, a workspace-mode public base is
+  untouched. Removing the `teamsModeVisible` AND turns the second case red (verified 2026-09-17).
+- ⚠ **A SECOND, STALER DISAGREEMENT WAS FOUND AND FIXED IN THE SAME CHANGE (CLAUDE.md: never silently
+  pick a side).** INVARIANTS §9 still carried the pre-F-716 bullet — *"THE VISIBILITY ARMS ARE A
+  STRICT SUBSET … `repository-container-rows.ts` keeps `visibility = <widest> OR <owner> = caller`"* —
+  immediately beside the bullet that replaced it. The code was right; the stale bullet is deleted.
+
+---
+
 ### F-717 — the search popup's Messages section was empty: `config` was dropped with the column switch, so an ENGLISH query ran against a SIMPLE vector
 
 **Found:** 2026-09-17, from Samuel live: *"I'm trying to search up channel messages … I only see
@@ -9962,7 +10010,8 @@ The claim had been restated in five places from one sentence, which is how it su
 - **THE MECHANISM.** The `resource_grants` row survives R-18 intact and three things still read it: the workspace KB list badges it (`› getChannelGrantMap`), the list filter uses it (`› listSharedIntoChannelBaseIds`), and an AGENT reaches the base through it (`shared/tenancy/resource-grant-reach.ts`). What R-18 deleted is the only **human, channel-side** read: the Knowledge tab and the four routes under `/api/channels/[channelId]/knowledge/`. So "Share this base into #room" now means "let #room's agents reach it", and for a PERSON in that room it means nothing at all.
 - ⚠ **THIS IS NOT AN ARGUMENT AGAINST R-18.** The ruling is explicit and the lane was unreachable product for two weeks. What is recorded here is the SHAPE the deletion leaves behind: a write whose UI copy promises more than the read side delivers. The fix is a copy or product decision, not a restoration — either the sharing control says what it actually does now (agent reach), or Samuel asks for a channel-side face again, which means writing the four fences from scratch (INVARIANTS §4A states them).
 - ⚠ **AND THE GUEST CASE IS THE SHARP END.** A guest has no workspace surface at all, so for them a granted base is now unreachable by any door. That was the exact argument F-666 made for keeping the lane, and R-18 overrode it — deliberately, and with the consequence stated.
-- Status: OPEN. Needs Samuel's word on which half moves: the sharing control's copy, or a new channel-side read.
+- ⚠ **NARROWED — NOT CLOSED — BY SAMUEL'S RESOURCE-SCOPE RULING LATER THE SAME DAY (2026-09-17).** *"In workspaces, resource access is not scoped by channels. It's instead scoped by teams."* So in a `kind='standard'` workspace the write this entry is about **no longer exists**: `setChannelKnowledgeGrant` refuses with 400 `SCOPE_NOT_ALLOWED_IN_WORKSPACE`, the settings section renders nothing at all, and the list stops badging `Shared` off a channel grant (INVARIANTS §4A). **The promise and the delivery agree there now, by removing the promise.** ⚠ **WHAT SURVIVES IS THE HOME CASE, AND IT IS THE WHOLE OF THE ENTRY THAT MATTERS**: in a `kind='link'` container the control is still offered, still writes, and a PERSON in that channel still has no face over the granted base. **The guest case is entirely inside the surviving half** — a guest lives in a link container.
+- Status: OPEN, and now scoped to HOME containers only. Needs Samuel's word on which half moves there: the sharing control's copy, or a new channel-side read.
 
 ### F-721 — "Add member" on the channel Info tab is a follow-up R-46 deliberately did not do (2026-09-17)
 
