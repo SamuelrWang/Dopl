@@ -6,9 +6,10 @@
  */
 
 import type { DoplClient } from "@dopl/client";
-import { inlineOr, isForeignAuthored } from "./narration";
+import { inlineOr, isForeignAuthored, NO_NAME } from "./narration";
 import { ok, type ToolResponse } from "./respond";
-import { isErr, resolveBaseOr } from "./knowledge-shared";
+import { resolveBaseOr } from "./knowledge-shared";
+import { isErr } from "./channel-shared";
 import {
   isConcise,
   windowBody,
@@ -38,8 +39,9 @@ import {
  *     below a `---` rule, under {@link UNTRUSTED_ENTRY_BODY_HEADER} when it is
  *     ANOTHER MEMBER'S. ⚠ The gap was never rendering it as itself; it was
  *     rendering it with nothing saying whose it was.
+ *
+ * The fallback itself is `narration.ts › NO_NAME` (2026-09-17).
  */
-const NO_NAME = "`(unnamed)`";
 
 /**
  * ⚠ WHOSE VIEW THIS IS, stated on the RESULT, not only in the description.
@@ -270,7 +272,7 @@ export async function opReadFile(
       // ⚠ NO OUTER BACKTICKS: `inlineOr` already renders a VALUE as code, and
       // wrapping its output again produced ``` ``Errors`` ``` — a heading an
       // agent cannot copy back into `section=`.
-      sectionLine = `Section: ${"#".repeat(Math.min(3, found.level))} ${inlineOr(found.heading, "(unnamed)")} · ${found.chars} of ${outline?.totalChars ?? found.chars} chars (starts at offset ${found.start}).`;
+      sectionLine = `Section: ${"#".repeat(Math.min(3, found.level))} ${inlineOr(found.heading, NO_NAME)} · ${found.chars} of ${outline?.totalChars ?? found.chars} chars (starts at offset ${found.start}).`;
     }
   }
   const { body, notice } = windowBody(entry.body, offset, maxChars);

@@ -16,7 +16,7 @@
  * ({@link OUTLINE_MAX_ROWS}).
  */
 
-import { inlineOr } from "./narration";
+import { inlineOr, NO_NAME } from "./narration";
 
 /** One heading, as the API sends it. ⚠ Structurally mirrored from
  *  `@dopl/client › KnowledgeOutlineRow`; declared here so the renderers can be
@@ -59,7 +59,7 @@ function name(row: OutlineRow): string {
   const raw = row.heading.length > HEADING_MAX
     ? `${row.heading.slice(0, HEADING_MAX - 1)}…`
     : row.heading;
-  return inlineOr(raw, "(unnamed)");
+  return inlineOr(raw, NO_NAME);
 }
 
 /** `1,234` — a character count a person can read at a glance. */
@@ -91,7 +91,7 @@ export function renderOutline(outline: Outline): string[] {
 
 /** The header every outline render opens with. */
 export function outlineHeading(title: string, outline: Outline): string {
-  return `## ${inlineOr(title, "`(unnamed)`")} — ${outline.sections.length} heading${outline.sections.length === 1 ? "" : "s"} · ${n(outline.totalChars)} chars`;
+  return `## ${inlineOr(title, NO_NAME)} — ${outline.sections.length} heading${outline.sections.length === 1 ? "" : "s"} · ${n(outline.totalChars)} chars`;
 }
 
 /**

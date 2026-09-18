@@ -53,6 +53,13 @@ export interface AmbiguousContainerRef {
     ambiguous: WorkspaceListItem[];
 }
 export type ContainerRefResolution = WorkspaceListItem | AmbiguousContainerRef;
+/**
+ * Does this row answer to `ref`? ⚠ ONE spelling (2026-09-17) — `factory.ts`
+ * re-spelled it inline for the `X-Workspace-Id` pin, a fourth copy of the same
+ * predicate. A workspace slug can be shaped like a UUID, so BOTH columns are
+ * matched on the first pass; id alone forces a wasteful refresh.
+ */
+export declare function matchesContainerRef(w: WorkspaceListItem, ref: string): boolean;
 /** ⚠ The one narrowing. A `ContainerRefResolution` carries no `id`, so the
  *  compiler — not a convention — is what stops a caller reading the refusal as
  *  a container. */

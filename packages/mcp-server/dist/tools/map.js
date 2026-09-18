@@ -17,7 +17,7 @@ const tool_style_1 = require("./tool-style");
 /** ⚠ The same row `dopl_search` teaches — one fan-out failure, one code. */
 const PARTIAL_READ_ERROR = tool_errors_1.SEARCH_ERRORS[0];
 const EMPTY_ONTOLOGY = { clusters: [], objects: {} };
-/**
+/*
  * ⚠ EVERY string this tool renders is a member-typed one-liner LABEL (KB name +
  * description, skill name + `when_to_use`, cluster name + purpose, column name)
  * and NONE carries a charset rule — only KB folder names and entry titles do,
@@ -28,8 +28,9 @@ const EMPTY_ONTOLOGY = { clusters: [], objects: {} };
  * flat bullet list — a description with a newline starts a line of its own in
  * the agent's opening picture of the workspace. So every field goes through the
  * neutralizer; `dopl_kb` / `dopl_skill` / `dopl_ontology` render full prose.
+ *
+ * The fallback itself is `narration.ts › NO_NAME` (2026-09-17).
  */
-const NO_NAME = "`(unnamed)`";
 /**
  * ⚠ THE DESCRIPTION MUST STATE ITS OWN SCOPE. This is a VIEW, never an
  * inventory: `listSkills` is visibility-filtered server-side and this file then
@@ -103,7 +104,7 @@ const CHANNELS_ROUTING = `**Reaching a member or their agent: dopl_channel.** Ch
  */
 function containerNodes(list) {
     const by = (kind) => list.filter((w) => (0, workspace_directory_js_1.containerKind)(w) === kind);
-    const row = (w, address) => `- ${(0, narration_1.inlineOr)(w.name, NO_NAME)} — kind=\`${(0, workspace_directory_js_1.containerKind)(w)}\` (${address}, id: \`${w.id}\`)`;
+    const row = (w, address) => `- ${(0, narration_1.inlineOr)(w.name, narration_1.NO_NAME)} — kind=\`${(0, workspace_directory_js_1.containerKind)(w)}\` (${address}, id: \`${w.id}\`)`;
     const lines = ["", "## Home space — your default container"];
     const home = by("personal");
     for (const w of home) {
@@ -160,7 +161,7 @@ directory) {
         lines.push("", `## Knowledge bases (${bases.length}) — dopl_kb`);
         for (const b of bases) {
             const desc = b.description ? ` — ${(0, narration_1.inlineOr)(b.description, "")}` : "";
-            lines.push(`- ${(0, narration_1.inlineOr)(b.name, NO_NAME)} \`${b.slug}\`${desc}`);
+            lines.push(`- ${(0, narration_1.inlineOr)(b.name, narration_1.NO_NAME)} \`${b.slug}\`${desc}`);
         }
         if (bases.length === 0)
             lines.push("_None._");
@@ -168,7 +169,7 @@ directory) {
         lines.push("", `## Skills (${activeSkills.length}) — dopl_skill`);
         for (const s of activeSkills) {
             const trigger = (0, narration_1.inlineOr)(s.whenToUse || s.description, "`(no trigger described)`");
-            lines.push(`- ${(0, narration_1.inlineOr)(s.name, NO_NAME)} \`${s.slug}\` — ${trigger}`);
+            lines.push(`- ${(0, narration_1.inlineOr)(s.name, narration_1.NO_NAME)} \`${s.slug}\` — ${trigger}`);
         }
         if (activeSkills.length === 0)
             lines.push("_None._");
@@ -177,10 +178,10 @@ directory) {
             const columns = c.columnIds
                 .map((id) => ontology.objects[id]?.name)
                 .filter((n) => Boolean(n))
-                .map((n) => (0, narration_1.inlineOr)(n, NO_NAME))
+                .map((n) => (0, narration_1.inlineOr)(n, narration_1.NO_NAME))
                 .join(", ");
             const purpose = c.purpose ? ` — ${(0, narration_1.inlineOr)(c.purpose, "")}` : "";
-            lines.push(`- ${(0, narration_1.inlineOr)(c.name, NO_NAME)} \`${c.slug}\`${purpose}${columns ? ` (objects: ${columns})` : ""}`);
+            lines.push(`- ${(0, narration_1.inlineOr)(c.name, narration_1.NO_NAME)} \`${c.slug}\`${purpose}${columns ? ` (objects: ${columns})` : ""}`);
         }
         if (ontology.clusters.length === 0)
             lines.push("_None._");

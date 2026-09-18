@@ -10,7 +10,7 @@ import { workspaceContext } from "@dopl/client";
 import type { DoplClient, OntologySummary } from "@dopl/client";
 import type { ChargeCredit } from "../registrar.js";
 import type { WorkspaceDirectory } from "../workspace-directory.js";
-import { inlineOr } from "./narration";
+import { inlineOr, NO_NAME } from "./narration";
 import { clippedNote } from "./ontology-clipped";
 import { partialRead } from "./partial-read";
 import { isConcise, RESPONSE_FORMAT_FIELD } from "./response-size";
@@ -21,9 +21,6 @@ import { fanOut, MAX_SCOPES } from "./search-everywhere";
 import { ok, type RegisterTool, type ToolResponse } from "./respond";
 
 const EMPTY_ONTOLOGY: OntologySummary = { clusters: [], objects: {} };
-
-/** A result with nothing nameable left after neutralization. */
-const NO_NAME = "`(unnamed)`";
 
 /**
  * A knowledge-entry search snippet, as a VALUE. ⚠ Do not turn the backend's

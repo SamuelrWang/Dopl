@@ -26,10 +26,9 @@
  * §5A), and this surface must not rebuild on a new door what the route closed.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TEMPLATES_SCOPE_NOTE = exports.NO_NAME = exports.VISIBILITY_ENUM_MESSAGE = exports.TEMPLATE_VISIBILITY_VALUES = exports.PRIVATE_VISIBILITY_DENIED_CODE = void 0;
+exports.TEMPLATES_SCOPE_NOTE = exports.VISIBILITY_ENUM_MESSAGE = exports.TEMPLATE_VISIBILITY_VALUES = exports.PRIVATE_VISIBILITY_DENIED_CODE = void 0;
 exports.resolveTemplateRef = resolveTemplateRef;
 exports.resolveTemplateOr = resolveTemplateOr;
-exports.isErr = isErr;
 exports.ambiguousTemplate = ambiguousTemplate;
 exports.templateNotFound = templateNotFound;
 exports.templateWriteDenied = templateWriteDenied;
@@ -75,8 +74,6 @@ exports.TEMPLATE_VISIBILITY_VALUES = ["private", "workspace"];
  * gone is what stops the second call.
  */
 exports.VISIBILITY_ENUM_MESSAGE = 'visibility must be "private" or "workspace", and nothing was written — "team" is no longer a sharing option on this surface.';
-/** A template with nothing nameable left after neutralization. */
-exports.NO_NAME = "`(unnamed)`";
 /** ⚠ Local, like `channel-addressing.ts` and `ontology-ops-write.ts` — three
  *  copies already exist in this package and unifying them is not this wave. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -128,9 +125,6 @@ async function resolveTemplateOr(client, ref) {
         return ambiguousTemplate(ref, res.matches);
     return templateNotFound(ref);
 }
-function isErr(x) {
-    return "isError" in x && x.isError === true;
-}
 /**
  * THE AMBIGUOUS-NAME REFUSAL — **it lists, and it does not pick.**
  *
@@ -148,11 +142,11 @@ function isErr(x) {
  * holding.
  */
 function ambiguousTemplate(ref, matches) {
-    const label = (0, narration_js_1.inlineOr)(ref, exports.NO_NAME);
+    const label = (0, narration_js_1.inlineOr)(ref, narration_js_1.NO_NAME);
     return (0, respond_js_1.err)([
         `Nothing was read or written — the name ${label} matches ${matches.length} agent templates you can see, and this call refuses rather than picking one. Template names are deliberately NOT unique (two members may each keep a "Researcher").`,
         `Re-issue with the ID of the one you meant:`,
-        ...matches.map((m) => `- \`${m.id}\` — ${(0, narration_js_1.inlineOr)(m.name, exports.NO_NAME)} (${m.visibility})`),
+        ...matches.map((m) => `- \`${m.id}\` — ${(0, narration_js_1.inlineOr)(m.name, narration_js_1.NO_NAME)} (${m.visibility})`),
     ].join("\n"));
 }
 /**
@@ -161,7 +155,7 @@ function ambiguousTemplate(ref, matches) {
  * that guessed would rebuild that oracle.
  */
 function templateNotFound(ref) {
-    return (0, respond_js_1.err)(`No agent template ${(0, narration_js_1.inlineOr)(ref, exports.NO_NAME)} resolves for you, and nothing was read or written. Either there is no such template or it is not shared with you — those are ONE answer here on purpose, so ids cannot be probed. Matching on a name is EXACT (case-insensitive), never fuzzy; list what you can see with dopl_agent(op="list").`);
+    return (0, respond_js_1.err)(`No agent template ${(0, narration_js_1.inlineOr)(ref, narration_js_1.NO_NAME)} resolves for you, and nothing was read or written. Either there is no such template or it is not shared with you — those are ONE answer here on purpose, so ids cannot be probed. Matching on a name is EXACT (case-insensitive), never fuzzy; list what you can see with dopl_agent(op="list").`);
 }
 /**
  * A template write refused because the caller is neither its creator nor a
@@ -210,7 +204,7 @@ function sharedCredentialPrivateDenied(e) {
  *  so a newline in either would otherwise start a row of its own. */
 function templateRow(t) {
     const desc = t.description ? `\n  ${(0, narration_js_1.inlineOr)(t.description, "")}` : "";
-    const model = t.model ? ` · model ${(0, narration_js_1.inlineOr)(t.model, "`(unnamed)`")}` : "";
+    const model = t.model ? ` · model ${(0, narration_js_1.inlineOr)(t.model, narration_js_1.NO_NAME)}` : "";
     // ⚠ **"knowledge scope(s)", NOT "knowledge base(s)" (2026-09-08).** An
     // attachment is a base, a FOLDER or an ENTRY now, and counting three folders
     // of one base as "3 knowledge bases" is a false sentence about what the
@@ -220,7 +214,7 @@ function templateRow(t) {
     const kbs = scopeCount > 0
         ? ` · ${scopeCount} knowledge scope${scopeCount === 1 ? "" : "s"}`
         : "";
-    return `- ${(0, narration_js_1.inlineOr)(t.name, exports.NO_NAME)} (id: \`${t.id}\` · ${t.visibility}${model}${kbs})${desc}`;
+    return `- ${(0, narration_js_1.inlineOr)(t.name, narration_js_1.NO_NAME)} (id: \`${t.id}\` · ${t.visibility}${model}${kbs})${desc}`;
 }
 /**
  * ⚠ WHOSE VIEW THIS IS, stated ON THE RESULT and not only in the description.

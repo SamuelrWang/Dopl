@@ -36,6 +36,18 @@ export declare function neutralizeInline(raw: string): string | null;
  * not name this" tell.
  */
 export declare function inlineOr(raw: string | null | undefined, fallback: string): string;
+/**
+ * THE TWO STOCK FALLBACKS, declared ONCE beside the contract they belong to
+ * (2026-09-17). They were 22 local `const`s across the tool modules carrying
+ * FOUR different strings, so the same absent name rendered as a code span in
+ * half the responses and as bare text in the other half.
+ *
+ * ⚠ BACKTICKED, because `inlineOr` returns a code span on every other path and
+ * a bare-text fallback is the one case where the "could not name this" tell is
+ * indistinguishable from a name the server actually read.
+ */
+export declare const NO_NAME = "`(unnamed)`";
+export declare const NO_PATH = "`(unreadable path)`";
 /** Anything with the two authorship columns every authored row carries. */
 export interface AuthoredRow {
     createdBy?: string | null;

@@ -45,6 +45,7 @@ const grant_js_1 = require("./grant.js");
 const respond_js_1 = require("./respond.js");
 const confirm_token_js_1 = require("./confirm-token.js");
 const agent_shared_js_1 = require("./agent-shared.js");
+const channel_shared_js_1 = require("./channel-shared.js");
 /**
  * THE ONE TRANSLATION between the agent-facing shape (`{base, folder?, entry?}`)
  * and the wire's discriminated union. ⚠ `folder` WINS over `entry` if a caller
@@ -114,7 +115,7 @@ async function opCreate(client, callerUserId, input) {
         tool: "dopl_agent",
         op: "create",
         callerUserId,
-        what: `an agent template named ${(0, narration_js_1.inlineOr)(input.name, agent_shared_js_1.NO_NAME)}, shared with the whole home channel`,
+        what: `an agent template named ${(0, narration_js_1.inlineOr)(input.name, narration_js_1.NO_NAME)}, shared with the whole home channel`,
         audience: `everyone in that home channel — the peer standing in it can list it, read its instructions, and launch it`,
         payload: {
             name: input.name,
@@ -162,7 +163,7 @@ async function opCreate(client, callerUserId, input) {
         ? "Private to you — only you and your own agents can see it."
         : "Shared with everyone in this workspace — every member can list it and launch it.";
     return (0, respond_js_1.ok)([
-        `Created agent template ${(0, narration_js_1.inlineOr)(template.name, agent_shared_js_1.NO_NAME)} (id: \`${template.id}\`). ${audience}`,
+        `Created agent template ${(0, narration_js_1.inlineOr)(template.name, narration_js_1.NO_NAME)} (id: \`${template.id}\`). ${audience}`,
         `Launch it into a channel with dopl_channel(op="manage", action="launch", channel=…, template="${template.id}") — which ASKS the operator's machine and does not start anything by itself.`,
     ].join("\n"));
 }
@@ -181,13 +182,13 @@ async function opUpdate(client, callerUserId, ref, input) {
         return (0, respond_js_1.err)(`op="update" changed nothing because no field was passed. Pass at least one of: name, description, instructions, model, fields, visibility, knowledge_bases, knowledge.`);
     }
     const template = await (0, agent_shared_js_1.resolveTemplateOr)(client, ref);
-    if ((0, agent_shared_js_1.isErr)(template))
+    if ((0, channel_shared_js_1.isErr)(template))
         return template;
     const verdict = await (0, confirm_token_js_1.confirmGate)(client, {
         tool: "dopl_agent",
         op: "update",
         callerUserId,
-        what: `sharing the agent template ${(0, narration_js_1.inlineOr)(template.name, agent_shared_js_1.NO_NAME)} (id: \`${template.id}\`) with the whole home channel`,
+        what: `sharing the agent template ${(0, narration_js_1.inlineOr)(template.name, narration_js_1.NO_NAME)} (id: \`${template.id}\`) with the whole home channel`,
         audience: `everyone in that home channel — the peer standing in it can list it, read its instructions, and launch it`,
         payload: {
             template: template.id,
@@ -222,7 +223,7 @@ async function opUpdate(client, callerUserId, ref, input) {
     const note = patch.visibility !== undefined
         ? ` Sharing is now: ${updated.visibility}.`
         : "";
-    return (0, respond_js_1.ok)(`Updated agent template ${(0, narration_js_1.inlineOr)(updated.name, agent_shared_js_1.NO_NAME)} (id: \`${updated.id}\`).${note}`);
+    return (0, respond_js_1.ok)(`Updated agent template ${(0, narration_js_1.inlineOr)(updated.name, narration_js_1.NO_NAME)} (id: \`${updated.id}\`).${note}`);
 }
 /**
  * `op="grant"` — lend ONE template to a channel, container or team. The op that
@@ -244,7 +245,7 @@ async function opGrantTemplate(client, directory, selfUserId, ref, scope, to, le
     if ((0, grant_js_1.isGrantRefusal)(chosen))
         return chosen;
     const found = await (0, agent_shared_js_1.resolveTemplateOr)(client, ref);
-    if ((0, agent_shared_js_1.isErr)(found))
+    if ((0, channel_shared_js_1.isErr)(found))
         return found;
     const notOwned = (0, grant_js_1.notOwnedRefusal)(found.createdBy, selfUserId, "agent template", found.name);
     if (notOwned)

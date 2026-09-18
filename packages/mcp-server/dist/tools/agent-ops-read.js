@@ -12,6 +12,7 @@ const untrusted_fence_1 = require("./untrusted-fence");
 const respond_js_1 = require("./respond.js");
 const response_size_js_1 = require("./response-size.js");
 const agent_shared_js_1 = require("./agent-shared.js");
+const channel_shared_js_1 = require("./channel-shared.js");
 /** One heading per OFFERED visibility, in the order `op="list"` prints them. */
 const VISIBILITY_HEADINGS = {
     private: "Private to you",
@@ -70,7 +71,7 @@ callerUserId = null,
 /** A16: clip the INSTRUCTIONS body, and SAY so. */
 maxChars) {
     const template = await (0, agent_shared_js_1.resolveTemplateOr)(client, ref);
-    if ((0, agent_shared_js_1.isErr)(template))
+    if ((0, channel_shared_js_1.isErr)(template))
         return template;
     const foreign = (0, narration_js_1.isForeignAuthored)(
     // ⚠ A template row carries `createdBy` and no `lastEditedBy` column, so the
@@ -78,8 +79,8 @@ maxChars) {
     // explicitly keeps `isForeignAuthored`'s fail-closed arms readable.
     { createdBy: template.createdBy, lastEditedBy: null }, callerUserId);
     const lines = [
-        `# ${(0, narration_js_1.inlineOr)(template.name, agent_shared_js_1.NO_NAME)}`,
-        `id: \`${template.id}\` · ${template.visibility} · model ${template.model ? (0, narration_js_1.inlineOr)(template.model, agent_shared_js_1.NO_NAME) : "(the desktop's default)"}`,
+        `# ${(0, narration_js_1.inlineOr)(template.name, narration_js_1.NO_NAME)}`,
+        `id: \`${template.id}\` · ${template.visibility} · model ${template.model ? (0, narration_js_1.inlineOr)(template.model, narration_js_1.NO_NAME) : "(the desktop's default)"}`,
         ...(template.description ? [(0, narration_js_1.inlineOr)(template.description, "")] : []),
     ];
     // ⚠ **`knowledge` WINS AND THE BASE LIST IS THE FALLBACK** (2026-09-08). A
@@ -105,7 +106,7 @@ maxChars) {
                 : scope.scope === "entry"
                     ? " (one entry)"
                     : "";
-            lines.push(`- ${(0, narration_js_1.inlineOr)(scope.path || scope.baseName, agent_shared_js_1.NO_NAME)}${what} (base: \`${scope.baseId}\`)`);
+            lines.push(`- ${(0, narration_js_1.inlineOr)(scope.path || scope.baseName, narration_js_1.NO_NAME)}${what} (base: \`${scope.baseId}\`)`);
         }
         // ⚠ VIEWER-FILTERED, and saying so matters: the desktop resolves this list
         // again under the OPERATOR's credential at spawn, so what you see here is
@@ -115,7 +116,7 @@ maxChars) {
     if (template.fields.length > 0) {
         lines.push("", "## Custom fields");
         for (const f of template.fields) {
-            lines.push(`- ${(0, narration_js_1.inlineOr)(f.key, agent_shared_js_1.NO_NAME)}: ${(0, narration_js_1.inlineOr)(f.value, "`(empty)`")}`);
+            lines.push(`- ${(0, narration_js_1.inlineOr)(f.key, narration_js_1.NO_NAME)}: ${(0, narration_js_1.inlineOr)(f.value, "`(empty)`")}`);
         }
     }
     lines.push("", "## Instructions");

@@ -5,19 +5,18 @@
  */
 
 import type { AgentTemplate, DoplClient } from "@dopl/client";
-import { inlineOr, isForeignAuthored } from "./narration.js";
+import { inlineOr, isForeignAuthored, NO_NAME } from "./narration.js";
 import { fenceBody } from "./untrusted-fence";
 import { ok, type ToolResponse } from "./respond.js";
 import { clipToMaxChars } from "./response-size.js";
 import {
-  isErr,
-  NO_NAME,
   resolveTemplateOr,
   TEMPLATE_VISIBILITY_VALUES,
   type OfferedTemplateVisibility,
   TEMPLATES_SCOPE_NOTE,
   templateRow,
 } from "./agent-shared.js";
+import { isErr } from "./channel-shared.js";
 
 /** One heading per OFFERED visibility, in the order `op="list"` prints them. */
 const VISIBILITY_HEADINGS: Record<OfferedTemplateVisibility, string> = {

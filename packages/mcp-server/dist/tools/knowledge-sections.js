@@ -46,7 +46,7 @@ function name(row) {
     const raw = row.heading.length > HEADING_MAX
         ? `${row.heading.slice(0, HEADING_MAX - 1)}…`
         : row.heading;
-    return (0, narration_1.inlineOr)(raw, "(unnamed)");
+    return (0, narration_1.inlineOr)(raw, narration_1.NO_NAME);
 }
 /** `1,234` — a character count a person can read at a glance. */
 function n(value) {
@@ -71,7 +71,7 @@ function renderOutline(outline) {
 }
 /** The header every outline render opens with. */
 function outlineHeading(title, outline) {
-    return `## ${(0, narration_1.inlineOr)(title, "`(unnamed)`")} — ${outline.sections.length} heading${outline.sections.length === 1 ? "" : "s"} · ${n(outline.totalChars)} chars`;
+    return `## ${(0, narration_1.inlineOr)(title, narration_1.NO_NAME)} — ${outline.sections.length} heading${outline.sections.length === 1 ? "" : "s"} · ${n(outline.totalChars)} chars`;
 }
 /**
  * The one-line outline every WRITE result ends with.

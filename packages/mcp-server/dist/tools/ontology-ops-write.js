@@ -15,12 +15,6 @@ const respond_1 = require("./respond");
 const ontology_render_1 = require("./ontology-render");
 const ontology_ops_read_1 = require("./ontology-ops-read");
 const identity_1 = require("./identity");
-/**
- * ⚠ Write confirmations read the STORED name back (the server canonicalises it,
- * and `create_object` copies fields from a PARENT another member authored), so
- * the read-side rule applies: a name is a VALUE.
- */
-const NO_NAME = "`(unnamed)`";
 // ⚠ HAND-MIRRORED from the server schema (attributeValueSchema) so an
 // oversized value fails with a field-named message at the tool boundary
 // instead of an opaque downstream VALIDATION_FAILED.
@@ -67,7 +61,7 @@ caller = identity_1.UNKNOWN_CALLER) {
                 name: args.name,
                 purpose: args.purpose,
             });
-            return (0, respond_1.ok)(`Created ontology ${(0, narration_1.inlineOr)(cluster.name, NO_NAME)} (slug: \`${cluster.slug}\`). Add objects with op="create_column".`);
+            return (0, respond_1.ok)(`Created ontology ${(0, narration_1.inlineOr)(cluster.name, narration_1.NO_NAME)} (slug: \`${cluster.slug}\`). Add objects with op="create_column".`);
         }
         case "update_cluster": {
             const snapshot = await client.getOntology();
@@ -78,7 +72,7 @@ caller = identity_1.UNKNOWN_CALLER) {
                 name: args.name,
                 purpose: args.purpose,
             });
-            return (0, respond_1.ok)(`Updated ontology ${(0, narration_1.inlineOr)(cluster.name, NO_NAME)} (slug: \`${cluster.slug}\`).`);
+            return (0, respond_1.ok)(`Updated ontology ${(0, narration_1.inlineOr)(cluster.name, narration_1.NO_NAME)} (slug: \`${cluster.slug}\`).`);
         }
         case "create_column": {
             const snapshot = await client.getOntology();
@@ -89,7 +83,7 @@ caller = identity_1.UNKNOWN_CALLER) {
                 clusterId: resolved.hit.id,
                 name: args.name,
             });
-            return (0, respond_1.ok)(`Created object ${(0, narration_1.inlineOr)(column.name, NO_NAME)} (id: \`${column.id}\`) in ${(0, narration_1.inlineOr)(resolved.hit.name, NO_NAME)}. Add items with op="create_object" parent="${column.id}".`);
+            return (0, respond_1.ok)(`Created object ${(0, narration_1.inlineOr)(column.name, narration_1.NO_NAME)} (id: \`${column.id}\`) in ${(0, narration_1.inlineOr)(resolved.hit.name, narration_1.NO_NAME)}. Add items with op="create_object" parent="${column.id}".`);
         }
         case "create_object": {
             const snapshot = await client.getOntology();
@@ -103,19 +97,19 @@ caller = identity_1.UNKNOWN_CALLER) {
             });
             const born = [];
             if (object.attributes.length) {
-                born.push(`fields ${object.attributes.map((a) => (0, narration_1.inlineOr)(a.label, NO_NAME)).join(", ")}`);
+                born.push(`fields ${object.attributes.map((a) => (0, narration_1.inlineOr)(a.label, narration_1.NO_NAME)).join(", ")}`);
             }
             if (object.relationships.length)
                 born.push(`${object.relationships.length} relationship(s)`);
             if (object.methods.length)
                 born.push(`${object.methods.length} action(s)`);
             const bornNote = born.length ? ` Born with ${born.join(" · ")}.` : "";
-            return (0, respond_1.ok)(`Created ${(0, narration_1.inlineOr)(object.name, NO_NAME)} (id: \`${object.id}\`) inside ${(0, narration_1.inlineOr)(resolved.hit.name, NO_NAME)}.${bornNote}`);
+            return (0, respond_1.ok)(`Created ${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)} (id: \`${object.id}\`) inside ${(0, narration_1.inlineOr)(resolved.hit.name, narration_1.NO_NAME)}.${bornNote}`);
         }
         case "update_object":
             return withObject(client, args.object, async (object) => {
                 await client.updateOntologyObject(object.id, { name: args.name, subtitle: args.subtitle }, args.expected_version);
-                return (0, respond_1.ok)(`Updated ${(0, narration_1.inlineOr)(args.name ?? object.name, NO_NAME)} (\`${object.id}\`).`);
+                return (0, respond_1.ok)(`Updated ${(0, narration_1.inlineOr)(args.name ?? object.name, narration_1.NO_NAME)} (\`${object.id}\`).`);
             });
         case "set_template_field":
             return withObject(client, args.object, async (object) => {
@@ -135,7 +129,7 @@ caller = identity_1.UNKNOWN_CALLER) {
                     ? current.map((f) => (f === existing ? field : f))
                     : [...current, field];
                 await client.updateOntologyObject(object.id, { template }, args.expected_version);
-                return (0, respond_1.ok)(`Set default field ${(0, narration_1.inlineOr)(label, NO_NAME)} (${kind}) on ${(0, narration_1.inlineOr)(object.name, NO_NAME)} — new objects created inside it are born with it, empty. Fields now: ${template.map((f) => (0, narration_1.inlineOr)(f.label, NO_NAME)).join(", ")}.`);
+                return (0, respond_1.ok)(`Set default field ${(0, narration_1.inlineOr)(label, narration_1.NO_NAME)} (${kind}) on ${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)} — new objects created inside it are born with it, empty. Fields now: ${template.map((f) => (0, narration_1.inlineOr)(f.label, narration_1.NO_NAME)).join(", ")}.`);
             });
         case "remove_template_field":
             return withObject(client, args.object, async (object) => {
@@ -143,10 +137,10 @@ caller = identity_1.UNKNOWN_CALLER) {
                 const current = object.template ?? [];
                 const template = current.filter((f) => f.label.toLowerCase() !== needle);
                 if (template.length === current.length) {
-                    return (0, respond_1.err)(`${(0, narration_1.inlineOr)(object.name, NO_NAME)} has no default field ${(0, narration_1.inlineOr)(args.label, NO_NAME)}.`);
+                    return (0, respond_1.err)(`${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)} has no default field ${(0, narration_1.inlineOr)(args.label, narration_1.NO_NAME)}.`);
                 }
                 await client.updateOntologyObject(object.id, { template }, args.expected_version);
-                return (0, respond_1.ok)(`Removed default field ${(0, narration_1.inlineOr)(args.label, NO_NAME)} from ${(0, narration_1.inlineOr)(object.name, NO_NAME)}.`);
+                return (0, respond_1.ok)(`Removed default field ${(0, narration_1.inlineOr)(args.label, narration_1.NO_NAME)} from ${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)}.`);
             });
         case "set_attribute":
             return opSetAttribute(client, args);
@@ -155,10 +149,10 @@ caller = identity_1.UNKNOWN_CALLER) {
                 const label = args.label.toLowerCase();
                 const attributes = object.attributes.filter((a) => a.label.toLowerCase() !== label);
                 if (attributes.length === object.attributes.length) {
-                    return (0, respond_1.err)(`${(0, narration_1.inlineOr)(object.name, NO_NAME)} has no attribute ${(0, narration_1.inlineOr)(args.label, NO_NAME)}.`);
+                    return (0, respond_1.err)(`${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)} has no attribute ${(0, narration_1.inlineOr)(args.label, narration_1.NO_NAME)}.`);
                 }
                 await client.updateOntologyObject(object.id, { attributes }, args.expected_version);
-                return (0, respond_1.ok)(`Removed attribute ${(0, narration_1.inlineOr)(args.label, NO_NAME)} from ${(0, narration_1.inlineOr)(object.name, NO_NAME)}.`);
+                return (0, respond_1.ok)(`Removed attribute ${(0, narration_1.inlineOr)(args.label, narration_1.NO_NAME)} from ${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)}.`);
             });
         case "set_relationship":
         case "remove_relationship":
@@ -178,22 +172,22 @@ caller = identity_1.UNKNOWN_CALLER) {
                     ? object.methods.map((m) => (m === existing ? method : m))
                     : [...object.methods, method];
                 await client.updateOntologyObject(object.id, { methods }, args.expected_version);
-                return (0, respond_1.ok)(`Set action ${(0, narration_1.inlineOr)(name, NO_NAME)} on ${(0, narration_1.inlineOr)(object.name, NO_NAME)}.`);
+                return (0, respond_1.ok)(`Set action ${(0, narration_1.inlineOr)(name, narration_1.NO_NAME)} on ${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)}.`);
             });
         case "remove_action":
             return withObject(client, args.object, async (object) => {
                 const needle = args.name.toLowerCase();
                 const methods = object.methods.filter((m) => m.name.toLowerCase() !== needle);
                 if (methods.length === object.methods.length) {
-                    return (0, respond_1.err)(`${(0, narration_1.inlineOr)(object.name, NO_NAME)} has no action ${(0, narration_1.inlineOr)(args.name, NO_NAME)}.`);
+                    return (0, respond_1.err)(`${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)} has no action ${(0, narration_1.inlineOr)(args.name, narration_1.NO_NAME)}.`);
                 }
                 await client.updateOntologyObject(object.id, { methods }, args.expected_version);
-                return (0, respond_1.ok)(`Removed action ${(0, narration_1.inlineOr)(args.name, NO_NAME)} from ${(0, narration_1.inlineOr)(object.name, NO_NAME)}.`);
+                return (0, respond_1.ok)(`Removed action ${(0, narration_1.inlineOr)(args.name, narration_1.NO_NAME)} from ${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)}.`);
             });
         case "claim_anchor":
             return withObject(client, args.object, async (object) => {
                 await client.claimOntologyAnchor(object.id);
-                return (0, respond_1.ok)(`Anchored the calling user to ${(0, narration_1.inlineOr)(object.name, NO_NAME)} (\`${object.id}\`). op="anchor" now resolves to it.`);
+                return (0, respond_1.ok)(`Anchored the calling user to ${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)} (\`${object.id}\`). op="anchor" now resolves to it.`);
             });
         default:
             return (0, respond_1.err)(`Unknown op ${(0, narration_1.inlineOr)(args.op, "`(unreadable)`")}.`);
@@ -212,7 +206,7 @@ async function withObject(client, ref, fn) {
         // caller's op="get" and this write. Re-get/reconcile/retry guidance, not an
         // opaque throw.
         if ((0, respond_1.isConflict)(e)) {
-            return (0, respond_1.err)(`${(0, narration_1.inlineOr)(resolved.hit.name, NO_NAME)} (\`${resolved.hit.id}\`) changed since you last read it. Re-read it with op="get", reconcile your change, then retry with the fresh Version as \`expected_version\` (or omit expected_version to overwrite blindly).`);
+            return (0, respond_1.err)(`${(0, narration_1.inlineOr)(resolved.hit.name, narration_1.NO_NAME)} (\`${resolved.hit.id}\`) changed since you last read it. Re-read it with op="get", reconcile your change, then retry with the fresh Version as \`expected_version\` (or omit expected_version to overwrite blindly).`);
         }
         throw e;
     }
@@ -228,7 +222,7 @@ async function opSetAttribute(client, args) {
             }
             const cap = kind === "pill" ? PILL_VALUE_MAX : TEXT_VALUE_MAX;
             if (args.value.length > cap) {
-                return (0, respond_1.err)(`set_attribute kind="${kind}" value for ${(0, narration_1.inlineOr)(label, NO_NAME)} is ${args.value.length} characters; the max is ${cap}. Shorten it, use kind="text" for longer prose, or link a knowledge entry instead.`);
+                return (0, respond_1.err)(`set_attribute kind="${kind}" value for ${(0, narration_1.inlineOr)(label, narration_1.NO_NAME)} is ${args.value.length} characters; the max is ${cap}. Shorten it, use kind="text" for longer prose, or link a knowledge entry instead.`);
             }
             value = { kind, value: args.value };
         }
@@ -254,7 +248,7 @@ async function opSetAttribute(client, args) {
             ? object.attributes.map((a, i) => (i === existing ? attribute : a))
             : [...object.attributes, attribute];
         await client.updateOntologyObject(object.id, { attributes }, args.expected_version);
-        return (0, respond_1.ok)(`Set attribute ${(0, narration_1.inlineOr)(label, NO_NAME)} on ${(0, narration_1.inlineOr)(object.name, NO_NAME)}.`);
+        return (0, respond_1.ok)(`Set attribute ${(0, narration_1.inlineOr)(label, narration_1.NO_NAME)} on ${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)}.`);
     });
 }
 async function opSetRelationship(client, args) {
@@ -264,16 +258,16 @@ async function opSetRelationship(client, args) {
         const kept = object.relationships.filter((r) => r.label.toLowerCase() !== needle);
         if (args.op === "remove_relationship") {
             if (kept.length === object.relationships.length) {
-                return (0, respond_1.err)(`${(0, narration_1.inlineOr)(object.name, NO_NAME)} has no relationship ${(0, narration_1.inlineOr)(label, NO_NAME)}.`);
+                return (0, respond_1.err)(`${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)} has no relationship ${(0, narration_1.inlineOr)(label, narration_1.NO_NAME)}.`);
             }
             await client.updateOntologyObject(object.id, { relationships: kept }, args.expected_version);
-            return (0, respond_1.ok)(`Removed relationship ${(0, narration_1.inlineOr)(label, NO_NAME)} from ${(0, narration_1.inlineOr)(object.name, NO_NAME)}.`);
+            return (0, respond_1.ok)(`Removed relationship ${(0, narration_1.inlineOr)(label, narration_1.NO_NAME)} from ${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)}.`);
         }
         // ⚠ An empty targets array slips past the required-param check (which
         // rejects only undefined/null/empty-string) and persists NOTHING — the
         // server drops zero-target edges.
         if (!args.targets?.length) {
-            return (0, respond_1.err)(`set_relationship needs \`targets\` (at least one object). To clear ${(0, narration_1.inlineOr)(label, NO_NAME)}, use op="remove_relationship".`);
+            return (0, respond_1.err)(`set_relationship needs \`targets\` (at least one object). To clear ${(0, narration_1.inlineOr)(label, narration_1.NO_NAME)}, use op="remove_relationship".`);
         }
         const resolved = resolveObjectValues(snapshot, args.targets);
         if ("fail" in resolved)
@@ -285,8 +279,8 @@ async function opSetRelationship(client, args) {
         }
         const relationships = [...kept, { label, targetIds: resolved.ids }];
         await client.updateOntologyObject(object.id, { relationships }, args.expected_version);
-        const names = resolved.ids.map((id) => snapshot.objects[id] ? (0, narration_1.inlineOr)(snapshot.objects[id].name, NO_NAME) : `\`${id}\``);
-        return (0, respond_1.ok)(`Set ${(0, narration_1.inlineOr)(object.name, NO_NAME)} —${(0, narration_1.inlineOr)(label, NO_NAME)}→ ${names.join(", ")}.`);
+        const names = resolved.ids.map((id) => snapshot.objects[id] ? (0, narration_1.inlineOr)(snapshot.objects[id].name, narration_1.NO_NAME) : `\`${id}\``);
+        return (0, respond_1.ok)(`Set ${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)} —${(0, narration_1.inlineOr)(label, narration_1.NO_NAME)}→ ${names.join(", ")}.`);
     });
 }
 function resolveObjectValues(snapshot, refs) {
@@ -332,12 +326,12 @@ async function resolveResourceValues(client, kind, refs) {
                 continue;
             }
         }
-        const known = resources.map((r) => (0, narration_1.inlineOr)(r.slug, NO_NAME)).join(", ") || "none";
+        const known = resources.map((r) => (0, narration_1.inlineOr)(r.slug, narration_1.NO_NAME)).join(", ") || "none";
         const entryHint = kind === "knowledge"
             ? ` For a specific entry, pass \`<base>/<entry path>\` or the entry's uuid.`
             : "";
         return {
-            fail: (0, respond_1.err)(`No ${kind === "knowledge" ? "knowledge base" : "skill"} ${(0, narration_1.inlineOr)(ref, NO_NAME)}. Available: ${known}.${entryHint}`),
+            fail: (0, respond_1.err)(`No ${kind === "knowledge" ? "knowledge base" : "skill"} ${(0, narration_1.inlineOr)(ref, narration_1.NO_NAME)}. Available: ${known}.${entryHint}`),
         };
     }
     return { ids };
@@ -362,7 +356,7 @@ async function resolveKbEntryRef(client, bases, ref) {
         }
         catch {
             return {
-                fail: (0, respond_1.err)(`No entry at ${(0, narration_1.inlineOr)(path, NO_NAME)} in knowledge base \`${base.slug}\`. Check the path with dopl_kb op="get_tree" base="${base.slug}".`),
+                fail: (0, respond_1.err)(`No entry at ${(0, narration_1.inlineOr)(path, narration_1.NO_NAME)} in knowledge base \`${base.slug}\`. Check the path with dopl_kb op="get_tree" base="${base.slug}".`),
             };
         }
     }

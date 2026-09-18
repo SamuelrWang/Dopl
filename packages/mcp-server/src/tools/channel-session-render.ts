@@ -38,6 +38,7 @@ import type {
   SessionDetailKey,
 } from "@dopl/client";
 import { inlineOr } from "./channel-shared";
+import { NO_NAME } from "./narration";
 // ⚠ THE HANDLE — its own file since 2026-08-31 (the §2 cap, and a different
 // reason to change). See `channel-session-handle.ts`'s header.
 import { addressableHandle } from "./channel-session-handle";
@@ -62,7 +63,6 @@ import { ageMs, coarseAge, compactCount } from "./channel-session-units";
 // table renders from these rather than growing a second set.
 
 /** Peer-influenced display text, neutralized — never an empty span. */
-export const NO_NAME = "(unnamed)";
 export const NO_TITLE = "(untitled)";
 
 

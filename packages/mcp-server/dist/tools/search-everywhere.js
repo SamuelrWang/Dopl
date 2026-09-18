@@ -54,7 +54,6 @@ const partial_read_js_1 = require("./partial-read.js");
  */
 exports.MAX_SCOPES = 6;
 const EMPTY_ONTOLOGY = { clusters: [], objects: {} };
-const NO_NAME = "`(unnamed)`";
 /**
  * ⚠ THE HEADING IS THE PROVENANCE, so it says WHAT the scope is as well as which.
  * A container rendered as "workspace" would advertise it as one, which INVARIANTS
@@ -65,7 +64,7 @@ function heading(leg) {
     const where = leg.slug
         ? `${leg.kind} · slug \`${leg.slug}\` · id \`${leg.id}\``
         : `${leg.kind} · id \`${leg.id}\``;
-    return `## ${(0, narration_js_1.inlineOr)(leg.label, NO_NAME)} (${where})`;
+    return `## ${(0, narration_js_1.inlineOr)(leg.label, narration_js_1.NO_NAME)} (${where})`;
 }
 /**
  * Search ONE leg. ⚠ Runs inside that leg's own AsyncLocalStorage scope so every
@@ -88,7 +87,7 @@ async function searchOneLeg(client, leg, query, limit, matches) {
             hits += entries.length;
             lines.push("", "### Knowledge entries");
             for (const h of entries) {
-                lines.push(`- ${(0, narration_js_1.inlineOr)(h.title, NO_NAME)} (entry id: \`${h.entryId}\`) — ${(0, narration_js_1.inlineOr)(h.snippet.replace(/<\/?b>/g, ""), "`(no snippet)`")}`);
+                lines.push(`- ${(0, narration_js_1.inlineOr)(h.title, narration_js_1.NO_NAME)} (entry id: \`${h.entryId}\`) — ${(0, narration_js_1.inlineOr)(h.snippet.replace(/<\/?b>/g, ""), "`(no snippet)`")}`);
             }
         }
         const skillHits = skills
@@ -98,7 +97,7 @@ async function searchOneLeg(client, leg, query, limit, matches) {
             hits += skillHits.length;
             lines.push("", "### Skills");
             for (const s of skillHits) {
-                lines.push(`- ${(0, narration_js_1.inlineOr)(s.name, NO_NAME)} \`${s.slug}\` — ${(0, narration_js_1.inlineOr)(s.whenToUse || s.description, "`(no trigger described)`")}`);
+                lines.push(`- ${(0, narration_js_1.inlineOr)(s.name, narration_js_1.NO_NAME)} \`${s.slug}\` — ${(0, narration_js_1.inlineOr)(s.whenToUse || s.description, "`(no trigger described)`")}`);
             }
         }
         const objectHits = Object.values(ontology.objects)
@@ -108,7 +107,7 @@ async function searchOneLeg(client, leg, query, limit, matches) {
             hits += objectHits.length;
             lines.push("", "### Ontology objects");
             for (const o of objectHits) {
-                lines.push(`- ${(0, narration_js_1.inlineOr)(o.name, NO_NAME)} (id: \`${o.id}\`)`);
+                lines.push(`- ${(0, narration_js_1.inlineOr)(o.name, narration_js_1.NO_NAME)} (id: \`${o.id}\`)`);
             }
         }
         const templateHits = templates
@@ -118,7 +117,7 @@ async function searchOneLeg(client, leg, query, limit, matches) {
             hits += templateHits.length;
             lines.push("", "### Agent templates");
             for (const t of templateHits) {
-                lines.push(`- ${(0, narration_js_1.inlineOr)(t.name, NO_NAME)} (id: \`${t.id}\` · ${t.visibility})`);
+                lines.push(`- ${(0, narration_js_1.inlineOr)(t.name, narration_js_1.NO_NAME)} (id: \`${t.id}\` · ${t.visibility})`);
             }
         }
         // ⚠ AN EMPTY SCOPE STILL GETS ITS HEADING. Dropping it would make "searched,

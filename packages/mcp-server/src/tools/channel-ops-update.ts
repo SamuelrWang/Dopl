@@ -38,11 +38,9 @@ import type {
   DoplClient,
 } from "@dopl/client";
 import { randomUUID } from "node:crypto";
-import { inlineOr, neutralizeInline } from "./narration";
+import { inlineOr, neutralizeInline, NO_NAME } from "./narration";
 import { ok, err, type ToolResponse } from "./respond";
 import { isErr, resolveChannelOr } from "./channel-shared";
-
-const NO_NAME = "(unnamed)";
 
 /** The card as shipped. ⚠ The wire type is optional and an older server sends
  *  none, so every read of `channel.infoCard` spells this inline (INVARIANTS §8). */

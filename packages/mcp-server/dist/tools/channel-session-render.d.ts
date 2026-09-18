@@ -33,7 +33,6 @@
  */
 import type { ChannelSessionState, ChannelSessionStateOwn, SessionDetailKey } from "@dopl/client";
 /** Peer-influenced display text, neutralized — never an empty span. */
-export declare const NO_NAME = "(unnamed)";
 export declare const NO_TITLE = "(untitled)";
 /**
  * ⚠ `state` is spliced into SERVER NARRATION, not a code span, so it must pass

@@ -26,7 +26,7 @@
  */
 
 import type { AgentTemplate, DoplClient } from "@dopl/client";
-import { inlineOr } from "./narration.js";
+import { inlineOr, NO_NAME } from "./narration.js";
 import { apiMessage, err, isApiError, type ToolResponse } from "./respond.js";
 
 /**
@@ -73,9 +73,6 @@ export type OfferedTemplateVisibility =
  */
 export const VISIBILITY_ENUM_MESSAGE =
   'visibility must be "private" or "workspace", and nothing was written — "team" is no longer a sharing option on this surface.';
-
-/** A template with nothing nameable left after neutralization. */
-export const NO_NAME = "`(unnamed)`";
 
 /** ⚠ Local, like `channel-addressing.ts` and `ontology-ops-write.ts` — three
  *  copies already exist in this package and unifying them is not this wave. */
@@ -138,10 +135,6 @@ export async function resolveTemplateOr(
   if (res.kind === "found") return res.template;
   if (res.kind === "ambiguous") return ambiguousTemplate(ref, res.matches);
   return templateNotFound(ref);
-}
-
-export function isErr(x: AgentTemplate | ToolResponse): x is ToolResponse {
-  return "isError" in x && x.isError === true;
 }
 
 /**
@@ -244,7 +237,7 @@ export function sharedCredentialPrivateDenied(e: unknown): ToolResponse | null {
  *  so a newline in either would otherwise start a row of its own. */
 export function templateRow(t: AgentTemplate): string {
   const desc = t.description ? `\n  ${inlineOr(t.description, "")}` : "";
-  const model = t.model ? ` · model ${inlineOr(t.model, "`(unnamed)`")}` : "";
+  const model = t.model ? ` · model ${inlineOr(t.model, NO_NAME)}` : "";
   // ⚠ **"knowledge scope(s)", NOT "knowledge base(s)" (2026-09-08).** An
   // attachment is a base, a FOLDER or an ENTRY now, and counting three folders
   // of one base as "3 knowledge bases" is a false sentence about what the

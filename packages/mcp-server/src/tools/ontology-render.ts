@@ -6,10 +6,10 @@
 
 import type { DoplClient, OntologyObject, OntologySnapshot } from "@dopl/client";
 import { isConcise, type ResponseFormat } from "./response-size";
-import { inlineOr } from "./narration";
+import { inlineOr, NO_NAME } from "./narration";
 import { err, type ToolResponse } from "./respond";
 
-/**
+/*
  * ⚠ THE VALUE/BODY LINE, DRAWN TWICE. The graph is workspace-scoped and nothing
  * in `features/ontology/schema.ts` carries a charset rule (object `name`
  * max 300, `subtitle` max 1000, attribute `label` max 200, method `name`
@@ -22,8 +22,9 @@ import { err, type ToolResponse } from "./respond";
  *     routing instructions the ontology exists to carry, and clipping them to
  *     160 chars deletes the feature. {@link indented} instead: a newline can no
  *     longer put attacker text at the START of a line.
+ *
+ * The fallback itself is `narration.ts › NO_NAME` (2026-09-17).
  */
-const NO_NAME = "`(unnamed)`";
 
 /**
  * Multi-line prose under the line introducing it, continuations indented two

@@ -26,12 +26,11 @@
 
 import type { ContainerKind } from "@dopl/contracts";
 import type { AccountChannelStatus, AccountStatus } from "@dopl/client";
-import { inlineOr } from "./narration.js";
+import { inlineOr, NO_NAME } from "./narration.js";
 import { formatSessionLine } from "./channel-session-render.js";
 import { isConcise, type ResponseFormat } from "./response-size.js";
 
 /** Peer-influenced display text that neutralized to nothing. */
-const NO_NAME = "(unnamed)";
 const NO_ONE = "(unresolved author)";
 const NO_TEXT = "(empty)";
 

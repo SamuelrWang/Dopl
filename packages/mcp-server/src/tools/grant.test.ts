@@ -15,7 +15,8 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import type { DoplClient, KnowledgeBase } from "@dopl/client";
+import type { DoplClient, KnowledgeBase, WorkspaceListItem } from "@dopl/client";
+import { createWorkspaceDirectory } from "../workspace-directory";
 
 import { opGrantBase } from "./knowledge-ops-write";
 import { channelScopeRefusal, levelForScope } from "./grant";
@@ -43,7 +44,9 @@ const textOf = (res: { content: Array<{ text: string }> }) =>
   res.content.map((c) => c.text).join("\n");
 
 const DIRECTORY = {
-  resolveWorkspaceRef: vi.fn(async (ref: string) =>
+  // ⚠ `resolveContainerRef` since 2026-09-17 — the addressing contract, which
+  // handles `home` and REFUSES an ambiguous slug instead of taking the head.
+  resolveContainerRef: vi.fn(async (ref: string) =>
     ref === "container-1" ? { id: "container-1" } : null,
   ),
 } as never;
@@ -161,13 +164,13 @@ describe('dopl_kb op="grant"', () => {
 
   it("does NOT resolve a channel scope through the workspace directory", async () => {
     // ⚠ A channel id is a uuid and is fenced SERVER-SIDE against the caller's
-    // own visible channels. Sending it through `resolveWorkspaceRef` would
+    // own visible channels. Sending it through `resolveContainerRef` would
     // refuse every legitimate channel grant.
     const grant = vi.fn(async () => ({}));
     const resolve = vi.fn();
     await opGrantBase(
       client({ grantResource: grant }),
-      { resolveWorkspaceRef: resolve } as never,
+      { resolveContainerRef: resolve } as never,
       ME,
       "notes",
       "channel",
@@ -237,5 +240,98 @@ describe("🔒 channelScopeRefusal — the server's SCOPE_NOT_ALLOWED_IN_WORKSPA
         "visible",
       ),
     ).rejects.toThrow("connection reset");
+  });
+});
+
+// ── 🔒 The ADDRESSING CONTRACT, not a second resolver (2026-09-17) ───────
+
+/**
+ * 🔒 **`to` RESOLVES THROUGH `resolveContainerRef`, LIKE EVERY OTHER CONTAINER
+ * ADDRESS.** It went through `resolveWorkspaceRef` — `matchContainerRefs(ref)[0]`,
+ * FIRST-WINS — until this date, which meant a slug naming two containers the
+ * caller is in silently LENT INTO THE FIRST (F-719's case, and a grant is a
+ * widen-the-audience write), and `to="home"` resolved to nothing at all though
+ * R-32 made the personal shelf a first-class address.
+ *
+ * ⚠ A REAL directory, not a stub: what is pinned is that the grant reaches the
+ * SAME resolver `container=` reaches, so a stub of its shape proves nothing.
+ */
+describe('🔒 op="grant" addresses a container the way every other call does', () => {
+  const ws = (
+    id: string,
+    slug: string,
+    kind: "standard" | "link" | "personal",
+  ): WorkspaceListItem => ({
+    id,
+    ownerId: "owner",
+    name: slug,
+    slug,
+    publicId: `pub-${id}`,
+    description: null,
+    kind,
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+    role: "owner",
+  });
+
+  // ⚠ ONE SLUG, TWO ROWS, NEITHER A MISTAKE: a home channel is named by the
+  // peer who minted it, so a caller seeing two `ops` is the documented case.
+  const MINE = ws("id-ws-ops", "ops", "standard");
+  const THEIRS = ws("id-room-ops", "ops", "link");
+  const HOME = ws("id-home", "sam", "personal");
+
+  const directoryOf = (rows: WorkspaceListItem[]) =>
+    createWorkspaceDirectory(
+      { listWorkspaces: vi.fn(async () => ({ workspaces: rows })) } as unknown as DoplClient,
+      { directory: rows },
+    );
+
+  const grantTo = async (rows: WorkspaceListItem[], to: string) => {
+    const grant = vi.fn(async () => ({}));
+    const res = await opGrantBase(
+      client({ grantResource: grant }),
+      directoryOf(rows),
+      ME,
+      "notes",
+      "container",
+      to,
+      undefined,
+    );
+    return { res, grant };
+  };
+
+  it('to="home" resolves the caller\'s PERSONAL container (R-32)', async () => {
+    const { res, grant } = await grantTo([MINE, HOME], "home");
+    expect(res.isError).toBeFalsy();
+    expect(grant).toHaveBeenCalledWith(
+      expect.objectContaining({ scopeType: "container", scopeId: "id-home" }),
+    );
+  });
+
+  it("an AMBIGUOUS slug refuses, names both ids, and shares NOTHING", async () => {
+    const { res, grant } = await grantTo([MINE, THEIRS, HOME], "ops");
+    expect(res.isError).toBe(true);
+    expect(grant).not.toHaveBeenCalled();
+    const text = textOf(res);
+    // ⚠ The refusal re-issues with `to=<id>`, not `container=<id>`.
+    expect(text).toContain("to=<id>");
+    expect(text).toContain("id-ws-ops");
+    expect(text).toContain("id-room-ops");
+  });
+
+  it("an ID never ties — it is the remedy the refusal hands back", async () => {
+    const { res, grant } = await grantTo([MINE, THEIRS, HOME], "id-room-ops");
+    expect(res.isError).toBeFalsy();
+    expect(grant).toHaveBeenCalledWith(
+      expect.objectContaining({ scopeId: "id-room-ops" }),
+    );
+  });
+
+  it("an UNAMBIGUOUS slug still resolves, exactly as before", async () => {
+    const { res, grant } = await grantTo([MINE, HOME], "ops");
+    expect(res.isError).toBeFalsy();
+    expect(grant).toHaveBeenCalledWith(
+      expect.objectContaining({ scopeId: "id-ws-ops" }),
+    );
   });
 });

@@ -277,10 +277,11 @@ function registerAgentTools(register, client,
 // server already filtered.
 caller = identity_js_1.UNKNOWN_CALLER, 
 // 🔒 THE SCOPE RESOLVER FOR op="grant", AND NOTHING ELSE READS IT HERE.
-// `workspace-directory.ts › resolveWorkspaceRef` is the ONE resolver that
-// takes a home-channel CONTAINER id (§4A: it deliberately does not filter)
-// and that answers `null` for every ref but the locked one under a CONTAINER
-// LOCK.
+// `workspace-directory.ts › resolveContainerRef` is the ONE resolver that
+// takes the reserved word `home` and a home-channel CONTAINER id (§4A: it
+// deliberately does not filter), REFUSES an ambiguous slug rather than picking
+// (F-719), and answers `null` for every ref but the locked one under a
+// CONTAINER LOCK.
 // ⚠ **REQUIRED, WITH NO DEFAULT, DELIBERATELY** — even though it follows a
 // defaulted parameter. A default would silently un-narrow the grant scope for
 // any caller that forgot it, which is the enumeration B3 exists to deny;

@@ -49,8 +49,7 @@ import { TENANCY_FIX, TENANCY_RULE } from "./channel-doctrine";
 import { colorTaken, freeColors } from "./channel-ops-launch-color";
 import { isNameRefusal, launchName, launchedName } from "./channel-ops-launch-name";
 
-/** Peer-influenced display text, neutralized — never an empty span. */
-const NO_NAME = "(unnamed)";
+import { NO_NAME } from "./narration";
 
 /** The `code` a DoplApiError carries, or null. ⚠ Duck-typed rather than imported
  *  — the same discipline `respond.ts`'s `isNotFound` follows across the

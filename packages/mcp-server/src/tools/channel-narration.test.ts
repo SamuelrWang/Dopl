@@ -151,7 +151,9 @@ describe("Q1-A · opList — a PUBLIC channel's name and topic", () => {
     });
 
     const text = (await opList(client)).content[0].text;
-    expect(text).toContain("**(unnamed)**");
+    // ⚠ BACKTICKED since 2026-09-17 — `narration.ts › NO_NAME` is the one
+    // fallback now, and `inlineOr` returns a code span on every other path.
+    expect(text).toContain("**`(unnamed)`**");
     expect(text).toContain("slug: `odd`");
   });
 });

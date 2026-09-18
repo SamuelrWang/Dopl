@@ -182,7 +182,7 @@ describe('dopl_agent op="grant"', () => {
     updatedAt: "2026-01-01T00:00:00Z",
   };
   const directory = {
-    resolveWorkspaceRef: vi.fn(async (ref: string) =>
+    resolveContainerRef: vi.fn(async (ref: string) =>
       ref === "container-1" ? { id: "container-1" } : null,
     ),
   } as never;

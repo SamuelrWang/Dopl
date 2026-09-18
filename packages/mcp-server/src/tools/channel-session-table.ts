@@ -21,7 +21,6 @@ import { addressableHandle } from "./channel-session-handle";
 // this one through it would make the leaf reachable two ways and invite a cycle.
 import { ageMs, coarseAge } from "./channel-session-units";
 import {
-  NO_NAME,
   NO_TITLE,
   SESSION_STATES,
   UNKNOWN_STATE,
@@ -31,6 +30,7 @@ import {
   shortModelLabel,
   type SessionRenderOpts,
 } from "./channel-session-render";
+import { NO_NAME } from "./narration";
 
 // ── THE TABLE (T13, 2026-09-02) ─────────────────────────────────────────────
 //

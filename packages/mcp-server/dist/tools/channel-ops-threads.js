@@ -22,6 +22,7 @@ exports.opCreateThread = opCreateThread;
 exports.opSetThreadMode = opSetThreadMode;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
+const narration_1 = require("./narration");
 // ⚠ Whether a pending HOLD outlives the turn is a CLIENT property this
 // server cannot see — one module decides what may be claimed about it.
 const channel_wake_guidance_1 = require("./channel-wake-guidance");
@@ -29,7 +30,6 @@ const channel_wake_guidance_1 = require("./channel-wake-guidance");
 const channel_facts_1 = require("./channel-facts");
 const channel_errors_1 = require("./channel-errors");
 /** Fallbacks for peer text that neutralized to nothing — never an empty span. */
-const NO_NAME = "(unnamed)";
 const NO_TITLE = "(untitled)";
 const NO_ID = "(unreadable id)";
 async function opCreateThread(client, channelRef, title, body, to, mode, clientMsgId, 
@@ -44,7 +44,7 @@ handoff) {
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);
     if ((0, channel_shared_1.isErr)(ch))
         return ch;
-    const chName = (0, channel_shared_1.inlineOr)(ch.name, NO_NAME);
+    const chName = (0, channel_shared_1.inlineOr)(ch.name, narration_1.NO_NAME);
     const member = await (0, channel_shared_1.resolveMemberOr)(client, to);
     if ((0, channel_shared_1.isErr)(member))
         return member;
@@ -163,7 +163,7 @@ async function opSetThreadMode(client, channelRef, threadId, mode) {
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);
     if ((0, channel_shared_1.isErr)(ch))
         return ch;
-    const chName = (0, channel_shared_1.inlineOr)(ch.name, NO_NAME);
+    const chName = (0, channel_shared_1.inlineOr)(ch.name, narration_1.NO_NAME);
     let thread;
     try {
         thread = await client.setChannelThreadMode(ch.id, threadId, { mode });

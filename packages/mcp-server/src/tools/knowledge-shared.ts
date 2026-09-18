@@ -4,7 +4,7 @@
  */
 
 import type { DoplClient, KnowledgeBase } from "@dopl/client";
-import { inlineOr } from "./narration";
+import { inlineOr, NO_NAME } from "./narration";
 import { apiMessage, err, isApiError, type ToolResponse } from "./respond";
 import { PRIVATE_VISIBILITY_DENIED_CODE } from "./agent-shared";
 import { KB_ERRORS, refusal } from "./tool-errors";
@@ -209,7 +209,7 @@ function matchLine(
     count === null
       ? "entry count unavailable"
       : `${count} ${count === 1 ? "entry" : "entries"}`;
-  return `- \`${base.id}\` — ${inlineOr(base.name, "`(unnamed)`")} · ${where} · ${entries}`;
+  return `- \`${base.id}\` — ${inlineOr(base.name, NO_NAME)} · ${where} · ${entries}`;
 }
 
 /**
@@ -241,10 +241,6 @@ async function entryCount(client: DoplClient, baseId: string): Promise<number | 
   } catch {
     return null;
   }
-}
-
-export function isErr(x: KnowledgeBase | ToolResponse): x is ToolResponse {
-  return "isError" in x && x.isError === true;
 }
 
 /**

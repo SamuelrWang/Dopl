@@ -31,8 +31,10 @@ export { INLINE_TEXT_MAX, inlineOr, neutralizeInline } from "./narration";
  */
 export declare function memberNames(client: DoplClient, ref: string): Promise<Map<string, string>>;
 /**
- * True when a resolver returned a ToolResponse error instead of the value.
- * Generic so it narrows both the channel and member resolvers.
+ * ⚠ **THE ONE `isErr`, FOR EVERY LANE** — channel, member, agent template and
+ * knowledge base (2026-09-17). Two further copies tested `"isError" in x` with
+ * no object guard, so a resolver that rejected with a STRING or a NUMBER threw
+ * `TypeError: Cannot use 'in' operator` instead of narrowing.
  */
 export declare function isErr<T>(x: T | ToolResponse): x is ToolResponse;
 /**

@@ -39,8 +39,7 @@ import { factsLine } from "./channel-facts";
 // why four characters of logic still deserve one home is in that module.
 import { bareAgentId } from "./channel-agent-id";
 
-/** Peer-influenced display text, neutralized — never an empty span. */
-const NO_NAME = "(unnamed)";
+import { NO_NAME } from "./narration";
 
 /** Default and cap for the bounded hold. ⚠ Mirrors `channel-schema.ts › wait_ms`;
  *  the schema is what an MCP client sees, this is what runs. */

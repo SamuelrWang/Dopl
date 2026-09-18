@@ -34,10 +34,10 @@ exports.isGrantRefusal = isGrantRefusal;
 exports.notOwnedRefusal = notOwnedRefusal;
 exports.resolveGrantScopeId = resolveGrantScopeId;
 exports.grantedLine = grantedLine;
+const workspace_directory_js_1 = require("../workspace-directory.js");
+const container_resolve_js_1 = require("../container-resolve.js");
 const narration_js_1 = require("./narration.js");
 const respond_js_1 = require("./respond.js");
-/** A row with nothing nameable left after neutralization. */
-const NO_NAME = "`(unnamed)`";
 /**
  * Where a resource can be lent, **AS OFFERED HERE**.
  *
@@ -128,7 +128,7 @@ function isGrantRefusal(x) {
 function notOwnedRefusal(createdBy, selfUserId, noun, ref) {
     if (selfUserId && createdBy && createdBy === selfUserId)
         return null;
-    return (0, respond_js_1.err)(`Refused: op="grant" lends ${noun}s YOU created, and ${(0, narration_js_1.inlineOr)(ref, NO_NAME)} is not one of them. NOTHING was shared. Being able to read it is not the same as being able to lend it — a grant puts it in front of everyone in the scope you named. ${selfUserId
+    return (0, respond_js_1.err)(`Refused: op="grant" lends ${noun}s YOU created, and ${(0, narration_js_1.inlineOr)(ref, narration_js_1.NO_NAME)} is not one of them. NOTHING was shared. Being able to read it is not the same as being able to lend it — a grant puts it in front of everyone in the scope you named. ${selfUserId
         ? `Ask its owner to share it.`
         : `(This session could not resolve who you are, so ownership cannot be proved at all — reconnect with a credential that carries your user id.)`}`);
 }
@@ -136,15 +136,26 @@ function notOwnedRefusal(createdBy, selfUserId, noun, ref) {
  * `to` → the scope id to write.
  *
  * ⚠ **A CHANNEL AND A TEAM ARE NAMED BY ID; A CONTAINER GOES THROUGH THE
- * SESSION'S OWN RESOLVER.** `workspace-directory.ts › resolveWorkspaceRef` is
- * the one resolver that takes a slug, a uuid **or** a home-channel CONTAINER id
- * (§4A: it deliberately does not filter) and that answers `null` for every ref
- * but the locked one under a container lock — so the lend inherits B3's fence
- * for free and never falls back to the workspace the call is in.
+ * ADDRESSING CONTRACT.** `workspace-directory.ts › resolveContainerRef` is the
+ * one resolver that takes a slug, a uuid, the reserved word `home` **or** a
+ * home-channel CONTAINER id (§4A: it deliberately does not filter) and that
+ * answers `null` for every ref but the locked one under a container lock — so
+ * the lend inherits B3's fence for free and never falls back to the workspace
+ * the call is in.
  *
- * ⚠ **THE REFUSAL IS UNIFORM.** "No such scope" and "not one you can act in"
- * stay ONE answer; a sentence that distinguished them is an existence oracle
- * over the operator's other rooms.
+ * 🔒 **IT WENT THROUGH `resolveWorkspaceRef` — FIRST-WINS — UNTIL 2026-09-17.**
+ * Two live consequences, both of them silent: `to=<slug>` naming two containers
+ * the caller is in LENT INTO THE FIRST (home channels are named after the peer
+ * who minted them, so two `ops` is the documented case, and a grant is a
+ * widen-the-audience write — picking one is the worst available failure), and
+ * `to="home"` resolved to nothing though R-32 made the personal shelf a
+ * first-class address that {@link GRANT_TO_ARG_DESCRIPTION} already advertises.
+ * F-719's refusal is the whole point of the other resolver; this op now shares it.
+ *
+ * ⚠ **THE NOT-FOUND REFUSAL IS UNIFORM.** "No such scope" and "not one you can
+ * act in" stay ONE answer; a sentence that distinguished them is an existence
+ * oracle over the operator's other rooms. ⚠ The AMBIGUITY refusal is not that
+ * case — every row in it is one the caller is already in.
  */
 async function resolveGrantScopeId(directory, scope, to) {
     const needle = to.trim();
@@ -152,8 +163,13 @@ async function resolveGrantScopeId(directory, scope, to) {
         return unresolvableScope(scope, to);
     if (scope !== "container")
         return needle;
-    const target = await directory.resolveWorkspaceRef(needle);
-    return target ? target.id : unresolvableScope(scope, to);
+    const target = await directory.resolveContainerRef(needle);
+    if (!target)
+        return unresolvableScope(scope, to);
+    if ((0, workspace_directory_js_1.isAmbiguousContainer)(target)) {
+        return (0, respond_js_1.err)((0, container_resolve_js_1.ambiguousContainer)("to", needle, target.ambiguous));
+    }
+    return target.id;
 }
 /**
  * WHERE A CONTAINER ID COMES FROM, worded ONCE — it is answered by the refusal
@@ -183,5 +199,5 @@ exports.GRANT_LEVEL_ARG_DESCRIPTION = `op=grant: "visible" or "agent_only" on a 
  *  grant does not have that problem, and saying so is what stops a caller
  *  reaching for a copy that no longer exists. */
 function grantedLine(noun, name, scope, scopeId, level) {
-    return (0, respond_js_1.ok)(`Shared the ${noun} ${(0, narration_js_1.inlineOr)(name, NO_NAME)} into the ${scope} \`${scopeId}\` at \`${level}\`. It is ONE row, still yours and still where you edit it — an edit reaches everyone it is lent to, which is the whole difference from the copy this replaced. Re-sending the same call only changes the level.`);
+    return (0, respond_js_1.ok)(`Shared the ${noun} ${(0, narration_js_1.inlineOr)(name, narration_js_1.NO_NAME)} into the ${scope} \`${scopeId}\` at \`${level}\`. It is ONE row, still yours and still where you edit it — an edit reaches everyone it is lent to, which is the whole difference from the copy this replaced. Re-sending the same call only changes the level.`);
 }

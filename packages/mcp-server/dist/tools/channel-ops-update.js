@@ -38,7 +38,6 @@ const node_crypto_1 = require("node:crypto");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
-const NO_NAME = "(unnamed)";
 /** The card as shipped. ⚠ The wire type is optional and an older server sends
  *  none, so every read of `channel.infoCard` spells this inline (INVARIANTS §8). */
 const EMPTY_CARD = { hidden: [], rows: [] };
@@ -120,7 +119,7 @@ async function opUpdate(client, ref, card) {
     const channel = await (0, channel_shared_1.resolveChannelOr)(client, ref);
     if ((0, channel_shared_1.isErr)(channel))
         return channel;
-    const label = (0, narration_1.inlineOr)(channel.name, NO_NAME);
+    const label = (0, narration_1.inlineOr)(channel.name, narration_1.NO_NAME);
     if (card === undefined) {
         return (0, respond_1.ok)([
             `Info card for **${label}** — READ ONLY, nothing was changed.`,

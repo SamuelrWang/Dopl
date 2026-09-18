@@ -16,8 +16,6 @@ const respond_1 = require("./respond");
 const response_size_1 = require("./response-size");
 const identity_1 = require("./identity");
 const ontology_render_1 = require("./ontology-render");
-/** Same rule as ontology-render.ts: a graph name is a value. */
-const NO_NAME = "`(unnamed)`";
 /**
  * ⚠ WHAT op="map" WALKS AND WHERE IT STOPS. The snapshot is the whole live
  * graph (no status filter, no visibility filter, no cap), but `opMap` walks
@@ -59,7 +57,7 @@ async function opMap(client, format) {
     const lines = [];
     for (const c of snapshot.clusters) {
         const purpose = c.purpose ? ` — ${(0, narration_1.inlineOr)(c.purpose, "")}` : "";
-        lines.push(`## ${(0, narration_1.inlineOr)(c.name, NO_NAME)} \`${c.slug}\`${purpose}`);
+        lines.push(`## ${(0, narration_1.inlineOr)(c.name, narration_1.NO_NAME)} \`${c.slug}\`${purpose}`);
         for (const columnId of c.columnIds) {
             const column = snapshot.objects[columnId];
             if (!column)
@@ -67,8 +65,8 @@ async function opMap(client, format) {
             const members = column.childIds
                 .map((id) => snapshot.objects[id]?.name)
                 .filter((n) => Boolean(n))
-                .map((n) => (0, narration_1.inlineOr)(n, NO_NAME));
-            lines.push(`- ${(0, narration_1.inlineOr)(column.name, NO_NAME)} (${members.length}): ${members.join(", ") || "empty"}`);
+                .map((n) => (0, narration_1.inlineOr)(n, narration_1.NO_NAME));
+            lines.push(`- ${(0, narration_1.inlineOr)(column.name, narration_1.NO_NAME)} (${members.length}): ${members.join(", ") || "empty"}`);
         }
         lines.push("");
     }
@@ -129,12 +127,12 @@ async function opResolve(client, query, format) {
     const containerOf = (id) => {
         // ⚠ The "kind" is the containing OBJECT'S NAME — member-typed.
         const name = Object.values(snapshot.objects).find((o) => o.childIds.includes(id))?.name;
-        return name ? (0, narration_1.inlineOr)(name, NO_NAME) : "object";
+        return name ? (0, narration_1.inlineOr)(name, narration_1.NO_NAME) : "object";
     };
     const shown = hits.slice(0, RESOLVE_CAP);
     const lines = shown.map((o) => {
         const subtitle = o.subtitle ? ` — ${(0, narration_1.inlineOr)(o.subtitle, "")}` : "";
-        return `- ${(0, narration_1.inlineOr)(o.name, NO_NAME)} (${containerOf(o.id)} · id: \`${o.id}\`)${subtitle}`;
+        return `- ${(0, narration_1.inlineOr)(o.name, narration_1.NO_NAME)} (${containerOf(o.id)} · id: \`${o.id}\`)${subtitle}`;
     });
     // ⚠ Free to state (cap applied here, over a loaded snapshot) and expensive to
     // omit: 21 matches otherwise renders exactly like 20.

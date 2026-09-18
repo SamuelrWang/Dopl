@@ -33,7 +33,7 @@
  * a missing fact as evidence of life.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SESSION_STALE_WINDOW_MS = exports.UNKNOWN_STATE = exports.SESSION_STATES = exports.NO_TITLE = exports.NO_NAME = void 0;
+exports.SESSION_STALE_WINDOW_MS = exports.UNKNOWN_STATE = exports.SESSION_STATES = exports.NO_TITLE = void 0;
 exports.detailPhrase = detailPhrase;
 exports.sessionIsStale = sessionIsStale;
 exports.shortModelLabel = shortModelLabel;
@@ -41,6 +41,7 @@ exports.rowIsQuietNotGone = rowIsQuietNotGone;
 exports.formatSessionLine = formatSessionLine;
 exports.sessionLegend = sessionLegend;
 const channel_shared_1 = require("./channel-shared");
+const narration_1 = require("./narration");
 // ⚠ THE HANDLE — its own file since 2026-08-31 (the §2 cap, and a different
 // reason to change). See `channel-session-handle.ts`'s header.
 const channel_session_handle_1 = require("./channel-session-handle");
@@ -60,7 +61,6 @@ const channel_session_units_1 = require("./channel-session-units");
 // window and its coarse-age spelling still have exactly ONE definition, and the
 // table renders from these rather than growing a second set.
 /** Peer-influenced display text, neutralized — never an empty span. */
-exports.NO_NAME = "(unnamed)";
 exports.NO_TITLE = "(untitled)";
 /**
  * ⚠ `state` is spliced into SERVER NARRATION, not a code span, so it must pass
@@ -287,7 +287,7 @@ function rowIsQuietNotGone(age, stale, operatorOnline) {
  */
 function formatSessionLine(s, opts = {}) {
     const now = opts.now ?? Date.now();
-    const where = s.channelName ? ` · in ${(0, channel_shared_1.inlineOr)(s.channelName, exports.NO_NAME)}` : "";
+    const where = s.channelName ? ` · in ${(0, channel_shared_1.inlineOr)(s.channelName, narration_1.NO_NAME)}` : "";
     const on = s.threadTitle
         ? ` · thread ${(0, channel_shared_1.inlineOr)(s.threadTitle, exports.NO_TITLE)}`
         : s.threadId
@@ -339,10 +339,10 @@ function formatSessionLine(s, opts = {}) {
     // ⚠ NEUTRALIZED, never spliced raw: it is a string another machine wrote.
     // ⚠ AND IT FALLS BACK TO `s.name`, not to `NO_NAME` — an unnamed row still has an address
     // worth printing, and that is the pre-F-708 line byte for byte.
-    const named = s.displayName?.trim() ? (0, channel_shared_1.inlineOr)(s.displayName, exports.NO_NAME) : null;
+    const named = s.displayName?.trim() ? (0, channel_shared_1.inlineOr)(s.displayName, narration_1.NO_NAME) : null;
     // ⚠ `bullet` DEFAULTS TO TRUE, so every existing caller's bytes are unchanged.
     const lead = opts.bullet === false ? "" : "- ";
-    return `${lead}**${named ?? (0, channel_shared_1.inlineOr)(s.name, exports.NO_NAME)}**${address} — ${head}${detail}${on}${where}${tail}`;
+    return `${lead}**${named ?? (0, channel_shared_1.inlineOr)(s.name, narration_1.NO_NAME)}**${address} — ${head}${detail}${on}${where}${tail}`;
 }
 /**
  * THE LEGEND under a set of session lines. One sentence per thing a reader

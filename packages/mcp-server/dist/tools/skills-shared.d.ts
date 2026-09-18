@@ -14,6 +14,8 @@ import { type ToolResponse } from "./respond";
  *     procedure the agent loads and follows: intact under op="get"; in
  *     op="list" they are bullet-row triggers, so that rendering bounds them.
  */
+/** ⚠ DELIBERATELY NOT `narration.ts › NO_NAME`: this surface renders nothing
+ *  but skills, and the noun is what says which row went unnamed. */
 export declare const NO_NAME = "`(unnamed skill)`";
 /**
  * ⚠ WHAT op="list" FILTERS, stated on the RESULT. `opList` applies

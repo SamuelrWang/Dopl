@@ -25,6 +25,7 @@
  */
 import type { ToolResponse } from "./tools/respond.js";
 import type { ActiveWorkspaceState, EffectiveWorkspace, WorkspaceDirectory } from "./workspace-directory.js";
+import type { WorkspaceListItem } from "@dopl/client";
 /** The two spellings, as the caller sent them. */
 export interface AddressArgs {
     container?: string;
@@ -61,3 +62,21 @@ export interface AddressDeps {
  * and a silent re-target (B13's argument, one argument later).
  */
 export declare function resolveCallAddress(tool: string, op: string | undefined, args: AddressArgs, { directory, activeWorkspace }: AddressDeps): Promise<AddressOutcome>;
+/**
+ * THE AMBIGUITY REFUSAL — **it lists, and it does not pick** (F-719).
+ *
+ * ⚠ **IT IS `knowledge-shared.ts › ambiguousBase`'s CONTRACT, ONE TABLE OVER, AND
+ * DELIBERATELY NOT A SECOND IDIOM**: the same `reason=ambiguous_slug` literal, the
+ * same opening, the same one-line-per-candidate list keyed by the ID to re-issue
+ * with — so an agent that learned the remedy from `dopl_kb` applies it unchanged.
+ *
+ * ⚠ **THE LIST IS THE WHOLE VALUE.** "That slug is ambiguous" alone sends the caller
+ * to `dopl_workspaces` for ids it was already holding; each row carries the id and
+ * the KIND, which is what says "one of these is a room somebody else named".
+ * ⚠ **AND IT IS NOT AN ORACLE** — every row came back from this caller's own
+ * lock-narrowed directory, so it discloses exactly what `dopl_workspaces` would.
+ *
+ * ⚠ **EXPORTED FOR `tools/grant.ts` SINCE 2026-09-17** — `argName` is what makes
+ * it reusable: a grant re-issues with `to=<id>`, not `container=<id>`.
+ */
+export declare function ambiguousContainer(argName: string, ref: string, matches: WorkspaceListItem[]): string;

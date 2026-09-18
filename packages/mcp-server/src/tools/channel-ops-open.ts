@@ -22,8 +22,7 @@ import {
   resolveMemberOr,
 } from "./channel-shared";
 
-/** Fallback for peer text that neutralized to nothing — never an empty span. */
-const NO_NAME = "(unnamed)";
+import { NO_NAME } from "./narration";
 
 /** Options for opOpen — a normal channel, or a `direct` message with `member`. */
 interface OpenOptions {

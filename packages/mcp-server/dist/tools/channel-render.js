@@ -25,6 +25,7 @@ exports.formatMemberLine = formatMemberLine;
 exports.groupByChannel = groupByChannel;
 const channel_facts_1 = require("./channel-facts");
 const channel_shared_1 = require("./channel-shared");
+const narration_1 = require("./narration");
 // ⚠ **WHO WROTE IT AND WHO IT REACHED IS `channel-render-identity.ts`** (§1
 // split, 2026-09-04) — one place decides how an author, a recipient and an
 // addressing clause read. Re-exported below so no importer of this module moved.
@@ -204,7 +205,7 @@ function formatChannelLine(c) {
         bits.push(`last activity ${c.lastMessageAt}`);
     const safeTopic = c.topic ? (0, channel_shared_1.neutralizeInline)(c.topic) : null;
     const topic = safeTopic ? ` — ${safeTopic}` : "";
-    return `- **${(0, channel_shared_1.inlineOr)(c.name, "(unnamed)")}** (slug: \`${c.slug}\` · ${bits.join(" · ")})${topic}`;
+    return `- **${(0, channel_shared_1.inlineOr)(c.name, narration_1.NO_NAME)}** (slug: \`${c.slug}\` · ${bits.join(" · ")})${topic}`;
 }
 /**
  * One rendered thread line for `list_threads`. The thread row is the

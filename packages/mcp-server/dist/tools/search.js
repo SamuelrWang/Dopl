@@ -19,8 +19,6 @@ const workspace_directory_1 = require("../workspace-directory");
 const search_everywhere_1 = require("./search-everywhere");
 const respond_1 = require("./respond");
 const EMPTY_ONTOLOGY = { clusters: [], objects: {} };
-/** A result with nothing nameable left after neutralization. */
-const NO_NAME = "`(unnamed)`";
 /**
  * A knowledge-entry search snippet, as a VALUE. ⚠ Do not turn the backend's
  * `<b>` highlight tags into `**` — that adds our own markdown to text we do not
@@ -209,7 +207,7 @@ function registerSearchTool(register, client, directory, charge) {
         if (entryHits.length === 0)
             lines.push("_No matches._");
         for (const h of entryHits.slice(0, limit)) {
-            lines.push(`- ${(0, narration_1.inlineOr)(h.title, NO_NAME)} (entry id: \`${h.entryId}\`) — ${snippet(h.snippet)}`);
+            lines.push(`- ${(0, narration_1.inlineOr)(h.title, narration_1.NO_NAME)} (entry id: \`${h.entryId}\`) — ${snippet(h.snippet)}`);
         }
         // ⚠ Without this line a capped group and an exhausted one render
         // identically. Free: `.slice(limit)` discards matches already counted.
@@ -220,7 +218,7 @@ function registerSearchTool(register, client, directory, charge) {
             lines.push("_No matches._");
         for (const s of skillHits) {
             const trigger = (0, narration_1.inlineOr)(s.whenToUse || s.description, "`(no trigger described)`");
-            lines.push(`- ${(0, narration_1.inlineOr)(s.name, NO_NAME)} \`${s.slug}\` — ${trigger}`);
+            lines.push(`- ${(0, narration_1.inlineOr)(s.name, narration_1.NO_NAME)} \`${s.slug}\` — ${trigger}`);
         }
         lines.push(...more(skillMatches.length, skillHits.length, "skills"));
         const objectMatches = Object.values(ontology.objects).filter((o) => matches(o.name, o.subtitle));
@@ -232,11 +230,11 @@ function registerSearchTool(register, client, directory, charge) {
             const name = Object.values(ontology.objects).find((c) => c.childIds.includes(id))?.name;
             // ⚠ Container name is another object's member-typed name — only the
             // "object" fallback is ours.
-            return name ? (0, narration_1.inlineOr)(name, NO_NAME) : "object";
+            return name ? (0, narration_1.inlineOr)(name, narration_1.NO_NAME) : "object";
         };
         for (const o of objectHits) {
             const subtitle = o.subtitle ? ` — ${(0, narration_1.inlineOr)(o.subtitle, "")}` : "";
-            lines.push(`- ${(0, narration_1.inlineOr)(o.name, NO_NAME)} (${containerOf(o.id)} · id: \`${o.id}\`)${subtitle}`);
+            lines.push(`- ${(0, narration_1.inlineOr)(o.name, narration_1.NO_NAME)} (${containerOf(o.id)} · id: \`${o.id}\`)${subtitle}`);
         }
         lines.push(...more(objectMatches.length, objectHits.length, "ontology objects"));
         // ⚠ A CLIPPED read differs from a capped GROUP: `more()` reports what the
@@ -260,7 +258,7 @@ function registerSearchTool(register, client, directory, charge) {
             lines.push("_No matches._");
         for (const t of templateHits) {
             const summary = (0, narration_1.inlineOr)(t.description, "`(no description)`");
-            lines.push(`- ${(0, narration_1.inlineOr)(t.name, NO_NAME)} (id: \`${t.id}\` · ${t.visibility}) — ${summary}`);
+            lines.push(`- ${(0, narration_1.inlineOr)(t.name, narration_1.NO_NAME)} (id: \`${t.id}\` · ${t.visibility}) — ${summary}`);
         }
         lines.push(...more(templateMatches.length, templateHits.length, "agent templates"));
         // ⚠ GROUPS, not domains — the denominator must move with the reads above,

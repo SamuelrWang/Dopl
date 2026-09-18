@@ -33,7 +33,7 @@ import type {
   ChannelArtifactResult,
   DoplClient,
 } from "@dopl/client";
-import { inlineOr } from "./narration";
+import { inlineOr, NO_NAME } from "./narration";
 import { err, missingParams, ok, type ToolResponse } from "./respond";
 import { isErr, resolveChannelOr } from "./channel-shared";
 import {
@@ -165,7 +165,7 @@ function spanLine(result: ChannelArtifactResult): string[] {
  * never structure. Same rule, same neutralizer, as the info card's rows.
  */
 function render(action: ArtifactAction, result: ChannelArtifactResult): string {
-  const name = inlineOr(result.artifact.name, "`(unnamed)`");
+  const name = inlineOr(result.artifact.name, NO_NAME);
   const head =
     action === "dissolve"
       ? `Dissolved **${name}**. Nothing was deleted: every message it held is back in the transcript, and the card still resolves by id.`

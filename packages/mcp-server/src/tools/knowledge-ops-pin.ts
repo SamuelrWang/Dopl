@@ -11,9 +11,10 @@
  */
 
 import type { DoplClient } from "@dopl/client";
-import { inlineOr } from "./narration";
+import { inlineOr, NO_NAME, NO_PATH } from "./narration";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
-import { agentWriteDenied, isErr, resolveBaseOr } from "./knowledge-shared";
+import { agentWriteDenied, resolveBaseOr } from "./knowledge-shared";
+import { isErr } from "./channel-shared";
 import {
   KB_PIN_MAX_CHARS,
   KB_PIN_WARN_CHARS,
@@ -21,9 +22,6 @@ import {
   renderOutline,
   type Outline,
 } from "./knowledge-sections";
-
-const NO_NAME = "`(unnamed)`";
-const NO_PATH = "`(unreadable path)`";
 
 /**
  * What the CURATED pinned set costs, or `null` when it could not be measured.

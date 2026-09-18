@@ -32,8 +32,7 @@ import {
   opCreateBase,
   opCreateFolder,
   opGrantBase,
-  opMoveFile,
-  opMoveFolder,
+  opMove,
   opSetVisibility,
   opUpdateBase,
   opWriteFile,
@@ -257,10 +256,11 @@ export function registerKnowledgeTools(
   // Nothing about visibility is decided from it — the server already filtered.
   caller: CallerIdentity = UNKNOWN_CALLER,
   // 🔒 THE SCOPE RESOLVER FOR op="grant", AND NOTHING ELSE READS IT HERE.
-  // `workspace-directory.ts › resolveWorkspaceRef` is the ONE resolver that
-  // takes a home-channel CONTAINER id (§4A: it deliberately does not filter)
-  // and that answers `null` for every ref but the locked one under a CONTAINER
-  // LOCK.
+  // `workspace-directory.ts › resolveContainerRef` is the ONE resolver that
+  // takes the reserved word `home` and a home-channel CONTAINER id (§4A: it
+  // deliberately does not filter), REFUSES an ambiguous slug rather than picking
+  // (F-719), and answers `null` for every ref but the locked one under a
+  // CONTAINER LOCK.
   // ⚠ **REQUIRED, WITH NO DEFAULT, DELIBERATELY** — even though it follows a
   // defaulted parameter. A default would silently un-narrow the grant scope for
   // any caller that forgot it, which is the enumeration B3 exists to deny;
@@ -323,7 +323,7 @@ export function registerKnowledgeTools(
         case "move_folder": {
           const miss = missingParams("move_folder", args, ["base", "from_path", "to_path"]);
           if (miss) return miss;
-          return opMoveFolder(client, args.base as string, args.from_path as string, args.to_path as string);
+          return opMove(client, args.base as string, args.from_path as string, args.to_path as string, "folder");
         }
         case "outline": {
           const miss = missingParams("outline", args, ["base", "path"]);
@@ -373,7 +373,7 @@ export function registerKnowledgeTools(
         case "move_file": {
           const miss = missingParams("move_file", args, ["base", "from_path", "to_path"]);
           if (miss) return miss;
-          return opMoveFile(client, args.base as string, args.from_path as string, args.to_path as string);
+          return opMove(client, args.base as string, args.from_path as string, args.to_path as string, "entry");
         }
         case "search": {
           const miss = missingParams("search", args, ["query"]);

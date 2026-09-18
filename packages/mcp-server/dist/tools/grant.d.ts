@@ -25,7 +25,7 @@
  * cannot. ⚠ **It is a NARROWING of a read that was already fenced** — R2,
  * carried over from the copy ops verbatim rather than re-decided.
  */
-import type { WorkspaceDirectory } from "../workspace-directory.js";
+import { type WorkspaceDirectory } from "../workspace-directory.js";
 import { type ToolResponse } from "./respond.js";
 /**
  * Where a resource can be lent, **AS OFFERED HERE**.
@@ -93,15 +93,26 @@ export declare function notOwnedRefusal(createdBy: string | null | undefined, se
  * `to` → the scope id to write.
  *
  * ⚠ **A CHANNEL AND A TEAM ARE NAMED BY ID; A CONTAINER GOES THROUGH THE
- * SESSION'S OWN RESOLVER.** `workspace-directory.ts › resolveWorkspaceRef` is
- * the one resolver that takes a slug, a uuid **or** a home-channel CONTAINER id
- * (§4A: it deliberately does not filter) and that answers `null` for every ref
- * but the locked one under a container lock — so the lend inherits B3's fence
- * for free and never falls back to the workspace the call is in.
+ * ADDRESSING CONTRACT.** `workspace-directory.ts › resolveContainerRef` is the
+ * one resolver that takes a slug, a uuid, the reserved word `home` **or** a
+ * home-channel CONTAINER id (§4A: it deliberately does not filter) and that
+ * answers `null` for every ref but the locked one under a container lock — so
+ * the lend inherits B3's fence for free and never falls back to the workspace
+ * the call is in.
  *
- * ⚠ **THE REFUSAL IS UNIFORM.** "No such scope" and "not one you can act in"
- * stay ONE answer; a sentence that distinguished them is an existence oracle
- * over the operator's other rooms.
+ * 🔒 **IT WENT THROUGH `resolveWorkspaceRef` — FIRST-WINS — UNTIL 2026-09-17.**
+ * Two live consequences, both of them silent: `to=<slug>` naming two containers
+ * the caller is in LENT INTO THE FIRST (home channels are named after the peer
+ * who minted them, so two `ops` is the documented case, and a grant is a
+ * widen-the-audience write — picking one is the worst available failure), and
+ * `to="home"` resolved to nothing though R-32 made the personal shelf a
+ * first-class address that {@link GRANT_TO_ARG_DESCRIPTION} already advertises.
+ * F-719's refusal is the whole point of the other resolver; this op now shares it.
+ *
+ * ⚠ **THE NOT-FOUND REFUSAL IS UNIFORM.** "No such scope" and "not one you can
+ * act in" stay ONE answer; a sentence that distinguished them is an existence
+ * oracle over the operator's other rooms. ⚠ The AMBIGUITY refusal is not that
+ * case — every row in it is one the caller is already in.
  */
 export declare function resolveGrantScopeId(directory: WorkspaceDirectory, scope: GrantScopeArg, to: string): Promise<string | ToolResponse>;
 /**

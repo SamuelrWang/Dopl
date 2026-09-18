@@ -15,9 +15,8 @@ exports.opPin = opPin;
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const knowledge_shared_1 = require("./knowledge-shared");
+const channel_shared_1 = require("./channel-shared");
 const knowledge_sections_1 = require("./knowledge-sections");
-const NO_NAME = "`(unnamed)`";
-const NO_PATH = "`(unreadable path)`";
 /**
  * What the CURATED pinned set costs, or `null` when it could not be measured.
  *
@@ -78,7 +77,7 @@ function costLine(chars) {
  */
 async function opPin(client, ref, path, pinned) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
-    if ((0, knowledge_shared_1.isErr)(base))
+    if ((0, channel_shared_1.isErr)(base))
         return base;
     const verb = pinned ? "Pinned" : "Unpinned";
     // ⚠ An UNPIN only ever shrinks the payload, so it is never measured. Reading
@@ -93,7 +92,7 @@ async function opPin(client, ref, path, pinned) {
                 return capped.refusal;
             return (0, respond_1.ok)([
                 ...(capped.warning ? [capped.warning, ""] : []),
-                `${verb} knowledge base ${(0, narration_1.inlineOr)(base.name, NO_NAME)} (slug: \`${base.slug}\`). ${pinned ? "Every entry in it is now included in the startup context of agent sessions launched in this workspace." : "Its entries are no longer included in the startup context of new agent sessions."}`,
+                `${verb} knowledge base ${(0, narration_1.inlineOr)(base.name, narration_1.NO_NAME)} (slug: \`${base.slug}\`). ${pinned ? "Every entry in it is now included in the startup context of agent sessions launched in this workspace." : "Its entries are no longer included in the startup context of new agent sessions."}`,
             ].join("\n"));
         }
         // ⚠ A PART read rather than a whole one: the entry id is all this write
@@ -106,7 +105,7 @@ async function opPin(client, ref, path, pinned) {
             return capped.refusal;
         return (0, respond_1.ok)([
             ...(capped.warning ? [capped.warning, ""] : []),
-            `${verb} ${(0, narration_1.inlineOr)(path, NO_PATH)} in ${(0, narration_1.inlineOr)(base.name, NO_NAME)} (entry id: \`${read.entry.id}\`). ${pinned ? "This ONE entry is now included in the startup context of agent sessions launched in this workspace — the rest of the base is not." : "It is no longer included on its own; if its BASE is pinned it still arrives with the base."}`,
+            `${verb} ${(0, narration_1.inlineOr)(path, narration_1.NO_PATH)} in ${(0, narration_1.inlineOr)(base.name, narration_1.NO_NAME)} (entry id: \`${read.entry.id}\`). ${pinned ? "This ONE entry is now included in the startup context of agent sessions launched in this workspace — the rest of the base is not." : "It is no longer included on its own; if its BASE is pinned it still arrives with the base."}`,
             ...(pinned ? [(0, knowledge_sections_1.outlineFooter)(read.outline) ?? ""].filter(Boolean) : []),
         ].join("\n"));
     }
@@ -116,7 +115,7 @@ async function opPin(client, ref, path, pinned) {
         if (denied)
             return denied;
         if ((0, respond_1.isNotFound)(e)) {
-            return (0, respond_1.err)(`No entry at ${(0, narration_1.inlineOr)(path, NO_PATH)} in ${(0, narration_1.inlineOr)(base.name, NO_NAME)}, so nothing was ${pinned ? "pinned" : "unpinned"}. Paths must resolve to an ENTRY, not a folder — check dopl_kb(op="get_tree", base) for the exact path, or omit \`path\` to ${pinned ? "pin" : "unpin"} the whole base.`);
+            return (0, respond_1.err)(`No entry at ${(0, narration_1.inlineOr)(path, narration_1.NO_PATH)} in ${(0, narration_1.inlineOr)(base.name, narration_1.NO_NAME)}, so nothing was ${pinned ? "pinned" : "unpinned"}. Paths must resolve to an ENTRY, not a folder — check dopl_kb(op="get_tree", base) for the exact path, or omit \`path\` to ${pinned ? "pin" : "unpin"} the whole base.`);
         }
         throw e;
     }
@@ -145,7 +144,7 @@ async function enforceCap(client, before, revert, outline, path) {
             `This entry is ${outline.totalChars.toLocaleString("en-US")} chars across ${outline.sections.length} headings:`,
             ...(0, knowledge_sections_1.renderOutline)(outline),
             "",
-            `There is no way to pin ONE section — a pinned section would be a stored pointer into prose that a rename empties. Split ${(0, narration_1.inlineOr)(path ?? "", NO_PATH)} into separate entries and pin the one a session actually needs.`,
+            `There is no way to pin ONE section — a pinned section would be a stored pointer into prose that a rename empties. Split ${(0, narration_1.inlineOr)(path ?? "", narration_1.NO_PATH)} into separate entries and pin the one a session actually needs.`,
         ]
         : [
             "",

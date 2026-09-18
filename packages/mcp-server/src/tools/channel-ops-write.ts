@@ -49,8 +49,7 @@ import {
   serverDetail,
 } from "./channel-errors";
 
-/** Fallback for peer text that neutralized to nothing — never an empty span. */
-const NO_NAME = "(unnamed)";
+import { NO_NAME } from "./narration";
 
 /**
  * G14 — **A MILESTONE IS ONE LINE, AND THAT IS NOW A BOUND RATHER THAN A WORD.**

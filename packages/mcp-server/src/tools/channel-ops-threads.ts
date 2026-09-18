@@ -20,6 +20,7 @@
 import type { DoplClient, ThreadMode } from "@dopl/client";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
 import { inlineOr, isErr, resolveChannelOr, resolveMemberOr } from "./channel-shared";
+import { NO_NAME } from "./narration";
 // ⚠ Whether a pending HOLD outlives the turn is a CLIENT property this
 // server cannot see — one module decides what may be claimed about it.
 import { holdFact } from "./channel-wake-guidance";
@@ -34,7 +35,6 @@ import {
 } from "./channel-errors";
 
 /** Fallbacks for peer text that neutralized to nothing — never an empty span. */
-const NO_NAME = "(unnamed)";
 const NO_TITLE = "(untitled)";
 const NO_ID = "(unreadable id)";
 

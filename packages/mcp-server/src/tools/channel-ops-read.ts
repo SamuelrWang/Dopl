@@ -33,6 +33,7 @@ import {
   memberNames,
   resolveChannelOr,
 } from "./channel-shared";
+import { NO_NAME } from "./narration";
 import {
   formatChannelLine,
   formatMemberLine,
@@ -257,10 +258,6 @@ export async function opRead(
   );
   return ok(lines.join("\n"));
 }
-
-/** Peer-influenced display text (a session's channel name), neutralized for a
- *  rendered result — never an empty span. */
-const NO_NAME = "(unnamed)";
 
 /**
  * READ-SESSION-STATE — the caller's OWN live sessions: handle, reduced state

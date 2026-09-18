@@ -9,7 +9,11 @@
 import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 import { createServer } from "./server.js";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./tools/identity.js";
-import { containerKind, type WorkspaceSource } from "./workspace-directory.js";
+import {
+  containerKind,
+  matchesContainerRef,
+  type WorkspaceSource,
+} from "./workspace-directory.js";
 import { isSharedRoom } from "./shared-room.js";
 
 export type { CallerIdentity } from "./tools/identity.js";
@@ -144,7 +148,7 @@ export async function bootServer(
   let active: WorkspaceListItem | null = null;
   let source: WorkspaceSource | null = null;
   if (pin) {
-    active = directory.find((w) => w.id === pin || w.slug === pin) ?? null;
+    active = directory.find((w) => matchesContainerRef(w, pin)) ?? null;
     if (active) {
       source = "header pin";
     } else {

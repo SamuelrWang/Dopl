@@ -60,7 +60,10 @@ const channel_session_table_1 = require("./channel-session-table");
 const channel_poll_detector_1 = require("./channel-poll-detector");
 const channel_wake_guidance_1 = require("./channel-wake-guidance");
 /** Peer-influenced display text, neutralized — never an empty span. */
-const NO_NAME = "(unnamed channel)";
+/** ⚠ DELIBERATELY NOT `narration.ts › NO_NAME`: this table lists channels across
+ *  every container and the noun is what says which row went unnamed. Backticked
+ *  like every other fallback — `inlineOr` returns a code span on every other path. */
+const NO_NAME = "`(unnamed channel)`";
 /**
  * THE SCOPE SENTENCE, stated on every account-wide result.
  *

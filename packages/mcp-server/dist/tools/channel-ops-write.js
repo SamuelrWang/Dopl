@@ -45,8 +45,7 @@ const channel_shared_1 = require("./channel-shared");
 const channel_wake_guidance_1 = require("./channel-wake-guidance");
 // ⚠ A 400's MEANING is read off its CODE, never guessed from its status.
 const channel_errors_1 = require("./channel-errors");
-/** Fallback for peer text that neutralized to nothing — never an empty span. */
-const NO_NAME = "(unnamed)";
+const narration_1 = require("./narration");
 /**
  * G14 — **A MILESTONE IS ONE LINE, AND THAT IS NOW A BOUND RATHER THAN A WORD.**
  *
@@ -89,7 +88,7 @@ async function opPost(client, channelRef, body, opts = {}) {
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);
     if ((0, channel_shared_1.isErr)(ch))
         return ch;
-    const chName = (0, channel_shared_1.inlineOr)(ch.name, NO_NAME);
+    const chName = (0, channel_shared_1.inlineOr)(ch.name, narration_1.NO_NAME);
     // Fold `thread` into the STORAGE key `metadata.taskId`; explicit param wins
     // over any metadata copy. Route validates it resolves in this channel.
     const metadata = opts.thread

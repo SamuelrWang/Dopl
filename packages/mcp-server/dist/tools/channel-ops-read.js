@@ -26,6 +26,7 @@ exports.opListThreads = opListThreads;
 exports.opMembers = opMembers;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
+const narration_1 = require("./narration");
 const channel_render_1 = require("./channel-render");
 const channel_framing_1 = require("./channel-framing");
 // ⚠ The clipped-list wording lives with the other thread-render prose, stated
@@ -218,9 +219,6 @@ subject = null) {
     lines.push(`\ncursor=none — \`thread\` filtered rows out of this page, and a HOLD is channel-wide with a strict "greater than", so a seq taken from here would permanently skip what the filter hid. Hold from the highest seq below which you have seen EVERYTHING in this channel; read unscoped to establish one.`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
-/** Peer-influenced display text (a session's channel name), neutralized for a
- *  rendered result — never an empty span. */
-const NO_NAME = "(unnamed)";
 /**
  * READ-SESSION-STATE — the caller's OWN live sessions: handle, reduced state
  * (working / idle / ended — desktop `session-summary.js` vocabulary;
@@ -260,7 +258,7 @@ async function opReadSessions(client, ref, format) {
         if ((0, channel_shared_1.isErr)(ch))
             return ch;
         channelId = ch.id;
-        channelLabel = ` in **${(0, channel_shared_1.inlineOr)(ch.name, NO_NAME)}**`;
+        channelLabel = ` in **${(0, channel_shared_1.inlineOr)(ch.name, narration_1.NO_NAME)}**`;
     }
     // ⚠ THE PAGE, NOT AN ARRAY (2026-08-23, F-294). `operatorOnline` is the
     // caller's own `agent_presence` freshness and it is what separates an

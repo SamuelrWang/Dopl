@@ -30,7 +30,6 @@ const narration_js_1 = require("./narration.js");
 const channel_session_render_js_1 = require("./channel-session-render.js");
 const response_size_js_1 = require("./response-size.js");
 /** Peer-influenced display text that neutralized to nothing. */
-const NO_NAME = "(unnamed)";
 const NO_ONE = "(unresolved author)";
 const NO_TEXT = "(empty)";
 /**
@@ -56,7 +55,7 @@ const STATUS_LEGEND = [
  * default arm here would invent a fact about somebody else's room.
  */
 function channelLine(channel, kinds) {
-    const name = (0, narration_js_1.inlineOr)(channel.channelName, NO_NAME);
+    const name = (0, narration_js_1.inlineOr)(channel.channelName, narration_js_1.NO_NAME);
     const moved = channel.unread === null
         ? "no cursor"
         : `${channel.unread} new`;

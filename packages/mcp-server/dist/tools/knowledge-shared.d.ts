@@ -40,7 +40,6 @@ export type BaseRefResolution = {
 };
 /** resolveBaseRef + its two refusals; caller short-circuits on `isError`. */
 export declare function resolveBaseOr(client: DoplClient, ref: string): Promise<KnowledgeBase | ToolResponse>;
-export declare function isErr(x: KnowledgeBase | ToolResponse): x is ToolResponse;
 /**
  * ⚠ **THIS CONSTANT IS NOW THE FENCE'S HEADER, AND THE 430-CHAR PARAGRAPH IT
  * USED TO HOLD IS GONE** (A14, 2026-09-02). The old wording asked a reader to

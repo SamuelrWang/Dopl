@@ -146,7 +146,7 @@ function spanLine(result) {
  * never structure. Same rule, same neutralizer, as the info card's rows.
  */
 function render(action, result) {
-    const name = (0, narration_1.inlineOr)(result.artifact.name, "`(unnamed)`");
+    const name = (0, narration_1.inlineOr)(result.artifact.name, narration_1.NO_NAME);
     const head = action === "dissolve"
         ? `Dissolved **${name}**. Nothing was deleted: every message it held is back in the transcript, and the card still resolves by id.`
         : action === "create"

@@ -10,24 +10,44 @@ exports.opCreateBase = opCreateBase;
 exports.opUpdateBase = opUpdateBase;
 exports.opSetVisibility = opSetVisibility;
 exports.opCreateFolder = opCreateFolder;
-exports.opMoveFolder = opMoveFolder;
+exports.opMove = opMove;
 exports.opWriteFile = opWriteFile;
-exports.opMoveFile = opMoveFile;
 exports.opGrantBase = opGrantBase;
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const knowledge_shared_1 = require("./knowledge-shared");
+const channel_shared_1 = require("./channel-shared");
 const confirm_token_1 = require("./confirm-token");
 const knowledge_sections_1 = require("./knowledge-sections");
 const grant_1 = require("./grant");
-/**
+/*
  * ⚠ Write confirmations read back the STORED value, not the argument (a
  * canonicalised base name, a title derived from a path), spliced into our own
  * narration — and a path can carry a backtick, since `NAME_RE` bans control and
  * zero-width characters, NOT markdown. A name is a VALUE.
+ *
+ * The fallbacks themselves are `narration.ts › NO_NAME` / `NO_PATH` (2026-09-17).
  */
-const NO_NAME = "`(unnamed)`";
-const NO_PATH = "`(unreadable path)`";
+/**
+ * Run a write, mapping the ONE 403 EVERY base write can raise. Six hand-written
+ * copies of this catch lived in this file (2026-09-17).
+ *
+ * ⚠ `more` runs FIRST, for the per-op codes — 409, 412 and 400, every one of
+ * them disjoint from `AGENT_WRITE_DISABLED`, so the order is a convenience and
+ * not a precedence. Anything neither maps RETHROWS: a catch that swallowed an
+ * outage would report it as a refusal.
+ */
+async function writeOr(run, more = () => null) {
+    try {
+        return await run();
+    }
+    catch (e) {
+        const mapped = more(e) ?? (0, knowledge_shared_1.agentWriteDenied)(e);
+        if (mapped)
+            return mapped;
+        throw e;
+    }
+}
 /**
  * A 403 `AGENT_WRITE_DISABLED` off `create_base` — ⚠ duck-typed on the CODE, the
  * shape every mapper in this file follows, so no new error class crosses the
@@ -77,7 +97,7 @@ async function opCreateBase(client, callerUserId, input) {
         tool: "dopl_kb",
         op: "create_base",
         callerUserId,
-        what: `a knowledge base named ${(0, narration_1.inlineOr)(input.name, NO_NAME)}, readable by the whole home channel`,
+        what: `a knowledge base named ${(0, narration_1.inlineOr)(input.name, narration_1.NO_NAME)}, readable by the whole home channel`,
         audience: `everyone in that home channel — the peer standing in it can list it and read everything you put in it`,
         payload: {
             name: input.name,
@@ -164,33 +184,16 @@ async function opCreateBase(client, callerUserId, input) {
     const visNote = base.visibility === "private"
         ? "Private to you — only you and your agent can see it."
         : "Visible to the whole workspace.";
-    return (0, respond_1.ok)(`Created knowledge base ${(0, narration_1.inlineOr)(base.name, NO_NAME)} (slug: \`${base.slug}\`). ${visNote}`);
+    return (0, respond_1.ok)(`Created knowledge base ${(0, narration_1.inlineOr)(base.name, narration_1.NO_NAME)} (slug: \`${base.slug}\`). ${visNote}`);
 }
 async function opUpdateBase(client, ref, name, description, slug) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
-    if ((0, knowledge_shared_1.isErr)(base))
+    if ((0, channel_shared_1.isErr)(base))
         return base;
-    let updated;
-    try {
-        updated = await client.updateKbBase(base.id, {
-            name,
-            description,
-            slug,
-        });
-    }
-    catch (e) {
-        // Read-only-to-agents base — the clean message, not a raw
-        // AGENT_WRITE_DISABLED dump.
-        const denied = (0, knowledge_shared_1.agentWriteDenied)(e);
-        if (denied)
-            return denied;
-        // ⚠ Name the field + rule, never a raw "VALIDATION_FAILED".
-        const mapped = (0, knowledge_shared_1.updateBaseValidationError)(e);
-        if (mapped)
-            return mapped;
-        throw e;
-    }
-    return (0, respond_1.ok)(`Updated ${(0, narration_1.inlineOr)(updated.name, NO_NAME)} (slug: \`${updated.slug}\`).`);
+    const updated = await writeOr(() => client.updateKbBase(base.id, { name, description, slug }), knowledge_shared_1.updateBaseValidationError);
+    if ((0, channel_shared_1.isErr)(updated))
+        return updated;
+    return (0, respond_1.ok)(`Updated ${(0, narration_1.inlineOr)(updated.name, narration_1.NO_NAME)} (slug: \`${updated.slug}\`).`);
 }
 /**
  * ⚠ **THE OTHER PUBLISHING DOOR, AND IT IS NOT PREVIEWED HERE — DELIBERATELY,
@@ -224,7 +227,7 @@ async function opSetVisibility(client, callerUserId, ref, visibility, confirmTok
         return (0, respond_1.err)(`set_visibility only publishes (visibility="public") a base you created. Un-publishing is human-only — use the Dopl web UI.`);
     }
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
-    if ((0, knowledge_shared_1.isErr)(base))
+    if ((0, channel_shared_1.isErr)(base))
         return base;
     // 🔒 G16 — PREVIEW, THEN PUBLISH. Resolved AFTER the base, deliberately: the
     // name the preview shows the operator has to be the base this call is about,
@@ -233,72 +236,53 @@ async function opSetVisibility(client, callerUserId, ref, visibility, confirmTok
         tool: "dopl_kb",
         op: "set_visibility",
         callerUserId,
-        what: `the knowledge base ${(0, narration_1.inlineOr)(base.name, NO_NAME)} (slug: \`${base.slug}\`), published workspace-wide`,
+        what: `the knowledge base ${(0, narration_1.inlineOr)(base.name, narration_1.NO_NAME)} (slug: \`${base.slug}\`), published workspace-wide`,
         audience: `everyone in that home channel — the peer standing in it can read everything in it, including what was written while it was private`,
         payload: { base: base.id, visibility: "public" },
     }, { publishes: true, token: confirmToken });
     if (verdict.kind === "halt")
         return verdict.response;
-    let updated;
-    try {
-        updated = await client.updateKbBase(base.id, {
-            visibility: "public",
-            // 🔒 The token, SPENT, becomes the server's precondition — the same
-            // mapping `create_base` makes, one op over.
-            acknowledgeShared: verdict.acknowledgedShared || undefined,
-        });
-    }
-    catch (e) {
-        // Read-only-to-agents base — the clean message, not a raw dump.
-        const denied = (0, knowledge_shared_1.agentWriteDenied)(e);
-        if (denied)
-            return denied;
-        // 🔒 G16 — the server's publish precondition. See the docblock above for
-        // why this op answers with a REMEDY rather than a preview.
-        const unacknowledged = (0, confirm_token_1.containerPublishUnacknowledged)(e, `This call already previewed and confirmed, so the server is refusing on a fact this process cannot see — re-previewing would answer the same. Ask your operator to publish the base from the Dopl app, where the audience change is stated before they press.`);
-        if (unacknowledged)
-            return unacknowledged;
-        throw e;
-    }
-    return (0, respond_1.ok)(`Published knowledge base ${(0, narration_1.inlineOr)(updated.name, NO_NAME)} (slug: \`${updated.slug}\`) — now visible workspace-wide.`);
+    // 🔒 G16 — the server's publish precondition. See the docblock above for why
+    // this op answers with a REMEDY rather than a preview.
+    const updated = await writeOr(() => client.updateKbBase(base.id, {
+        visibility: "public",
+        // 🔒 The token, SPENT, becomes the server's precondition — the same
+        // mapping `create_base` makes, one op over.
+        acknowledgeShared: verdict.acknowledgedShared || undefined,
+    }), (e) => (0, confirm_token_1.containerPublishUnacknowledged)(e, `This call already previewed and confirmed, so the server is refusing on a fact this process cannot see — re-previewing would answer the same. Ask your operator to publish the base from the Dopl app, where the audience change is stated before they press.`));
+    if ((0, channel_shared_1.isErr)(updated))
+        return updated;
+    return (0, respond_1.ok)(`Published knowledge base ${(0, narration_1.inlineOr)(updated.name, narration_1.NO_NAME)} (slug: \`${updated.slug}\`) — now visible workspace-wide.`);
 }
 async function opCreateFolder(client, ref, path, description) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
-    if ((0, knowledge_shared_1.isErr)(base))
+    if ((0, channel_shared_1.isErr)(base))
         return base;
-    let folder;
-    try {
-        folder = await client.createKbFolderByPath(base.id, path, description);
-    }
-    catch (e) {
-        // Read-only-to-agents base — clean message, not a raw dump.
-        const denied = (0, knowledge_shared_1.agentWriteDenied)(e);
-        if (denied)
-            return denied;
-        throw e;
-    }
+    const folder = await writeOr(() => client.createKbFolderByPath(base.id, path, description));
+    if ((0, channel_shared_1.isErr)(folder))
+        return folder;
     const descNote = description !== undefined ? " Description set." : "";
-    return (0, respond_1.ok)(`Folder ready at ${(0, narration_1.inlineOr)(path, NO_PATH)} (id: \`${folder.id}\`).${descNote}`);
+    return (0, respond_1.ok)(`Folder ready at ${(0, narration_1.inlineOr)(path, narration_1.NO_PATH)} (id: \`${folder.id}\`).${descNote}`);
 }
-async function opMoveFolder(client, ref, from_path, to_path) {
+/**
+ * `move_folder` and `move_file` — ONE mover (2026-09-17). They were two
+ * functions differing only in a noun: `moveKbByPath` is path-addressed and
+ * kind-agnostic, so the only per-op logic is checking that the path resolved to
+ * the KIND the caller named — which is a refusal, because moving an entry on a
+ * `move_folder` would be a write the caller never asked for.
+ */
+async function opMove(client, ref, from_path, to_path, kind) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
-    if ((0, knowledge_shared_1.isErr)(base))
+    if ((0, channel_shared_1.isErr)(base))
         return base;
-    let result;
-    try {
-        result = await client.moveKbByPath(base.id, from_path, to_path);
+    const result = await writeOr(() => client.moveKbByPath(base.id, from_path, to_path));
+    if ((0, channel_shared_1.isErr)(result))
+        return result;
+    if (result.kind !== kind) {
+        return (0, respond_1.err)(`Path ${(0, narration_1.inlineOr)(from_path, narration_1.NO_PATH)} resolved to a ${result.kind}, not ${kind === "folder" ? "a folder" : "an entry"}.`);
     }
-    catch (e) {
-        // Read-only-to-agents base — clean message, not a raw dump.
-        const denied = (0, knowledge_shared_1.agentWriteDenied)(e);
-        if (denied)
-            return denied;
-        throw e;
-    }
-    if (result.kind !== "folder") {
-        return (0, respond_1.err)(`Path ${(0, narration_1.inlineOr)(from_path, NO_PATH)} resolved to a ${result.kind}, not a folder.`);
-    }
-    return (0, respond_1.ok)(`Folder moved: ${(0, narration_1.inlineOr)(from_path, NO_PATH)} → ${(0, narration_1.inlineOr)(to_path, NO_PATH)}.`);
+    const noun = kind === "folder" ? "Folder" : "Entry";
+    return (0, respond_1.ok)(`${noun} moved: ${(0, narration_1.inlineOr)(from_path, narration_1.NO_PATH)} → ${(0, narration_1.inlineOr)(to_path, narration_1.NO_PATH)}.`);
 }
 /**
  * ⚠ **`section` MAKES THIS A READ-MODIFY-WRITE, AND THE SERVER DOES ALL THREE.**
@@ -313,46 +297,33 @@ async function opMoveFolder(client, ref, from_path, to_path) {
  */
 async function opWriteFile(client, ref, path, body, title, expected_version, force, excerpt, section) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
-    if ((0, knowledge_shared_1.isErr)(base))
+    if ((0, channel_shared_1.isErr)(base))
         return base;
-    let entry;
-    let outline;
-    let sectionCreated;
-    try {
-        const res = await client.writeKbFileByPath(base.id, path, { body, title, excerpt, section }, force ? null : expected_version);
-        entry = res.entry;
-        outline = res.outline;
-        sectionCreated = res.sectionCreated;
-    }
-    catch (e) {
+    const res = await writeOr(() => client.writeKbFileByPath(base.id, path, { body, title, excerpt, section }, force ? null : expected_version), (e) => {
         // ⚠ THE ONE REFUSAL `section` ADDS, and it is a refusal rather than a
         // first-match because the write it would have made is unrecoverable.
         if ((0, respond_1.isApiError)(e, 409, "KNOWLEDGE_SECTION_AMBIGUOUS")) {
             return (0, respond_1.err)(`reason=SECTION_AMBIGUOUS · ${(0, respond_1.apiMessage)(e) ?? "that heading names more than one section."} · retry=none, they have the same name\n\nNOTHING was written. Rename one of them, or drop \`section\` and write the whole body.`);
         }
         if ((0, respond_1.isConflict)(e)) {
-            return (0, respond_1.err)(`${(0, narration_1.inlineOr)(path, NO_PATH)} changed since you last read it. Call dopl_kb(op="read_file", base, path) to get the current content + version, reconcile your changes, then retry write_file with that expected_version (or pass force=true to overwrite).`);
+            return (0, respond_1.err)(`${(0, narration_1.inlineOr)(path, narration_1.NO_PATH)} changed since you last read it. Call dopl_kb(op="read_file", base, path) to get the current content + version, reconcile your changes, then retry write_file with that expected_version (or pass force=true to overwrite).`);
         }
         if ((0, respond_1.isAlreadyExists)(e)) {
-            return (0, respond_1.err)(`An entry titled ${(0, narration_1.inlineOr)(title ?? path.split("/").filter(Boolean).pop(), NO_NAME)} already exists in that folder. Pick a different title/path, or read+overwrite the existing entry with dopl_kb(op="read_file" → "write_file").`);
+            return (0, respond_1.err)(`An entry titled ${(0, narration_1.inlineOr)(title ?? path.split("/").filter(Boolean).pop(), narration_1.NO_NAME)} already exists in that folder. Pick a different title/path, or read+overwrite the existing entry with dopl_kb(op="read_file" → "write_file").`);
         }
-        // Read-only-to-agents base — clean message, not a raw dump.
-        const denied = (0, knowledge_shared_1.agentWriteDenied)(e);
-        if (denied)
-            return denied;
         // ⚠ Name the failing field + rule, never a raw "VALIDATION_FAILED".
-        const mapped = (0, knowledge_shared_1.writeFileValidationError)(e, title);
-        if (mapped)
-            return mapped;
-        throw e;
-    }
+        return (0, knowledge_shared_1.writeFileValidationError)(e, title);
+    });
+    if ((0, channel_shared_1.isErr)(res))
+        return res;
+    const { entry, outline, sectionCreated } = res;
     // ⚠ The addressable path's leaf is the entry's TITLE, not the input path's
     // leaf segment — print it, and surface the canonical form when a passed
     // `title` slugs differently from the input leaf.
     const parentSegments = path.split("/").slice(0, -1).filter(Boolean);
     const canonicalPath = [...parentSegments, entry.title].join("/");
     const note = canonicalPath !== path
-        ? ` Address future reads/moves with path ${(0, narration_1.inlineOr)(canonicalPath, NO_PATH)}.`
+        ? ` Address future reads/moves with path ${(0, narration_1.inlineOr)(canonicalPath, narration_1.NO_PATH)}.`
         : "";
     // ⚠ THE NUDGE LEADS, because a `reason=` line read after the success sentence
     // is a line an agent has already decided it does not need.
@@ -365,29 +336,9 @@ async function opWriteFile(client, ref, path, body, title, expected_version, for
             : ` Replaced section ${(0, narration_1.inlineOr)(section, "`(unreadable)`")}; the rest of the entry is untouched.`;
     return (0, respond_1.ok)([
         ...(unsectioned ? [(0, knowledge_sections_1.unsectionedNudge)(), ""] : []),
-        `Wrote ${(0, narration_1.inlineOr)(canonicalPath, NO_PATH)} (entry id: \`${entry.id}\`, ${entry.body.length} chars). New version: \`${entry.updatedAt}\`.${note}${sectionNote}`,
+        `Wrote ${(0, narration_1.inlineOr)(canonicalPath, narration_1.NO_PATH)} (entry id: \`${entry.id}\`, ${entry.body.length} chars). New version: \`${entry.updatedAt}\`.${note}${sectionNote}`,
         ...[(0, knowledge_sections_1.outlineFooter)(outline)].filter((l) => l !== null),
     ].join("\n"));
-}
-async function opMoveFile(client, ref, from_path, to_path) {
-    const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
-    if ((0, knowledge_shared_1.isErr)(base))
-        return base;
-    let result;
-    try {
-        result = await client.moveKbByPath(base.id, from_path, to_path);
-    }
-    catch (e) {
-        // Read-only-to-agents base — clean message, not a raw dump.
-        const denied = (0, knowledge_shared_1.agentWriteDenied)(e);
-        if (denied)
-            return denied;
-        throw e;
-    }
-    if (result.kind !== "entry") {
-        return (0, respond_1.err)(`Path ${(0, narration_1.inlineOr)(from_path, NO_PATH)} resolved to a ${result.kind}, not an entry.`);
-    }
-    return (0, respond_1.ok)(`Entry moved: ${(0, narration_1.inlineOr)(from_path, NO_PATH)} → ${(0, narration_1.inlineOr)(to_path, NO_PATH)}.`);
 }
 /**
  * `op="grant"` — lend ONE base to a channel, container or team. The op that
@@ -404,7 +355,7 @@ async function opGrantBase(client, directory, selfUserId, ref, scope, to, level)
     if ((0, grant_1.isGrantRefusal)(chosen))
         return chosen;
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
-    if ((0, knowledge_shared_1.isErr)(base))
+    if ((0, channel_shared_1.isErr)(base))
         return base;
     const notOwned = (0, grant_1.notOwnedRefusal)(base.createdBy, selfUserId, "knowledge base", base.name);
     if (notOwned)

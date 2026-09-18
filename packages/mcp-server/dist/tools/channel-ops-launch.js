@@ -43,8 +43,7 @@ const channel_doctrine_1 = require("./channel-doctrine");
 // cap and a refusal is prose about one server code (`channel-ops-launch-color.ts`).
 const channel_ops_launch_color_1 = require("./channel-ops-launch-color");
 const channel_ops_launch_name_1 = require("./channel-ops-launch-name");
-/** Peer-influenced display text, neutralized — never an empty span. */
-const NO_NAME = "(unnamed)";
+const narration_1 = require("./narration");
 /** The `code` a DoplApiError carries, or null. ⚠ Duck-typed rather than imported
  *  — the same discipline `respond.ts`'s `isNotFound` follows across the
  *  @dopl/client boundary. */
@@ -63,7 +62,7 @@ function templateMatches(e) {
         .filter((m) => !!m && typeof m === "object")
         .map((m) => ({
         id: typeof m.id === "string" ? m.id : "",
-        name: (0, channel_shared_1.inlineOr)(typeof m.name === "string" ? m.name : "", NO_NAME),
+        name: (0, channel_shared_1.inlineOr)(typeof m.name === "string" ? m.name : "", narration_1.NO_NAME),
         visibility: typeof m.visibility === "string" ? m.visibility : "unknown",
     }))
         .filter((m) => m.id !== "");
@@ -87,7 +86,7 @@ function templateMatches(e) {
  * does not exist.
  */
 function ambiguousTemplate(ref, matches) {
-    const label = (0, channel_shared_1.inlineOr)(ref, NO_NAME);
+    const label = (0, channel_shared_1.inlineOr)(ref, narration_1.NO_NAME);
     if (matches.length === 0) {
         return (0, respond_1.err)(`No agent was requested — the template name \`${label}\` matches MORE THAN ONE template you can see, and nothing was started. Template names are deliberately not unique, so this call will not guess between them. List them with the agent-templates surface, then re-issue with the template's ID instead of its name.`);
     }
@@ -147,12 +146,12 @@ function templateNotFound(ref, elsewhere) {
             // ⚠ `inlineOr` ALREADY RETURNS A CODE SPAN — no backticks of our own
             // around it. Both halves are peer-authored in principle (a template
             // name, a workspace name) and neither may pose as structure.
-            `No agent was requested, and **nothing was filed** — template ${(0, channel_shared_1.inlineOr)(elsewhere.name, NO_NAME)} lives in ${(0, channel_shared_1.inlineOr)(elsewhere.label, "another tenancy of yours")}, not in this channel's own container.`,
+            `No agent was requested, and **nothing was filed** — template ${(0, channel_shared_1.inlineOr)(elsewhere.name, narration_1.NO_NAME)} lives in ${(0, channel_shared_1.inlineOr)(elsewhere.label, "another tenancy of yours")}, not in this channel's own container.`,
             `⚠ ${channel_doctrine_1.TENANCY_RULE} Owning it is not enough; it has to live here. ${channel_doctrine_1.TENANCY_FIX}`,
         ].join("\n"));
     }
     return (0, respond_1.err)([
-        `No agent was requested — no agent template ${(0, channel_shared_1.inlineOr)(ref, NO_NAME)} resolves in THIS CHANNEL'S container, and **nothing was filed**. Either there is no such template, or it is not shared with you; those are ONE answer here on purpose, so ids cannot be probed.`,
+        `No agent was requested — no agent template ${(0, channel_shared_1.inlineOr)(ref, narration_1.NO_NAME)} resolves in THIS CHANNEL'S container, and **nothing was filed**. Either there is no such template, or it is not shared with you; those are ONE answer here on purpose, so ids cannot be probed.`,
         `⚠ CHECK THE TENANCY BEFORE THE SPELLING. ${channel_doctrine_1.TENANCY_RULE} If it really should resolve here, the NAME is the other suspect — matching is exact, not fuzzy. ${channel_doctrine_1.TENANCY_FIX}`,
     ].join("\n"));
 }

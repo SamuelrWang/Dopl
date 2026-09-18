@@ -40,8 +40,7 @@ const channel_facts_1 = require("./channel-facts");
 // and `rename_agent` became its second and third callers; the whole argument for
 // why four characters of logic still deserve one home is in that module.
 const channel_agent_id_1 = require("./channel-agent-id");
-/** Peer-influenced display text, neutralized — never an empty span. */
-const NO_NAME = "(unnamed)";
+const narration_1 = require("./narration");
 /** Default and cap for the bounded hold. ⚠ Mirrors `channel-schema.ts › wait_ms`;
  *  the schema is what an MCP client sees, this is what runs. */
 const WAIT_DEFAULT_MS = 15_000;
@@ -272,7 +271,7 @@ async function opReadDirections(client, opts = {}) {
         if ((0, channel_shared_1.isErr)(channel))
             return channel;
         channelId = channel.id;
-        label = (0, channel_shared_1.inlineOr)(channel.name, NO_NAME);
+        label = (0, channel_shared_1.inlineOr)(channel.name, narration_1.NO_NAME);
     }
     const directions = await client.listAgentDirections({
         channel: channelId,

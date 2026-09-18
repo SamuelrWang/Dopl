@@ -12,7 +12,7 @@ exports.renderObject = renderObject;
 const response_size_1 = require("./response-size");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
-/**
+/*
  * ⚠ THE VALUE/BODY LINE, DRAWN TWICE. The graph is workspace-scoped and nothing
  * in `features/ontology/schema.ts` carries a charset rule (object `name`
  * max 300, `subtitle` max 1000, attribute `label` max 200, method `name`
@@ -25,8 +25,9 @@ const respond_1 = require("./respond");
  *     routing instructions the ontology exists to carry, and clipping them to
  *     160 chars deletes the feature. {@link indented} instead: a newline can no
  *     longer put attacker text at the START of a line.
+ *
+ * The fallback itself is `narration.ts › NO_NAME` (2026-09-17).
  */
-const NO_NAME = "`(unnamed)`";
 /**
  * Multi-line prose under the line introducing it, continuations indented two
  * spaces. ⚠ Content survives verbatim; it loses only the ability to BEGIN a line.
@@ -48,15 +49,15 @@ function resolveObjectRef(snapshot, ref) {
     if (matches.length > 1) {
         const containerOf = (id) => {
             const name = Object.values(snapshot.objects).find((o) => o.childIds.includes(id))?.name;
-            return name ? (0, narration_1.inlineOr)(name, NO_NAME) : "object";
+            return name ? (0, narration_1.inlineOr)(name, narration_1.NO_NAME) : "object";
         };
         const list = matches.map((o) => `\`${o.id}\` (${containerOf(o.id)})`).join(", ");
         return {
-            fail: (0, respond_1.err)(`Multiple objects named ${(0, narration_1.inlineOr)(ref, NO_NAME)} — use an id: ${list}`),
+            fail: (0, respond_1.err)(`Multiple objects named ${(0, narration_1.inlineOr)(ref, narration_1.NO_NAME)} — use an id: ${list}`),
         };
     }
     return {
-        fail: (0, respond_1.err)(`No object ${(0, narration_1.inlineOr)(ref, NO_NAME)}. Find ids with op="resolve" or op="map".`),
+        fail: (0, respond_1.err)(`No object ${(0, narration_1.inlineOr)(ref, narration_1.NO_NAME)}. Find ids with op="resolve" or op="map".`),
     };
 }
 function resolveClusterRef(snapshot, ref) {
@@ -64,9 +65,9 @@ function resolveClusterRef(snapshot, ref) {
     const hit = snapshot.clusters.find((c) => c.id === ref || c.slug === ref || c.name.toLowerCase() === needle);
     if (hit)
         return { hit };
-    const known = snapshot.clusters.map((c) => (0, narration_1.inlineOr)(c.slug, NO_NAME)).join(", ") || "none";
+    const known = snapshot.clusters.map((c) => (0, narration_1.inlineOr)(c.slug, narration_1.NO_NAME)).join(", ") || "none";
     return {
-        fail: (0, respond_1.err)(`No ontology ${(0, narration_1.inlineOr)(ref, NO_NAME)}. Known ontologies: ${known}.`),
+        fail: (0, respond_1.err)(`No ontology ${(0, narration_1.inlineOr)(ref, narration_1.NO_NAME)}. Known ontologies: ${known}.`),
     };
 }
 async function resolveResourceHandles(client, object) {
@@ -116,15 +117,15 @@ async function resolveResourceHandles(client, object) {
 function renderObject(object, snapshot, headline, handles = new Map(), 
 /** A16: `concise` drops the two LEGENDS below and nothing else. */
 format) {
-    const nameOf = (id) => snapshot.objects[id] ? (0, narration_1.inlineOr)(snapshot.objects[id].name, NO_NAME) : `\`${id}\``;
+    const nameOf = (id) => snapshot.objects[id] ? (0, narration_1.inlineOr)(snapshot.objects[id].name, narration_1.NO_NAME) : `\`${id}\``;
     // ⚠ What the object IS = its container's NAME (column, or the object it is
     // nested in) — member-typed like any other. Only the "object" fallback is ours.
     const container = Object.values(snapshot.objects).find((o) => o.childIds.includes(object.id));
-    const kindLabel = container?.name ? (0, narration_1.inlineOr)(container.name, NO_NAME) : "object";
+    const kindLabel = container?.name ? (0, narration_1.inlineOr)(container.name, narration_1.NO_NAME) : "object";
     const lines = [];
     if (headline)
         lines.push(headline, "");
-    lines.push(`# ${(0, narration_1.inlineOr)(object.name, NO_NAME)} (${kindLabel} · id: \`${object.id}\`)`);
+    lines.push(`# ${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)} (${kindLabel} · id: \`${object.id}\`)`);
     if (object.subtitle)
         lines.push((0, narration_1.inlineOr)(object.subtitle, ""));
     // ⚠ A TIMESTAMP AND ITS LEGEND — `response-size.ts`'s own list of what
@@ -136,13 +137,13 @@ format) {
     if (object.attributes.length > 0) {
         lines.push("", "## Attributes");
         for (const attr of object.attributes) {
-            lines.push(indented(`- ${(0, narration_1.inlineOr)(attr.label, NO_NAME)}: ${renderValue(attr.value, nameOf, handles)}`));
+            lines.push(indented(`- ${(0, narration_1.inlineOr)(attr.label, narration_1.NO_NAME)}: ${renderValue(attr.value, nameOf, handles)}`));
         }
     }
     if (object.relationships.length > 0) {
         lines.push("", "## Relationships");
         for (const rel of object.relationships) {
-            lines.push(`- ${(0, narration_1.inlineOr)(rel.label, NO_NAME)}: ${rel.targetIds.map(nameOf).join(", ")}`);
+            lines.push(`- ${(0, narration_1.inlineOr)(rel.label, narration_1.NO_NAME)}: ${rel.targetIds.map(nameOf).join(", ")}`);
         }
     }
     // Inbound edges ("Referenced by") — without them `get` shows only outbound
@@ -153,7 +154,7 @@ format) {
             continue;
         for (const rel of other.relationships) {
             if (rel.targetIds.includes(object.id)) {
-                backlinks.push(`- ${(0, narration_1.inlineOr)(other.name, NO_NAME)} —${(0, narration_1.inlineOr)(rel.label, NO_NAME)}→ (id: \`${other.id}\`)`);
+                backlinks.push(`- ${(0, narration_1.inlineOr)(other.name, narration_1.NO_NAME)} —${(0, narration_1.inlineOr)(rel.label, narration_1.NO_NAME)}→ (id: \`${other.id}\`)`);
             }
         }
     }
@@ -165,7 +166,7 @@ format) {
             ? []
             : ["_New objects created inside this one are born with these fields, empty:_"]));
         for (const f of object.template) {
-            lines.push(`- ${(0, narration_1.inlineOr)(f.label, NO_NAME)} (${f.kind})`);
+            lines.push(`- ${(0, narration_1.inlineOr)(f.label, narration_1.NO_NAME)} (${f.kind})`);
         }
     }
     if (object.childIds.length > 0) {
@@ -173,7 +174,7 @@ format) {
         for (const id of object.childIds) {
             const child = snapshot.objects[id];
             if (child)
-                lines.push(`- ${(0, narration_1.inlineOr)(child.name, NO_NAME)} (id: \`${id}\`)`);
+                lines.push(`- ${(0, narration_1.inlineOr)(child.name, narration_1.NO_NAME)} (id: \`${id}\`)`);
         }
     }
     if (object.methods.length > 0) {
@@ -182,7 +183,7 @@ format) {
             // ⚠ Action NAME is a heading (neutralize); the three prose fields under
             // it are what the agent must carry out, so they keep their text and lose
             // only the ability to start a line.
-            lines.push(`### ${(0, narration_1.inlineOr)(m.name, NO_NAME)}`);
+            lines.push(`### ${(0, narration_1.inlineOr)(m.name, narration_1.NO_NAME)}`);
             if (m.description)
                 lines.push(indented(m.description));
             if (m.outcome) {
@@ -218,7 +219,7 @@ function renderValue(value, nameOf, handles) {
                     : h.kind === "kb-entry"
                         ? `dopl_kb op="read_file" base="${h.slug}" path="${h.path}"`
                         : `dopl_skill op="get" slug="${h.slug}"`;
-                return `${(0, narration_1.inlineOr)(h.name, NO_NAME)} (${opener})`;
+                return `${(0, narration_1.inlineOr)(h.name, narration_1.NO_NAME)} (${opener})`;
             })
                 .join(", ") || "—");
     }

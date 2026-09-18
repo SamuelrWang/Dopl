@@ -24,6 +24,7 @@ const channel_session_handle_1 = require("./channel-session-handle");
 // this one through it would make the leaf reachable two ways and invite a cycle.
 const channel_session_units_1 = require("./channel-session-units");
 const channel_session_render_1 = require("./channel-session-render");
+const narration_1 = require("./narration");
 // ── THE TABLE (T13, 2026-09-02) ─────────────────────────────────────────────
 //
 // ⚠ WHY A TABLE AT ALL. `read_sessions` is the op an orchestrator calls to
@@ -101,14 +102,14 @@ function sessionRow(s, opts = {}) {
     // ⚠ The HANDLE is the addressable form or nothing — a row whose name is not
     // an agent id prints its name rather than a plausible-looking handle.
     const at = opts.handle ? (0, channel_session_handle_1.addressableHandle)(s.name) : null;
-    const handle = at ? `\`${at}\`` : (0, channel_shared_1.inlineOr)(s.name, channel_session_render_1.NO_NAME);
+    const handle = at ? `\`${at}\`` : (0, channel_shared_1.inlineOr)(s.name, narration_1.NO_NAME);
     // ⚠ **THE NAME CELL — `channel_sessions.display_name`, the launch's or the rename's own
     // value** (F-708, 2026-09-16; the head's note carries why it is its own column). ⚠ A DASH
     // WHEN NOTHING WAS REPORTED, never the id and never a blank: the legend already defines `—`
     // as NOT REPORTED, and repeating the handle here would make an unnamed agent look named.
     // ⚠ Neutralized like every other peer-written cell.
     const name = s.displayName?.trim()
-        ? (0, channel_shared_1.inlineOr)(s.displayName, channel_session_render_1.NO_NAME)
+        ? (0, channel_shared_1.inlineOr)(s.displayName, narration_1.NO_NAME)
         : NOT_REPORTED;
     const thread = s.threadTitle
         ? (0, channel_shared_1.inlineOr)(s.threadTitle, channel_session_render_1.NO_TITLE)
@@ -116,7 +117,7 @@ function sessionRow(s, opts = {}) {
             ? (0, channel_shared_1.inlineOr)(s.threadId, channel_session_render_1.NO_TITLE)
             : NOT_REPORTED;
     const channel = s.channelName
-        ? (0, channel_shared_1.inlineOr)(s.channelName, channel_session_render_1.NO_NAME)
+        ? (0, channel_shared_1.inlineOr)(s.channelName, narration_1.NO_NAME)
         : NOT_REPORTED;
     // ⚠ TELEMETRY IS OPERATOR-ONLY and the type is the gate, exactly as in
     // `telemetryClauses`: a peer row has none of these fields, so it dashes.

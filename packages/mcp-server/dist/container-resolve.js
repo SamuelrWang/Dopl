@@ -26,6 +26,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.resolveCallAddress = resolveCallAddress;
+exports.ambiguousContainer = ambiguousContainer;
 const narration_js_1 = require("./tools/narration.js");
 const workspace_arg_js_1 = require("./workspace-arg.js");
 const tool_errors_js_1 = require("./tools/tool-errors.js");
@@ -130,6 +131,9 @@ async function resolveCallAddress(tool, op, args, { directory, activeWorkspace }
  * the KIND, which is what says "one of these is a room somebody else named".
  * ⚠ **AND IT IS NOT AN ORACLE** — every row came back from this caller's own
  * lock-narrowed directory, so it discloses exactly what `dopl_workspaces` would.
+ *
+ * ⚠ **EXPORTED FOR `tools/grant.ts` SINCE 2026-09-17** — `argName` is what makes
+ * it reusable: a grant re-issues with `to=<id>`, not `container=<id>`.
  */
 function ambiguousContainer(argName, ref, matches) {
     const shown = matches.slice(0, MAX_LISTED_MATCHES);
@@ -139,7 +143,7 @@ function ambiguousContainer(argName, ref, matches) {
         "",
         // ⚠ The id IS the `container=` handle, so the line an agent reads is also
         // the line it can act on.
-        ...shown.map((w) => `- \`${w.id}\` — ${(0, narration_js_1.inlineOr)(w.name, "`(unnamed)`")} · kind=\`${(0, workspace_directory_js_1.containerKind)(w)}\``),
+        ...shown.map((w) => `- \`${w.id}\` — ${(0, narration_js_1.inlineOr)(w.name, narration_js_1.NO_NAME)} · kind=\`${(0, workspace_directory_js_1.containerKind)(w)}\``),
         ...(rest > 0 ? [`- …and ${rest} more; \`dopl_workspaces\` has them all.`] : []),
     ].join("\n");
 }

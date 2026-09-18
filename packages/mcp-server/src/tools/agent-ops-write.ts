@@ -44,7 +44,7 @@ import type {
   TemplateKnowledgeScope,
 } from "@dopl/client";
 import type { WorkspaceDirectory } from "../workspace-directory.js";
-import { inlineOr } from "./narration.js";
+import { inlineOr, NO_NAME } from "./narration.js";
 import {
   channelScopeRefusal,
   grantedLine,
@@ -62,14 +62,13 @@ import {
   RECONFIRM_REMEDY,
 } from "./confirm-token.js";
 import {
-  isErr,
   knowledgeBaseNotAttachable,
-  NO_NAME,
   resolveTemplateOr,
   sharedCredentialPrivateDenied,
   templateWriteDenied,
   type OfferedTemplateVisibility,
 } from "./agent-shared.js";
+import { isErr } from "./channel-shared.js";
 
 export interface TemplateWriteInput {
   name?: string;

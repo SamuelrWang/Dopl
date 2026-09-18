@@ -61,7 +61,14 @@ export declare function opUpdateBase(client: DoplClient, ref: string, name?: str
  */
 export declare function opSetVisibility(client: DoplClient, callerUserId: string | null, ref: string, visibility: string, confirmToken?: string): Promise<ToolResponse>;
 export declare function opCreateFolder(client: DoplClient, ref: string, path: string, description?: string): Promise<ToolResponse>;
-export declare function opMoveFolder(client: DoplClient, ref: string, from_path: string, to_path: string): Promise<ToolResponse>;
+/**
+ * `move_folder` and `move_file` — ONE mover (2026-09-17). They were two
+ * functions differing only in a noun: `moveKbByPath` is path-addressed and
+ * kind-agnostic, so the only per-op logic is checking that the path resolved to
+ * the KIND the caller named — which is a refusal, because moving an entry on a
+ * `move_folder` would be a write the caller never asked for.
+ */
+export declare function opMove(client: DoplClient, ref: string, from_path: string, to_path: string, kind: "folder" | "entry"): Promise<ToolResponse>;
 /**
  * ⚠ **`section` MAKES THIS A READ-MODIFY-WRITE, AND THE SERVER DOES ALL THREE.**
  * The splice happens against the row `expected_version` was just checked on, so
@@ -74,7 +81,6 @@ export declare function opMoveFolder(client: DoplClient, ref: string, from_path:
  * ruling): refusing would refuse the user's content over our formatting taste.
  */
 export declare function opWriteFile(client: DoplClient, ref: string, path: string, body: string, title?: string, expected_version?: string, force?: boolean, excerpt?: string, section?: string): Promise<ToolResponse>;
-export declare function opMoveFile(client: DoplClient, ref: string, from_path: string, to_path: string): Promise<ToolResponse>;
 /**
  * `op="grant"` — lend ONE base to a channel, container or team. The op that
  * REPLACED `op="copy_base"` (Wave B slice B15, ruling B11).

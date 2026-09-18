@@ -177,7 +177,7 @@ async function renderedResults(): Promise<Array<[string, string]>> {
   // A directory that resolves NOTHING — the refusal branch, which is the one
   // that has to tell the caller where a container id comes from.
   const noDirectory = {
-    resolveWorkspaceRef: async () => null,
+    resolveContainerRef: async () => null,
   } as unknown as WorkspaceDirectory;
   const refusal = await resolveGrantScopeId(noDirectory, "container", "nope");
   return [

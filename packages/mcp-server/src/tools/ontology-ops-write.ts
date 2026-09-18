@@ -13,18 +13,19 @@ import type {
   OntologyObject,
   OntologySnapshot,
 } from "@dopl/client";
-import { inlineOr } from "./narration";
+import { inlineOr, NO_NAME } from "./narration";
 import { err, isConflict, missingParams, ok, type ToolResponse } from "./respond";
 import { resolveClusterRef, resolveObjectRef } from "./ontology-render";
 import { opAnchor, opGet, opMap, opResolve } from "./ontology-ops-read";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 
-/**
+/*
  * ⚠ Write confirmations read the STORED name back (the server canonicalises it,
  * and `create_object` copies fields from a PARENT another member authored), so
  * the read-side rule applies: a name is a VALUE.
+ *
+ * The fallback itself is `narration.ts › NO_NAME` (2026-09-17).
  */
-const NO_NAME = "`(unnamed)`";
 
 export interface OntologyArgs {
   op: string;

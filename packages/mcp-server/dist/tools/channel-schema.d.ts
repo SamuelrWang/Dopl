@@ -114,8 +114,8 @@ export declare const CHANNEL_INPUT_SHAPE: {
         detailed: "detailed";
     }>>;
     op: z.ZodEnum<{
-        read: "read";
         status: "status";
+        read: "read";
         send: "send";
         manage: "manage";
         artifact: "artifact";

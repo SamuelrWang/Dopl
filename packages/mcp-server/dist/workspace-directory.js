@@ -16,6 +16,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.HOME_ADDRESS = void 0;
+exports.matchesContainerRef = matchesContainerRef;
 exports.isAmbiguousContainer = isAmbiguousContainer;
 exports.createWorkspaceDirectory = createWorkspaceDirectory;
 exports.containerKindLabel = containerKindLabel;
@@ -35,6 +36,15 @@ exports.searchLegs = searchLegs;
  * around, because the personal container's slug is not published anywhere.
  */
 exports.HOME_ADDRESS = "home";
+/**
+ * Does this row answer to `ref`? ⚠ ONE spelling (2026-09-17) — `factory.ts`
+ * re-spelled it inline for the `X-Workspace-Id` pin, a fourth copy of the same
+ * predicate. A workspace slug can be shaped like a UUID, so BOTH columns are
+ * matched on the first pass; id alone forces a wasteful refresh.
+ */
+function matchesContainerRef(w, ref) {
+    return w.id === ref || w.slug === ref;
+}
 /** ⚠ The one narrowing. A `ContainerRefResolution` carries no `id`, so the
  *  compiler — not a convention — is what stops a caller reading the refusal as
  *  a container. */
@@ -74,10 +84,17 @@ function createWorkspaceDirectory(client, options = {}) {
     }
     /**
      * EVERY visible row a ref names. ⚠ **ONE MATCHER, TWO READINGS** (F-719):
-     * `resolveWorkspaceRef` takes the head — first-wins is its published
-     * contract, and `grant.ts` leans on it — while `resolveContainerRef` reads
-     * the whole list and refuses a tie. A second copy of the lock + refresh
-     * ordering is how the two drift apart.
+     * `resolveWorkspaceRef` takes the head, while `resolveContainerRef` reads the
+     * whole list and refuses a tie. A second copy of the lock + refresh ordering
+     * is how the two drift apart.
+     *
+     * ⚠ **`grant.ts` NO LONGER LEANS ON THE FIRST-WINS HEAD** (2026-09-17). It
+     * did, which meant `to=<slug>` naming two containers the caller is in lent
+     * into whichever came back first — silently widening an audience — and
+     * `to="home"` resolved to nothing at all. It goes through
+     * `resolveContainerRef` now, so first-wins has NO production caller left;
+     * `resolveWorkspaceRef` stays on the interface because the container-lock and
+     * workspace-kind suites pin the lock's behaviour through it.
      */
     async function matchContainerRefs(ref) {
         // 🔒 THE LOCK ANSWERS BEFORE ANY LOOKUP, so a ref that names another
@@ -87,15 +104,13 @@ function createWorkspaceDirectory(client, options = {}) {
         if (lockedTo) {
             return ref === lockedTo.id || ref === lockedTo.slug ? [lockedTo] : [];
         }
-        // ⚠ A workspace slug can be shaped like a UUID, so match id AND slug on the
-        // first pass — id alone forces a wasteful refresh.
         const list = await getAllWorkspaces();
-        const matches = list.filter((w) => w.id === ref || w.slug === ref);
+        const matches = list.filter((w) => matchesContainerRef(w, ref));
         if (matches.length > 0)
             return matches;
         // Force-refresh once — covers a mid-session membership add.
         workspaceListCache = null;
-        return (await getAllWorkspaces()).filter((w) => w.id === ref || w.slug === ref);
+        return (await getAllWorkspaces()).filter((w) => matchesContainerRef(w, ref));
     }
     async function resolveWorkspaceRef(ref) {
         return (await matchContainerRefs(ref))[0] ?? null;

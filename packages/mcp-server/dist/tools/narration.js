@@ -18,7 +18,7 @@
  * itself, under framing that says what it is).
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.INLINE_TEXT_MAX = void 0;
+exports.NO_PATH = exports.NO_NAME = exports.INLINE_TEXT_MAX = void 0;
 exports.neutralizeInline = neutralizeInline;
 exports.inlineOr = inlineOr;
 exports.isForeignAuthored = isForeignAuthored;
@@ -59,6 +59,18 @@ function inlineOr(raw, fallback) {
     const safe = raw ? neutralizeInline(raw) : null;
     return safe ?? fallback;
 }
+/**
+ * THE TWO STOCK FALLBACKS, declared ONCE beside the contract they belong to
+ * (2026-09-17). They were 22 local `const`s across the tool modules carrying
+ * FOUR different strings, so the same absent name rendered as a code span in
+ * half the responses and as bare text in the other half.
+ *
+ * ⚠ BACKTICKED, because `inlineOr` returns a code span on every other path and
+ * a bare-text fallback is the one case where the "could not name this" tell is
+ * indistinguishable from a name the server actually read.
+ */
+exports.NO_NAME = "`(unnamed)`";
+exports.NO_PATH = "`(unreadable path)`";
 /**
  * Is this row's CONTENT somebody else's — i.e. does the body below need framing?
  * In a SHARED workspace member B authors a KB entry or SKILL.md, member A's

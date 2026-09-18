@@ -23,6 +23,7 @@ import type {
 } from "@dopl/client";
 import { deliveryFact } from "./channel-facts";
 import { inlineOr, neutralizeInline } from "./channel-shared";
+import { NO_NAME } from "./narration";
 // ⚠ **WHO WROTE IT AND WHO IT REACHED IS `channel-render-identity.ts`** (§1
 // split, 2026-09-04) — one place decides how an author, a recipient and an
 // addressing clause read. Re-exported below so no importer of this module moved.
@@ -239,7 +240,7 @@ export function formatChannelLine(c: Channel): string {
   if (c.lastMessageAt) bits.push(`last activity ${c.lastMessageAt}`);
   const safeTopic = c.topic ? neutralizeInline(c.topic) : null;
   const topic = safeTopic ? ` — ${safeTopic}` : "";
-  return `- **${inlineOr(c.name, "(unnamed)")}** (slug: \`${c.slug}\` · ${bits.join(" · ")})${topic}`;
+  return `- **${inlineOr(c.name, NO_NAME)}** (slug: \`${c.slug}\` · ${bits.join(" · ")})${topic}`;
 }
 
 /**

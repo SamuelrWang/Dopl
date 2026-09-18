@@ -15,6 +15,7 @@ exports.opSearch = opSearch;
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const knowledge_shared_1 = require("./knowledge-shared");
+const channel_shared_1 = require("./channel-shared");
 const response_size_1 = require("./response-size");
 const untrusted_fence_1 = require("./untrusted-fence");
 const knowledge_sections_1 = require("./knowledge-sections");
@@ -32,8 +33,9 @@ const knowledge_sections_1 = require("./knowledge-sections");
  *     below a `---` rule, under {@link UNTRUSTED_ENTRY_BODY_HEADER} when it is
  *     ANOTHER MEMBER'S. ⚠ The gap was never rendering it as itself; it was
  *     rendering it with nothing saying whose it was.
+ *
+ * The fallback itself is `narration.ts › NO_NAME` (2026-09-17).
  */
-const NO_NAME = "`(unnamed)`";
 /**
  * ⚠ WHOSE VIEW THIS IS, stated on the RESULT, not only in the description.
  * `listBases` is filtered twice server-side (`canSeeBase` drops another
@@ -63,7 +65,7 @@ async function opListBases(client) {
         // ⚠ Immutable id beside the slug — the slug changes on rename.
         const vis = b.visibility === "private" ? "private" : "public";
         const desc = b.description ? `\n  ${(0, narration_1.inlineOr)(b.description, "")}` : "";
-        lines.push(`- ${(0, narration_1.inlineOr)(b.name, NO_NAME)} (slug: \`${b.slug}\` · id: \`${b.id}\` · ${vis})${desc}`);
+        lines.push(`- ${(0, narration_1.inlineOr)(b.name, narration_1.NO_NAME)} (slug: \`${b.slug}\` · id: \`${b.id}\` · ${vis})${desc}`);
     }
     lines.push("", BASES_SCOPE_NOTE);
     return (0, respond_1.ok)(lines.join("\n"));
@@ -72,7 +74,7 @@ const TREE_ENTRY_CAP = 400;
 const TREE_ENTRY_MAX = 1000;
 async function opGetTree(client, ref, entryLimit, entryCursor) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
-    if ((0, knowledge_shared_1.isErr)(base))
+    if ((0, channel_shared_1.isErr)(base))
         return base;
     // Entries are paged at the API (folders always ship in full), so the wire
     // payload matches what gets rendered.
@@ -84,7 +86,7 @@ async function opGetTree(client, ref, entryLimit, entryCursor) {
     const entryTotal = tree.entryTotal ?? tree.entries.length;
     const vis = tree.base.visibility === "private" ? "private" : "public";
     const lines = [
-        `## ${(0, narration_1.inlineOr)(tree.base.name, NO_NAME)} \`${tree.base.slug}\``,
+        `## ${(0, narration_1.inlineOr)(tree.base.name, narration_1.NO_NAME)} \`${tree.base.slug}\``,
         `id: \`${tree.base.id}\` · ${vis} · agent-write ${tree.base.agentWriteEnabled ? "on" : "off"}`,
         ...(tree.base.description ? [(0, narration_1.inlineOr)(tree.base.description, "")] : []),
         `Folders: ${tree.folders.length} · Entries: ${entryTotal}${tree.entries.length < entryTotal ? ` (showing ${tree.entries.length})` : ""}`,
@@ -108,11 +110,11 @@ async function opGetTree(client, ref, entryLimit, entryCursor) {
         arr.sort((a, b) => a.position - b.position || a.title.localeCompare(b.title));
     function dump(parentId, prefix) {
         for (const f of childFolders.get(parentId) ?? []) {
-            lines.push(`${prefix}📁 ${(0, narration_1.inlineOr)(f.name, NO_NAME)}/${descSuffix(f.description)}`);
+            lines.push(`${prefix}📁 ${(0, narration_1.inlineOr)(f.name, narration_1.NO_NAME)}/${descSuffix(f.description)}`);
             dump(f.id, prefix + "  ");
         }
         for (const e of childEntries.get(parentId) ?? []) {
-            lines.push(`${prefix}📄 ${(0, narration_1.inlineOr)(e.title, NO_NAME)}${descSuffix(e.excerpt)}`);
+            lines.push(`${prefix}📄 ${(0, narration_1.inlineOr)(e.title, narration_1.NO_NAME)}${descSuffix(e.excerpt)}`);
         }
     }
     dump(null, "");
@@ -144,12 +146,12 @@ function descSuffix(text) {
 }
 async function opListDir(client, ref, path) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
-    if ((0, knowledge_shared_1.isErr)(base))
+    if ((0, channel_shared_1.isErr)(base))
         return base;
     const listing = await client.listKbDirByPath(base.id, path ?? "");
     const lines = [];
-    const where = listing.folder ? (0, narration_1.inlineOr)(listing.folder.name, NO_NAME) : "(root)";
-    lines.push(`## ${(0, narration_1.inlineOr)(base.name, NO_NAME)} → ${where}`);
+    const where = listing.folder ? (0, narration_1.inlineOr)(listing.folder.name, narration_1.NO_NAME) : "(root)";
+    lines.push(`## ${(0, narration_1.inlineOr)(base.name, narration_1.NO_NAME)} → ${where}`);
     if (listing.folder?.description)
         lines.push((0, narration_1.inlineOr)(listing.folder.description, ""));
     if (listing.folders.length === 0 && listing.entries.length === 0) {
@@ -157,9 +159,9 @@ async function opListDir(client, ref, path) {
     }
     else {
         for (const f of listing.folders)
-            lines.push(`📁 ${(0, narration_1.inlineOr)(f.name, NO_NAME)}/${descSuffix(f.description)}`);
+            lines.push(`📁 ${(0, narration_1.inlineOr)(f.name, narration_1.NO_NAME)}/${descSuffix(f.description)}`);
         for (const e of listing.entries)
-            lines.push(`📄 ${(0, narration_1.inlineOr)(e.title, NO_NAME)}${descSuffix(e.excerpt)}`);
+            lines.push(`📄 ${(0, narration_1.inlineOr)(e.title, narration_1.NO_NAME)}${descSuffix(e.excerpt)}`);
     }
     return (0, respond_1.ok)(lines.join("\n"));
 }
@@ -173,7 +175,7 @@ async function opListDir(client, ref, path) {
  */
 async function opOutline(client, ref, path) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
-    if ((0, knowledge_shared_1.isErr)(base))
+    if ((0, channel_shared_1.isErr)(base))
         return base;
     const read = await client.readKbFilePart(base.id, path, { outline: true });
     const outline = read.outline;
@@ -182,7 +184,7 @@ async function opOutline(client, ref, path) {
         // the ordinary state of a short note; what the caller needs is the SIZE, so
         // it can decide whether reading the whole thing is cheap.
         return (0, respond_1.ok)([
-            `## ${(0, narration_1.inlineOr)(read.entry.title, NO_NAME)} — no headings`,
+            `## ${(0, narration_1.inlineOr)(read.entry.title, narration_1.NO_NAME)} — no headings`,
             `Path: \`${path}\` · ${outline?.totalChars ?? 0} chars whole.`,
             "",
             `Nothing to address by section — read it with op="read_file". Entries over ${knowledge_sections_1.KB_SECTION_NUDGE_CHARS} chars should carry \`##\` headings, one topic each.`,
@@ -207,7 +209,7 @@ async function opReadFile(client, ref, path,
 // it already ran.
 callerUserId = null, format, maxChars, section, offset) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
-    if ((0, knowledge_shared_1.isErr)(base))
+    if ((0, channel_shared_1.isErr)(base))
         return base;
     let outline;
     let sectionLine = null;
@@ -233,7 +235,7 @@ callerUserId = null, format, maxChars, section, offset) {
             // ⚠ NO OUTER BACKTICKS: `inlineOr` already renders a VALUE as code, and
             // wrapping its output again produced ``` ``Errors`` ``` — a heading an
             // agent cannot copy back into `section=`.
-            sectionLine = `Section: ${"#".repeat(Math.min(3, found.level))} ${(0, narration_1.inlineOr)(found.heading, "(unnamed)")} · ${found.chars} of ${outline?.totalChars ?? found.chars} chars (starts at offset ${found.start}).`;
+            sectionLine = `Section: ${"#".repeat(Math.min(3, found.level))} ${(0, narration_1.inlineOr)(found.heading, narration_1.NO_NAME)} · ${found.chars} of ${outline?.totalChars ?? found.chars} chars (starts at offset ${found.start}).`;
         }
     }
     const { body, notice } = (0, response_size_1.windowBody)(entry.body, offset, maxChars);
@@ -244,7 +246,7 @@ callerUserId = null, format, maxChars, section, offset) {
         // `expected_version`, so dropping it would make the smaller read unable to
         // feed the write it exists to precede — a knob that quietly costs a round
         // trip is a knob nobody uses twice.
-        `# ${(0, narration_1.inlineOr)(entry.title, NO_NAME)}`,
+        `# ${(0, narration_1.inlineOr)(entry.title, narration_1.NO_NAME)}`,
         ...(terse
             ? [`Version: \`${entry.updatedAt}\` (pass as expected_version to write_file)`]
             : [
@@ -273,7 +275,7 @@ async function opSearch(client, query, base, limit) {
     let baseSlug;
     if (base) {
         const resolved = await (0, knowledge_shared_1.resolveBaseOr)(client, base);
-        if ((0, knowledge_shared_1.isErr)(resolved))
+        if ((0, channel_shared_1.isErr)(resolved))
             return resolved;
         baseSlug = resolved.slug;
     }
@@ -287,7 +289,7 @@ async function opSearch(client, query, base, limit) {
         // ⚠ Do not turn highlight tags into `**` — that is our own markdown wrapped
         // around an excerpt of a member-authored body on an unframed line.
         const cleanSnippet = (0, narration_1.inlineOr)(h.snippet.replace(/<\/?b>/g, ""), "`(no snippet)`");
-        lines.push(`- ${(0, narration_1.inlineOr)(h.title, NO_NAME)} _(rank ${h.rank.toFixed(2)})_ — entry id: \`${h.entryId}\`\n  ${cleanSnippet}`);
+        lines.push(`- ${(0, narration_1.inlineOr)(h.title, narration_1.NO_NAME)} _(rank ${h.rank.toFixed(2)})_ — entry id: \`${h.entryId}\`\n  ${cleanSnippet}`);
     }
     lines.push("", SEARCH_SCOPE_NOTE);
     return (0, respond_1.ok)(lines.join("\n"));

@@ -17,8 +17,7 @@ exports.opOpen = opOpen;
 exports.opInvite = opInvite;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
-/** Fallback for peer text that neutralized to nothing — never an empty span. */
-const NO_NAME = "(unnamed)";
+const narration_1 = require("./narration");
 async function opOpen(client, opts) {
     // Direct branch: open (or dedup-return) a 1:1 channel — the server dedups a
     // repeat DM to the same peer, so this is idempotent.
@@ -70,7 +69,7 @@ async function opOpen(client, opts) {
         // ⚠ Caller's own name, one argument old — neutralized on the same FLAT
         // rule as everything else. Per-site judgement about who could have
         // authored a value is what leaves a peer-typed string raw.
-        `Created channel **${(0, channel_shared_1.inlineOr)(channel.name, NO_NAME)}** (slug: \`${channel.slug}\` · id: \`${channel.id}\`). ${visNote}${description}`,
+        `Created channel **${(0, channel_shared_1.inlineOr)(channel.name, narration_1.NO_NAME)}** (slug: \`${channel.slug}\` · id: \`${channel.id}\`). ${visNote}${description}`,
         `Post with dopl_channel(op="send", channel="${channel.slug}", body="..."); add members with op="rooms" action="invite".`,
     ].join("\n"));
 }
@@ -78,7 +77,7 @@ async function opInvite(client, channelRef, memberRef) {
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);
     if ((0, channel_shared_1.isErr)(ch))
         return ch;
-    const chName = (0, channel_shared_1.inlineOr)(ch.name, NO_NAME);
+    const chName = (0, channel_shared_1.inlineOr)(ch.name, narration_1.NO_NAME);
     const member = await (0, channel_shared_1.resolveMemberOr)(client, memberRef);
     if ((0, channel_shared_1.isErr)(member))
         return member;

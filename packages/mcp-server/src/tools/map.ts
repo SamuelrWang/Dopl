@@ -12,7 +12,7 @@ import {
   type ContainerKind,
   type WorkspaceDirectory,
 } from "../workspace-directory.js";
-import { inlineOr } from "./narration";
+import { inlineOr, NO_NAME } from "./narration";
 import { clippedNote } from "./ontology-clipped";
 import { partialRead } from "./partial-read";
 import { ok, type RegisterTool, type ToolResponse } from "./respond";
@@ -24,7 +24,7 @@ const PARTIAL_READ_ERROR = SEARCH_ERRORS[0];
 
 const EMPTY_ONTOLOGY: OntologySummary = { clusters: [], objects: {} };
 
-/**
+/*
  * ⚠ EVERY string this tool renders is a member-typed one-liner LABEL (KB name +
  * description, skill name + `when_to_use`, cluster name + purpose, column name)
  * and NONE carries a charset rule — only KB folder names and entry titles do,
@@ -35,8 +35,9 @@ const EMPTY_ONTOLOGY: OntologySummary = { clusters: [], objects: {} };
  * flat bullet list — a description with a newline starts a line of its own in
  * the agent's opening picture of the workspace. So every field goes through the
  * neutralizer; `dopl_kb` / `dopl_skill` / `dopl_ontology` render full prose.
+ *
+ * The fallback itself is `narration.ts › NO_NAME` (2026-09-17).
  */
-const NO_NAME = "`(unnamed)`";
 
 /**
  * ⚠ THE DESCRIPTION MUST STATE ITS OWN SCOPE. This is a VIEW, never an

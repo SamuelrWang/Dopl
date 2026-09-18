@@ -25,7 +25,7 @@
  */
 
 import type { ToolResponse } from "./tools/respond.js";
-import { inlineOr } from "./tools/narration.js";
+import { inlineOr, NO_NAME } from "./tools/narration.js";
 import {
   acceptsWorkspaceArg,
   aliasIgnoredNote,
@@ -187,8 +187,11 @@ export async function resolveCallAddress(
  * the KIND, which is what says "one of these is a room somebody else named".
  * ⚠ **AND IT IS NOT AN ORACLE** — every row came back from this caller's own
  * lock-narrowed directory, so it discloses exactly what `dopl_workspaces` would.
+ *
+ * ⚠ **EXPORTED FOR `tools/grant.ts` SINCE 2026-09-17** — `argName` is what makes
+ * it reusable: a grant re-issues with `to=<id>`, not `container=<id>`.
  */
-function ambiguousContainer(
+export function ambiguousContainer(
   argName: string,
   ref: string,
   matches: WorkspaceListItem[],
@@ -205,7 +208,7 @@ function ambiguousContainer(
     // the line it can act on.
     ...shown.map(
       (w) =>
-        `- \`${w.id}\` — ${inlineOr(w.name, "`(unnamed)`")} · kind=\`${containerKind(w)}\``,
+        `- \`${w.id}\` — ${inlineOr(w.name, NO_NAME)} · kind=\`${containerKind(w)}\``,
     ),
     ...(rest > 0 ? [`- …and ${rest} more; \`dopl_workspaces\` has them all.`] : []),
   ].join("\n");

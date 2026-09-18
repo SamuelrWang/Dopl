@@ -6,7 +6,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UNTRUSTED_ENTRY_BODY_HEADER = void 0;
 exports.resolveBaseOr = resolveBaseOr;
-exports.isErr = isErr;
 exports.agentWriteDenied = agentWriteDenied;
 exports.sharedCredentialPrivateBaseDenied = sharedCredentialPrivateBaseDenied;
 exports.writeFileValidationError = writeFileValidationError;
@@ -161,7 +160,7 @@ function matchLine(base, count, isPersonal) {
     const entries = count === null
         ? "entry count unavailable"
         : `${count} ${count === 1 ? "entry" : "entries"}`;
-    return `- \`${base.id}\` — ${(0, narration_1.inlineOr)(base.name, "`(unnamed)`")} · ${where} · ${entries}`;
+    return `- \`${base.id}\` — ${(0, narration_1.inlineOr)(base.name, narration_1.NO_NAME)} · ${where} · ${entries}`;
 }
 /**
  * Ids of the caller's PERSONAL-container bases, for the shelf label — empty
@@ -193,9 +192,6 @@ async function entryCount(client, baseId) {
     catch {
         return null;
     }
-}
-function isErr(x) {
-    return "isError" in x && x.isError === true;
 }
 /**
  * ⚠ **THIS CONSTANT IS NOW THE FENCE'S HEADER, AND THE 430-CHAR PARAGRAPH IT

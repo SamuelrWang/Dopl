@@ -219,10 +219,11 @@ function registerKnowledgeTools(register, client,
 // Nothing about visibility is decided from it — the server already filtered.
 caller = identity_1.UNKNOWN_CALLER, 
 // 🔒 THE SCOPE RESOLVER FOR op="grant", AND NOTHING ELSE READS IT HERE.
-// `workspace-directory.ts › resolveWorkspaceRef` is the ONE resolver that
-// takes a home-channel CONTAINER id (§4A: it deliberately does not filter)
-// and that answers `null` for every ref but the locked one under a CONTAINER
-// LOCK.
+// `workspace-directory.ts › resolveContainerRef` is the ONE resolver that
+// takes the reserved word `home` and a home-channel CONTAINER id (§4A: it
+// deliberately does not filter), REFUSES an ambiguous slug rather than picking
+// (F-719), and answers `null` for every ref but the locked one under a
+// CONTAINER LOCK.
 // ⚠ **REQUIRED, WITH NO DEFAULT, DELIBERATELY** — even though it follows a
 // defaulted parameter. A default would silently un-narrow the grant scope for
 // any caller that forgot it, which is the enumeration B3 exists to deny;
@@ -279,7 +280,7 @@ directory) {
                 const miss = (0, respond_1.missingParams)("move_folder", args, ["base", "from_path", "to_path"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_write_1.opMoveFolder)(client, args.base, args.from_path, args.to_path);
+                return (0, knowledge_ops_write_1.opMove)(client, args.base, args.from_path, args.to_path, "folder");
             }
             case "outline": {
                 const miss = (0, respond_1.missingParams)("outline", args, ["base", "path"]);
@@ -319,7 +320,7 @@ directory) {
                 const miss = (0, respond_1.missingParams)("move_file", args, ["base", "from_path", "to_path"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_write_1.opMoveFile)(client, args.base, args.from_path, args.to_path);
+                return (0, knowledge_ops_write_1.opMove)(client, args.base, args.from_path, args.to_path, "entry");
             }
             case "search": {
                 const miss = (0, respond_1.missingParams)("search", args, ["query"]);

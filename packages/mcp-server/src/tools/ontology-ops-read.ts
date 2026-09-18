@@ -6,7 +6,7 @@
  */
 
 import type { DoplClient } from "@dopl/client";
-import { inlineOr } from "./narration";
+import { inlineOr, NO_NAME } from "./narration";
 import { clippedNote } from "./ontology-clipped";
 import { ok, type ToolResponse } from "./respond";
 import { isConcise, type ResponseFormat } from "./response-size";
@@ -16,9 +16,6 @@ import {
   resolveObjectRef,
   resolveResourceHandles,
 } from "./ontology-render";
-
-/** Same rule as ontology-render.ts: a graph name is a value. */
-const NO_NAME = "`(unnamed)`";
 
 /**
  * ⚠ WHAT op="map" WALKS AND WHERE IT STOPS. The snapshot is the whole live

@@ -39,7 +39,7 @@
 import { workspaceContext } from "@dopl/client";
 import type { DoplClient, OntologySummary } from "@dopl/client";
 import type { ChargeCredit } from "../registrar.js";
-import { inlineOr } from "./narration.js";
+import { inlineOr, NO_NAME } from "./narration.js";
 import { partialRead } from "./partial-read.js";
 import type { SearchLeg } from "../workspace-directory.js";
 import type { ToolResponse } from "./respond.js";
@@ -57,7 +57,6 @@ import type { ToolResponse } from "./respond.js";
 export const MAX_SCOPES = 6;
 
 const EMPTY_ONTOLOGY: OntologySummary = { clusters: [], objects: {} };
-const NO_NAME = "`(unnamed)`";
 
 /** One leg's hits, already capped. */
 interface LegResult {

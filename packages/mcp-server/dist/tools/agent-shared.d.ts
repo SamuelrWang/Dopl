@@ -65,8 +65,6 @@ export type OfferedTemplateVisibility = (typeof TEMPLATE_VISIBILITY_VALUES)[numb
  * gone is what stops the second call.
  */
 export declare const VISIBILITY_ENUM_MESSAGE = "visibility must be \"private\" or \"workspace\", and nothing was written \u2014 \"team\" is no longer a sharing option on this surface.";
-/** A template with nothing nameable left after neutralization. */
-export declare const NO_NAME = "`(unnamed)`";
 export type TemplateRefResolution = {
     kind: "found";
     template: AgentTemplate;
@@ -94,7 +92,6 @@ export declare function resolveTemplateRef(client: DoplClient, ref: string): Pro
  * Returns the row, or the tool error to return verbatim.
  */
 export declare function resolveTemplateOr(client: DoplClient, ref: string): Promise<AgentTemplate | ToolResponse>;
-export declare function isErr(x: AgentTemplate | ToolResponse): x is ToolResponse;
 /**
  * THE AMBIGUOUS-NAME REFUSAL — **it lists, and it does not pick.**
  *

@@ -67,7 +67,7 @@ async function bootServer(client, opts = {}) {
     let active = null;
     let source = null;
     if (pin) {
-        active = directory.find((w) => w.id === pin || w.slug === pin) ?? null;
+        active = directory.find((w) => (0, workspace_directory_js_1.matchesContainerRef)(w, pin)) ?? null;
         if (active) {
             source = "header pin";
         }
