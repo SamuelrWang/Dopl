@@ -51,6 +51,7 @@ import type {
  */
 export type {
   ChannelInfoTabContext,
+  ChannelInfoExtras,
   ChannelSurfaceSlots,
   ChannelSurfaceCapabilities,
 } from "./channel-surface-contract";

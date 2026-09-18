@@ -10,7 +10,7 @@ import { openChannelRecord, renderHome, routes } from "./home-test-harness";
  * It should be moved a little bit to the left to start at the same place."*
  *
  * ⚠ **A FILE OF ITS OWN BECAUSE THE INBOX HAS TO HAVE ROWS IN IT**, and
- * `person-info-tab-mentions.test.tsx` is the EMPTY inbox — its three cases assert
+ * `home-info-mentions.test.tsx` is the EMPTY inbox — its three cases assert
  * the section's presence, its openness and its position, and every one of them
  * reads the empty sentence. The stub's mention bundle is a module-level `vi.mock`,
  * so "with rows" and "with none" cannot be two cases in one file.

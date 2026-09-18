@@ -55,7 +55,7 @@ const ROLE: ReadonlyArray<{ value: GrantRole; label: string }> = [
  * ⚠ RENDERED AT EVERY ROSTER SIZE (2026-08-26, Samuel's ruling: a home channel
  * takes MORE THAN TWO people). It used to render only for a SOLO channel, when
  * a container held two members and a mint against a full one 409'd; the caller
- * (`person-members.tsx`) no longer gates on `peer`, and there is still no
+ * (`person-roster-actions.tsx`) no longer gates on `peer`, and there is still no
  * disabled state here because there is still no reachable refusal to show. What
  * the caller DOES gate on is an already-open invitation — one section, two
  * states, never both.

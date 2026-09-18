@@ -20,7 +20,7 @@
  * 2026-09-17):** *"a majority of it is matching like the workspace pages. I want
  * it to match the home space pages."* The pane header is the channel's name, the
  * info column is **Info · Threads 0 · Agents N · Settings**, and the Info tab is
- * the account surface's own card (`demo-info-tab.tsx`). See `demo-steps.ts` for
+ * the account surface's own mentions face. See `demo-steps.ts` for
  * the four beats that were deleted with the thread.
  */
 
@@ -30,6 +30,7 @@ import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import type { AgentLaunchControls } from "@/features/channels/components/use-agents-panel";
 import { ChannelsMessagePane } from "@/features/channels/components/message-pane";
 import { ChannelsInfoPanel } from "@/features/channels/components/info-panel";
+import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
 import { indexMembers } from "@/features/channels/components/view-model";
 import { channelRows } from "@/features/channels/components/view-model-rows";
 import { agentKey } from "@/features/channels/components/agents-model";
@@ -49,7 +50,6 @@ import {
   narrationAt,
 } from "./demo-data";
 import { ACTIVITY_BINS, MENTIONS } from "./demo-info-data";
-import { DemoInfoTab } from "./demo-info-tab";
 import { HOME_ROW_ID, VIEWER, homeRowsAt } from "./demo-home-rows";
 import {
   DemoAccountRail,
@@ -192,21 +192,37 @@ export function DemoScene({
                       onMarkAllMentionsRead={NOOP}
                       // 🔒 **/home's OWN CAPABILITIES** (`relationship-record.tsx`):
                       // the Threads tab carries the Artifacts toggle here and
-                      // ONLY here, and the INFO tab's body is the account
-                      // surface's card rather than the channels page's.
+                      // ONLY here, and the Info tab wears the account surface's
+                      // mentions face — an open category below the strip rather
+                      // than a collapsed row inside the card.
                       artifacts
-                      infoTab={
-                        <DemoInfoTab
-                          channelName="q4-outbound"
-                          description="Q4 outbound push — enrichment, sequences, segments."
-                          createdAt={SALES_CHANNEL.createdAt}
-                          creator={MEMBERS[0]}
-                          members={MEMBERS}
-                          index={index}
-                          mentions={MENTIONS}
-                          activityBins={ACTIVITY_BINS}
-                        />
-                      }
+                      mentionsLayout="category"
+                      // ⚠ **THE HERO RENDERS THE PRODUCT'S OWN Info BODY SINCE
+                      // WAVE 1A (2026-09-17).** It used to inject
+                      // `demo-info-tab.tsx` through the body-REPLACING `infoTab`
+                      // slot — a FIFTH hand-copy of the same ladder, whose own
+                      // docblock promised every section was "the product's own
+                      // component, not a look-alike" while the composition around
+                      // them was a look-alike. It is deleted; `InfoTab` reads
+                      // `SALES_CHANNEL` and the roster, the scripted series and
+                      // mentions arrive as props above, and **no `headerEdit` or
+                      // `infoCardEdit` is passed**, which is exactly the
+                      // display-only face a decorative pane wants.
+                      activityBins={ACTIVITY_BINS}
+                      activityLoading={false}
+                      // ⚠ ADD PERSON LIVES *UNDER* THE ROSTER, with NO HEADING
+                      // (Samuel, 2026-08-25): the control says what it does. The
+                      // FACE is `PAGE_ACTION_BTN` by import — /home's own black
+                      // pill — and it is a `<span>` because this pane is
+                      // decorative and `aria-hidden`. Same region /home's real
+                      // Add person fills (`ChannelInfoExtras.belowRoster`).
+                      infoExtras={{
+                        belowRoster: (
+                          <div className="px-3.5 pt-2.5">
+                            <span className={PAGE_ACTION_BTN}>Add person</span>
+                          </div>
+                        ),
+                      }}
                     />
                   </div>
                   <DemoAgentView

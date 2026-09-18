@@ -88,7 +88,7 @@ describe("the Description row", () => {
   it("sits between Name and Creator, where the subject's own facts are", () => {
     // ⚠ POSITION IS THE ASSERTION: the card reads subject → what it is about →
     // who made it. The same ladder is composed a second time on /home
-    // (`apps/desktop-ui › person-info-tab.tsx`), and the two are meant to match.
+    // — and since wave 1A (2026-09-17) that is the SAME body on both hosts.
     mount("The redesign");
     const name = screen.getByText("Name");
     const description = screen.getByText("Description");

@@ -141,7 +141,7 @@ export const HOME: HomeChannelsPayload = {
       // ⚠ **THE DEFAULT READER OWNS THIS CONTAINER** (F-343's field, 2026-09-17)
       // — they minted it, which is what every suite predating the field assumed
       // when /home hardcoded `"owner"`. A case about a GUEST or a MEMBER peer
-      // states its own role (`person-members-role.test.tsx`), and a case about a
+      // states its own role (`home-caller-role.test.tsx`), and a case about a
       // payload cached BEFORE the field deletes the key outright (§8).
       role: "owner",
       linkOut: null,
@@ -189,7 +189,7 @@ export const CHANNEL: Channel = {
   myFavoritedAt: null,
   onlineMemberCount: 1,
   // The card as shipped — nothing hidden, nothing added. Suites that exercise
-  // the × or the add row override it (`person-info-tab.test.tsx`).
+  // the × or the add row override it (`home-info-tab.test.tsx`).
   infoCard: EMPTY_INFO_CARD,
   // ⚠ `agentPosture` (2026-09-06, items 12/13/14) and `defaultResponderAgentName` (2026-09-07,
   // items 10/11) BOTH LEFT THIS FIXTURE with their fields.
@@ -473,7 +473,7 @@ export async function openChannels(): Promise<void> {
  * Raise the Channel face AND wait for its record pane.
  *
  * ⚠ THE COMMON CASE, kept as one call because it is two statements in nineteen
- * places in `person-info-tab.test.tsx` alone — and that file sits AT the
+ * places in `home-info-tab.test.tsx` alone — and that file sits AT the
  * 500-line cap, where nineteen extra lines is the difference between a suite
  * that lints and one that does not.
  */

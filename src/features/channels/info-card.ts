@@ -41,7 +41,7 @@ import { closedEnum } from "@/shared/lib/closed-enum";
  * a row with no key cannot be removed, and a key with no row is dead weight.
  *
  * ⚠ `email` is PEER-ONLY and `created` / `lastActivity` are on every channel
- * (`pages/home/person-info-tab.tsx`). A key hidden on a channel that does not
+ * (`channels/components/info-tab-card.tsx`, the ONE body since wave 1A). A key hidden on a channel that does not
  * render that row is inert rather than wrong — the operator hid a row, then the
  * peer left; restoring the peer restores the choice they made.
  */

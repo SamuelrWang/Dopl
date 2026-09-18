@@ -1132,13 +1132,29 @@ the three capability-losing slots closed for good.
 
 | Order | Items | Why here |
 |---|---|---|
-| 1 | **P2 + P1** — `ChannelsOverlays` renders `SurfaceAgentView`; 9 forwarded props disappear and the missing colour is fixed as a side effect, not a patch | smallest blast radius, closes a live visible drift |
-| 2 | **P8** — `activity` onto `ChannelInfoTabContext`; **X6** delete `person-thread-activity.tsx`; **X7** delete `HARDCODED_THREAD_ACTIVITY` after re-deriving | the context pattern's fourth application |
-| 3 | **P9** — `members` + `headerEditable` onto the context | kills /home's second roster hook and two spellings of one rule |
-| 4 | **P7 + P6** — one `info-tab.tsx` with `mentionsLayout` and `infoExtras`; **X5** delete `person-info-tab.tsx`. Land **R-19(a)** (render the info card), **R-20(a)** ("Created" + `formatDate`), **R-22(a)** (delete the threads row), **R-45(a)** (delete Linked threads), **R-46(a)** (delete the two inert buttons) in this step. ⚠ **R-21 is NOT a Status row** — see the new item 7 | one body, three host facts |
+| 1 | ✅ **DONE (wave 1A) — P2 + P1** — `ChannelsOverlays` renders `SurfaceAgentView`; **eight** forwarded props disappear (the doc said 9 and 14 before; the number is `git show` on `overlays.tsx`) and the missing colour is fixed as a side effect, not a patch | smallest blast radius, closes a live visible drift |
+| 2 | ✅ **DONE (wave 1A) — P8** — `activity` onto `ChannelInfoTabContext`; **X6** `person-thread-activity.tsx` deleted. **X7** done too — `HARDCODED_THREAD_ACTIVITY` and `fixtures.test.ts` deleted after re-deriving: the array's only reader since 2026-09-05 was its own test | the context pattern's fourth application |
+| 3 | ✅ **DONE (wave 1A) — P9** — `members` **and `index`** onto the context, which is where **F-723** died. ⚠ **`headerEditable` was NOT added and deliberately so**: the second spelling of that rule was `person-info-tab.tsx`'s, and it died with the file — a context field nothing reads is the debt this wave is removing, not adding | kills /home's second and third roster hooks and two spellings of one rule |
+| 4 | ✅ **DONE (wave 1A) — P7 + P6** — one `info-tab.tsx` (+ `info-tab-card.tsx` at §1's cap) with `mentionsLayout` and `infoExtras`; **X5** `person-info-tab.tsx` deleted. ⚠ **`mentionsLayout` IS A CAPABILITY, NOT A CONTEXT FIELD** — 08 §6.1 put it on `ChannelInfoTabContext`, which is the surface→host direction, and this is a host→surface decision. R-19 · R-20 · R-22 · R-45 · R-46 had already landed in wave 1B | one body, one ruled face |
 | 5 | **X4** — delete the `knowledge` capability, tab, width branch and `channelPaneTabs` arm (**R-18**) | it changes the tab set, so it must land with the body |
-| 6 | **P10 + X8** — move `ChannelRecordSkeleton` into `src/features/channels/components/`; GUEST adopts it; WS composes it beside its tree ghost. ⚠ **No longer gated on ASK-9** (R-43 expired) | closes F-220 and the guest layout jump |
+| 6 | 🔴 **STILL OPEN AFTER WAVE 1A — P10 + X8** — move `ChannelRecordSkeleton` into `src/features/channels/components/`; GUEST adopts it; WS composes it beside its tree ghost. ⚠ **No longer gated on ASK-9** (R-43 expired). ⚠ **WAVE 1A LEFT IT ON PURPOSE AND MEASURED WHY:** it is neither small nor disjoint from the wave's subject — the file is 240+ lines, imports the SPA's own `SkeletonSurface` (so the move needs a seam, not a `git mv`), and `pages/home/channel-record-skeleton.test.tsx` pins it by BYTE-SHARE against the live panes the wave was rewriting. Doing it inside a commit that reshaped those panes would have made the byte-share pins unreadable as evidence | closes F-220 and the guest layout jump |
 | 7 | 🔴 **R-21 — REMOVE THE ARCHIVE FEATURE ENTIRELY, on BOTH surfaces.** Samuel: *"a user can delete a channel; no point in archives."* Not a Status row: the archive control, the lifecycle write, the Archived filter and every reader of the archived flag go. It lands here because it changes the same info body — but it is **larger than the body** and reaches the channel service and the list filters. See ledger row 23 | the ruling, and the only NEW work this wave acquired |
+
+🟢 **WAVE 1A LANDED 2026-09-17 (branch `wave1/one-record-surface`, one commit each) — ITEMS 1, 2 AND 3 ARE DONE AND THE FORK IS GONE.**
+**Item 1** — `overlays.tsx` renders `SurfaceAgentView`; eight forwarded props deleted, and the
+agent COLOUR the workspace page had never rendered arrives as a side effect of there being one
+wiring (pinned by `channels-core-agent-color.test.tsx`, mounted on the PAGE).
+**Items 2 + 3** — `ChannelInfoTabContext` gained `members`, `index`, `activity`, `channelName`;
+`ChannelSurfaceSlots.infoTab` is **DELETED** and replaced by `infoExtras`, a record of NAMED
+REGIONS that cannot be handed a body; `ChannelSurfaceCapabilities` gained `mentionsLayout`
+(`"disclosure" | "category"`), which is the ONE ruled presentational difference between the two
+surfaces. **`person-info-tab.tsx` (402), `person-thread-activity.tsx` (63) and
+`banner-demo/demo-info-tab.tsx` (206) are deleted**; `person-members.tsx` is reduced to
+`person-roster-actions.tsx` (Add person / Link out only). **The hero demo was a FIFTH copy of the
+body and is now a fourth HOST of it.**
+🔴 **F-723 — THE LIVE DEFECT 08 §4.3 FOUND IS FIXED AND PINNED.** /home's roster passed no
+`viewerUserId`, so the OPERATOR read as offline in their own home channel.
+⚠ **WHAT WAVE 1A DID NOT DO: item 6** — see the row below it.
 
 🟢 **WAVE 1B LANDED 2026-09-17 (branch `wave1/deletions-and-info-rows`, one commit each).** The
 DELETIONS and the small info-tab rows are **DONE**: **R-18** (item 5 — the whole knowledge lane, not

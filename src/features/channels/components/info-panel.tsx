@@ -52,6 +52,7 @@ import type { ChannelPeerSession } from "../hooks/use-channel-agent-sessions";
 import type { AgentLaunchOutcome } from "./use-agents-panel";
 import type { TemplateLaunchOverrides } from "@/features/agent-templates/lib/launch-overrides";
 import type { AuthorIndex } from "./view-model";
+import type { ChannelInfoExtras } from "./channel-surface-contract";
 import type {
   Channel,
   ChannelMember,
@@ -89,9 +90,11 @@ export function ChannelsInfoPanel({
   artifacts = false,
   headerEdit,
   infoCardEdit,
+  infoExtras,
+  mentionsLayout,
+  rosterEmptyLine,
   infoTabSignal = 0,
   fullTab,
-  infoTab,
   settings,
 }: {
   channel: Channel;
@@ -204,13 +207,23 @@ export function ChannelsInfoPanel({
    */
   fullTab?: TabKey;
   /**
-   * REPLACES the INFO tab's body in channel view — an account-level 1:1 shows a
-   * person card where a workspace channel shows `info-tab.tsx`. Absent is the
-   * channels page's own body (every caller but Home). ⚠ THREAD VIEW IGNORES IT:
-   * the column is already thread-scoped, so a card about the counterparty would
-   * answer a question the reader did not ask.
+   * WHAT THE HOST ADDS TO THE INFO TAB — named regions, resolved by
+   * `surface-info-panel.tsx` from `ChannelSurfaceSlots.infoExtras`.
+   *
+   * ⚠ **`infoTab?: ReactNode` STOOD HERE AND IS DELETED (wave 1A, 2026-09-17).**
+   * It REPLACED `info-tab.tsx › InfoTab` and the branch below was
+   * `infoTab !== undefined ? infoTab : <InfoTab …/>`; it is unconditional now.
+   * A body-replacing slot cannot help dropping what the surface minted for the
+   * body — it did so four times in three weeks, the last of them stating a
+   * falsehood on screen (F-723).
+   * ⚠ THREAD VIEW IGNORES THIS, like everything else on `InfoTab`: the column is
+   * already thread-scoped.
    */
-  infoTab?: ReactNode;
+  infoExtras?: ChannelInfoExtras;
+  /** WHICH RULED MENTIONS FACE — `ChannelSurfaceCapabilities.mentionsLayout`. */
+  mentionsLayout?: "disclosure" | "category";
+  /** Whether an EMPTY roster says so — `InfoTab.rosterEmptyLine` carries the rule. */
+  rosterEmptyLine?: boolean;
   /**
    * The SETTINGS tab's body — `settings-slot.tsx › ChannelsSettingsSlot`
    * (`channel-manage.tsx › ChannelsManageActions` in channel view,
@@ -312,9 +325,10 @@ export function ChannelsInfoPanel({
                 agentSessions={agentSessions}
                 peerSessions={peerSessions}
               />
-            ) : infoTab !== undefined ? (
-              infoTab
             ) : (
+              /* ⚠ UNCONDITIONAL SINCE WAVE 1A — there is ONE Info body and a host
+                 adds to it through {@link infoExtras}. See that prop for the slot
+                 this branch used to carry. */
               <InfoTab
                 channel={channel}
                 channelName={channelName}
@@ -324,11 +338,14 @@ export function ChannelsInfoPanel({
                 mentions={mentions}
                 mentionsTruncated={mentionsTruncated}
                 mentionsLoading={mentionsLoading}
+                mentionsLayout={mentionsLayout}
                 index={index}
                 onOpenMention={onOpenMention}
                 onMarkAllMentionsRead={onMarkAllMentionsRead}
                 headerEdit={headerEdit}
                 infoCardEdit={infoCardEdit}
+                rosterEmptyLine={rosterEmptyLine}
+                extras={infoExtras}
               />
             )
           ) : shown === "threads" ? (

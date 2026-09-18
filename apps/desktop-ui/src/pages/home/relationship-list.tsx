@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { HomeChannelRow } from "@/shared/ui/home-channel-row";
 // ⚠ AN APP READING A FEATURE COMPONENT, which is the direction /home already
-// takes eleven times (`person-members.tsx`, `person-info-tab.tsx`, …) and NOT the
+// takes eleven times (`person-roster-actions.tsx`, `relationship-record.tsx`, …) and NOT the
 // feature→feature import INVARIANTS §1 forbids. The well's machinery cannot live
 // in `shared/` while its heading face lives in `agent-templates` —
 // `collapse-wells.tsx`'s own import comment carries that argument.

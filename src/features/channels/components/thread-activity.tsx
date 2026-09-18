@@ -6,7 +6,7 @@
  *
  * ⚠ THE VISUAL IS THE ONE `info-tab.tsx` HAS ALWAYS DRAWN. What changed on
  * /home is where the numbers come from: that page's strip is
- * `fixtures.ts › HARDCODED_THREAD_ACTIVITY`, marked as such at its render site
+ * a hand-authored 31-level fixture in `fixtures.ts`, marked as such at its render site
  * since 2026-08-18, and the account surface now feeds the same squares from
  * `GET /api/workspaces/[workspaceSlug]/overview-series?metric=messages&channelId=`
  * — real daily counts for THIS channel. **The shade ramp lives here so the two

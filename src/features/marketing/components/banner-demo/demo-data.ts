@@ -155,7 +155,15 @@ function channel(
  * sections, and it is `HOME_ROWS` at the foot of this file. Do not re-add a
  * rooms/DMs split here; it is the shape Samuel rejected.
  */
-export const SALES_CHANNEL = channel(CHANNEL_ID, "q4-outbound");
+/**
+ * ⚠ **THE `topic` IS THE SCENE'S Description ROW (wave 1A, 2026-09-17).** It was
+ * a string passed straight into a scripted Info tab; that tab is deleted and the
+ * hero now mounts the PRODUCT's `info-tab.tsx › InfoTab`, which reads the column
+ * every real channel reads. A fact about the channel belongs on the channel row.
+ */
+export const SALES_CHANNEL = channel(CHANNEL_ID, "q4-outbound", {
+  topic: "Q4 outbound push — enrichment, sequences, segments.",
+});
 
 /* ── The thread ───────────────────────────────────────────────────── */
 

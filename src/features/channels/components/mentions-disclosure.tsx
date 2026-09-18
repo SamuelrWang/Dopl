@@ -6,8 +6,10 @@
  * ⚠ **EXTRACTED BECAUSE A SECOND SURFACE NEEDED IT AND COPIED NOTHING**
  * (2026-09-15, Samuel: the home space's Info tab had no Tags section at all).
  * The workspace channels page (`info-tab.tsx`) and a HOME channel's Info tab
- * (`pages/home/person-info-tab.tsx`) are two compositions of ONE ladder and are
- * MEANT TO MATCH — `person-info-tab.tsx` says so in its own docblock about the
+ * were two compositions of ONE ladder that were MEANT TO MATCH, until wave 1A
+ * (2026-09-17) collapsed them into one body with a ruled branch
+ * (`ChannelSurfaceCapabilities.mentionsLayout`). ⚠ This row is the DISCLOSURE
+ * face; `mentions-list.tsx` is the list under both. The old note said so about the
  * Description row. The parity gap was not that the home tab rendered the section
  * differently; it was that the surface FETCHED the mentions and the injected tab
  * threw them away.

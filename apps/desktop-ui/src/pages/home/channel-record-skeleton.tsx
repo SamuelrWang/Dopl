@@ -224,7 +224,7 @@ function InfoColumnGhost() {
         </div>
       </div>
       {/* The Info face's scroll body, its section heading and its card
-          (`info-tab.tsx`, `person-info-tab.tsx`, `bits.tsx › MetaRow`). */}
+          (`info-tab.tsx`, `info-tab-card.tsx`, `bits.tsx › MetaRow`). */}
       <div className="min-h-0 flex-1 overflow-hidden pb-6">
         <div className="flex items-center gap-2 px-3.5 pb-1.5 pt-4">
           <SkeletonLine w={84} h={11} />

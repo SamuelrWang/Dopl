@@ -247,7 +247,7 @@ export function HomeKnowledgePanels({
 
   // ⚠ NEITHER SECTION MAY STATE AN EMPTINESS IT HAS NOT MEASURED. Rendered
   // against an unresolved read, the empty sentences below are assertions about
-  // a list nobody has seen — the same false-sentence trap `person-members.tsx`
+  // a list nobody has seen — the same false-sentence trap `channels/components/info-tab.tsx › rosterEmptyLine`
   // turns `emptyLine` off for. The pane waits for the container read; Personal
   // waits separately for the home one, because they are two reads.
   // ⚠ ONLY WHILE THERE IS A CONTAINER READ TO WAIT FOR. With no channel that

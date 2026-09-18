@@ -6,7 +6,7 @@
  * launch after an update reads payloads written by the previous bundle — which
  * carry NO `channelGrants` key at all. A raw read would crash the pane over a
  * field that is decoration here. The parse falls back to `EMPTY_GRANTS`. This
- * copies `pages/home/person-info-tab.test.tsx`'s key-DELETED shape: the field is
+ * copies `pages/home/home-info-tab.test.tsx`'s key-DELETED shape: the field is
  * deleted from the fixture, not set to null or {}.
  */
 

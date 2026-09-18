@@ -62,7 +62,7 @@ vi.mock("@/features/channels/components/channel-surface-standalone", async () =>
  * (`channels/server/service-writes-members.ts`), and only the creator is the
  * channel's `owner`. The harness fixture is the CREATOR's copy, so a case about
  * anybody else has to say so or `canEdit`'s first clause answers for it.
- * ⚠ `isDirect: false` for the reason `person-info-tab-edit.test.tsx` gives: the
+ * ⚠ `isDirect: false` for the reason `home-info-edit.test.tsx` gives: the
  * tab keeps the workspace rule that only a channel whose name is STORED opens.
  */
 const PEER_CHANNEL = {

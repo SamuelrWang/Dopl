@@ -8,9 +8,24 @@
  * fake that lags the real context is worse than no fake: it passes while the
  * shipped surface hands the tab something the tab cannot use.
  *
- * ⚠ **THE STUB'S JOB IS THE SLOT, NOT THE SURFACE.** It renders the injected tab
- * and nothing else — no transcript, no panel, no tabs — because these tests are
- * about what the TAB draws when the surface hands it a context.
+ * 🔒 **IT RENDERS THE REAL `info-tab.tsx › InfoTab` SINCE WAVE 1A (2026-09-17),
+ * AND THAT IS THE WHOLE CHANGE.** It used to render whatever body the host
+ * injected, because /home injected one; there is one Info body now and a host
+ * may only ADD to it (`ChannelInfoExtras`). So the stub's job is what the real
+ * surface's job is: **make the reads, mint the writes, pass the capabilities,
+ * and hand the host's region to the shared body.** Every /home case below it
+ * therefore asserts what the SHARED body puts on screen when the /home host
+ * mounts it — which is the property those cases were always meant to be about.
+ *
+ * ⚠ **THE READS ARE REAL, AGAINST THE SUITES' OWN BRIDGE.** `useChannelMembers`,
+ * `useOverviewSeries` and the two writes are the exact calls
+ * `channel-surface-data.ts` / `surface-info-panel.tsx` make with the exact same
+ * arguments. A stub that handed fixtures down would pass every case while the
+ * shipped surface fetched nothing.
+ *
+ * ⚠ **WHAT IT STILL DOES NOT MOUNT: the transcript, the tab row, the header, the
+ * agent view.** Those have their own suites (`channel-surface.test.tsx`), and a
+ * stub that grew into the surface would make these files about the surface.
  *
  * ⚠ **THE CONTEXT TYPE IS IMPORTED, NEVER RE-DECLARED.** Each copy used to spell
  * its own `{ gate: ... }` inline, which is exactly why they all silently went
@@ -18,15 +33,20 @@
  * required field. Importing it makes the compiler the thing that notices.
  */
 
-import type { ReactNode } from "react";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
-import type { ChannelInfoTabContext } from "@/features/channels/components/channel-surface";
+import { InfoTab } from "@/features/channels/components/info-tab";
+import type {
+  ChannelInfoExtras,
+  ChannelInfoTabContext,
+  ChannelSurfaceCapabilities,
+} from "@/features/channels/components/channel-surface";
 import type { MentionsBundle } from "@/features/channels/components/mentions-disclosure";
 import {
   indexMembers,
   type AuthorIndex,
 } from "@/features/channels/components/view-model";
 import { useChannelHeaderWrite } from "@/features/channels/hooks/use-channel-header-writes";
+import { useChannelInfoCardWrite } from "@/features/channels/hooks/use-channel-info-card-writes";
 import { useChannelMembers } from "@/features/channels/hooks/use-channel-members";
 import { useOverviewSeries } from "@/features/workspaces/hooks/use-overview-series";
 import type { Channel } from "@/features/channels/types";
@@ -43,7 +63,7 @@ const EMPTY_INDEX: AuthorIndex = {
 /**
  * A Tags inbox with nothing in it: the ordinary case for these tests, which are
  * about the CARD. ⚠ Handlers are no-ops rather than spies — a test that cares
- * about the click passes its own bundle (see `person-info-tab.test.tsx`).
+ * about the click passes its own bundle (see `home-info-tab.test.tsx`).
  */
 export const EMPTY_MENTIONS: MentionsBundle = {
   mentions: [],
@@ -92,7 +112,7 @@ export function infoTabContext(
  * ⚠ **IT MINTS THE REAL HEADER WRITE, NOT A SPY (2026-09-17).** The click-to-edit
  * rows have to reach `PATCH /api/channels/[channelId]` and ITS cache patches, or
  * "the left column's title updates" is a sentence about a handler nobody wired —
- * the same argument `person-info-tab.test.tsx` makes for mounting through
+ * the same argument `home-info-tab.test.tsx` makes for mounting through
  * `HomePage` instead of the component. ⚠ **AND IT MIRRORS THE REAL PERMISSION**
  * off the channel it was handed (`surface-info-panel.tsx`'s own expression), so a
  * suite changes the ANSWER by changing the fixture's `role`, not the stub.
@@ -105,7 +125,8 @@ export function standaloneSurfaceStub(ctx?: Partial<ChannelInfoTabContext>) {
       workspaceSlug?: string;
       currentUserId?: string;
       role?: Role;
-      slots?: { infoTab?: (c: ChannelInfoTabContext) => ReactNode };
+      slots?: { infoExtras?: (c: ChannelInfoTabContext) => ChannelInfoExtras };
+      capabilities?: ChannelSurfaceCapabilities;
     }) => {
       const write = useChannelHeaderWrite({
         channelId: props.channel.id,
@@ -115,12 +136,14 @@ export function standaloneSurfaceStub(ctx?: Partial<ChannelInfoTabContext>) {
         // honest stand-in.
         gate: { begin: () => {}, end: () => {} },
       });
-      // 🔒 **THE STUB MAKES THE SURFACE'S READS, BECAUSE THE SLOT'S CONTRACT IS
-      // NOW THAT IT HAS ALREADY MADE THEM (wave 1A, 2026-09-17).** `members`,
-      // `index` and `activity` reach the tab from `channel-surface-data.ts` in the
-      // shipped app; a stub that handed them fixtures would pass every /home case
-      // while the real surface fetched nothing — and these suites drive a REAL
-      // bridge, so making the calls here keeps them end to end.
+      // ⚠ **MEMBERSHIP-GATED, NOT MANAGE-GATED** — `surface-info-panel.tsx` mints
+      // this from the same gate and passes it unconditionally, so the curated
+      // rows and their hover × are drawn on every product host.
+      const card = useChannelInfoCardWrite({
+        channelId: props.channel.id,
+        workspaceId: props.workspaceId,
+        gate: { begin: () => {}, end: () => {} },
+      });
       const { members } = useChannelMembers(props.channel.id, props.workspaceId);
       const series = useOverviewSeries({
         workspaceSegment: props.workspaceSlug ?? "",
@@ -128,31 +151,65 @@ export function standaloneSurfaceStub(ctx?: Partial<ChannelInfoTabContext>) {
         channelId: props.channel.id,
         enabled: Boolean(props.workspaceSlug),
       });
+      const resolved = infoTabContext({
+        headerEdit: {
+          // ⚠ THE REAL PERMISSION, off the channel this stub was handed
+          // (`surface-info-panel.tsx`'s own expression), so a suite changes the
+          // ANSWER by changing the fixture's `role`, not the stub.
+          canEdit:
+            props.channel.role === "owner" ||
+            meetsMinRole(props.role ?? "member", "admin"),
+          onSaveName: write.saveName,
+          onSaveTopic: write.saveTopic,
+          busy: write.pending,
+        },
+        members,
+        // ⚠ THE VIEWER IS THE HOST'S `currentUserId`, exactly as
+        // `derivations.ts › indexMembers` resolves it on the real surface — and
+        // it is what stops the roster reporting the operator offline in their
+        // own channel (F-723).
+        index: indexMembers(members, props.currentUserId ?? ""),
+        activity: { bins: series.days, loading: series.loading },
+        // 🔒 `peerNamedHeader: false` on every /home mount, so the surface's
+        // derived name IS the channel's stored one.
+        channelName: props.channel.name,
+        ...ctx,
+      });
       return (
-        <div data-testid="channel-surface">
-          {props.slots?.infoTab?.(
-            infoTabContext({
-              headerEdit: {
-                canEdit:
-                  props.channel.role === "owner" ||
-                  meetsMinRole(props.role ?? "member", "admin"),
-                onSaveName: write.saveName,
-                onSaveTopic: write.saveTopic,
-                busy: write.pending,
-              },
-              members,
-              // ⚠ THE VIEWER IS THE HOST'S `currentUserId`, exactly as
-              // `derivations.ts › indexMembers` resolves it on the real surface —
-              // and it is what stops the roster reporting the operator offline in
-              // their own channel (F-723).
-              index: indexMembers(members, props.currentUserId ?? ""),
-              activity: { bins: series.days, loading: series.loading },
-              // 🔒 `peerNamedHeader: false` on every /home mount, so the surface's
-              // derived name IS the channel's stored one.
-              channelName: props.channel.name,
-              ...ctx,
-            })
-          )}
+        // ⚠ **THE `data-*` ATTRIBUTES ARE `index.test.tsx`'s** — that file kept
+        // an inline stub of its own until wave 1A, which is the sixth copy this
+        // module exists to prevent. They say WHAT THE HOST MOUNTED THE SURFACE
+        // ON, which is a different question from what the tab draws, and the two
+        // are answered by one stub rather than two.
+        <div
+          data-testid="channel-surface"
+          data-workspace={props.workspaceId}
+          data-slug={props.workspaceSlug}
+          data-channel={props.channel.id}
+          data-user={props.currentUserId}
+          data-member-management={String(props.capabilities?.memberManagement)}
+        >
+          <InfoTab
+            channel={props.channel}
+            channelName={resolved.channelName}
+            activityBins={resolved.activity.bins}
+            activityLoading={resolved.activity.loading}
+            members={resolved.members}
+            mentions={resolved.mentions.mentions}
+            mentionsTruncated={resolved.mentions.truncated}
+            mentionsLoading={resolved.mentions.loading}
+            mentionsLayout={props.capabilities?.mentionsLayout}
+            index={resolved.index}
+            onOpenMention={resolved.mentions.onOpen}
+            onMarkAllMentionsRead={resolved.mentions.onMarkAllRead}
+            headerEdit={resolved.headerEdit}
+            infoCardEdit={{ onSave: card.save }}
+            // The derivation `surface-info-panel.tsx` makes — /home passes
+            // `memberManagement: false`, so "No members in this channel." is a
+            // sentence that could only ever flash falsely here.
+            rosterEmptyLine={props.capabilities?.memberManagement !== false}
+            extras={props.slots?.infoExtras?.(resolved)}
+          />
         </div>
       );
     },

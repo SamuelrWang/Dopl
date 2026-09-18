@@ -11,7 +11,7 @@ import { openChannelRecord, renderHome, routes } from "./home-test-harness";
  * MemberRoster` feeds `viewerUserId` to `view-model.ts › isPresentForViewer`,
  * whose override — *the viewer is present whenever THIS desktop app is the thing
  * rendering* — fires only when the viewer is known. /home's roster
- * (`person-members.tsx`) mounted its OWN `useChannelMembers` and passed no
+ * mounted its OWN `useChannelMembers` and passed no
  * viewer, so the operator's row fell through to the `lastSeenAt` heartbeat and
  * read OFFLINE, in the one renderer where `isSpaRenderer()` is ever true. The
  * workspace channels page, on the same machine in the same second, showed them
@@ -29,10 +29,11 @@ import { openChannelRecord, renderHome, routes } from "./home-test-harness";
  * So this file needs no renderer mock: it IS the renderer, as far as the rule is
  * concerned.
  *
- * ⚠ **IT IS ITS OWN FILE** rather than a case in `person-info-tab.test.tsx`,
+ * ⚠ **IT IS ITS OWN FILE** rather than a case in `home-info-tab.test.tsx`,
  * which sits within a hundred lines of the 500-line cap (§1) — and because the
- * subject outlives the /home body: the assertion is about what the HOST's roster
- * renders, and wave 1A's next step replaces that composition wholesale.
+ * subject outlived the /home body: the roster on screen here is the SHARED one
+ * now (`channels/components/info-tab.tsx`), and the assertion did not have to
+ * change when the composition under it was replaced wholesale.
  */
 
 const apiRequest = vi.hoisted(() => vi.fn());

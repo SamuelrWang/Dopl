@@ -3290,9 +3290,13 @@ constraint moves, and nothing connects the two.
   so they wrapped differently in the 380px column) and in ZERO ENCODING (the real strip maps a
   measured zero to `-1` = empty well, the fixture painted `0` = palest green). The cheap honest half
   landed: `HARDCODED_THREAD_ACTIVITY` is now 31 entries in `ActivityCells`' OWN encoding (`-1` for a
-  quiet slice, `0`–`4` shades), pinned in `fixtures.test.ts` against `OVERVIEW_SERIES_DAYS` and the
-  empty-well semantics. **The DATA gap below is untouched** — wiring the real series is still the
-  perf decision this entry parks.
+  quiet slice, `0`–`4` shades), pinned against `OVERVIEW_SERIES_DAYS` and the empty-well semantics
+  by a test file of its own. **The DATA gap below is untouched** — wiring the real series is still
+  the perf decision this entry parks.
+  ⚠ **BOTH THE FIXTURE AND THAT TEST ARE DELETED (wave 1A, 2026-09-17 — parity item X7).** The
+  DATA gap closed on 2026-09-05 when the channels page took the counted series, which left the
+  array with exactly one reader: its own test. The encoding rule it pinned lives where it is
+  EXECUTED — `channels/components/thread-activity.tsx › activityLevels` — and is pinned there.
 - **Why it was not fixed in the same change — a COST, not a difficulty.** The channels page would
   need the series threaded down through `channel-surface-data.ts` → `channel-surface.tsx` →
   `info-panel.tsx` → `info-tab.tsx` (mechanical), and would then pay **31 counted bins on every
@@ -3303,6 +3307,9 @@ constraint moves, and nothing connects the two.
   useOverviewSeries` in `channel-surface-data.ts` keyed on the open channel, pass `bins` down, and
   swap `ActivityCells` for `ThreadActivityStrip`. Delete `HARDCODED_THREAD_ACTIVITY` from
   `fixtures.ts` in the same change — a fixture with no caller is the next agent's furniture.
+  ⚠ **THE SWAP LANDED 2026-09-05 AND THE DELETE DID NOT; IT LANDED IN WAVE 1A, TWELVE DAYS LATE,
+  AND THE ARRAY WAS FURNITURE FOR ALL TWELVE.** "In the same change" is the load-bearing half of
+  that sentence.
 - ⚠ **Do not resolve this by deleting the marker.** The fixture is legitimate as FURNITURE
   (INVARIANTS §5, *"Design furniture stays HARDCODED… never render zeros from missing backing
   data"*) right up until somebody wires it; what this entry tracks is the one surface still on it.
@@ -9978,7 +9985,7 @@ The claim had been restated in five places from one sentence, which is how it su
 
 ### F-723 — the operator read as OFFLINE in their own home channel: /home's roster passed no viewer (2026-09-17)
 
-- Location: `apps/desktop-ui/src/pages/home/person-members.tsx › PersonMembers` (the roster that passed nothing), against `src/features/channels/components/member-roster.tsx › MemberRoster`'s `viewerUserId` and `src/features/channels/components/view-model.ts › isPresentForViewer`.
+- Location: /home's own roster — a second `MemberRoster` call site that passed no viewer — against `src/features/channels/components/member-roster.tsx › MemberRoster`'s `viewerUserId` and `src/features/channels/components/view-model.ts › isPresentForViewer`. ⚠ **THE CALL SITE IS GONE, WHICH IS THE FIX**: wave 1A deleted the forked body, and what survives of that file is `apps/desktop-ui/src/pages/home/person-roster-actions.tsx › PersonRosterActions`, which draws no members at all.
 - ⚠ **Id note:** re-derived across every live branch at file time (the header's loop), not from `master` — `master`'s highest is `F-717` and wave 1B holds `F-720`–`F-722`. ⚠ **Re-derive AGAIN before merge:** `master` moved under wave 1B mid-wave and cost it a three-entry renumber.
 - Found during: **wave 1A**, executing `docs/specs/workspace-parity/08-slot-audit.md` §4.3, which found it by reading the slot contract rather than the screen.
 - **THE MECHANISM, IN THREE FILES AND ONE EXPRESSION.** `isPresentForViewer` is `if (viewerUserId && member.userId === viewerUserId && isSpaRenderer()) return true;` before it falls through to the `lastSeenAt` heartbeat. `MemberRoster` forwards `viewerUserId` and nothing else touches it. The shared Info tab has passed `index.currentUserId` since 2026-09-08; /home's replacement body mounted its own `useChannelMembers` and passed **no viewer at all**, so the override could not fire — **in the desktop renderer, which is the only place `isSpaRenderer()` is ever true.** The operator therefore read as OFFLINE in their own home channel while the workspace channels page, on the same machine in the same second, showed them online.

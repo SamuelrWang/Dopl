@@ -226,7 +226,7 @@ export function InfoCardCustomRow({
  *
  * ⚠ AT THE CAP IT RENDERS NOTHING. A control whose only outcome is a refusal is
  * a dead control — the same rule that hides "Add person" once a container is
- * full (`person-info-tab.tsx`).
+ * full (`info-tab-card.tsx`, the ONE body since wave 1A).
  */
 export function InfoCardAddRow({
   full,

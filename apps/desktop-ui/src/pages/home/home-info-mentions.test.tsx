@@ -4,8 +4,8 @@ import { installBridge } from "#/test-utils/bridge";
 import { openChannelRecord, renderHome, routes } from "./home-test-harness";
 
 /**
- * ⚠ SPLIT OUT OF `person-info-tab.test.tsx`, WHICH IS AT THE 500-LINE CAP
- * (INVARIANTS §1) — `person-info-tab-peers` and `-description` set the precedent
+ * ⚠ SPLIT OUT OF `home-info-tab.test.tsx`, WHICH IS AT THE 500-LINE CAP
+ * (INVARIANTS §1) — `home-info-peers` and `home-info-description` set the precedent
  * and the reason is theirs: a file at the cap cannot absorb a case, let alone the
  * paragraph explaining one. Read-only; nothing here writes.
  */

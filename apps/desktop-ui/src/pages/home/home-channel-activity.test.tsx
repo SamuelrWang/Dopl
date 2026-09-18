@@ -13,7 +13,7 @@ import {
 /**
  * THE HOME CHANNEL'S **ACTIVITY STRIP**, as the /home host renders it.
  *
- * ⚠ SPLIT OUT OF `person-info-tab.test.tsx` ON 2026-09-01, when that file hit
+ * ⚠ SPLIT OUT OF `home-info-tab.test.tsx` ON 2026-09-01, when that file hit
  * the 500-line cap (§1 — `eslint.config.mjs › max-lines`) and could not absorb
  * the `openChannelRecord` gate every case on this page now needs. **A file at
  * the cap is relieved by a whole responsibility, not shaved**: the strip is a

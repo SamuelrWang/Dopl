@@ -29,7 +29,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { channel, member, message, thread, ME, PEER, WS } from "./test-fixtures";
-import type { ChannelInfoTabContext } from "./channel-surface";
 
 interface LiveArgs {
   workspaceId: string;
@@ -231,75 +230,6 @@ describe("StandaloneChannelSurface — the header's identity", () => {
 });
 
 describe("StandaloneChannelSurface — the host's two knobs", () => {
-  it("renders the channels page's own Info tab when no slot is given", () => {
-    mount();
-    expect(screen.getByText("Channel info")).toBeTruthy();
-  });
-
-  it("REPLACES the Info tab's body with the slot, keeping the tab row", () => {
-    mount({ slots: { infoTab: () => <p>Diana Taylor, since March</p> } });
-    expect(screen.getByText("Diana Taylor, since March")).toBeTruthy();
-    // The channel's own body is GONE, not merely pushed below the card.
-    expect(screen.queryByText("Channel info")).toBeNull();
-    expect(screen.getByRole("tab", { name: /^Info/ })).toBeTruthy();
-  });
-
-  // ⚠ THE SLOT IS HANDED **THIS SURFACE'S** GATE, never left to mint one
-  // (2026-08-25). The person card writes — removable Main-info rows — and
-  // INVARIANTS §7/§8 allow one `useRefetchGate` per live surface; a second one
-  // coordinates with nothing, so the doorbell's refetch lands mid-write and
-  // repaints the row the operator just deleted. Asserting the gate ARRIVES is
-  // the only thing that can catch that regression: a slot that quietly stopped
-  // receiving it renders identically.
-  it("hands the Info-tab slot the surface's own refetch gate", () => {
-    let seen: unknown = null;
-    mount({
-      slots: {
-        infoTab: (ctx) => {
-          seen = ctx.gate;
-          return <p>slot</p>;
-        },
-      },
-    });
-    // ⚠ IDENTITY, not shape. A shape assertion would pass against a gate the
-    // slot minted for itself, which is precisely the bug — so this pins that
-    // the object handed over is the one `live.ts` returned to THIS surface.
-    const fromLive = live.mock.results.at(-1)?.value.gate;
-    expect(fromLive).toBeTruthy();
-    expect(seen).toBe(fromLive);
-  });
-
-  // ⚠ **THE SAME ASSERTION, FOUR MORE FIELDS (wave 1A, 2026-09-17).** The
-  // context is what the surface has ALREADY PAID FOR, and every field on it is
-  // there because a host was re-reading it downstream — `members` twice more,
-  // `activity` once more, `channelName` re-derived off the other projection, and
-  // `index` (which carries the viewer) not resolved at all, which is F-723.
-  // 🔒 **IDENTITY WHEREVER IT CAN BE, FOR THE GATE'S REASON:** a SHAPE assertion
-  // passes against a value the tab minted for itself, and a tab minting its own
-  // is precisely the defect. `members` is the surface's array by reference;
-  // `index.currentUserId` is the id this surface was handed, not one re-resolved.
-  it("hands the Info-tab slot the surface's own roster, viewer, series and name", () => {
-    let seen: ChannelInfoTabContext | null = null;
-    mount({
-      slots: {
-        infoTab: (ctx) => {
-          seen = ctx;
-          return <p>slot</p>;
-        },
-      },
-    });
-    const ctx = seen as unknown as ChannelInfoTabContext;
-    expect(ctx.members.map((m) => m.userId)).toEqual([ME, PEER]);
-    expect(ctx.index.currentUserId).toBe(ME);
-    // The roster the tab is handed IS the roster the index was built over — one
-    // read, not two that happen to agree in a fixture.
-    expect(ctx.index.byId.get(ME)).toBe(ctx.members[0]);
-    expect(ctx.channelName).toBe(CHANNEL.name);
-    // ⚠ `loading` IS NOT `bins.length === 0`: an empty well is a MEASURED zero,
-    // so the strip has to be able to tell "not counted yet" from "counted, quiet".
-    expect(ctx.activity).toEqual({ bins: [], loading: expect.any(Boolean) });
-  });
-
   // ⚠ `await` ON THE TAB BODY throughout this block: the info column's body
   // crossfades (150ms), so a tab's content lands one fade after its click. The
   // NEGATIVE assertions have to come after a positive one from the SAME tab, or

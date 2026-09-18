@@ -1,6 +1,5 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ChannelInfoTabContext } from "@/features/channels/components/channel-surface";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import {
   USER_ID,
@@ -46,36 +45,17 @@ const apiRequest = vi.hoisted(() => vi.fn());
 /** The header's list-width CELL (`home-header.tsx`) as a `closest` selector: inside it heads the channel picker, outside it is a page control. */
 const LIST_CELL = ".w-\\[var\\(--home-list-w\\)\\]";
 
-vi.mock("@/features/channels/components/channel-surface-standalone", async () => {
-  const { infoTabContext } = await import("./surface-slot-fixtures");
-  return {
-    StandaloneChannelSurface: (props: {
-      workspaceId: string;
-      workspaceSlug: string;
-      channel: { id: string };
-      currentUserId: string;
-      capabilities?: { memberManagement?: boolean };
-      slots?: {
-        // ⚠ A RENDER FUNCTION since 2026-08-25 taking the surface's own refetch gate; the
-        // fixture supplies an inert context. This suite owns that Home MOUNTS the slot.
-        // ⚠ ASYNC FACTORY above because `vi.mock` is hoisted over every import.
-        // ⚠ THE REAL CONTEXT TYPE, not a hand-written shape: a structural copy cannot fail when it grows a field.
-        infoTab?: (ctx: ChannelInfoTabContext) => React.ReactNode;
-      };
-    }) => (
-      <div
-        data-testid="channel-surface"
-        data-workspace={props.workspaceId}
-        data-slug={props.workspaceSlug}
-        data-channel={props.channel.id}
-        data-user={props.currentUserId}
-        data-member-management={String(props.capabilities?.memberManagement)}
-      >
-        {props.slots?.infoTab?.(infoTabContext())}
-      </div>
-    ),
-  };
-});
+// ⚠ **ONE STUB, SIX FILES (`surface-slot-fixtures.tsx`) — THIS FILE'S INLINE COPY
+// WENT IN WAVE 1A (2026-09-17).** It rendered whatever body the host injected,
+// which was the right shape while /home injected one; there is ONE Info body now
+// and a host may only ADD to it, so a stub that does not render the shared body
+// cannot answer what this page puts on screen. The shared stub carries the same
+// `data-*` attributes this suite asserts on, and it MAKES the surface's reads, so
+// the cases below went from mounting a fake to mounting the real body.
+// ⚠ ASYNC FACTORY because `vi.mock` is hoisted over every import.
+vi.mock("@/features/channels/components/channel-surface-standalone", async () =>
+  (await import("./surface-slot-fixtures")).standaloneSurfaceStub()
+);
 
 describe("home page", () => {
   beforeEach(() => {

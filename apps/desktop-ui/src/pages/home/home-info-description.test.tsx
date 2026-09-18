@@ -21,8 +21,8 @@ import {
  * column, and the same row is pinned on the workspace pane in
  * `src/features/channels/components/info-tab.test.tsx`.
  *
- * ⚠ **SPLIT OUT OF `person-info-tab.test.tsx`, WHICH IS AT THE 500-LINE CAP**
- * (INVARIANTS §1), on `person-info-tab-peers.test.tsx`'s precedent. Read-only
+ * ⚠ **SPLIT OUT OF `home-info-tab.test.tsx`, WHICH IS AT THE 500-LINE CAP**
+ * (INVARIANTS §1), on `home-info-peers.test.tsx`'s precedent. Read-only
  * stub — nothing here writes.
  *
  * ⚠ MOUNTED THROUGH `HomePage`, not the component: the row reads `channel.topic`

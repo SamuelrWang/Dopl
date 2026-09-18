@@ -5,7 +5,7 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { PageError } from "#/components/page-states";
 import { EMPTY_ROLE, type HomeChannel } from "@/features/home/types";
 import { ChannelRecordSkeleton } from "./channel-record-skeleton";
-import { PersonInfoTab } from "./person-info-tab";
+import { PersonRosterActions } from "./person-roster-actions";
 
 /**
  * A home channel's RECORD — the whole channels surface, pinned to the one
@@ -100,49 +100,26 @@ export function RelationshipRecord({
       initialThreadId={initialThreadId}
       initialSeq={initialSeq}
       onDeleted={onDeleted}
-      // ⚠ A RENDER FUNCTION SINCE 2026-08-25, and the argument is the point:
-      // the person card became write-bearing when the Main-info rows became
-      // removable, and INVARIANTS §7/§8 allow ONE `useRefetchGate` per live
-      // surface. The surface hands its own down rather than the slot minting a
-      // second one that coordinates with nothing.
+      // 🔒 **/home RENDERS THE SHARED Info BODY AND ADDS ONE REGION TO IT (wave
+      // 1A, 2026-09-17).** It used to inject a whole tab through the
+      // body-REPLACING `infoTab` slot — `person-info-tab.tsx`, 402 lines of the
+      // same ladder out of the same leaves — and that fork lost something the
+      // surface had already paid for FOUR times in three weeks: the mentions
+      // section, the header write, the activity strip, and the viewer id, which
+      // made the operator read as offline in their own channel (F-723).
+      // ⚠ **WHAT IS LEFT IS DIFFERENT IN KIND, NOT DIFFERENT IN DEGREE.** Add
+      // person mints a bound LINK; a workspace channel's roster is added to
+      // through an invite the server refuses here outright (§4A
+      // `LINK_CONTAINER_CLOSED`). There is no shared control to narrow, so it is
+      // a region under the list it changes — `person-roster-actions.tsx`.
+      // ⚠ A RENDER FUNCTION SINCE 2026-08-25, and the argument is unchanged: the
+      // region is write-bearing, and INVARIANTS §7/§8 allow ONE `useRefetchGate`
+      // per live surface. The surface hands its own down rather than the region
+      // minting a second one that coordinates with nothing.
       slots={{
-        // ⚠ `mentions` RIDES WITH THE GATE (2026-09-15): the surface has already
-        // read this channel's Tags inbox, scoped to THIS home container, and the
-        // tab renders the same disclosure the workspace page does. Before this it
-        // was fetched and dropped — see `ChannelInfoTabContext.mentions`.
-        // ⚠ `headerEdit` RIDES WITH THEM TOO (2026-09-17, Samuel: *"I want to be
-        // able to click where the name and description are"*) — the surface has
-        // ALREADY minted the write and mirrored `canManageChannel` for the tab it
-        // is not rendering, so the /home card takes that bundle rather than a
-        // second hook on a second gate.
-        // ⚠ `members`, `index`, `activity` AND `channelName` RIDE WITH THEM
-        // (wave 1A, 2026-09-17) — the same argument, three applications later.
-        // Every one was ALREADY READ by the surface for the tab it is not
-        // rendering, and every one was being read a second time downstream:
-        // `members` twice more, `activity` once more, `channelName` re-derived
-        // off the other projection — and `index`, which carries the viewer, not
-        // at all, which is F-723.
-        infoTab: ({
-          gate,
-          mentions,
-          headerEdit,
-          members,
-          index,
-          activity,
-          channelName,
-        }) => (
-          <PersonInfoTab
-            homeChannel={homeChannel}
-            channel={channel}
-            gate={gate}
-            mentions={mentions}
-            headerEdit={headerEdit}
-            members={members}
-            index={index}
-            activity={activity}
-            channelName={channelName}
-          />
-        ),
+        infoExtras: () => ({
+          belowRoster: <PersonRosterActions homeChannel={homeChannel} />,
+        }),
       }}
       // ⚠ `memberManagement: false` IS NOT A HEADCOUNT — a container takes MORE
       // THAN TWO people since 2026-08-26. Every member arrives by claiming a
@@ -171,10 +148,19 @@ export function RelationshipRecord({
       // the same width budget. ⚠ The workspace channel page and the guest lane pass
       // nothing and are unchanged — the face's reads mount with the face, so a host
       // that never offers it never asks for a card.
+      // 🔒 `mentionsLayout: "category"` — MENTIONS IS A TOP-LEVEL SECTION HERE,
+      // BELOW THE ACTIVITY STRIP, WITH THE LIST OPEN AND FLUSH (Samuel,
+      // 2026-09-15 live review, superseding the collapsed row that shipped hours
+      // earlier; `inset="flush"` 2026-09-17). ⚠ IT IS THE ONE PRESENTATIONAL
+      // DIFFERENCE BETWEEN THE TWO CHANNEL RECORD SURFACES, and it is a
+      // capability rather than a fork precisely so it stays the only one — the
+      // capability's own docblock carries the ruling and why the POSITION
+      // travels with the face.
       capabilities={{
         memberManagement: false,
         peerNamedHeader: false,
         artifacts: true,
+        mentionsLayout: "category",
       }}
     />
   );

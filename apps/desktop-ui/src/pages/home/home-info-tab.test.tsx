@@ -18,9 +18,18 @@ import {
 } from "./home-test-harness";
 
 /**
- * THE HOME INFO TAB, END TO END THROUGH THE REAL PAGE (Samuel's four items,
- * 2026-08-25): removable Channel-info rows, the discreet add affordance, the
- * Members section with Add person beneath it, and Thread activity.
+ * THE HOME CHANNEL'S INFO TAB, END TO END THROUGH THE REAL PAGE (Samuel's four
+ * items, 2026-08-25): removable Channel-info rows, the discreet add affordance,
+ * the Members section with Add person beneath it, and channel activity.
+ *
+ * ⚠ **RENAMED OFF `person-info-tab.test.tsx` IN WAVE 1A (2026-09-17), AND WHAT
+ * IT MOUNTS CHANGED UNDER IT WHILE THE CASES DID NOT.** It pinned a /home-LOCAL
+ * Info body injected through the body-REPLACING `infoTab` slot; that body is
+ * deleted and the /home host now adds ONE region
+ * (`channel-surface-contract.ts › ChannelInfoExtras.belowRoster`) to the shared
+ * `channels/components/info-tab.tsx`. **Every case below is unchanged** — which
+ * is the finding, not a coincidence: what they always asserted is what the /home
+ * HOST puts on screen, and that was never the fork's to own.
  *
  * ⚠ MOUNTED THROUGH `HomePage`, NOT THE COMPONENT. The tab renders the card off
  * `Channel.infoCard`, which arrives from the `/api/channels` cache — so the

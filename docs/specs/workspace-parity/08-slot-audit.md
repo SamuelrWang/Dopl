@@ -1,7 +1,30 @@
 # 08 — THE SLOT-REPLACING-HOST AUDIT
 
-**Wave 0d. It gates Wave 1.** Measured 2026-09-17 against `master` at `cf87e6f6`, worktree
+**Wave 0d. It gated Wave 1.** Measured 2026-09-17 against `master` at `cf87e6f6`, worktree
 `wave0/slot-audit`. **Read-only: this audit changed no source.**
+
+> 🟢 **EXECUTED 2026-09-17 — WAVE 1A (branch `wave1/one-record-surface`) CLOSED THE TOP THREE AND
+> THE R1 BODY WITH THEM: §5 orders 1, 2, 3 AND 4 ARE DONE.** F1 (`ChannelsOverlays` renders
+> `SurfaceAgentView`) · F3 + the `viewerUserId` defect, filed and fixed as **F-723** · F2
+> (`activity` onto the context; the wrapper deleted) · R1 proper (`infoTab` DELETED, `infoExtras`
+> in its place, `person-info-tab.tsx` absorbed). **Order 5 (X4) had already landed in wave 1B;
+> order 6 (F6, the skeleton) is NOT done — 00-MASTER.md §5 wave 1 row 6 carries the measurement
+> that says why.** ⚠ **A SIXTH FORK THIS AUDIT DID NOT COUNT turned up during the execution and is
+> also gone: `src/features/marketing/components/banner-demo/demo-info-tab.tsx`**, the hero scene's
+> own copy of the same ladder, injected through the same slot. §1's derivation command sweeps
+> `src/features/` and would have found it; the audit's slotless-fork table was built from the
+> CHANNEL surface's hosts and the marketing tree was not read as one. **Re-run §1's command rather
+> than trusting the 84.**
+> ⚠ **TWO DEVIATIONS FROM §6, BOTH DELIBERATE, BOTH ARGUED IN THE COMMITS:**
+> (1) **`mentionsLayout` IS A CAPABILITY, NOT A `ChannelInfoTabContext` FIELD.** §6.1 lists it on
+> the context, which carries what the SURFACE hands the HOST; which mentions face to draw is a
+> decision the HOST hands the SURFACE, so it sits on `ChannelSurfaceCapabilities` with the other
+> three host knobs. (2) **`ChannelInfoExtras` DECLARES ONLY `belowRoster`.** §6.2's `belowCard` was
+> for /home's curated `info_card` rows, and **R-19 (wave 1B) put those rows in the shared body on
+> every host** — so the region has no consumer, and INVARIANTS §15 says an unreachable one is
+> deleted rather than declared. A second region is a one-line addition the day a host needs it.
+> ⚠ **`headerEditable` (§6.1) WAS NOT ADDED EITHER.** Its stated reason was that the rule was
+> spelled twice; the second spelling was `person-info-tab.tsx`'s and died with the file.
 
 The rule it enforces is `docs/INVARIANTS.md`'s, restated in `06-rulings-archive.md` § *The one hazard
 this archive exists to prevent*:
@@ -70,7 +93,7 @@ body and mints nothing; `infoTab` replaces a body the surface paid for.
 
 | # | Shared component | The slot | What it replaces | Host(s) | Minted-and-discarded | Verdict |
 |---|---|---|---|---|---|---|
-| R1 ⛔ | `src/features/channels/components/channel-surface.tsx › ChannelSurfaceSlots` → `src/features/channels/components/info-panel.tsx › infoTab` | `infoTab?: (ctx: ChannelInfoTabContext) => ReactNode` | the whole `info-tab.tsx › InfoTab` body in CHANNEL view | `apps/desktop-ui/src/pages/home/relationship-record.tsx` → `apps/desktop-ui/src/pages/home/person-info-tab.tsx › PersonInfoTab` | **5 minted facts** — see §4 | **FIX IN WAVE 1** |
+| R1 ✅ | **FIXED — wave 1A.** `src/features/channels/components/channel-surface-contract.ts › ChannelSurfaceSlots` → `src/features/channels/components/info-panel.tsx › infoTab` | `infoTab?: (ctx: ChannelInfoTabContext) => ReactNode` | nothing any more: the slot is `infoExtras`, a record of NAMED REGIONS | `apps/desktop-ui/src/pages/home/relationship-record.tsx` → `apps/desktop-ui/src/pages/home/person-roster-actions.tsx` (the `belowRoster` region) | none — the body is unconditional | **DONE 2026-09-17** |
 | R2 ✔ | `src/shared/ui/skeleton.tsx › TwoPaneListSkeleton` | `detail` | `DetailDocSkeleton` | `src/features/channels/components/channels-skeleton.tsx › ChannelsSkeleton` | nothing — a ghost mints no data | keep |
 | R3 ✔ | `apps/desktop-ui/src/components/skeletons/shell-skeleton.tsx › ShellChromeSkeleton` | `rail` | `AccountRailSkeleton` | `apps/desktop-ui/src/components/app-shell/app-shell.tsx` | nothing; the replacement is *richer* (live rail over ghost), which is the shape a good replacing slot has | keep |
 | R4 ✔ | `src/features/agent-templates/components/agent-templates-core.tsx` | `loadingSkeleton` | `PageShellSkeleton` | `apps/desktop-ui/src/pages/agents/index.tsx` | nothing | keep — `docs/INVARIANTS.md` already rules this idiom sound |
@@ -90,9 +113,9 @@ is a two-line type change (§6.5), not a Wave 1 item.
 
 | # | Shared body | The fork | Minted-and-discarded | Verdict |
 |---|---|---|---|---|
-| F1 ⛔ | `src/features/channels/components/surface-agent-view.tsx › SurfaceAgentView` (the ONE agent-pane wiring) | `src/features/channels/components/overlays.tsx › ChannelsOverlays` hand-wires `ChannelsAgentPanel` itself | `color` (off `channel-surface-data.ts › liveAgents`, the server's per-member assignment — **a shipped 2026-09-13 ruling the workspace page has never rendered**) and `full` | **FIX IN WAVE 1** |
-| F2 ⛔ | `src/features/channels/components/info-tab.tsx › InfoTab`'s activity section | `apps/desktop-ui/src/pages/home/person-thread-activity.tsx › PersonThreadActivity` | `channel-surface-data.ts › activityBins` / `activityLoading` — the surface has **already** mounted `useOverviewSeries` on the identical key | **FIX IN WAVE 1** |
-| F3 ⛔ | `src/features/channels/components/info-tab.tsx › InfoTab`'s Members section | `apps/desktop-ui/src/pages/home/person-members.tsx › PersonMembers` | `channel-surface-data.ts › members`, **and `AuthorIndex.currentUserId`** — see §4.3, this one is on screen | **FIX IN WAVE 1** |
+| F1 ✅ | `src/features/channels/components/surface-agent-view.tsx › SurfaceAgentView` (the ONE agent-pane wiring) | `src/features/channels/components/overlays.tsx › ChannelsOverlays` hand-wires `ChannelsAgentPanel` itself | `color` (off `channel-surface-data.ts › liveAgents`, the server's per-member assignment — **a shipped 2026-09-13 ruling the workspace page has never rendered**) and `full` | **DONE 2026-09-17** — `overlays.tsx` renders `SurfaceAgentView`; eight forwarded props deleted; pinned by `src/features/channels/components/channels-core-agent-color.test.tsx` |
+| F2 ✅ | `src/features/channels/components/info-tab.tsx › InfoTab`'s activity section | `apps/desktop-ui/src/pages/home/person-thread-activity.tsx › PersonThreadActivity` | `channel-surface-data.ts › activityBins` / `activityLoading` — the surface has **already** mounted `useOverviewSeries` on the identical key | **DONE 2026-09-17** — on the context as `activity`; the wrapper deleted (63 lines) |
+| F3 ✅ | `src/features/channels/components/info-tab.tsx › InfoTab`'s Members section | `apps/desktop-ui/src/pages/home/person-members.tsx › PersonMembers` | `channel-surface-data.ts › members`, **and `AuthorIndex.currentUserId`** — see §4.3, this one is on screen | **DONE 2026-09-17** — `members` + `index` on the context; **F-723** filed and fixed; pinned by `apps/desktop-ui/src/pages/home/home-roster-presence.test.tsx` |
 | F4 ⛔ | `src/features/channels/components/agent-panel.tsx › AgentStats` | `src/features/channels/components/agent-window.tsx › AgentWindowStats` — two fills of ONE additive `stats` slot | nothing minted; the two bodies differ only by the `Started …` fragment and have already drifted on `className` | Wave 2 (P17) |
 | F5 | `apps/desktop-ui/src/components/skeletons/shell-skeleton.tsx › ShellChromeSkeleton` | `apps/desktop-ui/src/pages/home/home-skeleton.tsx` — a second frame ghost, though R3's `rail` slot exists | nothing | Wave 6 (per `00-MASTER.md` §4.4) |
 | F6 | none yet — the promotion target is `src/features/channels/components/`, beside `channel-surface-standalone.tsx` | three channel ghosts: `apps/desktop-ui/src/pages/home/channel-record-skeleton.tsx`, `src/features/channels/components/channels-skeleton.tsx`, the kit generics in `src/app/c/[workspaceId]/guest-channel.tsx` | nothing | Wave 1 item 6 (P10 + X8) |
@@ -169,8 +192,8 @@ nothing, so it falls through to the heartbeat — **in the desktop renderer, whi
 channel while the workspace channels page, on the same machine in the same second, shows them
 online.
 
-**This is exactly the failure mode the rule predicts, a fourth time**, and it is on screen today. It
-needs an `F-NNN` in the change that fixes it — **allocate by re-deriving the highest claimed across
+**This is exactly the failure mode the rule predicts, a fourth time**, and it was on screen until
+wave 1A. ✅ **FILED AND FIXED AS `F-723` (2026-09-17)**, in the change that fixed it — **allocate by re-deriving the highest claimed across
 every live branch, never from `master`'s** (CLAUDE.md; `master`'s highest is **F-717** as of
 2026-09-17, and this branch deliberately claims none, because a doc-only branch minting an id is how
 three branches once produced six entries under three ids).
@@ -424,7 +447,18 @@ change that touches the file"*.
 
 ### Gaps
 
-1. **NOBODY HAS COUNTED THE ASSERTIONS THAT MOVE.** Seven test files die or are rewritten in step 4
+0. ✅ **GAP 1 IS ANSWERED BY EXECUTION, AND THE ANSWER IS "NONE OF THEM MOVED" (wave 1A,
+   2026-09-17).** Seven /home files were predicted to die or be rewritten. What actually happened:
+   **every case in all seven still passes, unedited** — six were RENAMED (`person-info-tab*` →
+   `home-info-*`, `person-thread-activity` → `home-channel-activity`) and their docblocks corrected,
+   and not one assertion changed. The reason is the finding: those suites mount through `HomePage`
+   against a real bridge and assert what the /home HOST puts on screen, which was never the fork's
+   to own. What DID move is `surface-slot-fixtures.tsx › standaloneSurfaceStub` — it renders the
+   REAL `InfoTab` now and makes the surface's reads — plus the **two inverting cases in
+   `channel-surface.test.tsx`**, rewritten as four, and `index.test.tsx`'s inline sixth copy of the
+   stub, deleted. **The count that mattered was the STUB, not the assertions.**
+
+1. ~~**NOBODY HAS COUNTED THE ASSERTIONS THAT MOVE.**~~ Seven test files die or are rewritten in step 4
    — `person-info-tab.test.tsx`, `-description`, `-edit`, `-mentions`, `-mentions-inset`, `-peers`,
    and `person-thread-activity.test.tsx` — plus `surface-slot-fixtures.tsx › standaloneSurfaceStub`
    and the two inverting tests in §7.3. `01-channel-surface.md` § *Confidence and gaps* named this

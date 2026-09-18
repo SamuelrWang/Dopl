@@ -21,7 +21,7 @@ import {
  * THE HOME INFO TAB WITH MORE THAN TWO PEOPLE IN IT (Samuel's ruling,
  * 2026-08-26 — F-307's fix).
  *
- * ⚠ SPLIT OUT OF `person-info-tab.test.tsx`, WHICH WAS AT THE 500-LINE CAP
+ * ⚠ SPLIT OUT OF `home-info-tab.test.tsx`, WHICH WAS AT THE 500-LINE CAP
  * (INVARIANTS §1 — a file at the cap cannot absorb a case, let alone the
  * paragraph explaining one). The seam is a REASON TO CHANGE: that file is about
  * the CURATED CARD — removable built-ins, the discreet add, persistence through

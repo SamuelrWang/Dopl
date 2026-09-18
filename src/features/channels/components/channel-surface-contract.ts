@@ -121,18 +121,57 @@ export interface ChannelInfoTabContext {
   channelName: string;
 }
 
+/**
+ * **NAMED REGIONS A HOST MAY ADD TO THE ONE INFO BODY.** Never a body.
+ *
+ * 🔒 **THE RETURN TYPE IS THE FENCE, AND THAT IS THE WHOLE POINT (wave 1A,
+ * 2026-09-17).** A `ReactNode` is exactly what a body IS, so a slot typed as one
+ * can always be handed a replacement — which is how this surface lost `mentions`
+ * (2026-09-15), `headerEdit` (2026-09-17), the activity strip, and the viewer id
+ * that made the operator read as offline in their own channel (F-723). A record
+ * of NAMED positions cannot be handed a body: the host says *where*, and the body
+ * decides *whether that place exists*.
+ *
+ * ⚠ **ONE REGION TODAY, AND THE RECORD IS STILL THE RIGHT SHAPE.** The audit
+ * proposed `belowCard` beside this for /home's curated `info_card` rows; wave 1B
+ * landed **R-19**, which put those rows in the SHARED body on every host, so the
+ * region has no consumer and is not declared (INVARIANTS §15 — a slot with no host
+ * is the thing this wave is deleting, not adding). A second region is a
+ * one-line addition here the day a host genuinely needs one.
+ */
+export interface ChannelInfoExtras {
+  /**
+   * UNDER THE MEMBER ROSTER, at the foot of the tab.
+   * ⚠ /home's Add person / Link out pair (`pages/home/person-roster-actions.tsx`)
+   * — the ONE act that changes a link container's roster, which is a door no
+   * workspace channel has (§4A: every workspace-level add answers
+   * `LINK_CONTAINER_CLOSED`). It sits under the list it changes (Samuel,
+   * 2026-08-25), which is why the region is named for that position rather than
+   * for the tab's end.
+   */
+  belowRoster?: ReactNode;
+}
+
 export interface ChannelSurfaceSlots {
   /**
-   * REPLACES the Info tab's body in CHANNEL view — an account-level 1:1 shows a
-   * person card where a workspace channel shows its metadata and roster.
-   * ⚠ A RENDER FUNCTION, not a node — see {@link ChannelInfoTabContext}.
+   * WHAT THIS HOST ADDS TO THE INFO TAB — see {@link ChannelInfoExtras}.
    *
-   * ⚠ THE TAB ROW IS NOT A SLOT and never becomes one: a host that could delete a
-   * tab could ship a surface missing one with nothing saying so. ⚠ THREAD VIEW
-   * IGNORES IT — the column is already thread-scoped (Samuel, 2026-08-21;
-   * `info-panel.tsx` owns the rule).
+   * ⚠ **A RENDER FUNCTION, NOT A NODE**, for {@link ChannelInfoTabContext}'s
+   * reason: the extras are write-bearing and §7/§8 allow ONE `useRefetchGate` per
+   * live surface, so what they need has to arrive from the surface rather than be
+   * minted beside it.
+   *
+   * ⚠ **`infoTab` STOOD HERE AND IS DELETED, NOT DEPRECATED (wave 1A,
+   * 2026-09-17).** It REPLACED `info-tab.tsx › InfoTab` in channel view, and
+   * `docs/specs/workspace-parity/08-slot-audit.md` walked all 78 slots in the tree
+   * to establish it was the only capability-LOSING one of the ten that replace a
+   * body. A body-replacing slot left in the type is a body-replacing slot a later
+   * host reaches for. ⚠ **THE TAB ROW IS STILL NOT A SLOT** and never becomes one:
+   * a host that could delete a tab could ship a surface missing one with nothing
+   * saying so. ⚠ **THREAD VIEW IGNORES THIS** — the column is already
+   * thread-scoped (Samuel, 2026-08-21; `info-panel.tsx` owns the rule).
    */
-  infoTab?: (ctx: ChannelInfoTabContext) => ReactNode;
+  infoExtras?: (ctx: ChannelInfoTabContext) => ChannelInfoExtras;
 }
 
 export interface ChannelSurfaceCapabilities {
@@ -197,5 +236,32 @@ export interface ChannelSurfaceCapabilities {
    * at the same visibility gate the transcript already passed.
    */
   artifacts?: boolean;
+  /**
+   * **WHICH OF THE TWO RULED MENTIONS FACES THIS SURFACE DRAWS.** Default
+   * `"disclosure"` — the workspace channels page's behaviour, like every other
+   * flag here.
+   *
+   * 🔒 **THE ONE PRESENTATIONAL DIFFERENCE SAMUEL RULED FOR, AND IT IS TWO
+   * DECISIONS THAT TRAVEL TOGETHER (2026-09-15, live review of the /home pane;
+   * carried into the one body in wave 1A).**
+   *   - `"disclosure"` — a COLLAPSED row inside the Channel-info card, with an
+   *     unread badge and the 28px hang (`mentions-disclosure.tsx`).
+   *   - `"category"` — a TOP-LEVEL heading BELOW the activity strip, list always
+   *     open, no badge, rows flush with every other heading on the tab
+   *     (`mentions-list.tsx`, `inset="flush"`).
+   *
+   * ⚠ **THE POSITION IS PART OF THE FACE, WHICH IS WHY THIS IS ONE FLAG AND NOT
+   * TWO.** Samuel moved Mentions BELOW the activity strip in the same review that
+   * made it a top-level category — *facts, then what has been happening, then what
+   * is addressed to YOU, then people* — and a collapsed row that belongs inside
+   * the card cannot be moved there without ceasing to be a row inside the card.
+   * Two flags would let a host ship a collapsed disclosure floating under the
+   * strip, which is neither ruled face.
+   *
+   * ⚠ **IT IS NOT A FORK.** Both faces are ONE body's branch over ONE list
+   * (`mentions-list.tsx`), reached through ONE bundle the surface minted. The
+   * alternative — which is what shipped until wave 1A — was a second Info tab.
+   */
+  mentionsLayout?: "disclosure" | "category";
 }
 

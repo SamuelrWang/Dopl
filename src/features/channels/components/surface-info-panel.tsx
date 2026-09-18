@@ -106,7 +106,7 @@ export function SurfaceInfoPanel({
    * ⚠ **THE SAME GATE AGAIN, AND THAT IS WHY IT IS MINTED HERE AND NOT IN THE
    * TAB** (INVARIANTS §7/§8: one `useRefetchGate` per live surface). /home's own
    * card already minted this hook from the gate this file hands down
-   * (`pages/home/person-info-tab.tsx`); the DEFAULT body had no write at all, which
+   * in its own forked body, deleted in wave 1A; the DEFAULT body had no write at all, which
    * is why a workspace channel's curated rows were stored, validated,
    * PATCH-writable — and invisible.
    * ⚠ **MEMBERSHIP-GATED, NOT MANAGE-GATED, AND DELIBERATELY SO** (Samuel,
@@ -210,18 +210,27 @@ export function SurfaceInfoPanel({
       // mints this same hook from the same gate already, and collapsing the two is
       // the ONE-BODY step, not this one.
       infoCardEdit={{ onSave: infoCardWrite.save }}
-      // ⚠ CALLED, not passed. The tab is a render function so it can be
+      // 🔒 **WHICH OF THE TWO RULED MENTIONS FACES (Samuel, 2026-09-15).** The
+      // capability's docblock carries the ruling and why the POSITION travels
+      // with the face; the body branches once over it.
+      mentionsLayout={capabilities?.mentionsLayout}
+      // 🔒 **"No members in this channel." IS DERIVED, NOT A NEW FLAG.** The
+      // hosts that pass `memberManagement: false` — /home and the guest lane —
+      // are exactly the ones whose roster ALWAYS holds the reader, because the
+      // only door in is a link that reader claimed (§4A). There the sentence
+      // could only appear for one frame of the roster read, stating something
+      // false; `info-tab.tsx › rosterEmptyLine` carries the rest.
+      rosterEmptyLine={capabilities?.memberManagement !== false}
+      // ⚠ CALLED, not passed. The extras are a render function so they can be
       // handed THIS surface's refetch gate — see `ChannelInfoTabContext`.
-      // ⚠ THE BUNDLE GOES WITH THE GATE (2026-09-15). The slot REPLACES the tab
-      // body, so a host that injects one used to lose the Tags section even
-      // though this component had already fetched it — that was the home space's
-      // missing-mentions gap, and nothing about the query had to change. Same
-      // page, same handlers, same centre-pane scroll.
-      // ⚠ **AND THE HEADER EDIT GOES WITH THEM (2026-09-17)** — same argument,
-      // one ruling later: the slot REPLACES the body, so /home's Info tab drew
-      // display-only Name and Description rows while this surface had already
-      // minted the write for the tab it was not rendering.
-      infoTab={slots?.infoTab?.({
+      // ⚠ **THIS WAS `infoTab`, AND IT REPLACED THE BODY (deleted wave 1A,
+      // 2026-09-17).** Every field on the context below was added AFTER a host
+      // that replaced the body dropped something this component had already paid
+      // for — `mentions` 2026-09-15, `headerEdit` 2026-09-17, then `members` /
+      // `index` / `activity` / `channelName` and F-723 with them. The regions a
+      // host may fill now ADD to the one body (`ChannelInfoExtras`), so the class
+      // is unexpressible rather than patched.
+      infoExtras={slots?.infoExtras?.({
         gate,
         headerEdit,
         // ⚠ **THE SURFACE'S OWN READS, HANDED DOWN (wave 1A, 2026-09-17).** Each
