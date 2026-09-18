@@ -286,29 +286,21 @@ export function ChannelsCore({
         />
       )}
 
+      {/* ⚠ **ONE OBJECT WHERE NINE FORWARDED PROPS STOOD (wave 1A, 2026-09-17).**
+          The agent pane is `surface-agent-view.tsx` now — the same wiring /home,
+          the guest lane and the web column already used — so the transcript, the
+          held outbound cards, the escalation answer and the agent COLOUR all
+          reach it off this surface's own read rather than through this file.
+          `overlays.tsx`'s docblock carries the drift that bought the collapse. */}
       <ChannelsOverlays
+        data={data}
         openAgent={sel.openAgent}
-        agentSessions={data.agentSessions}
-        messages={data.messages}
-        // ⚠ THE OUTBOUND REVIEW IS THE CARD NOW (Samuel, 2026-08-25) — the Inbox
-        // pane this page used to take over the center column with is DELETED, so
-        // these rows have exactly one surface and it is inside the work stream.
-        pendingPosts={data.requests}
-        onPostPending={(id) => data.decideOutbound(id, "allow")}
-        // ANSWERING AN ESCALATION FROM THE AGENT PANE (2026-08-31). ⚠ THE SAME
-        // MUTATION the transcript's own cards use — one write, one fence, one
-        // cache patch. A second path here is how the two panes come to disagree
-        // about whether a question was answered.
-        onAnswerEscalation={data.answerEscalation}
-        answerBusy={data.answerBusy}
-        postBusy={data.consentBusy}
         currentUserId={currentUserId}
         workspaceId={workspaceId}
         workspaceSlug={workspaceSlug}
         createOpen={sel.createOpen}
         directOpen={sel.directOpen}
         onCloseAgent={() => sel.setOpenAgent(null)}
-        onRefreshSessions={data.refreshAgents}
         onCreateOpenChange={sel.setCreateOpen}
         onDirectOpenChange={sel.setDirectOpen}
         onCreated={onCreated}
