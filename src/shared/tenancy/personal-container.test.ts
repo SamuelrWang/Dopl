@@ -39,22 +39,19 @@ const CONTAINER = "33333333-3333-4333-8333-333333333333";
 let filters: Array<[string, unknown]>;
 let tables: string[];
 
-/** ⚠ RETIRED READS, KEPT TOLERATED (2026-09-06 reversal). `personal-reach.ts`
- *  no longer probes the member count or the arming table — reach is default-on —
- *  so no test drives these now. The builder still answers them harmlessly, so a
- *  regression that re-issues either read shows up as a table in `tables` rather
- *  than as a throw. */
+/** ⚠ A RETIRED READ, KEPT TOLERATED (2026-09-06 reversal). `personal-reach.ts`
+ *  no longer counts the room's members — reach is default-on — so no test
+ *  drives this now. The builder still answers it harmlessly, so a regression
+ *  that re-issues the read shows up as a table in `tables` rather than as a
+ *  throw. */
 let memberCount: number | null;
-let armedChannels: string[];
 
 function primeContainer(id: string | null) {
   filters = [];
   tables = [];
-  let current = "";
   const builder: Record<string, unknown> = {};
   Object.assign(builder, {
     from: (t: string) => {
-      current = t;
       tables.push(t);
       return builder;
     },
@@ -65,14 +62,7 @@ function primeContainer(id: string | null) {
     },
     maybeSingle: async () => ({ data: id === null ? null : { id }, error: null }),
     then: (resolve: (r: unknown) => void) =>
-      resolve({
-        data:
-          current === "channel_personal_arming"
-            ? armedChannels.map((channel_id) => ({ channel_id }))
-            : [],
-        count: memberCount,
-        error: null,
-      }),
+      resolve({ data: [], count: memberCount, error: null }),
   });
   vi.mocked(supabaseAdmin).mockReturnValue(builder as never);
 }
@@ -99,7 +89,6 @@ function callerIs(
 beforeEach(() => {
   vi.clearAllMocks();
   memberCount = 5;
-  armedChannels = [];
   primeContainer(CONTAINER);
   callerIs(USER);
 });
@@ -209,19 +198,19 @@ describe("resolveShelfScope — one container, or none", () => {
  * pinned here is that the shelf reads GO THROUGH IT. Since the 2026-09-06
  * reversal the fence is DEFAULT-ON: an agent reaches its operator's shelf from
  * any room, and the confidentiality of that shelf's contents is a prompt rule,
- * not a refusal — so these reads never probe `channel_personal_arming`.
+ * not a refusal — so these reads ask nothing beyond the container probe.
  */
 describe("🔓 an AGENT's shelf reads are open from any room (default-on)", () => {
   const inRoom = { source: "agent" as const, credentialWorkspaceId: WORKSPACE };
 
-  it("opens the personal shelf in a shared room — no member count, no arming probe", async () => {
+  it("opens the personal shelf in a shared room — no member count", async () => {
     callerIs(USER, false, inRoom);
     expect(await resolveShelfScope(WORKSPACE, "home")).toEqual({
       workspaceIds: [CONTAINER],
     });
-    // ⚠ MUTATION CHECK: re-growing the task-11 narrowing would put these reads
-    // back on the shelf lane.
-    expect(tables).not.toContain("channel_personal_arming");
+    // ⚠ MUTATION CHECK: re-growing the task-11 narrowing would put the member
+    // count back on the shelf lane (its arming probe cannot come back — R-48
+    // dropped the table).
     expect(tables).not.toContain("workspace_members");
   });
 

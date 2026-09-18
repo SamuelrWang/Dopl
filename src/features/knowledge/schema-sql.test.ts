@@ -294,6 +294,13 @@ describe("the retired tables are gone, and the one left behind is unchanged", ()
         "channel_resource_grants",
         "20260923130000_drop_channel_resource_grants.sql",
       ],
+      // R-48 (Samuel, 2026-09-17). Same shape, and the cutoff is again its own
+      // drop file: the reach fence stopped reading the arming table on
+      // 2026-09-07 and the table itself goes here.
+      [
+        "channel_personal_arming",
+        "20261012120000_drop_channel_personal_arming.sql",
+      ],
     ];
     const offenders = FILES.flatMap(({ name, sql }) =>
       DROPPED.filter(

@@ -152,19 +152,19 @@ describe("🔓 AN AGENT REACHES ITS OPERATOR'S SHELF FROM ANY ROOM", () => {
     expect(tables()).toEqual(["workspaces"]);
   });
 
-  it("🔓 opens a SHARED room unconditionally — no member count, no arming probe", async () => {
+  it("🔓 opens a SHARED room unconditionally — no member count, no extra probe", async () => {
     // 🔓 THE REVERSAL ITSELF. Before 2026-09-06 an agent in a room with somebody
     // else in it was closed until the owner armed it; it now opens by default,
     // and the confidentiality of the shelf's contents is a PROMPT rule, not a
-    // refusal here. ⚠ MUTATION CHECK: re-growing the narrowing would put
-    // `workspace_members` and `channel_personal_arming` back on this list.
+    // refusal here. ⚠ MUTATION CHECK: the `toEqual` is the whole assertion —
+    // re-growing the narrowing would put `workspace_members` (and a probe of a
+    // table R-48 has since dropped) back on this list.
     expect(await resolvePersonalReach(agent)).toEqual({
       kind: "open",
       containerId: CONTAINER,
     });
     expect(tables()).toEqual(["workspaces"]);
     expect(tables()).not.toContain("workspace_members");
-    expect(tables()).not.toContain("channel_personal_arming");
   });
 
   it("🔓 opens regardless of the session header — it is no longer read", async () => {

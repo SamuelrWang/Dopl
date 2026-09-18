@@ -11,11 +11,11 @@ import { findPersonalContainerId } from "./personal-container";
  * to "armed rooms only", behind a per-(room, owner) switch. That narrowing is
  * REVERSED: an agent session reaches its operator's personal shelf
  * UNCONDITIONALLY — the same as a person, and the same as a solo room — so this
- * fence no longer reads `channel_personal_arming`, no longer counts the room's
- * members, and no longer consults the session header. The arming table survives
- * inert (see `20260925120000_channel_personal_arming.sql`) with NOTHING LEFT
- * THAT WRITES IT — the route and its service module are deleted (2026-09-07);
- * the reach decision simply stopped asking it.
+ * fence no longer reads the per-(room, owner) arming switch, no longer counts
+ * the room's members, and no longer consults the session header. The route and
+ * its service module went on 2026-09-07; the TABLE goes with
+ * `20261012120000_drop_channel_personal_arming.sql` (Samuel's R-48,
+ * 2026-09-17), so there is no longer anything to ask.
  *
  * ⚠ **THE COMPENSATING CONTROL IS A PROMPT INSTRUCTION, NOT A GATE.** A shared-
  * channel session may READ its operator's personal/private knowledge and is

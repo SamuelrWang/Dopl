@@ -40,8 +40,8 @@ beforeEach(() => {
  * lock widens onto the shelf only from a room that is armed").
  *
  * ⚠ **THE TESTS BELOW ARE THE REVERSAL'S OWED HALF, AND THEY WERE OWED FOR A
- * REASON WORTH KEEPING.** `personal-reach.ts` stopped reading
- * `channel_personal_arming`, stopped counting the room's members and stopped
+ * REASON WORTH KEEPING.** `personal-reach.ts` stopped reading the arming
+ * switch, stopped counting the room's members and stopped
  * consulting the session header; two cases here went on asserting the probe and
  * the `[lock]`-alone candidate list, so the suite failed RED against shipped,
  * intended behaviour — which is the worst state for a fence's only un-mocked
@@ -55,6 +55,12 @@ beforeEach(() => {
  * PERSONAL_KNOWLEDGE_CONFIDENTIALITY`), not by a refusal here — so a test that
  * expected a narrower candidate list would now be pinning a fence that is
  * deliberately gone.
+ *
+ * ⚠ **AND THE "asks the arming table NOTHING" CASE IS GONE (R-48, 2026-09-17).**
+ * `20261012120000_drop_channel_personal_arming.sql` drops the table, so the
+ * probe it pinned cannot be re-introduced without a migration to re-create it —
+ * at which point this suite is not the gate. The member-count half of that case
+ * is already pinned by the SHARED-room case above, on `workspace_members`.
  *
  * ⚠ **THE CLAUSES THAT DID NOT MOVE STILL DECIDE**, and that is why the widening
  * is safe to state so plainly: clause 1 returns before a query is built for a
@@ -113,23 +119,6 @@ describe("🔓 an AGENT's lock widens onto its operator's shelf, from any room",
     expect(filters(calls, "workspace_members")).toContain(
       `in("workspace_id"=${JSON.stringify([WS_A, WS_P])})`
     );
-  });
-
-  it("🔒 asks the arming table NOTHING, and counts the room NOT AT ALL", async () => {
-    // ⚠ MUTATION CHECK, AND A COST CHECK. The arming table survives INERT
-    // (the migration is kept; the route and service module that wrote it are
-    // deleted, 2026-09-07), so a re-introduced probe would still answer — it
-    // would just re-close a reach that was deliberately opened, from a table
-    // nothing writes. The member count went with it: one
-    // read for everybody now, and `head:true` on `workspace_members` is what its
-    // return would look like.
-    const calls = makeAdmin({
-      workspaces: [personalContainer()],
-      workspace_members: [member(WS_A)],
-      agent_templates: [],
-    });
-    await resolveResource(agent, "agent_template", T1);
-    expect(calls.some((c) => c.table === "channel_personal_arming")).toBe(false);
   });
 
   it("🔒 THE SHELF IS THE OPERATOR'S OWN, resolved by owner and by kind", async () => {

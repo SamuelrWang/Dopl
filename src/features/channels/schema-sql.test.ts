@@ -284,6 +284,16 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
   // collision until 2026-09-06, when SAMUEL RULED (b): the spend record SURVIVES
   // the channel. It is now the one NAMED exemption below — not a loosening of
   // the case, which still fails for any other child that forgets to cascade.
+  // ⚠ **`channel_personal_arming` IS RETIRED —
+  // `20261012120000_drop_channel_personal_arming.sql` DROPS THE TABLE AND ITS
+  // THREE POLICIES (Samuel's R-48, 2026-09-17), the code half having left on
+  // 2026-09-07.** ⚠ THE NUMBER DOES NOT MOVE, and that is not an oversight: this
+  // case counts FK DECLARATIONS across the directory, and a drop does not unwrite
+  // the `CREATE TABLE` that declared one. `channel_resource_grants`
+  // (`20260923130000_drop_channel_resource_grants.sql`) is the same shape and is
+  // still counted above. What the case asserts is unharmed — a retired child's
+  // declaration still has to read CASCADE, and a LIVE child that forgets still
+  // fails the next case.
   // ⚠ FOURTEEN SINCE 2026-09-09: `ontology_channel_shares.channel_id`
   // (`20261001120000_ontology_home_shares.sql`, the home-ontology wave —
   // ⚠ **WRITTEN, NOT APPLIED**, INVARIANTS §12). It CASCADES for the
