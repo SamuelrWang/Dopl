@@ -243,6 +243,9 @@ function bootIpc(opts = {}) {
       };
     }
     if (id === "./session-engine") return { reopenByTask: () => ({ ok: true }) };
+    // 2026-09-18 — DEFAULT AGENT SETTINGS, stubbed so `channel-dir-ipc.js` loads. These cases
+    // drive the POSTURE read's `connected` field and none of the defaults ops.
+    if (id === "./agent-defaults") return { getAgentDefaults: () => ({ tools: "manual", messages: "ask", agentChain: false, model: null, runtime: "" }), setAgentDefaults: () => ({ ok: true }), seedChannel: () => ({ ok: true, seeded: true }) };
     if (id === "./deep-link-target") return { isSafeSegment: () => true };
     if (id === "./version-gate") return { isBlocked: () => false };
     if (id === "./popout-window") return { openThreadWindow: () => ({ ok: true }) };

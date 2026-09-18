@@ -282,6 +282,20 @@ function bootIpc() {
         clearChannelDir: () => {},
       };
     }
+    // ⚠ THE DEFAULT AGENT SETTINGS MODULE (2026-09-18). Stubbed rather than sliced for the reason
+    // every stub here is: this section drives the SENDER BINDING and the UUID gate over
+    // `channel-dir-ipc.js`, not the storage behind any op. ⚠ `seedChannel` ANSWERS
+    // `{ ok: true, seeded: true }` FOR A GOOD ID and the harness never gives it a bad one — the
+    // refusal these cases assert is produced by the HANDLER's own `isUuid` gate and by
+    // `appWindowOnly`, so a stub that refused on its own would make the gate look like it worked
+    // when the gate was what had been deleted.
+    if (id === "./agent-defaults") {
+      return {
+        getAgentDefaults: () => ({ tools: "manual", messages: "ask", agentChain: false, model: null, runtime: "" }),
+        setAgentDefaults: (raw) => (raw && raw.tools === "manual" ? { ok: true } : { ok: false }),
+        seedChannel: () => ({ ok: true, seeded: true }),
+      };
+    }
     // Lazily required by ops this file does not drive, but stubbed so a typo in a
     // registration path surfaces here rather than as a mystery throw.
     if (id === "./session-engine") return { reopenByTask: () => ({ ok: true }) };

@@ -8,6 +8,7 @@ import {
 } from "@/shared/layout/settings-modal/settings-modal-core";
 import { AccountSectionCore } from "@/shared/layout/settings-modal/sections/account-section-core";
 import { WorkspaceSectionCore } from "@/shared/layout/settings-modal/sections/workspace-section-core";
+import { AgentDefaultsSettings } from "@/features/channels/components/agent-defaults-settings";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { invalidateWorkspaceReads } from "#/lib/workspace-cache";
 import { AccountActions } from "./account-actions";
@@ -105,6 +106,13 @@ export function SettingsModal({
           dangerZone={<AccountActions workspaceSegment={workspaceSegment} />}
         />
       }
+      // DEFAULT AGENT SETTINGS (2026-09-18, Samuel's ruling) — what a channel created from now on
+      // starts its agents on. ⚠ DESKTOP ONLY, AND NOT BECAUSE OF A POLICY: the record is in this
+      // machine's electron-store and is reached over `window.dopl.channels`, so the web binding
+      // passes no pane and `SettingsModalCore` draws no nav entry (no dead rows).
+      // ⚠ IT TAKES NO WORKSPACE AND NO CHANNEL. One operator, one Mac, one answer — which is why
+      // it is the one pane here that needs nothing from the props above it.
+      agentsPane={<AgentDefaultsSettings />}
       billingPane={
         <BillingPane
           workspaceSegment={workspaceSegment}

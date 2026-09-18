@@ -12,6 +12,7 @@ import type {
   HomeChannelCreateInput,
   HomeLinkMintBody,
 } from "@/features/home/schema";
+import { seedAgentDefaults } from "@/features/channels/lib/agent-defaults-seed";
 import { memberPath } from "@/features/members/client/query-keys";
 import { HOME_LINKS_PATH } from "./home-rows";
 
@@ -64,7 +65,18 @@ export function useCreateHomeChannel(onCreated: (workspaceId: string) => void) {
       query: { scope: "account" },
     }),
     invalidate: () => [channelKeys.list().all],
-    onSuccess: (result) => onCreated(result.channel.workspaceId),
+    onSuccess: (result) => {
+      // ⚠ THE NEW CHANNEL INHERITS THE OPERATOR'S DEFAULT AGENT SETTINGS (2026-09-18, Samuel's
+      // ruling). It is a SEED written once, at the one moment this channel comes into existence,
+      // and it reaches NO channel that already exists — `features/channels/lib/agent-defaults-seed.ts`
+      // and `main/agent-defaults.js` carry the argument. Fire-and-forget: the channel is already
+      // created, so a local preference that did not copy must not fail the creation, and the room
+      // simply stays at manual/ask.
+      // ⚠ IT RUNS BEFORE `onCreated`, which SELECTS the new row: the seed must land before the
+      // operator can reach the Settings tab and read a posture this write is about to change.
+      seedAgentDefaults(result.channel.id);
+      onCreated(result.channel.workspaceId);
+    },
   });
 }
 

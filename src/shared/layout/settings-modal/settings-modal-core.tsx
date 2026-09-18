@@ -15,7 +15,7 @@ import styles from "./settings-modal.module.css";
  * entry that opens a second console is how the two drifted apart in the first
  * place.
  */
-export type SettingsSection = "account" | "workspace" | "billing";
+export type SettingsSection = "account" | "workspace" | "billing" | "agents";
 
 interface NavItem {
   id: SettingsSection;
@@ -32,6 +32,11 @@ const NAV: ReadonlyArray<{ label: string; items: NavItem[] }> = [
     items: [
       { id: "account", label: "Account" },
       { id: "billing", label: "Plans & Billing" },
+      // ⚠ **"Agents" IS LAST IN THIS GROUP ON PURPOSE (Samuel, 2026-09-18: it sits below
+      // Connect).** The Connect entry arrives on a parallel branch that restructures this list;
+      // this row is written to merge under it rather than to fight it — one array entry, no
+      // change to any neighbour's id or label.
+      { id: "agents", label: "Agents" },
     ],
   },
 ];
@@ -50,6 +55,14 @@ export interface SettingsModalCoreProps {
   /** Stripe Elements on the web; read-only status + open-in-browser handoff on
    *  desktop, whose CSP refuses the Stripe script and every network origin. */
   billingPane: React.ReactNode;
+  /**
+   * DEFAULT AGENT SETTINGS (2026-09-18) — the one pane that is OPTIONAL, and the omission is the
+   * contract rather than a convenience. The record it edits lives in the desktop's own local
+   * store, so the WEB binding passes nothing and the nav entry is not drawn at all: the
+   * no-dead-rows rule (INVARIANTS §5), and the strong version of it here, since a tab that
+   * persisted nothing would promise new channels inherit settings that cannot exist.
+   */
+  agentsPane?: React.ReactNode;
 }
 
 /**
@@ -70,14 +83,19 @@ export function SettingsModalCore({
   workspacePane,
   accountPane,
   billingPane,
+  agentsPane,
 }: SettingsModalCoreProps) {
+  // ⚠ ONE PREDICATE, READ BY BOTH THE RAIL AND THE PANE. A nav entry whose pane is absent is a
+  // row that selects nothing, and a pane rendered under no entry is unreachable — so which
+  // sections EXIST is decided once, here, rather than by two conditions that can disagree.
+  const has = (id: SettingsSection) => id !== "agents" || agentsPane != null;
   return (
     <ModalShell open={open} onClose={() => onOpenChange(false)} label="Settings">
       <nav className={styles.nav}>
         {NAV.map((group) => (
           <div key={group.label} className={styles.navGroup}>
             <p className={styles.navGroupLabel}>{group.label}</p>
-            {group.items.map((item) => (
+            {group.items.filter((item) => has(item.id)).map((item) => (
               <button
                 key={item.id}
                 type="button"
@@ -109,6 +127,7 @@ export function SettingsModalCore({
         {section === "account" && accountPane}
         {section === "workspace" && workspacePane}
         {section === "billing" && billingPane}
+        {section === "agents" && has("agents") && agentsPane}
       </div>
     </ModalShell>
   );

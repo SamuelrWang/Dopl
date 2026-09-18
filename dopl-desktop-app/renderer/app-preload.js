@@ -160,6 +160,20 @@ contextBridge.exposeInMainWorld('dopl', {
     // AGENT CHAINING (2026-08-31, Samuel's ruling): may an agent launched in this channel launch MORE agents? Default and fail-closed answer are both FALSE — the one-generation bound that shipped. Same boolean-only wire as auto-send; it lifts a DEPTH bound and grants nothing (`main/channel-prefs.js › getAgentChain`).
     getAgentChain: (channelId) => ipcRenderer.invoke('channels:getAgentChain', asId(channelId)),
     setAgentChain: (channelId, on) => ipcRenderer.invoke('channels:setAgentChain', { channelId: asId(channelId), on: on === true }),
+    // DEFAULT AGENT SETTINGS (2026-09-18, Samuel's ruling): what a channel created FROM NOW ON starts on. It takes no channel id — one operator, one Mac, one answer — and it is a SEED, never a launch-time read: `main/agent-defaults.js` states why wiring it to a spawn would re-open H2 and would additionally re-point every EXISTING channel. `applyAgentDefaults` is the inheritance point, called by the renderer that just created the channel, and it refuses a channel that already has a posture.
+    getAgentDefaults: () => ipcRenderer.invoke('channels:getAgentDefaults'),
+    setAgentDefaults: (defaults) =>
+      ipcRenderer.invoke('channels:setAgentDefaults', {
+        defaults: {
+          tools: asMode(defaults && defaults.tools),
+          messages: asMode(defaults && defaults.messages),
+          agentChain: !!(defaults && defaults.agentChain),
+          // ⚠ COERCED UNCONDITIONALLY HERE, UNLIKE `setLaunchPosture` ABOVE, AND THE ASYMMETRY IS THE RULE. That op forwards `model` / `runtime` only on an own-key because MANY surfaces write one channel's posture and a surface with no model concept must not clear the operator's pick. This record has exactly ONE writer — the profile popup's Agents tab — which always sends the whole record, so an absent field really is "no pick" and `''` really is "clear it". Main re-validates both SOFT either way.
+          model: asMode(defaults && defaults.model),
+          runtime: asMode(defaults && defaults.runtime),
+        },
+      }),
+    applyAgentDefaults: (channelId) => ipcRenderer.invoke('channels:applyAgentDefaults', { channelId: asId(channelId) }),
   },
 
   // ── THE TWO ORCHESTRATOR CONSENTS ────────────────────────────────────────────────────────
