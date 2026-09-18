@@ -680,6 +680,8 @@ this half of R-40 is already answered and P12 should keep the workspace's select
 
 → ✅ RULED 2026-09-17 — Samuel: **keep all three home items** — the credit bar without its label, `HOME_CARD_FACE_SELECTED`, and the Agents page's face. **A "recorded reason" is not required** for a home-only choice.
 
+→ ✅ **EXECUTED AS "NOTHING" 2026-09-17 (wave 6), AND MEASURED RATHER THAN CLAIMED.** `git diff master -- apps/desktop-ui/src/pages/home/overview-sections.tsx src/shared/ui/home-card-marks.tsx apps/desktop-ui/src/pages/home/{agent-panels,agent-panel-cards}.tsx src/features/agent-templates/components/agent-templates-core.tsx` is EMPTY on `wave6/palette-flat`. ⚠ **ONE DIVERGENT EQUIVALENT DID MOVE, AND IT IS R-39's DOING RATHER THAN A PORT**: the WORKSPACE Agents page's section ground (`agent-templates/components/template-section.tsx › TemplatePanel`) dropped the `border-border-subtle` hairline when `SECTION_PANEL_GROUND` went flat, so the two Agents faces now share one recipe instead of differing by a line. /home's face did not change — it already had no hairline, through the `:global()` rule R-38 deleted.
+
 **R-41. The kit class layer has no drift gate.** `check-css-token-drift.ts` compares `--*`
 declarations only; four recipes live in `globals.css` and not in `kit.css`, and nothing failed.
 (a) Extend the script to compare the `@layer components` class SET (names only) and add its row to
@@ -697,6 +699,8 @@ question is still worth asking."*
 *Blocks: Wave 6 (P29 touches that page).* — 06 §E9
 
 → ✅ RULED 2026-09-17 — Samuel: **(a)** — keep the audience picker.
+
+→ ✅ **VERIFIED AND PINNED 2026-09-17 (wave 6).** It is untouched — `create-base-dialog.tsx › ScopePicker` under `DialogField label="Who can access"`, gated by `› scopePicker`, which is the negation of the two props a caller sets when its own button already named the audience. The 2026-08-27 reason still holds after B10. ⚠ **ONLY ITS ABSENCE WAS PINNED** (`pages/home/knowledge-panels.test.tsx › asks the audience question ONCE`); its PRESENCE on this page now is too — `pages/knowledge/home.test.tsx › KEEPS the audience question`.
 
 **R-43. Do the 31 unruled ASKs from the 2026-08-30 drift audit get answered as a batch?** Only 5 of
 36 were ever ruled. Several are literally *"is this /home's or the app's?"* — ASK-11
@@ -1440,6 +1444,8 @@ the change that breaks everything at once. ⚠ Adding or removing a page is a **
 `knowledge-v2` · P26 conform the remaining `Todo` input forms to `FormDialog` · P28 **promote the
 account palette to the app and delete the six `:global()` fence rules** (R-38 → yes) · U8/U9 the two
 type-scale and hardcoded-ink violations.
+> ✅ **R-38, R-39, R-40 and R-42 EXECUTED 2026-09-17 on `wave6/palette-flat`** (P28, P27+X13, the two verifications). **P29 (`.kbCards` into `knowledge-v2`), P26 (the `Todo` input forms) and U8/U9 are NOT done** and stay open on this row. ⚠ **THE FIELD KIT WAS DELIBERATELY NOT SWEPT**: `.concave-field` / `.concave-track` still paint search wells, switches and meters on the desktop. R-39 is the SECTION-language question (P27/X13 are its work items), and flattening every input in the app is a redesign nobody ruled — **ask before widening it.**
+
 **Rulings: ALL RULED 2026-09-17 — unblocked.** R-38 → **yes (a)**, the fence dissolves **on purpose** ·
 **R-39 → flat; remove concave from the desktop app** — the web login page **may keep concave for now**,
 so the sweep is desktop-tree-scoped, not repo-wide · R-40 → **keep all three home items** (nothing to
