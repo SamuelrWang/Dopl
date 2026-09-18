@@ -90,6 +90,25 @@ describe("GET /api/workspaces/[workspaceSlug]/token-spend", () => {
     expect(mockSpend).not.toHaveBeenCalled();
   });
 
+  it("404s a GUEST by taking the resolver's INVERTED DEFAULT, never an override", async () => {
+    // 🔒 The floor is `segment.ts › ApiWorkspaceOpts`'s `minRole: "viewer"`
+    // default, so a guest gets the same 404 a non-member does. The fence is that
+    // this route passes NO `minRole` — an override here would silently re-open
+    // the hole `docs/MEMBERS-AUTHORIZATION.md` records being closed on
+    // 2026-08-26.
+    await GET(getReq(), routeCtx());
+    const opts = mockResolve.mock.calls[0][2];
+    expect(opts).not.toHaveProperty("minRole");
+
+    mockResolve.mockResolvedValue(null);
+    const res = await GET(getReq(), routeCtx());
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({
+      error: { code: "WORKSPACE_NOT_FOUND", message: "Workspace not found" },
+    });
+    expect(mockSpend).toHaveBeenCalledTimes(1);
+  });
+
   it("401s an unauthenticated caller and resolves nothing", async () => {
     state.sessionUser = null;
     const res = await GET(getReq(), routeCtx());

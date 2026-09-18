@@ -21,10 +21,10 @@ import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError } from "#/components/page-states";
 import { openHomeSettings } from "./home-settings-control";
 import { CreditCapacityBar, UsageChart } from "./overview-sections";
+import { ClippedNote } from "#/components/overview/rank-rail";
 import {
   ChannelMessageRail,
   ChannelRail,
-  ClippedNote,
   PeopleRail,
   ToolRail,
 } from "./overview-rails";

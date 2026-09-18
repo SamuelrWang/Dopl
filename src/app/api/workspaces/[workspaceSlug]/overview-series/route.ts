@@ -24,8 +24,8 @@ interface Ctx {
  * DEFAULT.** No `range` still answers the fixed 31 UTC days ending today —
  * `channels/components/thread-activity.tsx` is that caller and its window must
  * not have shifted by a day. `24h` is deliberately absent from the set (this
- * payload’s bin is a calendar DAY; see `types.ts › WorkspaceSeriesRange`).
- * 🔒 **AND `credits` IS THIS CONTAINER’S SEAT WALLETS, NEVER A PERSONAL ONE**
+ * payload's bin is a calendar DAY; see `types.ts › WorkspaceSeriesRange`).
+ * 🔒 **AND `credits` IS THIS CONTAINER'S SEAT WALLETS, NEVER A PERSONAL ONE**
  * (`server/service-usage.ts › isWorkspaceSeatBurn`). One payload for both
  * container kinds was explicitly refused — the fences differ, and collapsing
  * them is how a container leak gets built.

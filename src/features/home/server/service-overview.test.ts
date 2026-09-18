@@ -326,7 +326,7 @@ describe("isPersonalWalletBurn", () => {
 
   /** ⚠ AN UNKNOWN WALLET FAILS CLOSED — the column has no closed `CHECK` future
    *  and a value this build has never heard of is not evidence of a charge to the
-   *  reader. Same rule `narrowDetail` applies to `channel_sessions.detail`. */
+   *  reader. Same rule `narrowSessionDetail` applies to `channel_sessions.detail`. */
   it("drops a wallet value it does not recognise", () => {
     expect(
       isPersonalWalletBurn(burn({ wallet: "future-wallet" }), VIEWER, OWNED)

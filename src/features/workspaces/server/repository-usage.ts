@@ -75,40 +75,31 @@ export interface WorkspaceCreditEventRow {
 /**
  * THE CREDIT LEDGER, fenced to the rows THIS WORKSPACE'S SEAT WALLETS PAID FOR.
  *
- * 🔒 **THE FENCE IS TWO ARMS UNDER ONE WALLET FILTER, AND IT IS
- * `docs/specs/credit-model-v2.md` §3 + RULE B READ BACKWARDS.**
+ * 🔒 **`docs/specs/credit-model-v2.md` §3 + RULE B READ BACKWARDS** — two
+ * container arms under one wallet filter:
  *   1. `channel_id IN (this workspace's channels)` — rule B arm 2: a
- *      workspace-channel agent charges the CALLER'S SEAT in that workspace
- *      whatever it touches, so a burn against somebody's personal KB is still
- *      this workspace's bill and its `origin_workspace_id` is NOT this
- *      workspace. The channel is the only column that says so.
+ *      workspace-channel agent charges the caller's SEAT here whatever it
+ *      touches, so its `origin_workspace_id` is often NOT this workspace and
+ *      the channel is the only column that says the bill is.
  *   2. `origin_workspace_id = this workspace` — rule B arm 3, the channel-less
- *      call on a workspace resource ("Desktop agent"), plus every legacy pooled
- *      row, neither of which has a channel at all.
+ *      call ("Desktop agent") and every legacy pooled row.
  * ⚠ **AND `wallet IN ('seat','workspace')` OVER BOTH.** A `personal` row
- * addressed at this workspace is a HOME channel's agent reaching in — rule B arm
- * 1, the channel owner's wallet — and it is on no workspace figure. **A personal
- * figure and a seat figure must never be summed** (the 2026-09-12 bug,
- * credit-model-v2 §3 "Surfaces"), which is why the wallet filter is an AND over
- * the union rather than a third arm beside it.
+ * addressed at this workspace is a HOME channel's agent reaching in (rule B arm
+ * 1) and is on no workspace figure — INVARIANTS §9: the meters must not be
+ * summed. The wallet filter is an AND over the union, never a third arm.
  *
- * ⚠ **THE CHANNEL LIST IS UNFENCED BY VISIBILITY AND THE RAIL IS NOT.** These
- * rows are AMOUNTS and carry no content, so the series, the by-person rail and
- * the by-tool rail are workspace-wide aggregates — the posture
- * `service-overview.ts` already states for counts. The by-CHANNEL rail prints a
- * NAME, so `service-usage.ts` drops rows whose channel the caller cannot see.
+ * ⚠ **THE CHANNEL LIST IS UNFENCED BY VISIBILITY AND THE RAIL IS NOT**: these
+ * rows are AMOUNTS, and `service-usage.ts` drops the ones whose channel the
+ * caller cannot see where a NAME gets printed.
  *
- * ⚠ **A SUM WITH NO `SUM`.** PostgREST cannot aggregate, so this hauls the
- * window and the service adds it up — the sanctioned haul-and-tally shape (§9),
- * with `truncated` travelling beside the shares.
+ * ⚠ **A SUM WITH NO `SUM`** — PostgREST cannot aggregate, so this hauls the
+ * window and the service adds it up (§9), `truncated` beside the shares.
  *
  * ⚠ **IT DEGRADES TO EMPTY RATHER THAN THROWING, and only this read does.**
  * `credit_usage_events` and its `wallet` / `channel_id` columns ship as
  * UNAPPLIED migrations (`20260901130000`, `20260930120000`, `20261003120000`),
- * so between deploy and apply PostgREST answers `42P01` / `42703` — and this
- * read sits in the Overview payload's `Promise.all`, where a throw 500s every
- * panel on the page. An empty ledger is an expected reading here anyway (the
- * table starts with no history), which is what makes the degrade honest. ⚠
+ * and this read sits in the Overview payload's `Promise.all`, where a throw
+ * 500s every panel. An empty ledger is an expected reading here anyway. ⚠
  * LOGGED, never silent.
  */
 export async function scanWorkspaceCreditEvents(
@@ -222,18 +213,15 @@ export interface WorkspaceSessionRow {
 
 /**
  * EVERYONE'S LIVE agent sessions in this container, newest activity first
- * (R-25, ruled 2026-09-17: every member's LIVE agent is listed and an ENDED one
- * is not).
+ * (R-25, 2026-09-17: every member's LIVE agent, never an ENDED one).
  *
- * 🔒 **PUBLIC COLUMNS ONLY — NOT ONE OF THE SEVEN OPERATOR-ONLY ONES.** Drawn
- * from the PUBLIC half of `20260822150000_channel_sessions_telemetry.sql`:
- * identity, whose machine, state, the closed-vocabulary `detail`, the two names
- * and the timestamps. **`model`, `tool_label`, `context_used`, `context_window`,
- * `tokens_spent`, `started_at` and `last_activity_at` are absent and must stay
- * absent.** This runs service-role, so neither RLS nor the column GRANT applies
- * and the DTO fence (`collab-dto.ts › mapPeerSessionStateRow`) is not on this
- * path — **the column list IS the fence**, and it fails closed by naming what
- * may be read rather than omitting what may not.
+ * 🔒 **PUBLIC COLUMNS ONLY — NOT ONE OF THE SEVEN OPERATOR-ONLY ONES.**
+ * `model`, `tool_label`, `context_used`, `context_window`, `tokens_spent`,
+ * `started_at` and `last_activity_at` are absent and must stay absent
+ * (`20260822150000_channel_sessions_telemetry.sql`). This runs service-role, so
+ * neither RLS nor the column GRANT applies and `collab-dto.ts ›
+ * mapPeerSessionStateRow` is not on this path — **the column list IS the
+ * fence**, and it fails closed by naming what may be read.
  */
 export async function listWorkspaceRunningSessions(
   workspaceId: string,
@@ -252,8 +240,13 @@ export async function listWorkspaceRunningSessions(
   return clipped((data ?? []) as WorkspaceSessionRow[], limit);
 }
 
-/** `userId → role` for this container — the guest/member split the person rail
- *  marks. ⚠ `workspace_members` is the ONLY table where `guest` exists. */
+/**
+ * `userId → role` for every ACTIVE member — the roster, as the members console
+ * reads it (`repository.ts › listMembers`; departure is a row DELETE, never a
+ * status flip). 🔒 **The by-person rail's fence as well as its guest marker**:
+ * a person absent from this map is absent from that rail.
+ * ⚠ `workspace_members` is the ONLY table where `guest` exists.
+ */
 export async function listWorkspaceRoles(
   workspaceId: string
 ): Promise<Map<string, Role>> {
@@ -276,18 +269,12 @@ const TOKEN_SPEND_LIMIT = 2_000;
 /**
  * THE CALLER'S OWN TOKEN SPEND IN THIS CONTAINER, newest run first.
  *
- * 🔒 **BOTH FENCES, AND THE `user_id` ONE IS NOT NEGOTIABLE.**
- * `workspace_token_spend` is RLS-deny-all and per-OPERATOR by design — its own
- * migration refuses a member-scoped read policy in as many words: *"a
- * member-scoped read policy would let any workspace member read how many tokens
- * a colleague's agents burned, which nobody has ruled"*. R-29's privacy half
- * left that standing, so this read adds the CONTAINER fence and keeps the
- * operator one. **There is no workspace-wide variant of this function and there
- * must not be one** — see INVARIANTS §9.
+ * 🔒 **BOTH FENCES, AND THE `user_id` ONE IS NOT NEGOTIABLE. There is no
+ * workspace-wide variant of this function and there must not be one** —
+ * INVARIANTS §9 carries the argument.
  *
- * ⚠ A MISSING LEDGER DEGRADES TO AN EMPTY LIST: an absent ledger and an empty
- * one both mean "no spend is recorded for you here", so the answer is honest
- * either way.
+ * ⚠ A MISSING LEDGER DEGRADES TO AN EMPTY LIST: absent and empty both mean "no
+ * spend is recorded for you here".
  */
 export async function listWorkspaceTokenSpend(
   workspaceId: string,

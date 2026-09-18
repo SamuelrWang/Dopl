@@ -147,6 +147,56 @@ describe("the rails", () => {
     ]);
   });
 
+  it("DROPS A DEPARTED MEMBER — the rail is fenced as the members console is", async () => {
+    // 🔒 The roster is `status='active'` and departure is a row DELETE
+    // (`membership-admin.ts`), so a person who has left is absent from the
+    // members page — and their NAME and figure are absent here. The spend still
+    // counts on the series above, which is integers.
+    const gone = "u-gone";
+    mocked.scanWorkspaceCreditEvents.mockResolvedValue({
+      rows: [burn({ user_id: gone, amount: 500 }), burn({ user_id: "u2", amount: 3 })],
+      truncated: false,
+    });
+    mocked.listWorkspaceRoles.mockResolvedValue(new Map([["u2", "member"]]));
+    vi.mocked(listProfileSummaries).mockResolvedValue(
+      new Map([["u2", { displayName: "Ada", email: "ada@example.com" }]]) as never
+    );
+
+    const usage = await getWorkspaceUsage(WS, [], NOW);
+
+    expect(usage.people).toEqual([
+      { userId: "u2", name: "Ada", role: "member", credits: 3 },
+    ]);
+    // ⚠ AND THE PROFILE IS NEVER EVEN FETCHED — a name the page may not print
+    // must not cross the service boundary either.
+    expect(vi.mocked(listProfileSummaries)).toHaveBeenCalledWith(["u2"]);
+  });
+
+  it("keeps a VIEWER-FILTERED colleague off the channel rail while their burn stays on the plot", async () => {
+    // The by-channel rail prints a NAME, so a room the caller cannot open has no
+    // row — but the same burn is still one of the series' integers.
+    mocked.scanWorkspaceCreditEvents.mockResolvedValue({
+      rows: [burn({ channel_id: CHAN, amount: 7 })],
+      truncated: false,
+    });
+    const usage = await getWorkspaceUsage(WS, [], NOW);
+    expect(usage.channels).toEqual([]);
+
+    const { counts } = await readWorkspaceCreditBins(WS, [
+      { startIso: "2026-09-10T00:00:00.000Z", endIso: "2026-09-11T00:00:00.000Z" },
+    ]);
+    expect(counts).toEqual([7]);
+  });
+
+  it("renders an EMPTY container as empty lists, never as NaN or a missing key", async () => {
+    const usage = await getWorkspaceUsage(WS, [], NOW);
+    expect(usage.channels).toEqual([]);
+    expect(usage.people).toEqual([]);
+    expect(usage.tools).toEqual([]);
+    expect(usage.scanned).toBe(0);
+    expect(usage.truncated).toBe(false);
+  });
+
   it("orders tools by calls and breaks ties on the key", () => {
     const rows = tallyWorkspaceTools([
       { tool: "b", op: "x" },
@@ -238,6 +288,26 @@ describe("token spend — operator-fenced, per member's own", () => {
       WS,
       "me",
       "2026-08-17T09:30:00.000Z"
+    );
+  });
+
+  it("has no workspace-wide variant — the two-member subtraction leak has no door", async () => {
+    // 🔒 In a container of two, "everyone" minus "me" IS the colleague's figure,
+    // so the fence is the absence of the aggregate, not a filter over it. The
+    // module must expose no read that takes the container without the caller.
+    const surface = await import("./service-usage");
+    const takesContainerOnly = Object.entries(surface).filter(
+      ([name, value]) =>
+        typeof value === "function" &&
+        /token|spend/i.test(name) &&
+        (value as (...args: never[]) => unknown).length < 2
+    );
+    expect(takesContainerOnly).toEqual([]);
+    await getWorkspaceTokenSpend(WS, "user-1", NOW);
+    expect(mocked.listWorkspaceTokenSpend).toHaveBeenCalledWith(
+      WS,
+      "user-1",
+      expect.any(String)
     );
   });
 

@@ -9,13 +9,7 @@ import { TokenSpendStrip } from "#/components/overview/token-spend-strip";
  * the caller's OWN agents (wave 8).
  *
  * 🔒 **PER-MEMBER-OWN IS THE WHOLE PANEL, AND IT IS A FENCE DECISION RATHER
- * THAN A MISSING FEATURE (INVARIANTS §9).** `workspace_token_spend` is
- * RLS-deny-all and operator-fenced on purpose — its migration refuses a
- * member-scoped read policy in as many words, because it *"would let any
- * workspace member read how many tokens a colleague's agents burned, which
- * nobody has ruled"*. R-29(b) left that standing. A workspace-wide total does
- * not become safe by being a total: in a two-member container, "everyone" minus
- * "me" IS the colleague's spend.
+ * THAN A MISSING FEATURE** — INVARIANTS §9 carries the argument.
  * ⚠ **SO THE PANEL SAYS WHOSE FIGURE IT IS**, in one line. An unlabelled strip
  * on a page full of other people's agents reads as the container's total, which
  * is the one thing this fence cannot answer. Minimal copy (§5): a RULE the

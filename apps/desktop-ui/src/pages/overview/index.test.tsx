@@ -318,6 +318,26 @@ describe("overview page", () => {
     ).toHaveLength(1);
   });
 
+  it("renders a STALE CACHED payload whose wave-8 keys are absent (§8)", async () => {
+    // ⚠ These payloads are IndexedDB-persisted: an entry written by a
+    // pre-wave-8 bundle carries no `usage`, no `agents`, and a series with
+    // neither `range` nor `truncated`. `.map` over `undefined` THROWS and blanks
+    // the page, so every read spells `?? EMPTY_X` inline — and the page must
+    // still paint, with the two folding panels simply absent.
+    const { container } = renderPage();
+
+    await screen.findByRole("heading", { level: 2, name: "Credits per day" });
+    expect(
+      screen.queryByRole("heading", { name: "Active agents" })
+    ).not.toBeInTheDocument();
+    // The plot still draws its bars and its total off the keys that DID arrive.
+    expect(screen.getByText("496,000 in the period")).toBeInTheDocument();
+    // ⚠ `truncated` absent is NOT truncated — the honesty prefix is a claim and
+    // an old cache may not make it.
+    expect(screen.queryByText(/at least/i)).not.toBeInTheDocument();
+    expect(container.innerHTML).not.toContain("NaN");
+  });
+
   it("plots an all-zero series as a flat baseline, with no NaN heights", async () => {
     sendRequest.mockImplementation((req: TransportRequest) => transport(req, true));
     renderPage();

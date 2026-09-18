@@ -17,15 +17,9 @@ const SOURCE = "api/workspaces/[workspaceSlug]/token-spend";
  * GET — the workspace Overview's token-spend strip: how many tokens the
  * CALLER'S OWN agents have spent IN THIS CONTAINER, per run, over 31 days.
  *
- * 🔒 **TWO FENCES, AND THE OPERATOR ONE IS THE ONE THAT WAS RULED.**
- * `workspace_token_spend` is RLS-deny-all and per-OPERATOR on purpose — its
- * migration (`20260927120000` §2) refuses a member-scoped read policy in as many
- * words, because it *"would let any workspace member read how many tokens a
- * colleague's agents burned, which nobody has ruled"*. R-29(b) left that
- * standing, so this route adds the CONTAINER fence and keeps the operator one.
- * **There is no workspace-wide variant and there must not be one** — see
- * INVARIANTS §9's fence note: an aggregate over a two-member container is that
- * fence removed by subtraction.
+ * 🔒 **TWO FENCES, AND THE OPERATOR ONE IS THE ONE THAT WAS RULED. There is no
+ * workspace-wide variant and there must not be one** — INVARIANTS §9 carries
+ * the argument, `20260927120000` §2 the refusal it rests on.
  *
  * `viewer`+ like its siblings: `resolveApiWorkspace` 404s a non-member — and a
  * `guest` — before any service-role read runs.
@@ -33,8 +27,8 @@ const SOURCE = "api/workspaces/[workspaceSlug]/token-spend";
  * ⚠ **ITS OWN ROUTE RATHER THAN A `metric` ON `./overview-series`.** Those four
  * metrics sum `credit_usage_events`; tokens are a different ledger with a
  * different accuracy story — a FLOOR (quantized, and an ended run's last stretch
- * is never pushed) against credits' exact counts. Those do not belong on one
- * axis without a label saying so.
+ * is never pushed) against credits' exact counts, which do not share an axis
+ * without a label saying so.
  *
  * ⚠ **NO REALTIME AND NO POLL** (INVARIANTS §7): a cold read, `private,
  * no-store`.

@@ -157,6 +157,20 @@ describe("GET /api/workspaces/[workspaceSlug]/overview-series", () => {
     expect(mockSeries).not.toHaveBeenCalled();
   });
 
+  it("404s a GUEST by taking the resolver's INVERTED DEFAULT, never an override", async () => {
+    // 🔒 The unscoped series is a workspace-wide aggregate with no channel
+    // fence, so the guest floor is the only thing between a guest and 31 days of
+    // volume across every room in the container. It is the resolver's
+    // `minRole: "viewer"` default — this route must pass no override.
+    await GET(getReq("?metric=messages"), routeCtx());
+    expect(mockResolve.mock.calls[0][2]).not.toHaveProperty("minRole");
+
+    mockResolve.mockResolvedValue(null);
+    const res = await GET(getReq("?metric=messages"), routeCtx());
+    expect(res.status).toBe(404);
+    expect(mockSeries).toHaveBeenCalledTimes(1);
+  });
+
   it("400s an unrecognised metric and reads nothing", async () => {
     const res = await GET(getReq("?metric=sessions"), routeCtx());
     expect(res.status).toBe(400);

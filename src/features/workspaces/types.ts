@@ -169,7 +169,7 @@ export interface OverviewSeriesPoint {
  *
  * ⚠ **`31d` IS THE BACK-COMPAT WINDOW, NOT A SWITCHER OPTION** — today plus
  * the 30 UTC days before it, what this route answered with no `range` at all
- * before wave 8. It stays the default so the Info tab’s activity strip did not
+ * before wave 8. It stays the default so the Info tab's activity strip did not
  * silently lose a day. {@link WORKSPACE_SERIES_SWITCHER_RANGES} is what the
  * Overview offers.
  */
@@ -183,10 +183,10 @@ export const WORKSPACE_SERIES_RANGES: readonly WorkspaceSeriesRange[] = [
 ];
 
 /** What a caller that sends no `range` gets. ⚠ Moving it moves the activity
- *  strip’s window — it is the one caller that never sends one. */
+ *  strip's window — it is the one caller that never sends one. */
 export const WORKSPACE_SERIES_DEFAULT_RANGE: WorkspaceSeriesRange = "31d";
 
-/** The three the Overview’s range switcher offers. */
+/** The three the Overview's range switcher offers. */
 export const WORKSPACE_SERIES_SWITCHER_RANGES: readonly WorkspaceSeriesRange[] =
   ["7d", "30d", "month"];
 
@@ -209,10 +209,10 @@ export interface WorkspaceOverviewSeries {
 }
 
 /**
- * One channel’s share of this workspace’s seat spend.
+ * One channel's share of this workspace's seat spend.
  *
- * 🔒 **FENCED TO THE CALLER’S VISIBLE CHANNELS, because this row prints a
- * NAME.** `server/service-overview.ts` states the workspace’s two fencing
+ * 🔒 **FENCED TO THE CALLER'S VISIBLE CHANNELS, because this row prints a
+ * NAME.** `server/service-overview.ts` states the workspace's two fencing
  * postures — aggregate INTEGERS are workspace-wide, anything carrying CONTENT is
  * viewer-filtered server-side — and a channel name is content. The by-person and
  * by-tool rails carry no channel identity and stay workspace-wide, which is also
@@ -225,16 +225,24 @@ export interface WorkspaceChannelUsage {
   messages: number;
 }
 
-/** One member’s share of this workspace’s seat spend. ⚠ `role` is the
- *  container role from `workspace_members`, `null` once they have left. */
+/**
+ * One member's share of this workspace's seat spend.
+ *
+ * 🔒 **ONLY PEOPLE THE MEMBERS CONSOLE WOULD SHOW THE CALLER GET A ROW** — this
+ * one prints a NAME, and the roster is the fence
+ * (`server/service-usage.ts › tallyWorkspacePeople`). Departure is a row
+ * DELETE, so a departed colleague has no role and no row here; their spend
+ * still counts on the series, which is integers.
+ */
 export interface WorkspacePersonUsage {
   userId: string;
   name: string;
-  role: Role | null;
+  /** The container role from `workspace_members` — the guest marker's source. */
+  role: Role;
   credits: number;
 }
 
-/** One `(tool, op)` pair’s call count. ⚠ There is no MCP SERVER column in the
+/** One `(tool, op)` pair's call count. ⚠ There is no MCP SERVER column in the
  *  schema; this is the finest grain that exists. */
 export interface WorkspaceToolUsage {
   tool: string;
@@ -270,12 +278,12 @@ export interface WorkspaceUsageBreakdown {
  * One live agent session in this workspace.
  *
  * 🔒 **PUBLIC COLUMNS ONLY, AND THE OMISSIONS ARE THE CONTRACT — the same
- * seven this shape’s /home twin refuses (`home/overview-types.ts ›
+ * seven this shape's /home twin refuses (`home/overview-types.ts ›
  * HomeAgentRow`).** No `model`, no `toolLabel`, no `tokensSpent`, no context
  * pair: those are the OPERATOR-ONLY telemetry columns
- * (`20260822150000_channel_sessions_telemetry.sql`), and R-29’s privacy half
+ * (`20260822150000_channel_sessions_telemetry.sql`), and R-29's privacy half
  * says a peer learns THAT an agent is working, never what it costs its operator.
- * ⚠ **Do not widen this interface** — the repository’s column list and this
+ * ⚠ **Do not widen this interface** — the repository's column list and this
  * shape are the fence on a service-role path.
  */
 export interface OverviewAgentRow {
@@ -284,20 +292,20 @@ export interface OverviewAgentRow {
   channelName: string;
   name: string;
   /** `working` / `idle` — anything the desktop has not reported as `ended`
-   *  (R-25: everyone’s LIVE agents, ended ones hidden). */
+   *  (R-25: everyone's LIVE agents, ended ones hidden). */
   state: string;
   /** One of six CLOSED situation keys, or `null`. */
   detail: string | null;
   threadTitle: string | null;
   threadId: string | null;
-  /** TRUE when this session runs on the CALLER’S machine. ⚠ The only thing
+  /** TRUE when this session runs on the CALLER'S machine. ⚠ The only thing
    *  separating "mine" from "theirs", and it names no peer. */
   mine: boolean;
   updatedAt: string;
 }
 
-/** One run’s token spend. ⚠ An INSTANT, never a day: the server cannot know
- *  the operator’s zone, so the renderer buckets (`20260927120000` §"DAYS ARE
+/** One run's token spend. ⚠ An INSTANT, never a day: the server cannot know
+ *  the operator's zone, so the renderer buckets (`20260927120000` §"DAYS ARE
  *  DERIVED"). */
 export interface WorkspaceTokenSpendMark {
   at: string;
@@ -307,12 +315,9 @@ export interface WorkspaceTokenSpendMark {
 /**
  * Payload of `GET /api/workspaces/[workspaceSlug]/token-spend`.
  *
- * 🔒 **THE CALLER’S OWN AGENTS IN THIS CONTAINER, AND THERE IS NO
- * WORKSPACE-WIDE FIGURE (wave 8 fence decision, INVARIANTS §9).**
- * `workspace_token_spend` is operator-fenced on purpose — its migration refuses a
- * member-scoped read policy in as many words — and an aggregate over a container
- * with two members is that fence removed by subtraction. Per-member-own is
- * therefore the whole of what this endpoint can honestly answer.
+ * 🔒 **THE CALLER'S OWN AGENTS IN THIS CONTAINER, AND THERE IS NO
+ * WORKSPACE-WIDE FIGURE** — the wave-8 fence decision, argued once in
+ * INVARIANTS §9.
  */
 export interface WorkspaceTokenSpend {
   marks: WorkspaceTokenSpendMark[];
@@ -376,7 +381,7 @@ export interface WorkspaceOverview {
    */
   usage?: WorkspaceUsageBreakdown;
   /**
-   * EVERYONE’S LIVE agents in this container, newest activity first (R-25).
+   * EVERYONE'S LIVE agents in this container, newest activity first (R-25).
    * ⚠ NOT window-scoped — a session row is live STATE, not an event.
    * ⚠ Optional for the same stale-cache reason as {@link usage}.
    */
@@ -387,7 +392,7 @@ export interface WorkspaceOverview {
  * Absent-fallbacks for the wave-8 array keys, per INVARIANTS §8.
  *
  * ⚠ FROZEN and shared: they reach render paths directly, so a caller that
- * pushed into one would be editing every other caller’s fallback.
+ * pushed into one would be editing every other caller's fallback.
  */
 export const EMPTY_OVERVIEW_AGENTS: readonly OverviewAgentRow[] =
   Object.freeze([]);

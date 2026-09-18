@@ -1,6 +1,7 @@
 import type { Role } from "@/features/workspaces/types";
 import { agentFaceName } from "@/shared/lib/agent-name";
 import { binByWindow } from "@/features/overview-series/windows";
+import { narrowSessionDetail } from "@/features/overview-series/session-detail";
 import type {
   HomeAgentRow,
   HomeChannelUsage,
@@ -31,31 +32,6 @@ import {
  * client. The marker stays on `service-overview.ts` and on the repository, which
  * are the modules that actually touch `supabaseAdmin()`.
  */
-
-/**
- * The six CLOSED situation keys `channel_sessions.detail` may carry.
- *
- * 🔒 **NARROWED ON THE WAY OUT, exactly as `collab-dto.ts ›
- * narrowSessionDetail` does it, and the column's own migration explains why the
- * DB deliberately does NOT `CHECK` this list**: a newer desktop shipping a
- * seventh key must be able to STORE it rather than 400 its whole push, so the
- * closed-value test belongs on the READ side. An unknown key renders as
- * nothing. ⚠ `detail` is the ONE peer-visible telemetry column and it is
- * peer-visible ONLY because this vocabulary is closed — if it ever becomes
- * free-form it becomes private in the same change.
- */
-const SESSION_DETAILS: readonly string[] = [
-  "thinking",
-  "tool",
-  "posting",
-  "permission",
-  "awaiting_peer",
-  "awaiting_inbound",
-];
-
-export function narrowDetail(raw: string | null): string | null {
-  return raw !== null && SESSION_DETAILS.includes(raw) ? raw : null;
-}
 
 /** How many `(tool, op)` rows the tools list carries. */
 const TOOL_ROWS = 8;
@@ -146,7 +122,7 @@ export function tallyTools(rows: McpCallScanRow[]): HomeToolUsage[] {
  * A `seat` row is neither, and a `personal` row somebody ELSE paid for is
  * neither. ⚠ **`wallet` IS NOT NARROWED TO A UNION HERE** — the column has no
  * `CHECK`-closed future and the closed-value test belongs on the read side, the
- * same argument {@link narrowDetail} makes: an unknown wallet is not the
+ * same argument `narrowSessionDetail` makes: an unknown wallet is not the
  * reader's, which fails CLOSED.
  *
  * ⚠ **IT IS THE SECOND HALF OF A RULE THE SQL ALSO STATES**, and deliberately so:
@@ -327,7 +303,7 @@ export function mapAgents(
     channelName: names.get(row.workspace_id) ?? row.channel_name ?? "",
     name: agentFaceName(row.display_name),
     state: row.state,
-    detail: narrowDetail(row.detail),
+    detail: narrowSessionDetail(row.detail),
     // ⚠ THE ID AND THE TITLE ARE TWO DIFFERENT ANSWERS AND BOTH RIDE. The title
     // is what the row PRINTS; the id is where clicking it LANDS, and a session
     // launched at channel level has neither.

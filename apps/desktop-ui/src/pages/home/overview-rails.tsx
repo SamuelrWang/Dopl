@@ -1,8 +1,4 @@
-import {
-  ClippedNote,
-  RailCard,
-  RankRail,
-} from "#/components/overview/rank-rail";
+import { RailCard, RankRail } from "#/components/overview/rank-rail";
 import type {
   HomeChannelUsage,
   HomePersonUsage,
@@ -30,11 +26,10 @@ import type {
  *
  * ⚠ **THE RAIL, THE CARD AND THE CLIPPED NOTE MOVED TO
  * `#/components/overview/rank-rail.tsx` IN WAVE 8, UNCHANGED.** The workspace
- * Overview draws the same breakdown over a different fence, and one picture with
- * two recipes is what P33 exists to stop. **What is left here is the four /home
- * rails' own copy and their own rows** — R-40 keeps this face byte-identical.
+ * Overview draws the same breakdown over a different fence. **What is left here
+ * is the four /home rails' own copy and their own rows** — R-40 keeps this face
+ * byte-identical.
  */
-export { ClippedNote };
 
 /**
  * CREDITS per home channel.

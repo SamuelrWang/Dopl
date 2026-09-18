@@ -159,7 +159,7 @@ function addDays(at: Date, days: number): Date {
 }
 
 /**
- * THE BINS — now {@link overviewWindows}’ job, and the delegation is P33.
+ * THE BINS — now {@link overviewWindows}' job, and the delegation is P33.
  *
  * ⚠ **THIS FUNCTION USED TO OWN A SECOND CALENDAR** (a local `utcDayStart` +
  * `addDays` walk). /home owned the other one. One overview series vocabulary
@@ -179,7 +179,7 @@ export function seriesWindows(
 }
 
 /**
- * The daily-binned series behind the histogram — always the range’s full bin
+ * The daily-binned series behind the histogram — always the range's full bin
  * count, oldest first, zero-filled, so the renderer never gap-fills. A day with
  * no rows is a real zero here: the bin was counted.
  *
@@ -193,10 +193,10 @@ export async function getWorkspaceOverviewSeries(
   workspaceId: string,
   metric: OverviewSeriesMetric,
   /**
-   * Narrow every bin to ONE channel (2026-08-25, the Info tab’s activity
+   * Narrow every bin to ONE channel (2026-08-25, the Info tab's activity
    * strip). ⚠ THE CALLER MUST HAVE PROVED VISIBILITY FIRST — the route does it
    * against `repository-overview.ts › listVisibleChannelRefs`, the channels
-   * feature’s one visibility statement. Nothing here re-checks it, and nothing
+   * feature's one visibility statement. Nothing here re-checks it, and nothing
    * here may be handed a raw query parameter.
    */
   channelId: string | null = null,
@@ -206,7 +206,7 @@ export async function getWorkspaceOverviewSeries(
   // ⚠ REFUSED, NOT IGNORED. `mcp_tool_calls` has no `channel_id` column, so a
   // channel-scoped MCP series is a question the schema cannot answer — and a
   // silently workspace-wide answer under a channel-scoped label is exactly the
-  // fabrication this whole section exists to prevent (§9’s "never a silent
+  // fabrication this whole section exists to prevent (§9's "never a silent
   // fall-through"). The route surfaces this as a 400.
   // ⚠ **`credits` IS NOT REFUSED**, and the difference is a column:
   // `credit_usage_events.channel_id` exists (rule B), so the question has an
@@ -387,7 +387,7 @@ export async function getWorkspaceOverview(
   ]);
 
   // ⚠ **THE WAVE-8 PANELS RIDE THE SAME ROUND TRIP (R-29(b)).** The rails and
-  // the board are part of the page’s FIRST FRAME — the skeleton is this page’s
+  // the board are part of the page's FIRST FRAME — the skeleton is this page's
   // own shape, module for module — so a second endpoint would paint them in
   // after the gate lifted, which is the jump `OverviewSkeleton` exists to stop.
   // ⚠ The SERIES stays its own route, because its `metric` and `range` are

@@ -149,7 +149,7 @@ export function rangeSince(
 }
 
 export function bucketFor(range: HomeOverviewRange): HomeOverviewBucket {
-  return overviewBucketFor(range) as HomeOverviewBucket;
+  return overviewBucketFor(range);
 }
 
 /* ----------------------------- the reads ------------------------------- */

@@ -53,6 +53,29 @@ describe("UsageRails", () => {
     expect(screen.getAllByText("Untitled channel")).toHaveLength(2);
   });
 
+  it("draws an EMPTY container as empty lines, never a bar of NaN", () => {
+    const { container } = render(
+      <UsageRails usage={usage({ channels: [], people: [], tools: [] })} />
+    );
+    expect(screen.getAllByText("Nothing yet.")).toHaveLength(4);
+    // ⚠ The bar's width is `value / top`, and `top` is `Math.max(1, …)` exactly
+    // so an empty rail cannot divide by zero into `width: NaN%`.
+    expect(container.innerHTML).not.toContain("NaN");
+  });
+
+  it("survives a STALE CACHED payload whose wave-8 keys are missing (§8)", () => {
+    // An entry written by a pre-wave-8 bundle has no `channels` / `people` /
+    // `tools` at all. `.map` over `undefined` THROWS and blanks the page, so
+    // every read spells `?? EMPTY_X` inline.
+    const stale = {
+      since: "2026-09-01T00:00:00.000Z",
+      scanned: 0,
+      truncated: false,
+    } as unknown as WorkspaceUsageBreakdown;
+    expect(() => render(<UsageRails usage={stale} />)).not.toThrow();
+    expect(screen.getAllByText("Nothing yet.")).toHaveLength(4);
+  });
+
   it("says so when a scan came back at its ceiling, with the denominator", () => {
     render(<UsageRails usage={usage({ truncated: true })} />);
     expect(screen.getByText("Rails cover the newest 120 rows.")).toBeDefined();

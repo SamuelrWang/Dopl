@@ -19,17 +19,16 @@ import {
  *
  * 🔒 **EVERY CREDIT FIGURE HERE IS THIS CONTAINER'S SEAT SPEND** — never a
  * personal wallet's (`workspaces/server/service-usage.ts ›
- * isWorkspaceSeatBurn`). The two meters must not mix; summing them was the
- * 2026-09-12 bug.
+ * isWorkspaceSeatBurn`).
  *
  * ⚠ **THE WINDOW IS THE CURRENT CALENDAR MONTH AND NO CONTROL MOVES IT** — the
  * same split /home makes, so the rails and the page's period figure answer for
  * one window. The range switcher belongs to the plot above.
  *
- * ⚠ **THE BY-CHANNEL RAIL IS VIEWER-FILTERED AND THE OTHER TWO ARE NOT**, which
- * is why it does not sum to the plot: a channel name is CONTENT and is fenced
- * server-side, while an amount is an aggregate integer. `service-overview.ts`
- * states that two-posture split for the whole page.
+ * ⚠ **THE BY-CHANNEL AND BY-PERSON RAILS ARE FENCED, THE TOOL RAIL IS NOT** —
+ * both print a name, so both are cut server-side (a channel to the caller's
+ * visible set, a person to the roster), which is why neither sums to the plot.
+ * INVARIANTS §9 states the two postures.
  *
  * ⚠ MINIMAL COPY (INVARIANTS §5): labels and controls, no explainer paragraphs.
  */
