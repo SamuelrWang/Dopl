@@ -353,6 +353,10 @@ surface, `home-tabs.ts:28-42`) sees none of them.
 **Recommendation: mount `ConnectAgentBanner` and `WelcomePopup` on /home; leave Tour on the
 workspace** (its steps are keyed by `NavSection`, `tour-steps.ts`).
 
+→ 🔴 **OVERRULED, AND EXECUTED THE OTHER WAY (Samuel's ruling R-49, 2026-09-17; wave 7).** Nothing is
+mounted on /home: all four surfaces are **DELETED**, on the workspace too. A first-run experience is
+designed fresh when it is wanted. INVARIANTS §15 carries what went and what survives.
+
 **E8 — Skills, Chats and Ontology have no page skeleton.**
 `section-skeleton.tsx:15-19` argues that inventing three shapes to fill the table is worse than
 `PageLoading`. /home has eleven bespoke shapes.

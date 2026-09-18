@@ -11,8 +11,9 @@ import { useWorkspaceAccess, type WorkspaceAccess } from "#/hooks/use-workspace-
 import { useKnowledgeUrlSync } from "./use-knowledge-url-sync";
 import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
 import { KnowledgeV2PreviewCore } from "@/features/knowledge/components/knowledge-v2/landing-preview-core";
-// Vite-bundled hero, passed as a prop: shared tree cannot import an SPA-local
-// asset (WelcomePopup precedent).
+// Vite-bundled hero, passed as a prop: the shared tree cannot import an
+// SPA-local asset. (`WelcomePopup`'s `brand` was the precedent; it is deleted —
+// R-49, 2026-09-17 — and the rule is not.)
 import knowledgeHero from "#/assets/knowledge-hero.jpg";
 import type { KnowledgeRouting } from "@/features/knowledge/components/knowledge-v2/routing";
 import type {

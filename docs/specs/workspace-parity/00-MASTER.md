@@ -1513,7 +1513,11 @@ is `person-roster-actions.tsx › PersonRosterRowAction` through the shared body
 2026-09-17**: `workspaces/server/dto.ts › scrubHiddenPresence`, applied by
 `› service.ts › listWorkspaceMembers` (one consumer, so the wire is the payload); the
 client rule stays as the LAST line. `docs/MEMBERS-AUTHORIZATION.md` §*Not yet enforced
-server-side* loses its one row · 🔴 **DELETE the guidance layer** (R-49).
+server-side* loses its one row · ✅ 🔴 **DELETE the guidance layer** (R-49) — **DONE 2026-09-17**: `src/features/tour/**`, the
+join-request notices core with `GET /api/me/join-requests` + `/ack` and their two service functions,
+the connect-agent banner, the welcome popup with `buildBootstrapPrompt`, and every mount in the
+desktop shell. The two ack COLUMNS survive as data with no reader; the rule is INVARIANTS §15 and the
+absence is pinned in `app-shell.test.tsx`.
 🔴 **DROPPED: V1/V3 Chats and Skills.** **R-33 — NO, Skills and Chats stay out of home.**
 ⚠ **V2 therefore stays a live orphan class**: `dopl_chats(op="export")` with no container still files
 chats nothing lists, and *what the export should do instead is still owed an answer.* Record it, do
@@ -1619,7 +1623,7 @@ merely recommended.
 | 22 | `HomeChannel.lastMessagePreview` | ⚠ **STILL OPEN after 2026-09-17.** R-28 ruled the **mention badge** in — *"mention badges YES on workspace rows (needs the count)"* — which commits Wave 3 to building the COUNT, and says nothing about the preview. **This row is not decided by R-28 and must not be read as decided**: either render it on the workspace row or delete the field | 3 or 4 |
 | 23 | 🔴 **THE ARCHIVE FEATURE, ENTIRELY, ON BOTH SURFACES** — the archive control, the lifecycle write, the Archived filter, the Status row that was never built, and every reader of the archived flag | ✅ **RULED (R-21): "a user can delete a channel; no point in archives."** This REPLACES R-21's recommended (a) (add a Status row) and is larger than the info body — it reaches the channel service and the list filters. ⚠ **Scope it before opening Wave 1's worktree**; re-derive every reader of the flag rather than trusting this row <span style="color:#c00">**⚠ TOUCHES DO-NOT-TOUCH**</span> (`src/features/channels/**`, 04 §F-5) | 1 |
 | 24 | ✅ ~~**Any code that mints a DEFAULT STANDARD WORKSPACE at signup**~~ — **MEASURED 2026-09-17: THE SET IS EMPTY.** Both signup-path sites call `ensurePersonalContainer`; `createWorkspaceForUser` is explicit-create only. The row is discharged by measurement, not by a deletion | ✅ **RULED (R-35): every user gets exactly a home space; no default standard workspace.** ⚠ **AND THE EXECUTION IS THE OTHER HALF OF THE RULING — PERMANENCE** (INVARIANTS §4A): the container cannot be deleted or left by its owner, at the service layer and in `20261009120000_personal_container_permanent.sql`. ⚠ `default_workspace_of` is a **marked-retired hold point** (see below) — retiring the minting path is not licence to drop the object in the same wave | 0 |
-| 25 | 🔴 **The guidance layer: `TourProviderCore`, `JoinRequestNoticesCore`, `ConnectAgentBanner`, `WelcomePopup`** | ✅ **RULED (R-49): delete the guidance-banner code NOW, reimplement later.** This reverses the wave's direction — they were to be MOUNTED on /home; they are removed instead. ⚠ **All four are live on the WORKSPACE today**, so this deletes a shipped workspace affordance, not an absent home one. The Tour's steps are keyed to `NavSection`, which goes with it | 7 |
+| 25 | 🔴 **The guidance layer: `TourProviderCore`, `JoinRequestNoticesCore`, `ConnectAgentBanner`, `WelcomePopup`** | ✅ **DONE 2026-09-17 (wave 7).** Ruled (R-49): delete the guidance-banner code NOW, reimplement later. This reverses the wave's direction — they were to be MOUNTED on /home; they are removed instead. ⚠ **All four are live on the WORKSPACE today**, so this deletes a shipped workspace affordance, not an absent home one. The Tour's steps are keyed to `NavSection`, which goes with it | 7 |
 
 ⚠ **On the red flags above.** 04 §F-5 lists `src/features/channels/**` (302 files) among the modules
 to *"leave alone entirely in a parity wave"*, with one carve-out: *"touch only `capabilities`"*.

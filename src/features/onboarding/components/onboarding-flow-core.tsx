@@ -101,11 +101,9 @@ export function OnboardingFlowCore({
           },
         }
       );
-      try {
-        window.localStorage.setItem("dopl:welcome", "1");
-      } catch {
-        // storage unavailable — welcome popup just won't show
-      }
+      // ⚠ `dopl:welcome` WAS SET HERE AND IS DELETED (Samuel's ruling R-49,
+      // 2026-09-17): the welcome popup that read it is gone, and a write with
+      // no reader is dead code, not a seam for a reimplementation.
       onDone(body.redirectTo);
     } catch {
       finishRef.current = false;

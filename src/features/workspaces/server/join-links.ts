@@ -12,22 +12,12 @@ import { findMembership, findWorkspaceById } from "./repository";
 /**
  * Shareable join links + admin-approved join requests. One standing link per
  * workspace; rotating the token kills previously shared copies. Anyone with the
- * link can request; an admin approves (picking a role) or declines. Requester
- * popups are driven by the two ack columns.
+ * link can request; an admin approves (picking a role) or declines. ⚠ The
+ * requester-side popups the two ack columns drove are DELETED (R-49) — see the
+ * note at the foot of this file.
  */
 
 export type JoinRequestStatus = "pending" | "approved" | "declined";
-
-export interface JoinRequestNotice {
-  id: string;
-  workspaceId: string;
-  workspaceName: string;
-  workspaceSlug: string;
-  workspacePublicId: string;
-  status: JoinRequestStatus;
-  /** Which popup this notice drives. */
-  kind: "pending" | "resolved";
-}
 
 const REQUEST_COLS =
   "id, workspace_id, user_id, status, requested_at, resolved_at, pending_acknowledged_at, resolved_acknowledged_at";
@@ -379,64 +369,15 @@ export async function resolveJoinRequest(
 /* --------------------------- my notices ---------------------------- */
 
 /**
- * Caller's unacknowledged join-request notices, oldest first:
- *   - pending + pending_acknowledged_at null  -> "awaiting approval"
- *   - approved/declined + resolved_acknowledged_at null -> outcome popup
+ * 🔴 **DELETED (Samuel's ruling R-49, 2026-09-17): `listMyJoinNotices`,
+ * `acknowledgeJoinNotice` and the `JoinRequestNotice` type.** Their one reader
+ * was `JoinRequestNoticesCore`, which is deleted with the rest of the guidance
+ * layer; `GET /api/me/join-requests` and its `/ack` POST went with them.
+ *
+ * ⚠ **THE TWO ACK COLUMNS SURVIVE, WITH NO READER AND NO WRITER** —
+ * `workspace_join_requests.pending_acknowledged_at` / `resolved_acknowledged_at`
+ * are still stamped `null` on insert above and are still what a reimplemented
+ * notice would key on. They hold a user's own "I have seen this", so they are
+ * DATA, not dead code (INVARIANTS §15). **Do not branch on them meanwhile**, and
+ * do not drop them without Samuel's word.
  */
-export async function listMyJoinNotices(userId: string): Promise<JoinRequestNotice[]> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("workspace_join_requests")
-    .select(
-      `${REQUEST_COLS}, workspace:workspaces!inner(id, name, slug, public_id)`
-    )
-    .eq("user_id", userId)
-    .order("requested_at", { ascending: true });
-  if (error) throw error;
-
-  type WsJoin = { id: string; name: string; slug: string; public_id: string };
-  type Row = {
-    id: string;
-    status: JoinRequestStatus;
-    pending_acknowledged_at: string | null;
-    resolved_acknowledged_at: string | null;
-    workspace: WsJoin | WsJoin[] | null;
-  };
-
-  const out: JoinRequestNotice[] = [];
-  for (const r of (data ?? []) as unknown as Row[]) {
-    const ws = Array.isArray(r.workspace) ? r.workspace[0] : r.workspace;
-    if (!ws) continue;
-    const base = {
-      id: r.id,
-      workspaceId: ws.id,
-      workspaceName: ws.name,
-      workspaceSlug: ws.slug,
-      workspacePublicId: ws.public_id,
-      status: r.status,
-    };
-    if (r.status === "pending" && r.pending_acknowledged_at === null) {
-      out.push({ ...base, kind: "pending" });
-    } else if (r.status !== "pending" && r.resolved_acknowledged_at === null) {
-      out.push({ ...base, kind: "resolved" });
-    }
-  }
-  return out;
-}
-
-/** Mark a notice as seen so its popup doesn't show again. */
-export async function acknowledgeJoinNotice(
-  userId: string,
-  requestId: string,
-  kind: "pending" | "resolved"
-): Promise<void> {
-  const db = supabaseAdmin();
-  const column =
-    kind === "pending" ? "pending_acknowledged_at" : "resolved_acknowledged_at";
-  const { error } = await db
-    .from("workspace_join_requests")
-    .update({ [column]: new Date().toISOString() })
-    .eq("id", requestId)
-    .eq("user_id", userId);
-  if (error) throw error;
-}

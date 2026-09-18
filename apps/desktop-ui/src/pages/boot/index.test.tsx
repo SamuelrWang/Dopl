@@ -242,7 +242,6 @@ describe("boot page", () => {
       if (path === "/api/workspaces") {
         return Promise.resolve(ok({ workspaces: [{ ...WORKSPACE, role: "owner" }] }));
       }
-      if (path === "/api/me/join-requests") return Promise.resolve(ok({ notices: [] }));
       if (path === "/api/onboarding/mcp-status") {
         return Promise.resolve(ok({ connected: true }));
       }

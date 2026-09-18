@@ -448,11 +448,13 @@ describe("what the page deliberately leaves out", () => {
     const imports = source
       .split("\n")
       .filter((line) => /^\s*import\b/.test(line) || /^\s*}\s*from\s+"/.test(line));
+    // ⚠ `@/features/tour` and `@/features/workspaces/components/join-request-notices`
+    // stood in this list and are gone with the modules themselves (R-49,
+    // 2026-09-17): a forbidden-import string naming a module that no longer
+    // exists asserts nothing and reads as if it did.
     for (const forbidden of [
       "@/shared/layout/app-shell",
-      "@/features/tour",
       "@/features/onboarding/components",
-      "@/features/workspaces/components/join-request-notices",
     ]) {
       expect(imports.join("\n")).not.toContain(forbidden);
     }

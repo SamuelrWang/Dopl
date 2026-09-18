@@ -274,7 +274,7 @@ join requests (`join-links.ts` L191). What is genuinely absent is narrower:
 
 ### B-4. Home lacks a **Settings page** → not a gap. §A-16/17; the modal already serves both.
 
-### B-5. Home lacks the **tour** and the **onboarding welcome popup** → §E-4.
+### B-5. Home lacks the **tour** and the **onboarding welcome popup** → 🔴 **SO DOES THE WORKSPACE, SINCE R-49 (2026-09-17): both are DELETED.** §E-4.
 
 ### B-6. Home lacks **`ConnectedAppsSection`** → small, real. `→HOME(a)`, one prop.
 
@@ -627,6 +627,10 @@ the tour second.
 
 **Recommendation: (a) until §E-6 is answered**, then revisit — a tour that names Skills and Chats is
 either wrong for home or becomes right for free.
+
+→ 🔴 **NEITHER — DELETED (Samuel's ruling R-49, 2026-09-17; wave 7).** The tour, the welcome popup,
+the join-request notices and the connect-agent banner are off disk, on the workspace as well as
+absent from /home. This row is closed; see INVARIANTS §15.
 
 ### E-5. Two Overviews, two overview-series endpoints. One product or two?
 

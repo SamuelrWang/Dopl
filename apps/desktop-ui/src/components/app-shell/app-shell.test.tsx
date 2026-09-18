@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -64,19 +64,16 @@ function mockApi() {
   );
 }
 
-/** Web-side reads. Overridden per test for the notice/banner cases. */
-let joinNotices: unknown[] = [];
-let mcpConnected = true;
-
+/**
+ * Web-side reads.
+ *
+ * 🔴 **`/api/me/join-requests`, ITS `/ack` AND `/api/onboarding/mcp-status` ARE
+ * NOT ANSWERED HERE (Samuel's ruling R-49, 2026-09-17)** — the shell no longer
+ * reads them, and the fall-through below REJECTS an unexpected path, so a
+ * re-mounted notice layer fails this file loudly instead of quietly polling.
+ */
 function mockBridge() {
   bridgeRequest.mockImplementation((path: string) => {
-    if (path === "/api/me/join-requests") {
-      return Promise.resolve(ok({ notices: joinNotices }));
-    }
-    if (path.startsWith("/api/me/join-requests/")) return Promise.resolve(ok({}));
-    if (path === "/api/onboarding/mcp-status") {
-      return Promise.resolve(ok({ connected: mcpConnected }));
-    }
     if (path === "/api/channels/consent") return Promise.resolve(ok({ requests: [] }));
     if (path.endsWith("/my-access")) {
       return Promise.resolve(ok({ defaultLevel: "edit", overrides: [] }));
@@ -118,8 +115,6 @@ function renderShell(path: string) {
 
 describe("app shell", () => {
   beforeEach(() => {
-    joinNotices = [];
-    mcpConnected = true;
     window.localStorage.clear();
     mockApi();
     mockBridge();
@@ -257,94 +252,35 @@ describe("app shell", () => {
     );
   });
 
-  // Terminal step of the join-approval loop: without this mount an approved
-  // requester is never told they're in.
-  it("shows an approved join notice, acks it over the bridge and routes in", async () => {
-    joinNotices = [
-      {
-        id: "jr-1",
-        workspaceName: "Globex",
-        workspaceSlug: "globex",
-        workspacePublicId: "zz99",
-        status: "approved",
-        kind: "resolved",
-      },
-    ];
-    const router = renderShell("/acme-ab12cd/overview");
-
-    fireEvent.click(await screen.findByRole("button", { name: "Go to workspace" }));
-
-    await waitFor(() =>
-      expect(bridgeRequest).toHaveBeenCalledWith(
-        "/api/me/join-requests/jr-1/ack",
-        expect.objectContaining({ method: "POST", body: { kind: "resolved" } })
-      )
-    );
-    await waitFor(() =>
-      expect(router.state.location.pathname).toBe("/globex-zz99")
-    );
-  });
-
-  it("renders no join notice when the queue is empty", async () => {
+  /**
+   * 🔒 **THE GUIDANCE LAYER IS DELETED, AND THE ABSENCE IS THE RULING**
+   * (Samuel, R-49, 2026-09-17): the tour, the join-request notices, the
+   * connect-agent banner and the welcome popup were all mounted here. Five
+   * cases stood in their place and went with them.
+   *
+   * ⚠ **THIS IS AN ABSENCE TEST — DELETING IT DELETES THE RULING** (04
+   * §F-5a). A wave that re-adds one of the four surfaces has to come through
+   * here, which is the point; the fix is Samuel's word, not a green edit.
+   */
+  it("mounts NO guidance layer — no tour, notice, banner or welcome popup", async () => {
+    // The welcome popup read this flag; onboarding no longer writes it, and
+    // setting it must now do nothing at all.
+    window.localStorage.setItem("dopl:welcome", "1");
     renderShell("/acme-ab12cd/overview");
     expect(await screen.findByText("page body")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(bridgeRequest).toHaveBeenCalledWith(
-        "/api/me/join-requests",
-        expect.anything()
-      )
-    );
+
+    expect(screen.queryByText("Welcome to Dopl!")).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Product tour" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Go to workspace" })).toBeNull();
-  });
-
-  // Banner appears only for a caller with NO active MCP token.
-  it("nudges an unconnected caller to connect their agent", async () => {
-    mcpConnected = false;
-    renderShell("/acme-ab12cd/overview");
-
-    expect(
-      await screen.findByText("Connect your AI agent to build out your workspace")
-    ).toBeInTheDocument();
-  });
-
-  it("hides the connect-agent nudge once the caller has an agent connected", async () => {
-    renderShell("/acme-ab12cd/overview");
-    expect(await screen.findByText("page body")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(bridgeRequest).toHaveBeenCalledWith(
-        "/api/onboarding/mcp-status",
-        expect.anything()
-      )
-    );
     expect(
       screen.queryByText("Connect your AI agent to build out your workspace")
     ).toBeNull();
-  });
 
-  // Onboarding writes `dopl:welcome` right before redirecting in.
-  it("shows the welcome popup after onboarding and starts the tour from it", async () => {
-    window.localStorage.setItem("dopl:welcome", "1");
-    const router = renderShell("/acme-ab12cd/overview");
-
-    expect(await screen.findByText("Welcome to Dopl!")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Walk me through" }));
-
-    // Tour mounted and listening: step 1 navigates to its section.
-    expect(
-      await screen.findByRole("dialog", { name: "Product tour" })
-    ).toBeInTheDocument();
-    await waitFor(() =>
-      expect(router.state.location.pathname).toBe("/acme-ab12cd/ontology")
-    );
-    // Dismissal clears the flag: one-shot.
-    expect(window.localStorage.getItem("dopl:welcome")).toBeNull();
-  });
-
-  it("stays silent when onboarding never set the welcome flag", async () => {
-    renderShell("/acme-ab12cd/overview");
-    expect(await screen.findByText("page body")).toBeInTheDocument();
-    expect(screen.queryByText("Welcome to Dopl!")).toBeNull();
-    expect(screen.queryByRole("dialog", { name: "Product tour" })).toBeNull();
+    // ⚠ AND NOTHING IS READ FOR THEM. `mockBridge` rejects an unexpected path,
+    // so a surviving poll would already have thrown — this states the rule the
+    // rejection enforces.
+    const asked = bridgeRequest.mock.calls.map((c: unknown[]) => c[0]);
+    expect(asked).not.toContain("/api/me/join-requests");
+    expect(asked).not.toContain("/api/onboarding/mcp-status");
   });
 });

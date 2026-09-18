@@ -2308,6 +2308,36 @@ recommendation in any spec; a spec that disagrees is the thing that is wrong.
     say "workspace" wherever they name a container, and the one projection R-32 was ruled to decide
     the addressing of (Wave 3's P30) is not built. The rule is implemented where an AGENT meets it.
 
+- 🔴 **THE GUIDANCE LAYER IS DELETED, PENDING A REIMPLEMENTATION (Samuel's ruling R-49,
+  2026-09-17).** *"Delete the guidance-banner code now, reimplement later."* Not mounted on /home,
+  not left on the workspace: **the Tour, the join-request notices, the connect-agent banner and the
+  welcome popup are off disk**, and a first-run experience is designed fresh when it is wanted.
+  ⚠ **THIS REMOVED A SHIPPED WORKSPACE AFFORDANCE**, not an absent home one — all four were live in
+  the desktop workspace shell. **Do not re-add one of the four on its own**; the ruling is about the
+  layer.
+  - **What went — re-derive with `git log --diff-filter=D`, never from this list:** the whole of
+    src/features/tour (the provider, the popover, its CSS, and the five tour steps keyed to
+    `NavSection`) · the join-request notices core in `src/features/workspaces/components/`, with
+    `GET /api/me/join-requests`, its `/ack` POST and `src/features/workspaces/server/join-links.ts`'s
+    `listMyJoinNotices` / `acknowledgeJoinNotice` / `JoinRequestNotice` · the connect-agent banner and
+    the welcome popup in `src/features/onboarding/components/`, with `buildBootstrapPrompt` and
+    `DOPL_CARD_TEMPLATE` out of `src/features/onboarding/bootstrap-prompt.ts`, and the `dopl:welcome`
+    write in `src/features/onboarding/components/onboarding-flow-core.tsx` that nothing reads any
+    more · every mount in `apps/desktop-ui/src/components/app-shell/app-shell.tsx`.
+  - **What SURVIVES, and why each one is not dead code.**
+    `src/features/onboarding/hooks/use-mcp-connection-poll.ts` — `OnboardingFlowCore` still mounts it.
+    `src/features/onboarding/bootstrap-prompt.ts › buildConnectPrompt` — onboarding step 2.
+    `src/shared/layout/app-shell/app-sidebar-core.tsx › NavSection` — the sidebar's own union, which
+    the tour merely keyed off.
+  - 🔒 **THE TWO ACK COLUMNS ARE DATA AND STAY: `workspace_join_requests.pending_acknowledged_at`
+    and `.resolved_acknowledged_at`.** They are a user's own "I have seen this", still stamped `null`
+    on insert, with **no reader and no writer** until a notice is rebuilt. ⚠ **Do not branch on them
+    meanwhile, and do not drop them without Samuel's word** — same posture as `channels.archived_at`
+    above. The per-device `dopl:welcome` flag is NOT in this class and went with its reader.
+  - **The absence is pinned** by `apps/desktop-ui/src/components/app-shell/app-shell.test.tsx ›
+    mounts NO guidance layer`, whose bridge stub REJECTS an unexpected path — so a re-mounted poll
+    fails loudly rather than returning quietly. Deleting that test deletes the ruling.
+
 - 🔒 **THE SETTINGS PAGE IS FROZEN (2026-09-17), pending Samuel's own overhaul.** No restyle, no
   header migration, no section-language sweep, no dialog conformance pass touches `/settings` or the
   body it shares with the settings modal. ⚠ **It is shared** — `WorkspaceSectionBody` is mounted by

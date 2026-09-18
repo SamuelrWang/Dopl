@@ -34,7 +34,7 @@ import styles from "./billing-page.module.css";
  * Bare visit → Usage; `?billing=` (402 envelope, checkout/portal return) →
  * Billing.
  *
- * ⚠ Deliberately NO `AppShell` (rail, sidebar, switcher, tour, join-notices,
+ * ⚠ Deliberately NO `AppShell` (rail, sidebar, switcher,
  * graph engine) — importing the app layout re-tethers this KEEP page to the
  * tree Stage D deletes. No profile editor, members pane, or workspace icon
  * uploader (GAP-21) either.

@@ -133,7 +133,10 @@ describe("onboarding page", () => {
     const complete = calls().find((c) => c.path === "/api/onboarding/complete");
     expect(complete?.opts.method).toBe("POST");
     expect(complete?.opts.body).toMatchObject({ mcpConnected: true, name: "Acme" });
-    expect(window.localStorage.getItem("dopl:welcome")).toBe("1");
+    // 🔴 `dopl:welcome` WAS WRITTEN HERE AND IS NOT ANY MORE (R-49,
+    // 2026-09-17): the welcome popup that read it is deleted, so the write was
+    // dead. The absence is asserted, not merely un-asserted.
+    expect(window.localStorage.getItem("dopl:welcome")).toBeNull();
     expect(fetch).not.toHaveBeenCalled();
   });
 

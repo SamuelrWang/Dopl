@@ -106,7 +106,7 @@ function getStartedPath(ws: { slug: string; publicId: string }): string {
  *
  * Deliberately no "we'll let you know": nothing web-side watches for approval;
  * the approved requester's notice is the DESKTOP app's
- * (`JoinRequestNoticesCore`, mounted in the SPA shell).
+ * (deleted with the guidance layer — Samuel's ruling R-49, 2026-09-17).
  */
 export function JoinPendingPanel({ heading }: { heading: string }) {
   return (

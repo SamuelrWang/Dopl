@@ -3,7 +3,8 @@
  * A CADENCE SHORTER THAN THE REQUEST TIMEOUT, WITH NO IN-FLIGHT GUARD, IS AN AMPLIFIER
  * (2026-08-30, the desktop abort-churn incident).
  *
- * WHAT THIS POLL DOES AND WHERE IT RUNS. `ConnectAgentBanner` mounts it on EVERY
+ * WHAT THIS POLL DOES AND WHERE IT RUNS. ⚠ `ConnectAgentBanner` MOUNTED IT AND IS
+ * DELETED (R-49, 2026-09-17); `OnboardingFlowCore` is the one live mount. It ran on EVERY
  * workspace page, and — this is the part that matters — an ERRORED status query counts as
  * "loaded" (`fail-open: failed status fetch still shows banner; live poll retries`), so
  * the incident state is precisely the state that ENABLES the poll. On the desktop it

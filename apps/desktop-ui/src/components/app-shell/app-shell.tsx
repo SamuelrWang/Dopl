@@ -11,10 +11,6 @@ import type { WorkspaceLike } from "@/shared/layout/app-shell/workspace-types";
 import styles from "@/shared/layout/app-shell/app-shell.module.css";
 import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
 import { CreateWorkspaceDialogCore } from "@/features/workspaces/components/create-workspace-dialog-core";
-import { JoinRequestNoticesCore } from "@/features/workspaces/components/join-request-notices-core";
-import { ConnectAgentBanner } from "@/features/onboarding/components/connect-agent-banner";
-import { WelcomePopup } from "@/features/onboarding/components/welcome-popup";
-import { TourProviderCore } from "@/features/tour/components/tour-provider-core";
 import { workspaceSegment as canonicalSegment } from "@/features/workspaces/url";
 import { isStandardWorkspace } from "@/features/workspaces/types";
 import type { ChannelListPayload } from "@/features/channels/types";
@@ -26,10 +22,6 @@ import { ShellChromeSkeleton } from "#/components/skeletons/shell-skeleton";
 import { sectionSkeleton } from "#/components/skeletons/section-skeleton";
 import { SignedOutScreen } from "#/pages/boot/signed-out-screen";
 import { SettingsModal, type SettingsSection } from "#/components/settings-modal";
-// ⚠ `?inline` (data URI) required: packaged renderer is a `file://` document
-// under `img-src 'self' data: blob:`, so an absolute `/favicons/...` src
-// resolves to the filesystem root and never loads.
-import doplMark from "#/assets/dopl-mark.png?inline";
 import { AccountRail, HOME_PATH } from "./account-rail";
 import { RouterLink } from "./router-link";
 import { useWorkspaceRoute } from "./use-workspace-route";
@@ -42,8 +34,11 @@ import { useWorkspaceRoute } from "./use-workspace-route";
  * injected; the web `AppShell` itself binds `next/navigation` + `useAuthUser`
  * and is not reusable.
  *
- * Also mounts the web layout's guidance + notice layer in its order:
- * TourProviderCore, JoinRequestNoticesCore, ConnectAgentBanner, WelcomePopup.
+ * 🔴 **IT MOUNTS NO GUIDANCE LAYER (Samuel's ruling R-49, 2026-09-17).** The
+ * tour, the join-request notices, the connect-agent banner and the welcome
+ * popup were mounted here and are DELETED, not unmounted — a first-run
+ * experience is designed fresh when it is wanted. Do not re-add one of the four
+ * on its own.
  *
  * ⚠ The `isPending` gate below blocks `<Outlet/>`, i.e. every page — anything
  * serial in front of it is serial in front of the whole app. Affordable only
@@ -286,43 +281,21 @@ export function AppShellLayout() {
                 }
               />
             )}
-            {/* Order matches the web layout: tour wraps the routed page. */}
-            <TourProviderCore
-              workspaceSegment={segment}
-              onNavigate={(path) => navigate(path)}
-            >
-              {/* ⚠ Required: without it useMyAccessContext no-ops and every
-                  teams-mode gate resolves to a FALSE edit affordance. */}
-              <MyAccessProvider workspaceSegment={segment}>
-                {/* ⚠ THE CARD WRAPS THE OUTLET AND NOTHING ELSE. The three
-                    notice/guidance mounts below stay OUTSIDE it: they are
-                    overlays over the whole shell, and `.pageCard` clips
-                    (`overflow: hidden`) so a banner inside it would be cut off
-                    at the card's rounded edge instead of floating over the
-                    page. */}
-                <div className={styles.pageCard}>
-                  {/* The router owns the tree, so the token says WHEN to fade,
-                      not WHAT to hold (INVARIANTS §4A). */}
-                  <Crossfade token={pageToken} className="flex min-h-0 flex-1 flex-col">
-                    {() => <Outlet />}
-                  </Crossfade>
-                </div>
-                {/* Terminal step of the join-approval loop (GAP-7). */}
-                <JoinRequestNoticesCore onNavigate={(path) => navigate(path)} />
-                <ConnectAgentBanner />
-                <WelcomePopup
-                  brand={
-                    // No Next runtime in this SPA, so next/image is forbidden.
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={doplMark}
-                      alt="Dopl"
-                      className="auth-logo-3d h-11 w-11 rounded-[8px]"
-                    />
-                  }
-                />
-              </MyAccessProvider>
-            </TourProviderCore>
+            {/* ⚠ Required: without it useMyAccessContext no-ops and every
+                teams-mode gate resolves to a FALSE edit affordance. */}
+            <MyAccessProvider workspaceSegment={segment}>
+              {/* ⚠ THE CARD WRAPS THE OUTLET AND NOTHING ELSE, and since R-49
+                  there is nothing else: the three notice/guidance mounts that
+                  sat OUTSIDE it — they were overlays and `.pageCard` clips —
+                  are deleted with the tour that wrapped all of this. */}
+              <div className={styles.pageCard}>
+                {/* The router owns the tree, so the token says WHEN to fade,
+                    not WHAT to hold (INVARIANTS §4A). */}
+                <Crossfade token={pageToken} className="flex min-h-0 flex-1 flex-col">
+                  {() => <Outlet />}
+                </Crossfade>
+              </div>
+            </MyAccessProvider>
           </div>
         </div>
       </div>
