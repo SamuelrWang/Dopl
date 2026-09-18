@@ -33,6 +33,24 @@ function snippet(raw: string): string {
 }
 
 /**
+ * 🔒 **THE HANDLE A FOLLOW-UP READ ACTUALLY TAKES** (2026-09-18). An `entryId`
+ * is not an address `dopl_kb(op="read_file")` accepts, so a hit used to end one
+ * lookup short of useful. ⚠ §8 STALE-CACHE, SPELLED INLINE — `baseSlug` and
+ * `path` are absent from an older server's payload, and the id stays on the row
+ * either way.
+ */
+function entryAddress(h: {
+  entryId: string;
+  baseSlug?: string;
+  path?: string;
+}): string {
+  const where = h.path
+    ? `${h.baseSlug ? `base \`${h.baseSlug}\` · ` : ""}path ${inlineOr(h.path, "`(unreadable path)`")} · `
+    : "";
+  return `${where}entry id: \`${h.entryId}\``;
+}
+
+/**
  * ⚠ THE GROUP COUNT IS A CONSTANT, NOT A LITERAL IN THREE PLACES. It is the
  * DENOMINATOR `partialRead`'s notice reports against ("2 of 4 groups could not
  * be read"), and it must move with the reads below and with the description's
@@ -126,10 +144,21 @@ function scopeNote(limit: number, notice: string, terse: boolean): string {
   // PARTIAL READ notice is different in kind — it says a group did not answer
   // on THIS call, which no description can know — so it survives at either
   // level. See `response-size.ts`.
+  // 🔒 **THE RECALL CAP, DISCLOSED ON THIS SURFACE TOO** (S15/S49, 2026-09-18).
+  // `dopl_kb`'s own search has said it for months (`knowledge-ops-read.ts ›
+  // SEARCH_SCOPE_NOTE`) and this one never did, so an agent reading "2 matches"
+  // here read a recall-capped, visibility-filtered SAMPLE as a census. It rides
+  // the FOOTER rather than the description because `dopl_search` is held to
+  // `READ_DESCRIPTION_MAX_CHARS` (450), the tightest budget on the surface, and
+  // a per-call footer is not in the served total at all.
+  // ⚠ THE CONCISE FORM CARRIES IT TOO, in one clause: `concise` drops what the
+  // DESCRIPTION already says, and the description cannot afford to say this.
   if (terse) {
-    return notice ? `_${notice}Scope: max ${limit} per group. See this tool's description._` : `_Scope: max ${limit} per group. See this tool's description._`;
+    return notice
+      ? `_${notice}Scope: max ${limit} per group — a recall-capped sample, not a census. See this tool's description._`
+      : `_Scope: max ${limit} per group — a recall-capped sample, not a census. See this tool's description._`;
   }
-  return `_${notice}Scope: max ${limit} per group, in ONE workspace — this one, with no cross-workspace fan-out. Only knowledge entries are matched on their BODIES; skills, ontology objects and agent templates on names and short metadata only, so a term living inside a SKILL.md or inside a template's instructions is not findable here. Drafts are excluded from Skills. Agent templates are the ones you can SEE, across both shelves. The CHAT ARCHIVE is not searched at all (dopl_chats(op="list", query=...)). A group whose read failed still shows "No matches" and is named with reason=partial_read opening this line; no group here is proof of absence._`;
+  return `_${notice}Scope: max ${limit} per group, in ONE workspace — this one, with no cross-workspace fan-out. Only knowledge entries are matched on their BODIES; skills, ontology objects and agent templates on names and short metadata only, so a term living inside a SKILL.md or inside a template's instructions is not findable here. Drafts are excluded from Skills. Agent templates are the ones you can SEE, across both shelves. The CHAT ARCHIVE is not searched at all (dopl_chats(op="list", query=...)). Knowledge entries are a ranked SAMPLE: candidates are capped before ranking, distant matches are dropped, and hits in bases you cannot read are removed after ranking — so fewer hits than \`limit\` does not mean there are no others. A group whose read failed still shows "No matches" and is named with reason=partial_read opening this line; no group here is proof of absence._`;
 }
 
 /**
@@ -237,7 +266,7 @@ export function registerSearchTool(
       if (entryHits.length === 0) lines.push("_No matches._");
       for (const h of entryHits.slice(0, limit)) {
         lines.push(
-          `- ${inlineOr(h.title, NO_NAME)} (entry id: \`${h.entryId}\`) — ${snippet(h.snippet)}`,
+          `- ${inlineOr(h.title, NO_NAME)} (${entryAddress(h)}) — ${snippet(h.snippet)}`,
         );
       }
 

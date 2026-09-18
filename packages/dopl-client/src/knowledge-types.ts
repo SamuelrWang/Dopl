@@ -72,6 +72,12 @@ export interface KnowledgeTreeSnapshot {
   entryTotal?: number;
   /** Opaque cursor for next entry page; null = last page. */
   nextEntryCursor?: string | null;
+  /**
+   * Heading names per entry id (`## Errors`), present only when `headings`
+   * was asked for. ⚠ `?? EMPTY` at every reader (INVARIANTS §8): an older
+   * server sends no such key and this response is cached.
+   */
+  entryHeadings?: Record<string, string[]>;
 }
 
 export interface KnowledgeDirListing {
@@ -366,4 +372,11 @@ export interface KnowledgeSearchHit {
   snippet: string;
   rank: number;
   updatedAt: string;
+  /**
+   * The base's slug and the entry's `/`-path — what a follow-up
+   * `read_file(base, path)` takes. ⚠ `?? EMPTY` at every reader (INVARIANTS
+   * §8): an older server sends neither key and this response is cached.
+   */
+  baseSlug?: string;
+  path?: string;
 }

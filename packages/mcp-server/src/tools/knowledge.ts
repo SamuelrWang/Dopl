@@ -8,7 +8,8 @@
  * Thin registrar: one tool schema + op routing, delegating to
  *   - `knowledge-shared.ts`    — base resolution + error/validation mappers
  *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/read_file/search
- *   - `knowledge-ops-write.ts` — create/update/move/write/grant ops
+ *   - `knowledge-ops-write.ts` — folder + entry writes, and their authoring rules
+ *   - `knowledge-ops-base-writes.ts` — create/update/publish/grant a BASE
  */
 
 import { z } from "zod";
@@ -28,15 +29,14 @@ import {
   opSearch,
 } from "./knowledge-ops-read";
 import { opPin } from "./knowledge-ops-pin";
+import { opCreateFolder, opMove, opWriteFile } from "./knowledge-ops-write";
+// ⚠ Base-level writes split out for the 500-line cap (2026-09-18).
 import {
   opCreateBase,
-  opCreateFolder,
   opGrantBase,
-  opMove,
   opSetVisibility,
   opUpdateBase,
-  opWriteFile,
-} from "./knowledge-ops-write";
+} from "./knowledge-ops-base-writes";
 import {
   GRANT_LEVEL_ARG_DESCRIPTION,
   GRANT_LEVEL_VALUES,

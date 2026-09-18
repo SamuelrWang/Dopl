@@ -26,6 +26,16 @@ export interface SearchHit {
   snippet: string;
   rank: number;
   updatedAt: string;
+  /**
+   * 🔒 **THE TWO HALVES OF THE ADDRESS A FOLLOW-UP READ NEEDS** (Wave 4,
+   * 2026-09-18). A hit used to carry an entry id and nothing that
+   * `read_file(base, path)` takes, so the agent that found the right entry
+   * still had to hunt for where it lived. Both are derived from rows this
+   * function already read — no extra query per hit.
+   */
+  baseSlug?: string;
+  /** `folder/sub/Title` — what `op="read_file"` takes as `path`. */
+  path?: string;
 }
 
 export interface SearchOpts {
@@ -106,16 +116,54 @@ export async function searchKnowledgeEntries(
   const { data, error } = result;
   if (error) throw error;
 
-  return ((data ?? []) as RpcRow[])
-    .filter((row) => readableIds.has(row.knowledge_base_id))
-    .map((row) => ({
-    entryId: row.entry_id,
-    knowledgeBaseId: row.knowledge_base_id,
-    folderId: row.folder_id,
-    title: row.title,
-    excerpt: row.excerpt,
-    snippet: row.snippet,
-    rank: row.rank,
-    updatedAt: row.updated_at,
-  }));
+  const rows = ((data ?? []) as RpcRow[]).filter((row) =>
+    readableIds.has(row.knowledge_base_id)
+  );
+
+  // 🔒 **THE ADDRESS, BUILT ONCE PER BASE THAT HAS A HIT** — never per hit. The
+  // folder list is one query for a whole base and the result set is capped at
+  // 100, so the join is bounded by the number of DISTINCT bases in it.
+  const slugOf = new Map(readable.map((b) => [b.id, b.slug]));
+  const hitBaseIds = [...new Set(rows.map((r) => r.knowledge_base_id))];
+  const folderPaths = new Map<string, Map<string, string>>();
+  await Promise.all(
+    hitBaseIds.map(async (id) => {
+      const folders = await repo.listFoldersForBase(id, false);
+      const byId = new Map(folders.map((f) => [f.id, f]));
+      const paths = new Map<string, string>();
+      for (const f of folders) {
+        const segments: string[] = [];
+        // ⚠ BOUNDED BY THE MAP, not by a depth constant: a parent chain that
+        // loops (or points outside this base) stops rather than spinning.
+        let cursor: typeof f | undefined = f;
+        const seen = new Set<string>();
+        while (cursor && !seen.has(cursor.id)) {
+          seen.add(cursor.id);
+          segments.unshift(cursor.name);
+          cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+        }
+        paths.set(f.id, segments.join("/"));
+      }
+      folderPaths.set(id, paths);
+    })
+  );
+
+  return rows.map((row) => {
+    const folder = row.folder_id
+      ? folderPaths.get(row.knowledge_base_id)?.get(row.folder_id)
+      : undefined;
+    const slug = slugOf.get(row.knowledge_base_id);
+    return {
+      entryId: row.entry_id,
+      knowledgeBaseId: row.knowledge_base_id,
+      folderId: row.folder_id,
+      title: row.title,
+      excerpt: row.excerpt,
+      snippet: row.snippet,
+      rank: row.rank,
+      updatedAt: row.updated_at,
+      ...(slug ? { baseSlug: slug } : {}),
+      path: folder ? `${folder}/${row.title}` : row.title,
+    };
+  });
 }
