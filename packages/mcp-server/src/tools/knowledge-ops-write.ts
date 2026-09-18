@@ -22,6 +22,10 @@ import {
 } from "./confirm-token";
 import type { WorkspaceDirectory } from "../workspace-directory";
 import {
+  homeChannelRowNotShared,
+  resolveChannelShareTarget,
+} from "./container-destination";
+import {
   KB_SECTION_NUDGE_CHARS,
   outlineFooter,
   unsectionedNudge,
@@ -112,7 +116,15 @@ export async function opCreateBase(
     visibility?: "public" | "private";
     confirm_token?: string;
   },
+  /** ⚠ OPTIONAL — absent means "not known": the create goes out unshared and
+   *  the SERVER refuses it (`container-destination.ts`). */
+  directory?: WorkspaceDirectory,
 ): Promise<ToolResponse> {
+  // 🔒 **DESTINATION 2, IN ONE SERVER CALL** (Samuel, 2026-09-18; the model is
+  // `container-destination.ts`'s header). A home channel holds only what is
+  // SHARED into it. ⚠ **THE BASE STAYS `private` AND THE GRANT IS THE AUDIENCE**,
+  // which is why this does not touch `visibility` as the template lane does.
+  const shareToChannelId = await resolveChannelShareTarget(client, directory);
   // 🔒 **ALWAYS SENT, NEVER LEFT TO THE SERVER'S DEFAULT** (2026-09-02) — the same
   // rule and the same reason as `agent-ops-write.ts › opCreate`, which states it
   // in full: the server's default is credential-dependent, this process cannot
@@ -134,6 +146,8 @@ export async function opCreateBase(
         name: input.name,
         description: input.description ?? null,
         visibility,
+        // ⚠ ON THE DIGEST: a token is bound to what LANDS, grant included.
+        shareToChannelId: shareToChannelId ?? null,
       },
     },
     {
@@ -163,6 +177,9 @@ export async function opCreateBase(
             name: input.name,
             description: input.description,
             visibility,
+            // ⚠ PART OF THE CONFIRMED BODY: without it a dry run previews an
+            // act the gate forbids (2026-09-18).
+            shareToChannelId,
             acknowledgeShared: true,
           });
         } catch (e) {
@@ -188,6 +205,8 @@ export async function opCreateBase(
       name: input.name,
       description: input.description,
       visibility,
+      // 🔒 DESTINATION 2, ATOMIC — the base rolls back if the grant fails.
+      shareToChannelId,
       // 🔒 G16 — THE TOKEN, SPENT, BECOMES THE SERVER'S PRECONDITION. Only ever
       // `true`, and only from a token this call actually consumed. See
       // `confirm-token.ts › ConfirmVerdict`.
@@ -203,14 +222,19 @@ export async function opCreateBase(
     // string over a row it could never see again.
     const ceiling = agentCreateForbidden(e);
     if (ceiling) return err(ceiling);
+    // 🔒 The destination fence (2026-09-18): the probe fails open, so this is
+    const unshared = homeChannelRowNotShared(e); // the SERVER refusing.
+    if (unshared) return unshared;
     // 🔒 G16 — only ever a RACE here: the gate above already previewed and spent
     // a token, so reaching this means the room gained a member in between.
     const unacknowledged = containerPublishUnacknowledged(e, RECONFIRM_REMEDY);
     if (unacknowledged) return unacknowledged;
     throw e;
   }
-  const visNote =
-    base.visibility === "private"
+  // ⚠ THE GRANT IS THE AUDIENCE (2026-09-18): a shared base is stored `private`.
+  const visNote = shareToChannelId
+    ? "Shared in this channel — everyone here can read it."
+    : base.visibility === "private"
       ? "Private to you — only you and your agent can see it."
       : "Visible to the whole workspace.";
   return ok(

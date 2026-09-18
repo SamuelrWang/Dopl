@@ -151,6 +151,8 @@ function templateNotFound(ref, elsewhere) {
         ].join("\n"));
     }
     return (0, respond_1.err)([
+        // ⚠ THE ID CLAUSE RIDES `TENANCY_RULE` BELOW (2026-09-18): this sentence
+        // is true of a NAME and was never true of a UUID.
         `No agent was requested — no agent template ${(0, channel_shared_1.inlineOr)(ref, narration_1.NO_NAME)} resolves in THIS CHANNEL'S container, and **nothing was filed**. Either there is no such template, or it is not shared with you; those are ONE answer here on purpose, so ids cannot be probed.`,
         `⚠ CHECK THE TENANCY BEFORE THE SPELLING. ${channel_doctrine_1.TENANCY_RULE} If it really should resolve here, the NAME is the other suspect — matching is exact, not fuzzy. ${channel_doctrine_1.TENANCY_FIX}`,
     ].join("\n"));

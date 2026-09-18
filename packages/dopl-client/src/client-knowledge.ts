@@ -34,7 +34,7 @@ export class KnowledgeMethods extends WorkspaceMethods {
   /** The rows PLUS the shelf sibling key. ⚠ Same single request as
    *  {@link listKbBases}; read `homeScopedBaseIds` as `?? []` (INVARIANTS §8). */
   listKbBasesPayload(
-    opts: { shelf?: KbShelf } = {}
+    opts: { shelf?: KbShelf; channelId?: string } = {}
   ): Promise<KnowledgeBaseListPayload> {
     return kb.listKbBasesPayload(this.transport, opts);
   }

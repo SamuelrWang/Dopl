@@ -110,7 +110,7 @@ export { DESCRIPTION_MAX_CHARS } from "./tool-style";
  * ⚠ It is ~250 characters shorter and teaches the same three things. A FOURTH
  * fact arriving here is the drift to watch for; the wording is not.
  */
-export const HOME_CHANNEL_ADDRESSING = `A HOME CHANNEL IS NOT A WORKSPACE DM: it lives in its own hidden container, so every op needs \`container=<slug or id>\` ALONGSIDE \`channel=\` — a bare \`channel=\` finds none, and they are absent from the room list. That container is ALSO the tenancy every other tool reads, so a template or base you use there must LIVE there.`;
+export const HOME_CHANNEL_ADDRESSING = `A HOME CHANNEL IS NOT A WORKSPACE DM: it lives in its own hidden container, so every op needs \`container=<slug or id>\` ALONGSIDE \`channel=\` — a bare \`channel=\` finds none, and they are absent from the room list. A Home template or base works here: address it by ID — a NAME resolves only in the container named.`;
 
 export const CHANNEL_DESCRIPTION = composeDescription({
   // ⚠ THE DENIAL IS IN THE FIRST SENTENCE because a truncating client keeps only

@@ -46,6 +46,7 @@ const respond_js_1 = require("./respond.js");
 const confirm_token_js_1 = require("./confirm-token.js");
 const agent_shared_js_1 = require("./agent-shared.js");
 const channel_shared_js_1 = require("./channel-shared.js");
+const container_destination_js_1 = require("./container-destination.js");
 /**
  * THE ONE TRANSLATION between the agent-facing shape (`{base, folder?, entry?}`)
  * and the wire's discriminated union. ⚠ `folder` WINS over `entry` if a caller
@@ -91,11 +92,41 @@ function mapWriteError(e) {
     const unacknowledged = (0, confirm_token_js_1.containerPublishUnacknowledged)(e, confirm_token_js_1.RECONFIRM_REMEDY);
     if (unacknowledged)
         return unacknowledged;
-    return ((0, agent_shared_js_1.sharedCredentialPrivateDenied)(e) ??
+    return (
+    // 🔒 The home-channel destination fence (2026-09-18) — reachable on BOTH
+    // verbs, which is why it is mapped here rather than inside `opCreate`: the
+    // update path can move a row to `private` inside a channel too.
+    (0, container_destination_js_1.homeChannelRowNotShared)(e) ??
+        (0, agent_shared_js_1.sharedCredentialPrivateDenied)(e) ??
         (0, agent_shared_js_1.knowledgeBaseNotAttachable)(e) ??
         (0, agent_shared_js_1.templateWriteDenied)(e));
 }
-async function opCreate(client, callerUserId, input) {
+/**
+ * 🔒 **THE TWO DESTINATIONS, ON THE TEMPLATE LANE** (Samuel's ruling
+ * 2026-09-18) — see `container-destination.ts` for the model.
+ *
+ * Inside a home channel the ONLY audience that exists is the channel itself, so
+ * `visibility` defaults to `"workspace"` there and an explicit `"private"` is
+ * refused before the round trip. Everywhere else the default is `"private"`,
+ * unchanged.
+ *
+ * ⚠ **THE REFUSAL IS THE SERVER'S AND THIS IS THE SENTENCE** — `assertHomeChannelRowIsShared`
+ * 400s the same write, so a caller that reaches the route directly gets the same
+ * answer. What this buys is that the COMMON call — `op="create"` with no
+ * `visibility`, into a channel — lands where the operator meant it to instead of
+ * being refused for a value the agent never chose.
+ */
+function homeChannelVisibility(requested) {
+    if (requested === "private") {
+        return (0, respond_js_1.err)(`Nothing was created. A home channel holds only what is shared into it, so an agent template cannot be private there. Create it with visibility="workspace" to share it with everyone in this channel, or pass container="home" to keep it to yourself in your home space.`);
+    }
+    return "workspace";
+}
+async function opCreate(client, callerUserId, input, 
+/** ⚠ OPTIONAL — see `container-destination.ts ›
+ *  resolveHomeChannelContainer`: absent means "not known", which degrades to
+ *  the pre-2026-09-18 behaviour and leaves the refusal with the server. */
+directory) {
     // 🔒 **VISIBILITY IS ALWAYS SENT, NEVER LEFT TO THE SERVER'S DEFAULT**
     // (2026-09-02).
     //
@@ -110,7 +141,17 @@ async function opCreate(client, callerUserId, input) {
     // ⚠ Sending it makes the wire match what the tool's own description promises
     // ("default 'private'"), so the branch cannot fire at all; a shared credential
     // then gets its clean, named 403 instead of an unanswerable 400.
-    const visibility = input.visibility ?? "private";
+    //
+    // 🔒 **AND SINCE 2026-09-18 THE DEFAULT IS THE DESTINATION'S, NOT A CONSTANT.**
+    // A home channel has one audience — the channel — so `"private"` there names
+    // the destination Samuel deleted. See {@link homeChannelVisibility}.
+    const inHomeChannel = await (0, container_destination_js_1.resolveHomeChannelContainer)(client, directory);
+    const chosen = inHomeChannel
+        ? homeChannelVisibility(input.visibility)
+        : (input.visibility ?? "private");
+    if (typeof chosen !== "string")
+        return chosen;
+    const visibility = chosen;
     const verdict = await (0, confirm_token_js_1.confirmGate)(client, {
         tool: "dopl_agent",
         op: "create",
@@ -159,9 +200,16 @@ async function opCreate(client, callerUserId, input) {
     // ⚠ TWO ARMS, because `create` sends the two-arm enum and nothing else: the
     // server's own default for an omitted `visibility` is `private`, so this
     // response cannot describe a row at a visibility this surface never offered.
+    // ⚠ **THREE ARMS SINCE 2026-09-18, AND THE THIRD IS A DIFFERENT SENTENCE**:
+    // inside a home channel `workspace` means "the other people in this
+    // relationship", never "everyone in your company" — the same split
+    // `src/features/agent-templates/lib/visibility.ts › SECTIONS_CONTAINER` makes,
+    // and its heading is the wording reused here.
     const audience = template.visibility === "private"
         ? "Private to you — only you and your own agents can see it."
-        : "Shared with everyone in this workspace — every member can list it and launch it.";
+        : inHomeChannel
+            ? "Shared in this channel — everyone here can list it and launch it."
+            : "Shared with everyone in this workspace — every member can list it and launch it.";
     return (0, respond_js_1.ok)([
         `Created agent template ${(0, narration_js_1.inlineOr)(template.name, narration_js_1.NO_NAME)} (id: \`${template.id}\`). ${audience}`,
         `Launch it into a channel with dopl_channel(op="manage", action="launch", channel=…, template="${template.id}") — which ASKS the operator's machine and does not start anything by itself.`,

@@ -15,6 +15,7 @@ export declare class KnowledgeMethods extends WorkspaceMethods {
      *  {@link listKbBases}; read `homeScopedBaseIds` as `?? []` (INVARIANTS §8). */
     listKbBasesPayload(opts?: {
         shelf?: KbShelf;
+        channelId?: string;
     }): Promise<KnowledgeBaseListPayload>;
     getKbBase(baseId: string): Promise<KnowledgeBase>;
     getKbTree(baseId: string, opts?: {

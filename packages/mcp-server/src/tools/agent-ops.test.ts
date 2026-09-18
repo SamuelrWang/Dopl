@@ -332,12 +332,27 @@ describe("the three-answer resolve rule", () => {
   it("RESOLVED — a uuid, and NEVER falling back to a name lookup on a miss", async () => {
     // ⚠ A fallback would make no-such-id and no-such-name answer through each
     // other, which is exactly what the id/name split exists to prevent.
+    // 🔒 **AND THE ID DOOR IS ASKED FIRST (2026-09-18, the F-470 port) — its own
+    // suite is `agent-id-door.test.ts`.** A 404 from it, and only a 404, is what
+    // makes this a miss; 404-never-403 is preserved and the sentence is unchanged.
+    const getAgentTemplate = vi.fn(async () => {
+      throw Object.assign(new Error("HTTP 404"), {
+        status: 404,
+        code: "AGENT_TEMPLATE_NOT_FOUND",
+      });
+    });
     const text = textOf(
       await opGet(
-        stub({ listAgentTemplates: vi.fn(async () => [template()]) }) as DoplClient,
+        stub({
+          listAgentTemplates: vi.fn(async () => [template()]),
+          getAgentTemplate,
+        }) as DoplClient,
         "99999999-9999-4999-8999-999999999999",
         ME,
       ),
+    );
+    expect(getAgentTemplate).toHaveBeenCalledWith(
+      "99999999-9999-4999-8999-999999999999",
     );
     expect(text).toContain("resolves for you");
     expect(text).toContain("nothing was read or written");

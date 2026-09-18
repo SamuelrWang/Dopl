@@ -31,8 +31,20 @@
  * from the description side; do not give it one.
  */
 
+/**
+ * 🔒 **IT NAMED THE ID PATH AND THE ID PATH HAD STOPPED OBEYING IT (fixed
+ * 2026-09-18).** The sentence read *"a template resolves ONLY in the container
+ * the channel lives in … so one in your personal container … does not resolve
+ * there however visible it is to you"*, and ruling #18 (B2, 2026-09-02) made a
+ * UUID follow its own tenancy through `read-resource.ts › readResourceById` —
+ * "a personal template launches anywhere its owner is",
+ * `src/features/agent-templates/server/service-resolve-ref.ts`'s own words. So
+ * for sixteen days this refusal told an agent that its Home template could not
+ * launch here, at exactly the moment it had passed an id that would have.
+ * **It is the NAME path the rule is about**, and it now says so.
+ */
 export const TENANCY_RULE =
-  "A template resolves ONLY in the container the channel lives in — and a home channel IS its own container, so one in your personal container or in a standard workspace does not resolve there however visible it is to you.";
+  "A NAME resolves only in the container the channel lives in, and a home channel IS its own container — so a template named by NAME from your home space or a workspace does not resolve here. Its ID does: an id resolves wherever the row lives.";
 /**
  * ⚠ **IT NAMES THE GRANT, NOT THE COPY** (fixed 2026-09-02 in review). This
  * sentence read `dopl_agent op="copy", passing to_workspace` for as long as
@@ -46,7 +58,7 @@ export const TENANCY_RULE =
  * this file directly for that reason.
  */
 export const TENANCY_FIX =
-  'Lend it into this channel\'s container (dopl_agent op="grant", scope="container", to=<that container>) or create it there — or launch without a template.';
+  'Re-issue with its ID, which resolves wherever the row lives (dopl_agent lists them); lend it into this channel\'s container (dopl_agent op="grant", scope="container", to=<that container>) or create it there — or launch without a template.';
 
 /** The MCP resource URI this text is published at. ⚠ One spelling, imported. */
 export const DOCTRINE_URI = "dopl://doctrine/channels";
