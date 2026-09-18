@@ -7,12 +7,16 @@ import type {
   WorkspaceOverviewSeries,
   WorkspaceSeriesRange,
 } from "@/features/workspaces/types";
-import { EMPTY_SERIES_DAYS } from "@/features/workspaces/types";
+import {
+  EMPTY_OVERVIEW_AGENTS,
+  EMPTY_SERIES_DAYS,
+} from "@/features/workspaces/types";
 import type { AccountStatus } from "@/features/channels/types";
 import { useWorkspaceRoute } from "#/components/app-shell";
 import { PageError } from "#/components/page-states";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { ActivityChart } from "./activity-chart";
+import { AgentBoardPanel } from "./agent-board";
 import { UsageRails } from "./usage-rails";
 import { MemberLoad } from "./member-load";
 import { OverviewHeader } from "./overview-header";
@@ -149,6 +153,12 @@ function OverviewSurface({
             onRangeChange={setRange}
             days={series.data.days ?? EMPTY_SERIES_DAYS}
             truncated={series.data.truncated ?? false}
+          />
+          {/* Everyone's live agents in this container (R-25). It folds itself
+              away when nothing is running. */}
+          <AgentBoardPanel
+            rows={overview.data.agents ?? EMPTY_OVERVIEW_AGENTS}
+            segment={segment}
           />
           {/* The wave-8 breakdown (R-29(b)): this container's seat credits by
               channel, person and tool. It ghosts rather than drawing zeroes. */}
