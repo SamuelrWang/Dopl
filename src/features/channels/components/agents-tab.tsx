@@ -1,15 +1,21 @@
 "use client";
 
 /**
- * Channels — the right panel's AGENTS tab: MY agents running in this
- * channel, one card each, each with a way into the agent view.
+ * Channels — the right panel's AGENTS tab: THE ROOM'S live agents, one card
+ * each, the operator's own with a way into the agent view.
  *
- * Every card is one live entry from this machine's own session projection —
- * `agents-model.ts`, over `spa-bridge.ts › DesktopSessionSummary` — including the
- * context and token numbers, which the desktop measures and the server stores
- * none of (INVARIANTS §5's Agents-tab bullet). It is therefore an OPERATOR
- * surface, not a roster: another member's agent cannot appear here, and the Info
- * tab's Members list is where everyone's presence lives.
+ * ⚠ **TWO SOURCES, ONE LIST** (Samuel's ruling R-25, 2026-09-17: *"show
+ * EVERYONE's live agents; ended agents hidden"*). MY cards come from this
+ * machine's own session projection (`agents-model.ts`, over `spa-bridge.ts ›
+ * DesktopSessionSummary`) and carry the context and token numbers, which the
+ * desktop measures and the server stores none of (INVARIANTS §5's Agents-tab
+ * bullet). A PEER's card comes from the channel-wide server read
+ * (`hooks/use-channel-agent-sessions.ts`, fenced by `loadVisibleChannel`) and is
+ * the COARSE projection alone — state, owner, thread — so it is read-only and
+ * never openable. ⚠ **The telemetry split is the reason there are two lanes and
+ * not one**, and it is enforced in `server/session-state-service.ts`, not here.
+ * ⚠ **THIS DOCBLOCK SAID *"another member's agent cannot appear here"* UNTIL
+ * 2026-09-17** and had been wrong since the peer cards landed on 2026-08-20.
  *
  * ⚠ DESKTOP-ONLY, AND IT SAYS SO RATHER THAN SHOWING NOTHING. "Could not ask" and
  * "asked, nothing is running" are different facts and are worded differently — an

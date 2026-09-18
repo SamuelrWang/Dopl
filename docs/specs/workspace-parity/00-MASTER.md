@@ -508,6 +508,8 @@ list is bounded. (b) Cap or group the peer section. (c) Opt-in above N members.
 
 → ✅ RULED 2026-09-17 — Samuel: **show EVERYONE's live agents; ended agents hidden.** Not (a): the Agents tab stops being an own-agents-plus-state-cards surface — every member's LIVE agent is listed, and an ENDED agent is not.
 
+→ 🟡 **EXECUTED 2026-09-17 (wave 2), AND THE EXECUTION SPLIT THE RULING IN TWO.** The **room-wide half needed no code and is now pinned**: `session-state-service.ts › listChannelSessions` is channel-scoped behind `loadVisibleChannel`, `surface-info-panel.tsx` hands `peerSessions` to the tab on EVERY host, and `agents-model.ts › peerCardsFor` already drops an ended row that a legacy desktop reports (`main/session-state-push.js › liveForWire` keeps it off the wire to begin with). `agents-tab-room.test.tsx` asserts peer-live-visible, peer-ended-absent and peer-rows-read-only. ⚠ **The "operator-scoped" premise in the question was wrong** — the peer cards have been a server read since 2026-08-20; what was missing was the pins. 🔴 **The OWN-ended half collides head-on with Samuel's 2026-08-22 rule** (*"the card is still drawn"*, `agent-ended.test.tsx`) and is **F-724, OPEN** — neither side edited, today's behaviour pinned, one question owed.
+
 #### Theme D — Data and API
 
 **R-26. Is the account surface a third host, or is it "the workspace host with `scope=account`"?**
