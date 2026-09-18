@@ -10,6 +10,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { BillingInvoices } from "./billing-invoices";
+import { SECTION_PANEL_GROUND } from "@/shared/ui/section-panel";
 import { BILLING_INVOICES_PATH } from "./use-billing-account";
 import {
   formatInvoiceAmount,
@@ -134,6 +135,37 @@ describe("a row that has to hold a long number", () => {
     expect(markup.match(/<li /g) ?? []).toHaveLength(2);
     expect(markup).toContain("$1.00");
     expect(markup).toContain("$2.00");
+  });
+});
+
+/**
+ * 🔒 THE HISTORY IS A FLAT SECTION (Samuel's ruling R-39, 2026-09-17). It was a
+ * `SectionBox` — a header STRIP over a concave inset body that supplied the
+ * frame, the fill AND the rows' `px-4` gutter. `SectionPanel` supplies its own
+ * `p-3`, so the swap has to land the ground and drop the second inset or the
+ * rows step in past their heading. Pinned in every state the body can be.
+ */
+describe("the invoice history's ground", () => {
+  it("is the flat section well, whatever the body is", () => {
+    for (const markup of [
+      table([invoice()]),
+      table([]),
+      table(undefined),
+    ]) {
+      expect(markup).toContain("data-section-panel");
+      for (const token of SECTION_PANEL_GROUND.split(" ")) {
+        expect(markup).toContain(token);
+      }
+      expect(markup).toContain("Billing history");
+      // The body it stopped being: no concave inset well.
+      expect(markup).not.toContain("bg-bg-inset");
+      expect(markup).not.toContain("shadow-[inset_");
+    }
+  });
+
+  it("drops the concave body's own gutter rather than nesting it", () => {
+    // `SectionPanel`'s `p-3` IS the padding now; `px-4` would be a second one.
+    expect(table([invoice()])).not.toContain("px-4");
   });
 });
 

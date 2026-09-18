@@ -3,10 +3,8 @@
  * THE FLAT SECTION — its shape, and the page hook that grounds it.
  *
  * ⚠ THE GROUND IS THE COMPONENT'S OWN SINCE R-38/R-39 (2026-09-17), so it is
- * asserted by RENDER and not by a source read any more. It was a `:global()`
- * rule fenced to /home's record pane (`pages/home/home.module.css › .frame`)
- * while a workspace page passed a ground carrying a hairline; one flat gray on
- * both hosts has one place to be stated.
+ * asserted by RENDER and no longer by a source read: one flat gray on every host
+ * has one place to be stated.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -20,8 +18,7 @@ afterEach(cleanup);
 
 describe("what a flat section is", () => {
   it("paints ONE flat ground, on every host", () => {
-    // 🔒 R-38 + R-39 (Samuel, 2026-09-17): the workspace adopts /home's skin and
-    // the section language is FLAT. This case asserted the OPPOSITE until then —
+    // 🔒 R-38 + R-39 (Samuel, 2026-09-17). This case asserted the OPPOSITE —
     // "paints NOTHING, the ground is the caller's" — which is what let a
     // hairline live on every page /home was not.
     render(

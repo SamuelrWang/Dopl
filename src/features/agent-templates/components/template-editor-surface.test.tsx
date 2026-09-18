@@ -19,6 +19,24 @@ import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
+/**
+ * Every shipped `.ts`/`.tsx` under `dir`. ⚠ TESTS ARE EXCLUDED: the suites here
+ * name the strings they forbid, so a test asserting on itself is a false
+ * positive by construction. ONE walker for both sweeps below — the sweep over
+ * this feature and /home, and the repo-wide census — because two that drift
+ * would disagree about what "a source file" is.
+ */
+function sources(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = path.join(dir, entry.name);
+    if (entry.name === "node_modules" || entry.name === "dist") return [];
+    if (entry.isDirectory()) return sources(full);
+    if (!/\.tsx?$/.test(entry.name)) return [];
+    if (/\.test\.tsx?$/.test(entry.name)) return [];
+    return [full];
+  });
+}
+
 describe("no concave surfaces", () => {
   // ⚠ SOURCE READ. jsdom loads no stylesheet, so the only honest place to pin a
   // SURFACE ruling is the class strings themselves.
@@ -41,19 +59,6 @@ describe("no concave surfaces", () => {
     // what keeps the one Samuel ordered.
     "UsageMeter",
   ];
-
-  function sources(dir: string): string[] {
-    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) return sources(full);
-      if (!/\.tsx?$/.test(entry.name)) return [];
-      // The rule is about what the feature SHIPS; this file names the strings it
-      // forbids, and a test asserting on itself is a false positive by
-      // construction.
-      if (entry.name.endsWith(".test.ts") || entry.name.endsWith(".test.tsx")) return [];
-      return [full];
-    });
-  }
 
   /**
    * ⚠ THE SWEEP REACHES ACROSS TREES, AND IT HAS TO (2026-08-26, Q4 of
@@ -190,45 +195,30 @@ describe("no concave surfaces", () => {
 
   /**
    * 🔒 **THE CONCAVE SECTION RECIPE IS OFF THE DESKTOP (Samuel's ruling R-39,
-   * 2026-09-17: flat wins; *"the web app, like on the login page, we can leave
-   * that for now"*).** This suite's `FORBIDDEN` list is swept over THIS feature
-   * and /home; the ruling is wider than either, so the wider half is a CENSUS —
-   * the two exports' consumers, repo-wide, must be exactly the surfaces the
-   * ruling left them on.
+   * 2026-09-17: flat wins; the web login page keeps concave for now).** The
+   * `FORBIDDEN` sweep above covers this feature and /home; the ruling is wider,
+   * so the wider half is a CENSUS of the two exports' consumers, repo-wide.
    *
    * ⚠ **A CENSUS AND NOT A BAN, BECAUSE THE WEB KEEPS CONCAVE.** Banning the
    * strings repo-wide would fail on the login page and the playground, which
    * Samuel exempted in as many words; listing the consumers fails the day a
-   * DESKTOP surface takes one back, which is the thing the ruling forbids.
-   * ⚠ **THE LIST MAY ONLY SHRINK**, and every entry names why it is not
-   * inertia — the frozen settings surfaces (INVARIANTS §15) and the composer
-   * panel's own standing ruling. `shared/ui/section-box.tsx` carries the same
-   * list in prose; both move together or the next reader believes the wrong one.
+   * DESKTOP surface takes one back, which is what the ruling forbids.
+   * ⚠ **THE LIST MAY ONLY SHRINK**, and each entry names why it is not inertia.
+   * This is where those reasons live — `shared/ui/section-box.tsx` points here
+   * rather than restating them.
    */
   describe("the concave section recipe is off the desktop", () => {
     const REPO = process.cwd();
 
-    /** Every `.ts`/`.tsx` under `src` and `apps/desktop-ui/src`, tests out. */
-    function tree(dir: string): string[] {
-      return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-        const full = path.join(dir, entry.name);
-        if (entry.name === "node_modules" || entry.name === "dist") return [];
-        if (entry.isDirectory()) return tree(full);
-        if (!/\.tsx?$/.test(entry.name)) return [];
-        if (/\.test\.tsx?$/.test(entry.name)) return [];
-        return [full];
-      });
-    }
-
     const ALL = [
-      ...tree(path.join(REPO, "src")),
-      ...tree(path.join(REPO, "apps", "desktop-ui", "src")),
+      ...sources(path.join(REPO, "src")),
+      ...sources(path.join(REPO, "apps", "desktop-ui", "src")),
     ];
 
     /**
-     * ⚠ COMMENTS ARE STRIPPED FIRST, AND BLOCK COMMENTS PROPERLY — a converted
-     * file EXPLAINS what it stopped wearing, by name, and `{/* … *\/}` in JSX
-     * puts that name on a line the suite's line-prefix filter never sees.
+     * ⚠ BLOCK COMMENTS STRIPPED PROPERLY, not by line prefix — a converted file
+     * EXPLAINS what it stopped wearing, by name, and `{/* … *\/}` in JSX puts
+     * that name on a line a prefix filter never sees.
      */
     function wearers(recipe: string): string[] {
       return ALL.filter((file) => {

@@ -10,23 +10,13 @@ const MIN_BODY_H = 56;
  * SectionBox's concave-body recipe.
  *
  * 🔒 ⚠ **THE DESKTOP DOES NOT WEAR IT ANY MORE (Samuel's ruling R-39,
- * 2026-09-17: flat wins; remove concave from the desktop app; *"the web app,
- * like on the login page, we can leave that for now"*).** The chats
- * header-card disclosure that this comment used to name as the reason for the
- * export is flat now. What is LEFT is a closed list, and each entry has a
- * reason that is not inertia:
- *   · the FROZEN settings surfaces (INVARIANTS §15) —
- *     `workspaces/components/workspace-danger-zone-core.tsx`,
- *     `mcp-connect/components/{connected-apps-section,remote-connect}.tsx`,
- *     `shared/layout/settings-modal/sections/delete-account.tsx` and
- *     `apps/desktop-ui/src/components/settings-modal/account-actions.tsx`.
- *     They wait for Samuel's own overhaul; the sweep does not reach in.
- *   · `channels/components/composer-launch-panel.tsx` — a COMPOSER PANEL, where
- *     the pressed-in stack is a standing ruling of its own (*"FILL ONLY. The
- *     concave shadow stack is deliberate and stays"*, 2026-08-26).
- * **Anything else that reaches for this on a desktop surface is the ruling
- * being re-broken.** Re-derive rather than trusting the list:
- * `grep -rn 'SECTION_BOX_INSET' src apps`.
+ * 2026-09-17: flat wins; the web login page keeps concave for now).** What is
+ * left is a closed list — the FROZEN settings surfaces (INVARIANTS §15) and the
+ * composer panel's own standing ruling — and the list is a TEST, not prose:
+ * `features/agent-templates/components/template-editor-surface.test.tsx › the
+ * concave section recipe is off the desktop` names each entry and its reason,
+ * and may only shrink. Anything else reaching for this on a desktop surface is
+ * the ruling being re-broken.
  */
 export const SECTION_BOX_INSET =
   "border-t border-border-subtle bg-bg-inset shadow-[inset_0_2px_4px_rgba(0,0,0,0.1),inset_0_1px_2px_rgba(0,0,0,0.06),inset_0_-1px_0_rgba(255,255,255,0.9)]";
@@ -35,16 +25,12 @@ export const SECTION_BOX_INSET =
  * Bordered section — uppercase label strip over a concave inset body, with a
  * corner grip that drag-resizes the body (clamped to its content height).
  *
- * 🔒 ⚠ **ONE CONSUMER LEFT, AND IT IS ON THE WEB (R-39, 2026-09-17).**
- * `features/playground/components/panes/members-pane.tsx`, reached only from
- * `src/app/playground/page.tsx`. Every DESKTOP section this painted — Members
- * (×5 files), Billing's invoice history — is `shared/ui/section-panel.tsx ›
- * SectionPanel` on the one flat gray now, and **the drag-resize grip went with
- * the box**: no flat section has ever had one. ⚠ **IT IS NOT DELETED BECAUSE IT
- * IS NOT DEAD** — Samuel left the web on concave for now — but a NEW desktop
- * section that mounts this is the ruling being re-broken. Pinned:
- * `features/agent-templates/components/template-editor-surface.test.tsx › the
- * concave section recipe is off the desktop`.
+ * 🔒 ⚠ **ONE CONSUMER LEFT, AND IT IS ON THE WEB (R-39, 2026-09-17):**
+ * `features/playground/components/panes/members-pane.tsx`. Every DESKTOP
+ * section this painted is `./section-panel.tsx › SectionPanel` on the one flat
+ * gray now, and **the drag-resize grip went with the box**. ⚠ NOT DELETED
+ * BECAUSE NOT DEAD — the web keeps concave — but a NEW desktop section that
+ * mounts this is the ruling being re-broken; same pin as `SECTION_BOX_INSET`.
  */
 export function SectionBox({
   label,

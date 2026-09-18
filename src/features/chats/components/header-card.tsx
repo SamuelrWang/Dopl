@@ -172,11 +172,14 @@ function Disclosure({
         {meta && <span className="text-caption text-text-muted">{meta}</span>}
         <span className="flex-1" />
       </button>
-      {/* FLAT since R-39 (2026-09-17). It was `SECTION_BOX_INSET` — the
-          concave inset body `SectionBox` paints — which is the one recipe the
-          ruling takes off the desktop. The top hairline the header already
-          carries is what separates the body; no second pressed-in step. */}
-      {open && <div className="bg-home-panel">{children}</div>}
+      {/* FLAT since R-39 (2026-09-17) — it was `SECTION_BOX_INSET`. ⚠ THE
+          `border-t` IS NOT DECORATION: the wrapper's hairline sits ABOVE the
+          header button, so without one here the body's gray runs straight into
+          the header strip's and the disclosure reads as one block. The recipe
+          lost its concave shadow, not its edge. */}
+      {open && (
+        <div className="border-t border-border-subtle bg-home-panel">{children}</div>
+      )}
     </div>
   );
 }

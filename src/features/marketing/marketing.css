@@ -3234,16 +3234,11 @@
 }
 
 /* 🔒 ⚠ **THE PORTED ACCOUNT-PALETTE RULES STOOD HERE AND ARE DELETED (R-38,
-   2026-09-17).** Six rules, a rule-for-rule port of
-   `apps/desktop-ui/src/pages/home/home.module.css › .frame` under this demo's
-   own prefix — a THIRD copy of one skin, kept because the landing never loads
-   the SPA's kit. The ruling promoted the skin to the app: it is `globals.css ›
-   THE ACCOUNT PALETTE SKIN` now, which this page DOES load, so the scene wears
-   `data-frame-skin` (`banner-demo/demo-scene.tsx`) and reads the one copy.
-   ⚠ `[data-section-panel]`'s ground went further still — it is
-   `shared/ui/section-panel.tsx`'s own default, so no host declares it.
-   ⚠ **DO NOT RE-PORT THEM**: `demo-class-coverage.test.tsx` pins the CLASSES the
-   scene needs, not this block, and a fourth copy is what the ruling deleted. */
+   2026-09-17)** — a third copy of one skin, kept only because the landing never
+   loads the SPA's kit. It loads `globals.css › THE ACCOUNT PALETTE SKIN`, which
+   is where the skin lives now, so the scene wears `data-frame-skin`
+   (`banner-demo/demo-scene.tsx`). ⚠ **DO NOT RE-PORT THEM**: a fourth copy is
+   what the ruling deleted. */
 
 /* ── Scripted cursor + click ripple ── */
 .lp-demo-cursor {

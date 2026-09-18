@@ -73,8 +73,7 @@ export function AboutTab({
       />
 
       {editable && (
-        // FLAT since R-39 (2026-09-17) — it was a `SectionBox`: a header STRIP
-        // over a concave inset body.
+        // FLAT since R-39 (2026-09-17) — it was a `SectionBox`.
         <SectionPanel id="about-profile" label="Profile">
           <FieldRow label="Display name">
             <EditableName

@@ -15,11 +15,10 @@
  *
  * ⚠ **NO HAIRLINE, AND THAT IS THE RULING NOT AN OMISSION** (2026-09-13:
  * *"you're adding this extra border line around the gray. I did not ask for
- * that"*). ⚠ **AND THE REST OF THE APP AGREED ON 2026-09-17 (R-39):**
- * `SECTION_PANEL_GROUND` carried `border-border-subtle` until then and is flat
- * now, so this well is no longer the exception it was written as. It still does
- * not compose that constant — this one has no border box at all, the section
- * ground keeps a transparent one so its callers' pixels do not move.
+ * that"*), and since R-39 (2026-09-17) `SECTION_PANEL_GROUND` is flat too — this
+ * well is no longer the exception it was written as. It still does not compose
+ * that constant: this one has no border box at all, the section ground keeps a
+ * transparent one so its callers' pixels do not move.
  *
  * ⚠ **DO NOT RE-TYPE THE RADIUS/PADDING.** A local `rounded-[14px] p-3` is the
  * same well said a second way, and the day the well's geometry moves it would

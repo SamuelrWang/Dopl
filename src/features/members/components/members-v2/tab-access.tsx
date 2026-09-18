@@ -101,11 +101,8 @@ function AccessGroup({
   empty: string;
 }) {
   return (
-    // FLAT since R-39 (2026-09-17) — this was a `SectionBox`: a header STRIP
-    // over a concave inset body. The count keeps the `caption` slot, which is
-    // what `SectionBox`'s `meta` had no counterpart for and what a fact ABOUT
-    // the section belongs in (the same swap `knowledge-v2/detail/
-    // overview-contents.tsx` made).
+    // FLAT since R-39 (2026-09-17) — it was a `SectionBox`. The count takes the
+    // `caption` slot, where a fact ABOUT a section belongs.
     <SectionPanel id={id} label={label} caption={`${rows.length}`}>
       {rows.length === 0 ? (
         <p className="px-1 py-1 text-caption text-text-muted">{empty}</p>
@@ -115,8 +112,7 @@ function AccessGroup({
           return (
             <div
               key={`${row.resourceType}:${row.resourceId}`}
-              // ⚠ `px-1`, NOT `px-3` — the panel supplies the padding now; the
-              // deeper inset was `SectionBox`'s edge-to-edge inset body.
+              // ⚠ `px-1`, NOT `px-3` — the panel supplies the gutter now.
               className="flex items-center gap-2.5 border-b border-border-subtle px-1 py-2 last:border-b-0"
             >
               <span

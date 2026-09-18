@@ -172,10 +172,9 @@ function PanelGhost({
   caption = false,
 }: {
   children: ReactNode;
-  /** ⚠ DEFAULTED, because the ground is no longer a page rule (R-38,
-   *  2026-09-17): the loaded `SectionPanel` paints `SECTION_PANEL_GROUND`
-   *  itself, so a ghost that passed nothing would resolve into a gray panel
-   *  appearing under the reader. Pass one only to say something else. */
+  /** ⚠ DEFAULTED since R-38 (2026-09-17): the loaded `SectionPanel` paints the
+   *  ground itself, so a ghost passing nothing would flash white and resolve
+   *  into gray. Pass one only to say something else. */
   ground?: string;
   /**
    * The header-right create button's ghost width. ⚠ OMITTED = NO BUTTON, and

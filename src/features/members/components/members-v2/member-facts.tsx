@@ -51,10 +51,9 @@ export function MemberFacts({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* FLAT since R-39 (2026-09-17) — every section here was a `SectionBox`:
-          a header STRIP over a concave inset body. The counts moved into the
-          `caption` slot, which is where a fact ABOUT a section belongs, and the
-          rows lost their second inset (`bits.tsx › FieldRow`). */}
+      {/* FLAT since R-39 (2026-09-17) — every section here was a `SectionBox`.
+          The counts take the `caption` slot and the rows lost their second
+          inset (`bits.tsx › FieldRow`). */}
       <SectionPanel id="facts-role" label="Role">
         <div className="flex flex-col gap-1.5 px-1 py-1">
           <RolePill role={m.role} />

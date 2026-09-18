@@ -197,10 +197,9 @@ function StatBlockGhost() {
 
 /**
  * One `shared/ui/section-panel.tsx › SectionPanel` — heading row over the body,
- * on ONE flat ground. ⚠ IT WAS A `SectionBox` GHOST (a header strip over a
- * concave inset body) until R-39 (2026-09-17). ⚠ NOT `SectionPanel` itself: it
- * takes a `label` STRING and prints it as an `<h2>`, which a loading state must
- * not do — so it keeps the GROUND and the BOX by name and draws a bar instead.
+ * on ONE flat ground since R-39 (2026-09-17). ⚠ NOT `SectionPanel` itself: it
+ * prints its `label` as an `<h2>`, which a loading state must not do — so this
+ * keeps the GROUND and the BOX by name and draws a bar instead.
  */
 function SectionPanelGhost({ lines }: { lines: number }) {
   return (

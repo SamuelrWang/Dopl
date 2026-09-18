@@ -1442,35 +1442,27 @@ html {
 
 /* ── THE ACCOUNT PALETTE SKIN — APP-WIDE SINCE 2026-09-17 (Samuel's ruling R-38)
    ────────────────────────────────────────────────────────────────────────────
-   These six rules stood in `apps/desktop-ui/src/pages/home/home.module.css ›
-   .frame`, fenced to /home on purpose. The 2026-08-30 charter — *"the workspace
-   pages adopt /home's frame model and palette — the two surfaces must match"* —
-   makes the FENCE the drift, so the SCOPE widened and the rules did not move
-   twice: one copy, every host that wears `data-frame-skin`
-   (`pages/home/index.tsx`, `pages/home/home-skeleton.tsx`,
-   `features/channels/components/channels-core.tsx`).
+   These rules were `home.module.css › .frame`, fenced to /home. The 2026-08-30
+   charter — *"the workspace pages adopt /home's frame model and palette — the
+   two surfaces must match"* — makes the FENCE the drift, so the scope widened
+   instead: one copy, worn by every host that carries `data-frame-skin`
+   (`channel-divider.test.ts` names them and pins the pair below).
 
    ⚠ WHY UNLAYERED. These override Tailwind UTILITIES on components the host
-   page does not own. Tailwind's layer order puts `utilities` above `components`
-   and a layer beats specificity outright, so a `@layer components` rule can
-   never win this. ⚠ It also means `scripts/check-css-token-drift.ts` does NOT
-   see them — its class half compares `@layer components` only — so this block
-   is mirrored BY HAND in the other kit copy, like the auth-adjacent rules
-   below (F-074).
+   page does not own, and a layer beats specificity outright — `utilities` sits
+   above `components`, so a `@layer components` rule can never win. ⚠ It also
+   means `scripts/check-css-token-drift.ts`'s class half does NOT see them, so
+   this block is mirrored BY HAND in the other kit copy (F-074).
 
-   ⚠ WHY IT SELECTS ON UTILITY CLASS NAMES. The dividers are Tailwind classes on
-   files in `features/channels/components/` — `border-border-default` is the
-   STRUCTURAL rule (the info column's `border-l`, the pane headers' `border-b`),
-   `border-border-subtle` the softer internal ones. If those class names change
-   there, this stops applying: it degrades to the neutral hairline, which is the
-   old look, not a broken one.
+   ⚠ WHY IT SELECTS ON UTILITY CLASS NAMES. The dividers are Tailwind classes in
+   `features/channels/components/` — `border-border-default` structural (the
+   info column's `border-l`, the pane headers' `border-b`), `border-border-subtle`
+   the softer internal ones. If those names change there this stops applying and
+   degrades to the neutral hairline: the old look, not a broken one.
 
-   ⚠ THE SIXTH RULE IS NOT HERE. `[data-section-panel]`'s ground is the
-   COMPONENT's own now (`src/shared/ui/section-panel.tsx ›
-   SECTION_PANEL_GROUND`) — one flat gray on both hosts needs no override to
-   repaint it, and a page that never mounted the skin (Members, Knowledge,
-   Agents) gets it too, which is what R-38 asks for and a scoped rule could not
-   give. */
+   ⚠ `[data-section-panel]` IS NOT HERE. Its ground is the component's own
+   (`src/shared/ui/section-panel.tsx › SECTION_PANEL_GROUND`), so a page that
+   never mounts the skin gets it too — which a scoped rule could not give. */
 [data-frame-skin] .border-border-default,
 [data-frame-skin] .border-border-subtle {
   border-color: var(--home-panel-line);
@@ -1485,13 +1477,11 @@ html {
 }
 /* ⚠ THE SAME 2px, TOLD TO THE RESIZE PILL (Samuel, 2026-09-13: *"I want it to
    be perfectly on the vertical line"*). `channels/components/info-resize-handle.tsx ›
-   DIVIDER_WIDTH_VAR` centres the pill on the divider by offsetting it half a
-   border width; its fallback is the kit hairline, so a host wearing the skin has
-   to say that its structural `border-l` above is wider. ⚠ **DECLARED ADJACENT
-   ON PURPOSE** — one pair states the width and the width it tells the handle, so
-   the two cannot drift the day the pane's outer border moves. It is inherited,
-   so the handle reads it anywhere in the skinned subtree.
-   Pinned by `apps/desktop-ui/src/pages/home/channel-divider.test.ts`. */
+   DIVIDER_WIDTH_VAR` centres the pill by offsetting it half a border width and
+   falls back to the kit hairline, so a skinned host has to say its structural
+   `border-l` is wider. ⚠ **DECLARED ADJACENT ON PURPOSE** — the width and the
+   width it tells the handle cannot drift. It inherits, so the handle reads it
+   anywhere in the subtree. */
 [data-frame-skin] {
   --channel-divider-w: 2px;
 }
@@ -1500,21 +1490,15 @@ html {
 }
 
 /* THE SENDER PILLS wear the raised-light face here (Samuel, 2026-08-24) — one
-   notch up from the flat `.bento` they carry where the skin is not worn.
+   notch up from the flat `.bento` they carry where the skin is not worn. ⚠ NOT
+   A FORKED RECIPE: the three values are the kit's own `--raised-light-*` parts,
+   the ones `.auth-btn-3d-light` and `.raised-tab` are built from.
 
-   ⚠ NOT A FORKED RECIPE. The three values are the kit's own `--raised-light-*`
-   parts, which `.auth-btn-3d-light` and `.raised-tab` are themselves built
-   from, so this face cannot drift from theirs and no hex is hardcoded.
-
-   ⚠ THE RESTING FACE, FOR BOTH ELEMENTS THE PILL CAN BE. A HUMAN pill is a
-   `<span>` naming an author and this is the whole of its treatment — no hover
-   lift, no pressed state, no pointer. An AGENT pill is a real `<button>` and
-   wears the SAME face by design: the lift and the press are the component's own
-   utilities (`attribution-pill.tsx`, borrowing `.btn-light`'s ±1px motion),
-   never a second recipe here. **Do not fork a hover state into this rule** — it
-   selects both kinds of pill and would put a pressable affordance on the human
-   ones. The hook is `attribution-pill.tsx › AttributionPill`'s
-   `data-attribution-pill`, carried by the `<span>` and the `<button>` alike. */
+   ⚠ THE RESTING FACE, AND IT SELECTS BOTH ELEMENTS THE PILL CAN BE — a human
+   `<span>` and an agent `<button>` (`attribution-pill.tsx › AttributionPill`).
+   **Do not fork a hover state into this rule**: it would put a pressable
+   affordance on the human ones. The agent pill's lift and press are the
+   component's own utilities. */
 [data-frame-skin] [data-attribution-pill] {
   background: var(--raised-light-face);
   border-color: var(--raised-light-line);
@@ -1523,12 +1507,10 @@ html {
 
 /* THE COMPOSER'S PANELS wear the frame's panel gray (Samuel, 2026-08-26): the
    recess a panel's header sits in reads as the same surface the "New channel"
-   button stands on, one card out. ⚠ BOTH of them — the new-thread panel and the
-   new-agent launch panel; they share one attribute so this stays ONE rule.
-   ⚠ FILL ONLY. The concave shadow stack is deliberate and stays
-   (`composer-panel-fields.tsx`). The hook is `composer-panel-fields.tsx ›
-   PANEL_HOOK`, an attribute, so swapping a utility class in either panel cannot
-   silently drop this. */
+   button stands on, one card out. ⚠ BOTH of them — new-thread and new-agent —
+   share `composer-panel-fields.tsx › PANEL_HOOK`, so this stays ONE rule and no
+   utility swap can silently drop it. ⚠ FILL ONLY: the concave shadow stack is
+   deliberate and stays. */
 [data-frame-skin] [data-composer-panel] {
   background-color: var(--home-panel);
 }

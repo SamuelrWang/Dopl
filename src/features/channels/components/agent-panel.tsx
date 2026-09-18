@@ -320,8 +320,7 @@ export function ChannelsAgentPanel({
         // says, so the divider and the pane's own lines cannot differ. An earlier attempt
         // hardcoded `border-link`, a DIFFERENT blue, and in doing so dropped the class the rule
         // keys on.
-        // ⚠ 2px COMES FROM THE SAME BLOCK, not from a number here. ⚠ **AND THE WORKSPACE CHANNELS
-        // PAGE WEARS IT TOO SINCE R-38 (2026-09-17)** — it kept the neutral hairline until then.
+        // ⚠ 2px COMES FROM THE SAME BLOCK, not from a number here.
         !full && "border-l border-border-default",
         !full && "transition-transform duration-200 ease-out motion-reduce:transition-none",
         !full && (open ? "translate-x-0" : "pointer-events-none translate-x-full")

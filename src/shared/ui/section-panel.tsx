@@ -16,18 +16,15 @@ import { SECTION_HEADING_TEXT } from "./section-heading";
  * | extra | drag-to-resize grip | none |
  *
  * ⚠ **IT PAINTS ONE GROUND, AND THAT IS NEW ON 2026-09-17 (R-38 + R-39).** It
- * used to paint NOTHING: /home's record pane repainted its panels `--home-panel`
- * through a scoped `:global([data-section-panel])` rule while a workspace page
- * passed `SECTION_PANEL_GROUND`, which carried a hairline /home's rule cleared.
- * Samuel ruled the two surfaces match and that the section language is FLAT, so
- * there is one ground left to choose and the component is where it is said. A
- * caller that genuinely needs another passes it — `cn` still wins on `className`
- * — but there is no `tone` enum and there is no second statement of the default.
+ * used to paint nothing and be grounded per host — a `:global()` rule on /home,
+ * `SECTION_PANEL_GROUND` on a workspace page. Samuel ruled the two surfaces
+ * match and the section language FLAT, so there is one ground left to choose and
+ * the component is where it is said. A caller that needs another passes it (`cn`
+ * wins on `className`); there is no `tone` enum.
  *
- * ⚠ `data-section-panel` STAYS, and it is now a HOOK WITH NO RULE ON IT in
- * either kit copy. It is what let a page repaint every panel at once; keeping it
- * costs an attribute and is the difference between "we can do that again" and a
- * sweep of call sites.
+ * ⚠ `data-section-panel` STAYS, now a hook with no rule on it in either kit
+ * copy — it is the difference between "a page can repaint every panel at once"
+ * and a sweep of call sites.
  *
  * ⚠ AN EMPTY SECTION KEEPS ITS HEADER. A panel that vanished when empty makes
  * "you have none" and "there are none to have" the same picture.
@@ -37,24 +34,20 @@ import { SECTION_HEADING_TEXT } from "./section-heading";
  * *"panels on top of that go back to that sidebar panel gray — it's
  * alternating"*). A workspace page renders inside `app-shell.module.css ›
  * .pageCard`, the white card floating in the one gray panel, so a panel drawn ON
- * that page is exactly where /home's record-pane wells are — and it takes the
- * same token they do.
+ * that page is exactly where /home's record-pane wells are — same token.
  *
- * ⚠ IT IS `--home-panel` AND NOT `bg-card-surface-subtle` (#f4f6f9) BECAUSE THE
- * WELL IS ONE COLOUR IN BOTH HOSTS: the two grays were 3/255 apart and said the
- * same thing twice.
+ * ⚠ IT IS `--home-panel` AND NOT `bg-card-surface-subtle` (#f4f6f9): the two
+ * grays were 3/255 apart and said the same thing twice.
  *
- * 🔒 ⚠ **THE HAIRLINE IS GONE (Samuel's ruling R-39, 2026-09-17: flat wins).**
- * It was `border-border-subtle` on a workspace page while /home's scoped rule
- * cleared it — the *"you're adding this extra border line around the gray. I did
- * not ask for that"* line (2026-09-13), still being drawn on every page /home
- * was not. ⚠ `border-transparent`, NOT `border: none` — the background paints
- * under the border box, so a transparent hairline is seamless AND leaves the box
- * model alone; dropping the border would move every panel's content by a pixel.
+ * 🔒 ⚠ **NO HAIRLINE (Samuel's ruling R-39, 2026-09-17: flat wins)** — *"you're
+ * adding this extra border line around the gray. I did not ask for that"*
+ * (2026-09-13). ⚠ `border-transparent`, NOT `border: none`: the background
+ * paints under the border box, so a transparent hairline is seamless AND leaves
+ * the box model alone; dropping the border moves every panel's content a pixel.
  *
- * ⚠ EXPORTED BECAUSE THE GHOSTS ARE NOT `SectionPanel` — the loading shapes draw
- * a plain `div` (a ghost must not paint a heading STRING), so they read the
- * ground by name rather than by mounting the component.
+ * ⚠ EXPORTED BECAUSE THE GHOSTS ARE NOT `SectionPanel` — a loading shape draws a
+ * plain `div` (it must not paint a heading STRING), so it reads the ground by
+ * name rather than by mounting the component.
  */
 export const SECTION_PANEL_GROUND =
   "border border-transparent bg-home-panel";

@@ -82,10 +82,9 @@ export function TeamDetailPane({
         <div className="flex flex-col gap-3.5">
           <PaneHeading title="Members" subtitle="Everyone here inherits the grants below." />
 
-          {/* FLAT since R-39 (2026-09-17) — both were `SectionBox`: a header
-              STRIP over a concave inset body. The counts take the `caption`
-              slot and the rows lose their second inset (`px-1`, because the
-              panel's own `p-3` is the padding now). */}
+          {/* FLAT since R-39 (2026-09-17) — both were `SectionBox`. The counts
+              take the `caption` slot and the rows lose their second inset
+              (`px-1`: the panel's own `p-3` is the gutter). */}
           <SectionPanel
             id="team-roster"
             label="On this team"

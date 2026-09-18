@@ -17,9 +17,8 @@ import { useWorkspaceInvoices } from "./use-billing-account";
  * Invoice history — date, amount, status, link to Stripe's hosted copy.
  *
  * No table primitive in this design system; documented substitute is a
- * `SectionPanel` body with `divide-border-subtle` rows. ⚠ IT WAS `SectionBox`
- * — a header strip over a concave inset body — until R-39 (2026-09-17: flat
- * wins, and the desktop stops wearing concave).
+ * `SectionPanel` body with `divide-border-subtle` rows — a `SectionBox` until
+ * R-39 (2026-09-17: flat wins, the desktop stops wearing concave).
  *
  * WHICH AMOUNT: paid invoice shows PAID, open/uncollectible shows DUE —
  * "$0.00 paid" on an unpaid invoice reads as free rather than outstanding.

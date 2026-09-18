@@ -36,9 +36,8 @@ export function SettingsTab({
     <div className="flex flex-col gap-3.5">
       <PaneHeading title="Settings" subtitle="How this member is scoped in the workspace." />
 
-      {/* FLAT since R-39 (2026-09-17) — these two were `SectionBox`: a header
-          STRIP over a concave inset body. `px-1` aligns the row with the
-          panel's own heading; `px-3` was the inset body's edge-to-edge well. */}
+      {/* FLAT since R-39 (2026-09-17) — both were `SectionBox`. `px-1` aligns
+          the row with the panel's own heading. */}
       <SectionPanel id="member-role" label="Role">
         <div className="flex items-center gap-3 px-1 py-1">
           {visibility.showRolePicker && m.role !== "owner" ? (

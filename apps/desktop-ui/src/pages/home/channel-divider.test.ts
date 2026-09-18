@@ -18,12 +18,11 @@
  * at 2 — so the width the border takes and the width it TELLS the handle are read
  * as one pair.
  *
- * ⚠ **BOTH KIT COPIES, WHICH IS HALF THE POINT SINCE R-38 (2026-09-17).** The rules
- * left `home.module.css › .frame` for the kit when Samuel ruled the workspace pages
- * adopt /home's palette; the kit is hand-mirrored (F-074) and the drift gate's class
- * half only sees `@layer components`, which this block is deliberately outside of.
- * The DESKTOP renders `kit.css`, so a fix that lands only on the web file is
- * invisible in the app Samuel filed this from.
+ * ⚠ **BOTH KIT COPIES, WHICH IS HALF THE POINT SINCE R-38 (2026-09-17).** The kit
+ * is hand-mirrored (F-074) and the drift gate's class half only sees
+ * `@layer components`, which this block is deliberately outside of. The DESKTOP
+ * renders `kit.css`, so a fix landing only on the web file is invisible in the app
+ * Samuel filed this from.
  */
 
 import { readFileSync } from "fs";

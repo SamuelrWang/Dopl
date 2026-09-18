@@ -128,10 +128,9 @@ export function TemplatePanel({
       label={label}
       action={action}
       caption={caption}
-      // ⚠ NO `className`, AND THAT IS THE POINT SINCE R-38 (2026-09-17). The
-      // ground was typed here, then hoisted to `SECTION_PANEL_GROUND` when the
-      // knowledge base-info face wanted the same one; it is the COMPONENT's
-      // default now, so the last two readers of the constant are the ghosts.
+      // ⚠ NO `className` SINCE R-38 (2026-09-17): the ground is the
+      // component's default, and the last readers of the constant are the
+      // loading ghosts.
     >
       {children}
     </SectionPanel>

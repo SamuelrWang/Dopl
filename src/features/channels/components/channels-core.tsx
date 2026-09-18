@@ -244,12 +244,10 @@ export function ChannelsCore({
     //
     // `data-frame-skin` — THE ACCOUNT PALETTE, ON THIS PAGE TOO SINCE R-38
     // (Samuel, 2026-09-17: *"the workspace pages adopt /home's frame model and
-    // palette — the two surfaces must match"*). The kit owns the six rules
+    // palette — the two surfaces must match"*). The kit owns the rules
     // (`src/app/globals.css` › THE ACCOUNT PALETTE SKIN); this page and /home's
-    // record pane are the two hosts that wear them, so the dividers, the sender
-    // pills and the composer panels read the same on both. ⚠ The guest web lane
-    // (`src/app/c/[workspaceId]/guest-channel.tsx`) deliberately does NOT wear
-    // it — it keeps the neutral kit hairlines it has today.
+    // record pane wear them. ⚠ The guest web lane (`src/app/c/[workspaceId]/
+    // guest-channel.tsx`) deliberately does NOT — it keeps the kit hairlines.
     <div className="page-float relative flex antialiased" data-frame-skin>
       <ChannelsSidebar
         workspaceId={workspaceId}

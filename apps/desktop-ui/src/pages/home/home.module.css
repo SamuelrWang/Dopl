@@ -30,23 +30,13 @@
    still the kit's shared "this is the live one" line, and the header's search
    pill and the landing page's scripted /home demo still wear it. */
 
-/* 🔒 ⚠ **THE SIX `.frame` PALETTE RULES STOOD HERE AND ARE DELETED (Samuel's
-   ruling R-38, 2026-09-17):** *"the workspace pages adopt /home's frame model
-   and palette — the two surfaces must match."* They repainted the SHARED
-   channel surface's dividers, its attribution pills and its composer panels
-   inside this pane only, and the fence — a class this page owned, so nothing
-   else could opt in by accident — was the whole point of a CSS module here.
-
-   The charter makes that fence the drift. The rules are the KIT's now, one copy
-   in each kit file, keyed on `data-frame-skin` (`src/app/globals.css` /
-   `apps/desktop-ui/src/styles/kit.css` › THE ACCOUNT PALETTE SKIN), and this
-   page wears the attribute where it wore `.frame` — so does the workspace
-   channels page. ⚠ **DO NOT RE-ADD A SCOPED COPY HERE**: two statements of one
-   skin is exactly what the ruling deleted.
-
-   ⚠ `[data-section-panel]`'s ground did not move to the kit either — it is
-   `shared/ui/section-panel.tsx`'s own default now, so every page gets the flat
-   gray and not only the two hosts that mount the skin. */
+/* 🔒 ⚠ **THE `.frame` PALETTE RULES STOOD HERE AND ARE DELETED (Samuel's ruling
+   R-38, 2026-09-17).** They are the kit's now, keyed on `data-frame-skin`
+   (`src/app/globals.css` / `apps/desktop-ui/src/styles/kit.css` › THE ACCOUNT
+   PALETTE SKIN), and this page wears the attribute where it wore `.frame` — so
+   does the workspace channels page, which is the ruling. ⚠ **DO NOT RE-ADD A
+   SCOPED COPY HERE.** `[data-section-panel]`'s ground did not move to the kit
+   either: it is `shared/ui/section-panel.tsx`'s own default. */
 
 /* ── The Knowledge tab's card grid ────────────────────────────────────────
    ⚠ WHY THE `--kv-*` LINE EXISTS. `knowledge-v2/home/base-card.tsx` is REUSED

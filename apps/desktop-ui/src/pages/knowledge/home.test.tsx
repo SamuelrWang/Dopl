@@ -179,19 +179,12 @@ describe("knowledge home grid", () => {
 
   /**
    * 🔒 **THE AUDIENCE PICKER STAYS ON THIS PAGE (Samuel's ruling R-42, confirmed
-   * 2026-09-17, first ruled 2026-08-27).** The reason is the create BUTTON: on
-   * /home it names the audience — "Shared in this channel" or "Personal" — so a
-   * workspace-visibility radio under it would offer a second, contradicting
-   * answer, and `pages/home/knowledge-panels.test.tsx › asks the audience
-   * question ONCE` pins its ABSENCE there. **This page's button names no
-   * audience, so this is the one place the question is still worth asking** —
-   * and nothing pinned its PRESENCE until this case, which made "keep it" a
-   * sentence in a docblock rather than a fact a change has to get past.
-   *
-   * ⚠ RE-CONFIRMED AFTER B10 COLLAPSED THE SHELF AXIS, which is what R-42 asked
-   * for: the picker is `create-base-dialog.tsx › ScopePicker` under a
-   * `DialogField label="Who can access"`, gated by `› scopePicker` — the
-   * negation of the two props a caller sets when it has already answered.
+   * 2026-09-17).** On /home the create BUTTON names the audience, so a
+   * workspace-visibility radio under it would give a second, contradicting
+   * answer — `pages/home/knowledge-panels.test.tsx › asks the audience question
+   * ONCE` pins its ABSENCE there. This page's button names no audience, so this
+   * is where the question is still worth asking, and nothing pinned its
+   * PRESENCE until this case.
    */
   it("KEEPS the audience question — this page's button names no audience", async () => {
     renderAt(`/${SEGMENT}/knowledge`);
@@ -201,7 +194,6 @@ describe("knowledge home grid", () => {
     await screen.findByPlaceholderText("e.g. Product specs");
     expect(screen.getByText("Who can access")).toBeInTheDocument();
   });
-
 });
 
 /**
