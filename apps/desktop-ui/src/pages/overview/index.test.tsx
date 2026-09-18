@@ -216,8 +216,12 @@ describe("overview page", () => {
     ).toEqual([
       "This billing period",
       "Credits per day",
-      // ⚠ JOINED IN WAVE 8 (R-29(b)) — the seat-credit breakdown.
+      // ⚠ JOINED IN WAVE 8 (R-29(b)) — the breakdown and the token strip. There
+      // is no "Active agents" row here because the fixture runs none and the
+      // board folds itself away: an empty state must not cost a full-width
+      // panel.
       "All channels",
+      "Token spend",
       // ⚠ JOINED 2026-09-01 — the ping inbox then, what is ADDRESSED TO YOU AND
       // UNANSWERED since slice B16, and it sits ABOVE the bottom row
       // deliberately: it is the only section on this page that is waiting on the

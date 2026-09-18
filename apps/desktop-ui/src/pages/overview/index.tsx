@@ -17,6 +17,7 @@ import { PageError } from "#/components/page-states";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { ActivityChart } from "./activity-chart";
 import { AgentBoardPanel } from "./agent-board";
+import { TokenSpendPanel } from "./token-spend";
 import { UsageRails } from "./usage-rails";
 import { MemberLoad } from "./member-load";
 import { OverviewHeader } from "./overview-header";
@@ -154,15 +155,15 @@ function OverviewSurface({
             days={series.data.days ?? EMPTY_SERIES_DAYS}
             truncated={series.data.truncated ?? false}
           />
-          {/* Everyone's live agents in this container (R-25). It folds itself
-              away when nothing is running. */}
+          {/* The wave-8 panels (R-29(b)): everyone's live agents, this
+              container's seat-credit breakdown, and the caller's own token
+              spend. Each folds itself away when it has nothing to say. */}
           <AgentBoardPanel
             rows={overview.data.agents ?? EMPTY_OVERVIEW_AGENTS}
             segment={segment}
           />
-          {/* The wave-8 breakdown (R-29(b)): this container's seat credits by
-              channel, person and tool. It ghosts rather than drawing zeroes. */}
           <UsageRails usage={overview.data.usage} />
+          <TokenSpendPanel segment={segment} />
           <NeedsYou
             rows={needsYouRows(waiting.data, workspaceId)}
             segment={segment}
