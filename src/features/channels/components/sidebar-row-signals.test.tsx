@@ -252,3 +252,46 @@ describe("the sidebar row's roster faces", () => {
     expect(screen.queryByTitle("Grace Liu")).toBeNull();
   });
 });
+
+/**
+ * THE "Link out" CHIP ON A WORKSPACE ROW — Wave 4.
+ *
+ * ⚠ **THE PRECEDENCE CASES LIVE IN `sidebar.test.tsx`** (R-28, Wave 3) and are
+ * untouched: badge suppresses dot, `0` draws the dot, a stale payload draws
+ * neither. What is new here is the THIRD mark and the fact that all three now
+ * come from `@/shared/ui/home-card-marks`.
+ */
+describe("the sidebar row's link-out chip", () => {
+  const LINK = {
+    id: "lk-1",
+    token: "tok",
+    label: "Priya",
+    grantedRole: "guest" as const,
+    createdAt: "2026-09-01T10:00:00.000Z",
+    expiresAt: null,
+    claimedAt: null,
+    revokedAt: null,
+  };
+
+  it("says an invitation is out on this channel", () => {
+    renderSidebar({
+      rooms: [channel({ id: "ch-web", name: "Website", linkOut: LINK as never })],
+    });
+    expect(screen.getByText("Link out")).toBeTruthy();
+  });
+
+  it("says nothing on a channel with no open invitation", () => {
+    renderSidebar({ rooms: [channel({ id: "ch-web", name: "Website" })] });
+    expect(screen.queryByText("Link out")).toBeNull();
+  });
+
+  /** A cache entry written before `linkOut` existed has no key (INVARIANTS §8) —
+   *  an absent key is NOT an open invitation. */
+  it("reads a STALE CACHE ENTRY with the key DELETED as no invitation", () => {
+    const stale = channel({ id: "ch-web", name: "Website" });
+    delete (stale as Partial<typeof stale>).linkOut;
+    renderSidebar({ rooms: [stale] });
+    expect(screen.queryByText("Link out")).toBeNull();
+    expect(row("Website")).toBeTruthy();
+  });
+});

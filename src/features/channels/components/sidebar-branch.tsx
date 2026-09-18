@@ -92,6 +92,9 @@ export function ChannelBranch({
           // older bundle has none. The ROW takes answers, so the fallback is
           // spelled here — once, where the cached payload is read.
           faces={channelRowFaces(channel.peers ?? EMPTY_PEERS)}
+          // ⚠ `?? null` INLINE (§8) — same reason as the two below. The chip is
+          // the FACT that an invitation is out, never the link itself.
+          linkOut={(channel.linkOut ?? null) !== null}
           unread={channel.unread}
           // ⚠ `?? 0` INLINE (§8): a new key on a persisted payload; `0` hides the
           // pill rather than printing `@ NaN`.

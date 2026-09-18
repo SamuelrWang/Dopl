@@ -139,21 +139,65 @@ export function MentionBadge({
  * markers for one fact reads as two facts. The caller decides — see
  * `home-channel-row.tsx`.
  *
- * ⚠ **`bg-text-primary`, NOT the sidebar's `bg-link`.** The channels sidebar's
- * dot is blue on a dark rail; this one sits on a white raised card in /home's
- * account palette, where the page's only accent is ink.
+ * ⚠ **`bg-text-primary` ON /home, `bg-link` ON THE CHANNELS SIDEBAR — TWO INKS,
+ * ONE IMPLEMENTATION (Wave 4).** The two are a real decision, not drift: /home's
+ * dot sits on a white raised card in the account palette, where the page's only
+ * accent is ink, and R-03 keeps the workspace picker's own design — including its
+ * blue. What Wave 4 removed is the SECOND dot, a hand-cut span in
+ * `channels/components/sidebar-rows.tsx` that owned the geometry and the
+ * accessible name as well as the colour. **A third tone is a ruling, not a prop
+ * value.**
  * ⚠ **AND `bg-text-on-cta` ON THE SELECTED ROW (2026-09-15)**, for
  * {@link MentionBadge}'s reason: the row is the black button face there, and ink
- * on ink is a mark nobody can see.
+ * on ink is a mark nobody can see. ⚠ It OUTRANKS `tone`, which is why it is the
+ * outer arm: the face the dot stands on decides before the surface's accent does.
  */
-export function UnreadDot({ onDark = false }: { onDark?: boolean }) {
+export type UnreadDotTone = "ink" | "link";
+
+export function UnreadDot({
+  onDark = false,
+  tone = "ink",
+}: {
+  onDark?: boolean;
+  tone?: UnreadDotTone;
+}) {
   return (
     <span
       aria-label="Unread messages"
       className={cn(
         "h-1.5 w-1.5 shrink-0 rounded-full",
-        onDark ? "bg-text-on-cta" : "bg-text-primary"
+        onDark ? "bg-text-on-cta" : tone === "link" ? "bg-link" : "bg-text-primary"
       )}
     />
+  );
+}
+
+/**
+ * THE "Link out" CHIP — an invitation is out on this row.
+ *
+ * ⚠ **ONE DECLARATION SINCE WAVE 4, AND IT WAS INLINE MARKUP IN
+ * `home-channel-row.tsx` UNTIL THEN.** The workspace channel row says the same
+ * fact off the same field (`Channel.linkOut`, judged by the claim gate's own
+ * predicate), and a chip cut twice is a chip that gets restyled once.
+ * **Nothing about /home's chip changed in the move.**
+ *
+ * ⚠ **IT IS A STATE OF THE ROW, NOT A CONTROL.** No `onClick` and no `button`:
+ * minting and revoking a link are the record pane's, and a chip that looked
+ * clickable here would be a dead control (§5).
+ * ⚠ `onDark` for {@link MentionBadge}'s reason — the selected /home row is the
+ * black button face, where a bordered light chip disappears.
+ */
+export function LinkOutChip({ onDark = false }: { onDark?: boolean }) {
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded-full border px-1.5 text-micro font-medium",
+        onDark
+          ? "border-text-on-cta/30 bg-text-on-cta/15 text-text-on-cta"
+          : "border-border-strong bg-bg-inset text-text-secondary"
+      )}
+    >
+      Link out
+    </span>
   );
 }

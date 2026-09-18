@@ -4,6 +4,7 @@ import { AvatarStack } from "@/shared/ui/avatar-stack";
 import {
   HOME_CARD_FACE,
   HOME_CARD_FACE_SELECTED,
+  LinkOutChip,
   MentionBadge,
   UnreadDot,
   rowQuietInk,
@@ -163,18 +164,10 @@ export function HomeChannelRow({
             ⚠ **THE TWO MARKS ARE EXCLUSIVE** — the `@ N` pill already says the
             louder version of what the dot says. */}
         <span className="mt-0.5 flex min-h-[18px] items-center gap-1.5">
-          {row.linkOut && (
-            <span
-              className={cn(
-                "shrink-0 rounded-full border px-1.5 text-micro font-medium",
-                selected
-                  ? "border-text-on-cta/30 bg-text-on-cta/15 text-text-on-cta"
-                  : "border-border-strong bg-bg-inset text-text-secondary"
-              )}
-            >
-              Link out
-            </span>
-          )}
+          {/* ⚠ THE CHIP IS `home-card-marks.tsx › LinkOutChip` SINCE WAVE 4 —
+              the workspace channel row says the same fact off the same field,
+              and this markup was the only declaration of it. */}
+          {row.linkOut && <LinkOutChip onDark={selected} />}
           {row.pendingLine && (
             <span className={cn("truncate text-caption", rowQuietInk(selected))}>
               {row.pendingLine}

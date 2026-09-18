@@ -15,7 +15,11 @@ import { AvatarStack } from "@/shared/ui/avatar-stack";
 import { cn } from "@/shared/lib/utils";
 import { CountBadge, IconTile } from "./bits";
 // ⚠ THE SAME MARKS /home DRAWS (R-28), never a second pill and never a second dot.
-import { MentionBadge } from "@/shared/ui/home-card-marks";
+import {
+  LinkOutChip,
+  MentionBadge,
+  UnreadDot,
+} from "@/shared/ui/home-card-marks";
 import type { HomeChannelRowFace } from "@/shared/ui/home-channel-row";
 import type { ChannelThread } from "../types";
 
@@ -90,6 +94,14 @@ function SidebarRow({
  * ⚠ **AND IT IS THE DOT'S ALTERNATIVE, NOT ITS COMPANION**: a channel with unread
  * mentions already says the louder thing, and two markers read as two facts.
  *
+ * 🔒 **THE DOT AND THE "Link out" CHIP COME FROM THE SAME MODULE SINCE WAVE 4.**
+ * The dot was a hand-cut span here — its own geometry, its own accessible name
+ * and its own colour — and the chip existed only inside `home-channel-row.tsx`.
+ * Both are `home-card-marks.tsx` now: **one implementation per mark, two inks.**
+ * ⚠ **`tone="link"` IS NOT A REGRESSION TO THE OLD SPAN** — R-03 keeps this
+ * picker's own design, so the blue stays while the geometry, the name and the
+ * precedence stop being re-typed. A third tone is a ruling, not a prop value.
+ *
  * ⚠ The DM section's rows are people; a person is already a face, so they are
  * never tiled.
  *
@@ -109,6 +121,7 @@ export function ChannelRow({
   label,
   person,
   faces,
+  linkOut = false,
   selected,
   unread,
   mentions = 0,
@@ -129,6 +142,9 @@ export function ChannelRow({
    * ⚠ **`?? EMPTY_PEERS` AT THE CALL SITE (§8)** — this row takes answers.
    */
   faces?: readonly HomeChannelRowFace[];
+  /** An invitation is out on this channel — `Channel.linkOut !== null`, the
+   *  SAME fact /home's row chips, judged by the same claim-gate predicate. */
+  linkOut?: boolean;
   selected: boolean;
   unread: boolean;
   /**
@@ -153,19 +169,22 @@ export function ChannelRow({
   // ⚠ ONE TRAILING GROUP, AND IT IS ABSENT WHEN IT HOLDS NOTHING — the row's own
   // `gap-2` would otherwise pad every quiet channel by an empty span's gutter.
   const stack = person ? null : (faces ?? []);
+  const hasStack = stack !== null && stack.length > 0;
+  // ⚠ **THE BADGE SUPPRESSES THE DOT, IT DOES NOT JOIN IT** — /home's rule, and
+  // this row's own since R-28: a channel with unread mentions already says the
+  // louder thing, and two markers read as two facts. ⚠ `tone="link"` is the
+  // picker's own accent (R-03), not a second dot.
   const mark =
     mentions > 0 ? (
       <MentionBadge count={mentions} />
     ) : unread ? (
-      <span
-        aria-label="Unread messages"
-        className="h-1.5 w-1.5 shrink-0 rounded-full bg-link"
-      />
+      <UnreadDot tone="link" />
     ) : null;
   const trailing =
-    (stack && stack.length > 0) || mark ? (
+    hasStack || linkOut || mark ? (
       <span className="ml-auto flex shrink-0 items-center gap-1.5">
-        {stack && stack.length > 0 && (
+        {linkOut && <LinkOutChip />}
+        {hasStack && (
           <AvatarStack size={FACE_SIZE} max={FACE_MAX} users={[...stack]} />
         )}
         {mark}
