@@ -75,5 +75,6 @@ export type {
   WorkspaceRole,
   MembershipStatus,
   WorkspaceKind,
+  ContainerKind,
   TemplateVisibility,
 } from "./workspaces.js";

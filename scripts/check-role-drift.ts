@@ -52,6 +52,7 @@
  *   A. the ROLE set (above)                        — `main`
  *   B. the workspace LIST-ITEM field set            — `checkWorkspaceMirror`
  *   C. `isStandardWorkspace`'s POSITIVE form        — `checkWorkspaceKind` (F-295)
+ *   D. the CONTAINER-KIND mapping                   — `checkContainerKind` (R-32)
  *
  * ⚠ **B AND C ARE THE TWO THAT A13 COULD NOT DELETE, FOR DIFFERENT REASONS.** B
  * compares INTERFACE FIELD SETS between two DTOs that are legitimately different
@@ -276,6 +277,116 @@ function checkWorkspaceMirror(read: (rel: string) => string): boolean {
  *      LATER, silently, into the one place the predicate exists to keep kinds
  *      out of. A set-only check cannot see a coordinated flip to `!==`.
  */
+/**
+ * Pull the values of `CHECK (kind IN ('a','b',…))` on `workspaces`, from
+ * whichever migration most recently re-declared `workspaces_kind_check`.
+ *
+ * ⚠ MOST RECENT BY FILENAME, which is the order the database replays in (§12):
+ * the last file to `ADD CONSTRAINT` it is the constraint that wins, and reading
+ * an earlier one would compare against history.
+ */
+function extractSqlKindValues(migrationsDir: string): { file: string; kinds: string[] } {
+  const files = readdirSync(migrationsDir)
+    .filter((f) => f.endsWith(".sql"))
+    .sort();
+  for (const file of [...files].reverse()) {
+    // ⚠ **COMMENTS ARE STRIPPED FIRST, AND THAT IS NOT A NICETY.** The file that
+    // widened this CHECK carries its own ROLLBACK in a `--` block, which
+    // re-states the constraint with the OLD two values — a naive read finds the
+    // rollback first and reports the live migration as missing `personal`.
+    const sql = readFileSync(resolve(migrationsDir, file), "utf8")
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("--"))
+      .join("\n");
+    // ⚠ And the LAST executable declaration wins, for the same reason the most
+    // recent FILE does: a migration may drop and re-add within itself.
+    const all = [
+      ...sql.matchAll(
+        /ADD\s+CONSTRAINT\s+workspaces_kind_check\s+CHECK\s*\(\s*kind\s+IN\s*\(([^)]*)\)/gi,
+      ),
+    ];
+    if (all.length === 0) continue;
+    const last = all[all.length - 1];
+    return { file, kinds: [...last[1].matchAll(/'([^']+)'/g)].map((x) => x[1]) };
+  }
+  throw new Error("no migration declares `workspaces_kind_check`");
+}
+
+/**
+ * 🔒 **FAMILY D — THE CONTAINER KIND, ACROSS THREE DECLARATIONS THAT NO
+ * COMPILER CAN HOLD TOGETHER** (R-32, Samuel 2026-09-17).
+ *
+ * ⚠ **THERE ARE TWO VOCABULARIES AND THAT IS THE WHOLE REASON THIS EXISTS.**
+ * `WorkspaceKind` is what the COLUMN holds (`standard | link | personal`);
+ * `ContainerKind` is what an AGENT is told (`workspace | home_channel |
+ * personal`). Neither is derivable from the other, and the mapping between them
+ * is one `switch`. So three things must agree:
+ *
+ *   1. `@dopl/contracts › WorkspaceKind` and the SQL `CHECK` hold the SAME set —
+ *      a value the column can hold and the union cannot is cast into the union
+ *      silently and takes every `default` branch, which is the exact failure
+ *      `check-message-kind-drift.ts` exists for;
+ *   2. `@dopl/contracts › ContainerKind` has exactly as many members as there
+ *      are storable kinds — a kind with no agent-facing name is a container an
+ *      agent cannot tell apart from a workspace;
+ *   3. `workspace-directory.ts › containerKind` NAMES every storable kind. ⚠ Its
+ *      `default` arm answers `workspace`, which fails SAFE for a fourth kind
+ *      (an unknown container is not advertised as somebody else's room) and is
+ *      exactly why a green compile proves nothing here: the `switch` is TOTAL
+ *      whatever the column gains.
+ */
+function checkContainerKind(
+  read: (rel: string) => string,
+  migrationsDir: string,
+): boolean {
+  let drift = false;
+  const contracts = read("packages/contracts/src/workspaces.ts");
+  const storable = extractUnion(contracts, "WorkspaceKind");
+  const agentFacing = extractUnion(contracts, "ContainerKind");
+  const sql = extractSqlKindValues(migrationsDir);
+
+  const missing = storable.filter((k) => !sql.kinds.includes(k));
+  const extra = sql.kinds.filter((k) => !storable.includes(k));
+  if (missing.length || extra.length) {
+    drift = true;
+    console.error(
+      `[drift] \`WorkspaceKind\` vs supabase/migrations/${sql.file} › workspaces_kind_check:`,
+    );
+    if (missing.length) console.error(`  the CHECK lacks: ${missing.join(", ")}`);
+    if (extra.length) console.error(`  the union lacks: ${extra.join(", ")}`);
+  }
+
+  if (agentFacing.length !== storable.length) {
+    drift = true;
+    console.error(
+      `[drift] \`ContainerKind\` has ${agentFacing.length} member(s) for ${storable.length} storable kind(s) — every kind a row can hold needs exactly one agent-facing name.`,
+    );
+  }
+
+  // ⚠ Read from the `switch`'s SOURCE, not from its behaviour: the `default`
+  // arm makes every input resolve, so only the written arms are evidence.
+  const mapper = read("packages/mcp-server/src/workspace-directory.ts");
+  const body = mapper.slice(mapper.indexOf("export function containerKind("));
+  for (const kind of storable) {
+    // `standard` is the `default` arm by design — it is the fail-safe, and
+    // naming it in a `case` would delete the fail-safe.
+    if (kind === "standard") continue;
+    if (!body.includes(`case "${kind}":`)) {
+      drift = true;
+      console.error(
+        `[drift] packages/mcp-server/src/workspace-directory.ts › containerKind has no \`case "${kind}"\` — it would fall to the \`default\` arm and be advertised as a workspace.`,
+      );
+    }
+  }
+
+  if (!drift) {
+    console.log(
+      `✅ Container kind: ${storable.join(", ")} (column) ↔ ${agentFacing.join(", ")} (agent-facing), one mapping, matching supabase/migrations/${sql.file}.`,
+    );
+  }
+  return drift;
+}
+
 function checkWorkspaceKind(read: (rel: string) => string): boolean {
   let drift = false;
 
@@ -389,6 +500,15 @@ function main(): void {
   if (checkWorkspaceMirror(read)) {
     console.error(
       "\n❌ Workspace list-item mirror drift detected. `src/features/workspaces/types.ts` and `packages/dopl-client/src/types.ts` (plus its committed dist/ mirror) are hand-mirrored: change every side in ONE change, and rebuild with `npm run build -w @dopl/client`."
+    );
+    process.exit(1);
+  }
+
+  // The FOURTH family — R-32's typed container kind, and the one gate that
+  // compares a TypeScript union against a SQL `CHECK` on this table.
+  if (checkContainerKind(read, resolve(root, "supabase/migrations"))) {
+    console.error(
+      "\n❌ Container kind drift detected (R-32). `@dopl/contracts › WorkspaceKind` is what the column holds and `› ContainerKind` is what an agent is told; the two sets, the `workspaces_kind_check` CHECK and `workspace-directory.ts › containerKind`'s arms must move together, in ONE change.",
     );
     process.exit(1);
   }

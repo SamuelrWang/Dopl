@@ -81,3 +81,31 @@ export type WorkspaceKind = "standard" | "link" | "personal";
  */
 export type TemplateVisibility = "private" | "team" | "workspace";
 
+
+/**
+ * 🔒 **THE CONTAINER ADDRESS SPACE'S KIND FIELD — A CLOSED, TYPED SET ON EVERY
+ * MCP ROW OR LIST THAT NAMES A CONTAINER** (R-32, Samuel 2026-09-17).
+ *
+ * ⚠ **IT IS NOT {@link WorkspaceKind} AND THE DIFFERENCE IS THE POINT.**
+ * `WorkspaceKind` is the COLUMN — what `workspaces.kind` may hold, and the set
+ * the DB `CHECK` states (`supabase/migrations/20260920120000_workspace_kind_
+ * personal.sql`). `ContainerKind` is what an AGENT is told, and the two
+ * vocabularies were never the same: `link` is the storage word for a home
+ * channel and means nothing to a reader, while `standard` is the word for the
+ * thing the product simply calls a workspace. The mapping is total and lives in
+ * exactly one function — `packages/mcp-server/src/workspace-directory.ts ›
+ * containerKind`, a `switch` with a `default` arm so a fourth column value is
+ * never silently advertised as somebody else's room.
+ *
+ * ⚠ **`home_channel`, NOT `"home channel"`.** It is a wire value an agent may
+ * compare, so it carries no space: the human words are
+ * `workspace-directory.ts › containerKindLabel`'s job, and a value that doubles
+ * as prose is a value nobody can match on. `scripts/check-role-drift.ts ›
+ * checkContainerKind` holds this set against the column's `CHECK` in both
+ * directions — one arm per storable kind, no arm without one.
+ *
+ * ⚠ **AND `personal` IS THE DEFAULT, STRUCTURALLY** (R-32). An unaddressed READ
+ * resolves to the caller's personal container — the reserved address `home` —
+ * and that is a property of the resolver, never a sentence in a prompt.
+ */
+export type ContainerKind = "personal" | "home_channel" | "workspace";
