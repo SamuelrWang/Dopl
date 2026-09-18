@@ -1153,9 +1153,9 @@ InfoCardCustomRow`, the write minted in `surface-info-panel.tsx` beside `headerE
 `SurfaceAgentView` collapse, `activity`/`members`/`headerEditable` onto the context, the
 `person-info-tab.tsx` absorption, and the skeleton move. **R-19 landed WITHOUT the collapse**, so
 /home still renders its own copy of the curated rows; that is the one-body step's to remove, and
-/home's rendering was left byte-identical on purpose. New findings: **F-719** (a granted KB now has
-no channel-side human reader), **F-720** ("Add member" → invite dialog, R-46's option (b) as a
-ticket), **F-721** (the THREAD info tab still says "Date of creation").
+/home's rendering was left byte-identical on purpose. New findings: **F-720** (a granted KB now has
+no channel-side human reader), **F-721** ("Add member" → invite dialog, R-46's option (b) as a
+ticket), **F-722** (the THREAD info tab still says "Date of creation").
 
 **Rulings: ALL SEVEN RULED 2026-09-17 — this wave is unblocked.** R-18 → delete the dead lane ·
 R-19 → (a) · R-20 → (a) · **R-21 → remove the archive feature entirely (item 7 — this GREW the wave)** ·

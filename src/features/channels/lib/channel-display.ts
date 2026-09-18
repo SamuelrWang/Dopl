@@ -35,7 +35,7 @@ import type { Channel, ChannelDirectPeer, ChannelMember } from "../types";
  * ⚠ **THE THREAD INFO TAB IS NOT COVERED AND STILL SAYS "Date of creation" +
  * `formatShortDate`** (`components/thread-info-tab.tsx`). R-20 ruled on the two
  * CHANNEL bodies, and a thread's created row is a different row about a different
- * object — so it is left alone rather than swept, and recorded as **F-721** rather
+ * object — so it is left alone rather than swept, and recorded as **F-722** rather
  * than accepted silently. ⚠ Do NOT import this constant there to "fix" it; that is
  * a copy decision Samuel has not made.
  *

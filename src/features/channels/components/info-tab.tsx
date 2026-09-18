@@ -304,7 +304,7 @@ export function InfoTab({
           nothing is a dead control (INVARIANTS §5), and this heading now reads the
           way /home's already did: the count, and nothing else
           (`pages/home/person-members.tsx`).
-          ⚠ **F-720 — "Add member" → the invite dialog is a FOLLOW-UP, not a
+          ⚠ **F-721 — "Add member" → the invite dialog is a FOLLOW-UP, not a
           regression.** R-46's option (b) was to wire it to the dialog the Settings
           tab already opens (`invite-dialog.tsx › InviteDialog`, mounted by
           `channel-manage.tsx`) and delete

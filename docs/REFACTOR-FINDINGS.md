@@ -8187,7 +8187,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - **THE CAPABILITY LOST ITS LAST HOST.** `/home` stopped passing it on 2026-08-27 (F-340, the width budget); the GUEST lane was the one that remained, on the argument that this tab is a guest's only way to read a base granted into the channel. Samuel's web ruling — *"There should be no Knowledge tab at all for the web: just Info, Threads, and Agents"* — takes that one too. **Nothing is deleted and nothing is dead by accident:** `channelPaneTabs`'s `knowledge` arm, the `gap-1` tightening and the `overflow-x-auto` residual all still work, and the routes are still guest-floored. What no longer exists is a caller.
 - ⚠ **THIS ENTRY SAID "THIS IS NOT A REQUEST TO DELETE IT" AND ASKED FOR THE RULING IT GOT.** It argued that deleting the lane forecloses a product answer Samuel had not been asked for — where a guest reads what was shared with them. **He was asked, as R-18, and answered: delete the dead lane.** The question is not foreclosed; it is answered in the other direction, and re-opening it means writing the four fences again.
 - ✅ **RESOLVED 2026-09-17 (R-18).** Deleted: the tab component, its hook, its client lane module, the fifth-tab width branch, `channelPaneTabs`'s `knowledge` arm, the `knowledge` capability, the three route files behind the four floors, the shared route helper that built the lane's request context, the lane's payload service and four now-unreachable gates in `knowledge/server/service-channel-grants.ts`. The two `the capability, per host` source pins went with the file that held them; the properties they guarded are stated in INVARIANTS §5 and §4A.
-- ⚠ **WHAT SURVIVED, DELIBERATELY:** the grant ROW and both of its remaining readers (the KB list's badge, and the agent reach in `shared/tenancy/resource-grant-reach.ts`). See **F-719** for the gap that leaves.
+- ⚠ **WHAT SURVIVED, DELIBERATELY:** the grant ROW and both of its remaining readers (the KB list's badge, and the agent reach in `shared/tenancy/resource-grant-reach.ts`). See **F-720** for the gap that leaves.
 - Status: RESOLVED. Re-adding the face still needs Samuel's word.
 
 ### F-681 — the ontology PROMPT-FRAMING block has no producer: nothing writes `ctx.ontologies` (2026-09-09) — ✅ RESOLVED 2026-09-09
@@ -9951,20 +9951,20 @@ The claim had been restated in five places from one sentence, which is how it su
 - ⚠ **AND THE GUEST CASE IS THE SHARP END.** A guest has no workspace surface at all, so for them a granted base is now unreachable by any door. That was the exact argument F-666 made for keeping the lane, and R-18 overrode it — deliberately, and with the consequence stated.
 - Status: OPEN. Needs Samuel's word on which half moves: the sharing control's copy, or a new channel-side read.
 
-### F-720 — "Add member" on the channel Info tab is a follow-up R-46 deliberately did not do (2026-09-17)
+### F-721 — "Add member" on the channel Info tab is a follow-up R-46 deliberately did not do (2026-09-17)
 
 - Location: `src/features/channels/components/info-tab.tsx` — the Members `PanelHeading`, which now carries the count and nothing else; the dialog it would open is `channels/components/invite-dialog.tsx › InviteDialog`, already mounted by `channel-manage.tsx` for the Settings tab's row.
-- ⚠ **Id note:** re-derived across every live branch on 2026-09-17; `F-719` was the highest, claimed by this same wave.
+- ⚠ **Id note:** wave 1B holds `F-720`–`F-722`; see `F-720`'s id note for why all three were renumbered before merge.
 - Found during: wave 1B, executing Samuel's ruling **R-46** (delete the two inert `IconButton`s in the workspace Members heading).
 - **WHAT THE RULING CHOSE.** R-46 offered (a) delete both, (b) wire "Add member" to the existing invite dialog and delete only the filter, (c) leave. Samuel took **(a)**, with (b) recorded as a follow-up ticket. This is that ticket.
 - ⚠ **NOTHING IS LOST IN THE MEANTIME, WHICH IS WHY (a) WAS SAFE.** **Add members** is on the Settings tab (`settings-tab.tsx`), capability-gated on `memberManagement` so /home's link container — where the act cannot happen at all (§4A `LINK_CONTAINER_CLOSED`) — does not offer it. The Info-tab button was a second opener for an act that already has one, and it had no `onClick` at all.
 - ⚠ **"Filter members" is NOT part of this.** It was deleted outright and no ticket follows it: the roster is bounded and short, and R-46's (b) named only the add affordance.
 - Status: OPEN, small. Wire the heading's affordance to `channels/components/invite-dialog.tsx › InviteDialog` behind the same `memberManagement` capability the Settings row uses, or decide the Settings row is the one place and close this.
 
-### F-721 — R-20 made the two CHANNEL info bodies agree and left the THREAD one saying "Date of creation" (2026-09-17)
+### F-722 — R-20 made the two CHANNEL info bodies agree and left the THREAD one saying "Date of creation" (2026-09-17)
 
 - Location: `src/features/channels/components/thread-info-tab.tsx` — the `MetaRow` at `Calendar` / `formatShortDate`, against `channels/lib/channel-display.ts › CREATED_ROW_LABEL`, which the two channel bodies now share.
-- ⚠ **Id note:** re-derived across every live branch on 2026-09-17; `F-720` was the highest, claimed by this same wave.
+- ⚠ **Id note:** wave 1B holds `F-720`–`F-722`; see `F-720`'s id note for why all three were renumbered before merge.
 - Found during: wave 1B, executing Samuel's ruling **R-20** ("Created" + `formatDate` on both info bodies).
 - **THE STATE AFTER R-20.** The workspace channel tab and /home's card now read **"Created"** and format with `formatDate` (year kept), from one exported constant. The THREAD info tab — the same column, one selection away, same `Calendar` glyph, same `MetaRow` — still reads **"Date of creation"** and formats with `formatShortDate` (year dropped). Before R-20 there were two spellings of this row and it was a channel-vs-home split; there are still two, and it is now a channel-vs-thread split.
 - ⚠ **THIS IS NOT AN ARGUMENT THAT R-20 WAS WRONG, AND IT IS NOT A LICENCE TO SWEEP.** A thread's created row is a row about a different object, and R-20's text is explicitly about the two channel bodies (01 §E-2). Extending a ruling to a surface it did not name is the failure the visual-match rules exist to prevent. Recorded so the next reader does not assume the constant was simply forgotten there.
