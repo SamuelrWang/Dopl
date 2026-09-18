@@ -672,6 +672,13 @@ d. **Both, plus channel sharing**, which drags in `assertSharedPublishAcknowledg
 two mounts against modules that are already tested, already MCP-reachable and already independent of
 the channel world (§D-2). ⚠ It changes the marketing hero (§D-6) and it touches the tour (§E-4).
 
+→ 🔴 **RULED NO (Samuel, 2026-09-17) — (c), reversing the recommendation above.** Neither face lands.
+⚠ Neither consequence arrived either: the hero's tab strip is unchanged at five faces, and the tour is
+gone for an unrelated reason (R-49). **Confirmed and pinned in wave 7** by
+`src/features/home/tabs.test.ts` — the face set plus an import scan over both /home source trees,
+mutation-verified. ⚠ **THE (c) HALF IS STILL OWED**: `dopl_chats(op="export")` with no container still
+files chats nothing lists, and what it should do instead has no answer. Ruling "no" did not close it.
+
 ### E-7. `dopl_workspaces(op="create_home_channel")` — the SHAPE is still owed
 
 F-621 is **RESOLVED** on a Desktop-Agent default and its own entry says *"THE SHAPE IS WHAT NEEDS

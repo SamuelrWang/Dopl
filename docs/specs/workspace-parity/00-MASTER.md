@@ -775,9 +775,9 @@ which lands in Wave 1).
 
 | # | Item | Recommendation | Ref |
 |---|---|---|---|
-| V1 | **Chats** — no /home face; scoping is plain `workspace_id`, no kind awareness anywhere | **Extend (personal shelf).** Smallest job in the set: no migration, no new endpoint, no audience ceiling. R-33 | 04 §B-1 |
+| V1 | **Chats** — no /home face; scoping is plain `workspace_id`, no kind awareness anywhere | 🔴 **DO NOT EXTEND — R-33 ruled NO (2026-09-17)**, and the absence is pinned (`src/features/home/tabs.test.ts`, wave 7) | 04 §B-1 |
 | V2 | **Orphan class: exported chats nothing lists.** `dopl_chats(op="export")` with no `workspace=` resolves the caller's `personal` container; `ChatsView` has one mount (the workspace route); the rail filters to `isStandardWorkspace` | **Extend, or answer what the export should do instead.** This is a live defect, not a missing feature | 04 §B-1; R-33 |
-| V3 | **Skills** — no /home face; the MCP tool is *already* link-container aware (a public publish inside a shared container needs a one-time confirm token) | **Extend (personal shelf).** The hard half is built; only the surface is missing. ⚠ A home shelf opens empty, and that is the ruled outcome (*"a personal container is a shelf, not a workspace"*) | 04 §B-2 |
+| V3 | **Skills** — no /home face; the MCP tool is *already* link-container aware (a public publish inside a shared container needs a one-time confirm token) | 🔴 **DO NOT EXTEND — R-33 ruled NO (2026-09-17)**, and the absence is pinned (`src/features/home/tabs.test.ts`, wave 7). The MCP half is untouched: `dopl_skill` still reaches a personal container | 04 §B-2 |
 | V4 | **`ConnectedAppsSection`** — reachable only from the workspace `/settings` PAGE; the modal passes no `extras` | **Extend (one prop).** An operator who works entirely in the home space cannot see or revoke their connected apps — security-relevant, not cosmetic | 04 §B-6 |
 | V5 | **The guidance layer** — `TourProviderCore`, `JoinRequestNoticesCore`, `ConnectAgentBanner`, `WelcomePopup`, none mounted on /home; all four already host-agnostic | **Ruling R-49** — a no-code-change parity win for two of the four | 03 §A12, §C3 |
 | V6 | **`MyAccessProvider`** — /home mounts it only inside the KB view, so any teams-mode gate elsewhere on /home resolves to a false edit affordance (F-330: `canEdit` **falls open**) | **Extend.** The prescribed fix shape is to report PROVIDERLESS distinctly from PENDING — **do not flip the default closed** | 03 §C3; 06 §C.1 |
@@ -1518,7 +1518,10 @@ join-request notices core with `GET /api/me/join-requests` + `/ack` and their tw
 the connect-agent banner, the welcome popup with `buildBootstrapPrompt`, and every mount in the
 desktop shell. The two ack COLUMNS survive as data with no reader; the rule is INVARIANTS §15 and the
 absence is pinned in `app-shell.test.tsx`.
-🔴 **DROPPED: V1/V3 Chats and Skills.** **R-33 — NO, Skills and Chats stay out of home.**
+✅ 🔴 **DROPPED: V1/V3 Chats and Skills.** **R-33 — NO, Skills and Chats stay out of home.**
+**CONFIRMED AND PINNED 2026-09-17**: nothing mounts either — `src/features/home/tabs.test.ts` holds
+the five-face set AND scans both /home source trees for an import of `@/features/{skills,chats}`
+(mutation-verified). It is an ABSENCE test; deleting it deletes the ruling.
 ⚠ **V2 therefore stays a live orphan class**: `dopl_chats(op="export")` with no container still files
 chats nothing lists, and *what the export should do instead is still owed an answer.* Record it, do
 not quietly close it.
