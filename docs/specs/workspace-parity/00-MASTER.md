@@ -1345,9 +1345,11 @@ as-is**; no rename.
 R-05 → crossfade page switches too · R-06 → not now · R-07 → keep both · R-10 → (a) + FROZEN ·
 R-13 → expired, and the guest nav goes.
 
-#### ✅ Wave 5 — the SHELL half, done 2026-09-17 (branch `wave5/shell`)
+#### ✅ Wave 5 — the SHELL half
 
-**R-01(a), R-13 and R-05 are IN THE TREE.** What landed, one commit each:
+🟢 **MERGED TO `master` 2026-09-17** (branch `wave5/shell`, 4 build commits + 1 review commit,
+fast-forward, full gate set). **R-01(a), R-13 and R-05 are in the tree.** What landed, one commit
+each:
 
 1. **R-01(a) / X19 — the shell refuses every member of a home-channel container, not only the
    guest.** `apps/desktop-ui/src/components/app-shell/app-shell.tsx › AppShellLayout`: the redirect
@@ -1356,8 +1358,16 @@ R-13 → expired, and the guest nav goes.
    a hand `!== "link"`. `personal` stays out of this arm because the effect above it already owns
    it; two arms firing would race two `replace`s over one history entry. **The destination is
    unchanged** — the container's own channel record, `/home` when the read answers no channel or
-   fails. `app-shell-guest.test.tsx` 6 cases → 12; the gate narrowed back to `role === "guest"` is
+   fails. `app-shell-guest.test.tsx` 6 cases → 13; the gate narrowed back to `role === "guest"` is
    3 red.
+   🔒 **THE DESTINATION IS THE CHANNEL RECORD, AND THAT IS DECIDED, NOT ASSUMED (2026-09-17
+   review).** The brief said *"the container's channel record"*; Samuel's literal wording under R-01
+   said *"redirects to /home"*. **The channel record stands** — it is the same ruling with a better
+   landing, and the code shows it always resolves: the read is `GET /api/home/channels`, fenced by
+   the caller's own membership rows, and EVERY member of the container (guest, member, admin, owner)
+   is on those rows, so the match on `workspaceId` cannot come up empty for somebody the shell is
+   refusing. `/home` remains the answer when it does come up empty or fails, which is Samuel's
+   wording as the fallback rather than the rule.
 2. **R-13 — the nav is DELETED, not ported.** `AppSidebarCore` is not rendered for a container
    member: eight rows, the switcher, the Team upsell and the settings gear all pointed at pages the
    redirect bounces. It reads the SAME `isContainerMember` the redirect reads — one derivation of
@@ -1377,6 +1387,23 @@ R-13 → expired, and the guest nav goes.
    the swap reads as a dip and return rather than one view dissolving into the next. Holding the
    outgoing route tree is not something a layout route can do from inside; **if Samuel wants a true
    cross-dissolve on routes, that is a different mechanism and his word.**
+
+🐛 **THE REVIEW FIXED ONE REAL BUG, AND IT IS THE ONE R-01(a) CREATED MORE OF.** The navigate is an
+EFFECT, so the render that computes the destination still renders `<Outlet/>` — measured with a
+mount log: `/{segment}/members` MOUNTED, ran its own reads and 403'd them, for one tick, on every
+cold load for every container member. That is the *"fully painted chrome around a stack of
+`PageError` cards"* the original ASK-2 ruling exists to kill, and widening the gate from one guest
+to every member multiplied it. The shell now holds `ShellChromeSkeleton` over the whole window, off
+ONE derivation (`awaitingRedirect`) that the effect and the loading gate both read — a second
+spelling of "is this member about to be moved" is exactly what would drift. ⚠ **A PATHNAME
+ASSERTION CANNOT SEE IT** (the URL is already the channel by the time a test reads it), so the
+witness is a mount log; dropping the ghost is 1 red.
+⚠ **AND THE QUERY STRING IS PINNED, NOT INFERRED** — a page's filter state rides the search params,
+the R-05 token is cut from `pathname`, and a token cut from the full URL is 1 red.
+**COMMENT BUDGET:** the wave's five files lost a NET 24 comment lines in the review (598 → 574,
+measured 2026-09-17, and the review added its own fix's comments inside that number) (the redirect
+docblock's history moved to this row and to INVARIANTS §4A, where CLAUDE.md doc rule 3 says current
+state belongs; the R-05 and R-13 rulings were each stated three times and are now stated once).
 
 🔒 **R-06 — CONFIRMED, NOTHING ADDED.** This wave adds no page skeleton and touches none. Skills,
 Chats and Ontology still resolve through `PageLoading`

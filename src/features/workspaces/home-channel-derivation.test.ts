@@ -108,23 +108,15 @@ const FENCE_SITES: Record<string, string> = {
 };
 
 /**
- * 🔒 **A FENCE WITH NO SENTENCE TO BRANCH (added 2026-09-17, wave 5 / R-01(a)).**
- * `FENCE_SITES`' third assertion — *"a FENCE site is declared as repaired"* —
- * reads a site's MESSAGE and requires it to branch on the kind. That assumes
- * every fence SAYS something, and a REDIRECT says nothing: `AppShellLayout`
- * sends a member of a non-standard container to their channel record and
- * renders no nav, with no copy anywhere in the path.
+ * 🔒 **A FENCE WITH NO SENTENCE TO BRANCH (2026-09-17, wave 5 / R-01(a)).**
+ * `FENCE_SITES`' third assertion reads a site's MESSAGE and requires it to
+ * branch on the kind. A REDIRECT says nothing: `AppShellLayout` sends a member
+ * of a non-standard container to their channel record, with no copy in the path.
  *
- * ⚠ **IT IS DECLARED SEPARATELY RATHER THAN EXEMPTED**, and the two maps stay
- * non-interchangeable in BOTH directions: a FENCE site must carry
- * `kind === "link"`, a SILENT one must NOT — so a site with a sentence cannot be
- * parked here to dodge the message assertion, which is the only way this map
- * could weaken the gate.
- *
- * ⚠ **THE NEGATION IS STILL THE POINT.** `personal` is excluded by its own
- * clause because the effect above it already redirects personal containers; the
- * KIND read is `!isStandardWorkspace`, so a fourth kind inherits the refusal
- * instead of opting into it — F-295 exactly.
+ * ⚠ **DECLARED SEPARATELY RATHER THAN EXEMPTED**, and the two maps are
+ * non-interchangeable in BOTH directions — a FENCE site must carry
+ * `kind === "link"`, a SILENT one must not — so a site with a sentence cannot be
+ * parked here to dodge the message assertion.
  */
 const SILENT_FENCE_SITES: Record<string, string> = {
   "apps/desktop-ui/src/components/app-shell/app-shell.tsx":

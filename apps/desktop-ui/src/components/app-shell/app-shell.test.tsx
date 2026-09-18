@@ -225,6 +225,21 @@ describe("app shell", () => {
     expect(fade().hasAttribute("data-out")).toBe(false);
   });
 
+  it("does NOT fade when only the query string moves", async () => {
+    // A page's own filter/tab state rides the search params. The token is cut
+    // from `pathname`, so this cannot fire — pinned because a token cut from
+    // `location.key` or from the full URL would blink the surface on every
+    // filter press.
+    const router = renderShell("/acme-ab12cd/overview");
+
+    await screen.findByText("page body");
+    await act(async () => {
+      await router.navigate("/acme-ab12cd/overview?tab=agents");
+    });
+
+    expect(fade().hasAttribute("data-out")).toBe(false);
+  });
+
   it("rewrites a stale segment to the canonical one, keeping the page", async () => {
     const router = renderShell("/acme/overview");
 

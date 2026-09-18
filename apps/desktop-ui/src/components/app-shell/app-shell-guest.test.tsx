@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router";
@@ -42,12 +43,13 @@ import { AppShellLayout } from "./index";
  *   - `channels[0]` instead of matching `workspaceId` ............. 1 red
  *   - `navigate(target)` instead of `{ replace: true }` ........... 1 red
  *   ⚠ THE SECOND ROW IS NOW THE OTHER WAY UP (2026-09-17): the gate is the
- *   KIND, and "any known role" is what the container cases assert. Re-measured:
+ *   KIND. Re-measured:
  *   the gate narrowed back to `role === "guest"` ................. 3 red
+ *   the ghost dropped over the redirect window .................... 1 red
  *   `!isStandardWorkspace` flipped to `kind === "link"` .......... 0 red,
  *   recorded rather than papered over — the union has no fourth kind to catch
- *   it with, which is exactly why `check-role-drift.ts › checkWorkspaceKind`
- *   holds the positive form and not a test here.
+ *   it with, which is why `check-role-drift.ts › checkWorkspaceKind` holds the
+ *   positive form and not a test here.
  *   - `?? []` dropped from the `select` .......................... **0 red**,
  *     and that is recorded rather than papered over. A throwing `select` puts
  *     the query in an ERROR state, which lands on the same `/home` the absent
@@ -154,6 +156,14 @@ function mockBridge() {
 }
 
 /** The shell over the routes a guest can be bounced BETWEEN. */
+const mounted: string[] = [];
+function MembersProbe() {
+  useEffect(() => {
+    mounted.push("members");
+  }, []);
+  return <p>members body</p>;
+}
+
 function renderShell(path: string) {
   const router = createMemoryRouter(
     [
@@ -163,7 +173,7 @@ function renderShell(path: string) {
         element: <AppShellLayout />,
         children: [
           { path: "overview", element: <p>overview body</p> },
-          { path: "members", element: <p>members body</p> },
+          { path: "members", element: <MembersProbe /> },
           { path: "channels/:channelId", element: <p>channel body</p> },
         ],
       },
@@ -180,6 +190,7 @@ function renderShell(path: string) {
 
 describe("the shell sends a container member to their channel", () => {
   beforeEach(() => {
+    mounted.length = 0;
     role = "guest";
     workspaceRow = CONTAINER;
     homePayload = { channels: [homeChannel()], pendingLinks: [] };
@@ -271,6 +282,23 @@ describe("the shell sends a container member to their channel", () => {
    * ⚠ `queryByRole("link")` is the assertion, not a class or a `hidden` prop —
    * a nav that renders and hides is the thing this forbids.
    */
+  /**
+   * 🔒 THE REDIRECT WINDOW IS PART OF THE RULING (wave 5 review, 2026-09-17).
+   * The navigate is an EFFECT, so the render before it mounted the very page
+   * R-01(a) refuses — measured: `/members` mounted, ran its own reads and 403'd
+   * them, on every cold load for every container member. ⚠ A pathname assertion
+   * CANNOT see this: the URL is already the channel by the time it is read. The
+   * mount log is the only witness, and holding the shell ghost is the fix.
+   */
+  it("never paints the page it is about to leave", async () => {
+    role = "member";
+    const router = renderShell(`/${SEGMENT}/members`);
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(`/${SEGMENT}/channels/${CHANNEL_ID}`)
+    );
+    expect(mounted).toEqual([]);
+  });
+
   it("renders NO workspace nav for a container member", async () => {
     role = "member";
     renderShell(`/${SEGMENT}/overview`);

@@ -94,53 +94,34 @@ export function AppShellLayout() {
    * option (a), 2026-09-17, for every other member of the same container).
    *
    * ⚠ ONE REDIRECT, WIDENED — not a second branch. A `kind='link'` container is
-   * a RELATIONSHIP, and nobody in one has a Members console, Skills, Chats or a
-   * Settings page carrying an owner delete, whatever their ROLE in it says.
-   * Fencing on `role === "guest"` admitted the container's member, admin and
-   * owner through the one door the guest was kept out of.
+   * a RELATIONSHIP: nobody in one has a Members console, Skills, Chats or a
+   * Settings page carrying an owner delete, whatever their ROLE says. Fencing on
+   * `role === "guest"` admitted its member, admin and owner through the one door
+   * the guest was kept out of.
    *
    * ⚠ THE FLOOR IS NOT THE FIX AND MUST NOT BECOME ONE. `segment.ts ›
-   * BOOT_MIN_ROLE` stays `"guest"` deliberately: the two pop-out windows live
-   * OUTSIDE this layout and pay the boot read themselves, so a `viewer` floor
-   * there answers 404 and a guest's popped-out thread renders "Workspace not
-   * found". The floor says WHO MAY ASK; this says WHERE THEY LAND. Both are
-   * needed and they are different questions.
+   * BOOT_MIN_ROLE` stays `"guest"`: the two pop-out windows live OUTSIDE this
+   * layout and pay the boot read themselves, so raising it to `viewer` renders
+   * "Workspace not found" in a guest's popped-out thread. The floor says WHO
+   * MAY ASK; this says WHERE THEY LAND.
    *
-   * WHAT IT REPLACES: a guest reaching `/{linkContainerSegment}` got the shell
-   * in full and then every routed page 403'd at the `viewer` default — fully
-   * painted chrome around a stack of `PageError` cards. Not a leak (nothing
-   * links a guest here), but URL-reachable.
+   * ⚠ THE CONTAINER HAS EXACTLY ONE CHANNEL, resolved the way the guest WEB
+   * lane resolves it (`src/app/c/[workspaceId]/page.tsx`): `GET
+   * /api/home/channels`, fenced by the caller's own membership rows, matched on
+   * `workspaceId` — which is what makes it the SAME container, not merely a
+   * channel.
    *
-   * ⚠ THE CONTAINER HAS EXACTLY ONE CHANNEL, and this resolves it THE WAY THE
-   * GUEST WEB LANE DOES — `src/app/c/[workspaceId]/page.tsx` calls
-   * `getHomeChannel(user, workspaceId)`, whose HTTP twin reachable from a
-   * renderer is `GET /api/home/channels` (`withUserAuth`, no `X-Workspace-Id`,
-   * fenced by the caller's own membership rows — so a guest may ask it and a
-   * container they do not belong to is not in the answer). Matching on
-   * `workspaceId` is what makes it the SAME container, not merely a channel.
+   * ⚠ NO CHANNEL ⇒ `/home`, and a FAILED read lands there too. Not
+   * UNKNOWN-rendered-as-EMPTY (INVARIANTS §11): `/home` asserts nothing, and
+   * claiming "you have no channel" ON a workspace URL is what would be a lie.
    *
-   * ⚠ NO CHANNEL ⇒ `/home`, NOT A THIRD ERROR CARD — and a FAILED read lands
-   * there too. That is not UNKNOWN-rendered-as-EMPTY (INVARIANTS §11), because
-   * `/home` asserts nothing: the question this answers is "where does a guest
-   * belong", the answer is never a workspace page, and `/home` is the guest's
-   * own surface, which reports its own read failure honestly. Claiming "you have
-   * no channel" ON a workspace URL is the thing that would be a lie.
+   * ⚠ ORDERED BEHIND THE CANONICAL REDIRECT above, and `personal` is excluded
+   * because the effect above already owns it: any two of these firing in one
+   * tick would race two `replace`s over one history entry.
    *
-   * ⚠ ORDERED BEHIND THE CANONICAL REDIRECT above: while `needsRedirect` is
-   * true the routed segment is stale, and both effects firing in one tick would
-   * race two `replace`s over one history entry.
-   *
-   * ⚠ THE TARGET IS COMPARED BEFORE NAVIGATING — it is a route INSIDE this
-   * layout, so an unguarded navigate re-runs this effect forever.
-   */
-  /**
    * ⚠ POSITIVE KIND CHECK (INVARIANTS §4A, F-295): `isStandardWorkspace` is THE
-   * predicate. A hand `kind !== "link"` would admit every kind added to the
-   * union later — the coordinated flip that check exists to stop.
-   *
-   * ⚠ `personal` IS EXCLUDED, because the effect above already owns it. Both
-   * firing would race two `replace`s over one history entry, and the personal
-   * fence is the unconditional one.
+   * predicate. A hand `kind !== "link"` admits every kind added to the union
+   * later — the coordinated flip that check exists to stop.
    */
   const isContainerMember =
     !!workspace && workspace.kind !== "personal" && !isStandardWorkspace(workspace);
@@ -163,26 +144,22 @@ export function AppShellLayout() {
       ? `/${segment}/channels/${containerChannelId.data}`
       : HOME_PATH
     : null;
+  /** ⚠ ONE DERIVATION, READ TWICE — the effect navigates on it, the loading
+   *  gate below holds the ghost on it. A target of `null` (read in flight)
+   *  counts: the destination is unknown, the departure is not. */
+  const awaitingRedirect = leavesShell && location.pathname !== containerTarget;
   useEffect(() => {
-    if (needsRedirect || !segment || containerTarget === null) return;
-    if (location.pathname === containerTarget) return;
+    if (needsRedirect || !segment || !awaitingRedirect || containerTarget === null) return;
     navigate(containerTarget, { replace: true });
-  }, [needsRedirect, segment, containerTarget, location.pathname, navigate]);
+  }, [needsRedirect, segment, awaitingRedirect, containerTarget, navigate]);
 
   /**
-   * 🔒 R-05 (Samuel, 2026-09-17): **THE SHELL CROSSFADES ON PAGE SWITCHES TOO**,
-   * not only when a page's own surface swaps a record — option (a), against
-   * 03 §C2's recommended (b).
+   * 🔒 R-05 (Samuel, 2026-09-17): the shell crossfades on PAGE switches too.
    *
-   * ⚠ THE TOKEN IS THE PAGE, NOT THE PATH. `/{segment}/knowledge/{slug}` and
-   * `/{segment}/channels/{id}` are the SAME page picking a different record, and
-   * those pages already crossfade that pick themselves (`knowledge-v2/detail/
-   * detail-panel.tsx`, `channels/components/info-panel.tsx`) — a second fade
-   * over the first is two swaps for one click.
-   *
-   * ⚠ `activeSectionFromPath` IS NOT THE TOKEN EITHER: it answers `null` for
-   * every non-nav route (Settings), which would collapse them onto one token and
-   * leave the one page in the shell that never fades.
+   * ⚠ THE TOKEN IS THE PAGE SEGMENT, NOT THE PATH — `knowledge/{slug}` and
+   * `channels/{id}` are one page picking a record, and those pages already fade
+   * that pick themselves. Not `activeSectionFromPath` either: it answers `null`
+   * for every non-nav route, collapsing them onto one token.
    */
   const pageToken = location.pathname.split("/").filter(Boolean)[1] ?? "";
 
@@ -205,7 +182,12 @@ export function AppShellLayout() {
   // the tile the operator just pressed — `parseSegment` off the ROUTED path, not
   // off `workspace`, which is the value this gate is waiting for. A publicId
   // survives a slug rename, so a stale segment still lights the right tile.
-  if (isPending) {
+  // ⚠ AND IT COVERS THE REDIRECT WINDOW TOO (added 2026-09-17, wave 5 review).
+  // A member who is leaving is known a round trip before the DESTINATION is, and
+  // the navigate is an effect — so `<Outlet/>` rendered here mounts the very page
+  // the redirect exists to refuse. Measured: `/members` mounted, ran its own
+  // reads and 403'd them, for every container member on every cold load.
+  if (isPending || awaitingRedirect) {
     const routed = location.pathname.split("/").filter(Boolean)[0] ?? "";
     return (
       <ShellChromeSkeleton
@@ -266,21 +248,17 @@ export function AppShellLayout() {
               composed here rather than restated, so the panel /home wears and
               the panel this wears are one recipe. `styles.panel` adds layout
               only; see `app-shell.module.css`'s header for the level table. */}
-          {/* ⚠ `data-no-nav`, NOT a second class on the panel: the panel's and
-              the card's class expressions are byte-shared with the shell ghost
-              (`skeletons/frame-skeletons.test.tsx`), so the no-sidebar inset is
-              an ATTRIBUTE hook and the CSS module owns the geometry. */}
+          {/* ⚠ An ATTRIBUTE, not a second class: the panel's and the card's
+              class expressions are byte-shared with the shell ghost
+              (`skeletons/frame-skeletons.test.tsx`). */}
           <div
             className={cn("page-float", styles.panel)}
             data-no-nav={isContainerMember ? "" : undefined}
           >
-            {/* 🔒 R-13 (Samuel, 2026-09-17): **THE CONTAINER MEMBER GETS NO
-                NAV**, and it is DELETED rather than disarmed or filtered. The
-                redirect above leaves them exactly one reachable shell route —
-                their channel record — so all eight rows, the switcher, the Team
-                upsell and the settings gear pointed at pages that bounce
-                straight back. ⚠ It is the same fence as the redirect, asked
-                once: a nav-only rule would be a SECOND reading of the kind. */}
+            {/* 🔒 R-13 (Samuel, 2026-09-17): the container member gets NO nav,
+                DELETED rather than hidden — every row, the switcher and the gear
+                pointed at pages the redirect bounces. Same fence as the
+                redirect, asked once. */}
             {isContainerMember ? null : (
               <AppSidebarCore
                 workspaceSegment={segment}
@@ -316,13 +294,8 @@ export function AppShellLayout() {
                     at the card's rounded edge instead of floating over the
                     page. */}
                 <div className={styles.pageCard}>
-                  {/* ⚠ THE ROUTER OWNS THE TREE, so the render function's shown
-                      token cannot select the outgoing page the way /home's pane
-                      selects it — react-router has already swapped `<Outlet/>`
-                      by the time the token changes. The token says WHEN to run
-                      the fade; the fade itself is the kit's `.crossfade`, its
-                      one timing and its one reduced-motion rule, reused and not
-                      re-stated. */}
+                  {/* The router owns the tree, so the token says WHEN to fade,
+                      not WHAT to hold (INVARIANTS §4A). */}
                   <Crossfade token={pageToken} className="flex min-h-0 flex-1 flex-col">
                     {() => <Outlet />}
                   </Crossfade>
