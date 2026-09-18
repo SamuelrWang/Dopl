@@ -129,8 +129,8 @@ research doc it came from (e.g. "01 §A row 5").
 | P30 | ✅ **DONE 2026-09-17 (Wave 3, R-26 (b)).** ONE channel-list resource, `?scope=container\|account`. `GET /api/home/channels` DELETED (the POST moved to `?scope=account`); `HomeChannel` deleted; the five home-only fields folded onto `Channel` as `types-list.ts › ChannelRowExtras`. `GET /api/channels/account/status` STAYS — it answers *what needs you*, not *what the rows are* | was `GET /api/home/channels` → `HomeChannel` | `GET /api/channels` → `Channel` | new adapter | L | R-26, R-27 | 05 §A.2, §B.3 collapse 1 |
 | P31 | ✅ **DONE 2026-09-17 (Wave 3).** Both cache-to-cache bridges deleted with the second cache — one projection needs no bridge (§4.2 G4) | was `use-home-channel-sync.ts` (113 lines) + `use-home-unread-refresh.ts` | n/a | rides P30 | S | P30 | 05 §B.2 |
 | P32 | ✅ **DONE 2026-09-17 (Wave 3, R-27).** ONE wire name for `channel_members.favorited_at` — `myFavoritedAt`, on `Channel`, on the home row **and** on `ChannelMember` (a THIRD spelling the audit had not counted). ⚠ Not cross-package after all: the SDK's `HomeChannel` mirror never carried the field | was `HomeChannel.favoritedAt` | `Channel.myFavoritedAt` | rename | M | R-27 | 05 §A10, §R7 |
-| P33 | ONE overview **series** vocabulary (`metric`, `range`, zero-fill, `truncated`) | `credits\|mcp\|messages`, 4 ranges, `&channel=`, `&month=` | `messages\|mcp\|threads`, fixed 31-day, `&channelId=` | new adapter | M | R-29 | 05 §A19, §B.3 collapse 2 |
-| P34 | Credits **by channel / person / tool**, token spend and the live agent board on the workspace Overview | `overview-panels.tsx:334` `CreditsBar`, `:191` `TokenSpendPanel`, `overview-agent-board.tsx` | ⚠ **CORRECTED 2026-09-17** — the workspace Overview is **not** spend-free: `pages/overview/index.tsx:94` reads `useWorkspaceEntitlements` and `:131` renders `<PeriodStats credits=…>` ("Credits used", this billing period). What is missing is the **breakdown** (by channel / person / tool), the token-spend panel and the agent board. 02 §A.8 C-2's `grep … → 0` was wrong | new code, fenced per container | L | R-29 | 02 A.8 C-2/C-3 (corrected); 04 §A-25, §B-8 |
+| P33 | ✅ **DONE 2026-09-17 (Wave 8, R-29(b)).** ONE overview **series** vocabulary in `src/features/overview-series/windows.ts` — the range union, the bucket, `overviewWindows`, `overviewSince`, `binByWindow`'s zero-fill. Both hosts are adapters over it; the workspace series gained `range` + a `credits` metric + `truncated`. ⚠ **THE PAYLOADS DID NOT MERGE and that is the ruling** — two fences, two wire shapes (INVARIANTS §9). ⚠ Two host-specific facts: the workspace set has **no `24h`** (its bin is a calendar DAY) and **defaults to `31d`**, the pre-wave window the Info-tab strip reads | `credits\|mcp\|messages`, 4 ranges, `&channel=`, `&month=` | `messages\|mcp\|threads\|credits`, `&range=`, `&channelId=` | new adapter | M | R-29 | 05 §A19, §B.3 collapse 2 |
+| P34 | ✅ **DONE 2026-09-17 (Wave 8, R-29(b)).** The workspace Overview now carries the credit BREAKDOWN (`pages/overview/usage-rails.tsx`, on `WorkspaceOverview.usage`), the LIVE AGENT BOARD (`pages/overview/agent-board.tsx`, R-25 semantics, peer rows read-only) and a TOKEN SPEND panel (`pages/overview/token-spend.tsx`, `GET /api/workspaces/[workspaceSlug]/token-spend`). All three fenced per container: seat wallets only (`workspaces/server/service-usage.ts › isWorkspaceSeatBurn`), the by-channel rail viewer-filtered because it prints a name, the board carrying none of the seven operator-only columns. 🔒 **TOKEN SPEND IS PER-MEMBER-OWN AND THERE IS NO WORKSPACE-WIDE FIGURE** — the fence decision, recorded in INVARIANTS §9. The three /home components were EXTRACTED rather than copied (`#/components/overview/{rank-rail,agent-board,token-spend-strip}.tsx`); /home's face is unchanged (R-40) | `overview-panels.tsx` `CreditsBar`, `TokenSpendPanel`, `overview-agent-board.tsx` | ⚠ **CORRECTED 2026-09-17** — the workspace Overview was **not** spend-free: it already read `useWorkspaceEntitlements` and rendered `<PeriodStats credits=…>`. What was missing is what this row shipped | new code, fenced per container | L | R-29 | 02 A.8 C-2/C-3 (corrected); 04 §A-25, §B-8 |
 | P35 | `truncated` + one clipped-list wording on merged reads | three non-reporting ceilings (200/50/500) | reports `truncated` | collapse duplicate | S | P30 | 05 §B.3 collapse 3 |
 | P36 | `isSoleAudience` as one derivation | hand-spelled `memberCount === 1` | same, in five places | collapse duplicate | S | R-08 | 05 §D.3 |
 | P37 | `containerNoun(kind)` for agent-facing copy | `containerKindLabel` exists (`workspace-directory.ts:218`) | ~8 hardcoded "this workspace" strings in `tools/map.ts`, `tools/members.ts`, `channel-ops-hold-workspace.ts` | collapse duplicate | S | — | 05 §A44, §D.3 |
@@ -1605,6 +1605,19 @@ the R-49 deletion is its own commit.
 
 ### Wave 8 — Overview parity.
 **Worktree `parity/w8-overview`.**
+
+> ✅ **P33 and P34 EXECUTED 2026-09-17 on `wave8/overview-parity`** (branched from `d6030ab3`; the
+> worktree name above is the plan’s, not the branch’s). One series vocabulary
+> (`src/features/overview-series/windows.ts`), the workspace credits series with a range switcher,
+> the three breakdown rails, the live agent board (R-25, peer rows read-only) and a per-member-own
+> token-spend panel. **The fence decision R-29 left open is recorded in INVARIANTS §9:**
+> `workspace_token_spend` stays per-member-own on every surface — a workspace-wide total is the
+> operator fence removed by subtraction, so there is none. 🔒 **/home’s Overview is unchanged
+> (R-40)**: the three shared components were EXTRACTED from it, not restyled, and the /home
+> suites pass untouched.
+> 🔴 **F-652 is NOT done and stays on this row** — the workspace "Needs you" card still reads the
+> ACCOUNT-wide endpoint and discards most of it. It was listed as a same-wave item and was not in
+> the executed slice.
 
 **Goal:** give a workspace admin the thing they most obviously want and do not have — credits by
 channel, person and tool.
