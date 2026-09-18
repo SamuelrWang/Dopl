@@ -18,6 +18,13 @@ vi.mock("@/shared/supabase/admin", () => ({
   supabaseAdmin: () => ({ __marker: "admin-client" }),
 }));
 
+// 🔒 THE CONTAINER-KIND FENCE (Samuel's ruling 2026-09-17) always ADMITS here:
+// every case in this file describes a legal HOME-container grant. The refusal
+// and its two doors are `./service-channel-grants-kind.test.ts`'s.
+vi.mock("@/shared/tenancy/channel-scope", () => ({
+  assertChannelScopeAllowedInContainer: vi.fn(async () => undefined),
+}));
+
 vi.mock("./repository-channel-grants", () => ({
   listChannelKnowledgeGrants: vi.fn(),
   listChannelGrantsForBase: vi.fn(),

@@ -42,7 +42,11 @@ beforeEach(() => {
 describe("🔒 a GRANT names a row in a container the caller is not in", () => {
   const CH = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
-  function grantedTo(channelId: string, level = "visible") {
+  /** ⚠ `channels` + `workspaces` ride along since 2026-09-17: a channel grant is
+   *  honoured only in a NON-standard container (`channel-scope.ts`), and the
+   *  helper fails CLOSED on a channel it cannot resolve. `kind` is the knob — a
+   *  `standard` one here is the ruling's refusal. */
+  function grantedTo(channelId: string, level = "visible", kind = "link") {
     return {
       resource_grants: [
         {
@@ -53,6 +57,8 @@ describe("🔒 a GRANT names a row in a container the caller is not in", () => {
         },
       ],
       channel_members: [{ channel_id: channelId }],
+      channels: [{ id: channelId, workspace_id: WS_B }],
+      workspaces: [{ id: WS_B, kind }],
     };
   }
 
@@ -116,6 +122,18 @@ describe("🔒 a GRANT names a row in a container the caller is not in", () => {
       workspace_members: [member(WS_A)],
       knowledge_bases: [],
       ...grantedTo(CH, "agent_only"),
+    });
+    expect(await resolveResource(caller, "knowledge_base", T1)).toBeNull();
+  });
+
+  it("🔒 a grant to a channel in a STANDARD workspace names nothing (2026-09-17)", async () => {
+    // Samuel: *"In workspaces, resource access is not scoped by channels. It's
+    // instead scoped by teams."* ⚠ The row is STILL THERE — what is under test
+    // is that the naming lane drops it, not that nothing wrote it.
+    makeAdmin({
+      workspace_members: [member(WS_A)],
+      knowledge_bases: [],
+      ...grantedTo(CH, "visible", "standard"),
     });
     expect(await resolveResource(caller, "knowledge_base", T1)).toBeNull();
   });

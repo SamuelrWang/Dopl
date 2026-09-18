@@ -58,6 +58,19 @@ const { grantedResourceIds, NO_GRANTS } = await import("./resource-grant-reach")
 const CONTAINER = { scope_type: "container", scope_id: "ws-b", level: "read" };
 const CHANNEL = { scope_type: "channel", scope_id: "ch-1" };
 
+/**
+ * 🔒 The rows `channel-scope.ts › channelsWhereScopeIsIgnored` reads, for a
+ * channel whose container is a HOME one (Samuel's ruling 2026-09-17). ⚠ EVERY
+ * channel case in this file needs them: without a resolvable container the
+ * helper fails CLOSED and the grant is ignored, which is the whole point.
+ */
+function homeChannel(channelId = "ch-1", kind = "link") {
+  return {
+    channels: [{ id: channelId, workspace_id: "ws-home" }],
+    workspaces: [{ id: "ws-home", kind }],
+  };
+}
+
 beforeEach(() => {
   rows = {};
   seen = [];
@@ -108,6 +121,7 @@ describe("grantedResourceIds", () => {
         { ...CHANNEL, level: "agent_only", resource_id: "kb-agent-only" },
       ],
       channel_members: [{ channel_id: "ch-1" }],
+      ...homeChannel(),
     };
     const granted = await grantedResourceIds("u-1", "knowledge_base", [
       "kb-visible",
@@ -137,6 +151,102 @@ describe("grantedResourceIds", () => {
     // reaches it through the SCOPE's — a `workspace_id` term would refuse the
     // cross-container lend this function exists to honour.
     expect(grants.eq.workspace_id).toBeUndefined();
+  });
+
+  /**
+   * 🔒 **SAMUEL'S RULING 2026-09-17** — *"In workspaces, resource access is not
+   * scoped by channels. It's instead scoped by teams."*
+   *
+   * ⚠ **IGNORED, NOT ABSENT.** The row is still in the table (the write doors
+   * refuse NEW ones; `20261011120000` converts the OLD ones), so what is under
+   * test is that the READ arm drops it — not that nothing wrote it.
+   */
+  describe("🔒 the container-KIND fence on a channel scope", () => {
+    const visible = { ...CHANNEL, level: "visible", resource_id: "kb-1" };
+
+    it("IGNORES a channel grant whose container is a STANDARD workspace", async () => {
+      rows = {
+        resource_grants: [visible],
+        channel_members: [{ channel_id: "ch-1" }],
+        channels: [{ id: "ch-1", workspace_id: "ws-std" }],
+        workspaces: [{ id: "ws-std", kind: "standard" }],
+      };
+      expect(await grantedResourceIds("u-1", "knowledge_base", ["kb-1"])).toBe(
+        NO_GRANTS
+      );
+    });
+
+    it("…even though the caller IS a member of that channel", async () => {
+      rows = {
+        resource_grants: [visible],
+        channel_members: [{ channel_id: "ch-1" }],
+        channels: [{ id: "ch-1", workspace_id: "ws-std" }],
+        workspaces: [{ id: "ws-std", kind: "standard" }],
+      };
+      const granted = await grantedResourceIds("u-1", "knowledge_base", ["kb-1"]);
+      expect([...granted]).toEqual([]);
+    });
+
+    it("HONOURS the same grant in a `link` container", async () => {
+      rows = {
+        resource_grants: [visible],
+        channel_members: [{ channel_id: "ch-1" }],
+        ...homeChannel(),
+      };
+      expect([...(await grantedResourceIds("u-1", "knowledge_base", ["kb-1"]))]).toEqual(
+        ["kb-1"]
+      );
+    });
+
+    it("HONOURS it in a `personal` container too — one member, untouched", async () => {
+      rows = {
+        resource_grants: [visible],
+        channel_members: [{ channel_id: "ch-1" }],
+        ...homeChannel("ch-1", "personal"),
+      };
+      expect([...(await grantedResourceIds("u-1", "knowledge_base", ["kb-1"]))]).toEqual(
+        ["kb-1"]
+      );
+    });
+
+    it("🔒 fails CLOSED when the channel row is gone — unknown is not permission", async () => {
+      rows = {
+        resource_grants: [visible],
+        channel_members: [{ channel_id: "ch-1" }],
+        channels: [],
+        workspaces: [],
+      };
+      expect(await grantedResourceIds("u-1", "knowledge_base", ["kb-1"])).toBe(
+        NO_GRANTS
+      );
+    });
+
+    it("🔒 an ABSENT `kind` reads as STANDARD and is ignored", async () => {
+      rows = {
+        resource_grants: [visible],
+        channel_members: [{ channel_id: "ch-1" }],
+        channels: [{ id: "ch-1", workspace_id: "ws-?" }],
+        workspaces: [{ id: "ws-?" }],
+      };
+      expect(await grantedResourceIds("u-1", "knowledge_base", ["kb-1"])).toBe(
+        NO_GRANTS
+      );
+    });
+
+    it("does NOT touch a CONTAINER grant — only the channel arm is narrowed", async () => {
+      rows = {
+        resource_grants: [{ ...CONTAINER, resource_id: "kb-1" }],
+        workspace_members: [{ workspace_id: "ws-b", role: "member" }],
+      };
+      expect([...(await grantedResourceIds("u-1", "knowledge_base", ["kb-1"]))]).toEqual(
+        ["kb-1"]
+      );
+      // ⚠ AND IT SPENDS NO KIND READ: a container scope never asks.
+      expect(seen.map((f) => f.table)).toEqual([
+        "resource_grants",
+        "workspace_members",
+      ]);
+    });
   });
 
   it("costs at most three queries, and only for the scope kinds that occur", async () => {

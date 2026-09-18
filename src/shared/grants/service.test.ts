@@ -51,15 +51,37 @@ const INPUT = {
   level: "visible",
 } as const;
 
-/** A recording builder: `scopeContainerId`'s read, then the upsert. */
-function makeAdmin(scopeRow: Record<string, unknown> | null, upsertError: unknown = null) {
+/**
+ * A recording builder: `scopeContainerId`'s read, the CONTAINER-KIND read
+ * (fence 3b, 2026-09-17), then the upsert.
+ *
+ * ⚠ **THE TWO READS ARE TOLD APART BY THEIR SELECTED COLUMN**, not by the
+ * table: `scopeContainerId` and `channel-scope.ts › containerKind` both reach
+ * `workspaces` when the scope is a container, and a builder that answered one
+ * row to both would prove nothing about either.
+ */
+function makeAdmin(
+  scopeRow: Record<string, unknown> | null,
+  upsertError: unknown = null,
+  // ⚠ DEFAULTS TO A HOME CONTAINER. Every assertion in this file predates the
+  // kind fence and describes a LEGAL channel grant; `standard` is the refusal,
+  // and it has its own block.
+  scopeKind: string | null = "link"
+) {
   const upsert = vi.fn(() => Promise.resolve({ error: upsertError }));
   const builder: Record<string, unknown> = {};
+  let cols = "";
   Object.assign(builder, {
     from: () => builder,
-    select: () => builder,
+    select: (c: string) => {
+      cols = c;
+      return builder;
+    },
     eq: () => builder,
-    maybeSingle: async () => ({ data: scopeRow, error: null }),
+    maybeSingle: async () =>
+      cols === "kind"
+        ? { data: scopeKind === null ? null : { kind: scopeKind }, error: null }
+        : { data: scopeRow, error: null },
     upsert,
   });
   vi.mocked(supabaseAdmin).mockReturnValue(builder as never);
@@ -179,6 +201,79 @@ describe("the SCOPE fence", () => {
       level: "read",
     });
     expect(isChannelVisibleTo).not.toHaveBeenCalled();
+  });
+});
+
+// ── Fence 3b — the CONTAINER KIND (Samuel's ruling 2026-09-17) ────────────
+
+/**
+ * 🔒 *"In workspaces, resource access is not scoped by channels. It's instead
+ * scoped by teams."*
+ *
+ * ⚠ **THE MUTATION THIS BLOCK CATCHES** is deleting the `channel-scope.ts` call
+ * from `assertGrantableScope`, which no other test in this file would notice:
+ * every one of them describes a LEGAL grant and would keep passing.
+ */
+describe("🔒 the CONTAINER-KIND fence on a channel scope", () => {
+  it("refuses a channel in a STANDARD workspace, and writes nothing", async () => {
+    const upsert = makeAdmin({ workspace_id: SCOPE_WS }, null, "standard");
+    await expect(grantResource(caller, { ...INPUT })).rejects.toMatchObject({
+      status: 400,
+      code: "SCOPE_NOT_ALLOWED_IN_WORKSPACE",
+    });
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it("refuses `agent_only` in a standard workspace too — BOTH audiences", async () => {
+    const upsert = makeAdmin({ workspace_id: SCOPE_WS }, null, "standard");
+    await expect(
+      grantResource(caller, { ...INPUT, level: "agent_only" })
+    ).rejects.toMatchObject({ code: "SCOPE_NOT_ALLOWED_IN_WORKSPACE" });
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it("ALLOWS a channel in a `link` container — Samuel's home-sharing model", async () => {
+    const upsert = makeAdmin({ workspace_id: SCOPE_WS }, null, "link");
+    await grantResource(caller, { ...INPUT });
+    expect(upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("ALLOWS a channel in a `personal` container — one member, untouched", async () => {
+    const upsert = makeAdmin({ workspace_id: SCOPE_WS }, null, "personal");
+    await grantResource(caller, { ...INPUT });
+    expect(upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("🔒 an ABSENT kind reads as STANDARD and refuses — `isStandardWorkspace`", async () => {
+    // ⚠ The positive form (§4A, F-295): absent `kind` IS standard, so the fence
+    // must refuse rather than fall through to "not link, therefore allowed".
+    const upsert = makeAdmin({ workspace_id: SCOPE_WS }, null, null);
+    await expect(grantResource(caller, { ...INPUT })).rejects.toMatchObject({
+      code: "SCOPE_NOT_ALLOWED_IN_WORKSPACE",
+    });
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it("does NOT fence a CONTAINER scope by kind — only channels are narrowed", async () => {
+    const upsert = makeAdmin({ id: SCOPE_WS }, null, "standard");
+    await grantResource(caller, {
+      ...INPUT,
+      scopeType: "container",
+      scopeId: SCOPE_WS,
+      level: "read",
+    });
+    expect(upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT fence a TEAM scope by kind — teams ARE the workspace's sub-scope", async () => {
+    const upsert = makeAdmin({ workspace_id: SCOPE_WS }, null, "standard");
+    await grantResource(caller, {
+      ...INPUT,
+      scopeType: "team",
+      scopeId: SCOPE_WS,
+      level: "read",
+    });
+    expect(upsert).toHaveBeenCalledTimes(1);
   });
 });
 
