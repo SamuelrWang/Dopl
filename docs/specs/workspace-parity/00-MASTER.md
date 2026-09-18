@@ -1140,6 +1140,23 @@ the three capability-losing slots closed for good.
 | 6 | **P10 + X8** — move `ChannelRecordSkeleton` into `src/features/channels/components/`; GUEST adopts it; WS composes it beside its tree ghost. ⚠ **No longer gated on ASK-9** (R-43 expired) | closes F-220 and the guest layout jump |
 | 7 | 🔴 **R-21 — REMOVE THE ARCHIVE FEATURE ENTIRELY, on BOTH surfaces.** Samuel: *"a user can delete a channel; no point in archives."* Not a Status row: the archive control, the lifecycle write, the Archived filter and every reader of the archived flag go. It lands here because it changes the same info body — but it is **larger than the body** and reaches the channel service and the list filters. See ledger row 23 | the ruling, and the only NEW work this wave acquired |
 
+🟢 **WAVE 1B LANDED 2026-09-17 (branch `wave1/deletions-and-info-rows`, one commit each).** The
+DELETIONS and the small info-tab rows are **DONE**: **R-18** (item 5 — the whole knowledge lane, not
+only the tab: component, hook, client module, capability, width branch, `channelPaneTabs` arm, the
+four `(route, method)` pairs across three route files, the shared route helper, the lane's payload
+service, and four now-unreachable gates in `service-channel-grants.ts`) · **R-45** · **R-22** ·
+**R-46** · **R-20** (a shared `channel-display.ts › CREATED_ROW_LABEL` + `formatDate` on both
+bodies) · **R-19** (the shared body renders the curated rows through `info-card-rows.tsx ›
+InfoCardCustomRow`, the write minted in `surface-info-panel.tsx` beside `headerEdit`) · **R-21**
+(the archive feature removed end to end; the column drop is WRITTEN NOT APPLIED).
+⚠ **WHAT WAVE 1B DID NOT DO, AND IT IS THE REST OF THIS TABLE:** items 1, 2, 3 and 6 — the
+`SurfaceAgentView` collapse, `activity`/`members`/`headerEditable` onto the context, the
+`person-info-tab.tsx` absorption, and the skeleton move. **R-19 landed WITHOUT the collapse**, so
+/home still renders its own copy of the curated rows; that is the one-body step's to remove, and
+/home's rendering was left byte-identical on purpose. New findings: **F-719** (a granted KB now has
+no channel-side human reader), **F-720** ("Add member" → invite dialog, R-46's option (b) as a
+ticket), **F-721** (the THREAD info tab still says "Date of creation").
+
 **Rulings: ALL SEVEN RULED 2026-09-17 — this wave is unblocked.** R-18 → delete the dead lane ·
 R-19 → (a) · R-20 → (a) · **R-21 → remove the archive feature entirely (item 7 — this GREW the wave)** ·
 R-22 → delete · R-45 → delete · R-46 → delete. **R-43 is EXPIRED**, so item 6 has no ASK-9 gate.
