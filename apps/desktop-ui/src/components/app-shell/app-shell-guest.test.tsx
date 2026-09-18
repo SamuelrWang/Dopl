@@ -7,8 +7,16 @@ import type { BridgeResponse } from "#/lib/dopl-bridge";
 import { AppShellLayout } from "./index";
 
 /**
- * 🔒 A GUEST AT A WORKSPACE URL LANDS ON THEIR CHANNEL (Samuel's ruling,
- * 2026-08-30 — ledger ASK-2, option b).
+ * 🔒 A MEMBER OF A HOME-CHANNEL CONTAINER AT A WORKSPACE URL LANDS ON THEIR
+ * CHANNEL — the GUEST by Samuel's 2026-08-30 ruling (ledger ASK-2, option b),
+ * every other member of the same container by R-01 option (a), 2026-09-17.
+ *
+ * ⚠ THE ROLE IS NOT THE FENCE ANY MORE AND THE OWNER CASE BELOW FLIPPED TO SAY
+ * SO. A `kind='link'` container is a relationship: its member, admin and owner
+ * were all getting the eight-row nav, the Members console, Skills, Chats and a
+ * Settings page with an owner delete, on a URL nothing links to. The kind is
+ * the fence, read through `isStandardWorkspace` (positive form, INVARIANTS §4A)
+ * — so a STANDARD workspace is untouched, which is the last case here.
  *
  * WHAT THIS REPLACES. `segment.ts › BOOT_MIN_ROLE` is `"guest"` on purpose, and
  * `AppShellLayout` added no floor of its own — so a guest reaching
@@ -33,6 +41,13 @@ import { AppShellLayout } from "./index";
  *   - `isGuest` widened to "any known role" (the gate dropped) .... 1 red
  *   - `channels[0]` instead of matching `workspaceId` ............. 1 red
  *   - `navigate(target)` instead of `{ replace: true }` ........... 1 red
+ *   ⚠ THE SECOND ROW IS NOW THE OTHER WAY UP (2026-09-17): the gate is the
+ *   KIND, and "any known role" is what the container cases assert. Re-measured:
+ *   the gate narrowed back to `role === "guest"` ................. 3 red
+ *   `!isStandardWorkspace` flipped to `kind === "link"` .......... 0 red,
+ *   recorded rather than papered over — the union has no fourth kind to catch
+ *   it with, which is exactly why `check-role-drift.ts › checkWorkspaceKind`
+ *   holds the positive form and not a test here.
  *   - `?? []` dropped from the `select` .......................... **0 red**,
  *     and that is recorded rather than papered over. A throwing `select` puts
  *     the query in an ERROR state, which lands on the same `/home` the absent
@@ -41,8 +56,9 @@ import { AppShellLayout } from "./index";
  *     stays, because "a stale entry lands somewhere sane" is worth pinning even
  *     where only one route to it is. **Do not read that case as covering §8.**
  *
- * ⚠ THE OWNER CASE ASSERTS AN UNASKED QUESTION, not just a pathname — see its
- * own comment. The pathname half alone stayed green under the dropped gate.
+ * ⚠ THE STANDARD-WORKSPACE CASE ASSERTS AN UNASKED QUESTION, not just a
+ * pathname — see its own comment. The pathname half alone stays green under a
+ * dropped gate.
  */
 
 const { sendRequest } = vi.hoisted(() => ({ sendRequest: vi.fn() }));
@@ -65,6 +81,9 @@ const CONTAINER = {
 };
 const SEGMENT = "link-priya-aa11bb";
 const CHANNEL_ID = "7f3a9c2e-1b4d-4e8a-9c1f-2d5b6a7c8e90";
+
+/** A real workspace, which the redirect must leave completely alone. */
+const STANDARD = { ...CONTAINER, kind: "standard" };
 
 function ok(body: unknown): BridgeResponse {
   return { status: 200, statusText: "OK", hasBody: true, body };
@@ -89,8 +108,9 @@ function homeChannel(over: Record<string, unknown> = {}) {
   };
 }
 
-/** `role` and the home-channels payload are what each case varies. */
+/** `role`, the CONTAINER KIND and the home-channels payload vary per case. */
 let role = "guest";
+let workspaceRow: unknown = CONTAINER;
 let homePayload: unknown = { channels: [homeChannel()], pendingLinks: [] };
 
 function mockApi() {
@@ -101,7 +121,7 @@ function mockApi() {
           isOnboarded: true,
           surveyCompleted: true,
           userId: "user-guest",
-          workspace: CONTAINER,
+          workspace: workspaceRow,
           segment: SEGMENT,
           needsRedirect: false,
           role,
@@ -143,6 +163,7 @@ function renderShell(path: string) {
         element: <AppShellLayout />,
         children: [
           { path: "overview", element: <p>overview body</p> },
+          { path: "members", element: <p>members body</p> },
           { path: "channels/:channelId", element: <p>channel body</p> },
         ],
       },
@@ -157,9 +178,10 @@ function renderShell(path: string) {
   return router;
 }
 
-describe("the shell sends a guest to their channel", () => {
+describe("the shell sends a container member to their channel", () => {
   beforeEach(() => {
     role = "guest";
+    workspaceRow = CONTAINER;
     homePayload = { channels: [homeChannel()], pendingLinks: [] };
     window.localStorage.clear();
     // ⚠ `mockImplementation` does NOT reset the call log, and the last case
@@ -225,14 +247,31 @@ describe("the shell sends a guest to their channel", () => {
     await waitFor(() => expect(router.state.location.pathname).toBe("/home"));
   });
 
-  it("leaves a non-guest where they are, and never even ASKS", async () => {
+  // 🔒 R-01(a), 2026-09-17: the container's OTHER members get the same answer
+  // the guest does. Each of these three had the full shell — Members, Skills,
+  // Chats, and a Settings page whose delete ends the relationship for everyone
+  // in it — at a URL nothing links to.
+  for (const containerRole of ["member", "admin", "owner"] as const) {
+    it(`redirects the container's ${containerRole} too, not only the guest`, async () => {
+      role = containerRole;
+      const router = renderShell(`/${SEGMENT}/members`);
+
+      await waitFor(() =>
+        expect(router.state.location.pathname).toBe(`/${SEGMENT}/channels/${CHANNEL_ID}`)
+      );
+      expect(await screen.findByText("channel body")).toBeTruthy();
+    });
+  }
+
+  it("leaves a STANDARD workspace alone, and never even ASKS", async () => {
     // ⚠ THE UNASKED QUESTION IS THE ASSERTION. "Still on /overview" alone is
     // VACUOUS here: the redirect needs a round trip, and the render assertion
-    // resolves before it lands — measured, a dropped `isGuest` gate keeps that
-    // half green. `enabled: isGuest` is what makes the read cost nothing on
-    // every workspace page for every member of every workspace, and the request
-    // log is the only place that shows.
+    // resolves before it lands — measured, a dropped gate keeps that half
+    // green. `enabled` is what makes the read cost nothing on every workspace
+    // page for every member of every workspace, and the request log is the only
+    // place that shows.
     role = "owner";
+    workspaceRow = STANDARD;
     const router = renderShell(`/${SEGMENT}/overview`);
 
     expect(await screen.findByText("overview body")).toBeTruthy();
@@ -248,5 +287,28 @@ describe("the shell sends a guest to their channel", () => {
       )
     ).toBe(false);
     expect(router.state.location.pathname).toBe(`/${SEGMENT}/overview`);
+  });
+
+  it("leaves a workspace whose row carries NO kind alone (pre-migration rows)", async () => {
+    // `kind` is absent on rows read before the kind migration — and absent MEANS
+    // standard (`isStandardWorkspace`). A `!== "link"` read would agree here and
+    // disagree on the next kind added to the union.
+    const noKind: Record<string, unknown> = { ...CONTAINER };
+    delete noKind.kind;
+    role = "owner";
+    workspaceRow = noKind;
+    renderShell(`/${SEGMENT}/overview`);
+
+    expect(await screen.findByText("overview body")).toBeTruthy();
+    await waitFor(() =>
+      expect(sendRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ path: "/api/workspaces" })
+      )
+    );
+    expect(
+      sendRequest.mock.calls.some(
+        (c: unknown[]) => (c[0] as { path?: string })?.path === "/api/home/channels"
+      )
+    ).toBe(false);
   });
 });

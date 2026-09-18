@@ -107,8 +107,34 @@ const FENCE_SITES: Record<string, string> = {
     "branches on `kind` (a home channel carries no plan, a personal container has Pro)",
 };
 
-/** ⚠ `FENCE_SITES` IS THE WHOLE DECLARATION SINCE `OPEN_SITES` EMPTIED. */
-const DECLARED = FENCE_SITES;
+/**
+ * 🔒 **A FENCE WITH NO SENTENCE TO BRANCH (added 2026-09-17, wave 5 / R-01(a)).**
+ * `FENCE_SITES`' third assertion — *"a FENCE site is declared as repaired"* —
+ * reads a site's MESSAGE and requires it to branch on the kind. That assumes
+ * every fence SAYS something, and a REDIRECT says nothing: `AppShellLayout`
+ * sends a member of a non-standard container to their channel record and
+ * renders no nav, with no copy anywhere in the path.
+ *
+ * ⚠ **IT IS DECLARED SEPARATELY RATHER THAN EXEMPTED**, and the two maps stay
+ * non-interchangeable in BOTH directions: a FENCE site must carry
+ * `kind === "link"`, a SILENT one must NOT — so a site with a sentence cannot be
+ * parked here to dodge the message assertion, which is the only way this map
+ * could weaken the gate.
+ *
+ * ⚠ **THE NEGATION IS STILL THE POINT.** `personal` is excluded by its own
+ * clause because the effect above it already redirects personal containers; the
+ * KIND read is `!isStandardWorkspace`, so a fourth kind inherits the refusal
+ * instead of opting into it — F-295 exactly.
+ */
+const SILENT_FENCE_SITES: Record<string, string> = {
+  "apps/desktop-ui/src/components/app-shell/app-shell.tsx":
+    "R-01(a) (2026-09-17) — CLOSED: the shell redirects every member of a non-standard " +
+    "container and renders no nav; the refusal is a REDIRECT, so there is no message to " +
+    "branch on the kind",
+};
+
+/** ⚠ `OPEN_SITES` EMPTIED; the declaration is the two fence maps. */
+const DECLARED = { ...FENCE_SITES, ...SILENT_FENCE_SITES };
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -195,6 +221,18 @@ describe("🔒 F-564 — `!isStandardWorkspace` is not `kind === 'link'`", () =>
     for (const file of Object.keys(FENCE_SITES)) {
       const text = readFileSync(join(ROOT, file), "utf8");
       expect(text, `${file} must branch its MESSAGE on the kind`).toMatch(
+        /kind === "link"/
+      );
+    }
+  });
+
+  it("a SILENT fence site has no message to branch — and that is checked, not assumed", () => {
+    // ⚠ THE OTHER DIRECTION OF THE SAME RULE. A site that DOES name the kind in
+    // a sentence belongs in `FENCE_SITES`, where the assertion above reads it;
+    // parking it here would be the one way this map could silence the gate.
+    for (const file of Object.keys(SILENT_FENCE_SITES)) {
+      const text = readFileSync(join(ROOT, file), "utf8");
+      expect(text, `${file} has a sentence — declare it as a FENCE site`).not.toMatch(
         /kind === "link"/
       );
     }

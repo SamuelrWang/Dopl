@@ -79,16 +79,24 @@ export function AppShellLayout() {
   // 🔒 THE SHELL NEVER RENDERS A PERSONAL CONTAINER (2026-09-08). Its surface is
   // /home; a typed or stale `/{personal-segment}` URL — or a cold launch that
   // slipped past `pages/boot` — otherwise paints a workspace overview titled
-  // "Home" with no rail icon lit (Samuel's "ghost overview page"). `link`
-  // containers are NOT fenced here: guests legitimately render in the shell.
+  // "Home" with no rail icon lit (Samuel's "ghost overview page"). ⚠ `link`
+  // containers are fenced by the redirect BELOW, not here: they land on the
+  // container's own channel record rather than on /home (R-01(a)).
   useEffect(() => {
     if (workspace?.kind !== "personal") return;
     navigate(HOME_PATH, { replace: true });
   }, [workspace?.kind, navigate]);
 
   /**
-   * 🔒 A GUEST AT A WORKSPACE URL GOES TO THEIR CHANNEL (Samuel's ruling,
-   * 2026-08-30 — ledger ASK-2, option b).
+   * 🔒 A MEMBER OF A HOME-CHANNEL CONTAINER AT A WORKSPACE URL GOES TO THEIR
+   * CHANNEL (Samuel's rulings: ASK-2 option b, 2026-08-30, for the GUEST; R-01
+   * option (a), 2026-09-17, for every other member of the same container).
+   *
+   * ⚠ ONE REDIRECT, WIDENED — not a second branch. A `kind='link'` container is
+   * a RELATIONSHIP, and nobody in one has a Members console, Skills, Chats or a
+   * Settings page carrying an owner delete, whatever their ROLE in it says.
+   * Fencing on `role === "guest"` admitted the container's member, admin and
+   * owner through the one door the guest was kept out of.
    *
    * ⚠ THE FLOOR IS NOT THE FIX AND MUST NOT BECOME ONE. `segment.ts ›
    * BOOT_MIN_ROLE` stays `"guest"` deliberately: the two pop-out windows live
@@ -124,11 +132,22 @@ export function AppShellLayout() {
    * ⚠ THE TARGET IS COMPARED BEFORE NAVIGATING — it is a route INSIDE this
    * layout, so an unguarded navigate re-runs this effect forever.
    */
-  const isGuest = role === "guest";
-  const guestChannelId = useApiQuery<HomeChannelsPayload, string | null>(
+  /**
+   * ⚠ POSITIVE KIND CHECK (INVARIANTS §4A, F-295): `isStandardWorkspace` is THE
+   * predicate. A hand `kind !== "link"` would admit every kind added to the
+   * union later — the coordinated flip that check exists to stop.
+   *
+   * ⚠ `personal` IS EXCLUDED, because the effect above already owns it. Both
+   * firing would race two `replace`s over one history entry, and the personal
+   * fence is the unconditional one.
+   */
+  const isContainerMember =
+    !!workspace && workspace.kind !== "personal" && !isStandardWorkspace(workspace);
+  const leavesShell = role === "guest" || isContainerMember;
+  const containerChannelId = useApiQuery<HomeChannelsPayload, string | null>(
     HOME_CHANNELS_PATH,
     {
-      enabled: isGuest,
+      enabled: leavesShell,
       // `?? []` is the stale-cache guard (INVARIANTS §8): this payload is
       // IndexedDB-persisted, and a `.find` on an absent key throws INSIDE the
       // shell, which blanks every page rather than one pane.
@@ -137,17 +156,17 @@ export function AppShellLayout() {
           ?.channelId ?? null,
     }
   );
-  const guestSettled = isGuest && !guestChannelId.isPending;
-  const guestTarget = guestSettled
-    ? guestChannelId.data
-      ? `/${segment}/channels/${guestChannelId.data}`
+  const containerSettled = leavesShell && !containerChannelId.isPending;
+  const containerTarget = containerSettled
+    ? containerChannelId.data
+      ? `/${segment}/channels/${containerChannelId.data}`
       : HOME_PATH
     : null;
   useEffect(() => {
-    if (needsRedirect || !segment || guestTarget === null) return;
-    if (location.pathname === guestTarget) return;
-    navigate(guestTarget, { replace: true });
-  }, [needsRedirect, segment, guestTarget, location.pathname, navigate]);
+    if (needsRedirect || !segment || containerTarget === null) return;
+    if (location.pathname === containerTarget) return;
+    navigate(containerTarget, { replace: true });
+  }, [needsRedirect, segment, containerTarget, location.pathname, navigate]);
 
   const workspacesQuery = useApiQuery<
     { workspaces?: WorkspaceLike[] },
