@@ -1154,6 +1154,12 @@ surfaces. **`person-info-tab.tsx` (402), `person-thread-activity.tsx` (63) and
 body and is now a fourth HOST of it.**
 🔴 **F-723 — THE LIVE DEFECT 08 §4.3 FOUND IS FIXED AND PINNED.** /home's roster passed no
 `viewerUserId`, so the OPERATOR read as offline in their own home channel.
+➕ **AND ONE ITEM WAVE 1A ACQUIRED: F-721 RESOLVED (Samuel, 2026-09-17 — R-46's option (b),
+answered yes later the same day).** The Members heading gets **Add member** back — as the
+page-action pill over the existing `invite-dialog.tsx › InviteDialog`, gated `channel.role ===
+"owner" || meetsMinRole(role, "admin")` under `capabilities.memberManagement`, hidden not
+disabled, mounted only while open. ⚠ **NOT the mock's inert `IconButton`, and "Filter members"
+stays deleted.** It landed here because wave 1A owns `info-tab.tsx`.
 ⚠ **WHAT WAVE 1A DID NOT DO: item 6** — see the row below it.
 
 🟢 **WAVE 1B LANDED 2026-09-17 (branch `wave1/deletions-and-info-rows`, one commit each).** The

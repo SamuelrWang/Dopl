@@ -93,6 +93,7 @@ export function ChannelsInfoPanel({
   infoExtras,
   mentionsLayout,
   rosterEmptyLine,
+  membersAction,
   infoTabSignal = 0,
   fullTab,
   settings,
@@ -224,6 +225,9 @@ export function ChannelsInfoPanel({
   mentionsLayout?: "disclosure" | "category";
   /** Whether an EMPTY roster says so — `InfoTab.rosterEmptyLine` carries the rule. */
   rosterEmptyLine?: boolean;
+  /** The Members heading's Add member control — `InfoTab.membersAction` carries
+   *  the rule, and `surface-info-panel.tsx` owns the dialog behind it. */
+  membersAction?: ReactNode;
   /**
    * The SETTINGS tab's body — `settings-slot.tsx › ChannelsSettingsSlot`
    * (`channel-manage.tsx › ChannelsManageActions` in channel view,
@@ -345,6 +349,7 @@ export function ChannelsInfoPanel({
                 headerEdit={headerEdit}
                 infoCardEdit={infoCardEdit}
                 rosterEmptyLine={rosterEmptyLine}
+                membersAction={membersAction}
                 extras={infoExtras}
               />
             )

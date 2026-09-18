@@ -34,6 +34,7 @@
  * fixture-fed section; R-45 deleted it.
  */
 
+import type { ReactNode } from "react";
 import { MetaRowDivider, PanelHeading } from "./bits";
 import { InfoTabCard } from "./info-tab-card";
 import type { ChannelHeaderEdit } from "./info-inline-edit";
@@ -62,6 +63,7 @@ export function InfoTab({
   headerEdit,
   infoCardEdit,
   rosterEmptyLine = true,
+  membersAction,
   extras,
 }: {
   channel: Channel;
@@ -118,6 +120,23 @@ export function InfoTab({
    * channel, by contrast, really can be read by nobody's member.
    */
   rosterEmptyLine?: boolean;
+  /**
+   * 🔒 **THE Members HEADING'S ONE CONTROL — Add member (F-721 RESOLVED, Samuel
+   * 2026-09-17, taking R-46's option (b) after all).**
+   *
+   * ⚠ **INJECTED, NOT BUILT HERE, FOR `info-panel.tsx › settings`'s REASON:** it
+   * is write-bearing. It opens `invite-dialog.tsx › InviteDialog`, which mounts
+   * two reads and the add/remove writes, and this body fetches nothing
+   * (INVARIANTS §7). `surface-info-panel.tsx` owns the open state, the gate and
+   * the dialog; this file owns where the control sits.
+   * ⚠ **ABSENT IS NOT "DISABLED".** A host with no membership to change passes
+   * nothing and the heading reads the way it has since R-46: the count, and
+   * nothing else. An affordance that always 403s is a dead control (§5).
+   * ⚠ **THERE IS NO "Filter members" AND THERE IS NOT GOING TO BE.** R-46 deleted
+   * it outright and (b) named only the add affordance; the roster is bounded and
+   * short.
+   */
+  membersAction?: ReactNode;
   /** WHAT THE HOST ADDS — named regions, never a body
    *  (`channel-surface-contract.ts › ChannelInfoExtras`). */
   extras?: ChannelInfoExtras;
@@ -231,17 +250,25 @@ export function InfoTab({
           2026-08-25 — *"a port is not a transcription."* A control that does
           nothing is a dead control (INVARIANTS §5), and this heading now reads the
           way /home's already did: the count, and nothing else.
-          ⚠ **F-721 — "Add member" → the invite dialog is a FOLLOW-UP, not a
-          regression.** R-46's option (b) was to wire it to the dialog the Settings
-          tab already opens (`invite-dialog.tsx › InviteDialog`, mounted by
-          `channel-manage.tsx`) and delete only the filter; Samuel took (a) with
-          (b) as a later ticket. The act is not lost meanwhile — **Add members** is
-          on the Settings tab, capability-gated (`settings-tab.tsx`,
-          `memberManagement`). */}
+          🔒 **AND "Add member" IS BACK, AS (b) — F-721 RESOLVED (Samuel, later
+          the same day).** R-46 offered (a) delete both and (b) wire the add
+          affordance to the dialog the Settings tab already opens; he took (a)
+          with (b) as a ticket, then answered the ticket yes. **What returns is
+          NOT the mock's inert `IconButton`**: it is the page-action pill
+          (`page-action-button.ts › PAGE_ACTION_BTN`) over
+          `invite-dialog.tsx › InviteDialog`, gated exactly as the server gates
+          the write. ⚠ **"Filter members" did NOT come back** — (b) named only the
+          add affordance, and the roster is bounded and short. */}
       <PanelHeading
         title="Members"
         trailing={
-          <span className="text-caption text-text-muted">{members.length}</span>
+          <>
+            <span className="text-caption text-text-muted">{members.length}</span>
+            {/* ⚠ `ml-auto` IS THE HEADING'S LAYOUT, NOT THE PILL'S — the shared
+                recipe is FACE AND SCALE ONLY and spacing stays with the caller
+                (`page-action-button.ts`). */}
+            {membersAction}
+          </>
         }
       />
       {/* ⚠ THE ROSTER IS `member-roster.tsx` SINCE 2026-08-25 — it was

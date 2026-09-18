@@ -15,7 +15,11 @@
  * HOST (INVARIANTS §7).
  */
 
+import { useState } from "react";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
+import { cn } from "@/shared/lib/utils";
+import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
+import { InviteDialog } from "./invite-dialog";
 import { useChannelHeaderWrite } from "../hooks/use-channel-header-writes";
 import { useChannelInfoCardWrite } from "../hooks/use-channel-info-card-writes";
 import { ChannelsSettingsSlot } from "./settings-slot";
@@ -122,6 +126,32 @@ export function SurfaceInfoPanel({
     gate,
   });
 
+  /**
+   * 🔒 **ADD MEMBER, ON THE Members HEADING — F-721 RESOLVED (Samuel, 2026-09-17,
+   * answering R-46's option (b) yes).**
+   *
+   * ⚠ **THE GATE IS THE SERVER'S FLOOR, MIRRORED — NOT A NEW RULE.**
+   * `channel-manage.tsx` hands the same dialog `canManage || meetsMinRole(role,
+   * "admin")` for the Settings row, so the two openers of one dialog cannot
+   * disagree about who may open it, and `headerEdit.canEdit` above is the same
+   * conjunction a third time on this surface.
+   * ⚠ **AND IT RIDES `memberManagement`,** which is what makes it absent on /home
+   * and the guest lane: a container's roster cannot be added to this way at ANY
+   * size (§4A — every workspace-level add answers `LINK_CONTAINER_CLOSED`), so the
+   * control would name an operation that always fails. That is the same reason
+   * `settings-tab.tsx` gates its **Add members** row on the flag.
+   * ⚠ **HIDDEN, NOT DISABLED** — there is no refusal to explain to somebody who
+   * was never offered the act (INVARIANTS §5).
+   * ⚠ **THE DIALOG IS MOUNTED ONLY WHILE OPEN**, for `settings-slot.tsx`'s reason:
+   * it opens two reads and the add/remove writes, and none of that has any
+   * business being live behind a tab nobody has acted on. Closed, `ModalShell`
+   * renders null anyway, so this costs the DOM nothing and saves the reads.
+   */
+  const canAddMembers =
+    capabilities?.memberManagement !== false &&
+    (channel.role === "owner" || meetsMinRole(role, "admin"));
+  const [inviteOpen, setInviteOpen] = useState(false);
+
   // ⚠ ON ONE COLUMN, OPENING A TRANSCRIPT HAS TO MOVE THE FACE TOO — a picked
   // thread, a jumped-to mention and a new-thread ask all land in the
   // CONVERSATION, which is a different face there and the pane next door on the
@@ -221,6 +251,39 @@ export function SurfaceInfoPanel({
       // could only appear for one frame of the roster read, stating something
       // false; `info-tab.tsx › rosterEmptyLine` carries the rest.
       rosterEmptyLine={capabilities?.memberManagement !== false}
+      // 🔒 ADD MEMBER — see `canAddMembers` above for the gate and the mount rule.
+      membersAction={
+        canAddMembers ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setInviteOpen(true)}
+              // ⚠ THE SHARED RECIPE, spacing at the call site — the constant is
+              // FACE AND SCALE ONLY (`page-action-button.ts`).
+              className={cn(PAGE_ACTION_BTN, "ml-auto")}
+            >
+              Add member
+            </button>
+            {inviteOpen && (
+              <InviteDialog
+                workspaceId={workspaceId}
+                workspaceSlug={workspaceSlug}
+                channelId={channel.id}
+                currentUserId={currentUserId}
+                canManage
+                open
+                onOpenChange={setInviteOpen}
+                // The roster the surface holds, and the host's channel list —
+                // the same pair `settings-slot.tsx` settles this dialog into.
+                onChanged={() => {
+                  onRosterChanged?.();
+                  data.refetchMembers();
+                }}
+              />
+            )}
+          </>
+        ) : null
+      }
       // ⚠ CALLED, not passed. The extras are a render function so they can be
       // handed THIS surface's refetch gate — see `ChannelInfoTabContext`.
       // ⚠ **THIS WAS `infoTab`, AND IT REPLACED THE BODY (deleted wave 1A,

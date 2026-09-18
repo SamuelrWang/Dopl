@@ -23,7 +23,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { channel, member, message, thread, ME, PEER, WS } from "./test-fixtures";
 import type { ChannelInfoTabContext } from "./channel-surface";
@@ -56,8 +56,12 @@ vi.mock("./settings-agent", () => ({
 // The invite half's two dialogs. Both open reads of their own on mount, and the
 // `memberManagement` case below is about whether they are MOUNTED at all — which
 // a stub still answers, because it is the same element either way.
+// ⚠ REPORTS ITS `canManage`, because F-721's gate is what the cases below are
+// about and a stub that rendered a bare div could not tell the two answers apart.
 vi.mock("./invite-dialog", () => ({
-  InviteDialog: () => <div data-testid="invite-dialog" />,
+  InviteDialog: ({ canManage }: { canManage: boolean }) => (
+    <div data-testid="invite-dialog" data-can-manage={String(canManage)} />
+  ),
 }));
 vi.mock("./go-public-dialog", () => ({
   GoPublicDialog: () => null,
@@ -283,4 +287,55 @@ describe("StandaloneChannelSurface — the ONE Info body and the host's extras",
     expect(ctx.activity).toEqual({ bins: [], loading: expect.any(Boolean) });
   });
 
+  /**
+   * 🔒 **ADD MEMBER — F-721, RESOLVED 2026-09-17** (Samuel, answering R-46's
+   * option (b) yes after taking (a) that morning).
+   *
+   * ⚠ **THE CASES ARE THE GATE, NOT THE PIXELS.** What R-46 deleted was an
+   * `IconButton` with no `onClick` — a dead control — so the thing that has to be
+   * pinned is that this one is NOT that: it is shown to exactly the readers the
+   * server would let through, and pressing it reaches the dialog.
+   * ⚠ **THE FLOOR IS MIRRORED, NOT INVENTED:** `channel-manage.tsx` hands the SAME
+   * dialog `canManage || meetsMinRole(role, "admin")` for the Settings row, so a
+   * case that passed here and failed there would mean two openers of one dialog
+   * disagreeing about who may open it.
+   */
+  it("offers Add member to a channel owner, and opens the invite dialog", async () => {
+    mount();
+    // ⚠ NOT MOUNTED UNTIL IT IS ASKED FOR — the dialog opens two reads of its own.
+    expect(screen.queryByTestId("invite-dialog")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add member" }));
+    const dialog = await screen.findByTestId("invite-dialog");
+    // It opens with the manage answer this surface already resolved, not with a
+    // second one the dialog re-derives.
+    expect(dialog.getAttribute("data-can-manage")).toBe("true");
+  });
+
+  it("offers it to a workspace ADMIN who is only a channel member", () => {
+    mount({ channel: { ...CHANNEL, role: "member" }, role: "admin" });
+    expect(screen.getByRole("button", { name: "Add member" })).toBeTruthy();
+  });
+
+  it("does NOT offer it to a plain member, or to a guest", () => {
+    mount({ channel: { ...CHANNEL, role: "member" }, role: "member" });
+    expect(screen.queryByRole("button", { name: "Add member" })).toBeNull();
+    cleanup();
+
+    mount({ channel: { ...CHANNEL, role: "member" }, role: "guest" });
+    expect(screen.queryByRole("button", { name: "Add member" })).toBeNull();
+  });
+
+  it("does NOT offer it where the roster cannot be added to at all", () => {
+    // /home and the guest lane: every member arrives by claiming a bound link,
+    // so a workspace-level add answers `LINK_CONTAINER_CLOSED` at ANY size (§4A).
+    mount({ capabilities: { memberManagement: false } });
+    expect(screen.queryByRole("button", { name: "Add member" })).toBeNull();
+  });
+
+  // ⚠ R-46's OTHER HALF STAYS DELETED. (b) named only the add affordance.
+  it("brings back no Filter members control", () => {
+    mount();
+    expect(screen.queryByRole("button", { name: /Filter/i })).toBeNull();
+  });
 });
