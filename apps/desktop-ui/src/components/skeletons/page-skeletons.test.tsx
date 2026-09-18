@@ -273,6 +273,13 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
   it("the channels ghost byte-shares the surface's columns, rows and composer", () => {
     const sidebar = shared("features/channels/components/sidebar.tsx");
     const rows = shared("features/channels/components/sidebar-rows.tsx");
+    // ⚠ THE 52px SEARCH STRIP MOVED OUT OF THE COLUMN IN WAVE 4, on the seam
+    // `sidebar-rows.tsx` named: the column is sections, the strip is a search
+    // surface. Same precedent as `message-pane-header.tsx` below — the ghost
+    // still byte-shares that ONE strip; only the file it is read from changed.
+    const sidebarSearch = shared(
+      "features/channels/components/sidebar-search.tsx"
+    );
     const header = shared("features/channels/components/bits.tsx");
     const pane = shared("features/channels/components/message-pane.tsx");
     // ⚠ THE HEADER MOVED OUT OF THE PANE ON 2026-09-01 (`message-pane.tsx` hit
@@ -285,7 +292,7 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
 
     for (const [source, geometry] of [
       [sidebar, "flex w-[260px] shrink-0 flex-col border-r border-border-default"],
-      [sidebar, "flex h-[52px] shrink-0 items-center gap-2 px-3"],
+      [sidebarSearch, "flex h-[52px] shrink-0 items-center gap-2 px-3"],
       [sidebar, "flex flex-col gap-px px-2"],
       // The section header's strip — `pt-3`, not the `pt-4` this ghost carried.
       [header, "flex items-center gap-1 px-3 pb-1 pt-3"],

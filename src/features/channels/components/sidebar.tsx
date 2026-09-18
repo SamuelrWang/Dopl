@@ -26,6 +26,15 @@
  * for real. Nothing in this column is inert chrome except the furniture
  * explicitly marked hardcoded.
  *
+ * ⚠ **THE COLUMN IS THE SECTIONS, AND THE SEARCH HEAD IS `sidebar-search.tsx`
+ * SINCE WAVE 4.** This file was carrying two responsibilities: the list of
+ * sections, and a search surface with three pieces of private state that no
+ * section, row or branch reads. They change for different reasons — search
+ * changed twice on 2026-09-17 and neither edit was about channels — which is the
+ * same seam `sidebar-rows.tsx` and `sidebar-branch.tsx` were taken on. 🚫 **NO
+ * IMPORTER MOVED**: `ChannelsSidebar` and `ChannelsSidebarProps` are still
+ * declared here, and nothing about the strip changed in the split.
+ *
  * 🔒 **THE HEADER'S SEARCH NO LONGER FILTERS THIS LIST — IT OPENS THE SEARCH
  * POPUP (Samuel, 2026-09-17:** *"right now, during search, it just filters by
  * channel name, and it like removes channel on the left sidebar. that doesnt
@@ -72,14 +81,12 @@
  */
 
 import { useState } from "react";
-import { Plus, Search } from "lucide-react";
-import { SearchField } from "@/shared/ui/search-field";
-import { SearchPopup } from "@/features/search/components/search-popup";
-import { apiSearchFetcher } from "@/features/search/search-client";
+import { Plus } from "lucide-react";
 import type { SearchItem } from "@/features/search/contracts";
 import { IconButton, NewPill, SectionHeader } from "./bits";
 import { NavRow } from "./sidebar-rows";
 import { ChannelBranch } from "./sidebar-branch";
+import { SidebarSearchHeader } from "./sidebar-search";
 import { HARDCODED_NAV_ROWS } from "./fixtures";
 import {
   channelDisplayName,
@@ -88,7 +95,9 @@ import {
 import type { Channel, ChannelMember, ChannelThread } from "../types";
 
 export interface ChannelsSidebarProps {
-  /** THE CONTAINER THE SEARCH POPUP RUNS IN — `scope="container"` is this id. */
+  /** THE CONTAINER THE SEARCH POPUP RUNS IN — `scope="container"` is this id.
+   *  Handed straight to `sidebar-search.tsx`; this column reads it for nothing
+   *  else. */
   workspaceId: string;
   rooms: Channel[];
   direct: Channel[];
@@ -149,10 +158,6 @@ export function ChannelsSidebar({
   const [threadsCollapsed, setThreadsCollapsed] = useState<ReadonlySet<string>>(
     () => new Set()
   );
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [searchFocused, setSearchFocused] = useState(false);
-
   const toggle = (key: SectionKey) =>
     setCollapsed((prev) => {
       const next = new Set(prev);
@@ -216,63 +221,10 @@ export function ChannelsSidebar({
       aria-label="Channels"
       className="flex w-[260px] shrink-0 flex-col border-r border-border-default"
     >
-      {/* ⚠ `relative` IS WHAT ANCHORS THE POPUP, exactly as `.search-expand`'s
-          own `position: relative` anchors /home's — the card is a child of the
-          field's row and lands on its edges with a plain `left-0 right-0`. */}
-      <div className="relative flex h-[52px] shrink-0 items-center gap-2 px-3">
-        {searchOpen ? (
-          <SearchField
-            value={query}
-            onChange={setQuery}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-            autoFocus
-            /* ⚠ **NOT "Filter channels" ANY MORE** — it filters nothing; it
-                searches the workspace. */
-            placeholder="Search"
-            size="sm"
-            className="min-w-0 flex-1"
-          />
-        ) : (
-          <span className="flex-1" />
-        )}
-        <IconButton
-          icon={Search}
-          label="Search"
-          active={searchOpen}
-          onClick={() => {
-            setSearchOpen((open) => !open);
-            setQuery("");
-          }}
-        />
-        {searchOpen && (
-          <SearchPopup
-            query={query}
-            focused={searchFocused}
-            scope="container"
-            containerId={workspaceId}
-            onNavigate={onSearchNavigate}
-            onClose={() => {
-              setQuery("");
-              setSearchFocused(false);
-            }}
-            onQueryChange={setQuery}
-            /* ⚠ **THE REAL ENDPOINT SINCE 2026-09-17**, when `feat/search-api`
-               merged — `GET /api/search?scope=container&container=<id>`, which
-               is the ONE thing this host passes that /home's does not. The
-               fixture table it opened on is test and dev data now. */
-            fetcher={apiSearchFetcher}
-            /* ⚠ **THE PIN ONLY — THE WIDTH IS THE CARD'S OWN SINCE 2026-09-17**
-               (`search-popup.tsx › SEARCH_CARD_W`, 280px). This read
-               `!w-[420px]`, which is a second declaration of a width the card
-               states for itself; the card came down a step and this copy would
-               have kept the old one. The column is 260px and the card is
-               slightly wider, so it stays pinned to the column's LEFT edge and
-               opens into the page rather than off-screen. */
-            className="!right-auto left-3"
-          />
-        )}
-      </div>
+      <SidebarSearchHeader
+        workspaceId={workspaceId}
+        onNavigate={onSearchNavigate}
+      />
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-6">
         <nav className="flex flex-col gap-px px-2">
