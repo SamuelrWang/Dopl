@@ -2,30 +2,15 @@
 /**
  * **THE WORKSPACE CHANNELS PAGE'S AGENT PANE CARRIES THE AGENT'S COLOUR** — the
  * regression `overlays.tsx`'s collapse onto `surface-agent-view.tsx` closed
- * (wave 1A, 2026-09-17; parity audit `docs/specs/workspace-parity/08-slot-audit.md`
- * § F1).
+ * (wave 1A, 2026-09-17).
  *
- * ⚠ **THIS IS THE ONE PROPERTY A SCREENSHOT OF EITHER HOST COULD NOT HAVE
- * CAUGHT.** `ChannelsAgentPanel` DEFAULTS `color` to `null` and renders a
- * perfectly good uncoloured banner, so the workspace page looked finished while
- * a SHIPPED ruling (2026-09-13, `docs/specs/agent-colors.md`) had never once
- * rendered on it. Nothing was red; there was simply a second wiring of one
- * component, and it was missing a prop.
- *
- * ⚠ **THE ASSERTION IS THE PROP, NOT THE PAINT.** What the key resolves to is
- * `agent-colors.ts`'s business and has its own suites
- * (`agent-color-circles.test.tsx`, `composer-launch-colors.test.tsx`); what this
- * file pins is that the PAGE hands the pane the key the surface's `liveAgents`
- * union already holds — the fact the fork dropped.
- *
- * ⚠ **AND IT IS PINNED AT THE PAGE, NOT AT `SurfaceAgentView`.** That component
- * has always passed `color`; the defect was one host never rendering it. A test
- * mounted on the shared view would have been green throughout the drift.
- *
- * ⚠ THE MOCK SET IS `channels-core.test.tsx`'s, minus the two stubs that would
- * erase the question: `./agent-panel` reports its `color` instead of rendering
- * `null`, and `./info-panel` offers the click that opens an agent (the real
- * Agents tab's `onOpenAgent`, which is the only way in).
+ * ⚠ Nothing was ever red: `ChannelsAgentPanel` defaults `color` to `null` and
+ * renders a perfectly good uncoloured banner, so a shipped ruling (2026-09-13,
+ * `docs/specs/agent-colors.md`) had simply never rendered on this one host.
+ * ⚠ THE ASSERTION IS THE PROP, NOT THE PAINT — what the key resolves to is
+ * `agent-colors.ts`'s business and has its own suites.
+ * ⚠ PINNED AT THE PAGE, not at `SurfaceAgentView`: that component has always
+ * passed `color`, so a test mounted on it would have been green throughout.
  */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";

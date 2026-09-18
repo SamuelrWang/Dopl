@@ -52,7 +52,10 @@ import type { ChannelPeerSession } from "../hooks/use-channel-agent-sessions";
 import type { AgentLaunchOutcome } from "./use-agents-panel";
 import type { TemplateLaunchOverrides } from "@/features/agent-templates/lib/launch-overrides";
 import type { AuthorIndex } from "./view-model";
-import type { ChannelInfoExtras } from "./channel-surface-contract";
+import type {
+  ChannelInfoExtras,
+  MentionsLayout,
+} from "./channel-surface-contract";
 import type {
   Channel,
   ChannelMember,
@@ -211,18 +214,15 @@ export function ChannelsInfoPanel({
    * WHAT THE HOST ADDS TO THE INFO TAB — named regions, resolved by
    * `surface-info-panel.tsx` from `ChannelSurfaceSlots.infoExtras`.
    *
-   * ⚠ **`infoTab?: ReactNode` STOOD HERE AND IS DELETED (wave 1A, 2026-09-17).**
-   * It REPLACED `info-tab.tsx › InfoTab` and the branch below was
-   * `infoTab !== undefined ? infoTab : <InfoTab …/>`; it is unconditional now.
-   * A body-replacing slot cannot help dropping what the surface minted for the
-   * body — it did so four times in three weeks, the last of them stating a
-   * falsehood on screen (F-723).
-   * ⚠ THREAD VIEW IGNORES THIS, like everything else on `InfoTab`: the column is
-   * already thread-scoped.
+   * ⚠ `infoTab?: ReactNode` stood here and is DELETED (wave 1A, 2026-09-17): it
+   * REPLACED the body, and a body-replacing slot cannot help dropping what the
+   * surface minted for it — four times in three weeks, the last of them stating
+   * a falsehood on screen (F-723). The branch below is unconditional now.
+   * ⚠ Thread view ignores this, like everything else on `InfoTab`.
    */
   infoExtras?: ChannelInfoExtras;
   /** WHICH RULED MENTIONS FACE — `ChannelSurfaceCapabilities.mentionsLayout`. */
-  mentionsLayout?: "disclosure" | "category";
+  mentionsLayout?: MentionsLayout;
   /** Whether an EMPTY roster says so — `InfoTab.rosterEmptyLine` carries the rule. */
   rosterEmptyLine?: boolean;
   /** The Members heading's Add member control — `InfoTab.membersAction` carries
@@ -330,9 +330,8 @@ export function ChannelsInfoPanel({
                 peerSessions={peerSessions}
               />
             ) : (
-              /* ⚠ UNCONDITIONAL SINCE WAVE 1A — there is ONE Info body and a host
-                 adds to it through {@link infoExtras}. See that prop for the slot
-                 this branch used to carry. */
+              /* ⚠ Unconditional since wave 1A — one Info body, and a host adds
+                 to it through {@link infoExtras}. */
               <InfoTab
                 channel={channel}
                 channelName={channelName}

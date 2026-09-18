@@ -197,25 +197,17 @@ export function DemoScene({
                       // than a collapsed row inside the card.
                       artifacts
                       mentionsLayout="category"
-                      // ⚠ **THE HERO RENDERS THE PRODUCT'S OWN Info BODY SINCE
-                      // WAVE 1A (2026-09-17).** It used to inject
-                      // `demo-info-tab.tsx` through the body-REPLACING `infoTab`
-                      // slot — a FIFTH hand-copy of the same ladder, whose own
-                      // docblock promised every section was "the product's own
-                      // component, not a look-alike" while the composition around
-                      // them was a look-alike. It is deleted; `InfoTab` reads
-                      // `SALES_CHANNEL` and the roster, the scripted series and
-                      // mentions arrive as props above, and **no `headerEdit` or
-                      // `infoCardEdit` is passed**, which is exactly the
+                      // ⚠ THE HERO RENDERS THE PRODUCT'S OWN Info BODY since
+                      // wave 1A (2026-09-17) — `demo-info-tab.tsx` was a FIFTH
+                      // hand-copy of the ladder and is deleted. No `headerEdit`
+                      // or `infoCardEdit` is passed, which is exactly the
                       // display-only face a decorative pane wants.
                       activityBins={ACTIVITY_BINS}
                       activityLoading={false}
-                      // ⚠ ADD PERSON LIVES *UNDER* THE ROSTER, with NO HEADING
-                      // (Samuel, 2026-08-25): the control says what it does. The
-                      // FACE is `PAGE_ACTION_BTN` by import — /home's own black
-                      // pill — and it is a `<span>` because this pane is
-                      // decorative and `aria-hidden`. Same region /home's real
-                      // Add person fills (`ChannelInfoExtras.belowRoster`).
+                      // ⚠ Add person sits UNDER the roster with no heading
+                      // (Samuel, 2026-08-25), in the same region /home's real one
+                      // fills. A `<span>`, not a button: this pane is decorative
+                      // and `aria-hidden`.
                       infoExtras={{
                         belowRoster: (
                           <div className="px-3.5 pt-2.5">

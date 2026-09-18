@@ -7,27 +7,16 @@ import { openChannelRecord, renderHome, routes } from "./home-test-harness";
 /**
  * 🔒 **THE OPERATOR IS ONLINE IN THEIR OWN HOME CHANNEL — F-723.**
  *
- * ⚠ **THIS WAS RED, AND IT WAS RED ON SCREEN.** `member-roster.tsx ›
- * MemberRoster` feeds `viewerUserId` to `view-model.ts › isPresentForViewer`,
- * whose override — *the viewer is present whenever THIS desktop app is the thing
- * rendering* — fires only when the viewer is known. /home's roster
- * mounted its OWN `useChannelMembers` and passed no
- * viewer, so the operator's row fell through to the `lastSeenAt` heartbeat and
- * read OFFLINE, in the one renderer where `isSpaRenderer()` is ever true. The
- * workspace channels page, on the same machine in the same second, showed them
- * online — because the shared Info tab has passed `index.currentUserId` since
- * 2026-09-08.
+ * ⚠ This was red, and it was red ON SCREEN. `isPresentForViewer`'s override —
+ * *the viewer is present whenever THIS desktop app is rendering* — fires only
+ * when the viewer is known, and /home's forked roster passed none, so the
+ * operator fell through to the `lastSeenAt` heartbeat and read OFFLINE.
  *
- * ⚠ **THE FIXTURE IS THE DEFAULT ROSTER, DELIBERATELY** (`home-test-harness.tsx
- * › MEMBERS`): the operator carries `agentOnline: false` and `lastSeenAt: null`,
- * which is the ordinary state of a member whose own machine is the one asking.
- * A fixture that made them heartbeat-present would be green with the override
- * deleted, which is the whole failure mode here.
- *
- * ⚠ **`installBridge` IS WHAT MAKES `isSpaRenderer()` TRUE** — it installs
- * `window.dopl`, which is the only thing that predicate asks (`spa-bridge.ts`).
- * So this file needs no renderer mock: it IS the renderer, as far as the rule is
- * concerned.
+ * ⚠ THE FIXTURE IS THE DEFAULT ROSTER, deliberately: the operator carries
+ * `agentOnline: false` and `lastSeenAt: null`, so a green run means the override
+ * fired rather than a heartbeat arriving.
+ * ⚠ `installBridge` is what makes `isSpaRenderer()` true — this file IS the
+ * renderer, as far as the rule is concerned.
  *
  * ⚠ **IT IS ITS OWN FILE** rather than a case in `home-info-tab.test.tsx`,
  * which sits within a hundred lines of the 500-line cap (§1) — and because the

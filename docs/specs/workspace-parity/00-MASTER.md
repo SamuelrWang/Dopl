@@ -1127,6 +1127,19 @@ each split is its own commit; revert individually.
 ### Wave 1 — One channel record surface, zero forks.
 **Worktree `parity/w1-channel-surface`.**
 
+🟢 **MERGED TO `master` 2026-09-17 — WAVES 1A AND 1B ARE DONE, AND ITEM 6 IS NOT.**
+`wave1/one-record-surface` (1A, plus F-722 and one review commit) fast-forwarded onto master after
+the full gate set. ⚠ **THIS ROW SAYS "MERGED", NOT "COMPLETE"**, and the difference is item 6: the
+`ChannelRecordSkeleton` move is still 🔴 open and still in `apps/desktop-ui/`. Items 1–5 and 7 are
+done, so what is left of Wave 1 is that one move — re-scope it as its own branch rather than
+inheriting a worktree that no longer exists. **Review pass (2026-09-17), on the merge commit:** the
+client mirror of `canManageChannel` collapsed to one declaration
+(`channels/lib/channel-manage-gate.ts › canManageChannelHere`, was three call sites),
+`MentionsLayout` became one exported union (was three literals), and the wave's files lost a NET
+356 comment lines (705 deleted, 349 rewritten shorter — measured 2026-09-17 on the review commit).
+INVARIANTS §5A's click-to-edit clause still described the deleted `infoTab` slot and was corrected
+in the same change.
+
 **Goal:** the thing Samuel is looking at. One info body, one agent wiring, one loading ghost — and
 the three capability-losing slots closed for good.
 

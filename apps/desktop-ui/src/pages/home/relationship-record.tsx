@@ -100,22 +100,15 @@ export function RelationshipRecord({
       initialThreadId={initialThreadId}
       initialSeq={initialSeq}
       onDeleted={onDeleted}
-      // 🔒 **/home RENDERS THE SHARED Info BODY AND ADDS ONE REGION TO IT (wave
-      // 1A, 2026-09-17).** It used to inject a whole tab through the
-      // body-REPLACING `infoTab` slot — `person-info-tab.tsx`, 402 lines of the
-      // same ladder out of the same leaves — and that fork lost something the
-      // surface had already paid for FOUR times in three weeks: the mentions
-      // section, the header write, the activity strip, and the viewer id, which
-      // made the operator read as offline in their own channel (F-723).
-      // ⚠ **WHAT IS LEFT IS DIFFERENT IN KIND, NOT DIFFERENT IN DEGREE.** Add
-      // person mints a bound LINK; a workspace channel's roster is added to
-      // through an invite the server refuses here outright (§4A
-      // `LINK_CONTAINER_CLOSED`). There is no shared control to narrow, so it is
-      // a region under the list it changes — `person-roster-actions.tsx`.
-      // ⚠ A RENDER FUNCTION SINCE 2026-08-25, and the argument is unchanged: the
-      // region is write-bearing, and INVARIANTS §7/§8 allow ONE `useRefetchGate`
-      // per live surface. The surface hands its own down rather than the region
-      // minting a second one that coordinates with nothing.
+      // 🔒 /home RENDERS THE SHARED Info BODY AND ADDS ONE REGION TO IT (wave
+      // 1A, 2026-09-17). It used to inject a whole tab through the
+      // body-REPLACING `infoTab` slot, which lost four things the surface had
+      // already paid for — the last of them putting a falsehood on screen
+      // (F-723). What is left is different in KIND: Add person mints a bound
+      // LINK, where a workspace channel's roster takes an invite the server
+      // refuses here outright (§4A `LINK_CONTAINER_CLOSED`).
+      // ⚠ A RENDER FUNCTION SINCE 2026-08-25: the region is write-bearing, and
+      // §7/§8 allow ONE `useRefetchGate` per live surface.
       slots={{
         infoExtras: () => ({
           belowRoster: <PersonRosterActions homeChannel={homeChannel} />,
@@ -148,14 +141,10 @@ export function RelationshipRecord({
       // the same width budget. ⚠ The workspace channel page and the guest lane pass
       // nothing and are unchanged — the face's reads mount with the face, so a host
       // that never offers it never asks for a card.
-      // 🔒 `mentionsLayout: "category"` — MENTIONS IS A TOP-LEVEL SECTION HERE,
-      // BELOW THE ACTIVITY STRIP, WITH THE LIST OPEN AND FLUSH (Samuel,
-      // 2026-09-15 live review, superseding the collapsed row that shipped hours
-      // earlier; `inset="flush"` 2026-09-17). ⚠ IT IS THE ONE PRESENTATIONAL
-      // DIFFERENCE BETWEEN THE TWO CHANNEL RECORD SURFACES, and it is a
-      // capability rather than a fork precisely so it stays the only one — the
-      // capability's own docblock carries the ruling and why the POSITION
-      // travels with the face.
+      // 🔒 `mentionsLayout: "category"` — the ONE presentational difference
+      // between the two channel record surfaces (Samuel, 2026-09-15; the
+      // capability's docblock carries the ruling). A capability rather than a
+      // fork precisely so it stays the only one.
       capabilities={{
         memberManagement: false,
         peerNamedHeader: false,

@@ -23,7 +23,7 @@
  */
 
 import type { Role } from "@/features/workspaces/types";
-import { meetsMinRole } from "@/features/workspaces/types";
+import { canManageChannelHere } from "../lib/channel-manage-gate";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { ChannelsManageActions } from "./channel-manage";
@@ -77,13 +77,9 @@ export function ChannelsSettingsSlot({
         thread={thread}
         workspaceId={workspaceId}
         currentUserId={currentUserId}
-        // ⚠ The SAME pair the server's gate reads (`service-shared.ts ›
-        // canManageChannel`): channel owner, or workspace admin. Computed here
-        // because this is where both facts are in hand, and mirrored rather than
-        // guessed so the row's presence matches the answer the route will give.
-        canManageChannel={
-          channel.role === "owner" || meetsMinRole(role, "admin")
-        }
+        // The server's own gate, mirrored once (`lib/channel-manage-gate.ts`),
+        // so the row's presence matches the answer the route will give.
+        canManageChannel={canManageChannelHere(channel, role)}
         agentSessions={agentSessions}
         gate={gate}
         onDeleted={onExitThread}

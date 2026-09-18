@@ -44,16 +44,16 @@ import type {
 } from "./channel-surface-contract";
 
 /**
- * ⚠ **THE HOST CONTRACT LIVES IN `channel-surface-contract.ts` SINCE WAVE 1A
- * (2026-09-17)** — `ChannelInfoTabContext`, `ChannelSurfaceSlots` and
- * `ChannelSurfaceCapabilities`, moved whole at §1's 500-line cap and re-exported
- * here so no caller moved. That file carries every rule; this one composes panes.
+ * The host contract moved to `channel-surface-contract.ts` at §1's cap (wave
+ * 1A, 2026-09-17) and is re-exported here so no caller moved. That file carries
+ * every rule; this one composes panes.
  */
 export type {
   ChannelInfoTabContext,
   ChannelInfoExtras,
   ChannelSurfaceSlots,
   ChannelSurfaceCapabilities,
+  MentionsLayout,
 } from "./channel-surface-contract";
 
 export interface ChannelSurfaceProps {

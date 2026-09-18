@@ -3,23 +3,15 @@
  * **THE ONE INFO BODY, AND WHAT A HOST MAY ADD TO IT** — the `infoExtras`
  * contract and the context the surface hands it.
  *
- * ⚠ **SPLIT OFF `channel-surface.test.tsx` IN WAVE 1A (2026-09-17), AT §1's
- * 500-LINE CAP**, when the two REPLACES-the-body cases inverted into four
- * ADDS-BESIDE-the-body ones. The seam is the honest one: that file is about
- * mounting the surface outside the channels page — the live registration, the
- * header's identity, the two narrowing capabilities — and moves when a PANE
- * moves; this one is about the host CONTRACT and moves when a host gains an
- * ability. ⚠ **THE MOCK BLOCK IS COPIED, NOT SHARED**, which is this tree's own
- * precedent (`channels-core.test.tsx` / `channels-core-search-seq.test.tsx`):
- * `vi.mock` is hoisted above every import, so a shared preamble is a factory
- * indirection per mock rather than one import.
+ * ⚠ Split off `channel-surface.test.tsx` at §1's cap (wave 1A, 2026-09-17), on
+ * the honest seam: that file moves when a PANE moves, this one when a host gains
+ * an ability. The mock block is COPIED, not shared — `vi.mock` is hoisted above
+ * every import, so sharing it costs a factory indirection per mock.
  *
- * ⚠ **WHY THESE CASES EXIST AT ALL.** `docs/specs/workspace-parity/08-slot-audit.md`
- * walked all 78 declared slots in the tree and found exactly ONE that replaced a
- * body the surface had already paid for. It dropped something four times in three
- * weeks — the mentions section, the header write, the activity strip, and the
- * viewer id, which put a FALSE answer on screen (F-723). The type is the fix and
- * these are what say so out loud.
+ * ⚠ `08-slot-audit.md` walked all 78 declared slots in the tree and found
+ * exactly one that replaced a body the surface had already paid for; it dropped
+ * something four times in three weeks, the last putting a FALSE answer on screen
+ * (F-723). The type is the fix and these cases say so out loud.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";

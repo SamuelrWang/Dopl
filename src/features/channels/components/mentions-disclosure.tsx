@@ -3,16 +3,13 @@
 /**
  * Channels — THE TAGS ROW AND WHAT IT OPENS, as one component.
  *
- * ⚠ **EXTRACTED BECAUSE A SECOND SURFACE NEEDED IT AND COPIED NOTHING**
+ * ⚠ EXTRACTED BECAUSE A SECOND SURFACE NEEDED IT AND COPIED NOTHING
  * (2026-09-15, Samuel: the home space's Info tab had no Tags section at all).
- * The workspace channels page (`info-tab.tsx`) and a HOME channel's Info tab
- * were two compositions of ONE ladder that were MEANT TO MATCH, until wave 1A
- * (2026-09-17) collapsed them into one body with a ruled branch
- * (`ChannelSurfaceCapabilities.mentionsLayout`). ⚠ This row is the DISCLOSURE
- * face; `mentions-list.tsx` is the list under both. The old note said so about the
- * Description row. The parity gap was not that the home tab rendered the section
- * differently; it was that the surface FETCHED the mentions and the injected tab
- * threw them away.
+ * The two Info tabs collapsed into one body with a ruled branch in wave 1A
+ * (2026-09-17, `ChannelSurfaceCapabilities.mentionsLayout`); this row is the
+ * DISCLOSURE face and `mentions-list.tsx` is the list under both. The parity gap
+ * was never that the home tab rendered the section differently — it was that the
+ * surface FETCHED the mentions and the injected tab threw them away.
  *
  * ⚠ **SO THE ROW IS DECLARED ONCE, HERE, RATHER THAN TWICE.** Pasting the
  * disclosure into the second tab would have shipped two spellings of one

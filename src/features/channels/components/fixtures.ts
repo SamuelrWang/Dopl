@@ -70,15 +70,10 @@ export const HARDCODED_NAV_ROWS: NavRowSpec[] = [
 // "for reference", because a fixture nothing renders is the next thing somebody
 // renders.
 
-/* ⚠ **`HARDCODED_THREAD_ACTIVITY` STOOD HERE AND IS DELETED (wave 1A, 2026-09-17
-   — parity item X7).** 31 hand-authored heatmap levels, the last fixture feeding
-   a shipped strip. F-316 wired /home's strip to a counted series on 2026-08-25
-   and the workspace channels page on 2026-09-05, which left this array with ONE
-   reader: its own test. INVARIANTS §15 — dead code is DELETED, not parked.
-   ⚠ **NOTHING ABOUT THE ENCODING IS LOST.** `-1` = an empty well and `0`–`4`
-   index `ACTIVITY_SHADE` low→high; that rule lives where it is executed
-   (`thread-activity.tsx › activityLevels` / `› ActivityCells`) and is pinned
-   there, not here. Reviving a fixture strip means reviving that reading too. */
+/* ⚠ `HARDCODED_THREAD_ACTIVITY` stood here and is deleted (wave 1A, 2026-09-17,
+   parity item X7): 31 hand-authored heatmap levels whose only reader since
+   F-316 wired both strips to a counted series was its own test (§15). The
+   encoding itself lives where it is executed, in `thread-activity.tsx`. */
 
 /** "Diana Taylor" → "Diana's agent". THE label form for an addressed agent —
  *  the composer's pills read it. */

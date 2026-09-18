@@ -4,34 +4,17 @@
  * **THE CHANNEL RECORD'S INFO TAB — THE ONE BODY, ON EVERY HOST.** Channel
  * metadata, the mentions inbox, the activity strip and the roster.
  *
- * 🔒 **THERE WAS A SECOND ONE UNTIL WAVE 1A (2026-09-17), AND DELETING IT IS
- * WHAT THIS FILE IS FOR.** `apps/desktop-ui/src/pages/home/person-info-tab.tsx`
- * was 402 lines composing the same ladder out of the same leaves through the
- * body-REPLACING `infoTab` slot, and the two docblocks each asserted the panes
- * "are MEANT TO MATCH" — which is a sentence a codebase writes when it knows the
- * two are going to stop matching. They had already stopped four times: the
- * mentions section (2026-09-15), the header write (2026-09-17), the activity
- * strip, and the viewer id that made the operator read as OFFLINE in their own
- * channel (**F-723**). A host may now only ADD
- * (`channel-surface-contract.ts › ChannelInfoExtras`).
+ * 🔒 /home had a second one until wave 1A (2026-09-17): 402 lines composing the
+ * same ladder out of the same leaves through the body-REPLACING `infoTab` slot,
+ * which had already dropped four things the surface paid for — the mentions
+ * section, the header write, the activity strip, and the viewer id that made
+ * the operator read as OFFLINE in their own channel (F-723). A host may now
+ * only ADD (`channel-surface-contract.ts › ChannelInfoExtras`).
  *
- * ⚠ **TWO RULED FACES, ONE BRANCH — NOT A FORK.**
- * `ChannelSurfaceCapabilities.mentionsLayout` picks between the workspace's
- * collapsed disclosure inside the card and /home's open top-level category below
- * the activity strip (Samuel, 2026-09-15). Both draw `mentions-list.tsx`, from
- * one bundle the surface minted. The capability's own docblock carries the ruling
- * and why the POSITION travels with the face.
- *
- * WIRED: channel info (creator / created) off the channel row, the CURATED rows
- * off `channels.info_card` (R-19, 2026-09-17), MEMBERS off the surface's
- * `use-channel-members` read (presence is the server's verdict —
- * `view-model.ts › isPresentForViewer`, 2026-09-08), the MENTIONS inbox off
- * `use-channel-mentions` (Phase 6), and the activity strip since 2026-09-05
- * (F-316). ⚠ **IT READS NOTHING ITSELF** — every one of those is
- * `channel-surface-data.ts`, mounted once by the HOST (INVARIANTS §7).
- *
- * ⚠ NOTHING ON THIS TAB IS HARDCODED (2026-09-17). "Linked threads" was the last
- * fixture-fed section; R-45 deleted it.
+ * ⚠ `mentionsLayout` is TWO RULED FACES OVER ONE BRANCH, not a fork (Samuel,
+ * 2026-09-15) — the capability's own docblock carries the ruling.
+ * ⚠ IT READS NOTHING ITSELF. Every fact below is `channel-surface-data.ts`,
+ * mounted once by the HOST (INVARIANTS §7).
  */
 
 import type { ReactNode } from "react";
@@ -44,7 +27,10 @@ import { ThreadActivityStrip, type ActivityBin } from "./thread-activity";
 import { MentionsDisclosure, type MentionsBundle } from "./mentions-disclosure";
 import { MentionsList } from "./mentions-list";
 import type { AuthorIndex } from "./view-model";
-import type { ChannelInfoExtras } from "./channel-surface-contract";
+import type {
+  ChannelInfoExtras,
+  MentionsLayout,
+} from "./channel-surface-contract";
 import type { Channel, ChannelMember, ChannelMention } from "../types";
 
 export function InfoTab({
@@ -78,71 +64,50 @@ export function InfoTab({
   mentionsLoading: boolean;
   /** WHICH RULED MENTIONS FACE — `ChannelSurfaceCapabilities.mentionsLayout`
    *  carries the ruling. Default is the workspace page's collapsed row. */
-  mentionsLayout?: "disclosure" | "category";
+  mentionsLayout?: MentionsLayout;
   index: AuthorIndex;
   onOpenMention: (mention: ChannelMention) => void;
   onMarkAllMentionsRead: () => void;
   /**
-   * CLICK-TO-EDIT NAME + DESCRIPTION (Samuel, 2026-09-16). ABSENT is the
-   * display face and the default, so a host that has not wired the write —
-   * every test harness, and any surface without a refetch gate — renders
-   * exactly what this tab rendered before. The host resolves both halves of
-   * "may this line open" (`surface-info-panel.tsx`).
+   * CLICK-TO-EDIT NAME + DESCRIPTION (Samuel, 2026-09-16). ABSENT is the display
+   * face and the default, so a host that has not wired the write renders exactly
+   * what this tab rendered before.
    */
   headerEdit?: ChannelHeaderEdit;
   /**
-   * 🔒 **THE CURATED `channels.info_card` ROWS' WRITE (Samuel's ruling R-19,
-   * 2026-09-17).** The column is on `channels` — every channel can carry curated
-   * rows — and until this ruling exactly ONE surface rendered them, so a workspace
-   * channel could hold rows no workspace surface showed. A stored row nothing
-   * displays is a data trap.
-   *
-   * ⚠ **ABSENT MEANS THE ROWS ARE NOT DRAWN AT ALL, NOT DRAWN INERT.** Every row
-   * carries a hover × and its value is the edit target (`info-card-rows.tsx ›
-   * InfoCardCustomRow`), so a body whose host has not wired the write would ship
-   * two dead controls per row — the thing INVARIANTS §5 forbids, and worse here
-   * than showing nothing, because a × that does not remove reads as data loss.
-   * The one product host (`surface-info-panel.tsx`) always passes it; what does
-   * not is a test harness with no card to draw.
+   * THE CURATED `channels.info_card` ROWS' WRITE (Samuel's ruling R-19,
+   * 2026-09-17).
+   * ⚠ ABSENT means the rows are not drawn AT ALL, not drawn inert: each row's
+   * value is the edit target and carries a hover ×, so an unwired host would
+   * ship two dead controls per row (INVARIANTS §5) — and a × that does not
+   * remove reads as data loss.
    */
   infoCardEdit?: ChannelInfoCardEdit;
   /**
-   * 🔒 **"No members in this channel." — TRUE ON A WORKSPACE CHANNEL, NEVER ON A
-   * CONTAINER THE VIEWER IS INSIDE.** Default on, like every other default here.
-   *
-   * ⚠ **IT IS DERIVED, NOT A NEW FLAG** (`surface-info-panel.tsx`:
-   * `capabilities?.memberManagement !== false`). The hosts that pass
-   * `memberManagement: false` — /home and the guest lane — are exactly the hosts
-   * whose roster ALWAYS holds the reader, because the only door in is a link the
-   * reader claimed (§4A: every workspace-level add answers
-   * `LINK_CONTAINER_CLOSED`). There the sentence could only ever appear for one
-   * frame during the roster read, stating something false. A public workspace
-   * channel, by contrast, really can be read by nobody's member.
+   * 🔒 "No members in this channel." — true on a workspace channel, never on a
+   * container the viewer is inside. Default on.
+   * ⚠ DERIVED, NOT A NEW FLAG (`surface-info-panel.tsx`): the hosts that pass
+   * `memberManagement: false` are exactly the ones whose only door in is a link
+   * the reader claimed, so the sentence could only flash falsely there.
    */
   rosterEmptyLine?: boolean;
   /**
-   * 🔒 **THE Members HEADING'S ONE CONTROL — Add member (F-721 RESOLVED, Samuel
-   * 2026-09-17, taking R-46's option (b) after all).**
-   *
-   * ⚠ **INJECTED, NOT BUILT HERE, FOR `info-panel.tsx › settings`'s REASON:** it
-   * is write-bearing. It opens `invite-dialog.tsx › InviteDialog`, which mounts
-   * two reads and the add/remove writes, and this body fetches nothing
-   * (INVARIANTS §7). `surface-info-panel.tsx` owns the open state, the gate and
-   * the dialog; this file owns where the control sits.
-   * ⚠ **ABSENT IS NOT "DISABLED".** A host with no membership to change passes
-   * nothing and the heading reads the way it has since R-46: the count, and
-   * nothing else. An affordance that always 403s is a dead control (§5).
-   * ⚠ **THERE IS NO "Filter members" AND THERE IS NOT GOING TO BE.** R-46 deleted
-   * it outright and (b) named only the add affordance; the roster is bounded and
-   * short.
+   * 🔒 THE Members HEADING'S ONE CONTROL — Add member (F-721 RESOLVED, Samuel
+   * 2026-09-17, taking R-46's option (b) after all).
+   * ⚠ INJECTED, NOT BUILT HERE, for `info-panel.tsx › settings`'s reason: it is
+   * write-bearing and this body fetches nothing (INVARIANTS §7).
+   * `surface-info-panel.tsx` owns the dialog; this file owns where it sits.
+   * ⚠ ABSENT IS NOT "DISABLED" — a host with no membership to change passes
+   * nothing and the heading reads the way it has since R-46: the count alone.
+   * ⚠ There is no "Filter members" and there is not going to be (R-46).
    */
   membersAction?: ReactNode;
   /** WHAT THE HOST ADDS — named regions, never a body
    *  (`channel-surface-contract.ts › ChannelInfoExtras`). */
   extras?: ChannelInfoExtras;
 }) {
-  // ⚠ ONE BUNDLE, BOTH FACES. `index` is the SURFACE's — the mentions list and
-  // the roster resolve authors and the viewer from one index, never two.
+  // ONE BUNDLE, BOTH FACES: the mentions list and the roster resolve authors
+  // and the viewer from the SURFACE's one index, never two.
   const bundle: MentionsBundle = {
     mentions,
     truncated: mentionsTruncated,
@@ -154,12 +119,9 @@ export function InfoTab({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto pb-6">
-      {/* ⚠ "Channel info", NOT "Main info" (Samuel, 2026-09-05): the old title
-          said where the block sat rather than what it was about.
-          ⚠ NO NAME HEADING ABOVE THE CARD (Samuel, 2026-09-05, live review of the
-          /home pane). The channel's name is a FIELD of the card — the first row
-          under this heading, the subject before its facts — not a title floating
-          over it. */}
+      {/* ⚠ "Channel info", not "Main info", and NO NAME HEADING above the card
+          (Samuel, 2026-09-05): the name is the card's first ROW — the subject
+          before its facts — not a title floating over it. */}
       <PanelHeading title="Channel info" />
       <div className="px-2">
         <InfoTabCard
@@ -169,64 +131,41 @@ export function InfoTab({
           headerEdit={headerEdit}
           infoCardEdit={infoCardEdit}
         />
-        {/* THE COLLAPSED FACE — a row INSIDE the card, with the unread badge.
-            `mentions-disclosure.tsx` owns the label, the badge and the open
-            state. */}
+        {/* THE COLLAPSED FACE — a row INSIDE the card, with the unread badge. */}
         {mentionsLayout === "disclosure" && (
           <>
             <MetaRowDivider />
             <MentionsDisclosure channelName={channelName} bundle={bundle} />
           </>
         )}
-        {/* ⚠ **THE THREADS-COUNT ROW STOOD HERE AND IS DELETED (Samuel's ruling
-            R-22, 2026-09-17).** It printed the length of the same bounded list the
-            Threads TAB already badges (`info-panel-tabs.ts › tabCount`), one row
-            below the tab row carrying it — two statements of one number, and the
-            badge is the one attached to the thing it counts. The row was also the
-            duplicate rather than the gap: /home's Info tab never had it. */}
+        {/* ⚠ The THREADS-COUNT row stood here and is deleted (Samuel's ruling
+            R-22, 2026-09-17): the Threads tab already badges that number one row
+            above, and a badge attached to the thing it counts is the one to keep. */}
       </div>
 
-      {/* ⚠ **"LINKED THREADS" STOOD HERE AND IS DELETED (Samuel's ruling R-45,
-          2026-09-17).** Two hardcoded rows with no `onClick` and no relation
-          behind them, marked hardcoded at this site since 2026-08-18. A thread
-          belongs to one channel and links to nothing, so there was never a read
-          to wire — and a dead control on the surface that is meant to be the
-          reference is the thing INVARIANTS §5 forbids. `HARDCODED_LINKED_THREADS`
-          went with it. ⚠ Reviving the IDEA means a schema answer first. */}
+      {/* ⚠ "Linked threads" stood here and is deleted (Samuel's ruling R-45,
+          2026-09-17) — two hardcoded rows with no `onClick` and no relation
+          behind them. Reviving the idea means a schema answer first. */}
 
-      {/* ⚠ THE LABEL FOLLOWS THE SURFACE (Samuel, 2026-09-05): this tab is the
-          CHANNEL's info, so the strip counts the channel. */}
+      {/* ⚠ The label follows the surface (Samuel, 2026-09-05): this tab is the
+          CHANNEL's info, so the strip counts the channel. Wired 2026-09-05
+          (F-316) off the same `overview-series?metric=messages&channelId=` the
+          account surface already used — no new endpoint, no new index.
+          ⚠ THE STRIP decides what nothing looks like, not this file: it draws
+          nothing in flight, because an empty well means a MEASURED zero. */}
       <PanelHeading title="Channel activity" />
-      {/* ⚠ **WIRED 2026-09-05 — F-316 CLOSED.** Samuel accepted the price (31
-          counted bins per channel selection, threaded down through
-          `channel-surface-data.ts`); the series is keyed by PATH, so re-selection
-          is a cache hit rather than a re-count.
-          ⚠ NO NEW ENDPOINT AND NO NEW INDEX: the same
-          `overview-series?metric=messages&channelId=` the account surface has fed
-          these identical squares from since 2026-08-25.
-          ⚠ THE STRIP DECIDES WHAT NOTHING LOOKS LIKE, not this file: it renders
-          NOTHING while the read is in flight, because an empty well means a
-          MEASURED zero.
-          ⚠ **ONE READ FOR THE WHOLE SURFACE SINCE WAVE 1A** — /home mounted a
-          second `useOverviewSeries` on this identical key, in a wrapper that
-          existed only to make it. */}
       <ThreadActivityStrip
         bins={activityBins}
         loading={activityLoading}
         metricLabel="Messages"
       />
 
-      {/* 🔒 **THE CATEGORY FACE (Samuel, 2026-09-15, live review, superseding the
-          collapsed disclosure that shipped hours earlier): a PEER of "Channel
-          info" and "Channel activity", with its own heading, no dropdown, and the
-          list rendered OPEN.** ⚠ **AND IT SITS BELOW THE STRIP**, which is the
-          same ruling: facts → what has been happening → what is addressed to YOU
-          → people. ⚠ **NO UNREAD BADGE, AND NOTHING IS LOST**: the count existed
-          to describe a list you could not see; open, every unread row carries its
-          own dot and tint. ⚠ **`inset="flush"`** (Samuel, 2026-09-17: *"each
-          individual mention is starting further right … it should start at the
-          same place"*) — this is a top-level category, not a disclosure's
-          contents, so the rows hang on the tab's own column edge. */}
+      {/* 🔒 THE CATEGORY FACE (Samuel, 2026-09-15, superseding the collapsed
+          disclosure that shipped hours earlier): a peer of "Channel info" and
+          "Channel activity", list open, no badge, BELOW the strip — facts → what
+          has been happening → what is addressed to YOU → people.
+          ⚠ `inset="flush"` (Samuel, 2026-09-17): a top-level category, not a
+          disclosure's contents, so the rows hang on the tab's own column edge. */}
       {mentionsLayout === "category" && (
         <>
           <PanelHeading title="Mentions" />
@@ -243,43 +182,25 @@ export function InfoTab({
         </>
       )}
 
-      {/* ⚠ **TWO INERT `IconButton`s — "Add member" and "Filter members" — STOOD IN
-          THIS HEADING AND ARE DELETED (Samuel's ruling R-46, 2026-09-17).** Neither
-          carried an `onClick`: they were markup from the design mock that the port
-          transcribed, and Samuel deliberately did NOT copy them to /home on
-          2026-08-25 — *"a port is not a transcription."* A control that does
-          nothing is a dead control (INVARIANTS §5), and this heading now reads the
-          way /home's already did: the count, and nothing else.
-          🔒 **AND "Add member" IS BACK, AS (b) — F-721 RESOLVED (Samuel, later
-          the same day).** R-46 offered (a) delete both and (b) wire the add
-          affordance to the dialog the Settings tab already opens; he took (a)
-          with (b) as a ticket, then answered the ticket yes. **What returns is
-          NOT the mock's inert `IconButton`**: it is the page-action pill
-          (`page-action-button.ts › PAGE_ACTION_BTN`) over
-          `invite-dialog.tsx › InviteDialog`, gated exactly as the server gates
-          the write. ⚠ **"Filter members" did NOT come back** — (b) named only the
-          add affordance, and the roster is bounded and short. */}
+      {/* ⚠ Two INERT `IconButton`s stood here and are deleted (R-46,
+          2026-09-17) — mock markup with no `onClick`, i.e. dead controls (§5).
+          🔒 "Add member" came back as a REAL control the same day (F-721): the
+          page-action pill over `invite-dialog.tsx`, gated as the server gates
+          the write. "Filter members" did not — the roster is bounded and short. */}
       <PanelHeading
         title="Members"
         trailing={
           <>
             <span className="text-caption text-text-muted">{members.length}</span>
-            {/* ⚠ `ml-auto` IS THE HEADING'S LAYOUT, NOT THE PILL'S — the shared
-                recipe is FACE AND SCALE ONLY and spacing stays with the caller
-                (`page-action-button.ts`). */}
             {membersAction}
           </>
         }
       />
-      {/* ⚠ THE ROSTER IS `member-roster.tsx` SINCE 2026-08-25 — it was
-          module-private here, which is how the account surface came to have a
-          roster of its own.
-          🔒 ⚠ `index.currentUserId` IS THE VIEWER, the id this surface already
-          holds — no second resolution (2026-09-08; `view-model.ts ›
-          isPresentForViewer`). **F-723 is what happens when a host draws this
-          roster without it**: the override that reports the operator present
-          whenever THIS desktop app is rendering cannot fire, and they read as
-          offline in their own channel. */}
+      {/* 🔒 `index.currentUserId` IS THE VIEWER — the id this surface already
+          holds, never a second resolution (2026-09-08; `view-model.ts ›
+          isPresentForViewer`). F-723 is what happens without it: the override
+          that reports the operator present while THIS desktop renderer is
+          running cannot fire, and they read as offline in their own channel. */}
       <div data-testid="channel-members">
         <MemberRoster
           members={members}
@@ -288,8 +209,7 @@ export function InfoTab({
         />
       </div>
 
-      {/* WHAT THE HOST ADDS, UNDER THE LIST IT CHANGES (Samuel, 2026-08-25) —
-          /home's Add person / Link out pair, and nothing on any other host. */}
+      {/* WHAT THE HOST ADDS, under the list it changes (Samuel, 2026-08-25). */}
       {extras?.belowRoster}
     </div>
   );

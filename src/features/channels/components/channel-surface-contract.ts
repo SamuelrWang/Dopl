@@ -1,19 +1,12 @@
 /**
  * **THE CHANNEL SURFACE'S HOST CONTRACT** — what a host may hand the surface
- * (`ChannelSurfaceSlots`, `ChannelSurfaceCapabilities`) and what the surface hands
- * back (`ChannelInfoTabContext`).
+ * (`ChannelSurfaceSlots`, `ChannelSurfaceCapabilities`) and what the surface
+ * hands back (`ChannelInfoTabContext`).
  *
- * ⚠ **ITS OWN FILE ON §1's CAP (wave 1A, 2026-09-17), AND THE SEAM IS THE HONEST
- * ONE.** `channel-surface.tsx` crossed 500 lines when the context took the four
- * facts F-723 and the slot audit found it was dropping. These three declarations
- * are the thing a HOST reads and the thing that changes when a host gains an
- * ability; the file next door is the composition, and it changes when a PANE
- * moves. They had already been diverging in edit rate for a month.
- *
- * ⚠ **TYPES ONLY, DELIBERATELY** — no component, no hook, nothing to import at
- * runtime, so a host may read the contract without pulling the surface's tree in.
- * `channel-surface.tsx` re-exports all three, so every existing import path is
- * unchanged (INVARIANTS §1: a split is a move, never a rename of a public name).
+ * Split out of `channel-surface.tsx` at §1's 500-line cap (wave 1A,
+ * 2026-09-17): this is what a HOST reads, that file is the composition.
+ * Types only — a host reads the contract without pulling the surface's tree in
+ * — and `channel-surface.tsx` re-exports all of it, so no import path moved.
  */
 
 import type { ReactNode } from "react";
@@ -24,99 +17,61 @@ import type { AuthorIndex } from "./view-model";
 import type { ActivityBin } from "./thread-activity";
 import type { ChannelMember } from "../types";
 
+/** Which of the two ruled mentions faces a surface draws — one declaration. */
+export type MentionsLayout = "disclosure" | "category";
+
 /**
- * What this surface hands an injected Info tab.
+ * What this surface has ALREADY PAID FOR, handed to a host's added regions.
  *
- * ⚠ IT CARRIES THE GATE AND THAT IS WHY THE SLOT IS A FUNCTION (2026-08-25). The
- * person card is WRITE-BEARING, and INVARIANTS §7/§8 allow exactly ONE
- * `useRefetchGate` per live surface — a slot handed a finished `ReactNode` could
- * only mint a second one, which coordinates with nothing.
+ * ⚠ Every field here was added after a host dropped it: `mentions`
+ * (2026-09-15), `headerEdit` (2026-09-17), then `members` / `index` /
+ * `activity` / `channelName` in wave 1A (2026-09-17, F-723). A region may not
+ * re-read any of them — two hooks on one key are two sources of truth.
  */
 export interface ChannelInfoTabContext {
-  /** THE surface's refetch gate — hand it to every write the tab makes. */
+  /**
+   * THE surface's refetch gate — hand it to every write a region makes.
+   * ⚠ This is why the slot is a FUNCTION (2026-08-25): §7/§8 allow exactly ONE
+   * `useRefetchGate` per live surface, and a finished `ReactNode` could only
+   * mint a second one, which coordinates with nothing.
+   */
   gate: MutationGate;
   /**
-   * THIS SURFACE'S TAGS INBOX, ALREADY READ (2026-09-15).
-   *
-   * ⚠ **IT IS HANDED DOWN BECAUSE THE SLOT REPLACES THE BODY, AND THAT IS WHAT
-   * LOST IT.** `surface-info-panel.tsx` fetches the mentions for EVERY mount,
-   * home space included, and passes them to the default Info tab — so a surface
-   * that injected its own tab paid for the read and then dropped the section on
-   * the floor. The home space's Info tab had no Tags row for that reason alone,
-   * not because the data was unavailable or wrongly scoped.
-   *
-   * ⚠ **THE HANDLERS CANNOT BE MINTED BY A TAB.** `onOpen` marks read, lands the
-   * CENTRE PANE on the right transcript and then fires the nonced scroll signal;
-   * only the surface holds the selection state that last step needs. A tab that
-   * built its own would mark read and scroll nothing.
-   *
-   * ⚠ **THE QUERY IS SCOPED BY THE SURFACE'S `workspaceId`,** which for a home
-   * channel IS the home CONTAINER id (`pages/home/relationship-record.tsx` passes
-   * `homeChannel.workspaceId`). So the tenancy is the container's by
-   * construction, and no caller may narrow or widen it here.
+   * This surface's tags inbox, already read.
+   * ⚠ The handlers cannot be minted downstream: `onOpen` marks read, lands the
+   * CENTRE pane on the right transcript and fires the nonced scroll signal —
+   * only the surface holds that selection state.
+   * ⚠ Scoped by the surface's `workspaceId`, which for a home channel IS the
+   * container id, so tenancy is settled by construction.
    */
   mentions: MentionsBundle;
   /**
-   * THIS SURFACE'S HEADER WRITE AND ITS PERMISSION, ALREADY RESOLVED (Samuel,
-   * 2026-09-17) — the click-to-edit Name and Description rows.
-   *
-   * ⚠ **IT RIDES WITH THE GATE FOR THE REASON `mentions` DOES.** Minted ONCE by
-   * `surface-info-panel.tsx`, from this surface's single `useRefetchGate`
-   * (§7/§8) and its mirror of `service-shared.ts › canManageChannel`, so ONE
-   * object reaches the default Info tab and an injected one. Before this, a host
-   * that replaced the body paid for the hook and dropped the edit — which is how
-   * /home had a display-only card while the workspace page's edited in place.
-   * ⚠ **A TAB MAY NOT MINT ITS OWN**: a second gate coordinates with nothing, and
-   * the realtime doorbell repaints the old name mid-write.
-   * ⚠ **THE DERIVED-NAME HALF IS STILL THE TAB'S** (`info-tab.tsx ›
-   * headerEditable`) — a fact about the ROW, not about the reader.
+   * The header write and its permission, already resolved (Samuel, 2026-09-17)
+   * — the click-to-edit Name and Description rows.
+   * ⚠ The DERIVED-NAME half is still the tab's (`info-tab-card.tsx ›
+   * headerEditable`): a fact about the ROW, not about the reader.
    */
   headerEdit: ChannelHeaderEdit;
-  /**
-   * THIS SURFACE'S ROSTER, ALREADY READ (`channel-surface-data.ts › members`)
-   * — wave 1A, 2026-09-17.
-   *
-   * ⚠ **A TAB OR AN EXTRA MAY NOT MOUNT ITS OWN.** Two `useChannelMembers` on
-   * one key are two subscribers to one cache entry and two sources of truth for
-   * one list; /home ran THREE of them (the surface's, `person-info-tab.tsx`'s
-   * for the Creator row, and `person-members.tsx`'s for the roster) and the
-   * second and third existed only because this field did not.
-   */
+  /** This surface's roster (`channel-surface-data.ts › members`). */
   members: ChannelMember[];
   /**
-   * THE AUTHOR INDEX, WHICH CARRIES THE VIEWER (`index.currentUserId`).
-   *
-   * 🔒 **IT IS NOT A CONVENIENCE, AND THE COST OF ITS ABSENCE WAS ON SCREEN**
-   * (F-723). `member-roster.tsx › MemberRoster` feeds `viewerUserId` to
-   * `view-model.ts › isPresentForViewer`, whose desktop override fires only when
-   * the viewer is known — so a roster rendered without it reported the OPERATOR
-   * OFFLINE in their own home channel while the workspace channels page, on the
-   * same machine in the same second, showed them online.
-   * ⚠ NEVER a second resolution and never a `useSession` mounted downstream: the
-   * surface already holds this id.
+   * The author index, which carries the viewer (`index.currentUserId`).
+   * ⚠ F-723: a roster drawn without it reported the OPERATOR offline in their
+   * own home channel — `view-model.ts › isPresentForViewer`'s desktop override
+   * fires only when the viewer is known.
    */
   index: AuthorIndex;
   /**
-   * THE 31-DAY MESSAGE SERIES THIS SURFACE ALREADY READ
-   * (`channel-surface-data.ts › activityBins` / `activityLoading`).
-   *
-   * ⚠ **A SECOND `useOverviewSeries` ON ONE KEY IS THE SAME DEFECT `members`
-   * DESCRIBES**, and /home had one: `person-thread-activity.tsx` mounted the hook
-   * the surface beside it had already mounted, with the identical arguments.
-   * ⚠ **ONE OBJECT, TWO FIELDS, BECAUSE `loading` IS NOT `bins.length === 0`** —
-   * an empty well means a MEASURED zero (`thread-activity.tsx`), so the strip has
-   * to be able to tell "nobody counted yet" from "counted, and it was quiet".
+   * The 31-day message series this surface already read.
+   * ⚠ Two fields, because `loading` is not `bins.length === 0` — an empty well
+   * is a MEASURED zero, so the strip must tell "nobody counted yet" apart from
+   * "counted, and it was quiet".
    */
   activity: { bins: readonly ActivityBin[]; loading: boolean };
   /**
-   * THE DERIVED DISPLAY NAME, SETTLED UPSTREAM by `peerNamedHeader`
-   * (`channel-display.ts › channelDisplayName`, or `channel.name` when the
-   * capability is off).
-   *
-   * ⚠ **ONE DERIVATION, NOT TWO.** /home re-derived it as
-   * `pages/home/home-rows.ts › channelTitle` off the ACCOUNT projection, so the
-   * pane header and the card's Name row read two different rows of one channel
-   * and could disagree for exactly as long as the two caches disagreed.
+   * The derived display name, settled upstream by `peerNamedHeader`.
+   * ⚠ One derivation: /home used to re-derive it off the ACCOUNT projection, so
+   * the pane header and the card's Name row could disagree.
    */
   channelName: string;
 }
@@ -124,144 +79,92 @@ export interface ChannelInfoTabContext {
 /**
  * **NAMED REGIONS A HOST MAY ADD TO THE ONE INFO BODY.** Never a body.
  *
- * 🔒 **THE RETURN TYPE IS THE FENCE, AND THAT IS THE WHOLE POINT (wave 1A,
- * 2026-09-17).** A `ReactNode` is exactly what a body IS, so a slot typed as one
- * can always be handed a replacement — which is how this surface lost `mentions`
- * (2026-09-15), `headerEdit` (2026-09-17), the activity strip, and the viewer id
- * that made the operator read as offline in their own channel (F-723). A record
- * of NAMED positions cannot be handed a body: the host says *where*, and the body
- * decides *whether that place exists*.
- *
- * ⚠ **ONE REGION TODAY, AND THE RECORD IS STILL THE RIGHT SHAPE.** The audit
- * proposed `belowCard` beside this for /home's curated `info_card` rows; wave 1B
- * landed **R-19**, which put those rows in the SHARED body on every host, so the
- * region has no consumer and is not declared (INVARIANTS §15 — a slot with no host
- * is the thing this wave is deleting, not adding). A second region is a
- * one-line addition here the day a host genuinely needs one.
+ * 🔒 The return type is the fence (wave 1A, 2026-09-17). A `ReactNode` is what
+ * a body IS, so a slot typed as one can always be handed a replacement — which
+ * is how this surface lost four things in three weeks. A record of NAMED
+ * positions cannot be: the host says *where*, the body decides whether that
+ * place exists. A second region is a one-line addition the day a host needs one.
  */
 export interface ChannelInfoExtras {
   /**
-   * UNDER THE MEMBER ROSTER, at the foot of the tab.
-   * ⚠ /home's Add person / Link out pair (`pages/home/person-roster-actions.tsx`)
-   * — the ONE act that changes a link container's roster, which is a door no
-   * workspace channel has (§4A: every workspace-level add answers
-   * `LINK_CONTAINER_CLOSED`). It sits under the list it changes (Samuel,
-   * 2026-08-25), which is why the region is named for that position rather than
-   * for the tab's end.
+   * Under the member roster, at the foot of the tab — /home's Add person /
+   * Link out pair, which sits under the list it changes (Samuel, 2026-08-25).
    */
   belowRoster?: ReactNode;
 }
 
 export interface ChannelSurfaceSlots {
   /**
-   * WHAT THIS HOST ADDS TO THE INFO TAB — see {@link ChannelInfoExtras}.
+   * What this host ADDS to the Info tab — see {@link ChannelInfoExtras}.
+   * A render function, not a node, so the regions reach this surface's one gate.
    *
-   * ⚠ **A RENDER FUNCTION, NOT A NODE**, for {@link ChannelInfoTabContext}'s
-   * reason: the extras are write-bearing and §7/§8 allow ONE `useRefetchGate` per
-   * live surface, so what they need has to arrive from the surface rather than be
-   * minted beside it.
-   *
-   * ⚠ **`infoTab` STOOD HERE AND IS DELETED, NOT DEPRECATED (wave 1A,
-   * 2026-09-17).** It REPLACED `info-tab.tsx › InfoTab` in channel view, and
-   * `docs/specs/workspace-parity/08-slot-audit.md` walked all 78 slots in the tree
-   * to establish it was the only capability-LOSING one of the ten that replace a
-   * body. A body-replacing slot left in the type is a body-replacing slot a later
-   * host reaches for. ⚠ **THE TAB ROW IS STILL NOT A SLOT** and never becomes one:
-   * a host that could delete a tab could ship a surface missing one with nothing
-   * saying so. ⚠ **THREAD VIEW IGNORES THIS** — the column is already
-   * thread-scoped (Samuel, 2026-08-21; `info-panel.tsx` owns the rule).
+   * ⚠ `infoTab` stood here and is DELETED, not deprecated (wave 1A,
+   * 2026-09-17): it replaced the Info body, and `08-slot-audit.md` walked all
+   * 78 slots in the tree to establish it was the only capability-LOSING one.
+   * ⚠ The tab ROW is still not a slot and never becomes one. ⚠ Thread view
+   * ignores this — the column is already thread-scoped (Samuel, 2026-08-21).
    */
   infoExtras?: (ctx: ChannelInfoTabContext) => ChannelInfoExtras;
 }
 
+/** Each flag NARROWS the workspace page's behaviour, except `artifacts`, which adds. */
 export interface ChannelSurfaceCapabilities {
   /**
-   * Whether this container's membership can be CHANGED. Default `true` — the
-   * workspace page's behaviour. `false` hides the invite affordance and the
-   * Settings tab's delete row, for a fixed two-person container where "add
-   * members" cannot happen and deleting the one channel would strand it.
+   * Whether this container's membership can be CHANGED. Default `true`.
+   * `false` hides the invite affordances and the Settings tab's delete row, for
+   * a container where "add members" cannot happen (§4A `LINK_CONTAINER_CLOSED`)
+   * and deleting the one channel would strand it.
    */
   memberManagement?: boolean;
   /**
    * Whether this surface's HEADER may name the channel after its counterpart.
    * Default `true` — `channel-display.ts › channelDisplayName`.
    *
-   * 🔒 **`false` PINS THE HEADER TO `channel.name`, AND /home PASSES IT (Samuel,
-   * 2026-09-01).** A home container is a CHANNEL, not a DM. Its row and Info tab
-   * were fixed at their own derivation (`pages/home/home-rows.ts › channelTitle`),
-   * but this header reads a DIFFERENT one — so a container carrying
-   * `is_direct = true` (every one minted before the 2026-08-24 channel-first
-   * inversion) still showed the peer's name over a row that said the channel's.
-   *
-   * ⚠ **REAL DMs ARE UNAFFECTED, WHICH IS WHY THIS IS A FLAG AND NOT AN EDIT TO
-   * `channel-display.ts`** — that module is the ONE counterpart derivation for the
-   * workspace surfaces. What changed is which surfaces ASK it.
+   * 🔒 `false` pins the header to `channel.name`, and /home passes it (Samuel,
+   * 2026-09-01): a home container is a CHANNEL, not a DM, but every one minted
+   * before the 2026-08-24 channel-first inversion still carries `is_direct`.
+   * ⚠ A flag rather than an edit to `channel-display.ts`, because real DMs are
+   * unaffected — what changed is which surfaces ASK it.
    */
   peerNamedHeader?: boolean;
   /**
-   * Whether the VIEWER'S OWN STAKE — their membership row and the agent they run
-   * here — is theirs to manage HERE. Default `true`; `false` hides "Leave channel"
-   * AND the whole `ChannelAgentSettings` block.
+   * Whether the VIEWER'S OWN STAKE — their membership row and the agent they
+   * run here — is theirs to manage HERE. Default `true`; `false` hides "Leave
+   * channel" AND the whole `ChannelAgentSettings` block.
    *
-   * ⚠ ONE FLAG, TWO CONTROLS, BECAUSE THERE IS ONE STORY (Samuel, ruling R2/R3,
-   * 2026-08-25): the GUEST LANE (`src/app/c/[workspaceId]`) runs no agent, so a
-   * tool profile governs a session that does not exist, and leaving is a one-way
-   * exit from their only surface. Two flags would let a host ship the other half's
-   * dead control. ⚠ IT IS ABOUT THE VIEWER, WHERE `memberManagement` IS ABOUT THE
-   * CONTAINER: /home passes `memberManagement: false` and leaves this one alone.
+   * ⚠ One flag, two controls, one story (Samuel, R2/R3, 2026-08-25): the guest
+   * lane runs no agent, and leaving is a one-way exit from its only surface.
+   * ⚠ About the VIEWER, where `memberManagement` is about the CONTAINER.
    */
   selfManagement?: boolean;
   /**
-   * ⚠ **`knowledge` IS DELETED (Samuel's ruling R-18, 2026-09-17).** It drew a
-   * fifth tab over bases granted into the channel. No host had passed it since
-   * 2026-09-04 (the guest lane was the last, F-666), so the tab, its hook, its
-   * client lane, its four API routes and this flag were unreachable product —
-   * deleted, not parked (INVARIANTS §15). /home's Knowledge SHELF
-   * (`pages/home/knowledge-panels.tsx`) is untouched and is the surface that
-   * reads a granted base today. ⚠ Re-adding the FACE still needs Samuel's word.
+   * Draw the ARTIFACTS FACE toggle in the Threads tab — this channel's folded
+   * runs as openable cards (Samuel, 2026-09-16; `artifacts-tab.tsx`).
    *
-   * Draw the ARTIFACTS FACE toggle in the Threads tab — this channel's folded runs
-   * as openable cards (Samuel, 2026-09-16; `artifacts-tab.tsx`).
-   *
-   * ⚠ DEFAULT `false`, WHICH INVERTS THE OTHER TWO: they REMOVE something, this
-   * ADDS a control.
-   *
-   * ⚠ **EXACTLY ONE HOST PASSES IT — /home**, under Samuel's standing home-space
-   * ruling for a new surface (2026-09-16). The workspace channel page and the guest
-   * lane are LEFT ALONE rather than forgotten: this is not a tab (the row's width
-   * budget is measured for four) and the reads mount with the face, so a host that
-   * passes nothing fetches nothing and renders the Threads tab byte for byte.
-   *
-   * ⚠ SAFE ON ANY HOST REGARDLESS — the face reads the channel's own artifact route
-   * at the same visibility gate the transcript already passed.
+   * ⚠ Default `false`, which inverts the others: they REMOVE, this ADDS.
+   * ⚠ /home is the one host that passes it; a host that passes nothing fetches
+   * nothing and renders the Threads tab byte for byte.
+   * ⚠ `knowledge` stood beside this and is deleted with its whole lane
+   * (Samuel's ruling R-18, 2026-09-17) — re-adding the face needs his word.
    */
   artifacts?: boolean;
   /**
    * **WHICH OF THE TWO RULED MENTIONS FACES THIS SURFACE DRAWS.** Default
-   * `"disclosure"` — the workspace channels page's behaviour, like every other
-   * flag here.
+   * `"disclosure"` — the workspace channels page's.
    *
-   * 🔒 **THE ONE PRESENTATIONAL DIFFERENCE SAMUEL RULED FOR, AND IT IS TWO
-   * DECISIONS THAT TRAVEL TOGETHER (2026-09-15, live review of the /home pane;
-   * carried into the one body in wave 1A).**
-   *   - `"disclosure"` — a COLLAPSED row inside the Channel-info card, with an
+   * 🔒 The one presentational difference Samuel ruled for (2026-09-15, live
+   * review of the /home pane; carried into the one body in wave 1A):
+   *   - `"disclosure"` — a collapsed row inside the Channel-info card, with an
    *     unread badge and the 28px hang (`mentions-disclosure.tsx`).
-   *   - `"category"` — a TOP-LEVEL heading BELOW the activity strip, list always
-   *     open, no badge, rows flush with every other heading on the tab
-   *     (`mentions-list.tsx`, `inset="flush"`).
+   *   - `"category"` — a top-level heading BELOW the activity strip, list always
+   *     open, no badge, rows flush (`mentions-list.tsx`, `inset="flush"`).
    *
-   * ⚠ **THE POSITION IS PART OF THE FACE, WHICH IS WHY THIS IS ONE FLAG AND NOT
-   * TWO.** Samuel moved Mentions BELOW the activity strip in the same review that
-   * made it a top-level category — *facts, then what has been happening, then what
-   * is addressed to YOU, then people* — and a collapsed row that belongs inside
-   * the card cannot be moved there without ceasing to be a row inside the card.
-   * Two flags would let a host ship a collapsed disclosure floating under the
+   * ⚠ ONE FLAG, NOT TWO: the position is part of the face. Samuel moved
+   * Mentions below the strip in the same review that made it a category —
+   * *facts, then what has been happening, then what is addressed to YOU, then
+   * people* — and two flags would allow a collapsed row floating under the
    * strip, which is neither ruled face.
-   *
-   * ⚠ **IT IS NOT A FORK.** Both faces are ONE body's branch over ONE list
-   * (`mentions-list.tsx`), reached through ONE bundle the surface minted. The
-   * alternative — which is what shipped until wave 1A — was a second Info tab.
+   * ⚠ Not a fork: both faces are one body's branch over one `mentions-list.tsx`.
    */
-  mentionsLayout?: "disclosure" | "category";
+  mentionsLayout?: MentionsLayout;
 }
-

@@ -286,12 +286,10 @@ export function ChannelsCore({
         />
       )}
 
-      {/* ⚠ **ONE OBJECT WHERE NINE FORWARDED PROPS STOOD (wave 1A, 2026-09-17).**
-          The agent pane is `surface-agent-view.tsx` now — the same wiring /home,
-          the guest lane and the web column already used — so the transcript, the
-          held outbound cards, the escalation answer and the agent COLOUR all
-          reach it off this surface's own read rather than through this file.
-          `overlays.tsx`'s docblock carries the drift that bought the collapse. */}
+      {/* ⚠ One object where nine forwarded props stood (wave 1A, 2026-09-17):
+          the agent pane is `surface-agent-view.tsx` now, so everything it needs
+          — the agent COLOUR included — reaches it off this surface's own read.
+          `overlays.tsx` carries the drift that bought the collapse. */}
       <ChannelsOverlays
         data={data}
         openAgent={sel.openAgent}
