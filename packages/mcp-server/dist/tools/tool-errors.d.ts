@@ -70,6 +70,20 @@ export declare function refusal(error: ToolError, detail?: string): string;
 export declare const MISSING_PARAMS: ToolError;
 export declare const READ_ONLY_SESSION: ToolError;
 export declare const DELETE_IS_APP_ONLY: ToolError;
+/**
+ * 🔒 **THE SAME `ambiguous_slug` LITERAL `KB_ERRORS` DECLARES, ONE TABLE OVER**
+ * (F-719). A `container=` slug that names two rows the caller can SEE is
+ * refused rather than picked, exactly as a base slug is — and an agent that
+ * learned the code from `dopl_kb`'s description matches the same characters
+ * here, which is the whole point of declaring it in this file rather than
+ * inventing `ambiguous_container` beside it.
+ *
+ * ⚠ **CROSS-CUTTING, SO IT IS PUSHED INTO NO DESCRIPTION.** It is raised by the
+ * registrar's address resolver for every tool that takes an address, like the
+ * four above it; the remedy is in the refusal itself, which names every
+ * candidate's id.
+ */
+export declare const AMBIGUOUS_CONTAINER: ToolError;
 export declare const CREDITS_EXHAUSTED: ToolError;
 /**
  * ⚠ THE OPTIMISTIC-CONCURRENCY REFUSAL, PARAMETERIZED BY ITS REMEDY. The code

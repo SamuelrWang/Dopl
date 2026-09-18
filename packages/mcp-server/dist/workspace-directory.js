@@ -16,6 +16,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.HOME_ADDRESS = void 0;
+exports.isAmbiguousContainer = isAmbiguousContainer;
 exports.createWorkspaceDirectory = createWorkspaceDirectory;
 exports.containerKindLabel = containerKindLabel;
 exports.containerKind = containerKind;
@@ -34,6 +35,12 @@ exports.searchLegs = searchLegs;
  * around, because the personal container's slug is not published anywhere.
  */
 exports.HOME_ADDRESS = "home";
+/** ⚠ The one narrowing. A `ContainerRefResolution` carries no `id`, so the
+ *  compiler — not a convention — is what stops a caller reading the refusal as
+ *  a container. */
+function isAmbiguousContainer(resolved) {
+    return "ambiguous" in resolved;
+}
 /** Membership cache TTL (slug→id). Seeded at boot, refreshed on demand. */
 const WORKSPACE_CACHE_TTL_MS = 60_000;
 function createWorkspaceDirectory(client, options = {}) {
@@ -65,25 +72,33 @@ function createWorkspaceDirectory(client, options = {}) {
             return [lockedTo];
         return getAllWorkspaces();
     }
-    async function resolveWorkspaceRef(ref) {
+    /**
+     * EVERY visible row a ref names. ⚠ **ONE MATCHER, TWO READINGS** (F-719):
+     * `resolveWorkspaceRef` takes the head — first-wins is its published
+     * contract, and `grant.ts` leans on it — while `resolveContainerRef` reads
+     * the whole list and refuses a tie. A second copy of the lock + refresh
+     * ordering is how the two drift apart.
+     */
+    async function matchContainerRefs(ref) {
         // 🔒 THE LOCK ANSWERS BEFORE ANY LOOKUP, so a ref that names another
         // workspace is refused without a cache refresh — and a refused ref is
         // indistinguishable from one that names nothing, which is the same
         // no-oracle discipline the server's own 404 ordering keeps (§4).
         if (lockedTo) {
-            return ref === lockedTo.id || ref === lockedTo.slug ? lockedTo : null;
+            return ref === lockedTo.id || ref === lockedTo.slug ? [lockedTo] : [];
         }
         // ⚠ A workspace slug can be shaped like a UUID, so match id AND slug on the
         // first pass — id alone forces a wasteful refresh.
-        let list = await getAllWorkspaces();
-        let match = list.find((w) => w.id === ref || w.slug === ref);
-        if (match)
-            return match;
+        const list = await getAllWorkspaces();
+        const matches = list.filter((w) => w.id === ref || w.slug === ref);
+        if (matches.length > 0)
+            return matches;
         // Force-refresh once — covers a mid-session membership add.
         workspaceListCache = null;
-        list = await getAllWorkspaces();
-        match = list.find((w) => w.id === ref || w.slug === ref);
-        return match ?? null;
+        return (await getAllWorkspaces()).filter((w) => w.id === ref || w.slug === ref);
+    }
+    async function resolveWorkspaceRef(ref) {
+        return (await matchContainerRefs(ref))[0] ?? null;
     }
     /**
      * ⚠ **THE PERSONAL CONTAINER IS SELECTED OFF THE LISTABLE SET, so the lock
@@ -100,7 +115,18 @@ function createWorkspaceDirectory(client, options = {}) {
         // (`slugifyWorkspaceName`), so nothing legitimate is shadowed by the fold.
         if (ref.trim().toLowerCase() === exports.HOME_ADDRESS)
             return homeContainer();
-        return resolveWorkspaceRef(ref);
+        const matches = await matchContainerRefs(ref);
+        // ⚠ **AN ID ANSWERS BEFORE ANY SLUG QUESTION** — it is unique account-wide,
+        // so it cannot tie, and it is the remedy the refusal below hands back.
+        const byId = matches.find((w) => w.id === ref);
+        if (byId)
+            return byId;
+        if (matches.length === 0)
+            return null;
+        if (matches.length === 1)
+            return matches[0];
+        // 🔒 F-719 — REFUSE AND NAME BOTH; never pick.
+        return { ambiguous: [...matches].sort((a, b) => a.id.localeCompare(b.id)) };
     }
     async function containerKindIndex() {
         const list = await getWorkspaceList();

@@ -34,12 +34,19 @@ import {
   refusesUnaddressedWrite,
   unaddressedWriteRefusal,
 } from "./workspace-arg.js";
-import { containerKind } from "./workspace-directory.js";
+import { AMBIGUOUS_CONTAINER, refusal } from "./tools/tool-errors.js";
+import { containerKind, isAmbiguousContainer } from "./workspace-directory.js";
 import type {
   ActiveWorkspaceState,
   EffectiveWorkspace,
   WorkspaceDirectory,
 } from "./workspace-directory.js";
+import type { WorkspaceListItem } from "@dopl/client";
+
+/** How many candidates the ambiguity refusal spells out before it summarises
+ *  the rest. ⚠ A cap, not a page — `knowledge-shared.ts › MAX_LISTED_MATCHES`
+ *  carries the argument, and this is the same number for the same reason. */
+const MAX_LISTED_MATCHES = 10;
 
 /** The two spellings, as the caller sent them. */
 export interface AddressArgs {
@@ -147,6 +154,12 @@ export async function resolveCallAddress(
       ),
     };
   }
+  if (isAmbiguousContainer(resolved)) {
+    return {
+      kind: "refusal",
+      response: err(ambiguousContainer(argName, supplied, resolved.ambiguous)),
+    };
+  }
   return {
     kind: "addressed",
     effective: {
@@ -159,4 +172,45 @@ export async function resolveCallAddress(
     },
     note: bothSent ? aliasIgnoredNote() : usedAlias ? deprecatedAliasNote() : null,
   };
+}
+
+/**
+ * THE AMBIGUITY REFUSAL — **it lists, and it does not pick** (F-719).
+ *
+ * ⚠ **IT IS `knowledge-shared.ts › ambiguousBase`'s CONTRACT, ONE TABLE OVER,
+ * AND DELIBERATELY NOT A SECOND IDIOM**: the same `reason=ambiguous_slug`
+ * literal (declared once, in `tool-errors.ts`), the same "nothing happened"
+ * opening, the same one-line-per-candidate list keyed by the ID to re-issue
+ * with. An agent that learned the remedy from `dopl_kb` applies it unchanged.
+ *
+ * ⚠ **THE LIST IS THE WHOLE VALUE.** "That slug is ambiguous" alone sends the
+ * caller to `dopl_workspaces` for ids it was already holding. Each row carries
+ * the two things that tell the containers apart — the id, and the KIND, which
+ * is what says "one of these is a room somebody else named".
+ *
+ * ⚠ **THE LIST IS NOT AN ORACLE.** Every row came back from this caller's own
+ * directory, narrowed by the container lock, so it discloses exactly what
+ * `dopl_workspaces` would.
+ */
+function ambiguousContainer(
+  argName: string,
+  ref: string,
+  matches: WorkspaceListItem[],
+): string {
+  const shown = matches.slice(0, MAX_LISTED_MATCHES);
+  const rest = matches.length - shown.length;
+  return [
+    refusal(
+      AMBIGUOUS_CONTAINER,
+      `Nothing ran — ${inlineOr(ref, "`(unreadable ref)`")} names ${matches.length} containers you are in, and this call refuses rather than picking one. A slug is unique only WITHIN an account, and a home channel is named by the peer who minted it, so this is a legitimate state. Re-issue with \`${argName}=<id>\` — an id is unique and resolves its own container.`,
+    ),
+    "",
+    // ⚠ The id IS the `container=` handle, so the line an agent reads is also
+    // the line it can act on.
+    ...shown.map(
+      (w) =>
+        `- \`${w.id}\` — ${inlineOr(w.name, "`(unnamed)`")} · kind=\`${containerKind(w)}\``,
+    ),
+    ...(rest > 0 ? [`- …and ${rest} more; \`dopl_workspaces\` has them all.`] : []),
+  ].join("\n");
 }

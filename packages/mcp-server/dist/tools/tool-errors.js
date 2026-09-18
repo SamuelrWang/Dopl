@@ -26,7 +26,7 @@
  * position here is what decides which remedy an agent is told about.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.STATUS_ERRORS = exports.SEARCH_ERRORS = exports.HOME_ERRORS = exports.CHANNEL_ERRORS = exports.AGENT_ERRORS = exports.ONTOLOGY_ERRORS = exports.MEMBERS_ERRORS = exports.CHATS_ERRORS = exports.BAD_SESSION_DATE = exports.SKILL_ERRORS = exports.KB_ERRORS = exports.CREDITS_EXHAUSTED = exports.DELETE_IS_APP_ONLY = exports.READ_ONLY_SESSION = exports.MISSING_PARAMS = void 0;
+exports.STATUS_ERRORS = exports.SEARCH_ERRORS = exports.HOME_ERRORS = exports.CHANNEL_ERRORS = exports.AGENT_ERRORS = exports.ONTOLOGY_ERRORS = exports.MEMBERS_ERRORS = exports.CHATS_ERRORS = exports.BAD_SESSION_DATE = exports.SKILL_ERRORS = exports.KB_ERRORS = exports.CREDITS_EXHAUSTED = exports.AMBIGUOUS_CONTAINER = exports.DELETE_IS_APP_ONLY = exports.READ_ONLY_SESSION = exports.MISSING_PARAMS = void 0;
 exports.refusal = refusal;
 exports.versionConflict = versionConflict;
 /**
@@ -67,6 +67,24 @@ exports.DELETE_IS_APP_ONLY = {
     reason: "delete_is_app_only",
     meaning: "agents never delete over MCP",
     retry: "no",
+};
+/**
+ * 🔒 **THE SAME `ambiguous_slug` LITERAL `KB_ERRORS` DECLARES, ONE TABLE OVER**
+ * (F-719). A `container=` slug that names two rows the caller can SEE is
+ * refused rather than picked, exactly as a base slug is — and an agent that
+ * learned the code from `dopl_kb`'s description matches the same characters
+ * here, which is the whole point of declaring it in this file rather than
+ * inventing `ambiguous_container` beside it.
+ *
+ * ⚠ **CROSS-CUTTING, SO IT IS PUSHED INTO NO DESCRIPTION.** It is raised by the
+ * registrar's address resolver for every tool that takes an address, like the
+ * four above it; the remedy is in the refusal itself, which names every
+ * candidate's id.
+ */
+exports.AMBIGUOUS_CONTAINER = {
+    reason: "ambiguous_slug",
+    meaning: "that slug names 2+ containers you can see",
+    retry: "use the id",
 };
 exports.CREDITS_EXHAUSTED = {
     reason: "credits_exhausted",

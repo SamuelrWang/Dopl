@@ -30,6 +30,37 @@ export type { ContainerKind };
  */
 export declare const HOME_ADDRESS = "home";
 /**
+ * 🔒 **A SLUG THAT NAMES TWO CONTAINERS IS REFUSED, NOT PICKED** (F-719,
+ * Samuel 2026-09-17) — the shape `knowledge-shared.ts › resolveBaseRef` already
+ * carries, one table over.
+ *
+ * ⚠ **`workspaces.slug` HAS NO UNIQUENESS CONSTRAINT AND IS NOT GETTING ONE.**
+ * `20260504000000_workspaces_public_id.sql` dropped it deliberately and minted
+ * `public_id` instead, because global uniqueness makes one account's workspace
+ * name deny another's. R-32 then made a slug an ADDRESS, so one caller can
+ * legitimately see two rows spelled the same — a home channel a PEER minted and
+ * named, against their own workspace — and `Array.find` picked whichever it
+ * reached first, silently. That is F-701's ten days of notes written into the
+ * wrong base, one table over, so it gets F-701's answer: REFUSE and NAME BOTH.
+ *
+ * ⚠ **AND THE TIE-BREAKS ARE ALL WRONG, WHICH IS WHY THERE IS NONE.** "The
+ * bound container wins" is the rule a caller holding a peer's room slug is
+ * already violating; "newest wins" acts on an identity the caller did not
+ * choose. Every ordering reports success against a container nobody named.
+ *
+ * ⚠ **AN ID CAN NEVER BE AMBIGUOUS**, which is the escape hatch the refusal
+ * points at: ids are unique account-wide, so the id arm is untouched.
+ */
+export interface AmbiguousContainerRef {
+    /** Every row the ref matched, id-ordered so a re-read is stable. */
+    ambiguous: WorkspaceListItem[];
+}
+export type ContainerRefResolution = WorkspaceListItem | AmbiguousContainerRef;
+/** ⚠ The one narrowing. A `ContainerRefResolution` carries no `id`, so the
+ *  compiler — not a convention — is what stops a caller reading the refusal as
+ *  a container. */
+export declare function isAmbiguousContainer(resolved: ContainerRefResolution): resolved is AmbiguousContainerRef;
+/**
  * The container this CONNECTION is bound to, resolved once at boot from
  * `X-Workspace-Id`. Read by `appendDoplStatus`. ⚠ Null is ORDINARY and is not a
  * refusal: an unbound connection names no container and the server answers with
@@ -136,8 +167,15 @@ export interface WorkspaceDirectory {
      * an estate where it has not replayed has callers without one, and answering
      * `home` with "the first workspace you happen to be in" would file a write
      * into somebody's team.
+     *
+     * 🔒 **AND A SLUG THAT NAMES TWO VISIBLE ROWS ANSWERS
+     * {@link AmbiguousContainerRef} RATHER THAN EITHER OF THEM** (F-719) — the
+     * caller renders the refusal. ⚠ **WHAT THE CALLER CAN SEE IS THE FENCE**: the
+     * match runs over this directory, so a slug that is ambiguous account-wide
+     * but names ONE row here resolves, and a locked session resolves against its
+     * one row alone.
      */
-    resolveContainerRef(ref: string): Promise<WorkspaceListItem | null>;
+    resolveContainerRef(ref: string): Promise<ContainerRefResolution | null>;
     /**
      * The caller's own personal container, or null. ⚠ The one reader of what
      * `home` MEANS — used by the unaddressed-read default and by `dopl_map`'s

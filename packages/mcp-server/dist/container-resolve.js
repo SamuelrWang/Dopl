@@ -28,7 +28,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.resolveCallAddress = resolveCallAddress;
 const narration_js_1 = require("./tools/narration.js");
 const workspace_arg_js_1 = require("./workspace-arg.js");
+const tool_errors_js_1 = require("./tools/tool-errors.js");
 const workspace_directory_js_1 = require("./workspace-directory.js");
+/** How many candidates the ambiguity refusal spells out before it summarises
+ *  the rest. ⚠ A cap, not a page — `knowledge-shared.ts › MAX_LISTED_MATCHES`
+ *  carries the argument, and this is the same number for the same reason. */
+const MAX_LISTED_MATCHES = 10;
 function err(text) {
     return { isError: true, content: [{ type: "text", text }] };
 }
@@ -93,6 +98,12 @@ async function resolveCallAddress(tool, op, args, { directory, activeWorkspace }
             response: err(`Container not found: ${(0, narration_js_1.inlineOr)(supplied, "`(unreadable ref)`")}. Call \`dopl_workspaces\` for every container you can reach — workspaces, home channels and your home space alike; \`home\` names the last of those.`),
         };
     }
+    if ((0, workspace_directory_js_1.isAmbiguousContainer)(resolved)) {
+        return {
+            kind: "refusal",
+            response: err(ambiguousContainer(argName, supplied, resolved.ambiguous)),
+        };
+    }
     return {
         kind: "addressed",
         effective: {
@@ -105,4 +116,34 @@ async function resolveCallAddress(tool, op, args, { directory, activeWorkspace }
         },
         note: bothSent ? (0, workspace_arg_js_1.aliasIgnoredNote)() : usedAlias ? (0, workspace_arg_js_1.deprecatedAliasNote)() : null,
     };
+}
+/**
+ * THE AMBIGUITY REFUSAL — **it lists, and it does not pick** (F-719).
+ *
+ * ⚠ **IT IS `knowledge-shared.ts › ambiguousBase`'s CONTRACT, ONE TABLE OVER,
+ * AND DELIBERATELY NOT A SECOND IDIOM**: the same `reason=ambiguous_slug`
+ * literal (declared once, in `tool-errors.ts`), the same "nothing happened"
+ * opening, the same one-line-per-candidate list keyed by the ID to re-issue
+ * with. An agent that learned the remedy from `dopl_kb` applies it unchanged.
+ *
+ * ⚠ **THE LIST IS THE WHOLE VALUE.** "That slug is ambiguous" alone sends the
+ * caller to `dopl_workspaces` for ids it was already holding. Each row carries
+ * the two things that tell the containers apart — the id, and the KIND, which
+ * is what says "one of these is a room somebody else named".
+ *
+ * ⚠ **THE LIST IS NOT AN ORACLE.** Every row came back from this caller's own
+ * directory, narrowed by the container lock, so it discloses exactly what
+ * `dopl_workspaces` would.
+ */
+function ambiguousContainer(argName, ref, matches) {
+    const shown = matches.slice(0, MAX_LISTED_MATCHES);
+    const rest = matches.length - shown.length;
+    return [
+        (0, tool_errors_js_1.refusal)(tool_errors_js_1.AMBIGUOUS_CONTAINER, `Nothing ran — ${(0, narration_js_1.inlineOr)(ref, "`(unreadable ref)`")} names ${matches.length} containers you are in, and this call refuses rather than picking one. A slug is unique only WITHIN an account, and a home channel is named by the peer who minted it, so this is a legitimate state. Re-issue with \`${argName}=<id>\` — an id is unique and resolves its own container.`),
+        "",
+        // ⚠ The id IS the `container=` handle, so the line an agent reads is also
+        // the line it can act on.
+        ...shown.map((w) => `- \`${w.id}\` — ${(0, narration_js_1.inlineOr)(w.name, "`(unnamed)`")} · kind=\`${(0, workspace_directory_js_1.containerKind)(w)}\``),
+        ...(rest > 0 ? [`- …and ${rest} more; \`dopl_workspaces\` has them all.`] : []),
+    ].join("\n");
 }
