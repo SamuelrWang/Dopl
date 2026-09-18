@@ -15,6 +15,7 @@ import {
   getBaseGrantMap,
   setChannelKnowledgeGrant,
 } from "@/features/knowledge/server/service-channel-grants";
+import { isStandardWorkspace } from "@/features/workspaces/types";
 import {
   buildChannelContext,
   listChannels,
@@ -110,6 +111,22 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const ctx = buildKnowledgeContext(auth);
     const base = await getBaseById(ctx, requireBaseId(auth));
+    // 🔒 SAMUEL'S RULING 2026-09-17 — a STANDARD workspace has no channel scope,
+    // so this read answers the EMPTY SECTION rather than a list of rooms the
+    // caller can no longer lend into. ⚠ `auth.workspaceKind` is a projection of
+    // the row `withWorkspaceAuth` already read, used here for a DISPLAY
+    // decision; the WRITE's fence re-reads `workspaces.kind` itself
+    // (`shared/tenancy/channel-scope.ts`) rather than trusting a context field.
+    // ⚠ It still 404s an invisible base FIRST: the refusal must not become an
+    // oracle for which bases exist.
+    if (isStandardWorkspace({ kind: auth.workspaceKind })) {
+      return NextResponse.json({
+        canManage: false,
+        channelScopeAllowed: false,
+        channels: [],
+        grants: {},
+      });
+    }
     const [visible, grantsByChannel] = await Promise.all([
       listChannels(buildChannelContext(auth)),
       getBaseGrantMap(ctx.workspaceId, base.id),
@@ -134,6 +151,7 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
 
     return NextResponse.json({
       canManage: canManageChannelGrants(ctx, base),
+      channelScopeAllowed: true,
       channels,
       grants,
     });

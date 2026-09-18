@@ -78,15 +78,17 @@ describe("fetchBaseList › channelGrants", () => {
 });
 
 describe("fetchChannelGrants — the settings read (M1)", () => {
-  it("passes the three keys through", async () => {
+  it("passes the four keys through", async () => {
     apiRequest.mockResolvedValue({
       canManage: true,
+      channelScopeAllowed: true,
       channels: [{ id: "chan-1", name: "engineering", isDirect: false }],
       grants: { "chan-1": { level: "visible", guestWrite: true } },
     });
 
     expect(await fetchChannelGrants("kb-1", "ws-1")).toEqual({
       canManage: true,
+      channelScopeAllowed: true,
       channels: [{ id: "chan-1", name: "engineering", isDirect: false }],
       grants: { "chan-1": { level: "visible", guestWrite: true } },
     });
@@ -105,9 +107,25 @@ describe("fetchChannelGrants — the settings read (M1)", () => {
 
     expect(await fetchChannelGrants("kb-1")).toEqual({
       canManage: false,
+      // 🔒 Samuel's ruling 2026-09-17 rides the same rule: an absent
+      // `channelScopeAllowed` renders NO channel control at all. Hiding a
+      // sharing control can only narrow what is offered.
+      channelScopeAllowed: false,
       channels: [],
       grants: {},
     });
+  });
+
+  it("🔒 carries a STANDARD workspace's refusal through as `false`", async () => {
+    apiRequest.mockResolvedValue({
+      canManage: false,
+      channelScopeAllowed: false,
+      channels: [],
+      grants: {},
+    });
+    expect((await fetchChannelGrants("kb-1", "ws-1")).channelScopeAllowed).toBe(
+      false
+    );
   });
 });
 

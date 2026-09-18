@@ -184,11 +184,13 @@ export async function setBaseStar(
 // ─── Channel grants (scope-A sharing) ───────────────────────────────
 
 /** `GET /api/knowledge/bases/{baseId}/channel-grants` — the settings section's
- *  read. `channels` is the caller's SERVER-fenced visible list; `grants` is
- *  keyed by channel id and a channel with no grant is ABSENT from it. */
+ *  read. `channels` is the caller's SERVER-fenced visible list; `grants` is keyed
+ *  by channel id, absent when ungranted; 🔒 `channelScopeAllowed` is whether this
+ *  container lends into CHANNELS at all (`shared/tenancy/channel-scope.ts`). */
 export interface ChannelGrantSettings {
   /** Creator or workspace admin+. False renders the read-only summary. */
   canManage: boolean;
+  channelScopeAllowed: boolean;
   channels: ChannelGrantChannelRef[];
   grants: Record<string, ChannelResourceGrant>;
 }
@@ -199,14 +201,15 @@ export async function fetchChannelGrants(
 ): Promise<ChannelGrantSettings> {
   const data = await request<{
     canManage?: boolean;
+    channelScopeAllowed?: boolean;
     channels?: ChannelGrantChannelRef[];
     grants?: Record<string, ChannelResourceGrant>;
   }>(`/api/knowledge/bases/${baseId}/channel-grants`, { workspaceId });
   return {
-    // ⚠ §8 stale-cache / old-server read: every field falls back to the
-    // CLOSED value. An unknown `canManage` renders read-only, an unknown
-    // channel list renders nothing — never an editor over invented rows.
+    // ⚠ §8 stale-cache / old-server read: every field falls back CLOSED —
+    // read-only, no channels, no channel section; never an invented row.
     canManage: data.canManage ?? false,
+    channelScopeAllowed: data.channelScopeAllowed ?? false,
     channels: data.channels ?? [],
     grants: data.grants ?? {},
   };

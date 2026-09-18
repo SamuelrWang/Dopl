@@ -11,6 +11,7 @@ import {
   useChannelGrantSettings,
   useSetChannelGrant,
 } from "../client/hooks-channel-grants";
+import { SettingsSection } from "./settings-section";
 import type {
   ChannelGrantChannelRef,
   ChannelGrantLevelInput,
@@ -50,6 +51,16 @@ import type {
  * (creator or workspace admin+, `service-channel-grants.ts ›
  * canManageChannelGrants`), so this cannot render an editor for somebody the
  * write will refuse. Everyone else gets the read-only summary.
+ *
+ * 🔒 ⚠ **AND IT RENDERS NOTHING AT ALL — HEADING INCLUDED — IN A STANDARD
+ * WORKSPACE** (Samuel's ruling 2026-09-17: *"In workspaces, resource access is
+ * not scoped by channels. It's instead scoped by teams."*). `channelScopeAllowed`
+ * is the server's own answer, from the same fence the PUT applies
+ * (`shared/tenancy/channel-scope.ts`), so the control cannot outlive the
+ * capability. ⚠ **IT OWNS ITS OWN `SettingsSection` FOR EXACTLY THAT** — with the
+ * frame in `base-settings-form.tsx` the refusal was an empty CHANNELS heading.
+ * ⚠ The /home face keeps its own channel sharing: a home channel is a
+ * `kind='link'` container and there the channel IS the container.
  */
 export function KbChannelGrantsSection({
   baseId,
@@ -79,45 +90,61 @@ export function KbChannelGrantsSection({
   }
 
   if (loading) {
-    return <p className="text-small text-text-secondary">Loading channels…</p>;
+    return (
+      <SettingsSection title="Channels">
+        <p className="text-small text-text-secondary">Loading channels…</p>
+      </SettingsSection>
+    );
   }
-  if (error) return <p className="text-small text-danger">{error}</p>;
+  if (error) {
+    return (
+      <SettingsSection title="Channels">
+        <p className="text-small text-danger">{error}</p>
+      </SettingsSection>
+    );
+  }
   if (!data) return null;
+  // 🔒 THE WHOLE SECTION, NOT JUST ITS ROWS — see the docblock.
+  if (!data.channelScopeAllowed) return null;
 
   const granted = data.channels.filter((c) => data.grants[c.id]);
 
   if (!data.canManage) {
     return (
-      <p className="text-caption text-text-secondary leading-relaxed">
-        {granted.length === 0
-          ? "Not shared into any channel."
-          : `Shared into ${granted.length} channel${granted.length === 1 ? "" : "s"}. Only the owner or a workspace admin can change this.`}
-      </p>
+      <SettingsSection title="Channels">
+        <p className="text-caption text-text-secondary leading-relaxed">
+          {granted.length === 0
+            ? "Not shared into any channel."
+            : `Shared into ${granted.length} channel${granted.length === 1 ? "" : "s"}. Only the owner or a workspace admin can change this.`}
+        </p>
+      </SettingsSection>
     );
   }
 
   if (data.channels.length === 0) {
     return (
-      <p className="text-small text-text-secondary">
-        No channels available.
-      </p>
+      <SettingsSection title="Channels">
+        <p className="text-small text-text-secondary">No channels available.</p>
+      </SettingsSection>
     );
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      {data.channels.map((channel) => (
-        <GrantRow
-          key={channel.id}
-          channel={channel}
-          grant={data.grants[channel.id] ?? null}
-          workspaceId={workspaceId}
-          pending={pendingChannelId === channel.id}
-          disabled={pendingChannelId !== null}
-          onChange={write}
-        />
-      ))}
-    </div>
+    <SettingsSection title="Channels">
+      <div className="flex flex-col gap-2">
+        {data.channels.map((channel) => (
+          <GrantRow
+            key={channel.id}
+            channel={channel}
+            grant={data.grants[channel.id] ?? null}
+            workspaceId={workspaceId}
+            pending={pendingChannelId === channel.id}
+            disabled={pendingChannelId !== null}
+            onChange={write}
+          />
+        ))}
+      </div>
+    </SettingsSection>
   );
 }
 

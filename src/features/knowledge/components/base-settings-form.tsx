@@ -18,6 +18,7 @@ import { AgentWriteToggle } from "./agent-write-toggle";
 import { DeleteBaseConfirm } from "./delete-base-confirm";
 import { KbChannelGrantsSection } from "./kb-channel-grants-section";
 import { KbSharingSection } from "./kb-sharing-section";
+import { SettingsSection as Section } from "./settings-section";
 
 interface Props {
   workspaceId: string;
@@ -186,10 +187,12 @@ export function BaseSettingsForm({
       </Section>
 
       {/* Channels — scope-A grants: None / Agent only / Visible per channel,
-          with the guest-write pen inside the row that can hand one over. */}
-      <Section title="Channels">
-        <KbChannelGrantsSection baseId={base.id} workspaceId={workspaceId} />
-      </Section>
+          with the guest-write pen inside the row that can hand one over.
+          🔒 IT RENDERS NOTHING AT ALL IN A STANDARD WORKSPACE (Samuel's ruling
+          2026-09-17) — the component owns its own frame for exactly that, and
+          the server is what decides (`channelScopeAllowed` off the GET), never
+          a kind the client re-derives. */}
+      <KbChannelGrantsSection baseId={base.id} workspaceId={workspaceId} />
 
       {/* Folder descriptions: agent-facing summaries streamed into MCP
           tree / directory listings alongside the folder names. */}
@@ -276,23 +279,6 @@ export function BaseSettingsForm({
         onConfirm={handleDelete}
       />
     </div>
-  );
-}
-
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section>
-      <h2 className="text-label font-medium text-text-muted uppercase tracking-wider mb-3">
-        {title}
-      </h2>
-      <div className="flex flex-col gap-4">{children}</div>
-    </section>
   );
 }
 

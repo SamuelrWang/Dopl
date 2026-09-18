@@ -45,6 +45,7 @@ function settings(
 ): ChannelGrantSettings {
   return {
     canManage: true,
+    channelScopeAllowed: true,
     channels: [{ id: CHAN, name: "engineering", isDirect: false }],
     grants,
   };

@@ -26,6 +26,12 @@ const AUTH: WorkspaceAuthContext = {
   workspacePublicId: "pub-1",
   role: "member",
   apiKeyWorkspaceId: null,
+  // ⚠ A LINK CONTAINER, AND EVERY GET ASSERTION BELOW DEPENDS ON IT SINCE
+  // 2026-09-17: Samuel's ruling made CHANNEL scope a home-container mechanism,
+  // and a standard workspace answers the EMPTY SECTION (its own block, at the
+  // foot). Leaving `workspaceKind` absent would read as `standard` (§4A) and
+  // retire these silently.
+  workspaceKind: "link",
 };
 
 vi.mock("@/shared/auth/with-workspace-auth", () => ({
@@ -131,6 +137,8 @@ describe("GET …/channel-grants", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       canManage: true,
+      // 🔒 A HOME container: channel scope exists here (Samuel 2026-09-17).
+      channelScopeAllowed: true,
       channels: [
         { id: "chan-1", name: "engineering", isDirect: false },
         { id: "chan-2", name: "design", isDirect: false },
@@ -320,5 +328,64 @@ describe("the gate options, read off the SOURCE", () => {
     expect(src).toMatch(
       /export const PUT = withWorkspaceAuth\(handlePut, \{[\s\S]*?minRole: "member",/
     );
+  });
+});
+
+// ── 🔒 The container-KIND fence (Samuel's ruling 2026-09-17) ─────────────
+
+/**
+ * *"In workspaces, resource access is not scoped by channels. It's instead
+ * scoped by teams."* — so in a STANDARD workspace this read answers a section
+ * with nothing in it and `channelScopeAllowed: false`, which is what
+ * `kb-channel-grants-section.tsx` renders as NOTHING AT ALL.
+ */
+describe("🔒 GET …/channel-grants in a STANDARD workspace", () => {
+  function standard() {
+    Object.assign(AUTH, { workspaceKind: "standard" as const });
+  }
+  function home() {
+    Object.assign(AUTH, { workspaceKind: "link" as const });
+  }
+
+  beforeEach(() => home());
+
+  it("answers channelScopeAllowed:false with no channels and no grants", async () => {
+    standard();
+    mockGetBase.mockResolvedValue(BASE);
+    const res = await GET(getReq(), ROUTE_CTX);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      canManage: false,
+      channelScopeAllowed: false,
+      channels: [],
+      grants: {},
+    });
+  });
+
+  it("🔒 reads NO channel list and NO grant map — the rows are not consulted", async () => {
+    standard();
+    mockGetBase.mockResolvedValue(BASE);
+    await GET(getReq(), ROUTE_CTX);
+    expect(mockListChannels).not.toHaveBeenCalled();
+    expect(mockBaseGrants).not.toHaveBeenCalled();
+  });
+
+  it("🔒 still 404s an invisible base FIRST — the refusal is not an oracle", async () => {
+    standard();
+    mockGetBase.mockRejectedValue(new KnowledgeBaseNotFoundError("kb-1"));
+    const res = await GET(getReq(), ROUTE_CTX);
+    expect(res.status).toBe(404);
+  });
+
+  it("says channelScopeAllowed:true in a home container", async () => {
+    home();
+    mockGetBase.mockResolvedValue(BASE);
+    mockListChannels.mockResolvedValue([]);
+    mockBaseGrants.mockResolvedValue({});
+    mockCanManage.mockReturnValue(true);
+    const body = (await (await GET(getReq(), ROUTE_CTX)).json()) as {
+      channelScopeAllowed: boolean;
+    };
+    expect(body.channelScopeAllowed).toBe(true);
   });
 });

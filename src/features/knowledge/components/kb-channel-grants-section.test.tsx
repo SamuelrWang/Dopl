@@ -55,6 +55,9 @@ function member(workspaceRole: ChannelMember["workspaceRole"]): ChannelMember {
 function base(over: Partial<ChannelGrantSettings> = {}): ChannelGrantSettings {
   return {
     canManage: true,
+    // ⚠ A HOME container's answer. `false` is a standard workspace's, and the
+    // section renders nothing at all there (Samuel's ruling 2026-09-17).
+    channelScopeAllowed: true,
     channels: [
       { id: "chan-1", name: "engineering", isDirect: false },
       { id: "chan-2", name: "design", isDirect: false },
@@ -243,3 +246,44 @@ describe("degraded reads", () => {
     expect(screen.getByText("No channels available.")).toBeTruthy();
   });
 });
+
+// ── 🔒 The container-KIND fence (Samuel's ruling 2026-09-17) ─────────────
+
+/**
+ * *"In workspaces, resource access is not scoped by channels. It's instead
+ * scoped by teams."* — so in a STANDARD workspace the section is not a disabled
+ * control or an empty list: it is NOT THERE, heading included.
+ */
+describe("🔒 channelScopeAllowed", () => {
+  it("renders NOTHING AT ALL when the server says channel scope is off", () => {
+    settings = base({ channelScopeAllowed: false });
+    const { container } = renderSection();
+    expect(container.innerHTML).toBe("");
+  });
+
+  it("…including the CHANNELS heading — the section owns its own frame", () => {
+    // ⚠ THE MUTATION THIS CATCHES is putting the frame back in
+    // `base-settings-form.tsx`: the refusal then renders as a bare heading over
+    // nothing, which reads as a broken pane rather than an absent capability.
+    settings = base({ channelScopeAllowed: false });
+    renderSection();
+    expect(screen.queryByText("Channels")).toBeNull();
+  });
+
+  it("…even for a manager with grants already in place", () => {
+    settings = base({
+      channelScopeAllowed: false,
+      canManage: true,
+      grants: { "chan-1": { level: "visible", guestWrite: false } },
+    });
+    const { container } = renderSection();
+    expect(container.innerHTML).toBe("");
+  });
+
+  it("renders the section when channel scope IS allowed", () => {
+    settings = base({ channelScopeAllowed: true });
+    renderSection();
+    expect(screen.getByText("Channels")).toBeTruthy();
+  });
+});
+

@@ -21,6 +21,13 @@ const AUTH: WorkspaceAuthContext = {
   workspacePublicId: "pub-1",
   role: "member",
   apiKeyWorkspaceId: null,
+  // ⚠ A LINK CONTAINER, AND THE WHOLE FILE DEPENDS ON IT SINCE 2026-09-17.
+  // `sharedBaseIds` and `channelGrants` are the /home pane's keys, and Samuel's
+  // ruling that day made CHANNEL scope a home-container mechanism — a standard
+  // workspace answers `[]` and omits the map (see the STANDARD block at the
+  // foot). Leaving `workspaceKind` absent would read as `standard` (§4A) and
+  // silently retire every assertion below.
+  workspaceKind: "link",
 };
 
 vi.mock("@/shared/auth/with-workspace-auth", () => ({
