@@ -38,7 +38,6 @@ function mountTab(
       channel={channel(over)}
       channelName={channelName}
       members={MEMBERS}
-      threadCount={0}
       mentions={[]}
       mentionsTruncated={false}
       mentionsLoading={false}

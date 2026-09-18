@@ -9,8 +9,7 @@
  * rename. The two panes are separate compositions of one ladder and are MEANT
  * TO MATCH — this file's Description row says the same thing.
  *
- * WIRED: channel info (creator / created / status / thread count) off the channel
- * row and its thread list, MEMBERS off `use-channel-members` (presence is the
+ * WIRED: channel info (creator / created / status) off the channel row, MEMBERS off `use-channel-members` (presence is the
  * server's verdict — `view-model.ts › isPresentForViewer`, 2026-09-08), the MENTIONS
  * inbox off `use-channel-mentions` (Phase 6), and the activity strip since
  * 2026-09-05 (F-316).
@@ -23,7 +22,6 @@ import {
   AlignLeft,
   Calendar,
   CircleDot,
-  ListChecks,
   ListFilter,
   Type,
   UserPlus,
@@ -52,7 +50,6 @@ export function InfoTab({
   activityBins = [],
   activityLoading = false,
   members,
-  threadCount,
   mentions,
   mentionsTruncated,
   mentionsLoading,
@@ -67,7 +64,6 @@ export function InfoTab({
   activityBins?: readonly ActivityBin[];
   activityLoading?: boolean;
   members: ChannelMember[];
-  threadCount: number;
   /** MY mentions in this channel, server-ordered. */
   mentions: ChannelMention[];
   mentionsTruncated: boolean;
@@ -214,12 +210,12 @@ export function InfoTab({
             onMarkAllRead: onMarkAllMentionsRead,
           }}
         />
-        <MetaRowDivider />
-        {/* The channel's thread count, off the same bounded list the Threads tab
-            renders. */}
-        <MetaRow icon={ListChecks} label="Threads">
-          <span className="text-body text-text-primary">{threadCount}</span>
-        </MetaRow>
+        {/* ⚠ **THE THREADS-COUNT ROW STOOD HERE AND IS DELETED (Samuel's ruling
+            R-22, 2026-09-17).** It printed the length of the same bounded list the
+            Threads TAB already badges (`info-panel-tabs.ts › tabCount`), one row
+            below the tab row carrying it — two statements of one number, and the
+            badge is the one attached to the thing it counts. The row was also the
+            duplicate rather than the gap: /home's Info tab never had it. */}
       </div>
 
       {/* ⚠ **"LINKED THREADS" STOOD HERE AND IS DELETED (Samuel's ruling R-45,

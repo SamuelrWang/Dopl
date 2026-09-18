@@ -315,7 +315,6 @@ export function ChannelsInfoPanel({
                 activityBins={activityBins}
                 activityLoading={activityLoading}
                 members={members}
-                threadCount={threads.length}
                 mentions={mentions}
                 mentionsTruncated={mentionsTruncated}
                 mentionsLoading={mentionsLoading}

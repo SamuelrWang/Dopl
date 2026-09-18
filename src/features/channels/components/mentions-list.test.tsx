@@ -69,7 +69,6 @@ function Harness({
       channel={channel()}
       channelName="Website"
       members={MEMBERS}
-      threadCount={2}
       mentions={mentions}
       mentionsTruncated={truncated}
       mentionsLoading={false}
