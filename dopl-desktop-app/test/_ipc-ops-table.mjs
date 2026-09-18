@@ -33,6 +33,17 @@ export const OPS = [
   // sender from a channel with chaining off.
   ["channels:getAgentChain", CH, false],
   ["channels:setAgentChain", { channelId: CH, on: true }, { ok: false }],
+  // 2026-09-18 (default-agent-settings ruling): the machine-user's DEFAULTS record, plus the seed
+  // that copies it into a channel at CREATION. `get` / `set` take NO channel id — their subject is
+  // the machine-user, like the two orchestrator ops below — so the sender binding is the only
+  // guard and that is exactly why they belong in this census. `apply` is UUID-gated; its refusal
+  // is `{ ok: false, seeded: false }`, byte-identical to its own bad-payload rejection.
+  ["channels:getAgentDefaults", undefined, null],
+  // ⚠ THE FOURTH SLOT: `setAgentDefaults` reads `defaults` and no `channelId`, so the shared
+  // loop's "corrupt the channelId" bad payload would have driven a VALID call through the
+  // bad-payload arm and asserted the refusal shape of a write that really landed.
+  ["channels:setAgentDefaults", { defaults: PRESET }, { ok: false }, { defaults: "not-an-object" }],
+  ["channels:applyAgentDefaults", { channelId: CH }, { ok: false, seeded: false }],
   // 2026-08-20: the DURABLE launch posture, same binding and UUID gate, and now the most privileged
   // write in the file. A refused `get` must not disclose the posture and a refused `set` must not
   // write one; both are asserted by the shared loops below, from all five surfaces.
@@ -137,6 +148,11 @@ export const NO_BAD_PAYLOAD = new Set([
   "orchestrator:getDirectEnabled",
   "orchestrator:setDirectEnabled",
   "claude:signIn",
+  // 2026-09-18: `channels:getAgentDefaults` reads NO payload at all — its subject is the
+  // machine-user — so there is no bad one to build, and a "corrupted" call to it SUCCEEDS.
+  // ⚠ `channels:setAgentDefaults` is NOT exempt and must not become so: it reads `defaults`, and a
+  // garbage payload must still come back `{ ok: false }` with nothing stored.
+  "channels:getAgentDefaults",
   // 2026-09-07: the turn-cap pair was exempted here too. Deleted with the caps.
   // `sessions:mintAgentId` reads no payload at all (2026-08-27), so there is no bad one to build:
   // a "corrupted" call to it SUCCEEDS, which would have asserted the refusal shape of a call that

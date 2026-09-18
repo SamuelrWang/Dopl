@@ -140,9 +140,22 @@ function renderShell() {
 /** The sidebar's gear. */
 const gear = () => screen.getByRole("button", { name: "Settings" });
 
-/** The rail, in order. ⚠ NO "Agents" ROW — a second branch owns that tab; this
- *  list is the expected merge point and nothing else in the file is. */
-const NAV_LABELS = ["Workspaces", "Connect", "Account", "Plans & Billing"];
+/**
+ * The rail, in order, AS THE DESKTOP DRAWS IT.
+ *
+ * ⚠ **FIVE ROWS HERE AND FOUR ON THE WEB, and that split is the contract, not a
+ * fixture detail.** "Agents" is default agent settings, held in this machine's
+ * own store, so `SettingsModalCore` draws it only when a binding passes
+ * `agentsPane` — the desktop does, the web passes nothing. Flattening this list
+ * to one shared set would pin a row the web is right not to have.
+ */
+const NAV_LABELS = [
+  "Workspaces",
+  "Connect",
+  "Agents",
+  "Account",
+  "Plans & Billing",
+];
 
 describe("settings modal", () => {
   beforeEach(() => {
@@ -189,7 +202,7 @@ describe("settings modal", () => {
    * siblings — this is what pins the indent from coming back, and the rows are
    * asserted IN ORDER because the list is the shape, not a set.
    */
-  it("shows four flat nav rows and no group headers", async () => {
+  it("shows the flat nav rows in order, and no group headers", async () => {
     renderShell();
     await screen.findByText("page body");
     fireEvent.click(gear());

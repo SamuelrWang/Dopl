@@ -12,6 +12,7 @@ import { useApiQuery } from "@/shared/hooks/use-api-query";
 import type { WorkspaceMemberView } from "@/features/members/types";
 import type { Channel } from "../types";
 import { ChannelApiError, createChannel } from "../client/api";
+import { seedAgentDefaults } from "../lib/agent-defaults-seed";
 
 interface Props {
   workspaceId: string;
@@ -76,6 +77,9 @@ export function DirectMessageDialog({
         { direct: true, memberUserId },
         workspaceId
       );
+      // ⚠ A DM IS A CHANNEL, so it seeds like one (2026-09-18) — see
+      // `lib/agent-defaults-seed.ts`. Fire-and-forget; a failure leaves the room at manual/ask.
+      seedAgentDefaults(channel.id);
       onCreated(channel);
       close();
     } catch (err) {

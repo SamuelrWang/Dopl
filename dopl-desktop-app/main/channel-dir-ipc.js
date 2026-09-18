@@ -56,6 +56,10 @@ const channelPrefs = require('./channel-prefs');
 // block over `channels:getLaunchPosture`.
 const channelRuntime = require('./channel-runtime');
 const runtimeRegistry = require('./runtime');
+// 2026-09-18 (the default-agent-settings ruling): the machine-user's DEFAULTS record and the
+// seed that copies it into a brand-new channel. Read that module's header before wiring
+// anything else to it — it is deliberately NOT a second consumer of the launch posture.
+const agentDefaults = require('./agent-defaults');
 const sessionIpcOps = require('./session-ipc-ops');
 const { diag } = require('./diag');
 
@@ -300,6 +304,60 @@ function register(opts = {}) {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
     return { ok: true, on: channelPrefs.setAgentChain(p.channelId, p.on === true) };
+  }));
+
+  // ── ⚠ DEFAULT AGENT SETTINGS (2026-09-18, Samuel's ruling) — WHAT A **NEW** CHANNEL STARTS ON.
+  //
+  // THREE ops, and the third is the whole feature: `applyAgentDefaults` SEEDS a channel that was
+  // just created with the record the other two read and write. `main/agent-defaults.js` carries
+  // the argument; the part that belongs in THIS file is what a hostile page could do with them.
+  //
+  // ⚠ ITS H3 ENTRY IS: *decides what MY next new channel's agents start on.* A forged `set` is the
+  // same authority the Agents tab hands the operator and no wider — it reaches no EXISTING
+  // channel, no running session, and no other machine. A forged `apply` can only copy that record
+  // into a channel that has NO posture yet (`agent-defaults.js › seedChannel` refuses otherwise),
+  // so the worst it can do to a configured room is nothing at all.
+  //
+  // ⚠ NO LIVE FAN-OUT, UNLIKE THE POSTURE OP ABOVE, AND THE ASYMMETRY IS THE RULE. That one
+  // widens SUPERVISION on agents already running in the room the operator is looking at; this
+  // record governs rooms that do not exist yet, so there is nothing live for it to reach and a
+  // fan-out here would make a defaults write silently re-posture the whole fleet.
+  //
+  // ⚠ THE READ CARRIES THE RUNTIME ROSTER, exactly as `channels:getLaunchPosture` does and for the
+  // same reason: the Agents tab renders the SAME row vocabulary as the per-channel Settings tab,
+  // and those rows feature-probe OWN KEYS (`runtime`, `model`) to decide whether to draw at all.
+  // Answering the pair alone would tell the tab this desktop has no runtime and no model concept.
+  ipcMain.handle('channels:getAgentDefaults', appWindowOnly('getAgentDefaults', null, async () => {
+    const connected = await Promise.resolve()
+      .then(() => runtimeRegistry.connectedIds())
+      .catch(() => []);
+    return Object.assign({}, agentDefaults.getAgentDefaults(), {
+      runtimes: runtimeRegistry.all().map((a) => a.descriptor),
+      defaultRuntime: runtimeRegistry.DEFAULT_ID,
+      // ⚠ A PLAIN ARRAY OF IDS, and a LABEL rather than a gate — `channels:getLaunchPosture`'s
+      // own rule, restated because the same 60s-stale probe answers both.
+      connected: Array.isArray(connected) ? connected.slice() : [],
+    });
+  }));
+  // ⚠ NO `channelId` AND NOTHING TO UUID-GATE — the subject is the machine-user, like the two
+  // orchestrator consents below. The sender binding is the only guard, which is why this pair is
+  // in `test/_ipc-ops-table.mjs`'s census.
+  ipcMain.handle('channels:setAgentDefaults', appWindowOnly('setAgentDefaults', { ok: false }, (_event, payload) => {
+    const p = payload || {};
+    // ⚠ THE SHAPE GATE IS HERE AS WELL AS IN THE STORE, and it stands in for the `isUuid` gate
+    // every other op in this file has: with no channel id there is nothing to reject a probe on,
+    // so the PAYLOAD is what a bad-payload call has to be refused over. `agent-defaults.js`
+    // re-validates every field regardless — this is the surface's half, not a substitute.
+    if (!p.defaults || typeof p.defaults !== 'object' || Array.isArray(p.defaults)) return { ok: false };
+    return agentDefaults.setAgentDefaults(p.defaults);
+  }));
+  // ⚠ THE INHERITANCE POINT, CALLED ONCE PER CREATED CHANNEL BY THE RENDERER THAT JUST CREATED IT.
+  // Idempotent by construction (`seeded: false` when a posture already exists), so a retry, a
+  // double-mounted dialog or a second window racing the same creation cannot rewrite a room.
+  ipcMain.handle('channels:applyAgentDefaults', appWindowOnly('applyAgentDefaults', { ok: false, seeded: false }, (_event, payload) => {
+    const p = payload || {};
+    if (!isUuid(p.channelId)) return { ok: false, seeded: false };
+    return agentDefaults.seedChannel(p.channelId);
   }));
 
   // ── ⚠ THE ORCHESTRATOR LAUNCH TOGGLE (2026-08-22, Samuel's launch-over-MCP ruling) ────────

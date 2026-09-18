@@ -188,6 +188,37 @@ export interface DoplBridge {
     // POSTDATE nothing — the handlers are deleted, so every main from this build on
     // rejects the invoke, and a caller guarded by `typeof fn === "function"` would
     // see the method and call into a channel nobody registered.
+    /**
+     * DEFAULT AGENT SETTINGS (2026-09-18) — what a channel created FROM NOW ON starts on, and
+     * the seed that copies the record into one at creation.
+     *
+     * ⚠ NO `channelId` ON THE FIRST TWO: the subject is the machine-user, so there is one
+     * answer per Mac rather than one per room.
+     * ⚠ **IT IS NEVER READ AT A SPAWN.** `main/agent-defaults.js` states why — a defaults
+     * record consulted at launch time is an ambient posture read at a spawn no human is
+     * attending (H2), and it would additionally re-point every EXISTING channel.
+     * ⚠ `applyAgentDefaults` REFUSES A CHANNEL THAT ALREADY HAS A POSTURE, which is what makes
+     * "existing channels untouched" a property of main rather than of who remembers to call it.
+     * ⚠ OPTIONAL, like the posture pair above: a main older than this change has no handler, and
+     * the feature-detect is what hides the Agents tab rather than breaking it.
+     */
+    getAgentDefaults?(): Promise<{
+      tools: string;
+      messages: string;
+      agentChain?: boolean;
+      model?: string | null;
+      runtime?: string;
+    } | null>;
+    setAgentDefaults?(defaults: {
+      tools: string;
+      messages: string;
+      agentChain: boolean;
+      model?: string | null;
+      runtime: string;
+    }): Promise<{ ok: boolean }>;
+    applyAgentDefaults?(
+      channelId: string
+    ): Promise<{ ok: boolean; seeded?: boolean }>;
   };
   /** `reopen`: open the AGENT WINDOW for this thread's session — the agent
    *  view's way in. Opens a window only, starts no query. Web tree

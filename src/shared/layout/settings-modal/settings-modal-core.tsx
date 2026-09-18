@@ -1,6 +1,6 @@
 "use client";
 
-import { CreditCard, LayoutGrid, Plug, UserRound } from "lucide-react";
+import { Bot, CreditCard, LayoutGrid, Plug, UserRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
@@ -26,10 +26,15 @@ import styles from "./settings-modal.module.css";
  * (`sections/workspace-section-core.tsx › WorkspaceSectionBody`), which is the
  * one surface that edits a workspace now.
  *
- * ⚠ **THERE IS NO `"agents"` MEMBER HERE ON PURPOSE.** A second coder owns that
- * tab on its own branch; the only expected collision is this list.
+ * ⚠ **`"agents"` IS THE ONE OPTIONAL MEMBER** — DEFAULT AGENT SETTINGS, desktop
+ * only, drawn only when `agentsPane` is passed (see the prop, and `has` below).
  */
-export type SettingsSection = "workspaces" | "connect" | "account" | "billing";
+export type SettingsSection =
+  | "workspaces"
+  | "connect"
+  | "agents"
+  | "account"
+  | "billing";
 
 interface NavItem {
   id: SettingsSection;
@@ -44,10 +49,16 @@ interface NavItem {
  * ⚠ The uppercase "WORKSPACE" / "ACCOUNT" strips and the `.navGroup` column they
  * titled are DELETED, not hidden: they were the only thing indenting this rail,
  * and a header over a single row was naming a group of one.
+ *
+ * ⚠ **"Agents" SITS BELOW Connect** (Samuel, same review) and is the one row
+ * that may be ABSENT — `has` below is what drops it, so the WEB draws four rows
+ * and the DESKTOP five. It is not reordered by that: the list is the order,
+ * filtered, never two lists.
  */
 const NAV: ReadonlyArray<NavItem> = [
   { id: "workspaces", label: "Workspaces", icon: LayoutGrid },
   { id: "connect", label: "Connect", icon: Plug },
+  { id: "agents", label: "Agents", icon: Bot },
   { id: "account", label: "Account", icon: UserRound },
   { id: "billing", label: "Plans & Billing", icon: CreditCard },
 ];
@@ -67,6 +78,14 @@ export interface SettingsModalCoreProps {
   /** Stripe Elements on the web; read-only status + open-in-browser handoff on
    *  desktop, whose CSP refuses the Stripe script and every network origin. */
   billingPane: React.ReactNode;
+  /**
+   * DEFAULT AGENT SETTINGS (2026-09-18) — the one pane that is OPTIONAL, and the omission is the
+   * contract rather than a convenience. The record it edits lives in the desktop's own local
+   * store, so the WEB binding passes nothing and the nav entry is not drawn at all: the
+   * no-dead-rows rule (INVARIANTS §5), and the strong version of it here, since a tab that
+   * persisted nothing would promise new channels inherit settings that cannot exist.
+   */
+  agentsPane?: React.ReactNode;
 }
 
 /**
@@ -88,16 +107,22 @@ export function SettingsModalCore({
   connectPane,
   accountPane,
   billingPane,
+  agentsPane,
 }: SettingsModalCoreProps) {
+  // ⚠ ONE PREDICATE, READ BY BOTH THE RAIL AND THE PANE. A nav entry whose pane is absent is a
+  // row that selects nothing, and a pane rendered under no entry is unreachable — so which
+  // sections EXIST is decided once, here, rather than by two conditions that can disagree.
+  const has = (id: SettingsSection) => id !== "agents" || agentsPane != null;
   return (
     <ModalShell open={open} onClose={() => onOpenChange(false)} label="Settings">
       <nav className={styles.nav}>
         {/* ⚠ THE APP SIDEBAR'S ROW, NOT A LOOKALIKE — same `nav-chip` recipe,
             same `--shell-chip` resting gray, same 20px lucide glyph at the same
-            stroke (`app-shell/app-sidebar-core.tsx`). The two rails read one
-            declaration, so neither can drift to a second gray. */}
+            stroke (`app-shell/app-sidebar-core.tsx`), Agents wearing that rail's
+            own `Bot`. The two rails read one declaration, so neither can drift
+            to a second gray. */}
         <div className={styles.navList}>
-          {NAV.map(({ id, label, icon: Icon }) => (
+          {NAV.filter(({ id }) => has(id)).map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"
@@ -131,6 +156,7 @@ export function SettingsModalCore({
         {section === "connect" && connectPane}
         {section === "account" && accountPane}
         {section === "billing" && billingPane}
+        {section === "agents" && has("agents") && agentsPane}
       </div>
     </ModalShell>
   );

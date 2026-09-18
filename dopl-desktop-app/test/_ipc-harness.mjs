@@ -124,6 +124,19 @@ export function bootIpc({ blocked = false } = {}) {
         normalizeRuntimeId: (v) => (v === "codex" || v === "cursor" ? v : ""),
       };
     }
+    // 2026-09-18 — DEFAULT AGENT SETTINGS. ⚠ EVERY WRITER RECORDS INTO THE SAME `writes` LEDGER as
+    // `channel-prefs`' fakes, because the refusal cases assert that ledger is EMPTY: a second
+    // ledger would let a forged `setAgentDefaults` or `applyAgentDefaults` pass unseen. ⚠ AND BOTH
+    // SUCCEED FOR ANY INPUT, deliberately — the refusal under test is produced by `appWindowOnly`
+    // and by the handler's own `isUuid` gate, so a fake that refused on its own would make the
+    // binding look intact when it had been deleted.
+    if (id === "./agent-defaults") {
+      return {
+        getAgentDefaults: () => ({ tools: "bypass", messages: "auto_both", agentChain: true, model: null, runtime: "" }),
+        setAgentDefaults: (defaults) => { writes.push({ agentDefaults: defaults }); return { ok: true }; },
+        seedChannel: (channelId) => { writes.push({ channelId, seeded: true }); return { ok: true, seeded: true }; },
+      };
+    }
     // `connectedIds` joined 2026-09-08: which registered adapters this Mac could start right now.
     // It rides the SAME read and NARROWS NOTHING — `all()` is still the roster the popup renders.
     if (id === "./runtime") return { all: () => [], DEFAULT_ID: "claude", connectedIds: async () => [] };

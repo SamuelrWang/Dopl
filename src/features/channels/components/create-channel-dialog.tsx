@@ -23,6 +23,7 @@ import {
 import type { WorkspaceMemberView } from "@/features/members/types";
 import type { Channel, ChannelVisibility } from "../types";
 import { addChannelMember, ChannelApiError, createChannel } from "../client/api";
+import { seedAgentDefaults } from "../lib/agent-defaults-seed";
 
 interface Props {
   workspaceId: string;
@@ -149,6 +150,13 @@ export function CreateChannelDialog({
         { name: trimmed, topic: topic.trim() || undefined, visibility },
         workspaceId
       );
+
+      // ⚠ THE NEW CHANNEL INHERITS THE OPERATOR'S DEFAULT AGENT SETTINGS (2026-09-18) — a SEED,
+      // written once, right here, because this is where a channel comes into existence. It is
+      // fire-and-forget and a failure is silent: the channel already exists, and a local
+      // preference that did not copy leaves it at manual/ask, which is what it had before this
+      // feature. `lib/agent-defaults-seed.ts` carries the whole argument.
+      seedAgentDefaults(channel.id);
 
       // Add the picked members best-effort — the channel already exists, so a
       // single member failure shouldn't discard the whole creation.

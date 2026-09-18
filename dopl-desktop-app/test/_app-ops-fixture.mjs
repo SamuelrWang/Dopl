@@ -19,6 +19,13 @@ export const APP_OPS = [
   "appWindow.toggleMaximize",
   "avatarDataUri",
   "beginSignIn",
+  // 2026-09-18 (default-agent-settings ruling): `channels.apply/get/setAgentDefaults` — the
+  // machine-user's DEFAULTS record and the seed that copies it into a channel at CREATION. All
+  // three are appWindowOnly; only `apply` takes an id and it is UUID-gated. ⚠ THE RECORD IS NEVER
+  // READ AT A SPAWN (`main/agent-defaults.js` states why that would re-open H2 and would
+  // additionally re-point every EXISTING channel), and `apply` refuses a channel that already has
+  // a posture — so a forged call reaches no configured room, no running session, no other machine.
+  "channels.applyAgentDefaults",
   "channels.chooseFolder",
   "channels.clearFolder",
   // `channels.get/setAutoSend`'s ADD review is retired with the ops (2026-09-06, item 8); the
@@ -29,6 +36,7 @@ export const APP_OPS = [
   // widen a session already running — the deliberate asymmetry with `setLaunchPosture`, which
   // fans out live: that one widens SUPERVISION, this one is CONTAINMENT.
   "channels.getAgentChain",
+  "channels.getAgentDefaults", // 2026-09-18 — the review is on `channels.applyAgentDefaults` above
   // 2026-09-06 (settings overhaul, item 8): `channels.getAutoSend` / `.setAutoSend` are DELETED,
   // handlers and storage with them — leaving them pinned would assert a bridge to nowhere. The
   // axis they set is the launch posture's `messages`, whose ops are already pinned here, so the
@@ -46,6 +54,7 @@ export const APP_OPS = [
   // was already missing: the arm's web controls lived in `launch-panel.tsx`'s INBOUND branch, which
   // stopped rendering at the 2026-08-18 consent rewrite (F-233). The handlers are gone with them.
   "channels.setAgentChain", // 2026-08-31 — the review is on `channels.getAgentChain` above
+  "channels.setAgentDefaults", // 2026-09-18 — the review is on `channels.applyAgentDefaults` above
   // `channels.setAutoSend` left 2026-09-06 — the removal review is on `channels.getAutoSend` above.
   "channels.setLaunchPosture",
   // 2026-08-25: `claude.signIn`, the ONE entry into the Claude Code auth recovery flow. It takes NO

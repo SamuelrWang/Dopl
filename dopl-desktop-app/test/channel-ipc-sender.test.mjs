@@ -213,6 +213,9 @@ test("every op REFUSES when no registry accessor was supplied (an unbound surfac
     // success path it backs is exactly what must never be reached.
     if (id === "./channel-dirs") return { liveChannelDirLabel: () => "x", resolvedDirLabel: () => "y", promptAndSetChannelDir: async () => {}, clearChannelDir: () => {} };
     if (id === "./session-engine") return { reopenByTask: () => ({ ok: true }) };
+    // 2026-09-18 — DEFAULT AGENT SETTINGS. Present only so the module loads: every call below is
+    // on an UNBOUND surface, so the success path these back is exactly what must never be reached.
+    if (id === "./agent-defaults") return { getAgentDefaults: () => PRESET, setAgentDefaults: () => ({ ok: true }), seedChannel: () => ({ ok: true, seeded: true }) };
     if (id === "./deep-link-target") return { isSafeSegment: () => true };
     if (id === "./version-gate") return { isBlocked: () => false };
     if (id === "./popout-window") return { openThreadWindow: () => ({ ok: true }) };
