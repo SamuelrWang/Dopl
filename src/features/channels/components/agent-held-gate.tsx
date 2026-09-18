@@ -19,6 +19,14 @@
  * stream would also put it behind a scroll, which is the wrong place for the one thing standing
  * between the agent and its next turn.
  *
+ * ⚠ **TWO HOSTS SINCE R-24 (Samuel, 2026-09-17): the panel's strip AND the agent WINDOW**
+ * (`agent-panel-controls.tsx › AgentControls`, `agent-window.tsx › ChannelsAgentWindow`). An
+ * operator working in the window could not answer a held call from it, and the notification is not
+ * an answer path — it is got once and lost to a ten-minute TTL. ⚠ **ONLY THIS CARD CROSSED**:
+ * Pause / End stay panel-only, because a destructive verb in a window that never had one is a new
+ * control rather than a move. ⚠ Both hosts hand it the same `onRefreshSessions` for the same one
+ * reason — a REFUSAL is not a push.
+ *
  * ⚠ ONE CARD PER HELD CALL. A session can hold several (the fan-out feeds a new turn while the
  * first call waits), and they are DIFFERENT questions with different answers — a single
  * "approve everything" control would be a standing grant wearing a per-call face, which is

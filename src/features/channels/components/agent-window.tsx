@@ -50,6 +50,7 @@ import { formatTokens, metric } from "./agent-metrics";
 import { viewerPerson } from "./view-model";
 import { useDesktopSessions } from "./use-desktop-sessions";
 import { AgentComposer } from "./agent-composer";
+import { AgentHeldGates } from "./agent-held-gate";
 import { PostureControls } from "./agent-posture";
 import { useAgentNarration } from "./use-agent-narration";
 
@@ -109,7 +110,11 @@ export function ChannelsAgentWindow({
   // ⚠ THE SAME FEED THE AGENTS TAB TAKES, filtered to one agent. A window makes its own
   // subscription because it is a different React tree in a different BrowserWindow — main
   // fans every push out over the app-window registry precisely so this works.
-  const { sessions } = useDesktopSessions();
+  // ⚠ `refresh` IS THE HELD GATE'S, AND ONLY A REFUSAL'S (Samuel's ruling R-24,
+  // 2026-09-17). An answer main REFUSED moves nothing, so no push follows to
+  // retire a card standing over a request that is already gone — the same one
+  // case `use-desktop-sessions.ts` minted this for. It is not a poll.
+  const { sessions, refresh } = useDesktopSessions();
   // ⚠ THE ID WHEN THE URL HAS ONE, THE PAIR WHEN IT DOES NOT (2026-08-22).
   // `(channel, thread)` addresses a THREAD since multiplayer, so the pair alone
   // lands on whichever of this operator's agents the feed lists first. `?agent=`
@@ -271,6 +276,27 @@ export function ChannelsAgentWindow({
           stats={<AgentWindowStats agent={agent} />}
         />
       ) : null}
+      {/* 🔒 **THE HELD-GATE CARD, IN THE WINDOW TOO** (Samuel's ruling R-24,
+          2026-09-17 — (b), not (a)): an operator working here could not answer the
+          one thing standing between their agent and its next turn, and the native
+          notification they got instead is a surface they cannot come back to.
+          ⚠ **THE CARD ONLY — Pause/End STAY PANEL-ONLY**, which is the whole of why
+          (b) was chosen over (a): a destructive verb appearing in a window that
+          never had one is a NEW control, not a move (`agent-window-chrome.tsx`
+          says the same thing about the header).
+          ⚠ **THE SAME COMPONENT AND THE SAME BRIDGE CAPABILITY** — it renders
+          nothing when the agent holds nothing, when this main reports no held
+          calls, or when this build cannot answer one (`agents-gate-controls.ts ›
+          canAnswerPermission`, checked inside). Absent, never inert.
+          ⚠ ITS OWN PADDING, because `PostureControls` above owns a bordered strip
+          and the stream below carries `px-4`; this sits between them. */}
+      {agent ? (
+        <AgentHeldGates
+          agent={agent}
+          onRefreshSessions={refresh}
+          className="shrink-0 px-4 pt-2.5"
+        />
+      ) : null}
       <AgentStream
         // ⚠ THE LIVE TAIL (Samuel, 2026-09-14) — the same verdict the window
         // chrome's badge shows (`agent-window-chrome.tsx`), from the one mapping.
@@ -384,7 +410,8 @@ function AgentWorkingOn({
  * strip (`agent-panel-controls.tsx › AgentControls`, Pause / End / Open window), which this window
  * has never mounted — so the badge is the only thing that was sitting at the end of this bar. It is
  * deliberately not INVENTED here: a destructive verb appearing in a window that never had one is a
- * new control, not a move.
+ * new control, not a move. ⚠ **AND R-24 (2026-09-17) DID NOT CHANGE THAT**: the HELD-GATE CARD came
+ * across to the window, the strip's verbs did not — see the mount in {@link ChannelsAgentWindow}.
  *
  * ⚠ THE TWO BUTTONS RENDER ONLY WHEN THEY CAN ACT. `canControlOwnWindow()` detects the BRIDGE op
  * (`spa-bridge-window.ts` carries why it is not the wrapper), so a plain browser and a main

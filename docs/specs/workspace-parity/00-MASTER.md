@@ -112,7 +112,7 @@ research doc it came from (e.g. "01 §A row 5").
 | P13 | Unread **mention count** `@ N` on a channel row | `HomeChannel.unreadMentions` (`types.ts:164`) ← `repository-unread.ts › listMyMentionStamps` | boolean dot only; `sidebar-rows.tsx:69-73 › "NO UNREAD BADGE"` forbids inventing a count (the doc previously cited `:27-31`, which is the re-export docblock) | new code (server projection) | M | R-28 | 01 §A row 72; 05 A12 |
 | P14 | Last-message preview on a row | `lastMessagePreview` on the wire (`types.ts:128`) — **rendered by nothing since 2026-09-13** | absent | new code, or delete the field | S | R-28 | 01 §A row 73; 05 A15 |
 | P15 | Agents-tab recency wells recognised as a workspace surface | four wells (`agents-tab.tsx:417` → `agents-wells.tsx:123`) | **identical — already shared** | none (verify + keep) | S | — | 02 A.3 G4 |
-| P16 | Held-gate Approve/Deny reachable from the agent WINDOW | absent on both hosts (`agent-window.tsx:383-387`) | absent | new wiring | M | R-24 | 02 A.5 W3 |
+| P16 | ✅ **DONE 2026-09-17 (wave 2)** — Held-gate Approve/Deny reachable from the agent WINDOW | `agent-window.tsx › ChannelsAgentWindow` mounts `agent-held-gate.tsx › AgentHeldGates` on both hosts' windows (one page, one implementation) | same | new wiring | M | R-24 | 02 A.5 W3 |
 | P17 | One `AgentStats` | `agent-panel.tsx:461-483` | `agent-window.tsx:403-439` (`AgentWindowStats`) | collapse duplicate | S | — | 02 §C2 |
 | P18 | One template save/remove orchestration | `agent-editor.tsx:222-275` | `agent-templates-core.tsx:141-176` | collapse duplicate → `use-template-save.ts` | S | — | 02 §C3 |
 | P19 | ONE page header strip (no title) | `home-header.tsx:37-102` — one 36px row | **five recipes**: H1 overview greeting, H2 agents 52px bar, H3 settings bar, H4 skills, H5 knowledge hero | move down + new adapter | L | R-02 | 03 §A.4, §D4 |
@@ -499,6 +499,8 @@ operator working in the agent window **cannot answer a held call from it**.
 verb to a window that never had one is a new control. *Blocks: Wave 2 (P16).* — 02 §R-5
 
 → ✅ RULED 2026-09-17 — Samuel: **(b)** — the held gate moves to the window too; Pause/End stays panel-only.
+
+→ ✅ **DONE 2026-09-17 (wave 2).** `AgentHeldGates` is mounted in `agent-window.tsx › ChannelsAgentWindow`, under the posture box and above the stream, on the SAME bridge capability (`agents-gate-controls.ts › canAnswerPermission`) and with `use-desktop-sessions.ts › refresh` for the refusal path. The boundary is pinned as well as the card: `agent-window-held-gate.test.tsx` asserts no Pause and no End.
 
 **R-25. Peer-agent visibility on a 20-person workspace channel.** The Agents tab is an **operator**
 surface: own agents from this machine's feed, peers as state-only cards.
