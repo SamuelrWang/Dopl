@@ -2297,10 +2297,18 @@ recommendation in any spec; a spec that disagrees is the thing that is wrong.
   - 🔒 **ZERO SPECIFICITY IN THE WEAKEST LAYER IS THE CONTRACT.** Every compound is `:where()`, so
     any explicit cursor still wins — `cursor-text` on the inline editors, `cursor-col-resize` on the
     channel info divider, `cursor-ns-resize` on a `SectionBox` grip, `cursor-grabbing` on a dragged
-    graph card, every `disabled:cursor-*` a component already spells, and
-    `agent-window-chrome.tsx › TAB_ACTIVE`, which now states `cursor-default` because the 2026-09-15
-    ruling (*"the ACTIVE tab takes neither the fill nor the cursor"*) used to hold by silence.
+    graph card, and every `disabled:cursor-*` a component already spells.
     **Do not raise the rule's specificity to make it stick** — that inverts it into an override.
+  - 🔴 **AND THIS RULING OVERRIDES THE CURSOR HALF OF THE 2026-09-15 AGENT-TAB RULING (Samuel,
+    2026-09-18, asked directly).** That one read *"the ACTIVE tab takes neither the fill nor the
+    cursor"* and held by SILENCE — a `<button>` had no hand unless a component asked for one.
+    **The FILL half stands** (no `hover:bg-*` on the active tab); **the CURSOR half does not** — an
+    active tab is still a button you can click, so it shows the hand like every other control.
+    ⚠ **`agent-window-chrome.tsx › TAB_ACTIVE` THEREFORE STATES NO CURSOR UTILITY AT ALL, AND THAT
+    ABSENCE IS LOAD-BEARING** — a `cursor-default` bolted back on would out-layer the base rule and
+    silently re-take the override. Pinned by `agent-window-chrome.test.tsx`, which asserts the
+    absence of any `cursor-` class rather than of `cursor-pointer` (the old spelling passed with
+    `cursor-default` present).
   - ⚠ **`[data-clickable]` IS THE ESCAPE HATCH AND IT IS NOT A STYLE HOOK.** A clickable that is
     neither a control nor a role — a card or a header row that selects on click while a real
     `<button>` inside it carries the keyboard — takes the attribute, never a `role="button"` that
