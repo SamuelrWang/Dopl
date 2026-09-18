@@ -36,6 +36,7 @@ import { registerAgentTools } from "./tools/agent.js";
 import { registerStatusTool } from "./tools/status.js";
 import {
   boundChannelId,
+  isDesktopRun,
   UNKNOWN_CALLER,
   type CallerIdentity,
 } from "./tools/identity.js";
@@ -145,6 +146,13 @@ export function createServer(
      * resolved value, so absent means unreported and renders as nothing.
      */
     posture?: string | null;
+    /**
+     * HOW TO ADDRESS THE OPERATOR — the mention handle the boot status ping
+     * returned (A1/S48). ⚠ Same terms as the two above: absent renders as
+     * NOTHING, never as a derived guess, and it costs no loopback because the
+     * ping already ran. See `instructions.ts › ConnectionIdentity.operatorHandle`.
+     */
+    operatorHandle?: string | null;
   } = {},
 ): McpServer {
   // ⚠ FAIL CLOSED: write/admin capability ONLY on an explicit `dopl.write`
@@ -214,10 +222,16 @@ export function createServer(
         // — no loopback is added, which `factory.ts › bootServer` forbids.
         identity: {
           userId: caller.userId,
+          operatorHandle: options.operatorHandle ?? null,
           boundChannelId: boundChannelId(caller),
           liveAgents: options.liveAgents,
           posture: options.posture ?? null,
         },
+        // ⚠ A5/S9 — the briefing's WAIT sentence branches on the same predicate
+        // the hold itself is fenced by (`identity.ts › isDesktopRun`), so the
+        // one surface read before the first call stops teaching the one call
+        // this server refuses to that caller.
+        desktopRun: isDesktopRun(caller),
       }),
     },
   );

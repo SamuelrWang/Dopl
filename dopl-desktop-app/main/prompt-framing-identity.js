@@ -30,8 +30,17 @@ const { AGENT_ID_RE } = require('./agent-id');
 // nothing left to disambiguate — and a line teaching an id "for the rare case" is a line an agent
 // will use in the common one.
 //
-// ⚠ **IT IS FOUR SHORT LINES AND MUST STAY SHORT** — a FACT and a PROHIBITION is the smallest
+// ⚠ **IT IS SIX SHORT LINES AND MUST STAY SHORT** — a FACT and a PROHIBITION is the smallest
 // shape that can be followed.
+//
+// ⚠ **THE LAST TWO LINES ARE WHO THE COUNTERPARTY IS, ADDED 2026-09-18 (A2/S45).** They are the
+// reading half of the same rule the first four are the writing half of, and each names a label
+// the MCP read really prints: `packages/mcp-server/src/tools/channel-render-identity.ts ›
+// formatAuthor` renders `agent @x for you` for a SIBLING — another session this same operator
+// launched — and `outside session for you` for the operator's own Claude Code / Codex / Cursor
+// connection. Without them the agent has the label and no rule for it, which is the lookup this
+// wave exists to delete. ⚠ **`@desktop` IS THE GROUP HANDLE FOR THOSE OUTSIDE SESSIONS** and is
+// minted on a sibling branch (`OUTSIDE_SESSION_HANDLE`); the two land together.
 //
 // ⚠ THE NAME IS SPOKEN ONLY WHEN THE CALLER SUPPLIES ONE. `ctx.agentName` is optional and this
 // module is PURE, so a caller that has the name passes it; inventing one here, or asserting the
@@ -48,6 +57,8 @@ function agentIdentityFraming(ctx) {
     `THE ID IS INTERNAL: read it, never write it in a message.`,
     `ADDRESS AN AGENT BY ITS NAME, as a tag: lower case, spaces as dashes (@bug-reviewer).`,
     `Names are unique among live agents, so a tag reaches exactly one.`,
+    `A line reading "for you" is YOUR OPERATOR'S own agent; any other name is another member's.`,
+    `An "outside session" line is your operator's own coding session: address it @desktop, in full agent detail.`,
   ];
 }
 

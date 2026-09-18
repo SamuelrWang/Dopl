@@ -125,7 +125,9 @@ function clipBody(m, ref, clip) {
  * label, this one is the reason a waiting agent should stop waiting.
  */
 function formatMessage(m, anyThreaded, view, ref, clip, terse) {
-    const author = (0, channel_render_identity_1.formatAuthor)(m);
+    // ⚠ THE READER GOES IN (A2): a sibling agent renders `for you`, another
+    // member's renders their name — see `channel-render-identity.ts`.
+    const author = (0, channel_render_identity_1.formatAuthor)(m, view);
     const ended = sessionEnded(m);
     const kindTag = ended
         ? " · SESSION ENDED"

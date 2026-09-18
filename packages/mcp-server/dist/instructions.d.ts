@@ -85,6 +85,27 @@ export interface ConnectionIdentity {
     /** The caller's immutable user id. Null when the boot could not resolve it. */
     userId: string | null;
     /**
+     * **HOW TO ADDRESS THE OPERATOR — the handle, not the uuid** (A1/S48,
+     * 2026-09-18).
+     *
+     * ⚠ IT DELETES A ROUND TRIP, which is the only test this record admits. An
+     * agent holding a user id and wanting to write `@…` in a post had to call
+     * `dopl_members` for the roster and re-derive the handle rule from it; the
+     * handle is the one spelling the channel's own resolver accepts
+     * (`features/channels/lib/mentions.ts › mentionSlug`, the SLUG form a picker
+     * inserts), and the boot status ping already reads the caller's profile.
+     *
+     * ⚠ **AND IT COSTS NO LOOPBACK.** `POST /api/user/mcp-status` already ran at
+     * boot and already touched the profile row; it now returns that row's handle
+     * on the same request. Null ⇒ the ping failed, the profile has no name, or
+     * the derived handle is unrenderable — and null renders NOTHING rather than a
+     * guess.
+     *
+     * ⚠ IT IS THE CALLER'S OWN ACCOUNT. A desktop-run agent runs AS its operator,
+     * so "who owns this connection" and "who do I report to" are one fact here.
+     */
+    operatorHandle?: string | null;
+    /**
      * The channel this session is BOUND to, from `X-Dopl-Session-Id`'s
      * `<channelId>:<tail>` head, else null. ⚠ A LABEL AND NOT A LOCK — the header
      * grants nothing (`shared/auth/session-header.ts`) and this only tells the
@@ -112,4 +133,20 @@ export declare function buildInstructions(directory: WorkspaceListItem[], guidan
      * test-constructed server and every older transport working unchanged.
      */
     identity?: ConnectionIdentity;
+    /**
+     * 🔒 **IS THIS CONNECTION DESKTOP-RUN?** — `identity.ts › isDesktopRun`,
+     * resolved by the caller (A5/S9, 2026-09-18) because THIS file may not
+     * import the caller record.
+     *
+     * ⚠ It decides ONE sentence, and it decides it because the briefing was
+     * stating the hold UNCONDITIONALLY while the server REFUSES the hold to
+     * exactly this caller (`channel-hold-budget.ts › DESKTOP_HOLD_REFUSAL`):
+     * the one surface a client reads before its first call was teaching the one
+     * call that surface's own server will not perform.
+     *
+     * ⚠ FALSE MEANS "NOT KNOWN TO BE DESKTOP-RUN", never "external" — the
+     * discipline `identity.ts` owns — and the false branch is the sentence that
+     * was always there, so an older transport is unchanged.
+     */
+    desktopRun?: boolean;
 }): string;

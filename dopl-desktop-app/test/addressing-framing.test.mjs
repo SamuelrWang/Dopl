@@ -87,6 +87,13 @@ test("the identity block is the id, its BOUNDARY, and how to address a peer", ()
     "THE ID IS INTERNAL: read it, never write it in a message.",
     "ADDRESS AN AGENT BY ITS NAME, as a tag: lower case, spaces as dashes (@bug-reviewer).",
     "Names are unique among live agents, so a tag reaches exactly one.",
+    // ⚠ **THE READING HALF (2026-09-18, A2/S45).** Each of these names a label the MCP read
+    // really prints (`channel-render-identity.ts › formatAuthor`): `for you` marks a SIBLING
+    // session of this same operator, and `outside session` marks the operator's own external
+    // MCP connection, whose reply handle is the group tag rather than the author's own name.
+    // A rule about a label the transcript does not carry would be worse than no rule.
+    "A line reading \"for you\" is YOUR OPERATOR'S own agent; any other name is another member's.",
+    "An \"outside session\" line is your operator's own coding session: address it @desktop, in full agent detail.",
   ]);
 });
 

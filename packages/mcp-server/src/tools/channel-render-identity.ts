@@ -26,6 +26,15 @@ import { UNREADABLE_ID } from "./channel-render-threads";
  * Author label for a message line. `agent` row renders "agent for <name>",
  * never bare name — reader treats counterparty as another member's agent.
  *
+ * ⚠ **IT TAKES THE READER SINCE 2026-09-18 (A2/S45), AND THAT IS WHAT LETS IT
+ * SAY `for you`.** A label built from the MESSAGE ALONE can name an operator
+ * and never say whether that operator is the reader's own, so a sibling worker
+ * launched by the same person and a stranger's agent rendered identically —
+ * and an agent deciding whether to answer, escalate or ignore was reading the
+ * one distinction it needed out of a uuid it had to go and look up. `view` is
+ * the reader `formatMessages` already holds; a caller that has none passes
+ * {@link NO_MEMBER_VIEW} and gets exactly the old line.
+ *
  * ⚠ Two rules, both because nothing validates `display_name`:
  *   1. Name NEUTRALIZED and user row prefixed `member`, never bare. Raw name
  *      may contain newlines → can close the line and forge fresh ones (a
@@ -34,19 +43,56 @@ import { UNREADABLE_ID } from "./channel-render-threads";
  *   2. `authorUserId` appended ALWAYS, not only as name-missing fallback. Name
  *      = author's claim; id = server's record. Claim alone is uncheckable.
  */
-export function formatAuthor(m: ChannelMessage): string {
+export function formatAuthor(m: ChannelMessage, view: MemberView = NO_MEMBER_VIEW): string {
   const id = m.authorUserId ? `\`${m.authorUserId}\`` : null;
   // `system` is a server-controlled enum, not user text; `PostableAuthorKindSchema`
   // blocks a caller minting one. Only label here with no untrusted half.
   if (m.authorKind === "system") return id ? `system ${id}` : "system";
   const named = m.authorName ? neutralizeInline(m.authorName) : null;
-  const who = named && id ? `${named} (${id})` : (named ?? id);
+  // ⚠ **`for you` IS AN ASSERTION ABOUT THE READER, SO IT IS MADE OFF THE
+  // IMMUTABLE ID AND NOTHING ELSE** — the same half `memberRef` matches on, and
+  // never the name.
+  const mine = view.selfUserId !== null && m.authorUserId === view.selfUserId;
+  const who = mine ? "you" : named && id ? `${named} (${id})` : (named ?? id);
+  // THE OPERATOR'S OWN OUTSIDE SESSION — see {@link isExternalSessionAuthor}.
+  if (isExternalSessionAuthor(m)) {
+    const label = who ? `outside session for ${who}` : "an outside session";
+    return mine ? `${label} — reply @${OUTSIDE_SESSION_HANDLE}` : label;
+  }
   if (m.authorKind === "agent") {
     const handle = agentHandleOf(m);
     const label = handle ? `agent ${handle}` : "agent";
     return who ? `${label} for ${who}` : (handle ? label : "an agent");
   }
   return who ? `member ${who}` : "a member";
+}
+
+/**
+ * 🔒 **THE GROUP HANDLE FOR AN OPERATOR'S OUTSIDE SESSIONS** — one built-in
+ * handle meaning *the operator's MCP sessions that are not app-spawned agents*
+ * (Claude Code, Codex, Cursor, a script).
+ *
+ * ⚠ **A SEAM, AND IT IS DELIBERATELY NOT THE MECHANISM** (2026-09-18). The
+ * handle's minting, its reservation against the member/agent namespaces and the
+ * author kind on the wire are built on a SIBLING BRANCH; what lives here is the
+ * RENDER side: the label a reader gets and the one non-derivable fact that goes
+ * with it — the reply for an outside session is this handle, never the author's
+ * own name.
+ */
+export const OUTSIDE_SESSION_HANDLE = "desktop";
+
+/**
+ * ⚠ **THE THIRD AUTHOR SHAPE, READ AS A STRING ON PURPOSE.**
+ * `@dopl/contracts › MessageAuthorKind` is a CLOSED union guarded by
+ * `check-message-kind-drift.ts` and by the column's own `CHECK`, so widening it
+ * is a migration plus a gate — the sibling branch's work, not this file's. This
+ * predicate therefore asks the wire value directly and answers false for every
+ * row written today, which is exactly what an un-merged seam should do: no
+ * behaviour changes until the kind exists.
+ */
+export const EXTERNAL_AUTHOR_KIND = "external";
+export function isExternalSessionAuthor(m: ChannelMessage): boolean {
+  return (m.authorKind as string) === EXTERNAL_AUTHOR_KIND;
 }
 
 /**
