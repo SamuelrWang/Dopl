@@ -27,12 +27,14 @@
 import { describe, expect, it, afterEach } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { UsageMeter } from "./usage-meter";
+import { formatTokens as tokens } from "@/shared/lib/format-tokens";
 
 afterEach(cleanup);
 
-/** `84_000` → `"84k"` — `channels/components/agent-metrics.ts › formatTokens`, restated so this suite does
- *  not reach across features for a formatter it only needs as a sample. */
-const tokens = (v: number) => `${Math.round(v / 1000)}k`;
+/** ⚠ THE REAL FORMATTER SINCE 2026-09-17, not a restatement. It used to be a
+ *  hand copy of the Agents tab's own, and had inherited its round-to-nearest;
+ *  `shared/lib/format-tokens.ts › formatTokens` floors, and `0` renders
+ *  `"0"` rather than `"0k"` — which is why the cases below name the SLASH. */
 
 describe("a missing denominator", () => {
   it("shows the number that IS known and no denominator beside it", () => {
@@ -40,9 +42,9 @@ describe("a missing denominator", () => {
       <UsageMeter label="Context tokens" used={84_000} limit={0} tone="ramp" formatValue={tokens} />
     );
     expect(screen.getByText("84k")).toBeTruthy();
-    // ⚠ THE WHOLE POINT. `84k / 0k` asserts a window this build was never told.
-    expect(container.textContent).not.toContain("0k");
+    // ⚠ THE WHOLE POINT. `84k / 0` asserts a window this build was never told.
     expect(container.textContent).not.toContain("/");
+    expect(container.textContent).not.toContain("0k");
   });
 
   it("STILL RENDERS THE BAR, at zero — the 2026-08-27 ruling is not what this fixes", () => {

@@ -7,7 +7,7 @@ import {
 } from "@/features/channels/types";
 import { meetsMinRole } from "@/features/workspaces/types";
 import { canShowMemberControls } from "@/features/workspaces/member-policy";
-import { FormDialog } from "@/shared/ui/form-dialog";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
 import { AddPersonDialog } from "./add-person-dialog";
 import { LinkOutPanel } from "./link-out-panel";
@@ -106,6 +106,9 @@ export function PersonRosterActions({
  *
  * ⚠ **CONFIRMED, NOT ONE-CLICK.** Both are membership DELETEs, and leaving a
  * link container is one-way: the claim link that let the viewer in was spent.
+ * ⚠ **AND THE CONFIRM IS `ConfirmDialog`, NOT `FormDialog`** (2026-09-17) —
+ * `shared/ui/form-dialog.tsx`'s own rule. It was a fieldless `FormDialog`, which
+ * gave a destructive act the affirmative black CTA and no way to retry a refusal.
  */
 export function PersonRosterRowAction({
   member,
@@ -135,11 +138,10 @@ export function PersonRosterRowAction({
   const canLeave = isSelf && meetsMinRole(role, "viewer") && role !== "owner";
   const canRemove = !isSelf && canShowMemberControls(role, targetRole, false);
 
-  // ⚠ CLOSE FIRST, then tell the host: leaving unmounts this row with the
-  // container, and a dialog left open over a row that no longer exists is the
-  // same defect as a dead control.
+  // ⚠ NO `setConfirming(false)` HERE — `ConfirmDialog` owns the close (it closes
+  // on resolve and STAYS OPEN on a throw, which is the retry this dialog used to
+  // have no way of offering).
   const write = useRemoveContainerMember(homeChannel.container?.segment ?? "", () => {
-    setConfirming(false);
     if (canLeave) onLeft();
     else onRosterChanged();
   });
@@ -158,26 +160,25 @@ export function PersonRosterRowAction({
       >
         {verb}
       </button>
-      {confirming && (
-        <FormDialog
-          open
-          onDiscard={() => setConfirming(false)}
-          // The title carries a name somebody typed, so CSS `capitalize` is off
-          // (`standard-dialog.tsx › DIALOG_TITLE_AS_TYPED`).
-          titleCase={false}
-          title={canLeave ? `Leave ${homeChannel.name}?` : `Remove ${name}?`}
-          discardLabel="Cancel"
-          primary={{
-            label: verb,
-            busy: write.pending,
-            onClick: () => write.mutate(member.userId),
-          }}
-        >
-          <p className="text-caption text-text-muted">
-            {canLeave ? "You lose access to this channel." : "They lose access to this channel."}
-          </p>
-        </FormDialog>
-      )}
+      {/* ⚠ `ConfirmDialog`, NOT `FormDialog` — the rule is `form-dialog.tsx`'s
+          own: a fieldless yes/no is a confirm, and a DESTRUCTIVE one wears
+          `.btnDanger` rather than the composer's black CTA (2026-09-17). Copy
+          matches `members-v2/tab-settings.tsx`: departure costs the whole
+          scoped container, not one channel. */}
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={canLeave ? `Leave ${homeChannel.name}?` : `Remove ${name}?`}
+        description={
+          canLeave
+            ? "You lose access to every knowledge base, skill and chat this container scoped to you, and are removed from its channels."
+            : "They lose access to every knowledge base, skill and chat this container scoped to them, and are removed from its channels."
+        }
+        confirmLabel={verb}
+        destructive
+        // ⚠ `mutateAsync`, so a refusal REJECTS and the dialog stays open.
+        onConfirm={() => write.mutateAsync(member.userId)}
+      />
     </>
   );
 }

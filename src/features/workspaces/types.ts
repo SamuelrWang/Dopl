@@ -393,14 +393,17 @@ export interface WorkspaceOverview {
  *
  * ⚠ FROZEN and shared: they reach render paths directly, so a caller that
  * pushed into one would be editing every other caller's fallback.
+ *
+ * ⚠ **`EMPTY_WORKSPACE_CHANNEL_USAGE` CARRIES THE CONTAINER PREFIX BECAUSE IT
+ * IS NOT INTERCHANGEABLE WITH /home's `EMPTY_CHANNEL_USAGE`** — that row is
+ * keyed `workspaceId`, this one `channelId`. The person and tool fallbacks had
+ * no such difference and were a second symbol under the SAME name; they are
+ * `home/overview-types.ts`'s now, and only there.
  */
 export const EMPTY_OVERVIEW_AGENTS: readonly OverviewAgentRow[] =
   Object.freeze([]);
-export const EMPTY_CHANNEL_USAGE: readonly WorkspaceChannelUsage[] =
+export const EMPTY_WORKSPACE_CHANNEL_USAGE: readonly WorkspaceChannelUsage[] =
   Object.freeze([]);
-export const EMPTY_PERSON_USAGE: readonly WorkspacePersonUsage[] =
-  Object.freeze([]);
-export const EMPTY_TOOL_USAGE: readonly WorkspaceToolUsage[] = Object.freeze([]);
 export const EMPTY_SERIES_DAYS: readonly OverviewSeriesPoint[] =
   Object.freeze([]);
 

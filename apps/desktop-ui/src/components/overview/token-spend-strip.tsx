@@ -30,6 +30,14 @@
  * The workspace Overview draws the same strip over its own container's rows.
  */
 
+import { formatTokens } from "@/shared/lib/format-tokens";
+
+// ⚠ RE-EXPORTED so `pages/home/overview-token-spend.tsx`'s shim keeps its shape.
+// The declaration moved to `src/shared/` on 2026-09-17: the channels Agents tab
+// held a second one that rounded to NEAREST, and this file's floor is the one
+// the honesty line above depends on.
+export { formatTokens };
+
 /** ONE ENTRY PER RUN, newest first, and no days in it. ⚠ Mirrors the server's
  *  report shape; the desktop UI cannot import server types. */
 export interface TokenSpendReport {
@@ -159,12 +167,4 @@ export function bucketByLocalDay(
     runs += 1;
   }
   return { byDay, total, runs };
-}
-
-/** ⚠ ROUNDED FOR DISPLAY ONLY, and never up: the underlying figure is already a
- *  floor, so rounding up here would turn an under-count into an over-claim. */
-export function formatTokens(tokens: number): string {
-  if (tokens >= 1_000_000) return `${Math.floor(tokens / 100_000) / 10}M`;
-  if (tokens >= 1_000) return `${Math.floor(tokens / 1_000)}k`;
-  return String(tokens);
 }

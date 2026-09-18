@@ -284,6 +284,12 @@ export interface HomeOverview {
  *
  * ⚠ FROZEN and shared: they reach render paths directly, so a caller that
  * pushed into one would be editing every other caller's fallback.
+ *
+ * ⚠ **`EMPTY_PERSON_USAGE` AND `EMPTY_TOOL_USAGE` ARE THE WORKSPACE OVERVIEW'S
+ * TOO** (2026-09-17) — `workspaces/types.ts` declared a second symbol under
+ * each of those names, so one name resolved to two objects by import specifier.
+ * Its CHANNEL fallback stays its own as `EMPTY_WORKSPACE_CHANNEL_USAGE`: that
+ * row is keyed `channelId`, this one `workspaceId`.
  */
 export const EMPTY_SERIES: readonly HomeSeriesPoint[] = Object.freeze([]);
 export const EMPTY_CHANNEL_USAGE: readonly HomeChannelUsage[] = Object.freeze([]);

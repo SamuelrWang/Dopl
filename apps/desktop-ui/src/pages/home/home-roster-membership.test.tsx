@@ -2,6 +2,7 @@ import { fireEvent, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import { USER_ID, installBridge, noContent, ok } from "#/test-utils/bridge";
+import confirmStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import type { Channel, ChannelMember } from "@/features/channels/types";
 import type { Role } from "@/features/workspaces/types";
 import {
@@ -180,6 +181,47 @@ describe("the write", () => {
             (call[1] as BridgeRequestOpts | undefined)?.method === "DELETE"
         )
       ).toBe(true);
+    });
+  });
+
+  /**
+   * 🔒 **A DESTRUCTIVE CONFIRM IS `ConfirmDialog`** (2026-09-17). It was a
+   * fieldless `FormDialog`, against `shared/ui/form-dialog.tsx`'s own rule.
+   *
+   * ⚠ MEASURED, 1 revert (back to `FormDialog`): 2 red. A third case — "a
+   * refused DELETE leaves the dialog open to retry" — was written and DROPPED
+   * as vacuous: the `FormDialog` copy closed from the SUCCESS callback, so it
+   * stayed open on a refusal too. Neither spelling shows an error state.
+   */
+  describe("the confirm is the destructive one", () => {
+    it("wears the DANGER face, not the composer's affirmative CTA", async () => {
+      serve(atRole("owner"));
+      renderHome();
+      await openRoster();
+
+      fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+      const dialog = await screen.findByRole("dialog", { name: /Remove Priya Shah/ });
+      const confirm = screen
+        .getAllByRole("button", { name: "Remove" })
+        .find((b) => dialog.contains(b))!;
+      // ⚠ The MODULE's own class, imported here, so the assertion survives the
+      // hashed name. `.btnConfirm` is the affirmative face and must not be it.
+      expect(confirm.className).toContain(confirmStyles.btnDanger);
+      expect(confirm.className).not.toContain(confirmStyles.btnConfirm);
+    });
+
+    it("says what departure ACTUALLY costs — not 'this channel'", async () => {
+      serve(atRole("owner"));
+      renderHome();
+      await openRoster();
+
+      fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+      const dialog = await screen.findByRole("dialog", { name: /Remove Priya Shah/ });
+      // The container's whole scoped shelf goes, and its channels with it —
+      // `members-v2/tab-settings.tsx` is where that sentence is canonical.
+      expect(dialog.textContent).toContain("knowledge base");
+      expect(dialog.textContent).toContain("channels");
+      expect(dialog.textContent).not.toContain("lose access to this channel");
     });
   });
 

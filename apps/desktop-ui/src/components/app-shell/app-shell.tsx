@@ -117,12 +117,11 @@ export function AppShellLayout() {
    * because the effect above already owns it: any two of these firing in one
    * tick would race two `replace`s over one history entry.
    *
-   * ⚠ POSITIVE KIND CHECK (INVARIANTS §4A, F-295): `isStandardWorkspace` is THE
-   * predicate. A hand `kind !== "link"` admits every kind added to the union
-   * later — the coordinated flip that check exists to stop.
+   * ⚠ POSITIVE KIND CHECK (INVARIANTS §4A, F-295), as `pages/home/home-rows.ts`
+   * already spells it: `=== "link"`, so a kind added to the union later is
+   * EXCLUDED rather than bounced out of the shell (2026-09-17).
    */
-  const isContainerMember =
-    !!workspace && workspace.kind !== "personal" && !isStandardWorkspace(workspace);
+  const isContainerMember = !!workspace && workspace.kind === "link";
   const leavesShell = role === "guest" || isContainerMember;
   const containerChannelId = useApiQuery<ChannelListPayload, string | null>(
     channelsPath(),

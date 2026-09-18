@@ -47,10 +47,10 @@ import { AppShellLayout } from "./index";
  *   KIND. Re-measured:
  *   the gate narrowed back to `role === "guest"` ................. 3 red
  *   the ghost dropped over the redirect window .................... 1 red
- *   `!isStandardWorkspace` flipped to `kind === "link"` .......... 0 red,
- *   recorded rather than papered over — the union has no fourth kind to catch
- *   it with, which is why `check-role-drift.ts › checkWorkspaceKind` holds the
- *   positive form and not a test here.
+ *   ⚠ **THAT ROW IS NOW THE OTHER WAY UP AGAIN (2026-09-17).** The gate WAS
+ *   `kind !== "personal" && !isStandardWorkspace(…)` and is now
+ *   `kind === "link"`; the negative spelling admitted every future kind, and
+ *   "a FOURTH container kind" below is the fixture that catches it — 1 red.
  *   - `?? []` dropped from the `select` .......................... **0 red**,
  *     and that is recorded rather than papered over. A throwing `select` puts
  *     the query in an ERROR state, which lands on the same `/home` the absent
@@ -355,6 +355,34 @@ describe("the shell sends a container member to their channel", () => {
       sendRequest.mock.calls.some(
         (c: unknown[]) =>
           isAccountChannels((c[0] as { path?: string })?.path ?? "")
+      )
+    ).toBe(false);
+    expect(router.state.location.pathname).toBe(`/${SEGMENT}/overview`);
+  });
+
+  /** 🔒 THE POSITIVE FORM, AND THE CASE NO EXISTING KIND COULD MAKE (2026-09-17).
+   *  The gate was `kind !== "personal" && !isStandardWorkspace(…)` — "not
+   *  personal and not standard" — so every kind added to `WorkspaceKind` later
+   *  would be ADMITTED and its members bounced out of the shell into a
+   *  single-channel redirect. `kind === "link"` excludes an unknown kind by
+   *  construction. The row is deliberately a kind the union does not have: that
+   *  is the only shape of fixture that can tell the two spellings apart. */
+  it("does NOT bounce a FOURTH container kind out of the shell", async () => {
+    role = "owner";
+    workspaceRow = { ...CONTAINER, kind: "archive" };
+    const router = renderShell(`/${SEGMENT}/overview`);
+
+    expect(await screen.findByText("overview body")).toBeTruthy();
+    // ⚠ THE UNASKED QUESTION AGAIN — "still on /overview" alone stays green
+    // under the broken gate, because the redirect needs a round trip.
+    await waitFor(() =>
+      expect(sendRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ path: "/api/workspaces" })
+      )
+    );
+    expect(
+      sendRequest.mock.calls.some((c: unknown[]) =>
+        isAccountChannels((c[0] as { path?: string })?.path ?? "")
       )
     ).toBe(false);
     expect(router.state.location.pathname).toBe(`/${SEGMENT}/overview`);

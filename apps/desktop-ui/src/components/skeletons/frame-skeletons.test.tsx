@@ -267,7 +267,12 @@ describe("the /home shapes are /home's own geometry", () => {
    *  now, and the bar's card is `"bento p-3.5"` on both sides. */
   it("ghosts the face the page actually opens on", () => {
     expect(HOME_DEFAULT_TAB).toBe("overview");
-    const panels = file("../../pages/home/overview-panels.tsx");
+    // ⚠ The rail ghost MOVED to `#/components/overview/rank-rail.tsx ›
+    // RailsGhost` on 2026-09-17 (both Overviews had a byte-identical copy), so
+    // its card size is pinned against THAT file — the scan stays bidirectional.
+    const panels =
+      file("../../pages/home/overview-panels.tsx") +
+      file("../overview/rank-rail.tsx");
     for (const shared of [
       '"bento p-3.5"',
       '"bento flex flex-col p-3.5"',

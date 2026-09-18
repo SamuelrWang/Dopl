@@ -109,21 +109,23 @@ const FENCE_SITES: Record<string, string> = {
 
 /**
  * 🔒 **A FENCE WITH NO SENTENCE TO BRANCH (2026-09-17, wave 5 / R-01(a)).**
- * `FENCE_SITES`' third assertion reads a site's MESSAGE and requires it to
- * branch on the kind. A REDIRECT says nothing: `AppShellLayout` sends a member
- * of a non-standard container to their channel record, with no copy in the path.
+ * `FENCE_SITES`' assertion reads a site's MESSAGE and requires it to branch on
+ * the kind. A REDIRECT says nothing, so such a site is declared here instead.
  *
  * ⚠ **DECLARED SEPARATELY RATHER THAN EXEMPTED**, and the two maps are
  * non-interchangeable in BOTH directions — a FENCE site must carry
  * `kind === "link"`, a SILENT one must not — so a site with a sentence cannot be
  * parked here to dodge the message assertion.
+ *
+ * ⚠ **EMPTY SINCE 2026-09-17, AND THE EMPTYING IS THE RECORD.** Its one entry was
+ * `app-shell.tsx`, whose `leavesShell` read `kind !== "personal" && !isStandardWorkspace(...)`
+ * — "not personal AND not standard", which ADMITS every kind added to `WorkspaceKind`
+ * later and bounces those members out of the shell. Final review replaced it with
+ * the positive `kind === "link"`, so the file is no longer a negation site at all
+ * and left `FOUND`. This map's emptiness is a gate that can only pass, and it stays
+ * only because the next silent fence has a documented home; delete it if none arrives.
  */
-const SILENT_FENCE_SITES: Record<string, string> = {
-  "apps/desktop-ui/src/components/app-shell/app-shell.tsx":
-    "R-01(a) (2026-09-17) — CLOSED: the shell redirects every member of a non-standard " +
-    "container and renders no nav; the refusal is a REDIRECT, so there is no message to " +
-    "branch on the kind",
-};
+const SILENT_FENCE_SITES: Record<string, string> = {};
 
 /** ⚠ `OPEN_SITES` EMPTIED; the declaration is the two fence maps. */
 const DECLARED = { ...FENCE_SITES, ...SILENT_FENCE_SITES };

@@ -14,6 +14,7 @@ import {
   EMPTY_TOOL_USAGE,
   HOME_OVERVIEW_DEFAULT_METRIC,
   HOME_OVERVIEW_DEFAULT_RANGE,
+  type HomeChannelUsage,
   type HomeOverview,
   type HomeOverviewSeries,
 } from "@/features/home/overview-types";
@@ -21,13 +22,15 @@ import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError } from "#/components/page-states";
 import { openHomeSettings } from "./home-settings-control";
 import { CreditCapacityBar, UsageChart } from "./overview-sections";
-import { ClippedNote } from "#/components/overview/rank-rail";
 import {
+  ChannelCreditRail,
   ChannelMessageRail,
-  ChannelRail,
+  ClippedNote,
   PeopleRail,
+  RailsGhost,
   ToolRail,
-} from "./overview-rails";
+  type RankRow,
+} from "#/components/overview/rank-rail";
 import {
   MonthStepper,
   USAGE_SCOPE_ALL,
@@ -158,7 +161,7 @@ export function HomeOverviewPanels({
             `.bento`, the histogram in a second, `gap-3` between them, and ONE
             well behind both. It was a single card holding the two stacked.
             ⚠ **THE `.bento` IS THE SAME RECIPE THE RAIL CARDS WEAR**
-            (`overview-rails.tsx › RailCard`) and the gap is the rails' grid gap,
+            (`rank-rail.tsx › RailCard`) and the gap is the rails' grid gap,
             so the panels layer and space identically by construction rather than
             by class strings that happen to agree today.
             ⚠ **NOTHING ELSE IN THE PANEL** — the bar card, then the histogram
@@ -194,8 +197,18 @@ export function HomeOverviewPanels({
           {data ? (
             <div className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-3">
-                <ChannelRail rows={data.channels ?? EMPTY_CHANNEL_USAGE} />
-                <ChannelMessageRail rows={data.channels ?? EMPTY_CHANNEL_USAGE} />
+                <ChannelCreditRail
+                  rows={channelRows(
+                    data.channels ?? EMPTY_CHANNEL_USAGE,
+                    (row) => row.credits
+                  )}
+                />
+                <ChannelMessageRail
+                  rows={channelRows(
+                    data.channels ?? EMPTY_CHANNEL_USAGE,
+                    (row) => row.messages
+                  )}
+                />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <PeopleRail rows={data.people ?? EMPTY_PERSON_USAGE} />
@@ -267,7 +280,7 @@ function UsageCard({ homeWorkspaceId }: { homeWorkspaceId: string | null }) {
   return (
     <div className="flex flex-col gap-3">
       {/* ⚠ **THE `.bento` RECIPE AND THE `gap-3`, BOTH BY MATCH AND NOT BY
-          TASTE**: the card is what `overview-rails.tsx › RailCard` and
+          TASTE**: the card is what `rank-rail.tsx › RailCard` and
           `overview-token-spend.tsx › TokenSpendPanel` wear, and the gap is the
           one the 2×2 rail grid uses — so the three panels on this face layer and
           space identically by construction. */}
@@ -375,12 +388,16 @@ function CreditsBar({
   );
 }
 
-function RailsGhost() {
-  return (
-    <div className="grid grid-cols-2 gap-3">
-      {Array.from({ length: 4 }).map((_, index) => (
-        <Skeleton key={index} className="h-40 rounded-[14px]" />
-      ))}
-    </div>
-  );
+/** ⚠ **THE ID KEY IS THIS PAGE'S** — /home addresses a channel by
+ *  `workspaceId`, a workspace by `channelId`, which is why the shared rail takes
+ *  `RankRow`s and not a key flag. */
+function channelRows(
+  rows: readonly HomeChannelUsage[],
+  value: (row: HomeChannelUsage) => number
+): RankRow[] {
+  return rows.map((row) => ({
+    id: row.workspaceId,
+    name: row.name,
+    value: value(row),
+  }));
 }
