@@ -27,11 +27,12 @@
 
 import { Bot, Calendar, Hash, Radio, UserRound, Users } from "lucide-react";
 import { AvatarWithPresence } from "@/shared/ui/avatar-with-presence";
-import { formatShortDate } from "@/shared/lib/format-time";
+import { formatDate } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
 import { THREAD_MODE_LABELS } from "../constants";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import type { ChannelPeerSession } from "../hooks/use-channel-agent-sessions";
+import { CREATED_ROW_LABEL } from "../lib/channel-display";
 import type { ChannelMember, ChannelThread } from "../types";
 import { MetaRow, MetaRowDivider, PanelHeading } from "./bits";
 import { AgentLiveness } from "./agent-bits";
@@ -97,9 +98,22 @@ export function ThreadInfoTab({
           </span>
         </MetaRow>
         <MetaRowDivider />
-        <MetaRow icon={Calendar} label="Date of creation">
+        {/* ⚠ **"Created" + `formatDate` — THE SAME ROW THE TWO CHANNEL BODIES
+            READ (Samuel, 2026-09-17, extending his ruling R-20 to the thread on
+            F-722's ask).** This row said **"Date of creation"** with
+            `formatShortDate` while the channel bodies said "Created" with
+            `formatDate`, one selection away in the same column, with the same
+            `Calendar` glyph — R-20 closed a channel-vs-home split and left a
+            channel-vs-thread one, which is what F-722 recorded rather than swept.
+            ⚠ **THE CONSTANT IS IMPORTED, NOT RETYPED** (`channel-display.ts ›
+            CREATED_ROW_LABEL`): two literals is exactly how the first divergence
+            happened. ⚠ **THE FORMATTER KEEPS THE YEAR** — `formatShortDate` drops
+            it, and on a creation date that is the component that matters.
+            ⚠ **THE SOURCE IS STILL THIS OBJECT'S OWN** (`thread.createdAt`); the
+            label and the formatter are shared, the row is not. */}
+        <MetaRow icon={Calendar} label={CREATED_ROW_LABEL}>
           <span className="text-body text-text-primary">
-            {formatShortDate(thread.createdAt)}
+            {formatDate(thread.createdAt)}
           </span>
         </MetaRow>
       </div>

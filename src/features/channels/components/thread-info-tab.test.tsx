@@ -23,7 +23,9 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import { formatDate } from "@/shared/lib/format-time";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import { CREATED_ROW_LABEL } from "../lib/channel-display";
 import type { ChannelPeerSession } from "../hooks/use-channel-agent-sessions";
 import { ThreadInfoTab } from "./thread-info-tab";
 import { CHANNEL_ID, ME, PEER, member, thread } from "./test-fixtures";
@@ -98,7 +100,26 @@ describe("the thread's own facts", () => {
     renderTab();
     expect(screen.getByText("UI-kit design")).toBeTruthy();
     expect(screen.getByText("Interactive")).toBeTruthy();
-    expect(screen.getByText("Aug 17")).toBeTruthy();
+    expect(screen.getByText("Aug 17, 2026")).toBeTruthy();
+  });
+
+  /**
+   * ⚠ **THE CREATED ROW IS SPELLED AND FORMATTED LIKE THE CHANNEL BODIES'**
+   * (Samuel, 2026-09-17, extending R-20 on F-722's ask). It said "Date of
+   * creation" + `formatShortDate` here while the two channel bodies said
+   * "Created" + `formatDate` — one selection away in the same column. Pinned on
+   * BOTH halves because either one drifting back is the same defect: the LABEL
+   * comes from `channel-display.ts › CREATED_ROW_LABEL` (a second literal is how
+   * the first divergence happened) and the FORMATTER keeps the YEAR, which on a
+   * creation date is the component that matters.
+   */
+  it("🔒 reads CREATED_ROW_LABEL and keeps the year", () => {
+    renderTab();
+    expect(screen.getByText(CREATED_ROW_LABEL)).toBeTruthy();
+    expect(screen.queryByText("Date of creation")).toBeNull();
+    // `formatShortDate`'s face — the year dropped — must not be what renders.
+    expect(screen.queryByText("Aug 17")).toBeNull();
+    expect(screen.getByText(formatDate(thread().createdAt))).toBeTruthy();
   });
 
   it("says AUTONOMOUS for an autonomous thread", () => {

@@ -32,12 +32,16 @@ import type { Channel, ChannelDirectPeer, ChannelMember } from "../types";
  * which on a creation date is the one component that matters; it is still the
  * right answer for recency stamps, and nothing else about it changed.
  *
- * ⚠ **THE THREAD INFO TAB IS NOT COVERED AND STILL SAYS "Date of creation" +
- * `formatShortDate`** (`components/thread-info-tab.tsx`). R-20 ruled on the two
- * CHANNEL bodies, and a thread's created row is a different row about a different
- * object — so it is left alone rather than swept, and recorded as **F-722** rather
- * than accepted silently. ⚠ Do NOT import this constant there to "fix" it; that is
- * a copy decision Samuel has not made.
+ * ⚠ **THE THREAD INFO TAB READS THIS CONSTANT TOO SINCE 2026-09-17, AND ONLY
+ * BECAUSE SAMUEL RULED IT DOES** (`components/thread-info-tab.tsx`). R-20 ruled on
+ * the two CHANNEL bodies alone, so the thread's row — same column, one selection
+ * away, same `Calendar` glyph — was left saying "Date of creation" with
+ * `formatShortDate` and recorded as **F-722** rather than swept. Samuel answered
+ * F-722 **yes** on 2026-09-17: the thread row takes "Created" + `formatDate` as
+ * well. ⚠ **THE PROCESS IS THE POINT, NOT THE OUTCOME** — extending a ruling to a
+ * surface it did not name is the failure the visual-match rules exist to prevent,
+ * so the third importer arrived through a ticket and a word, never through a
+ * sweep. A FOURTH surface needs the same, not this precedent.
  *
  * ⚠ **THE SOURCE IS STILL THE HOST'S** (`channel.createdAt` vs
  * `homeChannel.createdAt` — the same column, projected twice); collapsing that is
