@@ -90,9 +90,11 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
     const ctx = buildKnowledgeContext(auth);
     const shelf = readShelf(request);
     const bases = await listBases(ctx, { shelf });
-    // Does this container lend into CHANNELS at all? A home/personal container
-    // does; a standard workspace does not (Samuel's ruling 2026-09-17).
-    const channelScoped = !isStandardWorkspace({ kind: auth.workspaceKind });
+    // 🔒 A STANDARD workspace does not lend into CHANNELS at all (Samuel's
+    // ruling 2026-09-17); a home or personal container does. ⚠ Named and asked
+    // POSITIVELY — the negation shape is what `workspaces/
+    // home-channel-derivation.test.ts` (F-564) keeps out of this tree.
+    const workspaceScoped = isStandardWorkspace({ kind: auth.workspaceKind });
     // ⚠ Attribution and counters are cosmetic; the base list is not. A profiles/entries hiccup
     // degrades to no names / no stats, never a 500 (`kb_list_bases` over MCP rides this route).
     const [
@@ -126,12 +128,12 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
         // may wear a `Shared` pill bought by one. The read is SKIPPED, not
         // filtered: the rows are ignored everywhere else too, and asking would
         // spend a query to learn something already decided.
-        channelScoped
-          ? listSharedIntoChannelBaseIds(
+        workspaceScoped
+          ? Promise.resolve([] as string[])
+          : listSharedIntoChannelBaseIds(
               ctx.workspaceId,
               bases.map((b) => b.id)
-            ).catch(() => [] as string[])
-          : Promise.resolve([] as string[]),
+            ).catch(() => [] as string[]),
         // ⚠ SAME `[]` DEGRADE as its siblings, and the direction is the display
         // gap rather than the leak: an unreadable flag leaves every card
         // UNMARKED, which is what shipped before this key existed. A pin decides
@@ -175,7 +177,7 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
     // ⚠ **AFTER THE FENCE, NOT BEFORE IT.** Skipping `isChannelVisibleTo` would
     // make a bad `channelId` answer 200 in one container kind and 404 in
     // another — a cheaper oracle than the one the fence exists to close.
-    if (!channelScoped) {
+    if (workspaceScoped) {
       return NextResponse.json(base);
     }
 

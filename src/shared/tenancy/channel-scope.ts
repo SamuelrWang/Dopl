@@ -111,7 +111,13 @@ export async function channelScopeAllowedInContainer(
 ): Promise<boolean> {
   const kind = await containerKind(workspaceId);
   if (kind === null) return false;
-  return !isStandardWorkspace({ kind });
+  // 🔒 **A POSITIVE TEST OF THE KIND THE RULING NAMES, AND THE `if` SPELLING IS
+  // PART OF IT** (F-564, `workspaces/home-channel-derivation.test.ts`). A
+  // `return !isStandardWorkspace(…)` is the negation shape that census exists to
+  // keep out of the tree: it reads as "derive home-ness from not-standard-ness",
+  // where what this actually says is "a STANDARD workspace refuses".
+  if (isStandardWorkspace({ kind })) return false;
+  return true;
 }
 
 /** The write-door half: {@link channelScopeAllowedInContainer} or the refusal. */
