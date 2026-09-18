@@ -1,11 +1,15 @@
 /**
  * The agent audience ceiling — layer A (plan §4.2/§4.3), the fence half. Two
- * halves: `resolveAgentAudience` as a decision table (the three `unrestricted`
+ * halves: `resolveAgentAudience` as a decision table (the `unrestricted`
  * branches cost the queries they should and no more, an unreadable member count
- * fails CLOSED, an unknown workspace kind is NOT narrowed, and the
- * `X-Dopl-Session-Id` narrowing may only pick inside the DB-derived set), and
- * the three foundational lookups in `service-bases.ts` driven for real, so
- * deleting the wiring goes red.
+ * AND an unrecognised kind both fail CLOSED, and the `X-Dopl-Session-Id`
+ * narrowing may only pick inside the DB-derived set), and the three foundational
+ * lookups in `service-bases.ts` driven for real, so deleting the wiring goes red.
+ *
+ * ⚠ **THE POLARITY CASES BELOW WERE INVERTED ON 2026-09-18 (F-718).** They used
+ * to assert that a member count of `0` and an unknown kind answered
+ * `unrestricted`; Samuel ruled both fail closed, and the arms they assert now
+ * are the ones the ruling names.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -98,37 +102,87 @@ describe("resolveAgentAudience — the three unrestricted branches", () => {
     expect(mockGrants).not.toHaveBeenCalled();
   });
 
-  it("an agent in a STANDARD workspace is unrestricted and costs ONE read", async () => {
+  it("a SOLO agent in a STANDARD workspace is unrestricted and costs ONE read", async () => {
     mockKind.mockResolvedValue("standard");
+    mockCount.mockResolvedValue(1);
 
     expect(await resolveAgentAudience(ctx())).toEqual({ kind: "unrestricted" });
     expect(mockKind).toHaveBeenCalledTimes(1);
+    // The kind answers it outright — a standard workspace has no channel grant
+    // arm to narrow to, so the count is never asked for.
     expect(mockCount).not.toHaveBeenCalled();
   });
 
-  it("an UNKNOWN future workspace kind is NOT narrowed", async () => {
-    // The listing predicate `isStandardWorkspace` is positive on purpose
-    // (§4A/F-295); the ceiling must answer NO for a kind nobody has designed yet
-    // rather than fencing it on a guess.
-    mockKind.mockResolvedValue("archive");
+  it("🔒 a SHARED standard workspace is unrestricted and NEVER reads the grant arm (F-718)", async () => {
+    // Samuel's 2026-09-18 ruling: in a standard workspace the agent audience
+    // follows the WORKSPACE-WIDE + TEAMS visibility, so the ceiling adds nothing
+    // of its own. Taking the grant arm here would answer `granted` with an
+    // EMPTY set — the scope ruling refuses a channel grant in a standard
+    // container, so none can exist — and blank every colleague's agent.
+    mockKind.mockResolvedValue("standard");
+    mockCount.mockResolvedValue(9);
 
     expect(await resolveAgentAudience(ctx())).toEqual({ kind: "unrestricted" });
-    expect(mockCount).not.toHaveBeenCalled();
+    expect(mockChannels).not.toHaveBeenCalled();
+    expect(mockGrants).not.toHaveBeenCalled();
+  });
+
+  it("a PERSONAL container — one member — is unrestricted", async () => {
+    mockKind.mockResolvedValue("personal");
+    mockCount.mockResolvedValue(1);
+
+    expect(await resolveAgentAudience(ctx())).toEqual({ kind: "unrestricted" });
+    expect(mockGrants).not.toHaveBeenCalled();
   });
 
   it("a workspace row that has VANISHED is unrestricted, not a spurious 404", async () => {
+    // `channelScopeAllowedForKind(null)` is `false`, the same reading the write
+    // door takes: a row that is gone is not evidence that channel scope applies.
     mockKind.mockResolvedValue(null);
 
     expect(await resolveAgentAudience(ctx())).toEqual({ kind: "unrestricted" });
+    expect(mockCount).not.toHaveBeenCalled();
   });
 
-  it("a SOLO container is unrestricted — today's behaviour, untouched", async () => {
+  it("a SOLO link container is unrestricted — today's behaviour, untouched", async () => {
     mockKind.mockResolvedValue("link");
     mockCount.mockResolvedValue(1);
 
     expect(await resolveAgentAudience(ctx())).toEqual({ kind: "unrestricted" });
     expect(mockChannels).not.toHaveBeenCalled();
     expect(mockGrants).not.toHaveBeenCalled();
+  });
+});
+
+describe("resolveAgentAudience — the two unknowns, both fail CLOSED (F-718)", () => {
+  it("🔒 an UNRECOGNISED future kind is NARROWED, not admitted", async () => {
+    // The retired `kind !== "link"` admitted every kind added to the union
+    // after `link` (F-295/F-564). `channelScopeAllowedForKind` asks POSITIVELY:
+    // not standard ⇒ channel scope applies ⇒ a shared room is bounded.
+    mockKind.mockResolvedValue("archive");
+    mockCount.mockResolvedValue(4);
+    mockChannels.mockResolvedValue([CHANNEL_A]);
+    mockGrants.mockResolvedValue([]);
+
+    const audience = await resolveAgentAudience(ctx());
+
+    expect(audience.kind).toBe("granted");
+    expect(audienceAdmits(audience, "kb-anything")).toBe(false);
+  });
+
+  it("🔒 a member count of ZERO is NOT solo — the direction that leaked", async () => {
+    // A roster race or a `status` flip mid-request reads `0`. The retired
+    // `memberCount !== null && memberCount <= 1` took the UNRESTRICTED arm on
+    // it; `isSharedRoom` treats only an exact `1` as solo.
+    mockKind.mockResolvedValue("link");
+    mockCount.mockResolvedValue(0);
+    mockChannels.mockResolvedValue([CHANNEL_A]);
+    mockGrants.mockResolvedValue([]);
+
+    const audience = await resolveAgentAudience(ctx());
+
+    expect(audience.kind).toBe("granted");
+    expect(audienceAdmits(audience, "kb-anything")).toBe(false);
   });
 });
 
@@ -309,5 +363,26 @@ describe("the ceiling is WIRED into the foundational lookups", () => {
     const bases = await listBases(ctx());
 
     expect(bases.map((b) => b.id)).toEqual(["kb-granted", "kb-private"]);
+  });
+
+  it("🔒 an agent in a SHARED standard workspace sees what its MEMBER sees (F-718)", async () => {
+    // The ruling's outcome, driven through the real lookup rather than asserted
+    // on the audience shape: the set is non-empty and it is the same set the
+    // human on the same workspace gets. `base()` is workspace-mode and public,
+    // so `canSeeBase` + `filterTeamVisibleBases` admit both rows and whatever
+    // survives is the ceiling's doing.
+    mockKind.mockResolvedValue("standard");
+    mockCount.mockResolvedValue(2);
+    mockRepo.listBasesForWorkspace.mockResolvedValue([
+      base("kb-one"),
+      base("kb-two"),
+    ]);
+
+    const agentBases = await listBases(ctx());
+    const humanBases = await listBases(ctx({ source: "user" }));
+
+    expect(agentBases.map((b) => b.id)).toEqual(["kb-one", "kb-two"]);
+    expect(agentBases.map((b) => b.id)).toEqual(humanBases.map((b) => b.id));
+    expect(mockGrants).not.toHaveBeenCalled();
   });
 });

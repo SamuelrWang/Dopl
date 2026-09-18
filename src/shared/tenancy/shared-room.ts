@@ -20,11 +20,15 @@
  * one term: `0`, `null` and `undefined` are the unknown, and only an exact `1`
  * is solo.
  *
- * ⚠ **THE RE-EXPORTS ARE THE ONLY OTHER SPELLING IN `src/`.**
+ * ⚠ **THERE IS NO OTHER SPELLING IN `src/`.**
  * `features/channels/lib/tool-profile-resolve.ts › isSharedChannel` is this
  * function under its channel-shaped name, kept so no importer moved when the
- * body came here; `features/workspaces/server/shared-publish.ts` calls this one
- * directly.
+ * body came here; `features/workspaces/server/shared-publish.ts` and, since
+ * 2026-09-18 (F-718), BOTH audience ceilings —
+ * `features/knowledge/server/service-audience.ts › resolveAgentAudience` and
+ * `features/ontology/server/service-audience.ts › computeAudience`'s `solo` —
+ * call this one directly. ⚠ **Re-derive the callers, never quote them:
+ * `grep -rn isSharedRoom src`.**
  *
  * ⚠ **AND `packages/mcp-server/src/shared-room.ts` IS A HAND MIRROR, BECAUSE
  * `packages/` CANNOT IMPORT `src/`** and `@dopl/contracts` is type-only (it

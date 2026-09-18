@@ -1,7 +1,6 @@
 import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
 import { isSharedCredential } from "@/shared/auth/credential-audience";
-import { isStandardWorkspace } from "@/features/workspaces/types";
 import {
   CONTAINER_ONLY_SEARCH_GROUPS,
   SEARCH_GROUP_ORDER,
@@ -42,8 +41,11 @@ import { assembleGroups, type SearchLabels } from "./service-groups";
  * Three rules that fail quietly:
  * 1. Home scope never TOUCHES members / skills / chats — an absence, so
  *    `service.test.ts` asserts the repositories were not called.
- * 2. Container scope gates those three on `kind='standard'` too, via
- *    `isStandardWorkspace` (INVARIANTS §4A, F-295 — the positive form).
+ * 2. Container scope gates those three on `kind === "standard"` too — asked
+ *    POSITIVELY of the RAW column, never through `isStandardWorkspace`
+ *    (F-729, 2026-09-18). That predicate reads an absent kind AS standard,
+ *    which is fail-closed where `standard` denies and fail-OPEN here, where
+ *    `standard` is what unlocks the three groups.
  * 3. A shared credential loses every own-row arm: `isSharedCredential` collapses
  *    `ownerUserId` to `null` before any visibility clause is written.
  */
@@ -112,7 +114,10 @@ export async function runSearch(
     containerNameById: new Map(reach.containers.map((c) => [c.id, c.name])),
   };
   const standard =
-    reach.containers.length === 1 && isStandardWorkspace(reach.containers[0]);
+    reach.containers.length === 1 &&
+    // F-729: `=== "standard"` of the raw column. An unknown or absent kind
+    // offers no container-only group rather than every one of them.
+    reach.containers[0]?.kind === "standard";
   return {
     q,
     scope: input.scope,
@@ -176,15 +181,18 @@ async function runGroupReads(
 
   // Rules 1 and 2: an early return, not a filter on the results, because what
   // must be true is that the queries did not happen.
-  // F-564: the POSITIVE form. `!isStandardWorkspace(x)` means "not the listing
-  // kind", not "therefore a home channel", and there are three kinds — asking
-  // positively makes a fourth kind inherit the refusal rather than opt into it.
+  // F-564: the POSITIVE form. "Not the listing kind" is not "therefore a home
+  // channel", and there are three kinds — asking positively makes a fourth kind
+  // inherit the refusal rather than opt into it.
+  // F-729: and it asks the RAW column, not `isStandardWorkspace`, which reads an
+  // ABSENT kind as standard. Here that is the permissive side, so `null` — a
+  // narrowed projection, a kind this build does not know — must refuse.
   const container = reach.containers[0];
   const servesContainerModules =
     scope === "container" &&
     reach.containers.length === 1 &&
     container !== undefined &&
-    isStandardWorkspace(container);
+    container.kind === "standard";
   if (!servesContainerModules || container === undefined) return byKind;
 
   const [members, skills, chats] = await Promise.all([

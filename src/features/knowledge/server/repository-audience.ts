@@ -24,11 +24,13 @@ import { GRANT_REACH_LIMIT } from "@/shared/tenancy/resource-grant-reach";
 /**
  * `workspaces.kind` for one workspace, or `null` when the row is gone.
  *
- * Returns the RAW column, not a predicate. `workspaces/types.ts ›
- * isStandardWorkspace` is the LISTING predicate (§4A/F-295); the ceiling asks
- * the opposite question — "is this specifically a link container" — and must
- * answer NO for an unknown future kind. Keeping the raw value states that choice
- * in the service rather than inheriting it from the other direction's helper.
+ * Returns the RAW column, not a predicate. The ceiling asks
+ * `shared/tenancy/channel-scope.ts › channelScopeAllowedForKind` of it, which is
+ * the ONE spelling of "is channel scope a thing in this container" and reads an
+ * absent kind as `standard` (F-718, 2026-09-18). ⚠ **AN UNRECOGNISED KIND IS NOT
+ * STANDARD AND THEREFORE NARROWS** — the reverse of what this docblock said
+ * while the service asked `kind !== "link"`. Keeping the raw value is what lets
+ * the service state that, instead of a `WorkspaceKind` cast here hiding it.
  */
 export async function findWorkspaceKind(
   db: SupabaseClient,
@@ -52,10 +54,11 @@ export async function findWorkspaceKind(
  * invited-but-unaccepted row is not a peer in the room, and counting one would
  * narrow a solo operator's own agent for a person who never arrived.
  *
- * The only threshold read off this number is solo-vs-not (`<= 1` in
- * `service-audience.ts`), and it must stay that way — a container has no member
- * cap (INVARIANTS §4A), so a comparison against any fixed number would invent a
- * limit the server does not have.
+ * The only threshold read off this number is solo-vs-not
+ * (`shared/tenancy/shared-room.ts › isSharedRoom`, whose `!== 1` makes `0` and
+ * an unreadable count SHARED), and it must stay that way — a container has no
+ * member cap (INVARIANTS §4A), so a comparison against any fixed number would
+ * invent a limit the server does not have.
  *
  * `head: true` + `count: "exact"`: only the number is needed. A `null` count is
  * reported as-is and the SERVICE decides what silence means.

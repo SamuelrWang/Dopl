@@ -171,6 +171,40 @@ describe("🔒 home scope never returns members / skills / chats", () => {
     ]);
     expect(queries.map((q) => q.table)).not.toContain("profiles");
   });
+
+  it("🔒 omits all three on an ABSENT kind — F-729, the polarity is inverted here", async () => {
+    // `standard` is the PERMISSIVE side in this feature, so the
+    // `(kind ?? "standard")` idiom that is fail-CLOSED everywhere else would
+    // serve the three container-only groups to a container whose kind nobody
+    // could read. Both halves of the fix are pinned by this one case: the
+    // repository carries `null` out, and the gate asks `=== "standard"` of it.
+    // Asserted as an ABSENCE of the QUERY, because what must be true is that it
+    // did not happen.
+    //
+    // ⚠ **THERE IS NO SECOND CASE FOR AN UNRECOGNISED KIND, AND THAT IS
+    // DELIBERATE.** `"archive"` is refused by the pre-fix spelling too
+    // (`isStandardWorkspace` only defaults an ABSENT kind), so such a case
+    // survives every mutation of this change and would be vacuous. The
+    // non-standard arm above is what covers a fourth kind.
+    const tables = world();
+    (tables.workspaces[0] as { kind: string | null }).kind = null;
+    const queries = mount(tables);
+
+    const out = await runSearch(CTX, {
+      q: "zephyr",
+      scope: "container",
+      container: WS_MINE,
+    });
+
+    const kinds = out.groups.map((g) => g.kind);
+    expect(kinds).not.toContain("members");
+    expect(kinds).not.toContain("skills");
+    expect(kinds).not.toContain("chats");
+    const touched = queries.map((q) => q.table);
+    expect(touched).not.toContain("profiles");
+    expect(touched).not.toContain("skills");
+    expect(touched).not.toContain("chats");
+  });
 });
 
 describe("🔒 a private row reaches only its owner", () => {

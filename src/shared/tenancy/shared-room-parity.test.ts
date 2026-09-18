@@ -83,15 +83,21 @@ describe("the two trees answer the same room the same way", () => {
  * it stopped using, and a census that failed on its own audit trail would be
  * paid for by deleting the audit trail.
  */
-const DEVIATIONS: ReadonlyArray<readonly [string, string]> = [
-  [
-    "src/features/knowledge/server/service-audience.ts",
-    "F-718 — the AGENT AUDIENCE CEILING asks the same conjunction and was " +
-      "deliberately NOT moved in wave 0a. It is a per-REQUEST bound with an " +
-      "`X-Dopl-Session-Id` narrowing input (F-524), not the room's own fact, " +
-      "and widening it is a product change that needs its own ruling.",
-  ],
-];
+/**
+ * 🔒 **EMPTY SINCE 2026-09-18, AND THE EMPTYING IS THE RECORD (F-718 RESOLVED).**
+ * Its one entry was `features/knowledge/server/service-audience.ts`, carried
+ * because the AGENT AUDIENCE CEILING is a per-REQUEST bound rather than the
+ * room's own fact and widening it needed its own ruling. Samuel ruled it
+ * fail-closed: the ceiling now asks `channel-scope.ts ›
+ * channelScopeAllowedForKind` and then {@link isSharedRoom}, so it deviates from
+ * nothing and the entry would be a licence over code that no longer needs one.
+ *
+ * ⚠ **THE TWO CASES BELOW STILL EARN THIS FILE WITH THE LIST EMPTY** — the scan
+ * fails on a NEW site, which is the half that matters now. The staleness case
+ * loops over nothing and is kept only so the next documented deviation has a
+ * home that already checks itself; delete both if none arrives.
+ */
+const DEVIATIONS: ReadonlyArray<readonly [string, string]> = [];
 
 const SCAN_ROOTS = ["src", "packages", "apps"];
 const SKIP_DIRS = new Set(["node_modules", "dist", ".next", "build"]);

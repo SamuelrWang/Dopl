@@ -209,6 +209,15 @@ describe("matrix — the OWNER'S OWN AGENT (Samuel's solo toggle, Q2)", () => {
     prime({ members: null });
     expect(await levelOf(agent(), cluster({ agents_may_edit: true }))).toBe("view");
   });
+
+  it("🔒 A COUNT OF ZERO IS NOT SOLO EITHER — F-718, the direction that leaked", async () => {
+    // The hand-spelled `memberCount !== null && memberCount <= 1` answered SOLO
+    // to a real `0` (a roster race, a `status` flip mid-request) and handed the
+    // toggle back. `shared-room.ts › isSharedRoom` treats only an exact `1` as
+    // solo, so the drop to `view` holds.
+    prime({ members: 0 });
+    expect(await levelOf(agent(), cluster({ agents_may_edit: true }))).toBe("view");
+  });
 });
 
 describe("the arms that are not matrix rows", () => {

@@ -34,7 +34,16 @@ export interface SearchChannelRef {
 export interface SearchContainerRef {
   id: string;
   name: string;
-  kind: WorkspaceKind;
+  /**
+   * 🔒 **THE RAW COLUMN, NULLABLE, AND NEVER DEFAULTED HERE (F-729, ruled
+   * fail-closed 2026-09-18).** Elsewhere an absent kind reads as `standard`
+   * (`isStandardWorkspace`, §4A/F-295) and that lands fail-CLOSED because
+   * `standard` is the DENYING side. In THIS feature it is the PERMISSIVE side —
+   * it is what unlocks the `members` / `skills` / `chats` groups — so the same
+   * default would be fail-OPEN. `service.ts` asks `=== "standard"` of this
+   * positively, and an unknown kind serves nothing.
+   */
+  kind: WorkspaceKind | null;
   /**
    * F-716 (2026-09-17): the caller's role in THIS container, off the membership
    * row that proved the reach. It rides the ref rather than the request because a
@@ -125,12 +134,10 @@ export async function loadSearchReach(
   ).map((row) => ({
     id: row.id,
     name: row.name,
-    // ⚠ Absent `kind` reads as standard per `isStandardWorkspace` (INVARIANTS
-    // §4A) — but in THIS feature `standard` is the PERMISSIVE side: it unlocks
-    // the three container-only groups. Unreachable (`workspaces.kind` is NOT NULL
-    // and named in the select), so the fallback is polarity debt, not a hole —
-    // F-729.
-    kind: (row.kind ?? "standard") as WorkspaceKind,
+    // ⚠ NO `?? "standard"` — see {@link SearchContainerRef.kind}. The polarity
+    // is inverted in this feature, so the unknown is carried out of the
+    // repository and refused at the gate rather than defaulted into serving.
+    kind: row.kind ?? null,
     role: roleById.get(row.id) ?? ("guest" as Role),
   }));
 

@@ -1,6 +1,7 @@
 import "server-only";
 import { isSharedCredential } from "@/shared/auth/credential-audience";
 import { personalShelfContainerIds } from "@/shared/tenancy/personal-reach";
+import { isSharedRoom } from "@/shared/tenancy/shared-room";
 import {
   meetsLevel,
   narrowerLevel,
@@ -80,8 +81,9 @@ export type OntologyAudience =
       /** The person this request acts as, or `null` for a credential standing
        *  for nobody in particular — which owns nothing and inherits nobody. */
       readonly userId: string | null;
-      /** ONE active member in the CALLING container. `false` when the count
-       *  could not be read: unknown is not the same as one. */
+      /** EXACTLY ONE active member in the CALLING container —
+       *  `!isSharedRoom(count)`. `false` for `0`, `null` and an unread count:
+       *  unknown is not the same as one. */
       readonly solo: boolean;
     };
 
@@ -210,8 +212,12 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
     ownerAgents,
     source: ctx.source,
     userId: ctx.userId,
-    // Fail closed: `null` (no count) is NOT solo — unknown is not one.
-    solo: memberCount !== null && memberCount <= 1,
+    // Fail closed, through the ONE predicate (F-718, 2026-09-18): `0`, `null`
+    // and `undefined` are all "not one", so a roster race cannot widen an
+    // agent's own-cluster arm from `view` to `edit`. The hand-spelled
+    // `memberCount !== null && memberCount <= 1` it replaces answered SOLO to a
+    // real `0`.
+    solo: !isSharedRoom(memberCount),
   };
 }
 

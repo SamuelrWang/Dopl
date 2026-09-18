@@ -1,6 +1,9 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { isUuid } from "@/shared/lib/id/uuid";
+import { channelScopeAllowedForKind } from "@/shared/tenancy/channel-scope";
+import { isSharedRoom } from "@/shared/tenancy/shared-room";
+import type { WorkspaceKind } from "@/features/workspaces/types";
 import type { KnowledgeContext } from "../types";
 import {
   countActiveWorkspaceMembers,
@@ -10,9 +13,9 @@ import {
 } from "./repository-audience";
 
 /**
- * The agent audience ceiling: an agent acting inside a link container with a
- * peer in it may read only the bases the operator granted into one of that
- * container's channels. Applied at the foundational lookups in
+ * The agent audience ceiling: an agent acting inside a CHANNEL-SCOPED container
+ * with a second audience in it may read only the bases the operator granted into
+ * one of that container's channels. Applied at the foundational lookups in
  * `service-bases.ts`, because every other knowledge read composes one of them.
  *
  * It is a fence rather than a tripwire because every input is a DB fact read on
@@ -24,6 +27,24 @@ import {
  * audience to bound. Consequence (ruling 2): a private ungranted base in the
  * container is invisible to the operator's own agent in a shared channel until
  * it is granted `agent_only`.
+ *
+ * 🔒 ⚠ **THE TWO QUESTIONS ARE ASKED BY THE TWO SHARED PREDICATES SINCE
+ * 2026-09-18 (Samuel’s ruling; F-718 RESOLVED).** *Is channel scope a thing
+ * here* is `shared/tenancy/channel-scope.ts › channelScopeAllowedForKind`;
+ * *is this room shared* is `shared/tenancy/shared-room.ts › isSharedRoom`. The
+ * retired conjunction (`kind !== "link"` then `memberCount <= 1`) failed OPEN
+ * twice: a count of `0` — a roster race, a `status` flip mid-request — took the
+ * unrestricted arm, and every kind added to the union after `link` inherited it.
+ *
+ * ⚠ **A STANDARD WORKSPACE HAS NO GRANT ARM TO NARROW TO, WHICH IS WHY IT IS
+ * UNRESTRICTED RATHER THAN NARROWED.** The 2026-09-17 scope ruling refuses a
+ * channel-scoped grant there (`assertChannelScopeAllowedInContainer`) and
+ * `channelsWhereScopeIsIgnored` drops any an older write left, so the granted
+ * set in a standard container is empty BY CONSTRUCTION: taking that arm would
+ * blank every colleague’s agent rather than bound it. The audience there is the
+ * MEMBER’s — workspace-wide plus teams, applied by `service-shared.ts ›
+ * canSeeBase` / `› filterTeamVisibleBases` one layer out — and an agent sees
+ * exactly what the person holding its credential sees.
  *
  * It bounds future reads, never context already in the window (INVARIANTS §11) —
  * a channel that gains a peer tightens at the next tool call, which is why the
@@ -51,22 +72,29 @@ const UNRESTRICTED: AgentAudience = { kind: "unrestricted" };
  * Resolve the ceiling for one request.
  *
  * ```
- * ctx.source !== "agent"     → unrestricted   (humans are unaffected, full stop)
- * workspace.kind !== 'link'  → unrestricted   (standard workspaces unchanged)
- * active members <= 1        → unrestricted   (SOLO — today's behaviour)
- * else                       → granted        (grant row or 404)
+ * ctx.source !== "agent"        → unrestricted  (humans are unaffected, full stop)
+ * channel scope not allowed     → unrestricted  (STANDARD, and an absent kind —
+ *                                                the audience is the member’s)
+ * !isSharedRoom(active members) → unrestricted  (SOLO — exactly one member)
+ * else                          → granted       (grant row or 404)
  * ```
  *
  * The order is the query budget: a human costs zero extra reads, a
- * standard-workspace agent one, and only an agent inside a shared container pays
- * the full four. `listBases` runs on every knowledge page load.
+ * standard-workspace agent one, and only an agent inside a shared channel-scoped
+ * container pays the full four. `listBases` runs on every knowledge page load.
  *
- * An unreadable member count fails closed — `null` is treated as "not solo" and
- * takes the narrowed branch.
+ * 🔒 **BOTH UNKNOWNS FAIL CLOSED, AND THEY FAIL CLOSED IN OPPOSITE
+ * DIRECTIONS.** An unreadable member count is NOT solo (`isSharedRoom`: only an
+ * exact `1` is) and takes the narrowed branch. An unrecognised KIND is not
+ * standard, so channel scope is allowed there and it takes the narrowed branch
+ * too — the negative `kind !== "link"` it replaces admitted every kind added
+ * after it (F-295/F-564).
  *
- * A missing workspace row answers `unrestricted`: `withWorkspaceAuth` already
- * proved an active membership before this runs, so `null` means the row vanished
- * mid-request and every read underneath answers nothing anyway.
+ * A missing workspace row answers `unrestricted`, which is the same reading
+ * `channelScopeAllowedForKind(null)` takes and not a fourth policy:
+ * `withWorkspaceAuth` already proved an active membership before this runs, so
+ * `null` means the row vanished mid-request and every read underneath answers
+ * nothing anyway.
  */
 export async function resolveAgentAudience(
   ctx: KnowledgeContext
@@ -74,11 +102,15 @@ export async function resolveAgentAudience(
   if (ctx.source !== "agent") return UNRESTRICTED;
 
   const db = supabaseAdmin();
-  const kind = await findWorkspaceKind(db, ctx.workspaceId);
-  if (kind !== "link") return UNRESTRICTED;
+  // The raw column, widened to the union at the one place that asks a predicate
+  // of it: an unrecognised string is not `standard`, which is the arm it needs.
+  const kind = (await findWorkspaceKind(db, ctx.workspaceId)) as
+    | WorkspaceKind
+    | null;
+  if (!channelScopeAllowedForKind(kind)) return UNRESTRICTED;
 
   const memberCount = await countActiveWorkspaceMembers(db, ctx.workspaceId);
-  if (memberCount !== null && memberCount <= 1) return UNRESTRICTED;
+  if (!isSharedRoom(memberCount)) return UNRESTRICTED;
 
   const containerChannelIds = await listChannelIdsForWorkspace(
     db,
