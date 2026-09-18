@@ -1211,6 +1211,26 @@ worktree; the archive reaches the channel service and the list filters, not only
 ### Wave 2 — Artifacts and the info-column capability set.
 **Worktree `parity/w2-artifacts`.**
 
+🟡 **LANDED 2026-09-17 on `wave2/artifacts-agents-heldgate` (4 commits, one per item) — THREE ITEMS
+DONE, TWO NOT STARTED, ONE HALF HELD.**
+✅ **P3 + P4 + P5 (R-16 / R-17)** — `channels-core.tsx` passes `capabilities={{ artifacts: true }}`.
+⚠ **The GUEST lane deliberately does NOT get it**: the route floor IS `guest`
+(`src/app/api/channels/[channelId]/artifacts/route.ts`, both verbs), so a guest *could* read — but
+R-16 was ruled **(a)**, not (c), and the Artifacts design lists the web renderer among the things
+deliberately not designed. Four docblocks saying "/home only" were corrected.
+✅ **P16 (R-24)** — `AgentHeldGates` mounts in `agent-window.tsx`; Pause/End did not follow, and the
+test asserts their absence.
+🟡 **R-25** — the room-wide half needed NO CODE (see the ruling) and is pinned; the ENDED half is
+**F-724, OPEN**.
+🟡 **Wave 1 item 6** — the skeleton MOVE is done; its two adoptions are not (see that row).
+🔴 **NOT STARTED: P17** (one `AgentStats`) **and P18** (one template save orchestration) — both are
+pure de-dup with no ruling attached, and neither was in this branch's scope.
+**Gates run 2026-09-17:** `npm run typecheck` · `npm run typecheck -w @dopl/desktop-ui` ·
+`npx vitest run src/features/channels src/features/home` (241 files / 3537) ·
+`npm test -w @dopl/desktop-ui` (72 / 644) · `npm run lint -- --max-warnings 0` ·
+`node scripts/check-doc-refs.mjs` · `npx tsx scripts/check-css-token-drift.ts` · the `packages/`
+500-line sweep. ⚠ **NOT run here: the `rls-redteam` job** (no schema touched, and it needs Docker).
+
 **Goal:** stop a workspace reader seeing an artifact inline and being unable to browse the channel's
 artifacts.
 
