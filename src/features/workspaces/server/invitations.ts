@@ -400,11 +400,12 @@ async function joinInvitationTeams(
 }
 
 /**
- * `updateMemberRole` / `removeMember` live in `membership-admin.ts` (§2 split).
+ * `updateMemberRole` / `removeMember` / `leaveWorkspace` live in
+ * `membership-admin.ts` (§2 split).
  * Re-exported here because callers import them from this path
  * (`api/workspaces/[workspaceSlug]/members/[userId]/route.ts`) — same barrel
  * shape as `teams/server/repository.ts`.
  */
-export { updateMemberRole, removeMember } from "./membership-admin";
+export { updateMemberRole, removeMember, leaveWorkspace } from "./membership-admin";
 
 

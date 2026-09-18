@@ -1504,8 +1504,12 @@ the fence. Either is fine — **dissolving the fence by accident is not.**
 class stays open.**
 
 **Items:** V4 `ConnectedAppsSection` on /home · V6 `MyAccessProvider` on /home (report PROVIDERLESS
-distinctly from PENDING — **do not flip `canEdit` closed**) · V9 **remove + leave** on /home's roster
-(R-09 → (b)) · **R-12(a)** scrub `lastSeenAt` per caller **in the members DTO, in this wave and not
+distinctly from PENDING — **do not flip `canEdit` closed**) · ✅ V9 **remove + leave** on /home's roster
+(R-09 → (b)) — **DONE 2026-09-17**, and **NOT UI-ONLY: F-725.** `removeMember` is `admin`+ and then
+denies `isSelf` below owner, so no role a link container holds could leave one; the wave added
+`membership-admin.ts › leaveWorkspace` beside it, sharing one `› completeRemoval` tail. The row action
+is `person-roster-actions.tsx › PersonRosterRowAction` through the shared body's new
+`ChannelInfoExtras.rosterRowAction`; the rule is INVARIANTS §4A · **R-12(a)** scrub `lastSeenAt` per caller **in the members DTO, in this wave and not
 before** · 🔴 **DELETE the guidance layer** (R-49).
 🔴 **DROPPED: V1/V3 Chats and Skills.** **R-33 — NO, Skills and Chats stay out of home.**
 ⚠ **V2 therefore stays a live orphan class**: `dopl_chats(op="export")` with no container still files

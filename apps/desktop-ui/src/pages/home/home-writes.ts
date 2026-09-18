@@ -12,6 +12,7 @@ import type {
   HomeChannelCreateInput,
   HomeLinkMintBody,
 } from "@/features/home/schema";
+import { memberPath } from "@/features/members/client/query-keys";
 import { HOME_LINKS_PATH } from "./home-rows";
 
 /**
@@ -85,6 +86,32 @@ export function useRevokeHomeLink() {
       method: "DELETE",
     }),
     invalidate: () => LINK_READS,
+  });
+}
+
+/**
+ * REMOVE A PERSON FROM THIS CONTAINER, or LEAVE it — one write, because
+ * departure IS removal (Samuel's ruling R-09, 2026-09-17; INVARIANTS §4A).
+ * `DELETE /api/workspaces/{segment}/members/{userId}`, the SAME endpoint the
+ * members console uses; the route reads self as a leave.
+ *
+ * ⚠ THE CHANNELS LIST IS INVALIDATED BECAUSE LEAVING TAKES THE ROW OFF IT — the
+ * container is no longer the caller's. A removal moves nothing on that payload
+ * and pays one small refetch for not having to know which of the two happened.
+ * ⚠ THE ROSTER IS THE CALLER'S TO SETTLE (`onDone`): it belongs to the channel
+ * surface's own read, and this hook must not mint a second one (§7).
+ */
+export function useRemoveContainerMember(
+  workspaceSegment: string,
+  onDone: () => void
+) {
+  return useApiMutation<string, void>({
+    request: (userId) => ({
+      path: memberPath(workspaceSegment, userId),
+      method: "DELETE",
+    }),
+    invalidate: () => [channelKeys.list().all],
+    onSuccess: onDone,
   });
 }
 

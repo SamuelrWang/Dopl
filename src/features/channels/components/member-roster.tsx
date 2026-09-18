@@ -14,6 +14,7 @@
  * move becomes a redesign nobody reviewed.
  */
 
+import type { ReactNode } from "react";
 import { AvatarWithPresence } from "@/shared/ui/avatar-with-presence";
 import { cn } from "@/shared/lib/utils";
 import { RolePill } from "./bits";
@@ -33,9 +34,17 @@ import type { ChannelMember } from "../types";
 export function MemberRow({
   member,
   online,
+  action,
 }: {
   member: ChannelMember;
   online: boolean;
+  /**
+   * THE ROW'S TRAILING CONTROL, INJECTED — Remove / Leave (R-09, Samuel
+   * 2026-09-17). ⚠ NOT BUILT HERE, on `info-tab.tsx › membersAction`'s reason
+   * exactly: it is write-bearing and this file fetches nothing (INVARIANTS §7).
+   * ⚠ ABSENT IS THE DEFAULT AND MEANS "no control", never a disabled one.
+   */
+  action?: ReactNode;
 }) {
   return (
     <div
@@ -62,6 +71,7 @@ export function MemberRow({
         owner={member.role === "owner"}
         guest={member.workspaceRole === "guest"}
       />
+      {action}
     </div>
   );
 }
@@ -81,6 +91,7 @@ export function MemberRoster({
   members,
   emptyLine,
   viewerUserId,
+  rowAction,
 }: {
   members: ChannelMember[];
   /** Render "No members in this channel." for an empty roster. Default off. */
@@ -94,6 +105,14 @@ export function MemberRoster({
    * mounted here. ⚠ OPTIONAL: absent means "no override", not "nobody is online".
    */
   viewerUserId?: string | null;
+  /**
+   * WHAT SITS AT THE END OF EACH ROW — asked per member, because the answer is
+   * per member (R-09: Remove on somebody else's row, Leave on your own).
+   * ⚠ A HOST'S, reached through `channel-surface-contract.ts ›
+   * ChannelInfoExtras.rosterRowAction`. Returning `null` draws nothing, which
+   * is what every row gets on a host that passes no function at all.
+   */
+  rowAction?: (member: ChannelMember) => ReactNode;
 }) {
   // ⚠ ONE PASS, ONE PREDICATE, ONE `now` — the partition used to call `isPresent`
   // twice per member with two different `Date.now()` defaults, so a member could
@@ -107,7 +126,12 @@ export function MemberRoster({
   return (
     <div className="flex flex-col gap-px px-2">
       {online.map((member) => (
-        <MemberRow key={member.userId} member={member} online />
+        <MemberRow
+          key={member.userId}
+          member={member}
+          online
+          action={rowAction?.(member)}
+        />
       ))}
       {/* ⚠ The condition is `offline.length > 0` and NOTHING ELSE — the same test
           `info-tab.tsx` shipped. An all-offline roster leads with the rule, which
@@ -118,7 +142,12 @@ export function MemberRoster({
         </p>
       )}
       {offline.map((member) => (
-        <MemberRow key={member.userId} member={member} online={false} />
+        <MemberRow
+          key={member.userId}
+          member={member}
+          online={false}
+          action={rowAction?.(member)}
+        />
       ))}
       {emptyLine && members.length === 0 && (
         <p className="px-2 py-2 text-caption text-text-muted">

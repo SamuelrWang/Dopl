@@ -1,11 +1,17 @@
+import { useState } from "react";
 import { PanelHeading } from "@/features/channels/components/bits";
 import {
   EMPTY_WORKSPACE_ROLE,
   type Channel,
+  type ChannelMember,
 } from "@/features/channels/types";
 import { meetsMinRole } from "@/features/workspaces/types";
+import { canShowMemberControls } from "@/features/workspaces/member-policy";
+import { FormDialog } from "@/shared/ui/form-dialog";
+import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
 import { AddPersonDialog } from "./add-person-dialog";
 import { LinkOutPanel } from "./link-out-panel";
+import { useRemoveContainerMember } from "./home-writes";
 
 /**
  * **THE ONE ACT THAT CHANGES A HOME CONTAINER'S ROSTER** — Add person, or the
@@ -70,5 +76,108 @@ export function PersonRosterActions({
     <div className="px-3.5 pt-2.5">
       <AddPersonDialog workspaceId={homeChannel.workspaceId} />
     </div>
+  );
+}
+
+
+/**
+ * **THE ROSTER ROW'S ONE ACT — Remove somebody, or Leave** (Samuel's ruling
+ * R-09, 2026-09-17: *"add remove + leave"*). It renders into the shared Info
+ * body's per-row slot (`channel-surface-contract.ts › rosterRowAction`), so
+ * /home adds a control to the one roster rather than growing a second.
+ *
+ * 🔒 **THE TWO GATES ARE PICTURES OF THE SERVER'S, NOT FENCES** (INVARIANTS §5):
+ *  - **Remove** — `admin`+, which is `removeMember`'s own first line, narrowed
+ *    per row by `member-policy.ts › canShowMemberControls` (never self, never an
+ *    owner). One policy, shared with the members console.
+ *  - **Leave** — the viewer's OWN row, for a member who is NOT `admin`+. An
+ *    owner is the LAST owner of a link container, and `leaveWorkspace` answers
+ *    `WORKSPACE_LAST_OWNER` there; a guest is refused by the DELETE route's
+ *    resolver floor before it. Offering either would be a dead control.
+ *
+ * ⚠ **A PERSONAL CONTAINER FALLS OUT OF THOSE TWO AND NEEDS NO THIRD RULE**: its
+ * one member is its owner, so the row is self (no Remove) and the viewer is
+ * `admin`+ (no Leave). The server refuses it besides — `leaveWorkspace` runs
+ * `assertWorkspacePermanentById` (R-35).
+ *
+ * ⚠ **CONFIRMED, NOT ONE-CLICK.** Both are membership DELETEs, and leaving a
+ * link container is one-way: the claim link that let the viewer in was spent.
+ * The popup is the kit's `FormDialog` and carries a name and a verb — label +
+ * control, no explainer (INVARIANTS §5's minimal-copy ruling).
+ */
+export function PersonRosterRowAction({
+  member,
+  homeChannel,
+  viewerUserId,
+  onRosterChanged,
+  onLeft,
+}: {
+  member: ChannelMember;
+  homeChannel: Channel;
+  /** `AuthorIndex.currentUserId` — the surface's viewer, never a second read. */
+  viewerUserId: string | null;
+  onRosterChanged: () => void;
+  /** The viewer left: the container is gone from their /home. */
+  onLeft: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  // ⚠ **THE WORKSPACE ROLE, NOT `Channel.role`** — membership is what both
+  // writes are floored on, and it is the only ladder with a `guest` rung.
+  // ⚠ §8 STALE-CACHE, spelled inline: `EMPTY_WORKSPACE_ROLE` (rank 0) shows
+  // neither control for one paint rather than offering a DELETE the server
+  // would refuse.
+  const role = homeChannel.myWorkspaceRole ?? EMPTY_WORKSPACE_ROLE;
+  const isSelf = member.userId === viewerUserId;
+  const targetRole = member.workspaceRole ?? EMPTY_WORKSPACE_ROLE;
+
+  const canLeave =
+    isSelf && meetsMinRole(role, "member") && !meetsMinRole(role, "admin");
+  const canRemove =
+    !isSelf && canShowMemberControls(role, targetRole, false);
+
+  // ⚠ CLOSE FIRST, then tell the host: leaving unmounts this row with the
+  // container, and a dialog left open over a row that no longer exists is the
+  // same defect as a dead control.
+  const write = useRemoveContainerMember(homeChannel.container?.segment ?? "", () => {
+    setConfirming(false);
+    if (canLeave) onLeft();
+    else onRosterChanged();
+  });
+
+  if (!canLeave && !canRemove) return null;
+
+  const name = member.displayName ?? member.email ?? "this person";
+  const verb = canLeave ? "Leave" : "Remove";
+
+  return (
+    <>
+      <button
+        type="button"
+        className={SMALL_TEXT_BUTTON}
+        onClick={() => setConfirming(true)}
+      >
+        {verb}
+      </button>
+      {confirming && (
+        <FormDialog
+          open
+          onDiscard={() => setConfirming(false)}
+          // The title carries a name somebody typed, so CSS `capitalize` is off
+          // (`standard-dialog.tsx › DIALOG_TITLE_AS_TYPED`).
+          titleCase={false}
+          title={canLeave ? `Leave ${homeChannel.name}?` : `Remove ${name}?`}
+          discardLabel="Cancel"
+          primary={{
+            label: verb,
+            busy: write.pending,
+            onClick: () => write.mutate(member.userId),
+          }}
+        >
+          <p className="text-caption text-text-muted">
+            {canLeave ? "You lose access to this channel." : "They lose access to this channel."}
+          </p>
+        </FormDialog>
+      )}
+    </>
   );
 }

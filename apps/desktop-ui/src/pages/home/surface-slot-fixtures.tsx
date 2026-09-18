@@ -78,6 +78,7 @@ export function infoTabContext(
     // these from a REAL read: a fixture that invented a roster or a series would
     // let a suite pass while the surface handed the tab nothing.
     members: [],
+    refetchMembers: () => {},
     index: EMPTY_INDEX,
     activity: { bins: [], loading: false },
     channelName: "",
@@ -115,7 +116,10 @@ export function standaloneSurfaceStub(ctx?: Partial<ChannelInfoTabContext>) {
         workspaceId: props.workspaceId,
         gate: { begin: () => {}, end: () => {} },
       });
-      const { members } = useChannelMembers(props.channel.id, props.workspaceId);
+      const { members, refetch } = useChannelMembers(
+        props.channel.id,
+        props.workspaceId
+      );
       const series = useOverviewSeries({
         workspaceSegment: props.workspaceSlug ?? "",
         metric: "messages",
@@ -132,6 +136,10 @@ export function standaloneSurfaceStub(ctx?: Partial<ChannelInfoTabContext>) {
           busy: write.pending,
         },
         members,
+        // ⚠ THE REAL REFETCH, for the same reason the roster above is real: a
+        // region's write (R-09's Remove) settles the surface's read, not one of
+        // its own.
+        refetchMembers: () => void refetch(),
         // ⚠ The viewer is the host's `currentUserId`, exactly as the real
         // surface resolves it — and it is what stops the roster reporting the
         // operator offline in their own channel (F-723).

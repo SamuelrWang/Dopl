@@ -1,5 +1,5 @@
 /**
- * `removeMember` — THE WIRING.
+ * `removeMember` / `leaveWorkspace` — THE WIRING.
  *
  * ⚠ The channels sweep is deliberately NOT mocked: mocking
  * `removeWorkspaceDepartedMember` would only assert this file calls a name,
@@ -26,11 +26,12 @@ vi.mock("@/features/billing/server/seats", () => ({ syncSeatQuantity: vi.fn() })
 vi.mock("@/features/channels/server/repository");
 
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { requireWorkspaceRole } from "./authz";
+import { HttpError } from "@/shared/lib/http-error";
+import { assertWorkspacePermanentById, requireWorkspaceRole } from "./authz";
 import { findMembership } from "./repository";
 import { syncSeatQuantity } from "@/features/billing/server/seats";
 import * as channelsRepo from "@/features/channels/server/repository";
-import { removeMember } from "./membership-admin";
+import { leaveWorkspace, removeMember } from "./membership-admin";
 import type { ChannelMemberRow, ChannelRow } from "@/features/channels/server/dto";
 
 const WS = "11111111-e29b-41d4-a716-446655440000";
@@ -187,5 +188,80 @@ describe("removeMember — the departure reaches into channels", () => {
     // …and the follow-on best-effort work still runs.
     expect(syncSeatQuantity).toHaveBeenCalledWith(WS);
     spy.mockRestore();
+  });
+});
+
+/**
+ * **LEAVE — R-09's server half** (Samuel, 2026-09-17: *"add remove + leave"*).
+ *
+ * ⚠ **THE RULING WAS COSTED AS A UI-ONLY CHANGE AND THE PREMISE WAS FALSE
+ * (F-725).** `removeMember` above is `admin`+ by its first line and then denies
+ * `isSelf` below owner, so a `member` peer had no exit from any container and an
+ * owner is the last owner of one. `requireWorkspaceRole` is NOT called here, and
+ * the cases below are what takes its place.
+ */
+describe("leaveWorkspace — the caller's own exit", () => {
+  it("runs the SAME delete → sweep → record sequence a removal does", async () => {
+    vi.mocked(findMembership).mockResolvedValue({
+      userId: LEAVER,
+      role: "member",
+      status: "active",
+    } as never);
+
+    await leaveWorkspace(WS, LEAVER);
+
+    expect(trace[0]).toBe("db:delete:workspace_members");
+    expect(trace.slice(1)).toEqual([
+      `channels:delete:${ROOM}`,
+      `channels:close:${DM}`,
+      `channels:delete:${DM}`,
+      "db:insert:workspace_activity_events",
+    ]);
+  });
+
+  it("asks for NO admin floor — that is the whole difference from removeMember", async () => {
+    await leaveWorkspace(WS, LEAVER);
+    expect(requireWorkspaceRole).not.toHaveBeenCalled();
+  });
+
+  it("is an idempotent no-op for a caller with no active row", async () => {
+    vi.mocked(findMembership).mockResolvedValue(null as never);
+    await leaveWorkspace(WS, LEAVER);
+    expect(trace).toEqual([]);
+  });
+
+  it("refuses the LAST owner — the container would be unrecoverable", async () => {
+    vi.mocked(findMembership).mockResolvedValue({
+      userId: LEAVER,
+      role: "owner",
+      status: "active",
+    } as never);
+    // ⚠ The builder's `count: 2` is the owner tally, so this case makes it one.
+    vi.mocked(supabaseAdmin).mockReturnValue({
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            eq: () => ({
+              eq: () => Promise.resolve({ count: 1, error: null }),
+            }),
+          }),
+        }),
+      }),
+    } as never);
+
+    await expect(leaveWorkspace(WS, LEAVER)).rejects.toMatchObject({
+      status: 409,
+      code: "WORKSPACE_LAST_OWNER",
+    });
+  });
+
+  it("refuses a PERMANENT container — nobody leaves a home space (R-35)", async () => {
+    vi.mocked(assertWorkspacePermanentById).mockRejectedValue(
+      new HttpError(409, "WORKSPACE_PERMANENT", "permanent")
+    );
+    await expect(leaveWorkspace(WS, LEAVER)).rejects.toMatchObject({
+      code: "WORKSPACE_PERMANENT",
+    });
+    expect(trace).toEqual([]);
   });
 });

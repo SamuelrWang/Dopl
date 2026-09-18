@@ -5,6 +5,7 @@ import { parseJson } from "@/shared/api/parse-json";
 import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import {
+  leaveWorkspace,
   removeMember,
   updateMemberRole,
 } from "@/features/workspaces/server/invitations";
@@ -44,7 +45,15 @@ export const PATCH = withUserAuth(
   { sessionOnly: true }
 );
 
-/** DELETE — remove a member. Admin+; cannot remove the last owner. */
+/**
+ * DELETE — remove a member. Admin+; cannot remove the last owner.
+ *
+ * 🔒 **SELF IS A LEAVE, NOT A REMOVE (R-09, Samuel 2026-09-17).** `removeMember`
+ * is admin+ and then denies `isSelf` below owner, so this same URL answered 403
+ * to every member trying to walk out of a container. `leaveWorkspace` keeps the
+ * permanent-container and last-owner refusals and drops the admin floor, which
+ * is the only difference between the two arms.
+ */
 export const DELETE = withUserAuth(
   async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
     try {
@@ -57,7 +66,11 @@ export const DELETE = withUserAuth(
       if (!workspace) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }
-      await removeMember(workspace.id, userId, targetUserId);
+      if (targetUserId === userId) {
+        await leaveWorkspace(workspace.id, userId);
+      } else {
+        await removeMember(workspace.id, userId, targetUserId);
+      }
       return new NextResponse(null, { status: 204 });
     } catch (err) {
       return toHttpErrorResponse("api/workspaces/[workspaceSlug]/members/[userId]", err);

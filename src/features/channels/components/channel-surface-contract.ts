@@ -55,6 +55,13 @@ export interface ChannelInfoTabContext {
   /** This surface's roster (`channel-surface-data.ts › members`). */
   members: ChannelMember[];
   /**
+   * RE-READ THE ROSTER — for a region whose write CHANGES it (R-09's Remove).
+   * ⚠ The surface's own refetch, never a second `useMembers` in the region:
+   * two hooks on one key are two sources of truth, which is the rule every
+   * other field here was added to keep.
+   */
+  refetchMembers: () => void;
+  /**
    * The author index, which carries the viewer (`index.currentUserId`).
    * ⚠ F-723: a roster drawn without it reported the OPERATOR offline in their
    * own home channel — `view-model.ts › isPresentForViewer`'s desktop override
@@ -91,6 +98,17 @@ export interface ChannelInfoExtras {
    * Link out pair, which sits under the list it changes (Samuel, 2026-08-25).
    */
   belowRoster?: ReactNode;
+  /**
+   * AT THE END OF EACH ROSTER ROW — /home's Remove / Leave (Samuel's ruling
+   * R-09, 2026-09-17).
+   *
+   * ⚠ **A FUNCTION, AND THAT DOES NOT REOPEN THE `infoTab` HOLE THE RETURN TYPE
+   * ABOVE CLOSED.** The fence is that a host may not hand back a BODY; this
+   * hands back one row's trailing control, asked per member because the answer
+   * is per member. The body still decides whether the roster exists at all.
+   * ⚠ `null` for a row is the default answer, not a disabled control (§5).
+   */
+  rosterRowAction?: (member: ChannelMember) => ReactNode;
 }
 
 export interface ChannelSurfaceSlots {

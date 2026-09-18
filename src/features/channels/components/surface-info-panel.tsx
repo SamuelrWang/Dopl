@@ -246,6 +246,7 @@ export function SurfaceInfoPanel({
         gate,
         headerEdit,
         members,
+        refetchMembers: data.refetchMembers,
         index,
         activity: { bins: data.activityBins, loading: data.activityLoading },
         channelName,

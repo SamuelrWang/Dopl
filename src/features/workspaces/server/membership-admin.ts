@@ -10,22 +10,23 @@ import { requireWorkspaceRole, assertWorkspacePermanentById } from "./authz";
 import { findMembership } from "./repository";
 
 /**
- * Administration of an EXISTING member — the two writes that change what
+ * Administration of an EXISTING member — the three writes that change what
  * somebody inside the workspace is, or whether they are still in it. Split from
  * `invitations.ts` (which is about getting someone IN); both are re-exported
  * from there so no importer moved.
  *
- * ⚠ NO `assertMemberAddable` GATE HERE, and its absence is the rule: neither
- * write ADDS anybody. `updateMemberRole` re-grades an existing row and
- * `removeMember` deletes one, and removal from a `kind='link'` container is
+ * ⚠ NO `assertMemberAddable` GATE HERE, and its absence is the rule: no write
+ * here ADDS anybody. `updateMemberRole` re-grades an existing row and
+ * `removeMember` / `leaveWorkspace` delete one, and removal from a `kind='link'`
+ * container is
  * deliberately allowed (`authz.ts › assertMemberAddable`). A member-ADD write
  * added to this file would need the gate.
  *
  * ⚠ **`assertWorkspacePermanentById` IS HERE, THOUGH, AND IT IS A DIFFERENT
  * QUESTION** (R-35, 2026-09-17): not "may this container gain a member" but
  * "may this container lose its only one". A `kind='personal'` home space is
- * permanent, so `removeMember` refuses it outright; `link` and `standard` are
- * untouched.
+ * permanent, so `removeMember` AND `leaveWorkspace` refuse it outright; `link`
+ * and `standard` are untouched.
  *
  * ⚠ TERMINATION IS A ROW DELETE, NOT A STATUS FLIP. Nothing writes
  * `workspace_members.status` to anything but `'active'`; the only exits are the
@@ -110,12 +111,12 @@ export async function updateMemberRole(
  * Remove a member. Owner removes anyone (incl. themselves, with last-owner
  * protection); admin removes member/viewer only.
  *
- * ⚠ THE ONLY APP-LEVEL DEPARTURE PATH — the channels sweep below is wired here
- * and nowhere else. The other two exits are DATABASE cascades that already take
- * the channel rows: workspace delete (`channels.workspace_id` ON DELETE
- * CASCADE) and account delete (`channel_members.user_id` → `auth.users` ON
- * DELETE CASCADE). If a "leave workspace" route is ever added, it must call the
- * sweep too.
+ * ⚠ ONE OF THE TWO APP-LEVEL DEPARTURE PATHS — `leaveWorkspace` below is the
+ * other, and both run `completeRemoval`, which is where the channels sweep is
+ * wired. The remaining exits are DATABASE cascades that already take the
+ * channel rows: workspace delete (`channels.workspace_id` ON DELETE CASCADE)
+ * and account delete (`channel_members.user_id` → `auth.users` ON DELETE
+ * CASCADE). A third departure path must call `completeRemoval` too.
  */
 export async function removeMember(
   workspaceId: string,
@@ -161,6 +162,63 @@ export async function removeMember(
     }
   }
 
+  await completeRemoval(workspaceId, callerId, targetUserId, target.role);
+}
+
+/**
+ * LEAVE — the caller deletes their OWN membership row.
+ *
+ * 🔒 **Samuel's ruling R-09 (2026-09-17): "add remove + leave".**
+ * ⚠ **NOT AN ARM OF `removeMember`, AND THE RULING WAS COSTED AS UI-ONLY ON A
+ * PREMISE THAT WAS FALSE (F-725).** That write opens with
+ * `requireWorkspaceRole(…, "admin")` and then denies `isSelf` for everyone but
+ * an owner, and a link container's owner is its LAST owner — so before this
+ * function NOBODY could leave a container from any surface.
+ * ⚠ SAME THREE REFUSALS removal has, for the same reasons: a `kind='personal'`
+ * home space is permanent (R-35), the last owner may not go, and a caller with
+ * no active row is an idempotent no-op.
+ * ⚠ NO ROLE FLOOR OF ITS OWN, and the DELETE route's resolver still carries
+ * one: `resolveApiWorkspace`'s inverted default refuses a `guest` with a 404,
+ * so a guest has no exit through that door. The /home roster hides Leave from
+ * them for R2/R3's reason too (their claim link is spent, so leaving is
+ * one-way) — the hide is a picture of that 404, not a second fence.
+ */
+export async function leaveWorkspace(
+  workspaceId: string,
+  callerId: string
+): Promise<void> {
+  const membership = await findMembership(workspaceId, callerId);
+  if (!membership || membership.status !== "active") {
+    return; // Idempotent — nothing to leave.
+  }
+
+  await assertWorkspacePermanentById(workspaceId);
+
+  if (membership.role === "owner") {
+    const ownerCount = await countActiveOwners(workspaceId);
+    if (ownerCount <= 1) {
+      throw new HttpError(
+        409,
+        "WORKSPACE_LAST_OWNER",
+        "Cannot leave as the last owner — transfer ownership first"
+      );
+    }
+  }
+
+  await completeRemoval(workspaceId, callerId, callerId, membership.role);
+}
+
+/**
+ * THE DELETE AND ITS THREE FOLLOW-ONS, shared by removal and departure —
+ * "departure IS removal" (INVARIANTS §4A) spelled as one code path rather than
+ * two that drift. ⚠ EVERY GATE IS THE CALLER'S; this function refuses nothing.
+ */
+async function completeRemoval(
+  workspaceId: string,
+  actorId: string,
+  targetUserId: string,
+  targetRole: Role
+): Promise<void> {
   const db = supabaseAdmin();
 
   // Team memberships are cleaned by the member_removed_team_cleanup DB trigger
@@ -206,9 +264,9 @@ export async function removeMember(
   // observation of a write that already happened.
   await recordActivity({
     workspaceId,
-    actorUserId: callerId,
+    actorUserId: actorId,
     verb: "member.removed",
-    metadata: { subjectUserId: targetUserId, role: target.role },
+    metadata: { subjectUserId: targetUserId, role: targetRole },
   });
 }
 
