@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -100,6 +100,9 @@ function renderShell(path: string) {
           { path: "overview", element: <p>page body</p> },
           // Tour step 1's destination; the router needs it to exist.
           { path: "ontology", element: <p>ontology body</p> },
+          // R-05's pair: one PAGE with a record route under it.
+          { path: "knowledge", element: <p>knowledge body</p> },
+          { path: "knowledge/:kbSlug", element: <p>knowledge record</p> },
         ],
       },
     ],
@@ -180,6 +183,46 @@ describe("app shell", () => {
     expect(
       screen.queryByRole("button", { name: "Priya Shah" })
     ).not.toBeInTheDocument();
+  });
+
+  /**
+   * 🔒 R-05 (Samuel, 2026-09-17) — option (a), against 03 §C2's recommended (b):
+   * the shell crossfades on PAGE SWITCHES too, not only on a page's own record
+   * pick. Same component, same 150ms, same reduced-motion rule; one call site.
+   *
+   * ⚠ THE SECOND CASE IS THE ONE WITH TEETH. A token cut from the whole path
+   * would fade on every channel click and every knowledge-base click — over the
+   * fade those pages already run themselves — and the first case alone cannot
+   * see that.
+   */
+  const fade = () => document.querySelector(".crossfade")!;
+
+  it("crossfades when the PAGE changes", async () => {
+    const router = renderShell("/acme-ab12cd/overview");
+
+    await screen.findByText("page body");
+    expect(fade().hasAttribute("data-out")).toBe(false);
+
+    await act(async () => {
+      await router.navigate("/acme-ab12cd/ontology");
+    });
+    expect(fade().hasAttribute("data-out")).toBe(true);
+    expect(fade().getAttribute("aria-busy")).toBe("true");
+
+    // And it lands: the surface is not left dimmed.
+    await waitFor(() => expect(fade().hasAttribute("data-out")).toBe(false));
+  });
+
+  it("does NOT fade when one page picks a record", async () => {
+    const router = renderShell("/acme-ab12cd/knowledge");
+
+    await screen.findByText("knowledge body");
+    await act(async () => {
+      await router.navigate("/acme-ab12cd/knowledge/kb-1");
+    });
+
+    expect(await screen.findByText("knowledge record")).toBeInTheDocument();
+    expect(fade().hasAttribute("data-out")).toBe(false);
   });
 
   it("rewrites a stale segment to the canonical one, keeping the page", async () => {

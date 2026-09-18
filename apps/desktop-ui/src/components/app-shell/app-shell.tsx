@@ -5,6 +5,7 @@ import {
   activeSectionFromPath,
 } from "@/shared/layout/app-shell/app-sidebar-core";
 import { cn } from "@/shared/lib/utils";
+import { Crossfade } from "@/shared/ui/crossfade";
 import { WorkspaceSwitcherCore } from "@/shared/layout/app-shell/workspace-switcher-core";
 import type { WorkspaceLike } from "@/shared/layout/app-shell/workspace-types";
 import styles from "@/shared/layout/app-shell/app-shell.module.css";
@@ -168,6 +169,23 @@ export function AppShellLayout() {
     navigate(containerTarget, { replace: true });
   }, [needsRedirect, segment, containerTarget, location.pathname, navigate]);
 
+  /**
+   * 🔒 R-05 (Samuel, 2026-09-17): **THE SHELL CROSSFADES ON PAGE SWITCHES TOO**,
+   * not only when a page's own surface swaps a record — option (a), against
+   * 03 §C2's recommended (b).
+   *
+   * ⚠ THE TOKEN IS THE PAGE, NOT THE PATH. `/{segment}/knowledge/{slug}` and
+   * `/{segment}/channels/{id}` are the SAME page picking a different record, and
+   * those pages already crossfade that pick themselves (`knowledge-v2/detail/
+   * detail-panel.tsx`, `channels/components/info-panel.tsx`) — a second fade
+   * over the first is two swaps for one click.
+   *
+   * ⚠ `activeSectionFromPath` IS NOT THE TOKEN EITHER: it answers `null` for
+   * every non-nav route (Settings), which would collapse them onto one token and
+   * leave the one page in the shell that never fades.
+   */
+  const pageToken = location.pathname.split("/").filter(Boolean)[1] ?? "";
+
   const workspacesQuery = useApiQuery<
     { workspaces?: WorkspaceLike[] },
     WorkspaceLike[]
@@ -298,7 +316,16 @@ export function AppShellLayout() {
                     at the card's rounded edge instead of floating over the
                     page. */}
                 <div className={styles.pageCard}>
-                  <Outlet />
+                  {/* ⚠ THE ROUTER OWNS THE TREE, so the render function's shown
+                      token cannot select the outgoing page the way /home's pane
+                      selects it — react-router has already swapped `<Outlet/>`
+                      by the time the token changes. The token says WHEN to run
+                      the fade; the fade itself is the kit's `.crossfade`, its
+                      one timing and its one reduced-motion rule, reused and not
+                      re-stated. */}
+                  <Crossfade token={pageToken} className="flex min-h-0 flex-1 flex-col">
+                    {() => <Outlet />}
+                  </Crossfade>
                 </div>
                 {/* Terminal step of the join-approval loop (GAP-7). */}
                 <JoinRequestNoticesCore onNavigate={(path) => navigate(path)} />
