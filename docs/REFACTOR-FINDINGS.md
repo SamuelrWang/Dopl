@@ -3260,9 +3260,15 @@ constraint moves, and nothing connects the two.
   for: one route, one quantiser, one ramp.
 
 - Location: `src/features/channels/components/info-tab.tsx` (fed from
-  `› fixtures.ts › HARDCODED_THREAD_ACTIVITY`) against
-  `apps/desktop-ui/src/pages/home/person-thread-activity.tsx` (fed from
+  `› fixtures.ts › HARDCODED_THREAD_ACTIVITY`) against /home's own wrapper (fed from
   `GET /api/workspaces/[workspaceSlug]/overview-series?metric=messages&channelId=`).
+  ⚠ **THE CITATION NAMED A /home WRAPPER FILE THAT IS NOW DELETED (wave 1A, 2026-09-17), so
+  the path is gone from this line rather than repointed at something it never was** — the
+  wrapper mounted `useOverviewSeries` a second time on a key
+  `src/features/channels/components/channel-surface-data.ts` had already mounted, and the
+  series now reaches both hosts through `channel-surface.tsx › ChannelInfoTabContext`. This
+  entry's own last line ("one route, one quantiser, one ramp") is finally true of the
+  COMPOSITION too; see `F-723` for the class the second read belonged to.
 - Found during: Samuel's 2026-08-25 ruling to bring the channels page's thread-activity UI into
   /home's Info tab — and REWRITTEN the same day after his correction, which is the useful half of
   this entry.
@@ -9969,3 +9975,13 @@ The claim had been restated in five places from one sentence, which is how it su
 - **THE STATE AFTER R-20.** The workspace channel tab and /home's card now read **"Created"** and format with `formatDate` (year kept), from one exported constant. The THREAD info tab — the same column, one selection away, same `Calendar` glyph, same `MetaRow` — still reads **"Date of creation"** and formats with `formatShortDate` (year dropped). Before R-20 there were two spellings of this row and it was a channel-vs-home split; there are still two, and it is now a channel-vs-thread split.
 - ⚠ **THIS IS NOT AN ARGUMENT THAT R-20 WAS WRONG, AND IT IS NOT A LICENCE TO SWEEP.** A thread's created row is a row about a different object, and R-20's text is explicitly about the two channel bodies (01 §E-2). Extending a ruling to a surface it did not name is the failure the visual-match rules exist to prevent. Recorded so the next reader does not assume the constant was simply forgotten there.
 - Status: OPEN, one line either way. Needs Samuel's word: does the thread row take "Created" + `formatDate` too, or is the thread card deliberately terser?
+
+### F-723 — the operator read as OFFLINE in their own home channel: /home's roster passed no viewer (2026-09-17)
+
+- Location: `apps/desktop-ui/src/pages/home/person-members.tsx › PersonMembers` (the roster that passed nothing), against `src/features/channels/components/member-roster.tsx › MemberRoster`'s `viewerUserId` and `src/features/channels/components/view-model.ts › isPresentForViewer`.
+- ⚠ **Id note:** re-derived across every live branch at file time (the header's loop), not from `master` — `master`'s highest is `F-717` and wave 1B holds `F-720`–`F-722`. ⚠ **Re-derive AGAIN before merge:** `master` moved under wave 1B mid-wave and cost it a three-entry renumber.
+- Found during: **wave 1A**, executing `docs/specs/workspace-parity/08-slot-audit.md` §4.3, which found it by reading the slot contract rather than the screen.
+- **THE MECHANISM, IN THREE FILES AND ONE EXPRESSION.** `isPresentForViewer` is `if (viewerUserId && member.userId === viewerUserId && isSpaRenderer()) return true;` before it falls through to the `lastSeenAt` heartbeat. `MemberRoster` forwards `viewerUserId` and nothing else touches it. The shared Info tab has passed `index.currentUserId` since 2026-09-08; /home's replacement body mounted its own `useChannelMembers` and passed **no viewer at all**, so the override could not fire — **in the desktop renderer, which is the only place `isSpaRenderer()` is ever true.** The operator therefore read as OFFLINE in their own home channel while the workspace channels page, on the same machine in the same second, showed them online.
+- 🔒 **IT IS THE SLOT-REPLACES-BODY CLASS, A FOURTH TIME, AND THE FIRST ONE THAT WAS WRONG RATHER THAN MISSING.** `mentions` (2026-09-15) and `headerEdit` (2026-09-17) were sections that did not appear; this one appeared and stated a falsehood. All four have one cause: `ChannelSurfaceSlots.infoTab` replaced a body the surface had already paid for, so a fact the surface held reached nothing. `00-MASTER.md` §4.2 **G2** — *a slot may ADD, never REPLACE*.
+- **FIXED HERE, AND NOT BY PASSING THE PROP.** `ChannelInfoTabContext` gained `index` (and `members`, `activity`, `channelName` beside it), so the viewer reaches every host by the same route the gate does; wave 1A's next commit deletes the replacing slot outright, which is what stops a fifth instance. Pinned by `apps/desktop-ui/src/pages/home/home-roster-presence.test.tsx` — **red before the fix**, mutation-verified by dropping the prop again (both cases go red, including the negative one that proves the roster has not simply started calling everybody online).
+- Status: **RESOLVED 2026-09-17** in wave 1A. Left here because the CLASS is what the entry is about, and because `08-slot-audit.md` §4.3 asked for an id in the change that fixed it.

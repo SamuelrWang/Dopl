@@ -26,23 +26,25 @@ import {
 import { MentionsList } from "@/features/channels/components/mentions-list";
 import type { MentionsBundle } from "@/features/channels/components/mentions-disclosure";
 import { useChannelInfoCardWrite } from "@/features/channels/hooks/use-channel-info-card-writes";
-import { useChannelMembers } from "@/features/channels/hooks/use-channel-members";
 import {
   CREATED_ROW_LABEL,
   memberLabel,
 } from "@/features/channels/lib/channel-display";
-import { memberPerson } from "@/features/channels/components/view-model";
+import { memberPerson, type AuthorIndex } from "@/features/channels/components/view-model";
+import { PanelHeading as ActivityHeading } from "@/features/channels/components/bits";
+import {
+  ThreadActivityStrip,
+  type ActivityBin,
+} from "@/features/channels/components/thread-activity";
 import { Avatar } from "@/shared/ui/avatar";
 import {
   EMPTY_INFO_CARD,
   removeInfoCardRow,
   upsertInfoCardRow,
 } from "@/features/channels/info-card";
-import type { Channel } from "@/features/channels/types";
+import type { Channel, ChannelMember } from "@/features/channels/types";
 import type { HomeChannel } from "@/features/home/types";
-import { channelTitle } from "./home-rows";
 import { PersonMembers } from "./person-members";
-import { PersonThreadActivity } from "./person-thread-activity";
 
 /**
  * The Info tab of a home channel's surface — THE CHANNEL, exactly as a
@@ -96,6 +98,10 @@ export function PersonInfoTab({
   gate,
   mentions,
   headerEdit,
+  members,
+  index,
+  activity,
+  channelName,
 }: {
   homeChannel: HomeChannel;
   /**
@@ -119,11 +125,29 @@ export function PersonInfoTab({
    * mint its own: `useChannelHeaderWrite` takes THE surface's one refetch gate.
    */
   headerEdit: ChannelHeaderEdit;
+  /** THE SURFACE'S ROSTER — `ChannelInfoTabContext.members` (wave 1A). The
+   *  Creator row and `PersonMembers` below read this one list; each used to
+   *  mount `useChannelMembers` of its own. */
+  members: ChannelMember[];
+  /** THE AUTHOR INDEX, CARRYING THE VIEWER — `ChannelInfoTabContext.index`.
+   *  🔒 `index.currentUserId` is what the roster needs to stop reporting the
+   *  operator offline in their own channel (F-723). */
+  index: AuthorIndex;
+  /** THE SURFACE'S 31-DAY SERIES — `ChannelInfoTabContext.activity`. This pane
+   *  mounted a SECOND `useOverviewSeries` on the identical key until wave 1A. */
+  activity: { bins: readonly ActivityBin[]; loading: boolean };
+  /** THE DERIVED NAME, settled upstream — `ChannelInfoTabContext.channelName`.
+   *  ⚠ It replaced `home-rows.ts › channelTitle` HERE and only here: the LEFT
+   *  COLUMN's row still derives its own title off the account projection, which
+   *  is a different read of a different payload. */
+  channelName: string;
 }) {
-  // 🔒 THE CHANNEL'S OWN NAME. `channelTitle` returns `channel.name` and nothing
-  // else since 2026-09-01 — the roster-derived title is gone, and that function's
-  // docblock carries the ruling and its history.
-  const name = channelTitle(homeChannel);
+  // 🔒 THE CHANNEL'S OWN NAME, DERIVED ONCE BY THE SURFACE (wave 1A). This read
+  // `home-rows.ts › channelTitle` — the ACCOUNT projection's `name` — while the
+  // pane header beside it read the workspace row through `peerNamedHeader: false`.
+  // Two rows of one channel, two caches, one card. `channelTitle` keeps its one
+  // remaining caller, the left column's list row.
+  const name = channelName;
   // ⚠ CACHE-SHAPE FALLBACK: the persisted query cache (IndexedDB) serves
   // channel rows minted before `infoCard` existed, so the field can be absent
   // on the first paint after an upgrade even though the API now always sends
@@ -161,15 +185,11 @@ export function PersonInfoTab({
   // row was deleted 2026-09-01); dropping the union would fail validation on
   // every one of those rows. Only CUSTOM rows are removable.
   //
-  // ⚠ CREATOR reads the roster the surface already has (`useChannelMembers`, the
-  // same read `PersonMembers` makes one section down — one cache entry, not a
-  // second request). A creator who is no longer a member has no roster row and
-  // an id is not a name, so the row says it does not know — the same answer the
+  // ⚠ CREATOR reads THE SURFACE'S roster, handed down (wave 1A) — it used to
+  // mount `useChannelMembers` here and `PersonMembers` mounted a third one a
+  // section down. A creator who is no longer a member has no roster row and an
+  // id is not a name, so the row says it does not know — the same answer the
   // workspace channels page gives (`channels/components/info-tab.tsx`).
-  const { members } = useChannelMembers(
-    homeChannel.channelId,
-    homeChannel.workspaceId
-  );
   const creator = members.find((m) => m.userId === channel.createdBy) ?? null;
   const builtIns: BuiltInRow[] = [
     // ⚠ **"DESCRIPTION" IS THE PRODUCT'S WORD FOR `channels.topic` (ruling,
@@ -347,9 +367,19 @@ export function PersonInfoTab({
           between the card and this strip and he moved it below. The spine is
           unchanged in shape — facts, then activity, then what is addressed to YOU,
           then people. */}
-      <PersonThreadActivity
-        channelId={channel.id}
-        workspaceSegment={homeChannel.workspaceSegment}
+      {/* ⚠ **THE SURFACE'S SERIES, NOT A SECOND READ OF IT (wave 1A).** This was
+          `person-thread-activity.tsx`, a 63-line wrapper whose whole body was
+          `useOverviewSeries` + `PanelHeading` + `ThreadActivityStrip` — the same
+          hook, with the same arguments, that `channel-surface-data.ts` had already
+          mounted for the tab it was not rendering. The heading follows the SURFACE
+          (Samuel, 2026-09-05), which here is a CHANNEL.
+          ⚠ THE STRIP RENDERS NOTHING rather than empty wells while the read is in
+          flight — an empty well is a MEASURED zero. */}
+      <ActivityHeading title="Channel activity" />
+      <ThreadActivityStrip
+        bins={activity.bins}
+        loading={activity.loading}
+        metricLabel="Messages"
       />
 
       {/* ⚠ **A TOP-LEVEL CATEGORY, NOT A ROW INSIDE CHANNEL INFO** (Samuel,
@@ -388,7 +418,11 @@ export function PersonInfoTab({
         inset="flush"
       />
 
-      <PersonMembers homeChannel={homeChannel} />
+      <PersonMembers
+        homeChannel={homeChannel}
+        members={members}
+        viewerUserId={index.currentUserId}
+      />
     </div>
   );
 }

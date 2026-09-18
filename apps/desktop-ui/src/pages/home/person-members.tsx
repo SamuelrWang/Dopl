@@ -1,6 +1,6 @@
 import { PanelHeading } from "@/features/channels/components/bits";
 import { MemberRoster } from "@/features/channels/components/member-roster";
-import { useChannelMembers } from "@/features/channels/hooks/use-channel-members";
+import type { ChannelMember } from "@/features/channels/types";
 import { EMPTY_ROLE, type HomeChannel } from "@/features/home/types";
 import { meetsMinRole } from "@/features/workspaces/types";
 import { AddPersonDialog } from "./add-person-dialog";
@@ -19,11 +19,15 @@ import { LinkOutPanel } from "./link-out-panel";
  * presence ring, same `h-[46px]`, name over EMAIL, same role pill, same
  * online/offline partition. **Adapt data wiring here; never the row.**
  *
- * ⚠ IT READS THE ROSTER THE SURFACE ALREADY HAS. `useChannelMembers(channelId,
- * workspaceId)` is the exact call `channel-surface-data.ts` makes with the
- * exact same arguments, so this mounts on the SAME TanStack entry and costs no
- * request — that is what "reuse the existing read" buys, and it is why this
- * does not take `members` as a prop from a parent that has none.
+ * 🔒 **IT IS HANDED THE ROSTER, IT DOES NOT READ ONE (wave 1A, 2026-09-17).**
+ * This mounted its own `useChannelMembers(channelId, workspaceId)` — the exact
+ * call `channel-surface-data.ts` makes with the exact same arguments — on the
+ * argument that one TanStack entry costs no second request. **That was true about
+ * the REQUEST and false about the TRUTH.** A second subscriber is a second source
+ * for one list, and it came with a second decision about what to hand the roster:
+ * this one passed no `viewerUserId`, so the operator read as OFFLINE in their own
+ * home channel (F-723). `members` and `viewerUserId` now arrive from
+ * `channel-surface.tsx › ChannelInfoTabContext`, which is the surface's own read.
  *
  * ⚠ THE HEADING CARRIES THE COUNT AND NOTHING ELSE. `info-tab.tsx`'s trailing
  * cluster also holds `Add member` and `Filter members` `IconButton`s — both of
@@ -68,12 +72,20 @@ import { LinkOutPanel } from "./link-out-panel";
  * invitation would mint over a URL the operator has already sent. Pending link
  * → the Link out panel; otherwise → the button.
  */
-export function PersonMembers({ homeChannel }: { homeChannel: HomeChannel }) {
+export function PersonMembers({
+  homeChannel,
+  members,
+  viewerUserId,
+}: {
+  homeChannel: HomeChannel;
+  /** THE SURFACE'S ROSTER — `ChannelInfoTabContext.members`, never a second read. */
+  members: ChannelMember[];
+  /** 🔒 THE VIEWER — `ChannelInfoTabContext.index.currentUserId`. Absent is what
+   *  F-723 was: `isPresentForViewer` loses its desktop override and the operator's
+   *  own row falls through to a heartbeat their own app is not writing. */
+  viewerUserId: string | null;
+}) {
   const { linkOut } = homeChannel;
-  const { members } = useChannelMembers(
-    homeChannel.channelId,
-    homeChannel.workspaceId
-  );
   // ⚠ §8 STALE-CACHE, SPELLED INLINE: a payload cached by the previous bundle
   // carries no `role` key, and `EMPTY_ROLE` (rank 0) takes the button off for one
   // paint rather than offering a mint the server would refuse.
@@ -91,7 +103,7 @@ export function PersonMembers({ homeChannel }: { homeChannel: HomeChannel }) {
           "No members in this channel." could only ever appear during the
           roster read's first frame — a false sentence, briefly. */}
       <div data-testid="channel-members">
-        <MemberRoster members={members} />
+        <MemberRoster members={members} viewerUserId={viewerUserId} />
       </div>
 
       {linkOut ? (

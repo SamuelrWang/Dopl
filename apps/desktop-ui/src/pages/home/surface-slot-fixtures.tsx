@@ -22,8 +22,13 @@ import type { ReactNode } from "react";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import type { ChannelInfoTabContext } from "@/features/channels/components/channel-surface";
 import type { MentionsBundle } from "@/features/channels/components/mentions-disclosure";
-import type { AuthorIndex } from "@/features/channels/components/view-model";
+import {
+  indexMembers,
+  type AuthorIndex,
+} from "@/features/channels/components/view-model";
 import { useChannelHeaderWrite } from "@/features/channels/hooks/use-channel-header-writes";
+import { useChannelMembers } from "@/features/channels/hooks/use-channel-members";
+import { useOverviewSeries } from "@/features/workspaces/hooks/use-overview-series";
 import type { Channel } from "@/features/channels/types";
 
 /** An author index with nobody in it — enough for a list with no rows. */
@@ -69,6 +74,14 @@ export function infoTabContext(
       onSaveTopic: () => {},
       busy: false,
     },
+    // ⚠ **THE EMPTY DEFAULTS ARE THE HONEST ONES, AND THE STUB BELOW OVERRIDES
+    // EVERY ONE OF THEM FROM A REAL READ (wave 1A).** A fixture that invented a
+    // roster or a series here would let a suite pass while the surface handed the
+    // tab nothing — which is the failure this whole file exists to prevent.
+    members: [],
+    index: EMPTY_INDEX,
+    activity: { bins: [], loading: false },
+    channelName: "",
     ...over,
   };
 }
@@ -89,6 +102,8 @@ export function standaloneSurfaceStub(ctx?: Partial<ChannelInfoTabContext>) {
     StandaloneChannelSurface: (props: {
       channel: Channel;
       workspaceId: string;
+      workspaceSlug?: string;
+      currentUserId?: string;
       role?: Role;
       slots?: { infoTab?: (c: ChannelInfoTabContext) => ReactNode };
     }) => {
@@ -99,6 +114,19 @@ export function standaloneSurfaceStub(ctx?: Partial<ChannelInfoTabContext>) {
         // realtime loop, so the no-op gate `infoTabContext` already serves is the
         // honest stand-in.
         gate: { begin: () => {}, end: () => {} },
+      });
+      // 🔒 **THE STUB MAKES THE SURFACE'S READS, BECAUSE THE SLOT'S CONTRACT IS
+      // NOW THAT IT HAS ALREADY MADE THEM (wave 1A, 2026-09-17).** `members`,
+      // `index` and `activity` reach the tab from `channel-surface-data.ts` in the
+      // shipped app; a stub that handed them fixtures would pass every /home case
+      // while the real surface fetched nothing — and these suites drive a REAL
+      // bridge, so making the calls here keeps them end to end.
+      const { members } = useChannelMembers(props.channel.id, props.workspaceId);
+      const series = useOverviewSeries({
+        workspaceSegment: props.workspaceSlug ?? "",
+        metric: "messages",
+        channelId: props.channel.id,
+        enabled: Boolean(props.workspaceSlug),
       });
       return (
         <div data-testid="channel-surface">
@@ -112,6 +140,16 @@ export function standaloneSurfaceStub(ctx?: Partial<ChannelInfoTabContext>) {
                 onSaveTopic: write.saveTopic,
                 busy: write.pending,
               },
+              members,
+              // ⚠ THE VIEWER IS THE HOST'S `currentUserId`, exactly as
+              // `derivations.ts › indexMembers` resolves it on the real surface —
+              // and it is what stops the roster reporting the operator offline in
+              // their own channel (F-723).
+              index: indexMembers(members, props.currentUserId ?? ""),
+              activity: { bins: series.days, loading: series.loading },
+              // 🔒 `peerNamedHeader: false` on every /home mount, so the surface's
+              // derived name IS the channel's stored one.
+              channelName: props.channel.name,
               ...ctx,
             })
           )}

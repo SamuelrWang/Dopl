@@ -29,6 +29,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { channel, member, message, thread, ME, PEER, WS } from "./test-fixtures";
+import type { ChannelInfoTabContext } from "./channel-surface";
 
 interface LiveArgs {
   workspaceId: string;
@@ -266,6 +267,37 @@ describe("StandaloneChannelSurface — the host's two knobs", () => {
     const fromLive = live.mock.results.at(-1)?.value.gate;
     expect(fromLive).toBeTruthy();
     expect(seen).toBe(fromLive);
+  });
+
+  // ⚠ **THE SAME ASSERTION, FOUR MORE FIELDS (wave 1A, 2026-09-17).** The
+  // context is what the surface has ALREADY PAID FOR, and every field on it is
+  // there because a host was re-reading it downstream — `members` twice more,
+  // `activity` once more, `channelName` re-derived off the other projection, and
+  // `index` (which carries the viewer) not resolved at all, which is F-723.
+  // 🔒 **IDENTITY WHEREVER IT CAN BE, FOR THE GATE'S REASON:** a SHAPE assertion
+  // passes against a value the tab minted for itself, and a tab minting its own
+  // is precisely the defect. `members` is the surface's array by reference;
+  // `index.currentUserId` is the id this surface was handed, not one re-resolved.
+  it("hands the Info-tab slot the surface's own roster, viewer, series and name", () => {
+    let seen: ChannelInfoTabContext | null = null;
+    mount({
+      slots: {
+        infoTab: (ctx) => {
+          seen = ctx;
+          return <p>slot</p>;
+        },
+      },
+    });
+    const ctx = seen as unknown as ChannelInfoTabContext;
+    expect(ctx.members.map((m) => m.userId)).toEqual([ME, PEER]);
+    expect(ctx.index.currentUserId).toBe(ME);
+    // The roster the tab is handed IS the roster the index was built over — one
+    // read, not two that happen to agree in a fixture.
+    expect(ctx.index.byId.get(ME)).toBe(ctx.members[0]);
+    expect(ctx.channelName).toBe(CHANNEL.name);
+    // ⚠ `loading` IS NOT `bins.length === 0`: an empty well is a MEASURED zero,
+    // so the strip has to be able to tell "not counted yet" from "counted, quiet".
+    expect(ctx.activity).toEqual({ bins: [], loading: expect.any(Boolean) });
   });
 
   // ⚠ `await` ON THE TAB BODY throughout this block: the info column's body

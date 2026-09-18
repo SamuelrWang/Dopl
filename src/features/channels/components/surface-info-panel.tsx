@@ -224,6 +224,16 @@ export function SurfaceInfoPanel({
       infoTab={slots?.infoTab?.({
         gate,
         headerEdit,
+        // ⚠ **THE SURFACE'S OWN READS, HANDED DOWN (wave 1A, 2026-09-17).** Each
+        // of these was mounted a SECOND time downstream before it was on the
+        // context — `members` three times, `activity` twice — and `index` was
+        // not re-derived at all, which is how a roster came to be drawn with no
+        // viewer and the operator read as offline in their own channel (F-723).
+        // See `ChannelInfoTabContext` for each field's rule.
+        members,
+        index,
+        activity: { bins: data.activityBins, loading: data.activityLoading },
+        channelName,
         mentions: {
           mentions,
           truncated: data.mentionsTruncated,

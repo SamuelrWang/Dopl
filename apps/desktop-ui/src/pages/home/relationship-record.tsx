@@ -115,13 +115,32 @@ export function RelationshipRecord({
         // ALREADY minted the write and mirrored `canManageChannel` for the tab it
         // is not rendering, so the /home card takes that bundle rather than a
         // second hook on a second gate.
-        infoTab: ({ gate, mentions, headerEdit }) => (
+        // ⚠ `members`, `index`, `activity` AND `channelName` RIDE WITH THEM
+        // (wave 1A, 2026-09-17) — the same argument, three applications later.
+        // Every one was ALREADY READ by the surface for the tab it is not
+        // rendering, and every one was being read a second time downstream:
+        // `members` twice more, `activity` once more, `channelName` re-derived
+        // off the other projection — and `index`, which carries the viewer, not
+        // at all, which is F-723.
+        infoTab: ({
+          gate,
+          mentions,
+          headerEdit,
+          members,
+          index,
+          activity,
+          channelName,
+        }) => (
           <PersonInfoTab
             homeChannel={homeChannel}
             channel={channel}
             gate={gate}
             mentions={mentions}
             headerEdit={headerEdit}
+            members={members}
+            index={index}
+            activity={activity}
+            channelName={channelName}
           />
         ),
       }}

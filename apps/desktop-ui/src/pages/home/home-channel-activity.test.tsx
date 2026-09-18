@@ -11,7 +11,7 @@ import {
 } from "./home-test-harness";
 
 /**
- * THE HOME INFO TAB'S **THREAD ACTIVITY** STRIP.
+ * THE HOME CHANNEL'S **ACTIVITY STRIP**, as the /home host renders it.
  *
  * ⚠ SPLIT OUT OF `person-info-tab.test.tsx` ON 2026-09-01, when that file hit
  * the 500-line cap (§1 — `eslint.config.mjs › max-lines`) and could not absorb
@@ -20,6 +20,15 @@ import {
  * different subject from the info CARD — it reads a workspace series endpoint
  * and renders a quantised ramp, where the card is a curated fact list with a
  * write behind it.
+ *
+ * ⚠ **RENAMED OFF `person-thread-activity.test.tsx` IN WAVE 1A (2026-09-17), AND
+ * THE SUBJECT MOVED WITH THE NAME.** It pinned a /home-local WRAPPER
+ * (`person-thread-activity.tsx`) that mounted `useOverviewSeries` itself — a
+ * second subscriber to the key `channel-surface-data.ts` had already mounted for
+ * the tab it was not rendering. That file is deleted; the series is
+ * `ChannelInfoTabContext.activity` now. **Every case below is unchanged**,
+ * because what they always asserted is what the /home HOST puts on screen and
+ * which read it causes — neither of which was ever the wrapper's to own.
  *
  * ⚠ MOUNTED THROUGH `HomePage`, like its parent suite, and for the same reason:
  * the strip's read is keyed by the CHANNEL, which only the real page resolves.

@@ -20,10 +20,12 @@
  * the headings are read off that file; do not re-word them here.**
  *
  * ⚠ **WHAT THE SCENE CANNOT MOUNT, AND WHY — TWO THINGS, BOTH READS.**
- *   - `PersonThreadActivity` wraps `ThreadActivityStrip` in a
- *     `useOverviewSeries` call. The strip itself is shared, so the scene renders
- *     the STRIP with scripted bins under the same `PanelHeading` that component
- *     uses ("Channel activity", Samuel 2026-09-05).
+ *   - the activity strip is fed from a `useOverviewSeries` read the /home
+ *     SURFACE mounts and hands down (`channel-surface.tsx ›
+ *     ChannelInfoTabContext.activity`, wave 1A — it was a /home-local wrapper
+ *     with a second copy of that read until 2026-09-17). The strip itself is
+ *     shared, so the scene renders the STRIP with scripted bins under the same
+ *     `PanelHeading` the real body uses ("Channel activity", Samuel 2026-09-05).
  *   - `PersonMembers` wraps `MemberRoster` in `useChannelMembers` and ends in
  *     `AddPersonDialog`, a write. The roster is shared and mounted; the dialog's
  *     TRIGGER is the page's black pill, which is `PAGE_ACTION_BTN` — the same
@@ -128,8 +130,8 @@ export function DemoInfoTab({
 
       {/* ⚠ ACTIVITY ABOVE MENTIONS AND ABOVE MEMBERS (Samuel, 2026-08-25, and
           2026-09-15 for Mentions' place): facts → what has been happening →
-          what is addressed to YOU → who is here. The heading is
-          `person-thread-activity.tsx`'s own word for this surface. */}
+          what is addressed to YOU → who is here. The heading is the real body's
+          own word for this surface. */}
       <PanelHeading title="Channel activity" />
       <ThreadActivityStrip
         bins={activityBins}
