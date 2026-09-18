@@ -60,8 +60,14 @@
 --
 -- 🔒 **BY NAME, BYTE-EXACT, NEVER `db push`, NEVER BY FILENAME VERSION** —
 -- F-304's re-stamp means a history row's version is not this file's
--- `20261009120000` prefix. Verify with `supabase migration list` / MCP
+-- `20261010120000` prefix. Verify with `supabase migration list` / MCP
 -- `list_migrations`, JOINED ON THE NAME (`drop_channels_archived_at`).
+--
+-- ⚠ **THIS FILE WAS `20261009120000_…` AND WAS RENUMBERED ON REBASE.** `master`
+-- landed `20261009120000_personal_container_permanent.sql` on the same version
+-- while this wave was in flight, and TWO migrations sharing a version is what
+-- `knowledge/schema-sql.test.ts › no TWO migrations share a version` (F-526)
+-- exists to catch. Nothing about the statement changed.
 --
 -- ============================================================================
 

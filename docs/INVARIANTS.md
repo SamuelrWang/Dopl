@@ -2256,7 +2256,7 @@ recommendation in any spec; a spec that disagrees is the thing that is wrong.
   - ⚠ **THE COLUMN SURVIVES THIS WAVE, WITH NO WRITER AND NO READER.** `channels.archived_at`, the
     `Channel.archivedAt` DTO field and `@dopl/client › Channel.archivedAt` are vestigial — **do not
     branch on them.** The drop is written and deliberately NOT applied
-    (`supabase/migrations/20261009120000_drop_channels_archived_at.sql`); it carries the re-derive
+    (`supabase/migrations/20261010120000_drop_channels_archived_at.sql`); it carries the re-derive
     command rather than a count, and the DTO field, the client type and the fixtures go with it in
     that same change.
   - ⚠ **`deleted_at` IS A DIFFERENT THING AND STILL FILTERS EVERYWHERE.** A soft-deleted channel is
