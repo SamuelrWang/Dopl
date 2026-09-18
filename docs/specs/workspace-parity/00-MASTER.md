@@ -121,7 +121,7 @@ research doc it came from (e.g. "01 §A row 5").
 | P22 | `RECORD_SURFACE` — one declaration of the level-2 card | `pages/home/index.tsx:284-285` (utility string) | `app-shell.module.css:140-150` (CSS module) | collapse duplicate | S | — | 03 §A6, §D14 |
 | P23 | `FullScreenError` wrapper | `pages/home/index.tsx:135-148` | `app-shell.tsx:193-199` — byte-identical | collapse duplicate | S | — | 03 §A28, §D13 |
 | ✅ P24 | `.glass-panel` / `.hairline` / `.hairline-strong` in the SPA kit | n/a | in `globals.css`, **absent from `kit.css`** | DONE 2026-09-17: `.glass-panel` mirrored byte-exact into `kit.css`; `.hairline` / `.hairline-strong` had ZERO users in either tree and were DELETED from `globals.css` instead. Gate: `check-css-token-drift.ts` compares the `@layer components` class set (R-41) | S | R-41 | 03 §B22, §D12 |
-| P25 | `Crossfade` on in-page selection changes | `pages/home/index.tsx:294` | route remount, no transition | new call sites | S | R-05 | 03 §B14, §C2 |
+| ✅ P25 | `Crossfade` on in-page selection changes — **AND ON PAGE SWITCHES (R-05 chose (a))** | `pages/home/index.tsx:294` | DONE 2026-09-17 (wave 5): `app-shell.tsx › AppShellLayout` wraps `<Outlet/>` in `Crossfade`, token = the PAGE segment (a record pick inside a page is that page's own fade, not a second one). ⚠ The outgoing page is the ROUTER's tree, so the token says WHEN to fade, not WHAT to hold | new call site | S | R-05 | 03 §B14, §C2 |
 | P26 | `FormDialog` conformance for the 8 remaining input forms | 2 /home dialogs conform | 5 conform, **8 `Todo`** (`grep -c 'Todo' docs/DESIGN-SYSTEM.md` = 10, of which 2 are prose; the doc previously said 9) (`create-channel-dialog`, `direct-message-dialog`, `base-settings-modal`, `create-base-dialog`, `move-to-dialog`, `create-team-dialog`, `members/invite-dialog`, `create-skill-dialog`) | new code, 9 small rewrites | M | — | 03 §B16 |
 | P27 | Flat section language (`SectionPanel` on `--home-panel`) | `home.module.css:165-168`, no hairline | `SECTION_PANEL_GROUND` keeps a hairline; `SectionBox` (concave) live in 8 files | CSS + delete consumers | M | R-39 | 03 §B7/B8, §E5 |
 | P28 | The account palette skin over the shared channel surface | six `:global()` rules in `home.module.css:56-168`, attribute-hooked | neutral kit hairlines | CSS promotion (or keep the fence) | M | R-38 | 01 §D; 03 §B11, §E10 |
@@ -215,8 +215,8 @@ deletion could be wrong for a 20-person room.
 | X16 | Two declarations of the level-2 record card | `RECORD_SURFACE` | *"the single most load-bearing duplication in the document"* | **Yes** | 03 §A6 |
 | X17 | `use-home-channel-sync.ts` + `use-home-unread-refresh.ts` (cache bridges) | one projection | they exist **only** because there are two caches | **Yes** — a multi-member room makes the staleness worse | 05 §B.2 |
 | X18 | `HomeChannel.lastMessagePreview` on the wire with no renderer | either render it (P14) or delete it | Samuel 2026-09-13: on the list column a last message *"just doesn't make sense imo"* | **Re-ask** — a workspace row may want it | 05 §A15 |
-| X19 | The full workspace shell for a non-guest member of a `link` container | `/home` | `app-shell.tsx:84-87` fences only `personal`; L82-83 admits `link` **for guests** | **N/A → this IS the multi-member question.** R-01 | 04 §E-1 |
-| X20 | `/billing/[segment]` rendering Starter/Team for a `link` container | `/billing?plan=pro` | F-678 OPEN; its Team checkout 400s | **Yes** — closed by construction if R-01(a) wins | 04 §C-6 |
+| ✅ X19 | The full workspace shell for a non-guest member of a `link` container | `/home` | **CLOSED 2026-09-17 (wave 5, R-01(a))** — `app-shell.tsx › AppShellLayout` redirects every member of a non-standard container off `/{segment}/...`, gate read through `isStandardWorkspace` rather than the ROLE; `app-shell-guest.test.tsx` 6 cases → 12 | **N/A → this IS the multi-member question.** R-01 | 04 §E-1 |
+| X20 | `/billing/[segment]` rendering Starter/Team for a `link` container | `/billing?plan=pro` | F-678 OPEN; its Team checkout 400s. ⚠ **R-01(a) LANDED 2026-09-17 and closes the DESKTOP route into it, not the WEB route itself** — `/billing/{segment}` is a Next page outside the SPA shell, so F-678 stays open and is re-measured there, not assumed dead | **Yes** — closed by construction if R-01(a) wins | 04 §C-6 |
 | X21 | `channel_personal_arming` table + its three live policies | nothing writes it; Samuel reversed task 11 on 2026-09-06 | delete-don't-disarm | **Yes** | 05 §C.1, §F R8 |
 | X22 | `knowledge_bases.home_scoped` / `agent_templates.home_scoped` columns | `workspace_id = the personal container` | B10/#18 2026-09-02; drop is HELD in `supabase/migrations-held/` behind two `count(*) = 0` checks | **Yes**, but ⚠ the column is also the rollback path — once dropped the deploy is one-way | 04 §0.4; 05 §C.2 |
 | X23 | Playground (18 files, 4,467 lines, 0 tests, unauthenticated provisioning, 3 static mirror panes) | nothing; the website replaced it and is retiring | **not found as a ruling in this tree** — treat as a question | **Yes** if the site retires | 04 §C-5, §E-9 |
@@ -1344,6 +1344,53 @@ as-is**; no rename.
 **Rulings: ALL RULED 2026-09-17.** R-01 → (a) · R-02 → keep titles · R-04 → the search popup ·
 R-05 → crossfade page switches too · R-06 → not now · R-07 → keep both · R-10 → (a) + FROZEN ·
 R-13 → expired, and the guest nav goes.
+
+#### ✅ Wave 5 — the SHELL half, done 2026-09-17 (branch `wave5/shell`)
+
+**R-01(a), R-13 and R-05 are IN THE TREE.** What landed, one commit each:
+
+1. **R-01(a) / X19 — the shell refuses every member of a home-channel container, not only the
+   guest.** `apps/desktop-ui/src/components/app-shell/app-shell.tsx › AppShellLayout`: the redirect
+   that was fenced on `role === "guest"` (ledger ASK-2, 2026-08-30) is now fenced on the container
+   KIND, read through `isStandardWorkspace` — the POSITIVE predicate (INVARIANTS §4A, F-295), never
+   a hand `!== "link"`. `personal` stays out of this arm because the effect above it already owns
+   it; two arms firing would race two `replace`s over one history entry. **The destination is
+   unchanged** — the container's own channel record, `/home` when the read answers no channel or
+   fails. `app-shell-guest.test.tsx` 6 cases → 12; the gate narrowed back to `role === "guest"` is
+   3 red.
+2. **R-13 — the nav is DELETED, not ported.** `AppSidebarCore` is not rendered for a container
+   member: eight rows, the switcher, the Team upsell and the settings gear all pointed at pages the
+   redirect bounces. It reads the SAME `isContainerMember` the redirect reads — one derivation of
+   the kind, not two. The card's missing left inset is `.panel[data-no-nav] .pageCard` in
+   `app-shell.module.css`, an ATTRIBUTE hook, because the panel's and the card's class EXPRESSIONS
+   are byte-shared with the shell ghost (`components/skeletons/frame-skeletons.test.tsx`).
+   ⚠ **R-13's sentence points at the DESKTOP shell, not at `/c/{containerId}`.** The guest WEB lane
+   renders no nav and never did (`channels/components/channel-single-column.tsx`: *"there is no
+   other navigation on this page to offer them"*) — measured, not assumed.
+3. **R-05 / P25 — the shell crossfades on page switches.** One call site around `<Outlet/>`, the
+   shared `Crossfade`, the kit's one `.crossfade` recipe, its one `FADE_MS` and its one
+   reduced-motion rule; **no new timing value**. The token is the PAGE SEGMENT — `knowledge/{slug}`
+   and `channels/{id}` are one page picking a record, and those pages already fade that pick.
+   ⚠ **AND IT IS NOT A CROSS-DISSOLVE, WHICH IS RECORDED RATHER THAN GLOSSED.** react-router has
+   already swapped `<Outlet/>` by the time the token moves, so the render function cannot select
+   the OUTGOING page the way /home's pane does: the token says WHEN to fade, not WHAT to hold, and
+   the swap reads as a dip and return rather than one view dissolving into the next. Holding the
+   outgoing route tree is not something a layout route can do from inside; **if Samuel wants a true
+   cross-dissolve on routes, that is a different mechanism and his word.**
+
+🔒 **R-06 — CONFIRMED, NOTHING ADDED.** This wave adds no page skeleton and touches none. Skills,
+Chats and Ontology still resolve through `PageLoading`
+(`components/skeletons/section-skeleton.tsx`), which renders a SHAPE, so **no PAGE in the workspace
+shell shows a text loading line.** ⚠ **DEFERRED WITH SAMUEL'S "SKELETONS LATER":** eight text
+`Loading…` lines survive inside sub-panels and menus, none of them page chrome — re-measure with
+`grep -rn "Loading[….]" src apps --include="*.tsx" | grep -v "\.test\." | grep -v sr-only`
+(**8 @ 2026-09-17**), e.g. `pages/home/ontology-share.tsx › Loading sharing…`,
+`features/skills/components/skill-history-panel.tsx`, `features/revisions/components/changelog-list.tsx`.
+They are left exactly as written.
+
+🚧 **STILL OPEN IN WAVE 5** (not this branch's scope): P21 the hand-cut pill sweep · P39
+`AccountRail` + `AppShellLayout` + `ShellChromeSkeleton` moving down behind the `*Core` idiom · P40
+`BarSeries` moving down · U56 one frame ghost · the header GEOMETRY work R-02 left alive.
 **Files touched:** ~35.
 **Gates:** `frame-skeletons.test.tsx` (the shell ghost byte-shares five box expressions with `app-shell.tsx`; the rail ghost mounts `account-rail.module.css`'s own classes) · `demo-class-coverage.test.tsx` (the landing draws /home's chrome) · `deep-link-target.test.mjs`.
 **Risk:** **do the shell LAST of the chrome work** — moving it while five headers are in flight is
