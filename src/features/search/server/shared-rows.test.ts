@@ -286,3 +286,102 @@ describe("🔒 search admits exactly what canSeeSkill admits", () => {
     expect(moved).toBeGreaterThan(0);
   });
 });
+
+// ── 🔒 F-716's RESIDUAL: a TEAMS-MODE knowledge base (closed 2026-09-17) ──
+
+/**
+ * The entry's own words: *"a teams-mode PUBLIC base can appear in the popup for
+ * a member of no granted team — the one place the four tables still do not agree
+ * with their own pages."*
+ *
+ * ⚠ **THE FIX IS NOT A TEAMS ARM ON `canSeeBase`.** The knowledge feature spends
+ * its teams question in `teams/server/access.ts › listEffectiveAccess` +
+ * `resolveLevel` (through `filterTeamVisibleBases`), and
+ * `repository-visibility.ts › teamsModeVisible` calls **those two**, batched over
+ * the containers that actually hold a teams-mode row on the page. Same reader,
+ * same resolver, second caller — not a second rule.
+ *
+ * MUTATION-VERIFY: dropping the `teamsModeVisible` AND from `visibleBases` turns
+ * the second case here red; dropping the `access_mode` term from the candidate
+ * projection turns the first red (every row reads as workspace-mode).
+ */
+const teamsBase = (over: Record<string, unknown> = {}) => ({
+  ...base({
+    id: "kb-teams",
+    visibility: "public",
+    created_by: PEER,
+  }),
+  access_mode: "teams",
+  ...over,
+});
+
+describe("🔒 a TEAMS-MODE knowledge base is not visible to the wrong member", () => {
+  it("is found by a member of a granted team", async () => {
+    mount({
+      knowledge_bases: [teamsBase()],
+      team_members: [{ team_id: TEAM, user_id: ME, workspace_id: WS }],
+      resource_grants: [
+        {
+          resource_type: "knowledge_base",
+          resource_id: "kb-teams",
+          scope_type: "team",
+          scope_id: TEAM,
+          workspace_id: WS,
+          level: "read",
+        },
+      ],
+    });
+    expect([...(await listReadableBases([WS], caller())).keys()]).toEqual([
+      "kb-teams",
+    ]);
+  });
+
+  it("🔒 is NOT found by a member of no granted team — F-716's residual", async () => {
+    // ⚠ `visibility='public'` ADMITTED THIS ROW right up to 2026-09-17, because
+    // `canSeeBase` returns on its first arm and the teams narrowing lived in a
+    // per-row async call that is not on the search path.
+    mount({
+      knowledge_bases: [teamsBase()],
+      team_members: [],
+      resource_grants: [],
+    });
+    expect([...(await listReadableBases([WS], caller())).keys()]).toEqual([]);
+  });
+
+  it("is found by its OWN CREATOR with no team at all", async () => {
+    mount({
+      knowledge_bases: [teamsBase({ created_by: ME })],
+      team_members: [],
+      resource_grants: [],
+    });
+    expect([...(await listReadableBases([WS], caller())).keys()]).toEqual([
+      "kb-teams",
+    ]);
+  });
+
+  it("is found by a workspace ADMIN of the ROW's container", async () => {
+    // ⚠ The admin arm is about the ROW's container, never "an admin somewhere" —
+    // `roleByContainer` is a map for exactly this.
+    mount({
+      knowledge_bases: [teamsBase()],
+      team_members: [],
+      resource_grants: [],
+    });
+    const admin = caller({ roleByContainer: new Map([[WS, "admin"]]) });
+    expect([...(await listReadableBases([WS], admin)).keys()]).toEqual([
+      "kb-teams",
+    ]);
+  });
+
+  it("🔒 a WORKSPACE-MODE public base is untouched, and costs no teams read", async () => {
+    mount({
+      knowledge_bases: [
+        { ...teamsBase({ id: "kb-open" }), access_mode: "workspace" },
+      ],
+    });
+    expect([...(await listReadableBases([WS], caller())).keys()]).toEqual([
+      "kb-open",
+    ]);
+  });
+});
+

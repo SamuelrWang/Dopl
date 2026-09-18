@@ -154,6 +154,18 @@ class FakeQuery implements PromiseLike<{ data: FakeRow[]; error: null }> {
     return this;
   }
 
+  /** ⚠ ADDED 2026-09-17 with the teams narrowing on `visibleBases`:
+   *  `teams/server/repository-grants.ts › listGrantsForTeams` states its slice
+   *  as a `.match()`, and a fake that lacked it would have thrown rather than
+   *  filtered — which is the failure mode this file exists to have. */
+  match(spec: Record<string, unknown>): this {
+    for (const [column, value] of Object.entries(spec)) {
+      this.log.filters.push(`eq:${column}`);
+      this.predicates.push((r) => r[column] === value);
+    }
+    return this;
+  }
+
   is(column: string, value: null): this {
     this.log.filters.push(`is:${column}`);
     this.predicates.push((r) => (r[column] ?? null) === value);

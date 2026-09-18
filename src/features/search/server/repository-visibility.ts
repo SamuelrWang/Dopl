@@ -7,6 +7,10 @@ import {
   type GrantedResourceIds,
 } from "@/shared/tenancy/resource-grant-reach";
 import { canSeeBase } from "@/features/knowledge/server/service-shared";
+import {
+  listEffectiveAccess,
+  resolveLevel,
+} from "@/features/teams/server/access";
 import { canSeeSkill } from "@/features/skills/server/service-shared";
 import { canSeeChat } from "@/features/chats/server/service-shared";
 import { canSeeTemplate } from "@/features/agent-templates/server/service-shared";
@@ -170,9 +174,67 @@ function teamCtx(granted: GrantedResourceIds, ids: readonly string[]) {
   return { myTeamIds: new Set([MINE]), byId };
 }
 
-/** Knowledge BASES the caller may see. ⚠ `canSeeBase` has no teams arm — that
- *  narrowing lives in `assertBaseVisible`'s `effectiveResourceAccess` call and
- *  is NOT reproduced here (see the residual on F-716). */
+/**
+ * 🔒 **THE TEAMS NARROWING FOR KNOWLEDGE BASES — F-716's RESIDUAL, CLOSED
+ * 2026-09-17** under Samuel's ruling that TEAMS are the workspace's only
+ * sub-scope.
+ *
+ * ⚠ **`canSeeBase` STILL HAS NO TEAMS ARM, AND THIS IS NOT ONE EITHER.** That
+ * feature spends its teams question in `assertBaseVisible` /
+ * `filterTeamVisibleBases`, through `teams/server/access.ts ›
+ * listEffectiveAccess` + `resolveLevel` — and those two are what this calls.
+ * **The same batch reader and the same resolver, a second caller; not a second
+ * rule.** Restating the arm here (or bolting it onto `canSeeBase` with a set the
+ * knowledge feature would then have to supply as well) would put the teams
+ * question in two places with two data paths, which is the failure
+ * `agent-templates › canSeeBaseRow` is this tree's standing example of.
+ *
+ * ⚠ **IT IS THE BOUNDED FAN, NOT THE FORBIDDEN ONE.** `listEffectiveAccess` is
+ * PER CONTAINER, and the ceiling here is the number of DISTINCT containers that
+ * have an `access_mode='teams'` base **on this candidate page** — normally zero,
+ * because a workspace-mode row never reaches this function. A caller with no
+ * teams-mode row in the page pays NOTHING, which is the property that makes the
+ * fan acceptable where `teamGrantedResourceIds` exists to avoid it for the three
+ * predicates that ask on every row.
+ *
+ * ⚠ **A CONTAINER WHOSE ACCESS CANNOT BE RESOLVED DROPS ITS TEAMS-MODE ROWS.**
+ * `listEffectiveAccess` answers `null` for "not an active member" and for a role
+ * holding no level at all (a `guest`), and both mean the caller reaches no
+ * shareable resource there.
+ */
+async function teamsModeVisible<T extends CandidateRow>(
+  caller: SearchCaller,
+  rows: readonly T[]
+): Promise<Set<string>> {
+  const teamsMode = rows.filter((r) => (r.access_mode ?? "workspace") === "teams");
+  if (teamsMode.length === 0) return new Set();
+  const containers = [...new Set(teamsMode.map((r) => r.workspace_id))];
+  const access = await Promise.all(
+    containers.map(async (workspaceId) => {
+      const role = caller.roleByContainer.get(workspaceId) ?? ("viewer" as Role);
+      return [workspaceId, await listEffectiveAccess(workspaceId, caller.userId, { role })] as const;
+    })
+  );
+  const byContainer = new Map(access);
+  const visible = new Set<string>();
+  for (const row of teamsMode) {
+    const acc = byContainer.get(row.workspace_id);
+    if (!acc) continue;
+    if (resolveLevel(acc, "knowledge_base", row.id, "teams") !== null) {
+      visible.add(row.id);
+    }
+  }
+  return visible;
+}
+
+/**
+ * Knowledge BASES the caller may see — `canSeeBase`, then the TEAMS narrowing
+ * the base's own page applies ({@link teamsModeVisible}).
+ *
+ * ⚠ **TWO GATES, AND THE ORDER MIRRORS `assertBaseVisible` EXACTLY**: M-10 +
+ * the grant arm first, the teams question second, AND-ed. A teams-mode base that
+ * `canSeeBase` already refuses never costs a teams read.
+ */
 export async function visibleBases<T extends CandidateRow>(
   caller: SearchCaller,
   rows: readonly T[]
@@ -183,7 +245,7 @@ export async function visibleBases<T extends CandidateRow>(
     rows.map((r) => r.id),
     { team: false }
   );
-  return rows.filter((row) =>
+  const admitted = rows.filter((row) =>
     canSeeBase(
       knowledgeCtxFor(caller, row.workspace_id),
       {
@@ -193,6 +255,10 @@ export async function visibleBases<T extends CandidateRow>(
       } as unknown as KnowledgeBase,
       scoped
     )
+  );
+  const teamsOk = await teamsModeVisible(caller, admitted);
+  return admitted.filter(
+    (row) => (row.access_mode ?? "workspace") !== "teams" || teamsOk.has(row.id)
   );
 }
 
