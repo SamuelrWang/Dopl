@@ -71,6 +71,11 @@ export function BaseCard({
     <article
       className={cn(styles.card, SCOPE_CLASS[scope])}
       aria-label={base.name}
+      /* ⚠ The card's hand cursor, and the ONLY thing that carries it — read by the base
+         layer's one clickable-cursor rule (`globals.css › ANYTHING CLICKABLE SHOWS THE
+         HAND`). NOT a `role="button"`: the card already holds the star toggle, and a button
+         inside a button is invalid. */
+      data-clickable=""
       onClick={() => onOpen(base)}
     >
       <div className={styles.cardHead}>

@@ -2276,6 +2276,50 @@ Why/history: ENGINEERING.md §13, §0 (Known debt), §18 (F-146).
 Rules that are not one feature's. Each carries the date it was ruled. A rule here outranks a
 recommendation in any spec; a spec that disagrees is the thing that is wrong.
 
+- 🔴 **ANYTHING CLICKABLE SHOWS THE HAND, AND IT IS ONE RULE RATHER THAN A CLASS PER CONTROL
+  (2026-09-18).** Samuel: *"for a lot of buttons across the desktop app, when I hover over them,
+  the cursor does not change into the clickable cursor. … Is there one way you can set one piece of
+  code that will make it so that, anytime there's a button or something that can be clicked, the
+  cursor should change into the hand cursor? That's super important."* The rule lives in `@layer
+  base` in **both** stylesheets — `src/app/globals.css` and `apps/desktop-ui/src/styles/tokens.css`
+  (F-074: hand-copies, no shared module) — over `button`, `a[href]`, `summary`, `select`, the
+  clickable ARIA roles, the clickable `input` types, `input[type="file"]::file-selector-button`
+  and `[data-clickable]`, with a second rule giving `:disabled` / `[aria-disabled="true"]` /
+  `[data-disabled]` `not-allowed`.
+  - ⚠ **`label[for]` IS DELIBERATELY NOT IN THE LIST, AND THAT IS A MEASUREMENT.** Every
+    `htmlFor` in this tree points at a TEXT field (re-derive: `grep -rn htmlFor src apps
+    --include='*.tsx'`), where a hand promises a press that is really a focus. A label tied to a
+    CHECKBOX or a RADIO is the case that wants one and takes `data-clickable` the day it exists.
+  - ⚠ **THE CAUSE WAS TAILWIND v4, NOT THE COMPONENTS.** v3's Preflight carried `button { cursor:
+    pointer }`; v4's declares no `cursor` at all, so every `<button>` fell back to the UA
+    `cursor: default` and only components that happened to spell `cursor-pointer` had a hand.
+    Re-derive rather than trusting this: `grep -n cursor node_modules/tailwindcss/preflight.css`.
+  - 🔒 **ZERO SPECIFICITY IN THE WEAKEST LAYER IS THE CONTRACT.** Every compound is `:where()`, so
+    any explicit cursor still wins — `cursor-text` on the inline editors, `cursor-col-resize` on the
+    channel info divider, `cursor-ns-resize` on a `SectionBox` grip, `cursor-grabbing` on a dragged
+    graph card, and every `disabled:cursor-*` a component already spells.
+    **Do not raise the rule's specificity to make it stick** — that inverts it into an override.
+  - 🔴 **AND THIS RULING OVERRIDES THE CURSOR HALF OF THE 2026-09-15 AGENT-TAB RULING (Samuel,
+    2026-09-18, asked directly).** That one read *"the ACTIVE tab takes neither the fill nor the
+    cursor"* and held by SILENCE — a `<button>` had no hand unless a component asked for one.
+    **The FILL half stands** (no `hover:bg-*` on the active tab); **the CURSOR half does not** — an
+    active tab is still a button you can click, so it shows the hand like every other control.
+    ⚠ **`agent-window-chrome.tsx › TAB_ACTIVE` THEREFORE STATES NO CURSOR UTILITY AT ALL, AND THAT
+    ABSENCE IS LOAD-BEARING** — a `cursor-default` bolted back on would out-layer the base rule and
+    silently re-take the override. Pinned by `agent-window-chrome.test.tsx`, which asserts the
+    absence of any `cursor-` class rather than of `cursor-pointer` (the old spelling passed with
+    `cursor-default` present).
+  - ⚠ **`[data-clickable]` IS THE ESCAPE HATCH AND IT IS NOT A STYLE HOOK.** A clickable that is
+    neither a control nor a role — a card or a header row that selects on click while a real
+    `<button>` inside it carries the keyboard — takes the attribute, never a `role="button"` that
+    would nest buttons inside a button.
+  - ⚠ **PINNED BY `src/shared/ui/clickable-cursor.test.ts`, WHICH IS NOT A NEW CI GATE** — it rides
+    the existing root suite. `check-css-token-drift.ts` **cannot** see this rule (a `cursor`
+    declaration is neither a `--*` token nor a `@layer components` name), so that test is the only
+    thing holding the two copies equal, and its second half is a source scan: an `onClick` on a
+    non-interactive tag must carry `role` or `data-clickable`, or be named in its allowlist with the
+    reason it is not a click target. **The allowlist may only ever shrink.**
+
 - 🔴 **AN UNKNOWN FAILS CLOSED, AND "CLOSED" IS DECIDED BY WHICH SIDE DENIES — NOT BY WHICH
   LITERAL IS THE DEFAULT (2026-09-18).** Samuel, ruling F-718 and F-729 together: fix both
   fail-closed. Two rules came out of it, and neither is a style preference.

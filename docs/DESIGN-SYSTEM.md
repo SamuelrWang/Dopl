@@ -29,6 +29,24 @@ Exempt: marketing pages and auth + onboarding (their own glass/3D
 kit). The F-022 legacy Button/Dialog primitives are retired (deleted
 2026-07-17). Every new page starts on this system.
 
+🔒 **ANYTHING CLICKABLE SHOWS THE HAND — DO NOT ADD `cursor-pointer` TO A NEW
+CONTROL (Samuel, 2026-09-18).** One `@layer base` rule in both stylesheets gives
+`button`, `a[href]`, `summary`, `select`, the clickable ARIA roles
+(`button`/`link`/`tab`/`menuitem*`/`option`/`treeitem`/`switch`/`checkbox`/`radio`),
+the clickable `input` types and `[data-clickable]` a pointer, and gives `:disabled`
+/ `[aria-disabled="true"]` / `[data-disabled]` `not-allowed`. It is all `:where()`
+in the weakest layer, so **an explicit cursor still wins** — that is how
+`cursor-text`, `cursor-col-resize`, `cursor-ns-resize`, `cursor-grabbing` and every
+`disabled:cursor-*` keep their decisions. ⚠ **It also OVERRIDES the cursor half of
+the 2026-09-15 agent-tab ruling** (below): the active tab keeps its no-fill rule and
+now takes the hand, so `agent-window-chrome.tsx › TAB_ACTIVE` states no cursor
+utility at all — an absence that is load-bearing, not an omission. A clickable that is neither a control nor
+a role (a card, a header row) takes `data-clickable=""`, never a `role="button"`
+that would nest buttons — and so does a `<label for>` on a CHECKBOX or RADIO, which
+is why `label[for]` is not in the list (every `htmlFor` here points at a text field,
+where a click is a focus, not a press). Full rule: INVARIANTS §15; pinned by
+`src/shared/ui/clickable-cursor.test.ts`, which also fails a new bare `onClick`.
+
 ## Type scale
 
 Semantic `text-*` utilities (Tailwind, from `@theme`). Pick by role, not px:
@@ -175,7 +193,11 @@ which is why none is given here. Each is still an equality or an absence, and ea
 - **An INACTIVE tab's hover fill is `bg-surface-raised-2`** (*"it should highlight gray or
   something so I know that I can click on it"*), with `cursor-pointer`. ⚠ **Measured off this
   window, not picked**: that is the rail's hover AND its `ROW_SELECTED_FACE`, and a tab and a rail
-  row are already one object in two places. The ACTIVE tab takes neither.
+  row are already one object in two places. The ACTIVE tab takes neither. ⚠ **THE CURSOR HALF OF
+  THAT WAS OVERRIDDEN ON 2026-09-18** (*"anytime there's a button or something that can be clicked,
+  the cursor should change into the hand cursor"*): the active tab still takes no FILL, but it now
+  shows the hand from the global base rule, and `TAB_ACTIVE` carries no cursor utility so that rule
+  can reach it. Header of this doc; INVARIANTS §15.
 - 🔒 **The collapsed rail's padding is asymmetric — `RAIL_PAD_COLLAPSED` (`pl-4 pr-1`) — and that
   is the fix, not the bug.** *"In the collapsed sidebar, there's still more spacing to the right of
   the individual agent icons. … I want the right side to have the same amount of distance to the
