@@ -60,8 +60,6 @@
 
 import { useMemo, useState } from "react";
 import { Bot, CornerDownRight, X } from "lucide-react";
-import { UsageMeter } from "@/shared/ui/usage-meter";
-import { formatRelativeTime } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import type { ChannelConsentRequest, ChannelMessage } from "../types";
@@ -76,7 +74,6 @@ import {
   postDestination,
   parseAgentPostStamp,
 } from "./agents-model";
-import { formatTokens, metric } from "./agent-metrics";
 import { agentModelShortLabel } from "../lib/agent-models";
 import { AgentComposer } from "./agent-composer";
 import { AgentStream } from "./agent-stream";
@@ -89,6 +86,7 @@ import { answersByEscalation } from "./view-model-escalation";
 // not an arbitrary cut: it changes when the bridge does, this file when the layout
 // does. `AGENT_CONTROL_REFUSED` moved with it, being that strip's copy.
 import { AgentControls } from "./agent-panel-controls";
+import { AgentStats } from "./agent-stats";
 
 /**
  * WHAT THIS AGENT POSTED. Pure and exported for the test.
@@ -443,58 +441,5 @@ export function AgentPanelHeader({
       )}
       <IconButton icon={X} label="Close agent view" size={15} onClick={onClose} />
     </header>
-  );
-}
-
-/**
- * The compact restatement of the card's numbers.
- *
- * ⚠ Absences render AS absences: no denominator, no stamp, no clause. Never a zero standing in
- * for "not measured".
- * ⚠ THIS SAID "no denominator, NO METER", ON THE HEADER-STRIP FACE (`bg-card-surface-subtle`),
- * AND BOTH CLAUSES WERE STALE BY 2026-08-28. The strip face is not applied here any more, and
- * the 2026-08-27 ruling renders the BAR unconditionally at 0 so a spawn-idle agent gets a box
- * rather than nothing. The DENOMINATOR half is the live rule, and it is
- * `shared/ui/usage-meter.tsx` that keeps it — a reported `contextUsed` with no `contextWindow`
- * prints the number alone, never `84k / 0k`.
- */
-export function AgentStats({ agent }: { agent: DesktopSessionSummary }) {
-  const used = metric(agent.contextUsed);
-  const window = metric(agent.contextWindow);
-  const spent = metric(agent.tokensSpent);
-  const startedAt = metric(agent.startedAt);
-  const lastAt = metric(agent.lastActivityAt);
-  const line = [
-    startedAt !== null &&
-      `Started ${formatRelativeTime(new Date(startedAt).toISOString())}`,
-    spent !== null && `${formatTokens(spent)} tokens spent`,
-    lastAt !== null &&
-      `Last activity ${formatRelativeTime(new Date(lastAt).toISOString())}`,
-  ].filter(Boolean);
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      {/* ⚠ THE BAR AT ZERO, ALWAYS — THERE IS NO "not measured" LINE ANY MORE (Samuel,
-          2026-08-27, on the rendered pane).
-          ⚠ THE FIRST ATTEMPT KEPT A `window === null` ARM, and that arm is the one this surface
-          actually hits: a spawn-idle agent has sent nothing, so main has reported no
-          `contextWindow` yet and the box read "Context use is not measured yet." — a dead line
-          where the operator wanted the object they watch fill. A fresh agent's usage is a
-          MEASURED zero, and zero is what a bar is for.
-          ⚠ `UsageMeter` OWNS THE NO-DENOMINATOR CASE and always did: "Zero/negative limit: empty
-          track rather than dividing by it" (`shared/ui/usage-meter.tsx`), so `limit={0}` draws the
-          empty track rather than a division. Nothing is invented here — the arithmetic guard is
-          the meter's own, which is why this can be one unconditional call. */}
-      <UsageMeter
-        label="Context tokens"
-        used={used ?? 0}
-        limit={window ?? 0}
-        tone="ramp"
-        formatValue={formatTokens}
-      />
-      {line.length > 0 && (
-        <p className="text-caption text-text-muted">{line.join(" · ")}</p>
-      )}
-    </div>
   );
 }

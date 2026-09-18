@@ -8,14 +8,7 @@ import { useTeams } from "@/features/members/hooks/use-teams";
 import { agentTemplateErrorMessage } from "../client/api";
 import type { AgentTemplate, TemplateShelf } from "../client/types";
 import { useAgentTemplates } from "../hooks/use-agent-templates";
-import { useAgentTemplateWrites } from "../hooks/use-agent-template-writes";
-import {
-  draftToCreateBody,
-  draftToPatchBody,
-  isEmptyPatch,
-  optimisticTemplate,
-  type TemplateDraft,
-} from "../lib/template-draft";
+import { useTemplateSave } from "../hooks/use-template-save";
 import { SECTIONS, groupByVisibility } from "../lib/visibility";
 import { TemplateSection } from "./template-section";
 import { TemplateEditor } from "./template-editor";
@@ -101,12 +94,23 @@ export function AgentTemplatesCore({
   // the same value — a read on `[path, ws, {shelf:"workspace"}]` patched by a
   // writer on `[path, ws, undefined]` is F-331 with a new axis.
   const list = useAgentTemplates(workspaceId, { shelf: WORKSPACE_SHELF });
-  const writes = useAgentTemplateWrites(workspaceId, WORKSPACE_SHELF);
   const { teams } = useTeams(workspaceSlug);
   const baseList = useKnowledgeBaseList(workspaceId);
 
   const [editor, setEditor] = useState<EditorState>(CLOSED);
-  const [writeError, setWriteError] = useState<string | null>(null);
+  const {
+    save,
+    remove,
+    error: writeError,
+    setError: setWriteError,
+    saving,
+    deleting,
+  } = useTemplateSave({
+    workspaceId,
+    shelf: WORKSPACE_SHELF,
+    noun: "template",
+    onDone: closeEditor,
+  });
 
   const grouped = useMemo(() => groupByVisibility(list.templates), [list.templates]);
 
@@ -128,51 +132,6 @@ export function AgentTemplatesCore({
   function closeEditor() {
     setWriteError(null);
     setEditor((prev) => ({ ...prev, open: false }));
-  }
-
-  /**
-   * ⚠ THE EDITOR STAYS OPEN UNTIL THE WRITE SETTLES, and closes only on success
-   * — the dialog idiom this repo already runs (`create-channel-dialog.tsx`,
-   * `base-settings-form.tsx`). A modal that closed on the click would leave a
-   * failed save with nowhere to report: the optimistic row has already rolled
-   * back, so the card silently returns to its old values and the operator's edit
-   * is gone with no sentence anywhere saying why.
-   */
-  async function save(draft: TemplateDraft) {
-    setWriteError(null);
-    const editing = editor.template;
-    try {
-      if (!editing) {
-        await writes.create.mutateAsync({ body: draftToCreateBody(draft) });
-      } else {
-        const body = draftToPatchBody(draft, editing);
-        // Nothing changed — a PATCH with an empty body is a round trip that can
-        // only fail, and Save is the operator saying "I'm done", not "write
-        // something".
-        if (!isEmptyPatch(body)) {
-          await writes.update.mutateAsync({
-            templateId: editing.id,
-            body,
-            optimistic: optimisticTemplate(editing, draft),
-          });
-        }
-      }
-      closeEditor();
-    } catch (err) {
-      setWriteError(agentTemplateErrorMessage(err, "Couldn't save the template"));
-    }
-  }
-
-  async function remove() {
-    const editing = editor.template;
-    if (!editing) return;
-    setWriteError(null);
-    try {
-      await writes.remove.mutateAsync({ templateId: editing.id });
-      closeEditor();
-    } catch (err) {
-      setWriteError(agentTemplateErrorMessage(err, "Couldn't delete the template"));
-    }
   }
 
   if (list.loading) {
@@ -219,12 +178,12 @@ export function AgentTemplatesCore({
         template={editor.template}
         teams={teams ?? []}
         knowledgeBases={knowledgeBases}
-        saving={writes.create.pending || writes.update.pending}
-        deleting={writes.remove.pending}
+        saving={saving}
+        deleting={deleting}
         error={writeError}
         onClose={closeEditor}
-        onSave={(draft) => void save(draft)}
-        onDelete={() => void remove()}
+        onSave={(draft) => void save(draft, editor.template)}
+        onDelete={() => void remove(editor.template)}
       />
     </div>
   );

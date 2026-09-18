@@ -162,7 +162,7 @@ describe("the consent inbox is NOT mounted for a viewer with no agent of their o
     );
   });
 
-  it("still mounts it when no capabilities are passed at all — the workspace page", () => {
+  it("still mounts it when no capabilities are passed at all", () => {
     mount();
     expect(vi.mocked(useConsentInbox)).toHaveBeenCalledWith(
       WS,

@@ -38,9 +38,9 @@ import {
 import { AgentStream } from "@/features/channels/components/agent-stream";
 import {
   AgentPanelHeader,
-  AgentStats,
   agentSentMessages,
 } from "@/features/channels/components/agent-panel";
+import { AgentStats } from "@/features/channels/components/agent-stats";
 import {
   COMPOSER_BOTTOM,
   ComposerInputRow,

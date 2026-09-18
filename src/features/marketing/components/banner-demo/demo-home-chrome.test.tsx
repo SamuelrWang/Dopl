@@ -195,10 +195,15 @@ describe("the agent view is the product's panel, minus what needs a bridge", () 
   const VIEW_SRC =
     "src/features/marketing/components/banner-demo/demo-agent-view.tsx";
   const PANEL_SRC = "src/features/channels/components/agent-panel.tsx";
+  // ⚠ `AgentStats` LEFT THE PANEL ON 2026-09-17 (P17): the window held a second
+  // copy, and collapsing them into one declaration had to be a SPLIT because the
+  // panel stood at the §1 cap.
+  const STATS_SRC = "src/features/channels/components/agent-stats.tsx";
 
   it("🔒 imports the header and the stats rather than re-declaring them", () => {
     const view = readFileSync(VIEW_SRC, "utf8");
-    expect(view).toMatch(/AgentPanelHeader,\s*\n\s*AgentStats,/);
+    expect(view).toMatch(/AgentPanelHeader,\s*\n\s*agentSentMessages,/);
+    expect(view).toContain("import { AgentStats } from");
     expect(view).toContain("<AgentPanelHeader agent={agent} onClose={onClose} />");
     expect(view).toContain("<AgentStats agent={agent} />");
     // 🚫 AND THE TRANSCRIPTIONS ARE GONE — bidirectional, or this passes on a
@@ -208,10 +213,12 @@ describe("the agent view is the product's panel, minus what needs a bridge", () 
     expect(view).not.toContain("AgentLiveness");
   });
 
-  it("🔒 …and the panel really exports both, from ONE declaration each", () => {
-    const panel = readFileSync(PANEL_SRC, "utf8");
-    for (const name of ["AgentPanelHeader", "AgentStats"]) {
-      const declared = panel.match(
+  it("🔒 …and each really has ONE declaration, in the file the demo names", () => {
+    for (const [name, src] of [
+      ["AgentPanelHeader", PANEL_SRC],
+      ["AgentStats", STATS_SRC],
+    ] as const) {
+      const declared = readFileSync(src, "utf8").match(
         new RegExp(`^export function ${name}\\b`, "gm")
       );
       expect(`${name}: ${declared?.length ?? 0}`).toBe(`${name}: 1`);

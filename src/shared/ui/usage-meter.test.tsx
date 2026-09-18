@@ -5,8 +5,8 @@
  *
  * ⚠ THE BUG THIS PINS WAS A COLLISION BETWEEN TWO WAVES, AND EACH WAS RIGHT ALONE. The 2026-08-27
  * ruling made the agent surfaces render the BAR unconditionally, at 0, so a spawn-idle agent got a
- * box instead of nothing — `channels/components/agent-panel.tsx › AgentStats` and
- * `channels/components/agent-window.tsx › AgentWindowStats` therefore call this with `used ?? 0` and
+ * box instead of nothing — `channels/components/agent-stats.tsx › AgentStats` and
+ * (the one declaration all three hosts import since P17) therefore calls this with `used ?? 0` and
  * `limit ?? 0`, on the stated grounds that *"`UsageMeter` handles the missing denominator itself"*.
  * It handled it for the ARITHMETIC (`limit > 0 ? … : 0`, an empty track rather than a division) and
  * not for the READOUT, which printed `{fmt(limit)}` regardless.

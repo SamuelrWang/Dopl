@@ -273,12 +273,10 @@ export function ChannelsCore({
           initialSeq={searchSeq}
           onRosterChanged={refetchChannels}
           // 🔒 `artifacts: true` — THE ARTIFACTS FACE COMES TO THIS PAGE (Samuel's
-          // ruling R-16, 2026-09-17, after F-712). The inline artifact card already
+          // ruling R-16, 2026-09-17, after F-712): the inline artifact card already
           // renders in this transcript, so a reader here could SEE an artifact and
-          // not browse the channel's. ⚠ It is the Threads↔Artifacts TOGGLE, never a
-          // fifth tab (R-17): the face shares the Threads slot, so the tab row is
-          // still four options on one width budget. ⚠ The face's reads mount WITH
-          // it, so an unopened channel pays nothing.
+          // not browse the channel's. The capability's own docblock carries the
+          // rest (`channel-surface-contract.ts`).
           capabilities={{ artifacts: true }}
         />
       ) : (

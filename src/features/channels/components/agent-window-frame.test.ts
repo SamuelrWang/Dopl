@@ -319,8 +319,8 @@ describe("a tab label and a rail row are one type SIZE, in two weights", () => {
  * margin under the pickers, and a THIRD margin was arriving from `shared/ui/usage-meter.tsx`'s
  * `className` default — which measured 20px against 10, so it was never a padding at all.
  *
- * 🔒 MUTATION-PROOF: drop `className=""` from the meter and the second expectation fails; change
- * either `2.5` and the first does.
+ * 🔒 MUTATION-PROOF: drop `meterClassName=""` from the stats and the second expectation fails;
+ * change either `2.5` and the first does.
  */
 describe("the pickers sit the same distance from the line above and the meter below", () => {
   it("uses ONE step for both gaps", () => {
@@ -333,8 +333,9 @@ describe("the pickers sit the same distance from the line above and the meter be
 
   it("leaves the meter no margin of its own to stack on it", () => {
     // ⚠ EMPTY, NOT ABSENT: `usage-meter.tsx` defaults `className` to `mt-3`, so omitting the prop
-    // is what put the extra 12px there.
-    expect(view).toMatch(/<UsageMeter\s+className=""/);
+    // is what put the extra 12px there. ⚠ IT IS A PROP ON `AgentStats` SINCE P17 (2026-09-17) —
+    // the window stopped spelling the meter itself when the two stats copies collapsed.
+    expect(view).toMatch(/meterClassName=""/);
   });
 
   /** ⚠ AND THE ROW ABOVE STILL CONTRIBUTES NOTHING — the moment `AgentWorkingOn` grows a bottom

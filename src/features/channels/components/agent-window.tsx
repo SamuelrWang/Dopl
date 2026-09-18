@@ -32,9 +32,7 @@
 
 import { useEffect, useMemo } from "react";
 import { Bot, CornerDownRight } from "lucide-react";
-import { UsageMeter } from "@/shared/ui/usage-meter";
 import { EmptyState } from "@/shared/ui/empty-state";
-import { formatRelativeTime } from "@/shared/lib/format-time";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { CONSENT_INBOX_POLL_MS } from "../constants";
 import { useChannelMessages } from "../hooks/use-channel-messages";
@@ -46,11 +44,11 @@ import { AgentStream } from "./agent-stream";
 import { splitEndNote } from "./agent-stream-lanes";
 import { AgentEndedPill, AgentLiveness } from "./agent-bits";
 import { NO_THREAD_LABEL, agentDisplayName, agentLiveness, postDestination } from "./agents-model";
-import { formatTokens, metric } from "./agent-metrics";
 import { viewerPerson } from "./view-model";
 import { useDesktopSessions } from "./use-desktop-sessions";
 import { AgentComposer } from "./agent-composer";
 import { AgentHeldGates } from "./agent-held-gate";
+import { AgentStats } from "./agent-stats";
 import { PostureControls } from "./agent-posture";
 import { useAgentNarration } from "./use-agent-narration";
 
@@ -110,10 +108,8 @@ export function ChannelsAgentWindow({
   // ⚠ THE SAME FEED THE AGENTS TAB TAKES, filtered to one agent. A window makes its own
   // subscription because it is a different React tree in a different BrowserWindow — main
   // fans every push out over the app-window registry precisely so this works.
-  // ⚠ `refresh` IS THE HELD GATE'S, AND ONLY A REFUSAL'S (Samuel's ruling R-24,
-  // 2026-09-17). An answer main REFUSED moves nothing, so no push follows to
-  // retire a card standing over a request that is already gone — the same one
-  // case `use-desktop-sessions.ts` minted this for. It is not a poll.
+  // ⚠ `refresh` IS THE HELD GATE'S REFUSAL PATH AND NOTHING ELSE (R-24,
+  // 2026-09-17) — `use-desktop-sessions.ts` carries why it is not a poll.
   const { sessions, refresh } = useDesktopSessions();
   // ⚠ THE ID WHEN THE URL HAS ONE, THE PAIR WHEN IT DOES NOT (2026-08-22).
   // `(channel, thread)` addresses a THREAD since multiplayer, so the pair alone
@@ -273,21 +269,18 @@ export function ChannelsAgentWindow({
           agent={agent}
           channelId={channelId}
           taskId={taskId}
-          stats={<AgentWindowStats agent={agent} />}
+          // 🔒 `meterClassName=""` (Samuel, 2026-09-15) and no start stamp — the two
+          // differences that used to justify a second copy of this component (P17,
+          // collapsed 2026-09-17); `agent-stats.tsx` carries both reasons.
+          stats={
+            <AgentStats agent={agent} meterClassName="" showStarted={false} />
+          }
         />
       ) : null}
       {/* 🔒 **THE HELD-GATE CARD, IN THE WINDOW TOO** (Samuel's ruling R-24,
-          2026-09-17 — (b), not (a)): an operator working here could not answer the
-          one thing standing between their agent and its next turn, and the native
-          notification they got instead is a surface they cannot come back to.
-          ⚠ **THE CARD ONLY — Pause/End STAY PANEL-ONLY**, which is the whole of why
-          (b) was chosen over (a): a destructive verb appearing in a window that
-          never had one is a NEW control, not a move (`agent-window-chrome.tsx`
-          says the same thing about the header).
-          ⚠ **THE SAME COMPONENT AND THE SAME BRIDGE CAPABILITY** — it renders
-          nothing when the agent holds nothing, when this main reports no held
-          calls, or when this build cannot answer one (`agents-gate-controls.ts ›
-          canAnswerPermission`, checked inside). Absent, never inert.
+          2026-09-17 — (b), not (a)). ⚠ **THE CARD ONLY — Pause/End STAY
+          PANEL-ONLY**; `agent-held-gate.tsx` carries both rules and its own
+          absent-never-inert check.
           ⚠ ITS OWN PADDING, because `PostureControls` above owns a bordered strip
           and the stream below carries `px-4`; this sits between them. */}
       {agent ? (
@@ -419,48 +412,3 @@ function AgentWorkingOn({
  * feature-detection rule the whole bridge family follows (INVARIANTS §11).
  */
 
-/** ⚠ Absences render AS absences — no denominator, no stamp, no clause. Never a zero standing in
- *  for "not measured" (INVARIANTS §11). Same rule as the panel's strip.
- *  ⚠ THIS SAID "no denominator, NO METER" until 2026-08-28, and the second half had been reversed
- *  a day earlier: the 2026-08-27 ruling renders the BAR unconditionally, at 0, so a spawn-idle
- *  agent gets a box instead of nothing. The docblock kept the retired rule twenty lines above the
- *  call that breaks it. What survives — and what `shared/ui/usage-meter.tsx` now genuinely
- *  enforces rather than being credited with — is the DENOMINATOR half: no window reported, no
- *  `/ 0k` printed beside a number that is real. */
-function AgentWindowStats({ agent }: { agent: DesktopSessionSummary | null }) {
-  if (!agent) return null;
-  const used = metric(agent.contextUsed);
-  const window = metric(agent.contextWindow);
-  const spent = metric(agent.tokensSpent);
-  const lastAt = metric(agent.lastActivityAt);
-  const line = [
-    spent !== null && `${formatTokens(spent)} tokens spent`,
-    lastAt !== null &&
-      `Last activity ${formatRelativeTime(new Date(lastAt).toISOString())}`,
-  ].filter(Boolean);
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      {/* ⚠ THE BAR AT ZERO, ALWAYS — same ruling as the pane's (Samuel, 2026-08-27). It was
-          gated on a reported `contextWindow`, which a spawn-idle agent does not have, so the box
-          rendered nothing at all. `UsageMeter` handles the missing denominator itself (empty
-          track, no division), so this is one unconditional call. */}
-      {/* ⚠ **`className=""` IS LOAD-BEARING (Samuel, 2026-09-15)** — `shared/ui/usage-meter.tsx`
-          defaults it to `mt-3`, which stacked on `agent-posture.tsx`'s own margin and made the
-          20px gap he asked to close. It is also plain wrong INSIDE this column: the wrapper is a
-          `flex-col gap-1.5`, so the meter's spacing is the gap's job and a margin of its own is a
-          second opinion about it. The gap above this block is the posture row's to own. */}
-      <UsageMeter
-        className=""
-        label="Context tokens"
-        used={used ?? 0}
-        limit={window ?? 0}
-        tone="ramp"
-        formatValue={formatTokens}
-      />
-      {line.length > 0 && (
-        <p className="text-caption text-text-muted">{line.join(" · ")}</p>
-      )}
-    </div>
-  );
-}

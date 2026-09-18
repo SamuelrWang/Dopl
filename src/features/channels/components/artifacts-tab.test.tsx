@@ -37,6 +37,7 @@ vi.mock("@/shared/api/api-client", async () => {
 import {
   ARTIFACTS_CLIPPED_NOTE,
   ARTIFACTS_EMPTY_NOTE,
+  ARTIFACTS_UNREAD_NOTE,
   ArtifactsTab,
 } from "./artifacts-tab";
 import {
@@ -92,6 +93,8 @@ beforeEach(() => {
     const query = (opts?.query ?? {}) as { artifact?: string };
     const body = query.artifact ? lane.card : lane.list;
     if (body === undefined) throw new Error(`no fixture for ${path}`);
+    // A fixture that IS an error is the arm refusing — the 403 case below.
+    if (body instanceof Error) throw body;
     return body;
   });
   lane = {
@@ -292,6 +295,19 @@ describe("the artifacts list", () => {
     mountFace();
     expect(await screen.findByText(ARTIFACTS_EMPTY_NOTE)).toBeTruthy();
   });
+
+  /** 🔒 A READ THAT REFUSED IS NOT AN EMPTY CHANNEL. Found reviewing wave 2, which
+   *  gave this face a second host: both hooks returned an `error` nothing read, so
+   *  a 403 — the reader's access went away mid-session — printed "No artifacts in
+   *  this channel yet", a claim about the channel made from a failure to ask it.
+   *  MUTATION-VERIFY: drop the `error &&` arm and this goes red on the second
+   *  assertion while every other case here stays green. */
+  it("🔒 says the read FAILED rather than claiming the channel is empty", async () => {
+    lane.list = new Error("403");
+    mountFace();
+    expect(await screen.findByText(ARTIFACTS_UNREAD_NOTE)).toBeTruthy();
+    expect(screen.queryByText(ARTIFACTS_EMPTY_NOTE)).toBeNull();
+  });
 });
 
 /* ─────────────────────────── THE OPENED CARD, READ-ONLY ──────────────────── */
@@ -332,6 +348,16 @@ describe("opening one card", () => {
     for (const forbidden of ["dissolve", "remove", "delete", "new thread", "fold"]) {
       expect(labels.some((l) => l.includes(forbidden))).toBe(false);
     }
+  });
+
+  /** 🔒 THE CARD'S OWN NUMBERS ARE THE LIST'S AND SURVIVE; the MEMBERS read is what
+   *  failed, and a card printing a span over an empty body must say so. */
+  it("🔒 says so when the members arm refuses, and keeps the card", async () => {
+    lane.card = new Error("403");
+    mountFace();
+    fireEvent.click(await screen.findByRole("button", { name: "Open" }));
+    expect(await screen.findByText(ARTIFACTS_UNREAD_NOTE)).toBeTruthy();
+    expect(screen.getByText("Toggle wave wrap-up")).toBeTruthy();
   });
 
   it("goes back to the list", async () => {

@@ -1,5 +1,4 @@
-import { useMemo, useState } from "react";
-import { agentTemplateErrorMessage } from "@/features/agent-templates/client/api";
+import { useMemo } from "react";
 import type { WorkspaceKind } from "@dopl/contracts";
 import type {
   AgentTemplate,
@@ -8,14 +7,7 @@ import type {
 } from "@/features/agent-templates/client/types";
 import { TemplateEditor } from "@/features/agent-templates/components/template-editor";
 import type { PickerOption } from "@/features/agent-templates/components/template-editor-rows";
-import { useAgentTemplateWrites } from "@/features/agent-templates/hooks/use-agent-template-writes";
-import {
-  draftToCreateBody,
-  draftToPatchBody,
-  isEmptyPatch,
-  optimisticTemplate,
-  type TemplateDraft,
-} from "@/features/agent-templates/lib/template-draft";
+import { useTemplateSave } from "@/features/agent-templates/hooks/use-template-save";
 import {
   SECTIONS,
   SECTIONS_CONTAINER,
@@ -211,68 +203,36 @@ function TemplateEditorMount({
    *  every optimistic patch below lands on a key nobody is subscribed to. */
   shelf?: TemplateShelf;
 }) {
-  const writes = useAgentTemplateWrites(workspaceId, shelf);
   const baseList = useKnowledgeBaseList(workspaceId);
-  const [error, setError] = useState<string | null>(null);
+  const { save, remove, error, saving, deleting } = useTemplateSave({
+    workspaceId,
+    shelf,
+    noun: "agent",
+    onDone: onClose,
+    // 🔒 G16 — `acknowledgeShared` is sent ONLY when this mount named the
+    // audience AND the row is landing at the shared visibility. ⚠ `undefined`,
+    // never `false`: the server examines only an explicit `true`, and a `false`
+    // on every private save would suggest to a reader that the other value is
+    // examined too — the same rule `homeScoped` states beside it.
+    // ⚠ `homeScoped` IS ONLY EVER SENT for the home shelf: an unconditional
+    // `homeScoped: shelf === "home"` would put an explicit `false` on every
+    // container create, widening the contract the fence allows.
+    extras: (draft) => {
+      const acknowledgeShared =
+        namesSharedAudience && draft.visibility === "workspace"
+          ? { acknowledgeShared: true }
+          : {};
+      return {
+        create: { ...(shelf === "home" ? { homeScoped: true } : {}), ...acknowledgeShared },
+        patch: acknowledgeShared,
+      };
+    },
+  });
 
   const knowledgeBases = useMemo(
     () => (baseList.data?.bases ?? []).map((b) => ({ id: b.id, name: b.name })),
     [baseList.data]
   );
-  async function save(draft: TemplateDraft) {
-    setError(null);
-    // 🔒 G16 — sent ONLY when this mount named the audience AND the row is
-    // landing at the shared visibility. ⚠ `undefined`, never `false`: the
-    // server examines only an explicit `true` and a `false` on every private
-    // save would suggest to a reader that the other value is examined too —
-    // the same rule `homeScoped` states one line below.
-    const acknowledgeShared =
-      namesSharedAudience && draft.visibility === "workspace" ? true : undefined;
-    try {
-      if (!template) {
-        await writes.create.mutateAsync({
-          body: {
-            ...draftToCreateBody(draft),
-            // ⚠ ONLY EVER SENT for the home shelf — an unconditional
-            // `homeScoped: shelf === "home"` would put an explicit `false` on
-            // every container create, widening the contract the fence allows.
-            ...(shelf === "home" ? { homeScoped: true } : {}),
-            ...(acknowledgeShared ? { acknowledgeShared } : {}),
-          },
-        });
-      } else {
-        const body = draftToPatchBody(draft, template);
-        // Nothing changed — a PATCH with an empty body is a round trip that can
-        // only fail, and Save is the operator saying "I'm done".
-        if (!isEmptyPatch(body)) {
-          await writes.update.mutateAsync({
-            templateId: template.id,
-            // ⚠ SPREAD ONTO `body` AFTER the emptiness test, never into it: an
-            // acknowledgement moves no column, and counting it as a change
-            // would send a PATCH that alters nothing (the F-404 class).
-            body: { ...body, ...(acknowledgeShared ? { acknowledgeShared } : {}) },
-            // ⚠ NO NAME LOOKUP SINCE 2026-09-08: the draft holds resolved
-            // knowledge REFS, so every chip already carries its own label.
-            optimistic: optimisticTemplate(template, draft),
-          });
-        }
-      }
-      onClose();
-    } catch (err) {
-      setError(agentTemplateErrorMessage(err, "Couldn't save the agent"));
-    }
-  }
-
-  async function remove() {
-    if (!template) return;
-    setError(null);
-    try {
-      await writes.remove.mutateAsync({ templateId: template.id });
-      onClose();
-    } catch (err) {
-      setError(agentTemplateErrorMessage(err, "Couldn't delete the agent"));
-    }
-  }
 
   return (
     <TemplateEditor
@@ -285,12 +245,12 @@ function TemplateEditorMount({
       knowledgeBases={knowledgeBases}
       sections={sections}
       containerKind={containerKind}
-      saving={writes.create.pending || writes.update.pending}
-      deleting={writes.remove.pending}
+      saving={saving}
+      deleting={deleting}
       error={error}
       onClose={onClose}
-      onSave={(draft) => void save(draft)}
-      onDelete={() => void remove()}
+      onSave={(draft) => void save(draft, template)}
+      onDelete={() => void remove(template)}
     />
   );
 }

@@ -247,7 +247,7 @@ export function PostureControls({
           padding, and `mt-2.5` is the same step: equal by VALUE, not by two look-alike numbers.
           ⚠ **AND THE MEASURED GAP WAS 20px, NOT 8** — `shared/ui/usage-meter.tsx` defaults its own
           `className` to `mt-3`, which stacked here. The caller now passes an empty `className`
-          (`agent-window.tsx › AgentWindowStats`) so this margin is the only one left. */}
+          (`agent-stats.tsx › AgentStats`, which the window passes `meterClassName=""`) so this margin is the only one left. */}
       {stats && <div className={canPosture ? "mt-2.5" : undefined}>{stats}</div>}
       {notice && (
         <p role="status" className="mt-1.5 text-caption text-text-muted">

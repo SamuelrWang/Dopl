@@ -113,8 +113,8 @@ research doc it came from (e.g. "01 §A row 5").
 | P14 | Last-message preview on a row | `lastMessagePreview` on the wire (`types.ts:128`) — **rendered by nothing since 2026-09-13** | absent | new code, or delete the field | S | R-28 | 01 §A row 73; 05 A15 |
 | P15 | Agents-tab recency wells recognised as a workspace surface | four wells (`agents-tab.tsx:417` → `agents-wells.tsx:123`) | **identical — already shared** | none (verify + keep) | S | — | 02 A.3 G4 |
 | P16 | ✅ **DONE 2026-09-17 (wave 2)** — Held-gate Approve/Deny reachable from the agent WINDOW | `agent-window.tsx › ChannelsAgentWindow` mounts `agent-held-gate.tsx › AgentHeldGates` on both hosts' windows (one page, one implementation) | same | new wiring | M | R-24 | 02 A.5 W3 |
-| P17 | One `AgentStats` | `agent-panel.tsx:461-483` | `agent-window.tsx:403-439` (`AgentWindowStats`) | collapse duplicate | S | — | 02 §C2 |
-| P18 | One template save/remove orchestration | `agent-editor.tsx:222-275` | `agent-templates-core.tsx:141-176` | collapse duplicate → `use-template-save.ts` | S | — | 02 §C3 |
+| P17 | ✅ **DONE 2026-09-17 (wave 2 review)** — One `AgentStats` | `src/features/channels/components/agent-stats.tsx › AgentStats` — the ONE declaration | the panel, the WINDOW and the marketing demo all import it; `AgentWindowStats` deleted | collapse duplicate | S | — | 02 §C2 |
+| P18 | ✅ **DONE 2026-09-17 (wave 2 review)** — One template save/remove orchestration | `src/features/agent-templates/hooks/use-template-save.ts › useTemplateSave` | both hosts call it; what each ADDS rides `extras` | collapse duplicate → `use-template-save.ts` | S | — | 02 §C3 |
 | P19 | ONE page header strip (no title) | `home-header.tsx:37-102` — one 36px row | **five recipes**: H1 overview greeting, H2 agents 52px bar, H3 settings bar, H4 skills, H5 knowledge hero | move down + new adapter | L | R-02 | 03 §A.4, §D4 |
 | P20 | Per-page search | `home-search.tsx:44-67`, kit `.search-expand` pinned at 260px | none anywhere in the workspace shell | move down + one line per page | M | R-04 | 03 §A9, §E3 |
 | P21 | `PAGE_ACTION_BTN` as the one 36px black pill | `src/shared/ui/page-action-button.ts:29-30` | `TAB_ACTION` (`bits.tsx:66-73`) + ~20 hand-cut `auth-btn-3d` sites with `text-white` | collapse duplicate | M | — | 03 §B1–B3, §E12 |
@@ -1211,8 +1211,9 @@ worktree; the archive reaches the channel service and the list filters, not only
 ### Wave 2 — Artifacts and the info-column capability set.
 **Worktree `parity/w2-artifacts`.**
 
-🟡 **LANDED 2026-09-17 on `wave2/artifacts-agents-heldgate` (4 commits, one per item) — THREE ITEMS
-DONE, TWO NOT STARTED, ONE HALF HELD.**
+🟢 **MERGED TO `master` 2026-09-17** (branch `wave2/artifacts-agents-heldgate`, 5 build commits +
+1 review commit, fast-forward). **FIVE ITEMS DONE, ONE HALF HELD** — P3 · P4 · P5 · P16 · P17 ·
+P18, with R-25's own-ended half open as F-724.
 ✅ **P3 + P4 + P5 (R-16 / R-17)** — `channels-core.tsx` passes `capabilities={{ artifacts: true }}`.
 ⚠ **The GUEST lane deliberately does NOT get it**: the route floor IS `guest`
 (`src/app/api/channels/[channelId]/artifacts/route.ts`, both verbs), so a guest *could* read — but
@@ -1223,13 +1224,24 @@ test asserts their absence.
 🟡 **R-25** — the room-wide half needed NO CODE (see the ruling) and is pinned; the ENDED half is
 **F-724, OPEN**.
 🟡 **Wave 1 item 6** — the skeleton MOVE is done; its two adoptions are not (see that row).
-🔴 **NOT STARTED: P17** (one `AgentStats`) **and P18** (one template save orchestration) — both are
-pure de-dup with no ruling attached, and neither was in this branch's scope.
-**Gates run 2026-09-17:** `npm run typecheck` · `npm run typecheck -w @dopl/desktop-ui` ·
-`npx vitest run src/features/channels src/features/home` (241 files / 3537) ·
-`npm test -w @dopl/desktop-ui` (72 / 644) · `npm run lint -- --max-warnings 0` ·
-`node scripts/check-doc-refs.mjs` · `npx tsx scripts/check-css-token-drift.ts` · the `packages/`
-500-line sweep. ⚠ **NOT run here: the `rls-redteam` job** (no schema touched, and it needs Docker).
+✅ **P17 + P18 LANDED IN THE REVIEW COMMIT** (they were out of the build's scope and are in the
+review's): `AgentStats` is one declaration in its own file — a SPLIT, because `agent-panel.tsx`
+stood exactly at §1's cap and a file at 500 cannot absorb a prop — and `useTemplateSave` is one
+create-or-patch-or-delete orchestration both authoring surfaces call.
+🐛 **AND THE REVIEW FIXED ONE REAL BUG, WIDENED BY THIS WAVE.** `artifacts-tab.tsx` dropped the
+`error` BOTH its hooks return, so a refused list read — a reader whose access went away
+mid-session, an offline desktop, a 500 — rendered `ARTIFACTS_EMPTY_NOTE`: *"No artifacts in this
+channel yet"*, a positive claim about the channel made from a failure to ask it. R-16 put that face
+on a second host. Both arms now say the read failed (`ARTIFACTS_UNREAD_NOTE`), and only when there
+is nothing already on screen. ⚠ **The GUEST lane needed no new pin** — `guest-channel.test.tsx`
+asserts its capability object by `toEqual`, so an `artifacts` key appearing there fails.
+**Gates run at merge, 2026-09-17:** `npm run typecheck` · `npm run typecheck -w @dopl/desktop-ui` ·
+`npx vitest run` at the ROOT (563 files / 8050 passed, 42 skipped) · `npm test -w @dopl/desktop-ui`
+(72 / 644) · `npm run lint -- --max-warnings 0` · `npx tsx scripts/check-css-token-drift.ts`
+(241 tokens, 33 kit recipes) · `node scripts/check-doc-refs.mjs` · the five drift scripts · the
+500-line sweep over `src`/`packages`/`apps` (three known exemptions, nothing new). ⚠ **NOT run
+here: the `rls-redteam` job** — no schema, no migration and no predicate touched, and it needs
+Docker. ⚠ **`@dopl/mcp-server` was not run either: `packages/` has no diff on this branch.**
 
 **Goal:** stop a workspace reader seeing an artifact inline and being unable to browse the channel's
 artifacts.

@@ -54,6 +54,21 @@ export const ARTIFACTS_EMPTY_NOTE =
   "No artifacts in this channel yet. An artifact is made by folding messages in the transcript.";
 
 /**
+ * THE READ DID NOT ANSWER — one line for BOTH arms, and the reason it exists at all.
+ *
+ * ⚠ **"COULD NOT ASK" AND "ASKED, NOTHING IS THERE" ARE DIFFERENT FACTS** (the rule
+ * `agents-tab.tsx` states for its own surface, and INVARIANTS §9's no-silent-assertion
+ * half). Both hooks return an `error` and this face dropped it, so a 403 — a reader
+ * whose access went away mid-session — an offline desktop and a 500 all rendered
+ * `ARTIFACTS_EMPTY_NOTE`: a positive claim about the channel, made from a failure to
+ * ask it. Found reviewing wave 2, which put this face on a SECOND host (R-16).
+ * ⚠ IT NAMES NO REMEDY, because there is no control here that retries; the face
+ * re-reads when the panel does.
+ */
+export const ARTIFACTS_UNREAD_NOTE =
+  "Could not load this channel's artifacts.";
+
+/**
  * ⚠ A DISSOLVED CARD IS ABSENT, AND SO IS ONE THAT FOLDED NOTHING — the SERVER's
  * rule (`service-artifacts-list.ts › listChannelArtifacts`, which carries why). Named
  * here because it explains a face that never renders a member-less card; it is
@@ -71,7 +86,7 @@ export function ArtifactsTab({
   index: AuthorIndex;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
-  const { artifacts, truncated, loading } = useChannelArtifacts(
+  const { artifacts, truncated, loading, error } = useChannelArtifacts(
     channelId,
     workspaceId
   );
@@ -102,6 +117,16 @@ export function ArtifactsTab({
           {loading && artifacts.length === 0 ? (
             <p role="status" aria-busy="true" className="sr-only">
               Loading artifacts
+            </p>
+          ) : error && artifacts.length === 0 ? (
+            /* ⚠ THE FAILURE BEATS THE EMPTY CLAIM, and only when there is nothing
+               to show: a refetch that fails over a list already on screen must
+               not replace it with a sentence (`keepPreviousData`). */
+            <p
+              role="status"
+              className="px-1 pt-4 text-center text-caption text-text-muted"
+            >
+              {ARTIFACTS_UNREAD_NOTE}
             </p>
           ) : artifacts.length === 0 ? (
             <p className="px-1 pt-4 text-center text-caption text-text-muted">
@@ -192,7 +217,7 @@ function OpenArtifact({
   onBack: () => void;
 }) {
   const { artifact, count, firstSeq, lastSeq } = folded;
-  const { messages, truncated, loading } = useChannelArtifact(
+  const { messages, truncated, loading, error } = useChannelArtifact(
     channelId,
     artifact.id,
     workspaceId
@@ -223,6 +248,15 @@ function OpenArtifact({
         <p className="text-caption text-text-muted">
           This run is longer than one read returns; the newest members may not be
           shown.
+        </p>
+      )}
+      {/* ⚠ THE CARD STILL DRAWS — its name, summary and SPAN are the LIST's payload
+          and are not in doubt. What failed is the members read, and a card printing
+          "3 messages" over an empty body without saying so is the same false claim
+          the list note is written against. */}
+      {error && messages.length === 0 && (
+        <p role="status" className="text-caption text-text-muted">
+          {ARTIFACTS_UNREAD_NOTE}
         </p>
       )}
     </div>

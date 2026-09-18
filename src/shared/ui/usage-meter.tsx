@@ -75,7 +75,7 @@ export function UsageMeter({
    *
    * ⚠ THE ARITHMETIC GUARD ABOVE WAS NOT THE WHOLE OF "OWNING THE MISSING DENOMINATOR", AND THE
    * READOUT IS WHERE IT LEAKED (2026-08-28). Two agent surfaces call this unconditionally —
-   * `channels/components/agent-panel.tsx › AgentStats` and `› AgentWindowStats` pass `used ?? 0` and
+   * `channels/components/agent-stats.tsx › AgentStats` passes `used ?? 0` and
    * `limit ?? 0` — on the stated grounds that *"`UsageMeter` handles the missing denominator
    * itself"*. It handled it for the BAR. The number beside the label printed `{fmt(limit)}`
    * regardless, so an agent whose context USED is known but whose WINDOW is not rendered
