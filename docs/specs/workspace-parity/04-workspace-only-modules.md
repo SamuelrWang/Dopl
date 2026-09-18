@@ -874,7 +874,7 @@ that adds a surface will be tempted to delete them.
 
 ### F-6. Definition of green
 
-Five suites, TWO lints, TWO typechecks, TEN non-suite gates — CLAUDE.md § *Definition of green* and
+Five suites, TWO lints, TWO typechecks, TWELVE non-suite gates — CLAUDE.md § *Definition of green* and
 INVARIANTS §14. `npm run test:all` chains **four suites and nothing else**; it is not the definition.
 The two most-forgotten here: `npm run typecheck -w @dopl/desktop-ui` (the SPA is outside the root
 tsconfig) and the committed-`dist` check (`npm run build:packages`, then

@@ -307,7 +307,7 @@ the owner lands it. Contested files assigned once:
 - `.github/workflows/ci.yml` → **B7 alone** (the RLS flag's gate); every other slice asserts in its own new test file.
 
 **GATES** (every slice, unless it says otherwise): five suites · both lints `--max-warnings 0` · both
-typechecks incl. `-w @dopl/desktop-ui` · the **eight** non-suite gates **re-derived from
+typechecks incl. `-w @dopl/desktop-ui` · the **twelve** non-suite gates **re-derived from
 `grep -n 'run:' .github/workflows/ci.yml`, not from CLAUDE.md, which has been wrong three times** ·
 `node scripts/check-doc-refs.mjs` · `size-check` 500-line cap · a `build:packages` when any committed
 `dist/` mirror moves. **Migration replay is owed and has never run** — Docker was down for all of Wave A.

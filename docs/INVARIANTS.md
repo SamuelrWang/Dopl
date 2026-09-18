@@ -223,7 +223,7 @@ Why/history: ENGINEERING.md §9 (Workspace resolution), §7.
   - **ONE READ SITE, AND IT IS PINNED AS AN ABSENCE.** `pages/home/home-rows.ts › channelPeople` is the only thing on the home page that names `.peers`; `› channelTitle` (two names, then `+N`), `› channelSubline` ("Just you" / the address / `N people`) and every component go through it. ⚠ **It is an ACCESSOR, which §8 normally forbids** — the exemption is bought by `home-rows.test.ts`, which reads the directory's SOURCE and fails if any other file names `.peers` outside a comment. **Take the exemption only with the pin.**
   - **THE ROW DRAWS A STACK AT 2+** (`pages/home/relationship-list.tsx` → `shared/ui/avatar-stack.tsx › AvatarStack`, `size="sm"` `max={3}`; the Info-tab header does the same at `md`). `AvatarStack` GAINED a size (default `xs`, so its four older callers are byte-identical) rather than the home page forking a fifth stack. ⚠ **The stack's sizes are `avatar.tsx › SIZE`'s to the pixel**, or a row changes height the moment a second person joins. ⚠ **`+N` counts what is HIDDEN, not the total.**
   - ⚠ **THE INFO TAB'S EMAIL ROW IS A ONE-PERSON ROW AND IS DROPPED ABOVE ONE** (Samuel's call, 2026-08-26). It was already absent on a SOLO channel — a row answering a question nobody asked; with three members it answers about the WRONG person, since the header names two others. **Every member's address is one section down in the roster, beside their face.** Do not "fix" this by stacking N Email rows: the card is curated and capped, and the roster IS that list.
-- 🔑 **THE PAYLOAD CARRIES THE CALLER'S OWN ROLE IN EACH CONTAINER, AND /home's ROLE-SHAPED CONTROLS GATE ON IT (2026-09-17, F-343 RESOLVED).** `home/types.ts › HomeChannel.role` is `workspace_members.role` for the caller, derived server-side by `home/server/repository-containers.ts › listMyContainerRoles` — one bounded query in the tier that already reads peers, **never a client param**. ⚠ **THE SAME ROLE VOCABULARY AND THE SAME LADDER THE WORKSPACE USES** (`workspaces/types.ts › Role` through `meetsMinRole`), not a second predicate and not a `canManage` boolean: the floors it answers differ per control, and one flag could not say both. **`containerTarget.role` is no longer hardcoded `"owner"`** — that comment ("a home container is the caller's own") was true of the container the caller CREATED and false of every one they JOINED, where a bound claim seats them at the link's `granted_role`.
+- 🔑 **THE PAYLOAD CARRIES THE CALLER'S OWN ROLE IN EACH CONTAINER, AND /home's ROLE-SHAPED CONTROLS GATE ON IT (2026-09-17, F-343 RESOLVED).** `home/types.ts › HomeChannel.role` is `workspace_members.role` for the caller, derived server-side by `channels/server/repository-list-extras.ts › listMyContainerRoles` — one bounded query in the tier that already reads peers, **never a client param**. ⚠ **THE SAME ROLE VOCABULARY AND THE SAME LADDER THE WORKSPACE USES** (`workspaces/types.ts › Role` through `meetsMinRole`), not a second predicate and not a `canManage` boolean: the floors it answers differ per control, and one flag could not say both. **`containerTarget.role` is no longer hardcoded `"owner"`** — that comment ("a home container is the caller's own") was true of the container the caller CREATED and false of every one they JOINED, where a bound claim seats them at the link's `granted_role`.
   - **FOUR CONTROLS, EACH MIRRORING A FLOOR THE SERVER ALREADY APPLIES, AND EVERY ONE OF THOSE FENCES IS UNCHANGED**: Add person (`member`+, `service-writes.ts › mintContainerLink`), the Knowledge face's shared create and the Agents face's shared create (both `minRole: "member"`) — **hidden below the floor, not disabled**, since there is no refusal to explain to somebody never offered the act — and the header's click-to-edit, which is `surface-info-panel.tsx › headerEdit.canEdit`'s mirror of `canManageChannel` and was being answered by `StandaloneChannelSurface`'s `role = "member"` DEFAULT until /home passed the real one. **This is the picture, never the fence** (§5's dead-control rule).
   - 🔒 **§8: EVERY READ SPELLS `?? EMPTY_ROLE` INLINE, AND `EMPTY_ROLE` IS `guest` (rank 0).** F-343 filed the direction as genuinely contested — `member` keeps today's buttons on every existing member's first paint after the upgrade, `guest` takes them off for one repaint. **Fail closed**: the alternative is this surface asserting a permission nobody read, which is the defect itself. `pages/home/home-caller-role.test.tsx` holds the three ranks and the key-DELETED stale fixtures.
   - ⚠ **IT IS NOT MEMBER MANAGEMENT.** Removal, departure and role change on /home are still unbuilt and still R-09's (`docs/specs/workspace-parity/00-MASTER.md` §2.4); what this field ended is the GUESSING.
@@ -2353,10 +2353,58 @@ recommendation in any spec; a spec that disagrees is the thing that is wrong.
     mounts NO guidance layer`, whose bridge stub REJECTS an unexpected path — so a re-mounted poll
     fails loudly rather than returning quietly. Deleting that test deletes the ruling.
 
-- 🔒 **THE SETTINGS PAGE IS FROZEN (2026-09-17), pending Samuel's own overhaul.** No restyle, no
+- 🔒 **THE SETTINGS PAGE IS FROZEN (Samuel's ruling R-10, 2026-09-17), pending his own overhaul.** No restyle, no
   header migration, no section-language sweep, no dialog conformance pass touches `/settings` or the
   body it shares with the settings modal. ⚠ **It is shared** — `WorkspaceSectionBody` is mounted by
   both the page and the modal, and the modal is reachable from /home, so "I only touched the modal"
   is not an exemption. A wave that needs a settings change waits for the overhaul or asks.
+
+- 🔴 **CHANNEL DELETE IS CREATOR-ONLY, AND BLOCKED WHILE OTHERS ARE MEMBERS (R-14, 2026-09-17).**
+  The creator removes people first. Ruled in the same breath: the public claim surface gets a RATE
+  LIMIT (F-297), there is NO mint quota (F-298 declined), and a claim reveals NAMES only, never
+  emails (F-299). ⚠ Not yet built — no wave carries it.
+
+- 🔒 **THE AUDIENCE-CHANGE PREVIEW FIRES FOR ANY CONTAINER WITH A SECOND AUDIENCE (R-31,
+  2026-09-17)** — standard workspaces included. The confirm token was built as a home-channel
+  mechanism and is not one: **kind is not the question, a second audience is.**
+
+- 🔒 **A FOLDER-SCOPED KNOWLEDGE ATTACHMENT NARROWS AN AGENT'S REACH (R-37, 2026-09-17).** It does
+  not re-point an agent at a folder inside a base it may still read whole — the agent may read the
+  attached folder and nothing else.
+
+- 🔒 **THE MEMBER ACTIVITY TAB STAYS (R-11, 2026-09-17).** The table, the revoked grant and the
+  server-side filter are worth their cost. Not a deletion candidate again.
+
+- 🔒 **PRE-2026-08-24 HOME CONTAINERS STAY DISPLAY-ONLY (R-50, 2026-09-17).** Their channel name and
+  description are NOT restored and there is no migration.
+
+- 🔴 **THE WORKSPACE SIDEBAR AND THE FIVE PAGE TITLES STAY (R-02, 2026-09-17).** The /home header
+  strip vs the workspace sidebar is an INTENTIONAL difference, not drift. Header GEOMETRY may be
+  unified; no title is deleted. ⚠ The Knowledge hero band is **not** deleted on this ruling's
+  authority — ledger row 16 was narrowed, not granted.
+
+- 🔴 **ONE SEARCH SURFACE (R-04, 2026-09-17).** The search popup IS the workspace's search. No page
+  gets a per-page filter.
+
+- 🔒 **NO PAGE SKELETONS NOW — LATER, NOT NEVER (R-06, 2026-09-17).** Skills, Chats and Ontology keep
+  resolving through `PageLoading`, which renders a SHAPE. A wave may not add one.
+
+- 🔒 **BOTH "Agents" NAMES STAY (R-07, 2026-09-17).** /home Agents (template identities) and the
+  channel Agents tab (running sessions) are not disambiguated by a rename.
+
+- 🔴 **A HOME-ONLY DESIGN ASYMMETRY NEEDS NO RECORDED REASON (R-40, 2026-09-17).** The label-less
+  credit bar, `HOME_CARD_FACE_SELECTED` and the Agents-page face all stay. *"This differs from the
+  workspace and nothing says why"* is not a finding.
+
+- 🔴 **THE 2026-08-30 DRIFT-AUDIT ASKs ARE DEAD AS A BATCH — R-43 AND R-13 ARE EXPIRED
+  (2026-09-17).** An item from that audit is live only if it is RE-FOUND in current code; an
+  unanswered ASK holds nothing. This is why nothing waits on ASK-9.
+
+- 🔒 **THE PLAYGROUND STAYS (R-47, 2026-09-17).** It does NOT retire with the website; deletions
+  ledger row 21 is vetoed and `docs/RETIREMENT-UNWIRING-PLAN.md` does not reach it.
+
+- ⚠ **OWED: THE PERSONAL-SHELF BOUNDARY IS A RULE NOBODY HAS WRITTEN (R-30(a), 2026-09-17).** Samuel
+  ruled *"keep both, and write the boundary down as a rule in INVARIANTS §4A"*. §4A still does not
+  carry it, so the ruling is executed nowhere.
 
 Why/history: `docs/specs/workspace-parity/00-MASTER.md` §2.4 (the 49 rulings recorded 2026-09-17).

@@ -2922,7 +2922,7 @@ stated ordering rule — and warned that the cheap one *"needs a product call on
 at four members"*. Samuel made that call: build the list.
 
 **What shipped, end to end:**
-- `home/server/repository-containers.ts › listContainerPeers` returns `Map<string, string[]>` ordered
+- `channels/server/repository-list-extras.ts › listChannelPeerIds` returns `Map<string, string[]>` ordered
   `joined_at ASC, user_id ASC`. ⚠ **The tiebreaker is half the fix, not decoration** — `joined_at`
   alone is not a TOTAL order, so two members admitted in the same millisecond (or two legacy rows
   carrying NULL) would still have flipped between loads, which is the bug itself. `nullsFirst: false`
@@ -2957,7 +2957,7 @@ read whose correctness is borrowed from a constraint stated somewhere else is co
 constraint moves, and nothing connects the two.
 
 
-- Location: `src/features/home/server/repository-containers.ts › listContainerPeers` —
+- Location: `src/features/channels/server/repository-list-extras.ts › listChannelPeerIds` —
   `if (!out.has(row.workspace_id)) out.set(...)`, i.e. **first row wins, with no ordering**.
 - Found during: writing the bound claim, while checking what a third member would do.
 - Severity: **major** — it was filed as a **question** with the words *"major the day the cap moves"*,
@@ -4569,7 +4569,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
     vocabulary the workspace uses (`workspaces/types.ts › Role`, read through `meetsMinRole`;
     no second predicate and no boolean pair, because the two floors below are different).
     Derived server-side from the membership row by
-    `home/server/repository-containers.ts › listMyContainerRoles` — ONE bounded query in the
+    `channels/server/repository-list-extras.ts › listMyContainerRoles` — ONE bounded query in the
     tier that already reads peers, never a client param.
   - **The hardcode is gone.** `pages/home/knowledge-panels.tsx › containerTarget` takes the real
     role, so the base settings modal stops believing every reader is an owner.
@@ -10001,6 +10001,22 @@ The claim had been restated in five places from one sentence, which is how it su
 - Proposed resolution: put it to Samuel as its own one-line ruling, the way R-08 itself was: does the audience ceiling follow the member count, and if so does it need a migration path (default-grant every existing container's bases) before it can arm? Until then the census entry is what keeps the disagreement visible.
 - Status: open. ⚠ **THE TREE THEREFORE ANSWERS "IS THIS ROOM SHARED" TWO WAYS AGAIN, DELIBERATELY AND IN ONE NAMED PLACE** — which is the state F-513 existed to end, so it does not get to be implicit.
 
+- ⚠ **MEASURED IN FINAL REVIEW (2026-09-17): THE TWO ANSWERS DIVERGE AT ZERO, IN THE PERMISSIVE
+  DIRECTION.** `shared/tenancy/shared-room.ts › isSharedRoom` treats only an exact `1` as solo, so
+  `isSharedRoom(0)` is **true** (shared ⇒ narrow). Both ceilings spell solo as `memberCount <= 1`,
+  so a real `0` takes the **UNRESTRICTED** arm. `repository-audience.ts` returns `count ?? null`, so
+  a zero from PostgREST — a roster race, a `status` flip mid-request — widens the audience instead
+  of narrowing it. INVARIANTS §10 states the inverted rule explicitly (*"ZERO IS NOT SOLO"*), and
+  `shared-publish.ts` on the same input demands acknowledgement. **This is the direction that leaks.**
+- ⚠ **AND THERE IS A SECOND SITE THE CENSUS DOES NOT LIST: `ontology/server/service-audience.ts:214`**
+  (`solo: memberCount !== null && memberCount <= 1`), which carries the same `<= 1` and is in no
+  DEVIATIONS list at all. Both also spell the kind test NEGATIVELY (`kind !== "link"`), the form
+  F-295 records as silently mis-handling every kind added later.
+- ⚠ **NOT FIXED HERE, AND THE REASON IS CLAUDE.md's PRECEDENCE RULE, NOT SCOPE.** The code and
+  INVARIANTS disagree; the code looks wrong; that is a finding, not a licence to change a security
+  boundary outside the wave that owns it. The ruling F-718 already asks for should now also answer
+  the zero case and cover the ontology site.
+
 ### F-719 — `workspaces.slug` has NO uniqueness constraint, and R-32 just made it an ADDRESS (2026-09-17)
 
 - Location: `supabase/migrations/20260504000000_workspaces_public_id.sql:38-39` drops both `workspaces_slug_unique` and (by inheritance from `20260502120000`) the earlier `workspaces_owner_slug_unique`; nothing since re-declares either. The consumer is `packages/mcp-server/src/workspace-directory.ts › resolveWorkspaceRef`, which resolves with `list.find((w) => w.id === ref || w.slug === ref)`.
@@ -10075,3 +10091,18 @@ The claim had been restated in five places from one sentence, which is how it su
 - **FIXED HERE**, because R-09 is a ruling and a hidden control is not a delivery: `membership-admin.ts › leaveWorkspace` is the caller's own exit — no admin floor, the same `assertWorkspacePermanentById` (R-35) and last-owner refusals removal has, and the SAME delete → channels-sweep → seat-sync → activity tail, extracted as `› completeRemoval` so departure and removal cannot drift. `DELETE /api/workspaces/[workspaceSlug]/members/[userId]` routes `targetUserId === userId` to it.
 - ⚠ **THE COST ESTIMATE IS THE LESSON, NOT THE ROUTE.** "The server already allows it" was read off a docblock, not off the gate; the audit rows that say ✔ server-side for a capability nobody has exercised are worth re-deriving before the next wave is costed on one.
 - Status: **RESOLVED 2026-09-17** in wave 7. Pinned by `src/features/workspaces/server/membership-admin.test.ts › leaveWorkspace` and `apps/desktop-ui/src/pages/home/home-roster-membership.test.tsx`.
+
+### F-726 — five orphan modules survive the "dead code is deleted" ruling, and two of them say so in a comment (2026-09-17)
+
+- Location, all measured in final review with `npx knip` plus an import grep over `src apps packages dopl-desktop-app` (zero import sites each, not counting prose mentions):
+  `src/features/knowledge/components/knowledge-v2/detail/overview-contents.tsx` (398 lines) ·
+  `src/features/knowledge/components/knowledge-v2/detail/use-content-descriptions.ts` (102) ·
+  `src/features/channels/hooks/use-channel-auto-send.ts` (40) ·
+  `src/features/mcp-connect/skill-template.ts` (112) ·
+  `src/shared/layout/page-top-bar.tsx` (40).
+- Found during: the final whole-set review of the nine parity waves.
+- ⚠ **THE FIRST TWO ARE THE SHARP ONES, BECAUSE THE CODE ADMITS IT.** `knowledge-v2/detail/base-overview.tsx` says they are *"deliberately left in the tree, unmounted"* — which is precisely the state INVARIANTS §15's **DEAD CODE IS DELETED (2026-09-17)** rules out: *"Not disarmed, not parked, not left behind a flag nobody passes."* A rule made the same day is being contradicted by a comment in the tree it governs.
+- ⚠ **NOT DELETED IN THIS REVIEW, AND THE REASON IS SCOPE.** None of the five is wave output — `git log origin/master..master` touches only the knowledge pair, and only through R-38's palette commit. The review's mandate was the stacked diff; deleting pre-existing modules is a separate change with its own doc-anchor and test blast radius (`skill-template.ts` is cited three times by `docs/RETIREMENT-UNWIRING-PLAN.md`, so its deletion moves that document too).
+- ⚠ **`AppPanel` WAS IN THIS CLASS AND WAS DELETED**, because it was different in one way that matters: 00-MASTER §5 Wave 0 carried it as scoped work (X9) and the row claimed it done. Its CSS rule `app-shell.module.css › .mainDetail` went with it — zero other users.
+- Proposed resolution: delete all five, each in its own commit, with the `RETIREMENT-UNWIRING-PLAN.md` rows repointed in the same change. **Re-derive the orphan set first** (`npx knip`) rather than trusting this list — §15's own warning is that "dead" is a MEASUREMENT, and `bits.tsx › agentAccent` was called an orphan while it still had a live call site.
+- Status: open.

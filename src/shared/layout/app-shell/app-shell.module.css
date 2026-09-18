@@ -360,19 +360,6 @@
 .scroll { flex: 1; overflow-y: auto; padding-right: 38px; padding-bottom: 40px; }
 .scroll::-webkit-scrollbar { width: 0; }
 
-/* KB detail panel. No padding — the view fills edge-to-edge and draws its own
-   in-panel header. */
-.mainDetail {
-  flex: 1;
-  min-width: 0;
-  background: #fbfcfd;
-  border-top-left-radius: var(--shell-panel-radius);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  color: var(--text-primary);
-}
-
 /* No-op: re-declares the exact values it already inherits from the global
    :root. Kept to avoid churn; deletable together with its usages. */
 .lightScope {

@@ -14,6 +14,7 @@ import type { ReactNode } from "react";
 import { Bot, Check, ChevronDown, ChevronRight, X, type LucideIcon } from "lucide-react";
 import { CHIP } from "@/shared/ui/wells";
 import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
+import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
 import { cn } from "@/shared/lib/utils";
 
 /**
@@ -56,21 +57,15 @@ export const CARD_BUTTON = cn(
  * it again. Since {@link CARD_BUTTON} dropped to 30px on 2026-09-08 a tab action
  * is the only thing left wearing this scale.
  *
- * ⚠ SPLIT INTO {@link TAB_ACTION_SHELL} + {@link TAB_ACTION_INK} SO THE SPLIT
- * BUTTON CAN COMPOSE IT. A split control is a wrapper plus two hit targets and
- * one class string cannot express that; the Agents tab used to re-cut the same
- * `h-9` / 15px pad / `text-small` by hand with a ⚠ saying it had to be re-cut
- * again whenever this moved. It composes the halves now, so it cannot drift.
+ * ⚠ ALSO SPLIT INTO {@link TAB_ACTION_SHELL} + {@link TAB_ACTION_INK}: a split
+ * control is a wrapper plus two hit targets, which one class string cannot
+ * express. `bits-tab-action.test.ts` pins the halves against the whole.
  */
+export const TAB_ACTION = cn(PAGE_ACTION_BTN, "shrink-0 gap-1");
 /** The face and the box: elevation, 36px height, stadium ends. */
 export const TAB_ACTION_SHELL = "auth-btn-3d flex h-9 rounded-full";
 /** The label's own type, pad and ink — everything inside the shell. */
 export const TAB_ACTION_INK = "gap-1 px-[15px] text-small font-semibold text-text-on-cta";
-export const TAB_ACTION = cn(
-  TAB_ACTION_SHELL,
-  "shrink-0 cursor-pointer items-center",
-  TAB_ACTION_INK
-);
 
 /**
  * The RIGHT PANEL's card face — one `.bento` at panel width. The Threads tab's

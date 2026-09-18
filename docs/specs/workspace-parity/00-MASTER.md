@@ -215,7 +215,7 @@ deletion could be wrong for a 20-person room.
 | X16 | Two declarations of the level-2 record card | `RECORD_SURFACE` | *"the single most load-bearing duplication in the document"* | **Yes** | 03 §A6 |
 | X17 | ✅ **DONE 2026-09-17 (Wave 3, R-26 (b))** — both bridges deleted with the second cache; `use-home-unread-refresh.ts` survives RENAMED as `use-home-unread-clear.ts`, which is ONE invalidation of ONE cache and no longer a bridge | one projection | they exist **only** because there are two caches | **Yes** — a multi-member room makes the staleness worse | 05 §B.2 |
 | X18 | `HomeChannel.lastMessagePreview` on the wire with no renderer | either render it (P14) or delete it | Samuel 2026-09-13: on the list column a last message *"just doesn't make sense imo"* | **Re-ask** — a workspace row may want it | 05 §A15 |
-| ✅ X19 | The full workspace shell for a non-guest member of a `link` container | `/home` | **CLOSED 2026-09-17 (wave 5, R-01(a))** — `app-shell.tsx › AppShellLayout` redirects every member of a non-standard container off `/{segment}/...`, gate read through `isStandardWorkspace` rather than the ROLE; `app-shell-guest.test.tsx` 6 cases → 12 | **N/A → this IS the multi-member question.** R-01 | 04 §E-1 |
+| ✅ X19 | The full workspace shell for a non-guest member of a `link` container | `/home` | **CLOSED 2026-09-17 (wave 5, R-01(a))** — `app-shell.tsx › AppShellLayout` redirects every member of a non-standard container off `/{segment}/...`, gate read through `isStandardWorkspace` rather than the ROLE; `app-shell-guest.test.tsx` 6 cases → 13 | **N/A → this IS the multi-member question.** R-01 | 04 §E-1 |
 | X20 | `/billing/[segment]` rendering Starter/Team for a `link` container | `/billing?plan=pro` | F-678 OPEN; its Team checkout 400s. ⚠ **R-01(a) LANDED 2026-09-17 and closes the DESKTOP route into it, not the WEB route itself** — `/billing/{segment}` is a Next page outside the SPA shell, so F-678 stays open and is re-measured there, not assumed dead | **Yes** — closed by construction if R-01(a) wins | 04 §C-6 |
 | X21 | ✅ **DONE 2026-09-17 (Wave 3, R-48)** — migration applied 2026-09-17; TS references removed | nothing wrote it since 2026-09-06 | delete-don't-disarm | **Yes** | 05 §C.1, §F R8 |
 | X22 | `knowledge_bases.home_scoped` / `agent_templates.home_scoped` columns | `workspace_id = the personal container` | B10/#18 2026-09-02; drop is HELD in `supabase/migrations-held/` behind two `count(*) = 0` checks | **Yes**, but ⚠ the column is also the rollback path — once dropped the deploy is one-way | 04 §0.4; 05 §C.2 |
@@ -776,7 +776,7 @@ which lands in Wave 1).
 | # | Item | Recommendation | Ref |
 |---|---|---|---|
 | V1 | **Chats** — no /home face; scoping is plain `workspace_id`, no kind awareness anywhere | 🔴 **DO NOT EXTEND — R-33 ruled NO (2026-09-17)**, and the absence is pinned (`src/features/home/tabs.test.ts`, wave 7) | 04 §B-1 |
-| V2 | **Orphan class: exported chats nothing lists.** `dopl_chats(op="export")` with no `workspace=` resolves the caller's `personal` container; `ChatsView` has one mount (the workspace route); the rail filters to `isStandardWorkspace` | **Extend, or answer what the export should do instead.** This is a live defect, not a missing feature | 04 §B-1; R-33 |
+| V2 | **Orphan class: exported chats nothing lists.** `dopl_chats(op="export")` with no `container=` (R-32's parameter; `workspace=` is a retired alias) resolves the caller's `personal` container; `ChatsView` has one mount (the workspace route); the rail filters to `isStandardWorkspace` | **Extend, or answer what the export should do instead.** This is a live defect, not a missing feature | 04 §B-1; R-33 |
 | V3 | **Skills** — no /home face; the MCP tool is *already* link-container aware (a public publish inside a shared container needs a one-time confirm token) | 🔴 **DO NOT EXTEND — R-33 ruled NO (2026-09-17)**, and the absence is pinned (`src/features/home/tabs.test.ts`, wave 7). The MCP half is untouched: `dopl_skill` still reaches a personal container | 04 §B-2 |
 | V4 | **`ConnectedAppsSection`** — reachable only from the workspace `/settings` PAGE; the modal passes no `extras` | **Extend (one prop).** An operator who works entirely in the home space cannot see or revoke their connected apps — security-relevant, not cosmetic | 04 §B-6 |
 | V5 | **The guidance layer** — `TourProviderCore`, `JoinRequestNoticesCore`, `ConnectAgentBanner`, `WelcomePopup`, none mounted on /home; all four already host-agnostic | ✅ **RULED R-49 AND EXECUTED THE OTHER WAY — DONE 2026-09-17 (wave 7): all four DELETED**, on the workspace too, not mounted on /home | 03 §A12, §C3 |
@@ -1081,7 +1081,7 @@ Nine waves. Each is independently shippable, each makes the next smaller, and th
 
 **Definition of green for every wave** (CLAUDE.md § *Definition of green*; re-derive with
 `grep -n 'run:' .github/workflows/ci.yml`): five suites, **two** lints, **two** typechecks (the SPA
-is outside the root tsconfig — `npm run typecheck -w @dopl/desktop-ui`), and **ten** non-suite gates
+is outside the root tsconfig — `npm run typecheck -w @dopl/desktop-ui`), and **twelve** non-suite gates
 including `node scripts/check-doc-refs.mjs`, the `size-check` job, the committed-`dist` check
 (`npm run build:packages` then `git status --porcelain -- 'packages/*/dist/*'` — the trailing `/*`
 **is** the gate) and the `rls-redteam` job over **seven named files, not a glob**.
@@ -1095,8 +1095,12 @@ including `node scripts/check-doc-refs.mjs`, the `size-check` job, the committed
 
 ---
 
-### Wave 0 — Gates and blockers. Nothing visible moves.
+### ✅ Wave 0 — Gates and blockers. Nothing visible moves.
 **Worktree `parity/w0-gates`.**
+
+🟢 **MERGED TO `master` 2026-09-17.** F-688, F-343, F-513, F-712 (both halves), R-41, R-35, R-36,
+R-23's measurement, P24 and the slot-replacing-host audit are in the tree; deploy state is measured
+and dated in INVARIANTS §12. 🔴 **STILL OPEN ON THIS ROW: X9 and X10** — see the free-deletions row.
 
 **Goal:** make the tree green, make the three prerequisites true, and buy the gates that stop the
 next five waves being re-audited in six weeks.
@@ -1113,8 +1117,8 @@ next five waves being re-audited in six weeks.
 | ~~**Measure R-23**~~ — ✅ **MEASURED 2026-09-17: they open.** Both the /home pop-out and the /home agent window open; the control is kept and neither window is fenced to standard workspaces | 02 §R-3/§R-4 |
 | ✅ **R-35 — DONE 2026-09-17, AND THE MEASUREMENT IS THE FINDING: there was no such code left to remove.** Both provisioning sites (`src/app/auth/callback/route.ts`, `workspaces/server/segment.ts › getBootState`) already called `ensurePersonalContainer` — wave B B14 had retired the default-minting path and only the DOCS still said otherwise. What the ruling bought instead is **PERMANENCE**, which nothing enforced: `deleteWorkspaceForUser` and `removeMember` now refuse a `kind='personal'` container (403 `PERSONAL_CONTAINER_PERMANENT`) and `20261009120000_personal_container_permanent.sql` (applied 2026-09-17) puts the refusal in the database with a `pg_trigger_depth()` exemption so account deletion still works. `default_workspace_of` untouched — it is still the hold point ledger 24 names | R-35 |
 | ✅ **R-36 — DONE 2026-09-17: the sentence is CORRECTED TO SEVEN, not deleted** (Samuel: it should claim seven). The session-health set is seven fields and `scripts/check-session-health-drift.ts` is what holds that number; the doc now agrees with the gate instead of naming a field nobody landed | R-36 |
-| Free deletions and collapses: X9 `AppPanel` · X15 `FullScreenError` · X16 `RECORD_SURFACE` · X10 `TAB_ACTION` composes `PAGE_ACTION_BTN` · ✅ P24 **DONE 2026-09-17** — `.glass-panel` mirrored into `kit.css`, `.hairline`/`.hairline-strong` DELETED from `globals.css` (zero users in either tree), and the class set is gated (R-41) | 03 §F.3 wave 0 |
-| Doc repairs, each in the change that touches the file: X30 `channel-surface.tsx`'s `knowledge` docblock · X31 `authz.ts`'s retired two-member cap · X32 `packages/contracts/src/workspaces.ts` · X33 `DESIGN-SYSTEM.md:13` (allocate **F-714** — highest claimed on this branch is F-713; re-derive across live branches) · X34 the two fixture comments | 02 §C5; 03 §E9; 05 §F-notes |
+| Free deletions and collapses: ✅ **X9 `AppPanel` DELETED 2026-09-17** (final review: zero live call sites) · ✅ X15 `FullScreenError` DELETED · ✅ X16 `RECORD_SURFACE` DELETED · ✅ **X10 DONE 2026-09-17** — `bits.tsx › TAB_ACTION` composes `PAGE_ACTION_BTN` instead of hand-cutting it · ✅ P24 **DONE 2026-09-17** — `.glass-panel` mirrored into `kit.css`, `.hairline`/`.hairline-strong` DELETED from `globals.css` (zero users in either tree), and the class set is gated (R-41) | 03 §F.3 wave 0 |
+| Doc repairs, each in the change that touches the file: X30 `channel-surface.tsx`'s `knowledge` docblock · X31 `authz.ts`'s retired two-member cap · X32 `packages/contracts/src/workspaces.ts` · X33 `DESIGN-SYSTEM.md:13` (⚠ **F-714 IS TAKEN** — the search wave claimed it; highest claimed at merge is **F-725**, and re-deriving across live branches is still the rule) · X34 the two fixture comments | 02 §C5; 03 §E9; 05 §F-notes |
 
 **Rulings needed: ALL RULED 2026-09-17 — this wave is unblocked.** R-08 → **(a)**, executed here.
 R-41 → **(a)**, the exit gate. ⚠ **R-43 is EXPIRED**, so the ASK-9 arm is gone: the shared-skeleton
@@ -1132,7 +1136,7 @@ each split is its own commit; revert individually.
 
 ---
 
-### Wave 1 — One channel record surface, zero forks.
+### ✅ Wave 1 — One channel record surface, zero forks.
 **Worktree `parity/w1-channel-surface`.**
 
 🟢 **MERGED TO `master` 2026-09-17 — WAVES 1A AND 1B ARE DONE, AND ITEM 6 IS NOT.**
@@ -1208,11 +1212,11 @@ no migration.
 **Files touched:** ~22 as scoped, **plus the archive removal (R-21)** — re-scope before opening the
 worktree; the archive reaches the channel service and the list filters, not only the info body.
 **Gates:** `channels` suite · `page-skeletons.test.tsx` (TEN page shapes) + `channel-record-skeleton.test.tsx` byte-share pins · `knowledge-tab.test.tsx › the capability, per host` · `guest-channel.test.tsx` · `settings-tab.test.tsx › minimal copy` (8-word caption bound).
-**Risk:** the collapse breaks `person-info-tab*.test.tsx` (**6 files**) and `surface-slot-fixtures.tsx`; **nobody has counted the assertions that move** (01 gap 1). **Rollback:** the slot still exists — restoring `person-info-tab.tsx` as an `infoExtras` consumer is a one-file revert.
+**Risk — DISCHARGED at the merge:** the collapse did break `person-info-tab*.test.tsx`; all six files are DELETED (measured 2026-09-17, `find … -name "person-info-tab*.test.*"` → 0) and their surviving assertions moved onto the shared body's suites. **Rollback:** the slot still exists — restoring `person-info-tab.tsx` as an `infoExtras` consumer is a one-file revert.
 
 ---
 
-### Wave 2 — Artifacts and the info-column capability set.
+### ✅ Wave 2 — Artifacts and the info-column capability set.
 **Worktree `parity/w2-artifacts`.**
 
 🟢 **MERGED TO `master` 2026-09-17** (branch `wave2/artifacts-agents-heldgate`, 5 build commits +
@@ -1264,7 +1268,7 @@ work in the same surface.
 
 ---
 
-### Wave 3 — One channel projection. The substrate.
+### ✅ Wave 3 — One channel projection. The substrate.
 **Worktree `parity/w3-one-projection`.**
 
 **Goal:** one answer to "which channels am I in and what is their state"; delete both cache bridges.
@@ -1335,13 +1339,18 @@ paper over** — state it, do not hide it.
 
 ---
 
-### Wave 4 — The object column and the channel picker.
+### ✅ Wave 4 — The object column and the channel picker.
 **Worktree `parity/w4-object-column`.**
 
 **Goal:** "pick a thing" is one control on every page.
 
-**Items — this wave SHRANK on the 2026-09-17 rulings.** What survives: split `RelationshipList` into
-derivation + `ObjectColumn` (D8) · P13's **unread mention count** (the server projection R-28 requires)
+🟢 **MERGED TO `master` 2026-09-17** — see the PICKER MARKS half below. 🔴 **STILL OPEN: D8's /home
+half, and U58.**
+
+**Items — this wave SHRANK on the 2026-09-17 rulings.** What survives: 🔴 **D8 — NOT DONE on /home**
+(`grep -rn ObjectColumn src apps` → 0; `apps/desktop-ui/src/pages/home/relationship-list.tsx` still
+carries both the derivation and the column — only the WORKSPACE column's seam was taken, as
+`sidebar-search.tsx`) · P13's **unread mention count** (the server projection R-28 requires)
 and the `@ N` badge on the workspace row · **U28** presence rings (this line said "P28", which is the
 account-palette skin and was Wave 6's — a typo, corrected 2026-09-17) · U58/U59 the empty-state
 sentences.
@@ -1408,7 +1417,7 @@ measurement.
 
 ---
 
-### Wave 5 — The shell and the one header.
+### ✅ Wave 5 — The shell and the one header.
 **Worktree `parity/w5-shell-header`.**
 
 **Goal:** five header recipes become one; the shell assembly and the rail move into the shared tree.
