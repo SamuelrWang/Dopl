@@ -23,6 +23,7 @@
  * VALUE inside a line we wrote, neutralized, never a body rendered as itself.
  * The asymmetry with the wake surfaces that DO carry one is F-407.
  */
+import type { ContainerKind } from "@dopl/contracts";
 import type { AccountStatus } from "@dopl/client";
 import { type ResponseFormat } from "./response-size.js";
 /**
@@ -33,4 +34,6 @@ import { type ResponseFormat } from "./response-size.js";
  * window and render in different tenses, which reads as a fact about them —
  * `channel-ops-read.ts › opReadSessions` states the same rule.
  */
-export declare function statusLines(status: AccountStatus, now?: number, format?: ResponseFormat): string[];
+export declare function statusLines(status: AccountStatus, now?: number, format?: ResponseFormat, 
+/** `workspaceId` → kind, from the boot directory. Empty ⇒ no row names one. */
+kinds?: ReadonlyMap<string, ContainerKind>): string[];

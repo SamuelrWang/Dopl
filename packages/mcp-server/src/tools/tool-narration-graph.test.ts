@@ -20,7 +20,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 
-import { registerMapTool } from "./map";
+import { registerMapFixture } from "./narration-fixtures";
 import { registerSearchTool } from "./search";
 import { registerSkillTools } from "./skills";
 import { opGetTree, opListBases } from "./knowledge-ops-read";
@@ -176,7 +176,7 @@ describe("dopl_ontology — the object graph every member can write", () => {
 describe("dopl_map — the call the instructions say to make FIRST", () => {
   it("a base description cannot start a line of the agent's opening picture", async () => {
     const text = await callTool(
-      registerMapTool,
+      registerMapFixture,
       stub({
         listKbBases: vi.fn(async () => [{ ...BASE, description: FORGERY }]),
         listSkills: vi.fn(async () => []),

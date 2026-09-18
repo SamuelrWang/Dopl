@@ -175,7 +175,7 @@ async function fanOut(client, charge, opts) {
     const scopeWord = searched === 1 ? "scope" : "scopes";
     let coverage = `Searched ${searched} ${scopeWord} of ${total} you can reach, each one an ordinary search of that scope alone.`;
     if (truncation.kind === "cap") {
-        coverage += ` ⚠ TRUNCATED at the ${exports.MAX_SCOPES}-scope cap: ${total - searched} scope(s) were NOT searched and nothing here says anything about them. Narrow with \`workspace=\` and scope="here" to reach one directly.`;
+        coverage += ` ⚠ TRUNCATED at the ${exports.MAX_SCOPES}-scope cap: ${total - searched} scope(s) were NOT searched and nothing here says anything about them. Narrow with \`container=\` and scope="here" to reach one directly.`;
     }
     else if (truncation.kind === "credits") {
         coverage += ` ⚠ TRUNCATED — the fan-out stopped when you ran out of credits, so ${total - searched} scope(s) were NOT searched. What is above was searched and paid for; the rest is unknown, not empty.`;

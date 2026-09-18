@@ -100,6 +100,9 @@ function accountStub(sessions: ChannelSessionStateOwn[]): DoplClient {
 
 /** ⚠ Not container-locked: `narrowToLock` is B3's business and is tested with it. */
 const UNLOCKED: WorkspaceDirectory = {
+  resolveContainerRef: async () => null,
+  homeContainer: async () => null,
+  containerKindIndex: async () => new Map(),
   lockedWorkspaceId: () => null,
 } as unknown as WorkspaceDirectory;
 
@@ -175,14 +178,14 @@ describe("the ACCOUNT-WIDE status renders the same rows as the per-channel one",
     for (const line of SESSION_TABLE_HEAD) expect(text).toContain(line);
   });
 
-  it("heads each group with the room AND its `workspace=` handle", async () => {
+  it("heads each group with the room AND its `container=` handle", async () => {
     // ⚠ THE ONE THING THIS PAGE ADDS THAT THE TABLE CANNOT CARRY. The `channel`
     // COLUMN names the room; only the heading carries the value every other tool
     // takes to reach it, which is why the grouping survived the move to a table.
     const text = (await opReadSessionsAccount(accountStub([rich()]), UNLOCKED))
       .content[0].text;
     expect(text).toContain("### `General`");
-    expect(text).toContain("workspace=`ws-1`");
+    expect(text).toContain("container=`ws-1`");
   });
 
   it("says so in one line when nothing is being reported, and renders no table", async () => {

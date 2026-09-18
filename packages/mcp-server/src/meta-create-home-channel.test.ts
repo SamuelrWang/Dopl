@@ -91,7 +91,7 @@ describe("dopl_workspaces — dispatch", () => {
     const text = textOf(await handler({ op: "create_home_channel", name: "Ops" }));
     expect(createHomeChannel).toHaveBeenCalledWith({ name: "Ops" });
     expect(text).toContain("Created home channel `Ops`");
-    expect(text).toContain("workspace=`ws-new`");
+    expect(text).toContain("container=`ws-new`");
     expect(text).toContain("channel=`ch-new`");
     expect(text).toMatch(/cannot add a person/i);
   });

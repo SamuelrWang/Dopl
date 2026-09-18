@@ -132,7 +132,7 @@ describe("WorkspaceDirectory — listing vs resolution", () => {
     // one: an unknown kind is a workspace, never somebody's room.
     expect(containerKind(STANDARD)).toBe("workspace");
     expect(containerKind(KINDLESS)).toBe("workspace");
-    expect(containerKind(LINK_A)).toBe("home channel");
+    expect(containerKind(LINK_A)).toBe("home_channel");
     expect(containerKind({ kind: "personal" })).toBe("personal");
     expect(containerKind({ kind: "vault" as never })).toBe("workspace");
   });
@@ -146,7 +146,7 @@ describe("WorkspaceDirectory — listing vs resolution", () => {
     expect(label).toBe("home space (your default; a personal container, not a workspace)");
     expect(label).toMatch(/not a workspace/);
     expect(containerKindLabel("workspace")).toBe("workspace");
-    expect(containerKindLabel("home channel")).toBe("home channel");
+    expect(containerKindLabel("home_channel")).toBe("home channel");
   });
 });
 

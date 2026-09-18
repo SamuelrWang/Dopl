@@ -65,7 +65,7 @@ describe("the status table", () => {
     const text = statusLines(status([channel(1)]), NOW).join("\n");
     // A home channel's CONTAINER id appears here and in `dopl_workspaces`;
     // without it the row names a room the reader cannot address.
-    expect(text).toContain("workspace=`ws-1`");
+    expect(text).toContain("container=`ws-1`");
     expect(text).toContain("channel=`room-1`");
   });
 

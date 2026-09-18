@@ -11,7 +11,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z, type ZodRawShape } from "zod";
 import { workspaceContext } from "@dopl/client";
-import type { DoplClient, WorkspaceListItem } from "@dopl/client";
+import type { DoplClient } from "@dopl/client";
 
 import {
   creditsExhausted,
@@ -21,19 +21,19 @@ import {
   type RegisterTool,
   type ToolResponse,
 } from "./tools/respond.js";
-import { inlineOr } from "./tools/narration.js";
-import {
-  acceptsWorkspaceArg,
-  ignoredWorkspaceNote,
-  WORKSPACE_ARG_DESCRIPTION,
-} from "./workspace-arg.js";
+import { CONTAINER_ARG_DESCRIPTION } from "./workspace-arg.js";
+import { resolveCallAddress } from "./container-resolve.js";
 
 // ⚠ Re-exported: `tool-budget.test.ts` and `server.test.ts` read the contract
 // through the registrar that injects it, which is where an agent meets it.
 export {
+  CONTAINER_ARG_DESCRIPTION,
+  WORKSPACE_ALIAS_DESCRIPTION,
   WORKSPACE_ARG_DESCRIPTION,
   WORKSPACE_ARG_OPS,
+  UNADDRESSED_WRITE_REFUSALS,
   acceptsWorkspaceArg,
+  refusesUnaddressedWrite,
   workspaceArgTargets,
 } from "./workspace-arg.js";
 import type { CallerIdentity } from "./tools/identity.js";
@@ -55,18 +55,24 @@ import type {
 } from "./workspace-directory.js";
 
 /**
- * Optional per-call `workspace` arg injected into every domain tool's schema by
- * `registerTool`. Slug or UUID; routes via the transport's AsyncLocalStorage
- * override, leaving the connection's container unchanged. Const so its
- * description renders verbatim — and identically — in every tool's MCP
- * introspection.
+ * 🔒 **THE TWO ADDRESSING ARGS INJECTED INTO EVERY DOMAIN TOOL'S SCHEMA** —
+ * `container` (R-32, Samuel 2026-09-17) and `workspace`, its deprecated alias.
+ * Slug, id or the reserved `home`; routes via the transport's
+ * AsyncLocalStorage override, leaving the connection's container unchanged.
+ * Const so each description renders verbatim — and identically — in every
+ * tool's MCP introspection.
  *
- * ⚠ IT IS INJECTED EVEN WHERE IT IS IGNORED, and that is the point of the
- * one-release window: `strictInput` refuses an unknown key, so a schema without
- * it would turn "ignored" into `-32602`, which is the one thing B13 rules out.
+ * ⚠ BOTH ARE INJECTED EVEN WHERE THEY ARE IGNORED, and that is the point of the
+ * one-release window: `strictInput` refuses an unknown key, so dropping either
+ * from the schema would turn "ignored" into `-32602`, which is the one thing a
+ * deprecation window rules out. The alias is the reason the rename is not a
+ * wire break; `container-resolve.ts` maps it to the same resolver and says so
+ * on the result.
  */
 const WORKSPACE_ARG_SHAPE = {
-  workspace: z.string().optional().describe(WORKSPACE_ARG_DESCRIPTION),
+  container: z.string().optional().describe(CONTAINER_ARG_DESCRIPTION),
+  // ⚠ NO `.describe()` — see `workspace-arg.ts › WORKSPACE_ALIAS_DESCRIPTION`.
+  workspace: z.string().optional(),
 };
 type WorkspaceArgShape = typeof WORKSPACE_ARG_SHAPE;
 
@@ -303,7 +309,8 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
     type EnhancedArgs = z.infer<z.ZodObject<S & WorkspaceArgShape>>;
 
     const wrapped = async (args: EnhancedArgs): Promise<ToolResponse> => {
-      const { workspace: workspaceRef, ...rest } = args as EnhancedArgs & {
+      const { container: _c, workspace: _w, ...rest } = args as EnhancedArgs & {
+        container?: string;
         workspace?: string;
       };
       const innerArgs = rest as unknown as z.infer<z.ZodObject<S>>;
@@ -314,89 +321,43 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
       const refusal = gates.opRefusal(name, op);
       if (refusal) return refusal;
 
-      const supplied = typeof workspaceRef === "string" ? workspaceRef.trim() : "";
-      if (workspaceRef !== undefined && acceptsWorkspaceArg(name, op)) {
-        // ⚠ "provided but blank" (fail closed) must stay distinct from "not
-        // provided". A falsy-string test lets a computed-but-empty ref route a
-        // write to a container the caller never named.
-        if (!supplied) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                text: `The \`workspace\` argument was blank. Pass a container id or slug from \`dopl_workspaces\`, or omit \`workspace=\` entirely to use this connection's container.`,
-              },
-            ],
-          };
-        }
-        // ⚠ `resolveWorkspaceRef` calls listWorkspaces and can throw on
-        // network/auth failure — an uncaught throw surfaces as an opaque MCP
-        // framework error.
-        let resolved: WorkspaceListItem | null;
-        try {
-          resolved = await directory.resolveWorkspaceRef(supplied);
-        } catch (err) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                // ⚠ Loopback origin names where the bytes came from, not who
-                // wrote them — a 4xx can echo a rejected field.
-                text:
-                  `Couldn't validate the \`workspace\` argument (${inlineOr(
-                    err instanceof Error ? err.message : String(err),
-                    "\`no detail reported\`",
-                  )}). Try again, or call without \`workspace=\`.`,
-              },
-            ],
-          };
-        }
-        if (!resolved) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text" as const,
-                // ⚠ Caller's own arg, but a raw backtick still escapes this
-                // span and puts the tail into narration.
-                text: `Workspace not found: ${inlineOr(supplied, "\`(unreadable ref)\`")}. Call \`dopl_workspaces\` for every container you can reach — workspaces and home channels alike.`,
-              },
-            ],
-          };
-        }
+      // 🔒 ONE DECISION, ONE PLACE — `container-resolve.ts` owns the grammar,
+      // the alias, the blank/not-found refusals and R-32's unaddressed-mint
+      // refusal. This wrapper only spends the answer.
+      const address = await resolveCallAddress(
+        name,
+        op,
+        { container: _c, workspace: _w },
+        { directory, activeWorkspace },
+      );
+      if (address.kind === "refusal") return address.response;
+
+      if (address.kind === "addressed") {
         // Handler runs inside the AsyncLocalStorage scope so client.* calls
         // pick up the override in X-Workspace-Id; reverts on scope exit. Footer
-        // reports the EFFECTIVE workspace with a `per-call arg` source.
-        const effective: EffectiveWorkspace = {
-          id: resolved.id,
-          slug: resolved.slug,
-          name: resolved.name,
-          role: resolved.role,
-          source: "per-call arg",
-        };
-        const result = await runWithCredits(resolved.id, () =>
-          workspaceContext.run(resolved.id, () => handler(innerArgs)),
+        // reports the EFFECTIVE container with a `per-call arg` source.
+        const { effective } = address;
+        const result = await runWithCredits(effective.id, () =>
+          workspaceContext.run(effective.id, () => handler(innerArgs)),
         );
-        return appendDoplStatus(result, effective, caller, unmeteredNote());
+        return appendDoplStatus(
+          result,
+          effective,
+          caller,
+          joinNotes(address.note, unmeteredNote()),
+        );
       }
 
-      // ⚠ NO HONOURED `workspace=`. The call runs in this connection's
-      // container, and when the connection names none the SERVER resolves the
-      // caller's own — there is no guess to make here and nothing to refuse.
-      const ignored =
-        workspaceRef === undefined ? null : ignoredWorkspaceNote(op, supplied);
       const result = await runWithCredits(await billingTarget(), () =>
         handler(innerArgs),
       );
-      // ⚠ BOTH NOTES, NOT ONE: an ignored `workspace=` and an unmetered call are
+      // ⚠ BOTH NOTES, NOT ONE: a dropped address and an unmetered call are
       // independent facts about the same call, and dropping either is a silence.
       return appendDoplStatus(
         result,
         sessionEffective(),
         caller,
-        joinNotes(ignored, unmeteredNote()),
+        joinNotes(address.note, unmeteredNote()),
       );
     };
 

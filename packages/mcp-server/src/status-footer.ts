@@ -53,7 +53,11 @@ export async function appendDoplStatus(
     // server resolves the caller's own when nothing is passed (B10).
     ...(effective
       ? [
-          `  active_workspace: ${inlineOr(effective.name, UNNAMED_WORKSPACE)} (slug=\`${effective.slug}\`, id=\`${effective.id}\`, role=${effective.role})`,
+          // ⚠ **`kind=` SINCE R-32.** This is the one line on every successful
+          // response, and it is where a single-container list says what kind of
+          // container it listed — the alternative was a kind column on every
+          // row of every list, paid for per row.
+          `  active_workspace: ${inlineOr(effective.name, UNNAMED_WORKSPACE)} (slug=\`${effective.slug}\`, id=\`${effective.id}\`, role=${effective.role}${effective.kind ? `, kind=\`${effective.kind}\`` : ""})`,
           `  workspace_source: ${effective.source}`,
         ]
       : []),

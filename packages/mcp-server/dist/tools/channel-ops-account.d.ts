@@ -59,8 +59,9 @@ subject?: string | null): Promise<ToolResponse>;
  * about which fields an audience may read; see `channel-session-render.ts`.
  *
  * ⚠ **THE GROUPING IS WHAT THIS PAGE ADDS, AND IT IS NOT THE `channel` COLUMN.**
- * Each `###` heading carries the room's `workspace=` handle, which is the value
- * every other tool takes to reach it and which no cell in the table can carry.
+ * Each `###` heading carries the room's `container=` handle and its KIND, which
+ * is the value every other tool takes to reach it and which no cell in the table
+ * can carry.
  *
  * ⚠ **NO BANNER AND NO STANDING NOTES** — T11/T13. `SESSION_HANDLE_NOTE` and
  * `SESSION_TELEMETRY_NOTE` are deleted from every result on this surface; they

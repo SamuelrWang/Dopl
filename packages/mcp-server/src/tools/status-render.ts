@@ -24,6 +24,7 @@
  * The asymmetry with the wake surfaces that DO carry one is F-407.
  */
 
+import type { ContainerKind } from "@dopl/contracts";
 import type { AccountChannelStatus, AccountStatus } from "@dopl/client";
 import { inlineOr } from "./narration.js";
 import { formatSessionLine } from "./channel-session-render.js";
@@ -42,19 +43,34 @@ const NO_TEXT = "(empty)";
  * `dopl_channel(op="help")` — see the T11 note on the header below.
  */
 const STATUS_LEGEND = [
-  "`workspace=` is the handle every other tool takes for that room — a standard workspace OR a home-channel container, and a container is reachable NO OTHER WAY. `channel=` is what dopl_channel takes.",
+  "`container=` is the handle every other tool takes for that room — a workspace, a home channel, or `home` for your own home space; `kind=` says which. `channel=` is what dopl_channel takes.",
   '"new" counts messages past the `since` you passed, EXCLUDING your own. Read them with dopl_channel(op="read", since=<your cursor>) — with no `channel`, that reads across every room below at once.',
 ];
 
-/** One channel's own line: what it is, where it is, and whether it moved. */
-function channelLine(channel: AccountChannelStatus): string {
+/**
+ * One channel's own line: what it is, where it is, and whether it moved.
+ *
+ * ⚠ **THE CONTAINER'S KIND RIDES THE ROW SINCE R-32.** This table is the one
+ * place an orchestrator sees every room it has at once, across every container,
+ * and "which of these is my home space" was a second call to answer. The kind is
+ * the typed value (`@dopl/contracts › ContainerKind`), looked up from the boot
+ * directory — ⚠ **OMITTED, NEVER GUESSED, when the container is not in it**: an
+ * account read can name a container a locked directory does not list, and a
+ * default arm here would invent a fact about somebody else's room.
+ */
+function channelLine(
+  channel: AccountChannelStatus,
+  kinds: ReadonlyMap<string, ContainerKind>,
+): string {
   const name = inlineOr(channel.channelName, NO_NAME);
   const moved =
     channel.unread === null
       ? "no cursor"
       : `${channel.unread} new`;
   const head = channel.lastSeq === null ? "empty" : `seq ${channel.lastSeq}`;
-  return `- **${name}** — ${moved} · ${head} · workspace=\`${channel.workspaceId}\` · channel=\`${channel.channelSlug}\``;
+  const kind = kinds.get(channel.workspaceId);
+  const kindPart = kind ? ` · kind=\`${kind}\`` : "";
+  return `- **${name}** — ${moved} · ${head} · container=\`${channel.workspaceId}\`${kindPart} · channel=\`${channel.channelSlug}\``;
 }
 
 /**
@@ -98,6 +114,8 @@ export function statusLines(
   status: AccountStatus,
   now: number = Date.now(),
   format?: ResponseFormat,
+  /** `workspaceId` → kind, from the boot directory. Empty ⇒ no row names one. */
+  kinds: ReadonlyMap<string, ContainerKind> = new Map(),
 ): string[] {
   // ⚠ WHAT `concise` DROPS HERE, AND IT IS ONLY EVER METADATA: the two-line
   // LEGEND (standing teaching, identical on every check-in, and the single
@@ -145,7 +163,7 @@ export function statusLines(
     ...(terse ? [] : [""]),
   ];
   for (const channel of channels) {
-    lines.push(channelLine(channel));
+    lines.push(channelLine(channel, kinds));
     for (const session of channel.sessions) {
       // ⚠ THE PROJECTION RENDERER, REUSED VERBATIM. A second session line would
       // be a second opinion about what "stale" means and about which fields a

@@ -11,6 +11,8 @@
 import { expect } from "vitest";
 import type { DoplClient } from "@dopl/client";
 import type { RegisterTool, ToolResponse } from "./respond";
+import { registerMapTool } from "./map";
+import type { WorkspaceDirectory } from "../workspace-directory";
 
 /**
  * One payload carrying every structural trick a result's own formatting can be
@@ -58,6 +60,22 @@ function expectLineContains(line: string, marker: string): void {
   expect(span).not.toMatch(/[`*_#>[\]{}|]/);
 }
 
+/**
+ * EVERY line carrying the marker is neutralized — for results that legitimately
+ * name one hostile string more than once.
+ *
+ * ⚠ **IT EXISTS BECAUSE `dopl_map` GREW CONTAINER NODES IN R-32.** A forged
+ * workspace NAME now appears in the manifest's own directory node AND in the
+ * `_dopl_status` footer, so "exactly one line" stopped being the claim; what
+ * still holds, and is the whole security question, is that no occurrence of it
+ * escapes its code span.
+ */
+export function expectEveryHitNeutralized(text: string, marker = MARKER): void {
+  const hits = text.split("\n").filter((l) => l.includes(marker));
+  expect(hits.length, `"${marker}" appears nowhere`).toBeGreaterThan(0);
+  for (const hit of hits) expectLineContains(hit, marker);
+}
+
 /** No line of the result is structure the ATTACKER wrote. */
 export function expectNoForgedStructure(text: string): void {
   for (const line of text.split("\n")) {
@@ -94,3 +112,25 @@ export async function callTool(
 
 /** A hand-stubbed @dopl/client — nothing transports. */
 export const stub = (o: Record<string, unknown>) => o as unknown as DoplClient;
+
+/**
+ * A directory that lists NOTHING, for the `dopl_map` fixtures.
+ *
+ * ⚠ **IT EXISTS BECAUSE `registerMapTool` TOOK A THIRD ARGUMENT IN R-32** (the
+ * three container nodes), and every fixture here drives the tool through its
+ * real registrar. An empty list is the honest default for a fixture that is
+ * about the three DOMAIN reads: the container nodes then render their "none"
+ * arms, which is a rendering these files can pin without inventing a directory.
+ */
+export const EMPTY_DIRECTORY: WorkspaceDirectory = {
+  getWorkspaceList: async () => [],
+  resolveWorkspaceRef: async () => null,
+  resolveContainerRef: async () => null,
+  homeContainer: async () => null,
+  containerKindIndex: async () => new Map(),
+  lockedWorkspaceId: () => null,
+};
+
+/** `registerMapTool` in the two-argument shape every fixture harness takes. */
+export const registerMapFixture = (r: RegisterTool, c: DoplClient): void =>
+  registerMapTool(r, c, EMPTY_DIRECTORY);

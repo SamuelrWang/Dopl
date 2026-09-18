@@ -60,6 +60,9 @@ function directoryStub(
   return {
     getWorkspaceList: async () => workspaces,
     resolveWorkspaceRef: async () => null,
+    resolveContainerRef: async () => null,
+    homeContainer: async () => null,
+    containerKindIndex: async () => new Map(),
     lockedWorkspaceId: () => locked,
   };
 }
@@ -273,7 +276,7 @@ describe("provenance is structural", () => {
     expect(text).toContain("## `acme workspace` (workspace · slug `acme` · id `ws-a`)");
     // ⚠ A container is rendered as a HOME CHANNEL, never as a workspace —
     // INVARIANTS §4A forbids advertising one as a workspace anywhere.
-    expect(text).toContain("## `With Dana` (home channel · id `home-1`)");
+    expect(text).toContain("## `With Dana` (home_channel · id `home-1`)");
     expect(text).not.toContain("With Dana` (workspace");
   });
 
@@ -334,7 +337,7 @@ describe("provenance is structural", () => {
     );
     expect(getHomeChannels).not.toHaveBeenCalled();
     expect(text).toContain("## `acme workspace`");
-    expect(text).toContain("## `With Dana` (home channel · id `home-1`)");
+    expect(text).toContain("## `With Dana` (home_channel · id `home-1`)");
   });
 });
 
@@ -365,7 +368,7 @@ describe("🔒 the fan-out obeys the container lock", () => {
       charge,
       { query: "ship", scope: "everywhere" },
     );
-    expect(text).toContain("## `With Dana` (home channel · id `home-1`)");
+    expect(text).toContain("## `With Dana` (home_channel · id `home-1`)");
     // 🔒 Neither the NAME nor the ID of the operator's other room may appear.
     expect(text).not.toContain("With Sam");
     expect(text).not.toContain("home-2");

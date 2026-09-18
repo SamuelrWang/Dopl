@@ -26,7 +26,7 @@ vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
 
 import type { WorkspaceListItem } from "@dopl/client";
 import { buildInstructions } from "../server.js";
-import { registerMapTool } from "./map";
+import { registerMapFixture } from "./narration-fixtures";
 import { registerMembersTool } from "./members";
 import { CONTACT_POINTER } from "./members-render";
 import { callTool, stub } from "./narration-fixtures";
@@ -100,7 +100,7 @@ const MAP_CLIENT = () =>
 
 describe("dopl_map names the destination it cannot list", () => {
   it("routes to dopl_channel for reaching a member or their agent", async () => {
-    const text = await callTool(registerMapTool, MAP_CLIENT(), "dopl_map", {});
+    const text = await callTool(registerMapFixture, MAP_CLIENT(), "dopl_map", {});
     expect(text).toContain("Reaching a member or their agent: dopl_channel");
     // ⚠ THE OP NAME MOVED WITH THE COLLAPSE (B8): `list` is an `action` on
     // `rooms`. The claim is unchanged — a pre-discovery pointer must name a call
@@ -113,7 +113,7 @@ describe("dopl_map names the destination it cannot list", () => {
   it("says it did not query them, so the line is never read as a count", async () => {
     // ⚠ The tool is counts and this section has none — say WHY, or "no channels
     // section" reads as "no channels".
-    const text = await callTool(registerMapTool, MAP_CLIENT(), "dopl_map", {});
+    const text = await callTool(registerMapFixture, MAP_CLIENT(), "dopl_map", {});
     expect(text).toContain("this manifest does not query them");
     expect(text).toContain("nothing above is a count of them");
     expect(text).not.toMatch(/## Channels \(\d+\)/);
@@ -122,14 +122,14 @@ describe("dopl_map names the destination it cannot list", () => {
   it("sits BELOW the scope note, which only speaks for the domains it read", async () => {
     // ⚠ `SCOPE_NOTE` ends "every section above was read" — a pointer to a
     // domain this tool never queries must not sit under it and inherit that.
-    const text = await callTool(registerMapTool, MAP_CLIENT(), "dopl_map", {});
+    const text = await callTool(registerMapFixture, MAP_CLIENT(), "dopl_map", {});
     expect(text.indexOf("with no such notice every section above was read")).toBeLessThan(
       text.indexOf("Reaching a member or their agent"),
     );
   });
 
   it("still renders its three domains, unchanged", async () => {
-    const text = await callTool(registerMapTool, MAP_CLIENT(), "dopl_map", {});
+    const text = await callTool(registerMapFixture, MAP_CLIENT(), "dopl_map", {});
     for (const heading of [
       "## Knowledge bases (0)",
       "## Skills (0)",
@@ -223,7 +223,7 @@ describe("the routing additions grant nothing", () => {
    */
   const surfaces = async () => [
     buildInstructions([WS]),
-    await callTool(registerMapTool, MAP_CLIENT(), "dopl_map", {}),
+    await callTool(registerMapFixture, MAP_CLIENT(), "dopl_map", {}),
     await members({ op: "whoami" }),
     await members({ op: "list" }),
     await members({ op: "get", member: "u-1" }),

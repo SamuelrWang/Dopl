@@ -7,6 +7,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerMapTool = registerMapTool;
+const workspace_directory_js_1 = require("../workspace-directory.js");
 const narration_1 = require("./narration");
 const ontology_clipped_1 = require("./ontology-clipped");
 const partial_read_1 = require("./partial-read");
@@ -39,7 +40,7 @@ const NO_NAME = "`(unnamed)`";
  * description, and both name the authoritative alternative.
  */
 const MAP_DESCRIPTION = (0, tool_style_1.composeDescription)({
-    headline: "Routing manifest of this workspace: ACTIVE, caller-visible knowledge bases, skills and ontologies, one line each, with handles.",
+    headline: "Routing manifest: your containers, then this one's ACTIVE, caller-visible knowledge bases, skills and ontologies, one line each, with handles.",
     policy: "Read-only. No parameters.",
     routing: [
         'Use dopl_members(op="access_matrix") for the inventory across status and visibility.',
@@ -81,12 +82,69 @@ const SCOPE_NOTE = `Scope: ACTIVE items visible to you. Draft skills and team-sc
  * are `dopl_channel`'s to state.
  */
 const CHANNELS_ROUTING = `**Reaching a member or their agent: dopl_channel.** Channels are this workspace's live member-to-member and agent-to-agent messaging, and this manifest does not query them, so nothing above is a count of them. If dopl_channel is not in your tool list, load it with ToolSearch, then call dopl_channel(op="rooms", action="list") for the channels and DMs this account can post into.`;
-function registerMapTool(register, client) {
+/**
+ * 🔒 **THE CONTAINER NODES — "Home space" IS ITS OWN TOP-LEVEL NODE** (R-32,
+ * Samuel 2026-09-17: *home must be structurally distinct, never just a prompt
+ * line*).
+ *
+ * ⚠ **THREE HEADINGS, NOT ONE LIST WITH A KIND COLUMN.** The personal container
+ * is the DEFAULT — it is where an unaddressed read lands — and a default that
+ * renders as one row among N is a default an agent has to be told about in
+ * prose. Its own node is the structure that replaces the sentence.
+ *
+ * ⚠ **IT COSTS NO LOOPBACK.** `getWorkspaceList()` is the boot directory,
+ * already in hand and already narrowed by the container lock — a locked session
+ * therefore renders exactly the one container it stands in and learns nothing
+ * about the existence of another (B3).
+ *
+ * ⚠ **KIND IS THE TYPED VALUE ON EVERY ROW** (`@dopl/contracts ›
+ * ContainerKind`), because a heading groups rows and an agent copying one row
+ * out of this manifest must still carry what kind of thing it took.
+ */
+function containerNodes(list) {
+    const by = (kind) => list.filter((w) => (0, workspace_directory_js_1.containerKind)(w) === kind);
+    const row = (w, address) => `- ${(0, narration_1.inlineOr)(w.name, NO_NAME)} — kind=\`${(0, workspace_directory_js_1.containerKind)(w)}\` (${address}, id: \`${w.id}\`)`;
+    const lines = ["", "## Home space — your default container"];
+    const home = by("personal");
+    for (const w of home) {
+        lines.push(row(w, `container=\`${workspace_directory_js_1.HOME_ADDRESS}\``));
+    }
+    if (home.length === 0) {
+        // ⚠ ABSENT IS NOT EMPTY. A caller whose account has no personal container
+        // (the mint has not replayed for them) must not read a blank node as "your
+        // home space has nothing in it" — the node says the container is missing.
+        lines.push("_None — you have no home space, so an unaddressed call has no default to land in._");
+    }
+    const channels = by("home_channel");
+    lines.push("", `## Home channels (${channels.length})`);
+    for (const w of channels)
+        lines.push(row(w, `container=\`${w.slug}\``));
+    if (channels.length === 0)
+        lines.push("_None._");
+    const workspaces = by("workspace");
+    lines.push("", `## Workspaces (${workspaces.length})`);
+    for (const w of workspaces)
+        lines.push(row(w, `container=\`${w.slug}\``));
+    if (workspaces.length === 0)
+        lines.push("_None._");
+    return lines;
+}
+function registerMapTool(register, client, 
+/** 🔒 The boot directory, for the three container nodes above. */
+directory) {
     register("dopl_map", MAP_DESCRIPTION, {}, async () => {
         // ⚠ Fail-soft — one broken domain must not fail the manifest — but record
         // the failure, never swallow it. Labels must match the section headings
         // below so the notice names the section the reader sees empty.
         const reads = (0, partial_read_1.partialRead)();
+        // ⚠ THE DIRECTORY IS NOT A FAN-OUT LEG. It is the cached boot list, so it
+        // is read OUTSIDE `partialRead` and is NOT in {@link DOMAIN_COUNT}: adding
+        // it there would make the notice's denominator a claim about four remote
+        // domains when there are three. A refresh can still throw, and an empty
+        // list is the fail-safe — `containerNodes` renders "absent", never "empty".
+        const containers = await directory
+            .getWorkspaceList()
+            .catch(() => []);
         const [bases, skills, ontology] = await Promise.all([
             reads.soft("Knowledge bases", client.listKbBases(), []),
             reads.soft("Skills", client.listSkills(), []),
@@ -98,7 +156,7 @@ function registerMapTool(register, client) {
             // first substantive reply.
             reads.soft("Ontology", client.getOntology({ view: "summary" }), EMPTY_ONTOLOGY),
         ]);
-        const lines = ["# Workspace map"];
+        const lines = ["# Workspace map", ...containerNodes(containers)];
         lines.push("", `## Knowledge bases (${bases.length}) — dopl_kb`);
         for (const b of bases) {
             const desc = b.description ? ` — ${(0, narration_1.inlineOr)(b.description, "")}` : "";

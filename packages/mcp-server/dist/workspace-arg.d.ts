@@ -31,6 +31,43 @@
  */
 export declare const WORKSPACE_ARG_DESCRIPTION = "Workspace or home-channel container for list/create; omit for this one. Ignored elsewhere.";
 /**
+ * 🔒 **THE `container=` ARGUMENT'S DESCRIPTION — R-32's ADDRESS GRAMMAR IN ONE
+ * LINE** (Samuel, 2026-09-17).
+ *
+ * ⚠ IT REPLACES {@link WORKSPACE_ARG_DESCRIPTION} ON THE SAME NINE SCHEMAS AND
+ * IS PAID FOR NINE TIMES, so the same rule applies: the FULL contract is stated
+ * once, in `instructions.ts`, and is not restated here.
+ *
+ * ⚠ **THE DEFAULT IS NAMED, AND THAT IS THE BUDGET-NEUTRAL HALF OF THE
+ * RULING.** "home is structural, never a prompt line" means the resolver
+ * decides it; what the agent still cannot derive from anywhere else is WHICH
+ * container an omitted argument lands in, and three words say it.
+ */
+export declare const CONTAINER_ARG_DESCRIPTION = "Container for list/create: slug, id, or `home` (your default). Ignored elsewhere.";
+/**
+ * 🔒 **THE DEPRECATED ALIAS CARRIES NO DESCRIPTION AT ALL, AND THAT IS A
+ * DECISION** (R-32, 2026-09-17).
+ *
+ * `workspace=` maps to the same resolver for ONE release, and the schema must
+ * keep PUBLISHING the key because `strictInput` turns an unknown one into
+ * `-32602` — the one outcome a deprecation window rules out. What it must not
+ * do is DESCRIBE it: a description is pushed to every client on every
+ * connection, including every client that never sends the argument, and one
+ * clause × nine tools is ~290 chars per connection spent advertising an
+ * argument nobody should newly adopt.
+ *
+ * ⚠ **THE DEPRECATION IS ANNOUNCED ON THE RESULT INSTEAD** — see
+ * {@link deprecatedAliasNote}, which reaches exactly the caller that used it,
+ * which is the caller that has to change. The ruling asks for "a one-line
+ * deprecation note in the op result when used"; this is that line, and the
+ * schema is deliberately not a second copy of it.
+ *
+ * ⚠ AN AGENT READING THE SCHEMA SEES ONE DESCRIBED ADDRESS ARGUMENT
+ * (`container`) AND ONE BARE KEY. That is the intended reading: the alias
+ * exists for callers that already know it, not for new ones to discover.
+ */
+export declare const WORKSPACE_ALIAS_DESCRIPTION: undefined;
+/**
  * 🔒 **WHICH OPS STILL TAKE `workspace=` — the whole of B2/B13, as a table.**
  *
  * ⚠ **ONE QUESTION GENERATES EVERY ROW: can the SERVER find this op's container
@@ -84,4 +121,55 @@ export declare function acceptsWorkspaceArg(tool: string, op: string | undefined
  * ⚠ THE REF IS THE CALLER'S OWN STRING and is neutralized like every other
  * value spliced into a line this server wrote.
  */
-export declare function ignoredWorkspaceNote(op: string | undefined, ref: string): string;
+/**
+ * 🔒 **WHICH OPS REFUSE AN UNADDRESSED WRITE** (R-32 item 4; Samuel: Skills and
+ * Chats stay out of home, and *a chat filed where nothing lists it is an
+ * orphan*).
+ *
+ * ⚠ **ONE QUESTION GENERATES EVERY ROW, AND IT IS NOT "IS THIS A WRITE":** does
+ * this op MINT a row inside a container that the caller never named? Those are
+ * exactly the ops that appear in BOTH {@link WORKSPACE_ARG_OPS} (no id to
+ * follow — the container is the only address) and `gating.ts › WRITE_OPS`. An
+ * update, a move or a post carries a resource or channel id that resolves its
+ * own tenancy, so there is nothing for it to land in by accident.
+ *
+ * ⚠ **AND THE REFUSAL FIRES ONLY WHERE THE DEFAULT WOULD BE `home`.** A
+ * connection bound to a container (`X-Workspace-Id`) HAS named one, at the
+ * transport instead of in the arguments, and its writes land where the operator
+ * pointed it. What R-32 refuses is the silent fall-through to the personal
+ * container — the path that produced the orphan. Reads still default to home,
+ * unchanged.
+ *
+ * ⚠ Keys are the same grain as {@link WORKSPACE_ARG_OPS}; `workspace-arg.test.ts`
+ * pins every row against the live enum AND against `WRITE_OPS`, so a row cannot
+ * name a read and a mint cannot join unclassified.
+ */
+export declare const UNADDRESSED_WRITE_REFUSALS: Record<string, ReadonlySet<string>>;
+/** Does this op refuse to run without an explicit address? */
+export declare function refusesUnaddressedWrite(tool: string, op: string | undefined): boolean;
+/**
+ * 🔒 **THE REFUSAL ITSELF — it names the op, the reason and the way out.** ⚠ It
+ * offers `container="home"` explicitly rather than pretending the home space is
+ * unreachable: the ruling refuses the SILENT default, not the deliberate
+ * choice, and a refusal with no accepted value is a dead end an agent retries.
+ */
+export declare function unaddressedWriteRefusal(tool: string, op: string): string;
+/**
+ * 🔒 **THE ONE-RELEASE ALIAS, SAID OUT LOUD.** `workspace=` was honoured and is
+ * still honoured; what changed is that it has a successor, so the caller that
+ * sent it is told which argument to send next time. ⚠ On the RESULT, for the
+ * same reason {@link ignoredWorkspaceNote} is: a deprecation nobody is told
+ * about is a deprecation that surprises somebody at removal.
+ */
+export declare function deprecatedAliasNote(): string;
+export declare function ignoredWorkspaceNote(op: string | undefined, ref: string, 
+/** Which spelling the caller actually sent — `container` since R-32, or the
+ *  deprecated `workspace`. ⚠ Defaulted, so the note a caller reads names the
+ *  argument THEY passed rather than the one this file was named after. */
+arg?: "workspace" | "container"): string;
+/**
+ * Both spellings on one call: `container=` wins and the alias is dropped. ⚠ Said
+ * out loud for the same reason every other drop on this surface is — a caller
+ * that sent two addresses must not have to guess which one the call used.
+ */
+export declare function aliasIgnoredNote(): string;

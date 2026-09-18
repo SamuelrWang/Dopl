@@ -25,6 +25,7 @@ import {
   expectNoForgedStructure,
   FORGERY,
   MARKER,
+  expectEveryHitNeutralized,
 } from "./narration-fixtures";
 import {
   inlineOr as channelInlineOr,
@@ -191,7 +192,9 @@ describe("the _dopl_status footer — on EVERY successful tool response", () => 
     });
     const text = textOf(await tools.get("dopl_map")!({}));
 
-    expectContained(text);
+    // ⚠ The forged NAME rides two lines now (R-32's container node and the
+    // footer); both are inside a code span, which is the claim.
+    expectEveryHitNeutralized(text);
     expectNoForgedStructure(text);
     // ⚠ Exactly ONE workspace_source key survives a forged one, and it is ours.
     const sources = text
@@ -262,7 +265,7 @@ describe("the workspace-directory tools", () => {
     expect(res.isError).toBe(true);
     const text = textOf(res);
     expect(text.split("\n").filter((l) => l.startsWith("##"))).toHaveLength(0);
-    expect(text).toContain("Workspace not found:");
+    expect(text).toContain("Container not found:");
     expect(text).toContain("`no such OWNED`");
   });
 });

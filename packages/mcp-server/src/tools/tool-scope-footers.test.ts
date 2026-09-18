@@ -17,7 +17,7 @@ import { describe, it, expect, vi } from "vitest";
 import { registerSkillTools } from "./skills";
 import { registerKnowledgeTools } from "./knowledge";
 import { registerOntologyTool } from "./ontology";
-import { registerMapTool } from "./map";
+import { registerMapFixture } from "./narration-fixtures";
 import { registerSearchTool } from "./search";
 import { callTool, stub } from "./narration-fixtures";
 
@@ -114,7 +114,7 @@ describe("dopl_skill(op='list') carries its own scope", () => {
 describe("dopl_map carries its own scope", () => {
   it("says the counts are not workspace totals and names the inventory", async () => {
     const text = await callTool(
-      registerMapTool,
+      registerMapFixture,
       stub({
         listKbBases: vi.fn(async () => [BASE]),
         listSkills: vi.fn(async () => [SKILL]),

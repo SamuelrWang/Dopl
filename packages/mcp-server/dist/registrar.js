@@ -9,19 +9,23 @@
  * through `registerTool`'s wrapper. Do not fold the gate calls into one wrapper.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.workspaceArgTargets = exports.acceptsWorkspaceArg = exports.WORKSPACE_ARG_OPS = exports.WORKSPACE_ARG_DESCRIPTION = void 0;
+exports.workspaceArgTargets = exports.refusesUnaddressedWrite = exports.acceptsWorkspaceArg = exports.UNADDRESSED_WRITE_REFUSALS = exports.WORKSPACE_ARG_OPS = exports.WORKSPACE_ARG_DESCRIPTION = exports.WORKSPACE_ALIAS_DESCRIPTION = exports.CONTAINER_ARG_DESCRIPTION = void 0;
 exports.createToolRegistrars = createToolRegistrars;
 const zod_1 = require("zod");
 const client_1 = require("@dopl/client");
 const respond_js_1 = require("./tools/respond.js");
-const narration_js_1 = require("./tools/narration.js");
 const workspace_arg_js_1 = require("./workspace-arg.js");
+const container_resolve_js_1 = require("./container-resolve.js");
 // ⚠ Re-exported: `tool-budget.test.ts` and `server.test.ts` read the contract
 // through the registrar that injects it, which is where an agent meets it.
 var workspace_arg_js_2 = require("./workspace-arg.js");
+Object.defineProperty(exports, "CONTAINER_ARG_DESCRIPTION", { enumerable: true, get: function () { return workspace_arg_js_2.CONTAINER_ARG_DESCRIPTION; } });
+Object.defineProperty(exports, "WORKSPACE_ALIAS_DESCRIPTION", { enumerable: true, get: function () { return workspace_arg_js_2.WORKSPACE_ALIAS_DESCRIPTION; } });
 Object.defineProperty(exports, "WORKSPACE_ARG_DESCRIPTION", { enumerable: true, get: function () { return workspace_arg_js_2.WORKSPACE_ARG_DESCRIPTION; } });
 Object.defineProperty(exports, "WORKSPACE_ARG_OPS", { enumerable: true, get: function () { return workspace_arg_js_2.WORKSPACE_ARG_OPS; } });
+Object.defineProperty(exports, "UNADDRESSED_WRITE_REFUSALS", { enumerable: true, get: function () { return workspace_arg_js_2.UNADDRESSED_WRITE_REFUSALS; } });
 Object.defineProperty(exports, "acceptsWorkspaceArg", { enumerable: true, get: function () { return workspace_arg_js_2.acceptsWorkspaceArg; } });
+Object.defineProperty(exports, "refusesUnaddressedWrite", { enumerable: true, get: function () { return workspace_arg_js_2.refusesUnaddressedWrite; } });
 Object.defineProperty(exports, "workspaceArgTargets", { enumerable: true, get: function () { return workspace_arg_js_2.workspaceArgTargets; } });
 const status_footer_js_1 = require("./status-footer.js");
 // 🔒 A CALL THAT WAS NOT CHARGED SAYS SO — once in the log, and on the call's own
@@ -29,18 +33,24 @@ const status_footer_js_1 = require("./status-footer.js");
 // its consequence legible (`credits-unmetered.ts`).
 const credits_unmetered_js_1 = require("./credits-unmetered.js");
 /**
- * Optional per-call `workspace` arg injected into every domain tool's schema by
- * `registerTool`. Slug or UUID; routes via the transport's AsyncLocalStorage
- * override, leaving the connection's container unchanged. Const so its
- * description renders verbatim — and identically — in every tool's MCP
- * introspection.
+ * 🔒 **THE TWO ADDRESSING ARGS INJECTED INTO EVERY DOMAIN TOOL'S SCHEMA** —
+ * `container` (R-32, Samuel 2026-09-17) and `workspace`, its deprecated alias.
+ * Slug, id or the reserved `home`; routes via the transport's
+ * AsyncLocalStorage override, leaving the connection's container unchanged.
+ * Const so each description renders verbatim — and identically — in every
+ * tool's MCP introspection.
  *
- * ⚠ IT IS INJECTED EVEN WHERE IT IS IGNORED, and that is the point of the
- * one-release window: `strictInput` refuses an unknown key, so a schema without
- * it would turn "ignored" into `-32602`, which is the one thing B13 rules out.
+ * ⚠ BOTH ARE INJECTED EVEN WHERE THEY ARE IGNORED, and that is the point of the
+ * one-release window: `strictInput` refuses an unknown key, so dropping either
+ * from the schema would turn "ignored" into `-32602`, which is the one thing a
+ * deprecation window rules out. The alias is the reason the rename is not a
+ * wire break; `container-resolve.ts` maps it to the same resolver and says so
+ * on the result.
  */
 const WORKSPACE_ARG_SHAPE = {
-    workspace: zod_1.z.string().optional().describe(workspace_arg_js_1.WORKSPACE_ARG_DESCRIPTION),
+    container: zod_1.z.string().optional().describe(workspace_arg_js_1.CONTAINER_ARG_DESCRIPTION),
+    // ⚠ NO `.describe()` — see `workspace-arg.ts › WORKSPACE_ALIAS_DESCRIPTION`.
+    workspace: zod_1.z.string().optional(),
 };
 /**
  * ⚠ AN UNKNOWN ARGUMENT MUST BE REFUSED, NOT STRIPPED. A raw shape becomes a
@@ -161,7 +171,7 @@ function createToolRegistrars(deps) {
         // stripped again before the handler, whose signature does not know it.
         const enhancedSchema = { ...schema, ...WORKSPACE_ARG_SHAPE };
         const wrapped = async (args) => {
-            const { workspace: workspaceRef, ...rest } = args;
+            const { container: _c, workspace: _w, ...rest } = args;
             const innerArgs = rest;
             // ⚠ Both per-call refusals before any work: delete block, then read-only
             // write-scope gate. `op` read ONCE, and it is also the routing key below.
@@ -169,76 +179,24 @@ function createToolRegistrars(deps) {
             const refusal = gates.opRefusal(name, op);
             if (refusal)
                 return refusal;
-            const supplied = typeof workspaceRef === "string" ? workspaceRef.trim() : "";
-            if (workspaceRef !== undefined && (0, workspace_arg_js_1.acceptsWorkspaceArg)(name, op)) {
-                // ⚠ "provided but blank" (fail closed) must stay distinct from "not
-                // provided". A falsy-string test lets a computed-but-empty ref route a
-                // write to a container the caller never named.
-                if (!supplied) {
-                    return {
-                        isError: true,
-                        content: [
-                            {
-                                type: "text",
-                                text: `The \`workspace\` argument was blank. Pass a container id or slug from \`dopl_workspaces\`, or omit \`workspace=\` entirely to use this connection's container.`,
-                            },
-                        ],
-                    };
-                }
-                // ⚠ `resolveWorkspaceRef` calls listWorkspaces and can throw on
-                // network/auth failure — an uncaught throw surfaces as an opaque MCP
-                // framework error.
-                let resolved;
-                try {
-                    resolved = await directory.resolveWorkspaceRef(supplied);
-                }
-                catch (err) {
-                    return {
-                        isError: true,
-                        content: [
-                            {
-                                type: "text",
-                                // ⚠ Loopback origin names where the bytes came from, not who
-                                // wrote them — a 4xx can echo a rejected field.
-                                text: `Couldn't validate the \`workspace\` argument (${(0, narration_js_1.inlineOr)(err instanceof Error ? err.message : String(err), "\`no detail reported\`")}). Try again, or call without \`workspace=\`.`,
-                            },
-                        ],
-                    };
-                }
-                if (!resolved) {
-                    return {
-                        isError: true,
-                        content: [
-                            {
-                                type: "text",
-                                // ⚠ Caller's own arg, but a raw backtick still escapes this
-                                // span and puts the tail into narration.
-                                text: `Workspace not found: ${(0, narration_js_1.inlineOr)(supplied, "\`(unreadable ref)\`")}. Call \`dopl_workspaces\` for every container you can reach — workspaces and home channels alike.`,
-                            },
-                        ],
-                    };
-                }
+            // 🔒 ONE DECISION, ONE PLACE — `container-resolve.ts` owns the grammar,
+            // the alias, the blank/not-found refusals and R-32's unaddressed-mint
+            // refusal. This wrapper only spends the answer.
+            const address = await (0, container_resolve_js_1.resolveCallAddress)(name, op, { container: _c, workspace: _w }, { directory, activeWorkspace });
+            if (address.kind === "refusal")
+                return address.response;
+            if (address.kind === "addressed") {
                 // Handler runs inside the AsyncLocalStorage scope so client.* calls
                 // pick up the override in X-Workspace-Id; reverts on scope exit. Footer
-                // reports the EFFECTIVE workspace with a `per-call arg` source.
-                const effective = {
-                    id: resolved.id,
-                    slug: resolved.slug,
-                    name: resolved.name,
-                    role: resolved.role,
-                    source: "per-call arg",
-                };
-                const result = await runWithCredits(resolved.id, () => client_1.workspaceContext.run(resolved.id, () => handler(innerArgs)));
-                return (0, status_footer_js_1.appendDoplStatus)(result, effective, caller, (0, credits_unmetered_js_1.unmeteredNote)());
+                // reports the EFFECTIVE container with a `per-call arg` source.
+                const { effective } = address;
+                const result = await runWithCredits(effective.id, () => client_1.workspaceContext.run(effective.id, () => handler(innerArgs)));
+                return (0, status_footer_js_1.appendDoplStatus)(result, effective, caller, (0, credits_unmetered_js_1.joinNotes)(address.note, (0, credits_unmetered_js_1.unmeteredNote)()));
             }
-            // ⚠ NO HONOURED `workspace=`. The call runs in this connection's
-            // container, and when the connection names none the SERVER resolves the
-            // caller's own — there is no guess to make here and nothing to refuse.
-            const ignored = workspaceRef === undefined ? null : (0, workspace_arg_js_1.ignoredWorkspaceNote)(op, supplied);
             const result = await runWithCredits(await billingTarget(), () => handler(innerArgs));
-            // ⚠ BOTH NOTES, NOT ONE: an ignored `workspace=` and an unmetered call are
+            // ⚠ BOTH NOTES, NOT ONE: a dropped address and an unmetered call are
             // independent facts about the same call, and dropping either is a silence.
-            return (0, status_footer_js_1.appendDoplStatus)(result, sessionEffective(), caller, (0, credits_unmetered_js_1.joinNotes)(ignored, (0, credits_unmetered_js_1.unmeteredNote)()));
+            return (0, status_footer_js_1.appendDoplStatus)(result, sessionEffective(), caller, (0, credits_unmetered_js_1.joinNotes)(address.note, (0, credits_unmetered_js_1.unmeteredNote)()));
         };
         server.registerTool(name, { description, inputSchema: strictInput(enhancedSchema) }, 
         // ⚠ THE SCOPE ENCLOSES THE HANDLER **AND** THE FOOTER, which is what makes

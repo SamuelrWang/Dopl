@@ -12,7 +12,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 
-import { registerMapTool } from "./map";
+import { registerMapFixture } from "./narration-fixtures";
 import { callTool, stub } from "./narration-fixtures";
 
 const SUMMARY = {
@@ -41,7 +41,7 @@ const client = (over: Record<string, unknown> = {}) =>
 describe("dopl_map asks for the cheap projection", () => {
   it('calls getOntology with { view: "summary" } — never bare', async () => {
     const c = client();
-    await callTool(registerMapTool, c, "dopl_map", {});
+    await callTool(registerMapFixture, c, "dopl_map", {});
     const getOntology = vi.mocked(
       (c as unknown as { getOntology: (o?: unknown) => unknown }).getOntology,
     );
@@ -68,9 +68,9 @@ describe("dopl_map asks for the cheap projection", () => {
         },
       },
     };
-    const lean = await callTool(registerMapTool, client(), "dopl_map", {});
+    const lean = await callTool(registerMapFixture, client(), "dopl_map", {});
     const fat = await callTool(
-      registerMapTool,
+      registerMapFixture,
       client({ getOntology: vi.fn(async () => heavy) }),
       "dopl_map",
       {},
@@ -85,13 +85,13 @@ describe("dopl_map reports a clipped ontology read", () => {
   it("says nothing extra when the read was complete", async () => {
     // ⚠ The healthy result must stay byte-identical — a warning that also fires
     // on the happy path teaches agents to skip it.
-    const text = await callTool(registerMapTool, client(), "dopl_map", {});
+    const text = await callTool(registerMapFixture, client(), "dopl_map", {});
     expect(text).not.toContain("CLIPPED");
   });
 
   it("names the clip when the server reports one", async () => {
     const text = await callTool(
-      registerMapTool,
+      registerMapFixture,
       client({ getOntology: vi.fn(async () => ({ ...SUMMARY, truncated: true })) }),
       "dopl_map",
       {},

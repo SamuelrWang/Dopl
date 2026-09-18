@@ -14,12 +14,29 @@
  * resolution retries instead of serving a bogus empty list for a full TTL.
  */
 
+import type { ContainerKind } from "@dopl/contracts";
 import type {
   DoplClient,
   WorkspaceKind,
   WorkspaceListItem,
   WorkspaceRole,
 } from "@dopl/client";
+
+export type { ContainerKind };
+
+/**
+ * 🔒 **THE RESERVED CONTAINER ADDRESS** (R-32, Samuel 2026-09-17). `home` is the
+ * CALLER'S own `kind='personal'` container, resolved per caller — so the same
+ * six characters name a different row for every agent that types them, and no
+ * agent ever has to be handed an id to reach its own shelf.
+ *
+ * ⚠ **IT IS A RESERVED WORD AND IT WINS OVER A SLUG.** A standard workspace
+ * whose slug is literally `home` is reachable by its id, which is the tradeoff
+ * a reserved word always makes; the reverse — a caller's own shelf being
+ * shadowed by somebody's workspace name — is the one that cannot be worked
+ * around, because the personal container's slug is not published anywhere.
+ */
+export const HOME_ADDRESS = "home";
 
 /**
  * The container this CONNECTION is bound to, resolved once at boot from
@@ -32,6 +49,19 @@ export interface ActiveWorkspaceState {
   slug: string;
   name: string;
   role: WorkspaceRole;
+  /**
+   * ⚠ **THE TYPED KIND, ON THE ONE LINE EVERY SUCCESSFUL RESPONSE CARRIES**
+   * (R-32). `_dopl_status` is the agent's targeting check, and "which kind of
+   * container did this land in" was the question it could not answer — which is
+   * how a chat got exported into a home space nothing lists. Every single-
+   * container list (`dopl_kb(op="list_bases")`, `dopl_agent(op="list")`) names
+   * its container through this line rather than restating it per row.
+   *
+   * ⚠ OPTIONAL because a caller may construct this state from a row that
+   * carried no `kind` (an older server); absent renders as nothing, never as a
+   * guessed `workspace`.
+   */
+  kind?: ContainerKind;
 }
 
 /**
@@ -103,6 +133,38 @@ export interface WorkspaceDirectory {
   getWorkspaceList(): Promise<WorkspaceListItem[]>;
   /** A slug-or-UUID `workspace=` ref resolved against every membership. */
   resolveWorkspaceRef(ref: string): Promise<WorkspaceListItem | null>;
+  /**
+   * 🔒 **THE `container=` ADDRESS GRAMMAR, RESOLVED** (R-32) — the reserved word
+   * {@link HOME_ADDRESS}, else a slug, else an id, against every membership.
+   *
+   * ⚠ **`home` IS ANSWERED FROM THE DIRECTORY, NOT FROM A SECOND CONCEPT.** The
+   * caller's personal container is one of the rows `getWorkspaceList()` already
+   * returns (B10 stopped filtering them), so the reserved word is a SELECT over
+   * the list this object already holds — no loopback, no default-workspace
+   * notion coming back, and a locked session resolves it only if the row it is
+   * locked to IS that container.
+   *
+   * ⚠ **NULL FOR A CALLER WITH NO PERSONAL CONTAINER, AND THAT IS A REFUSAL AND
+   * NOT A FALLBACK** (§G.3 rule 4). `20260920120000` mints one per account, but
+   * an estate where it has not replayed has callers without one, and answering
+   * `home` with "the first workspace you happen to be in" would file a write
+   * into somebody's team.
+   */
+  resolveContainerRef(ref: string): Promise<WorkspaceListItem | null>;
+  /**
+   * The caller's own personal container, or null. ⚠ The one reader of what
+   * `home` MEANS — used by the unaddressed-read default and by `dopl_map`'s
+   * Home-space node, so neither restates the `kind === "personal"` test.
+   */
+  homeContainer(): Promise<WorkspaceListItem | null>;
+  /**
+   * `workspaceId` → {@link ContainerKind}, over every container the caller is
+   * in. ⚠ **A LOOKUP, NOT A SECOND DIRECTORY**: the account-wide channel reads
+   * name a `workspaceId` per row and carry no kind of their own, and R-32 puts
+   * the kind on every row that names a container. A row whose container is not
+   * in the directory is ABSENT rather than guessed at — see `narrowToLock`.
+   */
+  containerKindIndex(): Promise<ReadonlyMap<string, ContainerKind>>;
   /**
    * 🔒 THE LOCK, READABLE — the container id this session is narrowed to, or
    * null when it is not locked.
@@ -181,9 +243,37 @@ export function createWorkspaceDirectory(
     return match ?? null;
   }
 
+  /**
+   * ⚠ **THE PERSONAL CONTAINER IS SELECTED OFF THE LISTABLE SET, so the lock
+   * narrows it for free**: a locked session sees `[lockedTo]` and finds a
+   * personal container there only if that is what it is locked to.
+   */
+  async function homeContainer(): Promise<WorkspaceListItem | null> {
+    const list = await getWorkspaceList();
+    return list.find((w) => containerKind(w) === "personal") ?? null;
+  }
+
+  async function resolveContainerRef(
+    ref: string,
+  ): Promise<WorkspaceListItem | null> {
+    // ⚠ THE RESERVED WORD IS TESTED FIRST AND CASE-INSENSITIVELY. An agent that
+    // types `Home` means its home space; a slug is lower-case by construction
+    // (`slugifyWorkspaceName`), so nothing legitimate is shadowed by the fold.
+    if (ref.trim().toLowerCase() === HOME_ADDRESS) return homeContainer();
+    return resolveWorkspaceRef(ref);
+  }
+
+  async function containerKindIndex(): Promise<ReadonlyMap<string, ContainerKind>> {
+    const list = await getWorkspaceList();
+    return new Map(list.map((w) => [w.id, containerKind(w)] as const));
+  }
+
   return {
     getWorkspaceList,
     resolveWorkspaceRef,
+    resolveContainerRef,
+    homeContainer,
+    containerKindIndex,
     lockedWorkspaceId: () => lockedTo?.id ?? null,
   };
 }
@@ -206,25 +296,40 @@ export function createWorkspaceDirectory(
  * prints this label — which is what lets `getWorkspaceList()` stop hiding
  * containers (B10) without ever calling one a workspace.
  */
-export type ContainerKind = "workspace" | "home channel" | "personal";
-
 /**
  * How a kind is RENDERED in a directory row. The personal container is the one
  * an agent keeps mistaking for a workspace (Samuel, 2026-09-06: "Samuel's
  * Workspace" read as the home space, and the home space read as a workspace),
  * so its label says what it serves as, in words that cannot be read as a
  * second workspace: it is the caller's default, and it is not a workspace.
+ *
+ * ⚠ **THE VALUE AND THE LABEL SPLIT ON 2026-09-17 (R-32) AND THEY MUST STAY
+ * SPLIT.** `kind` is now a typed wire value an agent may COMPARE
+ * (`@dopl/contracts › ContainerKind`), so it carries no space and no
+ * parenthetical; this table is the only place those words are written. A
+ * `Record` keyed by the union, so the compiler proves it total — a fourth kind
+ * is a build error here rather than a row that renders its own value at a
+ * reader.
  */
+const CONTAINER_KIND_LABELS: Record<ContainerKind, string> = {
+  personal: "home space (your default; a personal container, not a workspace)",
+  home_channel: "home channel",
+  workspace: "workspace",
+};
+
 export function containerKindLabel(kind: ContainerKind): string {
-  return kind === "personal"
-    ? "home space (your default; a personal container, not a workspace)"
-    : kind;
+  return CONTAINER_KIND_LABELS[kind];
 }
 
+/**
+ * ⚠ **THE ONE MAPPING FROM THE COLUMN TO THE WIRE**, and `scripts/
+ * check-role-drift.ts › checkContainerKind` holds it against the `workspaces.
+ * kind` `CHECK` in both directions.
+ */
 export function containerKind(row: { kind?: WorkspaceKind }): ContainerKind {
   switch (row.kind ?? "standard") {
     case "link":
-      return "home channel";
+      return "home_channel";
     case "personal":
       return "personal";
     default:

@@ -132,9 +132,9 @@ describe("what the budget buys back is still stated", () => {
     expect(OUT).toContain('op="guide"');
   });
 
-  it("states the `workspace=` targeting rule once, here", () => {
+  it("states the `container=` targeting rule once, here", () => {
     // ⚠ The paragraph 14 tool schemas used to carry a byte-identical copy of.
-    expect(buildInstructions(directoryOf(2))).toContain("`workspace=<id_or_slug>`");
+    expect(buildInstructions(directoryOf(2))).toContain("`container=<slug|id|home>`");
   });
 });
 
@@ -239,7 +239,7 @@ describe("the briefing answers who this connection is before it asks", () => {
     // described, so the count stops changing the sentence at all.
     for (const dir of [[ws(1)], [ws(1), ws(2)]]) {
       expect(buildInstructions(dir, { pin: null, identity })).toContain(
-        "in no named container — one is resolved for you",
+        "in no named container — calls land in `home`",
       );
     }
   });

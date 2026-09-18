@@ -13,7 +13,22 @@
  * ⚠ A FAILED boot directory load does not seed the cache, so the first
  * resolution retries instead of serving a bogus empty list for a full TTL.
  */
+import type { ContainerKind } from "@dopl/contracts";
 import type { DoplClient, WorkspaceKind, WorkspaceListItem, WorkspaceRole } from "@dopl/client";
+export type { ContainerKind };
+/**
+ * 🔒 **THE RESERVED CONTAINER ADDRESS** (R-32, Samuel 2026-09-17). `home` is the
+ * CALLER'S own `kind='personal'` container, resolved per caller — so the same
+ * six characters name a different row for every agent that types them, and no
+ * agent ever has to be handed an id to reach its own shelf.
+ *
+ * ⚠ **IT IS A RESERVED WORD AND IT WINS OVER A SLUG.** A standard workspace
+ * whose slug is literally `home` is reachable by its id, which is the tradeoff
+ * a reserved word always makes; the reverse — a caller's own shelf being
+ * shadowed by somebody's workspace name — is the one that cannot be worked
+ * around, because the personal container's slug is not published anywhere.
+ */
+export declare const HOME_ADDRESS = "home";
 /**
  * The container this CONNECTION is bound to, resolved once at boot from
  * `X-Workspace-Id`. Read by `appendDoplStatus`. ⚠ Null is ORDINARY and is not a
@@ -25,6 +40,19 @@ export interface ActiveWorkspaceState {
     slug: string;
     name: string;
     role: WorkspaceRole;
+    /**
+     * ⚠ **THE TYPED KIND, ON THE ONE LINE EVERY SUCCESSFUL RESPONSE CARRIES**
+     * (R-32). `_dopl_status` is the agent's targeting check, and "which kind of
+     * container did this land in" was the question it could not answer — which is
+     * how a chat got exported into a home space nothing lists. Every single-
+     * container list (`dopl_kb(op="list_bases")`, `dopl_agent(op="list")`) names
+     * its container through this line rather than restating it per row.
+     *
+     * ⚠ OPTIONAL because a caller may construct this state from a row that
+     * carried no `kind` (an older server); absent renders as nothing, never as a
+     * guessed `workspace`.
+     */
+    kind?: ContainerKind;
 }
 /**
  * How the container a call hit was chosen — surfaced verbatim in the
@@ -93,6 +121,38 @@ export interface WorkspaceDirectory {
     /** A slug-or-UUID `workspace=` ref resolved against every membership. */
     resolveWorkspaceRef(ref: string): Promise<WorkspaceListItem | null>;
     /**
+     * 🔒 **THE `container=` ADDRESS GRAMMAR, RESOLVED** (R-32) — the reserved word
+     * {@link HOME_ADDRESS}, else a slug, else an id, against every membership.
+     *
+     * ⚠ **`home` IS ANSWERED FROM THE DIRECTORY, NOT FROM A SECOND CONCEPT.** The
+     * caller's personal container is one of the rows `getWorkspaceList()` already
+     * returns (B10 stopped filtering them), so the reserved word is a SELECT over
+     * the list this object already holds — no loopback, no default-workspace
+     * notion coming back, and a locked session resolves it only if the row it is
+     * locked to IS that container.
+     *
+     * ⚠ **NULL FOR A CALLER WITH NO PERSONAL CONTAINER, AND THAT IS A REFUSAL AND
+     * NOT A FALLBACK** (§G.3 rule 4). `20260920120000` mints one per account, but
+     * an estate where it has not replayed has callers without one, and answering
+     * `home` with "the first workspace you happen to be in" would file a write
+     * into somebody's team.
+     */
+    resolveContainerRef(ref: string): Promise<WorkspaceListItem | null>;
+    /**
+     * The caller's own personal container, or null. ⚠ The one reader of what
+     * `home` MEANS — used by the unaddressed-read default and by `dopl_map`'s
+     * Home-space node, so neither restates the `kind === "personal"` test.
+     */
+    homeContainer(): Promise<WorkspaceListItem | null>;
+    /**
+     * `workspaceId` → {@link ContainerKind}, over every container the caller is
+     * in. ⚠ **A LOOKUP, NOT A SECOND DIRECTORY**: the account-wide channel reads
+     * name a `workspaceId` per row and carry no kind of their own, and R-32 puts
+     * the kind on every row that names a container. A row whose container is not
+     * in the directory is ABSENT rather than guessed at — see `narrowToLock`.
+     */
+    containerKindIndex(): Promise<ReadonlyMap<string, ContainerKind>>;
+    /**
      * 🔒 THE LOCK, READABLE — the container id this session is narrowed to, or
      * null when it is not locked.
      *
@@ -107,33 +167,12 @@ export interface WorkspaceDirectory {
     lockedWorkspaceId(): string | null;
 }
 export declare function createWorkspaceDirectory(client: DoplClient, options?: WorkspaceDirectoryOptions): WorkspaceDirectory;
-/**
- * 🔒 **WHAT KIND OF CONTAINER THIS ROW IS, ASKED POSITIVELY AND IN ONE PLACE**
- * (F-564).
- *
- * ⚠ **IT IS A `switch` ON `kind`, NOT `!isStandardWorkspace(…)`.** That
- * predicate answers "does this belong in the rail"; its NEGATION was read as
- * "therefore a home channel" at four sites in this package, which was correct
- * by accident while `standard` and `link` were the only kinds and stops being
- * correct the moment `20260920120000` mints a `personal` container for every
- * user at once. A `default` arm that says "workspace" also fails safe for a
- * kind added later: an unknown container is not silently advertised as somebody
- * else's room.
- *
- * ⚠ **RENDERED, NEVER INFERRED BY THE READER.** A container and a workspace are
- * different things to the operator, and every surface that lists these rows
- * prints this label — which is what lets `getWorkspaceList()` stop hiding
- * containers (B10) without ever calling one a workspace.
- */
-export type ContainerKind = "workspace" | "home channel" | "personal";
-/**
- * How a kind is RENDERED in a directory row. The personal container is the one
- * an agent keeps mistaking for a workspace (Samuel, 2026-09-06: "Samuel's
- * Workspace" read as the home space, and the home space read as a workspace),
- * so its label says what it serves as, in words that cannot be read as a
- * second workspace: it is the caller's default, and it is not a workspace.
- */
 export declare function containerKindLabel(kind: ContainerKind): string;
+/**
+ * ⚠ **THE ONE MAPPING FROM THE COLUMN TO THE WIRE**, and `scripts/
+ * check-role-drift.ts › checkContainerKind` holds it against the `workspaces.
+ * kind` `CHECK` in both directions.
+ */
 export declare function containerKind(row: {
     kind?: WorkspaceKind;
 }): ContainerKind;

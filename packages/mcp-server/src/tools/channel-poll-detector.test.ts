@@ -313,6 +313,9 @@ describe("A HOLD IS NEVER COUNTED — the reset, end to end", () => {
 
 describe("opReadAccount — the channel-less page is pollable the same way", () => {
   const DIRECTORY = {
+    resolveContainerRef: async () => null,
+    homeContainer: async () => null,
+    containerKindIndex: async () => new Map(),
     lockedWorkspaceId: () => null,
     workspaces: () => [],
   } as unknown as WorkspaceDirectory;

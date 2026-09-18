@@ -197,25 +197,32 @@ describe("bootServer — when the directory LOCKS", () => {
     expect(text).not.toContain("beta");
   });
 
-  it("🔒 the locked row is a HOME CHANNEL, with no slug (T37)", async () => {
+  it("🔒 the locked row is a HOME CHANNEL, and its slug IS its address (R-32)", async () => {
     // The row `getWorkspaceList` answers with under the lock is a `kind='link'`
-    // container. Rendering it in the workspace shape told the agent two false
-    // things: that it is a workspace, and that its slug addresses it. (The
-    // third — a ★ meaning "the workspace a no-arg call auto-targets" — retired
-    // with the auto-target.) Same rule as `workspace-directory.ts › searchLegs`.
+    // container. Rendering it in the workspace shape told the agent it IS a
+    // workspace, which is the half this still pins: the KIND is rendered, as
+    // the typed value.
+    // ⚠ **THE SECOND HALF REVERSED ON 2026-09-17 (R-32).** This case used to
+    // assert that no slug was published, on the argument that a container's
+    // slug is not an address. Samuel's ruling makes it one: a home channel is
+    // addressed by its channel's slug, minted from the same name as the
+    // container in `home/server/service-writes.ts › createHomeChannel`. So the
+    // row publishes BOTH halves, and the lock is what keeps a locked session
+    // from seeing any other row — which was never what the slug decided.
     const booted = await bootDirectory(
       [STANDARD, OTHER_STANDARD, SHARED_CONTAINER],
       "id-shared",
     );
     const text = await booted.listWorkspaces();
 
-    expect(text).toContain("home channel");
-    // The id is the ONLY handle that addresses a container, so it stays.
+    expect(text).toContain("kind=`home_channel`");
+    // Both handles, and the id is still on every row.
     expect(text).toContain("id-shared");
-    // ⚠ Asserted as the RENDERED slug field, not the bare string: the fixture's
-    // name is `shared-c workspace`, so the slug substring is in the row either
-    // way and a bare `not.toContain("shared-c")` could never fail.
-    expect(text).not.toContain("slug: `shared-c`");
+    expect(text).toContain("slug: `shared-c`");
+    // 🔒 AND NOTHING ELSE — the lock, not the slug, is what denies the
+    // enumeration oracle.
+    expect(text).not.toContain("id-standard");
+    expect(text).not.toContain("id-other");
   });
 
   it("does NOT lock on a SOLO container — the lock is for a SHARED room", async () => {

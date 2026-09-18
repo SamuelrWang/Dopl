@@ -15,11 +15,25 @@
  * resolution retries instead of serving a bogus empty list for a full TTL.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.HOME_ADDRESS = void 0;
 exports.createWorkspaceDirectory = createWorkspaceDirectory;
 exports.containerKindLabel = containerKindLabel;
 exports.containerKind = containerKind;
 exports.narrowToLock = narrowToLock;
 exports.searchLegs = searchLegs;
+/**
+ * 🔒 **THE RESERVED CONTAINER ADDRESS** (R-32, Samuel 2026-09-17). `home` is the
+ * CALLER'S own `kind='personal'` container, resolved per caller — so the same
+ * six characters name a different row for every agent that types them, and no
+ * agent ever has to be handed an id to reach its own shelf.
+ *
+ * ⚠ **IT IS A RESERVED WORD AND IT WINS OVER A SLUG.** A standard workspace
+ * whose slug is literally `home` is reachable by its id, which is the tradeoff
+ * a reserved word always makes; the reverse — a caller's own shelf being
+ * shadowed by somebody's workspace name — is the one that cannot be worked
+ * around, because the personal container's slug is not published anywhere.
+ */
+exports.HOME_ADDRESS = "home";
 /** Membership cache TTL (slug→id). Seeded at boot, refreshed on demand. */
 const WORKSPACE_CACHE_TTL_MS = 60_000;
 function createWorkspaceDirectory(client, options = {}) {
@@ -71,28 +85,86 @@ function createWorkspaceDirectory(client, options = {}) {
         match = list.find((w) => w.id === ref || w.slug === ref);
         return match ?? null;
     }
+    /**
+     * ⚠ **THE PERSONAL CONTAINER IS SELECTED OFF THE LISTABLE SET, so the lock
+     * narrows it for free**: a locked session sees `[lockedTo]` and finds a
+     * personal container there only if that is what it is locked to.
+     */
+    async function homeContainer() {
+        const list = await getWorkspaceList();
+        return list.find((w) => containerKind(w) === "personal") ?? null;
+    }
+    async function resolveContainerRef(ref) {
+        // ⚠ THE RESERVED WORD IS TESTED FIRST AND CASE-INSENSITIVELY. An agent that
+        // types `Home` means its home space; a slug is lower-case by construction
+        // (`slugifyWorkspaceName`), so nothing legitimate is shadowed by the fold.
+        if (ref.trim().toLowerCase() === exports.HOME_ADDRESS)
+            return homeContainer();
+        return resolveWorkspaceRef(ref);
+    }
+    async function containerKindIndex() {
+        const list = await getWorkspaceList();
+        return new Map(list.map((w) => [w.id, containerKind(w)]));
+    }
     return {
         getWorkspaceList,
         resolveWorkspaceRef,
+        resolveContainerRef,
+        homeContainer,
+        containerKindIndex,
         lockedWorkspaceId: () => lockedTo?.id ?? null,
     };
 }
+/**
+ * 🔒 **WHAT KIND OF CONTAINER THIS ROW IS, ASKED POSITIVELY AND IN ONE PLACE**
+ * (F-564).
+ *
+ * ⚠ **IT IS A `switch` ON `kind`, NOT `!isStandardWorkspace(…)`.** That
+ * predicate answers "does this belong in the rail"; its NEGATION was read as
+ * "therefore a home channel" at four sites in this package, which was correct
+ * by accident while `standard` and `link` were the only kinds and stops being
+ * correct the moment `20260920120000` mints a `personal` container for every
+ * user at once. A `default` arm that says "workspace" also fails safe for a
+ * kind added later: an unknown container is not silently advertised as somebody
+ * else's room.
+ *
+ * ⚠ **RENDERED, NEVER INFERRED BY THE READER.** A container and a workspace are
+ * different things to the operator, and every surface that lists these rows
+ * prints this label — which is what lets `getWorkspaceList()` stop hiding
+ * containers (B10) without ever calling one a workspace.
+ */
 /**
  * How a kind is RENDERED in a directory row. The personal container is the one
  * an agent keeps mistaking for a workspace (Samuel, 2026-09-06: "Samuel's
  * Workspace" read as the home space, and the home space read as a workspace),
  * so its label says what it serves as, in words that cannot be read as a
  * second workspace: it is the caller's default, and it is not a workspace.
+ *
+ * ⚠ **THE VALUE AND THE LABEL SPLIT ON 2026-09-17 (R-32) AND THEY MUST STAY
+ * SPLIT.** `kind` is now a typed wire value an agent may COMPARE
+ * (`@dopl/contracts › ContainerKind`), so it carries no space and no
+ * parenthetical; this table is the only place those words are written. A
+ * `Record` keyed by the union, so the compiler proves it total — a fourth kind
+ * is a build error here rather than a row that renders its own value at a
+ * reader.
  */
+const CONTAINER_KIND_LABELS = {
+    personal: "home space (your default; a personal container, not a workspace)",
+    home_channel: "home channel",
+    workspace: "workspace",
+};
 function containerKindLabel(kind) {
-    return kind === "personal"
-        ? "home space (your default; a personal container, not a workspace)"
-        : kind;
+    return CONTAINER_KIND_LABELS[kind];
 }
+/**
+ * ⚠ **THE ONE MAPPING FROM THE COLUMN TO THE WIRE**, and `scripts/
+ * check-role-drift.ts › checkContainerKind` holds it against the `workspaces.
+ * kind` `CHECK` in both directions.
+ */
 function containerKind(row) {
     switch (row.kind ?? "standard") {
         case "link":
-            return "home channel";
+            return "home_channel";
         case "personal":
             return "personal";
         default:

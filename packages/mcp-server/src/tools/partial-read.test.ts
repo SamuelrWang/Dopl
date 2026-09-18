@@ -12,7 +12,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 
-import { registerMapTool } from "./map";
+import { registerMapFixture } from "./narration-fixtures";
 import { registerSearchTool } from "./search";
 import { causeOf } from "./partial-read";
 import { callTool, stub } from "./narration-fixtures";
@@ -71,7 +71,7 @@ function apiError(status: number): Error {
 describe("dopl_map names the domains it could not read", () => {
   it("a failing knowledge read is NAMED with its cause, not rendered as an empty workspace", async () => {
     const text = await callTool(
-      registerMapTool,
+      registerMapFixture,
       healthyMap({ listKbBases: vi.fn(async () => { throw apiError(500); }) }),
       "dopl_map",
       {},
@@ -87,7 +87,7 @@ describe("dopl_map names the domains it could not read", () => {
 
   it("names every failing domain, and only those", async () => {
     const text = await callTool(
-      registerMapTool,
+      registerMapFixture,
       healthyMap({
         listKbBases: vi.fn(async () => { throw apiError(503); }),
         getOntology: vi.fn(async () => { throw Object.assign(new Error("x"), { name: "DoplTimeoutError" }); }),
@@ -104,7 +104,7 @@ describe("dopl_map names the domains it could not read", () => {
 
   it("still renders the healthy sections — one dead domain does not fail the call", async () => {
     const text = await callTool(
-      registerMapTool,
+      registerMapFixture,
       healthyMap({ listSkills: vi.fn(async () => { throw apiError(500); }) }),
       "dopl_map",
       {},
@@ -116,11 +116,24 @@ describe("dopl_map names the domains it could not read", () => {
   });
 
   it("ALL-HEALTHY IS BYTE-IDENTICAL — the whole result, pinned", async () => {
-    const text = await callTool(registerMapTool, healthyMap(), "dopl_map", {});
+    const text = await callTool(registerMapFixture, healthyMap(), "dopl_map", {});
 
     expect(text).toBe(
       [
         "# Workspace map",
+        // ⚠ **THE THREE CONTAINER NODES COME FIRST SINCE R-32**, and they are
+        // part of the byte-identical claim: the Home-space node is the ruling's
+        // structural half, so a change that quietly dropped it would pass every
+        // other case in this file.
+        "",
+        "## Home space — your default container",
+        "_None — you have no home space, so an unaddressed call has no default to land in._",
+        "",
+        "## Home channels (0)",
+        "_None._",
+        "",
+        "## Workspaces (0)",
+        "_None._",
         "",
         "## Knowledge bases (1) — dopl_kb",
         "- `Notes` `notes`",
@@ -147,7 +160,7 @@ describe("dopl_map names the domains it could not read", () => {
 
   it("an empty-but-healthy workspace still says nothing failed", async () => {
     const text = await callTool(
-      registerMapTool,
+      registerMapFixture,
       healthyMap({ listKbBases: vi.fn(async () => []), listSkills: vi.fn(async () => []) }),
       "dopl_map",
       {},
@@ -229,7 +242,7 @@ describe("causeOf says enough to act on and nothing about our internals", () => 
       { name: "DoplApiError", status: 500 },
     );
     const text = await callTool(
-      registerMapTool,
+      registerMapFixture,
       healthyMap({ listKbBases: vi.fn(async () => { throw leak; }) }),
       "dopl_map",
       {},
@@ -244,7 +257,7 @@ describe("causeOf says enough to act on and nothing about our internals", () => 
   it("the notice is one line and carries its cause inside a code span", async () => {
     // ⚠ Anything spliced into our narration renders as a VALUE.
     const text = await callTool(
-      registerMapTool,
+      registerMapFixture,
       healthyMap({ listSkills: vi.fn(async () => { throw apiError(500); }) }),
       "dopl_map",
       {},

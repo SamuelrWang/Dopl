@@ -38,6 +38,9 @@ const DIRECTORY = {
   getWorkspaceList: async () => [],
   resolveWorkspaceRef: async () => null,
   noWorkspaceError: async () => ({ content: [], isError: true }),
+  resolveContainerRef: async () => null,
+  homeContainer: async () => null,
+  containerKindIndex: async () => new Map(),
   lockedWorkspaceId: () => null,
 };
 

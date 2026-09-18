@@ -64,6 +64,9 @@ function createServer(client, options = {}) {
             slug: options.workspace.slug,
             name: options.workspace.name,
             role: options.role ?? "viewer",
+            // ⚠ RENDERED FROM THE ROW, NOT INFERRED — the same `switch` every other
+            // surface reads (`workspace-directory.ts › containerKind`).
+            kind: (0, workspace_directory_js_1.containerKind)(options.workspace),
         }
         : null;
     const sessionSource = options.workspaceSource ?? null;
@@ -160,7 +163,9 @@ function createServer(client, options = {}) {
     (0, skills_js_1.registerSkillTools)(registerTool, client, caller); // dopl_skill
     (0, chats_js_1.registerChatTools)(registerTool, client); // dopl_chats — the archive
     (0, members_js_1.registerMembersTool)(registerTool, client, caller); // dopl_members — membership/teams/access (read-only)
-    (0, map_js_1.registerMapTool)(registerTool, client); // dopl_map — compact workspace manifest
+    // 🔒 `directory` is the THIRD argument and it is what draws R-32's three
+    // container nodes — Home space, Home channels, Workspaces — off the boot list.
+    (0, map_js_1.registerMapTool)(registerTool, client, directory); // dopl_map — compact workspace manifest
     // ⚠ `directory` + `chargeCredit` are what make `scope="everywhere"` possible
     // AT ALL: the leg list must be the LOCKED list (B3), and a fan-out charges
     // per leg (ruling Q3). Built without them the tool answers the single-scope

@@ -55,6 +55,7 @@ import { UNNAMED_WORKSPACE, UNTRUSTED_DIRECTORY_NOTE } from "./instructions.js";
 import {
   containerKind,
   containerKindLabel,
+  HOME_ADDRESS,
   type ActiveWorkspaceState,
   type WorkspaceDirectory,
 } from "./workspace-directory.js";
@@ -87,13 +88,13 @@ const WORKSPACES_SHAPE = {
 
 const WORKSPACES_DESCRIPTION = composeDescription({
   headline:
-    "Every container you are in — workspaces AND home channels, each with its kind, its id and your role. The only place a container id is published.",
+    "Every container you are in — home space, home channels AND workspaces, each with kind, address and role. The only place an address is published.",
   policy: 'Only "create_home_channel" writes; nothing deletes or invites.',
   routing: [
-    "Use dopl_status for the rooms, sessions and unanswered asks inside them.",
+    "Use dopl_status for rooms, sessions and unanswered asks inside them.",
   ],
   body: [
-    '- "list" (default) — every container and the id you pass as `workspace=`.',
+    '- "list" (default) — every container, its kind and `container=` address.',
     '- "create_home_channel" — Requires: name. A room outside any workspace, yours alone.',
   ],
   examples: [{}, { op: "create_home_channel", name: "Ops" }],
@@ -129,7 +130,7 @@ async function opCreateHomeChannel(
       // rather than by hand: this line said "on any other tool" and B13 had
       // already made that false — the arg is IGNORED off that table, so the
       // advice cost a call and a footer note to discover.
-      `Address it with workspace=\`${channel.workspaceId}\` on ${workspaceArgTargets()}, and with channel=\`${channel.channelId}\` on dopl_channel.`,
+      `Address it with container=\`${channel.workspaceId}\` on ${workspaceArgTargets()}, and with channel=\`${channel.channelId}\` on dopl_channel.`,
       `⚠ You cannot add a person to it. Minting the invitation is an interactive-session act, refused over MCP for every role and token — ask the user to add someone from the Dopl app.`,
     ].join("\n"),
   );
@@ -175,26 +176,35 @@ export function registerWorkspaceMetaTools(
     ];
     for (const w of list) {
       const kind = containerKind(w);
-      // ⚠ KIND IS RENDERED, NOT INFERRED BY THE READER, and a container's SLUG
-      // is withheld — its id is the only handle that addresses it, and printing
-      // a slug beside a room would read as a second, equivalent address.
+      // ⚠ **KIND IS THE TYPED WIRE VALUE SINCE R-32** (`@dopl/contracts ›
+      // ContainerKind`), rendered rather than inferred by the reader, and the
+      // personal container keeps its LABEL beside it because that is the one an
+      // agent has repeatedly read as a second workspace.
+      // ⚠ **AND EVERY KIND HAS A SLUG NOW.** A container's slug used to be
+      // withheld, on the argument that printing one beside a room would read as
+      // a second, equivalent address — R-32 makes it THE address: a home
+      // channel is addressed by its channel's slug, and the personal container
+      // by the reserved word `home`. The id stays on every row; it always worked
+      // and still does.
       const address =
-        kind === "workspace"
-          ? `slug: \`${w.slug}\` · id: \`${w.id}\``
-          : `id: \`${w.id}\``;
+        kind === "personal"
+          ? `address: \`${HOME_ADDRESS}\` · id: \`${w.id}\``
+          : `slug: \`${w.slug}\` · id: \`${w.id}\``;
+      const gloss = kind === "personal" ? ` — ${containerKindLabel(kind)}` : "";
       const here = w.id === activeWorkspace?.id ? " ←" : "";
       lines.push(
-        `- ${inlineOr(w.name, UNNAMED_WORKSPACE)} — ${containerKindLabel(kind)} (${address}, role: ${w.role})${here}`,
+        `- ${inlineOr(w.name, UNNAMED_WORKSPACE)} — kind=\`${kind}\`${gloss} (${address}, role: ${w.role})${here}`,
       );
     }
     lines.push("");
     lines.push(
       activeWorkspace
         ? "← this connection's container: a call that names none lands there."
-        : // ⚠ NOT "you have no default" — there is no default to lack. The
-          // server answers for a call that names nothing, and saying so is what
-          // stops an agent hunting for a tool that would set one.
-          "This connection names no container, so a call that names none is resolved for you. Pass `workspace=` to list or create somewhere specific.",
+        : // ⚠ NOT "you have no default" — there is no default to LACK, and since
+          // R-32 there is one to NAME. `home` is the caller's own container and
+          // it is where an unaddressed read lands; saying so is what stops an
+          // agent hunting for a tool that would set one.
+          "This connection names no container, so a call that names none lands in `home` — your home space. Pass `container=<slug|id|home>` to list or create somewhere specific.",
     );
     return { content: [{ type: "text" as const, text: lines.join("\n") }] };
   }

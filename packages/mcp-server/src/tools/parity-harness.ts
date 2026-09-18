@@ -24,7 +24,7 @@ import { registerKnowledgeTools } from "./knowledge.js";
 import { registerSkillTools } from "./skills.js";
 import { registerChatTools } from "./chats.js";
 import { registerMembersTool } from "./members.js";
-import { registerMapTool } from "./map.js";
+import { registerMapFixture } from "./narration-fixtures.js";
 import { registerSearchTool } from "./search.js";
 import { registerOntologyTool } from "./ontology.js";
 import { registerChannelTool } from "./channel.js";
@@ -56,7 +56,7 @@ export const REGISTRARS: Array<{
   { file: "skills.ts", register: registerSkillTools },
   { file: "chats.ts", register: registerChatTools },
   { file: "members.ts", register: registerMembersTool },
-  { file: "map.ts", register: registerMapTool },
+  { file: "map.ts", register: registerMapFixture },
   { file: "search.ts", register: registerSearchTool },
   { file: "ontology.ts", register: registerOntologyTool },
   // ⚠ It takes a `directory` its registrar REQUIRES (the container lock for the

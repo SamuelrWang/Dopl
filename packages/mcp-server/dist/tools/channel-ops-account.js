@@ -38,6 +38,18 @@ exports.opReadAccount = opReadAccount;
 exports.opReadSessionsAccount = opReadSessionsAccount;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
+/**
+ * The container's KIND beside its handle, or nothing (R-32).
+ *
+ * ⚠ **ABSENT, NEVER GUESSED.** These two reads are ACCOUNT-wide and the index is
+ * the caller's DIRECTORY: a container the directory does not list — a locked
+ * session, a membership added mid-call — has no kind this process knows, and a
+ * default arm would invent one for somebody else's room.
+ */
+function kindTag(kinds, workspaceId) {
+    const kind = kinds.get(workspaceId);
+    return kind ? ` · kind=\`${kind}\`` : "";
+}
 const account_scope_1 = require("./account-scope");
 const channel_render_1 = require("./channel-render");
 const channel_framing_1 = require("./channel-framing");
@@ -98,6 +110,9 @@ subject = null) {
             `${(0, channel_wake_guidance_1.waitingLine)((0, channel_wake_guidance_1.workspaceHoldCall)(since), since)} — that hold watches one workspace at a time.`,
         ].join("\n"));
     }
+    // ⚠ THE KIND INDEX RIDES THE SAME DIRECTORY THE NARROWING USED, so a locked
+    // session can name a kind only for the room it can already see.
+    const kinds = await directory.containerKindIndex();
     const groups = (0, channel_render_1.groupByChannel)(page.messages);
     const lines = [
         `## Everywhere — ${page.messages.length} new message${page.messages.length === 1 ? "" : "s"} since seq ${since}, across ${groups.length} channel${groups.length === 1 ? "" : "s"}\n`,
@@ -107,10 +122,11 @@ subject = null) {
     ];
     for (const g of groups) {
         // ⚠ The heading names the room AND gives the ref the per-message remedies
-        // below assume, plus the `workspace=` handle — without which a home
-        // channel's rows name a room the reader cannot address.
+        // below assume, plus the `container=` handle and its KIND (R-32) — without
+        // which a home channel's rows name a room the reader cannot address, and
+        // cannot tell apart from its own home space.
         const workspaceId = g.messages[0].workspaceId;
-        lines.push(`\n### ${g.label} — \`${g.ref}\` · workspace=\`${workspaceId}\``);
+        lines.push(`\n### ${g.label} — \`${g.ref}\` · container=\`${workspaceId}\`${kindTag(kinds, workspaceId)}`);
         lines.push(...(0, channel_render_1.formatMessages)(g.messages, g.ref, selfUserId));
     }
     // ⚠ THE CURSOR IS THE MAX OVER THE WHOLE PAGE, not the last line of the last
@@ -140,8 +156,9 @@ subject = null) {
  * about which fields an audience may read; see `channel-session-render.ts`.
  *
  * ⚠ **THE GROUPING IS WHAT THIS PAGE ADDS, AND IT IS NOT THE `channel` COLUMN.**
- * Each `###` heading carries the room's `workspace=` handle, which is the value
- * every other tool takes to reach it and which no cell in the table can carry.
+ * Each `###` heading carries the room's `container=` handle and its KIND, which
+ * is the value every other tool takes to reach it and which no cell in the table
+ * can carry.
  *
  * ⚠ **NO BANNER AND NO STANDING NOTES** — T11/T13. `SESSION_HANDLE_NOTE` and
  * `SESSION_TELEMETRY_NOTE` are deleted from every result on this surface; they
@@ -150,7 +167,10 @@ subject = null) {
  * page containing a hedged row.
  */
 async function opReadSessionsAccount(client, directory) {
-    const status = await (0, account_scope_1.accountStatus)(client, directory, { view: "sessions" });
+    const [status, kinds] = await Promise.all([
+        (0, account_scope_1.accountStatus)(client, directory, { view: "sessions" }),
+        directory.containerKindIndex(),
+    ]);
     const rooms = status.channels.filter((c) => c.sessions.length > 0);
     const total = rooms.reduce((n, c) => n + c.sessions.length, 0);
     if (total === 0) {
@@ -168,7 +188,7 @@ async function opReadSessionsAccount(client, directory) {
         `## Your sessions — ${total} across ${rooms.length} channel${rooms.length === 1 ? "" : "s"}`,
     ];
     for (const room of sortedByName(rooms)) {
-        lines.push(`\n### ${(0, channel_shared_1.inlineOr)(room.channelName, NO_NAME)} — \`${room.channelSlug}\` · workspace=\`${room.workspaceId}\``, ...channel_session_table_1.SESSION_TABLE_HEAD);
+        lines.push(`\n### ${(0, channel_shared_1.inlineOr)(room.channelName, NO_NAME)} — \`${room.channelSlug}\` · container=\`${room.workspaceId}\`${kindTag(kinds, room.workspaceId)}`, ...channel_session_table_1.SESSION_TABLE_HEAD);
         for (const s of room.sessions) {
             // ⚠ `handle: true` + `telemetry: true` — this read is own-scoped by
             // construction (the server fences on `user_id`), which is the AUDIENCE
@@ -181,7 +201,7 @@ async function opReadSessionsAccount(client, directory) {
             }));
         }
     }
-    lines.push(`\n${(0, channel_session_render_1.sessionLegend)(anyStale, status.operatorOnline)} Each heading carries the \`workspace=\` handle for that room, which is what every other tool takes to reach it.`);
+    lines.push(`\n${(0, channel_session_render_1.sessionLegend)(anyStale, status.operatorOnline)} Each heading carries the \`container=\` handle for that room and its \`kind=\`, which is what every other tool takes to reach it.`);
     return (0, respond_1.ok)(lines.join("\n"));
 }
 /** ⚠ Sorted by NAME, not by session count: a stable order is what lets an

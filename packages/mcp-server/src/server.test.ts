@@ -50,7 +50,6 @@ vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
 }));
 
 import { createServer, buildInstructions } from "./server.js";
-import { WORKSPACE_ARG_DESCRIPTION } from "./registrar.js";
 
 function wsItem(
   id: string,
@@ -246,7 +245,7 @@ describe("per-call workspace= (M-4 footer)", () => {
     });
     const res = await map({ workspace: "does-not-exist" });
     expect(res.isError).toBe(true);
-    expect(textOf(res)).toContain("Workspace not found");
+    expect(textOf(res)).toContain("Container not found");
   });
 });
 
@@ -381,17 +380,31 @@ describe("dopl_workspaces — the tool an agent reaches for when it is lost", ()
 
   /**
    * 🔒 §4A, kept by RENDERING rather than by hiding. B10 lists containers
-   * beside workspaces; what must never happen is one being CALLED a workspace,
-   * or its slug published as an address.
+   * beside workspaces; what must never happen is one being CALLED a workspace.
+   *
+   * ⚠ **THE SLUG HALF REVERSED ON 2026-09-17 (R-32).** A container's slug used
+   * to be withheld here on the argument that it is not an address; it is one
+   * now — a home channel is addressed by its channel's slug. The KIND is what
+   * keeps a room from reading as a workspace, and it is the TYPED value.
    */
-  it("lists a home-channel container by KIND and by id, never by slug", async () => {
+  it("lists a home-channel container by its typed KIND, its slug and its id", async () => {
     const container = wsItem("id-3", "room-seg", "With Dana", "owner");
     container.kind = "link";
-    build({ directory: [WS1, container], workspace: null, role: null, workspaceSource: null });
+    const home = wsItem("id-h", "sam", "Sam", "owner");
+    home.kind = "personal";
+    build({
+      directory: [WS1, container, home],
+      workspace: null,
+      role: null,
+      workspaceSource: null,
+    });
     const text = textOf(await tool("dopl_workspaces")({}));
-    expect(text).toContain("`With Dana` — home channel (id: `id-3`");
-    expect(text).not.toContain("slug: `room-seg`");
-    expect(text).toContain("`Alpha` — workspace (slug: `alpha`");
+    expect(text).toContain("`With Dana` — kind=`home_channel` (slug: `room-seg` · id: `id-3`");
+    expect(text).toContain("`Alpha` — kind=`workspace` (slug: `alpha`");
+    // ⚠ THE PERSONAL CONTAINER IS ADDRESSED BY THE RESERVED WORD, and keeps its
+    // label — it is the row an agent has repeatedly read as a second workspace.
+    expect(text).toContain("`Sam` — kind=`personal` — home space");
+    expect(text).toContain("address: `home` · id: `id-h`");
   });
 });
 
@@ -420,80 +433,3 @@ describe("buildInstructions — identity is taught before the first tool call", 
   });
 });
 
-// ── The injected `workspace` arg — one short contract, not fourteen copies ───
-//
-// ⚠ THIS ONE DESCRIPTION IS MULTIPLIED BY THE DOMAIN-TOOL COUNT ON EVERY
-// CONNECTION, before an agent has called anything. It was a 717-char paragraph
-// across 14 tools — ~10,000 served chars, measured 2026-09-02 — restating the
-// rule `instructions.ts` states once. That is the cost this pair of cases
-// exists to keep from growing back (C9).
-
-/**
- * ⚠ A CEILING THAT ONLY EVER MOVES DOWN, exactly like `tool-budget.test.ts`'s
- * description ratchet. Raising it is how a budget stops being a budget: the
- * rule belongs in the instructions, which are pushed ONCE.
- */
-const WORKSPACE_ARG_MAX_CHARS = 96;
-
-/**
- * The meta tools. ⚠ `registerMetaTool` injects NO `workspace` arg — an
- * account-wide lookup is user-scoped — so they are the complement of the set
- * that must carry the injected string, and deriving the expectation that way
- * keeps this case honest as domain tools are added or deleted.
- */
-const META_TOOLS = ["dopl_workspaces", "dopl_status"];
-
-/** The `workspace` arg's served description, read off the registered schema. */
-function workspaceArgOf(schema: unknown): string | undefined {
-  const shape = (schema as { shape?: Record<string, { description?: string }> })?.shape;
-  return shape?.workspace?.description;
-}
-
-describe("the injected `workspace` arg (C9)", () => {
-  beforeEach(() => {
-    build({
-      directory: [WS1],
-      workspace: WS1,
-      role: "owner",
-      workspaceSource: "header pin",
-    });
-  });
-
-  it(`is a contract, not a paragraph — ≤ ${WORKSPACE_ARG_MAX_CHARS} chars`, () => {
-    expect(WORKSPACE_ARG_DESCRIPTION.length).toBeLessThanOrEqual(WORKSPACE_ARG_MAX_CHARS);
-    // Both container kinds are addressable through this one arg, and a trim
-    // that deletes either half makes the shorter string a wrong string.
-    expect(WORKSPACE_ARG_DESCRIPTION).toContain("home-channel container");
-    expect(WORKSPACE_ARG_DESCRIPTION).toContain("omit");
-    // ⚠ THE RETIREMENT CLAUSE IS PART OF THE CONTRACT (B13). Without it the arg
-    // is a promise the registrar no longer keeps on most ops.
-    expect(WORKSPACE_ARG_DESCRIPTION).toContain("Ignored");
-  });
-
-  it("does not restate what `instructions.ts` states once", () => {
-    // ⚠ Discovery (`dopl_workspaces`) and the targeting rule are the
-    // instructions' job. Naming them here pays for them once per domain tool,
-    // which is the defect C9 names.
-    expect(WORKSPACE_ARG_DESCRIPTION).not.toMatch(/dopl_workspaces|REQUIRED/);
-  });
-
-  it("is the byte-identical string on every domain tool — 9 of them today", () => {
-    const carrying = [...registry.schemas]
-      .filter(([, schema]) => workspaceArgOf(schema) === WORKSPACE_ARG_DESCRIPTION)
-      .map(([name]) => name);
-    // A scan over nothing is not a guard.
-    expect(carrying.length).toBeGreaterThan(5);
-    expect(carrying.sort()).toEqual(
-      [...registry.schemas.keys()].filter((n) => !META_TOOLS.includes(n)).sort(),
-    );
-  });
-
-  it("is NOT injected onto the meta path — neither meta tool carries one", () => {
-    // ⚠ The meta path must never grow the domain path's routing contract: an
-    // account-wide answer cannot be scoped to one container, so an argument
-    // saying it could would only ever be wrong.
-    for (const name of META_TOOLS) {
-      expect(workspaceArgOf(registry.schemas.get(name)), name).toBeUndefined();
-    }
-  });
-});

@@ -22,7 +22,7 @@
  *   2. the SECURITY rule (T11) — stated here so no result has to repeat it;
  *   3. the ops, named and glossed, so a model can PICK one;
  *   4. the arguments that are not self-describing from their own `.describe()`
- *      — today the home-channel `workspace=` pairing, and that alone.
+ *      — today the home-channel `container=` pairing, and that alone.
  *
  * ⚠ **THE `seq` SENTENCE LEFT ON 2026-09-02 (A6b), UNDER RULE 4 ITSELF.** It
  * read *"`seq` is a TABLE-WIDE cursor: "read"/"await" take since=<seq> and
@@ -98,7 +98,7 @@ export { DESCRIPTION_MAX_CHARS } from "./tool-style";
  *
  *   • the DISCOVERY sentence spelled out that the orientation tool
  *     "is the discovery surface, and it prints the container id to pass as
- *     `workspace=` beside the channel id". The call is named and it prints both
+ *     `container=` beside the channel id". The call is named and it prints both
  *     ids — that is the fact — and the rest re-stated the ADDRESSING sentence
  *     directly above it.
  *   • the closing clause warned that `action="open"` with a member ref opens a
@@ -110,7 +110,7 @@ export { DESCRIPTION_MAX_CHARS } from "./tool-style";
  * ⚠ It is ~250 characters shorter and teaches the same three things. A FOURTH
  * fact arriving here is the drift to watch for; the wording is not.
  */
-export const HOME_CHANNEL_ADDRESSING = `A HOME CHANNEL IS NOT A WORKSPACE DM: it lives in its own hidden container, so every op needs \`workspace=<container id>\` ALONGSIDE \`channel=\` — a bare \`channel=\` finds none, and they are absent from the room list. That container is ALSO the tenancy every other tool reads, so a template or base you use there must LIVE there.`;
+export const HOME_CHANNEL_ADDRESSING = `A HOME CHANNEL IS NOT A WORKSPACE DM: it lives in its own hidden container, so every op needs \`container=<slug or id>\` ALONGSIDE \`channel=\` — a bare \`channel=\` finds none, and they are absent from the room list. That container is ALSO the tenancy every other tool reads, so a template or base you use there must LIVE there.`;
 
 export const CHANNEL_DESCRIPTION = composeDescription({
   // ⚠ THE DENIAL IS IN THE FIRST SENTENCE because a truncating client keeps only

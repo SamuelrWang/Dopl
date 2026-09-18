@@ -32,7 +32,7 @@ import { registerKnowledgeTools } from "./knowledge";
 import { registerSkillTools } from "./skills";
 import { registerChatTools } from "./chats";
 import { registerMembersTool } from "./members";
-import { registerMapTool } from "./map";
+import { registerMapFixture } from "./narration-fixtures";
 import { registerSearchTool } from "./search";
 import { registerOntologyTool } from "./ontology";
 import { registerChannelTool } from "./channel";
@@ -46,7 +46,7 @@ const REGISTRARS: Array<{
   { file: "skills.ts", register: registerSkillTools },
   { file: "chats.ts", register: registerChatTools },
   { file: "members.ts", register: registerMembersTool },
-  { file: "map.ts", register: registerMapTool },
+  { file: "map.ts", register: registerMapFixture },
   { file: "search.ts", register: registerSearchTool },
   { file: "ontology.ts", register: registerOntologyTool },
   { file: "channel.ts", register: registerChannelTool },

@@ -164,7 +164,7 @@ export async function resolveBaseOr(client: DoplClient, ref: string): Promise<Kn
  * NAMED BY ID, NEVER LOOKED UP.** Resolving container NAMES here would mean
  * `client.listWorkspaces()`, which walks straight past the session lock in
  * `workspace-directory.ts › getWorkspaceList` — a locked session must not learn
- * that other containers exist. The id is also the `workspace=` handle, so it is
+ * that other containers exist. The id is also the `container=` handle, so it is
  * the more useful half anyway.
  *
  * ⚠ **A COUNT THAT FAILS IS OMITTED, NOT GUESSED, AND NEVER THROWS.** This is
@@ -200,7 +200,7 @@ function matchLine(
   count: number | null,
   isPersonal: boolean,
 ): string {
-  // ⚠ The container id IS the `workspace=` handle, so the line an agent reads
+  // ⚠ The container id IS the `container=` handle, so the line an agent reads
   // is also the line it can act on.
   const where = isPersonal
     ? `your personal container \`${base.workspaceId}\``

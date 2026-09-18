@@ -15,7 +15,7 @@
  *
  * ⚠ **MEASURED AS SERVED**, through a real `Client.listTools()` over a real
  * transport — the SDK renders the JSON Schema and the registrar injects a
- * `workspace` argument, so a shape measured at its source is not what an agent
+ * `container`/`workspace` arguments, so a shape measured at its source is not what an agent
  * receives. Same boot shape as `tool-budget.test.ts`, for the same reason.
  */
 
@@ -79,10 +79,13 @@ beforeAll(async () => {
   const properties = (tool?.inputSchema as { properties?: Record<string, unknown> })
     ?.properties;
   if (!properties) throw new Error("dopl_channel served no input schema");
-  // ⚠ `workspace` is `registrar.ts`'s, injected into every domain tool. Counting
+  // ⚠ `container` and its deprecated alias `workspace` are `registrar.ts`'s,
+  // injected into every domain tool (R-32 made it two args, not one). Counting
   // it would move this number on an edit made in another file by another slice.
   served = Object.fromEntries(
-    Object.entries(properties).filter(([name]) => name !== "workspace"),
+    Object.entries(properties).filter(
+      ([name]) => name !== "workspace" && name !== "container",
+    ),
   );
 });
 
@@ -96,7 +99,7 @@ describe("the served input schema fits its budget", () => {
     expect(served).toHaveProperty("op");
   });
 
-  it(`is at most ${SCHEMA_MAX_CHARS} chars, injected \`workspace\` excluded`, () => {
+  it(`is at most ${SCHEMA_MAX_CHARS} chars, injected \`container\`/\`workspace\` excluded`, () => {
     const size = JSON.stringify(served).length;
     expect(
       size,

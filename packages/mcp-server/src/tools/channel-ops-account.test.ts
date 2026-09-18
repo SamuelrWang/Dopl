@@ -28,6 +28,9 @@ const DIRECTORY: WorkspaceDirectory = {
   resolveWorkspaceRef: async () => null,
   noWorkspaceError: async () => ({ content: [], isError: true }),
   // Unlocked — the lock's own behaviour is `account-scope.test.ts`'s subject.
+  resolveContainerRef: async () => null,
+  homeContainer: async () => null,
+  containerKindIndex: async () => new Map(),
   lockedWorkspaceId: () => null,
 };
 
@@ -149,11 +152,11 @@ describe('op="read" with no channel', () => {
     expect(text).toContain("Everywhere");
   });
 
-  it("tags every group with the `workspace=` handle that reaches it", async () => {
+  it("tags every group with the `container=` handle that reaches it", async () => {
     const text = await tool().call({ op: "read", since: 10 });
     // ⚠ Without this a home channel's rows name a room the reader cannot
     // address: the CONTAINER id appears here, in dopl_home and nowhere else.
-    expect(text).toContain("workspace=`ws-container-1`");
+    expect(text).toContain("container=`ws-container-1`");
     expect(text).toContain("`dopl-main`");
   });
 
@@ -195,7 +198,7 @@ describe('op="status"', () => {
     });
     expect(t.client.listChannelSessions).not.toHaveBeenCalled();
     // Grouped by room, with the handle to reach that room.
-    expect(text).toContain("workspace=`ws-container-1`");
+    expect(text).toContain("container=`ws-container-1`");
     // The projection renderer, reused verbatim — the handle is an AUDIENCE
     // decision and this read is own-scoped.
     expect(text).toContain("`@agent-x2sz1ztt`");
