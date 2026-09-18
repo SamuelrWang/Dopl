@@ -170,3 +170,85 @@ describe("the sidebar carries no approval signal", () => {
     expect(screen.getAllByLabelText("Unread messages").length).toBeGreaterThan(0);
   });
 });
+
+/**
+ * THE ROSTER ON A WORKSPACE ROW — Wave 4 (U28), R-03.
+ *
+ * ⚠ **THE POINT OF THE SUITE IS THAT IT IS THE SAME FACT AS /home's, NOT THE
+ * SAME ROW.** R-03 keeps this picker's own design; what Wave 4 shared is the
+ * MARK and the derivation behind it (`lib/channel-display.ts › channelRowFaces`,
+ * `@/shared/ui/avatar-stack`). A second face recipe cut locally here is what
+ * these cases exist to catch.
+ */
+describe("the sidebar row's roster faces", () => {
+  const GRACE = {
+    userId: "u-grace",
+    displayName: "Grace Liu",
+    email: "grace@dopl.dev",
+    avatarUrl: null,
+  };
+  const NAMELESS = {
+    userId: "u-priya",
+    displayName: null,
+    email: "priya@shahco.tax",
+    avatarUrl: null,
+  };
+
+  it("tiles the other people in a channel", () => {
+    renderSidebar({
+      rooms: [channel({ id: "ch-web", name: "Website", peers: [GRACE] })],
+    });
+    expect(screen.getByTitle("Grace Liu")).toBeTruthy();
+  });
+
+  // ⚠ `AvatarStack` INITIALS the name it is handed, so "?" is what a missing
+  // fallback looks like on screen — an unreadable face for a person we can name.
+  it("degrades a nameless member to their address, never to '?'", () => {
+    renderSidebar({
+      rooms: [channel({ id: "ch-web", name: "Website", peers: [NAMELESS] })],
+    });
+    expect(screen.getByTitle("priya@shahco.tax")).toBeTruthy();
+  });
+
+  // The DM row's LEADING slot is already this person's face — see
+  // `sidebar-rows.tsx › ChannelRow`. One fact, claimed once.
+  it("does NOT tile a DM's peer a second time", () => {
+    const DIANA = {
+      userId: PEER,
+      displayName: "Diana Taylor",
+      email: null,
+      avatarUrl: null,
+    };
+    // The CONTROL: the very same person on a NON-direct row does get a tile, so
+    // this case cannot pass by the roster having gone missing altogether.
+    renderSidebar({
+      rooms: [channel({ id: "ch-web", name: "Website", peers: [DIANA] })],
+      direct: [],
+    });
+    expect(screen.getAllByTitle("Diana Taylor").length).toBe(1);
+    cleanup();
+    renderSidebar({
+      rooms: [],
+      direct: [
+        channel({
+          id: "ch-dm",
+          isDirect: true,
+          name: "dm",
+          directPeer: { userId: PEER, displayName: "Diana Taylor", avatarUrl: null },
+          peers: [DIANA],
+        }),
+      ],
+    });
+    expect(screen.queryByTitle("Diana Taylor")).toBeNull();
+  });
+
+  /** A cache entry written before `peers` existed has no key at all (INVARIANTS
+   *  §8) — the row must render, not throw, and must claim nobody. */
+  it("renders a STALE CACHE ENTRY with the key DELETED and tiles nobody", () => {
+    const stale = channel({ id: "ch-web", name: "Website" });
+    delete (stale as Partial<typeof stale>).peers;
+    renderSidebar({ rooms: [stale] });
+    expect(row("Website")).toBeTruthy();
+    expect(screen.queryByTitle("Grace Liu")).toBeNull();
+  });
+});

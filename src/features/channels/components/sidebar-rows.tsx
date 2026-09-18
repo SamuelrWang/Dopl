@@ -11,11 +11,20 @@
 
 import { Bot, CornerDownRight, Hash } from "lucide-react";
 import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
+import { AvatarStack } from "@/shared/ui/avatar-stack";
 import { cn } from "@/shared/lib/utils";
 import { CountBadge, IconTile } from "./bits";
-// ⚠ THE SAME MARK /home DRAWS (R-28), never a second pill.
+// ⚠ THE SAME MARKS /home DRAWS (R-28), never a second pill and never a second dot.
 import { MentionBadge } from "@/shared/ui/home-card-marks";
+import type { HomeChannelRowFace } from "@/shared/ui/home-channel-row";
 import type { ChannelThread } from "../types";
+
+/** The roster sample a row shows, and the size it shows it at. ⚠ `2xs` (20px)
+ *  and `max={3}` are /home's own numbers (`home-channel-row.tsx`) — the same
+ *  sample on both surfaces, so a row that says "three people and +2" says it
+ *  once. ⚠ `2xs` also keeps this row at its 36px: `xs` grows it. */
+const FACE_SIZE = "2xs" as const;
+const FACE_MAX = 3;
 
 const DEPTH_PAD = ["pl-2", "pl-5"] as const;
 
@@ -83,10 +92,23 @@ function SidebarRow({
  *
  * ⚠ The DM section's rows are people; a person is already a face, so they are
  * never tiled.
+ *
+ * 🔒 **THE ROSTER RIDES THIS ROW SINCE WAVE 4 (U28), AS `AvatarStack` — THE MARK
+ * /home ALREADY DRAWS, NOT A NEW ONE.** Both surfaces show the same fact (who
+ * else is in this channel) from the same projection field and the same
+ * derivation (`lib/channel-display.ts › channelRowFaces`); only the LAYOUT is
+ * each surface's own, which is R-03 — **the workspace picker keeps its own
+ * design and ports none of /home's card.**
+ * ⚠ **NO PRESENCE RING, AND THAT IS THE MEASUREMENT RATHER THAN AN OMISSION.**
+ * `AvatarStack` has an `online` key and `Channel` carries no PER-PEER presence —
+ * only `onlineMemberCount`, a total. A ring driven by a total would say a named
+ * person is here when the payload does not know that. `AvatarWithPresence` (the
+ * roster panes) reads a real per-member signal; this row does not have one.
  */
 export function ChannelRow({
   label,
   person,
+  faces,
   selected,
   unread,
   mentions = 0,
@@ -96,6 +118,17 @@ export function ChannelRow({
   label: string;
   /** Present for a DM (the resolved peer); null for a normal channel. */
   person: AvatarPerson | null;
+  /**
+   * EVERYBODY ELSE IN THE CHANNEL — `Channel.peers` through
+   * `lib/channel-display.ts › channelRowFaces`, the one derivation both surfaces
+   * read.
+   *
+   * ⚠ **IGNORED ON A DM ROW, AND THAT IS THIS FILE'S OWN RULE** (the docblock
+   * below): a DM row's leading slot IS the peer's face, so tiling the same
+   * person again on the right is one fact claimed twice.
+   * ⚠ **`?? EMPTY_PEERS` AT THE CALL SITE (§8)** — this row takes answers.
+   */
+  faces?: readonly HomeChannelRowFace[];
   selected: boolean;
   unread: boolean;
   /**
@@ -117,6 +150,27 @@ export function ChannelRow({
   reserveTrailing?: boolean;
   onSelect: () => void;
 }) {
+  // ⚠ ONE TRAILING GROUP, AND IT IS ABSENT WHEN IT HOLDS NOTHING — the row's own
+  // `gap-2` would otherwise pad every quiet channel by an empty span's gutter.
+  const stack = person ? null : (faces ?? []);
+  const mark =
+    mentions > 0 ? (
+      <MentionBadge count={mentions} />
+    ) : unread ? (
+      <span
+        aria-label="Unread messages"
+        className="h-1.5 w-1.5 shrink-0 rounded-full bg-link"
+      />
+    ) : null;
+  const trailing =
+    (stack && stack.length > 0) || mark ? (
+      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+        {stack && stack.length > 0 && (
+          <AvatarStack size={FACE_SIZE} max={FACE_MAX} users={[...stack]} />
+        )}
+        {mark}
+      </span>
+    ) : null;
   return (
     <SidebarRow
       label={label}
@@ -143,18 +197,7 @@ export function ChannelRow({
           awaiting the viewer's ANSWER, a question the product no longer asks.
           What occupies the corner now is the mention pill OR the unread dot,
           never both: see this component's docblock. */}
-      {mentions > 0 ? (
-        <span className="ml-auto">
-          <MentionBadge count={mentions} />
-        </span>
-      ) : (
-        unread && (
-          <span
-            aria-label="Unread messages"
-            className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-link"
-          />
-        )
-      )}
+      {trailing}
     </SidebarRow>
   );
 }

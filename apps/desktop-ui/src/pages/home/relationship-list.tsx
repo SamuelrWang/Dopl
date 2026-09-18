@@ -9,6 +9,7 @@ import {
   WellsColumn,
   type WellItem,
 } from "@/features/channels/components/collapse-wells";
+import { channelRowFaces } from "@/features/channels/lib/channel-display";
 import { PANEL_WELL_ON_PANEL } from "@/shared/ui/panel-well";
 import { channelPeople, channelTitle, hasLinkOut, type HomeRow } from "./home-rows";
 import {
@@ -196,15 +197,14 @@ function RelationshipRow({
   /**
    * ⚠ **`channelPeople` IS THE ONE READ OF `peers`** — a plain `?? EMPTY_PEERS`
    * since the second cache went — and what decides whether the description takes
-   * line two. ⚠ `AvatarStack` takes a NON-NULL name and initials it; a nameless
-   * member degrades to their address as `Avatar`'s own fallback does, never to "?"
-   * when we hold one.
+   * line two.
+   * ⚠ **THE PEER→FACE MAPPING IS `channels/lib/channel-display.ts ›
+   * channelRowFaces` SINCE WAVE 4 (U28), NOT AN INLINE `.map` HERE.** The
+   * workspace sidebar row draws the same stack from the same field, and a
+   * fallback chain written twice is how the two rosters come to name one member
+   * differently. **Nothing about this row's faces changed in the move.**
    */
-  const faces = (channel ? channelPeople(channel) : []).map((person) => ({
-    userId: person.userId,
-    displayName: person.displayName ?? person.email ?? "Member",
-    avatarUrl: person.avatarUrl,
-  }));
+  const faces = channelRowFaces(channel ? channelPeople(channel) : []);
   /**
    * ⚠ **EMPTY STAYS EMPTY** — `topic` is `""` when nobody wrote one
    * (`channels.topic`, `NOT NULL DEFAULT ''`), so the row's own test is a

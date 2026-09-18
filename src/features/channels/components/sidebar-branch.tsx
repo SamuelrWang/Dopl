@@ -17,7 +17,9 @@
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { ChannelRow, ThreadRow } from "./sidebar-rows";
+import { channelRowFaces } from "../lib/channel-display";
 import type { channelDisplayPeerPerson } from "../lib/channel-display";
+import { EMPTY_PEERS } from "../types";
 import type { Channel, ChannelThread } from "../types";
 
 /**
@@ -85,6 +87,11 @@ export function ChannelBranch({
           label={label}
           person={person}
           selected={selected}
+          // ⚠ `?? EMPTY_PEERS` INLINE (§8), like the `?? 0` below: `peers` is a
+          // key on an IndexedDB-persisted payload, and an entry written by an
+          // older bundle has none. The ROW takes answers, so the fallback is
+          // spelled here — once, where the cached payload is read.
+          faces={channelRowFaces(channel.peers ?? EMPTY_PEERS)}
           unread={channel.unread}
           // ⚠ `?? 0` INLINE (§8): a new key on a persisted payload; `0` hides the
           // pill rather than printing `@ NaN`.
