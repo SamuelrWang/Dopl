@@ -20,6 +20,9 @@ export type {
 } from "./grant-types.js";
 export type {
   BuildResult,
+  // 🔒 THE CHANNEL ROW'S CONTAINER (R-26 (b)) — declared beside `WorkspaceKind`
+  // because `channel-types.ts` is at §1's cap; see its docblock.
+  ChannelContainer,
   CreditConsumeResponse,
   CreditWalletKind,
   WorkspaceKind,
@@ -49,12 +52,12 @@ export type {
   TemplateShelf,
   TemplateVisibility,
 } from "./agent-template-types.js";
+// 🔒 **`HomeChannel`, `HomePeer` AND `HomePendingLink` ARE RETIRED** (R-26 (b),
+// 2026-09-17): the row is `Channel`, and the link keeps the server's own name.
 export type {
-  HomeChannel,
+  ChannelPendingLink,
   HomeChannelCreateResult,
   HomeChannelsPayload,
-  HomePeer,
-  HomePendingLink,
 } from "./home-types.js";
 export type {
   KbShelf,

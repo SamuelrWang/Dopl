@@ -3,7 +3,10 @@ import { StandaloneChannelSurface } from "@/features/channels/components/channel
 import { useChannels } from "@/features/channels/hooks/use-channels";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { PageError } from "#/components/page-states";
-import { EMPTY_ROLE, type HomeChannel } from "@/features/home/types";
+import {
+  EMPTY_WORKSPACE_ROLE,
+  type Channel,
+} from "@/features/channels/types";
 import { ChannelRecordSkeleton } from "./channel-record-skeleton";
 import { PersonRosterActions } from "./person-roster-actions";
 
@@ -28,7 +31,7 @@ export function RelationshipRecord({
   initialSeq = null,
   onDeleted,
 }: {
-  homeChannel: HomeChannel;
+  homeChannel: Channel;
   currentUserId: string;
   /**
    * A thread to raise on MOUNT — how an Overview activity row lands
@@ -65,7 +68,7 @@ export function RelationshipRecord({
     return <PageError error={new Error(error)} onRetry={() => refetch()} />;
   }
 
-  const channel = channels.find((row) => row.id === homeChannel.channelId);
+  const channel = channels.find((row) => row.id === homeChannel.id);
   if (!channel) {
     return (
       <EmptyState
@@ -79,7 +82,9 @@ export function RelationshipRecord({
   return (
     <StandaloneChannelSurface
       workspaceId={homeChannel.workspaceId}
-      workspaceSlug={homeChannel.workspaceSegment}
+      // ⚠ `?? ""` INLINE (§8) — the segment rides `container`, one of the
+      // projection's new keys.
+      workspaceSlug={homeChannel.container?.segment ?? ""}
       channel={channel}
       currentUserId={currentUserId}
       // 🔒 **THE CALLER'S REAL ROLE IN THIS CONTAINER (2026-09-17, F-343).** The
@@ -93,10 +98,12 @@ export function RelationshipRecord({
       // seats its claimer at workspace `admin` (`repository-containers.ts ›
       // insertLinkContainer`), who the server WOULD let rename this channel and
       // who the `"member"` default was hiding the control from.
-      // ⚠ §8 STALE-CACHE, SPELLED INLINE: a payload cached by the previous bundle
-      // carries no `role` key, and `EMPTY_ROLE` (rank 0) renders display-only for
-      // one paint rather than claiming a permission nobody read.
-      role={homeChannel.role ?? EMPTY_ROLE}
+      // ⚠ **`myWorkspaceRole`, NEVER `Channel.role`** — the latter is the CHANNEL
+      // role (`owner|member`, no `guest`), a different ladder over a different
+      // membership. Two facts, two names (`types-list.ts`).
+      // ⚠ §8 STALE-CACHE, SPELLED INLINE: `EMPTY_WORKSPACE_ROLE` (rank 0) renders
+      // display-only for one paint rather than claiming a permission nobody read.
+      role={homeChannel.myWorkspaceRole ?? EMPTY_WORKSPACE_ROLE}
       initialThreadId={initialThreadId}
       initialSeq={initialSeq}
       onDeleted={onDeleted}

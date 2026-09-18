@@ -132,6 +132,15 @@ export function mapChannelRow(
     // degrade to the card as shipped, because the facts under the card are
     // still there and a channel that cannot render is the worse answer.
     infoCard: parseInfoCard(row.info_card),
+    // 🔒 THE ROW EXTRAS (R-26) — one projection, so they are mapped HERE and not
+    // by a per-scope hydrator. ⚠ `workspaceRole` is the CONTAINER role and is
+    // deliberately NOT `role` above, which is the CHANNEL role (`ChannelRole`,
+    // no `guest`): two ladders over two memberships, two names.
+    container: state.container,
+    myWorkspaceRole: state.workspaceRole,
+    peers: state.peers,
+    mentionCount: state.mentionCount,
+    linkOut: state.linkOut,
     // ⚠ **`agentPosture` AND `defaultResponderAgentName` ARE BOTH OFF THIS MAPPER
     // (2026-09-07).** The first went with the posture ceiling (items 12/13/14) and the second
     // with the room-wide responder (items 10/11); both were still being mapped here after

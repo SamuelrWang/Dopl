@@ -20,7 +20,8 @@ export const HOME_CHANNEL_NAME_MAX = 80;
 export const HOME_CHANNEL_DESCRIPTION_MAX = 2000;
 
 /**
- * `POST /api/home/channels` — "New channel". The name is the CHANNEL's name and
+ * `POST /api/channels?scope=account` — "New channel" (R-26; it was `POST
+ * /api/home/channels`). The name is the CHANNEL's name and
  * the container's name both: the container is plumbing nobody navigates to, so
  * a second name for it would be a second thing to keep in sync and a second
  * thing to get wrong.

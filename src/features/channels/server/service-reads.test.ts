@@ -29,7 +29,6 @@ import {
   getChannelTask,
   listChannelMembers,
   listChannelTasks,
-  listChannels,
   readMessages,
 } from "./service-reads";
 import { ChannelNotFoundError, TaskNotFoundError } from "./errors";
@@ -445,39 +444,6 @@ describe("listChannelTasks / getChannelTask — reads", () => {
 
 });
 
-describe("listChannels — direct peer resolution", () => {
-  it("resolves the peer (other member) for a direct channel; null for a normal one", async () => {
-    const directKey = [USER, OTHER].sort().join(":");
-    vi.mocked(repo.listMyMemberships).mockResolvedValue([
-      memberRow(USER, "all"),
-      { ...memberRow(USER, "all"), channel_id: "dm-1" },
-    ]);
-    vi.mocked(repo.listChannels).mockResolvedValue([
-      channelRow(),
-      { ...channelRow(), id: "dm-1", is_direct: true, direct_key: directKey },
-    ]);
-    vi.mocked(repo.memberCounts).mockResolvedValue(new Map());
-    vi.mocked(repoMessages.lastMessages).mockResolvedValue(new Map());
-    vi.mocked(collab.channelMemberUserIds).mockResolvedValue(
-      new Map([
-        ["chan-1", [USER]],
-        ["dm-1", [USER, OTHER]],
-      ])
-    );
-    vi.mocked(repo.fetchProfiles).mockResolvedValue([
-      { id: OTHER, email: "o@x.com", display_name: "Otto", avatar_url: "http://x/o.png" },
-    ]);
-
-    const channels = await listChannels(ctx);
-    const normal = channels.find((c) => c.id === "chan-1");
-    const dm = channels.find((c) => c.id === "dm-1");
-    expect(normal?.isDirect).toBe(false);
-    expect(normal?.directPeer).toBeNull();
-    expect(dm?.isDirect).toBe(true);
-    expect(dm?.directPeer).toMatchObject({
-      userId: OTHER,
-      displayName: "Otto",
-      avatarUrl: "http://x/o.png",
-    });
-  });
-});
+// ⚠ **THE LIST'S OWN CASES LIVE IN `service-list.test.ts` SINCE WAVE 3 (R-26)** —
+// the direct-peer case moved there with the projection, beside the roster sample it
+// now shares one profile read with.

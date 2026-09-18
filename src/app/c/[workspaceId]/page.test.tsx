@@ -13,7 +13,8 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ReactElement } from "react";
-import type { HomeChannel } from "@/features/home/types";
+// ⚠ **THE ONE ROW TYPE SINCE R-26** — this prop was `HomeChannel`.
+import type { Channel } from "@/features/channels/types";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -42,27 +43,27 @@ import GuestChannelPage from "./page";
 const WS = "33333333-3333-4333-8333-333333333333";
 const USER = "11111111-1111-4111-8111-111111111111";
 
-const CHANNEL: HomeChannel = {
+const CHANNEL: Channel = {
+  id: "44444444-4444-4444-8444-444444444444",
   workspaceId: WS,
-  workspaceSegment: "ada-grace-abc123def456",
-  channelId: "44444444-4444-4444-8444-444444444444",
+  container: { id: WS, kind: "link", segment: "ada-grace-abc123def456" },
   name: "Ada & Grace",
   topic: "",
   peers: [],
-  peer: null,
   createdAt: "2026-08-20T00:00:00.000Z",
   lastMessageAt: null,
-  lastMessagePreview: null,
   unread: false,
-  unreadMentions: 0,
+  mentionCount: 0,
   myFavoritedAt: null,
-  // The guest lane's reader, at the role a bound claim's default link grants.
-  role: "guest",
-      linkOut: null,
-};
+  // ⚠ THE LANE'S OWN READER: a bound claim seats its peer at the link's
+  // `granted_role`, whose default is `guest` (F-343). ⚠ **IT IS
+  // `myWorkspaceRole` SINCE R-26** — `Channel.role` is the CHANNEL role.
+  myWorkspaceRole: "guest",
+  linkOut: null,
+} as unknown as Channel;
 
 interface MountProps {
-  homeChannel: HomeChannel;
+  homeChannel: Channel;
   currentUserId: string;
 }
 

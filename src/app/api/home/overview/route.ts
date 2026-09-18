@@ -19,7 +19,7 @@ const SOURCE = "api/home/overview";
  * breakdowns are measured over.
  *
  * ⚠ NOT WORKSPACE-SCOPED, so `withUserAuth` and no `X-Workspace-Id`, exactly
- * like its `/api/home/channels` sibling. **The fence is the caller's own
+ * like `GET /api/channels?scope=account`. **The fence is the caller's own
  * membership rows**: the service builds the container id list from
  * `repository-containers.ts › listLinkContainers` and hands it to the
  * repository as the entire fence (every read below is service-role and bypasses

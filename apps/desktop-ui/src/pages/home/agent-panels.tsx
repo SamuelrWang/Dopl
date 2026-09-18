@@ -9,7 +9,10 @@ import {
   groupByVisibility,
 } from "@/features/agent-templates/lib/visibility";
 import type { AgentTemplate } from "@/features/agent-templates/client/types";
-import { EMPTY_ROLE, type HomeChannel } from "@/features/home/types";
+import {
+  EMPTY_WORKSPACE_ROLE,
+  type Channel,
+} from "@/features/channels/types";
 import { meetsMinRole } from "@/features/workspaces/types";
 import { PageError } from "#/components/page-states";
 import {
@@ -79,7 +82,7 @@ export function HomeAgentPanels({
 }: {
   /** `null` when the selected row is a legacy unbound LINK, or when there is
    *  no row at all — both are "no container to read templates from". */
-  channel: HomeChannel | null;
+  channel: Channel | null;
   /** ⚠ `POST /api/boot`'s `workspace`, which is NULL until the caller is
    *  onboarded. Scope C is UNAVAILABLE, not empty, when it is. */
   homeWorkspaceId: string | null;
@@ -90,7 +93,8 @@ export function HomeAgentPanels({
    *  2026-09-17 (F-343): the PERSONAL section is the caller's own home shelf,
    *  where a role prop would be a second, weaker copy of the server's floor. The
    *  SHARED section is a different container and a different reader — its gate
-   *  rides on `channel.role`, which is the row the server itself reads. */
+   *  rides on `channel.myWorkspaceRole`, which is the row the server itself
+   *  reads — NOT `channel.role`, which is the CHANNEL role. */
   homeWorkspaceSegment: string | null;
   currentUserId: string;
 }) {
@@ -102,10 +106,15 @@ export function HomeAgentPanels({
   // ⚠ A CONTAINER READ IS UNFILTERED. A shelf is a TENANCY and this container is
   // not the caller's personal one, so `?shelf=` here would be a question with one
   // possible answer.
-  // ⚠ §8 STALE-CACHE, SPELLED INLINE: a payload cached by the previous bundle
-  // carries no `role` key, and `EMPTY_ROLE` (rank 0) hides the create for one
-  // paint rather than offering a write the server would refuse.
-  const canCreateShared = meetsMinRole(channel?.role ?? EMPTY_ROLE, "member");
+  // ⚠ **THE WORKSPACE ROLE (`myWorkspaceRole`), NOT `Channel.role`** — the
+  // template create is floored on `workspace_members.role`, the only ladder with
+  // a `guest` rung; `Channel.role` is the channel's own `owner|member`.
+  // ⚠ §8 STALE-CACHE, SPELLED INLINE: `EMPTY_WORKSPACE_ROLE` (rank 0) hides the
+  // create for one paint rather than offering a write the server would refuse.
+  const canCreateShared = meetsMinRole(
+    channel?.myWorkspaceRole ?? EMPTY_WORKSPACE_ROLE,
+    "member"
+  );
   const containerList = useAgentTemplates(channel?.workspaceId ?? null);
   // ⚠ NO LONGER LAZY (2026-08-27). It was gated on the scope pill; with the
   // pill gone Personal is ALWAYS on screen, so a deferred read would just be a
@@ -265,7 +274,7 @@ export function HomeAgentPanels({
         // scope B's rows were already in the container; there is no scope B any
         // more, so the condition has no second branch to guard against.
         // ⚠ AND NOT WITH NO CHANNEL TO SHARE INTO. The dialog takes
-        // `channel.channelId`; offering the button with nothing selected would be
+        // `channel.id`; offering the button with nothing selected would be
         // an affordance whose only outcome is a crash.
         cardActionFor={
           channel === null
@@ -312,7 +321,7 @@ export function HomeAgentPanels({
           // ⚠ THE CHANNEL, NOT THE CONTAINER. A `channel` scope is what puts the
           // row in front of the people in the room; a `container` grant would
           // name the tenancy and no audience.
-          channelId={channel.channelId}
+          channelId={channel.id}
           onClose={() => setSharing(null)}
           onShared={() => setSharing(null)}
         />

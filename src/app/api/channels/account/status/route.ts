@@ -15,7 +15,7 @@ import { AccountStatusQuerySchema } from "@/features/channels/schema";
  * caller this endpoint exists for. It also filters `kind='link'` containers out
  * of auto-targeting (§4A), so a home channel would be unreachable through it
  * even for a single-workspace caller. The fence is therefore the USER, exactly
- * as it is for `GET /api/home/channels`: every read below enters through
+ * as it is for `GET /api/channels?scope=account`: every read below enters through
  * `channel_members.user_id = <caller>`, so a channel the caller does not belong
  * to is never NAMED by any query behind this route.
  *
@@ -26,7 +26,7 @@ import { AccountStatusQuerySchema } from "@/features/channels/schema";
  * reads that already exist.
  *
  * 🔒 **THE CONTAINER LOCK (B3) IS NOT APPLIED HERE.** A lock is a property of one
- * MCP CONNECTION, not of the credential, so — as for `/api/home/channels` — the
+ * MCP CONNECTION, not of the credential, so — as for the account scope — the
  * narrowing lives in the MCP layer (`packages/mcp-server/src/workspace-directory.ts
  * › narrowToLock`). A future non-MCP caller that skips it has rebuilt the
  * enumeration oracle B3 denies.

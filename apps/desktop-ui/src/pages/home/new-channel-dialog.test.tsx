@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import { bridgeCalls, installBridge, ok, renderWithProviders } from "#/test-utils/bridge";
 import { HomeChannelCreateSchema } from "@/features/home/schema";
+import { isAccountChannels } from "./home-test-harness";
 import { NewChannelDialog } from "./new-channel-dialog";
 
 /**
@@ -32,7 +33,10 @@ const WORKSPACE_ID = "ws-new";
 function serve(): void {
   apiRequest.mockImplementation(
     (path: string, opts: BridgeRequestOpts = {}): Promise<BridgeResponse> => {
-      if (path === "/api/home/channels" && opts.method === "POST") {
+      // 🔒 **`POST /api/channels?scope=account` SINCE R-26 (b)** — the scope is
+      // what picks the handler, so a create that omitted it would reach the
+      // CONTAINER create instead.
+      if (isAccountChannels(path) && opts.method === "POST") {
         return Promise.resolve(
           ok({ channel: { workspaceId: WORKSPACE_ID } })
         );
@@ -45,7 +49,7 @@ function serve(): void {
 /** The body the create POST sent, or null. */
 function lastPost(): Record<string, unknown> | null {
   const post = bridgeCalls(apiRequest)
-    .filter((c) => c.path === "/api/home/channels" && c.opts.method === "POST")
+    .filter((c) => isAccountChannels(c.path) && c.opts.method === "POST")
     .at(-1);
   return (post?.opts.body as Record<string, unknown>) ?? null;
 }

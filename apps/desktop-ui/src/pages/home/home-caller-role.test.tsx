@@ -4,11 +4,12 @@ import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import { installBridge, ok } from "#/test-utils/bridge";
 import { EMPTY_INFO_CARD } from "@/features/channels/info-card";
 import type { Role } from "@/features/workspaces/types";
-import type { HomeChannelsPayload } from "@/features/home/types";
+import type { Channel } from "@/features/channels/types";
 import { agentRoutes, openAgents } from "./agent-test-fixtures";
 import {
   CHANNEL,
   HOME,
+  isAccountChannels,
   openChannelRecord,
   renderHome,
   staleCachedChannel,
@@ -17,7 +18,7 @@ import {
 /**
  * **F-343 — /home TELLS A MEMBER FROM A GUEST** (Samuel, 2026-09-17: proceed).
  *
- * The account surface carried no caller role: `GET /api/home/channels` did not
+ * The account surface carried no caller role: `GET /api/channels?scope=account` did not
  * send one and `knowledge-panels.tsx` hardcoded `role: "owner"` under the comment
  * *"a home container is the caller's own"* — **true of the container the caller
  * CREATED and false of every one they JOINED**, where a bound claim seats them at
@@ -39,7 +40,7 @@ import {
  * about what a guest sees.
  *
  * ⚠ MOUNTED THROUGH `HomePage`, never a component: the role arrives on the
- * `/api/home/channels` payload this page reads, so a direct mount would hand each
+ * `/api/channels?scope=account` payload this page reads, so a direct mount would hand each
  * pane a static prop and pass while the projection was broken.
  */
 
@@ -75,11 +76,11 @@ const PEER_CHANNEL = {
 /** Serve /home with `channels` as the payload — everything else routes normally.
  *  ⚠ `agentRoutes` rather than `routes`: it answers the template lists this file
  *  needs for the Agents face and falls through to the harness table for the rest. */
-function serve(channels: HomeChannelsPayload["channels"]): void {
+function serve(channels: Channel[]): void {
   apiRequest.mockImplementation(
     (path: string, opts: BridgeRequestOpts = {}): Promise<BridgeResponse> => {
       const bare = path.split("?")[0];
-      if (bare === "/api/home/channels") {
+      if (isAccountChannels(path)) {
         return Promise.resolve(ok({ channels, pendingLinks: [] }));
       }
       if (bare === "/api/channels") {
@@ -92,8 +93,11 @@ function serve(channels: HomeChannelsPayload["channels"]): void {
 
 /** The default channel at one container role, with no invitation out — the
  *  Add-person state (a `linkOut` swaps the section for the Link out panel). */
-function atRole(role: Role): HomeChannelsPayload["channels"] {
-  return [{ ...HOME.channels[0], role, linkOut: null }];
+function atRole(role: Role): Channel[] {
+  // ⚠ **THE WORKSPACE ROLE, NOT `Channel.role`** — the CHANNEL role is a second
+  // ladder with no `guest` rung, and every control this suite pins is floored on
+  // the workspace one (`types-list.ts › myWorkspaceRole`).
+  return [{ ...HOME.channels[0], myWorkspaceRole: role, linkOut: null }];
 }
 
 /** The Knowledge / Agents face's SHARED section create, reached through its
@@ -173,7 +177,7 @@ describe("the Info tab's two role-shaped controls", () => {
    * surface assert a permission nobody read, which is the defect itself.
    */
   it("FAILS CLOSED on a payload cached before the field existed", async () => {
-    serve([{ ...staleCachedChannel("role"), linkOut: null }]);
+    serve([{ ...staleCachedChannel("myWorkspaceRole"), linkOut: null }]);
     renderHome();
     await openChannelRecord();
     await screen.findByTestId("channel-members");
@@ -212,7 +216,7 @@ describe("the Knowledge face's shared create (F-343 consequence 1)", () => {
   });
 
   it("FAILS CLOSED on a stale cached payload", async () => {
-    serve([{ ...staleCachedChannel("role"), linkOut: null }]);
+    serve([{ ...staleCachedChannel("myWorkspaceRole"), linkOut: null }]);
     renderHome();
     await openKnowledge();
     await screen.findByRole("region", { name: "Shared in this channel" });
@@ -241,7 +245,7 @@ describe("the Agents face's shared create (F-343 consequence 1b)", () => {
   });
 
   it("FAILS CLOSED on a stale cached payload", async () => {
-    serve([{ ...staleCachedChannel("role"), linkOut: null }]);
+    serve([{ ...staleCachedChannel("myWorkspaceRole"), linkOut: null }]);
     renderHome();
     await openAgents();
     await screen.findByRole("region", { name: "Shared in this channel" });

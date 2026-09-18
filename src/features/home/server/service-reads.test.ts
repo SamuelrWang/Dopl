@@ -1,9 +1,13 @@
 /**
- * `service-reads.ts` — the four things a renderer would otherwise have to
- * trust: the channels payload shape (name, peer-or-null, segment, channel,
- * truncated preview, the bound link riding as `linkOut`), which containers are
- * DROPPED, the pending-link filter, and the PRE-AUTH claim-page payload, whose
- * whole contract is what it does NOT carry.
+ * `service-reads.ts` — what is LEFT of the home read side: the guest route's
+ * one-container fence, the pending-link filter, and the PRE-AUTH claim-page
+ * payload whose whole contract is what it does NOT carry.
+ *
+ * 🔒 **THE CHANNEL-LIST CASES MOVED TO `channels/server/service-list.test.ts` IN
+ * WAVE 3 (R-26).** Peers, `linkOut`, the dropped container, the unread marks and
+ * the mention badge are properties of the ONE projection now, and asserting them
+ * from here would be the second suite over one behaviour that the second
+ * projection itself was.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -13,37 +17,35 @@ vi.mock("./repository", () => ({
   findMemberContainer: vi.fn(),
   listLinkContainers: vi.fn(),
   listLinksByCreator: vi.fn(),
-  listLinksByWorkspaces: vi.fn(),
-  listContainerPeers: vi.fn(),
   listContainerChannels: vi.fn(),
-  listLastMessages: vi.fn(),
-  listMyChannelReads: vi.fn(),
-  listMyContainerRoles: vi.fn(),
-  listMyMentionStamps: vi.fn(),
   findLinkByToken: vi.fn(),
 }));
 vi.mock("@/features/workspaces/server/repository", () => ({
   listProfileSummaries: vi.fn(),
 }));
+// ⚠ THE HYDRATOR IS THE CHANNELS FEATURE'S NOW — one row projection, so this
+// suite stubs the seam rather than re-asserting what the projection answers.
+vi.mock("@/features/channels/server/service", () => ({
+  hydrateChannelById: vi.fn(),
+}));
 
 import {
   getHomeChannel,
-  getHomeChannels,
   getLinkPublicInfo,
   listMyPendingLinks,
 } from "./service-reads";
-import { PREVIEW_CHARS } from "@/shared/lib/preview";
 import * as repo from "./repository";
 import type { ChannelLinkRow } from "./dto";
+import { hydrateChannelById } from "@/features/channels/server/service";
 import { listProfileSummaries } from "@/features/workspaces/server/repository";
 
 const ME = "11111111-1111-4111-8111-111111111111";
-const PEER = "22222222-2222-4222-8222-222222222222";
 const WS = "33333333-3333-4333-8333-333333333333";
 const CHANNEL = "44444444-4444-4444-8444-444444444444";
 
 const mocked = vi.mocked(repo);
 const mockProfiles = vi.mocked(listProfileSummaries);
+const mockHydrate = vi.mocked(hydrateChannelById);
 
 function linkRow(patch: Partial<ChannelLinkRow> = {}): ChannelLinkRow {
   return {
@@ -67,19 +69,10 @@ beforeEach(() => {
   mocked.findMemberContainer.mockResolvedValue(null);
   mocked.listLinkContainers.mockResolvedValue([]);
   mocked.listLinksByCreator.mockResolvedValue([]);
-  mocked.listLinksByWorkspaces.mockResolvedValue(new Map());
-  mocked.listContainerPeers.mockResolvedValue(new Map());
   mocked.listContainerChannels.mockResolvedValue(new Map());
-  mocked.listLastMessages.mockResolvedValue(new Map());
-  // ⚠ NO MEMBERSHIP AND NO MENTIONS BY DEFAULT (2026-09-13), so every case that
-  // predates the unread marks reads `unread: false` / `unreadMentions: 0` — the
-  // marks are opted into by the cases that own them
-  // (`service-reads-unread.test.ts`).
-  mocked.listMyChannelReads.mockResolvedValue(new Map());
-  mocked.listMyContainerRoles.mockResolvedValue(new Map());
-  mocked.listMyMentionStamps.mockResolvedValue([]);
   mocked.findLinkByToken.mockResolvedValue(null);
   mockProfiles.mockResolvedValue(new Map());
+  mockHydrate.mockResolvedValue(null);
 });
 
 const CONTAINER = {
@@ -89,275 +82,36 @@ const CONTAINER = {
   created_at: "2026-08-20T00:00:00.000Z",
 };
 
-describe("getHomeChannels", () => {
-  beforeEach(() => {
-    mocked.listLinkContainers.mockResolvedValue([CONTAINER]);
-    mocked.listContainerPeers.mockResolvedValue(new Map([[WS, [PEER]]]));
-    mocked.listContainerChannels.mockResolvedValue(
-      new Map([[WS, { id: CHANNEL, name: "Ada & Grace", topic: "" }]])
-    );
-    mockProfiles.mockResolvedValue(
-      new Map([
-        [
-          PEER,
-          {
-            email: "grace@x.dev",
-            displayName: "Grace",
-            avatarUrl: "https://x.dev/g.png",
-          },
-        ],
-      ])
-    );
-  });
-
-  it("is keyed `channels`, and addresses the container the way the channels client APIs do", async () => {
-    const payload = await getHomeChannels(ME);
-    expect(Object.keys(payload).sort()).toEqual(["channels", "pendingLinks"]);
-    expect(payload.channels).toEqual([
-      {
-        workspaceId: WS,
-        workspaceSegment: "ada-grace-abc123def456",
-        channelId: CHANNEL,
-        name: "Ada & Grace",
-        // ⚠ THE DESCRIPTION, UNDER ITS WIRE NAME (2026-09-15). `""` is what the
-        // fixture's channel carries and is what "nobody wrote one" looks like all
-        // the way to the picker — this key being PRESENT is the contract, because
-        // /home reads it per row and an absent key would read `undefined`.
-        topic: "",
-        peers: [
-          {
-            userId: PEER,
-            displayName: "Grace",
-            email: "grace@x.dev",
-            avatarUrl: "https://x.dev/g.png",
-          },
-        ],
-        peer: {
-          userId: PEER,
-          displayName: "Grace",
-          email: "grace@x.dev",
-          avatarUrl: "https://x.dev/g.png",
-        },
-        createdAt: "2026-08-20T00:00:00.000Z",
-        lastMessageAt: null,
-        lastMessagePreview: null,
-        // ⚠ BOTH MARKS ARE OFF HERE BECAUSE THE CALLER IS NOT A CHANNEL MEMBER in
-        // this fixture (`listMyChannelReads` answers an empty map) — the
-        // `isMember` clause, and the reason it is spelled out in this
-        // exact-shape assertion rather than left to `toMatchObject`.
-        unread: false,
-        unreadMentions: 0,
-        // ⚠ AND THE PIN IS OFF FOR THE SAME REASON (2026-09-15) — `myFavoritedAt`
-        // rides the SAME `channel_members` read, so an absent row means "not
-        // pinned" exactly as it means "no marks".
-        myFavoritedAt: null,
-        // ⚠ **THE CALLER'S OWN ROLE, AND `"guest"` HERE IS THE FAIL-CLOSED FLOOR
-        // rather than a fixture choice** (F-343, 2026-09-17): this fixture's
-        // `listMyContainerRoles` answers an EMPTY map, exactly as it answers no
-        // channel read above, and the hydrate refuses to invent a rank for a
-        // membership row that did not come back. The cases below pin the real
-        // three answers.
-        role: "guest",
-        linkOut: null,
-      },
-    ]);
-  });
-
-  /**
-   * F-343 — the /home surface could not tell a MEMBER from a GUEST inside a
-   * container, and **this is the read that ends that.** Three cases, one per rank, because the
-   * whole defect was a surface answering ONE of them for all three.
-   */
-  describe("role — the caller's own membership, carried per container", () => {
-    it("carries the ROW's role, which is `guest` for a claimed peer and `owner` for the creator", async () => {
-      mocked.listMyContainerRoles.mockResolvedValue(new Map([[WS, "guest"]]));
-      expect((await getHomeChannels(ME)).channels[0].role).toBe("guest");
-
-      mocked.listMyContainerRoles.mockResolvedValue(new Map([[WS, "owner"]]));
-      expect((await getHomeChannels(ME)).channels[0].role).toBe("owner");
-    });
-
-    it("is `member` for a member-grade claim — the rank the two create buttons need", async () => {
-      mocked.listMyContainerRoles.mockResolvedValue(new Map([[WS, "member"]]));
-      expect((await getHomeChannels(ME)).channels[0].role).toBe("member");
-    });
-
-    it("asks for the CALLER's own rows, and asks once for the whole page", async () => {
-      await getHomeChannels(ME);
-      // ⚠ THE VIEWER IS AN ARGUMENT, never a client param — and it is ONE
-      // bounded `.in()` over the page's containers, not a query per row (§9).
-      expect(mocked.listMyContainerRoles).toHaveBeenCalledTimes(1);
-      expect(mocked.listMyContainerRoles).toHaveBeenCalledWith([WS], ME);
-    });
-
-    it("FAILS CLOSED at rank 0 when the membership row does not come back", async () => {
-      // The caller reached this container THROUGH that row, so an absent entry
-      // is a torn read rather than a state. `guest` offers nothing.
-      mocked.listMyContainerRoles.mockResolvedValue(new Map());
-      expect((await getHomeChannels(ME)).channels[0].role).toBe("guest");
-    });
-  });
-
-  it("RENDERS a solo channel with no peers — a channel with nobody in it is finished, not broken", async () => {
-    mocked.listContainerPeers.mockResolvedValue(new Map());
-    mocked.listContainerChannels.mockResolvedValue(
-      new Map([[WS, { id: CHANNEL, name: "Fundraise", topic: "" }]])
-    );
-
-    const [row] = (await getHomeChannels(ME)).channels;
-
-    expect(row.peers).toEqual([]);
-    expect(row.peer).toBeNull();
-    // ⚠ The NAME is what the row has to render itself with when there is no
-    // person to name it after.
-    expect(row.name).toBe("Fundraise");
-  });
-
-  describe("MORE THAN TWO members — F-307's fix", () => {
-    const SECOND = "55555555-5555-4555-8555-555555555555";
-    const THIRD = "66666666-6666-4666-8666-666666666666";
-
-    beforeEach(() => {
-      // ⚠ THE ORDER IS THE REPOSITORY'S (`joined_at ASC, user_id ASC`) and this
-      // mock stands in for it. The service must PRESERVE that order and never
-      // re-sort — the whole point of F-307's fix is that one component decides.
-      mocked.listContainerPeers.mockResolvedValue(
-        new Map([[WS, [PEER, SECOND, THIRD]]])
-      );
-      mockProfiles.mockResolvedValue(
-        new Map([
-          [PEER, { email: "grace@x.dev", displayName: "Grace", avatarUrl: null }],
-          [SECOND, { email: "priya@x.dev", displayName: "Priya", avatarUrl: null }],
-          [THIRD, { email: "dana@x.dev", displayName: "Dana", avatarUrl: null }],
-        ])
-      );
-    });
-
-    it("hydrates EVERY member, in the repository's order", async () => {
-      const [row] = (await getHomeChannels(ME)).channels;
-
-      expect(row.peers.map((p) => p.userId)).toEqual([PEER, SECOND, THIRD]);
-      expect(row.peers.map((p) => p.displayName)).toEqual([
-        "Grace",
-        "Priya",
-        "Dana",
-      ]);
-    });
-
-    it("derives `peer` from `peers[0]` — one fact, never two that can disagree", async () => {
-      const [row] = (await getHomeChannels(ME)).channels;
-
-      // 🔒 The back-compat single field is the HEAD of the list and nothing
-      // else. A `peer` that is not `peers[0]` is F-307 re-opened in a shape no
-      // render test would catch, so it is pinned by IDENTITY, not by value.
-      expect(row.peer).toBe(row.peers[0]);
-      expect(row.peer?.userId).toBe(PEER);
-    });
-
-    it("KEEPS a member whose profile row is missing rather than dropping them", async () => {
-      // ⚠ `listProfileSummaries` answers only for ids it finds. A face the
-      // operator cannot name is still a person in the room — dropping them would
-      // under-count the avatar stack's `+N` and silently shrink the roster.
-      mockProfiles.mockResolvedValue(
-        new Map([[PEER, { email: "grace@x.dev", displayName: "Grace", avatarUrl: null }]])
-      );
-
-      const [row] = (await getHomeChannels(ME)).channels;
-
-      expect(row.peers).toHaveLength(3);
-      expect(row.peers[2]).toEqual({
-        userId: THIRD,
-        displayName: null,
-        email: null,
-        avatarUrl: null,
-      });
-    });
-
-    it("asks for each profile ONCE, however many containers share a member", async () => {
-      // §9: the profile tier widens with the rosters, and it stays ONE `.in()`
-      // over a DE-DUPLICATED set — never a read per member and never per row.
-      await getHomeChannels(ME);
-
-      const [ids] = mockProfiles.mock.calls[0];
-      expect([...ids].sort()).toEqual([PEER, SECOND, THIRD].sort());
-    });
-  });
-
-  it("still DROPS a container with no channel — there is nothing to open", async () => {
-    mocked.listContainerChannels.mockResolvedValue(new Map());
-    expect((await getHomeChannels(ME)).channels).toEqual([]);
-  });
-
-  it("rides the open BOUND link on its own channel as `linkOut`, never as a row", async () => {
-    mocked.listLinksByWorkspaces.mockResolvedValue(
-      new Map([[WS, linkRow({ id: "bound-1", workspace_id: WS, max_uses: 1 })]])
-    );
-
-    const payload = await getHomeChannels(ME);
-
-    expect(payload.channels[0].linkOut?.id).toBe("bound-1");
-    expect(payload.channels[0].linkOut?.url).toMatch(/\/link\/tok_abc$/);
-    // The chip is the ONLY place it appears — a second row would show one
-    // invitation twice.
-    expect(payload.pendingLinks).toEqual([]);
-  });
-
-  it("shows no chip for a bound link the claim gate would 410", async () => {
-    mocked.listLinksByWorkspaces.mockResolvedValue(
-      new Map([
-        [WS, linkRow({ workspace_id: WS, max_uses: 1, use_count: 1 })],
-      ])
-    );
-    expect((await getHomeChannels(ME)).channels[0].linkOut).toBeNull();
-  });
-
-  it("folds the chip read into the EXISTING fan — no extra round-trip tier", async () => {
-    await getHomeChannels(ME);
-    // Same tier as peers + channels: all three see the same container ids.
-    expect(mocked.listLinksByWorkspaces).toHaveBeenCalledWith([WS], 200);
-    expect(mocked.listContainerPeers).toHaveBeenCalledWith([WS], ME);
-    expect(mocked.listContainerChannels).toHaveBeenCalledWith([WS]);
-  });
-
-  it("truncates the preview server-side and collapses whitespace", async () => {
-    mocked.listLastMessages.mockResolvedValue(
-      new Map([
-        [
-          CHANNEL,
-          { at: "2026-08-22T10:00:00.000Z", body: `${"x".repeat(400)}\n\n  y` },
-        ],
-      ])
-    );
-    const [row] = (await getHomeChannels(ME)).channels;
-    expect(row.lastMessagePreview).toHaveLength(PREVIEW_CHARS);
-    expect(row.lastMessagePreview?.endsWith("…")).toBe(true);
-    expect(row.lastMessageAt).toBe("2026-08-22T10:00:00.000Z");
-  });
-});
-
 describe("getHomeChannel", () => {
   beforeEach(() => {
-    mocked.listContainerPeers.mockResolvedValue(new Map([[WS, [PEER]]]));
     mocked.listContainerChannels.mockResolvedValue(
       new Map([[WS, { id: CHANNEL, name: "Ada & Grace", topic: "" }]])
     );
   });
 
-  it("hands a MEMBER of a link container the same shape the page reads", async () => {
+  it("hands a MEMBER of a link container THE ONE ROW TYPE, off the shared hydrator", async () => {
     mocked.findMemberContainer.mockResolvedValue(CONTAINER);
+    mockHydrate.mockResolvedValue({
+      id: CHANNEL,
+      name: "Ada & Grace",
+    } as unknown as Awaited<ReturnType<typeof hydrateChannelById>>);
 
     const channel = await getHomeChannel(ME, WS);
 
-    expect(channel).toMatchObject({
-      workspaceId: WS,
-      workspaceSegment: "ada-grace-abc123def456",
-      channelId: CHANNEL,
-      name: "Ada & Grace",
-    });
+    expect(channel).toMatchObject({ id: CHANNEL, name: "Ada & Grace" });
+    // 🔒 ONE PROJECTION — the guest route gets the same `Channel` the list does,
+    // built by the channels feature and never re-shaped here.
+    expect(mockHydrate).toHaveBeenCalledWith(WS, CHANNEL, ME);
     // The fence takes the container id and the CALLER — never a slug, never a
-    // list scan, so it cannot 404 a channel that sits past `HOME_CHANNEL_LIMIT`.
+    // list scan, so it cannot 404 a channel that sits past a list ceiling.
     expect(mocked.findMemberContainer).toHaveBeenCalledWith(WS, ME);
     expect(mocked.listLinkContainers).not.toHaveBeenCalled();
+  });
+
+  it("500s a container with no channel — the state the rollbacks exist to prevent", async () => {
+    mocked.findMemberContainer.mockResolvedValue(CONTAINER);
+    mocked.listContainerChannels.mockResolvedValue(new Map());
+    await expect(getHomeChannel(ME, WS)).rejects.toMatchObject({ status: 500 });
   });
 
   it("answers NULL for a non-member — absent, never forbidden", async () => {

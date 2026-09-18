@@ -17,14 +17,14 @@ import { WelcomePopup } from "@/features/onboarding/components/welcome-popup";
 import { TourProviderCore } from "@/features/tour/components/tour-provider-core";
 import { workspaceSegment as canonicalSegment } from "@/features/workspaces/url";
 import { isStandardWorkspace } from "@/features/workspaces/types";
-import type { HomeChannelsPayload } from "@/features/home/types";
+import type { ChannelListPayload } from "@/features/channels/types";
+import { channelsPath } from "@/features/channels/client/query-keys";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { parseSegment } from "@/shared/lib/url/parse-segment";
 import { PageError, isUnauthorized } from "#/components/page-states";
 import { ShellChromeSkeleton } from "#/components/skeletons/shell-skeleton";
 import { sectionSkeleton } from "#/components/skeletons/section-skeleton";
 import { SignedOutScreen } from "#/pages/boot/signed-out-screen";
-import { HOME_CHANNELS_PATH } from "#/pages/home/home-rows";
 import { SettingsModal, type SettingsSection } from "#/components/settings-modal";
 // ⚠ `?inline` (data URI) required: packaged renderer is a `file://` document
 // under `img-src 'self' data: blob:`, so an absolute `/favicons/...` src
@@ -105,16 +105,23 @@ export function AppShellLayout() {
    * "Workspace not found" in a guest's popped-out thread. The floor says WHO
    * MAY ASK; this says WHERE THEY LAND.
    *
-   * ⚠ THE CONTAINER HAS EXACTLY ONE CHANNEL, resolved the way the guest WEB
-   * lane resolves it (`src/app/c/[workspaceId]/page.tsx`): `GET
-   * /api/home/channels`, fenced by the caller's own membership rows, matched on
-   * `workspaceId` — which is what makes it the SAME container, not merely a
-   * channel.
+   * ⚠ THE CONTAINER HAS EXACTLY ONE CHANNEL, and this resolves it THE WAY THE
+   * GUEST WEB LANE DOES — `src/app/c/[workspaceId]/page.tsx` calls
+   * `getHomeChannel(user, workspaceId)`, whose HTTP twin reachable from a renderer
+   * is `GET /api/channels?scope=account` (`withUserAuth`, no `X-Workspace-Id`,
+   * fenced by the caller's own membership rows — so a guest may ask it and a
+   * container they do not belong to is not in the answer). Matching on
+   * `workspaceId` is what makes it the SAME container, not merely a channel.
+   * ⚠ **IT WAS `GET /api/home/channels` UNTIL R-26 (2026-09-17)**, which deleted
+   * that route and its second row type; one projection, and this read shares the
+   * ONE account cache entry rather than minting a second.
+   * ⚠ **NO `container.kind` FILTER HERE, AND THAT IS NOT AN ESCAPE FROM G3.** G3
+   * narrows /home's COLUMN to the containers it can address; this addresses ONE
+   * container BY ID, which is a stricter fence than any kind test would be.
    *
    * ⚠ NO CHANNEL ⇒ `/home`, and a FAILED read lands there too. Not
    * UNKNOWN-rendered-as-EMPTY (INVARIANTS §11): `/home` asserts nothing, and
    * claiming "you have no channel" ON a workspace URL is what would be a lie.
-   *
    * ⚠ ORDERED BEHIND THE CANONICAL REDIRECT above, and `personal` is excluded
    * because the effect above already owns it: any two of these firing in one
    * tick would race two `replace`s over one history entry.
@@ -126,16 +133,20 @@ export function AppShellLayout() {
   const isContainerMember =
     !!workspace && workspace.kind !== "personal" && !isStandardWorkspace(workspace);
   const leavesShell = role === "guest" || isContainerMember;
-  const containerChannelId = useApiQuery<HomeChannelsPayload, string | null>(
-    HOME_CHANNELS_PATH,
+  const containerChannelId = useApiQuery<ChannelListPayload, string | null>(
+    channelsPath(),
     {
       enabled: leavesShell,
+      // ⚠ **THE SCOPE IS ALWAYS SENT** — it is what picks the route's handler,
+      // and it is also this read's cache identity (`use-channels.ts`), so the
+      // shell shares the one account entry rather than minting a second.
+      query: { scope: "account" },
       // `?? []` is the stale-cache guard (INVARIANTS §8): this payload is
       // IndexedDB-persisted, and a `.find` on an absent key throws INSIDE the
       // shell, which blanks every page rather than one pane.
-      select: (body) =>
-        (body.channels ?? []).find((c) => c.workspaceId === workspace?.id)
-          ?.channelId ?? null,
+      select: (body: ChannelListPayload) =>
+        (body.channels ?? []).find((c) => c.workspaceId === workspace?.id)?.id ??
+        null,
     }
   );
   const containerSettled = leavesShell && !containerChannelId.isPending;

@@ -3,44 +3,189 @@ import {
   withWorkspaceAuth,
   type WorkspaceAuthContext,
 } from "@/shared/auth/with-workspace-auth";
-import { parseJson } from "@/shared/api/parse-json";
+import {
+  withUserAuth,
+  type RouteContextArg,
+} from "@/shared/auth/with-auth";
+import { parseJson, parseQuery } from "@/shared/api/parse-json";
 import { toChannelErrorResponse } from "@/shared/api/channel-route";
 import {
   buildChannelContext,
   createChannel,
+  listAccountChannels,
   listChannels,
 } from "@/features/channels/server/service";
-import { ChannelCreateSchema } from "@/features/channels/schema";
+import {
+  ChannelCreateSchema,
+  ChannelListQuerySchema,
+} from "@/features/channels/schema";
+import { HomeChannelCreateSchema } from "@/features/home/schema";
+// ⚠ **ROUTE-LEVEL COMPOSITION, WHICH IS THE PERMITTED SHAPE.** The account
+// payload folds the caller's LEGACY unbound links, which are the HOME feature's
+// (`channel_links` with no container). §1 forbids `channels → home`, so the fold
+// happens HERE — the same place the channel-knowledge lane composes two features.
+import { createHomeChannel } from "@/features/home/server/service-writes";
+import { listMyPendingLinks } from "@/features/home/server/service-reads";
 
-async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
+/**
+ * 🔒 **THE ONE CHANNEL-LIST RESOURCE — `?scope=container|account`** (Samuel's
+ * ruling R-26 (b), 2026-09-17: *one endpoint*).
+ *
+ * *"Which channels am I in and what is their state"* was three types off three
+ * routes into three client caches. `GET /api/home/channels` is **DELETED**, not
+ * aliased; `HomeChannel`, both cache-to-cache bridges and the second query key
+ * went with it.
+ *
+ * ⚠ **THE FENCE DIFFERS PER SCOPE; THE PROJECTION DOES NOT.** That is the whole
+ * ruling, and it is why the two arms are two WRAPPERS over one service rather than
+ * two services:
+ *
+ * - `scope=container` — `withWorkspaceAuth` at `minRole: "guest"`. A guest reaches
+ *   the LISTING (§4A, §2B); the real gate is the per-channel membership fence in
+ *   the service (`repository-visibility.ts › visibleChannelsOr`), and the workspace
+ *   floor is only a tripwire. A non-member of the named container 403s upstream.
+ * - `scope=account` — `withUserAuth`, and it **could not be `withWorkspaceAuth`**:
+ *   that wrapper resolves exactly ONE workspace and answers 400 `WORKSPACE_REQUIRED`
+ *   to a caller with 2+ standard memberships (§4) — precisely the caller this scope
+ *   exists for — and it filters `kind='link'` containers out of auto-targeting
+ *   (§4A), so a home channel would be unreachable through it even for a
+ *   single-workspace caller. **The fence is the USER**, exactly as it is for
+ *   `GET /api/channels/account/status`.
+ *
+ * 🔒 **B1 — `ctx.apiKeyWorkspaceId` — IS APPLIED ON THE ACCOUNT ARM AND HAS TO BE
+ * (R3).** A container-locked credential's lock is a property of the CREDENTIAL, and
+ * `withWorkspaceAuth` 403s on it everywhere else; this arm does not use that
+ * wrapper, so nothing upstream enforces it. It is passed to the service, which
+ * narrows the membership PROOF. There is no caller-supplied scoping parameter, so
+ * the lock is the only thing that can narrow this answer.
+ *
+ * ⚠ **`GET /api/channels/account/status` STAYS, AND IT ANSWERS A DIFFERENT
+ * QUESTION.** That route is the "needs you" read — addressed-to-you items, session
+ * telemetry, per-channel unread tallies since a cursor — and its caller is
+ * `dopl_channel(op="status")` and the Overview card. This route answers what the
+ * ROWS are. Folding them would give one handler two payload shapes and two
+ * ceilings; the projections they share (`Channel`) is already one type.
+ */
+
+async function handleContainerGet(
+  _request: NextRequest,
+  auth: WorkspaceAuthContext
+) {
   try {
-    // ⚠ **NO `?include=archived` SINCE 2026-09-17 (Samuel's ruling R-21).** This
-    // route took one query param, and it existed only to widen the list past the
-    // archive filter. The filter is gone with the feature, so the read answers
-    // every live channel the caller may see and there is nothing left to opt into.
-    const ctx = buildChannelContext(auth);
-    const channels = await listChannels(ctx);
+    const channels = await listChannels(buildChannelContext(auth));
+    // ⚠ **NO `pendingLinks` KEY HERE, NEVER `[]`** — an absent param yields an
+    // absent key (§9's `channelGrants` precedent). `[]` would assert "asked, none
+    // open" where the truth is "this response was not account-scoped".
     return NextResponse.json({ channels });
   } catch (err) {
     return toChannelErrorResponse(err);
   }
 }
 
-async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
+async function handleAccountGet(
+  _request: NextRequest,
+  {
+    userId,
+    apiKeyWorkspaceId,
+  }: { userId: string; apiKeyWorkspaceId?: string | null }
+) {
+  try {
+    const [{ channels, truncated }, pendingLinks] = await Promise.all([
+      listAccountChannels(userId, apiKeyWorkspaceId ?? null),
+      listMyPendingLinks(userId),
+    ]);
+    return NextResponse.json(
+      { channels, pendingLinks, truncated },
+      // ⚠ Per-caller and volatile by construction — never cacheable.
+      { headers: { "Cache-Control": "private, no-store" } }
+    );
+  } catch (err) {
+    return toChannelErrorResponse(err);
+  }
+}
+
+async function handleContainerPost(
+  request: NextRequest,
+  auth: WorkspaceAuthContext
+) {
   try {
     const input = await parseJson(request, ChannelCreateSchema);
-    const ctx = buildChannelContext(auth);
-    const channel = await createChannel(ctx, input);
+    const channel = await createChannel(buildChannelContext(auth), input);
     return NextResponse.json({ channel }, { status: 201 });
   } catch (err) {
     return toChannelErrorResponse(err);
   }
 }
 
-// ⚠ `minRole: "guest"` — a guest reaches the channel LISTING (INVARIANTS §4A,
-// §2B). The real gate is the per-channel membership fence in the service layer
-// (`repository-visibility.ts › visibleChannelsOr` hides channels the caller is
-// not a member of); the workspace floor is only a tripwire. POST (create) stays
-// member+ so a guest cannot mint channels.
-export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
-export const POST = withWorkspaceAuth(handlePost, { minRole: "member" });
+/**
+ * POST `?scope=account` — "New channel": a solo `kind='link'` CONTAINER plus one
+ * private channel inside it. The channel half is the shared `createChannel`; what
+ * this scope adds is the container mint.
+ *
+ * ⚠ **DELIBERATELY NOT `sessionOnly`** (Samuel's ruling, 2026-08-24), matching
+ * `POST /api/workspaces`. An agent token MAY create a home channel — that is the
+ * point of a channel you are alone in — because it mints nothing that reaches
+ * another person. The write that DOES is `POST /api/home/links`, and that one is
+ * session-gated.
+ */
+async function handleAccountPost(
+  request: NextRequest,
+  { userId }: { userId: string }
+) {
+  try {
+    const input = await parseJson(request, HomeChannelCreateSchema);
+    return NextResponse.json(await createHomeChannel(userId, input), {
+      status: 201,
+      headers: { "Cache-Control": "private, no-store" },
+    });
+  } catch (err) {
+    return toChannelErrorResponse(err);
+  }
+}
+
+const containerGet = withWorkspaceAuth(handleContainerGet, { minRole: "guest" });
+const accountGet = withUserAuth(handleAccountGet);
+const containerPost = withWorkspaceAuth(handleContainerPost, {
+  minRole: "member",
+});
+const accountPost = withUserAuth(handleAccountPost);
+
+/**
+ * ⚠ **THE SCOPE IS PARSED BEFORE AUTH, AND IT MUST BE** — it is what CHOOSES the
+ * wrapper, so it cannot be read inside one. That is safe because it leaks nothing:
+ * the value is a closed two-member enum over no identifier, and a bad one answers
+ * 400 to an unauthenticated caller exactly as it does to a member.
+ */
+function scopeOf(request: NextRequest) {
+  return parseQuery(request.nextUrl.searchParams, ChannelListQuerySchema, [
+    "scope",
+  ]).scope;
+}
+
+type WrappedHandler = (
+  request: NextRequest,
+  context: RouteContextArg
+) => Promise<Response | NextResponse>;
+
+function dispatch(
+  request: NextRequest,
+  context: RouteContextArg,
+  container: WrappedHandler,
+  account: WrappedHandler
+): Promise<Response | NextResponse> {
+  let scope: "container" | "account";
+  try {
+    scope = scopeOf(request);
+  } catch (err) {
+    return Promise.resolve(toChannelErrorResponse(err));
+  }
+  return (scope === "account" ? account : container)(request, context);
+}
+
+export function GET(request: NextRequest, context: RouteContextArg) {
+  return dispatch(request, context, containerGet, accountGet);
+}
+
+export function POST(request: NextRequest, context: RouteContextArg) {
+  return dispatch(request, context, containerPost, accountPost);
+}

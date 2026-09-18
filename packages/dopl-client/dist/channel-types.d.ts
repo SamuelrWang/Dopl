@@ -14,6 +14,7 @@
  * in `channel.ts`.
  */
 import type { ChannelEscalationFields } from "./escalation-types.js";
+import type { ChannelContainer } from "./types.js";
 /**
  * ⚠ **THE TEN CLOSED SETS AND THE TELEMETRY SHAPE BELOW ARE DECLARED IN
  * `@dopl/contracts` AND RE-EXPORTED HERE UNDER THIS PACKAGE'S OWN NAMES**
@@ -75,6 +76,13 @@ export interface Channel {
      * throws on a row minted before the column existed.
      */
     infoCard?: ChannelInfoCard;
+    /**
+     * 🔒 The channel's CONTAINER — on every row of BOTH scopes of
+     * `GET /api/channels` (R-26 (b)), which is what lets the account scope answer
+     * workspaces and home channels in ONE shape. ⚠ OPTIONAL here, NOT on the
+     * server, for `infoCard`'s reason; see {@link ChannelContainer} for the rest.
+     */
+    container?: ChannelContainer;
 }
 import type { ChannelDelivery, ChannelWakeVerdict } from "./delivery-types.js";
 export type { ChannelDelivery, ChannelWakeVerdict };

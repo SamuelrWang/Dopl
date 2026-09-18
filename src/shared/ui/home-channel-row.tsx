@@ -25,7 +25,7 @@ import {
  *
  * ⚠ **THE PROPS ARE ANSWERS, NOT A PAYLOAD.** `channelTitle`, `channelPeople`
  * and `hasLinkOut` stay in the SPA with `HomeRow`; this component never learns
- * what a `HomeChannel` is, so the marketing scene can hand it scripted facts
+ * what a `Channel` row is, so the marketing scene can hand it scripted facts
  * without pulling a wire type or a cache rule into the Next tree.
  *
  * 🚫 **NO DERIVATION MAY MOVE IN HERE.** The `?? EMPTY_X` cache-shape fallbacks

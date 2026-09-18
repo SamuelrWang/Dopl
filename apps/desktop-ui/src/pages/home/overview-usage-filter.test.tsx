@@ -4,7 +4,11 @@ import { TEMPLATE_NAME_TEXT } from "@/features/agent-templates/components/templa
 import { NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import { USER_ID, bridgeCalls, installBridge } from "#/test-utils/bridge";
-import { renderHome, routes } from "./home-test-harness";
+import {
+  isAccountChannels,
+  renderHome,
+  routes,
+} from "./home-test-harness";
 import { CHANNEL_ID } from "./home-test-ids";
 import { monthKey, shiftMonthKey, monthLabel } from "./overview-usage-filter";
 
@@ -77,14 +81,15 @@ describe("the /home Usage histogram controls", () => {
    * *"all channels / specific channels / just desktop agent usage"*)** — in that
    * order, because Desktop agent is not a channel and must not sit among them.
    *
-   * ⚠ **THE CHANNEL ROWS ARE `GET /api/home/channels`' — THE LEFT PANE'S OWN
-   * READ.** `useApiQuery` keys on the path, so the dropdown is a cache hit and
-   * costs no request; the fixture's one channel is the row the pane shows.
+   * ⚠ **THE CHANNEL ROWS ARE `GET /api/channels?scope=account`' — THE LEFT
+   * PANE'S OWN READ, through the SAME G3 filter (`home-rows.ts › homeChannels`).**
+   * The hook keys on path + params, so the dropdown is a cache hit and costs no
+   * request; the fixture's one channel is the row the pane shows.
    */
   it("lists All channels, every home channel, then Desktop agent — and adds no read", async () => {
     renderHome();
     const before = bridgeCalls(apiRequest).filter(
-      (call) => call.path.split("?")[0] === "/api/home/channels"
+      (call) => isAccountChannels(call.path)
     ).length;
     await openScope();
 
@@ -97,7 +102,7 @@ describe("the /home Usage histogram controls", () => {
     ]);
     // ⚠ AND THE DEFAULT IS `All channels` — the trigger says so before it opens.
     expect(bridgeCalls(apiRequest).filter(
-      (call) => call.path.split("?")[0] === "/api/home/channels"
+      (call) => isAccountChannels(call.path)
     ).length).toBe(before);
   });
 

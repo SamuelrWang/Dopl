@@ -134,10 +134,34 @@ describe("D: the parser is pinned against hand-measured floors", () => {
       UNPARSED,
     ],
     [
-      "an exported FUNCTION DECLARATION is <unparsed>, never null",
+      // 🔒 **THIS CASE FLIPPED IN WAVE 3 (R-26) AND THE FLIP IS THE POINT.** It
+      // asserted `<unparsed>` — "the parser cannot read a dispatcher, and says
+      // so loudly" — which was the right answer while no such route existed.
+      // `/api/channels` is one now (the SCOPE parameter chooses the WRAPPER), so
+      // the parser learned the shape and `guest` is the TRUE floor here. The
+      // pin moved because the parser reads MORE, never because it was softened:
+      // the three cases below are the new `<unparsed>` / `<dynamic>` edges.
+      "an exported FUNCTION DECLARATION over ONE wrapped local reads its floor",
       `${WRAPPER}
        const inner = withWorkspaceAuth(async () => null, { minRole: "guest" });
        export async function GET(req: Request) { return inner(req); }`,
+      "GET",
+      "guest",
+    ],
+    [
+      "a dispatcher over TWO DISAGREEING workspace floors is <dynamic>, never a pick",
+      `${WRAPPER}
+       const a = withWorkspaceAuth(async () => null, { minRole: "guest" });
+       const b = withWorkspaceAuth(async () => null, { minRole: "admin" });
+       export function GET(req: Request) { return req ? a(req) : b(req); }`,
+      "GET",
+      "<dynamic>",
+    ],
+    [
+      "a dispatcher naming a local defined in ANOTHER module is still <unparsed>",
+      `${WRAPPER}
+       import { inner } from "./elsewhere";
+       export function GET(req: Request) { return inner(req); }`,
       "GET",
       UNPARSED,
     ],

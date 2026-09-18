@@ -41,7 +41,7 @@ export const POST = withUserAuth(
     try {
       const input = await parseJson(request, HomeLinkMintSchema);
       // ⚠ `private, no-store` — the body carries the single-use claim URL, the
-      // same credential class the sibling `POST /api/home/channels` and the GET
+      // same credential class the account-scope create and the GET
       // above both guard. A shared cache MUST NOT retain an invitation token.
       return NextResponse.json(
         await mintContainerLink(userId, input.workspaceId, input),
@@ -53,7 +53,7 @@ export const POST = withUserAuth(
   },
   // sessionOnly: mints an account-entry credential, same class as
   // `POST /api/workspaces/[workspaceSlug]/join-link`. ⚠ Unlike its sibling
-  // `POST /api/home/channels`, which an agent MAY call — this one reaches a
+  // `POST /api/channels?scope=account`, which an agent MAY call — this one reaches a
   // person, and that is the line.
   { sessionOnly: true }
 );

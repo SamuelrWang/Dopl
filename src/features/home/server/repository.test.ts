@@ -9,7 +9,6 @@
  *    forever, with the transcript split across them. So what is pinned is that
  *    the intersection happens in the DATABASE, over every row.
  *  - `listContainerChannels` — the two filters it must NOT carry.
- *  - `listLinksByWorkspaces` — the chip read: bounded, named columns.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -17,11 +16,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
 
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import {
-  findPairContainer,
-  listContainerChannels,
-  listLinksByWorkspaces,
-} from "./repository";
+import { findPairContainer, listContainerChannels } from "./repository";
 
 const A = "aaaaaaaa-1111-4111-8111-111111111111";
 const B = "bbbbbbbb-2222-4222-8222-222222222222";
@@ -193,33 +188,6 @@ describe("listContainerChannels", () => {
   });
 });
 
-describe("listLinksByWorkspaces", () => {
-  it("is bounded and selects NAMED COLUMNS, never a star", async () => {
-    primeSupabase([]);
-    await listLinksByWorkspaces([WS], 200);
-
-    expect(rec.tables).toEqual(["channel_links"]);
-    expect(rec.select).not.toBe("*");
-    expect(rec.select).toContain("workspace_id");
-    expect(rec.select).toContain("token");
-    expect(rec.filters).toEqual([
-      ["workspace_id", [WS]],
-      ["revoked_at", null],
-    ]);
-    expect(rec.limit).toBe(200);
-  });
-
-  it("keys the first open link per container", async () => {
-    primeSupabase([
-      { id: "link-1", workspace_id: WS },
-      { id: "link-2", workspace_id: WS },
-    ]);
-    expect((await listLinksByWorkspaces([WS], 200)).get(WS)?.id).toBe("link-1");
-  });
-
-  it("short-circuits on an empty id list", async () => {
-    primeSupabase([]);
-    expect((await listLinksByWorkspaces([], 200)).size).toBe(0);
-    expect(rec.tables).toEqual([]);
-  });
-});
+// ⚠ **`listLinksByWorkspaces` MOVED TO `channels/server/repository-list-extras.ts`
+// IN WAVE 3 (R-26)** — the chip is `Channel.linkOut` now, read by the ONE list
+// projection. Its cases moved with it, unchanged.

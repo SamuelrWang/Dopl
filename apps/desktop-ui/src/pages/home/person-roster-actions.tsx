@@ -1,5 +1,8 @@
 import { PanelHeading } from "@/features/channels/components/bits";
-import { EMPTY_ROLE, type HomeChannel } from "@/features/home/types";
+import {
+  EMPTY_WORKSPACE_ROLE,
+  type Channel,
+} from "@/features/channels/types";
 import { meetsMinRole } from "@/features/workspaces/types";
 import { AddPersonDialog } from "./add-person-dialog";
 import { LinkOutPanel } from "./link-out-panel";
@@ -36,13 +39,19 @@ import { LinkOutPanel } from "./link-out-panel";
 export function PersonRosterActions({
   homeChannel,
 }: {
-  homeChannel: HomeChannel;
+  homeChannel: Channel;
 }) {
-  const { linkOut } = homeChannel;
-  // ⚠ §8 STALE-CACHE, spelled inline: a payload cached by the previous bundle
-  // carries no `role` key, and `EMPTY_ROLE` (rank 0) takes the button off for
-  // one paint rather than offering a mint the server would refuse.
-  const canAddPerson = meetsMinRole(homeChannel.role ?? EMPTY_ROLE, "member");
+  // ⚠ `?? null` INLINE (§8): `linkOut` is one of the projection's new keys, and
+  // `undefined` must read as "no invitation out", never as one.
+  const linkOut = homeChannel.linkOut ?? null;
+  // ⚠ **THE WORKSPACE ROLE, NOT `Channel.role`** — minting is floored on
+  // `workspace_members.role`, which is the only ladder that has a `guest` rung.
+  // ⚠ §8 STALE-CACHE, spelled inline: `EMPTY_WORKSPACE_ROLE` (rank 0) takes the
+  // button off for one paint rather than offering a mint the server would refuse.
+  const canAddPerson = meetsMinRole(
+    homeChannel.myWorkspaceRole ?? EMPTY_WORKSPACE_ROLE,
+    "member"
+  );
 
   if (linkOut) {
     return (

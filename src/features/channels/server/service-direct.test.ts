@@ -22,9 +22,11 @@ vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
 vi.mock("./repository-agents");
 vi.mock("./service-reads");
+// ⚠ `getChannel` MOVED TO `service-list.ts` (R-26) — the one row projection.
+vi.mock("./service-list");
 
 import * as repo from "./repository";
-import * as reads from "./service-reads";
+import * as list from "./service-list";
 import { createChannel, deleteChannel } from "./service-writes";
 import { addMember, removeMember } from "./service-writes-members";
 import {
@@ -92,8 +94,8 @@ beforeEach(() => {
   vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
     uid === USER ? memberRow(USER, "owner") : null
   );
-  vi.mocked(reads.getChannel).mockResolvedValue(
-    {} as Awaited<ReturnType<typeof reads.getChannel>>
+  vi.mocked(list.getChannel).mockResolvedValue(
+    {} as Awaited<ReturnType<typeof list.getChannel>>
   );
 });
 
@@ -156,7 +158,7 @@ describe("createChannel — direct branch", () => {
     // Live row (deleted_at null) never revived; intact roster never touched.
     expect(repo.reviveChannel).not.toHaveBeenCalled();
     expect(repo.insertMember).not.toHaveBeenCalled();
-    expect(reads.getChannel).toHaveBeenCalledWith(ctx, "dm-existing");
+    expect(list.getChannel).toHaveBeenCalledWith(ctx, "dm-existing");
   });
 
   it("revives a soft-deleted DM (same id) and restores missing member rows", async () => {
@@ -184,7 +186,7 @@ describe("createChannel — direct branch", () => {
       .mock.calls.map((c) => [c[0].user_id, c[0].role]);
     expect(roles).toContainEqual([USER, "owner"]);
     expect(roles).toContainEqual([PEER, "member"]);
-    expect(reads.getChannel).toHaveBeenCalledWith(ctx, "dm-deleted");
+    expect(list.getChannel).toHaveBeenCalledWith(ctx, "dm-deleted");
   });
 
   it("revive leaves existing member rows untouched (no duplicate inserts)", async () => {
@@ -259,7 +261,7 @@ describe("createDirectChannel — 23505 convergence (B4)", () => {
     await createChannel(ctx, { direct: true, memberUserId: PEER });
 
     expect(repo.reviveChannel).toHaveBeenCalledWith(WS, "dm-deleted");
-    expect(reads.getChannel).toHaveBeenCalledWith(ctx, "dm-deleted");
+    expect(list.getChannel).toHaveBeenCalledWith(ctx, "dm-deleted");
   });
 
   it("a slug race with no matching pair surfaces as a 409, not a generic 500", async () => {
@@ -366,11 +368,11 @@ describe("reopenDirectChannel — an already-torn LIVE pair self-heals", () => {
     );
     // Stand-in for the real visibility gate: a private channel with no
     // membership row for the caller reads as not-found.
-    vi.mocked(reads.getChannel).mockImplementation(async (c, ref) => {
+    vi.mocked(list.getChannel).mockImplementation(async (c, ref) => {
       if (!(await repo.findMembership(ref, c.userId))) {
         throw new ChannelNotFoundError(ref);
       }
-      return {} as Awaited<ReturnType<typeof reads.getChannel>>;
+      return {} as Awaited<ReturnType<typeof list.getChannel>>;
     });
 
     await expect(

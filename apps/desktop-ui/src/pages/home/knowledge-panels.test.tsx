@@ -10,13 +10,14 @@ import {
   installBridge,
   ok,
 } from "#/test-utils/bridge";
-import type { HomeChannelsPayload } from "@/features/home/types";
+import type { Channel, ChannelListPayload } from "@/features/channels/types";
 import type { KnowledgeBaseList } from "@/features/knowledge/client/api";
 import {
   CONTAINER_BASES,
   HOME,
   HOME_BASES,
   LINK_WORKSPACE_ID,
+  isAccountChannels,
   knowledgeBases,
   renderHome,
   routes,
@@ -26,9 +27,9 @@ import {
  * /home → KNOWLEDGE, END TO END THROUGH THE REAL PAGE.
  *
  * ⚠ TWO SECTIONS, NO PILL (Samuel's ruling 2026-08-27). This file was written
- * against THREE scopes behind a `SelectMenu`; every assertion that drove that
- * pill is gone, and the per-channel private scope it selected is gone with it.
- * The shelf's own suite is `knowledge-panels-shelf.test.tsx`.
+ * against THREE scopes behind a `SelectMenu`; every assertion that drove that pill
+ * is gone, and the per-channel private scope it selected with it. The shelf's own
+ * suite is `knowledge-panels-shelf.test.tsx`.
  *
  * ⚠ MOUNTED THROUGH `HomePage`, NEVER THE PANEL. Three of the things this file
  * has to prove are properties of the PAGE, not of the component: that the pane
@@ -138,7 +139,7 @@ describe("the two sections", () => {
       kb.some(
         (c) =>
           c.opts.workspaceId === LINK_WORKSPACE_ID &&
-          c.path.includes(`channelId=${HOME.channels[0].channelId}`)
+          c.path.includes(`channelId=${HOME.channels[0].id}`)
       )
     ).toBe(true);
   });
@@ -404,7 +405,7 @@ describe("creating", () => {
       const post = lastPost();
       expect(post?.opts.workspaceId).toBe(LINK_WORKSPACE_ID);
       expect(post?.opts.body).toMatchObject({
-        shareToChannelId: HOME.channels[0].channelId,
+        shareToChannelId: HOME.channels[0].id,
         // ⚠ `private` ON THE WORKSPACE AXIS. The GRANT carries the audience;
         // private + a `visible` grant is exactly "readable in this channel and
         // nowhere else". A `public` container base would also be readable by
@@ -458,24 +459,23 @@ const OTHER_BASE = {
  * renders nowhere, so without it this fixture would prove nothing.
  */
 function installTwoChannels(): void {
-  const second = {
+  // ⚠ ONE ROW TYPE (R-26): the id IS the channel's, the address its `container`.
+  const second: Channel = {
     ...HOME.channels[0],
+    id: OTHER_CHANNEL,
     workspaceId: OTHER_WS,
-    workspaceSegment: "link-dana-bb22",
-    channelId: OTHER_CHANNEL,
+    container: { id: OTHER_WS, kind: "link", segment: "link-dana-bb22" },
     name: "Dana Ruiz",
     peers: [],
-    peer: null,
-    linkOut: null,
   };
-  const two: HomeChannelsPayload = {
+  const two: ChannelListPayload = {
     channels: [HOME.channels[0], second],
     pendingLinks: [],
   };
   apiRequest.mockImplementation(
     (path: string, opts: BridgeRequestOpts = {}): Promise<BridgeResponse> => {
       const bare = path.split("?")[0];
-      if (bare === "/api/home/channels") return Promise.resolve(ok(two));
+      if (isAccountChannels(path)) return Promise.resolve(ok(two));
       if (bare === "/api/knowledge/bases") {
         return opts.workspaceId === OTHER_WS
           ? Promise.resolve(

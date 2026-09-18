@@ -13,10 +13,12 @@ import { EMPTY_INFO_CARD } from "@/features/channels/info-card";
 // with the channel ceiling (items 12, 13, 14) and this was its last reference here.
 import type {
   Channel,
+  ChannelListPayload,
+  ChannelPeer,
+  ChannelPendingLink,
   ChannelMember,
   ChannelThread,
 } from "@/features/channels/types";
-import type { HomeChannelsPayload, HomePeer } from "@/features/home/types";
 import {
   CHANNEL_ID,
   LINK_SEGMENT,
@@ -74,7 +76,7 @@ export {
 
 /** The default fixture's one peer. Exported so a multi-peer case extends the
  *  roster rather than restating it. */
-export const PRIYA: HomePeer = {
+export const PRIYA: ChannelPeer = {
   userId: "user-2",
   displayName: "Priya Shah",
   email: "priya@shahco.tax",
@@ -82,89 +84,34 @@ export const PRIYA: HomePeer = {
 };
 /** Second and third members, for the cap-is-gone cases (2026-08-26). ⚠ Their
  *  ORDER is the server's (`joined_at ASC`) — the client never re-sorts. */
-export const DANA: HomePeer = {
+export const DANA: ChannelPeer = {
   userId: "user-3",
   displayName: "Dana Ruiz",
   email: "dana@ruiz.co",
   avatarUrl: null,
 };
-export const OMAR: HomePeer = {
+export const OMAR: ChannelPeer = {
   userId: "user-4",
   displayName: "Omar Idris",
   email: "omar@idris.dev",
   avatarUrl: null,
 };
 
-/**
- * ⚠ **THE DEFAULT FIXTURE'S STAMPS MOVE WITH THE CLOCK SINCE 2026-09-15, AND THAT
- * IS A CONSEQUENCE OF SAMUEL'S THREE WELLS** (`channel-wells.ts`): the list files
- * a row by *"activity in the last 24 hours"* and **Earlier** is CLOSED by default,
- * so a fixture frozen at `2026-08-22` put every row of every home suite inside a
- * collapsed well — where the rows are UNMOUNTED, not hidden (INVARIANTS §5). The
- * two stamps were arbitrary dates; what they were ALWAYS standing in for is "this
- * channel is the one the operator is looking at", which is a RELATIVE fact.
- *
- * ⚠ **NO SUITE ASSERTS EITHER VALUE** — measured before moving them (nothing greps
- * `2026-08-22` / `2026-07-12`, and `formatChannelTimestamp`'s output is never
- * pinned). A case that wants an OLD row states its own age, as
- * `relationship-list.test.tsx`'s wells cases do.
- */
+/** ⚠ THE DEFAULT ROW'S STAMPS MOVE WITH THE CLOCK SINCE 2026-09-15 — see
+ *  {@link HOME}, which carries the wells argument behind that. */
 const MINUTES_AGO = new Date(Date.now() - 5 * 60_000).toISOString();
 /** ⚠ OLDER THAN THE CHANNEL, so `homeRows`' newest-first order is unchanged. */
 const HOUR_AGO = new Date(Date.now() - 60 * 60_000).toISOString();
 
-export const HOME: HomeChannelsPayload = {
-  channels: [
-    {
-      workspaceId: LINK_WORKSPACE_ID,
-      workspaceSegment: LINK_SEGMENT,
-      channelId: CHANNEL_ID,
-      topic: "",
-      // ⚠ `peer` IS `peers[0]` — the server derives it, so a fixture where the
-      // two disagree is a payload the API cannot emit.
-      peers: [PRIYA],
-      peer: PRIYA,
-      name: "Priya Shah",
-      createdAt: MINUTES_AGO,
-      lastMessageAt: MINUTES_AGO,
-      // ⚠ STILL ON THE FIXTURE THOUGH NOTHING RENDERS IT (2026-09-13) — the field
-      // is still on the wire, and `relationship-list.test.tsx` asserts its ABSENCE
-      // from the row, which needs a payload that actually carries it.
-      lastMessagePreview: "Three renewals over $1k before October",
-      // The default row is fully READ — the unread marks are opt-in per case, so
-      // no existing suite grows a dot or a badge it never asked about.
-      unread: false,
-      unreadMentions: 0,
-      // ⚠ NOT PINNED BY DEFAULT — the **Pinned** well is opt-in per case, so no
-      // existing suite grows a row in a well it never asked about.
-      myFavoritedAt: null,
-      // ⚠ **THE DEFAULT READER OWNS THIS CONTAINER** (F-343's field, 2026-09-17)
-      // — they minted it, which is what every suite predating the field assumed
-      // when /home hardcoded `"owner"`. A case about a GUEST or a MEMBER peer
-      // states its own role (`home-caller-role.test.tsx`), and a case about a
-      // payload cached BEFORE the field deletes the key outright (§8).
-      role: "owner",
-      linkOut: null,
-    },
-  ],
-  pendingLinks: [
-    {
-      id: "link-1",
-      url: "https://dopl.link/c/x7Kd92mQ",
-      label: null,
-      createdAt: HOUR_AGO,
-      expiresAt: "2026-08-28T09:00:00.000Z",
-      grantedRole: "guest",
-      maxUses: 1,
-      useCount: 0,
-      revokedAt: null,
-    },
-  ],
-};
-
-// ⚠ TYPED, so a rename of any `Channel` field the endpoint sends breaks THIS
-// fixture at compile time rather than leaving the §8 stale-cache suite green
-// against a payload the endpoint stopped sending (F-322 test-quality wave).
+/**
+ * 🔒 **THE ONE ROW TYPE (Wave 3, R-26 (b))** — what BOTH scopes of
+ * `GET /api/channels` answer with. `HomeChannel` and its payload are deleted;
+ * one fixture shape on this page because there is one projection.
+ *
+ * ⚠ TYPED, so a rename of any field the endpoint sends breaks THIS fixture at
+ * compile time rather than leaving the §8 stale-cache suite green against a
+ * payload the endpoint stopped sending (F-322 test-quality wave).
+ */
 export const CHANNEL: Channel = {
   id: CHANNEL_ID,
   workspaceId: LINK_WORKSPACE_ID,
@@ -180,6 +127,8 @@ export const CHANNEL: Channel = {
   updatedAt: "2026-08-22T14:19:00.000Z",
   memberCount: 2,
   lastMessageAt: "2026-08-22T14:19:00.000Z",
+  // ⚠ THE CHANNEL ROLE (`owner|member`), NOT the container's — `myWorkspaceRole`
+  // below is the other ladder, and the two are deliberately two names.
   role: "owner",
   isMember: true,
   lastReadAt: null,
@@ -191,8 +140,52 @@ export const CHANNEL: Channel = {
   // The card as shipped — nothing hidden, nothing added. Suites that exercise
   // the × or the add row override it (`home-info-tab.test.tsx`).
   infoCard: EMPTY_INFO_CARD,
+  // ── `ChannelRowExtras` — ON EVERY ROW OF BOTH SCOPES ───────────────────────
+  // ⚠ A field present under one scope and absent under the other is the fork
+  // R-26 removed; a fixture that carried them only on the account payload would
+  // re-state that fork in the tests.
+  container: { id: LINK_WORKSPACE_ID, kind: "link", segment: LINK_SEGMENT },
+  // ⚠ **THE DEFAULT READER OWNS THIS CONTAINER** (F-343's field) — they minted
+  // it. A case about a GUEST or a MEMBER peer states its own role
+  // (`home-caller-role.test.tsx`); one about a cached payload deletes the key (§8).
+  myWorkspaceRole: "owner",
+  peers: [PRIYA],
+  mentionCount: 0,
+  linkOut: null,
   // ⚠ `agentPosture` (2026-09-06, items 12/13/14) and `defaultResponderAgentName` (2026-09-07,
   // items 10/11) BOTH LEFT THIS FIXTURE with their fields.
+};
+
+/**
+ * THE ACCOUNT PAYLOAD — `GET /api/channels?scope=account`, which is what /home
+ * reads. ⚠ **DERIVED FROM {@link CHANNEL}, not restated**: one channel seen
+ * through two scopes, and two hand-written copies is how fixtures come to
+ * disagree about a row the product says is one row.
+ *
+ * ⚠ **ONLY THE STAMPS MOVE, AND THAT IS SAMUEL'S THREE WELLS**
+ * (`channel-wells.ts`): the list files a row by *"activity in the last 24
+ * hours"* and **Earlier** is CLOSED by default, so the July/August stamps above
+ * would put every row of every home suite inside a collapsed well — where the
+ * rows are UNMOUNTED, not hidden (INVARIANTS §5). ⚠ NO SUITE ASSERTS EITHER
+ * VALUE (measured); a case that wants an OLD row states its own age.
+ */
+export const HOME: ChannelListPayload & {
+  pendingLinks: ChannelPendingLink[];
+} = {
+  channels: [{ ...CHANNEL, createdAt: MINUTES_AGO, lastMessageAt: MINUTES_AGO }],
+  pendingLinks: [
+    {
+      id: "link-1",
+      url: "https://dopl.link/c/x7Kd92mQ",
+      label: null,
+      createdAt: HOUR_AGO,
+      expiresAt: "2026-08-28T09:00:00.000Z",
+      grantedRole: "guest",
+      maxUses: 1,
+      useCount: 0,
+      revokedAt: null,
+    },
+  ],
 };
 
 /** The container's roster, as `GET /api/channels/{id}/members` answers it — the
@@ -305,9 +298,6 @@ export function routes(
     return Promise.resolve(ok({ base: KB_PRIVATE, folders: [], entries: [] }));
   }
   if (bare === "/api/workspaces") return Promise.resolve(ok(WORKSPACES));
-  if (bare === "/api/home/channels") {
-    return Promise.resolve(ok(HOME));
-  }
   if (bare === "/api/home/links") {
     return Promise.resolve(
       ok({ link: { ...HOME.pendingLinks[0], id: "link-2" } })
@@ -316,8 +306,14 @@ export function routes(
   if (bare.startsWith("/api/home/links/") && opts.method === "DELETE") {
     return Promise.resolve(noContent());
   }
+  // 🔒 **ONE PATH, TWO SCOPES (R-26 (b))** — `?scope=account` is /home's list and
+  // `?scope=container` is the record pane's. `bare` drops the query, so the SCOPE
+  // is what tells them apart; matching on the bare path alone would serve the
+  // account payload to the surface and put /home's rows in a container's list.
   if (bare === "/api/channels") {
-    return Promise.resolve(ok({ channels: [CHANNEL] }));
+    return Promise.resolve(
+      ok(isAccountChannels(path) ? HOME : { channels: [CHANNEL] })
+    );
   }
   // ⚠ THE INFO TAB'S TWO REUSED READS. They are the SAME calls the channels
   // surface makes with the same arguments, so in the app they share one cache
@@ -347,75 +343,84 @@ export function routes(
   return accountRoutes(bare);
 }
 
+/**
+ * WHICH SCOPE A CALL NAMES — the one thing `path.split("?")[0]` throws away.
+ * ⚠ **EVERY SUITE THAT ROUTES OR COUNTS `/api/channels` CALLS USES THIS**, read
+ * and write alike: `?scope=account` is /home's list and the "New channel" POST,
+ * `?scope=container` the channels surface's own. A hand-written
+ * `includes("scope=account")` is the same rule spelled a second way.
+ */
+export function isAccountChannels(path: string): boolean {
+  const [bare, query = ""] = path.split("?");
+  return (
+    bare === "/api/channels" &&
+    new URLSearchParams(query).get("scope") === "account"
+  );
+}
+
 /** A channel with nobody in it yet — the state "Add person" acts on. */
-export const SOLO_CHANNEL: HomeChannelsPayload["channels"][number] = {
+export const SOLO_CHANNEL: Channel = {
   ...HOME.channels[0],
   name: "Q3 Fundraise",
   peers: [],
-  peer: null,
   lastMessageAt: null,
-  lastMessagePreview: null,
 };
 
 /** UNREAD MENTIONS on the default channel — the `@ N` pill's fixture
  *  (2026-09-13). ⚠ `unread` is TRUE alongside: a channel with unread mentions has
  *  unread messages by construction, and the row must still show ONE mark. */
-export const MENTIONED_CHANNEL: HomeChannelsPayload["channels"][number] = {
+export const MENTIONED_CHANNEL: Channel = {
   ...HOME.channels[0],
   unread: true,
-  unreadMentions: 3,
+  mentionCount: 3,
 };
 
 /** UNREAD, BUT NOBODY TAGGED ME — the plain-dot fixture (2026-09-13). */
-export const UNREAD_CHANNEL: HomeChannelsPayload["channels"][number] = {
+export const UNREAD_CHANNEL: Channel = {
   ...HOME.channels[0],
   unread: true,
-  unreadMentions: 0,
+  mentionCount: 0,
 };
 
 /** THREE people in one container — the shape the retired two-member cap made
  *  unrepresentable (Samuel, 2026-08-26). The avatar stack, the counted title and
  *  the dropped Email row all key off this. */
-export const CROWDED_CHANNEL: HomeChannelsPayload["channels"][number] = {
+export const CROWDED_CHANNEL: Channel = {
   ...HOME.channels[0],
   peers: [PRIYA, DANA, OMAR],
-  peer: PRIYA,
 };
 
 /**
- * 🔒 THE STALE-CACHE SHAPE (INVARIANTS §8) — a payload written by a bundle that
- * predates `peers`, served from IndexedDB on the FIRST PAINT after the upgrade.
- * It HAS `peer` and LACKS `peers`, which is why the client's fallback is a
- * two-field MERGE and not a plain `?? EMPTY_PEERS`: falling back to "nobody"
- * would paint every one of the operator's channels as solo.
+ * 🔒 THE STALE-CACHE SHAPE (INVARIANTS §8) — a cached payload written by a bundle
+ * that predates one of the row projection's keys, served from IndexedDB on the
+ * FIRST PAINT after an upgrade.
  *
  * ⚠ THE CAST IS THE POINT AND IS NOT LAZINESS. The wire type is non-optional and
- * is RIGHT — the API always sends the key now. `delete` reproduces the only
- * moment where it is absent, and typing the fixture as `HomeChannel` would make
- * that moment unrepresentable in the very test written to cover it.
+ * is RIGHT — the API always sends every key now. `delete` reproduces the only
+ * moment where one is absent, and typing the fixture as `Channel` would make that
+ * moment unrepresentable in the very test written to cover it.
  */
 export function staleCachedChannel(
   /**
-   * WHICH KEY THE OLD BUNDLE DID NOT WRITE. Defaults to `peers`, the shape this
-   * helper was minted for; `role` is the 2026-09-17 one (F-343), whose fallback
-   * is a plain `?? EMPTY_ROLE` and whose fail-safe direction is DOWN.
+   * WHICH KEY THE OLD BUNDLE DID NOT WRITE. Defaults to `peers`; the other two
+   * covered are `myWorkspaceRole` (F-343, fallback `?? EMPTY_WORKSPACE_ROLE`,
+   * fail-safe direction DOWN) and `mentionCount` (`?? 0`, which hides the pill
+   * rather than printing `@ NaN`).
    *
    * ⚠ ONE HELPER RATHER THAN A SECOND FIXTURE: §8's rule is that the test
    * DELETES the key — not `null`, not `{}` — and two hand-rolled copies of that
    * `delete` is how one of them quietly becomes `undefined` instead.
    */
-  key: keyof HomeChannelsPayload["channels"][number] = "peers"
-): HomeChannelsPayload["channels"][number] {
+  key: keyof Channel = "peers"
+): Channel {
   const stale: Record<string, unknown> = { ...HOME.channels[0] };
-  delete stale[key];
-  return stale as unknown as HomeChannelsPayload["channels"][number];
+  delete stale[key as string];
+  return stale as unknown as Channel;
 }
 
 /** An invitation already out on that channel — what the chip and the Link out
  *  section render from. ⚠ A BOUND link is never also a `pendingLinks` row. */
-export const LINK_OUT: NonNullable<
-  HomeChannelsPayload["channels"][number]["linkOut"]
-> = {
+export const LINK_OUT: ChannelPendingLink = {
   id: "link-bound-1",
   url: "https://dopl.link/c/bound99",
   label: null,
@@ -429,10 +434,11 @@ export const LINK_OUT: NonNullable<
   revokedAt: null,
 };
 
-/** Serve a different channels payload; everything else routes normally. */
-export function withHome(payload: HomeChannelsPayload) {
+/** Serve a different ACCOUNT payload; everything else — the container-scope list
+ *  included — routes normally. */
+export function withHome(payload: ChannelListPayload) {
   return (path: string, opts: BridgeRequestOpts = {}) =>
-    path.split("?")[0] === "/api/home/channels"
+    isAccountChannels(path)
       ? Promise.resolve(ok(payload))
       : (routes(path, opts) ?? Promise.reject(new Error(`unexpected: ${path}`)));
 }

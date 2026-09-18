@@ -3,7 +3,10 @@ import { CopyButton } from "@/shared/ui/copy-button";
 import { RAISED_WELL } from "@/shared/ui/wells";
 import { formatChannelTimestamp, formatDate } from "@/shared/lib/format-time";
 import { errorMessage } from "#/components/page-states";
-import type { HomePendingLink } from "@/features/home/types";
+// ⚠ **`ChannelPendingLink` SINCE WAVE 3 (R-26)** — `HomePendingLink` was the
+// same shape under a second name; it lives in `shared/links/types.ts` now and
+// is re-exported by the channels barrel with the rest of the row projection.
+import type { ChannelPendingLink } from "@/features/channels/types";
 import { displayUrl, linkGrantLabel, linkUsesLabel } from "./home-rows";
 import { useRevokeHomeLink } from "./home-writes";
 
@@ -36,7 +39,7 @@ import { useRevokeHomeLink } from "./home-writes";
  * five-file list and this file was not on it; the list is derived from the
  * directory now, so the enforcement mechanism covers what the ruling always did.
  */
-export function LinkOutPanel({ link }: { link: HomePendingLink }) {
+export function LinkOutPanel({ link }: { link: ChannelPendingLink }) {
   const revoke = useRevokeHomeLink();
 
   return (
@@ -90,7 +93,7 @@ export function LinkOutPanel({ link }: { link: HomePendingLink }) {
  * bound to the channel it adds a person to. This renders the tail that predates
  * that, and it goes away on its own as those tokens are claimed or expire.
  */
-export function PendingLinkCard({ link }: { link: HomePendingLink }) {
+export function PendingLinkCard({ link }: { link: ChannelPendingLink }) {
   return (
     <div className="flex flex-1 items-center justify-center px-6">
       <div className="bento w-[380px] rounded-[14px] px-5 py-4">

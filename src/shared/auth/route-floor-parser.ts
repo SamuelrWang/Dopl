@@ -240,10 +240,46 @@ export function workspaceFloor(src: string, method: string): string | null {
   ).test(code);
   if (userAuthed) return null;
 
+  // ⚠ **THE SCOPE DISPATCHER (added Wave 3, R-26)** — `export function GET(req, ctx)
+  // { return dispatch(req, ctx, containerGet, accountGet); }`, over module-level
+  // locals each bound to a wrapper. `/api/channels` is the first of these because
+  // the SCOPE parameter chooses the WRAPPER, so the floor cannot be read off one
+  // call: `?scope=container` is `withWorkspaceAuth` and `?scope=account` is
+  // `withUserAuth`.
+  //
+  // ⚠ **IT ANSWERS THE WORKSPACE FLOOR AND SAYS NOTHING ABOUT THE OTHER ARM**,
+  // which is the question this parser asks. Every `withWorkspaceAuth` local the
+  // body names must AGREE; two different floors reachable from one export is a
+  // thing no reader could summarise, so it is `<dynamic>` rather than a pick.
+  const dispatcher = new RegExp(
+    `export\\s+(?:async\\s+)?function\\s+${method}\\s*\\(`
+  ).exec(code);
+  if (dispatcher) {
+    const body = balancedArgs(code, code.indexOf("{", dispatcher.index) + 1);
+    const floors = new Set<string>();
+    let sawUserAuth = false;
+    for (const bound of code.matchAll(
+      /(?:const|let|var)\s+(\w+)\s*=\s*with(WorkspaceAuth|UserAuth)\s*\(/g
+    )) {
+      if (!new RegExp(`\\b${bound[1]}\\b`).test(body)) continue;
+      if (bound[2] === "UserAuth") {
+        sawUserAuth = true;
+        continue;
+      }
+      floors.add(
+        minRoleIn(balancedArgs(code, bound.index + bound[0].length))
+      );
+    }
+    if (floors.size === 1) return [...floors][0];
+    if (floors.size > 1) return DYNAMIC;
+    // No workspace-wrapped arm at all: this method has no workspace floor, which
+    // is the literal truth and the same answer the mixed-wrapper branch gives.
+    if (sawUserAuth) return null;
+  }
+
   // Exported, and this file DOES use the wrapper, but not in a shape above —
-  // an assign-then-export, a function declaration, or a local helper composing
-  // it. Say so rather than answering `null`, which reads as "no workspace floor
-  // here".
+  // an assign-then-export, or a local helper composing it. Say so rather than
+  // answering `null`, which reads as "no workspace floor here".
   const exported =
     new RegExp(`export\\s+const\\s+${method}\\s*=`).test(code) ||
     new RegExp(`export\\s+(?:async\\s+)?function\\s+${method}\\s*\\(`).test(code);

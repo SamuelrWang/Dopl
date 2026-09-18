@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { installBridge } from "#/test-utils/bridge";
-import type { HomeChannelsPayload } from "@/features/home/types";
+import type { Channel, ChannelListPayload } from "@/features/channels/types";
 import {
   CROWDED_CHANNEL,
   HOME,
@@ -52,8 +52,8 @@ const CELL = ".w-\\[var\\(--home-list-w\\)\\]";
 
 /** One channel and no legacy link row, so a case owns the whole column. */
 function onlyChannel(
-  channel: HomeChannelsPayload["channels"][number]
-): HomeChannelsPayload {
+  channel: Channel
+): ChannelListPayload {
   return { channels: [channel], pendingLinks: [] };
 }
 
@@ -213,7 +213,7 @@ describe("the row's DESCRIPTION line", () => {
   });
 
   it("survives a cached payload written before `topic` existed", async () => {
-    // 🔒 INVARIANTS §8: `GET /api/home/channels` is IndexedDB-persisted with a 24h
+    // 🔒 INVARIANTS §8: `GET /api/channels?scope=account` is IndexedDB-persisted with a 24h
     // `gcTime`, so the first paint after this bundle ships reads entries with NO
     // such key. The read spells `?? ""`, so the row degrades to today's look
     // instead of printing `undefined` under the channel name.
@@ -269,10 +269,10 @@ describe("the row's UNREAD MARKS", () => {
   });
 
   /**
-   * 🔒 **THE STALE-CACHE CASE (INVARIANTS §8).** `GET /api/home/channels` is
+   * 🔒 **THE STALE-CACHE CASE (INVARIANTS §8).** `GET /api/channels?scope=account` is
    * IndexedDB-persisted with a 24h `gcTime`, so the FIRST PAINT after this bundle
    * ships serves entries written by the previous one — which have NEITHER new key.
-   * `unread` reads `?? false` and `unreadMentions` reads `?? 0`, so the row paints
+   * `unread` reads `?? false` and `mentionCount` reads `?? 0`, so the row paints
    * with no marks rather than printing `@ NaN` or dotting every row in the list.
    *
    * ⚠ THE CAST IS THE POINT. Both wire types are non-optional and are RIGHT; the
@@ -282,10 +282,12 @@ describe("the row's UNREAD MARKS", () => {
   it("paints no marks at all on a payload written before the fields existed", async () => {
     const stale: Record<string, unknown> = { ...MENTIONED_CHANNEL };
     delete stale.unread;
-    delete stale.unreadMentions;
+    // ⚠ `mentionCount` SINCE WAVE 3 (R-26) — the badge's field moved with the
+    // projection, and this fixture deletes the key the row actually reads.
+    delete stale.mentionCount;
     apiRequest.mockImplementation(
       withHome(
-        onlyChannel(stale as unknown as HomeChannelsPayload["channels"][number])
+        onlyChannel(stale as unknown as Channel)
       )
     );
     renderHome();

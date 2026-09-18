@@ -35,7 +35,14 @@ import {
 } from "./overview-tally";
 import { resolveUsageChannel } from "./overview-series-params";
 import * as repo from "./repository";
-import { HOME_CHANNEL_LIMIT } from "./service-reads";
+/**
+ * Containers the OVERVIEW tallies over. ⚠ **DECLARED HERE SINCE WAVE 3** — it was
+ * `service-reads.ts › HOME_CHANNEL_LIMIT`, the ceiling on the deleted home channel
+ * LIST, and two reads sharing a number they do not share a reason for is how one of
+ * them silently inherits the other's page size. A NON-REPORTING ceiling, on §9's
+ * sanctioned terms for this surface.
+ */
+const HOME_CONTAINER_TALLY_LIMIT = 200;
 
 /**
  * Everything behind the /home Overview face (2026-09-01).
@@ -226,7 +233,7 @@ async function resolveScope(userId: string): Promise<{
   names: Map<string, string>;
   channelContainers: Map<string, string>;
 }> {
-  const containers = await repo.listLinkContainers(userId, HOME_CHANNEL_LIMIT);
+  const containers = await repo.listLinkContainers(userId, HOME_CONTAINER_TALLY_LIMIT);
   const ids = containers.map((container) => container.id);
   // ⚠ THE NAME COMES FROM THE CHANNEL, NOT THE CONTAINER. A container's `slug`
   // is plumbing; `channels.name` is what every home surface titles a row by.

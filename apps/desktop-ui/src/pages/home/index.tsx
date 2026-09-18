@@ -7,7 +7,10 @@ import { isStandardWorkspace } from "@/features/workspaces/types";
 import { workspaceSegment } from "@/features/workspaces/url";
 import { Crossfade } from "@/shared/ui/crossfade";
 import type { WorkspaceLike } from "@/shared/layout/app-shell/workspace-types";
-import type { HomeChannelsPayload } from "@/features/home/types";
+// 🔒 **THE ONE CHANNEL LIST (R-26 (b))** — `GET /api/channels?scope=account`.
+// `GET /api/home/channels` and its hook are deleted; this page reads the same
+// cache entry, under the same key, as every other reader of that projection.
+import { useAccountChannels } from "@/features/channels/hooks/use-channels";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
 import home from "./home.module.css";
 import { useApiQuery } from "#/hooks/use-api-query";
@@ -24,10 +27,11 @@ import { HomePageSkeleton } from "./home-skeleton";
 import { HomePane, paneToken } from "./home-panes";
 import { useActivityJump } from "./use-activity-jump";
 // ⚠ THE UNREAD MARKS CLEAR THEMSELVES (2026-09-13) — the hook carries why it
-// watches the transcript's cache entry rather than this page's own click.
-import { useHomeUnreadRefresh } from "./use-home-unread-refresh";
+// watches the transcript's cache entry rather than this page's own click, and
+// why ONE cache still owes itself ONE invalidation.
+import { useHomeUnreadClear } from "./use-home-unread-clear";
 
-import { HOME_CHANNELS_PATH, channelRowId, homeRows } from "./home-rows";
+import { channelRowId, homeRows } from "./home-rows";
 import type { SearchItem } from "@/features/search/contracts";
 // ⚠ THE FACE VOCABULARY LIVES IN ITS OWN MODULE (2026-09-01) — see
 // `home-tabs.ts`, which carries the disjointness rule the prefixes rely on.
@@ -122,7 +126,10 @@ export default function HomePage() {
     { workspaces?: WorkspaceLike[] },
     WorkspaceLike[]
   >("/api/workspaces", { select: selectStandardWorkspaces });
-  const channelsQuery = useApiQuery<HomeChannelsPayload>(HOME_CHANNELS_PATH);
+  // ⚠ **THE RAW PAYLOAD, NOT `useChannels`' SELECTED ROWS** — /home also renders
+  // the caller's LEGACY unbound links, which have no channel to hang off. Same
+  // path, same params, so mounting it costs one request and one cache entry.
+  const channelsQuery = useAccountChannels();
   const identity = useQuery({
     queryKey: bootQueryKey(null),
     queryFn: ({ signal }) => fetchBoot(null, signal),
@@ -155,8 +162,8 @@ export default function HomePage() {
    */
   const selected =
     rows.find((row) => row.id === selectedId) ?? rows[0] ?? null;
-  useHomeUnreadRefresh(
-    selected?.kind === "channel" ? selected.channel.channelId : null
+  useHomeUnreadClear(
+    selected?.kind === "channel" ? selected.channel.id : null
   );
 
   const error = channelsQuery.error ?? workspacesQuery.error ?? identity.error;

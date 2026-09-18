@@ -130,3 +130,25 @@ export const AccountMessagesQuerySchema = z.object({
     .default(DEFAULT_MESSAGE_LIMIT),
 });
 export type AccountMessagesQuery = z.infer<typeof AccountMessagesQuerySchema>;
+
+/**
+ * 🔒 **THE SCOPE OF A CHANNEL LIST — R-26's parameter, and the whole of the
+ * collapse** (Samuel, 2026-09-17: *one endpoint*).
+ *
+ * `container` = today's list, fenced by membership of the named container.
+ * `account` = every container the caller is a member of, fenced by the USER.
+ *
+ * ⚠ **AN UNRECOGNISED VALUE IS A 400, NEVER A SILENT FALL-THROUGH** (§9) — a
+ * mistyped scope that quietly answered the narrower list is the failure mode a
+ * default would hide.
+ *
+ * ⚠ **ABSENT DEFAULTS TO `container`, WHICH IS WHAT EVERY EXISTING CALLER MEANS.**
+ * The SDK, the desktop and the MCP loopback all send no scope and all want the
+ * workspace list; making the parameter required would break them for no gain. The
+ * CLIENT sends it explicitly at both scopes anyway, so the two cache entries are
+ * distinct tuples.
+ */
+export const ChannelListQuerySchema = z.object({
+  scope: z.enum(["container", "account"]).optional().default("container"),
+});
+export type ChannelListQuery = z.infer<typeof ChannelListQuerySchema>;

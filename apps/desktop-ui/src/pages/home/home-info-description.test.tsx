@@ -9,6 +9,7 @@ import {
   HOME,
   MEMBERS,
   THREADS,
+  isAccountChannels,
   openChannelRecord,
   renderHome,
   routes,
@@ -46,7 +47,7 @@ function serve(topic: string): void {
   apiRequest.mockImplementation(
     (path: string, opts: BridgeRequestOpts = {}): Promise<BridgeResponse> => {
       const bare = path.split("?")[0];
-      if (bare === "/api/home/channels") return Promise.resolve(ok(HOME));
+      if (isAccountChannels(path)) return Promise.resolve(ok(HOME));
       if (bare === "/api/channels") {
         return Promise.resolve(
           ok({ channels: [{ ...CHANNEL, topic, infoCard: EMPTY_INFO_CARD }] })

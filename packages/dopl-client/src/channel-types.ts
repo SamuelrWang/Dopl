@@ -20,6 +20,7 @@
 // rule, the caps and the docblock stated ONCE, over there. ⚠ THE SESSION HEALTH
 // half is a THIRD on the same grounds (2026-09-01); see its own header.
 import type { ChannelEscalationFields } from "./escalation-types.js";
+import type { ChannelContainer } from "./types.js";
 
 /**
  * ⚠ **THE TEN CLOSED SETS AND THE TELEMETRY SHAPE BELOW ARE DECLARED IN
@@ -115,6 +116,13 @@ export interface Channel {
    * throws on a row minted before the column existed.
    */
   infoCard?: ChannelInfoCard;
+  /**
+   * 🔒 The channel's CONTAINER — on every row of BOTH scopes of
+   * `GET /api/channels` (R-26 (b)), which is what lets the account scope answer
+   * workspaces and home channels in ONE shape. ⚠ OPTIONAL here, NOT on the
+   * server, for `infoCard`'s reason; see {@link ChannelContainer} for the rest.
+   */
+  container?: ChannelContainer;
 }
 
 // ⚠ THE DELIVERY VOCABULARY LIVES IN `delivery-types.ts` (§1 split, 2026-09-02),

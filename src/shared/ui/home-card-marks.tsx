@@ -93,7 +93,7 @@ export function rowQuietInk(selected: boolean): string {
  * ⚠ **IT IS A COUNT, WHICH IS WHY IT MAY BE A BADGE AT ALL.** The channels
  * sidebar deliberately has no numeric badge (`channels/components/sidebar-rows.tsx`:
  * `Channel.unread` is a BOOLEAN and the wiring plan forbids inventing a number
- * for it) — this one is backed by a real aggregate, `HomeChannel.unreadMentions`.
+ * for it) — this one is backed by a real aggregate, `Channel.mentionCount`.
  * The BOOLEAN half of the same payload still renders as a dot, below.
  *
  * ⚠ Ink from tokens: `bg-surface-cta` / `text-text-on-cta` are the page's black

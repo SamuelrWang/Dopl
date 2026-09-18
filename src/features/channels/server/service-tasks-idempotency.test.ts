@@ -14,11 +14,13 @@ vi.mock("./repository");
 vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
 vi.mock("./service-reads");
+// ⚠ `getChannel` MOVED TO `service-list.ts` (R-26) — the one row projection.
+vi.mock("./service-list");
 
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
-import * as reads from "./service-reads";
+import * as list from "./service-list";
 import { createTask } from "./service-tasks";
 import type { ChannelContext } from "./service-shared";
 import type {
@@ -118,8 +120,8 @@ beforeEach(() => {
     client_msg_id: row.client_msg_id,
     created_at: "2026-07-27T00:00:00Z",
   }));
-  vi.mocked(reads.getChannel).mockResolvedValue(
-    {} as Awaited<ReturnType<typeof reads.getChannel>>
+  vi.mocked(list.getChannel).mockResolvedValue(
+    {} as Awaited<ReturnType<typeof list.getChannel>>
   );
 });
 

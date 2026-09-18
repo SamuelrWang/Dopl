@@ -73,7 +73,7 @@ describe("the popup", () => {
   it("shows one row per HOME CHANNEL, at the levels the server stored", async () => {
     await openShare();
 
-    // The channel comes off `GET /api/home/channels` — the read the page has
+    // The channel comes off `GET /api/channels?scope=account` — the read the page has
     // already mounted, so the popup asks for nothing new.
     expect(
       await screen.findByRole("tablist", { name: "Members in Priya Shah" })

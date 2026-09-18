@@ -11,7 +11,7 @@ import {
 } from "./errors";
 import { INFO_CARD_MAX_BYTES, infoCardTextBytes } from "../info-card";
 import * as repo from "./repository";
-import { getChannel } from "./service-reads";
+import { getChannel } from "./service-list";
 import { createDirectChannel } from "./service-writes-direct";
 import {
   canManageChannel,

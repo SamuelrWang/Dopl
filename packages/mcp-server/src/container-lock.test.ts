@@ -25,7 +25,10 @@
  *     that the route could not narrow; the containers come from the one
  *     narrowed membership list now, so there is no second read to leak from.
  *     `narrowToLock` still guards the account-wide CHANNEL reads and is pinned
- *     in `tools/account-scope.test.ts`.
+ *     in `tools/account-scope.test.ts`. ⚠ **AND THE `getHomeChannels` DOUBLE
+ *     WENT WITH IT ON 2026-09-17 (R-26 (b))** — `bootServer` never called it,
+ *     so its fixture was a THIRD hand-written statement of a channel row that
+ *     now has exactly one (`channels/types.ts › Channel`).
  *
  * ⚠ THIS IS A TRIPWIRE SUITE, NOT A CONTAINMENT SUITE. Nothing here proves an
  * agent cannot reach another workspace — Bash can open a second MCP connection
@@ -100,31 +103,6 @@ const SOLO_CONTAINER = wsItem("id-solo", "solo-c", "link", 1);
 const SHARED_CONTAINER = wsItem("id-shared", "shared-c", "link", 2);
 const COUNTLESS_CONTAINER = wsItem("id-old", "old-c", "link");
 
-/** Every home channel the ACCOUNT has — what the route really answers, which is
- *  the whole point: the narrowing is the MCP layer's, not the route's. */
-const ALL_HOME_CHANNELS = [
-  {
-    workspaceId: "id-shared",
-    workspaceSegment: "shared-c-pub",
-    channelId: "ch-shared",
-    name: "With Dana",
-    peers: [{ userId: "u2", displayName: "Dana", email: null, avatarUrl: null }],
-    createdAt: "2026-01-01T00:00:00Z",
-    lastMessageAt: null,
-    lastMessagePreview: null,
-  },
-  {
-    workspaceId: "id-solo",
-    workspaceSegment: "solo-c-pub",
-    channelId: "ch-solo",
-    name: "My own room",
-    peers: [],
-    createdAt: "2026-01-01T00:00:00Z",
-    lastMessageAt: null,
-    lastMessagePreview: null,
-  },
-];
-
 function mockClient(
   directory: WorkspaceListItem[],
   pin?: string | null,
@@ -136,9 +114,6 @@ function mockClient(
     listWorkspaces: vi.fn().mockResolvedValue({ workspaces: directory }),
     getWorkspaceId: vi.fn(() => pin ?? null),
     setWorkspaceId: vi.fn(),
-    getHomeChannels: vi
-      .fn()
-      .mockResolvedValue({ channels: ALL_HOME_CHANNELS, pendingLinks: [] }),
     consumeCredits: vi.fn().mockResolvedValue({ allowed: true }),
   } as unknown as DoplClient;
 }

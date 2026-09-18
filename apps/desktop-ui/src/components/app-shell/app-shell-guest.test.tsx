@@ -33,7 +33,8 @@ import { AppShellLayout } from "./index";
  *
  * ⚠ THE CONTAINER HAS ONE CHANNEL AND IT IS RESOLVED THE WAY THE GUEST WEB LANE
  * RESOLVES IT — `/c/{workspaceId}` calls `getHomeChannel(user, workspaceId)`;
- * the renderer's twin is `GET /api/home/channels` matched on `workspaceId`. The
+ * the renderer's twin is `GET /api/channels?scope=account` matched on
+ * `workspaceId` (ONE endpoint since R-26 (b)). The
  * "wrong container" case below is what makes that match load-bearing rather than
  * "take the first row".
  *
@@ -91,26 +92,40 @@ function ok(body: unknown): BridgeResponse {
   return { status: 200, statusText: "OK", hasBody: true, body };
 }
 
-/** One home-channel row, as `GET /api/home/channels` serialises it. */
+/**
+ * One row of `GET /api/channels?scope=account` — the ONE projection (R-26 (b)).
+ * ⚠ **THE FIELDS THIS SHELL ACTUALLY READS AND NOTHING ELSE** (`workspaceId` to
+ * match the container, `id` to build the route): the redirect is not a renderer
+ * of channels, and a full `Channel` here would be a second fixture drifting
+ * beside `pages/home/home-test-harness.tsx`'s real one.
+ */
 function homeChannel(over: Record<string, unknown> = {}) {
   return {
     workspaceId: CONTAINER.id,
-    workspaceSegment: SEGMENT,
-    channelId: CHANNEL_ID,
+    container: { id: CONTAINER.id, kind: "link", segment: SEGMENT },
+    id: CHANNEL_ID,
     name: "Priya Shah",
     peers: [],
-    peer: null,
     createdAt: "2026-01-01T00:00:00Z",
     lastMessageAt: null,
-    lastMessagePreview: null,
     unread: false,
-    unreadMentions: 0,
+    mentionCount: 0,
     linkOut: null,
     ...over,
   };
 }
 
-/** `role`, the CONTAINER KIND and the home-channels payload vary per case. */
+/** ⚠ The SCOPE is the one thing `path.split("?")[0]` throws away, and it is what
+ *  picks the route's handler — see `pages/home/home-test-harness.tsx`. */
+function isAccountChannels(path: string): boolean {
+  const [bare, query = ""] = path.split("?");
+  return (
+    bare === "/api/channels" &&
+    new URLSearchParams(query).get("scope") === "account"
+  );
+}
+
+/** `role`, the CONTAINER KIND and the account-channels payload vary per case. */
 let role = "guest";
 let workspaceRow: unknown = CONTAINER;
 let homePayload: unknown = { channels: [homeChannel()], pendingLinks: [] };
@@ -131,7 +146,7 @@ function mockApi() {
         })
       );
     }
-    if (path === "/api/home/channels") return Promise.resolve(ok(homePayload));
+    if (isAccountChannels(path)) return Promise.resolve(ok(homePayload));
     if (path === "/api/workspaces") return Promise.resolve(ok({ workspaces: [] }));
     return Promise.resolve(ok({}));
   });
@@ -237,7 +252,7 @@ describe("the shell sends a container member to their channel", () => {
     // single-row test.
     homePayload = {
       channels: [
-        homeChannel({ workspaceId: "ws-other", channelId: "not-this-one" }),
+        homeChannel({ workspaceId: "ws-other", id: "not-this-one" }),
         homeChannel(),
       ],
       pendingLinks: [],
@@ -339,7 +354,8 @@ describe("the shell sends a container member to their channel", () => {
     );
     expect(
       sendRequest.mock.calls.some(
-        (c: unknown[]) => (c[0] as { path?: string })?.path === "/api/home/channels"
+        (c: unknown[]) =>
+          isAccountChannels((c[0] as { path?: string })?.path ?? "")
       )
     ).toBe(false);
     expect(router.state.location.pathname).toBe(`/${SEGMENT}/overview`);
@@ -362,8 +378,8 @@ describe("the shell sends a container member to their channel", () => {
       )
     );
     expect(
-      sendRequest.mock.calls.some(
-        (c: unknown[]) => (c[0] as { path?: string })?.path === "/api/home/channels"
+      sendRequest.mock.calls.some((c: unknown[]) =>
+        isAccountChannels((c[0] as { path?: string })?.path ?? "")
       )
     ).toBe(false);
   });

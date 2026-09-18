@@ -2,9 +2,14 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import { WORKSPACE_ID, bootBody, installBridge, ok } from "#/test-utils/bridge";
-import type { HomeChannelsPayload } from "@/features/home/types";
+import type { ChannelListPayload } from "@/features/channels/types";
 import { SECTION_PRIVATE_EVERYWHERE } from "@/features/agent-templates/lib/visibility";
-import { HOME, LINK_WORKSPACE_ID, renderHome } from "./home-test-harness";
+import {
+  HOME,
+  LINK_WORKSPACE_ID,
+  isAccountChannels,
+  renderHome,
+} from "./home-test-harness";
 import {
   DANA_TEMPLATE,
   OTHER_WS,
@@ -208,14 +213,14 @@ function twoChannels() {
     peer: null,
     linkOut: null,
   };
-  const two: HomeChannelsPayload = {
+  const two: ChannelListPayload = {
     channels: [HOME.channels[0], second],
     pendingLinks: [],
   };
   apiRequest.mockImplementation(
     (path: string, opts: BridgeRequestOpts = {}): Promise<BridgeResponse> => {
       const bare = path.split("?")[0];
-      if (bare === "/api/home/channels") return Promise.resolve(ok(two));
+      if (isAccountChannels(path)) return Promise.resolve(ok(two));
       if (bare === "/api/agent-templates" && opts.workspaceId === OTHER_WS) {
         return Promise.resolve(ok({ templates: [DANA_TEMPLATE] }));
       }
@@ -393,7 +398,7 @@ describe("🔒 with no channels, PERSONAL still renders", () => {
     // and this whole block would be measuring a failed fetch.
     apiRequest.mockImplementation(
       (path: string, opts: BridgeRequestOpts = {}): Promise<BridgeResponse> =>
-        path.split("?")[0] === "/api/home/channels"
+        isAccountChannels(path)
           ? Promise.resolve(ok({ channels: [], pendingLinks: [] }))
           : defaultRoutes(path, opts)
     );

@@ -343,52 +343,41 @@ describe("provenance is structural", () => {
 
 describe("🔒 the fan-out obeys the container lock", () => {
   it("a LOCKED session fans out over its own room ALONE", async () => {
-    // ⚠ Both halves of the leg list are narrowed: `getWorkspaceList()` answers
-    // `[container]` under a lock, and the home half goes through
-    // `workspace-directory.ts › narrowToLock`. Neither the name nor the id of another
-    // room may appear.
-    // ⚠ The container's WORKSPACE name and its CHANNEL name are the same string
-    // by construction (`features/home/schema.ts`: one name names both), so the
-    // de-dupe keeping the directory row costs no information. The fixture says
-    // so rather than inventing a disagreement the product cannot produce.
+    // ⚠ **ONE HALF, NOT TWO, SINCE B13** — `getWorkspaceList()` answers
+    // `[container]` under a lock and `searchLegs` maps that list and nothing
+    // else, so what this case pins is that the fan-out ADDS no leg of its own.
+    // ⚠ **THE `getHomeChannels` DOUBLE AND THE "no other room" PAIR WENT ON
+    // 2026-09-17 (R-26 (b))**: the double named the operator's second room and
+    // the pair asserted its absence, and both only ever measured the SECOND
+    // account-wide read B13 deleted. Its `homeChannel(…)` fixture was already
+    // gone — only the never-run lambda kept the reference compiling. **What
+    // replaces them is not nothing**: `getHomeChannels` is asserted UNCALLED in
+    // "every leg comes from the ONE narrowed list" above, and the narrowing
+    // itself is `container-lock.test.ts`'s, driven through the real directory.
     const charge = vi.fn(async () => null);
     const locked = wsItem("home-1", "shared-c", "link");
     locked.name = "With Dana";
     const text = await search(
-      clientStub({
-        getWorkspaceId: () => "home-1",
-        getHomeChannels: vi.fn(async () => ({
-          channels: [
-            homeChannel("home-1", "With Dana"),
-            homeChannel("home-2", "With Sam"),
-          ],
-        })),
-      }),
+      clientStub({ getWorkspaceId: () => "home-1" }),
       directoryStub([locked], "home-1"),
       charge,
       { query: "ship", scope: "everywhere" },
     );
     expect(text).toContain("## `With Dana` (home_channel · id `home-1`)");
-    // 🔒 Neither the NAME nor the ID of the operator's other room may appear.
-    expect(text).not.toContain("With Sam");
-    expect(text).not.toContain("home-2");
     expect(text).toContain("Searched 1 scope of 1");
     // The one leg is the already-charged one, so the meter is untouched.
     expect(charge).not.toHaveBeenCalled();
   });
 
   it("DE-DUPES a scope that is both a listed workspace and a home channel", async () => {
-    // ⚠ A locked session's `getWorkspaceList()` answers `[container]` — the very
-    // container the home list also names. Searching it twice would charge twice
-    // and render two headings for one room.
+    // ⚠ A locked session's `getWorkspaceList()` answers `[container]`, and since
+    // B13 that ONE list is every leg — so a container can no longer arrive twice
+    // and be charged twice. ⚠ The `getHomeChannels` double that stated the
+    // second arrival went on 2026-09-17 (R-26 (b)); what is left is the
+    // property, asserted over the source the legs actually have.
     const charge = vi.fn(async () => null);
     const text = await search(
-      clientStub({
-        getWorkspaceId: () => "nothing",
-        getHomeChannels: vi.fn(async () => ({
-          channels: [homeChannel("home-1", "With Dana")],
-        })),
-      }),
+      clientStub({ getWorkspaceId: () => "nothing" }),
       directoryStub([wsItem("home-1", "shared-c", "link")], "home-1"),
       charge,
       { query: "ship", scope: "everywhere" },

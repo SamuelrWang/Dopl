@@ -1,13 +1,26 @@
-import { EMPTY_PEERS } from "@/features/home/types";
+import { EMPTY_PEERS } from "@/features/channels/types";
 import type {
-  HomeChannel,
-  HomeChannelsPayload,
-  HomePeer,
-  HomePendingLink,
-} from "@/features/home/types";
+  Channel,
+  ChannelListPayload,
+  ChannelPeer,
+  ChannelPendingLink,
+} from "@/features/channels/types";
 
-/** ⚠ NOT workspace-scoped — `withUserAuth`, no `X-Workspace-Id`. */
-export const HOME_CHANNELS_PATH = "/api/home/channels";
+/**
+ * /home's LEFT-PANE ROWS, derived from **the ONE channel projection** (Samuel's
+ * ruling R-26 (b), 2026-09-17: *one endpoint*).
+ *
+ * 🔒 **`HOME_CHANNELS_PATH` IS DELETED WITH THE ROUTE IT NAMED.** This page reads
+ * `GET /api/channels?scope=account` — `channels/hooks/use-channels.ts ›
+ * useAccountChannels`, keyed by `channelKeys.list()` — and its rows are
+ * `Channel`, the same type the workspace channels page renders. `HomeChannel`,
+ * `HomeChannelsPayload`, `HomePeer`, `HomePendingLink` and both cache-to-cache
+ * BRIDGES went with the second cache: **one cache needs no bridge** (G4).
+ */
+
+/** ⚠ NOT workspace-scoped — `withUserAuth`, no `X-Workspace-Id`. ⚠ The LEGACY
+ *  unbound links' own resource, which `scope=account` folds into its payload but
+ *  which the mint and the revoke still address directly. */
 export const HOME_LINKS_PATH = "/api/home/links";
 
 /**
@@ -16,9 +29,7 @@ export const HOME_LINKS_PATH = "/api/home/links";
  * open, and one whose other side has not arrived yet.
  *
  * ⚠ A BOUND link is NOT a row. It rides on its channel as `linkOut`, because a
- * pending peer is a STATE of a channel that already exists — the chip that
- * renders it lands with the client wave; this file only stops it being a second
- * row.
+ * pending peer is a STATE of a channel that already exists.
  */
 export type HomeRow =
   | {
@@ -26,10 +37,13 @@ export type HomeRow =
       id: string;
       /** What the row is sorted and stamped by. */
       at: string;
-      channel: HomeChannel;
+      channel: Channel;
     }
-  | { kind: "link"; id: string; at: string; link: HomePendingLink };
+  | { kind: "link"; id: string; at: string; link: ChannelPendingLink };
 
+/** ⚠ THE CONTAINER, NOT THE CHANNEL — /home addresses a relationship by the
+ *  `kind='link'` workspace it lives in (one channel per container), and every
+ *  caller that selects a row builds the id from a workspace id. */
 export function channelRowId(workspaceId: string): string {
   return `rel:${workspaceId}`;
 }
@@ -38,16 +52,40 @@ export function linkRowId(linkId: string): string {
   return `link:${linkId}`;
 }
 
-/** Newest-first over both kinds, so a fresh link sits where a fresh message would. */
-export function homeRows(payload: HomeChannelsPayload): HomeRow[] {
+/**
+ * Newest-first over both kinds, so a fresh link sits where a fresh message would.
+ *
+ * 🔒 **THIS IS THE ONE PLACE /home NARROWS THE ACCOUNT PAYLOAD TO HOME CHANNELS,
+ * AND THE TEST IS POSITIVE — master §4.2 rule G3.** `scope=account` answers every
+ * container the caller is a member of, of EVERY kind; /home is the account surface
+ * for `kind='link'` containers and nothing else. ⚠ **`container.kind === "link"`,
+ * NEVER `!isStandardWorkspace(…)`** — a fourth container kind is then excluded by
+ * construction rather than silently admitted into a column that cannot address it
+ * (a standard workspace has a route and a sidebar; this pane has neither).
+ *
+ * ⚠ **ONE PLACE.** Anything else on this page that wants "the operator's home
+ * channels" derives them from {@link homeChannels}, which is this filter read
+ * through this function — a second `container.kind` test is a second answer to
+ * the question the wave exists to make singular.
+ *
+ * ⚠ `pendingLinks` is ABSENT under `scope=container` and present under `account`
+ * (`channels/types.ts › ChannelListPayload`), so its `?? []` is the §8 read of an
+ * optional key. `channels`' `?? []` is the ordinary §8 one — the payload is
+ * IndexedDB-persisted, and a `.filter` on an absent key THROWS inside the page
+ * rather than inside one pane (`useChannels › selectChannels` spells the same
+ * fallback over the same body).
+ */
+export function homeRows(payload: ChannelListPayload): HomeRow[] {
   const rows: HomeRow[] = [
-    ...payload.channels.map((channel) => ({
-      kind: "channel" as const,
-      id: channelRowId(channel.workspaceId),
-      at: channel.lastMessageAt ?? channel.createdAt,
-      channel,
-    })),
-    ...payload.pendingLinks.map((link) => ({
+    ...(payload.channels ?? [])
+      .filter((channel) => channel.container?.kind === "link")
+      .map((channel) => ({
+        kind: "channel" as const,
+        id: channelRowId(channel.workspaceId),
+        at: channel.lastMessageAt ?? channel.createdAt,
+        channel,
+      })),
+    ...(payload.pendingLinks ?? []).map((link) => ({
       kind: "link" as const,
       id: linkRowId(link.id),
       at: link.createdAt,
@@ -55,6 +93,21 @@ export function homeRows(payload: HomeChannelsPayload): HomeRow[] {
     })),
   ];
   return rows.sort((a, b) => b.at.localeCompare(a.at));
+}
+
+/**
+ * THE OPERATOR'S HOME CHANNELS, in the order the left pane shows them — for the
+ * two surfaces that want the channels without the rows (the Ontology share popup
+ * and the Overview usage filter).
+ *
+ * ⚠ **DERIVED FROM {@link homeRows} ON PURPOSE**, so G3's filter and this page's
+ * order are stated once. A `payload.channels.filter(…)` here would be the second
+ * copy of the rule the day one of them learns about a new container kind.
+ */
+export function homeChannels(payload: ChannelListPayload): Channel[] {
+  return homeRows(payload).flatMap((row) =>
+    row.kind === "channel" ? [row.channel] : []
+  );
 }
 
 /**
@@ -67,9 +120,12 @@ export function homeRows(payload: HomeChannelsPayload): HomeRow[] {
  * are no longer a filterable state). It stays ONE named predicate because the
  * chip has to answer for both shapes, and an inline test that knows only one of
  * them renders a row with an open invitation as a row without one.
+ *
+ * ⚠ `?? null` INLINE (INVARIANTS §8): `linkOut` is a new key on a persisted
+ * payload, and `undefined !== null` would light the chip on every row.
  */
 export function hasLinkOut(row: HomeRow): boolean {
-  return row.kind === "link" || row.channel.linkOut !== null;
+  return row.kind === "link" || (row.channel.linkOut ?? null) !== null;
 }
 
 /**
@@ -85,28 +141,24 @@ export function hasLinkOut(row: HomeRow): boolean {
 
 /**
  * EVERYBODY ELSE IN THIS CHANNEL, oldest join first — the ONE read of
- * `HomeChannel.peers` on this page, and the only place the cache-shape rule for
- * it is written.
+ * `Channel.peers` on this page.
  *
- * 🔒 ⚠ **CACHE-SHAPE FALLBACK, AND IT IS A TWO-FIELD MERGE RATHER THAN A PLAIN
- * `?? EMPTY_X` — WHICH IS WHY IT IS A FUNCTION (INVARIANTS §8, and a stated
- * exception to its "spell it inline" clause).** `GET /api/home/channels` is
- * IndexedDB-persisted with a 24h `gcTime`, so the first paint after the
- * 2026-08-26 upgrade serves entries that HAVE `peer` and LACK `peers`.
- *   - `peers` present → use it, even when EMPTY (a real solo channel).
- *   - `peers` absent → fall back to the SINGLE `peer`, never to "nobody".
- * **Falling back to `EMPTY_PEERS` alone would paint every one of the operator's
- * channels as solo — "Just you", the agent glyph, no faces — which is a FALSE
- * sentence about who is in the room.** Degrading to one face is merely the old
- * answer.
- * ⚠ **§8 FORBIDS HIDING OPTIONALITY BEHIND AN ACCESSOR, and the reason is that
- * a helper nobody must call is a rule the next read forgets.** That reason is
- * answered here by ENFORCEMENT rather than by repetition: `home-rows.test.ts`
- * reads this directory's SOURCE and fails if any other file names `.peers`.
- * The merge above is one rule; two copies of it that drift is the worse bug.
+ * 🔒 **IT IS A PLAIN `?? EMPTY_PEERS` NOW, SPELLED INLINE, AND THE TWO-FIELD
+ * MERGE IS GONE (Wave 3, R-26).** It used to fall back through a second field
+ * (`HomeChannel.peer`) because `GET /api/home/channels` was IndexedDB-persisted
+ * with a 24h `gcTime`, so the first paint after the 2026-08-26 upgrade served
+ * entries that HAD `peer` and LACKED `peers`. **That payload and its cache entry
+ * no longer exist.** The account list is read under
+ * `["/api/channels", undefined, {scope:"account"}]` — a tuple no bundle has ever
+ * written — so there is no persisted entry carrying `peer`, nothing to degrade
+ * from, and the §8 exception this function held is retired with it.
+ *
+ * ⚠ **IT STAYS A FUNCTION, AND ITS ENFORCEMENT STAYS**: `home-rows.test.ts` reads
+ * this directory's SOURCE and fails if any other file names `.peers`. One named
+ * presenter is also what `agent-panel-cards.tsx` memoises against.
  */
-export function channelPeople(channel: HomeChannel): readonly HomePeer[] {
-  return channel.peers ?? (channel.peer ? [channel.peer] : EMPTY_PEERS);
+export function channelPeople(channel: Channel): readonly ChannelPeer[] {
+  return channel.peers ?? EMPTY_PEERS;
 }
 
 /**
@@ -134,7 +186,7 @@ export function channelPeople(channel: HomeChannel): readonly HomePeer[] {
  * ⚠ **NOTHING IS LOST.** Who is in the channel is answered by the Info tab's
  * roster, beside each face and each address, where it can be attributed.
  */
-export function channelTitle(channel: HomeChannel): string {
+export function channelTitle(channel: Channel): string {
   return channel.name;
 }
 
@@ -156,18 +208,16 @@ export function displayUrl(url: string): string {
  * different role for. The server now revokes-and-remints on a mismatch; this is
  * the half that lets the operator SEE which grant is currently out.
  *
- * ⚠ `?? "guest"` INLINE, per INVARIANTS §8: `grantedRole` is a NEW field on an
- * IndexedDB-persisted payload (24h `gcTime`), so an entry written by the
- * previous bundle survives the upgrade WITHOUT the key. The wire type is
- * non-optional and is right; the cache is a different moment. `"guest"` is both
- * the DB default and the fail-safe reading.
+ * ⚠ `?? "guest"` INLINE, per INVARIANTS §8 — the fallback `ChannelPendingLink`'s
+ * own docblock names: the DB default, the CHECK's floor, and the fail-safe for a
+ * row minted before `granted_role` existed (`20260825150000`, F-319).
  */
-export function linkGrantLabel(link: HomePendingLink): string {
+export function linkGrantLabel(link: ChannelPendingLink): string {
   return `Joins as ${link.grantedRole ?? "guest"}`;
 }
 
 /** "Single use" / "3 of 5 used" / "Multi use". */
-export function linkUsesLabel(link: HomePendingLink): string {
+export function linkUsesLabel(link: ChannelPendingLink): string {
   if (link.maxUses === null) return "Multi use";
   if (link.maxUses === 1) return "Single use";
   return `${link.useCount} of ${link.maxUses} used`;

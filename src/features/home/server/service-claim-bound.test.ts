@@ -17,6 +17,7 @@
  * is what replaced it. */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { Channel } from "@/features/channels/types";
 
 vi.mock("./repository", () => ({
   findMemberContainer: vi.fn(),
@@ -64,24 +65,23 @@ const CONTAINER = {
   created_at: "2026-08-24T00:00:00.000Z",
 };
 
+// ⚠ **THE ONE ROW TYPE (R-26)** — the claim's echo is the list's row.
 const CHANNEL = {
+  id: CHANNEL_ID,
   workspaceId: WS,
-  workspaceSegment: "q3-fundraise-abc123def456",
-  channelId: CHANNEL_ID,
+  container: { id: WS, kind: "link", segment: "q3-fundraise-abc123def456" },
   name: "Q3 Fundraise",
   topic: "",
   peers: [],
-  peer: null,
   createdAt: "2026-08-24T00:00:00.000Z",
   lastMessageAt: null,
-  lastMessagePreview: null,
   unread: false,
-  unreadMentions: 0,
+  mentionCount: 0,
   myFavoritedAt: null,
   // What a bound claim's default link seats its claimer at (F-343's field).
-  role: "guest" as const,
-      linkOut: null,
-};
+  myWorkspaceRole: "guest" as const,
+  linkOut: null,
+} as unknown as Channel;
 
 /** A BOUND link: `workspace_id` set, single-use, minted by the owner. */
 function boundLink(patch: Partial<ChannelLinkRow> = {}): ChannelLinkRow {

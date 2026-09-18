@@ -11,7 +11,6 @@ import {
 } from "@/features/channels/components/collapse-wells";
 import { PANEL_WELL_ON_PANEL } from "@/shared/ui/panel-well";
 import { channelPeople, channelTitle, hasLinkOut, type HomeRow } from "./home-rows";
-import { useHomeChannelSync } from "./use-home-channel-sync";
 import {
   HOME_CHANNEL_WELLS,
   HOME_CHANNEL_WELLS_KEY,
@@ -53,11 +52,14 @@ import {
  *     variant he asked for that morning was retracted the same day.
  *   - the SET and the 24h cut — `channel-wells.ts`, which asks
  *     `recency-wells.tsx › wellFor` rather than owning a second clock;
- *   - the PIN — `HomeChannel.myFavoritedAt`, i.e. `channel_members.favorited_at`,
- *     written by the channel header's own toggle and mirrored into this page's
- *     cache by `use-home-channel-sync.ts` (the pin, and since 2026-09-17 the name and
- *     description the Info tab edits in place). ⚠ **NOT a per-device store** — the
- *     one this file read for an afternoon is deleted; do not mint a second.
+ *   - the PIN — `Channel.myFavoritedAt`, i.e. `channel_members.favorited_at`,
+ *     written by the channel header's own toggle. 🔒 **NO MIRROR SINCE WAVE 3
+ *     (R-26 (b))**: that toggle patches `channelKeys.list().all`, which is the
+ *     entry THIS column reads, so the well moves on the click with nothing in
+ *     between. `use-home-channel-sync.ts` — the bridge that copied the pin, the
+ *     name and the description across two caches — is DELETED with the second
+ *     cache. ⚠ **NOT a per-device store** either — the one this file read for an
+ *     afternoon is deleted; do not mint a second.
  *
  * ⚠ **THE "no sections to manage" NOTE ABOVE WAS ABOUT THE WORKSPACE CHANNELS
  * TREE AND STILL IS.** These wells are not folders: nothing is filed by hand
@@ -79,13 +81,6 @@ export function RelationshipList({
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
-  // 🔒 THE PIN IS THE BOOKMARK, SO THE WELL MOVES WHEN THE HEADER'S TOGGLE FIRES
-  // (Samuel, 2026-09-15) — **and since 2026-09-17 the ROW'S TITLE follows the Info
-  // tab's click-to-edit rename the same way.** Those writes own the CHANNELS cache;
-  // this page's list is a different payload carrying the same facts, and the bridge
-  // is what tells it — `use-home-channel-sync.ts` carries the bug it fixes and why
-  // it lives here.
-  useHomeChannelSync();
   /** ⚠ THE ROWS ARE FILED, NEVER RE-ORDERED — `homeRows`' newest-first order
    *  survives inside each well, because the grouping pass sorts nothing. */
   const filed = useMemo<WellItem<HomeChannelWellId>[]>(
@@ -184,27 +179,30 @@ function RelationshipRow({
    * 🔒 **NO LAST-MESSAGE PREVIEW ON A CHANNEL ROW (Samuel, 2026-09-13: *"having
    * the most recent message being in there just doesn't make sense imo"*).** Only
    * a LINK row keeps a second sentence — it has no channel, roster or read-state,
-   * so the marks below have nothing to say about it. ⚠ `HomeChannel.lastMessagePreview`
-   * is still on the wire and this is still its only possible renderer; do not put
-   * it back on the row.
+   * so the marks below have nothing to say about it. ⚠ **THE PREVIEW IS NO LONGER
+   * ON THE WIRE EITHER** — `HomeChannel.lastMessagePreview` left with the second
+   * projection (Wave 3, R-26 (b); ledger row 22 stays open). Do not put it back
+   * on the row, and do not add it back to `Channel` to do so.
    */
   const pendingLine = row.kind === "link" ? "Not yet claimed" : null;
   /**
-   * ⚠ `?? EMPTY_X` INLINE AT EVERY NEW KEY (INVARIANTS §8): both fields are new
-   * on an IndexedDB-persisted payload with a 24h `gcTime`, so the first paint
-   * after this bundle ships reads entries that HAVE NEITHER. `channelPeople` is
-   * the one sanctioned exception and carries its own reason.
+   * ⚠ `?? EMPTY_X` INLINE AT EVERY NEW KEY (INVARIANTS §8): `mentionCount` is
+   * new on an IndexedDB-persisted payload with a 24h `gcTime`, and `?? 0` hides
+   * the pill rather than printing `@ NaN`. **The rule holds even though this
+   * wave's cache keys are new ones** (`{scope:"account"}` is a tuple no bundle
+   * has written) — a per-key migration is an argument and §8 is a rule.
+   * ⚠ `channelPeople` is the one named presenter, and it spells its own `??`.
    * ⚠ **THE FALLBACKS STAY HERE, WITH THE READER OF THE CACHE.** `HomeChannelRow`
    * takes ANSWERS and owns no `?? EMPTY_X` of its own — a fallback applied twice
    * is a fallback nobody can audit.
    */
   const channel = row.kind === "channel" ? row.channel : null;
-  const mentions = channel?.unreadMentions ?? 0;
+  const mentions = channel?.mentionCount ?? 0;
   const unread = channel?.unread ?? false;
   /**
-   * ⚠ **`channelPeople` CARRIES THE STALE-CACHE MERGE**, and the raw field would
-   * paint a populated channel as solo for one paint after an upgrade — which is
-   * also what decides whether the description takes line two.
+   * ⚠ **`channelPeople` IS THE ONE READ OF `peers`** — a plain `?? EMPTY_PEERS`
+   * since the second cache went (its docblock carries why the two-field merge is
+   * retired), and what decides whether the description takes line two.
    * ⚠ `AvatarStack` takes a NON-NULL name and initials it; a nameless member
    * degrades to their address exactly as `Avatar`'s own fallback does, never to
    * "?" when we hold one.
@@ -216,7 +214,7 @@ function RelationshipRow({
   }));
   /**
    * ⚠ **EMPTY STAYS EMPTY** — `topic` is `""` when nobody wrote one
-   * (`home/types.ts`, `NOT NULL DEFAULT ''`), so the row's own test is a
+   * (`channels.topic`, `NOT NULL DEFAULT ''`), so the row's own test is a
    * truthiness one, not a presence one.
    * ⚠ `?? ""` INLINE (INVARIANTS §8): a new key on an IndexedDB-persisted payload.
    */

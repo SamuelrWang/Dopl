@@ -83,7 +83,7 @@ describe("HomeChannelCreateSchema", () => {
 
 /**
  * ⚠ **TWO DOORS INTO ONE COLUMN, AND THEY MUST NOT DISAGREE.** `POST
- * /api/home/channels` and `POST /api/channels` both write `channels.name` /
+ * /api/channels?scope=account` and the container-scope POST both write `channels.name` /
  * `channels.topic`; a value one accepts and the other refuses is a bug in
  * whichever is looser, and the looser one is the one that reaches the DB CHECK
  * as a 500. Both gates come from `shared/lib/safe-label.ts` — this pins that

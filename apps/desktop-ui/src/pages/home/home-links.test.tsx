@@ -7,6 +7,7 @@ import {
   LINK_WORKSPACE_ID,
   SEVEN_DAYS_MS,
   SOLO_CHANNEL,
+  isAccountChannels,
   openChannelRecord,
   openChannels,
   renderHome,
@@ -116,7 +117,7 @@ describe("home link lifecycle", () => {
     });
     await waitFor(() =>
       expect(
-        bridgeCalls(apiRequest).filter((c) => c.path === "/api/home/channels")
+        bridgeCalls(apiRequest).filter((c) => isAccountChannels(c.path))
           .length
       ).toBeGreaterThan(1)
     );
@@ -153,7 +154,7 @@ describe("home link lifecycle", () => {
     // by a cache edit here.
     await waitFor(() =>
       expect(
-        bridgeCalls(apiRequest).filter((c) => c.path === "/api/home/channels")
+        bridgeCalls(apiRequest).filter((c) => isAccountChannels(c.path))
           .length
       ).toBeGreaterThan(1)
     );

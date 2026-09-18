@@ -61,24 +61,28 @@ afterEach(() => {
  * endpoint stopped sending.
  */
 const claimed = (existing: boolean): HomeLinkClaimResult => ({
+  // ⚠ **THE ONE ROW TYPE (R-26)** — the claim echoes exactly what the list
+  // answers. Only the fields this card reads are spelled.
   channel: {
+    id: "66666666-6666-4666-8666-666666666666",
     workspaceId: "55555555-5555-4555-8555-555555555555",
-    workspaceSegment: "dana-abc123def456",
-    channelId: "66666666-6666-4666-8666-666666666666",
+    container: {
+      id: "55555555-5555-4555-8555-555555555555",
+      kind: "link",
+      segment: "dana-abc123def456",
+    },
     name: "Dana",
     topic: "",
     peers: [],
-    peer: null,
     createdAt: "2026-08-25T00:00:00.000Z",
     lastMessageAt: null,
-    lastMessagePreview: null,
     unread: false,
-    unreadMentions: 0,
+    mentionCount: 0,
     myFavoritedAt: null,
     // What the claimer lands at — the link's `granted_role`, default `guest`.
-    role: "guest",
-      linkOut: null,
-  },
+    myWorkspaceRole: "guest",
+    linkOut: null,
+  } as unknown as HomeLinkClaimResult["channel"],
   existing,
   bound: true,
 });

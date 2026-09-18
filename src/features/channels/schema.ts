@@ -356,12 +356,14 @@ export {
   AccountMessagesQuerySchema,
   AccountStatusQuerySchema,
   AwaitQuerySchema,
+  ChannelListQuerySchema,
   MessageReadQuerySchema,
 } from "./schema-reads";
 export type {
   AccountMessagesQuery,
   AccountStatusQuery,
   AwaitQuery,
+  ChannelListQuery,
   MessageReadQuery,
 } from "./schema-reads";
 

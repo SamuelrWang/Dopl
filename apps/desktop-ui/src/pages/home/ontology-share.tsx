@@ -7,9 +7,9 @@ import {
   useOntologyShares,
 } from "@/features/ontology/hooks/use-ontology-shares";
 import type { OntologyLevel, OntologyShare } from "@/features/ontology/types";
-import type { HomeChannel, HomeChannelsPayload } from "@/features/home/types";
-import { useApiQuery } from "#/hooks/use-api-query";
-import { HOME_CHANNELS_PATH } from "./home-rows";
+import { useAccountChannels } from "@/features/channels/hooks/use-channels";
+import type { Channel } from "@/features/channels/types";
+import { homeChannels } from "./home-rows";
 
 /**
  * SHARING ONE ONTOLOGY INTO HOME CHANNELS — the popup, and the delete confirm
@@ -31,7 +31,7 @@ import { HOME_CHANNELS_PATH } from "./home-rows";
  * per member would be a matrix nobody asked for. The only agent control is the
  * OWNER's, because only the owner's agents can exceed what the room can see.
  *
- * ⚠ **THE CHANNEL LIST IS THE SERVER'S** — `GET /api/home/channels`, the read
+ * ⚠ **THE CHANNEL LIST IS THE SERVER'S** — `GET /api/channels?scope=account`, the read
  * this page already mounted, so the popup costs no request and cannot show a
  * room the caller does not reach. Home channels only (Q5): a `kind='standard'`
  * workspace channel is out of scope this wave and is not in this payload.
@@ -110,9 +110,9 @@ export function OntologyShareDialog({
         // ⚠ FALLS BACK TO THE SEED PER ROW, never to `rows[id]!`: the channel
         // list and the share read land independently, so a channel can arrive
         // AFTER the draft was seeded and would otherwise index to `undefined`.
-        const row = rows[channel.channelId] ?? seedFor(channel.channelId, shares);
+        const row = rows[channel.id] ?? seedFor(channel.id, shares);
         return (
-        <FormSection key={channel.channelId} label={channel.name}>
+        <FormSection key={channel.id} label={channel.name}>
           {canManage ? (
             <div className="flex flex-col gap-2">
               {AUDIENCES.map(({ field, label }) => (
@@ -125,7 +125,7 @@ export function OntologyShareDialog({
                   onChange={(next) =>
                     setDraft({
                       ...rows,
-                      [channel.channelId]: { ...row, [field]: next },
+                      [channel.id]: { ...row, [field]: next },
                     })
                   }
                 />
@@ -174,7 +174,7 @@ export function DeleteOntologyConfirm({
   const names = shares
     .map(
       (share) =>
-        channels.find((c) => c.channelId === share.channelId)?.name ??
+        channels.find((c) => c.id === share.channelId)?.name ??
         // ⚠ A CHANNEL THIS PAYLOAD CANNOT NAME IS STILL COUNTED. Dropping it
         // would under-state the cascade, which is the one thing this sentence
         // is for.
@@ -199,11 +199,18 @@ export function DeleteOntologyConfirm({
   );
 }
 
-/** ⚠ THE SAME CACHE ENTRY THE PAGE ALREADY MOUNTED (`HOME_CHANNELS_PATH`), so
- *  this costs no request. */
-function useHomeChannels(): readonly HomeChannel[] {
-  const query = useApiQuery<HomeChannelsPayload>(HOME_CHANNELS_PATH);
-  return query.data?.channels ?? EMPTY_CHANNELS;
+/**
+ * ⚠ THE SAME CACHE ENTRY THE PAGE ALREADY MOUNTED (`GET /api/channels?scope=account`),
+ * so this costs no request.
+ *
+ * ⚠ **AND THE SAME ROWS THE LEFT PANE SHOWS.** `scope=account` answers every
+ * container kind; an ontology is shared into HOME channels, so the list goes
+ * through `homeRows`' own G3 filter (`home-rows.ts › homeChannels`) rather than
+ * restating `container.kind === "link"` here — one filter, one answer.
+ */
+function useHomeChannels(): readonly Channel[] {
+  const query = useAccountChannels();
+  return query.data ? homeChannels(query.data) : EMPTY_CHANNELS;
 }
 
 /** The three audiences a share row states, in the order the popup asks them. */
@@ -234,12 +241,12 @@ function seedFor(
 }
 
 function seedDraft(
-  channels: readonly HomeChannel[],
+  channels: readonly Channel[],
   shares: readonly OntologyShare[]
 ): Record<string, OntologyShare> {
   const seeded: Record<string, OntologyShare> = {};
   for (const channel of channels) {
-    seeded[channel.channelId] = seedFor(channel.channelId, shares);
+    seeded[channel.id] = seedFor(channel.id, shares);
   }
   return seeded;
 }
@@ -269,4 +276,4 @@ function describeDelete(names: string[], resolved: boolean): string {
   return `This deletes the ontology and everything in it, and unshares it from ${names.join(", ")}.`;
 }
 
-const EMPTY_CHANNELS = Object.freeze([]) as readonly HomeChannel[];
+const EMPTY_CHANNELS = Object.freeze([]) as readonly Channel[];

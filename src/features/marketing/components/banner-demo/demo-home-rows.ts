@@ -7,11 +7,12 @@
  * the root lint enforces (`max-lines`), and these rows are the one part of the
  * demo's data that is NOT a wire shape. Everything in that file is a real
  * `Channel` / `ChannelMessage` / session row the product's own components are
- * fed; everything here is a flattened stand-in for `GET /api/home/channels`,
- * which the marketing tree has nothing to call.
+ * fed; everything here is a flattened stand-in for the rows
+ * `GET /api/channels?scope=account` answers with, which the marketing tree has
+ * nothing to call.
  *
  * ⚠ **THE FIELDS ARE `HomeChannelRowFacts` — THE OUTPUTS OF /home's ROW
- * DERIVATIONS, NOT THEIR INPUT.** The real list feeds a `HomeChannel` through
+ * DERIVATIONS, NOT THEIR INPUT.** The real list feeds a `Channel` through
  * `channelTitle` / `channelPeople` / `hasLinkOut` and hands the answers to
  * `HomeChannelRow`; the demo has no payload behind it, so it authors those
  * answers and the SAME component renders them. The derivations are what the

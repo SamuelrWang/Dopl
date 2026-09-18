@@ -59,6 +59,12 @@ export const baseChannel: Channel = {
   // assigned through a cast does not get excess-property checking — so the fixture outlived
   // the fields silently. Removed rather than left as harmless noise.
   onlineMemberCount: 1,
+  // THE ROW EXTRAS (R-26) — one projection, so a fixture carries them too.
+  container: { id: "ws-1", kind: "standard", segment: "ws-1-aaaaaa" },
+  myWorkspaceRole: "owner",
+  peers: [],
+  mentionCount: 0,
+  linkOut: null,
 };
 
 export const OTHER: Channel = {

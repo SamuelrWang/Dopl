@@ -2,7 +2,10 @@
 import "server-only";
 import type {
   AgentToolProfile,
+  ChannelContainer,
   ChannelDirectPeer,
+  ChannelPeer,
+  ChannelPendingLink,
   ChannelRole,
   NotifyScope,
 } from "../types";
@@ -218,6 +221,17 @@ export interface ChannelViewerState {
   onlineMemberCount: number;
   /** The resolved peer for a direct channel; null for a normal channel. */
   directPeer: ChannelDirectPeer | null;
+  /**
+   * 🔒 THE ROW EXTRAS (R-26) — the container address, the caller's role in it,
+   * the roster sample, the `@ N` count and the open bound link. ⚠ **REQUIRED, not
+   * optional, so a second list path cannot silently omit one**: the whole point of
+   * one projection is that every row of every scope carries the same shape.
+   */
+  container: ChannelContainer;
+  workspaceRole: Role | null;
+  peers: ChannelPeer[];
+  mentionCount: number;
+  linkOut: ChannelPendingLink | null;
 }
 
 /** Presence layered onto a member row (derived from agent_presence). */

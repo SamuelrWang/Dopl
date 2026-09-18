@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import { installBridge, ok } from "#/test-utils/bridge";
 import { EMPTY_INFO_CARD } from "@/features/channels/info-card";
-import type { HomeChannelsPayload } from "@/features/home/types";
+import type { ChannelListPayload } from "@/features/channels/types";
 import {
   CHANNEL,
   CHANNEL_ID,
@@ -11,6 +11,7 @@ import {
   HOME,
   MEMBERS,
   THREADS,
+  isAccountChannels,
   openChannelRecord,
   renderHome,
   routes,
@@ -29,7 +30,7 @@ import {
  * stub is deliberately READ-ONLY for the same reason: nothing here writes.
  *
  * ⚠ MOUNTED THROUGH `HomePage`, not the component, exactly as the parent file
- * is — the header reads `HomeChannel` off the `/api/home/channels` cache, so a
+ * is — the header reads `HomeChannel` off the `/api/channels?scope=account` cache, so a
  * direct mount would hand it a static prop and pass while the read was broken.
  */
 
@@ -46,11 +47,11 @@ vi.mock("@/features/channels/components/channel-surface-standalone", async () =>
 
 /** Serve the account surface with `home` as its channel payload. Read-only: the
  *  card never changes in this file, so there is no stored state to keep. */
-function serve(home: HomeChannelsPayload): void {
+function serve(home: ChannelListPayload): void {
   apiRequest.mockImplementation(
     (path: string, opts: BridgeRequestOpts = {}): Promise<BridgeResponse> => {
       const bare = path.split("?")[0];
-      if (bare === "/api/home/channels") return Promise.resolve(ok(home));
+      if (isAccountChannels(path)) return Promise.resolve(ok(home));
       if (bare === "/api/channels") {
         return Promise.resolve(
           ok({ channels: [{ ...CHANNEL, infoCard: EMPTY_INFO_CARD }] })
@@ -76,7 +77,7 @@ beforeEach(() => {
 });
 
 describe("MORE THAN TWO people (Samuel, 2026-08-26 — F-307)", () => {
-  const CROWDED: HomeChannelsPayload = {
+  const CROWDED: ChannelListPayload = {
     channels: [CROWDED_CHANNEL],
     pendingLinks: [],
   };

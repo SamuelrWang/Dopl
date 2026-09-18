@@ -23,6 +23,11 @@ import type { ChannelDelivery, ChannelWakeVerdict } from "./types-delivery";
 // and its coercion are ONE statement in `lib/agent-mentions.ts`, twinned by a SQL CHECK.
 import type { UnaddressedResponderSetting } from "./lib/agent-mentions";
 import type { Role } from "@/features/workspaces/types";
+// 🔒 THE ONE LIST PROJECTION (R-26). In its own file ONLY because this one is at
+// §1's cap, and re-exported WHOLE so `@/features/channels/types` stays the single
+// import path — a second path to a type is how two of them drift.
+import type { ChannelPendingLink, ChannelRowExtras } from "./types-list";
+export * from "./types-list";
 
 /**
  * ⚠ **THE TEN CLOSED SETS BELOW ARE DECLARED IN `@dopl/contracts › channels.ts` AND
@@ -210,11 +215,9 @@ export type Channel = {
    * ⚠ THE SIDEBAR'S FAVORITES SECTION READS THIS AND NOTHING ELSE — it rides
    * the channel list the sidebar already has, so no extra read, no endpoint.
    *
-   * 🔒 **AND IT IS THE ONE WIRE NAME FOR `channel_members.favorited_at` SINCE
-   * R-27 (Samuel, 2026-09-17).** The home payload spelled the same column
-   * `favoritedAt` and the roster row spelled it that way too; three names for one
-   * fact is what produced the pin bug (*"the bookmark icon like alway breaks"*,
-   * 2026-09-15) and the two cache-to-cache bridges that papered over it.
+   * 🔒 **THE ONE WIRE NAME FOR `channel_members.favorited_at` SINCE R-27** — the
+   * home payload and the roster row each spelled it `favoritedAt`, and three
+   * names for one fact is what produced the pin bug (2026-09-15).
    */
   myFavoritedAt: string | null;
   /** Members whose agent heartbeat is within PRESENCE_ONLINE_WINDOW_MS. */
@@ -239,6 +242,20 @@ export type Channel = {
   // different from my last agent address."* Replaced by
   // `ChannelMember.unaddressedResponder` on the VIEWER'S OWN roster row — deliberately
   // not a `my*` field here, so there is one client-side source.
+} & ChannelRowExtras;
+
+/**
+ * The payload of `GET /api/channels` at BOTH scopes (R-26 (b)).
+ *
+ * ⚠ **`pendingLinks` IS AN ABSENT KEY UNDER `scope=container`, NEVER `[]`** —
+ * `channelGrants` on `GET /api/knowledge/bases` is the §9 precedent: an absent
+ * param yields an absent key, where `[]` would assert "asked, none open". Under
+ * `scope=account` it is the caller's LEGACY UNBOUND links, which have no channel
+ * to hang off and so must be rows of their own.
+ */
+export type ChannelListPayload = {
+  channels: Channel[];
+  pendingLinks?: ChannelPendingLink[];
 };
 
 export type ChannelMessage = {
@@ -416,9 +433,7 @@ export type ChannelMember = {
   unaddressedResponder?: UnaddressedResponderSetting | null;
   /** ⚠ Private preference — present ONLY on the caller's own row. The
    *  favourite-toggle PATCH echoes it back; the sidebar reads
-   *  `Channel.myFavoritedAt` instead, off a list it already has.
-   *  ⚠ **RENAMED FROM `favoritedAt` BY R-27** — one wire name for the column,
-   *  on every payload that carries it. */
+   *  `Channel.myFavoritedAt` instead. ⚠ **RENAMED FROM `favoritedAt` BY R-27.** */
   myFavoritedAt: string | null;
   agentOnline: boolean;
   lastSeenAt: string | null;

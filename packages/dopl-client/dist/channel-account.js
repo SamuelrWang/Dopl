@@ -7,11 +7,12 @@
  * CALLS.** `/api/channels/account/**` is `withUserAuth` and reads no
  * `X-Workspace-Id`; the fence is the caller's own `channel_members` rows, so a
  * channel the caller does not belong to is unreachable from any query behind
- * them. This is the same rule `home.ts` states for `/api/home/channels`, and a
- * workspace header here would be noise suggesting a scoping the routes do not
- * have. ⚠ The transport's AsyncLocalStorage override still applies if a caller
- * wraps one of these in `workspaceContext.run(...)` — it changes nothing about
- * the answer and it should not be done.
+ * them. This is the same rule `home.ts` states for
+ * `/api/channels?scope=account`, and a workspace header here would be noise
+ * suggesting a scoping the routes do not have. ⚠ The transport's
+ * AsyncLocalStorage override still applies if a caller wraps one of these in
+ * `workspaceContext.run(...)` — it changes nothing about the answer and it
+ * should not be done.
  *
  * ⚠ **NEITHER OF THESE IS A HOLD.** They are ordinary bounded pages. The
  * long-poll is `awaitWorkspaceMessages`, which is workspace-scoped and stays

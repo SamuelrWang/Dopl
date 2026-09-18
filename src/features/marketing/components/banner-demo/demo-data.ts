@@ -139,6 +139,12 @@ function channel(
     myAgentToolProfile: null,
     myFavoritedAt: null,
     onlineMemberCount: 3,
+    // THE ROW EXTRAS (R-26) — one projection, so a fixture carries them too.
+    container: { id: "ws-1", kind: "standard", segment: "ws-1-aaaaaa" },
+    myWorkspaceRole: "owner",
+    peers: [],
+    mentionCount: 0,
+    linkOut: null,
     infoCard: EMPTY_INFO_CARD,
     // ⚠ `defaultResponderAgentName` LEFT THIS FIXTURE ON 2026-09-07 with the field (items 10
     // and 11), as `agentPosture` did the day before.

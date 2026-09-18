@@ -50,6 +50,12 @@ export function channel(over: Partial<Channel> = {}): Channel {
      *  section must be absent in, and the one a bookmark toggle starts from. */
     myFavoritedAt: null,
     onlineMemberCount: 1,
+    // THE ROW EXTRAS (R-26) — one projection, so a fixture carries them too.
+    container: { id: "ws-1", kind: "standard", segment: "ws-1-aaaaaa" },
+    myWorkspaceRole: "owner",
+    peers: [],
+    mentionCount: 0,
+    linkOut: null,
     infoCard: EMPTY_INFO_CARD,
     // ⚠ `defaultResponderAgentName` LEFT THIS FIXTURE ON 2026-09-07 with the field (items 10
     // and 11). The per-member replacement is on the MEMBER fixture, not this one.

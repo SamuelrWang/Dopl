@@ -7,8 +7,8 @@ import {
 } from "@/features/agent-templates/components/template-section";
 import type { AgentTemplate } from "@/features/agent-templates/client/types";
 import type { TemplateSectionDef } from "@/features/agent-templates/lib/visibility";
-import { EMPTY_PEERS } from "@/features/home/types";
-import type { HomeChannel } from "@/features/home/types";
+import { EMPTY_PEERS } from "@/features/channels/types";
+import type { Channel } from "@/features/channels/types";
 import { channelPeople } from "./home-rows";
 
 /**
@@ -189,17 +189,17 @@ export function PrivateAgentSection({
  *   one nobody acts on.
  */
 export function useContainerAuthorMarker(
-  channel: HomeChannel | null,
+  channel: Channel | null,
   currentUserId: string
 ): (template: AgentTemplate) => string | null {
-  // ⚠ THE DEPENDENCY IS `channel`, NOT THE PEER LIST. `channelPeople` SYNTHESISES
-  // an array on the stale-cache branch, so a fresh reference every render would
-  // bust this memo every render; the channel object itself is the stable thing
-  // the query cache hands back.
+  // ⚠ THE DEPENDENCY IS `channel`, NOT THE PEER LIST. `channelPeople` can hand
+  // back the frozen `EMPTY_PEERS` or the cached array, and reading `.peers` here
+  // would be a second read of the field §8's enforcement pins to one place; the
+  // channel object itself is the stable thing the query cache hands back.
   const names = useMemo(() => {
     const map = new Map<string, string>();
     // ⚠ A NAMELESS PEER IS LEFT OUT OF THE MAP, NOT ENTERED BLANK.
-    // `HomePeer.displayName` is nullable (a profile that never set one), and
+    // `ChannelPeer.displayName` is nullable (a profile that never set one), and
     // `authorMarker` already has the right answer for an unresolvable author —
     // `by another member`. An empty-string entry would render `by ` instead.
     for (const peer of channel ? channelPeople(channel) : EMPTY_PEERS) {

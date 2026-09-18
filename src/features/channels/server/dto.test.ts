@@ -49,6 +49,12 @@ function viewerState(overrides: Partial<ChannelViewerState> = {}): ChannelViewer
     favoritedAt: null,
     onlineMemberCount: 0,
     directPeer: null,
+    // THE ROW EXTRAS (R-26) — one projection, so the viewer state carries them.
+    container: { id: "ws-1", kind: "standard", segment: "ws-1-aaaaaa" },
+    workspaceRole: "owner",
+    peers: [],
+    mentionCount: 0,
+    linkOut: null,
     ...overrides,
   };
 }

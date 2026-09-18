@@ -3,8 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import { installBridge, ok } from "#/test-utils/bridge";
 import { EMPTY_INFO_CARD } from "@/features/channels/info-card";
-import type { Channel } from "@/features/channels/types";
-import type { HomeChannelsPayload } from "@/features/home/types";
+import type { Channel, ChannelListPayload } from "@/features/channels/types";
 import type { Role } from "@/features/workspaces/types";
 import {
   CHANNEL,
@@ -12,6 +11,7 @@ import {
   HOME,
   MEMBERS,
   THREADS,
+  isAccountChannels,
   openChannelRecord,
   renderHome,
   routes,
@@ -32,8 +32,8 @@ import {
  *
  * ⚠ MOUNTED THROUGH `HomePage`, and the surface stub mints the REAL write
  * (`surface-slot-fixtures.tsx`): the PATCH, its optimistic patch of
- * `GET /api/channels` and the /home bridge that copies the name across all have to
- * run, or "the row re-titles" is a sentence about a handler nobody wired.
+ * `GET /api/channels` — which the left column now reads from too — has to run, or
+ * "the row re-titles" is a sentence about a handler nobody wired.
  *
  * ⚠ **THE STUB SERVER IS STATEFUL.** The write's own `invalidate` re-reads
  * `/api/channels`, so a stub that always answered with the shipped name would
@@ -73,14 +73,26 @@ function serve(over: Partial<Channel> = {}, homeRole: Role = "owner"): void {
     infoCard: EMPTY_INFO_CARD,
     ...over,
   };
-  const home: HomeChannelsPayload = {
+  // 🔒 **THE ACCOUNT PAYLOAD IS STATEFUL TOO, AND IT HAS TO BE SINCE WAVE 3
+  // (R-26).** The write invalidates `channelKeys.list().all`, which is the PREFIX
+  // — so it now re-reads the ACCOUNT entry as well as the container one, where
+  // before those were two keys and only the container's was re-read. A stub that
+  // answered the shipped name here would repaint the OLD title a tick after every
+  // save, which is exactly the regression this suite's docblock names.
+  const home = (): ChannelListPayload => ({
     ...HOME,
-    channels: HOME.channels.map((row) => ({ ...row, role: homeRole })),
-  };
+    channels: HOME.channels.map((row: Channel) => ({
+      ...row,
+      ...(row.id === channel.id
+        ? { name: channel.name, topic: channel.topic }
+        : {}),
+      myWorkspaceRole: homeRole,
+    })),
+  });
   apiRequest.mockImplementation(
     (path: string, opts: BridgeRequestOpts = {}): Promise<BridgeResponse> => {
       const bare = path.split("?")[0];
-      if (bare === "/api/home/channels") return Promise.resolve(ok(home));
+      if (isAccountChannels(path)) return Promise.resolve(ok(home()));
       if (bare === "/api/channels") {
         return Promise.resolve(ok({ channels: [channel] }));
       }
@@ -143,7 +155,7 @@ describe("home info tab — the header lines open", () => {
     await waitFor(() => expect(patches).toEqual([{ name: "Q3 Fundraise" }]));
   });
 
-  it("re-titles the row in the LEFT COLUMN, which is a second cache", async () => {
+  it("re-titles the row in the LEFT COLUMN, off the ONE cache entry", async () => {
     serve();
     renderHome();
     await openChannelRecord();
@@ -154,9 +166,11 @@ describe("home info tab — the header lines open", () => {
     fireEvent.change(field, { target: { value: "Q3 Fundraise" } });
     fireEvent.blur(field);
 
-    // 🔒 THE WHOLE REASON THE BRIDGE EXISTS: the write patches `GET /api/channels`
-    // and this list is `GET /api/home/channels` — two payloads carrying one name
-    // (`use-home-channel-sync.ts`, the pin's own two-cache gap).
+    // 🔒 **ONE CACHE, SO THERE IS NOTHING TO BRIDGE (R-26).** The write patches
+    // `channelKeys.list().all` — the PREFIX — so the optimistic name reaches the
+    // account entry this column renders, and the invalidate re-reads it. The
+    // 113-line `use-home-channel-sync.ts` that used to copy the name between two
+    // payloads is DELETED; this case is what proves it is not needed.
     await waitFor(() => expect(listRow("Q3 Fundraise")).toBeTruthy());
   });
 

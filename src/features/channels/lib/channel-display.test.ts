@@ -36,6 +36,12 @@ function chan(over: Partial<Channel> = {}): Channel {
     myAgentToolProfile: "full",
     myFavoritedAt: null,
     onlineMemberCount: 0,
+    // THE ROW EXTRAS (R-26) — one projection, so a fixture carries them too.
+    container: { id: "ws-1", kind: "standard", segment: "ws-1-aaaaaa" },
+    myWorkspaceRole: "owner",
+    peers: [],
+    mentionCount: 0,
+    linkOut: null,
     infoCard: EMPTY_INFO_CARD,
     // ⚠ `defaultResponderAgentName` left this fixture on 2026-09-07 with the field.
     ...over,

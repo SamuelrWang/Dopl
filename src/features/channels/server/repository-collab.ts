@@ -318,6 +318,40 @@ export async function presenceForWorkspace(
 }
 
 /**
+ * Presence across MANY containers in ONE statement — what `scope=account` needs,
+ * since that read spans every container the caller belongs to (Wave 3, R-26).
+ *
+ * ⚠ **ONE `.in()`, NEVER A LOOP OVER `presenceForWorkspace`.** A per-container fan
+ * is the shape §9 forbids, and the per-workspace heartbeat loop below is the
+ * worked example of what it costs at 13+ containers.
+ *
+ * ⚠ **KEYED BY USER ID, LIKE ITS SIBLING, so a member of two containers collapses
+ * to one entry** — which is right: presence is a property of the PERSON's machine,
+ * not of a room. The last row read wins, and they carry the same answer.
+ */
+export async function presenceForWorkspaces(
+  workspaceIds: string[]
+): Promise<Map<string, MemberPresence>> {
+  const out = new Map<string, MemberPresence>();
+  if (workspaceIds.length === 0) return out;
+  const { data, error } = await supabaseAdmin()
+    .from("agent_presence")
+    .select("user_id, last_seen_at, status")
+    .in("workspace_id", workspaceIds)
+    .limit(PRESENCE_ROWS_LIMIT);
+  if (error) throw error;
+  const now = Date.now();
+  for (const row of (data ?? []) as Array<{
+    user_id: string;
+    last_seen_at: string;
+    status: string | null;
+  }>) {
+    out.set(row.user_id, derivePresence(row.last_seen_at, row.status, now));
+  }
+  return out;
+}
+
+/**
  * ONE STATEMENT, EVERY CONTAINER — the user-scoped heartbeat (2026-09-08).
  *
  * ⚠ **THE PER-WORKSPACE LOOP DID NOT SCALE WITH MEMBERSHIP COUNT — the reported

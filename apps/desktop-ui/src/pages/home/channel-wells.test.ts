@@ -14,7 +14,7 @@ const HOUR = 3_600_000;
 const NOW = Date.UTC(2026, 8, 15, 12, 0, 0);
 /** A channel row stamped `ms` before {@link NOW}, pinned or not. ⚠ The stamp is an
  *  ISO STRING on the wire, which is the shape `channelWellOf` has to survive; the
- *  pin is `HomeChannel.myFavoritedAt`, the SERVER's `channel_members.favorited_at`. */
+ *  pin is `Channel.myFavoritedAt`, the SERVER's `channel_members.favorited_at`. */
 function rowAgedMs(
   ms: number,
   over: { id?: string; myFavoritedAt?: string | null } = {}
@@ -66,7 +66,7 @@ describe("channelWellOf — Samuel's 24h cut", () => {
   });
 
   /**
-   * 🔒 **THE STALE-CACHE CASE (INVARIANTS §8).** `GET /api/home/channels` is
+   * 🔒 **THE STALE-CACHE CASE (INVARIANTS §8).** `GET /api/channels?scope=account` is
    * IndexedDB-persisted with a 24h `gcTime`, so the FIRST PAINT after this bundle
    * ships serves entries written by the previous one — which have NO `myFavoritedAt`.
    * The row must file under its own recency, which is the answer that was true for

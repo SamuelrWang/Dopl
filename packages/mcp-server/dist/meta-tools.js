@@ -100,7 +100,12 @@ async function opCreateHomeChannel(client, name) {
         // rather than by hand: this line said "on any other tool" and B13 had
         // already made that false — the arg is IGNORED off that table, so the
         // advice cost a call and a footer note to discover.
-        `Address it with container=\`${channel.workspaceId}\` on ${(0, workspace_arg_js_1.workspaceArgTargets)()}, and with channel=\`${channel.channelId}\` on dopl_channel.`,
+        // ⚠ **`channel.id`, NOT `channel.channelId` — THE MINT ANSWERS A `Channel`
+        // SINCE R-26 (b)** (2026-09-17). The deleted `HomeChannel` carried the
+        // container on `workspaceId` and the channel on `channelId`; the one
+        // projection carries the container on `workspaceId` still, and the channel
+        // on its own `id`.
+        `Address it with container=\`${channel.workspaceId}\` on ${(0, workspace_arg_js_1.workspaceArgTargets)()}, and with channel=\`${channel.id}\` on dopl_channel.`,
         `⚠ You cannot add a person to it. Minting the invitation is an interactive-session act, refused over MCP for every role and token — ask the user to add someone from the Dopl app.`,
     ].join("\n"));
 }

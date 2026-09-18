@@ -14,6 +14,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { HttpError } from "@/shared/lib/http-error";
+import type { Channel } from "@/features/channels/types";
 
 vi.mock("./repository", () => ({
   insertLink: vi.fn(),
@@ -103,21 +104,20 @@ const ADA = {
   avatarUrl: null,
 };
 
+// ⚠ **THE ONE ROW TYPE (R-26)** — a write echo answers exactly what the list
+// answers, which is why `hydrateOneChannel` is a seam and not a second mapper.
+// Only the fields these cases assert are spelled.
 const CHANNEL = {
+  id: "44444444-4444-4444-8444-444444444444",
   workspaceId: WS,
-  workspaceSegment: "ada-grace-abc123def456",
-  channelId: "44444444-4444-4444-8444-444444444444",
-  name: "Ada & Grace", topic: "",
-  // ⚠ `peer` IS `peers[0]`, not a second fact — `hydrateChannels` derives it, so
-  // a fixture where the two disagree is a shape the server cannot produce.
+  container: { id: WS, kind: "link", segment: "ada-grace-abc123def456" },
+  name: "Ada & Grace",
   peers: [ADA],
-  peer: ADA,
   createdAt: "2026-08-23T00:00:00.000Z",
-  lastMessageAt: null,
-  lastMessagePreview: null, unread: false, unreadMentions: 0,
-  myFavoritedAt: null, role: "owner" as const, // F-343's field: the creator's own
-      linkOut: null,
-};
+  mentionCount: 0,
+  myWorkspaceRole: "owner" as const,
+  linkOut: null,
+} as unknown as Channel;
 
 beforeEach(() => {
   vi.clearAllMocks();

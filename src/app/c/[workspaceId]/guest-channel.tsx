@@ -4,7 +4,7 @@
  * THE GUEST'S WHOLE APPLICATION — one channel, full viewport, no rail, no
  * sidebar, no workspace surfaces. Mirrors the desktop's
  * `apps/desktop-ui/src/pages/home/relationship-record.tsx`: the server hands
- * down a `HomeChannel`, the channels feature's OWN read resolves the `Channel`
+ * down the container's row, the channels feature's OWN read resolves the `Channel`
  * row it names, and `StandaloneChannelSurface` is the rest.
  *
  * ⚠ `next/dynamic` WITH `ssr: false`, not a plain import. The surface tree is
@@ -56,7 +56,9 @@ import { useChannels } from "@/features/channels/hooks/use-channels";
 import { useChannelWebView } from "@/features/channels/components/use-channel-web-view";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { DetailPaneSkeleton, TranscriptSkeleton } from "@/shared/ui/skeleton";
-import type { HomeChannel } from "@/features/home/types";
+// ⚠ **THE ONE ROW TYPE SINCE WAVE 3 (R-26)** — this prop was `HomeChannel`, the
+// second projection of the same question, and it is `Channel` now.
+import type { Channel } from "@/features/channels/types";
 
 const StandaloneChannelSurface = dynamic(
   () =>
@@ -70,7 +72,7 @@ export function GuestChannel({
   homeChannel,
   currentUserId,
 }: {
-  homeChannel: HomeChannel;
+  homeChannel: Channel;
   currentUserId: string;
 }) {
   /**
@@ -90,7 +92,7 @@ export function GuestChannel({
   const { channels, loading, error, refetch } = useChannels(homeChannel.workspaceId);
   const onDeleted = useCallback(() => setDeleted(true), []);
 
-  const channel = channels.find((row) => row.id === homeChannel.channelId);
+  const channel = channels.find((row) => row.id === homeChannel.id);
 
   return (
     <div className="flex h-[100dvh] bg-bg-elevated">
@@ -136,7 +138,7 @@ export function GuestChannel({
       ) : (
         <StandaloneChannelSurface
           workspaceId={homeChannel.workspaceId}
-          workspaceSlug={homeChannel.workspaceSegment}
+          workspaceSlug={homeChannel.container.segment}
           channel={channel}
           currentUserId={currentUserId}
           // ⚠ ONE COLUMN, AND THE FIVE FACES BEHIND A HEADER DROPDOWN (Samuel,

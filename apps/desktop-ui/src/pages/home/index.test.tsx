@@ -8,7 +8,7 @@ import {
   installBridge,
   ok,
 } from "#/test-utils/bridge";
-import type { HomeChannelsPayload } from "@/features/home/types";
+import type { Channel, ChannelListPayload } from "@/features/channels/types";
 import {
   CHANNEL,
   CHANNEL_ID,
@@ -16,6 +16,7 @@ import {
   LINK_SEGMENT,
   LINK_WORKSPACE_ID,
   failing,
+  isAccountChannels,
   openChannelRecord,
   openChannels,
   renderHome,
@@ -200,11 +201,20 @@ describe("home page", () => {
     expect(screen.getByText("Created")).toBeInTheDocument();
     expect(screen.getByText("Created")).toBeInTheDocument();
 
-    // The channels read is addressed to the CONTAINER, over the workspace header.
-    const call = bridgeCalls(apiRequest).find((c) =>
-      c.path.startsWith("/api/channels")
+    // ⚠ **THE RECORD PANE'S READ IS THE `container` SCOPE, AND THE PAGE'S LIST IS
+    // THE `account` ONE — ONE PATH, TWO SCOPES (R-26).** So this looks for the
+    // container call by its scope rather than by the path, which since Wave 3
+    // matches both. The container read is addressed over the workspace header;
+    // the account read carries none, and must not (`withUserAuth` resolves no
+    // workspace, and a header would key the cache per rail selection).
+    const calls = bridgeCalls(apiRequest).filter((c) =>
+      c.path.startsWith("/api/channels?")
     );
-    expect(call?.opts.workspaceId).toBe(LINK_WORKSPACE_ID);
+    const container = calls.find((c) => c.path.includes("scope=container"));
+    expect(container?.opts.workspaceId).toBe(LINK_WORKSPACE_ID);
+    expect(
+      calls.find((c) => c.path.includes("scope=account"))?.opts.workspaceId
+    ).toBeUndefined();
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -219,7 +229,7 @@ describe("home page", () => {
   it("🔒 says No channels yet with nothing to show — and a typed query never says No matches", async () => {
     apiRequest.mockImplementation(
       (path: string, opts: BridgeRequestOpts = {}) =>
-        path.split("?")[0] === "/api/home/channels"
+        isAccountChannels(path)
           ? Promise.resolve(ok({ channels: [], pendingLinks: [] }))
           : (routes(path, opts) ??
             Promise.reject(new Error(`unexpected: ${path}`)))
@@ -251,24 +261,20 @@ describe("home page", () => {
     // 🔒 NO LONGER A SPECIAL CASE SINCE 2026-09-01, which is the point: the row
     // was titled by the channel HERE and by the peer everywhere else, and the
     // "Just you" subline was the roster said a second way. Both are gone.
-    const solo: HomeChannelsPayload = {
+    const solo: ChannelListPayload = {
       channels: [
         {
           ...HOME.channels[0],
           name: "Q3 Fundraise",
-          // ⚠ BOTH, or the fixture contradicts itself: `peer` is `peers[0]`, so
-          // a null head over a non-empty list is a payload the server cannot emit.
           peers: [],
-          peer: null,
           lastMessageAt: null,
-          lastMessagePreview: null,
         },
       ],
       pendingLinks: [],
     };
     apiRequest.mockImplementation(
       (path: string, opts: BridgeRequestOpts = {}) =>
-        path.split("?")[0] === "/api/home/channels"
+        isAccountChannels(path)
           ? Promise.resolve(ok(solo))
           : (routes(path, opts) ??
             Promise.reject(new Error(`unexpected: ${path}`)))
@@ -296,26 +302,33 @@ describe("home page", () => {
     // ⚠ THE WHOLE POINT OF THE INVERSION: a channel exists BEFORE anybody else
     // is in it, so creating one is a name and nothing more — no invitee, no
     // second field — and the operator is dropped straight into it.
-    const created = {
+    const created: Channel = {
       ...HOME.channels[0],
       workspaceId: "ws-link-new",
-      workspaceSegment: "link-q3-cc22dd",
-      channelId: "chan-new",
+      // ⚠ THE CONTAINER MOVES WITH THE ROW — `container.kind` is what G3 filters
+      // on, so a created row that kept the old container id would still render
+      // but would address the wrong workspace.
+      container: {
+        id: "ws-link-new",
+        kind: "link",
+        segment: "link-q3-cc22dd",
+      },
+      id: "chan-new",
       name: "Q3 Fundraise",
       peers: [],
-      peer: null,
       lastMessageAt: null,
-      lastMessagePreview: null,
     };
     let channels = [...HOME.channels];
     apiRequest.mockImplementation(
       (path: string, opts: BridgeRequestOpts = {}) => {
         const bare = path.split("?")[0];
-        if (bare === "/api/home/channels" && opts.method === "POST") {
+        // ⚠ **THE SCOPE TELLS THE THREE APART**, and the POST is one of them:
+        // "New channel" is `POST /api/channels?scope=account` since R-26 (b).
+        if (isAccountChannels(path) && opts.method === "POST") {
           channels = [created, ...channels];
           return Promise.resolve(ok({ channel: created }));
         }
-        if (bare === "/api/home/channels") {
+        if (isAccountChannels(path)) {
           return Promise.resolve(ok({ channels, pendingLinks: [] }));
         }
         if (bare === "/api/channels") {
@@ -341,7 +354,7 @@ describe("home page", () => {
 
     await waitFor(() => {
       const post = bridgeCalls(apiRequest).find(
-        (c) => c.path === "/api/home/channels" && c.opts.method === "POST"
+        (c) => isAccountChannels(c.path) && c.opts.method === "POST"
       );
       // TRIMMED, because the server trims and would otherwise store the spaces
       // this field's own schema refuses to count toward its 1..80.
@@ -421,10 +434,9 @@ describe("home page", () => {
 
   it("routes a 401 to the signed-out screen, not an error card", async () => {
     apiRequest.mockImplementation(
-      failing(
-        "/api/home/channels",
-        failure(401, "UNAUTHORIZED", "Not signed in")
-      )
+      // ⚠ THE WHOLE RESOURCE, BOTH SCOPES — `failing` matches the bare path, and
+      // a 401 is an identity fact rather than a scope one.
+      failing("/api/channels", failure(401, "UNAUTHORIZED", "Not signed in"))
     );
 
     renderHome();
@@ -435,7 +447,7 @@ describe("home page", () => {
 
   it("surfaces a failed read as the shared page error", async () => {
     apiRequest.mockImplementation(
-      failing("/api/home/channels", failure(404, "NOT_FOUND", "Home blew up"))
+      failing("/api/channels", failure(404, "NOT_FOUND", "Home blew up"))
     );
 
     renderHome();

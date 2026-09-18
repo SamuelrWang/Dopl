@@ -9516,9 +9516,12 @@ the second snapshots the first's optimistic state, and the FIRST failing restore
 predates the second.
 
 **Measured** (throwaway probe, 2026-09-16): pin channel A, pin channel B, fail A → both
-`myFavoritedAt` values are `null`, and through
-`apps/desktop-ui/src/pages/home/use-home-channel-sync.ts` (the file was named for the favourite alone when this was measured; renamed 2026-09-17) **B's row also leaves the Pinned well**
-even though B's write succeeded.
+`myFavoritedAt` values are `null`, and through the /home cache bridge that existed then **B's row
+also leaves the Pinned well** even though B's write succeeded. ⚠ **THE BRIDGE IS GONE (R-26, Wave 3,
+2026-09-17)** — one projection, one cache — and the path is deliberately not cited, because a
+citation to a deleted file is what `check-doc-refs.mjs` refuses. **The FINDING is not closed by
+that**: the whole-payload snapshot restore is `use-api-mutation.ts`'s and is generic, so two writes
+against the ONE `/api/channels` entry interfere exactly as they did against two.
 
 ⚠ **IT SELF-HEALS ON THE SETTLE INVALIDATE**, so it is one round trip of visibly wrong state rather
 than a permanent one — which is why it has survived. The fix is a per-field rollback (restore only

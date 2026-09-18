@@ -1,8 +1,6 @@
 import "server-only";
 import type {
-  Channel,
   ChannelAgent,
-  ChannelDirectPeer,
   ChannelMember,
   ChannelMessage,
   ChannelReadEntry,
@@ -11,20 +9,13 @@ import type {
 import type { MessageReadQuery } from "../schema";
 import { ChannelNotFoundError, TaskNotFoundError } from "./errors";
 import { mapAgentRow } from "./agents-dto";
-import {
-  mapChannelRow,
-  mapMemberRow,
-  mapTaskRow,
-  type ChannelMemberRow,
-  type ChannelRow,
-} from "./dto";
+import { mapMemberRow, mapTaskRow } from "./dto";
 import * as repo from "./repository";
 import * as repoAgents from "./repository-agents";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
 import * as collab from "./repository-collab";
 import * as workspaceRepo from "@/features/workspaces/server/repository";
-import type { MemberPresence } from "./dto";
 import {
   hydrateMessages,
   loadVisibleChannel,
@@ -44,133 +35,11 @@ import { takeLineBudget } from "../lib/transcript-line-budget";
  * gate. A member's message read doubles as the read-watermark update.
  */
 
-interface ChannelExtras {
-  counts: Map<string, number>;
-  lasts: Map<string, string>;
-  /** channelId -> count of members whose agent is currently online. */
-  online: Map<string, number>;
-  /** channelId -> resolved peer, for direct channels only. */
-  directPeers: Map<string, ChannelDirectPeer>;
-}
-
-function toChannelDto(
-  row: ChannelRow,
-  membership: ChannelMemberRow | null,
-  extras: ChannelExtras
-): Channel {
-  return mapChannelRow(row, {
-    memberCount: extras.counts.get(row.id) ?? 0,
-    lastMessageAt: extras.lasts.get(row.id) ?? null,
-    role: (membership?.role as Channel["role"]) ?? null,
-    lastReadAt: membership?.last_read_at ?? null,
-    notifyScope: (membership?.notify_scope as Channel["myNotifyScope"]) ?? null,
-    agentToolProfile:
-      (membership?.agent_tool_profile as Channel["myAgentToolProfile"]) ?? null,
-    // Off the caller's own membership row, already loaded for `role` and the
-    // watermark — the sidebar's Favorites section adds no read.
-    favoritedAt: membership?.favorited_at ?? null,
-    onlineMemberCount: extras.online.get(row.id) ?? 0,
-    directPeer: extras.directPeers.get(row.id) ?? null,
-  });
-}
-
-/**
- * Resolve the rendered peer for every direct channel in `rows`, hydrated from
- * the roster. ⚠ Resolved LIVE, never stored as truth — a display name/avatar
- * changes. One profile fetch for the whole page.
- */
-async function buildDirectPeers(
-  rows: ChannelRow[],
-  memberIds: Map<string, string[]>,
-  selfId: string
-): Promise<Map<string, ChannelDirectPeer>> {
-  const peerByChannel = new Map<string, string>();
-  for (const row of rows) {
-    if (!row.is_direct) continue;
-    const ids = memberIds.get(row.id) ?? [];
-    const peerId = ids.find((id) => id !== selfId) ?? ids[0];
-    if (peerId) peerByChannel.set(row.id, peerId);
-  }
-  if (peerByChannel.size === 0) return new Map();
-  const profiles = await profilesById([...new Set(peerByChannel.values())]);
-  const out = new Map<string, ChannelDirectPeer>();
-  for (const [channelId, peerId] of peerByChannel) {
-    const p = profiles.get(peerId);
-    out.set(channelId, {
-      userId: peerId,
-      displayName: p?.display_name ?? null,
-      avatarUrl: p?.avatar_url ?? null,
-    });
-  }
-  return out;
-}
-
-/** Per-channel online-member counts from the workspace presence map. */
-function onlineCounts(
-  memberIds: Map<string, string[]>,
-  presence: Map<string, MemberPresence>
-): Map<string, number> {
-  const out = new Map<string, number>();
-  for (const [channelId, userIds] of memberIds) {
-    let n = 0;
-    for (const userId of userIds) {
-      if (presence.get(userId)?.online) n += 1;
-    }
-    out.set(channelId, n);
-  }
-  return out;
-}
-
-/** Every channel the caller may see, newest-active first. */
-export async function listChannels(ctx: ChannelContext): Promise<Channel[]> {
-  const myMemberships = await repo.listMyMemberships(ctx.workspaceId, ctx.userId);
-  const membershipByChannel = new Map(
-    myMemberships.map((m) => [m.channel_id, m])
-  );
-  const rows = await repo.listChannels(ctx.workspaceId, {
-    memberChannelIds: [...membershipByChannel.keys()],
-    // ⚠ A GUEST GETS NO PUBLIC ARM (2026-08-26) — the list half of the fence
-    // `loadVisibleChannel` applies to a single ref. Without it a container's
-    // public channel appears in a guest's list and every route then admits it.
-    includePublic: mayReadPublicChannels(ctx),
-  });
-  const ids = rows.map((r) => r.id);
-  const [counts, lasts, memberIds, presence] = await Promise.all([
-    repo.memberCounts(ids),
-    repoMessages.lastMessages(ids),
-    collab.channelMemberUserIds(ids),
-    collab.presenceForWorkspace(ctx.workspaceId),
-  ]);
-  const extras: ChannelExtras = {
-    counts,
-    lasts,
-    online: onlineCounts(memberIds, presence),
-    directPeers: await buildDirectPeers(rows, memberIds, ctx.userId),
-  };
-  return rows.map((row) =>
-    toChannelDto(row, membershipByChannel.get(row.id) ?? null, extras)
-  );
-}
-
-/** Single channel header + the caller's viewer state (Track B `open`). */
-export async function getChannel(
-  ctx: ChannelContext,
-  ref: string
-): Promise<Channel> {
-  const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  const [counts, lasts, memberIds, presence] = await Promise.all([
-    repo.memberCounts([channel.id]),
-    repoMessages.lastMessages([channel.id]),
-    collab.channelMemberUserIds([channel.id]),
-    collab.presenceForWorkspace(ctx.workspaceId),
-  ]);
-  return toChannelDto(channel, membership, {
-    counts,
-    lasts,
-    online: onlineCounts(memberIds, presence),
-    directPeers: await buildDirectPeers([channel], memberIds, ctx.userId),
-  });
-}
+// 🔒 **`listChannels`, `getChannel` AND THEIR THREE HYDRATORS MOVED TO
+// `service-list.ts` IN WAVE 3 (R-26).** There is ONE channel-row projection now,
+// shared by `?scope=container` and `?scope=account`, so the list mapper and its
+// `ChannelExtras` cannot live beside one of the two fences. They are re-exported
+// from the service barrel under the names every caller already imports.
 
 /** The channel's roster (visible to members + viewers of a public channel). */
 export async function listChannelMembers(

@@ -19,9 +19,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository");
 vi.mock("./service-reads");
+// ⚠ `getChannel` MOVED TO `service-list.ts` (R-26) — the one row projection.
+vi.mock("./service-list");
 
 import * as repo from "./repository";
-import * as reads from "./service-reads";
+import * as list from "./service-list";
 import { updateChannel } from "./service-writes";
 import { ChannelForbiddenError, ChannelInfoCardTooLargeError } from "./errors";
 import {
@@ -97,8 +99,8 @@ beforeEach(() => {
         : null
   );
   vi.mocked(repo.updateChannel).mockResolvedValue(channelRow());
-  vi.mocked(reads.getChannel).mockResolvedValue(
-    {} as Awaited<ReturnType<typeof reads.getChannel>>
+  vi.mocked(list.getChannel).mockResolvedValue(
+    {} as Awaited<ReturnType<typeof list.getChannel>>
   );
 });
 

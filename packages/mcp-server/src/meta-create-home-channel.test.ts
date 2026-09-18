@@ -26,11 +26,14 @@ import type { WorkspaceDirectory } from "./workspace-directory.js";
 
 type Handler = (args: Record<string, unknown>) => Promise<ToolResponse>;
 
+// ⚠ **THE MINT ANSWERS A `Channel` SINCE R-26 (b)** (2026-09-17) — the channel's
+// own `id`, not the deleted `HomeChannel.channelId`. `workspaceId` is unchanged:
+// it was the container handle on both shapes.
 const createHomeChannel = vi.fn(async ({ name }: { name: string }) => ({
   channel: {
     name,
     workspaceId: "ws-new",
-    channelId: "ch-new",
+    id: "ch-new",
   },
 }));
 

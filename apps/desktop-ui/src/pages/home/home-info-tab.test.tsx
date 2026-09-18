@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import { bridgeCalls, installBridge, ok } from "#/test-utils/bridge";
-import type { HomeChannelsPayload } from "@/features/home/types";
+import type { ChannelListPayload } from "@/features/channels/types";
 import type { ChannelInfoCard } from "@/features/channels/info-card";
 import {
   CHANNEL,
@@ -12,6 +12,7 @@ import {
   MEMBERS,
   SOLO_CHANNEL,
   THREADS,
+  isAccountChannels,
   openChannelRecord,
   renderHome,
   routes,
@@ -64,7 +65,7 @@ let stored: ChannelInfoCard;
  * the roster, and PERSIST whatever the info-card PATCH sends.
  */
 function serve(
-  home: HomeChannelsPayload,
+  home: ChannelListPayload,
   members: typeof MEMBERS = MEMBERS,
   /** Hold the info-card PATCH open until this resolves — the only way to prove
    *  an assertion ran while the write was still in flight. */
@@ -73,7 +74,7 @@ function serve(
   apiRequest.mockImplementation(
     (path: string, opts: BridgeRequestOpts = {}): Promise<BridgeResponse> => {
       const bare = path.split("?")[0];
-      if (bare === "/api/home/channels") return Promise.resolve(ok(home));
+      if (isAccountChannels(path)) return Promise.resolve(ok(home));
       if (bare === "/api/channels") {
         return Promise.resolve(
           ok({ channels: [{ ...CHANNEL, infoCard: stored }] })
@@ -114,7 +115,7 @@ function lastCardSent(): ChannelInfoCard | null {
 /** A solo container's roster: the operator, alone. */
 const SOLO_MEMBERS = { members: [MEMBERS.members[0]] };
 
-const SOLO_HOME: HomeChannelsPayload = {
+const SOLO_HOME: ChannelListPayload = {
   channels: [SOLO_CHANNEL],
   pendingLinks: [],
 };

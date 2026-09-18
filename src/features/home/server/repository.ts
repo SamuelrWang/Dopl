@@ -100,35 +100,10 @@ export async function findOpenLinkForWorkspace(
   return (data as ChannelLinkRow | null) ?? null;
 }
 
-/**
- * `workspaceId` → its open bound link. THE CHIP READ: one bounded query for a
- * whole page of channels, folded into the existing peers+channels tier so the
- * home payload does not grow a round trip.
- *
- * Backed by `channel_links_workspace_idx` (20260824120000). At most one row per
- * workspace exists by unique index, so `limit` is a safety ceiling rather than a
- * page — the first row per workspace wins, like every other map read here.
- */
-export async function listLinksByWorkspaces(
-  workspaceIds: string[],
-  limit: number
-): Promise<Map<string, ChannelLinkRow>> {
-  const out = new Map<string, ChannelLinkRow>();
-  if (workspaceIds.length === 0) return out;
-  const { data, error } = await supabaseAdmin()
-    .from("channel_links")
-    .select(CHANNEL_LINK_COLS)
-    .in("workspace_id", workspaceIds)
-    .is("revoked_at", null)
-    .limit(limit);
-  if (error) throw error;
-  for (const row of (data ?? []) as ChannelLinkRow[]) {
-    if (row.workspace_id && !out.has(row.workspace_id)) {
-      out.set(row.workspace_id, row);
-    }
-  }
-  return out;
-}
+// ⚠ **`listLinksByWorkspaces` MOVED TO `channels/server/repository-list-extras.ts`
+// IN WAVE 3 (R-26).** The open bound link is `Channel.linkOut` now, read by the ONE
+// channel-list projection; a copy here would be a second reader of `channel_links`
+// with nothing left calling it.
 
 export async function findLinkByToken(
   token: string
@@ -220,10 +195,8 @@ export * from "./repository-containers";
 
 /* ------------------------------ unread -------------------------------- */
 
-/**
- * ⚠ RE-EXPORT, NOT A RE-IMPLEMENTATION — `repository-unread.ts` owns the two
- * reads behind the /home row's unread dot and `@ N` badge (2026-09-13). Same
- * reason the container split is re-exported above: every caller and every
- * `vi.mock("./repository")` factory addresses ONE module.
- */
-export * from "./repository-unread";
+// ⚠ **`repository-unread.ts` IS DELETED (Wave 3, R-26)** and so is the re-export
+// that stood here. Its two reads served the /home row's unread marks; that row is
+// `GET /api/channels?scope=account` now, the dot is `dto.ts › mapChannelRow`'s
+// `unread`, and the mention scan is `channels/server/repository-mentions.ts ›
+// listMentionStamps` — beside the inbox read it shares a predicate with.

@@ -40,9 +40,15 @@ export { loadVisibleChannel } from "./service-shared";
 // outside caller took them, and a barrel row with no importer is a second name
 // for a type, which is how two of them drift.
 
+// 🔒 THE ONE CHANNEL-ROW PROJECTION (R-26) — both scopes and the single-row read
+// come off `service-list.ts`, so a list row and a mutation echo are one shape.
 export {
   listChannels,
+  listAccountChannels,
   getChannel,
+  hydrateChannelById,
+} from "./service-list";
+export {
   listAgents,
   listChannelMembers,
   listChannelTasks,

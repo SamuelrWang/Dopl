@@ -7,7 +7,7 @@ import {
   DirectSelfTargetError,
 } from "./errors";
 import * as repo from "./repository";
-import { getChannel } from "./service-reads";
+import { getChannel } from "./service-list";
 import { UNIQUE_VIOLATION, type ChannelContext } from "./service-shared";
 
 /**

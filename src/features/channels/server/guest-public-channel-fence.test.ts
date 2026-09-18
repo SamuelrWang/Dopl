@@ -81,7 +81,9 @@ import {
   type ChannelContext,
 } from "./service-shared";
 import { visibleChannelsOr } from "./repository-visibility";
-import { listChannels, revalidateAwaitAccess } from "./service-reads";
+import { revalidateAwaitAccess } from "./service-reads";
+// ⚠ THE LIST MOVED TO `service-list.ts` (R-26) — one projection, both scopes.
+import { listChannels } from "./service-list";
 import { ChannelNotFoundError } from "./errors";
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";

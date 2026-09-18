@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { installBridge } from "#/test-utils/bridge";
-import type { HomeChannelsPayload } from "@/features/home/types";
+import type { Channel, ChannelListPayload } from "@/features/channels/types";
 import { PANEL_WELL, PANEL_WELL_ON_PANEL } from "@/shared/ui/panel-well";
 import { channelKeys } from "@/features/channels/client/query-keys";
 import { HOME, openChannels, renderHome, withHome } from "./home-test-harness";
@@ -45,7 +45,7 @@ beforeEach(() => {
 describe("the list column's THREE WELLS", () => {
   /** A second channel, last spoken in months ago — the **Earlier** row. ⚠ Its own
    *  `workspaceId`, because that is what `channelRowId` keys the row on. */
-  const ANCIENT: HomeChannelsPayload["channels"][number] = {
+  const ANCIENT: Channel = {
     ...HOME.channels[0],
     workspaceId: "ws-ancient",
     name: "Cold Storage",
@@ -54,7 +54,7 @@ describe("the list column's THREE WELLS", () => {
   };
 
   /** The default (minutes old) channel plus the ancient one, no legacy link row. */
-  const SPREAD: HomeChannelsPayload = {
+  const SPREAD: ChannelListPayload = {
     channels: [HOME.channels[0], ANCIENT],
     pendingLinks: [],
   };
@@ -254,7 +254,7 @@ describe("the list column's THREE WELLS", () => {
     delete stale.myFavoritedAt;
     apiRequest.mockImplementation(
       withHome({
-        channels: [stale as unknown as HomeChannelsPayload["channels"][number]],
+        channels: [stale as unknown as Channel],
         pendingLinks: [],
       })
     );
@@ -271,32 +271,35 @@ describe("the list column's THREE WELLS", () => {
   });
 
   /**
-   * 🔒 **THE BUG BEHIND *"the bookmark icon like alway breaks and is super
-   * buggy"*, PINNED ON THE REAL PAGE.** The pin lives in TWO client caches —
-   * `GET /api/channels` (what the header's toggle patches) and
-   * `GET /api/home/channels` (what this list renders) — and the write only ever
-   * told the first. `use-home-channel-sync.ts` is the bridge; this is the case
-   * that fails without it.
+   * 🔒 **THE BUG BEHIND *"the bookmark icon like alway breaks and is super buggy"*,
+   * AND WHAT ACTUALLY FIXED IT (Samuel's ruling R-26 (b), Wave 3).** The pin used
+   * to live in TWO client caches — `GET /api/channels` (what the header's toggle
+   * patches) and `GET /api/home/channels` (what this list rendered) — and the write
+   * only ever told the first. **A 113-line cache-to-cache bridge carried it across;
+   * that bridge is DELETED, because there is one entry now.**
+   *
+   * ⚠ **THIS CASE IS THE PROOF, AND IT IS WHY IT PATCHES THE ACCOUNT ENTRY BY ITS
+   * OWN MINTER.** The header's optimistic write reaches this list because the read
+   * and the write register the SAME key — not because something copies between two.
+   * A hand-typed tuple here would pass while the real minter drifted, which is the
+   * failure `shared/api/query-keys.ts` opens with.
    */
-  it("moves the row into Pinned when the CHANNELS cache learns of a pin", async () => {
+  it("moves the row into Pinned off the ONE cache entry, with no bridge", async () => {
     apiRequest.mockImplementation(withHome(SPREAD));
     const { client } = renderHome();
     await openChannels();
     await screen.findByRole("heading", { name: "Recent" });
 
-    // The header's toggle patches the channels cache optimistically; the bridge
-    // copies the fact across, so the well moves on the CLICK and not on a reload.
     act(() => {
-      client.setQueryData(
-        channelKeys.list().entry({ workspaceId: HOME.channels[0].workspaceId }),
-        {
-          channels: [
-            {
-              id: HOME.channels[0].channelId,
-              myFavoritedAt: "2026-09-15T09:00:00.000Z",
-            },
-          ],
-        }
+      client.setQueryData<ChannelListPayload>(
+        channelKeys.list().entry({ query: { scope: "account" } }),
+        (prev) => ({
+          channels: (prev?.channels ?? []).map((row) => ({
+            ...row,
+            myFavoritedAt: "2026-09-15T09:00:00.000Z",
+          })),
+          pendingLinks: prev?.pendingLinks ?? [],
+        })
       );
     });
 

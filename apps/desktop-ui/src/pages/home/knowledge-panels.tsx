@@ -10,7 +10,10 @@ import {
 } from "@/features/knowledge/client/hooks";
 import { CreateBaseDialog } from "@/features/knowledge/components/create-base-dialog";
 import type { KnowledgeBase } from "@/features/knowledge/types";
-import { EMPTY_ROLE, type HomeChannel } from "@/features/home/types";
+import {
+  EMPTY_WORKSPACE_ROLE,
+  type Channel,
+} from "@/features/channels/types";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { PageError } from "#/components/page-states";
 import { HomeKnowledgeBaseView } from "./knowledge-base-view";
@@ -83,7 +86,7 @@ export function HomeKnowledgePanels({
 }: {
   /** `null` when the selected row is a legacy unbound LINK, or when there is
    *  no row at all — both are "no container to read knowledge from". */
-  channel: HomeChannel | null;
+  channel: Channel | null;
   /** ⚠ `POST /api/boot`'s `workspace`, which is NULL until the caller is
    *  onboarded (plan §0.1). Personal is unavailable, not empty, when it is. */
   homeWorkspaceId: string | null;
@@ -103,8 +106,8 @@ export function HomeKnowledgePanels({
   const [createOpen, setCreateOpen] = useState<PaneScope | null>(null);
 
   const containerList = useQuery({
-    queryKey: channelBasesQueryKey(channel?.workspaceId, channel?.channelId),
-    queryFn: () => fetchBaseList(channel?.workspaceId, channel?.channelId),
+    queryKey: channelBasesQueryKey(channel?.workspaceId, channel?.id),
+    queryFn: () => fetchBaseList(channel?.workspaceId, channel?.id),
     enabled: channel !== null,
   });
 
@@ -140,7 +143,7 @@ export function HomeKnowledgePanels({
   );
 
   const containerStar = useStarToggle(
-    channelBasesQueryKey(channel?.workspaceId, channel?.channelId),
+    channelBasesQueryKey(channel?.workspaceId, channel?.id),
     channel?.workspaceId
   );
   const homeStar = useStarToggle(
@@ -172,10 +175,13 @@ export function HomeKnowledgePanels({
   // believes about this viewer, and `accessSegment: null` means `MyAccessProvider`
   // resolves nothing behind it (F-330's fall-open) — so a guest peer opening a
   // shared base was shown edit affordances the API then refused.
-  // ⚠ §8 STALE-CACHE, SPELLED INLINE: a payload cached by the previous bundle
-  // carries no `role` key; `EMPTY_ROLE` is rank 0, so the modal opens display-only
-  // for one paint rather than claiming a permission nobody read.
-  const containerRole: Role = channel?.role ?? EMPTY_ROLE;
+  // ⚠ **`myWorkspaceRole`, NEVER `Channel.role`** — the CHANNEL role is a
+  // different ladder over a different membership and has no `guest` rung.
+  // ⚠ §8 STALE-CACHE, SPELLED INLINE: `EMPTY_WORKSPACE_ROLE` is rank 0, so the
+  // modal opens display-only for one paint rather than claiming a permission
+  // nobody read.
+  const containerRole: Role =
+    channel?.myWorkspaceRole ?? EMPTY_WORKSPACE_ROLE;
   /** The SHARED section's create, mirroring `POST /api/knowledge/bases`'s
    *  `minRole: "member"`. See the button for why it is a mirror and not a fence. */
   const canCreateShared = meetsMinRole(containerRole, "member");
@@ -189,7 +195,8 @@ export function HomeKnowledgePanels({
       ? null
       : {
           workspaceId: channel.workspaceId,
-          segment: channel.workspaceSegment,
+          // ⚠ `?? ""` INLINE (§8) — the segment rides `container`.
+          segment: channel.container?.segment ?? "",
           role: containerRole,
           // ⚠ NO `my-access` READ AGAINST A CONTAINER: it has no teams, so the
           // answer is the plain role default and the request buys nothing. See
@@ -290,7 +297,7 @@ export function HomeKnowledgePanels({
           // consequence 1).** `POST /api/knowledge/bases` is `minRole: "member"`,
           // so a GUEST peer's click was a 403 the dialog surfaced as an error —
           // correct, and a dead control (INVARIANTS §5). The pane could not tell
-          // a member from a guest until `HomeChannel.role` existed; it can now, so
+          // a member from a guest until `Channel.myWorkspaceRole` existed; it can now, so
           // it asks the SAME ladder the server asks (`meetsMinRole(…, "member")`)
           // rather than restating the floor as a second predicate.
           // ⚠ **THE SERVER FENCE IS UNCHANGED AND IS STILL THE FENCE** — this is
@@ -394,7 +401,7 @@ export function HomeKnowledgePanels({
           // the channel would land ungranted and be equally invisible.
           shelf={createOpen === "home" ? HOME_SHELF : undefined}
           shareToChannelId={
-            createOpen === "channel" ? channel?.channelId : undefined
+            createOpen === "channel" ? channel?.id : undefined
           }
           // ⚠ BOTH BUTTONS, NOT JUST THE SHARED ONE (Samuel, 2026-08-27). The
           // button that was pressed — Personal or Shared — IS the audience

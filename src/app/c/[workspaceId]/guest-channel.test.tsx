@@ -12,7 +12,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import type { HomeChannel } from "@/features/home/types";
+// ⚠ **THE ONE ROW TYPE SINCE R-26** — this prop was `HomeChannel`.
+import type { Channel } from "@/features/channels/types";
 
 const mocks = vi.hoisted(() => ({
   useChannels: vi.fn(),
@@ -40,25 +41,24 @@ const WS = "33333333-3333-4333-8333-333333333333";
 const CHANNEL_ID = "44444444-4444-4444-8444-444444444444";
 const USER = "11111111-1111-4111-8111-111111111111";
 
-const HOME_CHANNEL: HomeChannel = {
+const HOME_CHANNEL: Channel = {
+  id: CHANNEL_ID,
   workspaceId: WS,
-  workspaceSegment: "ada-grace-abc123def456",
-  channelId: CHANNEL_ID,
+  container: { id: WS, kind: "link", segment: "ada-grace-abc123def456" },
   name: "Ada & Grace",
   topic: "",
   peers: [],
-  peer: null,
   createdAt: "2026-08-20T00:00:00.000Z",
   lastMessageAt: null,
-  lastMessagePreview: null,
   unread: false,
-  unreadMentions: 0,
+  mentionCount: 0,
   myFavoritedAt: null,
   // ⚠ THE LANE'S OWN READER: a bound claim seats its peer at the link's
-  // `granted_role`, whose default is `guest` (F-343's field, 2026-09-17).
-  role: "guest",
-      linkOut: null,
-};
+  // `granted_role`, whose default is `guest` (F-343). ⚠ **IT IS
+  // `myWorkspaceRole` SINCE R-26** — `Channel.role` is the CHANNEL role.
+  myWorkspaceRole: "guest",
+  linkOut: null,
+} as unknown as Channel;
 
 const ROW = { id: CHANNEL_ID, name: "Ada & Grace" };
 

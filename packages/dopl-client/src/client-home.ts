@@ -5,6 +5,9 @@
  *
  * ⚠ TWO METHODS, and the omissions are the point — link MINT, link REVOKE and
  * the CLAIM are all `sessionOnly`, so none of them is bound. See `home.ts`.
+ *
+ * ⚠ **BOTH NOW ADDRESS `/api/channels?scope=account`** (R-26 (b)); the names are
+ * kept because `client-surface.test.ts` pins them. See `home.ts`.
  */
 
 import { AgentTemplateMethods } from "./client-agent-templates.js";

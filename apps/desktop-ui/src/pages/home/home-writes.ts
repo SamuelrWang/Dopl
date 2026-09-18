@@ -1,5 +1,9 @@
 import { useApiMutation } from "@/shared/hooks/use-api-mutation";
 import { apiPathKey } from "@/shared/api/query-keys";
+import {
+  channelKeys,
+  channelsPath,
+} from "@/features/channels/client/query-keys";
 import type {
   HomeChannelCreateResult,
   HomeLinkMintResult,
@@ -8,7 +12,7 @@ import type {
   HomeChannelCreateInput,
   HomeLinkMintBody,
 } from "@/features/home/schema";
-import { HOME_CHANNELS_PATH, HOME_LINKS_PATH } from "./home-rows";
+import { HOME_LINKS_PATH } from "./home-rows";
 
 /**
  * `POST /api/home/links`, as the ROUTE'S OWN schema types it. ⚠ Inferred, not
@@ -20,18 +24,18 @@ import { HOME_CHANNELS_PATH, HOME_LINKS_PATH } from "./home-rows";
  */
 export type HomeLinkDraft = HomeLinkMintBody;
 
-/** Both reads a link write can move. The channels payload carries both the
- *  legacy pending-link rows and each channel's own `linkOut`; `/api/home/links`
- *  is the same legacy rows for any other reader, so a write settles both rather
- *  than guessing which is mounted. */
-const LINK_READS = [
-  apiPathKey(HOME_CHANNELS_PATH),
-  apiPathKey(HOME_LINKS_PATH),
-];
+/** Both reads a link write can move. The channel list carries both the legacy
+ *  pending-link rows and each channel's own `linkOut`; `/api/home/links` is the
+ *  same legacy rows for any other reader, so a write settles both rather than
+ *  guessing which is mounted.
+ *  ⚠ `channelKeys.list().all` IS THE PREFIX, so one entry reaches BOTH scopes —
+ *  a minted BOUND link is a state of a channel the workspace list draws too. */
+const LINK_READS = [channelKeys.list().all, apiPathKey(HOME_LINKS_PATH)];
 
 /**
- * "New channel" — `POST /api/home/channels`. The one write the account surface
- * starts from: a solo container plus the private channel inside it.
+ * "New channel" — `POST /api/channels?scope=account` (R-26 (b); it was
+ * `POST /api/home/channels`). The one write the account surface starts from: a
+ * solo container plus the private channel inside it.
  *
  * ⚠ IT INVALIDATES RATHER THAN RECONCILING, which is the exception this hook's
  * docblock allows and not an oversight. The answer carries the created channel,
@@ -49,8 +53,16 @@ const LINK_READS = [
  */
 export function useCreateHomeChannel(onCreated: (workspaceId: string) => void) {
   return useApiMutation<HomeChannelCreateInput, HomeChannelCreateResult>({
-    request: (draft) => ({ path: HOME_CHANNELS_PATH, body: draft }),
-    invalidate: () => [apiPathKey(HOME_CHANNELS_PATH)],
+    // ⚠ **THE SCOPE IS WHAT PICKS THE HANDLER**, before auth and before the body
+    // is parsed (`app/api/channels/route.ts › dispatch`) — omitting it would POST
+    // a home-channel draft at the CONTAINER create, which 400s on a missing
+    // workspace rather than minting one.
+    request: (draft) => ({
+      path: channelsPath(),
+      body: draft,
+      query: { scope: "account" },
+    }),
+    invalidate: () => [channelKeys.list().all],
     onSuccess: (result) => onCreated(result.channel.workspaceId),
   });
 }

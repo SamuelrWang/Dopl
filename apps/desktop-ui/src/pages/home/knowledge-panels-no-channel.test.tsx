@@ -4,6 +4,7 @@ import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import { bridgeCalls, installBridge, ok } from "#/test-utils/bridge";
 import {
   LINK_WORKSPACE_ID,
+  isAccountChannels,
   renderHome,
   routes,
 } from "./home-test-harness";
@@ -45,7 +46,7 @@ beforeEach(() => {
   // unbound link produces, reached the way a real new account reaches it.
   apiRequest.mockImplementation(
     (path: string, opts: BridgeRequestOpts = {}): Promise<BridgeResponse> =>
-      path.split("?")[0] === "/api/home/channels"
+      isAccountChannels(path)
         ? Promise.resolve(ok({ channels: [], pendingLinks: [] }))
         : (routes(path, opts) ?? Promise.reject(new Error(`unexpected: ${path}`)))
   );

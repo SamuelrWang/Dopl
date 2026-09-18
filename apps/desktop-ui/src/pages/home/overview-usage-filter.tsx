@@ -7,9 +7,8 @@ import {
   USAGE_SCOPE_ALL,
   USAGE_SCOPE_DESKTOP,
 } from "@/features/home/overview-types";
-import type { HomeChannelsPayload } from "@/features/home/types";
-import { useApiQuery } from "#/hooks/use-api-query";
-import { HOME_CHANNELS_PATH } from "./home-rows";
+import { useAccountChannels } from "@/features/channels/hooks/use-channels";
+import { homeChannels } from "./home-rows";
 
 /**
  * THE /home USAGE HISTOGRAM'S TWO CONTROLS — the scope dropdown that replaced
@@ -47,12 +46,15 @@ export { USAGE_SCOPE_ALL, USAGE_SCOPE_DESKTOP };
  * home space, then **Desktop agent**.
  *
  * ⚠ **THE CHANNEL LIST IS THE LEFT PANE'S OWN READ, NOT A SECOND ONE.**
- * `useApiQuery` keys on the path and `GET /api/home/channels` is already mounted
- * by `pages/home/index.tsx`, so this is a cache hit and the dropdown costs no
- * request. ⚠ It is also the list Samuel means by "specific channels" — the rows
- * he can see in the pane beside the chart, in the order that pane shows them.
+ * `GET /api/channels?scope=account` is already mounted by `pages/home/index.tsx`
+ * on the same key, so this is a cache hit and the dropdown costs no request.
+ * ⚠ **AND IT IS THE SAME ROWS, THROUGH THE SAME FILTER** — `home-rows.ts ›
+ * homeChannels`, which is `homeRows`' G3 narrowing read without the link rows.
+ * The account scope answers every container kind; this menu is the list Samuel
+ * means by "specific channels", i.e. the rows he can see in the pane beside the
+ * chart, in the order that pane shows them.
  *
- * 🔒 **`HomeChannel.channelId` IS THE VALUE SINCE 2026-09-13 (rule B).** ⚠ **IT
+ * 🔒 **THE CHANNEL'S OWN ID IS THE VALUE SINCE 2026-09-13 (rule B).** ⚠ **IT
  * WAS `workspaceId` — the CONTAINER — UNTIL THIS WAVE**, because the ledger had no
  * channel column and its channel dimension was the addressed container. It has one
  * now, and it is the channel's OWN id: under rule B a home channel's agent can
@@ -71,14 +73,15 @@ export function UsageScopeMenu({
   value: string;
   onChange: (next: string) => void;
 }) {
-  const channels = useApiQuery<HomeChannelsPayload>(HOME_CHANNELS_PATH);
-  // ⚠ `?? []` INLINE (§8): this payload is IndexedDB-persisted and an entry
-  // written by an older bundle can lack the key this `.map` walks.
-  const rows = channels.data?.channels ?? [];
+  const channels = useAccountChannels();
+  // ⚠ `? … : []` INLINE (§8): the payload is IndexedDB-persisted, and `homeRows`
+  // walks `channels` — an entry lacking that key must yield no options, never a
+  // throw inside the Overview face.
+  const rows = channels.data ? homeChannels(channels.data) : [];
   const options: SelectMenuOption<string>[] = [
     { value: USAGE_SCOPE_ALL, label: "All channels" },
     ...rows.map((channel) => ({
-      value: channel.channelId,
+      value: channel.id,
       label: channel.name,
     })),
     {
