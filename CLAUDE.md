@@ -71,26 +71,17 @@ Do this before reporting the work complete, not as a follow-up.
 
 ## Definition of green
 
-**Five suites, TWO lints, TWO typechecks, and TEN non-suite gates** (ten since 2026-09-02) — the full table is
-docs/INVARIANTS.md §14. Red CI is a P0.
+**Five suites, TWO lints, TWO typechecks, and TWELVE non-suite gates.** Full table: docs/INVARIANTS.md §14.
+Red CI is a P0.
 
-⚠ **THE COUNT HAS BEEN WRONG THREE TIMES AND THE TWO ERRORS ARE OPPOSITE ONES — read both before
-trusting any number here.** (1) Until 2026-08-26 it said FIVE over a table of FOUR, because the five
-it counted included the desktop-ui typecheck, **which is one of the TWO typechecks** — a double
-count. (2) It then said FOUR until 2026-09-01, and that was an UNDERCOUNT: two real gates
-(`check-role-drift`, then `check-css-token-drift`) had shipped in CI with no doc row. It is FIVE
-today for a different reason than it was FIVE in August, and both times the fix was the same
-command. ⚠ **AND IT IS EIGHT SINCE 2026-09-02**, when `check-session-health-drift`, then
-`check-message-kind-drift`, then the committed-`dist` check landed — all three shipped WITH their
-doc rows, in the same change, which is the whole remedy this warning has been asking for. Three in
-one day makes it the convention rather than the exception. ⚠ **AND NINE SINCE LATER THE SAME DAY**,
-when Wave B's B7 added `check-rls-pair-gate` — also with its rows, here and in §14. ⚠ **AND TEN SINCE THE BATCH-2 REVIEW THE SAME DAY**, when the `rls-redteam` job landed — the fifth in two days to ship with its rows. ⚠ The list below is **"what gets forgotten"**, which is a different question from **"how
-many non-suite gates there are"** — the first item is on it precisely because it is a typecheck
-nobody remembers to run, and it is NOT one of the five.
+⚠ **RE-DERIVE THE COUNT, NEVER QUOTE IT: `grep -n 'run:' .github/workflows/ci.yml`.** It has been wrong
+five times, in both directions, always for one reason — **a wave that adds a gate does not add its doc
+row.** Most recently 2026-09-17: it read TEN and omitted `check-bridge-caller-drift` and
+`check-tenancy-move-gate`, both live CI steps. **A gate ships WITH its rows here and in §14, in the same
+change.**
 
-The eleven things that are routinely forgotten (TEN non-suite gates since 2026-09-02, plus the
-second typecheck):
-
+The thirteen things routinely forgotten — the twelve non-suite gates, plus the second typecheck, which
+is a TYPECHECK and not one of the twelve:
 1. `npm run typecheck -w @dopl/desktop-ui` — the SPA is **outside the root `tsconfig`**, and its
    vitest run does not typecheck. `npm run typecheck` alone does not cover it.
 2. `node scripts/check-doc-refs.mjs` — doc anchors. **Not covered by `npm run lint`**
@@ -174,6 +165,13 @@ second typecheck):
     case in two waves was green having never executed a statement, because the flag was set
     nowhere. `db reset` makes it the migration REPLAY gate too. ⚠ It cannot run on a machine
     without Docker; the local skip-with-reason stays.
+
+12. `node scripts/check-bridge-caller-drift.mjs` — every preload bridge member has a caller in the
+    SPA. ⚠ **A CI step with NO DOC ROW UNTIL 2026-09-17**, the fourth time that has happened. An
+    orphaned bridge member compiles, ships and is never called; nothing else notices.
+13. `npx tsx scripts/check-tenancy-move-gate.ts` — a tenancy move takes its children with it (4 child
+    tables over 2 parents). ⚠ **Also no doc row until 2026-09-17.** A migration that re-stamps a
+    parent and forgets a child leaves rows addressed to a container they are no longer in.
 
 ⚠ **`npm run test:all` chains the first four SUITES and nothing else. It is not the definition of
 green.** The two lint steps differ: the ROOT one runs `npm run lint -- --max-warnings 0`, so a new

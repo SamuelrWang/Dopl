@@ -6,10 +6,10 @@
 --    and that should be permanent. Every user will always have a home space, no
 --    matter what."
 --
--- ⚠ **WRITTEN, NOT APPLIED.** Deploy state is a MEASUREMENT (INVARIANTS §12):
--- re-derive with `supabase migration list` / the MCP `list_migrations`, and
--- **JOIN ON THE NAME** — `20260823150000` applied as `20260823205007`, so a
--- filename prefix is not an applied version (F-304).
+-- APPLIED 2026-09-17, by name (`personal_container_permanent`), byte-exact, no
+-- `db push`. Deploy state is a MEASUREMENT (INVARIANTS §12): re-derive with
+-- `supabase migration list` / MCP `list_migrations` and JOIN ON THE NAME — the
+-- history version is not this file's prefix (F-304).
 --
 -- ⚠ **IT DEPENDS ON `20260920120000_workspace_kind_personal.sql`**, which widens
 -- `workspaces_kind_check` to admit `'personal'` and mints one container per

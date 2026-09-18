@@ -2,12 +2,11 @@
 -- DROP `channel_personal_arming` — THE ARMING SWITCH IS GONE (Samuel's R-48)
 -- ============================================================================
 --
--- ⚠️ **WRITTEN, NOT APPLIED (this directory's standing gate).** The file records
--- the COMMAND; deploy state is a measurement taken elsewhere (CLAUDE.md doc
--- rule 4). ⚠ Apply BY NAME, byte-exact, never `db push`, never by the filename
--- version — F-304's re-stamp means a history row's version is not this file's
--- `20261012120000` prefix. Join `supabase migration list` on the NAME
--- (`drop_channel_personal_arming`).
+-- APPLIED 2026-09-17, by name (`drop_channel_personal_arming`), byte-exact, no
+-- `db push`, after `channel_scope_workspace_fence`. Deploy state is a
+-- measurement (CLAUDE.md doc rule 4): re-derive with `supabase migration list` /
+-- MCP `list_migrations`, joined on the NAME — the history version is not this
+-- file's prefix (F-304).
 --
 -- ── WHAT THIS REMOVES, AND WHY IT IS ALREADY DEAD ───────────────────────────
 --

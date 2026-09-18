@@ -1,7 +1,9 @@
 -- CHANNEL SCOPE IS A HOME-CHANNEL MECHANISM — the container-KIND fence on
 -- `resource_grants`, and the conversion of the rows written before it existed.
 --
--- ⚠️ WRITTEN, NOT APPLIED (Samuel's standing gate on this directory).
+-- APPLIED 2026-09-17, by name (`channel_scope_workspace_fence`), byte-exact.
+-- Re-derive with `supabase migration list` / MCP `list_migrations`, joined on
+-- the NAME — the history version is not this file's prefix (F-304).
 --
 -- ═══ THE RULING (Samuel, 2026-09-17), VERBATIM ══════════════════════════════
 --
