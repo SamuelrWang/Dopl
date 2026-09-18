@@ -229,6 +229,36 @@ export class KnowledgeStaleVersionError extends Error {
 }
 
 /**
+ * 🔒 **THE TARGET WAS THERE WHEN YOU READ IT AND IS NOT THERE NOW** — an upsert
+ * whose caller HELD A BELIEF about an existing entry, arriving at a path that
+ * resolves to nothing. → 409; the caller lists the folder and re-addresses.
+ *
+ * ⚠ **A DISTINCT ERROR BECAUSE THE REMEDY IS DISTINCT, AND BECAUSE `force` USED
+ * TO WALK PAST IT** (S40, 2026-09-18). The vanished-target refusal was written
+ * as a `KnowledgeStaleVersionError(expected, "deleted")` and was therefore
+ * reachable ONLY when a precondition was present — but `force: true` sends NO
+ * precondition, so the one call most likely to be a retry-after-timeout was the
+ * one arm that skipped the guard and CREATED A SECOND ENTRY at the vacated
+ * path. `write_file` is an upsert; a path is a position and not an identity, so
+ * a move or a retitle vacates one and the "recovery" writes a duplicate that
+ * nothing afterwards can tell from the original.
+ *
+ * ⚠ **IT IS NOT A 412.** Nothing about a version mismatched — the row is gone —
+ * and answering 412 sent callers to `read_file` for a version that cannot exist.
+ */
+export class KnowledgeTargetVanishedError extends Error {
+  readonly code = "KNOWLEDGE_TARGET_VANISHED";
+  readonly path: string;
+  constructor(path: string) {
+    super(
+      `Nothing at "${path}" — the entry this write expected to overwrite is no longer at that path. It may have been moved, renamed or deleted.`
+    );
+    this.name = "KnowledgeTargetVanishedError";
+    this.path = path;
+  }
+}
+
+/**
  * A `section=` argument that names TWO headings in one entry. → 409; the caller
  * disambiguates or edits the whole body.
  *
