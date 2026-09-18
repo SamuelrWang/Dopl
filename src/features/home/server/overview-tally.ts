@@ -1,5 +1,6 @@
 import type { Role } from "@/features/workspaces/types";
 import { agentFaceName } from "@/shared/lib/agent-name";
+import { binByWindow } from "@/features/overview-series/windows";
 import type {
   HomeAgentRow,
   HomeChannelUsage,
@@ -76,18 +77,16 @@ export function binCredits(
   rows: CreditEventScanRow[],
   windows: HomeWindow[]
 ): HomeSeriesPoint[] {
-  const points = windows.map((win) => ({ at: win.startIso, count: 0 }));
-  for (const row of rows) {
-    const at = Date.parse(row.created_at);
-    for (let i = 0; i < windows.length; i++) {
-      const win = windows[i];
-      if (at >= Date.parse(win.startIso) && at < Date.parse(win.endIso)) {
-        points[i].count += row.amount;
-        break;
-      }
-    }
-  }
-  return points;
+  const counts = binByWindow(
+    rows,
+    windows,
+    (row) => row.created_at,
+    (row) => row.amount
+  );
+  return windows.map((win, index) => ({
+    at: win.startIso,
+    count: counts[index] ?? 0,
+  }));
 }
 
 /** How many channels the per-channel comparison carries. */

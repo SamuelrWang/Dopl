@@ -5,12 +5,15 @@ import type {
   OverviewSeriesMetric,
   WorkspaceOverview,
   WorkspaceOverviewSeries,
+  WorkspaceSeriesRange,
 } from "@/features/workspaces/types";
+import { EMPTY_SERIES_DAYS } from "@/features/workspaces/types";
 import type { AccountStatus } from "@/features/channels/types";
 import { useWorkspaceRoute } from "#/components/app-shell";
 import { PageError } from "#/components/page-states";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { ActivityChart } from "./activity-chart";
+import { UsageRails } from "./usage-rails";
 import { MemberLoad } from "./member-load";
 import { OverviewHeader } from "./overview-header";
 import { OverviewSkeleton } from "./overview-skeleton";
@@ -78,7 +81,11 @@ function OverviewSurface({
   segment: string;
 }) {
   const navigate = useNavigate();
-  const [metric, setMetric] = useState<OverviewSeriesMetric>("messages");
+  const [metric, setMetric] = useState<OverviewSeriesMetric>("credits");
+  // ⚠ **SESSION STATE, NOT PERSISTED** — the page opens on this month's credits
+  // every time. A remembered range is a remembered QUESTION, and the one the
+  // reader asked last week is rarely the one they came back for.
+  const [range, setRange] = useState<WorkspaceSeriesRange>("month");
 
   const overview = useApiQuery<WorkspaceOverview>(overviewPath(segment), {
     workspaceId,
@@ -86,9 +93,11 @@ function OverviewSurface({
   // `metric` is part of the query key, so each series is cached separately and
   // switching back is free. `keepPreviousData` keeps the previous metric's bars
   // up while the next one loads — a switch must not drop the page to the gate.
+  // `metric` and `range` are part of the query key, so each series is cached
+  // separately and switching back is free.
   const series = useApiQuery<WorkspaceOverviewSeries>(seriesPath(segment), {
     workspaceId,
-    query: { metric },
+    query: { metric, range },
     keepPreviousData: true,
   });
   const credits = useWorkspaceEntitlements(workspaceId);
@@ -129,11 +138,21 @@ function OverviewSurface({
           />
           <StatCards counts={overview.data.counts} />
           <PeriodStats credits={credits.credits} />
+          {/* ⚠ `?? EMPTY_X` INLINE AT EVERY READ (§8): these payloads are
+              IndexedDB-persisted, so an entry written by an older bundle can
+              lack a key this one `.map`s over — and `.map` on `undefined`
+              THROWS and blanks the whole page. */}
           <ActivityChart
             metric={metric}
             onMetricChange={setMetric}
-            days={series.data.days}
+            range={range}
+            onRangeChange={setRange}
+            days={series.data.days ?? EMPTY_SERIES_DAYS}
+            truncated={series.data.truncated ?? false}
           />
+          {/* The wave-8 breakdown (R-29(b)): this container's seat credits by
+              channel, person and tool. It ghosts rather than drawing zeroes. */}
+          <UsageRails usage={overview.data.usage} />
           <NeedsYou
             rows={needsYouRows(waiting.data, workspaceId)}
             segment={segment}

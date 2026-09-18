@@ -22,6 +22,14 @@ vi.mock("./repository-overview", () => ({
   countThreadsInWindow: vi.fn(),
 }));
 vi.mock("./repository", () => ({ listProfileSummaries: vi.fn() }));
+// ⚠ The wave-8 panels ride `getWorkspaceOverview`'s round trip; their own reads
+// are pinned in `service-usage.test.ts`. Mocked at the SERVICE seam here so this
+// suite keeps testing the fence it was written for.
+vi.mock("./service-usage", () => ({
+  getWorkspaceUsage: vi.fn(),
+  getWorkspaceAgentBoard: vi.fn(),
+  readWorkspaceCreditBins: vi.fn(),
+}));
 
 import {
   getWorkspaceOverview,
@@ -34,6 +42,11 @@ import {
 } from "./service-overview";
 import * as repo from "./repository-overview";
 import { listProfileSummaries } from "./repository";
+import {
+  getWorkspaceAgentBoard,
+  getWorkspaceUsage,
+  readWorkspaceCreditBins,
+} from "./service-usage";
 
 const WORKSPACE = "11111111-1111-4111-8111-111111111111";
 const NOW = new Date("2026-08-22T09:30:00.000Z");
@@ -56,13 +69,28 @@ beforeEach(() => {
   mocked.countMcpCallsInWindow.mockResolvedValue(0);
   mocked.countThreadsInWindow.mockResolvedValue(0);
   mockProfiles.mockResolvedValue(new Map());
+  vi.mocked(getWorkspaceUsage).mockResolvedValue({
+    since: "2026-08-01T00:00:00.000Z",
+    channels: [],
+    people: [],
+    tools: [],
+    scanned: 0,
+    truncated: false,
+  });
+  vi.mocked(getWorkspaceAgentBoard).mockResolvedValue([]);
+  vi.mocked(readWorkspaceCreditBins).mockResolvedValue({
+    counts: [],
+    truncated: false,
+  });
 });
 
 describe("parseSeriesMetric", () => {
-  it("accepts exactly the three metrics the histogram can plot", () => {
+  it("accepts exactly the four metrics the histogram can plot", () => {
     expect(parseSeriesMetric("messages")).toBe("messages");
     expect(parseSeriesMetric("mcp")).toBe("mcp");
     expect(parseSeriesMetric("threads")).toBe("threads");
+    // ⚠ `credits` landed in wave 8 (R-29(b)) — this workspace's SEAT wallets.
+    expect(parseSeriesMetric("credits")).toBe("credits");
   });
 
   it("400s an unrecognised metric instead of falling through to a default", () => {

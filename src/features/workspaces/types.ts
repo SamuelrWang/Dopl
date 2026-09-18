@@ -137,8 +137,19 @@ export interface WorkspaceWithRole extends Workspace {
   memberCount?: number;
 }
 
-/** Series the overview histogram can plot. Unrecognised values are a 400. */
-export type OverviewSeriesMetric = "messages" | "mcp" | "threads";
+/**
+ * Series the overview histogram can plot. Unrecognised values are a 400.
+ *
+ * ⚠ **`credits` LANDED IN WAVE 8 (R-29(b)) AND IT IS A DIFFERENT SHAPE OF
+ * READ.** The other three are COUNTED per bin, exactly, with no cliff;
+ * `credits` is SUMMED from `credit_usage_events`, which PostgREST cannot
+ * aggregate — so that arm hauls the window once, bins in the service, and is the
+ * only arm that can answer {@link WorkspaceOverviewSeries.truncated} true.
+ * ⚠ **IT IS THIS WORKSPACE'S SEAT WALLETS AND NOTHING ELSE** — see
+ * `server/service-usage.ts › isWorkspaceSeatBurn`. A personal-wallet figure is
+ * on no workspace surface, and summing across wallets was the 2026-09-12 bug.
+ */
+export type OverviewSeriesMetric = "messages" | "mcp" | "threads" | "credits";
 
 /** One daily bin. `date` is a UTC calendar day, `YYYY-MM-DD`. */
 export interface OverviewSeriesPoint {
@@ -147,14 +158,165 @@ export interface OverviewSeriesPoint {
 }
 
 /**
+ * The windows a workspace series may be asked for.
+ *
+ * 🔒 **DAY BUCKETS ONLY, AND `24h` IS ABSENT ON PURPOSE (wave 8).** This
+ * payload's bin is {@link OverviewSeriesPoint}, whose `date` is a UTC CALENDAR
+ * DAY — the field `channels/components/thread-activity.tsx › ActivityBin` reads
+ * as `YYYY-MM-DD`. An hour bucket has no field to travel in here, and inventing
+ * one would be a second bin shape for one series (P33). /home keeps its `24h`
+ * arm because its bin is an INSTANT (`HomeSeriesPoint.at`).
+ *
+ * ⚠ **`31d` IS THE BACK-COMPAT WINDOW, NOT A SWITCHER OPTION** — today plus
+ * the 30 UTC days before it, what this route answered with no `range` at all
+ * before wave 8. It stays the default so the Info tab’s activity strip did not
+ * silently lose a day. {@link WORKSPACE_SERIES_SWITCHER_RANGES} is what the
+ * Overview offers.
+ */
+export type WorkspaceSeriesRange = "7d" | "30d" | "31d" | "month";
+
+export const WORKSPACE_SERIES_RANGES: readonly WorkspaceSeriesRange[] = [
+  "7d",
+  "30d",
+  "31d",
+  "month",
+];
+
+/** What a caller that sends no `range` gets. ⚠ Moving it moves the activity
+ *  strip’s window — it is the one caller that never sends one. */
+export const WORKSPACE_SERIES_DEFAULT_RANGE: WorkspaceSeriesRange = "31d";
+
+/** The three the Overview’s range switcher offers. */
+export const WORKSPACE_SERIES_SWITCHER_RANGES: readonly WorkspaceSeriesRange[] =
+  ["7d", "30d", "month"];
+
+/**
  * Daily-binned series behind the overview histogram. Read by
- * `GET /api/workspaces/[workspaceSlug]/overview-series?metric=`.
- * Always 31 points, oldest first, ending on the current UTC day —
- * zero-filled so the chart never has to gap-fill.
+ * `GET /api/workspaces/[workspaceSlug]/overview-series?metric=[&range=]`.
+ * Oldest first, ending on the current UTC day (except `month`, which draws the
+ * whole calendar month) — zero-filled so the chart never has to gap-fill.
  */
 export interface WorkspaceOverviewSeries {
   metric: OverviewSeriesMetric;
+  /** ⚠ **OPTIONAL ON THE READ SIDE (INVARIANTS §8): this payload is
+   *  IndexedDB-persisted and an entry written before wave 8 carries neither
+   *  `range` nor `truncated`.** */
+  range?: WorkspaceSeriesRange;
   days: OverviewSeriesPoint[];
+  /** TRUE when the `credits` haul came back AT its ceiling; always false for the
+   *  counted metrics, which have no cliff (§9). */
+  truncated?: boolean;
+}
+
+/**
+ * One channel’s share of this workspace’s seat spend.
+ *
+ * 🔒 **FENCED TO THE CALLER’S VISIBLE CHANNELS, because this row prints a
+ * NAME.** `server/service-overview.ts` states the workspace’s two fencing
+ * postures — aggregate INTEGERS are workspace-wide, anything carrying CONTENT is
+ * viewer-filtered server-side — and a channel name is content. The by-person and
+ * by-tool rails carry no channel identity and stay workspace-wide, which is also
+ * why this rail does not sum to the series.
+ */
+export interface WorkspaceChannelUsage {
+  channelId: string;
+  name: string;
+  credits: number;
+  messages: number;
+}
+
+/** One member’s share of this workspace’s seat spend. ⚠ `role` is the
+ *  container role from `workspace_members`, `null` once they have left. */
+export interface WorkspacePersonUsage {
+  userId: string;
+  name: string;
+  role: Role | null;
+  credits: number;
+}
+
+/** One `(tool, op)` pair’s call count. ⚠ There is no MCP SERVER column in the
+ *  schema; this is the finest grain that exists. */
+export interface WorkspaceToolUsage {
+  tool: string;
+  op: string;
+  calls: number;
+}
+
+/**
+ * The three comparison rails on the workspace Overview — the breakdown R-29(b)
+ * moved across from /home, over the CURRENT CALENDAR MONTH.
+ *
+ * ⚠ **THE WINDOW IS THE CREDIT PERIOD AND THE RANGE SWITCHER DOES NOT MOVE
+ * IT** — the same split /home makes: the capacity figure and the rails answer
+ * for the billing period, the plot is the thing with controls on it.
+ */
+export interface WorkspaceUsageBreakdown {
+  /** Window start, ISO-8601 UTC. */
+  since: string;
+  /** Descending by `credits`. */
+  channels: WorkspaceChannelUsage[];
+  /** Descending by `credits`. */
+  people: WorkspacePersonUsage[];
+  /** Descending by `calls`. */
+  tools: WorkspaceToolUsage[];
+  /** Rows the scans covered — the denominator travels with the shares (§9). */
+  scanned: number;
+  /** TRUE when a scan came back AT its ceiling; the rails are then a FLOOR and
+   *  the surface has to say so. */
+  truncated: boolean;
+}
+
+/**
+ * One live agent session in this workspace.
+ *
+ * 🔒 **PUBLIC COLUMNS ONLY, AND THE OMISSIONS ARE THE CONTRACT — the same
+ * seven this shape’s /home twin refuses (`home/overview-types.ts ›
+ * HomeAgentRow`).** No `model`, no `toolLabel`, no `tokensSpent`, no context
+ * pair: those are the OPERATOR-ONLY telemetry columns
+ * (`20260822150000_channel_sessions_telemetry.sql`), and R-29’s privacy half
+ * says a peer learns THAT an agent is working, never what it costs its operator.
+ * ⚠ **Do not widen this interface** — the repository’s column list and this
+ * shape are the fence on a service-role path.
+ */
+export interface OverviewAgentRow {
+  id: string;
+  channelId: string;
+  channelName: string;
+  name: string;
+  /** `working` / `idle` — anything the desktop has not reported as `ended`
+   *  (R-25: everyone’s LIVE agents, ended ones hidden). */
+  state: string;
+  /** One of six CLOSED situation keys, or `null`. */
+  detail: string | null;
+  threadTitle: string | null;
+  threadId: string | null;
+  /** TRUE when this session runs on the CALLER’S machine. ⚠ The only thing
+   *  separating "mine" from "theirs", and it names no peer. */
+  mine: boolean;
+  updatedAt: string;
+}
+
+/** One run’s token spend. ⚠ An INSTANT, never a day: the server cannot know
+ *  the operator’s zone, so the renderer buckets (`20260927120000` §"DAYS ARE
+ *  DERIVED"). */
+export interface WorkspaceTokenSpendMark {
+  at: string;
+  tokens: number;
+}
+
+/**
+ * Payload of `GET /api/workspaces/[workspaceSlug]/token-spend`.
+ *
+ * 🔒 **THE CALLER’S OWN AGENTS IN THIS CONTAINER, AND THERE IS NO
+ * WORKSPACE-WIDE FIGURE (wave 8 fence decision, INVARIANTS §9).**
+ * `workspace_token_spend` is operator-fenced on purpose — its migration refuses a
+ * member-scoped read policy in as many words — and an aggregate over a container
+ * with two members is that fence removed by subtraction. Per-member-own is
+ * therefore the whole of what this endpoint can honestly answer.
+ */
+export interface WorkspaceTokenSpend {
+  marks: WorkspaceTokenSpendMark[];
+  truncated: boolean;
 }
 
 /** One row of the overview "Recent activity" feed. Viewer-filtered server-side. */
@@ -205,7 +367,37 @@ export interface WorkspaceOverview {
     totalMessages: number;
     rows: OverviewMemberLoadRow[];
   };
+  /**
+   * The credit BREAKDOWN — by channel, person and tool (R-29(b), wave 8).
+   *
+   * ⚠ **OPTIONAL, AND EVERY READ SPELLS `?? EMPTY_X` INLINE (INVARIANTS §8).**
+   * This payload is IndexedDB-persisted, so an entry written before wave 8 has
+   * no `usage` key at all and a `.map` over it throws the whole page away.
+   */
+  usage?: WorkspaceUsageBreakdown;
+  /**
+   * EVERYONE’S LIVE agents in this container, newest activity first (R-25).
+   * ⚠ NOT window-scoped — a session row is live STATE, not an event.
+   * ⚠ Optional for the same stale-cache reason as {@link usage}.
+   */
+  agents?: OverviewAgentRow[];
 }
+
+/**
+ * Absent-fallbacks for the wave-8 array keys, per INVARIANTS §8.
+ *
+ * ⚠ FROZEN and shared: they reach render paths directly, so a caller that
+ * pushed into one would be editing every other caller’s fallback.
+ */
+export const EMPTY_OVERVIEW_AGENTS: readonly OverviewAgentRow[] =
+  Object.freeze([]);
+export const EMPTY_CHANNEL_USAGE: readonly WorkspaceChannelUsage[] =
+  Object.freeze([]);
+export const EMPTY_PERSON_USAGE: readonly WorkspacePersonUsage[] =
+  Object.freeze([]);
+export const EMPTY_TOOL_USAGE: readonly WorkspaceToolUsage[] = Object.freeze([]);
+export const EMPTY_SERIES_DAYS: readonly OverviewSeriesPoint[] =
+  Object.freeze([]);
 
 export interface WorkspaceMembership {
   workspaceId: string;

@@ -5,6 +5,7 @@ import {
   getWorkspaceOverviewSeries,
   isChannelVisibleTo,
   parseSeriesMetric,
+  parseSeriesRange,
 } from "@/features/workspaces/server/service-overview";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 
@@ -16,9 +17,18 @@ interface Ctx {
 }
 
 /**
- * GET `?metric=messages|mcp|threads[&channelId=]` — the overview histogram's
- * `WorkspaceOverviewSeries`: a fixed 31-day UTC window ending today,
- * zero-filled, oldest first.
+ * GET `?metric=messages|mcp|threads|credits[&range=][&channelId=]` — the
+ * overview histogram's `WorkspaceOverviewSeries`: zero-filled, oldest first.
+ *
+ * ⚠ **`range` AND `credits` LANDED IN WAVE 8 (R-29(b)) AND NEITHER MOVED THE
+ * DEFAULT.** No `range` still answers the fixed 31 UTC days ending today —
+ * `channels/components/thread-activity.tsx` is that caller and its window must
+ * not have shifted by a day. `24h` is deliberately absent from the set (this
+ * payload’s bin is a calendar DAY; see `types.ts › WorkspaceSeriesRange`).
+ * 🔒 **AND `credits` IS THIS CONTAINER’S SEAT WALLETS, NEVER A PERSONAL ONE**
+ * (`server/service-usage.ts › isWorkspaceSeatBurn`). One payload for both
+ * container kinds was explicitly refused — the fences differ, and collapsing
+ * them is how a container leak gets built.
  *
  * ⚠ ONE ROUTE, `metric` AS A QUERY PARAMETER (§9). Three endpoints would give
  * one resource three auth wrappers and three futures. An unrecognised `metric`
@@ -80,6 +90,7 @@ export const GET = withUserAuth(
       }
 
       const metric = parseSeriesMetric(request.nextUrl.searchParams.get("metric"));
+      const range = parseSeriesRange(request.nextUrl.searchParams.get("range"));
 
       // ⚠ THE VISIBILITY READ RUNS ONLY WHEN A CHANNEL WAS ASKED FOR. The
       // unscoped series is a workspace-wide aggregate and has always been one;
@@ -103,7 +114,9 @@ export const GET = withUserAuth(
       const series = await getWorkspaceOverviewSeries(
         workspace.id,
         metric,
-        channelId
+        channelId,
+        new Date(),
+        range
       );
 
       return NextResponse.json(series, {

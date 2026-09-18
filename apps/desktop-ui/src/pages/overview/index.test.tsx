@@ -70,6 +70,7 @@ const OVERVIEW: WorkspaceOverview = {
 
 /** Peak differs per metric so a switch is visible in the rendered total. */
 const PEAK: Record<OverviewSeriesMetric, number> = {
+  credits: 1000,
   messages: 100,
   mcp: 10,
   threads: 1,
@@ -114,7 +115,7 @@ function ok(body: unknown) {
 /** The metric a series request asked for; the query rides the path. */
 function metricOf(path: string): OverviewSeriesMetric {
   const query = new URLSearchParams(path.split("?")[1] ?? "");
-  return (query.get("metric") ?? "messages") as OverviewSeriesMetric;
+  return (query.get("metric") ?? "credits") as OverviewSeriesMetric;
 }
 
 function transport(req: TransportRequest, allZero = false) {
@@ -214,7 +215,9 @@ describe("overview page", () => {
       screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)
     ).toEqual([
       "This billing period",
-      "Messages per day",
+      "Credits per day",
+      // ⚠ JOINED IN WAVE 8 (R-29(b)) — the seat-credit breakdown.
+      "All channels",
       // ⚠ JOINED 2026-09-01 — the ping inbox then, what is ADDRESSED TO YOU AND
       // UNANSWERED since slice B16, and it sits ABOVE the bottom row
       // deliberately: it is the only section on this page that is waiting on the
@@ -245,12 +248,13 @@ describe("overview page", () => {
     ).toBeInTheDocument();
 
     // Bars carry the real date and count; the axis ceiling is a round number
-    // above the peak (3100 → 4000, four uniform bands).
-    expect(screen.getByTitle("7/1 · 100")).toBeInTheDocument();
-    expect(screen.getByTitle("7/31 · 3,100")).toBeInTheDocument();
-    expect(screen.getByText("49,600 in the period")).toBeInTheDocument();
-    expect(screen.getByText("4,000")).toBeInTheDocument();
-    expect(screen.getByText("2,000")).toBeInTheDocument();
+    // above the peak (31,000 → 40,000, four uniform bands). ⚠ The page opens on
+    // `credits` since wave 8, so these are the credits fixture's figures.
+    expect(screen.getByTitle("7/1 · 1,000")).toBeInTheDocument();
+    expect(screen.getByTitle("7/31 · 31,000")).toBeInTheDocument();
+    expect(screen.getByText("496,000 in the period")).toBeInTheDocument();
+    expect(screen.getByText("40,000")).toBeInTheDocument();
+    expect(screen.getByText("20,000")).toBeInTheDocument();
   });
 
   it("scopes every read to the resolved workspace", async () => {
@@ -272,9 +276,12 @@ describe("overview page", () => {
 
   it("the metric switcher re-asks for the chosen series only", async () => {
     renderPage();
-    await screen.findByRole("heading", { level: 2, name: "Messages per day" });
+    // ⚠ THE PAGE OPENS ON `credits` SINCE WAVE 8 (R-29(b)) — the workspace
+    // Overview is a spend page now, and the metric it lands on is the one the
+    // ruling was about.
+    await screen.findByRole("heading", { level: 2, name: "Credits per day" });
     expect(seriesRequests()).toHaveLength(1);
-    expect(metricOf(seriesRequests()[0].path)).toBe("messages");
+    expect(metricOf(seriesRequests()[0].path)).toBe("credits");
 
     fireEvent.click(screen.getByRole("tab", { name: "MCP calls" }));
 
@@ -284,6 +291,24 @@ describe("overview page", () => {
       await screen.findByRole("heading", { level: 2, name: "MCP calls per day" })
     ).toBeInTheDocument();
     // Only the series moved — the payload and credits reads are untouched.
+    expect(
+      transportCalls().filter((req) => req.path === OVERVIEW_PATH)
+    ).toHaveLength(1);
+  });
+
+  it("the RANGE switcher re-asks for the same metric over a new window", async () => {
+    renderPage();
+    await screen.findByRole("heading", { level: 2, name: "Credits per day" });
+    // ⚠ The page opens on the calendar MONTH — the credit period the figure
+    // above the plot describes, so the two answer for one window.
+    expect(seriesRequests()[0].path).toContain("range=month");
+
+    fireEvent.click(screen.getByRole("tab", { name: "7d" }));
+
+    await waitFor(() => expect(seriesRequests()).toHaveLength(2));
+    expect(seriesRequests()[1].path).toContain("range=7d");
+    expect(metricOf(seriesRequests()[1].path)).toBe("credits");
+    // Only the series moved — the payload read is untouched.
     expect(
       transportCalls().filter((req) => req.path === OVERVIEW_PATH)
     ).toHaveLength(1);

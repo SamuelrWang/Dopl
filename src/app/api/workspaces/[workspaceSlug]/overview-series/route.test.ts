@@ -109,16 +109,52 @@ describe("GET /api/workspaces/[workspaceSlug]/overview-series", () => {
     const body = (await res.json()) as WorkspaceOverviewSeries;
     expect(body.metric).toBe("messages");
     expect(body.days).toHaveLength(31);
-    expect(mockSeries).toHaveBeenCalledWith(WORKSPACE.id, "messages", null);
+    // ⚠ NO `range` → the pre-wave-8 fixed window, passed EXPLICITLY. The Info
+    // tab's activity strip is the caller that never sends one, and its 31 days
+    // must not have moved.
+    expect(mockSeries).toHaveBeenCalledWith(
+      WORKSPACE.id,
+      "messages",
+      null,
+      expect.any(Date),
+      "31d"
+    );
   });
 
-  it("serves all three metrics off ONE route — a query param, not three routes", async () => {
-    for (const metric of ["messages", "mcp", "threads"] as const) {
+  it("serves all four metrics off ONE route — a query param, not four routes", async () => {
+    for (const metric of ["messages", "mcp", "threads", "credits"] as const) {
       mockSeries.mockResolvedValue({ ...SERIES, metric });
       const res = await GET(getReq(`?metric=${metric}`), routeCtx());
       expect(res.status).toBe(200);
-      expect(mockSeries).toHaveBeenLastCalledWith(WORKSPACE.id, metric, null);
+      expect(mockSeries).toHaveBeenLastCalledWith(
+        WORKSPACE.id,
+        metric,
+        null,
+        expect.any(Date),
+        "31d"
+      );
     }
+  });
+
+  it("passes a recognised range through and 400s an unrecognised one", async () => {
+    const ok = await GET(getReq("?metric=credits&range=month"), routeCtx());
+    expect(ok.status).toBe(200);
+    expect(mockSeries).toHaveBeenLastCalledWith(
+      WORKSPACE.id,
+      "credits",
+      null,
+      expect.any(Date),
+      "month"
+    );
+    mockSeries.mockClear();
+    // ⚠ `24h` is not in this host's set: the bin is a calendar DAY here.
+    for (const bad of ["24h", "", "Month", "90d"]) {
+      const res = await GET(getReq(`?metric=credits&range=${bad}`), routeCtx());
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: { code: string } };
+      expect(body.error.code).toBe("INVALID_RANGE");
+    }
+    expect(mockSeries).not.toHaveBeenCalled();
   });
 
   it("400s an unrecognised metric and reads nothing", async () => {
@@ -180,7 +216,13 @@ describe("?channelId= — the narrowing view and its fence", () => {
     );
     expect(res.status).toBe(200);
     expect(mockVisible).toHaveBeenCalledWith(WORKSPACE.id, "user-1", CHANNEL_ID);
-    expect(mockSeries).toHaveBeenCalledWith(WORKSPACE.id, "messages", CHANNEL_ID);
+    expect(mockSeries).toHaveBeenCalledWith(
+      WORKSPACE.id,
+      "messages",
+      CHANNEL_ID,
+      expect.any(Date),
+      "31d"
+    );
   });
 
   it("404s a channel the caller cannot see, and COUNTS NOTHING", async () => {

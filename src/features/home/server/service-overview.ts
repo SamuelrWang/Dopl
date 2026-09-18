@@ -34,6 +34,11 @@ import {
   tallyTools,
 } from "./overview-tally";
 import { resolveUsageChannel } from "./overview-series-params";
+import {
+  overviewBucketFor,
+  overviewSince,
+  overviewWindows,
+} from "@/features/overview-series/windows";
 import * as repo from "./repository";
 /**
  * Containers the OVERVIEW tallies over. ⚠ **DECLARED HERE SINCE WAVE 3** — it was
@@ -84,28 +89,8 @@ const HOME_CONTAINER_TALLY_LIMIT = 200;
  * this page shows is a person's, not a workspace's.
  */
 
-/** Bars in a `24h` series — one per hour, ending on the current hour. */
-const HOURS_IN_DAY = 24;
-
 /** How many live agent sessions the board carries, across all channels. */
 const AGENT_ROWS = 24;
-
-/** Bins, and the width of one, for each window. */
-const RANGE_SHAPE: Record<
-  HomeOverviewRange,
-  { bins: number; bucket: HomeOverviewBucket }
-> = {
-  "24h": { bins: HOURS_IN_DAY, bucket: "hour" },
-  "7d": { bins: 7, bucket: "day" },
-  "30d": { bins: 30, bucket: "day" },
-  // ⚠ `bins` IS COMPUTED, not stored — a month is 28..31 days and the window is
-  // month-to-DATE. `rangeWindows` overrides this number; it is here so the
-  // record stays total over the union.
-  month: { bins: 31, bucket: "day" },
-};
-
-const HOUR_MS = 3_600_000;
-const DAY_MS = 86_400_000;
 
 /**
  * `range` off the query string, or a 400.
@@ -138,69 +123,20 @@ export function parseMetric(raw: string | null): HomeOverviewMetric {
   return found;
 }
 
-/** Truncate `at` down to the start of its UTC hour. */
-function hourStart(at: Date): Date {
-  return new Date(Math.floor(at.getTime() / HOUR_MS) * HOUR_MS);
-}
-
-/** Truncate `at` down to the start of its UTC day. */
-function dayStart(at: Date): Date {
-  return new Date(
-    Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate())
-  );
-}
-
 /**
  * The bins for one range, oldest first.
  *
- * ⚠ THE LAST BIN OF A ROLLING RANGE IS PARTIAL AND THAT IS CORRECT — it is "so
- * far today" (or "this hour"). What would NOT be correct is extending a ROLLING
- * window into the future so the bar looks finished.
- *
- * 🔒 **`month` IS THE WHOLE CALENDAR MONTH — EVERY DAY OF IT, 28..31 BINS — AND
- * IT IS THE ONE RANGE THAT DOES REACH INTO THE FUTURE (Samuel, 2026-09-01:
- * "show the month").** It was MONTH-TO-DATE for one pass, `bins =
- * now.getUTCDate()`, which is **1 on the first of the month** — so the chart
- * rendered a SINGLE bar stretched across the whole plot with `1/9` under it.
- * That is the defect this rewrite exists to fix, and month-to-date reproduces it
- * every month on the 1st.
- * ⚠ **THE FUTURE BINS ARE ZERO AND THAT IS THE POINT**: the axis is the FRAME
- * the operator reads the month against, and a month that grows a bar a day is
- * the picture they asked for. A future day's zero is not a claim that nothing
- * happened — it is a day that has not happened, which the axis position already
- * says.
+ * ⚠ **THE ARITHMETIC MOVED TO `features/overview-series/windows.ts` IN WAVE 8
+ * AND NOTHING ABOUT IT CHANGED (R-40: /home's Overview is byte-identical).**
+ * The workspace Overview draws the same shape of series over a different fence,
+ * and one calendar for both is the whole of P33 — see that file for `month`'s
+ * future bins and the rolling ranges' partial last bin.
  */
 export function rangeWindows(
   range: HomeOverviewRange,
   now: Date = new Date()
 ): HomeWindow[] {
-  const { bucket } = RANGE_SHAPE[range];
-  const width = bucket === "hour" ? HOUR_MS : DAY_MS;
-
-  if (range === "month") {
-    const year = now.getUTCFullYear();
-    const month = now.getUTCMonth();
-    // Day 0 of the NEXT month is the last day of this one — 28/29/30/31 without
-    // a leap-year table.
-    const days = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-    const first = Date.UTC(year, month, 1);
-    return Array.from({ length: days }, (_, index) => ({
-      startIso: new Date(first + index * width).toISOString(),
-      endIso: new Date(first + (index + 1) * width).toISOString(),
-    }));
-  }
-
-  const last = bucket === "hour" ? hourStart(now) : dayStart(now);
-  const bins = RANGE_SHAPE[range].bins;
-  const windows: HomeWindow[] = [];
-  for (let i = bins - 1; i >= 0; i--) {
-    const start = new Date(last.getTime() - i * width);
-    windows.push({
-      startIso: start.toISOString(),
-      endIso: new Date(start.getTime() + width).toISOString(),
-    });
-  }
-  return windows;
+  return overviewWindows(range, now);
 }
 
 /** Where a range's window opens — the first bin's start, so the totals and the
@@ -209,12 +145,11 @@ export function rangeSince(
   range: HomeOverviewRange,
   now: Date = new Date()
 ): string {
-  const windows = rangeWindows(range, now);
-  return windows[0]?.startIso ?? now.toISOString();
+  return overviewSince(range, now);
 }
 
 export function bucketFor(range: HomeOverviewRange): HomeOverviewBucket {
-  return RANGE_SHAPE[range].bucket;
+  return overviewBucketFor(range) as HomeOverviewBucket;
 }
 
 /* ----------------------------- the reads ------------------------------- */

@@ -8,7 +8,21 @@ import type {
   OverviewSeriesPoint,
   WorkspaceOverview,
   WorkspaceOverviewSeries,
+  WorkspaceSeriesRange,
 } from "../types";
+import {
+  WORKSPACE_SERIES_DEFAULT_RANGE,
+  WORKSPACE_SERIES_RANGES,
+} from "../types";
+import {
+  overviewWindows,
+  type OverviewWindow,
+} from "@/features/overview-series/windows";
+import {
+  getWorkspaceAgentBoard,
+  getWorkspaceUsage,
+  readWorkspaceCreditBins,
+} from "./service-usage";
 import {
   countActiveMembers,
   countMcpCallsInWindow,
@@ -62,6 +76,7 @@ const SERIES_METRICS: readonly OverviewSeriesMetric[] = [
   "messages",
   "mcp",
   "threads",
+  "credits",
 ];
 
 /** `metric` off the query string, or a 400. ⚠ Never a silent fall-through to a
@@ -74,6 +89,31 @@ export function parseSeriesMetric(raw: string | null): OverviewSeriesMetric {
       400,
       "INVALID_METRIC",
       `metric must be one of: ${SERIES_METRICS.join(", ")}`
+    );
+  }
+  return found;
+}
+
+/**
+ * `range` off the query string, or a 400 — same rule as {@link parseSeriesMetric}.
+ *
+ * ⚠ **ABSENT IS NOT INVALID.** A caller that sends no `range` gets
+ * {@link WORKSPACE_SERIES_DEFAULT_RANGE}, the fixed 31-day window this route
+ * answered with before wave 8 — `channels/components/thread-activity.tsx` is
+ * that caller, and its window must not have moved by a day. An unrecognised
+ * STRING is still a 400: the fall-through ban is about answering a question
+ * nobody asked, not about defaults nobody changed.
+ * ⚠ **`24h` IS NOT IN THE SET** — see `types.ts › WorkspaceSeriesRange`: this
+ * payload's bin is a UTC calendar DAY and an hour has no field to travel in.
+ */
+export function parseSeriesRange(raw: string | null): WorkspaceSeriesRange {
+  if (raw === null) return WORKSPACE_SERIES_DEFAULT_RANGE;
+  const found = WORKSPACE_SERIES_RANGES.find((r) => r === raw);
+  if (!found) {
+    throw new HttpError(
+      400,
+      "INVALID_RANGE",
+      `range must be one of: ${WORKSPACE_SERIES_RANGES.join(", ")}`
     );
   }
   return found;
@@ -118,44 +158,59 @@ function addDays(at: Date, days: number): Date {
   return new Date(at.getTime() + days * 86_400_000);
 }
 
-/** The fixed window: `OVERVIEW_SERIES_DAYS` UTC days ending on `now`'s day. */
-export function seriesWindows(now: Date): DayWindow[] {
-  const today = utcDayStart(now);
-  const windows: DayWindow[] = [];
-  for (let i = OVERVIEW_SERIES_DAYS - 1; i >= 0; i--) {
-    const start = addDays(today, -i);
-    windows.push({
-      date: start.toISOString().slice(0, 10),
-      startIso: start.toISOString(),
-      endIso: addDays(start, 1).toISOString(),
-    });
-  }
-  return windows;
+/**
+ * THE BINS — now {@link overviewWindows}’ job, and the delegation is P33.
+ *
+ * ⚠ **THIS FUNCTION USED TO OWN A SECOND CALENDAR** (a local `utcDayStart` +
+ * `addDays` walk). /home owned the other one. One overview series vocabulary
+ * means one implementation of the window arithmetic, so both hosts now build
+ * their bins from `features/overview-series/windows.ts` and this is the adapter
+ * that puts a UTC calendar DAY on each of them.
+ */
+export function seriesWindows(
+  now: Date,
+  range: WorkspaceSeriesRange = WORKSPACE_SERIES_DEFAULT_RANGE
+): DayWindow[] {
+  return overviewWindows(range, now).map((win) => ({
+    date: win.startIso.slice(0, 10),
+    startIso: win.startIso,
+    endIso: win.endIso,
+  }));
 }
 
 /**
- * The daily-binned series behind the histogram — always
- * `OVERVIEW_SERIES_DAYS` points, oldest first, zero-filled, so the renderer
- * never gap-fills. A day with no rows is a real zero here: the bin was counted.
+ * The daily-binned series behind the histogram — always the range’s full bin
+ * count, oldest first, zero-filled, so the renderer never gap-fills. A day with
+ * no rows is a real zero here: the bin was counted.
+ *
+ * ⚠ **TWO SHAPES OF READ BEHIND ONE ENDPOINT, AND THE DIFFERENCE IS REPORTED.**
+ * `messages`, `threads` and `mcp` are COUNTED per bin — exact `head:true`
+ * statements, no cliff, so `truncated` is always false. `credits` is SUMMED from
+ * a ledger PostgREST cannot aggregate, so it hauls the window ONCE and bins in
+ * memory, and it says `truncated` when the haul hit its ceiling (§9).
  */
 export async function getWorkspaceOverviewSeries(
   workspaceId: string,
   metric: OverviewSeriesMetric,
   /**
-   * Narrow every bin to ONE channel (2026-08-25, the Info tab's activity
+   * Narrow every bin to ONE channel (2026-08-25, the Info tab’s activity
    * strip). ⚠ THE CALLER MUST HAVE PROVED VISIBILITY FIRST — the route does it
    * against `repository-overview.ts › listVisibleChannelRefs`, the channels
-   * feature's one visibility statement. Nothing here re-checks it, and nothing
+   * feature’s one visibility statement. Nothing here re-checks it, and nothing
    * here may be handed a raw query parameter.
    */
   channelId: string | null = null,
-  now: Date = new Date()
+  now: Date = new Date(),
+  range: WorkspaceSeriesRange = WORKSPACE_SERIES_DEFAULT_RANGE
 ): Promise<WorkspaceOverviewSeries> {
   // ⚠ REFUSED, NOT IGNORED. `mcp_tool_calls` has no `channel_id` column, so a
   // channel-scoped MCP series is a question the schema cannot answer — and a
   // silently workspace-wide answer under a channel-scoped label is exactly the
-  // fabrication this whole section exists to prevent (§9's "never a silent
+  // fabrication this whole section exists to prevent (§9’s "never a silent
   // fall-through"). The route surfaces this as a 400.
+  // ⚠ **`credits` IS NOT REFUSED**, and the difference is a column:
+  // `credit_usage_events.channel_id` exists (rule B), so the question has an
+  // honest answer and withholding it would be a refusal with no schema behind it.
   if (channelId !== null && metric === "mcp") {
     throw new HttpError(
       400,
@@ -163,7 +218,24 @@ export async function getWorkspaceOverviewSeries(
       "The mcp metric cannot be scoped to a channel: MCP calls are not recorded per channel."
     );
   }
-  const windows = seriesWindows(now);
+  const windows = seriesWindows(now, range);
+  if (metric === "credits") {
+    const bins: OverviewWindow[] = windows.map((win) => ({
+      startIso: win.startIso,
+      endIso: win.endIso,
+    }));
+    const { counts, truncated } = await readWorkspaceCreditBins(
+      workspaceId,
+      bins,
+      channelId
+    );
+    return {
+      metric,
+      range,
+      truncated,
+      days: windows.map((win, i) => ({ date: win.date, count: counts[i] ?? 0 })),
+    };
+  }
   // ⚠ Branched rather than dispatched through a shared `counter` variable: the
   // mcp counter takes no `channelId`, and a lookup table would let a third
   // argument be dropped on the floor with nothing saying so. The guard above
@@ -181,7 +253,7 @@ export async function getWorkspaceOverviewSeries(
     date: win.date,
     count: counts[i] ?? 0,
   }));
-  return { metric, days };
+  return { metric, range, days, truncated: false };
 }
 
 interface ActivityInput {
@@ -314,10 +386,20 @@ export async function getWorkspaceOverview(
     listRecentTasksClosed(channelIds, ACTIVITY_LIMIT),
   ]);
 
-  const names = await resolveNames([
-    ...authorIds,
-    ...messages.flatMap((m) => (m.author_user_id ? [m.author_user_id] : [])),
-    ...opened.map((t) => t.created_by),
+  // ⚠ **THE WAVE-8 PANELS RIDE THE SAME ROUND TRIP (R-29(b)).** The rails and
+  // the board are part of the page’s FIRST FRAME — the skeleton is this page’s
+  // own shape, module for module — so a second endpoint would paint them in
+  // after the gate lifted, which is the jump `OverviewSkeleton` exists to stop.
+  // ⚠ The SERIES stays its own route, because its `metric` and `range` are
+  // parameters the reader switches (§9).
+  const [names, usage, agents] = await Promise.all([
+    resolveNames([
+      ...authorIds,
+      ...messages.flatMap((m) => (m.author_user_id ? [m.author_user_id] : [])),
+      ...opened.map((t) => t.created_by),
+    ]),
+    getWorkspaceUsage(workspaceId, visible, now),
+    getWorkspaceAgentBoard(workspaceId, userId, visible),
   ]);
 
   return {
@@ -330,5 +412,7 @@ export async function getWorkspaceOverview(
       names,
     }),
     memberLoad: tallyMemberLoad(authorIds, names),
+    usage,
+    agents,
   };
 }
