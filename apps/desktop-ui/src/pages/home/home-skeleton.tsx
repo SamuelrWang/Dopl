@@ -75,12 +75,13 @@ export function HomePageSkeleton({ label = "Opening home" }: { label?: string })
                   // real pane is a ROW holding one `Crossfade` that fills it,
                   // and the ghost carried a column for as long as it drew a
                   // 52px header the landing face does not have.
-                  "mb-3 mr-3 flex min-w-0 flex-1 overflow-hidden rounded-[14px] border-2 border-home-panel-line bg-home-card",
-                  // `home.frame` carries that colour and weight INTO the
-                  // hairlines below, so the ghost's panel lines are the account
-                  // palette's, like the real pane's.
-                  home.frame
+                  "mb-3 mr-3 flex min-w-0 flex-1 overflow-hidden rounded-[14px] border-2 border-home-panel-line bg-home-card"
                 )}
+                // `data-frame-skin` carries that colour and weight INTO the
+                // hairlines below, so the ghost's panel lines are the account
+                // palette's, like the real pane's. The kit owns the skin since
+                // R-38 (2026-09-17); this ghost wore `home.module.css › .frame`.
+                data-frame-skin
               >
                 <OverviewFaceGhost />
               </div>
@@ -142,10 +143,10 @@ export function HomeAgentPanelsSkeleton({
       label={label}
       className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3"
     >
-      <PanelGhost ground={SECTION_PANEL_GROUND} actionWidth={132}>
+      <PanelGhost actionWidth={132}>
         <TemplateCardsGhost />
       </PanelGhost>
-      <PanelGhost ground={SECTION_PANEL_GROUND} actionWidth={92} caption>
+      <PanelGhost actionWidth={92} caption>
         <TemplateCardsGhost />
       </PanelGhost>
     </SkeletonSurface>
@@ -159,19 +160,22 @@ export function HomeAgentPanelsSkeleton({
  * component takes a `label` STRING and paints it as an `<h2>`, which is the one
  * thing a loading state must not do (a heading that says "Personal" over a
  * shimmering grid asserts a section the read has not confirmed). What it DOES
- * keep is the two things the page depends on — `data-section-panel`, the
- * attribute `home.module.css › .frame` repaints every panel in this pane
- * through, and the `rounded-[14px] p-3` box — so the ghost stands on /home's
- * panel gray like its loaded counterpart and needs no palette of its own.
+ * keep is the three things the page depends on — `data-section-panel`, the
+ * `rounded-[14px] p-3` box and, since R-38 (2026-09-17), `SECTION_PANEL_GROUND`
+ * by default — so the ghost stands on the same panel gray as its loaded
+ * counterpart and needs no palette of its own.
  */
 function PanelGhost({
   children,
-  ground,
+  ground = SECTION_PANEL_GROUND,
   actionWidth,
   caption = false,
 }: {
   children: ReactNode;
-  /** The workspace default ground; /home's `.frame` overrides it either way. */
+  /** ⚠ DEFAULTED, because the ground is no longer a page rule (R-38,
+   *  2026-09-17): the loaded `SectionPanel` paints `SECTION_PANEL_GROUND`
+   *  itself, so a ghost that passed nothing would resolve into a gray panel
+   *  appearing under the reader. Pass one only to say something else. */
   ground?: string;
   /**
    * The header-right create button's ghost width. ⚠ OMITTED = NO BUTTON, and
@@ -391,8 +395,8 @@ function OverviewFaceGhost() {
             the capacity bar, then the plot (Samuel, 2026-09-13). ⚠ **NO
             `ground` OVERRIDE**: the 2026-09-08 white trial passed
             `!bg-home-card` here to mirror the page, and BOTH are reverted — the
-            ghost's ground is /home's own `.frame [data-section-panel]` rule, the
-            same as the rails panel below. */}
+            ghost takes `PanelGhost`'s default ground, the same as the rails
+            panel below. */}
         <PanelGhost>
           <div className="flex flex-col gap-3">
             <div className="bento p-3.5">

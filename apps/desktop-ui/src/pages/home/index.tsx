@@ -261,10 +261,10 @@ export default function HomePage() {
                 (2026-09-01): its GLOBAL sections do not vary with the
                 selection, but the list stays put beside them because its
                 CHANNEL-SCOPED half is driven by exactly that selection.
-                `border-2` + `home.frame`: the pane's outer line reads a weight
-                up, and `home.frame` carries that colour and weight INTO the
-                shared channel surface — scoped to /home, so the workspace
-                channels page keeps its neutral hairlines. */}
+                `border-2` + `data-frame-skin`: the pane's outer line reads a
+                weight up, and the skin carries that colour and weight INTO the
+                shared channel surface — on the workspace channels page too,
+                since R-38. */}
             <div className="flex min-h-0 flex-1">
               <RelationshipList
                 rows={rows}
@@ -316,9 +316,13 @@ export default function HomePage() {
                   // `agent-window.tsx`): these panes are COLUMNS of the surface they sit in,
                   // not cards floating on it. The 2px account-palette border is what says
                   // where the pane starts.
-                  "mb-3 mr-3 flex min-w-0 flex-1 overflow-hidden rounded-[14px] border-2 border-home-panel-line bg-home-card",
-                  home.frame
+                  "mb-3 mr-3 flex min-w-0 flex-1 overflow-hidden rounded-[14px] border-2 border-home-panel-line bg-home-card"
                 )}
+                // THE ACCOUNT PALETTE SKIN — the kit's since R-38 (2026-09-17),
+                // worn here where `home.module.css › .frame` used to fence it to
+                // this page. The workspace channels page wears the same
+                // attribute, which is the whole of the ruling.
+                data-frame-skin
               >
                 {/* ⚠ THE TOKEN, NOT THE CONTENT, is what crosses the fade —
                     the pane renders whatever `shown` names, which lags the

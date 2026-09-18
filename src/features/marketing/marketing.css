@@ -3233,67 +3233,17 @@
   background: var(--home-card);
 }
 
-/* ── The account palette, carried INTO the shared channel surface ─────
-   Port of `apps/desktop-ui/src/pages/home/home.module.css › .frame`, rule for
-   rule and for the same reasons. The surface inside this pane is SHARED with
-   the workspace channels page, where the neutral hairlines are correct; only
-   the copy mounted on /home wears the account palette, so the scope is the
-   pane's own class and nothing else can opt in.
-
-   ⚠ These select on Tailwind UTILITY class names, as the module does. If those
-   change in `features/channels/components/`, this degrades to the
-   neutral hairline — the old look, not a broken one. */
-.lp-demo-record .border-border-default,
-.lp-demo-record .border-border-subtle {
-  border-color: var(--home-panel-line);
-}
-/* Structural dividers match the pane's own 2px outer line; the soft internal
-   rules keep their hairline weight. `th` is excluded — a markdown table's
-   header cell carries the same utility and is not a pane divider. */
-.lp-demo-record .border-l.border-border-default {
-  border-left-width: 2px;
-}
-/* ⚠ THE SAME 2px, TOLD TO THE RESIZE PILL. `channels/components/info-resize-handle.tsx ›
-   DIVIDER_WIDTH_VAR` centres the pill on the divider by offsetting it half a border
-   width; its fallback is the kit hairline the workspace channels page wears, so THIS
-   host has to say that its structural `border-l` above is wider. Declared in this block
-   on purpose, exactly as `home.module.css › .frame` declares it — one rule states the
-   width and the width it tells the handle. */
-.lp-demo-record {
-  --channel-divider-w: 2px;
-}
-.lp-demo-record .border-b.border-border-default:not(th) {
-  border-bottom-width: 2px;
-}
-/* THE SENDER PILLS wear the raised-light face here — one notch up from the flat
-   `.bento` they carry on the workspace channels page. ⚠ Not a forked recipe:
-   these are the kit's own `--raised-light-*` parts, the same three
-   `.auth-btn-3d-light` is built from. The hook is
-   `attribution-pill.tsx › AttributionPill`'s attribute, carried by the human
-   `<span>` and the agent `<button>` alike, so this cannot miss one. */
-.lp-demo-record [data-attribution-pill] {
-  background: var(--raised-light-face);
-  border-color: var(--raised-light-line);
-  box-shadow: var(--raised-light-shadow);
-}
-/* THE COMPOSER'S PANELS wear the page's own panel gray — the recess a panel's
-   header sits in reads as the same surface the "New channel" button stands on,
-   one card out. ⚠ FILL ONLY: the concave shadow stack is deliberate and stays.
-   Hook: `composer-panel-fields.tsx › PANEL_HOOK`. */
-.lp-demo-record [data-composer-panel] {
-  background-color: var(--home-panel);
-}
-
-/* THE RECORD PANE'S SECTION PANELS wear that SAME panel gray, FLAT — no border
-   line, no inset shadow, with the heading and the cards sitting directly on it
-   (`home.module.css › .frame [data-section-panel]`). ⚠ `border-color`, NOT
-   `border: none`: the background paints under the border box, so a transparent
-   hairline is seamless AND leaves the box model alone. Hook:
-   `shared/ui/section-panel.tsx › SectionPanel`'s attribute. */
-.lp-demo-record [data-section-panel] {
-  background-color: var(--home-panel);
-  border-color: transparent;
-}
+/* 🔒 ⚠ **THE PORTED ACCOUNT-PALETTE RULES STOOD HERE AND ARE DELETED (R-38,
+   2026-09-17).** Six rules, a rule-for-rule port of
+   `apps/desktop-ui/src/pages/home/home.module.css › .frame` under this demo's
+   own prefix — a THIRD copy of one skin, kept because the landing never loads
+   the SPA's kit. The ruling promoted the skin to the app: it is `globals.css ›
+   THE ACCOUNT PALETTE SKIN` now, which this page DOES load, so the scene wears
+   `data-frame-skin` (`banner-demo/demo-scene.tsx`) and reads the one copy.
+   ⚠ `[data-section-panel]`'s ground went further still — it is
+   `shared/ui/section-panel.tsx`'s own default, so no host declares it.
+   ⚠ **DO NOT RE-PORT THEM**: `demo-class-coverage.test.tsx` pins the CLASSES the
+   scene needs, not this block, and a fourth copy is what the ruling deleted. */
 
 /* ── Scripted cursor + click ripple ── */
 .lp-demo-cursor {

@@ -241,7 +241,16 @@ export function ChannelsCore({
     // `relative` is the agent view's containing block: it is absolutely
     // positioned against this surface, and `.page-float`'s `overflow: hidden`
     // clips it to the page card's radius on the way in and out.
-    <div className="page-float relative flex antialiased">
+    //
+    // `data-frame-skin` — THE ACCOUNT PALETTE, ON THIS PAGE TOO SINCE R-38
+    // (Samuel, 2026-09-17: *"the workspace pages adopt /home's frame model and
+    // palette — the two surfaces must match"*). The kit owns the six rules
+    // (`src/app/globals.css` › THE ACCOUNT PALETTE SKIN); this page and /home's
+    // record pane are the two hosts that wear them, so the dividers, the sender
+    // pills and the composer panels read the same on both. ⚠ The guest web lane
+    // (`src/app/c/[workspaceId]/guest-channel.tsx`) deliberately does NOT wear
+    // it — it keeps the neutral kit hairlines it has today.
+    <div className="page-float relative flex antialiased" data-frame-skin>
       <ChannelsSidebar
         workspaceId={workspaceId}
         rooms={rooms}

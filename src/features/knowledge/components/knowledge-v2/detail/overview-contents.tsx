@@ -17,10 +17,7 @@ import {
 } from "lucide-react";
 import { DESCRIPTION_MAX } from "@/config";
 import { cn } from "@/shared/lib/utils";
-import {
-  SECTION_PANEL_GROUND,
-  SectionPanel,
-} from "@/shared/ui/section-panel";
+import { SectionPanel } from "@/shared/ui/section-panel";
 import { UNDERLINE_FIELD } from "@/shared/ui/wells";
 import type { KnowledgeEntry, KnowledgeFolder } from "../../../types";
 import type { BaseTree } from "../types";
@@ -180,7 +177,6 @@ export function OverviewContents({
       id="kb-contents"
       label="Contents"
       caption={meta}
-      className={SECTION_PANEL_GROUND}
     >
       {tree?.status === "loading" || tree === undefined ? (
         <p className="px-1 py-1 text-caption text-text-muted">Loading contents…</p>

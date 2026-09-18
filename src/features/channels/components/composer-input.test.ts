@@ -238,10 +238,10 @@ describe("one input row, two composers", () => {
 
 describe("the agent pane's divider", () => {
   it("carries the SAME border class the pane's own lines do", () => {
-    // ⚠ THE COLOUR IS NOT CHOSEN IN THE COMPONENT. On /home both are recoloured by
-    // `pages/home/home.module.css › .frame :global(.border-border-default)`, which is the blue
-    // being pointed at; a hardcoded `border-link` was a different blue AND dropped the class that
-    // rule keys on, so the divider could not track the pane's other lines.
+    // ⚠ THE COLOUR IS NOT CHOSEN IN THE COMPONENT. Under the account palette skin both are
+    // recoloured by `src/app/globals.css` › THE ACCOUNT PALETTE SKIN, which is the line being
+    // pointed at; a hardcoded `border-link` was a different blue AND dropped the class that rule
+    // keys on, so the divider could not track the pane's other lines.
     const panel = codeOf("agent-panel.tsx");
     expect(panel).toContain("border-l border-border-default");
     expect(panel, "the divider picked its own blue again").not.toMatch(/border-link\b/);

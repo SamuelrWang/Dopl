@@ -53,8 +53,7 @@ const read = (rel: string) =>
   readFileSync(join(REPO, rel), "utf8").replace(/\r\n/g, "\n");
 
 const SHELL_CSS = "src/shared/layout/app-shell/app-shell.module.css";
-const RAIL_CSS =
-  "apps/desktop-ui/src/components/app-shell/account-rail.module.css";
+const RAIL_CSS = "apps/desktop-ui/src/components/app-shell/account-rail.module.css";
 const KIT_CSS = "apps/desktop-ui/src/styles/kit.css";
 const WEB_KIT_CSS = "src/app/globals.css";
 const SPA_TOKENS = "apps/desktop-ui/src/styles/tokens.css";
@@ -63,6 +62,7 @@ const RAIL_TSX = "apps/desktop-ui/src/components/app-shell/account-rail.tsx";
 const HOME_PAGE = "apps/desktop-ui/src/pages/home/index.tsx";
 const HOME_SKELETON = "apps/desktop-ui/src/pages/home/home-skeleton.tsx";
 const LAYOUT_SHELL = "src/shared/layout/layout-shell.tsx";
+const HOME_CSS_MODULE = "apps/desktop-ui/src/pages/home/home.module.css";
 
 const shellCss = read(SHELL_CSS);
 const railCss = read(RAIL_CSS);
@@ -279,13 +279,14 @@ describe("ONE gray panel, with the page floating inside it", () => {
     // The Pro upsell sits in the sidebar region, i.e. ON the gray panel → white.
     expect(rule(shellCss, "\n.wordsCard {")).toContain("background: var(--home-card)");
     // A section panel is drawn on a PAGE, i.e. inside the white card → gray, the
-    // same token /home's record-pane wells take. Both hosts, one colour.
+    // same token /home's record-pane wells take. ⚠ ONE STATEMENT of it since
+    // R-38/R-39 (2026-09-17): `SectionPanel` paints the ground, so /home's scoped
+    // `:global([data-section-panel])` repaint is gone and so is the hairline it
+    // cleared (*"the extra border line around the gray"*, 2026-09-13).
     expect(code(read("src/shared/ui/section-panel.tsx"))).toContain(
-      'SECTION_PANEL_GROUND =\n  "border border-border-subtle bg-home-panel"'
+      'SECTION_PANEL_GROUND =\n  "border border-transparent bg-home-panel"'
     );
-    const homeCss = read("apps/desktop-ui/src/pages/home/home.module.css");
-    const wells = homeCss.slice(homeCss.indexOf(".frame :global([data-section-panel])"));
-    expect(wells.slice(0, wells.indexOf("}"))).toContain("var(--home-panel)");
+    expect(code(read(HOME_CSS_MODULE))).not.toContain("[data-section-panel]");
   });
 
   it("a COLUMN of the chat area takes the chat area's own level, not a panel's", () => {
@@ -415,7 +416,6 @@ describe("the rail reads the same on both hosts", () => {
 });
 
 describe("the selected channel row's line is its own step", () => {
-  const HOME_CSS = "apps/desktop-ui/src/pages/home/home.module.css";
   /** ⚠ **THE ROW'S FACE LEFT `relationship-list.tsx` ON 2026-09-17** — the hero
    *  demo renders the same row; the list still owns the column and the reads. */
   const ROW_TSX = "src/shared/ui/home-channel-row.tsx";
@@ -432,7 +432,7 @@ describe("the selected channel row's line is its own step", () => {
       expect(src).toContain("--focus-line: rgba(24, 24, 24, 0.22)");
       expect(src).not.toContain("--home-row-line-selected:");
     }
-    expect(read(HOME_CSS)).not.toContain(".rowSelected {");
+    expect(read(HOME_CSS_MODULE)).not.toContain(".rowSelected {");
     // ⚠ AND THE ROW WEARS THE BLACK BUTTON, BY THE CONSTANT.
     const row = code(read(ROW_TSX));
     expect(row).toContain("HOME_CARD_FACE_SELECTED");

@@ -91,9 +91,10 @@ export function DetailPanel({
   return (
     // ⚠ THE DIVIDER IS A UTILITY AND IT IS A `border-l` ON *THIS* COLUMN, not a
     // `border-r` on the rail — the two draw the same line and only one of them
-    // is reachable. `pages/home/home.module.css › .frame` selects on the class
-    // NAME (a module rule reading `--kv-border` is invisible to it), and its
-    // second rule widens exactly `.border-l.border-border-default` to 2px, so
+    // is reachable. The account palette skin (`src/app/globals.css` › THE
+    // ACCOUNT PALETTE SKIN) selects on the class NAME (a module rule reading
+    // `--kv-border` is invisible to it) and widens exactly
+    // `.border-l.border-border-default` to 2px, so
     // this lands on the account palette at the same weight as the channel
     // surface's info-column divider. A `border-r` would take the colour and
     // miss the weight, which is a hairline that matches nothing on either page.

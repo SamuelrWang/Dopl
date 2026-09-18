@@ -138,13 +138,13 @@ export function DemoScene({
                 <DemoChannelList rows={homeRows} selectedId={HOME_ROW_ID} />
                 {/* THE RECORD PANE — a white card bounded by the account
                     palette's 2px line, NOT an elevation (`index.tsx`: no
-                    `.bento`, the drop had nowhere to fall). `.lp-demo-record`
-                    also carries `home.module.css › .frame`'s overrides, which
-                    are what put the account palette on the shared surface's own
-                    dividers, sender pills and composer panel. `relative` is the
-                    agent view's containing block, exactly as
-                    `channel-surface-standalone.tsx` states. */}
-                <div className="lp-demo-record" ref={paneRef}>
+                    `.bento`, the drop had nowhere to fall). `data-frame-skin`
+                    is the account palette on the shared surface's own dividers,
+                    sender pills and composer panel — the KIT's since R-38
+                    (2026-09-17), where this scene used to carry a ported copy in
+                    `marketing.css`. `relative` is the agent view's containing
+                    block, exactly as `channel-surface-standalone.tsx` states. */}
+                <div className="lp-demo-record" data-frame-skin ref={paneRef}>
                   <ChannelsMessagePane
                     key={`pane-${run}`}
                     channelId={CHANNEL_ID}

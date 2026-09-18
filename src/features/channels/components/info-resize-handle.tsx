@@ -46,14 +46,15 @@ export const INFO_RESIZE_LABEL = "Resize channel info";
  * `borderWidth / 2` to the RIGHT of that edge. Shifting the strip by exactly
  * that much puts the 4px pill's centre on the line's centre.
  *
- * ⚠ **AND THE BORDER IS NOT ONE WIDTH ON BOTH HOSTS, WHICH IS WHY THIS IS A
- * VARIABLE AND NOT A NUMBER.** On the workspace channels page it is the kit
- * hairline (1px, the fallback here); inside /home's record pane
- * `pages/home/home.module.css › .frame :global(.border-l.border-border-default)`
- * widens exactly that shape to 2px, and it declares this variable in the SAME
- * rule block so the two cannot drift. A literal `1px` here would leave the pill
- * a pixel left of a 2px line on the surface Samuel was looking at, which is the
- * report.
+ * ⚠ **AND THE BORDER IS NOT ONE WIDTH ON EVERY HOST, WHICH IS WHY THIS IS A
+ * VARIABLE AND NOT A NUMBER.** Where the account palette skin is not worn — the
+ * guest web lane — it is the kit hairline (1px, the fallback here); a host
+ * wearing `data-frame-skin` (`src/app/globals.css` › THE ACCOUNT PALETTE SKIN)
+ * widens exactly that shape to 2px and declares this variable in the rule
+ * ADJACENT to it, so the two cannot drift. ⚠ **THAT NOW INCLUDES THE WORKSPACE
+ * CHANNELS PAGE** (R-38, 2026-09-17) — it read the 1px fallback until then. A
+ * literal `1px` here would leave the pill a pixel left of a 2px line on the
+ * surface Samuel was looking at, which is the report.
  */
 export const DIVIDER_WIDTH_VAR = "--channel-divider-w";
 

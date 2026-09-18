@@ -438,12 +438,12 @@ describe("home overview face", () => {
    * panel. This will be one gray shadow right behind this"*).**
    *
    * ⚠ **THE ASSERTION IS THE ABSENCE OF AN OVERRIDE, WHICH IS THE ONLY THING
-   * THIS SUITE CAN SEE.** The gray itself is painted by a CSS-module rule
-   * (`home.module.css › .frame [data-section-panel]`) that jsdom does not apply,
-   * so what is pinned is (1) the panel still carries the `data-section-panel`
-   * hook that rule keys on — swap it for a utility class and the override dies
-   * silently — and (2) no `!bg-home-card` is forcing it white. Those two together
-   * are what the trial changed.
+   * THIS SUITE CAN SEE.** The gray itself is a Tailwind utility jsdom does not
+   * paint (`shared/ui/section-panel.tsx › SECTION_PANEL_GROUND`, the component's
+   * own ground since R-38), so what is pinned is (1) the panel still carries the
+   * `data-section-panel` hook a page override would key on and (2) no
+   * `!bg-home-card` is forcing it white. Those two together are what the trial
+   * changed.
    *
    * 🔒 **AND TWO WHITE `.bento` CARDS INSIDE IT WITH A GAP (Samuel: *"I want the
    * credits bar and the bar graph to be split into two different white panels

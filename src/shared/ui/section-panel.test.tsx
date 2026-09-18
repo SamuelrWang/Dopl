@@ -2,37 +2,53 @@
 /**
  * THE FLAT SECTION — its shape, and the page hook that grounds it.
  *
- * ⚠ THE SECOND DESCRIBE IS A SOURCE READ. The /home ground is a CSS-module
- * rule, and jsdom loads no stylesheet: a rendered assertion would report the
- * same nothing for a grounded panel and an ungrounded one. Same shape as
- * `features/agent-templates/components/template-editor-surface.test.tsx › no concave
- * surfaces`, and it reaches across trees the same way — a `readFileSync` from
- * the repo root, no import and no second config.
+ * ⚠ THE GROUND IS THE COMPONENT'S OWN SINCE R-38/R-39 (2026-09-17), so it is
+ * asserted by RENDER and not by a source read any more. It was a `:global()`
+ * rule fenced to /home's record pane (`pages/home/home.module.css › .frame`)
+ * while a workspace page passed a ground carrying a hairline; one flat gray on
+ * both hosts has one place to be stated.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { SectionPanel } from "./section-panel";
+import { SECTION_PANEL_GROUND, SectionPanel } from "./section-panel";
 import { SECTION_HEADING_TEXT } from "./section-heading";
 
 afterEach(cleanup);
 
 describe("what a flat section is", () => {
-  it("paints NOTHING of its own — the ground is the caller's", () => {
-    // ⚠ THE WHOLE SCOPING STORY. /home's palette is that page's alone, so a
-    // shared component must not be able to reach it; the caller (or a
-    // page-scoped rule) supplies fill and border, and this asserts the default
-    // carries neither.
+  it("paints ONE flat ground, on every host", () => {
+    // 🔒 R-38 + R-39 (Samuel, 2026-09-17): the workspace adopts /home's skin and
+    // the section language is FLAT. This case asserted the OPPOSITE until then —
+    // "paints NOTHING, the ground is the caller's" — which is what let a
+    // hairline live on every page /home was not.
     render(
       <SectionPanel id="s" label="Personal">
         <p>body</p>
       </SectionPanel>
     );
     const panel = screen.getByRole("region", { name: "Personal" });
-    expect(panel.className).not.toMatch(/\bbg-/);
-    expect(panel.className).not.toMatch(/\bborder/);
+    for (const token of SECTION_PANEL_GROUND.split(" ")) {
+      expect(panel.className).toContain(token);
+    }
+    // FLAT: a transparent border box, never a visible hairline — see the
+    // constant's docblock for why the box stays.
+    expect(panel.className).not.toMatch(/border-border-/);
+  });
+
+  it("still lets a caller override the ground", () => {
+    render(
+      <SectionPanel id="s" label="Personal" className="bg-home-card">
+        <p>body</p>
+      </SectionPanel>
+    );
+    // `cn` is tailwind-merge: the later `bg-*` wins, so an override is one prop
+    // and not a `tone` enum.
+    const panel = screen.getByRole("region", { name: "Personal" });
+    expect(panel.className).toContain("bg-home-card");
+    expect(panel.className).not.toContain("bg-home-panel");
   });
 
   it("puts the heading, the caption and the content on ONE ground", () => {
@@ -70,37 +86,28 @@ describe("what a flat section is", () => {
   });
 });
 
-describe("the /home ground", () => {
+describe("the hook survives the rule that used it", () => {
   /**
-   * ⚠ BOTH HALVES OR NEITHER. The attribute above is inert without the rule,
-   * and the rule is dead the moment the attribute is renamed — and a dead
-   * repaint looks like a design change nobody made, on a page nobody was
-   * editing. The two are asserted together, in the direction Samuel ruled
-   * (2026-08-27): the record pane's sections are FLAT and wear the page's own
-   * panel gray, so Knowledge and Agents cannot diverge.
+   * ⚠ THE ATTRIBUTE OUTLIVED ITS `:global()` RULE ON PURPOSE (R-38, 2026-09-17).
+   * It is what let a page repaint every panel at once, and the day another host
+   * needs that it is the difference between one rule and a sweep of call sites.
+   * Asserted here so "no rule reads it" never becomes "so delete it".
    */
-  it("repaints every section panel in the record pane, in ONE rule", () => {
-    const css = readFileSync(
-      path.join(
-        process.cwd(),
-        "apps",
-        "desktop-ui",
-        "src",
-        "pages",
-        "home",
-        "home.module.css"
-      ),
-      "utf8"
-    );
-    expect(css).toContain(".frame :global([data-section-panel])");
-    // The frame palette, never a literal — `--home-panel` is the fill the
-    // relationship list stands on (`docs/DESIGN-SYSTEM.md`; app-frame-wide
-    // since 2026-08-30, /home-scoped before that).
-    const rule = css.slice(css.indexOf(".frame :global([data-section-panel])"));
-    const body = rule.slice(0, rule.indexOf("}"));
-    expect(body).toContain("var(--home-panel)");
-    // FLAT: the hairline `TemplatePanel` wears on the workspace Agents page is
-    // taken off here rather than left showing on one of the two faces.
-    expect(body).toContain("border-color: transparent");
+  it("is still on the section, and no kit copy claims it", () => {
+    render(<SectionPanel id="s" label="Personal">{null}</SectionPanel>);
+    expect(
+      screen.getByRole("region", { name: "Personal" }).hasAttribute("data-section-panel")
+    ).toBe(true);
+    for (const rel of [
+      "src/app/globals.css",
+      "apps/desktop-ui/src/styles/kit.css",
+      "apps/desktop-ui/src/pages/home/home.module.css",
+    ]) {
+      const css = readFileSync(path.join(process.cwd(), rel), "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "");
+      expect(css, `${rel} took the scoped repaint back`).not.toContain(
+        "[data-section-panel]"
+      );
+    }
   });
 });

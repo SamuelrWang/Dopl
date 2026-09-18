@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 import { agentModelShortLabel } from "@/features/channels/lib/agent-models";
 import { pendingRow } from "@/shared/ui/pending";
-import { SECTION_PANEL_GROUND, SectionPanel } from "@/shared/ui/section-panel";
+import { SectionPanel } from "@/shared/ui/section-panel";
 import { SECTION_HEADING_TEXT } from "@/shared/ui/section-heading";
 import type { AgentTemplate } from "../client/types";
 import type { TemplateSectionDef } from "../lib/visibility";
@@ -43,14 +43,12 @@ import type { TemplateSectionDef } from "../lib/visibility";
  * The flat panel shell: heading, optional header control, optional caption.
  *
  * ⚠ THE STRUCTURE IS `shared/ui/section-panel.tsx › SectionPanel` SINCE
- * 2026-08-27, and this is now only the GROUND it stands on — the kit's flat
- * "header strips, inset cards" face on a hairline. The /home Knowledge sections
- * were `SectionBox` (a header strip over a CONCAVE body) until Samuel ruled the
- * two /home faces onto one flat rectangle; `SectionPanel` is the shape they now
- * share, and it paints nothing so this page's ground and /home's stay separate
- * facts. ⚠ **THE /home PAGE REPAINTS THIS GROUND rather than passing one** —
- * `pages/home/home.module.css › .frame :global([data-section-panel])` — so a
- * mount there does not restate the page palette and this default is untouched.
+ * 2026-08-27. The /home Knowledge sections were `SectionBox` (a header strip
+ * over a CONCAVE body) until Samuel ruled the two /home faces onto one flat
+ * rectangle; `SectionPanel` is the shape they share. ⚠ **AND SINCE R-38/R-39
+ * (2026-09-17) IT IS ALSO THE GROUND** — the component paints one flat gray on
+ * every host, /home's scoped repaint is deleted, and this file passes no
+ * `className` at all.
  */
 /**
  * THE TEMPLATE CARD'S NAME TYPE — title size, medium weight, primary ink.
@@ -130,11 +128,10 @@ export function TemplatePanel({
       label={label}
       action={action}
       caption={caption}
-      // ⚠ THE VALUE MOVED, THE FACE DID NOT (2026-08-28). It was these two
-      // utilities typed here; the knowledge base-info face needed the same
-      // ground, so the string is `SECTION_PANEL_GROUND` in the kit and both
-      // callers read it. `SectionPanel` still paints nothing of its own.
-      className={SECTION_PANEL_GROUND}
+      // ⚠ NO `className`, AND THAT IS THE POINT SINCE R-38 (2026-09-17). The
+      // ground was typed here, then hoisted to `SECTION_PANEL_GROUND` when the
+      // knowledge base-info face wanted the same one; it is the COMPONENT's
+      // default now, so the last two readers of the constant are the ghosts.
     >
       {children}
     </SectionPanel>

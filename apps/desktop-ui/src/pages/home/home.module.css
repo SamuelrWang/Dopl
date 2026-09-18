@@ -1,6 +1,6 @@
-/* /home page GEOMETRY + the record pane's frame. Layout and scoping only —
-   every colour, radius, shadow and type size comes from the tokens and the kit
-   (docs/DESIGN-SYSTEM.md). */
+/* /home page GEOMETRY. Layout and scoping only — every colour, radius, shadow
+   and type size comes from the tokens and the kit (docs/DESIGN-SYSTEM.md), and
+   since R-38 (2026-09-17) the record pane's PAINT is the kit's too. */
 
 /* ⚠ ONE SOURCE FOR THE COLUMN WIDTH, and it is load-bearing in TWO places
    (Samuel, 2026-08-24): the relationship list IS this wide, and the header's
@@ -30,142 +30,23 @@
    still the kit's shared "this is the live one" line, and the header's search
    pill and the landing page's scripted /home demo still wear it. */
 
-/* ── The record pane's frame around the pinned channel surface ────────────
-   Colour/weight only; the card itself (radius, shadow, fill) is the kit's
-   `.bento` plus `bg-home-card` / `border-home-panel-line` in the TSX.
+/* 🔒 ⚠ **THE SIX `.frame` PALETTE RULES STOOD HERE AND ARE DELETED (Samuel's
+   ruling R-38, 2026-09-17):** *"the workspace pages adopt /home's frame model
+   and palette — the two surfaces must match."* They repainted the SHARED
+   channel surface's dividers, its attribution pills and its composer panels
+   inside this pane only, and the fence — a class this page owned, so nothing
+   else could opt in by accident — was the whole point of a CSS module here.
 
-   ⚠ WHY A SCOPED MODULE AND NOT A KIT RECIPE. `StandaloneChannelSurface` is
-   SHARED with the workspace channels page (INVARIANTS §7 — one surface, two
-   hosts). Its internal rules must stay the neutral hairlines there; only the
-   copy mounted on /home wears the account palette. A class the home pane owns
-   is the whole fence — nothing else can opt in by accident.
+   The charter makes that fence the drift. The rules are the KIT's now, one copy
+   in each kit file, keyed on `data-frame-skin` (`src/app/globals.css` /
+   `apps/desktop-ui/src/styles/kit.css` › THE ACCOUNT PALETTE SKIN), and this
+   page wears the attribute where it wore `.frame` — so does the workspace
+   channels page. ⚠ **DO NOT RE-ADD A SCOPED COPY HERE**: two statements of one
+   skin is exactly what the ruling deleted.
 
-   ⚠ WHY UNLAYERED. These override Tailwind UTILITIES on components this page
-   does not own. Tailwind's layer order puts `utilities` above `components`, and
-   a layer beats specificity outright — a `@layer components` rule can never win
-   this, no matter how many classes it stacks. A CSS module is unlayered, and
-   unlayered rules outrank every layered one.
-
-   ⚠ WHY IT SELECTS ON UTILITY CLASS NAMES. The dividers are Tailwind classes on
-   files in `features/channels/components/` — `border-border-default`
-   is the STRUCTURAL rule (the info column's `border-l`, the pane headers'
-   `border-b`), `border-border-subtle` the softer internal ones. If those class
-   names change there, this stops applying: it degrades to the neutral hairline,
-   which is the old look, not a broken one. */
-
-.frame :global(.border-border-default),
-.frame :global(.border-border-subtle) {
-  border-color: var(--home-panel-line);
-}
-
-/* Structural dividers match the pane's OWN 2px outer border; the soft internal
-   rules keep their hairline weight. `th` is excluded because a markdown table's
-   header cell carries the same `border-b border-border-default` and is not a
-   pane divider. */
-.frame :global(.border-l.border-border-default) {
-  border-left-width: 2px;
-}
-/* ⚠ THE SAME 2px, TOLD TO THE RESIZE PILL (Samuel, 2026-09-13: *"I want it to be
-   perfectly on the vertical line"*). `channels/components/info-resize-handle.tsx ›
-   DIVIDER_WIDTH_VAR` centres the pill on the divider by offsetting it half a
-   border width; its fallback is the kit hairline the workspace channels page
-   wears, so THIS host has to say that its structural `border-l` above is wider.
-   ⚠ **DECLARED IN THIS BLOCK ON PURPOSE** — one rule states the width and the
-   width it tells the handle, so the pair cannot drift the day the pane's outer
-   border moves. It is inherited, so the handle reads it anywhere in the frame. */
-.frame {
-  --channel-divider-w: 2px;
-}
-.frame :global(.border-b.border-border-default):not(th) {
-  border-bottom-width: 2px;
-}
-
-/* THE SENDER PILLS wear the raised-light face here (Samuel, 2026-08-24) — the
-   same elevation as the search button, one notch up from the flat `.bento` they
-   carry on the workspace channels page.
-
-   ⚠ NOT A FORKED RECIPE. The three values are the kit's own
-   `--raised-light-*` parts, which `.auth-btn-3d-light` and `.raised-tab` are
-   themselves built from, so this face cannot drift from theirs and no hex is
-   hardcoded here (docs/DESIGN-SYSTEM.md forbids that outright).
-
-   ⚠ THE RESTING FACE, FOR BOTH ELEMENTS THE PILL CAN BE (updated 2026-08-28). A HUMAN pill
-   is still a `<span>` naming an author and this is the whole of its treatment — no hover
-   lift, no pressed state, no pointer. An AGENT pill is a real `<button>` that opens that
-   agent's pane, and it wears the SAME face by design: the lift and the press are the
-   component's own utilities (`attribution-pill.tsx`, borrowing `.btn-light`'s ±1px motion),
-   never a second recipe here. **Do not fork a hover state into this rule** — it selects both
-   kinds of pill and would put a pressable affordance on the human ones.
-
-   The hook is `attribution-pill.tsx › AttributionPill`'s `data-attribution-pill`, carried by
-   the `<span>` and the `<button>` alike so this rule cannot miss one. */
-.frame :global([data-attribution-pill]) {
-  background: var(--raised-light-face);
-  border-color: var(--raised-light-line);
-  box-shadow: var(--raised-light-shadow);
-}
-
-/* THE COMPOSER'S PANELS wear the page's own panel gray here (Samuel, 2026-08-26): the recess a
-   panel's header sits in reads as the same surface the "New channel" button stands on, one card
-   out. ⚠ BOTH of them — the new-thread panel and, since 2026-08-27, the new-agent launch panel;
-   they share one attribute so this stays ONE rule.
-
-   ⚠ SCOPED, for the reason at the top of this file. The RULE is /home's, even
-   though the token is not: `--home-panel` is one of the APP FRAME palette's
-   four values (`tokens.css › THE APP FRAME PALETTE` — Samuel widened that
-   palette's scope on 2026-08-30 and the "that page's alone" claim this note
-   used to make is superseded). What stays page-scoped is the BINDING: the
-   shared composer keeps its neutral `bg-bg-inset` on the workspace channels
-   page, and only the copy mounted inside `.frame` follows the panel gray. The
-   point is that binding, not the ~4/255 the two grays differ by today.
-
-   ⚠ FILL ONLY. The concave shadow stack is deliberate and stays
-   (`composer-panel-fields.tsx`); only the colour under it is /home's.
-
-   The hook is `composer-panel-fields.tsx › PANEL_HOOK` — an attribute, like
-   `[data-attribution-pill]` above, so swapping a utility class in either panel cannot silently
-   drop this. */
-.frame :global([data-composer-panel]) {
-  background-color: var(--home-panel);
-}
-
-/* THE RECORD PANE'S SECTION PANELS — Knowledge's two and Agents' three — wear
-   that SAME panel gray, flat (Samuel, 2026-08-27, over a screenshot of the
-   Knowledge face). Knowledge's sections were `SectionBox`: a header STRIP over
-   a `bg-bg-inset` body with the concave inset shadow, which read as a rectangle
-   pressed INTO the pane. The ruling is a normal flat rectangle — no border
-   line, no inset shadow — filled with the colour the relationship list stands
-   on, with the section heading and the cards sitting DIRECTLY on it. The cards
-   stay raised; raised-on-flat-gray is the point.
-
-   ⚠ ONE RULE FOR BOTH FACES, and that is the ruling, not a shortcut. The two
-   /home tabs reached this from opposite sides — Knowledge from a concave
-   `SectionBox`, Agents from `template-section.tsx`'s flat
-   `bg-card-surface-subtle` card — and two faces that merely LOOK settled today
-   drift the moment one of them is re-tuned. Stating the ground once means a
-   change to it cannot land on one tab only.
-
-   ⚠ SCOPED, for the reason at the top of this file: `.frame` is applied nowhere
-   else, so `TemplatePanel` keeps its neutral flat card face on the WORKSPACE
-   Agents page. ⚠ The scope is the RULE's, not the token's — `--home-panel` was
-   /home's alone until 2026-08-30 and is now the app frame's panel fill; this
-   rule is what keeps the two Agents faces apart, and it always was. This is
-   also why `shared/ui/section-panel.tsx` paints nothing of its own — a
-   `tone="home"` prop there would turn a per-mount decision into an enum one
-   autocomplete away from every page.
-
-   ⚠ `border-color`, NOT `border: none` — the background paints under the
-   border box, so a transparent hairline is seamless AND leaves the box model
-   alone; removing the border would move every panel's content by a pixel on
-   /home only.
-
-   The hook is `shared/ui/section-panel.tsx › SectionPanel`'s
-   `data-section-panel` — an attribute, like the two above, so neither face's
-   utility classes can silently drop this. */
-.frame :global([data-section-panel]) {
-  background-color: var(--home-panel);
-  border-color: transparent;
-}
+   ⚠ `[data-section-panel]`'s ground did not move to the kit either — it is
+   `shared/ui/section-panel.tsx`'s own default now, so every page gets the flat
+   gray and not only the two hosts that mount the skin. */
 
 /* ── The Knowledge tab's card grid ────────────────────────────────────────
    ⚠ WHY THE `--kv-*` LINE EXISTS. `knowledge-v2/home/base-card.tsx` is REUSED

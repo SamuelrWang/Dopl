@@ -314,15 +314,14 @@ export function ChannelsAgentPanel({
           : "absolute inset-y-0 right-0 w-[var(--info-w,380px)]",
         // ⚠ THE DIVIDER IS `border-l border-border-default` — THE SAME CLASS THIS PANE'S OTHER
         // LINES ALREADY CARRY, and that is the whole point. Its header rule is
-        // `border-b border-border-default`; on /home BOTH are recoloured to the account palette's
-        // `--home-panel-line` by `pages/home/home.module.css › .frame :global(.border-border-
-        // default)`, which is the blue Samuel is pointing at. **The colour is not chosen here** —
-        // it is whatever that scoped rule says, so the divider and the pane's own lines cannot
-        // differ. An earlier attempt hardcoded `border-link`, a DIFFERENT blue, and in doing so
-        // dropped the class the /home rule keys on.
-        // ⚠ 2px COMES FROM THE SAME MODULE, not from a number here: `.frame :global(.border-l
-        // .border-border-default)` widens exactly this shape. On the workspace channels page it
-        // stays a neutral hairline, which is that page's own idiom.
+        // `border-b border-border-default`; under the account palette skin BOTH are recoloured to
+        // `--home-panel-line` (`src/app/globals.css` › THE ACCOUNT PALETTE SKIN), which is the
+        // line Samuel is pointing at. **The colour is not chosen here** — it is whatever that rule
+        // says, so the divider and the pane's own lines cannot differ. An earlier attempt
+        // hardcoded `border-link`, a DIFFERENT blue, and in doing so dropped the class the rule
+        // keys on.
+        // ⚠ 2px COMES FROM THE SAME BLOCK, not from a number here. ⚠ **AND THE WORKSPACE CHANNELS
+        // PAGE WEARS IT TOO SINCE R-38 (2026-09-17)** — it kept the neutral hairline until then.
         !full && "border-l border-border-default",
         !full && "transition-transform duration-200 ease-out motion-reduce:transition-none",
         !full && (open ? "translate-x-0" : "pointer-events-none translate-x-full")

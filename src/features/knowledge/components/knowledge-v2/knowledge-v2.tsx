@@ -58,8 +58,8 @@ interface Props {
    * workspace knowledge page IS that page, and /home's Knowledge face mounts
    * this same tree INSIDE the record pane, which is already a bordered card on
    * a panel. A second float there is a panel on a panel — the reported defect —
-   * and no amount of repainting from `.frame` makes a nested page surface into
-   * one surface.
+   * and no amount of repainting from the account palette skin makes a nested
+   * page surface into one surface.
    *
    * ⚠ DEFAULT FALSE, so the workspace page is unchanged by construction and a
    * future host has to say it is embedding before it loses its surface.

@@ -172,10 +172,9 @@ export function HomeOverviewPanels({
             layer short, and the only section on the face that did not match its
             siblings. **Both overrides are gone — and the `titleClassName` PROP
             went with them** (`shared/ui/section-panel.tsx`: it had no other
-            caller), so /home's own rule
-            (`home.module.css › .frame [data-section-panel]`) grounds this panel
-            exactly as it grounds Token spend and All channels: **ONE well, behind
-            the whole Usage block**, with the white cards inside it. */}
+            caller), so `SectionPanel`'s own ground (R-38, 2026-09-17) grounds
+            this panel exactly as it grounds Token spend and All channels: **ONE
+            well, behind the whole Usage block**, with the white cards inside. */}
         {/* Heading type is `SectionPanel`'s own now — the "Usage" trial became
             the rule for every section heading (Samuel, 2026-09-13). */}
         <SectionPanel id="home-overview-usage" label="Usage">

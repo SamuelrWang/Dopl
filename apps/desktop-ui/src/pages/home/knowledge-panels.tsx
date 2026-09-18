@@ -70,9 +70,9 @@ import home from "./home.module.css";
  * `shared/ui/section-panel.tsx › SectionPanel` now: no border line, no inset
  * shadow, heading and cards directly on one ground. **The cards stay raised** —
  * raised-on-flat-gray is the point, and the drag-resize grip went with the box.
- * ⚠ **THE GROUND IS NOT STATED IN THIS FILE** — `home.module.css › .frame
- * :global([data-section-panel])` grounds BOTH /home faces from one rule, so a
- * re-tune cannot land on one tab only.
+ * ⚠ **THE GROUND IS NOT STATED IN THIS FILE** — `shared/ui/section-panel.tsx ›
+ * SECTION_PANEL_GROUND` grounds every section on every host from one string
+ * (R-38, 2026-09-17), so a re-tune cannot land on one tab only.
  */
 export function HomeKnowledgePanels({
   channel,

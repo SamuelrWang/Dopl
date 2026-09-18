@@ -23,9 +23,10 @@ import { SkeletonSurface } from "./skeleton-surface";
  * them — `.baseHead` takes `border-b border-border-default`
  * (`detail/base-header.tsx`), `.detailPane` takes `border-l
  * border-border-default` (`detail/detail-panel.tsx`). That is deliberate there:
- * `pages/home/home.module.css › .frame` selects on those class names to widen
- * and repaint them in the account palette. Drawn any other way the skeleton
- * would wear neutral hairlines inside a pane whose every line is /home's.
+ * the account palette skin (`src/app/globals.css` › THE ACCOUNT PALETTE SKIN)
+ * selects on those class names to widen and repaint them. Drawn any other way
+ * the skeleton would wear neutral hairlines inside a pane whose every line is
+ * the palette's.
  */
 
 /** How many ghost cards a grid stands in for — two full rows at 3 columns. */
@@ -159,10 +160,10 @@ export function KnowledgeBaseSkeleton({
  *
  * ⚠ NOT `SectionPanel` ITSELF: it takes a `label` STRING and paints it as an
  * `<h2>`, and a skeleton carries no text. What it keeps is the box
- * (`rounded-[14px] p-3`), the `data-section-panel` hook — the one /home's record
- * pane repaints every panel through — and `SECTION_PANEL_GROUND`, so this ghost
- * re-grounds with `detail/meta-card.tsx` and `detail/overview-contents.tsx`
- * rather than beside them.
+ * (`rounded-[14px] p-3`), the `data-section-panel` hook and
+ * `SECTION_PANEL_GROUND` — the ground `SectionPanel` paints for the two real
+ * sections since R-38 — so this ghost re-grounds with `detail/meta-card.tsx`
+ * and `detail/overview-contents.tsx` rather than beside them.
  */
 function InfoPanelGhost({ lines }: { lines: number }) {
   return (

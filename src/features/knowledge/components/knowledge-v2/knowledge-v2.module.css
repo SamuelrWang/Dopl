@@ -66,11 +66,12 @@
    ⚠ THE TWO DIVIDERS ARE TAILWIND UTILITIES IN THE TSX, NOT RULES HERE — the
    header's `border-b` and the detail column's `border-l`, both
    `border-border-default` — because that is the class
-   `pages/home/home.module.css › .frame` selects on. A `--kv-border` rule in
+   the account palette skin selects on (`src/app/globals.css` › THE ACCOUNT
+   PALETTE SKIN). A `--kv-border` rule in
    this module is invisible to that scope, so the hairlines stayed neutral gray
    inside a pane whose every other line is the account palette's: the "stray
    hairlines" in the screenshot. ⚠ **AND THE SIDES ARE CHOSEN, NOT ARBITRARY**:
-   that file widens exactly `.border-l` and `.border-b` to 2px, so the rail's
+   that block widens exactly `.border-l` and `.border-b` to 2px, so the rail's
    divider is a `border-l` on the column to its RIGHT. Drawn as a `border-r` on
    the rail it would take the colour and miss the weight. One mechanism, both
    hosts — neutral hairlines on the workspace page, account palette at the
@@ -416,10 +417,9 @@
    `--card-surface-subtle` header STRIP — a second framed surface inside the
    pane, i.e. the third panel in a two-panel screenshot. The Details section is
    `shared/ui/section-panel.tsx › SectionPanel` now, like every other section on
-   this surface and like both /home faces; the GROUND comes from the caller
-   (`detail/meta-card.tsx`), and on /home from the one rule that grounds every
-   panel in the record pane (`pages/home/home.module.css › .frame
-   :global([data-section-panel])`). */
+   this surface and like both /home faces; the GROUND is the component's own on
+   every host since R-38/R-39 (2026-09-17), so no caller and no page rule states
+   it. */
 
 /* Layout + type for the editable field rows. ⚠ THE FACE IS NOT HERE: it is the
    kit's `shared/ui/wells.ts › RAISED_INPUT`, composed in `detail/meta-card.tsx`.

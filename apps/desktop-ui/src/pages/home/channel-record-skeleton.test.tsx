@@ -236,10 +236,10 @@ describe("the bubble transcript is gone, and the row shape is the real one", () 
   });
 
   /** ⚠ THE DIVIDERS ARE THE SAME UTILITY CLASSES THE REAL SURFACE WEARS, which
-   *  is what lets `home.module.css › .frame` repaint the ghost's lines to the
-   *  account palette — and widen the info column's `border-l` to 2px — exactly as
-   *  it does the loaded pane's. */
-  it("keeps the two dividers /home's .frame selects on", () => {
+   *  is what lets the account palette skin (`src/app/globals.css` › THE ACCOUNT
+   *  PALETTE SKIN) repaint the ghost's lines — and widen the info column's
+   *  `border-l` to 2px — exactly as it does the loaded pane's. */
+  it("keeps the two dividers the account palette skin selects on", () => {
     const { container } = render(<ChannelRecordSkeleton />);
     expect(container.querySelector(".border-b.border-border-default")).not.toBeNull();
     expect(container.querySelector(".border-l.border-border-default")).not.toBeNull();

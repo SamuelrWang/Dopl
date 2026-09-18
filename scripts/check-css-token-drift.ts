@@ -3,7 +3,9 @@
  * 2026-09-17 (Samuel's ruling R-41) the `@layer components` CLASS SET.
  *
  *   tokens:  src/app/globals.css                    (source of truth)
- *        vs  apps/desktop-ui/src/styles/tokens.css  (the SPA's only other copy)
+ *        vs  apps/desktop-ui/src/styles/tokens.css  + apps/desktop-ui/src/styles/kit.css
+ *            (the SPA's two copies — a `--*` declared inside a KIT RULE lives in
+ *             the second one; see `main`)
  *   classes: src/app/globals.css `@layer components`   (source of truth)
  *        vs  apps/desktop-ui/src/styles/kit.css        (its verbatim hand copy)
  *
@@ -151,7 +153,17 @@ function main(): void {
   const root = resolve(__dirname, "..");
   const read = (rel: string) => readFileSync(resolve(root, rel), "utf8");
   const web = declarations(read(WEB));
-  const spa = declarations(read(SPA));
+  // ⚠ THE SPA's TOKEN SIDE IS TWO FILES SINCE 2026-09-17 (R-38), AND THAT IS
+  // COVERAGE, NOT A LOOSENING. `globals.css` holds the tokens AND the kit, so a
+  // `--*` declared inside a KIT RULE (the account palette skin's
+  // `--channel-divider-w`) has its SPA copy in `kit.css`, not `tokens.css` —
+  // and comparing against `tokens.css` alone reported a real, mirrored
+  // declaration as missing. Concatenating is safe because the two SPA files
+  // partition the layers: `kit.css` carried exactly ONE `--*` when this landed
+  // (`grep -c -- '--[a-z-]*:' apps/desktop-ui/src/styles/kit.css` is the
+  // re-derive) and `globals.css`'s `@layer components` carried none, so nothing
+  // can be double-counted into a false multiplicity mismatch.
+  const spa = declarations(`${read(SPA)}\n${read(KIT)}`);
 
   const names = new Set([...web.keys(), ...spa.keys()]);
   const problems: string[] = [];
@@ -164,7 +176,7 @@ function main(): void {
     }
     const a = web.get(name);
     const b = spa.get(name);
-    if (!a) problems.push(`${name}: declared in ${SPA} only`);
+    if (!a) problems.push(`${name}: declared in ${SPA}/${KIT} only`);
     else if (!b) problems.push(`${name}: declared in ${WEB} only`);
     else if (a.join(" | ") !== b.join(" | ")) {
       problems.push(`${name}:\n    ${WEB}: ${a.join(" | ")}\n    ${SPA}: ${b.join(" | ")}`);
@@ -184,14 +196,14 @@ function main(): void {
     console.error("[drift] design tokens disagree across the two copies:");
     for (const p of problems) console.error(`  ${p}`);
     console.error(
-      `\n❌ CSS token drift detected. \`${WEB}\` is the source of truth and \`${SPA}\` is its only other copy (F-074): change both in ONE edit. If a difference is DELIBERATE, say so in BOTH the CSS comment and \`ALLOWED_DRIFT\` in this file — an undocumented one is indistinguishable from the bug.`
+      `\n❌ CSS token drift detected. \`${WEB}\` is the source of truth; the SPA's copy is \`${SPA}\` plus the kit rules in \`${KIT}\` (F-074): change both in ONE edit. If a difference is DELIBERATE, say so in BOTH the CSS comment and \`ALLOWED_DRIFT\` in this file — an undocumented one is indistinguishable from the bug.`
     );
     process.exit(1);
   }
 
   const shared = [...names].filter((n) => !(n in ALLOWED_DRIFT)).length;
   console.log(
-    `✅ ${shared} design tokens identical across ${WEB} and ${SPA}; ${allowedSeen} documented deviation(s): ${Object.keys(ALLOWED_DRIFT).join(", ")}.`
+    `✅ ${shared} design tokens identical across ${WEB} and ${SPA}+${KIT}; ${allowedSeen} documented deviation(s): ${Object.keys(ALLOWED_DRIFT).join(", ")}.`
   );
 
   checkClassSet(read(WEB), read(KIT));

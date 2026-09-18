@@ -3,10 +3,7 @@
 import { CalendarCheck, CalendarDays, Flag, Users, UsersRound } from "lucide-react";
 import { KB_BASE_DESCRIPTION_MAX } from "@/config";
 import { cn } from "@/shared/lib/utils";
-import {
-  SECTION_PANEL_GROUND,
-  SectionPanel,
-} from "@/shared/ui/section-panel";
+import { SectionPanel } from "@/shared/ui/section-panel";
 import { RAISED_INPUT } from "@/shared/ui/wells";
 import { TeamChip } from "@/features/members/components/team-bits";
 import { StorageMeter } from "../storage-meter";
@@ -51,10 +48,9 @@ export interface MetaCardProps {
  * It was a 14px-radius bordered box with its own `--card-surface-subtle` header
  * STRIP — a framed surface inside a pane that was itself framed inside a panel.
  * The section language here is the one both /home faces already share
- * (`shared/ui/section-panel.tsx`), and the GROUND is the kit's default for a
- * workspace page; on /home the record pane repaints it in one rule
- * (`pages/home/home.module.css › .frame :global([data-section-panel])`), so
- * this file never names that palette.
+ * (`shared/ui/section-panel.tsx`), and the GROUND is the component's own since
+ * R-38/R-39 (2026-09-17) — one flat gray on every host — so this file never
+ * names that palette.
  *
  * ⚠ THE FIELDS ARE RAISED, NOT PRESSED IN. They wore `.concave-field`; they
  * wear `shared/ui/wells.ts › RAISED_INPUT` — Samuel's reference text-control
@@ -78,7 +74,7 @@ export function MetaCard({
   storageLimit,
 }: MetaCardProps) {
   return (
-    <SectionPanel id="kb-details" label="Details" className={SECTION_PANEL_GROUND}>
+    <SectionPanel id="kb-details" label="Details">
       <div className="flex flex-col gap-4 px-1 pt-0.5">
         <label className={styles.fieldGroup}>
           <span className={styles.fieldLabel}>Name</span>

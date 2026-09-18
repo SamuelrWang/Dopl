@@ -195,9 +195,13 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
    */
   it("the opened-base ghost grounds its info sections as SECTION_PANEL wells", () => {
     expect(KNOWLEDGE_SKELETONS).toContain("SECTION_PANEL_GROUND");
+    // ⚠ THE REAL SECTION NAMES THE GROUND BY MOUNTING `SectionPanel`, NOT BY
+    // PASSING IT (R-38, 2026-09-17): the component paints the one flat gray, so
+    // the ghost — a plain `div`, because a loading state must not print a
+    // heading STRING — is the only side left that reads the constant by name.
     expect(
       shared("features/knowledge/components/knowledge-v2/detail/meta-card.tsx")
-    ).toContain("SECTION_PANEL_GROUND");
+    ).toContain("SectionPanel");
 
     const { container } = render(<KnowledgeBaseSkeleton />);
     expect(container.querySelectorAll("[data-section-panel]")).toHaveLength(2);
