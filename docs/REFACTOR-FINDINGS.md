@@ -3746,7 +3746,7 @@ Samuel asked the /home Overview for credits BY CHANNEL and BY PERSON, so the att
 closed at the schema rather than worked around: **`supabase/migrations/20260901130000_credit_usage_events.sql`**
 adds a per-burn ledger — `workspace_id` (the PAYER), `origin_workspace_id` (where the call was made,
 which IS the channel dimension), `user_id`, `amount`, `period_start` — written by
-`src/features/billing/server/credit-ledger.ts › recordCreditUsageEvent`, fired from
+the former `recordCreditUsageEvent` in `src/features/billing/server/credit-ledger.ts`, fired from
 `credits-service.ts › consumeMcpCredits` **only when the consume was ALLOWED**.
 
 - 🔒 **THE COUNTER IS UNCHANGED AND IS STILL THE ONLY AUTHORITY.** `consume_workspace_credits` decides
@@ -8861,7 +8861,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   (`wallet='personal'`, `payer_user_id` = him, same `period_start`) held FIVE rows. /home's Usage
   card prints the COUNTER on its bar and the LEDGER in its histogram, so the two charts on one card
   disagreed by three — *"there's a disconnect between the two charts. we need to nail this down."*
-- **ROOT CAUSE, exactly.** `billing/server/credit-ledger.ts › recordCreditUsageEvent` was
+- **ROOT CAUSE, exactly.** the former `recordCreditUsageEvent` in `billing/server/credit-ledger.ts` was
   `void`-fired by `credits-service.ts › consumeMcpCredits` AFTER the counter RPC had committed. For
   the minutes between the server naming `channel_id` and
   `20261003120000_credit_events_channel.sql` being applied, every insert answered
@@ -10105,4 +10105,14 @@ The claim had been restated in five places from one sentence, which is how it su
 - ⚠ **NOT DELETED IN THIS REVIEW, AND THE REASON IS SCOPE.** None of the five is wave output — `git log origin/master..master` touches only the knowledge pair, and only through R-38's palette commit. The review's mandate was the stacked diff; deleting pre-existing modules is a separate change with its own doc-anchor and test blast radius (`skill-template.ts` is cited three times by `docs/RETIREMENT-UNWIRING-PLAN.md`, so its deletion moves that document too).
 - ⚠ **`AppPanel` WAS IN THIS CLASS AND WAS DELETED**, because it was different in one way that matters: 00-MASTER §5 Wave 0 carried it as scoped work (X9) and the row claimed it done. Its CSS rule `app-shell.module.css › .mainDetail` went with it — zero other users.
 - Proposed resolution: delete all five, each in its own commit, with the `RETIREMENT-UNWIRING-PLAN.md` rows repointed in the same change. **Re-derive the orphan set first** (`npx knip`) rather than trusting this list — §15's own warning is that "dead" is a MEASUREMENT, and `bits.tsx › agentAccent` was called an orphan while it still had a live call site.
+- Status: open.
+
+### F-727 — the search `tsvector` rides every transcript read, and the reads are `select("*")` (2026-09-17)
+
+- Location: `src/features/channels/server/repository-messages.ts` (6 `select("*")` calls) and `src/features/channels/server/repository-account.ts` (2) over `channel_messages`, against `supabase/migrations/20261007120000_search_fulltext_indexes.sql`, which added `search_tsv` as `GENERATED ALWAYS AS … STORED`.
+- Found during: the final whole-set review of the nine parity waves.
+- **THE MIGRATION'S HEADER REASONS ABOUT THE WRITE SIDE AND SAYS NOTHING ABOUT EITHER READER.** It covers the table rewrite, the `ACCESS EXCLUSIVE` hold and GIN maintenance — all correct. What it does not cover is that `channel_messages` is the hottest table in the product and its transcript reads select every column. `› mapMessageRow` picks its fields explicitly, so the vector is fetched and discarded; for a 2 000-character body the lexeme vector is of comparable size to the body itself.
+- ⚠ **AND `channel_messages` IS IN `supabase_realtime`** (the mention doorbell rides it), so the widened row is also what Postgres hands the replication stream. **Whether the extra column actually reaches subscribed clients is a MEASUREMENT this review did not take** — it depends on the publication's column list — and it should be taken before the wire half is claimed either way. The read half is measured and certain.
+- ⚠ **NOT FIXED HERE.** Replacing `select("*")` with an explicit column list on eight sites is the right remedy and the pattern already exists (`workspaces/server/repository-overview.ts`, `repository-mentions.ts`), but `supabaseAdmin()` returns an UNTYPED client (`knowledge/server/search.ts` says why), so a forgotten column is a silent `undefined` at runtime rather than a compile error. That is a change that wants its own branch and its own coverage, not the last commit of a review.
+- Proposed resolution: one `MESSAGE_COLS` constant in `repository-messages.ts`, used by both files, with a test asserting it covers every field `mapMessageRow` reads — the pin has to be on the SET, because a regex over the select string would stay green while a mapper field went missing. Then measure the publication and, if the vector is on the wire, restrict that table's published columns.
 - Status: open.

@@ -253,7 +253,11 @@ export type ChannelListPayload = {
   channels: Channel[];
   pendingLinks?: ChannelPendingLink[];
   /** ⚠ **THE ACCOUNT SCOPE'S REPORTED CLIP (§9, P35).** Absent under
-   *  `scope=container`, which has no ceiling of its own; read `?? false` inline. */
+   *  `scope=container`, which has no ceiling of its own; read `?? false` inline.
+   *  ⚠ **NO SURFACE READS IT YET (measured 2026-09-17).** It is on the wire from
+   *  `app/api/channels/route.ts`, and `home-rows.ts` / `use-home-channels.ts` both
+   *  drop it — so a caller at `ACCOUNT_CHANNEL_LIMIT` sees a clipped list that
+   *  looks complete, which is the one thing §9's clip rule forbids. */
   truncated?: boolean;
 };
 
