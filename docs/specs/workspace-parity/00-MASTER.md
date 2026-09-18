@@ -107,8 +107,8 @@ research doc it came from (e.g. "01 §A row 5").
 | P8 | `activity: {bins, loading}` on `ChannelInfoTabContext` | own hook wrapper `person-thread-activity.tsx:47` | handed down `info-tab.tsx:248-263` | collapse duplicate | S | — | 01 §A row 51; 02 §C4 |
 | P9 | `members` + `headerEditable` on the context | second `useChannelMembers` (`person-info-tab.tsx:166-169`); rule spelled twice (`:144` / `info-tab.tsx:106`) | one source | collapse duplicate | S | — | 01 §A rows 54/55 |
 | P10 | 🟡 **MOVED 2026-09-17 (wave 2); the CALL SITES are not** — channel-record loading ghost, promoted to the shared tree | real two-column shape, tab count by import (`src/features/channels/components/channel-record-skeleton.tsx`); `pages/home/channel-record-skeleton.tsx` is a re-export | `channels-skeleton.tsx › ChannelsSkeleton`, still self-described *"a rough fit"*; GUEST still uses kit generics | move down ✅ + new call sites 🔴 | S | — | 01 §C4; 06 P13; F-220 |
-| P11 | Recency wells on the channel picker (Pinned / Recent / Earlier) | `relationship-list.tsx:125-128` over `home-channel-wells.ts:48-52` (already in `src/`) | flat tree (`sidebar.tsx`) | new call site over a shared module | S | R-03 | 01 §A row 71; 03 §E1 |
-| P12 | Channel row card face + avatar stack + selected face | `home-channel-row.tsx:129` wearing `HOME_CARD_FACE` (`home-card-marks.tsx:37,68`) | flat 36px `raised-tab` (`sidebar-rows.tsx:52-63`) | new call site | M | R-03, R-40 | 03 §B4; 01 §A row 74 |
+| P11 | 🔴 **CLOSED BY R-03, NOT BUILT (Wave 4, 2026-09-17)** — the workspace picker gets its OWN design later, so no well is added to it; `home-channel-wells.ts` stays shared and unported. Recency wells on the channel picker (Pinned / Recent / Earlier) | `relationship-list.tsx:125-128` over `home-channel-wells.ts:48-52` (already in `src/`) | flat tree (`sidebar.tsx`) | new call site over a shared module | S | R-03 | 01 §A row 71; 03 §E1 |
+| P12 | 🟡 **SPLIT BY R-03 (Wave 4, 2026-09-17): the FACE is closed, the AVATAR STACK is DONE.** No card face and no selected face are ported — the picker's own design is a later wave. The STACK is not a face: it is `Channel.peers`, the same fact off the same projection, so the workspace row draws it through the same `AvatarStack` and the same derivation (`channels/lib/channel-display.ts › channelRowFaces`) in its own 36px layout. See U28. Channel row card face + avatar stack + selected face | `home-channel-row.tsx:129` wearing `HOME_CARD_FACE` (`home-card-marks.tsx:37,68`) | flat 36px `raised-tab` (`sidebar-rows.tsx:52-63`) | new call site | M | R-03, R-40 | 03 §B4; 01 §A row 74 |
 | P13 | ✅ **THE COUNT IS BUILT (Wave 3, R-28)** — `Channel.mentionCount`, server-computed on every row of both scopes off the inbox's own `mentionContainmentFilter`; the workspace ROW's badge is Wave 4's. Unread **mention count** `@ N` on a channel row | `HomeChannel.unreadMentions` (`types.ts:164`) ← `repository-unread.ts › listMyMentionStamps` | boolean dot only; `sidebar-rows.tsx:69-73 › "NO UNREAD BADGE"` forbids inventing a count (the doc previously cited `:27-31`, which is the re-export docblock) | new code (server projection) | M | R-28 | 01 §A row 72; 05 A12 |
 | P14 | Last-message preview on a row | `lastMessagePreview` on the wire (`types.ts:128`) — **rendered by nothing since 2026-09-13** | absent | new code, or delete the field | S | R-28 | 01 §A row 73; 05 A15 |
 | P15 | Agents-tab recency wells recognised as a workspace surface | four wells (`agents-tab.tsx:417` → `agents-wells.tsx:123`) | **identical — already shared** | none (verify + keep) | S | — | 02 A.3 G4 |
@@ -838,16 +838,16 @@ were one row that was wrong about two of its three items).
 
 | # | Difference | Home | Workspace | Kind | Wave |
 |---|---|---|---|---|---|
-| U19 | Channel picker shape | three collapsible gray wells (Pinned / Recent / Earlier), 290px | flat nav tree with Favorites / DMs / Channels sections | BEH | 4 |
-| U20 | Channel row face | raised card, avatar stack, `HOME_CARD_FACE` | 36px `raised-tab` row | CSS + BEH | 4 |
-| U21 | Selected row | black 3D button face, no ring, no shadow | selection ring | CSS | 4 |
-| U22 | Row marks | `@ N` mention pill + 6px dot, exclusive | boolean dot only — **and a numeric badge there would be a lie** | BEH (data) | 4 |
+| U19 | Channel picker shape | three collapsible gray wells (Pinned / Recent / Earlier), 290px | flat nav tree with Favorites / DMs / Channels sections | BEH | 🔴 **CLOSED BY R-03** — its own design, later |
+| U20 | Channel row face | raised card, avatar stack, `HOME_CARD_FACE` | 36px `raised-tab` row | CSS + BEH | 🔴 **FACE CLOSED BY R-03**; the stack landed 2026-09-17 (U28) |
+| U21 | Selected row | black 3D button face, no ring, no shadow | selection ring | CSS | 🔴 **CLOSED BY R-03** |
+| U22 | Row marks | `@ N` mention pill + 6px dot, exclusive | ✅ **DONE 2026-09-17 (wave 4)** — the count was bought in wave 3 (R-28) and the workspace row now draws all three marks from `shared/ui/home-card-marks.tsx`: badge suppresses dot, plus the "Link out" chip. TWO INKS (`tone`), ONE implementation | BEH (data) | 4 ✅ |
 | U23 | Row subtitle | last-message preview on the wire, rendered by nothing | absent | BEH | 4 |
-| U24 | Well fill | `PANEL_WELL_ON_PANEL` on /home's column | `PANEL_WELL` on the info tabs; **no workspace PAGE uses either** | CSS | 4 |
+| U24 | Well fill | `PANEL_WELL_ON_PANEL` on /home's column | `PANEL_WELL` on the info tabs; **no workspace PAGE uses either** | CSS | 🔴 **MOOT — CLOSED WITH U19 BY R-03** |
 | U25 | Wells always render when empty | yes, both tabs and the column | yes (same module) | — | shipped |
 | U26 | Empty-well copy | none — the sentence sits **beside** the boxes | same | — | shipped |
 | U27 | Template card grid | three scoped `SectionPanel`s, per-section create | 52px header bar, `text-display` h1, white `.btn-light` pill, `max-w-[960px]` | CSS + BEH | 5, 6 |
-| U28 | Presence rings | bare `AvatarStack`, no presence | `AvatarWithPresence` in 5 places | BEH | 4 |
+| U28 | Presence rings | bare `AvatarStack`, no presence | `AvatarWithPresence` in 5 places | BEH | ✅ **ANSWERED 2026-09-17 (wave 4): NO RING, ONE STACK.** The workspace channel ROW had no roster at all and now draws /home's `AvatarStack`. Neither row gets a ring — `Channel` carries `onlineMemberCount`, a TOTAL, and a ring driven by a total claims a NAMED person is here. The 5 roster panes read a real per-member signal and keep `AvatarWithPresence` |
 
 ### 3.4 The channel record
 
@@ -1342,7 +1342,9 @@ paper over** — state it, do not hide it.
 
 **Items — this wave SHRANK on the 2026-09-17 rulings.** What survives: split `RelationshipList` into
 derivation + `ObjectColumn` (D8) · P13's **unread mention count** (the server projection R-28 requires)
-and the `@ N` badge on the workspace row · P28 presence rings · U58/U59 the empty-state sentences.
+and the `@ N` badge on the workspace row · **U28** presence rings (this line said "P28", which is the
+account-palette skin and was Wave 6's — a typo, corrected 2026-09-17) · U58/U59 the empty-state
+sentences.
 🔴 **DROPPED: P11 (wells) and P12 (row card face + selected face).** **R-03 — the workspace picker
 gets its OWN design later; do not port /home's.** Neither column is the answer, so nothing is ported
 until that design exists. **R-40 — keep all three home items** (the label-less credit bar,
@@ -1354,6 +1356,47 @@ R-40 → keep the home items.
 **Gates:** `collapse-wells.test.tsx` · `well-state` suite (keys are scoped by SURFACE, not by host — do not per-host them) · `home-channel-row` suites · `sidebar-rows` suites.
 **Risk:** R-03(a) would delete the tree's nesting and its Favorites/DM sections — **real structure**.
 Recommend (b). **Rollback:** the wells are a call site over a shared module; revert the call site.
+
+#### ✅ Wave 4 — the PICKER MARKS half
+
+🟢 **BUILT 2026-09-17** (branch `wave4/picker-marks`, 4 commits, full gate set). What landed, one
+commit each:
+
+1. **U28 / P12's stack — the roster rides the workspace channel row.** `sidebar-rows.tsx ›
+   ChannelRow` takes `faces` and draws `@/shared/ui/avatar-stack` at /home's own `2xs` / `max=3`, in
+   a trailing group that is ABSENT when it holds nothing. `channels/lib/channel-display.ts ›
+   channelRowFaces` is the ONE peer→face derivation and `relationship-list.tsx` imports it instead of
+   mapping inline — same output, so the `?? email ?? "Member"` chain cannot drift between hosts.
+   ⚠ **A DM ROW IGNORES IT**: its leading slot already IS that person's face, which is
+   `sidebar-rows.tsx`'s own rule since it was written. ⚠ **NO PRESENCE RING** — see the U28 row
+   above; `AvatarStack` has an `online` key and the projection has no per-peer signal to fill it.
+   `?? EMPTY_PEERS` at the call site (§8). `sidebar-row-signals.test.tsx` 12 → 16.
+2. **U22 — the dot and the "Link out" chip stop being cut twice.** The PRECEDENCE was already right
+   on both rows (R-28, Wave 3); what was wrong is where the marks were DECLARED. The workspace row
+   hand-cut its own 6px span (its own geometry, accessible name and colour) and the chip existed only
+   as inline markup in `home-channel-row.tsx`. Both are `shared/ui/home-card-marks.tsx` now —
+   `UnreadDot` gains `tone`, `LinkOutChip` is lifted out unchanged. ⚠ **TWO INKS IS NOT TWO
+   IMPLEMENTATIONS**: `tone="link"` keeps the picker's blue (R-03 — its own design), `onDark`
+   outranks both because the face the dot stands on decides before the surface's accent does. New
+   `shared/ui/home-card-marks.test.tsx` (9) carries a SOURCE SCAN pinning one declaration of the dot;
+   `sidebar-row-signals.test.tsx` 16 → 19 for the chip.
+3. **D8's seam, taken on the WORKSPACE column.** `sidebar.tsx` carried two responsibilities — the
+   list of SECTIONS, and a search surface with three pieces of private state no section, row or
+   branch reads — so the strip is `sidebar-search.tsx › SidebarSearchHeader` (385 → 326 + 110). Same
+   seam `sidebar-rows.tsx` named at design time and `sidebar-branch.tsx` already took a third slice
+   off. 🚫 **NO IMPORTER MOVED and NO BEHAVIOUR CHANGED**; pinned by the suites that were already
+   green. `page-skeletons.test.tsx` reads the 52px strip's class expression from the new file — the
+   same repair, for the same reason, as when the pane header left `message-pane.tsx` on 2026-09-01.
+4. 🔴 **THE WELLS ARE CLOSED BY R-03, NOT DEFERRED (P11, P12's faces, U19, U20, U21, U24).** *The
+   workspace picker gets its own design later; do not port /home's.* Nothing was added to the picker
+   and nothing was taken off it. ⚠ **THE MARKS ABOVE ARE NOT A PARTIAL PORT OF THAT DESIGN** — a
+   roster, an unread dot and a mention count are FACTS the projection carries for every row of both
+   scopes, and each is drawn in the picker's own 36px layout with the picker's own ink. R-03 is about
+   the CARD.
+
+⚠ **U58/U59 (the empty-state sentences) ARE NOT DONE** and stay open on this wave. U59's second
+sentence ("No matches") was deleted from /home with the search narrowing on 2026-09-17, so the item
+is now one sentence rather than two and should be re-read before it is built.
 
 ---
 
