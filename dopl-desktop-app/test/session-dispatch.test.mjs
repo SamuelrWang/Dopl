@@ -425,11 +425,13 @@ test("verdict `none`: nobody is fed, and nothing is acked", () => {
   assert.deepEqual(h.calls.acks, [], "nothing was aimed here, so nothing was refused");
 });
 
-test("the three MEMBER verdicts route on WHOSE machine this is", () => {
-  // 🔒 **NO CROSS-ACCOUNT DELIVERY.** `member` / `thread_peer` / `reciprocal` name a PERSON, and
-  // their side decides what runs. Named me -> my live sessions hear it as context and none wakes.
-  // Named a PEER -> this machine feeds nothing at all, which is the fan-out that used to run.
-  for (const verdict of ["member", "thread_peer", "reciprocal"]) {
+test("the two ADDRESSED member verdicts route on WHOSE machine this is", () => {
+  // 🔒 **NO CROSS-ACCOUNT DELIVERY.** `member` and `thread_peer` name a PERSON, and their side
+  // decides what runs. Named me -> my live sessions hear it as context and none wakes. Named a
+  // PEER -> this machine feeds nothing at all, which is the fan-out that used to run.
+  // ⚠ **`reciprocal` LEFT THIS TABLE ON 2026-09-18** and has a case of its own below: the two
+  // here name a recipient that exists independently of the post, and it does not.
+  for (const verdict of ["member", "thread_peer"]) {
     const mine = harness({ agents: both() });
     mine.feedLiveSession(entry, verdictMsg(verdict, { recipientUserIds: [ME] }), ME);
     assert.deepEqual(fedIds(mine), [A1, A2], `${verdict} -> me`);

@@ -79,12 +79,13 @@ describe(`every write result is one line and fits ${WRITE_RESULT_MAX_CHARS} char
           authorUserId: "u-me",
           metadata: { taskId: THREAD_ID, mentionedUserIds: [] },
           recipientUserIds: ["u-peer"],
+          recipientAgentIds: ["x2sz1ztt"],
         })),
       }),
       CHANNEL_ID,
-      "@diana please review, @agent-x2sz1ztt carry on with the audit",
+      "@diana please review, carry on with the audit",
       {
-        to: "diana@example.com",
+        to: "diana@example.com, @agent-x2sz1ztt",
         thread: THREAD_ID,
         summary: "review request",
         runtime: null,
@@ -97,8 +98,11 @@ describe(`every write result is one line and fits ${WRITE_RESULT_MAX_CHARS} char
     );
     // ⚠ THE FACTS THAT MAY NOT BE TRADED FOR BREVITY. `seq` is the cursor the
     // next call needs; `tags=0/1` is the ONLY signal in the product that catches
-    // a misspelled handle (INVARIANTS §10); `wake=` says which agent the body
-    // named, which the tag fraction deliberately does not count.
+    // a misspelled handle (INVARIANTS §10); `wake=` names the agents the SERVER
+    // put in front of a turn, which the tag fraction deliberately does not count.
+    // ⚠ **`wake=` READS THE STORED ROW SINCE 2026-09-18**, so the fixture carries
+    // `recipientAgentIds` — a body handle is no longer an address and a fixture
+    // that still proved this off the body would be measuring a deleted lane.
     expect(text).toContain("seq=858");
     expect(text).toContain("tags=0/1");
     expect(text).toContain("wake=@agent-x2sz1ztt");

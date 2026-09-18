@@ -136,9 +136,14 @@ describe("the zero-tag line names the causes it actually has", () => {
  */
 describe("cause (5): an agent id is a WAKE, and can never be a tag", () => {
   it("names the cause, and names it as a NON-tag rather than a bad tag", () => {
-    // ⚠ RE-SPELLED 2026-09-15: the cause is "YOU TAGGED AN AGENT" now, because an agent IS
+    // ⚠ RE-SPELLED 2026-09-15: the cause was "YOU TAGGED AN AGENT", because an agent WAS
     // reachable by a tag — just not by THIS resolver, which is the roster's.
-    expect(causes()).toContain("YOU TAGGED AN AGENT");
+    // ⚠ **RE-SPELLED AGAIN 2026-09-18, AND THE SUBJECT MOVED OFF "YOU" FOR A REASON THIS
+    // FUNCTION ENFORCES**: the slice may not say "your own" or "yourself" (the case below), and
+    // the claim is now about the HANDLE rather than the author — an agent handle in a body
+    // reaches nobody at all for an agent author, and `to` is the address.
+    expect(causes()).toContain("THE HANDLE NAMED AN AGENT");
+    expect(causes()).toContain("an agent is reached by `to` alone");
     // ⚠ Both halves are load-bearing. Without the first, the agent reads a
     // working wake as broken; without the second, it reads "tag them properly"
     // and goes looking for a spelling that does not exist. ⚠ The first is now
@@ -152,7 +157,7 @@ describe("cause (5): an agent id is a WAKE, and can never be a tag", () => {
     // ⚠ RE-POINTED 2026-09-15: "stamps nobody" was the reassurance half; what the compressed
     // clause now states is where the agent IS reached instead, which is the actionable half and
     // the one that stops the reader hunting for a spelling of this resolver that works.
-    expect(causes()).toContain("an agent is reached by the LAW's rule");
+    expect(causes()).toContain("an agent is reached by `to` alone");
   });
 
   it("keeps the wake CORRECT — it must not read as a thing to stop doing", () => {
@@ -166,7 +171,7 @@ describe("cause (5): an agent id is a WAKE, and can never be a tag", () => {
     // either direction being "corrected" back.
     // ⚠ RE-POINTED 2026-09-15 — the clause now names the rule that DOES reach an agent rather
     // than only the inbox it misses, which is the actionable half.
-    expect(causes()).toContain("an agent is reached by the LAW's rule");
+    expect(causes()).toContain("an agent is reached by `to` alone");
     // ⚠ RE-POINTED ONE SECTION OVER: the compressed cause list states what an
     // agent id does NOT do; that `@agent-<id>` IS a working wake is stated in
     // the LAW, which is where the exception lives. Both halves are still pinned,
@@ -174,7 +179,7 @@ describe("cause (5): an agent id is a WAKE, and can never be a tag", () => {
     // "corrected" back.
     // ⚠ RE-SPELLED 2026-09-15 — the LAW teaches the NAME tag now, and keeps the id form for
     // the one case Samuel carved out (two ACTIVE agents wearing one name).
-    expect(CHANNEL_DOCTRINE).toContain("that tag, in a body or in `to`, wakes THAT agent");
+    expect(CHANNEL_DOCTRINE).toContain("that tag, in `to`, wakes THAT agent");
     expect(CHANNEL_DOCTRINE).toContain("YOUR OWN AGENTS ARE THE ONE EXCEPTION");
     // ⚠ WHICH agent it wakes is stated in the doctrine's OWN AGENTS section
     // rather than inside the cause list — the half that used to ride here as

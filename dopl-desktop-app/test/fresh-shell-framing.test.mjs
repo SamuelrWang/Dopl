@@ -73,12 +73,12 @@ test("v2.x: that first turn also carries the CONCRETE channel + workspace ids", 
   // The recreated-shell path is the one that frames LAZILY, so it is the easiest one to
   // leave id-less: session-park rebuilds the context, io.takeFraming reads it.
   const turn = io.withSeed(freshShell({ pendingHistory: THREAD() }), "what next?");
-  assert.ok(turn.includes(`op "send", channel "${CH}", workspace "${WS}"`), "the exact call to make");
+  assert.ok(turn.includes(`op "send", channel "${CH}", container "${WS}"`), "the exact call to make");
   assert.match(turn, /discovery call\nlike op "rooms", action "list" is unnecessary here/, "and no id hunting");
   assert.match(turn, /IS this session's own channel/);
   // A REQUESTER-side shell addresses the same channel the same way.
   const req = io.withSeed(freshShell({ side: "requester" }), "keep going");
-  assert.ok(req.includes(`op "send", channel "${CH}", workspace "${WS}"`));
+  assert.ok(req.includes(`op "send", channel "${CH}", container "${WS}"`));
 });
 
 test("v2.x: a record with NO ids still frames (an older durable record)", () => {

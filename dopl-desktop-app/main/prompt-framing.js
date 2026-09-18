@@ -26,7 +26,7 @@
 
 // ⚠ FIXED TEXT BLOCKS live in prompt-framing-text.js: what the agent is TOLD changes on a
 // different clock from how a turn is ASSEMBLED. Nothing is interpolated into any of them.
-const { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, REPLY_ROUTING, PERSONAL_KNOWLEDGE_CONFIDENTIALITY } = require('./prompt-framing-text');
+const { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, REPLY_ROUTING, PERSONAL_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING } = require('./prompt-framing-text');
 // The id charset, so a value that is not one is never printed as though it were an address.
 // ⚠ `AGENT_ID_RE` MOVED WITH `agentIdentityFraming` (§2 split, 2026-09-15) — it was this file's
 // only reader, and a require left standing is how the next reader concludes the grammar lives here.
@@ -127,7 +127,7 @@ function channelScopeFraming(ctx) {
   const channelId = idToken(c.channelId);
   const workspaceId = idToken(c.workspaceId);
   const at = channelId && workspaceId
-    ? `channel "${channelId}", workspace "${workspaceId}"`
+    ? `channel "${channelId}", container "${workspaceId}"`
     : 'this channel';
   return [
     `YOUR SCOPE IS THIS CHANNEL'S MAIN ROOM, not one thread.`,
@@ -171,7 +171,15 @@ function channelScopeFraming(ctx) {
 }
 
 // The EXACT mcp__dopl__dopl_channel call this session must make, or '' when either id is missing.
-// ⚠ WORKSPACE UUID, never the slug: a prod anomaly has two workspaces sharing a slug.
+// ⚠ **THE ARGUMENT IS `container=`, NOT `workspace=` (2026-09-18).** `workspace` is a DEPRECATED
+// ALIAS kept for one release and published with no description at all
+// (`packages/mcp-server/src/workspace-arg.ts › WORKSPACE_ALIAS_DESCRIPTION`), and a caller that
+// sends it gets a deprecation line on its result. Every turn this module builds was teaching
+// every channel agent to send it — the one surface that could make a deprecation window
+// permanent, because it re-teaches the dead spelling on every spawn.
+// ⚠ THE VALUE IS UNCHANGED: `container` takes a slug, an id or `home`, and the id is what rides
+// the spawn context. ⚠ WORKSPACE UUID, never the slug: a prod anomaly has two workspaces sharing
+// a slug.
 // ⚠ `thread` is the AGENT-FACING argument name (packages/mcp-server/src/tools/channel.ts);
 // `taskId` is only the STORAGE key the op folds it into (channel-ops-write.ts). Printing
 // `task "<id>"` teaches every session a parameter the tool does not have, which makes the tagging
@@ -187,7 +195,7 @@ function deliveryCall(ctx) {
   if (!channelId || !workspaceId) return '';
   const taskId = idToken(ctx && ctx.taskId);
   const thread = taskId ? `, thread "${taskId}"` : '';
-  return `op "send", channel "${channelId}", workspace "${workspaceId}"${thread}`;
+  return `op "send", channel "${channelId}", container "${workspaceId}"${thread}`;
 }
 
 // FIRST ACTIONS — what a spawned session must DO before it plans anything, at the TOP of the turn
@@ -256,7 +264,7 @@ function firstActions(side, ctx) {
   if ((side !== 'requester' || (ctx && ctx.scope) === 'thread') && channelId && workspaceId && taskId) {
     lines.push(
       `- Your SECOND action is to read the exchange you are joining: mcp__dopl__dopl_channel`,
-      `  with op "read", channel "${channelId}", workspace "${workspaceId}", thread "${taskId}".`,
+      `  with op "read", channel "${channelId}", container "${workspaceId}", thread "${taskId}".`,
       `  That read is filtered to this one thread. You start with none of its earlier messages`,
       `  in context, so read it before you write anything, and read it again whenever you need`,
       `  to know what has been said since.`
@@ -290,6 +298,7 @@ function deliverySection(side, ctx) {
         `mcp__dopl__dopl_channel MCP tool (op "send", this channel). That is how the peer's`,
         `agent receives you.`,
         ...PROSE_RULE,
+        ...ADDRESSING,
         ...REPLY_ROUTING,
       ];
     }
@@ -299,6 +308,7 @@ function deliverySection(side, ctx) {
       ...own,
       `That is how the peer's agent receives you.`,
       ...PROSE_RULE,
+      ...ADDRESSING,
       ...REPLY_ROUTING,
     ];
   }
@@ -308,6 +318,7 @@ function deliverySection(side, ctx) {
       `(op "send", this channel); that is how the counterparty receives it, and there is no`,
       `other capture.`,
       ...PROSE_RULE,
+      ...ADDRESSING,
       ...REPLY_ROUTING,
     ];
   }
@@ -317,6 +328,7 @@ function deliverySection(side, ctx) {
     ...own,
     `That is how the counterparty receives your reply; there is no other capture.`,
     ...PROSE_RULE,
+    ...ADDRESSING,
     ...REPLY_ROUTING,
   ];
 }

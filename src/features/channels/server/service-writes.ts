@@ -18,7 +18,7 @@ import { hydrateOne, replayOf } from "./service-writes-ack";
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import { resolvePostMetadata } from "./service-writes-metadata";
-import { resolveToRecipient } from "./service-writes-metadata-recipient";
+import { resolveToRecipients } from "./service-writes-metadata-recipient";
 import { resolveWakeVerdict } from "./service-wake-verdict";
 import {
   requireMemberChannel,
@@ -106,23 +106,29 @@ export async function postMessage(
   assertChatIsUnaddressed(raw);
   assertOneRecipientField(raw);
 
-  // **`to=` RESOLVED ONCE, HERE** (2026-09-02, B4 — ruling B1). A MEMBER becomes
-  // the `toUserId` every fence below already knows how to check, so there is one
-  // addressee path and not two; an AGENT rides `toAgentId` into the verdict and
-  // stamps no metadata key (see `service-writes-metadata-recipient.ts`).
+  // **`to=` RESOLVED ONCE, HERE** (2026-09-02, B4 — ruling B1; a LIST since
+  // 2026-09-18). MEMBERS become the `toUserId` every fence below already knows
+  // how to check — the FIRST of them, because `metadata.to_user_id` is one key
+  // that consent cards and thread inheritance index on — and every one of them
+  // rides `toUserIds` into the verdict, which is what `recipient_user_ids`
+  // stores. AGENTS ride `toAgentIds` and stamp no metadata key at all (see
+  // `service-writes-metadata-recipient.ts`).
+  //
+  // ⚠ **THE MEMBERSHIP FENCE BELOW LOOPS OVER ALL OF THEM, NOT OVER THE FIRST.**
+  // A list whose second name is a departed teammate must be refused exactly as a
+  // single one is, or the multi form becomes the way around the check.
   //
   // ⚠ IT RUNS BEFORE THE IDEMPOTENCY SHORT-CIRCUIT for the same reason the two
   // asserts above do: `to` naming nobody is a REFUSAL (ruling B1), and a refusal
   // that a retry can replay out of storage is not one.
-  let toAgentId: string | null = null;
+  let toAgentIds: string[] = [];
+  let toUserIds: string[] = [];
   let input = raw;
   if (raw.to) {
-    const recipient = await resolveToRecipient(ctx, channel, raw.to);
-    if (recipient.kind === "member") {
-      input = { ...raw, toUserId: recipient.userId };
-    } else {
-      toAgentId = recipient.agentId;
-    }
+    const resolved = await resolveToRecipients(ctx, channel, raw.to);
+    toAgentIds = resolved.agentIds;
+    toUserIds = resolved.memberUserIds;
+    if (toUserIds.length > 0) input = { ...raw, toUserId: toUserIds[0] };
   }
   // ⚠ Same placement rule, same reason. Takes no `opts` since 2026-08-20 — the
   // `internalLifecycle` exemption it used to read is deleted, so the credential
@@ -141,14 +147,25 @@ export async function postMessage(
   // consumption" until 2026-08-22. That file is DELETED with the trust retirement
   // (INVARIANTS §6), so this is now the only place the rule is stated — it is not
   // a second copy of a check that lives elsewhere, and nothing re-asserts it later.
-  if (
-    input.toUserId &&
-    !(
-      (await repo.findMembership(channel.id, input.toUserId)) &&
-      (await repo.isActiveWorkspaceMember(ctx.workspaceId, input.toUserId))
-    )
-  ) {
-    throw new ChannelAddresseeNotMemberError(input.toUserId);
+  // ⚠ **EVERY ADDRESSEE, NOT JUST `toUserId`** (2026-09-18). `toUserIds` holds
+  // the whole resolved list and `toUserId` is only its first element, so
+  // checking the field alone would let the second name through unchecked. The
+  // `?? [input.toUserId]` arm keeps the single `toUserId` caller (the web
+  // composer, every older client) on exactly the path it has always taken.
+  const addressees = toUserIds.length > 0
+    ? toUserIds
+    : input.toUserId
+      ? [input.toUserId]
+      : [];
+  for (const addressee of addressees) {
+    if (
+      !(
+        (await repo.findMembership(channel.id, addressee)) &&
+        (await repo.isActiveWorkspaceMember(ctx.workspaceId, addressee))
+      )
+    ) {
+      throw new ChannelAddresseeNotMemberError(addressee);
+    }
   }
 
   // Re-sent client_msg_id returns the stored message and writes nothing.
@@ -225,7 +242,8 @@ export async function postMessage(
 
   const wake = await resolveWakeVerdict(ctx, channel, input, metadata, {
     authorKind,
-    toAgentId,
+    toAgentIds,
+    toUserIds,
     // ⚠ **MEMBERS OUTRANK AGENTS, AND THIS LINE IS THE WHOLE OF IT ON THE SERVER** (2026-09-07,
     // Samuel's suffix ruling). The handles are the metadata fold's own leftover — derived from
     // the roster and profiles it read for `mentionedUserIds`, on this same request — so the

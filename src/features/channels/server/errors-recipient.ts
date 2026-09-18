@@ -20,12 +20,21 @@ export class ChannelRecipientUnresolvedError extends ChannelError {
     public readonly to: string,
     public readonly liveHandles: readonly string[],
     /** Member LABELS, already entitlement-scoped by the caller. */
-    public readonly members: readonly string[]
+    public readonly members: readonly string[],
+    /**
+     * **THE WHOLE MESSAGE, WHEN THE REFUSAL IS NOT ABOUT A NAME** (2026-09-18,
+     * the multi-recipient list). ⚠ A `to=` carrying more addresses than
+     * `CHANNEL_SEND_MAX_RECIPIENTS` allows resolves nothing and has no candidate
+     * lists to offer — printing "no recipient matches" plus two empty lists
+     * would send the caller looking for a spelling mistake that is not there.
+     */
+    detail?: string
   ) {
     const agents = liveHandles.map((h) => `@${h}`).join(", ") || "none";
     super(
-      `No recipient in this channel matches "${to}". ` +
-        `Live agents: ${agents}. Members: ${members.join(", ") || "none"}.`
+      detail ??
+        `No recipient in this channel matches "${to}". ` +
+          `Live agents: ${agents}. Members: ${members.join(", ") || "none"}.`
     );
   }
 }

@@ -140,7 +140,7 @@ describe("a removed param is REFUSED, and the refusal names the field", () => {
     // ⚠ The refusal must be about the UNKNOWN key and nothing else.
     const res = await client.callTool({
       name: "dopl_channel",
-      arguments: { op: "send", channel: "general", body: "hi" },
+      arguments: { op: "send", channel: "general", body: "hi", to: "u-peer" },
     });
     expect(res.isError).toBeFalsy();
     expect(posted).toHaveBeenCalledTimes(1);

@@ -94,6 +94,9 @@ describe("the three lifecycle kinds are UNSAYABLE, not merely refused (C12)", ()
       channel: "general",
       body: "Here is the finished analysis…",
       kind: "task_finished",
+      // ⚠ 2026-09-18: `kind` is dropped by the strict shape, so what reaches the
+      // router is a PLAIN send — and a plain send must address somebody.
+      to: "u-peer",
     });
 
     expect(res.isError).toBeFalsy();

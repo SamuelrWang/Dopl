@@ -93,17 +93,53 @@ test("wake FENCE: a PEER'S AGENT wakes NOTHING, address included", () => {
 // operator's credential, so its posts are authored by that account, and before the carve the
 // agent id it was handed could never be spent by the one caller that had it.
 
-test("wake CARVE: MY OWN account's agent-authored address WAKES a dormant agent", () => {
+test("wake CARVE: MY OWN account's agent-authored ADDRESS wakes a dormant agent", () => {
+  // ⚠ **RE-POINTED ONTO `to=` ON 2026-09-18, AND THE CARVE ITSELF IS UNTOUCHED.** It used to be
+  // driven through PROSE on the fallback lane (`@<id>` / `@agent-<id>` in the body of a message
+  // no server had ruled on), because prose was the only agent→agent address there was. It is
+  // not any more: `to=` takes agent handles and takes a LIST of them, and an agent's prose is
+  // deliberately inert (the case below). The capability the carve exists to protect — one of my
+  // agents may start another of mine — is asserted here on the address that survives.
   for (const make of [idle, parked]) {
-    for (const body of [`@${A1} go`, `@agent-${A1} go`]) {
-      // Both doors, one carve: `@agent-<id>` is what the picker inserts and what `read_sessions`
-      // and `launch_agent` publish, so the carve would be decorative if only the bare form reached.
-      const h = harness({ agents: [make(A1)] });
-      const m = peerMsg({ authorKind: "agent", authorUserId: ME, body });
-      assert.equal(h.feedLiveSession(entry, m, ME), true, body);
-      assert.deepEqual(h.calls.feedInbound.map((c) => c.agentId), [A1]);
-      assert.equal(h.calls.feedInbound[0].wake, true, "and it is a WAKE, not merely a feed");
-    }
+    const h = harness({ agents: [make(A1)] });
+    const m = verdictMsg("agent", {
+      authorKind: "agent",
+      authorUserId: ME,
+      recipientAgentIds: [A1],
+      body: "taking this over",
+    });
+    assert.equal(h.feedLiveSession(entry, m, ME), true);
+    assert.deepEqual(h.calls.feedInbound.map((c) => c.agentId), [A1]);
+    assert.equal(h.calls.feedInbound[0].wake, true, "and it is a WAKE, not merely a feed");
+  }
+});
+
+test("wake: an AGENT'S PROSE handle is INERT on the fallback lane; a PERSON'S is not", () => {
+  // ⚠ **CAUSE 2 OF THE WAKE-ALL REPORT** (2026-09-18). A report saying *"I handed off to
+  // @<agent>"* woke that agent off the sentence DESCRIBING the handoff — the body parse did not
+  // ask who was writing. The server answers `[]` for an agent author's body on every row it
+  // rules on; this lane is the one row it never ruled on, so the fence is stated here too.
+  // ⚠ DRIVEN ON BOTH AUTHOR KINDS IN ONE CASE, because the rule is the DIFFERENCE between them.
+  for (const make of [idle, parked]) {
+    const agentAuthored = harness({ agents: [make(A1)] });
+    assert.equal(
+      agentAuthored.feedLiveSession(
+        entry,
+        peerMsg({ authorKind: "agent", authorUserId: ME, body: `handed off to @agent-${A1}` }),
+        ME,
+      ),
+      false,
+      "an agent's prose names nobody",
+    );
+    assert.equal(agentAuthored.calls.feedInbound.length, 0);
+
+    const personAuthored = harness({ agents: [make(A1)] });
+    assert.equal(
+      personAuthored.feedLiveSession(entry, peerMsg({ authorUserId: ME, body: `@agent-${A1} go` }), ME),
+      true,
+      "a person's prose still addresses",
+    );
+    assert.equal(personAuthored.calls.feedInbound[0].wake, true);
   }
 });
 
@@ -208,14 +244,31 @@ test("wake: `planFor` is the ONE place the seven verdicts become a delivery", ()
   assert.deepEqual(p({ wakeVerdict: "responder", recipientAgentIds: [A2] }), { ids: [A2], context: false });
   assert.deepEqual(p({ wakeVerdict: "thread", recipientAgentIds: [] }), { ids: [], context: true });
   assert.deepEqual(p({ wakeVerdict: "none", recipientAgentIds: [] }), { ids: [], context: false });
-  for (const v of ["member", "thread_peer", "reciprocal"]) {
+  // ⚠ **TWO MEMBER VERDICTS FEED, NOT THREE** (2026-09-18). `member` is an address the author
+  // WROTE and `thread_peer` is the thread's own two-party structure; both name a recipient that
+  // exists independently of the post, so this operator's sessions hear it.
+  for (const v of ["member", "thread_peer"]) {
     assert.deepEqual(p({ wakeVerdict: v, recipientAgentIds: [], recipientUserIds: [ME] }),
       { ids: [], context: true }, `${v} -> me`);
     assert.deepEqual(p({ wakeVerdict: v, recipientAgentIds: [], recipientUserIds: [PEER] }),
       { ids: [], context: false }, `${v} -> a peer`);
   }
+  // ⚠ **`reciprocal` FEEDS NOBODY, WHOEVER IT NAMES** — RR2 invents an address for a post whose
+  // author named none, and Samuel's ruling is that such a post is a RECORD. Naming ME used to be
+  // the whole wake-all bug; naming a peer never fed here.
+  for (const who of [ME, PEER]) {
+    assert.deepEqual(p({ wakeVerdict: "reciprocal", recipientAgentIds: [], recipientUserIds: [who] }),
+      { ids: [], context: false }, `reciprocal -> ${who}`);
+  }
+  // A verdict that names SEVERAL agents narrows to all of them and to nobody else.
+  assert.deepEqual(p({ wakeVerdict: "agent", recipientAgentIds: [A1, A2] }),
+    { ids: [A1, A2], context: false });
   // No verdict at all is the OLD SERVER, and the old server's answer is the fan-out.
   assert.deepEqual(p({ body: "hi" }), { ids: [], context: true });
+  // ⚠ ...INCLUDING FOR AN AGENT AUTHOR. The fallback is ruling 4 preserved WHOLE — an installed
+  // desktop must degrade to 2026-08-21's behaviour, not to silence — and `mayWake` is what keeps
+  // it safe. What an agent author loses on this lane is the PROSE parse, never the feed.
+  assert.deepEqual(p({ body: `@agent-${A1} hi`, authorKind: "agent" }), { ids: [], context: true });
 });
 
 const h0 = harness();

@@ -174,16 +174,22 @@ export const ChannelMessageCreateSchema = z.object({
   clientMsgId: z.string().min(1).max(200).optional(),
   toUserId: z.string().uuid().optional(),
   /**
-   * **THE ONE RECIPIENT, IN EITHER NAMESPACE** (2026-09-02, B4 — ruling B1): a
-   * member (user id or email) **or an agent** (`@agent-<id>` / `@<handle>`),
-   * resolved by `server/service-writes-metadata-recipient.ts ›
-   * resolveToRecipient`, which 400s `CHANNEL_RECIPIENT_UNRESOLVED` — listing the
-   * live handles and the roster — when it names nobody.
-   * ⚠ **IT DOES NOT REPLACE `toUserId`**: a member resolved here BECOMES that
-   * field before any fence runs, so there is one addressee path and one
-   * membership check, not two. `.max(320)` is RFC 5321's address ceiling.
+   * **THE RECIPIENTS, ACROSS EITHER NAMESPACE** (2026-09-02, B4 — ruling B1;
+   * widened to a COMMA-SEPARATED LIST 2026-09-18): members (user id or email)
+   * **and agents** (`@agent-<id>` / `@<handle>`), resolved by
+   * `server/service-writes-metadata-recipient.ts › resolveToRecipients`, which
+   * 400s `CHANNEL_RECIPIENT_UNRESOLVED` — listing the live handles and the
+   * roster — when ANY token names nobody.
+   * ⚠ **IT DOES NOT REPLACE `toUserId`**: the FIRST member resolved here becomes
+   * that field before any fence runs, so there is one `metadata.to_user_id` path
+   * and one consent key — every member named is fenced, and all of them ride
+   * `recipient_user_ids`.
+   * ⚠ **`.max(3520)` IS THE LIST'S CEILING, NOT AN ADDRESS'S** —
+   * `CHANNEL_SEND_MAX_RECIPIENTS` (10) × RFC 5321's 320, plus the separators.
+   * The COUNT is what the resolver refuses on; this only stops a megabyte of
+   * commas reaching it.
    */
-  to: z.string().trim().min(1).max(320).optional(),
+  to: z.string().trim().min(1).max(3520).optional(),
   // ⚠ `.min(1)` HERE AND NO MINIMUM ON THE CONSENT ONE — DELIBERATE, not drift
   // (stated 2026-08-20 after an audit flagged the pair). Two concepts sharing a name
   // and a `max(200)`: THIS is the POST's own summary, where present-and-empty is a
