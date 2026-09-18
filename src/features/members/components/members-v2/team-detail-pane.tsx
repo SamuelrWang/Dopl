@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import { Avatar } from "@/shared/ui/avatar";
-import { SectionBox } from "@/shared/ui/section-box";
+import { SectionPanel } from "@/shared/ui/section-panel";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
 import { formatDate } from "@/shared/lib/format-time";
@@ -82,9 +82,14 @@ export function TeamDetailPane({
         <div className="flex flex-col gap-3.5">
           <PaneHeading title="Members" subtitle="Everyone here inherits the grants below." />
 
-          <SectionBox
+          {/* FLAT since R-39 (2026-09-17) — both were `SectionBox`: a header
+              STRIP over a concave inset body. The counts take the `caption`
+              slot and the rows lose their second inset (`px-1`, because the
+              panel's own `p-3` is the padding now). */}
+          <SectionPanel
+            id="team-roster"
             label="On this team"
-            meta={`${roster.length}`}
+            caption={`${roster.length}`}
             action={
               canManage && addable.length > 0 ? (
                 <AddMemberMenu members={addable} disabled={busy} onPick={onAddMember} />
@@ -92,14 +97,14 @@ export function TeamDetailPane({
             }
           >
             {roster.length === 0 ? (
-              <p className="px-3 py-2.5 text-caption text-text-muted">
+              <p className="px-1 py-1 text-caption text-text-muted">
                 Nobody on this team yet — its grants reach no one.
               </p>
             ) : (
               roster.map((m) => (
                 <div
                   key={m.userId}
-                  className="flex items-center gap-2.5 border-b border-border-subtle px-3 py-2 last:border-b-0"
+                  className="flex items-center gap-2.5 border-b border-border-subtle px-1 py-2 last:border-b-0"
                 >
                   <Avatar person={m} size="sm" />
                   <span className="min-w-0 flex-1">
@@ -122,16 +127,20 @@ export function TeamDetailPane({
                 </div>
               ))
             )}
-          </SectionBox>
+          </SectionPanel>
 
           <PaneHeading
             title="Grants"
             subtitle="What belonging to this team gives you, and at what level."
           />
 
-          <SectionBox label="Scoped resources" meta={`${grants.length}`}>
+          <SectionPanel
+            id="team-grants"
+            label="Scoped resources"
+            caption={`${grants.length}`}
+          >
             {grants.length === 0 ? (
-              <p className="px-3 py-2.5 text-caption text-text-muted">
+              <p className="px-1 py-1 text-caption text-text-muted">
                 No scoped resources — this team grants nothing yet.
               </p>
             ) : (
@@ -143,7 +152,7 @@ export function TeamDetailPane({
                 return (
                   <div
                     key={`${g.resourceType}:${g.resourceId}`}
-                    className="flex items-center gap-2.5 border-b border-border-subtle px-3 py-2 last:border-b-0"
+                    className="flex items-center gap-2.5 border-b border-border-subtle px-1 py-2 last:border-b-0"
                   >
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-bg-elevated text-text-secondary">
                       <Icon size={13} aria-hidden />
@@ -161,7 +170,7 @@ export function TeamDetailPane({
                 );
               })
             )}
-          </SectionBox>
+          </SectionPanel>
         </div>
       </div>
 

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Pencil } from "lucide-react";
 import { InlineEditableRow } from "@/shared/ui/inline-editable-row";
-import { SectionBox } from "@/shared/ui/section-box";
+import { SectionPanel } from "@/shared/ui/section-panel";
 import { toast } from "@/shared/ui/toast";
 import { useProfileWrites } from "./hooks";
 import type { TeamView } from "@/features/teams/types";
@@ -73,14 +73,16 @@ export function AboutTab({
       />
 
       {editable && (
-        <SectionBox label="Profile">
+        // FLAT since R-39 (2026-09-17) — it was a `SectionBox`: a header STRIP
+        // over a concave inset body.
+        <SectionPanel id="about-profile" label="Profile">
           <FieldRow label="Display name">
             <EditableName
               value={displayNameOf(member)}
               onCommit={(next) => patch({ display_name: next })}
             />
           </FieldRow>
-        </SectionBox>
+        </SectionPanel>
       )}
     </div>
   );

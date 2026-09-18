@@ -2,7 +2,7 @@
 
 import { Lock } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { SectionBox } from "@/shared/ui/section-box";
+import { SectionPanel } from "@/shared/ui/section-panel";
 import { SkeletonRow } from "@/shared/ui/skeleton";
 import type { EffectiveAccessRow } from "@/features/teams/effective-access";
 import type { WorkspaceMemberView } from "../../types";
@@ -61,17 +61,20 @@ export function AccessTab({
       ) : (
         <>
           <AccessGroup
+            id="access-edit"
             label="Can edit"
             rows={groups.edit}
             empty={`Nothing ${visibility.isSelf ? "you" : "they"} can change.`}
           />
           <AccessGroup
+            id="access-read"
             label="Can read"
             rows={groups.read}
             empty="Nothing read-only."
           />
           {visibility.showNoAccessGroup && (
             <AccessGroup
+              id="access-none"
               label="No access"
               rows={groups.none}
               locked
@@ -85,27 +88,36 @@ export function AccessTab({
 }
 
 function AccessGroup({
+  id,
   label,
   rows,
   locked = false,
   empty,
 }: {
+  id: string;
   label: string;
   rows: EffectiveAccessRow[];
   locked?: boolean;
   empty: string;
 }) {
   return (
-    <SectionBox label={label} meta={`${rows.length}`}>
+    // FLAT since R-39 (2026-09-17) — this was a `SectionBox`: a header STRIP
+    // over a concave inset body. The count keeps the `caption` slot, which is
+    // what `SectionBox`'s `meta` had no counterpart for and what a fact ABOUT
+    // the section belongs in (the same swap `knowledge-v2/detail/
+    // overview-contents.tsx` made).
+    <SectionPanel id={id} label={label} caption={`${rows.length}`}>
       {rows.length === 0 ? (
-        <p className="px-3 py-2.5 text-caption text-text-muted">{empty}</p>
+        <p className="px-1 py-1 text-caption text-text-muted">{empty}</p>
       ) : (
         rows.map((row) => {
           const { label: typeLabel, icon: Icon } = resourceMeta(row.resourceType);
           return (
             <div
               key={`${row.resourceType}:${row.resourceId}`}
-              className="flex items-center gap-2.5 border-b border-border-subtle px-3 py-2 last:border-b-0"
+              // ⚠ `px-1`, NOT `px-3` — the panel supplies the padding now; the
+              // deeper inset was `SectionBox`'s edge-to-edge inset body.
+              className="flex items-center gap-2.5 border-b border-border-subtle px-1 py-2 last:border-b-0"
             >
               <span
                 className={cn(
@@ -142,6 +154,6 @@ function AccessGroup({
           );
         })
       )}
-    </SectionBox>
+    </SectionPanel>
   );
 }

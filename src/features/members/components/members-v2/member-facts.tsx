@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { CopyButton } from "@/shared/ui/copy-button";
-import { SectionBox } from "@/shared/ui/section-box";
+import { SectionPanel } from "@/shared/ui/section-panel";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
 import { formatDate, formatLastActive } from "@/shared/lib/format-time";
 import type { TeamView } from "@/features/teams/types";
@@ -51,17 +51,21 @@ export function MemberFacts({
 
   return (
     <div className="flex flex-col gap-3">
-      <SectionBox label="Role">
-        <div className="flex flex-col gap-1.5 px-3 py-2.5">
+      {/* FLAT since R-39 (2026-09-17) — every section here was a `SectionBox`:
+          a header STRIP over a concave inset body. The counts moved into the
+          `caption` slot, which is where a fact ABOUT a section belongs, and the
+          rows lost their second inset (`bits.tsx › FieldRow`). */}
+      <SectionPanel id="facts-role" label="Role">
+        <div className="flex flex-col gap-1.5 px-1 py-1">
           <RolePill role={m.role} />
           <p className="text-caption leading-relaxed text-text-secondary">
             {ROLE_COPY[m.role]}
           </p>
         </div>
-      </SectionBox>
+      </SectionPanel>
 
-      <SectionBox label="Teams" meta={`${mine.length}`}>
-        <div className="flex flex-wrap items-center gap-1.5 px-3 py-2.5">
+      <SectionPanel id="facts-teams" label="Teams" caption={`${mine.length}`}>
+        <div className="flex flex-wrap items-center gap-1.5 px-1 py-1">
           {mine.length === 0 && (
             <p className="text-caption text-text-muted">
               Not on a team — access comes from workspace-mode resources only.
@@ -83,14 +87,14 @@ export function MemberFacts({
             <AddToTeamChip teams={available} disabled={busy} onPick={onJoinTeam} />
           )}
         </div>
-      </SectionBox>
+      </SectionPanel>
 
-      <SectionBox label="Membership">
+      <SectionPanel id="facts-membership" label="Membership">
         <FieldRow label="Joined">{formatDate(m.joinedAt)}</FieldRow>
         <FieldRow label="Status">{STATUS_LABEL[m.status]}</FieldRow>
-      </SectionBox>
+      </SectionPanel>
 
-      <SectionBox label="Contact">
+      <SectionPanel id="facts-contact" label="Contact">
         <FieldRow label="Email">
           <span className="min-w-0 truncate">{m.email}</span>
           {m.email && <CopyButton text={m.email} label="Copy email address" />}
@@ -98,15 +102,15 @@ export function MemberFacts({
         <FieldRow label="Display name">
           <span className="min-w-0 truncate">{displayNameOf(m)}</span>
         </FieldRow>
-      </SectionBox>
+      </SectionPanel>
 
       {visibility.showPresence && (
-        <SectionBox label="Presence">
+        <SectionPanel id="facts-presence" label="Presence">
           <FieldRow label="Last active">
             <PresenceDot dot={activity.dot} />
             <span className="min-w-0 truncate">{activity.label}</span>
           </FieldRow>
-        </SectionBox>
+        </SectionPanel>
       )}
     </div>
   );

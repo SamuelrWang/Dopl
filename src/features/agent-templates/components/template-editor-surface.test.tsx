@@ -189,6 +189,92 @@ describe("no concave surfaces", () => {
   );
 
   /**
+   * 🔒 **THE CONCAVE SECTION RECIPE IS OFF THE DESKTOP (Samuel's ruling R-39,
+   * 2026-09-17: flat wins; *"the web app, like on the login page, we can leave
+   * that for now"*).** This suite's `FORBIDDEN` list is swept over THIS feature
+   * and /home; the ruling is wider than either, so the wider half is a CENSUS —
+   * the two exports' consumers, repo-wide, must be exactly the surfaces the
+   * ruling left them on.
+   *
+   * ⚠ **A CENSUS AND NOT A BAN, BECAUSE THE WEB KEEPS CONCAVE.** Banning the
+   * strings repo-wide would fail on the login page and the playground, which
+   * Samuel exempted in as many words; listing the consumers fails the day a
+   * DESKTOP surface takes one back, which is the thing the ruling forbids.
+   * ⚠ **THE LIST MAY ONLY SHRINK**, and every entry names why it is not
+   * inertia — the frozen settings surfaces (INVARIANTS §15) and the composer
+   * panel's own standing ruling. `shared/ui/section-box.tsx` carries the same
+   * list in prose; both move together or the next reader believes the wrong one.
+   */
+  describe("the concave section recipe is off the desktop", () => {
+    const REPO = process.cwd();
+
+    /** Every `.ts`/`.tsx` under `src` and `apps/desktop-ui/src`, tests out. */
+    function tree(dir: string): string[] {
+      return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const full = path.join(dir, entry.name);
+        if (entry.name === "node_modules" || entry.name === "dist") return [];
+        if (entry.isDirectory()) return tree(full);
+        if (!/\.tsx?$/.test(entry.name)) return [];
+        if (/\.test\.tsx?$/.test(entry.name)) return [];
+        return [full];
+      });
+    }
+
+    const ALL = [
+      ...tree(path.join(REPO, "src")),
+      ...tree(path.join(REPO, "apps", "desktop-ui", "src")),
+    ];
+
+    /**
+     * ⚠ COMMENTS ARE STRIPPED FIRST, AND BLOCK COMMENTS PROPERLY — a converted
+     * file EXPLAINS what it stopped wearing, by name, and `{/* … *\/}` in JSX
+     * puts that name on a line the suite's line-prefix filter never sees.
+     */
+    function wearers(recipe: string): string[] {
+      return ALL.filter((file) => {
+        const code = readFileSync(file, "utf8")
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .split("\n")
+          .filter((line) => !/^\s*\/\//.test(line))
+          .join("\n");
+        return code.includes(recipe);
+      })
+        .map((file) => path.relative(REPO, file))
+        .sort();
+    }
+
+    it("finds source to sweep (a silent empty census would pass forever)", () => {
+      expect(ALL.length).toBeGreaterThan(500);
+    });
+
+    it("`SectionBox` is mounted by the WEB playground and nothing else", () => {
+      expect(wearers("SectionBox")).toEqual([
+        // The declaration itself.
+        "src/shared/ui/section-box.tsx",
+        // Web-only: `src/app/playground/page.tsx` is its only route.
+        "src/features/playground/components/panes/members-pane.tsx",
+      ].sort());
+    });
+
+    it("`SECTION_BOX_INSET` survives only where a ruling keeps it", () => {
+      expect(wearers("SECTION_BOX_INSET")).toEqual([
+        "src/shared/ui/section-box.tsx",
+        // 🔒 FROZEN settings surfaces — INVARIANTS §15, pending Samuel's own
+        // overhaul. The sweep does not reach in; it also does not forget them.
+        "src/features/workspaces/components/workspace-danger-zone-core.tsx",
+        "src/features/mcp-connect/components/connected-apps-section.tsx",
+        "src/features/mcp-connect/components/remote-connect.tsx",
+        "src/shared/layout/settings-modal/sections/delete-account.tsx",
+        "apps/desktop-ui/src/components/settings-modal/account-actions.tsx",
+        // 🔒 A COMPOSER PANEL, where the pressed-in stack is its own standing
+        // ruling (2026-08-26: "FILL ONLY. The concave shadow stack is
+        // deliberate and stays").
+        "src/features/channels/components/composer-launch-panel.tsx",
+      ].sort());
+    });
+  });
+
+  /**
    * ⚠ THE RECIPE MOVED, THE RULE DID NOT (2026-08-27). `RAISED_INPUT` was
    * promoted out of `template-editor-rows.tsx` into `shared/ui/wells.ts` when
    * the four /home dialogs standardised onto this page's face, so the assertion

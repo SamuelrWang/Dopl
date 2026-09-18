@@ -17,7 +17,6 @@ import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { Avatar } from "@/shared/ui/avatar";
-import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import type { Chat } from "../types";
 import { FORMAT_LABELS, SOURCE_LABELS } from "../constants";
 import { formatDate } from "@/shared/lib/format-time";
@@ -173,7 +172,11 @@ function Disclosure({
         {meta && <span className="text-caption text-text-muted">{meta}</span>}
         <span className="flex-1" />
       </button>
-      {open && <div className={SECTION_BOX_INSET}>{children}</div>}
+      {/* FLAT since R-39 (2026-09-17). It was `SECTION_BOX_INSET` — the
+          concave inset body `SectionBox` paints — which is the one recipe the
+          ruling takes off the desktop. The top hairline the header already
+          carries is what separates the body; no second pressed-in step. */}
+      {open && <div className="bg-home-panel">{children}</div>}
     </div>
   );
 }

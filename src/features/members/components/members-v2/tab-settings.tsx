@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
-import { SectionBox } from "@/shared/ui/section-box";
+import { SectionPanel } from "@/shared/ui/section-panel";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import type { AssignableRole, WorkspaceMemberView } from "../../types";
 import { RolePill, RoleSelect } from "../member-bits";
@@ -36,8 +36,11 @@ export function SettingsTab({
     <div className="flex flex-col gap-3.5">
       <PaneHeading title="Settings" subtitle="How this member is scoped in the workspace." />
 
-      <SectionBox label="Role">
-        <div className="flex items-center gap-3 px-3 py-2.5">
+      {/* FLAT since R-39 (2026-09-17) — these two were `SectionBox`: a header
+          STRIP over a concave inset body. `px-1` aligns the row with the
+          panel's own heading; `px-3` was the inset body's edge-to-edge well. */}
+      <SectionPanel id="member-role" label="Role">
+        <div className="flex items-center gap-3 px-1 py-1">
           {visibility.showRolePicker && m.role !== "owner" ? (
             <>
               <RoleSelect
@@ -58,11 +61,11 @@ export function SettingsTab({
             </>
           )}
         </div>
-      </SectionBox>
+      </SectionPanel>
 
       {visibility.showDangerZone && (
-        <SectionBox label="Danger zone">
-          <div className="flex items-center gap-3 px-3 py-2.5">
+        <SectionPanel id="member-danger" label="Danger zone">
+          <div className="flex items-center gap-3 px-1 py-1">
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-danger/10 text-danger">
               <Trash2 size={13} aria-hidden />
             </span>
@@ -83,7 +86,7 @@ export function SettingsTab({
               Remove
             </button>
           </div>
-        </SectionBox>
+        </SectionPanel>
       )}
 
       <ConfirmDialog

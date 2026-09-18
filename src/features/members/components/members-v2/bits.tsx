@@ -110,7 +110,11 @@ export function StatBlock({ label, value }: { label: string; value: string }) {
 
 export function FieldRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-center gap-3 border-b border-border-subtle px-3 py-2 last:border-b-0">
+    // ⚠ `px-1`, NOT `px-3`, SINCE R-39 (2026-09-17): every caller draws these
+    // rows on a flat `SectionPanel` whose own padding is `p-3`, where a second
+    // inset would step the rows in past the section heading. The deeper one was
+    // `SectionBox`'s edge-to-edge concave body.
+    <div className="flex items-center gap-3 border-b border-border-subtle px-1 py-2 last:border-b-0">
       <span className="w-[92px] shrink-0 text-caption text-text-secondary">{label}</span>
       <span className="flex min-w-0 flex-1 items-center justify-end gap-1.5 text-body text-text-primary">
         {children}

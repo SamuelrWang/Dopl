@@ -1,7 +1,7 @@
 "use client";
 
 import { ExternalLink } from "lucide-react";
-import { SectionBox } from "@/shared/ui/section-box";
+import { SectionPanel } from "@/shared/ui/section-panel";
 import { SkeletonLine } from "@/shared/ui/skeleton";
 import { cn } from "@/shared/lib/utils";
 import { formatDate } from "@/shared/lib/format-time";
@@ -17,7 +17,9 @@ import { useWorkspaceInvoices } from "./use-billing-account";
  * Invoice history — date, amount, status, link to Stripe's hosted copy.
  *
  * No table primitive in this design system; documented substitute is a
- * `SectionBox` body with `divide-border-subtle` rows.
+ * `SectionPanel` body with `divide-border-subtle` rows. ⚠ IT WAS `SectionBox`
+ * — a header strip over a concave inset body — until R-39 (2026-09-17: flat
+ * wins, and the desktop stops wearing concave).
  *
  * WHICH AMOUNT: paid invoice shows PAID, open/uncollectible shows DUE —
  * "$0.00 paid" on an unpaid invoice reads as free rather than outstanding.
@@ -40,10 +42,10 @@ export function BillingInvoices({ workspaceId }: { workspaceId: string }) {
         Your most recent charges. Open one for the PDF and full details.
       </p>
 
-      <SectionBox label="Billing history">
+      <SectionPanel id="billing-history" label="Billing history">
         {loading ? (
           <div
-            className="space-y-3 px-4 py-3"
+            className="space-y-3 px-1 py-1"
             role="status"
             aria-busy="true"
             aria-label="Loading invoices"
@@ -54,7 +56,7 @@ export function BillingInvoices({ workspaceId }: { workspaceId: string }) {
             <SkeletonLine w="66%" />
           </div>
         ) : isError ? (
-          <p className="px-4 py-4 text-caption text-danger" role="alert">
+          <p className="px-1 py-2 text-caption text-danger" role="alert">
             Couldn&apos;t load invoices.{" "}
             <button
               type="button"
@@ -65,7 +67,7 @@ export function BillingInvoices({ workspaceId }: { workspaceId: string }) {
             </button>
           </p>
         ) : invoices.length === 0 ? (
-          <p className="px-4 py-4 text-caption text-text-secondary">
+          <p className="px-1 py-2 text-caption text-text-secondary">
             No invoices yet. The first one appears after your next payment.
           </p>
         ) : (
@@ -81,7 +83,7 @@ export function BillingInvoices({ workspaceId }: { workspaceId: string }) {
             ))}
           </ul>
         )}
-      </SectionBox>
+      </SectionPanel>
     </section>
   );
 }
@@ -93,7 +95,7 @@ function InvoiceRow({ invoice }: { invoice: InvoiceDto }) {
     invoice.currency
   );
   return (
-    <li className="flex items-center gap-3 px-4 py-2.5">
+    <li className="flex items-center gap-3 px-1 py-2.5">
       <div className="min-w-0 flex-1">
         <div className="truncate text-body text-text-primary">
           {formatDate(invoice.created)}

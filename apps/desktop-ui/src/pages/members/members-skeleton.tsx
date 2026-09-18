@@ -1,4 +1,8 @@
 import { cn } from "@/shared/lib/utils";
+import {
+  SECTION_PANEL_GROUND,
+  SECTION_PANEL_SHELL,
+} from "@/shared/ui/section-panel";
 import { Skeleton, SkeletonLine, SkeletonText } from "@/shared/ui/skeleton";
 import { SECTION_CARD } from "@/features/members/components/members-v2/bits";
 import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
@@ -169,11 +173,11 @@ function MemberDetailGhost() {
             <SkeletonLine w={92} h={16} />
             <SkeletonLine w="64%" h={9} />
           </div>
-          {/* `member-facts.tsx` — the Role and Teams `SectionBox`es, each a
-              14px-radius box with a subtle header strip over its body. */}
+          {/* `member-facts.tsx` — the Role and Teams sections, each a flat
+              14px-radius gray well since R-39 (2026-09-17). */}
           <div className="flex flex-col gap-3">
-            <SectionBoxGhost lines={2} />
-            <SectionBoxGhost lines={1} />
+            <SectionPanelGhost lines={2} />
+            <SectionPanelGhost lines={1} />
           </div>
         </div>
       </div>
@@ -191,14 +195,23 @@ function StatBlockGhost() {
   );
 }
 
-/** One `shared/ui/section-box.tsx › SectionBox` — header strip over the body. */
-function SectionBoxGhost({ lines }: { lines: number }) {
+/**
+ * One `shared/ui/section-panel.tsx › SectionPanel` — heading row over the body,
+ * on ONE flat ground. ⚠ IT WAS A `SectionBox` GHOST (a header strip over a
+ * concave inset body) until R-39 (2026-09-17). ⚠ NOT `SectionPanel` itself: it
+ * takes a `label` STRING and prints it as an `<h2>`, which a loading state must
+ * not do — so it keeps the GROUND and the BOX by name and draws a bar instead.
+ */
+function SectionPanelGhost({ lines }: { lines: number }) {
   return (
-    <div className="w-full overflow-hidden rounded-[14px] border border-border-strong">
-      <div className="flex items-center gap-2 bg-card-surface-subtle px-4 py-1.5">
-        <SkeletonLine w={58} h={8} />
+    <div
+      data-section-panel
+      className={cn(SECTION_PANEL_SHELL, SECTION_PANEL_GROUND)}
+    >
+      <div className="flex min-h-[22px] items-center px-1 pb-2.5">
+        <SkeletonLine w={58} h={10} />
       </div>
-      <div className="px-3 py-2.5">
+      <div className="px-1">
         <SkeletonText lines={lines} />
       </div>
     </div>
