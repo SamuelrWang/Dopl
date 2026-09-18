@@ -3,7 +3,7 @@
  * THE ARTIFACTS FACE OF THE THREADS PANEL — the toggle, and both view states
  * (Samuel, 2026-09-16).
  *
- * ⚠ **THE TRANSPORT IS MOCKED, NOT THE HOOKS** — `knowledge-tab.test.tsx`'s rule,
+ * ⚠ **THE TRANSPORT IS MOCKED, NOT THE HOOKS** — this tree's standing rule,
  * and it buys the same thing here: the real path (`/api/channels/<id>/artifacts`),
  * the real `?artifact=<id>` variant and the real cache keys are part of what is
  * under test, because the whole reason this face exists is that the LIST is a

@@ -2,8 +2,8 @@
 
 /**
  * Channels — RIGHT COLUMN: the channel's tabs. Info (`info-tab.tsx`), Threads
- * (`threads-tab.tsx`), Agents (`agents-tab.tsx`), the opt-in Knowledge
- * (`knowledge-tab.tsx`) and Settings — the pane header's evicted action cluster
+ * (`threads-tab.tsx`), Agents (`agents-tab.tsx`) and Settings — the pane
+ * header's evicted action cluster
  * (`channel-manage.tsx` → `settings-tab.tsx`), injected as a slot because it is
  * write-bearing and this file owns the tab row only.
  *
@@ -25,7 +25,6 @@
  */
 
 import { useState, type ReactNode } from "react";
-import { cn } from "@/shared/lib/utils";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { Crossfade } from "@/shared/ui/crossfade";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
@@ -35,7 +34,6 @@ import { ThreadInfoTab } from "./thread-info-tab";
 import { ThreadsTab } from "./threads-tab";
 import { ArtifactsTab } from "./artifacts-tab";
 import { AgentsTab } from "./agents-tab";
-import { ChannelKnowledgeTab } from "./knowledge-tab";
 import { activeAgentCount } from "./agents-model";
 // THE ROW'S VOCABULARY — `info-panel-tabs.ts` (split 2026-09-16 at the §1 cap).
 // ⚠ `TabKey` and `channelPaneTabs` are RE-EXPORTED below, so every importer that
@@ -87,7 +85,6 @@ export function ChannelsInfoPanel({
   mentionsLoading,
   onOpenMention,
   onMarkAllMentionsRead,
-  knowledge = false,
   artifacts = false,
   headerEdit,
   infoTabSignal = 0,
@@ -160,16 +157,12 @@ export function ChannelsInfoPanel({
   mentionsLoading: boolean;
   onOpenMention: (mention: ChannelMention) => void;
   onMarkAllMentionsRead: () => void;
-  /** Draw the KNOWLEDGE tab (`ChannelSurfaceCapabilities.knowledge`). Default
-   *  `false` — {@link channelPaneTabs} says why this one capability defaults
-   *  CLOSED. ⚠ Its reads mount with the tab, so `false` requests nothing at all. */
-  knowledge?: boolean;
   /**
    * Draw the ARTIFACTS FACE toggle in the Threads tab (Samuel, 2026-09-16).
    *
-   * ⚠ DEFAULT `false`, INVERTING THE USUAL RULE for the same reason `knowledge`
-   * does: it ADDS a control rather than removing one, so a host that passes
-   * nothing renders the Threads tab byte for byte as before.
+   * ⚠ DEFAULT `false`, INVERTING THIS FILE'S USUAL RULE: it ADDS a control
+   * rather than removing one, so a host that passes nothing renders the Threads
+   * tab byte for byte as before.
    *
    * ⚠ **EXACTLY ONE HOST PASSES IT — /home** (`pages/home/relationship-record.tsx`),
    * under Samuel's standing home-space ruling for new surfaces. The workspace
@@ -251,7 +244,7 @@ export function ChannelsInfoPanel({
   const [artifactsFace, setArtifactsFace] = useState(false);
   const openThreadId = openThread?.id ?? null;
   const threadView = openThread !== null;
-  const options = channelPaneTabs(threadView, knowledge);
+  const options = channelPaneTabs(threadView);
   /**
    * 🔒 **IS THE THREADS SLOT ON ITS ARTIFACTS FACE?** — ONE boolean, read by the
    * label, the body and the badge rule below.
@@ -350,7 +343,7 @@ export function ChannelsInfoPanel({
                 artifacts ? () => setArtifactsFace((v) => !v) : undefined
               }
               // ⚠ MOUNTED WITH THE FACE — the reads go with it, so a reader who
-              // never toggles requests nothing (the Settings/Knowledge slot rule).
+              // never toggles requests nothing (the Settings slot's rule).
               artifacts={
                 onArtifactsFace ? (
                   <ArtifactsTab
@@ -380,13 +373,6 @@ export function ChannelsInfoPanel({
               openAgent={openAgent}
               onOpenAgent={onOpenAgent}
               onNewThread={onNewThread}
-            />
-          ) : shown === "knowledge" ? (
-            // ⚠ MOUNTED WITH THE TAB, so the lane is not read for a viewer who
-            // never opens it — the Settings slot's rule (INVARIANTS §5).
-            <ChannelKnowledgeTab
-              channelId={channel.id}
-              workspaceId={channel.workspaceId}
             />
           ) : (
             settings
@@ -418,22 +404,16 @@ export function ChannelsInfoPanel({
       // shrinkable panel would reflow its contents through every frame of the slide.
       className="flex w-[var(--info-w,380px)] shrink-0 flex-col border-l border-border-default"
     >
-      {/* ⚠ A FIFTH TAB IS OVER THE ROW'S WIDTH BUDGET, AND THE BUDGET IS A
-          MEASUREMENT, NOT A TASTE (Home Knowledge Panels M4): at 380px the four
-          options with two badges leave roughly 55px spare and "Knowledge" wants
-          ~90 (docs/DESIGN-SYSTEM.md, 2026-08-25). Two answers, neither touching the
-          shared primitive — the row TIGHTENS (`gap-1`, header `px-2`) only while
-          the fifth tab is present, and whatever remains SCROLLS rather than clips.
-          ⚠ RULED 2026-08-27 (F-340, Samuel): the DESKTOP host stopped passing the
-          capability, so /home is back to FOUR tabs; it **still engages on the GUEST
-          lane**. ⚠ AND DO NOT "FIX" THE GUEST ROW BY SHORTENING THE LABEL:
-          "Knowledge" is what the product calls the thing everywhere else. */}
-      <div
-        className={cn(
-          "flex h-[56px] shrink-0 items-center",
-          options.length > 4 ? "px-2" : "px-3"
-        )}
-      >
+      {/* ⚠ **THE FIFTH-TAB WIDTH BRANCH IS GONE (Samuel's ruling R-18, 2026-09-17).**
+          The row TIGHTENED (`gap-1`, header `px-2`) only while a FIFTH tab was
+          present, and the only tab that could ever be the fifth was Knowledge —
+          whose capability no host had passed since 2026-09-04. The branch went with
+          the lane rather than being left behind a condition `channelPaneTabs` can no
+          longer satisfy. ⚠ The 380px budget it encoded is still real
+          (docs/DESIGN-SYSTEM.md, 2026-08-25): four options with two badges leave
+          roughly 55px spare, so a fifth tab needs this branch BACK, not a shorter
+          label. */}
+      <div className="flex h-[56px] shrink-0 items-center px-3">
         <SegmentedControl
           options={options.map((t) => {
             // 🔒 THE THREADS SLOT ANSWERS TO ITS FACE — heading and badge both,
@@ -459,10 +439,7 @@ export function ChannelsInfoPanel({
           variant="underline"
           // Layout only, which is all `className` may carry here (the primitive's
           // own contract). See the width-budget note above.
-          className={cn(
-            "min-w-0 flex-1 overflow-x-auto",
-            options.length > 4 && "gap-1"
-          )}
+          className="min-w-0 flex-1 overflow-x-auto"
         />
       </div>
 

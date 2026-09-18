@@ -144,32 +144,19 @@ export interface ChannelSurfaceCapabilities {
    */
   selfManagement?: boolean;
   /**
-   * Draw the KNOWLEDGE tab — bases granted INTO this channel, read-only unless the
-   * grant carries `guest_write` (Home Knowledge Panels M4, `knowledge-tab.tsx`).
-   * ⚠ DEFAULT `false`, WHICH INVERTS THE OTHER TWO: they REMOVE something, this
-   * ADDS a tab.
+   * ⚠ **`knowledge` IS DELETED (Samuel's ruling R-18, 2026-09-17).** It drew a
+   * fifth tab over bases granted into the channel. No host had passed it since
+   * 2026-09-04 (the guest lane was the last, F-666), so the tab, its hook, its
+   * client lane, its four API routes and this flag were unreachable product —
+   * deleted, not parked (INVARIANTS §15). /home's Knowledge SHELF
+   * (`pages/home/knowledge-panels.tsx`) is untouched and is the surface that
+   * reads a granted base today. ⚠ Re-adding the FACE still needs Samuel's word.
    *
-   * ⚠ EXACTLY ONE HOST PASSES IT SINCE 2026-08-27 — THE GUEST LANE (Samuel's
-   * F-340 ruling). Both container surfaces did from M4, costing the info column a
-   * FIFTH tab on a width budget measured for four. **The duplicate view gave way,
-   * not the capability:** /home carries a full Knowledge FACE over the same bases
-   * (`pages/home/knowledge-panels.tsx`), whereas for a guest this tab is the ONLY
-   * way to read a base granted into the channel. Pinned both ways by
-   * `knowledge-tab.test.tsx › the capability, per host`.
-   *
-   * ⚠ THE WORKSPACE CHANNEL PAGE DELIBERATELY DOES NOT PASS IT (this wave): it
-   * already carries the full knowledge surface, and a narrower read one tab away
-   * would be a second answer with nothing saying which is complete. ⚠ SAFE ON
-   * EVERY HOST REGARDLESS — the tab reads the guest-floored lane
-   * (`knowledge-lane.ts`), never `/api/knowledge/**`.
-   */
-  knowledge?: boolean;
-  /**
    * Draw the ARTIFACTS FACE toggle in the Threads tab — this channel's folded runs
    * as openable cards (Samuel, 2026-09-16; `artifacts-tab.tsx`).
    *
-   * ⚠ DEFAULT `false`, WHICH INVERTS THE FIRST THREE exactly as `knowledge` does:
-   * they REMOVE something, this ADDS a control.
+   * ⚠ DEFAULT `false`, WHICH INVERTS THE OTHER TWO: they REMOVE something, this
+   * ADDS a control.
    *
    * ⚠ **EXACTLY ONE HOST PASSES IT — /home**, under Samuel's standing home-space
    * ruling for a new surface (2026-09-16). The workspace channel page and the guest

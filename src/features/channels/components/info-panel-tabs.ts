@@ -22,7 +22,6 @@ const TABS = [
   { key: "info", label: "Info" },
   { key: "threads", label: "Threads" },
   { key: "agents", label: "Agents" },
-  { key: "knowledge", label: "Knowledge" },
   { key: "settings", label: "Settings" },
 ] as const;
 
@@ -35,20 +34,15 @@ export type TabKey = (typeof TABS)[number]["key"];
  * OTHER threads is the one control here that navigates away from what the reader
  * is looking at. The sidebar's tree covers thread-to-thread movement meanwhile.
  *
- * ⚠ KNOWLEDGE IS OPT-IN AND IS THE ROW'S ONLY CAPABILITY-GATED TAB (Home
- * Knowledge Panels M4) — ABSENT by default, inverting this file's usual "the
- * default is the workspace page's behaviour" rule; see
- * {@link ChannelSurfaceCapabilities.knowledge}. ⚠ THREAD VIEW KEEPS IT: a base is
- * granted onto the CHANNEL, so it is as true inside one exchange as outside it.
+ * ⚠ THREAD VIEW IS THE ONLY THING THAT SHORTENS THE ROW, AND THERE IS NO
+ * CAPABILITY-GATED TAB LEFT (Samuel's ruling R-18, 2026-09-17): the `knowledge` arm
+ * went with the hostless Knowledge lane, so every host draws the same four
+ * options and `options.length > 4` can never be true again.
  */
 export function channelPaneTabs(
-  threadView: boolean,
-  knowledge: boolean
+  threadView: boolean
 ): ReadonlyArray<(typeof TABS)[number]> {
-  return TABS.filter(
-    (t) =>
-      (t.key !== "threads" || !threadView) && (t.key !== "knowledge" || knowledge)
-  );
+  return TABS.filter((t) => t.key !== "threads" || !threadView);
 }
 
 /**
@@ -59,9 +53,7 @@ export function channelPaneTabs(
  * drawn for it, which is what `agentSessions === null` needs — "could not ask"
  * must NOT render as a confident `0` (INVARIANTS §11, UNKNOWN is not EMPTY).
  *
- * ⚠ KNOWLEDGE GETS NO BADGE EITHER: its list is read by the TAB BODY only while
- * the tab is open, and a row count would mount that read for every viewer of every
- * channel. ⚠ INFO AND SETTINGS GET NONE: Info already carries the mentions unread
+ * ⚠ INFO AND SETTINGS GET NONE: Info already carries the mentions unread
  * count INSIDE it (`info-tab.tsx`), and two numbers leave the reader guessing.
  *
  * ⚠ THREADS COUNTS THE LOADED LIST — count what is displayed and say when the

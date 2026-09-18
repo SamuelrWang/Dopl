@@ -26,16 +26,10 @@ import { ChannelsInfoPanel } from "./info-panel";
 import { indexMembers } from "./view-model";
 import { CHANNEL_ID, ME, PEER, channel, member, thread } from "./test-fixtures";
 
-// The Knowledge tab body opens reads of its own and has its own suite
-// (`knowledge-tab.test.tsx`). What is under test HERE is the tab row: whether
-// the tab exists, and whether its body is mounted at all — which an inert stub
-// answers, because it is the same element either way. (`vi.mock` is hoisted, so
-// it applies to the import above regardless of where it is written.)
-vi.mock("./knowledge-tab", () => ({
-  ChannelKnowledgeTab: () => <div data-testid="knowledge-tab" />,
-}));
-
-// Same rule, same reason, for the ARTIFACTS FACE (2026-09-16): its body opens the
+// The ARTIFACTS FACE's body is stubbed, and the rule is: what is under test HERE
+// is the ROW, which an inert stub answers because it is the same element either
+// way. (`vi.mock` is hoisted, so it applies to the import above regardless of
+// where it is written.) Same rule, same reason, for the ARTIFACTS FACE (2026-09-16): its body opens the
 // channel's artifact reads and has its own suite (`artifacts-tab.test.tsx`). What
 // is under test HERE is the ROW — the heading the slot wears and whether the face
 // is mounted at all — which an inert stub answers.
@@ -339,19 +333,13 @@ describe("the badge agrees with the list under it", () => {
 });
 
 /**
- * THE KNOWLEDGE TAB IS THE ROW'S ONE OPT-IN (Home Knowledge Panels M4).
- *
- * ⚠ IT DEFAULTS CLOSED, which inverts this column's usual rule that an unpassed
- * capability means "the workspace page's behaviour". The other two REMOVE
- * something; this one ADDS a tab that reads a channel-scoped grant lane, and the
- * workspace page has the whole knowledge surface a click away
- * (`channel-surface.tsx › ChannelSurfaceCapabilities.knowledge`).
- *
- * ⚠ AND ITS BODY MOUNTS WITH THE TAB. `false` is not a hidden control — nothing
- * is requested at all, which is the same property `selfManagement` buys the
- * consent inbox in `guest-surface-reads.test.tsx`.
+ * 🔒 **THE ROW HAS NO CAPABILITY-GATED TAB SINCE 2026-09-17 (Samuel's ruling
+ * R-18).** `describe("the Knowledge tab is opt-in")` stood here — eight cases over
+ * a fifth tab no host had passed since 2026-09-04. The capability, the tab, its
+ * hook, its client lane and its four API routes are deleted, so the row is FOUR
+ * options on every host and the one case worth keeping is the shape itself.
  */
-describe("the Knowledge tab is opt-in", () => {
+describe("the tab row", () => {
   /** Tab labels in row order, badges stripped. */
   function tabRow(): string[] {
     return screen
@@ -359,57 +347,14 @@ describe("the Knowledge tab is opt-in", () => {
       .map((t) => (t.textContent ?? "").replace(/\d+$/, ""));
   }
 
-  it("is ABSENT for a host that passes no capabilities — the workspace page", () => {
+  it("is Info · Threads · Agents · Settings on every host", () => {
     renderPanel();
     expect(tabRow()).toEqual(["Info", "Threads", "Agents", "Settings"]);
   });
 
-  it("is absent when the capability is explicitly false", () => {
-    renderPanel({ knowledge: false });
-    expect(screen.queryByRole("tab", { name: /^Knowledge/ })).toBeNull();
-  });
-
-  it("sits between Agents and Settings for a host that opts in", () => {
-    renderPanel({ knowledge: true });
-    expect(tabRow()).toEqual([
-      "Info",
-      "Threads",
-      "Agents",
-      "Knowledge",
-      "Settings",
-    ]);
-  });
-
-  it("carries no badge — the count would cost the read the tab exists to defer", () => {
-    renderPanel({ knowledge: true });
-    expect(badgeOf("Knowledge")).toBeNull();
-  });
-
-  it("STAYS in thread view, where Threads leaves", () => {
-    // A knowledge base is granted onto the CHANNEL, so it is as true inside one
-    // exchange as outside it.
-    renderPanel({ knowledge: true, openThread: THREADS[0] });
-    expect(screen.getByRole("tab", { name: /^Knowledge/ })).toBeTruthy();
-    expect(screen.queryByRole("tab", { name: /^Threads/ })).toBeNull();
-  });
-
-  it("mounts its body only once the tab is opened", async () => {
-    renderPanel({ knowledge: true });
-    expect(screen.queryByTestId("knowledge-tab")).toBeNull();
-    fireEvent.click(screen.getByRole("tab", { name: /^Knowledge/ }));
-    expect(await screen.findByTestId("knowledge-tab")).toBeTruthy();
-  });
-
-  it("falls back to Info if the capability is withdrawn while it is selected", () => {
-    // The same dead-selection rule the open thread exercises — and the fallback
-    // asks the ROW which tabs exist rather than re-listing the conditions, so
-    // both exits land in one place.
-    const view = renderPanel({ knowledge: true });
-    fireEvent.click(screen.getByRole("tab", { name: /^Knowledge/ }));
-    expect(selected("Knowledge")).toBe(true);
-    view.rerender(panel({ knowledge: false }));
-    expect(screen.queryByRole("tab", { name: /^Knowledge/ })).toBeNull();
-    expect(selected("Info")).toBe(true);
+  it("drops THREADS in thread view and nothing else", () => {
+    renderPanel({ openThread: THREADS[0] });
+    expect(tabRow()).toEqual(["Info", "Agents", "Settings"]);
   });
 });
 

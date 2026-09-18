@@ -101,8 +101,7 @@ export function ChannelSingleColumn({
 
   const options: ReadonlyArray<SelectMenuOption<Face>> = [
     { value: "channel", label: "Channel" },
-    // ⚠ `false` IS THE KNOWLEDGE ARGUMENT AND IT IS LITERAL — see the header.
-    ...channelPaneTabs(threadView, false).map((t) => ({
+    ...channelPaneTabs(threadView).map((t) => ({
       value: t.key as Face,
       label: t.label,
     })),

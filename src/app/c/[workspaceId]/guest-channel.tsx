@@ -147,14 +147,12 @@ export function GuestChannel({
           // transcript; a phone cannot, so the chat area is the whole page and
           // the column's faces become dropdown options.
           webView={webView}
-          // ⚠ NO `knowledge` CAPABILITY ANY MORE (Samuel, 2026-09-04): *"There
+          // ⚠ THE `knowledge` CAPABILITY IS GONE ENTIRELY (Samuel's ruling R-18,
+          // 2026-09-17). This host stopped PASSING it on 2026-09-04 (*"There
           // should be no Knowledge tab at all for the web: just Info, Threads,
-          // and Agents."* It was passed here from M4 on the argument that this
-          // tab is a guest's only way to read a base granted into the channel —
-          // that argument lost, and the ruling is the reason. The lane itself
-          // (`knowledge-lane.ts`) is untouched and still guest-floored; what is
-          // gone is the FACE. Re-adding it needs Samuel's word, not a reading of
-          // the M4 plan.
+          // and Agents."*), which left it with no host at all — so the flag, the
+          // tab, its hook, its client lane and its four API routes are deleted
+          // rather than parked. ⚠ Re-adding the face still needs Samuel's word.
           capabilities={{
             memberManagement: false,
             selfManagement: false,

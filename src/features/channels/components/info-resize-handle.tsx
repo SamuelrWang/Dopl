@@ -68,8 +68,8 @@ export const DIVIDER_WIDTH_VAR = "--channel-divider-w";
  */
 const STRIP_LEFT = "left-[calc(var(--channel-divider-w,1px)/2)]";
 
-/** 12px, the chevron step the info column already uses (`knowledge-tab.tsx` is
- *  13 at text scale; this one flanks a 4px pill and 12 is the ramp's step below). */
+/** 12px, the chevron step the info column already uses — it flanks a 4px pill,
+ *  and 12 is the icon ramp's step below the 13 a text-scale chevron takes. */
 const ARROW_ICON = 12;
 
 export function InfoResizeHandle() {

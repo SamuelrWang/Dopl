@@ -6,7 +6,7 @@
  * ⚠ WHAT THIS FILE IS FOR IS THE THINGS A SCREENSHOT CANNOT SHOW, and on this
  * change that is most of it: that the tab COLUMN is not merely closed but not
  * rendered (a closed column still reserves and still slides), that the option
- * list is exactly the five faces with NO Knowledge among them, that an agent box
+ * list is exactly the five faces — Knowledge never among them — that an agent box
  * opens into the main area and the dropdown then names it, and that the choice
  * is in the URL rather than in component state.
  *
@@ -217,6 +217,8 @@ describe("the web channel page — one column", () => {
       .map((el) => el.textContent?.trim());
     expect(labels).toEqual(["Channel", "Info", "Threads", "Agents", "Settings"]);
     // 🔒 Samuel, 2026-09-04: "There should be no Knowledge tab at all for the web."
+    // ⚠ AND SINCE R-18 (2026-09-17) THERE IS NO KNOWLEDGE TAB ANYWHERE — the
+    // capability is deleted, so this case now pins a fact about the whole row.
     expect(labels.some((l) => l?.includes("Knowledge"))).toBe(false);
   });
 

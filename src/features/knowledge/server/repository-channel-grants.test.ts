@@ -26,8 +26,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   CHANNEL_RESOURCE_GRANT_COLS,
   deleteChannelKnowledgeGrant,
-  findChannelKnowledgeGrant,
-  listChannelGrantsAtLevel,
   listChannelGrantsForBase,
   listChannelKnowledgeGrants,
   listSharedBaseIds,
@@ -153,101 +151,6 @@ describe("listChannelKnowledgeGrants", () => {
     const { client } = fakeClient({ data: null, error: new Error("db down") });
     await expect(
       listChannelKnowledgeGrants(client, "ws-1", "chan-1", ["kb-1"])
-    ).rejects.toThrow("db down");
-  });
-});
-
-describe("listChannelGrantsAtLevel — the GUEST LANE's list read", () => {
-  /**
-   * ⚠ THE `level` FILTER IS THE ASSERTION, and it needs a REPOSITORY test to
-   * exist at all. `grant-lane.test.ts` mocks this module, so a service-level pin
-   * cannot see the predicate — deleting the `level` term left that whole suite
-   * GREEN (measured 2026-08-26), which would have put every `agent_only` grant
-   * in the container into a guest's base list.
-   */
-  it("filters by workspace + scope + type + LEVEL, and carries the ceiling", async () => {
-    const { client, calls } = fakeClient({ data: [ROW], error: null });
-
-    const out = await listChannelGrantsAtLevel(
-      client,
-      "ws-1",
-      "chan-1",
-      "visible",
-      200
-    );
-
-    expect(out).toEqual([ROW]);
-    expect(calls.from).toEqual(["resource_grants"]);
-    expect(calls.match).toEqual([
-      {
-        workspace_id: "ws-1",
-        scope_id: "chan-1",
-        // 🔒 Without this term the lane lists `agent_only` grants — a DIFFERENT
-        // audience, whose existence must not leak to the people in the channel.
-        level: "visible",
-        ...CHANNEL_SLICE,
-      },
-    ]);
-    // PostgREST truncates an un-limited select silently.
-    expect(calls.limit).toEqual([200]);
-  });
-
-  it("passes `agent_only` through unchanged when that is what is asked for", async () => {
-    // The parameter is a parameter, not a decoration around a hardcoded value.
-    const { client, calls } = fakeClient({ data: [], error: null });
-    await listChannelGrantsAtLevel(client, "ws-1", "chan-1", "agent_only", 5);
-    expect(calls.match[0].level).toBe("agent_only");
-    expect(calls.limit).toEqual([5]);
-  });
-
-  it("throws when the query errors", async () => {
-    const { client } = fakeClient({ data: null, error: new Error("db down") });
-    await expect(
-      listChannelGrantsAtLevel(client, "ws-1", "chan-1", "visible", 200)
-    ).rejects.toThrow("db down");
-  });
-});
-
-describe("findChannelKnowledgeGrant — the lane's per-base PK lookup", () => {
-  it("filters by workspace + scope + type + resource and answers the row", async () => {
-    const { client, calls } = fakeClient({ data: ROW, error: null });
-
-    expect(
-      await findChannelKnowledgeGrant(client, "ws-1", "chan-1", "kb-1")
-    ).toEqual(ROW);
-    expect(calls.match).toEqual([
-      {
-        workspace_id: "ws-1",
-        scope_id: "chan-1",
-        resource_id: "kb-1",
-        ...CHANNEL_SLICE,
-      },
-    ]);
-  });
-
-  it("answers NULL for a missing row rather than throwing", async () => {
-    // `maybeSingle`, not `single`: "not shared" is the third state and the
-    // COMMON one, so it must not arrive as an error the service has to decode.
-    const { client } = fakeClient({ data: null, error: null });
-    expect(
-      await findChannelKnowledgeGrant(client, "ws-1", "chan-1", "kb-9")
-    ).toBeNull();
-  });
-
-  it("returns the row AT WHATEVER LEVEL IT CARRIES — the service decides", async () => {
-    // ⚠ No `level` filter here on purpose, and it is not an oversight: the
-    // service must be able to tell `agent_only` from absent in order to give
-    // them the SAME answer deliberately. A filter here would make that decision
-    // in SQL, where the reasoning cannot be written down.
-    const { client, calls } = fakeClient({ data: null, error: null });
-    await findChannelKnowledgeGrant(client, "ws-1", "chan-1", "kb-1");
-    expect(calls.match[0]).not.toHaveProperty("level");
-  });
-
-  it("throws when the query errors", async () => {
-    const { client } = fakeClient({ data: null, error: new Error("db down") });
-    await expect(
-      findChannelKnowledgeGrant(client, "ws-1", "chan-1", "kb-1")
     ).rejects.toThrow("db down");
   });
 });

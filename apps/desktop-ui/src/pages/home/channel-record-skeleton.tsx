@@ -203,14 +203,15 @@ function ComposerGhost() {
  * operator drags it), its 56px tab row, and the Info face's card rows.
  *
  * ⚠ THE TAB COUNT IS THE REAL ROW'S, ASKED RATHER THAN COUNTED:
- * `channelPaneTabs(false, false)` is channel view with no Knowledge capability,
- * which is exactly what /home mounts (`relationship-record.tsx`).
+ * `channelPaneTabs(false)` is channel view, which is exactly what /home mounts
+ * (`relationship-record.tsx`). ⚠ The second argument went with the Knowledge
+ * capability (R-18, 2026-09-17); the row has no capability-gated tab left.
  * ⚠ THE ROW IS THE `underline` CONTROL'S (`segmented-control.tsx`): text only,
  * `gap-5` between options, each `h-9 px-1`. No pills, and no selected mark — a
  * ghost that underlined one tab would be claiming which face resolves.
  */
 function InfoColumnGhost() {
-  const tabs = channelPaneTabs(false, false);
+  const tabs = channelPaneTabs(false);
   return (
     <aside className="flex w-[var(--info-w,380px)] shrink-0 flex-col border-l border-border-default">
       <div className="flex h-[56px] shrink-0 items-center px-3">

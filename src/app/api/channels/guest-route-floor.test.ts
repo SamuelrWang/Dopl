@@ -56,36 +56,31 @@
  * "guest" }` off an allowed GET, or raise an allowed POST back to `"member"`)
  * removes it from the discovered set → set A fails on that entry AND set B's
  * equality fails. Adding `guest` to any other route fails set B (both halves).
- * Breaking the parser fails set D. 21 entries.
+ * Breaking the parser fails set D. ⚠ The entry COUNT is pinned by set A's first
+ * case, which carries its own history — do not restate it here.
  * MEASURED 2026-08-26 — 4 reverts, 4 failures, 0 vacuous: parser loses the
  * re-export branch (4 red); loses the function-declaration branch (1 red); stops
  * stripping comments (1 red); B2 back to comparing FILE NAMES while a SECOND
  * guest floor is added to an already-listed file (`…/members/route.ts` POST) —
  * the count sweep goes red, and the old file-name sweep stayed GREEN on that
  * exact tree (12 files either way), which is the gap it closed.
- * RE-MEASURED 2026-08-26 for the four KNOWLEDGE-LANE additions — 4 reverts,
- * 4 failures, 0 vacuous (49 tests baseline):
- *   - raise `…/knowledge/bases` GET back to the viewer default   : 3 red (A, B, B2)
- *   - raise the entry PUT alone, its GET left at `guest`         : 3 red (A, B, B2)
- *     ⚠ THIS IS THE ONE B2's COUNT EXISTS FOR: the file stays on the sweep
- *     either way, and only the per-METHOD occurrence count notices.
- *   - drop `membership !== null` from the lane helper            : 1 red
- *   - a lane route naming `loadVisibleChannel` itself            : 1 red
- *     (a second, hand-rolled copy of the fence — the copy is what drifts)
+ * ⚠ **THE FOUR KNOWLEDGE-LANE ENTRIES ARE DELETED (Samuel's ruling R-18,
+ * 2026-09-17).** They were the only guest floors in this codebase in front of a
+ * payload the channel did not own, and the only guest WRITE outside the channel's
+ * own transcript. The capability that reached them had no host after 2026-09-04,
+ * so the tab, its hook, its client lane, its three route files and the
+ * `shared/api/channel-knowledge-lane.ts` helper are gone — and with them the two
+ * source pins at the bottom of this file. ⚠ **A guest now reaches no knowledge base
+ * at all**: every route under `/api/knowledge/**` is at the `viewer` default, where
+ * `defaultLevelForRole("guest")` is `null`.
  *
- * ⚠ TWENTY OF THE TWENTY-ONE ARE CHANNEL ROUTES; THE OTHER IS A METER
+ * ⚠ THE OTHER NON-CHANNEL ENTRY IS A METER
  * (2026-08-26). `mcp/credits/consume` sits at `guest` so a guest's tool calls
  * are BILLED — the registrar fails open on the 403 the `viewer` default
  * produced, so that floor made guest traffic free rather than refusing it
  * (F-325). It grants no data and no write; the entry lives here because this
  * file's contract is "nothing anywhere is at `guest` unless it is listed", and
  * that contract is worth more than the list staying channel-only.
- *
- * ⚠ FOUR OF THEM ARE NOT CHANNEL CONTENT AT ALL: the four knowledge-lane pairs
- * (Home Knowledge Panels M2, 2026-08-26) serve KNOWLEDGE through a
- * channel-scoped door — admitted by a `(knowledge_base, channel)` grant at
- * `visible`, with the membership fence REQUIRED rather than inherited.
- * See the last describe in this file, and INVARIANTS §4A.
  *
  * ⚠ THREE `personal-arming` VERBS STOOD HERE AND ARE DELETED (2026-09-07) with
  * the route itself: Samuel reversed task 11 and personal knowledge reaches a
@@ -169,33 +164,8 @@ const GUEST_ALLOWED: ReadonlyArray<readonly [string, string]> = [
   // for every guest — and seeing that the operator's agent is working is the
   // guest lane's whole proposition. READ ONLY; launching stays closed.
   [`${CHANNELS_REL}/[channelId]/sessions/route.ts`, "GET"],
-  // ⚠ THE KNOWLEDGE LANE (Home Knowledge Panels M2, 2026-08-26; plan §3, and
-  // §4A's "a guest reaches knowledge ONLY through a (kb, channel) grant at
-  // `visible`"). FOUR pairs across THREE files, and the first guest floors in
-  // this codebase in front of a payload the channel does not own.
-  //
-  // These four are the ONLY way a guest reaches a knowledge base at all. Every
-  // route under `/api/knowledge/**` stays at the `viewer` default and therefore
-  // still refuses one — `defaultLevelForRole("guest")` is `null`, so even a
-  // lowered floor there would 404 in `requireEffectiveAccess`. The lane exists
-  // BECAUSE that is true: it carries its own gates
-  // (`knowledge/server/service-channel-grants.ts › assertGrantVisible` /
-  // `assertGrantWritable`) and reuses none of the workspace ones.
-  //
-  // ⚠ THE FLOOR IS THE WEAKEST OF FOUR FENCES HERE, not the gate. In order:
-  // this floor → `loadVisibleChannel` with membership REQUIRED (the public arm
-  // is refused outright, or a workspace viewer who never joined the channel
-  // would read the operator's granted bases) → the grant row at `visible`
-  // (`agent_only` is a 404, always — a different audience, and its existence
-  // must not leak) → base alive and same workspace.
-  [`${CHANNELS_REL}/[channelId]/knowledge/bases/route.ts`, "GET"], // bases granted into this channel
-  [`${CHANNELS_REL}/[channelId]/knowledge/bases/[baseId]/tree/route.ts`, "GET"], // folders + entry metadata of ONE granted base
-  [`${CHANNELS_REL}/[channelId]/knowledge/entries/[entryId]/route.ts`, "GET"], // one entry's body
-  // ⚠ THE ONLY GUEST *WRITE* ON THIS LIST OUTSIDE THE CHANNEL'S OWN TRANSCRIPT,
-  // and it is gated on a per-grant `guest_write` flag that defaults OFF (§3.4).
-  // Title and body only; no create, no move, no delete. `agent_write_enabled` is
-  // not consulted because the service refuses an agent token here outright.
-  [`${CHANNELS_REL}/[channelId]/knowledge/entries/[entryId]/route.ts`, "PUT"], // edit one entry (guest_write)
+  // ⚠ **THE KNOWLEDGE LANE'S FOUR ENTRIES ARE DELETED (R-18, 2026-09-17)** — see
+  // this file's header. A guest reaches no knowledge base at all now.
   // ⚠ THE ONE NON-CHANNEL ENTRY, AND IT IS A METER RATHER THAN A CAPABILITY
   // (2026-08-26, Samuel: "charge MCP calls from a guest to the user"; closes
   // F-325). At the `viewer` default this 403'd every guest-scoped consume call,
@@ -230,8 +200,7 @@ const GUEST_ALLOWED: ReadonlyArray<readonly [string, string]> = [
   // `ontology/server/guest-lane.test.ts`.
   //
   // ⚠ **THE WRITES MOVED WITH THE READS, AND THAT IS THE RULING** — "are guests
-  // access/view or edit" — which is why the ONE ⚠ this file's knowledge-lane
-  // block raises (a guest write) is answered here by a LADDER rather than by a
+  // access/view or edit" — which is answered here by a LADDER rather than by a
   // per-grant boolean: `guests_level='edit'` is what admits them, and
   // `service-gates.ts › requireObject` demands `edit` on EVERY cluster the
   // object belongs to (Q9).
@@ -272,16 +241,17 @@ const GUEST_ALLOWED: ReadonlyArray<readonly [string, string]> = [
 const ALLOWED_KEYS = new Set(GUEST_ALLOWED.map(([f, m]) => `${f}#${m}`));
 
 describe("guest route floor — the guest-allowed set is exactly what runs at minRole:guest", () => {
-  it("has 30 entries (pins the size against a silent add/drop)", () => {
+  it("has 26 entries (pins the size against a silent add/drop)", () => {
     // 19 until 2026-09-06 (artifacts ×2), 24 while the three personal-arming
     // verbs existed, 21 once they were deleted with the route (2026-09-07), 27
     // with the ontology lane (2026-09-09, F-685), 30 with that lane's CHANGELOG
-    // (the same day, F-686 part 2); 15 until Home Knowledge
-    // Panels M2. ⚠ ENTRIES, NOT FILES, which is why B2
+    // (the same day, F-686 part 2); 15 until Home Knowledge Panels M2, and **26
+    // since R-18 took the four knowledge-lane entries out (2026-09-17)**.
+    // ⚠ ENTRIES, NOT FILES, which is why B2
     // counts occurrences. The number blesses nothing; set B proves the tree.
     // Re-derive both, never quote:
     //   grep -rc 'minRole: "guest"' $(grep -rl 'minRole: "guest"' src/app/api)
-    expect(ALLOWED_KEYS.size).toBe(30);
+    expect(ALLOWED_KEYS.size).toBe(26);
   });
 
   it.each(GUEST_ALLOWED)("A: %s %s is at minRole:guest", (file, method) => {
@@ -415,39 +385,11 @@ describe("the floors guard a real gate, not just a list", () => {
     );
   });
 
-  it("the KNOWLEDGE lane REQUIRES a membership row, rather than inheriting the public arm", () => {
-    // 🔒 THE LINE THE PLAN NAMED AS THE ONE THAT WILL REGRESS (§3.2 fence 2).
-    // `loadVisibleChannel` RETURNS SUCCESSFULLY with `membership: null` on the
-    // `visibility='public'` arm. A guest does not reach that arm
-    // (`mayReadPublicChannels`), but a workspace VIEWER does — and F-327 says a
-    // public channel can exist inside a container. Without this line such a
-    // viewer, who never joined the channel, would read every knowledge base
-    // granted into it.
-    //
-    // ⚠ SOURCE, not behaviour, and deliberately so: the behavioural proof lives
-    // in `…/knowledge/grant-lane.test.ts`, which drives the real fence. This is
-    // the four-floor list's own belt — the floors above are only safe because
-    // this line exists, so it is asserted where the floors are.
-    const helper = readFileSync(
-      join(import.meta.dirname, "..", "..", "..", "shared", "api", "channel-knowledge-lane.ts"),
-      "utf8"
-    );
-    expect(helper).toMatch(/loadVisibleChannel/);
-    expect(helper).toMatch(/if \(membership === null\) throw channelNotFound\(ref\);/);
-  });
-
-  it("all four knowledge-lane routes go through that ONE helper (no hand-rolled second fence)", () => {
-    // A route that resolved the channel itself would be a fourth copy of the
-    // fence, and the copy is what drifts. Every lane route imports the helper
-    // and none of them names `loadVisibleChannel`.
-    const laneRoutes = GUEST_ALLOWED.filter(([f]) => f.includes("/knowledge/")).map(
-      ([f]) => f
-    );
-    expect(new Set(laneRoutes).size).toBe(3);
-    for (const rel of new Set(laneRoutes)) {
-      const src = stripComments(readFileSync(join(API_ROOT, rel), "utf8"));
-      expect(src, rel).toMatch(/requireChannelKnowledgeContext\(auth\)/);
-      expect(src, rel).not.toMatch(/loadVisibleChannel/);
-    }
-  });
+  // ⚠ **TWO KNOWLEDGE-LANE SOURCE PINS STOOD HERE AND ARE DELETED (R-18,
+  // 2026-09-17)** — one asserting the lane helper demanded a membership row
+  // rather than inheriting `loadVisibleChannel`'s public arm, one asserting all
+  // four lane routes went through that ONE helper. Both named files that no longer
+  // exist. The rule they guarded is unchanged for every SURVIVING route: the
+  // membership fence is `channels/server/service-shared.ts › requireMemberChannel`,
+  // pinned by the case above this comment.
 });

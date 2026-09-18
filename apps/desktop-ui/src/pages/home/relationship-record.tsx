@@ -134,20 +134,12 @@ export function RelationshipRecord({
       // every workspace-level add answers `LINK_CONTAINER_CLOSED`), so "add
       // members" names an operation that cannot happen here at ANY size. The
       // act that CAN happen lives on the Info tab as Add person.
-      // ⚠ NO `knowledge` CAPABILITY — THE FIFTH INFO TAB IS OFF ON THIS SURFACE
-      // (Samuel, 2026-08-27; F-340). It passed `knowledge: true` from M4 to show
-      // the operator exactly what the guest sees, and that cost the info column a
-      // FIFTH tab on a width budget measured for four: the trackless `lg`
-      // `SegmentedControl` leaves ~55px spare at 380px and "Knowledge" wants ~90,
-      // so the row tightened and then SCROLLED.
-      // ⚠ THE OPERATOR LOSES NOTHING HERE, which is the whole reason this is the
-      // side that gives way. The /home Knowledge FACE (`knowledge-panels.tsx`,
-      // the header's own segmented control) is a full surface over the same
-      // bases; the tab was the smaller of two views one click apart.
-      // ⚠ THE GUEST LANE KEEPS ITS TAB (`src/app/c/[workspaceId]/guest-channel.tsx`)
-      // and that asymmetry is deliberate, not an oversight: the tab is the guest's
-      // ONLY way to read a base granted into this channel. Removing it there would
-      // have taken the capability away rather than the duplicate view.
+      // ⚠ THERE IS NO `knowledge` CAPABILITY ANY MORE (Samuel's ruling R-18,
+      // 2026-09-17). This surface stopped passing it on 2026-08-27 (F-340) and
+      // the guest lane on 2026-09-04 (F-666), which left the tab with no host —
+      // so it is deleted rather than parked. The /home Knowledge FACE
+      // (`knowledge-panels.tsx`, the header's own segmented control) is the full
+      // surface over the same bases and is untouched.
       // 🔒 `peerNamedHeader: false` — THE PANE'S HEADER IS THE CHANNEL'S NAME
       // (Samuel, 2026-09-01). The list row and the Info tab were fixed at
       // `home-rows.ts › channelTitle`; this header reads the OTHER counterpart

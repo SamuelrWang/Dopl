@@ -4373,8 +4373,9 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
     consumer (`info-panel.tsx`), and `/api/channels/[channelId]/knowledge/**` has no other client
     caller, so deleting the tab outright would have removed a guest's only access to a base the
     operator granted them. ⚠ **The asymmetry is therefore deliberate and is pinned in BOTH
-    directions** — `knowledge-tab.test.tsx › the capability, per host` reads each host's source
-    and asserts the guest lane HAS the flag and the /home pane does NOT.
+    directions** — a source pin, `the capability, per host`, read each host's source and asserted
+    the guest lane HAD the flag and the /home pane did NOT. ⚠ **That pin and its file are DELETED
+    (R-18, 2026-09-17)**, with the capability itself.
   - ⚠ **THE FIVE-TAB MACHINERY IS NOT DELETED, and that is not an oversight.** `tabsFor`'s
     `knowledge` arm, the `gap-1` tightening and the `overflow-x-auto` residual all still fire —
     the guest lane still renders five tabs, on a column with the same budget. **What is resolved
@@ -6419,7 +6420,7 @@ guard is typed as `repository.ts › UpdateTemplatePatch` so its emptiness test 
 column set it is deciding about.
 
 ⚠ **Id note:** first filed as **F-340**, which is a LIVE and unrelated entry (the channel info
-column's five-tab width budget, cited from INVARIANTS §5 and `channels/components/knowledge-tab.test.tsx`).
+column's five-tab width budget, cited from INVARIANTS §5).
 Renumbered before merge. Ids are never reused; two entries under one id makes both unreadable.
 
 ### F-405 — ✅ RESOLVED 2026-09-01 — `op="await"` filtered out its own account, so a same-account counterparty was invisible
@@ -8179,14 +8180,15 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - **WHAT WAS FIXED IN-REPO, AND IT IS NOT THIS.** The hook swallowed `onerror` into a bare `stop()`; it now maps the code to a word the button wears (`Dictation unavailable` / `Microphone blocked` / `No microphone`), so the control states its own failure. `dopl-desktop-app/main/media-permission.js` closes the unfenced permission default and `NSMicrophoneUsageDescription` + `com.apple.security.device.audio-input` make capture legal in a hardened packaged build — all three were real gaps, and **none of them makes dictation work in Electron.** Recorded here so the next reader does not spend the afternoon on the permission path a second time.
 - ⚠ **WHAT WOULD BE NEEDED**, none of it a config change: build Electron with a Google Speech API key (`GOOGLE_API_KEY` at Chromium build time — a fork of the runtime); OR replace the browser engine with an explicit transcription call from MAIN (a key, a bill and a new dependency, which is exactly what `use-dictation.ts`'s header chose this API to avoid); OR ship an on-device model. **All three are product decisions, not fixes.** The WEB surface is unaffected: Chrome and Safari carry their own engines and dictation works there today.
 - Status: OPEN. Needs Samuel's word on whether the desktop keeps a control that can only report a blocked backend.
-### F-666 — the channel Knowledge tab has ZERO hosts, so its component, its hook and its four routes have no live caller (2026-09-04)
+### F-666 — the channel Knowledge tab has ZERO hosts, so its component, its hook and its four routes have no live caller (2026-09-04) — ✅ RESOLVED 2026-09-17 by Samuel's ruling R-18
 
-- Locations: `src/features/channels/components/knowledge-tab.tsx`, `› use-channel-knowledge.ts`, `› knowledge-lane.ts`, `src/app/api/channels/[channelId]/knowledge/**`, against `channel-surface.tsx › ChannelSurfaceCapabilities.knowledge`.
+- Locations: the Knowledge tab component, its hook, its client lane module and the four `(route, method)` pairs under `src/app/api/channels/[channelId]/knowledge/`, against `channel-surface.tsx › ChannelSurfaceCapabilities`. ⚠ **Every file this entry named is DELETED**, which is why none of them is cited as a path any more.
 - Found during: the web channel page's one-column rebuild (Samuel, 2026-09-04).
 - **THE CAPABILITY LOST ITS LAST HOST.** `/home` stopped passing it on 2026-08-27 (F-340, the width budget); the GUEST lane was the one that remained, on the argument that this tab is a guest's only way to read a base granted into the channel. Samuel's web ruling — *"There should be no Knowledge tab at all for the web: just Info, Threads, and Agents"* — takes that one too. **Nothing is deleted and nothing is dead by accident:** `channelPaneTabs`'s `knowledge` arm, the `gap-1` tightening and the `overflow-x-auto` residual all still work, and the routes are still guest-floored. What no longer exists is a caller.
-- ⚠ **THIS IS NOT A REQUEST TO DELETE IT.** The capability is the surface's ONLY additive flag and the lane behind it is the only per-channel read of granted bases; deleting either forecloses a product answer Samuel has not been asked for (where a guest reads what was shared with them, now that the tab is gone). Recorded so the next reader does not mistake a ruled absence for an oversight — and so a future "unused export" sweep does not take the lane with the face.
-- ⚠ **BOTH DIRECTIONS ARE PINNED**, inverted on the same day: `channels/components/knowledge-tab.test.tsx › the capability, per host` now asserts that NEITHER host passes the flag, reading each host's source with comments stripped.
-- Status: OPEN (ruled absence, not debt to pay down). Re-adding the face needs Samuel's word.
+- ⚠ **THIS ENTRY SAID "THIS IS NOT A REQUEST TO DELETE IT" AND ASKED FOR THE RULING IT GOT.** It argued that deleting the lane forecloses a product answer Samuel had not been asked for — where a guest reads what was shared with them. **He was asked, as R-18, and answered: delete the dead lane.** The question is not foreclosed; it is answered in the other direction, and re-opening it means writing the four fences again.
+- ✅ **RESOLVED 2026-09-17 (R-18).** Deleted: the tab component, its hook, its client lane module, the fifth-tab width branch, `channelPaneTabs`'s `knowledge` arm, the `knowledge` capability, the three route files behind the four floors, the shared route helper that built the lane's request context, the lane's payload service and four now-unreachable gates in `knowledge/server/service-channel-grants.ts`. The two `the capability, per host` source pins went with the file that held them; the properties they guarded are stated in INVARIANTS §5 and §4A.
+- ⚠ **WHAT SURVIVED, DELIBERATELY:** the grant ROW and both of its remaining readers (the KB list's badge, and the agent reach in `shared/tenancy/resource-grant-reach.ts`). See **F-719** for the gap that leaves.
+- Status: RESOLVED. Re-adding the face still needs Samuel's word.
 
 ### F-681 — the ontology PROMPT-FRAMING block has no producer: nothing writes `ctx.ontologies` (2026-09-09) — ✅ RESOLVED 2026-09-09
 
@@ -9939,3 +9941,12 @@ The claim had been restated in five places from one sentence, which is how it su
 - ⚠ **AND IT IS NOT FIXED BY ADDING THE CONSTRAINT BACK.** `20260502120000` made the slug globally unique and `20260504000000` deliberately undid it, minting `public_id` instead; re-imposing global uniqueness would make one account's workspace name deny another's. The honest fixes are (a) refuse an ambiguous slug the way `dopl_kb` does, naming both ids, or (b) resolve slugs only within a kind and require an id across kinds.
 - Proposed resolution: (a). `resolveContainerRef` collects every match rather than the first, and returns a refusal that names each candidate's id and kind — the `ambiguous_slug` precedent, which is already the surface's idiom and already has a described error row for agents to recognise.
 - Status: open. The address grammar shipped without it because a first-match pick is the behaviour that was already there for workspaces; R-32 widened what it applies to, and that widening is what this entry records.
+### F-720 — a knowledge base can be shared INTO a channel and no person can read it there (2026-09-17)
+
+- Location: `src/features/knowledge/server/service-channel-grants.ts › setChannelKnowledgeGrant` (the write), `src/features/knowledge/components/kb-channel-grants-section.tsx` (the control that calls it), against the channel surface — which no longer has any face over a granted base.
+- ⚠ **Id note:** ⚠ **THIS ENTRY WAS FILED ONE NUMBER LOWER AND RENUMBERED ON REBASE.** The wave re-derived the highest id at the start, as this file's header asks — and `master` then advanced mid-wave and claimed that number for an unrelated finding (the `workspaces.slug` entry directly above). ⚠ **RE-DERIVING ONCE AT THE START IS NOT ENOUGH WHEN `master` CAN MOVE UNDER YOU:** re-derive again before you merge. Re-derived at rebase time; wave 1B holds `F-720`–`F-722`.
+- Found during: wave 1B, executing Samuel's ruling **R-18** (delete the hostless `knowledge` capability).
+- **THE MECHANISM.** The `resource_grants` row survives R-18 intact and three things still read it: the workspace KB list badges it (`› getChannelGrantMap`), the list filter uses it (`› listSharedIntoChannelBaseIds`), and an AGENT reaches the base through it (`shared/tenancy/resource-grant-reach.ts`). What R-18 deleted is the only **human, channel-side** read: the Knowledge tab and the four routes under `/api/channels/[channelId]/knowledge/`. So "Share this base into #room" now means "let #room's agents reach it", and for a PERSON in that room it means nothing at all.
+- ⚠ **THIS IS NOT AN ARGUMENT AGAINST R-18.** The ruling is explicit and the lane was unreachable product for two weeks. What is recorded here is the SHAPE the deletion leaves behind: a write whose UI copy promises more than the read side delivers. The fix is a copy or product decision, not a restoration — either the sharing control says what it actually does now (agent reach), or Samuel asks for a channel-side face again, which means writing the four fences from scratch (INVARIANTS §4A states them).
+- ⚠ **AND THE GUEST CASE IS THE SHARP END.** A guest has no workspace surface at all, so for them a granted base is now unreachable by any door. That was the exact argument F-666 made for keeping the lane, and R-18 overrode it — deliberately, and with the consequence stated.
+- Status: OPEN. Needs Samuel's word on which half moves: the sharing control's copy, or a new channel-side read.

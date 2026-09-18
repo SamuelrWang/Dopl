@@ -35,10 +35,6 @@ import { useChannelsSelection } from "./use-channels-selection";
 import { indexMembers } from "./view-model";
 import { ME, PEER, channel, member, thread } from "./test-fixtures";
 
-vi.mock("./knowledge-tab", () => ({
-  ChannelKnowledgeTab: () => <div data-testid="knowledge-tab" />,
-}));
-
 afterEach(cleanup);
 
 const A = "k3v7d2mq";

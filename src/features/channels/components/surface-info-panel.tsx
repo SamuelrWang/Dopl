@@ -178,8 +178,6 @@ export function SurfaceInfoPanel({
       mentionsLoading={data.mentionsLoading}
       onOpenMention={openMention}
       onMarkAllMentionsRead={markAllMentionsRead}
-      // THE KNOWLEDGE TAB (M4) — opt-in, see `ChannelSurfaceCapabilities`.
-      knowledge={capabilities?.knowledge}
       // THE ARTIFACTS FACE (Samuel, 2026-09-16) — opt-in, /home only; same place.
       artifacts={capabilities?.artifacts}
       // CLICK-TO-EDIT NAME + DESCRIPTION (Samuel, 2026-09-16) — see `headerEdit`

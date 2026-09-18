@@ -10,7 +10,6 @@ import { mapRevisionError } from "@/features/revisions/server/http-mapping";
 import {
   AgentWriteDisabledError,
   ChannelGrantInvalidError,
-  ChannelGrantReadOnlyError,
   EntryNotFoundError,
   FolderCycleError,
   FolderNotFoundError,
@@ -100,11 +99,9 @@ export function mapKnowledgeError(err: unknown): HttpError | null {
   if (err instanceof ChannelGrantInvalidError) {
     return new HttpError(400, "CHANNEL_GRANT_INVALID", err.message);
   }
-  // The channel lane's read-only grant — the ONE 4xx there that is not a 404;
-  // see the error class for why concealment has already stopped mattering.
-  if (err instanceof ChannelGrantReadOnlyError) {
-    return new HttpError(403, "CHANNEL_GRANT_READ_ONLY", err.message);
-  }
+  // ⚠ **`CHANNEL_GRANT_READ_ONLY` (403) LEFT THIS MAPPER ON 2026-09-17** with the
+  // channel knowledge lane (R-18). It was the ONE 4xx on that lane that was not a
+  // 404; nothing can throw it now, so the class went with the arm.
   // 🔒 G16 — 400, not 403: the caller is allowed to do this, the REQUEST is
   // incomplete. Shared with the knowledge lane (`knowledge/server/
   // http-mapping.ts`) — one error class, one code, two feature mappers.

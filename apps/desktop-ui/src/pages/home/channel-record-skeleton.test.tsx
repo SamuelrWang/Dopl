@@ -104,9 +104,9 @@ describe("the ghost is the surface's two columns, not a bare transcript", () => 
    *  the row's own answer for channel view with no Knowledge capability, which is
    *  what /home mounts (F-340). A fifth tab moves the ghost with it. */
   it("ghosts the tab row slot for slot, off channelPaneTabs itself", () => {
-    const tabs = channelPaneTabs(false, false);
+    const tabs = channelPaneTabs(false);
     expect(tabs).toHaveLength(4);
-    expect(GHOST).toContain("channelPaneTabs(false, false)");
+    expect(GHOST).toContain("channelPaneTabs(false)");
 
     const { container } = render(<ChannelRecordSkeleton />);
     // The `underline` control's own row (`segmented-control.tsx`): text only,
