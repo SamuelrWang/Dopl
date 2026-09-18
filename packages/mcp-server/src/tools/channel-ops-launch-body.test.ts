@@ -253,9 +253,18 @@ describe("the call itself", () => {
       "THIS CHANNEL'S container",
     );
     expect(TENANCY_RULE).toContain("a home channel IS its own container");
+    // 🔒 **THE RULE IS ABOUT THE NAME PATH, AND SAYING SO IS THE FIX OF
+    // 2026-09-18.** It read "A template resolves ONLY in the container the
+    // channel lives in", which stopped being true for a UUID at B2 (2026-09-02):
+    // `src/features/agent-templates/server/service-resolve-ref.ts` follows an id
+    // through `read-resource.ts › readResourceById` to whichever container of
+    // the caller's it lives in. ⚠ **BOTH HALVES ARE PINNED** — dropping the ID
+    // clause would restore a refusal that tells an agent its Home template
+    // cannot launch here at the moment an id would have worked.
     expect(TENANCY_RULE).toContain(
-      "A template resolves ONLY in the container the channel lives in",
+      "A NAME resolves only in the container the channel lives in",
     );
+    expect(TENANCY_RULE).toContain("an id resolves wherever the row lives");
     // ⚠ AND IT NAMES NO PLACE, because it CANNOT: this refusal came back from a
     // DESKTOP over a closed vocabulary with no detail field, so the honest
     // classification `template-resolve.js` made stays a local log. The RULE

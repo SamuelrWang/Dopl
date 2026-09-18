@@ -36,11 +36,19 @@ const enc = encodeURIComponent;
  */
 export async function listKbBasesPayload(
   t: DoplTransport,
-  opts: { shelf?: KbShelf } = {}
+  opts: { shelf?: KbShelf; channelId?: string } = {}
 ): Promise<KnowledgeBaseListPayload> {
-  const qs = opts.shelf ? `?shelf=${enc(opts.shelf)}` : "";
+  // ⚠ `channelId` IS WHAT MAKES `channelGrants` APPEAR, and its absence is why
+  // the key is absent — see {@link KnowledgeBaseListPayload.channelGrants}. The
+  // route FENCES the channel (`isChannelVisibleTo`) before it reads a grant, and
+  // answers an invisible one exactly as it answers an unknown one.
+  const qs = new URLSearchParams();
+  if (opts.shelf) qs.set("shelf", opts.shelf);
+  if (opts.channelId) qs.set("channelId", opts.channelId);
+  const query = qs.toString();
+  const suffix = query ? `?${query}` : "";
   return t.request<KnowledgeBaseListPayload>(
-    `/api/knowledge/bases${qs}`,
+    `/api/knowledge/bases${suffix}`,
     { toolName: "kb_list_bases" }
   );
 }

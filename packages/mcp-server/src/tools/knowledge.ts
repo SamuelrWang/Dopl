@@ -276,7 +276,7 @@ export function registerKnowledgeTools(
     async (args): Promise<ToolResponse> => {
       switch (args.op) {
         case "list_bases":
-          return opListBases(client);
+          return opListBases(client, directory);
         case "get_tree": {
           const miss = missingParams("get_tree", args, ["base"]);
           if (miss) return miss;

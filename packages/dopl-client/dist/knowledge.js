@@ -35,8 +35,18 @@ const enc = encodeURIComponent;
  * for never reaches the wire.
  */
 async function listKbBasesPayload(t, opts = {}) {
-    const qs = opts.shelf ? `?shelf=${enc(opts.shelf)}` : "";
-    return t.request(`/api/knowledge/bases${qs}`, { toolName: "kb_list_bases" });
+    // ⚠ `channelId` IS WHAT MAKES `channelGrants` APPEAR, and its absence is why
+    // the key is absent — see {@link KnowledgeBaseListPayload.channelGrants}. The
+    // route FENCES the channel (`isChannelVisibleTo`) before it reads a grant, and
+    // answers an invisible one exactly as it answers an unknown one.
+    const qs = new URLSearchParams();
+    if (opts.shelf)
+        qs.set("shelf", opts.shelf);
+    if (opts.channelId)
+        qs.set("channelId", opts.channelId);
+    const query = qs.toString();
+    const suffix = query ? `?${query}` : "";
+    return t.request(`/api/knowledge/bases${suffix}`, { toolName: "kb_list_bases" });
 }
 /**
  * The rows alone. ⚠ DELEGATES to {@link listKbBasesPayload} rather than issuing

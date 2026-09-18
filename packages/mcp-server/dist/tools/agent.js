@@ -291,7 +291,7 @@ directory) {
     register("dopl_agent", AGENT_DESCRIPTION, AGENT_INPUT_SHAPE, async (args) => {
         switch (args.op) {
             case "list":
-                return (0, agent_ops_read_js_1.opList)(client);
+                return (0, agent_ops_read_js_1.opList)(client, directory);
             case "get": {
                 const miss = (0, respond_js_1.missingParams)("get", args, ["template"]);
                 if (miss)

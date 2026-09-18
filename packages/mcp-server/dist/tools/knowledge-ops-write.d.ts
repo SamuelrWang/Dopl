@@ -30,7 +30,10 @@ export declare function opCreateBase(client: DoplClient, callerUserId: string | 
     description?: string;
     visibility?: "public" | "private";
     confirm_token?: string;
-}): Promise<ToolResponse>;
+}, 
+/** ⚠ OPTIONAL — absent means "not known": the create goes out unshared and
+ *  the SERVER refuses it (`container-destination.ts`). */
+directory?: WorkspaceDirectory): Promise<ToolResponse>;
 export declare function opUpdateBase(client: DoplClient, ref: string, name?: string, description?: string | null, slug?: string): Promise<ToolResponse>;
 /**
  * ⚠ **THE OTHER PUBLISHING DOOR, AND IT IS NOT PREVIEWED HERE — DELIBERATELY,

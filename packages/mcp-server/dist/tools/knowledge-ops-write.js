@@ -18,6 +18,7 @@ const respond_1 = require("./respond");
 const knowledge_shared_1 = require("./knowledge-shared");
 const channel_shared_1 = require("./channel-shared");
 const confirm_token_1 = require("./confirm-token");
+const container_destination_1 = require("./container-destination");
 const knowledge_sections_1 = require("./knowledge-sections");
 const grant_1 = require("./grant");
 /*
@@ -84,7 +85,15 @@ function agentCreateForbidden(e) {
  *    long before this wave, and gating one door and not the other would be
  *    theatre.
  */
-async function opCreateBase(client, callerUserId, input) {
+async function opCreateBase(client, callerUserId, input, 
+/** ⚠ OPTIONAL — absent means "not known": the create goes out unshared and
+ *  the SERVER refuses it (`container-destination.ts`). */
+directory) {
+    // 🔒 **DESTINATION 2, IN ONE SERVER CALL** (Samuel, 2026-09-18; the model is
+    // `container-destination.ts`'s header). A home channel holds only what is
+    // SHARED into it. ⚠ **THE BASE STAYS `private` AND THE GRANT IS THE AUDIENCE**,
+    // which is why this does not touch `visibility` as the template lane does.
+    const shareToChannelId = await (0, container_destination_1.resolveChannelShareTarget)(client, directory);
     // 🔒 **ALWAYS SENT, NEVER LEFT TO THE SERVER'S DEFAULT** (2026-09-02) — the same
     // rule and the same reason as `agent-ops-write.ts › opCreate`, which states it
     // in full: the server's default is credential-dependent, this process cannot
@@ -103,6 +112,8 @@ async function opCreateBase(client, callerUserId, input) {
             name: input.name,
             description: input.description ?? null,
             visibility,
+            // ⚠ ON THE DIGEST: a token is bound to what LANDS, grant included.
+            shareToChannelId: shareToChannelId ?? null,
         },
     }, {
         publishes: visibility === "public",
@@ -131,6 +142,9 @@ async function opCreateBase(client, callerUserId, input) {
                     name: input.name,
                     description: input.description,
                     visibility,
+                    // ⚠ PART OF THE CONFIRMED BODY: without it a dry run previews an
+                    // act the gate forbids (2026-09-18).
+                    shareToChannelId,
                     acknowledgeShared: true,
                 });
             }
@@ -157,6 +171,8 @@ async function opCreateBase(client, callerUserId, input) {
             name: input.name,
             description: input.description,
             visibility,
+            // 🔒 DESTINATION 2, ATOMIC — the base rolls back if the grant fails.
+            shareToChannelId,
             // 🔒 G16 — THE TOKEN, SPENT, BECOMES THE SERVER'S PRECONDITION. Only ever
             // `true`, and only from a token this call actually consumed. See
             // `confirm-token.ts › ConfirmVerdict`.
@@ -174,6 +190,10 @@ async function opCreateBase(client, callerUserId, input) {
         const ceiling = agentCreateForbidden(e);
         if (ceiling)
             return (0, respond_1.err)(ceiling);
+        // 🔒 The destination fence (2026-09-18): the probe fails open, so this is
+        const unshared = (0, container_destination_1.homeChannelRowNotShared)(e); // the SERVER refusing.
+        if (unshared)
+            return unshared;
         // 🔒 G16 — only ever a RACE here: the gate above already previewed and spent
         // a token, so reaching this means the room gained a member in between.
         const unacknowledged = (0, confirm_token_1.containerPublishUnacknowledged)(e, confirm_token_1.RECONFIRM_REMEDY);
@@ -181,9 +201,12 @@ async function opCreateBase(client, callerUserId, input) {
             return unacknowledged;
         throw e;
     }
-    const visNote = base.visibility === "private"
-        ? "Private to you — only you and your agent can see it."
-        : "Visible to the whole workspace.";
+    // ⚠ THE GRANT IS THE AUDIENCE (2026-09-18): a shared base is stored `private`.
+    const visNote = shareToChannelId
+        ? "Shared in this channel — everyone here can read it."
+        : base.visibility === "private"
+            ? "Private to you — only you and your agent can see it."
+            : "Visible to the whole workspace.";
     return (0, respond_1.ok)(`Created knowledge base ${(0, narration_1.inlineOr)(base.name, narration_1.NO_NAME)} (slug: \`${base.slug}\`). ${visNote}`);
 }
 async function opUpdateBase(client, ref, name, description, slug) {

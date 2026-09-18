@@ -58,6 +58,17 @@ vi.mock("@/shared/tenancy/read-resource", () => ({
   readResourceById: vi.fn(),
 }));
 
+// ⚠ **NEW ON 2026-09-18, AND FOR THE SAME REASON THE PERSONAL FENCE ABOVE IS
+// MOCKED.** A private create now asks
+// `workspaces/server/home-channel-destination.ts › assertHomeChannelRowIsShared`
+// where the row is LANDING, and that reads the workspace row. Answered
+// `personal` here — this file's whole subject is the personal shelf, which is
+// destination 1 and the one the fence must never refuse. Every direction of the
+// rule is `workspaces/server/home-channel-destination.test.ts`.
+vi.mock("@/features/workspaces/server/repository", () => ({
+  findWorkspaceById: vi.fn(async () => ({ id: "ws-personal", kind: "personal" })),
+}));
+
 import * as repo from "./repository";
 import { readResourceById } from "@/shared/tenancy/read-resource";
 import { listTemplates } from "./service-reads";

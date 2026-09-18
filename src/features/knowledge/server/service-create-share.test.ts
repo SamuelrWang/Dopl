@@ -45,8 +45,14 @@ vi.mock("./service-channel-grants", () => ({
   setChannelKnowledgeGrant: vi.fn(),
 }));
 
+// ⚠ **`findWorkspaceById` ADDED 2026-09-18**: a private create now asks
+// `workspaces/server/home-channel-destination.ts › assertHomeChannelRowIsShared`
+// where the row is LANDING. Answered as a STANDARD workspace, which the rule
+// leaves alone — every direction of it is
+// `workspaces/server/home-channel-destination.test.ts`.
 vi.mock("@/features/workspaces/server/repository", () => ({
   findDefaultWorkspaceForUser: vi.fn(),
+  findWorkspaceById: vi.fn(async () => ({ id: "ws-1", kind: "standard" })),
 }));
 
 vi.mock("@/features/teams/server/repository", () => ({
@@ -59,6 +65,7 @@ vi.mock("@/features/teams/server/repository", () => ({
 
 import * as repo from "./repository";
 import { setChannelKnowledgeGrant } from "./service-channel-grants";
+import { findWorkspaceById } from "@/features/workspaces/server/repository";
 import { createBase } from "./service-base-writes";
 
 const mockRepo = vi.mocked(repo);
@@ -89,6 +96,11 @@ beforeEach(() => {
   mockRepo.insertBase.mockResolvedValue(CREATED);
   mockRepo.hardDeleteBase.mockResolvedValue(undefined as never);
   mockGrant.mockResolvedValue({ level: "visible", guestWrite: false });
+  // ⚠ RESET PER CASE, because two cases below point it at a `link` container:
+  // a kind that leaked into the next test would refuse a create that is fine.
+  vi.mocked(findWorkspaceById).mockResolvedValue(
+    { id: WS, kind: "standard" } as never
+  );
 });
 
 describe("createBase with shareToChannelId", () => {
@@ -130,6 +142,34 @@ describe("createBase with shareToChannelId", () => {
     await expect(
       createBase(CTX, { name: "Handover", shareToChannelId: CHANNEL })
     ).rejects.toBe(boom);
+  });
+
+  it("🔒 A HOME CHANNEL REFUSES AN UNSHARED PRIVATE CREATE — the destination fence", async () => {
+    // 🔒 Samuel's ruling, 2026-09-18: a `kind='link'` container holds only what
+    // is shared into it, so `private` with no `shareToChannelId` names the
+    // destination he deleted. ⚠ THE WIRING CASE — this feature answers "shared"
+    // with the GRANT where the template lane answers with the audience column;
+    // the rule itself is `workspaces/server/home-channel-destination.test.ts`.
+    vi.mocked(findWorkspaceById).mockResolvedValue(
+      { id: WS, kind: "link" } as never
+    );
+    await expect(createBase(CTX, { name: "Orphan" })).rejects.toMatchObject({
+      code: "HOME_CHANNEL_ROW_NOT_SHARED",
+    });
+    // ⚠ NOTHING LANDED. The fence runs with the other pre-write gates, above
+    // the slug read, so a refusal costs no slug and cannot half-land.
+    expect(mockRepo.insertBase).not.toHaveBeenCalled();
+  });
+
+  it("…and the create-AND-SHARE in that same channel is allowed", async () => {
+    // ⚠ THE OTHER DIRECTION, which is the whole point: destination 2 exists and
+    // this is the only call shape that reaches it.
+    vi.mocked(findWorkspaceById).mockResolvedValue(
+      { id: WS, kind: "link" } as never
+    );
+    await expect(
+      createBase(CTX, { name: "Handover", shareToChannelId: CHANNEL })
+    ).resolves.toBeTruthy();
   });
 
   it("leaves an ordinary create untouched — no grant, no rollback path", async () => {

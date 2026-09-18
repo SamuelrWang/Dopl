@@ -336,7 +336,7 @@ export function registerAgentTools(
     async (args): Promise<ToolResponse> => {
       switch (args.op) {
         case "list":
-          return opList(client);
+          return opList(client, directory);
         case "get": {
           const miss = missingParams("get", args, ["template"]);
           if (miss) return miss;

@@ -46,10 +46,25 @@ export const WORKSPACE_ARG_DESCRIPTION =
  * ⚠ **THE DEFAULT IS NAMED, AND THAT IS THE BUDGET-NEUTRAL HALF OF THE
  * RULING.** "home is structural, never a prompt line" means the resolver
  * decides it; what the agent still cannot derive from anywhere else is WHICH
- * container an omitted argument lands in, and three words say it.
+ * container an omitted argument lands in, and a few words say it.
+ *
+ * 🔒 **AND `home` IS NOT "YOUR DEFAULT" — IT SAID SO UNTIL 2026-09-18, AND THAT
+ * WAS FALSE FOR EVERY AGENT RUNNING INSIDE A CHANNEL.** A connection bound to a
+ * container (`X-Workspace-Id`) lands THERE, which `instructions.ts` states
+ * correctly on the very same connection — *"every call lands there unless it
+ * names another"*. Two served strings disagreeing about where an unaddressed
+ * create goes is how the orphan class got minted: an agent reading "your
+ * default" believed its bare `op="create"` landed on its own shelf while it was
+ * landing in the channel's container. **The two strings now say one thing**, and
+ * they say it in ONE place: this string names what `home` IS, and where an
+ * OMITTED argument lands is `instructions.ts`'s sentence — *"every call lands
+ * there unless it names another"* — which is pushed once and knows whether this
+ * connection is bound. ⚠ The ceiling below this file is a ratchet that only
+ * moves down (`container-addressing.test.ts › CONTAINER_ARG_MAX_CHARS`), so
+ * restating it here was never the available fix.
  */
 export const CONTAINER_ARG_DESCRIPTION =
-  "Container for list/create: slug, id, or `home` (your default). Ignored elsewhere.";
+  "Container for list/create: slug, id, or `home` (home space). Ignored elsewhere.";
 
 /**
  * 🔒 **THE DEPRECATED ALIAS CARRIES NO DESCRIPTION AT ALL, AND THAT IS A

@@ -48,9 +48,17 @@ export const LAUNCH_INPUT_FIELDS = {
       // the rest of the launch contract and the refusal table it belongs to. It
       // is the one genuine MOVE in this slice — the sentence had no second home,
       // so it was WRITTEN there before it was cut here.
-      // ⚠ "THIS CHANNEL'S container" IS PINNED on this describe by
-      // `channel-ops-launch-body.test.ts:232` and stays verbatim.
-      'op="manage" action="launch" (optional): the AGENT TEMPLATE the new agent runs as — its id, or its exact name. It resolves in THIS CHANNEL\'S container under THE OPERATOR\'S visibility. Omit it to start a blank agent.',
+      // 🔒 **"IT RESOLVES IN THIS CHANNEL'S container" WAS FALSE FOR AN ID, AND
+      // HAD BEEN SINCE B2 (2026-09-02), FIXED 2026-09-18.** Ruling #18 made
+      // `src/features/agent-templates/server/service-resolve-ref.ts ›
+      // resolveTemplateRef` follow a UUID through `read-resource.ts ›
+      // readResourceById` — "a personal template launches anywhere its owner
+      // is", in that file's own words — while only the NAME path stayed keyed to
+      // `ctx.workspaceId`. Two test agents read this sentence and concluded Home
+      // templates were unusable in a channel, which is the opposite of what the
+      // code does. ⚠ The ID/NAME split is the load-bearing half and is pinned by
+      // `channel-ops-launch-body.test.ts`.
+      'op="manage" action="launch" (optional): the AGENT TEMPLATE the new agent runs as, under THE OPERATOR\'S visibility. An ID resolves wherever it lives; a NAME, in THIS CHANNEL\'S container. Omit for a blank agent.',
     ),
 
   // ⚠ Declared in `channel-ops-launch-color.ts` (one file, one rule; §1's cap). Argument there.

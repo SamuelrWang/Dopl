@@ -137,6 +137,24 @@ export interface KnowledgeBaseListPayload {
    * card is marked", which is what the surface showed before the key existed.
    */
   pinnedBaseIds?: string[];
+  /**
+   * 🔒 **WHICH OF THESE BASES ARE SHARED INTO ONE CHANNEL** — present ONLY when
+   * the read named a `channelId`, absent otherwise.
+   *
+   * ⚠ **ABSENT AND `{}` ARE DIFFERENT ANSWERS, AND THE DIFFERENCE IS THE POINT**
+   * (the server states it too): absent means NOT ASKED, `{}` means asked and
+   * none granted. A reader that collapses the two reports "nothing is shared in
+   * this channel" about a call that never asked.
+   *
+   * ⚠ Same `?? EMPTY` rule as the two id lists above (INVARIANTS §8) — an older
+   * server sends no such key and this response is cached.
+   *
+   * ⚠ **THE VALUE IS DELIBERATELY LOOSE.** Every SDK reader asks only whether a
+   * key is PRESENT; mirroring `src/features/knowledge/types.ts ›
+   * ChannelResourceGrant`'s level union here would be a hand-copy with no gate
+   * over it, bought for a field nothing in this package reads.
+   */
+  channelGrants?: Record<string, { level: string; guestWrite: boolean }>;
 }
 
 /**
@@ -218,6 +236,23 @@ export interface KnowledgeBaseCreateInput {
    * rather than downgrading. Omitted/false = the container the call is in.
    */
   homeScoped?: boolean;
+  /**
+   * 🔒 **CREATE THE BASE *AND* SHARE IT INTO THIS CHANNEL, IN ONE CALL** —
+   * DESTINATION 2, and the only way to reach it (Samuel's rulings 2026-08-27
+   * and 2026-09-18). Mirrors `src/features/knowledge/schema.ts ›
+   * KnowledgeBaseCreateSchema.shareToChannelId`.
+   *
+   * The grant is always `level: 'visible'`, `guestWrite: false`, and the base is
+   * rolled back if it fails — so this never half-lands. It is what the /home
+   * Shared section's create button sends, and since 2026-09-18 a `kind='link'`
+   * container REFUSES a private create without it
+   * (`features/workspaces/server/home-channel-destination.ts`).
+   *
+   * ⚠ NOT the same question as `acknowledgeShared` below: this asks for ONE
+   * channel's grant row while the base stays private, that one is the WORKSPACE
+   * axis — every member of the container at once.
+   */
+  shareToChannelId?: string;
   /**
    * 🔒 "I know this publishes into a room somebody else is standing in."
    *

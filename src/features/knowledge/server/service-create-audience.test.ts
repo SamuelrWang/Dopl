@@ -31,6 +31,17 @@ vi.mock("@/shared/supabase/admin", () => ({
   supabaseAdmin: () => ({ __marker: "admin-client" }),
 }));
 
+// ⚠ **`findWorkspaceById` MOCKED SINCE 2026-09-18**: a private create now asks
+// `workspaces/server/home-channel-destination.ts › assertHomeChannelRowIsShared`
+// where the row is LANDING, and that reads the workspace row. Answered as a
+// STANDARD workspace, the kind the rule leaves alone, so this file keeps
+// measuring its own subject — every direction of the rule itself is
+// `workspaces/server/home-channel-destination.test.ts`.
+vi.mock("@/features/workspaces/server/repository", () => ({
+  findWorkspaceById: vi.fn(async () => ({ id: "ws-1", kind: "standard" })),
+}));
+
+
 vi.mock("./repository-audience", () => ({
   findWorkspaceKind: vi.fn(),
   countActiveWorkspaceMembers: vi.fn(),

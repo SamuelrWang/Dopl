@@ -24,6 +24,18 @@ import {
   KB_SECTION_NUDGE_CHARS,
   type Outline,
 } from "./knowledge-sections";
+import {
+  DESTINATION_HEADINGS,
+  resolveHomeChannelContainer,
+  resolveHomeChannelId,
+} from "./container-destination";
+import type { WorkspaceDirectory } from "../workspace-directory";
+
+/** ⚠ §8 STALE-CACHE, SPELLED INLINE. ⚠ **ONE FROZEN EMPTY, NOT TWO** — a set of
+ *  personal ids has the same meaning empty as absent, so `homeScopedBaseIds`
+ *  takes a fallback. `channelGrants` does NOT get one: see {@link opListBases}
+ *  for why absent and `{}` are different answers there. */
+const EMPTY_BASE_IDS: readonly string[] = Object.freeze([]);
 
 /**
  * ⚠ WHAT IS AND ISN'T NEUTRALIZED IN A KNOWLEDGE READ. A published base is
@@ -63,23 +75,94 @@ const BASES_SCOPE_NOTE = `_Bases you can READ here. Another member's private bas
  * op could ask and became the tenancy the call is already in. Labelling rows
  * that are all in one container is chrome, and F-342's rule (the unfiltered MCP
  * read is the right one) is now the only rule there is.
+ *
+ * 🔒 **"ALL IN ONE CONTAINER" STOPPED BEING TRUE ON 2026-09-06, AND THE LABEL
+ * IS BACK AS A HEADING (2026-09-18).** Gap 1 of #1077 widened
+ * `src/shared/tenancy/personal-container.ts › resolveShelfScope` so an
+ * UNFILTERED read returns the calling container PLUS the caller's own personal
+ * one — two tenancies in one list, under one undifferentiated heading, for
+ * twelve days. The container is the FIRST axis now, off the
+ * `homeScopedBaseIds` sibling key this op used to discard; the twin correction
+ * is `agent-ops-read.ts › opList`.
  */
-export async function opListBases(client: DoplClient): Promise<ToolResponse> {
-  const bases = (await client.listKbBasesPayload()).bases;
+export async function opListBases(
+  client: DoplClient,
+  /** ⚠ OPTIONAL — see `container-destination.ts ›
+   *  resolveHomeChannelContainer`: absent means "not known", so no `channelId`
+   *  is sent and the grant split is not attempted. */
+  directory?: WorkspaceDirectory,
+): Promise<ToolResponse> {
+  // 🔒 **THE CHANNEL IS ASKED FOR, SO THE GRANTS COME BACK** (2026-09-18). In a
+  // home channel "shared" is a `channel_resource_grants` row and NOT the
+  // visibility column, so a list that never named the channel could not tell
+  // destination 2 from the legacy rows sitting beside it — and rendered both as
+  // "private". `channelGrants` is present only when `channelId` was sent, which
+  // is why an ABSENT key and an empty one must not be collapsed.
+  const container = await resolveHomeChannelContainer(client, directory);
+  const channelId = container
+    ? ((await resolveHomeChannelId(client, container)) ?? undefined)
+    : undefined;
+  const payload = await client.listKbBasesPayload({ channelId });
+  const bases = payload.bases;
   if (bases.length === 0)
     return ok(
       `No knowledge bases visible to you here. ${BASES_SCOPE_NOTE}\n\nCreate one with \`dopl_kb(op='create_base')\`.`,
     );
+  // ⚠ §8 STALE-CACHE, SPELLED INLINE. A payload from a bundle that predates
+  // either sibling key carries no such key, and BOTH read as "not asked" rather
+  // than as "none": an absent `homeScopedBaseIds` files no row under the
+  // personal heading, and an absent `channelGrants` skips the channel split
+  // entirely. Neither can crash and neither states a shelf or a grant it did not
+  // measure.
+  const personalIds = new Set(payload.homeScopedBaseIds ?? EMPTY_BASE_IDS);
+  // 🔒 **THE SPLIT KEYS ON THE ANSWER, NOT ON THE QUESTION.** Asking with a
+  // `channelId` and grouping on that would file EVERY row under LEGACY whenever
+  // the key came back absent — stating a grant fact this response never carried,
+  // which is the exact inversion the paragraph above forbids. `undefined` here
+  // means NOT ANSWERED and the channel split is skipped; `{}` means answered,
+  // none granted, and the split is correct.
+  const grants = payload.channelGrants;
+  const personal = bases.filter((b) => personalIds.has(b.id));
+  const here = bases.filter((b) => !personalIds.has(b.id));
+
+  // 🔒 **CONTAINER FIRST, THEN THE GRANT** (Samuel's ruling 2026-09-18): the two
+  // destinations are two CONTAINERS, and inside a home channel the only question
+  // left is whether the row is shared into it.
+  // ⚠ THE HEADINGS ARE `container-destination.ts › DESTINATION_HEADINGS`, the
+  // same table the template lane reads its own wording from — two surfaces
+  // naming one destination differently is how an agent learns a sharing model
+  // the operator does not have.
+  const groups: Array<readonly [string | null, typeof bases]> =
+    grants === undefined
+      ? [[null, here]]
+      : [
+          [
+            DESTINATION_HEADINGS.shared,
+            here.filter((b) => grants[b.id] !== undefined),
+          ],
+          [
+            DESTINATION_HEADINGS.legacy,
+            here.filter((b) => grants[b.id] === undefined),
+          ],
+        ];
   const lines = ["## Knowledge bases\n"];
-  for (const b of bases) {
-    // ⚠ Immutable id beside the slug — the slug changes on rename.
-    const vis = b.visibility === "private" ? "private" : "public";
-    const desc = b.description ? `\n  ${inlineOr(b.description, "")}` : "";
-    lines.push(
-      `- ${inlineOr(b.name, NO_NAME)} (slug: \`${b.slug}\` · id: \`${b.id}\` · ${vis})${desc}`,
-    );
+  for (const [heading, rows] of [
+    ...groups,
+    [DESTINATION_HEADINGS.personal, personal] as const,
+  ]) {
+    if (rows.length === 0) continue;
+    if (heading !== null) lines.push(`### ${heading}`);
+    for (const b of rows) {
+      // ⚠ Immutable id beside the slug — the slug changes on rename.
+      const vis = b.visibility === "private" ? "private" : "public";
+      const desc = b.description ? `\n  ${inlineOr(b.description, "")}` : "";
+      lines.push(
+        `- ${inlineOr(b.name, NO_NAME)} (slug: \`${b.slug}\` · id: \`${b.id}\` · ${vis})${desc}`,
+      );
+    }
+    lines.push("");
   }
-  lines.push("", BASES_SCOPE_NOTE);
+  lines.push(BASES_SCOPE_NOTE);
   return ok(lines.join("\n"));
 }
 

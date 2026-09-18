@@ -14,6 +14,7 @@ import type { KbShelf, KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseLis
  */
 export declare function listKbBasesPayload(t: DoplTransport, opts?: {
     shelf?: KbShelf;
+    channelId?: string;
 }): Promise<KnowledgeBaseListPayload>;
 /**
  * The rows alone. ⚠ DELEGATES to {@link listKbBasesPayload} rather than issuing

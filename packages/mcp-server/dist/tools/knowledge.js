@@ -234,7 +234,7 @@ directory) {
     register("dopl_kb", KB_DESCRIPTION, KB_INPUT_SHAPE, async (args) => {
         switch (args.op) {
             case "list_bases":
-                return (0, knowledge_ops_read_1.opListBases)(client);
+                return (0, knowledge_ops_read_1.opListBases)(client, directory);
             case "get_tree": {
                 const miss = (0, respond_1.missingParams)("get_tree", args, ["base"]);
                 if (miss)

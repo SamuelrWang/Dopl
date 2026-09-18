@@ -14,6 +14,10 @@ import type {
 // shared with `knowledge/server/service-base-writes.ts`. Two copies of a
 // tenancy predicate is how the shelf fence ended up divergent (findings §6 #3).
 import { assertSharedPublishAcknowledged } from "@/features/workspaces/server/shared-publish";
+// 🔒 The ONE statement of "a home channel holds only what is shared into it",
+// shared with `knowledge/server/service-base-gates.ts` for the same reason the
+// line above it is shared — see that module's header for the ruling.
+import { assertHomeChannelRowIsShared } from "@/features/workspaces/server/home-channel-destination";
 import {
   TemplateTeamScopeAgentForbiddenError,
   TemplateTeamNotGrantableError,
@@ -132,6 +136,20 @@ export async function createTemplate(
     publishes: visibility === "workspace",
     acknowledged: input.acknowledgeShared,
     noun: "agent",
+  });
+
+  // 🔒 **THE THIRD DESTINATION DOES NOT EXIST** (Samuel, 2026-09-18) — a
+  // `private` template inside a home channel is listed by nothing, because
+  // `lib/visibility.ts › SECTIONS_CONTAINER` stopped offering the value on
+  // 2026-08-27 and a container has no Agents page of its own. That ruling
+  // trimmed ONE array in the editor and left every other door open; this is the
+  // server half. ⚠ THE DESTINATION, like both gates above it: a row re-routed to
+  // the personal container is destination 1 and must not be refused.
+  await assertHomeChannelRowIsShared({
+    workspaceId: destination.workspaceId,
+    shared: visibility !== "private",
+    noun: "agent template",
+    remedy: 'visibility: "workspace"',
   });
 
   const template = await repo.insertTemplate({
@@ -254,6 +272,20 @@ export async function updateTemplate(
     publishes: patch.visibility === "workspace",
     acknowledged: patch.acknowledgeShared,
     noun: "agent",
+  });
+
+  // 🔒 **THE UPDATE TWIN OF THE CREATE'S HOME-CHANNEL FENCE** (Samuel,
+  // 2026-09-18). A create fence with no update twin is a fence defeated in two
+  // calls — F-289's own argument, which this file already makes twice.
+  // ⚠ `nextVisibility`, so a patch that leaves a row already `private` in a home
+  // channel alone is refused too. That is deliberate and it is the narrow
+  // reading of "do not touch the orphans": nothing MIGRATES them, and the first
+  // write that reaches one has to move it to a destination that exists.
+  await assertHomeChannelRowIsShared({
+    workspaceId: tplCtx.workspaceId,
+    shared: nextVisibility !== "private",
+    noun: "agent template",
+    remedy: 'visibility: "workspace"',
   });
 
   // VISIBILITY TRANSITIONS ARE FREE FOR THE OWNER, in any direction —

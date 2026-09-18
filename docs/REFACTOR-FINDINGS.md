@@ -10158,3 +10158,32 @@ The claim had been restated in five places from one sentence, which is how it su
 - ⚠ **`channels.deleted_at` AND `chats.deleted_at` ARE NOT IN SCOPE AND ARE NOT INERT.** Five live RLS policies filter on `channels.deleted_at IS NULL` (`channels_member_select` and the four child-table SELECT policies that `EXISTS`-join it), and `channels/server/repository-{account,await-workspace}.ts` call the filter *"not optional"*. Whatever the channel lifecycle means by it, it is a different question from this one.
 - Proposed resolution: ONE migration per feature, each `DROP COLUMN ... CASCADE`-free and paired with the explicit index rebuilds, ordered rebuild-then-drop; the knowledge/skills one lands WITH the `@dopl/client` field removal, a `dist/` rebuild and a `check-knowledge-type-drift.ts` run in the same commit, or the gate goes red on a published package.
 - Status: **OPEN.** The inert state is pinned by `src/features/knowledge/soft-delete-retired.test.ts`, which replays the migration directory and asserts the six functions and two triggers are gone, that `cascade_hard_delete_folder` survives, and that every FK to `knowledge_bases` is `ON DELETE CASCADE`. MUTATION-VERIFY: 1 revert (remove `20261013120000` from the directory), 9 failures, 0 vacuous (2026-09-18).
+
+### F-734 — a peer cannot see a row shared into a channel from another container (2026-09-18)
+
+- Location: `src/features/knowledge/server/resource-grant-reach.ts › ` the container-equality clause; the stale comment is `apps/desktop-ui/src/pages/home/agent-share.tsx`'s header.
+- Found during: the two-destinations wave, reading the grant lane end to end for `dopl_agent op="grant"`.
+- **FILED, NOT FIXED** — Samuel's ruling of 2026-09-18 is about CREATE destinations, and this is the GRANT lane's reach. Recording it here rather than widening a grant predicate inside a wave that was not about them.
+- The shape: a grant filed on a channel names the channel's container, and the reach read asks for rows in that same container — so a row LENT from the operator's personal container carries a grant the peer's read does not follow. The /home card offers the lend, the server writes the row, and the peer sees nothing; there is no error anywhere.
+- ⚠ **AND THE CARD'S OWN HEADER STILL DESCRIBES THE RETIRED COPY SEMANTICS** in one clause, which is the second half of why the behaviour reads as intended: `agent-share.tsx`'s docblock was written when sharing was a two-leg copy (B11 replaced it with a grant on 2026-09-02, and `agent-panels.tsx › PERSONAL_CAPTION` was corrected then — F-471 — while this file was not).
+- Proposed resolution: decide whether a `channel` grant reaches ACROSS containers at all. If it does, the reach read follows the grant rather than the tenancy; if it does not, the /home card must not offer the lend for a personal row. **Samuel's call — the two answers are different products.**
+- Status: OPEN.
+
+### F-735 — the orphan rows the destination fence does not migrate (2026-09-18)
+
+- Location: `agent_templates` rows with `visibility='private'` in a `kind='link'` workspace; `knowledge_bases` rows in one with no `channel_resource_grants` row. Measured 2026-09-18: **6 templates, 8 bases** (a count, so carry its date, and re-derive before acting).
+- Found during: the wave that closed the door — `src/features/workspaces/server/home-channel-destination.ts`.
+- **THE DOOR IS SHUT AND THE ROOM IS NOT SWEPT, DELIBERATELY.** Nothing in that change deletes, moves or re-visibilities an existing row: a cleanup is a data migration over rows somebody may still want, and Samuel has not been asked. What the change DOES do is stop them being read as live — `container-destination.ts › DESTINATION_HEADINGS.legacy` files them under *"Legacy — not visible anywhere in the app"* on both list surfaces, so an agent stops treating them as reachable.
+- ⚠ **THEY ARE STILL WRITEABLE-ADJACENT IN ONE DIRECTION**: `updateTemplate` now refuses a patch that LEAVES a template private inside a channel, so the first write to reach one has to move it to a destination that exists. That is the narrow reading of "do not touch them" — no sweep, but no fresh edits filed into the dead slot either.
+- Proposed resolution: ask Samuel for one of — move them to the owner's personal container, flip the templates to `visibility='workspace'` and grant the bases into their channel, or delete them. Then one migration, in its own change.
+- Status: OPEN — needs Samuel's word before anything runs.
+
+### F-736 — `appliedAgentName` collapses ABSENT and NULL, so a launch prints `name="(not applied)"` (2026-09-18)
+
+- Location: `src/features/channels/server/service-launch-dto.ts › ` the `applied_agent_name ?? null` projection, read by `packages/mcp-server/src/tools/channel-ops-launch-name.ts › launchedName`.
+- Found during: the two-destinations wave, on a report that a launch result printed `name="(not applied)"` for an agent whose name WAS applied.
+- **THE THREE-CASE RENDER IS A TWO-CASE RENDER ON THE WIRE.** `launchedName` distinguishes `undefined` ("the desktop predates the field — echo the request, which is the name it stored") from `null` ("the machine reported no name"), and that split is correct and is documented at length. The DTO never produces `undefined`: the column is `null` for a refusal, for a non-launch kind AND for every desktop older than 2026-09-15, and `?? null` sends all three across as `null`. So the older-desktop arm is unreachable through the API and a launch whose name was applied but not REPORTED renders as `(not applied)`.
+- ⚠ **THE REPORTING SIDE HAS ITS OWN CANDIDATE AND IT IS NOT THE SAME BUG.** `dopl-desktop-app/main/launch-directive-spawn.js` initialises `applied` before a `try` and its `catch` leaves it unset, so a throw AFTER a successful `commitRename` also reports nothing. Whether the live reports are that or the DTO is a measurement nobody has taken.
+- ⚠ **NOT FIXED HERE, AND THE REASON IS THE FIX ITSELF**: the honest repair is to stop collapsing the two on the wire, which means a DTO change plus a decision about what an old desktop's `null` means — a channels-lane change inside a tenancy wave.
+- Proposed resolution: carry `applied_agent_name` as `string | null | undefined` from the DTO (absent key when the column is null AND the directive predates the field), or drop the `undefined` arm from `launchedName` and say `(not reported)` — but not both halves pretending the other exists.
+- Status: OPEN.
