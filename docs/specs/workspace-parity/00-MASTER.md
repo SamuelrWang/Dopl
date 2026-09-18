@@ -1330,8 +1330,10 @@ Recommend (b). **Rollback:** the wells are a call site over a shared module; rev
 **Items — re-scoped by the 2026-09-17 rulings.** What survives: P21 the ~20 hand-cut pill sweep ·
 **P25 `Crossfade` — on PAGE SWITCHES TOO** (R-05 chose (a), not the recommended in-page-only (b)) ·
 P39 `AccountRail` + `AppShellLayout` + `ShellChromeSkeleton` move down behind the `*Core` idiom ·
-P40 `BarSeries` moves down · U56 one frame ghost · **R-01(a)** redirect any `link` segment to `/home`
-· **R-13** remove the guest nav (guests cannot use it).
+P40 `BarSeries` moves down · U56 one frame ghost · **R-01(a)** redirect any non-standard container's
+segment to that container's CHANNEL RECORD (`/home` only as the fallback — see the MERGED row below,
+where the destination is recorded as decided) · **R-13** remove the nav for EVERY member of such a
+container, not only the guest.
 🔴 **DROPPED: P19's title collapse.** **R-02 — KEEP the workspace sidebar and the page titles**: the
 /home strip vs the workspace sidebar is an **intentional difference**, not drift. Header GEOMETRY may
 still be unified, but no title is deleted and **the Knowledge hero band is not deleted on R-02's
@@ -1344,6 +1346,8 @@ as-is**; no rename.
 **Rulings: ALL RULED 2026-09-17.** R-01 → (a) · R-02 → keep titles · R-04 → the search popup ·
 R-05 → crossfade page switches too · R-06 → not now · R-07 → keep both · R-10 → (a) + FROZEN ·
 R-13 → expired, and the guest nav goes.
+✅ **THE SHELL HALF OF THIS WAVE IS MERGED** (R-01(a), R-13, R-05); P21, P39, P40, U56 and R-02's
+header geometry are NOT started. The row below is the record.
 
 #### ✅ Wave 5 — the SHELL half
 
