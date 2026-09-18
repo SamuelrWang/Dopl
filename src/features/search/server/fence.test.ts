@@ -1,24 +1,13 @@
 /**
- * 🔒 **THE FENCE, DRIVEN AGAINST ROWS THAT BELONG TO SOMEBODY ELSE.**
+ * The fence, driven against rows that belong to somebody else. Other suites here
+ * assert the SHAPE of a query; this asserts the OUTPUT — the whole service runs
+ * over an in-memory database holding one container the caller belongs to and one
+ * they do not, with an identical matching row in each (INVARIANTS §14).
  *
- * Every other suite in this feature asserts the SHAPE of a query. This one
- * asserts the OUTPUT: the whole service runs over an in-memory database holding
- * a container the caller belongs to and one they do not, with an identical
- * matching row in each, and nothing from the foreign one may appear in any
- * group. INVARIANTS §14: *"a regex over source text is not a behavioural
- * assertion — drive the real function"*, and a `WHERE` clause that was WRITTEN
- * is not a row that was EXCLUDED.
+ * The world lives in `_fake-world.ts` because `prefix-match.test.ts` (F-717)
+ * asserts a widening over the same rows, so a widening that leaked fails here.
  *
- * ⚠ **THE WORLD ITSELF LIVES IN `_fake-world.ts` SINCE 2026-09-17**, because
- * `prefix-match.test.ts` (F-717) asserts a WIDENING over the same rows this
- * asserts a fence over — two suites, one fixture, so a widening that leaked
- * fails here rather than in a copy that had drifted.
- *
- * MUTATION-VERIFY: 5 reverts, 5 failures, 0 vacuous (2026-09-17) — dropping the
- * `user_id` filter in `loadSearchReach`, dropping its `status='active'` arm,
- * dropping the `workspace_id` narrowing in `loadChannelReach`, dropping the
- * `containerId` narrowing, and calling the three container-only reads in account
- * scope each turn exactly one case in this file red.
+ * MUTATION-VERIFY: 5 reverts, 5 failures, 0 vacuous (2026-09-17).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -61,8 +50,8 @@ describe("🔒 a non-member sees NOTHING from a container", () => {
 
     const items = allItems(out.groups);
     expect(items.length).toBeGreaterThan(0);
-    // ⚠ THE ASSERTION IS OVER EVERY ITEM, NOT OVER A GROUP WE REMEMBERED TO
-    // CHECK — a tenth group added without a fence has to fail this line.
+    // Over EVERY item, not a group we remembered to check: a tenth group added
+    // without a fence has to fail this line.
     for (const item of items) {
       expect(item.containerId).toBe(WS_MINE);
       if (item.channelId !== undefined) expect(item.channelId).toBe(CH_MINE);
@@ -80,8 +69,8 @@ describe("🔒 a non-member sees NOTHING from a container", () => {
 
   it("answers a container that does not exist with the SAME 403", async () => {
     mount();
-    // 🔒 "Not a member" and "no such container" must be indistinguishable, or
-    // the pair of codes is an existence oracle (service.ts header).
+    // "Not a member" and "no such container" must be indistinguishable, or the
+    // pair of codes is an existence oracle (service.ts header).
     await expect(
       runSearch(CTX, {
         q: "zephyr",
@@ -108,10 +97,9 @@ describe("🔒 a non-member sees NOTHING from a container", () => {
       user_id: ME,
       status: "active",
     });
-    // ⚠ THE CALLER IS A MEMBER OF A CHANNEL IN THE LOCKED-OUT CONTAINER TOO, and
-    // that is what makes this case bite: `channel_members.user_id` alone admits
-    // the room, so only the `workspace_id` narrowing in `loadChannelReach` can
-    // keep it out. Without this row the case passes with the narrowing deleted.
+    // The caller is a member of a channel in the locked-out container too, which
+    // is what makes this bite: `channel_members.user_id` alone admits the room, so
+    // only `loadChannelReach`'s `workspace_id` narrowing keeps it out.
     tables.channel_members.push({
       channel_id: CH_THEIRS,
       user_id: ME,
@@ -139,9 +127,8 @@ describe("🔒 home scope never returns members / skills / chats", () => {
     expect(out.groups.map((g) => g.kind)).not.toContain("members");
     expect(out.groups.map((g) => g.kind)).not.toContain("skills");
     expect(out.groups.map((g) => g.kind)).not.toContain("chats");
-    // ⚠ THE ENFORCEMENT IS AN ABSENCE, so it is asserted as one: an empty group
-    // is omitted anyway, and a filter applied after the read would pass a test
-    // that only looked at the payload.
+    // The enforcement is an absence, so it is asserted as one: a filter applied
+    // after the read would pass a test that only looked at the payload.
     const tables = queries.map((q) => q.table);
     expect(tables).not.toContain("profiles");
     expect(tables).not.toContain("skills");
@@ -263,8 +250,8 @@ describe("🔒 a private row reaches only its owner", () => {
     (tables.skills[0] as { visibility: string }).visibility = "private";
     mount(tables);
 
-    // ⚠ `credentialSubjectUserId: null` = a credential with nobody behind it.
-    // Arm 2 of every `canSee*` predicate in this codebase (F-336/F-333).
+    // `credentialSubjectUserId: null` is a credential with nobody behind it —
+    // arm 2 of every `canSee*` predicate (F-336/F-333).
     const out = await runSearch(
       { ...CTX, credentialSubjectUserId: null },
       { q: "zephyr", scope: "container", container: WS_MINE }

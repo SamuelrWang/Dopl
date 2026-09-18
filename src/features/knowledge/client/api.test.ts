@@ -1,13 +1,11 @@
 /**
  * `fetchBaseList` — the client parse of `GET /api/knowledge/bases`, focused on
- * the `channelGrants` sibling key (M0, Home Knowledge Panels).
+ * the `channelGrants` sibling key.
  *
- * ⚠ STALE-CACHE (§8): the desktop list is IndexedDB-persisted, so the first
- * launch after an update reads payloads written by the previous bundle — which
- * carry NO `channelGrants` key at all. A raw read would crash the pane over a
- * field that is decoration here. The parse falls back to `EMPTY_GRANTS`. This
- * copies `pages/home/home-info-tab.test.tsx`'s key-DELETED shape: the field is
- * deleted from the fixture, not set to null or {}.
+ * Stale-cache (§8): the desktop list is IndexedDB-persisted, so the first launch
+ * after an update reads payloads written by the previous bundle, carrying no
+ * `channelGrants` key. The parse falls back to `EMPTY_GRANTS`. Fixtures use the
+ * key-DELETED shape, not null or {}.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -65,14 +63,13 @@ describe("fetchBaseList › channelGrants", () => {
 
   it("STALE CACHE: a payload with the channelGrants key DELETED falls back to EMPTY_GRANTS", async () => {
     const stale: Record<string, unknown> = { ...FULL };
-    // Deleted, not null or {} — a pre-grant cache entry does not carry the key.
+    // deleted, not null or {} — a pre-grant cache entry does not carry the key.
     delete stale.channelGrants;
     apiRequest.mockResolvedValue(stale);
 
     const out = await fetchBaseList("ws-1");
     expect(out.channelGrants).toBe(EMPTY_GRANTS);
     expect(out.channelGrants).toEqual({});
-    // The rest of the payload is unharmed.
     expect(out.bases).toHaveLength(2);
   });
 });
@@ -99,15 +96,14 @@ describe("fetchChannelGrants — the settings read (M1)", () => {
   });
 
   it("STALE CACHE / OLD SERVER: every deleted key falls back CLOSED", async () => {
-    // Keys deleted, not nulled — a payload written before this route existed
-    // does not carry them. ⚠ The fallback direction is the property: an unknown
-    // `canManage` must render the READ-ONLY summary, never an editor over an
-    // invented channel list.
+    // keys deleted, not nulled. The fallback DIRECTION is the property: an
+    // unknown `canManage` must render the read-only summary, never an editor
+    // over an invented channel list.
     apiRequest.mockResolvedValue({});
 
     expect(await fetchChannelGrants("kb-1")).toEqual({
       canManage: false,
-      // 🔒 An absent `channelScopeAllowed` renders NO channel control at all.
+      // an absent `channelScopeAllowed` renders NO channel control at all.
       channelScopeAllowed: false,
       channels: [],
       grants: {},
@@ -140,7 +136,7 @@ describe("setChannelGrant — the write (M1)", () => {
       "ws-1"
     );
 
-    // The server normalised `guestWrite` away; the client believes the answer.
+    // the server normalised `guestWrite` away; the client believes the answer.
     expect(out).toEqual({ level: "agent_only", guestWrite: false });
     expect(apiRequest).toHaveBeenLastCalledWith(
       "/api/knowledge/bases/kb-1/channel-grants",

@@ -14,7 +14,8 @@
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { UsageMeter } from "@/shared/ui/usage-meter";
 import { formatRelativeTime } from "@/shared/lib/format-time";
-import { formatTokens, metric } from "./agent-metrics";
+import { formatTokens } from "@/shared/lib/format-tokens";
+import { metric } from "./agent-metrics";
 
 /**
  * The compact restatement of the card's numbers — **ONE implementation for ALL THREE HOSTS**

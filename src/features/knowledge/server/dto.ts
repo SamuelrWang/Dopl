@@ -9,16 +9,15 @@ import type {
 
 /**
  * Row interfaces (snake_case Postgres columns) and row→domain mappers to the
- * camelCase types in `../types.ts`. ⚠ `select(...)` in repository.ts uses the
+ * camelCase types in `../types.ts`. `select(...)` in repository.ts uses the
  * *_COLS constants below, so row shape stays in sync with the migration.
  */
 
 /**
- * ⚠ Postgres `text`/`varchar` reject NUL (U+0000) with an opaque 500
- * ("unsupported Unicode escape sequence \\u0000"). Strip NULs at the DB write
- * boundary so a stray control byte degrades to "content minus the NUL" (F-7).
- * Other C0 controls are valid Postgres text and are LEFT INTACT — titles/names
- * reject them via NAME_RE at the schema layer, where the error is clear.
+ * Postgres `text`/`varchar` reject NUL (U+0000) with an opaque 500. Strip NULs
+ * at the DB write boundary so a stray control byte degrades to "content minus
+ * the NUL" (F-7). Other C0 controls are valid Postgres text and are left intact
+ * — titles/names reject them via NAME_RE at the schema layer.
  */
 export function stripNulls<T extends string | null | undefined>(value: T): T {
   return (typeof value === "string" ? value.replace(/\u0000/g, "") : value) as T;

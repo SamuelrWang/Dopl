@@ -3,10 +3,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { DocBodySkeleton } from "./doc-pane-chrome";
 
 /**
- * ⚠ No local `animate-pulse` Bar clones (src/shared/ui/skeleton.tsx,
- * DESIGN-SYSTEM). The clone this replaced had already drifted to
- * `surface-raised-3` where the kit uses `surface-raised-2`, ghosting the
- * knowledge body a shade darker than every other skeleton. Hence pinned.
+ * No local `animate-pulse` Bar clones (src/shared/ui/skeleton.tsx): the clone
+ * this replaced had drifted to `surface-raised-3` where the kit uses
+ * `surface-raised-2`, ghosting the knowledge body darker than every other
+ * skeleton.
  */
 describe("DocBodySkeleton", () => {
   const html = renderToStaticMarkup(<DocBodySkeleton />);
@@ -29,8 +29,8 @@ describe("DocBodySkeleton", () => {
   });
 
   it("announces itself instead of being hidden outright", () => {
-    // ⚠ Not `aria-hidden`: that leaves a screen reader silent where the body
-    // is about to appear.
+    // Not `aria-hidden`: that leaves a screen reader silent where the body is
+    // about to appear.
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain("Loading document");
   });

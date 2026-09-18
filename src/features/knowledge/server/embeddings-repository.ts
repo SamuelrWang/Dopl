@@ -1,8 +1,8 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
-/** Raw I/O for `knowledge_entry_chunks`. ⚠ Service-role only — the table has
- *  RLS enabled with NO policies. */
+/** Raw I/O for `knowledge_entry_chunks`. Service-role only — the table has RLS
+ *  enabled with NO policies. */
 
 export interface ChunkHashRow {
   chunkIndex: number;

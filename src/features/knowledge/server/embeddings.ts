@@ -13,17 +13,16 @@ import {
  * `knowledge_entry_chunks` and feed `search_knowledge_hybrid`, which fuses
  * vector similarity with the tsvector rank.
  *
- * ⚠ Degrades gracefully by design: no OPENAI_API_KEY → no embeddings → search
- * falls back to the pure full-text RPC. Sync runs post-response via `after()`
- * (see `scheduleEntryEmbedding`), so saves never wait on the embedding API and
- * failures only log — they can NEVER fail a write.
+ * Degrades gracefully: no OPENAI_API_KEY → no embeddings → search falls back to
+ * the pure full-text RPC. Sync runs post-response via `after()`, so saves never
+ * wait on the embedding API and failures only log — they never fail a write.
  */
 
 const OPENAI_EMBEDDINGS_URL = "https://api.openai.com/v1/embeddings";
 
 const MODEL = process.env.EMBEDDING_MODEL ?? "text-embedding-3-small";
 const DIMENSIONS = intEnv("EMBEDDING_DIMENSIONS", 1536);
-/** ⚠ Chunk size is in ~tokens (ingestion convention) — ×4 ≈ chars. */
+/** Chunk size is in ~tokens (ingestion convention) — ×4 ≈ chars. */
 const CHUNK_CHARS = intEnv("CHUNK_SIZE", 500) * 4;
 const OVERLAP_CHARS = intEnv("CHUNK_OVERLAP", 50) * 4;
 const MAX_CHUNKS = intEnv("MAX_CHUNKS_PER_ENTRY", 50);
@@ -111,10 +110,9 @@ function hardSplit(text: string, size: number): string[] {
 // ─── Sync ───────────────────────────────────────────────────────────
 
 /**
- * Reconcile an entry's chunk rows with its content. Hash-aware: unchanged
- * chunks are never re-embedded (autosave fires every few seconds, usually one
- * chunk changes). THROWS on hard failure — callers decide fatal (backfill) vs
- * log-only (after()-scheduled sync).
+ * Reconcile an entry's chunk rows with its content. Hash-aware: unchanged chunks
+ * are never re-embedded, since autosave fires every few seconds. Throws on hard
+ * failure — callers decide fatal (backfill) vs log-only (scheduled sync).
  */
 export async function syncEntryEmbeddings(entry: KnowledgeEntry): Promise<void> {
   if (!embeddingsEnabled()) return;
@@ -157,7 +155,7 @@ function hashChunk(text: string): string {
 }
 
 /** Fire-and-forget: sync after response flush (`after()`), detached promise
- *  outside a request scope. NEVER throws into the caller. */
+ *  outside a request scope. Never throws into the caller. */
 export function scheduleEntryEmbedding(entry: KnowledgeEntry): void {
   if (!embeddingsEnabled()) return;
   const run = () =>

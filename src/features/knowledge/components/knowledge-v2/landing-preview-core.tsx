@@ -30,13 +30,11 @@ export interface KnowledgeV2PreviewCoreProps {
   /** Bundled hero image for the home banner — injected by the host app. */
   heroImageSrc?: string;
   /**
-   * WHICH SHELF this view is (`../../types.ts › KbShelf`) — threaded, not
-   * assumed, because it has to reach TWO places that would otherwise disagree:
-   * the controller's live base-list query (and the star write that patches it)
-   * and the create dialog's cache seed. A host that narrows its read and
-   * forgets either one gets a §8 silent no-op: a star that round-trips without
-   * moving, or a new base that does not appear until a cold refetch.
-   * ⚠ Undefined = unfiltered, the pre-2026-08-26 behaviour.
+   * Which shelf this view is (`../../types.ts › KbShelf`) — threaded, not
+   * assumed, because it must reach two places that would otherwise disagree: the
+   * controller's live base-list query (and the star write that patches it) and
+   * the create dialog's cache seed. Forgetting either is a §8 silent no-op.
+   * Undefined = unfiltered.
    */
   shelf?: KbShelf;
   /**
@@ -57,9 +55,9 @@ export interface KnowledgeV2PreviewCoreProps {
  * Knowledge V2 entry point: the two-mode view plus the create-base dialog the
  * home grid's trailing cell opens. App shell is the host layout's.
  *
- * ⚠ FILE NAME IS A FOSSIL. This is the ONE knowledge entry point; its only
- * caller is apps/desktop-ui/src/pages/knowledge/index.tsx. Next-free by
- * construction — `routing`/`urlSync` are injected (./routing.ts).
+ * File name is a fossil — this is the ONE knowledge entry point, called only by
+ * apps/desktop-ui/src/pages/knowledge/index.tsx. Next-free by construction:
+ * `routing`/`urlSync` are injected (./routing.ts).
  */
 export function KnowledgeV2PreviewCore({
   workspaceSegment,
@@ -111,9 +109,8 @@ export function KnowledgeV2PreviewCore({
         workspaceSlug={workspaceSegment}
         currentUserId={currentUserId}
         role={role}
-        // ⚠ THE SAME SHELF THE VIEW READS. The dialog seeds the cache entry
-        // this prop names; handing it `undefined` while the controller reads
-        // `:shelf:workspace` seeds a key nobody has mounted.
+        // the same shelf the view reads: the dialog seeds the cache entry this
+        // prop names, so `undefined` here seeds a key nobody has mounted.
         shelf={shelf}
         audienceFixed={audienceFixed}
         routing={routing}

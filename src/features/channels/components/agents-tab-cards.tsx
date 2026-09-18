@@ -40,7 +40,8 @@ import {
   NO_THREAD_LABEL,
   peerRowStale,
 } from "./agents-model";
-import { formatTokens, metric } from "./agent-metrics";
+import { formatTokens } from "@/shared/lib/format-tokens";
+import { metric } from "./agent-metrics";
 import { agentModelShortLabel } from "../lib/agent-models";
 
 /**

@@ -16,9 +16,9 @@ import "server-only";
  *   - `service-startup-context.ts` — the capped payload a session starts with
  *   - `service-seed.ts`     — workspace fixture seeding
  *
- * ⚠ DELETES ARE PERMANENT. No soft-delete, trash, restore or purge. The
- * `deleted_at` columns and read-path `deleted_at IS NULL` filters remain only
- * so pre-switch tombstones stay hidden until
+ * Deletes are PERMANENT — no soft-delete, trash, restore or purge. The
+ * `deleted_at` columns and read-path filters remain only so pre-switch
+ * tombstones stay hidden until
  * `20260807110000_purge_soft_deleted_rows.sql` sweeps them.
  */
 
@@ -37,11 +37,9 @@ export {
 
 export {
   createBase,
-  // 🔒 THE CREATE'S GATE CHAIN WITHOUT THE WRITE — what `POST
-  // /api/knowledge/bases?dryRun=1` runs, so the MCP confirm-class PREVIEW is
-  // answered by the same gates the confirmed call passes. ⚠ A barrel row WITH
-  // an importer (the route); see `service-base-writes.ts` for why parity here
-  // is structural rather than a second list.
+  // The create's gate chain without the write — what `POST
+  // /api/knowledge/bases?dryRun=1` runs, so the MCP preview is answered by the
+  // same gates the confirmed call passes.
   assertCreateBaseAllowed,
   updateBase,
   deleteBase,
@@ -68,9 +66,9 @@ export {
 } from "./service-entries";
 export type { ListEntriesOpts, KnowledgeEntryRef } from "./service-entries";
 
-// ⚠ THE CHANGELOG'S READ HALF (2026-09-09). The CAPTURE half is deliberately NOT
-// on this barrel: nothing outside `server/` may record a revision by hand — a
-// write records its own, in the same request, or the history has a hole in it.
+// The changelog's READ half. The capture half is deliberately NOT on this
+// barrel: nothing outside `server/` may record a revision by hand — a write
+// records its own, in the same request, or the history has a hole in it.
 export {
   listEntryRevisions,
   listBaseRevisions,

@@ -1,14 +1,10 @@
 /**
- * THE PINNED LAUNCH PAYLOAD (T81) — the properties that make a capped read
- * honest, and the fence that makes it safe:
- *   1. an item is included WHOLE or not at all — the one that exactly fits is
- *      IN, the next is a POINTER, and no body is ever halved;
- *   2. `truncated` is load-bearing BOTH ways (INVARIANTS §9): false on an
- *      exhausted read, true the moment anything was left out;
- *   3. de-dup between a pinned base and a pinned entry inside it, so one
- *      document cannot spend the cap twice;
+ * The pinned launch payload (T81):
+ *   1. an item is included whole or not at all — no body is ever halved;
+ *   2. `truncated` is load-bearing both ways (INVARIANTS §9);
+ *   3. de-dup between a pinned base and a pinned entry inside it;
  *   4. the empty case is a real answer, not a gap;
- *   5. 🔒 every read is fenced by the id set `listBases` produced.
+ *   5. every read is fenced by the id set `listBases` produced.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -105,8 +101,8 @@ describe("the visibility fence", () => {
 
 describe("the empty case", () => {
   it("answers an EXHAUSTED read, not a clipped one", async () => {
-    // `truncated: false` is the assertion "this is all of it" — and nothing
-    // pinned is a legitimate state, not a degraded one.
+    // `truncated: false` asserts "this is all of it"; nothing pinned is a
+    // legitimate state.
     expect(await getStartupContext(CTX)).toEqual({
       items: [],
       omitted: [],
@@ -146,9 +142,8 @@ describe("the cap boundary", () => {
   });
 
   it("does NOT skip ahead to a smaller entry once anything was omitted", async () => {
-    // A payload whose contents depend on the sizes of the documents NOT in it is
-    // one nobody can reason about — and the tiny entry would arrive without the
-    // document that precedes it.
+    // Otherwise the payload's contents depend on the sizes of documents not in
+    // it, and the tiny entry arrives without the document preceding it.
     mockRepo.listPinnedEntriesForBases.mockResolvedValue([
       entry("e-big", "kb-1", "a".repeat(STARTUP_CONTEXT_CHAR_CAP + 1)),
       entry("e-tiny", "kb-1", "b"),
@@ -199,8 +194,8 @@ describe("truncated", () => {
   });
 
   it("is TRUE at the ROW ceiling too, where `omitted` cannot name what was missed", async () => {
-    // AT a ceiling is indistinguishable from over it, so the read reports the
-    // clip even though every row it DID get fitted under the character cap.
+    // At a ceiling is indistinguishable from over it, so the read reports the
+    // clip even though every row it got fitted under the character cap.
     mockRepo.listPinnedEntriesForBases.mockResolvedValue(
       Array.from({ length: STARTUP_CONTEXT_ENTRY_LIMIT }, (_, i) =>
         entry(`e-${i}`, "kb-1", "")
@@ -216,8 +211,7 @@ describe("truncated", () => {
 
 describe("de-dup", () => {
   it("counts an entry pinned INSIDE a pinned base exactly once", async () => {
-    // The two arms of the read overlap by construction; handing the document
-    // over twice would spend the cap on it twice.
+    // The two arms of the read overlap by construction.
     mockRepo.listPinnedEntriesForBases.mockResolvedValue([
       entry("e-1", "kb-1", "12345"),
       entry("e-1", "kb-1", "12345"),

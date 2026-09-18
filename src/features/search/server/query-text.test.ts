@@ -1,17 +1,13 @@
 /**
- * THE TEXT THAT GOES INTO A FILTER — the `ilike` escaper, the `.or()` quoter,
- * and the `tsquery` builder that is the query side of every `@@` in this
- * feature.
+ * The text that goes into a filter: the `ilike` escaper, the `.or()` quoter, and
+ * the tsquery builder that is the query side of every `@@` here.
  *
- * 🔒 **WHY THE BUILDER IS UNIT-TESTED AND NOT ONLY PINNED AT THE REPOSITORY.**
- * `to_tsquery` is the one tsquery spelling that RAISES on bad input — that is
- * the price of the `:*` the others throw away — so what is asserted here is that
- * nothing a person can type reaches it as an operator. A repository test proves
- * the string was SENT; only this one proves what the string can contain.
+ * The builder is unit-tested, not only pinned at the repository, because
+ * `to_tsquery` is the one spelling that RAISES on bad input — the price of the
+ * `:*` the others discard. A repository test proves the string was sent; only
+ * this proves what it can contain.
  *
- * MUTATION-VERIFY: 4 reverts, 4 failures, 0 vacuous (2026-09-17) — dropping the
- * `:*` suffix, prefixing EVERY token instead of the last, widening the token
- * class to `\S`, and dropping the 8-token cap each turn a case here red.
+ * MUTATION-VERIFY: 4 reverts, 4 failures, 0 vacuous (2026-09-17).
  */
 
 import { describe, it, expect } from "vitest";
@@ -27,7 +23,7 @@ import {
 
 describe("🔒 buildPrefixTsQuery", () => {
   it("prefixes the LAST token and only the last", () => {
-    // ⚠ The earlier tokens are words the reader FINISHED typing; prefixing them
+    // The earlier tokens are words the reader finished typing; prefixing them
     // widens the intersection for nothing.
     expect(buildPrefixTsQuery("each verified pick")).toBe(
       "each & verified & pick:*"
@@ -39,9 +35,8 @@ describe("🔒 buildPrefixTsQuery", () => {
   });
 
   it("🔒 strips every to_tsquery OPERATOR a person can type", () => {
-    // ⚠ `&`, `|`, `!`, `:`, `(`, `)`, `'` and `<->` are all operators. The
-    // allow-list keeps `\p{L}\p{N}_` and splits on everything else, so none of
-    // them can survive into the expression.
+    // `&`, `|`, `!`, `:`, `(`, `)`, `'` and `<->` are all operators; the
+    // allow-list keeps `\p{L}\p{N}_` and splits on everything else.
     expect(buildPrefixTsQuery("a & b | !c")).toBe("a & b & c:*");
     expect(buildPrefixTsQuery("(one)'two':*")).toBe("one & two:*");
     expect(buildPrefixTsQuery('"quoted phrase"')).toBe("quoted & phrase:*");
@@ -49,14 +44,13 @@ describe("🔒 buildPrefixTsQuery", () => {
   });
 
   it("keeps digits and underscores, which cannot be operators", () => {
-    // ⚠ `a_b` is TWO lexemes to the parser (`'a':* <-> 'b':*`), which is a
-    // phrase match rather than a syntax error — measured 2026-09-17.
+    // `a_b` is two lexemes to the parser (`'a':* <-> 'b':*`), a phrase match
+    // rather than a syntax error.
     expect(buildPrefixTsQuery("plan_9")).toBe("plan_9:*");
   });
 
   it("returns null when nothing survives the allow-list", () => {
-    // ⚠ NULL IS "RUN NO QUERY", never "match everything": an empty tsquery
-    // matches nothing and costs a round trip to learn it.
+    // `null` means "run no query", never "match everything".
     expect(buildPrefixTsQuery("???")).toBeNull();
     expect(buildPrefixTsQuery("   ")).toBeNull();
     expect(buildPrefixTsQuery("")).toBeNull();
@@ -69,7 +63,7 @@ describe("🔒 buildPrefixTsQuery", () => {
   });
 
   it("names the dictionary the generated columns were built with", () => {
-    // 🔒 The constant IS the fix: omitted, PostgREST falls to the server's
+    // The constant is the fix: omitted, PostgREST falls to the server's
     // `default_text_search_config` (english here) against a simple vector.
     expect(SEARCH_TSQUERY_CONFIG).toBe("simple");
   });

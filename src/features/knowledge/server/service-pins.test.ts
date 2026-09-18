@@ -1,15 +1,12 @@
 /**
- * WORKSPACE-WIDE pins (T81). ⚠ The repository runs as service role and bypasses
- * RLS, so `knowledge_bases_member_select` evaluates for nobody on this path and
- * these four properties have no lower layer holding them:
+ * Workspace-wide pins (T81). The repository runs as service role and bypasses
+ * RLS, so these four properties have no lower layer holding them:
  *   1. a pin is gated on `getBaseById` — visibility + teams + the audience
- *      ceiling, as ONE 404;
- *   2. an UNPIN is gated identically, unlike `unstarBase`, because it writes the
+ *      ceiling, as one 404;
+ *   2. an unpin is gated identically, unlike `unstarBase`, because it writes the
  *      workspace's row rather than the caller's own;
- *   3. an ENTRY pin chases the row UP to its base through `getEntry`, so the
- *      entry route's viewer-reachable id is not a way past the base's gate;
- *   4. `listPinnedBaseIds` re-filters to the id set it was handed — the id set
- *      IS the fence.
+ *   3. an entry pin chases the row up to its base through `getEntry`;
+ *   4. `listPinnedBaseIds` re-filters to the id set it was handed.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -68,8 +65,7 @@ describe("listPinnedBaseIds", () => {
   });
 
   it("drops a pinned id outside the visible set — the id set IS the fence", async () => {
-    // A pin surviving a lockdown must not re-announce the base's existence on a
-    // list response that has no card for it.
+    // A surviving pin must not re-announce a base the list has no card for.
     mockRepo.listPinnedBaseIds.mockResolvedValue(["kb-1", "kb-hidden"]);
 
     expect(await listPinnedBaseIds(CTX, [base("kb-1")])).toEqual(["kb-1"]);
@@ -81,8 +77,8 @@ describe("listPinnedBaseIds", () => {
   });
 
   it("takes NO user id — a pin is the workspace's fact, not a member's", () => {
-    // Structural, and it is the whole difference from `service-stars.ts`: the
-    // signature has no second place a subject could come from.
+    // The difference from `service-stars.ts`: the signature has no second place
+    // a subject could come from.
     expect(listPinnedBaseIds.length).toBe(2);
   });
 });
@@ -98,9 +94,8 @@ describe("pinBase", () => {
   });
 
   it("writes NOTHING when the base is not visible to the caller", async () => {
-    // `getBaseById` 404s a foreign base, one the private/teams gate hides, and
-    // one outside a locked agent's audience ceiling — one answer, so a pin
-    // cannot probe whether an id is real.
+    // `getBaseById` answers one 404 for all three refusals, so a pin cannot
+    // probe whether an id is real.
     mockGetBase.mockRejectedValue(new Error("KnowledgeBaseNotFound"));
 
     await expect(pinBase(CTX, "kb-hidden", true)).rejects.toThrow();
@@ -108,9 +103,8 @@ describe("pinBase", () => {
   });
 
   it("UNPINS through the same gate — the asymmetry with unstarBase is deliberate", async () => {
-    // `unstarBase` is ungated because a member must always be able to drop their
-    // OWN row. A pin is not the caller's row, so removing one is as much a write
-    // to shared state as adding one.
+    // `unstarBase` is ungated because a member must be able to drop their own
+    // row. A pin is not the caller's row, so removing one is a shared write.
     mockGetBase.mockRejectedValue(new Error("KnowledgeBaseNotFound"));
 
     await expect(pinBase(CTX, "kb-hidden", false)).rejects.toThrow();
@@ -144,8 +138,8 @@ describe("pinEntry", () => {
   });
 
   it("writes NOTHING when the entry's BASE is unreachable", async () => {
-    // `getEntry` answers `getBaseById`'s gates as a 404 about the entry, so the
-    // entry route's cheaply-obtained id is not a way past the base's gate.
+    // `getEntry` answers `getBaseById`'s gates as a 404 about the entry, so a
+    // cheaply-obtained entry id is not a way past the base's gate.
     mockGetEntry.mockRejectedValue(new Error("EntryNotFound"));
 
     await expect(pinEntry(CTX, "e-hidden", true)).rejects.toThrow();
@@ -160,8 +154,8 @@ describe("pinEntry", () => {
   });
 
   it("writes the id the SERVER resolved, never the caller's string", async () => {
-    // The gate returns the row; trusting it rather than the argument is what
-    // keeps a resolver change from re-opening a path around the gate.
+    // Trusting the row the gate returned, not the argument, keeps a resolver
+    // change from re-opening a path around the gate.
     mockGetEntry.mockResolvedValue(entry("e-canonical", "kb-1"));
 
     await pinEntry(CTX, "e-1", true);

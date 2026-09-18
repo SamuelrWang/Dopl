@@ -21,8 +21,8 @@ import { reportError } from "./utils";
 import { scopeCounts } from "./list-filters";
 import { useKnowledgeV2Trees } from "./use-knowledge-v2-trees";
 
-/** ⚠ Stable ref: a fresh `[]` per render re-runs every star-dependent memo
- *  (and re-sorts the grid) forever. */
+/** Stable ref: a fresh `[]` per render re-runs every star-dependent memo (and
+ *  re-sorts the grid) forever. */
 const EMPTY_STARS: string[] = [];
 
 interface ControllerArgs {
@@ -34,7 +34,7 @@ interface ControllerArgs {
   initialBases: KnowledgeBase[];
   initialSelection?: Selection | null;
   initialTrees?: Record<string, BaseTree>;
-  /** WHICH SHELF (`../../types.ts › KbShelf`). ⚠ Used TWICE below and the two
+  /** WHICH SHELF (`../../types.ts › KbShelf`). Used TWICE below and the two
    *  uses must not drift: it keys the live list query AND the star mutation
    *  that patches that query's entry. Undefined = unfiltered. */
   shelf?: KbShelf;
@@ -47,11 +47,10 @@ interface ControllerArgs {
  * Owns Knowledge V2 root client state: scope filter, search, lazy trees,
  * selection, open entry body. Tree mutations live in `useKnowledgeV2Trees`.
  *
- * **`selection === null` IS HOME MODE** — one component, one controller, the
- * selection picks grid vs two-pane (`knowledge-v2.tsx`). ⚠ Never auto-select a
- * base: an auto-select at `/knowledge` rewrites the URL before the grid paints,
- * making the home route unreachable. Selection is set only by a user move
- * (card, tree row, back/forward) or a deep link.
+ * `selection === null` is home mode: the selection picks grid vs two-pane
+ * (`knowledge-v2.tsx`). Never auto-select a base — that rewrites the URL before
+ * the grid paints and makes `/knowledge` unreachable. Selection is set only by
+ * a user move or a deep link.
  */
 export function useKnowledgeV2Controller({
   workspaceId,
@@ -67,11 +66,10 @@ export function useKnowledgeV2Controller({
     [urlSync, workspaceSegment]
   );
   // Live client query seeded from SSR (no skeleton flash); realtime refetches.
-  // ⚠ Read THE WHOLE LIST RESPONSE, not just `bases`: the caller's stars ride
-  // the same cache entry (`starredBaseIds`), and a second hook would put grid
-  // order one render behind the toggle. Seed's `starredBaseIds: []` is only
-  // reached on a COLD entry, which this view cannot start from (host resolves
-  // the same query first), so it never overrides a real answer.
+  // Read the whole list response, not just `bases`: the caller's stars ride the
+  // same cache entry, and a second hook would put grid order one render behind
+  // the toggle. The seed's empty `starredBaseIds` is only reached on a cold
+  // entry, which this view cannot start from.
   const basesQuery = useKnowledgeBaseList(workspaceId, {
     shelf,
     initialData: {
@@ -80,8 +78,7 @@ export function useKnowledgeV2Controller({
       baseStats: {},
       kbStorageLimit: null,
       starredBaseIds: [],
-      // Same argument as `starredBaseIds` above: only reached on a COLD entry,
-      // which this view cannot start from, so it never overrides a real answer.
+      // Same argument as `starredBaseIds` above: cold entry only.
       sharedBaseIds: [],
       // This view is never channel-scoped; no scope-A grants to seed.
       channelGrants: {},
@@ -91,9 +88,8 @@ export function useKnowledgeV2Controller({
   const starredBaseIds = basesQuery.data?.starredBaseIds ?? EMPTY_STARS;
 
   // Optimistic against the list cache above (grid reorders on click); failure
-  // rolls back — client/hooks.ts.
-  // ⚠ SAME SHELF AS THE READ ABOVE — this patches the entry that query mounts,
-  // and a key off by one suffix patches nothing anybody is listening to (§8).
+  // rolls back — client/hooks.ts. Must use the same shelf as the read above:
+  // a key off by one suffix patches an entry nobody is listening to.
   const starMutation = useToggleBaseStar(workspaceId, shelf);
   const starMutate = starMutation.mutate;
   const toggleStar = useCallback(
@@ -101,8 +97,7 @@ export function useKnowledgeV2Controller({
     [starMutate]
   );
 
-  // ⚠ A deep link is the ONLY thing that starts this view on a base; no base
-  // in the URL means home grid. Nothing to resolve, nothing to auto-open.
+  // Only a deep link starts this view on a base; no base in the URL = home.
   const initialResolvedSelection: Selection | null = initialSelection;
 
   const [query, setQuery] = useState("");
@@ -115,8 +110,7 @@ export function useKnowledgeV2Controller({
   );
 
   // Open entry body owned here (not EntryView) so realtime can refetch it. The
-  // tree strips bodies, so a metadata-only selection fetches; a deep-linked
-  // entry carrying its body seeds the hook.
+  // tree strips bodies, so a metadata-only selection fetches.
   const openSeed =
     selection?.kind === "entry" && selection.entry.body ? selection.entry : null;
   const openEntryQuery = useKnowledgeEntry(
@@ -125,9 +119,8 @@ export function useKnowledgeV2Controller({
     openSeed ? { initialData: openSeed, initialEntryId: openSeed.id } : undefined
   );
 
-  // Two stages, because a scope pill's COUNT is only meaningful before its own
-  // filter runs: `queryBases` = search matches, `visibleBases` = active pill,
-  // badges cut from the stage in between.
+  // Two stages, because a scope pill's count is only meaningful before its own
+  // filter runs: `queryBases` = search matches, `visibleBases` = active pill.
   const queryBases = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return bases;
@@ -199,8 +192,7 @@ export function useKnowledgeV2Controller({
             : { kind: "base", base: prev.base };
         });
       } catch {
-        // Keep existing tree: transient refresh failure must not blank the
-        // pane. Next mutation/realtime retries.
+        // Keep the existing tree: a transient failure must not blank the pane.
       }
     },
     [workspaceId]
@@ -222,9 +214,8 @@ export function useKnowledgeV2Controller({
     []
   );
 
-  // Selected base reconciled against latest `bases` — derived, not stored, so a
-  // rename (own or concurrent agent edit) flows into the toolbar title and
-  // overview fields with no state-sync effect.
+  // Derived, not stored, so a rename flows into the toolbar title and overview
+  // fields with no state-sync effect.
   const reconciledSelection = useMemo<Selection | null>(() => {
     if (!selection) return null;
     const fresh = bases.find((b) => b.id === selection.base.id);
@@ -234,8 +225,7 @@ export function useKnowledgeV2Controller({
       : { kind: "base", base: fresh };
   }, [selection, bases]);
 
-  // Tree CRUD/move/delete/download + access gate + dialog state, split out to
-  // hold this file under the 500-line cap.
+  // Tree CRUD/move/delete/download + access gate + dialog state.
   const mut = useKnowledgeV2Trees({
     workspaceId,
     bases,
@@ -289,10 +279,10 @@ export function useKnowledgeV2Controller({
     [trees]
   );
 
-  // Live updates from MCP/CLI agents + other tabs refresh every loaded tree and
-  // the open entry. DocPane's clean-only re-seed guard stops clobbering an
-  // active typer. ⚠ Hook captures onChange in a ref, so the fresh inline
-  // closure each render is intentional — no re-subscribe churn.
+  // Live updates from MCP/CLI agents and other tabs refresh every loaded tree
+  // and the open entry; DocPane's clean-only re-seed guard stops clobbering an
+  // active typer. The hook captures onChange in a ref, so the fresh inline
+  // closure each render causes no re-subscribe churn.
   useKnowledgeRealtime(workspaceId, () => {
     basesQuery.refetch();
     for (const baseId of Object.keys(trees)) void refreshTree(baseId);
@@ -305,14 +295,13 @@ export function useKnowledgeV2Controller({
   const prevBaseIdRef = useRef<string | null>(
     initialResolvedSelection?.base.id ?? null
   );
-  // ⚠ URL this controller last wrote. SPA router notifies on EVERY location
+  // URL this controller last wrote. The SPA router notifies on every location
   // change, its own writes included; without this the subscriber below
-  // re-derives from a URL we just wrote and downgrades an entry selection
-  // whose tree hasn't loaded.
+  // re-derives from a URL we just wrote and downgrades an entry selection whose
+  // tree hasn't loaded.
   const lastWrittenUrlRef = useRef<string | null>(null);
-  // ⚠ RECONCILED, not raw: URL is built from the base slug, and a rename
-  // arrives as a fresh `bases` row, not a new selection. Raw state would keep
-  // — and re-assert — the slug held at selection time.
+  // Reconciled, not raw: the URL is built from the base slug and a rename
+  // arrives as a fresh `bases` row, so raw state would re-assert a stale slug.
   useEffect(() => {
     const target = sync.urlFor(locationForSelection(reconciledSelection));
     const nextBaseId = reconciledSelection?.base.id ?? null;
@@ -326,9 +315,8 @@ export function useKnowledgeV2Controller({
     prevBaseIdRef.current = nextBaseId;
   }, [reconciledSelection, sync]);
 
-  // Back/forward (and SPA programmatic navigation from create dialog/delete):
-  // re-derive selection from the URL so the view changes, not just the address
-  // bar. Base matched by canonical segment; entry restored if tree is loaded.
+  // Back/forward and SPA programmatic navigation: re-derive selection from the
+  // URL so the view changes, not just the address bar.
   useEffect(() => {
     return sync.subscribe(() => {
       const { baseSegment, entryId } = sync.read();
@@ -339,8 +327,8 @@ export function useKnowledgeV2Controller({
         setSelection(null);
         return;
       }
-      // Same matcher the page uses for deep links, so a legacy slug-only URL
-      // over Back/Forward resolves exactly as on a cold load.
+      // Same matcher as deep links, so a legacy slug-only URL over
+      // back/forward resolves exactly as on a cold load.
       const base = findBaseBySegment(bases, baseSegment);
       if (!base) return;
       if (!trees[base.id]) void loadTree(base.id);
@@ -362,12 +350,12 @@ export function useKnowledgeV2Controller({
     setQuery,
     filter,
     setFilter,
-    /** Search-matched bases BEFORE the scope pill — what the counts count. */
+    /** Search-matched bases before the scope pill — what the counts count. */
     queryBases,
     filterCounts,
     visibleBases,
-    /** CALLER'S starred base ids; home grid lifts these to the front. ⚠ Stars
-     *  never touch `filterCounts` — they change ORDER, not membership. */
+    /** Caller's starred base ids; the home grid lifts these to the front.
+     *  Stars change order, never `filterCounts` membership. */
     starredBaseIds,
     toggleStar,
     trees,
@@ -377,8 +365,7 @@ export function useKnowledgeV2Controller({
     openEntry: openEntryQuery.data,
     openEntryStatus: openEntryQuery.status,
     refetchOpenEntry: openEntryQuery.refetch,
-    /** Refetch bases after a local edit so own rename/description shows
-     *  without waiting on realtime. */
+    /** Refetch bases after a local edit, without waiting on realtime. */
     refetchBases: basesQuery.refetch,
     refreshTree,
     handleSelectBase,

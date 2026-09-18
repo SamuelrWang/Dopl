@@ -1,9 +1,8 @@
 /**
- * The wire shape of a section read. ⚠ The SPLIT itself is proved in
- * `shared/knowledge/markdown-sections.test.ts`; what is proved here is the
- * three promises this projection makes to a client: an untouched response when
- * neither argument is passed, an empty body whenever the content was not the
- * answer, and an outline beside every refusal.
+ * The wire shape of a section read — the SPLIT itself is proved in
+ * `shared/knowledge/markdown-sections.test.ts`. Three promises: an untouched
+ * response when neither argument is passed, an empty body whenever the content
+ * was not the answer, and an outline beside every refusal.
  */
 
 import { describe, it, expect } from "vitest";

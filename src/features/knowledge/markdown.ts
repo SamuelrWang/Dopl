@@ -1,14 +1,10 @@
 /**
- * Pure markdown serialization for knowledge entries.
+ * Pure markdown serialization for knowledge entries. Outside `server/` so the
+ * archive builder and any client-side download share one definition of what an
+ * entry looks like as a `.md` file.
  *
- * Lives outside `server/` so both the server-side archive builder
- * (`server/export.ts`) and any client-side single-file download path
- * share one definition of "what an entry looks like as a `.md` file".
- *
- * An entry's `body` is already markdown; the `title` is stored
- * separately, so we prepend it as an H1 to make the file self-
- * describing — unless the body already opens with that exact heading
- * (avoids a duplicated title on entries written title-first).
+ * The `body` is already markdown and the `title` is stored separately, so it is
+ * prepended as an H1 — unless the body already opens with that exact heading.
  */
 
 export function entryToMarkdown(entry: { title: string; body: string }): string {

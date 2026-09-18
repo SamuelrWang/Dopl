@@ -1,44 +1,20 @@
 "use client";
 
 /**
- * THE SEARCH POPUP — one floating card under the header search field, holding a
+ * The search popup: one floating card under the header search field, holding a
  * text search across the whole space, split into sections.
  *
- * Samuel, 2026-09-17 (verbatim): *"right now, during search, it just filters by
- * channel name, and it like removes channel on the left sidebar. that doesnt
- * make sense, it should be a pop up like this."* … *"Let's not do command K, and
- * no toggle. Just have it that when a user searches, the search pop up is
- * separated into sections. So, Channels, messages, knowledge, agent template,
- * etc. It's basically doing a text search across the home space."*
+ * (2026-09-17) Samuel's rulings: a popup rather than sidebar filtering; sections
+ * per kind; no Cmd-K and no scope toggle; one step smaller than it first shipped.
  *
- * ⚠ **ONE COMPONENT, TWO HOSTS.** /home mounts it under its header pill with
- * `scope="account"`; a workspace surface mounts it with `scope="container"` and
- * its own id. The host contract is three props — `{ scope, containerId?,
- * onNavigate }` — and NOTHING about a host leaks in here: this file has no
- * router, no workspace read and no page state. A host that can open its own
- * objects can mount it.
+ * One component, two hosts. The host contract is `{ scope, containerId?,
+ * onNavigate }` and nothing about a host leaks in here — no router, no workspace
+ * read, no page state.
  *
- * ⚠ **THE FIELD IS THE HOST'S PILL.** The reference design draws the search
- * field at the top of the card because the card IS the field's dropdown; here
- * the field is the pill the card hangs from, so there is no input inside it. Two
- * inputs over one query is two places for the caret to be.
- *
- * ⚠ **NO ⌘K AND NO SCOPE TOGGLE** (Samuel, above). The popup has exactly one way
- * in — type into the pill — and its scope is the host's, not a control.
- *
- * ⚠ **IT IS ONE STEP SMALLER THAN THE CARD IT SHIPPED AS, AND THE SCALE IS THE
- * WHOLE CARD (Samuel, 2026-09-17, over the live popup:** *"right now, the search
- * bar, i feel like it's too big. Can we scale it down in its entirety, meaning,
- * I think we scale down fontsizes and stuff like that too."*). Width, padding,
- * row height, the glyph tile, the legend bar and every type step came down
- * together — see {@link SEARCH_CARD_W} for the width's rule and
- * {@link SEARCH_SECTION_MAX_H} for the section ceiling. **No new token and no
- * new size**: every step is one rung down the kit's own ramp.
- *
- * ⚠ **DISMISSAL IS SHARED WITH THE HOST**: Escape here calls `onClose`, and the
- * host is what clears the field and drops focus. Outside-pointer dismissal
- * belongs to the host too, because the pill and the card are one control and
- * only the host knows where the pill ends.
+ * The field is the host's pill, so there is no input inside the card: two inputs
+ * over one query is two places for the caret to be. Dismissal is shared — Escape
+ * calls `onClose`, and outside-pointer dismissal belongs to the host, which is
+ * the only side that knows where the pill ends.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -61,8 +37,7 @@ import { SearchResultRow } from "./search-popup-rows";
 export interface SearchPopupProps {
   /** The host field's live value. */
   query: string;
-  /** The host field has focus. ⚠ The popup is open ONLY while it is — see the
-   *  `open` note below. */
+  /** The host field has focus. The popup is open only while it is. */
   focused: boolean;
   scope: SearchScope;
   /** Required when `scope === "container"`. */
@@ -73,18 +48,17 @@ export interface SearchPopupProps {
   onClose: () => void;
   /** A recent query, put back in the field. */
   onQueryChange: (next: string) => void;
-  /** ⚠ MUST BE STABLE — see `use-search.ts`. */
+  /** Must be stable — see `use-search.ts`. */
   fetcher: SearchFetcher;
   /** Keys the recents list. Absent = this machine's anonymous list. */
   userId?: string;
-  /** ⚠ FIXTURE SEAM (2026-09-17) — see `use-search.ts › useRecentSearches`. */
+  /** Fixture seam — see `use-search.ts › useRecentSearches`. */
   seedRecents?: readonly string[];
   className?: string;
 }
 
 /** Small white key box — the footer legend and the field's return affordance.
- *  ⚠ 18px since 2026-09-17: the card came down a step and the legend came with
- *  it (`docs/DESIGN-SYSTEM.md` › Search popup › KEYCAP). */
+ *  18px (`docs/DESIGN-SYSTEM.md` › Search popup › KEYCAP). */
 function Keycap({ children }: { children: React.ReactNode }) {
   return (
     <span className="text-micro inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[5px] border border-border-default bg-bg-elevated px-1 leading-none text-text-secondary">
@@ -107,27 +81,19 @@ function LabelledRule({ label }: { label: string }) {
 }
 
 /**
- * 🔒 **THE CARD IS THE PILL'S WIDTH PLUS ITS OWN PADDING, AND NOTHING WIDER
- * (Samuel, 2026-09-17:** *"right now, the search bar, i feel like it's too big.
- * Can we scale it down in its entirety, meaning, I think we scale down
- * fontsizes and stuff like that too."*). The kit's open pill is a flat 260px
- * (`src/app/globals.css` › `.search-expand[data-open="true"]`) and the body
- * below carries `px-2.5` a side, so 280px puts the ROWS on the pill's own
- * edges. It was `w-[420px]`, i.e. the card overhung the control it hangs from
- * by 160px.
+ * (2026-09-17) The card is the pill's width plus its own padding, nothing wider.
+ * The kit's open pill is 260px and the body carries `px-2.5` a side, so 280px
+ * puts the rows on the pill's own edges.
  */
 export const SEARCH_CARD_W = "w-[280px]";
 
 /**
- * 🔒 **EACH SECTION IS FIVE ROWS TALL AND SCROLLS ITSELF (Samuel, 2026-09-17:**
- * *"right now, all the choices show, so it's like a super long scroll. It should
- * be, that each section is a fixed height, and if there's more items in it,
- * it's scrollable."*). A one-line row is 20px of tile inside `py-1`, so five of
- * them are 160px; a stacked row is taller and five of those scroll, which is the
- * ceiling doing its job rather than a number that is wrong for one kind.
+ * (2026-09-17) Each section is five rows tall and scrolls itself. A one-line row
+ * is 20px of tile inside `py-1`, so five are 160px; taller rows scroll, which is
+ * the ceiling doing its job.
  *
- * ⚠ **ON THE LIST, NOT ON THE SECTION** — the heading is a sibling ABOVE the
- * scroller, so it stays put while its own rows move under it.
+ * Applied to the LIST, not the section — the heading is a sibling above the
+ * scroller so it stays put while its rows move under it.
  */
 export const SEARCH_SECTION_MAX_H = "max-h-[160px]";
 
@@ -152,12 +118,9 @@ export function SearchPopup({
   });
   const { recents, remember } = useRecentSearches(userId, seedRecents);
   /**
-   * ⚠ **THE CURSOR IS A ROW ID, NOT AN INDEX, AND THAT IS WHAT MAKES THE RESET
-   * FREE.** A new answer must put the cursor back on the first row — holding an
-   * index across result sets points it at a different thing than the one it was
-   * on — and doing that with an index costs an effect that calls `setState`
-   * synchronously (`react-hooks/set-state-in-effect`). An id that the new list
-   * does not contain resolves to the first row by itself, with no effect at all.
+   * The cursor is a row id, not an index, so the reset is free: an id the new
+   * list does not contain resolves to the first row by itself. An index would
+   * need an effect calling `setState` synchronously.
    */
   const [activeId, setActiveId] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -181,17 +144,14 @@ export function SearchPopup({
   );
 
   /**
-   * ⚠ **FOCUS IS THE WHOLE DISMISSAL RULE, AND IT IS WHY THERE IS NO
-   * OUTSIDE-CLICK LISTENER.** The card suppresses its own `mousedown` default,
-   * so pointing at a row, a section or the scrollbar never blurs the field —
-   * which leaves exactly one way for focus to leave: the reader looked
-   * somewhere else, and that closes the popup. A second window-level pointer
-   * test would fight the host's own.
+   * Focus is the whole dismissal rule, which is why there is no outside-click
+   * listener: the card suppresses its own `mousedown` default, so the only way
+   * focus leaves is the reader looking elsewhere.
    */
   const open = focused && (searching || showRecents);
 
-  // ⚠ ON THE WINDOW, NOT ON THE CARD. The caret stays in the host's pill the
-  // whole time, so a handler bound here would never run.
+  // On the window, not the card: the caret stays in the host's pill, so a
+  // handler bound here would never run.
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
@@ -222,14 +182,10 @@ export function SearchPopup({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, items, active, take, onClose]);
 
-  // Keep the cursor visible when it walks past the card's fold — **or past its
-  // OWN SECTION's fold, since 2026-09-17**: `block: "nearest"` scrolls every
-  // scrollable ancestor, so one call serves the section scroller and the card
-  // under it, and ↓ into a section's sixth row still lands somewhere visible.
-  // ⚠ **`?.` ON THE METHOD TOO** — jsdom does not implement `scrollIntoView`, so
-  // a bare call turns every mounted test of this card red for a reason that has
-  // nothing to do with what it is testing (`message-pane.test.tsx` stubs the
-  // prototype instead; this card needs no assertion about the scroll).
+  // Keep the cursor visible past the card's fold or its own section's:
+  // `block: "nearest"` scrolls every scrollable ancestor, so one call serves both.
+  // `?.` on the method too — jsdom does not implement `scrollIntoView`, and a
+  // bare call would redden every mounted test of this card.
   useEffect(() => {
     const row = bodyRef.current?.querySelector('[data-active="true"]');
     row?.scrollIntoView?.({ block: "nearest" });
@@ -239,9 +195,8 @@ export function SearchPopup({
 
   return (
     <div
-      /* `.menu-card` IS the container recipe — white, radius 16, the kit's soft
-         wide drop. `!p-0` + `overflow-hidden` because the legend bar runs edge
-         to edge and clips to the card's own corners. */
+      /* `.menu-card` is the container recipe. `!p-0` + `overflow-hidden` because
+         the legend bar runs edge to edge and clips to the card's corners. */
       className={cn(
         "menu-card absolute top-full right-0 z-50 mt-2 !p-0 overflow-hidden",
         SEARCH_CARD_W,
@@ -260,12 +215,11 @@ export function SearchPopup({
       <div
         ref={bodyRef}
         className={cn(
-          // ⚠ THE CARD'S OWN CEILING STAYS, under the per-section one: five
-          // rows apiece still stacks past the screen once enough sections
-          // match, and a card taller than the viewport has no bottom edge.
+          // The card's own ceiling stays under the per-section one: five rows
+          // apiece still stacks past the screen once enough sections match.
           "scrollbar-discreet max-h-[min(60vh,380px)] overflow-y-auto px-2.5 py-2",
-          // ⚠ THE LOADING STATE IS A DIM, NOT A SPINNER AND NOT A CLEAR — the
-          // previous answer stays readable underneath it (`use-search.ts`).
+          // Loading is a dim, not a spinner or a clear: the previous answer stays
+          // readable underneath it (`use-search.ts`).
           loading && "opacity-60"
         )}
       >
@@ -313,8 +267,8 @@ export function SearchPopup({
                 </div>
               </div>
             ))}
-            {/* ⚠ ONE LINE, AND ONLY WHEN THE ANSWER IS IN. "No results" while a
-                request is in flight is a claim the client cannot make yet. */}
+            {/* Only once the answer is in: "No results" mid-flight is a claim the
+                client cannot make yet. */}
             {sections.length === 0 && !loading && (
               <p className="text-caption px-1.5 py-2 text-text-muted">
                 {error ?? "No results"}

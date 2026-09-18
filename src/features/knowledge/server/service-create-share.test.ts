@@ -1,36 +1,23 @@
 /**
- * 🔒 CREATE-AND-SHARE — one call, two writes, rolled back together (Samuel's
- * ruling 2026-08-27: the /home Shared section's create button).
+ * Create-and-share — one call, two writes, rolled back together (Samuel's ruling
+ * 2026-08-27: the /home Shared section's create button).
  *
- * WHY ATOMICITY IS THE WHOLE FEATURE HERE, and not a nicety. The same ruling
- * deleted the /home pane's per-channel PRIVATE scope, so **a container base
- * reaches /home only through a channel grant** (INVARIANTS §5A). A create whose
- * base landed and whose grant did not therefore produces a row that:
- *   - exists, and bills against the workspace's storage;
- *   - is shared with nobody;
- *   - is INVISIBLE on the surface that just created it, with no error shown;
- *   - and owns the slug, so the operator's second attempt collides with it.
- * That is four bad outcomes from one missing `catch`, and none of them look
- * like a failure from the outside.
+ * Atomicity is the feature: a container base reaches /home only through a channel
+ * grant (INVARIANTS §5A), so a base that landed without its grant exists, bills
+ * storage, is shared with nobody, is invisible on the surface that created it,
+ * and owns the slug the retry needs.
  *
- * ⚠ THE GRANT SERVICE IS MOCKED HERE — this file is about the WIRING and the
- * ROLLBACK, not about what a grant row contains. Its own gates (the agent
- * refusal, `canManageChannelGrants`, the same-workspace trigger) are pinned in
- * `service-channel-grants.test.ts`, and the CHANNEL fence is at the route
- * (`src/app/api/knowledge/bases/route.test.ts`). Three files, three questions.
- *
- * ⚠ MUTATION-VERIFIED; counts in this change's report.
+ * The grant service is MOCKED — this file is about the wiring and the
+ * rollback. Its own gates are pinned in `service-channel-grants.test.ts`, and the
+ * CHANNEL fence is at the route (`src/app/api/knowledge/bases/route.test.ts`).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { KnowledgeBase, KnowledgeContext } from "../types";
 
-// ⚠ **THE CHANGELOG CAPTURE IS A REAL WRITE AND IT IS AWAITED**
-// (`./service-revisions.ts`, 2026-09-09): every knowledge write now records a
-// revision inside the same request, so a service test that leaves it alone
-// reaches `supabaseAdmin()` and fails on a missing service-role key. Stubbed
-// here because these suites are about the WRITE, not about its audit row —
-// that the row is recorded, exactly once, per path, is
+// The changelog capture is a real awaited write (`./service-revisions.ts`,
+// 2026-09-09), so an unstubbed service test reaches `supabaseAdmin()` and fails
+// on a missing service-role key. That the row is recorded once per path is
 // `service-revisions.test.ts`'s subject.
 vi.mock("@/features/revisions/server/repository", () => ({
   appendRevision: vi.fn(async () => ({ id: "rev-1" })),
@@ -106,17 +93,15 @@ beforeEach(() => {
 
 describe("createBase with shareToChannelId", () => {
   it("grants at `visible` with guestWrite OFF, reusing the sharing service", async () => {
-    // ⚠ NOT A FORKED WRITE PATH. The same function the base's own sharing
-    // section calls — so the agent refusal, `canManageChannelGrants` and the
-    // trigger translation are inherited rather than re-implemented.
+    // not a forked write path: the same function the base's own sharing section
+    // calls, so its gates are inherited rather than re-implemented.
     await createBase(CTX, { name: "Handover", shareToChannelId: CHANNEL });
 
     expect(mockGrant).toHaveBeenCalledWith(CTX, CREATED, {
       channelId: CHANNEL,
-      // ⚠ `visible`, NEVER `agent_only`: the button says "shared", and
-      // `agent_only` is a different audience (the operator's agent, not the
-      // person in the room). ⚠ `guestWrite` OFF: handing a guest a pen is its
-      // own decision, taken later and deliberately.
+      // `visible`, never `agent_only`: the button says "shared", and
+      // `agent_only` is a different audience. `guestWrite` off: handing a guest
+      // a pen is its own decision.
       level: "visible",
       guestWrite: false,
     });
@@ -130,15 +115,14 @@ describe("createBase with shareToChannelId", () => {
       createBase(CTX, { name: "Handover", shareToChannelId: CHANNEL })
     ).rejects.toBe(boom);
 
-    // ⚠ HARD delete, not soft: a tombstone still owns the slug, so the
-    // operator's retry would collide with a row they cannot see.
+    // hard delete, not soft: a tombstone still owns the slug, so the operator's
+    // retry would collide with a row they cannot see.
     expect(mockRepo.hardDeleteBase).toHaveBeenCalledWith(WS, CREATED.id);
   });
 
   it("surfaces the ORIGINAL failure even when the rollback itself fails", async () => {
-    // ⚠ The caller must be told why the SHARE failed. A rollback error thrown
-    // in its place would replace a real explanation with a cleanup detail —
-    // and the orphan row is a smaller problem than a misleading message.
+    // the caller must be told why the SHARE failed; an orphan row is a smaller
+    // problem than a cleanup error in place of the real explanation.
     const boom = new Error("grant refused");
     mockGrant.mockRejectedValue(boom);
     mockRepo.hardDeleteBase.mockRejectedValue(new Error("delete failed"));
@@ -149,8 +133,8 @@ describe("createBase with shareToChannelId", () => {
   });
 
   it("leaves an ordinary create untouched — no grant, no rollback path", async () => {
-    // MCP `kb_create_base`, the workspace Knowledge page, and the /home
-    // PERSONAL button all land here.
+    // MCP `kb_create_base`, the workspace Knowledge page and the /home PERSONAL
+    // button all land here.
     const base = await createBase(CTX, { name: "Ordinary" });
 
     expect(base).toBe(CREATED);

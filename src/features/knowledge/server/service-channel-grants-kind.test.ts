@@ -1,21 +1,15 @@
 /**
- * 🔒 **`setChannelKnowledgeGrant` AND THE CONTAINER-KIND FENCE** — Samuel's
- * ruling 2026-09-17: *"In workspaces, resource access is not scoped by channels.
- * It's instead scoped by teams."*
+ * `setChannelKnowledgeGrant` and the container-kind fence — Samuel's ruling
+ * 2026-09-17: in workspaces, resource access is scoped by teams, not channels.
  *
- * ⚠ **THIS IS THE ONE DOOR BOTH KNOWLEDGE WRITE PATHS PASS THROUGH.**
+ * The one door both knowledge write paths pass through:
  * `PUT /api/knowledge/bases/{id}/channel-grants` and
- * `POST /api/knowledge/bases`'s `shareToChannelId` branch both land here — the
- * same argument that moved the AGENT refusal into this function on 2026-08-27,
- * rather than onto one of the two routes.
+ * `POST /api/knowledge/bases`'s `shareToChannelId` branch both land here.
  *
- * ⚠ **THE FENCE ITSELF IS STUBBED, AND ITS OWN BEHAVIOUR IS PINNED ELSEWHERE**
- * (`src/shared/tenancy/channel-scope.test.ts`): the positive
- * `isStandardWorkspace` spelling, the absent kind, the missing container.
- * Restating those here would be a second statement of one rule. What THIS file
- * pins is that the door ASKS, that it asks about the right container, that it
- * asks AFTER the manage gate, and that all three levels — including `"none"` —
- * are refused.
+ * The fence itself is stubbed and its own behaviour is pinned in
+ * `src/shared/tenancy/channel-scope.test.ts`. What THIS file pins is that the
+ * door ASKS, about the right container, AFTER the manage gate, and that all
+ * three levels — including `"none"` — are refused.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -88,7 +82,7 @@ const REFUSAL = new HttpError(
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // ⚠ ADMITS BY DEFAULT — a home container. Each refusal case says so itself.
+  // Admits by default — a home container. Each refusal case says so itself.
   mockFence.mockResolvedValue(undefined);
   mockUpsert.mockResolvedValue(STORED);
 });
@@ -112,9 +106,9 @@ describe("🔒 the container-KIND fence on the knowledge write door", () => {
   });
 
   it("🔒 refuses `none` as well — the DELETE is not a way round the rule", async () => {
-    // ⚠ There is nothing to remove there (`20261011120000` converted those rows),
-    // and a delete that quietly succeeded would teach a client that the
-    // three-state control still works in a workspace.
+    // There is nothing to remove there, and a delete that quietly succeeded
+    // would teach a client that the three-state control still works in a
+    // workspace.
     mockFence.mockRejectedValue(REFUSAL);
     await expect(write("none")).rejects.toMatchObject({
       code: "SCOPE_NOT_ALLOWED_IN_WORKSPACE",
@@ -123,7 +117,7 @@ describe("🔒 the container-KIND fence on the knowledge write door", () => {
   });
 
   it("asks about the CALLER's container, which is the channel's", async () => {
-    // ⚠ The route fenced `channelId` with `isChannelVisibleTo(ctx.workspaceId, …)`
+    // The route fenced `channelId` with `isChannelVisibleTo(ctx.workspaceId, …)`
     // and the create branch fences it the same way, so the two are the same
     // container by the time this runs.
     await write("visible");

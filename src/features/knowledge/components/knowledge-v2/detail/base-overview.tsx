@@ -24,26 +24,20 @@ interface Props {
 }
 
 /**
- * THE INFO FACE — what the detail column rests on when a whole base (not a
- * file) is selected, which since 2026-08-28 is what OPENING a base shows.
+ * The info face: what the detail column rests on when a base rather than a file
+ * is selected. Two flat sections on one ground — Details (name + description
+ * persist live, the rest read-only) and Changelog, the base's day-grouped
+ * roll-up of every revision of it and of everything in it.
  *
- * Two flat sections on one ground: Details (name + description persist live;
- * dates/visibility/access/teams read-only) and **Changelog** — the base's
- * day-grouped roll-up of every revision of it and of everything in it.
+ * Changelog replaced "Contents" on 2026-09-09; the inline folder/entry
+ * description editor it carried has no other home today, so the loss is filed in
+ * `docs/REFACTOR-FINDINGS.md` and `overview-contents.tsx` /
+ * `use-content-descriptions.ts` are left in the tree, unmounted, for it to point
+ * at.
  *
- * ⚠ **CHANGELOG REPLACED "Contents" ON 2026-09-09** (Samuel's design for the
- * CHANGELOG lane). Contents was the inline editor for each folder description
- * and entry excerpt — the summaries agents read via MCP `get_tree` / `list_dir`
- * — and it has no other home in the product today, so its loss is FILED rather
- * than absorbed silently (`docs/REFACTOR-FINDINGS.md`). `overview-contents.tsx`
- * and `use-content-descriptions.ts` are deliberately left in the tree, unmounted,
- * so the finding has something to point at.
- *
- * ⚠ NO WRAPPER, ON PURPOSE. The stack's gap and padding belong to the scroll
- * body that hosts it (`../knowledge-v2.module.css › .infoBody`), so a section
- * added here lands in the same rhythm without this file restating it — and so
- * the two sections are siblings of the pane rather than children of a third
- * box, which is the shape the overhaul removed.
+ * No wrapper, on purpose: the stack's gap and padding belong to the scroll body
+ * that hosts it (`../knowledge-v2.module.css › .infoBody`), so the sections are
+ * siblings of the pane rather than children of a third box.
  */
 export function BaseOverview({
   base,

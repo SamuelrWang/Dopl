@@ -11,7 +11,7 @@ import type { SeedFixture } from "./seed-fixtures";
  * `scripts/seed-knowledge-bases.ts` (`--all` backfill).
  */
 
-/** ⚠ The orchestrator's idempotency key. */
+/** The orchestrator's idempotency key. */
 export const DOPL_GUIDE_SLUG = "dopl-guide";
 
 /** Stable entry keys — used to wire ontology cross-references. */

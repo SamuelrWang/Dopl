@@ -1,17 +1,16 @@
 import "server-only";
 
 /**
- * Raw Supabase I/O for knowledge — public surface, a BARREL. No business
- * logic, no auth checks, no error translation; those live in the service.
+ * Raw Supabase I/O for knowledge — a BARREL. No business logic, no auth checks,
+ * no error translation; those live in the service.
  *
- * Convention:
- *   - `find*` → `T | null`; `list*` → `T[]`; `insert*` / `update*` /
- *     `hardDelete*` throw on error.
- *   - ⚠ `includeDeleted` is a LEGACY-TOMBSTONE escape hatch, NOT a trash
- *     surface — deletes are permanent, nothing new is soft-deleted. Default
- *     `false` keeps the `deleted_at IS NULL` filter hiding pre-switch rows.
- *   - ⚠ Service-role client BYPASSES RLS. Every method taking `workspaceId`
- *     filters by it explicitly so the bypass stays contained.
+ * Convention: `find*` → `T | null`; `list*` → `T[]`; `insert*` / `update*` /
+ * `hardDelete*` throw on error.
+ * - `includeDeleted` is a legacy-tombstone escape hatch, not a trash surface
+ *     — deletes are permanent. Default `false` keeps the `deleted_at IS NULL`
+ *     filter hiding pre-switch rows.
+ * - The service-role client BYPASSES RLS, so every method taking
+ *     `workspaceId` filters by it explicitly.
  *
  * Implementation siblings:
  *   - `repository-bases.ts`   — base reads + writes + hard delete

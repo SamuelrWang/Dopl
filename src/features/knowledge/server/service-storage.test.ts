@@ -50,8 +50,8 @@ beforeEach(() => {
 
 describe("bodyBytes", () => {
   it("measures UTF-8 BYTES, the unit octet_length() counts", () => {
-    // ⚠ Counter is SQL `octet_length(body)`. UTF-16 code units would gate an
-    // emoji body at half its real weight and drift silently.
+    // the counter is SQL `octet_length(body)`; UTF-16 code units would gate an
+    // emoji body at half its real weight.
     expect(bodyBytes("abc")).toBe(3);
     expect(bodyBytes("é")).toBe(2);
     expect(bodyBytes("🙂")).toBe(4);

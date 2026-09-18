@@ -6,13 +6,12 @@ import type { ListFilter } from "../types";
 import { KnowledgeHome } from "./knowledge-home";
 
 /**
- * `/knowledge` card grid. Properties pinned here, because a redesign loses them
- * quietly:
+ * `/knowledge` card grid. Properties pinned here:
  *  - meta line comes from `baseStats` on the LIST response; deriving counts
  *    from a loaded tree turns the grid into N requests.
  *  - pill counts are cut BEFORE the scope filter.
  *  - create cell sits outside the filtered set (no-match ≠ dead end).
- *  - ⚠ no `<button>` inside a `<button>`: card is an `<article>` with two
+ *  - no `<button>` inside a `<button>`: the card is an `<article>` with two
  *    sibling footer buttons.
  */
 
@@ -91,7 +90,7 @@ function renderHome(
 }
 
 /** Container is an `<article>` labelled by base name; controls are
- *  `Open {name}` / `Bookmark {name}`, so a BUTTON role+name query is
+ *  `Open {name}` / `Bookmark {name}`, so a button role+name query is
  *  ambiguous. */
 function card(name: string) {
   return screen.getByRole("article", { name });
@@ -131,12 +130,11 @@ describe("KnowledgeHome grid", () => {
   it("draws a storage bar per card, in human bytes against the plan cap", () => {
     renderHome();
     expect(card("Product specs").textContent).toContain("4.2 MB / 5 MB");
-    // Zero is a REAL value: empty base gets an empty bar, not no bar.
+    // zero is a real value: an empty base gets an empty bar, not no bar.
     expect(card("Runbooks").textContent).toContain("0 B / 5 MB");
   });
 
   it("draws NO bar when the cap is unknown — missing is unknown, never zero", () => {
-    // A bar against a guessed limit asserts a fact nobody measured.
     renderHome({ kbStorageLimit: null });
     expect(card("Product specs").textContent).not.toContain("MB /");
     expect(card("Product specs").textContent).toContain("12 entries");
@@ -164,14 +162,14 @@ describe("KnowledgeHome grid", () => {
     });
     const text = card("Product specs").textContent ?? "";
     expect(text).toContain("5 MB / 5 MB");
-    // Gates FREEZE: note must say data is intact and the way out still works.
+    // gates freeze: the note must say data is intact and the way out works.
     expect(text).toContain("Nothing was deleted");
     expect(text).toContain("still works");
   });
 
   it("nests no interactive element inside another", () => {
-    // ⚠ `<button>` inside `<button>` is invalid HTML — browsers reparent the
-    // inner one OUT of the card, so it lands elsewhere in the document.
+    // `<button>` inside `<button>` is invalid HTML — browsers reparent the
+    // inner one out of the card, so it lands elsewhere in the document.
     renderHome();
     const specs = card("Product specs");
     expect(specs.tagName).toBe("ARTICLE");
@@ -181,7 +179,6 @@ describe("KnowledgeHome grid", () => {
   });
 
   it("keeps BOTH controls keyboard-reachable, and names each by its base", () => {
-    // Otherwise the grid is N buttons all called "Open".
     renderHome();
     const specs = card("Product specs");
     const [star, open] = within(specs).getAllByRole("button");
@@ -212,7 +209,7 @@ describe("KnowledgeHome grid", () => {
   });
 
   it("still opens on a click anywhere on the card — ONCE, not twice", () => {
-    // ⚠ Card click handler is a MOUSE shortcut for Open; without the button
+    // the card click handler is a mouse shortcut for Open; without the button
     // stopping propagation both fire and the base opens twice.
     const props = renderHome();
     fireEvent.click(card("Product specs"));
@@ -244,7 +241,6 @@ describe("KnowledgeHome grid", () => {
 
 describe("KnowledgeHome stars", () => {
   it("puts the star state in the accessibility tree, not only the fill", () => {
-    // `aria-pressed` makes this a TOGGLE; the label names the ACTION.
     renderHome({ starredBaseIds: ["kb-2"] });
 
     const unstarred = screen.getByRole("button", {
@@ -259,7 +255,7 @@ describe("KnowledgeHome stars", () => {
   });
 
   it("asks for the OPPOSITE state, and does not open the base", () => {
-    // Sends the END state (route verbs are idempotent) and stops propagation.
+    // sends the END state (route verbs are idempotent) and stops propagation.
     const props = renderHome({ starredBaseIds: ["kb-2"] });
 
     fireEvent.click(
@@ -276,10 +272,8 @@ describe("KnowledgeHome stars", () => {
   });
 
   it("lifts starred bases to the FRONT, keeping list order within each group", () => {
-    // ⚠ List order here is DELIBERATELY NOT ALPHABETICAL: "Sales playbook"
-    // precedes "Runbooks" only because the caller's array says so. A comparator
-    // falling back to name — or to `starredBaseIds` order (`["kb-3","kb-2"]`)
-    // — gives the other answer.
+    // list order here is deliberately not alphabetical: a comparator falling
+    // back to name — or to `starredBaseIds` order — gives the other answer.
     renderHome({
       bases: [SHARED, PRIVATE, TEAM],
       starredBaseIds: ["kb-3", "kb-2"],
@@ -310,7 +304,7 @@ describe("KnowledgeHome stars", () => {
   });
 
   it("sorts WITHIN the filtered results, and never changes the pill counts", () => {
-    // Badges are cut upstream of the scope pill, so stars can't change them.
+    // badges are cut upstream of the scope pill, so stars can't change them.
     renderHome({
       bases: [PRIVATE, SHARED],
       starredBaseIds: ["kb-3"],
@@ -326,27 +320,20 @@ describe("KnowledgeHome stars", () => {
   });
 
   it("ignores a star for a base this grid is not rendering", () => {
-    // Client holds `starredBaseIds` across a search: an id with no card must
-    // not push a phantom to the front.
+    // the client holds `starredBaseIds` across a search: an id with no card
+    // must not push a phantom to the front.
     renderHome({ bases: [PRIVATE], starredBaseIds: ["kb-2", "kb-99"] });
     expect(cardNames()).toEqual(["Product specs"]);
   });
 });
 
 /**
- * THE HERO IS A DECORATIVE BAND AND NOTHING ELSE (Samuel's ruling, 2026-08-30 —
- * ledger ASK-5). `home/hero-chat.tsx › HeroChat` hung under this image and is
- * DELETED: a composer, an auto-grow textarea, an IME guard, a live region and a
- * hardcoded reply, wired to nothing, live on a workspace page.
+ * The hero is a decorative band and nothing else (Samuel's ruling, 2026-08-30 —
+ * ledger ASK-5); `home/hero-chat.tsx › HeroChat` is deleted.
  *
- * ⚠ THE ABSENCE IS THE ASSERTION, and it is written against the CONTROLS rather
- * than against the component, so re-adding the same fake chat under a new name
- * fails it too. The three probes below are the composer's own affordances: a
- * textbox, a send control, a dictation toggle.
- *
- * ⚠ MUTATION-VERIFY: restoring `<HeroChat />` under the band turns the second
- * case red on all three probes, and leaves the first (no image → no hero) green
- * — which is why both are here.
+ * The absence is the assertion, written against the CONTROLS rather than the
+ * component, so re-adding the same fake chat under a new name fails it too. The
+ * three probes are the composer's affordances: textbox, send, dictation.
  */
 describe("KnowledgeHome hero", () => {
   const HERO = "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
@@ -362,7 +349,7 @@ describe("KnowledgeHome hero", () => {
     const img = document.querySelector("img[alt='']");
     expect(img).not.toBeNull();
 
-    // The hero container (`.homeHero`) — the band's parent.
+    // the hero container (`.homeHero`) — the band's parent.
     const hero = (img as HTMLElement).closest("div")?.parentElement ?? null;
     expect(hero).not.toBeNull();
     expect(within(hero!).queryByRole("textbox")).toBeNull();

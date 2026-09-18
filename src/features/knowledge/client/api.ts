@@ -2,10 +2,8 @@
 
 /**
  * Typed client wrappers for knowledge REST endpoints. Each sets
- * `X-Workspace-Id` when `workspaceId` given, throws `KnowledgeApiError` on
- * `!res.ok` (from `toKnowledgeErrorResponse`'s `{ error: { code, message } }`
- * envelope), returns JSON for 200/201 or `void` for 204. Conventions match
- * `src/app/api/knowledge/`.
+ * `X-Workspace-Id` when `workspaceId` is given, throws `KnowledgeApiError` on
+ * `!res.ok`, and returns JSON for 200/201 or `void` for 204.
  */
 import { ApiError, apiRequest } from "@/shared/api/api-client";
 import type {
@@ -51,10 +49,10 @@ interface RequestOpts {
   body?: unknown;
   /** Defaults to GET. */
   method?: "GET" | "POST" | "PATCH" | "DELETE" | "PUT";
-  /** Optional URL search params (objects, never strings). */
+  /** URL search params (objects, never strings). */
   query?: Record<string, string | undefined>;
-  /** Concurrency precondition. Server compares against the row's current
-   *  `updated_at`; mismatch → 412 `KNOWLEDGE_STALE_VERSION`. */
+  /** Concurrency precondition, compared against the row's `updated_at`;
+   *  mismatch → 412 `KNOWLEDGE_STALE_VERSION`. */
   expectedUpdatedAt?: string;
 }
 
@@ -63,7 +61,7 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
     return await apiRequest<T>(path, opts);
   } catch (err) {
     if (err instanceof ApiError) {
-      // ⚠ Re-type: doc-pane branches on KnowledgeApiError instances
+      // re-type: doc-pane branches on KnowledgeApiError instances
       // (e.g. 412 KNOWLEDGE_STALE_VERSION).
       throw new KnowledgeApiError(err.status, err.code, err.message, err.details);
     }
@@ -76,44 +74,36 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 /** Full `GET /api/knowledge/bases` response: list plus the maps the route folds in. */
 export interface KnowledgeBaseList {
   bases: KnowledgeBase[];
-  /** Foreign base owners' display names, keyed by user id. `{}` when every
-   *  visible base is the caller's own. */
+  /** Foreign base owners' display names, keyed by user id. */
   ownerNames: Record<string, string>;
-  /** Keyed by base id. ⚠ MISSING key means "unknown", never "empty" — a base
-   *  with no entries still gets a zeroed entry; `{}` only when route degraded. */
+  /** Keyed by base id. A missing key means "unknown", never "empty": a base
+   *  with no entries still gets a zeroed entry. */
   baseStats: Record<string, KnowledgeBaseStats>;
-  /** Workspace per-base storage cap in bytes, from entitlement-resolved plan.
-   *  `null` = unknown (old server, or failed billing read) — meters suppressed
-   *  rather than drawn against a guessed cap. */
+  /** Workspace per-base storage cap in bytes. `null` = unknown; meters are
+   *  suppressed rather than drawn against a guessed cap. */
   kbStorageLimit: number | null;
-  /** CALLER'S OWN starred base ids, subset of `bases`. Per-user favourite, not
-   *  a base property, so it rides the response not the row. `[]` covers both
-   *  "nothing starred" and degraded — both render identically. */
+  /** Caller's own starred base ids. Per-user favourite, not a base property,
+   *  so it rides the response not the row. */
   starredBaseIds: string[];
   /**
-   * Base ids granted into AT LEAST ONE channel — the set behind the card's
-   * `Shared` pill (2026-09-01). Subset of `bases`.
-   *
-   * ⚠ **`?? EMPTY_SHARED` INLINE AT EVERY READ (INVARIANTS §8).** This list is
-   * IndexedDB-persisted, so an entry written by a bundle that predates the key
-   * survives the upgrade WITHOUT it — the wire type is non-optional and is
-   * right, the cache is a different moment. Absent reads as "none known to be
-   * shared", which is exactly what shipped before the key existed.
+   * Base ids granted into at least one channel — the set behind the card's
+   * `Shared` pill. Read it with `?? EMPTY_SHARED` (INVARIANTS §8): this list is
+   * IndexedDB-persisted, so an entry written before the key existed survives
+   * the upgrade without it.
    */
   sharedBaseIds: string[];
   /** `{baseId → {level, guestWrite}}` for the channel passed as `channelId`.
-   *  ⚠ `EMPTY_GRANTS` ({}) when NO channelId was requested OR a pre-grant server
-   *  sent no key — both mean "no scope-A grants to show here", which renders
-   *  identically. A base with no grant is simply ABSENT from the map. */
+   *  `EMPTY_GRANTS` when no channelId was requested or a pre-grant server sent
+   *  no key. A base with no grant is simply absent from the map. */
   channelGrants: Record<string, ChannelResourceGrant>;
 }
 
-/** Shared frozen empty list — the §8 fallback for `sharedBaseIds`, never a
- *  fresh `[]` per read (which would churn every memo keyed on it). */
+/** Shared frozen empty list — the §8 fallback for `sharedBaseIds`; a fresh `[]`
+ *  per read would churn every memo keyed on it. */
 export const EMPTY_SHARED: readonly string[] = Object.freeze([]);
 
-/** Shared frozen empty map — a stale cached payload (no `channelGrants` key)
- *  and an unscoped read both fall back to THIS, never a fresh `{}` per read. */
+/** Shared frozen empty map — §8 fallback for `channelGrants`, for the same
+ *  memo-churn reason. */
 export const EMPTY_GRANTS: Readonly<Record<string, ChannelResourceGrant>> =
   Object.freeze({});
 
@@ -123,10 +113,9 @@ export async function fetchBaseList(
    *  scope-A `channelGrants` map for that channel. */
   channelId?: string,
   /**
-   * When set, the request carries `?shelf=` and the SERVER returns only that
-   * shelf's bases (`../types.ts › KbShelf`). ⚠ OMITTED IS BOTH SHELVES — this
-   * is a narrowing, so forgetting it widens; the caller that must never widen
-   * is the /home pane's scope C. There is deliberately no client-side fallback
+   * When set, the request carries `?shelf=` and the server returns only that
+   * shelf's bases (`../types.ts › KbShelf`). Omitted is both shelves — this is
+   * a narrowing, so forgetting it widens. Deliberately no client-side fallback
    * filter: the rows are meant not to arrive.
    */
   shelf?: KbShelf
@@ -141,34 +130,28 @@ export async function fetchBaseList(
     channelGrants?: Record<string, ChannelResourceGrant>;
   }>("/api/knowledge/bases", {
     workspaceId,
-    // ⚠ `withQuery` strips `undefined` values, so this object is safe to build
-    // unconditionally — an absent channelId/shelf sends no param at all, which
-    // is what "not channel-scoped" / "both shelves" mean on this route.
+    // `withQuery` strips `undefined` values, so this object is safe to build
+    // unconditionally — an absent channelId/shelf sends no param at all.
     query: channelId || shelf ? { channelId, shelf } : undefined,
   });
   return {
     bases: data.bases,
     ownerNames: data.ownerNames ?? {},
     baseStats: data.baseStats ?? {},
-    // Pre-deploy server sends no key — indistinguishable from one that
-    // could not resolve it, correctly.
+    // pre-deploy server sends no key — same answer as a failed read.
     kbStorageLimit: data.kbStorageLimit ?? null,
     starredBaseIds: data.starredBaseIds ?? [],
-    // Pre-deploy server sends no key; "none known to be shared" is the same
-    // answer a degraded read gives and renders identically (every card keeps
-    // its scope word).
     sharedBaseIds: data.sharedBaseIds ?? [],
-    // ⚠ §8 stale-cache: a payload cached before this field existed carries no
-    // `channelGrants` key. `?? EMPTY_GRANTS` keeps the read from crashing and
-    // renders "no grants", never a blank pane.
+    // §8 stale-cache: a payload cached before this field existed carries no
+    // `channelGrants` key; the fallback renders "no grants", never a blank pane.
     channelGrants: data.channelGrants ?? EMPTY_GRANTS,
   };
 }
 
 /**
- * Star/unstar ONE base for the calling user. ⚠ Two idempotent verbs
- * (PUT/DELETE), not a toggle: caller states desired end state, so a retry
- * after an ambiguous failure cannot flip the value back.
+ * Star/unstar one base for the calling user. Two idempotent verbs (PUT/DELETE),
+ * not a toggle: the caller states the desired end state, so a retry after an
+ * ambiguous failure cannot flip the value back.
  */
 export async function setBaseStar(
   baseId: string,
@@ -183,10 +166,10 @@ export async function setBaseStar(
 
 // ─── Channel grants (scope-A sharing) ───────────────────────────────
 
-/** `GET /api/knowledge/bases/{baseId}/channel-grants` — the settings section's
- *  read. `channels` is the caller's SERVER-fenced visible list; `grants` is keyed
- *  by channel id, absent when ungranted; 🔒 `channelScopeAllowed` is whether this
- *  container lends into CHANNELS at all (`shared/tenancy/channel-scope.ts`). */
+/** `GET /api/knowledge/bases/{baseId}/channel-grants`. `channels` is the
+ *  caller's server-fenced visible list; `grants` is keyed by channel id, absent
+ *  when ungranted; `channelScopeAllowed` is whether this container lends into
+ *  channels at all (`shared/tenancy/channel-scope.ts`). */
 export interface ChannelGrantSettings {
   /** Creator or workspace admin+. False renders the read-only summary. */
   canManage: boolean;
@@ -206,8 +189,8 @@ export async function fetchChannelGrants(
     grants?: Record<string, ChannelResourceGrant>;
   }>(`/api/knowledge/bases/${baseId}/channel-grants`, { workspaceId });
   return {
-    // ⚠ §8 stale-cache / old-server read: every field falls back CLOSED —
-    // read-only, no channels, no channel section; never an invented row.
+    // §8 stale-cache / old-server read: every field falls back closed —
+    // read-only, no channels, no channel section.
     canManage: data.canManage ?? false,
     channelScopeAllowed: data.channelScopeAllowed ?? false,
     channels: data.channels ?? [],
@@ -216,10 +199,9 @@ export async function fetchChannelGrants(
 }
 
 /**
- * Set ONE (KB, channel) grant. `level: "none"` un-shares; the response's
- * `grant` is `null` for it, which the cache patch reads as "remove the key".
- *
- * ⚠ ONE IDEMPOTENT PUT STATING THE END STATE, not a toggle — a retry after an
+ * Set one (KB, channel) grant. `level: "none"` un-shares; the response's
+ * `grant` is then `null`, which the cache patch reads as "remove the key".
+ * Idempotent PUT stating the end state, not a toggle — a retry after an
  * ambiguous failure cannot land the opposite of what the operator chose.
  */
 export async function setChannelGrant(
@@ -403,12 +385,11 @@ export async function moveEntry(
 export type KnowledgeExportKind = "base" | "folder" | "entry";
 
 /**
- * Download base/folder as zip, or single entry as `.md`. Honors the
- * routes' `Content-Disposition` filename, else a default.
- * ⚠ `fetch` + object-URL anchor, NOT a plain link: the link form drops
- * `X-Workspace-Id`, and a caller with no header resolves somewhere it did not
- * ask for — or, for a header that is not a workspace id, navigates to an error
- * page instead of surfacing `KnowledgeApiError`.
+ * Download base/folder as zip, or a single entry as `.md`. Honors the routes'
+ * `Content-Disposition` filename, else a default.
+ * `fetch` + object-URL anchor, not a plain link: the link form drops
+ * `X-Workspace-Id`, so the caller resolves somewhere it did not ask for, or
+ * navigates to an error page instead of surfacing `KnowledgeApiError`.
  */
 export async function downloadKnowledgeExport(
   kind: KnowledgeExportKind,
@@ -438,7 +419,7 @@ export async function downloadKnowledgeExport(
       code = env.error?.code ?? code;
       message = env.error?.message ?? message;
     } catch {
-      // Non-JSON error body — keep the status text.
+      // non-JSON error body — keep the status text.
     }
     throw new KnowledgeApiError(res.status, code, message);
   }

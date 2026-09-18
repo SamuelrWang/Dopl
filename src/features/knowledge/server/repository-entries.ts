@@ -16,25 +16,15 @@ import {
 } from "./dto";
 
 /**
- * Raw Supabase I/O for knowledge ENTRIES. No business logic, no auth checks —
+ * Raw Supabase I/O for knowledge entries. No business logic, no auth checks —
  * see `repository.ts` for the split map and conventions.
  *
- * 🔒 TWO CLIENTS, AND WHICH ONE A FUNCTION TAKES IS THE WHOLE OF RLS PHASE 1
- * (Wave B B7). `readClient()` is the CALLER's client when
- * `RLS_CALLER_SCOPED_READS` is on and `supabaseAdmin()` otherwise, so with the
- * flag off this file behaves exactly as it did.
- *
- *   * **A read that answers "what may this caller see" takes `readClient()`.**
- *     With the flag on, the row filter is the policy
- *     (`20260919120000_rls_helpers_and_caller_scope`), which is written to equal
- *     the TS predicate — the predicate stays until the flag has run a release.
- *   * **A read that answers a SYSTEM question keeps `supabaseAdmin()`**, and
- *     says so at the call site. Slug uniqueness, storage accounting and the
- *     `max(position)` append helpers must see rows the caller cannot: scoped to
- *     the caller they would answer a different question and answer it wrongly
- *     (a slug "free" because someone else's private base holds it).
- *   * **Writes are unchanged.** INSERT/UPDATE/DELETE stay on the service role
- *     until RLS plan phase 4.
+ * Which client a function takes is load-bearing. A read answering "what may
+ * this caller see" takes `readClient()`; a read answering a SYSTEM question
+ * (slug uniqueness, storage accounting, `max(position)`) keeps
+ * `supabaseAdmin()` and says so at the call site — caller-scoped it would
+ * answer a different question wrongly (a slug "free" because someone else's
+ * private base holds it). Writes stay on the service role.
  */
 
 export interface ListEntriesOpts {
@@ -138,7 +128,7 @@ export async function listEntriesForBase(
   query = query
     .order("position", { ascending: true })
     .order("created_at", { ascending: true })
-    // ⚠ Deterministic tiebreak: paged reads repeat/skip rows on
+    // Deterministic tiebreak: paged reads repeat/skip rows on
     // position/created_at ties without it.
     .order("id", { ascending: true });
   if (opts.limit !== undefined) {
@@ -158,15 +148,13 @@ export async function listEntriesForBase(
 /**
  * Highest `position` among active entries in a (base, folder) bucket, -1 when
  * empty. `insertEntry` appends at `max + 1` so insertion order survives in
- * position-sorted views (F-8) instead of every row landing at 0 and collapsing
- * to an alphabetical tiebreak in get_tree.
+ * position-sorted views (F-8) instead of every row landing at 0.
  */
 export async function maxEntryPositionIn(
   baseId: string,
   folderId: string | null
 ): Promise<number> {
-  // ⚠ WRITE-PATH READ, service role on purpose: it feeds an INSERT, and writes
-  // stay on the service role until RLS plan phase 4.
+  // Write-path read, service role on purpose: it feeds an INSERT.
   const db = supabaseAdmin();
   let query = db
     .from("knowledge_entries")
@@ -202,11 +190,9 @@ export interface EntryStamp {
 }
 
 /**
- * `(base, updated_at)` for a SET of bases in ONE query — the base list's
- * "{N} entries · updated {when}" columns. Two columns, no bodies:
- * `countEntriesForBase` is N round trips per grid, and a count/max aggregate
- * needs a grouped RPC for numbers the caller re-derives free. ⚠ `baseIds` is
- * the caller's POST-visibility set, so nothing hidden is counted.
+ * `(base, updated_at)` for a set of bases in one query — the base list's
+ * "{N} entries · updated {when}" columns. `baseIds` is the caller's
+ * post-visibility set, so nothing hidden is counted.
  */
 export async function listEntryStampsForBases(
   workspaceId: string,
@@ -231,7 +217,7 @@ export async function listEntryStampsForBases(
 
 /**
  * Batch id lookup for active entries (`GET /api/knowledge/entries?ids=`).
- * ⚠ Meta only and workspace-filtered because callers pass UNTRUSTED ids;
+ * Meta only and workspace-filtered because callers pass untrusted ids;
  * base-visibility gating happens in the service.
  */
 export async function listEntriesByIds(
@@ -269,9 +255,9 @@ export async function insertEntry(
   args: InsertEntryArgs
 ): Promise<KnowledgeEntry> {
   const db = supabaseAdmin();
-  // F-8: append after siblings when position unpinned, preserving insertion
-  // order. Concurrent inserts may race to the same value — fine, position is a
-  // display hint and the (created_at, id) tiebreak stays deterministic.
+  // F-8: append after siblings when position unpinned. Concurrent inserts may
+  // race to the same value — position is a display hint and the (created_at,
+  // id) tiebreak stays deterministic.
   const position =
     args.position ??
     (await maxEntryPositionIn(args.knowledgeBaseId, args.folderId ?? null)) + 1;
@@ -297,10 +283,10 @@ export async function insertEntry(
 }
 
 /**
- * Batch form of `InsertEntryArgs`. `position` is REQUIRED — the single-row
+ * Batch form of `InsertEntryArgs`. `position` is required — the single-row
  * `maxEntryPositionIn` fallback would restore the per-row round trips the batch
- * exists to remove. `id` MAY be supplied so callers know each uuid before the
- * insert resolves — no second pass, no assumption about `RETURNING` order.
+ * exists to remove. `id` may be supplied so callers know each uuid up front,
+ * with no assumption about `RETURNING` order.
  */
 export interface InsertEntriesArgs extends Omit<InsertEntryArgs, "position"> {
   id?: string;
@@ -388,7 +374,7 @@ export async function updateEntryRow(
   return mapEntryRow(data as KnowledgeEntryRow);
 }
 
-/** PERMANENT delete — no trash. Workspace-scoped as defense-in-depth;
+/** Permanent delete, no trash. Workspace-scoped as defense-in-depth;
  *  embedding chunks cascade via FK. */
 export async function hardDeleteEntry(
   workspaceId: string,

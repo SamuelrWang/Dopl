@@ -1,18 +1,14 @@
 "use client";
 
 /**
- * THE SEARCH HOOK — debounce, abort, keep-the-last-answer, and the recents list.
+ * The search hook: debounce, abort, keep-the-last-answer, and the recents list.
  *
- * ⚠ **THE TRANSPORT IS A PROP, NOT AN IMPORT (2026-09-17).** `useSearch` takes a
- * `fetcher`, which is what lets this one hook run over the real endpoint, over a
- * fixture table while the endpoint is still being built, and over a stub in a
- * test — with the BEHAVIOUR (when it fires, what it cancels, what it keeps on
- * screen) identical in all three. Swapping the data source is one import at the
- * host; nothing in this file or in the popup knows which one it got.
+ * The transport is a prop, not an import, so the same behaviour runs over the
+ * real endpoint, a fixture table and a test stub.
  *
- * ⚠ **THE FETCHER MUST BE STABLE** — a module-level `const`, or `useCallback`d
- * by the host. It is an effect dependency, and a fresh function identity every
- * render re-arms the debounce forever.
+ * The fetcher must be STABLE — a module-level const or `useCallback`d. It is an
+ * effect dependency, and a fresh identity each render re-arms the debounce
+ * forever.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -23,7 +19,7 @@ import {
   type SearchScope,
 } from "./contracts";
 
-/** ⚠ 250ms, and it is a TYPING pause, not a network guess. */
+/** 250ms — a typing pause, not a network guess. */
 export const SEARCH_DEBOUNCE_MS = 250;
 
 export interface SearchRequest {
@@ -39,7 +35,7 @@ export type SearchFetcher = (req: SearchRequest) => Promise<SearchResponse>;
 
 export interface SearchState {
   groups: SearchGroup[];
-  /** A request is in flight. ⚠ `groups` is the PREVIOUS answer while it is. */
+  /** A request is in flight. `groups` is the previous answer while it is. */
   loading: boolean;
   /** Plain message, or `null`. Rendered as one line (minimal copy). */
   error: string | null;
@@ -50,14 +46,12 @@ const IDLE: SearchState = { groups: [], loading: false, error: null };
 /**
  * Run `query` against `fetcher`, 250ms after the typing stops.
  *
- * ⚠ **THE LAST ANSWER STAYS ON SCREEN WHILE THE NEXT ONE LOADS.** Clearing
- * `groups` on every keystroke makes the popup blink through an empty card at
- * typing speed, and the rows an operator is aiming at jump under the cursor.
- * `loading` is the whole signal; the card renders it as a subtle state.
+ * The last answer stays on screen while the next loads — clearing `groups` per
+ * keystroke blinks the card empty and moves rows under the cursor. `loading` is
+ * the whole signal.
  *
- * ⚠ **EVERY SUPERSEDED REQUEST IS ABORTED**, and a settled-but-aborted response
- * is DROPPED rather than rendered: out-of-order answers are how a popup ends up
- * showing results for a prefix of what the field now says.
+ * Every superseded request is aborted, and a settled-but-aborted response is
+ * dropped: out-of-order answers show results for a prefix of what the field says.
  */
 export function useSearch({
   query,
@@ -72,21 +66,18 @@ export function useSearch({
 }): SearchState {
   const [state, setState] = useState<SearchState>(IDLE);
   const q = query.trim();
-  // ⚠ **THE THRESHOLD IS THE SERVER'S OWN** (`contracts.ts`): shorter than this
-  // and the route answers an EMPTY 200 by contract, so asking would be a request
-  // whose answer is already known.
+  // The server's own threshold (`contracts.ts`): shorter answers an empty 200 by
+  // contract, so asking would be a request whose answer is already known.
   const searching = q.length >= SEARCH_MIN_QUERY_LENGTH;
 
   useEffect(() => {
     if (!searching) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      // ⚠ **THE FLAG IS RAISED WHEN THE REQUEST IS, NOT WHEN THE KEY IS
-      // PRESSED** — two reasons, and they agree. (1) A synchronous `setState` in
-      // an effect body is a cascading render (`react-hooks/set-state-in-effect`).
-      // (2) Through fast typing there is no request in flight during the 250ms
-      // pause, so a flag raised on the keystroke would dim the card for a read
-      // that had not been asked for yet.
+      // Raised when the request is, not when the key is pressed: a synchronous
+      // `setState` in an effect body cascades, and through fast typing nothing is
+      // in flight during the pause, so an earlier flag would dim the card for a
+      // read nobody has asked for.
       setState((prev) => ({ ...prev, loading: true, error: null }));
       fetcher({ q, scope, containerId, signal: controller.signal })
         .then((res) => {
@@ -95,8 +86,8 @@ export function useSearch({
         })
         .catch((err: unknown) => {
           if (controller.signal.aborted) return;
-          // ⚠ KEEP THE ROWS. A failed refresh is not a reason to throw away the
-          // answer the reader is currently looking at.
+          // Keep the rows: a failed refresh is not a reason to discard the answer
+          // the reader is looking at.
           setState((prev) => ({
             groups: prev.groups,
             loading: false,
@@ -111,11 +102,9 @@ export function useSearch({
   }, [q, searching, scope, containerId, fetcher]);
 
   /**
-   * ⚠ **SHORT QUERIES READ `IDLE` RATHER THAN CLEARING THE STATE.** Resetting it
-   * in the effect is a synchronous `setState` in an effect body — a cascading
-   * render, and what `react-hooks/set-state-in-effect` is for. Derived here, the
-   * held answer simply stops being visible, and is still there to stand under the
-   * next query's load (the keep-the-last-answer rule above).
+   * Short queries read `IDLE` rather than clearing state: resetting in the effect
+   * would be a cascading `setState`, and derived here the held answer is still
+   * there to stand under the next query's load.
    */
   return searching ? state : IDLE;
 }
@@ -125,17 +114,15 @@ export const RECENTS_MAX = 5;
 
 const RECENTS_KEY = "dopl.search.recents";
 
-/** ⚠ PER USER — one machine holds more than one account, and a previous
- *  operator's queries are theirs, not this one's. */
+/** Per user: one machine holds more than one account, and a previous operator's
+ *  queries are theirs. */
 function storageKey(userId?: string): string {
   return `${RECENTS_KEY}:${userId ?? "anon"}`;
 }
 
 /**
- * ⚠ **EVERY `localStorage` TOUCH IS GUARDED.** It throws outright in a private
- * window and with site data blocked, and it is absent in the SSR pass and in a
- * jsdom test that did not install it. A search box that cannot render because a
- * convenience failed is the worse bug.
+ * Every `localStorage` touch is guarded: it throws in a private window and with
+ * site data blocked, and is absent in the SSR pass and in jsdom.
  */
 export function readRecents(userId?: string): string[] {
   try {
@@ -167,18 +154,14 @@ export function writeRecent(query: string, userId?: string): string[] {
 }
 
 /**
- * The recents list and the one way to add to it.
- *
- * ⚠ **A QUERY IS REMEMBERED WHEN IT IS USED, NOT WHEN IT IS TYPED** — the popup
- * calls `remember` on a row activation. Storing every keystroke would fill the
- * list with the prefixes of one search.
+ * The recents list and the one way to add to it. A query is remembered when it is
+ * USED, not typed — storing keystrokes would fill the list with one search's
+ * prefixes.
  */
 export function useRecentSearches(
   userId?: string,
-  /** ⚠ **FIXTURE SEAM (2026-09-17)** — shown only while this user has remembered
-   *  NOTHING, so a first look at the popup is not an empty card. A real
-   *  remembered query replaces it permanently. Drop the argument once the search
-   *  endpoint has been live long enough for every operator to have a list. */
+  /** Fixture seam: shown only while this user has remembered nothing, so a first
+   *  look is not an empty card. A real remembered query replaces it permanently. */
   seed?: readonly string[]
 ): {
   recents: string[];
@@ -186,8 +169,8 @@ export function useRecentSearches(
 } {
   const [recents, setRecents] = useState<string[]>([]);
 
-  // ⚠ After mount, never during render: `localStorage` does not exist in the
-  // Next server pass, and a lazy initialiser that reads it would throw there.
+  // After mount, never during render: `localStorage` does not exist in the Next
+  // server pass, and a lazy initialiser reading it would throw there.
   useEffect(() => {
     const stored = readRecents(userId);
     setRecents(stored.length > 0 ? stored : [...(seed ?? [])].slice(0, RECENTS_MAX));

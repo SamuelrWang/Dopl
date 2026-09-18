@@ -39,24 +39,18 @@ export interface MetaCardProps {
 }
 
 /**
- * THE BASE'S DETAILS — the resting face of the detail column: two editable
+ * The base's details — the resting face of the detail column: two editable
  * fields (name + description) over a read-only meta grid and the storage bar.
- * Name/description persist via the base PATCH route; the rest is derived from
- * the base row.
+ * Name/description persist via the base PATCH route; the rest is derived.
  *
- * ⚠ IT IS A FLAT `SectionPanel` NOW, NOT A CARD (Samuel's ruling, 2026-08-28).
- * It was a 14px-radius bordered box with its own `--card-surface-subtle` header
- * STRIP — a framed surface inside a pane that was itself framed inside a panel.
- * The section language here is the one both /home faces already share
- * (`shared/ui/section-panel.tsx`), and the GROUND is the component's own since
- * R-38/R-39 (2026-09-17) — one flat gray on every host — so this file never
- * names that palette.
+ * Flat `SectionPanel`, not a card (Samuel's ruling, 2026-08-28).
+ * R-38/R-39 (2026-09-17): the ground is the component's own — one flat gray on
+ * every host — so this file never names that palette.
  *
- * ⚠ THE FIELDS ARE RAISED, NOT PRESSED IN. They wore `.concave-field`; they
- * wear `shared/ui/wells.ts › RAISED_INPUT` — Samuel's reference text-control
- * face — with height and padding supplied HERE, which is that recipe's own
- * division of labour. Do not add a `.concave-*` class back to this file: a
- * pressed-in well on a flat panel is the mismatch the overhaul removed.
+ * Fields are raised, not pressed in: they wear
+ * `shared/ui/wells.ts › RAISED_INPUT` with height and padding supplied HERE.
+ * Do not add a `.concave-*` class back — a pressed-in well on a flat panel is
+ * the mismatch the overhaul removed.
  */
 export function MetaCard({
   name,
@@ -154,10 +148,9 @@ export function MetaCard({
           </div>
         </div>
 
-        {/* Storage sits UNDER the meta grid rather than inside it: it is the
-            only value here that is a quantity against a ceiling, and the grid's
-            key/value rows have nowhere to put a bar. Renders nothing when
-            either half is unknown. */}
+        {/* storage sits under the meta grid: the grid's key/value rows have
+            nowhere to put a bar. Renders nothing when either half is
+            unknown. */}
         <StorageMeter
           usedBytes={storageBytes ?? null}
           limitBytes={storageLimit ?? null}

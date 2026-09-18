@@ -1,23 +1,13 @@
 /**
- * 🔒 **THE QUERY SIDE OF EVERY `@@` — DRIVEN THROUGH THE WHOLE SERVICE (F-717).**
+ * F-717: the query side of every `@@`, driven through the whole service.
+ * `repository-rows.test.ts` proves which operator goes on the wire and
+ * `query-text.test.ts` what the tsquery may contain; this proves the thing a
+ * reader cares about — a half-typed word comes back with the message it is in.
  *
- * `repository-rows.test.ts` proves which OPERATOR goes on the wire;
- * `query-text.test.ts` proves what the `tsquery` may contain. This one proves
- * the only thing a reader cares about: **a half-typed word comes back with the
- * message it is inside.** Samuel, 2026-09-17: *"I'm trying to search up channel
- * messages … I only see channels coming up from the search. I don't see any
- * messages."*
+ * It shares `_fake-world.ts` with `fence.test.ts` on purpose, so widening the
+ * match is asserted over the same rows the fence is asserted over.
  *
- * ⚠ **IT SHARES `_fake-world.ts` WITH `fence.test.ts` ON PURPOSE.** The fence
- * suite's world already carries one matching row per table on each side of the
- * membership line, so widening the MATCH is asserted over the same rows the
- * fence is asserted over — and a widening that leaked would fail there, in the
- * same fixture, rather than in a copy that had drifted.
- *
- * MUTATION-VERIFY: 3 reverts, 3 failures, 0 vacuous (2026-09-17) — dropping the
- * `:*` suffix in `buildPrefixTsQuery`, returning a match-everything tsquery for
- * a query with no lexeme, and putting `type: "websearch"` back on either arm
- * each turn a case here red.
+ * MUTATION-VERIFY: 3 reverts, 3 failures, 0 vacuous (2026-09-17).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -45,18 +35,17 @@ beforeEach(() => {
 describe("the full-text arms reach a HALF-TYPED word", () => {
   it("finds a message BODY from a prefix of its word", async () => {
     mount();
-    // ⚠ `websearch_to_tsquery` matches WHOLE lexemes, so this query reached no
-    // body at all before the builder: a popup that only answers finished words
-    // is empty for every keystroke but the last one.
+    // `websearch_to_tsquery` matches whole lexemes, so this query reached no body
+    // at all before the builder.
     const { groups } = await runSearch(CTX, { q: "zeph", scope: "account" });
     expect(ids(groups, "messages")).toEqual(["msg-mine"]);
   });
 
   it("reaches a knowledge entry through the VECTOR, not only its title", async () => {
     mount();
-    // ⚠ The knowledge group has two arms and the `ilike` one matches the title
-    // here too — what this pins is that BOTH are spelled the same way, because
-    // the arm that carried the bug is the one no title can stand in for.
+    // The knowledge group has two arms and the `ilike` one also matches this
+    // title; what is pinned is that both are spelled the same way, since no title
+    // can stand in for the arm that carried the bug.
     const { groups } = await runSearch(CTX, { q: "zeph", scope: "account" });
     expect(ids(groups, "knowledge")).toEqual(["kn-mine"]);
   });
@@ -71,9 +60,9 @@ describe("the full-text arms reach a HALF-TYPED word", () => {
 
   it("answers a query with NO lexeme in it without returning everything", async () => {
     mount();
-    // ⚠ `???` has nothing to ask Postgres for: the full-text arms run no query
-    // at all, the `ilike` arms answer for themselves, and neither matches. An
-    // empty `tsquery` matching everything is the failure this rules out.
+    // `???` has nothing to ask Postgres for: the full-text arms run no query and
+    // the `ilike` arms answer for themselves. An empty tsquery matching
+    // everything is the failure this rules out.
     const { groups } = await runSearch(CTX, { q: "???", scope: "account" });
     expect(groups).toEqual([]);
   });

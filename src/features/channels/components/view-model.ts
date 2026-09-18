@@ -449,7 +449,7 @@ export function shortName(person: AvatarPerson, currentUserId: string): string {
 }
 
 /** Direct channels are the DM section; everything else is the channel tree. */
-export function splitChannels(channels: Channel[]): {
+export function splitChannels(channels: readonly Channel[]): {
   direct: Channel[];
   rooms: Channel[];
 } {

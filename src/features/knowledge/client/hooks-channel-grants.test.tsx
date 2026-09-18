@@ -1,12 +1,9 @@
 // @vitest-environment jsdom
 /**
- * `useSetChannelGrant` + `patchChannelGrantInCache` — the scope-A grant write's
- * cache half. Hand-rolled, not `use-api-mutation.ts`, because knowledge reads
- * aren't on `useApiQuery` (INVARIANTS §8 rule 6), so this file pins the rules
- * that layer would have enforced: the patch MERGES (every sibling map on the
- * base-list entry survives); `null` REMOVES the key rather than storing a
- * level; a failure restores the SNAPSHOT; a cold entry is DECLINED by the patch
- * and picked up by `coldKeys`; the UNSCOPED base list is never touched.
+ * `useSetChannelGrant` + `patchChannelGrantInCache`. The write is hand-rolled,
+ * so this file pins the rules `use-api-mutation.ts` would have enforced: the
+ * patch MERGES; `null` REMOVES the key; a failure restores the SNAPSHOT; a cold
+ * entry is declined and picked up by `coldKeys`; the UNSCOPED list is untouched.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
@@ -95,11 +92,11 @@ describe("patchChannelGrantInCache", () => {
       grant: { level: "visible", guestWrite: true },
     });
 
-    // Settings entry: one base, keyed by CHANNEL.
+    // settings entry: one base, keyed by CHANNEL.
     expect(
       client.getQueryData<ChannelGrantSettings>(SETTINGS_KEY)?.grants
     ).toEqual({ [CHAN]: { level: "visible", guestWrite: true } });
-    // Channel-scoped base list: one channel, keyed by BASE.
+    // channel-scoped base list: one channel, keyed by BASE.
     expect(
       client.getQueryData<KnowledgeBaseList>(SCOPED_KEY)?.channelGrants
     ).toEqual({ [BASE_ID]: { level: "visible", guestWrite: true } });
@@ -166,14 +163,13 @@ describe("patchChannelGrantInCache", () => {
       "kb-2": { level: "agent_only", guestWrite: false },
       [BASE_ID]: { level: "visible", guestWrite: false },
     });
-    // A grant on chan-1 says nothing about chan-other's view.
     expect(
       client.getQueryData<KnowledgeBaseList>(otherChannel)?.channelGrants
     ).toEqual({});
   });
 
   it("NEVER touches the UNSCOPED base list — it carries no channelGrants at all", async () => {
-    // Absent param ⇒ absent key (§9). Writing one here would invent a
+    // absent param ⇒ absent key (§9); writing one here would invent a
     // channel-scoped payload nobody asked for.
     client.setQueryData(UNSCOPED_KEY, baseList({}));
 
@@ -206,8 +202,8 @@ describe("patchChannelGrantInCache", () => {
   });
 
   it("declines a COLD entry rather than seeding one", async () => {
-    // Nothing in the cache: `setQueryData` with an undefined `prev` must not
-    // fabricate a list, which would render as "this workspace has no bases".
+    // `setQueryData` with an undefined `prev` must not fabricate a list, which
+    // would render as "this workspace has no bases".
     patchChannelGrantInCache(client, {
       workspaceId: WS,
       baseId: BASE_ID,
@@ -222,7 +218,7 @@ describe("patchChannelGrantInCache", () => {
 describe("useSetChannelGrant", () => {
   it("patches from the SERVER'S answer, not the requested one", async () => {
     client.setQueryData(SETTINGS_KEY, settings({}));
-    // Asked for guestWrite at agent_only; the server normalised it away.
+    // asked for guestWrite at agent_only; the server normalised it away.
     mockWrite.mockResolvedValue({ level: "agent_only", guestWrite: false });
 
     const { result } = renderHook(() => useSetChannelGrant(BASE_ID, WS), {

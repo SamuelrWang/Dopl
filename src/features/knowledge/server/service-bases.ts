@@ -27,49 +27,29 @@ import { seedWorkspace } from "./service-seed";
 
 /**
  * Knowledge base reads. `getBaseById` / `getBaseBySlug` are the foundational
- * visibility-checked lookups the other service modules build on.
+ * visibility-checked lookups the other service modules build on, and where the
+ * agent audience ceiling (`service-audience.ts`) is applied — every other
+ * knowledge read composes one of them, so fencing here fences the surface.
  *
- * 🔒 THEY ARE ALSO WHERE THE AGENT AUDIENCE CEILING IS APPLIED
- * (`service-audience.ts`, plan §4.2). Every other knowledge read — trees,
- * entries, folders, stars, search, export — composes one of the lookups in this
- * file, so fencing here fences the surface.
- *
- * ⚠ THAT LAST SENTENCE WAS FALSE WHEN IT WAS WRITTEN, AND SAYING SO IS THE
- * POINT (corrected 2026-08-26). `service-entries.ts › getEntry` did NOT compose
- * one of these — it checked `assertSameWorkspace` alone — so
- * `GET /api/knowledge/entries/[entryId]` (viewer default) read the body of any
- * entry in any private base, bypassing BOTH the ceiling and M-10, and
- * `resolveEntryRefs` applied `canSeeBase` without the ceiling. `export.ts ›
- * buildEntryFile` had already noticed half of it and bolted its own `getBaseById`
- * on. Both are fixed AT THE ENTRY SERVICE, so the claim above is now true —
- * but it is a claim about every OTHER module, and this file cannot enforce it.
- *
- * ⚠ A NEW foundational lookup that reaches `repository-bases.ts` directly
- * instead of composing one of these owes itself the same two lines; that is the
- * regression to watch for, and it is the one that ALREADY HAPPENED ONCE.
- * `service-audience.test.ts` pins the lookups that exist by driving them, and
- * pins the entry lane the same way.
+ * A NEW foundational lookup that reaches `repository-bases.ts` directly instead
+ * of composing one of these owes itself the same two gates; that regression has
+ * happened once (`service-entries.ts › getEntry`, fixed 2026-08-26).
+ * `service-audience.test.ts` pins the lookups by driving them.
  */
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Which of `bases` sit on the caller's PERSONAL (/home) shelf — the sibling key
- * behind `GET /api/knowledge/bases › homeScopedBaseIds` (MCP surface v2 wave B,
- * 2026-08-28).
+ * behind `GET /api/knowledge/bases › homeScopedBaseIds`.
  *
- * 🔒 ⚠ **A LABEL OVER AN ALREADY-FENCED LIST, NEVER A SECOND READ PATH.** It
- * takes the POST-visibility rows — the ones `listBases` already put through
- * `canSeeBase`, `filterTeamVisibleBases` AND the agent audience ceiling — and
- * answers which of THOSE carry the flag. It applies no visibility of its own and
- * must never be handed a wider set; the id set IS the fence, exactly as
+ * A label over an already-fenced list, never a second read path: it takes the
+ * POST-visibility rows and applies no visibility of its own, so it must never be
+ * handed a wider set — the id set IS the fence, exactly as
  * `service-stars.ts › listStarredBaseIds` states it.
  *
- * ⚠ IT PROJECTS NOTHING SHELF-SHAPED ONTO THE ROW, and since 2026-09-02 (slice
- * B15) there is no column to project: the shelf is the row's own container. The
- * SDK-mirrored `KnowledgeBase` therefore still does not widen
- * (`check-knowledge-type-drift`), and a sibling key remains the shipped answer
- * for this exact shape.
+ * It projects nothing shelf-shaped onto the row, so the SDK-mirrored
+ * `KnowledgeBase` does not widen (`check-knowledge-type-drift`).
  */
 export async function listHomeScopedBaseIds(
   ctx: KnowledgeContext,
@@ -88,19 +68,13 @@ export async function listHomeScopedBaseIds(
  * bases AND is <24h old, so a mature workspace that intentionally cleared
  * everything is never re-seeded.
  *
- * ⚠ `opts.shelf` NARROWS TO ONE SHELF (`../types.ts › KbShelf`) — the /home
- * pane's "across all channels" asks for `"home"`, the workspace Knowledge page
- * for `"workspace"`, and everything else (MCP `kb_list_bases`, search) omits it
- * and gets BOTH. It is applied in the QUERY, not over the result, so a shelf
- * the caller did not ask for never reaches the wire (INVARIANTS §11: viewer
- * filtering is server-side by principle).
+ * `opts.shelf` narrows to one shelf (`../types.ts › KbShelf`); omitting it means
+ * BOTH. It is applied in the QUERY, not over the result, so a shelf the caller
+ * did not ask for never reaches the wire (INVARIANTS §11).
  *
- * 🔒 A SHELF READ NEVER SEEDS, and that is not an optimisation. The seed gate
- * below is "this workspace has NO bases at all"; asked of one shelf it becomes
- * "no bases ON THIS SHELF", which is the normal state of a workspace whose
- * content all lives on the other one — and a <24h-old workspace would then be
- * re-seeded by every visit to the /home Knowledge pane. Narrowed reads are
- * VIEWS; provisioning belongs to the unfiltered one.
+ * A shelf read never seeds: the seed gate below is "this workspace has NO bases
+ * at all", and asked of one shelf it would re-seed a <24h-old workspace whose
+ * content all lives on the other shelf on every visit.
  */
 export async function listBases(
   ctx: KnowledgeContext,
@@ -111,10 +85,10 @@ export async function listBases(
     false,
     opts.shelf
   );
-  // 🔒 The ceiling is the OUTERMOST filter, applied after the workspace gates
-  // rather than instead of them: an agent in a shared container gets the
-  // intersection of "what this caller could see anyway" and "what was granted
-  // into this container's channels". Neither gate is a substitute for the other.
+  // The ceiling is the OUTERMOST filter, applied after the workspace gates
+  // rather than instead of them: an agent gets the intersection of what this
+  // caller could see anyway and what was granted into this container's
+  // channels. Neither gate substitutes for the other.
   const [audience, granted] = await Promise.all([
     resolveAgentAudience(ctx),
     baseGrantsFor(ctx, all),
@@ -123,18 +97,16 @@ export async function listBases(
     await filterTeamVisibleBases(ctx, all.filter((b) => canSeeBase(ctx, b, granted)))
   ).filter((b) => audienceAdmits(audience, b.id));
   if (visible.length > 0) return visible;
-  // 🔒 A NARROWED READ STOPS HERE — see the docblock. `all` is this SHELF's
-  // rows, so every gate below it would be answering a different question than
-  // the one it was written for.
+  // A narrowed read stops here — see the docblock. `all` is this SHELF's rows,
+  // so every gate below would answer a different question.
   if (opts.shelf !== undefined) return visible;
-  // ⚠ CRITICAL: gate on the UNFILTERED count, not what the caller sees —
-  // else a member joining a workspace whose only bases are someone else's
-  // private items re-triggers seed on every list call.
+  // Gate on the UNFILTERED count, not what the caller sees — else a member
+  // joining a workspace whose only bases are someone else's private items
+  // re-triggers seed on every list call.
   if (all.length > 0) return visible;
-  // DEMO BYPASS: auto-seed off; new workspaces start empty. Flip to false to
-  // restore onboarding seeding. `seedWorkspace` stays callable for explicit
-  // paths. ⚠ Typed `boolean`, not literal `true`, so TS keeps the code below
-  // reachable.
+  // Demo bypass: auto-seed off; new workspaces start empty. Flip to false to
+  // restore onboarding seeding. Typed `boolean`, not literal `true`, so TS keeps
+  // the code below reachable.
   const DEMO_DISABLE_AUTO_SEED: boolean = true;
   if (DEMO_DISABLE_AUTO_SEED) return visible;
   const workspaceCreatedAt = await fetchWorkspaceCreatedAt(ctx.workspaceId);
@@ -175,10 +147,10 @@ export async function listBaseOwnerNames(
 
 /**
  * Entry count + newest content write + stored bytes per base — the
- * "{N} entries · updated {when}" line and usage bar.
- * ⚠ Takes the POST-visibility base list: the id set IS the fence. Every id
- * gets an entry — empty base is `0`, never a missing key.
- * ⚠ `storageBytes` reads a column existing only after
+ * "{N} entries · updated {when}" line and usage bar. Takes the POST-visibility
+ * base list: the id set IS the fence. Every id gets an entry — empty base is
+ * `0`, never a missing key.
+ * `storageBytes` reads a column existing only after
  * `20260812120000_knowledge_base_storage_bytes.sql`, so a build ahead of its
  * migration loses the BAR and keeps the COUNTS — hence the local catch and
  * `null` (unknown) rather than degrading the whole map to `{}`.
@@ -213,7 +185,7 @@ export async function listBaseStats(
     // rather than inventing a key.
     if (!stat) continue;
     stat.entryCount += 1;
-    // ⚠ Parsed, not lexicographic: Postgres timestamps arrive with a variable
+    // Parsed, not lexicographic: Postgres timestamps arrive with a variable
     // fractional-second tail, so string ordering is only accidentally right.
     if (
       stat.lastEntryUpdatedAt === null ||
@@ -226,19 +198,15 @@ export async function listBaseStats(
 }
 
 /**
- * 🔒 ⚠ **KEYED TO `ctx.workspaceId`: ONE CONTAINER, BOTH GATES.** It is the
- * in-container load every other door in this file is built from — the follow
- * ({@link loadVisibleBase}) calls it once per container, and the write gate
- * ({@link getBaseForWrite}) is the follow plus the landed context.
+ * Keyed to `ctx.workspaceId`: one container, both gates. The in-container load
+ * every other door in this file is built from — {@link loadVisibleBase} calls it
+ * once per container, {@link getBaseForWrite} is that plus the landed context.
  *
- * ⚠ **IT IS NO LONGER "THE WRITE GATE" AND MUST NOT BE USED AS ONE FOR A ROW THE
- * CALLER MAY NAME ELSEWHERE** (2026-09-06). Call sites still on it — `service-
- * pins.ts`, `service-stars.ts`, the channel-grants route — keep today's
- * workspace-keyed refusal on a cross-container id, which is correct-but-narrow
- * rather than wrong: they have not been given the re-based context their own
- * workspace-keyed follow-up calls would need. Migrating one means switching it
- * to {@link getBaseForWrite} AND passing the returned `ctx` to everything after
- * it, never just the first half.
+ * Not a write gate for a row the caller may name elsewhere (2026-09-06). Sites
+ * still on it — `service-pins.ts`, `service-stars.ts`, the channel-grants route
+ * — keep a workspace-keyed refusal on a cross-container id; migrating one means
+ * switching to {@link getBaseForWrite} AND passing the returned `ctx` to
+ * everything after it, never just the first half.
  */
 export async function getBaseById(
   ctx: KnowledgeContext,
@@ -247,25 +215,21 @@ export async function getBaseById(
   const base = await repo.findBaseById(id, false);
   if (!base) throw new KnowledgeBaseNotFoundError(id);
   assertSameWorkspace(base.workspaceId, ctx.workspaceId, `knowledge base ${id}`);
-  // ⚠ 404, not 403, so visibility itself isn't an oracle.
+  // 404, not 403, so visibility itself isn't an oracle.
   await assertBaseVisible(ctx, base);
   await assertWithinAudience(ctx, base.id);
   return base;
 }
 
 /**
- * 🔒 **THE ID-RESOLVING READ (B2).** The same row, the same two gates, the same
- * 404 — but the id says which container to apply them in, so `workspace=` is
- * optional on the way in and a `workspace=` that CONTRADICTS a resolvable id is
- * IGNORED rather than refused.
+ * The id-resolving read: same row, same two gates, same 404 — but the id says
+ * which container to apply them in, so `workspace=` is optional and a
+ * `workspace=` contradicting a resolvable id is ignored rather than refused.
  *
- * ⚠ **RESOLUTION IS NOT AUTHORISATION AND THE ORDER SAYS SO.**
+ * Resolution is not authorisation, and the order says so:
  * `shared/tenancy/resolve-resource.ts` is strictly NARROWER than this file's
- * gates — it names only rows the caller could already list, and it cannot see a
- * `teams`-scoped base an admin can — so the matrix AND the agent audience
- * ceiling both run AGAIN in the container it named, with the caller's real role
- * there. A row that clears one fence and not the other is the same 404 as a row
- * that exists nowhere.
+ * gates, so the matrix AND the agent audience ceiling both run again in the
+ * container it named, with the caller's real role there.
  */
 export async function readBaseById(
   ctx: KnowledgeContext,
@@ -275,14 +239,11 @@ export async function readBaseById(
 }
 
 /**
- * 🔒 **THE SAME READ, PLUS THE CONTAINER IT LANDED IN.**
- *
- * ⚠ **A BASE'S CONTENTS ARE WORKSPACE-KEYED, SO A CALLER THAT FOLLOWED AN ID AND
- * THEN COMPOSED AGAINST THE ORIGINAL CONTEXT READS THE ROW FROM ONE CONTAINER
- * AND ITS ENTRIES FROM ANOTHER** — `read-resource.ts › ContainerRead` says so in
- * its own docblock, and `service-paths.ts › readFileByPath` is the caller that
- * needs it. Exported rather than inlined there for the reason
- * {@link readBaseById} exists at all: one composition, not two.
+ * The same read, plus the container it landed in. A base's contents are
+ * workspace-keyed, so a caller that followed an id and then composed against the
+ * ORIGINAL context reads the row from one container and its entries from another
+ * (`read-resource.ts › ContainerRead`); `service-paths.ts › readFileByPath` is
+ * the caller that needs it.
  */
 export async function readBaseInContext(
   ctx: KnowledgeContext,
@@ -294,22 +255,20 @@ export async function readBaseInContext(
 }
 
 /**
- * 🔓 **THE WRITE GATE (2026-09-06, Samuel's ruling — see `shared/tenancy/
- * read-resource.ts`).** The same row, the same two gates, the same 404 — but the
- * id names its own container on a WRITE as it already did on a read, and the
- * caller gets the container back so the write lands in it.
+ * The write gate (2026-09-06, Samuel's ruling — see
+ * `shared/tenancy/read-resource.ts`): the id names its own container on a WRITE
+ * as it already did on a read, and the caller gets the container back so the
+ * write lands in it.
  *
- * ⚠ **IT IS {@link readBaseInContext} AND NOT A SECOND COMPOSITION.** The follow
+ * It is {@link readBaseInContext} and not a second composition. The follow
  * is one mechanic; a write-flavoured copy of it would be the copy that stops
- * matching the read (F-278). What makes this a WRITE gate is not extra
- * resolution, it is the obligation the return type puts on the caller: the
- * `ctx` it hands back is the one every workspace-keyed call downstream must use.
+ * matching the read (F-278). What makes it a WRITE gate is the obligation the
+ * return type puts on the caller: the `ctx` it hands back is the one every
+ * workspace-keyed call downstream must use.
  *
- * ⚠ **IT AUTHORISES NOTHING BY ITSELF.** `assertBaseWritable`,
- * `assertAgentCanDelete` and the sharing/creator checks are still the caller's
- * to run — and they must be run against the RETURNED ctx, so an `edit` grant is
- * weighed in the container the base actually lives in, with the caller's real
- * role there.
+ * It authorises nothing by itself — `assertBaseWritable`, `assertAgentCanDelete`
+ * and the sharing/creator checks are the caller's to run, against the RETURNED
+ * ctx, so a grant is weighed where the base actually lives.
  */
 export async function getBaseForWrite(
   ctx: KnowledgeContext,
@@ -321,17 +280,13 @@ export async function getBaseForWrite(
 /**
  * {@link getBaseById}'s answer as a `null`, which is what a follow needs.
  *
- * ⚠ **IT WRAPS THE GATE RATHER THAN RESTATING IT, AND THAT DIRECTION IS THE
- * POINT.** The M-10 matrix, the teams arm and the audience ceiling are three
- * predicates this file already composes in ONE place; a second null-returning
- * copy of them is the F-278 shape ("the copy is the one that will not notice").
- * So the twin is a TRANSLATION of two errors, listed explicitly — anything else
- * this read can throw is a real failure and still propagates.
+ * It wraps the gate rather than restating it:
+ * a second null-returning copy of them is the F-278 shape ("the copy is the one
+ * that will not notice"). So the twin TRANSLATES two errors, listed explicitly —
+ * anything else this read can throw still propagates.
  *
- * ⚠ `KnowledgeBaseMismatchError` IS ONE OF THE TWO, and it is why a follow is
- * needed at all: it is what `getBaseById` says about a base living in another
- * container, and answering it to a caller holding a perfectly good id is the
- * defect this slice removes.
+ * `KnowledgeBaseMismatchError` is one of the two, and is why a follow is needed
+ * at all: it is what `getBaseById` says about a base in another container.
  */
 async function loadVisibleBase(
   ctx: KnowledgeContext,
@@ -362,16 +317,13 @@ export async function getBaseBySlug(
 }
 
 /**
- * 🔒 The single-base half of the ceiling. Throws the SAME
+ * The single-base half of the ceiling. Throws the SAME
  * `KnowledgeBaseNotFoundError` an invisible base throws, so "not granted into
- * this container", "not visible to you" and "does not exist" are one answer —
- * the 404-not-403 rule this file already applies to visibility, extended to
- * audience for the same reason. A 403 here would tell an agent the id it
- * guessed was real.
+ * this container", "not visible to you" and "does not exist" are one answer: a
+ * 403 here would tell an agent the id it guessed was real.
  *
- * ⚠ It runs AFTER `assertBaseVisible`, not before. The order costs nothing (the
- * base row is already in hand) and keeps the audience read off the path of
- * every caller the workspace gates already refuse.
+ * It runs AFTER `assertBaseVisible`, which keeps the audience read off the path
+ * of every caller the workspace gates already refuse.
  */
 async function assertWithinAudience(
   ctx: KnowledgeContext,

@@ -2,21 +2,15 @@
  * `repository-channel-grants.ts` — the raw I/O for the CHANNEL slice of
  * `resource_grants`.
  *
- * The property every one of these pins shares: THE SERVICE-ROLE CLIENT BYPASSES
- * RLS, so `workspace_id` must appear as an explicit filter on every statement,
- * read or write. A missing one is not a slow query, it is a cross-tenant one.
+ * The property every pin shares: the service-role client bypasses RLS, so
+ * `workspace_id` must be an explicit filter on every statement. `scope_type =
+ * 'channel'` is as load-bearing since the channel and team grant tables were
+ * folded into one — without it these reads answer a channel question with a
+ * team's grants. The sweep at the bottom makes dropping either term red.
  *
- * 🔒 AND SINCE WAVE B THERE IS A SECOND SUCH TERM. `20260914120000` folded
- * `channel_resource_grants` and `team_resource_access` into ONE table keyed by
- * `scope_type`, so `scope_type = 'channel'` is now as load-bearing as
- * `workspace_id`: without it these reads answer a channel question with a team's
- * grants, and this module's writes land where the teams repository reads. The
- * `every statement` sweep at the bottom is what makes dropping either term red.
- *
- * `listChannelKnowledgeGrants` additionally pins the bounded fan behind
- * `channelGrants`: ONE query with `resource_id IN (baseIds)`, and an empty base
- * list short-circuits with NO query (the id set is the fence, and an empty `in`
- * would be a PostgREST syntax error anyway).
+ * `listChannelKnowledgeGrants` also pins the bounded fan: ONE query with
+ * `resource_id IN (baseIds)`, and an empty base list short-circuits with NO
+ * query (an empty `in` is a PostgREST syntax error anyway).
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -33,10 +27,9 @@ import {
 } from "./repository-channel-grants";
 
 /**
- * A fake PostgREST builder recording the filter chain. Every filter and
- * modifier returns the builder — `.in()` and `.limit()` included, because
- * `listSharedBaseIds` chains them in that order — and the builder is THENABLE,
- * so whichever call the statement ends on resolves the configured result.
+ * A fake PostgREST builder recording the filter chain. Every filter and modifier
+ * returns the builder, and the builder is THENABLE, so whichever call the
+ * statement ends on resolves the configured result.
  */
 function fakeClient(result: { data: unknown; error: unknown }) {
   const calls = {
@@ -111,11 +104,9 @@ const CHANNEL_SLICE = {
 
 describe("the table and the projection", () => {
   it("reads `resource_grants`, and projects `scope_id` back as `channel_id`", () => {
-    // 🔒 The alias is the module's contract with its service: the storage word
-    // is `scope_id` (three scopes share the table), the domain word here is
-    // `channel_id`. Dropping the alias silently blanks every map key the
-    // service builds, which reads as "nothing is shared" rather than as an
-    // error.
+    // The alias is the module's contract with its service: storage says
+    // `scope_id`, the domain here says `channel_id`. Dropping it silently blanks
+    // every map key the service builds, reading as "nothing is shared".
     expect(CHANNEL_RESOURCE_GRANT_COLS).toContain("channel_id:scope_id");
     expect(CHANNEL_RESOURCE_GRANT_COLS).not.toMatch(/(^|\s)scope_type/);
   });
@@ -165,16 +156,15 @@ describe("listChannelGrantsForBase — the inverse read", () => {
     expect(calls.match).toEqual([
       { workspace_id: "ws-1", resource_id: "kb-1", ...CHANNEL_SLICE },
     ]);
-    // ⚠ An un-limited select is truncated SILENTLY by PostgREST.
+    // An un-limited select is truncated SILENTLY by PostgREST.
     expect(calls.limit).toEqual([200]);
   });
 });
 
 describe("listSharedBaseIds — the card's `Shared` pill", () => {
   it("asks only about CHANNEL scopes, and de-duplicates the answer", async () => {
-    // 🔒 A team or container grant is a share too, but this pill belongs to the
-    // channel panel. Widening it to every scope is how one word starts meaning
-    // two things — and it would be invisible, because the answer stays a
+    // A team or container grant is a share too, but this pill belongs to the
+    // channel panel, and widening it would be invisible: the answer stays a
     // boolean either way.
     const { client, calls } = fakeClient({
       data: [{ resource_id: "kb-1" }, { resource_id: "kb-1" }],
@@ -220,10 +210,9 @@ describe("upsertChannelKnowledgeGrant", () => {
           workspace_id: "ws-1",
           level: "visible",
           guest_write: true,
-          // 🔒 THE GRANTOR the validity trigger judges — `enforce_resource_grant()`
+          // The grantor the validity trigger judges: `enforce_resource_grant()`
           // asks whether THIS user reaches both containers. Dropping the column
-          // does not skip the check; it re-points it at nobody, and an
-          // unattributed row is refused across containers by design.
+          // re-points the check at nobody rather than skipping it.
           created_by: "user-1",
         },
         // "One grant per (scope, resource)" IS the PK; this names it.
@@ -284,9 +273,9 @@ describe("deleteChannelKnowledgeGrant", () => {
 });
 
 /**
- * 🔒 THE SWEEP. Every statement in the module, not the ones a test happened to
- * drive: a seventh function added without the scope term would pass every case
- * above by simply not being in one.
+ * The sweep: every statement in the module, not the ones a test happened to
+ * drive — a new function without the scope term would pass every case above by
+ * not being in one.
  */
 describe("every statement pins its slice of the shared grant table", () => {
   const SRC = readFileSync(
@@ -308,9 +297,8 @@ describe("every statement pins its slice of the shared grant table", () => {
   });
 
   it("spreads CHANNEL_KNOWLEDGE_GRANT into every filter set and every write", () => {
-    // Each `.match(` and each `.upsert(` must carry the spread. Counting them
-    // is what makes a NEW statement without it fail, rather than only the ones
-    // enumerated above.
+    // Counting the spreads is what makes a NEW statement without one fail,
+    // rather than only the statements enumerated above.
     const filterSets = SRC.match(/\.match\(\{/g)?.length ?? 0;
     const writes = SRC.match(/\.upsert\(\s*\{/g)?.length ?? 0;
     const spreads = SRC.match(/\.\.\.CHANNEL_KNOWLEDGE_GRANT/g)?.length ?? 0;

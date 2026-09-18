@@ -263,12 +263,11 @@ function FolderRow({
   const create = async (kind: "entry" | "folder") => {
     if (busy) return;
     setBusy(true);
-    // ⚠ Reveal: creating inside a collapsed folder would hide the child.
+    // reveal first: creating inside a collapsed folder would hide the child.
     if (!isOpen) toggle(folder.id);
     try {
       if (kind === "folder") {
-        // Auto inline-rename (controller sets editingNodeId); marked a stub
-        // so Escape removes the empty placeholder.
+        // stub-marked so Escape removes the empty placeholder.
         const id = await onCreateFolder(folder.id, "Untitled folder");
         inline.beginStubEdit(id);
       } else {
@@ -413,12 +412,9 @@ function RowEditor({
  * Base-root create affordance: parentless folders/entries. Folder rows handle
  * their own children on hover.
  *
- * ⚠ THE PILL IS THE GLOBAL ONE (Samuel's ruling, 2026-08-28: the tree's create
- * actions use the global button component). These were `.addBtn`, a naked
- * hover-tint recipe private to `../knowledge-v2.module.css` and now deleted;
- * they are `shared/ui/open-scale-button.tsx › OpenScaleButton` — the same face
- * and scale as the KB card's Open and /home's section create buttons. Only the
- * row's layout is still local.
+ * Ruling 2026-08-28: the create pills are the global
+ * `shared/ui/open-scale-button.tsx › OpenScaleButton`, not a local recipe; only
+ * the row's layout is local.
  */
 function AddRow({
   onCreateFolder,
@@ -465,7 +461,7 @@ function AddRow({
   );
 }
 
-/** ⚠ Icon button rendered as a <span>: rows are <button>, no nesting. */
+/** Icon button kept out of the row's own button semantics: no nesting. */
 function RowIconBtn({
   title,
   disabled,

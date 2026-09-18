@@ -13,8 +13,8 @@ import { listBases } from "./service";
  * (no key, API failure) → falls back to pure-FTS `search_knowledge_entries`;
  * search never breaks, only gets less semantic.
  *
- * ⚠ Keyword-hit snippets carry HTML `<b>` tags around matched terms
- * (vector-only hits are plain text) — strip or render at the UI layer.
+ * Keyword-hit snippets carry HTML `<b>` tags around matched terms (vector-only
+ * hits are plain text) — strip or render at the UI layer.
  */
 
 export interface SearchHit {
@@ -39,8 +39,8 @@ export interface SearchOpts {
  * One `search_knowledge_entries` row. Manual because `supabaseAdmin()` returns
  * an untyped `SupabaseClient` (no `Database` generic), so `.rpc(...)` yields
  * `unknown`; typing the admin client would need 240+ call sites to compile.
- * ⚠ Gen types declare `excerpt` / `folder_id` non-null because RETURN TABLE
- * loses nullability — the real columns ARE nullable.
+ * Gen types declare `excerpt` / `folder_id` non-null because RETURN TABLE loses
+ * nullability; the real columns are nullable.
  */
 interface RpcRow {
   entry_id: string;
@@ -61,7 +61,7 @@ export async function searchKnowledgeEntries(
   const trimmed = query.trim();
   if (trimmed.length === 0) return [];
 
-  // ⚠ Visibility + team-scope gate — the RPC applies NO visibility filter, so
+  // Visibility + team-scope gate: the RPC applies no visibility filter, so
   // without this private bases' entries leak into results.
   const readable = await listBases(ctx);
   const readableIds = new Set(readable.map((b) => b.id));
@@ -77,9 +77,9 @@ export async function searchKnowledgeEntries(
   }
 
   const db = supabaseAdmin();
-  // ⚠ SECURITY: `p_workspace_id` MUST come from `ctx.workspaceId`, never from
-  // client input. RPCs are SECURITY INVOKER but the admin client bypasses RLS,
-  // so they trust whatever workspace_id we pass.
+  // `p_workspace_id` must come from `ctx.workspaceId`, never client input: RPCs
+  // are SECURITY INVOKER but the admin client bypasses RLS, so they trust
+  // whatever workspace_id we pass.
   const ftsArgs = {
     p_workspace_id: ctx.workspaceId,
     p_query: trimmed,
@@ -94,8 +94,7 @@ export async function searchKnowledgeEntries(
       p_embedding: queryEmbedding,
     });
     if (result.error) {
-      // Hybrid RPC missing/unhealthy (migration not applied) — degrade to
-      // pure FTS rather than breaking search.
+      // Hybrid RPC missing/unhealthy — degrade to pure FTS.
       console.error(
         "[knowledge-search] hybrid RPC failed, falling back to FTS:",
         result.error.message

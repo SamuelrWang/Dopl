@@ -1,10 +1,8 @@
 /**
- * PER-USER stars. ⚠ The repository runs as service role and bypasses RLS, so
- * the table's own-row policy evaluates for nobody and these three properties
- * have no lower layer holding them: only the CALLER'S OWN rows; only VISIBLE
- * bases (`starredBaseIds` narrowed post-visibility, `starBase` refuses
- * invisible ones); UNSTAR deliberately NOT gated, so a visibility change never
- * strands a star its owner can't remove.
+ * PER-USER stars. The repository runs as service role and bypasses RLS, so
+ * these three properties have no lower layer holding them: only the caller's own
+ * rows; only VISIBLE bases; UNSTAR deliberately not gated, so a visibility change
+ * never strands a star its owner cannot remove.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";

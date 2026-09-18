@@ -58,27 +58,16 @@ function folderChainOf(
 }
 
 /**
- * THE PANEL'S ONE HEADER — it spans the whole opened-base panel, above BOTH
- * columns (Samuel's ruling, 2026-08-28).
+ * The panel's one header, spanning both columns of the opened base (ruling
+ * 2026-08-28).
  *
- * ⚠ ONE BREADCRUMB, WHERE THERE WERE TWO. The rail carried `Knowledge › {base}`
- * and the detail pane carried `{base} › {folder} › {file}`, side by side, and
- * both files' comments were about keeping the two navs distinguishable. One
- * panel has one address: `Knowledge › {base} › {folders…} › {file}`, and it
- * keeps the rail's `aria-label` ("Knowledge base breadcrumb") because that is
- * the surviving nav's name and what every host test addresses it by.
+ * One breadcrumb for the whole panel: `Knowledge › {base} › {folders…} ›
+ * {file}`, keeping the `aria-label` "Knowledge base breadcrumb" that host tests
+ * address it by. The base crumb selects the BASE, not its first file — the
+ * resting face is the base.
  *
- * ⚠ THE BASE CRUMB GOES TO THE BASE, NOT TO ITS FIRST FILE (behaviour change,
- * and it is the ruling's). It used to call the crumb handler with a `null`
- * folder, which selects `entries[0]` — so the only way back to the base's own
- * page was to leave the base and re-open it. The resting face IS the base now,
- * so the crumb that names the base selects it.
- *
- * ⚠ THE CONTROLS ARE GLOBAL COMPONENTS. Download / settings / delete were a
- * file-private `ICON_BTN` string (a bare 28px hover tint); they are
- * `shared/ui/open-scale-button.tsx › OpenScaleIconButton` — the KB card Open
- * button's face at 1:1 — and the vertical hairline that fenced delete off from
- * settings is gone (`../knowledge-v2.module.css › .divider`, deleted).
+ * Download / settings / delete are `shared/ui/open-scale-button.tsx ›
+ * OpenScaleIconButton`, not a file-private icon-button recipe.
  */
 export function BaseHeader({
   selection,
@@ -96,9 +85,9 @@ export function BaseHeader({
   const [deleting, setDeleting] = useState(false);
   const queryClient = useQueryClient();
 
-  // ⚠ Must mirror base-settings-form.tsx's danger-zone delete: same
-  // `deleteBase` call, then navigate to the base-less knowledge root so the
-  // view drops to an empty selection and the list is re-pulled.
+  // Must mirror base-settings-form.tsx's danger-zone delete: same `deleteBase`
+  // call, then navigate to the base-less knowledge root so the view drops to an
+  // empty selection and the list is re-pulled.
   async function handleDeleteBase() {
     const base = selection.base;
     setDeleting(true);

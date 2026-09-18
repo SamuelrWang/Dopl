@@ -3,17 +3,14 @@
  * `KbChannelGrantsSection` — the settings section that decides which CHANNELS a
  * knowledge base reaches.
  *
- * Four properties, and three of them are fences rendered rather than enforced:
- *   1. THREE STATES, and the write says which one is wanted — `none` included,
- *      because absence is a state you have to be able to ASK for.
- *   2. THE GUEST-WRITE TOGGLE IS REVEALED ONLY AT `visible` AND ONLY WHEN A
- *      GUEST IS IN THE ROOM. An unloaded roster and a `workspaceRole` the
- *      payload predates BOTH read as "no guest" and HIDE it — fail-safe, never
- *      the other way round.
- *   3. `canManage` COMES OFF THE SERVER and gates the editor; everyone else
- *      gets the summary line and no controls at all.
- *   4. Dropping out of `visible` sends `guestWrite: false`, so the pen never
- *      rides along into a level that has no human audience.
+ * Four properties, three of them fences rendered rather than enforced:
+ *   1. three states, and the write says which one is wanted — `none` included,
+ *      because absence is a state you must be able to ask for;
+ *   2. the guest-write toggle is revealed only at `visible` and only with a
+ *      guest in the room; an unloaded roster and a null `workspaceRole` both
+ *      read as "no guest" and hide it, never the other way round;
+ *   3. `canManage` comes off the server and gates the editor;
+ *   4. dropping out of `visible` sends `guestWrite: false`.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import {
@@ -55,8 +52,8 @@ function member(workspaceRole: ChannelMember["workspaceRole"]): ChannelMember {
 function base(over: Partial<ChannelGrantSettings> = {}): ChannelGrantSettings {
   return {
     canManage: true,
-    // ⚠ A HOME container's answer. `false` is a standard workspace's, and the
-    // section renders nothing at all there (Samuel's ruling 2026-09-17).
+    // A home container's answer; `false` is a standard workspace's, where the
+    // section renders nothing at all (ruling 2026-09-17).
     channelScopeAllowed: true,
     channels: [
       { id: "chan-1", name: "engineering", isDirect: false },
@@ -82,7 +79,7 @@ beforeEach(() => {
   roster = [];
 });
 
-// ⚠ EXPLICIT — this suite's config does not auto-clean, and a leftover render
+// Explicit: this suite's config does not auto-clean, and a leftover render
 // turns every `queryByRole` into a multiple-match error.
 afterEach(cleanup);
 
@@ -95,7 +92,7 @@ describe("the three states", () => {
     // Two rows × three segments.
     const radios = screen.getAllByRole("radio");
     expect(radios).toHaveLength(6);
-    // ABSENCE renders as None, not as a missing selection.
+    // Absence renders as None, not as a missing selection.
     const checked = radios.filter((r) => r.getAttribute("aria-checked") === "true");
     expect(checked.map((r) => r.textContent)).toEqual(["None", "None"]);
   });
@@ -129,8 +126,7 @@ describe("the three states", () => {
 
     fireEvent.click(screen.getAllByRole("radio", { name: "None" })[0]);
 
-    // ⚠ `none` is a value on the wire, and `guestWrite` drops with the level —
-    // the pen must not ride along into a state that has no human audience.
+    // `none` is a value on the wire, and `guestWrite` drops with the level.
     await waitFor(() =>
       expect(mutateAsync).toHaveBeenCalledWith({
         channelId: "chan-1",
@@ -159,8 +155,8 @@ describe("the guest-write reveal", () => {
   });
 
   it("is HIDDEN when workspaceRole is null on a payload that predates the field", () => {
-    // ⚠ The member-mutation ECHOes omit `workspaceRole`, and so does any cache
-    // entry written before it existed. Null must read as "not a guest".
+    // Member-mutation echoes omit `workspaceRole`, as does any cache entry
+    // written before it existed: null must read as "not a guest".
     settings = base({ grants: { "chan-1": { level: "visible", guestWrite: false } } });
     roster = [member(null)];
     renderSection();
@@ -247,12 +243,12 @@ describe("degraded reads", () => {
   });
 });
 
-// ── 🔒 The container-KIND fence (Samuel's ruling 2026-09-17) ─────────────
+// ── The container-KIND fence (Samuel's ruling 2026-09-17) ─────────────
 
 /**
- * *"In workspaces, resource access is not scoped by channels. It's instead
- * scoped by teams."* — so in a STANDARD workspace the section is not a disabled
- * control or an empty list: it is NOT THERE, heading included.
+ * Ruling: workspace resource access is scoped by teams, not channels, so in a
+ * standard workspace the section is absent, heading included — not a disabled
+ * control or an empty list.
  */
 describe("🔒 channelScopeAllowed", () => {
   it("renders NOTHING AT ALL when the server says channel scope is off", () => {
@@ -262,12 +258,28 @@ describe("🔒 channelScopeAllowed", () => {
   });
 
   it("…including the CHANNELS heading — the section owns its own frame", () => {
-    // ⚠ THE MUTATION THIS CATCHES is putting the frame back in
-    // `base-settings-form.tsx`: the refusal then renders as a bare heading over
-    // nothing, which reads as a broken pane rather than an absent capability.
+    // Catches putting the frame back in `base-settings-form.tsx`: the refusal
+    // then renders as a bare heading over nothing.
     settings = base({ channelScopeAllowed: false });
     renderSection();
     expect(screen.queryByText("Channels")).toBeNull();
+  });
+
+  /**
+   * §8: the field is NEW on a payload cached for 24h, so a warm entry written
+   * before it existed has NO SUCH KEY — `false` proves nothing about that shape.
+   * ⚠ **THIS IS A SHAPE PIN, NOT A BUG CATCH, AND THE DIFFERENCE WAS MEASURED.**
+   * `!undefined` and `!false` are the same, so the `?? false` the gate now spells
+   * changes no behaviour and reverting it leaves this green. What DOES turn it red
+   * is narrowing the gate to an identity test (`=== false`), which would render
+   * the section to a stale reader in a standard workspace.
+   */
+  it("🔒 renders NOTHING for a cached payload written before the field existed", () => {
+    const stale = base({ canManage: true });
+    delete (stale as { channelScopeAllowed?: boolean }).channelScopeAllowed;
+    settings = stale;
+    const { container } = renderSection();
+    expect(container.innerHTML).toBe("");
   });
 
   it("…even for a manager with grants already in place", () => {

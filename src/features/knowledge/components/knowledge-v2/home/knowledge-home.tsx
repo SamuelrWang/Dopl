@@ -14,25 +14,24 @@ import styles from "../knowledge-v2.module.css";
 interface Props {
   /** After search AND the scope pill — exactly what the grid renders. */
   bases: KnowledgeBase[];
-  /** Per-pill badge counts, cut BEFORE the scope pill (see list-filters). */
+  /** Per-pill badge counts, cut before the scope pill (see list-filters). */
   filterCounts: Record<ListFilter, number>;
   baseStats?: Record<string, KnowledgeBaseStats>;
   /** Per-base storage cap in bytes, from the same list response. `null` =
    *  unknown → no bars. */
   kbStorageLimit?: number | null;
   ownerNames?: Record<string, string>;
-  /** CALLER'S OWN starred base ids. Lifted to the front of the grid; ⚠ never
+  /** Caller's own starred base ids. Lifted to the front of the grid, never
    *  counted by the scope pills. */
   starredBaseIds?: string[];
   /**
    * Base ids granted into at least one channel — the list response's
-   * `sharedBaseIds` sibling key. Drives the card's `Shared` pill.
+   * `sharedBaseIds` sibling key, driving the card's `Shared` pill.
    *
-   * ⚠ OPTIONAL, and the §8 reason: this key is newer than the persisted query
-   * cache, so an entry written by an older bundle simply lacks it. Absent reads
-   * as "none known to be shared", which is what shipped before the key existed.
-   * ⚠ NOT used for ordering or for the scope PILL COUNTS — a share is not a
-   * scope, and folding it into either would double-count a base.
+   * Optional because the key is newer than the persisted query cache: an entry
+   * written by an older bundle lacks it, and absent reads as "none known to be
+   * shared". Not used for ordering or for the scope pill counts — a share is not
+   * a scope, and folding it in would double-count a base.
    */
   sharedBaseIds?: string[];
   currentUserId: string;
@@ -51,17 +50,15 @@ interface Props {
 }
 
 /**
- * KNOWLEDGE HOME — `/knowledge` mode of the component serving both knowledge
+ * Knowledge home — `/knowledge` mode of the component serving both knowledge
  * routes (`knowledge-v2.tsx` picks by selection).
  *
- * ⚠ MOUNTS NO TREES. A grid of N bases must cost ONE request, so nothing here
- * touches `trees`/`loadTree`; counts and timestamps ride the base list
- * (`GET /api/knowledge/bases › baseStats`). Opening a card loads a tree.
+ * Mounts no trees: a grid of N bases costs one request, with counts and
+ * timestamps riding the base list (`GET /api/knowledge/bases › baseStats`).
  *
- * ⚠ Star sort runs HERE — after search and the scope pill, over exactly the
- * cards about to render. That is what keeps stars a VIEW concern: a star moves
- * a card, never adds or removes one, and the pill badges (cut upstream of the
- * scope filter) never see it.
+ * The star sort runs here, after search and the scope pill, over exactly the
+ * cards about to render — a star moves a card, never adds or removes one, and
+ * the pill badges never see it.
  */
 export function KnowledgeHome({
   bases,
@@ -91,10 +88,9 @@ export function KnowledgeHome({
   );
   const ordered = useMemo(() => {
     if (starred.size === 0) return bases;
-    // ⚠ ONE comparator, TWO groups, nothing else: sort is stable (ES2019), so
-    // cards keep the filter's order WITHIN a group. Comparing on name/date
-    // replaces the list's ordering with one only stars can see.
-    // `[...bases]` because sort mutates and `bases` is the caller's array.
+    // One comparator, two groups: sort is stable (ES2019), so cards keep the
+    // filter's order within a group. `[...bases]` because sort mutates and
+    // `bases` is the caller's array.
     return [...bases].sort(
       (a, b) => Number(starred.has(b.id)) - Number(starred.has(a.id))
     );
@@ -111,14 +107,8 @@ export function KnowledgeHome({
       </div>
 
       {/* Decorative banner, so the image is alt="". Absent image = no hero.
-          ⚠ THE HERO CHAT THAT HUNG UNDER THIS BAND IS DELETED (Samuel's ruling,
-          2026-08-30 — ledger ASK-5). It was 215 lines of composer wired to
-          NOTHING: its own docblock said "DESIGN ONLY… Send appends a HARDCODED
-          reply", and one of its hints shipped an internal note to the user. A
-          non-functional chat on a workspace page teaches people the product is
-          fake. **Do not re-add one here** — a chat on this surface means a real
-          one, over real reads, or none. The band itself is unchanged: the hero
-          is now the single image band it always drew. */}
+          Ruling 2026-08-30: the non-functional hero chat is deleted and no chat
+          goes here unless it is a real one over real reads. */}
       {heroImageSrc && (
         <div className={styles.homeHero}>
           <div className={styles.homeHeroBand}>
@@ -169,8 +159,8 @@ export function KnowledgeHome({
             />
           ))}
 
-          {/* ⚠ Always last, NEVER filtered away — a query matching nothing
-              must not hide the only create affordance. */}
+          {/* Always last, never filtered away — a query matching nothing must
+              not hide the only create affordance. */}
           <button
             type="button"
             className={styles.cardNew}

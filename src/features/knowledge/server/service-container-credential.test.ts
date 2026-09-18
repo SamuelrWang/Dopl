@@ -1,37 +1,24 @@
 /**
- * 🔒 THE CONTAINER-SESSION CREDENTIAL AGAINST THE AUDIENCE CEILING — F-336,
- * ruled by Samuel 2026-08-27 ("option B") and fixed here.
- *
- * THE THREE-WAY PIN THIS SUITE EXISTS FOR, and the three refusals are three
- * DIFFERENT fences answering with the same 404:
+ * The container-session credential against the audience ceiling — F-336, ruled
+ * by Samuel 2026-08-27 ("option B"). Four refusals, four different fences, one
+ * 404:
  *
  *   1. a PRIVATE base GRANTED `agent_only` into one of the container's channels
- *      → the operator's own agent READS it. This is the case that did not work:
- *      `canSeeBase` answered 404 from the credential lock before layer A's grant
- *      row was ever consulted, so RULING 2's remedy could not fire and the
- *      `agent_only` switch was decoration.
- *   2. the SAME base UNGRANTED → refused, by LAYER A (`resolveAgentAudience`).
- *   3. a base in ANOTHER workspace → refused, by the WORKSPACE fence.
- *
- * ⚠ AND THE FOURTH, WHICH IS THE ONE THE FIX MUST NOT HAVE BROKEN: a credential
- * whose lock states NO kind — the shared workspace key M-10 was written for —
- * still reads no private row at all, granted or not.
- *
- * ⚠ MUTATION-VERIFIED. Counts are in this change's report; each `it()` naming a
- * fence was confirmed red with that fence removed.
+ *      → the operator's own agent READS it (the case that did not work).
+ *   2. the SAME base UNGRANTED → refused by LAYER A (`resolveAgentAudience`).
+ *   3. a base in ANOTHER workspace → refused by the WORKSPACE fence.
+ *   4. a credential with NO subject — the shared workspace key M-10 was written
+ *      for — still reads no private row at all, granted or not.
  */
 
 import { NO_GRANTS } from "@/shared/tenancy/resource-grant-reach";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { KnowledgeBase, KnowledgeContext } from "../types";
 
-// ⚠ **THE GRANT ARM IS A DB READ, SO IT IS DECLARED HERE** (F-604, 2026-09-02).
-// `canSeeBase` / `canSeeTemplate` gained an arm over `resource_grants`, and its
-// batch precompute is the one part of this seam that talks to Postgres. Every
-// case in this file is about the OTHER arms, so the grant set is empty — which
-// is also the pre-2026-09-02 behaviour, and therefore the right default for a
-// suite that predates the arm. The cases that exercise a GRANT live in
-// `service-shared-grant-arm.test.ts` and the redteam suites.
+// The grant arm is a DB read, so it is declared here (F-604). Every case in this
+// file is about the OTHER arms, so the grant set is empty; the cases that
+// exercise a GRANT live in `service-shared-grant-arm.test.ts` and the redteam
+// suites.
 vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
   ...(await importOriginal<
     typeof import("@/shared/tenancy/resource-grant-reach")
@@ -96,9 +83,9 @@ function containerSession(over: Partial<KnowledgeContext> = {}): KnowledgeContex
 }
 
 /** The credential M-10 was written for: fenced to the same container, but with
- *  NO subject — it may be passed between humans and inherits nobody's personal
- *  reach. ⚠ IDENTICAL TO `containerSession` ON THE CONTAINER AXIS, which is the
- *  point: the two differ on the subject axis and nowhere else. */
+ *  NO subject — it inherits nobody's personal reach. Identical to
+ *  `containerSession` on the container axis; they differ on the subject axis
+ *  and nowhere else. */
 function sharedKey(over: Partial<KnowledgeContext> = {}): KnowledgeContext {
   return containerSession({ credentialSubjectUserId: null, ...over });
 }
@@ -141,9 +128,9 @@ describe("canSeeBase — the SUBJECT axis, not the container axis", () => {
   });
 
   it("the container axis alone decides NOTHING here — only the subject moves it", () => {
-    // 🔒 THE F-336 MUTATION, PINNED. These two contexts differ in exactly one
-    // field. If a predicate ever reads the container axis as an audience again,
-    // the first of these flips to false and this line fails.
+    // The F-336 mutation, pinned: these two contexts differ in exactly one
+    // field, so a predicate that reads the container axis as an audience again
+    // flips the first to false.
     expect(canSeeBase(containerSession(), privateBase("kb"), NO_GRANTS)).toBe(true);
     expect(
       canSeeBase(
@@ -184,9 +171,9 @@ describe("the three-way grant, end to end through getBaseById", () => {
     await expect(
       getBaseById(containerSession(), "kb-granted")
     ).rejects.toBeInstanceOf(KnowledgeBaseNotFoundError);
-    // The grant read HAPPENED — i.e. the refusal came from the grant fence and
-    // not from a visibility gate that answered before it. Without this the test
-    // passes for the WRONG reason and would have stayed green through F-336.
+    // The grant read HAPPENED — the refusal came from the grant fence and not
+    // from a visibility gate that answered before it. Without this the test
+    // passes for the WRONG reason and stays green through F-336.
     expect(mockGrants).toHaveBeenCalled();
   });
 

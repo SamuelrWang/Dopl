@@ -3,9 +3,9 @@
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 
 /**
- * The ONE permanent-delete confirmation for a knowledge base. Two surfaces
- * open it (settings danger zone, detail-panel header menu); ⚠ keep the copy
- * here so the two can't drift.
+ * The ONE permanent-delete confirmation for a knowledge base. Two surfaces open
+ * it (settings danger zone, detail-panel header menu); keep the copy here so the
+ * two cannot drift.
  */
 export function DeleteBaseConfirm({
   open,
@@ -16,7 +16,7 @@ export function DeleteBaseConfirm({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   baseName: string;
-  /** ⚠ ConfirmDialog contract: throwing keeps the dialog open for a retry,
+  /** ConfirmDialog contract: throwing keeps the dialog open for a retry,
    *  resolving closes it. */
   onConfirm: () => void | Promise<void>;
 }) {

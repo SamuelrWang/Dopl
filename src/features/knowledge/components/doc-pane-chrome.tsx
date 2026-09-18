@@ -11,12 +11,9 @@ import { KnowledgeApiError } from "../client/api";
  */
 
 /**
- * Editor-column placeholder while the per-entry body fetch is in flight.
- * ⚠ Must mirror the editor's geometry (`mx-auto … max-w-3xl px-6`) or the swap
- * to real content jumps. A 0%-width entry renders as a paragraph gap.
- *
- * ⚠ Bars come from the shared kit (`SkeletonBar`) — no hand-rolled
- * `animate-pulse` clones (shared/ui/skeleton.tsx, DESIGN-SYSTEM).
+ * Editor-column placeholder while the per-entry body fetch is in flight. Must
+ * mirror the editor's geometry (`mx-auto … max-w-3xl px-6`) or the swap to real
+ * content jumps; a 0%-width entry renders as a paragraph gap.
  */
 export function DocBodySkeleton() {
   return (

@@ -6,45 +6,31 @@ import { listBases } from "./service-bases";
 import { listPinnedBaseIds } from "./service-pins";
 
 /**
- * PINNED STARTUP CONTEXT (T81) — what an agent session is handed the moment it
- * starts, without anybody pasting it again.
+ * Pinned startup context (T81) — what an agent session is handed the moment it
+ * starts. `GET /api/knowledge/startup-context` is the caller that matters: the
+ * desktop reads it at launch and folds the payload into the spawn prompt. Every
+ * entry of a pinned base plus every individually pinned entry, de-duped on entry
+ * id, under a hard character cap.
  *
- * `GET /api/knowledge/startup-context` is the one caller that matters: the
- * desktop reads it at launch and folds the payload into the spawn prompt. The
- * payload is EVERY entry of a pinned base plus every individually pinned entry,
- * de-duped on entry id, with a hard character cap so a launch prompt cannot be
- * made unbounded by curating one large base.
+ * The visibility fence is `service-bases.ts › listBases` — M-10
+ * (`canSeeBase`), the teams filter and the agent AUDIENCE CEILING — and every
+ * read below is narrowed to exactly those ids. No repository function may be
+ * handed a base-id set that did not come from a fenced read.
  *
- * 🔒 ⚠ THE VISIBILITY FENCE IS `listBases`, AND ITS ID SET IS THE WHOLE FENCE.
- * The base list comes out of `service-bases.ts › listBases`, i.e. already
- * through M-10 (`canSeeBase`), the teams filter and the agent AUDIENCE CEILING;
- * every read below is narrowed to exactly those ids. Nothing here re-derives a
- * visibility rule, and no repository function may ever be handed a base-id set
- * that did not come from a fenced read.
- *
- * ⚠ IT IS A READ OF CONTENT THE CALLER CAN ALREADY READ, which is why the route
- * sits at `withWorkspaceAuth`'s viewer default and is neither `sessionOnly` nor
- * `member`-floored (INVARIANTS §3). Pinning is the write; this is not.
- *
- * ⚠ BOUNDED FAN: three queries total, whatever the workspace holds — the base
- * list, ONE `.in()` over entries, ONE `.in()` over the folder skeleton the paths
- * are built from. Never a query per base.
+ * It reads content the caller can already read, which is why the route sits at
+ * `withWorkspaceAuth`'s viewer default (INVARIANTS §3). Bounded fan: three
+ * queries total, never a query per base.
  */
 
 /**
- * The ceiling on the total body characters this read hands back.
+ * The ceiling on total body characters this read hands back. 8,000 ≈ 2k tokens:
+ * a PROMPT budget, not a storage one — it is paid on every session start and
+ * competes with the operator's own instructions. {@link StartupContext.omitted}
+ * is how curated content over the cap stays reachable.
  *
- * 8,000 characters ≈ 2k tokens — a few pages. The number is a PROMPT budget,
- * not a storage one: the payload is prepended to every session this workspace
- * launches, so it is paid on each start, competes with the operator's actual
- * instructions for the model's attention, and a startup context longer than the
- * task is how an agent learns to skim its own preamble. Curating more than this
- * is a legitimate thing to do — {@link StartupContext.omitted} is how the extra
- * stays reachable.
- *
- * ⚠ MEASURED ON BODIES ALONE, deliberately: titles and paths are the ADDRESSES
- * a reader needs in order to fetch what was left out, so charging the cap for
- * them would shrink the escape hatch as the payload grew.
+ * Measured on BODIES alone: titles and paths are the addresses a reader needs
+ * to fetch what was left out, so charging the cap for them would shrink the
+ * escape hatch as the payload grew.
  */
 export const STARTUP_CONTEXT_CHAR_CAP = 8_000;
 
@@ -52,13 +38,10 @@ export const STARTUP_CONTEXT_CHAR_CAP = 8_000;
  * Row ceiling on the entry read (INVARIANTS §9: every list read carries a
  * limit, and a clipped read SAYS SO).
  *
- * ⚠ IT IS AN ABUSE BOUND, NOT THE PAGE BOUNDARY. The character cap above is
- * what actually decides the payload, and no entry with a body can be shorter
- * than a character — so a read that returns 500 rows has already produced far
- * more pointers than items. It exists so that pinning a base with 50,000
- * entries costs a bounded read rather than a whole table scan on the launch
- * path. Reaching it sets {@link StartupContext.truncated}, because AT a ceiling
- * is indistinguishable from over it.
+ * An abuse bound, not the page boundary — the character cap above decides the
+ * payload. It exists so pinning a base with 50,000 entries costs a bounded read
+ * rather than a table scan on the launch path. Reaching it sets
+ * {@link StartupContext.truncated}: AT a ceiling is indistinguishable from over it.
  */
 export const STARTUP_CONTEXT_ENTRY_LIMIT = 500;
 
@@ -73,7 +56,7 @@ export interface StartupContextItem {
   body: string;
 }
 
-/** ⚠ AN ADDRESS, NEVER A BODY — everything a reader needs to fetch the entry
+/** An address, never a body — everything a reader needs to fetch the entry
  *  (`dopl_kb(op="read_file", base, path)`) and nothing of its content. */
 export interface StartupContextPointer {
   baseId: string;
@@ -90,26 +73,19 @@ export interface StartupContext {
   /** Body characters actually included, i.e. the sum over `items`. */
   chars: number;
   /**
-   * Body characters of everything PINNED, `omitted` included — what the curated
-   * set costs, as against what a launch is handed.
-   *
-   * ⚠ **THE TWO NUMBERS DIVERGE ON PURPOSE, AND THE GAP IS THE WHOLE WARNING.**
-   * `chars` is bounded by {@link STARTUP_CONTEXT_CHAR_CAP} and can never report
-   * a problem, because past the cap the payload simply ships pointers; this one
-   * keeps rising, so it is the number a pin can be judged against
-   * (`shared/knowledge/caps.ts › KB_PIN_WARN_CHARS`). ⚠ Bounded in its own right
-   * by {@link STARTUP_CONTEXT_ENTRY_LIMIT}, so it is a floor once
-   * `truncated` is set for the row reason.
+   * Body characters of everything PINNED, `omitted` included. `chars` is bounded
+   * by {@link STARTUP_CONTEXT_CHAR_CAP} and can never report a problem; this one
+   * keeps rising, so it is the number a pin is judged against
+   * (`shared/knowledge/caps.ts › KB_PIN_WARN_CHARS`). Itself bounded by
+   * {@link STARTUP_CONTEXT_ENTRY_LIMIT}, so it is a floor once `truncated` is set.
    */
   pinnedChars: number;
   /**
-   * ⚠ LOAD-BEARING (INVARIANTS §9). A clipped read that renders like an
-   * exhausted one is the bug, not the cap. `true` means "there is pinned
-   * content you were not given" — either because the character cap was reached
-   * (then `omitted` names it) or because the row ceiling was
-   * ({@link STARTUP_CONTEXT_ENTRY_LIMIT}, in which case there is also content
-   * `omitted` does not name). Consumers must say so out loud rather than
-   * presenting the payload as the whole of what is pinned.
+   * LOAD-BEARING (INVARIANTS §9): a clipped read that renders like an
+   * exhausted one is the bug, not the cap. `true` means there is pinned content
+   * you were not given — the character cap (then `omitted` names it) or the row
+   * ceiling ({@link STARTUP_CONTEXT_ENTRY_LIMIT}, which `omitted` does not name).
+   * Consumers must say so rather than present the payload as the whole.
    */
   truncated: boolean;
 }
@@ -123,13 +99,10 @@ const EMPTY: StartupContext = {
 };
 
 /**
- * The pinned launch payload for the caller's active workspace.
- *
- * ⚠ AN ITEM IS INCLUDED WHOLE OR NOT AT ALL. The first entry whose body would
- * cross {@link STARTUP_CONTEXT_CHAR_CAP} becomes a pointer, and so does
- * everything after it — no half body, and no skipping ahead to a smaller entry,
- * which would make the payload's contents depend on the sizes of documents that
- * are not in it.
+ * The pinned launch payload for the caller's active workspace. An item is
+ * included whole or not at all: the first entry whose body would cross
+ * {@link STARTUP_CONTEXT_CHAR_CAP} becomes a pointer, and so does everything
+ * after it — no skipping ahead to a smaller entry.
  */
 export async function getStartupContext(
   ctx: KnowledgeContext
@@ -144,7 +117,7 @@ export async function getStartupContext(
     pinnedBaseIds,
     STARTUP_CONTEXT_ENTRY_LIMIT
   );
-  // ⚠ AT the ceiling counts as clipped — see the constant's docblock.
+  // AT the ceiling counts as clipped — see the constant's docblock.
   const clipped = rows.length >= STARTUP_CONTEXT_ENTRY_LIMIT;
   if (rows.length === 0) return { ...EMPTY, truncated: clipped };
 
@@ -156,10 +129,9 @@ export async function getStartupContext(
 }
 
 /**
- * ⚠ DE-DUPE IS NOT DEFENSIVE PADDING — it is the contract between the two arms
- * of the read. An entry that is pinned AND lives inside a pinned base satisfies
- * both, and handing it over twice would spend the character cap twice on one
- * document. First occurrence wins, so the ordering below stays meaningful.
+ * The contract between the two arms of the read: an entry that is pinned AND
+ * lives inside a pinned base satisfies both, and handing it over twice would
+ * spend the character cap twice on one document. First occurrence wins.
  */
 function dedupeById(rows: KnowledgeEntry[]): KnowledgeEntry[] {
   const seen = new Set<string>();
@@ -171,12 +143,9 @@ function dedupeById(rows: KnowledgeEntry[]): KnowledgeEntry[] {
  * order — `repository-pins.ts › listPinnedEntriesForBases` sorts by position,
  * created_at, id, exactly as `listEntriesForBase` does).
  *
- * ⚠ THE SQL ORDERS BASES BY UUID, WHICH IS ARBITRARY; `baseIds` is the ordered
- * list `listBases` produced (oldest base first), so re-keying on it is what
- * makes the payload read the way the workspace reads. ⚠ The one consequence to
- * know: the ROW ceiling therefore clips in uuid order, not in this one — an
- * abuse bound is allowed to be arbitrary about which 500 it stops at, as long
- * as it is deterministic and says that it stopped.
+ * The SQL orders bases by uuid, which is arbitrary; `baseIds` is the ordered list
+ * `listBases` produced. Consequence: the ROW ceiling clips in uuid order, not in
+ * this one.
  */
 function orderForPresentation(
   entries: KnowledgeEntry[],
@@ -217,9 +186,9 @@ function assemble(
       path,
       title: entry.title,
     };
-    // ⚠ Once anything has been omitted every later entry is too, even a small
-    // one: a payload whose contents depend on the sizes of the documents NOT in
-    // it is one nobody can reason about.
+    // once anything has been omitted every later entry is too, even a small one:
+    // a payload whose contents depend on the sizes of documents NOT in it is one
+    // nobody can reason about.
     if (omitted.length > 0 || chars + entry.body.length > STARTUP_CONTEXT_CHAR_CAP) {
       omitted.push(head);
       continue;
@@ -240,11 +209,10 @@ function assemble(
  * `folder/sub/Entry Title` — the address `dopl_kb(op="read_file")` and
  * `readFileByPath` take. Root entries are their title alone.
  *
- * ⚠ THE WALK IS DEPTH-BOUNDED. `knowledge_folders.parent_id` is unconstrained
- * against cycles at rest (`service-folders.ts › moveFolder` is what refuses to
- * make one), and this read runs on the launch path — a cycle must degrade to a
- * short path, never to a hang. A missing or trashed parent stops the walk for
- * the same reason: render the segments that resolve rather than invent one.
+ * The walk is DEPTH-BOUNDED: `knowledge_folders.parent_id` is unconstrained
+ * against cycles at rest (`service-folders.ts › moveFolder` refuses to make one)
+ * and this runs on the launch path — a cycle must degrade to a short path, never
+ * a hang. A missing or trashed parent stops the walk for the same reason.
  */
 function pathBuilder(
   folders: KnowledgeFolderNode[]

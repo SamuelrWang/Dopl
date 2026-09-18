@@ -1,8 +1,8 @@
 import "server-only";
 
 /**
- * Domain errors thrown by the knowledge service. ⚠ Deliberately NOT `HttpError`
- * — the route boundary and MCP tool handlers each translate separately, so the
+ * Domain errors thrown by the knowledge service. Deliberately NOT `HttpError` —
+ * the route boundary and MCP tool handlers each translate separately, so the
  * same service feeds both without HTTP semantics leaking into the domain.
  */
 
@@ -77,12 +77,9 @@ export class WorkspaceKeyPrivateVisibilityError extends Error {
  * — the KB, the channel and the grant row must all name the SAME workspace.
  * → 400.
  *
- * ⚠ IT IS A BACKSTOP THAT SHOULD BE UNREACHABLE, AND IT IS TRANSLATED ANYWAY.
- * The route fences the channel (`isChannelVisibleTo`) and the base
- * (`getBaseById`) against the caller's own workspace before the write, so a
- * mismatch means one of those fences moved. A raw `P0001` would surface as a
- * 500 and read as an outage; a 4xx says "refused", which is what happened.
- * ⚠ The trigger's own message is NOT forwarded — it names both workspace ids.
+ * An unreachable backstop, translated anyway: a raw `P0001` would surface as a
+ * 500 and read as an outage, where a 4xx says "refused". The trigger's own
+ * message is NOT forwarded — it names both workspace ids.
  */
 export class ChannelGrantInvalidError extends Error {
   readonly code = "CHANNEL_GRANT_INVALID";
@@ -122,19 +119,15 @@ export class FolderCycleError extends Error {
 /**
  * A row whose tenancy disagrees with the context reading it.
  *
- * ⚠ **IT IS TWO DIFFERENT EVENTS WEARING ONE NAME, AND THE SECOND IS A BUG.**
- * On the id lane it is CONTROL FLOW — `service-bases.ts › loadVisibleBase`
- * catches it to mean "not in this container, follow the id" — and it is not
- * logged, because a follow is the normal path. Anything that reaches a RESPONSE
- * is the other kind: a child row left on a tenancy its parent no longer has
- * (F-664), which is a server invariant violation and not a caller's mistake.
+ * Two different events wearing one name, and the second is a bug. On the id lane
+ * it is CONTROL FLOW — `service-bases.ts › loadVisibleBase` catches it to mean
+ * "not in this container, follow the id" — and is not logged. Anything that
+ * reaches a RESPONSE is the other kind: a child row left on a tenancy its parent
+ * no longer has (F-664), a server invariant violation.
  *
- * ⚠ **SO IT CARRIES THE TWO IDS.** Until 2026-09-03 it carried a sentence
- * ("entry belongs to a different workspace") and the mapper answered 400 with
- * it, so the one thing an operator needed — WHICH row and WHICH two tenancies —
- * existed nowhere, and the class of defect was undiagnosable from logs alone.
- * ⚠ The ids are for the SERVER LOG (`http-mapping.ts`); the client still gets
- * the sentence, because naming a workspace the caller cannot see is an oracle.
+ * So it carries the two ids, for the SERVER LOG (`http-mapping.ts`); the client
+ * still gets only the sentence, because naming a workspace the caller cannot see
+ * is an oracle.
  */
 export class KnowledgeBaseMismatchError extends Error {
   readonly code = "KNOWLEDGE_BASE_MISMATCH";
@@ -189,13 +182,12 @@ export class KnowledgePathConflictError extends Error {
 /**
  * Write pushing a base past its plan's per-base storage cap.
  *
- * ⚠ PLAN GATE, not a validation error — does NOT go through `mapKnowledgeError`
- * / the nested envelope. `toKnowledgeErrorResponse` emits the flat
- * `{ error, message, upgrade_url }` envelope at 403, matching the ontology
- * object cap (`api/ontology/objects/route.ts`) because `@dopl/client` and every
- * MCP agent behind it already parse exactly that.
+ * A plan gate, not a validation error — it does NOT go through
+ * `mapKnowledgeError`/the nested envelope. `toKnowledgeErrorResponse` emits the
+ * flat `{ error, message, upgrade_url }` envelope at 403, matching the ontology
+ * object cap, because `@dopl/client` and every MCP agent already parse that.
  *
- * FREEZE, NEVER DELETE: only GROWTH throws. Reads, deletes, moves, renames and
+ * FREEZE, NEVER DELETE: only GROWTH throws; reads, deletes, moves, renames and
  * shrinking edits stay allowed while over cap.
  */
 export class KnowledgeStorageLimitError extends Error {
@@ -240,11 +232,9 @@ export class KnowledgeStaleVersionError extends Error {
  * A `section=` argument that names TWO headings in one entry. → 409; the caller
  * disambiguates or edits the whole body.
  *
- * ⚠ **A REFUSAL RATHER THAN A FIRST-MATCH, AND ONLY ON THE WRITE PATH IT IS
- * FATAL.** A read can hand back both positions and let the agent choose; a
- * write that picked one would overwrite a section the caller did not name, and
- * there is no trash to recover it from. The positions travel in `details` so
- * the answer carries its own remedy.
+ * A refusal rather than a first-match, because a write that picked one would
+ * overwrite a section the caller did not name and there is no trash to recover
+ * it from. The positions travel in `details`.
  */
 export class KnowledgeSectionAmbiguousError extends Error {
   readonly code = "KNOWLEDGE_SECTION_AMBIGUOUS";

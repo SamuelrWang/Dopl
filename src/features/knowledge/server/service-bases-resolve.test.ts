@@ -1,36 +1,24 @@
 /**
- * 🔒 **`readBaseById` — A KNOWLEDGE BASE FOLLOWS ITS OWN ID (B2).**
+ * `readBaseById` — a knowledge base follows its own id (B2).
  *
- * ⚠ **THE FENCE ITSELF IS NOT RE-TESTED HERE.** Shared credentials, the `viewer`
- * floor, the container lock and the two-arm "rows you could already list for
- * yourself" `.or()` are asserted un-mocked in
- * `shared/tenancy/resolve-resource.test.ts`; the follow is asserted in
- * `shared/tenancy/read-resource.test.ts`. What this file owns is that THIS
- * feature's read door composes the answer and re-runs its OWN two gates on top
- * of it — the M-10 matrix and the agent audience ceiling.
- *
- * ⚠ The sibling of `agent-templates/server/service-resolve.test.ts`, and the
- * pair must move together: two read doors disagreeing about what an id may name
- * is the whole defect this slice removes.
+ * The fence itself is asserted un-mocked in
+ * `shared/tenancy/resolve-resource.test.ts` and the follow in
+ * `shared/tenancy/read-resource.test.ts`. This file owns only that the feature's
+ * read door re-runs its own two gates on top — the M-10 matrix and the agent
+ * audience ceiling. Sibling of
+ * `agent-templates/server/service-resolve.test.ts`; the pair must move together.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { KnowledgeBase, KnowledgeContext } from "../types";
 
-// ⚠ **THE GRANT ARM IS A DB READ, SO IT IS DECLARED HERE** (F-604, 2026-09-02).
-// `canSeeBase` / `canSeeTemplate` gained an arm over `resource_grants`, and its
-// batch precompute is the one part of this seam that talks to Postgres. Every
-// case in this file is about the OTHER arms, so the grant set is empty — which
-// is also the pre-2026-09-02 behaviour, and therefore the right default for a
-// suite that predates the arm. The cases that exercise a GRANT live in
-// `service-shared-grant-arm.test.ts` and the redteam suites.
-// ⚠ **THE CHANGELOG CAPTURE IS A REAL WRITE AND IT IS AWAITED**
-// (`./service-revisions.ts`, 2026-09-09): every knowledge write now records a
-// revision inside the same request, so a service test that leaves it alone
-// reaches `supabaseAdmin()` and fails on a missing service-role key. Stubbed
-// here because these suites are about the WRITE, not about its audit row —
-// that the row is recorded, exactly once, per path, is
-// `service-revisions.test.ts`'s subject.
+// The grant arm is a DB read, so it is declared here (F-604, 2026-09-02). Every
+// case in this file is about the other arms, so the grant set is empty; grant
+// cases live in `service-shared-grant-arm.test.ts` and the redteam suites.
+// The changelog capture is a real awaited write (`./service-revisions.ts`), so
+// an unstubbed service test reaches `supabaseAdmin()` and fails on a missing
+// service-role key. That the row is recorded is `service-revisions.test.ts`'s
+// subject.
 vi.mock("@/features/revisions/server/repository", () => ({
   appendRevision: vi.fn(async () => ({ id: "rev-1" })),
   replaceRevisionSnapshot: vi.fn(async () => ({ id: "rev-1" })),
@@ -55,11 +43,9 @@ vi.mock("./service-audience", () => ({
 vi.mock("@/shared/tenancy/resolve-resource", () => ({
   resolveResource: vi.fn(async () => null),
 }));
-// ⚠ THE WRITE CASES BELOW REACH TWO SEAMS THE READ CASES NEVER DID. The storage
-// gate reads a billing row and the embedding scheduler talks to an API; both are
-// out of scope here (this file is about WHICH CONTAINER a call lands in) and an
-// unmocked either hangs the suite. Headroom always passes, so a refusal in these
-// cases can only ever be a tenancy refusal.
+// The write cases reach two more seams: the storage gate reads a billing row
+// and the embedding scheduler talks to an API. Unmocked, either hangs the suite.
+// Headroom always passes, so a refusal here can only be a tenancy refusal.
 vi.mock("./service-storage", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./service-storage")>()),
   assertStorageHeadroom: vi.fn(async () => {}),
@@ -136,8 +122,7 @@ beforeEach(() => {
 
 describe("🔒 the id names its own container", () => {
   it("reads the caller's own base out of ANOTHER container of theirs", async () => {
-    // The row is in `THERE`; the caller was authorised in `HERE`. Before B2 this
-    // was a `KnowledgeBaseMismatchError` about a perfectly good id.
+    // The row is in `THERE`; the caller was authorised in `HERE`.
     vi.mocked(repo.findBaseById).mockResolvedValue(base());
     vi.mocked(tenancy.resolveResource).mockResolvedValue(resolvedIn(THERE));
     await expect(readBaseById(ctx(), BASE)).resolves.toMatchObject({
@@ -147,9 +132,8 @@ describe("🔒 the id names its own container", () => {
   });
 
   it("🔒 RESOLUTION IS NOT AUTHORISATION — the matrix still refuses", async () => {
-    // Somebody else's PRIVATE base. The resolver could not have named it (its
-    // `.or()` has no arm that matches), and even handed the address the
-    // feature's own M-10 gate answers the same single 404.
+    // Somebody else's private base: the resolver could not have named it, and
+    // even handed the address the M-10 gate answers the same single 404.
     vi.mocked(repo.findBaseById).mockResolvedValue(
       base({ createdBy: OTHER })
     );
@@ -160,9 +144,8 @@ describe("🔒 the id names its own container", () => {
   });
 
   it("🔒 the AGENT AUDIENCE CEILING still applies in the container it named", async () => {
-    // ⚠ MUTATION CHECK. The ceiling is `getBaseById`'s second gate and the one a
-    // hand-written follow forgets: a granted-audience agent must not reach a
-    // base it holds no channel grant on, in ANY container.
+    // The ceiling is `getBaseById`'s second gate: a granted-audience agent must
+    // not reach a base it holds no channel grant on, in any container.
     vi.mocked(repo.findBaseById).mockResolvedValue(base());
     vi.mocked(tenancy.resolveResource).mockResolvedValue(resolvedIn(THERE));
     vi.mocked(audience.audienceAdmits).mockReturnValue(false);
@@ -191,10 +174,9 @@ describe("🔒 the id names its own container", () => {
 
 describe("🔒 the WRITE gate did not move", () => {
   it("getBaseById still refuses a base in another container", async () => {
-    // ⚠ MUTATION CHECK, and it is the whole reason there are two functions:
-    // every write in this feature funnels through `getBaseById`, so following an
-    // id here would make `workspace=` ignorable on a PATCH — a ruling nobody has
-    // made (INVARIANTS §T35).
+    // The reason there are two functions: every write funnels through
+    // `getBaseById`, so following an id here would make `workspace=` ignorable
+    // on a PATCH (INVARIANTS §T35).
     vi.mocked(repo.findBaseById).mockResolvedValue(base());
     vi.mocked(tenancy.resolveResource).mockResolvedValue(resolvedIn(THERE));
     await expect(getBaseById(ctx(), BASE)).rejects.toBeInstanceOf(
@@ -205,16 +187,10 @@ describe("🔒 the WRITE gate did not move", () => {
 });
 
 /**
- * 🔒 **THE SECONDARY READ DOORS FOLLOW THE ID TOO (F-470).**
- *
- * ⚠ **THE CLAIM WAS TRUE FOR ONE DOOR AND FALSE FOR THE REST, WHICH IS WORSE
- * THAN FALSE FOR ALL OF THEM.** `GET /api/knowledge/bases/<id>` resolved an id
- * to its own container from A12/B2 onward; `.../tree`, `.../files?path=` and
- * `.../folders` composed the WORKSPACE-KEYED `getBaseById` instead, so the same
- * id that opened a base answered `KNOWLEDGE_BASE_MISMATCH` for its contents —
- * F-604's shape ("a base you could open and could not read") one layer up, and
- * the reason `dopl_kb read_file` failed on a personal-shelf base in the 1.26.0
- * smoke.
+ * The secondary read doors follow the id too (F-470). `.../tree`,
+ * `.../files?path=` and `.../folders` used the workspace-keyed `getBaseById`,
+ * so the same id that opened a base answered `KNOWLEDGE_BASE_MISMATCH` for its
+ * contents.
  */
 describe("🔒 every by-id READ door names the id's own container", () => {
   beforeEach(() => {
@@ -226,10 +202,8 @@ describe("🔒 every by-id READ door names the id's own container", () => {
   });
 
   it("read_file resolves the path in the container the base lives in", async () => {
-    // ⚠ MUTATION CHECK. Put `getBaseById` back and this is a
-    // `KnowledgeBaseMismatchError` — and if only the BASE lookup follows while
-    // `resolvePath` keeps the original context, it is one anyway, from the
-    // entry's own `assertSameWorkspace`.
+    // If only the base lookup follows while `resolvePath` keeps the original
+    // context, the entry's own `assertSameWorkspace` still mismatches.
     vi.mocked(repo.findActiveEntryByTitle).mockResolvedValue({
       id: "e1",
       workspaceId: THERE,
@@ -258,9 +232,8 @@ describe("🔒 every by-id READ door names the id's own container", () => {
   });
 
   it("🔒 and every one of them still refuses what the matrix refuses", async () => {
-    // ⚠ MUTATION CHECK. The follow re-runs `getBaseById` in the container the id
-    // named, so somebody else's private row is the same single 404 on every door
-    // — the address is not the authorisation.
+    // The follow re-runs `getBaseById` in the container the id named, so
+    // somebody else's private row is the same single 404 on every door.
     vi.mocked(repo.findBaseById).mockResolvedValue(base({ createdBy: OTHER }));
     await expect(readFileByPath(ctx(), BASE, "x.md")).rejects.toBeInstanceOf(
       KnowledgeBaseNotFoundError
@@ -275,22 +248,13 @@ describe("🔒 every by-id READ door names the id's own container", () => {
 });
 
 /**
- * 🔓 **THE WRITE DOORS FOLLOW THE ID TOO — SAMUEL'S RULING, 2026-09-06**
- * (INVARIANTS §T35, rewritten; `shared/tenancy/read-resource.ts` carries the
- * argument).
+ * The write doors follow the id too (ruling 2026-09-06, INVARIANTS §T35).
  *
- * ⚠ **THIS BLOCK USED TO ASSERT THE OPPOSITE** ("the by-id WRITE doors stay
- * workspace-keyed"), and the behaviour it pinned is the defect that was
- * reported: a base you could OPEN from a channel and could not EDIT from the
- * same session, one call apart, because the read door followed the id and the
- * write door did not.
- *
- * ⚠ **THE SECOND ASSERTION IN EACH CASE IS THE LOAD-BEARING ONE.** Following the
- * id is only half a write — the entry insert, the path walk and the delete are
- * all workspace-keyed, so what matters is that they land in `THERE` (the base's
- * container) and not in `HERE` (the room the call came from). A write gated on
- * the followed base and executed against the calling context would be worse than
- * the refusal it replaces, and that is what these pin.
+ * The second assertion in each case is the load-bearing one: the entry insert,
+ * the path walk and the delete are all workspace-keyed, so they must land in
+ * `THERE` (the base's container), not `HERE` (the room the call came from). A
+ * write gated on the followed base but executed against the calling context
+ * would be worse than the refusal it replaces.
  */
 describe("🔓 the by-id WRITE doors name the id's own container", () => {
   beforeEach(() => {
@@ -300,8 +264,8 @@ describe("🔓 the by-id WRITE doors name the id's own container", () => {
     vi.mocked(tenancy.resolveResource).mockResolvedValue(resolvedIn(THERE));
     vi.mocked(repo.findActiveFolderByName).mockResolvedValue(null);
     vi.mocked(repo.findActiveEntryByTitle).mockResolvedValue(null);
-    // The slug fallback inside `resolvePath` — empty, so the path is a clean miss
-    // and `write_file` takes its CREATE arm.
+    // Slug fallback inside `resolvePath` — empty, so the path is a clean miss
+    // and `write_file` takes its create arm.
     vi.mocked(repo.listActiveEntryTitlesIn).mockResolvedValue([]);
     vi.mocked(repo.insertEntry).mockResolvedValue({
       id: "e-new",
@@ -313,16 +277,16 @@ describe("🔓 the by-id WRITE doors name the id's own container", () => {
     await expect(
       writeFileByPath(ctx(), BASE, "x.md", { body: "hi" })
     ).resolves.toMatchObject({ entry: { id: "e-new" } });
-    // ⚠ MUTATION CHECK. Compose the insert against the ORIGINAL ctx and this
-    // reads `HERE`: gated on the base's container, written into the caller's.
+    // Composing the insert against the original ctx reads `HERE`: gated on the
+    // base's container, written into the caller's.
     expect(repo.insertEntry).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: THERE, knowledgeBaseId: BASE })
     );
   });
 
   it("🔒 and it still refuses what the matrix refuses", async () => {
-    // ⚠ Following an id authorises nothing: the gate re-runs in the container
-    // the id named, so somebody else's private base is the same single 404.
+    // Following an id authorises nothing: the gate re-runs in the container the
+    // id named, so somebody else's private base is the same single 404.
     vi.mocked(repo.findBaseById).mockResolvedValue(base({ createdBy: OTHER }));
     await expect(
       writeFileByPath(ctx(), BASE, "x.md", { body: "hi" })
@@ -331,8 +295,8 @@ describe("🔓 the by-id WRITE doors name the id's own container", () => {
   });
 
   it("🔒 an id that resolves NOWHERE is still the mismatch refusal", async () => {
-    // The resolver is the first fence and it answers `null` for a row the caller
-    // could not have listed for themselves — no follow, no write.
+    // The resolver answers `null` for a row the caller could not have listed for
+    // themselves — no follow, no write.
     vi.mocked(tenancy.resolveResource).mockResolvedValue(null);
     await expect(
       writeFileByPath(ctx(), BASE, "x.md", { body: "hi" })

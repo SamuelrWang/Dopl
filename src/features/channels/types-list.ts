@@ -63,6 +63,10 @@ export interface ChannelPeer {
 // to hang off) are the payload's own `pendingLinks`, and a link is never in both.
 export type { ChannelPendingLink } from "@/shared/links/types";
 import type { ChannelPendingLink } from "@/shared/links/types";
+// ⚠ TYPE-ONLY, so the `types.ts ↔ types-list.ts` edge is erased at build: that
+// file `export *`s this one, and `Channel` is the row THIS file's list payload
+// carries.
+import type { Channel } from "./types";
 
 /**
  * 🔒 The absent-fallback for {@link ChannelRowExtras.peers} — INVARIANTS §8's
@@ -71,6 +75,15 @@ import type { ChannelPendingLink } from "@/shared/links/types";
  * ⚠ FROZEN and shared — it is handed straight to render paths.
  */
 export const EMPTY_PEERS: readonly ChannelPeer[] = Object.freeze([]);
+
+/**
+ * 🔒 The absent-fallback for {@link ChannelListPayload.channels} — the same §8
+ * `EMPTY_X`, and for the same reason plus one: `use-channels.ts`'s `?? []` sat
+ * inside a TanStack `select`, so it minted a NEW array identity on every render
+ * and churned every memo keyed on the result.
+ * ⚠ FROZEN and shared — it is handed straight to render paths.
+ */
+export const EMPTY_CHANNELS: readonly Channel[] = Object.freeze([]);
 
 /**
  * 🔒 The absent-fallback for {@link ChannelRowExtras.myWorkspaceRole} — `guest`,

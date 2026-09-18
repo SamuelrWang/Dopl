@@ -26,10 +26,9 @@ interface Props {
 }
 
 /**
- * Settings → Sharing: three-way scope picker + per-team grant editor.
- * ⚠ Editable by the KB owner or a workspace admin only — mirrors the
- * service-side `ScopeChangeForbiddenError` rule; everyone else gets a
- * read-only summary.
+ * Settings → Sharing: three-way scope picker + per-team grant editor. Editable
+ * by the KB owner or a workspace admin only, mirroring the service-side
+ * `ScopeChangeForbiddenError` rule; everyone else gets a read-only summary.
  */
 export function KbSharingSection({
   workspaceId,
@@ -49,8 +48,7 @@ export function KbSharingSection({
   const [grantsSeeded, setGrantsSeeded] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Grants live on TeamView.grants; seed the draft once the teams fetch
-  // lands (the modal mounts this section only while open).
+  // Grants live on TeamView.grants; seed the draft once the teams fetch lands.
   const currentGrants = useMemo<TeamGrantDraft[]>(
     () =>
       (teams ?? []).flatMap((t) =>
@@ -70,7 +68,7 @@ export function KbSharingSection({
     }
   }, [teams, grantsSeeded, currentGrants]);
 
-  // Members may add/raise only their OWN teams; admin-granted foreign teams
+  // Members may add/raise only their own teams; admin-granted foreign teams
   // render locked. Admins edit everything.
   const myTeamIds = useMemo(
     () =>

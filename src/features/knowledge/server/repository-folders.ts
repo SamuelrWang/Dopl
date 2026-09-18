@@ -13,22 +13,11 @@ import {
  * Raw Supabase I/O for knowledge FOLDERS. No business logic, no auth checks —
  * see `repository.ts` for the split map and conventions.
  *
- * 🔒 TWO CLIENTS, AND WHICH ONE A FUNCTION TAKES IS THE WHOLE OF RLS PHASE 1
- * (Wave B B7). `readClient()` is the CALLER's client when
- * `RLS_CALLER_SCOPED_READS` is on and `supabaseAdmin()` otherwise, so with the
- * flag off this file behaves exactly as it did.
- *
- *   * **A read that answers "what may this caller see" takes `readClient()`.**
- *     With the flag on, the row filter is the policy
- *     (`20260919120000_rls_helpers_and_caller_scope`), which is written to equal
- *     the TS predicate — the predicate stays until the flag has run a release.
- *   * **A read that answers a SYSTEM question keeps `supabaseAdmin()`**, and
- *     says so at the call site. Slug uniqueness, storage accounting and the
- *     `max(position)` append helpers must see rows the caller cannot: scoped to
- *     the caller they would answer a different question and answer it wrongly
- *     (a slug "free" because someone else's private base holds it).
- *   * **Writes are unchanged.** INSERT/UPDATE/DELETE stay on the service role
- *     until RLS plan phase 4.
+ * Two clients: a read that answers "what may this caller see" takes
+ * `readClient()` (the caller's client when `RLS_CALLER_SCOPED_READS` is on); a
+ * read that answers a SYSTEM question — the `max(position)` append helpers —
+ * keeps `supabaseAdmin()` and says so at the call site, since caller-scoped it
+ * would answer a different question. Writes stay on the service role.
  */
 
 export async function findFolderById(
@@ -85,7 +74,7 @@ export async function findActiveFolderByName(
  * `parent_id` chain from folder to root, index 0 = the folder itself. Feeds
  * `moveFolder`'s cycle pre-check and breadcrumbs.
  *
- * ⚠ INCLUDES soft-deleted nodes — a cycle through a trashed folder is still a
+ * Includes soft-deleted nodes — a cycle through a trashed folder is still a
  * cycle once restored. Capped at 1000 hops, matching the DB trigger's guard.
  *
  * Iterative: N round trips. Trees are shallow (<10 levels); a recursive-CTE
@@ -114,7 +103,7 @@ export async function maxFolderPositionIn(
   baseId: string,
   parentId: string | null
 ): Promise<number> {
-  // ⚠ WRITE-PATH READ, service role on purpose: sibling of `maxEntryPositionIn`.
+  // Write-path read, service role on purpose: sibling of `maxEntryPositionIn`.
   const db = supabaseAdmin();
   let query = db
     .from("knowledge_folders")
@@ -212,23 +201,21 @@ export async function updateFolderRow(
  * PERMANENTLY delete a folder, its descendant folders and every entry in the
  * subtree, in ONE atomic RPC. No trash.
  *
- * ⚠ MUST stay a single transaction. Split writes let an entries-delete commit
- * and a folder-delete fail, leaving an empty folder with its notes permanently
- * gone and nothing to recover them from.
+ * Must stay a single transaction: split writes let an entries-delete commit and
+ * a folder-delete fail, leaving an empty folder with its notes permanently gone.
  *
- * ⚠ ORDER IS LOAD-BEARING inside the function body: `knowledge_entries
- * .folder_id` is `ON DELETE SET NULL`, so deleting the folder first ORPHANS
- * its entries into the base root. The RPC deletes subtree ENTRIES first, then
- * the root folder — descendant folders cascade via the self-referential
- * `parent_id ... ON DELETE CASCADE`.
+ * Order is load-bearing inside the RPC: `knowledge_entries.folder_id` is
+ * `ON DELETE SET NULL`, so deleting the folder first ORPHANS its entries into
+ * the base root. It deletes subtree ENTRIES first, then the root folder —
+ * descendant folders cascade via `parent_id ... ON DELETE CASCADE`.
  */
 export async function hardDeleteFolder(
   workspaceId: string,
   id: string
 ): Promise<void> {
   const db = supabaseAdmin();
-  // ⚠ RPC from 20260807140000_cascade_hard_delete_folder_and_object.sql, not in
-  // the generated Database types. DEPLOY-BLOCKING with that migration: this is
+  // RPC from 20260807140000_cascade_hard_delete_folder_and_object.sql, not in
+  // the generated Database types. Deploy-blocking with that migration: this is
   // the ONLY folder delete path, so shipping without it fails every delete.
   const { error } = await db.rpc(
     "cascade_hard_delete_folder" as never,

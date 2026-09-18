@@ -21,17 +21,13 @@ interface Props {
   /** `null`/absent = unknown → no bar drawn. */
   storageLimit?: number | null;
   ownerLabel: string;
-  /** ⚠ CALLER'S OWN star — per-user, not a property of the base row. */
+  /** Caller's own star — per-user, not a property of the base row. */
   starred: boolean;
   /**
-   * Is this base granted into AT LEAST ONE channel? From the list response's
-   * `sharedBaseIds` sibling key — a fact about GRANTS, never a column on the
-   * base row, which is why it arrives as a prop and not off `base`.
-   *
-   * ⚠ Drives the pill's word through `kbCardLabel`, which overrides `private`
-   * and nothing else; that function carries the reasoning. Optional so an
-   * older caller (or a stale-cache read with no `sharedBaseIds`) renders the
-   * scope word exactly as it did before the key existed.
+   * Is this base granted into at least one channel? From the list response's
+   * `sharedBaseIds` key — a fact about grants, never a column on the base row.
+   * Drives the pill's word through `kbCardLabel`. Optional, so a stale-cache
+   * read with no `sharedBaseIds` renders the scope word as it did before.
    */
   shared?: boolean;
   onOpen: (base: KnowledgeBase) => void;
@@ -41,22 +37,18 @@ interface Props {
 /**
  * One knowledge base on the home grid.
  *
- * ⚠ Container is an `<article>`, NOT a `<button>` — the bookmark and Open must
- * be sibling controls; `<button>` inside `<button>` is invalid HTML and browsers
+ * Container is an `<article>`, not a `<button>` — the bookmark and Open must be
+ * sibling controls; `<button>` inside `<button>` is invalid HTML and browsers
  * reparent the inner one out of the card. Contracts that must hold:
  *
- *   - ONE keyboard Open action (the Open button). Tab order: bookmark, then
- *     Open.
- *   - Container `onClick` is a MOUSE duplicate of Open; both real buttons stop
+ *   - ONE keyboard Open action. Tab order: bookmark, then Open.
+ *   - Container `onClick` is a mouse duplicate of Open; both real buttons stop
  *     propagation so one click fires exactly one thing.
- *   - `aria-label` names every control by its base — otherwise the grid is N
- *     buttons all called "Open".
- *   - `aria-pressed` on the bookmark: it's a toggle, state must be in the a11y
- *     tree, not only the fill colour.
+ *   - `aria-label` names every control by its base.
+ *   - `aria-pressed` on the bookmark: state in the a11y tree, not only the fill.
  */
-/** Binds `--kv-scope` (see `.card` in the module) to this base's hue. ⚠ Applied
- *  to the CONTAINER, not the pill: the accent sliver reads the same variable,
- *  and colouring the pill directly is how the two drift apart. */
+/** Binds `--kv-scope` (see `.card` in the module) to this base's hue. Applied
+ *  to the CONTAINER, not the pill: the accent sliver reads the same variable. */
 const SCOPE_CLASS: Record<KbScope, string> = {
   private: styles.scopePrivate,
   team: styles.scopeTeam,
@@ -83,15 +75,13 @@ export function BaseCard({
     >
       <div className={styles.cardHead}>
         <span className={styles.cardName}>{base.name}</span>
-        {/* ⚠ THE HUE STAYS THE SCOPE'S (`SCOPE_CLASS` on the container binds
-            `--kv-scope`, which this pill and the accent sliver both read). Only
-            the WORD changes when a private base is shared — a shared private
-            base is still a private base that has been lent out, and giving it a
-            fourth colour would read as a fourth visibility level. */}
+        {/* the hue stays the scope's; only the WORD changes when a private
+            base is shared — a fourth colour would read as a fourth visibility
+            level. */}
         <span className={styles.cardScope}>{kbCardLabel(scope, shared)}</span>
       </div>
 
-      {/* Inset well: description, meta (+ meter) and footer are hairline-fenced
+      {/* inset well: description, meta (+ meter) and footer are hairline-fenced
           rows inside it. */}
       <div className={styles.cardInset}>
         <div className={styles.cardDescRow}>
@@ -111,7 +101,7 @@ export function BaseCard({
             {stats ? `${stats.entryCount} ${stats.entryCount === 1 ? "entry" : "entries"} · ` : ""}
             {`updated ${shortWhen(stats?.lastEntryUpdatedAt ?? base.updatedAt)} · By ${ownerLabel}`}
           </span>
-          {/* Absent stats or unresolved cap render nothing: missing is
+          {/* absent stats or unresolved cap render nothing: missing is
               unknown, never zero. */}
           <StorageMeter
             usedBytes={stats?.storageBytes ?? null}
@@ -121,11 +111,8 @@ export function BaseCard({
         </div>
 
         <div className={styles.cardFoot}>
-          {/* ⚠ Icon and COPY are Bookmark — one save affordance across the app,
-              matching channels (`channels/components/message-pane.tsx`, lucide
-              `Bookmark` at size 14). The DATA verb stays "star"
-              (`onToggleStar`, `/knowledge/bases/[baseId]/star`): that is the
-              route/service vocabulary and it did not change with the icon. */}
+          {/* icon and copy are Bookmark, matching channels; the DATA verb
+              stays "star" (`onToggleStar`, `/knowledge/bases/[baseId]/star`). */}
           <button
             type="button"
             className={cn(styles.cardStar, starred && styles.cardStarOn)}
@@ -136,29 +123,27 @@ export function BaseCard({
                 : `Bookmark ${base.name}`
             }
             onClick={(e) => {
-              // ⚠ Else the card's onClick opens the base under the toggle.
+              // else the card's onClick opens the base under the toggle.
               e.stopPropagation();
               onToggleStar(base.id, !starred);
             }}
           >
             <Bookmark
               size={14}
-              // Fill is the state — a filled bookmark reads as saved; outline
-              // always drawn so the size does not change between states.
+              // fill is the state; the outline is always drawn so the size
+              // does not change between states.
               fill={starred ? "currentColor" : "none"}
               aria-hidden="true"
             />
           </button>
 
-          {/* ⚠ THE FACE IS SHARED, NOT LOCAL (2026-08-28). It used to be
-              `cn("btn-light", styles.cardOpen)` here; those declarations moved
-              to `shared/ui/open-scale-button.module.css` when /home's section
-              buttons adopted this button's size — this card must render the
-              same component they do, or "adopted" lasts until the next edit. */}
+          {/* the face is shared, not local: this card must render the same
+              component /home's section buttons do
+              (`shared/ui/open-scale-button.module.css`). */}
           <OpenScaleButton
             aria-label={`Open ${base.name}`}
             onClick={(e) => {
-              // ⚠ Else the container's handler fires too: `onOpen` twice.
+              // else the container's handler fires too: `onOpen` twice.
               e.stopPropagation();
               onOpen(base);
             }}

@@ -20,84 +20,52 @@ import {
 } from "./repository-visibility";
 
 /**
- * THE FIVE GROUPS FENCED BY **CONTAINER MEMBERSHIP** — knowledge, agent
- * templates, members, skills, chats (2026-09-17).
+ * The five groups fenced by container membership: knowledge, agent templates,
+ * members, skills, chats.
  *
- * 🔒 ── THE SECOND FENCE, AND IT IS THE FEATURE'S OWN PREDICATE (F-716) ─────
+ * F-716 (2026-09-17): container membership admits the caller to the container,
+ * not to every row in it. The second fence is the owning feature's own predicate
+ * (`canSeeBase` / `canSeeSkill` / `canSeeChat` / `canSeeTemplate`), called from
+ * `repository-visibility.ts`. The SQL clause it replaced both missed lent rows
+ * and leaked `access_mode='teams'` ones.
  *
- * Container membership admits the caller to the CONTAINER; it does not admit
- * them to every row in it. Four of these tables carry their own visibility axis,
- * and each is decided by **the predicate the owning feature already wrote** —
- * `knowledge › canSeeBase`, `skills › canSeeSkill`, `chats › canSeeChat`,
- * `agent-templates › canSeeTemplate` — called from
- * `repository-visibility.ts`, which carries the whole argument.
+ * So the visibility clause is no longer SQL and the CONTAINER fence still is:
+ * each read fetches a candidate page (`WHERE workspace_id IN (<the reach>)` plus
+ * the name match, capped at `SEARCH_CANDIDATE_ROW_LIMIT`) and the predicate cuts
+ * it. A shared credential takes the same path — see {@link CANDIDATE_LIMIT}.
  *
- * ⚠ **UNTIL 2026-09-17 IT WAS A HAND-WRITTEN `visibility = <widest> OR <owner> =
- * caller`, AND THAT WAS WRONG IN BOTH DIRECTIONS.** It MISSED every row lent in
- * by a `resource_grants` row or a team share (F-716's complaint), and it LEAKED
- * `access_mode='teams'` rows, which `visibility='public'` admits and the real
- * predicates refuse to a member of none of the granted teams. **The entry's
- * "strict subset, so it can only be a miss" claim was half true and is
- * corrected with the code.**
- *
- * ⚠ **SO THE VISIBILITY CLAUSE IS NO LONGER SQL AND THE CONTAINER FENCE STILL
- * IS.** Each read below fetches a CANDIDATE page — `WHERE workspace_id IN
- * (<the reach>)` plus the name match, capped at
- * `repository-visibility.ts › SEARCH_CANDIDATE_ROW_LIMIT` — and the predicate
- * cuts it. A container the caller does not belong to is still never NAMED.
- *
- * ⚠ **AND A SHARED CREDENTIAL TAKES THE SAME PATH, not a cheaper one** — see
- * {@link CANDIDATE_LIMIT}'s note for the shortcut that was tried and was NOT
- * equal to the predicate. What it does skip is the grant READS, which arm 2 of
- * all four predicates (F-336/F-333) makes unreachable for it anyway.
- *
- * ⚠ **`members`, `skills` AND `chats` ARE NEVER CALLED IN ACCOUNT SCOPE**
- * (`contracts.ts › CONTAINER_ONLY_SEARCH_GROUPS`; Samuel 2026-09-17: *"those
- * modules do not exist on home"*). The service does not call them, and the
- * enforcement is an ABSENCE — which is what silently stops being true — so
- * `service.test.ts` asserts the tables are never queried rather than that the
- * groups came back empty.
+ * (2026-09-17) `members`, `skills` and `chats` are never called in account scope
+ * (`contracts.ts › CONTAINER_ONLY_SEARCH_GROUPS`) — those modules do not exist on
+ * home. The enforcement is an absence, so `service.test.ts` asserts the tables
+ * are never queried rather than that the groups came back empty.
  */
 
 /**
- * The caller's own-row axis. ⚠ `null` means **a credential with no person behind
- * it**, never "unknown": every arm below the widest visibility is skipped for
- * it, which is the fail-closed direction and is arm 2 of all four predicates.
+ * The caller's own-row axis. `null` is a credential with no person behind it,
+ * never "unknown": every arm below the widest visibility is skipped for it.
  */
 export type OwnerRef = string | null;
 
 /**
- * 🔒 **THERE IS NO SECOND PATH, AND THE ATTEMPT AT ONE IS WORTH RECORDING.**
- * The first cut of F-716 kept the old `visibility = <widest>` SQL arm for a
- * credential standing for nobody, on the reasoning that arm 2 of every
- * predicate refuses such a caller everything else, so the `eq` WAS the
- * predicate. **It is not, on two of the four tables:** `canSeeSkill` and
- * `canSeeChat` admit `public` only when `access_mode !== 'teams'`, so the
- * shortcut returned four combinations the predicate refuses. The combination
- * sweep in `shared-rows.test.ts` failed on exactly those four before any of
- * this shipped.
- *
- * ⚠ **SO EVERY CALLER TAKES THE SAME PATH: FETCH THE CANDIDATE PAGE, ASK THE
- * PREDICATE.** The saving the shortcut was for is kept where it is free —
- * `repository-visibility.ts › grantSets` reads NO grant table for a credential
- * with nobody behind it, because that caller has no membership to read one
- * through. A cheaper SQL arm that has to restate a predicate is the fifth copy
- * again, wearing a performance argument.
+ * Every caller takes the same path: fetch the candidate page, ask the predicate.
+ * A cheap `visibility = <widest>` SQL arm for credentials standing for nobody is
+ * NOT equal to the predicate — `canSeeSkill` and `canSeeChat` admit `public` only
+ * when `access_mode !== 'teams'` (the sweep in `shared-rows.test.ts` catches the
+ * four combinations). The saving is kept where it is free instead: `grantSets`
+ * reads no grant table for such a caller.
  */
 const CANDIDATE_LIMIT = SEARCH_CANDIDATE_ROW_LIMIT;
 
 /**
- * ⚠ A base ceiling distinct from the group cap: it bounds the FENCE, not the
- * page. A container with more bases than this searches a bounded subset of them,
- * which under-counts rather than leaking, and nothing here claims otherwise.
+ * Bounds the FENCE, not the page. A container with more bases than this searches
+ * a bounded subset, which under-counts rather than leaking.
  */
 export const SEARCH_REACH_ROW_LIMIT = 500;
 
 /**
- * 🔒 The knowledge BASES a search may name — the fence every entry read below is
- * bounded by. Two queries rather than a join, because the base set is also what
- * labels each hit (`subtitle` = the base's name) and PostgREST's embedded-select
- * would make the visibility clause a filter on the CHILD instead of the parent.
+ * The knowledge bases a search may name — the fence every entry read is bounded
+ * by. Two queries rather than a join: the base set also labels each hit, and
+ * PostgREST's embedded select would filter the child rather than the parent.
  */
 export async function listReadableBases(
   containerIds: string[],
@@ -122,32 +90,17 @@ export async function listReadableBases(
 }
 
 /**
- * Knowledge entries whose TITLE matches, or whose text does.
+ * Knowledge entries whose title matches, or whose text does.
  *
- * 🔒 ⚠ **THE FULL-TEXT ARM READS `search_tsv`, AND THAT COLUMN IS ALREADY LIVE**
- * — `supabase/migrations/20260501020000_knowledge_fulltext.sql`, a GENERATED
- * STORED `tsvector` over `setweight(title,'A') || setweight(excerpt,'B') ||
- * setweight(body,'C')` with a GIN index, and it is present in
- * `src/shared/supabase/types.ts`, which is generated FROM THE DEPLOYED DATABASE.
+ * F-717: `{config: "simple"}` must be named. PostgREST's `config` parameterises
+ * the tsquery function, not the column; omitted, the query side falls to
+ * `default_text_search_config` (english here) and silently matches nothing
+ * against the `simple` vector. The generated `search_tsv` column fixes only the
+ * vector half.
  *
- * 🔒 ⚠ **`{config: "simple"}` IS NAMED HERE FOR THE SAME REASON IT IS NAMED ON
- * THE MESSAGES ARM, AND FOR A WHILE NEITHER DID (F-717).** PostgREST's `config`
- * parameterises the tsquery FUNCTION — `search_tsv=fts(simple).<q>` is
- * `search_tsv @@ to_tsquery('simple', $1)` — it does NOT wrap the column in a
- * second `to_tsvector`, which is what the comment that used to stand here
- * claimed. Omitted, the query side falls to the server's
- * `default_text_search_config` (`pg_catalog.english` on this deployment), and an
- * english-stemmed query against a `simple` vector silently matches nothing.
- * The generated column fixes the VECTOR's dictionary and says nothing about the
- * QUERY's. See `query-text.ts › SEARCH_TSQUERY_CONFIG` for the measurement.
- *
- * ⚠ **TWO QUERIES, MERGED, AND THE TITLE ARM IS STILL NOT REDUNDANT.**
- * `search_tsv` carries the title at weight A, and the FTS arm is now a PREFIX
- * `tsquery` (`query-text.ts › buildPrefixTsQuery`), so `kno` does reach
- * *Knowledge handbook* through it. The `ilike` arm survives because a prefix is
- * not a CONTAINS: somebody typing `handbook` expects *Knowledge handbook*, and
- * no `tsquery` matches the middle of a lexeme. Title hits come FIRST in the
- * merge — somebody typing a document's name is looking for the document.
+ * Two queries, merged, and the title arm is not redundant: the FTS arm is a
+ * PREFIX tsquery, and no tsquery matches the middle of a lexeme, so `handbook`
+ * would not reach *Knowledge handbook*. Title hits come first in the merge.
  */
 export async function searchKnowledgeEntries(
   bases: Map<string, { name: string; containerId: string }>,
@@ -167,9 +120,8 @@ export async function searchKnowledgeEntries(
       .ilike("title", containsPattern(query))
       .order("updated_at", { ascending: false })
       .limit(SEARCH_GROUP_TOTAL_CAP),
-    // ⚠ NO TOKEN, NO QUERY — a query of `???` has no lexeme to ask for, and the
-    // title arm above still answers it. `null` here is a skipped round trip,
-    // never an unfiltered read.
+    // No token, no query: `null` is a skipped round trip, never an unfiltered
+    // read. The title arm above still answers a query with no lexeme.
     tsQuery === null
       ? null
       : db
@@ -214,7 +166,7 @@ interface KnowledgeRow {
   updated_at: string;
 }
 
-/** Agent templates whose NAME matches. ⚠ `agent_templates` has no soft-delete
+/** Agent templates whose name matches. `agent_templates` has no soft-delete
  *  column; `visibility` is the only gate the row carries. */
 export async function searchAgentTemplates(
   containerIds: string[],
@@ -252,17 +204,13 @@ interface TemplateRow extends CandidateRow {
 }
 
 /**
- * Members of ONE container whose display name contains the query, or whose email
- * STARTS with it.
+ * Members of one container whose display name contains the query, or whose email
+ * starts with it.
  *
- * ⚠ **EMAIL IS A PREFIX MATCH, NOT A CONTAINS.** An address is not prose: a
- * contains-match on `com` returns every member of the container, which is a
- * roster dump wearing a search result.
- * ⚠ `email` rides out as the subtitle, which is what the channel roster already
- * shows a co-member (`channels/server/dto.ts › mapMemberRow` scrubs the four
- * per-member SETTINGS to the viewer's own row and leaves `email` on every row).
- * This group is container-scoped and membership-fenced, so nobody sees an
- * address they could not already read on the Members page.
+ * Email is a PREFIX match: a contains-match on `com` would return every member,
+ * a roster dump wearing a search result. `email` rides out as the subtitle —
+ * container-scoped and membership-fenced, so it exposes nothing the Members page
+ * does not already show.
  */
 export async function searchMembers(
   containerId: string,
@@ -287,8 +235,8 @@ export async function searchMembers(
     .from("profiles")
     .select("id, display_name, email, avatar_url")
     .in("id", userIds)
-    // ⚠ RAW FILTER STRING — every value goes through `orLiteral`, or a query
-    // containing `,` or `.` rewrites the filter's SHAPE (`query-text.ts`).
+    // Raw filter string: every value goes through `orLiteral`, or a query
+    // containing `,` or `.` rewrites the filter's shape.
     .or(
       `display_name.ilike.${orLiteral(containsPattern(query))},` +
         `email.ilike.${orLiteral(prefixPattern(query))}`
@@ -298,8 +246,8 @@ export async function searchMembers(
   if (error) throw error;
   return ((data ?? []) as ProfileRow[]).map((row) => ({
     id: row.id,
-    // ⚠ The email is the fallback TITLE, exactly as `dto.ts › mapMessageRow`
-    // resolves an author name — a profile with no display name is a real state.
+    // Email is the fallback title, as `dto.ts › mapMessageRow` resolves an author
+    // name — a profile with no display name is a real state.
     title: row.display_name ?? row.email ?? containerName,
     subtitle: row.email ?? undefined,
     containerId,
@@ -314,9 +262,8 @@ interface ProfileRow {
   avatar_url: string | null;
 }
 
-/** Skills of ONE container whose NAME matches. ⚠ `status='draft'` rows are KEPT
- *  — a draft is the author's own work in progress and the visibility arm already
- *  decides who may see it. */
+/** Skills of one container whose name matches. `status='draft'` rows are kept —
+ *  the visibility arm already decides who may see the author's draft. */
 export async function searchSkills(
   containerId: string,
   query: string,
@@ -352,7 +299,7 @@ interface SkillRow extends CandidateRow {
   updated_at: string;
 }
 
-/** Archived chats of ONE container whose TITLE matches. ⚠ The owner column is
+/** Archived chats of one container whose title matches. The owner column is
  *  `owner_id`, not `created_by` — the one table here that spells it differently. */
 export async function searchChats(
   containerId: string,

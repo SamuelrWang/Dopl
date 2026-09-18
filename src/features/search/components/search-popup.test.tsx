@@ -1,15 +1,14 @@
 // @vitest-environment jsdom
 /**
- * THE SEARCH POPUP'S BEHAVIOUR — when it opens, what it asks for, what the
- * arrows walk, and what Enter hands back.
+ * The search popup's behaviour: when it opens, what it asks for, what the arrows
+ * walk, and what Enter hands back.
  *
- * ⚠ **THE FETCHER IS A STUB, WHICH IS THE POINT OF IT BEING A PROP.** These
- * cases exercise the SAME code path the fixture table and the real endpoint run
- * through; nothing here mocks a module.
+ * The fetcher is a stub, which is the point of it being a prop — these cases run
+ * the same code path as the fixture table and the real endpoint, and nothing here
+ * mocks a module.
  *
- * ⚠ **REAL TIMERS, `findBy*` FOR THE ANSWER.** The debounce is 250ms of wall
- * clock and the assertions that matter are about what the card shows once it has
- * settled; fake timers here would test the scheduler rather than the card.
+ * Real timers and `findBy*`: the debounce is 250ms of wall clock, and fake timers
+ * would test the scheduler rather than the card.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -52,20 +51,19 @@ const ANSWER: SearchResponse = {
   scope: "account",
   tookMs: 4,
   groups: [
-    // ⚠ **PAYLOAD ORDER IS SECTION ORDER** (`contracts.ts › SEARCH_GROUP_ORDER`,
-    // which the service builds in) — so this is stated in it, and the card is
-    // asserted to preserve it rather than to re-derive it.
+    // Payload order is section order (`contracts.ts › SEARCH_GROUP_ORDER`), so
+    // the card is asserted to preserve it rather than re-derive it.
     { kind: "channels", total: 1, items: [CHANNEL] },
     { kind: "messages", total: 1, items: [MESSAGE] },
-    // ⚠ AN EMPTY GROUP the contract would already have omitted: the card drops
-    // one anyway, for an older or a stubbed server.
+    // An empty group the contract would already have omitted: the card drops one
+    // anyway, for an older or stubbed server.
     { kind: "skills", total: 0, items: [] },
     { kind: "knowledge", total: 1, items: [KNOWLEDGE] },
   ],
 };
 
-/** A stable fetcher — the hook's contract requires it (a fresh identity every render
- *  re-arms the debounce forever). */
+/** A stable fetcher — the hook's contract requires it (a fresh identity every
+ *  render re-arms the debounce forever). */
 function stubFetcher(answer: SearchResponse = ANSWER) {
   const calls: string[] = [];
   const fetcher: SearchFetcher = ({ q }) => {
@@ -158,7 +156,7 @@ describe("the search popup opens on the TYPING, with no ⌘K and no toggle", () 
 
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
-    // ⚠ `.value`, not `toHaveValue`: the ROOT suite installs no jest-dom.
+    // `.value`, not `toHaveValue`: the root suite installs no jest-dom.
     expect((screen.getByLabelText("Search") as HTMLInputElement).value).toBe("");
   });
 });
@@ -170,8 +168,8 @@ describe("the sections", () => {
     type("orch");
     await card();
 
-    // ⚠ WAIT FOR THE ANSWER, not for the card: the card opens on the KEYSTROKE
-    // (loading, last answer underneath) and the sections arrive with the fetch.
+    // Wait for the ANSWER, not the card: the card opens on the keystroke and the
+    // sections arrive with the fetch.
     await screen.findByText("q4-outbound");
     const labels = screen.getAllByText(/^(Channels|Messages|Knowledge|Skills)$/);
     expect(labels.map((el) => el.textContent)).toEqual([
@@ -189,7 +187,7 @@ describe("the sections", () => {
 
     const mark = await screen.findByText("orchestrator");
     expect(mark.tagName).toBe("MARK");
-    // ⚠ The `<b>` arrived on the wire and must be TEXT, not markup.
+    // The `<b>` arrived on the wire and must be text, not markup.
     expect(document.querySelector("[role='listbox'] b")).toBeNull();
     expect(screen.getByText(/<b>template<\/b>/)).not.toBeNull();
   });
@@ -219,7 +217,7 @@ describe("the keyboard", () => {
     await waitFor(() => expect(activeRow()).toBe("msg-1"));
     fireEvent.keyDown(window, { key: "ArrowDown" });
     await waitFor(() => expect(activeRow()).toBe("kb-1"));
-    // ⚠ WRAPS, like every menu in the app.
+    // Wraps, like every menu in the app.
     fireEvent.keyDown(window, { key: "ArrowDown" });
     await waitFor(() => expect(activeRow()).toBe("ch-1"));
     fireEvent.keyDown(window, { key: "ArrowUp" });
@@ -244,8 +242,8 @@ describe("the keyboard", () => {
     );
     fireEvent.keyDown(window, { key: "Enter" });
 
-    // ⚠ THE WHOLE ITEM, because what "open" means is the HOST's decision and it
-    // needs the channel, the thread and the seq to make it.
+    // The whole item: what "open" means is the host's decision, and it needs the
+    // channel, the thread and the seq to make it.
     expect(onNavigate).toHaveBeenCalledWith(
       expect.objectContaining({ kind: "messages", channelId: "ch-1", seq: 4821 })
     );
@@ -265,15 +263,12 @@ describe("the keyboard", () => {
   });
 
   /**
-   * 🔒 **THE CURSOR IS SCROLLED INTO VIEW, WHICH IS WHAT KEEPS ↓ USABLE NOW THAT
-   * EACH SECTION HOLDS ITS OWN SCROLL (2026-09-17).** `block: "nearest"` walks
-   * every scrollable ancestor, so the one call serves the section's list and the
-   * card under it.
+   * The cursor is scrolled into view, which keeps arrow-down usable now each
+   * section holds its own scroll: `block: "nearest"` walks every scrollable
+   * ancestor.
    *
-   * ⚠ **jsdom IMPLEMENTS NO `scrollIntoView`**, which is why the card calls it
-   * with `?.` — this case INSTALLS one for the length of the test and takes it
-   * off again, so nothing else in the suite sees a method the browser build
-   * would not have.
+   * jsdom implements no `scrollIntoView`, which is why the card calls it with
+   * `?.`; this case installs one for the length of the test and removes it again.
    */
   it("🔒 ↓ scrolls the row it lands on into view", async () => {
     const scrollIntoView = vi.fn();
@@ -306,7 +301,7 @@ describe("recents", () => {
     await card();
     fireEvent.click(await screen.findByText("q4-outbound"));
 
-    // ⚠ PERSISTED, not held in a ref: the next session reads the same list.
+    // Persisted, not held in a ref: the next session reads the same list.
     expect(globalThis.localStorage.getItem("dopl.search.recents:u1")).toContain("orch");
 
     // The host cleared and blurred; focus the field again with nothing in it.
@@ -337,19 +332,18 @@ describe("recents", () => {
     render(<Host fetcher={fetcher} seedRecents={["orchestrator"]} />);
     fireEvent.focus(screen.getByLabelText("Search"));
     expect(await screen.findByText("orchestrator")).not.toBeNull();
-    // ⚠ And it is NOT written to storage — a seed the operator never typed must
-    // not become their history.
+    // Not written to storage — a seed the operator never typed must not become
+    // their history.
     expect(globalThis.localStorage.getItem("dopl.search.recents:u1")).toBeNull();
   });
 });
 
 /**
- * 🔒 **THE FIXTURE TABLE IS STILL A `SearchFetcher`, AND THAT IS WHAT KEEPS IT
- * USABLE (2026-09-17).** Both hosts ship `search-client.ts › apiSearchFetcher`
- * now that `feat/search-api` has merged; the table stayed for tests and for a dev
- * run with no server, and an unexercised one would rot into a shape the card can
- * no longer render. ⚠ It is also the body `pages/home/home-search-popup.test.tsx`
- * hands back through the bridge, so this case is what says that body is honest.
+ * The fixture table is still a `SearchFetcher`. Both hosts ship `search-client.ts
+ * › apiSearchFetcher`; the table stays for tests and for a dev run with no
+ * server, and an unexercised one would rot into a shape the card cannot render.
+ * It is also the body `pages/home/home-search-popup.test.tsx` hands back through
+ * the bridge, so this case is what says that body is honest.
  */
 describe("the fixture table, which the hosts no longer mount", () => {
   it("answers in PAYLOAD ORDER with rows the card can draw", async () => {
@@ -362,9 +356,8 @@ describe("the fixture table, which the hosts no longer mount", () => {
     expect(screen.getByText("Knowledge")).not.toBeNull();
     expect(screen.getByText("Orchestrator")).not.toBeNull();
 
-    // ⚠ PAYLOAD ORDER, NOT A SORT — the renderer walks the groups as given
-    // (`contracts.ts › SEARCH_GROUP_ORDER` is what the service builds in), so a
-    // table that answered out of order would show here.
+    // Payload order, not a sort: the renderer walks the groups as given
+    // (`contracts.ts › SEARCH_GROUP_ORDER`), so an out-of-order table shows here.
     const labels = screen.getAllByText(/^(Messages|Knowledge|Agent templates)$/);
     expect(labels.map((el) => el.textContent)).toEqual([
       "Messages",
@@ -374,7 +367,7 @@ describe("the fixture table, which the hosts no longer mount", () => {
   });
 
   it("account scope never returns the three container-only sections", async () => {
-    // ⚠ Samuel, 2026-09-17: *"those modules do not exist on home"* —
+    // (2026-09-17) Those modules do not exist on home —
     // `contracts.ts › CONTAINER_ONLY_SEARCH_GROUPS`, which the service enforces
     // and the table mirrors.
     render(<Host fetcher={fixtureSearchFetcher} />);

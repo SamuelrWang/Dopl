@@ -12,9 +12,9 @@ import { getBaseById, getEntry } from "./service";
  * as `.md`. Entries become `<slugified-title>.md` (`entryToMarkdown`), folders
  * become directories, all wrapped in one top-level dir so it extracts cleanly.
  *
- * ⚠ Access rides `getBaseById` (workspace + private/teams visibility), which
- * every entry/folder transitively belongs to — a caller who can't read the
- * base can't export any slice of it.
+ * Access rides `getBaseById` (workspace + private/teams visibility), which every
+ * entry/folder transitively belongs to, so a caller who cannot read the base
+ * cannot export any slice of it.
  */
 
 export interface KnowledgeArchive {
@@ -60,8 +60,8 @@ export async function buildEntryFile(
   entryId: string
 ): Promise<KnowledgeFile> {
   const entry = await getEntry(ctx, entryId);
-  // ⚠ `getEntry` only checks workspace — gate on base visibility too, else a
-  // private base's entry is pullable by id.
+  // `getEntry` only checks workspace; without the base gate a private base's
+  // entry is pullable by id.
   await getBaseById(ctx, entry.knowledgeBaseId);
   return {
     filename: `${slugify(entry.title, "entry")}.md`,
@@ -118,7 +118,7 @@ function buildZip(
   }
 
   function walk(parentId: string | null, dir: string): void {
-    // ⚠ ONE namespace per directory — dedup entry filenames and folder names
+    // One namespace per directory: dedup entry filenames and folder names
     // together, else two items slugging alike overwrite on extraction.
     const used: string[] = [];
     for (const e of entriesByFolder.get(parentId) ?? []) {

@@ -1,30 +1,20 @@
 /**
- * **THE MIGRATION REPLAY, FOR THE KNOWLEDGE SUITES** — every migration in
- * filename (= apply) order, and the four questions the grant suites ask of the
- * FINAL state: which policies are live, which tables are, and what a function's
- * body and its DECLARATION say.
+ * Migration replay for the knowledge suites: every migration in filename (=
+ * apply) order, and the questions the grant suites ask of the final state —
+ * which policies are live, which tables are, and what a function's body and its
+ * declaration say. This module is HOW to read the migration directory; the
+ * suites that import it are WHAT it says.
  *
- * ⚠ **SPLIT OUT OF `schema-sql.test.ts` ON 2026-09-02 AT THE 500-LINE CAP**
- * (§1: "split, do not squeeze"), when the batch-2 review added the trigger's
- * two repaired arms and the backfill's fail-safe. The seam is real: everything
- * here is HOW to read the migration directory, and both suites that import it
- * are about WHAT it says. `resource-grant-trigger.test.ts` took the validity
- * trigger with it.
+ * A plain module, not a `.test.ts`: importing one test file from another
+ * registers its `describe` blocks twice.
  *
- * ⚠ **A PLAIN MODULE, NOT A `.test.ts`** — importing one test file from another
- * registers its `describe` blocks twice. Same arrangement, same reason, as
- * `tools/law-removed-vocabulary.ts` in the MCP package.
+ * Not `shared/supabase/rls-policy-scan.ts`, and the duplication is known — that
+ * module answers the redteam suites' cross-table questions and carries no
+ * `tableIsLive` / `liveFunctionHeader`.
  *
- * ⚠ **NOT `shared/supabase/rls-policy-scan.ts`, AND THE DUPLICATION IS KNOWN.**
- * That module answers the redteam suites' questions — squashed policy bodies
- * keyed `<table>.<policy>` across every table. These answer per-TABLE questions
- * and carry `tableIsLive` / `liveFunctionHeader`, which it does not. Folding
- * them is a change to four suites and is not this one.
- *
- * ⚠ COMMENTS ARE STRIPPED LINE-WISE before matching, because these migration
- * headers QUOTE their own SQL at length — the rollback prose, the verification
- * SELECTs, the owed probe lists and, in the tightening migration, the OLD policy
- * bodies verbatim. A scan that did not strip them would pin a paragraph.
+ * Comments are stripped line-wise before matching, because these migration
+ * headers quote their own SQL at length; a scan that did not strip them would
+ * pin a paragraph.
  */
 
 import { readFileSync, readdirSync } from "node:fs";
@@ -71,15 +61,13 @@ export function statementAt(sql: string, from: number): string {
 }
 
 /**
- * REPLAY the migrations and answer with the policies LIVE on `table` at the end
+ * Replay the migrations and answer with the policies live on `table` at the end
  * — `CREATE POLICY` inserts, `DROP POLICY` removes, `DROP TABLE` takes them all,
- * later wins. That is the only reading that can tell "tightened" from
- * "tightened, and the loose one left behind beside it".
+ * later wins. That is the only reading that tells "tightened" from "tightened,
+ * with the loose one left beside it".
  *
- * ⚠ THE `DROP TABLE` ARM IS NOT A DETAIL: a policy is a dependency of its table
- * and dies with it silently. Without that arm this function reports the policies
- * of a table that no longer exists, which is the exact reading that would let a
- * dropped table look guarded.
+ * The `DROP TABLE` arm is load-bearing: a policy dies with its table silently,
+ * and without it a dropped table reports as guarded.
  */
 export function livePolicies(table: string): Map<string, string> {
   const live = new Map<string, string>();
@@ -96,7 +84,7 @@ export function livePolicies(table: string): Map<string, string> {
     "gi"
   );
   for (const { sql } of FILES) {
-    // Order matters WITHIN a file too: a tightening migration drops and
+    // Order matters within a file too: a tightening migration drops and
     // re-creates the same policy name in one file.
     const events: Array<{ at: number; kind: "create" | "drop" | "dropTable"; name: string }> = [];
     for (const m of sql.matchAll(create)) {
@@ -144,9 +132,9 @@ export function tableIsLive(table: string): boolean {
 }
 
 /**
- * The body of the LAST `CREATE OR REPLACE FUNCTION <name>` in apply order, or
- * `null` if a later `DROP FUNCTION` retired it. ⚠ The body is dollar-quoted, so
- * it is delimited by its own opening tag rather than by the first `;` — a
+ * The body of the last `CREATE OR REPLACE FUNCTION <name>` in apply order, or
+ * `null` if a later `DROP FUNCTION` retired it. The body is dollar-quoted, so it
+ * is delimited by its own opening tag rather than by the first `;` — a
  * `RAISE … ;` inside would otherwise truncate it two lines in.
  */
 export function liveFunctionBody(name: string): string | null {
@@ -161,18 +149,14 @@ export function liveFunctionBody(name: string): string | null {
 
 /**
  * Replay every `CREATE OR REPLACE` / `DROP FUNCTION` for `name` in apply order
- * and return what `read` made of the LAST surviving create — or `null` if a
+ * and return what `read` made of the last surviving create — or `null` if a
  * `DROP` came after it.
  *
- * ⚠ **SHARED BECAUSE THE TWO READERS DISAGREED (2026-09-02, F-661).**
- * `liveFunctionHeader` scanned only for creates, so a function this wave
- * DROPPED still reported a header and every "is it gone" assertion written
- * against it was green by construction. The create/drop ordering is the whole
- * of "as the replay leaves it" and there must be one copy of it.
+ * Shared because the two readers disagreed (F-661, 2026-09-02): a header scan
+ * that ignores drops makes every "is it gone" assertion green by construction.
  *
- * ⚠ `read` returning `undefined` means *"this create is unreadable"* — the
- * previous answer stands. Returning `null` is not available to it: only a DROP
- * retires a function.
+ * `read` returning `undefined` means this create is unreadable and the previous
+ * answer stands; only a DROP retires a function.
  */
 function replayFunction(
   name: string,
@@ -208,20 +192,14 @@ function replayFunction(
 }
 
 /**
- * The DECLARATION of `name` as the replay leaves it — everything between
+ * The declaration of `name` as the replay leaves it — everything between
  * `CREATE OR REPLACE FUNCTION` and the body's opening dollar-quote.
  *
- * ⚠ A DIFFERENT QUESTION FROM {@link liveFunctionBody}, which answers only what
- * is INSIDE the quotes. `SECURITY DEFINER`, `SET search_path` and the return
- * type all live out here, so the body scan cannot see them — and a `CREATE OR
- * REPLACE` in a later migration that dropped `SECURITY DEFINER` would leave
- * every body assertion green.
- *
- * ⚠ **AND IT IGNORED `DROP FUNCTION` UNTIL 2026-09-02 (F-661)** — it scanned
- * for creates alone, so a dropped function still reported the header of its
- * last create and `expect(liveFunctionHeader(fn)).toBeNull()` could not fail.
- * Both readers share {@link replayFunction} now, which is the only copy of the
- * ordering rule.
+ * A different question from {@link liveFunctionBody}, which sees only what is
+ * inside the quotes: `SECURITY DEFINER`, `SET search_path` and the return type
+ * all live out here, so a later `CREATE OR REPLACE` dropping `SECURITY DEFINER`
+ * would leave every body assertion green. Both readers share
+ * {@link replayFunction} (F-661), the only copy of the ordering rule.
  */
 export function liveFunctionHeader(name: string): string | null {
   return replayFunction(name, (sql, at) => {

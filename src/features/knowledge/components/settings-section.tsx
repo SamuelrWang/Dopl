@@ -3,9 +3,9 @@
 /**
  * The KB settings modal's section frame — a heading and a stacked body.
  *
- * ⚠ **EXTRACTED FROM `base-settings-form.tsx` ON 2026-09-17** because a section that
- * can DECIDE NOT TO EXIST has to own its own heading: with the frame in the parent, the
- * Channels refusal showed as an empty "CHANNELS" heading over nothing.
+ * Separate from `base-settings-form.tsx` (2026-09-17) because a section that can
+ * decide not to exist has to own its own heading, or its refusal shows as an
+ * empty heading over nothing.
  */
 export function SettingsSection({
   title,

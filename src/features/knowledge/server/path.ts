@@ -10,16 +10,13 @@ import * as repo from "./repository";
 /**
  * Path addressing. `/`-separated, leading/trailing slashes tolerated, `""` and
  * `"/"` = base root. Segments match folder `name` or entry `title`,
- * CASE-SENSITIVE.
+ * case-sensitive; unique partial indexes make the resolver deterministic, with
+ * no fuzzy matching.
  *
- * Unique partial indexes make the resolver deterministic — within one
- * (knowledge_base_id, parent_id) bucket no two active folders share a name and
- * no two active entries share a title. No fuzzy matching, no "first one wins".
- *
- * Rules: non-final segments must resolve to an active folder else
- * `PathTraversalError`; the final segment may be folder or entry, folder tried
- * FIRST (extensionless paths can legitimately name a folder); neither match ⇒
- * `not_found` returned, not thrown, so write-file can mkdir -p on it.
+ * Non-final segments must resolve to an active folder else `PathTraversalError`.
+ * The final segment may be folder or entry, folder tried first (an extensionless
+ * path can legitimately name a folder); neither match returns `not_found` rather
+ * than throwing, so write-file can mkdir -p on it.
  */
 
 export type ResolvedPath =
@@ -35,9 +32,8 @@ export type ResolvedPath =
 // ─── Path parsing ───────────────────────────────────────────────────
 
 /**
- * `"/foo//bar/"` → `["foo", "bar"]`; `""` → `[]`. `.` and `..` DROPPED — flat
- * name tree, not a filesystem — so `"../escape"` → `["escape"]` rather than a
- * folder literally named `..`.
+ * `"/foo//bar/"` → `["foo", "bar"]`; `""` → `[]`. `.` and `..` are dropped —
+ * flat name tree, not a filesystem — so `"../escape"` → `["escape"]`.
  */
 export function parsePath(path: string): string[] {
   return path
@@ -52,11 +48,10 @@ export function pathToString(segments: string[]): string {
 // ─── Resolution ─────────────────────────────────────────────────────
 
 /**
- * Walks a path through the folder tree, skipping soft-deleted folders. Pure —
- * NEVER throws on missing segments; strict callers (read/delete/move) check
- * `kind === "not_found"` themselves, mkdir -p callers consume it directly.
- * `not_found.lastFolder` = deepest folder that DID resolve; `entry.folder` =
- * parent (null = base root).
+ * Walks a path through the folder tree, skipping soft-deleted folders. Never
+ * throws on missing segments; strict callers check `kind === "not_found"`
+ * themselves. `not_found.lastFolder` = deepest folder that did resolve;
+ * `entry.folder` = parent (null = base root).
  */
 export async function resolvePath(
   ctx: KnowledgeContext,
@@ -106,11 +101,9 @@ export async function resolvePath(
     return { kind: "entry", folder: currentFolder, entry: entryMatch };
   }
 
-  // Slug fallback for the write-with-title-then-read-with-sluggy-path footgun
-  // (write `title: "LinkedIn Job Alerts"`, read `path:
-  // "linkedin-job-alerts.md"`). ⚠ Refuses to guess on slug collisions —
-  // titles in a bucket are unique but can collide after slugification ("Foo
-  // Bar" vs "Foo-Bar"); exact-title lookup stays the deterministic answer.
+  // Slug fallback: write `title: "LinkedIn Job Alerts"`, read
+  // `path: "linkedin-job-alerts.md"`. It refuses to guess on collisions —
+  // titles are unique per bucket but can collide after slugification.
   const querySlug = slugForPathSegment(lastSegment);
   if (querySlug) {
     const candidates = await repo.listActiveEntryTitlesIn(
@@ -137,10 +130,9 @@ export async function resolvePath(
 }
 
 /**
- * ⚠ Must mirror `slugify` normalization (NFKC + lowercase + non-alphanumeric
- * runs → '-'), PLUS strips a trailing extension (`.md`, `.txt`, ...) so
- * `linkedin-jobs.md` resolves to an entry titled `LinkedIn Jobs`. Returns ""
- * when the slug is empty = "no fallback possible".
+ * Mirrors `slugify` normalization (NFKC + lowercase + non-alphanumeric runs →
+ * '-') and strips a trailing extension, so `linkedin-jobs.md` resolves to an
+ * entry titled `LinkedIn Jobs`. Returns "" when no fallback is possible.
  */
 function slugForPathSegment(segment: string): string {
   const stripped = segment.replace(/\.(md|markdown|txt)$/i, "");
@@ -152,13 +144,11 @@ function slugForPathSegment(segment: string): string {
 }
 
 /**
- * mkdir -p. Returns leaf folder, null for an empty segment list (= root).
- * ⚠ Does NOT enforce workspace or agent-write — caller must validate base +
- * agent permission first.
- * ⚠ Unique partial indexes only cover folder-folder and entry-entry, so a
- * segment matching an existing ENTRY of the same name (entry "foo" at root,
- * mkdir -p "foo/bar") throws `KnowledgePathConflictError` rather than creating
- * a folder that shadows it.
+ * mkdir -p. Returns leaf folder, null for an empty segment list (= root). Does
+ * not enforce workspace or agent-write — the caller validates those first.
+ * Unique partial indexes only cover folder-folder and entry-entry, so a segment
+ * matching an existing entry of the same name throws
+ * `KnowledgePathConflictError` rather than creating a folder that shadows it.
  */
 export async function ensureFolderPath(
   ctx: KnowledgeContext,
@@ -195,8 +185,7 @@ export async function ensureFolderPath(
         createdBy: ctx.userId,
       });
     } catch (err) {
-      // 23505 = parallel call inserted this folder first. Re-find, continue —
-      // idempotency under contention.
+      // 23505 = parallel call inserted this folder first; re-find and continue.
       if (
         err &&
         typeof err === "object" &&

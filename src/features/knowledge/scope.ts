@@ -16,7 +16,7 @@ export function kbScope(
   return base.accessMode === "teams" ? "team" : "workspace";
 }
 
-/** ⚠ `workspace` reads "Public" to match MCP vocabulary (`dopl_kb`
+/** `workspace` reads "Public" to match MCP vocabulary (`dopl_kb`
  *  `op="set_visibility"` takes `visibility="public"`). Storage/wire spelling
  *  stays `workspace`. */
 export const KB_SCOPE_LABEL: Record<KbScope, string> = {

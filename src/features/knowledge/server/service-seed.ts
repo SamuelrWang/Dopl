@@ -23,9 +23,9 @@ export interface SeedKnowledgeResult {
  * Idempotent — skips entirely if the workspace has any active base. Returns
  * created ids so callers can cross-reference entries.
  *
- * ⚠ TWO writes total whatever the corpus size (one bases insert, one entries
+ * Two writes total whatever the corpus size (one bases insert, one entries
  * insert) — this runs in front of the post-signup redirect. Positions are
- * assigned BY INDEX, matching what sequential max+1 yields on a fresh base.
+ * assigned by index, matching what sequential max+1 yields on a fresh base.
  */
 export async function seedWorkspace(
   ctx: KnowledgeContext
@@ -48,13 +48,13 @@ export async function seedWorkspace(
       slug: slugByFixture[i],
       description: fixture.description,
       agentWriteEnabled: fixture.agentWriteEnabled ?? false,
-      // Starter content: public so every member sees it. ⚠ The one path where
+      // Starter content: public so every member sees it. The one path where
       // public is correct — `createBase` defaults to private.
       visibility: "public" as const,
       createdBy: ctx.userId,
     }))
   );
-  // ⚠ Keyed by slug, not index — nothing may depend on returned row order.
+  // Keyed by slug, not index — nothing may depend on returned row order.
   const baseIdBySlug = new Map(bases.map((base) => [base.slug, base.id]));
 
   const entryRows: repo.InsertEntriesArgs[] = [];
@@ -69,7 +69,7 @@ export async function seedWorkspace(
     if (isGuide) guide = { baseId, slug, entryIdByKey: guideEntryIds };
 
     fixture.rootEntries.forEach((entryInput, position) => {
-      // ⚠ uuid minted HERE so the cross-reference map is complete before the
+      // uuid minted here so the cross-reference map is complete before the
       // insert resolves — the ontology seed builds attributes from it.
       const id = randomUUID();
       entryRows.push({

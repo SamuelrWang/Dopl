@@ -4,10 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MetaCard } from "./meta-card";
 
 /**
- * Details card STORAGE row. Same three-state contract as the home grid — the
- * reason the meter is ONE shared component: a base reading "full" on its card
- * and "fine" on its overview is worse than showing neither. ⚠ Unknown on
- * EITHER half renders nothing, never an empty track (reads as "0 bytes used").
+ * Details card STORAGE row. Same three-state contract as the home grid, which is
+ * why the meter is one shared component. Unknown on EITHER half renders nothing,
+ * never an empty track (which reads as "0 bytes used").
  */
 
 afterEach(cleanup);
@@ -72,12 +71,10 @@ describe("MetaCard storage meter", () => {
   });
 
   it("🔒 keeps the description field inside the section", () => {
-    // 🔒 Samuel's live review, 2026-08-28: the textarea overflowed its card
-    // with the resize handle on the border. The containment is a THREE-part
-    // chain and this pins the half that lives in the markup — `RAISED_INPUT`'s
-    // `w-full` plus the module's capped block. The CSS half (`resize: none`,
-    // `max-width`, the parent's `min-width: 0`) is pinned in
-    // `../layout-rules.test.ts`, because jsdom has no layout to overflow.
+    // Samuel's live review, 2026-08-28: the textarea overflowed its card. This
+    // pins the markup half (`RAISED_INPUT`'s `w-full` + the module's capped
+    // block); the CSS half is pinned in `../layout-rules.test.ts`, because jsdom
+    // has no layout to overflow.
     renderCard();
     const field = screen.getByPlaceholderText(/What's in this knowledge base/);
     expect(field.tagName).toBe("TEXTAREA");

@@ -1,11 +1,10 @@
 /**
  * `listBaseStats` — the fold behind `GET /api/knowledge/bases › baseStats`.
  * Pins: ONE query for N bases; zero is a VALUE and "missing" means the route
- * degraded; `lastEntryUpdatedAt` is the newest CONTENT write, not
- * `KnowledgeBase.updatedAt` (out-of-order fixture blocks a
- * `stamps[stamps.length - 1]` shortcut); `storageBytes` is `null`, never `0`,
- * when the server ships ahead of
- * `20260812120000_knowledge_base_storage_bytes.sql` — bar lost, counts kept.
+ * degraded; `lastEntryUpdatedAt` is the newest CONTENT write (an out-of-order
+ * fixture blocks a `stamps[stamps.length - 1]` shortcut); `storageBytes` is
+ * `null`, never `0`, when the server ships ahead of
+ * `20260812120000_knowledge_base_storage_bytes.sql`.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -113,8 +112,8 @@ describe("listBaseStats — storageBytes", () => {
   });
 
   it("keeps the COUNTS when the storage column cannot be read", async () => {
-    // DEPLOY ORDER: build ahead of migration, `storage_bytes` absent. Losing
-    // the whole stats map would blank the "{N} entries · updated {when}" line;
+    // Deploy order: build ahead of migration, `storage_bytes` absent. Losing the
+    // whole stats map would blank the "{N} entries · updated {when}" line, so
     // degrade to `null` (unknown, no bar) instead.
     mockRepo.listEntryStampsForBases.mockResolvedValue([
       { baseId: "kb-1", updatedAt: "2026-08-01T00:00:00Z" },

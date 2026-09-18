@@ -3,28 +3,18 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ChannelGrantLevel } from "../types";
 
 /**
- * Raw Supabase I/O for CHANNEL RESOURCE GRANTS — the scope-A grant rows behind
- * Home Knowledge Panels. No business logic, no auth checks — those live in
- * `service-channel-grants.ts`.
+ * Raw Supabase I/O for channel resource grants. No business logic, no auth
+ * checks — those live in `service-channel-grants.ts`.
  *
- * ⚠ THE TABLE IS `resource_grants`, NOT `channel_resource_grants` (Wave B,
- * ruling B4, `20260914120000_resource_grants.sql`). One grant table now carries
- * every scope a resource can be lent to — `channel`, `container`, `team` — so
- * every statement here pins BOTH halves of its slice through
- * {@link CHANNEL_KNOWLEDGE_GRANT}: a missing `scope_type` would read a team's
- * grants as a channel's.
+ * The table is `resource_grants` and carries every scope a resource can be lent
+ * to (`channel`, `container`, `team`), so every statement pins both halves of
+ * its slice through {@link CHANNEL_KNOWLEDGE_GRANT}: a missing `scope_type`
+ * would read a team's grants as a channel's. The column is `scope_id`;
+ * `channel_id:scope_id` in the select keeps the domain word at the boundary.
  *
- * ⚠ `channel_id` SURVIVES AS THE PROJECTED NAME. The column is `scope_id`; this
- * module answers questions about CHANNELS, and `channel_id:scope_id` in the
- * select keeps the domain word at the boundary while the storage word stays in
- * the filter. One alias, in one constant, rather than a rename rippling through
- * the service and its callers.
- *
- * ⚠ TAKES A `SupabaseClient` rather than reaching for `supabaseAdmin()` itself.
- * The service passes the service-role client (which BYPASSES RLS), so every
- * method here filters by `workspace_id` EXPLICITLY to keep that bypass
- * contained — the same discipline `repository.ts` states for the KB reads.
- * Passing the client also lets tests drive a fake with no module mock.
+ * Takes a `SupabaseClient` rather than reaching for `supabaseAdmin()`. The
+ * service passes the RLS-bypassing service-role client, so every method here
+ * filters by `workspace_id` explicitly to keep that bypass contained.
  */
 
 export interface ChannelResourceGrantRow {
@@ -43,9 +33,8 @@ const GRANTS_TABLE = "resource_grants";
 
 /**
  * The slice of `resource_grants` this module owns, as an equality filter set for
- * `.match()`. ⚠ STATED ONCE AND SPREAD INTO EVERY STATEMENT, reads and writes
- * alike: the day a second `resource_type` is granted into a channel, a statement
- * that had been hand-spelling its filters would quietly widen.
+ * `.match()`. Stated once and spread into every statement: the day a second
+ * `resource_type` is granted into a channel, a hand-spelled filter would widen.
  */
 const CHANNEL_KNOWLEDGE_GRANT = {
   scope_type: "channel",
@@ -56,11 +45,9 @@ export const CHANNEL_RESOURCE_GRANT_COLS =
   "channel_id:scope_id, resource_type, resource_id, workspace_id, level, guest_write, created_by, created_at, updated_at";
 
 /**
- * Knowledge-base grants on ONE channel, restricted to a base-id set — the
- * bounded fan behind `channelGrants` (one `IN (baseIds)` query, the shape of
- * `listBaseStats`, never a per-row lookup). `workspace_id`-filtered so a
- * service-role read cannot escape the caller's tenancy. Empty `baseIds` short
- * circuits with no query.
+ * Knowledge-base grants on one channel, restricted to a base-id set — one
+ * `IN (baseIds)` query, never a per-row lookup. `workspace_id`-filtered so a
+ * service-role read cannot escape the caller's tenancy.
  */
 export async function listChannelKnowledgeGrants(
   db: SupabaseClient,
@@ -83,16 +70,12 @@ export async function listChannelKnowledgeGrants(
 }
 
 /**
- * Every channel ONE knowledge base is granted into — the other direction of the
- * same table, and the query `resource_grants_resource_idx (workspace_id,
- * resource_type, resource_id)` is named for. Behind the settings section, which
- * asks about one KB across many channels rather than one channel across many
- * KBs.
+ * Every channel one knowledge base is granted into — the other direction of the
+ * same table, served by `resource_grants_resource_idx`.
  *
- * ⚠ The caller INTERSECTS the result with its own fenced channel list. This
- * returns grants on channels the caller may not see (the KB owner can share
- * into a private room an admin later removed them from), and printing those
- * names would be the leak.
+ * The caller must intersect the result with its own fenced channel list: this
+ * returns grants on channels the caller may not see, and printing those names
+ * would be the leak.
  */
 export async function listChannelGrantsForBase(
   db: SupabaseClient,
@@ -114,23 +97,17 @@ export async function listChannelGrantsForBase(
 }
 
 /**
- * Create or replace ONE (channel, knowledge_base) grant. `onConflict` names the
- * PK, so a re-grant at a new level UPDATEs in place rather than 23505-ing —
- * "one grant per (kb, channel)" is the PK, and the write states the desired end
- * state rather than a delta.
+ * Create or replace one (channel, knowledge_base) grant. `onConflict` names the
+ * PK, so a re-grant at a new level updates in place rather than 23505-ing.
+ * `updated_at` is left to `touch_knowledge_updated_at()`.
  *
- * ⚠ `created_by` is only set on INSERT semantics by convention; the upsert
- * overwrites it with the current actor, which is what "who shared this, as it
- * stands" should mean. ⚠ `updated_at` is left to `touch_knowledge_updated_at()`.
+ * `created_by` is the grantor `enforce_resource_grant()` judges: it asserts that
+ * this user reaches both containers, the base's and the channel's. A stale or
+ * borrowed actor here does not loosen the check, it moves it onto the wrong
+ * person.
  *
- * 🔒 ⚠ `created_by` IS ALSO THE GRANTOR THE VALIDITY TRIGGER JUDGES. Since
- * `20260914120000`, `enforce_resource_grant()` asserts that this user reaches
- * BOTH containers — the base's and the channel's — rather than that the two
- * containers are the same one. Writing a stale or borrowed actor here does not
- * loosen the check; it moves it onto the wrong person.
- *
- * ⚠ The trigger RAISEs `P0001` on a refusal. This function does NOT translate it
- * — the service does, so the raw message (which names both containers, and the
+ * The trigger RAISEs `P0001` on a refusal and this function does not translate
+ * it — the service does, so the raw message (which names both containers and the
  * grantor) never reaches a client.
  */
 export async function upsertChannelKnowledgeGrant(
@@ -165,14 +142,12 @@ export async function upsertChannelKnowledgeGrant(
 }
 
 /**
- * Drop ONE grant — the storage form of `level: "none"`. Absence IS the third
- * state, so un-sharing is a DELETE and never a row at some lower level.
+ * Drop one grant — the storage form of `level: "none"`. Absence is the third
+ * state, so un-sharing is a DELETE, never a row at some lower level.
  *
- * ⚠ `workspace_id`-filtered like every read here: the service-role client
- * bypasses RLS, and the PK alone (scope + type + resource) would let a
- * mis-routed call delete another tenant's row. Deleting nothing is SUCCESS —
- * the end state asked for is the end state reached, so a double-click cannot
- * fail.
+ * `workspace_id`-filtered: the service-role client bypasses RLS, and the PK
+ * alone would let a mis-routed call delete another tenant's row. Deleting
+ * nothing is success, so a double-click cannot fail.
  */
 export async function deleteChannelKnowledgeGrant(
   db: SupabaseClient,
@@ -193,32 +168,17 @@ export async function deleteChannelKnowledgeGrant(
 }
 
 /**
- * WHICH OF THESE BASES IS SHARED INTO AT LEAST ONE CHANNEL — the read behind the
- * card's `Shared` pill (2026-09-01).
+ * Which of these bases is shared into at least one channel — the read behind the
+ * card's `Shared` pill. One `IN (baseIds)` query for the whole grid, with no
+ * `scope_id` narrowing it because the question is "any channel at all".
  *
- * ⚠ **ONE `IN (baseIds)` QUERY FOR THE WHOLE GRID, never a lookup per card.** It
- * is the shape `listChannelKnowledgeGrants` already uses; the only difference is
- * that no `scope_id` narrows it, because the question is "any channel at all".
- * Empty `baseIds` short-circuits with no query.
+ * It selects `resource_id` alone; every other column would put the identity of
+ * channels the caller may not see one `.map()` from a response body. Answering
+ * "yes, somewhere" leaks nothing about where.
  *
- * ⚠ **ONE COLUMN, AND THE OMISSIONS ARE THE POINT.** It selects `resource_id`
- * alone — not the scope, not `level`, not `created_by`. The caller wants a SET
- * of base ids; every other column would put the identity of channels the caller
- * may not be able to see one `.map()` away from a response body, which is
- * exactly what `listChannelGrantsForBase`'s docblock warns its own caller to
- * intersect against. Answering "yes, somewhere" leaks nothing about where.
- *
- * ⚠ **BOTH LEVELS COUNT.** `agent_only` and `visible` are both a share — the
- * base has left the operator's private shelf either way, and the pill answers
- * "is this still only mine", not "who can read it".
- *
- * ⚠ **AND ONLY CHANNEL SCOPES COUNT**, which is why `CHANNEL_KNOWLEDGE_GRANT`
- * is spread here too. A `team` or `container` grant is a share as well, but this
- * pill is the CHANNEL panel's; widening it silently is how one word starts
- * meaning two things.
- *
- * ⚠ `workspace_id`-filtered like every read in this file: the service passes the
- * RLS-BYPASSING client, so the tenancy fence has to be explicit.
+ * Both levels count — the base has left the private shelf either way — but only
+ * channel scopes do, hence the `CHANNEL_KNOWLEDGE_GRANT` spread.
+ * `workspace_id`-filtered because the client bypasses RLS.
  */
 export async function listSharedBaseIds(
   db: SupabaseClient,
@@ -234,9 +194,8 @@ export async function listSharedBaseIds(
     .in("resource_id", baseIds)
     .limit(limit);
   if (error) throw error;
-  // ⚠ DE-DUPLICATED HERE: a base granted into four channels is four rows and
-  // one answer. The SET is the contract (`sharedBaseIds` is a subset of the
-  // listed ids), so a caller can `includes` it without counting.
+  // De-duplicated: a base granted into four channels is four rows and one
+  // answer. The set is the contract, so a caller can `includes` it.
   return [
     ...new Set(
       ((data ?? []) as Array<{ resource_id: string }>).map((r) => r.resource_id)

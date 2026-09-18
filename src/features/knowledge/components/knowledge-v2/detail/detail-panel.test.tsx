@@ -8,26 +8,23 @@ import type { Selection } from "../types";
 import { DetailPanel } from "./detail-panel";
 
 /**
- * THE DETAIL COLUMN'S TWO FACES AND THE FADE BETWEEN THEM.
+ * The detail column's two faces and the fade between them.
  *
- * ⚠ THE DOCUMENT IS STUBBED, DELIBERATELY. `FileView` mounts a live TipTap
- * editor; what is under test is which FACE is on screen for a given selection
- * and WHAT THE OUTGOING ONE STILL HOLDS mid-fade — DetailPanel's own logic.
- * The stub prints the id it was handed a body for, which is the whole question
- * the `lastEntry` latch exists to answer.
+ * The document is stubbed deliberately: `FileView` mounts a live TipTap editor,
+ * and what is under test is which face is on screen for a given selection and
+ * what the outgoing one still holds mid-fade. The stub prints the id it was
+ * handed a body for, which is what the `lastEntry` latch exists to answer. The
+ * info face is not stubbed, because "info is the resting state" is an assertion
+ * about the real section.
  *
- * ⚠ THE INFO FACE IS NOT STUBBED, because "info is the resting state" is an
- * assertion about the real section, not about a placeholder.
- *
- * ⚠ **AND SINCE 2026-09-09 IT MOUNTS THE CHANGELOG**, which is a live query — so
- * every render here is wrapped in a `QueryClientProvider` and the changelog's
- * two client modules are stubbed. What is under test is still which FACE is on
- * screen; the changelog has its own suite.
+ * Since 2026-09-09 it mounts the changelog, a live query, so every render is
+ * wrapped in a `QueryClientProvider` and the changelog's client modules are
+ * stubbed; the changelog has its own suite.
  */
 
-// ⚠ THE WHOLE MODULE, not the two knowledge fetchers: `revisions/client/hooks.ts`
-// builds ONE fetcher map over every family (2026-09-09, part 2), so a partial
-// mock leaves an `undefined` in it and the module fails at import.
+// The whole module, not the two knowledge fetchers: `revisions/client/hooks.ts`
+// builds one fetcher map over every family, so a partial mock leaves an
+// `undefined` in it and the module fails at import.
 vi.mock("@/features/revisions/client/api", () => ({
   fetchEntryRevisions: vi.fn(async () => ({ revisions: [], nextCursor: null })),
   fetchBaseRevisions: vi.fn(async () => ({ revisions: [], nextCursor: null })),
@@ -45,7 +42,7 @@ vi.mock("./file-view", () => ({
 
 afterEach(cleanup);
 
-/** ⚠ A FRESH CLIENT PER RENDER: a shared cache would let one test's changelog
+/** A fresh client per render: a shared cache would let one test's changelog
  *  answer another's. */
 function withQuery({ children }: { children: ReactNode }) {
   return (
@@ -112,8 +109,8 @@ describe("the detail column's resting state", () => {
   it("opens on the base's INFO face, not on an empty 'pick a file' pane", () => {
     renderPane(baseSel);
     expect(screen.getByText("Details")).toBeTruthy();
-    // ⚠ "Changelog", not "Contents" (2026-09-09): the base info face's second
-    // flat section is the day-grouped roll-up now.
+    // "Changelog", not "Contents": the base info face's second flat section is
+    // the day-grouped roll-up.
     expect(screen.getByText("Changelog")).toBeTruthy();
     expect(screen.getByDisplayValue("Product specs")).toBeTruthy();
     expect(screen.queryByTestId("file-face")).toBeNull();
@@ -155,7 +152,7 @@ describe("the fade between the faces", () => {
       />
     );
 
-    // ⚠ THE OUTGOING FACE IS STILL MOUNTED — that IS the fade
+    // The outgoing face is still mounted — that is the fade
     // (`shared/ui/crossfade.tsx`: 150ms, the token lags the selection).
     expect(screen.getByText("Details")).toBeTruthy();
     expect(screen.queryByTestId("file-face")).toBeNull();
@@ -165,9 +162,8 @@ describe("the fade between the faces", () => {
   });
 
   it("🔒 the outgoing FILE keeps its document while the info face fades in", () => {
-    // 🔒 THE `lastEntry` LATCH. Leaving a file nulls `openEntry` immediately,
-    // so without the latch the document that is fading OUT would blink into a
-    // loading skeleton on its way off screen — a face nobody navigated to.
+    // The `lastEntry` latch: leaving a file nulls `openEntry` immediately, so
+    // without it the document fading out blinks into a loading skeleton.
     const props = {
       workspaceId: "ws-1",
       refetchOpenEntry: () => {},

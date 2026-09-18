@@ -1,16 +1,12 @@
 // @vitest-environment jsdom
 /**
- * THE SEARCH POPUP'S SHAPE — which kinds are ONE LINE, what the right-hand slot
- * says, and the per-section scroll (2026-09-17).
+ * The search popup's shape: which kinds are one line, what the right-hand slot
+ * says, and the per-section scroll.
  *
- * ⚠ **ITS OWN FILE BECAUSE `search-popup.test.tsx` SITS AT THE 500-LINE CAP**
- * (`eslint.config.mjs › max-lines`) — these cases pushed it to 535. One file per
- * reason to change (INVARIANTS §1): this one changes when the ROW ANATOMY does,
- * that one when the card's BEHAVIOUR does (the debounce, the arrows, the
- * recents, the sanitiser).
+ * Its own file (INVARIANTS §1, `eslint.config.mjs › max-lines`): this changes when
+ * the ROW ANATOMY does, `search-popup.test.tsx` when the card's BEHAVIOUR does.
  *
- * ⚠ **REAL TIMERS AND A STUB FETCHER**, the same posture as that file: the cases
- * that matter are about what the card draws once the answer has settled.
+ * Real timers and a stub fetcher, the same posture as that file.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -38,7 +34,7 @@ const KNOWLEDGE: SearchItem = {
   containerName: "Original",
 };
 
-/** ⚠ STABLE, as the hook's contract requires (`use-search.ts`). */
+/** Stable, as the hook's contract requires (`use-search.ts`). */
 function stubFetcher(answer: SearchResponse) {
   const fetcher: SearchFetcher = ({ q }) => Promise.resolve({ ...answer, q });
   return { fetcher };
@@ -127,11 +123,8 @@ const SHAPES: SearchResponse = {
 };
 
 /**
- * 🔒 **THE ROW SHAPE (Samuel, 2026-09-17, over the live card:** *"For channels it
- * like repeats the name of the channel in like 3 places it doesn't make any
- * sense. For channels and threads, it should be one line, it should be the name
- * of the channel in black, and then to the right the description of the channel
- * in gray italics."*). What is pinned here is the ANATOMY: which kinds are one
+ * (2026-09-17) The row shape: channels and threads are one line — name, then the
+ * description to the right. What is pinned is the anatomy: which kinds are one
  * line, that nothing is said twice, and that a row with no description draws no
  * second span at all.
  */
@@ -144,8 +137,8 @@ describe("the row shape", () => {
     render(<Host fetcher={fetcher} {...extra} />);
     type("q4");
     await card();
-    // ⚠ `findAll` — the word is the channel's NAME and the thread's PARENT, so
-    // it is legitimately on two rows.
+    // `findAll` — the word is the channel's name and the thread's parent, so it
+    // is legitimately on two rows.
     await screen.findAllByText("q4-outbound");
   }
 
@@ -153,8 +146,8 @@ describe("the row shape", () => {
     await open();
     const el = row("ch-desc");
 
-    // ⚠ ONCE. The name used to be the title, the subtitle AND the right-hand
-    // fact on the same row.
+    // Once: the name could otherwise be title, subtitle and right-hand fact on
+    // the same row.
     const written = (el.textContent ?? "").match(/q4-outbound/g) ?? [];
     expect(written).toHaveLength(1);
 
@@ -162,7 +155,7 @@ describe("the row shape", () => {
     expect(description.className).toContain("italic");
     expect(description.className).toContain("text-text-muted");
     expect(description.className).toContain("truncate");
-    // ⚠ ONE LINE = the description is a SIBLING of the title, never stacked
+    // One line means the description is a SIBLING of the title, never stacked
     // under it in a column.
     expect(description.parentElement).toBe(el);
   });
@@ -170,8 +163,8 @@ describe("the row shape", () => {
   it("🔒 a channel with NO description draws no second span", async () => {
     await open();
     const el = row("ch-bare");
-    // ⚠ The NAME and the container chip, and nothing between them — no empty
-    // second line, and no repeat.
+    // The name and the container chip, nothing between them — no empty second
+    // line and no repeat.
     expect(el.textContent).toBe("weekly-reviewOriginal");
     expect(el.querySelector(".italic")).toBeNull();
   });
@@ -207,10 +200,7 @@ describe("the row shape", () => {
 });
 
 /**
- * 🔒 **EACH SECTION IS A FIXED HEIGHT THAT SCROLLS ITSELF (Samuel, 2026-09-17:**
- * *"right now, all the choices show, so it's like a super long scroll. It should
- * be, that each section is a fixed height, and if there's more items in it, it's
- * scrollable."*).
+ * (2026-09-17) Each section is a fixed height that scrolls itself.
  */
 describe("the sections scroll one at a time", () => {
   it("caps every section's list and leaves the heading above it", async () => {
@@ -226,7 +216,7 @@ describe("the sections scroll one at a time", () => {
       expect(list.className).toContain(SEARCH_SECTION_MAX_H);
       expect(list.className).toContain("overflow-y-auto");
     }
-    // ⚠ THE HEADING IS A SIBLING, not the scroller's first child — it must not
+    // The heading is a sibling, not the scroller's first child — it must not
     // scroll away from the rows it names.
     expect(screen.getByText("Channels").closest("[data-search-section]")).toBeNull();
   });

@@ -18,18 +18,14 @@ interface Props {
 }
 
 /**
- * THE FILE FACE — the formatting band plus the document, as one thing.
+ * The file face: the formatting band plus the document, as one thing.
  *
- * ⚠ THE EDITOR HANDLE IS LOCAL, AND THAT IS WHAT MAKES THE FADE SAFE. The band
- * used to live in the detail pane's header with the live `Editor` held in that
- * pane's state; during a crossfade TWO documents are mounted at once
- * (`shared/ui/crossfade.tsx`: the outgoing subtree stays for 150ms), and they
- * would take turns publishing into one `useState` — the outgoing one landing
- * last, leaving the header driving a dead editor. One band per document, owned
- * by the document's own face, cannot do that.
- *
- * ⚠ AND IT BELONGS TO THE DOCUMENT ANYWAY. The panel header names the BASE and
- * survives every swap; a bold/italic row is not a property of the base.
+ * The editor handle is local, which is what makes the fade safe. During a
+ * crossfade two documents are mounted at once (`shared/ui/crossfade.tsx`, 150ms)
+ * and a band held in the pane's state would have them take turns publishing into
+ * one `useState`, the outgoing one landing last and leaving the header driving a
+ * dead editor. It belongs to the document anyway — the panel header names the
+ * base and survives every swap.
  */
 export function FileView({
   base,
@@ -44,8 +40,8 @@ export function FileView({
 
   return (
     <>
-      {/* Always above the scroll body so formatting stays reachable in long
-          documents; empty until the editor mounts, keeping height stable. */}
+      {/* Above the scroll body so formatting stays reachable in long documents;
+          empty until the editor mounts, keeping height stable. */}
       <div className={styles.detailToolbarBand}>
         {editor && <Toolbar editor={editor} variant="header" />}
       </div>

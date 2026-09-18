@@ -25,7 +25,7 @@ import {
 } from "./service-shared";
 import { getBaseById, readBaseById } from "./service-bases";
 import { assertStorageHeadroom, bodyBytes } from "./service-storage";
-// ⚠ THE CAPTURE IS AWAITED, INSIDE THE REQUEST, AFTER EACH WRITE — a lost
+// The capture is awaited, inside the request, after each write — a lost
 // revision is a lost audit (`./service-revisions.ts`).
 import { entryOpFor, entryPath, recordEntryRevision } from "./service-revisions";
 import type { RevisionOp } from "@/features/revisions/types";
@@ -52,33 +52,18 @@ export async function listEntries(
 }
 
 /**
- * One entry by id.
+ * One entry by id. It chases the entry up to its base and re-asks the base's own
+ * question (2026-08-26): `assertSameWorkspace` alone let any workspace viewer
+ * pull the body of an entry in a private base, and bypassed both the M-10
+ * api-key tightening and the agent audience ceiling. Entry ids are cheap —
+ * ontology `kind:"knowledge"` attributes ship raw entry-id arrays — so "you
+ * need the id" was never the fence.
  *
- * 🔒 IT CHASES THE ENTRY UP TO ITS BASE AND RE-ASKS THE BASE'S OWN QUESTION
- * (2026-08-26). This used to check `assertSameWorkspace` and nothing else, and
- * that was a hole with three tenants: (1) `GET /api/knowledge/entries/[entryId]`
- * runs at the viewer default, so ANY workspace viewer could pull the body of an
- * entry in a `visibility='private'` base they cannot see — the service-role
- * route was strictly WIDER than the RLS policy behind it, which correctly
- * requires `public OR created_by = auth.uid()`; (2) the M-10 tightening (a
- * workspace-scoped key never sees a private base) was bypassed; (3) the AUDIENCE
- * CEILING was bypassed, so a locked agent credential could read an ungranted
- * base's entries one id at a time. ⚠ **Entry ids are obtainable** — ontology
- * attributes of `kind:"knowledge"` ship raw entry-id arrays and `dopl_ontology`
- * is an auto-allowed read tool — so "you need the id" was never the fence.
+ * `export.ts › buildEntryFile` had ALREADY worked this out for itself and
+ * added its own `getBaseById`; that call is now redundant belt, left in place.
  *
- * ⚠ `export.ts › buildEntryFile` had ALREADY worked this out for itself and
- * added its own `getBaseById` beside the comment *"getEntry only checks
- * workspace — gate on base visibility too"*. That call is now redundant rather
- * than load-bearing, and it is deliberately left in place as belt: a second
- * `getBaseById` on a row already in hand is one memoized lookup, and deleting it
- * would remove the evidence that this file's gate is what closed it.
- *
- * ⚠ A refusal is `EntryNotFoundError`, NOT the base's error — "this entry does
- * not exist", "its base is invisible to you" and "its base is outside your
- * audience" are ONE answer, the same 404-not-403 rule `service-bases.ts`
- * applies one level up. Leaking `KNOWLEDGE_BASE_NOT_FOUND` here would tell a
- * caller that the id it guessed was a real entry in a base it may not see.
+ * A refusal is `EntryNotFoundError`, never the base's error: leaking
+ * `KNOWLEDGE_BASE_NOT_FOUND` would confirm the guessed id names a real entry.
  */
 export async function getEntry(
   ctx: KnowledgeContext,
@@ -92,27 +77,21 @@ export async function getEntry(
 }
 
 /**
- * 🔒 **THE ID-RESOLVING READ (B2)** — the entry follows its BASE's id.
+ * The id-resolving read (B2) — the entry follows its BASE's id.
  *
- * ⚠ **AN ENTRY HAS NO TENANCY OF ITS OWN TO RESOLVE, WHICH IS WHY IT IS NOT A
- * FIFTH ROW IN THE RESOLVER REGISTRY.** `knowledge_entries` carries no
- * `visibility` column: its base is both its address and its fence, so clause 4
- * of `shared/tenancy/resolve-resource.ts` would have no arm to apply and a
- * registry row for entries would be a second, weaker way to name one. The entry
- * lookup is already global by id; what follows the id is
+ * An entry has no tenancy of its own to resolve, so it is not a row in the
+ * resolver registry: `knowledge_entries` carries no `visibility` column and its
+ * base is both its address and its fence. What follows the id is
  * `service-bases.ts › readBaseById`, and the base's two gates then run in the
  * container the BASE lives in.
  *
- * ⚠ **THE TWO `workspace_id`s MUST AGREE.** `knowledge_entries.workspace_id` is
- * a denormalized copy of its base's; a row where they disagree is not a wider
- * read, it is a broken row, and it resolves as the same single 404.
+ * `knowledge_entries.workspace_id` is a denormalized copy of its base's; a row
+ * where the two disagree is a broken row and resolves as the same single 404,
+ * which is `EntryNotFoundError`, never the base's error.
  *
- * ⚠ 404 IS `EntryNotFoundError`, never the base's error — the same
- * one-answer rule {@link getEntry} states above.
- *
- * 🔒 ⚠ **{@link getEntry} STAYS WORKSPACE-KEYED AND IS THE WRITE GATE**:
- * `updateEntry`, `moveEntry`, `deleteEntry` and `service-pins.ts` all funnel
- * through it (INVARIANTS §T35).
+ * {@link getEntry} stays workspace-keyed and is the WRITE gate: `updateEntry`,
+ * `moveEntry`, `deleteEntry` and `service-pins.ts` funnel through it
+ * (INVARIANTS §T35).
  */
 export async function readEntry(
   ctx: KnowledgeContext,
@@ -127,9 +106,8 @@ export async function readEntry(
   return entry;
 }
 
-/** {@link readBaseById}'s answer as a `null`. ⚠ Composed rather than restated,
- *  exactly as {@link assertEntryBaseReadable} is — a new gate on the
- *  foundational base lookup reaches entry reads for free. */
+/** {@link readBaseById}'s answer as a `null`. Composed rather than restated so a
+ *  new gate on the base lookup reaches entry reads for free. */
 async function readEntryBase(ctx: KnowledgeContext, baseId: string) {
   try {
     return await readBaseById(ctx, baseId);
@@ -140,8 +118,7 @@ async function readEntryBase(ctx: KnowledgeContext, baseId: string) {
 }
 
 /** `getBaseById`'s two gates (visibility + audience ceiling), re-answered as a
- *  404 about the ENTRY. Composed rather than restated so a new gate added to the
- *  foundational lookup reaches entry reads for free. */
+ *  404 about the ENTRY. */
 async function assertEntryBaseReadable(
   ctx: KnowledgeContext,
   entry: KnowledgeEntry,
@@ -163,18 +140,13 @@ export interface KnowledgeEntryRef {
 }
 
 /**
- * Names for a set of entry ids (`GET /api/knowledge/entries?ids=`).
- * ⚠ Applies the SAME base-visibility gating as `listBases` — `canSeeBase` for
- * M-10 + api-key scope, `filterTeamVisibleBases` for teams, AND the agent
- * AUDIENCE CEILING. Entries under an unreadable base are silently DROPPED, never
- * leaked; unknown / cross-workspace / trashed ids simply don't resolve.
+ * Names for a set of entry ids (`GET /api/knowledge/entries?ids=`). It is the
+ * `listBases` filter verbatim — `canSeeBase`, `filterTeamVisibleBases` and the
+ * agent audience ceiling — so the two lists cannot answer differently. Entries
+ * under an unreadable base are silently dropped.
  *
- * 🔒 THE CEILING HALF WAS MISSING UNTIL 2026-08-26, and this route is the one
- * that makes entry ids cheap: ontology attributes of `kind:"knowledge"` ship raw
- * entry-id arrays, so an agent under the ceiling could resolve 100 ids per
- * request against bases that were never granted into its container. It is the
- * `listBases` filter verbatim — `resolveAgentAudience` once for the request,
- * `audienceAdmits` per base — so the two lists cannot answer differently.
+ * The ceiling half was missing until 2026-08-26, and this route is what makes
+ * entry ids cheap: 100 ids per request against bases never granted in.
  */
 export async function resolveEntryRefs(
   ctx: KnowledgeContext,
@@ -343,10 +315,8 @@ export async function deleteEntry(
   // API key can hit this route directly, not only via MCP.
   assertAgentCanDelete(ctx, base);
   await assertBaseWritable(ctx, base);
-  // ⚠ THE PATH IS DERIVED BEFORE THE ROW GOES, because `entryPath` walks the
-  // folder chain and a deleted entry still has one — but the entry itself must
-  // be read while it exists. The DELETE's snapshot is the LAST state, which is
-  // the only place it survives: knowledge deletes are permanent.
+  // path derived before the row goes: `entryPath` walks the folder chain, and
+  // the delete's snapshot is the only surviving copy — deletes are permanent.
   const path = await entryPath(entry);
   await repo.hardDeleteEntry(ctx.workspaceId, id);
   await recordEntryRevision(ctx, entry, "delete", { path });

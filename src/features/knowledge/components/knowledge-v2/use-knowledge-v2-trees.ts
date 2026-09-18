@@ -49,8 +49,8 @@ export function useKnowledgeV2Trees({
   const [deleteTarget, setDeleteTarget] = useState<ScopedItem | null>(null);
   const [moveTarget, setMoveTarget] = useState<ScopedItem | null>(null);
 
-  // ⚠ Falls OPEN while the access fetch is pending, so owners/admins never
-  // see a flash of disabled affordances.
+  // falls open while the access fetch is pending, so owners/admins never see a
+  // flash of disabled affordances.
   const access = useMyAccessContext();
   const canEdit = useCallback(
     (baseId: string) => {
@@ -65,7 +65,7 @@ export function useKnowledgeV2Trees({
       try {
         const folder = await apiCreateFolder(baseId, { parentId, name }, workspaceId);
         await refreshTree(baseId);
-        // Into inline-rename; the tree marks it a stub so Escape removes the
+        // into inline-rename; the tree marks it a stub so Escape removes the
         // empty placeholder.
         setEditingNodeId(folder.id);
         return folder.id;
@@ -93,7 +93,7 @@ export function useKnowledgeV2Trees({
     [workspaceId, refreshTree, bases, setSelection]
   );
 
-  // ⚠ Raw movers THROW on failure so the move dialog can stay open.
+  // raw movers throw on failure so the move dialog can stay open.
   const moveFolderRaw = useCallback(
     async (baseId: string, folderId: string, newParentId: string | null) => {
       await apiMoveFolder(folderId, { parentId: newParentId }, workspaceId);

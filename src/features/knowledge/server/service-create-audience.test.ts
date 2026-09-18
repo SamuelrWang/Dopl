@@ -1,36 +1,22 @@
 /**
- * 🔒 **A CREATE MUST NOT WRITE A ROW ITS OWN CREATOR CANNOT READ BACK** — the
- * AUTHORING half of F-323, closed here, and the bug Samuel reported against
- * `dopl_kb(op="create_base")` in a shared home channel.
+ * A create must not write a row its own creator cannot read back — the AUTHORING
+ * half of F-323, closed here.
  *
- * WHAT WAS OBSERVED: two identical successes ("Created knowledge base … Private
- * to you"), a `list_bases` that never showed it, a slug that would not resolve,
- * and nothing in the caller's default workspace either.
+ * `resolveAgentAudience` answers `granted` for an agent in a `kind='link'`
+ * container holding a peer (reachable = bases carrying a channel grant), and
+ * every read composes that filter while `createBase` composed none — so a fresh
+ * base was unreachable to its creator from the very next call.
  *
- * WHAT WAS HAPPENING: every one of those is one fact. The row WAS written, into
- * the right workspace. `resolveAgentAudience` answers `granted` for an agent in
- * a `kind='link'` container holding a PEER — reachable = the bases carrying a
- * channel GRANT — and every READ composes that filter while `createBase`
- * composed nothing. A new base has no grant by construction, so it was
- * unreachable to its creator from the very next call. An agent that cannot see
- * a failure retries, which is why there were two.
- *
- * ⚠ THE SUITE PINS THE PREMISE TOO, not just the refusal. "The base would have
- * been invisible" is the entire justification, so it is asserted directly
- * (`the premise` below) rather than left as a claim in a comment — if the
- * ceiling ever stops filtering a fresh base, this guard should be reconsidered,
- * and that should go red here rather than being noticed years later.
+ * The premise is asserted directly (`the premise` below), not just the refusal:
+ * if the ceiling ever stops filtering a fresh base, this guard goes red here.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { KnowledgeBase, KnowledgeContext } from "../types";
 
-// ⚠ **THE CHANGELOG CAPTURE IS A REAL WRITE AND IT IS AWAITED**
-// (`./service-revisions.ts`, 2026-09-09): every knowledge write now records a
-// revision inside the same request, so a service test that leaves it alone
-// reaches `supabaseAdmin()` and fails on a missing service-role key. Stubbed
-// here because these suites are about the WRITE, not about its audit row —
-// that the row is recorded, exactly once, per path, is
+// The changelog capture is a real awaited write (`./service-revisions.ts`,
+// 2026-09-09), so an unstubbed service test reaches `supabaseAdmin()` and fails
+// on a missing service-role key. That the row is recorded once per path is
 // `service-revisions.test.ts`'s subject.
 vi.mock("@/features/revisions/server/repository", () => ({
   appendRevision: vi.fn(async () => ({ id: "rev-1" })),
@@ -61,12 +47,10 @@ vi.mock("./repository", () => ({
   hardDeleteBase: vi.fn(),
 }));
 
-// ⚠ **THE A2 SLICE PUT A SECOND FENCE UNDER THIS SUITE'S SUBJECT.** `createBase`
-// no longer refuses a restricted audience outright — it asks
-// `personal-reach.ts` whether the caller's own shelf is reachable from this
-// room, and follows the OWNER when it is (gap 2 of #1077). Defaulted CLOSED
-// here, which is an UNARMED room and therefore the exact world every case below
-// was written in: the refusals are unchanged facts, not survivals.
+// A2: `createBase` no longer refuses a restricted audience outright — it asks
+// `personal-reach.ts` whether the caller's own shelf is reachable from this room
+// and follows the owner when it is (gap 2 of #1077). Defaulted CLOSED here: an
+// unarmed room, the world every case below was written in.
 vi.mock("@/shared/tenancy/personal-reach", () => ({
   resolvePersonalReach: vi.fn(),
   personalShelfContainerIds: vi.fn(async () => []),
@@ -136,15 +120,14 @@ function soloContainer() {
 }
 
 const mockReach = vi.mocked(resolvePersonalReach);
-/** The operator's OWN personal container. ⚠ Never the room. */
+/** The operator's OWN personal container. Never the room. */
 const PERSONAL = "33333333-3333-4333-8333-333333333333";
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockRepo.listBaseSlugsForWorkspace.mockResolvedValue([]);
-  // ⚠ UNARMED IS THE DEFAULT WORLD OF THIS FILE, and it is the fail-closed one:
-  // an agent in a room its operator has not armed reaches no shelf, so every
-  // refusal below is measured under exactly the conditions it was written for.
+  // unarmed is the default world of this file, and the fail-closed one: every
+  // refusal below is measured under the conditions it was written for.
   mockReach.mockResolvedValue({ kind: "closed", refusal: "unarmed_room" });
   mockRepo.insertBase.mockImplementation(
     async (args: { workspaceId: string; slug: string }) =>
@@ -193,12 +176,11 @@ describe("createBase refuses where the creator could not read it back", () => {
 
     await expect(createBase(agentCtx(), { name: "Notes" } as never)).rejects.toThrow();
 
-    // ⚠ The whole point. Two calls used to leave two invisible rows, each
-    // holding a slug the next attempt then collided with.
+    // two calls used to leave two invisible rows, each holding a slug the next
+    // attempt then collided with.
     expect(mockRepo.insertBase).not.toHaveBeenCalled();
-    // ⚠ Refused BEFORE the slug read too: a caller that may not create here is
-    // told so without spending a round trip, and is never handed a slug
-    // collision against a row it cannot see.
+    // refused before the slug read: never hands back a collision against a row
+    // the caller cannot see.
     expect(mockRepo.listBaseSlugsForWorkspace).not.toHaveBeenCalled();
   });
 
@@ -212,8 +194,8 @@ describe("createBase refuses where the creator could not read it back", () => {
     expect(err).toBeInstanceOf(AgentWriteDisabledError);
     const message = err!.message;
 
-    // ⚠ A refusal an agent cannot explain sends it to grep the repo. This one
-    // says WHY (no grant → invisible), WHO can fix it, and WHAT ELSE to do.
+    // the message says why (no grant → invisible), who can fix it, and what else
+    // to do.
     expect(message).toContain("shared home channel");
     expect(message).toContain("grant");
     expect(message).toContain("human-only");
@@ -221,9 +203,8 @@ describe("createBase refuses where the creator could not read it back", () => {
   });
 
   it("create-and-share is refused the same way, and equally writes nothing", async () => {
-    // ⚠ It was ALREADY a refusal — `setChannelKnowledgeGrant` rejects an agent
-    // — but only AFTER inserting the row and then hard-deleting it. Now it
-    // never gets that far.
+    // already a refusal via `setChannelKnowledgeGrant`, but only after inserting
+    // the row and hard-deleting it. Now it never gets that far.
     sharedContainer([]);
 
     await expect(
@@ -246,11 +227,9 @@ describe("🔒 an ARMED room sends the create to its OWNER instead of refusing",
   }
 
   it("writes the base into the caller's OWN container, not the room", async () => {
-    // 🔒 THE READ-BACK GUARANTEE MOVED TO THE DESTINATION, which is the whole
-    // repair: the premise at the top of this file is about the ROOM's ceiling,
-    // and a personal row does not land there. In a container with one member
-    // the audience is `unrestricted` by construction, so an OPEN fence IS the
-    // guarantee rather than a way around the gate.
+    // the read-back guarantee moves to the destination: the premise at the top of
+    // this file is about the ROOM's ceiling and a personal row does not land
+    // there. A one-member container is `unrestricted` by construction.
     sharedContainer([]);
     armed();
 
@@ -263,9 +242,8 @@ describe("🔒 an ARMED room sends the create to its OWNER instead of refusing",
   });
 
   it("🔒 and the slug is read in the DESTINATION, never in the room", async () => {
-    // ⚠ MUTATION CHECK. A slug read against the room would collide the new row
-    // against names it will never share a container with, and — worse — report
-    // a conflict with a base the caller cannot see.
+    // mutation check: a slug read against the room would report a conflict with a
+    // base the caller cannot see.
     sharedContainer([]);
     armed();
 
@@ -275,10 +253,9 @@ describe("🔒 an ARMED room sends the create to its OWNER instead of refusing",
   });
 
   it("🔒 an ARMED room still refuses create-AND-SHARE — the room is named", async () => {
-    // 🔒 A GRANT CANNOT FOLLOW A ROW OUT OF ITS CONTAINER. `shareToChannelId`
-    // names a channel of THIS room, so a personal destination would leave the
-    // grant pointing at a container the base does not live in. Arming widens
-    // where a row may LAND; it does not make a channel grant portable.
+    // a grant cannot follow a row out of its container: `shareToChannelId` names
+    // a channel of THIS room. Arming widens where a row may land; it does not
+    // make a channel grant portable.
     sharedContainer([]);
     armed();
 
@@ -292,21 +269,13 @@ describe("🔒 an ARMED room sends the create to its OWNER instead of refusing",
   });
 });
 
-// ── 🔒 THE DRY RUN ANSWERS WHAT THE CONFIRMED CALL ANSWERS ───────────
+// ── the dry run answers what the confirmed call answers ────────────────
 //
-// ⚠ **THE PIN: A PREVIEW MUST NEVER PROMISE A CREATE THE CONFIRM WOULD REFUSE.**
-// Observed live on 2026-09-06, before this: `dopl_kb op="create_base"
-// visibility="public"` in a shared home channel PREVIEWED, handed back a
-// `confirm_token` — and the echoed call was refused by the gate above. The
-// preview is minted in the MCP process, which cannot see a grant row or an
-// arming row, so it was describing an act the server would not perform.
-//
-// ⚠ **PARITY IS ASSERTED THROUGH BOTH DOORS ON ONE WORLD, which is the only
-// form of it worth having.** `assertCreateBaseAllowed` is not tested here for
-// what it says on its own — it is tested for saying the SAME thing `createBase`
-// says, in the same world, with the same input. A suite that checked the dry run
-// against its own expectations would keep passing on the day the two diverge,
-// which is exactly the bug.
+// A preview must never promise a create the confirm would refuse (observed
+// 2026-09-06): the token is minted in the MCP process, which cannot see a grant
+// row or an arming row. Parity is asserted through both doors on ONE world —
+// `assertCreateBaseAllowed` is tested for saying the same thing `createBase`
+// says, not against its own expectations.
 describe("🔒 the dry run runs the SAME gate, and writes nothing", () => {
   /** The owner has armed this room for their personal shelf (#1077 gap 2). */
   function armed() {
@@ -325,8 +294,7 @@ describe("🔒 the dry run runs the SAME gate, and writes nothing", () => {
   });
 
   it("...with the SAME SENTENCE, so a preview cannot soften the refusal", async () => {
-    // ⚠ ONE MESSAGE, TWO DOORS. A preview that refused in gentler words would
-    // read as "not yet" and send the agent back to try the real call.
+    // one message, two doors: a gentler preview refusal reads as "not yet".
     sharedContainer([]);
     const fail = (p: Promise<unknown>) => p.then(() => null, (e: Error) => e.message);
 
@@ -344,16 +312,14 @@ describe("🔒 the dry run runs the SAME gate, and writes nothing", () => {
     } as never);
     const created = await createBase(agentCtx(), { name: "Notes" } as never);
 
-    // 🔒 THE SAME CONTAINER, ASKED TWICE. The preview's "this would be created"
-    // is a claim about WHERE as much as WHETHER.
+    // the same container, asked twice: the preview claims WHERE as well as WHETHER.
     expect(preconditions.destination.workspaceId).toBe(PERSONAL);
     expect(created.workspaceId).toBe(PERSONAL);
   });
 
   it("is a GATE, not a create: no row, no slug read, nothing rolled back", async () => {
-    // ⚠ THE WHOLE JUSTIFICATION FOR RUNNING IT ON THE PREVIEW PATH. If the dry
-    // run wrote anything, every previewed create would leave a row behind for
-    // an act the operator has not confirmed yet.
+    // if the dry run wrote anything, every previewed create would leave a row
+    // behind for an act the operator has not confirmed.
     sharedContainer([]);
     armed();
 
@@ -361,17 +327,14 @@ describe("🔒 the dry run runs the SAME gate, and writes nothing", () => {
 
     expect(mockRepo.insertBase).not.toHaveBeenCalled();
     expect(mockRepo.hardDeleteBase).not.toHaveBeenCalled();
-    // ⚠ AND NO SLUG READ — a dry run must never report a collision against a
-    // base the caller cannot see, and it must not be a way to probe a
-    // container's names one create body at a time.
+    // and no slug read — a dry run must not become a way to probe a container's
+    // names one create body at a time.
     expect(mockRepo.listBaseSlugsForWorkspace).not.toHaveBeenCalled();
   });
 
   it("answers the RESOLVED visibility, which is what the preview describes", async () => {
-    // ⚠ The visibility the row LANDS at, not the one the caller typed: an
-    // absent `visibility` resolves to private for a session caller, and a
-    // preview that said "public" about it would state the wrong audience in the
-    // one line a person uses to decide.
+    // the visibility the row LANDS at, not the one the caller typed: an absent
+    // `visibility` resolves to private for a session caller.
     soloContainer();
 
     const preconditions = await assertCreateBaseAllowed(agentCtx(), {
@@ -417,8 +380,8 @@ describe("create → list → resolve still works wherever the ceiling is open",
 
     expect(listed).toHaveLength(1);
     expect(resolved.id).toBe("kb-new");
-    // ⚠ A human caller costs ZERO ceiling reads and an agent in a standard
-    // workspace exactly ONE — the guard must not have changed that budget.
+    // budget: a human costs zero ceiling reads, an agent in a standard workspace
+    // exactly one.
     expect(mockCount).not.toHaveBeenCalled();
   });
 
@@ -428,7 +391,7 @@ describe("create → list → resolve still works wherever the ceiling is open",
     const { listed } = await createThenRead(agentCtx({ source: "user" }));
 
     expect(listed).toHaveLength(1);
-    // ⚠ `ctx.source !== "agent"` short-circuits before any ceiling read.
+    // `ctx.source !== "agent"` short-circuits before any ceiling read.
     expect(mockKind).not.toHaveBeenCalled();
   });
 });

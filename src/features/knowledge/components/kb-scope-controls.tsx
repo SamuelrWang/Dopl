@@ -10,7 +10,7 @@ import {
 } from "@/features/members/components/team-bits";
 import type { KbScope } from "../scope";
 
-/** One drafted grant row. ⚠ Mirrors `KbTeamGrantSchema`. */
+/** One drafted grant row. Mirrors `KbTeamGrantSchema`. */
 export interface TeamGrantDraft {
   teamId: string;
   level: "read" | "edit";
@@ -34,8 +34,8 @@ const SCOPE_OPTIONS: Array<{
 
 /**
  * Three-way sharing scope radio, shared by the create dialog and the settings
- * Sharing section. ⚠ Token-based styling only, so it renders correctly inside
- * the ModalShell light scope.
+ * Sharing section. Token-based styling only, so it renders correctly inside the
+ * ModalShell light scope.
  */
 export function ScopeSelector({
   value,
@@ -87,9 +87,9 @@ export function ScopeSelector({
 }
 
 /**
- * Per-team grant editor: None / Read / Edit per team, None = no grant.
- * ⚠ Caller passes only the teams the user may grant (all for admins, own
- * teams for members).
+ * Per-team grant editor: None / Read / Edit per team, None = no grant. The
+ * caller passes only the teams the user may grant (all for admins, own teams
+ * for members).
  */
 export function TeamGrantEditor({
   teams,

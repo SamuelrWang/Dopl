@@ -1,26 +1,12 @@
 // @vitest-environment jsdom
 /**
  * The Agents tab and the agent view, WIRED (wiring plan Phase 5, 2026-08-18).
- *
- * These are the properties that go quiet rather than loud when they break, which
- * is why each one is pinned here:
- *
- *  - **"COULD NOT ASK" IS NOT "NOTHING IS RUNNING."** `null` (plain browser, or
- *    a main without the feed) and `[]` are different facts and are worded
- *    differently. An empty list under a browser reads as "you have no agents",
- *    which this surface cannot honestly claim (INVARIANTS §11 — UNKNOWN is not
- *    EMPTY).
- *  - **AN UNMEASURED METRIC RENDERS AS AN ABSENCE, NEVER AS 0.** A context meter
- *    reading 0% of a window that is nearly full is a lie the operator acts on.
- *  - **THE COPY RULE** (INVARIANTS §5): inside one member's window there is
- *    exactly ONE session, so it never needs a qualifier — "agent session" and
- *    "channel session" must appear nowhere on this surface, and the agent view
- *    is where the temptation lives.
- *  - **THE SENT LANE IS THE VIEWER'S OWN AGENT, ON THIS THREAD** — and, since
- *    multiplayer, THAT ONE INSTANCE rather than every sibling sharing the thread.
- *    ⚠ The DERIVATION's own cases moved to `agent-sent-messages.test.ts` on
- *    2026-08-22 (the 500-line cap, split on the render-vs-pure seam); what stays
- *    here is the PANEL rendering it.
+ * Each property here fails QUIETLY, which is why it is pinned:
+ *  - `null` (could not ask) is not `[]` (nothing running) — INVARIANTS §11.
+ *  - An unmeasured metric renders as an absence, never as 0.
+ *  - One session per member's window, so it never needs a qualifier (§5).
+ *  - The sent lane is the viewer's own agent on THIS thread — the derivation's
+ *    own cases live in `agent-sent-messages.test.ts`.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -48,7 +34,7 @@ import { ChannelsAgentPanel } from "./agent-panel";
 // cap when the 1:1 composer landed in the panel); its copy travelled with it.
 import { AGENT_CONTROL_REFUSED } from "./agent-panel-controls";
 import { agentKey, agentsForChannel, NO_THREAD_LABEL } from "./agents-model";
-import { formatTokens } from "./agent-metrics";
+import { formatTokens } from "@/shared/lib/format-tokens";
 import { CHANNEL_ID, ME, message } from "./test-fixtures";
 
 afterEach(() => {
@@ -225,6 +211,26 @@ describe("formatTokens", () => {
     expect(formatTokens(84_000)).toBe("84k");
     expect(formatTokens(1_200_000)).toBe("1.2M");
     expect(formatTokens(48_000_000)).toBe("48M");
+  });
+
+  /** 🔒 ONE DECLARATION SINCE 2026-09-17, and these are the three inputs on
+   *  which the two disagreed. The Overview's floor won: the figure it formats is
+   *  ALREADY a floor (`overview/token-spend-strip.tsx`'s header), so rounding up
+   *  turns an under-count into an over-claim — and this tab renders the same
+   *  quantised number. */
+  it("FLOORS, never rounds up", () => {
+    expect(formatTokens(84_500)).toBe("84k");
+    expect(formatTokens(1_250_000)).toBe("1.2M");
+    expect(formatTokens(999_999)).toBe("999k");
+  });
+
+  /** 🔒 An agent under 500 tokens read "0k" on every card until this arm
+   *  existed — a measured spend rendered as no spend. */
+  it("prints a sub-1000 count whole", () => {
+    expect(formatTokens(400)).toBe("400");
+    expect(formatTokens(1)).toBe("1");
+    expect(formatTokens(999)).toBe("999");
+    expect(formatTokens(0)).toBe("0");
   });
 });
 

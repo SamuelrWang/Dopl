@@ -1,32 +1,22 @@
 /**
- * THE GLOBAL SEARCH CONTRACT — the wire shape `GET /api/search` answers, and the
- * one declaration both the route and its clients read (Samuel, 2026-09-17:
- * *"when a user searches, the search pop up is separated into sections. So,
- * Channels, messages, knowledge, agent template, etc. It's basically doing a
- * text search across the home space."*).
+ * The wire shape `GET /api/search` answers — one declaration for the route and
+ * its clients.
  *
- * ⚠ **IT IS NOT IN `@dopl/contracts`, AND THAT IS THAT PACKAGE'S OWN RULE
- * APPLIED RATHER THAN AN OVERSIGHT** (INVARIANTS §1; `packages/contracts/src/
- * index.ts` rule 2: *"CLOSED SETS AND THE SHAPES BUILT DIRECTLY ON THEM. NOT
- * DTOs. A row shape that only one tree ever builds does not [belong]"*). These
- * rows are built in `src/` and nowhere else; `apps/desktop-ui` MAY import root
- * `src/` (§1, the /home-face rule), which is the path its popup takes. Neither
- * `packages/dopl-client` nor `packages/mcp-server` states this shape, so there
- * is no second copy for the package to collapse.
+ * Deliberately not in `@dopl/contracts`: that package holds closed sets, not DTOs
+ * only one tree builds (INVARIANTS §1). `apps/desktop-ui` may import root `src/`.
  *
- * ⚠ **THE GROUP KIND IS A CLOSED SET AND `SEARCH_GROUP_ORDER` IS ITS ONLY
- * ORDERING.** The popup renders sections in payload order, so a group's place in
- * the list is part of the contract and not a renderer preference. The `satisfies`
- * below makes a kind added to the union without a place in the order a COMPILE
- * error rather than a section that silently never renders.
+ * The group kind is a closed set and `SEARCH_GROUP_ORDER` is its only ordering —
+ * the popup renders in payload order, so a group's place is part of the contract.
+ * The `satisfies` makes a kind added without a place a compile error rather than
+ * a section that silently never renders.
  */
 
 /** Which reach a search runs over. */
 export type SearchScope = "account" | "container";
 
 /**
- * The sections the popup draws. ⚠ `members`, `skills` and `chats` are
- * CONTAINER-ONLY (see {@link CONTAINER_ONLY_SEARCH_GROUPS}).
+ * The sections the popup draws. `members`, `skills` and `chats` are
+ * container-only (see {@link CONTAINER_ONLY_SEARCH_GROUPS}).
  */
 export type SearchGroupKind =
   | "channels"
@@ -39,7 +29,7 @@ export type SearchGroupKind =
   | "skills"
   | "chats";
 
-/** Payload order. ⚠ The renderer does not sort; this IS the section order. */
+/** Payload order. The renderer does not sort; this IS the section order. */
 export const SEARCH_GROUP_ORDER = [
   "channels",
   "messages",
@@ -53,12 +43,9 @@ export const SEARCH_GROUP_ORDER = [
 ] as const satisfies readonly SearchGroupKind[];
 
 /**
- * 🔒 **THE THREE MODULES THAT DO NOT EXIST ON HOME (Samuel, 2026-09-17:
- * *"those modules do not exist on home"*).** Account scope never returns them —
- * not "returns them empty": an empty group is omitted anyway (see
- * {@link SearchGroup}), and the point of stating the set here is that the
- * service NEVER QUERIES those tables account-wide, so a `kind='link'` or
- * `kind='personal'` container cannot contribute a member row to a home search.
+ * (2026-09-17) The three modules that do not exist on home. Account scope never
+ * QUERIES these tables — not merely "returns them empty" — so a `link` or
+ * `personal` container cannot contribute a member row to a home search.
  */
 export const CONTAINER_ONLY_SEARCH_GROUPS = [
   "members",
@@ -73,15 +60,14 @@ export const SEARCH_MIN_QUERY_LENGTH = 2;
 export const SEARCH_GROUP_ITEM_CAP = 8;
 
 /**
- * The ceiling on `SearchGroup.total`. ⚠ **`total` IS A TRUE COUNT UP TO HERE AND
- * THIS NUMBER AT OR ABOVE IT** — 50 means "50 or more", which is why the popup
- * renders it as `50+`. A group is never scanned past this, so a bigger number
- * could only be bought with an unbounded read (INVARIANTS §9).
+ * The ceiling on `SearchGroup.total`: a true count below it, and "50 or more" at
+ * it, which is why the popup renders `50+`. A group is never scanned past this,
+ * so a bigger number would need an unbounded read (INVARIANTS §9).
  */
 export const SEARCH_GROUP_TOTAL_CAP = 50;
 
-/** One hit. ⚠ Every optional field is OMITTED when this kind has no honest
- *  answer for it — never null-filled, never defaulted (INVARIANTS §9). */
+/** One hit. Every optional field is omitted when this kind has no honest answer
+ *  for it — never null-filled, never defaulted (INVARIANTS §9). */
 export interface SearchItem {
   /** The row's own id. Unique within its group, not across groups. */
   id: string;
@@ -92,10 +78,9 @@ export interface SearchItem {
    *  email. Plain text, never marked up. */
   subtitle?: string;
   /**
-   * ⚠ **PLAIN TEXT WITH `<mark>…</mark>` AND NOTHING ELSE.** Every other
-   * character is HTML-escaped at the source (`server/snippet.ts`), so a body
-   * containing `<script>` arrives as `&lt;script&gt;`. A renderer may therefore
-   * set this as HTML; it may NOT assume the same of any other field.
+   * Plain text with `<mark>…</mark>` and nothing else — every other character is
+   * HTML-escaped at the source (`server/snippet.ts`). A renderer may set THIS as
+   * HTML; it may not assume the same of any other field.
    */
   snippet?: string;
   /** The container the row belongs to. Always present — it is the fence's own
@@ -111,7 +96,7 @@ export interface SearchItem {
   updatedAt?: string;
 }
 
-/** One section. ⚠ A group with NO items is omitted from the payload entirely. */
+/** One section. A group with no items is omitted from the payload entirely. */
 export interface SearchGroup {
   kind: SearchGroupKind;
   /** Matches found, capped at {@link SEARCH_GROUP_TOTAL_CAP}. ≥ `items.length`. */

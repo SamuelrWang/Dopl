@@ -31,10 +31,9 @@ const group = (kind: SearchGroup["kind"], ids: string[]): SearchGroup => ({
 
 describe("the section model", () => {
   it("🔒 renders in PAYLOAD order and SORTS NOTHING", () => {
-    // 🔒 **THE ORDER IS THE CONTRACT'S** — `contracts.ts › SEARCH_GROUP_ORDER` is
-    // what `search/server/service.ts` builds the payload in, so a client-side
-    // sort would be a second answer to "which section is first". This payload is
-    // deliberately NOT in that order: the renderer must hand it back untouched.
+    // The order is the contract's (`contracts.ts › SEARCH_GROUP_ORDER`), so a
+    // client-side sort would be a second answer. This payload is deliberately NOT
+    // in that order: the renderer must hand it back untouched.
     const groups = [
       group("knowledge", ["k1"]),
       group("channels", ["c1"]),
@@ -66,15 +65,15 @@ describe("the section model", () => {
   });
 
   it("every kind the CONTRACT can send has a label here", () => {
-    // ⚠ Read off `SEARCH_GROUP_ORDER`, so a kind added to the contract with no
-    // label is a red test rather than an empty hairline.
+    // Read off `SEARCH_GROUP_ORDER`, so a kind added with no label is a red test
+    // rather than an empty hairline.
     for (const kind of SEARCH_GROUP_ORDER) expect(GROUP_LABEL[kind]).toBeTruthy();
   });
 
   it("wraps at both ends, like every menu in the app", () => {
     expect(moveIndex(0, -1, 3)).toBe(2);
     expect(moveIndex(2, 1, 3)).toBe(0);
-    // ⚠ And it never divides by an empty list.
+    // And it never divides by an empty list.
     expect(moveIndex(0, 1, 0)).toBe(0);
   });
 });
@@ -85,7 +84,7 @@ describe("the snippet sanitiser", () => {
   });
 
   it("escapes every other tag rather than stripping it", () => {
-    // ⚠ ALLOW-LIST BY RECONSTRUCTION. A strip pass is a blocklist, and every
+    // Allow-list by reconstruction: a strip pass is a blocklist, and every
     // blocklist has a bypass — the nested case below is the classic one.
     expect(sanitizeSnippet('<img src=x onerror="alert(1)">')).toBe(
       "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;"
@@ -140,8 +139,7 @@ describe("recents — five, per user, newest first", () => {
   });
 
   it("🔒 survives a THROWING localStorage — the read answers empty, the write is a no-op", () => {
-    // ⚠ It throws outright in a private window and with site data blocked. A
-    // search box that cannot render because a convenience failed is the worse bug.
+    // It throws outright in a private window and with site data blocked.
     const boom = () => {
       throw new Error("blocked");
     };

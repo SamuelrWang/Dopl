@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 /**
- * `useToggleBaseStar`. Hand-rolled, not `use-api-mutation.ts`, because
- * knowledge reads aren't on `useApiQuery` (INVARIANTS §8 rule 6) — so this
- * file pins the rules that layer would have enforced: patch lands BEFORE the
- * request settles; MERGES (other folds survive); failure restores the
- * SNAPSHOT, not the inverse toggle; cold entry DECLINED; no invalidation.
+ * `useToggleBaseStar`. Hand-rolled, not `use-api-mutation.ts`, because knowledge
+ * reads aren't on `useApiQuery`, so this file pins the rules that layer would
+ * have enforced: the patch lands before the request settles, it merges, failure
+ * restores the snapshot rather than the inverse toggle, a cold entry is
+ * declined, and nothing is invalidated.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
@@ -88,8 +88,8 @@ describe("useToggleBaseStar", () => {
     // Optimistic window: the write has not answered yet.
     expect(mockSetStar).toHaveBeenCalledWith("kb-1", true, WS);
 
-    // MERGE, never replace: the response is narrower than the entry, so
-    // assigning over it drops four folds the toggle never saw.
+    // Merge, never replace: the response is narrower than the entry, so
+    // assigning over it drops folds the toggle never saw.
     const cached = client.getQueryData<KnowledgeBaseList>(KEY);
     expect(cached?.bases).toHaveLength(2);
     expect(cached?.ownerNames).toEqual({ "u-other": "Dana Reed" });
@@ -123,7 +123,7 @@ describe("useToggleBaseStar", () => {
     act(() => release()(true));
 
     await waitFor(() => expect(stars()).toEqual(["kb-2"]));
-    // SNAPSHOT, not the inverse op — everything else comes back with it.
+    // Snapshot, not the inverse op — everything else comes back with it.
     const cached = client.getQueryData<KnowledgeBaseList>(KEY);
     expect(cached?.bases).toHaveLength(2);
     expect(cached?.kbStorageLimit).toBe(5_000_000);
@@ -143,8 +143,8 @@ describe("useToggleBaseStar", () => {
   });
 
   it("DECLINES a cold cache instead of inventing an entry", async () => {
-    // No data ⇒ no patch, no snapshot, and critically NO cancel — cancelling
-    // a first load strands the grid empty with nothing to fill it (§8 rule 2).
+    // No data means no patch, no snapshot, and critically no cancel —
+    // cancelling a first load strands the grid empty with nothing to fill it.
     mockSetStar.mockResolvedValue(undefined);
     const { result } = renderHook(() => useToggleBaseStar(WS), { wrapper });
 

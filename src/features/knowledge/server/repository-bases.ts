@@ -18,22 +18,13 @@ import {
  * Raw Supabase I/O for knowledge BASES. No business logic, no auth checks —
  * see `repository.ts` for the split map and conventions.
  *
- * 🔒 TWO CLIENTS, AND WHICH ONE A FUNCTION TAKES IS THE WHOLE OF RLS PHASE 1
- * (Wave B B7). `readClient()` is the CALLER's client when
- * `RLS_CALLER_SCOPED_READS` is on and `supabaseAdmin()` otherwise, so with the
- * flag off this file behaves exactly as it did.
- *
- *   * **A read that answers "what may this caller see" takes `readClient()`.**
- *     With the flag on, the row filter is the policy
- *     (`20260919120000_rls_helpers_and_caller_scope`), which is written to equal
- *     the TS predicate — the predicate stays until the flag has run a release.
- *   * **A read that answers a SYSTEM question keeps `supabaseAdmin()`**, and
- *     says so at the call site. Slug uniqueness, storage accounting and the
- *     `max(position)` append helpers must see rows the caller cannot: scoped to
- *     the caller they would answer a different question and answer it wrongly
- *     (a slug "free" because someone else's private base holds it).
- *   * **Writes are unchanged.** INSERT/UPDATE/DELETE stay on the service role
- *     until RLS plan phase 4.
+ * Two clients: a read that answers "what may this caller see" takes
+ * `readClient()` (the caller's client when `RLS_CALLER_SCOPED_READS` is on,
+ * where the row filter is the policy written to equal the TS predicate). A read
+ * that answers a SYSTEM question keeps `supabaseAdmin()` and says so at the call
+ * site — slug uniqueness and storage accounting must see rows the caller cannot,
+ * or a slug reads "free" because someone else's private base holds it. Writes
+ * stay on the service role until RLS phase 4.
  */
 
 export async function findBaseById(
@@ -102,18 +93,13 @@ export async function findBaseByPublicId(
 /**
  * One workspace's bases, optionally narrowed to ONE SHELF.
  *
- * ⚠ `shelf` UNDEFINED IS "NO FILTER", NOT A DEFAULT SHELF, and every caller that
- * omits it means the whole workspace: MCP `kb_list_bases` rides the unfiltered
- * path, so does workspace search, and so does the lazy-seed count in
- * `service-bases.ts › listBases` — which MUST see both shelves, or a workspace
- * whose only bases are home-scoped would re-seed on every list call.
+ * `shelf` undefined is NO filter, not a default shelf: MCP `kb_list_bases`,
+ * workspace search and the lazy-seed count in `service-bases.ts › listBases`
+ * all need both shelves, or a workspace whose bases are all home-scoped
+ * re-seeds on every list call.
  *
- * ⚠ **THE SHELF IS A TENANCY, NOT A `WHERE` (2026-09-02, slice B15).** This
- * used to filter a `home_scoped` BOOLEAN alongside the workspace; the column is
- * dropped and `shelf="home"` is the caller's PERSONAL CONTAINER
- * (`shared/tenancy/personal-container.ts`). The decision lives there; what stays
- * here is applying it, and it is now one `.in()` rather than an `.in()` plus a
- * conditional `.eq()`.
+ * The shelf is a TENANCY, not a `WHERE`: `shelf="home"` is the caller's personal
+ * container, and `shared/tenancy/personal-container.ts` decides the scope.
  */
 export async function listBasesForWorkspace(
   workspaceId: string,
@@ -134,23 +120,15 @@ export async function listBasesForWorkspace(
 }
 
 /**
- * WHICH of `baseIds` are on the caller's PERSONAL shelf — the fold behind
+ * WHICH of `baseIds` are in the caller's PERSONAL container — the fold behind
  * `GET /api/knowledge/bases › homeScopedBaseIds`. One query for N bases.
  *
- * ⚠ **IT ASKS A TENANCY QUESTION SINCE 2026-09-02 (slice B15).** It selected the
- * `home_scoped` flag, which was the ONLY place that column was projected; the
- * column is dropped and the question is "is this row in my personal container".
- * The answer set is the same one it always returned — ids the caller was ALREADY
- * shown, labelled — so the wire contract and the sibling key are untouched.
+ * Callers MUST pass the post-visibility list: the id set IS the fence (same
+ * requirement as `repository-stars.ts › listStarredBaseIds`), since this applies
+ * no visibility of its own.
  *
- * ⚠ CALLERS MUST PASS THE POST-VISIBILITY LIST. The id set IS the fence, exactly
- * as `repository-stars.ts › listStarredBaseIds` requires — this function applies
- * no visibility of its own and must never be given a wider set.
- *
- * ⚠ IT ASKS THE SAME QUESTION `listBasesForWorkspace(_, _, "home")` ASKS, so it
- * asks it through the same {@link resolveShelfScope} — a second, hand-rolled
- * spelling of "is this row personal" is how a label comes to disagree with the
- * list it labels.
+ * It asks the same question `listBasesForWorkspace(_, _, "home")` asks, through
+ * the same {@link resolveShelfScope}, so the label cannot disagree with the list.
  */
 export async function listHomeScopedBaseIds(
   workspaceId: string,
@@ -170,14 +148,14 @@ export async function listHomeScopedBaseIds(
 
 /**
  * ACTIVE slugs only (`deleted_at IS NULL`), matching the partial-unique index.
- * Slug uniqueness per workspace persists alongside publicId because MCP `kb_*`
- * tools address bases by slug.
+ * Slug uniqueness persists alongside publicId because MCP `kb_*` tools address
+ * bases by slug.
  */
 export async function listBaseSlugsForWorkspace(
   workspaceId: string
 ): Promise<string[]> {
-  // ⚠ SYSTEM READ, service role on purpose: uniqueness spans rows the caller
-  // cannot see. Scoped to the caller, a taken slug would read as free.
+  // System read, service role on purpose: uniqueness spans rows the caller
+  // cannot see — scoped to the caller, a taken slug would read as free.
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("knowledge_bases")
@@ -200,17 +178,16 @@ export interface InsertBaseArgs {
   /** `'workspace'` if omitted (matches DB column default). */
   accessMode?: "workspace" | "teams";
   /**
-   * WHICH SHELF (`../types.ts › KbShelf`). ⚠ **A ROUTING FLAG, NOT A COLUMN,
-   * SINCE 2026-09-02 (slice B15)** — it decides the row's `workspace_id` and
-   * nothing stores it. Absent = the container the call is in, so the seed path
-   * and every batch insert are unchanged; only `createBase` ever passes `true`.
+   * WHICH SHELF (`../types.ts › KbShelf`). A routing flag, not a column: it
+   * decides the row's `workspace_id` and nothing stores it. Absent = the
+   * container the call is in; only `createBase` ever passes `true`.
    */
   homeScoped?: boolean;
   createdBy: string | null;
 }
 
-/** ⚠ Shared by single AND batch insert so column defaults can't drift.
- *  ⚠ `workspaceId` is the RESOLVED one — see {@link insertBase}. */
+/** Shared by single AND batch insert so column defaults can't drift.
+ *  `workspaceId` is the RESOLVED one — see {@link insertBase}. */
 function baseInsertRow(args: InsertBaseArgs) {
   return {
     workspace_id: args.workspaceId,
@@ -226,13 +203,10 @@ function baseInsertRow(args: InsertBaseArgs) {
 }
 
 /**
- * 🔒 **THE PERSONAL WRITE LANDS IN THE CONTAINER, OR IT REFUSES** (slice B15).
- * The dual-write this replaced kept `home_scoped = true` beside a `workspace_id`
- * a flag might or might not have moved; with the column dropped there is one
- * place a personal row can be, and a fallback would write a row no surface can
- * find. `personalWriteWorkspaceId` throws rather than guessing. Everything else
- * inserts unchanged; only `insertBase` can be personal, which is why
- * {@link insertBases} (the new-workspace seed) is not on this path.
+ * A personal write lands in the container or refuses: `personalWriteWorkspaceId`
+ * throws rather than guessing, because a fallback would write a row no surface
+ * can find. Only `insertBase` can be personal, which is why {@link insertBases}
+ * (the new-workspace seed) is not on this path.
  */
 export async function insertBase(args: InsertBaseArgs): Promise<KnowledgeBase> {
   const db = supabaseAdmin();
@@ -246,7 +220,7 @@ export async function insertBase(args: InsertBaseArgs): Promise<KnowledgeBase> {
   return mapBaseRow(data as KnowledgeBaseRow);
 }
 
-/** Many bases in ONE statement (new-workspace seed). ⚠ Callers key results by
+/** Many bases in ONE statement (new-workspace seed). Callers key results by
  *  `slug`, not index — nothing may depend on returned row order. */
 export async function insertBases(
   argsList: InsertBaseArgs[]
@@ -313,9 +287,8 @@ export async function updateBaseRow(
 
 /**
  * PERMANENT delete of a base and everything inside — no trash. Workspace-scoped
- * as defense-in-depth. Folders/entries (and embeddings/cluster links) cascade
- * via `knowledge_base_id ... ON DELETE CASCADE`, so one statement clears the
- * subtree.
+ * as defense-in-depth; children cascade via `knowledge_base_id ... ON DELETE
+ * CASCADE`, so one statement clears the subtree.
  */
 export async function hardDeleteBase(
   workspaceId: string,
@@ -333,7 +306,7 @@ export async function hardDeleteBase(
 /**
  * `knowledge_bases.storage_bytes` for a SET of bases — the usage bar's `used`
  * half, one round trip for the grid.
- * ⚠ SEPARATE QUERY, NOT a column in `KNOWLEDGE_BASE_COLS`: those feed
+ * SEPARATE QUERY, NOT a column in `KNOWLEDGE_BASE_COLS`: those feed
  * `mapBaseRow` → the `KnowledgeBase` interface that
  * `scripts/check-knowledge-type-drift.ts` pins field-for-field against the SDK
  * mirror, so adding the counter pushes a display-only number onto every MCP
@@ -344,7 +317,7 @@ export async function listBaseStorageBytes(
   baseIds: string[]
 ): Promise<Map<string, number>> {
   if (baseIds.length === 0) return new Map();
-  // ⚠ SYSTEM READ, service role on purpose: accounting, not visibility.
+  // System read, service role on purpose: accounting, not visibility.
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("knowledge_bases")
@@ -361,17 +334,16 @@ export async function listBaseStorageBytes(
 
 /**
  * One base's `storage_bytes` — the write gate's `used` reading.
- * ⚠ `null` (row gone) must NOT be read as zero: the gate fails OPEN on an
- * unknown counter (see `service-storage.ts`).
- * ⚠ Arrives as a JS `number` though the column is BIGINT — PostgREST
- * serialises int8 as JSON number and `supabase-js` doesn't re-widen. Exact to
- * 2^53 bytes (~9 PB).
+ * `null` (row gone) must NOT be read as zero: the gate fails OPEN on an unknown
+ * counter (see `service-storage.ts`).
+ * Arrives as a JS `number` though the column is BIGINT — PostgREST serialises
+ * int8 as JSON number and `supabase-js` doesn't re-widen. Exact to 2^53 bytes.
  */
 export async function getBaseStorageBytes(
   workspaceId: string,
   baseId: string
 ): Promise<number | null> {
-  // ⚠ SYSTEM READ, service role on purpose: the write gate's quota reading.
+  // System read, service role on purpose: the write gate's quota reading.
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("knowledge_bases")

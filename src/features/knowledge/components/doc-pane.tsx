@@ -20,8 +20,8 @@ import { ConflictBanner, reportError } from "./doc-pane-chrome";
 const AUTOSAVE_DELAY_MS = 1500;
 
 export interface DocPaneProps {
-  /** ⚠ MUST be full entry (body + fresh `updated_at`) — body-stripped tree
-   *  entry makes first autosave write `body: ""` over document. */
+  /** Must be the full entry (body + fresh `updated_at`): a body-stripped tree
+   *  entry makes the first autosave write `body: ""` over the document. */
   entry: KnowledgeEntry;
   workspaceId: string;
   /** Parent refetches tree for new title/updated_at. */
@@ -44,18 +44,13 @@ interface ConflictState {
 
 /**
  * One entry. Title + body debounce-saved ~1.5s after typing stops.
- * Status: idle → dirty → saving → saved → idle.
  *
- * ⚠ Concurrency model — never overwrite the editor silently:
- *   - every PATCH carries the `X-Updated-At` precondition;
- *   - on 412, fetch server state into ConflictState and pause autosave. Server
- *     content is NOT pushed into the editor; the user picks;
- *   - unmount-flush skipped in conflict, or a background save overwrites the
- *     resolution the user was about to pick.
- *
- * Editor content owned locally (`editorReloadKey` + `initialMarkdown`); `entry`
- * reseeds only on entry switch (parent keys on `entry.id`) or a clean focus
- * refetch — never over unsaved edits.
+ * Concurrency, so the editor is never overwritten silently: every PATCH carries
+ * the `X-Updated-At` precondition; a 412 snapshots server state into
+ * ConflictState and pauses autosave without pushing it into the editor; the
+ * unmount flush is skipped in conflict, or it would overwrite the resolution
+ * the user is about to pick. Editor content is owned locally and `entry`
+ * reseeds only on entry switch or a clean focus refetch.
  */
 export function DocPane({
   entry,
@@ -75,9 +70,9 @@ export function DocPane({
   const [description, setDescription] = useState(entry.excerpt ?? "");
   const lastSavedDescription = useRef(entry.excerpt ?? "");
 
-  // ⚠ Bumping `editorReloadKey` re-seeds Tiptap from `editorMd`. ONLY on
-  // entry switch (remount) and user-driven "Discard mine, reload" — realtime
-  // echo and parent refetches must NOT touch it.
+  // Bumping `editorReloadKey` re-seeds Tiptap from `editorMd`: only on entry
+  // switch and on "Discard mine, reload" — never on realtime echo or a parent
+  // refetch.
   const [editorMd, setEditorMd] = useState(entry.body);
   const [editorReloadKey, setEditorReloadKey] = useState(0);
 
@@ -87,7 +82,7 @@ export function DocPane({
   const expectedUpdatedAtRef = useRef(entry.updatedAt);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // ⚠ Unmount-flush mirror: React state is stale inside cleanup.
+  // Unmount-flush mirror: React state is stale inside cleanup.
   const latestRef = useRef({ title, body });
   useEffect(() => {
     latestRef.current = { title, body };
@@ -109,9 +104,8 @@ export function DocPane({
     (p) => p.userId !== selfProfile?.userId
   );
 
-  // ⚠ Re-seed from `entry` prop ONLY when safe (not dirty/saving, no
-  // conflict) — otherwise it clobbers unsaved edits. Handles in-place
-  // refreshes only; entry switch remounts (parent keys on `entry.id`).
+  // Re-seed from the `entry` prop only when safe (not dirty/saving, no
+  // conflict); otherwise it clobbers unsaved edits.
   useEffect(() => {
     if (status === "dirty" || status === "saving" || conflict) return;
     setTitle(entry.title);
@@ -136,7 +130,7 @@ export function DocPane({
     }
   );
 
-  // Unmount flush. ⚠ Captures entry.id/workspaceId at MOUNT deliberately —
+  // Unmount flush. Captures entry.id/workspaceId at mount deliberately: a
   // deterministic snapshot of what was being saved. Skipped in conflict.
   useEffect(() => {
     return () => {
@@ -158,8 +152,8 @@ export function DocPane({
           );
         } catch (err) {
           if (err instanceof KnowledgeApiError && err.status === 412) {
-            // Editor unmounted — no resolution UI. Toast beats dropping the
-            // edit silently.
+            // Editor unmounted, so there is no resolution UI: toast instead
+            // of dropping the edit silently.
             toast({
               title: "Last edit not saved",
               description: `"${t || "Untitled"}" was edited elsewhere while you navigated away — reopen it to reconcile.`,
@@ -173,8 +167,8 @@ export function DocPane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Snapshot server entry into conflict state: pauses autosave, surfaces the
-   *  banner. ⚠ Does NOT touch editor content. */
+  /** Snapshot the server entry into conflict state: pauses autosave, surfaces
+   *  the banner, does not touch editor content. */
   const enterConflict = useCallback(async (): Promise<boolean> => {
     try {
       const fresh = await apiFetchEntry(entry.id, workspaceId);
@@ -192,10 +186,9 @@ export function DocPane({
     }
   }, [entry.id, workspaceId, onStaleVersion]);
 
-  // ⚠ Serialize every PATCH through one chain — two saves must never be in
-  // flight together. Body autosave, description blur and conflict resolution
-  // share one `updated_at` token; an overlapping pair 412s against our own
-  // write (phantom "edited elsewhere" with a single editor).
+  // Serialize every PATCH through one chain: body autosave, description blur
+  // and conflict resolution share one `updated_at` token, so an overlapping
+  // pair 412s against our own write (phantom "edited elsewhere").
   const saveChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const enqueueSave = useCallback(<T,>(job: () => Promise<T>): Promise<T> => {
     const next = saveChainRef.current.then(job, job);
@@ -211,8 +204,7 @@ export function DocPane({
   const scheduleSave = useCallback(
     (nextTitle: string, nextBody: string) => {
       if (timerRef.current) clearTimeout(timerRef.current);
-      // User MAY keep typing during conflict: show dirty, but schedule no
-      // round-trip (would 412 again).
+      // Typing during a conflict shows dirty but schedules no round-trip.
       setStatus("dirty");
       if (conflictRef.current !== null) return;
       timerRef.current = setTimeout(() => {
@@ -350,9 +342,8 @@ export function DocPane({
           onDiscardMine={handleDiscardMine}
         />
       )}
-      {/* Header panel: the one place the file name shows, plus the
-          agent-facing description (entry `excerpt`) that MCP clients get in
-          tree / directory listings. */}
+      {/* Header panel: file name plus the agent-facing description (entry
+          `excerpt`) that MCP clients see in tree listings. */}
       <div className="mx-auto mt-4 mb-1 w-[calc(100%-3rem)] max-w-3xl overflow-hidden rounded-[14px] border border-border-strong">
         <div className="flex items-center gap-3 bg-card-surface-subtle px-4 py-1.5">
           <span className="flex-1 text-label font-semibold uppercase tracking-wide text-text-secondary">

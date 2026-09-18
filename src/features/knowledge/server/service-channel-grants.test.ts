@@ -1,13 +1,12 @@
 /**
  * `getChannelGrantMap` — the read behind `GET /api/knowledge/bases?channelId= ›
- * channelGrants`. Pins: BOTH stored levels ride the map (`agent_only` is badged
- * by the UI, not hidden here — the read lane is where it becomes a 404); a base
- * with no grant is ABSENT (never `'none'`); the repo is handed the service-role
- * client and the caller's workspace/channel/base-id set verbatim.
+ * channelGrants`. Both stored levels ride the map; an ungranted base is absent
+ * (never `'none'`); the repo gets the service-role client and the caller's args
+ * verbatim.
  *
- * ⚠ §3.3 ABSENCE PIN: this module must NOT reuse the workspace gate half. The
- * source is scanned below for any import of `service-shared` — `canSeeBase` /
- * `assertBaseVisible` encode the wrong (workspace) audience for a channel grant.
+ * Absence pin: the source is scanned below for any import of `service-shared` —
+ * `canSeeBase` / `assertBaseVisible` encode the workspace audience, which is the
+ * wrong one for a channel grant.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -18,9 +17,9 @@ vi.mock("@/shared/supabase/admin", () => ({
   supabaseAdmin: () => ({ __marker: "admin-client" }),
 }));
 
-// 🔒 THE CONTAINER-KIND FENCE (Samuel's ruling 2026-09-17) always ADMITS here:
-// every case in this file describes a legal HOME-container grant. The refusal
-// and its two doors are `./service-channel-grants-kind.test.ts`'s.
+// The container-kind fence (ruling 2026-09-17) always admits here: every case
+// is a legal home-container grant. The refusal lives in
+// `./service-channel-grants-kind.test.ts`.
 vi.mock("@/shared/tenancy/channel-scope", () => ({
   assertChannelScopeAllowedInContainer: vi.fn(async () => undefined),
 }));
@@ -112,9 +111,8 @@ describe("getChannelGrantMap", () => {
   });
 
   it("names neither service-shared gate — the workspace audience is the wrong question", () => {
-    // ABSENCE pin (link-container-guard technique): a 'tidy-up' that routes this
-    // read through canSeeBase / assertBaseVisible would silently refuse guests,
-    // and no behavioural mock in M0 would notice.
+    // Routing this read through canSeeBase / assertBaseVisible would silently
+    // refuse guests, and no behavioural mock would notice.
     const src = readFileSync(
       resolve(__dirname, "service-channel-grants.ts"),
       "utf8"
@@ -147,7 +145,7 @@ describe("getBaseGrantMap — the inverse read (one base, many channels)", () =>
     expect(await getBaseGrantMap("ws-1", "kb-1")).toEqual({
       "chan-1": { level: "visible", guestWrite: true },
     });
-    // ⚠ PostgREST truncates an un-limited select SILENTLY; the ceiling is passed.
+    // PostgREST truncates an un-limited select silently; the ceiling is passed.
     expect(mockListForBase).toHaveBeenCalledWith(
       { __marker: "admin-client" },
       "ws-1",
@@ -241,7 +239,7 @@ describe("setChannelKnowledgeGrant — the three-state write", () => {
         baseId: "kb-1",
         level: "visible",
         guestWrite: true,
-        // ⚠ Off the CONTEXT, never the request.
+        // off the context, never the request.
         createdBy: "user-1",
       }
     );
@@ -256,8 +254,8 @@ describe("setChannelKnowledgeGrant — the three-state write", () => {
       guestWrite: true,
     });
 
-    // A stored `true` here would be a latent permission that comes back ON with
-    // the audience the moment somebody raises the level to `visible`.
+    // A stored `true` would come back on with the audience the moment somebody
+    // raises the level to `visible`.
     expect(mockUpsert).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ level: "agent_only", guestWrite: false })
@@ -290,7 +288,7 @@ describe("setChannelKnowledgeGrant — the three-state write", () => {
     }).catch((e: unknown) => e);
 
     expect(err).toBeInstanceOf(ChannelGrantInvalidError);
-    // ⚠ The raw message names both workspace ids — it must not survive.
+    // The raw message names both workspace ids — it must not survive.
     expect((err as Error).message).not.toContain("ws-2");
   });
 
@@ -307,9 +305,7 @@ describe("setChannelKnowledgeGrant — the three-state write", () => {
 
   it("translates a 23514 CHECK violation the same way — the per-scope level set", async () => {
     // `resource_grants_level_check` refuses `read`/`edit` on a channel scope and
-    // `visible`/`agent_only` on a team's. It is a refusal, not an outage, and it
-    // became reachable when the two vocabularies moved into one column
-    // (`20260914120000`).
+    // `visible`/`agent_only` on a team's — a refusal, not an outage.
     mockUpsert.mockRejectedValue({
       code: "23514",
       message: 'violates check constraint "resource_grants_level_check"',
@@ -324,10 +320,9 @@ describe("setChannelKnowledgeGrant — the three-state write", () => {
   });
 
   it("🔒 translates the GRANTOR-MAY-SHARE refusal, and keeps its names off the wire", async () => {
-    // The branch ruling B4 added: `enforce_resource_grant()` refuses a grant
-    // whose author does not reach both containers. The message names the
-    // grantor AND the container they could not reach — an id oracle for
-    // anyone who can provoke it.
+    // `enforce_resource_grant()` refuses a grant whose author does not reach
+    // both containers. Its message names the grantor and the container — an id
+    // oracle, so it must not reach the wire.
     mockUpsert.mockRejectedValue({
       code: "P0001",
       message:
@@ -346,8 +341,8 @@ describe("setChannelKnowledgeGrant — the three-state write", () => {
   });
 
   it("RE-THROWS an unrelated P0001 rather than relabelling it a grant refusal", async () => {
-    // A bare code match would hand the user a confident 400 explaining a
-    // cross-workspace grant that never happened.
+    // A bare code match would 400 with a cross-workspace grant that never
+    // happened.
     const other = { code: "P0001", message: "some other trigger blew up" };
     mockUpsert.mockRejectedValue(other);
     const err = await setChannelKnowledgeGrant(OWNER, BASE, {
@@ -373,22 +368,14 @@ describe("setChannelKnowledgeGrant — the three-state write", () => {
 });
 
 /**
- * 🔒 THE AGENT REFUSAL — added 2026-08-27, and the reason it is HERE rather
- * than on a route is a second caller.
+ * The agent refusal lives in the service, not on a route, because
+ * `service-base-writes.ts › createBase`'s create-and-share branch reaches it
+ * from `POST /api/knowledge/bases`, which is not `sessionOnly` (MCP
+ * `kb_create_base` rides it). One place both doors pass through.
  *
- * This function's own docblock used to say the source *"is not consulted,
- * because the ROUTE is `sessionOnly`"*, with a note saying where the refusal
- * would belong if that gate were ever relaxed. It was relaxed by
- * `service-base-writes.ts › createBase`'s create-and-share branch, reached from
- * `POST /api/knowledge/bases` — which is NOT `sessionOnly` and must not become
- * so, because MCP `kb_create_base` rides it. So the refusal moved to the one
- * place both doors pass through.
- *
- * ⚠ WHAT IT PROTECTS: a `visible` grant puts a knowledge base in front of every
- * member of a channel, GUESTS INCLUDED. An agent token must not be able to
- * widen its own operator's audience — and a `full`-profile session has Bash and
- * can read the device token off disk, so "the renderer would never send it" is
- * not a fence.
+ * A `visible` grant exposes a base to every member of a channel, guests
+ * included; an agent token must not widen its operator's audience, and a
+ * `full`-profile session can read the device token off disk.
  */
 describe("🔒 an AGENT token cannot set a grant, by either door", () => {
   const AGENT: KnowledgeContext = { ...OWNER, source: "agent" };
@@ -405,9 +392,8 @@ describe("🔒 an AGENT token cannot set a grant, by either door", () => {
   });
 
   it("refuses the DELETE arm too — un-sharing is a human decision as well", async () => {
-    // ⚠ `level: "none"` takes a different branch below the refusal. An agent
-    // that could not share but COULD un-share would still be editing an
-    // audience its operator set.
+    // `level: "none"` takes a different branch below the refusal; un-sharing
+    // still edits an audience the operator set.
     await expect(
       setChannelKnowledgeGrant(AGENT, BASE, {
         channelId: "chan-1",
@@ -419,8 +405,7 @@ describe("🔒 an AGENT token cannot set a grant, by either door", () => {
   });
 
   it("refuses even the base's own CREATOR when the credential is an agent", async () => {
-    // ⚠ `canManageChannelGrants` would say yes — this is a different axis from
-    // "may this person manage sharing", and the order matters: the credential
+    // `canManageChannelGrants` would say yes — different axis. The credential
     // question is asked first, so the answer cannot depend on who owns the row.
     expect(canManageChannelGrants(AGENT, BASE)).toBe(true);
     await expect(

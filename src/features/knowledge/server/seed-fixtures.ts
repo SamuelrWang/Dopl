@@ -10,7 +10,7 @@ import type { KnowledgeEntryType } from "../types";
  */
 
 export interface SeedEntryInput {
-  /** ⚠ Stable cross-reference handle, NOT the DB id. The orchestrator maps
+  /** Stable cross-reference handle, not the DB id. The orchestrator maps
    *  key → inserted uuid so other seeds can point at entries by an
    *  authoring-time name. */
   key?: string;

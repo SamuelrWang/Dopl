@@ -1,25 +1,20 @@
 /**
  * Storage-gate WIRING: which entry write paths consult the gate, and with what
- * DELTA. The gate itself is proved in `service-storage.test.ts`; an update
- * that forgot to subtract the old body would stay green there and refuse
- * shrinking edits in production.
+ * DELTA. The gate itself is proved in `service-storage.test.ts`; an update that
+ * forgot to subtract the old body would stay green there and refuse shrinking
+ * edits in production.
  *
- * ⚠ THE COUNTER IS NOT UNDER TEST and cannot be — `knowledge_bases
- * .storage_bytes` is maintained by a row trigger
- * (`20260812120000_knowledge_base_storage_bytes.sql` §3), which is what counts
- * pure-FK folder/base cascades. Verified by that migration's reconciliation
- * SELECT against a real database.
+ * The COUNTER is not under test and cannot be — it is maintained by a row
+ * trigger (`20260812120000_knowledge_base_storage_bytes.sql` §3), which is what
+ * counts pure-FK folder/base cascades.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { KnowledgeBase, KnowledgeContext, KnowledgeEntry } from "../types";
 
-// ⚠ **THE CHANGELOG CAPTURE IS A REAL WRITE AND IT IS AWAITED**
-// (`./service-revisions.ts`, 2026-09-09): every knowledge write now records a
-// revision inside the same request, so a service test that leaves it alone
-// reaches `supabaseAdmin()` and fails on a missing service-role key. Stubbed
-// here because these suites are about the WRITE, not about its audit row —
-// that the row is recorded, exactly once, per path, is
+// The changelog capture is a real awaited write (`./service-revisions.ts`,
+// 2026-09-09), so an unstubbed service test reaches `supabaseAdmin()` and fails
+// on a missing service-role key. That the row is recorded once per path is
 // `service-revisions.test.ts`'s subject.
 vi.mock("@/features/revisions/server/repository", () => ({
   appendRevision: vi.fn(async () => ({ id: "rev-1" })),
@@ -46,8 +41,8 @@ vi.mock("./service-shared", () => ({
 }));
 vi.mock("./service-storage", () => ({
   assertStorageHeadroom: vi.fn(),
-  // ⚠ The real one: delta arithmetic must use the counter's unit; stubbing
-  // makes every assertion below vacuous.
+  // the real one: delta arithmetic must use the counter's unit; stubbing makes
+  // every assertion below vacuous.
   bodyBytes: (body?: string | null) => (body ? Buffer.byteLength(body, "utf8") : 0),
 }));
 vi.mock("./embeddings", () => ({ scheduleEntryEmbedding: vi.fn() }));
@@ -130,8 +125,8 @@ describe("updateEntry", () => {
   });
 
   it("passes a NEGATIVE delta for a shrink, so the gate can wave it through", async () => {
-    // Over-cap escape hatch: a positive number (or the new length) here means
-    // a user over cap can never shrink their way out.
+    // over-cap escape hatch: a positive number here means a user over cap can
+    // never shrink their way out.
     mockRepo.findEntryById.mockResolvedValue(entry("aaaaaaaaaa"));
     await updateEntry(CTX, "e-1", { body: "aa" } as never);
     expect(deltaAt()).toBe(-8);

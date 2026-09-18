@@ -10,38 +10,30 @@ import type {
 import * as repo from "./repository";
 
 /**
- * KNOWLEDGE → REVISIONS: the CAPTURE half (2026-09-09, the CHANGELOG lane).
+ * Knowledge → revisions: the CAPTURE half (2026-09-09, the changelog lane).
  *
- * ⚠ **ONE REVISION PER WRITE OPERATION, INSIDE THE SAME REQUEST, AFTER THE
- * WRITE, AND AWAITED** — never `void`-ed, never `catch`-and-continue
- * (`revisions/server/repository.ts` carries the argument).
+ * One revision per write operation, inside the same request, after the write,
+ * and AWAITED — never `void`-ed, never `catch`-and-continue.
  *
- * ⚠ **THE SNAPSHOT IS POST-WRITE, NOT THE PATCH.** Every function takes the row
- * the write RETURNED: a payload built from the patch would describe an edit
- * rather than a state, and `revisions/lib/diff.ts` compares STATES.
+ * The snapshot is POST-WRITE, not the patch: every function takes the row the
+ * write returned, because `revisions/lib/diff.ts` compares STATES.
  *
- * ⚠ **CAPTURE ONLY.** The reads and the restore need the knowledge services,
- * which reach the writers that call this module;
- * `./service-revisions-read.ts` holds that half so the cycle is a visible seam.
- *
- * ⚠ **THE HUMAN SEAL RULE IS NOT RESTATED HERE** — it lives ONCE, in
+ * Capture only — the reads and the restore need the knowledge services, which
+ * reach the writers that call this module, so `./service-revisions-read.ts` holds
+ * that half. The human seal rule lives once, in
  * `revisions/server/service.ts › COALESCE_WINDOW_MS`.
  */
 
 /**
- * The entry's slash path, as a reader would address it.
- *
- * ⚠ **ONE ANCESTOR WALK, AND ONLY WHEN THE ENTRY IS IN A FOLDER** — a root-level
- * entry's path is its title and costs no query, which is the common case. The
- * walk is the indexed read `./service-folders.ts › moveFolder` already spends.
- *
- * ⚠ **A CALLER THAT ALREADY KNOWS THE PATH PASSES IT** and nothing is read.
+ * The entry's slash path, as a reader would address it. One ancestor walk, and
+ * only when the entry is in a folder — a root-level entry's path is its title
+ * and costs no query. A caller that already knows the path passes it.
  */
 export async function entryPath(entry: KnowledgeEntry): Promise<string> {
   if (!entry.folderId) return entry.title;
   const ancestors = await repo.listFolderAncestors(entry.folderId);
-  // ⚠ `listFolderAncestors` answers the chain; ordering it root-first is what
-  // makes the join a path rather than a reversed one.
+  // `listFolderAncestors` answers the chain folder-first; root-first is what
+  // makes the join a path.
   const names = [...ancestors].reverse().map((f) => f.name);
   return [...names, entry.title].join("/");
 }
@@ -56,9 +48,9 @@ export async function recordEntryRevision(
   await recordRevision(ctx, {
     resourceType: "knowledge_entry",
     resourceId: entry.id,
-    // ⚠ THE ENTRY'S OWN container — for a base followed across a tenancy
-    // boundary that is the BASE's, not `ctx.workspaceId` (INVARIANTS §T35).
-    // Filed anywhere else, the base roll-up cannot find it.
+    // the ENTRY's own container — for a base followed across a tenancy boundary
+    // that is the BASE's, not `ctx.workspaceId` (INVARIANTS §T35). Filed anywhere
+    // else, the base roll-up cannot find it.
     workspaceId: entry.workspaceId,
     op,
     summary: opts.summary ?? null,
@@ -104,13 +96,9 @@ export async function recordBaseRevision(
 }
 
 /**
- * WHICH OP a patch performed.
- *
- * ⚠ **BODY WINS OVER TITLE, AND THAT ORDER IS THE CONTRACT**: a save changing
- * both is an `edit`, because classifying it as a `rename` would seal the open
- * coalescing row mid-sentence every time the title bar was touched. Title-only is
- * a `rename`, folder/position-only a `move`, anything else an `edit` with no body
- * — honest, and not restorable.
+ * Which op a patch performed. Body wins over title and that order is the
+ * contract: a save changing both is an `edit`, because a `rename` would seal the
+ * open coalescing row every time the title bar was touched mid-sentence.
  */
 export function entryOpFor(patch: {
   body?: unknown;

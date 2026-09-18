@@ -19,41 +19,23 @@ import { safeLabel } from "@/shared/lib/safe-label";
 const slugRegex = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
 /**
- * The BASE name was the gap in this file: folder names and entry titles have
- * carried `NAME_RE` since audit fix #14, but the base sitting above them was
- * bounded by length alone — and it is the one of the three that `dopl_map`
- * prints at session start and that every `dopl_kb` and `dopl_search` result
- * names. Same class as `NAME_RE` minus its '/' ban, which exists for the
- * path resolver and has nothing to say about a base name. `description` stays
- * prose (2000 chars of what the base is for).
+ * Same class as `NAME_RE` minus its '/' ban, which exists for the path resolver
+ * and has nothing to say about a base name.
  *
- * `knowledge_bases_editor_update` is a `public` UPDATE policy and
- * `authenticated` holds UPDATE, so any workspace editor can rename a base
- * straight through PostgREST without passing this schema. The DB CHECK is the
- * load-bearing half; this line is the one that produces a readable error.
+ * Any workspace editor can rename a base straight through PostgREST without
+ * passing this schema (`knowledge_bases_editor_update`), so the DB CHECK is the
+ * load-bearing half; this line only produces a readable error.
  */
 const KnowledgeBaseNameSchema = safeLabel("Knowledge base name", 120);
 
-// Folder / entry names — design notes (audit fix #14):
-//
-//   Path-addressing (`/foo/bar/baz.md`) is **case-sensitive** and
-//   **byte-exact**. `Foo.md` and `foo.md` coexist as distinct entries;
-//   the agent must spell paths exactly as the user does. Filesystem
-//   semantics. The URL-side handles the case-insensitive ergonomics —
-//   `proxy.ts` lowercase-redirects mixed-case URLs (audit fix S-8) so
-//   workspace / KB slugs don't suffer from typo case mismatches.
-//
-//   At the schema level we enforce:
-//     - no '/' (would be unreachable via the path resolver)
-//     - no leading or trailing whitespace (visual collisions like " foo"
-//       vs "foo" are confusing and break filesystem-style mental models)
-//     - no control / zero-width characters (would render identically
-//       to a sibling and let an agent or attacker hide a duplicate)
-//
-// Exported so non-zod call sites (e.g. WriteFileSchema in the
-// path-write route) can validate against the same constraint without
-// re-declaring the literal — single source of truth for folder / entry
-// name validation.
+// Folder / entry names. Path-addressing (`/foo/bar/baz.md`) is case-sensitive
+// and byte-exact, so `Foo.md` and `foo.md` coexist. Enforced here:
+//   - no '/' (would be unreachable via the path resolver)
+//   - no leading/trailing whitespace (" foo" vs "foo" collide visually)
+//   - no control / zero-width characters (would render identically to a
+//     sibling and let an agent or attacker hide a duplicate)
+// Exported so non-zod call sites (e.g. WriteFileSchema in the path-write route)
+// validate against the same literal.
 export const NAME_RE = /^(?!\s)(?!.*\s$)[^/\u0000-\u001F\u007F\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFEFF]+$/;
 export const NAME_INVALID_MESSAGE =
   "Cannot contain '/', control characters, zero-width characters, or leading/trailing whitespace";
@@ -62,10 +44,8 @@ export const NAME_INVALID_MESSAGE =
 const noSlashRegex = NAME_RE;
 const noSlashMessage = NAME_INVALID_MESSAGE;
 
-// Cap body size to 1 MB (audit fix #26). Without this an agent could
-// upload arbitrarily large markdown that blows up the search_tsv
-// generated column and the per-entry payload. Generous enough that
-// real markdown documents fit; tight enough to bound DoS surface.
+// Cap body size to 1 MB: unbounded markdown blows up the search_tsv generated
+// column and the per-entry payload.
 const MAX_BODY_BYTES = 1_048_576;
 const bodyMaxMessage = "Body must be 1 MB or less";
 
@@ -88,15 +68,12 @@ export type KbTeamGrantInput = z.infer<typeof KbTeamGrantSchema>;
 /**
  * One (KB, channel) grant write — `PUT /api/knowledge/bases/[baseId]/channel-grants`.
  *
- * ⚠ `level: "none"` is the DELETE, spelled. Storage has no `'none'` (absence of
- * a row is "not shared"), so this enum is wider than `ChannelGrantLevel` by
- * exactly one wire-only value; the service collapses it.
+ * `level: "none"` is the delete, spelled: storage has no `'none'`, so this enum
+ * is wider than `ChannelGrantLevel` by one wire-only value.
  *
- * ⚠ `guestWrite` DEFAULTS TO FALSE, and the default is the safety property, not
- * ergonomics: an omitted flag must never inherit whatever the previous grant
- * carried. A caller raising `agent_only` → `visible` without naming
- * `guestWrite` gets a read-only guest audience. The service additionally FORCES
- * it false at `agent_only`, where no human is in the audience at all.
+ * `guestWrite` defaults to false for safety, not ergonomics: an omitted flag
+ * must never inherit what the previous grant carried. The service also forces
+ * it false at `agent_only`, where no human is in the audience.
  */
 export const ChannelGrantWriteSchema = z.object({
   channelId: z.string().uuid(),
@@ -170,13 +147,11 @@ export const KnowledgeBaseCreateSchema = z
     teamGrants: z.array(KbTeamGrantSchema).max(50).optional(),
     /**
      * Put the new base on the PERSONAL SHELF (`types.ts › KbShelf`) instead of
-     * the workspace Knowledge page. ⚠ A REQUEST, NOT A DECISION: the schema only
-     * says the word is spellable — `shared/tenancy/personal-container.ts ›
-     * personalWriteWorkspaceId` is the fence, and it 403s rather than
-     * downgrading. ⚠ **IT ROUTES THE ROW AND NOTHING STORES IT** (2026-09-02,
-     * slice B15): it decides the `workspace_id`, where it used to be written
-     * onto a `home_scoped` column beside one. Omitted/false = the container the
-     * call is in, which is every existing caller.
+     * the workspace Knowledge page. A request, not a decision:
+     * `shared/tenancy/personal-container.ts › personalWriteWorkspaceId` is the
+     * fence and it 403s rather than downgrading. It routes the row and nothing
+     * stores it — it decides the `workspace_id`. Omitted/false = the container
+     * the call is in.
      */
     homeScoped: z.boolean().optional(),
     /**
@@ -185,26 +160,23 @@ export const KnowledgeBaseCreateSchema = z
      * always `level: 'visible'`, `guestWrite: false`; anything else is the
      * base's own sharing settings, where a three-state control belongs.
      *
-     * ⚠ A REQUEST, NOT A DECISION. The ROUTE fences the channel against the
+     * A request, not a decision: the route fences the channel against the
      * caller's visible list (404 on a miss, never an oracle) and
      * `server/service-channel-grants.ts › setChannelKnowledgeGrant` owns the
-     * rest; the base is rolled back if the grant fails, so this never half-lands.
+     * rest. The base is rolled back if the grant fails, so this never half-lands.
      */
     shareToChannelId: z.string().uuid().optional(),
     /**
-     * 🔒 "I know this publishes into a room somebody else is standing in."
+     * "I know this publishes into a room somebody else is standing in."
      *
-     * ⚠ A PRECONDITION, NOT A PERMISSION, AND IT IS REQUIRED ONLY ON THE NARROW
-     * PREDICATE — `kind='link'` container, two or more active members, and the
-     * base landing at `visibility: 'public'`. Everywhere else it is IGNORED,
-     * never refused. `features/workspaces/server/shared-publish.ts` is the one
-     * statement of both the predicate and the 400, shared with agent templates
-     * so the two lanes cannot answer differently.
+     * A precondition, not a permission, required only on the narrow predicate —
+     * `kind='link'` container, two or more active members, and the base landing
+     * at `visibility: 'public'`. Ignored elsewhere, never refused;
+     * `features/workspaces/server/shared-publish.ts` states predicate and 400.
      *
-     * ⚠ NOT THE SAME QUESTION AS `shareToChannelId`. That one asks for a
-     * `channel_resource_grants` row — a base reaching ONE channel while staying
-     * private. This one is about the WORKSPACE axis, which inside a container
-     * means every member of it at once.
+     * Not the same question as `shareToChannelId`: that asks for a
+     * `channel_resource_grants` row (one channel, base stays private), this is
+     * the WORKSPACE axis — every member of the container at once.
      */
     acknowledgeShared: z.boolean().optional(),
   })
@@ -217,33 +189,24 @@ export const KnowledgeBaseUpdateSchema = z
     description: z.string().max(KB_BASE_DESCRIPTION_MAX).nullable().optional(),
     slug: z.string().min(1).max(80).regex(slugRegex).optional(),
     agentWriteEnabled: z.boolean().optional(),
-    /**
-     * Two-way visibility: scope is fully changeable by the owner or a
-     * workspace admin. Narrowing transitions (→ private, grant removal)
-     * are applied as-is by the service (no cross-resource check remains).
-     */
+    /** Two-way: owner or workspace admin may change scope either direction;
+     *  narrowing transitions are applied as-is by the service. */
     visibility: z.enum(["public", "private"]).optional(),
     accessMode: z.enum(["workspace", "teams"]).optional(),
-    /**
-     * Declarative FULL set of team grants when `accessMode: 'teams'` —
-     * the service diffs against current rows (upserts added/changed,
-     * removes missing).
-     */
+    /** Declarative FULL set of team grants when `accessMode: 'teams'` — the
+     *  service diffs against current rows. */
     teamGrants: z.array(KbTeamGrantSchema).max(50).optional(),
     /**
-     * 🔒 "I know this publishes into a room somebody else is standing in."
+     * "I know this publishes into a room somebody else is standing in."
      *
-     * ⚠ A PRECONDITION, NOT A PERMISSION, AND IT IS REQUIRED ONLY ON THE NARROW
-     * PREDICATE — `kind='link'` container, two or more active members, and the
-     * base landing at `visibility: 'public'`. Everywhere else it is IGNORED,
-     * never refused. `features/workspaces/server/shared-publish.ts` is the one
-     * statement of both the predicate and the 400, shared with agent templates
-     * so the two lanes cannot answer differently.
+     * A precondition, not a permission, required only on the narrow predicate —
+     * `kind='link'` container, two or more active members, and the base landing
+     * at `visibility: 'public'`. Ignored elsewhere, never refused;
+     * `features/workspaces/server/shared-publish.ts` states predicate and 400.
      *
-     * ⚠ NOT THE SAME QUESTION AS `shareToChannelId`. That one asks for a
-     * `channel_resource_grants` row — a base reaching ONE channel while staying
-     * private. This one is about the WORKSPACE axis, which inside a container
-     * means every member of it at once.
+     * Not the same question as `shareToChannelId`: that asks for a
+     * `channel_resource_grants` row (one channel, base stays private), this is
+     * the WORKSPACE axis — every member of the container at once.
      */
     acknowledgeShared: z.boolean().optional(),
   })
@@ -330,18 +293,14 @@ export type KnowledgeEntryMoveInput = z.infer<typeof KnowledgeEntryMoveSchema>;
  * entry write (M2, plan §3.4), and it is a STRICT SUBSET of
  * `KnowledgeEntryUpdateSchema` rather than a reuse of it.
  *
- * ⚠ THE MISSING FIELDS ARE THE SCHEMA'S POINT. `excerpt`, `entryType` and
- * `position` are all writable on the workspace PATCH and none of them is an
- * EDIT: `position` reorders somebody else's tree, `entryType` reclassifies a
- * document, `excerpt` rewrites what the base's owner sees in a list without
- * touching the page. Samuel's ruling 3 scopes guest writes to "edit existing
- * entries", and the cheapest honest reading of that is title + body. A caller
- * that sends more gets a 400 at the boundary, not a silent drop — zod's default
- * strip would have made the refusal invisible, so this object is `.strict()`.
+ * The missing fields are the point: `excerpt`, `entryType` and `position` are
+ * writable on the workspace PATCH but none is an edit (they reorder, reclassify
+ * or rewrite what the owner sees). Samuel's ruling 3 scopes guest writes to
+ * editing existing entries — title + body. `.strict()` so a caller that sends
+ * more gets a 400 rather than a silent strip.
  *
- * ⚠ `expectedVersion` IS THE ENTRY'S `updatedAt` and rides in the BODY, where
- * the workspace PATCH takes the same value in `X-Updated-At`. Optional: absent
- * means last-write-wins, present and stale means 412.
+ * `expectedVersion` is the entry's `updatedAt`, in the BODY where the workspace
+ * PATCH takes `X-Updated-At`. Absent = last-write-wins, stale = 412.
  */
 export const ChannelLaneEntryUpdateSchema = z
   .object({

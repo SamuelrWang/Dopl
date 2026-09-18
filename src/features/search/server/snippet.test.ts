@@ -1,22 +1,16 @@
 /**
- * THE SNIPPET'S ONE PROMISE: **plain text, `<mark>…</mark>` and NOTHING ELSE.**
+ * The snippet's one promise: plain text, `<mark>…</mark>` and nothing else. A
+ * renderer may set `SearchItem.snippet` as HTML, so every other character has to
+ * arrive escaped. The properties that fail quietly:
+ *  - A body's own tags are escaped (`ts_headline` would copy them through, and a
+ *    test checking only "contains `<mark>`" would pass against either).
+ *  - The escape happens AROUND the match, not before it: escaping first breaks a
+ *    query containing `&` or `<` and cannot tell an inserted mark from a quoted
+ *    one.
+ *  - `lastIndex` is reset per call, or a `g` regex reused across rows resumes
+ *    where the last ended.
  *
- * The payload documents that a renderer may set `SearchItem.snippet` as HTML, so
- * every character that is not one of those two tags has to arrive escaped. The
- * properties that fail quietly:
- *  - 🔒 **A BODY'S OWN TAGS ARE ESCAPED.** `ts_headline` copies the source
- *    through verbatim, which is why the snippet is built here instead; a test
- *    that only checked "contains `<mark>`" would pass against either.
- *  - 🔒 **THE ESCAPE HAPPENS AROUND THE MATCH, NOT BEFORE IT.** Escaping first
- *    and marking second breaks a query containing `&` or `<` — it would never
- *    match its own body — and cannot tell an inserted mark from a quoted one.
- *  - **`lastIndex` IS RESET PER CALL.** A `g` regex reused across rows resumes
- *    where the last row ended and silently misses early matches.
- *
- * MUTATION-VERIFY: 3 reverts, 3 failures, 0 vacuous (2026-09-17) — emitting the
- * matched text UNESCAPED inside the mark, dropping the `pattern.lastIndex = 0`
- * reset, and sorting the terms shortest-first each turn a case here red (1, 4
- * and 2 failures respectively).
+ * MUTATION-VERIFY: 3 reverts, 3 failures, 0 vacuous (2026-09-17).
  */
 
 import { describe, it, expect } from "vitest";
@@ -32,8 +26,8 @@ const patternFor = (q: string) => highlightPattern(highlightTerms(q));
 
 describe("highlightTerms", () => {
   it("puts the whole query first and the longest words next", () => {
-    // ⚠ A shortest-first order would mark `ship` and leave `ping` bare, because
-    // the alternation takes the first arm that matches at a position.
+    // A shortest-first order would mark `ship` and leave `ping` bare: the
+    // alternation takes the first arm that matches at a position.
     expect(highlightTerms("shipping ship")).toEqual(["shipping ship", "shipping", "ship"]);
   });
 
@@ -63,13 +57,13 @@ describe("🔒 buildSnippet — the only markup is <mark>", () => {
   it("marks the hit and escapes the body's own tags", () => {
     const out = buildSnippet("<script>alpha</script>", patternFor("alpha"));
     expect(out).toBe("&lt;script&gt;<mark>alpha</mark>&lt;/script&gt;");
-    // ⚠ MUTATION CHECK. The only `<` that survives is a mark's.
+    // The only `<` that survives is a mark's.
     expect(out?.replace(/<\/?mark>/g, "")).not.toContain("<");
   });
 
   it("matches a query that CONTAINS an escapable character", () => {
-    // ⚠ This is the case that fails if the window is escaped before matching:
-    // `A&B` would be hunted inside `A&amp;B` and never found.
+    // Fails if the window is escaped before matching: `A&B` would be hunted
+    // inside `A&amp;B` and never found.
     expect(buildSnippet("say A&B twice", patternFor("A&B"))).toBe(
       "say <mark>A&amp;B</mark> twice"
     );
@@ -80,7 +74,7 @@ describe("🔒 buildSnippet — the only markup is <mark>", () => {
     expect(buildSnippet("ab cd ab", pattern)).toBe(
       "<mark>ab</mark> cd <mark>ab</mark>"
     );
-    // ⚠ MUTATION CHECK for the `lastIndex` reset: the SAME regex object, reused.
+    // The `lastIndex` reset: the SAME regex object, reused.
     expect(buildSnippet("ab cd ab", pattern)).toBe(
       "<mark>ab</mark> cd <mark>ab</mark>"
     );
@@ -99,8 +93,8 @@ describe("🔒 buildSnippet — the only markup is <mark>", () => {
   });
 
   it("returns undefined for a body with nothing in it", () => {
-    // ⚠ `undefined`, never `""` — an absent snippet reads as "this kind has no
-    // body", which is a different claim from "the body is blank".
+    // `undefined`, never `""` — an absent snippet reads as "this kind has no
+    // body", a different claim from "the body is blank".
     expect(buildSnippet("", patternFor("a"))).toBeUndefined();
     expect(buildSnippet(null, patternFor("a"))).toBeUndefined();
     expect(buildSnippet("   \n  ", patternFor("a"))).toBeUndefined();

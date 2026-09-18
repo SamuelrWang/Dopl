@@ -1,18 +1,14 @@
 /**
- * Seed fixture data — canonical knowledge-base content for brand-new
- * workspaces.
+ * Seed fixture data — canonical knowledge-base content for brand-new workspaces.
  *
- * ⚠ The legacy `KnowledgeBase` shape here (embedded `entries` / `pending` /
- * `sources` arrays) is the SEED-INPUT shape only; it differs from the live
- * domain `KnowledgeBase` in `../types.ts`. `./seed-fixtures.ts` reshapes it
- * into what the service consumes.
+ * The legacy shape here (embedded `entries`/`pending`/`sources`) is the
+ * SEED-INPUT shape only; `./seed-fixtures.ts` reshapes it into the live domain
+ * `KnowledgeBase` in `../types.ts`.
  */
 
-// ⚠ NO `import "server-only"`, deliberately. Pure data — string literals and
-// types, no server APIs, env access or secrets. The directive forced
-// scripts/smoke-knowledge-md-roundtrip.ts to run under
-// NODE_OPTIONS='--conditions=react-server' though the script is pure-Node.
-// ENGINEERING.md §10: "Shared code (types, pure utilities) has no directive."
+// No `import "server-only"`, deliberately: pure data, and the directive forced
+// scripts/smoke-knowledge-md-roundtrip.ts to run under --conditions=react-server
+// though the script is pure Node.
 
 type LegacyKnowledgeEntryType =
   | "note"

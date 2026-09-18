@@ -11,37 +11,29 @@ import type { SearchHit } from "./repository-channel-rows";
 import { buildSnippet, highlightPattern, highlightTerms } from "./snippet";
 
 /**
- * HIT → ITEM → GROUP. The projection half of the search service, split out of
- * `service.ts` so the FENCE and the RENDERING are one reason-to-change each
- * (INVARIANTS §1).
+ * Hit to item to group: the projection half of the search service, split from
+ * `service.ts` so the fence and the rendering are one reason-to-change each.
  *
- * ⚠ **A GROUP WITH NO ITEMS IS OMITTED, NOT EMPTIED** — `{kind, total: 0,
- * items: []}` and "this section did not match" are the same fact told twice, and
- * the popup draws a section header for every group it is handed. {@link
- * toGroup} returns `null` and {@link assembleGroups} drops it.
+ * A group with no items is OMITTED, not emptied — the popup draws a header for
+ * every group it is handed. {@link toGroup} returns `null` and
+ * {@link assembleGroups} drops it.
  */
 
-/** The labels a hit needs that no single row carries. ⚠ Built ONCE per request
- *  from the reach that proved access, never re-queried per row. */
+/** The labels a hit needs that no single row carries. Built once per request from
+ *  the reach that proved access, never re-queried per row. */
 export interface SearchLabels {
   channelById: ReadonlyMap<string, SearchChannelRef>;
   containerNameById: ReadonlyMap<string, string>;
 }
 
 /**
- * ⚠ **THE RANK IS COMPUTED HERE AND NOT BY `ts_rank`, AND THE REASON IS
- * TRANSPORT RATHER THAN TASTE (2026-09-17).** `ts_rank` is an expression in a
- * SELECT list; PostgREST can only ask for columns, so ranking in Postgres would
- * need a `SECURITY DEFINER` RPC — a route BROKEN, not merely slow, until its
- * migration is applied (`supabase/migrations/20260822170000_overview_time_range_
- * indexes.sql` states that rule for this directory). The page this scores is
- * already the DATABASE's newest-first 50, so the rank reorders a bounded page
- * and never decides which rows were fetched.
+ * Ranked here rather than by `ts_rank` for transport reasons: PostgREST can only
+ * ask for columns, so ranking in Postgres would need a `SECURITY DEFINER` RPC.
+ * The page scored is already the database's newest-first 50, so this reorders a
+ * bounded page and never decides which rows were fetched.
  *
- * TITLE hits outweigh BODY hits: somebody typing a name is looking for the
- * thing with that name, and a body that merely mentions it is context.
- * ⚠ **NEWEST-FIRST IS THE TIEBREAK AND IT IS TOTAL** — equal scores fall back to
- * `updatedAt`, then to `id`, so two identical requests return the same order.
+ * Title hits outweigh body hits. The tiebreak is total — equal scores fall back
+ * to `updatedAt` then arrival order, so identical requests return one order.
  */
 export function rankHits(hits: SearchHit[], pattern: RegExp | null): SearchHit[] {
   if (pattern === null) return hits;
@@ -55,9 +47,8 @@ export function rankHits(hits: SearchHit[], pattern: RegExp | null): SearchHit[]
     const at = a.hit.updatedAt ?? "";
     const bt = b.hit.updatedAt ?? "";
     if (at !== bt) return at < bt ? 1 : -1;
-    // ⚠ The LAST tiebreak is the arrival order, which is the database's own
-    // deterministic page — never `Array.prototype.sort`'s stability, which is
-    // a guarantee about equal elements and not about equal KEYS.
+    // Last tiebreak is arrival order, the database's own deterministic page —
+    // not sort stability, which guarantees equal ELEMENTS, not equal keys.
     return a.index - b.index;
   });
   return scored.map((s) => s.hit);
@@ -84,12 +75,10 @@ function countMatches(text: string | null | undefined, pattern: RegExp): number 
 /**
  * One group, or `null` when nothing matched.
  *
- * ⚠ **`total` IS THE ROW COUNT, WHICH IS THE CAP'S OWN CEILING.** Every read is
- * `.limit(SEARCH_GROUP_TOTAL_CAP)`, so a count AT the cap means "50 or more" —
- * the same "at is indistinguishable from over" rule §9 states for `truncated`,
- * spelled as a number because the contract asked for a number. It is never the
- * item count: `items` is capped at eight and a group that reported eight when it
- * found forty would hide the thing the reader is about to scroll for.
+ * `total` is the ROW count, capped at `SEARCH_GROUP_TOTAL_CAP`, so a count at the
+ * cap means "50 or more" (INVARIANTS §9). Never the item count: `items` is capped
+ * at eight, and reporting eight when forty matched would hide what the reader is
+ * about to scroll for.
  */
 export function toGroup(
   kind: SearchGroupKind,
@@ -109,13 +98,9 @@ export function toGroup(
 }
 
 /**
- * 🔒 **A DM'S STORED NAME IS A PLACEHOLDER, NOT A LABEL.**
- * `channels/server/service-writes-direct.ts` inserts the literal below because
- * the column is NOT NULL and the DM surfaces render the PEER instead
- * (`channels/components/sidebar.tsx` resolves it per viewer). A search row has
- * no roster to resolve against, so it says NOTHING rather than telling every
- * reader that their thread lives in "Direct message" (Samuel, 2026-09-17, over
- * the live card: THREADS rows all read that).
+ * A DM's stored name is a placeholder, not a label: the column is NOT NULL and DM
+ * surfaces render the peer per viewer. A search row has no roster to resolve
+ * against, so it says nothing rather than labelling every thread "Direct message".
  */
 const DIRECT_CHANNEL_PLACEHOLDER_NAME = "Direct message";
 
@@ -128,19 +113,14 @@ function channelLabel(name: string | undefined): string | undefined {
 }
 
 /**
- * ⚠ **THE SUBTITLE IS DECIDED HERE AND IN ONE PLACE.** A repository sets it only
- * when the label is a column it already read (a knowledge base's name, a
- * member's email, a channel's TOPIC); everything else is the CHANNEL it lives
- * in, or — for a container-level row with no channel — nothing, because
- * `containerName` already rides beside it and saying the same word twice is not
- * a subtitle.
+ * The subtitle is decided here, in one place. A repository sets it only when the
+ * label is a column it already read; everything else is the channel the row lives
+ * in, or nothing for a container-level row (`containerName` already rides beside
+ * it).
  *
- * 🔒 **AND A CHANNEL HIT TAKES NO FALLBACK AT ALL (Samuel, 2026-09-17:** *"For
- * channels it like repeats the name of the channel in like 3 places it doesn't
- * make any sense."*). The generic arm resolves `channelById` for the hit's own
- * `channelId`, which for a CHANNEL row is the row itself — so a channel with no
- * topic was handed its own name as its subtitle and drew it twice. A channel's
- * subtitle is its description or nothing.
+ * (2026-09-17) A channel hit takes no fallback: the generic arm would resolve the
+ * row itself and draw the channel's name twice. A channel's subtitle is its
+ * description or nothing.
  */
 function toItem(
   kind: SearchGroupKind,
@@ -155,10 +135,10 @@ function toItem(
   const item: SearchItem = {
     id: hit.id,
     kind,
-    // ⚠ A MESSAGE HAS NO NAME OF ITS OWN and the repository says so with an
-    // empty title; the room it was said in is the honest headline. The final
-    // fallback is the container, never a slice of the body — that would print
-    // the snippet twice and mark it once.
+    // A message has no name of its own — the repository says so with an empty
+    // title, and the room it was said in is the honest headline. The final
+    // fallback is the container, never a slice of the body (that would print the
+    // snippet twice and mark it once).
     title: hit.title !== "" ? hit.title : (channel?.name ?? containerName ?? ""),
     containerId: hit.containerId,
   };
@@ -180,11 +160,9 @@ function toItem(
 }
 
 /**
- * The payload's group list, in `SEARCH_GROUP_ORDER`.
- *
- * ⚠ **IT ITERATES THE ORDER, NOT THE MAP.** Iterating the results would make the
- * section order depend on which query resolved first, which is a race the popup
- * would render as sections jumping between keystrokes.
+ * The payload's group list, in `SEARCH_GROUP_ORDER`. It iterates the ORDER, not
+ * the map: iterating results would tie section order to which query resolved
+ * first, which the popup renders as sections jumping between keystrokes.
  */
 export function assembleGroups(
   order: readonly SearchGroupKind[],

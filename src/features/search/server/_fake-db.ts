@@ -1,25 +1,19 @@
 /**
- * A TINY IN-MEMORY POSTGREST — enough of the builder for the search
- * repositories, and it APPLIES the filters rather than recording them.
+ * A tiny in-memory PostgREST: enough of the builder for the search repositories,
+ * and it APPLIES the filters rather than recording them (INVARIANTS §14). A
+ * recorder proves a `WHERE` was written but can never prove a non-member gets
+ * nothing, because nothing in it excludes a row.
  *
- * ⚠ **THAT IS THE WHOLE POINT, AND IT IS INVARIANTS §14's RULE APPLIED.** A
- * chainable recorder (`channels/server/repository-account.test.ts`'s shape)
- * proves a `WHERE` was WRITTEN; it cannot prove a non-member gets nothing,
- * because nothing in it ever excludes a row. The fence tests in this feature
- * have to drive the real service against real rows belonging to somebody else
- * and observe the output, or they assert a comment. The recorder shape is still
- * used beside this, for the queries whose SHAPE is the claim.
- *
- * ⚠ NOT A POSTGRES. It implements the operators these repositories use and
- * throws on anything else, so a repository that grows a new filter fails loudly
- * here instead of being silently unfiltered.
+ * Not a Postgres: it implements the operators these repositories use and throws
+ * on anything else, so a repository that grows a filter fails loudly rather than
+ * running unfiltered.
  */
 
 export type FakeRow = Record<string, unknown>;
 export type FakeTables = Record<string, FakeRow[]>;
 
-/** Which query reached the fake. Kept so a test can also assert an ABSENCE — a
- *  table nobody touched is the enforcement for the home-scope rule. */
+/** Which query reached the fake. Kept so a test can assert an ABSENCE — a table
+ *  nobody touched is the enforcement for the home-scope rule. */
 export interface FakeQueryLog {
   table: string;
   filters: string[];
@@ -30,7 +24,7 @@ function likeToRegExp(pattern: string): RegExp {
   for (let i = 0; i < pattern.length; i += 1) {
     const ch = pattern[i];
     if (ch === "\\") {
-      // An escaped metacharacter is a LITERAL — this is the half
+      // An escaped metacharacter is a literal — the half
       // `query-text.ts › escapeLikeLiteral` exists to produce.
       i += 1;
       out += (pattern[i] ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -74,17 +68,11 @@ function splitArms(filter: string): string[] {
 }
 
 /**
- * ⚠ `search_tsv` IS SYNTHESISED, AND THE SPELLING MIRRORS **BOTH** REAL GENERATED
- * COLUMNS. `knowledge_entries.search_tsv` is `setweight(title,'A') ||
- * setweight(excerpt,'B') || setweight(body,'C')`
- * (`20260501020000_knowledge_fulltext.sql`); `channel_messages.search_tsv` is
- * `to_tsvector('simple', coalesce(body, ''))`
- * (`20261007120000_search_fulltext_indexes.sql`, applied 2026-09-17). Joining
- * whichever of the three a row HAS answers both — a message row carries only
- * `body`, so it reduces to the body on its own.
- * ⚠ Weights do not matter to a containment test; the SOURCE COLUMNS do, because a
- * repository that searched `search_tsv` expecting the body alone would pass a
- * fake that only held the body.
+ * `search_tsv` is synthesised, and the spelling mirrors BOTH real generated
+ * columns (knowledge joins title/excerpt/body; messages hold body alone), so
+ * joining whichever columns a row has answers both. Weights do not matter to a
+ * containment test; the SOURCE COLUMNS do, or a repository expecting the body
+ * alone would pass against a fake that only held the body.
  */
 function textOf(row: FakeRow, column: string): string {
   if (column === "search_tsv") {
@@ -98,15 +86,13 @@ function textOf(row: FakeRow, column: string): string {
 
 /**
  * `to_tsquery('simple', q)` reduced to "every `&` arm matches a word", with `:*`
- * meaning PREFIX.
+ * meaning prefix.
  *
- * ⚠ **IT MODELS THE RAW FORM, BECAUSE THAT IS THE ONLY FORM THE REPOSITORIES
- * SEND (F-717).** `query-text.ts › buildPrefixTsQuery` hands over a `tsquery`
- * it built itself — `a & b:*` — so there is no normalisation step to imitate.
- * `|`, `!` and `<->` are not modelled: the builder's allow-list cannot emit one.
- * ⚠ The real parser splits `a_b` into two lexemes and this keeps it whole; no
- * case here turns on that, and pretending to split would be the lying kind of
- * fake.
+ * It models the RAW form, the only one the repositories send (F-717):
+ * `query-text.ts › buildPrefixTsQuery` hands over a tsquery it built itself, so
+ * there is no normalisation to imitate, and `|`, `!`, `<->` cannot survive its
+ * allow-list. The real parser splits `a_b` into two lexemes and this keeps it
+ * whole; no case turns on that.
  */
 function matchesTsQuery(haystack: string, query: string): boolean {
   const words = [...(haystack.toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? [])];
@@ -154,8 +140,8 @@ class FakeQuery implements PromiseLike<{ data: FakeRow[]; error: null }> {
     return this;
   }
 
-  /** ⚠ `teams/server/repository-grants.ts › listGrantsForTeams` states its slice as a
-   *  `.match()`; a fake lacking it would throw rather than filter. */
+  /** `teams/server/repository-grants.ts › listGrantsForTeams` states its slice as
+   *  a `.match()`; a fake lacking it would throw rather than filter. */
   match(spec: Record<string, unknown>): this {
     for (const [column, value] of Object.entries(spec)) {
       this.log.filters.push(`eq:${column}`);
@@ -201,12 +187,10 @@ class FakeQuery implements PromiseLike<{ data: FakeRow[]; error: null }> {
     query: string,
     opts?: { type?: string; config?: string }
   ): this {
-    // ⚠ **THE FAKE REFUSES THE TWO SPELLINGS THAT WERE THE BUG (F-717).** A
-    // `type` means `plainto_`/`websearch_to_tsquery`, which normalise the
-    // builder's `:*` away; an absent `config` means the SERVER's
-    // `default_text_search_config` — `english` in production — against a
-    // `simple` vector, which is the mismatch that returned nothing and
-    // explained nothing. A fake that accepted either would go green on it.
+    // The fake refuses the two spellings that were the bug (F-717): a `type`
+    // normalises the builder's `:*` away, and an absent `config` leaves the query
+    // side on the server's english default against a `simple` vector. A fake that
+    // accepted either would go green on the bug.
     if (opts?.type !== undefined) {
       throw new Error("fake-db: only the RAW to_tsquery form is modelled");
     }

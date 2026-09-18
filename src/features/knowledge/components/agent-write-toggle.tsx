@@ -16,7 +16,7 @@ interface Props {
  * `agent_write_enabled` toggle: ON lets MCP-origin callers
  * create/edit/move/delete in this base; OFF (default) is read-only.
  *
- * ⚠ Enforcement is server-side in
+ * Enforcement is server-side in
  * [service.ts#assertAgentWriteAllowed](src/features/knowledge/server/service.ts).
  */
 export function AgentWriteToggle({

@@ -23,9 +23,9 @@ import * as repo from "./repository";
 /**
  * Cross-cutting gates + helpers shared by the per-domain service modules.
  *
- * ⚠ `./repository.ts` bypasses RLS via the service-role client, so every
- * method reaching a row MUST filter by `ctx.workspaceId` (or chase the row up
- * to a base and verify scope) or workspaces leak into each other.
+ * `./repository.ts` bypasses RLS via the service-role client, so every method
+ * reaching a row MUST filter by `ctx.workspaceId` (or chase the row up to a base
+ * and verify scope) or workspaces leak into each other.
  */
 
 // ─── Context construction ───────────────────────────────────────────
@@ -37,7 +37,7 @@ export interface AuthLike {
   agentTokenId?: string | null;
   apiKeyWorkspaceId?: string | null;
   /** WHOSE REACH the credential inherits; `null` = nobody in particular.
-   *  ⚠ REQUIRED — this axis has no safe default (F-336). */
+   *  Required — this axis has no safe default (F-336). */
   credentialSubjectUserId: string | null;
   sessionId?: string | null;
 }
@@ -47,12 +47,9 @@ export interface AuthLike {
  * derives from API-key presence: session = user, API key = agent. The key's
  * workspace lock is forwarded so the service can enforce M-10 visibility.
  *
- * ⚠ `sessionId` is forwarded VERBATIM and is the one forgeable field on the
- * result. It exists for `service-audience.ts › narrowToSessionChannel`, which
- * may only use it to NARROW an already-fenced channel set; the field's own
- * docblock on `KnowledgeContext` carries the rule. Every route already hands
- * this function the whole `withWorkspaceAuth` context, so it arrives with no
- * per-route edit — which is also why nothing may start granting on it.
+ * `sessionId` is forwarded VERBATIM and is the one forgeable field here. It
+ * exists for `service-audience.ts › narrowToSessionChannel`, which may only use
+ * it to NARROW an already-fenced channel set — nothing may grant on it.
  */
 export function buildKnowledgeContext(auth: AuthLike): KnowledgeContext {
   return {
@@ -73,36 +70,24 @@ export function buildKnowledgeContext(auth: AuthLike): KnowledgeContext {
  * credential → NEVER. Used as row filter (`listBases`) AND 404 gate
  * (`getBaseById` / `getBaseBySlug` / `getBaseByPublicId`).
  *
- * 🔒 ⚠ ARM 2 ASKS `isSharedCredential`, NOT "IS THERE A WORKSPACE LOCK?", AND
- * THE DIFFERENCE IS F-336 (fixed 2026-08-27, Samuel's ruling). This line read
- * `if (ctx.apiKeyWorkspaceId) return false`, which turned layer B1's WORKSPACE
- * fence into a VISIBILITY fence: a container-locked session — the operator's own
- * agent, on the operator's own user id — was refused every non-public base
- * **before** `service-audience.ts`'s grant fence was ever consulted, so a
- * private base granted `agent_only` into the channel was still a 404 and the
- * grant switch was decoration. The two layers own different axes: **B1 decides
- * WHICH WORKSPACE, layer A decides WHICH BASE WITHIN IT.** This predicate owns
- * neither — it decides whether a credential stands for a person.
+ * Arm 2 asks `isSharedCredential`, not "is there a workspace lock?", and the
+ * difference is F-336 (fixed 2026-08-27, Samuel's ruling): the lock decides
+ * WHICH WORKSPACE, layer A decides WHICH BASE WITHIN IT, and this predicate
+ * decides only whether a credential stands for a person.
  *
- * ⚠ NOTHING HERE WIDENS THE CONTAINER. `getBaseById`/`getBaseBySlug`/`listBases`
- * still run `resolveAgentAudience` after this, so an agent in a shared container
- * reaches an ungranted base — private or public — exactly never.
+ * Nothing here widens the container — `getBaseById`/`getBaseBySlug`/`listBases`
+ * still run `resolveAgentAudience` after it.
  *
- * ⚠ MIRRORED, NOT IMPORTED, IN FOUR PLACES: `chats › canSeeChat`,
+ * Mirrored, not imported, in four places: `chats › canSeeChat`,
  * `skills › canSeeSkill`, `agent-templates › canSeeTemplate` and
- * `agent-templates › canSeeBaseRow`. All five moved together in this change;
- * splitting them is how the rule drifts.
+ * `agent-templates › canSeeBaseRow`. Splitting them is how the rule drifts.
  *
- * 🔒 ⚠ **ARM 4 IS THE GRANT, ADDED 2026-09-02 (F-604), AND IT SITS BELOW THE
- * SHARED-CREDENTIAL REFUSAL ON PURPOSE.** B11 replaced the copy ops with grants,
- * and until this arm existed the lent row was refused in the scope it was lent
- * to — the write door wrote a correct row nothing read. It is LAST because
- * every arm above it is cheaper and because a grant may only ever WIDEN: a row
- * arm 1 already admits does not need it, and a SHARED credential stands for
- * nobody, so it has no membership of the granted scope to read the grant
- * through (M-10, arm 2). ⚠ The set comes from
+ * Arm 4 is the grant (F-604, 2026-09-02) and sits BELOW the shared-credential
+ * refusal on purpose: a grant may only ever WIDEN, and a SHARED credential
+ * stands for nobody, so it has no membership of the granted scope to read the
+ * grant through. The set comes from
  * `shared/tenancy/resource-grant-reach.ts › grantedResourceIds`, whose SQL twin
- * `dopl_grant_admits()` is the arm the policy gained in the same change.
+ * `dopl_grant_admits()` is the policy's matching arm.
  */
 export function canSeeBase(
   ctx: KnowledgeContext,
@@ -117,12 +102,10 @@ export function canSeeBase(
 /**
  * Rows whose answer arm 4 could still CHANGE — the negation of arms 1-3.
  *
- * ⚠ **IT IS A DELIBERATE MIRROR OF THE ARMS ABOVE, AND IT IS PINNED AS ONE.**
- * `shared/tenancy/grant-read-arm.test.ts` drives every (credential × visibility ×
- * author) combination through both and fails if a row this says NO about would
- * have had its answer moved by a grant. The mirror buys the thing that matters
- * on a list path: a workspace of public rows, or a caller's own shelf, asks the
- * grant table NOTHING.
+ * A deliberate mirror of the arms above, pinned as one by
+ * `shared/tenancy/grant-read-arm.test.ts`. It buys the thing that matters on a
+ * list path: a workspace of public rows, or a caller's own shelf, asks the grant
+ * table NOTHING.
  */
 export function needsGrantArm(
   ctx: KnowledgeContext,
@@ -157,9 +140,9 @@ export async function assertBaseVisible(
   ctx: KnowledgeContext,
   base: KnowledgeBase
 ): Promise<void> {
-  // ⚠ ONE base, so the grant read is done here rather than pushed onto every
-  // caller: the list paths batch it, and a single-row door that made its own
-  // callers precompute would be four more places to forget it.
+  // ONE base, so the grant read is done here rather than pushed onto every
+  // caller: the list paths batch it, and making callers precompute would be four
+  // more places to forget it.
   if (!canSeeBase(ctx, base, await baseGrantsFor(ctx, [base]))) {
     throw new KnowledgeBaseNotFoundError(base.id);
   }
@@ -196,17 +179,16 @@ export async function filterTeamVisibleBases(
  * KB write gate for EVERY source, web sessions included. Team grants are the
  * source of truth: owner/admin/creator pass; teams-mode members need an `edit`
  * grant; workspace-mode uses the role default (member → edit, viewer → read).
- * ⚠ updateBase does NOT route here for `agentWriteEnabled` flips — it throws
+ * updateBase does NOT route here for `agentWriteEnabled` flips — it throws
  * `AgentWriteDisabledError` itself.
  */
 export async function assertBaseWritable(
   ctx: KnowledgeContext,
   base: KnowledgeBase
 ): Promise<void> {
-  // ⚠ `agent_write_enabled=false` = read-only to AGENTS only; source="user"
+  // `agent_write_enabled=false` = read-only to AGENTS only; source="user"
   // unaffected. Must be checked on the WRITE path, not just deletes (F-10b):
-  // team-access alone let an agent with team "edit" overwrite a read-only
-  // base. Read-only wins over team access.
+  // team-access alone let an agent with team "edit" overwrite a read-only base.
   if (ctx.source === "agent" && !base.agentWriteEnabled) {
     throw new AgentWriteDisabledError(base.id);
   }
@@ -249,11 +231,10 @@ export function deriveSlug(input: string, taken: string[]): string {
 }
 
 /**
- * ⚠ **THE IDS TRAVEL WITH THE REFUSAL** (2026-09-03, F-664). The message is what
- * the caller sees and says no more than it did; the two tenancies and the
- * subject ride the error for the server log, because this throw is how a child
- * row stranded on an old tenancy first announces itself and "belongs to a
- * different workspace" names neither the row nor either workspace.
+ * The ids travel with the refusal (2026-09-03, F-664): the message says no more
+ * than it did, but the two tenancies and the subject ride the error for the
+ * server log, because this throw is how a child row stranded on an old tenancy
+ * first announces itself.
  */
 export function assertSameWorkspace(
   rowWorkspaceId: string,

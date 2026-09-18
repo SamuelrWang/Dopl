@@ -1,29 +1,20 @@
 "use client";
 
 /**
- * THE POPUP'S ROWS — one anatomy, nine kinds, and no new markup.
+ * The popup's rows: one anatomy, nine kinds, no new markup.
  *
- * ⚠ **ONE ROW COMPONENT, KEYED OFF `item.kind` — NEVER A COMPONENT PER KIND.**
- * Every row in the reference is the same object: a leading mark, a bold title,
- * a secondary line, and right-aligned meta. The kinds differ in WHICH MARK and
- * WHAT THE SECONDARY LINE SAYS, which is data, not structure. Nine components
- * would be nine places for the row height to drift.
+ * One row component keyed off `item.kind`, never a component per kind — the kinds
+ * differ in which mark and what the secondary line says, which is data. Nine
+ * components would be nine places for the row height to drift.
  *
- * ⚠ **THE FACE IS THE KIT'S `.menu-row`** (`docs/DESIGN-SYSTEM.md` › Kit
- * classes) — the app's ONE option face, hover and focus alike. The
- * keyboard-active row wears `bg-menu-item-hover-bg`, the same token the CSS
- * hover paints, so a pointer hover and an ↓ landing look identical. Never a
- * second gray here.
+ * The face is the kit's `.menu-row`. The keyboard-active row wears
+ * `bg-menu-item-hover-bg`, the same token CSS hover paints, so a pointer hover
+ * and an arrow landing look identical.
  *
- * 🔒 **TWO SHAPES SINCE 2026-09-17, AND WHICH ONE A KIND TAKES IS A SET, NOT A
- * PROP (Samuel, over the live card:** *"For channels it like repeats the name of
- * the channel in like 3 places it doesn't make any sense. For channels and
- * threads, it should be one line, it should be the name of the channel in black,
- * and then to the right the description of the channel in gray italics."*).
- * Channels and threads are ONE LINE — name, then the row's own description in
- * muted italic; every other kind keeps the stacked title + snippet. The rest of
- * the anatomy (the tile, the trailing chip) is shared, so the two shapes cannot
- * drift into two row heights.
+ * (2026-09-17) Two shapes, chosen by a SET rather than a prop: channels and
+ * threads are one line (name, then description in muted italic); every other kind
+ * keeps the stacked title + snippet. The tile and trailing chip are shared, so the
+ * two shapes cannot drift into two row heights.
  */
 
 import {
@@ -59,11 +50,9 @@ const GLYPH: Record<SearchGroupKind, LucideIcon> = {
 };
 
 /**
- * 🔒 **THE ONE-LINE KINDS (Samuel, 2026-09-17 — quoted in the header).** A
- * channel and a thread are each a NAMED THING with a description; stacking that
- * description under the name bought a second line that said what the first line
- * already said. Everything else here is a piece of PROSE found by its body, and
- * prose needs the snippet line.
+ * The one-line kinds: a channel and a thread are each a named thing with a
+ * description, so stacking it bought a second line saying what the first said.
+ * Everything else is prose found by its body, and prose needs the snippet line.
  */
 const ONE_LINE_KINDS: ReadonlySet<SearchGroupKind> = new Set<SearchGroupKind>([
   "channels",
@@ -71,14 +60,11 @@ const ONE_LINE_KINDS: ReadonlySet<SearchGroupKind> = new Set<SearchGroupKind>([
 ]);
 
 /**
- * ⚠ `avatarUrls` is a list of URLs on the wire; `AvatarStack` takes people. The
- * mapping is here and nowhere else, and a URL is its own key — the wire carries
- * no user ids for these faces on purpose (a row is not a roster).
- *
- * ⚠ **THE FALLBACK NAME COMES OUT OF THE URL**, because there is no name on the
- * wire and `AvatarStack` draws INITIALS whenever the image does not resolve —
- * which is every avatar in the packaged SPA until main hands the bytes back. A
- * blank name there paints a row of `?` circles.
+ * `avatarUrls` is URLs on the wire and `AvatarStack` takes people; a URL is its
+ * own key, since the wire carries no user ids for these faces (a row is not a
+ * roster). The fallback name is derived from the URL because `AvatarStack` draws
+ * initials whenever the image does not resolve, and a blank name paints `?`
+ * circles.
  */
 function stackUsers(urls: readonly string[]) {
   return urls.map((url, i) => ({
@@ -89,12 +75,9 @@ function stackUsers(urls: readonly string[]) {
 }
 
 /**
- * 🔒 **THE CONTAINER IS A CHIP, AND ONLY WHERE IT TELLS THE READER SOMETHING
- * (Samuel, 2026-09-17).** In container scope every row is in the container the
- * reader is already looking at, and in account scope the reader's own container
- * is the unstated default — naming either one is the third copy of a word the
- * row already carries. What is left is the CROSS-CONTAINER row, which is the
- * only case where "where is this" is a question.
+ * (2026-09-17) The container is a chip only where it tells the reader something:
+ * in container scope, and for the reader's own container, the name is already
+ * implied. Only a cross-container row leaves "where is this" a question.
  */
 function containerChip(
   item: SearchItem,
@@ -126,7 +109,7 @@ export function SearchResultRow({
   const Glyph = GLYPH[item.kind];
   const oneLine = ONE_LINE_KINDS.has(item.kind);
   const chip = containerChip(item, scope, containerId);
-  // ⚠ A TIME ONLY ON THE STACKED ROWS, and only when no chip took the slot: the
+  // A time only on the stacked rows, and only when no chip took the slot — the
   // one-line kinds spend their right-hand space on the description.
   const when = !oneLine && chip === null && item.updatedAt
     ? formatRelativeTime(item.updatedAt)
@@ -136,8 +119,8 @@ export function SearchResultRow({
   return (
     <button
       type="button"
-      // ⚠ `data-active` IS THE KEYBOARD CURSOR, and the test reads it. The
-      // pointer's own hover stays with the CSS.
+      // `data-active` is the keyboard cursor and the test reads it; the pointer's
+      // own hover stays with the CSS.
       data-active={active || undefined}
       data-search-row={item.id}
       onClick={onActivate}
@@ -149,9 +132,8 @@ export function SearchResultRow({
     >
       <span
         className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] bg-surface-raised-2 text-text-secondary"
-        // ⚠ THE AGENT'S OWN HUE WHEN THE ROW HAS ONE (a template's colour
-        // arrives as a value, so it cannot be a Tailwind class —
-        // `docs/DESIGN-SYSTEM.md` › THE AGENT COLOUR BANK).
+        // The agent's own hue when the row has one: a template's colour arrives
+        // as a value, so it cannot be a Tailwind class.
         style={item.color ? { color: item.color } : undefined}
         aria-hidden
       >
@@ -163,9 +145,8 @@ export function SearchResultRow({
           <span className="text-small min-w-0 truncate font-semibold text-text-primary">
             {item.title}
           </span>
-          {/* ⚠ **OMITTED ENTIRELY WITH NOTHING TO SAY** — an empty span still
-              takes the row's free space, and the name would stop reading as the
-              start of a line. */}
+          {/* Omitted entirely with nothing to say: an empty span still takes the
+              row's free space. */}
           {item.subtitle ? (
             <span className="text-caption min-w-0 flex-1 truncate italic text-text-muted">
               {item.subtitle}
@@ -180,7 +161,7 @@ export function SearchResultRow({
             {item.title}
           </span>
           {item.snippet ? (
-            // ⚠ THE ONLY `dangerouslySetInnerHTML` IN THIS FEATURE, and it reads
+            // The only `dangerouslySetInnerHTML` in this feature, and it reads
             // the sanitiser's output — never the wire string.
             <span
               className="text-caption truncate text-text-secondary [&_mark]:bg-caution/30 [&_mark]:text-text-primary"
@@ -198,8 +179,8 @@ export function SearchResultRow({
         <AvatarStack users={stackUsers(faces)} max={3} size="2xs" />
       )}
       {chip !== null && (
-        /* The kit's chip (`docs/DESIGN-SYSTEM.md` › Pills/chips) at the card's
-           own scale — never a second copy of the row's name. */
+        /* The kit's chip at the card's own scale — never a second copy of the
+           row's name. */
         <span className="text-micro shrink-0 whitespace-nowrap rounded-full border border-border-strong bg-bg-elevated px-1.5 py-px font-medium text-text-muted">
           {chip}
         </span>

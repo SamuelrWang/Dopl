@@ -22,41 +22,28 @@ import type {
  * Settings → Channels: which CHANNELS this knowledge base is shared into, one
  * row per channel, three states per row.
  *
- * The three states are `None` (no grant row at all — the default and the
- * absence), `Agent only` (the channel's agents may read it; no human in the
- * channel sees it) and `Visible` (everyone in the channel sees it, GUESTS
- * INCLUDED). They are the same three the grant table stores as two levels plus
- * absence, so this control is the table's shape and not a translation of it.
+ * The three states are `None` (no grant row), `Agent only` (the channel's
+ * agents read it, no human does) and `Visible` (everyone in the channel,
+ * guests included) — the table's own shape, not a translation of it.
  *
- * 🔒 ✅ `Agent only` REACHES A `visibility='private'` BASE AGAIN, SO THE
- * SENTENCE ABOVE IS TRUE OF EVERY BASE (F-336 resolved 2026-08-27, Samuel's
- * ruling). ⚠ IT WAS FALSE FOR A DAY AND THIS PARAGRAPH IS KEPT AS THE RECORD:
- * `knowledge/server/service-shared.ts › canSeeBase` answered false for every
- * non-public base under a container-locked credential, and `getBaseById`
- * applies it BEFORE the audience ceiling, so the grant row was never consulted
- * and the agent 404'd whatever this control said. The fix was NOT to widen the
- * lock — it was to stop reading a WORKSPACE fence as a VISIBILITY one: the gate
- * now asks `shared/auth/credential-audience.ts › isSharedCredential`, so a
- * container SESSION (one human's, narrowed) reads what that human reads and a
- * credential shared between humans still reads no private row at all.
- * ⚠ `Agent only` is still bounded by layer A: it grants into THIS channel, and
- * an agent elsewhere in the container reaches nothing new.
+ * F-336 (resolved 2026-08-27, Samuel's ruling): `Agent only` reaches a
+ * `visibility='private'` base again, so that is true of every base.
+ * `knowledge/server/service-shared.ts › canSeeBase` had answered false for every
+ * non-public base under a container-locked credential and runs before the
+ * audience ceiling; it now asks `shared/auth/credential-audience.ts ›
+ * isSharedCredential`, so a container session reads what its human reads.
+ * `Agent only` is still bounded by layer A: it grants into this channel only.
  *
- * ⚠ THE CHANNEL LIST COMES OFF THE SERVER, already fenced to the caller's
- * visible channels (`GET …/channel-grants`). It is never assembled from a
- * client-side workspace channel list — the names of rooms the caller cannot
- * read would then be on the wire, filtered only by the renderer.
+ * The channel list comes off the server, already fenced to the caller's visible
+ * channels, or the names of unreadable rooms would be on the wire with only the
+ * renderer filtering them. `canManage` likewise — the same predicate the PUT
+ * applies (`service-channel-grants.ts › canManageChannelGrants`) — so this
+ * cannot render an editor for somebody the write will refuse.
  *
- * ⚠ `canManage` ALSO COMES OFF THE SERVER — the same predicate the PUT applies
- * (creator or workspace admin+, `service-channel-grants.ts ›
- * canManageChannelGrants`), so this cannot render an editor for somebody the
- * write will refuse. Everyone else gets the read-only summary.
- *
- * 🔒 ⚠ **AND IT RENDERS NOTHING AT ALL — HEADING INCLUDED — IN A STANDARD WORKSPACE**
- * (2026-09-17). `channelScopeAllowed` is the server's own answer, from the same fence
- * the PUT applies, so the control cannot outlive the capability. ⚠ **IT OWNS ITS OWN
- * `SettingsSection` FOR EXACTLY THAT** — with the frame in the parent, the refusal was
- * an empty CHANNELS heading.
+ * Ruling 2026-09-17: in a standard workspace it renders nothing, heading
+ * included, on the server's `channelScopeAllowed`. It owns its own
+ * `SettingsSection` for that; with the frame in the parent the refusal left an
+ * empty Channels heading.
  */
 export function KbChannelGrantsSection({
   baseId,
@@ -100,8 +87,10 @@ export function KbChannelGrantsSection({
     );
   }
   if (!data) return null;
-  // 🔒 THE WHOLE SECTION, NOT JUST ITS ROWS — see the docblock.
-  if (!data.channelScopeAllowed) return null;
+  // The whole section, not just its rows — see the docblock.
+  // ⚠ `?? false` because the field is NEW on a 24h-cached payload: a warm entry
+  // written before it existed has no such key (INVARIANTS §8).
+  if (!(data.channelScopeAllowed ?? false)) return null;
 
   const granted = data.channels.filter((c) => data.grants[c.id]);
 
@@ -170,19 +159,15 @@ function GrantRow({
   const level: ChannelGrantLevelInput = grant?.level ?? "none";
   const guestWrite = grant?.guestWrite ?? false;
 
-  // ⚠ THE ROSTER IS READ ONLY AT `visible`, and that bounds the fan: a null
-  // channel id disables the query, so a settings modal listing N channels
-  // issues one roster request per SHARED channel, not per row.
+  // Roster read only at `visible`: a null channel id disables the query, so a
+  // modal listing N channels issues one request per shared channel, not per row.
   const { members } = useChannelMembers(
     level === "visible" ? channel.id : null,
     workspaceId
   );
-  // ⚠ FAIL-SAFE, and the two ways it can be absent are the reason. A roster
-  // that has not loaded is `[]`, and `workspaceRole` is null on payloads that
-  // predate the field (`ChannelMember.workspaceRole`) — both read as "no
-  // guest", which HIDES the toggle. Never the other way round: a revealed
-  // toggle over an unknown roster would offer to hand a pen to somebody who
-  // may not be there.
+  // Fail-safe: an unloaded roster (`[]`) and a null `workspaceRole` both read
+  // as "no guest" and hide the toggle. Never the other way round — a revealed
+  // toggle over an unknown roster offers a pen to somebody who may not be there.
   const hasGuest = members.some((m) => m.workspaceRole === "guest");
   const Icon = channel.isDirect ? MessageSquare : Hash;
 
@@ -202,9 +187,8 @@ function GrantRow({
           value={level}
           disabled={disabled}
           onChange={(next) =>
-            // ⚠ Dropping to `none`/`agent_only` sends `guestWrite: false`. The
-            // server forces it too; sending it keeps the wire honest about the
-            // end state being asked for.
+            // Dropping to `none`/`agent_only` sends `guestWrite: false`; the
+            // server forces it too, but the wire states the end state asked for.
             onChange(channel.id, next, next === "visible" ? guestWrite : false)
           }
         />
@@ -237,11 +221,9 @@ const LEVELS: Array<{ key: ChannelGrantLevelInput; label: string }> = [
  * Three-state segmented radio, the shape of `members/components/team-bits.tsx ›
  * AccessLevelControl`.
  *
- * ⚠ NOT that component reused: its value type is `AccessLevel | null` and its
- * three segments are None/Read/Edit. Widening it to carry a second, unrelated
- * three-value vocabulary would put "Agent only" inside the TEAM access control,
- * where it means nothing. Same tokens and the same kit-free recipe; no new
- * class.
+ * Not that component reused: its segments are None/Read/Edit, and widening it
+ * would put "Agent only" inside the team access control, where it means
+ * nothing. Same tokens, same kit-free recipe.
  */
 function GrantLevelControl({
   value,

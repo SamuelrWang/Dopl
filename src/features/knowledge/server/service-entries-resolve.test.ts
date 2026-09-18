@@ -1,26 +1,20 @@
 /**
- * 🔒 **`readEntry` — AN ENTRY FOLLOWS ITS BASE'S ID (B2).**
+ * `readEntry` — an entry follows its base's id.
  *
- * ⚠ **AN ENTRY IS NOT A ROW IN THE RESOLVER REGISTRY, AND THAT IS THE CLAIM
- * THIS FILE PINS.** `knowledge_entries` has no `visibility` column: its base is
- * both its address and its fence, so clause 4 of
- * `shared/tenancy/resolve-resource.ts` would have no arm to apply and a registry
- * row would be a second, weaker door onto the same content. The follow goes
- * through `service-bases.ts › readBaseById` instead — which means the base's
- * matrix AND its agent audience ceiling come along for free, and that is exactly
- * what a hand-rolled entry resolver would have lost.
+ * An entry is NOT a row in the resolver registry: `knowledge_entries` has no
+ * `visibility` column, so its base is both its address and its fence and a
+ * registry row would be a second, weaker door onto the same content. The follow
+ * goes through `service-bases.ts › readBaseById`, so the base's matrix AND its
+ * agent audience ceiling come along with it.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { KnowledgeBase, KnowledgeContext, KnowledgeEntry } from "../types";
 
-// ⚠ **THE GRANT ARM IS A DB READ, SO IT IS DECLARED HERE** (F-604, 2026-09-02).
-// `canSeeBase` / `canSeeTemplate` gained an arm over `resource_grants`, and its
-// batch precompute is the one part of this seam that talks to Postgres. Every
-// case in this file is about the OTHER arms, so the grant set is empty — which
-// is also the pre-2026-09-02 behaviour, and therefore the right default for a
-// suite that predates the arm. The cases that exercise a GRANT live in
-// `service-shared-grant-arm.test.ts` and the redteam suites.
+// The grant arm is a DB read, so it is declared here (F-604). Every case in this
+// file is about the OTHER arms, so the grant set is empty; the cases that
+// exercise a GRANT live in `service-shared-grant-arm.test.ts` and the redteam
+// suites.
 vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
   ...(await importOriginal<
     typeof import("@/shared/tenancy/resource-grant-reach")
@@ -139,10 +133,9 @@ describe("🔒 the entry follows its base", () => {
   });
 
   it("🔒 the base's AUDIENCE CEILING still applies, in the container it named", async () => {
-    // 🔒 MUTATION CHECK, and the reason the follow goes through `readBaseById`
-    // rather than a registry row of its own: entry ids are cheap (ontology
-    // attributes ship raw arrays), and a hand-rolled entry resolver would have
-    // dropped this gate exactly as `getEntry` did before 2026-08-26.
+    // The reason the follow goes through `readBaseById` rather than a registry
+    // row of its own: a hand-rolled entry resolver would have dropped this gate
+    // exactly as `getEntry` did before 2026-08-26.
     vi.mocked(audience.audienceAdmits).mockReturnValue(false);
     await expect(readEntry(ctx(), ENTRY)).rejects.toBeInstanceOf(
       EntryNotFoundError
@@ -150,8 +143,8 @@ describe("🔒 the entry follows its base", () => {
   });
 
   it("🔒 refuses an entry whose own workspace disagrees with its base's", async () => {
-    // ⚠ MUTATION CHECK. The two columns are denormalized halves of one fact; a
-    // row where they disagree is broken, not wider, and reads as the same 404.
+    // The two columns are denormalized halves of one fact; a row where they
+    // disagree is broken, not wider, and reads as the same 404.
     vi.mocked(repo.findEntryById).mockResolvedValue(
       entry({ workspaceId: "ws-third" })
     );
@@ -170,8 +163,8 @@ describe("🔒 the entry follows its base", () => {
 
 describe("🔒 the WRITE gate did not move", () => {
   it("getEntry still refuses an entry outside this container", async () => {
-    // ⚠ MUTATION CHECK: `updateEntry`, `moveEntry`, `deleteEntry` and the pin
-    // service all funnel through it (INVARIANTS §T35).
+    // `updateEntry`, `moveEntry`, `deleteEntry` and the pin service all funnel
+    // through it (INVARIANTS §T35).
     await expect(getEntry(ctx(), ENTRY)).rejects.toBeInstanceOf(
       KnowledgeBaseMismatchError
     );

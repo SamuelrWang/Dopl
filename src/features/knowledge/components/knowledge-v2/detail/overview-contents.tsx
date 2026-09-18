@@ -42,25 +42,15 @@ function byPosition<T extends { position: number }>(a: T, b: T): number {
 }
 
 /**
- * Base info "Contents" tree: every folder + entry with an inline-editable
- * short description (folders → `description`, entries → `excerpt`). These are
- * the same summaries agents read in MCP get_tree / list_dir.
+ * Base info "Contents" tree: every folder + entry with an inline-editable short
+ * description (folders → `description`, entries → `excerpt`). These are the
+ * summaries agents read in MCP get_tree / list_dir.
  *
- * ⚠ IT IS NOT THE NAVIGATION TREE. The rail on the left of this panel
- * (`../list/list-panel.tsx`) is what OPENS files; this is the description
- * editor for the same nodes, and it is the reason the section survived the
- * overhaul rather than being folded into the rail. Selecting is one job,
- * writing the summaries an agent reads is another.
+ * Not the navigation tree — the rail (`../list/list-panel.tsx`) is what opens
+ * files; this is the description editor for the same nodes.
  *
- * 🔒 ⚠ THE `SectionBox` DIVERGENCE IS RESOLVED HERE (INVARIANTS §5A, 2026-08-28).
- * This rendered a `SectionBox` — a `bg-card-surface-subtle` header STRIP over a
- * `bg-bg-inset` body carrying the concave inset shadow — inside /home's record
- * pane, where every other section had already been ruled FLAT. The doc recorded
- * it as a live divergence and said not to "finish the job" without asking;
- * Samuel's 2026-08-28 ruling over the opened-base screenshot asked. It is
- * `SectionPanel` on the same ground as Details, and it keeps the folder/file
- * counts in the `caption` slot — `SectionBox`'s `meta` had no counterpart, and
- * a count is a fact about the section, which is what that slot is for.
+ * Flat `SectionPanel` on /home's record-pane ground (INVARIANTS §5A,
+ * 2026-08-28), folder/file counts in the `caption` slot.
  */
 export function OverviewContents({
   tree,
@@ -81,7 +71,7 @@ export function OverviewContents({
     onTreeRefresh,
   });
 
-  // ⚠ Track COLLAPSED folders, not expanded ones, so folders default open —
+  // track COLLAPSED folders, not expanded ones, so folders default open —
   // including any streaming in after an async tree load.
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -347,7 +337,7 @@ function DescriptionField({
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    // ⚠ IME guard: skip Enter while composing (matches InlineEditableRow).
+    // IME guard: skip Enter while composing (matches InlineEditableRow).
     if (composingRef.current || e.nativeEvent.isComposing || e.keyCode === 229) {
       return;
     }
@@ -370,16 +360,11 @@ function DescriptionField({
       maxLength={DESCRIPTION_MAX}
       aria-label="Description"
       placeholder="Short summary agents see in the tree"
-      // ⚠ THE UNDERLINE, NOT A WELL (docs/DESIGN-SYSTEM.md › "Inline editing is
-      // the UNDERLINE and nothing else"). This was a `.concave-field` — a
-      // pressed-in box appearing mid-row on a flat section, which is the
-      // "mismatched inset well" the 2026-08-28 ruling named. `UNDERLINE_FIELD`
-      // is taken VERBATIM, its `text-body` included: the recipe's whole promise
-      // is that a row does not change height between reading and editing, and a
-      // size utility bolted on beside it fights it in Tailwind's EMIT order
-      // rather than in class order. The row's resting description line is
-      // `text-caption`, so it grows by one step while open — a fact about this
-      // row, not a licence to fork the recipe.
+      // THE UNDERLINE, NOT A WELL (docs/DESIGN-SYSTEM.md › "Inline editing is
+      // the UNDERLINE and nothing else"). `UNDERLINE_FIELD` is taken verbatim,
+      // its `text-body` included: a size utility bolted on beside it fights it
+      // in Tailwind's emit order rather than in class order, and the row must
+      // not change height between reading and editing.
       className={cn(UNDERLINE_FIELD, "w-full disabled:opacity-60")}
       onChange={(e) => setDraft(e.target.value)}
       onCompositionStart={() => {

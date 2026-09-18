@@ -1,10 +1,9 @@
 /**
- * The seed's WRITE SHAPE and cross-reference map. ⚠ It runs inside the
- * post-signup redirect, so the awaited round-trip count is the point: two
- * statements total, whatever the corpus size.
- *
- * `entryIdByKey` is what the ontology seed's knowledge attributes resolve
- * against, asserted here because the orchestrator test mocks this module.
+ * The seed's WRITE SHAPE and cross-reference map. It runs inside the post-signup
+ * redirect, so the round-trip count is the point: two statements total, whatever
+ * the corpus size. `entryIdByKey` is what the ontology seed's knowledge
+ * attributes resolve against, asserted here because the orchestrator test mocks
+ * this module.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";

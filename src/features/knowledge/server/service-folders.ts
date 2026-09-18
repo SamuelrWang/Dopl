@@ -24,7 +24,7 @@ import {
   assertSameWorkspace,
 } from "./service-shared";
 import { getBaseById, readBaseInContext } from "./service-bases";
-// ⚠ AWAITED, AFTER THE WRITE, INSIDE THE REQUEST (`./service-revisions.ts`).
+// Awaited, after the write, inside the request (`./service-revisions.ts`).
 import { recordFolderRevision } from "./service-revisions";
 
 /** Folder reads + writes, plus `getBaseTree` — the snapshot shared by REST and
@@ -34,19 +34,18 @@ export async function listFolders(
   ctx: KnowledgeContext,
   baseId: string
 ): Promise<KnowledgeFolder[]> {
-  // 🔒 A READ BY ID, so it follows the id — see {@link getBaseTree}.
+  // A read by id, so it follows the id — see {@link getBaseTree}.
   const { value: base } = await readBaseInContext(ctx, baseId);
   return repo.listFoldersForBase(base.id, false);
 }
 
 /**
- * Base + folders + entries, metadata only (bodies stripped). ⚠ Lives here so
+ * Base + folders + entries, metadata only (bodies stripped). Lives here so
  * `GET /api/knowledge/bases/[baseId]/tree` and MCP get_tree share ONE
  * composition and ONE auth path.
  *
- * Entry paging is opt-in (`entryLimit` + `entryOffset`); folders always ship
- * in full. Without `entryLimit`: full snapshot, no extra fields, no count
- * query.
+ * Entry paging is opt-in (`entryLimit` + `entryOffset`); folders always ship in
+ * full. Without `entryLimit`: full snapshot, no extra fields, no count query.
  */
 export async function getBaseTree(
   ctx: KnowledgeContext,
@@ -59,12 +58,9 @@ export async function getBaseTree(
   entryTotal?: number;
   nextEntryCursor?: string | null;
 }> {
-  // 🔒 **A READ BY ID FOLLOWS THE ID (B2), AND EVERYTHING UNDER IT IS KEYED ON
-  // `base.id` RATHER THAN ON A WORKSPACE** — so the snapshot is the base's own,
-  // wherever it lives. Until this, `GET .../tree` and `dopl_kb(op="get_tree")`
-  // answered `KNOWLEDGE_BASE_MISMATCH` for an id `GET /api/knowledge/bases/<id>`
-  // resolves perfectly well, which is the wave's headline claim being untrue on
-  // every door but one (F-470).
+  // A read by id follows the id, and everything under it is keyed on `base.id`
+  // rather than on a workspace, so the snapshot is the base's own wherever it
+  // lives (F-470).
   const { value: base } = await readBaseInContext(ctx, baseId);
   const [folders, entries, entryTotal] = await Promise.all([
     repo.listFoldersForBase(base.id, false),
@@ -135,8 +131,8 @@ export async function updateFolder(
     const fresh = await getFolderInternal(ctx, id, false);
     throw new KnowledgeStaleVersionError(expectedUpdatedAt!, fresh.updatedAt);
   }
-  // ⚠ A NAME change is a `rename`; a description-only change is an `edit` with
-  // no body — honest, and never restorable (`revisions › restoreRevision`).
+  // A name change is a `rename`; a description-only change is an `edit` with no
+  // body — honest, and never restorable (`revisions › restoreRevision`).
   await recordFolderRevision(ctx, saved, patch.name !== undefined ? "rename" : "edit");
   return saved;
 }
@@ -189,10 +185,8 @@ export async function deleteFolder(
   assertAgentCanDelete(ctx, base);
   await assertBaseWritable(ctx, base);
   await repo.hardDeleteFolder(ctx.workspaceId, id);
-  // ⚠ ONE REVISION FOR THE FOLDER, not one per row in the subtree the cascade
-  // took. The OPERATION is "this folder was deleted"; a per-descendant fan would
-  // be an unbounded write inside a request, and every descendant's own history
-  // already ends at its last revision.
+  // One revision for the FOLDER, not one per row the cascade took: a
+  // per-descendant fan would be an unbounded write inside a request.
   await recordFolderRevision(ctx, folder, "delete");
 }
 

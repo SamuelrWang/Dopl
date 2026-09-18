@@ -151,8 +151,8 @@ export function KnowledgeSearch({
 /**
  * `ts_headline` snippet → React nodes. RPC wraps matched terms in `<b>…</b>`.
  *
- * ⚠ NEVER `dangerouslySetInnerHTML` here: bodies are user-authored and
- * ts_headline faithfully preserves any `<script>`/`<iframe>` in them. Parsing
+ * Never `dangerouslySetInnerHTML` here: bodies are user-authored and
+ * ts_headline preserves any `<script>`/`<iframe>` in them, so parsing
  * explicitly is what stops injected markup escaping the snippet.
  */
 function renderSnippet(snippet: string): React.ReactNode {

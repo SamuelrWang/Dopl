@@ -1,19 +1,14 @@
 /**
- * THE FIXTURE SEARCH SOURCE — a data table, so the popup can be REVIEWED LIVE
- * before `GET /api/search` exists (Samuel, 2026-09-17: he wants to see the UI
- * now; the endpoint is being built in parallel on `feat/search-api`).
+ * The fixture search source: a data table, so the popup can be reviewed live
+ * without a server.
  *
- * ⚠ **ONLY THE DATA IS FIXTURE.** The debounce, the abort, the grouping, the
- * keyboard order, the recents and the navigation are the real code paths — this
- * module is a `SearchFetcher` like any other, so nothing downstream of it knows
- * it is reading a table.
+ * Only the DATA is fixture — the debounce, abort, grouping, keyboard order,
+ * recents and navigation are the real code paths, and this is a `SearchFetcher`
+ * like any other. The swap is one import (`./search-client.ts ›
+ * apiSearchFetcher`): no flag, no branch, no second code path.
  *
- * ⚠ **THE SWAP IS ONE IMPORT.** A host names `fixtureSearchFetcher` today and
- * `apiSearchFetcher` (`./search-client.ts`) the day the endpoint lands; there is
- * no flag, no branch and no second code path to delete.
- *
- * ⚠ **IT FILTERS FOR REAL** — a query that matches nothing returns no groups, so
- * the "No results" line and the empty-group omission are reviewable too.
+ * It filters for real, so the "No results" line and the empty-group omission are
+ * reviewable too.
  */
 
 import type { SearchGroup, SearchItem, SearchResponse } from "./contracts";
@@ -28,9 +23,9 @@ const ACCOUNT_ROWS: SearchItem[] = [
     id: "ch-q4",
     kind: "channels",
     title: "q4-outbound",
-    // ⚠ THE CHANNEL'S DESCRIPTION — `channels.topic`, which is what the server
-    // sends as a channel row's subtitle (`server/repository-channel-rows.ts ›
-    // searchChannels`). It is NOT a roster: the row draws one line.
+    // The channel's description — `channels.topic`, which the server sends as a
+    // channel row's subtitle (`server/repository-channel-rows.ts ›
+    // searchChannels`). Not a roster: the row draws one line.
     subtitle: "Outbound sequences and replies for the quarter",
     containerId: "ws-orig",
     containerName: "Original",
@@ -41,9 +36,8 @@ const ACCOUNT_ROWS: SearchItem[] = [
     id: "ch-weekly",
     kind: "channels",
     title: "weekly-review",
-    // ⚠ AND ONE WITH NO DESCRIPTION IS THE ORDINARY CASE — `topic` is NOT NULL
-    // DEFAULT `''`, so most channels ride out with no subtitle at all and the
-    // row omits the span.
+    // No description is the ordinary case: `topic` is NOT NULL DEFAULT `''`, so
+    // most channels ride out with no subtitle and the row omits the span.
     containerId: "ws-orig",
     containerName: "Original",
     channelId: "ch-weekly",
@@ -88,8 +82,8 @@ const ACCOUNT_ROWS: SearchItem[] = [
     id: "th-221",
     kind: "threads",
     title: "Pricing page rewrite",
-    // ⚠ THE PARENT CHANNEL, which is what `service-groups.ts › toItem` fills a
-    // thread's subtitle with — never a reply count and never "Direct message".
+    // The parent channel, which is what `service-groups.ts › toItem` fills a
+    // thread's subtitle with — never a reply count, never "Direct message".
     subtitle: "q4-outbound",
     containerId: "ws-orig",
     containerName: "Original",

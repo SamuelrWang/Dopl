@@ -7,15 +7,14 @@ import type { KnowledgeEntry, KnowledgeFolder } from "../../../types";
 import { reportError } from "../utils";
 
 /**
- * Inline-edit persistence for folder descriptions + entry excerpts (the
- * "Contents" tree). Uses the by-id PATCH routes (`updateFolder.description`,
- * `updateEntry.excerpt`) — both session-authenticated, so `last_edited_source`
- * stays `'user'` — then refreshes the base's tree so the change flows back
- * down through props.
+ * Inline-edit persistence for folder descriptions + entry excerpts. Uses the
+ * by-id PATCH routes, both session-authenticated so `last_edited_source` stays
+ * `'user'`, then refreshes the base's tree so the change flows back through
+ * props.
  *
- * Optimistic per-node overrides that self-clear once the refreshed tree
- * carries the same value (or revert on error). ⚠ Node ids are UUIDs, so
- * folder and entry ids never collide in one override map.
+ * Optimistic per-node overrides self-clear once the refreshed tree carries the
+ * same value, or revert on error. Node ids are UUIDs, so folder and entry ids
+ * never collide in one override map.
  */
 export type ContentNodeType = "folder" | "entry";
 
@@ -40,7 +39,7 @@ export function useContentDescriptions({
   const [savingId, setSavingId] = useState<string | null>(null);
 
   // Drop an override once the refreshed tree carries the same value: our save
-  // landed. ⚠ Depends only on incoming props (never `overrides`) or it loops.
+  // landed. Depends only on incoming props (never `overrides`) or it loops.
   useEffect(() => {
     const actual = new Map<string, string | null>();
     for (const f of folders) actual.set(f.id, f.description);

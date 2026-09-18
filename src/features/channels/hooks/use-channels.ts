@@ -1,10 +1,13 @@
 "use client";
 
 import { useApiQuery } from "@/shared/hooks/use-api-query";
-import type { Channel, ChannelListPayload } from "../types";
+import { EMPTY_CHANNELS, type Channel, type ChannelListPayload } from "../types";
 import { channelsPath, type ChannelScope } from "../client/query-keys";
 
-const selectChannels = (body: ChannelListPayload) => body.channels ?? [];
+// ⚠ `EMPTY_CHANNELS`, NEVER `?? []` — this is a `select`, so a literal would mint
+// a new array identity on every render and churn every memo keyed on the result.
+const selectChannels = (body: ChannelListPayload): readonly Channel[] =>
+  body.channels ?? EMPTY_CHANNELS;
 
 /**
  * 🔒 **THE ONE CHANNEL LIST — `?scope=container|account`** (R-26 (b), 2026-09-17).
@@ -31,7 +34,7 @@ export function useChannels(
     typeof target === "string"
       ? { scope: "container" as ChannelScope, workspaceId: target }
       : target;
-  const query = useApiQuery<ChannelListPayload, Channel[]>(channelsPath(), {
+  const query = useApiQuery<ChannelListPayload, readonly Channel[]>(channelsPath(), {
     // ⚠ ABSENT on the account scope, and it has to be: `withUserAuth` resolves no
     // workspace, and sending `X-Workspace-Id` would key the cache per rail
     // selection for a list that does not depend on one.
@@ -40,7 +43,7 @@ export function useChannels(
     select: selectChannels,
   });
   return {
-    channels: query.data ?? [],
+    channels: query.data ?? EMPTY_CHANNELS,
     loading: query.isPending,
     error: query.error ? query.error.message : null,
     refetch: query.refetch,

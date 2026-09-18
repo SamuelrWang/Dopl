@@ -1,11 +1,9 @@
 import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
 import { ContainerPublishUnacknowledgedError } from "@/features/workspaces/server/shared-publish";
-// ⚠ THE CHANGELOG'S TWO DOMAIN ERRORS ARE DELEGATED, NOT RESTATED. They were
-// mapped inline here until 2026-09-09 under the claim that "every revision
-// surface in this app is a KNOWLEDGE route" — which the ontology changelog
-// routes ended. `revisions/server/http-mapping.ts` is the one statement now, so
-// there is still only one place a 404 could become a 403.
+// The changelog's two domain errors are delegated, not restated:
+// `revisions/server/http-mapping.ts` is the one statement, so there is only one
+// place a 404 could become a 403.
 import { mapRevisionError } from "@/features/revisions/server/http-mapping";
 import {
   AgentWriteDisabledError,
@@ -46,15 +44,12 @@ export function mapKnowledgeError(err: unknown): HttpError | null {
     return new HttpError(409, "KNOWLEDGE_FOLDER_CYCLE", err.message);
   }
   if (err instanceof KnowledgeBaseMismatchError) {
-    // 🔒 **500, NOT 400, AND IT CHANGED ON 2026-09-03 (F-664).** A mismatch that
-    // reaches a RESPONSE is never something the caller did: the id lane catches
-    // this error as control flow (`service-bases.ts › loadVisibleBase`), so what
-    // is left is a row whose tenancy disagrees with its parent's — the state
-    // `20260924120000_personal_container_child_rows.sql` repairs and
-    // `check-tenancy-move-gate.ts` prevents. Answering 4xx told an operator the
-    // request was malformed and put the incident in nobody's error budget.
-    // ⚠ THE IDS GO TO THE LOG AND NOT TO THE BODY. Naming a workspace the caller
-    // cannot see would make the refusal an oracle; the sentence is unchanged.
+    // 500, not 400 (2026-09-03, F-664): a mismatch that reaches a RESPONSE is
+    // never something the caller did — the id lane catches this error as control
+    // flow (`service-bases.ts › loadVisibleBase`), so what is left is a row whose
+    // tenancy disagrees with its parent's.
+    // The ids go to the LOG and not to the body: naming a workspace the caller
+    // cannot see would make the refusal an oracle.
     console.error(
       "[knowledge] tenancy mismatch — a row disagrees with its parent's workspace:",
       {
@@ -99,12 +94,10 @@ export function mapKnowledgeError(err: unknown): HttpError | null {
   if (err instanceof ChannelGrantInvalidError) {
     return new HttpError(400, "CHANNEL_GRANT_INVALID", err.message);
   }
-  // ⚠ **`CHANNEL_GRANT_READ_ONLY` (403) LEFT THIS MAPPER ON 2026-09-17** with the
-  // channel knowledge lane (R-18). It was the ONE 4xx on that lane that was not a
-  // 404; nothing can throw it now, so the class went with the arm.
-  // 🔒 G16 — 400, not 403: the caller is allowed to do this, the REQUEST is
-  // incomplete. Shared with the knowledge lane (`knowledge/server/
-  // http-mapping.ts`) — one error class, one code, two feature mappers.
+  // R-18 (2026-09-17): `CHANNEL_GRANT_READ_ONLY` (403) left this mapper with the
+  // channel knowledge lane — nothing can throw it now.
+  // G16 — 400, not 403: the caller is allowed to do this, the REQUEST is
+  // incomplete. One error class, one code, two feature mappers.
   if (err instanceof ContainerPublishUnacknowledgedError) {
     return new HttpError(400, "CONTAINER_PUBLISH_UNACKNOWLEDGED", err.message);
   }

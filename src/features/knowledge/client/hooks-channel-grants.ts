@@ -3,17 +3,14 @@
 /**
  * The scope-A (KB, channel) grant read + write, client side.
  *
- * ⚠ HAND-ROLLED, not `useApiMutation` — the same reason `hooks.ts ›
- * useToggleBaseStar` is. INVARIANTS §8 rule 6 requires the READ to be on
- * `useApiQuery` first, and knowledge reads sit under `["knowledge", key]` keys
- * that `apiQueryKey` never mints, so the write layer would patch an
- * unsubscribed key and fail SILENTLY. Its rules still apply and are followed
- * below: cancel before patching and only with data (2); MERGE, leaving every
- * sibling map on the base-list entry untouched (5); no blanket invalidation,
- * because the surfaces that render grants are warm by construction (1); the
- * keys come from the ids captured AT SUBMIT (4). Rollback restores the
- * SNAPSHOT, never the inverse write — an inverse is wrong if a refetch landed
- * in between.
+ * Hand-rolled, not `useApiMutation` — the same reason `hooks.ts ›
+ * useToggleBaseStar` is: knowledge reads sit under `["knowledge", key]` keys
+ * `apiQueryKey` never mints (INVARIANTS §8 rule 6), so the write layer would
+ * patch an unsubscribed key and fail silently. Its rules still apply below:
+ * cancel before patching and only with data (2); MERGE, leaving every sibling
+ * map on the base-list entry untouched (5); no blanket invalidation (1); keys
+ * from the ids captured at submit (4). Rollback restores the SNAPSHOT, never the
+ * inverse write — an inverse is wrong if a refetch landed in between.
  */
 
 import {
@@ -46,9 +43,8 @@ export function knowledgeChannelGrantsQueryKey(
 /**
  * The grants section's read. Disabled until a base id exists.
  *
- * ⚠ `canManage` comes off the SERVER, not off a role the client re-derives —
- * the same answer the write gate applies, so the editor cannot render for
- * somebody the PUT will refuse.
+ * `canManage` comes off the server, not off a role the client re-derives, so
+ * the editor cannot render for somebody the PUT will refuse.
  */
 export function useChannelGrantSettings(
   baseId: string,
@@ -72,17 +68,13 @@ export function useChannelGrantSettings(
  *  - the SETTINGS entry is `{channelId → grant}` for one base;
  *  - each CHANNEL-SCOPED BASE LIST entry is `{baseId → grant}` for one channel.
  *
- * ⚠ `null` REMOVES THE KEY rather than storing a level. Absence is the third
- * state everywhere — storage, wire and cache — so a `{level:"none"}` here would
- * be a fourth state that only the client believes in.
+ * `null` REMOVES the key rather than storing a level: absence is the third
+ * state in storage, wire and cache alike.
  *
- * ⚠ THE BASE-LIST HALF MATCHES BY PREFIX. Its segment is minted by
- * `knowledgeBasesCacheSegment(ws, channelId)`, and a surface may extend that
- * segment further; an exact-key patch would silently miss those entries and the
- * grid would keep rendering the old level until a refetch. The UNSCOPED base
- * list is deliberately NOT patched — it carries no `channelGrants` at all
- * (absent param ⇒ absent key, §9), and writing one there would invent a
- * channel-scoped payload nobody asked for.
+ * The base-list half matches by PREFIX, because a surface may extend the segment
+ * `knowledgeBasesCacheSegment(ws, channelId)` mints; an exact-key patch would
+ * silently miss those entries. The UNSCOPED list is deliberately not patched —
+ * it carries no `channelGrants` at all (absent param ⇒ absent key, §9).
  */
 export function patchChannelGrantInCache(
   client: QueryClient,
@@ -130,18 +122,15 @@ function withGrant(
 /**
  * Set one (KB, channel) grant, patching the cache from the SERVER'S answer.
  *
- * ⚠ THE PATCH IS APPLIED ON SUCCESS, NOT OPTIMISTICALLY, and that is the point:
- * the server normalises the write (`guestWrite` is forced false at
- * `agent_only`), so an optimistic patch would paint a state the row never took
- * and then quietly disagree with the next refetch. The snapshot is still taken
- * so a failure restores exactly what was on screen.
+ * The patch is applied on success, not optimistically: the server normalises
+ * the write (`guestWrite` is forced false at `agent_only`), so an optimistic
+ * patch would paint a state the row never took. The snapshot is still taken so
+ * a failure restores exactly what was on screen.
  *
- * ⚠ `coldKeys` NAMES THE `?channelId=` VARIANT (§8's one exception to "no
- * invalidation"): the patch above declines on an entry with no data, so a
- * grant set from the workspace settings modal before the /home panel has ever
- * loaded its channel-scoped list would land server-side and never reach that
- * surface. `coldKeys` runs after the patch, so "still empty" IS the decline and
- * a warm cache re-downloads nothing.
+ * `coldKeys` names the `?channelId=` variant (§8's one exception to "no
+ * invalidation"): the patch declines on an entry with no data, so a grant set
+ * before the /home panel ever loaded its channel-scoped list would never reach
+ * that surface. It runs after the patch, so "still empty" IS the decline.
  */
 export function useSetChannelGrant(baseId: string, workspaceId?: string) {
   const client = useQueryClient();

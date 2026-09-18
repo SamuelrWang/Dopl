@@ -42,11 +42,10 @@ interface Props {
  *   5. Advanced — slug edit (folded behind a disclosure).
  *   6. Danger zone — permanently delete the KB (confirmed).
  *
- * ⚠ SHARING AND CHANNELS ARE TWO DIFFERENT AUDIENCES, kept as two sections on
- * purpose. Sharing answers "which WORKSPACE MEMBERS see this" (visibility +
- * teams, on the base row); Channels answers "which CHANNELS — and therefore
- * which guests and which agents — reach it" (grant rows, per channel). Folding
- * them together would imply one is a level of the other.
+ * Sharing and Channels stay two sections because they are two audiences:
+ * Sharing is which workspace members see this (visibility + teams, on the base
+ * row); Channels is which channels — and so which guests and agents — reach it
+ * (grant rows, per channel).
  */
 export function BaseSettingsForm({
   workspaceId,
@@ -91,7 +90,7 @@ export function BaseSettingsForm({
         workspaceId
       );
       toast({ title: "Saved" });
-      // ⚠ New row must be in the cache BEFORE the URL moves: the segment
+      // The new row must be in the cache before the URL moves: the segment
       // carries the slug and the controller resolves it against this list.
       seedKnowledgeBase(queryClient, workspaceId, next);
       // Slug change keeps the publicId, so the resolver would 301 anyway;
@@ -186,14 +185,14 @@ export function BaseSettingsForm({
         />
       </Section>
 
-      {/* Channels — scope-A grants: None / Agent only / Visible per channel, with the
-          guest-write pen inside the row that can hand one over. 🔒 It renders NOTHING in
-          a standard workspace and owns its own frame for exactly that; the server
-          decides, via `channelScopeAllowed`. */}
+      {/* Channels — scope-A grants per channel, with the guest-write pen in the
+          row that can hand one over. Renders nothing in a standard workspace and
+          owns its own frame for that; the server decides, via
+          `channelScopeAllowed`. */}
       <KbChannelGrantsSection baseId={base.id} workspaceId={workspaceId} />
 
-      {/* Folder descriptions: agent-facing summaries streamed into MCP
-          tree / directory listings alongside the folder names. */}
+      {/* Folder descriptions: agent-facing summaries shown in MCP tree
+          listings. */}
       {folders.length > 0 ? (
         <Section title="Folder descriptions">
           <p className="text-caption text-text-secondary leading-relaxed -mt-1">
@@ -298,7 +297,7 @@ function Field({
 }
 
 /** Full path label per folder ("parent / child"), sorted so nested folders
- *  list under their ancestors. ⚠ Cycle-guarded. */
+ *  list under their ancestors. Cycle-guarded. */
 function sortFoldersByPath(
   folders: KnowledgeFolder[]
 ): Array<{ folder: KnowledgeFolder; pathLabel: string }> {

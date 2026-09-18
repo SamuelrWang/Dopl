@@ -12,19 +12,13 @@ import {
 } from "../contracts";
 
 /**
- * ⚠ **THE ORDER IS THE CONTRACT'S, AND THIS FILE DECLARES NONE OF ITS OWN.**
- * `contracts.ts › SEARCH_GROUP_ORDER` is the payload order the service builds in
- * (`search/server/service.ts`), so the renderer walks the groups AS GIVEN and
- * never sorts — a second ordering here is a second answer to "which section is
- * first", and the two would drift the day a kind is added.
+ * The order is the contract's: this file declares none of its own. The renderer
+ * walks the groups as given and never sorts.
  */
 
 /**
- * The centred label that sits IN the hairline above each section.
- *
- * ⚠ MINIMAL COPY — a noun, never a sentence and never a count. The section's
- * size is visible; naming it "3 channels" would be a second place for a number
- * to be wrong.
+ * The centred label that sits in the hairline above each section. A noun, never a
+ * sentence and never a count — the section's size is already visible.
  */
 export const GROUP_LABEL: Record<SearchGroupKind, string> = {
   channels: "Channels",
@@ -39,17 +33,13 @@ export const GROUP_LABEL: Record<SearchGroupKind, string> = {
 };
 
 /**
- * The groups the popup will draw — **IN PAYLOAD ORDER, WHICH IS
- * `SEARCH_GROUP_ORDER`** (the contract says so; see the note above). This
- * function DROPS, it never reorders.
+ * The groups the popup will draw, in payload order. This function DROPS; it never
+ * reorders.
  *
- * ⚠ **AN EMPTY GROUP IS NOT A SECTION.** The contract already omits one, so this
- * is belt-and-braces over a payload from an older or a stubbed server: a hairline
- * with a label and nothing under it says "there are Skills here" to a reader who
- * is scanning for exactly that.
- * ⚠ **AN UNKNOWN KIND IS DROPPED, NOT APPENDED.** A newer server may grow a
- * group this bundle has no row renderer and no label for; appending it would
- * paint an unlabelled section of `undefined`.
+ * An empty group is not a section — belt-and-braces over an older or stubbed
+ * server, since a labelled hairline with nothing under it claims rows exist.
+ * An unknown kind is dropped, not appended: a newer server may grow a group this
+ * bundle has no renderer or label for.
  */
 export function orderedGroups(groups: readonly SearchGroup[]): SearchGroup[] {
   return groups.filter(
@@ -60,12 +50,9 @@ export function orderedGroups(groups: readonly SearchGroup[]): SearchGroup[] {
 }
 
 /**
- * Every row, in the order the eye reads them — which is what ↑/↓ walk.
- *
- * ⚠ **ONE FLAT LIST ACROSS THE GROUPS, NOT A CURSOR PER SECTION.** Arrow keys
- * move through the popup, not within a section: a reader pressing ↓ at the foot
- * of Channels expects the first Message, and a per-section cursor would trap
- * them.
+ * Every row in the order the eye reads them, which is what the arrow keys walk.
+ * One flat list across the groups, not a cursor per section: a reader pressing
+ * down at the foot of Channels expects the first Message.
  */
 export function flatItems(groups: readonly SearchGroup[]): SearchItem[] {
   return orderedGroups(groups).flatMap((group) => group.items);
@@ -86,15 +73,13 @@ const ESCAPES: Record<string, string> = {
 };
 
 /**
- * THE SNIPPET SANITISER — escape EVERYTHING, then let `<mark>` back in.
+ * The snippet sanitiser: escape everything, then let `<mark>` back in.
  *
- * ⚠ **ALLOW-LIST BY RECONSTRUCTION, NEVER A STRIP PASS.** A "remove the tags I
- * do not like" filter is a blocklist, and every blocklist has a bypass
- * (`<scr<script>ipt>`, an attribute on the allowed tag, a stray `<` the parser
- * heals). Escaping first makes the string inert; the only two sequences that
- * become markup again are the two spelled here, with no attributes possible.
- * ⚠ The result is handed to `dangerouslySetInnerHTML` — that is the ONLY such
- * call in this feature, and it reads this function's output or nothing.
+ * Allow-list by RECONSTRUCTION, never a strip pass — a "remove the tags I dislike"
+ * filter is a blocklist and every blocklist has a bypass. Escaping first makes the
+ * string inert, and only the two sequences spelled here become markup again, with
+ * no attributes possible. The result feeds this feature's only
+ * `dangerouslySetInnerHTML`.
  */
 export function sanitizeSnippet(snippet: string): string {
   return snippet

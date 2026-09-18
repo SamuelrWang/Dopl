@@ -23,31 +23,26 @@ export type WriteSource = "user" | "agent";
  * (RLS enforces; service layer belt-and-suspenders).
  *
  * KBs are two-way (owner or admin flips via Sharing settings, narrowing
- * unchecked); skills stay one-way private → public.
- * ⚠ DB column default is `'public'` so existing rows stay visible;
- * `createBase` / `createSkill` override to `'private'` for new items.
+ * unchecked); skills stay one-way private → public. The DB column defaults to
+ * `'public'` so existing rows stay visible; `createBase` / `createSkill`
+ * override to `'private'` for new items.
  */
 export type Visibility = "public" | "private";
 
 /**
- * WHICH SHELF a base lives on — the /home Knowledge pane's "across all
- * channels" scope, or the workspace Knowledge page. Two PLACES over one table
- * (Samuel's ruling 2026-08-26).
+ * Which shelf a base lives on: the /home Knowledge pane's "across all channels"
+ * scope, or the workspace Knowledge page (ruling 2026-08-26). Since 2026-09-02
+ * these are two containers — the personal shelf is the caller's own
+ * `kind='personal'` workspace — so the shelf resolves to a `workspace_id`, not
+ * to a `WHERE`.
  *
- * ⚠ **AND SINCE 2026-09-02 THEY ARE LITERALLY TWO CONTAINERS** (slice B15,
- * ruling B10). `20260923120000_drop_home_scoped.sql` drops the boolean this used
- * to name: the personal shelf is the caller's own `kind='personal'` workspace,
- * so "which shelf" resolves to a `workspace_id` rather than to a `WHERE`. The
- * exclusion is now structural instead of enforced.
+ * Not a field on `KnowledgeBase` and never make it one: it is a write input
+ * (`KnowledgeBaseCreateInput.homeScoped`, which routes the row) and a read
+ * filter (`GET /api/knowledge/bases?shelf=`). A surface that must show the shelf
+ * gets a sibling key on the list response, which is what stops the SDK-mirrored
+ * row type widening (`scripts/check-knowledge-type-drift.ts`).
  *
- * ⚠ NOT A FIELD ON `KnowledgeBase`, and never make it one. It is a WRITE input
- * (`KnowledgeBaseCreateInput.homeScoped`, which ROUTES the row) and a READ
- * FILTER (`GET /api/knowledge/bases?shelf=`). A surface that must SHOW the shelf
- * gets a SIBLING key on the list response, like `baseStats` / `channelGrants` —
- * the shape is unchanged, and it is what stops the SDK-mirrored row type
- * widening (`scripts/check-knowledge-type-drift.ts`).
- *
- * ⚠ ABSENT IS NOT A THIRD VALUE — it means NO FILTER, which is what keeps MCP
+ * Absent is not a third value — it means no filter, which is what keeps MCP
  * `kb_list_bases` and workspace search seeing the whole workspace.
  */
 export type KbShelf = "home" | "workspace";
@@ -70,63 +65,55 @@ export interface KnowledgeBase {
 }
 
 /**
- * Per-base list-view counters, computed not stored. ⚠ SIBLING of
- * `KnowledgeBase`, never fields on it: `KnowledgeBase` is hand-mirrored
- * into `packages/dopl-client/src/knowledge-types.ts` and pinned
- * field-for-field by `scripts/check-knowledge-type-drift.ts`, so widening
- * it pushes display-only numbers onto every MCP `kb_*` payload. Keyed by
- * base id alongside `bases` in the list response, like `ownerNames`.
+ * Per-base list-view counters, computed not stored. A sibling of
+ * `KnowledgeBase`, never fields on it: that type is hand-mirrored into
+ * `packages/dopl-client/src/knowledge-types.ts` and pinned field-for-field by
+ * `scripts/check-knowledge-type-drift.ts`, so widening it pushes display-only
+ * numbers onto every MCP `kb_*` payload.
  *
- * `lastEntryUpdatedAt` = CONTENT freshness (newest active entry write),
- * NOT `KnowledgeBase.updatedAt` (moves on name/description/sharing writes,
- * stands still while an agent fills the base).
+ * `lastEntryUpdatedAt` is content freshness (newest active entry write), not
+ * `KnowledgeBase.updatedAt`, which moves on name/description/sharing writes.
  */
 export interface KnowledgeBaseStats {
   entryCount: number;
   lastEntryUpdatedAt: string | null;
   /**
-   * Stored `knowledge_bases.storage_bytes` counter (summed
-   * `octet_length(body)` of live entries), NOT a re-sum per request.
-   * ⚠ `0` = empty base, `null` = UNKNOWN (counter unreadable, e.g. build
-   * deployed ahead of migration). Meter renders for `0`, suppressed for
-   * `null` — never drawn on a guess.
+   * Stored `knowledge_bases.storage_bytes` counter, not a re-sum per request.
+   * `0` = empty base, `null` = unknown (e.g. build deployed ahead of the
+   * migration); the meter renders for `0` and is suppressed for `null`.
    */
   storageBytes: number | null;
 }
 
-/** A (knowledge_base, channel) grant's three states collapse to TWO stored
- *  levels plus ABSENCE (no row = not shared). See
+/** A (knowledge_base, channel) grant's three states collapse to two stored
+ *  levels plus absence (no row = not shared). See
  *  `20260827120000_channel_resource_grants.sql`. */
 export type ChannelGrantLevel = "agent_only" | "visible";
 
-/** One KB's grant on ONE channel, as projected onto the `channelGrants` sibling
+/** One KB's grant on one channel, projected onto the `channelGrants` sibling
  *  key of `GET /api/knowledge/bases?channelId=`. `guestWrite` lives on the
- *  grant, not the KB — a KB shared into N channels is N audience questions.
- *  ⚠ NOT a field on `KnowledgeBase`: it rides the LIST response, so it never
- *  widens the SDK-mirrored row type (`check-knowledge-type-drift`). */
+ *  grant, not the KB — a KB shared into N channels is N audience questions —
+ *  and it rides the list response so it never widens the SDK-mirrored row
+ *  type (`check-knowledge-type-drift`). */
 export interface ChannelResourceGrant {
   level: ChannelGrantLevel;
   guestWrite: boolean;
 }
 
 /**
- * What a WRITER may ask for (M1) — the two stored levels plus the third state
- * spelled out.
+ * What a writer may ask for: the two stored levels plus the third state.
  *
- * ⚠ `"none"` EXISTS ON THE WIRE AND NOWHERE ELSE. Storage has no such value
- * (the CHECK admits `agent_only`/`visible` only); the service turns it into a
- * DELETE. A caller cannot say "not shared" by omitting a field, so the write is
- * a full statement of the desired end state and a retry is idempotent — the
- * `PUT`/`DELETE` star argument (`bases/[baseId]/star/route.ts`), reached by a
- * different road because here the third state is the interesting one.
+ * `"none"` exists on the wire and nowhere else — storage admits
+ * `agent_only`/`visible` only and the service turns `none` into a DELETE. So the
+ * write states the desired end state in full and a retry is idempotent, rather
+ * than "not shared" being said by omitting a field.
  */
 export type ChannelGrantLevelInput = ChannelGrantLevel | "none";
 
 /**
  * One channel the grants section may offer, as the settings read projects it.
- * ⚠ The list is built SERVER-side from the caller's visible channels — never a
- * client-side workspace channel list, which would put unreadable rooms' names
- * on the wire.
+ * The list is built server-side from the caller's visible channels; a
+ * client-side one would put unreadable rooms' names on the wire.
  */
 export interface ChannelGrantChannelRef {
   id: string;
@@ -179,30 +166,28 @@ export interface KnowledgeContext {
   role: Role;
   /**
    * Workspace this credential is locked to; `null` for session callers and
-   * unlocked tokens. ⚠ IT ANSWERS *WHICH WORKSPACE* AND NOTHING ELSE. It used
-   * to double as the M-10 visibility gate, which is the F-336 defect: see
+   * unlocked tokens. It answers which workspace and nothing else: it used to
+   * double as the M-10 visibility gate, which is the F-336 defect — see
    * {@link KnowledgeContext.credentialSubjectUserId}.
    */
   apiKeyWorkspaceId?: string | null;
   /**
-   * WHOSE REACH this credential inherits (`mcp_tokens.subject_user_id`): the ONE
+   * Whose reach this credential inherits (`mcp_tokens.subject_user_id`): the one
    * human it acts as, or `null` for a credential that may be passed between
-   * humans. ⚠ NEVER read directly; the one reader is
+   * humans. Never read it directly; the one reader is
    * `shared/auth/credential-audience.ts › isSharedCredential`.
    *
-   * M-10 means *"a credential with no single human behind it inherits nobody's
-   * personal reach"*. A container SESSION has a human behind it — the operator,
-   * whose own private bases are the whole point of the `agent_only` grant (§10
-   * layer A) — so it reads private rows exactly as its operator does, while
-   * staying fenced to one container by the OTHER axis and to the GRANTED bases
-   * by layer A.
+   * M-10: a credential with no single human behind it inherits nobody's personal
+   * reach. A container session does have one — the operator — so it reads
+   * private rows as its operator does, while staying fenced to one container by
+   * the other axis and to granted bases by layer A.
    */
   credentialSubjectUserId: string | null;
   /**
    * `X-Dopl-Session-Id` verbatim (the desktop's slot key, `<channelId>:<tail>`),
    * or `null`/absent for every caller that sends none.
    *
-   * ⚠ A NON-AUTHORIZATION SIGNAL (`shared/auth/session-header.ts`) and the ONLY
+   * A non-authorization signal (`shared/auth/session-header.ts`) and the only
    * forgeable field on this context. It is read in exactly one place —
    * `service-audience.ts › narrowToSessionChannel` — where it may only NARROW an
    * already-fenced channel set. Nothing else may read it, and nothing may grant
@@ -211,8 +196,8 @@ export interface KnowledgeContext {
   sessionId?: string | null;
 }
 
-/** Snapshot of a base's contents. Folders and entries are FLAT arrays; UI
- *  builds hierarchy from `parentId`/`folderId`. */
+/** Snapshot of a base's contents. Folders and entries are flat arrays; the UI
+ *  builds the hierarchy from `parentId`/`folderId`. */
 export interface KnowledgeTreeSnapshot {
   base: KnowledgeBase;
   folders: KnowledgeFolder[];

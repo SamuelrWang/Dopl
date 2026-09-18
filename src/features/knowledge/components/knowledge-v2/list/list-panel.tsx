@@ -27,22 +27,15 @@ interface Props {
 }
 
 /**
- * THE FOLDER RAIL — the opened base's tree, and nothing else (Samuel's ruling,
+ * The folder rail — the opened base's tree and nothing else (Samuel's ruling,
  * 2026-08-28: "left column: THIN collapsible folder tree").
  *
- * ⚠ IT LOST ITS BREADCRUMB, WHICH IS THE POINT. This pane used to carry a
- * `Knowledge › {base}` crumb while the detail pane beside it carried a SECOND
- * one — two navs, on screen together, that this file's own comment had to warn
- * a screen reader could not tell apart. The panel has ONE header now
- * (`../detail/base-header.tsx`) and it holds the ONE crumb; the rail holds the
- * tree.
+ * It carries no breadcrumb: the panel has ONE header
+ * (`../detail/base-header.tsx`) holding the one crumb; the rail holds the tree.
  *
- * ⚠ COLLAPSE STATE IS LOCAL, and belongs here: nothing outside this column
- * renders differently for it, and lifting it would put a rail concern in the
- * view root that composes three faces. The MECHANIC — a strip, not a
- * disappearance, at 150ms, reduced-motion aware — is the module's
- * (`../knowledge-v2.module.css › .rail`), which is where the argument for it
- * is written down.
+ * Collapse state is local — nothing outside this column renders differently for
+ * it. The mechanic (a strip, not a disappearance, 150ms, reduced-motion aware)
+ * is the module's (`../knowledge-v2.module.css › .rail`).
  */
 export function ListPanel({
   base,
@@ -78,10 +71,9 @@ export function ListPanel({
 
         <div className={styles.railBody}>
           {!tree || tree.status === "loading" ? (
-            // Skeleton, not a "Loading…" line (docs/DESIGN-SYSTEM.md: no text
-            // loaders). ⚠ Shimmer is aria-hidden, so the status role and
-            // sr-only label must live on THIS wrapper or the announcement is
-            // lost.
+            // skeleton, not a "Loading…" line (docs/DESIGN-SYSTEM.md). The
+            // shimmer is aria-hidden, so the status role and sr-only label must
+            // live on THIS wrapper or the announcement is lost.
             <div role="status" aria-busy="true" aria-live="polite">
               <span className="sr-only">Loading knowledge base</span>
               {Array.from({ length: 5 }).map((_, i) => (

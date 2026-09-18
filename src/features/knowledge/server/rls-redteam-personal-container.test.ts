@@ -10,21 +10,17 @@ import {
 } from "@/shared/supabase/rls-redteam-fixture";
 
 /**
- * 🔒 **THE PERSONAL CONTAINER, READ THROUGH A CONTAINER LOCK** — the SQL half of
- * the 1.26.0 smoke fix, and the reason that fix ships no policy change.
+ * The personal container, read through a container LOCK — the SQL half of the
+ * 1.26.0 smoke fix, and why that fix ships no policy change.
  *
- * ⚠ **THE LOCK IS NOT A POLICY INPUT AND MUST NOT BECOME ONE.**
+ * The lock is not a policy input and must not become one:
  * `rls-redteam-resource-grants.test.ts` pins that no SELECT policy reads
- * `dopl_credential.workspace_id`: tenancy comes from `workspace_members`, which
- * no caller-supplied claim can widen, and the lock is enforced at the ROUTE
- * (`with-workspace-auth.ts`, `segment.ts › withinKeyLock`). So the database has
- * always admitted the operator's own personal base to their own locked
- * credential, and `resolve-resource.ts` was the narrow half. **These three cases
- * are what makes that a measurement rather than an argument** — without them the
- * claim "the twin already agrees, so there is no migration" rests on reading the
- * SQL rather than on running it.
+ * `dopl_credential.workspace_id` — tenancy comes from `workspace_members`, and
+ * the lock is enforced at the ROUTE (`with-workspace-auth.ts`,
+ * `segment.ts › withinKeyLock`). These three cases make "the twin already
+ * agrees, so there is no migration" a measurement rather than an argument.
  *
- * ⚠ Every scope this fixture mints carries a FOREIGN container id
+ * Every scope this fixture mints carries a FOREIGN container id
  * (`rls-redteam-fixture.ts › scopeFor`), so each case below is genuinely a
  * LOCKED credential reading outside its lock.
  */
@@ -99,10 +95,9 @@ describe.skipIf(!liveRedteamEnabled)(
     });
 
     it("🔒 and reads ANOTHER user's personal base not at all — 0 rows", async () => {
-      // ⚠ The shelf is a container with exactly one member, so this is the
-      // ordinary non-member refusal — which is the point: admitting the
-      // caller's OWN container to the id lane borrows no reach into anyone
-      // else's, because the lookup is keyed on the owner.
+      // the shelf is a container with exactly one member, so this is the ordinary
+      // non-member refusal: admitting the caller's OWN container to the id lane
+      // borrows no reach into anyone else's — the lookup is keyed on the owner.
       expect(
         await readableIds(ownerId, "knowledge_bases", strangerPersonalId)
       ).toHaveLength(0);

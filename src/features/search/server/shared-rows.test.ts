@@ -1,30 +1,17 @@
 /**
- * 🔒 **ROWS LENT INTO A CONTAINER ARE FINDABLE, AND TEAM-SCOPED ONES ARE NOT
- * FINDABLE BY THE WRONG PERSON (F-716, RESOLVED 2026-09-17).**
+ * F-716 (resolved 2026-09-17): rows lent into a container are findable, and
+ * team-scoped ones are not findable by the wrong person. The SQL fence this
+ * replaced both missed lent rows and leaked `access_mode='teams'` ones. Both
+ * directions are pinned here over the real repositories and a filtering
+ * in-memory database (INVARIANTS §14: a `WHERE` that was written is not a row
+ * that was excluded).
  *
- * The old fence was `visibility = <widest> OR <owner> = caller`, written in SQL.
- * F-716 filed it as a MISS. It was also a LEAK: `visibility='public'` admits an
- * `access_mode='teams'` row, which `canSeeSkill` / `canSeeChat` refuse to a
- * member of none of the granted teams. **Both directions are pinned here**, over
- * the real repositories and a filtering in-memory database — INVARIANTS §14: a
- * `WHERE` clause that was WRITTEN is not a row that was EXCLUDED.
+ * The last describe is a combination sweep asserting EQUALITY — what search
+ * returns is exactly what the owning feature's `canSee*` admits, neither subset
+ * nor superset — so a predicate that gains a narrowing arm fails here instead of
+ * quietly disagreeing with its own page.
  *
- * ⚠ **AND THE LAST DESCRIBE IS THE PIN F-716 SAID WAS MISSING** — *"the subset
- * relationship is the claim and it is not pinned"* — in
- * `shared/tenancy/grant-read-arm.test.ts`'s idiom: a COMBINATION sweep asserting
- * the property rather than examples of it.
- *
- *   > **what search returns is exactly what the owning feature's `canSee*`
- *   > admits** — not a subset of it, and not a superset.
- *
- * A subset would be a silent miss; a superset is a leak. Asserting EQUALITY is
- * what makes a predicate that gains a NARROWING arm tomorrow fail here instead
- * of quietly disagreeing with its own page.
- *
- * MUTATION-VERIFY: 4 reverts, 4 failures, 0 vacuous (2026-09-17) — putting the
- * `visibility` SQL arm back on skills, dropping the grant read from
- * `visibleBases`, dropping `access_mode` from the skills projection, and
- * widening the container fence to every row each turn a case here red.
+ * MUTATION-VERIFY: 4 reverts, 4 failures, 0 vacuous (2026-09-17).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -109,9 +96,8 @@ describe("🔒 a row LENT into a container the caller is in", () => {
   it("🔒 is NOT found through an `agent_only` channel grant", async () => {
     mount({
       knowledge_bases: [base()],
-      // ⚠ TWO AUDIENCES, NOT A HIGH/LOW PAIR — `agent_only` names the AGENT's
-      // ceiling and must not widen a person's read
-      // (`shared/tenancy/resource-grant-reach.ts`).
+      // Two audiences, not a high/low pair: `agent_only` names the AGENT's
+      // ceiling and must not widen a person's read.
       resource_grants: [
         containerGrant({ scope_type: "channel", scope_id: "ch-1", level: "agent_only" }),
       ],
@@ -159,8 +145,8 @@ describe("account scope spans containers", () => {
         { workspace_id: WS, user_id: ME, status: "active", role: "member" },
       ],
     });
-    // ⚠ **A GRANT WIDENS VISIBILITY, NEVER THE CANDIDATE SET.** The container
-    // fence is the reach, and the reach is the only thing a query may name.
+    // A grant widens visibility, never the candidate set: the reach is the only
+    // thing a query may name.
     expect([...(await listReadableBases([WS], caller())).keys()]).toEqual([]);
   });
 });
@@ -200,9 +186,8 @@ describe("🔒 a TEAM-scoped row is not visible to the wrong member", () => {
 
   it("🔒 is NOT found by a member of no granted team — the arm the OLD fence leaked", async () => {
     mount({ skills: [skill()], team_members: [], resource_grants: [] });
-    // ⚠ `visibility='public'` ADMITTED THIS ROW under the SQL fence, and
-    // `canSeeSkill` refuses it. F-716's "strict subset, so it can only be a
-    // miss" was half true; this is the other half.
+    // `visibility='public'` admitted this row under the SQL fence and
+    // `canSeeSkill` refuses it — the leak half of F-716.
     expect(await searchSkills(WS, "tax", caller())).toEqual([]);
   });
 
@@ -223,10 +208,9 @@ describe("🔒 a TEAM-scoped row is not visible to the wrong member", () => {
 });
 
 /**
- * 🔒 **THE PIN F-716 ASKED FOR — the arms are not a subset, they are the SAME
- * ARMS.** `grant-read-arm.test.ts`'s idiom: a property over every combination,
- * driven through the REAL repository (so a SQL arm put back would fail here)
- * and compared against the feature's own predicate called directly.
+ * F-716's pin: the arms are not a subset, they are the same arms. A property over
+ * every combination, driven through the real repository and compared against the
+ * feature's own predicate called directly.
  */
 describe("🔒 search admits exactly what canSeeSkill admits", () => {
   const CREDENTIALS = {
@@ -284,29 +268,20 @@ describe("🔒 search admits exactly what canSeeSkill admits", () => {
   }
 
   it("the property is not vacuous — some combinations ARE visible", () => {
-    // ⚠ Without this the sweep above would pass if search returned nothing at
-    // all, which is the failure mode an equality property cannot see by itself.
+    // Without this the sweep above would pass if search returned nothing at all,
+    // which an equality property cannot see by itself.
     expect(moved).toBeGreaterThan(0);
   });
 });
 
-// ── 🔒 F-716's RESIDUAL: a TEAMS-MODE knowledge base (closed 2026-09-17) ──
+// ── F-716's RESIDUAL: a TEAMS-MODE knowledge base (closed 2026-09-17) ──
 
 /**
- * The entry's own words: *"a teams-mode PUBLIC base can appear in the popup for
- * a member of no granted team — the one place the four tables still do not agree
- * with their own pages."*
- *
- * ⚠ **THE FIX IS NOT A TEAMS ARM ON `canSeeBase`.** The knowledge feature spends
- * its teams question in `teams/server/access.ts › listEffectiveAccess` +
- * `resolveLevel` (through `filterTeamVisibleBases`), and
- * `repository-visibility.ts › teamsModeVisible` calls **those two**, batched over
- * the containers that actually hold a teams-mode row on the page. Same reader,
- * same resolver, second caller — not a second rule.
- *
- * MUTATION-VERIFY: dropping the `teamsModeVisible` AND from `visibleBases` turns
- * the second case here red; dropping the `access_mode` term from the candidate
- * projection turns the first red (every row reads as workspace-mode).
+ * F-716's residual: a teams-mode public base could appear in the popup for a
+ * member of no granted team. The fix is not a teams arm on `canSeeBase` —
+ * `repository-visibility.ts › teamsModeVisible` calls the same
+ * `teams/server/access.ts › listEffectiveAccess` + `resolveLevel` the base's own
+ * page uses, batched over the containers that hold a teams-mode row.
  */
 const teamsBase = (over: Record<string, unknown> = {}) => ({
   ...base({
@@ -340,9 +315,8 @@ describe("🔒 a TEAMS-MODE knowledge base is not visible to the wrong member", 
   });
 
   it("🔒 is NOT found by a member of no granted team — F-716's residual", async () => {
-    // ⚠ `visibility='public'` ADMITTED THIS ROW right up to 2026-09-17, because
-    // `canSeeBase` returns on its first arm and the teams narrowing lived in a
-    // per-row async call that is not on the search path.
+    // `visibility='public'` admitted this row: `canSeeBase` returns on its first
+    // arm, and the teams narrowing lived in a per-row async call off this path.
     mount({
       knowledge_bases: [teamsBase()],
       team_members: [],
@@ -363,7 +337,7 @@ describe("🔒 a TEAMS-MODE knowledge base is not visible to the wrong member", 
   });
 
   it("is found by a workspace ADMIN of the ROW's container", async () => {
-    // ⚠ The admin arm is about the ROW's container, never "an admin somewhere" —
+    // The admin arm is about the ROW's container, never "an admin somewhere" —
     // `roleByContainer` is a map for exactly this.
     mount({
       knowledge_bases: [teamsBase()],
@@ -388,10 +362,9 @@ describe("🔒 a TEAMS-MODE knowledge base is not visible to the wrong member", 
   });
 
   it("🔒 is NOT found in a container the caller holds NO ROLE for", async () => {
-    // ⚠ Unreachable through the route — the reach is the caller's own containers — and
-    // pinned because the alternative is a GUESSED `viewer`, which would skip
-    // `listEffectiveAccess`'s membership check and admit a non-member's OWN teams-mode
-    // row that the base's own page refuses.
+    // Unreachable through the route, pinned because the alternative is a guessed
+    // `viewer`, which would skip `listEffectiveAccess`'s membership check and
+    // admit a non-member's own teams-mode row.
     mount({
       knowledge_bases: [teamsBase({ created_by: ME })],
       team_members: [],
@@ -402,8 +375,8 @@ describe("🔒 a TEAMS-MODE knowledge base is not visible to the wrong member", 
   });
 
   it("🔒 reads at most SEARCH_TEAMS_CONTAINER_LIMIT containers, and drops the rest", async () => {
-    // ⚠ FAIL-CLOSED IN THE DIRECTION THAT MATTERS: past the cap a row is HIDDEN, never
-    // shown. The cap is stated so the fan cannot silently become one read per row.
+    // Fail-closed in the direction that matters: past the cap a row is hidden,
+    // never shown.
     const ids = Array.from(
       { length: SEARCH_TEAMS_CONTAINER_LIMIT + 1 },
       (_, i) => `${i}`.padStart(8, "6") + "-6666-6666-6666-666666666666"

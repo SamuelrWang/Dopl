@@ -33,37 +33,31 @@ interface Props {
   onBaseSaved: () => void;
 }
 
-/** The token a BASE selection shows. ⚠ Includes the id, so switching bases
- *  under a live mount is a swap and not a silent content change. */
+/** The token a base selection shows. Includes the id, so switching bases under
+ *  a live mount is a swap and not a silent content change. */
 const infoToken = (baseId: string) => `info:${baseId}`;
-/** The token a FILE selection shows. ⚠ `file:` is not a prefix of `info:` and
+/** The token a file selection shows. `file:` is not a prefix of `info:` and
  *  vice versa, so the two branches below cannot claim each other's tokens. */
 const fileToken = (entryId: string) => `file:${entryId}`;
 
 /**
- * THE DETAIL COLUMN — ONE surface whose contents fade between two faces
- * (Samuel's ruling, 2026-08-28):
+ * The detail column: one surface fading between two faces (ruling 2026-08-28).
+ * A base selection shows the info face, which is the resting state, not a
+ * placeholder for "no file picked yet"; a file selection shows the document.
  *
- *   BASE selected → the INFO face, and it is the RESTING STATE. Opening a base
- *       lands here; it is not a placeholder for "no file picked yet".
- *   FILE selected → the document, arriving by a 150ms fade.
+ * The fade is the shared `shared/ui/crossfade.tsx` primitive: it takes a render
+ * function and hands back the token still ON SCREEN, which lags the selection by
+ * one fade.
  *
- * ⚠ THE FADE IS THE SHARED PRIMITIVE (`shared/ui/crossfade.tsx`), the one
- * /home's record pane and the channel info column use — same 150ms, same
- * `prefers-reduced-motion` opt-out, one recipe. It takes a RENDER FUNCTION and
- * hands back the token still ON SCREEN, which lags the selection by one fade.
- *
- * 🔒 ⚠ WHICH IS WHY `lastEntry` EXISTS. `openEntry` belongs to the CURRENT
- * selection, so the moment a file is left it is already `null` — and the
- * outgoing face, still mounted for its 150ms, would render its document as a
- * loading skeleton on the way out. The latch holds the last FULLY LOADED entry
- * and is consulted only when the shown token names it, so:
- *   file → info: the outgoing document is still the document.
- *   file A → file B: A fades out AS A; B fades in as a skeleton if its fetch is
- *       still out — which is the truth, not a stale body wearing B's name.
- * ⚠ Adjust-state-during-render, the sanctioned form (`pages/knowledge/index.tsx
- * › deepLinkResolved` is the other one): an effect would land a frame late,
- * i.e. exactly during the fade it exists to survive.
+ * Which is why `lastEntry` exists. `openEntry` belongs to the current selection,
+ * so leaving a file nulls it while the outgoing face is still mounted, and the
+ * document would render as a loading skeleton on the way out. The latch holds
+ * the last fully loaded entry and is consulted only when the shown token names
+ * it, so file A fades out as A and B fades in as a skeleton while its fetch is
+ * out — the truth, not a stale body wearing B's name. Adjust-state-during-render
+ * is deliberate here (`pages/knowledge/index.tsx › deepLinkResolved` is the
+ * other case): an effect would land a frame late, during the fade it exists to
+ * survive.
  */
 export function DetailPanel({
   selection,
@@ -89,22 +83,18 @@ export function DetailPanel({
       : infoToken(selection.base.id);
 
   return (
-    // ⚠ THE DIVIDER IS A UTILITY AND IT IS A `border-l` ON *THIS* COLUMN, not a
-    // `border-r` on the rail — the two draw the same line and only one of them
-    // is reachable. The account palette skin (`src/app/globals.css` › THE
-    // ACCOUNT PALETTE SKIN) selects on the class NAME (a module rule reading
-    // `--kv-border` is invisible to it) and widens exactly
-    // `.border-l.border-border-default` to 2px, so
-    // this lands on the account palette at the same weight as the channel
-    // surface's info-column divider. A `border-r` would take the colour and
-    // miss the weight, which is a hairline that matches nothing on either page.
+    // The divider is a utility and a `border-l` on THIS column, not a
+    // `border-r` on the rail. The account palette skin (`src/app/globals.css` ›
+    // THE ACCOUNT PALETTE SKIN) selects on the class name — a module rule
+    // reading `--kv-border` is invisible to it — and widens exactly
+    // `.border-l.border-border-default` to 2px; a `border-r` would take the
+    // colour and miss the weight.
     <div className={cn(styles.detailPane, "border-l border-border-default")}>
       <Crossfade token={token} className={styles.detailFade}>
         {(shown) => {
           if (shown.startsWith("file:")) {
             const entryId = shown.slice("file:".length);
-            // The body for THIS token, from the live fetch or the latch —
-            // never another file's.
+            // The body for this token, from the live fetch or the latch.
             const entry =
               openEntry?.id === entryId
                 ? openEntry

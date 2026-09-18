@@ -31,39 +31,24 @@ import type { SearchCaller } from "./repository-visibility";
 import { assembleGroups, type SearchLabels } from "./service-groups";
 
 /**
- * **GLOBAL SEARCH** — one surface behind `GET /api/search`, serving the desktop
- * /home page (`scope=account`: every container the caller is a member of) and a
- * workspace page (`scope=container`: that one) (Samuel, 2026-09-17).
+ * Global search behind `GET /api/search`: `scope=account` for /home (every
+ * container the caller is a member of), `scope=container` for one workspace.
  *
- * ── 🔒 THE FENCE, IN ONE SENTENCE ──────────────────────────────────────────
+ * The fence: nothing is queried that `loadSearchReach` did not prove. Every read
+ * is handed an id array built from the caller's active memberships, so a
+ * container or channel they do not belong to is never named. The reads run as
+ * service role (INVARIANTS §2), so this service is the fence with no backstop.
  *
- * **NOTHING IS QUERIED THAT `repository-reach.ts › loadSearchReach` DID NOT
- * PROVE.** Every read below is handed an id array built from
- * `workspace_members.user_id = <caller> AND status='active'` or from
- * `channel_members.user_id = <caller>`, so a container or channel the caller
- * does not belong to is never NAMED. The reads run as service role
- * (`RLS_CALLER_SCOPED_READS` is off, INVARIANTS §2), which makes this service the
- * fence with no backstop underneath it — the same posture, and the same
- * paragraph, as `channels/server/service-account.ts`.
- *
- * ── THE THREE RULES THAT FAIL QUIETLY ──────────────────────────────────────
- *
- * 1. 🔒 **HOME SCOPE NEVER TOUCHES members / skills / chats** (Samuel: *"those
- *    modules do not exist on home"*). It is an ABSENCE — the tables are not
- *    queried — so `service.test.ts` asserts the repositories were NOT CALLED
- *    rather than that the groups came back empty.
- * 2. 🔒 **CONTAINER SCOPE GATES THOSE THREE ON `kind='standard'` AS WELL.** A
- *    `link` (home-channel) or `personal` container has no members page, no
- *    skills shelf and no chat archive, and `isStandardWorkspace` is the one
- *    predicate that decides it (INVARIANTS §4A, F-295 — the POSITIVE form).
- * 3. 🔒 **A SHARED CREDENTIAL LOSES EVERY OWN-ROW ARM.** `isSharedCredential`
- *    (`shared/auth/credential-audience.ts`) is arm 2 of every `canSee*` predicate
- *    in this codebase; here it collapses `ownerUserId` to `null` before any
- *    visibility clause is written, so a credential standing for nobody reaches
- *    only the widest-visibility rows.
+ * Three rules that fail quietly:
+ * 1. Home scope never TOUCHES members / skills / chats — an absence, so
+ *    `service.test.ts` asserts the repositories were not called.
+ * 2. Container scope gates those three on `kind='standard'` too, via
+ *    `isStandardWorkspace` (INVARIANTS §4A, F-295 — the positive form).
+ * 3. A shared credential loses every own-row arm: `isSharedCredential` collapses
+ *    `ownerUserId` to `null` before any visibility clause is written.
  */
 
-/** What the route hands in. ⚠ `lockedWorkspaceId` is `ctx.apiKeyWorkspaceId` and
+/** What the route hands in. `lockedWorkspaceId` is `ctx.apiKeyWorkspaceId` and
  *  can never be a request field (INVARIANTS §4/§10, R3). */
 export interface SearchContext {
   userId: string;
@@ -78,15 +63,11 @@ export interface SearchInput {
 }
 
 /**
- * 🔒 **403 FOR "NOT A MEMBER" *AND* FOR "NO SUCH CONTAINER", DELIBERATELY THE
- * SAME ANSWER.** INVARIANTS §3's rule is that membership existence must not be
- * leaked, and `authz.ts › requireWorkspaceRole` spells that as a 404. This route
- * answers 403 — the shape the popup is built against — and gets the same
- * property a different way: the membership PROOF is narrowed rather than
- * checked, so a container that does not exist and one the caller is not in are
- * literally the same empty read and produce one indistinguishable refusal. **Do
- * not "fix" this into a 404-for-missing / 403-for-forbidden split; that split IS
- * the oracle both codes exist to deny.**
+ * 403 for "not a member" AND for "no such container", deliberately the same
+ * answer (INVARIANTS §3: membership existence must not leak). The membership
+ * proof is narrowed rather than checked, so both are the same empty read. Do not
+ * split this into 404-for-missing / 403-for-forbidden — that split is the oracle
+ * both codes exist to deny.
  */
 const CONTAINER_FORBIDDEN = "SEARCH_CONTAINER_FORBIDDEN";
 
@@ -105,10 +86,9 @@ export async function runSearch(
   const startedAt = Date.now();
   const q = (input.q ?? "").trim();
 
-  // ⚠ **TOO SHORT IS A 200 WITH NO GROUPS, NEVER A 400** (contract). The popup
-  // mounts and asks on the first keystroke; an error there would render as a
-  // failed search rather than as "keep typing". No query runs, so this costs
-  // nothing — which is the other half of why it is not a validation failure.
+  // Too short is a 200 with no groups, never a 400 (contract): the popup asks on
+  // the first keystroke, and an error would render as a failed search rather than
+  // "keep typing". No query runs.
   if (q.length < SEARCH_MIN_QUERY_LENGTH) {
     return { q, scope: input.scope, tookMs: Date.now() - startedAt, groups: [] };
   }
@@ -122,9 +102,9 @@ export async function runSearch(
     throw new HttpError(403, CONTAINER_FORBIDDEN, "No access to that container");
   }
 
-  // ⚠ ONE `Promise.all` OVER A FIXED SET OF READS — never a per-row or
-  // per-container fan (INVARIANTS §9). The container-only reads are absent from
-  // the array entirely in account scope, not present-and-discarded.
+  // One `Promise.all` over a fixed set of reads, never a per-row or per-container
+  // fan (INVARIANTS §9). In account scope the container-only reads are absent from
+  // the array entirely, not present-and-discarded.
   const byKind = await runGroupReads(ctx, input.scope, reach, q);
 
   const labels: SearchLabels = {
@@ -159,15 +139,13 @@ async function runGroupReads(
 ): Promise<Map<SearchGroupKind, SearchHit[]>> {
   const containerIds = reach.containers.map((c) => c.id);
   const channelIds = reach.channels.map((c) => c.id);
-  // 🔒 RULE 3 — see the header. A credential with nobody behind it has no own
-  // rows to reach, so every arm below the widest visibility is dropped before
-  // any clause is written.
+  // Rule 3: a credential with nobody behind it has no own rows, so every arm
+  // below the widest visibility is dropped before any clause is written.
   const ownerUserId: OwnerRef = isSharedCredential(ctx) ? null : ctx.userId;
   /**
-   * 🔒 **THE CALLER, AS THE FOUR `canSee*` PREDICATES NEED THEM (F-716).** Built
-   * ONCE per request from the reach that proved access — never re-derived, and
-   * never from anything the caller sent. The role map is what makes the
-   * workspace-admin arms container-correct in account scope.
+   * F-716: the caller as the four `canSee*` predicates need them. Built once per
+   * request from the reach that proved access, never from caller input. The role
+   * map is what makes the workspace-admin arms container-correct in account scope.
    */
   const caller: SearchCaller = {
     userId: ctx.userId,
@@ -196,16 +174,11 @@ async function runGroupReads(
     ["agentTemplates", agentTemplates],
   ]);
 
-  // 🔒 RULES 1 AND 2 — the three container-only groups. The guard is an EARLY
-  // RETURN rather than a filter on the results, because what must be true is
-  // that the QUERIES DID NOT HAPPEN.
-  //
-  // ⚠ **THE POSITIVE FORM, AND IT IS F-564's RULE RATHER THAN A STYLE CHOICE.**
-  // `!isStandardWorkspace(x)` does NOT mean "therefore a home channel" — it
-  // means "not the listing kind", and since `20260920120000` there are three
-  // kinds. Asking the question positively is what makes a FOURTH kind inherit
-  // the refusal instead of opting into it, which is exactly the disposition
-  // `workspaces/home-channel-derivation.test.ts` is a census of.
+  // Rules 1 and 2: an early return, not a filter on the results, because what
+  // must be true is that the queries did not happen.
+  // F-564: the POSITIVE form. `!isStandardWorkspace(x)` means "not the listing
+  // kind", not "therefore a home channel", and there are three kinds — asking
+  // positively makes a fourth kind inherit the refusal rather than opt into it.
   const container = reach.containers[0];
   const servesContainerModules =
     scope === "container" &&

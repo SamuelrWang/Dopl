@@ -1,8 +1,8 @@
 import "server-only";
 import { isSharedCredential } from "@/shared/auth/credential-audience";
 import { meetsMinRole } from "@/features/workspaces/types";
-// 🔒 G16 — the ONE statement of the publish-into-a-peer's-room precondition,
-// shared with `agent-templates/server/service-writes.ts`. Two copies of a
+// G16 — the one statement of the publish-into-a-peer's-room precondition,
+// shared with `agent-templates/server/service-writes.ts`; two copies of a
 // tenancy predicate is how the shelf fence ended up divergent (findings §6 #3).
 import { assertSharedPublishAcknowledged } from "@/features/workspaces/server/shared-publish";
 import { listTeamIdsForUser } from "@/features/teams/server/repository";
@@ -18,57 +18,36 @@ import {
 import { resolveAgentAudience } from "./service-audience";
 
 /**
- * 🔒 THE GATE A KNOWLEDGE-BASE **CREATE** PASSES, and nothing else.
+ * The gate a knowledge-base CREATE passes, and nothing else. What lives here
+ * answers a question about the CALLER before any row exists; composing and
+ * persisting the row is `service-base-writes.ts`. Not exported any further than
+ * that module: it is meaningful only before an insert that has not happened yet.
  *
- * ⚠ **THE SEAM, AND WHY IT IS NOT ARBITRARY** (split out of
- * `service-base-writes.ts` at §1's cap, 2026-09-02 and again 2026-09-09, both
- * times on this line): what lives here answers a question about the CALLER
- * before any row exists — may this person write to their shelf, will they read
- * back what is about to be written — while `service-base-writes.ts` composes a
- * row and persists it. A gate beside the insert is a gate a later edit reorders
- * past it.
- *
- * ⚠ NOT EXPORTED ANY FURTHER THAN THAT MODULE. This is not a general "knowledge
- * gate" surface: what is here is meaningful only before an insert that has not
- * happened yet.
- *
- * ⚠ RETIRED NAMES THE DOCS STILL CITE: `resolveHomeScope` (the three-condition
- * home-shelf fence, deleted 2026-09-02 with the `home_scoped` column — replaced
- * by `shared/tenancy/personal-container.ts › personalWriteWorkspaceId`, which
- * fences ONE condition) and `assertCreatorCanReadItBack` (deleted 2026-09-06,
- * absorbed by {@link resolveCreateDestination}).
+ * Retired names the docs still cite: `resolveHomeScope` (deleted 2026-09-02 with
+ * the `home_scoped` column, replaced by
+ * `shared/tenancy/personal-container.ts › personalWriteWorkspaceId`) and
+ * `assertCreatorCanReadItBack` (deleted 2026-09-06, absorbed by
+ * {@link resolveCreateDestination}).
  */
 
 /**
- * 🔒 **A CREATE MUST NOT PRODUCE A ROW ITS OWN CREATOR CANNOT READ BACK** —
- * F-323's authoring half, said by both refusing arms of
- * {@link resolveCreateDestination} (the create that names the ROOM, and the one
- * whose personal reach comes back CLOSED). ONE message for both: two copies of a
- * refusal stop agreeing about the remedy. ⚠ The third throw there — the shelf
- * asked for BY NAME — is `personal-container.ts › personalShelfRefusal`, whose
- * wording belongs to the router.
+ * A create must not produce a row its own creator cannot read back — F-323's
+ * authoring half, said by both refusing arms of
+ * {@link resolveCreateDestination}. ONE message for both: two copies of a
+ * refusal stop agreeing about the remedy. The third throw there — the shelf
+ * asked for BY NAME — is `personal-container.ts › personalShelfRefusal`.
  *
- * THE BUG IT CLOSES. `resolveAgentAudience` answers `granted` for an agent in a
- * `kind='link'` container with a PEER in it — reachable bases are only those
- * carrying a channel GRANT — and every READ composes that filter while
- * `createBase` composed nothing. A new base has no grant by construction, so the
- * insert succeeded, the tool reported success, and the row was invisible to its
- * creator from the very next call. An agent that cannot see the failure retries:
- * the observed report was two successes and two orphaned rows.
+ * `resolveAgentAudience` answers `granted` for an agent in a `kind='link'`
+ * container with a PEER in it, and every read composes that grant filter while
+ * `createBase` composed none — so a fresh base was invisible to its creator from
+ * the very next call. Refusal is the only answer available: the alternative
+ * repair, granting the base into the container's channel, is human-only
+ * (`service-channel-grants.ts › setChannelKnowledgeGrant`, 2026-08-27).
  *
- * ⚠ **REFUSAL IS THE ONLY AVAILABLE ANSWER.** The alternative repair — granting
- * the new base into the container's channel — is human-only
- * (`service-channel-grants.ts › setChannelKnowledgeGrant`, 2026-08-27), so the
- * create-and-share path already always refuses here. This makes the plain create
- * behave the same way, one call earlier and without writing a row first.
- *
- * ⚠ **IT NARROWS NOBODY WHOSE WRITE WORKED**: a human, a standard workspace and
- * a solo container are `resolveAgentAudience`'s `unrestricted` branches. It is
- * deliberately NOT keyed on `ctx.source === "agent"` alone — an agent in the
- * operator's own workspace reads its bases back perfectly well.
- *
- * ⚠ The message names the ROOM and the REMEDY: "forbidden" with no cause is what
- * sends an agent to grep the repo.
+ * It narrows nobody whose write worked — a human, a standard workspace and a
+ * solo container are `resolveAgentAudience`'s `unrestricted` branches, so this is
+ * not keyed on `ctx.source === "agent"` alone. The message names the room and the
+ * remedy.
  */
 function personalShelfUnreachableInRoom(): AgentWriteDisabledError {
   return new AgentWriteDisabledError(
@@ -85,49 +64,28 @@ function personalShelfUnreachableInRoom(): AgentWriteDisabledError {
 }
 
 /**
- * 🔒 **WHERE A CREATE LANDS — gap 2 of #1077:** *"a create with no valid
- * container in a shared room should go to the caller's own personal container,
- * not refuse — personal-visibility creates resolve their container by OWNER,
- * never by call site."*
+ * Where a create lands — gap 2 of #1077: a create with no valid container in a
+ * shared room goes to the caller's own personal container rather than refusing;
+ * personal-visibility creates resolve their container by OWNER, never by call
+ * site. The only creates it re-routes are the ones already refused outright.
  *
- * ── The seam, in the order it decides ───────────────────────────────────────
- * ```
- * asked for the shelf (homeScoped)  → the fence answers; open lands personal,
- *                                     closed REFUSES (never downgrades)
- * audience unrestricted             → the calling container, exactly as today
- * audience restricted + reachable   → the caller's own personal container
- * audience restricted + closed      → the refusal above, with the new remedy
- * ```
+ * The personal destination needs `personal-reach.ts` to answer OPEN — in a
+ * shared room that means the owner armed it — and the fence is ASKED here rather
+ * than re-implemented, so an adopting caller gets the same answer. The read-back
+ * question is answered AT THE DESTINATION, not at `ctx.workspaceId`: the caller's
+ * own container is `unrestricted` by construction, so an OPEN fence IS the
+ * read-back guarantee.
  *
- * ⚠ **IT CHANGES NOTHING THAT WORKS TODAY** — the only creates it re-routes are
- * the ones already refused outright, so no row that lands in the calling
- * container today lands anywhere else tomorrow.
- *
- * 🔒 **IT HALF-OPENS NOTHING, AND A4 INHERITS THIS.** The personal destination
- * needs `personal-reach.ts` to answer OPEN, which in a shared room means the
- * owner armed it; an unarmed room still refuses. The fence is ASKED here rather
- * than re-implemented, so an adopting caller gets the same answer, not a second
- * opinion.
- * ⚠ **THE READ-BACK QUESTION IS ANSWERED AT THE DESTINATION** — not at
- * `ctx.workspaceId`, where a personal row does not land. The caller's own
- * container is `unrestricted` by construction (one member, no grant filter), so
- * an OPEN fence IS the read-back guarantee.
- * ⚠ **REFUSING LOUDLY IS NOT THE ORACLE THE FENCE FORBIDS** — that rule is about
- * READS. A write has no silent form ("refuse, never downgrade"), and the only
- * person who learns anything is the OWNER, about their own shelf and room.
- * ⚠ **NOTHING HERE GUESSES A CONTAINER** (invariant 1 of #1077;
+ * **NOTHING HERE GUESSES A CONTAINER** (invariant 1 of #1077;
  * `workspaces/b10-no-derived-default.test.ts` scans this file's prose): the
  * destination is resolved by owner and is the ONLY container a personal row can
- * live in. A create that cannot land there is refused, never widened.
- * ⚠ **`shareToChannelId` AND TEAM GRANTS ARE NEVER RE-ROUTED** — both name the
- * calling container, so a create carrying either keeps the refusal rather than
- * landing its row where its grant cannot follow.
+ * live in. `shareToChannelId` and team grants are never re-routed — both name
+ * the calling container, so a create carrying either keeps the refusal.
  */
 export interface CreateDestination {
-  /** ⚠ THE ROUTING FLAG, PASSED STRAIGHT TO THE REPOSITORY — the router is what
-   *  resolves the container, so this function and `personalWriteWorkspaceId`
-   *  cannot disagree about the id: both ask `findPersonalContainerId` for the
-   *  same owner. */
+  /** The routing flag, passed straight to the repository. The router resolves
+   *  the container, so this and `personalWriteWorkspaceId` cannot disagree: both
+   *  ask `findPersonalContainerId` for the same owner. */
   homeScoped: boolean;
   /** WHERE the row lands, for the callers that must know before the insert —
    *  the slug read and the rollback. Equal to `ctx.workspaceId` unless the row
@@ -152,11 +110,9 @@ export async function resolveCreateDestination(
     if (reach.kind === "open") {
       return { homeScoped: true, workspaceId: reach.containerId };
     }
-    // ⚠ REFUSE, NEVER DOWNGRADE — the caller asked for their shelf by name and
-    // the workspace shelf is a different audience, not a lesser one.
-    // ⚠ THE SENTENCE IS `personal-container.ts`'s, not this file's: the router
-    // and the agent-templates twin throw the same three, and a hand-mirrored
-    // copy is how two refusals stop agreeing about the remedy.
+    // refuse, never downgrade — the caller asked for their shelf by name and the
+    // workspace shelf is a different audience, not a lesser one. The sentence is
+    // `personal-container.ts`'s so the router and its twin cannot diverge.
     throw personalShelfRefusal(reach.refusal);
   }
 
@@ -174,12 +130,11 @@ export async function resolveCreateDestination(
 
 // ─── The CREATE's whole pre-write gate chain ────────────────────────────────
 //
-// ⚠ Moved here from `service-base-writes.ts` on 2026-09-09 (§1's cap; see this
-// module's header for the seam). That file RE-EXPORTS both names, so the route,
-// the barrel and `service-create-audience.test.ts` are unchanged.
+// Moved here from `service-base-writes.ts` on 2026-09-09 (§1's cap). That file
+// RE-EXPORTS both names, so the route, the barrel and the tests are unchanged.
 
 /** What {@link assertCreateBaseAllowed} decided, and {@link createBase} then
- *  writes with. ⚠ Every field is a DECISION, not an echo of the input: the
+ *  writes with. Every field is a DECISION, not an echo of the input: the
  *  destination is resolved by owner, and the visibility is the value the row
  *  LANDS at after the teams branch has had its say. */
 export interface CreateBasePreconditions {
@@ -189,37 +144,28 @@ export interface CreateBasePreconditions {
 }
 
 /**
- * 🔒 **EVERY PRE-WRITE GATE OF {@link createBase}, AS ONE FUNCTION — SO A DRY
- * RUN CAN RUN THE GATE THE CONFIRMED CALL RUNS.**
+ * Every pre-write gate of {@link createBase}, as one function, so a dry run can
+ * run the gate the confirmed call runs:
+ * `packages/mcp-server/src/tools/confirm-token.ts` previews in a DIFFERENT
+ * PROCESS from the gates, so a public `create_base` in an unarmed shared home
+ * channel previewed happily and was then refused. Parity is structural — the dry
+ * run CALLS this rather than re-implementing the chain.
  *
- * ⚠ **THE PIN IT EXISTS FOR: A PREVIEW MUST NEVER MINT A TOKEN FOR A CREATE THE
- * CONFIRMED CALL WOULD REFUSE.** `packages/mcp-server/src/tools/confirm-token.ts`
- * previews in a DIFFERENT PROCESS from the gates, so a public `create_base` in
- * an unarmed shared home channel previewed happily, issued a token, and was then
- * refused by {@link resolveCreateDestination}.
- * ⚠ **PARITY IS STRUCTURAL:** the dry run CALLS this function rather than
- * re-implementing the chain, so a gate added below is inherited by the preview
- * on the same commit.
- *
- * ⚠ **IT STOPS EXACTLY WHERE THE WRITES BEGIN.** Everything here touches no row,
- * so running it twice costs reads and changes nothing. The slug read stays BELOW
- * the line: a dry run must not report a collision against a base nobody may see.
- * ⚠ **A DRY RUN MUST SEND THE BODY THE CONFIRMED CALL WILL SEND**, including
- * `acknowledgeShared` — previewing without it refuses on the missing
- * acknowledgement, which is the very thing the preview exists to obtain.
+ * It stops exactly where the writes begin, so running it twice changes nothing,
+ * and the slug read stays BELOW the line: a dry run must not report a collision
+ * against a base nobody may see. A dry run must send the body the confirmed call
+ * will send, `acknowledgeShared` included.
  */
 export async function assertCreateBaseAllowed(
   ctx: KnowledgeContext,
   input: KnowledgeBaseCreateInput,
 ): Promise<CreateBasePreconditions> {
-  // 🔒 THE AUDIENCE CEILING, ASKED BEFORE THE INSERT rather than only by the
-  // reads afterwards (F-323's authoring half), and the SAME call that decides
-  // WHERE THE ROW LANDS (#1077 gap 2 — {@link resolveCreateDestination}).
-  // ⚠ FIRST, before any other validation and before the slug read: a caller who
-  // may not create here should spend no round trips finding out, and must not be
-  // told about a collision with a row it cannot see.
-  // ⚠ `wantsTeams` is resolved here rather than below because a teams create
-  // names the calling container and must never be re-routed.
+  // The audience ceiling, asked before the insert rather than only by the reads
+  // afterwards (F-323's authoring half), and the same call that decides where the
+  // row lands (#1077 gap 2). FIRST, before any other validation and before the
+  // slug read: a caller who may not create here must not be told about a
+  // collision with a row it cannot see. `wantsTeams` is resolved here because a
+  // teams create names the calling container and must never be re-routed.
   const wantsTeams = input.accessMode === "teams";
   const destination = await resolveCreateDestination(ctx, {
     homeScoped: input.homeScoped,
@@ -232,18 +178,15 @@ export async function assertCreateBaseAllowed(
   // addressing unambiguous; publicId is the URL routing key.
   //
   // Visibility default by caller: a SHARED credential must be 'public'
-  // (⚠ `canSeeBase` blocks such credentials from reading their own private rows
-  // back, so a private one is stranded — explicit 'private' rejected loudly);
-  // session caller / container session → 'private', owner publishes later.
+  // (`canSeeBase` blocks such credentials from reading their own private rows
+  // back, so a private one is stranded); session caller → 'private'.
   //
-  // ⚠ THE PREDICATE MOVED WITH `canSeeBase` ON 2026-08-27 (F-336): a
-  // container-session credential CAN read its own private rows back, so it is
-  // not stranded, and forcing 'public' would have the operator's agent publish
-  // into the room the PEER is standing in.
+  // THE PREDICATE MOVED WITH `canSeeBase` ON 2026-08-27 (F-336): a
+  // container-session credential CAN read its own private rows back, and forcing
+  // 'public' would publish into the room the PEER is standing in.
   const fromWorkspaceKey = isSharedCredential(ctx);
-  // ⚠ ANNOTATED, NOT INFERRED, since this function ANSWERS with it — the
-  // inferred type carried `undefined`, and a caller reading that as "whatever
-  // the server defaults to" is the guess `knowledge-ops-write.ts › opCreateBase`
+  // annotated, not inferred, since this function ANSWERS with it: the inferred
+  // type carried `undefined`, the guess `knowledge-ops-write.ts › opCreateBase`
   // refuses to make.
   let resolvedVisibility: "public" | "private";
   if (fromWorkspaceKey) {
@@ -256,8 +199,8 @@ export async function assertCreateBaseAllowed(
   }
 
   // Teams mode is human-only; non-admin creators may only grant teams they
-  // belong to. ⚠ `wantsTeams` is resolved at the top of this function now — the
-  // destination gate needs it before any read.
+  // belong to. `wantsTeams` is resolved at the top — the destination gate needs
+  // it before any read.
   const teamGrants = wantsTeams ? (input.teamGrants ?? []) : [];
   if (wantsTeams) {
     if (ctx.source === "agent") {
@@ -278,17 +221,14 @@ export async function assertCreateBaseAllowed(
     resolvedVisibility = "public";
   }
 
-  // 🔒 G16 — PUBLISHING INTO THE ROOM A PEER IS STANDING IN. ⚠ The RESOLVED
-  // visibility, after the teams branch has had its say: `accessMode: "teams"`
-  // rewrites it to `public`, and reading `input.visibility` would let that
-  // rewrite publish unacknowledged.
-  // ⚠ BEFORE THE SLUG LOOP, so a refusal costs no slug and cannot half-land.
+  // G16 — publishing into the room a peer is standing in, on the RESOLVED
+  // visibility: `accessMode: "teams"` rewrites it to `public`, and reading
+  // `input.visibility` would let that rewrite publish unacknowledged. Before the
+  // slug loop, so a refusal costs no slug and cannot half-land.
   await assertSharedPublishAcknowledged({
-    // ⚠ THE CONTAINER THE ROW LANDS IN, not the one the call stands in. G16 asks
-    // whether this publishes into the room a PEER is standing in; a personal row
-    // lands on a shelf with one member, so asking about the room would demand an
-    // acknowledgement for an audience the row never reaches. Identical to
-    // `ctx.workspaceId` for every non-personal create.
+    // the container the row LANDS in, not the one the call stands in: a personal
+    // row lands on a shelf with one member, so asking about the room would demand
+    // an acknowledgement for an audience the row never reaches.
     workspaceId: destination.workspaceId,
     publishes: resolvedVisibility === "public",
     acknowledged: input.acknowledgeShared,

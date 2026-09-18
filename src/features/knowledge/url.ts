@@ -12,17 +12,14 @@ export function knowledgeBaseSegment(kb: {
 }
 
 /**
- * Client twin of `resolveKbSegment` (`./server/segment.ts`): match a
- * `{kbSlug}` URL segment against an already-loaded base list, accepting the
- * canonical `{slug}-{publicId}` form first and falling back to a legacy
- * slug-only URL.
+ * Client twin of `resolveKbSegment` (`./server/segment.ts`): match a `{kbSlug}`
+ * URL segment against an already-loaded base list, canonical
+ * `{slug}-{publicId}` first, falling back to a legacy slug-only URL.
  *
- * The desktop SPA has no server hop to resolve a deep link with, and
- * `GET /api/knowledge/bases/{id}` only takes a raw UUID
- * (docs/migration-research/web-pages.md §9) — so it resolves locally against
- * the base list it already holds. Callers compare the hit against
- * `knowledgeBaseSegment(base)` to decide whether to rewrite the URL, which is
- * the client-side stand-in for the page's 301.
+ * The desktop SPA has no server hop and `GET /api/knowledge/bases/{id}` only
+ * takes a raw UUID, so it resolves locally. Callers compare the hit against
+ * `knowledgeBaseSegment(base)` to decide whether to rewrite the URL — the
+ * client-side stand-in for the page's 301.
  */
 export function findBaseBySegment<T extends { slug: string; publicId: string }>(
   bases: readonly T[],

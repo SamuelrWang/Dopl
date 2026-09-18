@@ -15,10 +15,9 @@ interface Draft {
 }
 
 /**
- * Editable name/description for the base overview card: optimistic local
- * state, debounced `updateBase` PATCH, ⚠ flushed on blur AND unmount so an
- * edit inside the debounce window survives a base switch. `onSaved` lets the
- * caller re-pull the base list (list row + toolbar title in sync).
+ * Editable name/description for the base overview card: optimistic local state,
+ * debounced `updateBase` PATCH, flushed on blur AND unmount so an edit inside
+ * the debounce window survives a base switch.
  *
  * Seeds once from `base`; the overview keys by base id, so a base switch
  * remounts with fresh values rather than reconciling in place.
@@ -114,7 +113,7 @@ export function useBaseMetaEdit(
     [schedule]
   );
 
-  // Flush pending save on unmount (base switch / navigation).
+  // flush pending save on unmount (base switch / navigation).
   useEffect(() => {
     return () => {
       if (timerRef.current) {

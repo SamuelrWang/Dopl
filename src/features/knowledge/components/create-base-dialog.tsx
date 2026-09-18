@@ -33,19 +33,15 @@ interface Props {
   currentUserId: string;
   role: Role;
   /**
-   * WHICH SHELF this dialog writes to (`../types.ts › KbShelf`). Omitted = the
-   * WORKSPACE shelf, which is the workspace Knowledge page and every other
-   * caller. `"home"` is passed by the /home Knowledge pane on its "across all
-   * channels" scope, and it does TWO things that must stay together: it sends
+   * Which shelf this dialog writes to (`../types.ts › KbShelf`). Omitted = the
+   * workspace shelf. `"home"` does TWO things that must stay together: it sends
    * `homeScoped: true` so the row lands on the shelf, and it seeds the cache
-   * entry keyed by that same shelf. Sending one without the other creates a
-   * base the surface that created it cannot see (§8).
+   * entry keyed by that same shelf. One without the other creates a base the
+   * surface that created it cannot see (§8).
    *
-   * ⚠ A REQUEST, NOT A GUARANTEE — `shared/tenancy/personal-container.ts ›
-   * personalWriteWorkspaceId` 403s when the caller has no personal container to
-   * write into, and the dialog surfaces that message rather than retrying
-   * unmarked. ⚠ Since 2026-09-02 (slice B15) the flag ROUTES the row's
-   * `workspace_id`; nothing stores it.
+   * A request, not a guarantee — `shared/tenancy/personal-container.ts ›
+   * personalWriteWorkspaceId` 403s when the caller has no personal container,
+   * and the dialog surfaces that message rather than retrying unmarked.
    */
   shelf?: KbShelf;
   /**
@@ -54,26 +50,21 @@ interface Props {
    * `channel_resource_grants` row at `level: 'visible'` and rolls the base back
    * if that fails, so this never half-lands.
    *
-   * ⚠ IT ALSO REMOVES THE "WHO CAN ACCESS" PICKER, and that is not cosmetic:
-   * the GRANT is the audience answer here, so leaving a workspace-visibility
-   * radio beside it would offer a second, contradicting one. The base is created
-   * `private` — private + a `visible` grant is precisely "readable in this
-   * channel and nowhere else", which is what the button says.
+   * It also removes the "Who can access" picker: the grant is the audience
+   * answer, so a workspace-visibility radio beside it would contradict. The base
+   * is created `private` — private + a `visible` grant is "readable in this
+   * channel and nowhere else".
    */
   shareToChannelId?: string;
   /**
-   * THE AUDIENCE IS ALREADY DECIDED, so do not ask again (Samuel, 2026-08-27 —
-   * the /home mounts). On /home the operator reached this dialog through a
-   * button that named the audience — **Personal** or **Shared** — and a
-   * private/public/team radio underneath would be a second answer to a question
-   * already answered, in a surface where two of its three options do not apply
-   * (a link container has no teams, §4A/§5A).
+   * The audience is already decided, so do not ask again (Samuel, 2026-08-27):
+   * on /home the operator reached this dialog through a button that named it,
+   * and two of the radio's three options do not apply (a link container has no
+   * teams, §4A/§5A).
    *
-   * ⚠ IT IS THE SAME RULE `shareToChannelId` ALREADY ENFORCES, named
-   * separately because the two are not the same fact: a shared create carries a
-   * channel grant, a personal one carries nothing but its shelf. The WORKSPACE
-   * Knowledge page passes neither and keeps the picker — that page's create
-   * button names no audience, so this is the only place its question is asked.
+   * Same rule `shareToChannelId` enforces, named separately because the facts
+   * differ: a shared create carries a channel grant, a personal one carries only
+   * its shelf. The workspace Knowledge page passes neither and keeps the picker.
    */
   audienceFixed?: boolean;
   /** Where a freshly created base sends the user (./knowledge-v2/routing.ts). */
@@ -81,15 +72,11 @@ interface Props {
 }
 
 /**
- * Create-knowledge-base dialog. THE standard dialog chrome
- * (`shared/ui/standard-dialog.tsx` — narrow width, centered uppercase heading,
- * pillow fields, fully-rounded footer pair), plus the three-way scope picker
- * where the caller has not already settled the audience. Server derives the
- * slug from the name.
+ * Create-knowledge-base dialog: the standard dialog chrome
+ * (`shared/ui/standard-dialog.tsx`) plus the three-way scope picker where the
+ * caller has not already settled the audience. Server derives the slug.
  *
- * ⚠ NO EXPLAINER PARAGRAPH (2026-08-27). It carried one — what a knowledge base
- * holds, and that MCP can reach it — which is the copy the minimal-copy ruling
- * deletes and which none of the other three dialogs has. Label + control.
+ * No explainer paragraph (2026-08-27 minimal-copy ruling): label + control.
  */
 export function CreateBaseDialog({
   open,
@@ -125,17 +112,15 @@ export function CreateBaseDialog({
     reset();
   }
 
-  // ⚠ ONE EXPRESSION, READ THREE TIMES — the render, the disabled guard and the
-  // body below all ask "is the picker live?". Three copies of that condition is
-  // how a hidden control starts contributing a scope to a write nobody chose.
+  // one expression, read three times (render, disabled guard, request body) —
+  // duplicating it is how a hidden control contributes a scope nobody chose.
   const scopePicker = !shareToChannelId && !audienceFixed;
 
   const createDisabled =
     submitting ||
     !name.trim() ||
-    // ⚠ Only reachable when the picker is RENDERED; a create whose audience the
-    // caller already settled never shows it, so it can never be blocked by a
-    // team scope nobody chose.
+    // only reachable when the picker is rendered, so a create whose audience
+    // the caller settled cannot be blocked by a team scope nobody chose.
     (scopePicker && scope === "team" && teamGrants.length === 0);
 
   async function handleCreate() {
@@ -148,29 +133,25 @@ export function CreateBaseDialog({
         {
           name: trimmed,
           description: description.trim() || undefined,
-          // ⚠ A CREATE WITH NO PICKER IS ALWAYS `private` ON THE WORKSPACE
-          // AXIS — the button (or the grant) carries the audience, and `scope`
-          // is not rendered at all in that mode, so reading it here would send
-          // whatever the state happened to be initialised to.
+          // a create with no picker is always `private` on the workspace axis:
+          // `scope` is not rendered in that mode, so reading it would send
+          // whatever the state was initialised to.
           visibility:
             !scopePicker || scope === "private" ? "private" : "public",
           ...(scopePicker && scope === "team"
             ? { accessMode: "teams" as const, teamGrants }
             : {}),
           ...(shareToChannelId ? { shareToChannelId } : {}),
-          // ⚠ Only ever SENT for the home shelf — an unconditional
-          // `homeScoped: shelf === "home"` would put an explicit `false` on
-          // every workspace-page create, which is the same row but a wider
-          // contract for the fence to have to allow.
+          // only ever sent for the home shelf — an explicit `false` on every
+          // workspace-page create is a wider contract for the fence to allow.
           ...(shelf === "home" ? { homeScoped: true } : {}),
         },
         workspaceId,
       );
       close();
-      // ⚠ Seed BEFORE navigating: the controller resolves the URL segment it
-      // is about to see against the cached base list, and the
-      // `refreshServerData` refetch has not landed yet.
-      // ⚠ SAME SHELF THE PROP NAMES — see the `shelf` prop's docblock.
+      // seed BEFORE navigating: the controller resolves the URL segment it is
+      // about to see against the cached base list, and `refreshServerData` has
+      // not landed yet. Same shelf the prop names.
       seedKnowledgeBase(queryClient, workspaceId, base, shelf);
       routing.goToBase(base, "push");
       routing.refreshServerData();
@@ -218,9 +199,8 @@ export function CreateBaseDialog({
         />
       </DialogField>
 
-      {/* ⚠ HIDDEN WHEREVER THE CALLER ALREADY NAMED THE AUDIENCE — see the
-          `shareToChannelId` and `audienceFixed` props. One audience question,
-          asked once. */}
+      {/* hidden wherever the caller already named the audience — see the
+          `shareToChannelId` and `audienceFixed` props. */}
       {scopePicker && (
         <DialogField label="Who can access">
           <ScopePicker

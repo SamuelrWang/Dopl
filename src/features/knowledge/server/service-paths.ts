@@ -28,9 +28,7 @@ import { scheduleEntryEmbedding } from "./embeddings";
 import { assertAgentCanDelete, assertBaseWritable, errorCode } from "./service-shared";
 import { getBaseForWrite, readBaseInContext } from "./service-bases";
 import { assertStorageHeadroom, bodyBytes } from "./service-storage";
-// ⚠ AWAITED, AFTER THE WRITE, INSIDE THE REQUEST (`./service-revisions.ts`).
-// ⚠ THE PATH IS PASSED, NEVER DERIVED, on every call in this module: it IS the
-// argument, so a `entryPath` walk here would re-read what the caller stated.
+// AWAITED, AFTER THE WRITE, INSIDE THE REQUEST (`./service-revisions.ts`).
 import {
   recordEntryRevision,
   recordFolderRevision,
@@ -50,18 +48,11 @@ export interface WriteFileByPathInput {
    *  an existing entry; stale value → 412. */
   expectedUpdatedAt?: string;
   /**
-   * Replace ONE `#`/`##`/`###` section instead of the whole document — `body`
-   * is then that section's new content.
-   *
-   * ⚠ **THE MERGE IS SERVER-SIDE AND UNDER THE SAME PRECONDITION.** It reads
-   * the stored body, splices, and writes — all against the row
-   * `expectedUpdatedAt` was just checked on, so a sectioned write is exactly as
-   * safe as a whole-body one and no safer. A caller that merged client-side
-   * would be merging onto a body it fetched in a different request.
-   *
-   * ⚠ **A HEADING THAT DOES NOT EXIST IS APPENDED, NOT REFUSED**, at `##`, and
-   * the result says so ({@link WriteFileByPathResult.sectionCreated}). An
-   * AMBIGUOUS heading refuses: overwriting the wrong section is unrecoverable.
+   * Replace ONE `#`/`##`/`###` section instead of the whole document; `body` is
+   * that section's new content. The merge is server-side, under the same
+   * `expectedUpdatedAt` precondition. A heading that does not exist is appended
+   * at `##` ({@link WriteFileByPathResult.sectionCreated}); an ambiguous heading
+   * refuses — overwriting the wrong section is unrecoverable.
    */
   section?: string;
 }
@@ -83,15 +74,10 @@ export async function readFileByPath(
   baseId: string,
   path: string
 ): Promise<KnowledgeEntry> {
-  // 🔒 **THE ONE PATH OP THAT FOLLOWS THE ID (B2), AND IT MUST RESOLVE THE
-  // PATH IN THE CONTAINER THE FOLLOW LANDED IN.** `readBaseById`'s door already
-  // let `GET /api/knowledge/bases/<id>` name a base on the caller's personal
-  // shelf from any container they are in (rulings B10/#18); this read composed
-  // the WORKSPACE-KEYED lookup instead, so the same id answered
-  // `KNOWLEDGE_BASE_MISMATCH` here — a base you could open and could not read,
-  // F-604's shape one layer up. ⚠ **READ ONLY**: every write below keeps
-  // `getBaseForWrite`, which follows the same id and hands back the same landed
-  // context — the write half of the ruling, made 2026-09-06 (INVARIANTS §T35).
+  // A read follows the base id and must resolve the path in the container the
+  // follow landed in; a workspace-keyed lookup answers `KNOWLEDGE_BASE_MISMATCH`
+  // for a base the caller can open — F-604's shape one layer up. Writes below
+  // keep `getBaseForWrite` for the same reason (2026-09-06, INVARIANTS §T35).
   const { ctx: baseCtx, value: base } = await readBaseInContext(ctx, baseId);
   const resolved = await resolvePath(baseCtx, base.id, path);
   if (resolved.kind === "not_found") {
@@ -112,8 +98,7 @@ function throwIfIntermediateMissing(
 ): void {
   const segments = parsePath(path);
   const resolvedDepth = resolved.lastFolder
-    ? // lastFolder depth needs a parent walk; instead take first index matching
-      // missingSegment — anywhere but last ⇒ intermediate miss.
+    ? // first index matching missingSegment — anywhere but last ⇒ intermediate miss
       segments.indexOf(resolved.missingSegment)
     : 0;
   if (resolvedDepth !== -1 && resolvedDepth < segments.length - 1) {
@@ -130,11 +115,8 @@ export async function writeFileByPath(
   path: string,
   input: WriteFileByPathInput = {}
 ): Promise<WriteFileByPathResult> {
-  // 🔓 THE WRITE FOLLOWS THE ID (2026-09-06). `baseCtx` is the base's own
-  // container: the path walk, the storage gate, the folder scaffolding and the
-  // insert are ALL workspace-keyed, so every one of them takes it. Resolving the
-  // path against `ctx` after gating on a followed base would look up the tree in
-  // a container the base is not in and read an empty one.
+  // The write follows the id (2026-09-06): `baseCtx` is the base's own container
+  // and every workspace-keyed step below takes it, never `ctx`.
   const { ctx: baseCtx, value: base } = await getBaseForWrite(ctx, baseId);
   await assertBaseWritable(baseCtx, base);
 
@@ -152,8 +134,7 @@ export async function writeFileByPath(
   const parentSegments = segments.slice(0, -1);
 
   if (resolved.kind === "entry") {
-    // undefined preserves existing title/body (CREATE below must default
-    // title to leafName instead).
+    // undefined preserves existing title/body (create below defaults to leafName).
     if (
       input.expectedUpdatedAt &&
       resolved.entry.updatedAt !== input.expectedUpdatedAt
@@ -163,9 +144,8 @@ export async function writeFileByPath(
         resolved.entry.updatedAt
       );
     }
-    // ⚠ THE SECTION MERGE HAPPENS HERE, between the precondition and the
-    // storage gate: it is the merged body that gets written, so it is the
-    // merged body the gate has to weigh.
+    // merge sits between the precondition and the storage gate: the merged body
+    // is what gets written, so it is what the gate must weigh.
     const merged = mergeSection(resolved.entry.body, input);
     // Storage gate on NET delta, before write. `body === undefined` preserves
     // column ⇒ no delta; shrink is negative and always allowed.
@@ -210,9 +190,7 @@ export async function writeFileByPath(
     if (input.title !== undefined || merged.body !== undefined) {
       scheduleEntryEmbedding(saved);
     }
-    // ⚠ A SECTION WRITE IS ITS OWN OP, so the changelog can say which heading
-    // moved rather than reporting a whole-document edit. A title-only write is a
-    // `rename`; anything with a body is an `edit`.
+    // section write is its own op so the changelog can name the heading that moved.
     await recordEntryRevision(
       baseCtx,
       saved,
@@ -232,16 +210,15 @@ export async function writeFileByPath(
     throw new KnowledgeStaleVersionError(input.expectedUpdatedAt, "deleted");
   }
 
-  // ⚠ A `section` on a CREATE writes an entry that IS that one section — the
-  // heading included, so the document the caller goes on to address by heading
-  // is the document that was made.
+  // a section on create writes an entry that IS that section, heading included,
+  // so it can be addressed by heading afterwards.
   const createdBody =
     input.section === undefined
       ? input.body
       : appendSection("", input.section, input.body ?? "");
 
-  // ⚠ Storage gate BEFORE mkdir -p: refusing after creating parents leaves
-  // empty scaffolding for a write that never landed.
+  // storage gate before mkdir -p: refusing after creating parents leaves empty
+  // scaffolding for a write that never landed.
   await assertStorageHeadroom(baseCtx, base, bodyBytes(createdBody));
 
   const parentFolder = await ensureFolderPath(baseCtx, base.id, parentSegments);
@@ -280,11 +257,8 @@ export async function writeFileByPath(
 
 /**
  * Splice `input.body` into ONE section of `current`, or leave the write whole.
- *
- * ⚠ **`section` WITHOUT `body` IS A NO-OP, NOT AN ERASURE.** `body: undefined`
- * already means "leave the column alone" on this path (it is how a title-only
- * rename works), and a section argument must not change what an absent body
- * means.
+ * `section` without `body` is a no-op, not an erasure: `body: undefined` already
+ * means "leave the column alone" on this path.
  */
 function mergeSection(
   current: string,
@@ -306,9 +280,8 @@ function mergeSection(
 
 /**
  * mkdir -p a folder. Leaf already an entry ⇒ KnowledgePathConflictError.
- * `description` (≤300 chars) applies to the LEAF only; mkdir-p'd parents stay
- * description-less. Re-calling on an existing folder UPDATES its description —
- * the sanctioned "set folder summary without touching contents" path;
+ * `description` (≤300 chars) applies to the leaf only; mkdir-p'd parents stay
+ * description-less. Re-calling on an existing folder updates its description;
  * `undefined` leaves it as-is.
  */
 export async function createFolderByPath(
@@ -337,10 +310,8 @@ export async function createFolderByPath(
     description !== undefined
       ? await repo.updateFolderRow(folder.id, { description })
       : folder;
-  // ⚠ ONE REVISION, FOR THE LEAF — the operation the caller asked for. `mkdir -p`
-  // may have scaffolded intermediate folders on the way; those are a consequence
-  // of this one write, not writes of their own, and a revision per level would
-  // report a path as several unrelated creates.
+  // one revision, for the leaf: mkdir -p'd parents are a consequence of this
+  // write, not writes of their own.
   await recordFolderRevision(baseCtx, saved, "create", { path });
   return saved;
 }
@@ -372,8 +343,7 @@ export async function deleteByPath(
     return { kind: "folder", id: resolved.folder.id };
   }
   await repo.hardDeleteEntry(baseCtx.workspaceId, resolved.entry.id);
-  // ⚠ THE SNAPSHOT IS THE LAST STATE, and it is the only place it survives:
-  // knowledge deletes are permanent.
+  // the snapshot is the only surviving copy: knowledge deletes are permanent.
   await recordEntryRevision(baseCtx, resolved.entry, "delete", { path });
   return { kind: "entry", id: resolved.entry.id };
 }
@@ -459,7 +429,7 @@ export async function listDirByPath(
   folders: KnowledgeFolder[];
   entries: KnowledgeEntry[];
 }> {
-  // 🔒 A READ, so it follows the id — see {@link readFileByPath}.
+  // a read, so it follows the id — see {@link readFileByPath}.
   const { ctx: baseCtx, value: base } = await readBaseInContext(ctx, baseId);
   let parentId: string | null = null;
   let folder: KnowledgeFolder | null = null;

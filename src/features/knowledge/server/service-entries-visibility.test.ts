@@ -1,41 +1,19 @@
 /**
- * ENTRY READS ARE GATED ON THEIR BASE — the hole `GET /api/knowledge/entries/
- * [entryId]` sat on until 2026-08-26, and the ceiling half `?ids=` was missing.
- *
- * `service-entries.ts › getEntry` used to check `assertSameWorkspace` and
- * NOTHING ELSE, while its route runs at `withWorkspaceAuth`'s viewer default.
- * Three consequences, all pinned below:
- *
- *   1. PRE-EXISTING M-10 HOLE — any workspace `viewer` could pull the body of an
- *      entry inside a `visibility='private'` base they cannot see. The
- *      service-role route was strictly WIDER than the RLS policy behind it,
- *      which requires `public OR created_by = auth.uid()`.
- *   2. The M-10 tightening the container-locked credential (B1) lit up — a
- *      workspace-scoped key never sees a private base — was bypassed by id.
- *   3. The AUDIENCE CEILING (layer A) was bypassed: a locked agent could read an
- *      ungranted base's entries one id at a time, and `?ids=` resolves 100 per
- *      request.
- *
- * ⚠ IDS ARE CHEAP, so "you need the id" was never the fence: ontology
- * attributes of `kind:"knowledge"` ship raw entry-id arrays and `dopl_ontology`
- * is an auto-allowed read tool.
- *
- * ⚠ MUTATION-VERIFIED. Every `it()` below was confirmed to fail with the
- * corresponding production line removed — the `assertEntryBaseReadable` call in
- * `getEntry`, and the `audienceAdmits` filter in `resolveEntryRefs`. Counts are
- * in this milestone's report.
+ * Entry reads are gated on their base. `service-entries.ts › getEntry` checked
+ * only `assertSameWorkspace` while its route runs at the viewer default, so
+ * three fences were bypassable by id: the M-10 visibility gate (any viewer could
+ * pull the body of an entry in a private base), the container-locked credential
+ * tightening, and the audience ceiling. Ids are cheap — ontology attributes of
+ * `kind:"knowledge"` ship raw entry-id arrays — so "you need the id" was never
+ * the fence.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { KnowledgeBase, KnowledgeContext, KnowledgeEntry } from "../types";
 
-// ⚠ **THE GRANT ARM IS A DB READ, SO IT IS DECLARED HERE** (F-604, 2026-09-02).
-// `canSeeBase` / `canSeeTemplate` gained an arm over `resource_grants`, and its
-// batch precompute is the one part of this seam that talks to Postgres. Every
-// case in this file is about the OTHER arms, so the grant set is empty — which
-// is also the pre-2026-09-02 behaviour, and therefore the right default for a
-// suite that predates the arm. The cases that exercise a GRANT live in
-// `service-shared-grant-arm.test.ts` and the redteam suites.
+// The grant arm is a DB read, so it is declared here (F-604, 2026-09-02). Every
+// case in this file is about the other arms, so the grant set is empty; grant
+// cases live in `service-shared-grant-arm.test.ts` and the redteam suites.
 vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
   ...(await importOriginal<
     typeof import("@/shared/tenancy/resource-grant-reach")
@@ -135,8 +113,8 @@ function sharedContainer(grantedBaseIds: string[]) {
   mockGrants.mockResolvedValue(grantedBaseIds);
 }
 
-/** Standard workspace — the ceiling answers `unrestricted` and gets out of the
- *  way, so what an assertion sees is the VISIBILITY gate alone. */
+/** Standard workspace — the ceiling answers `unrestricted`, so an assertion
+ *  sees the visibility gate alone. */
 function standardWorkspace() {
   mockKind.mockResolvedValue("standard");
 }
@@ -148,8 +126,8 @@ beforeEach(() => {
 
 describe("getEntry — the base's visibility answers for its entries", () => {
   it("a workspace VIEWER cannot read an entry in someone else's PRIVATE base", async () => {
-    // The pre-existing hole, and the widest one: no agent, no container, no
-    // API key — a plain teammate with the entry id.
+    // The widest case: no agent, no container, no API key — a plain teammate
+    // with the entry id.
     mockRepo.findEntryById.mockResolvedValue(entry());
     mockRepo.findBaseById.mockResolvedValue(
       base({ visibility: "private", createdBy: OWNER })
@@ -190,8 +168,7 @@ describe("getEntry — the base's visibility answers for its entries", () => {
 
   it("M-10: a WORKSPACE-SCOPED key is refused a private base's entry even as its creator", async () => {
     // `canSeeBase` answers false for any non-public base under an
-    // `apiKeyWorkspaceId` — such a credential may be shared between humans, and
-    // the container lock (B1) mints exactly this shape.
+    // `apiKeyWorkspaceId`: such a credential may be shared between humans.
     mockRepo.findEntryById.mockResolvedValue(entry());
     mockRepo.findBaseById.mockResolvedValue(
       base({ visibility: "private", createdBy: OWNER })
@@ -231,8 +208,7 @@ describe("getEntry — the base's visibility answers for its entries", () => {
     mockRepo.findEntryById.mockResolvedValue(entry({ workspaceId: "ws-other" }));
 
     await expect(getEntry(ctx(), "e-1")).rejects.toThrow();
-    // The base is never fetched — the workspace filter refuses before the row
-    // can be chased anywhere.
+    // The base is never fetched: the workspace filter refuses first.
     expect(mockRepo.findBaseById).not.toHaveBeenCalled();
   });
 });

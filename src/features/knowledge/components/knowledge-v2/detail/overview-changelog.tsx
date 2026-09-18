@@ -18,19 +18,12 @@ interface Props {
 }
 
 /**
- * THE BASE PAGE'S **Changelog** — the day-grouped roll-up of every revision of
- * this base and of everything in it.
+ * The base page's Changelog — the day-grouped roll-up of every revision of this
+ * base and of everything in it. Replaced the "Contents" section on 2026-09-09.
  *
- * ⚠ **IT REPLACED THE "Contents" SECTION ON 2026-09-09** (Samuel's design for the
- * CHANGELOG lane). Contents was the inline description editor whose summaries
- * agents read in MCP `get_tree` / `list_dir`, and that surface now has NO home —
- * filed as a finding rather than kept beside this one, because the base info face
- * holds two flat sections and Samuel named which two.
- *
- * ⚠ **RESTORE IS ADDRESSED TO THE ROW'S OWN ENTRY**, taken from
- * `revision.resourceId`, not to "the base" — a base has no body to restore. Rows
- * with no body snapshot (a folder move, a base rename) render no Restore at all;
- * `changelog-list.tsx` states that rule once.
+ * Restore is addressed to the ROW'S OWN ENTRY (`revision.resourceId`), not to
+ * "the base" — a base has no body to restore. Rows with no body snapshot render
+ * no Restore; `changelog-list.tsx` states that rule once.
  */
 export function OverviewChangelog({ baseId, workspaceId, canEdit }: Props) {
   const history = useRevisionHistory({ kind: "base", id: baseId }, workspaceId);
@@ -38,7 +31,7 @@ export function OverviewChangelog({ baseId, workspaceId, canEdit }: Props) {
 
   async function restore(revision: Revision) {
     await restoreEntryRevision(revision.resourceId, revision.id, workspaceId);
-    // ⚠ INVALIDATE, never patch: the restore appends a revision whose id, stamp
+    // invalidate, never patch: the restore appends a revision whose id, stamp
     // and actor the server assigns (`revisions/client/hooks.ts`).
     await queryClient.invalidateQueries({ queryKey: ["revisions"] });
     await queryClient.invalidateQueries({ queryKey: ["knowledge"] });
@@ -60,8 +53,8 @@ export function OverviewChangelog({ baseId, workspaceId, canEdit }: Props) {
   );
 }
 
-/** ⚠ Re-exported so a surface that wants ONE entry's history mounts the same
- *  list rather than a second one. */
+/** Re-exported so a surface that wants ONE entry's history mounts the same list
+ *  rather than a second one. */
 export function EntryChangelog({
   entryId,
   workspaceId,

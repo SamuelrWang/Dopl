@@ -1,19 +1,11 @@
 /**
- * THE AGENT AUDIENCE CEILING — layer A (plan §4.2/§4.3), the fence half of the
- * ceiling. Two halves to this suite:
- *
- *  1. `resolveAgentAudience` as a decision table: the three `unrestricted`
- *     branches (human caller, standard workspace, SOLO container) cost the
- *     queries they are supposed to cost and no more; the fourth narrows; an
- *     UNREADABLE member count fails CLOSED; an unknown future workspace kind is
- *     NOT narrowed; and the `X-Dopl-Session-Id` narrowing may only pick inside
- *     the DB-derived set.
- *  2. The three foundational lookups in `service-bases.ts` driven for real, so
- *     deleting the wiring — not just the module — goes red.
- *
- * ⚠ MUTATION-VERIFIED. Counts are in the report for this milestone; each
- * `it()` below whose title names a fence was confirmed to fail with that fence
- * removed.
+ * The agent audience ceiling — layer A (plan §4.2/§4.3), the fence half. Two
+ * halves: `resolveAgentAudience` as a decision table (the three `unrestricted`
+ * branches cost the queries they should and no more, an unreadable member count
+ * fails CLOSED, an unknown workspace kind is NOT narrowed, and the
+ * `X-Dopl-Session-Id` narrowing may only pick inside the DB-derived set), and
+ * the three foundational lookups in `service-bases.ts` driven for real, so
+ * deleting the wiring goes red.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -116,8 +108,8 @@ describe("resolveAgentAudience — the three unrestricted branches", () => {
 
   it("an UNKNOWN future workspace kind is NOT narrowed", async () => {
     // The listing predicate `isStandardWorkspace` is positive on purpose
-    // (§4A/F-295); the ceiling asks the opposite question and must answer NO for
-    // a kind nobody has designed yet rather than fencing it on a guess.
+    // (§4A/F-295); the ceiling must answer NO for a kind nobody has designed yet
+    // rather than fencing it on a guess.
     mockKind.mockResolvedValue("archive");
 
     expect(await resolveAgentAudience(ctx())).toEqual({ kind: "unrestricted" });
@@ -208,9 +200,8 @@ describe("resolveAgentAudience — §4.3, the session-id narrowing", () => {
   });
 
   it("🔒 IGNORES a session id naming a channel OUTSIDE the set — no widening", async () => {
-    // The header is forgeable. A value naming a channel the container does not
-    // hold is discarded ENTIRELY; the DB-derived set stands. There is no input
-    // that ADDS a channel.
+    // the header is forgeable: a value naming a channel the container does not
+    // hold is discarded entirely. No input ADDS a channel.
     mockKind.mockResolvedValue("link");
     mockCount.mockResolvedValue(2);
     mockChannels.mockResolvedValue([CHANNEL_A]);
@@ -246,9 +237,8 @@ describe("resolveAgentAudience — §4.3, the session-id narrowing", () => {
     const narrowed = await resolveAgentAudience(
       ctx({ sessionId: `${CHANNEL_B}:t` })
     );
-    // ⚠ TWO ARGUMENTS SINCE F-662 — the container term is gone from this
-    // read, because a grant row is filed under the RESOURCE's container and
-    // `channelIds` is already the fence.
+    // TWO ARGUMENTS SINCE F-662 — the container term is gone from this
+    // read: a grant row is filed under the RESOURCE's container.
     const [, narrowedChannels] = mockGrants.mock.calls[0];
 
     expect(narrowedChannels).toEqual([CHANNEL_B]);

@@ -7,29 +7,23 @@ import {
 } from "@/shared/knowledge/markdown-sections";
 
 /**
- * **THE SECTION PROJECTION — WHERE A HEADING BECOMES AN ADDRESS ON THE WIRE.**
+ * The section projection — where a heading becomes an address on the wire.
  *
- * ⚠ **IT RUNS ON THE SERVER, NOT IN THE RENDERER, AND THAT IS THE ONE PLACE
- * THIS WAVE DEPARTS FROM `response-size.ts`'s RULE.** That module's three knobs
- * (`response_format`, `fields`, `max_chars`) are applied where the text is
- * assembled, because they PROJECT a payload the loopback already paid for. A
- * `section` is not a projection: it SELECTS which part of a document to fetch,
- * the way `path` selects which document — so it belongs beside `path`, on the
- * request, and the body that never matched never crosses the wire either.
- * ⚠ The practical half of the same argument: `packages/mcp-server` cannot import
- * `src/` (its tsconfig `rootDir` is its own `src`), so a renderer-side split
- * would mean a hand-copied parser. One implementation, one place.
+ * It runs on the server, unlike `response-size.ts`'s knobs, because a `section`
+ * is not a projection: it selects which part of a document to fetch, the way
+ * `path` selects which document, so the body that never matched never crosses
+ * the wire. Practically, `packages/mcp-server` cannot import `src/`, so a
+ * renderer-side split would mean a hand-copied parser.
  *
- * ⚠ **PURE OVER AN ENTRY ALREADY READ — NO SECOND QUERY, EVER.** Everything
- * here is arithmetic on `entry.body`, so a sectioned read costs exactly what a
- * whole read costs the DATABASE and a fraction of what it costs the model.
+ * Pure over an entry already read — everything here is arithmetic on
+ * `entry.body`, so a sectioned read costs the database what a whole read does.
  */
 
 /** One outline row as it travels: no `end`, which is derivable from the next. */
 export interface KnowledgeOutlineRow {
   heading: string;
   level: number;
-  /** Cost of reading this section — a parent's count CONTAINS its children's. */
+  /** Cost of reading this section — a parent's count contains its children's. */
   chars: number;
   /** Char offset of the heading, so `offset=` can resume from here. */
   start: number;
@@ -67,15 +61,12 @@ export function outlinePayload(body: string): KnowledgeOutlinePayload {
 /**
  * Project a read.
  *
- * ⚠ **AN UNKNOWN SECTION IS A 200 CARRYING THE OUTLINE, NOT A 404.** The entry
- * resolved; what did not resolve is a heading inside it, and the answer that
- * costs the caller nothing is the list of headings that DO exist — so the retry
- * needs no second call. A 404 here would mean "no such entry", which is a
- * different fact and one this response would be asserting falsely.
+ * An unknown section is a 200 carrying the outline, not a 404: the entry
+ * resolved, only the heading did not, and returning the headings that do exist
+ * saves the retry a second call. A 404 would assert "no such entry" falsely.
  *
- * ⚠ **THE BODY IS EMPTIED ON A MISS AND ON AN OUTLINE-ONLY READ.** Sending the
- * whole document beside a refusal to name part of it would spend exactly the
- * characters the argument exists to save.
+ * The body is emptied on a miss and on an outline-only read — sending the whole
+ * document beside a refusal would spend the characters this exists to save.
  */
 export function projectFile(
   entry: KnowledgeEntry,

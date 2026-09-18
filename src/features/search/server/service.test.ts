@@ -1,24 +1,15 @@
 /**
- * THE PAYLOAD'S OWN RULES — the ones a fence test cannot see because they are
- * about SHAPE rather than about which rows came back.
+ * The payload's own rules — the ones a fence test cannot see, because they are
+ * about SHAPE rather than which rows came back.
  *
- *  - **A too-short query is a 200 with NO groups and NO queries.** The popup
- *    mounts and asks on the first keystroke; a 400 there renders as a failed
- *    search rather than as "keep typing".
- *  - **Per-group cap 8, `total` capped at 50 and never the item count.** A group
- *    reporting eight when it found forty hides what the reader is about to
- *    scroll for.
- *  - **A group with no items is OMITTED.** `{total: 0, items: []}` and "this
- *    section did not match" are the same fact told twice, and the popup draws a
- *    header for every group it is handed.
- *  - **Section order is `SEARCH_GROUP_ORDER`, not resolution order.** Iterating
- *    the results would make the order a race the popup renders as sections
- *    jumping between keystrokes.
+ *  - A too-short query is a 200 with no groups and no queries.
+ *  - Per-group cap 8, `total` capped at 50 and never the item count.
+ *  - A group with no items is omitted, since the popup draws a header for every
+ *    group it is handed.
+ *  - Section order is `SEARCH_GROUP_ORDER`, not resolution order: iterating the
+ *    results would make it a race.
  *
- * MUTATION-VERIFY: 4 reverts, 4 failures, 0 vacuous (2026-09-17) — returning
- * `items.length` as `total`, dropping the `slice(0, SEARCH_GROUP_ITEM_CAP)`,
- * keeping empty groups in the payload, and iterating the result map instead of
- * the order each turn a case here red.
+ * MUTATION-VERIFY: 4 reverts, 4 failures, 0 vacuous (2026-09-17).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -95,8 +86,8 @@ describe("the minimum query length", () => {
 
     expect(out).toMatchObject({ q: "a", scope: "account", groups: [] });
     expect(typeof out.tookMs).toBe("number");
-    // ⚠ The read is skipped, not filtered — which is the other half of why this
-    // is not a validation failure: it costs nothing.
+    // The read is skipped, not filtered, which is why this is not a validation
+    // failure: it costs nothing.
     expect(queries).toEqual([]);
   });
 
@@ -136,7 +127,7 @@ describe("caps", () => {
     const group = out.groups.find((g) => g.kind === "threads");
 
     expect(group?.items).toHaveLength(SEARCH_GROUP_ITEM_CAP);
-    // ⚠ NOT `items.length`. The count is what the reader is deciding on.
+    // Not `items.length` — the count is what the reader is deciding on.
     expect(group?.total).toBe(12);
   });
 
@@ -227,8 +218,8 @@ describe("the group list", () => {
 
     const out = await runSearch(CTX, { q: "zephyr", scope: "account" });
 
-    // ⚠ Compared against the CONSTANT's own order, filtered to what matched —
-    // a hand-written literal here would drift the day a group is inserted.
+    // Compared against the constant's own order, filtered to what matched: a
+    // hand-written literal would drift the day a group is inserted.
     const accountKinds = SEARCH_GROUP_ORDER.filter(
       (k) => !["members", "skills", "chats"].includes(k)
     );

@@ -1,7 +1,11 @@
 /**
- * Channels — AN AGENT'S NUMBERS, AND THE ABSENCE OF ONE. The two pure
- * readers every agent surface shares: the Agents tab's cards, the agent panel
+ * Channels — AN AGENT'S NUMBERS, AND THE ABSENCE OF ONE. The pure reader
+ * every agent surface shares: the Agents tab's cards, the agent panel
  * and the agent window (`grep -rn "from \"./agent-metrics\"" src`).
+ *
+ * ⚠ `formatTokens` LEFT FOR `shared/lib/format-tokens.ts` (2026-09-17). The
+ * desktop Overview held a second declaration that FLOORED; this one rounded to
+ * nearest and had no sub-1000 arm, so `84_500` read "85k" and `400` read "0k".
  *
  * ⚠ ITS OWN FILE SINCE 2026-08-22, AND THE REASON TO CHANGE IS THE SPLIT
  * (INVARIANTS §1). `agents-model.ts` is the SESSION PROJECTION — which agents
@@ -15,16 +19,6 @@
  * the `permission-modes.ts` tangle is named for, and the one that file's own
  * footer warns about for `agents-controls.ts`.
  */
-
-/** `84_000` → `"84k"`. Tokens are only ever glanced at here; the exact integer is
- *  noise at caption size, and above a million the thousands are too. */
-export function formatTokens(value: number): string {
-  if (value >= 1_000_000) {
-    const m = value / 1_000_000;
-    return `${m >= 10 ? Math.round(m) : m.toFixed(1)}M`;
-  }
-  return `${Math.round(value / 1000)}k`;
-}
 
 /**
  * A metric, or `null`. ⚠ The one place the wire's three absences collapse into

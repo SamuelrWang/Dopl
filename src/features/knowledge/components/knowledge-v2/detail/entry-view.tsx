@@ -27,8 +27,8 @@ interface Props {
  * File view: rich-text editor with conflict-safe autosave, focus-refetch,
  * presence, agent-facing description.
  *
- * ⚠ DocPane mounts ONLY once the FULL entry (body + fresh `updated_at`) is in
- * hand, never the body-stripped tree entry. On tree metadata, a title edit
+ * DocPane mounts ONLY once the full entry (body + fresh `updated_at`) is in
+ * hand, never the body-stripped tree entry: on tree metadata, a title edit
  * during the load window autosaves `body: ""` over the whole document, and the
  * concurrency token seeds from stale data (phantom "edited elsewhere").
  */

@@ -1,34 +1,19 @@
 /**
- * 🔒 **WHERE A CREATE LANDS — THE FOUR ARMS OF `resolveCreateDestination`, AND
- * THE TWO IT MUST NOT ASK.** Gap 2 of #1077 (design), approved #1080; the seam
- * itself shipped with the A2 final slice and shipped with no test, which is the
- * hole this file closes.
+ * Where a create lands — the four arms of `resolveCreateDestination`, and the
+ * two it must not ask.
  *
- * ⚠ **IT ASSERTS THE COLLABORATOR CALLS AS WELL AS THE ANSWERS, which is what
- * `shared/tenancy/personal-reach.test.ts` means by asserting the filters.** This
- * function issues no query of its own — it composes two fences — so the
- * equivalent of a filter here is WHICH fence it asked, WITH WHAT, and WHICH ONE
- * IT DID NOT ASK. Both halves are load bearing and for the same two reasons that
- * suite gives:
+ * The function issues no query of its own, so the assertions cover which fence
+ * it asked, with what, and which one it did not ask:
+ *   - order is the query budget: a `homeScoped` caller must never pay for the
+ *     audience ceiling (four reads), an `unrestricted` one never for the
+ *     personal fence.
+ *   - the fence is asked, never re-implemented, and asked ABOUT THE CALLER —
+ *     keyed on a caller-supplied container it becomes a door into any shelf.
  *
- *   - **THE ORDER IS THE QUERY BUDGET.** A caller naming `homeScoped` must never
- *     pay for the audience ceiling (four reads inside a shared container), and an
- *     `unrestricted` caller must never pay for the personal fence. Every create
- *     in the product goes through here.
- *   - **THE FENCE IS ASKED, NEVER RE-IMPLEMENTED.** A4 (artifacts) is briefed to
- *     adopt this function, so it inherits one answer rather than a second
- *     opinion. A version that decided reach for itself would satisfy every
- *     answer-shaped assertion below while quietly half-opening the authz — and
- *     the argument it must be asked ABOUT THE CALLER, never about a
- *     caller-supplied container, is the same one that makes `personal-reach.ts`
- *     safe.
- *
- * ⚠ **THE REFUSALS ARE TWO DIFFERENT ERRORS AND THAT IS DELIBERATE.** A caller
- * that ASKED for the shelf gets `PersonalContainerMissingError` (403,
- * `PERSONAL_CONTAINER_MISSING`) naming why the shelf is out of reach; a caller
- * that asked for nothing and simply cannot create in the room gets the
- * unchanged `AgentWriteDisabledError`. Collapsing them would tell an agent that
- * never mentioned a shelf that its operator has one.
+ * The two refusals are deliberately different errors: a caller that asked for
+ * the shelf gets `PersonalContainerMissingError`, one that asked for nothing
+ * gets `AgentWriteDisabledError`. Collapsing them would tell an agent that never
+ * mentioned a shelf that its operator has one.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -57,9 +42,9 @@ const mockReach = vi.mocked(resolvePersonalReach);
 const mockAudience = vi.mocked(resolveAgentAudience);
 
 const ME = "u-operator";
-/** The ROOM — a link container with a peer in it, from the original report. */
+/** The room — a link container with a peer in it. */
 const ROOM = "e7998a94-d3ab-42cc-8c76-99585bcb920c";
-/** The caller's OWN personal container. ⚠ Never equal to the room. */
+/** The caller's own personal container. Never equal to the room. */
 const CONTAINER = "33333333-3333-4333-8333-333333333333";
 const CHANNEL = "aaaaaaaa-0000-4000-8000-000000000001";
 
@@ -76,7 +61,7 @@ function ctx(over: Partial<KnowledgeContext> = {}): KnowledgeContext {
   };
 }
 
-/** The ceiling is ARMED — an agent in a room with somebody else in it. */
+/** The ceiling is armed — an agent in a room with somebody else in it. */
 function restricted() {
   mockAudience.mockResolvedValue({
     kind: "granted",
@@ -85,7 +70,7 @@ function restricted() {
   });
 }
 
-/** Today's behaviour: a human, a standard workspace, or a solo container. */
+/** A human, a standard workspace, or a solo container. */
 function unrestricted() {
   mockAudience.mockResolvedValue({ kind: "unrestricted" });
 }
@@ -102,7 +87,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-// ── ARM 1: THE CALLER ASKED FOR THE SHELF BY NAME ─────────────────────────
+// ── Arm 1: the caller asked for the shelf by name ─────────────────────────
 
 describe("🔒 homeScoped — asked for by name, so the fence alone decides", () => {
   it("lands on the caller's OWN container when the fence is open", async () => {
@@ -112,19 +97,15 @@ describe("🔒 homeScoped — asked for by name, so the fence alone decides", ()
       homeScoped: true,
       workspaceId: CONTAINER,
     });
-    // 🔒 THE FLAG AND THE ID TOGETHER. `insertBase` routes on the flag through
+    // The flag and the id together: `insertBase` routes on the flag through
     // `personalWriteWorkspaceId` while the slug read and the rollback use the
-    // id; answering with only one of them is how the two disagree about where
-    // the row went.
+    // id.
   });
 
   it("⚠ NEVER PAYS FOR THE AUDIENCE CEILING — the budget, not a tidiness point", async () => {
-    // ⚠ MUTATION CHECK. Asking `resolveAgentAudience` here would put up to four
-    // reads (workspace kind, member count, channel ids, grant rows) on every
-    // personal create, and it cannot change the answer: the destination is a
-    // container with one member, whose ceiling is `unrestricted` by
-    // construction. Order IS the query budget, exactly as the fence's own suite
-    // argues for its reads.
+    // Asking `resolveAgentAudience` here would put up to four reads on every
+    // personal create and cannot change the answer: the destination is a
+    // one-member container, whose ceiling is `unrestricted` by construction.
     open();
 
     await resolveCreateDestination(ctx(), { homeScoped: true });
@@ -133,11 +114,9 @@ describe("🔒 homeScoped — asked for by name, so the fence alone decides", ()
   });
 
   it("🔒 REFUSES, NEVER DOWNGRADES, when the fence is closed", async () => {
-    // 🔒 THE DIRECTION THAT MATTERS. The workspace shelf is a DIFFERENT
-    // audience, not a lesser one — falling back to the room would silently
-    // publish a row the caller meant to keep on their own shelf into a
-    // container a peer is standing in. `personal-container.ts`'s "refuse, never
-    // downgrade" rule, on the gate.
+    // The workspace shelf is a different audience, not a lesser one: falling
+    // back to the room would publish a row the caller meant to keep on their own
+    // shelf into a container a peer is standing in.
     closed("unarmed_room");
 
     await expect(
@@ -146,11 +125,10 @@ describe("🔒 homeScoped — asked for by name, so the fence alone decides", ()
   });
 
   it("names the REMEDY on an unarmed room, and arming is human-only", async () => {
-    // ⚠ A refusal with no cause is what sends an agent to grep the repo. This
-    // is also the one place `unarmed_room` may be spoken: a WRITE has no silent
-    // form, and the only person who learns anything is the OWNER, about their
-    // OWN shelf in their OWN room. ⚠ It must never reach a READ path, where an
-    // unarmed room has to answer what an empty one answers.
+    // The one place `unarmed_room` may be spoken: a write has no silent form,
+    // and the only person who learns anything is the owner, about their own
+    // shelf in their own room. It must never reach a read path, where an unarmed
+    // room has to answer what an empty one answers.
     closed("unarmed_room");
 
     const err = await resolveCreateDestination(ctx(), { homeScoped: true }).then(
@@ -166,10 +144,9 @@ describe("🔒 homeScoped — asked for by name, so the fence alone decides", ()
     ["shared_credential" as const, "a shared credential has no personal shelf"],
     ["no_container" as const, "your personal container has not been created yet"],
   ])("carries the %s reason through verbatim", async (refusal, sentence) => {
-    // ⚠ ONE SENTENCE PER REASON, WRITTEN ONCE (`personal-container.ts ›
-    // personalShelfRefusal`) and shared with the ROUTER and the agent-templates
-    // twin. A hand-mirrored copy is two refusals that stop agreeing about the
-    // remedy.
+    // One sentence per reason, written once (`personal-container.ts ›
+    // personalShelfRefusal`) and shared with the router and the agent-templates
+    // twin.
     closed(refusal);
 
     const err = await resolveCreateDestination(ctx(), { homeScoped: true }).then(
@@ -181,11 +158,8 @@ describe("🔒 homeScoped — asked for by name, so the fence alone decides", ()
   });
 
   it("🔒 asks the fence about THE CALLER, standing in THE ROOM", async () => {
-    // ⚠ MUTATION CHECK, and the reason the composition is safe: the fence is
-    // asked, never re-implemented, and it is asked about the context this
-    // request already proved — never about a container named in the input. Key
-    // it on anything the caller supplies and the gate becomes a door into any
-    // shelf.
+    // The fence is asked about the context this request already proved, never
+    // about a container named in the input.
     open();
     const caller = ctx();
 
@@ -196,14 +170,12 @@ describe("🔒 homeScoped — asked for by name, so the fence alone decides", ()
   });
 });
 
-// ── ARM 2: THE CEILING IS OPEN — EVERY PATH THAT WORKS TODAY ──────────────
+// ── Arm 2: the ceiling is open — every path that works today ──────────────
 
 describe("⚠ an UNRESTRICTED audience lands in the calling container, as it always did", () => {
   it("answers the room, and does not ask the personal fence at all", async () => {
-    // 🔒 "IT CHANGES NOTHING THAT WORKS TODAY" IS AN ASSERTION, not a claim in
-    // a docblock. A human, a standard workspace and a solo container are the
-    // three `unrestricted` branches; every one of them must land exactly where
-    // it landed before the seam existed.
+    // A human, a standard workspace and a solo container are the three
+    // `unrestricted` branches; each must land where it landed before the seam.
     unrestricted();
 
     expect(await resolveCreateDestination(ctx({ source: "user" }), {})).toEqual({
@@ -214,10 +186,8 @@ describe("⚠ an UNRESTRICTED audience lands in the calling container, as it alw
   });
 
   it("⚠ answers `homeScoped: false`, not absent — the router reads `!== true`", async () => {
-    // The two are the same instruction to `personalWriteWorkspaceId`, and the
-    // explicit `false` is what lets the destination be ONE shape with both
-    // fields always present. A caller reading the flag can never find it
-    // missing and guess.
+    // The explicit `false` keeps the destination one shape with both fields
+    // always present, so a caller reading the flag never finds it missing.
     unrestricted();
 
     const destination = await resolveCreateDestination(ctx(), {});
@@ -226,8 +196,7 @@ describe("⚠ an UNRESTRICTED audience lands in the calling container, as it alw
   });
 
   it("does not re-route a create that names a CHANNEL or a TEAM either", async () => {
-    // Both name the calling container in as many words, so neither is a
-    // personal row — and this arm reaches them before any fence runs.
+    // Both name the calling container, so neither is a personal row.
     unrestricted();
 
     expect(
@@ -239,15 +208,13 @@ describe("⚠ an UNRESTRICTED audience lands in the calling container, as it alw
   });
 });
 
-// ── ARM 3: RESTRICTED, BUT THE SHELF IS REACHABLE ─────────────────────────
+// ── Arm 3: restricted, but the shelf is reachable ─────────────────────────
 
 describe("🔒 a RESTRICTED audience follows its OWNER when the room is armed", () => {
   it("re-routes to the personal container instead of refusing", async () => {
-    // 🔒 GAP 2 ITSELF (#1077): *"a create with no valid container in a shared
-    // room should go to the caller's own personal container, not refuse —
-    // personal-visibility creates resolve their container by OWNER, never by
-    // call site."* ⚠ The only creates this moves are the ones the read-back
-    // gate was already refusing outright, so no working path changes.
+    // Personal-visibility creates resolve their container by owner, never by
+    // call site. The only creates this moves are ones the read-back gate was
+    // already refusing outright.
     restricted();
     open();
 
@@ -258,12 +225,9 @@ describe("🔒 a RESTRICTED audience follows its OWNER when the room is armed", 
   });
 
   it("🔒 the READ-BACK GUARANTEE is the OPEN fence, and it is asked every time", async () => {
-    // ⚠ MUTATION CHECK for the half-open shortcut A4 would inherit. The reason
-    // this is not a way around F-323's gate is that the row lands in a
-    // container with ONE member, where the audience is `unrestricted` by
-    // construction — and that is true only because the fence said OPEN. A
-    // version that re-routed without asking would write rows into a shelf the
-    // caller has no reach to.
+    // This is not a way around F-323's gate because the row lands in a
+    // one-member container, and that holds only because the fence said open.
+    // Re-routing without asking would write into a shelf out of reach.
     restricted();
     open();
 
@@ -273,15 +237,13 @@ describe("🔒 a RESTRICTED audience follows its OWNER when the room is armed", 
   });
 });
 
-// ── ARM 4: RESTRICTED AND CLOSED — F-323's REFUSAL, UNCHANGED ─────────────
+// ── Arm 4: restricted and closed — F-323's refusal, unchanged ─────────────
 
 describe("🔒 RESTRICTED and out of reach keeps F-323's refusal", () => {
   it("refuses an unarmed shared room with the ROOM error, not the shelf one", async () => {
-    // ⚠ THE TWO ERRORS ARE NOT INTERCHANGEABLE. This caller never mentioned a
-    // shelf, so it is told what it was always told: an agent cannot create a
-    // base here. Answering `PERSONAL_CONTAINER_MISSING` would disclose that its
-    // operator has a personal container and that this room is not armed for it,
-    // to a caller that asked about neither.
+    // This caller never mentioned a shelf. Answering
+    // `PERSONAL_CONTAINER_MISSING` would disclose that its operator has a
+    // personal container and that this room is not armed for it.
     restricted();
     closed("unarmed_room");
 
@@ -292,17 +254,15 @@ describe("🔒 RESTRICTED and out of reach keeps F-323's refusal", () => {
 
     expect(err).toBeInstanceOf(AgentWriteDisabledError);
     expect(err).not.toBeInstanceOf(PersonalContainerMissingError);
-    // The unchanged sentence: WHY (no grant → invisible), WHO can fix it, and
-    // WHAT ELSE to do — now including arming as a third remedy.
+    // The sentence carries why, who can fix it, and what else to do.
     expect(err!.message).toContain("shared home channel");
     expect(err!.message).toContain("Ask your operator");
   });
 
   it("🔒 a create naming a CHANNEL is refused WITHOUT asking the fence", async () => {
-    // 🔒 `shareToChannelId` NAMES THE ROOM, and a grant cannot follow a row out
-    // of it. ⚠ MUTATION CHECK: re-routing this would land the base on the
-    // personal shelf and then try to grant it into a channel of a container it
-    // no longer lives in. Refused before the fence is even asked.
+    // `shareToChannelId` names the room and a grant cannot follow a row out of
+    // it: re-routing would land the base on the personal shelf and then grant it
+    // into a channel of a container it no longer lives in.
     restricted();
 
     await expect(
@@ -312,8 +272,8 @@ describe("🔒 RESTRICTED and out of reach keeps F-323's refusal", () => {
   });
 
   it("🔒 a TEAMS create is refused WITHOUT asking the fence, for the same reason", async () => {
-    // A team lives in the calling container too, so a personal row could never
-    // carry the grant the caller asked for.
+    // A team lives in the calling container, so a personal row could never carry
+    // the grant the caller asked for.
     restricted();
 
     await expect(
@@ -323,9 +283,8 @@ describe("🔒 RESTRICTED and out of reach keeps F-323's refusal", () => {
   });
 
   it("⚠ `homeScoped` BEATS both, because the caller named the shelf", async () => {
-    // Order check: the shelf arm runs FIRST, so a caller that explicitly asked
-    // for its own shelf is answered by the fence rather than by the room's
-    // ceiling — and gets the shelf's own refusal when it is closed.
+    // The shelf arm runs first, so a caller that named its own shelf is answered
+    // by the fence rather than the room's ceiling.
     closed("unarmed_room");
 
     await expect(

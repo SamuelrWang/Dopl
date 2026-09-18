@@ -11,30 +11,26 @@ import { KnowledgeStorageLimitError } from "./errors";
 import * as repo from "./repository";
 
 /**
- * THE PER-KB STORAGE GATE. Answers one question BEFORE the write: may it grow.
+ * The per-KB storage gate: may this write grow the base.
  *
- * ⚠ The COUNTER is NOT maintained here — `knowledge_bases.storage_bytes` is
- * kept in step by a row trigger on `knowledge_entries`
- * (`20260812120000_knowledge_base_storage_bytes.sql` §3) in the same
- * transaction as the write, the only way FK cascades get counted at all.
+ * The COUNTER is not maintained here — `knowledge_bases.storage_bytes` is kept
+ * in step by a row trigger on `knowledge_entries`
+ * (`20260812120000_knowledge_base_storage_bytes.sql` §3) in the same transaction
+ * as the write, the only way FK cascades get counted at all.
  *
- * ⚠ PLAN = ENTITLEMENT VERDICT, never `workspace_billing.plan`: a solo
+ * Plan = ENTITLEMENT VERDICT, never `workspace_billing.plan`: a solo
  * subscription grown to two members is degraded to free by `entitlements.ts ›
- * paidEntitlement`, and the raw column would hand it 100 MB/base it isn't
- * entitled to. Deliberately NOT `getWorkspaceEntitlements` — its third query is
- * a `COUNT(*)` over `ontology_objects` only the object cap reads.
+ * paidEntitlement`. Not `getWorkspaceEntitlements` — its third query is a
+ * `COUNT(*)` over `ontology_objects` only the object cap reads.
  *
- * FREEZE, NEVER DELETE: only POSITIVE deltas checked, so a shrinking edit on an
- * over-cap base MUST succeed — the one action that gets the workspace out.
- *
- * ⚠ FAILS OPEN on purpose — it reads a column that exists only post-migration,
- * and a web deploy landing first would refuse EVERY knowledge write with a
- * billing error. An unreadable meter is not evidence of an over-cap workspace.
+ * Freeze, never delete: only POSITIVE deltas are checked, so a shrinking edit on
+ * an over-cap base MUST succeed. Fails OPEN — it reads a column that exists only
+ * post-migration, and an unreadable meter is not evidence of an over-cap base.
  */
 
 /**
  * Per-base byte cap from the entitlement-resolved plan.
- * ⚠ `null` = UNKNOWN (billing read failed): callers must treat as "do not
+ * `null` = UNKNOWN (billing read failed): callers must treat as "do not
  * gate" AND "do not render a bar" — never zero, never unlimited.
  */
 export async function resolveKbStorageLimit(
@@ -51,7 +47,7 @@ export async function resolveKbStorageLimit(
   }
 }
 
-/** ⚠ Must stay the SAME unit as the counter: `octet_length` over a UTF-8
+/** Must stay the SAME unit as the counter: `octet_length` over a UTF-8
  *  database is `Buffer.byteLength(s, "utf8")`. */
 export function bodyBytes(body: string | null | undefined): number {
   return body ? Buffer.byteLength(body, "utf8") : 0;
@@ -64,13 +60,10 @@ export function bodyBytes(body: string | null | undefined): number {
  * `bodyBytes(next)` on create. Delta ≤ 0 returns without touching the DB —
  * renames, moves, repositions and shrinks cost nothing.
  *
- * ⚠ TAKES `Pick<KnowledgeContext, "workspaceId">` RATHER THAN THE WHOLE CONTEXT
+ * Takes `Pick<KnowledgeContext, "workspaceId">` rather than the whole context
  * (widened 2026-08-26 for the channel lane, whose `ChannelKnowledgeContext`
- * deliberately carries no `role`). The narrow type is a claim the compiler
- * checks: this is a PLAN gate, it asks the workspace's billing one question, and
- * it must never grow into reading a caller's role and answering a visibility
- * question with it. Every existing caller passes a full `KnowledgeContext` and
- * is unaffected.
+ * carries no `role`). The narrow type is a compiler-checked claim: this is a PLAN
+ * gate and must never grow into reading a caller's role.
  */
 export async function assertStorageHeadroom(
   ctx: Pick<KnowledgeContext, "workspaceId">,
@@ -107,8 +100,8 @@ export async function assertStorageHeadroom(
 }
 
 /**
- * Flat plan-gate envelope for a refused write. ⚠ Must mirror billing's
- * `entitlementDeniedBody` and chats' `chatRetentionDeniedBody` EXACTLY —
+ * Flat plan-gate envelope for a refused write. Must mirror billing's
+ * `entitlementDeniedBody` and chats' `chatRetentionDeniedBody` exactly —
  * `{ error, message, upgrade_url }` — because `@dopl/client` and MCP
  * `respond.ts › entitlementDenied` key off that shape, not the nested
  * `HttpError` one.

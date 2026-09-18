@@ -15,28 +15,23 @@ import { readBaseInContext } from "./service-bases";
 import { getEntry, readEntry, updateEntry } from "./service-entries";
 
 /**
- * KNOWLEDGE → REVISIONS: the READ half — history, the base roll-up, and restore.
+ * Knowledge → revisions: the READ half — history, the base roll-up, and restore.
  *
- * ⚠ **SPLIT FROM `./service-revisions.ts` BY A CYCLE, NOT BY SIZE.** The capture
- * half is imported BY the writers (`service-entries.ts`, `service-folders.ts`,
- * `service-base-writes.ts`, `service-paths.ts`); this half imports those same
- * writers back, to gate a read and to perform a restore. Keeping both in one
- * module would make that cycle real rather than merely apparent.
+ * Split from `./service-revisions.ts` by a CYCLE, not by size: the capture half
+ * is imported BY the writers, and this half imports those writers back to gate a
+ * read and to perform a restore.
  *
- * 🔒 ⚠ **EVERY READ HERE IS GATED BY THE RESOURCE'S OWN SERVICE FIRST, AND THE
- * PROOF IS PASSED ON AS A REACH SET.** `revisions` states no visibility rule of
- * its own (`revisions/server/service-shared.ts`), so a history read that skipped
- * this step would be a service-role read of an unfenced table — which is exactly
- * the shape `service-entries.ts › getEntry`'s own docblock records as a hole.
+ * Every read here is gated by the resource's own service FIRST, and the proof
+ * is passed on as a reach set. `revisions` states no visibility rule of its own,
+ * so a history read that skipped this step would be a service-role read of an
+ * unfenced table — the shape `service-entries.ts › getEntry`'s own docblock
+ * records as a hole.
  */
 
 /**
- * ONE entry's history, newest first.
- *
- * 🔒 GATED ON {@link readEntry} — the id-following READ (B2), the same door
- * `GET /api/knowledge/entries/{id}` opens. A refusal is that read's 404, so
- * "no such entry", "its base is invisible to you" and "no history" stay one
- * answer.
+ * ONE entry's history, newest first. Gated on {@link readEntry} — the
+ * id-following READ (B2). A refusal is that read's 404, so "no such entry", "its
+ * base is invisible to you" and "no history" stay one answer.
  */
 export async function listEntryRevisions(
   ctx: KnowledgeContext,
@@ -52,20 +47,17 @@ export async function listEntryRevisions(
 }
 
 /**
- * THE BASE ROLL-UP — every revision of the base itself and of everything in it,
- * newest first. This is what the base page's **Changelog** section renders.
+ * The base roll-up — every revision of the base itself and of everything in it,
+ * newest first; what the base page's Changelog section renders.
  *
- * 🔒 GATED ON `readBaseInContext`, then narrowed to the ids that base actually
- * owns: the reach set is built from the base's OWN folder and entry lists, so a
- * row naming anything else is dropped rather than rendered even though the query
- * ran as service role.
+ * Gated on `readBaseInContext`, then narrowed to the ids that base owns: the
+ * reach set is built from the base's OWN folder and entry lists, so a row naming
+ * anything else is dropped even though the query ran as service role.
  *
- * ⚠ **THE ID SET IS READ FRESH, AND A DELETED ROW IS THEREFORE NOT IN IT.**
- * Knowledge deletes are permanent, so a delete revision names an id no list can
- * still produce — its row is filed and is not shown in the roll-up. That is the
- * fail-closed direction and it is the SAME answer the RLS policy gives
- * (`20261002120000_revisions.sql`, the fence section). Naming the deleted ids
- * would mean keeping a tombstone list this feature deliberately does not have.
+ * The id set is read FRESH, so a deleted row is not in it. Knowledge deletes
+ * are permanent, so a delete revision names an id no list can still produce; its
+ * row is filed and not shown. That is the fail-closed direction and the same
+ * answer the RLS policy gives (`20261002120000_revisions.sql`).
  */
 export async function listBaseRevisions(
   ctx: KnowledgeContext,
@@ -92,26 +84,18 @@ export async function listBaseRevisions(
 }
 
 /**
- * 🔒 **RESTORE — A NEW REVISION, NEVER A REWRITE.**
+ * Restore — a new revision, never a rewrite. The snapshot is written back through
+ * {@link updateEntry}, so the base's writable gate, the storage accounting and
+ * the embedding refresh all re-run and the revision is recorded with
+ * `op: "restore"`. Nothing here touches the source row.
  *
- * The snapshot is written back through {@link updateEntry}, the entry's own
- * write service: it re-runs the base's writable gate, the storage headroom
- * accounting and the embedding refresh, and it records the resulting revision
- * itself with `op: "restore"` and the source's date in the summary. Nothing here
- * touches the source row or any row between it and now.
+ * The write gate is {@link getEntry}, workspace-keyed — a write must not
+ * follow an id across a tenancy boundary (INVARIANTS §T35).
  *
- * 🔒 THE WRITE GATE IS {@link getEntry}, workspace-keyed, exactly as `PATCH
- * /api/knowledge/entries/{id}` uses it — a write must not follow an id across a
- * tenancy boundary (INVARIANTS §T35).
- *
- * ⚠ **AGENTS MAY RESTORE.** This is deliberately NOT `sessionOnly`: restoring is
- * a WRITE that adds a revision, not a deletion, and the app-only fence exists for
- * acts that destroy history. `assertBaseWritable` and the base's
- * `agent_write_enabled` toggle are the gates that apply.
- *
- * ⚠ A revision belonging to a DIFFERENT entry answers the same 404 an unknown id
- * does — the route addresses one entry, and letting it write another entry's
- * snapshot would make the entry id decorative.
+ * Agents may restore: deliberately NOT `sessionOnly`, because restoring adds a
+ * revision rather than destroying history; `assertBaseWritable` and
+ * `agent_write_enabled` are the gates that apply. A revision belonging to a
+ * DIFFERENT entry answers the same 404 an unknown id does.
  */
 export async function restoreEntryRevision(
   ctx: KnowledgeContext,

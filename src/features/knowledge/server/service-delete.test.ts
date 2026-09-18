@@ -9,8 +9,8 @@
  *     more permissive than content writes;
  *   - `deleteByPath` routes folder vs. entry to the right hard delete.
  *
- * ⚠ Folder-delete SUBTREE semantics (entries removed, not SET-NULL-orphaned)
- * are NOT covered here — the repo is mocked. See
+ * Folder-delete SUBTREE semantics (entries removed, not SET-NULL-orphaned) are
+ * NOT covered here — the repo is mocked. See
  * `scripts/smoke-knowledge-audit-probes.ts` PROBE 7 against a real database.
  */
 
@@ -22,13 +22,10 @@ import type {
   KnowledgeFolder,
 } from "../types";
 
-// ⚠ **THE CHANGELOG CAPTURE IS A REAL WRITE AND IT IS AWAITED**
-// (`./service-revisions.ts`, 2026-09-09): every knowledge write now records a
-// revision inside the same request, so a service test that leaves it alone
-// reaches `supabaseAdmin()` and fails on a missing service-role key. Stubbed
-// here because these suites are about the WRITE, not about its audit row —
-// that the row is recorded, exactly once, per path, is
-// `service-revisions.test.ts`'s subject.
+// The changelog capture is a real, awaited write (`./service-revisions.ts`), so
+// a service test that leaves it alone reaches `supabaseAdmin()` and fails on a
+// missing service-role key. That the row is recorded is
+// `service-revisions.test.ts`'s subject, not this suite's.
 vi.mock("@/features/revisions/server/repository", () => ({
   appendRevision: vi.fn(async () => ({ id: "rev-1" })),
   replaceRevisionSnapshot: vi.fn(async () => ({ id: "rev-1" })),
@@ -54,13 +51,12 @@ vi.mock("./repository", () => ({
 vi.mock("./embeddings", () => ({ scheduleEntryEmbedding: vi.fn() }));
 
 /**
- * ⚠ THE AUDIENCE CEILING IS ON THE AGENT PATH THIS SUITE DRIVES.
- * `getBaseById` now calls `service-audience.ts › resolveAgentAudience`, which
- * reads the workspace's KIND on the service-role client for any `source:
- * "agent"` caller — so without this mock the F-10 cases below reach a real
- * Supabase client and time out. `standard` is the pre-ceiling world: the
- * `unrestricted` branch, one read, nothing narrowed. The ceiling's own
- * behaviour is pinned in `service-audience.test.ts`, not here.
+ * The audience ceiling is on the agent path this suite drives: `getBaseById`
+ * calls `service-audience.ts › resolveAgentAudience`, which reads the
+ * workspace's KIND on the service-role client, so without this mock the F-10
+ * cases below reach a real Supabase client and time out. `standard` is the
+ * `unrestricted` branch; the ceiling itself is pinned in
+ * `service-audience.test.ts`.
  */
 vi.mock("./repository-audience", () => ({
   findWorkspaceKind: vi.fn().mockResolvedValue("standard"),

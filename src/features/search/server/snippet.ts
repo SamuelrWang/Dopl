@@ -1,27 +1,18 @@
 import "server-only";
 
 /**
- * THE SNIPPET — the ONE place `SearchItem.snippet` is minted, and the one place
- * a `<mark>` tag enters this feature.
+ * The one place `SearchItem.snippet` is minted, and the one place a `<mark>` tag
+ * enters this feature.
  *
- * 🔒 ⚠ **IT IS NOT `ts_headline`, AND THAT IS A SECURITY CHOICE RATHER THAN A
- * PORTING SHORTCUT (2026-09-17).** `ts_headline` COPIES THE SOURCE THROUGH
- * VERBATIM between its delimiters: a message body containing `<script>` comes
- * back as `<script>`, so a payload documented as *"plain text, match highlighted
- * with `<mark>…</mark>` only, no other HTML"* would be a lie the moment somebody
- * posted a tag, and the popup renders these with `innerHTML`. Building the
- * snippet here lets the ESCAPE happen FIRST and the markup be inserted SECOND,
- * which is the only order in which the contract's sentence is true.
- * ⚠ The second reason is availability: `ts_headline` and `ts_rank` are
- * expressions in a SELECT list, and PostgREST has no way to ask for one — they
- * would need a `SECURITY DEFINER` RPC, i.e. a route that is BROKEN rather than
- * SLOW until its migration is applied (`20260822170000_overview_time_range_
- * indexes.sql` states that rule).
+ * Not `ts_headline`, and that is a security choice: it copies the source through
+ * verbatim, so a body containing `<script>` would come back as `<script>` into a
+ * payload the popup renders with `innerHTML`. Building it here escapes FIRST and
+ * inserts markup SECOND, the only order in which the contract holds. (Secondly,
+ * PostgREST cannot ask for a SELECT-list expression at all.)
  *
- * ⚠ **THE MATCH IS SUBSTRING AND CASE-INSENSITIVE, WHICH IS DELIBERATELY WIDER
- * THAN THE `tsquery` THAT SELECTED THE ROW.** The row is already a hit; this only
- * decides where to point. A narrower highlighter would hand back a hit with
- * nothing marked in it, which reads as a false positive.
+ * The match is substring and case-insensitive, deliberately wider than the
+ * `tsquery` that selected the row: the row is already a hit and this only decides
+ * where to point. A narrower highlighter would return a hit with nothing marked.
  */
 
 /** Characters that would change the shape of the HTML around them. */
@@ -33,14 +24,14 @@ const ESCAPES: Record<string, string> = {
   "'": "&#39;",
 };
 
-/** ⚠ `&` FIRST BY CONSTRUCTION — a single pass over one character class, so an
+/** `&` first by construction — a single pass over one character class, so an
  *  escaped `&lt;` can never be re-escaped into `&amp;lt;`. */
 export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (c) => ESCAPES[c] as string);
 }
 
-/** How much text rides on the wire per hit. ⚠ The body is truncated in the
- *  SERVICE, never in the renderer (INVARIANTS §9). */
+/** How much text rides on the wire per hit. The body is truncated in the SERVICE,
+ *  never in the renderer (INVARIANTS §9). */
 export const SNIPPET_CHARS = 180;
 
 /** Characters kept before the first match, so the hit is not flush-left. */
@@ -51,15 +42,13 @@ const MAX_TERM_LENGTH = 64;
 
 /**
  * The terms a snippet highlights: the whole trimmed query, plus each
- * whitespace-separated word of it.
+ * whitespace-separated word.
  *
- * ⚠ **THE WHOLE QUERY COMES FIRST AND THE LONGEST WORDS NEXT**, because the
- * highlighter takes the first alternative that matches at a position: with
- * `["ship", "shipping"]` a search for `shipping` would mark only `ship` and
- * leave `ping` bare.
- * ⚠ Quotation marks and the `websearch_to_tsquery` operators (`or`, `-`) are
- * STRIPPED rather than honoured — they steer which ROWS come back; inside a row
- * they are not text the reader typed at the thing they are looking at.
+ * Whole query first, then longest words: the highlighter takes the first
+ * alternative matching at a position, so `["ship","shipping"]` would mark only
+ * `ship` and leave `ping` bare.
+ * Quotation marks and the `websearch_to_tsquery` operators are stripped — they
+ * steer which ROWS come back, and are not text to point at inside one.
  */
 export function highlightTerms(query: string): string[] {
   const trimmed = query.trim();
@@ -69,10 +58,8 @@ export function highlightTerms(query: string): string[] {
     .split(/\s+/)
     .map((w) => w.replace(/^-+/, ""))
     .filter((w) => w.length > 0 && w.toLowerCase() !== "or");
-  // ⚠ THE PHRASE IS BUILT FROM THE CLEANED WORDS, NOT FROM THE RAW QUERY. A raw
-  // `cats or dogs` would otherwise be hunted verbatim and could mark a literal
-  // "or" somebody wrote — the operators steer which ROWS come back and are not
-  // text the reader is pointing at.
+  // Built from the cleaned words, not the raw query: `cats or dogs` hunted
+  // verbatim could mark a literal "or" somebody wrote.
   const all = [words.join(" "), ...words]
     .filter((t) => t.length > 0)
     .map((t) => t.slice(0, MAX_TERM_LENGTH));
@@ -91,22 +78,20 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** ⚠ Built ONCE per search, never per row: a regex compiled inside a row loop is
- *  the shape that turns a 50-row page into 50 compilations. */
+/** Built once per search, never per row — a regex compiled inside a row loop
+ *  turns a 50-row page into 50 compilations. */
 export function highlightPattern(terms: string[]): RegExp | null {
   if (terms.length === 0) return null;
   return new RegExp(terms.map(escapeRegExp).join("|"), "gi");
 }
 
 /**
- * Plain text → a bounded, escaped, `<mark>`-highlighted excerpt.
+ * Plain text to a bounded, escaped, `<mark>`-highlighted excerpt.
  *
- * ⚠ **AN ELLIPSIS IS NOT A CLIP NOTICE.** It says the excerpt is a window onto a
- * longer body, which the caller already knows; the §9 "this read was clipped"
- * signal is `SearchGroup.total`, and these two must never be confused.
- * ⚠ Returns `undefined` — never `""` — for a body with nothing in it, so an
- * absent snippet reads as "this kind has no body" rather than "the body is
- * blank".
+ * An ellipsis is not a clip notice — the §9 "this read was clipped" signal is
+ * `SearchGroup.total`, and the two must never be confused.
+ * Returns `undefined`, never `""`, so an absent snippet reads as "this kind has
+ * no body" rather than "the body is blank".
  */
 export function buildSnippet(
   body: string | null | undefined,
@@ -117,8 +102,8 @@ export function buildSnippet(
 
   let start = 0;
   if (pattern) {
-    // ⚠ `lastIndex` is RESET on every call: a `g` regex reused across rows
-    // resumes where the previous row ended and silently misses early matches.
+    // `lastIndex` is reset on every call: a `g` regex reused across rows resumes
+    // where the previous row ended and silently misses early matches.
     pattern.lastIndex = 0;
     const hit = pattern.exec(text);
     if (hit && hit.index > LEAD_CHARS) start = hit.index - LEAD_CHARS;
@@ -129,12 +114,10 @@ export function buildSnippet(
 
   if (!pattern) return `${prefix}${escapeHtml(window)}${suffix}`;
 
-  // 🔒 **MATCH ON THE RAW TEXT, ESCAPE EVERY PIECE, AND EMIT `<mark>` LAST.**
-  // Matching on already-escaped text is the obvious shortcut and it is WRONG in
-  // both directions: a query containing `&` or `<` would never match its own
-  // body (`A&B` against `A&amp;B`), and an `.replace()` over escaped text cannot
-  // tell a mark it inserted from one the body contained. So the only unescaped
-  // characters this function can emit are the tags on the two lines below.
+  // Match on the RAW text, escape every piece, emit `<mark>` last. Matching on
+  // already-escaped text fails both ways: `A&B` would never match `A&amp;B`, and
+  // a replace over escaped text cannot tell an inserted mark from one the body
+  // contained. The only unescaped characters emitted are the tags below.
   const parts: string[] = [];
   let last = 0;
   pattern.lastIndex = 0;

@@ -1,18 +1,13 @@
 /**
- * THE WORLD THE FENCE TESTS RUN IN — two containers, two channels, and ONE
- * matching row in EVERY searchable table on each side.
+ * The world the fence tests run in: two containers, two channels, and one
+ * matching row in every searchable table on each side.
  *
- * ⚠ **IT LIVES BESIDE `_fake-db.ts` RATHER THAN INSIDE A SUITE BECAUSE TWO
- * SUITES NEED IT** (`fence.test.ts` proves nothing foreign comes back;
- * `prefix-match.test.ts` proves a half-typed word reaches a body, F-717), and a
- * fixture copied into the second one is a fixture that stops matching the first.
- * §1's 500-line cap is what forced the question; the answer would be the same
- * without it.
+ * Shared by `fence.test.ts` (nothing foreign comes back) and
+ * `prefix-match.test.ts` (a half-typed word reaches a body, F-717), so a widening
+ * that leaked fails in the same fixture rather than in a drifted copy.
  *
- * ⚠ **EVERY ROW ON THE FOREIGN SIDE IS AN EXACT TWIN OF ITS OWN-SIDE ROW.** The
- * query `zephyr` matches all of them, so a fence that fails shows up as a
- * VISIBLE row rather than as a silent absence — which is the only shape of leak
- * test worth writing.
+ * Every foreign-side row is an exact twin of its own-side row, so a failed fence
+ * shows up as a VISIBLE row rather than a silent absence.
  */
 
 import type { FakeTables } from "./_fake-db";

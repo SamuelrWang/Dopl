@@ -21,9 +21,9 @@ interface Props {
    *  read action, independent of `canEdit`. */
   onDownload: (item: ContextMenuItem) => void;
   onClose: () => void;
-  /** False hides Rename / Move / Delete entirely: caller is read-only and the
-   *  server would reject anyway (Audit A-013). ⚠ While the access fetch is
-   *  pending pass `true`, or admins/owners flash an actions-less menu. */
+  /** False hides Rename / Move / Delete entirely: the caller is read-only and
+   *  the server would reject anyway. While the access fetch is pending pass
+   *  `true`, or admins/owners flash an actions-less menu. */
   canEdit?: boolean;
 }
 

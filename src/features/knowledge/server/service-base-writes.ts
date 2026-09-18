@@ -1,9 +1,8 @@
 import "server-only";
 import { isSharedCredential } from "@/shared/auth/credential-audience";
 import { meetsMinRole } from "@/features/workspaces/types";
-// 🔒 G16 — the ONE statement of the publish-into-a-peer's-room precondition,
-// shared with `agent-templates/server/service-writes.ts`. Two copies of a
-// tenancy predicate is how the shelf fence ended up divergent (findings §6 #3).
+// G16 — the ONE statement of the publish-into-a-peer's-room precondition,
+// shared with `agent-templates/server/service-writes.ts`.
 import { assertSharedPublishAcknowledged } from "@/features/workspaces/server/shared-publish";
 import {
   deleteGrantRow,
@@ -34,16 +33,14 @@ import {
   listSlugs,
 } from "./service-shared";
 import { getBaseById, getBaseForWrite } from "./service-bases";
-// ⚠ THE PRE-WRITE GATE, SPLIT OUT AT THE §1 CAP (2026-09-02, again 2026-09-09).
-// Read that module's header for the seam. It asks the SAME ceiling question
-// `listBases` / `getBaseBySlug` will ask a millisecond later, or this writes rows
-// nobody can reach.
+// The pre-write gate. It asks the SAME ceiling question `listBases` /
+// `getBaseBySlug` will ask a millisecond later, or this writes rows nobody can
+// reach.
 import { assertCreateBaseAllowed } from "./service-base-gates";
-// ⚠ AWAITED, AFTER THE WRITE, INSIDE THE REQUEST (`./service-revisions.ts`).
+// Awaited, after the write, inside the request (`./service-revisions.ts`).
 import { recordBaseRevision } from "./service-revisions";
-// ⚠ RE-EXPORTED, NOT RE-DECLARED: the create gate moved to `service-base-gates.ts`
-// on 2026-09-09 and every importer — `app/api/knowledge/bases/route.ts`, the
-// `service.ts` barrel and `service-create-audience.test.ts` — still names it here.
+// Re-exported, not re-declared: the create gate moved to `service-base-gates.ts`
+// and every importer still names it here.
 export { assertCreateBaseAllowed } from "./service-base-gates";
 export type { CreateBasePreconditions } from "./service-base-gates";
 import { setChannelKnowledgeGrant } from "./service-channel-grants";
@@ -59,10 +56,8 @@ export async function createBase(
   ctx: KnowledgeContext,
   input: KnowledgeBaseCreateInput,
 ): Promise<KnowledgeBase> {
-  // 🔒 EVERY GATE, IN ONE CALL — and it is the SAME call the dry run makes, so
-  // the MCP preview and this write can never disagree about whether the create
-  // is allowed. See {@link assertCreateBaseAllowed} for why that is structural
-  // rather than a promise.
+  // Every gate in one call — the SAME call the dry run makes, so the MCP preview
+  // and this write can never disagree about whether the create is allowed.
   const {
     destination,
     visibility: resolvedVisibility,
@@ -76,23 +71,21 @@ export async function createBase(
   while (true) {
     try {
       base = await repo.insertBase({
-        // 🔒 THE DESTINATION, and the flag beside it cannot disagree with it:
-        // both resolve the personal container by OWNER through
-        // `findPersonalContainerId`. The ROUTER still owns the write — this
-        // names the same place so the slug read above and the rollback below
-        // look where the row actually lands.
+        // The destination; the flag beside it cannot disagree with it (both
+        // resolve the personal container by owner). Named here so the slug read
+        // above and the rollback below look where the row actually lands.
         workspaceId: destination.workspaceId,
         name: input.name,
         slug: baseSlug,
         description: input.description ?? null,
-        // Default true so the creator's agent can write without an opt-in
-        // step. ⚠ Real enforcement is `requireEffectiveAccess`'s grant check,
-        // NOT this column — TRUE here only keeps UI/MCP messaging honest.
+        // Default true so the creator's agent can write without an opt-in step.
+        // Real enforcement is `requireEffectiveAccess`'s grant check, NOT this
+        // column — TRUE here only keeps UI/MCP messaging honest.
         agentWriteEnabled: input.agentWriteEnabled ?? true,
         visibility: resolvedVisibility,
-        // 🔒 A ROUTING FLAG, NOT A COLUMN (B15): it decides the row's
-        // `workspace_id`, and `personalWriteWorkspaceId` REFUSES rather than
-        // falling back when the caller has no personal container.
+        // A routing flag, not a column: it decides the row's `workspace_id`, and
+        // `personalWriteWorkspaceId` REFUSES rather than falling back when the
+        // caller has no personal container.
         homeScoped: destination.homeScoped,
         createdBy: ctx.userId,
       });
@@ -130,28 +123,18 @@ export async function createBase(
     }
   }
 
-  // 🔒 CREATE-AND-SHARE, ATOMIC BY THE SAME ROLLBACK THE TEAM GRANTS USE
-  // (Samuel's ruling 2026-08-27 — the /home Shared section's create button).
+  // Create-and-share, atomic by the same rollback the team grants use (Samuel's
+  // ruling 2026-08-27). Without it a failed share leaves a base that exists,
+  // is shared with nobody and is invisible on the surface that made it — and
+  // whose slug then collides with the retry. Hard delete, not soft: a tombstone
+  // would still own the slug.
   //
-  // ⚠ THE ROLLBACK IS NOT TIDINESS. Two independent statements is what this is,
-  // so the failure mode without it is a base that exists, is shared with nobody,
-  // and is INVISIBLE on the surface that made it (/home shows a container base
-  // only through a grant) — and whose slug then collides with the retry. Hard
-  // delete, not soft: the row must stop existing, not become a tombstone that
-  // still owns the slug.
+  // The grant is always `visible`, never `agent_only` (a different audience,
+  // reached from the base's own settings); `guestWrite` starts FALSE.
   //
-  // ⚠ THE GRANT IS ALWAYS `visible`, NEVER `agent_only`. The button says
-  // "shared"; `agent_only` is a different audience (the operator's agent, not
-  // the person in the room) and is reached from the base's own settings, which
-  // is where a THREE-state control belongs. `guestWrite` starts FALSE — handing
-  // a guest a pen is its own decision, taken later and deliberately.
-  //
-  // ⚠ NOT A FORKED WRITE PATH. `setChannelKnowledgeGrant` is the same service
-  // the sharing settings section calls; it owns `canManageChannelGrants` (which
-  // the creator passes by construction), the trigger's same-workspace refusal,
-  // and — since 2026-08-27 — the agent refusal this second caller made
-  // necessary. The CHANNEL ITSELF is fenced by the ROUTE (`isChannelVisibleTo`)
-  // before this function runs, exactly as the grant PUT does it.
+  // Not a forked write path: `setChannelKnowledgeGrant` is the same service the
+  // sharing settings section calls, and the CHANNEL itself is fenced by the
+  // route (`isChannelVisibleTo`) before this function runs.
   if (input.shareToChannelId) {
     try {
       await setChannelKnowledgeGrant(ctx, base, {
@@ -164,9 +147,8 @@ export async function createBase(
       throw err;
     }
   }
-  // ⚠ AFTER the two rollback-guarded branches, never between them: a create
-  // that rolls back must leave no revision claiming a base that stopped
-  // existing.
+  // After the two rollback-guarded branches, never between them: a create that
+  // rolls back must leave no revision claiming a base that stopped existing.
   await recordBaseRevision(ctx, base, "create");
   return base;
 }
@@ -177,7 +159,7 @@ export async function updateBase(
   patch: KnowledgeBaseUpdateInput,
   expectedUpdatedAt?: string,
 ): Promise<KnowledgeBase> {
-  // 🔓 THE ID NAMES ITS OWN CONTAINER ON A WRITE TOO (2026-09-06, §T35). ⚠ EVERY
+  // The id names its own container on a write too (2026-09-06). EVERY
   // workspace-keyed call below takes `baseCtx` — role, slugs, grants, publish
   // precondition, writability — or the gate and the write are in two containers.
   const { ctx: baseCtx, value: base } = await getBaseForWrite(ctx, id);
@@ -220,13 +202,11 @@ export async function updateBase(
       throw new ScopeChangeForbiddenError();
     }
 
-    // 🔒 G16 — the same precondition on the UPDATE path, which is the door
-    // `dopl_kb(op="set_visibility")` and the sharing settings both come through.
-    // ⚠ `patch.visibility`, NOT `targetVisibility`: a grant-only or accessMode
-    // edit on a base that is ALREADY public changes no audience, and gating it
-    // would be a gate on the wrong verb.
-    // ⚠ AFTER the creator/admin check above and BEFORE any grant upsert, so a
-    // refusal leaves neither a row nor a grant behind.
+    // G16 — the same precondition on the UPDATE path.
+    // `patch.visibility`, NOT `targetVisibility`: a grant-only or accessMode
+    // edit on an ALREADY-public base changes no audience.
+    // After the creator/admin check and BEFORE any grant upsert, so a refusal
+    // leaves neither a row nor a grant behind.
     await assertSharedPublishAcknowledged({
       workspaceId: baseCtx.workspaceId,
       publishes: patch.visibility === "public",
@@ -242,7 +222,7 @@ export async function updateBase(
 
     if (targetVisibility === "private") {
       // SHARED credentials can't read private rows back, so they may not
-      // create this state either. ⚠ Same predicate as `canSeeBase` on purpose
+      // create this state either. Same predicate as `canSeeBase` on purpose
       // (F-336): the fence is "can this caller read it back?", not "is it
       // locked?".
       if (isSharedCredential(ctx)) {
@@ -287,13 +267,13 @@ export async function updateBase(
           level,
         );
       }
-      // NARROWING IS UNCHECKED, DELIBERATELY: no cross-resource dependency
+      // Narrowing is unchecked, deliberately: no cross-resource dependency
       // survives that a narrowed base could strand.
     }
     // → workspace is pure widening: grants stay as inert rows, remembered if
     // re-narrowed, matching `setResourceAccessMode`.
 
-    // ⚠ Write BOTH columns whenever sharing was touched: keeps the row update
+    // Write BOTH columns whenever sharing was touched: keeps the row update
     // non-empty for grant-only edits and bumps `updated_at` so CAS clients
     // refresh their snapshot.
     resolvedVisibility = targetVisibility;
@@ -323,8 +303,8 @@ export async function updateBase(
       },
       expectedUpdatedAt,
     );
-    // ⚠ Grant deletions only AFTER the row update succeeds, else a
-    // stale-version rejection half-applies the scope change.
+    // Grant deletions only AFTER the row update succeeds, else a stale-version
+    // rejection half-applies the scope change.
     if (saved !== null) {
       if (dropAllGrants) {
         await deleteGrantsForResource(
@@ -361,10 +341,9 @@ export async function updateBase(
  * base (`getBaseForWrite`), agents can't delete an `agent_write_enabled=false` base
  * (F-10), caller needs `edit`.
  *
- * ⚠ Team grants NOT cleared here on purpose — `team_resource_access` has a
+ * Team grants NOT cleared here on purpose — `team_resource_access` has a
  * polymorphic `resource_id` with no FK, so cleanup is the AFTER DELETE trigger
- * `knowledge_base_grants_cleanup`, which also covers paths this function isn't
- * (workspace cascade, admin SQL).
+ * `knowledge_base_grants_cleanup`, which also covers paths this function isn't.
  */
 export async function deleteBase(
   ctx: KnowledgeContext,

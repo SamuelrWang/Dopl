@@ -5,19 +5,19 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  * Raw Supabase I/O for PER-USER knowledge-base stars. No business logic, no
  * auth checks — see `repository.ts` for the split map and conventions.
  *
- * ⚠ EVERY FUNCTION TAKES A `userId` AND FILTERS ON IT. This client is the
- * service role and bypasses RLS, so each `.eq("user_id", …)` IS the fence, not
- * a hint. There is deliberately NO "list every star on this base" read —
- * that absence is what keeps a private signal private.
+ * Every function takes a `userId` and filters on it. This client is the service
+ * role and bypasses RLS, so each `.eq("user_id", …)` IS the fence, not a hint.
+ * There is deliberately NO "list every star on this base" read — that absence is
+ * what keeps a private signal private.
  *
  * The base-id set arrives from the service already narrowed to what the caller
  * may see, so a star on a gate-hidden base can never surface here.
  */
 
 /**
- * Which of `baseIds` this user starred. ⚠ Unordered — grid ordering is the
- * LIST's order with starred ones lifted, never this query's. One `in` filter,
- * so N cards cost one round trip.
+ * Which of `baseIds` this user starred. Unordered — grid ordering is the LIST's
+ * order with starred ones lifted, never this query's. One `in` filter, so N
+ * cards cost one round trip.
  */
 export async function listStarredBaseIds(
   userId: string,

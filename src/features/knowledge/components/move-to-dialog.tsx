@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Folder, FolderOpen, X } from "lucide-react";
-// ⚠ Deep import, not the `settings-modal` barrel: the barrel re-exports
+// Deep import, not the `settings-modal` barrel: the barrel re-exports
 // SettingsModal, which is Next-coupled (see base-settings-modal.tsx).
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
@@ -88,8 +88,8 @@ export function MoveToDialog({
       await onConfirm(selected);
       onOpenChange(false);
     } catch {
-      // Caller toasts errors; keep the dialog OPEN so the user can pick
-      // another target instead of a close-then-toast sequence.
+      // Caller toasts errors; keep the dialog open so the user can pick
+      // another target.
     } finally {
       setSubmitting(false);
     }

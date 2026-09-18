@@ -1,37 +1,21 @@
 /**
- * THE QUERY SHAPE — what actually reaches PostgREST, recorded rather than
+ * The query shape: what actually reaches PostgREST, recorded rather than
  * simulated. `_fake-db.ts` proves which ROWS survive; this proves which FILTERS
- * were written, which is the half a filtering fake can never fail on: an
- * operator spelled wrongly still excludes the right rows in a fake written to
- * the same misunderstanding.
- *
- * Same chainable-recorder idiom as
- * `channels/server/repository-account.test.ts`.
+ * were written — the half a filtering fake cannot fail on, since a misspelled
+ * operator still excludes the right rows in a fake sharing the misunderstanding.
  *
  * The properties that fail quietly:
- *  - 🔒 **`ilike` IS A PATTERN MATCH AND THE QUERY IS ESCAPED.** Unescaped, a
- *    search for `100%` matches `100x` and `a_b` matches `axb`.
- *  - 🔒 **`.or()` VALUES ARE QUOTED.** Its grammar splits on `,` and `.`, so an
- *    unquoted value a person typed rewrites the filter's SHAPE. ⚠ Since F-716
- *    the only `.or()` left in this feature is the MEMBERS one — the four
- *    visibility arms are gone, decided by each feature's own `canSee*` instead.
- *  - 🔒 **THE VISIBILITY PROJECTION.** A predicate reads columns SQL no longer
- *    filters on; a dropped column reads as its fail-closed default and narrows
- *    silently.
- *  - 🔒 **THE FULL-TEXT ARM NAMES `simple` ON THE QUERY SIDE (F-717).** The
- *    generated column fixes the VECTOR's dictionary and says nothing about the
- *    QUERY's; omitted, PostgREST falls to the server's
- *    `default_text_search_config` and a mismatched dictionary across `@@`
- *    returns nothing and explains nothing. One case asserts the OPERATOR
- *    postgrest-js actually renders, because that is the half the recorder
- *    cannot see.
- *  - **THE SOFT-DELETE / RETIREMENT FILTERS** — `deleted_at`, `dissolved_at`.
+ *  - `ilike` is a pattern match and the query is escaped (`100%` would match
+ *    `100x`).
+ *  - `.or()` values are quoted: its grammar splits on `,` and `.`. Since F-716
+ *    the only `.or()` left here is the members one.
+ *  - The visibility projection: a predicate reads columns SQL no longer filters
+ *    on, and a dropped column reads as its fail-closed default.
+ *  - F-717: the full-text arms name `simple` on the QUERY side. One case asserts
+ *    the operator postgrest-js actually renders, which the recorder cannot see.
+ *  - The soft-delete / retirement filters (`deleted_at`, `dissolved_at`).
  *
- * MUTATION-VERIFY: 6 reverts, 6 failures, 0 vacuous (2026-09-17) — dropping the
- * `escapeLikeLiteral` call, dropping `orLiteral`, pointing the message arm back
- * at the `body` EXPRESSION form, dropping `.is("dissolved_at", null)`, dropping
- * `{config: "simple"}` from either full-text arm, and putting `type:
- * "websearch"` back each turn a case here red.
+ * MUTATION-VERIFY: 6 reverts, 6 failures, 0 vacuous (2026-09-17).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -58,8 +42,8 @@ import { SEARCH_GROUP_TOTAL_CAP } from "../contracts";
 import { SEARCH_CANDIDATE_ROW_LIMIT } from "./repository-visibility";
 
 const ME = "11111111-1111-1111-1111-111111111111";
-/** The caller, as the four predicates need them (F-716). ⚠ `ownerUserId: null`
- *  is the SHARED-credential shape and keeps the cheap SQL arm. */
+/** The caller, as the four predicates need them (F-716). `ownerUserId: null` is
+ *  the shared-credential shape. */
 const caller = (ownerUserId: string | null = ME) => ({
   userId: ME,
   ownerUserId,
@@ -118,8 +102,8 @@ describe("🔒 the ilike arms escape the query", () => {
   ])("%s", async (_label, run, column) => {
     const calls = recorder();
     await run();
-    // ⚠ The metacharacters the CALLER typed are escaped; only the wrapping `%`
-    // are wildcards.
+    // The metacharacters the caller typed are escaped; only the wrapping `%` are
+    // wildcards.
     expect(argOf(calls, "ilike", column)).toBe("%100\\%\\_x%");
   });
 });
@@ -133,15 +117,13 @@ describe("🔒 the visibility narrowing is the PREDICATE's, not SQL's (F-716)", 
   ])("%s: no visibility filter, and the columns the predicate reads", async (_l, run, cols) => {
     const calls = recorder();
     await run();
-    // ⚠ **NO `.or()` AND NO `visibility` `eq`.** A person's visibility is
-    // decided by the owning feature's `canSee*` over the fetched page
-    // (`repository-visibility.ts`); a SQL restatement here is the fifth copy
-    // F-716 exists to refuse.
+    // No `.or()` and no `visibility` eq: visibility is decided by the owning
+    // feature's `canSee*` over the fetched page. A SQL restatement here is the
+    // fifth copy F-716 exists to refuse.
     expect(of(calls, "or")).toHaveLength(0);
     expect(argOf(calls, "eq", "visibility")).toBeUndefined();
-    // 🔒 AND THE PROJECTION CARRIES WHAT THE PREDICATE ASKS FOR. Dropping one
-    // of these columns makes every row read as its fail-closed default, which
-    // is a silent narrowing no other case here would see.
+    // The projection must carry what the predicate asks for: a dropped column
+    // makes every row read as its fail-closed default, a silent narrowing.
     const select = String(of(calls, "select")[0]?.args[0]);
     for (const col of cols.split(", ")) expect(select).toContain(col);
   });
@@ -154,11 +136,9 @@ describe("🔒 the visibility narrowing is the PREDICATE's, not SQL's (F-716)", 
   ])("%s: a SHARED credential gets NO cheaper SQL arm either", async (_l, run) => {
     const calls = recorder();
     await run();
-    // 🔒 **THE SHORTCUT WAS TRIED AND IT WAS WRONG.** `visibility='public'`
-    // admits an `access_mode='teams'` row that `canSeeSkill`/`canSeeChat`
-    // refuse, so a "cheap arm equal to arm 2" is not equal on two of the four
-    // tables (`shared-rows.test.ts`'s sweep found the four combinations). One
-    // path, one authority.
+    // `visibility='public'` admits an `access_mode='teams'` row that
+    // `canSeeSkill`/`canSeeChat` refuse, so a cheap SQL arm is not equal to the
+    // predicate on two of the four tables. One path, one authority.
     expect(argOf(calls, "eq", "visibility")).toBeUndefined();
     expect(of(calls, "or")).toHaveLength(0);
   });
@@ -174,14 +154,11 @@ describe("🔒 the full-text arms", () => {
   it("🔒 reads the message GENERATED column, NAMING the dictionary", async () => {
     const calls = recorder();
     await searchMessages([CH], "zephyr ship");
-    // ⚠ `search_tsv` since 2026-09-17, when `20261007120000_search_fulltext_
-    // indexes.sql` was APPLIED (F-715 closed).
-    // 🔒 **`config` IS THE FIX FOR F-717 AND IT IS NOT OPTIONAL.** PostgREST's
-    // `config` parameterises the tsquery FUNCTION, not the column: dropped, the
-    // query side falls to the server's `default_text_search_config` (english),
-    // and an english-stemmed query against a `simple` vector matches nothing.
-    // ⚠ NO `type` — the raw `fts` form is `to_tsquery`, the only one of the
-    // three that honours the `:*` the builder puts on the last token.
+    // `search_tsv` since F-715 closed. `config` is the F-717 fix and is not
+    // optional: it parameterises the tsquery FUNCTION, not the column, so dropped
+    // the query side falls to english against a `simple` vector.
+    // No `type` — the raw `fts` form is `to_tsquery`, the only one that honours
+    // the `:*` the builder puts on the last token.
     expect(of(calls, "textSearch")[0]?.args).toEqual([
       "search_tsv",
       "zephyr & ship:*",
@@ -190,10 +167,9 @@ describe("🔒 the full-text arms", () => {
   });
 
   it("🔒 renders `fts(simple).` on the wire, through the REAL builder", async () => {
-    // ⚠ **THE RECORDER ABOVE CANNOT SEE THIS AND IT IS THE HALF THAT BROKE.**
-    // `{config}` and `{type}` are two spellings of one option object; what
-    // matters is the OPERATOR postgrest-js renders from them, and only
-    // postgrest-js can say. A captured `fetch` is the cheapest way to ask.
+    // The recorder cannot see this, and it is the half that broke: `{config}`
+    // and `{type}` are two spellings of one option object, and only postgrest-js
+    // can say which operator it renders. A captured `fetch` is the cheapest ask.
     const seen: string[] = [];
     const client = createClient("http://db.test", "service-role-key", {
       global: {
@@ -217,8 +193,7 @@ describe("🔒 the full-text arms", () => {
   it("still selects `body` — the column the SNIPPET is cut from", async () => {
     const calls = recorder();
     await searchMessages([CH], "zephyr");
-    // ⚠ MUTATION CHECK. `search_tsv` decides WHICH rows; it is a lexeme vector
-    // and cannot be read back as prose, so dropping `body` from the projection
+    // `search_tsv` decides which rows but is a lexeme vector, so dropping `body`
     // would return hits with no snippet and no way to make one.
     expect(String(of(calls, "select")[0]?.args[0])).toContain("body");
   });
@@ -229,9 +204,8 @@ describe("🔒 the full-text arms", () => {
       new Map([["kb", { name: "Handbook", containerId: WS }]]),
       "zephyr"
     );
-    // 🔒 The knowledge arm carried the same omitted-`config` bug as the message
-    // arm (F-717) and is fixed the same way — the two are spelled identically,
-    // which is the point.
+    // The knowledge arm carried the same omitted-`config` bug (F-717) and is
+    // spelled identically to the message arm, which is the point.
     expect(of(calls, "textSearch")[0]?.args).toEqual([
       "search_tsv",
       "zephyr:*",
@@ -245,8 +219,8 @@ describe("🔒 the full-text arms", () => {
   it("runs NO full-text query when nothing survives the allow-list", async () => {
     const calls = recorder();
     await searchMessages([CH], "???");
-    // ⚠ An empty tsquery matches nothing; asking for it is a round trip to
-    // learn that.
+    // An empty tsquery matches nothing; asking for it is a round trip to learn
+    // that.
     expect(calls).toEqual([]);
   });
 
@@ -265,8 +239,8 @@ describe("the lifecycle filters", () => {
 
     const artifactCalls = recorder();
     await searchArtifacts([CH], "q");
-    // ⚠ A dissolved card is RETIRED, never deleted — the row survives so an old
-    // id still resolves, and listing one would offer a card that folds nothing.
+    // A dissolved card is retired, never deleted: the row survives so an old id
+    // still resolves, but listing one would offer a card that folds nothing.
     expect(of(artifactCalls, "is")[0]?.args).toEqual(["dissolved_at", null]);
 
     const skillCalls = recorder();
@@ -300,7 +274,7 @@ describe("the bounds", () => {
       listReadableBases([], caller()),
       searchKnowledgeEntries(new Map(), "q"),
     ]);
-    // ⚠ `.in("x", [])` is a legal filter that returns nothing; spending a round
+    // `.in("x", [])` is a legal filter that returns nothing; spending a round
     // trip to learn it is a per-keystroke cost.
     expect(calls).toEqual([]);
   });
@@ -310,7 +284,7 @@ describe("members", () => {
   it("matches the display name by CONTAINS and the email by PREFIX", async () => {
     const calls = recorder([[{ user_id: ME }], []]);
     await searchMembers(WS, "Mine", "sam");
-    // ⚠ A contains-match on an address turns `com` into a roster dump.
+    // A contains-match on an address turns `com` into a roster dump.
     expect(of(calls, "or")[0]?.args[0]).toBe(
       'display_name.ilike."%sam%",email.ilike."sam%"'
     );

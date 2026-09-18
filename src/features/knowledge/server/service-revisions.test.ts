@@ -1,21 +1,12 @@
 /**
- * **EVERY KNOWLEDGE WRITE PATH RECORDS EXACTLY ONE REVISION.**
+ * Every knowledge write path records EXACTLY ONE revision. The claim is a COUNT,
+ * not a presence: a path that records twice shows one save as two versions, a
+ * path that records none changes a document with nothing to say it did. Both are
+ * silent, and only a count assertion catches either.
  *
- * The claim is a COUNT, not a presence: a path that records twice makes the
- * changelog show one save as two versions, and a path that records none makes a
- * document change with nothing to say it did. Both are silent, and only a count
- * assertion catches either.
- *
- * ⚠ **THE OP IS ASSERTED TOO.** `edit` is the only op the human coalescing
- * window joins (`revisions/server/service.ts › COALESCE_WINDOW_MS`), so a
- * rename mis-labelled as an edit would silently absorb the next five minutes of
- * somebody's typing into a row called "Renamed".
- *
- * ⚠ **MUTATION-VERIFIED — three reverts, three failures:** deleting the capture
- * in `createEntry` (1 red); classifying a body+title save as a `rename` by
- * reordering `entryOpFor`'s arms (2 red); and recording the capture in
- * `updateEntry` BEFORE the CAS check, so a lost race still leaves a revision
- * (4 red).
+ * The op is asserted too — `edit` is the only op the human coalescing window
+ * joins (`revisions/server/service.ts › COALESCE_WINDOW_MS`), so a rename
+ * mis-labelled as an edit would absorb the next five minutes of typing.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -131,8 +122,8 @@ describe("entry writes — exactly one revision each", () => {
   });
 
   it("🔒 a body+title save is an `edit`, NEVER a `rename`", async () => {
-    // ⚠ The coalescing window joins `edit` only. Calling this a rename would
-    // seal the open row every time the title bar was touched mid-sentence.
+    // the coalescing window joins `edit` only: calling this a rename would seal
+    // the open row every time the title bar was touched mid-sentence.
     mockRepo.updateEntryRow.mockResolvedValue(entry({ body: "next", title: "New" }));
     await updateEntry(CTX, "e-1", { body: "next", title: "New" } as never);
     expect(recorded().op).toBe("edit");
@@ -145,8 +136,8 @@ describe("entry writes — exactly one revision each", () => {
   });
 
   it("🔒 records NOTHING when the CAS loses the race", async () => {
-    // ⚠ THE MUTATION: recording before the `saved === null` check leaves a
-    // revision for a write that never landed.
+    // recording before the `saved === null` check would leave a revision for a
+    // write that never landed.
     mockRepo.updateEntryRow.mockResolvedValue(null as never);
     await expect(
       updateEntry(CTX, "e-1", { body: "next" } as never, "2026-01-01T00:00:00.000Z")
@@ -182,7 +173,7 @@ describe("entry writes — exactly one revision each", () => {
     const input = recorded();
     expect(input.op).toBe("delete");
     expect(input.payload.body).toBe("the last words");
-    // ⚠ The snapshot is the only place it survives — knowledge deletes are hard.
+    // the snapshot is the only place it survives — knowledge deletes are hard.
     expect(mockRepo.hardDeleteEntry).toHaveBeenCalled();
   });
 });
