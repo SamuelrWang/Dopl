@@ -107,9 +107,7 @@ describe("fetchChannelGrants — the settings read (M1)", () => {
 
     expect(await fetchChannelGrants("kb-1")).toEqual({
       canManage: false,
-      // 🔒 Samuel's ruling 2026-09-17 rides the same rule: an absent
-      // `channelScopeAllowed` renders NO channel control at all. Hiding a
-      // sharing control can only narrow what is offered.
+      // 🔒 An absent `channelScopeAllowed` renders NO channel control at all.
       channelScopeAllowed: false,
       channels: [],
       grants: {},

@@ -90,22 +90,14 @@ export function levelForScope(
 }
 
 /**
- * 🔒 **THE SERVER'S `SCOPE_NOT_ALLOWED_IN_WORKSPACE`, SAID IN THIS SURFACE'S
- * OWN WORDS** (Samuel's ruling 2026-09-17: *"In workspaces, resource access is
- * not scoped by channels. It's instead scoped by teams."*).
+ * 🔒 **THE SERVER'S `SCOPE_NOT_ALLOWED_IN_WORKSPACE`, SAID IN THIS SURFACE'S OWN
+ * WORDS** (Samuel's ruling 2026-09-17: channel scope is a HOME-channel mechanism).
  *
- * ⚠ **THE MCP TIER CANNOT PROVE THIS ONE LOCALLY, AND IT DOES NOT PRETEND TO.**
- * `notOwnedRefusal` can, because the resolvers already read the row; the fence
- * here is about the CHANNEL's container, and `to` is a bare uuid with no local
- * channel→container index (`workspace-directory.ts › containerKindIndex` keys on
- * CONTAINERS). Guessing from the RESOURCE's container would be wrong in the one
- * direction that matters: a base on the caller's personal shelf lent into a HOME
- * channel is still legal and is the model Samuel keeps.
- *
- * So the server refuses and this TRANSLATES — the pattern
- * `channel-errors.ts › classifyBadRequest` uses, duck-typing `DoplApiError.code`
- * rather than importing the class. The value is the SENTENCE: an agent told
- * `400 SCOPE_NOT_ALLOWED_IN_WORKSPACE` and nothing else goes and greps the repo.
+ * ⚠ **THIS TIER CANNOT PROVE THE FENCE LOCALLY.** `to` is a bare channel uuid and
+ * `workspace-directory.ts › containerKindIndex` keys on CONTAINERS; guessing from the
+ * RESOURCE's container would refuse the legal case (a personal-shelf base lent into a
+ * home channel). So the server refuses and this TRANSLATES — the duck-typed
+ * `DoplApiError.code` pattern of `channel-errors.ts › classifyBadRequest`.
  */
 export function channelScopeRefusal(e: unknown): ToolResponse | null {
   const code =

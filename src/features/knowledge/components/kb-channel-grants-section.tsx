@@ -52,15 +52,11 @@ import type {
  * canManageChannelGrants`), so this cannot render an editor for somebody the
  * write will refuse. Everyone else gets the read-only summary.
  *
- * 🔒 ⚠ **AND IT RENDERS NOTHING AT ALL — HEADING INCLUDED — IN A STANDARD
- * WORKSPACE** (Samuel's ruling 2026-09-17: *"In workspaces, resource access is
- * not scoped by channels. It's instead scoped by teams."*). `channelScopeAllowed`
- * is the server's own answer, from the same fence the PUT applies
- * (`shared/tenancy/channel-scope.ts`), so the control cannot outlive the
- * capability. ⚠ **IT OWNS ITS OWN `SettingsSection` FOR EXACTLY THAT** — with the
- * frame in `base-settings-form.tsx` the refusal was an empty CHANNELS heading.
- * ⚠ The /home face keeps its own channel sharing: a home channel is a
- * `kind='link'` container and there the channel IS the container.
+ * 🔒 ⚠ **AND IT RENDERS NOTHING AT ALL — HEADING INCLUDED — IN A STANDARD WORKSPACE**
+ * (2026-09-17). `channelScopeAllowed` is the server's own answer, from the same fence
+ * the PUT applies, so the control cannot outlive the capability. ⚠ **IT OWNS ITS OWN
+ * `SettingsSection` FOR EXACTLY THAT** — with the frame in the parent, the refusal was
+ * an empty CHANNELS heading.
  */
 export function KbChannelGrantsSection({
   baseId,

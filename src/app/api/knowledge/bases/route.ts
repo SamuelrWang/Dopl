@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { withWorkspaceAuth, type WorkspaceAuthContext } from "@/shared/auth/with-workspace-auth";
 import { parseJson } from "@/shared/api/parse-json";
 import { HttpError } from "@/shared/lib/http-error";
-import { isStandardWorkspace } from "@/features/workspaces/types";
+import { channelScopeAllowedForKind } from "@/shared/tenancy/channel-scope";
 import { toKnowledgeErrorResponse } from "@/shared/api/knowledge-route";
 import {
   assertCreateBaseAllowed,
@@ -90,11 +90,10 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
     const ctx = buildKnowledgeContext(auth);
     const shelf = readShelf(request);
     const bases = await listBases(ctx, { shelf });
-    // 🔒 A STANDARD workspace does not lend into CHANNELS at all (Samuel's
-    // ruling 2026-09-17); a home or personal container does. ⚠ Named and asked
-    // POSITIVELY — the negation shape is what `workspaces/
-    // home-channel-derivation.test.ts` (F-564) keeps out of this tree.
-    const workspaceScoped = isStandardWorkspace({ kind: auth.workspaceKind });
+    // 🔒 A STANDARD workspace does not lend into CHANNELS at all (Samuel's ruling
+    // 2026-09-17). ⚠ The RULE is asked of `shared/tenancy/channel-scope.ts` and never
+    // re-spelled here — this route only holds the kind, not a second opinion.
+    const channelScope = channelScopeAllowedForKind(auth.workspaceKind);
     // ⚠ Attribution and counters are cosmetic; the base list is not. A profiles/entries hiccup
     // degrades to no names / no stats, never a 500 (`kb_list_bases` over MCP rides this route).
     const [
@@ -123,17 +122,14 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
         listHomeScopedBaseIds(ctx, bases).catch(() => [] as string[]),
         // ⚠ SEE THE DOCBLOCK for why `[]` is the degraded value and why that
         // direction is stated rather than called safe.
-        // 🔒 SAMUEL'S RULING 2026-09-17 — in a STANDARD workspace a channel
-        // grant reaches nobody (`shared/tenancy/channel-scope.ts`), so no card
-        // may wear a `Shared` pill bought by one. The read is SKIPPED, not
-        // filtered: the rows are ignored everywhere else too, and asking would
-        // spend a query to learn something already decided.
-        workspaceScoped
-          ? Promise.resolve([] as string[])
-          : listSharedIntoChannelBaseIds(
+        // 🔒 In a STANDARD workspace a channel grant reaches nobody, so no card may
+        // wear a `Shared` pill bought by one. The read is SKIPPED, not filtered.
+        channelScope
+          ? listSharedIntoChannelBaseIds(
               ctx.workspaceId,
               bases.map((b) => b.id)
-            ).catch(() => [] as string[]),
+            ).catch(() => [] as string[])
+          : Promise.resolve([] as string[]),
         // ⚠ SAME `[]` DEGRADE as its siblings, and the direction is the display
         // gap rather than the leak: an unreadable flag leaves every card
         // UNMARKED, which is what shipped before this key existed. A pin decides
@@ -172,12 +168,11 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
       );
     }
 
-    // 🔒 …and the key is ABSENT in a STANDARD workspace, for the same ruling: a
-    // channel grant reaches nobody there, so there is no map to fold in.
-    // ⚠ **AFTER THE FENCE, NOT BEFORE IT.** Skipping `isChannelVisibleTo` would
-    // make a bad `channelId` answer 200 in one container kind and 404 in
-    // another — a cheaper oracle than the one the fence exists to close.
-    if (workspaceScoped) {
+    // 🔒 …and the key is ABSENT in a STANDARD workspace: no map to fold in.
+    // ⚠ **AFTER THE FENCE, NOT BEFORE IT.** Skipping `isChannelVisibleTo` would make a
+    // bad `channelId` answer 200 in one container kind and 404 in another — a cheaper
+    // oracle than the one the fence exists to close.
+    if (!channelScope) {
       return NextResponse.json(base);
     }
 

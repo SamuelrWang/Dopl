@@ -184,13 +184,8 @@ describe('dopl_kb op="grant"', () => {
 // ── 🔒 The container-KIND refusal (Samuel's ruling 2026-09-17) ───────────
 
 /**
- * *"In workspaces, resource access is not scoped by channels. It's instead
- * scoped by teams."*
- *
- * ⚠ **THIS TIER CANNOT PROVE THE FENCE LOCALLY AND DOES NOT PRETEND TO** — `to`
- * is a bare channel uuid and the directory indexes CONTAINERS. The server
- * refuses; what is pinned here is that the refusal ARRIVES AS A SENTENCE rather
- * than as a bare 400, and that an unrelated failure is not relabelled as one.
+ * ⚠ The server owns the fence. What is pinned here is that its refusal ARRIVES AS A
+ * SENTENCE rather than a bare 400, and that no unrelated failure is relabelled as one.
  */
 describe("🔒 channelScopeRefusal — the server's SCOPE_NOT_ALLOWED_IN_WORKSPACE", () => {
   const refused = { code: "SCOPE_NOT_ALLOWED_IN_WORKSPACE" };

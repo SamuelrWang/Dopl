@@ -231,13 +231,10 @@ export async function setChannelKnowledgeGrant(
     );
   }
   if (!canManageChannelGrants(ctx, base)) throw new ScopeChangeForbiddenError();
-  // 🔒 SAMUEL'S RULING 2026-09-17 — channel scope is a HOME-channel mechanism.
-  // ⚠ IT FENCES `"none"` TOO, i.e. the DELETE as well as the lend: this door has
-  // nothing to remove in a standard workspace (the migration converted those
-  // rows), and a delete that silently succeeded would teach a client that the
-  // three-state control still works here. ⚠ The channel is already fenced to
-  // `ctx.workspaceId` by the route's `isChannelVisibleTo` / the create branch's
-  // own fence, so the CALLER's container IS the channel's.
+  // 🔒 Channel scope is a HOME-channel mechanism (2026-09-17). ⚠ IT FENCES `"none"`
+  // TOO — a DELETE that silently succeeded would teach a client the three-state control
+  // still works here. ⚠ The channel is already fenced to `ctx.workspaceId` upstream, so
+  // the CALLER's container IS the channel's.
   await assertChannelScopeAllowedInContainer(ctx.workspaceId);
 
   const db = supabaseAdmin();

@@ -35,10 +35,8 @@ import type { ResourceGrantWrite } from "./schema";
  *     the caller must be an active `member` of that container, and a CHANNEL
  *     must additionally be visible to them — the `?channelId=` precedent, 404 on
  *     a miss so the write is never a room oracle. 🔒 **AND SINCE 2026-09-17 a
- *     CHANNEL scope must be a HOME channel** (Samuel's ruling: *"In workspaces,
- *     resource access is not scoped by channels. It's instead scoped by
- *     teams."*) — `shared/tenancy/channel-scope.ts`, a 400
- *     `SCOPE_NOT_ALLOWED_IN_WORKSPACE` and not a 404, because it runs after the
+ *     CHANNEL scope must be a HOME channel** — `shared/tenancy/channel-scope.ts`, a
+ *     400 `SCOPE_NOT_ALLOWED_IN_WORKSPACE` and not a 404, because it runs after the
  *     visibility fence has already admitted the room.
  *  4. **`enforce_resource_grant()`** — the database's own "the grantor may share
  *     this" (`20260914120000`). It is defense in depth here rather than the only
@@ -129,12 +127,9 @@ async function assertGrantableScope(
   if (!(await isChannelVisibleTo(scopeWorkspaceId, caller.userId, input.scopeId))) {
     throw HttpError.notFound("Scope not found");
   }
-  // 🔒 FENCE 3b — Samuel's ruling 2026-09-17. ⚠ **AFTER the visibility fence,
-  // and a 400 rather than a 404**: the caller has PROVED they can see this
-  // channel by the time it runs, so naming the rule tells them nothing new and
-  // "forbidden with no cause" is what sends an agent to grep the repo. The same
-  // ordering argument `ontology/server/service-shares.ts` makes for its own Q5
-  // refusal, which is this rule's older half.
+  // 🔒 FENCE 3b (2026-09-17). ⚠ **AFTER the visibility fence, and a 400 not a 404**:
+  // the caller has already PROVED they can see this channel, so naming the rule tells
+  // them nothing new — the ordering `ontology/server/service-shares.ts` uses for Q5.
   await assertChannelScopeAllowedInContainer(scopeWorkspaceId);
 }
 

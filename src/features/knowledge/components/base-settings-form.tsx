@@ -186,12 +186,10 @@ export function BaseSettingsForm({
         />
       </Section>
 
-      {/* Channels — scope-A grants: None / Agent only / Visible per channel,
-          with the guest-write pen inside the row that can hand one over.
-          🔒 IT RENDERS NOTHING AT ALL IN A STANDARD WORKSPACE (Samuel's ruling
-          2026-09-17) — the component owns its own frame for exactly that, and
-          the server is what decides (`channelScopeAllowed` off the GET), never
-          a kind the client re-derives. */}
+      {/* Channels — scope-A grants: None / Agent only / Visible per channel, with the
+          guest-write pen inside the row that can hand one over. 🔒 It renders NOTHING in
+          a standard workspace and owns its own frame for exactly that; the server
+          decides, via `channelScopeAllowed`. */}
       <KbChannelGrantsSection baseId={base.id} workspaceId={workspaceId} />
 
       {/* Folder descriptions: agent-facing summaries streamed into MCP

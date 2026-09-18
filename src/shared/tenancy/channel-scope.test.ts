@@ -54,6 +54,7 @@ vi.mock("@/shared/supabase/admin", () => ({
 const {
   SCOPE_NOT_ALLOWED_IN_WORKSPACE,
   assertChannelScopeAllowedInContainer,
+  channelScopeAllowedForKind,
   channelScopeAllowedInContainer,
   channelScopeRefusal,
   channelsWhereScopeIsIgnored,
@@ -180,5 +181,61 @@ describe("channelsWhereScopeIsIgnored", () => {
     rows = { channels: [], workspaces: [] };
     await channelsWhereScopeIsIgnored(["ch-1"]);
     expect(seen.map((f) => f.table)).toEqual(["channels"]);
+  });
+});
+
+// ── The RULE itself, asked with no database at all ─────────────────────────
+
+describe("channelScopeAllowedForKind — the one spelling of the rule", () => {
+  it("answers for every kind, and an absent one reads as STANDARD", () => {
+    expect(channelScopeAllowedForKind("standard")).toBe(false);
+    expect(channelScopeAllowedForKind("link")).toBe(true);
+    expect(channelScopeAllowedForKind("personal")).toBe(true);
+    expect(channelScopeAllowedForKind(null)).toBe(false);
+    expect(channelScopeAllowedForKind(undefined)).toBe(false);
+  });
+
+  it("⚠ an UNKNOWN FUTURE kind is ALLOWED, deliberately — see above", () => {
+    expect(
+      channelScopeAllowedForKind("something-new" as never)
+    ).toBe(true);
+  });
+});
+
+// ── A LINK CONTAINER WITH MORE THAN ONE CHANNEL ───────────────────────────
+
+describe("🔒 a link container that somehow holds TWO channels", () => {
+  /**
+   * ⚠ INVARIANTS §4A says a link container holds exactly ONE channel, and this
+   * asks what happens when the DATA disagrees — a second row written by hand, or
+   * by a future slice. The fence is per CONTAINER, so both channels answer the
+   * same way, and neither is a special case that has to be found.
+   */
+  beforeEach(() => {
+    rows = {
+      channels: [
+        { id: "ch-a", workspace_id: "ws-home" },
+        { id: "ch-b", workspace_id: "ws-home" },
+      ],
+      workspaces: [{ id: "ws-home", kind: "link" }],
+    };
+  });
+
+  it("admits BOTH — the fence asks about the container, not the count", async () => {
+    expect((await channelsWhereScopeIsIgnored(["ch-a", "ch-b"])).size).toBe(0);
+  });
+
+  it("asks the workspaces table ONCE for the container they share", async () => {
+    await channelsWhereScopeIsIgnored(["ch-a", "ch-b"]);
+    expect(seen.map((f) => f.table)).toEqual(["channels", "workspaces"]);
+    expect(seen[1].in.id).toEqual(["ws-home"]);
+  });
+
+  it("🔒 …and REFUSES both when that container is standard", async () => {
+    rows.workspaces = [{ id: "ws-home", kind: "standard" }];
+    expect([...(await channelsWhereScopeIsIgnored(["ch-a", "ch-b"]))]).toEqual([
+      "ch-a",
+      "ch-b",
+    ]);
   });
 });

@@ -57,15 +57,11 @@ import { channelsWhereScopeIsIgnored } from "./channel-scope";
  *
  * ── 🔒 AND A CHANNEL SCOPE IS FENCED BY CONTAINER KIND (2026-09-17) ────────
  *
- * Samuel's ruling: *"In workspaces, resource access is not scoped by channels.
- * It's instead scoped by teams."* So {@link grantedResourceIds} IGNORES every
- * `scope_type='channel'` row whose channel lives in a `kind='standard'`
- * container — the rule, its positive spelling and its two doors are stated once
- * in `./channel-scope.ts`. Home (`kind='link'`) containers are unchanged: there
- * the one channel IS the container, which is Samuel's home-sharing model.
- * ⚠ **IGNORED, NOT ABSENT.** The rows may still exist (the write doors refuse
- * NEW ones; `20261011120000` converts the OLD ones), so the read arm cannot
- * assume the table is already clean.
+ * Samuel's ruling: channel scope is a HOME-channel mechanism, so
+ * {@link grantedResourceIds} IGNORES every `scope_type='channel'` row whose channel
+ * lives in a `kind='standard'` container. The rule is stated once, in
+ * `./channel-scope.ts`. ⚠ **IGNORED, NOT ABSENT** — the write doors refuse NEW rows and
+ * `20261011120000` converts the OLD ones, so this arm cannot assume a clean table.
  *
  * ── WHAT THIS DOES *NOT* DO, STATED SO NOBODY INFERS IT ────────────────────
  *
@@ -129,14 +125,10 @@ interface GrantRow {
  * Which of `resourceIds` are lent to a channel or container the caller is in.
  *
  * ⚠ **A FIXED NUMBER OF QUERIES PER REQUEST — at most five, and none at all
- * when nothing is granted.** One read of the grants for this row set, then one
- * membership read per scope kind that actually occurs, then — only when a
- * CHANNEL scope occurs — the two reads `channel-scope.ts ›
- * channelsWhereScopeIsIgnored` spends resolving those channels to their
- * container KIND (Samuel's ruling 2026-09-17). ⚠ **IT WAS THREE UNTIL
- * 2026-09-17**, and the two new ones are on the branch that was already the
- * uncommon one: a container grant, or no grant at all, still costs what it did.
- * The shape
+ * when nothing is granted.** One read of the grants for this row set, one membership
+ * read per scope kind that occurs, and — only when a CHANNEL scope occurs — the two
+ * `channel-scope.ts › channelsWhereScopeIsIgnored` spends on container KIND. It was
+ * three until 2026-09-17, and both new ones sit on the uncommon branch. The shape
  * `agent-templates/server/service-shared.ts › shareCtxForTemplates` established:
  * a batch precompute, never a query per row.
  *
@@ -177,8 +169,7 @@ export async function grantedResourceIds(
   const [containers, channels, ignoredChannels] = await Promise.all([
     reachableContainers(db, userId, scopeIds("container")),
     reachableChannels(db, userId, scopeIds("channel")),
-    // 🔒 Samuel's ruling 2026-09-17 — a channel-scoped row in a STANDARD
-    // workspace widens nobody's read. See `./channel-scope.ts`.
+    // 🔒 A channel-scoped row in a STANDARD workspace widens nobody's read (2026-09-17).
     channelsWhereScopeIsIgnored(scopeIds("channel")),
   ]);
 

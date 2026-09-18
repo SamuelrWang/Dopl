@@ -37,6 +37,36 @@
 -- rows are read by `dopl_teams_mode_visible()` / `listEffectiveAccess`, which
 -- this file does not open. Nor is `scope_type='container'`.
 --
+-- ═══ ROLLBACK ═══════════════════════════════════════════════════════════════
+--
+-- ⚠ **THE DDL REVERSES; THE DATA DOES NOT.** Two halves, and only the first is a
+-- rollback in the usual sense:
+--
+--   (a) THE FENCE. Restore `dopl_grant_admits` from `20260923140000` verbatim
+--       (drop the one `AND public.dopl_channel_scope_allowed(g.scope_id)` line),
+--       then `DROP FUNCTION IF EXISTS public.dopl_channel_scope_allowed(uuid);`.
+--       Revert `src/shared/tenancy/channel-scope.ts` in the same change — §5A,
+--       the two halves of one rule move together or neither does.
+--
+--   (b) THE CONVERSION IS ONE-WAY. Step 3 DELETEs channel grants and WIDENS
+--       `visibility`, and records no prior value of either. **To be able to undo
+--       it, snapshot the grant rows BEFORE applying** and keep the table:
+--
+--         CREATE TABLE public._rb_20261011120000 AS
+--         SELECT g.*
+--           FROM public.resource_grants g
+--           JOIN public.channels   ch ON ch.id = g.scope_id
+--           JOIN public.workspaces w  ON w.id  = ch.workspace_id
+--          WHERE g.scope_type = 'channel'
+--            AND COALESCE(w.kind, 'standard') = 'standard';
+--
+--       ⚠ **THAT RESTORES THE GRANTS, NOT THE VISIBILITIES.** The widened
+--       `visibility` values are lost on apply, and a row already at the widest
+--       value is indistinguishable afterwards from one this file widened — so
+--       snapshot `(id, visibility)` for the five resource tables too, or accept
+--       that the widening stands. Reverting (a) alone turns the fence off over a
+--       table this file has already emptied, which is the worse of the two.
+--
 -- ═══ 🔒 THE TS TWIN, WHICH MOVES IN THE SAME CHANGE ═════════════════════════
 --
 -- `src/shared/tenancy/channel-scope.ts` holds the same rule for the service
@@ -169,6 +199,9 @@ BEGIN
   -- The (resource_type, resource_id) pairs whose HUMAN audience has to be
   -- preserved. ⚠ Materialised BEFORE any delete, because step 3b removes the
   -- rows this reads.
+  -- ⚠ `IF EXISTS` FIRST: `ON COMMIT DROP` clears this at COMMIT, so a re-run in the
+  -- same session with no enclosing transaction would otherwise hit a live table.
+  DROP TABLE IF EXISTS _channel_scope_converts;
   CREATE TEMP TABLE _channel_scope_converts ON COMMIT DROP AS
   SELECT DISTINCT g.resource_type, g.resource_id
     FROM public.resource_grants g

@@ -36,7 +36,10 @@ import { canSeeSkill } from "@/features/skills/server/service-shared";
 import type { Skill } from "@/features/skills/types";
 import { fakeDb, type FakeTables } from "./_fake-db";
 import { listReadableBases, searchSkills } from "./repository-container-rows";
-import type { SearchCaller } from "./repository-visibility";
+import {
+  SEARCH_TEAMS_CONTAINER_LIMIT,
+  type SearchCaller,
+} from "./repository-visibility";
 
 const ME = "11111111-1111-1111-1111-111111111111";
 const PEER = "22222222-2222-2222-2222-222222222222";
@@ -382,6 +385,41 @@ describe("🔒 a TEAMS-MODE knowledge base is not visible to the wrong member", 
     expect([...(await listReadableBases([WS], caller())).keys()]).toEqual([
       "kb-open",
     ]);
+  });
+
+  it("🔒 is NOT found in a container the caller holds NO ROLE for", async () => {
+    // ⚠ Unreachable through the route — the reach is the caller's own containers — and
+    // pinned because the alternative is a GUESSED `viewer`, which would skip
+    // `listEffectiveAccess`'s membership check and admit a non-member's OWN teams-mode
+    // row that the base's own page refuses.
+    mount({
+      knowledge_bases: [teamsBase({ created_by: ME })],
+      team_members: [],
+      resource_grants: [],
+    });
+    const stranger = caller({ roleByContainer: new Map() });
+    expect([...(await listReadableBases([WS], stranger)).keys()]).toEqual([]);
+  });
+
+  it("🔒 reads at most SEARCH_TEAMS_CONTAINER_LIMIT containers, and drops the rest", async () => {
+    // ⚠ FAIL-CLOSED IN THE DIRECTION THAT MATTERS: past the cap a row is HIDDEN, never
+    // shown. The cap is stated so the fan cannot silently become one read per row.
+    const ids = Array.from(
+      { length: SEARCH_TEAMS_CONTAINER_LIMIT + 1 },
+      (_, i) => `${i}`.padStart(8, "6") + "-6666-6666-6666-666666666666"
+    );
+    mount({
+      knowledge_bases: ids.map((ws, i) =>
+        teamsBase({ id: `kb-${i}`, workspace_id: ws, created_by: ME })
+      ),
+      team_members: [],
+      resource_grants: [],
+    });
+    const many = caller({
+      roleByContainer: new Map(ids.map((ws) => [ws, "member" as const])),
+    });
+    const found = await listReadableBases(ids, many);
+    expect(found.size).toBe(SEARCH_TEAMS_CONTAINER_LIMIT);
   });
 });
 
