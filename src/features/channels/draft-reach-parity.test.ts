@@ -318,7 +318,7 @@ describe("🔒 the composer's line and the server's verdict agree, case for case
       { id: CHAN, workspace_id: WS } as ChannelRow,
       { body: c.body, kind: "message" } as ChannelMessageCreateInput,
       metadata,
-      { authorKind: "user", toAgentId: null },
+      { authorKind: "user", toAgentIds: [], toUserIds: [] },
       NOW
     );
     expect(server.verdict, "server verdict").toBe(c.expect.verdict);
@@ -402,7 +402,7 @@ describe("⚠ RR2 is predicted by NOBODY, and that is the recorded gap (F-551)",
       { id: CHAN, workspace_id: WS } as ChannelRow,
       { body: "can someone look at the build?", kind: "message" } as ChannelMessageCreateInput,
       {},
-      { authorKind: "user", toAgentId: null },
+      { authorKind: "user", toAgentIds: [], toUserIds: [] },
       NOW
     );
     expect(server.recipientAgentIds ?? []).toEqual(["m8q1zzzz"]);
@@ -423,7 +423,7 @@ describe("⚠ RR2 is predicted by NOBODY, and that is the recorded gap (F-551)",
       { id: CHAN, workspace_id: WS } as ChannelRow,
       { body: "done", kind: "message", clientMsgId: "agent-k3v7d2mq-4" } as ChannelMessageCreateInput,
       {},
-      { authorKind: "agent", toAgentId: null },
+      { authorKind: "agent", toAgentIds: [], toUserIds: [] },
       NOW
     );
     expect(server.verdict).toBe("reciprocal");

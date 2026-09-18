@@ -126,10 +126,33 @@ describe("`to` is ONE field over two namespaces, sent AS GIVEN", () => {
     });
   }
 
-  it("omitted, it sends nothing at all — chat is exactly 'no `to`'", async () => {
+  it("SEVERAL ride one field, comma-separated, and nothing is split client-side", async () => {
+    // ⚠ **THE MULTI-RECIPIENT RULING** (Samuel, 2026-09-18): *"agents might need to respond to
+    // multiple agents … and it could be multiple people on the channel."* The list lives inside
+    // the existing string, so no published schema shape moved and a single-string `to` is
+    // byte-identical; the SERVER splits and resolves it, for the same reason it resolves a lone
+    // token — one resolver, one refusal, and a list whose second name misses is refused WHOLE.
+    const post = vi.fn(async () => message({ recipientUserIds: ["u2"], recipientAgentIds: ["k3wpf7c5"] }));
+    await send(sendStub(post), { to: "ada@example.com, @agent-k3wpf7c5" });
+    expect(post.mock.calls[0][1].to).toBe("ada@example.com, @agent-k3wpf7c5");
+  });
+
+  it("omitted, the send is REFUSED unless it is a record — and a record carries no `to`", async () => {
+    // ⚠ **RE-POINTED 2026-09-18.** It read "omitted, it sends nothing at all — chat is exactly
+    // 'no `to`'", which was C12's reading: the ABSENCE of an address was itself the statement.
+    // Samuel's ruling replaces the absence with a CHOICE, so a bare send never reaches the wire
+    // and `kind="record"` is what an author with nothing to address actually sends.
+    const bare = vi.fn(async () => message());
+    const refused = await send(sendStub(bare), {});
+    expect(refused).toContain("a send must ADDRESS somebody or be marked a RECORD");
+    expect(bare).not.toHaveBeenCalled();
+
     const post = vi.fn(async () => message());
-    await send(sendStub(post), {});
+    await send(sendStub(post), { kind: "record" });
     expect(post.mock.calls[0][1].to).toBeUndefined();
+    // ⚠ THE RECORD MARKER IS THE ROUTE'S EXISTING `intent`, not a new stored kind.
+    expect(post.mock.calls[0][1].intent).toBe("chat");
+    expect(post.mock.calls[0][1].kind).toBeUndefined();
   });
 });
 
@@ -182,7 +205,7 @@ describe("`delivery=` is the ack, and it is the only one", () => {
     // (`channel-facts.ts › NOT_APPLICABLE`) rather than dropping the column, so
     // the line keeps ONE shape — a result read by a model choosing its next
     // action must not change field count between calls.
-    const out = await send(sendStub(vi.fn(async () => message())), {});
+    const out = await send(sendStub(vi.fn(async () => message())), { kind: "record" });
     expect(out).toContain("delivery=-");
     expect(out).not.toContain("delivery=none");
   });

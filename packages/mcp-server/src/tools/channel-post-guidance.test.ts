@@ -341,7 +341,13 @@ describe("chat + a thread tag — the branch that never read landedThread", () =
     expect(text).toContain("landed=room");
     expect(text).toContain("addressed=no");
     expect(text).not.toContain("no agent was put in front of it");
-    expect(CHANNEL_DOCTRINE).toContain("addressing nobody and starting nobody");
+    // ⚠ **RE-POINTED 2026-09-18.** The doctrine used to describe this post as CHAT —
+    // "addressing nobody and starting nobody" — which read the ABSENCE of an address as a
+    // statement. Samuel's structural ruling names the state instead: a post for nobody is a
+    // RECORD, and the law says what one reaches.
+    expect(CHANNEL_DOCTRINE).toContain(
+      'kind="record" files a post for NOBODY: visible in the room, reaching no agent and no inbox',
+    );
   });
 
   it("a THREADED chat post is NOT reported as having reached nobody", async () => {

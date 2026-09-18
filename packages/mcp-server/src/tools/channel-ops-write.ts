@@ -88,6 +88,79 @@ export function milestoneRefusal(body: string): ToolResponse | null {
  */
 export const DECISION_CONTEXT_MAX_CHARS = 2000;
 
+/**
+ * **HOW MANY RECIPIENTS ONE `to=` MAY NAME.** ⚠ HAND-MIRRORED from
+ * `src/features/channels/constants.ts › CHANNEL_SEND_MAX_RECIPIENTS` — there is
+ * no shared source tree between the app and this package, the same arrangement
+ * `channel-addressing.ts › GROUP_CHANNEL_MIN_MEMBERS` lives under. The server
+ * refuses over-cap too; this copy exists so the refusal is a SENTENCE naming the
+ * bound rather than an opaque 400 the caller has to interpret.
+ */
+export const SEND_MAX_RECIPIENTS = 10;
+
+/**
+ * **A SEND ADDRESSES SOMEBODY OR IT IS A RECORD, AND THERE IS NO THIRD WAY**
+ * (2026-09-18, Samuel's ruling: *"agents posting in a channel should always be
+ * adding to or addressing another agent, or addressing someone … I don't think
+ * there should ever be messages that have no @ unless it really is purely just
+ * posting … we should bake this into the structure"*).
+ *
+ * ⚠ **IT IS A REFUSAL AND NOT A DEFAULT, WHICH IS THE WHOLE RULING.** Treating an
+ * unaddressed send as a record silently would be the same shape as the behaviour
+ * being removed — the server GUESSING at an address the author did not write —
+ * only quieter. A caller that meant a record says so in one argument; a caller
+ * that forgot a recipient finds out on the call rather than by nobody answering.
+ *
+ * ⚠ **THREE CARVE-OUTS, AND EACH IS AN ADDRESS ALREADY.**
+ *   · a THREAD send — a thread has exactly two parties, so a reply with no `to`
+ *     is addressed to the other one by the thread's own structure (the server
+ *     resolves it; INVARIANTS §5, RR1). This is what keeps two agents working a
+ *     thread unchanged.
+ *   · `kind="record"` — the second state, by name.
+ *   · `kind="milestone"` and `kind="decision"` — routed before this runs, and
+ *     both are structurally for nobody or for a person reading a card.
+ *
+ * ⚠ **THE REFUSAL NAMES THE TWO CHOICES AND NOTHING ELSE.** A caller with a body
+ * in hand needs the next call, not the reasoning; the reasoning is one
+ * `op="rooms" action="help"` away and is stated in the LAW.
+ */
+export function unaddressedRefusal(hasTo: boolean, hasThread: boolean): ToolResponse | null {
+  if (hasTo || hasThread) return null;
+  return err(
+    'Nothing was posted: a send must ADDRESS somebody or be marked a RECORD. Either pass `to` — one name or several, comma-separated, mixing agents (`@handle`) and people (email or user id) — or re-send it with kind="record", which posts it for nobody to read later and starts no one.',
+  );
+}
+
+/**
+ * **A RECORD IS FOR NOBODY, SO IT MAY NOT CARRY AN ADDRESS.**
+ *
+ * ⚠ The server refuses the same contradiction (`ChannelChatAddressedError`, a
+ * 400 the write ops would narrate as a membership problem), so this is here for
+ * the sentence rather than for the fence: the two fields say opposite things and
+ * picking either would be a guess about who a message is for.
+ */
+export function recordAddressedRefusal(hasTo: boolean): ToolResponse | null {
+  if (!hasTo) return null;
+  return err(
+    'Nothing was posted: kind="record" is the post for NOBODY, so it cannot carry `to`. Drop `to` to file the record, or drop kind="record" to address the people and agents you named.',
+  );
+}
+
+/**
+ * **THE RECIPIENT-COUNT BOUND, CHECKED BEFORE THE WIRE.** ⚠ The server's own
+ * refusal answers on `CHANNEL_RECIPIENT_UNRESOLVED`, whose narration is about a
+ * NAME that matched nobody — right for a typo and wrong for a list that is
+ * simply too long, which is why the bound is said here in its own words.
+ */
+export function tooManyRecipientsRefusal(to: string | undefined): ToolResponse | null {
+  if (!to) return null;
+  const count = to.split(",").filter((token) => token.trim().length > 0).length;
+  if (count <= SEND_MAX_RECIPIENTS) return null;
+  return err(
+    `Nothing was posted: \`to\` named ${count} recipients and a send addresses at most ${SEND_MAX_RECIPIENTS}. Address the ones who must act; anyone else can read it in the room.`,
+  );
+}
+
 export function decisionRefusal(body: string): ToolResponse | null {
   if (body.length <= DECISION_CONTEXT_MAX_CHARS) return null;
   return err(
@@ -107,10 +180,19 @@ interface PostOptions {
   metadata?: Record<string, unknown>;
   clientMsgId?: string;
   /**
-   * The ONE recipient, in either namespace — a member (email or user id) or an
-   * agent (`@agent-<id>` / `@<handle>`). ⚠ Sent AS GIVEN; the server resolves it.
+   * The recipients, in either namespace — members (email or user id) and agents
+   * (`@agent-<id>` / `@<handle>`), one or several comma-separated.
+   * ⚠ Sent AS GIVEN; the server splits and resolves it (2026-09-18).
    */
   to?: string;
+  /**
+   * `"chat"` — THE RECORD MARKER, set only by `op="send" with kind="record"`.
+   *
+   * ⚠ IT IS THE ROUTE'S EXISTING FIELD, not a new one: `intent:"chat"` already
+   * meant *"this post is not work for anybody"*, and since 2026-09-18 it also
+   * stops the server REPAIRING the address of a post that deliberately has none.
+   */
+  intent?: ChannelMessageInput["intent"];
   /** One-line intent for the receiver's notification. */
   summary?: string;
   /** A thread id — threads this post under that thread's card (server-validated). */
@@ -150,6 +232,29 @@ interface PostOptions {
   resultFacts?: Record<string, FactValue>;
 }
 
+/**
+ * **THE AGENTS THIS SEND PUT IN FRONT OF A TURN** — `wake=`, read off the STORED
+ * ROW rather than off the body (2026-09-18).
+ *
+ * ⚠ **THE QUESTION IS UNCHANGED AND THE SOURCE OF THE ANSWER MOVED.** `wake=`
+ * has always meant *"which agents did I just name"*, and until this wave a body
+ * handle WAS how an agent named one, so `classifyMentions` over the body was the
+ * honest answer. It is not one now: an agent's prose reaches no agent
+ * (`server/service-wake-verdict.ts`), so a body-derived `wake=@agent-x` would
+ * report a wake that structurally cannot happen — beside `addressed=no`, on the
+ * same line, in the one field an orchestrator reads to know whether it delegated.
+ *
+ * ⚠ **IT IS THE SAME COLUMN `addressed=` AND THE READ'S `→` ARROW RENDER**, so
+ * the three cannot disagree; several recipients join with `,` and the renderer's
+ * own `FACT_VALUE_MAX` clip bounds the value, exactly as it does a thread id.
+ * ⚠ `null`/absent is NOT `[]`: a server that computed no recipients has said
+ * nothing about reach, and `NOT_APPLICABLE` is the spelling for that.
+ */
+function wakeFact(agentIds: string[] | null | undefined): FactValue {
+  if (!Array.isArray(agentIds) || agentIds.length === 0) return null;
+  return agentIds.map((id) => `@agent-${id}`).join(",");
+}
+
 export async function opPost(
   client: DoplClient,
   channelRef: string,
@@ -178,6 +283,7 @@ export async function opPost(
       to: opts.to,
       summary: opts.summary,
       // ⚠ Omitted on every ordinary post, so no existing wire shape moved.
+      intent: opts.intent,
       escalation: opts.escalation,
     });
   } catch (e) {
@@ -319,7 +425,8 @@ export async function opPost(
         (message.recipientUserIds?.length ?? 0) > 0 ||
         (message.recipientAgentIds?.length ?? 0) > 0,
       tags: mentions.tags,
-      wake: mentions.wake,
+      // ⚠ READ OFF THE STORED ROW SINCE 2026-09-18 — see {@link wakeFact}.
+      wake: wakeFact(message.recipientAgentIds),
       // ⚠ WHAT BECAME OF IT — A9's keystone contract, rendered where the caller
       // already reads the rest of the write's outcome. `woken?` is the server's
       // write-time prediction (no `deliveryAt` yet); `woken` is the operator's

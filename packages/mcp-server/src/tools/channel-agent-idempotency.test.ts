@@ -288,7 +288,10 @@ describe('op="send" — a replayed post says so in its first words', () => {
       })),
     }) as unknown as DoplClient;
 
-  const send = { op: "send", channel: "general", body: "the answer" };
+  // ⚠ `to` IS ON THE FIXTURE SINCE 2026-09-18: a send that addresses nobody and
+  // marks no record is refused before the wire, so a bare one would drive the
+  // REFUSAL rather than the replay lane these cases are about.
+  const send = { op: "send", channel: "general", body: "the answer", to: "u-peer" };
 
   it("names the seq the FIRST call wrote, and that it was not re-sent", async () => {
     const text = await run(posted({ replayed: true }), { ...send, client_msg_id: KEY });

@@ -216,4 +216,37 @@ const REPLY_ROUTING = [
   `  the room does not need. Answer those there and do not echo them into the channel.`,
 ];
 
-module.exports = { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, REPLY_ROUTING, PERSONAL_KNOWLEDGE_CONFIDENTIALITY };
+// ── ADDRESS IT OR MARK IT A RECORD (2026-09-18, Samuel's structural ruling) ──────────────────
+//
+// *"Agents posting in a channel should always be adding to or addressing another agent, or
+// addressing someone. I don't think there should ever be messages that have no @ unless it really
+// is purely just posting … we should bake this into the structure."*
+//
+// THE STRUCTURE IS THE REFUSAL, and it lives in the MCP tool (`channel-ops-write.js ›
+// unaddressedRefusal`). This block exists so the agent does not have to LEARN it by being refused:
+// a turn that teaches the two choices up front costs four lines once, and a refusal costs a whole
+// round trip every time an agent reaches for the shape it had before.
+//
+// IT ALSO CARRIES THE HALF THE REFUSAL CANNOT: that an @-handle in the BODY reaches no agent. That
+// is not a rule about this call, it is a rule about what the agent writes, and an agent that
+// believes prose can hand off will keep writing "@x please take this" into a body and wonder why
+// nothing happened. The people half is unchanged and is said here too, because the two look
+// identical on the page and only one of them still works.
+//
+// House voice (§H-13): no em dash, and nothing here teaches a `task=` argument.
+const ADDRESSING = [
+  `EVERY MESSAGE YOU SEND IS ADDRESSED OR IT IS A RECORD. There is no third way, and a send`,
+  `that is neither is refused before it is written:`,
+  `- ADDRESS IT with to="<who>". One name or several, comma separated, mixing your operator's`,
+  `  agents (@handle) and people (email or user id). Each agent named gets one turn; each`,
+  `  person named is notified.`,
+  `- MARK IT with kind="record" when it really is just posting: something the room should be`,
+  `  able to read later that nobody has to act on. A record starts nobody and notifies nobody.`,
+  `- A reply INSIDE A THREAD needs neither. A thread has two parties and the other one is`,
+  `  already your address.`,
+  `- AN @HANDLE IN YOUR BODY REACHES NO AGENT. Writing "@builder please take this" into a`,
+  `  message tells a human reader and starts nothing; to= is the only way to reach an agent.`,
+  `  @-tagging a PERSON in the body still works and still puts it in their Tags inbox.`,
+];
+
+module.exports = { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, REPLY_ROUTING, PERSONAL_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING };

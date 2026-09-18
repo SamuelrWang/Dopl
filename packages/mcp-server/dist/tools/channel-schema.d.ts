@@ -61,7 +61,7 @@ export type { ChannelOp, ManageAction, RoomsAction, ArtifactAction, } from "./ch
  * is `body`, a hold is `wait_ms`. Eighteen op names // left the published enum. A cut a re-worded
  * sentence cannot make twice.
  */
-export declare const SCHEMA_MAX_CHARS = 8656;
+export declare const SCHEMA_MAX_CHARS = 8648;
 /**
  * ⚠ THE PER-FIELD HALF, AND IT IS THE ONE THAT ACTUALLY HOLDS THE LINE. A total can absorb one
  * 900-character paragraph by trimming nine short fields; this cannot. A `.describe()` states the
@@ -129,6 +129,7 @@ export declare const CHANNEL_INPUT_SHAPE: {
     body: z.ZodOptional<z.ZodString>;
     kind: z.ZodOptional<z.ZodEnum<{
         message: "message";
+        record: "record";
         milestone: "milestone";
         decision: "decision";
     }>>;

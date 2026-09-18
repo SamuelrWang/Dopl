@@ -5,16 +5,14 @@
 // with the machinery they drove — and the switch itself is gone too, a wave later:
 //
 //   (2) maybeOpenRequesterSession   MY OWN thread opener minted a REQUESTER WINDOW on MY OWN
-//                                   machine and launched my agent against my own message. This
-//                                   is the self-trigger bug the retirement was ruled from.
+//                                   machine and launched my agent against my own message — the
+//                                   self-trigger bug the retirement was ruled from.
 //   (3) maybeSurfaceRequesterReply  a peer reply on a thread I requested, HELD at that window's
 //                                   inbound gate. No window, no gate, no hold.
 //   (4) noteRequestLifecycle        advanced the request STRIP in the window chrome.
-//   (5) maybeReopenAddressedThread  a peer follow-up reopened the window that answered it,
-//                                   via the shell-recreate lane.
-//
-// `diagRuntimeGateSkip`, `REQUEST_MILESTONES`, `exchangeTag` and `reopenableRecord` were
-// helpers of those four alone and went with them.
+//   (5) maybeReopenAddressedThread  a peer follow-up reopened the window that answered it.
+// `diagRuntimeGateSkip`, `REQUEST_MILESTONES`, `exchangeTag` and `reopenableRecord` were helpers
+// of those four alone and went with them.
 //
 //   (1) feedLiveSession — the delivery lane. It claims nothing into existence; a live session's
 //       own existence is the gate.
@@ -22,11 +20,9 @@
 // ── THE FAN-OUT IS NARROWED TO THE ADDRESSED RECIPIENT (2026-09-02, ruling B1) ─────────────
 //
 // ⚠ THIS REVERSES SAMUEL'S RULING 4 OF 2026-08-21 — *"every message in a thread feeds every
-// live agent on it"* — AND THE REVERSAL IS THE WHOLE OF THIS ROUTE NOW. Ruling 4 was right for
-// a machine that had no other answer: WHO a message was for was re-derived here, from the body,
-// by every desktop in the field, so the only safe reading of an unaddressed post was "everybody
-// on the thread". It cost a peer turn per agent per message and it made a room of agents answer
-// each other.
+// live agent on it"* — AND THE REVERSAL IS THE WHOLE OF THIS ROUTE NOW. Ruling 4 was right for a
+// machine that had no other answer: WHO a message was for was re-derived here, by every desktop
+// in the field, so the only safe reading of an unaddressed post was "everybody on the thread".
 //
 // ⚠ **WHO A MESSAGE IS FOR IS NOW DECIDED ONCE, ON THE SERVER, AT WRITE TIME** — INVARIANTS §5,
 // THE DELIVERY KEYSTONE. `src/features/channels/server/service-wake-verdict.ts` stores
@@ -35,17 +31,21 @@
 //
 //   agent · responder     the named agent ids. They are FED and they are WOKEN.
 //   member · thread_peer   a MEMBER. Their machine decides what runs — so if that member is
-//     · reciprocal         this operator, their live sessions on the thread hear it as context
+//                          this operator, their live sessions on the thread hear it as context
 //                          and NONE of them is woken; if it is a peer, nothing here is fed.
+//   reciprocal             NOBODY, since 2026-09-18 — see the block above
+//                          `CONTEXT_MEMBER_VERDICTS`. The server still repairs the address so
+//                          the transcript's `→` is truthful and the operator is notified; what
+//                          it no longer does is buy every sibling session a turn.
 //   thread                 no recipient, but a thread tag: the sessions already working that
 //                          thread hear it and nobody is woken.
-//   none                   nobody.
+//   none                   nobody — which is every RECORD (`kind="record"`).
 //
-// ⚠ **THE THREE RESILIENCE ARMS ARE WHAT MAKE THE NARROWING SAFE** (RR1/RR2/RR3, INVARIANTS §5).
-// Narrowing to the addressed recipient means a message that named nobody would reach nobody, and
-// Samuel's ruling in the same breath is that a forgotten `@` must never stall a conversation. The
-// repair is the SERVER's, resolved once at write time, so every desktop gets it at once and the
-// weakest build in the field no longer sets the rule. Nothing on this machine repairs an address.
+// ⚠ **THE RESILIENCE ARMS ARE WHAT MAKE THE NARROWING SAFE** (RR1/RR3, INVARIANTS §5): a
+// forgotten `@` from a PERSON must never stall a conversation, so the SERVER repairs the address
+// once at write time and nothing on this machine repairs one. ⚠ RR2 (`reciprocal`) was the third
+// and it repaired an AGENT's — which Samuel's 2026-09-18 ruling replaces with structure: an agent
+// either addresses somebody or files a RECORD, so there is nothing left to repair.
 //
 // ⚠ **AND THE FALLBACK IS THE WHOLE COMPATIBILITY STORY. IT HAS TWO CAUSES AND THEY ARE THE SAME
 // FACT: THE SERVER DID NOT ANSWER.**
@@ -68,37 +68,32 @@
 //   • an AUTHORLESS row reaches nothing — a system row, nobody spoke;
 //   • a session is never fed its OWN post (`wroteIt`, by `client_msg_id` — every agent on this
 //     machine posts under the operator's account, so authorship cannot tell three of mine apart).
-// The fourth — the 2026-08-31 SAME-ACCOUNT CARVE — is `mayWake` below, and it is what is left of
-// `wakeEligibility`'s three-string enum. It is REDUNDANT under a stored verdict, because the
-// server resolves an agent recipient against the AUTHOR'S OWN sessions and can therefore never
-// name a peer's agent; it is LOAD-BEARING under the body-parse fallback, where the door is open
-// again. One predicate that is right in both places beats two spellings of one rule.
+// The fourth is `mayWake` below (the 2026-08-31 SAME-ACCOUNT CARVE), all that is left of
+// `wakeEligibility`'s three-string enum: redundant under a stored verdict, load-bearing under
+// the fallback. One predicate right in both places beats two spellings of one rule.
 //
 // ⚠ **THE LLM TRIAGE TIER IS DELETED** (ruling B6). Tier 2 (the solo room) and tier 3 (a
 // claim/pass model call per dormant candidate) both answered "which of my agents did this
-// unaddressed human message mean?" — a question RR3 now answers SERVER-SIDE for free, for every
-// desktop at once, with no model call and no held cursor. Tier 1 (the @-mention) is not gone: it
-// is the `agent` verdict, resolved through the same handle grammar the transcript tints with.
+// unaddressed HUMAN message mean?" — a question RR3 now answers SERVER-SIDE for free. Tier 1
+// (the @-mention) is the `agent` verdict, on the same handle grammar the transcript tints with.
 //
 // ── THE SPAWN-IDLE WAKE RULE (2026-08-22, Samuel's ruling) ────────────────────────────────
 //
-// ⚠ ONE CLASS OF SESSION IS EXEMPT FROM DELIVERY, AND IT IS EXEMPT UNTIL SOMEBODY DIRECTS IT.
-// A SPAWN-IDLE agent (`sessions:launch` with `idle: true` — the New Agent button) is REGISTERED
-// and has started no `claude` child at all: it holds a slot, a pill and an @-mention address, and
-// `wakeEffects` starts its query on the first fed turn. So an unwoken spawn-idle session is fed
-// NOTHING unless this message WAKES it — an address, not an overhearing. Everything else is
-// DROPPED, not queued: the agent reads the thread ON DEMAND once directed, and that read costs no
-// permission (`session-profiles.js › isOwnChannelRead`), so nothing is lost by not pushing it.
+// ⚠ ONE CLASS OF SESSION IS EXEMPT FROM DELIVERY UNTIL SOMEBODY DIRECTS IT. A SPAWN-IDLE agent
+// (`sessions:launch` with `idle: true` — the New Agent button) is REGISTERED and has started no
+// `claude` child at all: it holds a slot, a pill and an @-mention address, and `wakeEffects`
+// starts its query on the first fed turn. So an unwoken spawn-idle session is fed NOTHING unless
+// this message WAKES it — an address, not an overhearing. Everything else is DROPPED, not queued:
+// the agent reads the thread ON DEMAND once directed, and that read costs no permission
+// (`session-profiles.js › isOwnChannelRead`), so nothing is lost by not pushing it.
 //
 // ⚠ THE FLAG IS ITS OWN (`s.awaitingDirective`), NOT AN OVERLOAD OF `freshFraming`. That marker
-// answers "does this turn carry the full framing", is consumed by `session-seed.takeFraming`, and
-// is one-shot; this answers "may anything reach this agent yet", is read on every message, and is
-// cleared by the WAKE rather than by the framing. Two questions, two fields — and the session
-// engine clears this one at its single dispatch funnel so BOTH wake lanes clear it identically.
+// answers "does this turn carry the full framing" and is one-shot; this answers "may anything
+// reach this agent yet", is read on every message, and is cleared by the WAKE. Two questions,
+// two fields — cleared at the engine's single dispatch funnel so both wake lanes agree.
 //
 // ⚠ AND IT IS BELT-AND-BRACES. `session-gate.js › feedInbound` refuses the same message again,
 // because this file is not the only thing that could ever call it.
-
 const targeting = require('./targeting');
 const io = require('./listener-io');
 const sessionEngine = require('./session-engine');
@@ -116,11 +111,23 @@ const { diag } = require('./diag');
 // verdict, and an installed desktop must degrade to today's behaviour rather than to silence.
 const VERDICTS = ['none', 'member', 'agent', 'thread', 'thread_peer', 'reciprocal', 'responder'];
 
-// The verdicts whose recipient is a MEMBER rather than an agent — an explicit `to=` and the two
-// resilience arms that REPAIR one (RR1, RR2). ⚠ They are three values and not a flag beside
-// `member` because a transcript has to be able to tell an address the author WROTE from one the
-// server repaired; the ROUTING is the same for all three, which is why they share a list here.
-const MEMBER_VERDICTS = ['member', 'thread_peer', 'reciprocal'];
+// ── THE MEMBER VERDICTS ARE THREE; TWO OF THEM FEED (2026-09-18, the wake-all report) ───────
+//
+// ⚠ **THE FIX FOR *"when one agent posts to a channel it wakes up all the other agents … they
+// just end up saying, oh this was not addressed for me"*.** The chain: an agent posts in the
+// MAIN ROOM with no `to`; RR2 repairs the address to the OPERATOR (`reciprocal`); that counted
+// as a member verdict; the member is this operator; `context` went true; and `liveOnThread` on a
+// main-room post is keyed `<channel>::`, so EVERY main-room session of that operator took a full
+// model turn about a message addressed to none of them. There is no passive-context lane — a
+// windowless session floors at `auto_inbound` — so "hearing it" IS a turn, priced like one.
+//
+// ⚠ **THE OTHER TWO STAY, AND THE ASYMMETRY IS THE RULE.** `member` and `thread_peer` name a
+// recipient that exists independently of the post — one the author WROTE, one the THREAD's own
+// two-party structure supplies. `reciprocal` is the only arm that INVENTS an address for a post
+// whose author named nobody, and Samuel's ruling is that such a post is a RECORD. ⚠ All three
+// words survive on the wire, so a transcript still tells a written address from a repaired one;
+// what is gone is the list that treated them alike.
+const CONTEXT_MEMBER_VERDICTS = ['member', 'thread_peer'];
 
 // WHO WROTE THIS MESSAGE, for the wrapper a session is fed it inside.
 // ⚠ `io.displayNameFor` names the ACCOUNT a post came from, and a peer's AGENT posts from the
@@ -141,14 +148,13 @@ function storedVerdict(m) {
   return VERDICTS.indexOf(v) === -1 ? '' : v;
 }
 
-// The agent ids the server resolved, intersected with the sessions live here.
+// The agent ids the server resolved — ONE OR SEVERAL — intersected with the sessions live here.
 //
 // ⚠ **ABSENT IS NOT EMPTY.** An ARRAY — EMPTY INCLUDED — is the server's authoritative answer
 // and the body parse is not run at all; `null` is "not resolved there" and falls through to the
 // parse, which is today's behaviour exactly. `??` and never `||` at the call site.
-// ⚠ **STILL INTERSECTED WITH `liveIds`**: the server resolves the author's own sessions
-// CHANNEL-wide and this feed is THREAD-scoped — which is also what stops the server naming a
-// session this machine does not have.
+// ⚠ **STILL INTERSECTED WITH `liveIds`**, and DE-DUPED: the server resolves CHANNEL-wide while
+// this feed is THREAD-scoped, and a `to=` list naming one agent twice is one address, one wake.
 function serverAddressed(m, liveIds) {
   const ids = m && m.recipientAgentIds;
   if (!Array.isArray(ids)) return null;
@@ -171,6 +177,8 @@ function serverNamesMember(m, myUserId) {
 
 // THE @AGENT-ID PARSER, AND WHY IT LIVES ON THIS MACHINE (2026-08-21, ruling 5).
 //
+// ⚠ **A PERSON'S DOOR ONLY SINCE 2026-09-18** — an agent's prose names nobody (see `planFor`).
+//
 // ⚠ IT MUST NEVER BECOME A SERVER READ. `metadata.mentionedUserIds` is the server's stamped,
 // unspoofable mention set, resolved against the channel ROSTER — and an agent id is not a
 // member, so that resolver correctly answers "nobody". That fail-closed behaviour is right and
@@ -183,11 +191,11 @@ function serverNamesMember(m, myUserId) {
 // a peer cannot address an agent that is not mine because they cannot know its id.
 //
 // ⚠ THE `agent-` PREFIX IS ACCEPTED SINCE 2026-08-27 (Samuel's handle-convention ruling). The
-// web tree now WRITES and TINTS `@agent-<id>` (`src/features/channels/lib/agent-mentions.ts`),
-// and the bare `@<id>` form is what every message written before that carries — so both resolve,
-// and the prefix is optional in the pattern rather than a second regex. **A convention change
-// that only moved the renderer would have rendered a blue token this parser ignored**, which is
-// the tint-says-tagged / stamp-says-nobody defect F-266 already cost a wave to fix once.
+// web tree WRITES and TINTS `@agent-<id>` (`src/features/channels/lib/agent-mentions.ts`) and
+// the bare `@<id>` form is what older messages carry, so both resolve and the prefix is optional
+// rather than a second regex. **A convention change that only moved the renderer would have
+// rendered a blue token this parser ignored** — the tint-says-tagged / stamp-says-nobody defect
+// F-266 already cost a wave to fix once.
 //
 // ⚠ THE NEGATIVE LOOKBEHIND IS WHAT KEEPS THE TWO FORMS FROM OVERLAPPING. Without it the bare-id
 // alternative would ALSO match inside `@agent-k3v7d2mq` — `-` is a non-word character, so a plain
@@ -197,10 +205,8 @@ function serverNamesMember(m, myUserId) {
 // ⚠ AND SLUGGED CUSTOM NAMES SINCE 2026-08-28 (Samuel's F-350 ruling: "the parser learns names").
 // `@research-bot` reaches the agent its operator renamed "Research Bot", because the picker
 // INSERTS that form (`lib/agent-mentions.ts › agentMentionHandle` prefers the slug over the id)
-// and the transcript TINTS it — so a parser that read only the id forms was rendering a blue
-// token it ignored for very nearly every named agent. The slug rule, the token strip and the
-// ambiguity fence all live in `agent-handles.js`; what belongs HERE is that there are TWO DOORS
-// and how they compose:
+// and the transcript TINTS it. The slug rule, the token strip and the ambiguity fence live in
+// `agent-handles.js`; what belongs HERE is that there are TWO DOORS and how they compose:
 //
 //   • THE ID DOOR is this regex, intersected with `liveIds`. Unambiguous by construction, never
 //     withdrawn, and still the handle that reaches an agent whose NAME is contested.
@@ -241,48 +247,44 @@ const escalationAnswerAgentIds = agentHandles.escalationAnswerAgentIds;
  *   ids      the agent sessions this message is FOR. Fed, and woken if dormant.
  *   context  feed every OTHER live session on the thread, waking none of them.
  *
- * ⚠ **`context` IS NOT A SECOND FAN-OUT.** It is true in exactly three situations, and each is
- * the server having said "this reaches the thread and wakes nobody": the `thread` verdict, a
- * MEMBER recipient who is this operator (their machine decides what runs; the agents already
- * working the thread hear it), and the OLD-SERVER fallback, which is ruling 4 preserved whole.
- * Everything else — a message for a peer, a message for nobody — feeds nothing at all.
+ * ⚠ **`context` IS NOT A SECOND FAN-OUT.** It is true in exactly three situations, each the
+ * server having said "this reaches the thread and wakes nobody": the `thread` verdict, an
+ * ADDRESSED member recipient who is this operator (`CONTEXT_MEMBER_VERDICTS` — not
+ * `reciprocal`), and the OLD-SERVER fallback, which is ruling 4 preserved whole. Everything
+ * else — a message for a peer, a message for nobody, a RECORD — feeds nothing at all.
  */
 // ⚠ THE BODY PARSE RUNS ONLY ON A ROW NO SERVER EVER RULED ON (2026-09-07). It used to run
-// whenever `recipientAgentIds` was absent, and that quietly unbought the CODE AND MARKUP MASKS.
-// The server reads handles through `mentionTokensOf`, which masks them (`lib/mentions.ts` rules 6
-// and 7) — code is quoted text and tags NOBODY, a rule bought after two agents writing
-// documentation about @-tagging put backticked handles in their bodies and tagged both operators
-// for real (channel seqs 647 / 653, 2026-08-21). `mentionedAgentIds` above masks nothing. So a
-// body carrying a live agent's handle INSIDE BACKTICKS plus any handle that did not resolve made
-// the server answer `null`, fell through to the unmasked regex, and woke the fenced agent. A
-// message about addressing that quotes one live agent and names one dead one is ordinary traffic,
-// not a contrived shape.
+// whenever `recipientAgentIds` was absent, and that quietly unbought the CODE AND MARKUP MASKS:
+// the server reads handles through `mentionTokensOf`, which masks them (`lib/mentions.ts` rules
+// 6 and 7 — code is quoted text and tags NOBODY, bought after two agents documenting @-tagging
+// put backticked handles in their bodies and tagged both operators for real, seqs 647 / 653,
+// 2026-08-21), and `mentionedAgentIds` above masks nothing. A body quoting one live handle and
+// naming one dead one made the server answer `null`, fell through to the unmasked regex, and
+// woke the fenced agent — ordinary traffic, not a contrived shape.
 //
-// ⚠ AND NO, DO NOT PORT THE MASKS INTO THIS TREE. That is the first thing the next reader of that
-// regex will reach for, and it is the drift `lib/mentions.ts` spends its header forbidding: the
-// masks would exist twice, in two languages, and the copies would come apart the moment either
-// changed — which is the ORIGINAL defect (a private copy of the token rule) in a new place. The
-// narrowing costs no second copy because it needs no mask: a row the server ruled on is already
-// masked, authoritatively, by the one parser.
-//
-// ⚠ THE DISTINCTION IS `wakeVerdict`, AND IT IS THE LOAD-BEARING BIT. "This build stored no
-// verdict" (an old row — `storedVerdict` answers '') and "the server ran and named nobody" are
-// different facts, and only the first is what the fallback was ever justified by.
-//
-// ⚠ WHAT THIS TRADES, STATED PLAINLY BECAUSE IT IS A REAL LOSS. `server/…-handles.ts` documents
-// `null` as "you decide", not "nobody": the token may name an agent whose session row has not
-// been PUSHED yet, and answering `[]` there would stop this machine feeding an agent it can see.
-// That case now goes unfed on a verdict-bearing row. It is accepted here as the smaller harm —
-// an unwoken agent is visible and retryable, a code fence that wakes one is neither — and the
-// repair that gets it back WITHOUT a second masker is for the server to stamp the token set it
-// actually saw, so this parse can intersect with it rather than re-derive it. Pinned both ways in
-// `test/session-dispatch-mask-fallback.test.mjs`.
+// ⚠ AND NO, DO NOT PORT THE MASKS INTO THIS TREE — that is the drift `lib/mentions.ts` spends
+// its header forbidding, the original defect (a private copy of the token rule) in a new place.
+// A row the server ruled on is already masked, authoritatively, by the one parser.
+// ⚠ THE DISTINCTION IS `wakeVerdict`: "this build stored no verdict" (`storedVerdict` answers
+// '') and "the server ran and named nobody" are different facts, and only the first justifies
+// the fallback. ⚠ WHAT IT TRADES: `null` means "you decide", not "nobody" — the token may name an
+// agent whose session row has not been PUSHED yet — and that case now goes unfed on a
+// verdict-bearing row. The smaller harm: an unwoken agent is visible and retryable, a code fence
+// that wakes one is neither. Pinned both ways in `test/session-dispatch-mask-fallback.test.mjs`.
+// ⚠ **AN AGENT'S PROSE IS NOT AN ADDRESS ON THIS MACHINE EITHER** (2026-09-18, cause 2 of the
+// wake-all report): a report saying *"I handed off to @sonnet-reader"* woke that agent off the
+// sentence DESCRIBING the handoff, because the parse never asked who was writing. The server
+// answers `[]` for an agent author's body on every row it rules on; this closes the one row it
+// never ruled on. An agent that means an agent says so in `to=`, which takes a list.
+// ⚠ IT DOES NOT TOUCH `escalationAnswerAgentIds` — a SERVER-STAMPED structured field naming the
+// agent that ASKED, not a handle somebody typed.
 function planFor(m, liveIds, myUserId) {
   const verdict = storedVerdict(m);
   const resolved = serverAddressed(m, liveIds);
+  const agentAuthored = !!(m && m.authorKind === 'agent');
   const ids =
     resolved ??
-    (verdict === ''
+    (verdict === '' && !agentAuthored
       ? mentionedAgentIds(m.body, liveIds, agentHandles.handleIndexFor(liveIds))
       : []);
   for (const id of escalationAnswerAgentIds(m, liveIds)) {
@@ -290,7 +292,8 @@ function planFor(m, liveIds, myUserId) {
   }
   if (!verdict) return { ids: ids, context: true }; // no answer stored: ruling 4, unchanged
   if (ids.length) return { ids: ids, context: false }; // narrowed to whoever was named
-  const forMe = MEMBER_VERDICTS.indexOf(verdict) !== -1 && serverNamesMember(m, myUserId);
+  const forMe =
+    CONTEXT_MEMBER_VERDICTS.indexOf(verdict) !== -1 && serverNamesMember(m, myUserId);
   return { ids: ids, context: verdict === 'thread' || forMe };
 }
 
@@ -323,12 +326,10 @@ function wroteIt(s, m) {
 // agent supplied — so a session that passes its own idempotency key posts a row whose id this
 // machine never recorded, `wroteIt` answers false, and the session is fed its own words back.
 // Three turns of a 1M-context session went that way in one four-minute stretch.
-// ⚠ **IT IS A SECOND KEY, NOT A REPLACEMENT.** `client_msg_id` still answers first because it is
-// the older form and rows predate the stamp; this answers for everything that supplied its own.
-// ⚠ **AND IT IS THE BELT UNDER THE SERVER'S BRACE.** `service-wake-verdict.ts` now drops the
-// author's own session before it stores a recipient — but a stored verdict is only as new as the
-// server, and the body-parse fallback has no such structure. One machine-side predicate that
-// holds whatever the row was written by.
+// ⚠ **A SECOND KEY, NOT A REPLACEMENT** — `client_msg_id` answers first (rows predate the
+// stamp); this answers for everything that supplied its own. ⚠ **AND THE BELT UNDER THE SERVER'S
+// BRACE**: the verdict drops the author's own session before storing a recipient, but a stored
+// verdict is only as new as the server and the fallback has no such structure.
 function authoredBySession(s, m) {
   const meta = m && m.metadata;
   const stamped = meta && typeof meta === 'object' ? meta.session_id : null;
@@ -373,14 +374,13 @@ function mayFeed(s, wake) {
  * fence's three-string enum.
  *
  * An AGENT-authored message may wake a dormant agent only when its author is **this machine's
- * signed-in operator**. A PEER's agent starts nothing here, which is the 2026-08-28 ruling
- * unchanged; the operator's own agents may @-wake each other, which is what makes `launch_agent`
- * over MCP a capability rather than an id nobody can spend.
+ * signed-in operator**. A PEER's agent starts nothing here (the 2026-08-28 ruling, unchanged);
+ * the operator's own agents may address each other, which is what makes a launched agent a
+ * capability rather than an id nobody can spend.
  *
  * ⚠ **REDUNDANT UNDER A STORED VERDICT, LOAD-BEARING UNDER THE FALLBACK.** The server resolves
  * an agent recipient against the AUTHOR'S OWN sessions, so no stored verdict can name a peer's
- * agent; the body-parse fallback has no such structure and this is its fence. One predicate that
- * holds in both places, rather than a rule the server states and the machine re-states.
+ * agent; the fallback has no such structure and this is its fence.
  * ⚠ FAILS CLOSED ON THE IDENTITY: a blank or unknown operator id can never equal a non-blank
  * author id, so the comparison needs no second branch.
  * ⚠ IT GATES THE **WAKE** AND NEVER THE FEED. An agent-authored message still reaches a session
@@ -417,14 +417,14 @@ function feedLiveSession(entry, m, myUserId) {
   const authorName = authorLabel(m); // the AUTHOR, not just the account — see authorLabel
   const wakeAllowed = mayWake(m, myUserId);
 
-  // ⚠ **THE RECEIPT IS FILED PER SESSION, WITH THAT SESSION'S OWN OUTCOME** (A9 + D3). It used to
-  // be one aggregate over four counters plus an `earnedBy` table naming which session had earned
-  // the winning word — bookkeeping that existed only because a message reached many sessions.
-  // With one recipient there is nothing to aggregate, and `delivery-ack.js` already holds ONE
-  // receipt per (operator, channel, seq) and only ever STRENGTHENS it, so the collapse is the
-  // buffer's job rather than this loop's. `myUserId` is the only identity that may claim a
-  // receipt (`session-state-push.js › trackOrigin`); the server SKIPS one whose session key is
-  // not in this machine's own live set, which is why the key is carried and never composed.
+  // ⚠ **THE RECEIPT IS FILED PER SESSION, WITH THAT SESSION'S OWN OUTCOME** (A9 + D3). It used
+  // to be one aggregate over four counters plus an `earnedBy` table naming which session had
+  // earned the winning word. `delivery-ack.js` holds ONE receipt per (operator, channel, seq)
+  // and only ever STRENGTHENS it, so collapsing SEVERAL addressees onto one word is the buffer's
+  // job rather than this loop's — which is what makes a multi-recipient send report compactly.
+  // `myUserId` is the only identity that may claim a receipt (`session-state-push.js ›
+  // trackOrigin`); the server SKIPS one whose key is not in this machine's own live set, which
+  // is why the key is carried and never composed.
   const ack = (s, counts) => {
     const verdict = deliveryAck.verdictFor(counts);
     if (verdict) deliveryAck.note(entry.workspaceId, entry.channel.id, m.seq, verdict, myUserId, String(s.key || ''));

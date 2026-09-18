@@ -90,9 +90,26 @@ export interface WakeVerdictContext {
    *  `service-writes.ts` — never from the body. RR2 and RR3 are the same
    *  situation split by this one fact. */
   authorKind: string;
-  /** The agent `to=` resolved to, when the caller addressed one
-   *  (`service-writes-metadata-recipient.ts`). `null` for every other post. */
-  toAgentId: string | null;
+  /**
+   * The agents `to=` resolved to (`service-writes-metadata-recipient.ts ›
+   * resolveToRecipients`). `[]` for every post that named none.
+   *
+   * ⚠ **A LIST SINCE 2026-09-18** (Samuel: *"agents might need to respond to
+   * multiple agents … and it could be multiple people on the channel"*). Each id
+   * is stored on `recipient_agent_ids`, and the desktop wakes each of them ONCE
+   * — the intersection in `main/session-dispatch.js › serverAddressed` already
+   * de-dupes, and this list is de-duped at the door.
+   */
+  toAgentIds: string[];
+  /**
+   * The members `to=` resolved to. `[]` when none were named.
+   *
+   * ⚠ **IT IS NOT `metadata.to_user_id`, AND THE DIFFERENCE IS THE POINT.** That
+   * key is ONE member — the consent card's and the thread inheritance's index —
+   * and is the FIRST of these. `recipient_user_ids` stores all of them, which is
+   * what every machine routes on (`serverNamesMember`).
+   */
+  toUserIds: string[];
   /** A legacy thread tag the poster was not entitled to was dropped
    *  (`service-writes-metadata.ts › PostMetadataResult.threadTagStripped`). */
   threadTagStripped?: boolean;
@@ -118,13 +135,25 @@ export interface WakeVerdictContext {
  *
  * PRECEDENCE — strongest reach first, because the verdict answers *what this
  * message DID*, and waking an agent is the loudest thing it can do:
- *   1. `agent`   `to=` named an agent, or the body named a live agent of the
- *                author's own.
- *   2. `member`  `to=` named a member; their side decides what runs.
+ *   1. `agent`   `to=` named one or more agents, or — for a PERSON author only —
+ *                the body named live agents.
+ *   2. `member`  `to=` named members; their side decides what runs.
  *   3. **the three RESILIENCE arms** (B1) — see below.
  *   4. `thread`  no recipient, but a thread tag — it reaches sessions already
  *                working that thread and wakes nothing.
- *   5. `none`    nothing.
+ *   5. `none`    nothing — which includes every RECORD.
+ *
+ * ⚠ **`to=` IS A LIST SINCE 2026-09-18** (Samuel: *"agents might need to respond
+ * to multiple agents … and it could be multiple people on the channel"*). A
+ * mixed send stores BOTH columns and takes the stronger word; nothing is
+ * dropped, because every machine routes on `recipient_*` and reads the word only
+ * to explain itself.
+ *
+ * ⚠ **AN AGENT'S PROSE IS NOT AN ADDRESS** (2026-09-18, the same ruling's other
+ * half). The body parse is a PERSON's door only — see {@link bodyAgentIds}.
+ *
+ * ⚠ **AND A RECORD IS NOT A FORGOTTEN `@`** — `intent:"chat"` short-circuits
+ * every arm and lands on `none`. See {@link isRecord}.
  *
  * ⚠ **THE RESILIENCE ARMS RUN ONLY WHEN NOTHING WAS ADDRESSED, AND THEY ARE
  * DISJOINT BY (in a thread?) × (author kind), SO EXACTLY ONE FIRES.** RR1 is the
@@ -195,13 +224,34 @@ export async function resolveWakeVerdict(
   // own-scoped too (`service-writes-metadata-recipient.ts › liveAgentHandles`),
   // so dropping it BEFORE the body gate makes the post behave like the
   // unaddressed post it actually is: the prose is read, and the arms get a turn.
-  const toAgentId =
-    wakeCtx.toAgentId !== null && wakeCtx.toAgentId === selfAgentId
-      ? null
-      : wakeCtx.toAgentId;
-  const bodyAgentIds =
-    toAgentId === null && isMessage
-      ? await resolveAgentRecipients(
+  const toAgentIds = wakeCtx.toAgentIds.filter((id) => id !== selfAgentId);
+
+  /**
+   * **AN AGENT'S PROSE NAMES NOBODY** (2026-09-18, Samuel's ruling that a post is
+   * either addressed or a record — cause 2 of the wake-all report).
+   *
+   * ⚠ **THE BODY PARSE IS A PERSON'S DOOR NOW, AND ONLY A PERSON'S.** An agent
+   * writing *"I handed off to @sonnet-reader"* was WAKING that agent: the handle
+   * resolved through the same index a deliberate address does, so a REPORT about
+   * a handoff and the handoff itself were one wire shape. An agent that means to
+   * reach an agent says so in `to=`, which now takes as many as it needs.
+   *
+   * ⚠ **`[]`, NEVER `null`.** `null` means "you decide" and sends the desktop to
+   * its OWN body parse (`main/session-dispatch.js › mentionedAgentIds`), which
+   * would resolve the very handle this gate exists to make inert. `[]` is the
+   * authoritative answer *this body names no agent*, and the machine executes it.
+   *
+   * ⚠ **THE PEOPLE HALF IS UNTOUCHED.** `@diana` in an agent's body still lands
+   * in Diana's Tags inbox — that is `resolveBodyMentions`, a different fold over
+   * the human roster, and tagging a person starts nothing. The LAW's "tagging is
+   * not addressing" is exactly what this makes true of agents too.
+   */
+  const askBody = toAgentIds.length === 0 && isMessage;
+  const bodyAgentIds = !askBody
+    ? null
+    : wakeCtx.authorKind === "agent"
+      ? []
+      : await resolveAgentRecipients(
           ctx,
           channelId,
           input.body,
@@ -210,12 +260,33 @@ export async function resolveWakeVerdict(
           // ⚠ MEMBERS OUTRANK AGENTS ON THIS DOOR TOO SINCE 2026-09-07 — see the field's note
           // on {@link WakeVerdictContext}.
           wakeCtx.reservedHandles ?? []
-        )
-      : null;
-  const namedAgentIds = toAgentId !== null ? [toAgentId] : bodyAgentIds;
+        );
+  const namedAgentIds = toAgentIds.length > 0 ? toAgentIds : bodyAgentIds;
 
   const addressed =
-    (namedAgentIds !== null && namedAgentIds.length > 0) || toUserId !== null;
+    (namedAgentIds !== null && namedAgentIds.length > 0) ||
+    wakeCtx.toUserIds.length > 0 ||
+    toUserId !== null;
+
+  /**
+   * **A RECORD — A POST FOR NOBODY, ON PURPOSE** (2026-09-18, Samuel: *"there
+   * are cases where maybe the agent … needs to post something to channel to have
+   * a record of it, but it's like really not meant for agents and it might not be
+   * meant for like users"*).
+   *
+   * ⚠ **IT IS `intent:"chat"`, THE FIELD THAT ALREADY MEANT THIS**, rather than a
+   * fourth `kind` and a second stored shape. `MessageIntentSchema`'s own contract
+   * is *"it STATES that this post is not work for anybody"*, `chat` + an address
+   * is already a 400 (`ChannelChatAddressedError`), and the row stays an ordinary
+   * `message` — same seq, same realtime, same transcript, no migration and no
+   * renderer arm. The MCP surface spells it `kind="record"`.
+   *
+   * ⚠ **WHAT IT ADDS IS THE ARMS.** Until now a `chat` post was still REPAIRED:
+   * the arms read only "nobody was addressed", which a record satisfies for a
+   * reason opposite to a forgotten `@`. Repairing one aims a wake at a post whose
+   * author said it was for nobody.
+   */
+  const isRecord = input.intent === "chat";
 
   /**
    * **THE AUTHOR TYPED A HANDLE AND THIS SERVER COULD NOT SAY WHOSE IT IS** —
@@ -243,9 +314,15 @@ export async function resolveWakeVerdict(
    * EQUIVALENT TODAY.** `bodyAgentIds` is also `null` when the parse never RAN
    * (`to=` won, or a non-`message` kind) — the same two nulls `recipientAgentIds`
    * is documented not to collapse.
+   *
+   * ⚠ **AN AGENT AUTHOR CAN NO LONGER REACH IT** (2026-09-18): its prose is not
+   * parsed at all, so `bodyAgentIds` is `[]` and never the `null` this reads. The
+   * term is kept whole because the fact it states — *the author typed a handle
+   * this server could not place* — is still true of a PERSON, and RR3 is a
+   * person's arm.
    */
   const namedButUnresolved =
-    isMessage && toAgentId === null && bodyAgentIds === null;
+    isMessage && toAgentIds.length === 0 && bodyAgentIds === null;
 
   // ── THE THREE RESILIENCE ARMS (B1) ──────────────────────────────────────
   // Reached only when the author addressed NOBODY. Each answers a member id, an
@@ -258,8 +335,15 @@ export async function resolveWakeVerdict(
         reason?: ResponderReason;
       }
     | null = null;
+  // ⚠ **A RECORD IS NOT REPAIRABLE, AND THAT IS THE THIRD SHORT-CIRCUIT BESIDE
+  // THE STRIPPED TAG.** Both are posts that LOOK unaddressed and are not missing
+  // an address: one was aimed at a thread it may not tag, the other was aimed at
+  // nobody deliberately. See {@link isRecord}.
   const repairable =
-    !addressed && isMessage && wakeCtx.threadTagStripped !== true;
+    !addressed &&
+    isMessage &&
+    !isRecord &&
+    wakeCtx.threadTagStripped !== true;
   if (repairable && threaded) {
     // RR1 — the thread's other party.
     const other = threadOtherParty(ctx, metadata);
@@ -330,21 +414,34 @@ export async function resolveWakeVerdict(
     }
   }
 
+  // ⚠ **PRECEDENCE IS UNCHANGED BY THE LIST — `agent` STILL OUTRANKS `member`,
+  // AND A MIXED SEND IS ONE WORD OVER TWO COLUMNS** (2026-09-18). The verdict
+  // answers *what this message DID*, and waking an agent is the loudest thing it
+  // can do; the members named alongside are not dropped, they ride
+  // `recipient_user_ids` exactly as a member-only send's would, and every
+  // machine routes on the COLUMNS rather than on the word.
   const verdict: ChannelWakeVerdict =
     namedAgentIds !== null && namedAgentIds.length > 0
       ? "agent"
-      : toUserId
+      : wakeCtx.toUserIds.length > 0 || toUserId
         ? "member"
         : (resilience?.verdict ??
-          (threaded && wakeCtx.threadTagStripped !== true ? "thread" : "none"));
+          (threaded && wakeCtx.threadTagStripped !== true && !isRecord
+            ? "thread"
+            : "none"));
 
   // ⚠ **A REPAIRED RECIPIENT IS STORED IN THE SAME TWO COLUMNS AS A WRITTEN
   // ONE.** The desktop executes `recipient_*` and reads `wake_verdict` to
   // EXPLAIN what it did; splitting repaired recipients into columns of their own
   // would mean two delivery paths, which `b-fanout-narrow` exists to collapse.
-  const recipientUserIds = toUserId
-    ? [toUserId]
-    : (resilience?.userIds ?? []);
+  // ⚠ **THE WHOLE LIST, NOT `metadata.to_user_id`.** That key is the first named
+  // member and exists for the consent index; this column is the address.
+  const recipientUserIds =
+    wakeCtx.toUserIds.length > 0
+      ? wakeCtx.toUserIds
+      : toUserId
+        ? [toUserId]
+        : (resilience?.userIds ?? []);
   const recipientAgentIds =
     namedAgentIds !== null && namedAgentIds.length > 0
       ? namedAgentIds
@@ -364,17 +461,21 @@ export async function resolveWakeVerdict(
     // silent miss G15 describes. Four terms narrow it:
     //   · `isMessage` — a lifecycle marker never asked the agent half, so its
     //     `null` says nothing about reach (2026-09-02).
-    //   · `toAgentId === null` — an UNRESOLVED `to=` never reaches here at all
-    //     (2026-09-02, B4: a 400 `CHANNEL_RECIPIENT_UNRESOLVED` listing the live
-    //     handles), and a resolvable one is a stronger reach that wins.
+    //   · `toAgentIds.length === 0` — an UNRESOLVED `to=` never reaches here at
+    //     all (2026-09-02, B4: a 400 `CHANNEL_RECIPIENT_UNRESOLVED` listing the
+    //     live handles), and a resolvable one is a stronger reach that wins.
     //   · `verdict !== "member"` — same: it reached somebody.
     //   · `resilience === null` — a repaired address means this message reached a
     //     real recipient, so `unreachable` would describe the one thing that did
     //     NOT happen.
+    // ⚠ **AN AGENT AUTHOR NEVER REACHES IT NOW, AND THAT IS CORRECT RATHER THAN
+    // A REGRESSION** (2026-09-18): its prose names nobody by construction, so
+    // there is no missed reach to report. The loud path for an agent that meant
+    // to address somebody is the `to=` resolver's own 400.
     delivery:
       isMessage &&
       bodyAgentIds === null &&
-      toAgentId === null &&
+      toAgentIds.length === 0 &&
       verdict !== "member" &&
       resilience === null
         ? "unreachable"

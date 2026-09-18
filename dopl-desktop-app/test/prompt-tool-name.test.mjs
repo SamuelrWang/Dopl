@@ -171,7 +171,7 @@ test("FIX F7: a responder that knows its thread is ordered to READ it before it 
   const out = framing.buildFencedTurn({ side: "responder", message: "x", nonce: "f7", context: ctx({ taskId: TASK }) });
   assert.match(out, /Your SECOND action is to read the exchange you are joining/, "stated as an order too");
   assert.ok(
-    out.includes(`with op "read", channel "${CH}", workspace "${WS}", thread "${TASK}"`),
+    out.includes(`with op "read", channel "${CH}", container "${WS}", thread "${TASK}"`),
     `the whole scoped call, ids and all:\n${out}`
   );
   assert.match(out, /filtered to this one thread/, "says the read is scoped, not the whole channel");

@@ -150,7 +150,15 @@ export function channelRow(over: Partial<ChannelRow> = {}): ChannelRow {
 export interface ResolveOpts {
   kind?: "message" | "task_progress";
   authorKind?: string;
+  /** ⚠ THE SINGULAR FORM IS THE FIXTURE'S CONVENIENCE, NOT THE CONTRACT
+   *  (2026-09-18). `WakeVerdictContext` takes `toAgentIds: string[]`; every case
+   *  written before the multi-recipient ruling names one agent, so this keeps
+   *  reading as it did and folds into a one-element list below. */
   toAgentId?: string | null;
+  toAgentIds?: string[];
+  toUserIds?: string[];
+  /** `"chat"` is the RECORD marker — the MCP surface's `kind="record"`. */
+  intent?: "chat" | "request";
   threadTagStripped?: boolean;
   clientMsgId?: string;
   channel?: Partial<ChannelRow>;
@@ -192,11 +200,14 @@ export function resolve(
       body,
       kind: opts.kind ?? "message",
       clientMsgId: opts.clientMsgId,
+      intent: opts.intent,
     } as Parameters<typeof resolveWakeVerdict>[2],
     metadata,
     {
       authorKind: opts.authorKind ?? "user",
-      toAgentId: opts.toAgentId ?? null,
+      toAgentIds:
+        opts.toAgentIds ?? (opts.toAgentId ? [opts.toAgentId] : []),
+      toUserIds: opts.toUserIds ?? [],
       threadTagStripped: opts.threadTagStripped,
       reservedHandles: opts.reservedHandles,
     },

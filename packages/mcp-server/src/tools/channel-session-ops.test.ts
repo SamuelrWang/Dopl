@@ -48,7 +48,7 @@ const NOTE_PHRASES = [
   // …the handle, and the limits on spending it (was SESSION_HANDLE_NOTE).
   // ⚠ RE-SPELLED 2026-09-15 — the address is the NAME tag, and the rename clause's
   // `reaches no server` was false and is gone. See `channel-ops-launch.test.ts`.
-  "that tag, in a body or in `to`, wakes THAT agent",
+  "that tag, in `to`, wakes THAT agent",
   "what people see and what agents tag it by",
   "wakes THAT agent",
   "Tagging is not addressing and starts no agent",

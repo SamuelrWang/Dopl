@@ -308,7 +308,7 @@ const turn = (over = {}) => framing.buildFencedTurn({
 test("a WOKEN requester (`scope: 'thread'`) IS ordered to read the thread it is joining", () => {
   const out = turn({ scope: "thread" });
   assert.match(out, /Your SECOND action is to read the exchange you are joining/);
-  assert.ok(out.includes(`with op "read", channel "${CH}", workspace "${WS}", thread "${TASK}"`), out);
+  assert.ok(out.includes(`with op "read", channel "${CH}", container "${WS}", thread "${TASK}"`), out);
   assert.equal(out.split('op "read"').length - 1, 1, "stated once");
 });
 

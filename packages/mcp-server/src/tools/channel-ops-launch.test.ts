@@ -226,13 +226,13 @@ describe("LAUNCHED — the id, and how to direct it", () => {
     // the own-agents exception, and the redirect route is stated on the second.
     expect(CHANNEL_DOCTRINE).toContain("THE LOOP BRAKE, AND IT IS ABSOLUTE");
     // ⚠ RE-SPELLED 2026-09-15 — the redirect route is the NAME tag now, and the bullet says so.
-    expect(CHANNEL_DOCTRINE).toContain("that tag, in a body or in `to`, wakes THAT agent");
+    expect(CHANNEL_DOCTRINE).toContain("that tag, in `to`, wakes THAT agent");
     // (1) ADDRESSED ONLY — tiers 2 and 3 stay shut to every agent-authored post.
     expect(CHANNEL_DOCTRINE).toContain(
       "an AGENT-authored UNADDRESSED message starts nobody",
     );
     // (2) OWN OPERATOR ONLY — the 2026-08-28 fence, which the carve did not move.
-    expect(CHANNEL_DOCTRINE).toContain("YOUR OWN AGENTS ARE THE ONE EXCEPTION, AND ONLY BY NAME");
+    expect(CHANNEL_DOCTRINE).toContain("YOUR OWN AGENTS ARE THE ONE EXCEPTION, AND ONLY IN `to`, BY NAME");
     expect(CHANNEL_DOCTRINE).toContain(
       "Never another member's agent, and never without naming one",
     );

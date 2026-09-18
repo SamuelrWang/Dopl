@@ -86,25 +86,44 @@ describe("THE LAW is stated, in full, in the doctrine", () => {
     );
   });
 
-  it("says a message is CHAT or REQUEST, and that chat addresses nobody", () => {
-    // ⚠ C12 (2026-09-02): `intent` is deleted, so chat is exactly "no `to`" —
-    // one field carries the whole of addressing and the two cannot contradict.
-    expect(CHANNEL_LAW).toContain("A MESSAGE IS CHAT OR REQUEST");
+  it("says every message is ADDRESSED or a RECORD, and that a bare send is refused", () => {
+    // ⚠ **RE-POINTED 2026-09-18 (Samuel's structural ruling).** It pinned "A MESSAGE IS CHAT OR
+    // REQUEST … No `to` is CHAT", which was C12's reading: chat was exactly "no `to`", so the
+    // absence of an address WAS a statement. Samuel's ruling replaces the absence with a CHOICE
+    // — *"I don't think there should ever be messages that have no @ unless it really is purely
+    // just posting … we should bake this into the structure"* — so the two states are named, and
+    // a send that is neither is refused rather than interpreted.
     expect(CHANNEL_LAW).toContain(
-      "No `to` is CHAT: people talking, addressing nobody and starting nobody",
+      "EVERY MESSAGE YOU SEND IS ADDRESSED OR IT IS A RECORD, AND THERE IS NO THIRD WAY",
     );
+    // ⚠ THE LIST IS PART OF THE RULE, not a detail of `to`: *"agents might need to respond to
+    // multiple agents … and it could be multiple people on the channel."*
+    expect(CHANNEL_LAW).toContain(
+      "`to` addresses — ONE name or SEVERAL, comma-separated, agents and people mixed",
+    );
+    expect(CHANNEL_LAW).toContain(
+      'kind="record" files a post for NOBODY: visible in the room, reaching no agent and no inbox',
+    );
+    // ⚠ THE REFUSAL IS THE STRUCTURE. Without it the two states are advice.
+    expect(CHANNEL_LAW).toContain("A send with neither is REFUSED");
   });
 
   it("keeps THE LOOP BRAKE absolute — agents do not wake each other by talking", () => {
     // ⚠ WHERE THE BRAKE IS NOW (2026-09-02, B8 × B9): the tier gate this named,
     // `session-wake-tiers.js › wakeEligibility`, is DELETED with triage. It is
-    // decided server-side at write time — `service-wake-verdict.ts` resolves an
-    // unaddressed AGENT-authored post through RR2 alone, never RR3's responder
-    // arm — and `targeting.js › classify` keeps the same refusal desktop-side.
+    // decided server-side at write time and `targeting.js › classify` keeps the
+    // same refusal desktop-side.
     // Pinned ABSOLUTE: the unaddressed half has no bound and takes no qualifier.
+    //
+    // ⚠ **AND SINCE 2026-09-18 IT BRAKES THE FEED, NOT ONLY THE WAKE.** The old sentence was
+    // true and incomplete: an unaddressed agent post started nobody, and then RR2 repaired its
+    // address to the operator and every one of that operator's main-room sessions was FED it —
+    // *"they just end up saying, oh this was not addressed for me"*, one full model turn each.
+    // `main/session-dispatch.js › CONTEXT_MEMBER_VERDICTS` is where that half is enforced, and
+    // "AND IS SHOWN TO NOBODY" is the clause that may not be dropped for brevity.
     expect(CHANNEL_LAW).toContain("THE LOOP BRAKE, AND IT IS ABSOLUTE");
     expect(CHANNEL_LAW).toContain(
-      "an AGENT-authored UNADDRESSED message starts nobody, in a room of two or of ten",
+      "an AGENT-authored UNADDRESSED message starts nobody AND IS SHOWN TO NOBODY, in a room of two or of ten",
     );
     expect(CHANNEL_LAW).toContain(
       "Agents do not wake each other by talking, and every post you make is agent-authored",
@@ -124,11 +143,18 @@ describe("THE LAW is stated, in full, in the doctrine", () => {
     // this carve did not touch. An exception stated without its boundary reads
     // as the brake being negotiable.
     expect(CHANNEL_LAW).toContain(
-      "YOUR OWN AGENTS ARE THE ONE EXCEPTION, AND ONLY BY NAME",
+      "YOUR OWN AGENTS ARE THE ONE EXCEPTION, AND ONLY IN `to`, BY NAME",
     );
-    // ⚠ RE-SPELLED 2026-09-15 (Samuel): the address is the NAME tag; the id form is what the
-    // bullet reserves for two ACTIVE agents sharing a name, and it still names both.
-    expect(CHANNEL_LAW).toContain("that tag, in a body or in `to`, wakes THAT agent");
+    // ⚠ RE-SPELLED 2026-09-15 (Samuel): the address is the NAME tag.
+    // ⚠ **AND RE-SPELLED AGAIN 2026-09-18 — "in a body or in `to`" IS NOW FALSE FOR AN AGENT
+    // AUTHOR**, and a doctrine that still taught it would teach the defect: a report saying
+    // *"handed off to @<agent>"* woke that agent off the sentence describing the handoff. The
+    // prose door is a PERSON's; `to` is the agent address, and it takes a list.
+    expect(CHANNEL_LAW).toContain("that tag, in `to`, wakes THAT agent");
+    expect(CHANNEL_LAW).toContain("`to` takes as many of them as the work needs");
+    expect(CHANNEL_LAW).toContain(
+      "AN AGENT HANDLE IN YOUR BODY IS PROSE AND REACHES NOBODY",
+    );
     expect(CHANNEL_LAW).toContain("NEVER WRITE AN AGENT ID IN A MESSAGE");
     expect(CHANNEL_LAW).toContain(
       "Never another member's agent, and never without naming one",

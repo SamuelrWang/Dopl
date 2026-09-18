@@ -188,7 +188,12 @@ async function post(
       clientMsgId: over.clientMsgId,
     } as Parameters<typeof resolveWakeVerdict>[2],
     { ...(threaded ? { taskId: THREAD } : {}), ...over.metadata },
-    { authorKind: over.authorKind ?? "user", toAgentId: over.toAgentId ?? null },
+    {
+      authorKind: over.authorKind ?? "user",
+      // ⚠ A LIST SINCE 2026-09-18 — the fixture still names at most one.
+      toAgentIds: over.toAgentId ? [over.toAgentId] : [],
+      toUserIds: [],
+    },
     NOW
   );
   const desktop = machine(live);

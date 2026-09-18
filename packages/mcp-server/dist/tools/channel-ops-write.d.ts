@@ -54,6 +54,58 @@ export declare function milestoneRefusal(body: string): ToolResponse | null;
  * refusal says which lane the extra prose belongs in.
  */
 export declare const DECISION_CONTEXT_MAX_CHARS = 2000;
+/**
+ * **HOW MANY RECIPIENTS ONE `to=` MAY NAME.** ⚠ HAND-MIRRORED from
+ * `src/features/channels/constants.ts › CHANNEL_SEND_MAX_RECIPIENTS` — there is
+ * no shared source tree between the app and this package, the same arrangement
+ * `channel-addressing.ts › GROUP_CHANNEL_MIN_MEMBERS` lives under. The server
+ * refuses over-cap too; this copy exists so the refusal is a SENTENCE naming the
+ * bound rather than an opaque 400 the caller has to interpret.
+ */
+export declare const SEND_MAX_RECIPIENTS = 10;
+/**
+ * **A SEND ADDRESSES SOMEBODY OR IT IS A RECORD, AND THERE IS NO THIRD WAY**
+ * (2026-09-18, Samuel's ruling: *"agents posting in a channel should always be
+ * adding to or addressing another agent, or addressing someone … I don't think
+ * there should ever be messages that have no @ unless it really is purely just
+ * posting … we should bake this into the structure"*).
+ *
+ * ⚠ **IT IS A REFUSAL AND NOT A DEFAULT, WHICH IS THE WHOLE RULING.** Treating an
+ * unaddressed send as a record silently would be the same shape as the behaviour
+ * being removed — the server GUESSING at an address the author did not write —
+ * only quieter. A caller that meant a record says so in one argument; a caller
+ * that forgot a recipient finds out on the call rather than by nobody answering.
+ *
+ * ⚠ **THREE CARVE-OUTS, AND EACH IS AN ADDRESS ALREADY.**
+ *   · a THREAD send — a thread has exactly two parties, so a reply with no `to`
+ *     is addressed to the other one by the thread's own structure (the server
+ *     resolves it; INVARIANTS §5, RR1). This is what keeps two agents working a
+ *     thread unchanged.
+ *   · `kind="record"` — the second state, by name.
+ *   · `kind="milestone"` and `kind="decision"` — routed before this runs, and
+ *     both are structurally for nobody or for a person reading a card.
+ *
+ * ⚠ **THE REFUSAL NAMES THE TWO CHOICES AND NOTHING ELSE.** A caller with a body
+ * in hand needs the next call, not the reasoning; the reasoning is one
+ * `op="rooms" action="help"` away and is stated in the LAW.
+ */
+export declare function unaddressedRefusal(hasTo: boolean, hasThread: boolean): ToolResponse | null;
+/**
+ * **A RECORD IS FOR NOBODY, SO IT MAY NOT CARRY AN ADDRESS.**
+ *
+ * ⚠ The server refuses the same contradiction (`ChannelChatAddressedError`, a
+ * 400 the write ops would narrate as a membership problem), so this is here for
+ * the sentence rather than for the fence: the two fields say opposite things and
+ * picking either would be a guess about who a message is for.
+ */
+export declare function recordAddressedRefusal(hasTo: boolean): ToolResponse | null;
+/**
+ * **THE RECIPIENT-COUNT BOUND, CHECKED BEFORE THE WIRE.** ⚠ The server's own
+ * refusal answers on `CHANNEL_RECIPIENT_UNRESOLVED`, whose narration is about a
+ * NAME that matched nobody — right for a typo and wrong for a list that is
+ * simply too long, which is why the bound is said here in its own words.
+ */
+export declare function tooManyRecipientsRefusal(to: string | undefined): ToolResponse | null;
 export declare function decisionRefusal(body: string): ToolResponse | null;
 /** Options accepted by opPost — the per-post flags routed from the registrar. */
 interface PostOptions {
@@ -67,10 +119,19 @@ interface PostOptions {
     metadata?: Record<string, unknown>;
     clientMsgId?: string;
     /**
-     * The ONE recipient, in either namespace — a member (email or user id) or an
-     * agent (`@agent-<id>` / `@<handle>`). ⚠ Sent AS GIVEN; the server resolves it.
+     * The recipients, in either namespace — members (email or user id) and agents
+     * (`@agent-<id>` / `@<handle>`), one or several comma-separated.
+     * ⚠ Sent AS GIVEN; the server splits and resolves it (2026-09-18).
      */
     to?: string;
+    /**
+     * `"chat"` — THE RECORD MARKER, set only by `op="send" with kind="record"`.
+     *
+     * ⚠ IT IS THE ROUTE'S EXISTING FIELD, not a new one: `intent:"chat"` already
+     * meant *"this post is not work for anybody"*, and since 2026-09-18 it also
+     * stops the server REPAIRING the address of a post that deliberately has none.
+     */
+    intent?: ChannelMessageInput["intent"];
     /** One-line intent for the receiver's notification. */
     summary?: string;
     /** A thread id — threads this post under that thread's card (server-validated). */

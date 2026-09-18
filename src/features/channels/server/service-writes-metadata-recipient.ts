@@ -1,6 +1,7 @@
 import "server-only";
 import { meetsMinRole } from "@/features/workspaces/types";
 import { isUuid } from "@/shared/lib/id/uuid";
+import { CHANNEL_SEND_MAX_RECIPIENTS } from "../constants";
 import {
   agentIdHandle,
   buildAgentMentionIndex,
@@ -14,8 +15,9 @@ import * as repoSessions from "./repository-sessions";
 import type { ChannelContext } from "./service-shared";
 
 /**
- * **`to=` IS ONE RECIPIENT AND TWO NAMESPACES** (2026-09-02, v2 wave B slice B4
- * — Samuel's ruling B1).
+ * **`to=` IS ONE OR MORE RECIPIENTS ACROSS TWO NAMESPACES** (2026-09-02, v2 wave
+ * B slice B4 — Samuel's ruling B1; widened to a LIST on 2026-09-18 by his
+ * multi-recipient ruling).
  *
  * ⚠ **THIS WIDENS A FENCE, WHICH IS THE OPPOSITE OF WHAT MOST OF THIS FAMILY
  * DOES, SO READ WHY.** Until now `to` was `z.string().uuid()` and an agent in it
@@ -125,6 +127,66 @@ export async function liveAgentHandles(
   const handles = [...new Set(candidates.map((c) => agentIdHandle(c.agentId)))];
   handles.sort();
   return { handles, index };
+}
+
+/**
+ * **`to=` NAMES ONE OR MORE RECIPIENTS, COMMA-SEPARATED** (2026-09-18, Samuel's
+ * multi-recipient ruling).
+ *
+ * ⚠ **THE LIST LIVES INSIDE THE EXISTING STRING FIELD, AND THAT IS THE WHOLE OF
+ * THE WIRE CHANGE.** A `string | string[]` union publishes as `anyOf` on every
+ * MCP schema that carries the field, and a single-string `to` had to keep
+ * working byte-for-byte on every installed caller; one separator no address in
+ * either namespace can contain (a uuid, an email local/domain part and an agent
+ * handle are all comma-free) costs nothing on the wire and nothing in the
+ * published schema.
+ *
+ * ⚠ **EVERY TOKEN IS RESOLVED BY {@link resolveToRecipient}** — one resolver,
+ * one refusal, so a list of one behaves exactly as `to` always did and a list
+ * where ONE token misses is refused whole rather than partly delivered.
+ *
+ * ⚠ **ORDER IS PRESERVED AND DUPLICATES COLLAPSE.** The order is what the read's
+ * `→` arrow prints, and naming the same agent twice is one address, not two
+ * wakes.
+ */
+export interface ResolvedRecipients {
+  memberUserIds: string[];
+  agentIds: string[];
+}
+
+export async function resolveToRecipients(
+  ctx: ChannelContext,
+  channel: ChannelRow,
+  to: string
+): Promise<ResolvedRecipients> {
+  const tokens = to
+    .split(",")
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0);
+  // ⚠ A `to` that trims to nothing is the caller's mistake, not "no recipient":
+  // answering `{[], []}` here would post it as an unaddressed message.
+  if (tokens.length === 0) throw await unresolved(ctx, channel, to);
+  if (tokens.length > CHANNEL_SEND_MAX_RECIPIENTS) {
+    throw new ChannelRecipientUnresolvedError(
+      `${tokens.length} recipients`,
+      [],
+      [],
+      `A send addresses at most ${CHANNEL_SEND_MAX_RECIPIENTS} recipients.`
+    );
+  }
+  const memberUserIds: string[] = [];
+  const agentIds: string[] = [];
+  for (const token of tokens) {
+    const recipient = await resolveToRecipient(ctx, channel, token);
+    if (recipient.kind === "member") {
+      if (!memberUserIds.includes(recipient.userId)) {
+        memberUserIds.push(recipient.userId);
+      }
+    } else if (!agentIds.includes(recipient.agentId)) {
+      agentIds.push(recipient.agentId);
+    }
+  }
+  return { memberUserIds, agentIds };
 }
 
 /**
