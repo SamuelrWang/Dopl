@@ -22,15 +22,12 @@ import {
   AlignLeft,
   Calendar,
   CircleDot,
-  ListFilter,
   Type,
-  UserPlus,
   UserRound,
 } from "lucide-react";
 import { Avatar } from "@/shared/ui/avatar";
 import { formatShortDate } from "@/shared/lib/format-time";
 import {
-  IconButton,
   MetaRow,
   MetaRowDivider,
   PanelHeading,
@@ -245,15 +242,27 @@ export function InfoTab({
         metricLabel="Messages"
       />
 
+      {/* ⚠ **TWO INERT `IconButton`s — "Add member" and "Filter members" — STOOD IN
+          THIS HEADING AND ARE DELETED (Samuel's ruling R-46, 2026-09-17).** Neither
+          carried an `onClick`: they were markup from the design mock that the port
+          transcribed, and Samuel deliberately did NOT copy them to /home on
+          2026-08-25 — *"a port is not a transcription."* A control that does
+          nothing is a dead control (INVARIANTS §5), and this heading now reads the
+          way /home's already did: the count, and nothing else
+          (`pages/home/person-members.tsx`).
+          ⚠ **F-720 — "Add member" → the invite dialog is a FOLLOW-UP, not a
+          regression.** R-46's option (b) was to wire it to the dialog the Settings
+          tab already opens (`invite-dialog.tsx › InviteDialog`, mounted by
+          `channel-manage.tsx`) and delete
+          only the filter; Samuel took (a) with (b) as a later ticket. The act is
+          not lost meanwhile — **Add members** is on the Settings tab, capability-
+          gated (`settings-tab.tsx`, `memberManagement`). Re-adding it here is a
+          wiring job with a home already built, which is exactly why it did not need
+          to stay as a stub. */}
       <PanelHeading
         title="Members"
         trailing={
-          <>
-            <span className="text-caption text-text-muted">{members.length}</span>
-            <span className="flex-1" />
-            <IconButton icon={UserPlus} label="Add member" size={14} className="h-6 w-6" />
-            <IconButton icon={ListFilter} label="Filter members" size={14} className="h-6 w-6" />
-          </>
+          <span className="text-caption text-text-muted">{members.length}</span>
         }
       />
       {/* ⚠ THE ROSTER IS `member-roster.tsx` SINCE 2026-08-25 — the same component

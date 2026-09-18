@@ -9950,3 +9950,13 @@ The claim had been restated in five places from one sentence, which is how it su
 - ⚠ **THIS IS NOT AN ARGUMENT AGAINST R-18.** The ruling is explicit and the lane was unreachable product for two weeks. What is recorded here is the SHAPE the deletion leaves behind: a write whose UI copy promises more than the read side delivers. The fix is a copy or product decision, not a restoration — either the sharing control says what it actually does now (agent reach), or Samuel asks for a channel-side face again, which means writing the four fences from scratch (INVARIANTS §4A states them).
 - ⚠ **AND THE GUEST CASE IS THE SHARP END.** A guest has no workspace surface at all, so for them a granted base is now unreachable by any door. That was the exact argument F-666 made for keeping the lane, and R-18 overrode it — deliberately, and with the consequence stated.
 - Status: OPEN. Needs Samuel's word on which half moves: the sharing control's copy, or a new channel-side read.
+
+### F-720 — "Add member" on the channel Info tab is a follow-up R-46 deliberately did not do (2026-09-17)
+
+- Location: `src/features/channels/components/info-tab.tsx` — the Members `PanelHeading`, which now carries the count and nothing else; the dialog it would open is `channels/components/invite-dialog.tsx › InviteDialog`, already mounted by `channel-manage.tsx` for the Settings tab's row.
+- ⚠ **Id note:** re-derived across every live branch on 2026-09-17; `F-719` was the highest, claimed by this same wave.
+- Found during: wave 1B, executing Samuel's ruling **R-46** (delete the two inert `IconButton`s in the workspace Members heading).
+- **WHAT THE RULING CHOSE.** R-46 offered (a) delete both, (b) wire "Add member" to the existing invite dialog and delete only the filter, (c) leave. Samuel took **(a)**, with (b) recorded as a follow-up ticket. This is that ticket.
+- ⚠ **NOTHING IS LOST IN THE MEANTIME, WHICH IS WHY (a) WAS SAFE.** **Add members** is on the Settings tab (`settings-tab.tsx`), capability-gated on `memberManagement` so /home's link container — where the act cannot happen at all (§4A `LINK_CONTAINER_CLOSED`) — does not offer it. The Info-tab button was a second opener for an act that already has one, and it had no `onClick` at all.
+- ⚠ **"Filter members" is NOT part of this.** It was deleted outright and no ticket follows it: the roster is bounded and short, and R-46's (b) named only the add affordance.
+- Status: OPEN, small. Wire the heading's affordance to `channels/components/invite-dialog.tsx › InviteDialog` behind the same `memberManagement` capability the Settings row uses, or decide the Settings row is the one place and close this.
