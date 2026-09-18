@@ -105,7 +105,16 @@ const TAB_WIDTH = `${TAB_MAX} shrink-0`;
  */
 const TAB_BASE =
   "group relative flex h-[34px] items-center gap-1.5 rounded-[8px] px-2 transition-colors";
-const TAB_ACTIVE = "text-text-primary";
+/**
+ * ⚠ **`cursor-default` IS NOW SPELLED OUT, AND IT IS THE 2026-09-15 RULING SURVIVING A GLOBAL
+ * ONE.** *"The ACTIVE TAB TAKES NEITHER THE FILL NOR THE CURSOR"* used to hold by SILENCE — a
+ * `<button>` had no hand unless a component asked for one. Since 2026-09-18 the base layer gives
+ * every `button` / `[role="tab"]` a pointer (`globals.css › ANYTHING CLICKABLE SHOWS THE HAND`),
+ * so an active tab would have started promising a state change it will not make. The utility
+ * outranks that rule by layer, which is exactly the opt-out the global rule is built to allow.
+ * Pinned by `agent-window-chrome.test.tsx` (the active tab carries no `cursor-pointer`).
+ */
+const TAB_ACTIVE = "cursor-default text-text-primary";
 /**
  * 🔒 **AN INACTIVE TAB LIGHTS UP GRAY UNDER THE POINTER** (Samuel, 2026-09-15: *"On the tabs when I
  * hover over a different tab, it should highlight gray or something so I know that I can click on

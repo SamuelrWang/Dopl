@@ -48,6 +48,10 @@ export function KanbanCard({
       onMouseMove={(e) => setHoverPos({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => setHoverPos(null)}
       onClick={() => onSelect(objectId)}
+      /* ⚠ Read by the base layer's one clickable-cursor rule (`globals.css › ANYTHING
+         CLICKABLE SHOWS THE HAND`) — this is the whole card's hand cursor, not a style
+         hook. No `role="button"`: the card holds buttons of its own. */
+      data-clickable=""
       data-selected={selected ? "true" : undefined}
       {...pendingRow(
         pending,

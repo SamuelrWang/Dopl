@@ -29,6 +29,22 @@ Exempt: marketing pages and auth + onboarding (their own glass/3D
 kit). The F-022 legacy Button/Dialog primitives are retired (deleted
 2026-07-17). Every new page starts on this system.
 
+🔒 **ANYTHING CLICKABLE SHOWS THE HAND — DO NOT ADD `cursor-pointer` TO A NEW
+CONTROL (Samuel, 2026-09-18).** One `@layer base` rule in both stylesheets gives
+`button`, `a[href]`, `summary`, `select`, the clickable ARIA roles
+(`button`/`link`/`tab`/`menuitem*`/`option`/`treeitem`/`switch`/`checkbox`/`radio`),
+the clickable `input` types and `[data-clickable]` a pointer, and gives `:disabled`
+/ `[aria-disabled="true"]` / `[data-disabled]` `not-allowed`. It is all `:where()`
+in the weakest layer, so **an explicit cursor still wins** — that is how
+`cursor-text`, `cursor-col-resize`, `cursor-ns-resize`, `cursor-grabbing` and every
+`disabled:cursor-*` keep their decisions, and how `agent-window-chrome.tsx ›
+TAB_ACTIVE` opts the active tab back out. A clickable that is neither a control nor
+a role (a card, a header row) takes `data-clickable=""`, never a `role="button"`
+that would nest buttons — and so does a `<label for>` on a CHECKBOX or RADIO, which
+is why `label[for]` is not in the list (every `htmlFor` here points at a text field,
+where a click is a focus, not a press). Full rule: INVARIANTS §15; pinned by
+`src/shared/ui/clickable-cursor.test.ts`, which also fails a new bare `onClick`.
+
 ## Type scale
 
 Semantic `text-*` utilities (Tailwind, from `@theme`). Pick by role, not px:
