@@ -2,26 +2,18 @@
  * ONTOLOGY → REVISIONS — the CAPTURE COUNT, the actor, the cluster roll-up and
  * the per-field restore (2026-09-09, the CHANGELOG lane part 2).
  *
- * ⚠ **THE CLAIM IS A COUNT, AND THAT IS THE ONLY THING THAT CATCHES EITHER
- * FAILURE.** A path that records TWICE shows one save as two versions of one
+ * The claim is a COUNT, and that is the only thing that catches either
+ * failure: a path that records TWICE shows one save as two versions of one
  * field; a path that records NONE changes a graph with nothing to say it did.
  * Both are silent in every other suite.
  *
- * ⚠ **THE PRIMITIVE RUNS FOR REAL — only `revisions/server/repository.ts` is
- * stubbed.** So `recordRevision`'s actor derivation, its coalescing decision and
- * `restoreRevision`'s refusal are all under test here rather than mocked out
- * from under it. `appendRevision`'s ARGUMENTS are the assertion surface.
+ * The primitive runs for real — only `revisions/server/repository.ts` is
+ * stubbed — so `recordRevision`'s actor derivation, its coalescing decision and
+ * `restoreRevision`'s refusal are under test rather than mocked out from under
+ * it. `appendRevision`'s ARGUMENTS are the assertion surface.
  *
- * ⚠ MUTATION-VERIFIED — FOUR reverts, four failures (the READ half's two are in
- * `./service-revisions-read.test.ts`):
- *   1. `changedFields` returning every key instead of the moved ones (one row
- *      per changed field → one per field).
- *   2. `changedFields` skipping a key present on one side only (an added or
- *      removed attribute records nothing).
- *   3. letting ontology rows into `COALESCING_RESOURCE_TYPES` (two fields of one
- *      save collapse into one row).
- *   4. `deriveActor` stamping `agentSessionId` for a user (the MCP-write
- *      attribution assertion passes for a person too).
+ * Mutation-verified — four reverts, four failures (the READ half's two are in
+ * `./service-revisions-read.test.ts`).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -29,7 +21,7 @@ import type { OntologyClusterRow, OntologyObjectRow } from "./dto";
 import { ontologyContextFactory } from "./test-fixtures";
 import type { Revision } from "@/features/revisions/types";
 
-// ⚠ THE PRIMITIVE'S REPOSITORY, AND NOTHING ABOVE IT.
+// The primitive's repository, and nothing above it.
 vi.mock("@/features/revisions/server/repository", () => ({
   appendRevision: vi.fn(async (args: Record<string, unknown>) => ({
     id: "rev-new",
@@ -209,7 +201,7 @@ describe("capture — one row per CHANGED field", () => {
     await updateObject(ctxOf(), OBJECT_ID, { name: "Acme Corp" });
     expect(append).toHaveBeenCalledTimes(2);
     expect(rows().map((r) => [r.op, r.payload.field])).toEqual([
-      // ⚠ `rename` for `name`, `edit` for everything else — the primitive's own
+      // `rename` for `name`, `edit` for everything else — the primitive's own
       // vocabulary, so the renderer needs no ontology arm to label it.
       ["edit", "attribute:stage"],
       ["rename", "name"],
@@ -259,7 +251,7 @@ describe("capture — one row per CHANGED field", () => {
         { label: "works at", targetIds: ["33333333-3333-4333-8333-333333333333"] },
       ],
     });
-    // ⚠ `edit`, NOT a new `link` word — the migration's `op` CHECK is unchanged.
+    // `edit`, NOT a new `link` word — the migration's `op` CHECK is unchanged.
     expect(rows()[0].op).toBe("edit");
   });
 
@@ -323,7 +315,7 @@ describe("the actor", () => {
     } as Revision);
     mockRepo.updateObject.mockResolvedValue(objectRow({ subtitle: "A customer" }));
     await updateObject(ctxOf(), OBJECT_ID, { subtitle: "A customer" });
-    // ⚠ A NEW ROW, never the open one rewritten: coalescing would replace one
+    // A new row, never the open one rewritten: coalescing would replace one
     // FIELD's history with another's (F-686 point 3).
     expect(append).toHaveBeenCalledTimes(1);
     expect(replace).not.toHaveBeenCalled();

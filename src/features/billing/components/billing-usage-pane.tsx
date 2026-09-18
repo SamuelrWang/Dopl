@@ -8,30 +8,20 @@ import type { WalletKind } from "../credits";
 import { useWorkspaceEntitlements } from "./use-workspace-entitlements";
 
 /**
- * USAGE half of `/billing/[segment]`. Pure READ of the one billing-status
+ * Usage half of `/billing/[segment]`. Pure read of the one billing-status
  * payload (`useWorkspaceEntitlements`) — no second endpoint, no write, no
  * Stripe; legible to every member, unlike the admin-gated Billing tab.
  *
- * Order = order things run out: Credits (only meter every plan has),
- * ontology objects (capped only on multi-member free; paid says "Unlimited"
- * rather than an empty track), then members/seats and chat window as lines.
+ * Order = order things run out: credits, ontology objects (capped only on
+ * multi-member free), then members/seats and chat window as lines.
  *
- * ⚠ THE CREDIT METER IS THE READER'S OWN, NOT THE WORKSPACE'S (2026-09-07).
- * `/api/billing/status` answers with the caller's seat here, or their personal
- * home-space wallet, and `credits.wallet` says which — so the label names the
- * payer instead of implying a pool that does not exist.
- *
- * ⚠ MINIMAL COPY (INVARIANTS §5): label + control. The two-sentence explainer
- * that used to sit under "Usage this period" is DELETED — a meter that prints
- * `used / limit` and a reset date does not need a paragraph telling the reader
- * what a meter is.
- *
- * ⚠ **A PERSONAL CONTAINER HAS NO ROSTER AND NO SEATS (2026-09-08).** It is one
- * person's home space with exactly one member by construction, so the Members
+ * 2026-09-07: the credit meter is the reader's own, not the workspace's —
+ * `credits.wallet` says which, so the label names the payer instead of implying
+ * a pool that does not exist.
+ * Minimal copy (INVARIANTS §5): label + control, no explainer paragraph.
+ * 2026-09-08: a personal container has no roster and no seats, so the Members
  * line and every "billable seat" phrase are dropped there rather than printed
- * as `1` — a count that can only ever be 1 is a fact about the schema, not
- * about the reader's plan. The section is titled for the container it is
- * describing for the same reason.
+ * as a `1` that can only ever be 1.
  */
 export function BillingUsagePane({ workspaceId }: { workspaceId: string }) {
   const ent = useWorkspaceEntitlements(workspaceId);
@@ -56,9 +46,9 @@ export function BillingUsagePane({ workspaceId }: { workspaceId: string }) {
           over={creditsExhausted}
           overNote="Tool calls are paused until the next period."
         />
-        {/* The period bounds are blank on the degraded fallback status (see
-            `use-workspace-entitlements.ts › DEFAULT_STATUS`), and a date we
-            never measured must not be invented here. */}
+        {/* Period bounds are blank on the degraded fallback status
+            (`use-workspace-entitlements.ts › DEFAULT_STATUS`); a date we never
+            measured must not be invented here. */}
         {ent.credits.periodEnd && (
           <p className="mt-1.5 text-micro text-text-secondary">
             Resets {formatDate(ent.credits.periodEnd)}

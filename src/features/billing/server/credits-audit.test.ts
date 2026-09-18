@@ -1,31 +1,14 @@
 /**
- * INVARIANT SUITE — **THE RECONCILIATION GUARD** (`credits-audit.ts`).
+ * Invariant suite — the reconciliation guard (`credits-audit.ts`). F-693
+ * (2026-09-13): the histogram must equal the wallet. The migration makes the two
+ * agree by construction for new rows; this module measures the older ones and
+ * anything a hand backfill leaves behind. Repository mocked.
  *
- * 🔒 **SAMUEL'S RULING, 2026-09-13: THE HISTOGRAM MUST EQUAL THE WALLET, ALWAYS**
- * (*"there's a disconnect between the two charts. we need to nail this down"*;
- * F-693). `20261004120000_credit_consume_with_ledger.sql` makes the two AGREE by
- * construction for every row written after it. This module is the other half of
- * "always" — the measurement that says so, for the rows written before it and for
- * anything a hand backfill does afterwards.
- *
- * What is pinned:
- *   1. **BOTH SIDES ARE READ ON THE SAME KEY.** Personal: the payer's own counter
- *      against the payer's own `wallet='personal'` ledger sum. Seat: the payer's
- *      seat counters SUMMED across workspaces, against the `wallet='seat'` sum —
- *      because the ledger row records the ADDRESSED container, so a per-workspace
- *      narrowing would drop cross-container seat burns and report them as drift.
- *   2. **THE SIGN IS MEANINGFUL AND BOTH DIRECTIONS ARE REPORTED.** Positive = the
- *      ledger is missing rows (the old fire-and-forget writer's failure mode, and
- *      the shape of the incident). Negative = ledger rows no counter carries.
- *   3. **`ledgerDriftFor` DEGRADES TO 0 WITH A WARN, NEVER THROWS.** The migration
- *      ships unapplied, so `credit_ledger_sum` does not exist between deploy and
- *      apply; a 500 on the billing surface over a diagnostic is the wrong trade.
- *   4. **NOTHING IS CORRECTED.** No write, no counter touched — reconciliation is
- *      a person's SQL, and a service that rewrote either side would destroy the
- *      evidence that they differed.
- *
- * ⚠ The repository is mocked; the arithmetic and the degrade are the code under
- * test.
+ * Pinned: both sides read on the same `(payer, wallet, period)` key (never narrowed
+ * by workspace, since the ledger row records the ADDRESSED container); drift is
+ * signed and both directions are reported; `ledgerDriftFor` degrades to 0 with a
+ * warn rather than throwing; nothing is corrected — a service that rewrote either
+ * side would destroy the evidence that they differed.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -69,9 +52,8 @@ describe("walletMatchesLedger — the PERSONAL wallet", () => {
   });
 
   /**
-   * 🔒 **THE INCIDENT, AS A CASE.** Samuel's counter read 8 over FIVE ledger rows
-   * because three inserts answered `42703` after the counter had already moved and
-   * were `console.warn`ed. This is the number the guard has to be able to say.
+   * The incident as a case: a counter read 8 over five ledger rows because three
+   * inserts answered `42703` after the counter had moved and were only warned about.
    */
   it("🔒 reports the incident's shape: counter 8, ledger 5, drift +3", async () => {
     mockWallets.getUserCreditsUsed.mockResolvedValue(8);
@@ -99,20 +81,17 @@ describe("walletMatchesLedger — the PERSONAL wallet", () => {
       "personal",
       PERIOD
     );
-    // ⚠ THE REVERT DETECTOR FOR THE WRONG COUNTER: a version that read the seat
-    // total for a personal wallet agrees with an empty ledger and disagrees with
-    // everything else.
+    // Revert detector: a version reading the seat total for a personal wallet
+    // agrees with an empty ledger and disagrees with everything else.
     expect(mockWallets.sumMemberCreditsUsed).not.toHaveBeenCalled();
   });
 });
 
 describe("walletMatchesLedger — the SEAT wallet", () => {
   /**
-   * 🔒 **CROSS-WORKSPACE ON BOTH SIDES, AND IT IS NOT A POOL.** The ledger row
-   * carries the ADDRESSED container, never the charged one, so the only key both
-   * records share is `(payer, wallet, period)`. Narrowing the ledger by workspace
-   * would drop every cross-container seat burn — rule B's arm 2 — and report the
-   * difference as drift.
+   * Cross-workspace on both sides, and not a pool: the ledger row carries the
+   * ADDRESSED container, so the only key both records share is
+   * `(payer, wallet, period)`.
    */
   it("sums the payer's seats and compares against the seat ledger", async () => {
     mockWallets.sumMemberCreditsUsed.mockResolvedValue(12);
@@ -132,9 +111,9 @@ describe("walletMatchesLedger — the SEAT wallet", () => {
   });
 
   it("🔒 never narrows either side by a workspace id", async () => {
-    // ⚠ THE REVERT DETECTOR. `getMemberCreditsUsed(workspaceId, …)` is the METER's
-    // read and is the obvious wrong fix here: one workspace's counter against a
-    // cross-workspace ledger sum flags every person holding two seats.
+    // Revert detector: `getMemberCreditsUsed(workspaceId, …)` is the meter's read,
+    // and one workspace's counter against a cross-workspace ledger sum flags every
+    // person holding two seats.
     await walletMatchesLedger(PAYER, "seat", PERIOD);
     for (const call of [
       ...mockWallets.sumMemberCreditsUsed.mock.calls,
@@ -154,9 +133,8 @@ describe("ledgerDriftFor — what the status payload publishes", () => {
       PERIOD
     );
     expect(drift).toBe(2);
-    // ⚠ THE PERIOD IS THE METER'S, NOT THE CLOCK'S: a wallet on a Stripe anchor
-    // does not roll on the 1st, and reconciling a different window would report
-    // two different months as drift.
+    // The period is the meter's, not the clock's: a wallet on a Stripe anchor does
+    // not roll on the 1st, and a different window reads as drift.
     expect(mockWallets.sumCreditLedger).toHaveBeenCalledWith(
       PAYER,
       "personal",
@@ -180,10 +158,9 @@ describe("ledgerDriftFor — what the status payload publishes", () => {
   });
 
   /**
-   * 🔒 **THE MIGRATION LAG IS THE WHOLE REASON THIS DEGRADES.**
-   * `credit_ledger_sum` ships as an UNAPPLIED migration, so between deploy and
-   * apply the function does not exist. A throw here 500s `GET /api/billing/status`
-   * — the single billing read every surface makes — over a diagnostic figure.
+   * Migration lag is why this degrades: `credit_ledger_sum` ships unapplied, so
+   * between deploy and apply a throw here would 500 `GET /api/billing/status` over
+   * a diagnostic figure.
    */
   it("🔒 degrades to 0 with a WARN when the reconciliation cannot be read", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -195,7 +172,7 @@ describe("ledgerDriftFor — what the status payload publishes", () => {
       PERIOD
     );
     expect(drift).toBe(0);
-    // WARN, not ERROR, and it names what it could not check: a measurement was
+    // Warn, not error, and it names what it could not check: a measurement was
     // lost, not a credit.
     expect(warn).toHaveBeenCalledTimes(1);
     const line = String(warn.mock.calls[0]?.[0]);

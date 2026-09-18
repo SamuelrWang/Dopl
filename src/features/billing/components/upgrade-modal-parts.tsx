@@ -4,36 +4,25 @@ import { formatMoney, TEAM_SEAT_PRICE } from "../prices";
 import { useWorkspaceEntitlements } from "./use-workspace-entitlements";
 
 /**
- * The paywall's shared blocks — the add-member variant plus the three notes
- * every variant can end on.
+ * The paywall's shared blocks — the add-member variant plus the notes every
+ * variant can end on. Split out of `./upgrade-modal.tsx` (2026-09-07) to stay
+ * under the 500-line cap (INVARIANTS §1): that file owns the sell, this one the
+ * blocked path and the terminal notes. Imports run one way, parts ← modal.
  *
- * ⚠ SPLIT OUT OF `./upgrade-modal.tsx` ON 2026-09-07 BECAUSE THAT FILE WAS THE
- * OLDEST OVER-CAP ROW IN `docs/REFACTOR-FINDINGS.md` (551 lines; the 500 cap is
- * INVARIANTS §1). Retiring the Pro card took it to ~510 — still over — so the
- * seam is drawn where the reasons-to-change actually differ: `upgrade-modal.tsx`
- * owns the SELL (the free-workspace upsell and the checkout hand-off), and this
- * file owns the BLOCKED path (a member could not be added) and the terminal
- * notes. The imports run one way, parts ← modal, so there is no cycle.
- *
- * ⚠ NOTHING HERE MENTIONS A PRICE OR AN ALLOWANCE AS A LITERAL — `plans.ts`'s
- * G4 rule. `prices.ts › TEAM_SEAT_PRICE` is the one source.
- *
- * ⚠ **`AddMemberBlocked` IS STANDARD-WORKSPACE-ONLY (2026-09-08)** and the caller
- * enforces it (`./upgrade-modal.tsx › showAddMember`). Everything it says —
- * seats, "invite your team", the legacy single-member limit — is about a roster,
- * and a personal container has none.
+ * No price or allowance appears as a literal (`plans.ts`'s G4 rule);
+ * `prices.ts › TEAM_SEAT_PRICE` is the one source.
+ * `AddMemberBlocked` is standard-workspace-only (2026-09-08), enforced by the
+ * caller (`./upgrade-modal.tsx › showAddMember`) — everything it says is about
+ * a roster, and a personal container has none.
  */
 
 export type Ent = ReturnType<typeof useWorkspaceEntitlements>;
 
 /**
- * The invite/join 402 (`SOLO_MEMBER_LIMIT`) landing.
- *
- * ⚠ STILL REACHABLE AFTER PRO WAS RETIRED FROM SALE (2026-09-07), WHICH IS WHY
- * IT IS STILL HERE. Nothing sells `solo` any more, but the workspaces that
- * already hold a live legacy row are still single-member and their invites
- * still 402 — so the gate keeps its handling and only its WORDS change: the
- * plan is named as legacy, never as something to buy.
+ * The invite/join 402 (`SOLO_MEMBER_LIMIT`) landing. Still reachable after Pro
+ * was retired from sale (2026-09-07): live legacy rows are still single-member
+ * and their invites still 402, so only the wording changed — the plan is named
+ * as legacy, never as something to buy.
  */
 export function AddMemberBlocked({
   ent,
@@ -55,9 +44,9 @@ export function AddMemberBlocked({
   onClose: () => void;
 }) {
   const seats = ent.billableSeats;
-  // ⚠ Any live non-Team sub behind a SOLO_MEMBER_LIMIT 402 is the legacy Pro
-  // sub (incl. the degraded case reporting plan=free). Must swap in place —
-  // checkout would 409 on the existing subscription.
+  // Any live non-Team sub behind a SOLO_MEMBER_LIMIT 402 is the legacy Pro sub
+  // (including the degraded case reporting plan=free), so it must swap in place
+  // — checkout would 409 on the existing subscription.
   const hasLiveSub = ent.status === "active" || ent.status === "past_due";
 
   return (
@@ -96,9 +85,9 @@ export function AddMemberBlocked({
       {!canManageBilling ? (
         <AskAdminNote onClose={onClose} action="upgrade this workspace to Team" />
       ) : ent.loading ? (
-        // ⚠ The 402 opens this modal before /api/billing/status resolves;
-        // acting on DEFAULT_STATUS offers checkout to a live legacy-Pro
-        // workspace (409). Wait for real state.
+        // The 402 opens this modal before /api/billing/status resolves; acting
+        // on DEFAULT_STATUS would offer checkout to a live legacy-Pro workspace
+        // (409). Wait for real state.
         <div className="bento mt-5 h-16 animate-pulse opacity-50" />
       ) : ent.isTeam ? (
         <div className="mt-5">
@@ -114,7 +103,7 @@ export function AddMemberBlocked({
           )}
           <div className="flex items-center gap-2">
             {hasLiveSub ? (
-              // Live legacy Pro sub: swap to per-seat Team in place, no 2nd
+              // Live legacy Pro sub: swap to per-seat Team in place, no second
               // checkout.
               <button
                 type="button"
@@ -191,10 +180,10 @@ export function PlanOption({
 }
 
 /**
- * ⚠ THE SUBJECT IS THE CONTAINER, NOT ALWAYS A WORKSPACE (2026-09-08): a
- * personal container is the reader's own space, so it is addressed in the
- * second person and named `Pro`. `isSolo` still labels the retired flat
- * WORKSPACE plan, which is a different product from the personal `pro`.
+ * The subject is the container, not always a workspace (2026-09-08): a personal
+ * container is the reader's own space, so it is addressed in the second person.
+ * `isSolo` labels the retired flat workspace plan, a different product from the
+ * personal `pro`.
  */
 export function AlreadyPaidNote({
   ent,

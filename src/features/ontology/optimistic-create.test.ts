@@ -1,14 +1,12 @@
 /**
- * INVARIANT SUITE — ontology create ORDER, and what a failure puts back.
- *
- * ⚠ The assertion is WHEN, not whether: reducer state is snapshotted INSIDE the
+ * Invariant suite: ontology create order, and what a failure puts back. The
+ * assertion is WHEN, not whether — reducer state is snapshotted inside the
  * transport (at the instant each request leaves), and the tab + column + first
- * card must already be there in the first one. Runs against the REAL
+ * card must already be there in the first one. Runs against the real
  * `graphReducer`, so rollbacks are checked as board states, not dispatch logs.
  *
- * ⚠ THE DRAFT LANE ("+ Object", 2026-09-11) IS ITS OWN FILE —
- * `optimistic-create-draft.test.ts` — for the 500-line cap. Both drive the one
- * harness in `optimistic-create-harness.ts`.
+ * The draft lane ("+ Object") is its own file, `optimistic-create-draft.test.ts`;
+ * both drive the one harness in `optimistic-create-harness.ts`.
  */
 
 import { describe, expect, it } from "vitest";
@@ -51,9 +49,8 @@ describe("createClusterOptimistic — ordering", () => {
     expect([...h.pending].sort()).toEqual([row.id, column.id, card.id].sort());
     expect([...h.pending].every(isPendingOntologyId)).toBe(true);
     expect(h.writesInFlight).toBe(1);
-    // The gate opens BEFORE the request, or a realtime snapshot arriving in
-    // the same tick could re-seed the reducer over rows that have no server
-    // row yet — they would simply vanish.
+    // The gate opens before the request, or a realtime snapshot arriving in the
+    // same tick could re-seed the reducer over rows that have no server row yet.
     expect(h.order).toEqual([
       "markPending",
       "CLUSTER_ADD",
@@ -206,7 +203,7 @@ describe("createObjectOptimistic", () => {
     expect(h.sent).toHaveLength(1);
     const atSubmit = h.sent[0]!.board;
     expect(atSubmit.objects.col1!.childIds).toEqual([row.id]);
-    // Columns are templates server-side → pending card renders COMPLETE.
+    // Columns are templates server-side → pending card renders complete.
     expect(row.attributes).toEqual([
       { key: "owner", label: "Owner", value: { kind: "text", value: "" } },
       { key: "docs", label: "Docs", value: { kind: "knowledge", value: [] } },

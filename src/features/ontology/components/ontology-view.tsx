@@ -6,12 +6,8 @@ import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
 import { useWorkspaceEntitlements } from "@/features/billing/components/use-workspace-entitlements";
 import { cn } from "@/shared/lib/utils";
 import { pendingRow } from "@/shared/ui/pending";
-// ⚠ THE APP'S 36px BLACK PILL, AND `src`'s ONLY DECLARATION OF IT
-// (`docs/DESIGN-SYSTEM.md`: *"The 36px scale is `bits.tsx › TAB_ACTION`'s alone
-// now"*). /home's `panel-buttons.tsx › PAGE_ACTION_BTN` is the same face in the
-// downstream `apps/desktop-ui` tree, which this one cannot import — so "+ Object"
-// reads the shared constant rather than re-cutting a third copy of `auth-btn-3d
-// h-9 rounded-full px-[15px]`.
+// The app's 36px black pill; `bits.tsx › TAB_ACTION` is its only declaration in
+// `src` (/home's `panel-buttons.tsx › PAGE_ACTION_BTN` is the desktop-ui twin).
 import { TAB_ACTION } from "@/features/channels/components/bits";
 import { useOntology } from "../hooks/use-ontology";
 import { useObjectDraft } from "../hooks/use-object-draft";
@@ -31,53 +27,29 @@ interface Props {
   /** Deep-linked cluster (`/[ws]/ontology/[clusterSlug]`); first cluster when omitted. */
   initialClusterSlug?: string;
   /**
-   * SINGLE-ONTOLOGY MODE — pin the board to ONE cluster (2026-09-09, the /home
-   * Ontology face; `docs/specs/home-ontology.md` §5).
-   *
-   * ⚠ **THE VIEW STILL LOADS THE CONTAINER'S WHOLE GRAPH, and that is not a
-   * fence hole here**: the container is the caller's OWN personal one, so the
-   * snapshot holds nothing they could not open anyway, and the same cache entry
-   * backs the list they arrived from (`hooks/use-ontologies.ts`). This prop is a
-   * SELECTION, never a permission — the fence is the ontology service's (§4).
-   *
-   * ⚠ WHAT IT SUPPRESSES, and why each is the HOST's job rather than a style:
-   * the board's own DELETE row in the gear menu (the /home delete sits behind a
-   * confirm that NAMES the channels the ontology is shared into — Q4 — which this
-   * view cannot know, and the gear holds ONE Delete slot, never two), and the URL
-   * write (there is no URL on /home). Everything else — the picker, the rename
-   * row, the board, the object panel, the editors — is untouched.
-   *
-   * ⚠ A PIN THAT NAMES NOTHING RESOLVES TO NOTHING, never to `clusters[0]`.
-   * Falling back would open a DIFFERENT ontology under the name the operator
-   * clicked.
-   *
-   * ⚠ **THE PIN IS THE HOST'S SELECTION, so a host that offers a picker MOVES
-   * it** — pair it with `onSelectCluster`, or the dropdown will change nothing.
+   * Single-ontology mode: pin the board to one cluster (2026-09-09, the /home
+   * Ontology face; `docs/specs/home-ontology.md` §5). A selection, never a
+   * permission — the fence is the ontology service's (§4). Suppresses the gear's
+   * Delete row and the URL write; the host owns both. A pin naming nothing
+   * resolves to nothing, never to `clusters[0]` — falling back would open a
+   * different ontology under the name the operator clicked. Pair with
+   * `onSelectCluster` or a host picker moves nothing.
    */
   pinnedClusterId?: string;
-  /** Host-owned selection: fired beside the view's own state so a PINNED host
-   *  can move its pin. Omit and the view keeps selecting for itself. */
+  /** Host-owned selection, fired beside the view's own state so a pinned host can
+   *  move its pin. Omit and the view keeps selecting for itself. */
   onSelectCluster?: (id: string) => void;
   /**
-   * THE PICKER'S CREATE, OVERRIDDEN (the "+ Ontology" row inside the name
-   * dropdown — `cluster-switcher.tsx`).
-   *
-   * ⚠ A PROP RATHER THAN A SLOT SINCE 2026-09-10: it used to be `headerStart`, a
-   * black page button /home rendered beside the picker, and Samuel moved it INTO
-   * the dropdown — so the host can no longer supply a face, only the act.
-   * Omitted ⇒ the view's own optimistic `createCluster`. /home passes its own
-   * because the board's optimistic path mints a PROVISIONAL id a host holding a
-   * pin would be left pointing at.
+   * Overrides the "+ Ontology" row inside the name dropdown
+   * (`cluster-switcher.tsx`). Omitted ⇒ the view's own optimistic
+   * `createCluster`, which mints a provisional id a pin-holding host would be
+   * left pointing at.
    */
   onCreateCluster?: () => void;
   /**
-   * THE HOST'S ROWS INSIDE THE HEADER'S GEAR MENU — /home's Share, Changelog, the
-   * agents view/edit rungs and Delete.
-   *
-   * ⚠ **ROWS, NOT A TRIGGER** (2026-09-10, Samuel: the `…` becomes *"a circle
-   * … with a settings icon"*). It was `headerEnd`, a node that brought its own
-   * button, and two menus in one header is the drift a single trigger removes.
-   * Takes the menu's `close` so a row can dismiss it before opening a dialog.
+   * Host rows inside the header's gear menu. Rows, not a trigger (2026-09-10):
+   * two menus in one header is the drift a single trigger removes. Takes the
+   * menu's `close` so a row can dismiss it before opening a dialog.
    */
   settingsMenu?: (close: () => void) => ReactNode;
   /** Admin/owner — controls whether the upgrade prompt offers checkout. */
@@ -87,17 +59,16 @@ interface Props {
   canEdit?: boolean;
   /**
    * How the address bar follows the active cluster's slug. Defaults to
-   * `history.replaceState`; RSC pages pass nothing (a server component can't
-   * hand a function to a client component). ⚠ Desktop SPA injects its
-   * hash-router equivalent — the packaged renderer is a `file://` document
-   * where replacing the path is a Chromium security error.
+   * `history.replaceState`; RSC pages pass nothing (a server component can't hand
+   * a function to a client component). Desktop SPA injects its hash-router
+   * equivalent — replacing the path in a `file://` document is a Chromium
+   * security error.
    */
   replaceUrl?: (path: string) => void;
   /**
-   * `true` when the host already IS a floated page panel (the /home pane):
-   * the view then fills the host instead of raising a second `.page-float`
-   * inside it (Samuel, 2026-09-10: *"the ontology is still on a gray panel.
-   * That is on the white panel"*). The workspace page keeps its own float.
+   * `true` when the host already IS a floated page panel (the /home pane): fill
+   * the host instead of raising a second `.page-float` inside it. The workspace
+   * page keeps its own float.
    */
   frameless?: boolean;
 }
@@ -135,9 +106,9 @@ export function OntologyView({
   }, [isCapped, refresh]);
   const [clusterId, setClusterId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // Create renders rows under PROVISIONAL ids, swapped when the POST answers.
-  // ⚠ Selection is local state and must move with them, else board + panel
-  // blank out exactly when the create succeeds.
+  // Create renders rows under PROVISIONAL ids, swapped when the POST answers;
+  // selection is local state and must move with them, else board + panel blank
+  // out exactly when the create succeeds.
   const handleIdsResolved = useCallback((map: Readonly<Record<string, string>>) => {
     setClusterId((id) => (id ? (map[id] ?? id) : id));
     setSelectedId((id) => (id ? (map[id] ?? id) : id));
@@ -168,18 +139,12 @@ export function OntologyView({
     commitColumnDraft,
   });
   const [confirmDeleteCluster, setConfirmDeleteCluster] = useState(false);
-  /**
-   * RENAMING — the gear's "Rename" row, and the ONLY way to rename an ontology
-   * from the board since the name became the switcher's TRIGGER (2026-09-10).
-   *
-   * ⚠ IT LIVES HERE, not in either child: the row that starts it is in the gear
-   * and the field that ends it stands where the switcher does, so neither
-   * component can own the flag without reaching across the header.
-   */
+  // Lives here, not in either child: the row that starts renaming is in the gear
+  // and the field that ends it stands where the switcher does, so neither
+  // component can own the flag without reaching across the header.
   const [renaming, setRenaming] = useState(false);
 
-  // ⚠ THE PIN OUTRANKS ALL THREE FALLBACKS AND HAS NONE OF ITS OWN — see the
-  // prop's docblock.
+  // The pin outranks all three fallbacks and has none of its own.
   const cluster = pinnedClusterId
     ? (graph.clusters.find((c) => c.id === pinnedClusterId) ?? null)
     : (graph.clusters.find((c) => c.id === clusterId) ??
@@ -188,8 +153,7 @@ export function OntologyView({
       null);
   const selected = selectedId ? (graph.objects[selectedId] ?? null) : null;
   const clusterPending = cluster ? pendingIds.has(cluster.id) : false;
-  // ⚠ ONE list for BOTH picker faces, walked once per graph — never per render
-  // and never per face (`cluster-switcher.tsx`).
+  // One list for both picker faces, walked once per graph (`cluster-switcher.tsx`).
   const entries = useMemo(() => clusterSwitcherEntries(graph), [graph]);
 
   const selectCluster = (id: string) => {
@@ -198,25 +162,23 @@ export function OntologyView({
     setConfirmDeleteCluster(false);
     // A half-typed name belongs to the ontology that was open, not the next one.
     setRenaming(false);
-    // ⚠ BESIDE the local write, not instead of it: a PINNED host resolves the
-    // cluster from its own state, and an unpinned one from `clusterId`.
+    // Beside the local write, not instead of it: a pinned host resolves the
+    // cluster from its own state, an unpinned one from `clusterId`.
     onSelectCluster?.(id);
   };
 
-  // ⚠ Effect, not inline in `selectCluster`: an optimistic cluster is selected
-  // BEFORE it has a slug (server mints it, arrives via `CREATE_RESOLVE`). Keyed
-  // on slug alone — stable across renames, and an unselected cluster (deep
-  // link, first-cluster fallback) leaves the URL untouched.
-  // ⚠ NEVER IN PINNED MODE: the host has no URL for the slug to follow.
+  // Effect, not inline in `selectCluster`: an optimistic cluster is selected
+  // before it has a slug (server mints it, arrives via `CREATE_RESOLVE`). Keyed
+  // on slug alone — stable across renames. Never in pinned mode: no URL there.
   const activeSlug =
     !pinnedClusterId && cluster && cluster.id === clusterId ? cluster.slug : null;
   useEffect(() => {
     if (activeSlug) replaceUrl(`/${workspaceSegment}/ontology/${activeSlug}`);
   }, [activeSlug, workspaceSegment, replaceUrl]);
 
-  // Permanent cascading delete. Selection moves to the ADJACENT tab (next,
-  // else previous), never index 0: the `?? clusters[0]` display fallback would
-  // land on an unrelated board (skills-browser-core `handleDeleted` pattern).
+  // Permanent cascading delete. Selection moves to the adjacent tab (next, else
+  // previous), never index 0: the `?? clusters[0]` display fallback would land on
+  // an unrelated board.
   const handleDeleteCluster = () => {
     if (!cluster) return;
     const at = graph.clusters.findIndex((c) => c.id === cluster.id);
@@ -233,9 +195,9 @@ export function OntologyView({
     replaceUrl(`/${workspaceSegment}/ontology`);
   };
 
-  // ⚠ New cluster creates TWO objects (column + first card) → needs headroom
-  // of 2, not just under-cap. Otherwise a create at 999/1000 trips the server
-  // cap mid-sequence and leaves an orphaned partial cluster.
+  // New cluster creates TWO objects (column + first card) → needs headroom of 2,
+  // not just under-cap: a create at 999/1000 would trip the server cap
+  // mid-sequence and leave an orphaned partial cluster.
   const handleCreateCluster = () => {
     if (
       ent.overCap ||
@@ -264,14 +226,10 @@ export function OntologyView({
   };
 
   /**
-   * "+ Object" — **THE OBJECT TYPE, WHICH IS THE LANE** (2026-09-11, Samuel:
-   * *"what it's supposed to do is create a new object type, basically a new
-   * column … right now the code is messed up, where it's actually creating a new
-   * object on top of the column"*). It made a CARD in the first lane until today,
-   * minting a lane when there was none; cards are the LANE's own add button's job.
-   * ⚠ ONE object, so the plain under-cap check — the headroom-of-2 arithmetic
-   * belonged to the two-row sequence this replaced. ⚠ The lane lands first and the
-   * popup opens over it; nothing is POSTed until Create (`use-object-draft.ts`).
+   * "+ Object" creates the object TYPE, which is the lane (2026-09-11); cards are
+   * the lane's own add button's job. One object, so the plain under-cap check.
+   * The lane lands first and the popup opens over it; nothing is POSTed until
+   * Create (`use-object-draft.ts`).
    */
   const handleNewObject = () => {
     if (!cluster) return;
@@ -299,9 +257,9 @@ export function OntologyView({
     );
   }
   if (pinnedClusterId && !cluster) {
-    // ⚠ ONE LINE, and it is not the empty state below: "there are none" and
-    // "the one you opened is gone" are different answers, and the create button
-    // under the second would make an unrelated ontology.
+    // Not the empty state below: "there are none" and "the one you opened is
+    // gone" are different answers, and the create button under the second would
+    // make an unrelated ontology.
     return (
       <Frame>
         <p className="m-auto text-lead text-text-secondary">
@@ -337,15 +295,13 @@ export function OntologyView({
   return (
     <OntologyResourcesProvider workspaceId={workspaceId} graph={graph}>
       <Frame>
-        {/* ⚠ THE HEADER SITS ON THE PAGE'S OWN WHITE PANEL — no surface of its
-            own here (Samuel, 2026-09-10: no "double panel"). The BOARD below
-            wears the dotted grid again since 2026-09-11 — `kanban-board.tsx`. */}
+        {/* The header sits on the page's own white panel — no surface of its own
+            here (2026-09-10: no double panel). The board below wears the dotted
+            grid — `kanban-board.tsx`. */}
         <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-3 py-2">
-          {/* ⚠ THE ONTOLOGY'S NAME **IS** THE PICKER (2026-09-10) — one control
-              where the pill strip and a separate bold name input used to stand …
-              ⚠ …and while RENAMING it is the kit's underline field IN THAT SLOT,
-              swapped rather than decorated: the chevron belongs to the trigger,
-              so it goes with it and nothing hides it separately. */}
+          {/* The ontology's name IS the picker (2026-09-10); while renaming it is
+              the kit's underline field in that slot, swapped rather than
+              decorated, so the chevron goes with the trigger. */}
           {renaming ? (
             <NameField
               name={cluster.name}
@@ -364,7 +320,7 @@ export function OntologyView({
               onCreate={onCreateCluster ?? handleCreateCluster}
             />
           )}
-          {/* ⚠ Inert until cluster is real: an edit on a provisional row would
+          {/* Inert until cluster is real: an edit on a provisional row would
               debounce a PATCH at an id the server has never seen. */}
           <div {...pendingRow(clusterPending, "flex min-w-0 flex-1 items-center")}>
             <DescriptionField
@@ -381,18 +337,14 @@ export function OntologyView({
           {(canEdit || settingsMenu) && (
             <BoardSettingsMenu
               clusterName={cluster.name}
-              // ⚠ Both edits are inert on a PROVISIONAL cluster, the Description
-              // field's rule: a rename would debounce a PATCH at an id the server
-              // has never seen.
+              // Inert on a provisional cluster, like the Description field.
               onRename={
                 canEdit && !clusterPending ? () => setRenaming(true) : undefined
               }
               hostRows={settingsMenu}
-              // ⚠ **ONE DELETE SLOT, AND THE GEAR IS IT** (2026-09-10) — the
-              // standalone trash button that stood here is DELETED. Pinned mode is
-              // how a host declares it brings its OWN Delete (/home's confirm
-              // NAMES the channels the ontology is lent into — Q4), so exactly one
-              // of the two is ever rendered.
+              // One Delete slot, and the gear is it (2026-09-10). Pinned mode is
+              // how a host declares it brings its own Delete, so exactly one of
+              // the two is ever rendered.
               onDelete={
                 canEdit && !pinnedClusterId
                   ? () => setConfirmDeleteCluster(true)
@@ -459,9 +411,8 @@ export function OntologyView({
         }
       />
 
-      {/* ⚠ THE LANE IT FILLS IN IS ALREADY BEHIND IT (2026-09-11). Discard —
-          Escape and the backdrop with it — takes that lane back off the board,
-          and no request was ever made for it. */}
+      {/* The lane it fills in is already behind it; Discard takes that lane back
+          off the board, and no request was ever made for it. */}
       <NewObjectDialog
         open={draft.open}
         onDiscard={draft.discard}
@@ -479,7 +430,7 @@ export function OntologyView({
   );
 }
 
-/** Floats the surface as ONE raised card via the global .page-float. */
+/** Floats the surface as one raised card via the global .page-float. */
 function Float({ children }: { children?: React.ReactNode }) {
   return (
     <div className="page-float flex flex-col antialiased">{children}</div>

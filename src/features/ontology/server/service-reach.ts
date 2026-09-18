@@ -4,11 +4,11 @@ import { levelForCluster, resolveOntologyAudience } from "./service-audience";
 import type { OntologyContext, OntologyLevel } from "../types";
 
 /**
- * WHICH ONTOLOGIES THIS REQUEST REACHES, AND AT WHAT RUNG — the smallest
+ * Which ontologies this request reaches, and at what rung — the smallest
  * possible ontology read, and the PRODUCER the desktop's framing block had none
  * of (F-681, closed 2026-09-09).
  *
- * ⚠ **IT IS NOT A GATE AND ITS OUTPUT IS NOT A CAPABILITY.** The one consumer is
+ * It is not a gate and its output is not a capability. The one consumer is
  * `dopl-desktop-app/main/prompt-framing-ontology.js › ontologyReachLines`, which
  * INVARIANTS §4A calls a COMPENSATING CONTROL: it tells an agent what it may
  * open so it stops discovering its level by being refused. The fence is
@@ -17,7 +17,7 @@ import type { OntologyContext, OntologyLevel } from "../types";
  * is the SAME function this read composes, which is the whole point: a second
  * statement of the level would be one that drifts.
  *
- * ⚠ **NO `channelId` ARGUMENT, DELIBERATELY, AND IT IS NOT AN OMISSION.** The
+ * No `channelId` argument, deliberately, and it is not an omission. The
  * ceiling is resolved per CONTAINER: `repository-shares.ts ›
  * listChannelIdsForWorkspace` folds in every channel of `ctx.workspaceId` and
  * takes the WIDER rung across them (I5). A home channel IS the one channel in a
@@ -26,11 +26,11 @@ import type { OntologyContext, OntologyLevel } from "../types";
  * narrower answer than the server will actually enforce, which is the direction
  * that lies to an agent rather than the direction that leaks.
  *
- * ⚠ **`none` IS DROPPED, NOT REPORTED.** The framing's own filter fails closed on
+ * `none` is dropped, not reported. The framing's own filter fails closed on
  * any rung it does not recognise, and "an ontology exists that you may not
  * touch" is a fact about somebody else's shelf.
  *
- * ⚠ ONE READ. `listClusterSummaries` carries no `layout`, no objects and no
+ * One read. `listClusterSummaries` carries no `layout`, no objects and no
  * memberships — this answers a question about CLUSTERS, and pulling a graph to
  * write four prompt lines is what `getSummary` is for.
  */

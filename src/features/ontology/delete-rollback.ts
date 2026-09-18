@@ -1,16 +1,14 @@
 /**
- * Rollback for `useOntology()`'s OPTIMISTIC deletes (sibling of
- * `create-cluster-rollback.ts`).
+ * Rollback for `useOntology()`'s optimistic deletes (sibling of
+ * `create-cluster-rollback.ts`). The dispatch that removes the row also sets the
+ * store's `dirty` flag, which permanently disables the seed effect — so a refused
+ * delete leaves the row live server-side, gone locally, and unreachable by any
+ * refetch until the next mount.
  *
- * The dispatch that removes the row also sets the store's `dirty` flag, which
- * permanently disables the seed effect — so a refused delete leaves the row
- * live server-side, gone locally, and unreachable by any refetch until the next
- * mount.
- *
- * ⚠ The undo MERGES the removed slice into CURRENT state, never reinstates the
- * pre-delete snapshot wholesale: several writes can be in flight, and a
- * wholesale revert drops edits made during the round trip — including one whose
- * debounced PATCH hasn't fired, which would then persist the reverted value.
+ * The undo MERGES the removed slice into current state, never reinstates the
+ * pre-delete snapshot wholesale: several writes can be in flight, and a wholesale
+ * revert drops edits made during the round trip — including one whose debounced
+ * PATCH hasn't fired, which would then persist the reverted value.
  */
 
 import { clusterObjectIds, type GraphAction, type GraphState } from "./graph-state";
@@ -50,7 +48,7 @@ export function planDeleteRollback(
 
 /**
  * Puts deleted objects back and un-scrubs the containment/relationship refs the
- * delete stripped from survivors. ⚠ Every other field on a survivor comes from
+ * delete stripped from survivors. Every other field on a survivor comes from
  * `current`, so an edit made during the round trip survives the rollback.
  */
 function restoreObjects(
@@ -77,8 +75,8 @@ function restoreObjects(
 
 /**
  * Restores `columnIds` on clusters an object delete pruned, and re-inserts a
- * deleted cluster AT ITS ORIGINAL INDEX — ⚠ a failed delete must not reorder
- * the tab strip.
+ * deleted cluster at its original index — a failed delete must not reorder the
+ * tab strip.
  */
 function restoreClusters(
   before: GraphState,

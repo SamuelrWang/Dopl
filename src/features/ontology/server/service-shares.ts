@@ -14,34 +14,34 @@ import {
   type OntologyShareRow,
 } from "./repository-shares";
 import { resolveOntologyAudience } from "./service-audience";
-// ⚠ AWAITED, AFTER THE WRITE, INSIDE THE REQUEST (`./service-revisions.ts`). A
+// Awaited, after the write, inside the request (`./service-revisions.ts`). A
 // share is who ELSE reaches the ontology, so its row is filed on the CLUSTER.
 import { recordShareRevision } from "./service-revisions";
 
 /**
- * 🔒 THE SHARE WRITE LANE (spec §6 S3) — "share an ontology with a channel …
+ * The share write lane (spec §6 S3) — "share an ontology with a channel …
  * members access/view or edit, and guests access/view or edit … and for each
  * channel, if their own agents are allowed access, and read or also write".
  *
- * ── THE FENCES, IN ORDER, AND THE ORDER IS THE DESIGN ───────────────────────
+ * ── The fences, in order, and the order is the design ───────────────────────
  * ```
  * 0. a PERSON is asking          — an agent may not widen its operator's audience
  * 1. the ONTOLOGY is the caller's own   → else 404 (never 403)
  * 2. the CHANNEL is one the caller is an active member of → else 404
  * 3. that channel's container is a HOME container         → else 400 (Q5)
  * ```
- * ⚠ **1 BEFORE 2, AND BOTH 404** — answering the channel question first makes
+ * 1 before 2, and both 404 — answering the channel question first makes
  * this a ROOM ORACLE (probe channel ids, read "exists / does not" off the status
  * code); a 403 does the same for the resource. The rule
  * `knowledge/.../channel-grants/route.ts` states for its own two fences.
  *
- * ⚠ **3 IS A 400, SAFE ONLY BECAUSE IT COMES AFTER 2**: the caller has PROVED a
+ * 3 is a 400, safe only because it comes after 2: the caller has PROVED a
  * membership by then, so naming the remedy tells them nothing new — and
  * "forbidden with no cause" is what sends an agent to grep the repo.
  */
 
 /** The ontology must be the caller's OWN — a `members_level='edit'` grant is a
- *  pen on the content, never on the lending. ⚠ Reached through the audience's
+ *  pen on the content, never on the lending. Reached through the audience's
  *  scope, then re-checked by `created_by`. */
 async function requireOwnCluster(
   ctx: OntologyContext,
@@ -55,7 +55,7 @@ async function requireOwnCluster(
   return row;
 }
 
-/** 🔒 Fence 0 — the one that survives a new caller reaching the service another
+/** Fence 0 — the one that survives a new caller reaching the service another
  *  way (`sessionOnly` on the route is the same refusal at the door). Precedent:
  *  `knowledge › setChannelKnowledgeGrant`. */
 function assertHumanShareWrite(ctx: OntologyContext): void {
@@ -77,7 +77,7 @@ async function assertHomeChannelReachable(
   const channel = await findChannelContainer(channelId);
   if (!channel) throw HttpError.notFound("Channel not found");
   const role = await findActiveMemberRole(channel.workspaceId, ctx.userId);
-  // ⚠ The SAME answer an unknown channel gets. "Cannot see" and "does not
+  // The SAME answer an unknown channel gets. "Cannot see" and "does not
   // exist" must stay indistinguishable, or this write becomes a room oracle.
   if (role === null) throw HttpError.notFound("Channel not found");
   const kind = await findWorkspaceKind(channel.workspaceId);
@@ -90,7 +90,7 @@ async function assertHomeChannelReachable(
 }
 
 /**
- * Fences 0-3, then the row this pair already has. ⚠ ONE PROLOGUE FOR BOTH
+ * Fences 0-3, then the row this pair already has. One prologue for both
  * WRITES: the order of the fences IS the design (see the header), so a second
  * copy is a second place to reorder them.
  */
@@ -117,7 +117,7 @@ function toShare(row: OntologyShareRow): OntologyShare {
   };
 }
 
-/** WHICH CHANNELS THIS ONTOLOGY IS LENT INTO. ⚠ Fenced by ownership alone, and
+/** Which channels this ontology is lent into. Fenced by ownership alone, and
  *  a room the owner was SINCE removed from still shows: understating an
  *  ontology's exposure to its own owner is the worse failure
  *  (`knowledge › listSharedIntoChannelBaseIds` makes the same call). */
@@ -127,7 +127,7 @@ export async function listOntologyShares(
 ): Promise<{ canManage: boolean; shares: OntologyShare[] }> {
   await requireOwnCluster(ctx, clusterId);
   const rows = await listSharesForCluster(clusterId);
-  // ⚠ `canManage` COMES OFF THE SERVER — the write's own predicate, so the
+  // `canManage` comes off the SERVER — the write's own predicate, so the
   // dialog cannot render an editor for somebody the write will refuse.
   return { canManage: ctx.source === "user", shares: rows.map(toShare) };
 }
@@ -135,7 +135,7 @@ export async function listOntologyShares(
 /**
  * Upsert one `(ontology, channel)` row.
  *
- * ⚠ **Q2's SEED, AND ITS ONE-WAY-NESS.** On the FIRST row an absent
+ * Q2's seed, and its one-way-ness. On the FIRST row an absent
  * `ownerAgentsLevel` is seeded from the ontology's `agents_may_edit` toggle —
  * what Samuel's solo setting MEANS once a room exists to state it in. On an
  * existing row an absent value KEEPS the stored one: a later edit must never
@@ -155,7 +155,7 @@ export async function setOntologyShare(
   const row = await upsertShare({
     ontologyId: clusterId,
     channelId: input.channelId,
-    // ⚠ THE ONTOLOGY's container, off the row this lane already fenced — never
+    // The ONTOLOGY's container, off the row this lane already fenced — never
     // the channel's, and never anything off the request (spec §3.1).
     workspaceId: cluster.workspace_id,
     membersLevel: input.membersLevel,
@@ -176,10 +176,10 @@ export async function setOntologyShare(
 /**
  * UNSHARE — the row DELETE (I4).
  *
- * ⚠ Q3: ACCESS ENDS IMMEDIATELY and EDITS ALREADY MADE STAY, attributed to their
+ * Q3: access ends immediately and edits already made STAY, attributed to their
  * author — no retroactive scrub (INVARIANTS §4A's departure-is-removal answer).
  *
- * ⚠ IDEMPOTENT: a pair with no row is a success, not a 404.
+ * Idempotent: a pair with no row is a success, not a 404.
  */
 export async function unshareOntology(
   ctx: OntologyContext,
@@ -188,7 +188,7 @@ export async function unshareOntology(
 ): Promise<void> {
   const { cluster, existing } = await openShareWrite(ctx, clusterId, channelId);
   await deleteShare(clusterId, channelId);
-  // ⚠ NOTHING IS RECORDED WHEN NOTHING WAS SHARED — a revision for an unshare
+  // Nothing is recorded when nothing was shared — a revision for an unshare
   // that removed no row would put an access change in the history of an ontology
   // whose access did not change.
   await recordShareRevision(

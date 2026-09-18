@@ -5,24 +5,19 @@ import { STEPS, stepIndex } from "./demo-steps";
 
 /**
  * Clock for the banner demo. Advances one integer `step` through STEPS on
- * per-step timeouts, looping forever while `playing`. `run` increments on
- * every restart — the scene keys per-loop component state (the info column's
- * internal tab) on it so a fresh loop starts from the product's own defaults.
+ * per-step timeouts, looping while `playing`. `run` increments on every restart,
+ * and the scene keys per-loop component state on it so a fresh loop starts from
+ * the product's own defaults.
  *
- * Play/stop is slaved to the SLOT's visibility, not to scroll maths of its
- * own: use-banner-scrub writes `--lp-slot-opacity` (0 or 1) INLINE on the
- * scene element only when it flips, so a MutationObserver on that style
- * attribute is the wake signal. ⚠ Not transition events on the slot — a
- * hidden tab skips CSS transitions entirely (no events ever fire) while the
- * engine's var writes still happen, which deadlocks an event-based clock.
- * Fresh shows restart from step 0 — the demo should always be watched from
- * the top; `visibilitychange` stops the clock in hidden tabs so throttled
- * timers can't drag the scene mid-story while nobody watches.
+ * Play/stop is slaved to the slot's visibility: `use-banner-scrub` writes
+ * `--lp-slot-opacity` inline on the scene element only when it flips, so a
+ * MutationObserver on that style attribute is the wake signal. Not transition
+ * events — a hidden tab skips CSS transitions entirely while the engine's var
+ * writes still happen, which deadlocks an event-based clock. `visibilitychange`
+ * stops the clock in hidden tabs so throttled timers cannot drag the scene.
  *
- * ⚠ prefers-reduced-motion: the scrub engine never runs (`reduced` mode shows
- * the slot at opacity 1 with no transition), so no engine write ever arrives.
- * The tableau branch below parks the timeline on `hold` — the full
- * collaborative scene — and never starts the clock.
+ * Under prefers-reduced-motion the scrub engine never runs, so no write arrives;
+ * the tableau branch parks the timeline on `hold` and never starts the clock.
  */
 export function useDemoTimeline() {
   const [step, setStep] = useState(0);
@@ -52,8 +47,8 @@ export function useDemoTimeline() {
       "(prefers-reduced-motion: reduce)",
     ).matches;
 
-    // Edge detector in a ref, not read back from state: sync() must be able
-    // to run from any callback without a stale-closure play flag.
+    // Edge detector in a ref, not read back from state: sync() must run from any
+    // callback without a stale-closure play flag.
     let wasShown = false;
     const sync = () => {
       if (reduced) {
@@ -68,8 +63,8 @@ export function useDemoTimeline() {
         getComputedStyle(slot).getPropertyValue("--lp-slot-opacity").trim() ===
           "1";
       if (shown && !wasShown) {
-        // Fresh show: always watched from the top, with per-loop UI state
-        // (the info column's tab) reset via the run key.
+        // Fresh show: watched from the top, with per-loop UI state reset via the
+        // run key.
         setStep(0);
         setRun((r) => r + 1);
       }
@@ -87,9 +82,9 @@ export function useDemoTimeline() {
       });
     document.addEventListener("visibilitychange", sync);
 
-    // Initial state via timeout, not the effect body (lint) and not rAF
-    // (never fires in a hidden tab) — the page may load mid-scroll with the
-    // slot already shown, or in `reduced` mode where the engine never writes.
+    // Initial state via timeout, not the effect body (lint) and not rAF (never
+    // fires in a hidden tab) — the page may load mid-scroll with the slot already
+    // shown, or in `reduced` mode where the engine never writes.
     const t = window.setTimeout(sync, 0);
     return () => {
       window.clearTimeout(t);

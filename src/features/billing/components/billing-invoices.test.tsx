@@ -1,6 +1,6 @@
 /**
- * Invoice table — the one surface here that renders MONEY. Pins the two
- * decisions that pick a number: WHICH amount a row shows (paid vs. due), and
+ * Invoice table — the one surface here that renders money. Pins the two
+ * decisions that pick a number: which amount a row shows (paid vs. due), and
  * how a minor-unit integer becomes a string.
  */
 
@@ -22,7 +22,7 @@ function invoice(overrides: Partial<InvoiceDto> = {}): InvoiceDto {
   return {
     id: "in_1",
     number: "DOPL-0001",
-    // ⚠ Midday UTC: `formatDate` renders in the runner's timezone.
+    // Midday UTC: `formatDate` renders in the runner's timezone.
     created: "2026-07-04T12:00:00.000Z",
     amountPaid: 3196,
     amountDue: 3196,
@@ -102,8 +102,8 @@ describe("a status Stripe invented after we shipped", () => {
   });
 
   it("renders an unrecognised one in the NEUTRAL tone, not untoned", () => {
-    // Sixth Stripe value can land with no deploy here; `STATUS_TONE[it]` is
-    // then `undefined` — a pill with no colour class, silently.
+    // A sixth Stripe value can land with no deploy here, making
+    // `STATUS_TONE[it]` `undefined` — a pill with no colour class.
     const markup = table([
       invoice({ status: "disputed" as InvoiceDto["status"] }),
     ]);
@@ -139,11 +139,11 @@ describe("a row that has to hold a long number", () => {
 });
 
 /**
- * 🔒 THE HISTORY IS A FLAT SECTION (Samuel's ruling R-39, 2026-09-17). It was a
- * `SectionBox` — a header STRIP over a concave inset body that supplied the
- * frame, the fill AND the rows' `px-4` gutter. `SectionPanel` supplies its own
- * `p-3`, so the swap has to land the ground and drop the second inset or the
- * rows step in past their heading. Pinned in every state the body can be.
+ * R-39 (2026-09-17): the history is a flat section. It was a `SectionBox` whose
+ * concave inset body supplied the frame, the fill and the rows' `px-4` gutter;
+ * `SectionPanel` supplies its own `p-3`, so the swap has to land the ground and
+ * drop the second inset or the rows step in past their heading. Pinned in every
+ * state the body can be.
  */
 describe("the invoice history's ground", () => {
   it("is the flat section well, whatever the body is", () => {
@@ -164,7 +164,7 @@ describe("the invoice history's ground", () => {
   });
 
   it("drops the concave body's own gutter rather than nesting it", () => {
-    // `SectionPanel`'s `p-3` IS the padding now; `px-4` would be a second one.
+    // `SectionPanel`'s `p-3` is the padding now; `px-4` would be a second.
     expect(table([invoice()])).not.toContain("px-4");
   });
 });
@@ -175,7 +175,7 @@ describe("formatInvoiceAmount", () => {
   });
 
   it("does NOT divide a zero-decimal currency by 100", () => {
-    // ¥600 is six hundred yen, not six. Blanket /100 is the bug.
+    // ¥600 is six hundred yen, not six. A blanket /100 is the bug.
     expect(formatInvoiceAmount(600, "jpy")).toBe("¥600");
   });
 

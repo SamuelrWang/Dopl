@@ -9,21 +9,15 @@ import type { Revision } from "@/features/revisions/types";
 import { PanelSection } from "./panel-section";
 
 /**
- * ONE OBJECT'S **History** — the HubSpot-shaped per-field timeline, inside the
- * object panel (Samuel, 2026-09-09).
+ * One object's History — the per-field timeline inside the object panel (Samuel,
+ * 2026-09-09). A section of the panel and not a tab: history is read after the
+ * fields it is about, so it sits last.
  *
- * ⚠ **A SECTION OF THE PANEL, NOT A TAB.** The panel's chrome is one scrolling
- * column of editors (attributes, relationships, actions); a tab bar would be a
- * second navigation model inside a 420px pane, and history is read AFTER the
- * fields it is about rather than instead of them. So it sits last.
+ * The rows come from the shared list
+ * (`revisions/components/changelog-list.tsx`); nothing about a row is spelled here.
  *
- * ⚠ **IT IS THE SHARED LIST** (`revisions/components/changelog-list.tsx`), which
- * renders the field rows, the association rows, the agent mark and the restore
- * confirmation. Nothing about a row is spelled here.
- *
- * ⚠ **NOTHING IS FETCHED FOR A PROVISIONAL ID.** The panel opens on an optimistic
- * object id while the create POST is unanswered; a history read at that id is a
- * guaranteed 404, so the caller passes `objectId: null` until the row exists.
+ * Nothing is fetched for a provisional id — a read at an unanswered create's id is
+ * a guaranteed 404, so the caller passes `objectId: null` until the row exists.
  */
 export function ObjectHistory({
   objectId,
@@ -43,11 +37,9 @@ export function ObjectHistory({
   const restore = useRestoreOntologyRevision(workspaceId);
 
   return (
-    // ⚠ **THE SAME `PanelSection` THE OTHER FOUR WEAR SINCE 2026-09-12** — this
-    // section was already flat (it never had a frame), but its heading was muted
-    // and unweighted, so the panel's LAST section announced itself differently
-    // from the three above it. The heading is still an `h3` named "History",
-    // which is what `pages/home/ontology-panels.test.tsx` matches.
+    // The same `PanelSection` the other four wear (2026-09-12). The heading is an
+    // `h3` named "History", which is what `pages/home/ontology-panels.test.tsx`
+    // matches.
     <PanelSection label="History">
       {objectId === null ? null : (
         <ChangelogList
@@ -59,10 +51,9 @@ export function ObjectHistory({
           canRestore={canEdit}
           onRestore={async (revision: Revision) => {
             await restore.mutateAsync({
-              // ⚠ ADDRESSED TO THE ROW'S OWN OBJECT, off `resourceId` — the same
-              // rule the knowledge roll-up follows. On this surface it is always
-              // this object, and reading it off the row is what keeps the two
-              // surfaces one code path.
+              // Addressed to the row's own object, off `resourceId` — always this
+              // object here, but reading it off the row keeps both surfaces on one
+              // code path.
               objectId: revision.resourceId,
               revisionId: revision.id,
             });

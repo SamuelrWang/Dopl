@@ -1,15 +1,11 @@
 /**
- * INVARIANT SUITE — the PERSONAL wallet's tier: which row decides it, what it
- * allows, and when it rolls.
+ * The PERSONAL wallet's tier: which row decides it, what it allows, and when it
+ * rolls. The wallet gained a plan on 2026-09-08, billed on the owner's own
+ * `kind='personal'` container (spec §11.1).
  *
- * 🔒 **THIS IS THE HALF THAT DID NOT EXIST BEFORE 2026-09-08.** A personal
- * wallet had one allowance and no row behind it; Samuel's $8.99 ruling gave it
- * a plan, billed on the owner's own `kind='personal'` container (spec §11.1).
- * Every case below is red under the one-tier model.
- *
- * ⚠ Repository mocked; `entitlements.ts` and `credits.ts` are REAL, so the
- * verdict is proven to be the same `paidEntitlement` the seat wallet uses and
- * the window the same `resolveCreditPeriod` — not a second copy of either.
+ * Repository mocked; `entitlements.ts` and `credits.ts` are real, so the verdict
+ * is the same `paidEntitlement` the seat wallet uses and the window the same
+ * `resolveCreditPeriod` — not a second copy of either.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -63,9 +59,9 @@ afterEach(() => {
 });
 
 /**
- * 🔒 WHICH READ, AND WHY THERE ARE TWO OF THEM. The addressed container IS the
- * billing row when the caller addressed their own personal shelf; inside a link
- * container the payer's row is somewhere else entirely.
+ * Why there are two reads: the addressed container IS the billing row when the
+ * caller addressed their own personal shelf; inside a link container the payer's
+ * row is somewhere else entirely.
  */
 describe("readPersonalBilling", () => {
   it("reads the ADDRESSED container directly when it is the personal one", async () => {
@@ -75,8 +71,7 @@ describe("readPersonalBilling", () => {
       plan: "pro",
     });
     expect(mockRepo.getWorkspaceBilling).toHaveBeenCalledWith(PERSONAL);
-    // ⚠ THE ROUND TRIP THIS SAVES IS THE POINT: no owner → container hop when
-    // we were handed the container.
+    // No owner → container hop when we were handed the container.
     expect(mockRepo.getPersonalBilling).not.toHaveBeenCalled();
   });
 
@@ -90,9 +85,8 @@ describe("readPersonalBilling", () => {
       plan: "pro",
     });
     expect(mockRepo.getPersonalBilling).toHaveBeenCalledWith(OWNER);
-    // ⚠ AND NEVER THE ADDRESSED CONTAINER. A link container has no billing row,
-    // so reading it always answers `null` and silently reports Pro as free —
-    // green under every test that only exercises the free case.
+    // Never the addressed container: a link container has no billing row, so
+    // reading it answers `null` and reports Pro as free.
     expect(mockRepo.getWorkspaceBilling).not.toHaveBeenCalled();
   });
 
@@ -105,10 +99,9 @@ describe("readPersonalBilling", () => {
   });
 
   it("🔒 falls back to null AND WARNS when the user has no personal container", async () => {
-    // ⚠ Cannot happen after `20260920120000_workspace_kind_personal.sql`, and
-    // the burn still has to be charged to something. FREE is the safe
-    // direction; the warning is what stops a paying customer being quietly
-    // metered at 500 with no symptom until the refusal lands.
+    // Cannot happen after `20260920120000_workspace_kind_personal.sql`, and the
+    // burn still has to be charged to something. Free is the safe direction; the
+    // warning stops a paying customer being quietly metered at 500.
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     mockRepo.getPersonalBilling.mockResolvedValue(null);
 
@@ -161,11 +154,10 @@ describe("personalWalletTier", () => {
   });
 
   it("🔒 a CANCELED pro row drops to 500 AND to the calendar month — no lockout", () => {
-    // ⚠ THE SELF-HEAL, ON THE PERSONAL WALLET. A canceled row keeps a
-    // future-ending anchor; honouring it charges the first free call to a key
-    // already spent to 5,000 against a fresh 500 limit, so the wallet is locked
-    // out of MCP until the dead anchor lapses. The FREE verdict is read FIRST
-    // and ignores the anchor (`credits.ts › resolveCreditPeriod`).
+    // The self-heal: a canceled row keeps a future-ending anchor, and honouring
+    // it would lock a key already spent to 5,000 out of a fresh 500 limit. The
+    // free verdict is read first and ignores the anchor
+    // (`credits.ts › resolveCreditPeriod`).
     expect(personalWalletTier(billing({ status: "canceled" }))).toEqual({
       verdict: "free",
       limit: 500,
@@ -176,19 +168,16 @@ describe("personalWalletTier", () => {
 
   it("🔒 counts ONE member, so `solo`'s degrade rule can never fire here", () => {
     // A personal container holds its owner and nobody else, so the member count
-    // is a constant rather than a read. Passing a real count would be a round
-    // trip to learn 1 — and would make the tier depend on a roster the
-    // container cannot have.
+    // is a constant: a real count would be a round trip to learn 1.
     expect(personalWalletTier(billing({ plan: "solo" }))).toMatchObject({
       verdict: "solo",
     });
   });
 
   it("🔒 a stray `team` row still yields the FREE personal allowance", () => {
-    // `team` cannot be the plan on a personal container. If a bad row produced
-    // one, the verdict is `team` (the shared `paidEntitlement`) but the
-    // ALLOWANCE is the free personal figure — `personalCreditsForPlan` answers
-    // 5,000 only for `pro`, which is the safe direction.
+    // `team` cannot be the plan on a personal container. On a bad row the verdict
+    // is `team` but the allowance is the free personal figure:
+    // `personalCreditsForPlan` answers 5,000 only for `pro`.
     expect(personalWalletTier(billing({ plan: "team" }))).toMatchObject({
       verdict: "team",
       limit: 500,

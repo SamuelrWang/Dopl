@@ -8,18 +8,18 @@ import type { OntologyLevel } from "../types";
  * channel)` rows of `ontology_channel_shares` and the four container facts the
  * audience ceiling is built from (`service-audience.ts`). No business logic.
  *
- * 🔒 EVERY INPUT TO THE CEILING IS A DB FACT READ HERE, on the service client
+ * Every input to the ceiling is a DB fact read here, on the service client
  * (`knowledge/server/repository-audience.ts`'s design, verbatim): it may not be
  * decided by anything the caller can type. `X-Workspace-Id`, `X-Dopl-Runtime` and
  * `X-Dopl-Session-Id` are documented NON-authorization signals (INVARIANTS §10)
  * and any device token can send any value for all three.
  *
- * ⚠ CREATES ITS OWN CLIENT, matching `./repository.ts` and
+ * Creates its own client, matching `./repository.ts` and
  * `./repository-projections.ts`. INVARIANTS §2 states the opposite rule ("takes a
  * `SupabaseClient`, never creates one"); the disagreement PREDATES this file and
  * is reported rather than resolved either way (CLAUDE.md's precedence rule).
  *
- * ⚠ Service role BYPASSES RLS, so the SERVICE is the fence on every read here
+ * Service role BYPASSES RLS, so the SERVICE is the fence on every read here
  * and the `dopl_ontology_readable` twin (S1) is not a backstop for it.
  */
 
@@ -30,7 +30,7 @@ export interface OntologyShareRow {
   ontology_id: string;
   /** The channel the ontology is lent INTO. */
   channel_id: string;
-  /** ⚠ The ONTOLOGY's container, never the channel's (spec §3.1, rule 3 of
+  /** The ONTOLOGY's container, never the channel's (spec §3.1, rule 3 of
    *  `20260914120000`) — it is what makes the cross-container lend addressable
    *  and what the audience widens its read set with. */
   workspace_id: string;
@@ -40,13 +40,13 @@ export interface OntologyShareRow {
 }
 
 /** Ceiling on the container's channel fan and the share rows read through it.
- *  ⚠ `knowledge › CONTAINER_CHANNEL_LIMIT`'s reason: PostgREST truncates an
+ * `knowledge › CONTAINER_CHANNEL_LIMIT`'s reason: PostgREST truncates an
  *  un-limited select SILENTLY, which narrows the admitted set invisibly — safe,
  *  and undebuggable. */
 export const ONTOLOGY_SHARE_LIMIT = 500;
 
 /** `workspaces.kind` for one workspace, or `null` when the row is gone.
- *  ⚠ RAW COLUMN, not a predicate — the ceiling asks "is this specifically a
+ *  Raw COLUMN, not a predicate — the ceiling asks "is this specifically a
  *  link/personal container", which must answer NO for a kind nobody has
  *  designed yet. */
 export async function findWorkspaceKind(workspaceId: string): Promise<string | null> {
@@ -63,8 +63,8 @@ export async function findWorkspaceKind(workspaceId: string): Promise<string | n
  * How many ACTIVE members the container has — the SOLO/SHARED question behind
  * Samuel's solo default (*"viewable and editable by their agents"*).
  *
- * ⚠ `status='active'`, as every other member count: an invited-but-unaccepted
- * row is not a peer in the room. ⚠ A `null` count is reported as `null`, not
+ * `status='active'`, as every other member count: an invited-but-unaccepted
+ * row is not a peer in the room. A `null` count is reported as `null`, not
  * `0` — `./service-audience.ts` decides what silence means (it fails CLOSED).
  */
 export async function countActiveWorkspaceMembers(
@@ -80,7 +80,7 @@ export async function countActiveWorkspaceMembers(
 }
 
 /** Every live channel id in the container — the SET the ceiling reads shares
- *  against. ⚠ NOT narrowed by channel membership: a link container holds ONE
+ *  against. NOT narrowed by channel membership: a link container holds ONE
  *  channel whose members are the container's (INVARIANTS §4A), and the share row
  *  is the authorization either way. */
 export async function listChannelIdsForWorkspace(workspaceId: string): Promise<string[]> {
@@ -98,13 +98,13 @@ export async function listChannelIdsForWorkspace(workspaceId: string): Promise<s
  * Every share row landing on ANY of `channelIds` — the reachable set behind
  * `resolveOntologyAudience`.
  *
- * 🔒 ⚠ NO `workspace_id` TERM — F-662 applied to this table. The row is filed
+ * NO `workspace_id` TERM — F-662 applied to this table. The row is filed
  * under the ONTOLOGY's container while the caller reaches it through the
  * CHANNEL's, so an `.eq("workspace_id", …)` would refuse precisely the
  * cross-container lend. `channelIds` IS the fence, computed from the caller's own
  * container one call up.
  *
- * ⚠ Empty `channelIds` short-circuits with NO QUERY — fail-closed, and a `.in()`
+ * Empty `channelIds` short-circuits with NO QUERY — fail-closed, and a `.in()`
  * on an empty array is a syntax hazard.
  */
 export async function listSharesForChannels(
@@ -121,17 +121,17 @@ export async function listSharesForChannels(
 }
 
 /**
- * HOW MANY CHANNELS EACH OF THESE ONTOLOGIES IS LENT INTO — the card's
+ * How many channels each of these ontologies is lent into — the card's
  * "shared into N channels" line, for a WHOLE list.
  *
- * ⚠ **ONE QUERY FOR THE ROW SET, NEVER ONE PER ROW** — a `count` per cluster
- * would be an N+1 on the hottest read this feature has.
+ * One query for the row set, never one per row — a `count` per cluster would
+ * be an N+1 on the hottest read this feature has.
  *
- * ⚠ **EVERY REQUESTED ID GETS AN ENTRY, INCLUDING `0`**: `0` is a MEASUREMENT
+ * Every requested id gets an entry, including `0`: `0` is a MEASUREMENT
  * ("lent into no channel") while an absent key upstream means "nobody looked"
  * (`../types.ts › OntologyCluster.sharedChannelCount` keeps them apart).
  *
- * ⚠ Two ids only, no `ONTOLOGY_SHARE_COLS`: nothing here reads a level.
+ * Two ids only, no `ONTOLOGY_SHARE_COLS`: nothing here reads a level.
  */
 export async function countSharesForClusters(
   clusterIds: readonly string[]
@@ -167,7 +167,7 @@ export async function listSharesForCluster(
 export interface OntologyShareWrite {
   ontologyId: string;
   channelId: string;
-  /** ⚠ THE ONTOLOGY's container. The service reads it off the cluster row it
+  /** The ONTOLOGY's container. The service reads it off the cluster row it
    *  has already fenced; taking it from the request would let a caller file a
    *  lend under somebody else's tenancy. */
   workspaceId: string;
@@ -217,7 +217,7 @@ export async function deleteShare(
   if (error) throw error;
 }
 
-/** A live channel's own container, or `null`. ⚠ Resolution is not
+/** A live channel's own container, or `null`. Resolution is not
  *  authorization: the caller still has to prove a membership of the container
  *  this names ({@link findActiveMemberRole}). */
 export async function findChannelContainer(

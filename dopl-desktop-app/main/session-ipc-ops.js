@@ -1,23 +1,15 @@
 // THE SESSION + WINDOW IPC OPS — `sessions:*` and `threads:*`.
 //
-// ⚠ SPLIT OUT OF `main/channel-dir-ipc.js` ON 2026-08-20 (F-226). That file sat at EXACTLY
-// 500 lines, which under INVARIANTS §1 means it could not absorb so much as a corrected
-// COMMENT — and it was carrying four stale ones, including a SECURITY-MODEL paragraph that
-// still described the main window as hosting remote usedopl.com content. A file at the cap
-// does not just stop growing; it stops being correctable, and that is the state this split
-// was taken out of.
+// Split out of `main/channel-dir-ipc.js` on 2026-08-20 (F-226), which sat at EXACTLY 500 lines and
+// so could not absorb even a corrected comment. The seam is REASON TO CHANGE, not line count:
+// `channel-dir-ipc.js` keeps the `channels:*` ops (per-channel PREFERENCES), this file takes the
+// AGENT + WINDOW verbs. They shared a file because they shared a guard, and the guard is now its
+// own module (`main/ipc-guards.js`).
 //
-// THE SEAM IS REASON-TO-CHANGE, not line count. `channel-dir-ipc.js` keeps the `channels:*`
-// ops — per-channel PREFERENCES (the working folder, the durable launch posture, auto-send),
-// which move when a new per-channel setting is added. This file takes the AGENT + WINDOW
-// verbs, which move when the agent surface moves. They shared a file because they shared a
-// guard, and the guard is now its own module (`main/ipc-guards.js`).
-//
-// ⚠ ONE REGISTRATION ENTRY POINT, DELIBERATELY. `index.js` still calls
-// `channelDirIpc.register({...})` exactly as before, and that function calls this one with
-// the same `getSenderIds` accessor. A second call site in `index.js` would be a second place
-// to forget the registry accessor, and an unbound privileged surface is the bug this whole
-// binding exists to prevent.
+// ONE REGISTRATION ENTRY POINT, deliberately: `index.js` still calls `channelDirIpc.register({...})`
+// and that function calls this one with the same `getSenderIds` accessor. A second call site would
+// be a second place to forget the registry accessor, and an unbound privileged surface is the bug
+// this binding exists to prevent.
 //
 // THE OPS HERE, and why each is bound:
 //
@@ -43,41 +35,35 @@
 //                            session — the ONE entry into the recovery flow
 //   threads:openWindow       (Phase 10) opens a pop-out window on ONE thread
 //
-// ⚠ SENDER BINDING IS THE SAME RULE, WRITTEN THE SAME WAY. Two checks, because one is not
-// enough: the sender must be an APP-OWNED window's webContents AND that window's TOP frame
-// (a cross-origin iframe SHARES its host's webContents). The predicate is
-// `main/ipc-guards.js › isAppWindowSender` — ONE source, shared with `ui-bridge.js`. The
-// `appWindowOnly(...)` WRAPPER is written literally at every `ipcMain.handle` below, because
-// `test/channel-ipc-sender.test.mjs`'s structural belt reads exactly that shape: hiding it
-// inside a factory would pass review and silently disarm the guard that stops the NEXT op
-// being added unbound.
+// SENDER BINDING IS THE SAME RULE, WRITTEN THE SAME WAY. Two checks, because one is not enough:
+// the sender must be an APP-OWNED window's webContents AND that window's TOP frame (a cross-origin
+// iframe SHARES its host's webContents). The predicate is `main/ipc-guards.js ›
+// isAppWindowSender` — ONE source, shared with `ui-bridge.js`. The `appWindowOnly(...)` WRAPPER is
+// written literally at every `ipcMain.handle` below, because `test/channel-ipc-sender.test.mjs`'s
+// structural belt reads exactly that shape: hiding it inside a factory would pass review and
+// silently disarm the guard that stops the NEXT op being added unbound.
 //
-// ⚠ EVERY REFUSAL IS BYTE-IDENTICAL TO THAT OP'S OWN BAD-PAYLOAD REJECTION, so a hostile
-// page cannot learn which window it is running in from the difference.
+// EVERY REFUSAL IS BYTE-IDENTICAL to that op's own bad-payload rejection, so a hostile page cannot
+// learn which window it is running in from the difference.
 
 const { ipcMain } = require('electron');
 const { isAppWindowSender, isUuid } = require('./ipc-guards');
 const { isAgentId, newAgentId } = require('./agent-id'); // ⚠ BOTH from the ONE require: `agent-id.js` is pure + electron-free, so it needs none of the lazy-require cycle dodging below.
 const { diag } = require('./diag');
 
-// ⚠ THE THIRD COORDINATE OF EVERY AGENT OP (2026-08-21, Samuel's multiplayer ruling). Ops here
-// address `(channelId, taskId)` and that pair stopped identifying a session the moment an
-// operator could run several agents on one thread — so each one takes an OPTIONAL `agentId`.
-// Optional, never required: an omitted id resolves to the OLDEST live agent on the thread
-// (`main/session-reopen.js › resolveSession`), which is byte-for-byte what a caller got when
-// there was only ever one, so an older renderer keeps working. Anything that is not the closed
-// `agent-id.js` charset is dropped to '' rather than refused, on the same terms as `segment`:
-// a malformed value degrades to the thread-scoped answer instead of teaching a probe which
-// values exist.
+// THE THIRD COORDINATE OF EVERY AGENT OP (2026-08-21, Samuel's multiplayer ruling). `(channelId,
+// taskId)` stopped identifying a session the moment an operator could run several agents on one
+// thread, so each op takes an OPTIONAL `agentId`. An omitted id resolves to the OLDEST live agent
+// on the thread (`main/session-reopen.js › resolveSession`), which is what a caller got when there
+// was only ever one. Anything outside the closed `agent-id.js` charset is dropped to '' rather than
+// refused, so a malformed value degrades instead of teaching a probe which values exist.
 function asAgentId(value) {
   return isAgentId(value) ? String(value) : '';
 }
 
-// The 1:1 composer's body bound, enforced at the BOUNDARY (the preload caps too, but a
-// renderer bound is a convenience and this one is the fence). Well above a typed note, well
-// below anything that could stuff a context window.
-// ⚠ PINNED AGAINST THE PRELOAD'S OWN CAP by `test/preload-parity.test.mjs` — the two are
-// deliberately separate bounds and must not drift into disagreeing about the same sentence.
+// The 1:1 composer's body bound, enforced at the BOUNDARY (the preload caps too, but a renderer
+// bound is a convenience and this one is the fence). PINNED against the preload's own cap by
+// `test/preload-parity.test.mjs` — two deliberately separate bounds that must not drift.
 const MESSAGE_CAP = 4000;
 
 /**
@@ -98,53 +84,41 @@ function register(opts = {}) {
 
   // NEW AGENT ON A THREAD — the operator's own Launch button, windowless and SPAWN-IDLE.
   //
-  // ⚠ THE BODY LIVES IN `main/session-launch-op.js` SINCE 2026-08-22 (a §1 split; that file's
-  // header carries the argument and every comment that used to sit here). What stays HERE is
-  // the IPC SURFACE: the op name, the sender binding, and the refusal shape. The wrapper is
-  // written LITERALLY at the site, exactly like every other op in this file, because
-  // `test/channel-ipc-sender.test.mjs`'s structural belt reads that shape and a guard hidden
-  // inside a factory passes review while disarming the next op somebody adds.
+  // The body lives in `main/session-launch-op.js` since 2026-08-22 (a §1 split; that file's header
+  // carries the argument). What stays HERE is the IPC SURFACE: the op name, the sender binding
+  // written literally at the site, and the refusal shape.
   //
-  // ⚠ IT RETURNS AN ADDRESS: `{ ok: true, agentId }`. It STARTS NOTHING — the session is
-  // registered idle and its query launches on the first message for that agent.
-  // ⚠ REFUSALS ON THIS LANE, as words the SPA renders: `cap`, `busy`, `no-sdk`, `auth-hold`,
-  // `disabled`, and since 2026-08-22 `no-template` (the picked template is gone or not visible)
-  // and `template-approval` (a FOREIGN template's first run on this machine needs one click).
-  // ⚠ `template-approval` IS AN IPC WORD ONLY. It is NOT a member of the
-  // `channel_launch_directives` refusal vocabulary and must not be added to it: the directive
-  // lane has no human at the keyboard and `orchestratorLaunchEnabled` stands in for the click
-  // there (OQ-3), so a directive can never produce it.
+  // It returns an ADDRESS, `{ ok: true, agentId }`, and STARTS NOTHING — the session is registered
+  // idle and its query launches on the first message for that agent. Refusals on this lane, as
+  // words the SPA renders: `cap`, `busy`, `no-sdk`, `auth-hold`, `disabled`, and since 2026-08-22
+  // `no-template` and `template-approval`. `template-approval` is an IPC word ONLY and must not
+  // join the `channel_launch_directives` refusal vocabulary: the directive lane has no human at the
+  // keyboard and `orchestratorLaunchEnabled` stands in for the click there (OQ-3).
   ipcMain.handle('sessions:launch', appWindowOnly('sessions:launch', { ok: false }, (_event, payload) => (
     require('./session-launch-op').launchFromButton(payload)
   )));
 
-  // ⚠ FIRST-USE APPROVAL FOR ANOTHER MEMBER'S AGENT TEMPLATE (2026-08-22, OQ-3). It records a
-  // MACHINE-LOCAL decision and starts nothing; the renderer relaunches afterwards. It grants no
-  // tool, widens no axis and touches no containment input — it decides only whether a foreign
-  // template's TEXT may become an agent's role on this Mac. The store is unreachable from any
-  // Dopl endpoint, deliberately (`main/channel-prefs.js`): a server-writable approval lets a
-  // credential-holding agent pre-approve itself across every machine the operator owns.
+  // FIRST-USE APPROVAL FOR ANOTHER MEMBER'S AGENT TEMPLATE (2026-08-22, OQ-3). It records a
+  // MACHINE-LOCAL decision and starts nothing; it grants no tool, widens no axis and touches no
+  // containment input — it decides only whether a foreign template's TEXT may become an agent's
+  // role on this Mac. The store is unreachable from any Dopl endpoint, deliberately: a
+  // server-writable approval lets a credential-holding agent pre-approve itself everywhere.
   ipcMain.handle('sessions:approveTemplate', appWindowOnly('sessions:approveTemplate', { ok: false }, (_event, payload) => (
     require('./session-launch-op').approveTemplate(payload)
   )));
 
   // FORGET EVERY LOCAL TRACE OF THIS THREAD'S ENDED AGENTS (2026-08-22, Samuel's ended-agent
-  // ruling). The thread-delete cascade's desktop half.
+  // ruling) — the thread-delete cascade's desktop half.
   //
-  // ⚠ MAIN CANNOT SEE A THREAD DELETION ON ITS OWN, and that is why this op exists rather than
-  // a listener. The delete is a SERVER cascade driven from the SPA
-  // (`channels/server/service-tasks-delete.ts`); main learns nothing from it, so an ended
-  // agent's frozen history would sit out its full seven days keyed to a thread that no longer
-  // resolves — a card with a stale title opening a window onto work whose exchange is gone.
-  // The SPA already ends its own agents on that thread before deleting; this is the same
-  // gesture finished.
+  // MAIN CANNOT SEE A THREAD DELETION ON ITS OWN, which is why this is an op rather than a
+  // listener: the delete is a SERVER cascade driven from the SPA, so an ended agent's frozen
+  // history would sit out its full seven days keyed to a thread that no longer resolves.
   //
-  // ⚠ IT DELETES A LOCAL VIEW, NEVER A CONVERSATION. Everything the agents POSTED is
-  // `channel_messages` on the server and is not reachable from here at all.
-  // ⚠ IT CANNOT TOUCH A LIVE SESSION. The sweep's cleaners are keyed stores only; an agent
-  // still running keeps running (the SPA ends those first, deliberately, over `sessions:end`).
-  // ⚠ Same guards as every op here: sender-bound, `channelId` UUID-gated, `taskId` coerced.
-  // Best-effort by design — a failed cleanup must not fail a delete the server already did.
+  // IT DELETES A LOCAL VIEW, NEVER A CONVERSATION — everything the agents POSTED is
+  // `channel_messages` on the server and is not reachable from here. It cannot touch a LIVE session
+  // either: the sweep's cleaners are keyed stores only (the SPA ends those first, over
+  // `sessions:end`). Same guards as every op here, and best-effort by design — a failed cleanup
+  // must not fail a delete the server already did.
   ipcMain.handle('agents:forgetThread', appWindowOnly('agents:forgetThread', { ok: false }, (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
@@ -157,21 +131,17 @@ function register(opts = {}) {
     }
   }));
 
-  // Reveal a LIVE session for a (channel, task) from a bound window.
-  // channelId is UUID-validated (the same anti-probe guard as every op here);
-  // taskId is an opaque string (a legacy `task-{channel}-{seq}` id or a
-  // first-class UUID), coerced and handed to the engine, which resolves the
-  // session by `store.sessionKey(channelId, taskId)`.
-  // ⚠ REWRITTEN 2026-08-20: this described the v1 SESSION WINDOW that `sessions:reopen`
-  // used to show or recreate, deleted whole (F-228). `reopenByTask` has two answers now — a
-  // LIVE session opens the AGENT WINDOW (`main/agent-window.js`), anything else refuses. It
-  // still starts NO query and runs NO gated tool (test/open-session-no-query.test.mjs pins
-  // that half). Wire name `task` == domain name `thread`.
-  // ⚠ `segment` JOINED THE PAYLOAD ON 2026-08-20 and is OPTIONAL. The agent window's landing
-  // is a router path, and main holds the workspace UUID while a route needs the SLUG — so the
-  // segment has to come from the renderer, character-checked here like every other string
-  // entering a path. An absent or unsafe one degrades rather than refusing: an older caller
-  // that only knows `(channel, task)` keeps working exactly as it did.
+  // Reveal a LIVE session for a (channel, task) from a bound window. `channelId` is UUID-validated
+  // (the anti-probe guard every op here uses); `taskId` is an opaque string, coerced and handed to
+  // the engine, which resolves by `store.sessionKey(channelId, taskId)`. Wire name `task` == domain
+  // name `thread`.
+  //
+  // Rewritten 2026-08-20 (F-228): `reopenByTask` has two answers now — a LIVE session opens the
+  // AGENT WINDOW (`main/agent-window.js`), anything else refuses. It still starts NO query and runs
+  // NO gated tool (test/open-session-no-query.test.mjs pins that half). `segment` is OPTIONAL: the
+  // agent window's landing is a router path and main holds the workspace UUID while a route needs
+  // the SLUG, so it comes from the renderer, character-checked here; an absent or unsafe one
+  // degrades rather than refusing.
   ipcMain.handle('sessions:reopen', appWindowOnly('sessions:reopen', { ok: false }, (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
@@ -186,20 +156,16 @@ function register(opts = {}) {
     });
   }));
 
-  // THE AGENT WINDOW (2026-08-20, F-212's closure) — a second window on this same bundle
-  // showing ONE of the operator's OWN agents: its live narration, what it sent, and a 1:1
-  // composer. It is `threads:openWindow`'s twin and takes its guards verbatim.
+  // THE AGENT WINDOW (2026-08-20, F-212's closure) — a second window on this same bundle showing
+  // ONE of the operator's OWN agents: its live narration, what it sent, and a 1:1 composer.
+  // `threads:openWindow`'s twin, taking its guards verbatim.
   //
-  // ⚠ IT IS A SEPARATE OP FROM `sessions:reopen`, not a rename. `reopen` answers "show me
-  // this thread's session" and resolves against the registry first; this one always means
-  // "open the agent view". Both reach `agent-window.js`, so there is one window factory and
-  // one budget — what differs is what the caller is asking.
-  // ⚠ THREE STRINGS ENTERING A ROUTER PATH, none trusted: `channelId` UUID-gated,
-  // `segment` and `taskId` through `deep-link-target.js › isSafeSegment` — the ONE
-  // character rule (INVARIANTS §11). A second regex here would be a second answer to it.
-  // ⚠ THE VERSION FLOOR APPLIES, like `threads:openWindow`: `createShellWindow` is the
-  // min-version gate's single enforcement point, and a factory that bypassed it would be a
-  // door the block does not cover.
+  // A SEPARATE OP FROM `sessions:reopen`, not a rename: `reopen` answers "show me this thread's
+  // session" and resolves against the registry first, this one always means "open the agent view".
+  // Three strings enter a router path and none is trusted — `channelId` UUID-gated, `segment` and
+  // `taskId` through `deep-link-target.js › isSafeSegment`, the ONE character rule (INVARIANTS §11).
+  // The VERSION FLOOR applies: `createShellWindow` is the min-version gate's single enforcement
+  // point, and a factory that bypassed it would be a door the block does not cover.
   ipcMain.handle('sessions:openAgentWindow', appWindowOnly('sessions:openAgentWindow', { ok: false }, (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
@@ -209,25 +175,18 @@ function register(opts = {}) {
     return require('./session-ipc-window-op').openAgentWindow(p);
   }));
 
-  // THE LIVE PERMISSION POSTURE (Samuel, 2026-08-20) — both axes, on a session ALREADY
-  // RUNNING, applying from the very next gate decision rather than the next launch.
-  // ⚠ NOT `channels:setLaunchPosture`: that writes a per-channel RECORD governing the NEXT
-  // spawn, this moves ONE live session's reducer state and stores nothing. Collapsing the
-  // two makes a per-session decision permanent.
-  // ⚠ SECURITY, in one line because the argument lives with the code that acts on it
-  // (`main/session-reopen.js › setModeByTask`, and the review at
-  // `test/preload-parity.test.mjs`): it widens SUPERVISION (is the operator asked?), never
-  // CONTAINMENT (what is reachable at all) — the profile is checked first and no posture can
-  // widen it.
+  // THE LIVE PERMISSION POSTURE (Samuel, 2026-08-20) — both axes, on a session ALREADY RUNNING,
+  // applying from the very next gate decision rather than the next launch. NOT
+  // `channels:setLaunchPosture`: that writes a per-channel RECORD governing the NEXT spawn, this
+  // moves ONE live session's reducer state and stores nothing. It widens SUPERVISION (is the
+  // operator asked?), never CONTAINMENT (what is reachable at all) — the profile is checked first
+  // and no posture can widen it; the argument lives with `main/session-reopen.js › setModeByTask`.
   //
   // BOUNDS HERE, because this is the boundary: sender-bound; `channelId` UUID-gated; the AXIS
-  // restricted to two literals (it cannot coerce — there is no "most restrictive axis"); the
-  // MODE re-validated against `session-profiles.js`'s frozen enums, after which the reducer
-  // coerces AGAIN fail-closed onto the most restrictive member of its axis.
-  // ⚠ AND THE WINDOWLESS FLOOR IS APPLIED IN `setModeByTask`, NOT HERE (2026-08-20). The
-  // message axis may not drop below `auto_inbound` on a session with no Accept surface; the
-  // clamp lives with the session it is a fact about, because this boundary cannot see whether
-  // the resolved session is windowless.
+  // restricted to two literals (it cannot coerce — there is no "most restrictive axis"); the MODE
+  // re-validated against `session-profiles.js`'s frozen enums, after which the reducer coerces
+  // AGAIN fail-closed. The WINDOWLESS FLOOR is applied in `setModeByTask`, not here: this boundary
+  // cannot see whether the resolved session is windowless.
   ipcMain.handle('sessions:setMode', appWindowOnly('sessions:setMode', { ok: false }, (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
@@ -246,14 +205,12 @@ function register(opts = {}) {
     });
   }));
 
-  // ⚠ THE LIVE MODEL SWITCH (2026-08-22, Samuel's ruling). It moves ONE running session onto
-  // another model and RECORDS the pick, so a later park/resume keeps it; the bundled SDK supports
-  // it in streaming input mode (`Query.setModel`), the only mode this tree uses, so it really
-  // switches. Full argument at `main/session-reopen.js › setModelByTask`. It is NOT
-  // `channels:setLaunchPosture`, which governs the NEXT spawn — a session can be moved off what
-  // it launched on. The value is the ID vocabulary (`session-model.js › MODEL_IDS`), coerced HERE
-  // and again inside; an unknown value lands on 'default', which CLEARS the override rather than
-  // refusing, because the CLI's own pick is a legitimate thing to ask for.
+  // THE LIVE MODEL SWITCH (2026-08-22, Samuel's ruling). It moves ONE running session onto another
+  // model and RECORDS the pick, so a later park/resume keeps it; the bundled SDK supports it in
+  // streaming input mode (`Query.setModel`), the only mode this tree uses. Full argument at
+  // `main/session-reopen.js › setModelByTask`. The value is the ID vocabulary (`session-model.js ›
+  // MODEL_IDS`), coerced HERE and again inside; an unknown value lands on 'default', which CLEARS
+  // the override rather than refusing, because the CLI's own pick is a legitimate thing to ask for.
   ipcMain.handle('sessions:setModel', appWindowOnly('sessions:setModel', { ok: false }, async (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
@@ -267,22 +224,17 @@ function register(opts = {}) {
     });
   }));
 
-  // ⚠ THE OP ON THIS SURFACE THAT STARTS A TURN ON AN EXISTING SESSION (2026-08-20, F-212's
-  // direct 1:1 lane). Everything else here is a read, a stop verb or a window; this one makes
-  // the operator's own agent DO something, which is a materially different security shape and
-  // got its own review. The full argument lives with the code that executes it
-  // (`main/session-reopen.js › messageByTask`), including why an out-of-band steer correctly
-  // bypasses the inbound gate and why it is own-agents-only structurally.
+  // THE OP ON THIS SURFACE THAT STARTS A TURN ON AN EXISTING SESSION (2026-08-20, F-212's direct
+  // 1:1 lane). Everything else here is a read, a stop verb or a window; this one makes the
+  // operator's own agent DO something, so it got its own review. The full argument lives with the
+  // code that executes it (`main/session-reopen.js › messageByTask`), including why an out-of-band
+  // steer correctly bypasses the inbound gate and why it is own-agents-only structurally.
   //
-  // THE BOUNDS THAT LIVE HERE, because this is the boundary:
-  //   • sender-bound like every op in this file (`appWindowOnly`, literally at the site);
-  //   • `channelId` UUID-gated, `taskId` coerced — resolved against MAIN's OWN registry,
-  //     which holds nothing but this operator's sessions on this machine;
-  //   • the text is CAPPED here as well as in the preload, because a renderer bound is a
-  //     convenience and this one is the boundary;
-  //   • an EMPTY body after trimming is refused rather than dispatched — a blank turn
-  //     wakes a parked agent to read nothing;
-  //   • the version floor applies: a blocked build must not be able to start work.
+  // THE BOUNDS THAT LIVE HERE: sender-bound like every op in this file; `channelId` UUID-gated and
+  // `taskId` coerced, resolved against MAIN's OWN registry, which holds nothing but this operator's
+  // sessions on this machine; the text CAPPED here as well as in the preload; an EMPTY body after
+  // trimming refused rather than dispatched (a blank turn wakes a parked agent to read nothing);
+  // and the version floor, because a blocked build must not be able to start work.
   ipcMain.handle('sessions:message', appWindowOnly('sessions:message', { ok: false }, (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
@@ -296,28 +248,24 @@ function register(opts = {}) {
     return engine.messageByTask({
       channelId: p.channelId,
       taskId: String(p.taskId || ''),
-      // ⚠ THE 1:1 LANE MUST REACH EXACTLY ONE AGENT (2026-08-21, ruling 5). Named, it steers
-      // that agent and no other; unnamed, it steers the oldest live one on the thread, which is
-      // what this op did when a thread could only ever hold one.
+      // THE 1:1 LANE MUST REACH EXACTLY ONE AGENT (2026-08-21, ruling 5): named, it steers that
+      // agent and no other; unnamed, the oldest live one on the thread.
       agentId: asAgentId(p.agentId),
       text: text,
     });
   }));
 
-  // The agent window's FIRST PAINT. The ring is a push (`session-narration.js`), and a
-  // push-only surface leaves a freshly opened window blank until the next event — which on
-  // an agent between turns never comes. Read once on mount, then listen; the same rule
-  // `sessions.summaries` follows and for the same reason.
-  // ⚠ READ-ONLY AND DERIVED FROM IN-MEMORY STATE: no path, no token, no window handle, and
-  // no `inputFull` (session-narration.js's header states what may enter a ring entry).
+  // The agent window's FIRST PAINT. The ring is a push (`session-narration.js`), and a push-only
+  // surface leaves a freshly opened window blank until the next event — which on an agent between
+  // turns never comes. Read once on mount, then listen. READ-ONLY and derived from in-memory state:
+  // no path, no token, no window handle, and no `inputFull`.
   ipcMain.handle('sessions:narration', appWindowOnly('sessions:narration', { entries: [] }, (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { entries: [] };
     const engine = require('./session-engine');
     if (typeof engine.narrationFor !== 'function') return { entries: [] };
-    // ⚠ IT HANDS OVER AN ADDRESS, NOT A KEY (2026-08-21). This used to build
-    // `${channelId}:${taskId}` by hand — a second statement of the session-key format, sitting
-    // in the IPC layer, which the third segment silently invalidated. The engine resolves it.
+    // IT HANDS OVER AN ADDRESS, NOT A KEY (2026-08-21). This used to build `${channelId}:${taskId}`
+    // by hand — a second statement of the session-key format, which the third segment invalidated.
     return { entries: engine.narrationFor({
       channelId: p.channelId,
       taskId: String(p.taskId || ''),
@@ -325,19 +273,15 @@ function register(opts = {}) {
     }) };
   }));
 
-  // PAUSE / END MY OWN AGENT, from the Agents tab (wiring plan Phase 5, 2026-08-18). Same
-  // guards as `sessions:reopen` — sender-bound, UUID-gated channel id, opaque task id — and
-  // the SAME resolution (`store.sessionKey`), so the two ops cannot disagree about which
-  // session a card names.
+  // PAUSE / END MY OWN AGENT, from the Agents tab (wiring plan Phase 5, 2026-08-18). Same guards
+  // and the SAME resolution (`store.sessionKey`) as `sessions:reopen`, so the two ops cannot
+  // disagree about which session a card names.
   //
-  // ⚠ THESE ARE STOP VERBS AND THEY WIDEN NOTHING. Nothing here can START a query, wake a
-  // parked shell, grant a tool or post on the operator's behalf — the failure direction of a
-  // forged call is an agent that stops, which is the safe one.
-  // ⚠ There is no cross-machine control here and there must not be: the registry holds only
-  // this operator's own sessions, so an unresolvable key answers { ok: false } rather than
-  // reaching for anything else. Pause/end is own-agents-only (Samuel's ruling, INVARIANTS §11).
-  // ⚠ THE BODY IS SHARED, THE WRAPPING IS NOT — see this file's header for why the wrap is
-  // written literally at each registration site.
+  // THESE ARE STOP VERBS AND THEY WIDEN NOTHING: nothing here can START a query, wake a parked
+  // shell, grant a tool or post on the operator's behalf, so the failure direction of a forged call
+  // is an agent that stops. There is no cross-machine control and there must not be — the registry
+  // holds only this operator's own sessions (Samuel's ruling, INVARIANTS §11). The body is shared,
+  // the wrapping is not; see this file's header.
   const control = (action) => (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
@@ -361,19 +305,14 @@ function register(opts = {}) {
 
   // DELETE MY OWN AGENT (2026-08-25, Samuel's ruling) — the Agents-tab card's trash icon.
   //
-  // ⚠ THE BODY LIVES IN `main/session-delete-op.js` SINCE IT LANDED (a §1 split; that file's
-  // header carries the whole argument, including why END-THEN-PURGE is an ORDER rather than a
-  // preference and why the `agentId` is required here and optional everywhere else). What stays
-  // HERE is the IPC SURFACE: the op name, the sender binding written literally at the site, and
-  // the refusal shape.
+  // The body lives in `main/session-delete-op.js` (a §1 split; that file's header carries the whole
+  // argument, including why END-THEN-PURGE is an ORDER rather than a preference and why the
+  // `agentId` is required here and optional everywhere else). What stays HERE is the IPC SURFACE.
   //
-  // ⚠ IT IS A STOP VERB PLUS A LOCAL ERASE, AND IT WIDENS NOTHING. It cannot start a query, wake
-  // a parked shell, grant a tool or post on the operator's behalf; the failure direction of a
-  // forged call is an agent that stops and a local card that disappears. Own-agents-only for
-  // `sessions:end`'s reason — the registry holds nothing but this operator's own sessions.
-  // ⚠ ⚠ AND IT REACHES NO `channel_messages`. Everything the agent said stays in the channel,
-  // attributed exactly as before (the id rides the message). This deletes a LOCAL VIEW, never a
-  // conversation — the same sentence `agents:forgetThread` above carries, at one agent's scope.
+  // It is a STOP VERB plus a LOCAL ERASE and it widens nothing: it cannot start a query, wake a
+  // parked shell, grant a tool or post on the operator's behalf. Own-agents-only for
+  // `sessions:end`'s reason. It reaches no `channel_messages` — everything the agent said stays in
+  // the channel, attributed exactly as before. This deletes a LOCAL VIEW, never a conversation.
   ipcMain.handle('sessions:delete', appWindowOnly('sessions:delete', { ok: false }, (_event, payload) => (
     require('./session-delete-op').deleteAgent(payload)
   )));
@@ -381,99 +320,80 @@ function register(opts = {}) {
   // WHAT THE OPERATOR CALLS THIS AGENT (2026-08-25, Samuel's ruling). Store is
   // `main/agent-names.js`, keyed by the INSTANCE ADDRESS.
   //
-  // ⚠ IT IS THE ONLY OP HERE THAT TAKES NO CHANNEL, and that is the point: a name belongs to
-  // an agent, not to where it is working. It moves no session, starts no turn, grants nothing
-  // and cannot wake anything — the registry is not even consulted.
+  // It is the ONLY op here that takes no channel, and that is the point: a name belongs to an
+  // agent, not to where it is working. It moves no session, starts no turn and grants nothing — the
+  // registry is not even consulted. IT NAMES, IT NEVER ADDRESSES: `@<agentId>` and every other op
+  // still resolve against the id, or a rename would silently re-point a running instruction. An
+  // EMPTY name CLEARS, which is how the operator goes back to `Agent #<id>`.
   //
-  // ⚠ IT NAMES, IT NEVER ADDRESSES. `@<agentId>` and every other op still resolve against the
-  // id; if a display name could address a session, a rename would silently re-point a running
-  // instruction.
-  //
-  // ⚠ AN EMPTY NAME CLEARS, which is how the operator goes back to `Agent #<id>` — a separate
-  // op for "unname" would be a second way to say the same thing.
-  //
-  // ⚠ THE ANSWER IS MAIN'S OWN STORED VALUE, never an echo: a refused name (too long, control
-  // or bidi characters) comes back `{ ok: false }` so the field can revert rather than paint a
-  // name this machine did not take. Same rule `setMode` / `setModel` follow.
+  // The answer is MAIN's own stored value, never an echo: a refused name (too long, control or bidi
+  // characters) comes back `{ ok: false }` so the field can revert rather than paint a name this
+  // machine did not take. Same rule `setMode` / `setModel` follow.
   ipcMain.handle('sessions:rename', appWindowOnly('sessions:rename', { ok: false }, (_event, payload) => {
     const p = payload || {};
     const agentId = asAgentId(p.agentId);
     if (!agentId) return { ok: false };
-    // ⚠ THE WRITE IS `agent-self-ops.js › applyRenameTo` SINCE 2026-09-01 — the
-    // ONE statement of "empty CLEARS, else sanitize, and a sanitizer refusal is a
-    // refusal rather than a silent strip", now shared with the in-process tool and
-    // the external rename directive. What stays here is the IPC ANSWER SHAPE.
-    // ⚠ AND IT COMMITS THROUGH `agent-identity-commit.js` SINCE 2026-09-05, which writes the
-    // store AND flushes the summary. Writing `agent-names` directly here is the bug Samuel
-    // reported: the local store moved, the summary digest did not, so the push never fired and
-    // the @-picker — which reads the SERVER's projection, not this machine — offered the old
-    // name until an app restart. That module's header carries the whole argument.
+    // The write is `agent-self-ops.js › applyRenameTo` since 2026-09-01 — the ONE statement of
+    // "empty CLEARS, else sanitize, and a sanitizer refusal is a refusal rather than a silent
+    // strip", shared with the in-process tool and the external rename directive. It commits through
+    // `agent-identity-commit.js` since 2026-09-05, which writes the store AND flushes the summary:
+    // writing `agent-names` directly here moved the local store without moving the summary digest,
+    // so the push never fired and the @-picker offered the old name until an app restart.
     const res = require('./agent-identity-commit').commitRename(agentId, p.name);
     if (!res.ok) return { ok: false, reason: res.reason };
     return { ok: true, displayName: res.name };
   }));
 
-  // ⚠ WHAT AN AGENT IS FOR, beside what it is CALLED (2026-08-27, Samuel's launch-panel ruling).
-  // `sessions:rename`'s TWIN — its whole contract above applies verbatim. EMPTY clears; the
-  // answer is MAIN'S OWN stored value. Why a second op: `main/agent-names.js › patched`.
+  // WHAT AN AGENT IS FOR, beside what it is CALLED (2026-08-27, Samuel's launch-panel ruling).
+  // `sessions:rename`'s TWIN — its whole contract above applies verbatim. EMPTY clears; the answer
+  // is MAIN's own stored value. Why a second op: `main/agent-names.js › patched`.
   ipcMain.handle('sessions:describe', appWindowOnly('sessions:describe', { ok: false }, (_event, payload) => {
     const p = payload || {};
     const agentId = asAgentId(p.agentId);
     if (!agentId) return { ok: false };
-    // ⚠ SAME COMMIT PATH AS ITS TWIN, AND IT HAD THE SAME MISSING FLUSH (2026-09-05). A
-    // description never reaches a PEER — `channel_sessions` carries no such column, on purpose —
-    // but it does ride this machine's own summary onto its own cards, so a describe that never
-    // flushed left the card stale on the very machine that set it.
+    // Same commit path as its twin, and it had the same missing flush (2026-09-05). A description
+    // never reaches a PEER — `channel_sessions` carries no such column, on purpose — but it does
+    // ride this machine's own summary onto its own cards.
     const stored = require('./agent-identity-commit').commitDescribe(agentId, p.description);
     if (stored === null) return { ok: false, reason: 'bad-description' };
     return { ok: true, description: stored || null };
   }));
 
-  // ⚠ ONE FRESH INSTANCE ID, ASSIGNED TO NOBODY (2026-08-27, Samuel's launch-panel ruling). The
-  // panel shows the operator the ID while they fill the form, so it is minted BEFORE the spawn
-  // and handed to `sessions:launch`, which forwards it (`session-launch-op.js`). ⚠ ITS PRESENCE
-  // IS THE SPA'S CAPABILITY GATE and it reserves nothing — `main/agent-id.js` argues both.
+  // ONE FRESH INSTANCE ID, ASSIGNED TO NOBODY (2026-08-27, Samuel's launch-panel ruling). The panel
+  // shows the operator the ID while they fill the form, so it is minted BEFORE the spawn and handed
+  // to `sessions:launch`. Its presence is the SPA's capability gate and it reserves nothing —
+  // `main/agent-id.js` argues both.
   ipcMain.handle('sessions:mintAgentId', appWindowOnly('sessions:mintAgentId', { ok: false }, () => (
     { ok: true, agentId: newAgentId() }
   )));
 
-  // ⚠ SIGN THIS MAC IN TO CLAUDE CODE (2026-08-25) — the ONE entry into the recovery flow.
+  // SIGN THIS MAC IN TO CLAUDE CODE (2026-08-25) — the ONE entry into the recovery flow.
   //
-  // ⚠ THE BODY LIVES IN `main/claude-signin-op.js` (a §1 split, the `session-launch-op.js`
-  // precedent); that file's header carries the whole argument, including why success is
-  // RE-PROBED rather than reported and why the single-flight stays in `claude-auth.js`. The
-  // wrapper is written LITERALLY at the site like every op here, because
-  // `test/channel-ipc-sender.test.mjs`'s structural belt reads that shape.
+  // The body lives in `main/claude-signin-op.js` (a §1 split); that file's header carries the whole
+  // argument, including why success is RE-PROBED rather than reported and why the single-flight
+  // stays in `claude-auth.js`. The wrapper is written literally at the site like every op here.
   //
-  // ⚠ IT TAKES NO PAYLOAD, and that is the third op in this family whose subject is the MACHINE
-  // rather than a channel (`orchestrator:get/setLaunchEnabled` are the others). There is no id
-  // to UUID-gate, so the SENDER BINDING IS THE ONLY GUARD — which is why it is enumerated in
-  // that suite rather than waved through.
-  // ⚠ IT STARTS NO TURN AND GRANTS NOTHING. It drives an OAuth flow the operator completes in
-  // their own browser (no credential is ever typed into a Dopl surface) and then RELEASES
-  // sessions this machine already holds — every one of which is the operator's own, contained by
-  // the profile and posture it launched under. The failure direction of a forged call is a
-  // native dialog the operator did not ask for, which they cancel.
+  // It takes NO PAYLOAD, the third op in this family whose subject is the MACHINE rather than a
+  // channel. There is no id to UUID-gate, so the SENDER BINDING IS THE ONLY GUARD — which is why it
+  // is enumerated in that suite rather than waved through. It starts no turn and grants nothing: it
+  // drives an OAuth flow the operator completes in their own browser (no credential is ever typed
+  // into a Dopl surface) and then RELEASES sessions this machine already holds. The failure
+  // direction of a forged call is a native dialog the operator cancels.
   ipcMain.handle('claude:signIn', appWindowOnly('claude:signIn', { ok: false }, () => (
     require('./claude-signin-op').signIn()
   )));
 
-  // THE POP-OUT THREAD WINDOW (wiring plan Phase 10, 2026-08-18). The thread view's
-  // "Open as new window" button — a SECOND window on the SAME SPA bundle, landing on the
-  // channel route with this thread selected. It is the op the whole sender-binding
-  // widening exists for.
+  // THE POP-OUT THREAD WINDOW (wiring plan Phase 10, 2026-08-18) — a SECOND window on the SAME SPA
+  // bundle, landing on the channel route with this thread selected. It is the op the whole
+  // sender-binding widening exists for.
   //
-  // ⚠ THE PAYLOAD IS THREE STRINGS ENTERING A ROUTER PATH, and none of them is trusted:
-  // `channelId` is UUID-gated like every op here, and `segment` + `threadId` pass
-  // `deep-link-target.js › isSafeSegment` — the ONE character rule for a string entering a
-  // router path (INVARIANTS §11). A second regex here would be a second answer to it.
-  // Required LAZILY so this file keeps its load-time dependency set small.
-  // ⚠ THE VERSION FLOOR APPLIES. `createShellWindow` is the min-version gate's single
-  // enforcement point (main/shell-mode.js), and a factory that bypassed it would be a window
-  // the block does not cover — so a blocked build refuses here rather than growing a second
-  // door. There is nothing to pop out of anyway: the shell is the update screen.
-  // ⚠ REFUSES IN THE SAME `{ ok: false }` SHAPE as a bad channel id, a foreign sender and a
-  // full window budget alike — a hostile page must not learn which one it hit.
+  // The payload is three strings entering a router path and none is trusted: `channelId` UUID-gated
+  // like every op here, `segment` + `threadId` through `deep-link-target.js › isSafeSegment`, the
+  // ONE character rule (INVARIANTS §11). Required LAZILY so this file keeps its load-time
+  // dependency set small. The VERSION FLOOR applies — `createShellWindow` is the min-version gate's
+  // single enforcement point, and a factory that bypassed it would be a window the block does not
+  // cover. It refuses in the same `{ ok: false }` shape as a bad channel id, a foreign sender and a
+  // full window budget alike.
   ipcMain.handle('threads:openWindow', appWindowOnly('threads:openWindow', { ok: false }, (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };

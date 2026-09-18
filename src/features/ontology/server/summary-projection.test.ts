@@ -1,5 +1,5 @@
 /**
- * INVARIANT SUITE — the ontology SUMMARY projection. `getSummary` only stays
+ * Invariant suite — the ontology SUMMARY projection. `getSummary` only stays
  * the answer while these hold:
  *
  *   1. NO JSONB LEAVES — absent, not "empty arrays". A reused `mapObjectRow`
@@ -33,7 +33,7 @@ vi.mock("./repository-projections", () => ({
   listObjectSummariesByIds: vi.fn(),
 }));
 
-// ⚠ The AUDIENCE is mocked at its own repository, not stubbed out: a standard
+// The AUDIENCE is mocked at its own repository, not stubbed out: a standard
 // workspace answers `unrestricted`, which is this suite's subject (the
 // projection) with the ceiling in its today's-behaviour arm.
 vi.mock("./repository-shares", () => ({

@@ -4,17 +4,12 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 /**
  * Residual per-user Stripe references, still stored on `profiles`.
  *
- * The per-user subscription model (tier / status / 24h trial) is RETIRED —
- * billing is now CONTAINER-level (see workspace-billing.ts / entitlements.ts):
- * one row per `workspaces` row, standard workspaces (`team`) and personal
- * containers (`pro`, 2026-09-08) alike. ⚠ That is NOT a return of per-user
- * billing by another name — the row is keyed by container id, and a user with
- * two workspaces and a personal container has three of them.
- * The profiles.subscription_* columns are intentionally NOT dropped, but they
- * are no longer written. Two things still read from here:
- *   1. The ONE grandfathered live subscription is tied to a profile's
- *      stripe_customer_id — the webhook maps it to a workspace via this.
- *   2. Account deletion cancels the legacy subscription by its stored id.
+ * The per-user subscription model is retired — billing is container-level (see
+ * workspace-billing.ts / entitlements.ts), one row per `workspaces` row keyed by
+ * container id. The profiles.subscription_* columns are intentionally not dropped
+ * but are no longer written. Two things still read from here: the one grandfathered
+ * live subscription, which the webhook maps to a workspace via the profile's
+ * stripe_customer_id, and account deletion cancelling it by its stored id.
  */
 
 export interface ProfileBillingRef {

@@ -1,26 +1,17 @@
-// Tests for the v1.9 SESSION-mode tool grant table (main/session-profiles.js,
-// Track T1). SOURCE EXTRACTION with INJECTION: the BEGIN/END SESSION-PROFILE TABLE
-// block references the tool-profiles constants (required at the top of the module,
-// OUTSIDE the block), so we slice the block and inject the REAL exported constants
-// as parameters — the test evaluates exactly what ships and is pinned to the real
-// profile lists (same idiom as tool-profiles, but parameterized).
+// Tests for the v1.9 SESSION-mode tool grant table (main/session-profiles.js, Track T1).
+// SOURCE EXTRACTION with INJECTION: the BEGIN/END SESSION-PROFILE TABLE block references the
+// tool-profiles constants required OUTSIDE the block, so the block is sliced and the REAL
+// exported constants are injected as parameters — the test evaluates exactly what ships.
 //
-// What matters after the adversarial-review security fixes (§ FIX H1/H2/H3) and the
-// v2.5 D2 outbound gate:
-//   H1 — `dopl_channel` is NOT pre-approved on ANY profile and NOT denied either; it
-//        reaches the gate.
-//   D2 — and it NEVER auto-allows there any more: even an own-channel op=post gates,
-//        so no message leaves the machine without a click. The task grant a post can
-//        earn is the narrow POST_GRANT key, which cannot open a DM.
-//   H2 + H3 — REVERSED FOR `full` (2026-08-08, F-177). `full`'s hard-deny is now the
-//        UNIVERSAL FLOOR and nothing else: the dopl admins + the retired dopl tools. The
-//        delegation / outbound / persistence / escalation built-ins (Task, Agent, Artifact,
-//        SendMessage, Cron*, Skill, ToolSearch, …) are LIVE-GATED there, exactly like Bash —
-//        which was live-gated under `full` all along, and which is why denying the others was
-//        never a boundary. read_only and dopl_only still hard-deny all of them, Task/Agent
-//        included, so H3 survives everywhere a session is actually contained.
-//   F2 — EVERY dopl_channel grant is op-scoped and the bare tool name allows nothing:
-//        a click taken on op=read can no longer authorize op=post or op=open for the task.
+// The rulings it pins:
+//   H1 — `dopl_channel` is neither pre-approved nor denied on ANY profile; it reaches the gate.
+//   D2 — and it never auto-allows there: even an own-channel op=send gates. The task grant a post
+//        can earn is the narrow POST_GRANT key, which cannot open a DM.
+//   H2 + H3 — reversed for `full` (2026-08-08, F-177): `full`'s hard-deny is the UNIVERSAL FLOOR
+//        and nothing else, and the delegation / outbound / persistence / escalation built-ins
+//        live-gate there. read_only and dopl_only still hard-deny all of them, so H3 survives
+//        everywhere a session is actually contained.
+//   F2 — every dopl_channel grant is op-scoped and the bare tool name allows nothing.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -45,8 +36,7 @@ const {
   RETIRED_DOPL_TOOLS,
   DOPL_CHANNEL_TOOL,
   DOPL_SERVER_PREFIX,
-  // F-177: the SDK lane's `full` hard-deny IS this constant now — injected, not restated, so
-  // the block is pinned to the SAME floor the headless lane applies.
+  // F-177: injected, not restated, so the block is pinned to the SAME floor the headless lane applies.
   UNIVERSAL_HARD_DENY,
   normalizeProfile,
 } = require(join(HERE, "..", "main", "tool-profiles.js"));
@@ -60,55 +50,39 @@ assert.notEqual(to, -1, "END SESSION-PROFILE TABLE sentinel missing");
 assert.ok(to > from, "session-profile sentinels out of order");
 const BLOCK = SRC.slice(from, to);
 
-// v2.9: the block digests a grant key. FIX F4: the FULL SHA-256, not a 12-hex (48-bit) prefix.
-// The counterparty supplies the exact command / body text, so a 48-bit birthday collision is
-// seconds of work on this machine: a benign/malicious pair sharing argv0 + digest gets the benign
-// one approved and the twin auto-allowed. §2 SPLIT (2026-08-02): the key machinery itself now
-// lives in main/session-grant-keys.js, so the block references `makeGrantKeyFor` / `POST_GRANT` /
-// `postFieldsOk` from the module head — injected here exactly like normalizeProfile, and the REAL
-// implementations, so the block is still pinned to what ships.
+// FIX F4: the FULL SHA-256, not a 12-hex (48-bit) prefix — the counterparty supplies the exact
+// command / body text, so a 48-bit birthday collision gets a benign/malicious pair sharing one
+// key. §2 SPLIT (2026-08-02): the key machinery lives in main/session-grant-keys.js and is
+// injected REAL, exactly like normalizeProfile.
 const shaKey = (value) =>
   createHash("sha256").update(String(value == null ? "" : value)).digest("hex");
 const KEYS = require(join(HERE, "..", "main", "session-grant-keys.js"));
-// F-139 (2026-08-05): the block matches every tool name through mcp-tool-names' normalizers
-// (the server segment is the CLIENT's — `mcp__dopl__`, `mcp__claude_ai_Dopl__`, `mcp__<uuid>__`
-// are all the same server). Injected like makeGrantKeyFor, and the REAL implementations, so the
-// block stays pinned to what ships.
+// F-139 (2026-08-05): the block matches every tool name through mcp-tool-names' normalizers —
+// the server segment is the CLIENT's (`mcp__dopl__`, `mcp__claude_ai_Dopl__`, `mcp__<uuid>__` are
+// all the same server). Injected REAL.
 const NAMES = require(join(HERE, "..", "main", "mcp-tool-names.js"));
-// 2026-08-22 (OQ-1): the block op-scopes `dopl_kb` the way it has always op-scoped
-// `dopl_channel`, reading `isKnowledgeReadCall` off the module head. Injected like
-// makeGrantKeyFor, and the REAL implementation, so the block stays pinned to what ships.
+// 2026-08-22 (OQ-1): the block op-scopes `dopl_kb` the way it has always op-scoped `dopl_channel`.
 const KB_OPS = require(join(HERE, "..", "main", "knowledge-ops.js"));
-// 2026-08-24 (Samuel's create_thread ruling): the OWN-CHANNEL OUTBOUND OPS BESIDE THE POST were
-// §2-SPLIT into main/session-own-outbound.js — session-profiles.js measured 496 of the 500-line
-// cap and could not carry the ruling's argument beside the list it admits to. The block reads
-// them off the module head, so they are injected here exactly like `isKnowledgeReadCall`, and
-// the REAL implementations, so the block stays pinned to what ships.
-// ⚠ `isOwnChannelMarker` / `OWN_CHANNEL_MARKER_KIND` are RE-EXPORTED from the injected module
-// rather than returned out of the block, which is why the destructure below shrank.
+// 2026-08-24 (Samuel's create_thread ruling): the own-channel outbound ops beside the post were
+// §2-split into main/session-own-outbound.js and are injected REAL. `isOwnChannelMarker` /
+// `OWN_CHANNEL_MARKER_KIND` are re-exported from that module rather than returned out of the
+// block, which is why the destructure below is short.
 const OUT = require(join(HERE, "..", "main", "session-own-outbound.js"));
-// 2026-08-25 (Samuel's launch ruling, F-320): the OWN-MACHINE LAUNCH LANE is a THIRD §2 file on
-// the same precedent — `launch_agent` is not outbound CONTENT, so it could not join the list
-// above; it needs BOTH axes plus a launch-depth bound. The block reads `isOwnMachineLaunch` /
-// `launchLaneVerdict` off the module head, so they are injected here like everything else, and
-// the REAL implementations, so the block stays pinned to what ships.
+// 2026-08-25 (Samuel's launch ruling, F-320): the own-machine LAUNCH lane, a third §2 file —
+// `launch_agent` is not outbound CONTENT, and it needs BOTH axes plus a launch-depth bound.
 const LAUNCH = require(join(HERE, "..", "main", "session-own-launch.js"));
-// 2026-08-31 (Samuel's same-owner directions ruling): the OWN-MACHINE DIRECT LANE, a FOURTH §2
-// file on the same precedent — `direct_agent` buys a TURN on a local process, so it takes the
-// launch lane's two-axis conjunction while carrying NO depth bound (that one bounds how many
-// agents come into existence; a direction creates none). Injected REAL, like every predicate here.
+// 2026-08-31 (Samuel's same-owner directions ruling): the own-machine DIRECT lane, a fourth §2
+// file — `direct_agent` buys a TURN on a local process, so it takes the launch lane's two-axis
+// conjunction while carrying NO depth bound.
 const DIRECT = require(join(HERE, "..", "main", "session-own-direct.js"));
-// 2026-09-17 (Samuel's field report): the OWN-MACHINE MANAGE LANE, a FIFTH §2 file on the same
-// precedent — `rename` / `end` / `posture` reach a live session on this Mac, so they take the launch
-// lane's conjunction and carry NO depth bound. Injected REAL, like every predicate here.
+// 2026-09-17 (Samuel's field report): the own-machine MANAGE lane, a fifth §2 file — rename /
+// end / posture reach a live session on this Mac, so they take launch's conjunction, no depth bound.
 const MANAGE = require(join(HERE, "..", "main", "session-own-manage.js"));
 const AUDIENCE = require(join(HERE, "..", "main", "session-audience.js")); // B2 belt (plan §4.4)
 
-// 2026-08-31 (runtime-adapter port, §0.1b): the AXIS-A TAIL LEFT THIS BLOCK. `buildSessionToolConfig`
-// and the mode transforms are a vocabulary of ONE runtime's built-in tool names, so they live in
-// `main/runtime/claude/tools.js`; the block asks the REGISTRY for them per call, through the two
-// contract methods `toolConfigFor` / `axisAAllows`. `runtimeFor` is injected here exactly like every
-// other predicate, and the REAL registry is injected, so the block stays pinned to what ships.
+// 2026-08-31 (runtime-adapter port, §0.1b): the Axis-A tail left this block — the mode transforms
+// are ONE runtime's vocabulary of built-in tool names, so the block asks the REGISTRY per call
+// through `toolConfigFor` / `axisAAllows`. `runtimeFor` and the REAL registry are injected.
 const RUNTIME = require(join(HERE, "..", "main", "runtime", "index.js"));
 const CLAUDE_TOOLS = require(join(HERE, "..", "main", "runtime", "claude", "tools.js"));
 const buildSessionToolConfig = CLAUDE_TOOLS.buildSessionToolConfig;
@@ -126,15 +100,12 @@ const { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
   "isOwnMachineLaunch", "launchLaneVerdict",
   "isOwnMachineDirect", "directLaneVerdict",
   "isOwnMachineManage", "manageLaneVerdict",
-  // ⚠ 2026-09-06: `channelOpKey` WAS MISSING FROM THIS LIST SINCE F-578 (2026-09-02), and it is a
-  // free variable inside the block — `isOwnChannelReadCall` calls it. It did not throw only
-  // because `grantDecision` short-circuits (`autoInboundMode(...) && isOwnChannelRead(...)`) and
-  // no case in THIS file sets an inbound posture, so the call was never made. That is a latent
-  // ReferenceError one test case away, and the harness's whole claim is that it evaluates what
-  // ships. Injected REAL, like every other predicate.
+  // 2026-09-06: `channelOpKey` was MISSING from this list since F-578 and is a free variable
+  // inside the block — it did not throw only because `grantDecision` short-circuits before the
+  // call is ever made. That is a latent ReferenceError one test case away. Injected REAL.
   "channelOpKey",
-  // 🔒 2026-08-26 (plan §4.4 B2): the AUDIENCE BELT, injected REAL like every other predicate —
-  // a fake would let the harness agree with itself while the shipped gate did something else.
+  // 2026-08-26 (plan §4.4 B2): the AUDIENCE BELT, injected REAL — a fake would let the harness
+  // agree with itself while the shipped gate did something else.
   "containerOnlyDenies", "isDoplToolName", "runtimeFor", "EDIT_TOOLS",
   `${BLOCK}
    return { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
@@ -153,26 +124,22 @@ const { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
 const { isOwnChannelMarker, OWN_CHANNEL_MARKER_KIND } = OUT;
 
 const CHANNEL_SHORT = "dopl_channel";
-// ⚠ D7.2 (2026-09-01): THE TWO AGENT-OPS VERBS ARE PART OF THE TABLE NOW, SO THE deepEqual PINS
-// BELOW READ THEM. They were pre-approved on all three profiles before this too — but appended in
-// `runtime/claude/launch-spec.js`, DOWNSTREAM of `buildSessionToolConfig`, so these three
-// assertions passed while the shipped `allowedTools` was two names wider than what they measured.
-// That is the defect: a shadow this file could not see. Injected REAL from the module that defines
-// the wire, never restated, so a rename cannot make these cases agree with a stale copy.
+// D7.2 (2026-09-01): the two agent-ops verbs are part of the table now, so the deepEqual pins
+// below read them. They were pre-approved before this too, but appended in
+// `runtime/claude/launch-spec.js` DOWNSTREAM of `buildSessionToolConfig` — so these assertions
+// passed while the shipped `allowedTools` was two names wider. Injected REAL from the module that
+// defines the wire, so a rename cannot make these cases agree with a stale copy.
 const AGENT_OPS = require(join(HERE, "..", "main", "agent-self-ops.js")).AGENT_OPS_TOOL_NAMES;
 // The work tools that were live-gated under `full` even when the rest of DENIED_BUILTINS was
-// hard-denied there. F-177 released the rest, so this list no longer PARTITIONS anything — it
-// is kept because these are the tools whose gated-ness is oldest and most load-bearing, and
-// several tests below still drive them by name.
+// hard-denied there. Kept because several cases below still drive them by name.
 const GATED_WORK = ["Bash", "BashOutput", "KillShell", "Write", "Edit", "MultiEdit", "NotebookEdit"];
-// F-177 — the whole of `full`'s hard-deny, and the SAME constant the headless lane applies.
-// Written as the injected value rather than re-derived: a test that recomputes the partition
-// would pass against either behaviour, which is exactly how the two lanes drifted apart.
+// F-177 — the whole of `full`'s hard-deny, written as the injected value rather than re-derived:
+// a test that recomputes the partition would pass against either behaviour.
 const HARD_DENY = UNIVERSAL_HARD_DENY.slice();
 // What `full` used to hard-deny on top of that floor, and now live-gates instead. Derived by
 // subtraction from the REAL shared blacklist so a new DENIED_BUILTINS entry joins it for free.
 const RELEASED_UNDER_FULL = DENIED_BUILTINS.filter((t) => !GATED_WORK.includes(t));
-// ⚠ `send`, NOT `post` (2026-09-02, F-578): the five-op collapse made the plain delivery post
+// `send`, NOT `post` (2026-09-02, F-578): the five-op collapse made the plain delivery post
 // `op="send"`, and every own-channel outbound shape a `send` told apart by its arguments.
 const post = (channel) => ({ op: "send", channel });
 
@@ -210,11 +177,9 @@ test("read_only: local reads pre-approved (NOT the channel); web + dopl reads/ad
 
 // ── dopl_only ────────────────────────────────────────────────────────────────
 
-// FIX F2 (v2.9 review): the WORKSPACE-WRITE dopl tools. "Non-admin" is not "read-only" —
-// dopl_kb alone registers write_file / create_base / create_folder / move_file, and the
-// others carry the same create+update shape. A write lands OFF this machine in rows every
-// workspace member can read, which is the same class of move as an outbound post.
-// Four since the 2026-08-07 retirement (dopl_workflow / dopl_cluster are unregistered).
+// FIX F2 (v2.9 review): the WORKSPACE-WRITE dopl tools. "Non-admin" is not "read-only" — a write
+// lands OFF this machine in rows every workspace member can read, which is the same class of move
+// as an outbound post. Four since the 2026-08-07 retirement.
 const DOPL_WRITE = ["mcp__dopl__dopl_kb", "mcp__dopl__dopl_skill", "mcp__dopl__dopl_ontology",
   "mcp__dopl__dopl_chats"];
 const DOPL_READ = DOPL_SAFE_TOOLS.filter((t) => !DOPL_WRITE.includes(t));
@@ -244,10 +209,9 @@ test("dopl_only: reads + web + READ-ONLY dopl pre-approved; writes GATE; admins 
 
 test("F-177: full pre-approves only local reads and hard-denies ONLY the universal floor", () => {
   const cfg = buildSessionToolConfig("full");
-  // ⚠ A5 (2026-09-02) REPLACED `[]` — no bound, i.e. every built-in the CLI ships — WITH A
-  // POSITIVE ONE. The BY-NAME assertion is `session-builtin-bound.test.mjs`, deliberately not
-  // here: a constant compared against itself is not evidence. What belongs in the profile table's
-  // own suite is the PROPERTY, which is what makes the bound safe to derive.
+  // A5 (2026-09-02) replaced `[]` — no bound, i.e. every built-in the CLI ships — with a POSITIVE
+  // one. The by-name assertion is `session-builtin-bound.test.mjs`; what belongs here is the
+  // PROPERTY that makes the bound safe to derive.
   assert.ok(cfg.builtinTools.length > 0, "`[]` means NO BOUND, never an empty one — A5");
   for (const t of cfg.builtinTools) {
     assert.equal(toolModeAllows("bypass", t), true, `${t} is offered but UNCLASSIFIED — it would gate in every mode`);
@@ -255,9 +219,8 @@ test("F-177: full pre-approves only local reads and hard-denies ONLY the univers
   assert.deepEqual(cfg.preApproved, READ_BUILTINS.concat(AGENT_OPS),
     "FIX H1: no dopl_channel pre-approved. D7.2: + the two self-ops verbs, DECLARED");
   assert.equal(cfg.doplToolsPolicy, null, "no per-server scoping under full");
-  // THE NEW INVARIANT, asserted as an EQUALITY rather than a containment: a containment check
-  // ("the floor is denied") passed under the old, broader set too, which is how a lane could
-  // hard-deny 25 extra built-ins with nothing failing.
+  // An EQUALITY rather than a containment: "the floor is denied" passed under the old, broader
+  // set too, which is how a lane could hard-deny 25 extra built-ins with nothing failing.
   assert.deepEqual(cfg.disallowedTools.slice().sort(), HARD_DENY.slice().sort(),
     "full denies the retired + admin dopl tools and NOTHING else");
 });
@@ -282,19 +245,16 @@ test("F-177: the delegation / outbound / persistence / escalation built-ins live
 });
 
 test("F-177: the two lanes give the SAME answer for `full` — same names, same constant", () => {
-  // The whole point of the change. session-profiles' SESSION_HARD_DENY is literally
-  // tool-profiles' UNIVERSAL_HARD_DENY, and the headless lane's buildDeniedTools('full')
-  // returns it too, so neither lane can move without the other.
+  // session-profiles' SESSION_HARD_DENY is literally tool-profiles' UNIVERSAL_HARD_DENY, and the
+  // headless lane's buildDeniedTools('full') returns it too, so neither lane can move alone.
   const headless = require(join(HERE, "..", "main", "tool-profiles.js")).buildDeniedTools("full");
   assert.deepEqual(buildSessionToolConfig("full").disallowedTools.slice().sort(),
     headless.slice().sort(), "SDK `full` and headless `full` must deny exactly the same set");
 });
 
-// C-11 (2026-08-08): unknown profiles used to normalize to FULL. `myAgentToolProfile` is null
-// for a non-member read, an unrefreshed DTO and any out-of-enum column value, so a profile
-// that could not be resolved silently became the widest one — while `session-park.knownProfile`
-// answered the same question with read_only one file over. The SDK lane inherits the fix for
-// free, because it reads the SAME `normalizeProfile`.
+// C-11 (2026-08-08): unknown profiles used to normalize to FULL, so a profile that could not be
+// resolved silently became the widest one. The SDK lane inherits the fix for free, because it
+// reads the SAME `normalizeProfile`.
 test("unknown profiles normalize to read_only (fail closed), not to full", () => {
   assert.deepEqual(buildSessionToolConfig("nonsense"), buildSessionToolConfig("read_only"));
   assert.deepEqual(buildSessionToolConfig(undefined), buildSessionToolConfig("read_only"));
@@ -325,9 +285,8 @@ test("isOwnChannelPost: only op=send into the session's own channel (or no expli
 
 test("v2.5 D2: EVERY dopl_channel op gates, own-channel post included (no 'preapproved')", () => {
   const chan = "c-abc";
-  // THE OUTBOUND GATE: a plain delivery post into this session's own channel used to
-  // resolve 'preapproved' (no click). It now gates like every other write, so no
-  // message leaves this machine without the operator seeing the drafted body.
+  // THE OUTBOUND GATE: a plain delivery post into this session's own channel used to resolve
+  // 'preapproved'. It now gates like every other write.
   assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: post(chan) }), "gate");
   assert.equal(grantDecision({ profile: "read_only", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: post() }), "gate");
   // Gated: the exfiltration surface the blanket pre-approval used to hand out free.
@@ -341,9 +300,9 @@ test("v2.5 D2: EVERY dopl_channel op gates, own-channel post included (no 'preap
 });
 
 test("2026-09-17: the OWN-MACHINE MANAGE LANE, through the EXTRACTED block", () => {
-  // ⚠ DRIVEN THROUGH THE HARNESS'S OWN COPY OF THE TABLE: a lane wired into `grantDecision` but
-  // never injected here throws a ReferenceError at the first call that reaches it — the 2026-09-06
-  // `channelOpKey` defect. Full table: `test/session-own-manage.test.mjs`.
+  // Driven through the harness's own copy of the table: a lane wired into `grantDecision` but
+  // never injected here throws a ReferenceError at the first call that reaches it (the 2026-09-06
+  // `channelOpKey` defect). Full table: `test/session-own-manage.test.mjs`.
   const chan = "c-abc";
   const call = (action, over, extra, room) => grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL,
     channelId: chan, input: { op: "manage", action, channel: room || chan, to: "@agent-k3", ...extra }, ...over });
@@ -352,7 +311,7 @@ test("2026-09-17: the OWN-MACHINE MANAGE LANE, through the EXTRACTED block", () 
     assert.equal(call(action, BOTH, extra), "allow", `${action}: both axes, own room`);
     assert.equal(call(action, { toolMode: "auto", messageMode: "auto_both" }, extra), "gate", action);
     assert.equal(call(action, { toolMode: "bypass", messageMode: "ask" }, extra), "gate", action);
-    // ⚠ NO DEPTH QUESTION — every session it was filed for is a launched one, AT the cap already.
+    // No depth question — every session it was filed for is a launched one, AT the cap already.
     assert.equal(call(action, { ...BOTH, launchDepth: 1 }, extra), "allow", `${action} at the cap`);
     assert.equal(call(action, BOTH, extra, "OTHER"), "gate", `${action}: cross-channel is unchanged`);
   }
@@ -380,9 +339,8 @@ test("FIX F2: grantKeyFor op-scopes every dopl_channel shape (own post, cross po
   assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "read" }, "c1"), DOPL_CHANNEL_TOOL + "#op:read");
   assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "status" }, "c1"), DOPL_CHANNEL_TOOL + "#op:status");
   assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, {}, "c1"), DOPL_CHANNEL_TOOL + "#op:unknown", "a missing op is its own key");
-  // A CROSS-channel post carries its target, so a grant to post into one other channel
-  // cannot post into a different one (and never collides with the own-channel key). FIX F6:
-  // the readable token is followed by a digest of the RAW target.
+  // A cross-channel post carries its target, so a grant to post into one other channel cannot post
+  // into a different one. FIX F6: the readable token is followed by a digest of the RAW target.
   assert.ok(ownPostKey(post("OTHER")).startsWith(DOPL_CHANNEL_TOOL + "#op:send:other#" + shaKey("OTHER")));
   assert.notEqual(ownPostKey(post("OTHER")), ownPostKey(post("SECOND")));
   // Sanitizing must not let a junk op collapse onto the own-channel post key.
@@ -426,9 +384,8 @@ test("D2: an 'Allow for this session' taken on a POST authorizes posts only, nev
   // The exfil ops stay gated under a post-only grant — this is the whole point of the key.
   assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "rooms", action: "open", direct: true, member: "evil@x" }, allowForTask: granted }), "gate");
   assert.equal(grantDecision({ profile: "read_only", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: post("OTHER"), allowForTask: granted }), "gate", "cross-channel post is not covered");
-  // ⚠ AND THE RETIRED SPELLING IS COVERED BY NOTHING (2026-09-02, F-578): `post` matches no
-  // classifier now, so it falls to the unclassified arm and GATES — the safe direction, and the
-  // reason a deleted op never needs an explicit deny.
+  // The retired spelling is covered by nothing (2026-09-02, F-578): `post` matches no classifier
+  // now, so it falls to the unclassified arm and GATES — which is why a deleted op needs no deny.
   assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "post" }, allowForTask: granted }), "gate");
   assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "status" }, allowForTask: granted }), "gate", "a read is not covered by a post grant");
 });
@@ -471,8 +428,7 @@ test("grantDecision: a hard-denied tool -> 'deny', even when allowed-for-task (d
 // ── F-177: the released set gates under full and STILL denies under the restricted two ──
 
 test("F-177: Task/Agent/CronCreate/SendMessage are 'gate' (NOT 'deny') under full", () => {
-  // The inversion of the old FIX H2 assertion. `full` means full: these exist and they stop on
-  // an operator button, which is what `manual`/`auto`/`bypass` is for.
+  // `full` means full: these exist and they stop on an operator button.
   for (const t of ["Task", "Agent", "CronCreate", "SendMessage"]) {
     assert.equal(grantDecision({ profile: "full", toolName: t }), "gate", `${t} must gate under full`);
   }
@@ -489,9 +445,8 @@ test("F-177: a released tool gates in EVERY Axis-A mode, `bypass` included (noth
 });
 
 test("FIX H3 survives where containment is the point: Task + Agent still 'deny' under the restricted profiles", () => {
-  // A subagent is a fresh session that does not inherit this session's canUseTool bound, which
-  // is why read_only / dopl_only keep refusing it outright. Under `full` the operator has the
-  // shell anyway, so the refusal bought nothing and cost the delegation feature.
+  // A subagent is a fresh session that does not inherit this session's canUseTool bound, which is
+  // why read_only / dopl_only keep refusing it outright. Under `full` the operator has the shell.
   for (const p of ["read_only", "dopl_only"]) {
     assert.equal(grantDecision({ profile: p, toolName: "Task" }), "deny", `${p}: Task must deny`);
     assert.equal(grantDecision({ profile: p, toolName: "Agent" }), "deny", `${p}: Agent must deny`);

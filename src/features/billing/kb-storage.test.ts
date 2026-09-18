@@ -1,7 +1,7 @@
 /**
- * INVARIANT SUITE — per-KB storage constants. Pins the VALUE of each plan's cap
- * (INVARIANTS §14: "A PIN ON A SYMBOL IS NOT A PIN"). ⚠ DECIMAL megabytes — a
- * "fix" to 1024-based MiB makes the free plan read 4.77 MB.
+ * Invariant suite — per-KB storage constants. Pins the value of each plan's cap
+ * (INVARIANTS §14: a pin on a symbol is not a pin). Decimal megabytes — a "fix"
+ * to 1024-based MiB makes the free plan read 4.77 MB.
  */
 
 import { describe, it, expect } from "vitest";
@@ -24,9 +24,9 @@ describe("KB_STORAGE_BYTES", () => {
   });
 
   it("covers every plan id the product sells — no plan can fall off the map", () => {
-    // ⚠ BOTH LISTS SINCE 2026-09-08. Iterating only the workspace cards would
-    // have missed `pro` entirely, which is how the personal tier could have
-    // shipped resolving to `undefined` here.
+    // Both lists since 2026-09-08: iterating only the workspace cards would
+    // miss `pro`, which is how the personal tier could ship resolving to
+    // `undefined` here.
     for (const plan of [...WORKSPACE_PLANS, ...PERSONAL_PLANS]) {
       expect(KB_STORAGE_BYTES[plan.id]).toBeGreaterThan(0);
     }
@@ -35,8 +35,8 @@ describe("KB_STORAGE_BYTES", () => {
   it("gives every paid plan strictly more room than free", () => {
     expect(KB_STORAGE_BYTES.solo).toBeGreaterThan(KB_STORAGE_BYTES.free);
     expect(KB_STORAGE_BYTES.team).toBeGreaterThan(KB_STORAGE_BYTES.free);
-    // ⚠ A PAYING HOME SPACE IS A PAYING CUSTOMER. `pro` landing on the free cap
-    // is the silent version of this bug: nothing errors, the base just fills.
+    // A paying home space is a paying customer: `pro` landing on the free cap is
+    // the silent version of this bug — nothing errors, the base just fills.
     expect(KB_STORAGE_BYTES.pro).toBeGreaterThan(KB_STORAGE_BYTES.free);
   });
 });
@@ -50,8 +50,8 @@ describe("kbStorageLimitForPlan", () => {
   });
 
   it("falls back to the FREE cap for an unknown plan, never to unlimited", () => {
-    // ⚠ Unrecognised plan must land on the TIGHTEST cap, not `undefined`
-    // (compares as NaN, letting every write through).
+    // An unrecognised plan must land on the tightest cap, not `undefined`,
+    // which compares as NaN and lets every write through.
     expect(kbStorageLimitForPlan("enterprise" as never)).toBe(
       KB_STORAGE_BYTES.free
     );

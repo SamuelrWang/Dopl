@@ -28,7 +28,7 @@ import {
  * `team` sub on a personal container, is LOGGED and still written: by this
  * point the money has moved, and `checkout/route.ts` is the fence).
  *
- * ⚠ ORDERING: Stripe delivers at-least-once, unordered. Every applied event
+ * ORDERING: Stripe delivers at-least-once, unordered. Every applied event
  * stamps `event.created` as a freshness watermark; `created` <= the stored
  * watermark is skipped. This is what stops a late `subscription.updated`
  * (active) resurrecting a workspace `subscription.deleted` already canceled.
@@ -43,9 +43,8 @@ export interface ProcessResult {
   duplicate?: boolean;
 }
 
-/** The plans that BILL. ⚠ Re-derive from `PlanId` rather than listing the free
- *  one's complement: a plan added to the taxonomy is not paid until somebody
- *  says so here. */
+/** The plans that bill. Listed rather than derived as the free plan's complement:
+ *  a plan added to the taxonomy is not paid until somebody says so here. */
 function isPaidPlan(plan: PlanId | undefined): boolean {
   return plan === "solo" || plan === "team" || plan === "pro";
 }
@@ -58,8 +57,8 @@ function mapStatus(stripeStatus: Stripe.Subscription.Status): WorkspaceBillingSt
       return "active";
     case "past_due":
       return "past_due";
-    // ⚠ Never-paid / lapsed states are NON-entitled — folding them into
-    // past_due hands full Pro entitlements to a sub that never cleared.
+    // Never-paid / lapsed states are non-entitled — folding them into past_due
+    // hands full Pro entitlements to a sub that never cleared.
     case "incomplete":
     case "incomplete_expired":
     case "unpaid":
@@ -75,17 +74,11 @@ function mapStatus(stripeStatus: Stripe.Subscription.Status): WorkspaceBillingSt
  * Resolve (and backfill) the workspace behind a Stripe customer. Grandfather
  * fallback: customer → user → their SOLE owned standard workspace.
  *
- * 🔒 **AMBIGUITY IS A REFUSAL, NOT A WARNING (B10).** This used to route the
- * legacy subscription to the oldest owned workspace and `console.warn` that it
- * had guessed — so an owner of two workspaces had a real payment applied to
- * whichever one was created first, and the only trace was a log line. There is
- * no derived default left to appeal to, so the mapping either has ONE answer or
- * it has none: `null` here leaves the subscription unmapped, alerted, and
- * repairable by writing the mapping the customer actually meant.
- *
- * ⚠ BOTH REFUSALS ALERT, AND THEY SAY DIFFERENT THINGS — "nothing to map" is a
- * customer with no workspace; "too many" is a customer whose intent was never
- * recorded. Collapsing them into one message loses the operator's next step.
+ * B10: ambiguity is a refusal, not a warning. There is no derived default to
+ * appeal to, so the mapping has exactly one answer or none; `null` leaves the
+ * subscription unmapped, alerted, and repairable by hand. The two refusals say
+ * different things — "nothing to map" is a customer with no workspace, "too many"
+ * is a customer whose intent was never recorded — so they stay separate messages.
  */
 async function resolveWorkspaceIdForCustomer(
   customerId: string | null
@@ -116,9 +109,9 @@ async function resolveWorkspaceIdForSubscription(
   return resolveWorkspaceIdForCustomer(subscription.customer as string);
 }
 
-/** ⚠ Stripe's Basil API moved this to
- *  `parent.subscription_details.subscription`; older payloads carried a
- *  top-level `subscription`. Handles both, string or expanded object. */
+/** Stripe's Basil API moved this to `parent.subscription_details.subscription`;
+ *  older payloads carried a top-level `subscription`. Handles both, string or
+ *  expanded object. */
 function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   const parentSub = invoice.parent?.subscription_details?.subscription;
   if (parentSub) return typeof parentSub === "string" ? parentSub : parentSub.id;
@@ -129,15 +122,13 @@ function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   return null;
 }
 
-/** ⚠ `plan` is passed rather than re-derived so the caller's ONE derivation
- *  decides both the written plan and its seat count — two derivations of the
- *  same subscription is two things that can disagree. */
+/** `plan` is passed rather than re-derived so one derivation decides both the
+ *  written plan and its seat count; two derivations can disagree. */
 function subscriptionFields(subscription: Stripe.Subscription, plan: PlanId) {
   const item = selectSeatItem(subscription);
-  // ⚠ Basil exposes current_period_start/end on the ITEM; older payloads at
-  // the subscription level. Prefer sub-level, else item — same rule for both
-  // bounds. The START anchors the MCP credit window to the workspace's own
-  // billing date (`features/billing/credits.ts › resolveCreditPeriod`).
+  // Basil exposes current_period_start/end on the ITEM; older payloads at the
+  // subscription level. Prefer sub-level, else item. The start anchors the MCP
+  // credit window (`features/billing/credits.ts › resolveCreditPeriod`).
   const subLevel = subscription as unknown as {
     current_period_start?: number | null;
     current_period_end?: number | null;
@@ -145,13 +136,12 @@ function subscriptionFields(subscription: Stripe.Subscription, plan: PlanId) {
   const periodStart = subLevel.current_period_start ?? item?.current_period_start;
   const periodEnd = subLevel.current_period_end ?? item?.current_period_end;
   return {
-    // ⚠ `pro` IS FLAT: one personal container, one member, one price. Stripe
-    // reports quantity 1 on that line anyway; pinning it here means a hand-
-    // edited quantity in the dashboard cannot make a personal container look
-    // like a multi-seat one to `entitlements.ts`.
+    // `pro` is flat — one container, one member, one price. Pinned so a
+    // hand-edited dashboard quantity cannot make a personal container look
+    // multi-seat to `entitlements.ts`.
     seatCount: plan === "pro" ? 1 : (item?.quantity ?? 1),
     stripePriceId: item?.price?.id ?? null,
-    // ⚠ ALWAYS written, never undefined: a resumed subscription must clear the
+    // Always written, never undefined: a resumed subscription must clear the
     // flag, and an omitted key leaves the old `true` standing.
     cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
     currentPeriodStart: periodStart
@@ -167,10 +157,9 @@ function subscriptionFields(subscription: Stripe.Subscription, plan: PlanId) {
  * Apply a billing patch only when the event is fresh; every applied event
  * stamps the watermark.
  *
- * ⚠ `<=` is deliberate. Stripe stamps `created` at 1s granularity, so `<` lets
- * an `updated(active)` sharing a `deleted` event's second durably resurrect a
- * canceled sub. The cost — dropping a second legitimate update in the same
- * second — is transient.
+ * `<=` is deliberate: Stripe stamps `created` at 1s granularity, so `<` lets an
+ * `updated(active)` sharing a `deleted` event's second durably resurrect a
+ * canceled sub. Dropping a second legitimate update in that second is transient.
  */
 async function applyStripeEvent(
   workspaceId: string,
@@ -199,10 +188,9 @@ async function handleSubscriptionUpsert(
   if (!workspaceId) return;
   const status = mapStatus(subscription.status);
 
-  // ⚠ Any canceled write must null the subscription pointers, like
-  // `subscription.deleted`. A retained sub id lets a later
-  // `invoice.payment_succeeded` match it and restore status=active WITHOUT the
-  // plan — stranding a payer at free/active and 409-blocking re-checkout.
+  // Any canceled write must null the subscription pointers: a retained sub id
+  // lets a later `invoice.payment_succeeded` match it and restore status=active
+  // without the plan, stranding a payer at free/active and blocking re-checkout.
   if (status === "canceled") {
     await applyStripeEvent(workspaceId, eventCreated, {
       plan: "free",
@@ -213,11 +201,10 @@ async function handleSubscriptionUpsert(
       seatCount: null,
       // Sub is gone; leftover `true` renders "ends on <date>" after the end.
       cancelAtPeriodEnd: false,
-      // ⚠ Period anchor goes with it. A retained future anchor keeps the MCP
-      // credit window on the key the PAID plan spent against, so the first
-      // free-plan call is charged past the free limit and MCP locks out until
-      // the dead period ends. (`credits.ts › resolveCreditPeriod` also ignores
-      // the anchor on a free verdict — that half heals unreached rows.)
+      // The period anchor goes with it: a retained future anchor keeps the MCP
+      // credit window on the key the paid plan spent against, locking the caller
+      // out until the dead period ends. (`credits.ts › resolveCreditPeriod`
+      // also ignores the anchor on a free verdict, healing unreached rows.)
       currentPeriodStart: null,
       currentPeriodEnd: null,
     });
@@ -256,10 +243,9 @@ async function handleCheckoutCompleted(
     workspaceId ?? (await resolveWorkspaceIdForCustomer(customerId));
   if (!targetWorkspaceId || !subscriptionId) return;
 
-  // ⚠ The webhook does NOT touch the checkout claim — the route released it in
-  // its `finally` (checkout/route.ts) long before this event lands. Releasing
-  // it here would happen BEFORE the subscription id is persisted below, and
-  // that persisted id is the durable 409 guard for re-checkout.
+  // The webhook does not touch the checkout claim — the route released it in its
+  // `finally` long before this event lands. Releasing it here would run before
+  // the subscription id is persisted below, which is the durable re-checkout guard.
   const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
   const status = mapStatus(subscription.status);
   const plan = derivePlan(subscription);
@@ -267,9 +253,8 @@ async function handleCheckoutCompleted(
     await reportPlanContainerMismatch(targetWorkspaceId, plan);
   }
   const fields = subscriptionFields(subscription, plan);
-  // ⚠ Watermark-guarded like every other billing write: Stripe can retry a
-  // failed checkout delivery AFTER the sub was canceled, resurrecting a
-  // non-null sub id on a canceled row.
+  // Watermark-guarded like every other billing write: Stripe can retry a failed
+  // checkout delivery after the sub was canceled, resurrecting a non-null sub id.
   const applied = await applyStripeEvent(targetWorkspaceId, eventCreated, {
     plan: status === "canceled" ? "free" : plan,
     status,
@@ -278,11 +263,10 @@ async function handleCheckoutCompleted(
     stripePriceId: status === "canceled" ? null : fields.stripePriceId,
     seatCount: status === "canceled" ? null : fields.seatCount,
     cancelAtPeriodEnd: status === "canceled" ? false : fields.cancelAtPeriodEnd,
-    // ⚠ Conditioned on `canceled` like every other paid field above —
-    // otherwise a checkout retried after cancellation writes a live future
-    // anchor onto a free row (the MCP-credit lockout, by a path neither cancel
-    // handler covers). `undefined` leaves the stored value alone —
-    // `upsertWorkspaceBilling` only writes keys that are not `undefined`.
+    // Conditioned on `canceled` like every other paid field above: otherwise a
+    // checkout retried after cancellation writes a live future anchor onto a free
+    // row, the credit lockout by a path neither cancel handler covers.
+    // `undefined` leaves the stored value alone.
     currentPeriodStart: status === "canceled" ? null : fields.currentPeriodStart,
     currentPeriodEnd: status === "canceled" ? null : fields.currentPeriodEnd,
   });
@@ -329,10 +313,9 @@ async function handlePaymentFailed(
   );
   if (!workspaceId) return;
   const billing = await getWorkspaceBilling(workspaceId);
-  // Only a PAID row can go past_due — flagging a free row would produce a
-  // nonsensical free/past_due state. ⚠ `pro` joined the set on 2026-09-08
-  // (spec §11): omitting it would have made a personal Pro subscription the one
-  // paid plan that silently skips dunning and shows no warning anywhere.
+  // Only a paid row can go past_due; a free/past_due state is nonsensical.
+  // `pro` joined the set 2026-09-08 — omitting it would skip dunning for personal
+  // Pro subscriptions entirely.
   if (!billing || !isPaidPlan(billing.plan)) {
     console.warn(
       `[webhook] Ignoring invoice.payment_failed for workspace ${workspaceId}: plan is ${billing?.plan ?? "none"}, not a paid plan.`
@@ -354,9 +337,7 @@ async function handlePaymentFailed(
     );
     return;
   }
-  // past_due keeps PAID entitlements (grace) while surfacing the warning. ⚠ Not
-  // "pro" — that is a plan id since 2026-09-08, and this line means every paid
-  // plan.
+  // past_due keeps paid entitlements (grace) while surfacing the warning.
   await applyStripeEvent(workspaceId, eventCreated, { status: "past_due" });
 }
 

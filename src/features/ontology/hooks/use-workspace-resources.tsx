@@ -57,8 +57,8 @@ const selectEntries = (body: { entries: EntryRef[] }) => body.entries;
  * resolve from the bases list, entry ids batch-resolve through
  * `GET /api/knowledge/entries?ids=` — one query, no per-row waterfall.
  *
- * ⚠ All three endpoints enforce visibility SERVER-side; the pickers never
- * filter for security themselves.
+ * All three endpoints enforce visibility server-side; the pickers never filter for
+ * security themselves.
  */
 export function OntologyResourcesProvider({
   workspaceId,
@@ -101,8 +101,8 @@ export function OntologyResourcesProvider({
     return [...ids].sort().slice(0, MAX_ENTRY_IDS);
   }, [graph, baseNames]);
 
-  // ⚠ Query key moves whenever the picked id-set changes; keepPreviousData
-  // stops existing chips flashing back to "Unavailable" mid-refetch.
+  // Query key moves whenever the picked id-set changes; keepPreviousData stops
+  // existing chips flashing back to "Unavailable" mid-refetch.
   const entriesQuery = useApiQuery("/api/knowledge/entries", {
     workspaceId,
     query: entryIds.length > 0 ? { ids: entryIds.join(",") } : undefined,

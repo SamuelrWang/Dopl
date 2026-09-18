@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Check } from "lucide-react";
-// ⚠ Deep import, NOT the `settings-modal` barrel: the barrel re-exports
+// Deep import, not the `settings-modal` barrel: the barrel re-exports
 // SettingsModal, whose section tree reaches `next/navigation`. This modal
 // mounts in desktop-SPA-reused pages, where any `next/*` fails the build.
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
@@ -24,10 +24,9 @@ import {
 import { useWorkspaceEntitlements } from "./use-workspace-entitlements";
 
 /**
- * ⚠ THE CREDITS LINE IS INTERPOLATED, NEVER TYPED OUT (plans.ts's G4 rule) —
- * it said "10,000+ Credits every month" while the allowance was three other
- * numbers. "per member" is load-bearing on the TEAM list: the allocation is
- * fixed per person and NOT pooled (`credits.ts › SEAT_MONTHLY_CREDITS`).
+ * The credits line is interpolated, never typed out (plans.ts's G4 rule).
+ * "per member" is load-bearing on the Team list: the allocation is fixed per
+ * person and not pooled (`credits.ts › SEAT_MONTHLY_CREDITS`).
  */
 const TEAM_UNLOCKS = [
   "Uncapped ontology objects",
@@ -37,14 +36,10 @@ const TEAM_UNLOCKS = [
 ] as const;
 
 /**
- * What PRO buys on a personal container (2026-09-08).
- *
- * ⚠ **NO "per member", AND NO OBJECT-CAP LINE.** A personal container has one
- * member by construction, so "per member" would invite the reader to multiply;
- * and the ontology cap is a MULTI-member free rule (`plans.ts ›
- * FREE_MULTI_MEMBER_OBJECT_CAP`), so uncapping it is not something Pro sells —
- * a personal container was never capped. Listing it would be selling an unlock
- * the buyer already has.
+ * What Pro buys on a personal container (2026-09-08). No "per member" (one
+ * member by construction) and no object-cap line — the cap is a multi-member
+ * free rule (`plans.ts › FREE_MULTI_MEMBER_OBJECT_CAP`), so listing it would
+ * sell an unlock the buyer already has.
  */
 const PRO_UNLOCKS = [
   `${planNumber(PERSONAL_MONTHLY_CREDITS.pro)} credits a month`,
@@ -67,18 +62,10 @@ interface Props {
    * "add-member": invite/join blocked path — Team, and a live legacy Pro sub
    * swaps in place via `/api/billing/upgrade-to-team` (no checkout).
    *
-   * ⚠ THE TWO VARIANTS DO NOT DIFFER ON *WHAT* THEY SELL WITHIN A KIND
-   * (2026-09-07, Solo retired from sale) — only on why the modal opened and
-   * what the blocked path has to explain. `AddMemberBlocked` lives in
-   * `./upgrade-modal-parts`.
-   *
-   * ⚠ **"add-member" IS STANDARD-ONLY (2026-09-08)** and falls back to the
-   * generic upsell on a personal container: that path exists because a member
-   * could not be ADDED, and a personal container has no roster to add one to
-   * (`server/entitlements.ts › assertCanAddMember`). Its whole pitch — seats,
-   * "invite your team", the legacy single-member limit — describes a thing the
-   * reader cannot do, so rendering it there would sell the wrong plan for the
-   * wrong reason.
+   * The variants differ only in why the modal opened, not in what they sell
+   * within a kind. "add-member" is standard-only (2026-09-08) and falls back to
+   * the generic upsell on a personal container, which has no roster to add to
+   * (`server/entitlements.ts › assertCanAddMember`).
    */
   variant?: "generic" | "add-member";
 }
@@ -207,9 +194,9 @@ function CheckoutView({
       <h2 className="mb-1 text-display font-semibold tracking-tight text-text-primary">
         Subscribe to {isPro ? "Pro" : "Team"}
       </h2>
-      {/* ⚠ BRANCHED ON THE PLAN, NOT THE CONTAINER: this line describes the
-          session about to be created. `pro` is flat quantity-1, so seat math
-          would name a unit it does not have. */}
+      {/* Branched on the plan, not the container: this line describes the
+          session about to be created, and `pro` is flat quantity-1, so seat
+          math would name a unit it does not have. */}
       <p className="mb-4 text-caption text-text-secondary">
         {isPro
           ? `${formatMoney(PRO_PRICE)} / month`
@@ -227,12 +214,10 @@ function CheckoutView({
 }
 
 /**
- * DESKTOP leg of checkout — same handoff as
- * `apps/desktop-ui/src/components/settings-modal/billing-pane.tsx`.
- *
- * ⚠ Packaged renderer cannot mount Stripe at all: `script-src 'self'` refuses
- * js.stripe.com, `connect-src 'none'` its XHR, `frame-src 'none'` its iframes,
- * and the session fetch would resolve against a `file://` document. So the
+ * Desktop leg of checkout — same handoff as
+ * `apps/desktop-ui/src/components/settings-modal/billing-pane.tsx`. The
+ * packaged renderer cannot mount Stripe at all (`script-src 'self'`,
+ * `connect-src 'none'`, `frame-src 'none'`, and a `file://` document), so the
  * paywall stops at the pitch and sends the purchase to the browser (GAP-9).
  */
 function BrowserCheckoutHandoff({ plan }: { plan: CheckoutPlan }) {
@@ -260,20 +245,16 @@ function BrowserCheckoutHandoff({ plan }: { plan: CheckoutPlan }) {
 
 /**
  * `/billing/{segment}?billing=upgrade&plan=…` for the workspace the desktop app
- * is CURRENTLY showing (`src/app/billing/[segment]/page.tsx`).
- *
- * ⚠ Segment comes off the desktop hash router's location (`#/{segment}/…`): a
- * segment-less `/billing` resolves or asks, and either way not necessarily the
- * one being upgraded. Origin comes from the preload constant, never
- * `window.location` (a `file://` document here). `plan` rides along so the
- * browser opens straight into checkout.
+ * is currently showing (`src/app/billing/[segment]/page.tsx`). Segment comes off
+ * the desktop hash router's location, since a segment-less `/billing` resolves
+ * or asks and need not land on the one being upgraded. Origin comes from the
+ * preload constant, never `window.location` (a `file://` document here).
  */
 function browserBillingUrl(plan: CheckoutPlan): string {
-  // ⚠ **`pro` GOES SEGMENT-LESS, DELIBERATELY (2026-09-08).** The hash segment
-  // names the STANDARD workspace this window is showing, and `pro` is refused
-  // there (400 `PLAN_NOT_FOR_CONTAINER`). Bare `/billing?plan=pro` is the one
-  // link that resolves the caller's personal container (`app/billing/page.tsx`)
-  // — a segment the desktop window never holds.
+  // `pro` goes segment-less deliberately (2026-09-08): the hash segment names
+  // the standard workspace this window is showing, where `pro` is refused (400
+  // `PLAN_NOT_FOR_CONTAINER`). Bare `/billing?plan=pro` is the one link that
+  // resolves the caller's personal container (`app/billing/page.tsx`).
   if (plan === "pro") {
     return billingUrl(getAppOrigin(), { intent: "upgrade", plan });
   }
@@ -282,15 +263,10 @@ function browserBillingUrl(plan: CheckoutPlan): string {
 }
 
 /**
- * The free-container upsell — ONE option, because one plan is on sale FOR THIS
- * KIND: Team on a standard workspace, Pro on a personal one (2026-09-08).
- *
- * ⚠ THE SINGLE-MEMBER BRANCH IS GONE (2026-09-07). It offered Solo to a
- * one-member free workspace; Solo is retired from sale, and a workspace's
- * member count no longer changes what it can buy — unlimited members on both
- * tiers. ⚠ The kind branch below is NOT that branch coming back: it keys on the
- * CONTAINER, which decides which plan exists at all, not on how many people are
- * in it.
+ * The free-container upsell — one option, because one plan is on sale for this
+ * kind: Team on a standard workspace, Pro on a personal one (2026-09-08). The
+ * branch below keys on the container, never on member count: since Solo was
+ * retired (2026-09-07) a workspace's size no longer changes what it can buy.
  */
 function GenericUpsell({
   ent,
@@ -312,12 +288,10 @@ function GenericUpsell({
   onClose: () => void;
 }) {
   const isPersonal = ent.containerKind === "personal";
-  // ⚠ Live (or grace-period) sub behind a free-reporting plan = degraded legacy
-  // Solo sub; checkout would 409, so Team must swap in place via
-  // /api/billing/upgrade-to-team. Entitled paid containers show
-  // AlreadyPaidNote instead, so this only fires for the degraded case.
-  // ⚠ STANDARD-ONLY: `solo` was never sold on a personal container, so there is
-  // no subscription there to swap and a live one would be Pro itself.
+  // A live (or grace-period) sub behind a free-reporting plan is a degraded
+  // legacy Solo sub; checkout would 409, so Team swaps in place via
+  // /api/billing/upgrade-to-team. Entitled paid containers show AlreadyPaidNote
+  // instead. Standard-only: `solo` was never sold on a personal container.
   const hasLiveSub =
     !isPersonal && (ent.status === "active" || ent.status === "past_due");
   const unlocks = isPersonal ? PRO_UNLOCKS : TEAM_UNLOCKS;
@@ -368,7 +342,7 @@ function GenericUpsell({
                     </span>
                   </>
                 }
-                // ⚠ NO SEAT MATH AND NO ROSTER — `pro` is flat, quantity 1.
+                // No seat math and no roster — `pro` is flat, quantity 1.
                 pitch="Billed monthly. Cancel anytime."
                 cta="Continue to checkout"
                 highlight

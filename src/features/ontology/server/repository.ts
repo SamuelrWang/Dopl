@@ -16,18 +16,15 @@ import {
 
 /**
  * Raw Supabase I/O. Business logic + auth live in service.ts.
- * ⚠ Service-role client bypasses RLS; every method MUST filter workspace_id.
+ * Service-role client bypasses RLS; every method MUST filter workspace_id.
  *
- * ⚠ **THE ENUMERATING READS TAKE A workspace SET, NOT AN ID (2026-09-09, home
- * ontology S2).** A shared ontology is a REFERENCE, never a copy: the row stays
- * in the LENDER's container while the reader stands in the channel's, so a read
- * keyed on one id refuses precisely the lend the share row exists to be. The set
+ * The enumerating reads take a workspace SET, not an id: a shared ontology is
+ * a reference, never a copy, so the row stays in the LENDER's container while
+ * the reader stands in the channel's. The set
  * is `service-audience.ts › OntologyAudience.workspaceIds`, and it is a READ
- * SCOPE — never an authorization. Every cluster a widened read returns is still
- * filtered by `levelForCluster`, and the object reads below take IDS produced by
- * the membership walk over ALREADY-ADMITTED clusters (Q8), so no object arrives
- * that no admitted cluster reaches. Dropping either filter hands the caller the
- * lender's whole shelf. Same shape, same reason, as
+ * SCOPE — never an authorization; clusters stay filtered by `levelForCluster`,
+ * and object reads take ids from the membership walk over ALREADY-ADMITTED
+ * clusters (Q8). Same shape, same reason, as
  * `shared/tenancy/personal-container.ts › resolveShelfScope`.
  */
 
@@ -146,7 +143,7 @@ export async function updateCluster(
     name?: string;
     purpose?: string;
     layout?: GraphLayout;
-    /** Samuel's solo toggle. ⚠ Only ever narrows; the service refuses it from
+    /** Samuel's solo toggle. Only ever narrows; the service refuses it from
      *  an agent (a containment control cannot be self-widened). */
     agentsMayEdit?: boolean;
   },
@@ -181,11 +178,11 @@ export async function updateCluster(
 }
 
 /**
- * Cascade HARD-delete cluster + every object it owns (columns, nested
- * descendants) in ONE atomic RPC. Permanent, no trash. ⚠ Must stay one
- * transaction: partial failure could delete objects and leave cluster behind.
- * Memberships/relationships cascade via FK.
- *
+ * Cascade HARD-delete cluster + every object it owns in ONE atomic RPC.
+ * Permanent, no trash. Must stay one transaction: partial failure could
+ * delete objects and leave the cluster behind. Memberships/relationships
+ * cascade via FK. Returns objects deleted, or null when no LIVE cluster
+ * matched (service → 404).
  * Returns objects deleted, or null when no LIVE cluster matched (service → 404).
  */
 export async function cascadeHardDeleteCluster(
@@ -193,7 +190,7 @@ export async function cascadeHardDeleteCluster(
   clusterId: string
 ): Promise<number | null> {
   const db = supabaseAdmin();
-  // ⚠ DEPLOY-BLOCKING migration 20260807120000_ontology_cluster_hard_delete_rpc.sql.
+  // DEPLOY-BLOCKING migration 20260807120000_ontology_cluster_hard_delete_rpc.sql.
   // Sole path for `deleteCluster`; missing → every cluster delete fails at
   // runtime. `as never` = house convention for a not-yet-generated RPC (see
   // `chats/server/repository.ts` → `chat_create_with_messages`) and why tsc
@@ -211,13 +208,10 @@ export async function cascadeHardDeleteCluster(
 
 /**
  * The objects of the ADMITTED clusters, addressed by the ids the membership
- * walk produced.
- *
- * ⚠ **BY ID, NOT BY CONTAINER (2026-09-09), AND THE DIFFERENCE IS R1.** The
- * whole-workspace read this replaces loaded every object in the container and
- * left the narrowing to whatever assembled the graph afterwards — which is a
- * fence only for as long as nobody adds a second consumer of the rows. The walk
- * is the boundary (Q8), so the walk is what the query takes.
+ * walk produced. By id, not by container (R1): a whole-container read leaves
+ * the narrowing to whatever assembles the graph afterwards, which is a fence
+ * only until a second consumer of the rows appears. The walk is the boundary
+ * (Q8), so the walk is what the query takes.
  */
 export async function listObjectsByIds(
   workspaceIds: readonly string[],
@@ -253,11 +247,9 @@ export async function findObjectById(
   return data as OntologyObjectRow | null;
 }
 
-/** ⚠ THE ATTRIBUTION STAMP IS NOT OPTIONAL (Q3/Q6). An edit made through a
- *  share SURVIVES the unshare, attributed to its author and to whether a person
- *  or an agent made it — the same `('user','agent')` literal the knowledge and
- *  skills tables carry. Every write path below stamps it; a write that forgets
- *  leaves a row whose last author is a guess. */
+/** The attribution stamp is not optional (Q3/Q6): an edit made through a
+ *  share survives the unshare, attributed to its author and to whether a
+ *  person or an agent made it. Every write path below stamps it. */
 export async function insertObject(input: {
   workspaceId: string;
   name: string;
@@ -328,20 +320,18 @@ export async function updateObject(
 }
 
 /**
- * PERMANENTLY delete one object AND everything left unreachable by its removal,
- * in ONE atomic RPC. Irreversible.
+ * PERMANENTLY delete one object AND everything left unreachable by its
+ * removal, in ONE atomic RPC. Irreversible.
  *
- * ⚠ Do NOT reduce to a plain single-row DELETE. Object FKs cascade off
- * `ontology_memberships`, not off child objects — a plain delete drops the
- * LINKS and leaves the subtree alive, unreachable (board/picker walk down from
- * `cluster.columnIds`) yet still counted against the object cap, forever.
- *
- * RPC sweeps descendants it was the LAST way into; a card also hanging under
- * another parent survives. Relationships cascade via FK.
+ * Do NOT reduce to a plain single-row DELETE: object FKs cascade off
+ * `ontology_memberships`, not off child objects, so a plain delete drops the
+ * LINKS and leaves the subtree alive, unreachable yet still counted against
+ * the object cap. The RPC sweeps descendants it was the LAST way into; a card
+ * also hanging under another parent survives. Relationships cascade via FK.
  */
 export async function hardDeleteObject(workspaceId: string, id: string): Promise<void> {
   const db = supabaseAdmin();
-  // ⚠ DEPLOY-BLOCKING migration
+  // DEPLOY-BLOCKING migration
   // 20260807140000_cascade_hard_delete_folder_and_object.sql. Sole path for
   // `deleteObject`; missing → every object delete fails at runtime.
   const { error } = await db.rpc(
@@ -408,10 +398,10 @@ export async function countMembershipSiblings(
   return count ?? 0;
 }
 
-/** Outbound edges of the WALKED object set. ⚠ Sourced by id for the reason
- *  {@link listObjectsByIds} is: an edge whose source is an object no admitted
- *  cluster reaches is not this reader's edge. Targets outside the set are
- *  dropped during assembly, as they always were. */
+/** Outbound edges of the WALKED object set, sourced by id for the reason
+ *  {@link listObjectsByIds} is: an edge from an object no admitted cluster
+ *  reaches is not this reader's edge. Targets outside the set are dropped
+ *  during assembly. */
 export async function listRelationshipsForSources(
   workspaceIds: readonly string[],
   sourceObjectIds: readonly string[]

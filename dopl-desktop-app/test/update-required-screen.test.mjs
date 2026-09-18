@@ -1,19 +1,14 @@
-// The blocking "update required" screen, and the wiring that makes the block
-// total.
+// The blocking "update required" screen, and the wiring that makes the block total.
 //
-// THE PROPERTY THIS FILE PROTECTS. A gate that can be walked around is not a
-// gate, and the ways around one in this app are not hypothetical: the dock icon,
-// the tray's "Open Dopl", a clicked channel notification and a dopl:// deep link
-// are four independent paths that each open a window, and the 2026-08-03 fleet
-// audit found all four of them resurrecting the WRONG shell because they each
-// built their own. The fix then was one factory (shell-mode.createShellWindow);
-// the gate rides that same factory, which is why there is exactly one branch to
-// pin here rather than four. If someone reintroduces a direct createSpaWindow /
-// createMainWindow call site, that is the regression this file is watching for.
+// A gate that can be walked around is not a gate, and four independent paths open a window here:
+// the dock icon, the tray's "Open Dopl", a clicked channel notification and a dopl:// deep link.
+// They all ride ONE factory (shell-mode.createShellWindow), which is why there is exactly one
+// branch to pin rather than four; a direct createSpaWindow / createMainWindow call site is the
+// regression this file watches for.
 //
-// The second half is the screen's own contract: it must be able to END the block
-// (restart), must always offer a way OUT (quit), and must not be able to grant
-// itself anything else — its preload is the whole privileged surface it has.
+// The second half is the screen's own contract: it must be able to END the block (restart), must
+// always offer a way OUT (quit), and must not be able to grant itself anything else — its preload
+// is the whole privileged surface it has.
 //
 // Run: `node --test dopl-desktop-app/test/update-required-screen.test.mjs`
 
@@ -30,13 +25,10 @@ const R = (p) => readFileSync(join(HERE, "..", "renderer", p), "utf8");
 
 const KIT = readFileSync(join(HERE, "..", "..", "apps", "desktop-ui", "src", "styles", "kit.css"), "utf8");
 
-// Every `prop: value` in one rule body, whitespace-normalized, as a Set. Enough
-// to compare two hand-transcribed copies of the same recipe; not a CSS parser.
-// Comments come OUT before the split: kit.css explains its recipes inline (the
-// hover rule's `--shadow-raised-hover` note, 2026-09-16), and on a naive split
-// that prose rides along on the declaration that follows it, so a rule would
-// read as drifted purely for being commented. Only the comments are forgiven —
-// the declarations themselves still have to match character for character.
+// Every `prop: value` in one rule body, whitespace-normalized, as a Set. Enough to compare two
+// hand-transcribed copies of the same recipe; not a CSS parser. Comments come OUT before the
+// split, or kit.css's inline prose would ride along on the declaration that follows it and a rule
+// would read as drifted purely for being commented.
 function rule(css, selector) {
   const at = css.indexOf(selector + " {");
   assert.notEqual(at, -1, `no rule for ${selector}`);
@@ -61,10 +53,8 @@ test("the gate branch is INSIDE the one shell factory, ahead of the shell", () =
   const fn = fnOf(SHELL, "createShellWindow");
   assert.match(fn, /deps\.versionGate && deps\.versionGate\.isBlocked\(\)/);
   assert.match(fn, /createUpdateRequiredWindow\(\)/);
-  // Ahead of the shell, or a blocked build would still get the app. There used to be TWO
-  // shells to sit ahead of; Stage D (2026-08-06) deleted the remote one, which makes this
-  // stricter rather than weaker — the factory now has exactly one branch and one exit, so
-  // there is nowhere for a second window path to hide.
+  // Ahead of the shell, or a blocked build would still get the app. Stage D (2026-08-06) deleted
+  // the remote shell, so the factory now has exactly one branch and one exit.
   const gate = fn.indexOf("isBlocked()");
   assert.ok(gate < fn.indexOf("createSpaWindow"), "before the SPA");
   assert.ok(!/createMainWindow/.test(fn), "a second factory is a window the gate does not cover");
@@ -98,13 +88,9 @@ test("index.js arms the gate, and feeds it the updater state it decides on", () 
 test("wake re-asks for the floor: a Mac can sleep across a release", () => {
   assert.match(WAKE, /kick\('version-gate', \(\) => deps\.versionGate\.onWake\(\)\)/);
   assert.match(INDEX, /wake\.arm\(\{[\s\S]*?versionGate,/);
-  // The extraction kept every previous participant; losing one here would be a
-  // silent multi-minute hang after every unlock.
-  //
-  // 'guard' LEFT THE LIST on 2026-08-06, and it is the one removal that is correct: it woke
-  // `load-guard.js`, which existed to recover a hung REMOTE page load. The SPA paints from
-  // local disk, so there is no network load to recover and no guard to wake. Stage D deleted
-  // the module; a `kick('guard', …)` reappearing here would mean the remote shell came back.
+  // The extraction kept every previous participant; losing one is a silent multi-minute hang after
+  // every unlock. `guard` LEFT the list on 2026-08-06 and that removal is the correct one: it woke
+  // `load-guard.js`, which recovered a hung REMOTE page load, and the SPA paints from local disk.
   for (const name of ["listener", "pool-reset", "token", "ui-sync"]) {
     assert.match(WAKE, new RegExp(`kick\\('${name}'`), `wake dropped ${name}`);
   }
@@ -125,9 +111,8 @@ test("the window is the repo's local-page shape, and never a browser", () => {
 });
 
 test("its three IPC handlers are SENDER-BOUND to this window's top frame", () => {
-  // `restart` and `quit` end the process. The H3 idiom (channel-dir-ipc.js): the
-  // sender must be this window's webContents AND its main frame, since a
-  // cross-origin iframe shares its host's webContents.
+  // `restart` and `quit` end the process. The H3 idiom (channel-dir-ipc.js): the sender must be
+  // this window's webContents AND its main frame, since a cross-origin iframe shares webContents.
   const guard = fnOf(WINDOW, "isGateSender");
   assert.match(guard, /sender !== win\.webContents/);
   assert.match(guard, /frame !== sender\.mainFrame/);
@@ -140,15 +125,11 @@ test("its three IPC handlers are SENDER-BOUND to this window's top frame", () =>
 
 // ── F-221: the THIRD copy of the frame guard ─────────────────────────────────
 //
-// The predicate has three copies (channel-dir-ipc.js, ui-bridge.js, and this
-// one). Two were closed at Phase 10; THIS one kept the lenient
-// `if (frame && sender.mainFrame && frame !== sender.mainFrame)` form, which
-// WAVES THROUGH a `senderFrame` reading as null/undefined — on the window whose
-// two live ops END THE PROCESS. Closed 2026-08-18 (wave-2 fix pass).
-//
-// Driven rather than grepped, the `test/channel-ipc-sender.test.mjs` idiom: the
-// real source is sliced out and executed, so a regression in the BRANCH fails
-// here even if the surrounding text still matches.
+// The predicate has three copies (channel-dir-ipc.js, ui-bridge.js, and this one). Two were closed
+// at Phase 10; THIS one kept a lenient form that WAVED THROUGH a null/undefined `senderFrame`, on
+// the window whose two live ops END THE PROCESS. Closed 2026-08-18. Driven rather than grepped:
+// the real source is sliced out and executed, so a regression in the BRANCH fails here even if the
+// surrounding text still matches.
 
 const gateGuard = (win) =>
   new Function("win", `${fnOf(WINDOW, "isGateSender")}\n return isGateSender;`)(win);
@@ -192,8 +173,7 @@ test("the gate guard REFUSES an iframe, a stranger, a destroyed window and a thr
 });
 
 test("the handlers are registered ONCE, not per window", () => {
-  // ipcMain.handle throws on a duplicate channel, and the window is rebuilt on
-  // every re-block.
+  // ipcMain.handle throws on a duplicate channel, and the window is rebuilt on every re-block.
   assert.match(fnOf(WINDOW, "registerIpc"), /if \(registered\) return;\s*registered = true;/);
 });
 
@@ -210,11 +190,9 @@ test("the live narration is unsubscribed when the window goes away", () => {
 });
 
 test("a stale 'closed' cannot orphan the window that replaced it", () => {
-  // `closed` arrives a tick after destroy(), so a release-then-reblock can have
-  // a NEW window in the slot by then. Nulling it blindly would leave the module
-  // pointing at nothing while a live window is on screen — every IPC call from
-  // that window then fails isGateSender, and the screen goes blank with no
-  // button on it. The handler is bound to the window it was created for.
+  // `closed` arrives a tick after destroy(), so a release-then-reblock can have a NEW window in
+  // the slot by then. Nulling it blindly would leave the module pointing at nothing while a live
+  // window is on screen, and every IPC call from that window would then fail isGateSender.
   assert.match(WINDOW, /const created = new BrowserWindow\(/);
   assert.match(WINDOW, /on\('closed', \(\) => \{\s*if \(win !== created\) return;/);
   // The push listener is bound to the same window, not to whatever `win` is now.
@@ -259,18 +237,14 @@ test("it renders main's answer and holds no state of its own", () => {
   assert.match(HTML, /window\.doplUpdate\.onState\(render\)/);
   assert.match(HTML, /window\.doplUpdate\.state\(\)\.then\(render\)/, "the first paint, not just pushes");
   assert.match(HTML, /window\.doplUpdate\.act\(id\)/);
-  // textContent, never innerHTML: the copy comes from main, but it is still
-  // strings being written into a document.
+  // textContent, never innerHTML: the copy comes from main, but it is still written into a document.
   assert.ok(!/innerHTML/.test(HTML));
 });
 
 test("THE BUTTONS ARE THE DESIGN SYSTEM'S, not a look-alike", () => {
-  // This page cannot import the kit: it is a local file in its own window and
-  // must render with no network at all. So it carries the kit's recipes as
-  // literal CSS — the same bargain kit.css itself made with globals.css (its own
-  // DRIFT WARNING header, F-074). A copy with nothing watching it is how the
-  // screen ended up with pill-shaped buttons in a squared-off app, so this
-  // diffs the copy against the source instead of trusting a comment.
+  // This page cannot import the kit: it is a local file in its own window and must render with no
+  // network at all, so it carries the kit's recipes as literal CSS — the same bargain kit.css made
+  // with globals.css (F-074). This diffs the copy against the source rather than trusting it.
   for (const [kitSelector, pageSelector] of [
     [".auth-btn-3d", "button.primary"],
     [".auth-btn-3d:hover:not(:disabled)", "button.primary:hover:not(:disabled)"],

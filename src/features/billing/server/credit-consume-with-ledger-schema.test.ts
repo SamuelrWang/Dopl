@@ -1,22 +1,19 @@
 /**
- * `20261004120000_credit_consume_with_ledger.sql`, READ AS THE CONTRACT IT IS.
+ * `20261004120000_credit_consume_with_ledger.sql`, read as the contract it is.
  *
- * 🔒 **THE RULING IT ENCODES (Samuel, 2026-09-13): THE HISTOGRAM MUST EQUAL THE
- * WALLET, ALWAYS.** The counter UPDATE and the `credit_usage_events` INSERT are
- * one transaction, so a refused consume writes nothing and a failed ledger insert
- * rolls the counter back. Before this file the insert was a fire-and-forget
- * `console.warn` AFTER the counter had already committed, and a `42703` cost
- * Samuel's wallet three rows of attribution against a counter of 8 (F-693).
+ * The ruling it encodes (Samuel, 2026-09-13): the histogram must equal the
+ * wallet, always. The counter UPDATE and the `credit_usage_events` INSERT are one
+ * transaction, so a refused consume writes nothing and a failed ledger insert
+ * rolls the counter back (F-693).
  *
- * ⚠ **NOT A REPLAY** — Docker is unavailable here, so nothing in this file has
- * met a database. What a SQL-text test can honestly prove is that the file still
- * SAYS what the fix is: ONE function per wallet, the ledger INSERT INSIDE the
- * branch the CAS already proved moved the counter, the CAS itself byte-for-byte
- * from `20260930120000` §3, no error handler anywhere near it, and the old
- * signatures dropped rather than left standing as overloads. Behavioural probes
- * are OWED (CI's `rls-redteam` job is the replay, INVARIANTS §14).
+ * Not a replay — Docker is unavailable here. What SQL text proves is that the
+ * file still says what the fix is: one function per wallet, the ledger INSERT
+ * inside the branch the CAS proved moved the counter, the CAS byte-for-byte from
+ * `20260930120000` §3, no error handler near it, and the old signatures dropped
+ * rather than left standing as overloads. Behavioural probes are owed (CI's
+ * `rls-redteam` job is the replay, INVARIANTS §14).
  *
- * ⚠ Deploy state is a MEASUREMENT: `supabase migration list`, joined on the
+ * Deploy state is a MEASUREMENT: `supabase migration list`, joined on the
  * NAME, never on the filename prefix (INVARIANTS §12, F-304).
  */
 
@@ -66,8 +63,8 @@ describe("the header carries what an operator needs before applying it", () => {
   });
 
   it("🔒 records the INCIDENT, including that the hand fix was not the fix", () => {
-    // The measurement is the whole reason this file exists; a header that stated
-    // only the rule would read as a refactor.
+    // The measurement is why this file exists; a header stating only the rule
+    // would read as a refactor.
     expect(prose).toContain("used = 8");
     expect(prose).toContain("42703");
     expect(prose).toContain("that is not the fix");
@@ -86,8 +83,8 @@ describe("the header carries what an operator needs before applying it", () => {
     ]) {
       expect(prose, stmt).toContain(stmt);
     }
-    // ⚠ The rollback must say to deploy the old server FIRST: between the two
-    // steps every tool call is free, and discovering that afterwards is worse.
+    // The rollback must say to deploy the old server first: between the two steps
+    // every tool call is free.
     expect(prose).toContain("DEPLOY THE PRE-WAVE SERVER FIRST");
     // Nothing in this file takes away a table, a column, an index or a policy.
     expect(live).not.toMatch(/DROP\s+(TABLE|COLUMN|INDEX|POLICY|CONSTRAINT)/i);
@@ -106,11 +103,9 @@ describe("🔒 the old four/five-argument signatures are DROPPED, not replaced",
   });
 
   /**
-   * ⚠ **THE REVERT DETECTOR.** `CREATE OR REPLACE` on a CHANGED argument list
-   * creates a SECOND function rather than replacing the first — and that second
-   * function is the pre-fix path: a counter move with no ledger row, reachable by
-   * any caller that sends the old argument names. The two consume functions must
-   * therefore be plain `CREATE`.
+   * Revert detector: `CREATE OR REPLACE` on a changed argument list creates a
+   * SECOND function, and that one is the pre-fix path — a counter move with no
+   * ledger row. Both consume functions must be plain `CREATE`.
    */
   it("creates both consume functions with bare CREATE, never OR REPLACE", () => {
     for (const name of ["consume_user_credits", "consume_member_credits"]) {
@@ -163,11 +158,10 @@ describe("🔒 ONE ATOMIC WRITE — the ledger INSERT is inside the CAS's succes
       });
 
       /**
-       * 🔒 **THE ORDERING ASSERTION, AND IT IS THE WHOLE FILE.** The ledger
-       * INSERT must sit AFTER `IF v_used IS NOT NULL THEN` — the CAS's own "the
-       * counter moved" answer — and BEFORE that branch's `RETURN`. An insert
-       * above the `IF` attributes credits a refusal never charged; one below the
-       * `RETURN` is unreachable.
+       * The ledger INSERT must sit after `IF v_used IS NOT NULL THEN` (the CAS's
+       * "the counter moved" answer) and before that branch's `RETURN`: above the
+       * `IF` it attributes credits a refusal never charged, below the `RETURN` it
+       * is unreachable.
        */
       it("🔒 sits after `IF v_used IS NOT NULL THEN` and before its RETURN", () => {
         const text = fn();
@@ -180,9 +174,9 @@ describe("🔒 ONE ATOMIC WRITE — the ledger INSERT is inside the CAS's succes
       });
 
       it("🔒 has NO exception handler — a failed insert must abort the spend", () => {
-        // ⚠ THE SECOND REVERT DETECTOR. `EXCEPTION WHEN OTHERS THEN NULL` around
-        // the insert would restore the exact defect in SQL: the counter commits,
-        // the attribution does not, and nothing says so.
+        // Second revert detector: `EXCEPTION WHEN OTHERS THEN NULL` around the
+        // insert restores the defect in SQL — the counter commits, the
+        // attribution does not, and nothing says so.
         expect(fn()).not.toMatch(/\bEXCEPTION\b/i);
       });
 
@@ -234,9 +228,8 @@ describe("credit_ledger_sum — the reconciliation guard's read side", () => {
     expect(fn).toContain("e.payer_user_id = p_payer_user_id");
     expect(fn).toContain("e.wallet = p_wallet");
     expect(fn).toContain("e.period_start = p_period_start");
-    // ⚠ The ledger row records the ADDRESSED container, not the charged one, so a
-    // workspace narrowing would drop every cross-container seat burn and read as
-    // drift.
+    // The ledger row records the addressed container, not the charged one, so a
+    // workspace narrowing would drop every cross-container seat burn.
     expect(fn.slice(0, fn.indexOf("$$;"))).not.toContain("workspace_id");
   });
 
@@ -254,9 +247,9 @@ describe("ordering", () => {
   it("has a unique version and sorts after every file it depends on", () => {
     const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql"));
     expect(files.filter((f) => f.startsWith("20261004120000"))).toEqual([NAME]);
-    // ⚠ Not a style rule: this file's INSERT names `channel_id`, `wallet` and
-    // `payer_user_id`, and it DROPs the two functions the wallets file created —
-    // so all three must land BEFORE it in filename order or the replay fails.
+    // Not a style rule: this file's INSERT names `channel_id`, `wallet` and
+    // `payer_user_id`, and it DROPs the two functions the wallets file created,
+    // so all three must sort before it or the replay fails.
     for (const dependency of [
       "20260901130000_credit_usage_events.sql",
       "20260930120000_credit_wallets.sql",

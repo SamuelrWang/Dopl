@@ -2,17 +2,15 @@
  * ONTOLOGY → REVISIONS, THE READ HALF — one object's history, the CLUSTER
  * ROLL-UP and the PER-FIELD RESTORE (2026-09-09, the CHANGELOG lane part 2).
  *
- * ⚠ **SPLIT FROM `./service-revisions.test.ts` AT THE §1 CAP, ON THE SAME SEAM
- * THE SOURCE IS SPLIT ON** — capture there, reads and restore here. The mock
- * preamble is duplicated rather than shared: a helper module would be a third
- * file that both suites' `vi.mock` factories cannot close over anyway (they are
- * hoisted).
+ * Split from `./service-revisions.test.ts` on the same seam the source is
+ * split on — capture there, reads and restore here. The mock preamble is
+ * duplicated because a `vi.mock` factory is hoisted and cannot close over a helper.
  *
- * ⚠ **THE PRIMITIVE RUNS FOR REAL — only `revisions/server/repository.ts` is
- * stubbed** — so `restoreRevision`'s own refusal is under test rather than
+ * The primitive runs for real — only `revisions/server/repository.ts` is
+ * stubbed — so `restoreRevision`'s own refusal is under test rather than
  * mocked out from under it.
  *
- * ⚠ MUTATION-VERIFIED — two reverts, two failures: `restoreObjectRevision`
+ * Mutation-verified — two reverts, two failures: `restoreObjectRevision`
  * writing without the `restore` op override (no new row is filed as a restore);
  * and `listClusterRevisions` losing its gate (the `none` reader gains history).
  */
@@ -22,7 +20,7 @@ import type { OntologyClusterRow, OntologyObjectRow } from "./dto";
 import { ontologyContextFactory } from "./test-fixtures";
 import type { Revision } from "@/features/revisions/types";
 
-// ⚠ THE PRIMITIVE'S REPOSITORY, AND NOTHING ABOVE IT.
+// The primitive's repository, and nothing above it.
 vi.mock("@/features/revisions/server/repository", () => ({
   appendRevision: vi.fn(async (args: Record<string, unknown>) => ({
     id: "rev-new",
@@ -186,7 +184,7 @@ describe("the cluster roll-up", () => {
       revisionRepo.listRevisionsForResources
     ).mock.calls[0];
     expect(workspaceId).toBe(WS);
-    // ⚠ THE ID SET IS THE FENCE — the object of ANOTHER cluster is not on it,
+    // The id set is the fence — the object of ANOTHER cluster is not on it,
     // because the walk is the same boundary `getSnapshot` uses (Q8).
     expect(new Set(ids)).toEqual(new Set([CLUSTER_ID, OBJECT_ID]));
   });
@@ -212,7 +210,7 @@ describe("the cluster roll-up", () => {
     mockShares.listSharesForChannels.mockResolvedValue([
       { ...share, members_level: "none" as const },
     ]);
-    // ⚠ A 404, never a 403 — "not shared with you" and "does not exist" are one
+    // A 404, never a 403 — "not shared with you" and "does not exist" are one
     // answer (`service-gates.ts`).
     await expect(listClusterRevisions(ctxOf(), CLUSTER_ID)).rejects.toMatchObject({
       status: 404,
@@ -248,7 +246,7 @@ describe("per-field restore", () => {
         ],
       })
     );
-    // ⚠ THE POST-WRITE ROW carries the restored value and NOTHING ELSE moved —
+    // The post-write row carries the restored value and NOTHING ELSE moved —
     // one field restored is one revision, which is the count below.
     mockRepo.updateObject.mockResolvedValue(
       objectRow({
@@ -260,13 +258,13 @@ describe("per-field restore", () => {
 
     await restoreObjectRevision(ctxOf(), OBJECT_ID, "rev-1");
 
-    // ⚠ THE MERGE, NOT A REPLACEMENT OF THE BAG: only `stage` moves.
+    // The merge, not a replacement of the bag: only `stage` moves.
     expect(mockRepo.updateObject.mock.calls[0][2]).toMatchObject({
       attributes: [
         { key: "stage", label: "Stage", value: { kind: "pill", value: "New" } },
       ],
     });
-    // ⚠ A NEW ROW, op `restore`, naming the SOURCE's date — never a rewrite of
+    // A new row, op `restore`, naming the SOURCE's date — never a rewrite of
     // the row it restored from.
     expect(append).toHaveBeenCalledTimes(1);
     expect(rows()[0]).toMatchObject({

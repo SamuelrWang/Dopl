@@ -4,35 +4,27 @@ import type { WalletKind } from "../credits";
 import type { CreditLedgerAttribution } from "./credit-ledger";
 
 /**
- * THE TWO WALLET COUNTERS — repository only (INVARIANTS §2). One atomic spend
- * and one meter read per wallet, and nothing else: the numbers live in
- * `../credits.ts`, the routing in `./credits-service.ts`.
+ * The two wallet counters — repository only (INVARIANTS §2). One atomic spend and
+ * one meter read per wallet: the numbers live in `../credits.ts`, the routing in
+ * `./credits-service.ts`.
  *
- * 🔒 **A SPEND WRITES THE COUNTER AND THE LEDGER ROW IN ONE TRANSACTION SINCE
- * 2026-09-13** (Samuel: "the histogram must equal the wallet, always"; F-693,
- * `supabase/migrations/20261004120000_credit_consume_with_ledger.sql`). Both
- * consume RPCs take the ledger's own dimensions as a trailing
- * {@link CreditLedgerAttribution} and insert `credit_usage_events` themselves.
- * ⚠ **THERE IS NO SECOND WRITE TO SEQUENCE AND NO `console.warn`-AND-CONTINUE
- * PATH LEFT**: a refused consume inserts nothing, and an insert that fails aborts
- * the counter move with it, so the RPC throwing is the ONLY way attribution can
- * be missing — and a throw is what the route's fail-open already handles.
+ * F-693 (2026-09-13): a spend writes the counter and the ledger row in one
+ * transaction. Both consume RPCs take the ledger's dimensions as a trailing
+ * {@link CreditLedgerAttribution} and insert `credit_usage_events` themselves, so
+ * there is no second write to sequence: a refused consume inserts nothing, a failed
+ * insert aborts the counter move, and the RPC throwing is the only way attribution
+ * can go missing.
  *
- * 🔒 **BOTH COUNTERS ARE PER-PAYER, WHICH IS THE WHOLE POINT OF THE WAVE**
- * (Samuel, 2026-09-07). `workspace_credit_usage` was one pooled row per
- * (workspace, period) and could not express "each member gets a fixed 5,000".
- * `user_credit_usage` keys on the person; `workspace_member_credit_usage` keys
- * on (workspace, person). Migration `20260930120000_credit_wallets.sql`.
+ * 2026-09-07: both counters are per-payer. `user_credit_usage` keys on the person,
+ * `workspace_member_credit_usage` on (workspace, person) — the pooled
+ * (workspace, period) row could not express "each member gets a fixed 5,000".
  *
- * ⚠ **A SEPARATE MODULE FROM `workspace-billing.ts`, DELIBERATELY.** That file
- * is the `workspace_billing` row plus the two counts the entitlement layer
- * needs, and every suite in this feature mocks it wholesale. Wallet writes are a
- * different table, a different key and a different lifecycle; folding them back
- * in means every entitlements test carries a mock for the hottest write path in
- * the product.
+ * Kept separate from `workspace-billing.ts`, which every suite in this feature
+ * mocks wholesale: folding wallet writes back in would put a mock for the hottest
+ * write path in the product into every entitlements test.
  *
- * ⚠ Both consume functions THROW on a DB error. The fail DIRECTION is the
- * route's decision, and `POST /api/mcp/credits/consume` fails OPEN.
+ * Both consume functions throw on a DB error; the fail direction is the route's
+ * decision, and `POST /api/mcp/credits/consume` fails open.
  */
 
 /** One atomic credit spend: allowed?, plus the counter AFTER the attempt
@@ -54,13 +46,11 @@ function firstRow(data: unknown, rpc: string): CreditConsumeRow {
  * Spend `amount` from the PERSONAL wallet of `userId` for `periodStart`,
  * refusing past `limit`.
  *
- * ⚠ Atomic cross-instance compare-and-set in Postgres (`consume_user_credits`,
- * one upsert-CAS statement, no advisory lock), so two concurrent tool calls in
- * two different home containers can never both spend the last credit.
+ * Atomic cross-instance compare-and-set in Postgres (one upsert-CAS statement, no
+ * advisory lock), so two concurrent tool calls can never both spend the last credit.
  *
- * ⚠ **`attribution` IS NOT OPTIONAL AND IS NOT LOGGING.** It is the
- * `credit_usage_events` row this spend writes, in the same transaction — the
- * /home histogram's only source. `userId` here is the PAYER; the CALLER is
+ * `attribution` is not logging: it is the `credit_usage_events` row this spend
+ * writes in the same transaction. `userId` is the PAYER; the caller is
  * `attribution.callerUserId`, and the two differ exactly on the guest path.
  */
 export async function consumeUserCredits(
@@ -87,16 +77,13 @@ export async function consumeUserCredits(
  * Spend `amount` from `userId`'s SEAT in `workspaceId` for `periodStart`,
  * refusing past `limit`. Same CAS shape as above, one key wider.
  *
- * ⚠ **THE LIMIT IS THIS MEMBER'S, NOT THE WORKSPACE'S.** Nothing here sums or
- * divides by the seat count: the allocation is fixed per member and is not
- * pooled, so a member out of credits stays out even while a colleague's seat is
+ * The limit is this member's, not the workspace's: nothing sums or divides by the
+ * seat count, so a member out of credits stays out while a colleague's seat is
  * untouched.
  *
- * ⚠ **`workspaceId` IS THE CHARGED CONTAINER AND
- * `attribution.originWorkspaceId` IS THE ADDRESSED ONE, AND UNDER RULE B THEY
- * DIFFER** — a workspace-channel agent reaching into a personal KB charges the
- * seat while addressing the shelf. Passing one where the other belongs bills the
- * right wallet and files the burn in the wrong place, or the reverse.
+ * `workspaceId` is the charged container, `attribution.originWorkspaceId` the
+ * addressed one, and under rule B they differ. Passing one where the other belongs
+ * files the burn in the wrong place.
  */
 export async function consumeMemberCredits(
   workspaceId: string,
@@ -123,8 +110,8 @@ export async function consumeMemberCredits(
 /**
  * Credits spent from a personal wallet in `(userId, periodStart)`.
  *
- * ⚠ NO ROW MEANS ZERO — the counter row is created by the first consume of a
- * period, so "made no MCP call this month" and "used 0" are the same state.
+ * No row means zero — the counter row is created by the first consume of a period,
+ * so "made no MCP call this month" and "used 0" are the same state.
  */
 export async function getUserCreditsUsed(
   userId: string,
@@ -144,16 +131,11 @@ export async function getUserCreditsUsed(
  * Every seat counter this person holds for `periodStart`, summed — the SEAT
  * wallet's half of the reconciliation guard (`credits-audit.ts`).
  *
- * ⚠ **CROSS-WORKSPACE ON PURPOSE, AND IT IS NOT A POOL.** Nothing here decides an
- * allowance; the seat allocation is still fixed per (workspace, member) and
- * `getMemberCreditsUsed` is what a meter reads. This answers the ONE question the
- * ledger can be compared on: the ledger row records the ADDRESSED container, not
- * the charged one, so a per-workspace ledger sum would drop every cross-container
- * seat burn and read as drift. Both sides therefore key on (payer, period).
- *
- * ⚠ Seats in workspaces on DIFFERENT subscription anchors have different
- * `period_start` values and are correctly excluded by the same filter on both
- * sides — that is what makes the comparison exact rather than approximate.
+ * Cross-workspace on purpose, and not a pool: nothing here decides an allowance.
+ * The ledger row records the ADDRESSED container, so a per-workspace ledger sum
+ * would drop every cross-container seat burn and read as drift; both sides key on
+ * (payer, period) instead. Seats on different subscription anchors have different
+ * `period_start` values and drop out of both sides by the same filter.
  */
 export async function sumMemberCreditsUsed(
   userId: string,
@@ -175,12 +157,10 @@ export async function sumMemberCreditsUsed(
  * One wallet's ATTRIBUTION total for a period — `SUM(amount)` over
  * `credit_usage_events`, keyed exactly as the counter is.
  *
- * ⚠ **AN RPC BECAUSE POSTGREST CANNOT AGGREGATE** (the constraint
- * `home/server/repository-overview.ts › scanCreditEvents` records, where the
- * answer was a capped haul tallied in the service). A capped haul is a FLOOR, and
- * a floor cannot measure a DIFFERENCE — it would report the cap as drift. One
- * `SUM` in Postgres is exact and is one round trip
- * (`20261004120000_credit_consume_with_ledger.sql` §4).
+ * An RPC because PostgREST cannot aggregate (see
+ * `home/server/repository-overview.ts › scanCreditEvents`, which tallies a capped
+ * haul instead). A capped haul is a floor, and a floor cannot measure a difference
+ * — it would report the cap as drift. One `SUM` in Postgres is exact.
  */
 export async function sumCreditLedger(
   payerUserId: string,

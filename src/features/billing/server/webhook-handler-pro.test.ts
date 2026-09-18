@@ -1,14 +1,10 @@
 /**
- * The webhook's PERSONAL-PRO cases (2026-09-08, spec §11). A separate file
- * because `webhook-handler.test.ts` is already over the 500-line cap with a
- * standing exemption (`eslint.config.mjs`), and growing an exempted file is how
- * an exemption becomes permanent.
- *
- * Two facts that only the assembled handler can state — the derivation itself
- * is `webhook-plan.test.ts`:
- *   - a Pro subscription writes `seatCount: 1`, whatever quantity Stripe reports;
- *   - `invoice.payment_failed` moves a `pro` row to past_due, so a personal
- *     subscriber is dunned like every other payer.
+ * The webhook's personal-Pro cases (2026-09-08), split out because
+ * `webhook-handler.test.ts` already sits over the 500-line cap on an exemption.
+ * Two facts only the assembled handler can state (the derivation is
+ * `webhook-plan.test.ts`): a Pro subscription writes `seatCount: 1` whatever
+ * quantity Stripe reports, and `invoice.payment_failed` moves a `pro` row to
+ * past_due.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -133,8 +129,8 @@ describe("a personal Pro subscription", () => {
   });
 
   it("pins seatCount to 1 even when Stripe reports a larger quantity", async () => {
-    // ⚠ A hand-edited quantity in the Stripe dashboard must not make a personal
-    // container look like a multi-seat workspace to `entitlements.ts`.
+    // A hand-edited dashboard quantity must not make a personal container look
+    // like a multi-seat workspace to `entitlements.ts`.
     await processStripeEvent(event("customer.subscription.updated", proSub(4)));
     expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
       PERSONAL,
@@ -143,8 +139,8 @@ describe("a personal Pro subscription", () => {
   });
 
   it("logs — and still writes — a Pro subscription landing on a standard workspace", async () => {
-    // 🔒 Reports, never refuses: the money has already moved by the time the
-    // event lands, and dropping the write leaves a payer with no plan at all.
+    // Reports, never refuses: the money has already moved by the time the event
+    // lands, and dropping the write leaves a payer with no plan at all.
     findWorkspace.mockResolvedValue({
       id: PERSONAL,
       name: "Acme",
@@ -172,8 +168,8 @@ describe("dunning reaches a personal Pro row", () => {
   }
 
   it("flags past_due on a failed invoice", async () => {
-    // ⚠ Before 2026-09-08 the paid check was `solo || team`, so `pro` would
-    // have been the one paid plan that silently skipped dunning.
+    // `pro` must be in the paid set, or it is the one paid plan that silently
+    // skips dunning.
     mockRepo.getWorkspaceBilling.mockResolvedValue(billing());
     await processStripeEvent(event("invoice.payment_failed", invoice()));
     expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(

@@ -1,51 +1,35 @@
-// SESSION TELEMETRY — the QUANTIZATION and the CADENCE FLOOR that let the eight rich fields
-// ride `channel_sessions` without turning the state-change push into a heartbeat.
+// SESSION TELEMETRY — the QUANTIZATION and the CADENCE FLOOR that let the eight rich fields ride
+// `channel_sessions` without turning the state-change push into a heartbeat.
 //
-// ⚠ WHY IT IS ITS OWN FILE, and it is the same seam `session-metrics.js` took out of
-// `session-summary.js` (§1: one file, one reason to change). `session-state-push.js` answers
-// "WHEN does this machine write, and what may it honestly claim" — identity, the replace
-// protocol, the bounded retry. This answers "HOW COARSE is a number allowed to be before it is
-// worth a write", which moves when the field set moves or when the cost arithmetic moves. It is
-// also the cheaper split: that file measured 465 lines before this wave and the §1 cap is 500.
+// Its own file on the seam `session-metrics.js` took out of `session-summary.js` (§1: one file,
+// one reason to change). `session-state-push.js` answers "WHEN does this machine write, and what
+// may it honestly claim"; this answers "HOW COARSE is a number allowed to be before it is worth a
+// write". PURE, no require of its own, and `session-state-push.js` requires it ABOVE its BEGIN
+// sentinel so its harness injects the real module rather than a slice plus a stub.
 //
-// ⚠ PURE, no require of its own, and `session-state-push.js` requires it ABOVE its BEGIN
-// sentinel so its harness injects the real module — one program under test rather than a slice
-// plus a stub. Same idiom as `session-metrics.js` / `session-detail.js`.
-//
-// ── THE PROBLEM THIS EXISTS FOR ──────────────────────────────────────────────────────────
-//
-// ⚠ `lastActivityAt` IS STAMPED AT THE ENGINE'S DISPATCH FUNNEL — many times per TURN
-// (`session-summary.js › noteActivity`). Put it on the wire unquantized and unfloored and the
-// push's own digest gate stops gating anything: the set digest moves on every SDK event, so the
-// writer that "writes when a session's DERIVED state actually moves" would write per event. That
-// is `presence.js`'s always-on cost with extra steps, and it is the exact defect
-// `session-state-push.js`'s header forbids in capitals.
+// THE PROBLEM. `lastActivityAt` is stamped at the engine's dispatch funnel, many times per TURN
+// (`session-summary.js › noteActivity`). Unquantized and unfloored, the push's own digest gate
+// stops gating anything: the set digest moves on every SDK event, so a writer that "writes when a
+// session's DERIVED state actually moves" writes per event.
 //
 // TWO MECHANISMS, AND NEITHER IS A TIMER:
-//
 //   QUANTIZE  a number is rounded DOWN to its bucket before it becomes part of the row, so the
-//             digest cannot move on drift smaller than the bucket. ⚠ THE ROW CARRIES THE
-//             QUANTIZED VALUE, not the raw one. Quantizing only the digest would leave the wire
-//             carrying a precise number the gate is not watching — a peer would read a stale
-//             exact figure, which is worse than an honest coarse one.
-//   FLOOR     a set whose STATE half did not move waits out `TELEMETRY_MIN_INTERVAL_MS` since
-//             this workspace's last successful write. ⚠ A DELAY, NEVER A SCHEDULE: nothing is
-//             queued and no timer is armed. The push simply does not happen, the digest is not
-//             recorded, and the session's NEXT projection move re-evaluates. An agent that goes
-//             quiet inside the floor window costs zero writes and its last churn rides out on
-//             its next real state change — which is the same bargain the bounded retry already
-//             makes.
+//             digest cannot move on drift smaller than the bucket. The ROW carries the quantized
+//             value — quantizing only the digest would leave a precise number on the wire that the
+//             gate is not watching, and a peer reading a stale exact figure is worse than a coarse
+//             honest one.
+//   FLOOR     a set whose STATE half did not move waits out `TELEMETRY_MIN_INTERVAL_MS` since this
+//             workspace's last successful write. A DELAY, NEVER A SCHEDULE: nothing is queued, no
+//             timer is armed, the digest is not recorded, and the session's NEXT projection move
+//             re-evaluates.
 //
-// ⚠ A STATE CHANGE BYPASSES THE FLOOR. `state` is what a peer's card is ABOUT; delaying
-// `working -> idle` by up to ten seconds to save a write is the wrong trade in the one direction
-// that matters. The floor governs CHURN only.
+// A STATE CHANGE BYPASSES THE FLOOR. `state` is what a peer's card is ABOUT, and delaying
+// `working -> idle` by up to ten seconds to save a write is the wrong trade. The floor governs
+// CHURN only.
 //
-// ── NULL IS NOT ZERO, AND ZERO IS NOT NULL ───────────────────────────────────────────────
-// ⚠ `metricOrNull`'s discipline survives quantization intact: null in, null out, at every step.
-// An UNMEASURED metric is never rounded into a confident 0.
-// ⚠ AND `0` IS A REAL QUANTIZED ANSWER that must not be confused with it: `tokensSpent: 0` on
-// the wire means "measured, and under one bucket", where `null` means "nothing has measured
-// this". A reader that renders them the same is choosing to; the wire keeps them apart.
+// NULL IS NOT ZERO, AND ZERO IS NOT NULL. `metricOrNull`'s discipline survives quantization intact
+// — null in, null out at every step — and `tokensSpent: 0` on the wire means "measured, and under
+// one bucket" where `null` means "nothing has measured this".
 
 // ─── BEGIN SESSION-TELEMETRY (pure; unit-tested via source extraction) ───────────────────
 // No require / electron / fs reference from here down, so test/session-telemetry.test.mjs
@@ -62,19 +46,14 @@
 const CONTEXT_BUCKET_FRACTION = 0.05;
 
 // …AND THE ABSOLUTE FALLBACK for a model this build has no window row for
-// (`session-model.js › contextWindowFor` answers null and never guesses a denominator).
-//
-// ⚠ WITH NO DENOMINATOR THERE IS NO PERCENTAGE TO BE A FRACTION OF, so the bucket has to be
-// meaningful as an ABSOLUTE count — which is also what the reader renders in that case (the
-// meter shows raw tokens rather than a made-up percentage). 5 000 tokens is about one small
-// prompt: fine enough that a raw count still visibly moves, coarse enough that it cannot move
-// per SDK event.
-// ⚠ AND IT IS DELIBERATELY FINER THAN ANY KNOWN MODEL'S BUCKET — half the 10 000 the smallest
-// window this build knows (200k) would produce, a tenth of the 1M one's 50 000. An unknown
-// model is therefore never quantized MORE COARSELY than a known one. The trade is the right way
-// round: extra resolution costs at most extra writes, and those are already bounded above by
-// `TELEMETRY_MIN_INTERVAL_MS`, while too coarse a bucket destroys the signal outright and
-// nothing bounds that.
+// (`session-model.js › contextWindowFor` answers null and never guesses a denominator). With no
+// denominator there is no percentage to be a fraction of, so the bucket has to be meaningful as an
+// ABSOLUTE count — which is also what the reader renders in that case. 5 000 tokens is about one
+// small prompt, and deliberately FINER than any known model's bucket (half the 10 000 a 200k
+// window gives, a tenth of the 1M one's 50 000), so an unknown model is never quantized MORE
+// coarsely than a known one: extra resolution costs at most extra writes, already bounded by
+// `TELEMETRY_MIN_INTERVAL_MS`, while too coarse a bucket destroys the signal and nothing bounds
+// that.
 const CONTEXT_BUCKET_FALLBACK_TOKENS = 5000;
 
 // LIFETIME SPEND is a COUNT, not an occupancy, so it has no denominator to be a fraction of and
@@ -85,57 +64,43 @@ const CONTEXT_BUCKET_FALLBACK_TOKENS = 5000;
 const TOKENS_BUCKET = 10000;
 
 // ── THE CADENCE FLOOR ────────────────────────────────────────────────────────────────────
-//
-// ⚠ THE DERIVATION IS AN ARITHMETIC ON THE WRITE RATE, AND IT IS THE WHOLE JUSTIFICATION.
-// Unfloored, a continuously working agent moves `lastActivityAt` on every engine dispatch —
-// dozens per turn — so the ceiling on writes would be the SDK's event rate. Floored at 10s the
-// ceiling is 6 writes per minute PER WORKSPACE no matter how many sessions are running on this
-// machine (the push groups by workspace and posts the whole set), and it is a CEILING that is
-// only approached while something is genuinely moving: an idle machine writes NOTHING, which a
-// heartbeat by definition cannot claim.
-//
-// ⚠ COMPARE THE THING IT MUST NOT BECOME: `presence.js` beats every 30s per listener per
-// workspace UNCONDITIONALLY — ~120 writes/hour/machine forever, asleep or awake. This is a
-// different shape, not a faster version of the same one: bounded ABOVE by 360/hour/workspace
-// while work is happening, and exactly 0 when it is not.
-//
-// ⚠ 10s IS ALSO THE READER'S RESOLUTION. The peer Agents tab polls `channel_sessions` on
-// `PEER_SESSIONS_POLL_MS` (30s), so a churn field delivered faster than this floor could not be
-// SEEN sooner anyway — the floor gives up nothing the surface was going to render.
+// The derivation is an arithmetic on the write rate. Unfloored, a continuously working agent moves
+// `lastActivityAt` on every engine dispatch, so the ceiling on writes would be the SDK's event
+// rate. Floored at 10s the ceiling is 6 writes per minute PER WORKSPACE no matter how many
+// sessions run here (the push groups by workspace and posts the whole set), and it is approached
+// only while something is genuinely moving — an idle machine writes NOTHING, which is the shape
+// `presence.js` (every 30s per listener, unconditionally, ~120 writes/hour forever) cannot claim.
+// 10s is also the reader's resolution: the peer Agents tab polls `channel_sessions` on
+// `PEER_SESSIONS_POLL_MS` (30s), so a churn field delivered faster could not be SEEN sooner.
 const TELEMETRY_MIN_INTERVAL_MS = 10000;
 
 /**
  * A number or nothing, restating `session-metrics.js › metricOrNull`'s rule at this boundary.
- * ⚠ `typeof` FIRST, never a bare Number(): `Number(null)` is 0 and `Number('')` is 0, so a
- * coercion-only guard turns every absence into a confident zero — the one lie the whole
- * metric-or-null discipline exists to prevent. It is RESTATED rather than imported because this
- * block is sliced and evaluated with no requires; the two are pinned against each other in
- * test/session-telemetry.test.mjs.
+ * `typeof` FIRST, never a bare `Number()`: `Number(null)` and `Number('')` are both 0, so a
+ * coercion-only guard turns every absence into a confident zero. Restated rather than imported
+ * because this block is sliced and evaluated with no requires; the two are pinned against each
+ * other in test/session-telemetry.test.mjs.
  */
 function numberOrNull(value) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
   return value;
 }
 
-// ── ⚠ THE LABEL RULE, RESTATED FROM THE SERVER'S OWN (measured 2026-08-22) ───────────────
+// ── THE LABEL RULE, RESTATED FROM THE SERVER'S OWN (measured 2026-08-22) ─────────────────
+// `schema-sessions.ts` validates these three with `safeLabel(subject, N)`, whose `SAFE_LABEL_RE`
+// (`src/shared/lib/safe-label.ts`) rejects control chars, zero-width and bidi overrides, and the
+// separators several renderers still treat as newlines: a field that can never hold a newline
+// cannot forge a line in the SERVER's voice inside an MCP result that forgot to neutralize.
 //
-// `schema-sessions.ts` validates these three with `safeLabel(subject, N)`, whose
-// `SAFE_LABEL_RE` (`src/shared/lib/safe-label.ts`) REJECTS control chars, zero-width and bidi
-// overrides, and the line/paragraph separators several renderers still treat as newlines. Its
-// header states why: a field that can never hold a newline cannot forge a line in the SERVER's
-// voice inside an MCP result that forgot to neutralize.
+// THIS SIDE STRIPS WHERE THE SERVER REJECTS, and the asymmetry is the point. zod validates the
+// ARRAY, so one bad character in one `toolLabel` would 400 the WHOLE push; `retryable(400)` is
+// false, the digest is never recorded, and `read_sessions` answers `[]` for this machine — LIVE
+// sessions included — for the life of the run. A tool name can come from the operator's own MCP
+// servers, so the character set is not ours to assume.
 //
-// ⚠ THIS SIDE STRIPS WHERE THE SERVER REJECTS, and the asymmetry is the point. zod validates the
-// ARRAY: one bad character in one `toolLabel` would 400 the WHOLE push, `retryable(400)` is
-// false, the digest is never recorded, and every later push for that workspace fails identically
-// — `read_sessions` answers `[]` for the machine, LIVE sessions included, for the life of the
-// run. That is the exact wedge `serverReportable` / `nameReportable` already exist for, reached
-// by a fourth road. A tool name can come from the operator's own MCP servers, so the character
-// set is not ours to assume.
-// ⚠ THE CLASSES, ESCAPED — the complement of `SAFE_LABEL_RE`'s own, character for character.
-// Written as `\uXXXX` and never as the literals: a control character pasted into source is
-// invisible in review and, inside a character class, is a syntax error waiting for the next
-// editor to normalize it.
+// The classes are the complement of `SAFE_LABEL_RE`'s, written as `\uXXXX` and never as literals:
+// a control character pasted into source is invisible in review and, inside a character class, a
+// syntax error waiting for the next editor to normalize it.
 const UNSAFE_LABEL_RE = /[\u0000-\u001F\u007F\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFEFF]/gu;
 
 // ⚠ THE THREE BOUNDS ARE THE SERVER'S, FIELD FOR FIELD (`schema-sessions.ts`, 2026-08-22).
@@ -161,17 +126,13 @@ function labelOrNull(value, max) {
 /**
  * EPOCH MS -> AN ISO-8601 INSTANT WITH AN OFFSET, or null.
  *
- * ⚠ THE UNITS DO NOT SURVIVE THE CROSSING, AND THIS IS THE ONE PLACE THAT KNOWS IT. Everything
- * on this machine — `s.startedAt`, `s.lastActivityAt`, `metricOrNull`, the local summaries
- * bridge and every renderer reading it — speaks EPOCH MS. The columns are `TIMESTAMPTZ` and
- * `schema-sessions.ts` validates them as `z.string().datetime({ offset: true })`, so a raw
- * number is not a rounding difference: it is a zod failure that 400s the WHOLE report, which is
- * unretryable and blanks the machine's rows for the run.
- * ⚠ AND THE LOCAL WIRE IS UNCHANGED. `DesktopSessionSummary` still carries epoch ms; the
- * conversion happens HERE, on the server row alone, so no renderer has to learn a second unit.
- * ⚠ AN UNREPRESENTABLE STAMP IS NULL, NOT AN EXCEPTION. `new Date(x).toISOString()` throws on a
- * value outside the ECMAScript time range, and a corrupt stamp must cost this field, never the
- * whole push.
+ * The units do not survive the crossing, and this is the one place that knows it: everything on
+ * this machine speaks EPOCH MS, while the columns are `TIMESTAMPTZ` validated by
+ * `schema-sessions.ts` as `z.string().datetime({ offset: true })` — a raw number is not a rounding
+ * difference but a zod failure that 400s the WHOLE report, unretryably blanking the machine's rows
+ * for the run. The LOCAL wire is unchanged; the conversion happens here, on the server row alone.
+ * An unrepresentable stamp is null, not an exception: `new Date(x).toISOString()` throws outside
+ * the ECMAScript time range, and a corrupt stamp must cost this field, never the whole push.
  */
 function isoOrNull(value) {
   const n = numberOrNull(value);
@@ -184,10 +145,9 @@ function isoOrNull(value) {
 }
 
 /**
- * THE BUCKET SIZE FOR ONE SESSION'S CONTEXT METER — a fraction of its own window, or the
- * absolute fallback when this build has no window for the model.
- * ⚠ NEVER ZERO. A window smaller than 20 tokens would round the fraction to 0 and make the
- * quantizer divide by it; `Math.max(1, …)` is that guard, not a style choice.
+ * THE BUCKET SIZE FOR ONE SESSION'S CONTEXT METER — a fraction of its own window, or the absolute
+ * fallback when this build has no window for the model. NEVER ZERO: a window smaller than 20
+ * tokens would round the fraction to 0 and make the quantizer divide by it.
  */
 function contextBucket(window) {
   const w = numberOrNull(window);
@@ -196,9 +156,8 @@ function contextBucket(window) {
 }
 
 /**
- * Round a measured count DOWN to its bucket. ⚠ DOWN, not nearest: the number's job is to answer
- * "at least this much", and rounding up would let a meter claim occupancy that has not happened.
- * null in, null out.
+ * Round a measured count DOWN to its bucket. DOWN, not nearest: the number answers "at least this
+ * much", and rounding up would let a meter claim occupancy that has not happened. null in, null out.
  */
 function quantize(value, bucket) {
   const n = numberOrNull(value);
@@ -216,26 +175,18 @@ function quantizeTokens(spent) {
 }
 
 /**
- * THE EIGHT RICH FIELDS OF A WIRE ROW, from one `session-summary.js` report entry.
+ * THE EIGHT RICH FIELDS OF A WIRE ROW, from one `session-summary.js` report entry. The names are
+ * the summary's: `detail` / `toolLabel` from `liveSummary`, the metrics from
+ * `session-metrics.js › metrics`, and `model` is `s.liveModel` else the operator's pick else null
+ * — the SDK's own reported id first, the only honest answer to "which model is really answering".
  *
- * ⚠ THE NAMES ARE THE SUMMARY'S, VERIFIED AGAINST IT: `detail` / `toolLabel` come from
- * `liveSummary`, and `contextUsed` / `contextWindow` / `tokensSpent` / `startedAt` /
- * `lastActivityAt` from `session-metrics.js › metrics`, spread into it. `model` is
- * `s.liveModel` else the operator's pick else null — the SDK's own reported id first, which is
- * the only honest answer to "which model is really answering".
- *
- * ⚠ `contextWindow` IS NOT QUANTIZED and must not be. It is the DENOMINATOR — a frozen table
- * lookup that either exists or does not — so it never drifts, and rounding it would move the
- * percentage the numerator was bucketed against. It IS floored to an integer, because
- * `schema-sessions.ts` validates all three counts with `.int()`.
- * ⚠ `startedAt` IS NOT QUANTIZED EITHER: it is stamped once at construction and never moves, so
- * it can cost at most one digest move per session however precise it is.
- * ⚠ `lastActivityAt` IS NOT QUANTIZED, DELIBERATELY, AND THE FLOOR IS WHY. It is the one field
- * an orchestrator reads to tell "still going" from "wedged", and a bucket coarse enough to stop
- * it moving would be coarse enough to destroy that answer. Its write cost is bounded by
- * `TELEMETRY_MIN_INTERVAL_MS` instead — a rate bound rather than a value bound.
- * ⚠ BOTH STAMPS CROSS AS ISO-8601, NOT AS EPOCH MS — see `isoOrNull`. The local summaries wire
- * is unchanged; only the server row converts.
+ * `contextWindow` is NOT quantized and must not be: it is the DENOMINATOR, a frozen table lookup
+ * that never drifts, and rounding it would move the percentage the numerator was bucketed against.
+ * It IS floored to an integer, because `schema-sessions.ts` validates all three counts with
+ * `.int()`. `startedAt` is stamped once at construction and never moves. `lastActivityAt` is
+ * deliberately unquantized — it is the one field an orchestrator reads to tell "still going" from
+ * "wedged", so its cost is bounded by `TELEMETRY_MIN_INTERVAL_MS`, a rate bound rather than a
+ * value bound. Both stamps cross as ISO-8601; see `isoOrNull`.
  */
 function telemetryFields(e) {
   const x = e || {};
@@ -248,23 +199,18 @@ function telemetryFields(e) {
     tokensSpent: quantizeTokens(x.tokensSpent),
     startedAt: isoOrNull(x.startedAt),
     lastActivityAt: isoOrNull(x.lastActivityAt),
-    // ── ⚠ THE HEALTH HALF, 2026-09-01 (T25 / T50 / T51 / T83) ──────────────────────────────
+    // ── THE HEALTH HALF, 2026-09-01 (T25 / T50 / T51 / T83) ──────────────────────────────
     // `session-health.js` derives all seven; this decides how coarse each may be on the wire.
     //
-    // ⚠ `turns`, `deniedCalls` AND `lastWakeSeq` ARE NOT QUANTIZED, AND THE REASON IS THE SAME
-    // FOR ALL THREE: they are SMALL INTEGERS THAT MOVE RARELY. A turn count moves once per turn,
-    // a denial count only when something is refused, and a wake seq only when a wake lands —
-    // orders of magnitude below `lastActivityAt`'s per-dispatch churn, which is the rate the
-    // quantizer exists for. Bucketing `turns` to 10 would also destroy the field: the difference
-    // between 1 turn and 4 IS the signal.
-    // ⚠ `tokensDelta` TAKES `tokensSpent`'S OWN BUCKET, so the two move together. A delta
-    // quantized more finely than the total it is derived from would move on drift the total
-    // cannot show, which is a digest that ticks for a number no reader can see change.
-    // ⚠ `stale` IS A BOOLEAN AND IS DELIBERATELY IN THE CHURN HALF (`STATE_FIELDS` below does
-    // NOT list it). It is derived from a WALL CLOCK, so putting it in the state half would let it
-    // flip a set past the cadence floor on a timer — the exact "digest gate stops gating" defect
-    // this whole module exists to prevent. Floored, it lands on the session's next real move,
-    // which is at most ten seconds late for a fact that took ten minutes to become true.
+    // `turns`, `deniedCalls` and `lastWakeSeq` are NOT quantized, for one reason: small integers
+    // that move rarely — orders of magnitude below `lastActivityAt`'s per-dispatch churn, which is
+    // the rate the quantizer exists for. Bucketing `turns` to 10 would destroy the field; the
+    // difference between 1 turn and 4 IS the signal.
+    // `tokensDelta` takes `tokensSpent`'s own bucket, so the two move together — a delta quantized
+    // finer than its total would move on drift no reader can see.
+    // `stale` is a boolean and is deliberately in the CHURN half (`STATE_FIELDS` does not list
+    // it): it is derived from a WALL CLOCK, so in the state half it would flip a set past the
+    // cadence floor on a timer. Floored, it lands on the session's next real move.
     turns: numberOrNull(x.turns),
     tokensDelta: quantizeTokens(x.tokensDelta),
     stale: x.stale === true,
@@ -277,52 +223,27 @@ function telemetryFields(e) {
 
 // ── THE STATE HALF OF A ROW ──────────────────────────────────────────────────────────────
 //
-// ⚠ THIS LIST IS THE FLOOR'S WHOLE DEFINITION OF "A STATE CHANGE", so it is a literal rather
-// than "the row minus the eight". A field added to `reportRow` must be classified DELIBERATELY:
-// defaulting a new field into the state half makes it bypass the floor forever, and defaulting
-// it into the churn half can silently delay something a peer's card is about.
+// This list is the floor's whole definition of "a state change", so it is a literal rather than
+// "the row minus the eight". A field added to `reportRow` must be classified DELIBERATELY:
+// defaulting a new field into the state half makes it bypass the floor forever, and defaulting it
+// into the churn half can silently delay something a peer's card is about.
 //
-// EVERY MEMBER IS A FACT ABOUT WHICH SESSION THIS IS OR WHAT IT IS DOING AT THE COARSE
-// GRAIN — the vocabulary that existed before this wave, which is exactly the set the
-// state-change-only contract was written about.
-// ⚠ `templateName` JOINED 2026-08-22 AND THE CLASSIFICATION IS DELIBERATE, per this block's
-// own instruction. It is a fact about WHICH SESSION THIS IS — the identity the operator
-// configured this agent to wear — so it belongs here and not in the churn half. Putting it
-// in the state half means a change pushes IMMEDIATELY, past the cadence floor, and that is
-// free: `context.template` is a SPAWN-TIME capture that is never re-resolved, so the value
-// can move at most once per session, at its first push.
-// ⚠ `color` JOINED 2026-09-13 AND THE CLASSIFICATION IS DELIBERATE, per this block's own
-// instruction. It is a fact about WHICH SESSION THIS IS — the identity a reader uses to tell two
-// agents apart in a transcript — so it belongs in the state half and not the churn half, exactly
-// as `templateName` does. Putting it here means a change pushes IMMEDIATELY, past the cadence
-// floor, and that is what the feature needs: the colour is what the operator's OWN transcript
-// paints with, so a key held behind the floor is a box that stays neutral for up to
-// `TELEMETRY_MIN_INTERVAL_MS` after the agent starts.
-// ⚠ AND IT IS FREE, FOR A STRONGER REASON THAN `templateName`'s spawn-time capture: the server
-// RESOLVES this field rather than storing it, and
-// `src/features/channels/server/session-colors.ts` rule 1 keeps whatever a session already
-// holds — so the value can move at most once per session (its first assignment) and cannot
-// oscillate. ⚠ **THAT IS ALSO WHY IT DOES NOT INHERIT `session-store.js`'s DURABLE-WHITELIST
-// HAZARD.** A resume that rebuilds context without `templateName` NULLS a column the server
-// stores verbatim; a resume that reports no colour is overruled by rule 1 and changes nothing.
-// ⚠ `displayName` JOINED 2026-09-16 (F-708) AND IT WAS MISSING BY OVERSIGHT, NOT BY
-// CLASSIFICATION — this block's own instruction says a new field must be classified
-// DELIBERATELY, and this one never was: it landed on `reportRow` on 2026-08-31 whose docblock
-// then CLAIMED it "changes the digest and pushes like any state change", which was false the
-// day it was written. It is the plainest member of the set by this list's own definition — WHAT
-// A PERSON CALLS THIS SESSION is a fact about WHICH SESSION THIS IS, beside `name` and
-// `templateName`.
-// ⚠ **WHAT THE OVERSIGHT COST, because it is not the ten-second delay the floor is for.** A
-// rename moves the FULL-row digest and nothing else, so `cycle` cleared the first gate and then
-// needed `floorAllows` — and a churn-only set inside the window "is not written and its digest
-// is NOT recorded", i.e. it waits for the session's NEXT PROJECTION MOVE. On a machine that has
-// gone quiet there is no next move: three agents renamed at 18:31 could sit unpushed
-// indefinitely while every peer's card, the Agents tab and the @-picker showed the name they
-// were launched with. "Nothing wakes up to it" is this file's own sentence.
-// ⚠ AND IT IS FREE, for `templateName`'s reason rather than `color`'s: the value moves only
-// when a HUMAN OR AN AGENT RENAMES — an operator gesture, not a counter — so bypassing the
-// floor cannot oscillate and cannot storm. A rename is precisely the kind of news the floor
-// was written to let through.
+// Every member is a fact about WHICH SESSION THIS IS or what it is doing at the coarse grain.
+//
+// `templateName` joined 2026-08-22: the identity the operator configured this agent to wear. Free
+// to push past the floor, because `context.template` is a SPAWN-TIME capture that can move at most
+// once per session.
+// `color` joined 2026-09-13: the identity a reader uses to tell two agents apart in a transcript,
+// and it must push immediately or the box stays neutral for up to `TELEMETRY_MIN_INTERVAL_MS`
+// after the agent starts. Free for a stronger reason than `templateName`'s — the server RESOLVES
+// rather than stores it, and `session-colors.ts` rule 1 keeps whatever a session already holds, so
+// it cannot oscillate and does not inherit `session-store.js`'s durable-whitelist hazard: a resume
+// reporting no colour is overruled by rule 1, where one reporting no `templateName` NULLS it.
+// `displayName` joined 2026-09-16 (F-708), missing by oversight rather than classification — what
+// a person calls this session is a fact about which session it is. The cost was not the
+// ten-second delay: a rename moves only the FULL-row digest, so a churn-only set inside the window
+// is neither written nor digest-recorded and waits for a next projection move that a quiet machine
+// never makes. Free for `templateName`'s reason — a rename is an operator gesture, not a counter.
 const STATE_FIELDS = [
   'sessionKey', 'channelId', 'threadId', 'name', 'state', 'channelName', 'threadTitle',
   'templateName', 'color', 'displayName',
@@ -337,10 +258,10 @@ function stateDigest(rows) {
 }
 
 /**
- * MAY A CHURN-ONLY SET BE WRITTEN NOW? ⚠ It answers about the FLOOR alone — the caller has
- * already established that the set moved and that its state half did not.
- * `lastAt` is when this workspace last STORED a set, or null for "never", which is never
- * floored: the first write for a workspace is the one carrying its whole set.
+ * MAY A CHURN-ONLY SET BE WRITTEN NOW? It answers about the FLOOR alone — the caller has already
+ * established that the set moved and that its state half did not. `lastAt` is when this workspace
+ * last STORED a set, or null for "never", which is never floored: the first write for a workspace
+ * carries its whole set.
  */
 function floorAllows(lastAt, now) {
   if (typeof lastAt !== 'number' || !Number.isFinite(lastAt)) return true;
@@ -359,12 +280,11 @@ module.exports = {
   TOOL_LABEL_MAX,
   MODEL_MAX,
   TEMPLATE_NAME_MAX, // 2026-08-22: the agent-template name's bound, on both ends
-  // ⚠ THE DESKTOP'S ONE COPY OF THE SERVER'S SHORT-LABEL CHARSET, exported 2026-08-22 so
+  // THE DESKTOP'S ONE COPY OF THE SERVER'S SHORT-LABEL CHARSET, exported 2026-08-22 so
   // `template-resolve.js` can VALIDATE renderer-supplied launch overrides against it (F-281:
   // `@/shared/lib/safe-label` imports zod, so no renderer surface can reach `SAFE_LABEL_RE` and
-  // MAIN is the only real validator). It lives here because this is where it already was, and
-  // "two copies of a neutralizer drift, and the copy that drifts is the one that stops
-  // neutralizing" is that module's own rule about exactly this.
+  // MAIN is the only real validator). Two copies of a neutralizer drift, and the copy that drifts
+  // is the one that stops neutralizing.
   UNSAFE_LABEL_RE,
   numberOrNull,
   labelOrNull,

@@ -8,7 +8,7 @@ import type { OntologyObject, OntologyWriteSource } from "../types";
  * happens in service.ts because it spans tables.
  */
 
-/** ⚠ `created_by` and `agents_may_edit` are AUDIENCE INPUTS, not display
+/** `created_by` and `agents_may_edit` are AUDIENCE INPUTS, not display
  *  fields — `service-audience.ts › levelForCluster` reads both off the row, so
  *  every projection that a gate is applied to must carry them or the gate
  *  silently answers about a cluster with no owner and no toggle. */
@@ -25,7 +25,7 @@ export const ONTOLOGY_RELATIONSHIP_COLS =
   "id, workspace_id, source_object_id, label, target_object_id, position";
 
 /**
- * THE SUMMARY PROJECTION — same graph SHAPE, every JSONB column left in the DB.
+ * The summary projection — same graph SHAPE, every JSONB column left in the DB.
  *
  * The wide sets ship `attributes`/`methods`/`template` (schema caps: 100
  * entries, 4000 chars per text attribute → hundreds of KB per object) and
@@ -47,7 +47,7 @@ export const ONTOLOGY_OBJECT_SUMMARY_COLS = "id, name, subtitle";
  * a heavy paid board is in the hundreds), so hitting one means a runaway agent
  * loop, an import, or a bug.
  *
- * ⚠ A clipped read is REPORTED, never silently short: `getSummary` returns
+ * A clipped read is REPORTED, never silently short: `getSummary` returns
  * `truncated: true` and `dopl_map` renders a line saying so. A cap that renders
  * identically to an exhausted list is the bug.
  */
@@ -82,7 +82,7 @@ export interface OntologyObjectRow {
   methods: OntologyObject["methods"];
   template: OntologyObject["template"];
   user_id: string | null;
-  /** Q3/Q6 ATTRIBUTION — an edit survives an unshare, attributed to its author.
+  /** Q3/Q6 attribution — an edit survives an unshare, attributed to its author.
    *  `null` on rows written before the columns existed. */
   last_edited_by: string | null;
   last_edited_source: OntologyWriteSource | null;
@@ -111,7 +111,7 @@ export interface OntologyRelationshipRow {
 
 export interface OntologyClusterSummaryRow {
   id: string;
-  /** ⚠ AN AUDIENCE INPUT, like `created_by` — `service-shared.ts ›
+  /** An audience input, like `created_by` — `service-shared.ts ›
    *  canSeeOntology` asks which container the row lives in. */
   workspace_id: string;
   slug: string;
@@ -132,7 +132,7 @@ export interface OntologyObjectSummaryRow {
  * `OntologyCluster` so the same render code reads either, but a DISTINCT type
  * on purpose — an empty array claims "no attributes", an absent field says
  * "this view didn't ask".
- * ⚠ Mirror lives in `packages/dopl-client/src/ontology-types.ts` — sync both.
+ * Mirror lives in `packages/dopl-client/src/ontology-types.ts` — sync both.
  */
 export interface OntologyObjectSummary {
   id: string;
@@ -159,7 +159,7 @@ export interface OntologySummary {
 
 /**
  * Merge one relationship row into an edge list — same-label rows collect under
- * one edge. ⚠ ONE COPY: the graph read and the per-object read assemble the
+ * one edge. ONE COPY: the graph read and the per-object read assemble the
  * same shape, and two loops are two orderings waiting to disagree.
  */
 export function pushEdge(
@@ -179,7 +179,7 @@ export function mapObjectRow(row: OntologyObjectRow): OntologyObject {
     name: row.name,
     subtitle: row.subtitle,
     attributes: row.attributes ?? [],
-    // ⚠ Backfill fields added after rows were written — never assume stored
+    // Backfill fields added after rows were written — never assume stored
     // JSON has the newest shape.
     methods: (row.methods ?? []).map((m) => ({ ...m, tools: m.tools ?? "" })),
     template: row.template ?? [],

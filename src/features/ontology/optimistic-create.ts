@@ -11,7 +11,7 @@ import type {
 } from "./types";
 
 /**
- * OPTIMISTIC CREATES for the ontology board — the write path's ordering half,
+ * Optimistic creates for the ontology board — the write path's ordering half,
  * outside React so it's testable as a sequence.
  *
  * Before the first POST leaves: provisional ids minted, rows dispatched into
@@ -19,16 +19,15 @@ import type {
  * — each needs the id the previous minted. `CREATE_RESOLVE` swaps ids in place;
  * a failure removes the rows and cleans the server half (F-031).
  *
- * ⚠ NOT `useApiMutation`: that patches the TANSTACK CACHE, but this board
- * renders from `graphReducer` (`use-ontology.ts` `dirtyRef`), so a cache patch
- * lands where no observer reads. The reducer IS the optimistic engine —
- * rollback is a dispatch, invalidation is none, writes keyed by submit-time ids.
+ * Not `useApiMutation`: that patches the TanStack cache, but this board renders
+ * from `graphReducer` (`use-ontology.ts` `dirtyRef`), so a cache patch lands
+ * where no observer reads.
  */
 
 /** Marks an id the server has not acknowledged yet — never sent as a target. */
 const PENDING_ID_PREFIX = "pending:";
 
-/** True for a row that exists only on screen. ⚠ Prefixed, not a bare uuid, so a
+/** True for a row that exists only on screen. Prefixed, not a bare uuid, so a
  *  leaked provisional id fails the server's uuid check instead of being stored
  *  as a dangling reference. */
 export function isPendingOntologyId(id: string): boolean {
@@ -43,15 +42,10 @@ function newPendingId(): string {
   return `${PENDING_ID_PREFIX}${token}`;
 }
 
-/** ⚠ Shared by the optimistic row AND the POST body so they cannot drift. */
+/** Shared by the optimistic row and the POST body so they cannot drift. */
 export const NEW_CLUSTER_NAME = "New ontology";
-/**
- * THE LANE'S BORN NAME. ⚠ **"object", NOT "column", SINCE 2026-09-11** (Samuel:
- * *"We're going to rename this from Column to Object … Untitled Object, not
- * Column"*) — a lane IS an object type, and "column" was the board's word for it
- * leaking into the operator's. The identifier keeps the code's word; only what a
- * person reads changed.
- */
+/** The lane's born name: "object", not "column", since 2026-09-11. The
+ *  identifier keeps the code's word; only what a person reads changed. */
 export const NEW_COLUMN_NAME = "Untitled object";
 export const NEW_CARD_NAME = "New object";
 
@@ -60,7 +54,7 @@ function emptyValue(kind: AttributeValue["kind"]): AttributeValue {
 }
 
 /**
- * The row the server would build, built locally. ⚠ Must mirror
+ * The row the server would build, built locally. Must mirror
  * `server/service.ts › createObject` (columns are templates: card born with
  * template fields as empty attributes + copies of actions/relationships).
  * Drift → pending card renders as a stub that rearranges when the POST answers.
@@ -107,11 +101,10 @@ export interface OntologyCreateApi {
     name: string;
   }): Promise<OntologyObject>;
   /**
-   * ⚠ THE SECOND HALF OF A POPUP-FILLED CREATE, and it exists because the
-   * CREATE POST carries a NAME AND NOTHING ELSE (`schema.ts ›
-   * OntologyObjectCreateSchema`). The New object popup also collects a
-   * description and a field list, so those land as one PATCH at the id the POST
-   * just minted — never at the provisional one.
+   * The second half of a popup-filled create: the create POST carries a name and
+   * nothing else (`schema.ts › OntologyObjectCreateSchema`), so the popup's
+   * description and field list land as one PATCH at the id the POST just minted
+   * — never at the provisional one.
    */
   updateObject(
     objectId: string,
@@ -142,7 +135,7 @@ export interface OntologyCreateSink {
   failed(what: string, err: unknown): void;
 }
 
-/** The optimistic row, returned SYNCHRONOUSLY, plus the settle of its POSTs. */
+/** The optimistic row, returned synchronously, plus the settle of its POSTs. */
 export interface OptimisticCreate<T> {
   /** Already in the reducer — safe to select, address and render. */
   row: T;
@@ -161,7 +154,7 @@ export function createClusterOptimistic(
   const card = pendingObject(NEW_CARD_NAME, column);
   const ids = [cluster.id, column.id, card.id];
 
-  // PIXELS FIRST. Nothing below this line is awaited before the board changes.
+  // Pixels first: nothing below this line is awaited before the board changes.
   sink.markPending(ids);
   sink.dispatch({ type: "CLUSTER_ADD", cluster });
   sink.dispatch({ type: "OBJECT_ADD", object: column, clusterId: cluster.id });
@@ -204,7 +197,7 @@ export function createClusterOptimistic(
       sink.failed("create ontology", err);
       return null;
     } finally {
-      // ⚠ After `resolve`, never before: an id is real only once swapped.
+      // After `resolve`, never before: an id is real only once swapped.
       sink.clearPending(ids);
       sink.endWrite();
     }
@@ -221,20 +214,15 @@ export interface ColumnDraftPatch {
 }
 
 /**
- * "+ Object" — THE LANE APPEARS AND NOTHING IS SENT (2026-09-11, Samuel: *"I want
- * the column UI to immediately appear on the thing, but at the same time, a
- * pop-up comes up. If the user doesn't actually end up creating it, that little
- * thing disappears"*).
+ * "+ Object" (2026-09-11): the lane appears and nothing is sent. The one create
+ * path that does not POST from the click — a create that had already left could
+ * only be taken back with a DELETE at an id that is still `pending:…` while the
+ * operator types, whereas a reducer-only row is withdrawn by
+ * {@link discardColumnDraft} with no request at all.
  *
- * ⚠ **THE ONE CREATE PATH THAT DOES NOT POST FROM THE CLICK**, and the popup is
- * the reason: a create that had already left could only be taken back with a
- * DELETE — at an id that is still `pending:…` while the operator types. A row
- * that exists ONLY in the reducer is withdrawn by {@link discardColumnDraft}
- * with no request at all, which is the behaviour Samuel described.
- *
- * ⚠ It is marked PENDING like every other provisional row, so the lane draws
- * inert (`shared/ui/pending.ts`) — its id is provisional and nothing may be
- * written at it until {@link commitColumnDraftOptimistic} resolves one.
+ * Marked pending like every other provisional row, so the lane draws inert and
+ * nothing may be written at it until {@link commitColumnDraftOptimistic} resolves
+ * a real id.
  */
 export function beginColumnDraft(
   sink: OntologyCreateSink,
@@ -246,8 +234,8 @@ export function beginColumnDraft(
   return object;
 }
 
-/** Discard / Escape / backdrop: the lane leaves the board. ⚠ NO REQUEST, in
- *  either direction — nothing was ever sent for it (see above). */
+/** Discard / Escape / backdrop: the lane leaves the board. No request in either
+ *  direction — nothing was ever sent for it. */
 export function discardColumnDraft(
   sink: OntologyCreateSink,
   draftId: string
@@ -259,15 +247,13 @@ export function discardColumnDraft(
 /**
  * Create: the lane the operator has been looking at becomes a real row.
  *
- * ⚠ **TWO REQUESTS, AND ONLY THE FIRST CAN UNDO THE LANE.** The POST carries the
- * name (all the create schema takes); the description and the field list follow
- * as a PATCH at the id it minted. A refused POST removes the lane — nothing
- * exists. A refused PATCH does NOT: the row is on the server, and deleting the
- * operator's lane because its description did not save would destroy more than
- * it repairs. It reports instead.
+ * Two requests, and only the first can undo the lane. A refused POST removes it
+ * — nothing exists. A refused PATCH does not: the row is on the server, and
+ * deleting the lane because its description did not save would destroy more than
+ * it repairs, so it reports instead.
  *
- * ⚠ The typed values land in the reducer FIRST, so the lane wears its real name
- * in the click's frame rather than after the round trip.
+ * The typed values land in the reducer first, so the lane wears its real name in
+ * the click's frame rather than after the round trip.
  */
 export function commitColumnDraftOptimistic(
   api: OntologyCreateApi,
@@ -285,7 +271,7 @@ export function commitColumnDraftOptimistic(
       saved = await api.createObject({ clusterId, name: patch.name });
       sink.resolve({ [draft.id]: saved.id });
       sink.created();
-      // ⚠ Only when there is something the POST could not carry.
+      // Only when there is something the POST could not carry.
       if (patch.subtitle !== "" || patch.template.length > 0) {
         await api.updateObject(saved.id, {
           subtitle: patch.subtitle,
@@ -330,8 +316,8 @@ export function createObjectOptimistic(
 
   const done = (async (): Promise<OntologyObject | null> => {
     try {
-      // ⚠ TARGET captured at submit — never re-read from current selection,
-      // which may have moved during the round trip.
+      // Target captured at submit — never re-read from current selection, which
+      // may have moved during the round trip.
       const saved = await api.createObject({ ...target, name: object.name });
       sink.resolve({ [object.id]: saved.id });
       sink.created();

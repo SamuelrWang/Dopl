@@ -1,16 +1,15 @@
 /**
- * INVARIANT SUITE — 🔒 THE ONTOLOGY AUDIENCE CEILING, one case per ROW of the
+ * Invariant suite — the ontology audience ceiling, one case per ROW of the
  * permission matrix (`docs/specs/home-ontology.md` §2) × solo/shared.
  *
  * The ceiling is the WHOLE fence for the home ontology: an agent holds its
- * operator's credential and has Bash, so a hidden control decides nothing and
- * the desktop's prompt framing is a compensating control rather than a gate.
+ * operator's credential and has Bash, so a hidden control decides nothing.
  * Every input is driven through `repository-shares.ts` — the DB facts — so a
- * case here is a case about the server, not about a mock of the decision.
+ * case here is about the server, not about a mock of the decision.
  *
- * ⚠ THE TWO CASES THAT ARE NOT MATRIX ROWS ARE THE ONES THAT MATTER MOST:
- * the UNREADABLE member count (fails CLOSED to the narrower rung) and the ONE
- * RESOLUTION PER REQUEST pin.
+ * The two cases that are not matrix rows matter most: the UNREADABLE member
+ * count (fails CLOSED to the narrower rung) and the ONE RESOLUTION PER REQUEST
+ * pin.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -50,7 +49,7 @@ const PEER_CLUSTER = "c-peer";
 function cluster(over: Partial<AudienceClusterFacts> = {}): AudienceClusterFacts {
   return {
     id: OWN_CLUSTER,
-    // ⚠ The ONTOLOGY's container, and NOT the calling one: every case below is
+    // The ONTOLOGY's container, and NOT the calling one: every case below is
     // the cross-container shape the lend actually has.
     workspace_id: OWNER_CONTAINER,
     created_by: OWNER,
@@ -220,18 +219,15 @@ describe("the arms that are not matrix rows", () => {
     expect(
       levelForCluster(ctx({ userId: "user-me" }), audience, cluster({ created_by: PEER }))
     ).toBe("edit");
-    // ⚠ And it costs ONE probe: no channels, no members, no shares.
+    // And it costs ONE probe: no channels, no members, no shares.
     expect(mockShares.listChannelIdsForWorkspace).not.toHaveBeenCalled();
     expect(mockShares.listSharesForChannels).not.toHaveBeenCalled();
   });
 
   /**
-   * 🔒 F-683 — THE FALLBACK IS `resolved, reaches nothing`, NOT `unrestricted`.
-   * Until 2026-09-09 the first arm was `kind !== "link" && kind !== "personal"
-   * → unrestricted`, so a kind nobody has designed yet, and a workspace row that
-   * vanished mid-request, both answered `edit` on every cluster in scope. Both
-   * directions are pinned: the STANDARD arm still answers `unrestricted` (the
-   * case above), and everything else answers nothing.
+   * F-683 — THE FALLBACK IS `resolved, reaches nothing`, NOT `unrestricted`.
+   * Both directions are pinned: the STANDARD arm still answers `unrestricted`
+   * (the case above), and everything else answers nothing.
    */
   for (const [label, kind] of [
     ["an UNKNOWN kind", "some-future-kind"],
@@ -249,7 +245,7 @@ describe("the arms that are not matrix rows", () => {
       // `inOwnContainer` would otherwise admit at `view`/`edit`.
       expect(levelForCluster(me, audience, cluster({ workspace_id: LINK }))).toBe("none");
       expect(levelForCluster(me, audience, cluster())).toBe("none");
-      // ⚠ And it costs ONE probe: an unreadable kind must not buy a share fan.
+      // And it costs ONE probe: an unreadable kind must not buy a share fan.
       expect(mockShares.listSharesForChannels).not.toHaveBeenCalled();
     });
   }
@@ -298,14 +294,13 @@ describe("the arms that are not matrix rows", () => {
   });
 
   /**
-   * 🔒 THE OWNER ARM — `created_by === userId`, which restores ROW 2 of
+   * The OWNER arm — `created_by === userId`, which restores ROW 2 of
    * `./service-shared.ts`'s truth table (the caller's own personal shelf,
    * reached from a room) and nothing else.
    *
-   * ⚠ IT ASKS NOTHING ABOUT MEMBERSHIP, so its soundness is the READ SCOPE's:
+   * It asks NOTHING about membership, so its soundness is the READ SCOPE's:
    * a row from a container the caller was removed from would answer `edit` and
-   * simply never arrives. The second case states that in as many words, so the
-   * next reader knows what the arm does and does NOT check.
+   * simply never arrives. The second case states that in as many words.
    */
   it("the owner arm — `created_by`, restoring the personal shelf and nothing more", async () => {
     prime({ members: 2, personal: [OWNER_CONTAINER] });

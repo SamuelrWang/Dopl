@@ -1,16 +1,10 @@
 import { Skeleton, SkeletonLine } from "@/shared/ui/skeleton";
 
 /**
- * Loading skeleton for the ontology kanban board. ⚠ Must mirror the loaded
- * shape (`kanban-board.tsx`); slots inside the view's `.page-float` Frame.
- *
- * Composes `.kanban-substrate` even though nothing scrolls here
- * (`overflow-hidden`) — `background-attachment: local` is inert without a
- * scroller, and one class keeps the two surfaces identical.
- *
- * ⚠ THE GRID IS BACK SINCE 2026-09-11 (Samuel: *"I want to bring that dotted grid
- * back"* — `kanban-board.tsx`), so a skeleton without it would flash a bare
- * surface the loaded board does not have.
+ * Loading skeleton for the ontology kanban board. Must mirror the loaded shape
+ * (`kanban-board.tsx`); slots inside the view's `.page-float` Frame. Composes
+ * `.kanban-substrate` even though nothing scrolls here — one class keeps the two
+ * surfaces identical, and the dotted grid is on the loaded board since 2026-09-11.
  */
 export function OntologyBoardSkeleton() {
   return (
@@ -28,7 +22,7 @@ export function OntologyBoardSkeleton() {
         <Skeleton className="h-9 w-24 rounded-full" />
       </div>
 
-      {/* ⚠ Same geometry as the live board: 12px dot pitch, 24px padding, 12px
+      {/* Same geometry as the live board: 12px dot pitch, 24px padding, 12px
           gutter, lanes hug contents. */}
       <div className="graph-substrate kanban-substrate flex min-h-0 flex-1 items-start gap-3 overflow-hidden p-6">
         {[3, 2, 3].map((cards, i) => (
@@ -41,7 +35,7 @@ export function OntologyBoardSkeleton() {
 
 function ColumnSkeleton({ cards }: { cards: number }) {
   return (
-    // ⚠ The live lane's gray, by the same token (`kanban-board.tsx › Column`).
+    // The live lane's gray, by the same token (`kanban-board.tsx › Column`).
     <div className="flex w-72 shrink-0 flex-col gap-2 self-start rounded-[14px] bg-home-panel p-3">
       {/* Header card, collapsed — shorter than an object card. */}
       <div className="flex shrink-0 items-center gap-2 rounded-[10px] border border-border-default bg-bg-elevated px-2.5 py-2">

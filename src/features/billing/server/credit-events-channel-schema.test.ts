@@ -1,15 +1,14 @@
 /**
- * `20261003120000_credit_events_channel.sql`, READ AS THE CONTRACT IT IS.
+ * `20261003120000_credit_events_channel.sql`, read as the contract it is.
  *
- * ⚠ **NOT A REPLAY** — Docker is unavailable here, so nothing in this file has
- * met a database. What a SQL-text test can honestly prove is that the file still
- * SAYS what the rest of rule B is built on: a NULLABLE channel column that is
- * `SET NULL` rather than CASCADE, an index whose column order matches the ONE
+ * Not a replay — Docker is unavailable here. What SQL text proves is that the
+ * file still says what rule B is built on: a nullable channel column that is
+ * `SET NULL` rather than CASCADE, an index whose column order matches the one
  * scan that reads it, the ruling in the header, and that nothing is dropped or
- * backfilled. Behavioural probes are OWED (CI's `rls-redteam` job is the replay,
+ * backfilled. Behavioural probes are owed (CI's `rls-redteam` job is the replay,
  * INVARIANTS §14).
  *
- * ⚠ Deploy state is a MEASUREMENT: `supabase migration list`, joined on the
+ * Deploy state is a MEASUREMENT: `supabase migration list`, joined on the
  * NAME, never on the filename prefix (INVARIANTS §12, F-304).
  */
 
@@ -45,9 +44,8 @@ describe("the header carries what an operator needs before applying it", () => {
   });
 
   it("🔒 carries SAMUEL'S RULE B, and both halves of it", () => {
-    // The one sentence the whole wave implements. A header that named only the
-    // channel half would leave the fallback looking like an implementation
-    // detail rather than the ruling it is.
+    // A header naming only the channel half would leave the fallback looking like
+    // an implementation detail rather than the ruling it is.
     expect(prose).toContain("charge the CALLING CHANNEL's container");
     expect(prose).toContain(
       "with no calling channel, charge the RESOURCE's container"
@@ -57,7 +55,7 @@ describe("the header carries what an operator needs before applying it", () => {
 
   it("🔒 says NULL means Desktop agent and that legacy rows CANNOT be backfilled", () => {
     // The accepted cost, stated rather than discovered by a reader who finds a
-    // month of spend sitting under one label.
+    // month of spend under one label.
     expect(prose).toContain("Desktop agent");
     expect(prose).toContain("cannot recover a channel");
   });
@@ -89,9 +87,9 @@ describe("🔒 the column is additive, nullable, and SET NULL", () => {
   });
 
   it("🔒 never CASCADEs — a deleted channel's spend still totals into the wallet", () => {
-    // ⚠ THE REVERT DETECTOR. `ON DELETE CASCADE` here would delete real,
-    // already-charged spend the moment a channel was removed, and the /home
-    // plot would silently stop matching the counter for past months.
+    // Revert detector: `ON DELETE CASCADE` would delete already-charged spend the
+    // moment a channel was removed, and the /home plot would stop matching the
+    // counter for past months.
     expect(live).not.toMatch(/channel_id[^;]*ON DELETE CASCADE/);
   });
 
@@ -110,11 +108,10 @@ describe("🔒 the column is additive, nullable, and SET NULL", () => {
 
 describe("🔒 the index matches the scan that reads the column", () => {
   /**
-   * ⚠ **THE COLUMN ORDER IS THE ASSERTION.** Equality predicates first
+   * The column order is the assertion: equality predicates first
    * (`payer_user_id`, `wallet`, `channel_id`), then `created_at` as the range AND
    * the sort — which is `repository-overview.ts › scanCreditEvents` exactly. Any
-   * other order makes the index unusable for the narrowed histogram while still
-   * existing, which is the expensive kind of wrong.
+   * other order leaves the index existing but unusable for that scan.
    */
   it("is (payer_user_id, wallet, channel_id, created_at DESC)", () => {
     expect(live).toContain(
@@ -123,9 +120,8 @@ describe("🔒 the index matches the scan that reads the column", () => {
   });
 
   it("🔒 does NOT put `period_start` in it, and says why", () => {
-    // The histogram never filters or orders by `period_start`; a column the
-    // predicate does not mention, sitting between two it does, stops the scan
-    // using anything after it.
+    // The histogram never filters or orders by `period_start`, and a column the
+    // predicate does not mention stops the scan using anything after it.
     const idx = live.slice(live.indexOf("CREATE INDEX"));
     expect(idx).not.toContain("period_start");
     expect(prose).toContain("`period_start` IS DELIBERATELY NOT IN IT");
@@ -141,10 +137,9 @@ describe("ordering", () => {
   it("has a unique version and sorts after every file it depends on", () => {
     const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql"));
     expect(files.filter((f) => f.startsWith("20261003120000"))).toEqual([NAME]);
-    // ⚠ Not a style rule: this file ALTERs `credit_usage_events` and references
-    // `channels`, so both must land BEFORE it in filename order or the replay
-    // fails. `wallet` is the index's second column, which is what puts
-    // `20260930120000` on this list.
+    // Not a style rule: this file ALTERs `credit_usage_events` and references
+    // `channels`, so both must sort before it. `wallet` is the index's second
+    // column, which is what puts `20260930120000` on this list.
     for (const dependency of [
       "20260725120000_channels.sql",
       "20260901130000_credit_usage_events.sql",

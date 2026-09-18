@@ -1,27 +1,17 @@
 "use client";
 
 /**
- * THE HERO SCENE'S TREE — /home's frame, its rail, its header, its channel
- * column and its record pane, as a PURE FUNCTION OF THE STEP.
+ * The hero scene's tree — /home's frame, rail, header, channel column and record
+ * pane, as a pure function of the step.
  *
- * ⚠ **SPLIT OUT OF `banner-demo.tsx` ON 2026-09-17 FOR TWO REASONS, AND THE
- * SECOND ONE IS THE GATE.** That file sits near the 500-line cap; more
- * importantly, Samuel asked for a check that *"collects every class name the
- * demo renders and asserts each resolves"* (`demo-class-coverage.test.tsx`) —
- * and the clock, the ResizeObserver fit, the scripted cursor and the click
- * ripple are all things a render-and-read-the-classes gate must not have to
- * start. **What is left here is exactly what paints**, so the gate mounts the
- * scene at one step and reads the DOM.
+ * Split from `banner-demo.tsx` so `demo-class-coverage.test.tsx` can mount the
+ * scene at one step and read the DOM: the clock, the ResizeObserver fit, the
+ * scripted cursor and the click ripple are all things that gate must not have to
+ * start. What is left here is exactly what paints.
  *
- * ⚠ **NOTHING MOVED BUT THE CLOSURE.** Every rule the markup carried came with
- * it verbatim; `banner-demo.tsx` still owns the step, the box and the cursor.
- *
- * 🔒 **THE SCENE IS /home's CHANNEL RECORD AND NEVER A THREAD (Samuel,
- * 2026-09-17):** *"a majority of it is matching like the workspace pages. I want
- * it to match the home space pages."* The pane header is the channel's name, the
- * info column is **Info · Threads 0 · Agents N · Settings**, and the Info tab is
- * the account surface's own mentions face. See `demo-steps.ts` for
- * the four beats that were deleted with the thread.
+ * (2026-09-17) The scene is /home's CHANNEL RECORD and never a thread. The pane
+ * header is the channel's name, the info column is Info / Threads 0 / Agents N /
+ * Settings, and the Info tab is the account surface's own mentions face.
  */
 
 import { useMemo, useState, type RefObject } from "react";
@@ -63,18 +53,15 @@ const DEMO_GATE: MutationGate = { begin() {}, end() {} };
 
 const NOOP = () => {};
 
-/** ⚠ MODULE-LEVEL so the empty list is one REFERENCE, not a fresh `[]` per
- *  render — it is in a memo's dependency list. */
+/** Module-level so the empty list is one REFERENCE, not a fresh `[]` per render
+ *  — it is in a memo's dependency list. */
 const NO_THREADS: never[] = [];
 
 /**
- * THE COMPOSER'S BOT GLYPH (Samuel, 2026-09-17: the demo *"is missing the bot
- * icon"*). `composer-toolbar.tsx` draws it ONLY on `newAgent?.canLaunch` — the
- * desktop bridge op's own detection — so a scene that passed nothing was
- * correctly rendering a BROWSER's composer, which is not what /home looks like
- * on the machine Dopl runs on. ⚠ EVERY HANDLER IS INERT: the slot is decorative,
- * and both refuse rather than hang, which is the shape a caller must handle
- * anyway.
+ * The composer's Bot glyph. `composer-toolbar.tsx` draws it only on
+ * `newAgent?.canLaunch`, so a scene that passed nothing correctly rendered a
+ * BROWSER's composer, which is not what /home looks like on a machine running
+ * Dopl. Every handler is inert and refuses rather than hangs.
  */
 const DEMO_LAUNCH: AgentLaunchControls = {
   canLaunch: true,
@@ -106,9 +93,8 @@ export function DemoScene({
     () => indexMembers(MEMBERS, CURRENT_USER_ID, AGENT_INDEX),
     []
   );
-  /** 🔒 **NO THREADS, AND THAT IS THE RULING RATHER THAN AN EMPTY FIXTURE** —
-   *  the column's Threads tab reads `0`, exactly as /home does on a channel
-   *  nobody has opened a thread in. */
+  /** No threads: the ruling, not an empty fixture. The column's Threads tab reads
+   *  `0`, exactly as /home does on a channel with none. */
   const rows = useMemo(
     () => channelRows(messages, NO_THREADS, index, formatChannelTimestamp),
     [messages, index]
@@ -150,9 +136,8 @@ export function DemoScene({
                     channelId={CHANNEL_ID}
                     workspaceId={WORKSPACE_ID}
                     channelName="q4-outbound"
-                    // 🔒 **ALWAYS THE CHANNEL RECORD (Samuel, 2026-09-17).** A
-                    // thread here puts a BREADCRUMB in the header and a
-                    // thread-scoped column beside it — the workspace shape.
+                    // Always the channel record: a thread here puts a breadcrumb
+                    // in the header and a thread-scoped column beside it.
                     thread={null}
                     rows={rows}
                     index={index}
@@ -162,7 +147,7 @@ export function DemoScene({
                     infoOpen
                     favorited
                     gate={DEMO_GATE}
-                    // ⚠ THE COMPOSER'S BOT GLYPH — see `DEMO_LAUNCH`.
+                    // The composer's Bot glyph — see `DEMO_LAUNCH`.
                     newAgent={DEMO_LAUNCH}
                     onToggleInfo={NOOP}
                     onToggleFavorite={NOOP}
@@ -190,23 +175,19 @@ export function DemoScene({
                       mentionsLoading={false}
                       onOpenMention={NOOP}
                       onMarkAllMentionsRead={NOOP}
-                      // 🔒 **/home's OWN CAPABILITIES** (`relationship-record.tsx`):
-                      // the Threads tab carries the Artifacts toggle here and
-                      // ONLY here, and the Info tab wears the account surface's
-                      // mentions face — an open category below the strip rather
-                      // than a collapsed row inside the card.
+                      // /home's own capabilities (`relationship-record.tsx`): the
+                      // Threads tab carries the Artifacts toggle here and only
+                      // here, and the Info tab wears the account surface's
+                      // mentions face.
                       artifacts
                       mentionsLayout="category"
-                      // ⚠ THE HERO RENDERS THE PRODUCT'S OWN Info BODY since
-                      // wave 1A (2026-09-17) — `demo-info-tab.tsx` was a FIFTH
-                      // hand-copy of the ladder and is deleted. No `headerEdit`
-                      // or `infoCardEdit` is passed, which is exactly the
+                      // The hero renders the product's own Info body. No
+                      // `headerEdit` or `infoCardEdit` is passed, which is the
                       // display-only face a decorative pane wants.
                       activityBins={ACTIVITY_BINS}
                       activityLoading={false}
-                      // ⚠ Add person sits UNDER the roster with no heading
-                      // (Samuel, 2026-08-25), in the same region /home's real one
-                      // fills. A `<span>`, not a button: this pane is decorative
+                      // (2026-08-25) Add person sits under the roster with no
+                      // heading. A `<span>`, not a button: the pane is decorative
                       // and `aria-hidden`.
                       infoExtras={{
                         belowRoster: (
@@ -224,9 +205,8 @@ export function DemoScene({
                     messages={messages}
                     currentUserId={CURRENT_USER_ID}
                     viewer={VIEWER}
-                    // ⚠ OFF THE INDEX, exactly as the real panel resolves it —
-                    // the colour is a live fact about the SESSION and is never
-                    // stamped on a message row.
+                    // Off the index, as the real panel resolves it: the colour is
+                    // a live fact about the SESSION, never stamped on a row.
                     color={
                       index.agents.get(MY_SESSION.agentId ?? "")?.color ?? null
                     }

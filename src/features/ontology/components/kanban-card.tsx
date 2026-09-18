@@ -16,23 +16,20 @@ interface Props {
 }
 
 /**
- * One object in a lane: name, description, hairline, counts. Whole card
- * selects; hover shows the cursor-following quick view. No inline expand —
- * attributes already render in the hover card and the panel.
+ * One object in a lane: name, description, hairline, counts. Whole card selects;
+ * hover shows the cursor-following quick view.
  *
- * ⚠ FIXED HEIGHT is board arithmetic: `h-[216px]` = 18 × the 12px dot pitch
- * (the scale has no 216), against a 264px inner width.
+ * Fixed height is board arithmetic: `h-[216px]` = 18 × the 12px dot pitch, against
+ * a 264px inner width.
  *
- * ⚠ The eight-line clamp is arithmetic, not taste: 216 − meta row (1px
- * hairline + 16px `py-2` + 14.7px micro line ≈ 32) − 20px body padding −
- * 18.75px name line − 2px gap ≈ 143px; `text-caption` is 11.5px × 1.4 =
- * 16.1px/line, so 8 lines (128.8px) is the last that fits with its ellipsis
- * (9 needs 144.9). Re-do the sum if height, paddings, lane padding or the type
- * scale move.
+ * The eight-line clamp is arithmetic, not taste: 216 − meta row (≈ 32) − 20px body
+ * padding − 18.75px name line − 2px gap ≈ 143px, and `text-caption` is 16.1px/line,
+ * so 8 lines (128.8px) is the last that fits with its ellipsis. Re-do the sum if
+ * height, paddings, lane padding or the type scale move.
  *
- * ⚠ `<div>` + `onClick`, not a wrapping `<button>`: the title button is the
- * accessible control, the container handler is mouse convenience so the meta
- * row shares the target (see `knowledge-v2/home/base-card`).
+ * `<div>` + `onClick`, not a wrapping `<button>`: the title button is the
+ * accessible control, the container handler is mouse convenience so the meta row
+ * shares the target.
  */
 export function KanbanCard({
   objectId,
@@ -68,10 +65,9 @@ export function KanbanCard({
         <span className="block w-full truncate text-body font-semibold tracking-tight text-text-primary">
           {object.name}
         </span>
-        {/* Flexible middle: takes the space the fixed height leaves, clamps
-            with ellipsis at the last fitting line. ⚠ No `block` beside the
-            clamp — the clamp IS a display rule (-webkit-box) and whichever the
-            stylesheet emitted last wins. */}
+        {/* Flexible middle: clamps with ellipsis at the last fitting line. No
+            `block` beside the clamp — the clamp IS a display rule (-webkit-box)
+            and whichever the stylesheet emitted last wins. */}
         {object.subtitle && (
           <span className="mt-0.5 line-clamp-[8] w-full min-h-0 flex-1 text-caption text-text-secondary">
             {object.subtitle}

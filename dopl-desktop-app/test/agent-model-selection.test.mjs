@@ -1,25 +1,21 @@
 // AGENT MODEL SELECTION — the desktop half (2026-08-22, Samuel's ruling).
 //
-// ── THE SHAPE, AND WHY IT IS TWO VOCABULARIES ────────────────────────────────────────────────
-// The operator picks a MODEL for a channel; their agents run on it. The ruling names the values
-// as FULL IDS and the SPA renders exactly those, while this tree's existing picker is a frozen
-// list of ALIASES — deliberately, because an alias is version-stable and is what may become
-// `--model` on a child process. Both are right about different things, so there are two frozen
-// lists (`session-model.js › MODEL_IDS` / `MODEL_CHOICES`) and one map between them.
+// TWO VOCABULARIES: the ruling names FULL IDS and the SPA renders those, while everything below the
+// launch boundary speaks version-stable ALIASES (an alias is what may become `--model` on a child
+// process). Hence two frozen lists in `session-model.js` and one map between them.
 // `test/session-model.test.mjs` owns the lists; THIS file owns the WIRING:
 //
 //   DURABLE  the per-channel launch posture carries `model` beside the two axes — a third FIELD,
 //            never a third AXIS. It validates SOFT (unknown = absent = the SDK default) where the
 //            axes validate HARD (unknown = the whole write is refused).
-//   LAUNCH   every lane that spawns hands it in. ⚠ INCLUDING the peer-triggered one, which may
-//            NOT inherit the permission pair — hence two readers in `channel-prefs.js`.
+//   LAUNCH   every lane that spawns hands it in, INCLUDING the peer-triggered one, which may NOT
+//            inherit the permission pair — hence two readers in `channel-prefs.js`.
 //   LIVE     `Query.setModel` really switches a running session; main records the pick so a
 //            park/resume keeps it.
 //   REPORT   the summary carries the EFFECTIVE model, SDK-reported first.
 //
-// ⚠ THE SECURITY PROPERTY THIS FILE EXISTS FOR: the value ends up as `--model <argv>` on a
-// `claude` child. Nothing anywhere may pass a string through — every layer coerces against a
-// frozen list, and the LAST one is `buildSdkOptions`. These cases drive that from each entry.
+// THE SECURITY PROPERTY THIS FILE EXISTS FOR: the value ends up as `--model <argv>` on a `claude`
+// child, so every layer coerces against a frozen list and the LAST one is `buildSdkOptions`.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -50,10 +46,10 @@ test("DURABLE: a valid model rides the pair and round-trips unchanged", () => {
 });
 
 test("DURABLE: an UNKNOWN model is ABSENT, and the pair is still written", () => {
-  // ⚠ THE ASYMMETRY IS THE DESIGN. An unknown value on either AXIS rejects the whole write, so a
+  // THE ASYMMETRY IS THE DESIGN. An unknown value on either AXIS rejects the whole write, so a
   // half-applied posture cannot exist. An unknown MODEL is simply not stored: absent means the SDK
-  // default, which is what every channel that has never chosen one already does. Failing the write
-  // would mean a desktop that has not heard of a newer model could not store a POSTURE at all.
+  // default. Failing the write would stop a desktop that has not heard of a newer model from
+  // storing a POSTURE at all.
   for (const junk of JUNK) {
     const map = {};
     const res = prefs.postureInto(map, CH_A, { tools: "auto", messages: "ask", model: junk });
@@ -75,16 +71,13 @@ test("DURABLE: a record written BEFORE this field reads back as the pair alone",
   assert.deepEqual(prefs.readPostureFrom(map, CH_A), { tools: "manual", messages: "ask" });
 });
 
-// ── ⚠ STORAGE OMITS THE KEY; THE WIRE MUST NOT. THIS IS THE SEAM. ───────────────────────────
+// ── STORAGE OMITS THE KEY; THE WIRE MUST NOT. THIS IS THE SEAM. ─────────────────────────────
 //
-// The three cases above are about the STORED record, where an absent model is a MISSING KEY so
-// that a pre-field record and a cleared one are the same record. The RENDERER is the opposite
-// requirement, and reading `readPostureFrom` as if it were the wire is what broke it: the web's
-// capability probe (`src/features/channels/lib/permission-modes.ts › hasModelKey`) is an OWN-KEY
-// test — a missing `model` means "this desktop predates the field" and the Settings tab draws NO
-// MODEL ROW at all. So a `getLaunchPosture` that answered the pair alone told every channel
-// without a stored model that the feature did not exist, and the only way to store one is the row
-// that was never drawn. A closed loop, green in every suite, with the feature unreachable.
+// The web's capability probe (`src/features/channels/lib/permission-modes.ts › hasModelKey`) is an
+// OWN-KEY test: a missing `model` means "this desktop predates the field" and the Settings tab draws
+// NO MODEL ROW at all. So a `getLaunchPosture` answering the pair alone told every channel without a
+// stored model that the feature did not exist — and the only way to store one is the row that was
+// never drawn. A closed loop, green in every suite, with the feature unreachable.
 test("WIRE: the effective read ALWAYS carries `model`, so the capability probe can see it", () => {
   // A channel that has never chosen anything: the restrictive pair, and an EXPLICIT null.
   const fresh = prefs.effectivePosture({}, CH_A);
@@ -109,9 +102,9 @@ test("WIRE: the effective read ALWAYS carries `model`, so the capability probe c
 });
 
 test("WIRE: `getLaunchPosture` is that composition, not a second spelling of it", () => {
-  // ⚠ A REGEX BECAUSE THE REAL FUNCTION NEEDS electron-store. What it pins is the ONE property
-  // source extraction cannot: that the store-backed reader routes through the same helper the
-  // case above drives, rather than re-deriving the shape and drifting from it.
+  // A REGEX BECAUSE THE REAL FUNCTION NEEDS electron-store. It pins the one property source
+  // extraction cannot: that the store-backed reader routes through the same helper the case above
+  // drives, rather than re-deriving the shape and drifting from it.
   const PREFS = read("channel-prefs.js");
   const body = PREFS.slice(PREFS.indexOf("function getLaunchPosture("));
   assert.match(body.slice(0, body.indexOf("}")), /effectivePosture\(getAllPostures\(\), channelId\)/);
@@ -131,23 +124,13 @@ test("DURABLE: extra properties are still dropped whole", () => {
   assert.deepEqual(Object.keys(map[CH_A]).sort(), ["messages", "model", "tools"]);
 });
 
-// ── ⚠ ABSENT IS UNCHANGED; SUPPLIED IS OBEYED. THE OTHER SEAM. ──────────────────────────────
+// ── ABSENT IS UNCHANGED; SUPPLIED IS OBEYED. THE OTHER SEAM. ────────────────────────────────
 //
-// The cases above are all about a write that MENTIONS the model. This one is about a write that
-// does not, and the two ends of it are a preload and a validator that must agree.
-//
-// THE FAILURE: the durable record is rewritten WHOLE on every posture change, and the preload
-// coerced `model` unconditionally (`asMode(preset && preset.model)`), so a write from any surface
-// that does not carry the field — a Permissions-only or Sends-only control, an older SPA, any
-// caller that predates 2026-08-22 — arrived as `model: ''`, stored no key, and silently dropped
-// the operator's pick. The Settings row still read Opus and every launch after it ran the SDK
-// default. That is the RUNTIME's own bug, on the axis the runtime copied its rule FROM
-// (`app-preload.js`: "the key is forwarded only when the caller supplied one … main's own-key
-// test is the other half of the same rule").
-//
-// ⚠ IT DOES NOT CONTRADICT THE `JUNK` CASE ABOVE. `{ model: undefined }` HAS the own key, so it
-// is a caller SAYING "no model" and still clears; what survives is a `raw` with no `model` key at
-// all. Absent and present-but-junk are different facts (INVARIANTS §11).
+// The durable record is rewritten WHOLE on every posture change, and the preload used to coerce
+// `model` unconditionally — so a write from any surface that does not carry the field arrived as
+// `model: ''`, stored no key, and silently dropped the operator's pick while the Settings row still
+// read Opus. `{ model: undefined }` HAS the own key, so it is a caller SAYING "no model" and still
+// clears; only a `raw` with no `model` key at all preserves (INVARIANTS §11).
 test("SUPPLIED-ONLY: a write that never mentions the model leaves the stored pick alone", () => {
   const map = {};
   prefs.postureInto(map, CH_A, { tools: "bypass", messages: "auto_both", model: "claude-opus-5" });
@@ -172,10 +155,9 @@ test("SUPPLIED-ONLY: an explicit '' still CLEARS it — the Default row is a rea
 });
 
 test("SUPPLIED-ONLY: the two ends agree — the preload spreads, the validator probes the key", () => {
-  // ⚠ SOURCE-ASSERTED BECAUSE THE HOLE IS AT AN END, NOT IN THE MIDDLE. Either half alone leaves
-  // the rule broken at whichever end forgot, and neither end can drive the other in-process: the
-  // preload needs `electron`, and the validator is sliced pure. The RUNTIME's pair carries the
-  // identical two-sided assertion, one line below this one in the same preload block.
+  // SOURCE-ASSERTED BECAUSE THE HOLE IS AT AN END, NOT IN THE MIDDLE. Either half alone leaves the
+  // rule broken at whichever end forgot, and neither end can drive the other in-process: the preload
+  // needs `electron`, and the validator is sliced pure.
   const PRELOAD = readFileSync(join(HERE, "..", "renderer", "app-preload.js"), "utf8");
   assert.match(PRELOAD, /\.\.\.\(preset && preset\.model !== undefined \? \{ model: asMode\(preset\.model\) \} : \{\}\)/,
     "the preload forwards the key ONLY when the caller supplied one");
@@ -188,12 +170,10 @@ test("SUPPLIED-ONLY: the two ends agree — the preload spreads, the validator p
 // ── 2. TWO READERS, AND WHY ──────────────────────────────────────────────────────────────────
 
 test("READERS: the model has its OWN reader, so H2's posture census stays honest", () => {
-  // ⚠ THE POINT OF THE SPLIT. `getLaunchPosture` has exactly ONE consumer and
+  // THE POINT OF THE SPLIT. `getLaunchPosture` has exactly ONE consumer and
   // `test/session-preset-start.test.mjs` pins the count, because a second reader of the stored
-  // PERMISSION pair re-opens the failure H2 exists to prevent — a posture reaching a spawn nobody
-  // is attending. A MODEL grants nothing and reaches no gate, so the PEER-TRIGGERED lane may
-  // inherit it; keeping the two readers apart is what makes that distinction CHECKABLE rather
-  // than a claim in a comment.
+  // PERMISSION pair re-opens the failure H2 exists to prevent. A MODEL grants nothing and reaches no
+  // gate, so the PEER-TRIGGERED lane may inherit it; two readers make that distinction CHECKABLE.
   const PREFS = read("channel-prefs.js");
   assert.match(PREFS, /function getLaunchModel\(channelId\)/);
   const body = PREFS.slice(PREFS.indexOf("function getLaunchModel("), PREFS.indexOf("module.exports = {"));
@@ -213,10 +193,9 @@ test("READERS: the model has its OWN reader, so H2's posture census stays honest
 // ── 3. THE LAUNCH LANES ──────────────────────────────────────────────────────────────────────
 
 test("LAUNCH: the spawn funnel FORWARDS a model — it used to drop one on every lane", () => {
-  // ⚠ THE BUG THIS CASE IS FOR. `session-launch.js › launch` built the `startSession` spec with no
-  // `model` field at all, so `startSession`'s `normalizeModel(spec.model)` could only ever answer
-  // 'default' for anything spawned through the funnel — which is every lane. The per-session
-  // picker had one producer left (a resume's stored record) and no way in from a launch.
+  // THE BUG THIS CASE IS FOR: `session-launch.js › launch` built the `startSession` spec with no
+  // `model` field at all, so `normalizeModel(spec.model)` could only answer 'default' for anything
+  // spawned through the funnel — which is every lane.
   const LAUNCH = read("session-launch.js");
   const spec = LAUNCH.slice(LAUNCH.indexOf("const s = await deps.startSession({"), LAUNCH.indexOf("}, sdk);"));
   assert.match(spec, /^\s*model: a\.model,$/m, "forwarded, never invented");
@@ -224,30 +203,23 @@ test("LAUNCH: the spawn funnel FORWARDS a model — it used to drop one on every
 
 test("LAUNCH: both lanes convert the ID to the argv-safe ALIAS before it travels", () => {
   // Everything below the launch boundary speaks the alias vocabulary, and `buildSdkOptions`
-  // re-coerces against it as the last gate. Converting at the boundary is what keeps a full id
-  // from reaching a layer that would coerce it to 'default' and silently drop the pick.
-  // ⚠ REPOINTED 2026-08-22: the launch body moved to `main/session-launch-op.js` (§1 split).
-  // ⚠ AND THE CHAIN GREW A LINK IN FRONT OF IT. An AGENT TEMPLATE may carry a default model,
-  // and it outranks the channel's durable pick — so the assertion is that the channel read is
-  // still the FALLBACK of that expression, not that it is the whole of it. `templateModel`
-  // answers '' (not 'default') when a template names no model or names one this build does
-  // not know, which is what keeps an unknown template model falling THROUGH to this read
-  // instead of ending the chain one link early.
+  // re-coerces against it as the last gate. An AGENT TEMPLATE may carry a default model and it
+  // outranks the channel's durable pick, so the channel read is the FALLBACK of the expression, not
+  // the whole of it; `templateModel` answers '' (not 'default') for an unknown template model, which
+  // is what keeps it falling THROUGH instead of ending the chain one link early.
   const OPS = read("session-launch-op.js");
-  // ⚠ AND THE LAUNCH SHEET SITS IN FRONT OF BOTH SINCE PHASE 2: `overrides.model` is a
-  // DELIBERATE PER-CALL CHOICE and the other two are DEFAULTS, which is the same ordering
-  // argument the directive lane's explicit `model` param wins on.
+  // The launch sheet sits in front of both since Phase 2: `overrides.model` is a DELIBERATE PER-CALL
+  // CHOICE and the other two are DEFAULTS.
   assert.match(OPS,
     /model: overrides\.model \|\| templateModel\(sessionModel, template\)\s*\|\| sessionModel\.aliasForModelId\(channelPrefs\.getLaunchModel\(p\.channelId\)\)/,
     "the operator's own Launch: the sheet, then the template default, then the channel's pick");
-  // ⚠ THE RULE ITSELF MOVED TO `session-model.js › chainModel` ON 2026-08-23 (F-285) — the
-  // DIRECTIVE lane needed the identical answer for its OWN link, and a rule written once per lane
-  // is a rule that drifts in one of them. `templateModel` is now only "which field to read".
+  // The rule itself moved to `session-model.js › chainModel` on 2026-08-23 (F-285): the DIRECTIVE
+  // lane needed the identical answer, and a rule written once per lane drifts in one of them.
   assert.match(read("session-model.js"), /alias === 'default' \? '' : alias/,
     "an unrecognised model falls THROUGH to the next link, it does not end the chain");
   assert.match(OPS, /return sessionModel\.chainModel\(/,
     "the button lane must not restate the rule — it delegates");
-  // ⚠ THE CHAIN MOVED WITH `spawn` ON 2026-09-01 (the §1 split); the precedence is unchanged.
+  // The chain moved with `spawn` on 2026-09-01 (the §1 split); the precedence is unchanged.
   assert.match(read("launch-directive-spawn.js"), /model: sessionModel\.chainModel\(d\.model\)/,
     "…and so does the directive lane's own link, which used to be a ternary on aliasForModelId");
   assert.match(read("trigger.js"),
@@ -256,11 +228,9 @@ test("LAUNCH: both lanes convert the ID to the argv-safe ALIAS before it travels
 
 test("LAUNCH: an unknown stored model degrades to the PRODUCT FALLBACK, never to argv", () => {
   // Driven rather than asserted from source: the whole chain, id -> alias -> argv.
-  // ⚠ THE DEGRADATION TARGET MOVED 2026-09-06 (Samuel's back-fill ruling). This read "degrades to
-  // the CLI's own pick" and asserted `null` — no `--model` option at all — which stopped being
-  // true when "Default" was removed as an option and an unpicked channel was ruled to launch
-  // `LAUNCH_MODEL_FALLBACK`. What the case is really about is unchanged and is what still fails
-  // here: the junk itself must never reach argv.
+  // The degradation target moved 2026-09-06 (back-fill ruling): an unpicked channel launches
+  // `LAUNCH_MODEL_FALLBACK` rather than leaving `--model` off. What the case is about is unchanged:
+  // the junk itself must never reach argv.
   const fallback = model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK);
   for (const junk of JUNK) {
     assert.equal(model.modelArg(model.aliasForModelId(junk)), fallback, JSON.stringify(junk));
@@ -298,9 +268,9 @@ function live({ query, settled = false } = {}) {
 const address = { channelId: "c", taskId: "t", agentId: "a1b2c3d4" };
 
 test("LIVE: the SDK is told, and the pick is RECORDED for the next assembly", () => {
-  // Both halves matter. `s.model` is what `buildSdkOptions` reads on the NEXT assembly — a park,
-  // a crash resume, the post-sign-in relaunch — so a switch that only called the SDK would revert
-  // the operator's pick the first time the session was rebuilt.
+  // Both halves matter. `s.model` is what `buildSdkOptions` reads on the NEXT assembly — a park, a
+  // crash resume, the post-sign-in relaunch — so a switch that only called the SDK would revert the
+  // operator's pick the first time the session was rebuilt.
   const seen = [];
   const h = live({ query: { setModel: async (m) => { seen.push(m); } } });
   return h.fn({ ...address, model: "claude-opus-5" }).then((res) => {
@@ -311,12 +281,10 @@ test("LIVE: the SDK is told, and the pick is RECORDED for the next assembly", ()
 });
 
 test("LIVE: an unknown value RESETS to the product default rather than being refused", () => {
-  // ⚠ THIS READ "CLEARS the override" AND PINNED `setModel(undefined)` — no `--model` option at
-  // all, the CLI's own pick. Samuel removed "Default" as an option on 2026-09-06 and ruled that
-  // an unpicked channel runs `LAUNCH_MODEL_FALLBACK`, so there is nothing left to clear TO: the
-  // live switch now hands the SDK the same model a fresh launch would spend. The property the
-  // case exists for is untouched — an unknown value is ACCEPTED and normalized, never refused —
-  // and `s.model` still records `'default'`, which is "no explicit pick", not a model name.
+  // 2026-09-06: "Default" was removed as an option and an unpicked channel was ruled to run
+  // `LAUNCH_MODEL_FALLBACK`, so there is nothing left to clear TO. The property the case exists for
+  // is untouched — an unknown value is ACCEPTED and normalized, never refused — and `s.model` still
+  // records `'default'`, which is "no explicit pick", not a model name.
   const seen = [];
   const h = live({ query: { setModel: async (m) => { seen.push(m); } } });
   return h.fn({ ...address, model: "claude-opus-4-5" }).then((res) => {
@@ -358,17 +326,14 @@ test("LIVE: a session with no query yet is still recorded, so its first launch u
 });
 
 test("LIVE: the SDK really supports this — it is a switch, not a deferral", () => {
-  // ⚠ READ OFF THE BUNDLED SDK, NOT FROM MEMORY. `Query.setModel` is documented "Only available
-  // in streaming input mode", and every session here runs in that mode by construction:
-  // `sdk.query({ prompt: s.pushIterator })` takes an async iterable, never a string. If a future
-  // SDK drops the method the shipped op degrades to record-only, which this file's "no query yet"
-  // case already covers — but the claim in the docs would be wrong, so it is pinned.
+  // READ OFF THE BUNDLED SDK, NOT FROM MEMORY. `Query.setModel` is documented "Only available in
+  // streaming input mode", and every session here runs in that mode by construction:
+  // `sdk.query({ prompt: s.pushIterator })` takes an async iterable, never a string.
   const sdk = readFileSync(
     join(HERE, "..", "node_modules", "@anthropic-ai", "claude-agent-sdk", "sdk.d.ts"), "utf8");
   assert.match(sdk, /setModel\(model\?: string\): Promise<void>;/);
-  // ⚠ 2026-08-31: the call moved to the runtime adapter (`runtime/claude/launch-spec.js › start`),
-  // which takes the prompt off the OPAQUE spec core hands it. The condition is unchanged: the
-  // prompt is the push iterator, never a string, so streaming input mode holds by construction.
+  // 2026-08-31: the call moved to the runtime adapter (`runtime/claude/launch-spec.js › start`).
+  // The condition is unchanged: the prompt is the push iterator, never a string.
   assert.match(read("runtime/claude/launch-spec.js"), /sdk\.query\(\{ prompt: spec\.prompt/,
     "streaming input mode, which is the condition on the method");
   assert.match(read("session-query.js"), /s\.pushIterator = io\.makePushIterator\(\);/,
@@ -386,23 +351,18 @@ test("REPORT: the summary reports the SDK's own model over the operator's pick",
 });
 
 test("REPORT: the bridge declares the field and the op, in BOTH trees", () => {
-  // ⚠ THREE PLACES MUST AGREE and a gap here does not fail, it deletes a feature silently: the
-  // preload is ground truth, `src/shared/lib/spa-bridge.ts` is the shared declaration and
+  // THREE PLACES MUST AGREE and a gap here does not fail, it deletes a feature silently: the preload
+  // is ground truth, `src/shared/lib/spa-bridge.ts` is the shared declaration and
   // `apps/desktop-ui/src/lib/dopl-bridge.ts` is the mirror the SPA compiles against.
   const root = join(HERE, "..", "..");
   const shared = readFileSync(join(root, "src", "shared", "lib", "spa-bridge.ts"), "utf8");
-  // ⚠ THE WIRE SHAPES MOVED TO `spa-bridge-shapes.ts` ON 2026-08-22 (the 500-line cap), and
-  // `spa-bridge.ts` RE-EXPORTS them as the import path of record — so the FIELD is asserted where
-  // it is declared and the RE-EXPORT is asserted separately. Reading only the ops file would go
-  // green on a re-export that had quietly dropped a name.
+  // The wire SHAPES moved to `spa-bridge-shapes.ts` on 2026-08-22 and `spa-bridge.ts` RE-EXPORTS
+  // them as the import path of record — so the FIELD is asserted where it is declared and the
+  // RE-EXPORT separately. Reading only one file goes green on a re-export that dropped a name.
   const shapes = readFileSync(join(root, "src", "shared", "lib", "spa-bridge-shapes.ts"), "utf8");
   const mirror = readFileSync(join(root, "apps", "desktop-ui", "src", "lib", "dopl-bridge.ts"), "utf8");
-  // ⚠ AND THE OPS MOVED TO `spa-bridge-sessions.ts` ON 2026-09-17, at the same 500-line cap and
-  // on the same terms as the shapes split above: `spa-bridge.ts` keeps the BRIDGE (the detector,
-  // the transport, the app-wide toggles) and RE-EXPORTS the namespace as the import path of
-  // record. Same rule as the shapes, so the same two assertions — the op where it is DECLARED,
-  // the re-export separately — because reading only one file goes green on a re-export that has
-  // quietly dropped a name.
+  // The OPS moved to `spa-bridge-sessions.ts` on 2026-09-17, at the same cap and on the same terms
+  // as the shapes split above — hence the same two assertions.
   const sessionOps = readFileSync(join(root, "src", "shared", "lib", "spa-bridge-sessions.ts"), "utf8");
   assert.match(shapes, /model\?: string \| null;/, "DesktopSessionSummary carries it");
   assert.match(shared, /export type \{\s*DesktopSessionSummary,\s*DesktopNarrationEntry,\s*\} from "\.\/spa-bridge-shapes";/,

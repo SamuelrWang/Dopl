@@ -3,12 +3,11 @@
 import { useState } from "react";
 
 /**
- * THE Stripe billing portal handoff, one place. Two surfaces reach it (plans
- * pane "Manage billing"/"Update payment method", payment-method card
- * "Update"). Same-tab redirect, web-side only — desktop does its own
- * `openExternal`.
+ * The Stripe billing portal handoff, one place — reached from the plans pane and
+ * the payment-method card. Same-tab redirect, web-side only; desktop does its
+ * own `openExternal`.
  *
- * ⚠ Route's error body is FLAT (`{error: "…"}`, legacy shape) while the auth
+ * The route's error body is flat (`{error: "…"}`, legacy shape) while the auth
  * wrapper's is nested; both are read here since the caller cannot tell which
  * layer refused.
  */

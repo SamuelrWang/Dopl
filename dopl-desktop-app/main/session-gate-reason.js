@@ -1,25 +1,20 @@
 // WHY a session tool call was gated or denied (2026-08-02, the "bypass still asks" round).
 //
-// THE DEFECT. grantDecision is CORRECT far more often than it looks. Under `bypass` an
-// unclassified tool still gates on purpose (session-profiles FIX F3: unknown names are never
-// auto-allowed), a slug-addressed post is classified cross-channel on purpose (isOwnChannelPost
-// compares against the channel ID only), and a malformed `to`/`kind` refuses to auto-allow on
-// purpose (FIX F9). None of that was ever SAID, so every one of them read to the operator as a
-// broken toggle: "I turned bypass on and it still asks." A verdict the operator cannot explain
-// is a verdict they stop trusting, and then they turn the gate off for the wrong reason.
+// grantDecision is CORRECT far more often than it looks: under `bypass` an unclassified tool still
+// gates on purpose (FIX F3), a slug-addressed post is classified cross-channel on purpose, and a
+// malformed `to`/`kind` refuses to auto-allow on purpose (FIX F9). None of it was ever SAID, so
+// each read to the operator as a broken toggle.
 //
-// This module turns a verdict into a machine-readable REASON CODE. It is deliberately NOT a
-// second decision point: it takes the DECISION grantDecision already made and only explains it,
-// so it can never disagree with the gate about what happens — only about how it is described.
-// The codes are stable identifiers; the operator-facing WORDS live in the renderer
-// (session-render.gateReasonText) and the diag line prints the code, never the words.
+// This module turns a verdict into a machine-readable REASON CODE. It is deliberately NOT a second
+// decision point: it takes the decision `grantDecision` already made and only explains it, so it
+// can never disagree about what happens — only about how it is described. The codes are stable
+// identifiers; the operator-facing WORDS live in the renderer (`session-render.gateReasonText`)
+// and the diag line prints the code, never the words.
 //
-// PURE + electron-free, like session-profiles: it is built by FACTORY with the predicates the
-// session-profile table already owns (isChannelTool / isOwnChannelPost / postFieldsOk /
-// grantKeyFor / isClassifiedTool / normalizeToolMode / canonicalDoplName / the two own-channel op
-// sets), so there is exactly ONE definition of each and this file cannot drift into its own
-// copy of the rules — F-139 is what that discipline is for: the matcher and its explanation
-// were wrong in lockstep, and normalizing in one place fixed both.
+// PURE + electron-free, like session-profiles: built by FACTORY with the predicates the
+// session-profile table already owns, so there is exactly ONE definition of each and this file
+// cannot drift into its own copy of the rules — F-139 is what that discipline is for, where the
+// matcher and its explanation were wrong in lockstep.
 
 // The closed set of reason codes. A payload / diag line carries one of these or nothing;
 // anything else is a bug, and the renderer renders no line at all for a code it does not know.
@@ -40,46 +35,28 @@ const GATE_REASONS = [
   //                             messages auto-outbound). Its own code because the operator's fix
   //                             is TWO settings, not the one `message-approval-required` names.
   'manage-posture-required', //  2026-09-17 (Samuel's field report): an own-channel
-  //                             `manage.rename` / `manage.end` / `manage.posture` while the two
-  //                             postures its lane needs are not BOTH set — the launch lane's
-  //                             conjunction, so the launch lane's shape of answer. ⚠ **IT NAMES
-  //                             THE TWO POSTURES, NOT THE `posture` ACTION**: all three verbs
-  //                             stop on it, and `manage.posture` is merely the one whose name
-  //                             collides with the word. ⚠ ITS OWN CODE because the defect was a
-  //                             DISHONEST one: these three answered `channel-op-approval-required`
-  //                             ("message approval covers this channel's messages, not this
-  //                             operation"), which told an operator to go find an approval that
-  //                             does not exist on any surface — the F-320 dead end, one op later.
-  //                             ⚠ **AND `manage.direct` STOPS ON IT TOO, SINCE LATER THE SAME
-  //                             DAY** — the direct lane is the manage lane's conjunction exactly
-  //                             (tools `bypass` AND the outbound half), so the operator's fix is
-  //                             the SAME TWO SETTINGS and a fourth code would be a second name
-  //                             for one remedy. It had been narrated `channel-op-approval-
-  //                             required` since the lane shipped on 2026-08-31, which is the
-  //                             identical dead end one op sideways. ⚠ THE CODE IS NAMED FOR THE
-  //                             OP FAMILY, NOT FOR THE `posture` VERB, which is what lets it
-  //                             cover four actions honestly.
+  //                             `manage.rename` / `.end` / `.posture` — and `manage.direct`, since
+  //                             later the same day — while the two postures its lane needs are not
+  //                             BOTH set. It names the two postures, not the `posture` action. Its
+  //                             own code because these answered `channel-op-approval-required`,
+  //                             which sent the operator to an approval that exists on no surface:
+  //                             the F-320 dead end, one op over. Named for the OP FAMILY rather
+  //                             than the `posture` verb, which is what lets it cover four actions.
   'launch-depth-capped', //      ...and the DENY half: this session is at MAX_LAUNCH_DEPTH, so no
-  //                             posture can open it (`session-own-launch.js`). ⚠ IT IS NOT
-  //                             `hard-denied`: that code means the PROFILE refused a tool, and
-  //                             `dopl_channel` is hard-denied on no profile at all — reporting
-  //                             the bound as a profile deny would send an operator to a deny
-  //                             list that does not contain it.
-  'await-desktop-session', //    2026-09-01 (T85): a HELD `dopl_channel(op="read", wait_ms=…)` from a session this
-  //                             machine RUNS. Its own code for the reason `launch-depth-capped`
-  //                             has one — `dopl_channel` is hard-denied on no profile, so
-  //                             `hard-denied` would send an operator to a deny list that does not
-  //                             contain it — and because the fix is NOT a setting: the call is
-  //                             refused because a wake already arrives as a TURN here
+  //                             posture can open it (`session-own-launch.js`). NOT `hard-denied`:
+  //                             that code means the PROFILE refused a tool, and `dopl_channel` is
+  //                             hard-denied on no profile at all.
+  'await-desktop-session', //    2026-09-01 (T85): a HELD `dopl_channel(op="read", wait_ms=…)` from
+  //                             a session this machine RUNS. Its own code for the reason
+  //                             `launch-depth-capped` has one, and because the fix is NOT a
+  //                             setting — a wake already arrives as a TURN here
   //                             (`session-profiles.js › isAwaitOp`).
   'container-audience', //       2026-08-26 (plan §4.4 B2): this session runs in a SHARED link
   //                             container and the call named a DIFFERENT workspace. Its own code
-  //                             for the same reason `launch-depth-capped` has one — the tool is
-  //                             on no deny list, so `hard-denied` would send the operator to a
-  //                             setting that has nothing to do with it. ⚠ The refusal is about
-  //                             WHICH WORKSPACE, and this is the only code that says so. ⚠ IT
-  //                             NAMES A TRIPWIRE: Bash can issue the same call as plain HTTP and
-  //                             never reach this gate — see `session-audience.js`.
+  //                             for `launch-depth-capped`'s reason, and the only code that says
+  //                             the refusal is about WHICH WORKSPACE. It names a TRIPWIRE: Bash
+  //                             can issue the same call as plain HTTP and never reach this gate —
+  //                             see `session-audience.js`.
   // allow / preapproved (carried for the diag line, so "never landed" and "landed but not
   // covered" are distinguishable in the field without a source read)
   'profile-preapproved', //      shadowed via allowedTools; never actually reaches canUseTool
@@ -88,66 +65,43 @@ const GATE_REASONS = [
   'auto-inbound-read', //        M3: AXIS B auto_inbound / auto_both on an own-channel READ
   'auto-outbound-marker', //     M4: the same outbound half on an own-channel milestone (its
   //                             sibling `propose_close` went with thread closing, Phase 4)
-  'auto-launch-own-machine', //  2026-08-25 (Samuel's ruling, F-320): an own-channel
-  //                             `launch_agent` that BOTH axes covered — the audit answer to
-  //                             "what asked this machine for a process with no click?", which no
-  //                             outbound code can give, because nothing left as CONTENT.
-  'auto-direct-own-machine', //  2026-09-17: an own-channel `manage.direct` that BOTH axes
-  //                             covered — an agent steering ANOTHER of this operator's running
-  //                             agents through the private mailbox (`session-own-direct.js`,
-  //                             Samuel's 2026-08-31 ruling). ⚠ **ITS OWN CODE, AND THE LANE HAD
-  //                             NONE UNTIL THIS CHANGE**: it answered `auto-outbound`, the
-  //                             MESSAGE lane's code, so every private direction in the field was
-  //                             indistinguishable in `listener.log` from a post into the room —
-  //                             the one distinction this lane's whole ruling rests on. ⚠ AND IT
-  //                             IS NOT AN OUTBOUND CODE FOR `auto-launch-own-machine`'S REASON:
-  //                             a direction buys a TURN on a process on this Mac, and nothing
-  //                             left the room as CONTENT anybody in it can read.
+  'auto-launch-own-machine', //  2026-08-25 (F-320): an own-channel `launch_agent` that BOTH axes
+  //                             covered — the audit answer to "what asked this machine for a
+  //                             process with no click?", which no outbound code can give.
+  'auto-direct-own-machine', //  2026-09-17: an own-channel `manage.direct` that BOTH axes covered
+  //                             — an agent steering ANOTHER of this operator's running agents
+  //                             through the private mailbox (`session-own-direct.js`). Its own
+  //                             code: until this change it answered `auto-outbound`, so every
+  //                             private direction in the field was indistinguishable in
+  //                             `listener.log` from a post into the room. Not an outbound code, for
+  //                             `auto-launch-own-machine`'s reason: nothing left as CONTENT.
   'auto-rename-own-machine', //  2026-09-17: an own-channel `manage.rename` BOTH axes covered.
   'auto-end-own-machine', //     ...an own-channel `manage.end`.
-  'auto-posture-own-machine', // ...and an own-channel `manage.posture`.
-  //                             ⚠ THREE CODES AND NOT ONE, WHERE THE FOUR `artifact.*` ACTIONS
-  //                             GOT ONE: this list's grain is the ARGUMENT, and the artifact four
-  //                             share a single one where these three do not. "an agent was
-  //                             STOPPED", "an agent was RELABELLED" and "an agent's POSTURE was
-  //                             asked to move" are three different answers to "what happened here
-  //                             with no click?", and the delivery end already separates them in
-  //                             code — the posture verb sits behind the operator's launch toggle
-  //                             and the other two do not (`launch-directives.js ›
-  //                             KINDS_NEEDING_LAUNCH_CONSENT`). The map is the LANE's
-  //                             (`session-own-manage.js › MANAGE_ALLOW_REASONS`), injected.
-  //                             ⚠ AND NONE OF THEM IS AN OUTBOUND CODE, for `auto-launch-own-
-  //                             machine`'s reason: nothing left this machine as CONTENT.
+  'auto-posture-own-machine', // ...and an own-channel `manage.posture`. THREE CODES AND NOT ONE,
+  //                             where the four `artifact.*` actions got one: this list's grain is
+  //                             the ARGUMENT, and these three do not share one — the delivery end
+  //                             puts only the posture verb behind the operator's launch toggle
+  //                             (`launch-directives.js › KINDS_NEEDING_LAUNCH_CONSENT`). The map is
+  //                             the LANE's (`session-own-manage.js › MANAGE_ALLOW_REASONS`),
+  //                             injected. None is an outbound code: nothing left as CONTENT.
   'auto-outbound-escalate', //   2026-08-31 (Samuel's ruling): the same outbound half on an
-  //                             own-channel `send(kind="decision")` — an agent asking a HUMAN a structured
-  //                             question. Its own code because "the agent asked for a decision"
-  //                             is a different answer to "what left with no click?" than a
-  //                             milestone or a thread open.
-  'auto-outbound-artifact', //   2026-09-06: the same outbound half on an own-channel
-  //                             `artifact` fold (create / add / remove / dissolve). ITS OWN CODE,
-  //                             for the reason each of the three above has one: "the agent folded
-  //                             part of the transcript into a card" is not the same answer to
-  //                             "what left this machine with no click?" as a message, a marker or
-  //                             a decision — and it is the ONLY one of the four that changed how
-  //                             the room READS rather than adding to what it says.
-  //                             ⚠ ONE CODE FOR FOUR ACTIONS, deliberately: they share a single
-  //                             admission argument (a fold settles nothing, `dissolve` reverses
-  //                             it), and this list's grain is the ARGUMENT, not the verb. WHICH
-  //                             action ran is already on the same diag line — `session-gate-
-  //                             bridge.js › channelOpLabel` prints `op=artifact.dissolve` — so a
-  //                             second code per verb would duplicate a field the line has and
-  //                             split one ruling across four names nobody could grep as one.
+  //                             own-channel `send(kind="decision")` — an agent asking a HUMAN a
+  //                             structured question, a different audit answer than a milestone.
+  'auto-outbound-artifact', //   2026-09-06: the same outbound half on an own-channel `artifact`
+  //                             fold (create / add / remove / dissolve) — the only one of the four
+  //                             that changed how the room READS rather than what it says. ONE CODE
+  //                             FOR FOUR ACTIONS, deliberately: they share a single admission
+  //                             argument, and WHICH action ran is already on the same diag line
+  //                             (`session-gate-bridge.js › channelOpLabel` prints
+  //                             `op=artifact.dissolve`).
   'auto-outbound-thread-open', //2026-08-24 (Samuel's ruling): the same outbound half on an
-  //                             own-channel `create_thread`. ITS OWN CODE, for the reason the
-  //                             marker has one: the question an audit asks is "what left this
-  //                             machine with no click?", and "the agent opened an exchange with
-  //                             a member" is not the same answer as "the agent logged a step".
+  //                             own-channel `create_thread`. Its own code, for the reason the
+  //                             marker has one: "the agent opened an exchange with a member" is not
+  //                             the same audit answer as "the agent logged a step".
   'tool-mode', //                AXIS A: the current toolMode covers this tool
   'knowledge-read-op', //        2026-08-22 (OQ-1): an OP-SCOPED `dopl_kb` READ. Axis A does NOT
-  //                             cover the tool (it is a write tool), the CALL is a read, and
-  //                             that distinction is exactly what an audit of "what ran with no
-  //                             click?" needs to see — `tool-mode` here would claim the operator
-  //                             had granted the whole tool, which they had not.
+  //                             cover the tool (it is a write tool) and the CALL is a read;
+  //                             `tool-mode` here would claim the operator granted the whole tool.
 ];
 
 // Build the explainer. `deps` are the session-profile table's own predicates — passed in rather
@@ -166,64 +120,44 @@ function makeGateReason(deps) {
     if (!d.postFieldsOk(a.input)) return 'malformed-post-fields';
     if (d.isOwnChannelPost(a.input, a.channelId)) return 'message-approval-required';
     if (d.isOwnChannelRead(a.input, a.channelId)) return 'read-approval-required';
-    // M4: an own-channel milestone follows the OUTBOUND half of the axis exactly as a post
-    // does, so it stops on the same fact and must say the same thing.
-    // 'channel-op-approval-required' ("message approval covers this channel's messages, not
-    // this operation") became FALSE for it the moment the axis started covering it. (Its
-    // sibling `propose_close` was on this branch until thread closing, Phase 4, 2026-08-18.)
-    // ⚠ AND `create_thread` JOINED IT ON 2026-08-24 (Samuel's ruling) — `isOwnChannelOutbound`
-    // is the union, so the GATE code is shared even though the ALLOW codes are not. It stops on
-    // the same fact ("your outbound setting is not auto"), and the operator's fix is identical.
+    // M4: an own-channel milestone follows the OUTBOUND half of the axis exactly as a post does,
+    // so it stops on the same fact and must say the same thing. `create_thread` joined it on
+    // 2026-08-24, and `isOwnChannelOutbound` is the union, so the GATE code is shared even though
+    // the ALLOW codes are not.
     if (d.isOwnChannelOutbound(a.input, a.channelId)) return 'message-approval-required';
-    // ⚠ 2026-08-25 (F-320): an own-channel LAUNCH stops on a DIFFERENT fact from either half of
-    // the message axis — it needs tools=`bypass` AND messages auto-outbound, and naming only the
-    // message setting would send the operator to widen a posture that is already wide enough.
-    // A launch naming ANOTHER channel is not this case and falls through, as a post's does.
+    // 2026-08-25 (F-320): an own-channel LAUNCH stops on a DIFFERENT fact from either half of the
+    // message axis — it needs tools=`bypass` AND messages auto-outbound, and naming only the
+    // message setting would send the operator to widen a posture that is already wide enough. A
+    // launch naming ANOTHER channel is not this case and falls through, as a post's does.
     if (d.isOwnMachineLaunch(a.input, a.channelId)) return 'launch-posture-required';
-    // ⚠ 2026-09-17: AND SO DOES `manage.direct`, WHICH HAD BEEN FALLING THROUGH SINCE THE LANE
-    // SHIPPED (2026-08-31). It stops on the conjunction, never on the message axis alone, so
-    // `channel-op-approval-required` was the F-320 sentence one op sideways: an approval with no
-    // surface, over a fix that is TWO settings. ⚠ IT SHARES THE MANAGE CODE RATHER THAN TAKING A
-    // FOURTH: the remedy is byte-identical, and a code an operator cannot act on differently is
-    // a code that should not exist. ⚠ ASKED BETWEEN THE LAUNCH ARM AND THE MANAGE ARM, MIRRORING
-    // `grantDecision`'s own order (launch, direct, manage) — the three predicates are disjoint,
-    // so the order buys nothing today and is kept because "mirror the gate" is the only rule that
-    // has ever kept this function honest. A direct naming ANOTHER channel falls through.
+    // 2026-09-17: and so does `manage.direct`, which had been falling through since the lane
+    // shipped (2026-08-31) — `channel-op-approval-required` was the F-320 sentence one op sideways,
+    // an approval with no surface over a fix that is TWO settings. It shares the manage code rather
+    // than taking a fourth: the remedy is byte-identical. Asked between the launch and manage arms,
+    // mirroring `grantDecision`'s own order; the three predicates are disjoint, so the order buys
+    // nothing today and is kept because "mirror the gate" keeps this function honest.
     if (d.isOwnMachineDirect && d.isOwnMachineDirect(a.input, a.channelId)) return 'manage-posture-required';
-    // ⚠ 2026-09-17: AND THE THREE MANAGE VERBS STOP ON THE SAME FACT, WHICH IS WHY THIS ARM HAD
-    // TO EXIST. They fell through to `channel-op-approval-required` below, whose sentence is
-    // "message approval covers this channel's messages, not this operation" — false here twice
-    // over: the fix is TWO postures, and the approval that sentence sends the operator to has no
-    // surface to be given on. ⚠ ASKED AFTER THE LAUNCH ARM, MIRRORING `grantDecision`'s own order
-    // (launch, direct, manage); the predicates are disjoint, so the order buys nothing today and
-    // is kept because "mirror the gate" is the only rule that has ever kept this function honest.
-    // A manage op naming ANOTHER channel is not this case and falls through, as a launch's does.
+    // 2026-09-17: the three manage verbs stop on the same fact, which is why this arm exists. They
+    // fell through to `channel-op-approval-required`, false here twice over — the fix is TWO
+    // postures, and that approval has no surface to be given on. A manage op naming ANOTHER channel
+    // falls through, as a launch's does.
     if (d.isOwnMachineManage && d.isOwnMachineManage(a.input, a.channelId)) return 'manage-posture-required';
-    // A SLUG lands here too, and that is the single most confusing gate in the product: the
-    // agent addressed its own channel by name, isOwnChannelPost compares against the ID, and the
-    // safe classification is "another channel". The renderer's copy names the fix (use the id).
-    // M4: an OUTBOUND op that got past isOwnChannelOutbound named ANOTHER channel — most often
-    // the session's own channel written as a SLUG. It shares the post code deliberately: the
-    // fact and the operator's fix are identical ("address your own channel by id"), and a code
-    // the operator cannot act on differently is a code that should not exist. (2026-08-24: the
-    // list this reads is the UNION, so a slug-addressed `create_thread` lands here too.)
-    // (2026-09-02, F-578: the collapse made every outbound shape `op="send"`, so the union this
-    // reads is a list of one and the `post` disjunct it used to need is gone with the op.)
-    // ⚠ **ASKED THROUGH THE MEMBERSHIP PREDICATE SINCE 2026-09-06, NOT BY INDEXING THE LIST WITH
-    // A BARE `input.op`** — the identical correction the READ arm below took at F-578, arriving
-    // here one op late. The union stopped being a list of one when `artifact.*` joined it, and a
-    // bare `'artifact'` matches none of the four dotted keys: a SLUG-addressed fold would have
-    // fallen past this arm to `channel-op-approval-required`, telling the operator their message
-    // posture does not cover the operation when the real fix is "address your own channel by id".
-    // The predicate is `session-own-outbound.js`'s, injected like every other, so the explainer
-    // still cannot hold its own copy of the rule.
+    // A SLUG lands here too, and that is the single most confusing gate in the product: the agent
+    // addressed its own channel by name, `isOwnChannelPost` compares against the ID, and the safe
+    // classification is "another channel". The renderer's copy names the fix (use the id). It
+    // shares the post code deliberately — the fact and the operator's fix are identical.
+    //
+    // Asked through the MEMBERSHIP PREDICATE since 2026-09-06, not by indexing the list with a bare
+    // `input.op` — the correction the READ arm below took at F-578, one op late. The union stopped
+    // being a list of one when `artifact.*` joined it, and a bare `'artifact'` matches none of the
+    // four dotted keys, so a slug-addressed fold would have fallen past this arm. The predicate is
+    // `session-own-outbound.js`'s, injected like every other.
     if (d.isOwnChannelOutboundCall && d.isOwnChannelOutboundCall(a.input)) return 'cross-channel-post';
-    // M3: a READ op that got here named a channel this session is not bound to (or a slug),
-    // which is a DIFFERENT fact from "reads are never auto-run" and now says so.
-    // ⚠ ASKED THROUGH THE GATE'S OWN MEMBERSHIP PREDICATE, not by indexing the list: since the
-    // five-op collapse the entries are `<op>.<action>` keys (F-578), and a bare `indexOf(op)`
-    // here would call a cross-channel `rooms.open` a READ — the one classification the gate
-    // itself refuses to make.
+    // M3: a READ op that got here named a channel this session is not bound to (or a slug), which
+    // is a DIFFERENT fact from "reads are never auto-run". Asked through the gate's own membership
+    // predicate, not by indexing the list: since the five-op collapse the entries are
+    // `<op>.<action>` keys (F-578), and a bare `indexOf(op)` here would call a cross-channel
+    // `rooms.open` a READ — the one classification the gate itself refuses to make.
     if (d.isOwnChannelReadCall && d.isOwnChannelReadCall(a.input)) return 'cross-channel-read';
     return 'channel-op-approval-required';
   };
@@ -234,12 +168,11 @@ function makeGateReason(deps) {
     // report `unclassified-tool` for a dopl tool the gate had just covered under a different
     // server prefix — the diagnostic and the defect were one bug and must stay one fix.
     const name = d.canonicalDoplName(a.toolName);
-    // ⚠ "IN NO LIST THIS BUILD KNOWS" IS ASKED OF THE RUNTIME SINCE 2026-08-31, not of a copied
-    // list. `isClassifiedTool` is "allowed at the WIDEST mode this runtime offers", which is the
-    // same question the old `BYPASS_TOOLS` membership asked and stays correct on a runtime whose
-    // widest mode is not spelled the same way. Injected like every other predicate here, and
-    // handed the SESSION'S runtime, or a non-default session would be narrated against another
-    // runtime's lists.
+    // "In no list this build knows" is asked of the RUNTIME since 2026-08-31, not of a copied list.
+    // `isClassifiedTool` is "allowed at the WIDEST mode this runtime offers" — the same question
+    // the old `BYPASS_TOOLS` membership asked, and correct on a runtime that spells its widest mode
+    // differently. Handed the SESSION's runtime, or a non-default session would be narrated against
+    // another runtime's lists.
     if (!d.isClassifiedTool(name, a.runtime)) return 'unclassified-tool';
     const m = d.normalizeToolMode(a.toolMode, a.runtime);
     return m === 'auto' || m === 'bypass' ? 'not-covered-by-bypass' : 'awaiting-approval';
@@ -247,80 +180,66 @@ function makeGateReason(deps) {
   return function gateReason(args, decision) {
     const a = args || {};
     const channel = d.isChannelTool(a.toolName);
-    // ⚠ 2026-08-25 (F-320): `deny` HAS TWO CAUSES NOW. The profile's hard-deny is one; the LAUNCH
-    // DEPTH BOUND is the other, and it is the only one that can deny a channel op (`dopl_channel`
-    // is on no profile's deny list). Asked in this order so a hard-denied name can never be
-    // narrated as a depth cap, which would be a bound the operator could not find.
+    // 2026-08-25 (F-320): `deny` has more than one cause — the profile's hard-deny, and the LAUNCH
+    // DEPTH BOUND, the only one that can deny a channel op. Asked in an order that MIRRORS
+    // `grantDecision`'s, so a hard-denied name can never be narrated as a bound nobody can find.
     if (decision === 'deny') {
-      // ⚠ 2026-08-26: `deny` HAS THREE CAUSES NOW, AND THE ORDER MIRRORS `grantDecision`'S — which
-      // is this whole function's standing discipline, and which the first draft of this branch got
-      // WRONG. It asked the audience question first, so a HARD-DENIED admin tool that also named
-      // another workspace was narrated `container-audience`: both facts true, but the gate refused
-      // it at step 1 for a reason that has nothing to do with workspaces, and an operator sent to
-      // the audience story would go looking for a roster instead of a profile.
-      // ⚠ THE HARD DENY IS ASKED WITH THE GATE'S OWN `buildSessionToolConfig`, injected like every
-      // other predicate here — the explainer must not grow a second copy of the deny list.
+      // 2026-08-26: the audience deny is asked AFTER the hard deny. The first draft asked it first,
+      // so a hard-denied admin tool that also named another workspace was narrated
+      // `container-audience` — both facts true, but the gate refused it at step 1 for a reason that
+      // has nothing to do with workspaces. The hard deny uses the gate's own
+      // `buildSessionToolConfig`, injected: the explainer must not grow a second copy of the list.
       const cfg = d.buildSessionToolConfig ? d.buildSessionToolConfig(a.profile, a.runtime) : null;
       const hardDenied = !!cfg && cfg.disallowedTools.indexOf(d.canonicalDoplName(a.toolName)) !== -1;
       if (!hardDenied && d.containerOnlyDenies && d.containerOnlyDenies(a, d.isDoplTool)) {
         return 'container-audience';
       }
-      // ⚠ 2026-09-01: `deny` HAS FOUR CAUSES NOW, AND THE ORDER STILL MIRRORS `grantDecision`'S.
-      // `await` is refused inside the channel branch, ahead of the launch lane, so it is asked
-      // ahead of the depth cap here. The two are disjoint ops, so the order buys nothing today —
-      // it is kept because "mirror the gate" is the only rule that has ever kept this function
-      // honest, and a branch ordered by coincidence is one nobody can check.
+      // 2026-09-01: `await` is refused inside the channel branch ahead of the launch lane, so it is
+      // asked ahead of the depth cap here. The two are disjoint ops, so the order buys nothing today
+      // — it is kept because "mirror the gate" keeps this function honest.
       if (channel && !hardDenied && d.isAwaitOp && d.isAwaitOp(a.input)) return 'await-desktop-session';
       return channel && d.isOwnMachineLaunch(a.input, a.channelId) ? 'launch-depth-capped' : 'hard-denied';
     }
     if (decision === 'preapproved') return 'profile-preapproved';
     if (decision === 'allow') {
       if (grantedFor(a)) return 'granted-for-session';
-      // ⚠ THE ORDER MIRRORS `grantDecision` AGAIN: Axis A is consulted BEFORE the op-scoped
-      // knowledge branch, so a `dopl_kb` call under `bypass` (where `BYPASS_TOOLS` really does
-      // carry the whole tool) is honestly reported as `tool-mode`, and only a call Axis A
-      // MISSED can be a `knowledge-read-op`.
+      // The order mirrors `grantDecision` again: Axis A before the op-scoped knowledge branch, so a
+      // `dopl_kb` call under `bypass` (where `BYPASS_TOOLS` carries the whole tool) is honestly
+      // reported as `tool-mode`, and only a call Axis A MISSED can be a `knowledge-read-op`.
       if (!channel) {
         const name = d.canonicalDoplName(a.toolName);
         if (d.toolModeAllows(a.toolMode, name, a.runtime)) return 'tool-mode';
         return d.isKnowledgeReadCall(name, a.input) ? 'knowledge-read-op' : 'tool-mode';
       }
-      // ⚠ THE LAUNCH LANE IS ASKED FIRST OF THE CHANNEL ALLOWS (2026-08-25, F-320), because it
-      // is the only one that is not a message: nothing left this machine as CONTENT, and an
-      // audit line claiming otherwise would put a launch under "what did my agent say".
+      // The LAUNCH lane is asked first of the channel allows (2026-08-25, F-320): it is the only one
+      // that is not a message, and an audit line claiming otherwise would file a launch under "what
+      // did my agent say".
       if (d.isOwnMachineLaunch(a.input, a.channelId)) return 'auto-launch-own-machine';
-      // ⚠ 2026-09-17: the DIRECT lane is asked next and for the same reason — a direction is not
-      // a message either, and until this line it answered the `auto-outbound` fall-through below,
-      // which claims "the agent sent a message into its own channel". ⚠ A LITERAL AND NOT AN
-      // INJECTED MAP, where the manage lane below needs one: that lane has THREE codes over three
-      // verbs, this one has a single op and a single code, so the launch lane's shape above is
-      // the one that fits. The PREDICATE is still the lane's own, injected like every other.
+      // 2026-09-17: the DIRECT lane next, for the same reason — until this line it answered the
+      // `auto-outbound` fall-through, which claims the agent sent a message into its own channel. A
+      // literal and not an injected map, where the manage lane below needs one: this lane is a
+      // single op with a single code. The predicate is still the lane's own, injected.
       if (d.isOwnMachineDirect && d.isOwnMachineDirect(a.input, a.channelId)) return 'auto-direct-own-machine';
-      // ⚠ 2026-09-17: the MANAGE lane is asked with it and for its reason — none of these three
-      // is a message either. WHICH verb ran is answered by the LANE's own map rather than by a
-      // branch per action here, so the explainer holds no second opinion about which code belongs
-      // to which action; `null` means this call was not an own-channel manage op at all.
+      // 2026-09-17: the MANAGE lane with it, for its reason — none of the three is a message. WHICH
+      // verb ran is answered by the LANE's own map rather than a branch per action here, so the
+      // explainer holds no second opinion; `null` means not an own-channel manage op at all.
       const manageCode = d.manageAllowReason && d.manageAllowReason(a.input, a.channelId);
       if (manageCode) return manageCode;
       // M3: the Axis-B allows are different rules and the diag must be able to tell them
       // apart — "your outbound setting sent this" vs "your inbound setting read this".
       if (d.isOwnChannelRead(a.input, a.channelId)) return 'auto-inbound-read';
-      // M4: a marker keeps its OWN code on the allow side, where the gate codes were merged.
-      // The question this line answers in an audit is "what left this machine with no click?",
-      // and "the agent proposed a close" is not the same answer as "the agent sent a message".
-      // ⚠ 2026-08-24: `create_thread` rides the same lane and takes the SAME treatment — its
-      // own code, asked FIRST because the two op sets are disjoint and neither may absorb the
-      // other's audit line.
+      // M4: a marker keeps its OWN code on the allow side, where the gate codes were merged — "the
+      // agent proposed a close" is not the same audit answer as "the agent sent a message".
+      // `create_thread` rides the same lane with the same treatment (2026-08-24), asked FIRST
+      // because the op sets are disjoint and neither may absorb the other's audit line.
       if (d.isOwnChannelThreadOpen(a.input, a.channelId)) return 'auto-outbound-thread-open';
       if (d.isOwnChannelEscalate(a.input, a.channelId)) return 'auto-outbound-escalate';
       if (d.isOwnChannelMarker(a.input, a.channelId)) return 'auto-outbound-marker';
-      // ⚠ 2026-09-06: the FOLD takes the same treatment as the three above — its own code, and
-      // asked here rather than absorbed by the `auto-outbound` fall-through below. That
-      // fall-through means "the agent sent a message into its own channel", which an artifact
-      // call is not; letting it answer would make every fold in the field indistinguishable from
-      // a post in `listener.log`. ⚠ ITS PREDICATE IS DISJOINT FROM ALL THREE ABOVE (they match
-      // `op="send"` only, `isSendKind`'s note), so the order among the four buys nothing and is
-      // kept alphabetical-by-nothing: it mirrors the order the arguments were ruled in.
+      // 2026-09-06: the FOLD takes the same treatment as the three above — its own code, asked here
+      // rather than absorbed by the `auto-outbound` fall-through, which means "the agent sent a
+      // message into its own channel" and would make every fold indistinguishable from a post in
+      // `listener.log`. Its predicate is disjoint from all three above (they match `op="send"`
+      // only), so the order among the four buys nothing.
       if (d.isOwnChannelArtifact && d.isOwnChannelArtifact(a.input, a.channelId)) return 'auto-outbound-artifact';
       return 'auto-outbound';
     }
@@ -330,19 +249,16 @@ function makeGateReason(deps) {
 }
 
 /**
- * `{ decision, reason }` — the verdict plus a `GATE_REASONS` code, or `null` for a verdict
- * nothing can honestly explain.
+ * `{ decision, reason }` — the verdict plus a `GATE_REASONS` code, or `null` for a verdict nothing
+ * can honestly explain.
  *
- * ⚠ IT MOVED HERE FROM `session-profiles.js` ON 2026-08-26, under the hard 500-line cap that file
- * was sitting exactly on (§1). The seam is the one that file's own comment already named:
- * MAKING a verdict and EXPLAINING one change on different clocks, and the explainer was already
- * built outside the extracted profile table so an explanation could never move a gate.
+ * It moved here from `session-profiles.js` on 2026-08-26 under the hard 500-line cap (§1), on the
+ * seam that file already named: MAKING a verdict and EXPLAINING one change on different clocks.
  *
- * ⚠ IT TAKES `grantDecision` AS AN ARGUMENT RATHER THAN REQUIRING IT, and that is what keeps the
- * two modules acyclic: `session-profiles.js` requires this file, so this file must not require it
- * back. Same injection idiom `makeGateReason` already uses for its predicates, and the same
- * guarantee — the explainer is handed the gate's OWN function, so it can never explain a verdict
- * some second copy of the rules produced.
+ * It takes `grantDecision` as an ARGUMENT rather than requiring it, which is what keeps the two
+ * modules acyclic — `session-profiles.js` requires this file. Same injection idiom `makeGateReason`
+ * uses for its predicates, and the same guarantee: the explainer is handed the gate's OWN function,
+ * so it can never explain a verdict some second copy of the rules produced.
  */
 function makeGrantDetail(grantDecision, predicates) {
   const gateReason = makeGateReason(predicates);

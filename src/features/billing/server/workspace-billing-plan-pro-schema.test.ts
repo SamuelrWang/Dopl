@@ -1,24 +1,14 @@
 /**
- * INVARIANT SUITE — `20260930130000_workspace_billing_plan_pro.sql`, READ AS
- * THE CONTRACT IT IS.
+ * Invariant suite — `20260930130000_workspace_billing_plan_pro.sql` read as a
+ * contract. It is the only schema the personal Pro tier needs. If the CHECK and
+ * the TypeScript union disagree, the failure is a `23514` raised inside the Stripe
+ * webhook, which Stripe retries forever against a database that will never accept
+ * the row while the customer is already charged.
  *
- * 🔒 **WHY A SUITE FOR FOUR STATEMENTS.** This file is the ONLY schema the
- * personal Pro tier needs, and the whole design rests on that: a
- * `kind='personal'` container is a real `workspaces` row, so its subscription
- * lives in `workspace_billing` keyed by the container id and every existing
- * Stripe path works unchanged (spec §11.1). If the CHECK and the TypeScript
- * union ever disagree, the failure is a `23514` raised INSIDE the Stripe
- * webhook — which Stripe then retries forever against a database that will
- * never accept the row, while the customer is already charged. Nothing else in
- * the tree notices.
- *
- * ⚠ Deploy state is a MEASUREMENT: `supabase migration list`, joined on the
- * NAME (INVARIANTS §12, F-304). This suite reads the FILE and says nothing
- * about what is applied.
- *
- * ⚠ Comments are stripped before the SQL assertions, because this header quotes
- * its own rollback and verification SQL at length — an unstripped scan would
- * pin the prose instead of the statements.
+ * Deploy state is a measurement (`supabase migration list`, joined on the NAME —
+ * INVARIANTS §12, F-304); this suite reads the file and says nothing about what is
+ * applied. Comments are stripped before the SQL assertions because the migration
+ * header quotes its own rollback SQL.
  */
 
 import { describe, it, expect } from "vitest";
@@ -46,10 +36,8 @@ const sql = strip(raw);
 
 describe("the CHECK", () => {
   it("drops and re-adds the constraint under the name taxonomy v2 gave it", () => {
-    // 🔒 **THE NAME IS READ OUT OF THE EARLIER MIGRATION, NOT GUESSED.** A
-    // typo'd name would leave the OLD three-value constraint in place and ADD a
-    // second one beside it — `pro` still refused, with two constraints on the
-    // column and nothing saying which one refused it.
+    // The name is read out of the earlier migration, not guessed: a typo would
+    // leave the old three-value constraint in place and add a second one beside it.
     expect(read(TAXONOMY_V2)).toContain(
       "ADD CONSTRAINT workspace_billing_plan_check"
     );
@@ -66,10 +54,9 @@ describe("the CHECK", () => {
   });
 
   it("🔒 the CHECK's value set EQUALS the TypeScript taxonomy", () => {
-    // ⚠ THE DRIFT THIS FILE EXISTS TO CATCH, IN BOTH DIRECTIONS. A value in the
-    // union the CHECK lacks is a webhook `23514` that retries forever; a value
-    // in the CHECK the union lacks is a row every reader casts into a type that
-    // cannot hold it and then takes the default branch for.
+    // The drift this file exists to catch, in both directions: a value the CHECK
+    // lacks is a webhook `23514` that retries forever; a value the union lacks is a
+    // row every reader casts into a type that cannot hold it.
     const inCheck = [
       ...sql.matchAll(/CHECK \(plan IN \(([^)]*)\)\)/g),
     ][0]?.[1]
@@ -96,10 +83,9 @@ describe("the CHECK", () => {
   });
 
   it("changes NOTHING else — no data migration, no rename, no new column", () => {
-    // 🔒 `pro` IS NOT `solo` RENAMED AND NOT THE OLD PER-SEAT `pro` RESTORED.
-    // Taxonomy v2 renamed those rows to `team` and dropped the value; this file
-    // re-admits the STRING for a different plan, so there is nothing to
-    // backfill and an UPDATE here would relabel live rows.
+    // `pro` is not `solo` renamed nor the old per-seat `pro` restored: this file
+    // re-admits the string for a different plan, so there is nothing to backfill
+    // and an UPDATE here would relabel live rows.
     expect(sql).not.toMatch(/\bUPDATE\b/);
     expect(sql).not.toMatch(/\bADD COLUMN\b/);
     expect(sql).not.toMatch(/\bCREATE TABLE\b/);
@@ -131,10 +117,8 @@ describe("the header", () => {
   });
 
   it("🔒 carries a rollback AND says when it is unsafe", () => {
-    // ⚠ **THE ROLLBACK IS SAFE ONLY WHILE NO `pro` ROW EXISTS**, because ADD
-    // CONSTRAINT validates the whole table. A header that printed the three
-    // statements without that sentence would read as "reversible", and the
-    // person reading it at 3am would discover otherwise from a 23514.
+    // The rollback is safe only while no `pro` row exists, because ADD CONSTRAINT
+    // validates the whole table — so the header must say so, not just print it.
     expect(prose).toContain("CHECK (plan IN ('free', 'solo', 'team'))");
     expect(prose).toContain("SAFE ONLY WHILE NO `pro` ROW EXISTS");
     expect(prose).toContain(
@@ -151,13 +135,10 @@ describe("ordering", () => {
   it("has a unique version, and no later file re-states the plan CHECK", () => {
     const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql"));
     expect(files.filter((f) => f.startsWith("20260930130000"))).toEqual([NAME]);
-    // ⚠ **THIS ASSERTED `later` WAS EMPTY UNTIL 2026-09-10**, i.e. that this was
-    // the newest file in the tree — a claim that is true for exactly as long as
-    // the branch is alone. The new-user merge brought five later migrations
-    // (presence, template knowledge scopes, two ontology files, revisions) and
-    // none of them goes near `workspace_billing`. The real rule is that nothing
-    // following may re-state the constraint this file widens, so that is what is
-    // checked, over every later file rather than over an allow-list of names.
+    // The rule is that nothing following may re-state the constraint this file
+    // widens — checked over every later file, not over an allow-list of names
+    // (and not by asserting this is the newest migration, which only holds while
+    // the branch is alone).
     const later = files.filter((f) => f.slice(0, 14) > "20260930130000");
     for (const name of later) {
       const laterSql = strip(read(name));
@@ -165,9 +146,8 @@ describe("ordering", () => {
         /workspace_billing[\s\S]{0,200}?plan/
       );
     }
-    // ⚠ AND AFTER THE MIGRATION THAT CREATED THE CONSTRAINT IT REPLACES. Landing
-    // first would drop a constraint that does not exist yet (harmless) and then
-    // be overwritten by v2's three-value one (not harmless).
+    // And after the migration that created the constraint it replaces: landing
+    // first would be overwritten by v2's three-value constraint.
     expect(TAXONOMY_V2.slice(0, 14) < "20260930130000").toBe(true);
     expect(files).toContain(TAXONOMY_V2);
   });

@@ -1,17 +1,9 @@
-// SHARED HARNESS for the two IPC-boundary suites (`channel-dir-ipc.js` + `session-ipc-ops.js`).
+// SHARED HARNESS for the two IPC-boundary suites (`channel-dir-ipc.js` + `session-ipc-ops.js`),
+// split out at the 500-line cap when the 2026-08-20 split (F-226) made one suite read TWO sources.
 //
-// WHY IT IS ITS OWN FILE. `channel-ipc-sender.test.mjs` crossed the 500-line cap when the
-// 2026-08-20 split (F-226) made it read TWO sources instead of one, and the alternative — a
-// second copy of the boot machinery in a second file — is how two suites drift into testing
-// two different programs. Same seam and same precedent as `_classify-harness.mjs` /
-// `_session-summary-harness.mjs`: the extraction machinery is shared, the cases are split by
-// what they are about.
-//
-// ⚠ THE REAL GUARDS ARE THE ONES UNDER TEST. `main/ipc-guards.js` is sliced and evaluated,
-// never faked: `isAppWindowSender` IS the subject of the binding suite, and `isUuid` is the
-// anti-probe gate every op leans on. Only electron and the store/window-backed modules are
-// swapped. Both halves are built with the SAME stub, so they register into ONE `handlers`
-// map and every case drives both.
+// THE REAL GUARDS ARE THE ONES UNDER TEST. `main/ipc-guards.js` is sliced and evaluated, never
+// faked; only electron and the store/window-backed modules are swapped. Both halves are built with
+// the SAME stub, so they register into ONE `handlers` map and every case drives both.
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -22,45 +14,33 @@ import { fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const req = createRequire(import.meta.url);
-// `main/agent-id.js` is pure (crypto only), so the boundary suites drive the REAL charset
-// predicate rather than a fake that would accept ids main refuses.
+// `main/agent-id.js` is pure (crypto only), so the boundary suites drive the REAL charset predicate
+// rather than a fake that would accept ids main refuses.
 const realAgentId = req(join(HERE, "..", "main", "agent-id.js"));
-// ⚠ REAL FOR THE SAME REASON (2026-09-05, the turn-cap pair): `main/session-state.js` is pure (no
-// requires of its own) and it DECLARES the two documented caps the read hands the SPA. A fake
-// would let the refusal shape below assert numbers main does not actually answer with.
+// REAL for the same reason (2026-09-05): `main/session-state.js` is pure and DECLARES the caps the
+// read hands the SPA, so the refusal shape below cannot assert numbers main never answers with.
 const realState = req(join(HERE, "..", "main", "session-state.js"));
 export const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 export const SRC = M("channel-dir-ipc.js");
 export const OPS_SRC = M("session-ipc-ops.js");
-// ⚠ THE LAUNCH BODY IS REAL, NOT A STUB (2026-08-22). `sessions:launch` delegates to
-// `main/session-launch-op.js` since the §1 split, and a FAKE there would make the boundary
-// suites assert a refusal shape the shipped code no longer produces — which is exactly the
-// drift a split must not cost. It is evaluated against this file's OWN stub require, so its
-// lazy handles (engine, prefs, targeting, listener, model, template-resolve) are the
-// harness's; a payload that is refused at the boundary never reaches one.
+// THE LAUNCH BODY IS REAL, NOT A STUB (2026-08-22): `sessions:launch` delegates to
+// `main/session-launch-op.js`, and a fake there would make these suites assert a refusal shape the
+// shipped code no longer produces. Its lazy handles are this harness's own stub, and a payload
+// refused at the boundary never reaches one.
 export const LAUNCH_OP_SRC = M("session-launch-op.js");
-// ⚠ THE DELETE BODY IS REAL FOR THE SAME REASON (2026-08-25). `sessions:delete` validates its
-// payload inside `main/session-delete-op.js` — the split moved the code, not the boundary — so a
-// stub here would make the "a refusal is INDISTINGUISHABLE from a bad-payload rejection" arm
-// assert a shape the shipped code does not produce. Its module-scope requires are the guards,
-// the id predicate and `diag`; everything destructive is required LAZILY, after both gates, so a
-// payload refused at the boundary never reaches a store.
+// THE DELETE BODY IS REAL for the same reason (2026-08-25) — the split moved the code, not the
+// boundary. Everything destructive is required LAZILY, after both gates.
 export const DELETE_OP_SRC = M("session-delete-op.js");
-// ⚠ THE HELD-GATE ANSWER IS REAL FOR EXACTLY THE SAME REASON (2026-09-17). `sessions:answer
-// Permission` validates its payload inside `main/session-answer-permission.js` — the split moved
-// the code, not the boundary — so a stub would make the indistinguishable-refusal arm assert a
-// shape the shipped code does not produce. Its module-scope requires are the guards and the id
-// predicate, both stubbed REAL below; everything else it touches arrives through `bind`, which
-// this harness never calls, so an unbound module fails CLOSED — which is the answer under test.
+// THE HELD-GATE ANSWER IS REAL for the same reason (2026-09-17). Everything it touches beyond the
+// guards and the id predicate arrives through `bind`, which this harness never calls, so an unbound
+// module fails CLOSED — which is the answer under test.
 export const ANSWER_PERM_SRC = M("session-answer-permission.js");
-// ⚠ BOTH SOURCES, BECAUSE THE FILE SPLIT AND THE BINDING DID NOT (2026-08-20, F-226). Every
-// structural assertion reads the CONCATENATION: an op that dodges the wrapper fails the belt
-// whichever half it was added to, which is the property the split must not cost.
+// BOTH SOURCES, BECAUSE THE FILE SPLIT AND THE BINDING DID NOT (2026-08-20, F-226): an op that
+// dodges the wrapper fails the belt whichever half it was added to.
 export const BOTH = `${SRC}\n${OPS_SRC}`;
 
-// ⚠ SLICED FROM `main/ipc-guards.js` SINCE 2026-08-20 — it used to be one of TWO
-// byte-identical copies (the other in `ui-bridge.js`, driven by its own suite), which is the
-// F-221 drift. One source now; both suites still drive it.
+// Sliced from `main/ipc-guards.js` since 2026-08-20 — it used to be two byte-identical copies
+// (the other in `ui-bridge.js`), which is the F-221 drift. One source now; both suites drive it.
 const GUARDS = M("ipc-guards.js");
 const from = GUARDS.indexOf("// ─── BEGIN IPC-GUARDS");
 const to = GUARDS.indexOf("// ─── END IPC-GUARDS");
@@ -89,8 +69,6 @@ export const idsOf = (...wcs) => new Set(wcs.map((wc) => wc.id));
 
 // ── The wiring: every handler is wrapped, and refuses an unbound sender ──────
 
-// The real file, evaluated with a stub `require` so the real guard + the real UUID gate
-// are the ones under test; only electron and the store/window-backed modules are swapped.
 export function bootIpc({ blocked = false } = {}) {
   const handlers = {};
   const writes = [];
@@ -98,64 +76,47 @@ export function bootIpc({ blocked = false } = {}) {
   const reopens = [];
   const popouts = [];
   const approvals = [];
-  // ⚠ `let turnCap = 7` STOOD HERE AND IS DELETED (2026-09-07) with the `./settings` stub below.
   const stubRequire = (id) => {
     if (id === "electron") return { ipcMain: { handle: (n, fn) => { handlers[n] = fn; } } };
-    // ⚠ ONE BRANCH PER MODULE ID, AND THAT IS A RULE NOW (2026-09-05). This stub carried THREE
-    // duplicated ids — `./channel-prefs`, `./agent-id` and `./channel-runtime` — each declared
-    // twice with DIFFERENT members. A `stubRequire` is a lookup chain, so the FIRST branch always
-    // won and the second was dead code that read like coverage: the live `./channel-prefs` was
-    // missing `approveTemplate`, `isTemplateApproved`, `getLaunchModel`, `getOrchestratorDirect`,
-    // `getAgentChain` and `setAgentChain` outright. Every handler behind those would have THROWN
-    // on a success path, and the suites never noticed because they drive almost only refusals —
-    // the fail-OPEN shape, where a guard passes for a reason unrelated to what it claims to pin.
-    // ⚠ Merged as a strict SUPERSET, so no case's inputs changed. Where the two copies disagreed
-    // (`launchStartModes` answered a real pair here and `{}` there) the REAL pair survives: a
-    // fake that answers less than main does is how a success path passes without being exercised.
+    // ONE BRANCH PER MODULE ID, AND THAT IS A RULE NOW (2026-09-05). A `stubRequire` is a lookup
+    // chain, so a duplicated id leaves the second branch dead code that reads like coverage: every
+    // handler behind its members THROWS on a success path. Merged as a strict SUPERSET, so no
+    // case's inputs changed and, where two copies disagreed, the REAL value survives.
     if (id === "./channel-prefs") {
-      // ⚠ THE ARM'S THREE ENTRIES ARE GONE (2026-08-20): `getPermissionPreset`,
-      // `armPermissionPreset`, `clearPermissionPreset`. What remains is the DURABLE posture
-      // plus auto-send. EVERY WRITER RECORDS INTO ONE `writes` LEDGER on purpose — the refusal
-      // cases below assert `writes` is empty, so a second ledger would let one op's forged
-      // write pass unseen while the other's was checked.
+      // The arm's three entries left in 2026-08-20; what remains is the DURABLE posture. EVERY
+      // WRITER RECORDS INTO ONE `writes` LEDGER on purpose — the refusal cases assert `writes` is
+      // empty, so a second ledger would let one op's forged write pass unseen.
       return {
         getLaunchPosture: () => ({ tools: "bypass", messages: "auto_both" }),
         setLaunchPosture: (channelId, preset) => { writes.push({ channelId, preset }); return { ok: true }; },
         launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
         getLaunchModel: () => "",
-        // ⚠ `getAutoSend` / `setAutoSend` REMOVED 2026-09-06 (item 8). The fakes go WITH the
-        // real functions: a harness that still offers a method `channel-prefs.js` no longer
-        // exports would let a handler reading it pass here and throw in production — which is
-        // the inversion this whole fixture exists to prevent.
-        // ⚠ 2026-08-31, the per-channel AGENT-CHAINING setting. `get` answers TRUE for the reason
-        // the orchestrator getter does: a fake answering the fail-closed value would pass the
-        // refusal cases whether the binding worked or not.
+        // `getAutoSend` / `setAutoSend` removed 2026-09-06 (item 8). The fakes go WITH the real
+        // functions: a harness offering a method `channel-prefs.js` no longer exports would let a
+        // handler reading it pass here and throw in production.
+        // 2026-08-31, the per-channel AGENT-CHAINING setting. `get` answers TRUE deliberately: a
+        // fake answering the fail-closed value would pass the refusal cases whether the binding
+        // worked or not.
         getAgentChain: () => true,
         setAgentChain: (channelId, on) => { writes.push({ channelId, agentChain: on }); return on === true; },
-        // ⚠ 2026-08-22, the ORCHESTRATOR LAUNCH TOGGLE. The getter answers TRUE deliberately:
-        // the refusal cases assert a rejected sender reads `{enabled:false}`, and a fake that
-        // answered false would pass those whether the binding worked or not. `set` records into
-        // the SAME `writes` ledger as every other writer here, for the reason stated above.
+        // 2026-08-22, the ORCHESTRATOR LAUNCH TOGGLE. The getter answers TRUE for the reason above;
+        // `set` records into the SAME `writes` ledger as every other writer here.
         getOrchestratorLaunch: () => true,
         setOrchestratorLaunch: (on) => { writes.push({ orchestratorLaunch: on }); return on === true; },
-        // 2026-08-31, the PRIVATE DIRECT lane's own consent — same shape, separate grant. It was
-        // absent from the live stub entirely, so `orchestrator:getDirectEnabled` would have
-        // thrown on any bound call.
+        // 2026-08-31, the PRIVATE DIRECT lane's own consent — same shape, separate grant.
         getOrchestratorDirect: () => true,
         setOrchestratorDirect: (on) => { writes.push({ orchestratorDirect: on }); return on === true; },
-        // The MACHINE-LOCAL template approval store. `approveTemplate` records and answers true;
-        // `isTemplateApproved` answers false, which is the default-deny state a fresh Mac is in.
+        // The MACHINE-LOCAL template approval store; `isTemplateApproved` answers false, which is
+        // the default-deny state a fresh Mac is in.
         approveTemplate: (templateId) => { approvals.push(templateId); return true; },
         isTemplateApproved: () => false,
       };
     }
-    // 2026-08-31 (port wave D) — the channel's RUNTIME pick and the adapter registry. They ride
-    // the EXISTING posture pair rather than growing a fourth op (see `channel-dir-ipc.js`), so
-    // there is no new row in the OPS table; what they need here is only to exist, because the
-    // handler reads them on the SUCCESS path these cases must never reach.
-    // ⚠ `normalizeRuntimeId` is the REAL character rule, merged in from the dead second copy:
-    // answering `''` is the DEFAULT adapter, which is what every launch resolved to before the
-    // port, so the specs the suites assert stay byte-identical to the ones that shipped.
+    // 2026-08-31 (port wave D) — the channel's RUNTIME pick and the adapter registry. They ride the
+    // EXISTING posture pair rather than growing a fourth op, so there is no new row in the OPS
+    // table; they need only to exist, because the handler reads them on the SUCCESS path these
+    // cases must never reach. `normalizeRuntimeId` is the REAL character rule: `''` is the DEFAULT
+    // adapter, which is what every launch resolved to before the port.
     if (id === "./channel-runtime") {
       return {
         getChannelRuntime: () => "",
@@ -163,19 +124,15 @@ export function bootIpc({ blocked = false } = {}) {
         normalizeRuntimeId: (v) => (v === "codex" || v === "cursor" ? v : ""),
       };
     }
-    // ⚠ `connectedIds` JOINED 2026-09-08 (Samuel's connectivity correction): which registered
-    // adapters this Mac could start right now. It rides the SAME read, and it NARROWS NOTHING —
-    // `all()` is still the roster the popup renders. A registry with no adapters is connected to
-    // none of them, which is what an empty list means here.
+    // `connectedIds` joined 2026-09-08: which registered adapters this Mac could start right now.
+    // It rides the SAME read and NARROWS NOTHING — `all()` is still the roster the popup renders.
     if (id === "./runtime") return { all: () => [], DEFAULT_ID: "claude", connectedIds: async () => [] };
     if (id === "./channel-dirs") {
       return {
         liveChannelDirLabel: () => "~/Downloads/secret-repo",
-        // ⚠ THE EFFECTIVE-DIR HALF (2026-09-05, task 15). The folder ops answer a PAIR now —
-        // `{label, custom}` — and `custom` is derived from `liveChannelDirLabel` being non-null.
-        // ⚠ A DISTINCT VALUE FROM THE ONE ABOVE, deliberately: they are two different questions
-        // (where it RUNS vs is a per-channel dir SET), and a stub answering the same string for
-        // both would let a handler that read the wrong one pass.
+        // THE EFFECTIVE-DIR HALF (2026-09-05, task 15): the folder ops answer `{label, custom}`. A
+        // DISTINCT value from the one above, deliberately — they are two different questions (where
+        // it RUNS vs is a per-channel dir SET), and one string for both would let a wrong read pass.
         resolvedDirLabel: () => "~/Downloads/effective-repo",
         promptAndSetChannelDir: async () => { dialogs.push(1); },
         clearChannelDir: () => { writes.push({ cleared: true }); },
@@ -184,8 +141,7 @@ export function bootIpc({ blocked = false } = {}) {
     if (id === "./session-engine") {
       return { reopenByTask: (a) => { reopens.push(a); return { ok: true }; } };
     }
-    // The REAL character rule — a second regex in channel-dir-ipc.js would be a second
-    // answer to it, so the test drives the real one rather than a permissive fake.
+    // The REAL character rule — a second regex in channel-dir-ipc.js would be a second answer to it.
     if (id === "./deep-link-target") {
       return { isSafeSegment: (v) => typeof v === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(v) };
     }
@@ -194,49 +150,23 @@ export function bootIpc({ blocked = false } = {}) {
       return { openThreadWindow: (t) => { popouts.push(t); return { ok: true }; } };
     }
     if (id === "./diag") return { diag: () => {} };
-    // ⚠ 2026-09-05, THE TURN-CAP PAIR. `main/settings.js` opens an electron-store, so it is
-    // stubbed at its seam like `./channel-prefs` — and the getter answers a NON-NULL cap
-    // deliberately, for `getOrchestratorLaunch`'s stated reason: the refusal cases assert a
-    // rejected sender reads `cap: null`, and a fake that answered null would pass them whether
-    // the binding worked or not. `setTurnCap` records into the SAME `writes` ledger as every
-    // other writer here, so a forged write cannot pass unseen.
-    // `normalizeTurnCapInput` is the REAL rule, sliced from the shipped source: the boundary
-    // compares against it, and a permissive fake would let it report `ok` on a value main
-    // refuses to write.
-    // 🔒 THE `./settings` STUB IS DELETED (2026-09-07, Samuel: "Remove the turn/cost limit").
-    // ⚠ IT COULD NOT HAVE SURVIVED THE DELETION EVEN AS DEAD WEIGHT: it sliced
-    // `normalizeTurnCapInput` out of the SHIPPED `main/settings.js`, and that function is gone
-    // with the caps — so the slice would have thrown at harness construction and taken every
-    // suite in this file down with it, not just the turn-cap cases. Slicing real source is what
-    // makes this harness honest and is also what makes it fail loudly when the source retires.
+    // The `./settings` stub left 2026-09-07 with the turn caps: it sliced `normalizeTurnCapInput`
+    // out of the shipped source, and that function is gone, so it would now throw at construction.
     if (id === "./session-state") return realState;
-    // ⚠ THE REAL GUARDS, NOT A FAKE — `isAppWindowSender` IS what is under test, and `isUuid`
-    // is the anti-probe gate every op leans on. The split half is built with this SAME stub,
-    // so both register into one `handlers` map and both are driven by every case below.
+    // THE REAL GUARDS, NOT A FAKE — `isAppWindowSender` IS what is under test, and `isUuid` is the
+    // anti-probe gate every op leans on.
     if (id === "./ipc-guards") return realGuards;
-    // The REAL id predicate, for the reason stated where `realAgentId` is loaded: a permissive
-    // fake would accept ids `session-launch-op.js` refuses. ⚠ It is also the third coordinate's
-    // boundary clamp (`asAgentId`, 2026-08-21), which is why a fake here would let every op
-    // below accept an agent id shape main really refuses. (Both sentences stood as two identical
-    // branches until 2026-09-05; the reasons are merged, the branch is one.)
+    // The REAL id predicate, for the reason stated where `realAgentId` is loaded, and also the third
+    // coordinate's boundary clamp (`asAgentId`, 2026-08-21): a permissive fake would let every op
+    // below accept an agent id shape main really refuses.
     if (id === "./agent-id") return realAgentId;
     if (id === "./session-launch-op") return launchOpModule;
     if (id === "./session-delete-op") return deleteOpModule;
   if (id === "./session-answer-permission") return answerPermModule;
     if (id === "./session-ipc-ops") return opsModule;
-    // ⚠ A SECOND `./channel-prefs` AND A SECOND `./channel-runtime` STOOD HERE AND ARE DELETED
-    // (2026-09-05). Both were UNREACHABLE — the branches above match first — so the members only
-    // they declared (the template-approval pair, `normalizeRuntimeId`) were never in the stub at
-    // all, and every handler that reads one would have thrown the moment a case drove its success
-    // path. They are merged into the single branch for each id above, which is why this file now
-    // holds exactly one per module.
     throw new Error("unexpected require: " + id);
   };
   const realGuards = new Function(`${BLOCK}\n return { isAppWindowSender, isUuid, UUID_RE };`)();
-  // 🔒 THE `normalizeTurnCapInput` SLICE IS DELETED (2026-09-07) with the caps. It was sliced
-  // rather than required because `main/settings.js` opens an electron-store — and the function it
-  // sliced no longer exists in that file, so this line was the one that would have thrown at
-  // construction and failed every case in this harness, not only the turn-cap ones.
   const launchOpModule = evalModule(LAUNCH_OP_SRC, stubRequire);
   const deleteOpModule = evalModule(DELETE_OP_SRC, stubRequire);
   const answerPermModule = evalModule(ANSWER_PERM_SRC, stubRequire);

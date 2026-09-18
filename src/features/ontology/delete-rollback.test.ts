@@ -1,8 +1,8 @@
 /**
- * INVARIANT SUITE — optimistic-delete rollback. A refused delete restores the
- * object (or whole cluster cascade), the scrubbed references, and the cluster's
- * ORIGINAL tab index. ⚠ It must NOT undo anything that landed during the round
- * trip — a wholesale revert persists stale text on the next debounced PATCH.
+ * Invariant suite — optimistic-delete rollback. A refused delete restores the object
+ * (or whole cluster cascade), the scrubbed references and the cluster's original tab
+ * index, but must not undo anything that landed during the round trip: a wholesale
+ * revert persists stale text on the next debounced PATCH.
  */
 
 import { describe, it, expect } from "vitest";

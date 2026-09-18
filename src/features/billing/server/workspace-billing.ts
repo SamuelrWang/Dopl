@@ -6,14 +6,13 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  * entitlements layer needs (active members, live ontology objects). Keeps
  * `entitlements.ts` unit-testable by mocking this module.
  *
- * ⚠ **A `workspace_billing` ROW IS NOT ALWAYS A WORKSPACE'S SINCE 2026-09-08.**
- * The personal Pro tier is billed on the `kind='personal'` CONTAINER's own row
- * (spec §11.1) — same table, same columns, same webhook — so every function
- * here answers for containers too and `getPersonalBilling` is the one lookup
- * that goes owner → container → row.
+ * A `workspace_billing` row is not always a workspace's (2026-09-08): the
+ * personal Pro tier is billed on the `kind='personal'` container's own row
+ * (spec §11.1), so every function here answers for containers too and
+ * `getPersonalBilling` is the one lookup that goes owner → container → row.
  */
 
-/** ⚠ MIRRORS `workspace_billing_plan_check` IN THE DATABASE
+/** Mirrors `workspace_billing_plan_check` in the database
  *  (`20260930130000_workspace_billing_plan_pro.sql`) and `../plans.ts › PlanId`.
  *  A value this union has and the CHECK lacks is a `23514` raised inside the
  *  Stripe webhook, which Stripe then retries forever. */
@@ -84,13 +83,10 @@ function mapBillingRow(row: BillingRowShape): WorkspaceBillingRow {
     seatCount: row.seat_count,
     currentPeriodStart: row.current_period_start,
     currentPeriodEnd: row.current_period_end,
-    // `?? false` is TYPE-LEVEL narrowing (row shape types it nullable), NOT a
-    // pre-migration fallback — `BILLING_COLS` names the new columns and
-    // PostgREST 400s a select for a missing column.
-    // ⚠ THE REAL COUPLING IS DEPLOY ORDER: this code must not ship ahead of
-    // `20260811130000_mcp_credits.sql` (adds `current_period_start` AND
-    // `cancel_at_period_end`) or every billing read 400s. Verify against the
-    // database, never a migration header (docs/INVARIANTS.md §12).
+    // `?? false` is type-level narrowing, not a pre-migration fallback. The real
+    // coupling is deploy order: this code must not ship ahead of
+    // `20260811130000_mcp_credits.sql` or every billing read 400s. Verify against
+    // the database, never a migration header (docs/INVARIANTS.md §12).
     cancelAtPeriodEnd: row.cancel_at_period_end ?? false,
     lastStripeEventCreated: row.last_stripe_event_created,
   };
@@ -111,22 +107,18 @@ export async function getWorkspaceBilling(
 /**
  * The caller's PERSONAL container and its billing row, in ONE round trip.
  *
- * 🔒 **ONE QUERY, AND THE EMBED IS WHY THIS FUNCTION EXISTS AT ALL.** It is on
- * the MCP credit path, which runs once per tool call: the naive form is
- * "find the personal container, then read its billing row", two sequential
- * round trips because the second needs the first's id. PostgREST's embedded
- * select answers both from one request over the `workspace_billing.workspace_id`
- * → `workspaces.id` foreign key. ⚠ The per-wallet budget in
- * `credits-service.ts` is pinned by MOCK CALL COUNTS — splitting this back into
- * two reads fails `credits-service.test.ts`, which is the intended alarm.
+ * The embed is why this function exists: it is on the MCP credit path (once per
+ * tool call), and "find the container, then read its row" is two sequential
+ * round trips. PostgREST answers both over the
+ * `workspace_billing.workspace_id` → `workspaces.id` foreign key. Splitting it
+ * back into two reads fails `credits-service.test.ts`'s mock call counts, which
+ * is the intended alarm.
  *
- * `null` = the user has no personal container. ⚠ **THAT CANNOT HAPPEN AND THE
- * BRANCH STAYS**: `20260920120000_workspace_kind_personal.sql` backfills one
- * per user and `ensure_personal_container` mints one on demand, so this is the
- * answer to a state the database says is impossible — exactly the kind of read
- * that must return rather than throw on the hottest path in the product.
- * `{ containerId, billing: null }` is the DIFFERENT answer: the container
- * exists and has never been billed, i.e. a free home space.
+ * `null` = the user has no personal container, a state the database says is
+ * impossible (backfill + `ensure_personal_container`); the branch stays because
+ * this read must return rather than throw on the hottest path.
+ * `{ containerId, billing: null }` is the different answer: the container exists
+ * and has never been billed, i.e. a free home space.
  */
 export async function getPersonalBilling(
   ownerUserId: string
@@ -146,12 +138,10 @@ export async function getPersonalBilling(
 /**
  * The embedded `workspace_billing` of a `workspaces` row → the mapped row.
  *
- * ⚠ **AN EMBEDDED 1:1 ARRIVES AS AN OBJECT OR AS A ONE-ELEMENT ARRAY, AND
- * WHICH ONE IS NOT OURS TO DECIDE.** PostgREST returns an object when it can
- * prove the relationship is to-one from the constraints and an array when it
- * cannot, and that inference has changed across releases — so a reader that
- * handles only the shape it saw in dev reads `undefined` in production and
- * quietly reports every Pro home space as free. Both shapes, one mapper.
+ * An embedded 1:1 arrives as an object or as a one-element array: PostgREST
+ * decides from the constraints and that inference has changed across releases,
+ * so a reader handling only the shape it saw in dev reads `undefined` in
+ * production and reports every Pro home space as free. Both shapes, one mapper.
  */
 function mapEmbeddedBillingRow(embedded: unknown): WorkspaceBillingRow | null {
   const row = Array.isArray(embedded) ? embedded[0] : embedded;
@@ -193,7 +183,7 @@ export async function upsertWorkspaceBilling(
 
 /**
  * Take the short-lived cross-instance checkout claim. True iff THIS caller won;
- * false means another checkout is in flight (route → 409). ⚠ Atomic
+ * false means another checkout is in flight (route → 409). Atomic
  * compare-and-set in Postgres (`claim_workspace_checkout`, self-expires after
  * 2 min) so it holds across Vercel lambda instances, where an in-process guard
  * cannot. Migration 20260720210814_workspace_billing_checkout_claim.sql.
@@ -209,7 +199,7 @@ export async function claimWorkspaceCheckout(
 }
 
 /**
- * Release the checkout claim (best-effort). ⚠ Called ONLY by the checkout
+ * Release the checkout claim (best-effort). Called only by the checkout
  * route, in its `finally`, on every path — otherwise an abandoned or
  * plan-switching checkout is blocked for the full 2-minute expiry. The webhook
  * does NOT touch the claim. Clearing an expired/cleared claim is a no-op.
@@ -296,17 +286,12 @@ export async function countActiveMembers(workspaceId: string): Promise<number> {
 }
 
 /**
- * ⚠ **THE POOLED CREDIT COUNTER'S TWO ACCESSORS LEFT ON 2026-09-07** —
- * `consumeWorkspaceCredits` and `getWorkspaceCreditsUsed`, which wrapped
- * `consume_workspace_credits` and read `workspace_credit_usage`. Samuel's
- * per-seat + personal-wallet ruling replaced ONE POOLED counter per workspace
- * with TWO per-payer ones, and they live in `./credit-wallets.ts`.
- *
- * 🔒 **THE TABLE AND THE RPC ARE STILL THERE** (`20260930120000_credit_wallets.sql`
- * §5 retires them from writes and drops nothing, so a rollback keeps its
- * balances). **Deleting the wrappers is what makes "nothing writes the retired
- * counter" a code fact rather than a comment** — a SQL COMMENT fences no
- * writer. Do not re-export them for a caller's convenience.
+ * The pooled counter's accessors (`consumeWorkspaceCredits`,
+ * `getWorkspaceCreditsUsed`) left on 2026-09-07; the per-payer replacements live
+ * in `./credit-wallets.ts`. The table and RPC are still there
+ * (`20260930120000_credit_wallets.sql` §5 retires them from writes and drops
+ * nothing), so deleting the wrappers is what makes "nothing writes the retired
+ * counter" a code fact rather than a comment. Do not re-export them.
  */
 
 /** Live (non-trashed) ontology objects — the object cap meter. */

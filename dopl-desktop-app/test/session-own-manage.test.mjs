@@ -1,22 +1,16 @@
-// THE OWN-MACHINE MANAGE LANE — `manage.rename` / `manage.end` / `manage.posture` (2026-09-17).
+// The own-machine manage lane — `manage.rename` / `manage.end` / `manage.posture` (2026-09-17).
 //
-// THE DEFECT, as Samuel measured it in the field. A channel at tools=`bypass` /
-// messages=`auto_both` — the posture the own-machine LAUNCH lane is written for — admitted an
-// orchestrator's `manage(action="launch")` and then GATED the `manage(action="rename")` it issued
-// against the agent it had just launched:
+// The defect: a channel at tools=`bypass` / messages=`auto_both` admitted an orchestrator's
+// `manage(action="launch")` and then GATED the `manage(action="rename")` it issued against the
+// agent it had just launched — and a held channel-op gate has no surface to be answered on, so
+// the orchestrator waits forever.
 //
-//   session gate: dopl_channel op=manage.rename gate channel-op-approval-required tool=bypass msg=auto_both
+// The rule: the three housekeeping actions take the LAUNCH LANE'S CONJUNCTION (tools `bypass`
+// AND messages auto-outbound, own channel BY ID) and carry NO depth bound, because they create
+// no agent and every session that renames itself is AT the cap by construction. The argument
+// lives in `main/session-own-manage.js`.
 //
-// **AND THERE IS NO SURFACE ON WHICH A HELD CHANNEL-OP GATE CAN BE ANSWERED**, so the
-// orchestrator waits forever — F-320's defect class one op later, and not rare: the shipped Coder
-// template has every coder rename itself on start.
-//
-// THE RULE. The three housekeeping actions take the LAUNCH LANE'S CONJUNCTION — tools `bypass`
-// AND messages auto-outbound, own channel BY ID — and carry NO depth bound, because they create
-// no agent and every session that renames itself is AT the cap by construction. The whole
-// argument is `main/session-own-manage.js`.
-//
-// SOURCE-OF-TRUTH IDIOM, like session-own-launch/-direct: the REAL modules, driven directly.
+// Source-of-truth idiom, like session-own-launch/-direct: the REAL modules, driven directly.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -34,16 +28,15 @@ const lane = require(M("session-own-manage.js"));
 const launchLane = require(M("session-own-launch.js"));
 const directLane = require(M("session-own-direct.js"));
 const profiles = require(M("session-profiles.js"));
-// ⚠ 2026-08-31 (runtime-adapter port, step 3): the HELD-CALLBACK WIRING and the platform's own
-// reply vocabulary are the adapter's, so the end-to-end cases below drive the shipped callback
-// from there, exactly as the two neighbouring lane suites do.
+// 2026-08-31 (runtime-adapter port, step 3): the held-callback wiring and the platform's reply
+// vocabulary are the adapter's, so the end-to-end cases drive the shipped callback from there.
 const axisB = require(M("runtime/claude/axis-b.js"));
 const { GATE_REASONS } = require(M("session-gate-reason.js"));
 const { DOPL_CHANNEL_TOOL } = require(M("tool-profiles.js"));
 
 const CH = "ch1";
-// The three calls in the shape the MCP tool actually publishes: `channel` and `to` are REQUIRED
-// on all three server-side (`channel-dispatch-agents.ts`), so a real one always names its room.
+// `channel` and `to` are REQUIRED on all three server-side (`channel-dispatch-agents.ts`), so a
+// real call always names its room.
 const RENAME = { op: "manage", action: "rename", channel: CH, to: "@agent-k3wpf7c5", name: "coder" };
 const END = { op: "manage", action: "end", channel: CH, to: "@agent-k3wpf7c5" };
 const POSTURE = { op: "manage", action: "posture", channel: CH, to: "@agent-k3wpf7c5",
@@ -63,14 +56,13 @@ const NOT_AUTO_OUT = MESSAGE_MODES.filter((m) => !AUTO_OUT.includes(m));
 
 test("the keys are EXACTLY the three housekeeping actions, and it is an ALLOW list", () => {
   assert.deepEqual(lane.OWN_MACHINE_MANAGE_OPS, ["manage.rename", "manage.end", "manage.posture"]);
-  // ⚠ NAMED, NEVER INFERRED: a call in no list gates in every posture, which is the safe
-  // direction, so this must never grow by pattern-match or by prefix.
+  // Named, never inferred: a call in no list gates in every posture, so this must not grow by
+  // pattern-match or by prefix.
   for (const op of ["rename", "end", "posture", "rename_agent", "end_agent", "send", "manage", ""]) {
     assert.equal(lane.isOwnMachineManage({ op }, CH), false, `${op} must not reach the lane`);
   }
-  // ⚠ AND THE BARE OP IS NOT ENOUGH: `manage` also dispatches `launch` (which carries the depth
-  // bound) and `direct` (which buys a TURN), and admitting the dispatcher would open both
-  // through a door written for neither.
+  // The bare op is not enough: `manage` also dispatches `launch` (which carries the depth bound)
+  // and `direct` (which buys a TURN).
   for (const action of ["launch", "direct", "open", ""]) {
     assert.equal(lane.isOwnMachineManage({ op: "manage", action }, CH), false,
       `manage.${action} must not reach the MANAGE lane`);
@@ -78,11 +70,9 @@ test("the keys are EXACTLY the three housekeeping actions, and it is an ALLOW li
 });
 
 test("it is DISJOINT from BOTH neighbouring lanes and from both halves of Axis B", () => {
-  // ⚠ SAMENESS OF CONJUNCTION IS NOT A REASON TO MERGE — `session-own-direct.js`'s own argument,
-  // applied a second time. Folding these into `OWN_MACHINE_LAUNCH_OPS` would make relabelling an
-  // agent depend on the channel's agent-chaining setting and on a depth bound that has nothing to
-  // say about labels; folding `launch` in HERE would hand a capped session the one op the bound
-  // exists to refuse.
+  // Sameness of conjunction is not a reason to merge (`session-own-direct.js`'s own argument):
+  // folding these into `OWN_MACHINE_LAUNCH_OPS` would make relabelling an agent depend on a depth
+  // bound, and folding `launch` in here would hand a capped session the op the bound refuses.
   for (const key of lane.OWN_MACHINE_MANAGE_OPS) {
     assert.ok(!launchLane.OWN_MACHINE_LAUNCH_OPS.includes(key), `${key} carries no depth bound`);
     assert.ok(!directLane.OWN_MACHINE_DIRECT_OPS.includes(key), `${key} is not a direction`);
@@ -105,16 +95,15 @@ test("the scope is the CHANNEL, BY ID — a slug is another room, exactly like a
 });
 
 test("the verdict asks NO depth question, and that absence is the FIX rather than an omission", () => {
-  // ⚠ THE SESSIONS THIS LANE EXISTS FOR ARE ALL AT THE CAP. A launched agent carries no depth
-  // stamp, and `normalizeLaunchDepth` reads absent AS the cap — so a depth question here would
-  // DENY every self-rename the Coder template performs, re-filing the reported defect under a
-  // code no posture can open. These three create no agent, so there is no generation to count.
+  // Every session this lane exists for is AT the cap: a launched agent carries no depth stamp and
+  // `normalizeLaunchDepth` reads absent AS the cap, so a depth question here would DENY every
+  // self-rename. These three create no agent, so there is no generation to count.
   for (const launchDepth of [0, 1, 2, undefined, null, -1]) {
     assert.equal(lane.manageLaneVerdict({ toolMode: "bypass", launchDepth }, true), "allow",
       `depth=${String(launchDepth)} must not move a rename`);
   }
   // ...and nothing on this lane can answer `deny`: the not-admitted case is a POSTURE the
-  // operator can widen, so it must stay the refusable verdict.
+  // operator can widen, so it must stay refusable.
   for (const toolMode of TOOL_MODES) {
     for (const autoOutbound of [true, false]) {
       assert.notEqual(lane.manageLaneVerdict({ toolMode }, autoOutbound), "deny");
@@ -134,8 +123,8 @@ test("ADMITTED: tools `bypass` + messages auto-outbound — the 2026-09-17 field
 });
 
 test("...AT THE LAUNCH CAP TOO, which is the shape the defect was reported on", () => {
-  // The orchestrator's own workers are launched sessions (no depth stamp => the cap), and the
-  // Coder template tells each of them to rename itself the moment it starts.
+  // Launched sessions carry no depth stamp (=> the cap), and the Coder template tells each of
+  // them to rename itself the moment it starts.
   for (const [name, input] of CALLS) {
     assert.equal(decide(args(input, { toolMode: "bypass", messageMode: "auto_both" })), "allow", name);
     assert.equal(decide(args(input, { toolMode: "bypass", messageMode: "auto_both", launchDepth: 1 })),
@@ -205,11 +194,11 @@ test("each admitted action carries its OWN diag code — it is not narrated as a
     assert.equal(v.decision, "allow");
     assert.equal(v.reason, want[name]);
     assert.ok(GATE_REASONS.includes(v.reason), "the code is in the closed set");
-    // ⚠ THREE CODES AND NOT ONE, because the delivery end already separates these verbs: the
-    // posture one sits behind the operator's launch toggle and the other two do not.
+    // Three codes and not one: the delivery end already separates these verbs — the posture one
+    // sits behind the operator's launch toggle and the other two do not.
     assert.equal(lane.MANAGE_ALLOW_REASONS[`manage.${name}`], want[name]);
-    // Nothing left this machine as CONTENT, so none of them may borrow an outbound code — the
-    // same rule `auto-launch-own-machine` is held to.
+    // Nothing left this machine as CONTENT, so none may borrow an outbound code — the same rule
+    // `auto-launch-own-machine` is held to.
     for (const outbound of ["auto-outbound", "auto-outbound-marker", "auto-outbound-thread-open",
       "auto-outbound-escalate", "auto-outbound-artifact", "auto-launch-own-machine"]) {
       assert.notEqual(v.reason, outbound);
@@ -220,9 +209,8 @@ test("each admitted action carries its OWN diag code — it is not narrated as a
 });
 
 test("THE DISHONEST GATE IS GONE: `manage-posture-required`, not `channel-op-approval-required`", () => {
-  // ⚠ THE REPORTED LINE, REPRODUCED. The old code's sentence — "message approval covers this
-  // channel's messages, not this operation" — was false twice over: the fix is TWO postures, and
-  // the approval it names has no surface to be given on.
+  // The reported line, reproduced. The old code's sentence named an approval that has no surface
+  // to be given on, and the real fix is TWO postures.
   for (const [name, input] of CALLS) {
     for (const over of [{ toolMode: "bypass", messageMode: "ask" },
       { toolMode: "auto", messageMode: "auto_both" },
@@ -259,10 +247,9 @@ test("the LAUNCH lane's own codes are untouched on both sides", () => {
 
 // ── D. THE WIRING: the auto-deny path is unreachable for the admitted case ─────────
 //
-// ⚠ WHY THIS IS THE TEST THAT MATTERS. The refusal Samuel measured is not a card nobody clicked;
-// it is `session-windowless.js › claimGate` auto-denying a dispatched `permission_request`. An
-// ADMITTED call resolves inside `makeCanUseTool` and dispatches NOTHING, so there is no payload
-// to claim and no resolver to deny.
+// The refusal measured in the field is `session-windowless.js › claimGate` auto-denying a
+// dispatched `permission_request`. An ADMITTED call resolves inside `makeCanUseTool` and
+// dispatches NOTHING, so there is no payload to claim and no resolver to deny.
 
 function mkSession(over) {
   const o = over || {};
@@ -305,9 +292,8 @@ test("NOT ADMITTED: ONE permission_request carrying the HONEST reason — refusa
 // ── E. THE DISCIPLINE PINS ────────────────────────────────────────────────────────
 
 test("the lane holds no identity concept — whose machine is reached is not its question", () => {
-  // It classifies an ASK. It has no operator id, no credential and no registry, so there is no
-  // shape of this module that could widen WHOSE machine may be addressed: a directive is stamped
-  // with the caller's own `operator_user_id` server-side and only their machines claim it.
+  // It classifies an ASK: no operator id, no credential, no registry, so no shape of this module
+  // could widen WHOSE machine may be addressed.
   const src = read("session-own-manage.js");
   const executable = src.split("const { channelOpKey } = require")[1] || "";
   assert.ok(!/operatorUserId|getUserId|credential|token/i.test(executable),
@@ -330,19 +316,17 @@ test("the gate's ORDER is mirrored by the explainer, which is what keeps it true
 });
 
 test("🔒 THE DELIVERY END'S PER-KIND CONSENT IS UNTOUCHED — widening a gate moved no consent", () => {
-  // ⚠ ADMITTING THE ASK IS NOT ADMITTING THE ACT. `manage.posture` rides the mailbox as
-  // `set_agent_mode`, which is behind the operator's machine-local launch toggle; `end` and
-  // `rename` are outside it because a STOP verb and a DISPLAY verb spend no compute. On a machine
-  // with that toggle off an ADMITTED posture ask still changes nothing and the row expires.
+  // Admitting the ask is not admitting the act. `manage.posture` rides the mailbox as
+  // `set_agent_mode`, behind the operator's machine-local launch toggle; `end` and `rename` are
+  // outside it because a STOP verb and a DISPLAY verb spend no compute.
   const wire = read("launch-directive-wire.js");
   assert.match(wire, /KINDS_NEEDING_LAUNCH_CONSENT/);
   const directives = read("launch-directives.js");
   assert.match(directives,
     /if \(wire\.KINDS_NEEDING_LAUNCH_CONSENT\.indexOf\(d\.kind\) !== -1 && !launchEnabled\(\)\) return;/);
-  // ...and this lane's CODE says nothing about any of it. ⚠ COMMENTS STRIPPED FIRST, on
-  // `session-own-launch.test.mjs`'s 2026-09-05 correction: the header NAMES that consent split in
-  // order to explain why admitting the ask is not admitting the act, and a raw regex over the file
-  // text would redden the very invariant the prose documents.
+  // ...and this lane's CODE says nothing about any of it. COMMENTS ARE STRIPPED FIRST: the header
+  // names that consent split, so a raw regex over the file text would redden the invariant the
+  // prose documents.
   const stripComments = (src) => src
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/(^|[^:])\/\/.*$/gm, "$1");

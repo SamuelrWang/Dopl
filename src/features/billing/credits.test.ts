@@ -1,20 +1,13 @@
 /**
- * INVARIANT SUITE — MCP credit constants + the TWO period rules. `credits.ts` is
- * the ONE retune spot; pinned here are the PER-MEMBER seat allowance, the
- * PERSONAL wallet allowance, and WHICH WINDOW each wallet is charged to.
+ * Invariant suite — MCP credit constants and the two period rules: the
+ * per-member seat allowance, the personal wallet allowance, and which window
+ * each wallet is charged to.
  *
- * ⚠ **REWRITTEN 2026-09-07 for Samuel's per-seat + personal-wallet ruling.** It
- * used to pin `MONTHLY_MCP_CREDITS` — one POOLED allowance per workspace
- * (free 500 / solo 10,000 / team 25,000 workspace-wide) — and a case asserting
- * that team was FLAT and deliberately not a multiple of solo. Both are gone
- * with the map: the allowance is per MEMBER now and multiplies by the roster.
- *
- * ⚠ **AND EXTENDED 2026-09-08 FOR THE PERSONAL PRO TIER.** Two cases INVERTED
- * rather than being added beside their predecessors, and they are called out
- * because a suite that keeps both spellings of a superseded rule is green under
- * either: `PERSONAL_MONTHLY_CREDITS` was pinned as `toBe(500)` and as
- * `typeof === "number"` with the comment "the home space has no plan". It is a
- * two-key MAP now and the home space does have a plan.
+ * 2026-09-07: rewritten for the per-seat + personal-wallet ruling (the pooled
+ * `MONTHLY_MCP_CREDITS` map and its flat-team case went with it).
+ * 2026-09-08: extended for the personal Pro tier — two cases were inverted
+ * rather than added beside their predecessors, because a suite keeping both
+ * spellings of a superseded rule is green under either.
  */
 
 import { describe, it, expect } from "vitest";
@@ -45,10 +38,10 @@ describe("allowances", () => {
   });
 
   it("🔒 carries a `pro` key that NO seat ever reads — it is there for the Record type", () => {
-    // ⚠ `pro` is sold only on a `kind='personal'` container, which has no seats.
-    // The key exists so `Record<PlanId, number>` stays exhaustive and the NEXT
-    // plan id is a compile error here rather than a silent `undefined`; the
-    // credits SERVICE never routes a seat burn through it
+    // `pro` is sold only on a `kind='personal'` container, which has no seats.
+    // The key exists so `Record<PlanId, number>` stays exhaustive and the next
+    // plan id is a compile error rather than a silent `undefined`; the credits
+    // service never routes a seat burn through it
     // (`server/credits-service.test.ts`).
     expect(SEAT_MONTHLY_CREDITS.pro).toBe(5_000);
     expect(Object.keys(SEAT_MONTHLY_CREDITS).sort()).toEqual([
@@ -65,17 +58,16 @@ describe("allowances", () => {
   });
 
   it("🔒 legacy SOLO takes the PAID figure, not the free one", () => {
-    // Retired from sale, still live on real rows. A legacy payer's members are
-    // entitled to what paid members get; falling back to free would quietly cut
-    // a paying workspace's allowance by 98%.
+    // Retired from sale, still live on real rows: a legacy payer's members are
+    // entitled to what paid members get, and falling back to free would quietly
+    // cut a paying workspace's allowance by 98%.
     expect(seatCreditsForPlan("solo")).toBe(SEAT_MONTHLY_CREDITS.team);
   });
 
   it("🔒 the paid allowance is PER MEMBER, so Team is NOT a workspace-wide pool", () => {
-    // ⚠ THE REVERT DETECTOR FOR THE POOLED MODEL. Under `MONTHLY_MCP_CREDITS`
-    // Team was 25,000 for the whole workspace however many people were in it;
-    // this figure is what EACH member gets, and nothing here divides by a seat
-    // count. A revert to a pooled map fails this and the map assertion above.
+    // Revert detector for the pooled model: under `MONTHLY_MCP_CREDITS` Team was
+    // 25,000 workspace-wide, where this figure is what each member gets and
+    // nothing divides by a seat count.
     expect(SEAT_MONTHLY_CREDITS.team).toBe(5_000);
     expect(seatCreditsForPlan("team")).toBe(SEAT_MONTHLY_CREDITS.team);
   });
@@ -85,10 +77,9 @@ describe("allowances", () => {
   });
 
   it("🔒 the personal allowance IS a plan lookup now — the home space has a plan", () => {
-    // ⚠ THE REVERT DETECTOR FOR THE ONE-TIER MODEL. The superseded case asserted
-    // `typeof PERSONAL_MONTHLY_CREDITS === "number"` with the comment "a map
-    // here would imply a tier that cannot be bought" — true until Samuel priced
-    // it at $8.99. A revert to the bare constant fails this AND every
+    // Revert detector for the one-tier model: the superseded case asserted
+    // `typeof PERSONAL_MONTHLY_CREDITS === "number"`, true until the personal
+    // tier was priced. A revert to the bare constant fails this and every
     // `.free`/`.pro` read in the tree.
     expect(typeof PERSONAL_MONTHLY_CREDITS).toBe("object");
     expect(Object.keys(PERSONAL_MONTHLY_CREDITS).sort()).toEqual(["free", "pro"]);
@@ -97,7 +88,7 @@ describe("allowances", () => {
   it("🔒 free PERSONAL (500) is NOT free SEAT (100) — different things, different numbers", () => {
     // A free seat is one of many inside somebody's workspace; a free personal
     // wallet is a person's entire home space. Collapsing them cuts every
-    // existing user's allowance by 80% with no ruling behind it.
+    // existing user's allowance by 80%.
     expect(PERSONAL_MONTHLY_CREDITS.free).toBe(500);
     expect(PERSONAL_MONTHLY_CREDITS.free).not.toBe(SEAT_MONTHLY_CREDITS.free);
   });
@@ -108,10 +99,9 @@ describe("allowances", () => {
 });
 
 /**
- * 🔒 THE PERSONAL LIMIT IS A VERDICT LOOKUP, AND EVERYTHING THAT IS NOT `pro`
- * IS FREE. The verdict comes from `server/entitlements.ts › entitledPlanFor`,
- * so a canceled Pro row arrives here as `free` and gets 500 — not the 5,000 it
- * stopped paying for.
+ * The personal limit is a verdict lookup and anything but `pro` is free. The
+ * verdict comes from `server/entitlements.ts › entitledPlanFor`, so a canceled
+ * Pro row arrives as `free` and gets the free allowance.
  */
 describe("personalCreditsForPlan", () => {
   it("gives a `pro` verdict 5,000 and a `free` verdict 500", () => {
@@ -120,11 +110,9 @@ describe("personalCreditsForPlan", () => {
   });
 
   it("🔒 answers FREE for a workspace plan that cannot be on a personal container", () => {
-    // ⚠ THE SAFE DIRECTION. `team` and `solo` are standard-workspace plans and
-    // cannot be the verdict here; if a bad row produced one anyway, reading it
-    // as paid would hand a free home space 5,000 credits nobody bought. A
-    // `SEAT_MONTHLY_CREDITS`-style lookup keyed on the whole taxonomy would do
-    // exactly that, which is why this function is not one.
+    // The safe direction: `team` and `solo` cannot be the verdict here, and if a
+    // bad row produced one, reading it as paid would hand a free home space
+    // credits nobody bought — which a taxonomy-wide lookup would do.
     expect(personalCreditsForPlan("team")).toBe(PERSONAL_MONTHLY_CREDITS.free);
     expect(personalCreditsForPlan("solo")).toBe(PERSONAL_MONTHLY_CREDITS.free);
   });
@@ -136,8 +124,8 @@ describe("personalCreditsForPlan", () => {
 });
 
 /**
- * THE PERSONAL WALLET'S WINDOW — always the UTC calendar month, because a
- * personal wallet has no subscription to anchor to.
+ * The personal wallet's window — the UTC calendar month, with no subscription to
+ * anchor to.
  */
 describe("personalCreditPeriod", () => {
   it("is the UTC calendar month containing `now`", () => {
@@ -174,17 +162,16 @@ describe("personalCreditPeriod", () => {
   });
 
   it("🔒 STILL takes no anchor — the Pro window grew `resolveCreditPeriod`, not a copy of it", () => {
-    // ⚠ THE PREDICTION THIS CASE MADE CAME TRUE ON 2026-09-08. It said a future
-    // personal PAID tier would grow `resolveCreditPeriod`'s anchor branch
-    // "rather than a second copy of it". Pro landed and did exactly that
-    // (`server/personal-wallet.ts › personalWalletTier`), so this function is
-    // still clock-only — it is the FREE / no-row arm now, not the whole rule.
-    // A second anchor branch appearing here is the regression.
+    // Since 2026-09-08 the personal paid tier goes through
+    // `resolveCreditPeriod`'s anchor branch
+    // (`server/personal-wallet.ts › personalWalletTier`), so this function stays
+    // clock-only — the free / no-row arm. A second anchor branch here is the
+    // regression.
     expect(personalCreditPeriod.length).toBe(0);
   });
 });
 
-/** Live future anchor — shape a mid-period cancellation leaves behind. */
+/** Live future anchor — the shape a mid-period cancellation leaves behind. */
 const LIVE_ANCHOR = {
   currentPeriodStart: "2026-07-21T09:30:00.000Z",
   currentPeriodEnd: "2026-08-21T09:30:00.000Z",
@@ -211,9 +198,9 @@ describe("resolveCreditPeriod — subscription anchor", () => {
   });
 
   it("anchors a PERSONAL `pro` subscription the same way (2026-09-08)", () => {
-    // ⚠ THE PERSONAL WALLET IS NOT SPECIAL-CASED. Its window is this same
-    // function, so a Pro home space rolls on its Stripe date and NOT on the
-    // 1st — otherwise the payer gets a second month's 5,000 early, every month.
+    // The personal wallet is not special-cased: its window is this same
+    // function, so a Pro home space rolls on its Stripe date and not on the 1st
+    // — otherwise the payer gets a second month's allowance early, every month.
     expect(resolveCreditPeriod(LIVE_ANCHOR, "pro", NOW)).toEqual({
       periodStart: "2026-07-21T09:30:00.000Z",
       periodEnd: "2026-08-21T09:30:00.000Z",
@@ -222,10 +209,10 @@ describe("resolveCreditPeriod — subscription anchor", () => {
 });
 
 /**
- * Cancellation lockout, pinned at the rule that heals it. A mid-period cancel
- * leaves a future-ending anchor; honouring it would charge the first free-plan
- * call to the period key the paid plan already spent past 500. Verdict read
- * FIRST heals it on next consume, no webhook.
+ * Cancellation lockout, pinned at the rule that heals it: a mid-period cancel
+ * leaves a future-ending anchor, and honouring it would charge the first
+ * free-plan call to a period key the paid plan already spent. Reading the
+ * verdict first heals it on next consume, no webhook.
  */
 describe("resolveCreditPeriod — a FREE verdict ignores the anchor", () => {
   it("uses the calendar month even when a live future anchor is stamped", () => {

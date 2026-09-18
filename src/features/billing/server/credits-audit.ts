@@ -8,45 +8,30 @@ import {
 import type { BillingTarget } from "./credits-service";
 
 /**
- * THE RECONCILIATION GUARD — does one wallet's COUNTER equal its LEDGER?
+ * The reconciliation guard — does one wallet's counter equal its ledger?
  *
- * 🔒 **SAMUEL'S RULING, 2026-09-13: THE HISTOGRAM MUST EQUAL THE WALLET, ALWAYS**
- * ("there's a disconnect between the two charts. we need to nail this down").
- * `20261004120000_credit_consume_with_ledger.sql` makes divergence UNREACHABLE
- * going forward by putting both writes in one transaction. This file is the other
- * half of "always": a claim that two numbers agree is worth nothing if nobody can
- * MEASURE it, and the rows written before the fix — the three Samuel's wallet lost
- * to a `42703` on 2026-09-13, reconciled by hand — are exactly the rows no
- * transaction can vouch for retroactively.
+ * 2026-09-13 ruling: the histogram must equal the wallet. The migration makes
+ * divergence unreachable going forward by putting both writes in one transaction;
+ * this file is the measurement for the rows written before it, which no transaction
+ * can vouch for retroactively.
  *
- * ⚠ **ITS OWN MODULE, NOT A THIRD RESPONSIBILITY FOR `credits-service.ts`**
- * (§1's "split, do not squeeze": that file measured 448 of the 500-line cap the
- * day this landed — ⚠ `wc -l`, do not quote). The seam is the one that file's own
- * header already draws: enforcement asks "may this call proceed", the meter asks
- * "how much is left", and this asks "do our two records of what was spent agree" —
- * a question with no place on the hottest write path in the product.
- *
- * ⚠ **NOTHING HERE DECIDES A CHARGE, GATES A CALL, OR CORRECTS A ROW.** It reads
- * two numbers and subtracts. Reconciliation is a person's decision with a person's
- * SQL (`scripts/sql/backfill-credit-wallets-v2.sql` sets counters FROM the
- * ledger); a service that silently rewrote either side would destroy the evidence
- * that they ever differed.
+ * Nothing here decides a charge, gates a call, or corrects a row — it reads two
+ * numbers and subtracts. Reconciliation is a person's SQL
+ * (`scripts/sql/backfill-credit-wallets-v2.sql`); a service that rewrote either
+ * side would destroy the evidence that they differed.
  */
 
 /** Which wallet to reconcile, and the key its counter is on. */
 export interface LedgerReconciliation {
-  /** The COUNTER — the authority on what was charged. */
+  /** The counter — the authority on what was charged. */
   counter: number;
   /** `SUM(amount)` over the ledger rows that counter's spends wrote. */
   ledgerSum: number;
   /**
-   * `counter - ledgerSum`. **0 is the only correct value.**
-   *
-   * ⚠ **POSITIVE MEANS THE LEDGER IS MISSING ROWS** — the direction the old
-   * fire-and-forget writer produced, and the one the /home card showed as a
-   * histogram below its own bar. NEGATIVE means the ledger holds spend no counter
-   * carries, which the atomic write cannot produce and a hand backfill can; both
-   * are reported, neither is corrected.
+   * `counter - ledgerSum`; 0 is the only correct value. Positive means the ledger
+   * is missing rows; negative means it holds spend no counter carries, which the
+   * atomic write cannot produce and a hand backfill can. Both are reported, neither
+   * is corrected.
    */
   drift: number;
 }
@@ -54,16 +39,15 @@ export interface LedgerReconciliation {
 /**
  * Compare one wallet's counter against its ledger for `periodStart`.
  *
- * ⚠ **BOTH SIDES KEY ON `(payer, wallet, period)`, AND THE SEAT ARM IS
- * CROSS-WORKSPACE FOR THAT REASON.** The ledger row records the ADDRESSED
- * container, never the charged one (`credit-ledger.ts › CreditUsageEvent`), so a
- * per-workspace ledger sum would drop every cross-container seat burn and report
- * the difference as drift. The counter side therefore sums the payer's seat rows
- * for the same period (`credit-wallets.ts › sumMemberCreditsUsed`) — an
- * apples-to-apples total, not a pooled allowance.
+ * Both sides key on `(payer, wallet, period)`, which is why the seat arm is
+ * cross-workspace: the ledger row records the ADDRESSED container
+ * (`credit-ledger.ts › CreditUsageEvent`), so a per-workspace sum would drop every
+ * cross-container seat burn and report the difference as drift. The counter side
+ * sums the payer's seat rows for the period
+ * (`credit-wallets.ts › sumMemberCreditsUsed`).
  *
- * ⚠ **THROWS.** The fail direction is the caller's: `ledgerDriftFor` below is the
- * one that decides a read failure is not worth a 500 on the billing surface.
+ * Throws — the fail direction is the caller's, and `ledgerDriftFor` below is where
+ * a read failure is decided not to be worth a 500.
  */
 export async function walletMatchesLedger(
   payerUserId: string,
@@ -83,18 +67,15 @@ export async function walletMatchesLedger(
  * The drift figure `GET /api/billing/status` publishes as `credits.ledgerDrift`,
  * or `0` when there was nothing to reconcile or nothing could be read.
  *
- * ⚠ **DEGRADES TO 0, LOUDLY, AND THE REASON IS THE MIGRATION LAG** — the same
- * argument `home/server/repository-overview.ts › scanCreditEvents` makes for being
- * the one read on its page that degrades instead of throwing. `credit_ledger_sum`
- * ships as an UNAPPLIED migration (Samuel applies it), so between deploy and apply
- * the function DOES NOT EXIST: throwing here would 500 the billing surface for
- * every user over a figure that is a diagnostic, not a meter. **A warn, not an
- * error**: what was lost is a measurement, not a credit.
+ * Degrades to 0 loudly because of the migration lag — the same argument
+ * `home/server/repository-overview.ts › scanCreditEvents` makes: `credit_ledger_sum`
+ * ships unapplied, so between deploy and apply the function does not exist and
+ * throwing would 500 the billing surface over a diagnostic. A warn, not an error — what was
+ * lost is a measurement, not a credit.
  *
- * ⚠ **0 MEANS "reconciled" TO EVERY CONSUMER, SO THE DEGRADE IS A FALSE
- * NEGATIVE BY CONSTRUCTION** — stated rather than discovered. The alternative is a
- * third state on the wire and a renderer that has to explain it; the honest
- * mitigation is the log line, which names the wallet it could not check.
+ * 0 means "reconciled" to every consumer, so the degrade is a false negative by
+ * construction; the alternative is a third state on the wire, and the mitigation is
+ * the log line naming the wallet it could not check.
  */
 export async function ledgerDriftFor(
   target: BillingTarget,

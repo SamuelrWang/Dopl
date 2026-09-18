@@ -1,7 +1,7 @@
 /**
  * The ontology seed's WRITE SHAPE and cross-reference resolution.
  *
- * ⚠ Runs inside the post-signup redirect, so the awaited round-trip count is a
+ * Runs inside the post-signup redirect, so the awaited round-trip count is a
  * product property. Pins the four-statement form AND that batching cost the
  * graph nothing: same objects, parentage, ordering, resolved attribute ids and
  * relationship endpoints.
@@ -133,7 +133,7 @@ describe("ontology seed — the graph the batch produces", () => {
         }
       }
     }
-    // ⚠ Seed order is knowledge → skills → ontology; cross-refs depend on it.
+    // Seed order is knowledge → skills → ontology; cross-refs depend on it.
     expect(linkAttributes).toBeGreaterThan(0);
   });
 

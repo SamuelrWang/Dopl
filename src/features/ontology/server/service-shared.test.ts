@@ -1,24 +1,20 @@
 /**
- * THE TWIN's TRUTH TABLE — `./service-shared.ts › canSeeOntology` /
+ * The twin's truth table — `./service-shared.ts › canSeeOntology` /
  * `› canEditOntology`, driven through every row of Samuel's matrix
  * (`docs/specs/home-ontology.md` §2, slice S1).
  *
- * 🔒 **THIS IS THE FENCE THAT ACTUALLY RUNS.** Every ontology read goes through
+ * This is the fence that actually runs. Every ontology read goes through
  * the service-role client, which bypasses RLS, so the policy proved by
  * `./rls-redteam.test.ts` is the fence for tomorrow and this predicate is the
  * fence for today. The two files are halves of one claim: that suite asserts the
  * SQL says what this says, arm for arm.
  *
- * ⚠ **THE AGENT CEILING IS NOT TESTED HERE BECAUSE IT IS NOT DECIDED HERE.** An
+ * The agent ceiling is not tested here because it is not decided here. An
  * agent capped at its operator's level (I1/Q1), the solo `agents_may_edit` toggle
  * and `owner_agents_level` are `./service-audience.ts › resolveOntologyAudience`'s
  * question, and its own suite's.
  *
- * ⚠ MUTATION-VERIFIED, 5 REVERTS AND 5 FAILURES (2026-09-09) — each applied, run,
- * and reverted: the read floor dropped to `none`; the write floor dropped to
- * `view`; `sharedOntologyLevel` losing its shared-credential refusal; the
- * container arm answering `true` for everyone; and `needsShareArm` forgetting the
- * credential axis.
+ * Mutation-verified — 5 reverts, 5 failures (2026-09-09).
  */
 
 import { describe, it, expect } from "vitest";
@@ -85,7 +81,7 @@ describe("canSeeOntology / canEditOntology — Samuel's matrix, in TypeScript", 
     expect(canSeeOntology(peer(shared), CLUSTER, reach("edit"))).toBe(false);
     expect(canEditOntology(peer(shared), CLUSTER, reach("edit"))).toBe(false);
     expect(needsShareArm(peer(shared), CLUSTER)).toBe(false);
-    // ⚠ …and it still reaches its OWN container's board. Narrowing that would be
+    // …and it still reaches its OWN container's board. Narrowing that would be
     // a change to M-10 this feature has no business making.
     expect(canSeeOntology(ctx(shared), CLUSTER, NO_ONTOLOGY_SHARES)).toBe(true);
   });
@@ -96,12 +92,12 @@ describe("canSeeOntology / canEditOntology — Samuel's matrix, in TypeScript", 
   });
 
   /**
-   * 🔒 THE SQL TWIN'S ARM 1 IS `is_current_workspace_member(workspace_id,
-   * 'viewer')`, AND THIS PREDICATE IS STRICTLY NARROWER THAN IT — the truth
+   * The SQL twin's arm 1 is `is_current_workspace_member(workspace_id,
+   * 'viewer')`, and this predicate is strictly NARROWER than it — the truth
    * table in this module's header, pinned so the divergence cannot be
    * rediscovered as a bug or "fixed" as a mirror.
    *
-   * ⚠ The narrow direction is the SAFE one and it is still a divergence: the
+   * The narrow direction is the SAFE one and it is still a divergence: the
    * service-role client bypasses RLS, so what runs is this. Row 2 (the caller's
    * own personal shelf, reached from a room) is restored — and only row 2 — by
    * `./service-audience.ts › levelForCluster`'s `created_by` arm, which its own

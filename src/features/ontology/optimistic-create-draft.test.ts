@@ -1,11 +1,7 @@
 /**
- * INVARIANT SUITE — "+ Object" AS A DRAFT LANE (2026-09-11, Samuel: *"I want the
- * column UI to immediately appear on the thing, but at the same time, a pop-up
- * comes up. If the user doesn't actually end up creating it, that little thing
- * disappears"*).
- *
- * ⚠ SPLIT FROM `optimistic-create.test.ts` for the 500-line cap; same harness,
- * same claim shape — what LEFT, and when.
+ * Invariant suite — "+ Object" as a draft lane (Samuel, 2026-09-11): the lane
+ * appears at once beside the popup and disappears if nothing is created.
+ * Split from `optimistic-create.test.ts` for the 500-line cap.
  */
 
 import { describe, expect, it } from "vitest";
@@ -20,22 +16,17 @@ import {
 import { flush, harness, savedCluster, savedObject } from "./optimistic-create-harness";
 
 /**
- * THE "+ Object" DRAFT LANE (2026-09-11, Samuel: *"I want the column UI to
- * immediately appear on the thing, but at the same time, a pop-up comes up. If
- * the user doesn't actually end up creating it, that little thing disappears"*).
- *
- * ⚠ THE CLAIM UNDER TEST IS **WHAT LEAVES**, not what renders: this is the ONE
- * create path that sends nothing from the click, because a discard has to be
- * free. `h.sent` is the whole proof.
+ * The claim under test is what LEAVES, not what renders: this is the one create
+ * path that sends nothing from the click, because a discard has to be free.
+ * `h.sent` is the whole proof.
  */
 describe("the object draft — begin / discard", () => {
   const cluster = savedCluster({ id: "c1", slug: "c1", columnIds: [] });
   const board: GraphState = { clusters: [cluster], objects: {} };
 
   /**
-   * ⚠ MUTATION-VERIFIED — one revert, one failure: pointing `beginColumnDraft`
-   * at `createObjectOptimistic` (the lane still appears, still reads "Untitled
-   * object" and is still pending — only the empty `h.sent` says nothing left).
+   * Mutation-verified: pointing `beginColumnDraft` at `createObjectOptimistic`
+   * leaves the lane looking identical — only the empty `h.sent` catches it.
    */
   it("puts the lane on the board and sends NOTHING", () => {
     const h = harness();
@@ -47,8 +38,8 @@ describe("the object draft — begin / discard", () => {
     expect(isPendingOntologyId(row.id)).toBe(true);
     expect(h.pending.has(row.id)).toBe(true);
     expect(h.sent).toEqual([]);
-    // ⚠ AND THE WRITE GATE STAYS SHUT: nothing is in flight, so a realtime
-    // snapshot is free to arrive while the popup is open.
+    // the write gate stays shut: nothing in flight, so a realtime snapshot is
+    // free to arrive while the popup is open.
     expect(h.writesInFlight).toBe(0);
   });
 
@@ -75,9 +66,8 @@ describe("the object draft — commit", () => {
   };
 
   /**
-   * ⚠ MUTATION-VERIFIED — one revert, one failure: dropping the `OBJECT_UPDATE`
-   * before the POST (the row still lands, the PATCH still carries the fields, and
-   * only the lane's name at submit time says the board lied for a round trip).
+   * Mutation-verified: dropping the `OBJECT_UPDATE` before the POST still lands the
+   * row — only the lane's name at submit time says the board lied for a round trip.
    */
   it("wears the typed name before the POST leaves, and POSTs that name", () => {
     const h = harness();
@@ -152,9 +142,8 @@ describe("the object draft — commit", () => {
   });
 
   /**
-   * 🔒 A REFUSED PATCH KEEPS THE LANE. The row exists server-side by then, and
-   * deleting the operator's object because its description did not save would
-   * destroy more than it repairs — it reports instead.
+   * A refused PATCH keeps the lane: the row exists server-side by then, so deleting
+   * it because a description did not save would destroy more than it repairs.
    */
   it("keeps the lane when only the follow-up PATCH fails", async () => {
     const h = harness();

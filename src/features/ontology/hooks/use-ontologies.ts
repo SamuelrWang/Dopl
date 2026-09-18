@@ -11,28 +11,26 @@ import {
 import { ontologySnapshotKey } from "./use-ontology";
 import type { OntologySnapshot } from "../types";
 
-/** ⚠ RE-EXPORTED, not redeclared: the row shape is the client lane's
- *  (`client/api.ts`), and a surface reads it through the hook it came from. */
+/** Re-exported, not redeclared: the row shape is the client lane's
+ *  (`client/api.ts`). */
 export type { OntologyListRow } from "../client/api";
 
 /**
- * THE ONTOLOGY LIST — one container's clusters as ROWS, for a surface that
- * lists them rather than editing one (`/home` → Ontology, spec §5).
+ * The ontology list — one container's clusters as rows, for a surface that lists
+ * them rather than editing one (`/home` → Ontology, spec §5).
  *
- * 🔒 **IT SHARES `ontologySnapshotKey`'s CACHE ENTRY WITH THE BOARD, AND THAT IS
- * THE POINT.** `useOntology` mounts the same `GET /api/ontology` under the same
- * key, so opening an ontology from this list costs no second request and an edit
- * on the board moves the count on the card behind it. A key differing by one
- * element would be a silent second fetch (INVARIANTS §8) — the reason the key is
- * IMPORTED from the store rather than restated here.
+ * It shares `ontologySnapshotKey`'s cache entry with the board on purpose, so
+ * opening an ontology costs no second request and a board edit moves the count
+ * behind it. A key differing by one element is a silent second fetch
+ * (INVARIANTS §8) — hence the key is imported, not restated.
  *
- * ⚠ NO REALTIME OF ITS OWN. `client/realtime.ts › useOntologyRealtime` is the
- * board's, subscribes per WORKSPACE (R7) and is what refreshes this entry while
- * a board is open. A list that subscribed too would double every signal.
+ * No realtime of its own: `client/realtime.ts › useOntologyRealtime` is the
+ * board's, subscribes per workspace (R7) and refreshes this entry. A list that
+ * subscribed too would double every signal.
  */
 export function useOntologies(workspaceId: string | null): {
   rows: readonly OntologyListRow[];
-  /** ⚠ `data !== undefined`, so a FAILED read is unresolved FOREVER — read it
+  /** `data !== undefined`, so a FAILED read is unresolved FOREVER — read it
    *  beside `error`, never as "still pending" (F-339). */
   resolved: boolean;
   error: unknown;
@@ -59,19 +57,14 @@ export function useOntologies(workspaceId: string | null): {
 /**
  * One snapshot → the rows a list renders.
  *
- * ⚠ **THE OBJECT COUNT IS A GRAPH WALK, NOT A COLUMN** (R5 — an object can sit
- * in several clusters, and `ontology_memberships` is built for it). `graph-state
- * .ts › clusterObjectIds` is that walk, already written and already tested; a
- * `columnIds.length` here would count COLUMNS and call them objects.
+ * The object count is a graph walk, not a column (R5 — an object can sit in several
+ * clusters): `graph-state.ts › clusterObjectIds` is that walk. A `columnIds.length`
+ * here would count columns and call them objects.
  *
- * 🔒 **BOTH SHARING FIELDS TAKE A STALE-CACHE FALLBACK** (INVARIANTS §8): this
- * payload is served from IndexedDB on the first paint after an upgrade, so a
- * bundle that reads them must render against a body written before they
- * existed. The two fallbacks are DIFFERENT ANSWERS and that is deliberate —
- * `agentsMayEdit` falls back to the column default (`true`, spec §3.1), which is
- * a fact about a row nobody has narrowed; `sharedChannelCount` falls back to
- * `null`, so the card SAYS NOTHING rather than claiming a share count of zero
- * that this payload never carried. UNKNOWN is not EMPTY.
+ * Both sharing fields take a stale-cache fallback (INVARIANTS §8), and the two
+ * answers differ on purpose: `agentsMayEdit` falls back to the column default
+ * (`true`, spec §3.1), a fact; `sharedChannelCount` falls back to `null` so the
+ * card says nothing rather than claiming a share count it never carried.
  */
 export function ontologyListRows(snapshot: OntologySnapshot): OntologyListRow[] {
   const state: GraphState = {

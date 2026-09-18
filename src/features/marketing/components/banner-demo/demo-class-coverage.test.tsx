@@ -1,32 +1,20 @@
 // @vitest-environment jsdom
 /**
- * 🔒 **EVERY CLASS THE HERO SCENE EMITS MUST RESOLVE IN THE CSS THE LANDING PAGE
- * ACTUALLY LOADS.** Samuel, 2026-09-17, after rejecting the scene: *"AUDIT EVERY
- * CLASS the demo emits against the CSS the marketing page actually loads … This
- * is the gate that would have caught this."*
+ * (2026-09-17) Every class the hero scene emits must resolve in the CSS the
+ * landing page actually loads.
  *
- * ⚠ **THE TWO TREES LOAD DIFFERENT STYLESHEETS, AND THAT IS THE WHOLE RISK.**
- * The SPA's entry is `apps/desktop-ui/src/styles/index.css` — Tailwind, then
- * `tokens.css`, then `kit.css`, plus every CSS MODULE its pages import
- * (`pages/home/home.module.css`, `app-shell/account-rail.module.css`, …). The
- * landing page loads `src/app/globals.css` (from the root layout) and
- * `src/features/marketing/marketing.css` (from `src/app/page.tsx`) and **nothing
- * else** — no kit copy, and no CSS module, because a module's class names are
- * hashed and belong to the file that imports them. **A recipe that lives only in
- * a module or only in `kit.css` renders as NOTHING in this scene**, silently,
- * which is exactly how a scene can look "super off" while every component in it
- * is the product's own.
+ * The two trees load different stylesheets, which is the whole risk. The SPA
+ * loads Tailwind + `tokens.css` + `kit.css` plus every CSS module its pages
+ * import; the landing page loads only `src/app/globals.css` and
+ * `src/features/marketing/marketing.css`. A recipe that lives only in a module or
+ * in `kit.css` renders as NOTHING here, silently.
  *
- * ⚠ **THE CSS IS COMPILED, NOT GREPPED.** Tailwind v4 generates utilities from a
- * source scan, so the question "does `bg-[var(--seg-fill)]` exist" cannot be
- * answered by reading `globals.css` — it is answered by running the same
- * PostCSS plugin the Next build runs, over the same two files, and looking at
- * the output. Measured 2026-09-17: ~350ms, ~220KB.
+ * The CSS is COMPILED, not grepped: Tailwind v4 generates utilities from a source
+ * scan, so "does `bg-[var(--seg-fill)]` exist" is answered by running the same
+ * PostCSS plugin the Next build runs over the same two files (~350ms, ~220KB).
  *
- * ⚠ **IT ASSERTS PER CLASS, NOT PER FILE.** A missing selector names itself, so
- * a failure here tells you which recipe to port into `marketing.css` (scoped to
- * the demo root, byte-identical, with a comment naming its source rule) rather
- * than that "something is off".
+ * It asserts per class, not per file, so a failure names the recipe to port into
+ * `marketing.css` rather than saying "something is off".
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -39,18 +27,16 @@ import tailwind from "@tailwindcss/postcss";
 import { DemoScene } from "./demo-scene";
 import { stepIndex } from "./demo-steps";
 
-/** The two stylesheets the landing page loads, in load order.
- *  ⚠ `src/app/layout.tsx` imports the first; `src/app/page.tsx` the second. */
+/** The two stylesheets the landing page loads, in load order: `src/app/layout.tsx`
+ *  imports the first, `src/app/page.tsx` the second. */
 const SHEETS = [
   "src/app/globals.css",
   "src/features/marketing/marketing.css",
 ] as const;
 
-/** Repo root — this file is five levels under it.
- *  ⚠ THE SPECIFIER IS A VARIABLE ON PURPOSE. Vite rewrites
- *  `new URL("<literal>", import.meta.url)` into an ASSET url, which under vitest
- *  comes back on a non-`file:` scheme; held in a const, the call is left alone.
- *  The same guard `pages/home/panel-buttons.test.tsx` carries. */
+/** Repo root — this file is five levels under it. The specifier is a VARIABLE on
+ *  purpose: Vite rewrites `new URL("<literal>", import.meta.url)` into an asset
+ *  url, which under vitest comes back on a non-`file:` scheme. */
 const UP = "../../../../../";
 const ROOT = fileURLToPath(new URL(UP, import.meta.url));
 
@@ -58,20 +44,14 @@ const ROOT = fileURLToPath(new URL(UP, import.meta.url));
 const LAST_STEP = stepIndex("hold");
 
 /**
- * THE ONE EXEMPTION, AND IT IS NARROW ON PURPOSE.
+ * The one exemption, narrow on purpose. `lucide-react` stamps every icon with
+ * `lucide` plus a `lucide-<name>` hook, and neither carries any style in this
+ * product (`grep -c lucide` is 0 in all three stylesheets), so an icon renders
+ * identically with them unresolved.
  *
- * `lucide-react` stamps every icon it renders with `lucide` plus a
- * `lucide-<name>` identity hook. **Neither carries any style in this product** —
- * measured 2026-09-17: `grep -c lucide` is `0` in `src/app/globals.css`,
- * `src/features/marketing/marketing.css` AND `apps/desktop-ui/src/styles/kit.css`,
- * so an icon renders identically on both hosts with them unresolved. They are a
- * library's own marker, not a recipe this scene is missing.
- *
- * ⚠ **A PREFIX, NOT A LIST, AND NOTHING ELSE MAY JOIN IT.** Every other
- * unresolved class in this scene is a real hole — one was found the first time
- * this gate ran (`lp-demo-rail-create`, emitted and defined nowhere). **Adding a
- * second entry here is how that gate stops working**; port the missing rule into
- * `marketing.css` instead.
+ * A prefix, not a list, and nothing else may join it: every other unresolved class
+ * is a real hole. Adding a second entry is how this gate stops working — port the
+ * missing rule into `marketing.css` instead.
  */
 const UNSTYLED = (c: string) => c === "lucide" || c.startsWith("lucide-");
 
@@ -96,10 +76,9 @@ afterAll(cleanup);
 /**
  * Every distinct class name in a rendered subtree.
  *
- * ⚠ **`getAttribute("class")`, NEVER `el.className`.** On an SVG element that
- * property is an `SVGAnimatedString`, so `String(el.className)` yields
- * `"[object SVGAnimatedString]"` — which this check then reported as two missing
- * classes. The attribute is the same string on every element type.
+ * `getAttribute("class")`, never `el.className`: on an SVG element that property
+ * is an `SVGAnimatedString`, so `String(el.className)` yields
+ * `"[object SVGAnimatedString]"`. The attribute is the same string everywhere.
  */
 function emittedClasses(root: HTMLElement): string[] {
   const out = new Set<string>();
@@ -116,25 +95,23 @@ describe("the hero scene's CSS is all present on the landing page", () => {
     const missing = emittedClasses(container).filter(
       (c) => !selectors.has(c) && !UNSTYLED(c)
     );
-    // ⚠ NAMES THEM. A count tells you nothing about which recipe to port.
+    // Names them: a count says nothing about which recipe to port.
     expect(missing).toEqual([]);
   });
 
   it("🔒 …and the sheet really did compile, so an empty set cannot pass", () => {
-    // A compile that produced nothing would make EVERY class "missing", not
-    // zero — but a compile that produced a stub could pass the case above
-    // vacuously if the scene rendered nothing. Both halves are asserted.
+    // A compile that produced a stub could pass the case above vacuously if the
+    // scene rendered nothing, so both halves are asserted.
     expect(selectors.size).toBeGreaterThan(500);
     const { container } = render(<DemoScene step={LAST_STEP} />);
     expect(emittedClasses(container).length).toBeGreaterThan(80);
   });
 
   it("🔒 the recipes that live ONLY in a CSS module or kit.css are named", () => {
-    // ⚠ THE SPECIFIC TRAP, PINNED BY NAME. These are the faces the scene wears
-    // that the SPA gets from a file the landing page never loads — the rail's
-    // tiles (`account-rail.module.css`) and the record pane's account palette
-    // (`pages/home/home.module.css`). They are ported into `marketing.css` under
-    // the demo's own prefix, so the check is that the PORT is there.
+    // The specific trap, pinned by name: faces the SPA gets from a file the
+    // landing page never loads (`account-rail.module.css`,
+    // `pages/home/home.module.css`), ported into `marketing.css` under the demo's
+    // own prefix. The check is that the port is there.
     for (const ported of [
       "lp-demo-rail",
       "lp-demo-rail-tile",

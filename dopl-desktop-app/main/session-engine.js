@@ -3,14 +3,11 @@
 // Owns ONE agent-runtime query per live session and executes the pure session-reducer's
 // side-effect-free effect descriptors. ⚠ WHICH runtime is `main/runtime/index.js`'s answer.
 //
-// ⚠ THREE THINGS THIS HEADER USED TO DESCRIBE ARE DELETED (2026-08-20, F-228): the CONSENT
-// REFLOW (a pre-consent window running no agent work until Accept, then ADOPTED by
-// launchResponderSession), REOPEN (live windows hide-on-close + tray reopen, with
-// render-process-gone as the crash signal), and the renderer->main IPC that lived in
-// session-ipc.js. Every session is WINDOWLESS; `s.win` is null and every emit no-ops on it.
-// SEAM: this file imports NO electron at all — that was true when an injected factory created
-// windows and is trivially true now. SECURITY: settingSources:[] always, so the
-// global allow-list can never shadow a gated tool; the dopl bearer stays in the in-memory mcpServers
+// Three things this header used to describe are deleted (2026-08-20, F-228): the CONSENT REFLOW,
+// REOPEN (live windows hide-on-close + tray reopen), and the renderer->main IPC in session-ipc.js.
+// Every session is WINDOWLESS; `s.win` is null and every emit no-ops on it.
+// SEAM: this file imports NO electron at all. SECURITY: settingSources:[] always, so the global
+// allow-list can never shadow a gated tool; the dopl bearer stays in the in-memory mcpServers
 // object (never logged, never on argv, never on disk since C1).
 
 const crypto = require('crypto');
@@ -67,10 +64,11 @@ const sessions = new Map(); // sessionKey -> live session object (in-memory only
 let selfUserId = null; // operator's own user id (item 1: the self avatar); set by channel-listener
 function setSelfIdentity(id) { selfUserId = id || null; }
 
-// Resume machinery (session-park.js) is fed the engine handles it can't require: the registry, the runtime acquire (it THROWS where the old SDK loader threw — `main/runtime/index.js › acquire` carries that argument, and why it is neither the binary probe nor the credential one), buildLaunchSpec (the v1.9 security path, NEVER duplicated), plus consume/dispatch/startSession. Hoisted, so bind order does not matter.
-// ⚠ FOUR HANDLES LEFT WITH THE SHELL-RECREATE FAMILY (2026-08-20, F-228): `windowFactoryReady`,
-// `atWindowCap`, `loadHistory` and `settleSession` all existed for a lane that opened a window,
-// and `resolveChannelContext` fed the record-less shell alone.
+// Resume machinery (session-park.js) is fed the engine handles it cannot require: the registry, the
+// runtime acquire (it THROWS where the old SDK loader threw), buildLaunchSpec (the v1.9 security
+// path, NEVER duplicated), plus consume/dispatch/startSession. Hoisted, so bind order does not
+// matter. Four handles left with the shell-recreate family (2026-08-20, F-228):
+// `windowFactoryReady`, `atWindowCap`, `loadHistory` and `settleSession`.
 sessionPark.bind({
   sessions, acquireRuntime, buildLaunchSpec, consume, dispatch, startSession, hasLiveSession,
   emit, preflightMcp: sessionQuery.preflightMcp, // F-696: the RESUME lane warms `/api/mcp` too — a boot re-park resumes against a route nothing in this process has touched — and the same call carries the settled re-check
@@ -98,12 +96,12 @@ sessionTeardown.bind({ sessions, baseRecord: (s) => io.baseRecord(s), denyPendin
 const baseRecord = io.baseRecord; // durable-record projection (session-io.js)
 
 // FIX F1 (v2.7): dispatch REPORTS whether an effect resolved a LIVE canUseTool promise (only
-// resolvePerm knows; a park's denyPending may have fail-closed the requestId already). ⚠ session-ipc is deleted; it
-// turns that into the {ok} the renderer's optimistic stamp is gated on; other callers ignore it.
+// resolvePerm knows; a park's denyPending may have fail-closed the requestId already). Callers
+// other than the renderer's optimistic-stamp gate ignore it.
 function dispatch(s, event) {
-  // ⚠ A TURN ENDED: spend one of the PRIVATE WINDOW (2026-08-22). HERE, at the one dispatch
-  // funnel, rather than as a reducer effect: the window is a fact about the SESSION OBJECT, not
-  // reducer state, so it survives a park/resume like the nonce and no SDK event can forge it.
+  // A TURN ENDED: spend one of the PRIVATE WINDOW (2026-08-22). Here, at the one dispatch funnel,
+  // rather than as a reducer effect: the window is a fact about the SESSION OBJECT, not reducer
+  // state, so it survives a park/resume like the nonce and no SDK event can forge it.
   if (event && event.type === 'result') sessionPrivate.closePrivateTurn(s);
   if (event && (event.type === 'steer' || event.type === 'inbound_arrived')) s.awaitingDirective = false;
   const { state, effects } = sessionReducer(s.state, event);
@@ -115,11 +113,10 @@ function dispatch(s, event) {
 
 function runEffect(s, eff) {
   switch (eff.type) {
-    // ⚠ THE ENDED LINE IS MINTED HERE, NOT IN `emit` (2026-09-06, A9). `emit` returns early on a
-    // windowless session (`claimGate`) and on a destroyed window, and the work stream must still
-    // record WHY the session ended: the ring is frozen into the 7-day history by the `settle`
-    // that follows, and that history is what an ended agent's window is served from. Putting it
-    // inside `emit` would lose the line on exactly the sessions nobody was watching.
+    // THE ENDED LINE IS MINTED HERE, NOT IN `emit` (2026-09-06, A9). `emit` returns early on a
+    // windowless session and on a destroyed window, and the work stream must still record WHY the
+    // session ended: the ring is frozen into the 7-day history by the `settle` that follows, and
+    // that history is what an ended agent's window is served from.
     case 'emit':
       if (eff.payload && eff.payload.type === 'ended') sessionNarration.noteEnded(s, eff.payload);
       emit(s, eff.payload);
@@ -135,13 +132,13 @@ function runEffect(s, eff) {
     // FIX F1: the ONLY effect with a return value — did a live resolver really take it?
     case 'resolvePermission':
       return resolvePerm(s, eff.requestId, eff.decision);
-    // io.withSeed gives the FIRST turn of a fresh (nothing-to-resume) shell its full framing plus the D3 history seed, once; a normal turn passes through.
-    // ⚠ BOTH PUSHES REFRESH THE SIBLING ROSTER FIRST (2026-08-21). `io.withSeed` may build this
-    // session's FIRST TURN right here — a SPAWN-IDLE agent has none until its first message
-    // arrives — and that turn's multiplayer paragraph names the operator's other agents in this
-    // channel. Reading the registry at push time is what makes the list true rather than a
-    // snapshot of who was running when New Agent was clicked.
-    // ⚠ `eff.addressing` is the @agent-id verdict for THIS message and THIS agent, parsed
+    // io.withSeed gives the FIRST turn of a fresh (nothing-to-resume) shell its full framing plus
+    // the D3 history seed, once; a normal turn passes through.
+    // BOTH PUSHES REFRESH THE SIBLING ROSTER FIRST (2026-08-21): `io.withSeed` may build this
+    // session's FIRST TURN right here — a SPAWN-IDLE agent has none until its first message arrives
+    // — and that turn's multiplayer paragraph names the operator's other agents in this channel, so
+    // reading the registry at push time is what makes the list true.
+    // `eff.addressing` is the @agent-id verdict for THIS message and THIS agent, parsed
     // desktop-side by `session-dispatch.js` (agent ids are not channel members, so the server's
     // mention resolver correctly fails closed on them and must keep doing so).
     case 'pushTurn':
@@ -155,12 +152,10 @@ function runEffect(s, eff) {
     case 'interruptQuery': // ⚠ ON A RUNTIME THAT DECLARES NO INTERRUPT THIS SILENTLY DOES NOTHING, and the honest two-line log for it DID NOT FIT — this file is AT the 500-line cap with no headroom, which is F-388 demonstrated rather than asserted. `main/runtime/capability.js › interruptRefusal` holds the sentence; the SPA hides the control and the launch surface warns with it (design §3.2). Add the log when this file splits.
       try { if (s.query && s.query.interrupt) s.query.interrupt().catch(() => {}); } catch (_) { /* best effort */ }
       break;
-    // ⚠ BOTH OF THESE ALSO CLOSE THE PRIVATE WINDOW (2026-08-22). The depth is spent by a turn's
-    // `result`, and a TORN-DOWN QUERY OWES NO RESULTS: its consume loop is superseded by the
-    // `s.query !== q` guard, so the +1 (or +2) it was carrying is never paid off and the NEXT
-    // private turn opens on top of a depth that should have been zero. That is the leak behind
-    // the posture degradation — a session that had been paused once held its outbound widening
-    // withdrawn for turns nobody asked to be private.
+    // BOTH OF THESE ALSO CLOSE THE PRIVATE WINDOW (2026-08-22). The depth is spent by a turn's
+    // `result`, and a TORN-DOWN QUERY OWES NO RESULTS — its consume loop is superseded by the
+    // `s.query !== q` guard — so the +1 (or +2) it was carrying would never be paid off and the
+    // next private turn would open on top of a depth that should have been zero.
     case 'abortQuery':
       sessionPrivate.resetPrivateTurn(s);
       sessionDirected.resetDirected(s); // 2026-08-31: a stray `result` must not report a partial answer
@@ -216,58 +211,46 @@ function scheduleIdle(s) {
   s.idleTimer = setTimeout(() => { if (!s.settled) dispatch(s, { type: t.type }); }, t.ms);
 }
 
-// ⚠ `resolvePerm` MOVED WITH IT, AND ITS DENIAL COPY IS WHY (2026-08-22, Samuel's ruling). It
+// `resolvePerm` MOVED WITH IT, AND ITS DENIAL COPY IS WHY (2026-08-22, Samuel's ruling): it
 // answered every deny with `'Denied by operator'`, including the WINDOWLESS auto-deny where nobody
-// was asked; that sentence cost ~8 messages of wasted agent diagnosis and two operator escalations
-// in live testing. `session-permissions.js` carries the argument and the two messages.
-
-// ⚠ `settle(s, outcome, keepWindow)` STOOD HERE AND MOVED TO `main/session-teardown.js`
-// (2026-08-22, the §2 cap). Nothing about it changed: it is still the ONE teardown every terminal
-// reaches, still runs the C3 fail-closed sweep before the abort, and still freezes the narration
-// ring into `agent-history` before the registry entry disappears. The engine executes it through
-// the `settle` effect exactly as before. Its sibling, `session-close-task.js`'s status flip, was
-// deleted with thread closing (Phase 4, 2026-08-18).
-
-// ⚠ `narrationFor(a)` MOVED WITH IT, for the reason its own docblock now states: it is the one
-// read whose correctness depends on what `settle` wrote a moment earlier.
-// Build the session object, open (or ADOPT) its window, start the query (launch + resume). The per-session nonce is
-// minted HERE so the first turn's fence + every fed-inbound continuation share the SAME token (else injected content
-// forges it). v2.x: the CONCRETE channel + workspace UUIDs are merged into the context here — the framing reads only the context, while every spawn shape carries the ids on its spec (fresh responder/requester, parked resume, recreated shell).
+// was asked. `session-permissions.js` carries the argument and the two messages.
+// `settle(s, outcome, keepWindow)` and `narrationFor(a)` moved to `main/session-teardown.js`
+// (2026-08-22, the §2 cap), unchanged: `settle` is still the ONE teardown every terminal reaches,
+// still runs the C3 fail-closed sweep before the abort, and still freezes the narration ring into
+// `agent-history` before the registry entry disappears.
+// Build the session object, attach its surface, start the query (launch + resume). The per-session
+// nonce is minted HERE so the first turn's fence and every fed-inbound continuation share the SAME
+// token (else injected content forges it). The concrete channel + workspace UUIDs are merged into
+// the context here — the framing reads only the context, while every spawn shape carries the ids on
+// its spec.
 async function startSession(spec, rt) {
   const sessionId = crypto.randomUUID();
   const nonce = crypto.randomBytes(8).toString('hex');
   // H2 — THE ONLY WAY A STORED POSTURE REACHES A SPAWN. It used to be an AMBIENT read of a
-  // durable, channel-wide preference (channel-context.startingModes), and startSession is the
-  // single construction site for EVERY spawn shape, so that read re-armed the posture on shapes
-  // involving no human decision at all — a peer-driven wake, a crash resume, a requester
-  // auto-open — and bypass/auto_both picked once on one card became a standing, clickless grant
-  // for the whole channel. It is HANDED IN now, per launch, by a caller executing a decision a
-  // human is making right now; anything that passes nothing inherits the reducer's manual/ask.
-  //
-  // ⚠ THE PRE-CONSENT CARD WAS A SECOND POSTURE SOURCE AND IT IS GONE (2026-08-20, F-228).
-  // Its two selects lived in the session window; `session-ipc` stored the pick on that card's
-  // own registry entry and this line consumed it, keyed by the entry. With no card there is
-  // ONE source left — `spec.startModes`, handed in per launch by a caller executing a decision
-  // a human is making right now — which is the shape H2 always wanted and the card was the
-  // exception to. `spec.adoptsConsent` went with it.
+  // durable, channel-wide preference, and startSession is the single construction site for EVERY
+  // spawn shape, so that read re-armed the posture on shapes involving no human decision at all — a
+  // peer-driven wake, a crash resume, a requester auto-open — and bypass/auto_both picked once on
+  // one card became a standing, clickless grant for the whole channel. It is HANDED IN now, per
+  // launch, by a caller executing a decision a human is making right now; anything that passes
+  // nothing inherits the reducer's manual/ask. The pre-consent card was a second posture source and
+  // went with F-228 (2026-08-20), along with `spec.adoptsConsent`.
   //
   // FIX 4 SURVIVES AND IS NOW THE WHOLE RULE — OPERATOR-ARMED IS THE ONE THING THAT REACHES A
   // PARKED SHELL. A shell is normally woken by something that is NOT the approving human, so it
-  // refuses a handed-in posture unless an explicit `operatorArmed` says a human chose it just
-  // now; a bare recreate, reopen, resume or wake sets neither.
+  // refuses a handed-in posture unless an explicit `operatorArmed` says a human chose it just now;
+  // a bare recreate, reopen, resume or wake sets neither.
   const armedModes = spec.startModes;
   const operatorArmed = spec.operatorArmed === true;
   const startModes = armedModes && (!spec.parkedShell || operatorArmed)
     ? { toolMode: armedModes.tools, messageMode: armedModes.messages }
     : {};
   const state = initialSessionState({ mode: spec.mode, side: spec.side, ...readCaps(spec), ...startModes });
-  // ⚠ THE WINDOWLESS MESSAGE FLOOR, AT THE ONE CONSTRUCTION SITE (2026-08-22, F-236's last hole).
+  // THE WINDOWLESS MESSAGE FLOOR, AT THE ONE CONSTRUCTION SITE (2026-08-22, F-236's last hole).
   // Both LAUNCH lanes already derive their message axis through `channel-prefs.js ›
-  // windowlessMessageMode`, so for them this is a no-op. What it fixes is every shape that hands
-  // in NOTHING and inherits the reducer's `ask`: a crash resume above all (`session-park.js ›
-  // startResume`), which came back BELOW the floor on a session with no accept surface — so
-  // `session-gate.js › enqueue` held the peer's next reply forever with no drain left to release
-  // it. Same SHARED rule both lanes call; never a second spelling.
+  // windowlessMessageMode`, so for them this is a no-op. What it fixes is every shape that hands in
+  // NOTHING and inherits the reducer's `ask` — a crash resume above all — which came back BELOW the
+  // floor on a session with no accept surface, so `session-gate.js › enqueue` held the peer's next
+  // reply forever with no drain left to release it. The same SHARED rule, never a second spelling.
   if (spec.windowless === true) state.messageMode = floorWindowlessMessage(state.messageMode);
   // P2: a reopen fallback opens a PARKED SHELL — a live window, NO SDK query yet. It boots
   // parked so a lazy wake (P1) resumes it; baseRecord persists s.state.phase = 'parked'.
@@ -329,13 +312,11 @@ async function startSession(spec, rt) {
     // fallback every other shape carries. Coerced against the frozen enum HERE, so a hand-edited
     // store can only land on 'default'. NOT reducer state: buildSdkOptions is its one reader.
     model: sessionModel.normalizeModel(spec.model),
-    // ⚠ **THE AGENT COLOUR THIS SPAWN ASKED FOR** (Samuel, 2026-09-13; docs/specs/agent-colors.md).
-    // ⚠ **FORWARDED THE WHOLE WAY DOWN THE FUNNEL AND DROPPED ON THIS LITERAL UNTIL 2026-09-13** —
-    // `session-launch.js › launch`'s whitelist note names the failure mode (F-510's shape) and this
-    // was the layer below it with the same hole, so `session-summary.js › liveSummary` had no value
-    // to report and every push asked for nothing. ⚠ NOT normalized here (two boundary `colorKey`s
-    // already do it; a third copy is what INVARIANTS §5's nine-places warning is about) and NOT
-    // reducer state — its one reader is the summary, and the SERVER resolves the ask.
+    // THE AGENT COLOUR THIS SPAWN ASKED FOR (Samuel, 2026-09-13; docs/specs/agent-colors.md). It
+    // was forwarded the whole way down the funnel and DROPPED on this literal until then, so
+    // `session-summary.js › liveSummary` had no value to report and every push asked for nothing.
+    // Not normalized here (two boundary `colorKey`s already do it; a third copy is what INVARIANTS
+    // §5's nine-places warning is about) and not reducer state — the SERVER resolves the ask.
     color: spec.color || null,
     state,
     context, // display identity + the channel/workspace ids the framing addresses
@@ -356,12 +337,11 @@ async function startSession(spec, rt) {
     // turn's request body when there is no channel transcript to seed. Stamped only where it can
     // be read — a non-parked spawn already pushed `firstTurn` and must not carry a second copy.
     launchGoal: spec.parkedShell === true ? String(spec.firstMessage == null ? '' : spec.firstMessage) : '',
-    // ⚠ THE SPAWN-IDLE WAKE FLAG (2026-08-22, Samuel's ruling). TRUE while this agent is
-    // registered, addressable and UNDIRECTED: the fan-out feeds it nothing but a message naming
-    // its own agent id, and a 1:1 `sessions:message` wakes it too. `dispatch` above clears it on
-    // either lane. ⚠ NOT `freshFraming` overloaded — that is a ONE-SHOT marker about whether a
-    // TURN carries the framing, consumed by the first turn built; this is read on EVERY message
-    // and answers whether anything may reach the agent at all.
+    // THE SPAWN-IDLE WAKE FLAG (2026-08-22, Samuel's ruling). TRUE while this agent is registered,
+    // addressable and UNDIRECTED: the fan-out feeds it nothing but a message naming its own agent
+    // id, and a 1:1 `sessions:message` wakes it too. Not `freshFraming` overloaded — that is a
+    // ONE-SHOT marker about whether a TURN carries the framing; this is read on EVERY message and
+    // answers whether anything may reach the agent at all.
     awaitingDirective: spec.parkedShell === true,
     idleTimer: null,
     settled: false, windowHidden: false,
@@ -379,12 +359,11 @@ async function startSession(spec, rt) {
     ownPostSeq: store.resumedPostSeq(spec.ownPostSeq),
     win: null, query: null, abortController: null, pushIterator: null,
   };
-  // 🔒 **WHOSE SESSION THIS IS — the cross-account stamp (adversarial review, 2026-08-31).**
-  // Written ONCE, at registration, and never rewritten: the registry is process-lifetime and a
-  // sign-out does NOT clear it, so operator A's live agent survives B signing in on the same
-  // Mac. The PRIVATE DIRECT LANE resolves a target by `(channel, thread, agent)` against this
-  // registry, so without a stamp B's direction could reach A's session and ship A's private
-  // turn text back to B. Same guard, same reason, as `session-state-push.js › trackOrigin`.
+  // WHOSE SESSION THIS IS — the cross-account stamp (adversarial review, 2026-08-31). Written ONCE
+  // at registration and never rewritten: the registry is process-lifetime and a sign-out does NOT
+  // clear it, so operator A's live agent survives B signing in on the same Mac. The PRIVATE DIRECT
+  // LANE resolves a target by `(channel, thread, agent)` against this registry, so without a stamp
+  // B's direction could reach A's session and ship A's private turn text back to B.
   s.operatorUserId = selfUserId || null;
   noteSiblings(s); // the framing's multiplayer paragraph, current as of registration
   sessions.set(s.key, s); sessionSummary.touch(); // §3.3: REGISTRATION IS A PROJECTION MOVE — the pill must not wait for the SDK's first dispatch (§11)
@@ -407,27 +386,23 @@ async function startSession(spec, rt) {
   // parked/resumed shell). Emitted, NEVER pushed to the iterator; rides the replay ring.
   const reqItem = io.initialRequestPayload(s.side, spec.firstMessage, s.counterpartyName);
   if (reqItem) emit(s, reqItem);
-  // A WINDOWLESS spawn cannot hold on sign-in (the recovery UI wrote to a window):
-  // roll back so launch() reports auth-hold and the caller answers honestly.
-  // ⚠ IT RUNS BEFORE THE SPAWN-IDLE RETURN BELOW, AND THAT ORDER IS THE FIX (2026-08-22). The
-  // `parkedShell` branch returned FIRST, so New Agent on a signed-out machine answered
-  // `{sessionId, agentId}` — a SUCCESS — and `launch`'s `{skipped:'auth-hold'}` was unreachable
-  // on the one lane an operator reaches by clicking. Spawn-idle starts no query, but it is still
-  // a spawn, and the credential question is about the MACHINE, not about the first turn.
+  // A WINDOWLESS spawn cannot hold on sign-in (the recovery UI wrote to a window): roll back so
+  // launch() reports auth-hold and the caller answers honestly. IT RUNS BEFORE THE SPAWN-IDLE
+  // RETURN BELOW, AND THAT ORDER IS THE FIX (2026-08-22): the `parkedShell` branch returned FIRST,
+  // so New Agent on a signed-out machine answered a SUCCESS and `{skipped:'auth-hold'}` was
+  // unreachable on the one lane an operator reaches by clicking.
   if (spec.windowless && sessionAuth.holdIfNoCredential(s)) { sessions.delete(s.key); sessionSummary.touch(); return { authHold: true }; }
   // Q6 PREFLIGHT: a machine with no Claude Code sign-in can only produce a dead session, so HOLD the
   // launch on the sign-in action instead. Nothing is settled, echoed, or thrown away; the request runs
   // the moment sign-in succeeds.
   if (sessionAuth.holdIfNoCredential(s)) return s;
-  // ⚠ SPAWN IDLE — THE ONE SHAPE THAT REGISTERS AND STARTS NOTHING (2026-08-21, ruling 3). Not
+  // SPAWN IDLE — THE ONE SHAPE THAT REGISTERS AND STARTS NOTHING (2026-08-21, ruling 3). Not
   // "build the query and hold the prompt": a held query is a live `claude` child holding this
-  // session's pre-approved `dopl_channel` access with nobody watching it, the orphan shape
-  // C3/C-8 exist to prevent. There is no child at all. The session IS registered, so it has a
-  // pill, a slot against MAX_CONCURRENT_SESSIONS, an id to be @-mentioned at, pause/end and a
-  // durable record; `wakeEffects` starts the query on the first fed turn.
-  // ⚠ THE TIMER IS ARMED DELIBERATELY: `idleTimeout` reads `parked === true` and answers the
-  // ABANDONMENT bound, so an agent nobody messages ends on its own. Nothing else would arm one
-  // here — every other arming site is a reducer effect, and no reducer event has run yet.
+  // session's pre-approved `dopl_channel` access with nobody watching it, the orphan shape C3/C-8
+  // exist to prevent. There is no child at all. The session IS registered, so it has a pill, a slot
+  // against MAX_CONCURRENT_SESSIONS, an id to be @-mentioned at, pause/end and a durable record.
+  // The timer is armed deliberately: `idleTimeout` reads `parked === true` and answers the
+  // ABANDONMENT bound, and no reducer event has run yet to arm one anywhere else.
   if (spec.parkedShell) {
     scheduleIdle(s);
     diag('session spawned IDLE (no query until the first message)', 'agent', String(s.agentId || ''), 'thread', String(s.taskId || '').slice(0, 8));
@@ -437,17 +412,14 @@ async function startSession(spec, rt) {
   return s;
 }
 
-// The inbound gate lives in session-gate.js (v2.5 D1): `feedInbound` enqueues a counterparty
-// turn on a live or parked session. Its HOLD half went with the surface that answered a hold
-// (F-228) — a windowless session's message axis is floored at auto_inbound, so nothing holds.
-// ⚠ THE CONSENT REFLOW (item 8) IS DELETED — 2026-08-20, F-228. `openConsentWindow` minted a
-// PRE-CONSENT WINDOW on every inbound request: a window per thread, before anyone had looked at
-// it, running no agent work until Accept and then ADOPTED by launchResponderSession. The
-// decision surfaces are inline on the channels page now (INVARIANTS §6), so there is no card to
-// open, adopt, close or release, and `session-consent.js` went with the renderer it painted into.
-// Resume machinery (offerResume/startResume/resume) lives in session-park. init(): register the
-// renderer->main IPC once, then settle any session live/awaiting when the app died — post the
-// interrupted echo and, when the SDK session id survives, offer an opt-in resume (never auto).
+// The inbound gate lives in session-gate.js (v2.5 D1): `feedInbound` enqueues a counterparty turn
+// on a live or parked session. Its HOLD half went with the surface that answered a hold (F-228) — a
+// windowless session's message axis is floored at auto_inbound, so nothing holds. The CONSENT
+// REFLOW went with it: the decision surfaces are inline on the channels page now (INVARIANTS §6),
+// so there is no card to open, adopt, close or release.
+// Resume machinery (offerResume/startResume/resume) lives in session-park. init(): settle any
+// session live/awaiting when the app died — post the interrupted echo and, when the SDK session id
+// survives, offer an opt-in resume (never auto).
 async function init() {
   // ⚠ NO IPC TO REGISTER (2026-08-20, F-228). `session-ipc.js` bound 15 handlers resolved from
   // `event.sender` against a session's own window; no session has a webContents any more, so the
@@ -480,11 +452,9 @@ module.exports = {
   liveOnThread,
   agentIdsOnThread,
   sessionOn,
-  // The three session-team.js exports (`summonTeamSession`, `wakeTeamSession`,
-  // `acceptsInboundFrom`) went with summoning — docs/ENGINEERING.md §18 F-141 carries that
-  // story, including why the inert room-vs-pair slot shape stayed. The LAST of them left its
-  // line behind here, and `module.exports` is EVALUATED, so requiring this module threw
-  // `ReferenceError: sessionTeam is not defined` — no engine, no windows, no sessions.
+  // The three session-team.js exports went with summoning (docs/ENGINEERING.md §18 F-141). The last
+  // of them left its line behind here, and `module.exports` is EVALUATED, so requiring this module
+  // threw `ReferenceError: sessionTeam is not defined` — no engine, no windows, no sessions.
   // test/main-exports-defined.test.mjs now pins every main export against what its file binds.
   feedInbound: sessionGate.feedInbound, // v2.5 D1 — the inbound gate (live or parked)
   listLiveSessions: sessionReopen.listLiveSessions, listOrphanRisk: sessionReopen.listOrphanRisk, endLiveSessions: sessionReopen.endLiveSessions, // item 10 tray + C-8 quit guard

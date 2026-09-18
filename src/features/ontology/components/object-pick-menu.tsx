@@ -6,9 +6,9 @@ import type { GraphState } from "../graph-state";
 import { PickMenu, type PickMenuItem } from "./pick-menu";
 
 /**
- * THE object picker — `PickMenu` fed from the graph: object TYPES (the lanes)
- * under an "Objects" group, cards grouped by their lane's name. ⚠ Every place that links objects
- * (relationship targets, ref attributes) renders this, never a bespoke dropdown.
+ * The object picker — `PickMenu` fed from the graph: object types (the lanes) under
+ * an "Objects" group, cards grouped by their lane's name. Every place that links
+ * objects renders this, never a bespoke dropdown.
  */
 export function ObjectPickMenu({
   graph,

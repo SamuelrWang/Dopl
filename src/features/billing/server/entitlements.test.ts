@@ -1,25 +1,10 @@
 /**
- * INVARIANT SUITE — workspace entitlements (the billing contract).
+ * Invariant suite — workspace entitlements (the billing contract). Locks the
+ * plan/cap/window matrix with the billing repository mocked. The pro arm carries
+ * no member condition (2026-09-08, F-673).
  *
- * Locks the plan/cap/window matrix other agents build against, with the
- * billing repository mocked (no Supabase, no network). Rules under test:
- *   - 1-member free -> uncapped (Notion-style), 90-day chats window
- *   - 2+ free       -> object cap 100, freeze-don't-delete create gate
- *   - solo active/1 -> entitled: uncapped, full history, no seatCount
- *   - solo + 2 mbrs -> DEGRADED to free multi-member rules (backstop)
- *   - solo canceled -> free rules
- *   - team active   -> uncapped, full history, seatCount surfaced
- *   - pro active    -> the PERSONAL tier: uncapped, full history, NO seatCount,
- *                      and NO member condition (2026-09-08, F-673)
- *   - past_due      -> paid-with-warning: entitlements stay, status shows
- *   - canceled      -> reverts to free rules, status surfaces "canceled"
- *
- * ⚠ **THE GATES LIVE IN `entitlements-gates.test.ts` SINCE 2026-09-08** (§1:
- * "split, do not squeeze" — the pro cases took this file past 500 lines). The
- * seam is real: this file asks what a container IS ENTITLED TO, that one asks
- * what the ENFORCEMENT SITES do with the answer — `assertCanCreateObject`,
- * `assertCanAddMember` and its two 402 envelopes, `upgradeUrl`, and
- * `entitlementDeniedBody`. Same mocks, same fixtures, deliberately.
+ * The enforcement sites live in `entitlements-gates.test.ts`: this file asks what
+ * a container is entitled to, that one what the gates do with the answer.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -200,12 +185,10 @@ describe("getWorkspaceEntitlements — team", () => {
 });
 
 /**
- * 🔒 THE PERSONAL PRO TIER (Samuel, 2026-09-08). ⚠ A `kind='personal'` container
- * is a real `workspaces` row with a real `workspace_billing` row, so it reaches
- * this function through the SAME arithmetic as a workspace — §11.1's three
- * claims (objectCap null, chatsWindowDays by verdict, seatCount null) fall out
- * of the existing rules rather than a personal branch, and these cases prove it
- * rather than asserting the branch exists.
+ * The personal Pro tier (2026-09-08). A `kind='personal'` container is a real
+ * `workspaces` row with a real `workspace_billing` row, so it reaches this function
+ * through the same arithmetic — these cases prove the three claims fall out of the
+ * existing rules rather than a personal branch.
  */
 describe("getWorkspaceEntitlements — pro (the personal container)", () => {
   it("pro active is uncapped, full history, and surfaces NO seatCount", async () => {
@@ -216,8 +199,8 @@ describe("getWorkspaceEntitlements — pro (the personal container)", () => {
     expect(ent.objectCap).toBeNull();
     expect(ent.canCreateObjects).toBe(true);
     expect(ent.chatsWindowDays).toBeNull();
-    // ⚠ `seatCount` IS TEAM-ONLY. A number here would put a seat row on a
-    // surface for a container that has no seats to sell.
+    // `seatCount` is team-only: a number here would show a seat row for a
+    // container that has no seats to sell.
     expect(ent.seatCount).toBeNull();
   });
 
@@ -244,19 +227,16 @@ describe("getWorkspaceEntitlements — pro (the personal container)", () => {
   });
 
   it("🔒 pro does NOT degrade at 2 members — unlike solo (F-673)", async () => {
-    // ⚠ THE REVERT DETECTOR FOR "COPY THE SOLO ARM". Solo's `memberCount <= 1`
-    // is a backstop against a state the schema PERMITS; a personal container
-    // cannot hold a second member at all (`assertCanAddMember` below), so the
-    // same clause would guard nothing while creating a real failure: one stale
-    // membership row and a PAYING customer silently drops to free — no refund,
-    // no signal, and the credit allowance falls 5,000 → 500 with it.
+    // Revert detector for "copy the solo arm": solo's `memberCount <= 1` backstops
+    // a state the schema permits, but a personal container cannot hold a second
+    // member at all — so the same clause would guard nothing while letting one
+    // stale membership row silently drop a paying customer to free.
     setup({ billing: billing({ plan: "pro", seatCount: null }), members: 2, objects: 5_000 });
     const ent = await getWorkspaceEntitlements(WS);
     expect(ent.plan).toBe("pro");
     expect(ent.objectCap).toBeNull();
     expect(ent.chatsWindowDays).toBeNull();
-    // ...and the same row on SOLO does degrade, which is what makes this a
-    // contrast rather than a coincidence.
+    // ...and the same row on solo does degrade — a contrast, not a coincidence.
     setup({ billing: billing({ plan: "solo", seatCount: 1 }), members: 2, objects: 5 });
     expect((await getWorkspaceEntitlements(WS)).plan).toBe("free");
   });

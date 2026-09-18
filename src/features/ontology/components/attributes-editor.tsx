@@ -25,42 +25,32 @@ import { PickMenu } from "./pick-menu";
 
 type AttrKind = AttributeValue["kind"];
 
-/** A row's EDITABLE HALF — what a person types. The persisted attribute carries
- *  a `key` beside it; a draft has none yet, and the two render identically. */
+/** A row's editable half. The persisted attribute carries a `key` beside it; a
+ *  draft has none yet, and the two render identically. */
 type AttrRowValue = { label: string; value: AttributeValue };
 
 /**
- * Attributes section — one WHITE BAR per attribute on the section's gray well,
- * each bar showing all three cells at once: the label, the KIND, the value.
- * Value kinds: text, tag, object refs (cascade picker), and access-gated
- * knowledge / skills (PickMenu offers only resources the caller can see).
+ * Attributes section — one white bar per attribute, showing all three cells at
+ * once: label, kind, value. Value kinds: text, tag, object refs (cascade picker),
+ * and access-gated knowledge / skills (PickMenu offers only resources the caller
+ * can see).
  *
- * ⚠ **EVERY CELL EXISTS FROM THE MOMENT THE ROW DOES (Samuel, 2026-09-13:
- * *"right now … I see the word 'new attribute' … I have to put text into 'new
- * attribute', and when I click 'Add', the field for value comes up. I don't like
- * this. For each line, we should see: the new attribute name, the key, the value
- * field"*).** The add COMPOSER is deleted: `+ Add` under the rows appends an empty
- * bar (`panel-section.tsx › useDraftRows`) and the value cell is there to type in
- * before the label is.
+ * 2026-09-13: every cell exists from the moment the row does — `+ Add` appends an
+ * empty bar (`panel-section.tsx › useDraftRows`) and the value cell can be typed
+ * in before the label is.
  *
- * ⚠ **"THE KEY" IS THE KIND PICKER.** `ObjectAttribute.key` is the label SLUGGED
- * at creation — the address MCP writes at (`set_attribute`), not a cell — and it
- * is deliberately still not on screen; the second column a person sees and sets
- * is `value.kind`, which every persisted row now carries too (it used to exist
- * only in the composer, so an attribute's kind could be chosen once and never
- * changed).
+ * `ObjectAttribute.key` is the label slugged at creation — the address MCP writes
+ * at (`set_attribute`), not a cell, and deliberately off screen; the second
+ * column a person sets is `value.kind`.
  *
- * ⚠ **CHANGING THE KIND EMPTIES THE VALUE, EXCEPT text↔tag.** Those two are both
- * one string and it survives; every other pair is a list of ids of a different
- * KIND of thing, and carrying ids across would keep a knowledge id in a `ref`.
+ * Changing the kind empties the value except text↔tag: those two are one string,
+ * every other pair is a list of ids of a different kind of thing.
  *
- * ⚠ **FLAT SINCE 2026-09-12** (Samuel: *"no more indented stuff"*), and the well
- * is not a return of the frame — see `panel-section.tsx › PanelSection`. Text
- * rows are the popup kit's UNDERLINE (`board-header-bits.tsx ›
- * InlineUnderlineField`, imported not re-cut), kind is a `SelectMenu` text face,
- * pickers wear `SMALL_TEXT_BUTTON`, and no `FIELD_WELL` survives anywhere here.
- * ⚠ The CHIPS stay chips: a knowledge / skill / object value is a removable
- * TOKEN, not a field.
+ * Flat since 2026-09-12, and the well is not a return of the frame — see
+ * `panel-section.tsx › PanelSection`. Text rows are the popup kit's underline
+ * (`board-header-bits.tsx › InlineUnderlineField`, imported not re-cut), kind is
+ * a `SelectMenu` text face, pickers wear `SMALL_TEXT_BUTTON`. Chips stay chips: a
+ * knowledge / skill / object value is a removable token, not a field.
  */
 export function AttributesEditor({
   object,
@@ -78,8 +68,7 @@ export function AttributesEditor({
     value: { kind: "text", value: "" },
   }));
 
-  /** ⚠ THE SAME `ATTRIBUTE_UPSERT` THE COMPOSER DISPATCHED, key slugged the same
-   *  way — the row is new, the write path is not. An unnamed row stays a draft. */
+  /** An unnamed row stays a draft. */
   const commit = (index: number, row: AttrRowValue) => {
     const label = row.label.trim();
     if (!label) return;
@@ -139,43 +128,27 @@ export function AttributesEditor({
 const PICK_TRIGGER = cn(SMALL_TEXT_BUTTON, "gap-1");
 
 /**
- * THE ROW'S COLON — **`Attribute : value`, A GLYPH THE PANEL DRAWS** (Samuel,
- * 2026-09-14: *"the format should be like: Attribute : Field Dropdown … So
- * reordered"*).
- *
- * ⚠ **IT IS NOT PART OF THE LABEL AND IT IS NOT TYPED.** A colon appended to the
- * label VALUE would be slugged into `key` (`attribute-name:`), written to the
- * server and read back by MCP — the separator is punctuation between two cells,
- * so it lives in the row and never in the data.
- *
- * ⚠ `aria-hidden` — a screen reader already announces two separately named
- * fields, and ":" between them reads as noise.
+ * The row's `Attribute : value` colon, a glyph the panel draws. Never typed: a
+ * colon appended to the label value would be slugged into `key`
+ * (`attribute-name:`), written to the server and read back by MCP.
+ * `aria-hidden` — two separately named fields already read fine without it.
  */
 const ROW_COLON = <span aria-hidden="true" className="shrink-0 text-text-muted">:</span>;
 
 /**
- * ONE ATTRIBUTE, PERSISTED OR DRAFT — **ONE COMPONENT FOR BOTH**, which is what
- * makes the commit invisible: the draft at index N is reconciled into the
- * persisted row at index N (`panel-section.tsx › useDraftRows`), so the caret
- * stays where it was.
+ * One attribute, persisted or draft — one component for both, which is what makes
+ * the commit invisible: the draft at index N is reconciled into the persisted row
+ * at index N (`panel-section.tsx › useDraftRows`), so the caret stays put.
  *
- * ⚠ `onCommit` is the DRAFT's only extra: it fires on the label's blur and on
- * Enter. A persisted row needs none — its `onChange` already dispatches.
+ * `onCommit` is the draft's only extra (label blur and Enter); a persisted row's
+ * `onChange` already dispatches.
  *
- * ⚠ **THE ORDER IS `label : value [kind ▾] ✕` SINCE 2026-09-14** (Samuel: *"the
- * format should be like: Attribute : Field Dropdown … So reordered"*). The KIND
- * picker used to stand between the label and the value, which put the row's
- * least-read cell in the middle of the sentence a reader is trying to read; it is
- * the same control, after the value it types. ⚠ The value cell is
- * `AttrValueEditor` for EVERY kind — the colon therefore sits in front of a text
- * line, a tag line or a chip strip without knowing which, and a viewer
- * (`canEdit=false`) reads the identical row with the pickers gone.
+ * Order is `label : value [kind ▾] ✕` since 2026-09-14. The value cell is
+ * `AttrValueEditor` for every kind, so the colon sits in front of a text line, a
+ * tag line or a chip strip without knowing which.
  *
- * ⚠ **AND THE ROW'S FIELDS ARE `quiet`** (same ruling: *"remove the gray
- * underline, and have it so that the black underline only appears when a user
- * clicks on a field item (vertical center the text also)"*) — the kit's
- * `.inputQuiet`, a resting state of the one underline recipe, never a second
- * face. The panel's DESCRIPTION keeps its gray line.
+ * Fields are `quiet` — the kit's `.inputQuiet`, a resting state of the one
+ * underline recipe, never a second face. The panel's description keeps its gray line.
  */
 function AttrRow({
   row,
@@ -239,8 +212,8 @@ function AttrRow({
   );
 }
 
-/** A fresh value of `kind`. ⚠ text↔tag keep the string; every other switch
- *  starts empty rather than reinterpreting one sort of id as another. */
+/** A fresh value of `kind`. text↔tag keep the string; every other switch starts
+ *  empty rather than reinterpreting one sort of id as another. */
 function emptyValueOf(kind: AttrKind, from: AttributeValue): AttributeValue {
   const text = from.kind === "text" || from.kind === "pill" ? from.value : "";
   if (kind === "text") return { kind: "text", value: text };

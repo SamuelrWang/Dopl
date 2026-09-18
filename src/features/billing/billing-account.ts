@@ -1,11 +1,11 @@
 /**
- * Stripe account wire shapes.
+ * Stripe account wire shapes. Must stay pure/framework-free like `./credits.ts`
+ * (no `server-only`, Supabase, Stripe or React): server service, routes and
+ * client hooks all import it.
  *
- * ⚠ Must stay pure/framework-free like `./credits.ts` — server service, routes
- * and client hooks all import it: no `server-only`, Supabase, Stripe, React.
- *
- * MINOR UNITS ALWAYS (`amountPaid: 599` = $5.99). `formatInvoiceAmount` is the
- * ONE converter, so zero-decimal currencies (JPY) can't be mis-rendered.
+ * Amounts are always minor units (`amountPaid: 599` = $5.99);
+ * `formatInvoiceAmount` is the one converter, so zero-decimal currencies (JPY)
+ * can't be mis-rendered.
  */
 
 /** Default method Stripe will charge next. */
@@ -13,7 +13,7 @@ export interface PaymentMethodDto {
   /** Stripe brand slug, lowercased ("visa"). */
   brand: string;
   last4: string;
-  /** NULL when Stripe reported none, never `0` — expiry-less cards are legal
+  /** Null when Stripe reported none, never `0` — expiry-less cards are legal
    *  (wallet-backed) and `0` renders "00 / 0". Null = pane drops the line. */
   expMonth: number | null;
   expYear: number | null;
@@ -28,7 +28,7 @@ export type InvoiceStatus =
   | "void";
 
 /**
- * Runtime half of `InvoiceStatus`. ⚠ Stripe can add a status in a live payload
+ * Runtime half of `InvoiceStatus`. Stripe can add a status in a live payload
  * with no deploy here, arriving typed as `InvoiceStatus` — narrow with
  * `isInvoiceStatus` so unknowns render neutral instead of missing a `Record`.
  */
@@ -103,7 +103,7 @@ export function formatCardLabel(method: PaymentMethodDto): string {
   return `${brand} •••• ${method.last4}`;
 }
 
-/** "04 / 2029". NULL when Stripe reported no expiry — caller drops the
+/** "04 / 2029". Null when Stripe reported no expiry — caller drops the
  *  "Expires" line rather than printing a made-up one. */
 export function formatCardExpiry(method: PaymentMethodDto): string | null {
   if (method.expMonth == null || method.expYear == null) return null;

@@ -1,30 +1,19 @@
 /**
- * INVARIANT SUITE — 🔒 THE ONTOLOGY WRITE AND READ GATES inside a HOME
- * container (`service-gates.ts`, spec §4 sites 2-6).
- *
- * `service.test.ts` runs the same service in a STANDARD workspace, where the
- * ceiling answers `unrestricted` and today's behaviour is unchanged. This file
- * moves it into a `link` container and pins the four things the sharing model
- * IS: reads are FILTERED, a `view` level REFUSES a write, Q9's all-clusters
- * rule holds on an object in two clusters, and every write is ATTRIBUTED.
- *
- * ⚠ **SPLIT OUT OF `service.test.ts` AT THE §1 CAP** (it measured 508 of 500).
- * The seam is the one the source has: what is pinned here is the GATE, and what
- * is pinned there is the object cap and the CRUD contracts the gate stands in
- * front of.
+ * Invariant suite — the ontology write and read gates inside a HOME
+ * container (`service-gates.ts`, spec §4 sites 2-6). `service.test.ts` runs
+ * the same service in a standard workspace; this file moves it into a `link`
+ * container and pins: reads are filtered, a `view` level refuses a write, Q9's
+ * all-clusters rule holds on an object in two clusters, and every write is
+ * attributed.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { OntologyClusterRow, OntologyObjectRow } from "./dto";
 import { ontologyContextFactory } from "./test-fixtures";
 
-// ⚠ **THE CHANGELOG CAPTURE IS A REAL WRITE AND IT IS AWAITED**
-// (`./service-revisions.ts`, 2026-09-09, part 2): every ontology write now
-// records one revision per CHANGED FIELD inside the same request, so a service
-// test that leaves it alone reaches `supabaseAdmin()` and fails on a missing
-// service-role key. Stubbed here because these suites are about the WRITE, not
-// about its audit rows — that the rows are recorded, one per changed field, per
-// path, is `service-revisions.test.ts`'s subject.
+// The changelog capture is a real awaited write (`./service-revisions.ts`), so
+// an unstubbed service test reaches `supabaseAdmin()` and fails on a missing
+// service-role key. That the rows are recorded is `service-revisions.test.ts`'s subject.
 vi.mock("@/features/revisions/server/repository", () => ({
   appendRevision: vi.fn(async () => ({ id: "rev-1" })),
   replaceRevisionSnapshot: vi.fn(async () => ({ id: "rev-1" })),
@@ -39,7 +28,7 @@ vi.mock("./repository-shares", () => ({
   countActiveWorkspaceMembers: vi.fn(),
   listChannelIdsForWorkspace: vi.fn(),
   listSharesForChannels: vi.fn(),
-  // ⚠ The card's "shared into N channels" read (`service-reads.ts ›
+  // The card's "shared into N channels" read (`service-reads.ts ›
   // mapClusterRow`). It rides `getSnapshot`'s second fan, so a mock that omits
   // it fails every snapshot case here with a missing-export error rather than a
   // wrong answer.
@@ -198,9 +187,8 @@ describe("home container — reads are FILTERED to the admitted clusters", () =>
     const snapshot = await getSnapshot(homeCtx({ userId: "user-1" }));
 
     expect(snapshot.clusters.map((c) => c.id)).toEqual([CLUSTER_ID]);
-    // 🔒 The unadmitted cluster's object is not merely unrendered — it is
-    // never ASKED FOR. A filter applied after the read is a filter a second
-    // consumer of the rows walks straight past.
+    // The unadmitted cluster's object is never ASKED FOR: a filter applied
+    // after the read is one a second consumer of the rows walks straight past.
     expect(mockRepo.listObjectsByIds).toHaveBeenCalledWith(expect.anything(), ["obj-1"]);
   });
 });
@@ -300,11 +288,9 @@ describe("home container — Q9, an object in TWO clusters", () => {
   });
 
   it("a cluster the walk NAMES but this caller cannot even SEE still refuses the write", async () => {
-    // 🔒 The sharpest form of Q9. The object hangs under a visible cluster the
-    // caller may edit AND under one in a container this request never reached,
-    // so the second never comes back from `listClusters` — an `every` over the
-    // VISIBLE ones alone would silently admit the write. A cluster you cannot
-    // see is not a cluster that stops counting.
+    // The sharpest form of Q9: the object also hangs under a cluster in a
+    // container this request never reached, so `listClusters` never returns it —
+    // an `every` over the visible ones alone would admit the write.
     primeHome([share({ ontology: CLUSTER_ID, members: "edit" })]);
     mockRepo.findObjectById.mockResolvedValue({ ...OBJECT_ROW, id: OBJECT_ID });
     mockRepo.listClusters.mockResolvedValue([
@@ -333,8 +319,8 @@ describe("home container — Q9, an object in TWO clusters", () => {
       { cluster_id: "c-invisible", parent_object_id: null, child_object_id: OBJECT_ID },
     ]);
 
-    // ⚠ The ASYMMETRY is the ruling: the very same pair of clusters that
-    // REFUSES the write two cases up ADMITS the read.
+    // The asymmetry is the ruling: the same pair of clusters that refuses the
+    // write two cases up admits the read.
     await expect(getAnchor(homeCtx())).resolves.toMatchObject({ id: OBJECT_ID });
   });
 
@@ -348,9 +334,9 @@ describe("home container — Q9, an object in TWO clusters", () => {
 });
 
 /**
- * 🔒 Q8 ON A WRITE — an EDGE may not reach out of the shared cluster.
+ * Q8 on a WRITE — an edge may not reach out of the shared cluster.
  *
- * ⚠ The scope holds the LENDER's whole container by construction, so
+ * The scope holds the LENDER's whole container by construction, so
  * `repository.ts › filterObjectIds` (which asks only "is this a live row in the
  * scope") admits a target the caller cannot see. `service-gates.ts ›
  * admittedObjectIds` is the second half, and this is the case that would pass
@@ -399,8 +385,8 @@ describe("Q8 on a WRITE — an edge target outside the shared cluster is dropped
     await updateObject(homeCtx(), OBJECT_ID, {
       relationships: [{ label: "reports to", targetIds: [OBJECT_ID, FOREIGN] }],
     });
-    // ⚠ `OBJECT_ID` is the SOURCE, so the self-ref is dropped too — what is
-    // left is the empty label, which `sanitizeEdges` drops whole.
+    // `OBJECT_ID` is the source, so the self-ref is dropped too — what is left
+    // is the empty label, which `sanitizeEdges` drops whole.
     expect(mockRepo.replaceRelationshipsForSource).toHaveBeenCalledWith(
       WS,
       OBJECT_ID,

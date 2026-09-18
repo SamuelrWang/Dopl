@@ -1,38 +1,18 @@
 // @vitest-environment jsdom
 /**
- * THE OBJECT PANEL'S FACE (Samuel, 2026-09-12, looking at the panel): *"We need
- * to overhaul the UI of this panel for objects. Firstly, no more indented stuff.
- * also, no need to show the ID in the UI. at the top, it shouldnt be a pill, just
- * have it be the name of the object … For the description, that UI should be the
- * underline. also for the trash and X buttons, just have it be naked icons, no
- * more button UI"*.
+ * ObjectPanel face rulings (Samuel): 2026-09-12 no pill, no uuid on screen, no
+ * section frame, naked icon buttons, underlined description; 2026-09-13 each field
+ * section is a gray well of white bars and the item count is gone.
  *
- * ⚠ **AND THE FIELD SECTIONS GOT A GROUND ON 2026-09-13** (Samuel, over the same
- * panel): *"each of those items should have the gray background where it sits,
- * kind of like the overview you see. For example, token spend: you can see that
- * it's sitting on a gray box and on top of it are white panels. Each field should
- * be a white bar … Remove the count, the number of items in each … For each line,
- * we should see: the new attribute name, the key, the value field. The 'Add'
- * button should be under it"*.
- *
- * ⚠ **WHAT IS PINNED IS THE ABSENCE OF FOUR THINGS AND THE SOURCE OF FOUR.** The
- * absences — a pill, a uuid, a section FRAME, a button face — are what the
- * 2026-09-12 ruling was about, and every one of them is a class string that reads
- * as harmless when it comes back in a later edit. **The COUNT is a fifth absence
- * now**, and it is pinned as "nothing sits between the label and the well",
- * because a count is exactly what fits there. The sources are the recipes this
- * panel may not re-cut: the popup kit's underline (`board-header-bits.tsx ›
+ * Asserted against the imported constants, never a class string, so this panel and
+ * /home stay one recipe: the popup kit's underline (`board-header-bits.tsx ›
  * InlineUnderlineField` over `shared/ui/form-dialog.module.css`), the 30px text
- * button (`shared/ui/small-action-button.ts › SMALL_TEXT_BUTTON`), and the well's
+ * button (`shared/ui/small-action-button.ts › SMALL_TEXT_BUTTON`) and the well's
  * two halves (`shared/ui/section-panel.tsx › SECTION_PANEL_SHELL` /
- * `SECTION_PANEL_GROUND`) — the Token-spend well, reached by import, which is why
- * this file asserts against the CONSTANTS and never against a class string.
+ * `SECTION_PANEL_GROUND`).
  *
- * ⚠ jsdom loads no stylesheet, so the CSS-module half is a CLASS read (`line` /
- * `input`) — the same two-layer pin `shared/ui/form-dialog.test.tsx` uses.
- *
- * ⚠ ONE PANEL, TWO SURFACES: the workspace ontology page and /home mount this
- * same component, so these are not a page's assertions.
+ * jsdom loads no stylesheet, so the CSS-module half is a class read (`line` /
+ * `input`). Both the workspace ontology page and /home mount this component.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -48,7 +28,7 @@ import { PANEL_WELL } from "./panel-section";
 
 afterEach(cleanup);
 
-/** A REAL-SHAPED uuid — the string the header used to print in `font-mono`. */
+/** A real-shaped uuid — the panel must print it nowhere. */
 const CARD_ID = "9f2b1c84-4d7e-4a11-9d3f-6b0c5e8a2d77";
 const LANE_ID = "1c0e7a55-92b8-4c2d-8e41-7fa3b6d09c10";
 
@@ -107,16 +87,15 @@ function renderPanel(objectId = CARD_ID, canEdit = true) {
 
 const SECTIONS = ["Attributes", "Relationships", "Actions"] as const;
 
-/** The section's GRAY WELL — the element right under the label. */
-/** The WELL is the section itself — the label sits inside the gray. */
+/** The well is the section itself — the label sits inside the gray. */
 function wellOf(label: string): HTMLElement {
   const section = screen.getByRole("heading", { name: label }).closest("section");
   expect(section).not.toBeNull();
   return section as HTMLElement;
 }
 
-/** The WHITE BARS in a well — its direct `.bento` children, so the `+ Add`
- *  button and anything a row draws inside itself are not miscounted. */
+/** The white bars in a well — direct `.bento` children only, so `+ Add` and a
+ *  row's own inner markup are not miscounted. */
 function bars(well: HTMLElement): HTMLElement[] {
   return Array.from(well.querySelectorAll(":scope > div > .bento"));
 }
@@ -129,14 +108,13 @@ describe("the header", () => {
     expect(top.className).toContain("text-body");
     expect(top.className).toContain("font-medium");
     expect(top.className).toContain("text-text-primary");
-    // ⚠ THE FAILURE THIS CATCHES: the pill coming back as a "badge".
+    // catches the pill coming back as a "badge".
     expect(top.className).not.toMatch(/rounded-full|border|bg-bg-inset|uppercase/);
   });
 
   it("prints the uuid NOWHERE a person can read it — not even in a title", () => {
     const { container } = renderPanel();
-    // innerHTML, not textContent: a `title` or `aria-label` carrying the id is
-    // still the id on screen, and that is what the ruling removed.
+    // innerHTML, not textContent: an id in a `title`/`aria-label` is still on screen.
     expect(container.innerHTML).not.toContain(CARD_ID);
     expect(container.innerHTML).not.toContain(LANE_ID);
   });
@@ -148,7 +126,7 @@ describe("the header", () => {
       expect(button.className).not.toMatch(/btn-light|border|shadow|bg-/);
       expect(button.className).toContain("text-text-muted");
       expect(button.className).toContain("hover:text-text-primary");
-      // The 30px hit area is PADDING — a fixed box would draw one again.
+      // the 30px hit area is padding — a fixed box would draw a face again.
       expect(button.className).toContain("p-2");
       expect(button.className).not.toMatch(/\bh-\d|\bw-\d|\bh-\[|\bw-\[/);
     }
@@ -161,9 +139,8 @@ describe("the section LABEL sits in the gray, and carries no count", () => {
     for (const label of SECTIONS) {
       const section = screen.getByRole("heading", { name: label }).closest("section");
       expect(section).not.toBeNull();
-      // ⚠ The `SectionBox` face, by its parts: a border, a shadow, a clipped
-      // body. The section IS the Token-spend well now (a radius and the
-      // `--home-panel` fill are that well's), so those two are allowed.
+      // the `SectionBox` face by its parts; the section is the Token-spend well
+      // now, so that well's radius and `--home-panel` fill are allowed.
       expect(section!.className).not.toMatch(/\bborder|shadow|overflow-hidden/);
       expect(screen.queryByRole("button", { name: `Resize ${label}` })).toBeNull();
     }
@@ -175,24 +152,22 @@ describe("the section LABEL sits in the gray, and carries no count", () => {
       const heading = screen.getByRole("heading", { name: label });
       expect(heading.className).toContain("uppercase");
       expect(heading.className).toContain("text-label");
-      // ⚠ THE COUNT'S ABSENCE, PINNED BY GEOMETRY (Samuel, 2026-09-13: *"Remove
-      // the count, the number of items in each"*). The label carries no number
-      // itself and NOTHING stands between it and the well — which is the slot a
-      // returning `meta` span would take.
+      // count removed (Samuel, 2026-09-13): no number on the label and nothing
+      // between it and the well, which is the slot a returning `meta` span takes.
       expect(heading.textContent).toBe(label);
       expect(heading.closest("section")?.className).toBe(PANEL_WELL);
-      // The label is the well's FIRST content — on the gray, not above it.
+      // the label is the well's first content — on the gray, not above it.
       expect(heading.closest("section")?.firstElementChild?.contains(heading)).toBe(true);
     }
   });
 
   it("holds no concave well anywhere in the panel", () => {
     const { container } = renderPanel();
-    // `FIELD_WELL`'s own class — the inset grey the add rows used to wear.
+    // `FIELD_WELL`'s own class.
     expect(container.innerHTML).not.toContain("concave-field");
-    // …and no native `<select>`: kinds are a `SelectMenu` text face now.
+    // kinds are a `SelectMenu` text face, not a native `<select>`.
     expect(container.querySelector("select")).toBeNull();
-    // ⚠ EVERY attribute row carries the kind picker now, not just an add row.
+    // every attribute row carries the kind picker, not just an add row.
     expect(screen.getAllByRole("button", { name: "Attribute type" })).toHaveLength(1);
   });
 
@@ -206,16 +181,14 @@ describe("the section LABEL sits in the gray, and carries no count", () => {
 });
 
 /**
- * THE 2026-09-13 GROUND. ⚠ The well is asserted against the two IMPORTED halves,
- * never against `"rounded-[14px] bg-home-panel"`: what the ruling bought is that
- * this panel's well and the /home Token-spend well are ONE recipe, and a test that
- * spelled the tokens out would pass on a local copy of them.
+ * The 2026-09-13 ground. Asserted against the two imported halves, never against
+ * `"rounded-[14px] bg-home-panel"`: spelled-out tokens would pass on a local copy.
  */
 describe("each field section is a gray well of white bars", () => {
   it("builds the well out of the Token-spend well's geometry and /home's fill — no hairline", () => {
     expect(PANEL_WELL).toContain(SECTION_PANEL_SHELL);
     expect(PANEL_WELL).toContain("bg-home-panel");
-    // 🔒 NO BORDER (Samuel, 2026-09-13): the Overview's well has none.
+    // no border (Samuel, 2026-09-13): the Overview's well has none.
     expect(PANEL_WELL).not.toMatch(/\bborder/);
     expect(PANEL_WELL).not.toContain(SECTION_PANEL_GROUND);
   });
@@ -234,7 +207,7 @@ describe("each field section is a gray well of white bars", () => {
       // The fixture carries exactly one of each.
       expect(bars(well)).toHaveLength(1);
       const add = within(well).getByRole("button", { name: "Add" });
-      // ⚠ UNDER THE ROWS: the button is the rows column's LAST child, never a
+      // under the rows: the button is the rows column's last child, not a
       // composer strip above them or a footer outside the well.
       expect(well.lastElementChild?.lastElementChild).toBe(add);
     }
@@ -263,11 +236,7 @@ describe("each field section is a gray well of white bars", () => {
   });
 });
 
-/**
- * `+ Add` — **A ROW, NOT A COMPOSER** (Samuel, 2026-09-13: *"I have to put text
- * into 'new attribute', and when I click 'Add', the field for value comes up. I
- * don't like this"*).
- */
+/** `+ Add` appends a row, not a composer (Samuel, 2026-09-13). */
 describe("+ Add appends an empty row with every cell on it", () => {
   it("shows name, kind and value at once, all empty", () => {
     renderPanel();
@@ -277,7 +246,6 @@ describe("+ Add appends an empty row with every cell on it", () => {
     expect(row).not.toBeUndefined();
     expect((row.querySelector('input[aria-label="Attribute label"]') as HTMLInputElement).value).toBe("");
     expect(row.querySelector('[aria-label="Attribute type"]')).not.toBeNull();
-    // ⚠ THE CELL THAT USED TO NOT EXIST YET.
     expect((row.querySelector('input[aria-label="Value"]') as HTMLInputElement).value).toBe("");
   });
 
@@ -334,7 +302,6 @@ describe("the fields are the popup kit's underline", () => {
     const field = screen.getByLabelText("Description") as HTMLInputElement;
     expect(field.className).toMatch(/input/);
     expect(field.parentElement?.className).toMatch(/line/);
-    // ⚠ NOT the sentence it used to hold ("…agents see this when browsing…").
     expect(field.placeholder).toBe("Description");
     expect(field.value).toBe("The deal");
   });
@@ -357,28 +324,18 @@ describe("the fields are the popup kit's underline", () => {
 });
 
 /**
- * SAMUEL, 2026-09-14, over this panel: *"the distance between the text
- * description and its underline should be increased, look at the distance with
- * the description field to the right of the ontology picker … for the individual
- * fields. I want to remove the gray underline, and have it so that the black
- * underline only appears when a user clicks on a field item (vertical center the
- * text also). Also, the format should be like: Attribute : Field Dropdown … So
- * reordered"*.
+ * Samuel, 2026-09-14: more room under the description, no gray rule on row cells
+ * (black line on focus only), row ordered `Attribute : Value Dropdown`.
  *
- * ⚠ **THE DESCRIPTION AND THE ROW CELLS TOOK OPPOSITE HALVES OF ONE RULING**, and
- * that is exactly what these assertions pin: the Description grows the 36px
- * action face the BOARD HEADER's Description already wore, while the row cells
- * lose their resting rule entirely. A later edit that "unifies the panel's
- * fields" would satisfy neither half, so both are stated against the CLASS NAMES
- * of the shared module (jsdom loads no stylesheet — the same two-layer pin this
- * file's header describes).
+ * Opposite halves of one ruling — the Description takes the board header's 36px
+ * action face while the row cells lose their resting rule — so both are stated
+ * against the shared module's class names (jsdom loads no stylesheet).
  */
 describe("the 2026-09-14 field ruling", () => {
   it("gives the Description the board header's 36px face, not a hand-cut padding", () => {
     renderPanel();
     const field = screen.getByLabelText("Description");
-    // ⚠ THE FAILURE THIS CATCHES: a `pb-2` on the panel's own field, which looks
-    // identical until the header's Description changes and this one does not.
+    // catches a hand-cut `pb-2` here: identical until the header's face changes.
     expect(field.className).toMatch(/inputAction/);
     expect(field.className).not.toMatch(/inputQuiet/);
     expect(field.className).not.toMatch(/\bp[btxy]?-\d/);
@@ -408,13 +365,13 @@ describe("the 2026-09-14 field ruling", () => {
     renderPanel();
     const cells = Array.from(bars(wellOf("Attributes"))[0].children);
     expect(cells[0].querySelector('input[aria-label="Attribute label"]')).not.toBeNull();
-    // ⚠ THE COLON IS THE PANEL'S, NOT THE LABEL'S: typed into the label it would
-    // be slugged into `key` and written to the server.
+    // the colon is the panel's, not the label's: typed into the label it would be
+    // slugged into `key` and written to the server.
     expect(cells[1].textContent).toBe(":");
     expect(cells[1].getAttribute("aria-hidden")).toBe("true");
     expect((screen.getByLabelText("Attribute label") as HTMLInputElement).value).toBe("Stage");
     expect(cells[2].querySelector('input[aria-label="Value"]')).not.toBeNull();
-    // ⚠ THE REORDER ITSELF: the kind picker stood HERE, between label and value.
+    // the reorder: the kind picker no longer sits between label and value.
     expect(cells[3].getAttribute("aria-label")).toBe("Attribute type");
   });
 
@@ -437,8 +394,7 @@ describe("the 2026-09-14 field ruling", () => {
       />
     );
     const cells = Array.from(bars(wellOf("Attributes"))[0].children);
-    // ⚠ A ref value is a CHIP STRIP, not a field — the colon sits in front of it
-    // all the same, and a viewer reads the row with the pickers gone.
+    // a ref value is a chip strip, not a field; the colon still sits in front.
     expect(cells[1].textContent).toBe(":");
     expect(cells[2].textContent).toContain("Lead");
     expect(cells[2].querySelector("input")).toBeNull();

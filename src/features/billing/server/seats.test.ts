@@ -1,8 +1,7 @@
 /**
- * INVARIANT SUITE — seat sync. Locks `syncSeatQuantity`'s guards (no Stripe
- * without a key / live Team sub / a changed count / non-flat plan) and the
- * happy path (retrieve sub → update item quantity → persist seat_count).
- * Stripe + billing repository fully mocked, no network.
+ * Invariant suite — seat sync. Locks `syncSeatQuantity`'s guards (no key / live
+ * Team sub / a changed count / non-flat plan) and the happy path. Stripe and the
+ * billing repository are fully mocked.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -119,11 +118,9 @@ describe("syncSeatQuantity — guards", () => {
   });
 
   /**
-   * 🔒 THE PERSONAL PRO TIER IS FLAT (2026-09-08). A Pro subscription is one
-   * price at quantity 1 on a `kind='personal'` container and has no seat item
-   * at all — falling through to the Team path would call
-   * `subscriptionItems.update` on it with a member count, which is a BILLED
-   * proration against the wrong subscription.
+   * The personal Pro tier is flat (2026-09-08): one price at quantity 1, no seat
+   * item. Falling through to the Team path would call `subscriptionItems.update`
+   * with a member count — a billed proration against the wrong subscription.
    */
   it("never resizes a flat personal PRO subscription", async () => {
     mockRepo.getWorkspaceBilling.mockResolvedValue(

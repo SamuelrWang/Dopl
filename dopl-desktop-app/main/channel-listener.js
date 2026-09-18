@@ -255,11 +255,8 @@ async function reconcileInner() {
     }
     for (const c of chans) {
       if (!c || !c.id) continue;
-      // R-21 (2026-09-17): there is no archive. `archived_at` is a vestigial
-      // column with no writer, and this was its last reader — a legacy stamp had
-      // been costing that channel its listener loop, so no long-poll, no
-      // auto-responder and no notification, while every other surface listed it
-      // as an ordinary channel.
+      // R-21 (2026-09-17): no archive. This held the last `archivedAt` branch,
+      // which cost a legacy-stamped channel its whole listener loop.
       desired.set(c.id, { workspaceId: ws.id, workspaceSegment, channel: c });
     }
   }
@@ -446,17 +443,10 @@ function restart() {
   reconcile();
 }
 
-// Fast catch-up after the Mac wakes / the screen unlocks (wired from index.js
-// via powerMonitor). Three cheap steps:
-//   1. Abort every in-flight long-poll so each loop re-awaits from its persisted
-//      cursor immediately — a message that arrived while asleep surfaces within
-//      seconds instead of waiting for the current ~50s await to time out.
-//   2. Kick the presence heartbeat (wake also means the network may have
-//      changed; beat now so the web shows the agent back online promptly).
-//   3. reconcile() to pick up channels joined while asleep — single-flight, so a
-//      resume+unlock double-fire coalesces onto one pass.
-// A wake left a loop mid-backoff is untouched (no awaitCtrl); it recovers on its own capped-backoff
-// schedule. Debounced by the caller (index.js) so rapid resume/unlock pairs collapse.
+// Fast catch-up after wake/unlock (index.js, powerMonitor; debounced there).
+// Aborts in-flight long-polls so each loop re-awaits from its cursor at once,
+// beats presence (the network may have changed), and reconciles for channels
+// joined while asleep. A loop mid-backoff is untouched — it recovers on its own.
 function wake() {
   if (!running) { start(onStatus); return; }
   for (const entry of loops.values()) {

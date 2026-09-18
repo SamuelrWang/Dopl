@@ -25,20 +25,17 @@ import {
  * cancel/resume. Logic between the three routes and the two data sources
  * (`./stripe.ts`, `./workspace-billing.ts`).
  *
- * ⚠ **CONTAINER, NOT "WORKSPACE", SINCE 2026-09-08 (spec §11.1)** — and the
- * word is the only thing that changed. A personal container's Pro subscription
- * is a `workspace_billing` row keyed by that container's id, so every function
- * here already worked on one: they take a `workspaceId` and none of them asks
- * what KIND it is. ⚠ Do not add a kind filter — cancel, resume, invoices and
- * the payment method are the same three questions on either kind, and a filter
- * here would strand a personal subscriber with no way to stop paying.
+ * Container, not "workspace" (2026-09-08): a personal container's Pro
+ * subscription is a `workspace_billing` row keyed by that container's id, so every
+ * function here already worked on one. Do not add a kind filter — it would strand
+ * a personal subscriber with no way to stop paying.
  *
- * ONE GUARD, SPELLED ONCE: nothing here is reachable without a Stripe secret
- * key AND a `stripe_customer_id`. Both READS answer EMPTY on that path — "never
- * paid" is a state, not a failure. Only the WRITE refuses.
+ * One guard, spelled once: nothing here is reachable without a Stripe secret key
+ * and a `stripe_customer_id`. Both reads answer empty on that path — "never paid"
+ * is a state, not a failure — and only the write refuses.
  *
- * DTOs are camelCase and shaped HERE (§2): no `snake_case` Stripe key escapes
- * this module, no route reaches for the Stripe SDK.
+ * DTOs are camelCase and shaped here (§2): no `snake_case` Stripe key escapes this
+ * module, no route reaches for the Stripe SDK.
  */
 
 /** Customer id, or null when no Stripe account to read (never subscribed, or
@@ -68,7 +65,7 @@ function toPaymentMethodDto(
   return {
     brand: card.brand ?? "card",
     last4: card.last4 ?? "••••",
-    // ⚠ NULL, NOT ZERO: `0` renders "00 / 0", an expiry Stripe never reported.
+    // Null, not zero: `0` renders "00 / 0", an expiry Stripe never reported.
     expMonth: card.exp_month ?? null,
     expYear: card.exp_year ?? null,
   };
@@ -106,9 +103,9 @@ function toInvoiceDto(invoice: Stripe.Invoice): InvoiceDto {
  * seconds later in another process, but the clicker needs the end date NOW.
  * The webhook's later write is idempotent with this one.
  *
- * ⚠ `lastStripeEventCreated` is deliberately NOT stamped — that watermark
- * belongs to Stripe's event stream, and stamping it here makes the real event
- * look stale and get dropped (same as `upgrade-to-team`).
+ * `lastStripeEventCreated` is deliberately not stamped — that watermark belongs to
+ * Stripe's event stream, and stamping it here makes the real event look stale and
+ * get dropped.
  *
  * Throws `HttpError` 409 with no live subscription to flag.
  */
@@ -141,9 +138,9 @@ export async function setWorkspaceCancelAtPeriodEnd(
 
   return {
     cancelAtPeriodEnd,
-    // ⚠ Already stamped by the webhook that opened the subscription;
-    // re-deriving from the update response would fork the sub-level/item-level
-    // fallback in `webhook-handler.ts › subscriptionFields`.
+    // Already stamped by the webhook that opened the subscription; re-deriving
+    // from the update response would fork the sub-level/item-level fallback in
+    // `webhook-handler.ts › subscriptionFields`.
     currentPeriodEnd: billing.currentPeriodEnd,
   };
 }

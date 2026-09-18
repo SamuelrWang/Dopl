@@ -45,22 +45,15 @@ export function KanbanBoard({
     .filter((col): col is OntologyObject => Boolean(col));
 
   return (
-    // ⚠ **THE DOT GRID IS BACK** (Samuel, 2026-09-11: *"I don't see the dots, the
-    // dotted grid. I want to bring that dotted grid back"*). It was taken off on
-    // 2026-09-10 reading it as the inner panel of a *"double panel"*; what he
-    // actually objected to was the FILL, and the dots are drawn on the white
-    // surface with no background under them — so the panel stays single and the
-    // grid returns exactly as it was (`git show 8d85b59a^`).
+    // The dot grid is load-bearing geometry. `.kanban-substrate` tiles at 12px and
+    // every dimension here is a whole number of tiles: p-6 = 24 (2), lane w-72 =
+    // 288 (24), gutter gap-3 = 12 (1, dot dead centre), lane p-3 = 12 (1). Lane
+    // edges land at 24, 324, 624 … (stride 300 = 25 tiles), cards at 36 and 300.
+    // The 12px pitch is forced by the 12px gutter — at a 24px pitch every second
+    // lane sits half a tile out.
     //
-    // ⚠ THE DOT GRID IS LOAD-BEARING GEOMETRY. `.kanban-substrate` tiles at 12px
-    // and every dimension here is a whole number of tiles: p-6 = 24 (2), lane
-    // w-72 = 288 (24), gutter gap-3 = 12 (1, dot dead centre), lane p-3 = 12 (1).
-    // Lane edges land at 24, 324, 624 … (stride 300 = 25 tiles), cards at 36 and
-    // 300. The 12px pitch is FORCED by the 12px gutter — at the inherited 24px
-    // pitch every second lane sits half a tile out.
-    //
-    // ⚠ Still NO FILL on this element: the lanes supply the only gray on the
-    // board (`bg-home-panel` below), and a tint here is the double panel again.
+    // No fill on this element: the lanes supply the only gray on the board
+    // (`bg-home-panel` below).
     //
     // `items-start` stops lanes stretching: each is as tall as its contents and
     // vertical overflow belongs to this board, not a scrollbar per lane.
@@ -104,15 +97,12 @@ function Column({
   /** `+ Lead` once named; `+ Untitled object` while the lane still is not. */
   const addLabel = col.name || NEW_COLUMN_NAME;
   return (
-    // ⚠ Pending column takes its whole lane inert: header inputs, menu and add
+    // A pending column takes its whole lane inert: header inputs, menu and add
     // button all address an id the server hasn't minted yet.
     //
-    // ⚠ **THE LANE'S GRAY IS THE TAB-SWITCHER PANEL'S** (Samuel, 2026-09-11: *"I
-    // want it to be the same gray that appears on the panel holding the tab
-    // switcher"*) — `--home-panel`, which is what /home's header strip stands on
-    // (`apps/desktop-ui/src/pages/home/index.tsx`, the `page-float bg-home-panel`
-    // base panel). It was `bg-bg-inset`, four steps off it. ⚠ BY TOKEN, never a
-    // hex, and the skeleton lane wears the same one (`ontology-skeleton.tsx`).
+    // The lane's gray is the tab-switcher panel's (Samuel, 2026-09-11):
+    // `--home-panel`, by token and never a hex, and the skeleton lane wears the
+    // same one (`ontology-skeleton.tsx`).
     <div
       {...pendingRow(
         pendingIds.has(col.id),
@@ -141,18 +131,14 @@ function Column({
           />
         ))}
         {canEdit && (
-          // Hugs the left corner AFTER the last card, not filling the lane:
-          // it is the next row in the list, not a footer.
+          // Hugs the left corner after the last card: the next row in the list,
+          // not a footer.
           //
-          // ⚠ **THE LABEL IS THE OBJECT'S OWN NAME** (Samuel, 2026-09-11: *"Once
-          // the user has named the object, it should say 'the bunch + name of the
-          // object' … instead of '+ untitled columns'"*) — the button adds an ITEM
-          // of this object type, so it reads `+ Lead`, and only an unnamed lane
-          // falls back to the lane's born name (`NEW_COLUMN_NAME`, "Untitled
-          // object"). It was a bare `Add`, which said nothing about what it made.
-          // ⚠ `min-w-0` + `truncate` because the label is user text in a fixed
-          // `w-72` lane: a long object name must ellipsise INSIDE the pill rather
-          // than widen it past the lane it sits in.
+          // The label is the object's own name (Samuel, 2026-09-11) — the button
+          // adds an item of this object type, so it reads `+ Lead`; only an unnamed
+          // lane falls back to `NEW_COLUMN_NAME`. `min-w-0` + `truncate` because
+          // the label is user text in a fixed `w-72` lane and must ellipsise inside
+          // the pill rather than widen it.
           <button
             type="button"
             onClick={() => onCreateObject(col.id)}

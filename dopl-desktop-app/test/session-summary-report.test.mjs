@@ -1,25 +1,13 @@
-// SESSION SUMMARIES — THE REPORT VIEW AND THE CHANGE SUBSCRIPTION (F-147).
+// SESSION SUMMARIES — the report view and the change subscription (F-147).
 //
-// WHAT THIS FILE IS ABOUT, and why it is separate from `session-summary.test.mjs`: that
-// file pins what the OPERATOR sees (the mapping, the naming, the wire shape, the ended
-// retention rule, the renderer frame). This one pins the seam rollback §3.5's
-// read-session-state hangs off — the two facts a server row needs that a pill does not, and
-// the event the writer rides. Both share `_session-summary-harness.mjs`.
+// `session-summary.test.mjs` pins what the OPERATOR sees (mapping, naming, wire shape, ended
+// retention, renderer frame). This file pins the seam read-session-state hangs off: the two facts
+// a server row needs that a pill does not, and the event the writer rides. Both share
+// `_session-summary-harness.mjs`.
 //
-// THE PROPERTY UNDER ALL OF IT: a server write must cost a STATE CHANGE and never a turn,
-// and never a window rebuild. `agent_presence` heartbeats 120 times an hour per listener and
-// is the quadratic always-on term plan §5 is shedding; if this gate is wrong in the cheap
-// direction, the replacement is the thing it replaced.
-//
-// ⚠ NOTHING HERE WAS REMOVED BY THE SESSION-WINDOW WAVE (2026-08-20, F-228) AND NOTHING HERE IS
-// ABOUT A WINDOW. Every case in this file failed at LOAD, not on an assertion: the shared
-// harness's `EXPORTED` list still named `main/session-summary.js › keptWindow`, and that list
-// feeds a `new Function` return, so one deleted symbol is a ReferenceError for all fourteen. The
-// harness lost the name; the report shape and the change gate are untouched.
-// ⚠ ONE CASE STILL DRIVES A WINDOW HANDLE — "ending a session is a change, and so is its pill
-// leaving" flips `s.win.destroyed` to make a retained pill lapse. That is the RETENTION
-// predicate, which is live source that the engine can no longer satisfy; the argument is written
-// out over §4 of `session-summary.test.mjs` and is not restated here.
+// The property under all of it: a server write must cost a STATE CHANGE, never a turn and never a
+// window rebuild. `agent_presence` heartbeats 120 times an hour per listener, and if this gate is
+// wrong in the cheap direction the replacement is the thing it replaced.
 //
 // Run: `node --test dopl-desktop-app/test/session-summary-report.test.mjs`
 
@@ -35,10 +23,9 @@ test("REPORT: an entry carries the session KEY and the WORKSPACE a row cannot do
   const m = load();
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
   const [entry] = m.reportList();
-  // The upsert key is the STABLE (channel, thread, AGENT) key, never `sessionId` — a park, a
-  // lazy resume and a crash recreate all mint a fresh sessionId for the same session.
-  // ⚠ The AGENT segment joined 2026-08-21: without it two of the operator's agents on one
-  // thread would upsert onto ONE row and each overwrite the other's state.
+  // The upsert key is the STABLE (channel, thread, AGENT) key, never `sessionId` — a park, a lazy
+  // resume and a crash each mint a fresh sessionId. The AGENT segment joined 2026-08-21: without
+  // it two of the operator's agents on one thread would upsert onto ONE row.
   assert.equal(entry.key, "chan-1:task-1:a1b2c3d4");
   assert.equal(entry.workspaceId, "ws-1");
   // …and everything the pill shows is still there, unchanged.
@@ -48,91 +35,50 @@ test("REPORT: an entry carries the session KEY and the WORKSPACE a row cannot do
   assert.equal(entry.state, "working");
   assert.equal(entry.channelName, "general");
   assert.equal(entry.threadTitle, "Ship the thing");
-  // ⚠ 2026-08-22: the fixture carries no template, and `null` is the honest answer for a
-  // BLANK agent. Absent would be a different claim on a wire whose reader cannot tell them
-  // apart once JSON.stringify has dropped it.
+  // 2026-08-22: `null` is the honest answer for a BLANK agent. Absent would be a different claim
+  // on a wire whose reader cannot tell them apart once JSON.stringify has dropped it.
   assert.equal(entry.templateName, null);
 });
 
 test("REPORT: `list()` narrows the report-only `key` back off — `workspaceId` rides the wire", () => {
   const m = load();
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
-  // ⚠ The five measurement fields joined the wire in Phase 5 (2026-08-18) and they are
-  // NOT report-only: the Agents tab is their whole audience. What stays report-only is
-  // still exactly two, and the point of this case is that the narrowing did not widen.
-  // ⚠ `detail` and `toolLabel` joined on 2026-08-20 and are NOT report-only either — they
-  // are LOCAL-only, which is a different claim and is asserted where it bites: the server
-  // never sees them because `session-state-push.js › reportRow` picks columns by name, and
-  // `session-state-push.test.mjs` pins that row shape. Here the claim is narrower and
-  // unchanged: whatever the wire carries, the two REPORT fields are not on it.
+  // The five measurement fields (Phase 5, 2026-08-18) and `detail` / `toolLabel` (2026-08-20) are
+  // NOT report-only — they are LOCAL-only, which is a different claim and is asserted where it
+  // bites, in `session-state-push.test.mjs`'s row shape. The claim here is narrower and unchanged:
+  // whatever the wire carries, the two REPORT fields are not on it.
   assert.deepEqual(Object.keys(m.list()[0]).sort(), [
-    // ⚠ `toolMode` / `messageMode` joined 2026-08-20 (the agent view's live controls) and
-    // are LOCAL-only for the same reason `detail` is — asserted where it bites, in
-    // `session-state-push.test.mjs`'s row shape. Here the claim is the narrower one and is
-    // unchanged: whatever the wire carries, the two REPORT fields are not on it.
-    // ⚠ `agentId` joined 2026-08-21 and IS on the wire: the Agents tab addresses pause / end /
-    // setMode / message / narration at ONE agent among several, and (channelId, taskId) can no
-    // longer say which. It is LOCAL-only in the other direction — `reportRow` picks the server
-    // columns by name and files the same string as `name`.
-    // ⚠ `listening` joined 2026-08-22 and is LOCAL-only in the same sense `detail` is: it
-    // refines the `idle` pill into Waiting (query alive, a message feeds it) vs Idle (torn down,
-    // a message relaunches it), and `reportRow` picks the server columns by name so it never
-    // reaches `channel_sessions`.
-    // ⚠ `endedAt` joined 2026-08-22 and is LOCAL-only for the same reason: it is the 7-day
-    // retention clock the OPERATOR's own cards render from, and `reportRow` picks the server
-    // columns by name so it never reaches `channel_sessions`.
-    // ⚠ `displayName` joined 2026-08-25 (Samuel's rename ruling) and is LOCAL-only for exactly
-    // the reason `detail` is: `reportRow` picks the server columns BY NAME, so what the
-    // operator calls an agent never reaches `channel_sessions` — whose `name` CHECK
-    // (`^[a-z][a-z0-9-]{1,30}$`) would refuse a human name anyway. A peer's card still shows
-    // what THEIR machine reports.
+    // Most fields below are LOCAL-only: `session-state-push.js › reportRow` picks the server
+    // columns BY NAME, so they never reach `channel_sessions`. The exceptions are noted inline.
+    // `agentId` joined 2026-08-21 and IS on the wire: session ops address ONE agent among several,
+    // and (channelId, taskId) can no longer say which.
     "agentId", "channelId", "channelName",
-    // ⚠ `color` joined 2026-09-13 (Samuel's agent-colours ruling) and, like `templateName` below,
-    // is NOT local-only: `reportRow` names it on purpose and `channel_sessions.color` receives it
-    // — PEER-VISIBLE by design, since a colour is drawn on every member's transcript. It is not
-    // REPORT-only either, which is all this case claims: the popup's taken set reads it too.
+    // `color` (2026-09-13, Samuel's agent-colours ruling) DOES reach the server: peer-visible by
+    // design, since a colour is drawn on every member's transcript.
     "color",
     "contextUsed", "contextWindow",
-    // ⚠ THE HEALTH HALF joined 2026-09-01 (T25 / T50 / T51 / T83). Like `templateName` below,
-    // these are NOT local-only — all seven are named in `reportRow` on purpose, with
-    // OPERATOR-ONLY columns to receive them. They are not REPORT-only either, which is all this
-    // case claims: the Agents tab reads them too.
+    // The health half (2026-09-01, T25 / T50 / T51 / T83) also reaches the server, onto
+    // OPERATOR-ONLY columns.
     "deniedCalls",
-    // ⚠ `description` joined 2026-08-27 (Samuel's launch-panel ruling) and is LOCAL-only on
-    // exactly `displayName`'s terms — same store (`main/agent-names.js`), same machine-local
-    // rule, and `reportRow` picks the server columns BY NAME so it never reaches
-    // `channel_sessions`, which has no column to receive it.
     "description", "detail",
-    // ⚠ `diag` joined 2026-09-13 (F-692) and is LOCAL-only on exactly `detail`'s terms:
-    // `reportRow` picks the server columns BY NAME and `channel_sessions` has none to receive
-    // it. It is the sentence an operator reads when a launch could not run at all — the Dopl MCP
-    // server never connected — which is the one state the three-value pill cannot express.
+    // `diag` (2026-09-13, F-692) is the sentence an operator reads when a launch could not run at
+    // all — the one state the three-value pill cannot express.
     "diag",
     "displayName", "endedAt",
-    // ⚠ `heldGates` joined 2026-09-17 (Samuel's inline-approval ruling) and is LOCAL-only on
-    // exactly `diag`'s terms: `reportRow` picks the server columns BY NAME and
-    // `channel_sessions` has none to receive it. That is stronger than a convenience here — an
-    // entry carries a one-line summary of a TOOL INPUT, which is a fact about this machine and
-    // is nobody else's business. It is not REPORT-only either, which is all this case claims:
-    // the agent panel's approve/deny card is its whole audience.
+    // `heldGates` (2026-09-17, Samuel's inline-approval ruling) is local-only, and that matters
+    // more here than elsewhere: an entry carries a one-line summary of a TOOL INPUT, which is a
+    // fact about this machine and nobody else's business.
     "heldGates",
     "lastActivityAt", "lastDeniedTool", "lastWakeAt", "lastWakeSeq", "listening", "messageMode",
-    // ⚠ `model` joined 2026-08-22 (Samuel's model-selection ruling) and is LOCAL-only on the same
-    // terms as `detail` / `toolMode` / `messageMode`: `session-state-push.js › reportRow` picks
-    // columns by name, so the wire is unchanged and the claim here stays the narrower one.
     "model",
     "name", "sessionId", "stale", "startedAt", "state", "taskId",
-    // ⚠ `templateName` joined 2026-08-22 (agent templates) and is the ONE field on this list
-    // that is NOT local-only: it is named in `reportRow` on purpose, because Phase 4 added the
-    // column to receive it. It is still not REPORT-only, which is all this case claims.
+    // `templateName` (2026-08-22) is named in `reportRow` on purpose — Phase 4 added the column.
     "templateName", "threadTitle", "tokensDelta", "tokensSpent", "toolLabel", "toolMode",
     "turns",
-    // ⚠ `workspaceId` joined the WIRE on 2026-09-14 (the tabbed pop-out's rail routes a
-    // cross-workspace row by it): sorted here, and no longer report-only.
+    // `workspaceId` joined the WIRE on 2026-09-14 (the pop-out rail routes by it).
     "workspaceId",
   ]);
-  // `key` is report-only; `workspaceId` RIDES the wire since 2026-09-14 (the tabbed
-  // pop-out's rail routes a cross-workspace row by it) — `DesktopSessionSummary.workspaceId`.
+  // `key` is report-only; `workspaceId` rides the wire since 2026-09-14.
   assert.equal("key" in m.list()[0], false);
   assert.equal(m.list()[0].workspaceId, "ws-1");
 });
@@ -159,10 +105,9 @@ test("REPORT: a thread-less responder reports a real key and a NULL thread", () 
 });
 
 test("REPORT: an ENDED retained entry carries the workspace frozen at settle time", () => {
-  // ⚠ IT COMES FROM THE DURABLE HISTORY NOW (2026-08-22, Samuel's ended-agent ruling), not
-  // from an in-memory list `noteEnded` appended to. The projection READS `agent-history.js ›
-  // listEnded`, which is why an ended card survives a restart — and why the workspace has to
-  // be frozen into the record: the session object is long gone.
+  // It comes from the durable history (2026-08-22, Samuel's ended-agent ruling): the projection
+  // reads `agent-history.js › listEnded`, which is why an ended card survives a restart — and why
+  // the workspace has to be frozen into the record, since the session object is long gone.
   const m = load();
   m.bind({ sessions: new Map(), endedRecords: () => [endedRecord({ workspaceId: "ws-7" })] });
   const [entry] = m.reportList();
@@ -224,9 +169,8 @@ test("CHANGE: a REBUILT renderer repaints but is NOT a change — the two gates 
   await settle(m);
   assert.equal(m.sent.length, 1);
   assert.equal(seen.length, 1);
-  // The SPA window is closed and reopened: `start()` resets the window's digest so the
-  // fresh renderer is painted. Nothing about the SESSIONS changed, so the server must not
-  // be written to — a window rebuild is not an event the server has any interest in.
+  // The SPA window is closed and reopened: `start()` resets the window's digest so the fresh
+  // renderer is painted. Nothing about the SESSIONS changed, so the server must not be written to.
   m.start({ getWindows: () => [m.spaWindow] });
   await settle(m);
   assert.equal(m.sent.length, 2, "the renderer is repainted");
@@ -275,9 +219,8 @@ test("CHANGE: a THROWING subscriber cannot break the engine's dispatch", async (
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
   m.start({ getWindows: () => [m.spaWindow] });
   await settle(m);
-  // `touch()` is called from the engine's dispatch, so an exception here would unwind into
-  // the SDK event loop. The frame still lands, the next subscriber still runs, and the
-  // failure is on the record.
+  // `touch()` is called from the engine's dispatch, so an exception here would unwind into the
+  // SDK event loop. The frame still lands, the next subscriber still runs, and it is logged.
   assert.equal(m.sent.length, 1);
   assert.equal(after.length, 1);
   assert.ok(m.logged.some((l) => l.includes("change subscriber threw")));
@@ -298,13 +241,10 @@ test("CHANGE: ending a session is a change, and so is its pill leaving", async (
   await settle(m);
   assert.equal(seen.length, 2);
   assert.equal(seen[1][0].state, "ended");
-  // ⚠ THE THIRD BEAT IS DELETED, AND ITS SUBJECT WITH IT (2026-08-20, F-234). It read: "the
-  // operator closes that window: the pill leaves, and the writer is told the set is now empty
-  // — which is what deletes the row", driven by `s.win.destroyed = true`. Retention no longer
-  // consults a window (it could not: every session is windowless, which is why NOTHING was
-  // being retained at all), so there is no event that makes a retained pill leave except the
-  // `MAX_ENDED` bound. Rewritten to the rule that survives: a retained pill is STABLE across
-  // projections, and the writer is not told to delete a row that is still on the tab.
+  // The third beat is deleted (2026-08-20, F-234): retention no longer consults a window — every
+  // session is windowless — so nothing makes a retained pill leave except the `MAX_ENDED` bound.
+  // The rule that survives: a retained pill is STABLE across projections, and the writer is not
+  // told to delete a row that is still on the tab.
   m.touch();
   await settle(m);
   assert.equal(seen.length, 2, "a projection with nothing new is not a change");

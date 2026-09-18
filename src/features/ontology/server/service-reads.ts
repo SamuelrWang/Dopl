@@ -26,13 +26,9 @@ import {
 } from "./service-audience";
 
 /**
- * 🔒 THE TWO GRAPH READS, AUDIENCE-FILTERED (spec §4 sites 2 and 3, risks
- * R1/R2).
+ * The two graph reads, audience-filtered (spec §4 sites 2 and 3, risks R1/R2).
  *
- * ⚠ **SPLIT OUT OF `./service.ts` ON 2026-09-09 AT THE §1 CAP**, on the READS
- * vs WRITES seam. `./service.ts` re-exports both names, so no caller moved.
- *
- * ── 🔒 THE ORDER, AND WHY IT IS NOT NEGOTIABLE ──────────────────────────────
+ * ── The order, and why it is not negotiable ─────────────────────────────────
  * ```
  * 1. resolve the audience          — one ceiling for the request
  * 2. read clusters in its SCOPE    — wider than the caller's container (the lend)
@@ -46,25 +42,24 @@ import {
  * keeping the scope and dropping the filter serves the lender's whole shelf to
  * whoever they lent ONE ontology to.
  *
- * ⚠ **ONE DELIBERATE CONSEQUENCE FOR THE UNRESTRICTED ARM TOO.** The walk
- * replaces a whole-container object read, so an ORPHAN — an object no membership
- * chain reaches a cluster from — stops appearing even in a standard workspace.
- * That is a bug STATE, not a product one (every create writes a membership in
- * the same call, and nothing renders an orphan: the board and the picker both
- * walk DOWN from `cluster.columnIds`). ⚠ A `kind:"ref"` attribute into ANOTHER
- * cluster still resolves under `unrestricted` — every cluster is a root there —
- * and does not under a `resolved` audience, which is Q8.
+ * One deliberate consequence for the unrestricted arm too: the walk replaces
+ * a whole-container object read, so an ORPHAN — an object no membership chain
+ * reaches a cluster from — stops appearing even in a standard workspace. That
+ * is a bug STATE, not a product one (every create writes a membership in the
+ * same call, and nothing renders an orphan). A `kind:"ref"` attribute into
+ * ANOTHER cluster still resolves under `unrestricted` — every cluster is a root
+ * there — and does not under a `resolved` audience, which is Q8.
  */
 
 /** The membership rows reachable from an ADMITTED cluster, and the objects they
- *  reach. ⚠ Rows outside the walk are DROPPED, never merely unrendered — they
+ *  reach. Rows outside the walk are DROPPED, never merely unrendered — they
  *  are what would otherwise attach a foreign column to a visible board. */
 interface ClusterWalk {
   objectIds: string[];
   rows: OntologyMembershipRow[];
 }
 
-/** ⚠ EXPORTED FOR THE CLUSTER ROLL-UP (`./service-revisions-read.ts ›
+/** EXPORTED FOR THE CLUSTER ROLL-UP (`./service-revisions-read.ts ›
  *  listClusterRevisions`), which needs the SAME boundary — a second downward
  *  walk is how a history comes to name an object the board does not show. */
 export function walkAdmittedClusters(
@@ -93,7 +88,7 @@ export function walkAdmittedClusters(
     frontier.push(m.child_object_id);
   };
   for (const m of roots) take(m);
-  // ⚠ `seen` is what terminates this: a card hanging under two parents is
+    // `seen` is what terminates this: a card hanging under two parents is
   // visited once, and a malformed cycle cannot spin.
   while (frontier.length > 0) {
     const parent = frontier.pop() as string;
@@ -129,7 +124,7 @@ async function admittedWalk<T extends AudienceClusterFacts>(
   };
 }
 
-/** Hang the walk's rows on their parents. ⚠ A row whose child did not survive
+/** Hang the walk's rows on their parents. A row whose child did not survive
  *  the object read is skipped, never rendered as an empty node. */
 function attachWalkRows(
   walk: ClusterWalk,
@@ -157,7 +152,7 @@ export async function getSnapshot(ctx: OntologyContext): Promise<OntologySnapsho
   const [objectRows, relationshipRows, shareCounts] = await Promise.all([
     repo.listObjectsByIds(audience.workspaceIds, walk.objectIds),
     repo.listRelationshipsForSources(audience.workspaceIds, walk.objectIds),
-    // ⚠ ONE READ FOR THE WHOLE LIST, and it rides THIS fan rather than adding a
+    // One read for the whole list, and it rides THIS fan rather than adding a
     // round trip — the `grantedResourceIds` shape (spec §3 reason 4).
     countSharesForClusters(ownedClusterIds(audience, admitted)),
   ]);
@@ -182,14 +177,14 @@ export async function getSnapshot(ctx: OntologyContext): Promise<OntologySnapsho
 /**
  * One cluster row → the wire shape.
  *
- * 🔒 **IT CARRIES `agentsMayEdit` AND `sharedChannelCount`, BOTH READ BY THE
- * /home CARD** (`pages/home/ontology-panels.tsx › OntologyCard` through
- * `../hooks/use-ontologies.ts › ontologyListRows`). ⚠ Emitting neither renders
+ * It carries `agentsMayEdit` and `sharedChannelCount`, both read by the
+ * /home card (`pages/home/ontology-panels.tsx › OntologyCard` through
+ * `../hooks/use-ontologies.ts › ontologyListRows`). Emitting neither renders
  * the FALLBACKS — "agents may edit" for an ontology whose owner turned that off
  * — which exist for a STALE CACHE, never as this mapper's output.
  *
- * ⚠ `sharedChannelCount` IS OMITTED, NOT ZEROED, WHEN THE CALLER DOES NOT OWN
- * THE ROW: how widely somebody else's ontology is lent is their business, and
+ * `sharedChannelCount` is omitted, not zeroed, when the caller does not own
+ * the row: how widely somebody else's ontology is lent is their business, and
  * `undefined` is the "nobody looked" the card renders as nothing.
  */
 export function mapClusterRow(
@@ -209,7 +204,7 @@ export function mapClusterRow(
 }
 
 /** The admitted clusters the caller OWNS — the only ones a share count is
- *  emitted for. ⚠ `unrestricted` ANSWERS NOTHING: a standard-workspace board
+ *  emitted for. `unrestricted` answers NOTHING: a standard-workspace board
  *  never lends into a home channel, so the hot path pays no share read. */
 function ownedClusterIds(
   audience: OntologyAudience,
@@ -225,10 +220,10 @@ function ownedClusterIds(
  * relationships table. Backs `dopl_map`. `truncated` = clipped by
  * `ONTOLOGY_READ_LIMITS`.
  *
- * ⚠ THE SAME FENCE AS `getSnapshot` — R2: a leak here lands on the routing
+ * The same fence as `getSnapshot` — R2: a leak here lands on the routing
  * surface every agent calls FIRST.
  *
- * ⚠ Relationships deliberately unfetched (nothing map-shaped draws an edge, and
+ * Relationships deliberately unfetched (nothing map-shaped draws an edge, and
  * that table grows quadratically); per-object edges stay reachable via
  * `op="get"`.
  */

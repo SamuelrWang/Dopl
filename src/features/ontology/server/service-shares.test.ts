@@ -1,24 +1,19 @@
 /**
- * INVARIANT SUITE — 🔒 THE SHARE WRITE LANE (spec §6 S3).
+ * Invariant suite — the share write lane (spec §6 S3).
  *
  * What it pins is the ORDER of the fences, not merely that each exists: the
  * resource before the room, both 404 rather than 403, and the home-container
  * refusal LAST so that a 400 is only ever shown to somebody who has already
- * proved a membership. Reordering any pair turns this route into an oracle,
- * and every case below fails when one is moved.
+ * proved a membership. Reordering any pair turns this route into an oracle.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ontologyContextFactory } from "./test-fixtures";
 import type { OntologyClusterRow } from "./dto";
 
-// ⚠ **THE CHANGELOG CAPTURE IS A REAL WRITE AND IT IS AWAITED**
-// (`./service-revisions.ts`, 2026-09-09, part 2): every ontology write now
-// records one revision per CHANGED FIELD inside the same request, so a service
-// test that leaves it alone reaches `supabaseAdmin()` and fails on a missing
-// service-role key. Stubbed here because these suites are about the WRITE, not
-// about its audit rows — that the rows are recorded, one per changed field, per
-// path, is `service-revisions.test.ts`'s subject.
+// The changelog capture is a real awaited write (`./service-revisions.ts`), so
+// an unstubbed service test reaches `supabaseAdmin()` and fails on a missing
+// service-role key. That the rows are recorded is `service-revisions.test.ts`'s subject.
 vi.mock("@/features/revisions/server/repository", () => ({
   appendRevision: vi.fn(async () => ({ id: "rev-1" })),
   replaceRevisionSnapshot: vi.fn(async () => ({ id: "rev-1" })),
@@ -122,7 +117,7 @@ describe("fence order — the resource, then the room, both 404", () => {
     await expect(setOntologyShare(ctx(), CLUSTER_ID, WRITE)).rejects.toMatchObject({
       status: 404,
     });
-    // 🔒 THE ORDER IS THE POINT: probing the channel first would make this a
+    // The order is the point: probing the channel first would make this a
     // room oracle for anybody holding a cluster id.
     expect(mockShares.findChannelContainer).not.toHaveBeenCalled();
     expect(mockShares.upsertShare).not.toHaveBeenCalled();
@@ -197,7 +192,7 @@ describe("the write itself", () => {
       },
     ]);
     const share = await setOntologyShare(ctx(), CLUSTER_ID, WRITE);
-    // ⚠ NOT re-seeded from the toggle: a share edit must never silently
+    // NOT re-seeded from the toggle: a share edit must never silently
     // re-decide what the owner already said about their own agents.
     expect(share.ownerAgentsLevel).toBe("none");
   });

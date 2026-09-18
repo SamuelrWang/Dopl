@@ -5,15 +5,11 @@ import { ONTOLOGY_LEVELS } from "./types";
 
 /**
  * Cluster/object names are the ontology's short labels (`dopl_map` and
- * `dopl_ontology` print them). Real columns on editor-writable tables → both
- * get the charset rule and a matching DB CHECK.
- *
- * ⚠ Labels NESTED IN JSONB (`attributes[].label`, `template[].label`,
- * `relationships[].label`, `methods[].name`) are deliberately left alone: a
- * CHECK means walking a jsonb array on every write, and `ontology_objects` has
- * an editor-scoped UPDATE policy for `public`, so a zod-only bound would be a
- * fence beside an open gate. `purpose`, `subtitle`, method descriptions and
- * text attribute values are prose and stay prose.
+ * `dopl_ontology` print them). Real columns on editor-writable tables → both get
+ * the charset rule and a matching DB CHECK. Labels nested in jsonb are left alone
+ * deliberately: a CHECK means walking a jsonb array on every write, and
+ * `ontology_objects` has an editor-scoped UPDATE policy for `public`, so a
+ * zod-only bound would be a fence beside an open gate.
  */
 const OntologyClusterNameSchema = safeLabel("Ontology name", 200);
 const OntologyObjectNameSchema = safeLabel("Object name", 300);
@@ -42,8 +38,8 @@ const methodSchema = z.object({
   name: z.string().max(300),
   description: z.string().max(2000),
   outcome: z.string().max(2000),
-  // ⚠ Default, not required: methods stored before this field existed sync
-  // back without it.
+  // Default, not required: methods stored before this field existed sync back
+  // without it.
   tools: z.string().max(2000).default(""),
 });
 
@@ -63,12 +59,11 @@ export const OntologyClusterUpdateSchema = z.object({
   purpose: z.string().max(1000).optional(),
   layout: graphLayoutSchema.optional(),
   /**
-   * 🔒 SAMUEL'S SOLO TOGGLE — "a setting where they can toggle it so that their
-   * agents can only view, and not edit". It only ever NARROWS, and it is ALSO
-   * the seed for `ownerAgentsLevel` at first share (Q2).
+   * Owner toggle: agents may view but not edit. It only ever narrows, and it
+   * seeds `ownerAgentsLevel` at first share (Q2).
    *
-   * ⚠ REFUSED FROM AN AGENT IN THE SERVICE, not by a route field gate. It is a
-   * CONTAINMENT control — a Bash-capable session could otherwise read its own
+   * Refused from an agent in the SERVICE, not by a route field gate: it is a
+   * containment control — a Bash-capable session could otherwise read its own
    * bearer off disk and durably re-widen itself — and the service refusal covers
    * the MCP path too, which a route-level `SESSION_ONLY_FIELDS` would not.
    */
@@ -98,18 +93,15 @@ export const OntologyObjectUpdateSchema = z.object({
 export type OntologyObjectUpdateInput = z.infer<typeof OntologyObjectUpdateSchema>;
 
 /**
- * THE SHARE WRITE — one `(ontology, channel)` row, stated as a COMPLETE end
- * state for all three audiences (I4), so a retry after an ambiguous failure is
- * idempotent. The `channel-grants` PUT contract, with a LADDER instead of an
- * audience word.
+ * The share write: one `(ontology, channel)` row, stated as a complete end state
+ * for all three audiences (I4), so a retry after an ambiguous failure is idempotent.
  *
- * ⚠ `ownerAgentsLevel` IS OPTIONAL AND THAT IS Q2, NOT A CONVENIENCE. Absent on
- * the FIRST share seeds it from the ontology's `agents_may_edit` toggle; absent
- * on a row that already exists KEEPS the stored value. A share write must never
- * silently re-decide what the owner already said about their own agents.
+ * `ownerAgentsLevel` is optional by Q2, not for convenience: absent on the FIRST
+ * share seeds it from the ontology's `agents_may_edit` toggle; absent on an
+ * existing row keeps the stored value.
  *
- * ⚠ UNSHARING IS `DELETE`, never three `none`s (I4): absence is the third state
- * and it is what the FK cascade (Q4) is written against.
+ * Unsharing is `DELETE`, never three `none`s (I4): absence is the third state, and
+ * what the FK cascade (Q4) is written against.
  */
 export const OntologyShareWriteSchema = z.object({
   channelId: z.string().uuid(),

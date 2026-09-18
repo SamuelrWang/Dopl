@@ -1,11 +1,9 @@
 "use client";
 
 /**
- * THE BOARD HEADER'S OWN CONTROLS — the underline fields (Description, and the
- * Rename face of the name) and the gear menu (2026-09-10, Samuel's restyle of
- * this header). ⚠ They live beside `ontology-view.tsx` rather than in it for the
- * 500-line cap, and nowhere else mounts them: this is the ontology board's
- * header, on both surfaces.
+ * The ontology board header's own controls: the underline fields (Description and
+ * the Rename face of the name) and the gear menu. They sit beside
+ * `ontology-view.tsx` for the 500-line cap; nothing else mounts them.
  */
 
 import {
@@ -20,22 +18,14 @@ import fieldStyles from "@/shared/ui/form-dialog.module.css";
 import { MenuDivider, MenuItem, Popover } from "@/shared/ui/popover-menu";
 
 /**
- * THE HEADER'S UNDERLINE FIELD — **ONE RECIPE, TWO FIELDS** (`DescriptionField`
- * and `NameField` below). Samuel, 2026-09-10: *"a gray underline that turns black
- * when a user is editing (like the one we have in other places)"*.
+ * One underline recipe for both header fields (Samuel, 2026-09-10: gray rule that
+ * turns black while editing). The face is `shared/ui/form-dialog.module.css`'s by
+ * import — never re-cut per field, or two lines in one header drift by a pixel.
+ * Not `UnderlineField` itself: that draws a bold label above the control, and
+ * these fields' names are their hint, inside the line.
  *
- * ⚠ **THE RECIPE IS `shared/ui/form-dialog.module.css`'s, BY IMPORT** — the popup
- * kit's `UnderlineField` face, which is the "one we have in other places": a 2px
- * `--border-strong` rule at rest with the black `::after` sweeping in from the
- * left while focused. Nothing is hand-drawn here, and nothing is re-cut per
- * field: a second copy of this wrapper is how the two lines in one header come to
- * differ by a pixel. ⚠ And it is not `UnderlineField` itself: that component
- * brings a bold LABEL above the control (`FormSection`), and these fields' names
- * are their HINT, inside the line.
- *
- * ⚠ THE ACTIVE CLASS IS REACT STATE, NOT `:focus-within` — the module's own rule
- * for its own reason: jsdom loads no stylesheet, so a pure-CSS focus rule reports
- * the same nothing whether it is there or not.
+ * The active class is React state, not `:focus-within`: jsdom loads no stylesheet,
+ * so a pure-CSS focus rule would be untestable.
  */
 export function InlineUnderlineField({
   label,
@@ -54,15 +44,10 @@ export function InlineUnderlineField({
   /** Extra class on the input itself (the kit's `.inputAction` for a 36px row). */
   inputClassName?: string;
   /**
-   * ⚠ **NO RULE AT REST — THE BLACK LINE ONLY WHILE FOCUSED** (Samuel,
-   * 2026-09-14, over the object panel's section rows: *"I want to remove the gray
-   * underline, and have it so that the black underline only appears when a user
-   * clicks on a field item (vertical center the text also)"*). It is the kit's
-   * `.inputQuiet` — **a RESTING STATE of this same recipe, not a second field** —
-   * so the sweep, the 2px and the box are byte-identical and only the gray goes
-   * transparent. The panel's ROW fields wear it; the two DESCRIPTION fields (this
-   * header's and the object panel's) keep their gray→black line, which is a
-   * different ruling on a different row.
+   * No rule at rest, black line only while focused (Samuel, 2026-09-14, over the
+   * object panel's rows). The kit's `.inputQuiet` is a resting state of this same
+   * recipe, not a second field, so only the gray goes transparent. Panel row fields
+   * wear it; the two Description fields keep their gray→black line.
    */
   quiet?: boolean;
   value: string;
@@ -71,11 +56,8 @@ export function InlineUnderlineField({
   className?: string;
   autoFocus?: boolean;
   /**
-   * VIEWER PARITY (2026-09-12, the object panel's fields). The line keeps its
-   * face — a viewer reads the same row an editor writes in — and the FOCUS state
-   * still lands, because a caret that cannot type is the honest answer to a
-   * read-only field and `disabled` would take the row out of the tab order
-   * entirely.
+   * Viewer parity (2026-09-12): the line keeps its face and still takes focus —
+   * `disabled` would drop the row out of the tab order.
    */
   readOnly?: boolean;
   onKeyDown?: (e: ReactKeyboardEvent<HTMLInputElement>) => void;
@@ -114,11 +96,8 @@ export function InlineUnderlineField({
 }
 
 /**
- * THE ONTOLOGY'S DESCRIPTION — the shared field, hinted "Description". It
- * replaced a bare input whose placeholder was a sentence.
- *
- * ⚠ SAME SAVE PATH AS THE INPUT IT REPLACED — `CLUSTER_UPDATE` at `purpose`,
- * debounced by the store. The word "purpose" is still what agents read.
+ * The ontology's description, hinted "Description". Saves through `CLUSTER_UPDATE`
+ * at `purpose`, debounced by the store — "purpose" is still what agents read.
  */
 export function DescriptionField({
   value,
@@ -133,29 +112,22 @@ export function DescriptionField({
       value={value}
       onChange={onChange}
       className="flex-1"
-      // ⚠ AS TALL AS THE BLACK BUTTON beside it, so the hairline is flush with
-      // that button's bottom edge (Samuel, 2026-09-10).
+      // as tall as the black button beside it, so the hairline is flush with that
+      // button's bottom edge (Samuel, 2026-09-10).
       inputClassName={fieldStyles.inputAction}
     />
   );
 }
 
 /**
- * THE ONTOLOGY'S NAME, WHILE IT IS BEING RENAMED — the same underline field, in
- * the slot the name dropdown's trigger normally occupies.
+ * The ontology's name while being renamed — the same underline field, in the slot
+ * the switcher's trigger occupies. Renaming is a menu act (2026-09-10), so this is
+ * mounted only while renaming.
  *
- * ⚠ **RENAMING IS A MENU ACT NOW, NOT AN ALWAYS-ON INPUT.** The name became the
- * switcher's TRIGGER on 2026-09-10, which deleted the inline name input and with
- * it every way to rename an ontology from the board; the gear's "Rename" row is
- * the way back. So this field is mounted only while renaming, and the chevron is
- * gone with the trigger it belongs to rather than hidden separately.
- *
- * ⚠ **ENTER AND BLUR SAVE, ESCAPE CANCELS, EMPTY CANCELS.** An empty name is not
- * a rename to "" — the switcher's trigger would then read "Untitled" with no way
- * to tell an unnamed ontology from a slipped keystroke. There is no blur-after-
- * Escape double-fire to guard: the host unmounts this field, and React fires no
- * `blur` on an unmounted input (`skills/components/skill-folder-control.tsx` is
- * the same shape).
+ * Enter and blur save; Escape and an empty name cancel — a rename to "" would read
+ * as "Untitled" and hide a slipped keystroke. No blur-after-Escape double-fire to
+ * guard: the host unmounts the field and React fires no `blur` on an unmounted
+ * input (`skills/components/skill-folder-control.tsx` is the same shape).
  */
 export function NameField({
   name,
@@ -200,30 +172,20 @@ export function NameField({
 }
 
 /**
- * THE BOARD'S GEAR — one round 36px trigger over every menu row this header has
- * (Samuel, 2026-09-10: *"change the … button to the left of it, to be a circle
- * and to have a settings icon"*). It was `…`, a 28px rounded rectangle the HOST
- * rendered through a `headerEnd` slot.
+ * The board's gear: one round 36px trigger over every menu row this header has
+ * (Samuel, 2026-09-10).
  *
- * ⚠ **ONE TRIGGER, TWO SOURCES OF ROWS.** Rename is the VIEW's — the name is a
- * dropdown trigger rather than an input, so the act lives here. Everything under
- * the divider is the HOST's: /home's Share, Changelog and agents rungs.
+ * Two sources of rows — Rename is the view's; everything under the divider is the
+ * host's (/home's Share, Changelog and agents rungs).
  *
- * ⚠ **AND "+ Column" IS DELETED FROM THIS MENU** (2026-09-11): the header's black
- * button makes the lane now (`ontology-view.tsx › handleNewObject`, "+ Object" =
- * a new object TYPE), so the row was a second way to do the same thing under a
- * word the UI no longer uses. One place per control.
+ * 2026-09-11: no "+ Column" row — the header's black button makes the lane
+ * (`ontology-view.tsx › handleNewObject`). One place per control.
  *
- * ⚠ **DELETE IS ONE SLOT, AND IT IS THE LAST ROW.** The workspace page had a
- * standalone `Trash2` button beside this gear until 2026-09-10; it is DELETED and
- * its confirm is now `onDelete` here. A host that brings its own Delete (/home's
- * names the CHANNELS the ontology is lent into — Q4 — which the board cannot
- * know) passes it in `hostRows` and no `onDelete`, so the menu shows exactly one
- * Delete on either surface, never two.
+ * Delete is one slot and the last row. A host that brings its own Delete passes it
+ * in `hostRows` and no `onDelete`, so exactly one Delete shows on either surface.
  *
- * ⚠ COORDINATE MODE, like the switcher beside it and for the same reason: this
- * menu opens inside `.page-float`, an overflow-clipping pane where a
- * trigger-anchored panel renders as a clipped sliver.
+ * Coordinate mode, like the switcher beside it: this menu opens inside
+ * `.page-float`, where a trigger-anchored panel renders as a clipped sliver.
  */
 export function BoardSettingsMenu({
   clusterName,
@@ -235,7 +197,7 @@ export function BoardSettingsMenu({
   /** Member+ only — a viewer gets the host's rows and no edits. */
   onRename?: () => void;
   hostRows?: (close: () => void) => ReactNode;
-  /** ⚠ Omit when `hostRows` supplies Delete. */
+  /** Omit when `hostRows` supplies Delete. */
   onDelete?: () => void;
 }) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);

@@ -1,63 +1,46 @@
 // The FIXED TEXT BLOCKS of a spawn prompt — the vocabulary, the prose invariant, and the
-// thread-tag rule (`module.exports = { THREAD_TAG, VOCABULARY, PROSE_RULE }`). It also held THE
-// LAW, the five-rule multiplayer contract a room-bound TEAM session opened with; that block is
-// deleted with the named agents four of its five rules turned on (channels rollback §1) and only
-// its epitaph remains, above THREAD_TAG.
+// thread-tag rule. It also held THE LAW, the five-rule multiplayer contract a room-bound TEAM
+// session opened with; that block went with the named agents four of its five rules turned on
+// (channels rollback §1) and only its epitaph remains, above THREAD_TAG.
 //
-// Split out of `prompt-framing.js` at the §2 500-line cap (2026-08-04) when the P0-1 invariant
-// landed. The seam is not arithmetic: this file is WHAT THE AGENT IS TOLD and changes every time
-// a behaviour round rewrites a paragraph, while `prompt-framing.js` is HOW A TURN IS ASSEMBLED
-// (sanitization, the nonce fence, the delivery call, which block goes in which shape) and
-// changes when the assembly does. The same seam `channel-description.ts` and `channel.ts` are
-// split on in the MCP package.
+// Split out of `prompt-framing.js` at the §2 500-line cap (2026-08-04). The seam is not arithmetic:
+// this file is WHAT THE AGENT IS TOLD and changes every time a behaviour round rewrites a
+// paragraph, while `prompt-framing.js` is HOW A TURN IS ASSEMBLED and changes when the assembly
+// does.
 //
-// EVERY BLOCK HERE IS FIXED TEXT — nothing is interpolated into any of them — so none of them
-// can ever carry a fence token of its own. That property is why they were safe to lift out
-// wholesale, and it must hold for anything added: a block that interpolates caller data belongs
-// beside `sanitizeName`, not here.
+// EVERY BLOCK HERE IS FIXED TEXT — nothing is interpolated into any of them — so none can ever
+// carry a fence token of its own. That property is why they were safe to lift out wholesale, and it
+// must hold for anything added: a block that interpolates caller data belongs beside `sanitizeName`.
 //
 // PURE: no electron / fs / path, so the truth tables `require` it directly.
 
-// v3.0 THE VOCABULARY. Stated in the FIRST turn, outside the fence, so the agent writes
-// the same words the operator reads in the window and in the channel. It is fixed text —
-// nothing is interpolated into it — so it can never carry a fence token of its own.
+// v3.0 THE VOCABULARY. Stated in the FIRST turn, outside the fence, so the agent writes the same
+// words the operator reads in the window and in the channel.
 //
-// The distinction is load-bearing for the agent's plan, not decoration: a THREAD is the
-// shared unit both members see and it does not pause, while a SESSION is the local run
-// that does. Anything the agent scopes "for this session" (a standing grant, a mode) dies
-// with the session; anything it says about the THREAD is visible to the other member.
+// The distinction is load-bearing for the agent's plan: a THREAD is the shared unit both members
+// see and it does not pause, while a SESSION is the local run that does. Anything scoped "for this
+// session" dies with the session; anything said about the THREAD is visible to the other member.
 //
-// FIX S1: this used to teach `task=<id>` as the tool ARGUMENT. mcp__dopl__dopl_channel has no
+// FIX S1: this used to teach `task=<id>` as the tool ARGUMENT. `mcp__dopl__dopl_channel` has no
 // such parameter — the 1.7.11 cutover made the agent-facing argument `thread=<id>` and left the
-// older word only on the post KINDS (`kind="task_*"`) and the storage key (`metadata.taskId`),
-// which the agent never types. The split is stated below exactly that way.
+// older word only on the post KINDS and the storage key, which the agent never types.
 //
-// P0-1 (incident 2026-08-04) — THE FOUR KINDS ARE NOT A VOCABULARY TO PICK FROM. The last
-// bullet used to LIST all four side by side and say "use each as given", which reads as an
-// interchangeable set: a responder that had finished its work picked `task_finished` for the
-// answer itself, and a `task_finished` body is structurally unrenderable on the peer's card
-// (lib/group-thread.ts sets it as `endEvent` and never pushes it to `entries`). So the whole
-// answer arrived on the wire and appeared nowhere. The bullet now states the SPLIT of
-// authority instead of the list of names: three of them belong to the runtime, one is an
-// optional marker, and everything the agent says is a message. (It named "and the close" as a
-// second owner of the three until thread closing was removed — wiring plan Phase 4,
-// 2026-08-18 — which left the runtime as the only one.)
+// P0-1 (incident 2026-08-04) — THE FOUR KINDS ARE NOT A VOCABULARY TO PICK FROM. The last bullet
+// used to LIST all four side by side, which reads as an interchangeable set: a responder picked
+// `task_finished` for its answer, and a `task_finished` body is structurally unrenderable on the
+// peer's card, so the whole answer arrived on the wire and appeared nowhere. The bullet now states
+// the SPLIT of authority: three kinds belong to the runtime, one is an optional marker, and
+// everything the agent says is a message.
 //
-// TWO CAPABILITIES ADDED 2026-08-18 (wiring plan Phase 11), because an agent does not have
-// either unless it is TOLD: the sparse main-CHANNEL post, and the @-tag. They sit in the
-// VOCABULARY rather than in the delivery section on purpose — both are about what the agent
-// may CHOOSE to do, not about how the one call it was given is shaped, and this block opens
-// both sides' first turn (`prompt-framing.js › buildFencedTurn`) where the delivery section
-// is written for the send that is already decided.
+// TWO CAPABILITIES ADDED 2026-08-18 (wiring plan Phase 11), because an agent does not have either
+// unless it is TOLD: the sparse main-CHANNEL post, and the @-tag. They sit in the VOCABULARY rather
+// than the delivery section because both are about what the agent may CHOOSE to do.
 //
-// ⚠ THE TAG RULE STATED HERE IS THE REAL ONE, copied from the single parser in
-// `src/features/channels/lib/mentions.ts` (lowercase EXACT match against handles derived from
-// the display name and the email local part; ambiguity resolves to nobody). A prompt that
-// taught a friendlier rule would produce tags that resolve to nobody and report nothing.
-//
-// ⚠ WHAT IT DOES NOT PROMISE: a notification. Mention-gated notification is wiring plan
-// Phase 7 and lands in `main/targeting.js`, a separate build; this copy states the Tags INBOX,
-// which is true today, and never a popup it cannot see.
+// THE TAG RULE STATED HERE IS THE REAL ONE, copied from the single parser in
+// `src/features/channels/lib/mentions.ts` (lowercase EXACT match against handles derived from the
+// display name and the email local part; ambiguity resolves to nobody). A friendlier rule would
+// produce tags that resolve to nobody. WHAT IT DOES NOT PROMISE: a notification — this copy states
+// the Tags INBOX, which is true today, and never a popup it cannot see.
 const VOCABULARY = [
   'VOCABULARY (use these words when you write):',
   '- A CHANNEL (or DM) holds many THREADS.',
@@ -78,19 +61,14 @@ const VOCABULARY = [
   '  changes what somebody else is doing, or an answer to something asked in the room. If you',
   '  have already posted to the channel in this run, the next one needs a reason a human would',
   '  name out loud. Work traffic stays in the thread.',
-  // ⚠ **THE HANDLE IS THE WHOLE DISPLAY NAME, SLUGGED, AND THIS PARAGRAPH IS WHY AN AGENT
-  // WROTE `@samuel`** (F-708, 2026-09-16; Samuel's ruling: the display NAME is authoritative
-  // and the handle is DERIVED from it, never the reverse). This copy taught the squashed and
-  // first-word forms and named no canonical one, so every agent picked a shortening — and
-  // `@samuel` is the FIRST-WORD door, which is real but is not the person's handle. The
-  // canonical form is `lib/mentions.ts › mentionSlug` (spaces to dashes: "Samuel Wang" →
-  // `samuel-wang`), which is what the composer's own picker inserts
-  // (`components/composer-mentions.tsx › insertableHandle`), what the MCP doctrine publishes
-  // (`channel-doctrine.ts`), and what the transcript tints.
-  // ⚠ THE OLDER FORMS ARE STILL RECOGNISED AND THE COPY STILL SAYS SO — they resolve for
-  // bodies already written (`lib/mentions.ts › handlesOf` keeps them, deliberately) — but they
-  // are named as fallbacks rather than as choices, because an agent offered three spellings
-  // with no preference will not pick the one the product writes everywhere else.
+  // THE HANDLE IS THE WHOLE DISPLAY NAME, SLUGGED, and this paragraph is why an agent wrote
+  // `@samuel` (F-708, 2026-09-16; Samuel's ruling: the display NAME is authoritative and the handle
+  // is DERIVED from it, never the reverse). This copy taught the squashed and first-word forms and
+  // named no canonical one, so every agent picked a shortening. The canonical form is
+  // `lib/mentions.ts › mentionSlug` (spaces to dashes: "Samuel Wang" → `samuel-wang`), which is what
+  // the composer's picker inserts, what the MCP doctrine publishes, and what the transcript tints.
+  // The older forms are still recognised and the copy still says so — they resolve for bodies
+  // already written — but they are named as FALLBACKS rather than choices.
   '- @-TAG A PERSON when you need one. Write `@` and then their handle, in the BODY of the',
   '  post: their display name, lowercased, with spaces as dashes — "Samuel Wang" is',
   '  `@samuel-wang`. That is the handle the app itself inserts and tints, so it is the one to',
@@ -105,21 +83,17 @@ const VOCABULARY = [
 ];
 
 // P0-1 — THE INVARIANT THE PROMPT NEVER STATED, and the whole reason a finished piece of work
-// vanished. mcp__dopl__dopl_channel defaults `kind` to "message" when the call omits it, and
-// the delivery call this module prints has ALWAYS omitted it (deliveryCall), so the runtime was
-// innocent: the AGENT chose a lifecycle kind, because nothing here said prose could not go in
-// one. It is stated in the delivery section, on EVERY branch (with or without a resolved call,
-// requester and responder alike), because delivery is the one section an agent re-reads when it
-// is about to send something.
+// vanished. `mcp__dopl__dopl_channel` defaults `kind` to "message" when the call omits it, and the
+// delivery call this module prints has ALWAYS omitted it, so the runtime was innocent: the AGENT
+// chose a lifecycle kind, because nothing here said prose could not go in one. It is stated in the
+// delivery section on EVERY branch, because delivery is the one section an agent re-reads when it
+// is about to send something. It names the FAILURE MODE rather than the rule: "use kind=message"
+// reads as a formatting preference, where "the body of a task_finished is not rendered on the other
+// member's card" is a fact it can act on.
 //
-// Why it names the failure mode rather than just the rule: "use kind=message" reads as a
-// formatting preference, and the agent had a reason to think otherwise. "the body of a
-// task_finished is not rendered on the other member's card" is a fact it can act on.
-//
-// House voice (§H-13): no em dash — prompt-framing.test.mjs asserts every delivery line is free
-// of one. Kept as an ARRAY (not a paragraph) so each branch of deliverySection splices it in
-// beside its own lines and the em-dash / `task=` scanners in the truth table read it line by
-// line like everything else.
+// House voice (§H-13): no em dash — prompt-framing.test.mjs asserts every delivery line is free of
+// one. Kept as an ARRAY (not a paragraph) so each branch of deliverySection splices it in and the
+// em-dash / `task=` scanners read it line by line.
 const PROSE_RULE = [
   `EVERY SUBSTANTIVE WORD YOU SEND IS AN ORDINARY MESSAGE, YOUR FINAL ANSWER INCLUDED. The`,
   `delivery call above sets no kind, and that is correct: leave it that way. NEVER put prose`,
@@ -129,32 +103,26 @@ const PROSE_RULE = [
   `read, send it as a message.`,
 ];
 
-// THE LAW OF THIS ROOM was five rules opening a room-bound TEAM session's first turn:
-// address to act (do work only when a message names your HANDLE), reply where you were
-// asked, never assume another identity, escalate by addressing a human, one voice (post as
-// yourself). Four of the five turned on being a NAMED AGENT, and named agents are gone
-// (channels rollback §1) along with the room-bound session that read them. What survived is
-// stated where it still applies: "reply where you were asked" is the THREAD_TAG rule below,
-// and the addressing law itself lives in the MCP tool's own description, which every session
-// reads on every connection.
+// THE LAW OF THIS ROOM was five rules opening a room-bound TEAM session's first turn. Four of the
+// five turned on being a NAMED AGENT, and named agents are gone (channels rollback §1) along with
+// the room-bound session that read them. What survived is stated where it still applies: "reply
+// where you were asked" is the THREAD_TAG rule below, and the addressing law lives in the MCP
+// tool's own description, which every session reads on every connection.
 
 
-// Why the tag must survive EVERY turn, not just the first post. Appended to the delivery
-// section only when the call really carries a `thread` argument, so a session with no thread
-// id keeps the wording it had before, byte for byte.
-// THE CONCISION RULING (Samuel, 2026-08-21). STANDING framing, not a per-message reminder.
+// Why the tag must survive EVERY turn, not just the first post. Appended to the delivery section
+// only when the call really carries a `thread` argument, so a session with no thread id keeps the
+// wording it had before, byte for byte.
 //
-// ⚠ IT IS HERE RATHER THAN IN A PER-TURN LINE ON PURPOSE, and the reason is the ruling's own:
-// a style instruction repeated on every fed turn competes with the turn's actual content and
-// reads as a fresh demand each time. Said ONCE, in the first turn, beside the vocabulary and
-// the delivery rule, it is a property of how this agent writes rather than a note about this
-// message. Every spawn shape gets it — both sides of `buildFencedTurn`.
+// THE CONCISION RULING (Samuel, 2026-08-21) is STANDING framing, not a per-message reminder: a
+// style instruction repeated on every fed turn competes with the turn's content and reads as a
+// fresh demand each time. Said ONCE, in the first turn, it is a property of how this agent writes.
+// Every spawn shape gets it — both sides of `buildFencedTurn`.
 //
-// ⚠ IT IS A DEFAULT, NOT A CAP, AND IT SAYS SO. An explicit ask for depth beats it; otherwise
-// the agent would refuse the one case where length is the answer, which is worse than the
-// verbosity this exists to stop. Written as what to DO ("short paragraphs") with the specific
-// failures named, because "be concise" alone measurably does not move a model that believes
-// exhaustiveness is helpfulness.
+// IT IS A DEFAULT, NOT A CAP, AND IT SAYS SO: an explicit ask for depth beats it, or the agent
+// would refuse the one case where length is the answer. Written as what to DO ("short paragraphs")
+// with the specific failures named, because "be concise" alone measurably does not move a model
+// that believes exhaustiveness is helpfulness.
 //
 // House voice (§H-13): no em dash, like every other block in this file.
 const CONCISION = [
@@ -168,24 +136,17 @@ const CONCISION = [
   '  style, give them exactly that. Their ask beats this default every time.',
 ];
 
-// PERSONAL KNOWLEDGE CONFIDENTIALITY (2026-09-06, Samuel's reversal of task 11) — the
-// COMPENSATING CONTROL for making an operator's personal/private knowledge bases reachable by
-// default from a shared channel. The reach itself is a server fence
-// (`src/shared/tenancy/personal-reach.ts`, now default-on); this block is the other half of the
-// package: the shelf is reachable, and this is the standing instruction that it must not be
-// LEAKED. Read is allowed, disclosure is not.
+// PERSONAL KNOWLEDGE CONFIDENTIALITY (2026-09-06, Samuel's reversal of task 11) — the COMPENSATING
+// CONTROL for making an operator's personal/private knowledge bases reachable by default from a
+// shared channel. The reach itself is a server fence (`src/shared/tenancy/personal-reach.ts`,
+// default-on); this is the other half: read is allowed, disclosure is not.
 //
-// ⚠ IT IS STANDING FRAMING, NOT A PER-MESSAGE REMINDER, and it sits beside VOCABULARY / CONCISION
-// for the same reason they do: a confidentiality rule repeated on every fed turn reads as a fresh
-// demand and competes with the turn's content. Said once, in the first turn, it is a property of
-// how this agent handles knowledge rather than a note about this message.
+// STANDING framing, not a per-message reminder, beside VOCABULARY / CONCISION and for their reason.
+// Harmless in a solo room (there is no other member to withhold from), so it rides every channel
+// session's first turn unconditionally rather than branching on member count — the same shape the
+// reach fence took when it stopped counting the room.
 //
-// ⚠ IT IS HARMLESS IN A SOLO ROOM (there is no other member to withhold from), so it rides every
-// channel session's first turn unconditionally rather than branching on member count — the same
-// shape the reach fence took when it stopped counting the room.
-//
-// House voice (§H-13): no em dash, like every other block in this file; nothing here teaches a
-// `task=` argument, so the delivery scanners read it clean.
+// House voice (§H-13): no em dash; nothing here teaches a `task=` argument.
 const PERSONAL_KNOWLEDGE_CONFIDENTIALITY = [
   'PERSONAL KNOWLEDGE IS YOURS TO USE, NOT TO SHARE:',
   '- You may read your own operator\'s personal and private knowledge bases and use what you',
@@ -203,27 +164,23 @@ const THREAD_TAG = [
   `there as a brand new request and starts a second agent run against your own reply.`,
 ];
 
-// LANE EXCLUSIVITY (2026-08-22, F-268) — the second half of the "which tool is your delivery
-// path" instruction, and a BELT over a lane no SDK option covers.
+// LANE EXCLUSIVITY (2026-08-22, F-268) — the second half of the "which tool is your delivery path"
+// instruction, and a BELT over a lane no SDK option covers.
 //
-// WHY IT EXISTS. The CLI has a THIRD MCP lane beside `mcpServers` and `settingSources`: when the
-// session's OAuth credential carries the `user:mcp_servers` scope it fetches `GET /v1/mcp_servers`
-// and connects every claude.ai ACCOUNT CONNECTOR as `mcp__claude_ai_<Name>__*`. Measured
-// 2026-08-22 against the bundled binary: NINE of them (Slack, Gmail, Google Calendar, Google
-// Drive, Figma, Granola, Notion, Attio, Dopl) in a session that asked for one server.
-// `sdk-loader.js › buildScrubbedEnv` suppresses the lane at the process boundary; this paragraph
-// is what holds on the day that suppression does not (an older binary, a renamed env var).
+// The CLI has a THIRD MCP lane beside `mcpServers` and `settingSources`: when the session's OAuth
+// credential carries the `user:mcp_servers` scope it fetches `GET /v1/mcp_servers` and connects
+// every claude.ai ACCOUNT CONNECTOR as `mcp__claude_ai_<Name>__*` — measured 2026-08-22 against the
+// bundled binary at NINE of them in a session that asked for one server.
+// `sdk-loader.js › buildScrubbedEnv` suppresses the lane at the process boundary; this paragraph is
+// what holds on the day that suppression does not (an older binary, a renamed env var).
 //
-// ⚠ IT IS NOT THE CONTAINMENT AND MUST NOT BE READ AS IT. Every connector tool is unclassified,
-// so `session-profiles.js › grantDecision` gates it and a windowless session denies it — pinned
-// by `test/session-tool-name-prefix.test.mjs`. The failure this text prevents is CHEAPER and more
-// likely: a model that sees a plausible `mcp__claude_ai_Slack__send_message` sitting next to its
-// real delivery path spends a turn on it, or plans a route to a person that is not this session's.
-// ⚠ NAMED EXAMPLES, then the RULE, in that order. "Any mcp__ tool that is not mcp__dopl__" alone
-// is a shape an agent has to derive mid-turn; the three names make it recognisable at a glance,
-// and the general clause is what actually closes the set.
-// ⚠ NO EM DASH (§H-13 house voice, and `prompt-framing.test.mjs` scans every line naming
-// `dopl_channel`), and nothing here teaches a `task=` argument.
+// IT IS NOT THE CONTAINMENT AND MUST NOT BE READ AS IT: every connector tool is unclassified, so
+// `grantDecision` gates it and a windowless session denies it. The failure this text prevents is
+// cheaper and more likely — a model that sees a plausible `mcp__claude_ai_Slack__send_message` next
+// to its real delivery path spends a turn on it. NAMED EXAMPLES, then the RULE, in that order: the
+// three names make it recognisable at a glance, and the general clause closes the set.
+//
+// No em dash (§H-13), and nothing here teaches a `task=` argument.
 const LANE_EXCLUSIVITY = [
   `- It is also the ONLY path off this machine. Other servers may be offered to you, including`,
   `  similar-looking ones (Slack, Gmail, Drive, any mcp__ tool that is not mcp__dopl__). None`,
@@ -231,25 +188,21 @@ const LANE_EXCLUSIVITY = [
   `  move data out. Post here instead.`,
 ];
 
-// ── ⚠ WHERE AN ANSWER GOES WHEN THE QUESTION CAME FROM THE PANEL (2026-08-31, Samuel's ruling) ──
+// ── WHERE AN ANSWER GOES WHEN THE QUESTION CAME FROM THE PANEL (2026-08-31, Samuel's ruling) ──
 //
-// THE DEFECT THIS CLOSES. A session has TWO inbound lanes and only ONE of them is visible to
-// anybody but the operator: the CHANNEL (posts, which every member and every watching agent sees)
+// A session has TWO inbound lanes and only ONE is visible to anybody but the operator: the CHANNEL,
 // and the operator's private 1:1 composer (`sessions:message` -> the reducer's `steer`), whose
 // turns are rendered in the agent panel and are on no wire at all. The framing said where to
-// deliver, but nothing said the two lanes are DIFFERENT — so an agent woken by a panel message
-// answered in the panel, which is exactly right for "what are you doing?" and exactly wrong for
-// the channel work it was launched to do. From outside, that agent has produced nothing.
+// deliver but never that the two lanes are DIFFERENT, so an agent woken by a panel message answered
+// in the panel — right for "what are you doing?", wrong for the channel work it was launched to do.
 //
-// ⚠ THE RULE IS ABOUT THE WORK, NOT ABOUT THE LANE THE QUESTION ARRIVED ON, and that is the
-// half a shorter sentence would lose. "Reply where you were asked" is right for a question about
-// YOU; it is wrong for the channel's work, because the people and agents waiting on that work
-// cannot read the panel. So the discriminator is the AUDIENCE.
+// THE RULE IS ABOUT THE WORK, NOT ABOUT THE LANE THE QUESTION ARRIVED ON: "reply where you were
+// asked" is right for a question about YOU and wrong for the channel's work, because the people and
+// agents waiting on it cannot read the panel. The discriminator is the AUDIENCE.
 //
-// ⚠ IT DOES NOT TELL THE AGENT TO ECHO EVERYTHING INTO THE CHANNEL. The panel is a real lane with
-// a real purpose (the operator steering privately, and asking things the room does not need), and
-// an agent that mirrored every private exchange into the room would be the running commentary the
-// sparseness rule forbids two paragraphs up.
+// It does NOT tell the agent to echo everything into the channel. The panel is a real lane with a
+// real purpose, and an agent that mirrored every private exchange into the room would be the running
+// commentary the sparseness rule forbids two paragraphs up.
 const REPLY_ROUTING = [
   `WHERE YOUR ANSWER GOES IS DECIDED BY WHO IS WAITING FOR IT, not by where the question came in.`,
   `- You have TWO inbound lanes. CHANNEL messages are posts everyone in the room can read. Your`,

@@ -1,18 +1,13 @@
-// "BYPASS STILL ASKS" — the 2026-08-02 transparency + coverage round.
-//
-// Three defects, all of them the same shape: the gate was RIGHT and could not say so.
-//   FIX 1  Every gate/deny verdict now carries a machine-readable REASON CODE, threaded onto the
-//          permission payload and rendered as one short line on the card. An uncovered tool under
-//          `bypass` used to read as a broken toggle; a slug-addressed post as a random refusal.
+// "BYPASS STILL ASKS" — the 2026-08-02 transparency + coverage round. Three defects, all the same
+// shape: the gate was RIGHT and could not say so.
+//   FIX 1  Every gate/deny verdict carries a machine-readable REASON CODE, threaded onto the
+//          permission payload and rendered as one short line on the card.
 //   FIX 2  BashOutput / KillShell were HARD-DENIED under `full` (they sit in DENIED_BUILTINS with
-//          Bash and hard-deny is checked first), so background Bash was unusable. They are the
-//          READ HALF of an already-gated Bash and now follow it exactly on the tool axis.
+//          Bash and hard-deny is checked first), so background Bash was unusable. They are the READ
+//          HALF of an already-gated Bash and now follow it exactly on the tool axis.
 //   FIX 3  A gate verdict logged NOTHING, so "the mode never landed" and "the mode landed but does
 //          not cover this tool" were indistinguishable in the field. One diag line per verdict,
 //          carrying codes and postures only — never a body, a prompt, or a full id.
-//
-// Layers: a direct require for the (electron-free) main modules, the render module under the same
-// tiny DOM stub session-render-dom.test.mjs uses, and a source pin for the diag line's payload.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -27,11 +22,10 @@ const require = createRequire(import.meta.url);
 const M = (p) => join(HERE, "..", "main", p);
 const profiles = require(M("session-profiles.js"));
 const io = require(M("session-io.js"));
-// ⚠ 2026-08-31 (runtime-adapter port, step 3): `makeCanUseTool` SPLIT. The verdict plumbing, the
-// diag line, the card payloads and the resolver parking are platform-free and live in
+// 2026-08-31 (runtime-adapter port, step 3): `makeCanUseTool` SPLIT. The verdict plumbing, the diag
+// line, the card payloads and the resolver parking are platform-free and live in
 // `main/session-gate-bridge.js`; what remains under this name is the HELD-CALLBACK WIRING and the
-// platform's own reply vocabulary, which is the adapter's. The tests below drive the shipped
-// callback, so they take it from there.
+// platform's own reply vocabulary. The tests drive the shipped callback, so they take it from there.
 const axisB = require(M("runtime/claude/axis-b.js"));
 const { GATE_REASONS } = require(M("session-gate-reason.js"));
 const { DOPL_CHANNEL_TOOL, DENIED_BUILTINS } = require(M("tool-profiles.js"));
@@ -45,8 +39,8 @@ const SHELL_READS = ["BashOutput", "KillShell"];
 test("FIX 1: every gate/deny branch names WHY, with a code from the closed set", () => {
   const cases = [
     // [label, args, expected decision, expected reason]
-    // F-177 (2026-08-08): this case used to drive `Task`, which `full` no longer hard-denies.
-    // The BRANCH is unchanged; only the set it covers shrank to the universal floor.
+    // F-177 (2026-08-08): this case used to drive `Task`, which `full` no longer hard-denies. The
+    // BRANCH is unchanged; only the set it covers shrank to the universal floor.
     ["hard-deny is immovable and says so",
       { toolName: "mcp__dopl__dopl_kb_admin", input: {}, toolMode: "bypass" }, "deny", "hard-denied"],
     ["F-177: a RELEASED built-in gates instead, and says it is in no mode list",
@@ -74,10 +68,10 @@ test("FIX 1: every gate/deny branch names WHY, with a code from the closed set",
       { toolName: DOPL_CHANNEL_TOOL, input: { op: "read" }, messageMode: "ask" }, "gate", "read-approval-required"],
     ["a slug-addressed read is classified cross-channel, and says READ, not POST",
       { toolName: DOPL_CHANNEL_TOOL, input: { op: "read", channel: "my-slug" }, messageMode: "auto_both" }, "gate", "cross-channel-read"],
-    // 2026-09-17 (Samuel's field report): THE THREE MANAGE VERBS STOP ON THE POSTURE PAIR, and
-    // said `channel-op-approval-required` until this wave — an approval with no surface to be
-    // given on, so the orchestrator that filed this waited forever. The honest fact is that BOTH
-    // axes are needed, exactly as the launch lane next door already said.
+    // 2026-09-17 (Samuel's field report): THE THREE MANAGE VERBS STOP ON THE POSTURE PAIR. They said
+    // `channel-op-approval-required` until this wave — an approval with no surface to be given on,
+    // so the orchestrator that filed this waited forever. BOTH axes are needed, exactly as the
+    // launch lane next door already said.
     ["an own-channel manage.rename under a half-set posture names the PAIR, not an approval",
       { toolName: DOPL_CHANNEL_TOOL, input: { op: "manage", action: "rename", channel: CH, to: "@agent-k3", name: "coder" }, toolMode: "auto", messageMode: "auto_both" }, "gate", "manage-posture-required"],
     ["...and manage.end the same way, on the message half",
@@ -86,9 +80,8 @@ test("FIX 1: every gate/deny branch names WHY, with a code from the closed set",
       { toolName: DOPL_CHANNEL_TOOL, input: { op: "manage", action: "posture", channel: CH, to: "@agent-k3", posture: { tools: "auto" } }, toolMode: "manual", messageMode: "auto_outbound" }, "gate", "manage-posture-required"],
     ["a manage op naming ANOTHER room is a different fact and keeps the old code",
       { toolName: DOPL_CHANNEL_TOOL, input: { op: "manage", action: "rename", channel: "other-id", to: "@agent-k3", name: "x" }, toolMode: "bypass", messageMode: "auto_both" }, "gate", "channel-op-approval-required"],
-    // 2026-09-17: ...AND `manage.direct` STOPS ON THE SAME PAIR, which it had been falling
-    // through since its lane shipped on 2026-08-31. It SHARES the manage code rather than
-    // taking a fourth: the conjunction is identical, so the operator's fix is identical.
+    // 2026-09-17: `manage.direct` stops on the same pair, which it had been falling through since
+    // its lane shipped. It SHARES the manage code: the conjunction is identical, so the fix is too.
     ["an own-channel manage.direct under a half-set posture names the PAIR, not an approval",
       { toolName: DOPL_CHANNEL_TOOL, input: { op: "manage", action: "direct", channel: CH, agent_id: "a1", body: "go" }, toolMode: "auto", messageMode: "auto_both" }, "gate", "manage-posture-required"],
     ["...and on the MESSAGE half, where the tools axis is already wide enough",
@@ -119,9 +112,8 @@ test("FIX 1: an ALLOW is explained too, so the diag can tell WHICH rule let it t
     { decision: "allow", reason: "auto-inbound-read" });
   // 2026-09-17: the OWN-MACHINE MANAGE LANE carries ONE CODE PER VERB, because "an agent was
   // STOPPED", "an agent was RELABELLED" and "an agent's POSTURE was asked to move" are three
-  // different answers to "what happened on this machine with no click?" — a distinction the
-  // delivery end already makes in code (only the posture verb sits behind the launch toggle).
-  // ⚠ NONE of them may be an outbound code: nothing left this machine as CONTENT.
+  // different answers to "what happened on this machine with no click?". NONE of them may be an
+  // outbound code: nothing left this machine as CONTENT.
   const managed = (action, extra) => detail({ toolName: DOPL_CHANNEL_TOOL,
     input: { op: "manage", action, channel: CH, to: "@agent-k3", ...extra },
     toolMode: "bypass", messageMode: "auto_both" });
@@ -130,9 +122,8 @@ test("FIX 1: an ALLOW is explained too, so the diag can tell WHICH rule let it t
   assert.deepEqual(managed("end"), { decision: "allow", reason: "auto-end-own-machine" });
   assert.deepEqual(managed("posture", { posture: { tools: "auto" } }),
     { decision: "allow", reason: "auto-posture-own-machine" });
-  // 2026-09-17: and the DIRECT lane gets the code it never had. It answered `auto-outbound`
-  // until this wave — the MESSAGE lane's code — so every private direction in the field read
-  // like a post into the room, which is the one distinction this lane's ruling rests on.
+  // 2026-09-17: the DIRECT lane gets the code it never had. It answered `auto-outbound` until this
+  // wave — the MESSAGE lane's code — so every private direction read like a post into the room.
   assert.deepEqual(detail({ toolName: DOPL_CHANNEL_TOOL,
     input: { op: "manage", action: "direct", channel: CH, agent_id: "a1", body: "go" },
     toolMode: "bypass", messageMode: "auto_both" }),
@@ -328,9 +319,8 @@ test("FIX 3: the line carries NO body, NO prompt text, NO tool input and NO full
 });
 
 // ── M3 (2026-08-05): the line NAMES THE CHANNEL OP ────────────────────────────────
-// The line carried the tool and the reason but not the operation, so `dopl_channel gate
-// channel-op-approval-required` read identically for a read, an invite and a DM open — which is
-// why diagnosing the read/post incoherence took code archaeology instead of ten seconds of log.
+// Without it, `dopl_channel gate channel-op-approval-required` read identically for a read, an
+// invite and a DM open.
 
 test("M3: a channel verdict names the op; nothing else on the line moves", () => {
   const modes = { allowForTask: [], toolMode: "bypass", messageMode: "auto_both" };
@@ -340,18 +330,16 @@ test("M3: a channel verdict names the op; nothing else on the line moves", () =>
   assert.match(open.logged[0], /^session gate: dopl_channel op=rooms.open gate channel-op-approval-required tool=bypass msg=auto_both session=sess-123$/);
   // THE PRODUCTION LINE FROM THE DIAG LOG, now diagnosable: it says WHICH op stopped.
   assert.ok(open.logged[0].includes("op=rooms.open"), "the field that turns archaeology into reading");
-  // ⚠ **THE ACTION IS ON THE LINE SINCE 2026-09-02 (F-578), and it has to be:** `rooms` is four
-  // reads and four writes, so `op=rooms` would read identically for a roster read and an invite
-  // — the exact incoherence this segment was added to end, one collapse later.
+  // THE ACTION IS ON THE LINE SINCE 2026-09-02 (F-578), and it has to be: `rooms` is four reads and
+  // four writes, so `op=rooms` would read identically for a roster read and an invite.
   assert.ok(!/op=rooms\b(?!\.)/.test(open.logged[0]), "the bare dispatcher name is not the label");
 });
 
 // ── F-139: the diagnostic hole and the defect had ONE root ────────────────────────
-// The line only prints `op=` for a tool that CLASSIFIES as the channel tool, so on the broken
-// machine the op was absent from every line — the bug hid its own diagnosis. These pin that
-// fixing the matcher resolves the diag by itself, and that the name is stripped for a server
-// segment carrying underscores (the old label regex was `[a-z0-9-]+?`, so it stripped nothing
-// and the field printed the whole dotted name).
+// The line only prints `op=` for a tool that CLASSIFIES as the channel tool, so on the broken machine
+// the op was absent from every line — the bug hid its own diagnosis. These pin that fixing the
+// matcher resolves the diag by itself, and that the name is stripped for a server segment carrying
+// underscores (the old label regex was `[a-z0-9-]+?`, so it stripped nothing).
 
 test("F-139: a connector-named channel tool logs the SAME line as our own registration", () => {
   const modes = { allowForTask: [], toolMode: "bypass", messageMode: "auto_both" };
@@ -384,10 +372,8 @@ test("M4: the diag distinguishes a marker allow from a message allow", () => {
   // A post keeps its OWN code: "did my agent send a message?" is a different audit question.
   const post = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "send", body: "hi" });
   assert.match(post.logged[0], /^session gate: dopl_channel op=send allow auto-outbound /);
-  // ⚠ `propose_close` was the marker set's other member and `close_thread` was pinned here as
-  // the op that STILL gated in the very posture that auto-allowed its proposal. Both left the
-  // tool's enum with thread closing (wiring plan Phase 4, 2026-08-18). An unclassified op
-  // resolves to `gate`, which is the safe direction, so this is the pin that they do:
+  // `propose_close` and `close_thread` left the tool's enum with thread closing (wiring plan Phase 4,
+  // 2026-08-18). An unclassified op resolves to `gate`, the safe direction, which is what is pinned:
   for (const op of ["propose_close", "close_thread"]) {
     const gated = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op, thread: "T1" });
     assert.match(gated.logged[0], new RegExp(`^session gate: dopl_channel op=${op} gate `),
@@ -456,18 +442,13 @@ test("FIX 3: no log function, no throw — the diag is a diagnostic, never a dep
 });
 
 test("FIX 3 (source pin): the diag call passes CODES and postures, never an input or a body", () => {
-  // ⚠ 2026-08-31 (runtime-adapter port, step 3): the gate DIAG LINE moved with the rest of the
-  // verdict plumbing to `main/session-gate-bridge.js`. It is platform-free by construction — a
-  // tool name, a channel op, a verdict, a reason code and both postures — which is exactly why it
-  // did not go to an adapter.
+  // 2026-08-31 (runtime-adapter port, step 3): the gate DIAG LINE moved with the rest of the verdict
+  // plumbing to `main/session-gate-bridge.js`. It is platform-free by construction.
   const src = readFileSync(M("session-gate-bridge.js"), "utf8");
-  // BRACE-MATCHED, NOT BOUNDED BY THE NEXT COMMENT (2026-08-06). This used to slice from
-  // `function logGateVerdict(` up to the `BEGIN SESSION-IO-POST-SURFACE` sentinel that
-  // happened to follow it. That block moved to session-post-surface.js in the §2 split, so
-  // the end bound became `indexOf(...) === -1` and the slice silently ran to the END OF THE
-  // FILE — every assertion below would then be scanning the whole module. The `< 900` guard
-  // caught it, but only by luck of ordering; a slice whose end bound is a DIFFERENT feature's
-  // sentinel is one refactor away from being wrong again.
+  // BRACE-MATCHED, NOT BOUNDED BY THE NEXT COMMENT (2026-08-06). The old slice ended at a sentinel
+  // that happened to follow it; when that block moved, the end bound became -1 and the slice
+  // silently ran to the END OF THE FILE. A slice bounded by a DIFFERENT feature's sentinel is one
+  // refactor away from being wrong again.
   const fn = fnOf(src, "logGateVerdict");
   assert.ok(fn.length > 0 && fn.length < 900, "the diag builder stays small enough to read");
   for (const f of ["input", "body", "command", "inputFull", "inputSummary"]) {

@@ -34,10 +34,9 @@ export const ontologySnapshotKey = (workspaceId: string) =>
 export type OntologyStatus = "loading" | "ready" | "error";
 
 export interface UseOntologyOptions extends OntologyCreateCallbacks {
-  /** An object or cluster was permanently deleted ON THE SERVER. Object cap is
-   *  a server-side count and deleting is the only way back under it — caller
-   *  must refresh entitlements here or the cap meter (and the `overCap` create
-   *  short-circuit) stays stuck at the pre-delete number until a reload. */
+  /** An object or cluster was permanently deleted on the server. The cap is a
+   *  server-side count, so the caller must refresh entitlements here or the meter
+   *  (and the `overCap` short-circuit) stays stuck until a reload. */
   onDeleted?: () => void;
 }
 
@@ -54,7 +53,7 @@ export function useOntology(
   graph: GraphState;
   status: OntologyStatus;
   dispatch: (action: GraphAction) => void;
-  /** Both return the row that is ALREADY on screen — no await to a pixel. */
+  /** Both return the row that is already on screen — no await to a pixel. */
   createCluster: () => OntologyCluster;
   createObject: (
     target: { clusterId: string } | { parentObjectId: string }
@@ -87,8 +86,8 @@ export function useOntology(
   const inFlightRef = useRef(0);
 
   // Snapshot through the query cache: revisit paints instantly, background
-  // refetch brings it current. ⚠ Focus refetch stays OFF — a surprise
-  // SNAPSHOT_SET mid-edit clobbers the reducer's optimistic edits.
+  // refetch brings it current. Focus refetch stays off — a surprise SNAPSHOT_SET
+  // mid-edit clobbers the reducer's optimistic edits.
   const snapshotQuery = useQuery({
     queryKey: ontologySnapshotKey(workspaceId),
     queryFn: () => api.fetchSnapshot(workspaceId),
@@ -97,12 +96,12 @@ export function useOntology(
     staleTime: 0,
   });
 
-  // Seed/refresh reducer from query data, ⚠ never over local edits: once the
-  // user has dispatched anything later refetches are ignored (debounced writes
-  // own persistence; next mount refetches).
+  // Seed/refresh reducer from query data, never over local edits: once the user
+  // has dispatched anything, later refetches are ignored (debounced writes own
+  // persistence; next mount refetches).
   const dirtyRef = useRef(false);
   const seededRef = useRef(false);
-  // `seeded` mirrors seededRef as state: status must track when the REDUCER has
+  // `seeded` mirrors seededRef as state: status must track when the reducer has
   // the snapshot, not the query cache — else the empty-graph frame flashes the
   // "create your first cluster" CTA on a cached revisit.
   const [seeded, setSeeded] = useState(false);
@@ -132,11 +131,10 @@ export function useOntology(
       ? "error"
       : "loading";
 
-  // ── Live updates from MCP/CLI agents and other tabs ────────────────
-  // Remote change refetches + re-seeds, bypassing the seed effect's dirty-guard.
-  // ⚠ Never apply a remote snapshot while a local write is in flight: the
-  // coordinator defers until debounced PATCHes have fired AND returned, then
-  // applies the coalesced refetch. Own edits echo back — harmless re-seed.
+  // Live updates from MCP/CLI agents and other tabs: a remote change refetches
+  // and re-seeds, bypassing the seed effect's dirty-guard. Never apply a remote
+  // snapshot while a local write is in flight — the coordinator defers until
+  // debounced PATCHes have fired and returned, then applies the coalesced refetch.
   const refetchSnapshot = snapshotQuery.refetch;
   const hasPendingWrites = useCallback(
     () => timersRef.current.size > 0 || inFlightRef.current > 0,
@@ -203,9 +201,9 @@ export function useOntology(
     };
   }, [workspaceId]);
 
-  // ⚠ Every mirrored write (debounced PATCH + create sequences) must bracket
-  // itself with these, so a remote snapshot can't re-seed the reducer on top of
-  // a row whose POST hasn't answered.
+  // Every mirrored write (debounced PATCH + create sequences) must bracket itself
+  // with these, so a remote snapshot can't re-seed the reducer on top of a row
+  // whose POST hasn't answered.
   const beginWrite = useCallback(() => {
     inFlightRef.current += 1;
   }, []);
@@ -286,7 +284,7 @@ export function useOntology(
 
   const dispatch = useCallback(
     (action: GraphAction) => {
-      // ⚠ Captured BEFORE the reducer runs: rollback source, and the state the
+      // Captured before the reducer runs: rollback source, and the state the
       // cluster cascade's pending-timer keys are read from.
       const before = graphRef.current;
       const removedClusterObjectIds =
@@ -300,7 +298,7 @@ export function useOntology(
         const timer = timersRef.current.get(action.id);
         if (timer) clearTimeout(timer);
         timersRef.current.delete(action.id);
-        // ⚠ Two-arg `then`, not `.then().catch()`: a throw out of the caller's
+        // Two-arg `then`, not `.then().catch()`: a throw out of the caller's
         // onDeleted must not read as a refused DELETE and roll back a delete
         // that actually landed.
         void api.deleteObject(workspaceId, action.id).then(

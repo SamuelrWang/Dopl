@@ -1,36 +1,23 @@
 /**
- * THE ONE OVERVIEW SERIES VOCABULARY — ranges, buckets, bins, zero-fill
- * (P33 / R-29(b), wave 8).
+ * R-29(b) (2026-09-17): one implementation of the overview series, two payloads.
+ * /home's series is fenced on the reader's personal wallet and a workspace's on
+ * that container's seat wallets — different meters, and summing across them was
+ * the 2026-09-12 bug. Shared here: the window arithmetic, the bucket, the
+ * zero-fill, the `truncated` story. Not shared: the payload or the fence. Never
+ * widen this module with a read — it does no IO and knows no container kind.
  *
- * 🔒 **ONE IMPLEMENTATION OF THE SERIES, TWO PAYLOADS — AND THE SPLIT IS THE
- * RULING (R-29(b), Samuel 2026-09-17: the SERIES first, and *not* (c) for the
- * payload).** /home's series is fenced on the reader's PERSONAL WALLET and a
- * workspace's on that container's SEAT wallets; those are different meters, and
- * summing across them was the exact 2026-09-12 bug
- * (`docs/specs/credit-model-v2.md` §3). So what is shared is this file — the
- * window arithmetic, the bucket, the zero-fill and the `truncated` story — and
- * what is NOT shared is the payload or the fence. **Never widen this module
- * with a read.** It does no IO and knows no container kind.
+ * The range union is both hosts' sets and neither host accepts all of it; each
+ * parses its OWN set and 400s the rest (INVARIANTS §9 is per host, not per union).
  *
- * ⚠ **THE RANGE UNION IS THE UNION OF BOTH HOSTS' SETS, AND NEITHER HOST
- * ACCEPTS ALL OF IT.** /home's allowed set is `overview-types.ts ›
- * HOME_OVERVIEW_RANGES` (four); a workspace's is
- * `workspaces/types.ts › WORKSPACE_SERIES_RANGES` (four, a different four). A
- * host parses its OWN set and 400s everything else — the fall-through ban in
- * INVARIANTS §9 is per host, not per union.
- *
- * ⚠ **NO `server-only`.** This is arithmetic over strings; the SPA imports the
- * types beside it, and a marker here would fence the renderer out of them.
+ * No `server-only`: this is arithmetic over strings, and the SPA imports the
+ * types beside it.
  */
 
 /**
- * Every window either host can ask for.
- *
- * ⚠ **`31d` IS THE WORKSPACE'S LEGACY FIXED WINDOW, NOT A SWITCHER OPTION** —
- * today plus the 30 UTC days before it, what
- * `…/overview-series` answered with no `range` at all before wave 8 and what
- * `channels/components/thread-activity.tsx › ThreadActivityStrip` still reads.
- * It stays reachable so that caller's window did not silently move by a day.
+ * Every window either host can ask for. `31d` is the workspace's legacy fixed
+ * window, not a switcher option — today plus the 30 UTC days before it, still
+ * read by `channels/components/thread-activity.tsx › ThreadActivityStrip`. It
+ * stays reachable so that caller's window did not silently move by a day.
  */
 export type OverviewSeriesRange = "24h" | "7d" | "30d" | "31d" | "month";
 
@@ -47,11 +34,9 @@ const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
 
 /**
- * Bins, and the width of one, for each window.
- *
- * ⚠ `month`'s `bins` IS COMPUTED, not stored — a month is 28..31 days.
- * {@link overviewWindows} overrides the number; it is here so the record stays
- * total over the union.
+ * Bins, and the width of one, for each window. `month`'s `bins` is computed, not
+ * stored (28..31 days); {@link overviewWindows} overrides the number, which is
+ * here only so the record stays total over the union.
  */
 const RANGE_SHAPE: Record<
   OverviewSeriesRange,
@@ -85,24 +70,18 @@ function dayStart(at: Date): Date {
 /**
  * The bins for one range, oldest first.
  *
- * ⚠ THE LAST BIN OF A ROLLING RANGE IS PARTIAL AND THAT IS CORRECT — it is "so
- * far today" (or "this hour"). What would NOT be correct is extending a ROLLING
- * window into the future so the bar looks finished.
+ * The last bin of a ROLLING range is partial and that is correct — "so far
+ * today". Extending a rolling window into the future so the bar looks finished
+ * would not be.
  *
- * 🔒 **`month` IS THE WHOLE CALENDAR MONTH — EVERY DAY OF IT, 28..31 BINS — AND
- * IT IS THE ONE RANGE THAT DOES REACH INTO THE FUTURE (Samuel, 2026-09-01:
- * "show the month").** It was MONTH-TO-DATE for one pass, `bins =
- * now.getUTCDate()`, which is **1 on the first of the month** — so the chart
- * rendered a SINGLE bar stretched across the whole plot. Month-to-date
- * reproduces that every month on the 1st.
- * ⚠ **THE FUTURE BINS ARE ZERO AND THAT IS THE POINT**: the axis is the FRAME
- * the operator reads the month against. A future day's zero is not a claim that
- * nothing happened — it is a day that has not happened, which the axis position
- * already says.
+ * (2026-09-01) `month` is the whole CALENDAR month, 28..31 bins, and is the one
+ * range that reaches into the future. Month-to-date gives `bins = 1` on the first
+ * of the month, which renders a single bar stretched across the plot. The future
+ * bins are zero on purpose: the axis is the frame the month is read against.
  *
- * ⚠ **MOVED HERE FROM `home/server/service-overview.ts` IN WAVE 8, UNCHANGED.**
- * That file re-exports it, so /home's windows are the same windows byte for
- * byte (R-40) and the workspace host cannot grow a second calendar.
+ * R-40: `home/server/service-overview.ts` re-exports this, so /home's windows are
+ * the same windows byte for byte and the workspace host cannot grow a second
+ * calendar.
  */
 export function overviewWindows(
   range: OverviewSeriesRange,
@@ -114,7 +93,7 @@ export function overviewWindows(
   if (range === "month") {
     const year = now.getUTCFullYear();
     const month = now.getUTCMonth();
-    // Day 0 of the NEXT month is the last day of this one — 28/29/30/31 without
+    // Day 0 of the next month is the last day of this one — 28/29/30/31 without
     // a leap-year table.
     const days = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
     const first = Date.UTC(year, month, 1);
@@ -148,17 +127,15 @@ export function overviewSince(
 }
 
 /**
- * LEDGER ROWS → ONE ZERO-FILLED BIN EACH.
+ * Ledger rows to one zero-filled bin each.
  *
- * ⚠ **BINNED BY A HALF-OPEN COMPARISON ON THE INSTANT**, not by arithmetic on a
- * day number: the bins are already `[start, end)` pairs and a row belongs to
- * exactly one of them. A row outside every bin (the scan can return one when the
- * window boundary moves between reads) is DROPPED rather than folded into the
- * nearest bar.
+ * Binned by a half-open comparison on the instant, not arithmetic on a day
+ * number: the bins are already `[start, end)` pairs. A row outside every bin (the
+ * scan can return one when the window boundary moves between reads) is dropped
+ * rather than folded into the nearest bar.
  *
- * ⚠ **ALWAYS THE FULL BIN COUNT, NEVER AN EMPTY ARRAY.** Samuel overruled the
- * honesty argument that an empty ledger should answer `[]` (2026-09-01): the
- * axis is the frame and the page never loses it.
+ * (2026-09-01) Always the full bin count, never an empty array: the axis is the
+ * frame and the page never loses it.
  */
 export function binByWindow<T>(
   rows: readonly T[],

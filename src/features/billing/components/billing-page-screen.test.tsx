@@ -1,8 +1,7 @@
 /**
- * Billing page: pins the IMPORT GRAPH (one `AppShell` import drags the rail,
- * sidebar, workspaces fetch, tour and graph engine back into the KEEP set and
- * Stage D stops being a deletion) plus the tab contract — which pane a URL
- * opens on, and that each tab carries what it claims.
+ * Billing page: pins the import graph (one `AppShell` import drags the rail,
+ * sidebar, workspaces fetch, tour and graph engine back into the KEEP set) plus
+ * the tab contract — which pane a URL opens on, and what each tab carries.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -36,17 +35,16 @@ const FREE: WorkspaceEntitlementsStatus = {
   objectsUsed: 12,
   canCreateObjects: true,
   chatsWindowDays: 90,
-  // ⚠ THE METER IS THE READER'S OWN SEAT, NOT A WORKSPACE POOL (2026-09-07).
-  // `wallet` says which counter answered, and the limit is the per-MEMBER
-  // allowance for this plan — built from `credits.ts` so a retune moves the
-  // fixture with the product instead of leaving a stale literal behind.
+  // The meter is the reader's own seat, not a workspace pool (2026-09-07):
+  // `wallet` says which counter answered, and the limit is the per-member
+  // allowance, built from `credits.ts` so a retune moves the fixture too.
   credits: {
     wallet: "seat" as const,
     used: 42,
     limit: SEAT_MONTHLY_CREDITS.free,
     remaining: SEAT_MONTHLY_CREDITS.free - 42,
     periodStart: "2026-08-01T00:00:00.000Z",
-    // ⚠ Midday UTC: `formatDate` renders in the RUNNER's timezone; a midnight
+    // Midday UTC: `formatDate` renders in the runner's timezone, so a midnight
     // instant flips a day west of UTC.
     periodEnd: "2026-09-01T12:00:00.000Z",
     ledgerDrift: 0,
@@ -73,8 +71,8 @@ const TEAM: WorkspaceEntitlementsStatus = {
   has_stripe_customer: true,
 };
 
-/** A workspace that bought Pro before it was retired from sale (2026-09-07) and
- *  has not switched or cancelled. Not sellable, still billed. */
+/** A workspace that bought Pro before it was retired from sale (2026-09-07)
+ *  and has not switched or cancelled. Not sellable, still billed. */
 const LEGACY_SOLO: WorkspaceEntitlementsStatus = {
   ...TEAM,
   plan: "solo",
@@ -83,10 +81,9 @@ const LEGACY_SOLO: WorkspaceEntitlementsStatus = {
 };
 
 /**
- * The SAME page addressed at a `kind='personal'` container — one person's home
- * space (spec §11.1). ⚠ Every "workspace" fact is dropped rather than set to a
- * small number: one member is a fact about the schema, not about a plan, and
- * the object cap is a multi-member rule that cannot apply here.
+ * The same page addressed at a `kind='personal'` container (spec §11.1). Every
+ * "workspace" fact is dropped rather than set to a small number: one member is a
+ * fact about the schema, and the object cap is a multi-member rule.
  */
 const PERSONAL_FREE: WorkspaceEntitlementsStatus = {
   ...FREE,
@@ -101,7 +98,7 @@ const PERSONAL_FREE: WorkspaceEntitlementsStatus = {
   },
 };
 
-/** The personal PAID tier — $8.99 flat, 5,000 credits (Samuel, 2026-09-08). */
+/** The personal paid tier — flat monthly, paid credit allowance (2026-09-08). */
 const PERSONAL_PRO: WorkspaceEntitlementsStatus = {
   ...PERSONAL_FREE,
   plan: "pro",
@@ -160,7 +157,7 @@ describe("which tab a URL opens on", () => {
   });
 
   it("puts the INTENT above ?tab=, because only Billing polls", () => {
-    // Shell produces `?billing=success&tab=usage` itself; honouring `?tab=`
+    // The shell produces `?billing=success&tab=usage` itself; honouring `?tab=`
     // would strand a reloading payer on Usage where the poll never mounts.
     expect(resolveBillingTab("usage", true)).toBe("billing");
   });
@@ -207,15 +204,11 @@ describe("the Usage tab", () => {
   });
 
   /**
-   * 🔒 **THE LABEL NAMES THE PAYER (2026-09-07).** `/api/billing/status` answers
-   * with the CALLER's own meter — their seat here, their personal wallet in the
-   * home space — and `credits.wallet` says which. A bare "Credits" over a
-   * per-member allocation reads as a workspace pool, which is the one thing
-   * Samuel's ruling says it is not ("fixed … not pooled").
-   *
-   * ⚠ The null arm is the STALE-CACHE arm (§8): an IndexedDB row written before
-   * `wallet` shipped replays without it, and the neutral label claims no payer
-   * rather than guessing one.
+   * The label names the payer (2026-09-07): `/api/billing/status` answers with
+   * the caller's own meter and `credits.wallet` says which, so a bare "Credits"
+   * over a per-member allocation would read as the pool it is not.
+   * The null arm is the stale-cache arm (§8) — a row written before `wallet`
+   * shipped replays without it, and the neutral label guesses no payer.
    */
   it("names whose meter it is, from the wallet the payload declares", () => {
     expect(usage(FREE)).toContain("Your credits");
@@ -232,8 +225,8 @@ describe("the Usage tab", () => {
   });
 
   it("drops the explainer paragraph — label and control only (§5)", () => {
-    // Minimal-copy ruling: the meter prints `used / limit` and a reset date,
-    // which is the whole explanation.
+    // Minimal-copy ruling: `used / limit` plus a reset date is the whole
+    // explanation.
     expect(usage(FREE)).not.toContain("Every plan has a monthly MCP allowance");
     expect(usage(FREE)).toContain("Usage this period");
   });
@@ -262,12 +255,10 @@ describe("the Billing tab", () => {
   });
 
   /**
-   * 🔒 **A LEGACY PRO ROW IS STILL PAYING, AND THE PANE MUST SAY SO
-   * (2026-09-07).** Pro is retired from sale, so there is no Solo card to badge
-   * — and `!ent.isPaid` alone would then badge STARTER as this workspace's
-   * current plan, i.e. tell a customer being charged every month that they are
-   * on the free tier. The row gets a one-line note plus the in-place switch
-   * (`/api/billing/upgrade-to-team`), and nothing offers to sell it Pro again.
+   * A legacy Pro row is still paying and the pane must say so (2026-09-07).
+   * With Pro retired there is no Solo card to badge, so the row gets a one-line
+   * note plus the in-place switch (`/api/billing/upgrade-to-team`) and nothing
+   * offers to sell it Pro again.
    */
   it("names a live legacy Pro row without ever selling Pro", () => {
     const markup = screen({}, LEGACY_SOLO);
@@ -279,17 +270,17 @@ describe("the Billing tab", () => {
   });
 
   it("does NOT badge Starter as the current plan of a paying legacy row", () => {
-    // ⚠ WITH THE SOLO CARD GONE, `!ent.isTeam` is the tempting simplification
-    // for Starter's arm — and it would tell a workspace being charged every
-    // month that it is on the free tier. The right test is `!ent.isPaid`, so a
-    // live legacy row matches NEITHER card and nothing is badged.
+    // With the Solo card gone, `!ent.isTeam` is the tempting simplification for
+    // Starter's arm, and it would tell a workspace being charged every month
+    // that it is on the free tier. `!ent.isPaid` is the right test, so a live
+    // legacy row matches neither card and nothing is badged.
     const markup = screen({}, LEGACY_SOLO);
     expect(markup).not.toContain("Current plan");
   });
 
   it("still badges Starter for a workspace that actually is on it", () => {
     // The other direction: a guard that never lets Starter be current is just
-    // as wrong. A cancelled legacy row is genuinely on Starter.
+    // as wrong — a cancelled legacy row is genuinely on Starter.
     expect(screen({}, FREE)).toContain("Current plan");
     expect(screen({}, { ...LEGACY_SOLO, status: "canceled" })).toContain(
       "Current plan"
@@ -297,17 +288,17 @@ describe("the Billing tab", () => {
   });
 
   it("carries the account danger zone the desktop app links out to", () => {
-    // `apps/desktop-ui/.../account-actions.tsx` links here for deletion (D4):
-    // API delete + Supabase sign-out + redirect is not reproducible in the
-    // packaged renderer.
+    // `apps/desktop-ui/.../account-actions.tsx` links here for deletion (D4) —
+    // API delete + sign-out + redirect is not reproducible in the packaged
+    // renderer.
     const markup = screen();
     expect(markup).toContain("Danger zone");
     expect(markup).toContain("Delete account");
   });
 
   it("shows card, invoices and cancel ONLY for a paying workspace", () => {
-    // Starter has no Stripe customer — an empty card/invoice table would
-    // invent an account.
+    // Starter has no Stripe customer — an empty card/invoice table would invent
+    // an account.
     const free = screen();
     expect(free).not.toContain("Payment method");
     expect(free).not.toContain("Invoices");
@@ -349,10 +340,10 @@ describe("the Billing tab", () => {
 });
 
 /**
- * 🔒 **THE SAME ROUTE SERVES A PERSONAL CONTAINER SINCE PRO WENT ON SALE
- * (2026-09-08, spec §11.1).** Its Pro subscription lives in `workspace_billing`
- * keyed by that container, so checkout, portal, invoices and cancel are the
- * ones already here — what changes is every word that assumed a roster.
+ * The same route serves a personal container since Pro went on sale
+ * (2026-09-08, spec §11.1): its subscription lives in `workspace_billing` keyed
+ * by that container, so checkout, portal, invoices and cancel are unchanged and
+ * only the wording that assumed a roster differs.
  */
 describe("addressed at a personal container", () => {
   const usage = (status: WorkspaceEntitlementsStatus) =>
@@ -362,8 +353,8 @@ describe("addressed at a personal container", () => {
     const markup = screen({}, PERSONAL_FREE);
     expect(markup).toContain("Acme");
     expect(markup).toContain("Personal space");
-    // The browser-payment explainer is a workspace-surface note; §5 minimal
-    // copy leaves a personal space with a label and no paragraph.
+    // The browser-payment explainer is a workspace-surface note; §5 minimal copy
+    // leaves a personal space with a label and no paragraph.
     expect(markup).not.toContain("Payment lives in your browser");
   });
 
@@ -371,12 +362,12 @@ describe("addressed at a personal container", () => {
     const markup = usage(PERSONAL_FREE);
     expect(markup).toContain("Personal credits");
     expect(markup).toContain(String(PERSONAL_MONTHLY_CREDITS.free));
-    // ⚠ BOTH DIRECTIONS. The Members line and the section title that framed it
+    // Both directions: the Members line and the section title that framed it
     // are the two places a home space was called a workspace.
     expect(markup).not.toContain("Members");
     expect(markup).not.toContain("Workspace limits");
     expect(markup).toContain("Limits");
-    // Chat history survives — it is a real limit on a personal container.
+    // Chat history survives — a real limit on a personal container.
     expect(markup).toContain("Last 90 days");
   });
 
@@ -390,9 +381,9 @@ describe("addressed at a personal container", () => {
     const markup = screen({}, PERSONAL_FREE);
     expect(markup).toContain("Upgrade to Pro");
     expect(markup).toContain(`$${PRO_PRICE.toFixed(2)}`);
-    // 🔒 The two groups are never concatenated: `team` on a personal container
-    // answers 400 `PLAN_NOT_FOR_CONTAINER`, so offering it would be selling a
-    // checkout that refuses.
+    // The two groups are never concatenated: `team` on a personal container
+    // answers 400 `PLAN_NOT_FOR_CONTAINER`, so offering it would sell a checkout
+    // that refuses.
     expect(markup).not.toContain("Starter");
     expect(markup).not.toContain("/ seat / month");
     expect(markup).not.toContain("Upgrade to Team");
@@ -411,17 +402,17 @@ describe("addressed at a personal container", () => {
   });
 
   /**
-   * 🔒 **THE STRIPE GATE HAS NO PLAN TEST, AND THIS IS THE CASE THAT SAYS SO.**
-   * `hasStripeAccount` is `canManage && isPaid && has_stripe_customer`
-   * (`billing-plans-pane.tsx`); a `plan === "team"` anywhere in it would strand
-   * every Pro payer with no way to change a card or read an invoice.
+   * The Stripe gate has no plan test: `hasStripeAccount` is
+   * `canManage && isPaid && has_stripe_customer` (`billing-plans-pane.tsx`), and
+   * a `plan === "team"` anywhere in it would strand every Pro payer with no way
+   * to change a card or read an invoice.
    */
   it("gives a Pro payer the card, invoices and cancel sections", () => {
     const markup = screen({}, PERSONAL_PRO);
     expect(markup).toContain("Payment method");
     expect(markup).toContain("Invoices");
     expect(markup).toContain("Cancel plan");
-    // And a FREE personal container gets none of them — no customer exists.
+    // And a free personal container gets none of them — no customer exists.
     const free = screen({}, PERSONAL_FREE);
     expect(free).not.toContain("Payment method");
     expect(free).not.toContain("Invoices");
@@ -448,10 +439,9 @@ describe("what the page deliberately leaves out", () => {
     const imports = source
       .split("\n")
       .filter((line) => /^\s*import\b/.test(line) || /^\s*}\s*from\s+"/.test(line));
-    // ⚠ `@/features/tour` and `@/features/workspaces/components/join-request-notices`
-    // stood in this list and are gone with the modules themselves (R-49,
-    // 2026-09-17): a forbidden-import string naming a module that no longer
-    // exists asserts nothing and reads as if it did.
+    // R-49 (2026-09-17): `@/features/tour` and the join-request-notices module
+    // left this list with the modules themselves — a forbidden-import string
+    // naming a module that no longer exists asserts nothing.
     for (const forbidden of [
       "@/shared/layout/app-shell",
       "@/features/onboarding/components",
@@ -464,7 +454,7 @@ describe("what the page deliberately leaves out", () => {
     const markup = screen();
     expect(markup).not.toContain("role=\"dialog\"");
     expect(markup).not.toContain("Workspace switcher");
-    // Settings-modal nav: appearing means the page re-absorbed the shell.
+    // Settings-modal nav: if it appears, the page re-absorbed the shell.
     expect(markup).not.toContain("Plans &amp; Billing");
   });
 

@@ -1,45 +1,19 @@
 /**
- * THE PINNED `window.dopl` OP SURFACE, split out of `preload-parity.test.mjs` on 2026-09-05 for
- * the 500-line cap (ENGINEERING.md §2). It is a LIST, not logic: the assertions, the loader and
- * the reasoning stay in the test; only the inventory moved, so the file that argues about the
- * surface is readable again.
- *
- * ⚠ ORDER IS PART OF THE ASSERTION — `opPaths` walks the exposed object and the test compares
- * deep-equal, so a reordering here reads as a changed surface. Add an op where it actually sits.
+ * The pinned `window.dopl` op surface, split out of `preload-parity.test.mjs` on 2026-09-05.
+ * ORDER IS PART OF THE ASSERTION: `opPaths` walks the exposed object and the test compares
+ * deep-equal, so a reordering reads as a changed surface. Add an op where it actually sits.
  */
 export const APP_OPS = [
   "apiRequest",
-  // ⚠ TWO OPS JOINED HERE ON 2026-09-13 (Samuel's Wispr-Flow ruling): the pin failed on the ADD,
-  // which is the review this comment records:
-  //   • The main-process handlers EXIST and were checked first — `main/window-chrome.js` registers
-  //     `window:close` / `window:toggleMaximize`, both `appWindowOnly`, both refusing in the one
-  //     `{ ok: false }` shape, and both resolving their target as
-  //     `BrowserWindow.fromWebContents(event.sender)`.
-  //   • THEY TAKE NO ARGUMENTS AND CAN NAME NO OTHER WINDOW. There is no id, key or handle on the
-  //     wire, so the usual "every value is re-validated in main" clause has nothing to cover: the
-  //     ONLY window either op can reach is the caller's own.
-  //   • THEY WIDEN NOTHING. Until today macOS drew a close button and a zoom button on this very
-  //     window and the operator clicked them directly; `main/agent-window.js` took `frame: false`,
-  //     so what these restore is exactly that authority and no more. They grant no tool, read no
-  //     secret, start no turn and reach no other machine.
+  // 2026-09-13 (Wispr-Flow ruling): `appWindow.close` / `.toggleMaximize`. Both handlers are
+  // `appWindowOnly`, take NO arguments and can name no other window — the only window either can
+  // reach is the caller's own, which is the authority macOS's own buttons had before `frame: false`.
   "appWindow.close",
-  // ⚠ TWO MORE JOINED HERE LATER THE SAME DAY (Samuel's TABBED pop-out): the pin failed on the
-  // ADD, which is the review this comment records:
-  //   • The main-process handler EXISTS and was checked first — `main/window-chrome.js` registers
-  //     `window:closeTab`, `appWindowOnly`, refusing in the same one `{ ok: false }` shape, and
-  //     resolving its window as `BrowserWindow.fromWebContents(event.sender)` like its two
-  //     neighbours. `onTabs` is a LISTENER and registers no handler: main PUSHES
-  //     `agent-window:tabs` to the window it created (`main/agent-window.js › pushTabs`).
-  //   • ⚠ `closeTab` IS THE FIRST OF THESE THREE TO TAKE AN ARGUMENT, and the key it takes names
-  //     a TAB INSIDE THE SENDER'S OWN WINDOW — never a window. TWO fences, not one: the sender
-  //     must be a bound app window AND that window must BE the agent window
-  //     (`agent-window.js › isHostWindow`), so a bound pop-out or the main window cannot reach
-  //     the agent window's tab set however the key is spelled. An unknown key answers `false`.
-  //   • THEY WIDEN NOTHING. Until today each agent had its OWN window and the operator closed it
-  //     with the same authority; what these restore is exactly that, one tab at a time. They
-  //     grant no tool, read no secret, start no turn and reach no other machine. ⚠ The LAST-TAB
-  //     rule (closing it closes the window) stays in MAIN, so the renderer cannot close a window
-  //     by emptying a list.
+  // 2026-09-13 (tabbed pop-out): `closeTab` is the first of these to take an argument, and the key
+  // names a TAB INSIDE THE SENDER'S OWN WINDOW. Two fences: the sender must be a bound app window
+  // AND that window must BE the agent window (`agent-window.js › isHostWindow`); an unknown key
+  // answers `false`. The LAST-TAB rule stays in MAIN, so the renderer cannot close a window by
+  // emptying a list. `onTabs` is a listener — main pushes `agent-window:tabs`.
   "appWindow.closeTab",
   "appWindow.onTabs",
   "appWindow.toggleMaximize",
@@ -47,307 +21,116 @@ export const APP_OPS = [
   "beginSignIn",
   "channels.chooseFolder",
   "channels.clearFolder",
-  // ⚠ THE 2026-08-20 AUTO-SEND ADD REVIEW STOOD HERE AND IS RETIRED WITH THE OPS IT REVIEWED
-  // (2026-09-06, item 8). It is not deleted silently: the REMOVAL review is on
-  // `channels.getAutoSend`'s former line below, which is where a reader looking for these two
-  // ops will go. Its original text, kept because a retired review still explains what the
-  // surface once carried:
-  //   • The main-process handlers EXIST and were checked first — `main/channel-dir-ipc.js`
-  //     registers `channels:getAutoSend` / `channels:setAutoSend`, both `appWindowOnly`,
-  //     both UUID-gating `channelId`, storage in `main/channel-prefs.js › get/setAutoSend`
-  //     (durable, default OFF, boolean-only writes).
-  //   • THEY WIDEN LITTLE, AND IN THE STATED DIRECTION: the setting governs whether the
-  //     operator's OWN agent's drafted reply posts without a Send click. A forged `set`
-  //     from an app window can flip a channel to auto-send — the same authority the
-  //     Settings tab hands the operator — and never grants a tool, reads a secret, or
-  //     reaches another member's machine.
-  // ⚠ TWO OPS JOINED HERE ON 2026-08-31 (Samuel's agent-chaining ruling): the pin failed on
-  // the ADD, which is the review this comment records:
-  //   • The main-process handlers EXIST and were checked first — `main/channel-dir-ipc.js`
-  //     registers `channels:getAgentChain` / `channels:setAgentChain`, both `appWindowOnly`,
-  //     both UUID-gating `channelId`, storage in `main/channel-prefs.js › get/setAgentChain`
-  //     (durable, per channel, default OFF, boolean-only writes, off deletes the key).
-  //   • THEY WIDEN LITTLE, AND IN THE STATED DIRECTION: the setting lifts a DEPTH bound —
-  //     whether an agent launched in this channel may launch further agents — and grants
-  //     nothing else. A forged `set` from an app window can turn chaining on for one channel,
-  //     the same authority the Settings tab hands the operator, and a chained launch still
-  //     needs `bypass`, the outbound half, the machine-wide orchestrator toggle, a free slot
-  //     against `MAX_CONCURRENT_SESSIONS` and the rolling budget in `main/launch-budget.js`.
-  //   • ⚠ IT REACHES NO RUNNING SESSION. The flag is a SPAWN-TIME stamp, so a forged flip
-  //     cannot widen an agent that is already working — the asymmetry with
-  //     `setLaunchPosture` below, which fans out live, and it is deliberate: that one widens
-  //     SUPERVISION, this one is CONTAINMENT.
+  // `channels.get/setAutoSend`'s ADD review is retired with the ops (2026-09-06, item 8); the
+  // REMOVAL review is on `channels.getAutoSend`'s former line below.
+  // 2026-08-31 (agent-chaining ruling): `channels.get/setAgentChain` — appWindowOnly, UUID-gated,
+  // durable per channel, default OFF, boolean-only. It lifts a DEPTH bound (may an agent launched
+  // here launch more?) and nothing else, and it is a SPAWN-TIME stamp, so a forged flip cannot
+  // widen a session already running — the deliberate asymmetry with `setLaunchPosture`, which
+  // fans out live: that one widens SUPERVISION, this one is CONTAINMENT.
   "channels.getAgentChain",
-  // ⚠ `channels.getAutoSend` LEFT ON 2026-09-06 (settings overhaul, item 8), and its twin
-  // `channels.setAutoSend` with it. The pin failed on the REMOVAL, which is the review this
-  // comment records — the same discipline the two ADD reviews above follow:
-  //   • The main-process handlers ARE GONE, checked first: `main/channel-dir-ipc.js` no longer
-  //     registers `channels:getAutoSend` / `channels:setAutoSend`, and `main/channel-prefs.js`
-  //     no longer exports `getAutoSend` / `setAutoSend`. Leaving these pinned would assert a
-  //     bridge to nowhere — the exact failure the two deleted consent ops below record.
-  //   • NOTHING WIDENED. The axis they set is the launch posture's `messages`, whose two ops
-  //     are already pinned here; the surface shrank by two ops and gained none.
-  //   • THE SETTING DID NOT DIE, THE SECOND AUTHORITY DID. Auto-send and the posture's
-  //     `messages` were two controls over one axis, and auto-send won by force
-  //     (`session-private.js › autoSendMessageMode`, also deleted). The operator's pick now
-  //     stands, read live at the same single Axis-B decision point.
+  // 2026-09-06 (settings overhaul, item 8): `channels.getAutoSend` / `.setAutoSend` are DELETED,
+  // handlers and storage with them — leaving them pinned would assert a bridge to nowhere. The
+  // axis they set is the launch posture's `messages`, whose ops are already pinned here, so the
+  // setting did not die; the second authority over one axis did.
   "channels.getFolderLabel",
-  // ⚠ TWO MORE JOINED HERE ON 2026-08-20 (the arm-vs-durable-posture split): the pin failed
-  // on the ADD, which is the review this comment records:
-  //   • The main-process handlers EXIST and were checked first — `main/channel-dir-ipc.js`
-  //     registers `channels:getLaunchPosture` / `channels:setLaunchPosture`, both
-  //     `appWindowOnly`, both UUID-gating `channelId`, with BOTH axes re-validated against
-  //     the frozen enums in `main/channel-prefs.js › normalizePreset` (a half-valid pair is
-  //     rejected whole and writes nothing).
-  //   • THEY WIDEN THE SAME AUTHORITY THE SETTINGS TAB ALREADY HANDS THE OPERATOR, on a
-  //     record with exactly ONE consumer: `sessions:launch`, the operator's own Launch
-  //     button. It is SUPERVISION, not containment — a forged `set` to `bypass` cannot
-  //     escape the channel's tool profile or `session-profiles.js › SESSION_HARD_DENY`, and
-  //     Axis B still refuses to let any tool posture send a message.
-  //   • ⚠ AND SINCE LATER THE SAME DAY THEY ARE THE ONLY POSTURE OPS ON THIS BRIDGE. The
-  //     entry above used to end "IT IS NOT THE ARM — `channels.get/setPermissionPreset` stays
-  //     single-use, 30-minute, consent-only (H2), and wiring either pair to the other's
-  //     consumer re-opens the failure H2 exists to prevent". Both arm ops are DELETED
-  //     (Samuel's ruling), together with their main-process handlers and the whole
-  //     `channelPermissionPresets` record. The warning still applies to THIS pair and is
-  //     what the one-consumer census in `test/session-preset-start.test.mjs` enforces:
-  //     `channels.setLaunchPosture` writes a record read by `sessions:launch` and by nothing
-  //     else, and a second reader is H2 re-opened whether or not an arm exists to contrast it
-  //     with.
+  // 2026-08-20: `channels.get/setLaunchPosture` — appWindowOnly, UUID-gated, with BOTH axes
+  // re-validated against the frozen enums in `channel-prefs.js › normalizePreset` (a half-valid
+  // pair is rejected whole and writes nothing). It is SUPERVISION, not containment: a forged `set`
+  // to `bypass` cannot escape the channel's tool profile or `session-profiles.js › SESSION_HARD_DENY`.
+  // It has exactly ONE consumer (`sessions:launch`); a second reader re-opens the failure H2 exists
+  // to prevent, which is what the census in `test/session-preset-start.test.mjs` enforces.
   "channels.getLaunchPosture",
-  // ⚠ TWO OPS WERE REMOVED FROM THIS LIST ON 2026-08-20, and a REMOVAL is exactly what this
-  // file exists to catch — so it is stated rather than absorbed. `channels.getPermissionPreset`
-  // and `channels.setPermissionPreset` sat between the two entries above and below. The pin's
-  // premise is "a removed op is a silently missing feature", and the check that premise
-  // demands was made: the feature was ALREADY missing. The arm's web controls lived in
-  // `launch-panel.tsx`'s INBOUND branch, which stopped rendering at the 2026-08-18 consent
-  // rewrite (the panel's one consumer is the outbound send box, so `kind === "inbound"` was
-  // never true in production — measured, F-233). Nothing feature-detected these two, because
-  // nothing could reach them. The main-process handlers are gone with them, so leaving them
-  // pinned would assert a bridge to nowhere.
+  // 2026-08-20: `channels.getPermissionPreset` / `.setPermissionPreset` were REMOVED, and a removal
+  // is exactly what this file exists to catch — so it is stated rather than absorbed. The feature
+  // was already missing: the arm's web controls lived in `launch-panel.tsx`'s INBOUND branch, which
+  // stopped rendering at the 2026-08-18 consent rewrite (F-233). The handlers are gone with them.
   "channels.setAgentChain", // 2026-08-31 — the review is on `channels.getAgentChain` above
-  // ⚠ `channels.setAutoSend` LEFT 2026-09-06 — the removal review is on `channels.getAutoSend`
-  // above, where its twin's used to be.
+  // `channels.setAutoSend` left 2026-09-06 — the removal review is on `channels.getAutoSend` above.
   "channels.setLaunchPosture",
-  // ⚠ ONE JOINED HERE ON 2026-08-25: `claude.signIn`, the ONE entry into the Claude Code auth
-  // recovery flow. The pin failed on the ADD, which is the review this comment records:
-  //   • The main-process handler EXISTS and was checked first — `main/session-ipc-ops.js`
-  //     registers `claude:signIn` under the same `appWindowOnly()` sender binding as every op
-  //     above, delegating to `main/claude-signin-op.js › signIn`. It takes NO PAYLOAD: the
-  //     subject is the MACHINE, so there is no id to UUID-gate and the sender binding is the
-  //     ONLY guard — the third op in this family with that shape, after the two
-  //     `orchestratorLaunch` members, and enumerated in `channel-ipc-sender.test.mjs` for it.
-  //   • ⚠ IT EXISTS BECAUSE THE DETECTION HAD NO REMEDY. `session-auth.js` has HELD sessions on
-  //     a missing Claude Code credential since Q6 and the channels surface has said so out loud,
-  //     but `claude-auth.js › startSignInFlow` and `session-auth.js › resumeAfterSignIn` had
-  //     ZERO production callers — so re-posting into a held agent was refused with `auth-hold`
-  //     forever and no dialog could ever appear. This is exactly the failure THIS FILE exists to
-  //     catch, arrived at from the other end: the bridge op was never written at all.
-  //   • NO CREDENTIAL CROSSES IT IN EITHER DIRECTION. Main opens the OAuth page in the SYSTEM
-  //     BROWSER and collects the pasted code in its own local window (`main/claude-auth.js`);
-  //     nothing is typed into a Dopl surface and the answer is a bare `{ ok }` — no token, no
-  //     path, no reason string a probe could read.
-  //   • IT STARTS NO TURN AND GRANTS NOTHING. On success it RELEASES sessions this machine is
-  //     already holding, each of them the operator's own and contained by the profile and
-  //     posture it launched under. The failure direction of a forged call is a native dialog
-  //     the operator did not ask for, which they cancel.
+  // 2026-08-25: `claude.signIn`, the ONE entry into the Claude Code auth recovery flow. It takes NO
+  // PAYLOAD — the subject is the MACHINE, so the sender binding is the only guard. It exists because
+  // the detection had no remedy: `session-auth.js` had HELD sessions on a missing credential since
+  // Q6 while `startSignInFlow` / `resumeAfterSignIn` had zero production callers. NO CREDENTIAL
+  // CROSSES IT: main opens the OAuth page in the SYSTEM BROWSER and answers a bare `{ ok }`. On
+  // success it RELEASES sessions this machine is already holding.
   "claude.signIn",
   "getAuthState",
   "onAuthState",
   "onNavigate",
   "onSyncEvent",
   "openExternal",
-  // ⚠ TWO OPS JOINED HERE ON 2026-08-22 (Samuel's launch-over-MCP ruling): `orchestratorLaunch
-  // .get` / `.set`, the MACHINE-WIDE standing consent for the `channel_launch_directives` lane.
-  // The pin failed on the ADD, which is the review this comment records:
-  //   • The main-process handlers EXIST and were checked first — `main/channel-dir-ipc.js`
-  //     registers `orchestrator:getLaunchEnabled` / `orchestrator:setLaunchEnabled`, both
-  //     `appWindowOnly`. There is NO id to UUID-gate: the subject is the machine, so the payload
-  //     is a bare boolean and `=== true` is the whole validation. Storage is
-  //     `main/channel-prefs.js › get/setOrchestratorLaunch` — durable, default OFF, boolean-only
-  //     writes, unreadable store reads as false.
-  //   • ⚠ THIS PAIR IS MATERIALLY DIFFERENT FROM EVERY OTHER OP ON THIS LIST, AND THE REVIEW IS
-  //     THE POINT OF IT. Enabled, it lets a DIRECTIVE — a row another agent wrote with this
-  //     operator's own credential — cause this machine to spawn a session with no click. That is
-  //     `sessions.launch`'s authority, exercised by a program. So the toggle IS the consent
-  //     (Samuel's ruling, replacing "the click IS that human" for this lane), and everything
-  //     about where it lives follows from that: **it is deliberately not reachable by any Dopl
-  //     credential.** No route, no MCP op, no `workspace_settings` column — because a spawned
-  //     session has `Bash` and the device token is on disk (§6), so a server-side flag could be
-  //     flipped by the very agents it governs, on every machine the operator owns.
-  //   • ⚠ IT WIDENS WHO MAY PRESS, NEVER WHAT IS ALLOWED. A directive-driven launch is exactly
-  //     as contained as a button launch: the channel's own tool profile, the same durable
-  //     posture, `session-profiles.js › SESSION_HARD_DENY`, the windowless message floor. A
-  //     forged `set` from an app-window top frame buys the same thing the Settings row hands
-  //     the operator and reaches no other machine.
-  //   • Both are feature-probed by the SPA; an older main has no toggle, which reads OFF.
-  // ⚠ TWO JOINED HERE ON 2026-08-31: `orchestratorDirect`, the PRIVATE DIRECT LANE's standing
-  // consent. The pin failed on the ADD, which is the review this comment records:
-  //   • The main-process handlers EXIST and were checked first — `main/channel-dir-ipc.js`
-  //     registers `orchestrator:getDirectEnabled` / `orchestrator:setDirectEnabled` under the
-  //     same `appWindowOnly()` sender binding as every op above. They take NO id: the subject
-  //     is the MACHINE, so there is nothing to UUID-gate and `=== true` on a bare boolean is
-  //     the whole validation — the same shape the two `orchestratorLaunch` members have, and
-  //     enumerated in `channel-ipc-sender.test.mjs` beside them.
-  //   • WHAT IT WIDENS, AND IN WHICH DIRECTION: it lets the operator's OWN external agent
-  //     deliver a private message into one of the operator's OWN running agents. Default OFF,
-  //     so the lane does nothing until a human turns it on at this machine.
-  //   • FORGED FROM AN APP-WINDOW TOP FRAME, the worst case is that the operator's direction
-  //     lane is armed or disarmed. It starts no turn by itself, grants no tool, widens no
-  //     posture, reads no secret and reaches no other machine — a direction still has to be
-  //     filed by that operator's own credential and still lands in an existing session's
-  //     private turn, inside that session's existing containment.
-  //   • WHAT IT DOES NOT DO: it is not a second launch toggle, it cannot direct a PEER's agent
-  //     (there is no argument anywhere that names another operator), and it cannot make a
-  //     directed turn post anything — the private-turn gate holds an outbound post for the
-  //     operator's approval whatever this is set to.
+  // 2026-08-22 (launch-over-MCP ruling): `orchestratorLaunch.get` / `.set` — the MACHINE-WIDE
+  // standing consent for the `channel_launch_directives` lane. No id to UUID-gate; the payload is a
+  // bare boolean and `=== true` is the whole validation. Enabled, it lets a DIRECTIVE cause this
+  // machine to spawn a session with no click, so THE TOGGLE IS THE CONSENT — and it is deliberately
+  // not reachable by any Dopl credential (no route, no MCP op, no `workspace_settings` column),
+  // because a spawned session has `Bash` and the device token is on disk (§6). It widens WHO MAY
+  // PRESS, never what is allowed. Feature-probed by the SPA; an older main reads OFF.
+  // 2026-08-31: `orchestratorDirect.get` / `.set` — the PRIVATE DIRECT lane's standing consent, same
+  // machine-wide no-id shape, default OFF. It lets the operator's own external agent deliver a
+  // private message into one of their own running agents. It is not a second launch toggle, cannot
+  // direct a PEER's agent, and cannot make a directed turn post: the private-turn gate still holds
+  // an outbound post for approval whatever this is set to.
   "orchestratorDirect.get",
   "orchestratorDirect.set",
   "orchestratorLaunch.get",
   "orchestratorLaunch.set",
   "passwordSignIn",
   "sendMagicLink",
-  // ⚠ ONE JOINED HERE ON 2026-08-22 (OQ-3, the agent-templates launch wave):
-  // `sessions.approveTemplate` records THIS MACHINE's first-use approval of ANOTHER MEMBER's
-  // agent template. The review, because the pin fails on the ADD:
-  //
-  //   • It STARTS NOTHING and GRANTS NOTHING. No query, no shell wake, no tool, no post. It
-  //     decides one thing: whether a foreign template's TEXT may become an agent's role here.
-  //     A launch from an approved template is contained exactly like any other launch — same
-  //     tool profile, same permission axes, same working folder, same hard-deny floor.
-  //   • Handler: `main/session-ipc-ops.js › sessions:approveTemplate`, `appWindowOnly`, with a
-  //     UUID gate on the id, delegating to `main/session-launch-op.js › approveTemplate`.
-  //   • The failure direction of a FORGED call is that a template the operator would have been
-  //     asked about runs without the question. That is why it is sender-bound like everything
-  //     else here, and why the store it writes is machine-local: a SERVER-writable approval
-  //     would let a credential-holding agent pre-approve itself across the whole fleet, which
-  //     is the escalation `orchestratorLaunchEnabled` exists to not have either.
-  // ⚠ ONE JOINED HERE ON 2026-09-17 (Samuel's inline-approval ruling: *"i dont see like a surface
-  // where I can approve the permission either inline"*). `sessions.answerPermission` carries the
-  // operator's Approve / Deny for ONE tool call this machine is HOLDING at the gate. The review,
-  // because the pin fails on the ADD:
-  //
-  //   • The main-process handler EXISTS and was checked before this list was edited —
-  //     `main/session-ipc-ops.js › sessions:answerPermission`, `appWindowOnly` written literally
-  //     at the site, delegating to `main/session-answer-permission.js › answerPermission`, which
-  //     re-validates the payload (UUID channel, coerced task, charset-gated agent id, bounded
-  //     request id) because the split moved the code and not the boundary.
-  //   • IT DECIDES NOTHING AND WIDENS NOTHING. The GATE already ruled "hold and ask"; this only
-  //     carries a human's answer to a resolver already parked in THIS process for a session in
-  //     main's own registry. ALLOW-ONCE only, so it mints no standing grant; it moves neither
-  //     permission axis, starts no turn, wakes no parked shell and reaches no other machine. A
-  //     `deny` VERDICT parks no resolver at all, so a call the PROFILE refused cannot be answered
-  //     here — this op cannot make a hard-denied tool run.
-  //   • EXACTLY ONCE, PROVED BY THE RESOLVER MAP rather than by a flag: `session-permissions.js ›
-  //     resolvePerm` deletes as it answers, and the engine dispatch returns FIX-F1's "did a live
-  //     resolver really take it". A second click, or one racing the 10-minute TTL or a park's
-  //     fail-close, answers `{ ok: false }` with a reason instead of a blanket success.
-  //   • The failure direction of a FORGED call is one held question answered inside the
-  //     containment that session already launched under — the same shape `sessions.approveTemplate`
-  //     below carries, and why the sender binding matters anyway: a forged ALLOW skips a question
-  //     the operator should have been asked.
+  // 2026-08-22 (OQ-3): `sessions.approveTemplate` records THIS MACHINE's first-use approval of
+  // ANOTHER member's template. It starts nothing and grants nothing — it decides only whether a
+  // foreign template's TEXT may become an agent's role here, and a launch from an approved template
+  // is contained exactly like any other. The store is machine-local because a SERVER-writable
+  // approval would let a credential-holding agent pre-approve itself across the fleet.
+  // 2026-09-17 (Samuel's inline-approval ruling): `sessions.answerPermission` carries the operator's
+  // Approve / Deny for ONE tool call this machine is HOLDING at the gate. The GATE already ruled
+  // "hold and ask"; this only carries the answer to a resolver parked in THIS process. ALLOW-ONCE,
+  // so it mints no standing grant, moves neither axis, starts no turn — and a `deny` VERDICT parks
+  // no resolver at all, so a hard-denied tool cannot be made to run here. EXACTLY ONCE is proved by
+  // the resolver map, not a flag: `session-permissions.js › resolvePerm` deletes as it answers.
   "sessions.answerPermission",
   "sessions.approveTemplate",
-  // ⚠ ONE JOINED HERE ON 2026-08-25 (Samuel's delete ruling): `sessions.delete`, the Agents-tab
-  // card's trash icon. The pin failed on the ADD, which is the review this comment records:
-  //   • The main-process handler EXISTS and was checked before this list was edited —
-  //     `main/session-ipc-ops.js` registers `sessions:delete` under the same `appWindowOnly()`
-  //     sender binding as every op above, UUID-gates `channelId`, and delegates to
-  //     `main/session-delete-op.js › deleteAgent`, which re-validates the payload because the
-  //     split moved the code and not the boundary.
-  //   • IT IS A STOP VERB PLUS A LOCAL ERASE, AND IT WIDENS NOTHING. It cannot start a query,
-  //     wake a parked shell, grant a tool or post anything. A live session is ended through the
-  //     SAME reducer event `sessions:end` dispatches — one stop path, never two — and then the
-  //     LOCAL stores keyed to that agent are dropped. The failure direction of a forged call is
-  //     an agent that stops and a local card that disappears.
-  //   • ⚠ **IT REACHES NO `channel_messages`.** Everything the agent posted is the SERVER's
-  //     shared record and is unreachable from main at all; the transcript keeps every message
-  //     and keeps attributing it to `Agent #<id>`, because the id rides the message rather than
-  //     any table this op can touch. The only server-visible effect is the one `end` already
-  //     has: the session projects as `ended`.
-  //   • ⚠ `agentId` IS REQUIRED, uniquely on this namespace. Every other op resolves an omitted
-  //     id to the OLDEST live agent on the thread; for a DESTRUCTIVE verb that is a DIFFERENT
-  //     agent than the card that was clicked, and nothing would report the substitution.
-  //   • Own agents only, structurally: the registry and the local stores hold nothing but this
-  //     operator's own agents on this machine.
+  // 2026-08-25 (Samuel's delete ruling): `sessions.delete` — a STOP VERB plus a LOCAL ERASE. A live
+  // session ends through the SAME reducer event `sessions:end` dispatches (one stop path, never
+  // two), then the local stores keyed to that agent are dropped. IT REACHES NO `channel_messages`:
+  // the transcript keeps every message and keeps attributing it to `Agent #<id>`. `agentId` is
+  // REQUIRED, uniquely on this namespace — every other op resolves an omitted id to the OLDEST live
+  // agent, which for a destructive verb is a different agent than the card that was clicked.
   "sessions.delete",
-  // ⚠ TWO OPS JOINED HERE ON 2026-08-27 (the composer's launch panel). The pin failed on the
-  // ADD, which is the review this comment records:
-  //   • BOTH main-process handlers EXIST and were checked before this list was edited —
-  //     `main/session-ipc-ops.js` registers `sessions:describe` and `sessions:mintAgentId`
-  //     under the same `appWindowOnly()` sender binding as every op above. A pinned op with no
-  //     handler is a promise the bridge cannot keep; that is the check this rule forces.
-  //   • `sessions.describe` IS `sessions.rename`'S TWIN, field for field: it takes no channel,
-  //     moves no session, starts no turn, grants nothing, and never consults the registry. It
-  //     writes one machine-local string to `main/agent-names.js` — the same store, the same
-  //     `electron-store` record, the same never-server-reachable rule.
-  //   • `sessions.mintAgentId` STARTS NOTHING AND RESERVES NOTHING. It returns eight characters
-  //     from `main/agent-id.js › newAgentId` — a pure CSPRNG draw with no registry entry and
-  //     nothing to release. ⚠ ITS PRESENCE IS ALSO A CAPABILITY GATE: the SPA reads it as "this
-  //     build's `session-launch-op.js` forwards a caller-supplied `agentId`", and falls back to
-  //     filling the id in after launch when it is absent. **Removing it does not merely lose an
-  //     op — it silently re-enables the fallback**, which is exactly the class of disappearance
-  //     this file exists to catch.
+  // 2026-08-27 (the composer's launch panel). `sessions.describe` is `sessions.rename`'s twin, field
+  // for field: one machine-local string in `main/agent-names.js`. `sessions.mintAgentId` starts and
+  // reserves nothing — eight CSPRNG characters from `main/agent-id.js`. ITS PRESENCE IS ALSO A
+  // CAPABILITY GATE: the SPA reads it as "this build forwards a caller-supplied `agentId`", so
+  // removing it does not merely lose an op, it silently re-enables the fill-in-after-launch fallback.
   "sessions.describe",
-  // ⚠ TWO OPS JOINED HERE ON 2026-08-18 (wiring plan Phase 5): `sessions.pause` and
-  // `sessions.end`, the Agents tab's controls on the operator's OWN agent. The pin failed on
-  // the ADD, which is the review this comment records:
-  //   • The main-process handlers EXIST and were checked before this list was edited —
-  //     `main/channel-dir-ipc.js` registers `sessions:pause` / `sessions:end`, both wrapped in
-  //     the same sender binding as `sessions:reopen` and the folder ops (`mainOnly()` when this
-  //     entry was written; `appWindowOnly()` since Phase 10 widened its subject), both
-  //     UUID-gating `channelId`. A pinned op with no handler is a promise the bridge cannot
-  //     keep; that is the check this rule exists to force.
-  //   • THEY WIDEN NOTHING. Each resolves (channel, thread) against main's OWN session
-  //     registry and dispatches a reducer event the session window's buttons already
-  //     dispatched — `interrupt` (the send button's pause morph) and `end` ("End session").
-  //     No query starts, no shell wakes, no tool is granted, nothing is posted. The failure
-  //     direction of a forged call is an agent that STOPS.
-  //   • Own agents only, structurally: the registry holds nothing but this operator's sessions
-  //     on this machine, so there is no cross-member control surface to abuse.
+  // 2026-08-18 (wiring plan Phase 5): `sessions.pause` / `sessions.end` — sender-bound, UUID-gated
+  // stop verbs dispatching the reducer events the session window's buttons already dispatched. The
+  // failure direction of a forged call is an agent that STOPS. Own agents only, structurally: main's
+  // registry holds nothing but this operator's sessions on this machine.
   "sessions.end",
-  // ⚠ JOINED 2026-08-22 with Samuel's ended-agent ruling: `sessions.forgetThread` drops every
-  // LOCAL trace of a deleted thread's ended agents (frozen history, durable record, resume map,
-  // ended card, notice guard). Main cannot see the server's delete cascade, so without a call
-  // from the SPA an ended agent's history outlives its thread by up to seven days. It deletes
-  // no `channel_messages` and cannot touch a LIVE session — the SPA ends those first.
+  // 2026-08-22 (ended-agent ruling): `sessions.forgetThread` drops every LOCAL trace of a deleted
+  // thread's ended agents. Main cannot see the server's delete cascade, so without a call from the
+  // SPA an ended agent's history outlives its thread by up to seven days. It deletes no
+  // `channel_messages` and cannot touch a LIVE session — the SPA ends those first.
   "sessions.forgetThread",
-  // ⚠ ONE JOINED HERE ON 2026-08-20: `sessions.launch`, the Agents tab's "Launch
-  // agent" button — attach MY OWN agent to a thread, windowless. Handler exists
-  // (`main/session-ipc-ops.js › sessions:launch`, appWindowOnly, UUID-gated channel
-  // AND task). It DOES start a query — the materially different shape Phase 5's
-  // stop verbs called out — and that is the feature: the same authority the
-  // consent Allow exercises, here exercised by the operator on their OWN thread
-  // with no peer involved. Posture is main's (auto_inbound / channel auto-send);
-  // the renderer hands over ids and display strings only.
+  // 2026-08-20: `sessions.launch` — attach MY OWN agent to a thread, windowless. appWindowOnly,
+  // UUID-gated channel AND task. It DOES start a query, which is the feature: the same authority the
+  // consent Allow exercises, here on the operator's OWN thread with no peer involved. Posture is
+  // main's; the renderer hands over ids and display strings only.
   "sessions.launch",
-  // ⚠ FOUR JOINED HERE ON 2026-08-20 (F-212's closure — the AGENT WINDOW). The pin failed
-  // on the ADD, which is the review this comment records. They are NOT equivalent to each
-  // other and are reviewed separately:
-  //
-  //   `sessions.message` — ⚠ THE ONE OP ON THIS BRIDGE THAT STARTS A TURN, and the only
-  //     reason this namespace's failure direction is no longer simply "an agent that
-  //     stops". Handler: `main/channel-dir-ipc.js › sessions:message`, appWindowOnly,
-  //     UUID-gated channel, body capped in BOTH layers (the preload's is a convenience,
-  //     main's `MESSAGE_CAP` is the fence), empty-after-trim refused, and the version floor
-  //     applies. It dispatches the EXISTING `steer` reducer event through
-  //     `session-reopen.js › messageByTask` — no new branch and no second wake path — on a
-  //     session resolved by (channel, thread) against MAIN'S OWN registry, which is what
-  //     makes it own-agents-only structurally rather than by a check. The text is delimited
-  //     with that session's nonce and carries OPERATOR authority (`session-seed.js ›
-  //     frameOperatorTurn`); it is deliberately NOT fenced as data, and that file states
-  //     why. ⚠ It BYPASSES the inbound gate, correctly: AXIS B governs counterparty turns,
-  //     and this is the operator's own keyboard in a window main created. Worst case of a
-  //     forged call: the operator's own agent does work they did not ask for, inside its
-  //     existing profile and containment — it grants no tool, widens no posture, reaches no
-  //     other machine, and cannot post without the outbound gate.
-  //   `sessions.openAgentWindow` — `threads.openWindow`'s twin, verbatim guards: it ASKS
-  //     for a window and gets none back, three strings character-checked (UUID + two
-  //     `isSafeSegment`), one `{ ok: false }` refusal shape, version floor honoured.
-  //   `sessions.narration` / `sessions.onNarration` — READ-ONLY, derived from in-memory
-  //     state: no path, no token, no window handle, and explicitly no `inputFull` (which is
-  //     unbounded by construction — `main/session-narration.js` states what may enter a
-  //     ring entry). Read once on mount, then listen, like `summaries`/`onSummaries`.
+  // 2026-08-20 (F-212's closure — the AGENT WINDOW). Reviewed separately, because they are not the
+  // same shape as each other:
+  //   `sessions.message` — THE ONE OP ON THIS BRIDGE THAT STARTS A TURN. UUID-gated channel, body
+  //     capped in both layers (main's `MESSAGE_CAP` is the fence), empty-after-trim refused. It
+  //     dispatches the EXISTING `steer` event through `session-reopen.js › messageByTask` on a
+  //     session resolved against MAIN'S OWN registry, which makes it own-agents-only structurally.
+  //     The text carries OPERATOR authority (`session-seed.js › frameOperatorTurn`) and is
+  //     deliberately not fenced as data. It BYPASSES the inbound gate, correctly: Axis B governs
+  //     counterparty turns, and this is the operator's own keyboard in a window main created.
+  //   `sessions.openAgentWindow` — `threads.openWindow`'s twin, verbatim guards.
+  //   `sessions.narration` / `.onNarration` — READ-ONLY, derived from in-memory state: no path, no
+  //     token, no window handle, and explicitly no `inputFull`.
   "sessions.message",
   "sessions.mintAgentId",
   "sessions.narration",
@@ -355,103 +138,36 @@ export const APP_OPS = [
   "sessions.onSummaries",
   "sessions.openAgentWindow",
   "sessions.pause",
-  // ⚠ JOINED 2026-08-25: `sessions.rename` — what the operator calls one agent. DISPLAY ONLY:
-  //     the main-process handler EXISTS and was checked before this list was edited —
-  //     `main/session-ipc-ops.js` registers `sessions:rename` under the same `appWindowOnly()`
-  //     sender binding as every op above, gates `agentId` through `agent-id.js › isAgentId`,
-  //     and stores the string in `main/agent-names.js` keyed by that address.
-  //   • It moves no session, starts no turn and grants nothing; it cannot wake anything,
-  //     because the registry is never consulted.
-  //   • NOTHING RESOLVES AN AGENT BY IT. `@<agentId>` and every op still address the id, so a
-  //     rename can never re-point a running instruction.
+  // 2026-08-25: `sessions.rename` is DISPLAY ONLY — `agent-id.js › isAgentId` gates the key and the
+  // string lands in `main/agent-names.js`. It moves no session and never consults the registry, and
+  // NOTHING RESOLVES AN AGENT BY IT, so a rename can never re-point a running instruction.
   "sessions.rename",
   "sessions.reopen",
-  // ⚠ ONE JOINED HERE ON 2026-08-20: `sessions.setMode`, the agent view's LIVE permission
-  // controls. The pin failed on the ADD, which is the review this comment records:
-  //   • The main-process handler EXISTS and was checked first — `main/channel-dir-ipc.js`
-  //     registers `sessions:setMode`, `appWindowOnly`, UUID-gating `channelId`, with the
-  //     AXIS restricted to the two literals and the MODE re-validated against
-  //     `session-profiles.js`'s frozen enums (the same normalizers `channel-prefs.js`
-  //     uses) — and the reducer coerces AGAIN fail-closed via `coerceMode`, so an unknown
-  //     value lands on the most restrictive member of its axis rather than half-applying.
-  //   • ⚠ IT WIDENS SUPERVISION, NEVER CONTAINMENT — the review this op turns on. The two
-  //     axes decide whether the OPERATOR IS ASKED. The PROFILE decides what is reachable at
-  //     all, is checked FIRST, and no posture can widen it: `SESSION_HARD_DENY` is
-  //     unconditional, and `bypass` is a POSITIVE allow-list, so an unclassified tool (any
-  //     built-in a newer CLI ships, every tool from the operator's own MCP servers) gates in
-  //     EVERY mode, `bypass` included. So the worst a forged call achieves is to stop asking
-  //     about tools this operator's own channel profile ALREADY PERMITS.
-  //   • THAT IS THE SAME AUTHORITY THE DURABLE POSTURE ALREADY HANDS THEM. `channels.
-  //     setLaunchPosture` sets exactly these two axes for the next spawn; this sets them on a
-  //     session already running. A forged call buys a few minutes' head start on a decision
-  //     the operator can make from the Settings tab, and reaches no other machine.
-  //   • ⚠ IT IS NOT THAT DURABLE POSTURE AND MUST NOT BE WIRED TO IT. This writes NOTHING —
-  //     it moves one live session's reducer state, and the channel's stored posture is
-  //     untouched. Collapsing the two would make a per-session decision permanent.
+  // 2026-08-20: `sessions.setMode`, the agent view's LIVE permission controls. The AXIS is two
+  // literals, the MODE re-validates against `session-profiles.js`'s frozen enums, and the reducer
+  // coerces AGAIN fail-closed via `coerceMode`. IT WIDENS SUPERVISION, NEVER CONTAINMENT: the
+  // profile is checked first, `SESSION_HARD_DENY` is unconditional, and `bypass` is a POSITIVE
+  // allow-list, so an unclassified tool gates in every mode. IT IS NOT THE DURABLE POSTURE and must
+  // not be wired to it — this writes nothing, it moves one live session's reducer state.
   "sessions.setMode",
-  // ⚠ ONE MORE JOINED ON 2026-08-22: `sessions.setModel`, the LIVE model switch (Samuel's
-  // model-selection ruling). The same review, and it lands in a materially milder place:
-  //   • The main-process handler EXISTS and was checked first — `main/session-ipc-ops.js`
-  //     registers `sessions:setModel`, `appWindowOnly`, UUID-gating `channelId`, coercing the
-  //     value against `session-model.js`'s frozen ID list at the boundary and converting to the
-  //     argv-safe ALIAS inside. `session-query.js › buildSdkOptions` coerces once more, as the
-  //     last step before the value could become `--model` on a child process.
-  //   • THE FAILURE DIRECTION IS THE MILDEST ON THIS BRIDGE: a forged call makes the operator's
-  //     OWN agent answer on a different model. It grants no tool, widens no posture, reaches no
-  //     other machine, and the permission table never reads a model at all.
-  //   • AN UNKNOWN VALUE CLEARS THE OVERRIDE rather than being refused, which is deliberate:
-  //     "let the CLI choose" is a legitimate ask and is what an unset channel already does. A
-  //     forged string therefore cannot even pin a model, only un-pin one.
-  //   • ⚠ IT IS NOT `channels.setLaunchPosture`'s `model` FIELD. That one governs the NEXT spawn
-  //     and is durable; this moves one running session and stores nothing per channel. Same
-  //     distinction `setMode` carries above, for the same reason.
+  // 2026-08-22 (model-selection ruling): `sessions.setModel`, the LIVE model switch. The value is
+  // coerced against `session-model.js`'s frozen ID list at the boundary and converted to the
+  // argv-safe ALIAS inside; `session-query.js › buildSdkOptions` coerces once more, as the last step
+  // before it could become `--model` on a child process. An UNKNOWN VALUE CLEARS THE OVERRIDE rather
+  // than being refused, so a forged string cannot pin a model, only un-pin one. It is not
+  // `channels.setLaunchPosture`'s `model` field: this moves one running session and stores nothing.
   "sessions.setModel",
   "sessions.summaries",
   "signOut",
   "syncWatch",
-  // ⚠ ONE JOINED HERE ON 2026-08-18 (wiring plan Phase 10): `threads.openWindow`, the
-  // thread view's "Open as new window". The pin failed on the ADD, which is the review this
-  // comment records:
-  //   • The main-process handler EXISTS and was checked before this list was edited —
-  //     `main/channel-dir-ipc.js` registers `threads:openWindow` under the same
-  //     `appWindowOnly()` sender binding as every op above, UUID-gates `channelId`, and runs
-  //     the segment and the thread id through `deep-link-target.js › isSafeSegment` (the ONE
-  //     character rule for a string entering a router path). A pinned op with no handler is
-  //     a promise the bridge cannot keep; that is the check this rule exists to force.
-  //   • IT ASKS FOR A WINDOW; IT DOES NOT GET ONE. No handle, window id or reference comes
-  //     back — main creates the window and main registers it in `main/app-windows.js`. That
-  //     is precisely why widening the sender binding in this phase is safe: the renderer
-  //     cannot enlarge the set of bound senders, only ask main to.
-  //   • The failure directions are all refusals in ONE shape (`{ ok: false }`): a bad id, a
-  //     blocking version floor, a full window budget. Nothing here starts a query, wakes a
-  //     shell, grants a tool or posts anything.
+  // 2026-08-18 (wiring plan Phase 10): `threads.openWindow`. UUID-gated channel, with the segment
+  // and thread id through `deep-link-target.js › isSafeSegment`. IT ASKS FOR A WINDOW; IT DOES NOT
+  // GET ONE — main creates it and registers it in `main/app-windows.js`, which is why widening the
+  // sender binding is safe: the renderer cannot enlarge the set of bound senders, only ask main to.
   "threads.openWindow",
-  // ⚠ TWO JOINED HERE ON 2026-09-05 (task 9b; Samuel's #1098 via #1101 item 4b, ruled (a) in
-  // #1177): `turnCap.get` / `turnCap.set`, the machine's LOOP-SAFETY BRAKE. The pin failed on the
-  // ADD, which is the review this comment records:
-  //   • The main-process handlers EXIST and were checked first — `main/channel-dir-ipc.js`
-  //     registers `settings:getTurnCap` / `settings:setTurnCap` under the same `appWindowOnly()`
-  //     sender binding as every op above, and both are enumerated in `_ipc-ops-table.mjs`. There
-  //     is NO id to UUID-gate: the subject is the MACHINE, the fourth op family here with that
-  //     shape after the two `orchestrator*` pairs and `claude.signIn`, so the sender binding is
-  //     the only guard on them. Storage is `main/settings.js › sessionTurnCap`, whose `setTurnCap`
-  //     is the ONE writer of that key in the app.
-  //   • ⚠ THIS ONE CAN REMOVE A SAFETY BOUND, WHICH THE OTHERS CANNOT. `set(0)` means unlimited:
-  //     the cap is what ends a runaway session (`session-reducer.js`, reason `turn_cap`), and
-  //     without it a loop between two agents has no local stop. That is why there is no route, no
-  //     MCP op and no `workspace_settings` column for it — a SERVER-writable version would let an
-  //     agent holding this operator's device token (§6) unbound itself on every Mac they own.
-  //   • FORGED FROM AN APP-WINDOW TOP FRAME, the worst case is the operator's own machine running
-  //     with a cap they did not choose. It starts no turn, grants no tool, opens no window, posts
-  //     nothing and reaches no other machine — and it applies to NEW sessions only, because a
-  //     running session read its cap at launch and re-reads nothing (#1177: the reducer owns every
-  //     transition, so a live re-read is a reducer event and a build of its own).
-  //   • Both are feature-probed by the SPA; an older main has no turn-cap concept, which reads as
-  //     NO ROW rather than an inert one.
-  // 🔒 `turnCap.get` / `turnCap.set` STOOD HERE AND ARE DELETED (2026-09-07, Samuel: "Remove the
-  // turn/cost limit"). ⚠ THIS LIST IS THE REASON THE DEFECT WAS FINDABLE AT ALL: it is the pin
-  // that the PRELOAD offers exactly these ops, so it went on asserting two bindings whose
-  // main-process handlers had already been unregistered — the list agreeing with the preload
-  // while both disagreed with main. A preload op with no handler REJECTS on invoke, which the
-  // SPA row's catch rendered as "unset": a control showing a posture nothing enforced.
+  // 2026-09-07 (Samuel: "Remove the turn/cost limit"): `turnCap.get` / `turnCap.set` are DELETED.
+  // THIS LIST IS WHY THE DEFECT WAS FINDABLE: it went on asserting two bindings whose main-process
+  // handlers had already been unregistered — the list agreeing with the preload while both
+  // disagreed with main. A preload op with no handler REJECTS on invoke, which the SPA row's catch
+  // rendered as "unset": a control showing a posture nothing enforced.
 ];

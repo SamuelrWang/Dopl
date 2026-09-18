@@ -8,20 +8,14 @@ import {
 import type { Revision } from "@/features/revisions/types";
 
 /**
- * THE ONTOLOGY'S **Changelog** — the day-grouped roll-up of every change to the
- * cluster and to every object in it (Samuel, 2026-09-09: "cluster-level roll-up
- * = the day-grouped list of everything that changed in that ontology").
+ * The ontology's Changelog — the day-grouped roll-up of every change to the cluster
+ * and to every object in it (Samuel, 2026-09-09). The same list the object panel
+ * mounts, with different rows.
  *
- * ⚠ **THE SAME LIST THE OBJECT PANEL MOUNTS**, with different rows. A second
- * component would be two places for the day heading, the agent mark and the
- * restore confirmation to drift — the rule
- * `revisions/components/changelog-list.tsx` states for its own two surfaces.
- *
- * ⚠ **RESTORE IS ADDRESSED TO THE ROW'S OWN OBJECT**, taken from
- * `revision.resourceId` — a cluster has no per-field restore door, and rows that
- * cannot be written back (the cluster's own, every association, every
- * create/delete bundle) render no Restore at all. `revisions/lib/restorable.ts`
- * states that rule once, for the button and for the server's refusal.
+ * Restore is addressed to the row's own object (`revision.resourceId`): a cluster
+ * has no per-field restore door, and rows that cannot be written back render no
+ * Restore. `revisions/lib/restorable.ts` states that rule once, for the button and
+ * for the server's refusal.
  */
 export function ClusterChangelog({
   clusterId,

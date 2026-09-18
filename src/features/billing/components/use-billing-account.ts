@@ -14,16 +14,15 @@ import { BILLING_STATUS_PATH } from "./use-workspace-entitlements";
 
 /**
  * Client hooks over the workspace's Stripe account — card, invoices,
- * cancel/resume. Separate from `use-workspace-entitlements.ts` (that one is THE
- * read every surface makes; these three are one admin pane).
+ * cancel/resume. Separate from `use-workspace-entitlements.ts`, which is the
+ * read every surface makes; these three are one admin pane.
  *
- * Reads gated twice: `enabled` stops a member/viewer request leaving at all
- * (routes answer 403), and the pane separately hides the sections. Routes are
- * the actual authority.
+ * Reads are gated twice: `enabled` stops a member/viewer request leaving at all
+ * and the pane hides the sections, but the routes are the actual authority.
  *
- * ⚠ THREE OUTCOMES, NOT TWO. A Stripe call that THREW is not a measured
- * absence, so `isError` is part of the contract, not inferable from falsy
- * `data` — panes branch on it BEFORE their empty state and offer `retry`.
+ * Three outcomes, not two: a Stripe call that threw is not a measured absence,
+ * so `isError` is part of the contract and panes branch on it before their
+ * empty state.
  */
 
 export const BILLING_PAYMENT_METHOD_PATH = "/api/billing/payment-method";
@@ -43,11 +42,11 @@ export function useWorkspacePaymentMethod(
     select: (body) => body.paymentMethod ?? null,
   });
   return {
-    // ⚠ `undefined` = in flight OR failed; `null` = MEASURED "no card on
-    // file". Three renders — may not collapse into one falsy check.
+    // `undefined` = in flight or failed; `null` = measured "no card on file".
+    // Three renders — may not collapse into one falsy check.
     paymentMethod: query.data,
     loading: enabled && query.isPending,
-    /** Read threw — `paymentMethod` undefined for a reason that is NOT
+    /** Read threw — `paymentMethod` undefined for a reason that is not
      *  "Stripe has no card". */
     isError: enabled && query.isError,
     retry: query.refetch,
@@ -63,7 +62,7 @@ export function useWorkspaceInvoices(
     { workspaceId, enabled, select: (body) => body.invoices ?? [] }
   );
   return {
-    // ⚠ `?? []` only safe because `isError` is read FIRST — on failure this is
+    // `?? []` is only safe because `isError` is read first — on failure this is
     // the same empty array as a customer with no invoices.
     invoices: query.data ?? [],
     loading: enabled && query.isPending,
@@ -80,14 +79,14 @@ export interface CancelPlanDraft {
 /**
  * Cancel (or resume) the workspace subscription.
  *
- * NO optimistic patch: `cancelAtPeriodEnd` is one field on the billing STATUS
- * row that also carries plan, seat count and credit meter — patching locally
- * asserts the rest is unchanged, which a Stripe write cannot.
+ * No optimistic patch: `cancelAtPeriodEnd` is one field on the billing status
+ * row that also carries plan, seat count and credit meter, and patching locally
+ * asserts the rest is unchanged.
  *
- * ⚠ Invalidation is AWAITED and `pending` covers it (§8 rule 8): the status
- * read decides Cancel vs Resume, so between POST resolving and that read
- * landing, a live button is a second POST for a decision already made. Hence
- * this hook owns the invalidation rather than `onSettled` (fires un-awaited).
+ * Invalidation is awaited and `pending` covers it (§8 rule 8): the status read
+ * decides Cancel vs Resume, so between the POST resolving and that read landing
+ * a live button is a second POST. Hence this hook owns the invalidation rather
+ * than `onSettled`, which fires un-awaited.
  */
 export function useCancelPlan(workspaceId: string | undefined) {
   const client = useQueryClient();
@@ -106,8 +105,8 @@ export function useCancelPlan(workspaceId: string | undefined) {
     try {
       return await mutation.mutateAsync(draft);
     } finally {
-      // ⚠ Both paths: a REFUSED cancel can still have moved Stripe (local row
-      // written after the Stripe call). Prefix key, never a hand-typed tuple (§8).
+      // Both paths: a refused cancel can still have moved Stripe (the local row
+      // is written after the Stripe call). Prefix key, never a tuple (§8).
       await client.invalidateQueries({
         queryKey: apiPathKey(BILLING_STATUS_PATH),
       });

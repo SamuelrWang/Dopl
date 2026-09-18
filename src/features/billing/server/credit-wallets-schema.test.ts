@@ -1,24 +1,18 @@
 /**
- * `20260930120000_credit_wallets.sql`, READ AS THE CONTRACT IT IS.
+ * `20260930120000_credit_wallets.sql`, read as the contract it is.
  *
- * ⚠ **THIS IS NOT A REPLAY.** Docker is unavailable on this machine, so nothing
- * here has met a database and nothing here claims to have. What a SQL-text test
- * can honestly prove is that the file still SAYS the things the rest of this
- * slice is built on — a per-payer key on each counter, the CAS shape that makes
- * the spend atomic, the INSERT-path limit guard, the service-role-only write
- * model, and that NOTHING IS DROPPED — each of which is a silent, expensive
- * failure if it drifts. Behavioural probes inside a rolled-back transaction (the
- * `20260827120000` precedent) are OWED and recorded as such.
+ * Not a replay: Docker is unavailable here, so this is SQL text only. What it
+ * proves is that the file still says the things the slice is built on — a
+ * per-payer key per counter, the CAS shape, the INSERT-path limit guard, the
+ * service-role-only write model, and that nothing is dropped. Behavioural probes
+ * in a rolled-back transaction (the `20260827120000` precedent) are owed.
  *
- * ⚠ Deploy state is a MEASUREMENT: `supabase migration list`, joined on the
+ * Deploy state is a MEASUREMENT: `supabase migration list`, joined on the
  * NAME, never on the filename prefix (INVARIANTS §12, F-304).
  *
- * ⚠ **THE ONE THING A TEXT TEST CANNOT PROVE IS THE CONCURRENCY**, and that is
- * exactly what the CAS is for. What is pinned is that the statement SHAPE is
- * `consume_workspace_credits`'s — one `INSERT … ON CONFLICT DO UPDATE … WHERE …
- * RETURNING`, no advisory lock — because that shape is the argument
- * (`20260811130000`'s header carries it in full) and a second statement, a
- * `SELECT … FOR UPDATE` or a lock would each silently break it.
+ * Text cannot prove the concurrency, so what is pinned is the statement SHAPE —
+ * one `INSERT … ON CONFLICT DO UPDATE … WHERE … RETURNING`, no advisory lock. A
+ * second statement, a `SELECT … FOR UPDATE` or a lock would each break it.
  */
 
 import { describe, it, expect } from "vitest";
@@ -41,14 +35,9 @@ describe("the header carries what an operator needs before applying it", () => {
   });
 
   /**
-   * ⚠ **THE ASSERTION IS "FILENAME ORDER + THE TWO DEPENDENCIES", NOT THE WORD
-   * `LAST` (corrected 2026-09-08 in review).** It read `APPLY ORDER: LAST`,
-   * which was true for one day: `20260930130000_workspace_billing_plan_pro.sql`
-   * ships in the same wave and sorts after this file. Pinning a SUPERLATIVE
-   * made the next migration in the directory a test failure with no bug behind
-   * it — and, worse, the way to make it pass again was to leave a false
-   * sentence in an unapplied migration's header. What an operator needs is the
-   * RULE and the dependencies; those are what this case holds.
+   * The assertion is "filename order + the two dependencies", never the word
+   * `LAST` (2026-09-08): pinning a superlative makes the next migration in the
+   * directory a failure with no bug behind it.
    */
   it("states the apply order and the two files it depends on", () => {
     const prose = sql.replace(/\n--\s*/g, " ");
@@ -92,7 +81,7 @@ describe("🔒 each counter is keyed on its PAYER — the whole point of the wav
   });
 
   it("the seat wallet keys on (workspace, user, period)", () => {
-    // ⚠ THE `user_id` IS THE REVERT DETECTOR. Drop it and this is
+    // `user_id` is the revert detector: drop it and this is
     // `workspace_credit_usage` again — one pooled row per workspace, which
     // cannot express a fixed per-member allocation (Samuel, 2026-09-07).
     expect(sql).toMatch(
@@ -119,9 +108,8 @@ describe("🔒 RLS: no client may write, and a wallet is readable only by its ow
   });
 
   it("a personal wallet has a SELF-ONLY select policy and no member arm", () => {
-    // 🔒 The counter spans the owner's whole home space, so a member arm would
-    // show one container's peer the operator's spend across every OTHER
-    // relationship they have.
+    // The counter spans the owner's whole home space, so a member arm would show
+    // one container's peer their spend across every other relationship.
     expect(sql).toMatch(
       /CREATE POLICY user_credit_usage_self_select ON public\.user_credit_usage\s+FOR SELECT\s+USING \(user_id = \(SELECT auth\.uid\(\)\)\);/
     );
@@ -150,12 +138,10 @@ describe("🔒 RLS: no client may write, and a wallet is readable only by its ow
   });
 
   it("uses the `(SELECT auth.uid())` initplan form, not a bare per-row call", () => {
-    // A bare `auth.uid()` in a policy expression is re-evaluated PER ROW;
-    // wrapping it hoists it to a once-per-query InitPlan (20260720211005 PART
-    // 2). Count the wrapped occurrences against ALL of them rather than pattern
-    // -matching the USING clause — every arm has to be wrapped, not just one.
-    // ⚠ COMMENTS STRIPPED FIRST: this header discusses `auth.uid()` in prose,
-    // and a scan that did not strip would pin a paragraph.
+    // A bare `auth.uid()` in a policy is re-evaluated per row; wrapping hoists it
+    // to a once-per-query InitPlan (20260720211005 part 2). Count wrapped against
+    // ALL occurrences so every arm is covered, and strip comments first — this
+    // file's own prose discusses `auth.uid()`.
     const live = sql
       .split("\n")
       .map((l) => (l.indexOf("--") === -1 ? l : l.slice(0, l.indexOf("--"))))
@@ -185,16 +171,16 @@ describe("🔒 the two RPCs copy consume_workspace_credits' exact CAS shape", ()
       expect(body).toContain("DO UPDATE");
       expect(body).toMatch(/WHERE u\.used \+ p_amount <= p_limit/);
       expect(body).toContain("RETURNING u.used INTO v_used");
-      // ⚠ An advisory lock here would reproduce the leak through PgBouncer
+      // An advisory lock here would reproduce the leak through PgBouncer
       // transaction pooling that `20260720210814` records.
       expect(body).not.toContain("pg_advisory");
       expect(body).not.toMatch(/FOR UPDATE/);
     });
 
     it(`${name} guards the fresh-INSERT path too`, () => {
-      // ⚠ THE `IF` IS NOT REDUNDANT. `ON CONFLICT … WHERE` guards only the
-      // UPDATE, so without it a zero-limit wallet is granted its first call
-      // free — and zero is now REACHABLE (an unmetered verdict resolves to it).
+      // The `IF` is not redundant: `ON CONFLICT … WHERE` guards only the UPDATE,
+      // so without it a zero-limit wallet gets its first call free — and zero is
+      // reachable (an unmetered verdict resolves to it).
       expect(body).toMatch(/IF p_amount <= p_limit THEN/);
     });
 
@@ -302,9 +288,9 @@ describe("ordering", () => {
   it("has a unique version and sorts after every file it depends on", () => {
     const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql"));
     expect(files.filter((f) => f.startsWith("20260930120000"))).toEqual([NAME]);
-    // ⚠ Not a style rule: this file ALTERs `credit_usage_events` and reads the
-    // `personal` workspace kind, so anything it depends on must land BEFORE it
-    // in filename order or the replay fails.
+    // Not a style rule: this file ALTERs `credit_usage_events` and reads the
+    // `personal` workspace kind, so its dependencies must sort before it or the
+    // replay fails.
     for (const dependency of [
       "20260901130000_credit_usage_events.sql",
       "20260920120000_workspace_kind_personal.sql",
@@ -316,30 +302,16 @@ describe("ordering", () => {
   });
 
   it("🔒 no file after it UNDOES this file's subjects", () => {
-    // ⚠ **THIS CASE ASSERTED `later` WAS EMPTY UNTIL 2026-09-08, THEN NAMED ONE
-    // FILE UNTIL 2026-09-10.** Neither shape survives contact with a second
-    // wave: the new-user merge brought five later migrations (presence, template
-    // knowledge scopes, two ontology files, revisions) and a NAMED allow-list
-    // fails on every one of them while proving nothing. It was never a rule that
-    // nothing may follow — it is a rule that nothing following may UNDO this
-    // file's subjects, so the check is now the subject sweep over EVERY later
-    // file. That is stronger than the allow-list was, not weaker: an allow-list
-    // says a name is fine, this reads the SQL.
-    // ⚠ **AND IT SWEPT FOR THE SUBJECT'S *NAME* UNTIL 2026-09-13, WHICH WAS THE
-    // SAME MISTAKE ONE LAYER DOWN.** `20261003120000_credit_events_channel.sql`
-    // ADDs a column to `credit_usage_events` (rule B's `channel_id`) — an
-    // additive, later, entirely legitimate edit that a name sweep reads as a
-    // violation, and whose only fix would have been to stop asserting anything.
-    // What this rule always meant is UNDOING: a `DROP` / `ALTER … DROP` /
-    // `REVOKE` reaching one of these subjects. So the sweep is for the UNDO
-    // VERBS against the subjects, and an ADD COLUMN passes.
+    // The rule is not "nothing may follow" and not a named allow-list: it is
+    // that nothing following may UNDO this file's subjects. So the check sweeps
+    // every later file for UNDO VERBS (`DROP` / `ALTER … DROP` / `REVOKE`)
+    // against the subjects; an additive ADD COLUMN passes.
     const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql"));
     const later = files.filter((f) => f.slice(0, 14) > "20260930120000");
     expect(later.length).toBeGreaterThan(0);
-    // ⚠ COMMENTS STRIPPED. Every migration in this directory carries the
-    // house deploy-state note, which NAMES `credit_usage_events` as its example
-    // of a version that does not match its filename — an unstripped scan reads
-    // that sentence as a statement about the table.
+    // Comments stripped: every migration carries the house deploy-state note,
+    // which names `credit_usage_events` as its example, and an unstripped scan
+    // would read that sentence as a statement about the table.
     const strip = (name: string) =>
       read(name)
         .split("\n")
@@ -355,19 +327,17 @@ describe("ordering", () => {
       "consume_member_credits",
       "credit_usage_events",
     ];
-    // The verbs that take something away. ⚠ `DROP COLUMN` is reached through
-    // `ALTER TABLE`, so the scan is per STATEMENT (split on `;`) rather than per
-    // line: the subject and the verb are on different lines in every file in
-    // this directory.
+    // The verbs that take something away. `DROP COLUMN` is reached through
+    // `ALTER TABLE`, so the scan is per statement (split on `;`), not per line.
     const UNDO = /\b(DROP\s+(TABLE|FUNCTION|INDEX|VIEW|COLUMN|POLICY|CONSTRAINT)|REVOKE|TRUNCATE|DELETE\s+FROM)\b/i;
-    // ⚠ **AND A `DROP FUNCTION` PAIRED WITH A `CREATE FUNCTION` OF THE SAME NAME
+    // **AND A `DROP FUNCTION` PAIRED WITH A `CREATE FUNCTION` OF THE SAME NAME
     // IN THE SAME FILE IS A REPLACEMENT, NOT AN UNDO (2026-09-13, F-693).** The
     // third time this sweep has had to learn the difference between taking
     // something away and changing it. `20261004120000_credit_consume_with_ledger.sql`
     // DROPs both consume RPCs and re-CREATEs them one argument list wider, because
     // `CREATE OR REPLACE` on a changed signature leaves the old function standing
     // as an OVERLOAD — a second path that moves a counter with no ledger row,
-    // which is the exact defect that file closes. ⚠ **THE PAIRING IS THE
+    // which is the exact defect that file closes. **THE PAIRING IS THE
     // ASSERTION**: a bare `DROP FUNCTION` with no `CREATE` beside it still fails,
     // and TABLES, COLUMNS, INDEXES and POLICIES get no such latitude — a dropped
     // counter is a free re-spend of everyone's allowance (that file's own header).

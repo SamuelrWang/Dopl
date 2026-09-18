@@ -19,23 +19,19 @@ import {
 const BLANK_ACTION: ObjectMethod = { name: "", description: "", outcome: "", tools: "" };
 
 /**
- * Actions section — what the object CAN DO (things an agent performs for it).
- * One WHITE BAR per action on the section's gray well, holding the action's NAME
- * with its description / outcome / tools under it.
+ * Actions section — what the object can do. One white bar per action holding its
+ * name with description / outcome / tools under it.
  *
- * ⚠ **`+ Add` APPENDS AN EMPTY BAR WITH ALL FOUR FIELDS ON IT** (Samuel,
- * 2026-09-13: *"Same for actions, relationships, and stuff like that"*). The add
- * composer — a lone name field and an Add button — is deleted: an action's
- * outcome and tools are typeable before its name is written.
+ * 2026-09-13: `+ Add` appends an empty bar with all four fields on it, so an
+ * action's outcome and tools are typeable before its name is written.
  *
- * ⚠ **THE ROW IS WRITTEN WHEN IT HAS A NAME** (its label's blur, or Enter), for
- * the reason in `panel-section.tsx › useDraftRows`: `METHOD_UPSERT` appends by
- * position, so a nameless action would be a row nobody can read or address.
+ * The row is written when it has a name (label blur, or Enter), for the reason in
+ * `panel-section.tsx › useDraftRows`: `METHOD_UPSERT` appends by position, so a
+ * nameless action would be a row nobody can read or address.
  *
- * ⚠ **FLAT SINCE 2026-09-12** (Samuel: *"no more indented stuff"*) — the fields
- * are the popup kit's underline, never a `FIELD_WELL`, and what the bar restores
- * is a SURFACE under the four lines, not the three nested frames that ruling cut
- * (`panel-section.tsx › PanelSection`).
+ * Flat since 2026-09-12 — the fields are the popup kit's underline, never a
+ * `FIELD_WELL`, and the bar restores a surface under the four lines, not the
+ * nested frames that ruling cut (`panel-section.tsx › PanelSection`).
  */
 export function ActionsEditor({
   object,
@@ -90,19 +86,13 @@ export function ActionsEditor({
 }
 
 /**
- * ⚠ **THE ROW'S FIELDS ARE `quiet` SINCE 2026-09-14** (Samuel, over the object
- * panel: *"for the individual fields. I want to remove the gray underline, and
- * have it so that the black underline only appears when a user clicks on a field
- * item (vertical center the text also)"*). It is the kit's `.inputQuiet` — a
- * RESTING STATE of the one underline recipe (`board-header-bits.tsx ›
- * InlineUnderlineField`), not a second face — so the black `::after` sweep on
- * focus is unchanged and blur takes the line away again. The panel's own
- * DESCRIPTION keeps its gray-at-rest line; the rule is about ROW cells.
+ * Fields are `quiet` since 2026-09-14: the kit's `.inputQuiet`, a resting state of
+ * the one underline recipe (`board-header-bits.tsx › InlineUnderlineField`), not
+ * a second face. The panel's own description keeps its gray-at-rest line; the rule
+ * is about row cells.
  *
- * ⚠ **AND THE ORDER IS UNTOUCHED.** The same day's `Attribute : value dropdown`
- * reordering is the ATTRIBUTE row's shape; an action is a STACK of four named
- * fields with no value cell and no kind picker, so there is nothing to reorder
- * and no colon to put between two halves.
+ * Order untouched: the `Attribute : value dropdown` reordering is the attribute
+ * row's shape, and an action is a stack of four named fields with no value cell.
  */
 function ActionRow({
   method,
@@ -114,17 +104,15 @@ function ActionRow({
   method: ObjectMethod;
   canEdit: boolean;
   onChange: (m: ObjectMethod) => void;
-  /** DRAFT ONLY — fires on the name's blur and on Enter. */
+  /** Draft only — fires on the name's blur and on Enter. */
   onCommit?: () => void;
   onRemove: () => void;
 }) {
   return (
     <div className={cn(PANEL_ROW, "group flex flex-col gap-1.5")}>
-      {/* ⚠ THE THREE UNDER-FIELDS KEEP THEIR OLD ACCESSIBLE NAMES ("Action
-          description" / "Action outcome" / "Action tools") AND NOW SHOW THEM AS
-          THE HINT: the field's name IS its hint in this face, and a bare
-          "Description" here would collide with the OBJECT's own Description two
-          sections up — one accessible name, two different things. */}
+      {/* The three under-fields keep their "Action …" accessible names and show
+          them as the hint: a bare "Description" here would collide with the
+          object's own Description two sections up. */}
       <div className="flex items-center gap-2">
         <InlineUnderlineField
           label="Action name"

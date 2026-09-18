@@ -54,8 +54,8 @@ describe("derivePlan — the price is authoritative", () => {
   });
 
   it("calls a LEGACY seat subscription `team`, not whatever the metadata says", () => {
-    // ⚠ The price moved on 2026-09-08; the plan did not. One live sub is on it
-    // (measured 2026-09-08) and it is a Team workspace.
+    // The price moved on 2026-09-08; the plan did not. One live sub is on it and
+    // it is a Team workspace.
     expect(derivePlan(sub(["price_legacy_seat"], { plan: "pro" }))).toBe("team");
   });
 
@@ -80,7 +80,7 @@ describe("derivePlan — the price is authoritative", () => {
   });
 
   it("defaults to `team`, NOT `pro`, on an unstamped unknown price", () => {
-    // ⚠ Deliberate: every subscription that can reach this arm predates `pro`.
+    // Deliberate: every subscription that can reach this arm predates `pro`.
     expect(derivePlan(sub(["price_20_legacy"]))).toBe("team");
     expect(derivePlan(sub([]))).toBe("team");
   });
@@ -130,8 +130,8 @@ describe("🔒 reportPlanContainerMismatch — reports, never refuses", () => {
   });
 
   it("ERRORS when Team lands on a LINK container — the positive predicate", async () => {
-    // ⚠ Not `kind !== "personal"`: a home-channel container carries no plan
-    // either, and a fourth kind must not become sellable by being named.
+    // Not `kind !== "personal"`: a home-channel container carries no plan either,
+    // and a fourth kind must not become sellable by being named.
     findWorkspace.mockResolvedValue(workspace("link"));
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     await reportPlanContainerMismatch("ws-1", "team");

@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 /**
- * Tab switcher as a hazard. A tab click UNMOUNTS the other pane, and Billing
- * can be holding Stripe's embedded card form — so while checkout is up the
- * control is inert and says why (H1). The same click also edits the URL:
- * `?tab=` written via `replaceState`, and the `?billing=` intent DROPPED
- * because the click consumed it (H2). Together they keep the post-payment poll
- * (mounts only in the Billing pane) from being lost to a stray param.
+ * Tab switcher as a hazard. A tab click unmounts the other pane, and Billing can
+ * be holding Stripe's embedded card form — so while checkout is up the control
+ * is inert and says why (H1). The same click edits the URL: `?tab=` via
+ * `replaceState`, and the `?billing=` intent dropped because the click consumed
+ * it (H2). Together they keep the post-payment poll, which mounts only in the
+ * Billing pane, from being lost to a stray param.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -113,17 +113,15 @@ describe("the switcher while checkout is mounted", () => {
     });
 
     expect(view.getByTestId("embedded-checkout")).toBeTruthy();
-    // ⚠ ANCHORED ON THE PANE'S HEADING, NOT ON THE METER'S LABEL (2026-09-05).
-    // This asserted `queryByText("MCP credits")`, which was distinctive; the
-    // meter is labelled "Credits" now, and a bare "Credits" is a word the plan
-    // cards on this very screen can also render exactly — the assertion would
-    // have started passing or failing for the wrong reason. "Usage this period"
-    // belongs to `billing-usage-pane.tsx` alone, which is what this test means.
+    // Anchored on the pane's heading, not the meter's label (2026-09-05): the
+    // meter now reads "Credits", a word the plan cards on this screen also
+    // render, so the assertion would pass or fail for the wrong reason.
+    // "Usage this period" belongs to `billing-usage-pane.tsx` alone.
     expect(view.queryByText("Usage this period")).toBeNull();
   });
 
   it("is live again once checkout is left", async () => {
-    // "← Back to plans" is the sanctioned exit; it must re-enable the switcher.
+    // "← Back to plans" is the sanctioned exit and must re-enable the switcher.
     const view = mount({ initialCheckoutPlan: "team" });
     await waitFor(() => expect(view.getByTestId("embedded-checkout")).toBeTruthy());
 

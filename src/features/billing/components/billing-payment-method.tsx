@@ -7,14 +7,13 @@ import { useWorkspacePaymentMethod } from "./use-billing-account";
 import type { BillingPortal } from "./use-billing-portal";
 
 /**
- * Card on file. READ HERE, EDIT IN STRIPE — showing brand/last4/expiry needs no
- * PCI surface of our own; "Update" is the hosted-portal handoff.
+ * Card on file: read here, edit in Stripe — brand/last4/expiry needs no PCI
+ * surface of our own, and "Update" is the hosted-portal handoff. Rendered by
+ * `billing-plans-pane.tsx` only for a paid workspace with a Stripe customer, so
+ * `null` = Stripe has no card for an existing customer.
  *
- * Rendered by `billing-plans-pane.tsx` only for a paid workspace with a Stripe
- * customer, so `null` = Stripe has no card for an existing customer.
- *
- * ⚠ Error branch checked BEFORE the empty one: "No card on file" is a
- * MEASUREMENT; a read that threw measured nothing. Retry, not the portal —
+ * The error branch is checked before the empty one: "No card on file" is a
+ * measurement, and a read that threw measured nothing. Retry, not the portal —
  * nothing here says the portal would work either.
  */
 export function BillingPaymentMethod({

@@ -1,17 +1,11 @@
 /**
- * INVARIANT SUITE — `credits-unmetered.ts`, the web side of "a charge that was
- * not measured says so".
+ * `credits-unmetered.ts`, the web side of "a charge that was not measured says
+ * so". The behaviour under test is the dedupe, not the message: the first
+ * occurrence logs, every later one is silent, and the timestamp is the first
+ * rather than the latest.
  *
- * 🔒 **THE BEHAVIOUR UNDER TEST IS THE DEDUPE, NOT THE MESSAGE.** The superseded
- * consume route `console.error`'d PER CALL, so the deploy-ordering outage this
- * module exists for (a `PGRST202` between a web deploy and its migration
- * applying) printed one line per tool call per agent and buried itself. The
- * three things that must hold: the FIRST occurrence logs, every later one is
- * SILENT, and the timestamp is the FIRST one rather than the latest.
- *
- * ⚠ The state is PROCESS-LOCAL by decision (the module header carries the full
- * argument), which is exactly why `resetUnmeteredForTests` has to exist: a
- * once-per-process Set cannot be asserted twice without it.
+ * The state is process-local by decision (the module header carries the
+ * argument), which is why `resetUnmeteredForTests` exists.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -45,8 +39,8 @@ describe("recordUnmetered", () => {
       recordUnmetered("consume_failed", `call ${i}`);
     }
     expect(error).toHaveBeenCalledTimes(1);
-    // ⚠ THE LINE SAYS THE CONDITION MAY BE CONTINUING. Without that, one line
-    // for a three-hour outage reads as one blip three hours ago.
+    // The line says the condition may be continuing: otherwise one line for a
+    // three-hour outage reads as one blip three hours ago.
     expect(String(error.mock.calls[0]?.[0])).toContain("ONCE per process");
     expect(String(error.mock.calls[0]?.[0])).toContain("UNMETERED");
   });
@@ -65,7 +59,6 @@ describe("recordUnmetered", () => {
       recordUnmetered("consume_failed", "first");
       vi.setSystemTime(new Date("2026-09-14T13:00:00.000Z"));
       recordUnmetered("consume_failed", "three hours later");
-      // ⚠ An operator needs HOW LONG the estate has been running free.
       // Re-stamping would answer "a moment ago" for an outage three hours old.
       expect(unmeteredSince()).toBe("2026-09-14T10:00:00.000Z");
     } finally {
@@ -88,9 +81,8 @@ describe("clearUnmetered", () => {
     recordUnmetered("consume_failed", "boom again");
     // The FIELD comes back (there is something to show again) …
     expect(unmeteredSince()).not.toBeNull();
-    // … and the LOG does not, which is the whole point of the dedupe: a
-    // condition that flaps would otherwise print the per-call log this
-    // replaced, one line per flap.
+    // … and the LOG does not: a flapping condition would otherwise print one
+    // line per flap.
     expect(error).toHaveBeenCalledTimes(1);
   });
 });

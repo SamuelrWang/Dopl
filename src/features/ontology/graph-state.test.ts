@@ -1,8 +1,7 @@
 /**
- * INVARIANT SUITE — CLUSTER_DELETE cascade contract. Deleting a cluster removes
- * its columns + nested cards and scrubs dangling childIds / relationship
- * targetIds off objects surviving in OTHER clusters, leaving those clusters and
- * a no-op unknown id untouched.
+ * Invariant suite: CLUSTER_DELETE cascade contract. Deleting a cluster removes its
+ * columns + nested cards and scrubs dangling childIds / relationship targetIds off
+ * objects surviving in other clusters.
  */
 
 import { describe, it, expect } from "vitest";
@@ -91,15 +90,9 @@ describe("CLUSTER_DELETE", () => {
 });
 
 /**
- * INVARIANT SUITE — orphanedByObjectDelete mirrors `cascade_hard_delete_object`.
- * Its count is what the confirm dialog shows before a permanent delete. ⚠ Rule
- * is MEMBERSHIP, not depth: a descendant still under a surviving parent lives
- * on. `makeState`'s `card1` is that case — child of both `colA` and `card3`.
- */
-/**
- * INVARIANT SUITE — CREATE_RESOLVE rewrites every place an id is named. ⚠ Total,
- * not just the created row's links: a leftover provisional id is a dangling
- * reference the user only discovers on the next load.
+ * CREATE_RESOLVE rewrites every place an id is named — total, not just the created
+ * row's links: a leftover provisional id is a dangling reference the user only
+ * discovers on the next load.
  */
 describe("CREATE_RESOLVE", () => {
   function pendingState(): GraphState {
@@ -107,7 +100,7 @@ describe("CREATE_RESOLVE", () => {
       clusters: [
         {
           ...makeCluster("p:cluster", ["p:col"]),
-          // Dragged positions keyed by OBJECT id — the structure a rewrite skips.
+          // Dragged positions keyed by object id — the structure a rewrite skips.
           layout: { "p:col": { x: 40, y: 80 }, live: { x: 1, y: 2 } },
         },
       ],
@@ -152,7 +145,7 @@ describe("CREATE_RESOLVE", () => {
     expect(live.childIds).toEqual(["card-1"]);
     expect(live.relationships).toEqual([{ label: "refs", targetIds: ["card-1", "other"] }]);
     expect(live.attributes[0].value).toEqual({ kind: "ref", value: ["col-1", "other"] });
-    // A text value that LOOKS like an id is content, not a reference.
+    // A text value that looks like an id is content, not a reference.
     expect(live.attributes[1].value).toEqual({ kind: "text", value: "p:col" });
   });
 

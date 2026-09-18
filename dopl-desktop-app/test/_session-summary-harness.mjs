@@ -1,21 +1,10 @@
-// SHARED HARNESS for the `main/session-summary.js` suites (F-147).
+// SHARED HARNESS for the `main/session-summary.js` suites (F-147), split out at the 500-line cap so
+// the suites share ONE loader instead of drifting into two copies.
 //
-// WHY IT IS ITS OWN FILE. `session-summary.test.mjs` stood at 498 of the 500-line cap that
-// `test/**/*.mjs` is linted under, so the F-147 report/subscription cases had nowhere to go
-// in it — and the alternative, a second copy of the loader in a second file, is how two
-// suites drift into testing two different programs. Same seam and same precedent as
-// `_classify-harness.mjs` / `_reducer-block.mjs`: the extraction machinery is shared, the
-// cases are split by what they are about.
-//
-// THE IDIOM. `main/session-summary.js`'s requires sit ABOVE its BEGIN sentinel, so everything
-// from there to `module.exports` is import-free and can be evaluated verbatim with fakes — no
-// window layer, no file log, no Electron of any kind (the session-reopen idiom). Every
-// dependency is injected REAL from its REAL module: these cases are about THIS module's
-// projection, not about re-testing the tables it reads.
-//
-// ⚠ `pickAgentName` LEFT THIS HARNESS ON 2026-08-21. The stone-name pool and its ledger are
-// DELETED (Samuel's multiplayer ruling): a pill's name is the session object's own `agentId`,
-// minted per instance at spawn, so there is nothing to inject and nothing to pick.
+// THE IDIOM. `main/session-summary.js`'s requires sit ABOVE its BEGIN sentinel, so everything from
+// there to `module.exports` is import-free and can be evaluated verbatim with fakes — no window
+// layer, no file log, no Electron. Every dependency is injected REAL from its REAL module: these
+// cases are about THIS module's projection, not about re-testing the tables it reads.
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -27,45 +16,31 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const MAIN = join(HERE, "..", "main");
 export const SRC = readFileSync(join(MAIN, "session-summary.js"), "utf8");
 const req = createRequire(import.meta.url);
-// ⚠ THE METRICS MOVED OUT ON 2026-08-20 (session-metrics.js) — one file, one reason to
-// change: this projection answers "what STATE is this session in", the metrics answer "what
-// has it COST". Injected REAL, like every other dependency here, so these cases still drive
-// one program rather than a slice plus a stub.
+// The metrics moved out 2026-08-20 (`session-metrics.js`) — one file, one reason to change.
+// Injected REAL, like every dependency here.
 const { metricOrNull, metrics } = req(join(MAIN, "session-metrics.js"));
-// ⚠ THE FOURTH ABOVE-SENTINEL DEPENDENCY, JOINED 2026-08-20 (the `detail` signal). Injected
-// REAL, like the two above and for the same reason: these cases are about THIS module's
-// projection carrying the detail, not about re-testing the table that derives it —
-// `session-detail.test.mjs` owns that. Injecting a stub here would let the two drift.
+// The `detail` signal, joined 2026-08-20. Injected REAL; `session-detail.test.mjs` owns the table
+// that derives it, and a stub here would let the two drift.
 const { noteEvent, detailFor } = req(join(MAIN, "session-detail.js"));
-// ⚠ THE NAME STORE IS STUBBED, NOT LOADED (2026-08-25). `main/agent-names.js` opens an
-// electron-store on require, which a source-extraction harness has no business doing — and what
-// these tests assert about `displayName` is that the projection CARRIES it, never where it was
-// read from. The stub answers null (the ordinary case: nobody renamed this agent); a test that
-// wants a name overrides `names.value`.
+// THE NAME STORE IS STUBBED, NOT LOADED (2026-08-25): `main/agent-names.js` opens an electron-store
+// on require. The stub answers null (nobody renamed this agent); a test that wants a name overrides
+// `names.value`.
 export const names = { value: null, description: null };
 const displayNameFor = () => names.value;
-// ⚠ THE SECOND FIELD OFF THE SAME STORE (2026-08-27). Stubbed for the same reason the name is:
-// `agent-names.js` requires `electron-store` at module scope. Override `names.description`.
+// The second field off the same store (2026-08-27), stubbed for the same reason. Override
+// `names.description`.
 const descriptionForAgent = () => names.description;
-// ⚠ THE STATE MAPPING MOVED OUT ON 2026-08-22 (`main/session-pill.js`) — see that file's header
-// for the seam. Injected REAL, like every dependency here: these cases are about the PROJECTION
-// carrying the pill, not about re-testing the table that derives one. The names are MERGED into
-// the returned api below, so `m.pillState` / `m.PILL_STATES` / `m.listeningState` still resolve
-// exactly as they did when the mapping lived in the sliced block.
+// The state mapping moved out 2026-08-22 (`main/session-pill.js`). Injected REAL and MERGED into
+// the returned api below, so `m.pillState` / `m.PILL_STATES` / `m.listeningState` still resolve.
 const pill = req(join(MAIN, "session-pill.js"));
 const { PILL_STATES, ACTIVITY_PILL, PILL_ENDED, pillState, queryTornDown, listeningState } = pill;
-// ⚠ `displayText` / `TEMPLATE_NAME_MAX` MOVED OUT ON 2026-09-13 (`main/session-summary-text.js`),
-// when the agent-colour field met the 500-line cap. Injected REAL and MERGED into the returned api
-// below, exactly as the pill mapping is, so `m.displayText` still resolves for every case that
-// drives it — and they left `EXPORTED` in the same change, because that list is a NAME LIST for a
-// `new Function` return and a name the block no longer declares is a ReferenceError at LOAD.
+// `displayText` / `TEMPLATE_NAME_MAX` moved out 2026-09-13 (`main/session-summary-text.js`), and
+// left `EXPORTED` in the same change — that list is a NAME LIST for a `new Function` return, so a
+// name the block no longer declares is a ReferenceError at LOAD.
 const summaryText = req(join(MAIN, "session-summary-text.js"));
 const { displayText, TEMPLATE_NAME_MAX } = summaryText;
-// ⚠ THE HELD-GATE PROJECTION (2026-09-17). Injected REAL, like every dependency here and for
-// the same reason: these cases are about the summary CARRYING the held calls, not about
-// re-deriving them — `session-held-gates.test.mjs` owns the ledger's own rules. It is safe to
-// `req` because that module takes NO requires of its own (its header says why), so it cannot
-// drag an `electron-store` into this loader the way `agent-names.js` would.
+// The held-gate projection (2026-09-17). Injected REAL; safe to `req` because that module takes NO
+// requires of its own, so it cannot drag an `electron-store` into this loader.
 const { heldGatesFor } = req(join(MAIN, "session-held-gates.js"));
 
 const BEGIN = "// ─── BEGIN SESSION-SUMMARY-PURE";
@@ -75,27 +50,21 @@ assert.notEqual(from, -1, "BEGIN SESSION-SUMMARY-PURE sentinel missing");
 assert.ok(to > from, "module.exports not found after the sentinel");
 const BLOCK = SRC.slice(from, to);
 
-// The purity assertion IS a test — it is what makes "this module reaches no network" a fact
-// rather than a docblock, and F-147 put a writer next door that would be tempting to fold
-// back in here. `fetch(` is the one that matters now.
+// The purity assertion IS a test — it is what makes "this module reaches no network" a fact rather
+// than a docblock. `fetch(` is the one that matters now.
 for (const banned of ["require(", "electron", "child_process", "@anthropic", "fetch("]) {
   assert.ok(!BLOCK.includes(banned), `the extracted block must not reference ${banned}`);
 }
 
-// ⚠ `keptWindow` STOOD IN THIS LIST AND IS GONE (2026-08-20, F-228). It is a NAME LIST for a
-// `new Function` return, so a name the block no longer declares is a ReferenceError at LOAD —
-// not one failing case but every case in all four suites that share this loader, which is
-// exactly what happened. ⚠ Anything added here must be a real declaration inside the block;
-// there is no such thing as a "mostly right" entry.
+// A NAME LIST for a `new Function` return: a name the block no longer declares is a ReferenceError
+// at LOAD — every case in all four suites, not one. Every entry must be a real declaration in the
+// block; there is no such thing as a "mostly right" one.
 const EXPORTED = [
   "liveSummary", "endedSummary",
   "nameOf", "summariesDigest", "SESSIONS_EVENT", "PUSH_COALESCE_MS",
-  // ⚠ `MAX_ENDED` and `sweepEnded` LEFT THIS LIST ON 2026-08-22 (Samuel's ended-agent ruling):
-  // retained ended cards are read from the DURABLE history (`agent-history.js`), bounded by
-  // SEVEN DAYS from `endedAt` rather than by a count of 12, and they survive a restart — which
-  // the in-memory set never did. `retainedEnded` is the reader; `releaseEnded` is the sweep's
-  // cleaner. ⚠ This is a NAME LIST for a `new Function` return, so a name the block no longer
-  // declares is a ReferenceError at LOAD — every case in all four suites, not one.
+  // `MAX_ENDED` / `sweepEnded` left this list 2026-08-22: retained ended cards are read from the
+  // DURABLE history (`agent-history.js`), bounded by SEVEN DAYS from `endedAt` and surviving a
+  // restart. `retainedEnded` is the reader; `releaseEnded` is the sweep's cleaner.
   "retainedEnded", "releaseEnded",
   "bind", "start", "list", "nameForSession", "noteEnded", "noteActivity", "touch",
   // F-147: the report view and the change subscription the server writer rides.
@@ -140,22 +109,17 @@ export function load() {
       send(channel, payload) { sent.push({ channel, payload }); },
     },
   };
-  // ⚠ The mapping's names are merged in, not re-declared: `m.pillState` and friends resolve to
-  // the REAL `session-pill.js`, which is what keeps the split invisible to every case here.
+  // The mapping's names are merged in, not re-declared, which is what keeps the split invisible.
   return { ...pill, ...summaryText, ...api, sent, logged, spaWindow };
 }
 
 /**
  * A window handle shaped like a BrowserWindow, as the engine USED to hand one over.
  *
- * ⚠ IT IS STILL HERE BECAUSE `noteEnded` / `sweepEnded` STILL READ `s.win` (2026-08-20, F-228).
- * The session-window model is deleted and a windowless session's `win` is null, so the
- * retention predicate `keepWindow === true && windowAlive(s.win)` can no longer be satisfied by
- * anything the ENGINE produces — but the predicate is live source in `main/session-summary.js`
- * and the cases below still drive it. Keeping a fake window here is what lets the retention,
- * sweep and MAX_ENDED rules keep running instead of being silently deleted with the feature
- * that used to reach them (INVARIANTS §14). ⚠ The stale predicate itself is a FINDING, not
- * something this harness should paper over: see the ⚠ block over §4 of session-summary.test.mjs.
+ * Still here because `noteEnded` / `sweepEnded` still read `s.win` (2026-08-20, F-228): a windowless
+ * session's `win` is null, so the retention predicate can no longer be satisfied by anything the
+ * ENGINE produces — but it is live source and the cases still drive it (INVARIANTS §14). The stale
+ * predicate is a FINDING, not something to paper over: see §4 of session-summary.test.mjs.
  */
 export function fakeWindow() {
   return {
@@ -168,11 +132,9 @@ export function fakeWindow() {
   };
 }
 
-/** A live session object shaped like the engine's registry entries. */
 /**
- * ONE RETAINED ENDED RECORD, as `agent-history.js › listEnded` hands them over (2026-08-22).
- * ⚠ It is a RECORD, not a session: it carries no state, no query and nothing resumable, which
- * is the point — an ended agent is dead and only its history survives.
+ * ONE RETAINED ENDED RECORD, as `agent-history.js › listEnded` hands them over (2026-08-22). It is a
+ * RECORD, not a session: no state, no query, nothing resumable.
  */
 export function endedRecord(over = {}) {
   const channelId = over.channelId || "chan-1";
@@ -190,8 +152,8 @@ export function endedRecord(over = {}) {
     startedAt: 1700000000000,
     lastActivityAt: 1700000600000,
     endedAt: 1700000600000,
-    // Frozen at settle — the session object is gone, so a live read would blank the numbers at
-    // exactly the moment the operator wants to read what the run cost.
+    // Frozen at settle — a live read would blank the numbers at exactly the moment the operator
+    // wants to read what the run cost.
     contextUsed: 84000,
     contextWindow: 200000,
     tokensSpent: 1200000,
@@ -203,10 +165,9 @@ export function endedRecord(over = {}) {
 export function session(over = {}) {
   const channelId = over.channelId || "chan-1";
   const taskId = over.taskId === undefined ? "task-1" : over.taskId;
-  // ⚠ THE AGENT ID IS PART OF THE KEY SINCE 2026-08-21 (`main/session-store.js#sessionKey`),
-  // and it is also the NAME the pill wears — the stone-name pool that used to supply one is
-  // deleted. A default keeps every existing case working; a case about several agents on one
-  // thread overrides it, and the key follows automatically.
+    // The agent id is part of the key since 2026-08-21 (`main/session-store.js#sessionKey`) and is
+    // also the NAME the pill wears. A case about several agents on one thread overrides the default,
+    // and the key follows automatically.
   const agentId = over.agentId === undefined ? "a1b2c3d4" : over.agentId;
   return {
     key: `${channelId}:${taskId}:${agentId}`,
@@ -220,13 +181,8 @@ export function session(over = {}) {
     state: { phase: "running", activity: "working", parked: false },
     context: { channelName: "general", taskTitle: "Ship the thing" },
     // ── THE AGENT-VIEW MEASUREMENTS (wiring plan Phase 5, 2026-08-18) ──────────────
-    // Real fields on a real live session object, exactly where session-summary reads
-    // them: `promptTokens` from session-model's observer, `liveModel` from the SDK's
-    // system/init (the frozen window table turns it into a denominator), `tokensSpent`
-    // accumulated in session-io beside the cost, and the two stamps from the engine.
-    // ⚠ Defaulted to MEASURED values so the shape cases see the widened row; the
-    // absence cases override them to undefined, which is what an unmeasured session
-    // and an older engine both look like.
+    // Defaulted to MEASURED values so the shape cases see the widened row; the absence cases
+    // override them to undefined, which is what an unmeasured session and an older engine look like.
     promptTokens: 84000,
     liveModel: "claude-haiku-4-5", // 200k in the frozen table — a real denominator
     tokensSpent: 1200000,

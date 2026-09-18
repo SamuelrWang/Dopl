@@ -1,22 +1,13 @@
 // @vitest-environment jsdom
 /**
- * THE LANE'S ADD BUTTON — **it is named for the object it adds to** (Samuel,
- * 2026-09-11: *"Once the user has named the object, it should say 'the bunch +
- * name of the object' … Instead of '+ untitled columns'"*).
+ * The lane's add button is named for the object it adds to (Samuel, 2026-09-11).
  *
- * ⚠ WHAT IS PINNED IS THE **LABEL'S SOURCE**, not its text: the visible word is
- * the lane's own `name`, and the fallback is `NEW_COLUMN_NAME` — the SAME
- * constant a newly drafted lane is born with, imported here rather than
- * retyped, so a future rename of the born name cannot leave this button saying
- * something the board does not. The failure this is for is the button drifting
- * back to a generic verb ("Add"), which tells the operator nothing about what
- * the click makes, or to the board's private word ("column").
+ * What is pinned is the label's SOURCE, not its text: the lane's own `name`, with
+ * `NEW_COLUMN_NAME` imported rather than retyped so a rename of the born name
+ * cannot leave this button saying what the board does not.
  *
- * ⚠ **THE ACCESSIBLE NAME IS PINNED BESIDE THE VISIBLE ONE**, because the pill
- * truncates: a lane is a fixed `w-72` and a long object name ellipsises inside
- * the button, so the only complete statement of what the control does is the
- * `aria-label` — and a screen reader that heard "Add" would be worse off than
- * the eye.
+ * The accessible name is pinned beside the visible one because the pill truncates
+ * inside a fixed `w-72` lane — the `aria-label` is the only complete statement.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -41,8 +32,7 @@ function object(id: string, name: string, childIds: string[] = []): OntologyObje
   };
 }
 
-/** One NAMED lane and one the operator has not named yet — the pair is the
- *  whole ruling, since the fallback only ever shows on the second. */
+/** One named lane and one still unnamed — the fallback only shows on the second. */
 const CLUSTER: OntologyCluster = {
   id: "c1",
   slug: "pipeline",
@@ -80,7 +70,7 @@ describe("the lane's add button is named for its object", () => {
     renderBoard();
     const button = screen.getByRole("button", { name: "Add Lead" });
     expect(button.textContent).toContain("Lead");
-    // ⚠ NOT the old generic verb, and not the board's private word.
+    // not the old generic verb, and not the board's private word.
     expect(button.textContent).not.toBe("Add");
     expect(button.textContent?.toLowerCase()).not.toContain("column");
   });
@@ -89,7 +79,7 @@ describe("the lane's add button is named for its object", () => {
     renderBoard();
     const button = screen.getByRole("button", { name: `Add ${NEW_COLUMN_NAME}` });
     expect(button.textContent).toContain(NEW_COLUMN_NAME);
-    // The ruling's own words: an untitled lane is an OBJECT, never a column.
+    // an untitled lane is an object, never a column.
     expect(NEW_COLUMN_NAME).toBe("Untitled object");
   });
 

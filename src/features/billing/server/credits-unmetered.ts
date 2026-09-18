@@ -1,52 +1,30 @@
 import "server-only";
 
 /**
- * 🔒 **THE WEB SIDE OF "A TOOL CALL THAT WAS NOT CHARGED SAYS SO" (2026-09-14).**
+ * The web side of "a tool call that was not charged says so" (2026-09-14).
  *
- * ⚠ **THE FAILURE THIS EXISTS FOR IS A MIS-ORDERED DEPLOY, AND IT WAS SILENT ON
- * THIS SIDE.** `POST /api/mcp/credits/consume` FAILS OPEN by decision — a DB
- * blip must not brick every agent (`route.ts › failOpen`, INVARIANTS §10) — and
- * answers `{ allowed: true, degraded: true, wallet: null, used: 0, limit: 0 }`.
- * Ship the web app before the migration applies and a missing RPC signature is a
- * `PGRST202`, not a 500: every MCP tool call in the estate then runs UNMETERED,
- * for as long as the gap lasts. Two things were missing:
- *   1. the log was a `console.error` **PER CALL** — under a real outage that is
- *      one line per tool call per agent, which buries itself and everything
- *      beside it. A deploy-ordering bug is a STATE, not an event; one line
- *      states it.
- *   2. **nothing web-side showed it at all.** The Settings meter and the /home
- *      bar read the same zeroes they read for every other degraded posture, so
- *      the operator saw `0` and had no way to tell "nothing was spent" from
- *      "nothing was measured".
+ * `POST /api/mcp/credits/consume` fails open by decision — a DB blip must not
+ * brick every agent (`route.ts › failOpen`, INVARIANTS §10). Ship the web app
+ * before its migration applies and the missing RPC signature is a `PGRST202`,
+ * so the whole estate runs unmetered while both meters show the same `0` they
+ * show for a measured empty month. This module logs that state once per process
+ * and publishes it as a field, instead of one `console.error` per tool call.
  *
- * ⚠ **THIS MIRRORS `packages/mcp-server/src/credits-unmetered.ts`, IT DOES NOT
- * SHARE WITH IT.** That module is the AGENT-facing half (the once-per-process
- * log plus the per-call `_dopl_status` footer note); this is the OPERATOR-facing
- * half (the once-per-process log plus a field on `GET /api/billing/status`).
- * The two trees cannot import each other — the MCP server is a separate build
- * kept external by `next.config.ts › serverExternalPackages` — so the SHAPE is
- * copied deliberately and each side owns its own audience.
+ * It mirrors `packages/mcp-server/src/credits-unmetered.ts` rather than sharing
+ * with it: that module is the agent-facing half, this the operator-facing one,
+ * and the two trees cannot import each other (the MCP server is kept external by
+ * `next.config.ts › serverExternalPackages`).
  *
- * 🔒 ⚠ **THE STATE IS PROCESS-LOCAL, AND THAT IS A STATED LIMITATION RATHER
- * THAN AN OVERSIGHT.** `unmeteredSince()` answers for THE SERVER PROCESS THAT
- * HANDLES THE STATUS READ, so on a multi-instance deployment a status read
- * served by an instance that never failed open reports `null` while a sibling
- * instance is failing open. It is therefore a **HINT THAT NEVER FALSELY
- * ACCUSES**: a set value means THIS process really did fail open, and a `null`
- * means only that this process has not. The honest alternative — a row per
- * incident — puts a WRITE on the failure path of the billing outage it is
- * reporting, which is the one place a new write must not go. When every
- * instance is affected (the deploy-ordering case this exists for) every
- * instance reports it, which is the case that matters.
- *
- * ⚠ **IT NEVER REFUSES AND NEVER RETRIES.** Fail-open is the decision; this
- * module only makes the consequence legible.
+ * The state is process-local, a stated limitation: `unmeteredSince()` answers for
+ * the process that served this read, so it is a hint that never falsely accuses.
+ * The alternative — a row per incident — puts a write on the failure path of the
+ * outage it reports. It never refuses and never retries.
  */
 
 /**
- * Why a charge was not measured. ⚠ A CLOSED SET, because it is the LOG DEDUPE
- * KEY: folding the server's message into the key would defeat the
- * once-per-process rule the moment a message carried an id or a timestamp.
+ * Why a charge was not measured. A closed set, because it is the log dedupe key:
+ * folding the server's message in would defeat the once-per-process rule the
+ * moment a message carried an id or a timestamp.
  */
 export type UnmeteredReason =
   /** `consumeMcpCredits` threw — a dead RPC (`PGRST202` between a web deploy
@@ -57,17 +35,15 @@ export type UnmeteredReason =
  * When THIS process first failed open and has not recovered since — the value
  * `GET /api/billing/status` publishes as `credits.unmeteredSince`.
  *
- * ⚠ **THE FIRST ONE, NOT THE LATEST.** An operator needs to know how long the
- * estate has been running free; re-stamping on every call would answer "a
+ * The FIRST one, not the latest: re-stamping on every call would answer "a
  * moment ago" for an outage three hours old.
  */
 let firstFailOpenIso: string | null = null;
 
-/** ⚠ PROCESS-WIDE ON PURPOSE — the whole point is that the second occurrence is
- *  silent. ⚠ **AND IT IS NOT RE-ARMED BY {@link clearUnmetered}**: a condition
- *  that flaps would otherwise print a line per flap, which is the per-call log
- *  this replaced wearing a different shape. The FIELD re-arms; the LOG does
- *  not. Cleared only by {@link resetUnmeteredForTests}. */
+/** Process-wide on purpose — the second occurrence is silent. Not re-armed by
+ *  {@link clearUnmetered}: a flapping condition would otherwise print a line per
+ *  flap. The FIELD re-arms, the LOG does not; cleared only by
+ *  {@link resetUnmeteredForTests}. */
 const logged = new Set<UnmeteredReason>();
 
 const LOG_HEADLINE: Record<UnmeteredReason, string> = {
@@ -78,9 +54,9 @@ const LOG_HEADLINE: Record<UnmeteredReason, string> = {
  * Record that a charge ran UNMETERED, and say so in the log the FIRST time this
  * process sees this reason.
  *
- * ⚠ **`detail` IS LOGGED, NEVER KEYED ON** — see {@link UnmeteredReason}.
- * ⚠ Never throws: a throw here would turn a billing outage into a failed tool
- * call, which is the exact inversion the fail-open decision exists to prevent.
+ * `detail` is logged, never keyed on — see {@link UnmeteredReason}. Never throws:
+ * that would turn a billing outage into a failed tool call, the inversion
+ * fail-open exists to prevent.
  */
 export function recordUnmetered(reason: UnmeteredReason, detail: string): void {
   firstFailOpenIso ??= new Date().toISOString();
@@ -98,26 +74,23 @@ export function recordUnmetered(reason: UnmeteredReason, detail: string): void {
 /**
  * A charge was MEASURED, so this process is no longer failing open.
  *
- * ⚠ **ANY ANSWER THAT DID NOT THROW CLEARS IT, INCLUDING A `degraded` ONE.**
- * The unmetered POSTURE (`credits-meter.ts › unmetered` — a container with no
- * active owner, a peer's meter) is a DECIDED answer the service reached on
- * purpose and reports for itself; it is not the service failing to answer, and
- * conflating the two would leave this field stuck on for every operator who
- * happens to own a link container.
+ * Any answer that did not throw clears it, including a `degraded` one. The
+ * unmetered posture (`credits-meter.ts › unmetered` — a container with no active
+ * owner, a peer's meter) is a decided answer, not a failure to answer; conflating
+ * the two would leave this field stuck on for every owner of a link container.
  */
 export function clearUnmetered(): void {
   firstFailOpenIso = null;
 }
 
 /** When this process first failed open and has not recovered since, or `null`.
- *  ⚠ Process-local — see the header. */
+ *  Process-local — see the header. */
 export function unmeteredSince(): string | null {
   return firstFailOpenIso;
 }
 
-/** ⚠ TEST-ONLY. The once-per-process Set and the sticky timestamp are both the
- *  behaviour under test, so a suite that asserts them has to be able to put the
- *  process back. */
+/** Test-only. The once-per-process Set and the sticky timestamp are both the
+ *  behaviour under test, so a suite asserting them must be able to reset. */
 export function resetUnmeteredForTests(): void {
   logged.clear();
   firstFailOpenIso = null;

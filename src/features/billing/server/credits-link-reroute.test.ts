@@ -1,42 +1,21 @@
 /**
- * HOME-SPACE BILLING — **THE OPERATOR PAYS, FROM THEIR PERSONAL WALLET**
- * (Samuel, 2026-08-26: "charge MCP calls from a guest to the user"; wallet moved
- * 2026-09-07 with the per-seat + personal-wallet ruling).
- *
- * A `kind='link'` home-channel container is a relationship and a
- * `kind='personal'` container is a shelf: neither has a `workspace_billing` row
- * and neither ever will. The person who minted the container invited the
- * traffic, so a burn inside it spends the CONTAINER OWNER's PERSONAL wallet —
- * whoever made the call.
- *
- * ⚠ **THE "REROUTE" IN THIS FILE'S NAME IS HISTORY, AND THE HISTORY IS THE
- * POINT.** Until 2026-09-07 a container burn was rerouted onto the owner's SOLE
- * owned STANDARD workspace, and REFUSED (unmetered + logged) when they owned
- * none — `container-owner-has-no-billing-workspace` — or owned two —
- * `container-owner-has-ambiguous-billing-workspace`. Home spend is its own
- * wallet now, so there is no second workspace to route to and **both of those
- * branches are DELETED**: every user has exactly one personal wallet, so nothing
- * can be missing and nothing can be ambiguous.
- *
- * ⚠ **AND THE PERSONAL WALLET GAINED A PLAN ON 2026-09-08** (Samuel's $8.99
- * ruling): a home burn's limit and window come off the OWNER's own
- * `kind='personal'` container's billing row, so "which row" is now as
- * load-bearing as "whose wallet". The claims below are unchanged; two cases are
- * added for the row.
+ * Home-space billing: the operator pays, from their personal wallet (Samuel,
+ * 2026-08-26; wallet moved 2026-09-07 with the per-seat ruling, and the personal
+ * wallet gained a plan 2026-09-08 — a home burn's limit and window come off the
+ * OWNER's own `kind='personal'` container's billing row). A `kind='link'` or
+ * `kind='personal'` container never has a `workspace_billing` row of its own.
  *
  * Five claims, each red under a different single revert:
- *   1. STANDARD target → the CALLER's own seat, asking nobody who owns it. This
- *      is also the migration-unapplied case (`workspaceKind` absent).
- *   2. LINK target → the OWNER's personal wallet, never the caller's.
- *   3. PERSONAL target → the caller's own wallet, with NO owner lookup at all.
- *   4. Container with no active owner → unmetered, allowed, LOGGED.
- *   5. The METER is the caller's OWN wallet: an owner reads a real reading, a
- *      PEER reads the unmetered posture and no read of the owner's wallet
- *      happens at all.
+ *   1. standard target → the caller's own seat (also the migration-unapplied
+ *      case, `workspaceKind` absent).
+ *   2. link target → the owner's personal wallet, never the caller's.
+ *   3. personal target → the caller's own wallet, with no owner lookup.
+ *   4. container with no active owner → unmetered, allowed, logged.
+ *   5. the meter is the caller's own wallet: the owner reads a real reading, a
+ *      peer reads the unmetered posture and the owner's wallet is not read.
  *
- * ⚠ THE CALLER IS DELIBERATELY NOT THE OWNER IN MOST CASES BELOW. A test whose
- * guest and owner are the same user passes against a version that bills the
- * caller.
+ * The caller is deliberately not the owner in most cases: a test whose guest and
+ * owner are the same user passes against a version that bills the caller.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -44,10 +23,8 @@ import type { WorkspaceBillingRow } from "./workspace-billing";
 
 vi.mock("./workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
-  // ⚠ THE PERSONAL WALLET'S OWN READ (2026-09-08). `personal-wallet.ts` is
-  // REAL in this suite — only the repository is mocked — so the tier, the
-  // window and the limit are computed by the code under test from the row this
-  // mock hands back, exactly as they are in production.
+  // The personal wallet's own read (2026-09-08). `personal-wallet.ts` is real
+  // here, so tier, window and limit are computed from the row this mock returns.
   getPersonalBilling: vi.fn(),
   countActiveMembers: vi.fn(),
   countOntologyObjects: vi.fn(),
@@ -108,10 +85,9 @@ beforeEach(() => {
   warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   mockFindOwner.mockResolvedValue(OWNER);
   mockRepo.getWorkspaceBilling.mockResolvedValue(billing());
-  // ⚠ THE OWNER'S HOME SPACE IS FREE BY DEFAULT HERE, WHILE THE STANDARD
-  // WORKSPACE FIXTURE ABOVE IS A LIVE TEAM ROW. The two being different is what
-  // makes every case below able to tell "read the payer's personal row" from
-  // "read whatever billing row was lying around".
+  // The owner's home space is free by default while the standard-workspace
+  // fixture above is a live Team row: the difference is what lets each case tell
+  // "read the payer's personal row" from "read whatever row was lying around".
   mockRepo.getPersonalBilling.mockResolvedValue({
     containerId: PERSONAL_OF_OWNER,
     billing: null,
@@ -131,7 +107,7 @@ afterEach(() => {
 
 describe("resolveBillingTarget", () => {
   it("1. standard target (and a kind-less one) is the CALLER's seat, asking nobody who owns it", async () => {
-    // ⚠ NO CALLING CHANNEL — rule B's fallback arm (`credits-channel-attribution.test.ts`).
+    // No calling channel — rule B's fallback arm (`credits-channel-attribution.test.ts`).
     const seat = seatTarget({ workspaceId: OWNER_WS, payerUserId: GUEST });
     expect(await resolveBillingTarget(OWNER_WS, { userId: GUEST })).toEqual(seat);
     expect(
@@ -174,17 +150,15 @@ describe("resolveBillingTarget", () => {
   });
 
   it("🔒 an owner who owns NO standard workspace is billed normally now", async () => {
-    // ⚠ THE BRANCH THAT WAS DELETED. This used to answer
-    // `container-owner-has-no-billing-workspace` and charge nothing — a whole
-    // population running free because they had never made a workspace. The
-    // personal wallet does not need one.
+    // Deleted branch: this used to answer
+    // `container-owner-has-no-billing-workspace` and charge nothing.
     const target = await resolveBillingTarget(LINK_WS, guestCaller);
     expect(target.wallet).toBe("personal");
     expect(target.payerUserId).toBe(OWNER);
   });
 
   it("🔒 an owner who owns TWO standard workspaces has nothing to disambiguate", async () => {
-    // ⚠ THE OTHER DELETED BRANCH (`…-ambiguous-billing-workspace`). There is
+    // The other deleted branch (`…-ambiguous-billing-workspace`): there is
     // exactly one personal wallet per user, so the question cannot be asked.
     await consumeMcpCredits(LINK_WS, guestCaller);
     expect(mockWallets.consumeUserCredits).toHaveBeenCalledWith(
@@ -223,25 +197,22 @@ describe("consumeMcpCredits — home containers", () => {
       500,
       attrib(LINK_WS, GUEST)
     );
-    // ⚠ THE REVERT DETECTOR. A version that bills the caller passes every
-    // assertion above.
+    // Revert detector: a version that bills the caller passes every assertion above.
     expect(mockWallets.consumeUserCredits).not.toHaveBeenCalledWith(
       GUEST,
       expect.anything(),
       expect.anything(),
       expect.anything()
     );
-    // ⚠ AND NOTHING SEAT-SHAPED HAPPENS AT ALL: no billing row, no member count,
-    // no member RPC. A container has no plan to read.
+    // Nothing seat-shaped happens: a container has no plan to read.
     expect(mockWallets.consumeMemberCredits).not.toHaveBeenCalled();
     expect(mockRepo.getWorkspaceBilling).not.toHaveBeenCalled();
     expect(res).toMatchObject({ allowed: true, limit: 500, wallet: "personal" });
   });
 
   it("2c. the limit comes off the OWNER's PERSONAL row, not the addressed container's", async () => {
-    // 🔒 The addressed link container has NO billing row; the standard-workspace
-    // fixture in `beforeEach` is a live TEAM plan that belongs to neither. A
-    // version reading either one charges this Pro operator 500.
+    // The addressed link container has no billing row and the `beforeEach` Team
+    // fixture belongs to neither: reading either charges this Pro operator 500.
     mockRepo.getPersonalBilling.mockResolvedValue({
       containerId: PERSONAL_OF_OWNER,
       billing: { ...billing(), workspaceId: PERSONAL_OF_OWNER, plan: "pro" },
@@ -272,19 +243,14 @@ describe("consumeMcpCredits — home containers", () => {
     expect(res.degraded).toBeUndefined();
   });
 
-  // ⚠ **THE HOME-ONLY USER, AND THIS IS THE CASE THE OLD MODEL LET RUN FREE**
-  // (2026-09-10, the new-user flow). A person who has never made a workspace
-  // burns inside their OWN `kind='personal'` shelf — the container `POST /api/boot`
-  // hands the SPA with no segment. Under the reroute that was
-  // `container-owner-has-no-billing-workspace`: unmetered, allowed, logged, and a
-  // whole population of exactly these accounts spending nothing. There is no
-  // `wallet: null` on this path any more, and `resolveBillingTarget`'s only
-  // remaining one is `container-has-no-active-owner`.
+  // The home-only user (2026-09-10): a person who has never made a workspace
+  // burns inside their own `kind='personal'` shelf — the container
+  // `POST /api/boot` hands the SPA with no segment. `resolveBillingTarget`'s only
+  // remaining `wallet: null` is `container-has-no-active-owner`.
   it("🔒 3b. a HOME-ONLY user's burn in their own personal shelf IS metered", async () => {
-    // ⚠ NO BILLING ROW AT ALL — a shelf nobody has paid on, i.e. the state a
-    // brand-new account is in. The `beforeEach` fixture is a live TEAM row on a
-    // DIFFERENT workspace, so leaving it in place would let a version that reads
-    // "whatever row was lying around" answer 500 by accident.
+    // No billing row at all — the state a brand-new account is in. Leaving the
+    // `beforeEach` Team row (a different workspace) in place would let a version
+    // reading "whatever row was lying around" answer 500 by accident.
     mockRepo.getWorkspaceBilling.mockResolvedValue(null);
 
     const res = await consumeMcpCredits(PERSONAL_WS, {
@@ -293,10 +259,9 @@ describe("consumeMcpCredits — home containers", () => {
     });
 
     expect(res.allowed).toBe(true);
-    // 🔒 **CHARGED, AND `degraded` IS THE ASSERTION THAT MATTERS.** `unmetered()`
-    // also answers `allowed: true` with zeroed counters, so a version that leaked
-    // here would pass on `allowed` alone — the stamp is what separates "nothing
-    // measured" from "nothing spent" (`CreditsSummary.degraded`).
+    // `degraded` is the assertion that matters: `unmetered()` also answers
+    // `allowed: true`, so a leak here passes on `allowed` alone. The stamp
+    // separates "nothing measured" from "nothing spent".
     expect(res.degraded).toBeUndefined();
     expect(res).toMatchObject({ wallet: "personal", limit: 500 });
     expect(mockWallets.consumeUserCredits).toHaveBeenCalledWith(
@@ -306,23 +271,21 @@ describe("consumeMcpCredits — home containers", () => {
       500,
       attrib(PERSONAL_WS, OWNER)
     );
-    // ⚠ THE ADDRESSED CONTAINER IS ITSELF THE BILLING ROW HERE — the one shape
+    // THE ADDRESSED CONTAINER IS ITSELF THE BILLING ROW HERE — the one shape
     // where it is (`credits-service.ts › consumeMcpCredits`'s `workspaceKind ===
     // "personal" ? target.workspaceId : null`), so the row is read STRAIGHT off
     // the addressed id and the payer→container lookup is skipped entirely.
     expect(mockRepo.getWorkspaceBilling).toHaveBeenCalledWith(PERSONAL_WS);
     expect(mockRepo.getPersonalBilling).not.toHaveBeenCalled();
-    // ⚠ AND NOTHING SEAT-SHAPED OR OWNER-SHAPED HAPPENS: a shelf has one member
-    // and its owner is the caller, so neither question is asked.
+    // Nothing seat- or owner-shaped: a shelf has one member and it is the caller.
     expect(mockFindOwner).not.toHaveBeenCalled();
     expect(mockWallets.consumeMemberCredits).not.toHaveBeenCalled();
     expect(warn).not.toHaveBeenCalled();
   });
 
   it("🔒 3c. …and the same user's PRO shelf meters at 5,000, off that same row", async () => {
-    // 🔒 The pair is the claim: 3b alone passes against a version that hardcodes
-    // the free allowance for every personal burn, which is the other way to make
-    // "metered" meaningless.
+    // The pair is the claim: 3b alone passes against a version that hardcodes the
+    // free allowance for every personal burn.
     mockRepo.getWorkspaceBilling.mockResolvedValue({
       ...billing(),
       workspaceId: PERSONAL_WS,
@@ -351,9 +314,8 @@ describe("consumeMcpCredits — home containers", () => {
 
     expect(res.allowed).toBe(true);
     expect(res).toMatchObject({ used: 0, limit: 0, remaining: 0, wallet: null });
-    // ⚠ STAMPED. The zeroes are not a reading, and `degraded` is the only thing
-    // that says so — the same flag the route's `failOpen()` puts on its own
-    // zeroes, so one reader recognises both.
+    // The zeroes are not a reading, and `degraded` is the only thing that says
+    // so — the same flag the route's `failOpen()` puts on its own zeroes.
     expect(res.degraded).toBe(true);
     expect(mockWallets.consumeUserCredits).not.toHaveBeenCalled();
     expect(mockWallets.consumeMemberCredits).not.toHaveBeenCalled();
@@ -376,13 +338,9 @@ describe("consumeMcpCredits — home containers", () => {
 });
 
 /**
- * 5. THE METER IS THE CALLER'S OWN WALLET.
- *
- * 🔒 A personal wallet spans its owner's WHOLE home space — every link container
- * they hold, plus their personal shelf. Showing it to a peer inside ONE of those
- * relationships would print the operator's total home spend to somebody who can
- * see one channel of it. The peer gets the same stamped zeroes the consume path
- * reports for a reading it did not take.
+ * 5. The meter is the caller's own wallet. A personal wallet spans its owner's
+ * whole home space, so showing it to a peer inside one link container would
+ * print the operator's total home spend to somebody who sees one channel of it.
  */
 describe("getWorkspaceBillingStatus — the caller's own meter", () => {
   it("the OWNER reads a real, unstamped reading of their own personal wallet", async () => {
@@ -404,10 +362,9 @@ describe("getWorkspaceBillingStatus — the caller's own meter", () => {
   });
 
   it("the OWNER's PRO home space meters at 5,000, read off their personal row", async () => {
-    // ⚠ THE METER'S OWN COPY OF THE 2c CLAIM. Enforcement and the meter resolve
-    // the row through the same helper; if only one of them did, the settings
-    // pane would show 500 for a wallet the agent is being charged 5,000
-    // against.
+    // The meter's own copy of the 2c claim: enforcement and the meter resolve the
+    // row through the same helper, or the settings pane shows 500 for a wallet
+    // being charged against 5,000.
     mockRepo.getPersonalBilling.mockResolvedValue({
       containerId: PERSONAL_OF_OWNER,
       billing: { ...billing(), workspaceId: PERSONAL_OF_OWNER, plan: "pro" },
@@ -425,7 +382,7 @@ describe("getWorkspaceBillingStatus — the caller's own meter", () => {
   });
 
   it("stamps the addressed container's KIND on the payload", async () => {
-    // ⚠ NO RENDERER CAN PICK A PLAN LIST FROM `plan` ALONE — `free` is a value
+    // No renderer can pick a plan list from `plan` alone — `free` is a value
     // on both taxonomies (`plans.ts › plansForKind`).
     expect((await getWorkspaceBillingStatus(LINK_WS, ownerCaller)).containerKind).toBe(
       "link"
@@ -455,7 +412,7 @@ describe("getWorkspaceBillingStatus — the caller's own meter", () => {
       remaining: 0,
       degraded: true,
     });
-    // 🔒 The whole point: no reading of the operator's allowance reaches the peer.
+    // The whole point: no reading of the operator's allowance reaches the peer.
     expect(mockWallets.getUserCreditsUsed).not.toHaveBeenCalled();
     expect(mockWallets.getMemberCreditsUsed).not.toHaveBeenCalled();
   });

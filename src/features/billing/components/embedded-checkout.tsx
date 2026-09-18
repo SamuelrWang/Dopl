@@ -13,8 +13,8 @@ import type { CheckoutPlan } from "../url";
 import { checkoutAppearance } from "./checkout-appearance";
 
 /**
- * ⚠ Lazy singleton, NEVER a module-level read: `process` doesn't exist in the
- * Vite-bundled desktop renderer, and a top-level `process.env.*` is an
+ * Lazy singleton, never a module-level read: `process` doesn't exist in the
+ * Vite-bundled desktop renderer, so a top-level `process.env.*` is an
  * import-time ReferenceError that whites out the whole SPA (same rule as
  * `@/shared/supabase/browser.ts`).
  */
@@ -35,13 +35,10 @@ function getStripePromise() {
  * (`ui_mode: "elements"`), we render its `client_secret` through our own
  * `PaymentElement` + pay button — no Stripe iframe chrome.
  *
- * `plan`: `team` (a standard workspace's seats) or `pro` (a personal
- * container's flat monthly), the two things checkout sells since 2026-09-08.
- * ⚠ TYPED AS `CheckoutPlan` RATHER THAN PINNED TO A STRING, so the body this
- * form POSTs and the plans the route accepts (`app/api/billing/checkout ›
- * readPlan`) are one union; a body naming `solo` answers 400 `PLAN_RETIRED`,
- * and a plan the addressed container cannot buy answers 400
- * `PLAN_NOT_FOR_CONTAINER`.
+ * `plan` is typed `CheckoutPlan` rather than pinned to a string so this form's
+ * body and the plans the route accepts (`app/api/billing/checkout › readPlan`)
+ * are one union; `solo` answers 400 `PLAN_RETIRED`, and a plan the addressed
+ * container cannot buy answers 400 `PLAN_NOT_FOR_CONTAINER`.
  * `workspaceId` → `x-workspace-id`; omitting it makes the server resolve
  * fail-closed from memberships (sole workspace auto-targets; 0 or 2+ →
  * WORKSPACE_REQUIRED).
@@ -146,7 +143,7 @@ function CheckoutPaymentForm({ plan }: { plan: CheckoutPlan }) {
   const handleConfirm = async () => {
     setConfirming(true);
     setConfirmError(null);
-    // ⚠ No args → session's server-set return_url drives the redirect to
+    // No args → the session's server-set return_url drives the redirect to
     // `/billing/{segment}?billing=success&session_id=…`, where `billing=success`
     // is the signal to poll for the webhook (`features/billing/url.ts`). Success
     // navigates away, so the button deliberately stays "Processing…".
@@ -190,11 +187,9 @@ function CheckoutPaymentForm({ plan }: { plan: CheckoutPlan }) {
 }
 
 /**
- * The plan's own name — ⚠ **FROM THE PLAN, NOT A CONSTANT** (2026-09-08). It
- * read `planName: "Team"` while Team was the only thing on sale, so a `pro`
- * session would have rendered a Pro price under a Team heading. Not
- * `plans.ts › plansForKind` either: that answers a CONTAINER, and this form is
- * describing the session it was handed.
+ * The plan's own name, keyed off the plan (2026-09-08) so a `pro` session never
+ * renders its price under a Team heading. Not `plans.ts › plansForKind`, which
+ * answers a container — this form describes the session it was handed.
  */
 const CHECKOUT_PLAN_NAME: Record<CheckoutPlan, string> = {
   team: "Team",
@@ -204,10 +199,9 @@ const CHECKOUT_PLAN_NAME: Record<CheckoutPlan, string> = {
 /**
  * Order described from the session, not hardcoded prices: `checkout.total.total`
  * and the first line item already carry Stripe-formatted, localized currency.
- *
- * ⚠ EXPORTED FOR ITS TEST, and only for that: mounting the form needs a live
- * Stripe session, so this pure function is the only place the plan→heading and
- * the seat-math branch can be pinned at all.
+ * Exported for its test only — mounting the form needs a live Stripe session,
+ * so this is the only place the plan→heading and seat-math branches can be
+ * pinned.
  */
 export function describeOrder(checkout: StripeCheckoutValue, plan: CheckoutPlan) {
   const item = checkout.lineItems[0];
@@ -217,7 +211,7 @@ export function describeOrder(checkout: StripeCheckoutValue, plan: CheckoutPlan)
 
   const seats = item?.quantity ?? 1;
   const unitAmount = item?.unitAmount.amount;
-  // ⚠ SEAT MATH ON `team` ONLY. `pro` is a flat quantity-1 subscription
+  // Seat math on `team` only: `pro` is a flat quantity-1 subscription
   // (`server/stripe.ts`), so "1 seat × $8.99" would name a unit the personal
   // container does not have.
   const summaryDetail =

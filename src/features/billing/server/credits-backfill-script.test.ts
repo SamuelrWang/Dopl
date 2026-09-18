@@ -1,30 +1,22 @@
 /**
- * `scripts/sql/backfill-credit-wallets-v2.sql`, READ AS THE CONTRACT IT IS.
+ * `scripts/sql/backfill-credit-wallets-v2.sql`, read as the contract it is. The
+ * deploy-day catch-up that seeds the two v2.1 wallets from the attribution
+ * ledger, and the one hand-run artifact that can put counter and ledger out of
+ * step (F-693; Samuel, 2026-09-13: the histogram must equal the wallet).
  *
- * 🔒 **THE RULING IT SERVES (Samuel, 2026-09-13): THE HISTOGRAM MUST EQUAL THE
- * WALLET, ALWAYS** (F-693). The script is the deploy-day catch-up that seeds the
- * two v2.1 wallets from the attribution ledger, and it is the ONE hand-run
- * artifact that can put the counter and the ledger out of step.
+ * Not a replay — no database runs here. What SQL text proves is that the file
+ * still says what makes it safe to run twice, and has not drifted back to the
+ * three shapes that were wrong under rule B:
  *
- * ⚠ **NOT A REPLAY** — no database runs here. What a SQL-text test can honestly
- * prove is that the file still SAYS what makes it safe to run twice, and that it
- * has not drifted back to the three shapes that were wrong under rule B:
- *
- *   1. **LEGACY ROWS ONLY (`wallet = 'workspace'`).** A v2.1 row already moved
- *      its counter inside `consume_user_credits` / `consume_member_credits`, so
- *      re-deriving a counter from it is at best a no-op. ⚠ **AND AT WORST A LOST
- *      BALANCE**: the ledger row records the ADDRESSED container and a seat
- *      burn's CHARGED workspace appears on it NOWHERE (rule B arm 2), so an
- *      absolute `SET used = <sum over origin>` dropped every cross-container seat
- *      burn and wrote a `workspace_member_credit_usage` row keyed on a
- *      `kind='personal'` container besides.
- *   2. **ADDITIVE, NOT ABSOLUTE.** Legacy spend was never counted, so it is added
- *      to whatever the atomic RPCs have already charged this period.
- *   3. **IT LABELS THE ROWS IT COUNTED**, which is what makes (2) idempotent
- *      *and* what stops `credit_ledger_sum` reporting the whole backfill as
- *      drift: that function keys on `(payer_user_id, wallet, period_start)` and a
- *      `wallet='workspace'` row carries neither, so every seeded counter would
- *      have read as `Unreconciled` on /home for the rest of the month.
+ *   1. Legacy rows only (`wallet = 'workspace'`). A v2.1 row already moved its
+ *      counter inside the consume RPCs, and re-deriving from it loses balance:
+ *      the ledger row records the ADDRESSED container, so an absolute
+ *      `SET used = <sum over origin>` drops every cross-container seat burn.
+ *   2. Additive, not absolute: legacy spend was never counted, so it is added to
+ *      whatever the atomic RPCs already charged this period.
+ *   3. It labels the rows it counted, which makes (2) idempotent and stops
+ *      `credit_ledger_sum` — keyed on `(payer_user_id, wallet, period_start)` —
+ *      reporting the whole backfill as drift.
  */
 
 import { describe, it, expect } from "vitest";
@@ -57,8 +49,8 @@ describe("the header carries what an operator needs before running it", () => {
   });
 
   it("warns that the SUPERSEDED absolute form must not be re-run alongside it", () => {
-    // ⚠ The two shapes are not interchangeable: the old one SET the counter, this
-    // one ADDS to it. Running the old one first and this one after double-counts.
+    // The two shapes are not interchangeable: the old one SET the counter, this
+    // one ADDS to it, so running both double-counts.
     expect(prose).toMatch(/SET .*(superseded|absolute)|absolute .*superseded/i);
   });
 });
@@ -76,8 +68,7 @@ describe("🔒 it reads LEGACY rows only — a v2.1 row's counter is already mov
 
   it("keys a seat counter on the ORIGIN only because a legacy row has no other container", () => {
     // Rule B did not exist when these rows were written, so origin IS the charged
-    // container for every one of them. The comment is the reason; the filter above
-    // is the fence.
+    // container for every one of them; the filter above is the fence.
     expect(prose).toMatch(/rule B did not exist/i);
   });
 });
@@ -97,7 +88,7 @@ describe("🔒 it ADDS to the counters and LABELS the rows it counted", () => {
   it("is one transaction, so the labels and the counters land together", () => {
     expect(live).toContain("BEGIN;");
     expect(live).toContain("COMMIT;");
-    // ⚠ ONE statement, so every CTE reads the SAME pre-update snapshot: the
+    // One statement, so every CTE reads the same pre-update snapshot: the
     // aggregates cannot see the labels the same statement is writing.
     expect(live.match(/^WITH /gm) ?? []).toHaveLength(1);
   });

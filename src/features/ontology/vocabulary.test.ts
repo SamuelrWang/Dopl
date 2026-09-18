@@ -1,26 +1,16 @@
 /**
- * THE VOCABULARY GATE — **a cluster is an "ontology" and a column is an
- * "object"; a card is an ITEM of that object** (Samuel, 2026-09-11: *"any
- * wording that's called 'cluster' should not be there. It's like 'ontology',
- * right? … it's not a column, it's an object"*).
+ * The vocabulary gate (Samuel, 2026-09-11): a cluster is an "ontology" and a column
+ * an "object"; a card is an item of that object.
  *
- * ⚠ **THE RULING IS ABOUT WHAT A PERSON READS, NOT WHAT THE CODE IS CALLED.**
- * `clusterId`, `CLUSTER_ADD`, `ontology_clusters`, the `create_column` op name,
- * the `/api/ontology/clusters` routes and every DB column STAY — renaming them
- * is a migration, not a wording fix, and this file is deliberately blind to
- * them. What it reads is STRING LITERALS and JSX TEXT, which is the only place
- * the board's private word can leak into the operator's.
+ * The ruling is about what a person reads, not what the code is called. Identifiers,
+ * op names, routes and DB columns stay — renaming them is a migration. This gate
+ * reads only string literals and JSX text.
  *
- * ⚠ **THE ALLOW-LIST IS EXACT TEXT, NOT A PATTERN, AND THAT IS THE GATE.** A
- * rule like "single lowercase word is fine" would wave through the next
- * `"column"` fallback label; an exact set fails on any literal that is not
- * already known to be an identifier, which is what makes a NEW one a decision
- * rather than an accident. Module specifiers and `/api/` paths are the two
- * carve-outs taken by rule, because neither can ever be prose.
+ * The allow-list is exact text, not a pattern: a loose rule would wave through the
+ * next `"column"` fallback label, while an exact set makes each new entry a
+ * decision. Module specifiers and `/api/` paths are carved out by rule.
  *
- * ⚠ Comments are stripped before the scan. They carry the history of the
- * rename — "it was a column" is the sentence a future reader needs — and a gate
- * that banned the old word from comments would delete its own explanation.
+ * Comments are stripped before the scan — they carry the history of the rename.
  */
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -30,14 +20,14 @@ import { describe, expect, it } from "vitest";
 /** The two surfaces the ruling covers: the feature, and the page that mounts it. */
 const ROOTS = ["src/features/ontology", "apps/desktop-ui/src/pages/ontology"];
 
-/** ⚠ Test files, fixtures and harnesses are EXCLUDED: a fixture's job is to
- *  speak the server's shape, ids and all, and a rename there proves nothing. */
+/** Test files, fixtures and harnesses are excluded: a fixture speaks the server's
+ *  shape, ids and all, so a rename there proves nothing. */
 const SKIP = /(\.test\.[tj]sx?$)|(^test-fixtures\.ts$)|(-harness\.ts$)/;
 
 const BANNED = /\b(clusters?|columns?)\b/i;
 
-/** Literals that are IDENTIFIERS, one by one. ⚠ Add to this only with a reason
- *  a reader can check — a new entry is the claim that nobody reads the string. */
+/** Literals that are identifiers, one by one. Add only with a reason a reader can
+ *  check — a new entry is the claim that nobody reads the string. */
 const ALLOWED_LITERALS = new Set([
   "cluster", // `slugify(name, "cluster", …)` fallback — a URL slug, not a label.
   "cluster:", // reducer/debounce timer-key prefix (`use-ontology.ts`).
@@ -61,7 +51,7 @@ function sourceFiles(dir: string): string[] {
   return out;
 }
 
-/** ⚠ Block comments first, then line comments — the other order leaves the
+/** Block comments first, then line comments — the other order leaves the
  *  inside of a `/* … // … *\/` block behind as loose text. */
 function stripComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");

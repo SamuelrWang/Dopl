@@ -1,27 +1,13 @@
 /**
- * INVARIANT SUITE — MCP credit consume path, part 2 of two: WHICH PERIOD KEY a
- * burn is charged under, and WHAT THE ANSWER SAYS. Pins:
- *   1. THE WINDOW — the verdict is read FIRST, and a FREE verdict ignores a
- *      subscription anchor (the self-heal for a mid-period cancellation). ⚠
- *      **ON BOTH WALLETS SINCE 2026-09-08**: the superseded clause here said
- *      "the personal wallet is always the UTC calendar month", true only while
- *      that wallet had no subscription. A Pro home space rolls on its Stripe
- *      date.
- *   2. THE METER AND ENFORCEMENT AGREE — same wallet, same window, same limit.
- *      A meter reading a different key shows a used/limit pair that does not
- *      explain the refusal the agent just got.
- *   3. THE REFUSAL — and that the upgrade url is EMPTY wherever there is
- *      nothing to buy.
- *   4. THE LEDGER — one row per SPEND, carrying the caller AND the payer, which
- *      differ exactly on the guest path.
+ * Invariant suite — MCP credit consume, part 2: which period key a burn is charged
+ * under, and what the answer says. Pins the window (a free verdict ignores a
+ * subscription anchor, self-healing a mid-period cancellation — on both wallets
+ * since 2026-09-08, so a Pro home space rolls on its Stripe date), meter/enforcement
+ * agreement, the refusal and its upgrade url, and the ledger's caller-vs-payer split.
  *
- * ⚠ **SPLIT OUT OF `credits-service.test.ts` AT THE 500-LINE CAP** (§1: "split,
- * do not squeeze"). That file keeps the ROUTING half — which wallet, whose, and
- * the per-wallet round-trip budget. Same mocks, same fixtures, deliberately: the
- * two halves ask different questions of one function.
- *
- * ⚠ Repositories mocked; `entitlements.ts` is REAL, so the lean verdict helper
- * is proven to be the same `paidEntitlement` logic, not a copy.
+ * Split from `credits-service.test.ts` (the routing half) at the 500-line cap.
+ * Repositories mocked; `entitlements.ts` is real, so the lean verdict helper is
+ * proven to be the same `paidEntitlement` logic, not a copy.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -29,10 +15,8 @@ import type { WorkspaceBillingRow } from "./workspace-billing";
 
 vi.mock("./workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
-  // ⚠ THE PERSONAL WALLET'S OWN READ (2026-09-08). `personal-wallet.ts` is
-  // REAL in this suite — only the repository is mocked — so the tier, the
-  // window and the limit are computed by the code under test from the row this
-  // mock hands back, exactly as they are in production.
+  // `personal-wallet.ts` stays real here — only the repository is mocked — so
+  // tier, window and limit are computed from the row this mock hands back.
   getPersonalBilling: vi.fn(),
   countActiveMembers: vi.fn(),
   countOntologyObjects: vi.fn(),
@@ -53,8 +37,8 @@ import * as repo from "./workspace-billing";
 import * as wallets from "./credit-wallets";
 import { findActiveOwnerUserId } from "@/features/workspaces/server/repository";
 import { consumeMcpCredits } from "./credits-service";
-// ⚠ THE METER HALF MOVED TO `credits-meter.ts` ON 2026-09-13 (rule B needed the
-// room); this file drives BOTH sides, which is the point of its agreement cases.
+// Meter half lives in `credits-meter.ts` (2026-09-13); this file drives both
+// sides, which is the point of the agreement cases.
 import { creditPeriodFor, summarizeCredits, unmetered } from "./credits-meter";
 import {
   ledgerAttribution,
@@ -102,7 +86,7 @@ function setup(opts: {
 }) {
   mockRepo.getWorkspaceBilling.mockResolvedValue(opts.billing);
   mockRepo.countActiveMembers.mockResolvedValue(opts.members);
-  // The OWNER's personal container, free by default — the arm a LINK burn takes.
+  // The owner's personal container, free by default — the arm a link burn takes.
   mockRepo.getPersonalBilling.mockResolvedValue({
     containerId: PERSONAL,
     billing: opts.personalBilling ?? null,
@@ -124,15 +108,9 @@ afterEach(() => {
 });
 
 /**
- * 🔒 THE ATTRIBUTION TABLE (`credits-service.ts`'s docblock), one case per row.
- * Each wrong answer is a different bill going to a different person.
- */
-/**
- * Cancellation lockout, end to end, on the SEAT wallet. A team member spent
- * 4,000 credits, then the workspace canceled mid-period; the row keeps a
- * FUTURE-ending anchor. Honouring it charges the next call to a key already at
- * 4,000 used against a NEW 100 limit. Heals on the next consume — no webhook,
- * no cron.
+ * Cancellation lockout on the seat wallet: a canceled row keeps a future-ending
+ * anchor, so honouring it would charge the next call to a key already at 4,000
+ * used against a new 100 limit. Heals on the next consume — no webhook, no cron.
  */
 describe("consumeMcpCredits — a canceled workspace is not locked out (B2b)", () => {
   const CANCELED = () =>
@@ -249,12 +227,11 @@ describe("the settings meter resolves the SAME window and wallet as enforcement"
   });
 
   it("and for a PRO personal wallet — same 5,000 and same subscription window", async () => {
-    // 🔒 **THE METER MUST BE FED THE PAYER'S PERSONAL ROW, NOT THE ADDRESSED
-    // CONTAINER'S.** A link container has no billing row at all, so a meter
-    // handed `null` there reports 500 on the calendar month while enforcement
-    // charges 5,000 on the Stripe anchor — a used/limit pair that cannot
-    // explain the refusal the agent just got. `status-service.ts ›
-    // callerCredits` resolves it through `personal-wallet.ts`.
+    // The meter must be fed the payer's personal row, not the addressed
+    // container's: a link container has no billing row, so a meter handed `null`
+    // reports 500 on the calendar month while enforcement charges 5,000 on the
+    // Stripe anchor. `status-service.ts › callerCredits` resolves it through
+    // `personal-wallet.ts`.
     const pro = billing({
       workspaceId: PERSONAL,
       plan: "pro",
@@ -331,10 +308,9 @@ describe("creditPeriodFor", () => {
 });
 
 /**
- * 🔒 THE UPGRADE URL IS AN OFFER, AND AN OFFER TO NOWHERE IS WORSE THAN NONE.
- * The MCP refusal renders it literally (`tools/respond.ts › creditsExhausted`),
- * so a non-empty url on a wallet with nothing to buy sends an exhausted agent
- * to a checkout that cannot help it.
+ * The MCP refusal renders the upgrade url literally
+ * (`tools/respond.ts › creditsExhausted`), so a non-empty url on a wallet with
+ * nothing to buy sends an exhausted agent to a checkout that cannot help it.
  */
 describe("consumeMcpCredits — refusal and the upgrade url", () => {
   it("a SEAT on a FREE verdict is the only case that offers an upgrade", async () => {
@@ -352,11 +328,9 @@ describe("consumeMcpCredits — refusal and the upgrade url", () => {
   });
 
   it("a FREE PERSONAL wallet offers PRO — and the link carries `plan=pro`", async () => {
-    // ⚠ **INVERTED 2026-09-08.** The superseded case asserted `""` here with the
-    // reason "there is no personal paid tier"; Samuel priced one at $8.99.
-    // ⚠ `plan=pro` IS LOAD-BEARING, NOT DECORATION: segment-less `/billing`
-    // resolves a STANDARD workspace by default, so a bare upgrade link would
-    // land a home-space upsell on a workspace the caller may not even have.
+    // `plan=pro` is load-bearing: segment-less `/billing` resolves a standard
+    // workspace by default, so a bare upgrade link would land a home-space
+    // upsell on a workspace the caller may not even have.
     setup({ billing: null, members: 1, allowed: false, used: 500 });
     const res = await consumeMcpCredits(PERSONAL, personalCaller);
     expect(res.allowed).toBe(false);
@@ -374,8 +348,8 @@ describe("consumeMcpCredits — refusal and the upgrade url", () => {
   });
 
   it("🔒 the two free offers are DIFFERENT urls — a seat is never sold Pro", async () => {
-    // A single shared `upgradeUrl()` for both wallets passes every "non-empty"
-    // assertion above and sends a workspace member to a personal checkout.
+    // A single shared `upgradeUrl()` passes every "non-empty" assertion above
+    // and sends a workspace member to a personal checkout.
     setup({ billing: null, members: 1, allowed: false, used: 100 });
     const seat = await consumeMcpCredits(WS, seatCaller);
     setup({ billing: null, members: 1, allowed: false, used: 500 });
@@ -428,20 +402,14 @@ describe("the unmetered posture", () => {
 });
 
 /**
- * THE ATTRIBUTION LEDGER — **ONE ROW PER SPEND, IN THE COUNTER'S OWN
- * TRANSACTION** (2026-09-13, Samuel: *"the histogram must equal the wallet,
- * always"*; F-693).
+ * F-693 (2026-09-13): one ledger row per spend, in the counter's own transaction —
+ * the histogram must equal the wallet. The write is not a second round trip, so
+ * these cases pin the RPC's arguments rather than a writer's calls.
  *
- * 🔒 **THE WRITE IS NO LONGER A SECOND ROUND TRIP, SO THESE CASES PIN THE RPC's
- * ARGUMENTS RATHER THAN A WRITER'S CALLS.** The superseded shape asserted
- * `recordCreditUsageEvent` was FIRED — a call made after the counter had committed,
- * which swallowed its own failures, which is exactly how Samuel's wallet came to
- * read 8 over five ledger rows. There is nothing left to fire.
- *
- * ⚠ **WHAT MOVED INTO SQL IS PINNED IN SQL**: "a refused consume writes nothing"
- * and "a failed insert rolls the counter back" are properties of the function body
- * now (`credit-consume-with-ledger-schema.test.ts`). What TypeScript still proves
- * is that the dimensions REACH the RPC, and that nothing writes the ledger twice.
+ * "A refused consume writes nothing" and "a failed insert rolls the counter back"
+ * are properties of the SQL function body now
+ * (`credit-consume-with-ledger-schema.test.ts`); TypeScript still proves the
+ * dimensions reach the RPC and that nothing writes the ledger twice.
  */
 describe("credit usage ledger", () => {
   it("hands the RPC the attribution, stamped with the period the counter used", async () => {
@@ -451,9 +419,9 @@ describe("credit usage ledger", () => {
 
     expect(mockWallets.consumeMemberCredits).toHaveBeenCalledTimes(1);
     const call = mockWallets.consumeMemberCredits.mock.calls[0];
-    // The charged container, the payer, then the period. ⚠ The period the RPC is
-    // called with IS the one stamped on the row — one statement, so it cannot be
-    // re-derived from a clock half a request later.
+    // Charged container, payer, then period. The period passed to the RPC is the
+    // one stamped on the row — one statement, so it cannot be re-derived from a
+    // clock half a request later.
     expect(call?.[0]).toBe(WS);
     expect(call?.[1]).toBe(CALLER);
     expect(call?.[2]).toBe(CALENDAR_START);
@@ -465,12 +433,9 @@ describe("credit usage ledger", () => {
   });
 
   /**
-   * 🔒 **THE CALLER AND THE PAYER DIFFER EXACTLY ON THE GUEST PATH, AND THE ROW
-   * MUST SAY BOTH.** A peer's burn in somebody's link container spends the
-   * OWNER's personal wallet; collapsing the two makes "who spent my credits"
-   * answer the wrong person. ⚠ They ride two DIFFERENT arguments now — the payer
-   * is the counter's key, the caller is on the attribution — so what this pins is
-   * passing one where the other belongs.
+   * A peer's burn in somebody's link container spends the owner's personal wallet,
+   * so the row must carry both: payer is the counter's key, caller rides the
+   * attribution. Collapsing them makes "who spent my credits" name the wrong person.
    */
   it("separates the caller from the payer across the two arguments", async () => {
     setup({ billing: null, members: 1 });
@@ -486,9 +451,8 @@ describe("credit usage ledger", () => {
     });
   });
 
-  /** ⚠ **THE REVERT DETECTOR FOR THE WHOLE WAVE.** A reintroduced post-spend ledger
-   *  write — awaited or not — reopens the gap, and the cheapest proof none exists is
-   *  that the module which used to hold one exports nothing callable. */
+  /** Revert detector: a reintroduced post-spend ledger write reopens the gap, and
+   *  the cheapest proof none exists is that the module exports nothing callable. */
   it("🔒 `credit-ledger.ts` exports NO writer to fire after the spend", async () => {
     const ledger = await import("./credit-ledger");
     expect(Object.values(ledger).filter((v) => typeof v === "function")).toEqual(

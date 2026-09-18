@@ -1,24 +1,21 @@
 /**
- * INVARIANT SUITE — 🔒 **A GUEST OF A HOME CHANNEL, END TO END** (Samuel's
+ * Invariant suite — a GUEST of a home channel, end to end (Samuel's
  * home-ontology ruling, 2026-09-09; closes F-685).
  *
  * `guests_level` was stored, read by SQL, picked by the audience and written by
- * the share dialog, and NO GUEST REQUEST COULD REACH AN ONTOLOGY ROUTE: every
+ * the share dialog, and no guest request could reach an ontology route: every
  * one sat at `withWorkspaceAuth`'s `viewer` default while a home channel's peer
  * is admitted at the role the LINK grants, which defaults to `guest`. Six floors
  * moved (`app/api/channels/guest-route-floor.test.ts › GUEST_ALLOWED`), and this
- * file is the behavioural half: **the floor lets a guest be REFUSED; the
- * AUDIENCE is what refuses them.**
+ * file is the behavioural half: the floor lets a guest be REFUSED; the
+ * AUDIENCE is what refuses them.
  *
- * ⚠ **THE TWO HALVES ARE BOTH REQUIRED AND NEITHER IS THE OTHER.** The census
- * reads route SOURCE and cannot tell what the service does; this drives the real
+ * Both halves are required and neither is the other: the census reads route
+ * SOURCE and cannot tell what the service does; this drives the real
  * `service.ts` against a mocked repository and cannot tell what floor the route
- * carries. The last describe is the seam: what a guest must NEVER reach, asserted
- * as a floor, because there is no service call to make when the request is
- * rejected two layers up.
- *
- * ⚠ Its own file rather than a describe in `service-gates.test.ts`, which
- * measured 468 of the §1 500 when this was written.
+ * carries. The last describe is the seam — what a guest must NEVER reach,
+ * asserted as a floor, because there is no service call to make when the
+ * request is rejected two layers up.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -28,13 +25,9 @@ import type { OntologyClusterRow, OntologyObjectRow } from "./dto";
 import type { OntologyLevel } from "../types";
 import { ontologyContextFactory } from "./test-fixtures";
 
-// ⚠ **THE CHANGELOG CAPTURE IS A REAL WRITE AND IT IS AWAITED**
-// (`./service-revisions.ts`, 2026-09-09, part 2): every ontology write now
-// records one revision per CHANGED FIELD inside the same request, so a service
-// test that leaves it alone reaches `supabaseAdmin()` and fails on a missing
-// service-role key. Stubbed here because these suites are about the WRITE, not
-// about its audit rows — that the rows are recorded, one per changed field, per
-// path, is `service-revisions.test.ts`'s subject.
+// The changelog capture is a real awaited write (`./service-revisions.ts`), so
+// an unstubbed service test reaches `supabaseAdmin()` and fails on a missing
+// service-role key. That the rows are recorded is `service-revisions.test.ts`'s subject.
 vi.mock("@/features/revisions/server/repository", () => ({
   appendRevision: vi.fn(async () => ({ id: "rev-1" })),
   replaceRevisionSnapshot: vi.fn(async () => ({ id: "rev-1" })),
@@ -152,7 +145,7 @@ const guest = ontologyContextFactory({
 });
 
 /**
- * One share row for the lent ontology. ⚠ `members_level` is `edit` in EVERY case
+ * One share row for the lent ontology. `members_level` is `edit` in EVERY case
  * below, so a case that passes because the wrong COLUMN was read is impossible:
  * a guest reading `members_level` would be `edit` throughout.
  */
@@ -176,7 +169,7 @@ function primeShare(guests: OntologyLevel | null) {
   );
   mockRepo.listClusters.mockResolvedValue([CLUSTER_ROW]);
   mockRepo.listMemberships.mockResolvedValue([MEMBERSHIP]);
-  // ⚠ HONOURS THE IDS IT IS GIVEN. A mock that answers the same row whatever it
+  // Honours the ids it is given: a mock that answers the same row whatever it
   // is asked cannot tell "the walk found nothing" from "the walk found it and
   // the filter missed", which is exactly the case below.
   mockRepo.listObjectsByIds.mockImplementation(async (_ws, ids) =>
@@ -301,8 +294,8 @@ describe("a guest at `none`, and a guest with NO share row — the same nothing 
 });
 
 /**
- * 🔒 WHAT A GUEST MUST NEVER REACH, AND WHY IT IS ASSERTED AS A FLOOR. There is
- * no service call to drive: `withWorkspaceAuth` rejects the request before the
+ * What a guest must never reach, and why it is asserted as a floor: there is
+ * no service call to drive — `withWorkspaceAuth` rejects the request before the
  * handler runs, so the only observable fact is the floor itself. Set B of
  * `app/api/channels/guest-route-floor.test.ts` proves nothing ELSE in the tree
  * drifted to `guest`; this states the two that matter for THIS feature
@@ -321,7 +314,7 @@ describe("the two lanes a guest may never reach", () => {
   });
 
   it("THE AGENTS TOGGLE — `agentsMayEdit` rides the cluster PATCH, which stays `member`", () => {
-    // ⚠ The toggle is a CONTAINMENT control on the OWNER's own agents
+    // The toggle is a CONTAINMENT control on the OWNER's own agents
     // (`schema.ts › OntologyClusterUpdateSchema.agentsMayEdit`). A guest cannot
     // rename an ontology either; both facts are this one floor.
     expect(floorOf("ontology/clusters/[clusterId]/route.ts", "PATCH")).toBe("member");

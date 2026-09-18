@@ -21,20 +21,20 @@ import {
 } from "./repository-shares";
 
 /**
- * 🔒 THE ONTOLOGY AUDIENCE CEILING — what ONE request may reach, and at what
+ * The ontology audience ceiling — what ONE request may reach, and at what
  * rung. The ontology twin of `knowledge/server/service-audience.ts ›
  * resolveAgentAudience`, and the only fence behind the home ontology's sharing
  * model (spec §2 I6, §4 site 1).
  *
- * 🔒 EVERY INPUT IS A DB FACT (`./repository-shares.ts`, plus the cluster row's
+ * Every input is a DB fact (`./repository-shares.ts`, plus the cluster row's
  * own `created_by` / `agents_may_edit`) — never a header, a prompt or a tool
  * description. An agent holds its operator's credential and has Bash, so the
  * desktop's prompt framing (§4 site 9) is a COMPENSATING CONTROL, never this.
  *
- * ⚠ IT BOUNDS FUTURE READS, NEVER CONTEXT ALREADY IN THE WINDOW (I7,
+ * It bounds FUTURE reads, never context already in the window (I7,
  * INVARIANTS §11).
  *
- * ⚠ TWO ANSWERS SHARE THE WORD "SCOPE" AND CONFUSING THEM IS THE ONE WAY TO
+ * Two answers share the word "scope" and confusing them is the one way to
  * LEAK: {@link OntologyAudience.workspaceIds} is a READ SCOPE, deliberately
  * WIDER than the caller's container (a lent ontology lives in the LENDER's);
  * {@link levelForCluster} is the AUTHORIZATION every returned row must pass.
@@ -49,7 +49,7 @@ export interface AudienceClusterFacts {
   /** The OWNER (spec §1). `null` = a row whose author is gone; it can never
    *  match a caller, which is the fail-closed reading. */
   created_by: string | null;
-  /** Samuel's solo toggle. ⚠ Only ever read on the owner's own AGENT arm. */
+  /** Samuel's solo toggle. Only ever read on the owner's own AGENT arm. */
   agents_may_edit: boolean;
 }
 
@@ -67,7 +67,7 @@ export type OntologyAudience =
       readonly kind: "resolved";
       readonly workspaceIds: readonly string[];
       /**
-       * 🔒 THE CALLER'S OWN HUMAN LEVEL PER CLUSTER — `service-shared.ts ›
+       * The caller's own human level per cluster — `service-shared.ts ›
        * OntologyShareReach`, and the map its predicates take. The MEMBER-vs-GUEST
        * column choice happens ONCE here, at resolve time, because the caller's
        * class is a fact about the request rather than about a row.
@@ -80,18 +80,18 @@ export type OntologyAudience =
       /** The person this request acts as, or `null` for a credential standing
        *  for nobody in particular — which owns nothing and inherits nobody. */
       readonly userId: string | null;
-      /** ONE active member in the CALLING container. ⚠ `false` when the count
+      /** ONE active member in the CALLING container. `false` when the count
        *  could not be read: unknown is not the same as one. */
       readonly solo: boolean;
     };
 
 /**
- * ⚠ ONE RESOLUTION PER REQUEST, keyed on the context OBJECT — `./service.ts ›
+ * One resolution per request, keyed on the context OBJECT — `./service.ts ›
  * buildOntologyContext` mints exactly one per request, so an entry can neither
  * outlive its request nor be shared between two. A `WeakMap` keeps
  * `OntologyContext` a plain data shape `../types.ts` can own.
  *
- * ⚠ THE PROMISE IS CACHED, NOT THE VALUE — concurrent readers would otherwise
+ * The promise is cached, not the value — concurrent readers would otherwise
  * race past an unset slot and resolve the ceiling once each.
  */
 const AUDIENCE_CACHE = new WeakMap<OntologyContext, Promise<OntologyAudience>>();
@@ -114,10 +114,10 @@ export function resolveOntologyAudience(
  * anything else (unknown kind, null)→ resolved, reaching NOTHING (F-683, fail closed)
  * ```
  *
- * ⚠ THE ORDER IS THE QUERY BUDGET: the first arm is every read the product does
+ * The order is the query budget: the first arm is every read the product does
  * today and costs ONE probe, never touching channels, members or shares.
  *
- * 🔒 **THE FALLBACK REACHES NOTHING, AND THE SAFE READING BELONGS IN THE ARM
+ * **THE FALLBACK REACHES NOTHING, AND THE SAFE READING BELONGS IN THE ARM
  * RATHER THAN IN THE DEFAULT (F-683, fixed 2026-09-09).** It read
  * `if (kind !== "link" && kind !== "personal") return unrestricted`, so an
  * unknown kind — or a `null` from a workspace row that vanished mid-request —
@@ -130,7 +130,7 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
     return { kind: "unrestricted", workspaceIds: [ctx.workspaceId] };
   }
   if (kind !== "link" && kind !== "personal") {
-    // 🔒 F-683's fail-closed arm. ⚠ The READ SCOPE is EMPTY, not
+    // F-683's fail-closed arm. The READ SCOPE is EMPTY, not
     // `[ctx.workspaceId]`: every repository read short-circuits on an empty set,
     // and {@link levelForCluster} answers `none` for one — which is what closes
     // `./service-gates.ts › assertCanCreateCluster`, whose question is about a
@@ -147,7 +147,7 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
   }
 
   if (isSharedCredential(ctx)) {
-    // 🔒 A credential passed between humans stands for nobody: it owns no
+    // A credential passed between humans stands for nobody: it owns no
     // ontology and reads no share THROUGH a membership it does not have
     // (`./service-shared.ts › sharedOntologyLevel`, and the SQL share arm). It
     // keeps the calling container as its read SCOPE — arm 1 still admits that
@@ -171,7 +171,7 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
       credentialSubjectUserId: ctx.credentialSubjectUserId,
       source: ctx.source,
     }),
-    // ⚠ Only the AGENT arms read this, and only on an UNSHARED own cluster; it
+    // Only the AGENT arms read this, and only on an UNSHARED own cluster; it
     // rides the same fan rather than adding a round trip for one caller.
     ctx.source === "agent"
       ? countActiveWorkspaceMembers(ctx.workspaceId)
@@ -179,9 +179,9 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
   ]);
 
   const shareRows = await listSharesForChannels(channelIds);
-  // ⚠ THE COLUMN IS PICKED ONCE, BY THE CALLER'S CLASS (§1: `member`+ vs
+  // The column is picked ONCE, by the caller's class (§1: `member`+ vs
   // `guest`); Q1 is why an agent needs no second pick — it inherits EXACTLY its
-  // person's level, so it reads the same column. ⚠ MAX across channels, not
+  // person's level, so it reads the same column. MAX across channels, not
   // first-wins (I5).
   const reach = new Map<string, OntologyLevel>();
   const ownerAgents = new Map<string, OntologyLevel>();
@@ -196,7 +196,7 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
 
   return {
     kind: "resolved",
-    // ⚠ THE LEND WIDENS THE READ SCOPE AND NOTHING ELSE — every row it returns
+    // The lend widens the read scope and nothing else — every row it returns
     // still has to clear `levelForCluster`, which admits only the cluster the
     // share row actually names.
     workspaceIds: [
@@ -210,13 +210,13 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
     ownerAgents,
     source: ctx.source,
     userId: ctx.userId,
-    // ⚠ FAIL CLOSED: `null` (no count) is NOT solo — unknown is not one.
+    // Fail closed: `null` (no count) is NOT solo — unknown is not one.
     solo: memberCount !== null && memberCount <= 1,
   };
 }
 
 /**
- * 🔒 **THE AGENT CEILING, AND NOTHING ELSE (spec §2).** WHICH ontology the
+ * The AGENT ceiling, and nothing else (spec §2). WHICH ontology the
  * caller may see is `./service-shared.ts › canSeeOntology` / `› canEditOntology`;
  * this asks how far a CREDENTIAL may reach inside that answer.
  *
@@ -230,21 +230,21 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
  *   anyone else's                      → unchanged  (Q1: EXACTLY its human)
  * ```
  *
- * 🔒 **IT ONLY EVER CLOSES**: every agent arm is a {@link narrowerLevel} against
+ * It only ever closes: every agent arm is a {@link narrowerLevel} against
  * the human answer, so no branch here can reach an ontology the predicate
  * refused.
  *
- * ⚠ **THE OWNER ARM IS `created_by`, NOT `workspace_id === ctx.workspaceId`, AND
- * IT RESTORES ROW 2 OF THE TRUTH TABLE STATED ONCE IN `./service-shared.ts`'s
- * header** — read it there. `created_by === userId` is exact for a personal
+ * The owner arm is `created_by`, not `workspace_id === ctx.workspaceId`, and
+ * it restores row 2 of the truth table stated once in `./service-shared.ts`'s
+ * header — read it there. `created_by === userId` is exact for a personal
  * container (its only member IS its owner) and strictly narrower everywhere else.
  *
- * 🔒 **SOUND ONLY BECAUSE THE READ SCOPE CONTAINS THE ROW.** This arm asks
+ * Sound only because the read scope contains the row: this arm asks
  * nothing about membership, so a caller that hands `levelForCluster` a row it did
  * NOT read through {@link OntologyAudience.workspaceIds} has broken it, and no arm
  * here can tell. Pinned in `./service-audience.test.ts › the owner arm`.
  *
- * ⚠ OTHER PEOPLE'S AGENTS NEED NO `min` (Q1): the human answer already IS it.
+ * Other people's agents need no `min` (Q1): the human answer already IS it.
  */
 export function levelForCluster(
   ctx: OntologyContext,
@@ -252,7 +252,7 @@ export function levelForCluster(
   cluster: AudienceClusterFacts
 ): OntologyLevel {
   if (audience.kind === "unrestricted") return "edit";
-  // 🔒 AN EMPTY READ SCOPE REACHES NOTHING, SAID ONCE HERE (F-683) — including
+  // AN EMPTY READ SCOPE REACHES NOTHING, SAID ONCE HERE (F-683) — including
   // through `inOwnContainer`, which would otherwise admit the caller's own
   // container to an audience resolved BECAUSE that container's kind could not
   // be trusted.
@@ -281,7 +281,7 @@ export function levelForCluster(
   return narrowerLevel(human, cluster.agents_may_edit ? "edit" : "view");
 }
 
-/** Does this audience clear `min` on this cluster? ⚠ `min` defaults to `view`;
+/** Does this audience clear `min` on this cluster? `min` defaults to `view`;
  *  a WRITE must pass `"edit"` explicitly, so no caller gets a write gate by
  *  forgetting an argument. */
 export function audienceAdmits(
@@ -293,7 +293,7 @@ export function audienceAdmits(
   return meetsLevel(levelForCluster(ctx, audience, cluster), min);
 }
 
-/** The wider of two rungs, `undefined` = nothing seen yet. ⚠ I5, never the
+/** The wider of two rungs, `undefined` = nothing seen yet. I5, never the
  *  first row PostgREST happened to return. */
 function widerOf(
   current: OntologyLevel | undefined,

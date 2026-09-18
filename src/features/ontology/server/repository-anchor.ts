@@ -3,17 +3,10 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import { ONTOLOGY_OBJECT_COLS, type OntologyObjectRow } from "./dto";
 
 /**
- * IDENTITY ANCHOR I/O — the `ontology_objects.user_id` link, and the ONE part
+ * Identity anchor I/O — the `ontology_objects.user_id` link, and the ONE part
  * of this feature that is about a PERSON rather than about the graph.
  *
- * ⚠ **SPLIT OUT OF `repository.ts` ON 2026-09-09 AT THE §1 CAP** (it measured
- * 518 of 500 once the enumerating reads took a workspace SET). The seam is not
- * arbitrary: an anchor is workspace-scoped IDENTITY and stays keyed on ONE
- * container, while every read left in that module now takes the audience's
- * container SET. Two different tenancy questions in one file is how the wrong
- * one gets copied.
- *
- * ⚠ **STILL SINGLE-CONTAINER, DELIBERATELY (spec §8 R9).** Whose anchor a peer
+ * Still single-container, deliberately (spec §8 R9). Whose anchor a peer
  * resolves inside a shared container is UNDECIDED, and widening this read to
  * the audience's set would decide it silently, in the direction of showing one
  * member the other's identity object.

@@ -1,30 +1,11 @@
-// SESSION SUMMARIES — THE WIRE SHAPE (main/session-summary.js › liveSummary / endedSummary).
+// SESSION SUMMARIES — the wire shape (main/session-summary.js › liveSummary / endedSummary).
 //
-// WHY IT IS ITS OWN FILE, and it is the SECOND time this exact seam was taken. The harness
-// header records the first: `session-summary.test.mjs` stood at 498 of the 500-line cap that
-// `test/**/*.mjs` is linted under, so F-147's report/subscription cases went to
-// `session-summary-report.test.mjs` rather than into it. On 2026-08-20 the same file stood at
-// 499 and the `detail` signal's review comment — the thing this tree REQUIRES on a widened
-// parity pin — did not fit. Shaving the comment to fit the file would have been the cap
-// deciding what a review is allowed to say, which is backwards.
+// Split out of `session-summary.test.mjs` under the 500-line cap on `test/**/*.mjs`, as a pure
+// MOVE: every case kept its name and its body. That file keeps what is about BEHAVIOUR — the
+// mapping, the naming, the ended retention rule, the renderer frame. This one keeps the CONTRACT:
+// what a summary carries, what an absence looks like, and what is bounded on the way out.
 //
-// SO THE SHAPE SECTION MOVED WHOLE, as a pure MOVE: every case kept its name, its body and
-// its comments. `session-summary.test.mjs` (399 lines after the move; re-measure) keeps the
-// mapping, the naming, the ended retention rule and the renderer frame — the things that are
-// about BEHAVIOUR. This file keeps the things that are about the CONTRACT: what a summary
-// carries, what an absence looks like, and what is bounded on the way out.
-//
-// SOURCE EXTRACTION with INJECTION is the shared `_session-summary-harness.mjs`, as in both
-// siblings — one loader, one program under test.
-//
-// ⚠ THE WIRE SHAPE DID NOT MOVE IN THE SESSION-WINDOW WAVE (2026-08-20, F-228), AND THAT IS THE
-// USEFUL FACT: `liveSummary` / `endedSummary` never carried a window handle, so retiring the
-// window model changes no key, no type and no absence rule. All six cases here failed at LOAD —
-// the shared harness's `EXPORTED` list named the deleted `keptWindow`, and that list feeds a
-// `new Function` return, so one missing symbol is a ReferenceError for the whole file. No case
-// was rewritten and none was removed.
-// ⚠ The unused `fakeWindow` import went with it: `session()` builds its own, and an import kept
-// alive by nothing is how the next reader concludes this file is about windows.
+// Source extraction with injection, through the shared `_session-summary-harness.mjs`.
 //
 // Run: `node --test dopl-desktop-app/test/session-summary-shape.test.mjs`
 
@@ -34,25 +15,12 @@ import { load, session, endedRecord } from "./_session-summary-harness.mjs";
 
 
 test("SHAPE: a live summary carries exactly what the Agents tab and the agent view need", () => {
-  // ⚠ WIDENED 2026-08-18 (wiring plan Phase 5): the five MEASUREMENT fields joined the
-  // identity + state ones when session cards died and the Agents tab replaced them. They
-  // are read from where they already lived on the session object — nothing here starts a
-  // counter — and none of them reaches the server (`session-state-push.js › rowFor` picks
-  // its columns by name).
-  //
-  // ⚠ WIDENED AGAIN 2026-08-20 by TWO fields, `detail` and `toolLabel`. The pin failed on
-  // the ADD, which is the review this comment records:
-  //   • `state` IS UNCHANGED AND THAT IS THE WHOLE POINT. The pill vocabulary is the
-  //     SERVER's (`channel_sessions.state`'s CHECK, `schema-sessions.ts`'s z.enum), zod
-  //     validates the ARRAY, and `retryable(400)` is false — so a fourth pill value would
-  //     400 the whole push unretryably and kill every later one for that workspace. The
-  //     finer signal had to ride BESIDE the pill, and does.
-  //   • THEY DO NOT REACH THE SERVER, by the same property the five metrics rely on:
-  //     `session-state-push.js › reportRow` picks its columns BY NAME. The
-  //     `session-state-push.test.mjs` row-shape case is the belt that keeps it true.
-  //   • `detail` IS NULL OVER ANY PILL BUT `working`, so an ended or parked row's shape is
-  //     unchanged in meaning as well as in key count. `session-detail.test.mjs` owns the
-  //     table; this file owns only the fact that the projection carries it.
+  // The five MEASUREMENT fields joined 2026-08-18 (Phase 5); `detail` / `toolLabel` 2026-08-20.
+  // `state` is unchanged deliberately: the pill vocabulary is the SERVER's
+  // (`channel_sessions.state`'s CHECK), zod validates the ARRAY and `retryable(400)` is false, so
+  // a fourth pill value would 400 the whole push unretryably. The finer signal rides BESIDE the
+  // pill and never reaches the server — `session-state-push.js › reportRow` picks its columns BY
+  // NAME, which is the property every field below relies on.
   const m = load();
   m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
   assert.deepEqual(m.list(), [
@@ -63,28 +31,12 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       taskId: "task-1",
       agentId: "a1b2c3d4",
       name: "a1b2c3d4",
-      // ⚠ WIDENED 2026-08-25 BY ONE FIELD, `displayName` (Samuel's rename ruling). The pin
-      // failed on the ADD, which is the review this comment records:
-      //   • NULL IS THE ORDINARY ANSWER and this fixture's: most agents are never renamed,
-      //     and the card falls back to the canonical `Agent #<id>`. A blank standing in for
-      //     the name would be worse than the address (INVARIANTS §11).
-      //   • IT RIDES BESIDE `agentId`/`name` AND REPLACES NEITHER. Those two are the
-      //     ADDRESS — `@<agentId>`, every session op's third coordinate — and nothing
-      //     resolves an agent by this string, so a rename cannot re-point anything.
-      //   • LOCAL-ONLY, by the property `detail` and the posture pair already rely on:
-      //     `session-state-push.js › reportRow` picks its columns BY NAME, so it never
-      //     reaches `channel_sessions` (whose `name` CHECK would refuse a human name anyway).
+      // `displayName` (2026-08-25, Samuel's rename ruling) rides BESIDE `agentId`/`name` and
+      // replaces neither: those two are the ADDRESS and nothing resolves an agent by this string.
+      // `null` is the ordinary answer — most agents are never renamed (INVARIANTS §11).
       displayName: null,
-      // ⚠ WIDENED 2026-08-27 BY ONE FIELD, `description` (Samuel's launch-panel ruling). The
-      // pin failed on the ADD, which is the review this comment records:
-      //   • NULL IS THE ORDINARY ANSWER and this fixture's, exactly as `displayName`'s is: a
-      //     description is optional at launch and most agents carry none, so every reader
-      //     renders its ABSENCE rather than an empty line (INVARIANTS §11).
-      //   • IT RIDES BESIDE `displayName`, OFF THE SAME STORE (`main/agent-names.js`), under
-      //     the same machine-local rule — nothing here reaches the network.
-      //   • IT DOES NOT REACH THE SERVER, by the property this whole block rests on:
-      //     `session-state-push.js › reportRow` picks its columns BY NAME, and `description`
-      //     is not one of them. `session-state-push.test.mjs`'s row-shape case is the belt.
+      // `description` (2026-08-27, launch-panel ruling) rides off the same store as `displayName`
+      // (`main/agent-names.js`), under the same machine-local rule; `null` is the ordinary answer.
       description: null,
       listening: true,
       endedAt: null,
@@ -93,110 +45,51 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       // rule's own answer, and the fixture's state (no `lastEventKind` stamped).
       detail: "thinking",
       toolLabel: null,
-      // ⚠ WIDENED 2026-09-13 BY ONE FIELD, `diag` (F-692). The pin failed on the ADD, which is
-      // the review this comment records:
-      //   • NULL IS THE ORDINARY ANSWER and this fixture's. It is set only when a launch could
-      //     not run at all — `mcp-connect-guard.js › failVisibly`, when the Dopl MCP server
-      //     never connected — and that state is the one the pill CANNOT express: `state` is the
-      //     server's three-value vocabulary, so an agent that ran a whole session with every
-      //     `mcp__dopl__*` call answering "No such tool available" read `working`, then `Ended`.
-      //   • IT RIDES BESIDE `state`, NEVER INSTEAD OF IT — `detail`'s rule exactly. Nothing
-      //     downstream may branch on it to decide whether a session is over.
-      //   • LOCAL-ONLY, by the same property the fields above it rely on: `reportRow` picks its
-      //     columns BY NAME, so it never reaches `channel_sessions` and no peer can read it.
+      // `diag` (2026-09-13, F-692) is set only when a launch could not run at all
+      // (`mcp-connect-guard.js › failVisibly`, when the Dopl MCP server never connected) — the one
+      // state the server's three-value `state` cannot express. It rides BESIDE `state`, never
+      // instead of it, and nothing downstream may branch on it to decide a session is over.
       diag: null,
-      // ⚠ WIDENED AGAIN 2026-08-20 by the LIVE POSTURE pair. The pin failed on the ADD,
-      // which is the review this comment records:
-      //   • READ-ONLY ON THIS WIRE, and it is the REDUCER's state — not the channel's
-      //     stored launch posture. Different facts: the whole point of the agent view's
-      //     controls is that a running session can be moved OFF what it launched on, and a
-      //     control that cannot read back what it set lies after the auth hold resets both
-      //     axes, after a resume, and after a change made in another window.
-      //   • THEY DO NOT REACH THE SERVER, by the property the metrics and `detail` already
-      //     rely on: `session-state-push.js › reportRow` picks its columns BY NAME. The
-      //     row-shape case in `session-state-push.test.mjs` is the belt.
-      //   • The values are the reducer's own, coerced there; an absent state reads
-      //     fail-closed (`manual` / `ask`), exactly as `session-io.js › grantArgs` treats it.
+      // The live POSTURE pair (2026-08-20) is read-only on this wire and is the REDUCER's state,
+      // not the channel's stored launch posture: a running session can be moved OFF what it
+      // launched on. An absent state reads fail-closed (`manual` / `ask`).
       toolMode: "manual",
       messageMode: "ask",
-      // ⚠ WIDENED AGAIN 2026-08-22 by ONE field, `model` (Samuel's model-selection ruling), and
-      // the fixture's value shows the PRECEDENCE: the SDK's own reported id (`s.liveModel`) beats
-      // the operator's pick, because 'default' means "whatever the CLI chose" and the CLI is the
-      // one that knows. LOCAL-only like `detail` and the two axes — `session-state-push.js ›
-      // reportRow` picks its columns by name, so it never reaches `channel_sessions`.
+      // `model` (2026-08-22, Samuel's model-selection ruling), and the fixture shows the
+      // PRECEDENCE: the SDK's own reported id (`s.liveModel`) beats the operator's pick, because
+      // 'default' means "whatever the CLI chose" and the CLI is the one that knows.
       model: "claude-haiku-4-5",
       channelName: "general",
       threadTitle: "Ship the thing",
-      // ⚠ WIDENED AGAIN 2026-08-22 by ONE field, `templateName` (agent templates). The pin
-      // failed on the ADD, which is the review this comment records:
-      //   • It is the SPAWN-TIME capture, `context.template.name`, and it can never move: the
-      //     resolve happens once at launch and a session keeps what it ran as.
-      //   • THE NAME, NEVER THE ID. An id here would be an ownership fact travelling where a
-      //     label was asked for, and the server resolves nothing from this column.
-      //   • ⚠ UNLIKE every other field reviewed above, it DOES reach the server — deliberately,
-      //     onto `channel_sessions.template_name`, which is OPERATOR-ONLY by construction on
-      //     that side (`collab-dto.ts › mapOwnSessionStateRow` builds a narrow object, so a new
-      //     column fails CLOSED for peers). `null` here: the fixture is a blank agent.
+      // `templateName` (2026-08-22, agent templates) is the SPAWN-TIME capture
+      // `context.template.name` and can never move. THE NAME, never the id. Unlike the fields
+      // above it DOES reach the server, onto `channel_sessions.template_name`, which is
+      // operator-only by construction on that side (`collab-dto.ts › mapOwnSessionStateRow`).
       templateName: null,
-      // ⚠ WIDENED 2026-09-13 BY ONE FIELD, `color` (Samuel's agent-colours ruling;
-      // docs/specs/agent-colors.md). The pin failed on the ADD, which is the review this
-      // comment records:
-      //   • `null` IS THE ORDINARY ANSWER and this fixture's: a session that asked for no key
-      //     carries none, and the SERVER assigns the first free one (`server/session-colors.ts`).
-      //     Absent could never mean "no colour" — omission is not a value on the push lane.
-      //   • IT IS THE ASK, NOT THE ASSIGNMENT. Uniqueness is per channel across EVERY member and
-      //     no machine can evaluate that, so what this reports is what `session-engine.js` stamped
-      //     from `spec.color` and the server may have substituted.
-      //   • ⚠ UNLIKE `displayName` and the metrics, it DOES reach the server — deliberately,
-      //     onto `channel_sessions.color`, which is PEER-VISIBLE by design (a colour is drawn on
-      //     every member's transcript, which is the whole ruling).
-      //   • ⚠ **AND UNTIL THIS FIELD EXISTED THE PUSH ASKED FOR NOTHING.**
-      //     `session-state-push.js › reportRow` has read `e.color` off this summary since the
-      //     colours wave; the summary carried none, so the ask was `undefined` on every push.
+      // `color` (2026-09-13, docs/specs/agent-colors.md) is THE ASK, not the assignment:
+      // uniqueness is per channel across EVERY member and no machine can evaluate that, so the
+      // server may substitute. It DOES reach the server (`channel_sessions.color`), peer-visible
+      // by design. Until this field existed `reportRow` read `e.color` off a summary that carried
+      // none, so the ask was `undefined` on every push.
       color: null,
-      // ⚠ WIDENED 2026-09-17 BY ONE FIELD, `heldGates` (Samuel's inline-approval ruling:
-      // *"i dont see like a surface where I can approve the permission either inline"*). The pin
-      // failed on the ADD, which is the review this comment records:
-      //   • `[]` IS THE ORDINARY ANSWER and this fixture's — a session holding nothing. It is
-      //     UNIFORM rather than omitted, so no reader branches on absence to decide whether this
-      //     build reports held calls at all; an older main answers `undefined` and the SPA's
-      //     reader (`agents-held-gates.ts`) treats that as "cannot say", which is the same
-      //     widened-local-type rule `agentEndedAt` and `agentRunningModel` already follow.
-      //   • IT IS A PROJECTION OF `state.pendingPermissions`, NEVER A SECOND SET.
-      //     `session-held-gates.js › heldGatesFor` walks the reducer's own array and looks each
-      //     id up in a bounded per-session ledger, so an answered, parked or expired request is
-      //     invisible by construction and there is no "is it still pending" opinion to drift.
-      //   • ⚠ IT DOES NOT REACH THE SERVER, by the property every field above it relies on:
-      //     `session-state-push.js › reportRow` picks its columns BY NAME. That matters more
-      //     here than elsewhere — an entry carries a one-line summary of a TOOL INPUT, which is
-      //     a fact about this machine and nobody else's business.
+      // `heldGates` (2026-09-17, Samuel's inline-approval ruling). `[]` is UNIFORM rather than
+      // omitted, so no reader branches on absence to decide whether this build reports held calls;
+      // an older main answers `undefined` and the SPA reads that as "cannot say". It is a
+      // PROJECTION of `state.pendingPermissions`, never a second set. It does not reach the
+      // server: an entry carries a one-line summary of a TOOL INPUT, nobody else's business.
       heldGates: [],
       contextUsed: 84000,
       contextWindow: 200000, // the frozen table's row for claude-haiku-4-5
       tokensSpent: 1200000,
       startedAt: 1700000000000,
       lastActivityAt: 1700000600000,
-      // ⚠ WIDENED AGAIN 2026-09-01 BY THE HEALTH HALF (T25 / T50 / T51 / T83). The pin failed on
-      // the ADD, which is the review this comment records:
-      //   • IT ANSWERS A DIFFERENT QUESTION FROM THE METRICS BESIDE IT. Those say what the run
-      //     has COST; these say whether it is GETTING ANYWHERE and what has been refused to it.
-      //     Its own module (`main/session-health.js`), carried here through `metrics` because
-      //     `session-summary.js` stands at exactly the 500-line cap and cannot take a line.
-      //   • EVERY COUNT IS NULL UNTIL SOMETHING MEASURES IT, and this fixture has measured none
-      //     of them: it has run no turn, been denied nothing and been woken by nothing.
-      //     `deniedCalls: 0` would be a claim ("nothing was refused") that no machine made.
-      //   • `tokensDelta` IS NOT NULL HERE and that is correct rather than an exception: the
-      //     fixture HAS measured a spend (`tokensSpent: 1200000`) and has never posted, so
-      //     everything it cost has bought its reader nothing yet — which is the whole number.
-      //   • `stale` IS THE ONE DERIVATION and here it is `true`, which is the fixture telling
-      //     the truth rather than a case being tuned: this session is WORKING, has spent 1.2M
-      //     tokens, has never posted, and its `startedAt` is a 2023 stamp — so all three
-      //     conditions hold against a real clock. The `false` branches (idle, quiet but not
-      //     spending, spending but recently spoken) are driven in `session-health.test.mjs`,
-      //     where the clock is injected and the three conditions can be separated.
-      //   • ⚠ UNLIKE most of the fields reviewed above, all seven DO reach the server —
-      //     deliberately, onto OPERATOR-ONLY columns, because each is a fact about how the
-      //     reader's OWN machine is getting on and none of them is a peer's business.
+      // The HEALTH half (2026-09-01, T25 / T50 / T51 / T83) answers a different question from the
+      // metrics beside it: those say what the run has COST, these whether it is getting anywhere
+      // and what has been refused to it. Every count is NULL until something measures it —
+      // `deniedCalls: 0` would be a claim no machine made. `tokensDelta` is not null because the
+      // fixture HAS spent and never posted, and `stale` is the one DERIVATION (its false branches
+      // are driven with an injected clock in `session-health.test.mjs`). All seven DO reach the
+      // server, onto OPERATOR-ONLY columns.
       turns: null,
       tokensDelta: 1200000,
       stale: true,
@@ -209,12 +102,9 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
 });
 
 test("SHAPE: an UNMEASURED metric is null — never a confident zero", () => {
-  // ⚠ THE FAILURE THIS CASE EXISTS FOR: `Number(null)` is 0, so a coercion-only guard
-  // reports an empty context window on a session that has simply not reported usage yet,
-  // and the meter paints 0% of a window that may be nearly full. Three absences land
-  // here — a session before its first turn, an engine that predates the stamps, and a
-  // MODEL THIS BUILD HAS NO WINDOW FOR (which must show raw tokens, never a made-up
-  // percentage: session-model.js says so in as many words).
+  // `Number(null)` is 0, so a coercion-only guard reports an empty context window on a session
+  // that has simply not reported usage yet, and the meter paints 0% of a window that may be nearly
+  // full. A model this build has no window for must show raw tokens, never a made-up percentage.
   const m = load();
   const s = session({
     promptTokens: undefined,
@@ -236,11 +126,9 @@ test("SHAPE: an UNMEASURED metric is null — never a confident zero", () => {
 });
 
 test("SHAPE: a RETAINED ENDED pill keeps the measurement it settled with", () => {
-  // The session object is gone by then, so a live read would blank every number at
-  // exactly the moment the operator wants to read what the run cost. `noteEnded` freezes
-  // them with the identity.
-  // ⚠ FROZEN INTO THE DURABLE RECORD SINCE 2026-08-22, not into an in-memory list: an ended
-  // card survives a restart now, so the numbers have to survive with it.
+  // The session object is gone by then, so a live read would blank every number at exactly the
+  // moment the operator wants to read what the run cost. `noteEnded` freezes them into the durable
+  // record (2026-08-22), so an ended card survives a restart with its numbers.
   const m = load();
   m.bind({ sessions: new Map(), endedRecords: () => [endedRecord()] });
   const [row] = m.list();

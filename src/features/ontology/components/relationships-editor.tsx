@@ -22,27 +22,19 @@ import {
 const DEFAULT_EDGE_LABEL = "related to";
 
 /**
- * Relationships section — one WHITE BAR per edge on the section's gray well. Row
- * = label, target chips (click = navigate, ✕ = unlink), cascade picker to link
- * more.
+ * Relationships section — one white bar per edge on the section's gray well: label,
+ * target chips (click = navigate, ✕ = unlink), cascade picker to link more.
+ * `+ Add` appends an empty bar rather than opening a composer (Samuel, 2026-09-13).
  *
- * ⚠ **`+ Add` APPENDS AN EMPTY BAR, IT DOES NOT OPEN A COMPOSER** (Samuel,
- * 2026-09-13: *"Same for actions, relationships, and stuff like that"*). Both
- * cells — the label and the target picker — are on the new bar from the start.
+ * An edge is written the moment it has a target, not when it has a label:
+ * `graph-state.ts › RELATIONSHIP_SET` drops edges with empty `targetIds` and
+ * addresses edges BY LABEL, so a target-less draft has nowhere to land and two
+ * blank ones would collapse into one row. An empty label is written as
+ * "related to"; a label matching an existing edge merges into it (upsert-by-label),
+ * so the bar disappears and the target joins the edge above.
  *
- * ⚠ **AN EDGE IS WRITTEN THE MOMENT IT HAS A TARGET, NOT WHEN IT HAS A LABEL, AND
- * THE REDUCER IS WHY.** `graph-state.ts › RELATIONSHIP_SET` drops any edge whose
- * `targetIds` is empty and addresses edges BY LABEL, so a target-less draft has
- * nowhere to land and two blank ones would be one row. A label left empty is
- * written as "related to" — the same fallback the deleted composer used.
- *
- * ⚠ A draft whose label MATCHES AN EXISTING EDGE merges into it (the reducer's
- * upsert-by-label), so the bar disappears and the target joins the edge above.
- * That is the reducer's rule, stated here because the row makes it visible.
- *
- * ⚠ **FLAT SINCE 2026-09-12** — see `attributes-editor.tsx`'s header for the
- * ruling and what it deleted; the well is not a return of the frame
- * (`panel-section.tsx › PanelSection`).
+ * Flat since 2026-09-12 — see `attributes-editor.tsx`'s header; the well is not a
+ * return of the frame (`panel-section.tsx › PanelSection`).
  */
 export function RelationshipsEditor({
   object,
@@ -116,23 +108,17 @@ export function RelationshipsEditor({
 }
 
 /**
- * ONE EDGE, PERSISTED OR DRAFT — one component for both, so the commit
- * reconciles in place and keeps the caret (`panel-section.tsx › useDraftRows`).
+ * One edge, persisted or draft — one component for both, so a commit reconciles in
+ * place and keeps the caret (`panel-section.tsx › useDraftRows`).
  *
- * ⚠ **THE ROW'S FIELDS ARE `quiet` SINCE 2026-09-14** (Samuel, over the object
- * panel: *"for the individual fields. I want to remove the gray underline, and
- * have it so that the black underline only appears when a user clicks on a field
- * item (vertical center the text also)"*). It is the kit's `.inputQuiet` — a
- * RESTING STATE of the one underline recipe (`board-header-bits.tsx ›
- * InlineUnderlineField`), not a second face — so the black `::after` sweep on
- * focus is unchanged and blur takes the line away again. The panel's own
- * DESCRIPTION keeps its gray-at-rest line; the rule is about ROW cells.
+ * Row fields are `quiet` since 2026-09-14 (Samuel): no gray rule at rest, black
+ * line on focus only. A resting state of the one underline recipe
+ * (`board-header-bits.tsx › InlineUnderlineField`), not a second face; the panel's
+ * Description keeps its gray-at-rest line.
  *
- * ⚠ **AND THE ORDER IS UNTOUCHED.** Samuel's `Attribute : value dropdown`
- * reordering (same ruling) is the ATTRIBUTE row's: this row is label → targets,
- * already in that order, with no kind picker standing between them to move. No
- * colon either — the edge's LABEL is the sentence ("owned by"), not a field name
- * in front of a value.
+ * The 2026-09-14 reorder is the ATTRIBUTE row's: this row is already label →
+ * targets with no kind picker between them, and no colon — the edge's label is the
+ * sentence, not a field name in front of a value.
  */
 function RelRow({
   row,

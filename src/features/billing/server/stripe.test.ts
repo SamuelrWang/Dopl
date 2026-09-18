@@ -68,7 +68,7 @@ async function checkout(segment?: string | null) {
 
 describe("the checkout return", () => {
   it("lands on the billing page for the workspace that was PAID FOR", async () => {
-    // ⚠ Not whatever `/billing` resolves — a multi-workspace admin would be
+    // Not whatever `/billing` resolves — a multi-workspace admin would be
     // returned to the first workspace's billing state.
     expect(await checkout(SEGMENT)).toBe(
       `https://www.usedopl.com/billing/${SEGMENT}?billing=success&session_id={CHECKOUT_SESSION_ID}`
@@ -76,7 +76,7 @@ describe("the checkout return", () => {
   });
 
   it("keeps Stripe's session-id placeholder literal", async () => {
-    // ⚠ Percent-encoded braces are not substituted by Stripe.
+    // Percent-encoded braces are not substituted by Stripe.
     const url = await checkout(SEGMENT);
     expect(url).toContain("session_id={CHECKOUT_SESSION_ID}");
     expect(url).not.toContain("%7B");
@@ -100,10 +100,9 @@ describe("the checkout return", () => {
 
 describe("what a checkout may be minted for", () => {
   it("always bills the per-seat Team price at the seat quantity", async () => {
-    // ⚠ 2026-09-07 (spec A6): the retired Solo line cannot be minted by
-    // anyone — `WorkspaceCheckoutArgs["plan"]` is `"team" | "pro"` and neither
-    // reaches `STRIPE_SOLO_PRICE_ID`. The route's 400 `PLAN_RETIRED` is the
-    // first lock; this is the second.
+    // 2026-09-07 (spec A6): the retired Solo line cannot be minted —
+    // `WorkspaceCheckoutArgs["plan"]` is `"team" | "pro"`. The route's 400
+    // `PLAN_RETIRED` is the first lock; this is the second.
     await checkout(SEGMENT);
     expect(captured.checkout!.line_items).toEqual([
       { price: "price_seat", quantity: 3 },
@@ -160,15 +159,15 @@ describe("what a checkout may be minted for", () => {
         segment: SEGMENT,
       })
     ).rejects.toThrow(/STRIPE_PRO_SEAT_PRICE_ID/);
-    // ⚠ Not "fall back to the Solo price it can still see" — a misconfigured
-    // env must fail loudly, never sell the retired plan by accident.
+    // Not "fall back to the Solo price it can still see" — a misconfigured env
+    // must fail loudly, never sell the retired plan by accident.
     expect(captured.checkout).toBeNull();
   });
 
   it("refuses a Pro checkout with its OWN env var named when that price is unset", async () => {
-    // ⚠ Not the seat price: the two are the same $8.99 and land on different
-    // container kinds, so a fallback would put a per-seat subscription on
-    // somebody's personal container and only the webhook would notice.
+    // Not the seat price: the two are the same $8.99 on different container
+    // kinds, so a fallback would put a per-seat subscription on somebody's
+    // personal container and only the webhook would notice.
     vi.stubEnv("STRIPE_PERSONAL_PRO_PRICE_ID", "");
     await expect(
       createWorkspaceCheckoutSession({
@@ -202,9 +201,9 @@ describe("selectSeatItem — sold-today first, then the three recognition arms",
   });
 
   it("still finds the flat Solo item on a LIVE legacy subscription", () => {
-    // ⚠ Solo is off SALE (2026-09-07, spec A6), not off the books. Deleting
-    // this arm would send `upgrade-to-team` and the seat sync at
-    // `items.data[0]` — the wrong line the moment a legacy sub holds two.
+    // Solo is off sale (2026-09-07, spec A6), not off the books: without this
+    // arm the seat sync lands on `items.data[0]`, wrong the moment a legacy sub
+    // holds two.
     expect(
       selectSeatItem(
         sub([
@@ -216,8 +215,8 @@ describe("selectSeatItem — sold-today first, then the three recognition arms",
   });
 
   it("prefers the CURRENT seat price over the legacy one on a half-migrated sub", () => {
-    // ⚠ The order is "sold today first". A sub carrying both is mid-migration
-    // and its live line is the new price.
+    // The order is "sold today first": a sub carrying both is mid-migration and
+    // its live line is the new price.
     expect(
       selectSeatItem(
         sub([

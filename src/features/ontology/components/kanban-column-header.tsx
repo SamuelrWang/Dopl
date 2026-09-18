@@ -29,17 +29,16 @@ interface Props {
 }
 
 /**
- * Header card at the top of a column's lane: name (edited in place), card
- * count, and for editors an add button + kebab menu. Expands downward onto a
- * PREVIEW of the column's description and default fields; the template is
- * edited in the panel's TemplateEditor ("Object settings").
+ * Header card at the top of a column's lane: name (edited in place), card count,
+ * and for editors an add button + kebab menu. Expands onto a preview of the
+ * column's description and default fields; the template is edited in the panel's
+ * TemplateEditor ("Object settings").
  *
- * ⚠ THE CARD IS NOT ONE BUTTON (see `knowledge-v2/home/base-card`): a
- * `<button>` inside a `<button>` is invalid HTML and browsers reparent the
- * inner one OUT. Input + icon buttons are SIBLINGS; the chevron is the real
- * keyboard toggle (`aria-expanded` + `aria-controls`) and the row's `onClick`
- * is a mouse convenience duplicating it. Every control stops propagation so one
- * click fires exactly one thing.
+ * The card is not one button: a `<button>` inside a `<button>` is invalid HTML
+ * and browsers reparent the inner one out. Input + icon buttons are siblings; the
+ * chevron is the real keyboard toggle (`aria-expanded` + `aria-controls`) and the
+ * row's `onClick` duplicates it for the mouse. Every control stops propagation so
+ * one click fires exactly one thing.
  */
 export function KanbanColumnHeader({
   column,
@@ -57,8 +56,8 @@ export function KanbanColumnHeader({
   const detailsId = `column-details-${column.id}`;
 
   return (
-    // ⚠ No `overflow-hidden`: the kebab's Popover is an absolutely positioned
-    // child and a clipping ancestor cuts the menu off. Nothing inside paints a
+    // No `overflow-hidden`: the kebab's Popover is an absolutely positioned child
+    // and a clipping ancestor cuts the menu off. Nothing inside paints a
     // background, so rounded corners hold without it.
     <div
       className="kanban-card shrink-0 rounded-[10px] border bg-bg-elevated"
@@ -97,10 +96,9 @@ export function KanbanColumnHeader({
           {column.childIds.length}
         </span>
         {canEdit && (
-          // ⚠ `Add to <name>`, NOT `Add <name>` — that exact phrase is the LANE
-          // FOOT button's (`kanban-board.tsx`), and two controls doing the same
-          // thing under one accessible name is an ambiguous stop for anyone
-          // navigating by name. Same action, two places, two namings.
+          // `Add to <name>`, not `Add <name>` — that phrase is the lane-foot
+          // button's (`kanban-board.tsx`), and two controls under one accessible
+          // name is an ambiguous stop for anyone navigating by name.
           <button
             type="button"
             aria-label={`Add to ${label}`}
@@ -152,8 +150,8 @@ export function KanbanColumnHeader({
       </div>
 
       {/* Height collapse without measuring: row animates 0fr → 1fr, child clips
-          itself. ⚠ `inert` while closed keeps the hidden input out of tab order
-          and off the a11y tree — `overflow: hidden` alone only hides it. */}
+          itself. `inert` while closed keeps the hidden input out of tab order and
+          off the a11y tree — `overflow: hidden` alone only hides it. */}
       <div
         id={detailsId}
         inert={!open}

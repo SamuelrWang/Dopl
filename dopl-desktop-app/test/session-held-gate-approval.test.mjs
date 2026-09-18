@@ -1,21 +1,9 @@
-// THE INLINE APPROVAL SURFACE (Samuel, 2026-09-17: *"i dont see like a surface where I can
-// approve the permission either inline"*) — main's two halves of it:
-//
-//   §1 `main/session-held-gates.js`            WHAT a held call is, recorded beside the id
-//   §2 the gate bridge's own recording          only the DOCK shape, with the gate's spellings
-//   §3 `main/session-summary.js › liveSummary`  the projection the card is drawn from
-//   §4 `main/session-answer-permission.js`      the answer, exactly once
-//
-// WHY ONE FILE FOR FOUR MODULES. They are one CONTRACT and the defect class is the SEAM between
-// them: a ledger that records what the projection cannot show, or an answer that resolves what no
-// card offered. Splitting them by module would leave each half green over a broken join — which
-// is the failure this whole feature exists to fix, one level up (a blocked session with no
-// surface: every part working, nothing reaching the operator).
-//
-// ⚠ EVERY MODULE IS THE REAL ONE. The gate bridge is driven through the SHIPPED callback
-// (`runtime/claude/axis-b.js › makeCanUseTool`, the `session-io-grant.test.mjs` idiom), and the
-// summary through its own source-extraction harness — so these cases cannot pass over a stub
-// whose shape the shipped code no longer produces.
+// The inline approval surface (Samuel, 2026-09-17). Four modules, one contract:
+// `main/session-held-gates.js` (the ledger), the gate bridge's own recording,
+// `main/session-summary.js › liveSummary` (the projection), `main/session-answer-permission.js`
+// (the answer, exactly once). Tested together because the defect class is the SEAM between them:
+// a ledger that records what the projection cannot show, or an answer that resolves what no card
+// offered. Every module here is the real one — no stubs.
 //
 // Run: `node --test dopl-desktop-app/test/session-held-gate-approval.test.mjs`
 
@@ -97,8 +85,8 @@ test("LEDGER: BOUNDED, oldest first — a per-session map multiplies against the
   assert.equal(s.heldGates.size, held.MAX_HELD);
   assert.equal(s.heldGates.has("r0"), false, "the oldest went");
   assert.equal(s.heldGates.has(`r${held.MAX_HELD + 9}`), true, "the newest stayed");
-  // ⚠ RE-NOTING A KEY ALREADY HELD MUST NOT EVICT (a reshow of the same request): the map
-  // would otherwise shrink by one every time a live card was re-recorded.
+  // Re-noting a key already held must NOT evict (a reshow of the same request), or the map
+  // shrinks by one every time a live card is re-recorded.
   const before = s.heldGates.size;
   held.note(s, { requestId: `r${held.MAX_HELD + 9}`, tool: "Bash" });
   assert.equal(s.heldGates.size, before);
@@ -110,8 +98,8 @@ test("PROJECTION: the REDUCER's array is the set; the ledger only supplies the d
   const s = mkSession();
   held.note(s, { requestId: "r1", tool: "Bash", summary: "ls" });
   held.note(s, { requestId: "r2", tool: "Read", summary: "/tmp/x" });
-  // Only `r2` is still held as far as the reducer is concerned — `r1` was answered, timed out
-  // or fail-closed by a park. The ledger still HAS it, and it must not be rendered.
+  // `r1` was answered, timed out or fail-closed by a park. The ledger still HAS it, and it
+  // must not be rendered.
   s.state.pendingPermissions = ["r2"];
   assert.deepEqual(held.heldGatesFor(s).map((e) => e.requestId), ["r2"]);
   // …and the ORDER is the reducer's, not the ledger's insertion order.
@@ -142,8 +130,8 @@ test("BRIDGE: a gated work tool is recorded when its resolver is parked", async 
   assert.equal(entry.tool, "Bash");
   assert.equal(entry.op, "", "a work tool has no channel op key");
   assert.match(entry.summary, /ls/, "the input's one-line restatement");
-  // ⚠ THE REASON IS THE GATE'S OWN CODE (`session-gate-reason.js`), never words: the renderer
-  // owns the copy and an unknown code must render no line rather than a guess.
+  // The reason is the gate's own CODE (`session-gate-reason.js`), never words: the renderer owns
+  // the copy and an unknown code must render no line rather than a guess.
   assert.equal(entry.reason, "awaiting-approval");
   s.pendingPermissions.get("r1")({ behavior: "deny" });
   await p;
@@ -156,19 +144,19 @@ test("BRIDGE: a `dopl_channel` hold carries the OP KEY the classifiers match on 
   const p = canUse("mcp__dopl__dopl_channel", { op: "rooms", action: "invite", channel: "ch1" }, { requestId: "r5" });
   assert.equal(events[0].type, "permission_request", "precondition: it really gated");
   const entry = s.heldGates.get("r5");
-  // The SHORT label, past the `mcp__<server>__` prefix — the same spelling the diag line prints.
+  // The SHORT label, past the `mcp__<server>__` prefix.
   assert.equal(entry.tool, "dopl_channel");
-  // ⚠ `rooms` ALONE WOULD READ IDENTICALLY FOR A ROSTER READ AND AN INVITE, which is the whole
-  // reason the op key is a field of its own rather than part of the tool name.
+  // `rooms` alone would read identically for a roster read and an invite, which is why the op
+  // key is a field of its own.
   assert.equal(entry.op, "rooms.invite");
   s.pendingPermissions.get("r5")({ behavior: "deny" });
   await p;
 });
 
 test("BRIDGE: an OWN-CHANNEL POST is NOT recorded — it already has a surface", async () => {
-  // An own-channel post gates onto a CONSENT ROW and renders as a held post with its own Post
-  // button in the thread's send box. A second set of buttons here would be two answers to one
-  // question, and a local resolve would race the row the server CAS's.
+  // An own-channel post gates onto a CONSENT ROW with its own Post button in the send box. A
+  // second set of buttons would be two answers to one question, and a local resolve would race
+  // the row the server CAS's.
   const s = mkSession();
   const events = [];
   const canUse = axisB.makeCanUseTool(s, (_s, ev) => events.push(ev));
@@ -191,9 +179,8 @@ test("SUMMARY: `heldGates` rides the live row and moves the push digest", () => 
   assert.deepEqual(row.heldGates, [
     { requestId: "r1", tool: "Bash", op: "", summary: "ls", reason: "awaiting-approval" },
   ]);
-  // ⚠ THE CARD MUST APPEAR AND DISAPPEAR WITHOUT A SECOND WIRING. The summaries push is
-  // digest-gated, so a held call that is not part of the digest would leave the panel showing a
-  // card over a call already answered — until some unrelated field moved.
+  // The summaries push is digest-gated, so a held call outside the digest would leave the panel
+  // showing a card over an already-answered call until some unrelated field moved.
   const answered = { ...s, state: { ...s.state, pendingPermissions: [] } };
   assert.notEqual(
     m.summariesDigest([row]),
@@ -208,11 +195,9 @@ test("SUMMARY: an ENDED row has no held calls — a control over a finished run 
 });
 
 test("BRIDGE: the op is declared in ALL THREE places the preload's surface has to reach", () => {
-  // ⚠ A GAP HERE DOES NOT FAIL, IT DELETES A FEATURE SILENTLY — the same review
-  // `agent-model-selection.test.mjs` makes for `setModel`. The preload is ground truth;
+  // A gap here does not fail, it deletes a feature silently. The preload is ground truth;
   // `src/shared/lib/spa-bridge-sessions.ts` is the shared declaration the channels components
-  // compile against (split off `spa-bridge.ts` at the 500-line cap in this same change), and
-  // `apps/desktop-ui/src/lib/dopl-bridge.ts` is the SPA's own mirror.
+  // compile against, and `apps/desktop-ui/src/lib/dopl-bridge.ts` is the SPA's own mirror.
   const root = join(HERE, "..", "..");
   const read = (...p) => readFileSync(join(root, ...p), "utf8");
   assert.match(read("src", "shared", "lib", "spa-bridge-sessions.ts"), /answerPermission\?\(/,
@@ -227,7 +212,7 @@ test("BRIDGE: the op is declared in ALL THREE places the preload's surface has t
 // ── 5. THE ANSWER ────────────────────────────────────────────────────────────────────
 
 /** A bound copy of the answer op over ONE fake session. `dispatched` records what reached the
- *  reducer funnel; `live` models `resolvePerm`'s delete-as-it-answers. */
+ *  reducer funnel; the dispatch models `resolvePerm`'s delete-as-it-answers. */
 function mkAnswerer(over) {
   const s = mkSession(over);
   s.pendingPermissions.set("r1", () => {});
@@ -258,8 +243,8 @@ test("ANSWER: an allow dispatches `permission_decision` as ALLOW-ONCE and report
   );
   assert.equal(dispatched.length, 1);
   assert.equal(dispatched[0].type, "permission_decision");
-  // ⚠ ALLOW-ONCE, NEVER ALLOW-TASK. A standing grant keyed on the scoped name is too much to
-  // hand over from a compact inline card — the notification's Allow button has the same bound.
+  // ALLOW-ONCE, never allow-task: a standing grant keyed on the scoped name is too much to hand
+  // over from a compact inline card.
   assert.equal(dispatched[0].decision, "allow-once");
   // The grant name is the SESSION's own recorded key, never a caller's string.
   assert.equal(dispatched[0].name, "Bash#ls#deadbeef");
@@ -286,8 +271,7 @@ test("ANSWER: EXACTLY ONCE — the second click answers {ok:false}, never a blan
   const { dispatched } = mkAnswerer();
   const p = { channelId: CH, taskId: "t1", requestId: "r1", allow: true };
   assert.deepEqual(answer.answerPermission(p), { ok: true, decision: "allow-once" });
-  // ⚠ THE SECOND CALL MUST NOT REACH THE REDUCER AT ALL: the resolver map no longer holds it,
-  // which is the same test `claimGate` and the TTL both make.
+  // The second call must not reach the reducer at all: the resolver map no longer holds it.
   assert.deepEqual(answer.answerPermission(p), { ok: false, reason: "unknown-request" });
   assert.equal(dispatched.length, 1, "one dispatch, not two");
 });
@@ -303,9 +287,8 @@ test("ANSWER: an UNKNOWN request id is refused and dispatches nothing", () => {
 
 test("ANSWER: a request the reducer still lists but no resolver holds is `already-decided`", () => {
   // The race this closes: a park's `denyPendingPermissions` fail-closed the resolver between the
-  // state push the card was drawn from and the click. A blanket `{ok:true}` there is the defect
-  // FIX F1 is named for — *"a renderer believing a blanket {ok:true} stamped a DENIED post
-  // 'sent'"* — so the honest answer is a refusal with a reason.
+  // state push the card was drawn from and the click. FIX F1: the honest answer is a refusal with
+  // a reason, never a blanket `{ok:true}`.
   const { s } = mkAnswerer();
   let resolvedLive = true;
   answer.bind({ resolveSession: () => s, dispatch: () => { resolvedLive = false; return false; } });
@@ -335,8 +318,8 @@ test("ANSWER: a settled session answers `no-session` — an ended agent has noth
 
 test("ANSWER: the BOUNDARY gates — a non-UUID channel is the plain refusal, indistinguishable", () => {
   const { dispatched } = mkAnswerer();
-  // ⚠ THE SAME `{ok:false}` a SENDER-BINDING refusal returns, deliberately: a hostile page must
-  // not learn which window it is running in from the difference.
+  // The SAME `{ok:false}` a sender-binding refusal returns, deliberately: a hostile page must not
+  // learn which window it is running in from the difference.
   assert.deepEqual(answer.answerPermission({ channelId: "not-a-uuid", requestId: "r1", allow: true }), { ok: false });
   assert.deepEqual(answer.answerPermission({}), { ok: false });
   assert.deepEqual(answer.answerPermission(null), { ok: false });

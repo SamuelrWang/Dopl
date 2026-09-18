@@ -5,17 +5,14 @@ import type { ColumnDraftPatch } from "../optimistic-create";
 import type { OntologyObject } from "../types";
 
 /**
- * "+ Object" AS A TWO-STEP ACT (2026-09-11, Samuel's popup ruling) — the lane
- * appears on the click and the popup decides whether it stays.
- *
- * ⚠ **ITS OWN FILE FOR THE 500-LINE CAP** (`eslint.config.mjs › max-lines`):
- * `ontology-view.tsx` sits at the cap, and this is the one piece of the flow that
- * is state rather than markup. It is not a second store — every write it makes is
+ * "+ Object" as a two-step act (Samuel, 2026-09-11): the lane appears on the click
+ * and the popup decides whether it stays. Its own file for the 500-line cap
+ * (`eslint.config.mjs › max-lines`); not a second store — every write it makes is
  * the ontology store's own (`use-ontology-creates.ts`).
  *
- * ⚠ **THE DRAFT IS A ROW, NOT AN ID.** `commitColumnDraft` needs the row as it
- * was dispatched (the POST body is built from it), and a provisional id cannot be
- * looked back up once `CREATE_RESOLVE` has swapped it.
+ * The draft is a row, not an id: `commitColumnDraft` builds the POST body from the
+ * row, and a provisional id cannot be looked back up once `CREATE_RESOLVE` has
+ * swapped it.
  */
 export interface ObjectDraft {
   /** True while a draft lane is on the board waiting for the popup's answer. */
@@ -39,17 +36,17 @@ export function useObjectDraft({
     patch: ColumnDraftPatch
   ) => void;
 }): ObjectDraft {
-  // ⚠ A REF BESIDE THE FLAG, NOT STATE ALONE: each of the three acts DISPATCHES,
-  // and a dispatch inside a `setState` updater runs during render — twice under
-  // StrictMode, which is two lanes for one click. The ref holds the row; the
-  // boolean is the only thing the render reads.
+  // A ref beside the flag, not state alone: each act dispatches, and a dispatch
+  // inside a `setState` updater runs during render — twice under StrictMode, which
+  // is two lanes for one click. The ref holds the row; the render reads only the
+  // boolean.
   const draftRef = useRef<{ clusterId: string; row: OntologyObject } | null>(null);
   const [open, setOpen] = useState(false);
 
   const begin = useCallback(
     (clusterId: string) => {
-      // One draft at a time: a second click while the popup is open would strand
-      // the first lane on the board with nothing left holding its row.
+      // One draft at a time: a second click would strand the first lane on the
+      // board with nothing holding its row.
       if (draftRef.current) return;
       draftRef.current = { clusterId, row: beginColumnDraft(clusterId) };
       setOpen(true);

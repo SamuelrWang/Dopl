@@ -1,24 +1,19 @@
 "use client";
 
 /**
- * The banner demo's AGENT VIEW — the product's slide-out agent panel, rebuilt
- * from the SAME exported parts `channels/components/agent-panel.tsx` composes.
+ * The banner demo's agent view — the product's slide-out agent panel, rebuilt
+ * from the same exported parts `channels/components/agent-panel.tsx` composes.
  *
- * ⚠ WHY NOT MOUNT `ChannelsAgentPanel` ITSELF: its stream and liveness come
- * off the desktop bridge (`useAgentNarration`), which a plain browser cannot
- * feed — the real panel would honestly render "This build cannot show what
- * your agent is doing", which is the truth and also not a demo. This wrapper
+ * `ChannelsAgentPanel` itself cannot be mounted: its stream and liveness come off
+ * the desktop bridge, which a browser cannot feed, so the real panel would
+ * honestly render "This build cannot show what your agent is doing". This wrapper
  * scripts only the entries the bridge would have pushed.
  *
- * 🔑 **EVERY RENDERED PIECE IS THE PANEL'S OWN COMPONENT SINCE 2026-09-17** —
- * `AgentPanelHeader`, `AgentStats`, `AgentStream` and `ComposerInputRow`, all
- * imported. The header and the stats were TRANSCRIBED here until then and had
- * drifted: the real header had grown the effective-model clause and the
- * ended-agent pill, and the real stats a third clause. **The only thing this
- * file still states is the aside's own class list** (verbatim from
- * `agent-panel.tsx`, whose divider and slide notes live there) and the box
- * around the stats that `AgentControls` would have drawn — that component is
- * bridge-gated and correctly absent in a browser.
+ * Every rendered piece is the panel's own component — `AgentPanelHeader`,
+ * `AgentStats`, `AgentStream`, `ComposerInputRow`, all imported. The only things
+ * stated here are the aside's class list (verbatim from `agent-panel.tsx`) and
+ * the box `AgentControls` would have drawn; that component is bridge-gated and
+ * correctly absent in a browser.
  */
 
 import { useState } from "react";
@@ -64,7 +59,7 @@ export function DemoAgentView({
   messages: ChannelMessage[];
   currentUserId: string;
   viewer: AvatarPerson;
-  /** This agent's identity colour, resolved by the MOUNT off the channel's own
+  /** This agent's identity colour, resolved by the mount off the channel's own
    *  bank (`view-model.ts › AgentIdentity.color`) — never stamped on a row. */
   color: AgentColorKey | null;
   onClose: () => void;
@@ -83,7 +78,7 @@ export function DemoAgentView({
         open ? "translate-x-0" : "pointer-events-none translate-x-full",
       )}
     >
-      {/* 🔑 **THE PANEL'S OWN HEADER, MOUNTED — NOT COPIED (2026-09-17).** It was
+      {/* The panel's own header, mounted rather than copied. It was
           transcribed here, and by the time this scene was rebuilt the real one had
           grown the effective-model clause and the ended-agent pill that replaces the
           liveness dot. `agent-panel.tsx › AgentPanelHeader` is exported for this
@@ -103,12 +98,12 @@ export function DemoAgentView({
       <AgentStream
         entries={entries}
         supported
-        // ⚠ THE AGENT'S OWN IDENTITY COLOUR, which the SENT banner boxes with —
-        // the same key the transcript beside it paints this agent's posts in.
+        // The agent's own identity colour, which the Sent banner boxes with —
+        // the same key the transcript paints this agent's posts in.
         color={color}
-        // ⚠ THE LIVE TAIL AT THE FOOT OF THE STREAM (Samuel, 2026-09-14) — the
-        // SAME `agentLiveness` verdict the header pill renders, handed down
-        // rather than re-derived, so the two cannot disagree.
+        // (2026-09-14) The live tail at the foot of the stream: the same
+        // `agentLiveness` verdict the header pill renders, handed down rather
+        // than re-derived, so the two cannot disagree.
         liveness={agentLiveness(agent)}
         sent={agentSentMessages(
           messages,

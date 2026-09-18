@@ -11,25 +11,16 @@ import { FIELD_WELL } from "./ontology-bits";
 import { KIND_LABELS } from "./template-editor";
 
 /**
- * THE "NEW OBJECT" POPUP (2026-09-11, Samuel: *"I want it to be for the +
- * Object. Can we make it so that it's actually a pop-up? … the column UI to
- * immediately appear on the thing, but at the same time, a pop-up comes up …
- * That pop-up is where the user would put in the information. They can add new
- * fields and put descriptions"*).
+ * The "New object" popup (Samuel, 2026-09-11). The lane is already on the board
+ * while this is open — the host begins a draft lane in the same click
+ * (`optimistic-create.ts › beginColumnDraft`) and Discard withdraws it. This
+ * component collects; it never creates.
  *
- * ⚠ **THE LANE IS ALREADY ON THE BOARD WHILE THIS IS OPEN** — the host begins a
- * DRAFT lane in the same click (`optimistic-create.ts › beginColumnDraft`), and
- * Discard withdraws it. This component collects; it never creates.
+ * It wears the kit's face (`shared/ui/form-dialog.tsx`), re-cutting no control.
  *
- * ⚠ IT IS THE KIT'S FACE AND NOT A FOURTH ONE (`shared/ui/form-dialog.tsx`, the
- * New agent / New thread popup): bold stacked labels, underline fields, the
- * 30px Discard + verb pair. Nothing here re-cuts a control.
- *
- * ⚠ **FIELDS ARE THE COLUMN'S OBJECT TEMPLATE, WHICH IS A REAL MODEL AND NOT A
- * NEW ONE** (`types.ts › TemplateField`: `key`, `label`, `kind`). There is no
- * per-field DESCRIPTION on that model and none is invented here — a field row is
- * its label and its kind, the same two the panel's `TemplateEditor` edits. The
- * OBJECT's description is the `Description` field above.
+ * Fields are the column's object template (`types.ts › TemplateField`: `key`,
+ * `label`, `kind`) — no per-field description exists on that model and none is
+ * invented here. The object's description is the `Description` field above.
  */
 export function NewObjectDialog({
   open,
@@ -46,10 +37,8 @@ export function NewObjectDialog({
   const [fields, setFields] = useState<FieldRow[]>([]);
 
   /**
-   * ⚠ **BOTH EXITS CLEAR, AND THEY CLEAR ON THE WAY OUT** — `new-thread-dialog.tsx`'s
-   * rule, verbatim: a popup that came back holding a draft the operator dismissed
-   * would be remembering a decision they undid. Resetting HERE rather than in an
-   * open-effect is also what keeps this component free of a setState-in-effect.
+   * Both exits clear, on the way out (`new-thread-dialog.tsx`'s rule). Resetting
+   * here rather than in an open-effect avoids a setState-in-effect.
    */
   const reset = () => {
     setName(NEW_COLUMN_NAME);
@@ -58,10 +47,8 @@ export function NewObjectDialog({
   };
 
   /**
-   * ⚠ FOCUS + SELECT FROM THE DOM, and deliberately: `UnderlineField` is the
-   * kit's and takes no ref or `autoFocus`, and the prefilled name must arrive
-   * SELECTED so typing replaces it rather than appending to it. One read of an
-   * id this component owns is cheaper than a prop on every popup in the app.
+   * Focus + select from the DOM: `UnderlineField` takes no ref or `autoFocus`, and
+   * the prefilled name must arrive selected so typing replaces it.
    */
   useEffect(() => {
     if (!open) return;
@@ -178,7 +165,7 @@ export function NewObjectDialog({
 
 const NAME_ID = "new-object-name";
 
-/** A row while it is being typed. ⚠ `rowId` is a REACT KEY and nothing else —
+/** A row while it is being typed. `rowId` is a React key and nothing else —
  *  keying on the label would remount the input on every keystroke. */
 interface FieldRow {
   rowId: string;
@@ -193,10 +180,9 @@ function nextRowId(): string {
 }
 
 /**
- * Rows → the stored template. ⚠ SAME KEY DERIVATION AS `TemplateEditor` (label
- * lowercased, spaces hyphenated) so a field added here and one added in the
- * panel are the same field, and blank rows are DROPPED rather than stored as a
- * field with no name.
+ * Rows → the stored template. Same key derivation as `TemplateEditor` (label
+ * lowercased, spaces hyphenated) so a field added here and one added in the panel
+ * are the same field; blank rows are dropped.
  */
 function toTemplate(rows: readonly FieldRow[]): TemplateField[] {
   const template: TemplateField[] = [];

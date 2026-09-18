@@ -13,13 +13,13 @@ import {
   type OntologyShare,
 } from "../types";
 
-/** TanStack key for ONE ontology's share rows. ⚠ Cluster-scoped, because the
- *  route is: one dialog, one read, whatever the container's channel fan is. */
+/** TanStack key for one ontology's share rows. Cluster-scoped, because the route
+ *  is: one dialog, one read, whatever the container's channel fan is. */
 export const ontologySharesKey = (workspaceId: string, clusterId: string) =>
   ["ontology-shares", workspaceId, clusterId] as const;
 
-/** A share row is UNSHARED, not stored, when all three audiences are `none`
- *  (I4). One place decides it, so the dialog and the write cannot disagree. */
+/** A share row is unshared, not stored, when all three audiences are `none` (I4).
+ *  One place decides it, so the dialog and the write cannot disagree. */
 export function isUnshared(share: OntologyShare): boolean {
   return (
     share.membersLevel === "none" &&
@@ -29,17 +29,15 @@ export function isUnshared(share: OntologyShare): boolean {
 }
 
 /**
- * ONE ONTOLOGY'S SHARES — the read behind the share dialog and behind the
- * delete confirm that has to NAME the channels (Q4).
+ * One ontology's shares: the read behind the share dialog and the delete confirm
+ * that has to name the channels (Q4).
  *
- * ⚠ `canManage` COMES OFF THE SERVER and is never decided here: it is the same
- * predicate the write applies (spec §5), so a dialog that guessed would render
- * an editor for a caller the PUT then refuses.
+ * `canManage` comes off the server and is never decided here — it is the same
+ * predicate the write applies (spec §5), so a dialog that guessed would render an
+ * editor for a caller the PUT then refuses.
  *
- * ⚠ THE WRITES INVALIDATE **TWO** ENTRIES, and forgetting the second is silent.
- * This key holds the rows; `ontologySnapshotKey` holds the CARD's
- * `sharedChannelCount`, which is a different read of the same fact — patch one
- * and the list behind the dialog keeps the old number until a cold refetch.
+ * The writes invalidate TWO entries, and forgetting the second is silent: this key
+ * holds the rows, `ontologySnapshotKey` holds the card's `sharedChannelCount`.
  */
 export function useOntologyShares(
   workspaceId: string | null,
@@ -63,9 +61,9 @@ export function useOntologyShares(
 
   const mutation = useMutation({
     mutationFn: (share: OntologyShare) =>
-      // 🔒 UNSHARING IS A ROW DELETE (I4). `none` is a stored value for ONE
-      // audience of a live row; three of them is the absence of the row, and
-      // writing it as a row would leave a lend nobody can see standing.
+      // Unsharing is a row delete (I4): `none` is a stored value for one audience
+      // of a live row, and writing three of them would leave a lend nobody can
+      // see standing.
       isUnshared(share)
         ? deleteOntologyShare(
             workspaceId as string,
@@ -77,7 +75,7 @@ export function useOntologyShares(
       void queryClient.invalidateQueries({
         queryKey: ontologySharesKey(workspaceId ?? "", clusterId ?? ""),
       });
-      // ⚠ THE SECOND ENTRY — the card's share COUNT rides the snapshot.
+      // The second entry — the card's share count rides the snapshot.
       void queryClient.invalidateQueries({
         queryKey: ontologySnapshotKey(workspaceId ?? ""),
       });
@@ -86,7 +84,7 @@ export function useOntologyShares(
 
   return {
     shares: query.data?.shares ?? EMPTY_SHARES,
-    // ⚠ FAIL CLOSED: an unresolved or failed read is NOT permission to manage.
+    // Fail closed: an unresolved or failed read is not permission to manage.
     canManage: query.data?.canManage ?? false,
     resolved: query.data !== undefined,
     error: query.error,
@@ -104,11 +102,10 @@ const LEVEL_LABELS: Record<OntologyLevel, string> = {
 };
 
 /**
- * The three rungs as a `PillChoice` roster, IN LADDER ORDER.
- *
- * ⚠ DERIVED FROM `ONTOLOGY_LEVELS`, never hand-typed: the order IS the ladder
- * (`none < view < edit`, I2), and a hand-typed roster is how a fourth spelling
- * of a stored level reaches a control that then writes it.
+ * The three rungs as a `PillChoice` roster, in ladder order. Derived from
+ * `ONTOLOGY_LEVELS`, never hand-typed: the order IS the ladder (`none < view <
+ * edit`, I2), and a hand-typed roster is how a fourth spelling of a stored level
+ * reaches a control that then writes it.
  */
 export const LEVEL_OPTIONS = ONTOLOGY_LEVELS.map((key) => ({
   key,

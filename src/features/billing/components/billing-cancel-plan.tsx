@@ -6,20 +6,18 @@ import { formatDate } from "@/shared/lib/format-time";
 import { useCancelPlan } from "./use-billing-account";
 
 /**
- * CANCEL — and, when already canceled, RESUME. One switch, two faces.
+ * Cancel — and, when already canceled, resume. One switch, two faces.
  *
  * Cancelling sets Stripe's `cancel_at_period_end`: nothing ends today, paid
- * features stay until the quoted date, then revert to Starter. Confirm dialog
- * names the DATE because the date is the whole decision.
+ * features stay until the quoted date, then revert to Starter. The confirm
+ * dialog names the date because the date is the whole decision.
  *
- * ⚠ Dialog closes on confirm, failure lands IN THE SECTION
- * (`pending-invitations.tsx` pattern). `ConfirmDialog` swallows a throw and
- * stays open, so a reason rendered under it sits behind the scrim — in the DOM,
- * unreadable.
- *
- * ⚠ Button stays disabled past the POST: `useCancelPlan().pending` spans the
+ * The dialog closes on confirm and failure lands in the section
+ * (`pending-invitations.tsx` pattern): `ConfirmDialog` swallows a throw and
+ * stays open, so a reason rendered under it sits behind the scrim.
+ * The button stays disabled past the POST — `useCancelPlan().pending` spans the
  * awaited status invalidation, during which this section still renders "Cancel
- * plan" off the OLD status — a live button there is a second cancel.
+ * plan" off the old status, and a live button there is a second cancel.
  */
 export function BillingCancelPlan({
   workspaceId,
@@ -37,7 +35,7 @@ export function BillingCancelPlan({
 
   const endsOn = currentPeriodEnd ? formatDate(currentPeriodEnd) : null;
 
-  /** ⚠ NEVER RETHROWS — a throw keeps the dialog open over this message. */
+  /** Never rethrows — a throw keeps the dialog open over this message. */
   async function run(resume: boolean) {
     setError(null);
     try {
@@ -119,10 +117,9 @@ export function BillingCancelPlan({
         confirmLabel="Cancel plan"
         cancelLabel="Keep plan"
         destructive
-        // Dismiss FIRST, then run. `ConfirmDialog` closes on a resolve and
+        // Dismiss first, then run: `ConfirmDialog` closes on a resolve and
         // stays open on a throw, and `run` never throws — so without this the
-        // dialog would sit over the section for the whole round trip and the
-        // outcome, good or bad, would land behind it.
+        // dialog would sit over the section for the whole round trip.
         onConfirm={() => {
           setConfirming(false);
           void run(false);

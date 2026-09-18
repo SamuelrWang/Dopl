@@ -8,28 +8,26 @@ import type { OntologyClusterRow, OntologyObjectRow } from "./dto";
  * ONTOLOGY → REVISIONS: the CAPTURE half (2026-09-09, the CHANGELOG lane part 2,
  * closing `docs/REFACTOR-FINDINGS.md › F-686`).
  *
- * ⚠ **ONE REVISION PER CHANGED FIELD, NOT ONE PER SAVE — A DIFFERENT
- * GRANULARITY FROM KNOWLEDGE'S.** Samuel's design (2026-09-09) is HubSpot-shaped:
- * per OBJECT, per FIELD, `old → new`, who, when, person or which agent. One PATCH
- * changes N entries of the `attributes` bag, so one row per save would collapse
- * the per-property timeline this exists for. The two granularities share one
- * table and one actor model and must never be described by one sentence.
+ * One revision per CHANGED FIELD, not one per save — a different granularity
+ * from knowledge's (Samuel 2026-09-09, HubSpot-shaped: per object, per field,
+ * `old → new`, who, when, person or which agent). One PATCH changes N entries
+ * of the `attributes` bag, so one row per save would collapse the per-property
+ * timeline this exists for.
  *
- * ⚠ **THE HUMAN COALESCING WINDOW DOES NOT APPLY, AND THE PRIMITIVE SAYS SO**
+ * The human coalescing window does not apply, and the primitive says so
  * (`revisions/server/service.ts › COALESCING_RESOURCE_TYPES`), not a flag this
  * module passes.
  *
- * ⚠ **AWAITED, AFTER THE WRITE, INSIDE THE SAME REQUEST** — never `void`-ed,
- * never caught-and-continued (`revisions/server/repository.ts` carries the
- * argument).
+ * Awaited, after the write, inside the same request — never `void`-ed, never
+ * caught-and-continued (`revisions/server/repository.ts` carries the argument).
  *
- * ⚠ **CAPTURE ONLY.** The reads and the restore need `./service-gates.ts` and
- * the object WRITE service, which import this module back;
+ * Capture only. The reads and the restore need `./service-gates.ts` and the
+ * object WRITE service, which import this module back;
  * `./service-revisions-read.ts` holds that half so the cycle is a visible seam.
  */
 
-/** ⚠ **ONE BAG ENTRY IS SPELLED `attribute:<key>`, SO IT CAN NEVER COLLIDE WITH
- *  A COLUMN.** An attribute keyed `name` is legal, and unprefixed it would file
+/** One bag entry is spelled `attribute:<key>`, so it can never collide with a
+ *  column. An attribute keyed `name` is legal, and unprefixed it would file
  *  its history under the object's own `name`. */
 export const ATTRIBUTE_FIELD_PREFIX = "attribute:";
 
@@ -42,12 +40,12 @@ export interface OntologyFieldChange {
 /**
  * The OBJECT's tracked fields, flattened.
  *
- * ⚠ **DELIBERATELY NOT ON THIS LIST**: `updated_at`, `last_edited_by`,
+ * Deliberately not on this list: `updated_at`, `last_edited_by`,
  * `last_edited_source` (a revision already records all three), and `user_id` —
  * the anchor gets its own row ({@link recordAnchorRevision}) because it links to
  * a PERSON rather than being a property.
  *
- * ⚠ `methods` and `template` are WHOLE-LIST fields: they are the object's
+ * `methods` and `template` are WHOLE-LIST fields: they are the object's
  * DEFINITION, edited as one list. F-686's per-entry granularity is about
  * `attributes`, where the property values live.
  */
@@ -69,9 +67,9 @@ export function objectFields(
 /**
  * The CLUSTER's tracked fields.
  *
- * ⚠ **`layout` IS NOT ONE** — one `{x,y}` per node, written on every drag-drop;
- * recording it makes the changelog a mouse log (Samuel: *"it doesn't make sense
- * to track every tiny letter change"*). ⚠ Nor `slug`: DERIVED from the name at
+ * `layout` is not one — one `{x,y}` per node, written on every drag-drop;
+ * recording it makes the changelog a mouse log (Samuel: it doesn't make sense
+ * to track every tiny letter change). Nor `slug`: DERIVED from the name at
  * create and never changed, so a row about it would restate the rename.
  */
 export function clusterFields(
@@ -85,7 +83,7 @@ export function clusterFields(
 }
 
 /** Stable-order JSON, so two equal values compare equal however they were
- *  built. ⚠ Arrays keep their order — an attribute list reordered IS a change. */
+ *  built. Arrays keep their order — an attribute list reordered IS a change. */
 function stable(value: unknown): string {
   return JSON.stringify(value ?? null, (_key, v) => {
     if (v && typeof v === "object" && !Array.isArray(v)) {
@@ -100,11 +98,11 @@ function stable(value: unknown): string {
 /**
  * The fields that actually MOVED.
  *
- * ⚠ **PRESENT ON ONE SIDE ONLY IS A CHANGE, AND THE MISSING HALF IS `null`, NOT
- * `undefined`** — `undefined` does not survive `JSON.stringify` into `jsonb`, so
+ * Present on ONE SIDE ONLY is a change, and the missing half is `null`, not
+ * `undefined` — `undefined` does not survive `JSON.stringify` into `jsonb`, so
  * the row would arrive keyless and read as "no value recorded".
  *
- * ⚠ **AN UNCHANGED FIELD RECORDS NOTHING** — a re-sent PATCH is a no-op, and a
+ * An unchanged field records nothing — a re-sent PATCH is a no-op, and a
  * no-op that files a revision shows an edit that never happened.
  */
 export function changedFields(
@@ -122,7 +120,7 @@ export function changedFields(
   return changes;
 }
 
-/** ⚠ `rename` for the `name` field, `edit` for every other — a rename is the one
+/** `rename` for the `name` field, `edit` for every other — a rename is the one
  *  field change a reader scans a timeline for, and both words already exist. */
 function opForField(field: string): RevisionOp {
   return field === "name" ? "rename" : "edit";
@@ -146,7 +144,7 @@ async function recordFieldChanges(
     await recordRevision(ctx, {
       resourceType: resource.resourceType,
       resourceId: resource.id,
-      // ⚠ THE RESOURCE'S OWN container, never `ctx.workspaceId`: a LENT ontology
+      // The RESOURCE'S OWN container, never `ctx.workspaceId`: a LENT ontology
       // lives in the lender's, and a row filed under the writer's is invisible
       // from the cluster it is the history of (INVARIANTS §T35).
       workspaceId: resource.workspaceId,
@@ -159,7 +157,7 @@ async function recordFieldChanges(
 }
 
 /** ONE row carrying a WHOLE state — a create's initial fields, or a delete's
- *  last. ⚠ NOT N field rows: a create has no `before` to diff against, and N
+ *  last. NOT N field rows: a create has no `before` to diff against, and N
  *  rows would read as N edits of a thing that did not exist a moment earlier. */
 async function recordBundle(
   ctx: OntologyContext,
@@ -225,7 +223,7 @@ export async function recordAnchorRevision(
     workspaceId: row.workspace_id,
     op: "edit",
     payload: {
-      // ⚠ AN ASSOCIATION, NOT A FIELD: `claimAnchor` anchors the CALLER, so no
+      // An association, not a field: `claimAnchor` anchors the CALLER, so no
       // write could put somebody else's anchor back and a field-shaped row would
       // draw a Restore button whose only outcome is a refusal.
       association: "anchor",
@@ -240,13 +238,13 @@ export async function recordAnchorRevision(
  * AN ASSOCIATION — a relationship or a cluster/column membership — filed on the
  * OBJECT it attaches to.
  *
- * 🔒 ⚠ **`op` IS `edit`, NOT A NEW WORD.** `link`/`unlink` would grow the
- * migration's `op` CHECK; `payload.association` needs no schema change and is
- * what the renderer keys on and the restore predicate refuses
+ * `op` is `edit`, not a new word: `link`/`unlink` would grow the migration's
+ * `op` CHECK; `payload.association` needs no schema change and is what the
+ * renderer keys on and the restore predicate refuses
  * (`revisions/lib/restorable.ts`). Filed on the OBJECT because neither edge is
  * addressable — no reader can ask a membership row for its history.
  *
- * ⚠ RECORDS NOTHING WHEN THE EDGE SET DID NOT MOVE.
+ * Records nothing when the edge set did not move.
  */
 export async function recordAssociationRevision(
   ctx: OntologyContext,
@@ -310,7 +308,7 @@ export async function recordClusterFieldChanges(
 }
 
 /** The cascade delete — ONE row on the CLUSTER carrying its last state.
- *  ⚠ The objects it took with it record NOTHING: the RPC is one statement and
+ *  The objects it took with it record NOTHING: the RPC is one statement and
  *  the rows are gone, so a per-object row would be a claim this path cannot
  *  make honestly. The cluster's `delete` row is what the roll-up shows. */
 export async function recordClusterDelete(
@@ -327,7 +325,7 @@ export async function recordClusterDelete(
 /**
  * A SHARE change — who else reaches this ontology, filed on the CLUSTER.
  *
- * ⚠ LEVELS and the channel id, never a channel NAME: this row is read by whoever
+ * Levels and the channel id, never a channel NAME: this row is read by whoever
  * can read the cluster's history, and a name belongs to somebody else's
  * container.
  */

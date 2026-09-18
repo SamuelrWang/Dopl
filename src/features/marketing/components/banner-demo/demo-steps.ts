@@ -7,12 +7,9 @@
  */
 
 /**
- * 🔒 **NO THREAD BEATS SINCE 2026-09-17 (Samuel):** *"Render THAT composition …
- * No thread view."* Four steps are deleted — `thread-card`, `cursor-to-thread`,
- * `click-thread`, `thread-open` — because opening a thread put the pane on the
- * WORKSPACE shape: a breadcrumb header and a thread-scoped info column, which is
- * what he was looking at when he rejected the scene. The opener they existed for
- * is now an ordinary channel message on `channel-request`.
+ * (2026-09-17) No thread beats: opening a thread put the pane on the WORKSPACE
+ * shape — a breadcrumb header and a thread-scoped info column. The opener those
+ * steps existed for is now an ordinary channel message on `channel-request`.
  */
 export type StepId =
   | "channel-base"
@@ -77,36 +74,24 @@ export const reached = (step: number, id: StepId): boolean => step >= INDEX[id];
 export const at = (step: number, id: StepId): boolean => step === INDEX[id];
 
 /**
- * The design canvas.
+ * The design canvas. (2026-08-30) Only the WIDTH is fixed: the component scales
+ * to FILL the slot (`scale = slotWidth / CANVAS_W`) and derives the height, so
+ * the scene reaches both edges instead of being letterboxed. CANVAS_W is mirrored
+ * by `marketing.css › .lp-demo-canvas`; keep the two in step.
  *
- * ⚠ ONLY THE WIDTH IS FIXED (2026-08-30). The component scales the canvas to
- * FILL the slot — `scale = slotWidth / CANVAS_W` — and derives the height from
- * that scale, so the scene reaches both edges instead of being letterboxed
- * inside them (banner-demo.tsx › `fit`, which carries the gutters this
- * replaced). CANVAS_W is mirrored by `marketing.css › .lp-demo-canvas`; keep
- * the two in step.
- *
- * CANVAS_H is now only the SEED for the derived height — what the box measures
- * before the slot has one (first paint, a hidden tab). It is the old fixed
- * height and any plausible number would do; nothing lays out against it.
+ * CANVAS_H is only the SEED for the derived height — what the box measures before
+ * the slot has one. Nothing lays out against it.
  */
 /**
- * 🔒 **1280 — THE DESKTOP WINDOW'S OWN WIDTH (Samuel, 2026-09-17).** He put the
- * hero beside the live /home pane and the scene read as *"the denser workspace
- * scale"*: *"Product is the home 30px scale: larger type, taller rows, bigger
- * radii, more padding … the frame's fixed size may need the scene's viewport
- * widened/scaled rather than the components shrunk."*
+ * (2026-09-17) 1280 is the desktop window's own width, measured rather than
+ * picked: `dopl-desktop-app/main/spa-window.js › createSpaWindow` opens the SPA
+ * at `width: 1280`, so matching it makes the hero the product at 1:1 in design
+ * units.
  *
- * ⚠ **NOTHING WAS SHRUNK — THE DESIGN VIEWPORT WAS TOO WIDE.** Every control in
- * this scene is the product's own component at the product's own size; the
- * canvas is then scaled by `slotWidth / CANVAS_W`, so a WIDER canvas in the same
- * slot makes every one of those controls land SMALLER on the reader's screen.
- * At 1480 the scene was 1480/1280 = **1.16× denser** than the real window.
- * ⚠ **1280 IS MEASURED, NOT PICKED**:
- * `dopl-desktop-app/main/spa-window.js › createSpaWindow` opens the SPA at
- * `width: 1280`. Match it and the hero is the product at 1:1 in design units.
- * ⚠ CANVAS_W is mirrored by `marketing.css › .lp-demo-canvas`; keep the two in
- * step.
+ * Nothing in the scene is shrunk — the design viewport was too wide. The canvas
+ * is scaled by `slotWidth / CANVAS_W`, so a wider canvas in the same slot makes
+ * every control land smaller (1480 was 1.16x denser than the real window).
+ * CANVAS_W is mirrored by `marketing.css › .lp-demo-canvas`; keep the two in step.
  */
 export const CANVAS_W = 1280;
 export const CANVAS_H = 820;

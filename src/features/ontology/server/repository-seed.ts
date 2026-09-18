@@ -8,7 +8,7 @@ import {
 import { stripNullBytes } from "./repository";
 
 /**
- * BULK write I/O — set-at-a-time forms of the single-row writes in
+ * Bulk write I/O — set-at-a-time forms of the single-row writes in
  * `./repository.ts`. Separate module because they serve a different caller:
  * `repository.ts` is the API/MCP create-update surface (one gesture, one row);
  * these serve the new-workspace seed, which materialises a whole authored graph
@@ -89,7 +89,7 @@ export async function insertMemberships(
 
 
 /**
- * Insert many relationships in ONE statement. ⚠ Not
+ * Insert many relationships in ONE statement. Not
  * `replaceRelationshipsForSource` — that is a replace-set (delete + insert per
  * source object). This is the ADD form, for a caller that knows nothing exists
  * yet (the seed's objects were created moments earlier in the same call).

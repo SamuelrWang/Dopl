@@ -1,10 +1,9 @@
 /**
- * What the checkout form SAYS it is selling. ⚠ `describeOrder` is the only
+ * What the checkout form says it is selling. `describeOrder` is the only
  * assertable part of this module — everything else needs a live Stripe session
- * and the `@stripe/react-stripe-js` provider — and it is where the plan's own
- * name lives, which is exactly what went wrong before: `planName` was the
- * constant `"Team"`, so a `pro` session would have rendered a Pro price under a
- * Team heading (2026-09-08).
+ * and the `@stripe/react-stripe-js` provider — and it holds the plan's own name,
+ * which was the constant `"Team"` until 2026-09-08, so a `pro` session would
+ * have rendered a Pro price under a Team heading.
  */
 
 import { describe, expect, it } from "vitest";
@@ -29,7 +28,7 @@ describe("the order line above the card form", () => {
   });
 
   it("names Pro and does NOT invent a seat", () => {
-    // 🔒 `pro` is a flat quantity-1 subscription (`server/stripe.ts`), so
+    // `pro` is a flat quantity-1 subscription (`server/stripe.ts`), so
     // "1 seat × $8.99" would name a unit the personal container does not have.
     const order = describeOrder(session("$8.99", 1, "$8.99"), "pro");
     expect(order.planName).toBe("Pro");
@@ -38,8 +37,8 @@ describe("the order line above the card form", () => {
   });
 
   it("takes every figure from the session, never from a price constant", () => {
-    // Stripe's own pre-formatted, localized strings — a coupon, a proration or
-    // a currency this app does not know about must still print correctly.
+    // Stripe's own pre-formatted, localized strings — a coupon, a proration or a
+    // currency this app does not know about must still print correctly.
     const order = describeOrder(session("€7,50", 2, "€15,00"), "team");
     expect(order.summaryDetail).toBe("2 seats × €7,50 / month");
     expect(order.totalLabel).toBe("€15,00 / month");

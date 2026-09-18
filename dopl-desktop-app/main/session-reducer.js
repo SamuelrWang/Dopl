@@ -7,7 +7,9 @@
 // (session-engine.js), which EXECUTES the returned effects — every effect is a side-effect-FREE descriptor
 // ({ type, ... }), never a callback or a live handle. It NEVER holds message/prompt text longer than one event
 // and NEVER builds a prompt string (framing lives in prompt-framing / session-io, applied by the shell), so it
-// stays a pure function of (state, event). The conceptual pendingPermissions / allowForTask Sets (§A.3) are dedup ARRAYS so the state deep-equals cleanly in the extraction test; membership semantics are identical.
+// stays a pure function of (state, event). The conceptual pendingPermissions / allowForTask Sets
+// (§A.3) are dedup ARRAYS so the state deep-equals cleanly in the extraction test; membership
+// semantics are identical.
 
 // §2 SPLIT: the pure EFFECT BUILDERS live in session-effects.js and the STATE SHAPE (defaults,
 // initialSessionState, the cap readers, the mode tables) in session-state.js. Both are required
@@ -39,13 +41,10 @@ function without(arr, v) {
 // on the SAME session object through the SAME buildSdkOptions path (options.resume = sdkSessionId),
 // so the security model is byte-identical; a live session is a no-op here.
 //
-// H1 — AN AUTH-HELD SESSION IS NOT WAKE-RESUMABLE; the guard is explicit, not incidental. The
-// hold used to live ONLY as `s.authHold` in session-auth.js, invisible here, so this saw nothing
-// but `parked` and resumed sessions on a Mac with NO Claude Code credential: a peer follow-up
-// under an auto_both preset -> inboundAutoAccepted -> feedInboundEffects -> here -> resumeQuery
-// spawned the SDK with no credential re-check, and a later sign-in then started a SECOND query
-// beside it (two claude children for one request, the orphan still holding this session's
-// pre-approved dopl_channel access). Only the sign-in path may restart a held session, and it
+// H1 — AN AUTH-HELD SESSION IS NOT WAKE-RESUMABLE; the guard is explicit, not incidental. The hold
+// used to live ONLY as `s.authHold` in session-auth.js, invisible here, so a peer follow-up under
+// an auto_both preset resumed the SDK on a Mac with NO Claude Code credential, and a later sign-in
+// then started a SECOND query beside it. Only the sign-in path may restart a held session, and it
 // dispatches `auth_release` first — the credential must be verified back BEFORE anything spawns.
 function wakeEffects(state) {
   return state.parked && state.authHeld !== true ? [{ type: 'resumeQuery' }] : [];
@@ -55,11 +54,9 @@ function wakeEffects(state) {
 // two ways: AXIS B set to auto_inbound / auto_both, or the standing "Accept for this session" grant.
 // Default state is neither, so the gate holds. session-gate.autoInbound answers the same question
 // for the live queue and MUST agree (pinned by test).
-// H1: an AUTH-HELD session auto-accepts NOTHING, whatever the axes say. Auto-accept means "feed
-// this straight to the agent" and there is no agent — the push would land on a closed iterator
-// and vanish. HOLDING it is the honest answer: the card lands beside the sign-in button, so the
-// operator sees both what is waiting and what to do first, and the ordinary accept delivers it
-// once the credential is back. The peer's message is never eaten, it just waits for a human.
+// H1: an AUTH-HELD session auto-accepts NOTHING, whatever the axes say — there is no agent, so the
+// push would land on a closed iterator and vanish. HOLDING it is the honest answer: the card lands
+// beside the sign-in button, and the ordinary accept delivers it once the credential is back.
 function inboundAutoAccepted(state) {
   if (state.authHeld === true) return false;
   const m = state.messageMode;
@@ -212,13 +209,14 @@ function sessionReducer(state, event) {
 
   if (type === 'set_tool_mode' || type === 'set_message_mode') {
     // v2.9 — set ONE axis, coerced fail-closed (unknown => most restrictive); the `modes` echo
-    // re-paints the header posture live. NO DRAIN: the old set_auto_approve(true) resolved every
-    // request already parked on a button, which cannot survive the split. `pendingPermissions`
-    // holds requestIds only, so the reducer cannot tell a queued Bash from a queued `op=open
-    // direct:true`, and a blanket drain would let the TOOL axis answer a MESSAGE operation — the
-    // very invariant this contract establishes. A mode change governs the NEXT call; anything
-    // already waiting keeps its buttons (fail-closed). The INBOUND half of Axis B still drains,
-    // because that queue holds messages and nothing else (the deleted session-ipc -> gate.drainInbound lane, F-228). ⚠ THE TOOL ARM ALSO STAMPS `toolModeSet` (2026-09-16) and is its ONE producer — a fact about WHO CHOSE, not a posture, and Axis B needs no twin; `session-private.js › effectiveToolMode` carries the whole argument, because this file is AT the §1 500-line cap.
+    // re-paints the header posture live. NO DRAIN: `pendingPermissions` holds requestIds only, so
+    // the reducer cannot tell a queued Bash from a queued `op=open direct:true`, and a blanket
+    // drain would let the TOOL axis answer a MESSAGE operation — the very invariant this contract
+    // establishes. A mode change governs the NEXT call; anything already waiting keeps its buttons
+    // (fail-closed). The INBOUND half of Axis B still drains, because that queue holds messages and
+    // nothing else. The tool arm also stamps `toolModeSet` (2026-09-16) and is its ONE producer — a
+    // fact about WHO CHOSE, not a posture, and Axis B needs no twin; the argument is in
+    // `session-private.js › effectiveToolMode`, because this file is AT the §1 500-line cap.
     const patch = type === 'set_tool_mode'
       ? { toolMode: coerceMode(TOOL_MODES, event.mode), toolModeSet: true }
       : { messageMode: coerceMode(MESSAGE_MODES, event.mode) };
@@ -238,11 +236,10 @@ function sessionReducer(state, event) {
     // that a live switch never produces. Absent (an older event) keeps what we had.
     const model = typeof event.model === 'string' && event.model ? event.model : state.model;
     const ns = clone(state, { turns: turns, costUsd: costUsd, model: model, postedThisTurn: false, postedToolUseIds: [] });
-    // 🔒 THE TWO CAP CHECKS STOOD HERE AND ARE DELETED (2026-09-07, Samuel's ruling). A `result`
-    // event no longer ends a session for turn count or spend; it only updates the counters and
-    // arms the idle timer. Nothing below this line bounds a looping agent — the SDK's
-    // `maxTurns` backstop in `runtime/claude/launch-spec.js` is the only remaining stop, and it
-    // is a crash guard rather than a ceiling.
+    // THE TWO CAP CHECKS STOOD HERE AND ARE DELETED (2026-09-07, Samuel's ruling). A `result` event
+    // no longer ends a session for turn count or spend; it only updates the counters and arms the
+    // idle timer. The SDK's `maxTurns` backstop in `runtime/claude/launch-spec.js` is the only
+    // remaining stop, and it is a crash guard rather than a ceiling.
     // Item 3: a turn that POSTED is waiting on a reply; otherwise idle. This REPLACES the usage emit.
     const activity = state.postedThisTurn ? 'awaiting_peer' : 'idle';
     return {
@@ -367,13 +364,11 @@ function sessionReducer(state, event) {
     return { state: clone(state, { phase: 'ended' }), effects: endEffects(state, 'ended', endReasonOf(event)) };
   }
 
-  // ⚠ A `close_task` branch sat here — the operator's Close in the session window. It flipped
-  // `channel_tasks.status`, echoed task_finished/task_failed, aborted the query and settled the
-  // session in one move. DELETED with thread closing (wiring plan Phase 4, 2026-08-18): threads
-  // do not close, and 'end' above is what the operator reaches for instead. ⚠ Note what 'end'
-  // does NOT do, and why that is now the whole story: it leaves the exchange exactly where it
-  // is and posts a NON-TERMINAL `session_ended` marker, because one member's window closing was
-  // never an outcome for the shared thread.
+  // A `close_task` branch sat here — the operator's Close in the session window — and was DELETED
+  // with thread closing (wiring plan Phase 4, 2026-08-18): threads do not close, and 'end' above is
+  // what the operator reaches for instead. Note what 'end' does NOT do: it leaves the exchange
+  // exactly where it is and posts a NON-TERMINAL `session_ended` marker, because one member's
+  // window closing was never an outcome for the shared thread.
 
   if (type === 'idle_timeout') {
     // P1: PARK, do not end. Already parked (a stale timer that survived the clear) is a no-op; NOT
@@ -381,17 +376,13 @@ function sessionReducer(state, event) {
     // `phase` — a parked session HOLDING a message sits at 'awaiting_inbound' with parked===true,
     // so the old phase check let a stale timer re-run the whole park on it.
     //
-    // M2 (2026-08-05) — THE POSTURE AND THE GRANTS NOW SURVIVE THE PARK, per Samuel's contract:
-    // set it and it behaves as set for the rest of the session, the for-task grants included.
-    // WHAT USED TO RESET AND WHY (the reasoning is real, and is re-sited, not deleted — the full
-    // argument is at session-state.ABANDONED_MS and docs/ENGINEERING.md §12.4): FIX #3 (v2.9)
-    // both axes, so a counterparty-driven lazy resume could not run pre-authorized while the
-    // operator was away; MEDIUM-3 (C9) `inboundForTask`, so a peer could not restart a parked
-    // query and drive turns unwatched; FIX F1 `allowForTask`, where one reply approved for-task
-    // before the operator walked away let the woken agent post with NO card. Every one is an AWAY
-    // threat, and fifteen quiet minutes was a bad proxy for away. It is answered twice elsewhere
-    // now: this park ARMS THE ABANDONMENT BOUND (a session nobody comes back to ENDS, and ended
-    // beats disarmed — it cannot be woken at all), and the real boundary was always the PROFILE's
+    // M2 (2026-08-05) — THE POSTURE AND THE GRANTS NOW SURVIVE THE PARK, per Samuel's contract: set
+    // it and it behaves as set for the rest of the session, the for-task grants included. What used
+    // to reset (FIX #3's two axes, C9's `inboundForTask`, F1's `allowForTask`) was answering an AWAY
+    // threat, and fifteen quiet minutes was a bad proxy for away; the full argument is re-sited at
+    // session-state.ABANDONED_MS and docs/ENGINEERING.md §12.4. It is answered twice elsewhere now:
+    // this park ARMS THE ABANDONMENT BOUND (a session nobody comes back to ENDS, and ended beats
+    // disarmed — it cannot be woken at all), and the real boundary was always the PROFILE's
     // hard-deny + containment, which no posture and no grant can widen.
     // FIX F6 SURVIVES: the per-turn post counters still clear (the park deny-closed the very post
     // they counted), and so does `pendingPermissions` — one-shot resolvers on a query being torn
@@ -406,30 +397,27 @@ function sessionReducer(state, event) {
 
   if (type === 'abandon_timeout') {
     // M2 — a PARKED session nobody came back to. The park kept the operator's posture on the bet
-    // that they are coming back; this is where that bet expires, hours later. ENDING is the honest
-    // state and the STRONGER away-guard: `phase: 'ended'` is terminal at the top of this function,
-    // so no peer reply, no stale dock click and no drained SDK tail can wake it, where the old
-    // silent downgrade left it wakeable. A later peer reply recreates a DORMANT shell from the
-    // durable record, at manual/ask like every other spawn nobody approved (FIX 1b).
+    // that they are coming back; this is where that bet expires. ENDING is the honest state and the
+    // STRONGER away-guard: `phase: 'ended'` is terminal at the top of this function, so no peer
+    // reply, no stale dock click and no drained SDK tail can wake it, where the old silent downgrade
+    // left it wakeable. A later peer reply recreates a DORMANT shell from the durable record, at
+    // manual/ask like every other spawn nobody approved (FIX 1b).
     // A LIVE session ignores it — a stale timer must never end a session being worked in.
     if (state.parked !== true) return { state: state, effects: [] };
     return { state: clone(state, { phase: 'ended' }), effects: endEffects(state, 'ended', 'abandoned') };
   }
 
   if (type === 'auth_hold') {
-    // H1 — THE HOLD, AS REDUCER STATE. session-auth.js owns the DECISION (no Claude Code
-    // credential here, or an auth-shaped SDK failure) and the window painting; this records the
-    // one bit the rest of the machine must agree on. A hold IS a park — same effects, same
-    // durable phase — so it is dormant on restart and reopenable (it said "and LRU-evictable"
-    // until 2026-08-20; that eviction went with the window — session-park.js), and parkEffects
-    // fail-closes every awaited canUseTool promise before the abort. It resets both axes and
-    // every standing grant, and it is now the ONLY park that does (M2 above): a hold is a session
-    // whose CREDENTIAL is gone, which relaunches through startQuery on sign-in rather than
-    // resuming in place, so the arm it was given belongs to the run that ended (the H2 arm cannot
-    // survive a hold either). It arms NO abandonment timer — a held session is waiting on a human
-    // clicking Sign in, and ending it would destroy the window carrying that button.
-    // IDEMPOTENT: a second hold changes nothing and emits nothing, so two failures cannot stack
-    // two banners, two parks or two denyPending sweeps.
+    // H1 — THE HOLD, AS REDUCER STATE. session-auth.js owns the DECISION (no Claude Code credential
+    // here, or an auth-shaped SDK failure) and the window painting; this records the one bit the
+    // rest of the machine must agree on. A hold IS a park — same effects, same durable phase, so it
+    // is dormant on restart and reopenable, and parkEffects fail-closes every awaited canUseTool
+    // promise before the abort. It resets both axes and every standing grant, and it is now the ONLY
+    // park that does (M2 above): a hold is a session whose CREDENTIAL is gone, relaunching through
+    // startQuery on sign-in rather than resuming in place, so the arm it was given belongs to the
+    // run that ended. It arms NO abandonment timer — a held session is waiting on a human clicking
+    // Sign in, and ending it would destroy the window carrying that button. IDEMPOTENT, so two
+    // failures cannot stack two banners, two parks or two denyPending sweeps.
     if (state.authHeld === true) return { state: state, effects: [] };
     return {
       state: clone(state, { phase: gatePhase(state, 'parked'), parked: true, activity: 'parked',
@@ -449,7 +437,7 @@ function sessionReducer(state, event) {
     return { state: clone(state, { authHeld: false }), effects: [] };
   }
 
-  // ⚠ TWO PRODUCERS, NOT THREE (corrected 2026-08-20): the C-4 launch watchdog and the C-5
+  // TWO PRODUCERS, NOT THREE (corrected 2026-08-20): the C-4 launch watchdog and the C-5
   // abandonment. The window-budget LRU it also named is deleted; the surviving ceiling refuses
   // rather than evicts. Copy: session-effects.INACTIVE_NOTE.
   if (type === 'inactive') {

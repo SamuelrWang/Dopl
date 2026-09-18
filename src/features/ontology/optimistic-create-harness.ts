@@ -1,10 +1,7 @@
 /**
- * THE CREATE-SEQUENCE HARNESS — the fake transport + the real reducer both
- * `optimistic-create.test.ts` and `optimistic-create-draft.test.ts` drive.
- *
- * ⚠ ONE COPY, and that is the whole reason it is a file: the proof in both
- * suites is the board AS EACH REQUEST LEFT, and two harnesses would be two
- * different definitions of "as it left".
+ * The create-sequence harness — fake transport + real reducer, driven by both
+ * `optimistic-create.test.ts` and `optimistic-create-draft.test.ts`. One copy, so
+ * both suites share one definition of "the board as the request left".
  */
 
 import {

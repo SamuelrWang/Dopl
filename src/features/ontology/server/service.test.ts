@@ -10,13 +10,9 @@ import type { WorkspaceBillingRow } from "@/features/billing/server/workspace-bi
 import type { OntologyClusterRow, OntologyObjectRow } from "./dto";
 import { ontologyContextFactory } from "./test-fixtures";
 
-// ⚠ **THE CHANGELOG CAPTURE IS A REAL WRITE AND IT IS AWAITED**
-// (`./service-revisions.ts`, 2026-09-09, part 2): every ontology write now
-// records one revision per CHANGED FIELD inside the same request, so a service
-// test that leaves it alone reaches `supabaseAdmin()` and fails on a missing
-// service-role key. Stubbed here because these suites are about the WRITE, not
-// about its audit rows — that the rows are recorded, one per changed field, per
-// path, is `service-revisions.test.ts`'s subject.
+// The changelog capture is a real awaited write (`./service-revisions.ts`), so
+// an unstubbed service test reaches `supabaseAdmin()` and fails on a missing
+// service-role key. That the rows are recorded is `service-revisions.test.ts`'s subject.
 vi.mock("@/features/revisions/server/repository", () => ({
   appendRevision: vi.fn(async () => ({ id: "rev-1" })),
   replaceRevisionSnapshot: vi.fn(async () => ({ id: "rev-1" })),
@@ -32,11 +28,9 @@ vi.mock("@/features/billing/server/workspace-billing", () => ({
   countOntologyObjects: vi.fn(),
 }));
 
-// ⚠ The AUDIENCE is driven through its OWN repository rather than stubbed: a
-// standard workspace answers `unrestricted`, which is this suite's subject
-// (the object cap and the CRUD contracts) with the ceiling in its
-// today's-behaviour arm. The home-container arms are
-// `service-audience.test.ts` and the block at the foot of this file.
+// The AUDIENCE is driven through its OWN repository rather than stubbed: a
+// standard workspace answers `unrestricted`, which is this suite's subject.
+// The home-container arms are `service-audience.test.ts` and the block below.
 vi.mock("./repository-shares", () => ({
   findWorkspaceKind: vi.fn(async () => "standard"),
   countActiveWorkspaceMembers: vi.fn(async () => 1),
@@ -238,7 +232,7 @@ describe("updateCluster — layout round-trip", () => {
 
 // ── Cascade HARD delete ─────────────────────────────────────────────
 // Deleting is PERMANENT and IMMEDIATE — no trash, restore or purge.
-// ⚠ `deleteCluster` must stay ONE atomic RPC (`cascadeHardDeleteCluster`,
+// `deleteCluster` must stay ONE atomic RPC (`cascadeHardDeleteCluster`,
 // migration 20260807120000); composing two writes re-opens a desync that
 // leaves objects hard-gone under a surviving tombstone. Pins the RPC call, the
 // object count, and the null→404 mapping.

@@ -1,17 +1,12 @@
-// Tests for the SESSION-mode per-call grant decision (main/session-profiles.js
-// `grantDecision`, Track T1) — the pure function the engine's canUseTool bridge
-// consults. SOURCE EXTRACTION with INJECTION (same block + real constants as
-// session-profiles.test.mjs), focused here on the DECISION truth table and the
-// load-bearing SHADOW INVARIANT: a pre-approved tool must resolve to 'preapproved'
-// and can therefore NEVER reach the gate (§A.5 / research §3).
+// The SESSION-mode per-call grant decision (`main/session-profiles.js › grantDecision`, Track T1) —
+// the pure function the engine's canUseTool bridge consults. SOURCE EXTRACTION with INJECTION,
+// focused on the DECISION truth table and the load-bearing SHADOW INVARIANT: a pre-approved tool
+// must resolve to 'preapproved' and can therefore NEVER reach the gate (§A.5).
 //
-// SECURITY (adversarial review): grantDecision OP-SCOPES `dopl_channel` (FIX H1 — no
-// blanket pre-approval) and reflects `full`'s HARD-DENY set, which since F-177 (2026-08-08) is
-// the UNIVERSAL FLOOR alone — the retired + admin dopl tools, matching the headless lane. v2.5 D2
-// went further: NO dopl_channel op auto-allows any more, own-channel posts included,
-// and the shadow check below proves the tool stays out of allowedTools so that gate can
-// actually fire. The op/grant-key cases live in session-profiles.test.mjs; this file
-// pins the invariants + the profile universe.
+// `full`'s hard-deny set is the UNIVERSAL FLOOR alone since F-177 (2026-08-08), and since v2.5 D2
+// NO `dopl_channel` op auto-allows — own-channel posts included — so the shadow check below proves
+// the tool stays out of allowedTools and that gate can actually fire. The op/grant-key cases live in
+// session-profiles.test.mjs; this file pins the invariants + the profile universe.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -33,47 +28,40 @@ const to = SRC.indexOf("// ─── END SESSION-PROFILE TABLE");
 assert.ok(from !== -1 && to > from, "SESSION-PROFILE TABLE sentinels missing/out of order");
 const BLOCK = SRC.slice(from, to);
 
-// v2.9: the block digests grant keys, so `shaKey` is injected like normalizeProfile. FIX F4:
-// the FULL digest, not a 12-hex prefix — 48 bits is minutes of search for a counterparty who
-// supplies the exact command/body text, and a grant key is a Set member, never a display string.
+// v2.9: the block digests grant keys, so `shaKey` is injected like normalizeProfile. FIX F4: the
+// FULL digest, not a 12-hex prefix — 48 bits is minutes of search for a counterparty who supplies
+// the exact command/body text, and a grant key is a Set member, never a display string.
 const shaKey = (v) => createHash("sha256").update(String(v == null ? "" : v)).digest("hex");
-// §2 SPLIT (2026-08-02): the grant-key machinery lives in main/session-grant-keys.js, so the
-// block reads `makeGrantKeyFor` / `POST_GRANT` / `postFieldsOk` off the module head. Injected
-// like normalizeProfile, and the REAL implementations, so the block stays pinned to what ships.
+// §2 SPLIT (2026-08-02): the grant-key machinery lives in main/session-grant-keys.js. Injected REAL,
+// so the block stays pinned to what ships.
 const KEYS = require(join(HERE, "..", "main", "session-grant-keys.js"));
-// F-139 (2026-08-05): the block matches tool names through mcp-tool-names' normalizers, because
-// the `mcp__<server>__` segment is the CLIENT's and never ours. Injected like makeGrantKeyFor.
+// F-139 (2026-08-05): the block matches tool names through mcp-tool-names' normalizers, because the
+// `mcp__<server>__` segment is the CLIENT's and never ours.
 const NAMES = require(join(HERE, "..", "main", "mcp-tool-names.js"));
-// 2026-08-22 (OQ-1): the block op-scopes `dopl_kb` the way it has always op-scoped
-// `dopl_channel`, reading `isKnowledgeReadCall` off the module head. Injected like
-// makeGrantKeyFor, and the REAL implementation, so the block stays pinned to what ships.
+// 2026-08-22 (OQ-1): the block op-scopes `dopl_kb` the way it has always op-scoped `dopl_channel`.
+// Injected REAL.
 const KB_OPS = require(join(HERE, "..", "main", "knowledge-ops.js"));
-// 2026-08-24 (Samuel's create_thread ruling): the OWN-CHANNEL OUTBOUND OPS BESIDE THE POST are a
-// §2 SPLIT into main/session-own-outbound.js, so the block reads them off the module head.
-// Injected like makeGrantKeyFor, and the REAL implementations, so the block stays pinned.
+// 2026-08-24 (create_thread ruling): the own-channel outbound ops beside the post, a §2 split into
+// main/session-own-outbound.js. Injected REAL.
 const OUT = require(join(HERE, "..", "main", "session-own-outbound.js"));
-// 2026-08-25 (Samuel's launch ruling, F-320): the OWN-MACHINE LAUNCH LANE, a THIRD §2 file on the
-// same precedent — `launch_agent` asks for a PROCESS rather than sending CONTENT, so it is its own
-// lane (both axes + a launch-depth bound) and not a fourth member of the outbound list.
+// 2026-08-25 (launch ruling, F-320): the OWN-MACHINE LAUNCH LANE — `launch_agent` asks for a PROCESS
+// rather than sending CONTENT, so it is its own lane (both axes + a launch-depth bound).
 const LAUNCH = require(join(HERE, "..", "main", "session-own-launch.js"));
-// 2026-08-31 (Samuel's same-owner directions ruling): the OWN-MACHINE DIRECT LANE, a FOURTH §2
-// file on the same precedent — `direct_agent` buys a TURN on a local process, so it takes the
-// launch lane's two-axis conjunction while carrying NO depth bound (that one bounds how many
-// agents come into existence; a direction creates none). Injected REAL, like every predicate here.
+// 2026-08-31 (same-owner directions ruling): the OWN-MACHINE DIRECT LANE — `direct_agent` buys a
+// TURN, so it takes the launch lane's two-axis conjunction while carrying NO depth bound (that one
+// bounds how many agents come into existence; a direction creates none).
 const DIRECT = require(join(HERE, "..", "main", "session-own-direct.js"));
-// 2026-09-17 (Samuel's field report): the OWN-MACHINE MANAGE LANE, a FIFTH §2 file on the same
-// precedent — `manage.rename` / `manage.end` / `manage.posture` reach a live session on the
+// 2026-09-17: the OWN-MACHINE MANAGE LANE — the `manage.*` verbs reach a live session on the
 // operator's own Mac, so they take the launch lane's two-axis conjunction and carry NO depth bound
 // (a launched agent is AT the cap, and asking the depth here would DENY the very renames the lane
-// was filed for). Injected REAL, like every predicate here.
+// was filed for).
 const MANAGE = require(join(HERE, "..", "main", "session-own-manage.js"));
 const AUDIENCE = require(join(HERE, "..", "main", "session-audience.js")); // B2 belt (plan §4.4)
 
 // 2026-08-31 (runtime-adapter port, §0.1b): the AXIS-A TAIL LEFT THIS BLOCK. `buildSessionToolConfig`
-// and the mode transforms are a vocabulary of ONE runtime's built-in tool names, so they live in
-// `main/runtime/claude/tools.js`; the block asks the REGISTRY for them per call, through the two
-// contract methods `toolConfigFor` / `axisAAllows`. `runtimeFor` is injected here exactly like every
-// other predicate, and the REAL registry is injected, so the block stays pinned to what ships.
+// and the mode transforms are ONE runtime's built-in tool vocabulary, so they live in
+// `main/runtime/claude/tools.js` and the block asks the REGISTRY per call, through `toolConfigFor` /
+// `axisAAllows`. The REAL registry is injected, so the block stays pinned to what ships.
 const RUNTIME = require(join(HERE, "..", "main", "runtime", "index.js"));
 const CLAUDE_TOOLS = require(join(HERE, "..", "main", "runtime", "claude", "tools.js"));
 const buildSessionToolConfig = CLAUDE_TOOLS.buildSessionToolConfig;
@@ -84,21 +72,19 @@ const { grantDecision, grantKeyFor } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
   "DOPL_ADMIN_TOOLS", "RETIRED_DOPL_TOOLS", "UNIVERSAL_HARD_DENY", "DOPL_CHANNEL_TOOL", "DOPL_SERVER_PREFIX", "normalizeProfile", "shaKey",
   "makeGrantKeyFor", "POST_GRANT", "postFieldsOk", "mcpShortName", "canonicalDoplName", "isKnowledgeReadCall",
-  // ⚠ 2026-09-06 — TWO OF THESE NAMES HAD NOT EXISTED SINCE F-578 (2026-09-02).
-  // `OWN_CHANNEL_MARKER_OPS` / `OWN_CHANNEL_THREAD_OPS` became `..._KIND` / `..._NEW` when the
-  // three outbound ops collapsed into SHAPES of `send`, so `OUT.<old name>` had been injecting
-  // `undefined` under a name the block does not reference — a harness silently agreeing with
-  // itself. Corrected to the REAL exports, and `channelOpKey` added: it is a free variable inside
-  // the block (`isOwnChannelReadCall` calls it) that was never injected, and only the
-  // `autoInboundMode(...) &&` short-circuit kept it from throwing.
+  // 2026-09-06: two of these names had not existed since F-578 — `OWN_CHANNEL_MARKER_OPS` /
+  // `OWN_CHANNEL_THREAD_OPS` became `..._KIND` / `..._NEW`, so `OUT.<old name>` was injecting
+  // `undefined` under a name the block does not reference. Corrected to the REAL exports, and
+  // `channelOpKey` added: it is a free variable inside the block that was never injected, and only
+  // the `autoInboundMode(...) &&` short-circuit kept it from throwing.
   "OWN_CHANNEL_MARKER_KIND", "OWN_CHANNEL_THREAD_NEW", "OWN_CHANNEL_OUTBOUND_OPS",
   "isOwnChannelMarker", "isOwnChannelThreadOpen", "isOwnChannelOutbound",
   "isOwnMachineLaunch", "launchLaneVerdict",
   "isOwnMachineDirect", "directLaneVerdict",
   "isOwnMachineManage", "manageLaneVerdict",
   "channelOpKey",
-  // 🔒 2026-08-26 (plan §4.4 B2): the AUDIENCE BELT, injected REAL like every other predicate —
-  // a fake would let the harness agree with itself while the shipped gate did something else.
+  // 2026-08-26 (plan §4.4 B2): the AUDIENCE BELT, injected REAL like every other predicate — a fake
+  // would let the harness agree with itself while the shipped gate did something else.
   "containerOnlyDenies", "isDoplToolName", "runtimeFor", "EDIT_TOOLS",
   `${BLOCK}
    return { grantDecision, grantKeyFor };`
@@ -191,9 +177,9 @@ test("D2 SHADOW CHECK: dopl_channel is in NO profile's allowedTools, so the gate
 // ── F-177: `full` releases the built-ins; the restricted profiles keep refusing them ────
 
 test("FIX H3 (restricted profiles): Task + Agent resolve 'deny', never 'gate'", () => {
-  // Where the session really IS contained, a subagent that does not inherit the canUseTool
-  // bound is still refused outright. Under `full` the operator already has Bash, so the
-  // refusal protected nothing and removed the delegation feature — see F-177.
+  // Where the session really IS contained, a subagent that does not inherit the canUseTool bound is
+  // still refused outright. Under `full` the operator already has Bash, so the refusal protected
+  // nothing and removed the delegation feature — see F-177.
   for (const profile of ["read_only", "dopl_only"]) {
     assert.equal(grantDecision({ profile, toolName: "Task" }), "deny", `${profile}: Task`);
     assert.equal(grantDecision({ profile, toolName: "Agent" }), "deny", `${profile}: Agent`);
@@ -220,10 +206,8 @@ test("F-177: full GATES the persistence/exfil/delegation set — and hard-denies
 
 // ── Robustness ───────────────────────────────────────────────────────────────
 
-// C-11 (2026-08-08): an unknown profile normalizes to READ_ONLY now, not to full — see
-// tool-profiles' normalizeProfile. So the tolerance this test is about is unchanged (nothing
-// throws, every path still reaches a verdict) but the verdict for a WORK tool is the
-// fail-closed one. `deny` here is read_only's hard-deny list doing exactly its job.
+// C-11 (2026-08-08): an unknown profile normalizes to READ_ONLY now, not to full, so the verdict for
+// a WORK tool is the fail-closed one. `deny` here is read_only's hard-deny list doing its job.
 test("grantDecision tolerates missing args and unknown profiles (fail closed to read_only)", () => {
   assert.equal(grantDecision({ toolName: "Bash" }), "deny", "no profile -> read_only -> Bash is hard-denied");
   assert.equal(grantDecision({ profile: "full", toolName: "Bash" }), "gate", "an EXPLICIT full still gates it");
@@ -236,20 +220,15 @@ test("grantDecision tolerates missing args and unknown profiles (fail closed to 
 
 // ── v2.x WORKSPACE PIN: the dopl MCP server entry the session actually runs with ──
 //
-// The other half of "the spawned agent does not know where it lives". The device
-// credential can span several workspaces, and a multi-workspace connection has NO
-// default, so every dopl call that omitted `workspace=` was refused ("This connection
-// has no default workspace ... pass workspace=<slug_or_id>"). buildMcpServers now pins
-// the SESSION's workspace UUID as the `X-Workspace-Id` request header — the pin the MCP
-// endpoint resolves against the caller's own memberships — so an unqualified call
-// auto-targets instead of failing. The pin GRANTS nothing (it must match a membership
-// the credential already has) and a per-call `workspace=` still wins server-side.
+// The device credential can span several workspaces and a multi-workspace connection has NO default,
+// so every dopl call that omitted `workspace=` was refused. buildMcpServers pins the SESSION's
+// workspace UUID as the `X-Workspace-Id` request header, so an unqualified call auto-targets. The
+// pin GRANTS nothing (it must match a membership the credential already has) and a per-call
+// `workspace=` still wins server-side.
 //
-// sdk-loader.js is electron-bound (app.getPath), so the function is source-extracted and
-// driven with fakes — the same idiom the rest of this directory uses. C1/C2 changed what it
-// is injected with: the bearer now comes from mcp-config's safeStorage cache (`doplBearer`)
-// instead of a readFileSync of mcp-spawn.json, and the url is always the compiled-in
-// MCP_URL. The credential-path story itself is pinned in test/sdk-mcp-token.test.mjs.
+// sdk-loader.js is electron-bound (app.getPath), so the function is source-extracted and driven with
+// fakes. The bearer comes from mcp-config's safeStorage cache and the url is always the compiled-in
+// MCP_URL; the credential-path story itself is pinned in test/sdk-mcp-token.test.mjs.
 
 const LOADER = readFileSync(join(HERE, "..", "main", "runtime", "claude", "loader.js"), "utf8");
 const MCP_BLOCK = LOADER.slice(
@@ -260,11 +239,9 @@ assert.ok(MCP_BLOCK.includes("return { dopl: server };"), "buildMcpServers slice
 
 const MCP_URL = "https://dopl.test/api/mcp";
 
-// `clientTimeoutMs` is injected for the same reason `doplBearer` is: it lives ABOVE
-// the slice in sdk-loader, and its body is `require('./mcp-config').…`, which cannot
-// run in a `new Function` program. The VALUE is read out of mcp-config's source so a
-// harness can never drift from the shipped constant (Q9 — the two used to be separate
-// literals in mcp-config and sdk-loader, and that is exactly how they drifted).
+// `clientTimeoutMs` is injected for the same reason `doplBearer` is: it lives ABOVE the slice and its
+// body cannot run in a `new Function` program. The VALUE is read out of mcp-config's source so a
+// harness can never drift from the shipped constant (Q9 — two separate literals is how they drifted).
 const CONFIG_SRC = readFileSync(join(HERE, "..", "main", "mcp-config.js"), "utf8");
 const SHIPPED_TIMEOUT_MS = (() => {
   const m = /MCP_CLIENT_TIMEOUT_MS = ([\d_]+);/.exec(CONFIG_SRC);
@@ -286,9 +263,8 @@ test("the session's workspace UUID rides as the X-Workspace-Id header, beside th
   assert.deepEqual(servers.dopl.headers, {
     Authorization: "Bearer secret-token",
     "X-Dopl-Runtime": "desktop-session", // WAKE-V1, below
-    // 2026-08-31 (adapter port step 1): the VENDOR dimension, unconditional like the custody
-    // stamp beside it and deliberately not a value of it — `test/runtime-stamp-literals.test.mjs`
-    // owns the argument and the join with the server's constant.
+    // 2026-08-31 (adapter port step 1): the VENDOR dimension, unconditional like the custody stamp
+    // beside it; `test/runtime-stamp-literals.test.mjs` owns the argument.
     "X-Dopl-Vendor": "claude",
     "X-Workspace-Id": WS_UUID,
   }, "the header the MCP endpoint reads as its per-request pin");
@@ -307,17 +283,14 @@ test("no session workspace -> NO pin header at all (today's behavior, unchanged)
 
 // ── WAKE-V1: the runtime header that makes a desktop-spawned session identifiable ──
 //
-// The server cannot otherwise tell a session THIS APP spawned from the operator's own
-// external `claude` process: both authenticate with the same device credential, as the
-// same user. This header is the discriminator. The server treats `runtime` as a RESERVED
-// metadata key — it strips any caller-supplied value and stamps
-// metadata.runtime='desktop-session' ONLY when this exact header value is present — so
-// a value smuggled in the message body cannot produce the stamp. It stays a ROUTING HINT
-// and never an authorization signal (any device-token holder can send the header), so
-// targeting.requesterTaskOpen gates on it only alongside its identity conjuncts and fails
-// CLOSED without it (a thread opened by an EXTERNAL session must NOT auto-open a desktop
-// requester window; that session awaits the reply itself). Absence is the external case,
-// which is why the header has to ride EVERY spawned-session call, pin or no pin.
+// A session THIS APP spawned and the operator's own external `claude` process authenticate with the
+// same device credential, as the same user; this header is the discriminator. The server treats
+// `runtime` as a RESERVED metadata key and stamps `metadata.runtime='desktop-session'` ONLY on this
+// exact header value, so a value smuggled in the message body cannot produce the stamp. It stays a
+// ROUTING HINT and never an authorization signal (any device-token holder can send it), so
+// `targeting.requesterTaskOpen` gates on it only alongside its identity conjuncts and fails CLOSED
+// without it. Absence is the external case, which is why the header rides EVERY spawned-session
+// call, pin or no pin.
 
 test("WAKE-V1: every spawned session's dopl entry sends X-Dopl-Runtime: desktop-session", () => {
   // With a pin, without one, and under a restricted tools policy — the stamp is what
@@ -325,30 +298,27 @@ test("WAKE-V1: every spawned session's dopl entry sends X-Dopl-Runtime: desktop-
   for (const ws of [WS_UUID, "", undefined]) {
     assert.equal(buildServers(null, ws).dopl.headers["X-Dopl-Runtime"], "desktop-session", `ws=${ws}`);
   }
-  // A restricted profile still HANDS the builder its `doplToolsPolicy`; since the F-177
-  // follow-up (2026-08-08) the builder does not forward it — the per-server `tools` field is
-  // a PERMISSION policy and the short-name array made the CLI drop the whole dopl entry
-  // (test/mcp-server-tools-policy.test.mjs owns that). The stamp is unaffected either way.
+  // A restricted profile still HANDS the builder its `doplToolsPolicy`; since the F-177 follow-up
+  // the builder does not forward it — the per-server `tools` field is a PERMISSION policy and the
+  // short-name array made the CLI drop the whole dopl entry.
   const restricted = buildServers(["dopl_kb"], WS_UUID).dopl;
   assert.equal(restricted.headers["X-Dopl-Runtime"], "desktop-session");
   assert.ok(!("tools" in restricted), "a per-server tools policy is never sent");
 });
 
 test("FIX Q9: the dopl entry raises the per-call timeout past the 60s client abort", () => {
-  // Claude Code 2.1.220 (the version @anthropic-ai/claude-agent-sdk 0.3.220 bundles)
-  // aborts a call whose response headers have not arrived by
-  // min(max(server.timeout ?? MCP_TOOL_TIMEOUT ?? 60_000, 60_000), 2147483647) ms;
-  // /api/mcp used to send no headers until the handler returned, so without this field
-  // EVERY await died at 60s — before the ~2min backgrounding mark that makes it a wake
-  // primitive. Must clear the LONGEST REACHABLE hold and stay under maxDuration 300.
+  // Claude Code aborts a call whose response headers have not arrived by
+  // min(max(server.timeout ?? MCP_TOOL_TIMEOUT ?? 60_000, 60_000), 2147483647) ms; /api/mcp used to
+  // send no headers until the handler returned, so without this field EVERY await died at 60s —
+  // before the ~2min backgrounding mark that makes it a wake primitive. Must clear the LONGEST
+  // REACHABLE hold and stay under maxDuration 300.
   for (const ws of [WS_UUID, "", undefined]) {
     const t = buildServers(null, ws).dopl.timeout;
     assert.ok(t > 215_000 && t < 300_000, `ws=${ws} timeout=${t} must clear the hold and the function ceiling`);
   }
-  // Pinned as WIRING, not as a number: dropping the field silently disables the wake,
-  // while the VALUE and its arithmetic (HOLD_CAP_MS + HOLD_MARGIN_MS <=
-  // MCP_CLIENT_TIMEOUT_MS) are owned by test/mcp-client-timeout.test.mjs, which reads
-  // the server's own constants. A literal here would be a second place to maintain it.
+  // Pinned as WIRING, not as a number: dropping the field silently disables the wake, while the
+  // VALUE and its arithmetic are owned by test/mcp-client-timeout.test.mjs, which reads the server's
+  // own constants.
   assert.match(MCP_BLOCK, /timeout: clientTimeoutMs\(\),/, "the field is still set");
   assert.ok(!/timeout: \d[\d_]*,/.test(MCP_BLOCK), "…and never from a literal of its own");
 });
@@ -363,12 +333,10 @@ test("WAKE-V1: the header value is the literal the server matches, and it grants
 });
 
 test("the pin does not disturb how the dopl tools policy is handled (or the bearer)", () => {
-  // WAS "…does not disturb the per-profile dopl tools allowlist", pinning
-  // `scoped.dopl.tools === ['dopl_channel']`. That field was never an allowlist: it is the
-  // SDK's per-tool PERMISSION policy (`{name, permission_policy}[]`), and a string array
-  // failed the CLI's per-entry validation, which DROPS THE SERVER rather than the field —
-  // so the two restricted profiles were spawning with no dopl tools at all. The builder no
-  // longer sends it; the bound is the deny lists (test/mcp-server-tools-policy.test.mjs).
+  // WAS "…does not disturb the per-profile dopl tools allowlist". That field was never an allowlist:
+  // it is the SDK's per-tool PERMISSION policy, and a string array failed the CLI's per-entry
+  // validation, which DROPS THE SERVER rather than the field — so the two restricted profiles were
+  // spawning with no dopl tools at all. What is pinned HERE is only that the pin changes none of it.
   // What is pinned HERE is only that the workspace pin changes none of that.
   const scoped = buildServers(["dopl_channel"], WS_UUID);
   assert.ok(!("tools" in scoped.dopl), "a scoped policy is accepted and deliberately not forwarded");
@@ -380,19 +348,17 @@ test("the pin does not disturb how the dopl tools policy is handled (or the bear
 });
 
 test("the launch spec passes the SESSION's workspace, so every session query is pinned", () => {
-// ⚠ 2026-08-31 (runtime-adapter port, steps 3–4): the OPTION ASSEMBLY moved to
-// `main/runtime/claude/launch-spec.js` — it is written in ONE platform's option vocabulary, so it
-// is that platform's adapter. `session-query.js` keeps the LIFECYCLE (supersede-before-relaunch,
-// the loop tagging, the launch watchdog) and hands the opaque spec straight back to the runtime.
-// The pins below follow the code; what they assert is unchanged.
+// 2026-08-31 (runtime-adapter port, steps 3-4): the OPTION ASSEMBLY moved to
+// `main/runtime/claude/launch-spec.js` — it is written in ONE platform's option vocabulary.
+// `session-query.js` keeps the LIFECYCLE. The pins below follow the code; what they assert is
+// unchanged.
   const ENGINE = readFileSync(join(HERE, "..", "main", "session-engine.js"), "utf8");
   const SPEC = readFileSync(join(HERE, "..", "main", "runtime", "claude", "launch-spec.js"), "utf8");
   const opts = SPEC.slice(SPEC.indexOf("function buildOptions(s, dispatch, emitQuiet) {"), SPEC.indexOf("function buildLaunchSpec("));
   assert.ok(opts.length > 0, "the option assembly slice not found in runtime/claude/launch-spec.js");
-  // 🔒 THE THIRD ARGUMENT IS THE CONTAINER LOCK (2026-08-26, plan §4.4 B1) — the child
-  // credential for a session spawned into a SHARED link container, '' for every other
-  // session. It is pinned INTO this literal rather than beside it because dropping the
-  // argument silently reverts every locked session to the operator's device token.
+  // THE THIRD ARGUMENT IS THE CONTAINER LOCK (2026-08-26, plan §4.4 B1) — the child credential for a
+  // session spawned into a SHARED link container, '' for every other session. Pinned INTO this
+  // literal because dropping the argument silently reverts every locked session to the device token.
   assert.match(opts, /mcpServers: loader\.buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId, sessionCredential\.sessionBearer\(s\)\),/);
   // A parked resume and a recreated shell assemble the spec through this SAME function
   // (session-park calls deps.buildLaunchSpec), so they are pinned by construction.

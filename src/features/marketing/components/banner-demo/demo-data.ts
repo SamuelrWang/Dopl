@@ -1,28 +1,22 @@
 /**
- * The banner demo's SCRIPTED ACCOUNT SURFACE — real channels data shapes,
- * hand authored, revealed step by step.
+ * The banner demo's scripted account surface: real channels data shapes, hand
+ * authored, revealed step by step.
  *
- * ⚠ NOTHING IN HERE IS A UI COMPONENT. The demo's RECORD PANE renders the
- * PRODUCT's own channels components (`banner-demo.tsx`); this file only
- * builds the `Channel` / `ChannelMember` / `ChannelMessage` / session rows
- * those components are fed everywhere else, so the pane cannot drift from the
- * real surface's face.
+ * Nothing here is a UI component. The demo's record pane renders the product's
+ * own channels components; this file only builds the `Channel` / `ChannelMember`
+ * / `ChannelMessage` / session rows those components are fed everywhere else, so
+ * the pane cannot drift from the real surface's face.
  *
- * ⚠ THE SCENE IS /home SINCE 2026-08-30 (Samuel), and the MOCK half of its data
- * is deliberately NOT here — it is `demo-home-rows.ts`. /home's chrome (account
- * rail, gray panel, header selector, 290px channel list) lives in
- * `apps/desktop-ui/src/pages/home/`, a SEPARATE app the Next tree cannot import
- * (root `tsconfig.json` excludes `apps`, and those files resolve `#/*` against
- * the SPA's own src), so that chrome is hand-built marketing markup
- * (`demo-home-chrome.tsx`) over hand-authored rows. Keeping those rows in
- * their own file is what lets THIS file stay all-product-shapes. The RECORD
- * PANE inside the chrome is the product's own surface, exactly as it is on the
- * real page (`relationship-record.tsx`).
+ * (2026-08-30) The scene is /home, and the MOCK half of its data lives in
+ * `demo-home-rows.ts` instead: /home's chrome is in `apps/desktop-ui/`, which the
+ * Next tree cannot import, so it is hand-built marketing markup
+ * (`demo-home-chrome.tsx`). Keeping those rows separate is what lets this file
+ * stay all-product-shapes.
  */
 
 import { EMPTY_INFO_CARD } from "@/features/channels/info-card";
-// ⚠ `EMPTY_AGENT_POSTURE` no longer imported (2026-09-06): `Channel.agentPosture` is
-// deleted with the channel ceiling (items 12, 13, 14).
+// `EMPTY_AGENT_POSTURE` is not imported: `Channel.agentPosture` was deleted with
+// the channel ceiling (2026-09-06).
 import type {
   Channel,
   ChannelMember,
@@ -41,13 +35,10 @@ export const CHANNEL_ID = "demo-ch-sales";
 export const CURRENT_USER_ID = "demo-u-samuel";
 
 /**
- * 🔒 **THE CAST IS EXACTLY AS LARGE AS THE PHOTOGRAPHS WE SHIP (Samuel,
- * 2026-09-17, over the rejected scene):** *"use bundled placeholder avatar
- * images for the fictional people; initials chips are not the product's face."*
- * Three faces, three files in `public/img/avatars/`. **Do not add a fourth
- * person without a fourth photo** — a nameless member degrades to initials, and
- * an `AvatarStack` over four of them degrades to `+N`, which is the exact
- * artefact he pointed at.
+ * (2026-09-17) The cast is exactly as large as the photographs we ship: three
+ * faces, three files in `public/img/avatars/`. Do not add a fourth person without
+ * a fourth photo — a nameless member degrades to initials and an `AvatarStack`
+ * over four degrades to `+N`.
  */
 const U = {
   samuel: CURRENT_USER_ID,
@@ -55,22 +46,20 @@ const U = {
   anthony: "demo-u-anthony",
 };
 
-/** The bundled photograph for each of the three. ⚠ A `public/` path, which
- *  `useBridgedImageSrc` returns verbatim on the web — no bridge, no request
- *  beyond the asset. */
+/** The bundled photograph for each of the three. A `public/` path, which
+ *  `useBridgedImageSrc` returns verbatim on the web. */
 export const FACE = {
   [U.samuel]: "/img/avatars/sam.jpg",
   [U.grace]: "/img/avatars/grace.jpg",
   [U.anthony]: "/img/avatars/anthony.jpg",
 } as const;
 
-/** Anchored once per load so relative stamps ("2m ago") stay plausible.
- *  ⚠ EXPORTED so `demo-home-rows.ts` stamps its rows off the SAME anchor — a
- *  second `Date.now()` there would drift the list's timestamps off the
- *  transcript's by however long the module graph took to evaluate. */
+/** Anchored once per load so relative stamps stay plausible. Exported so
+ *  `demo-home-rows.ts` stamps its rows off the SAME anchor — a second
+ *  `Date.now()` would drift the list's timestamps off the transcript's. */
 const NOW = Date.now();
-/** ⚠ THE SAME ANCHOR, FOR THE MODULES THAT NEED EPOCH MS RATHER THAN AN ISO
- *  STRING (`demo-info-data.ts`'s day keys). One clock, two presenters. */
+/** The same anchor for modules needing epoch ms rather than an ISO string. One
+ *  clock, two presenters. */
 export const NOW_MS = NOW;
 export const minsAgo = (m: number) =>
   new Date(NOW - m * 60_000).toISOString();
@@ -98,7 +87,7 @@ function member(
     joinedAt: minsAgo(60 * 24 * 12),
     displayName,
     email,
-    // ⚠ EVERY MEMBER HAS A PHOTOGRAPH — see `U`'s docblock.
+    // Every member has a photograph — see `U`'s docblock.
     avatarUrl: FACE[userId as keyof typeof FACE] ?? null,
   };
 }
@@ -146,24 +135,18 @@ function channel(
     mentionCount: 0,
     linkOut: null,
     infoCard: EMPTY_INFO_CARD,
-    // ⚠ `defaultResponderAgentName` LEFT THIS FIXTURE ON 2026-09-07 with the field (items 10
-    // and 11), as `agentPosture` did the day before.
+    // `defaultResponderAgentName` left this fixture with the field (2026-09-07).
     ...extra,
   };
 }
 
 /**
- * The one channel the scene plays.
- *
- * ⚠ `ROOMS` / `DIRECT` STOOD HERE AND ARE DELETED (2026-08-30). They fed
- * `ChannelsSidebar` — the WORKSPACE channel tree — which the /home scene does
- * not have: the account surface's left column is one flat channel list with no
- * sections, and it is `HOME_ROWS` at the foot of this file. Do not re-add a
- * rooms/DMs split here; it is the shape Samuel rejected.
+ * The one channel the scene plays. (2026-08-30) No rooms/DMs split here: the
+ * account surface's left column is one flat channel list with no sections
+ * (`HOME_ROWS`), and the split is the shape that was rejected.
  */
-/** ⚠ The `topic` is the scene's Description row (wave 1A, 2026-09-17): the hero
- *  mounts the product's own `InfoTab` now, which reads the column every real
- *  channel reads. */
+/** The `topic` is the scene's Description row: the hero mounts the product's own
+ *  `InfoTab`, which reads the column every real channel reads. */
 export const SALES_CHANNEL = channel(CHANNEL_ID, "q4-outbound", {
   topic: "Q4 outbound push — enrichment, sequences, segments.",
 });
@@ -171,16 +154,10 @@ export const SALES_CHANNEL = channel(CHANNEL_ID, "q4-outbound", {
 /* ── The thread ───────────────────────────────────────────────────── */
 
 /**
- * 🔒 **THE THREAD FIXTURE IS DELETED (Samuel, 2026-09-17):** *"Render THAT
- * composition … No thread view."* The scene opened `Q4 Outbound Push`, which put
- * a BREADCRUMB in the pane header, replaced the info column's four tabs with the
- * thread's three, and made the composer address the thread — the WORKSPACE shape
- * on the surface that is supposed to be /home's channel record.
- *
- * ⚠ **`THREAD_ID` GOES WITH IT.** Nothing in this scene carries a `taskId` now,
- * which is what keeps `channelRows` from collapsing the conversation into a
- * card (see `agentPost` below). **Do not reintroduce either to "show threads"** —
- * the Threads tab reading `0` is the ruling, not a gap.
+ * (2026-09-17) No thread view: the thread fixture and `THREAD_ID` are deleted.
+ * Nothing in this scene carries a `taskId`, which keeps `channelRows` from
+ * collapsing the conversation into a card. Do not reintroduce either to "show
+ * threads" — the Threads tab reading `0` is the ruling, not a gap.
  */
 
 /* ── Agents — templates as roles, one per member ──────────────────── */
@@ -213,8 +190,8 @@ export const AGENT_INDEX: ReadonlyMap<string, AgentIdentity> = new Map([
 export const MY_SESSION: DesktopSessionSummary = {
   sessionId: "demo-session-writer",
   channelId: CHANNEL_ID,
-  // ⚠ `""` IS THE CHANNEL (`agents-model.ts › postDestination`) — the scene has
-  // no thread since 2026-09-17, so the sent banner reads "Posted to channel".
+  // `""` is the channel (`agents-model.ts › postDestination`) — the scene has no
+  // thread, so the sent banner reads "Posted to channel".
   taskId: "",
   agentId: AGENT_IDS.writer,
   name: AGENT_IDS.writer,
@@ -282,16 +259,10 @@ function msg(
 }
 
 /**
- * 🔒 **EVERY POST IS CHANNEL-LEVEL (Samuel, 2026-09-17):** *"Render THAT
- * composition … No thread view."* The scene used to open a THREAD, so the pane
- * wore a breadcrumb and the column wore the thread's tabs — the workspace
- * shape, not /home's channel record.
- *
- * ⚠ **A `taskId` IS WHAT MADE IT ONE, SO THERE ARE NONE.** `view-model-rows.ts ›
- * channelRows` COLLAPSES every threaded post into a single thread CARD, so a
- * channel view over a threaded script would have shown three lines and a card
- * instead of the conversation. ⚠ `postDestination` reads `taskId === ""` as the
- * channel, which is what makes the agent's sent banner say "Posted to channel".
+ * (2026-09-17) Every post is channel-level. A `taskId` is what would make one a
+ * thread, so there are none: `view-model-rows.ts › channelRows` collapses every
+ * threaded post into a single card, which would show three lines and a card
+ * instead of the conversation.
  */
 const agentPost = (agentId: string, n: number) => ({
   authorKind: "agent" as const,
@@ -322,9 +293,8 @@ const SCRIPT: ReadonlyArray<{ step: StepId; message: ChannelMessage }> = [
     "Big quarter push starts today — let's line up outbound.",
     5,
   ),
-  // The request that sets the room going — an ordinary channel post since
-  // 2026-09-17 (it was a thread OPENER, and the card it drew is what put this
-  // pane on the workspace's thread shape).
+  // The request that sets the room going — an ordinary channel post, not a
+  // thread opener (the card it drew put this pane on the workspace's shape).
   msg(
     "channel-request",
     U.grace,

@@ -3,45 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <!-- This page has no network needs at all: everything it draws arrives over
-       the preload bridge. `default-src 'none'` states that, so a future edit
-       that reaches for a font or an analytics beacon fails loudly. -->
+  <!-- No network needs at all: everything this page draws arrives over the preload bridge, and
+       `default-src 'none'` makes a future edit that reaches for one fail loudly. -->
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
   <title>Dopl — Update required</title>
   <!--
-    THE STYLES BELOW ARE THE DESIGN SYSTEM'S, COPIED VERBATIM, NOT APPROXIMATED.
-    This page is outside the React/Tailwind pipeline (it is a local file loaded
-    into its own BrowserWindow, and it must render with no network at all), so it
-    cannot import the kit. It therefore carries the kit's own recipes as literal
-    CSS, transcribed from:
-
-      apps/desktop-ui/src/styles/kit.css   .auth-btn-3d (raised primary) and
-                                           .auth-btn-3d-light (raised secondary),
-                                           including hover / active / disabled
-      apps/desktop-ui/src/styles/tokens.css  --font-app
-      src/features/auth/components/login-form-core.tsx  the auth-surface type
-                                           scale and ink colors: h 30px/700/
-                                           -0.8px/#181818, body 14px/#9a9a9a/1.55,
-                                           footnote 12px, and the button geometry
-                                           every auth surface uses (h 46px,
-                                           radius 10px, 15px/600)
-      src/shared/layout/auth-split/auth-split-layout.tsx  the white page
-
-    THIS IS A COPY AND COPIES ROT. It is the same bargain kit.css already made
-    with globals.css (see its own DRIFT WARNING header, F-074): when the kit's
-    button recipe changes, this file changes in the same commit. Pinned by
-    test/update-required-screen.test.mjs, which diffs the recipes against
+    The styles below are the design system's, copied verbatim. This page is outside the
+    React/Tailwind pipeline (a local file in its own BrowserWindow, rendering with no network) so
+    it cannot import the kit. Sources: kit.css `.auth-btn-3d` / `.auth-btn-3d-light`, tokens.css
+    `--font-app`, login-form-core.tsx (auth type scale and button geometry), auth-split-layout.tsx.
+    A copy rots: when the kit's button recipe changes, this file changes in the same commit
+    (F-074). Pinned by test/update-required-screen.test.mjs, which diffs the recipes against
     kit.css rather than trusting this comment.
   -->
   <style>
     :root {
       color-scheme: light;
-      /* kit.css `--raised-light-*` — the raised-light face, as parts. Copied
-         here for the same reason every recipe on this page is: the window is a
-         local file with NO network and cannot import the kit. `.auth-btn-3d-light`
-         is built from these upstream (2026-08-25), so the copy has to be too or
-         `test/update-required-screen.test.mjs` diffs the two and fails. */
+      /* kit.css `--raised-light-*`, as parts: `.auth-btn-3d-light` is built from these upstream
+         (2026-08-25), so the copy has to be too. */
       --raised-light-face: linear-gradient(180deg, #ffffff 0%, #f2f2f2 100%);
       --raised-light-line: #d4d4d4;
       --raised-light-bevel:
@@ -49,16 +29,14 @@
         inset 0 -1px 0 rgba(0, 0, 0, 0.06),
         0 2px 3px rgba(0, 0, 0, 0.08);
       --raised-light-shadow: var(--raised-light-bevel), 0 6px 14px rgba(0, 0, 0, 0.06);
-      /* tokens.css `--shadow-raised-hover`, verbatim, because the mirror rule
-         `button.primary:hover:not(:disabled)` below spends it by reference the
-         way kit.css `.auth-btn-3d:hover:not(:disabled)` does (2026-09-16). */
+      /* tokens.css `--shadow-raised-hover`, verbatim: the mirror rule below spends it by
+         reference the way kit.css does (2026-09-16). */
       --shadow-raised-hover: 0 4px 7px rgba(0, 0, 0, 0.24), 0 10px 24px rgba(0, 0, 0, 0.24);
     }
     html, body {
       margin: 0; height: 100%;
       background: #ffffff; color: #181818;
-      /* --font-app, with the same system fallback chain globals.css uses so it
-         can never drop to the browser's serif default. */
+      /* --font-app, with globals.css's fallback chain so it can never drop to a serif default. */
       font-family: "Helvetica Neue", Helvetica, Arial, system-ui, -apple-system, sans-serif;
       -webkit-font-smoothing: antialiased;
       -webkit-user-select: none; user-select: none;
@@ -94,8 +72,7 @@
     .spinner[hidden] { display: none; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }
-    /* The auth surfaces put mt-7 (28px) above their primary button; the 14px
-       flex gap on .wrap carries the rest of it. */
+    /* Auth surfaces put mt-7 (28px) above the primary button; .wrap's 14px gap carries the rest. */
     .row { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 
     /* Geometry every auth surface shares (login, reset, OAuth consent). */
@@ -183,8 +160,7 @@
     const el = (id) => document.getElementById(id);
     const action = el('action');
 
-    // Everything on screen is main's answer. The page holds no state of its own
-    // and has no way to decide it is allowed through.
+    // Everything on screen is main's answer: the page holds no state and cannot decide it is through.
     function render(s) {
       if (!s) return;
       el('title').textContent = s.title || 'Update required';
@@ -205,8 +181,7 @@
     action.addEventListener('click', () => {
       const id = action.dataset.id;
       if (!id) return;
-      // Optimistic only in the narrow sense of "do not let a second click start
-      // a second check"; the next push from main is what actually redraws.
+      // Not a second click starting a second check; the next push from main is what redraws.
       action.disabled = true;
       window.doplUpdate.act(id);
     });

@@ -16,7 +16,7 @@ import {
   useDraftRows,
 } from "./panel-section";
 
-/** ⚠ Shared with the column header card's read-only template preview — two
+/** Shared with the column header card's read-only template preview — two
  *  renderings of a field's kind must not drift. */
 export const KIND_LABELS: Record<TemplateField["kind"], string> = {
   text: "Text",
@@ -26,10 +26,9 @@ export const KIND_LABELS: Record<TemplateField["kind"], string> = {
   skill: "Skill",
 };
 
-/** THE SAME SET AS `SelectMenu` OPTIONS — one declaration, so the template's
- *  kind picker and the attributes' cannot offer different words for one kind.
- *  ⚠ No `description`: five one-word kinds, and a second line per option in a
- *  420px panel is the paragraph the minimal-copy ruling refuses. */
+/** One declaration, so the template's kind picker and the attributes' cannot
+ *  offer different words for one kind. No `description`: a second line per option
+ *  in a 420px panel is the paragraph the minimal-copy ruling refuses. */
 export const KIND_OPTIONS: ReadonlyArray<SelectMenuOption<TemplateField["kind"]>> =
   Object.entries(KIND_LABELS).map(([value, label]) => ({
     value: value as TemplateField["kind"],
@@ -38,22 +37,18 @@ export const KIND_OPTIONS: ReadonlyArray<SelectMenuOption<TemplateField["kind"]>
 
 /**
  * The column's object template — default fields (label + kind, no values) every
- * new child is born with. NOT the attributes editor: rows are field
- * definitions, so there is no value cell, just label + kind.
+ * new child is born with. Not the attributes editor: rows are field definitions,
+ * so there is no value cell.
  *
- * ⚠ **FLAT SINCE 2026-09-12** (Samuel, over the object panel: *"no more indented
- * stuff"*) — `PanelSection` instead of `SectionBox`, the kind picker a `SelectMenu`
- * text face instead of a native `<select>` in an inset well, and no divider grid.
+ * Flat since 2026-09-12, and one white bar per field on a gray well since
+ * 2026-09-13 — the same recipe the other three sections took, and not a return of
+ * the frame (`panel-section.tsx › PanelSection`). `+ Add` appends an empty bar;
+ * the field is written on the label's blur (or Enter), because a nameless default
+ * field has no `key` to be addressed by.
  *
- * ⚠ **AND ONE WHITE BAR PER FIELD ON A GRAY WELL SINCE 2026-09-13** — the same
- * recipe the other three sections took, and not a return of the frame
- * (`panel-section.tsx › PanelSection`). `+ Add` under the rows appends an EMPTY
- * bar with both cells on it; the field is written on the label's blur (or Enter),
- * because a nameless default field has no `key` to be addressed by.
- *
- * ⚠ A draft whose label matches an existing field UPDATES that field instead of
- * appending — `addField`'s upsert-by-label, kept from the composer it replaced —
- * so the new bar disappears and the row above it takes the kind.
+ * A draft whose label matches an existing field updates that field instead of
+ * appending (`addField`'s upsert-by-label), so the new bar disappears and the row
+ * above it takes the kind.
  */
 export function TemplateEditor({
   column,
@@ -69,7 +64,7 @@ export function TemplateEditor({
     kind: "text",
   }));
 
-  // ⚠ HOISTED, NOT INLINED IN THE KEY. `vocabulary.test.ts` reads every string
+  // Hoisted, not inlined in the key: `vocabulary.test.ts` reads every string
   // literal in this feature for the words the reader must never see, and a
   // template literal holding `column.template.length` is one of them.
   const saved = column.template.length;
@@ -77,7 +72,7 @@ export function TemplateEditor({
   const setTemplate = (template: TemplateField[]) =>
     dispatch({ type: "OBJECT_UPDATE", id: column.id, patch: { template } });
 
-  // ⚠ Upsert by label (case-insensitive) to match MCP `set_template_field`
+  // Upsert by label (case-insensitive) to match MCP `set_template_field`
   // semantics — no duplicate default fields.
   const addField = (index: number, row: Omit<TemplateField, "key">) => {
     const label = row.label.trim();
@@ -129,25 +124,17 @@ export function TemplateEditor({
 }
 
 /**
- * ONE DEFAULT FIELD, PERSISTED OR DRAFT — one component for both, so a commit
+ * One default field, persisted or draft — one component for both, so a commit
  * reconciles in place (`panel-section.tsx › useDraftRows`).
  *
- * ⚠ **THE ROW'S FIELDS ARE `quiet` SINCE 2026-09-14** (Samuel, over the object
- * panel: *"for the individual fields. I want to remove the gray underline, and
- * have it so that the black underline only appears when a user clicks on a field
- * item (vertical center the text also)"*). It is the kit's `.inputQuiet` — a
- * RESTING STATE of the one underline recipe (`board-header-bits.tsx ›
- * InlineUnderlineField`), not a second face — so the black `::after` sweep on
- * focus is unchanged and blur takes the line away again. The panel's own
- * DESCRIPTION keeps its gray-at-rest line; the rule is about ROW cells.
+ * Fields are `quiet` since 2026-09-14: the kit's `.inputQuiet`, a resting state of
+ * the one underline recipe (`board-header-bits.tsx › InlineUnderlineField`), not
+ * a second face. The panel's own description keeps its gray-at-rest line; the rule
+ * is about row cells.
  *
- * ⚠ **THIS ROW IS IN THE SAME PANEL AND TAKES THE SAME REST STATE**, so "Default
- * fields" is not the one section left drawing gray rules under the other three.
- *
- * ⚠ **ORDER UNTOUCHED**: a template row is a field DEFINITION — label + kind, no
- * value — so there is no value cell for the same day's `Attribute : value
- * dropdown` ruling to put the picker after, and no colon between a name and a
- * thing it does not have.
+ * Order untouched: a template row is a field definition — label + kind, no value
+ * — so there is no value cell for the `Attribute : value dropdown` ruling to put
+ * the picker after.
  */
 function FieldRow({
   row,
@@ -159,7 +146,7 @@ function FieldRow({
   row: Omit<TemplateField, "key">;
   canEdit: boolean;
   onChange: (row: Omit<TemplateField, "key">) => void;
-  /** DRAFT ONLY — fires on the label's blur and on Enter. */
+  /** Draft only — fires on the label's blur and on Enter. */
   onCommit?: () => void;
   onRemove: () => void;
 }) {

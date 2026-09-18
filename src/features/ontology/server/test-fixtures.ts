@@ -3,8 +3,8 @@ import type { OntologyContext } from "../types";
 /**
  * Shared fixtures for the ontology server suites.
  *
- * ⚠ **A FRESH CONTEXT OBJECT PER CALL, AND THAT IS WHY THIS IS A FACTORY OF
- * FACTORIES.** The audience ceiling is memoised against the context's IDENTITY
+ * A fresh context object per call, which is why this is a factory of
+ * factories: the audience ceiling is memoised against the context's IDENTITY
  * (`./service-audience.ts › AUDIENCE_CACHE`), so a literal shared between cases
  * carries one case's resolution into the next.
  */

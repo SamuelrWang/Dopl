@@ -16,15 +16,14 @@ import { useWorkspaceInvoices } from "./use-billing-account";
 /**
  * Invoice history — date, amount, status, link to Stripe's hosted copy.
  *
- * No table primitive in this design system; documented substitute is a
- * `SectionPanel` body with `divide-border-subtle` rows — a `SectionBox` until
- * R-39 (2026-09-17: flat wins, the desktop stops wearing concave).
+ * No table primitive in this design system; the documented substitute is a
+ * `SectionPanel` body with `divide-border-subtle` rows.
+ * R-39 (2026-09-17): flat wins, the desktop stops wearing concave.
  *
- * WHICH AMOUNT: paid invoice shows PAID, open/uncollectible shows DUE —
- * "$0.00 paid" on an unpaid invoice reads as free rather than outstanding.
- *
- * ⚠ A FAILED READ IS NOT AN EMPTY HISTORY. Hook answers `[]` on both paths, so
- * the error branch must be checked FIRST.
+ * A paid invoice shows PAID, open/uncollectible shows DUE — "$0.00 paid" on an
+ * unpaid invoice reads as free rather than outstanding.
+ * A failed read is not an empty history: the hook answers `[]` on both paths,
+ * so the error branch must be checked first.
  */
 export function BillingInvoices({ workspaceId }: { workspaceId: string }) {
   const { invoices, loading, isError, retry } = useWorkspaceInvoices(
@@ -72,9 +71,9 @@ export function BillingInvoices({ workspaceId }: { workspaceId: string }) {
         ) : (
           <ul className="divide-y divide-border-subtle">
             {invoices.map((invoice, index) => (
-              // ⚠ Fallbacks cover the DTO's degraded path
-              // (`id: invoice.id ?? invoice.number ?? ""`): two empty ids
-              // would collide into one React key.
+              // Fallbacks cover the DTO's degraded path
+              // (`id: invoice.id ?? invoice.number ?? ""`): two empty ids would
+              // collide into one React key.
               <InvoiceRow
                 key={invoice.id || invoice.number || `invoice-${index}`}
                 invoice={invoice}
@@ -106,7 +105,7 @@ function InvoiceRow({ invoice }: { invoice: InvoiceDto }) {
         )}
       </div>
       <InvoiceStatusPill status={invoice.status} />
-      {/* ⚠ MIN-width, not fixed: `w-20` clipped anything past "$1,234.56"
+      {/* Min-width, not fixed: `w-20` clipped anything past "$1,234.56"
           (yearly Team invoice, zero-decimal ¥1,234,567). `min-w-20` holds the
           alignment edge; the date block (`min-w-0 flex-1`) gives up space. */}
       <span className="min-w-20 shrink-0 whitespace-nowrap text-right text-body font-medium tabular-nums text-text-primary">
@@ -137,8 +136,8 @@ const STATUS_TONE: Record<InvoiceStatus, string> = {
 };
 
 /**
- * ⚠ Prop is `string`, NOT `InvoiceStatus` — the DTO's type rests on a cast at
- * the Stripe boundary, and Stripe can ship a sixth value with no deploy here,
+ * Prop is `string`, not `InvoiceStatus` — the DTO's type rests on a cast at the
+ * Stripe boundary, and Stripe can ship a sixth value with no deploy here,
  * making `STATUS_TONE[value]` silently `undefined`. Narrow at render so an
  * unknown status still shows Stripe's word in the neutral tone.
  */

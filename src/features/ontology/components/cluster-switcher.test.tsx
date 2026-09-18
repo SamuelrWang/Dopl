@@ -1,12 +1,9 @@
 // @vitest-environment jsdom
 /**
- * THE CLUSTER PICKER — the ontology's NAME as the trigger, every ontology and the
- * create behind it (2026-09-10, Samuel's board-header ruling).
- *
- * ⚠ WHAT IS WORTH PINNING HERE IS THE **SOURCE AND THE SHAPE**: one control on two
- * boards, and the failures it is for are one of them quietly showing a different
- * set of ontologies, the trigger coming back as a PILL, or the create row going
- * missing now that it is the only way to make an ontology from the board.
+ * The cluster picker — the ontology's name as the trigger, every ontology and the
+ * create behind it (Samuel, 2026-09-10). Pins source and shape: one control on two
+ * boards, against a board showing a different set, the trigger returning as a pill,
+ * or the create row going missing.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -29,8 +26,8 @@ function object(id: string, name: string, childIds: string[] = []) {
   };
 }
 
-/** One cluster of a column and two cards (THREE objects, ONE column), and one
- *  empty cluster — the pair that keeps the count honest (R5, a graph WALK). */
+/** One cluster of a column and two cards (three objects, one column) plus one empty
+ *  cluster — the pair that keeps the count honest (R5, a graph walk). */
 const GRAPH = {
   clusters: [
     {
@@ -52,8 +49,8 @@ const GRAPH = {
 
 describe("the list source", () => {
   it("carries the graph WALK, one entry per cluster", () => {
-    // ⚠ R5: an object can sit in several clusters, so "how many objects" is a
-    // walk — one column plus its two cards is THREE, never `columnIds.length`.
+    // R5: an object can sit in several clusters, so the count is a walk — one
+    // column plus its two cards is three, never `columnIds.length`.
     expect(clusterSwitcherEntries(GRAPH)).toEqual([
       { id: "c1", name: "Pipeline", objectCount: 3 },
       { id: "c2", name: "Roster", objectCount: 0 },
@@ -87,20 +84,16 @@ describe("the trigger", () => {
     renderSwitcher();
     const trigger = screen.getByTitle("Switch ontology");
 
-    // ⚠ Plain `textContent`: the root vitest setup loads no jest-dom matchers.
+    // plain `textContent`: the root vitest setup loads no jest-dom matchers.
     expect(trigger.textContent).toBe("Pipeline");
-    // 🔒 THE PILL IS GONE (Samuel, 2026-09-10: *"no pill, only a down arrow to
-    // its right. Also unbold the text"*) — the strip's `.raised-tab` stadium and
-    // the bold weight are both what he was looking at.
+    // no pill and no bold weight (Samuel, 2026-09-10).
     expect(trigger.className).not.toMatch(/raised-tab|rounded-full|seg-pill/);
-    // 🔒 …and since later that day it wears the CHANNEL ROW's name recipe
-    // (*"match it to the text and font size and styling of the name of the
-    // channel in the left channel selector"* — `relationship-list.tsx`).
+    // it wears the channel row's name recipe (`relationship-list.tsx`).
     expect(trigger.className).toMatch(/\btext-body\b/);
     expect(trigger.className).toMatch(/\bfont-medium\b/);
     expect(trigger.className).not.toMatch(/text-title|font-semibold|font-bold/);
     expect(trigger.querySelector("svg")).toBeTruthy();
-    // 🔒 A DROPDOWN, NOT TABS — the other ontology is behind it, never beside it.
+    // a dropdown, not tabs — the other ontology is behind it, never beside it.
     expect(screen.queryByText("Roster")).toBeNull();
   });
 });
@@ -120,8 +113,7 @@ describe("the menu", () => {
 
     fireEvent.click(items[1]);
     expect(onSelect).toHaveBeenCalledWith("c2");
-    // The menu closes on the pick — a picker left open over the board it just
-    // changed reads as a control that did nothing.
+    // the menu closes on the pick.
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
@@ -138,9 +130,8 @@ describe("the menu", () => {
     fireEvent.click(screen.getByTitle("Switch ontology"));
 
     const create = screen.getByRole("menuitem", { name: "Ontology" });
-    // 🔒 Samuel, 2026-09-10: *"it shouldn't be a black button it should be like a
-    // gray"* — it is the shared `.menu-row`, so the kit's option face is the only
-    // thing styling it, and `auth-btn-3d` is what it must never wear again.
+    // Samuel, 2026-09-10: a gray option row, not a black button — the shared
+    // `.menu-row`, never `auth-btn-3d`.
     expect(create.className).toMatch(/menu-row/);
     expect(create.className).not.toMatch(/auth-btn-3d/);
     expect(create.querySelector("svg")).toBeTruthy();

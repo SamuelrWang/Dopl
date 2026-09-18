@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 /**
- * Stripe panes when Stripe does NOT answer.
+ * Stripe panes when Stripe does not answer.
  *
- * Empty states here are MEASUREMENTS ("No card on file" = Stripe said none). A
- * read that THREW measured nothing, yet `undefined` (failed) and `null`
- * (measured absent) collapse into one falsy check and `data ?? []` erases the
- * distinction. Drives the real transport with a FAILING route (whole
- * hook/query/pane path, not a stubbed hook): on failure pane must say it could
- * not load, offer retry, and NEVER say what is only true when Stripe answered.
+ * Empty states here are measurements ("No card on file" = Stripe said none),
+ * but a read that threw measured nothing, and `undefined` (failed) collapses
+ * with `null` (measured absent) under one falsy check. Drives the real
+ * transport with a failing route — the whole hook/query/pane path — so the
+ * pane must say it could not load, offer retry, and never claim what is only
+ * true when Stripe answered.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,10 +27,10 @@ import type { BillingPortal } from "./use-billing-portal";
 import type { PaymentMethodDto } from "../billing-account";
 
 /**
- * ⚠ Real `ConfirmDialog` portals in from a `requestAnimationFrame` chain, so
- * clicking through it times the animation, not the flow. Stub reproduces the
- * one contract the section is written against: `await onConfirm()`, close on
- * resolve, STAY OPEN on throw.
+ * The real `ConfirmDialog` portals in from a `requestAnimationFrame` chain, so
+ * clicking through it times the animation, not the flow. This stub reproduces
+ * the one contract the section is written against: `await onConfirm()`, close
+ * on resolve, stay open on throw.
  */
 vi.mock("@/shared/ui/confirm-dialog", () => ({
   ConfirmDialog: ({
@@ -89,7 +89,7 @@ afterEach(() => {
 
 function mount(node: ReactElement) {
   const client = new QueryClient({
-    // No retry: failing read reaches error state in one hop, no backoff wait.
+    // No retry: a failing read reaches error state in one hop, no backoff.
     defaultOptions: { queries: { retry: false } },
   });
   return render(
@@ -160,8 +160,8 @@ describe("the payment method pane when the read fails", () => {
   });
 
   it("drops the Expires line rather than printing '00 / 0'", async () => {
-    // Stripe can return a card with no expiry; zero-defaulting renders a date
-    // that does not exist.
+    // Stripe can return a card with no expiry; zero-defaulting would render a
+    // date that does not exist.
     reply = () => ({
       status: 200,
       body: { paymentMethod: { ...CARD, expMonth: null, expYear: null } },
@@ -186,7 +186,7 @@ describe("the invoice table when the read fails", () => {
         "Couldn't load invoices"
       )
     );
-    // `invoices` is `data ?? []` — same empty array as a customer with no
+    // `invoices` is `data ?? []` — the same empty array as a customer with no
     // history.
     expect(view.queryByText(/No invoices yet/)).toBeNull();
     expect(view.getByRole("button", { name: "Retry" })).toBeTruthy();
@@ -261,8 +261,9 @@ describe("a cancel the server refuses", () => {
   });
 
   it("fires exactly ONE POST per confirmed cancel", async () => {
-    // Button held through the awaited status invalidation, not just the round
-    // trip: in the gap the section still renders "Cancel plan" from OLD status.
+    // The button is held through the awaited status invalidation, not just the
+    // round trip: in the gap the section still renders "Cancel plan" from the
+    // old status.
     reply = (path) =>
       path.startsWith(BILLING_CANCEL_PATH)
         ? {

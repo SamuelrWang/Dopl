@@ -1,29 +1,21 @@
 /**
- * INVARIANT SUITE — **RULE B: THE CALLING CHANNEL'S CONTAINER PAYS** (Samuel,
- * 2026-09-13: *"The wallet needs to match the histogram. That's the whole
- * point."*). The arms `credits-service.test.ts` and `credits-link-reroute.test.ts`
- * cannot hold, because every case there is the CHANNEL-LESS fallback.
+ * Rule B: the calling channel's container pays (Samuel, 2026-09-13 — "the wallet
+ * needs to match the histogram"). The channel-less fallback lives in
+ * `credits-service.test.ts` and `credits-link-reroute.test.ts`. Pinned here:
+ *   1. The five arms: home-channel agent → the channel owner's personal wallet +
+ *      the channel id; workspace-channel agent → the caller's seat there + the
+ *      channel id; Desktop (channel-less) → the resource's container, channel
+ *      `null`; sub-agent → the channel its own session names.
+ *   2. The fence: the channel arrives on the forgeable `X-Dopl-Session-Id`, so a
+ *      channel in a container the caller is not an active member of is ignored
+ *      (and logged) — never billed, never refused.
+ *   3. The ledger's `channel_id`: every metered burn files the channel it was
+ *      attributed to, or `null` for Desktop.
+ *   4. Round-trip cost by mock call count — 0 extra with no channel, 1 when the
+ *      channel is in the addressed container, 2 across containers.
  *
- * What is pinned:
- *   1. **THE FIVE ARMS Samuel named.** Home-channel agent → the channel owner's
- *      PERSONAL wallet + the channel id, whatever it touches. Workspace-channel
- *      agent → the CALLER'S SEAT in that workspace + the channel id, whatever it
- *      touches. Desktop (channel-less) call → the RESOURCE's container, channel
- *      `null`, on both a workspace and a home resource. Sub-agent → the channel
- *      ITS OWN session names.
- *   2. 🔒 **THE FENCE.** The channel arrives on `X-Dopl-Session-Id`, which any
- *      device-token holder can forge, and under rule B it decides WHOSE WALLET
- *      MOVES. A channel in a container the caller is not an active member of is
- *      IGNORED (and logged) — never billed, never refused.
- *   3. **THE LEDGER's `channel_id`**, which is what makes the /home histogram the
- *      wallet's own breakdown: every metered burn files the channel it was
- *      attributed to, or `null` for Desktop agent.
- *   4. **THE ROUND-TRIP COST, by mock call count** — 0 extra with no channel, 1
- *      when the channel is in the addressed container, 2 across containers.
- *
- * ⚠ Repositories mocked; `channel-attribution.ts`, `containerTarget` and
- * `personal-wallet.ts` are REAL, so the rule is proven end to end from a caller's
- * session key to the wallet RPC and the ledger row.
+ * Repositories mocked; `channel-attribution.ts`, `containerTarget` and
+ * `personal-wallet.ts` are real.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -69,11 +61,8 @@ const mockMember = vi.mocked(findMembership);
  * The ledger attribution each wallet RPC was handed — the object
  * `credit-ledger.ts › CreditLedgerAttribution` describes, in the trailing
  * argument position of each consume signature (5th for the personal wallet, 6th
- * for the seat, because that counter's key is one column wider).
- *
- * ⚠ **READ BY POSITION ON PURPOSE.** Naming the index here is what makes a future
- * argument inserted in the middle fail loudly, instead of asserting against
- * whatever landed last.
+ * for the seat). Read by position on purpose: an argument inserted in the middle
+ * then fails loudly instead of asserting against whatever landed last.
  */
 const personalAttribution = () =>
   mockWallets.consumeUserCredits.mock.calls[0]?.[4];
@@ -121,8 +110,8 @@ beforeEach(() => {
   });
   mockRepo.countActiveMembers.mockResolvedValue(3);
   mockOwner.mockResolvedValue(OWNER);
-  // An active membership row. ⚠ `findMembership` filters `status='active'`, so a
-  // row IS the active answer — the fence reads its presence, not its fields.
+  // An active membership row: `findMembership` filters `status='active'`, so the
+  // fence reads the row's presence, not its fields.
   mockMember.mockResolvedValue({
     workspaceId: TEAM_WS,
     userId: GUEST,
@@ -153,10 +142,9 @@ function teamChannel() {
 
 describe("🔒 rule B, arm 1 — a HOME-CHANNEL agent pays the owner's PERSONAL wallet, whatever it touches", () => {
   it("reading a WORKSPACE KB charges the personal wallet, filed under the home channel", async () => {
-    // ⚠ THE CASE THE WHOLE WAVE EXISTS FOR. The ADDRESSED container is a
-    // standard workspace, so the superseded rule charged a SEAT there; rule B
-    // charges the calling channel's container, which is the operator's home
-    // channel, which is their personal wallet.
+    // The addressed container is a standard workspace, but rule B charges the
+    // calling channel's container — the operator's home channel, i.e. their
+    // personal wallet.
     mockChannel.mockResolvedValue(homeChannel());
     const target = await resolveBillingTarget(TEAM_WS, {
       userId: OWNER,
@@ -197,10 +185,8 @@ describe("🔒 rule B, arm 1 — a HOME-CHANNEL agent pays the owner's PERSONAL 
 
 describe("🔒 rule B, arm 2 — a WORKSPACE-CHANNEL agent pays the CALLER's SEAT, whatever it touches", () => {
   it("reading the caller's OWN PERSONAL KB charges their seat, filed under the workspace channel", async () => {
-    // ⚠ ACCEPTED BY SAMUEL EXPLICITLY: a member burning their own FIXED seat
-    // allocation on a personal resource is bounded and harms nobody else. The
-    // addressed container is the caller's own shelf, which the superseded rule
-    // billed to their personal wallet.
+    // Accepted by Samuel: a member burning their own fixed seat allocation on a
+    // personal resource is bounded and harms nobody else.
     mockChannel.mockResolvedValue(teamChannel());
     mockRepo.getWorkspaceBilling.mockResolvedValue(billing());
     const res = await consumeMcpCredits(PERSONAL, {
@@ -215,7 +201,7 @@ describe("🔒 rule B, arm 2 — a WORKSPACE-CHANNEL agent pays the CALLER's SEA
       expect.any(String),
       1,
       5_000,
-      // ⚠ THE ADDRESSED CONTAINER IS THE CALLER'S OWN SHELF while the CHARGED one
+      // The addressed container is the caller's own shelf while the charged one
       // is the workspace — the pair rule B exists to keep apart.
       { originWorkspaceId: PERSONAL, callerUserId: GUEST, channelId: TEAM_CHANNEL }
     );
@@ -245,8 +231,8 @@ describe("🔒 rule B, arms 3 and 4 — a CHANNEL-LESS call pays the RESOURCE's 
     await consumeMcpCredits(HOME_CONTAINER, {
       userId: GUEST,
       workspaceKind: "link",
-      // ⚠ EXPLICIT `null`, the shape the route sends when the request carried no
-      // session key — an absent field and a null one must not differ.
+      // Explicit `null`, as the route sends with no session key — an absent field
+      // and a null one must not differ.
       channelId: null,
     });
     expect(mockChannel).not.toHaveBeenCalled();
@@ -263,9 +249,8 @@ describe("🔒 rule B, arms 3 and 4 — a CHANNEL-LESS call pays the RESOURCE's 
 
 describe("🔒 rule B, arm 5 — a SUB-AGENT is filed under ITS OWN session's channel", () => {
   it("needs no rule of its own: the sub-agent's session key IS the input", async () => {
-    // A sub-agent launched into a different channel sends that channel's slot
-    // key, so the same one rule files it there. Nothing in the credit path knows
-    // or needs to know that a call came from a sub-agent.
+    // A sub-agent sends its own channel's slot key, so the one rule files it
+    // there; nothing in the credit path knows about sub-agents.
     mockChannel.mockResolvedValue({
       channelId: "chan-sub",
       workspaceId: "ws-link-2",
@@ -286,7 +271,7 @@ describe("🔒 rule B, arm 5 — a SUB-AGENT is filed under ITS OWN session's ch
 
 describe("🔒 THE FENCE — a forgeable header may not move a stranger's wallet", () => {
   it("a channel in a container the caller is NOT a member of is IGNORED, and logged", async () => {
-    // ⚠ THE SECURITY CASE. Without this, any account could drain a stranger's
+    // Security case: without the fence, any account could drain a stranger's
     // personal wallet by naming their channel in `X-Dopl-Session-Id`.
     mockChannel.mockResolvedValue(homeChannel());
     mockMember.mockResolvedValue(null);
@@ -326,9 +311,8 @@ describe("🔒 THE FENCE — a forgeable header may not move a stranger's wallet
   });
 
   it("🔒 NO MEMBERSHIP READ when the channel is in the ADDRESSED container", async () => {
-    // ⚠ THE ROUND TRIP THIS SAVES IS THE COMMON CASE — an agent working in its
-    // own channel. `withWorkspaceAuth` already proved that membership, and its
-    // KIND is already on the auth context, so asking again buys answers we hold.
+    // The common case (an agent in its own channel): `withWorkspaceAuth` already
+    // proved the membership and its kind is on the auth context.
     mockChannel.mockResolvedValue(homeChannel());
     await resolveBillingTarget(HOME_CONTAINER, {
       userId: OWNER,
@@ -353,9 +337,9 @@ describe("🔒 THE FENCE — a forgeable header may not move a stranger's wallet
 });
 
 /**
- * 🔒 **THE LEDGER ROW IS WRITTEN BY THE WALLET RPC ITSELF SINCE 2026-09-13**
+ * **THE LEDGER ROW IS WRITTEN BY THE WALLET RPC ITSELF SINCE 2026-09-13**
  * (Samuel: *"the histogram must equal the wallet, always"*; F-693,
- * `20261004120000_credit_consume_with_ledger.sql`). ⚠ **SO THESE CASES ASSERT THE
+ * `20261004120000_credit_consume_with_ledger.sql`). **SO THESE CASES ASSERT THE
  * RPC's ATTRIBUTION ARGUMENT, NOT A WRITER'S CALL** — the superseded shape mocked
  * `recordCreditUsageEvent` and proved it was fired, which is a weaker claim than
  * it looked: the real writer ran AFTER the counter had committed and swallowed its
@@ -363,9 +347,9 @@ describe("🔒 THE FENCE — a forgeable header may not move a stranger's wallet
  */
 describe("🔒 the ledger row is what makes the histogram the wallet's own breakdown", () => {
   it("files the CALLING CHANNEL beside the addressed container, not instead of it", async () => {
-    // ⚠ BOTH DIMENSIONS RIDE. `origin_workspace_id` stays WHERE the call was
-    // addressed; `channel_id` is WHOSE CHANNEL was billed. Collapsing either into
-    // the other is how the by-channel rail stopped summing to the wallet.
+    // Both dimensions ride: `origin_workspace_id` is where the call was addressed,
+    // `channel_id` whose channel was billed. Collapsing either into the other
+    // stops the by-channel rail summing to the wallet.
     mockChannel.mockResolvedValue(homeChannel());
     await consumeMcpCredits(TEAM_WS, {
       userId: OWNER,
@@ -383,11 +367,9 @@ describe("🔒 the ledger row is what makes the histogram the wallet's own break
   });
 
   /**
-   * ⚠ **"A REFUSED CONSUME WRITES NOTHING" IS A PROPERTY OF THE FUNCTION BODY
-   * NOW**, pinned in SQL by `credit-consume-with-ledger-schema.test.ts` (the
-   * INSERT sits inside the branch that already proved the CAS moved the counter).
-   * What is still provable from here is that the refusal is NOT a second code path
-   * with a second write: the same one RPC call carries both outcomes.
+   * "A refused consume writes nothing" is pinned in SQL by
+   * `credit-consume-with-ledger-schema.test.ts`. What is provable here is that the
+   * refusal is not a second code path: one RPC call carries both outcomes.
    */
   it("takes ONE RPC call whether the consume is allowed or refused", async () => {
     mockChannel.mockResolvedValue(homeChannel());

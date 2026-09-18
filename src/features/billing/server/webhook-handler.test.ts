@@ -1,14 +1,8 @@
 /**
- * INVARIANT SUITE — Stripe webhook handler. Drives `processStripeEvent` with
- * repository, Stripe client, seat-sync and idempotency table mocked. Locks:
- *   - status mapping: incomplete/unpaid/incomplete_expired -> canceled
- *   - event-ordering watermark: a stale (older event.created) replay no-ops
- *   - invoice.payment_succeeded recovers ONLY on a matching subscription
- *   - invoice.payment_failed sets past_due ONLY on a matching Pro row
- *   - multi-item subs bill the seat-priced item; period end prefers sub-level
- *   - checkout re-syncs seats
- *   - idempotency claim is atomic (duplicate short-circuits; error releases)
- *   - grandfather path warns on ambiguous / unmapped mappings
+ * Stripe webhook handler — drives `processStripeEvent` with the repository,
+ * Stripe client, seat-sync and idempotency table mocked. Locks status mapping,
+ * the event-ordering watermark, invoice recovery/past_due matching, seat-item
+ * selection, checkout seat re-sync, atomic idempotency and grandfather refusal.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -69,7 +63,7 @@ vi.mock("./stripe", async (importOriginal) => {
 
 vi.mock("./seats", () => ({ syncSeatQuantity: vi.fn() }));
 vi.mock("./subscriptions", () => ({ getUserByStripeCustomer: vi.fn() }));
-// ⚠ `findWorkspaceById` is `webhook-plan.ts › reportPlanContainerMismatch`'s
+// `findWorkspaceById` is `webhook-plan.ts › reportPlanContainerMismatch`'s
 // read (2026-09-08). Undefined here = "workspace not found" = no report, which
 // is the right default for every case in this file: none of them is about the
 // plan/container-kind check. That check has its own suite,
@@ -176,7 +170,7 @@ describe("mapStatus (via subscription.updated)", () => {
   });
 
   it("a canceled write via updated NULLS the sub pointers, like deleted", async () => {
-    // Retaining sub_1 lets a later invoice.payment_succeeded restore
+    // A retained sub_1 would let a later invoice.payment_succeeded restore
     // status=active without the plan — free/active, 409-blocked re-checkout.
     await processStripeEvent(
       event("customer.subscription.updated", sub({ status: "unpaid" }))
@@ -360,8 +354,7 @@ describe("period START + cancel_at_period_end (the MCP credits anchor)", () => {
       expect.objectContaining({ cancelAtPeriodEnd: true })
     );
 
-    // Omitted key leaves the old `true` standing — a resumed customer would
-    // still be told their plan is ending.
+    // Omitting the key would leave the old `true` standing on a resumed sub.
     await processStripeEvent(
       event("customer.subscription.updated", sub({ status: "active" }), 2000)
     );
@@ -563,8 +556,7 @@ describe("checkout.session.completed", () => {
       expect.objectContaining({ plan: "team", status: "active" })
     );
     expect(syncSeatQuantity).toHaveBeenCalledWith(WS);
-    // Webhook must NOT touch the checkout claim — the route released it in its
-    // `finally` when the create-session section ended.
+    // The route already released the checkout claim in its `finally`.
     expect(mockRepo.releaseWorkspaceCheckout).not.toHaveBeenCalled();
   });
 
@@ -582,8 +574,7 @@ describe("checkout.session.completed", () => {
   });
 
   it("a retried checkout older than the watermark is dropped (no resurrection after a cancel)", async () => {
-    // First delivery failed and released; sub then canceled (watermark=300).
-    // Stripe's retry of the checkout event (created=200) must not re-write.
+    // Sub canceled at watermark=300; Stripe's retry (created=200) must not re-write.
     mockRepo.getStripeEventWatermark.mockResolvedValue(300);
     const session = {
       metadata: { workspace_id: WS },
@@ -596,11 +587,9 @@ describe("checkout.session.completed", () => {
   });
 
   /**
-   * Period spreads must be conditioned on `canceled` like every other paid
-   * field in this branch — otherwise a checkout event landing on an
-   * already-canceled sub (Stripe retry, or cancellation between session and
-   * delivery) writes a live future anchor onto a free row: the credit lockout,
-   * by a path neither cancel handler covers.
+   * Period spreads must be conditioned on `canceled` like every other paid field
+   * here: a checkout landing on an already-canceled sub would otherwise write a
+   * live future anchor onto a free row and lock credits out.
    */
   it("a checkout whose subscription is already canceled writes NULL anchors", async () => {
     retrieveSub.mockResolvedValue(
@@ -685,11 +674,8 @@ describe("idempotency claim (atomic)", () => {
 });
 
 /**
- * 🔒 THE GRANDFATHER PATH REFUSES ON AMBIGUITY (B10, spec §7 (a)). It used to
- * route the legacy subscription to the OLDEST owned workspace and `console.warn`
- * that it had guessed — a real payment applied to a workspace nobody named, with
- * a log line as its only trace. There is no derived answer left to appeal to, so
- * the mapping has exactly one answer or none.
+ * B10, spec §7 (a): the grandfather mapping has exactly one answer or none — it
+ * never routes a legacy subscription to a guessed workspace.
  */
 describe("grandfather mapping", () => {
   function unmappedCustomer() {
@@ -728,7 +714,7 @@ describe("grandfather mapping", () => {
     );
 
     expect(err).toHaveBeenCalledWith(expect.stringContaining("is ambiguous"));
-    // ⚠ THE REVERT DETECTOR: the old shape WROTE a billing row here.
+    // Revert detector: the old shape wrote a billing row here.
     expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
     err.mockRestore();
   });

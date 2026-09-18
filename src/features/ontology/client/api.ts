@@ -37,8 +37,7 @@ export function isOverFreeCapError(err: unknown): boolean {
 async function request<T>(
   workspaceId: string,
   path: string,
-  // ⚠ `PUT` JOINED THE UNION FOR THE SHARE LANE (2026-09-09) — a share states
-  // the END STATE of three audiences, which is a PUT and not a POST.
+  // `PUT` is the share lane's: a share states the end state of three audiences.
   init: { method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; body?: unknown } = {}
 ): Promise<T> {
   try {
@@ -126,25 +125,18 @@ export function deleteObject(workspaceId: string, objectId: string): Promise<voi
  * ────────────────────────────────────────────────────────────────────────── */
 
 /**
- * The two SHARING FIELDS a cluster carries once it is a home ontology, declared
- * here as a PARTIAL over `OntologyCluster` rather than added to that type.
+ * The two sharing fields a cluster carries once it is a home ontology, kept as a
+ * partial over `OntologyCluster` because a cached snapshot predates them
+ * (INVARIANTS §8): `GET /api/ontology` is served from IndexedDB on the first paint
+ * after an upgrade, so every consumer goes through
+ * `hooks/use-ontologies.ts › ontologyListRows` and never the raw field.
  *
- * ⚠ **PARTIAL BECAUSE A CACHED SNAPSHOT PREDATES THEM** (INVARIANTS §8, the
- * stale-cache rule). `GET /api/ontology`'s body is served from IndexedDB on the
- * first paint after an upgrade, so a bundle that reads these fields must render
- * correctly against a payload written by a bundle that never sent them — which
- * is why every consumer goes through `hooks/use-ontologies.ts › ontologyListRows`
- * and never touches the raw field.
- *
- * ⚠ AND THE TWO FALLBACKS ARE DIFFERENT ANSWERS ON PURPOSE. `agentsMayEdit`
- * falls back to the COLUMN DEFAULT (`true` — Samuel's solo default is "viewable
- * and editable", spec §3.1), which is a fact. `sharedChannelCount` falls back to
- * `null` and the card then says NOTHING, because "shared into 0 channels" is a
- * claim about share rows this payload never carried — UNKNOWN is not EMPTY
- * (INVARIANTS §5A).
+ * The fallbacks differ on purpose: `agentsMayEdit` falls back to the column
+ * default (`true`), a fact; `sharedChannelCount` falls back to `null` and renders
+ * nothing, because unknown is not empty (INVARIANTS §5A).
  */
 export interface OntologyClusterSharing {
-  /** The SOLO toggle (spec §5): may the owner's own agents write, or only read. */
+  /** The solo toggle (spec §5): may the owner's own agents write, or only read. */
   agentsMayEdit: boolean;
   /** How many channels this ontology is lent into. */
   sharedChannelCount: number;
@@ -156,7 +148,7 @@ export interface OntologyListRow {
   slug: string;
   name: string;
   purpose: string;
-  /** Objects reachable from this cluster — a graph WALK, not a column (R5). */
+  /** Objects reachable from this cluster — a graph walk, not a column (R5). */
   objectCount: number;
   agentsMayEdit: boolean;
   /** `null` when the payload did not carry it — render nothing, never "0". */
@@ -164,24 +156,21 @@ export interface OntologyListRow {
 }
 
 /**
- * One `(ontology, channel)` share row as the share route serves it.
- *
- * ⚠ THE WIRE SHAPE IS `types.ts › OntologyShare` and this re-states nothing —
- * it is imported, so the dialog and the service cannot drift into two
- * vocabularies of the same three levels.
+ * One `(ontology, channel)` share row as the share route serves it. The wire shape
+ * is `types.ts › OntologyShare`, imported rather than restated, so the dialog and
+ * the service cannot drift into two vocabularies of the same three levels.
  */
 export interface OntologySharesPayload {
   shares: OntologyShare[];
   /**
-   * 🔒 **OFF THE SERVER, THE SAME PREDICATE THE WRITE APPLIES** (spec §5, the
-   * rule `kb-channel-grants-section.tsx` states). A dialog that decided this
-   * locally would render an editor for a caller the PUT then refuses.
+   * Off the server, the same predicate the write applies (spec §5). Decided
+   * locally it would render an editor for a caller the PUT then refuses.
    */
   canManage: boolean;
 }
 
-/** `GET` one ontology's share rows. ⚠ Cluster-scoped, so the dialog costs ONE
- *  read whatever the container's channel fan is. */
+/** `GET` one ontology's share rows. Cluster-scoped, so the dialog costs one read
+ *  whatever the container's channel fan is. */
 export function fetchOntologyShares(
   workspaceId: string,
   clusterId: string
@@ -190,9 +179,8 @@ export function fetchOntologyShares(
 }
 
 /**
- * SHARE, or re-state an existing share. ⚠ A PUT of the WHOLE triple, never a
- * patch of one level: a share row is a COMPLETE statement about three audiences
- * (I4), so a retry after an ambiguous failure lands the same row.
+ * Share, or re-state an existing share. A PUT of the whole triple, never a patch
+ * of one level (I4), so a retry after an ambiguous failure lands the same row.
  */
 export function putOntologyShare(
   workspaceId: string,
@@ -206,11 +194,9 @@ export function putOntologyShare(
 }
 
 /**
- * UNSHARE — a row DELETE, never a stored triple of `none` (I4).
- *
- * ⚠ THE CHANNEL RIDES THE QUERY STRING because a `DELETE` body is not carried
- * by every layer between here and the route. It is an opaque resource id, never
- * a person.
+ * Unshare — a row DELETE, never a stored triple of `none` (I4). The channel rides
+ * the query string because a `DELETE` body is not carried by every layer between
+ * here and the route; it is an opaque resource id, never a person.
  */
 export function deleteOntologyShare(
   workspaceId: string,
@@ -225,12 +211,9 @@ export function deleteOntologyShare(
 }
 
 /**
- * The SOLO TOGGLE's write — `agents_may_edit` on the cluster itself.
- *
- * ⚠ IT RIDES THE CLUSTER PATCH THAT ALREADY EXISTS rather than growing a route
- * of its own: it is a column on `ontology_clusters`, and `PATCH
- * /api/ontology/clusters/[clusterId]` is already the cluster write gate (spec
- * §4.4). A second endpoint would be a second floor to keep in step.
+ * The solo toggle's write — `agents_may_edit` on the cluster. It rides the existing
+ * cluster PATCH (already the cluster write gate, spec §4.4) rather than growing a
+ * route of its own: a second endpoint would be a second floor to keep in step.
  */
 export function setAgentsMayEdit(
   workspaceId: string,

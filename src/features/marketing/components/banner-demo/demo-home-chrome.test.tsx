@@ -1,23 +1,16 @@
 // @vitest-environment jsdom
 /**
- * 🔒 **THE HERO DEMO'S /home CHROME IS THE PRODUCT'S UI, NOT A LOOK-ALIKE**
- * (Samuel, 2026-09-17: *"in the main demo/first glass window demo spot, we need
- * to overhaul it to match the new UI of the home space. The current version is
- * based on an outdated UI/UX."*).
+ * (2026-09-17) The hero demo's /home chrome is the product's UI, not a look-alike.
  *
- * ⚠ **WHAT THIS SUITE IS FOR, AND IT IS NOT "the demo renders".** The scene it
- * replaced looked right on the day it was written and was a year of rulings
- * behind by the time anyone noticed: the header still put a face where the
- * "New channel" pill goes, the search pill was the CLOSED 36px face, the column
- * was a flat list of rows with a leading glyph and a last-message preview — every
- * one of those a thing Samuel had since deleted from /home. **A screenshot cannot
- * catch that and neither can a render test.** So every case below pins the scene
- * to a SHARED DECLARATION — the same constant or component the SPA page renders —
- * and fails when the demo grows a copy of one instead.
+ * This suite is not "the demo renders". The scene it replaced looked right the day
+ * it was written and was a year of rulings behind by the time anyone noticed —
+ * something no screenshot and no render test can catch. So every case pins the
+ * scene to a SHARED DECLARATION, the same constant or component the SPA page
+ * renders, and fails when the demo grows a copy of one instead.
  *
- * ⚠ **BIDIRECTIONAL WHERE IT MATTERS**: the deleted things are asserted ABSENT,
- * because a suite that only checks what is present passes on a scene that grew
- * the old chrome back beside the new.
+ * Bidirectional where it matters: deleted things are asserted ABSENT, because a
+ * suite that only checks what is present passes on a scene that grew the old
+ * chrome back beside the new.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -40,7 +33,7 @@ import { messagesAt } from "./demo-data";
 const CHROME_SRC = "src/features/marketing/components/banner-demo/demo-home-chrome.tsx";
 const ROWS_SRC = "src/features/marketing/components/banner-demo/demo-home-rows.ts";
 
-/** The header's list-width CELL, as a `closest` selector — the same one
+/** The header's list-width cell, as a `closest` selector — the same one
  *  `relationship-list.test.tsx` uses against the real page. */
 const CELL = ".w-\\[var\\(--home-list-w\\)\\]";
 
@@ -53,16 +46,15 @@ describe("the header strip is /home's, control for control", () => {
   it("🔒 heads the list column with `New channel` and closes the row with `Profile`", () => {
     render(<DemoHomeHeader />);
 
-    // ⚠ ASSERTED AGAINST THE CONSTANT, NOT AGAINST A CLASS LIST TYPED HERE.
-    // `PAGE_ACTION_BTN` is the SPA's own declaration, so a restyle of the page
-    // action moves this case with it rather than breaking it.
+    // Asserted against the CONSTANT, not a class list typed here, so a restyle of
+    // the page action moves this case with it rather than breaking it.
     const create = screen.getByText("New channel");
     const profile = screen.getByText("Profile");
     for (const el of [create, profile]) {
       expect(el.className).toBe(PAGE_ACTION_BTN);
     }
-    // The pill's LEFT edge lands on the channel rows'; the operator's control
-    // is NOT in that cell (Samuel, 2026-09-15).
+    // (2026-09-15) The pill's left edge lands on the channel rows'; the
+    // operator's control is not in that cell.
     expect(create.closest(CELL)).not.toBeNull();
     expect(profile.closest(CELL)).toBeNull();
     expect(create.className).not.toMatch(/w-full/);
@@ -70,21 +62,20 @@ describe("the header strip is /home's, control for control", () => {
 
   it("🔒 names the five faces `HOME_TABS` names, in its order, on `Channel`", () => {
     render(<DemoHomeHeader />);
-    // ⚠ THE PRODUCT'S OWN SET — a sixth face or a relabelled one reaches this
-    // scene without an edit, which is the whole reason it is imported.
+    // The product's own set, so a sixth or relabelled face reaches this scene
+    // without an edit.
     const labels = HOME_TABS.map((tab) => tab.label);
     expect(labels).toContain("Channel");
     for (const label of labels) expect(screen.getByText(label)).toBeTruthy();
-    // 🚫 AND THE SET THIS SCENE USED TO CARRY IS GONE — it was a marketing list
-    // of three ("Chat", "Knowledge", "Agents") that outlived two renames.
+    // And no marketing list of its own — the old one outlived two renames.
     expect(screen.queryByText("Chat")).toBeNull();
   });
 
   it("🔒 renders the search pill OPEN, which is what /home renders", () => {
     const { container } = render(<DemoHomeHeader />);
     const pill = container.querySelector(".search-expand");
-    // The CLOSED 36px face is still the kit's; this scene stopped being its
-    // caller on 2026-09-17 (`pages/home/home-search.test.ts` carries both halves).
+    // The closed 36px face is still the kit's; this scene is not its caller
+    // (`pages/home/home-search.test.ts` carries both halves).
     expect(pill?.getAttribute("data-open")).toBe("true");
     expect(within(pill as HTMLElement).getByText("Search…")).toBeTruthy();
   });
@@ -99,8 +90,8 @@ describe("the header strip is /home's, control for control", () => {
     // still reach inside it is worse than a visible one.
     expect(code).not.toContain("<button");
     expect(code).not.toContain("<input");
-    // ⚠ THE ANTI-COPY FENCE. Every face in this file arrives by import — a
-    // literal kit recipe here is the drift the extraction was made to stop.
+    // The anti-copy fence: every face in this file arrives by import, and a
+    // literal kit recipe is the drift the extraction was made to stop.
     expect(code).not.toMatch(/"auth-btn-3d[ "]/);
     expect(code).not.toContain("rounded-[14px]");
   });
@@ -114,9 +105,8 @@ describe("the channel column is the product's three wells over the product's row
     for (const well of HOME_CHANNEL_WELLS) {
       expect(screen.getByRole("heading", { name: well.label })).toBeTruthy();
     }
-    // ⚠ `PANEL_WELL_ON_PANEL`, not `PANEL_WELL`: this column stands ON
-    // `--home-panel`, so the default fill would be gray on the same gray
-    // (Samuel: *"there's no gray background on this at all"*).
+    // `PANEL_WELL_ON_PANEL`, not `PANEL_WELL`: this column stands on
+    // `--home-panel`, so the default fill would be gray on the same gray.
     const boxes = [...container.querySelectorAll("section")];
     expect(boxes).toHaveLength(HOME_CHANNEL_WELLS.length);
     for (const box of boxes) expect(box.className).toBe(PANEL_WELL_ON_PANEL);
@@ -135,12 +125,12 @@ describe("the channel column is the product's three wells over the product's row
 
   it("🔒 shows the marks the row can carry, and the solo row's description", () => {
     render(<DemoChannelList rows={rows()} selectedId={HOME_ROW_ID} />);
-    // The `@ N` pill and the dot are EXCLUSIVE — one row takes each.
+    // The `@ N` pill and the dot are exclusive — one row takes each.
     expect(screen.getByTitle("2 unread mentions")).toBeTruthy();
     expect(screen.getByLabelText("Unread messages")).toBeTruthy();
     expect(screen.getAllByText("Link out").length).toBeGreaterThan(0);
-    // 🔒 A SOLO channel's DESCRIPTION takes line two, in italic (2026-09-15) —
-    // the faces' alternative in that one slot, never stacked with them.
+    // (2026-09-15) A solo channel's description takes line two, in italic — the
+    // faces' alternative in that one slot, never stacked with them.
     const solo = screen.getByText(/Friday sweep of the pipeline/);
     expect(solo.className).toContain("italic");
   });
@@ -153,9 +143,8 @@ describe("the channel column is the product's three wells over the product's row
       expect(Object.keys(row)).not.toContain("lastLine");
       expect(Object.keys(row)).not.toContain("subline");
     }
-    // 🔒 NO IDENTITY GLYPH IN THE LEADING SLOT (Samuel, 2026-09-01): a channel is
-    // not a DM and must not be dressed as one. The scene used to draw a `Bot`
-    // glyph, an avatar stack or a face there, by roster size.
+    // (2026-09-01) No identity glyph in the leading slot: a channel is not a DM
+    // and must not be dressed as one.
     const code = readFileSync(ROWS_SRC, "utf8");
     expect(code).not.toContain("Bot");
   });
@@ -172,8 +161,7 @@ describe("the column tracks the scripted conversation", () => {
     const script = messagesAt(step);
     const live = homeRowsAt(step).find((row) => row.id === HOME_ROW_ID);
     expect(live?.at).toBe(script[script.length - 1]?.createdAt);
-    // ⚠ AND ONLY THE LIVE ROW MOVES — the others are other conversations, and
-    // nothing is happening in them.
+    // Only the live row moves — nothing is happening in the others.
     const early = homeRowsAt(stepIndex("channel-base"));
     const late = homeRowsAt(stepIndex("hold"));
     for (const [i, row] of early.entries()) {
@@ -184,20 +172,16 @@ describe("the column tracks the scripted conversation", () => {
 });
 
 /**
- * 🔑 **THE AGENT VIEW MOUNTS THE PANEL'S OWN PARTS.** It transcribed the header
- * and the stats until 2026-09-17, and both had drifted — the real header had
- * grown the effective-model clause and the ended-agent pill, the real stats a
- * third clause. What the wrapper may still state is the ASIDE's class list and
- * the box `AgentControls` would have drawn around the stats; everything else is
- * an import.
+ * The agent view mounts the panel's own parts. The wrapper may state only the
+ * aside's class list and the box `AgentControls` would have drawn around the
+ * stats; everything else is an import.
  */
 describe("the agent view is the product's panel, minus what needs a bridge", () => {
   const VIEW_SRC =
     "src/features/marketing/components/banner-demo/demo-agent-view.tsx";
   const PANEL_SRC = "src/features/channels/components/agent-panel.tsx";
-  // ⚠ `AgentStats` LEFT THE PANEL ON 2026-09-17 (P17): the window held a second
-  // copy, and collapsing them into one declaration had to be a SPLIT because the
-  // panel stood at the §1 cap.
+  // `AgentStats` lives outside the panel: the window held a second copy, and
+  // collapsing them into one declaration had to be a split (§1 cap).
   const STATS_SRC = "src/features/channels/components/agent-stats.tsx";
 
   it("🔒 imports the header and the stats rather than re-declaring them", () => {
@@ -206,8 +190,8 @@ describe("the agent view is the product's panel, minus what needs a bridge", () 
     expect(view).toContain("import { AgentStats } from");
     expect(view).toContain("<AgentPanelHeader agent={agent} onClose={onClose} />");
     expect(view).toContain("<AgentStats agent={agent} />");
-    // 🚫 AND THE TRANSCRIPTIONS ARE GONE — bidirectional, or this passes on a
-    // file that grew the copies back beside the imports.
+    // And no transcriptions — bidirectional, or this passes on a file that grew
+    // the copies back beside the imports.
     expect(view).not.toContain("<header");
     expect(view).not.toContain("UsageMeter");
     expect(view).not.toContain("AgentLiveness");
@@ -233,12 +217,10 @@ describe("the agent view is the product's panel, minus what needs a bridge", () 
 });
 
 /**
- * 🔒 **THE RECORD PANE IS /home's CHANNEL RECORD, NOT A THREAD (Samuel,
- * 2026-09-17):** *"the demo is super off … a majority of it is matching like the
- * workspace pages. I want it to match the home space pages."* He was looking at a
- * THREAD view — a breadcrumb header, a thread-scoped info column with "Thread
- * info" and "Parties", and a composer addressed to a thread. Every case here pins
- * one half of the correction, and each pins the ABSENCE of what it replaced.
+ * (2026-09-17) The record pane is /home's channel record, not a thread. What it
+ * replaced was a thread view — breadcrumb header, thread-scoped info column, a
+ * composer addressed to a thread. Every case pins one half of the correction and
+ * the ABSENCE of what it replaced.
  */
 describe("the record pane plays /home's channel record", () => {
   const scene = () => render(<DemoScene step={stepIndex("hold")} />);
@@ -250,7 +232,7 @@ describe("the record pane plays /home's channel record", () => {
     );
     // The five FACE tabs are the header's; the four after them are the column's.
     expect(tabs.slice(-4)).toEqual(["Info", "Threads0", "Agents3", "Settings"]);
-    // 🚫 AND THE THREAD COLUMN IS NOT THERE — `channelPaneTabs` drops Threads in
+    // And the thread column is not there — `channelPaneTabs` drops Threads in
     // thread view and `ThreadInfoTab` heads itself "Thread info".
     expect(screen.queryByText("Thread info")).toBeNull();
     expect(screen.queryByText("Parties")).toBeNull();
@@ -267,7 +249,7 @@ describe("the record pane plays /home's channel record", () => {
       "Mentions",
       "Members",
     ]);
-    // The card's four fixed rows (Samuel, 2026-09-15 — Last activity deleted).
+    // The card's four fixed rows (2026-09-15; Last activity deleted).
     for (const row of ["Name", "Description", "Creator", "Created"]) {
       expect(screen.getByText(row)).toBeTruthy();
     }
@@ -278,10 +260,9 @@ describe("the record pane plays /home's channel record", () => {
   it("🔒 the composer addresses nobody and carries the Bot glyph", () => {
     const { container } = scene();
     // `composer-recipients.tsx › REACH_NOBODY` — a channel post with no tag.
-    // It read "→ Priya Shah thread" while a thread was open.
     expect(screen.getByLabelText("Recipients").textContent).toContain("nobody");
-    // 🔒 `composer-toolbar.tsx` draws the Bot ONLY on `newAgent?.canLaunch`, so a
-    // scene that passed nothing rendered a BROWSER's composer.
+    // `composer-toolbar.tsx` draws the Bot only on `newAgent?.canLaunch`, so a
+    // scene that passed nothing rendered a browser's composer.
     for (const label of ["New Agent", "New thread", "Mention", "Emoji"]) {
       expect(
         container.querySelector(`[aria-label="${label}"]`)
@@ -297,18 +278,17 @@ describe("the record pane plays /home's channel record", () => {
     // Three avatars and three workspace icons, all bundled `public/` assets.
     expect(srcs.filter((s) => s?.startsWith("/img/avatars/")).length)
       .toBeGreaterThan(5);
-    // 🔒 THE RAIL IS IMAGE TILES (Samuel, 2026-09-17) — `WorkspaceGlyph`
-    // initials a workspace only when it has NO icon.
+    // (2026-09-17) The rail is image tiles — `WorkspaceGlyph` initials a
+    // workspace only when it has no icon.
     for (const icon of DEMO_RAIL_ICONS) expect(srcs).toContain(icon);
-    // 🚫 AND NO OVERFLOW BITE: `AvatarStack` prints `+N` past its cap, which is
-    // what "DW OH LZ +1" was.
+    // And no overflow bite: `AvatarStack` prints `+N` past its cap.
     expect(container.textContent).not.toMatch(/\+\d/);
   });
 });
 
-/** The three bundled images the rail's workspace tiles wear. ⚠ Asserted, not
- *  imported: the point is that the scene renders IMAGES, and a list that came
- *  from the component could not fail when the component stops passing them. */
+/** The three bundled images the rail's workspace tiles wear. Asserted, not
+ *  imported: a list that came from the component could not fail when the
+ *  component stops passing them. */
 const DEMO_RAIL_ICONS = [
   "/img/dev-clouds.jpg",
   "/img/framework-banner.jpg",

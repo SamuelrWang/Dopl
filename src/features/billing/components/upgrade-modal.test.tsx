@@ -1,15 +1,13 @@
 // @vitest-environment jsdom
 /**
- * THE PAYWALL, AND WHICH PLAN IT SELLS. `UpgradeModal` is mounted from four
- * places (`ontology-view`, `invite-dialog`, `members-v2-view`,
- * `chats/list-pane`) and since 2026-09-08 it can be shown a `kind='personal'`
- * container as well as a standard workspace — so what it offers has to follow
- * the container, not the call site. A modal that sold Team on a personal
- * container would open a checkout that answers 400 `PLAN_NOT_FOR_CONTAINER`.
+ * The paywall, and which plan it sells. `UpgradeModal` is mounted from four
+ * places and since 2026-09-08 it can be shown a `kind='personal'` container as
+ * well as a standard workspace, so what it offers follows the container, not the
+ * call site — selling Team on a personal container opens a checkout that answers
+ * 400 `PLAN_NOT_FOR_CONTAINER`.
  *
- * ⚠ jsdom, and a real render: `ModalShell` is a PORTAL that mounts on a
- * `requestAnimationFrame`, so its first server paint is empty and only a DOM
- * render can see the contents at all.
+ * jsdom and a real render: `ModalShell` is a portal that mounts on a
+ * `requestAnimationFrame`, so its first server paint is empty.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -99,7 +97,7 @@ describe("on a personal container", () => {
     expect(html).toContain("Upgrade to Pro");
     expect(html).toContain(formatMoney(PRO_PRICE));
     expect(html).toContain("/ month");
-    // 🔒 The wrong plan here is a 400 at checkout, not a cosmetic slip.
+    // The wrong plan here is a 400 at checkout, not a cosmetic slip.
     expect(html).not.toContain("Team");
     expect(html).not.toContain("/ seat / month");
     expect(html).not.toContain("Upgrade your workspace");
@@ -110,14 +108,14 @@ describe("on a personal container", () => {
     expect(html).toContain(
       `${planNumber(PERSONAL_MONTHLY_CREDITS.pro)} credits a month`
     );
-    // ⚠ The seat figure happens to be the same number, so the assertion is on
-    // the WORDING that distinguishes them.
+    // The seat figure happens to be the same number, so the assertion is on the
+    // wording that distinguishes them.
     expect(html).not.toContain("credits per member");
   });
 
   it("promises no unlock the container already has", async () => {
-    // The ontology cap is a MULTI-member free rule and a personal container has
-    // one member — so "uncapped objects" would be selling nothing.
+    // The ontology cap is a multi-member free rule and a personal container has
+    // one member, so "uncapped objects" would be selling nothing.
     const html = await open(PERSONAL_FREE);
     expect(html).not.toContain("Uncapped ontology objects");
     expect(html).toContain("Full chat history");
@@ -125,10 +123,9 @@ describe("on a personal container", () => {
   });
 
   /**
-   * 🔒 **THE add-member VARIANT IS STANDARD-ONLY.** Its whole pitch is seats,
-   * "invite your team" and the legacy single-member limit; a personal container
-   * has no roster to add anyone to, so the caller falls back to the generic
-   * upsell rather than describing something the reader cannot do.
+   * The add-member variant is standard-only: its pitch is seats, "invite your
+   * team" and the legacy single-member limit, and a personal container has no
+   * roster, so the caller falls back to the generic upsell.
    */
   it("falls back to the generic upsell when asked for the add-member variant", async () => {
     const html = await open(PERSONAL_FREE, "add-member");

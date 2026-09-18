@@ -4,25 +4,17 @@
  * ontology tables and the share row (slice S1, `docs/specs/home-ontology.md`
  * §3.2/§3.3; Samuel's ruling B5, *"RLS is the fence"*).
  *
- * ⚠ TWO HALVES, AND ONLY ONE OF THEM RUNS HERE. The SQL half replays every
- * migration and asserts on the FINAL policy and function bodies; the live half is
- * `skipIf(!liveRedteamEnabled)` and needs a local stack. **A STRUCTURAL
+ * Two halves, and only one of them runs here. The SQL half replays every
+ * migration and asserts on the final policy and function bodies; the live half
+ * is `skipIf(!liveRedteamEnabled)` and needs a local stack. **A STRUCTURAL
  * ASSERTION IS NOT A BEHAVIOURAL ONE (F-523)**: the text pins prove the rule is
  * WRITTEN once and name every arm; only CI's `rls-redteam` job proves Postgres
  * agrees. Say it that way in any doc that cites this file.
  *
- * ⚠ **THE TWIN's OWN TRUTH TABLE IS `./service-shared.test.ts`** — split at §1's
- * 500-line cap, and the seam is the one the code has: that file asserts what the
- * PREDICATE answers, this one asserts that the SQL says the same thing.
+ * The twin's own truth table is `./service-shared.test.ts`: that file asserts
+ * what the PREDICATE answers, this one that the SQL says the same thing.
  *
- * ⚠ MUTATION-VERIFIED, 8 REVERTS AND 8 FAILURES (2026-09-09) — each applied, run,
- * and reverted: AND-ing the share arm into the membership group; dropping
- * `NOT dopl_credential_is_shared()` from it; swapping `is_current_workspace_member`
- * for the 3-arg `is_workspace_member`; making the guest class read
- * `members_level`; dropping `is_channel_member` from `dopl_ontology_share_level`;
- * re-ordering `dopl_ontology_level_rank` so `view` outranks `edit`; removing a
- * child policy's container arm; and giving `ontology_channel_shares` a write
- * policy.
+ * Mutation-verified (2026-09-09): 8 reverts, 8 failures.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -67,10 +59,10 @@ const policy = (key: string) => POLICIES.get(key) ?? "";
 
 describe("REDTEAM ontology — the SHARE arm (Samuel 2026-09-09)", () => {
   it("🔒 is OR-ed onto a CLOSED membership group, never AND-ed into one", () => {
-    // ⚠ THE POSITION IS THE ASSERTION. A share's reader is by definition NOT a
+    // The POSITION is the assertion: a share's reader is by definition not a
     // member of the ontology's container — reaching it through the CHANNEL's is
-    // the whole point — so an arm conjoined with `is_current_workspace_member`
-    // could only ever narrow, and the share row would be a row nothing reads.
+    // the point — so an arm conjoined with `is_current_workspace_member` could
+    // only ever narrow, and the share row would be a row nothing reads.
     // That is `20260923140000` §3b's defect, pinned before it can happen.
     for (const fn of [READABLE, WRITABLE]) {
       const body = liveFunction(fn);
@@ -184,7 +176,7 @@ describe("REDTEAM ontology — the CHILD tables (R5)", () => {
     expect(liveFunction("dopl_ontology_object_clusters")).toMatch(
       /WITH RECURSIVE/i
     );
-    // ⚠ `UNION`, not `UNION ALL`: the de-duplication is what terminates a cycle.
+    // `UNION`, not `UNION ALL`: the de-duplication is what terminates a cycle.
     expect(liveFunction("dopl_ontology_object_clusters")).not.toMatch(
       /UNION ALL/i
     );
@@ -244,7 +236,7 @@ describe("REDTEAM ontology_channel_shares — the settings row", () => {
 
 /* ────────────────────────── the live half ────────────────────────── */
 
-/** ⚠ SKIPPED-WITH-REASON — `shared/supabase/rls-redteam-fixture.ts` carries the
+/** Skipped with reason — `shared/supabase/rls-redteam-fixture.ts` carries the
  *  measurement (Docker is down here) and the command that runs it. */
 describe.skipIf(!liveRedteamEnabled)(
   "REDTEAM (live) — Samuel's matrix, one row at a time",
@@ -261,7 +253,7 @@ describe.skipIf(!liveRedteamEnabled)(
     let clusterId = "";
     let objectId = "";
 
-    /** ⚠ A HOME channel — Q5 refuses a `standard` container AT REST, so the
+    /** A HOME channel — Q5 refuses a `standard` container AT REST, so the
      *  fixture's own `makeWorkspace` (which mints a standard one) cannot host it. */
     const makeLinkContainer = (owner: string) =>
       insertId("workspaces", {
@@ -300,7 +292,7 @@ describe.skipIf(!liveRedteamEnabled)(
     const rows = (userId: string, table: string, shared = false) =>
       readableIds(userId, table, ownerContainerId, { shared });
 
-    /** ⚠ SERVICE-ROLE, like every fixture row: a fixture shaped by the fence it
+    /** Service-role, like every fixture row: a fixture shaped by the fence it
      *  is testing passes by having no rows. */
     async function insertId(
       table: string,
@@ -330,7 +322,7 @@ describe.skipIf(!liveRedteamEnabled)(
         slug: "redteam",
         name: "Redteam",
       });
-      // ⚠ `channel_members.role` is only `owner | member` — the GUEST class comes
+      // `channel_members.role` is only `owner | member` — the GUEST class comes
       // from `workspace_members.role` in the channel's container, which is what
       // `dopl_ontology_share_level` reads.
       for (const userId of [ownerId, memberId, guestId]) {
@@ -391,7 +383,7 @@ describe.skipIf(!liveRedteamEnabled)(
       await setShare({ members: "view", guests: "none" });
       try {
         expect(await rows(memberId, "ontology_clusters")).toEqual([clusterId]);
-        // 🔒 THE CHILDREN FOLLOW THE PARENT — they ask about the cluster through
+        // The children follow the parent: they ask about the cluster through
         // the membership walk, and never learn what a share is.
         expect(await rows(memberId, "ontology_objects")).toEqual([objectId]);
         expect(await rows(memberId, "ontology_memberships")).toHaveLength(1);

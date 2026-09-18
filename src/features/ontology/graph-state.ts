@@ -27,8 +27,8 @@ export type GraphAction =
   /**
    * Optimistic-create reconcile: provisional ids from `optimistic-create.ts`
    * swapped for the server's wherever referenced, plus server-minted slugs.
-   * `map` = provisional → real; `slugs` keyed by the REAL cluster id.
-   * ⚠ A SWAP, not a re-seed — rows stay as they are on screen.
+   * `map` = provisional → real; `slugs` keyed by the real cluster id.
+   * A swap, not a re-seed — rows stay as they are on screen.
    */
   | {
       type: "CREATE_RESOLVE";
@@ -90,15 +90,12 @@ function patchObject(
 }
 
 /**
- * Rewrite provisional ids EVERYWHERE the graph names an id: the object map's
- * KEYS, `id`, `columnIds`, `childIds`, relationship targets, `ref` attribute
- * values, and the KEYS of each cluster's `layout`.
- *
- * ⚠ Total on purpose — any on-screen id can be picked as a relationship/`ref`
- * target mid-round-trip, and a missed rewrite dangles.
- * ⚠ `layout` is objectId → {x,y}: its KEYS are ids though it has no id-shaped
- * FIELD, so a row-shape-driven enumeration skips it. A key left behind orphans
- * a dragged position and rides `pending:<uuid>` into the next write.
+ * Rewrite provisional ids everywhere the graph names one: the object map's keys,
+ * `id`, `columnIds`, `childIds`, relationship targets, `ref` attribute values and
+ * each cluster's `layout` keys. Total on purpose — any on-screen id can be picked
+ * as a relationship/`ref` target mid-round-trip, and a missed rewrite dangles.
+ * `layout`'s KEYS are ids though it has no id-shaped field, so a row-shape-driven
+ * enumeration skips it and the stale key rides `pending:<uuid>` into the next write.
  */
 function resolveIds(
   state: GraphState,
@@ -157,14 +154,10 @@ function collectClusterObjectIds(state: GraphState, cluster: OntologyCluster): S
 }
 
 /**
- * Ids left UNREACHABLE by deleting `objectId` — what
- * `cascade_hard_delete_object` (migration `20260807140000`) sweeps alongside
- * the target, target excluded.
- *
- * ⚠ Must stay in sync with that RPC; drift makes the confirm dialog's count
- * lie. NOT a plain subtree walk: a descendant also hanging under a surviving
- * parent stays alive. Membership, not depth — also why a one-row delete orphans
- * children (`parent_object_id ON DELETE CASCADE` drops the MEMBERSHIP row).
+ * Ids left unreachable by deleting `objectId` — what `cascade_hard_delete_object`
+ * (migration `20260807140000`) sweeps alongside the target, target excluded. Must
+ * stay in sync with that RPC or the confirm dialog's count lies. Not a plain
+ * subtree walk: a descendant also hanging under a surviving parent stays alive.
  */
 export function orphanedByObjectDelete(state: GraphState, objectId: string): string[] {
   if (!state.objects[objectId]) return [];

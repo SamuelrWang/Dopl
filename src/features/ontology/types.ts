@@ -68,24 +68,17 @@ export interface OntologyCluster {
   /** Persisted dragged node positions (id → {x,y}); `{}` = pure auto-layout. */
   layout: GraphLayout;
   /**
-   * Samuel's SOLO TOGGLE (`ontology_clusters.agents_may_edit`, spec §3.1).
-   *
-   * ⚠ **OPTIONAL BECAUSE A CACHED SNAPSHOT PREDATES IT** (INVARIANTS §8, the
-   * stale-cache rule): `GET /api/ontology`'s body is served from IndexedDB on
-   * the first paint after an upgrade. Every consumer goes through
-   * `hooks/use-ontologies.ts › ontologyListRows`, which falls back to the COLUMN
-   * DEFAULT `true` — a fact about a row nobody has narrowed.
+   * The solo toggle (`ontology_clusters.agents_may_edit`, spec §3.1). Optional
+   * because a cached snapshot predates it (INVARIANTS §8); every consumer goes
+   * through `hooks/use-ontologies.ts › ontologyListRows`, which falls back to the
+   * column default `true`.
    */
   agentsMayEdit?: boolean;
   /**
-   * How many home channels this ontology is lent into (spec Q4 — the delete
-   * confirm's count, and the card's line).
-   *
-   * ⚠ **ABSENT IS "UNKNOWN", NEVER ZERO**, which is why the fallback differs
-   * from `agentsMayEdit`'s: a stale payload carried no share rows at all, and a
-   * card that rendered "shared into 0 channels" would be claiming something
-   * nobody read. ⚠ **EMITTED ONLY FOR CLUSTERS THE CALLER OWNS** — how widely
-   * somebody else's ontology is lent is their business, not a lent reader's.
+   * How many home channels this ontology is lent into (spec Q4). Absent is
+   * unknown, never zero: a stale payload carried no share rows, and "shared into 0
+   * channels" would be a claim nobody read. Emitted only for clusters the caller
+   * owns.
    */
   sharedChannelCount?: number;
 }
@@ -107,12 +100,9 @@ export interface WorkspaceResource {
 }
 
 /**
- * THE LEVEL LADDER — `none < view < edit`, and the ONLY vocabulary the
- * home-ontology sharing model speaks (spec §1, I2).
- *
- * ⚠ NOT `resource_grants`'s channel vocabulary (`agent_only | visible`), which
- * is two AUDIENCES rather than rungs. Two words that look like a level and are
- * not comparable is how a `min` gets written against the wrong table.
+ * The level ladder — `none < view < edit`, the only vocabulary the home-ontology
+ * sharing model speaks (spec §1, I2). Not `resource_grants`'s channel vocabulary
+ * (`agent_only | visible`), which is two audiences rather than comparable rungs.
  */
 export const ONTOLOGY_LEVELS = ["none", "view", "edit"] as const;
 export type OntologyLevel = (typeof ONTOLOGY_LEVELS)[number];
@@ -130,9 +120,9 @@ export function narrowerLevel(a: OntologyLevel, b: OntologyLevel): OntologyLevel
 }
 
 /**
- * One `(ontology, channel)` share row on the wire — a COMPLETE statement about
- * three audiences (I4), which is why `none` is a stored value and unsharing is
- * a row DELETE rather than three `none`s.
+ * One `(ontology, channel)` share row on the wire — a complete statement about
+ * three audiences (I4), which is why `none` is a stored value and unsharing is a
+ * row DELETE rather than three `none`s.
  */
 export interface OntologyShare {
   channelId: string;
@@ -146,16 +136,14 @@ export interface OntologyShare {
 export type OntologyWriteSource = "user" | "agent";
 
 /**
- * Request-scoped ontology context.
+ * Request-scoped ontology context. It carries both credential axes (INVARIANTS
+ * §4A/§11) because the audience asks both: `source` says whether an agent is
+ * asking, and `credentialSubjectUserId` whether the credential stands for a person
+ * at all — a shared credential inherits nobody's reach and so reaches no home
+ * ontology.
  *
- * ⚠ IT CARRIES THE CREDENTIAL AXES (INVARIANTS §4A/§11) BECAUSE THE AUDIENCE
- * ASKS BOTH: `source` says whether an AGENT is asking (the solo toggle and
- * `owner_agents_level` arms), and `credentialSubjectUserId` says whether the
- * credential stands for a PERSON at all — a shared credential inherits nobody's
- * reach and therefore reaches no home ontology.
- *
- * ⚠ `role` is the caller's role in {@link OntologyContext.workspaceId} and is
- * the MEMBER-vs-GUEST class the share row is read at. It is not a level.
+ * `role` is the caller's role in {@link OntologyContext.workspaceId} — the
+ * member-vs-guest class the share row is read at, not a level.
  */
 export interface OntologyContext {
   workspaceId: string;
@@ -164,14 +152,11 @@ export interface OntologyContext {
   source: OntologyWriteSource;
   credentialSubjectUserId: string | null;
   /**
-   * `X-Dopl-Session-Id` verbatim (the desktop's slot key), or `null` for every
-   * caller that sends none.
+   * `X-Dopl-Session-Id` verbatim (the desktop's slot key), or `null`.
    *
-   * ⚠ A NON-AUTHORIZATION SIGNAL (`shared/auth/session-header.ts`) and the ONLY
-   * forgeable field on this context. It is read in exactly one place — the
-   * CHANGELOG's actor (`revisions/server/service.ts › deriveActor`), which
-   * stamps it for AGENT writes so a session's edits group visually. Nothing
-   * grants on it and no gate in this feature reads it.
+   * A non-authorization signal (`shared/auth/session-header.ts`) and the only
+   * forgeable field here. Read in exactly one place — the changelog's actor
+   * (`revisions/server/service.ts › deriveActor`). Nothing grants on it.
    */
   sessionId?: string | null;
 }

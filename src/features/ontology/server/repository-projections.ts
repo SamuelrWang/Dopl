@@ -12,16 +12,16 @@ import {
 } from "./dto";
 
 /**
- * NARROW READS — the rows `repository.ts` returns, minus columns/rows the
+ * Narrow reads — the rows `repository.ts` returns, minus columns/rows the
  * caller was never going to look at. Each exists because its wide sibling let
  * the cost of a read be set by the size of the WORKSPACE, not of the answer.
  * Same layer, same rules as `repository.ts`: raw Supabase I/O, no business
  * logic, every query filtered by `workspace_id` (service-role bypasses RLS).
  *
- * ⚠ **AND THE SAME workspace SET (2026-09-09)** — `repository.ts`'s header
- * carries the argument in full: the set is a READ SCOPE, `levelForCluster` is
- * the authorization, and the object read below takes the ids the membership
- * walk produced rather than a container.
+ * And the same workspace SET — `repository.ts`'s header carries the
+ * argument in full: the set is a READ SCOPE, `levelForCluster` is the
+ * authorization, and the object read below takes the ids the membership walk
+ * produced rather than a container.
  */
 
 /** Clusters for a map-shaped read: no `layout`. `layout` is one `{x,y}` per
@@ -62,9 +62,9 @@ export async function listObjectSummariesByIds(
   return (data ?? []) as OntologyObjectSummaryRow[];
 }
 
-/** Just the slugs, for `createCluster`'s uniqueness check. ⚠ ONE container,
+/** Just the slugs, for `createCluster`'s uniqueness check. ONE container,
  *  never the audience set: a create lands in the container it names, and the
- *  slug it must not collide with is that container's. ⚠ Not `listClusters`
+ *  slug it must not collide with is that container's. Not `listClusters`
  *  — that drags every cluster's `layout` over the wire to compare strings. */
 export async function listClusterSlugs(workspaceId: string): Promise<string[]> {
   const db = supabaseAdmin();
@@ -78,7 +78,7 @@ export async function listClusterSlugs(workspaceId: string): Promise<string[]> {
   return (data ?? []).map((row) => row.slug as string);
 }
 
-/** One object's outbound edges, filtered in Postgres. ⚠ `source_object_id` is
+/** One object's outbound edges, filtered in Postgres. `source_object_id` is
  *  indexed — never scan `listRelationships` in JS for this. */
 export async function listRelationshipsForSource(
   workspaceIds: readonly string[],
@@ -103,7 +103,7 @@ export async function listRelationshipsForSource(
  * The step `service-gates.ts › clustersOfObject` iterates to answer Q9's "every
  * cluster this object belongs to".
  *
- * ⚠ Narrow on purpose: three columns, no `position`, no `id`. The walk reads
+ * Narrow on purpose: three columns, no `position`, no `id`. The walk reads
  * the edge, never the row.
  */
 export async function listMembershipParents(

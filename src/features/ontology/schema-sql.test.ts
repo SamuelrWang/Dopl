@@ -1,36 +1,21 @@
 /**
- * INVARIANT SUITE — the ONTOLOGY SHARE SCHEMA, read out of `supabase/migrations`
- * and REPLAYED in apply order (slice S1, `docs/specs/home-ontology.md` §3.1/§3.4).
- * These are database facts no application test can reach, because every ontology
- * read runs on the SERVICE-ROLE client and never meets a policy or a trigger.
+ * Invariant suite for the ontology share schema, read out of `supabase/migrations`
+ * and replayed in apply order (slice S1, `docs/specs/home-ontology.md` §3.1/§3.4).
+ * These are database facts no application test can reach: every ontology read runs
+ * on the service-role client and never meets a policy or a trigger.
  *
- * ⚠ WHAT IT PINS IS THE FINAL STATE AFTER REPLAY, not one file — a `DROP` in a
- * later migration is as load-bearing as the `CREATE`. Files are read in FILENAME
- * order, which is apply order.
+ * It pins the final state AFTER replay, not one file — a `DROP` in a later
+ * migration is as load-bearing as the `CREATE`. Files are read in filename order,
+ * which is apply order.
  *
- * ⚠ COMMENTS ARE STRIPPED LINE-WISE before matching (the shared replay module's
- * rule), because these headers quote their own rollback SQL at length. The two
- * header assertions below therefore read the files RAW, which is the only thing
+ * Comments are stripped line-wise before matching (the shared replay module's
+ * rule), so the two header assertions below read the files raw — the only thing
  * in here that may.
  *
- * ⚠ MUTATION-VERIFIED, 8 REVERTS AND 8 FAILURES (2026-09-09) — each applied, run,
- * and reverted: dropping a rung word from `ontology_share_levels_check`; flipping
- * the `channel_id` FK to `ON DELETE SET NULL`; `agents_may_edit` defaulting
- * `false`; deleting the `kind = 'link'` arm of the scope trigger; deleting its
- * `workspace_id` arm; publishing `ontology_channel_shares` to `supabase_realtime`;
- * taking `SECURITY DEFINER` off `dopl_ontology_readable`; granting `authenticated`
- * INSERT on the share table.
- *
- * ⚠ **THE FIRST TWO OF THOSE SURVIVED THE FIRST ROUND, AND BOTH FOR ONE REASON:
- * AN ASSERTION THAT WAS NOT SCOPED TO ITS OWN TABLE OR ITS OWN COLUMN.** The FK
- * pattern matched `channel_members`'s identical line elsewhere in the replay; the
- * rung pattern was satisfied by the OTHER two audience columns' copies of `'edit'`.
- * Hence {@link SHARE_TABLE} and the per-column loop below. **A schema assertion
- * read against the whole replay is an assertion about somebody else's schema.**
- *
- * ⚠ THE REPLAY IS THE SHARED MODULE (§1's 500-line cap, and one copy of "what the
- * final state IS"). It lives under `knowledge/` for historical reasons and is read
- * by `shared/supabase/migrations-held.test.ts` too.
+ * Mutation-verified 2026-09-09, 8 reverts / 8 failures. The two that survived the
+ * first round both failed for one reason: an assertion not scoped to its own table
+ * or column, so it matched another table's identical line. Hence
+ * {@link SHARE_TABLE} and the per-column loop below.
  */
 
 import { describe, it, expect } from "vitest";
@@ -61,15 +46,10 @@ const REPLAYED = FILES.map((f) => f.sql).join("\n");
 const raw = (name: string) => readFileSync(join(MIGRATIONS, name), "utf8");
 
 /**
- * The `CREATE TABLE ontology_channel_shares (…)` body ALONE.
- *
- * 🔒 **THE NARROWING IS THE POINT, AND ITS ABSENCE ALREADY LET A MUTATION
- * THROUGH** (caught 2026-09-09 while mutation-verifying this file): a bare
- * `channel_id UUID NOT NULL REFERENCES public.channels(id) ON DELETE CASCADE`
- * asserted against the WHOLE replay is satisfied by `channel_members`,
- * `channel_messages` and a dozen other tables, so flipping THIS column to
- * `SET NULL` stayed green. A column assertion that is not scoped to its table is
- * an assertion about somebody else's table.
+ * The `CREATE TABLE ontology_channel_shares (…)` body alone. The narrowing is the
+ * point: the same column line asserted against the whole replay is satisfied by
+ * `channel_members` and a dozen other tables, so flipping this column to
+ * `SET NULL` stayed green (caught 2026-09-09).
  */
 const SHARE_TABLE = (() => {
   const at = REPLAYED.search(
@@ -88,7 +68,7 @@ describe("the two S1 files exist, sort correctly, and are HELD", () => {
   });
 
   it("🔒 both sort AFTER `agent_template_knowledge_scopes` — the stated apply order", () => {
-    // ⚠ The version stamp is not the applied version (F-304's re-stamp): apply
+    // The version stamp is not the applied version (F-304's re-stamp): apply
     // by NAME. What filename order buys is the REPLAY order, which is what every
     // scan in this repo — and `supabase db reset` — actually uses.
     const names = FILES.map((f) => f.name);
@@ -98,8 +78,7 @@ describe("the two S1 files exist, sort correctly, and are HELD", () => {
   });
 
   it("🔒 no other file reuses either VERSION stamp", () => {
-    // `schema_migrations` is keyed by version and can hold only one — the
-    // duplicate-version class that took the replay job down the first time it ran.
+    // `schema_migrations` is keyed by version and can hold only one.
     for (const file of [SHARES, READABLE]) {
       const version = file.split("_")[0];
       expect(
@@ -132,7 +111,7 @@ describe("ontology_channel_shares — the row", () => {
     ["workspace_id", "workspaces"],
   ])("🔒 %s CASCADEs to %s — Q4, both delete directions", (column, parent) => {
     // A `SET NULL` on any of them leaves a live share row pointing at nothing,
-    // and the delete confirm that names the channel COUNT would lie.
+    // and the delete confirm that names the channel count would lie.
     expect(SHARE_TABLE).toMatch(
       new RegExp(
         String.raw`${column}\s+UUID NOT NULL REFERENCES public\.${parent}\(id\)\s+ON DELETE CASCADE`,
@@ -142,11 +121,9 @@ describe("ontology_channel_shares — the row", () => {
   });
 
   it("🔒 the LADDER's three rungs, on EACH of the three audience columns", () => {
-    // `edit ⇒ view` (spec I2) needs no separate CHECK: one column holding one
-    // RUNG cannot be `edit` without being `view`. What this pins is that each
-    // audience still gets all three rungs — asserted PER COLUMN, because "the
-    // word `edit` appears somewhere in the constraint" is satisfied by the other
-    // two columns while this one silently loses its top rung.
+    // `edit ⇒ view` (spec I2) needs no separate CHECK. Asserted per column:
+    // "the word `edit` appears somewhere in the constraint" is satisfied by the
+    // other two columns while this one silently loses its top rung.
     const at = SHARE_TABLE.search(/CONSTRAINT ontology_share_levels_check\b/i);
     expect(at).toBeGreaterThan(-1);
     const check = SHARE_TABLE.slice(at);
@@ -159,16 +136,14 @@ describe("ontology_channel_shares — the row", () => {
 
   it("🔒 the DEFAULTS are Samuel's Q2 answer", () => {
     // Members `view`; guests `none` (a guest is not a member by default); the
-    // owner's agents `view` — the drop a SOLO channel takes when it gains a peer,
-    // until the owner says otherwise.
+    // owner's agents `view`.
     expect(REPLAYED).toMatch(/members_level\s+TEXT NOT NULL DEFAULT 'view'/i);
     expect(REPLAYED).toMatch(/guests_level\s+TEXT NOT NULL DEFAULT 'none'/i);
     expect(REPLAYED).toMatch(/owner_agents_level TEXT NOT NULL DEFAULT 'view'/i);
   });
 
   it("🔒 both indexes exist, and there is no third", () => {
-    // Each has a named statement (the channel read + the two FK cascades). An
-    // index with no statement behind it is what `20260805120000`'s rule forbids.
+    // Each has a named statement behind it — `20260805120000`'s rule.
     const indexes = [
       ...REPLAYED.matchAll(
         /CREATE INDEX (?:IF NOT EXISTS )?(\w+)\s+ON public\.ontology_channel_shares/gi
@@ -222,7 +197,7 @@ describe("the two columns on the ontology tables", () => {
 
   it("🔒 `last_edited_source` is the SAME two-word vocabulary knowledge and skills use", () => {
     // A third word here would be a third answer to one question (Q6). Naming
-    // WHICH agent is deferred: a template id on an ontology row is a second
+    // which agent is deferred: a template id on an ontology row is a second
     // identity model.
     for (const table of ["ontology_clusters", "ontology_objects"]) {
       expect(REPLAYED, table).toMatch(
@@ -241,9 +216,8 @@ describe("the two columns on the ontology tables", () => {
   });
 
   it("🔒 `DEFAULT` IS the backfill — no UPDATE statement on either table", () => {
-    // `agents_may_edit true` and `last_edited_source 'user'` satisfy every
-    // existing row the moment the columns exist (the `access_mode`/`scope_kind`
-    // shape). A backfill UPDATE would be a rewrite of every ontology row.
+    // The defaults satisfy every existing row the moment the columns exist; a
+    // backfill UPDATE would rewrite every ontology row.
     expect(raw(SHARES)).not.toMatch(/^\s*UPDATE\s+public\.ontology_/im);
   });
 });
@@ -270,9 +244,8 @@ describe("the predicates — SECURITY DEFINER, pinned, and caller-subject-free",
   });
 
   it("🔒 NONE takes a caller-supplied SUBJECT, which is why `authenticated` may EXECUTE", () => {
-    // `presence_heartbeat_all` (`20260930140000`) is the opposite case: it takes
-    // `p_user_id`, so its `service_role`-only grant IS its fence. A function here
-    // that ever grows one must lose the grant in the same change.
+    // A function here that ever grows a caller-supplied subject must lose the
+    // `authenticated` grant in the same change.
     for (const fn of [...FUNCTIONS, "dopl_ontology_level_rank"]) {
       expect(liveFunctionHeader(fn) ?? "", fn).not.toMatch(/p_user_id/i);
     }
@@ -327,9 +300,8 @@ describe("NOT a realtime change, and both files say so", () => {
   it("🔒 neither file touches the four ontology tables' replica identity", () => {
     for (const file of [SHARES, READABLE]) {
       const sql = FILES.find((f) => f.name === file)?.sql ?? "";
-      // ⚠ THE DDL, not the word: both files NAME `REPLICA IDENTITY USING INDEX`
-      // inside the `RAISE EXCEPTION` that asserts it survived, which is the
-      // opposite of touching it.
+      // The DDL, not the word: both files name `REPLICA IDENTITY USING INDEX`
+      // inside the `RAISE EXCEPTION` that asserts it survived.
       expect(sql, file).not.toMatch(/ALTER TABLE[^;]*REPLICA IDENTITY/i);
       expect(sql, file).not.toMatch(/ALTER PUBLICATION/i);
     }

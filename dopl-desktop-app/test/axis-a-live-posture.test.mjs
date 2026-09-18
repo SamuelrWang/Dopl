@@ -1,32 +1,20 @@
 // AXIS A IS READ LIVE, LIKE AXIS B — the permission-inheritance bug (2026-09-16).
 //
-// ── THE DEFECT THIS PINS ────────────────────────────────────────────────────────────────────
-// The operator set `tools: bypass` on a channel's Settings tab, and agents still raised a
-// permission card for `Bash`. Nothing was wrong with the RECORD: `channel-prefs.js ›
-// getLaunchPosture` held the pair, `launch-posture.js` clamped nothing, and the directive lane
-// handed it in. The stored pair reached a session ONLY as `spec.startModes` at spawn, and the
-// shapes that hand NONE are the common ones — a reopen, a recreate, a crash resume, a peer wake
-// (`trigger.js` hands `tools: 'manual'` there by H2's own rule), an abandoned shell rebuilt
-// (`session-reducer.js › abandon_timeout`: "at manual/ask like every other spawn nobody
-// approved"). Those all sat at the reducer's `manual`, which allows NO work tool, so every call
-// gated while the Settings tab read Bypass.
+// THE DEFECT THIS PINS. Nothing was wrong with the RECORD; the stored pair reached a session ONLY
+// as `spec.startModes` at spawn, and the shapes that hand NONE are the common ones — a reopen, a
+// recreate, a crash resume, a peer wake, an abandoned shell rebuilt. Those all sat at the reducer's
+// `manual`, which allows NO work tool, so every call gated while the Settings tab read Bypass.
+// Axis B already answers this on the line below it, with a read at DECISION time
+// (`session-private.js › effectiveMessageMode`); Axis A read `st.toolMode` and nothing else.
 //
-// ⚠ **AND IT IS THE DEFECT AXIS B ALREADY FIXED, ON THE LINE BELOW IT.** `session-io.js ›
-// grantArgs` reads Axis B through `session-private.js › effectiveMessageMode`, whose header names
-// the FOUR silent ways a durable setting fails to be in effect and answers them with a read at
-// DECISION time. Axis A read `st.toolMode` and nothing else. One axis of one gate, two rules.
-//
-// ⚠ WHAT IS NOT WIDENED. Hard-deny, the container-only path rules, the profile's own
+// WHAT IS NOT WIDENED. Hard-deny, the container-only path rules, the profile's own
 // `disallowedTools` and the Axis-A/Axis-B split are all checked BEFORE `grantDecision` consults
-// this value; `bypass` still reaches only `BYPASS_TOOLS`, and no tool posture can send a message.
-// This is SUPERVISION read live, which is what the 2026-08-31 ruling already granted the operator
-// on the other axis: *"if a user toggles it, that goes into effect for ALL their agents in that
-// channel, IMMEDIATELY"*.
+// this value; `bypass` still reaches only `BYPASS_TOOLS`. This is SUPERVISION read live, which is
+// what the 2026-08-31 ruling already granted the operator on the other axis.
 //
-// ⚠ THE ONE PLACE IT IS STRICTER THAN AXIS B: an explicit `set_tool_mode` from the agent view
-// stamps `state.toolModeSet`, and a stamped session keeps its own pick. Without it the channel
-// record would silently undo an operator narrowing ONE live agent — the same lie in the opposite
-// direction.
+// THE ONE PLACE IT IS STRICTER THAN AXIS B: an explicit `set_tool_mode` stamps `state.toolModeSet`,
+// and a stamped session keeps its own pick — otherwise the channel record would silently undo an
+// operator narrowing ONE live agent.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -97,8 +85,8 @@ test("LIVE: a session frozen at `manual` runs Bash when the channel says bypass"
 });
 
 test("LIVE: it narrows as immediately as it widens — back to `manual` and Bash gates at once", () => {
-  // ⚠ THE OFF DIRECTION IS THE ONE A FROZEN COPY BREAKS SILENTLY. A session launched at `bypass`
-  // must stop running shells the moment the operator narrows the channel, with no relaunch.
+  // THE OFF DIRECTION IS THE ONE A FROZEN COPY BREAKS SILENTLY. A session launched at `bypass` must
+  // stop running shells the moment the operator narrows the channel, with no relaunch.
   const s = sess({ toolMode: "bypass" });
   assert.equal(decideWith("manual", s, "Bash"), "gate");
   assert.equal(decideWith("auto", s, "Bash"), "gate", "Bash is in BYPASS_TOOLS only");
@@ -106,10 +94,9 @@ test("LIVE: it narrows as immediately as it widens — back to `manual` and Bash
 });
 
 test("LIVE: the real grantArgs fails CLOSED where the store cannot be read at all", () => {
-  // Plain node has no electron-store, so `channelToolMode` answers `''` for every channel — the
-  // same answer a hiccuping store gives on the machine. The frozen value must survive, and an
-  // unreadable store must never become a grant. (The WIN case needs the injected slice above;
-  // this is the half that can be driven against the SHIPPED read.)
+  // Plain node has no electron-store, so `channelToolMode` answers `''` for every channel — the same
+  // answer a hiccuping store gives on the machine. The frozen value must survive, and an unreadable
+  // store must never become a grant.
   assert.equal(profiles.grantDecision(io.grantArgs(sess({ toolMode: "manual" }), "Bash", {})), "gate");
   assert.equal(profiles.grantDecision(io.grantArgs(sess({ toolMode: "bypass" }), "Bash", {})), "allow");
 });

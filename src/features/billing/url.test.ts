@@ -1,7 +1,6 @@
 /**
- * The billing surface's URL, as a table. The assertion with teeth: nothing this
- * builder emits points into the retiring app tree, and the params money depends
- * on survive the trip.
+ * The billing surface's URL, as a table: nothing this builder emits points into
+ * the retiring app tree, and the params money depends on survive the trip.
  */
 
 import { describe, it, expect } from "vitest";
@@ -45,7 +44,7 @@ describe("the path it builds", () => {
   });
 
   it("leaves Stripe's session-id placeholder LITERAL", () => {
-    // ⚠ `%7BCHECKOUT_SESSION_ID%7D` is delivered verbatim to the browser —
+    // `%7BCHECKOUT_SESSION_ID%7D` would be delivered verbatim to the browser —
     // why the query is concatenated, not run through URLSearchParams.
     const url = billingPath({
       segment: "acme-ab12cd34ef56",
@@ -83,7 +82,7 @@ describe("the absolute form", () => {
 
 describe("billingSelfPath — the page's own URL, for the login bounce", () => {
   it("keeps the query, which is the entire point", () => {
-    // First-time payer is signed out: without the query riding along in
+    // A first-time payer is signed out: without the query riding along in
     // `redirectTo`, checkout never opens after sign-in.
     expect(
       billingSelfPath("acme-ab12cd34ef56", { billing: "upgrade", plan: "team" })
@@ -126,11 +125,11 @@ describe("what the page reads back off the URL", () => {
 
   it("accepts Team and Pro — the two plans on sale — and nothing else", () => {
     expect(parseCheckoutPlan("team")).toBe("team");
-    // Personal Pro, $8.99/month on a `kind='personal'` container (2026-09-08,
-    // spec §11). Which CONTAINER may buy it is the checkout route's fence, not
-    // this parser's: a URL is read before any workspace is resolved.
+    // Personal Pro on a `kind='personal'` container (2026-09-08). Which
+    // container may buy it is the checkout route's fence, not this parser's — a
+    // URL is read before any workspace is resolved.
     expect(parseCheckoutPlan("pro")).toBe("pro");
-    // "free" is a plan but not a CHECKOUT — no such price exists.
+    // "free" is a plan but not a checkout — no such price exists.
     expect(parseCheckoutPlan("free")).toBeNull();
     expect(parseCheckoutPlan("enterprise")).toBeNull();
     expect(parseCheckoutPlan(null)).toBeNull();
@@ -138,19 +137,18 @@ describe("what the page reads back off the URL", () => {
   });
 
   it("carries `plan=pro` through the builder with no segment — the personal forward", () => {
-    // The seller (a 402 envelope, /pricing) holds no personal-container
-    // segment; `/billing` resolves it and must still see the plan.
+    // The seller (a 402 envelope, /pricing) holds no personal-container segment;
+    // `/billing` resolves it and must still see the plan.
     expect(billingPath({ intent: "upgrade", plan: "pro" })).toBe(
       "/billing?billing=upgrade&plan=pro"
     );
   });
 
   it("REFUSES `plan=solo` — a retired price must not open a checkout", () => {
-    // 2026-09-07, spec A6: Solo/"Pro" is retired from sale. Old 402 envelopes,
-    // bookmarks and sign-in bounces still carry `?plan=solo` and are already in
-    // the wild; parsing one to null lands the payer on the plan list instead of
-    // in a checkout for a price nobody may buy. Live `solo` ROWS are untouched
-    // — they upgrade in place via POST /api/billing/upgrade-to-team.
+    // 2026-09-07 (spec A6): Solo is retired from sale, but old 402 envelopes,
+    // bookmarks and sign-in bounces carrying `?plan=solo` are in the wild, and
+    // parsing one to null lands the payer on the plan list instead of a checkout
+    // for a price nobody may buy. Live `solo` rows are untouched.
     expect(parseCheckoutPlan("solo")).toBeNull();
   });
 });

@@ -1,15 +1,15 @@
 /**
- * INVARIANT SUITE — 🔒 THE REACH READ (`service-reach.ts › getReach`), the
+ * Invariant suite — the reach read (`service-reach.ts › getReach`), the
  * producer the desktop's framing block had none of (F-681).
  *
- * ⚠ **WHAT IT MUST NEVER DO IS OVER-PROMISE.** The one consumer is a
+ * What it must never do is over-promise. The one consumer is a
  * COMPENSATING CONTROL (INVARIANTS §4A): it tells an agent what it may open so
  * it stops discovering its level by being refused. A rung wider than the server
  * will enforce turns that control into a lie, so every case below asks whether
  * this read's answer IS `levelForCluster`'s — the same function the gates ask —
  * rather than whether it looks plausible.
  *
- * ⚠ THE GUEST ROWS OF THE MATRIX ARE IN `./guest-lane.test.ts`, beside the
+ * The guest rows of the matrix are in `./guest-lane.test.ts`, beside the
  * behaviour they bound.
  */
 

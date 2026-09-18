@@ -1,32 +1,21 @@
 "use client";
 
 /**
- * Scripted product demo for the hero banner's slot (hero-banner.tsx).
- * Decorative and non-interactive — the slot keeps `pointer-events: none`.
+ * Scripted product demo for the hero banner's slot (hero-banner.tsx). Decorative
+ * and non-interactive — the slot keeps `pointer-events: none`.
  *
- * ⚠ THE SCENE IS /home, AND SINCE 2026-09-17 IT IS /home's CHANNEL RECORD
- * (Samuel, over the hero beside the live pane: *"a majority of it is matching
- * like the workspace pages. I want it to match the home space pages"*). The
- * TREE is `demo-scene.tsx`, which carries that ruling and what it deleted; this
- * file owns the CLOCK, the design box, the scripted cursor and its ripple.
+ * (2026-09-17) The scene is /home's CHANNEL RECORD. The tree is
+ * `demo-scene.tsx`; this file owns the clock, the design box, the scripted cursor
+ * and its ripple. The cursor presses the REAL buttons via programmatic `.click()`,
+ * so every transition runs the product's own handlers and state.
  *
- * The scripted cursor presses the REAL buttons — the info column's Agents tab
- * and an agent card's "Open" — via programmatic `.click()`, so every transition
- * runs the product's own handlers and state. ⚠ **THE THREAD BEATS ARE GONE**
- * (`demo-steps.ts`): opening one put the pane on the workspace shape.
+ * (2026-08-30) The canvas FILLS the slot edge to edge: CANVAS_W is fixed and the
+ * scale is `slotWidth / CANVAS_W`, never a `min()` contain-fit, which is what left
+ * white gutters. The height is derived from that scale, so the design box is
+ * exactly the slot in design units. See `fit()`.
  *
- * ⚠ THE CANVAS FILLS THE SLOT EDGE TO EDGE (Samuel, 2026-08-30: the white
- * gutters at the left and right had to go). CANVAS_W is fixed and the scale is
- * `slotWidth / CANVAS_W` — never a `min()` contain-fit, which is what left the
- * gutters. The canvas HEIGHT is derived from that scale, so the design box is
- * exactly the slot in design units and the scene is a normal flex column inside
- * it. See `fit()`.
- *
- * 🔒 ⚠ **CANVAS_W IS THE DESKTOP WINDOW'S WIDTH (1280) SINCE 2026-09-17, AND
- * THAT IS WHAT SETS THE SCENE'S SCALE** — Samuel read the hero as *"the denser
- * workspace scale"* against the live pane. A wider design canvas in the same
- * slot makes every control land smaller; `demo-steps.ts › CANVAS_W` carries the
- * measurement. **Nothing here shrinks a component and nothing may start to.**
+ * CANVAS_W is the desktop window's width (1280) and that is what sets the scene's
+ * scale — see `demo-steps.ts › CANVAS_W`. Nothing here shrinks a component.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -51,21 +40,19 @@ function findButton(
 export function BannerDemo() {
   const { step, run, rootRef } = useDemoTimeline();
   const canvasRef = useRef<HTMLDivElement>(null);
-  /** ⚠ The record pane, and the cursor's search root — NOT the canvas. The
-   *  /home header now carries a button labelled "Agents" (the surface selector)
-   *  and `findButton` takes the first match in DOM order, which would hand the
-   *  cursor the header instead of the info column's Agents TAB. Scoping the
-   *  search to the pane is what keeps the two apart. */
+  /** The record pane, and the cursor's search root — NOT the canvas. The /home
+   *  header also carries a button labelled "Agents" (the surface selector), and
+   *  `findButton` takes the first match in DOM order, so scoping the search to the
+   *  pane is what keeps it off the header. */
   const paneRef = useRef<HTMLDivElement>(null);
   /** Design box + its scale, as one write: `w` is fixed, `h` is derived so the
    *  scaled canvas is EXACTLY the slot (see the file docblock). */
   const [box, setBox] = useState({ scale: 1, h: CANVAS_H });
 
-  // Set by the REAL components' own callbacks when the cursor clicks them;
-  // gated on the step so a loop reset closes everything without an effect.
-  // 🔒 **THERE IS NO `threadClicked` ANY MORE (Samuel, 2026-09-17)** — the scene
-  // never leaves the CHANNEL record, so the only thing the cursor opens is an
-  // agent. See the file docblock.
+  // Set by the REAL components' own callbacks when the cursor clicks them; gated
+  // on the step so a loop reset closes everything without an effect. The scene
+  // never leaves the channel record, so the only thing the cursor opens is an
+  // agent.
   const [agentClicked, setAgentClicked] = useState(false);
   const agentOpen = agentClicked && reached(step, "click-agent");
 
@@ -81,10 +68,9 @@ export function BannerDemo() {
   }, [cursor]);
   const [ripple, setRipple] = useState({ x: 0, y: 0, n: 0 });
 
-  // FILL the slot — never contain-fit it (the file docblock has the gutters
-  // this replaced). Width sets the scale; height follows in design units, so
-  // `CANVAS_W × h` scaled by `scale` is the slot to the pixel on both axes and
-  // the scene is a plain flex column that grows into whatever `h` comes out as.
+  // Fill the slot, never contain-fit it. Width sets the scale; height follows in
+  // design units, so `CANVAS_W × h` scaled by `scale` is the slot to the pixel on
+  // both axes.
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
@@ -107,11 +93,11 @@ export function BannerDemo() {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    // ⚠ SEARCHED IN THE PANE, MEASURED AGAINST THE CANVAS — see `paneRef`.
+    // Searched in the pane, measured against the canvas — see `paneRef`.
     const pane = paneRef.current;
     const target = (): HTMLElement | null => {
       if (at(step, "cursor-to-tab") || at(step, "click-tab"))
-        // ⚠ The count badge concatenates into textContent ("Agents3").
+        // The count badge concatenates into textContent ("Agents3").
         return findButton(pane, (l) => l.startsWith("Agents"));
       if (at(step, "cursor-to-agent") || at(step, "click-agent"))
         return findButton(pane, (l) => l === "Open");
@@ -128,9 +114,9 @@ export function BannerDemo() {
       };
     };
 
-    // ⚠ Everything runs from a 0ms timer, never the effect body — the lint's
-    // set-state-in-effect rule (error tier) rejects synchronous setState here,
-    // and the choreography needs the step's DOM committed anyway.
+    // Everything runs from a 0ms timer, never the effect body: synchronous
+    // setState in an effect is a lint error, and the choreography needs the
+    // step's DOM committed anyway.
     let raf = 0;
     const t = window.setTimeout(() => {
       if (at(step, "cursor-to-tab") || at(step, "cursor-to-agent")) {

@@ -8,7 +8,7 @@ import { buildOntologySeed, type SeedAttr } from "./seed";
 
 /**
  * Cross-reference maps the orchestrator threads in: entry key → knowledge uuid,
- * skill slug → skill uuid. ⚠ Unresolved refs are DROPPED, never persisted
+ * skill slug → skill uuid. Unresolved refs are DROPPED, never persisted
  * dangling.
  */
 export interface OntologySeedRefs {
@@ -54,7 +54,7 @@ function resolveAttributes(
  * system content, so `service.createObject`'s free-plan object cap gate is
  * deliberately bypassed (a fresh solo workspace is uncapped anyway).
  *
- * ⚠ FOUR writes, whatever the corpus size: cluster, objects, memberships,
+ * FOUR writes, whatever the corpus size: cluster, objects, memberships,
  * relationships — this runs before the post-signup redirect. Object uuids are
  * minted here so memberships/relationships are built up front rather than
  * discovered one insert at a time.
@@ -104,7 +104,7 @@ export async function seedWorkspace(
     });
   }
 
-  // ⚠ `position` must reproduce `replaceRelationshipsForSource`'s ordering
+  // `position` must reproduce `replaceRelationshipsForSource`'s ordering
   // (edge index × 1000 + target index), per source object.
   const edges: Parameters<typeof seedRepo.insertRelationships>[1] = [];
   const edgeIndexBySource = new Map<string, number>();
@@ -127,7 +127,7 @@ export async function seedWorkspace(
     relationshipsCreated += 1;
   }
 
-  // ⚠ Ordering: cluster and objects are independent; memberships need both
+  // Ordering: cluster and objects are independent; memberships need both
   // (`cluster_id` on columns, `parent_object_id` on cards) and relationships
   // need the objects. Two waves, four statements.
   const [cluster] = await Promise.all([

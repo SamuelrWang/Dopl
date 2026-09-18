@@ -17,35 +17,24 @@ import { personalWalletTier } from "./personal-wallet";
 import type { WorkspaceBillingRow } from "./workspace-billing";
 
 /**
- * WHAT A WALLET READS — the credit WINDOW, the DEGRADED reading, and the METER.
- * Nothing here spends: `credits-service.ts` owns WHICH wallet a burn lands on and
- * whether it may proceed, and this owns the numbers a surface prints.
+ * What a wallet reads — the credit window, the degraded reading, and the meter.
+ * Nothing here spends: `credits-service.ts` owns which wallet a burn lands on and
+ * whether it may proceed; this owns the numbers a surface prints.
  *
- * ⚠ **SPLIT OUT OF `credits-service.ts` ON 2026-09-13, WHEN RULE B NEEDED THE
- * ROOM** (§1's "split, do not squeeze": that file measured 490 of the 500-line cap
- * the day rule B landed — ⚠ `wc -l`, do not quote). The seam is real and it is
- * the one that file's own header describes: enforcement asks "may this call
- * proceed", a surface asks "how much is left", and only the first is on the
- * hottest write path in the product.
- *
- * ⚠ **THE IMPORT RUNS ONE WAY AT RUNTIME.** This module imports `credits-service`
- * TYPES ONLY (erased), and `credits-service.ts` imports `unmetered` and
- * `creditPeriodFor` from here — so there is no runtime cycle, and the direction
- * says which file is upstream.
+ * The import runs one way at runtime: this module takes `credits-service` types
+ * only (erased) and `credits-service.ts` imports `unmetered` and `creditPeriodFor`
+ * from here, so there is no runtime cycle.
  */
 /**
- * Credit window for a billing row (null row = calendar month). SEAT wallets
- * only — not because the rule differs, but because the personal wallet reaches
- * the SAME `resolveCreditPeriod` through `./personal-wallet.ts ›
- * personalWalletTier`, which resolves its verdict and its window together.
- * ⚠ THE SUPERSEDED LINE SAID "a personal wallet has no subscription to anchor
- * to" — true only while that wallet had one tier (2026-09-07). A `pro` wallet
- * has a Stripe anchor and uses it.
+ * Credit window for a billing row (null row = calendar month). Seat wallets only:
+ * the personal wallet reaches the same `resolveCreditPeriod` through
+ * `./personal-wallet.ts › personalWalletTier`, which resolves verdict and window
+ * together.
  *
- * ⚠ `entitledPlan` is the VERDICT, not `billing.plan`: a free verdict ignores
- * the subscription anchor outright, which un-sticks a workspace canceled
- * mid-period (`../credits.ts › resolveCreditPeriod`). Both callers —
- * enforcement and the settings meter — must pass the SAME verdict.
+ * `entitledPlan` is the verdict, not `billing.plan`: a free verdict ignores the
+ * subscription anchor outright, which un-sticks a workspace canceled mid-period
+ * (`../credits.ts › resolveCreditPeriod`). Enforcement and the settings meter must
+ * pass the same verdict.
  */
 export function creditPeriodFor(
   billing: WorkspaceBillingRow | null,
@@ -63,32 +52,20 @@ export function creditPeriodFor(
 /**
  * A burn with no wallet to charge: a container with no active owner row.
  *
- * ⚠ FAIL OPEN, AND IT IS A RULING RATHER THAN AN OVERSIGHT (Samuel, 2026-08-26,
- * on lowering the consume floor): refusing would brick a relationship on the
- * strength of the OTHER party's billing — a guest doing legitimate work in a
- * channel they were invited into would see "out of credits" for an allowance
- * that is not theirs and that they cannot buy. The honesty requirement is that
- * it is LOGGED, not silent: `consumeMcpCredits` warns with the reason before
- * returning this. Zeroed counters, because nothing was measured.
+ * 2026-08-26 ruling: fail open. Refusing would brick a relationship on the strength
+ * of the other party's billing — a guest would see "out of credits" for an
+ * allowance that is not theirs and that they cannot buy. The honesty requirement is
+ * that it is logged: `consumeMcpCredits` warns with the reason before returning this.
  *
- * ⚠ **THE BRANCH IS NEARLY UNREACHABLE AND STAYS ANYWAY.**
- * `20260720184806_workspace_last_active_owner_guard.sql` stops a workspace
- * losing its last active owner, so this is the answer to a state the database
- * says cannot exist — which is exactly the kind of branch that must not throw.
+ * The branch is nearly unreachable (a DB guard stops a workspace losing its last
+ * active owner) and stays anyway, because a branch answering an impossible state
+ * must not throw.
  *
- * ⚠ `degraded: true` IS THE SAME STAMP THE ROUTE'S `failOpen()` PUTS ON ITS
- * OWN ZEROES, and it must be: both answers are "allowed, and these numbers mean
- * nothing", and a reader that can only recognise one of them puts a made-up
- * `used: 0` on the settings meter as if it were measured.
- *
- * ⚠ `upgradeUrl` IS EMPTY, MATCHING `failOpen()` BYTE FOR BYTE (2026-09-07). It
- * carried the billing link until this wave, which pointed a caller at a
- * checkout for a refusal that never happened — and the two degraded answers
- * differing at all is what makes one reader treat them differently.
- * ⚠ **AND `upgradeCredits` IS `0` FOR THE SAME REASON (2026-09-14, F-668).** The
- * figure exists to make the offer at `upgradeUrl` concrete; an allowance printed
- * beside no link is an upsell to nowhere with a number attached. The two fields
- * are set and cleared together on EVERY arm.
+ * `degraded: true`, `upgradeUrl: ""` and `upgradeCredits: 0` match the route's
+ * `failOpen()` byte for byte: both answers mean "allowed, and these numbers mean
+ * nothing", and a reader that recognises only one of them prints a made-up
+ * `used: 0` as if it were measured. F-668 (2026-09-14) put `upgradeCredits` on the
+ * same footing — the two upgrade fields are set and cleared together on every arm.
  */
 export function unmetered(): UnmeteredResult {
   return {
@@ -111,15 +88,12 @@ export function unmetered(): UnmeteredResult {
  * its one caller has just paid for those reads (`getWorkspaceEntitlements`
  * alone is three queries).
  *
- * ⚠ **ON THE PERSONAL ARM `billing` IS THE PAYER'S PERSONAL ROW, NOT THE
- * ADDRESSED CONTAINER'S** (2026-09-08). Those are the same row when the caller
- * addressed their own personal container and DIFFERENT rows inside a link
- * container, where the addressed container has no billing row at all. Handing
- * this the link container's `null` would meter every Pro operator's home space
- * at the free 500 while enforcement charged them against 5,000 — a meter that
- * cannot explain the refusal, which is the exact failure the "same verdict on
- * both sides" rule exists to prevent. `status-service.ts › callerCredits`
- * resolves it through `personal-wallet.ts › readPersonalBilling`.
+ * On the personal arm `billing` is the PAYER's personal row, not the addressed
+ * container's (2026-09-08): inside a link container the addressed container has no
+ * billing row at all, and handing this its `null` would meter a Pro operator at the
+ * free 500 while enforcement charged them against 5,000.
+ * `status-service.ts › callerCredits` resolves it through
+ * `personal-wallet.ts › readPersonalBilling`.
  */
 export async function summarizeCredits(
   target: BillingTarget,
@@ -160,10 +134,9 @@ export async function summarizeCredits(
  * `unmetered()` narrowed to the METER's fields — the same zeroes, minus the
  * consume decision.
  *
- * ⚠ ONE DEFINITION, TWO CALLERS (`summarizeCredits` and `status-service.ts`).
- * Two hand-written copies of "the degraded reading" is how one surface comes to
- * report a `degraded` stamp the other omits, and the whole point of the stamp is
- * that one reader recognises every degraded answer.
+ * One definition, two callers (`summarizeCredits` and `status-service.ts`): two
+ * hand-written copies are how one surface comes to omit the `degraded` stamp the
+ * other reports.
  */
 export function unmeteredSummary(): CreditsSummary {
   const { periodStart, periodEnd, wallet, used, limit, remaining, degraded } =

@@ -1,48 +1,29 @@
 "use client";
 
 /**
- * The banner demo's /home CHROME — the account rail, the gray panel's header
- * strip and the 290px channel column that frame the record pane.
+ * The banner demo's /home chrome: the account rail, the gray panel's header strip
+ * and the 290px channel column that frame the record pane.
  *
- * ⚠ **IT COMPOSES THE PRODUCT'S OWN RECIPES; IT DOES NOT COPY THEM.** /home
- * itself lives in a DIFFERENT APP — `apps/desktop-ui/src/pages/home/` and
- * `apps/desktop-ui/src/components/app-shell/account-rail.tsx` resolve `#/*`
- * against the SPA's own src, and the root `tsconfig.json` excludes `apps`
- * outright — so this file cannot mount those PAGES. What it can do, and does, is
- * read every piece of them that was moved into the root tree for exactly this
- * reason (2026-09-17):
+ * It COMPOSES the product's own recipes rather than copying them. /home itself
+ * lives in `apps/desktop-ui/`, which the root tree cannot import, so this mounts
+ * the pieces that were moved into the root tree for exactly that reason:
+ *   - `shared/ui/page-action-button.ts › PAGE_ACTION_BTN` (the header pills);
+ *   - `features/home/tabs.ts › HOME_TABS` (the face selector's options, so a
+ *     renamed or sixth face reaches this scene without an edit);
+ *   - `channels/components/collapse-wells.tsx › WellsColumn` over
+ *     `channels/components/home-channel-wells.ts › HOME_CHANNEL_WELLS`, at
+ *     `shared/ui/panel-well.ts › PANEL_WELL_ON_PANEL`;
+ *   - `shared/ui/home-channel-row.tsx › HomeChannelRow`, the same component
+ *     `relationship-list.tsx` renders.
  *
- *   - the header's two black pills — `shared/ui/page-action-button.ts ›
- *     PAGE_ACTION_BTN`, the class list "New channel" and "Profile" wear;
- *   - the face selector's options — `features/home/tabs.ts › HOME_TABS`, so a
- *     renamed or a sixth face reaches this scene without an edit;
- *   - the channel column's three gray wells — `channels/components/collapse-wells.tsx ›
- *     WellsColumn` over `channels/components/home-channel-wells.ts ›
- *     HOME_CHANNEL_WELLS`, at `shared/ui/panel-well.ts › PANEL_WELL_ON_PANEL`;
- *   - the ROW — `shared/ui/home-channel-row.tsx › HomeChannelRow`, the same
- *     component `relationship-list.tsx` renders.
+ * Nothing below picks a colour, radius or type size — those are
+ * `globals.css › THE APP FRAME PALETTE` and the kit's own faces. Geometry with no
+ * token (the 54px rail, the 40px tile) is in `marketing.css`.
  *
- * ⚠ **WHICH MAKES THE TOKEN DISCIPLINE THE REST OF IT.** Nothing below picks a
- * colour, a radius or a type size: the frame ink, the panel gray, the card white
- * and the panel line are `globals.css › THE APP FRAME PALETTE` (the same four
- * values `apps/desktop-ui/src/styles/tokens.css` carries), the faces are the
- * kit's `.auth-btn-3d-light` / `.raised-tab` / `.search-expand*`, and
- * `SegmentedControl`, `Avatar` and `WorkspaceGlyph` are the SHARED primitives
- * the real page mounts. Geometry that has no token — the 54px rail, the 40px
- * tile — is in `marketing.css` beside its source reference.
- *
- * 🚫 **NOTHING HERE IS PRESSABLE.** The slot is decorative and `aria-hidden`
- * (`banner-demo.tsx`), so every control that is a `<button>` on the real page is
- * a `<span>` here — same face, no focus stop inside a hidden subtree. The only
- * real buttons in the scene are inside the RECORD PANE, which is the product's
- * own surface and is what the scripted cursor presses.
- *
- * Sources to keep this in step with, all read 2026-09-17:
- *   `apps/desktop-ui/src/pages/home/index.tsx`             — the frame
- *   `apps/desktop-ui/src/pages/home/home-header.tsx`       — the header strip
- *   `apps/desktop-ui/src/pages/home/home-search.tsx`       — the open pill
- *   `apps/desktop-ui/src/pages/home/relationship-list.tsx` — the column
- *   `apps/desktop-ui/src/components/app-shell/account-rail.{tsx,module.css}`
+ * Nothing here is pressable: the slot is decorative and `aria-hidden`, so every
+ * control that is a `<button>` on the real page is a `<span>` here — same face,
+ * no focus stop inside a hidden subtree. The only real buttons are inside the
+ * record pane, which is the product's own surface.
  */
 
 import { useMemo } from "react";
@@ -66,20 +47,15 @@ import type { HomeRowMock } from "./demo-home-rows";
 const NOOP = () => {};
 
 /**
- * The ACCOUNT rail — Home pinned top and selected, workspace tiles under it,
- * create at the end (`account-rail.tsx`). Home is the active tile because /home
- * is the surface on screen, so it wears the kit's `.raised-tab` exactly as the
- * real one does.
+ * The account rail — Home pinned top and selected, workspace tiles under it,
+ * create at the end (`account-rail.tsx`).
  */
 export function DemoAccountRail() {
   return (
     <nav className="lp-demo-rail" aria-label="Account">
-      {/* 🔒 **THE SELECTED TILE IS THE RAIL'S OWN FILL, NOT `.raised-tab`**
-          (Samuel, 2026-09-09: the kit face's 2px white bevel *"is thicker at the
-          top than at the bottom … just have it be that [the hover fill], and
-          instead of white, make it a gray bordering"*). This scene wore
-          `.raised-tab` until 2026-09-17 and was therefore showing a face the
-          product deleted. `.is-active` below carries `--rail-tile-fill`. */}
+      {/* (2026-09-09) The selected tile is the rail's own fill, not
+          `.raised-tab`, whose bevel the product deleted. `.is-active` carries
+          `--rail-tile-fill`. */}
       <span className="lp-demo-rail-tile is-active">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -89,28 +65,21 @@ export function DemoAccountRail() {
           draggable={false}
         />
       </span>
-      {/* ⚠ The account/container break is 4px of RHYTHM and no rule — the
-          divider that used to sit here is deleted (`account-rail.module.css`);
-          the only line in this rail belongs to the selected tile. */}
+      {/* The account/container break is 4px of rhythm and no rule
+          (`account-rail.module.css`); the only line belongs to the selected
+          tile. */}
       <div className="lp-demo-rail-group">
-        {/* 🔒 **IMAGE TILES, NOT LETTER TILES (Samuel, 2026-09-17).**
-            `WorkspaceGlyph` initials a workspace only when it has NO icon, and
-            every real workspace in the product has one — so a rail of letters was
-            the scene showing the product's fallback as if it were its face. The
-            photographs are the ones this site already ships; `WorkspaceGlyph`
-            crops them `object-cover` into its own 36px rounded square, which is
-            exactly what it does with a Supabase-hosted icon. */}
+        {/* (2026-09-17) Image tiles, not letter tiles: `WorkspaceGlyph` initials
+            a workspace only when it has no icon, and every real one has one, so a
+            rail of letters showed the product's fallback as its face. */}
         {DEMO_WORKSPACES.map((ws) => (
           <span key={ws.name} className="lp-demo-rail-tile">
             <WorkspaceGlyph name={ws.name} iconUrl={ws.iconUrl} size="md" />
           </span>
         ))}
       </div>
-      {/* ⚠ **`lp-demo-rail-create` IS DELETED (2026-09-17)** — it was emitted here
-          and DEFINED NOWHERE, which `demo-class-coverage.test.tsx` found on its
-          first run. The product's create tile is `.tile` with a `Plus` in it and
-          nothing else (`account-rail.module.css`), so the extra hook was never
-          carrying anything. */}
+      {/* No `lp-demo-rail-create` hook: the product's create tile is `.tile` with
+          a `Plus` in it and nothing else (`account-rail.module.css`). */}
       <span className="lp-demo-rail-tile">
         <Plus size={18} strokeWidth={1.8} />
       </span>
@@ -118,7 +87,7 @@ export function DemoAccountRail() {
   );
 }
 
-/** The rail's workspace tiles. ⚠ EVERY ONE HAS AN ICON — see the note above. */
+/** The rail's workspace tiles. Every one has an icon — see the note above. */
 const DEMO_WORKSPACES = [
   { name: "Northwind", iconUrl: "/img/dev-clouds.jpg" },
   { name: "Vermillion", iconUrl: "/img/framework-banner.jpg" },
@@ -128,23 +97,19 @@ const DEMO_WORKSPACES = [
 /**
  * The panel's header strip — `home-header.tsx`, control for control.
  *
- * ⚠ **"New channel" HEADS THE LIST COLUMN (Samuel, 2026-09-15:** *"move the new
- * channel button to be where the search bar now is. It will be left aligned
- * basically. And move the search bar back"*). The cell is exactly
- * `--home-list-w` wide, so the pill's LEFT edge lands on the channel rows' and
- * the selector's left edge lands on the record pane's — one number for both.
- * ⚠ **LEFT-ALIGNED, NOT STRETCHED** — the pill hugs its label; no `w-full`.
+ * (2026-09-15) "New channel" heads the list column, left-aligned and not
+ * stretched. The cell is exactly `--home-list-w` wide, so the pill's left edge
+ * lands on the channel rows' and the selector's on the record pane's.
  *
- * ⚠ **THE SELECTOR IS PLAIN PILLS AT 36px, SEMIBOLD** (Samuel, 2026-09-08), and
- * its options are `HOME_TABS` itself rather than a marketing list — the scene
- * names the same five faces the product does, in the same order.
+ * (2026-09-08) The selector is plain pills at 36px, semibold, and its options are
+ * `HOME_TABS` itself rather than a marketing list.
  *
- * ⚠ **THE SCENE NEVER LEAVES Channel** — the selector NAMES the surface here, it
- * does not drive it (the timeline owns every state change in the demo).
+ * The scene never leaves Channel: the selector names the surface, the timeline
+ * owns every state change.
  */
 export function DemoHomeHeader() {
   return (
-    // ⚠ SYMMETRIC PADDING. The controls are one 36px row, centred in the strip.
+    // Symmetric padding: the controls are one 36px row, centred in the strip.
     <div className="flex items-center justify-between gap-3 py-3 pr-5">
       <div className="flex min-w-0 items-center">
         <div className="flex w-[var(--home-list-w)] min-w-0 shrink-0 items-center px-3">
@@ -161,10 +126,9 @@ export function DemoHomeHeader() {
       </div>
       <div className="flex items-center gap-2.5">
         <DemoHomeSearch />
-        {/* ⚠ **A BLACK PILL READING "Profile", LAST IN THE ROW (Samuel,
-            2026-09-15)** — the page's only way into settings, and the ONE
-            exception to "one primary action". `PAGE_ACTION_BTN` worn BARE: one
-            word, no glyph (`home-settings-control.tsx`). */}
+        {/* (2026-09-15) A black pill reading "Profile", last in the row — the
+            page's only way into settings and the one exception to "one primary
+            action". `PAGE_ACTION_BTN` worn bare: one word, no glyph. */}
         <span className={PAGE_ACTION_BTN}>Profile</span>
       </div>
     </div>
@@ -172,17 +136,13 @@ export function DemoHomeHeader() {
 }
 
 /**
- * The search pill — **ALWAYS OPEN, at the kit's fixed 260px** (Samuel,
- * 2026-09-13: *"remove the expanding animation, just have the bar always be
- * expanded fixed … just have it say Search…"*), which is what `home-search.tsx`
- * renders. This scene showed the CLOSED 36px face until 2026-09-17; the closed
- * state is still the kit's and still lives on `[data-open]`, it simply has no
- * renderer today.
+ * The search pill — (2026-09-13) always open at the kit's fixed 260px, which is
+ * what `home-search.tsx` renders. The closed state is still the kit's and still
+ * lives on `[data-open]`; it simply has no renderer here.
  *
- * ⚠ **A `<span>` WHERE THE PAGE HAS AN `<input>`** — see the file's docblock: a
- * field inside an `aria-hidden` subtree is a focus stop nobody can see. The
- * placeholder ink is the kit's own `--text-muted`, stated by the utility rather
- * than by a `::placeholder` this element cannot have.
+ * A `<span>` where the page has an `<input>`: a field inside an `aria-hidden`
+ * subtree is a focus stop nobody can see. The placeholder ink is stated by the
+ * utility rather than a `::placeholder` this element cannot have.
  */
 function DemoHomeSearch() {
   return (
@@ -200,15 +160,13 @@ function DemoHomeSearch() {
 }
 
 /**
- * The 290px channel column — **three collapsible gray wells since 2026-09-15**
- * (Samuel: *"one for Pinned, one for Recents … and Earlier"*), drawn by the
- * product's own `WellsColumn` over the product's own well set.
+ * The 290px channel column — (2026-09-15) three collapsible gray wells, drawn by
+ * the product's own `WellsColumn` over the product's own well set.
  *
- * ⚠ `PANEL_WELL_ON_PANEL` IS THE FILL AND THE REASON IS THIS SURFACE: the panel
- * under this column IS `--home-panel`, so the default `PANEL_WELL` would be gray
- * on the same gray (Samuel: *"there's no gray background on this at all"*).
- * ⚠ `showEmpty` — all three boxes are always drawn, because *"a **Pinned** box
- * you can see is how you learn there is a pin"*.
+ * `PANEL_WELL_ON_PANEL` is the fill because the panel under this column IS
+ * `--home-panel`, so the default `PANEL_WELL` would be gray on the same gray.
+ * `showEmpty`: all three boxes always draw, because a visible Pinned box is how
+ * you learn there is a pin.
  */
 export function DemoChannelList({
   rows,
@@ -234,9 +192,8 @@ export function DemoChannelList({
   );
   return (
     <div className="flex w-[var(--home-list-w)] shrink-0 flex-col">
-      {/* ⚠ `overflow-hidden` WHERE THE REAL COLUMN IS `overflow-y-auto` — there
-          is nothing to scroll in a scripted scene and a scrollbar has no place
-          in a decorative one. Everything else is the real column's own box. */}
+      {/* `overflow-hidden` where the real column is `overflow-y-auto`: nothing
+          scrolls in a scripted scene. Everything else is the real column's box. */}
       <div className="flex flex-1 flex-col gap-2 overflow-hidden px-3 pb-3 pt-1">
         <WellsColumn
           wells={HOME_CHANNEL_WELLS}
@@ -251,10 +208,9 @@ export function DemoChannelList({
 }
 
 /**
- * ⚠ **THE DEMO'S OWN `localStorage` KEY, NOT `HOME_CHANNEL_WELLS_KEY`.** Nothing
- * in this scene toggles a well, so the key is never written and the column
- * always opens on the SET's own defaults — Pinned and Recent open, Earlier
- * closed. Reading the product's key instead would let a returning operator's
- * saved posture change the height of a fixed-size marketing canvas.
+ * The demo's own `localStorage` key, not `HOME_CHANNEL_WELLS_KEY`: reading the
+ * product's would let a returning operator's saved posture change the height of a
+ * fixed-size marketing canvas. Nothing here toggles a well, so it is never
+ * written and the column opens on the set's own defaults.
  */
 const DEMO_WELLS_KEY = "dopl.banner-demo.wells";

@@ -1,19 +1,12 @@
 /**
- * INVARIANT SUITE — the entitlement GATES: what the enforcement sites do with a
- * verdict. `entitlements.test.ts` owns the verdict itself (the plan/cap/window
- * matrix); this file owns `assertCanCreateObject`, `assertCanAddMember`,
- * `upgradeUrl` and `entitlementDeniedBody`.
+ * Invariant suite — the entitlement gates: what the enforcement sites do with a
+ * verdict. `entitlements.test.ts` owns the verdict itself. Billing repository
+ * mocked; no Supabase, no network.
  *
- * ⚠ **SPLIT OUT ON 2026-09-08 AT THE 500-LINE CAP** (§1: "split, do not
- * squeeze"), when the personal Pro tier added a second single-member refusal.
- * Billing repository mocked; no Supabase, no network.
- *
- * 🔒 TWO SINGLE-MEMBER REFUSALS, TWO CODES, TWO OFFERS. `SOLO_MEMBER_LIMIT`
- * means "this workspace's plan is too small — buy Team" and the invite/join
- * surfaces key on that string to offer the in-place upgrade;
- * `PERSONAL_SINGLE_MEMBER` means "this is a home space" and has NOTHING to
- * sell. Collapsing them shows a Team checkout inside somebody's personal
- * container.
+ * Two single-member refusals, two codes, two offers: `SOLO_MEMBER_LIMIT` means the
+ * workspace's plan is too small (invite/join surfaces key on that string to offer
+ * the in-place upgrade), `PERSONAL_SINGLE_MEMBER` means it is a home space and has
+ * nothing to sell. Collapsing them shows a Team checkout inside a personal container.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -76,9 +69,9 @@ describe("upgradeUrl", () => {
   });
 
   it("appends `plan=pro` when the caller is being sold the PERSONAL tier", () => {
-    // ⚠ LOAD-BEARING: segment-less `/billing` forwards to a STANDARD workspace
-    // by default, so a home-space upsell without this param lands on a
-    // workspace the caller may not have (`url.ts › billingPath`).
+    // Load-bearing: segment-less `/billing` forwards to a standard workspace by
+    // default, so a home-space upsell without this param lands on a workspace the
+    // caller may not have (`url.ts › billingPath`).
     expect(upgradeUrl("pro")).toMatch(/\/billing\?billing=upgrade&plan=pro$/);
   });
 });
@@ -171,10 +164,8 @@ describe("assertCanAddMember", () => {
   });
 
   /**
-   * 🔒 A LIVE PRO CONTAINER IS SINGLE-MEMBER BY CONSTRUCTION, and this is the
-   * belt on top of the upstream braces (`workspaces/server/link-container-guard`).
-   * It must not be the only thing standing between a paying single-member tier
-   * and a second seat it never sold.
+   * A live pro container is single-member by construction; this is the belt on top
+   * of the upstream braces (`workspaces/server/link-container-guard`).
    */
   it("throws 402 PERSONAL_SINGLE_MEMBER for a live pro container", async () => {
     mockRepo.getWorkspaceBilling.mockResolvedValue(
@@ -187,15 +178,13 @@ describe("assertCanAddMember", () => {
     } catch (err) {
       const e = err as HttpError;
       expect(e.status).toBe(402);
-      // ⚠ **NOT `SOLO_MEMBER_LIMIT`, AND THE DIFFERENCE IS THE POINT.** The
-      // invite/join surfaces key on that string to offer an in-place TEAM
-      // upgrade; reusing it here would sell a workspace plan to somebody whose
-      // answer is "make a workspace".
+      // Not `SOLO_MEMBER_LIMIT`: invite/join surfaces key on that string to offer
+      // an in-place Team upgrade, which is the wrong answer in a home space.
       expect(e.code).toBe("PERSONAL_SINGLE_MEMBER");
       expect(e.message).toBe(
         "This is a personal space. Create a workspace to add members."
       );
-      // ⚠ NOTHING TO BUY, so the empty string — the same posture
+      // Nothing to buy, so the empty string — the same posture
       // `credits-service.ts › upgradeUrlFor` takes for a wallet with no offer.
       expect((e.details as { upgrade_url: string }).upgrade_url).toBe("");
     }
@@ -220,8 +209,8 @@ describe("assertCanAddMember", () => {
   });
 
   it("🔒 the two refusals carry DIFFERENT codes and DIFFERENT offers", async () => {
-    // One shared error class with one code passes every "throws 402" assertion
-    // above and shows a Team checkout inside somebody's home space.
+    // One shared code passes every "throws 402" assertion above and shows a Team
+    // checkout inside somebody's home space.
     const codes: string[] = [];
     const urls: string[] = [];
     for (const plan of ["solo", "pro"] as const) {
@@ -252,9 +241,8 @@ describe("entitlementDeniedBody", () => {
     expect(body.upgrade_url).toMatch(/\/billing\?billing=upgrade$/);
   });
 
-  // ⚠ GAP-11 / D1: API-first clients (MCP agents) follow this URL literally,
-  // so it must name a page that SURVIVES retirement and can take money.
-  // `/canvas?billing=…` RETIRES; `/pricing` sells nothing.
+  // GAP-11 / D1: API-first clients follow this URL literally, so it must name a
+  // page that survives retirement and can take money.
   it("points at the standalone billing page, never /canvas, /pricing or the 404 billing route", () => {
     const body = entitlementDeniedBody();
     expect(body.upgrade_url).toMatch(/\/billing\?billing=upgrade$/);

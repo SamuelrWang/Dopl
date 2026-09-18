@@ -27,7 +27,7 @@ import {
 } from "./service-gates";
 import { mapClusterRow, getSnapshot, getSummary } from "./service-reads";
 import { getReach } from "./service-reach";
-// ⚠ AWAITED, AFTER THE WRITE, INSIDE THE REQUEST (`./service-revisions.ts`).
+// Awaited, after the write, inside the request (`./service-revisions.ts`).
 import {
   edgeSnapshot,
   recordAnchorRevision,
@@ -47,10 +47,10 @@ import {
  * READS live in `./service-reads.ts`, re-exported below so every caller keeps
  * importing them from here.
  *
- * 🔒 **EVERY WRITE PASSES `./service-gates.ts` FIRST, AND THE GATE RETURNS THE
- * ROW.** A lent ontology lives in the LENDER's container, so each write targets
- * `row.workspace_id`: `ctx.workspaceId` would 404 a row the caller may edit and,
- * on a create, file it under the wrong tenancy.
+ * Every write passes `./service-gates.ts` FIRST, and the gate returns the row.
+ * A lent ontology lives in the LENDER's container, so each write targets
+ * `row.workspace_id`: `ctx.workspaceId` would 404 a row the caller may edit
+ * and, on a create, file it under the wrong tenancy.
  */
 
 export { getSnapshot, getSummary, getReach };
@@ -61,7 +61,7 @@ interface AuthLike {
   role: Role;
   agentTokenId?: string | null;
   /** WHOSE REACH the credential inherits; `null` = nobody in particular.
-   *  ⚠ REQUIRED — this axis has no safe default (F-336). */
+   *  Required — this axis has no safe default (F-336). */
   credentialSubjectUserId: string | null;
   sessionId?: string | null;
 }
@@ -71,7 +71,7 @@ interface AuthLike {
  * `source` derives from agent-token presence, as
  * `knowledge/server/service-shared.ts › buildKnowledgeContext` derives it.
  *
- * ⚠ **ONE CONTEXT OBJECT PER REQUEST IS LOAD-BEARING**: the ceiling is memoised
+ * One context object per request is load-bearing: the ceiling is memoised
  * against this object's identity (`./service-audience.ts › AUDIENCE_CACHE`), so
  * two would resolve it twice and a module-level constant would share one
  * request's answer with the next.
@@ -83,7 +83,7 @@ export function buildOntologyContext(auth: AuthLike): OntologyContext {
     role: auth.role,
     source: auth.agentTokenId ? "agent" : "user",
     credentialSubjectUserId: auth.credentialSubjectUserId,
-    // ⚠ VERBATIM, AND ATTRIBUTION ONLY — the desktop's slot key and the one
+    // Verbatim, and attribution only — the desktop's slot key and the one
     // forgeable field here (`shared/auth/session-header.ts`). The changelog
     // GROUPS an agent session's writes by it; nothing grants on it.
     sessionId: auth.sessionId ?? null,
@@ -116,7 +116,7 @@ export async function updateCluster(
   input: OntologyClusterUpdateInput
 ): Promise<OntologyCluster> {
   const gated = await requireCluster(ctx, clusterId, "edit");
-  // 🔒 CONTAINMENT: the solo toggle decides what THIS SESSION's class may do, so
+  // Containment: the solo toggle decides what THIS SESSION's class may do, so
   // a session that could write it would be one call from re-widening itself
   // (`channels/[channelId]/members`' `agentToolProfile` argument, one layer lower
   // so the MCP path inherits it).
@@ -132,7 +132,7 @@ export async function updateCluster(
     source: ctx.source,
   });
   if (!row) throw HttpError.notFound("Ontology not found");
-  // ⚠ `gated` IS THE BEFORE STATE, so the diff costs no second read. A
+  // `gated` is the BEFORE state, so the diff costs no second read. A
   // layout-only drag changes no TRACKED field and records nothing
   // (`./service-revisions.ts › clusterFields`).
   await recordClusterFieldChanges(ctx, gated, row);
@@ -141,11 +141,11 @@ export async function updateCluster(
 
 /**
  * Cascade HARD-delete cluster + every object it owns, one atomic RPC.
- * Permanent: no trash/restore/purge. ⚠ Must stay one transaction — two writes
+ * Permanent: no trash/restore/purge. Must stay one transaction — two writes
  * can delete the objects and leave the cluster behind. Returns objects
  * cascaded; RPC null = no live cluster → 404 (≠ a cluster that owned 0).
  *
- * ⚠ Q4 — THE SHARE ROWS CASCADE BY FK (`ontology_channel_shares.ontology_id
+ * Q4 — the share rows cascade by FK (`ontology_channel_shares.ontology_id
  * ON DELETE CASCADE`, spec §3.1). Nothing here deletes them by hand: a
  * hand-written cascade beside a declared one is the copy that stops matching.
  */
@@ -164,7 +164,7 @@ export async function createObject(
   ctx: OntologyContext,
   input: OntologyObjectCreateInput
 ): Promise<OntologyObject> {
-  // 🔒 The write gate comes FIRST and decides the container: a column lands in
+  // The write gate comes FIRST and decides the container: a column lands in
   // its cluster's, a card in its parent's. Q9 applies through `requireObject`
   // for the parent case — a card inherits the parent's cluster set, so the
   // parent's ALL-clusters `edit` is the same question asked one row up.
@@ -194,7 +194,7 @@ export async function createObject(
   // Sole create-time choke point for free-plan object cap. Columns + nested
   // cards land here; createCluster inserts no object row so it isn't gated.
   // Freeze-don't-delete: only creation blocked, never updates/deletes/reads.
-  // ⚠ Billed to the ROW's container, which is the OWNER's when a peer creates
+  // Billed to the ROW's container, which is the OWNER's when a peer creates
   // inside a lent ontology (R11, and `credits-service.ts › resolveBillingTarget`
   // already reroutes container burn to the owner).
   await assertCanCreateObject(workspaceId);
@@ -242,7 +242,7 @@ export async function createObject(
   return object;
 }
 
-/** 412 on optimistic-concurrency miss. ⚠ Must mirror KB/skills
+/** 412 on optimistic-concurrency miss. Must mirror KB/skills
  *  `*_STALE_VERSION` contract so MCP conflict handling (re-get, reconcile,
  *  retry) fires uniformly across tools. */
 function staleVersionError(expected: string, actual: string): HttpError {
@@ -254,7 +254,7 @@ function staleVersionError(expected: string, actual: string): HttpError {
   );
 }
 
-/** ⚠ `revision` IS THE RESTORE'S DOOR AND NOTHING ELSE WRITES IT
+/** `revision` is the restore's door and nothing else writes it
  *  (`./service-revisions-read.ts › restoreObjectRevision`): a restore is an
  *  ordinary field write FILED as `op:"restore"`, and letting that path reach the
  *  repository instead would skip Q9's gate, the attribution stamp and the
@@ -266,7 +266,7 @@ export async function updateObject(
   expectedUpdatedAt?: string,
   revision: RecordFieldOpts = {}
 ): Promise<OntologyObject> {
-  // 🔒 Q9 — `edit` on EVERY cluster this object belongs to, before any write.
+  // Q9 — `edit` on EVERY cluster this object belongs to, before any write.
   const gated = await requireObject(ctx, objectId, "edit");
   const workspaceId = gated.workspace_id;
   const scope = [workspaceId];
@@ -299,7 +299,7 @@ export async function updateObject(
   let cleanEdges: OntologyObject["relationships"] | undefined;
   let beforeEdges: OntologyObject["relationships"] | undefined;
   if (relationships) {
-    // ⚠ READ BEFORE THE REPLACE, and only on a relationship write: the capture
+    // Read BEFORE the replace, and only on a relationship write: the capture
     // needs both ends and `replaceRelationshipsForSource` is destructive. The one
     // extra query this costs, on a path that already spends two.
     beforeEdges = await currentRelationships(ctx, objectId);
@@ -312,7 +312,7 @@ export async function updateObject(
     if (refreshed) row = refreshed;
   }
 
-  // ⚠ `gated` IS THE BEFORE STATE — one row per field that MOVED, zero for a
+  // `gated` is the BEFORE state — one row per field that MOVED, zero for a
   // PATCH that re-sent what was already stored.
   await recordObjectFieldChanges(ctx, gated, row, revision);
   if (beforeEdges) {
@@ -335,14 +335,14 @@ export async function updateObject(
  * can collide labels — merging beats a unique-index 500), dedupe targets, drop
  * self-refs and non-live targets (clients hold stale ids after a delete).
  *
- * 🔒 **TARGETS ARE VALIDATED AGAINST THE AUDIENCE'S ANSWER, NOT ITS SCOPE, AND
- * THE DIFFERENCE IS Q8.** The scope holds the LENDER's whole container, so
+ * Targets are validated against the AUDIENCE'S ANSWER, not its scope, and the
+ * difference is Q8. The scope holds the LENDER's whole container, so
  * `./repository.ts › filterObjectIds` alone would let somebody lent ONE ontology
  * point an edge at any row in that container — the "widens the scope and forgets
  * the filter" failure, arriving on a WRITE. `./service-gates.ts ›
  * admittedObjectIds` applies the cluster walk on top.
  *
- * ⚠ It is still a `filter`, never a refusal: clients hold stale ids after a
+ * It is still a `filter`, never a refusal: clients hold stale ids after a
  * delete, and a 400 on one dropped target would fail a whole legitimate save.
  */
 async function sanitizeEdges(
@@ -376,11 +376,11 @@ async function sanitizeEdges(
 }
 
 /**
- * One object's outbound edges. ⚠ Scope in Postgres, not JS — `source_object_id`
+ * One object's outbound edges. Scope in Postgres, not JS — `source_object_id`
  * is indexed, and this sits on four hot paths (inherited-edge copy at create,
  * every update, claim_anchor, get_anchor). Never filter a whole-container read.
  *
- * 🔒 **AND THE FAR END IS FILTERED BY THE AUDIENCE**, as `getSnapshot` drops an
+ * The far end is filtered by the audience, as `getSnapshot` drops an
  * edge whose target it did not walk to: a row written before this fence existed,
  * or by the OWNER into a private cluster, must not hand a lent reader the raw id
  * of an object they cannot open (spec R12). One batched walk, never one per
@@ -416,12 +416,12 @@ export async function deleteObject(
 ): Promise<void> {
   const gated = await requireObject(ctx, objectId, "edit");
   await repo.hardDeleteObject(gated.workspace_id, objectId);
-  // ⚠ AFTER the delete, carrying the LAST state — the only place it survives.
+  // After the delete, carrying the LAST state — the only place it survives.
   await recordObjectDelete(ctx, gated);
 }
 
-/** Link the caller's account to an object (their identity anchor). ⚠ THE ANCHOR
- *  STAYS SINGLE-CONTAINER (R9): the ordinary object write gate applies, and the
+/** Link the caller's account to an object (their identity anchor). The anchor
+ *  stays single-container (R9): the ordinary object write gate applies, and the
  *  link lands in the row's own container — the one the anchor read looks in. */
 export async function claimAnchor(
   ctx: OntologyContext,
@@ -437,7 +437,7 @@ export async function claimAnchor(
 }
 
 /** Caller's identity anchor — object linked via `ontology_objects.user_id`,
- *  or null. ⚠ Re-gated as a READ (`view` on ANY cluster, Q9): an anchor whose
+ *  or null. Re-gated as a READ (`view` on ANY cluster, Q9): an anchor whose
  *  object left this caller's audience answers `null`, the same as no anchor. */
 export async function getAnchor(
   ctx: OntologyContext

@@ -1,24 +1,19 @@
 // THE DIRECTIVE LANE'S SPAWN — one claimed row becoming one session, and nothing else.
 //
-// ⚠ **§1 SPLIT OUT OF `main/launch-directives.js` ON 2026-09-01 (T24), AT THE HARD 500-LINE CAP
-// THAT FILE WAS SITTING EXACTLY ON.** The seam is a real one and not a line budget: that module
-// is the WATCHER — arming, the realtime binding, the owner re-check, the per-kind consent gate,
-// the CAS, the dedupe ledger, the backstop poll — and it changes when the LOCAL POLICY for
-// acting on a row changes. This is the LAUNCH ASSEMBLY, and it changes when what a session is
-// built out of changes: the containment inputs, the template resolve, the model precedence
-// chain, the posture. Two reasons to change, and the second one had grown a posture bound with
-// nowhere to put it. Same precedent as `launch-directive-calls.js` (the two authenticated calls)
-// and `launch-directive-wire.js` (the shape) leaving the same file for the same cap.
+// §1 SPLIT out of `main/launch-directives.js` on 2026-09-01 (T24), at the hard 500-line cap. The
+// seam is real: that module is the WATCHER (arming, the realtime binding, the owner re-check, the
+// per-kind consent gate, the CAS, the dedupe ledger, the backstop poll) and changes when the LOCAL
+// POLICY for acting on a row changes; this is the LAUNCH ASSEMBLY and changes when what a session
+// is built out of changes. Same precedent as `launch-directive-calls.js` and
+// `launch-directive-wire.js`.
 //
-// ⚠ **THE CONTAINMENT ARGUMENT CAME WITH IT AND IS STATED ON `spawn` ITSELF**, where the code it
-// governs is — that block is the whole §6 answer for this lane and must never be summarized into
-// a pointer. What stayed behind is the THREAT MODEL (why the arming switch is local, why the row
-// is not the authorization); what is here is the field-by-field statement of where every
-// containment input comes from.
+// The containment argument came with it and is stated on `spawn` itself, where the code it governs
+// is — that block is the whole §6 answer for this lane and must never be summarized into a pointer.
+// What stayed behind is the THREAT MODEL (why the arming switch is local, why the row is not the
+// authorization).
 //
-// ⚠ **`deps` IS INJECTED, NOT SHARED.** The watcher owns the two handles this needs
-// (`watchedChannel`, `launch`) and hands them in per call, so this module holds no module state
-// of its own and its suite can drive it without arming a watcher.
+// `deps` IS INJECTED, NOT SHARED: the watcher owns the two handles this needs and hands them in per
+// call, so this module holds no module state and its suite can drive it without arming a watcher.
 
 const channelPrefs = require('./channel-prefs');
 const channelRuntime = require('./channel-runtime'); // 2026-08-31: which runtime this channel's agents run on
@@ -34,64 +29,52 @@ const { diag } = require('./diag');
 /**
  * SPAWN, THROUGH THE ORDINARY FUNNEL. Returns `{ refused: <word> }`, or — on success —
  * `{ agentId, appliedTools, appliedMessages, appliedChain }`, the ECHO the decide reports back
- * (2026-09-01). The three `applied*` values are the RESOLVED ones, never the requested ones; the
- * block at the return statement carries why.
+ * (2026-09-01). The three `applied*` values are the RESOLVED ones, never the requested ones.
  *
- * ⚠ EVERY CONTAINMENT INPUT COMES FROM THIS MACHINE, NOT FROM THE DIRECTIVE. Stated field by
- * field because this is the whole safety argument:
- *   toolProfile   `channel-listener.js › watchedChannel` — MAIN's own full server DTO off the
- *                 loop entry, the same read `sessions:launch` makes (F-267 fixed it to this) and
- *                 the same one `trigger.js` makes on the responder lane. Unwatched -> refuse.
- *                 ⚠ SINCE 2026-09-02 (ruling B7) IT IS THEN NARROWED, NEVER WIDENED: a launch
- *                 into a SHARED container resolves `full` to `channel_agent` — `full` minus the
- *                 shell — because an agent with a shell and its own bearer reaches the REST API
- *                 directly. On a SOLO container the operator's explicit `full` still means
- *                 `full`. The fact comes from this machine's own roster memo, never the row.
+ * EVERY CONTAINMENT INPUT COMES FROM THIS MACHINE, NOT FROM THE DIRECTIVE. Stated field by field
+ * because this is the whole safety argument:
+ *   toolProfile   `channel-listener.js › watchedChannel` — MAIN's own full server DTO off the loop
+ *                 entry, the same read `sessions:launch` makes (F-267) and `trigger.js` makes on
+ *                 the responder lane. Unwatched -> refuse. Since 2026-09-02 (ruling B7) it is then
+ *                 NARROWED, never widened: a launch into a SHARED container resolves `full` to
+ *                 `channel_agent` — `full` minus the shell — because an agent with a shell and its
+ *                 own bearer reaches the REST API directly. The fact comes from this machine's own
+ *                 roster memo, never the row.
  *   startModes    the operator's DURABLE per-channel posture (`channel-prefs.js ›
- *                 getLaunchPosture`) as the CEILING, message axis floored at `auto_inbound` for
- *                 the windowless reason. ⚠ SINCE 2026-09-01 (T24) A DIRECTIVE MAY ASK FOR A
- *                 NARROWER PAIR, and `launch-posture.js › resolveLaunch` is the clamp: asking is
- *                 admitted, widening is not, and the ceiling is still the operator's own record.
+ *                 getLaunchPosture`) as the CEILING, message axis floored at `auto_inbound` for the
+ *                 windowless reason. Since T24 a directive may ASK for a NARROWER pair, and
+ *                 `launch-posture.js › resolveLaunch` is the clamp: asking is admitted, widening is
+ *                 not, and the ceiling is still the operator's own record.
  *   windowless    literal `true`. There is one spawn shape.
  * The directive supplies `goal`, `model`, a TEMPLATE ID and — since T24 — a posture REQUEST and a
- * chaining REQUEST. None of them reaches a permission decision unclamped: the two requests are
- * bounded by the operator's own stored pair and by their own channel chaining setting, and a
- * chain asked for where the channel forbids it REFUSES rather than launching quietly narrower.
+ * chaining REQUEST. None reaches a permission decision unclamped, and a chain asked for where the
+ * channel forbids it REFUSES rather than launching quietly narrower.
  *
- * ── ⚠ THE TEMPLATE, RESOLVED HERE AND ONLY HERE (2026-08-23) ─────────────────────────────
- * The row carries an ID and a NAME SNAPSHOT; the CONTENT is fetched by THIS machine, at claim
- * time (`template-resolve.js › resolveTemplate`). Three consequences, each deliberate:
- *   1. THE SECOND FENCE IS THE OPERATOR'S. The orchestrator proved it could SEE the template at
- *      create; this proves the OPERATOR can. Routinely different people — a `team` template the
- *      orchestrator is in and the operator is not is created fine and REFUSED here as
- *      `no-template`, which is fail-closed and the designed outcome rather than a bug.
- *   2. `knowledgeBases` IS VIEWER-FILTERED AGAINST WHOEVER RESOLVES, so a shared template cannot
- *      launder access to a private base. 3. REFUSE, NEVER DEGRADE: no branch drops an unresolvable
- *      template and launches blank — a blank agent wearing no identity goes unnoticed.
+ * THE TEMPLATE IS RESOLVED HERE AND ONLY HERE (2026-08-23). The row carries an ID and a NAME
+ * SNAPSHOT; the CONTENT is fetched by THIS machine at claim time (`template-resolve.js ›
+ * resolveTemplate`). Three deliberate consequences: the SECOND FENCE IS THE OPERATOR'S (the
+ * orchestrator proved it could SEE the template, this proves the operator can — a `team` template
+ * the operator is not in is created fine and refused here as `no-template`, fail-closed and
+ * designed); `knowledgeBases` is VIEWER-FILTERED against whoever resolves, so a shared template
+ * cannot launder access to a private base; and REFUSE, NEVER DEGRADE, because a blank agent wearing
+ * no identity goes unnoticed.
  *
- * ⚠ NO FIRST-USE APPROVAL ON THIS LANE — a RULING, not an omission (OQ-3). The BUTTON lane's
- * one-modal gate (`session-launch-op.js`, answering its own renderer with `template-approval`)
- * has no equivalent here: there is no human at the keyboard and the toggle already stands in for
- * the click, so `template-approval` has no producer here, is not in the wire vocabulary, and the
- * column cannot store it.
+ * NO FIRST-USE APPROVAL ON THIS LANE — a ruling, not an omission (OQ-3). The button lane's one-modal
+ * gate has no equivalent here: there is no human at the keyboard and the toggle already stands in
+ * for the click, so `template-approval` has no producer here and is not in the wire vocabulary.
  *
- * ⚠ `operatorArmed: true`, AND IT IS THE TOGGLE THAT EARNS IT. `startSession`'s FIX-4 guard
- * refuses a handed-in posture on a `parkedShell` unless a human armed it just now, because a
- * shell is normally woken by something that is NOT the approving human. Here that human is the
- * operator who turned this lane on, on this machine — Samuel's ruling exactly. ⚠ WITHOUT IT the
- * spawn would drop the operator's own posture and inherit the reducer's `manual` tool axis, which
- * is not "safer" in any useful sense — it is the operator's configured channel behaving
- * differently depending on who pressed, the drift H2's one-consumer rule exists to make visible.
+ * `operatorArmed: true`, AND IT IS THE TOGGLE THAT EARNS IT. `startSession`'s FIX-4 guard refuses a
+ * handed-in posture on a `parkedShell` unless a human armed it just now; here that human is the
+ * operator who turned this lane on, on this machine. Without it the spawn would drop the operator's
+ * own posture and inherit the reducer's `manual` tool axis — not "safer", just the operator's
+ * configured channel behaving differently depending on who pressed.
  *
- * ── ⚠ `idle: !d.goal` — A GOAL RUNS, NO GOAL STANDS BY (2026-08-31; ENGINEERING §8 has the repro
- * and the whole argument). It was `idle: true` unconditionally, with the goal held for a WAKE
- * (`s.launchGoal` -> `session-seed.js › takeFraming`). Every link of that worked; the PREMISE did
- * not — **the only caller of this lane cannot produce that wake**, since a dormant session is
- * woken by an ADDRESS and a directive is filed by an AGENT, whose unaddressed posts
- * `session-dispatch.js › mayWake` refuses. ⚠ THE FENCE DID NOT MOVE AND MUST NOT; the SPAWN SHAPE
- * did. No-goal
- * keeps the shell (`defaultGoal` is a synthesized stand-by line, not an instruction anybody wrote);
- * `buildFencedTurn` fences the goal on both branches, and only the WHEN differs.
+ * `idle: !d.goal` — A GOAL RUNS, NO GOAL STANDS BY (2026-08-31; ENGINEERING §8 has the repro). It
+ * was `idle: true` unconditionally, with the goal held for a WAKE; every link worked but the
+ * PREMISE did not — the only caller of this lane cannot produce that wake, since a dormant session
+ * is woken by an ADDRESS and a directive is filed by an AGENT, whose unaddressed posts
+ * `session-dispatch.js › mayWake` refuses. The FENCE did not move and must not; the SPAWN SHAPE
+ * did. `buildFencedTurn` fences the goal on both branches, and only the WHEN differs.
  */
 async function spawn(d, deps) {
   const plan = launchPosture.resolveLaunch({
@@ -105,11 +88,10 @@ async function spawn(d, deps) {
   // ⚠ ANSWERED BEFORE ANY WORK, because the chain request REFUSES where the posture CLAMPS —
   // `launch-posture.js › resolveChain` carries both halves of that asymmetry.
   if (plan.refused) {
-    // ⚠ `no-chain`, NOT `no-bridge` (2026-09-02). They were one word until then, and the two facts
-    // are opposite instructions: `no-bridge` means this machine has no context for that channel —
-    // go elsewhere — while this means the channel is right and ONE SETTING is off. The setting's
-    // name travels in the log AND on the wire, because a refusal an orchestrator can only explain
-    // by reading this repo is the refusal T24 exists to delete.
+    // `no-chain`, NOT `no-bridge` (2026-09-02): the two facts are opposite instructions —
+    // `no-bridge` means this machine has no context for that channel, while this means the channel
+    // is right and ONE SETTING is off. The setting's name travels in the log AND on the wire,
+    // because a refusal an orchestrator can only explain by reading this repo is what T24 deletes.
     diag('launch-directive: chaining asked for and NOT enabled here —', launchPosture.CHAIN_SETTING,
       'is off for this channel; the operator turns it on in the channel Settings tab');
     return { refused: 'no-chain', setting: launchPosture.CHAIN_SETTING };
@@ -121,10 +103,10 @@ async function spawn(d, deps) {
   }
   const channel = deps.watchedChannel ? deps.watchedChannel(d.channelId) : null;
   if (!channel) {
-    // ⚠ NOT WATCHING THIS CHANNEL IS A REFUSAL, NOT A CRASH, and `no-bridge` is the honest word:
-    // this machine has no context for that channel, so it has nothing to launch INTO. Failing
-    // closed here is also what stops a directive naming an arbitrary channel id from reaching a
-    // spawn with a fail-closed `read_only` profile and looking like it worked.
+    // NOT WATCHING THIS CHANNEL IS A REFUSAL, NOT A CRASH, and `no-bridge` is the honest word: this
+    // machine has no context for that channel, so it has nothing to launch INTO. Failing closed here
+    // also stops a directive naming an arbitrary channel id from reaching a spawn with a
+    // fail-closed `read_only` profile and looking like it worked.
     return { refused: 'no-bridge' };
   }
   const targeting = require('./targeting');
@@ -136,45 +118,38 @@ async function spawn(d, deps) {
   let template = null;
   if (d.templateId) {
     const resolved = await require('./template-resolve').resolveTemplate(d.templateId, d.workspaceId);
-    // ⚠ `resolved.reason` IS ALREADY ONE OF THE WIRE WORDS — `no-template` for a 404 (deleted,
-    // invisible to THIS operator, or IN ANOTHER TENANCY: `d.workspaceId` is the CHANNEL's
-    // container, so a template this operator owns elsewhere is ABSENT from that read, not
-    // hidden), `busy` for a timeout, a network failure or a 5xx. 404-never-403 makes the first
-    // two one answer and this machine must not try to tell them apart. Passed through rather
-    // than re-mapped: `decideBody › refusalFor` is the closed-vocabulary gate — which is also
-    // why the T35 tenancy note `template-resolve.js` logs cannot travel; the RULE crosses
-    // instead of the row, in `channel-doctrine.ts › TENANCY_RULE`.
+    // `resolved.reason` is already one of the wire words — `no-template` for a 404 (deleted,
+    // invisible to THIS operator, or IN ANOTHER TENANCY: `d.workspaceId` is the CHANNEL's container,
+    // so a template this operator owns elsewhere is ABSENT from that read), `busy` for a timeout,
+    // network failure or 5xx. 404-never-403 makes the first two one answer and this machine must not
+    // try to tell them apart. Passed through rather than re-mapped: `decideBody › refusalFor` is the
+    // closed-vocabulary gate.
     if (!resolved.ok) return { refused: resolved.reason };
     template = resolved.template;
   } else if (d.templateName) {
-    // ⚠ E-4 — THE DELETION SIGNAL, AND IT REFUSES WITHOUT A RESOLVE ATTEMPT. `template_id` is
+    // E-4 — THE DELETION SIGNAL, AND IT REFUSES WITHOUT A RESOLVE ATTEMPT. `template_id` is
     // `ON DELETE SET NULL`, so a template deleted between CREATE and CLAIM leaves the id null and
-    // the NAME standing. There is no id left to ask about. On the id alone this machine cannot
-    // tell "no template requested" from "template deleted" — which is why the server snapshots
-    // the name — and the answer to a deletion is REFUSE, never a blank launch.
+    // the NAME standing — which is why the server snapshots the name, since on the id alone this
+    // machine cannot tell "no template requested" from "template deleted".
     diag('launch-directive: template deleted before claim —', String(d.templateName).slice(0, 40));
     return { refused: 'no-template' };
   }
 
   // ── THE PINNED STARTUP CONTEXT, UNDER THIS OPERATOR'S CREDENTIAL (T81) ────────────────
-  // ⚠ AFTER the template, and for the SAME ordering reason: the tool profile and the identity are
-  // both already decided by the time any workspace prose exists here.
-  // ⚠ **AND IT IS THE ONE FETCH ON THIS LANE THAT CANNOT REFUSE THE LAUNCH.** `fetchStartupContext`
-  // answers `null` on every failure — timeout, network, 5xx, an older server's 404 — because a
-  // startup context is ENRICHMENT and a template is an IDENTITY. Its docblock carries the whole
-  // argument; the shape of the difference is right here, in the missing `if (!…) return { refused }`.
+  // AFTER the template, for the same ordering reason: the tool profile and the identity are both
+  // already decided by the time any workspace prose exists here. It is the ONE fetch on this lane
+  // that cannot refuse the launch — `fetchStartupContext` answers `null` on every failure, because
+  // a startup context is ENRICHMENT and a template is an IDENTITY.
   const startupContext = await fetchStartupContext(d.workspaceId);
 
   const res = await deps.launch({
     channelId: d.channelId,
     taskId: d.taskId,
     workspaceId: d.workspaceId || null,
-    // ⚠ THE CHANNEL'S RUNTIME, INHERITED (2026-08-31, port wave D) — `trigger.js ›
-    // launchResponderSession` carries the whole argument for why this record travels where the
-    // permission pair may not. An orchestrator's directive is a lane with no human at the
-    // keyboard, so it inherits the channel's setting exactly as it inherits the tool profile and
-    // the model: picking a runtime widens nothing, and a directive answered on a vendor the
-    // operator never chose is the surprise the port exists to avoid. Absent => the default.
+    // THE CHANNEL'S RUNTIME, INHERITED (2026-08-31, port wave D) — `trigger.js ›
+    // launchResponderSession` carries the argument for why this record travels where the permission
+    // pair may not. A directive lane has no human at the keyboard, so it inherits the channel's
+    // setting exactly as it inherits the tool profile and the model. Absent => the default.
     runtime: channelRuntime.getChannelRuntime(d.channelId),
     goal: d.goal || defaultGoal(channelLevel),
     counterpartyId: null,
@@ -187,38 +162,27 @@ async function spawn(d, deps) {
       taskId: d.taskId,
       scope: channelLevel ? 'channel' : 'thread',
       workspaceSegment: null,
-      // ── ⚠ THE RESOLVED TEMPLATE, CAPTURED AT SPAWN AND NEVER RE-READ ───────────────────
-      // The SAME `context.template` key the button lane uses — `session-launch.js › launch`
-      // forwards `context` on a literal whitelist and `startSession` merges it — so this costs
-      // zero funnel changes: one resolution point, two lanes, one consumer
-      // (`prompt-framing-template.js › templateRoleFraming`).
-      // ⚠ A SESSION KEEPS ITS SPAWN-TIME TEMPLATE CONTENT, and that FALLS OUT rather than being
-      // enforced: the role block is built at WAKE from what was captured here, so a template
-      // edited or deleted afterwards neither changes nor stops this session (E-1 / E-2).
-      // ⚠ `null` when none was named — `templateRoleFraming` returns `[]` and the turn is
-      // byte-identical to what this lane produced before templates existed.
+      // THE RESOLVED TEMPLATE, CAPTURED AT SPAWN AND NEVER RE-READ. The SAME `context.template` key
+      // the button lane uses, so this costs zero funnel changes: one resolution point, two lanes,
+      // one consumer (`prompt-framing-template.js › templateRoleFraming`). A session keeping its
+      // spawn-time template content FALLS OUT rather than being enforced — the role block is built
+      // at WAKE from what was captured here, so a template edited or deleted afterwards neither
+      // changes nor stops this session (E-1 / E-2). `null` when none was named.
       template,
-      // ── ⚠ THE PINNED WORKSPACE CONTEXT, CAPTURED AT SPAWN AND NEVER RE-READ (T81) ─────
-      // Same key discipline as `template` above — `session-launch.js › launch` forwards `context`
-      // and `session-engine.js` spreads it onto the session, so this costs zero funnel changes and
-      // has ONE consumer (`prompt-framing-startup.js › startupContextFraming`).
-      // ⚠ `null` WHEN NOTHING IS PINNED **AND** WHEN THE FETCH FAILED, and those two are one state
-      // deliberately: the framer returns `[]` for either, so the turn is byte-identical to what
-      // this lane produced before T81. `fetchStartupContext` carries why a failure is not reported
-      // into the prompt.
+      // THE PINNED WORKSPACE CONTEXT, CAPTURED AT SPAWN AND NEVER RE-READ (T81). Same key
+      // discipline as `template` above, with ONE consumer
+      // (`prompt-framing-startup.js › startupContextFraming`). `null` when nothing is pinned AND
+      // when the fetch failed — one state deliberately, because the framer returns `[]` for either
+      // and the turn stays byte-identical to what this lane produced before T81.
       startupContext,
     },
-    // ── ⚠ THE CHANNEL'S PROFILE, NARROWED FOR A SHARED ROOM (2026-09-02, ruling B7) ─────────
-    // The READ is unchanged and is still MAIN's own full server DTO (the docblock's field-by-field
-    // statement above); what is new is one NARROWING applied to it, which can only ever move
-    // `full` -> `channel_agent` and never the other way.
-    // ⚠ ONE CALL, AND THE OTHER TWO LAUNCH LANES MAKE THE SAME ONE. The rule used to be spelled
-    // beside this resolver alone, so the New Agent button and the responder trigger kept their
-    // shell in a room this lane bounded (F-510). `targeting-window.js › resolveLaunchToolProfile`
-    // is now the only place either half is written.
-    // ⚠ THE DIRECTIVE STILL SUPPLIES NOTHING HERE. A profile has never been a directive field and
-    // does not become one: an orchestrator cannot ask for a wider profile, or for a narrower one,
-    // any more than it could before — this is the DESTINATION's property, read on this machine.
+    // THE CHANNEL'S PROFILE, NARROWED FOR A SHARED ROOM (2026-09-02, ruling B7). The READ is
+    // unchanged and is still MAIN's own full server DTO; what is new is one NARROWING, which can
+    // only ever move `full` -> `channel_agent`. ONE CALL, and the other two launch lanes make the
+    // same one — the rule used to be spelled beside this resolver alone, so the New Agent button and
+    // the responder trigger kept their shell in a room this lane bounded (F-510). THE DIRECTIVE
+    // STILL SUPPLIES NOTHING HERE: a profile has never been a directive field and does not become
+    // one — this is the DESTINATION's property, read on this machine.
     toolProfile: targeting.resolveLaunchToolProfile(channel),
     mode: 'interactive',
     windowless: true,
@@ -230,74 +194,55 @@ async function spawn(d, deps) {
     // ⚠ THE ORCHESTRATOR'S EXPLICIT `model` BEATS THE TEMPLATE'S, for the same reason the launch
     // sheet does on the button lane: one is a deliberate per-call choice, the other a default.
     // The template's named position is BELOW it and ABOVE the channel, and nowhere else.
-    // ⚠ EVERY LINK IS `chainModel` — "a real pick, or '' meaning KEEP GOING" — INCLUDING THE
+    // EVERY LINK IS `chainModel` — "a real pick, or '' meaning KEEP GOING" — INCLUDING THE
     // DIRECTIVE'S OWN (F-285, 2026-08-23). It used to be a ternary coercing `d.model` through
-    // `aliasForModelId`, which knows FULL IDS ONLY: a legitimate alias like `opus` (a member of
-    // `MODEL_CHOICES`, the value this tree spends as argv) collapsed to `'default'`, committed the
-    // ternary, and threw the template's AND the channel's picks away. An unrecognised id now FALLS
-    // THROUGH, which is what `channel-schema.ts › model` promises ("silently FALLS BACK to whatever
-    // the channel is set to") and what INVARIANTS §10's `launch_agent` bullet records — F-5's
-    // tree-wide rule on every link: unknown model falls back, never refuses.
+    // `aliasForModelId`, which knows FULL IDS ONLY, so a legitimate alias like `opus` collapsed to
+    // `'default'`, committed the ternary, and threw the template's AND the channel's picks away. An
+    // unrecognised id now FALLS THROUGH — F-5's tree-wide rule: unknown model falls back, never
+    // refuses.
     model: sessionModel.chainModel(d.model)
       || require('./session-launch-op').templateModel(sessionModel, template)
       || sessionModel.aliasForModelId(channelPrefs.getLaunchModel(d.channelId)),
-    // ⚠ **THE COLOUR THE ORCHESTRATOR ASKED FOR** (Samuel, 2026-09-13;
-    // docs/specs/agent-colors.md). `dopl_channel(op="manage", action="launch", color=…)` reaches
-    // this lane as a directive column (`channel_launch_directives.color`,
-    // `20261005120000_agent_session_colors.sql`) and nowhere else — a parameter the server
-    // accepts and the spawning machine cannot see would be worse than no parameter, which is
-    // exactly the argument that migration makes for having the column at all.
-    // ⚠ **NO PRECEDENCE CHAIN, UNLIKE `model` ABOVE, AND THAT ASYMMETRY IS THE POINT.** A
-    // template carries no colour and a channel stores no default, because a colour is UNIQUE
-    // among a channel's live agents across EVERY member: a remembered default is a default that
-    // collides the second time it is used. Empty means "the server picks the first free key",
-    // which is what every directive filed before this wave effectively asked for.
-    // ⚠ **AND WHAT ARRIVES HERE MAY ALREADY BE STALE, BY DESIGN.** The 409 at create time is a
-    // courtesy and never a reservation (that migration's second block states it): minutes may
-    // have passed, another member may hold the key, and the push that follows this spawn resolves
-    // the collision to the next free one. So this lane APPLIES it and never verifies it.
+    // THE COLOUR THE ORCHESTRATOR ASKED FOR (Samuel, 2026-09-13; docs/specs/agent-colors.md).
+    // `dopl_channel(op="manage", action="launch", color=…)` reaches this lane as a directive column
+    // and nowhere else — a parameter the server accepts and the spawning machine cannot see would be
+    // worse than no parameter. NO PRECEDENCE CHAIN, unlike `model` above, and the asymmetry is the
+    // point: a colour is UNIQUE among a channel's live agents across EVERY member, so a remembered
+    // default is a default that collides the second time it is used. Empty means "the server picks
+    // the first free key". What arrives here may already be STALE by design — the 409 at create time
+    // is a courtesy, never a reservation — so this lane APPLIES it and never verifies it.
     color: d.color,
     launchChain: plan.chain, idle: !d.goal, // ⚠ `launchChain` (2026-08-31, Samuel's agent-chaining ruling): THIS lane is the ONLY caller that passes it, read PER DIRECTIVE and never cached (the operator may flip the channel setting between two of them), so a session started here may launch further agents exactly when the room says so — every other lane passes nothing, reads false, and keeps the one-generation bound. ⚠ `idle`: docblock; `directiveFrom` trimmed the goal, so '' is the only spelling of "none"
     operatorArmed: true, // ⚠ both branches: FIX-4 reads it only for a shell, but it is true either way
   });
-  // ── ⚠ THE ECHO, RETURNED BESIDE THE ADDRESS (2026-09-01, T24's second half) ───────────────
-  // `decideBody` puts these three on the LAUNCHED body and the server stores them in
-  // `applied_tool_mode` / `applied_message_mode` / `applied_chain`, where
-  // `channel-ops-launch.ts › postureFacts` renders them.
-  // ⚠ **THEY ARE `plan`'s VALUES, NEVER `d`'s.** `d.startToolMode` / `d.startMessageMode` /
-  // `d.chain` are what the ORCHESTRATOR ASKED FOR; `plan.modes` / `plan.chain` are what this
-  // machine SETTLED ON after the clamp, the windowless floor and the chain rule — and they are the
-  // same objects handed to `deps.launch` above, so the report cannot drift from the session.
-  // Echoing the request instead would be right whenever nothing was clamped and confidently wrong
-  // exactly when it mattered, which is the one claim this lane must never make.
-  // ⚠ REPORTED ON EVERY LAUNCH, NOT ONLY A CLAMPED ONE. "Not reported" has to keep meaning "this
-  // machine said nothing" (an older desktop), so a machine that CAN report and stays silent
-  // whenever it agrees would make silence ambiguous.
+  // THE ECHO, RETURNED BESIDE THE ADDRESS (2026-09-01, T24's second half). `decideBody` puts these
+  // three on the LAUNCHED body and the server stores them in `applied_tool_mode` /
+  // `applied_message_mode` / `applied_chain`.
+  //
+  // They are `plan`'s values, NEVER `d`'s: `d.*` is what the ORCHESTRATOR ASKED FOR, `plan.*` is
+  // what this machine SETTLED ON after the clamp, the windowless floor and the chain rule — the same
+  // objects handed to `deps.launch`, so the report cannot drift from the session. REPORTED ON EVERY
+  // LAUNCH, not only a clamped one, so that "not reported" keeps meaning "this machine said
+  // nothing" (an older desktop) rather than becoming ambiguous.
   if (res && res.agentId) {
-    // ── ⚠ THE NAME (Samuel, 2026-09-15: *"if agents are spinning up agents, they should be
-    // the ones that are naming the agent … certainly shouldn't be an agent with the id as the
-    // name."*) ────────────────────────────────────────────────────────────────────────────────
+    // THE NAME (Samuel, 2026-09-15: agents spinning up agents should be the ones naming them, and
+    // never with the id as the name).
     //
-    // ⚠ **AFTER THE LAUNCH, NOT BEFORE, BECAUSE THE NAME IS KEYED ON THE AGENT ID** and there is
-    // no id until `deps.launch` answers. `agent-names.js` is keyed by the INSTANCE address, which
-    // is why a rename survives a park, a lazy resume and a crash resume.
-    // ⚠ **`New Agent` IS THE FALLBACK** for a directive with no name — a client older than
-    // `20261006120000`, §13's supported peer — and is the same face every unnamed agent wears.
-    // ⚠ **THROUGH `commitRename`, NEVER `agent-names.js` DIRECTLY**: that wrapper also touches
-    // the summary, and a name that never reaches the projection is a name the @-picker and every
-    // peer's card do not have. ⚠ A REFUSAL IS NOT A FAILED LAUNCH — an agent under the unnamed
-    // face beats a spawn reported as refused after it started.
-    // ⚠ **THE STORED NAME IS REPORTED BACK, BECAUSE IT MAY NOT BE THE ONE ASKED FOR** (the
-    // uniqueness rule may have stored `Coder-1`). `commitRename` answers main's OWN value, and
-    // `decideBody` puts it on the LAUNCHED body as the launch's `name=`.
+    // AFTER the launch, not before, because the name is keyed on the AGENT ID and there is no id
+    // until `deps.launch` answers. `agent-names.js` is keyed by the INSTANCE address, which is why a
+    // rename survives a park, a lazy resume and a crash resume. `New Agent` is the fallback for a
+    // directive with no name (a client older than `20261006120000`, §13's supported peer). Through
+    // `commitRename`, never `agent-names.js` directly: that wrapper also touches the summary, and a
+    // name that never reaches the projection is a name the @-picker and every peer's card do not
+    // have. A refusal is NOT a failed launch. The STORED name is reported back, because it may not
+    // be the one asked for (the uniqueness rule may have stored `Coder-1`).
     let applied = null;
     try {
-      // ⚠ **THE FALLBACK IS LOGGED, BECAUSE A NAMELESS AGENT USED TO BE INDISTINGUISHABLE FROM
-      // A NAMED ONE HERE** (F-708, 2026-09-16). `'' -> New Agent` is the older-client arm and
-      // is legitimate, but it is ALSO what a NAME LOST UPSTREAM looks like — and that is what
-      // had actually happened: the API route dropped `agentName` before the row was written, so
-      // this line ran the fallback on every launch and said nothing. The name the directive
-      // carried is the one fact that separates the two, so it is the one printed.
+      // THE FALLBACK IS LOGGED, because a nameless agent used to be indistinguishable from a named
+      // one here (F-708, 2026-09-16). `'' -> New Agent` is the older-client arm and is legitimate,
+      // but it is ALSO what a NAME LOST UPSTREAM looks like — and that is what had happened: the API
+      // route dropped `agentName` before the row was written, so this line ran the fallback on every
+      // launch and said nothing. The name the directive carried separates the two.
       const asked = d.agentName || '';
       if (!asked) {
         diag('launch-directive: directive carried NO agent name — falling back to',
@@ -307,13 +252,11 @@ async function spawn(d, deps) {
       const stored = require('./agent-identity-commit')
         .commitRename(res.agentId, asked || NEW_AGENT_NAME);
       applied = stored && stored.ok ? stored.name : null;
-      // ⚠ **THE REFUSAL ARM, WHICH LOGGED NOTHING AT ALL.** `commitRename` answers
-      // `agent-self-ops.js › applyRenameTo`'s verdict, and a sanitizer refusal is `ok: false`
-      // — so an agent could run unnamed with no line anywhere, and `appliedAgentName` went
-      // back as null, which `channel-ops-launch.ts` renders by ECHOING THE REQUEST. The
-      // launcher then reads the name it asked for while the machine stored none: the one
-      // reading this whole change exists to make impossible.
-      // ⚠ STILL NOT A FAILED LAUNCH (the note above) — it is a line, not a verdict.
+      // THE REFUSAL ARM, WHICH LOGGED NOTHING AT ALL. `commitRename` answers
+      // `agent-self-ops.js › applyRenameTo`'s verdict, and a sanitizer refusal is `ok: false` — so
+      // an agent could run unnamed with no line anywhere, and `appliedAgentName` went back as null,
+      // which `channel-ops-launch.ts` renders by ECHOING THE REQUEST: the launcher reads the name it
+      // asked for while the machine stored none. Still not a failed launch — a line, not a verdict.
       if (!applied) {
         diag('launch-directive: the agent name was REFUSED by the store —',
           (stored && stored.reason) || 'no reason given',
@@ -340,33 +283,28 @@ async function spawn(d, deps) {
 const STARTUP_CONTEXT_TIMEOUT_MS = 5000;
 
 /**
- * THE FACE AN UNNAMED AGENT WEARS (Samuel, 2026-09-15: *"if a user launches an agent with no
- * name, just give it the name, New Agent."*) — ⚠ **HAND-COPIED FROM
- * `src/shared/lib/agent-name.ts › NEW_AGENT_NAME`**, which main cannot import. Its only reader
- * here is the directive lane's older-client arm; the SPA's own launch sends the string itself
- * (`components/use-agent-launch-run.ts`).
+ * THE FACE AN UNNAMED AGENT WEARS (Samuel, 2026-09-15: an agent launched with no name is called
+ * `New Agent`) — HAND-COPIED from `src/shared/lib/agent-name.ts › NEW_AGENT_NAME`, which main
+ * cannot import. Its only reader here is the directive lane's older-client arm.
  */
 const NEW_AGENT_NAME = 'New Agent';
 
 /**
  * THE PINNED STARTUP CONTEXT (T81) — `GET /api/knowledge/startup-context`, at spawn, under THIS
- * OPERATOR's credential. Returns the payload, or `null`. **NEVER THROWS AND NEVER REFUSES.**
+ * OPERATOR's credential. Returns the payload, or `null`. NEVER THROWS AND NEVER REFUSES.
  *
- * ⚠ **THE ERROR DISCIPLINE IS THE TEMPLATE RESOLVE'S SHAPE WITH THE OPPOSITE VERDICT, AND THE
- * DIFFERENCE IS THE WHOLE REASON THIS COMMENT EXISTS.** `template-resolve.js` returns a REFUSAL
- * word and this file's `spawn` turns it into `no-template`, because a template is an IDENTITY the
- * caller deliberately chose: an agent silently wearing none is not noticed for several turns, so
- * "refuse, never degrade" is right there.
- * ⚠ A STARTUP CONTEXT IS **ENRICHMENT**, so the same failure must NOT refuse. It is standing
- * reference material the workspace pinned for every session, not something this directive asked
- * for; refusing the launch would mean an unreachable knowledge route, a slow one, or a server too
- * old to have the endpoint takes down agent launching altogether — a hard failure bought for a
- * soft benefit. It degrades to ABSENT (the pre-T81 turn, byte for byte) and says so via `diag`.
- * ⚠ **AND ABSENT IS INDISTINGUISHABLE FROM "NOTHING IS PINNED", DELIBERATELY.** There is no
- * prompt line saying "your workspace may have pinned something I could not fetch": that sentence
- * is unactionable by the agent, and a session that has it would report a machine-local blocker
- * into a shared channel, which is exactly what `prompt-framing.js › counterpartyFraming` exists
- * to stop. The operator sees it in `diag`; the agent sees the pre-T81 turn.
+ * The error discipline is the template resolve's shape with the OPPOSITE verdict.
+ * `template-resolve.js` returns a REFUSAL word because a template is an IDENTITY the caller
+ * deliberately chose, and an agent silently wearing none is not noticed for several turns. A
+ * startup context is ENRICHMENT — standing reference material the workspace pinned for every
+ * session — so refusing here would let an unreachable, slow, or too-old knowledge route take down
+ * agent launching altogether: a hard failure bought for a soft benefit. It degrades to ABSENT (the
+ * pre-T81 turn, byte for byte) and says so via `diag`.
+ *
+ * ABSENT IS INDISTINGUISHABLE FROM "NOTHING IS PINNED", deliberately: a prompt line saying "your
+ * workspace may have pinned something I could not fetch" is unactionable by the agent, and would
+ * report a machine-local blocker into a shared channel — what `prompt-framing.js ›
+ * counterpartyFraming` exists to stop. The operator sees it in `diag`.
  */
 async function fetchStartupContext(workspaceId) {
   try {

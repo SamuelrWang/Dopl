@@ -8,15 +8,13 @@
 // module-level mutable state and NO electron or platform handle, so the engine stays the only
 // stateful, electron-bound module.
 //
-// ⚠ THREE THINGS LEFT ON 2026-08-31 (runtime-adapter port, step 3/4) AND THE FILE IS UNDER CAP
-// AGAIN. `› sdkRenderEvents` and `› handleSdkMessage` — the two functions that read a platform's
-// own message schema — are the ADAPTER's (`main/runtime/claude/normalize.js`), which is what lets
-// a later runtime be tested from a recorded transcript with nothing installed. `› makeCanUseTool`
-// SPLIT: the verdict plumbing, the diag line, the card payloads and the resolver parking are
-// platform-free and went to `main/session-gate-bridge.js`; only the held-callback wiring and the
-// platform's reply vocabulary are the adapter's. What replaces all three here is
-// `› applyCoreEvents`, which owns the bookkeeping none of them could give away — the conversation
-// handle, the durable record, the cost/token DELTAS and the meter's last reading.
+// THREE THINGS LEFT ON 2026-08-31 (runtime-adapter port, step 3/4). `sdkRenderEvents` and
+// `handleSdkMessage` — the two functions that read a platform's own message schema — are the
+// ADAPTER's (`main/runtime/claude/normalize.js`), which is what lets a later runtime be tested from
+// a recorded transcript with nothing installed. `makeCanUseTool` SPLIT: the verdict plumbing, the
+// diag line, the card payloads and the resolver parking went to `main/session-gate-bridge.js`; only
+// the held-callback wiring and the platform's reply vocabulary are the adapter's. What replaces all
+// three here is `applyCoreEvents`, which owns the bookkeeping none of them could give away.
 
 const { grantDecisionDetail, floorWindowlessTool } = require('./session-profiles');
 const { DOPL_CHANNEL_TOOL } = require('./tool-profiles');
@@ -54,21 +52,17 @@ function shiftInbound(s) {
   return s.pendingInbound.length ? s.pendingInbound.shift() : null;
 }
 
-// A push-based AsyncIterable<SDKUserMessage>: the SDK consumes it as the live
-// prompt; the engine `push()`es the first framed turn, steer text, and fed inbound
-// replies (research §6). `close()` ends the stream so a `for await` completes.
-// ⚠ **AND IT REMEMBERS WHAT IT HANDED OUT, SINCE 2026-09-14 (F-696)** — `replayable()`. An
-// iterator is minted PER LAUNCH (`session-query.js › startQuery`, `session-park.js ›
-// resumeParked`), so what it has carried is exactly this launch's input: the framed wake message,
-// the first turn, any steer. That matters because a launch can be SUPERSEDED after the child has
-// already drained the queue — `mcp-connect-guard.js` kills a launch whose Dopl MCP server did not
-// connect — and the cold path re-pushes `s.firstTurn` for itself while the RESUME path has no
-// such thing to re-push: the peer message that woke the agent was consumed by a child that is
-// about to be aborted, and without this the retry starts a resumed conversation with NO input and
-// the peer waits forever.
-// ⚠ BOUNDED AT `REPLAY_MAX`, OLDEST DROPPED. It is not a transcript and must never become one:
-// one launch's input is one or two messages, and an unbounded copy of every turn a long session
-// pushes is a leak with a plausible-sounding name.
+// A push-based AsyncIterable<SDKUserMessage>: the SDK consumes it as the live prompt; the engine
+// `push()`es the first framed turn, steer text, and fed inbound replies (research §6). `close()`
+// ends the stream so a `for await` completes.
+//
+// It REMEMBERS WHAT IT HANDED OUT since 2026-09-14 (F-696) — `replayable()`. An iterator is minted
+// PER LAUNCH, so what it has carried is exactly this launch's input. A launch can be SUPERSEDED
+// after the child has already drained the queue (`mcp-connect-guard.js` kills a launch whose Dopl
+// MCP server did not connect): the cold path re-pushes `s.firstTurn` for itself, but the RESUME
+// path has nothing to re-push, so without this the retry starts a resumed conversation with NO
+// input and the peer waits forever. BOUNDED at `REPLAY_MAX`, oldest dropped — it is not a
+// transcript and must never become one.
 const REPLAY_MAX = 8;
 function makePushIterator() {
   const queue = [];
@@ -184,41 +178,35 @@ function grantArgs(s, toolName, input) {
     input: input, workspaceId: s.workspaceId, audience: s.audience || null, // B2's belt (plan §4.4): the audience is STAMPED AT SPAWN by session-credential.js, off the roster this machine already reads, and is null for every unlocked session
     channelId: s.channelId, launchDepth: s.launchDepth, launchChain: s.launchChain === true, // ...and F-320's RECURSION BOUND, stamped at spawn: ABSENT READS AS THE CAP (session-own-launch.js), so no lane opens it by forgetting to pass one. `launchChain` is the channel's chaining SETTING (2026-08-31), stamped at spawn beside it and read `=== true` so absent keeps the bound — it is not read LIVE, deliberately: the 2026-08-25 live-apply ruling widens SUPERVISION, never CONTAINMENT
     allowForTask: st.allowForTask || [],
-    // AXIS A — never consulted for a dopl_channel call. ⚠ FLOORED AT `auto` ON A WINDOWLESS
-    // SESSION (2026-08-22, ruling 4; the rule is `session-profiles.js › floorWindowlessTool`,
-    // which carries the why). ⚠ APPLIED HERE BECAUSE THIS IS THE ONE READ COVERING EVERY SPAWN
-    // SHAPE: Axis B's floor is written into STATE at two lanes (`channel-prefs.js ›
-    // windowlessMessageMode` at launch, `session-reopen.js › setModeByTask` live) and a third
-    // spawn shape would need a third, while this is the single read of both axes at decision
-    // time. ⚠ IT DOES NOT REWRITE THE REDUCER'S STORED `toolMode` — the deliberate opposite of
-    // the message floor. That one clamps a value the operator PICKED, so a select left ahead of
-    // the engine would lie about their choice; this one widens a value they may never have
-    // touched (`manual` is Axis A's start value AND its park reset), so writing it back would
-    // make the agent view's Tools select report a posture NOBODY CHOSE. The honest trade: the
-    // select keeps showing what was set, the gate applies what a surface-less session can
-    // enforce. ⚠ Conditioned on `s.windowless` (stamped by `session-windowless.js ›
-    // attachSurface`), never on the axis — a hypothetical WINDOWED session is untouched.
-    // ⚠ THE FLOOR IS THE RUNTIME'S SINCE 2026-08-31 (§0.1b): a mode that fail-closes to a
-    // vocabulary the runtime does not speak denies EVERYTHING on a surface-less session, so the
-    // floor is declared per runtime and applied here. `s.runtimeId` is absent on a session record
-    // written before this wave and resolves to the default runtime, which is what shipped.
-    // ⚠ **AND SINCE 2026-09-16 THE VALUE IT FLOORS IS READ LIVE, NOT FROZEN** —
-    // `session-private.js › effectiveToolMode`, the exact twin of the Axis-B read two fields
-    // below, whose docblock carries the whole argument. `st.toolMode` alone meant the operator's
-    // durable per-channel TOOLS pick reached a session ONLY through `spec.startModes` at spawn, so
-    // every shape that hands none (a recreate, a reopen, a crash resume, a peer wake, an abandoned
-    // shell rebuilt) gated at `manual` while the Settings tab read `bypass`. The floor still
-    // applies AFTER the read and still rewrites nothing back into the reducer.
+    // AXIS A — never consulted for a dopl_channel call. FLOORED AT `auto` ON A WINDOWLESS SESSION
+    // (2026-08-22, ruling 4; `session-profiles.js › floorWindowlessTool` carries the why). Applied
+    // HERE because this is the one read covering every spawn shape, where Axis B's floor is written
+    // into STATE at two lanes and a third spawn shape would need a third.
+    //
+    // It does NOT rewrite the reducer's stored `toolMode` — the deliberate opposite of the message
+    // floor. That one clamps a value the operator PICKED; this one widens a value they may never
+    // have touched (`manual` is Axis A's start value and its park reset), so writing it back would
+    // make the agent view's Tools select report a posture NOBODY CHOSE. Conditioned on
+    // `s.windowless`, never on the axis, so a windowed session is untouched.
+    //
+    // The floor is the RUNTIME's since 2026-08-31 (§0.1b): a mode that fail-closes to a vocabulary
+    // the runtime does not speak denies EVERYTHING on a surface-less session. `s.runtimeId` is
+    // absent on a pre-port record and resolves to the default runtime.
+    //
+    // Since 2026-09-16 the value it floors is read LIVE, not frozen (`session-private.js ›
+    // effectiveToolMode`, the twin of the Axis-B read below, whose docblock carries the argument):
+    // `st.toolMode` alone meant the operator's durable per-channel TOOLS pick reached a session only
+    // through `spec.startModes` at spawn, so every shape that hands none gated at `manual` while the
+    // Settings tab read `bypass`. The floor still applies AFTER the read and rewrites nothing back.
     toolMode: s && s.windowless === true
       ? floorWindowlessTool(sessionPrivate.effectiveToolMode(s), s.runtimeId)
       : sessionPrivate.effectiveToolMode(s),
     // WHICH RUNTIME'S VOCABULARY steps 1 and 4 of `grantDecision` are asked in. ⚠ IT DECIDES
     // NOTHING — the order, the verdicts and every Axis-B lane are the same on every runtime.
     runtime: (s && s.runtimeId) || null,
-    // AXIS B. ⚠ Through `session-private.js` (2026-08-22): a PRIVATE 1:1 turn withdraws the OUT
-    // half, so a post gates and bridges to a consent row instead of auto-sending. ⚠ AND SINCE
-    // 2026-08-31 that derivation reads the channel's AUTO-SEND toggle LIVE and FIRST (Samuel's
-    // ruling) — ON forces the OUT half open on every turn shape, private included.
+    // AXIS B, through `session-private.js` (2026-08-22): a PRIVATE 1:1 turn withdraws the OUT half,
+    // so a post gates and bridges to a consent row instead of auto-sending. Since 2026-08-31 that
+    // derivation reads the channel's own value LIVE and FIRST (Samuel's ruling).
     messageMode: sessionPrivate.effectiveMessageMode(s)
   };
 }
@@ -267,47 +255,38 @@ function baseRecord(s) {
     // FIX #9: the running cap counters, so a P2 recreate rehydrates a turn/cost-capped (or
     turns: s.state.turns, // parked) session's budget instead of resetting it to a fresh one.
     costUsd: s.state.costUsd,
-    // 2026-09-07: `turnCap` travelled here so a resumed session kept the bound its spent counters
-    // were measured against. There is no bound now, so there is nothing to carry: the counters
-    // above are reported for display and nothing compares them to anything.
+    // 2026-09-07: `turnCap` travelled here so a resumed session kept the bound its counters were
+    // measured against. There is no bound now, so there is nothing to carry.
     // 2026-08-22: the OUTBOUND POST COUNTER, so a crash resume does not re-mint client_msg_ids the
-    // server already stored under this instance's (persisted, re-used) agent id — `session-store.js
-    // › resumedPostSeq`. NOT reducer state: it lives on the session object, bumped by
-    // `session-outbound-tag.js › nextOwnPostId`.
+    // server already stored under this instance's persisted agent id (`session-store.js ›
+    // resumedPostSeq`). NOT reducer state: it lives on the session object.
     ownPostSeq: s.ownPostSeq,
     // 2026-08-02: the operator's MODEL pick, whitelisted so a P2 recreate or a crash resume comes
-    // back on the model they chose — without it a recreate silently reverts to the CLI default
-    // while the third select still claims the pick, the exact defect class the durable-whitelist
-    // discipline exists to kill. Coerced against the frozen enum on the way OUT
+    // back on the model they chose — without it a recreate silently reverts to the CLI default while
+    // the select still claims the pick. Coerced against the frozen enum on the way OUT
     // (session-store.durableSessionRecord) and again on the way back IN (startSession), so this
     // projection stays a plain copy with no dependency of its own.
     model: s.model || null,
-    // 2026-08-31 (port wave D): WHICH RUNTIME drove this session. Whitelisted for the same reason
-    // `model` above is and with a sharper consequence — `session-park.js › startResume` hands the
-    // persisted `sdkSessionId` to the runtime it acquires, so a record that lost this would resume
-    // one platform's conversation handle on another platform's adapter. `session-store.js ›
-    // durableSessionRecord` bounds the value; `runtime/index.js › resolve` turns an unknown id
-    // into the default, which is the runtime every pre-port record actually ran on.
+    // 2026-08-31 (port wave D): WHICH RUNTIME drove this session, whitelisted for `model`'s reason
+    // with a sharper consequence — `session-park.js › startResume` hands the persisted
+    // `sdkSessionId` to the runtime it acquires, so a record that lost this would resume one
+    // platform's conversation handle on another platform's adapter. `runtime/index.js › resolve`
+    // turns an unknown id into the default, which is the runtime every pre-port record ran on.
     runtimeId: s.runtimeId || null,
   };
 }
 
-// APPLY the CoreEvents one raw platform message produced. ⚠ SUCCESSOR TO `› handleSdkMessage`
-// (2026-08-31): the PARSING is the adapter's, the BOOKKEEPING is here, and the split is exactly
-// "what could a fixture test without a session". Returns the `auth_hold` event when the stream
-// must stop being read, and `null` otherwise; the caller owns what stopping means, and gets the
-// runtime's own sentence rather than re-deriving it.
+// APPLY the CoreEvents one raw platform message produced — successor to `handleSdkMessage`
+// (2026-08-31): the PARSING is the adapter's, the BOOKKEEPING is here, split on "what could a
+// fixture test without a session". Returns the `auth_hold` event when the stream must stop being
+// read, else `null`; the caller owns what stopping means.
 //
-// ⚠ ORDER IS PRESERVED AND IT IS OBSERVABLE. `result` dispatches BEFORE the turn's `context`,
-// because that is the order the two consumers ran in and the reducer's cap checks read the cost
-// on the `result`. Nothing here reorders a stream.
-// ⚠ `log` IS INJECTED, NOT REQUIRED, AND THAT IS THIS FILE'S STANDING RULE RATHER THAN a new one.
-// `diag.js` requires electron at its top and this module must not — `session-outbound-tag.test.mjs`
-// pins exactly that (`diag requires electron; this file must not`), because a dozen suites require
-// this file in plain Node. The precedent is `session-gate-bridge.js › makeCanUseTool(s, dispatch,
-// log)`, whose `log` the adapter's option assembly supplies; the consume loop supplies this one.
-// ⚠ OPTIONAL BY CONTRACT: a caller that passes nothing loses the LINE, never the SWALLOW. The
-// try/catch below is the behaviour; the log is how you find out it fired.
+// ORDER IS PRESERVED AND OBSERVABLE: `result` dispatches BEFORE the turn's `context`, the order the
+// two consumers ran in. Nothing here reorders a stream.
+//
+// `log` IS INJECTED, NOT REQUIRED — `diag.js` requires electron at its top and this module must not
+// (`session-outbound-tag.test.mjs` pins exactly that), because a dozen suites require this file in
+// plain Node. OPTIONAL BY CONTRACT: a caller that passes nothing loses the LINE, never the SWALLOW.
 function applyCoreEvents(s, list, dispatch, store, log) {
   // F-692: the MCP-connect signal this message produced, if any. ⚠ RETURNED AT THE END rather than
   // short-circuiting like `auth_hold`: the bookkeeping for `launched` (the conversation handle, the
@@ -334,54 +313,45 @@ function applyCoreEvents(s, list, dispatch, store, log) {
       store.saveRecord(baseRecord(s));
       if (ev.model) s.liveModel = ev.model; // the first honest statement of what is really running
       dispatch(s, { type: 'launched', payload: launchedPayload(s, ev.model) });
-      // ⚠ THE CONNECT ASSERTION (F-692, 2026-09-13). This is the ONE message that states which MCP
+      // THE CONNECT ASSERTION (F-692, 2026-09-13). This is the ONE message that states which MCP
       // servers the runtime really connected, and nothing read it: a `dopl` entry that ran out the
-      // CLI's 5s connect budget against a cold `/api/mcp` left the session with `rename_agent`
-      // (in-process SDK server) working and EVERY `mcp__dopl__*` call answering "No such tool
-      // available" — with `prompt-framing.js` telling the agent never to report it. The WORD is
-      // read here (`mcp-connect.js` is pure); the ACT is `mcp-connect-guard.js`'s, because killing
-      // a child and re-running a launch needs handles this file may not hold.
+      // CLI's 5s connect budget left the session with `rename_agent` working and EVERY
+      // `mcp__dopl__*` call answering "No such tool available", with `prompt-framing.js` telling the
+      // agent never to report it. The WORD is read here (`mcp-connect.js` is pure); the ACT is
+      // `mcp-connect-guard.js`'s, because killing a child needs handles this file may not hold.
       mcpSignal = { type: 'mcp_status', status: mcpConnect.doplStatus(ev.mcpServers) };
       continue;
     }
     if (ev.type === 'result') {
-      // THE DELTAS. ⚠ Both numbers arrive CUMULATIVE for the current run, so a resumed run
-      // restarts them from zero and `session-park.js › resumeParked` zeroes the baselines to
-      // match. Summing DELTAS is what makes the figures survive a park+resume; the raw totals
-      // would collapse. ⚠ `Math.max(0, …)` is the clamp that makes a platform which does NOT
-      // restart on resume fail SILENTLY — which is why `descriptor.session.usageResetsOnResume`
-      // is launch-blocking rather than a footnote.
+      // THE DELTAS. Both numbers arrive CUMULATIVE for the current run, so a resumed run restarts
+      // them from zero and `session-park.js › resumeParked` zeroes the baselines to match. Summing
+      // DELTAS is what makes the figures survive a park+resume. `Math.max(0, …)` is the clamp that
+      // makes a platform which does NOT restart on resume fail SILENTLY — which is why
+      // `descriptor.session.usageResetsOnResume` is launch-blocking rather than a footnote.
       const total = Number(ev.costUsd) || 0;
       const turnCost = Math.max(0, total - (s.lastTotalCost || 0));
       s.lastTotalCost = total;
       const tokenTotal = Number(ev.sessionTokens) || 0;
       s.tokensSpent = (s.tokensSpent || 0) + Math.max(0, tokenTotal - (s.lastTotalTokens || 0));
       s.lastTotalTokens = tokenTotal;
-      // ⚠ THE TURN COUNT (2026-09-01, T83). A `result` IS one completed turn on every runtime —
-      // the normalizer's own vocabulary says so — so this is the ONE honest place to count them
-      // and it costs an increment beside arithmetic that was already here. It rides the
-      // projection out through `session-health.js › health`. ⚠ IT SURVIVES A PARK/RESUME for the
-      // same reason `tokensSpent` does: both accumulate on the session object rather than
-      // reading a per-run cumulative total back, so a resumed run adds to the count instead of
-      // restarting it. That is what makes "12 turns and nothing posted" a readable sentence.
+      // THE TURN COUNT (2026-09-01, T83). A `result` IS one completed turn on every runtime, so
+      // this is the one honest place to count them. It survives a park/resume for `tokensSpent`'s
+      // reason: both accumulate on the session object rather than reading a per-run cumulative total
+      // back, which is what makes "12 turns and nothing posted" a readable sentence.
       s.turns = (Number(s.turns) || 0) + 1;
       dispatch(s, { type: 'result', turnCostUsd: turnCost, model: ev.model });
       // ⚠ AFTER the result, and only when something was measured: say nothing rather than paint a
       // zero (`session-model.js › contextEvent`).
       const context = sessionModel.contextEvent(s.promptTokens, s.liveModel);
-      // ⚠ THE METER MAY NOT KILL THE SESSION, AND THIS `try/catch` IS THE WHOLE OF THAT RULE.
-      // It came over from `session-model.js › observe` with the dispatch it wraps and was LOST in
-      // the port (restored 2026-09-01, D7.3). The context event is a GAUGE READING — the last
-      // assistant message's prompt tokens over a window denominator — and it is dispatched from
-      // inside the consume loop's `for await`. A throw here therefore does not fail the meter, it
-      // escapes to `session-query.js › consume`'s catch, which reads it as a query error and
-      // dispatches `crash` -> settle + destroy + `task_failed{interrupted}`. So a reducer bug on a
-      // COSMETIC row would tear down a session mid-turn and report it to the peer as an
-      // interruption. HEAD swallowed it to one diag line and kept the stream alive; that is the
-      // correct trade and the line is kept VERBATIM (`session-model:` prefix included) so the
-      // existing `listener.log` grep still finds it.
-      // ⚠ SWALLOWED, NOT RETHROWN, AND ONLY HERE. Every other dispatch in this loop is a state
-      // transition the session's correctness depends on — those must still reach `crash`.
+      // THE METER MAY NOT KILL THE SESSION, and this `try/catch` is the whole of that rule (it came
+      // over from `session-model.js › observe` and was LOST in the port; restored 2026-09-01, D7.3).
+      // The context event is a GAUGE READING dispatched from inside the consume loop's `for await`,
+      // so a throw here escapes to `session-query.js › consume`'s catch, which reads it as a query
+      // error and dispatches `crash` -> settle + destroy + `task_failed{interrupted}`: a reducer bug
+      // on a COSMETIC row would tear down a session mid-turn and report it to the peer as an
+      // interruption. The diag line is kept VERBATIM (`session-model:` prefix included) so the
+      // existing `listener.log` grep still finds it. Swallowed only HERE — every other dispatch in
+      // this loop is a state transition whose failure must still reach `crash`.
       if (context) {
         try {
           dispatch(s, context);

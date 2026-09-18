@@ -4,20 +4,19 @@
 // dynamic channels, no Node, no fs. Every argument is coerced to a primitive before it crosses,
 // fail-closed (session-preload.js's discipline).
 //
-// ⚠ TWO INVARIANTS THAT MUST SURVIVE EVERY EDIT:
+// TWO INVARIANTS THAT MUST SURVIVE EVERY EDIT:
 //  1. NO TOKENS. `getAuthState` answers `{ signedIn, userId }` and nothing else. Access token,
-//     refresh token and cookie jar stay in main. A renderer that never holds a credential
-//     cannot leak one.
-//  2. NO CALLER-SUPPLIED HEADERS. `apiRequest` takes a path and a small typed options object;
-//     main builds every header, Authorization included. A page that can set headers can forge
-//     identity or reach a third party.
+//     refresh token and cookie jar stay in main; a renderer that never holds a credential cannot
+//     leak one.
+//  2. NO CALLER-SUPPLIED HEADERS. `apiRequest` takes a path and a small typed options object; main
+//     builds every header, Authorization included. A page that can set headers can forge identity
+//     or reach a third party.
 //
-// Main additionally binds every handler to an APP-OWNED window's top frame
-// (main/ui-bridge.js, main/channel-dir-ipc.js), so a payload can never target another window.
-// ⚠ "APP-OWNED" WIDENED ON 2026-08-18 (wiring plan Phase 10) from "the main window" to
-// "anything main/app-windows.js registered at creation" — the shell plus a pop-out thread
-// window. This preload is what a pop-out gets too, deliberately: a pop-out is an app window,
-// and REGISTRATION is what authorizes it, not a second, narrower bridge.
+// Main additionally binds every handler to an APP-OWNED window's top frame (main/ui-bridge.js,
+// main/channel-dir-ipc.js), so a payload can never target another window. "App-owned" widened on
+// 2026-08-18 (wiring plan Phase 10) from "the main window" to "anything main/app-windows.js
+// registered at creation". This preload is what a pop-out gets too, deliberately: REGISTRATION is
+// what authorizes it, not a second, narrower bridge.
 
 const { contextBridge, ipcRenderer } = require('electron');
 
@@ -66,10 +65,9 @@ ipcRenderer.on(AUTH_STATE_EVENT, (_event, state) => {
 const APP_ORIGIN_ARG = process.argv.find((a) => a.startsWith('--dopl-app-origin='));
 const APP_ORIGIN = APP_ORIGIN_ARG ? APP_ORIGIN_ARG.split('=')[1] : '';
 
-// ⚠ Channel-scoped input coercion — the bridge never forwards raw renderer values. (This said
-// "mirrored from renderer/preload.js" until 2026-08-20; that preload is deleted, and
-// `test/preload-parity.test.mjs` asserts it stays deleted. Nothing is mirrored from anywhere:
-// this is the only preload with a `channels` namespace.)
+// Channel-scoped input coercion — the bridge never forwards raw renderer values. Nothing is
+// mirrored from anywhere: this is the only preload with a `channels` namespace, and
+// `test/preload-parity.test.mjs` asserts the old `renderer/preload.js` stays deleted.
 const asId = (channelId) => String(channelId == null ? '' : channelId);
 const asMode = (mode) => String(mode == null ? '' : mode);
 
@@ -129,26 +127,19 @@ contextBridge.exposeInMainWorld('dopl', {
     return () => authListeners.delete(callback);
   },
 
-  // Per-channel settings for the Settings tab: the working folder, the durable launch posture
-  // and auto-send — SEVEN ops on the sender-bound handlers in `main/channel-dir-ipc.js`.
-  // ⚠ RE-COUNTED AND RE-POINTED 2026-08-20. This said "the SAME five label-only ops
-  // renderer/preload.js exposes": that preload is deleted, "five" predates the auto-send pair,
-  // and only the three FOLDER ops are label-only.
-  // ⚠ Absolute paths never cross this bridge; folder ops return LABELS only.
+  // Per-channel settings for the Settings tab: the working folder, the durable launch posture and
+  // auto-send — SEVEN ops on the sender-bound handlers in `main/channel-dir-ipc.js`. Only the three
+  // FOLDER ops are label-only. Absolute paths never cross this bridge.
   channels: {
     getFolderLabel: (channelId) => ipcRenderer.invoke('channels:getFolderLabel', asId(channelId)),
     chooseFolder: (channelId) => ipcRenderer.invoke('channels:chooseFolder', asId(channelId)),
     clearFolder: (channelId) => ipcRenderer.invoke('channels:clearFolder', asId(channelId)),
-    // ⚠ `getPermissionPreset` / `setPermissionPreset` STOOD HERE AND ARE DELETED
-    // (2026-08-20). They were the single-use consent ARM; its web controls had already
-    // stopped rendering (F-233), so the ops armed a record nothing could set.
+    // `getPermissionPreset` / `setPermissionPreset` stood here and are deleted (2026-08-20): they
+    // were the single-use consent ARM, whose web controls had already stopped rendering (F-233).
 
     // THE DURABLE LAUNCH POSTURE. One consumer — `session-ipc-ops.js › sessions:launch`, the
     // operator's own Launch button — and that consumer COUNT is what keeps H2 closed
-    // (`main/channel-prefs.js` states it). ⚠ This said "SEPARATE record with a separate
-    // consumer … the arm stays single-use and consent-only": there is no arm to be separate
-    // from, and the handler moved out of `channel-dir-ipc.js` at the F-226 split. Corrected
-    // 2026-08-20. Same `asMode` coercion, same fail-closed write.
+    // (`main/channel-prefs.js` states it). Same `asMode` coercion, same fail-closed write.
     getLaunchPosture: (channelId) => ipcRenderer.invoke('channels:getLaunchPosture', asId(channelId)),
     setLaunchPosture: (channelId, preset) =>
       ipcRenderer.invoke('channels:setLaunchPosture', {
@@ -156,11 +147,11 @@ contextBridge.exposeInMainWorld('dopl', {
         preset: {
           tools: asMode(preset && preset.tools),
           messages: asMode(preset && preset.messages),
-          // ⚠ THE MODEL JOINED THE POSTURE ON 2026-08-22 (Samuel's ruling) AND IS NOT A THIRD
-          // AXIS. It rides the same record because it is the same decision — what MY agent starts
-          // as when I press Launch — but it grants nothing and reaches no gate. Main validates it
-          // against `session-model.js › MODEL_IDS` and an unknown value is simply ABSENT (the SDK
-          // default), where an unknown value on either AXIS rejects the whole write.
+          // THE MODEL JOINED THE POSTURE ON 2026-08-22 (Samuel's ruling) AND IS NOT A THIRD AXIS.
+          // It rides the same record because it is the same decision — what MY agent starts as when
+          // I press Launch — but it grants nothing and reaches no gate. Main validates it against
+          // `session-model.js › MODEL_IDS` and an unknown value is simply ABSENT (the SDK default),
+          // where an unknown value on either AXIS rejects the whole write.
           ...(preset && preset.model !== undefined ? { model: asMode(preset.model) } : {}), // ⚠ THE KEY IS FORWARDED ONLY WHEN THE CALLER SUPPLIED ONE — a SPREAD, not `asMode(...)` unconditionally (2026-09-05) — for the RUNTIME's exact reason one line below, on the axis the runtime copied it from. `''` is a REAL VALUE here too: it is the "Default" row, which CLEARS the channel's pick. Coercing an ABSENT field into it made every posture write from a surface that does not carry a model — an older SPA, a Permissions-only or Sends-only control, anything that predates this field — silently clear the pick, so the operator's chosen model stopped reaching the launch with nothing anywhere saying so. A launch sends NO model unless one was explicitly picked, and an absent key must never be how a pick disappears. Main's own-key test is the other half of the same rule (`main/channel-prefs.js › postureInto` carries the stored model through a write that does not mention it); the two must agree or the rule has a hole at whichever end forgets.
           ...(preset && preset.runtime !== undefined ? { runtime: asMode(preset.runtime) } : {}), // ⚠ 2026-08-31 (port wave D) — WHICH AGENT RUNTIME this channel's agents launch on. It rides this record for the MODEL's exact reason and with the model's exact discipline: same decision (what MY agent starts as when I press Launch), grants nothing, reaches no gate, and an id main does not have REGISTERED clears the key rather than being stored (`main/channel-runtime.js › normalizeRuntimeId`) — where an unknown value on either AXIS rejects the whole write. The read answers `runtime` + the frozen `runtimes` descriptor table, so the SPA feature-probes an OWN KEY exactly as it does for `model` and renders NO row on a desktop that has no runtime concept. ⚠ THE KEY IS FORWARDED ONLY WHEN THE CALLER SUPPLIED ONE — a SPREAD, not `asMode(...)` unconditionally — because `''` is a REAL VALUE here (reset to the default runtime) and coercing an absent field into it would make every posture write from a surface that does not know about runtimes silently clear the channel's pick. Main's own-key test is the other half of the same rule; the two must agree or the rule has a hole at whichever end forgets.
         },
@@ -171,24 +162,24 @@ contextBridge.exposeInMainWorld('dopl', {
     setAgentChain: (channelId, on) => ipcRenderer.invoke('channels:setAgentChain', { channelId: asId(channelId), on: on === true }),
   },
 
-  // ── ⚠ THE TWO ORCHESTRATOR CONSENTS ───────────────────────────────────────────────────────
+  // ── THE TWO ORCHESTRATOR CONSENTS ────────────────────────────────────────────────────────
   //   `orchestratorLaunch` (2026-08-22) — may another agent make this machine SPAWN a session?
   //   `orchestratorDirect` (2026-08-31) — may one DIRECT a session already running here?
-  // ⚠ TWO GRANTS, NOT TWO SPELLINGS OF ONE: launching buys COMPUTE, directing reaches a RUNNING
-  // agent's PRIVATE lane, and an operator may want one and not the other. Both default FALSE,
-  // per machine; with one off, a row addressed to this operator is ignored SILENTLY and expires
+  // TWO GRANTS, NOT TWO SPELLINGS OF ONE: launching buys COMPUTE, directing reaches a RUNNING
+  // agent's PRIVATE lane, and an operator may want one and not the other. Both default FALSE, per
+  // machine; with one off, a row addressed to this operator is ignored SILENTLY and expires
   // server-side where the orchestrator can see it happen.
-  // ⚠ THEIR OWN NAMESPACES, NOT MEMBERS OF `channels`, because neither takes a channel: one
-  // operator, one Mac, one answer. Every member is FEATURE-PROBED, and an older main simply has
-  // no toggle — which reads as OFF, the correct terminal answer rather than a compatibility mode.
-  // ⚠ THIS BRIDGE IS THE ONLY WAY EITHER VALUE MOVES, AND THAT IS THE SECURITY CONTENT rather
-  // than a storage detail. A spawned session runs with `Bash` and this operator's device token
-  // is on disk (§6), so a SERVER-STORED version of either flag could be flipped by an agent
-  // holding the operator's own credential — arming every machine they own. There is no route, no
-  // MCP op and no column for either, deliberately; read `main/orchestrator-consent.js`'s block
-  // (the 2026-08-31 §1 split out of `channel-prefs.js`) before adding any second writer.
-  // ⚠ `set` ANSWERS MAIN'S OWN VALUE, never an echo, so an optimistic switch reverts on
-  // `{ok:false}` rather than showing a state nothing enforces.
+  //
+  // Their own namespaces, not members of `channels`, because neither takes a channel: one operator,
+  // one Mac, one answer. Every member is FEATURE-PROBED, and an older main simply has no toggle —
+  // which reads as OFF, the correct terminal answer.
+  //
+  // THIS BRIDGE IS THE ONLY WAY EITHER VALUE MOVES, and that is the security content rather than a
+  // storage detail: a spawned session runs with `Bash` and this operator's device token is on disk
+  // (§6), so a SERVER-STORED version of either flag could be flipped by an agent holding the
+  // operator's own credential, arming every machine they own. Read
+  // `main/orchestrator-consent.js` before adding any second writer. `set` answers MAIN'S OWN value,
+  // never an echo, so an optimistic switch reverts on `{ok:false}`.
   orchestratorLaunch: {
     get: () => ipcRenderer.invoke('orchestrator:getLaunchEnabled'),
     set: (e) => ipcRenderer.invoke('orchestrator:setLaunchEnabled', { enabled: e === true }),
@@ -198,95 +189,69 @@ contextBridge.exposeInMainWorld('dopl', {
     set: (e) => ipcRenderer.invoke('orchestrator:setDirectEnabled', { enabled: e === true }),
   },
 
-  // 🔒 `turnCap.get` / `turnCap.set` STOOD HERE AND ARE DELETED (2026-09-07, Samuel's ruling:
-  // "Remove the turn/cost limit"). They were the machine-wide loop-safety brake — one operator,
-  // one Mac, one answer — in their own channel-less namespace, with a three-state value (unset /
-  // 0 = unlimited / N) and the two issuer-keyed defaults riding the read.
-  //
-  // ⚠ THEY WERE A LIVE DEFECT FOR THE LENGTH OF ONE PASS, and that is the reason this teardown is
-  // its own item rather than tidying: the main-process handlers `settings:getTurnCap` /
-  // `settings:setTurnCap` were unregistered in `main/channel-dir-ipc.js` while these two bindings
-  // stayed — so the SPA's row could still call them, and an `invoke` with no registered handler
-  // REJECTS. The row's own catch turned that into "reads as unset", i.e. a control that silently
-  // showed a posture nothing enforced.
-  //
-  // ⚠ NO DECLARED-OPTIONAL STUB IN THEIR PLACE, which is the auto-send teardown's discipline: the
-  // SPA feature-probed this bridge member and rendered NO ROW when it was absent, so absence was
-  // already the designed answer. A method left here answering `null` would be an op that exists
-  // to say it does nothing. The SPA's row, its hook and its suite are deleted in the same change.
+  // `turnCap.get` / `turnCap.set` stood here and are DELETED (2026-09-07, Samuel's ruling: remove
+  // the turn/cost limit). They were a live defect for the length of one pass, which is why this
+  // teardown is its own item: the main-process handlers were unregistered while these bindings
+  // stayed, so the SPA could still call them and an `invoke` with no registered handler REJECTS —
+  // which the row's catch turned into "reads as unset", a control showing a posture nothing
+  // enforced. No declared-optional stub in their place: the SPA feature-probed this bridge member
+  // and rendered NO ROW when absent, so absence was already the designed answer.
 
-  // ── ⚠ SIGN IN TO CLAUDE CODE, FROM INSIDE THE APP (2026-08-25) ───────────────────────────
+  // ── SIGN IN TO CLAUDE CODE, FROM INSIDE THE APP (2026-08-25) ─────────────────────────────
   //
   // THE ONE ENTRY INTO THE RECOVERY FLOW. A session runs on THIS MAC's Claude Code credential —
   // separate from the Dopl login and from the Claude app — and when it is missing or expired the
-  // engine HOLDS the session (`main/session-auth.js`) instead of burning it. Everything needed
-  // to un-hold one existed and had no caller; this is the call.
+  // engine HOLDS the session (`main/session-auth.js`) instead of burning it.
   //
-  // ⚠ ITS OWN NAMESPACE, NOT A MEMBER OF `sessions`, because it takes no session and no channel:
-  // one operator, one Mac, one credential. It is FEATURE-PROBED by the SPA (the button is absent
-  // on an older main and in a plain browser, never inert).
+  // Its own namespace, not a member of `sessions`, because it takes no session and no channel: one
+  // operator, one Mac, one credential. FEATURE-PROBED by the SPA, so the button is absent on an
+  // older main and in a plain browser, never inert.
   //
-  // ⚠ NO CREDENTIAL CROSSES THIS BRIDGE IN EITHER DIRECTION, and nothing is typed into a Dopl
+  // NO CREDENTIAL CROSSES THIS BRIDGE IN EITHER DIRECTION, and nothing is typed into a Dopl
   // surface: main opens the OAuth page in the SYSTEM BROWSER and collects the pasted code in its
-  // own local window (`main/claude-auth.js`). The answer is `{ ok }` — whether this Mac can run a
-  // session now — and carries no token, no path and no reason string.
+  // own local window. The answer is `{ ok }` — whether this Mac can run a session now.
   claude: {
     signIn: () => ipcRenderer.invoke('claude:signIn'),
   },
 
   // `reopen` — the session card's "Open thread" button, on the sender-bound handler in
-  // `main/session-ipc-ops.js` (`sessions:reopen`, which requires an app-owned window's TOP
-  // frame). ⚠ It said "the SAME op renderer/preload.js exposes" until 2026-08-20: that preload
-  // is deleted, and the handler moved at the F-226 split. Ids coerced here, re-validated in main
-  // (channelId must be a UUID). Wire name `task` == domain name `thread`.
-  // ⚠ OPENS THE WINDOW ONLY: starts no query, wakes no agent, runs no gated tool, so it widens
-  // neither invariant above. A parked shell stays parked until a steer or accepted inbound.
-  // ⚠ The web tree FEATURE-DETECTS this namespace (`@/shared/lib/desktop` getDesktopSessions ->
-  // `sessions.reopen`) and renders NOTHING when absent, so dropping it silently removes the
-  // button rather than failing. Pinned by test/preload-parity.test.mjs.
+  // `main/session-ipc-ops.js` (`sessions:reopen`, which requires an app-owned window's TOP frame).
+  // Ids coerced here, re-validated in main (channelId must be a UUID). Wire name `task` == domain
+  // name `thread`. It OPENS THE WINDOW ONLY: starts no query, wakes no agent, runs no gated tool,
+  // so it widens neither invariant above. The web tree FEATURE-DETECTS this namespace and renders
+  // NOTHING when absent, so dropping it silently removes the button rather than failing.
   //
-  // `summaries` / `onSummaries` — the AGENTS TAB's feed: sessions running on THIS machine, each
-  // with a name, a coarse state (working|idle|ended), its channel + thread, and (Phase 5,
-  // 2026-08-18) the runtime numbers the agent view draws — context occupancy against that
-  // model's window, lifetime token spend, started and last-activity stamps. All projected by
-  // main/session-summary.js. Read once on mount, then listen — a push-only surface leaves a
-  // freshly opened channel blank until the next state change, which on a quiet machine is
-  // never.
-  // ⚠ TWO MORE FIELDS SINCE 2026-08-20: `detail` (thinking | tool | posting | permission |
-  // awaiting_peer | awaiting_inbound, or null) and `toolLabel`, from main/session-detail.js.
-  // They refine the coarse state for the operator's OWN cards and are LOCAL-ONLY — the pill
-  // vocabulary stays three-valued because it is the SERVER's, and session-state-push.js picks
-  // the row's columns by name so neither field can reach `channel_sessions`.
-  // ⚠ THIS WAS "SPA-ONLY, absent from renderer/preload.js, … the parity invariant runs
-  // remote ⊆ SPA" — and there is no second preload to be absent from since the remote shell
-  // was deleted (corrected 2026-08-20). `test/preload-parity.test.mjs` is a PINNED INVENTORY
-  // now, not a comparison: adding an op fails it deliberately, so a new capability is looked
-  // at rather than absorbed.
-  // ⚠ NOTHING PRIVILEGED CROSSES: derived from in-memory state — no path, no token, no window
-  // handle, no absolute anything. The metrics are counts, and they stop at this renderer:
-  // session-state-push.js picks the server row's columns by name and takes none of them.
+  // `summaries` / `onSummaries` — the AGENTS TAB's feed: sessions running on THIS machine, each with
+  // a name, a coarse state (working|idle|ended), its channel + thread, and (Phase 5, 2026-08-18)
+  // the runtime numbers the agent view draws — context occupancy against that model's window,
+  // lifetime token spend, started and last-activity stamps. All projected by
+  // main/session-summary.js. Read once on mount, then listen — a push-only surface leaves a freshly
+  // opened channel blank until the next state change, which on a quiet machine is never.
+  // Two more fields since 2026-08-20: `detail` and `toolLabel`, from main/session-detail.js. They
+  // refine the coarse state for the operator's OWN cards and are LOCAL-ONLY — the pill vocabulary
+  // stays three-valued because it is the SERVER's, and session-state-push.js picks the row's
+  // columns by name so neither field can reach `channel_sessions`.
+  // `test/preload-parity.test.mjs` is a PINNED INVENTORY, not a comparison: adding an op fails it
+  // deliberately, so a new capability is looked at rather than absorbed.
+  // NOTHING PRIVILEGED CROSSES: derived from in-memory state — no path, no token, no window handle.
   //
-  // `pause` / `end` — the Agents tab's two controls on MY OWN agent (Phase 5). They reach the
-  // SAME reducer events the session window's own buttons have always dispatched: pause is the
-  // send button's pause morph (interrupt), end is "End session". Nothing here can START a
-  // query, wake a parked shell or post anything, so the failure direction of a forged call is
-  // an agent that stops.
-  // ⚠ OWN AGENTS ONLY, structurally: main resolves (channelId, taskId) against its own session
-  // registry, which contains nothing but this operator's sessions on this machine.
-  // ⚠ NEVER keyed on `sessionId` — that id is ephemeral across a park+recreate.
+  // `pause` / `end` — the Agents tab's two controls on MY OWN agent (Phase 5). They reach the SAME
+  // reducer events the session window's own buttons dispatched: pause is the send button's pause
+  // morph (interrupt), end is "End session". Nothing here can START a query, wake a parked shell or
+  // post anything, so the failure direction of a forged call is an agent that stops. OWN AGENTS
+  // ONLY, structurally: main resolves (channelId, taskId) against its own session registry, which
+  // contains nothing but this operator's sessions on this machine. NEVER keyed on `sessionId` —
+  // that id is ephemeral across a park+recreate.
   sessions: {
-    // ⚠ EVERY OP BELOW GAINED A TRAILING OPTIONAL `agentId` ON 2026-08-21 (Samuel's
-    // multiplayer ruling). `(channelId, taskId)` stopped identifying a session when an operator
-    // could put several agents on one thread; the id is which of them this call is for. It is
-    // TRAILING and OPTIONAL so every existing call site keeps compiling and keeps its old
-    // behaviour — main resolves an omitted id to the oldest live agent on the thread, which is
-    // exactly what a thread that could hold only one always gave back. `asId` is the same
-    // character clamp every other id on this surface gets; agent ids are `[a-z][a-z0-9]{7}`, a
-    // strict subset of it, and main re-checks the real charset.
-    // ⚠ `segment` is OPTIONAL and joined 2026-08-20: a live WINDOWLESS session reopens as
-    // the AGENT WINDOW, whose landing is a router path, and main holds the workspace UUID
-    // while a route needs the slug. Main re-checks it through `isSafeSegment` and degrades
-    // to the other reopen branches when it is absent or unusable.
+    // EVERY OP BELOW GAINED A TRAILING OPTIONAL `agentId` ON 2026-08-21 (Samuel's multiplayer
+    // ruling). `(channelId, taskId)` stopped identifying a session when an operator could put
+    // several agents on one thread. It is TRAILING and OPTIONAL so every existing call site keeps
+    // compiling and its old behaviour — main resolves an omitted id to the oldest live agent on the
+    // thread. `asId` is the same character clamp every other id gets; agent ids are
+    // `[a-z][a-z0-9]{7}`, a strict subset, and main re-checks the real charset.
+    // `segment` is OPTIONAL and joined 2026-08-20: a live WINDOWLESS session reopens as the AGENT
+    // WINDOW, whose landing is a router path, and main holds the workspace UUID while a route needs
+    // the slug. Main re-checks it through `isSafeSegment` and degrades when it is unusable.
     reopen: (channelId, taskId, segment, agentId) => ipcRenderer.invoke('sessions:reopen',
       { channelId: asId(channelId), taskId: asId(taskId), segment: asId(segment), agentId: asId(agentId) }),
     summaries: () => ipcRenderer.invoke('sessions:summaries'),
@@ -299,30 +264,24 @@ contextBridge.exposeInMainWorld('dopl', {
       ipcRenderer.on(SESSIONS_EVENT, listener);
       return () => ipcRenderer.removeListener(SESSIONS_EVENT, listener);
     },
-    // LAUNCH (2026-08-20): attach MY OWN agent to a thread, windowless. The
-    // payload is display strings + ids; main validates and owns the posture.
-    // ⚠ THE ONE OP HERE THAT FORWARDS ITS PAYLOAD RAW, and `templateId` (2026-08-22) rides that
-    // property rather than adding a coercion: main re-validates every field of this object
-    // anyway (`session-launch-op.js`), and a preload that half-coerced a UUID would be a second
-    // opinion about what a template id is. An absent / null / '' id is a BLANK agent, exactly as
-    // before templates existed.
+    // LAUNCH (2026-08-20): attach MY OWN agent to a thread, windowless. The payload is display
+    // strings + ids; main validates and owns the posture. THE ONE OP HERE THAT FORWARDS ITS PAYLOAD
+    // RAW, and `templateId` (2026-08-22) rides that property rather than adding a coercion: main
+    // re-validates every field anyway, and a preload that half-coerced a UUID would be a second
+    // opinion about what a template id is. An absent / null / '' id is a BLANK agent.
     launch: (payload) => ipcRenderer.invoke('sessions:launch', payload || {}),
 
-    // ⚠ FIRST-USE APPROVAL FOR ANOTHER MEMBER'S AGENT TEMPLATE (2026-08-22, OQ-3). Records a
-    // MACHINE-LOCAL decision and starts nothing. Call it when the operator has read that
-    // template's instructions in the launch sheet and chosen to run as it, then relaunch.
-    // ⚠ IT WIDENS NO CONTAINMENT. A launch from an approved template is contained exactly like a
-    // launch from any other: same tool profile, same permission axes, same working folder.
-    // ⚠ NEVER SERVER-REACHABLE, and that is the security content rather than the storage: a
-    // server-writable approval would let a credential-holding agent pre-approve itself on every
-    // machine the operator owns (`main/channel-prefs.js` states the same rule for the
-    // orchestrator toggle it lives beside).
+    // FIRST-USE APPROVAL FOR ANOTHER MEMBER'S AGENT TEMPLATE (2026-08-22, OQ-3). Records a
+    // MACHINE-LOCAL decision and starts nothing; call it when the operator has read that template's
+    // instructions and chosen to run as it, then relaunch. It widens no containment — a launch from
+    // an approved template is contained exactly like any other. NEVER SERVER-REACHABLE, and that is
+    // the security content: a server-writable approval would let a credential-holding agent
+    // pre-approve itself on every machine the operator owns.
     approveTemplate: (templateId) => ipcRenderer.invoke('sessions:approveTemplate', { templateId: asId(templateId) }),
 
-    // ⚠ CALL THIS AFTER A THREAD DELETE SUCCEEDS (2026-08-22). Main cannot see the server's
-    // cascade, so without it an ended agent's frozen history outlives its thread by up to
-    // seven days and renders a card with a stale title. It deletes LOCAL history only —
-    // `channel_messages` are the server's and are never touched.
+    // CALL THIS AFTER A THREAD DELETE SUCCEEDS (2026-08-22). Main cannot see the server's cascade,
+    // so without it an ended agent's frozen history outlives its thread by up to seven days and
+    // renders a card with a stale title. LOCAL history only — `channel_messages` are the server's.
     forgetThread: (channelId, taskId) => ipcRenderer.invoke('agents:forgetThread',
       { channelId: asId(channelId), taskId: asId(taskId) }),
     pause: (channelId, taskId, agentId) => ipcRenderer.invoke('sessions:pause',
@@ -334,33 +293,28 @@ contextBridge.exposeInMainWorld('dopl', {
     answerPermission: (channelId, taskId, requestId, allow, agentId) => ipcRenderer.invoke('sessions:answerPermission',
       { channelId: asId(channelId), taskId: asId(taskId), requestId: asId(requestId), allow: allow === true, agentId: asId(agentId) }),
 
-    // ⚠ DELETE THE AGENT (2026-08-25) — `end` plus an ERASE. A live session stops through the
-    // SAME reducer event `end` dispatches (one stop path, never two), then every LOCAL trace goes.
-    // ⚠ IT DELETES A LOCAL VIEW, NEVER A CONVERSATION: what the agent POSTED is `channel_messages`
-    // on the SERVER, and the transcript keeps attributing it to `Agent #<id>` from the message.
-    // ⚠ `agentId` IS REQUIRED here and optional above — an omitted id resolves to the OLDEST live
-    // agent on the thread, which for a DESTRUCTIVE verb is not the card that was clicked.
-    // Full argument: `main/session-delete-op.js` and `test/preload-parity.test.mjs`.
+    // DELETE THE AGENT (2026-08-25) — `end` plus an ERASE. A live session stops through the SAME
+    // reducer event `end` dispatches (one stop path, never two), then every LOCAL trace goes. It
+    // deletes a LOCAL VIEW, never a conversation: what the agent POSTED is `channel_messages` on the
+    // SERVER. `agentId` is REQUIRED here and optional above — an omitted id resolves to the OLDEST
+    // live agent on the thread, which for a DESTRUCTIVE verb is not the card that was clicked.
     delete: (channelId, taskId, agentId) => ipcRenderer.invoke('sessions:delete',
       { channelId: asId(channelId), taskId: asId(taskId), agentId: asId(agentId) }),
 
     // ── THE AGENT WINDOW (2026-08-20, F-212's closure) ─────────────────────────────
-    // `openAgentWindow` ASKS MAIN for a second window on this same bundle, showing ONE of
-    // the operator's own agents. Like `threads.openWindow` it gets NO handle back — main
-    // creates the window and main registers it in `main/app-windows.js`; the answer is
-    // `{ ok }`. That is the whole reason the widened sender binding is safe: a renderer
-    // cannot enlarge the set of bound senders, only ask main to.
+    // `openAgentWindow` ASKS MAIN for a second window on this same bundle, showing ONE of the
+    // operator's own agents. Like `threads.openWindow` it gets NO handle back — main creates and
+    // registers the window, and the answer is `{ ok }`. That is why the widened sender binding is
+    // safe: a renderer cannot enlarge the set of bound senders, only ask main to.
     openAgentWindow: (segment, channelId, taskId, agentId) => ipcRenderer.invoke('sessions:openAgentWindow',
       { segment: asId(segment), channelId: asId(channelId), taskId: asId(taskId), agentId: asId(agentId) }),
 
-    // THE LIVE PERMISSION POSTURE (2026-08-20) — both axes, on a session already running,
-    // applying from the very next gate decision rather than the next launch.
-    // ⚠ NOT `channels.setLaunchPosture`, which writes the per-channel record governing the
-    // NEXT spawn. This moves ONE live session's reducer state and stores nothing.
-    // ⚠ IT WIDENS SUPERVISION, NEVER CONTAINMENT: the axes decide whether the operator is
-    // ASKED, the profile decides what is reachable at all and is checked first. Main
-    // re-validates both strings against the frozen enums, and the reducer coerces again
-    // fail-closed, so an unknown value lands on the most restrictive member of its axis.
+    // THE LIVE PERMISSION POSTURE (2026-08-20) — both axes, on a session already running, applying
+    // from the very next gate decision rather than the next launch. NOT `channels.setLaunchPosture`,
+    // which writes the per-channel record governing the NEXT spawn. It widens SUPERVISION, never
+    // CONTAINMENT: the axes decide whether the operator is ASKED, the profile decides what is
+    // reachable at all and is checked first. Main re-validates both strings against the frozen
+    // enums, and the reducer coerces again fail-closed.
     setMode: (channelId, taskId, axis, mode, agentId) => ipcRenderer.invoke('sessions:setMode',
       { channelId: asId(channelId), taskId: asId(taskId), axis: asMode(axis), mode: asMode(mode), agentId: asId(agentId) }),
 
@@ -383,15 +337,14 @@ contextBridge.exposeInMainWorld('dopl', {
     setModel: (channelId, taskId, model, agentId) => ipcRenderer.invoke('sessions:setModel',
       { channelId: asId(channelId), taskId: asId(taskId), model: asMode(model), agentId: asId(agentId) }),
 
-    // ⚠ `message` IS THE ONE OP ON THIS BRIDGE THAT STARTS A TURN, and it is the only
-    // reason this namespace's failure direction is not simply "an agent that stops".
-    // The operator types to their OWN agent out of band; main resolves (channel, thread)
-    // against its own registry, delimits the text with that session's nonce
-    // (`session-seed.js › frameOperatorTurn`, which carries operator authority rather than
-    // fencing the words as data), and dispatches the SAME `steer` the session window's
-    // composer always dispatched. It cannot grant a tool, widen a posture, reach another
-    // machine, or post anything without the outbound gate. Capped here AND in main —
-    // this bound is a convenience, main's is the fence.
+    // `message` IS THE ONE OP ON THIS BRIDGE THAT STARTS A TURN, and the only reason this
+    // namespace's failure direction is not simply "an agent that stops". The operator types to their
+    // OWN agent out of band; main resolves (channel, thread) against its own registry, delimits the
+    // text with that session's nonce (`session-seed.js › frameOperatorTurn`, which carries operator
+    // authority rather than fencing the words as data), and dispatches the SAME `steer` the session
+    // window's composer always dispatched. It cannot grant a tool, widen a posture, reach another
+    // machine, or post anything without the outbound gate. Capped here AND in main — this bound is
+    // a convenience, main's is the fence.
     message: (channelId, taskId, text, agentId) => ipcRenderer.invoke('sessions:message',
       { channelId: asId(channelId), taskId: asId(taskId), text: String(text == null ? '' : text).slice(0, 4000), agentId: asId(agentId) }),
 
@@ -418,17 +371,14 @@ contextBridge.exposeInMainWorld('dopl', {
     },
   },
 
-  // THE POP-OUT THREAD WINDOW (wiring plan Phase 10, 2026-08-18). `openWindow` asks MAIN to
-  // open a second window on this same bundle, landing on `/{segment}/channels/{channelId}`
-  // with `{threadId}` selected. The thread view's header renders the button only when this
-  // op exists, so a plain browser and an older main both simply have no affordance.
-  // ⚠ ASKS FOR A WINDOW; IT IS NOT ONE. No handle, no window id and no reference of any kind
-  // comes back — main creates the window, main registers it in `main/app-windows.js`, and the
-  // answer is `{ ok }`. That is the whole reason widening the sender binding is safe: the
-  // renderer cannot enlarge the set of bound senders, it can only ask main to.
-  // ⚠ Every value is coerced here and RE-VALIDATED in main — the channel id as a UUID, the
-  // segment and thread id through `deep-link-target.js › isSafeSegment`, the one character
-  // rule for a string entering a router path.
+  // THE POP-OUT THREAD WINDOW (wiring plan Phase 10, 2026-08-18). `openWindow` asks MAIN to open a
+  // second window on this same bundle, landing on `/{segment}/channels/{channelId}` with
+  // `{threadId}` selected. The thread view's header renders the button only when this op exists, so
+  // a plain browser and an older main both simply have no affordance. IT ASKS FOR A WINDOW AND IS
+  // NOT ONE: no handle, no window id and no reference comes back — main creates the window and
+  // registers it, and the answer is `{ ok }`. That is the whole reason widening the sender binding
+  // is safe. Every value is coerced here and RE-VALIDATED in main — the channel id as a UUID, the
+  // segment and thread id through `deep-link-target.js › isSafeSegment`.
   threads: {
     openWindow: (segment, channelId, threadId) => ipcRenderer.invoke('threads:openWindow',
       { segment: asId(segment), channelId: asId(channelId), threadId: asId(threadId) }),
@@ -448,11 +398,10 @@ contextBridge.exposeInMainWorld('dopl', {
     return () => ipcRenderer.removeListener('dopl:sync-event', listener);
   },
 
-  // THIS WINDOW'S OWN CHROME (2026-09-13) — the agent pop-out is FRAMELESS, so macOS draws no
-  // close and no zoom button and its header draws its own. ⚠ NO ARGUMENTS, AND THAT IS THE POINT:
-  // each op acts on the window the call came FROM, so there is nothing to coerce here and no id to
-  // forge in main. The full argument is `main/window-chrome.js`'s header; the header
-  // FEATURE-DETECTS both, so an older main renders no buttons rather than dead ones (§11).
+  // THIS WINDOW'S OWN CHROME (2026-09-13) — the agent pop-out is FRAMELESS, so macOS draws no close
+  // and no zoom button and its header draws its own. NO ARGUMENTS, AND THAT IS THE POINT: each op
+  // acts on the window the call came FROM, so there is nothing to coerce and no id to forge in main.
+  // The header FEATURE-DETECTS both, so an older main renders no buttons rather than dead ones.
   appWindow: {
     close: () => ipcRenderer.invoke('window:close'),
     toggleMaximize: () => ipcRenderer.invoke('window:toggleMaximize'),

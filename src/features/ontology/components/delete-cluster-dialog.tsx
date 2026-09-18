@@ -13,9 +13,9 @@ interface Props {
 }
 
 /**
- * Confirm gate for a cascade cluster delete. ⚠ Must name the cluster AND the
- * exact object count — the count is the only thing telling the user a "cluster"
- * delete is really a board delete.
+ * Confirm gate for a cascade cluster delete. Must name the cluster and the exact
+ * object count — the count is the only thing telling the user a "cluster" delete
+ * is really a board delete.
  */
 export function DeleteClusterDialog({
   open,
