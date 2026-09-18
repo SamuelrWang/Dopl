@@ -252,12 +252,24 @@ async function opGrantTemplate(client, directory, selfUserId, ref, scope, to, le
     const scopeId = await (0, grant_js_1.resolveGrantScopeId)(directory, scope, to);
     if ((0, grant_js_1.isGrantRefusal)(scopeId))
         return scopeId;
-    await client.grantResource({
-        resourceType: "agent_template",
-        resourceId: found.id,
-        scopeType: scope,
-        scopeId,
-        level: chosen,
-    });
+    try {
+        await client.grantResource({
+            resourceType: "agent_template",
+            resourceId: found.id,
+            scopeType: scope,
+            scopeId,
+            level: chosen,
+        });
+    }
+    catch (e) {
+        // 🔒 The container-KIND refusal, said in this surface's own words rather
+        // than as a bare 400 (Samuel's ruling 2026-09-17). Every other failure
+        // rethrows — a catch that swallowed them would report a refusal for an
+        // outage.
+        const refused = (0, grant_js_1.channelScopeRefusal)(e);
+        if (refused)
+            return refused;
+        throw e;
+    }
     return (0, grant_js_1.grantedLine)("agent template", found.name, scope, scopeId, chosen);
 }

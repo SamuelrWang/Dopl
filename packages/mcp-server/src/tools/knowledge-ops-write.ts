@@ -27,6 +27,7 @@ import {
   unsectionedNudge,
 } from "./knowledge-sections";
 import {
+  channelScopeRefusal,
   grantedLine,
   isGrantRefusal,
   levelForScope,
@@ -470,12 +471,22 @@ export async function opGrantBase(
   if (notOwned) return notOwned;
   const scopeId = await resolveGrantScopeId(directory, scope, to);
   if (isGrantRefusal(scopeId)) return scopeId;
-  await client.grantResource({
-    resourceType: "knowledge_base",
-    resourceId: base.id,
-    scopeType: scope,
-    scopeId,
-    level: chosen,
-  });
+  try {
+    await client.grantResource({
+      resourceType: "knowledge_base",
+      resourceId: base.id,
+      scopeType: scope,
+      scopeId,
+      level: chosen,
+    });
+  } catch (e) {
+    // 🔒 The container-KIND refusal, said in this surface's own words rather
+    // than as a bare 400 (Samuel's ruling 2026-09-17). Every other failure
+    // rethrows — a catch that swallowed them would report a refusal for an
+    // outage.
+    const refused = channelScopeRefusal(e);
+    if (refused) return refused;
+    throw e;
+  }
   return grantedLine("knowledge base", base.name, scope, scopeId, chosen);
 }

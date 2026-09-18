@@ -18,7 +18,7 @@ import { describe, it, expect, vi } from "vitest";
 import type { DoplClient, KnowledgeBase } from "@dopl/client";
 
 import { opGrantBase } from "./knowledge-ops-write";
-import { levelForScope } from "./grant";
+import { channelScopeRefusal, levelForScope } from "./grant";
 import { stub } from "./narration-fixtures";
 
 const ME = "user-1";
@@ -178,5 +178,69 @@ describe('dopl_kb op="grant"', () => {
     expect(grant).toHaveBeenCalledWith(
       expect.objectContaining({ scopeType: "channel", scopeId: "ch-1" }),
     );
+  });
+});
+
+// ── 🔒 The container-KIND refusal (Samuel's ruling 2026-09-17) ───────────
+
+/**
+ * *"In workspaces, resource access is not scoped by channels. It's instead
+ * scoped by teams."*
+ *
+ * ⚠ **THIS TIER CANNOT PROVE THE FENCE LOCALLY AND DOES NOT PRETEND TO** — `to`
+ * is a bare channel uuid and the directory indexes CONTAINERS. The server
+ * refuses; what is pinned here is that the refusal ARRIVES AS A SENTENCE rather
+ * than as a bare 400, and that an unrelated failure is not relabelled as one.
+ */
+describe("🔒 channelScopeRefusal — the server's SCOPE_NOT_ALLOWED_IN_WORKSPACE", () => {
+  const refused = { code: "SCOPE_NOT_ALLOWED_IN_WORKSPACE" };
+
+  it("names the rule, the remedy and that nothing was written", () => {
+    const res = channelScopeRefusal(refused);
+    expect(res?.isError).toBe(true);
+    expect(textOf(res!)).toContain("NOTHING was shared");
+    expect(textOf(res!)).toMatch(/team/i);
+    expect(textOf(res!)).toMatch(/HOME channel/);
+  });
+
+  it("🔒 passes EVERY other failure through — a catch-all would report an outage as a refusal", () => {
+    expect(channelScopeRefusal({ code: "INTERNAL_ERROR" })).toBeNull();
+    expect(channelScopeRefusal(new Error("connection reset"))).toBeNull();
+    expect(channelScopeRefusal(null)).toBeNull();
+    expect(channelScopeRefusal(undefined)).toBeNull();
+  });
+
+  it('dopl_kb op="grant" answers with it instead of throwing', async () => {
+    const grant = vi.fn(async () => {
+      throw Object.assign(new Error("400"), refused);
+    });
+    const res = await opGrantBase(
+      client({ grantResource: grant }),
+      DIRECTORY,
+      ME,
+      "notes",
+      "channel",
+      "ch-1",
+      "visible",
+    );
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toContain("NOTHING was shared");
+  });
+
+  it("🔒 …and RETHROWS anything else from the same call", async () => {
+    const grant = vi.fn(async () => {
+      throw new Error("connection reset");
+    });
+    await expect(
+      opGrantBase(
+        client({ grantResource: grant }),
+        DIRECTORY,
+        ME,
+        "notes",
+        "channel",
+        "ch-1",
+        "visible",
+      ),
+    ).rejects.toThrow("connection reset");
   });
 });

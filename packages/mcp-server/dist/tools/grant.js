@@ -29,6 +29,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GRANT_LEVEL_ARG_DESCRIPTION = exports.GRANT_TO_ARG_DESCRIPTION = exports.GRANT_SCOPE_ARG_DESCRIPTION = exports.GRANT_LEVEL_VALUES = exports.GRANT_SCOPE_VALUES = void 0;
 exports.levelForScope = levelForScope;
+exports.channelScopeRefusal = channelScopeRefusal;
 exports.isGrantRefusal = isGrantRefusal;
 exports.notOwnedRefusal = notOwnedRefusal;
 exports.resolveGrantScopeId = resolveGrantScopeId;
@@ -83,6 +84,32 @@ function levelForScope(scope, level) {
     if (legal.includes(level))
         return level;
     return (0, respond_js_1.err)(`Refused before writing: \`level="${level}"\` is not a ${scope} level, so nothing was shared. A ${scope} scope takes ${legal.map((l) => `\`${l}\``).join(" or ")} — the two vocabularies are different questions, not a high/low pair, and the database refuses the mismatch.`);
+}
+/**
+ * 🔒 **THE SERVER'S `SCOPE_NOT_ALLOWED_IN_WORKSPACE`, SAID IN THIS SURFACE'S
+ * OWN WORDS** (Samuel's ruling 2026-09-17: *"In workspaces, resource access is
+ * not scoped by channels. It's instead scoped by teams."*).
+ *
+ * ⚠ **THE MCP TIER CANNOT PROVE THIS ONE LOCALLY, AND IT DOES NOT PRETEND TO.**
+ * `notOwnedRefusal` can, because the resolvers already read the row; the fence
+ * here is about the CHANNEL's container, and `to` is a bare uuid with no local
+ * channel→container index (`workspace-directory.ts › containerKindIndex` keys on
+ * CONTAINERS). Guessing from the RESOURCE's container would be wrong in the one
+ * direction that matters: a base on the caller's personal shelf lent into a HOME
+ * channel is still legal and is the model Samuel keeps.
+ *
+ * So the server refuses and this TRANSLATES — the pattern
+ * `channel-errors.ts › classifyBadRequest` uses, duck-typing `DoplApiError.code`
+ * rather than importing the class. The value is the SENTENCE: an agent told
+ * `400 SCOPE_NOT_ALLOWED_IN_WORKSPACE` and nothing else goes and greps the repo.
+ */
+function channelScopeRefusal(e) {
+    const code = typeof e === "object" && e !== null
+        ? e.code
+        : undefined;
+    if (code !== "SCOPE_NOT_ALLOWED_IN_WORKSPACE")
+        return null;
+    return (0, respond_js_1.err)(`Refused: NOTHING was shared. In a WORKSPACE, a resource is scoped to the whole workspace — everyone in it already reaches it — so there is no such thing as lending one to a single channel. Narrow it with a TEAM instead. \`scope="channel"\` is for HOME channels, where the channel IS the container.`);
 }
 /** Narrow the `resolve → value | refusal` union. */
 function isGrantRefusal(x) {
@@ -156,7 +183,7 @@ function unresolvableScope(scope, to) {
  * publishes those as keywords, and a description that repeats a keyword is the
  * same fact pushed twice on every connection (`tool-budget.test.ts`).
  */
-exports.GRANT_SCOPE_ARG_DESCRIPTION = `op=grant (required): WHERE to lend it — "channel" (everyone in that room) or "container" (a home channel or workspace, by ref). The scope decides the audience; the row itself never moves.`;
+exports.GRANT_SCOPE_ARG_DESCRIPTION = `op=grant (required): WHERE to lend it — "channel" (a home channel's room) or "container" (a home channel or workspace, by ref). The scope decides the audience; the row itself never moves.`;
 exports.GRANT_TO_ARG_DESCRIPTION = `op=grant (required): the scope's handle — a channel UUID, or for scope="container" a workspace slug/UUID or a home-channel CONTAINER id from dopl_workspaces(op="list"). It must be one you are a member of; an id that does not resolve for you refuses and shares nothing, and there is no fallback to the workspace you are calling from.`;
 exports.GRANT_LEVEL_ARG_DESCRIPTION = `op=grant: "visible" or "agent_only" on a CHANNEL scope (two audiences inside the room, not a high/low pair); "read" or "edit" on a container. Omitted, the narrower one for the scope. Mixing the two vocabularies is refused.`;
 /** The `granted` line both tools answer with. ⚠ ONE sentence per fact, and the

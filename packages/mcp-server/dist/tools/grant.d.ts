@@ -60,6 +60,25 @@ export type GrantLevelArg = (typeof GRANT_LEVEL_VALUES)[number];
  * and silent".
  */
 export declare function levelForScope(scope: GrantScopeArg, level: GrantLevelArg | undefined): GrantLevelArg | ToolResponse;
+/**
+ * 🔒 **THE SERVER'S `SCOPE_NOT_ALLOWED_IN_WORKSPACE`, SAID IN THIS SURFACE'S
+ * OWN WORDS** (Samuel's ruling 2026-09-17: *"In workspaces, resource access is
+ * not scoped by channels. It's instead scoped by teams."*).
+ *
+ * ⚠ **THE MCP TIER CANNOT PROVE THIS ONE LOCALLY, AND IT DOES NOT PRETEND TO.**
+ * `notOwnedRefusal` can, because the resolvers already read the row; the fence
+ * here is about the CHANNEL's container, and `to` is a bare uuid with no local
+ * channel→container index (`workspace-directory.ts › containerKindIndex` keys on
+ * CONTAINERS). Guessing from the RESOURCE's container would be wrong in the one
+ * direction that matters: a base on the caller's personal shelf lent into a HOME
+ * channel is still legal and is the model Samuel keeps.
+ *
+ * So the server refuses and this TRANSLATES — the pattern
+ * `channel-errors.ts › classifyBadRequest` uses, duck-typing `DoplApiError.code`
+ * rather than importing the class. The value is the SENTENCE: an agent told
+ * `400 SCOPE_NOT_ALLOWED_IN_WORKSPACE` and nothing else goes and greps the repo.
+ */
+export declare function channelScopeRefusal(e: unknown): ToolResponse | null;
 /** Narrow the `resolve → value | refusal` union. */
 export declare function isGrantRefusal(x: unknown): x is ToolResponse;
 /**
@@ -99,7 +118,7 @@ export declare function resolveGrantScopeId(directory: WorkspaceDirectory, scope
  * publishes those as keywords, and a description that repeats a keyword is the
  * same fact pushed twice on every connection (`tool-budget.test.ts`).
  */
-export declare const GRANT_SCOPE_ARG_DESCRIPTION = "op=grant (required): WHERE to lend it \u2014 \"channel\" (everyone in that room) or \"container\" (a home channel or workspace, by ref). The scope decides the audience; the row itself never moves.";
+export declare const GRANT_SCOPE_ARG_DESCRIPTION = "op=grant (required): WHERE to lend it \u2014 \"channel\" (a home channel's room) or \"container\" (a home channel or workspace, by ref). The scope decides the audience; the row itself never moves.";
 export declare const GRANT_TO_ARG_DESCRIPTION = "op=grant (required): the scope's handle \u2014 a channel UUID, or for scope=\"container\" a workspace slug/UUID or a home-channel CONTAINER id from dopl_workspaces(op=\"list\"). It must be one you are a member of; an id that does not resolve for you refuses and shares nothing, and there is no fallback to the workspace you are calling from.";
 export declare const GRANT_LEVEL_ARG_DESCRIPTION = "op=grant: \"visible\" or \"agent_only\" on a CHANNEL scope (two audiences inside the room, not a high/low pair); \"read\" or \"edit\" on a container. Omitted, the narrower one for the scope. Mixing the two vocabularies is refused.";
 /** The `granted` line both tools answer with. ⚠ ONE sentence per fact, and the
