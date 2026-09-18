@@ -163,9 +163,9 @@ describe("the write", () => {
     await vi.waitFor(() => {
       expect(
         apiRequest.mock.calls.some(
-          ([path, opts]: [string, BridgeRequestOpts?]) =>
-            path === `/api/workspaces/${LINK_SEGMENT}/members/user-2` &&
-            opts?.method === "DELETE"
+          (call: unknown[]) =>
+            call[0] === `/api/workspaces/${LINK_SEGMENT}/members/user-2` &&
+            (call[1] as BridgeRequestOpts | undefined)?.method === "DELETE"
         )
       ).toBe(true);
     });
@@ -185,9 +185,9 @@ describe("the write", () => {
     await vi.waitFor(() => {
       expect(
         apiRequest.mock.calls.some(
-          ([path, opts]: [string, BridgeRequestOpts?]) =>
-            path === `/api/workspaces/${LINK_SEGMENT}/members/${USER_ID}` &&
-            opts?.method === "DELETE"
+          (call: unknown[]) =>
+            call[0] === `/api/workspaces/${LINK_SEGMENT}/members/${USER_ID}` &&
+            (call[1] as BridgeRequestOpts | undefined)?.method === "DELETE"
         )
       ).toBe(true);
     });
