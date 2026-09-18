@@ -206,8 +206,7 @@ export function InfoTab({
           members={members}
           emptyLine={rosterEmptyLine}
           viewerUserId={index.currentUserId}
-          // WHAT THE HOST PUTS AT THE END OF EACH ROW (R-09) — see
-          // `channel-surface-contract.ts › ChannelInfoExtras.rosterRowAction`.
+          // R-09's per-row control — `ChannelInfoExtras.rosterRowAction`.
           rowAction={extras?.rosterRowAction}
         />
       </div>

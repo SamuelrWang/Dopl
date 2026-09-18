@@ -48,11 +48,10 @@ export const PATCH = withUserAuth(
 /**
  * DELETE — remove a member. Admin+; cannot remove the last owner.
  *
- * 🔒 **SELF IS A LEAVE, NOT A REMOVE (R-09, Samuel 2026-09-17).** `removeMember`
- * is admin+ and then denies `isSelf` below owner, so this same URL answered 403
- * to every member trying to walk out of a container. `leaveWorkspace` keeps the
- * permanent-container and last-owner refusals and drops the admin floor, which
- * is the only difference between the two arms.
+ * 🔒 **SELF IS A LEAVE, NOT A REMOVE (R-09, Samuel 2026-09-17).**
+ * `leaveWorkspace` keeps the permanent-container and last-owner refusals and
+ * drops the admin floor, which is the only difference between the two arms
+ * (F-725).
  */
 export const DELETE = withUserAuth(
   async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {

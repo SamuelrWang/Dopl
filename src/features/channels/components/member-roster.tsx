@@ -38,12 +38,9 @@ export function MemberRow({
 }: {
   member: ChannelMember;
   online: boolean;
-  /**
-   * THE ROW'S TRAILING CONTROL, INJECTED — Remove / Leave (R-09, Samuel
-   * 2026-09-17). ⚠ NOT BUILT HERE, on `info-tab.tsx › membersAction`'s reason
-   * exactly: it is write-bearing and this file fetches nothing (INVARIANTS §7).
-   * ⚠ ABSENT IS THE DEFAULT AND MEANS "no control", never a disabled one.
-   */
+  /** The row's trailing control, INJECTED — never built here, on
+   *  `info-tab.tsx › membersAction`'s reason exactly: it is write-bearing and
+   *  this file fetches nothing (INVARIANTS §7). See `MemberRoster.rowAction`. */
   action?: ReactNode;
 }) {
   return (
@@ -107,10 +104,10 @@ export function MemberRoster({
   viewerUserId?: string | null;
   /**
    * WHAT SITS AT THE END OF EACH ROW — asked per member, because the answer is
-   * per member (R-09: Remove on somebody else's row, Leave on your own).
-   * ⚠ A HOST'S, reached through `channel-surface-contract.ts ›
-   * ChannelInfoExtras.rosterRowAction`. Returning `null` draws nothing, which
-   * is what every row gets on a host that passes no function at all.
+   * per member (R-09: Remove on somebody else's row, Leave on your own). A
+   * HOST'S, reached through `channel-surface-contract.ts ›
+   * ChannelInfoExtras.rosterRowAction`. ⚠ `null` draws nothing, which is also
+   * what every row gets on a host that passes no function at all.
    */
   rowAction?: (member: ChannelMember) => ReactNode;
 }) {

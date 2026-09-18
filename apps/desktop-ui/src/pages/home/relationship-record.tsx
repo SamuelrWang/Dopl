@@ -119,14 +119,12 @@ export function RelationshipRecord({
       // refuses here outright (§4A `LINK_CONTAINER_CLOSED`).
       // ⚠ A RENDER FUNCTION SINCE 2026-08-25: the region is write-bearing, and
       // §7/§8 allow ONE `useRefetchGate` per live surface.
-      // 🔒 THE ROSTER ROW'S Remove / Leave (Samuel's ruling R-09, 2026-09-17)
-      // rides the SAME extras call — a per-row control on the one roster, not a
-      // /home roster beside it. `ctx` is why the slot is a function: the viewer
-      // (`index.currentUserId`) and the surface's own `refetchMembers` are
-      // already paid for here, and a region may not re-read either (§7).
+      // 🔒 THE ROSTER ROW'S Remove / Leave (R-09) rides the SAME extras call, and
+      // `ctx` is why the slot is a function: the viewer (`index.currentUserId`)
+      // and the surface's own `refetchMembers` are already paid for here, and a
+      // region may not re-read either (§7).
       // ⚠ LEAVING DROPS THE SELECTION through `onDeleted` — the container is off
-      // the caller's /home either way, so the pane has the same nothing to show
-      // as it does after the channel is deleted from Settings.
+      // the caller's /home either way.
       slots={{
         infoExtras: (ctx) => ({
           belowRoster: <PersonRosterActions homeChannel={homeChannel} />,

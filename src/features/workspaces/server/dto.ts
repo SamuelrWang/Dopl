@@ -79,16 +79,12 @@ export function mapMemberRow(row: WorkspaceMemberRow): WorkspaceMembership {
  *
  * ⚠ **THE RULE IS THE CONSOLE'S OWN, NOT A SECOND ONE**:
  * `members/components/members-v2/visibility.ts › showPresence` is
- * `isAdmin || isSelf`, and this is that expression with the client half left in
- * place as the LAST line rather than the only one. Two spellings of one rule is
- * what `docs/MEMBERS-AUTHORIZATION.md` called *"the only row in this doc where
- * the pairing is missing"*.
+ * `isAdmin || isSelf`, and this is that expression. The two move together;
+ * `docs/MEMBERS-AUTHORIZATION.md` carries why.
  *
  * ⚠ **`null` MEANS "NOT YOURS TO SEE" HERE, EXACTLY AS IT DOES ON THE CHANNEL
  * ROSTER'S VIEWER-ONLY FIELDS** (`channels/server/dto.ts › mapMemberRow`) — it
  * does NOT mean "never seen", and nothing may read it as a heartbeat.
- * ⚠ IT IS NOT A GUEST-LANE DISCLOSURE: the exposed population was `viewer`+,
- * which is what made this a members-console defect rather than a fence hole.
  */
 export function scrubHiddenPresence(
   members: WorkspaceMembership[],

@@ -95,9 +95,10 @@ export function useRevokeHomeLink() {
  * `DELETE /api/workspaces/{segment}/members/{userId}`, the SAME endpoint the
  * members console uses; the route reads self as a leave.
  *
- * ⚠ THE CHANNELS LIST IS INVALIDATED BECAUSE LEAVING TAKES THE ROW OFF IT — the
- * container is no longer the caller's. A removal moves nothing on that payload
- * and pays one small refetch for not having to know which of the two happened.
+ * ⚠ `channelKeys.list().all` — THE PREFIX, so BOTH scopes settle: leaving takes
+ * the row off the account list and the container list at once. A removal moves
+ * neither, and pays one small refetch for not having to know which of the two
+ * acts happened.
  * ⚠ THE ROSTER IS THE CALLER'S TO SETTLE (`onDone`): it belongs to the channel
  * surface's own read, and this hook must not mint a second one (§7).
  */

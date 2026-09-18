@@ -779,7 +779,7 @@ which lands in Wave 1).
 | V2 | **Orphan class: exported chats nothing lists.** `dopl_chats(op="export")` with no `workspace=` resolves the caller's `personal` container; `ChatsView` has one mount (the workspace route); the rail filters to `isStandardWorkspace` | **Extend, or answer what the export should do instead.** This is a live defect, not a missing feature | 04 §B-1; R-33 |
 | V3 | **Skills** — no /home face; the MCP tool is *already* link-container aware (a public publish inside a shared container needs a one-time confirm token) | 🔴 **DO NOT EXTEND — R-33 ruled NO (2026-09-17)**, and the absence is pinned (`src/features/home/tabs.test.ts`, wave 7). The MCP half is untouched: `dopl_skill` still reaches a personal container | 04 §B-2 |
 | V4 | **`ConnectedAppsSection`** — reachable only from the workspace `/settings` PAGE; the modal passes no `extras` | **Extend (one prop).** An operator who works entirely in the home space cannot see or revoke their connected apps — security-relevant, not cosmetic | 04 §B-6 |
-| V5 | **The guidance layer** — `TourProviderCore`, `JoinRequestNoticesCore`, `ConnectAgentBanner`, `WelcomePopup`, none mounted on /home; all four already host-agnostic | **Ruling R-49** — a no-code-change parity win for two of the four | 03 §A12, §C3 |
+| V5 | **The guidance layer** — `TourProviderCore`, `JoinRequestNoticesCore`, `ConnectAgentBanner`, `WelcomePopup`, none mounted on /home; all four already host-agnostic | ✅ **RULED R-49 AND EXECUTED THE OTHER WAY — DONE 2026-09-17 (wave 7): all four DELETED**, on the workspace too, not mounted on /home | 03 §A12, §C3 |
 | V6 | **`MyAccessProvider`** — /home mounts it only inside the KB view, so any teams-mode gate elsewhere on /home resolves to a false edit affordance (F-330: `canEdit` **falls open**) | **Extend.** The prescribed fix shape is to report PROVIDERLESS distinctly from PENDING — **do not flip the default closed** | 03 §C3; 06 §C.1 |
 | V7 | **Members console** | **Do not extend.** Close the gap the other way: add remove/leave to /home's roster (R-09(b)). Three of v2's capabilities have no referent in a link container | 04 §B-3 |
 | V8 | **Member role change after claim** — the role is set once, by the link | **Ruling R-09(c); hold until asked** | 04 §B-3 |
@@ -1497,8 +1497,11 @@ the fence. Either is fine — **dissolving the fence by accident is not.**
 
 ---
 
-### Wave 7 — Reverse parity: what the home space is missing.
-**Worktree `parity/w7-reverse`.**
+### ✅ Wave 7 — Reverse parity: what the home space is missing.
+
+🟢 **MERGED TO `master` 2026-09-17** (branch `wave7/reverse-parity`, 5 build commits + 1 review
+commit, rebased onto Wave 3's one-channel projection, fast-forward, full gate set). **R-09 (with
+F-725's server half), R-12(a), R-33 and R-49 are in the tree; the row stays OPEN for V4 and V6.**
 
 **Goal:** close the home-side gaps. ⚠ **This wave got much smaller on 2026-09-17, and the orphan
 class stays open.**
@@ -1518,6 +1521,7 @@ join-request notices core with `GET /api/me/join-requests` + `/ack` and their tw
 the connect-agent banner, the welcome popup with `buildBootstrapPrompt`, and every mount in the
 desktop shell. The two ack COLUMNS survive as data with no reader; the rule is INVARIANTS §15 and the
 absence is pinned in `app-shell.test.tsx`.
+> ✅ **REVIEWED + MERGED 2026-09-17.** Review fixes: **Leave was gated at `member`-and-not-`admin`+, which is not the server's shape** — a bound link may grant `viewer` (`home/schema.ts › HomeLinkMintSchema`) and a legacy unbound claim seats its claimer at `admin`, and `leaveWorkspace` refuses neither, so both were trapped in somebody else's container; the gate is `viewer`+ and not the owner, pinned by a new case in `home-roster-membership.test.tsx` · `constants.ts`'s `MCP_SERVER_NAME` went with `buildBootstrapPrompt`, its last reader (INVARIANTS §15, dead code is deleted) · the one dangling comment reference to `connect-agent-banner` (`ontology/hooks/use-ontology.ts`) and the six spec rows that still named the deleted surfaces as live (03 §A12, 04 rows 4/19/21 + §7, 08 R7, this file's V5). Verified rather than assumed: `leaveWorkspace` and `removeMember` share ONE tail (`› completeRemoval`) and there is one confirm dialog, not two · `listWorkspaceMembers` really has one consumer, so the presence scrub IS the wire · `git grep` over src/apps/packages/docs/dopl-desktop-app finds no live reader of a tour / join-notice / connect-banner / welcome symbol, route, query key or storage key.
 ✅ 🔴 **DROPPED: V1/V3 Chats and Skills.** **R-33 — NO, Skills and Chats stay out of home.**
 **CONFIRMED AND PINNED 2026-09-17**: nothing mounts either — `src/features/home/tabs.test.ts` holds
 the five-face set AND scans both /home source trees for an import of `@/features/{skills,chats}`

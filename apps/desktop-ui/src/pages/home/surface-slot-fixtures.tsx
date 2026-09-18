@@ -136,9 +136,7 @@ export function standaloneSurfaceStub(ctx?: Partial<ChannelInfoTabContext>) {
           busy: write.pending,
         },
         members,
-        // ⚠ THE REAL REFETCH, for the same reason the roster above is real: a
-        // region's write (R-09's Remove) settles the surface's read, not one of
-        // its own.
+        // ⚠ THE REAL REFETCH, for the same reason the roster above is real.
         refetchMembers: () => void refetch(),
         // ⚠ The viewer is the host's `currentUserId`, exactly as the real
         // surface resolves it — and it is what stops the roster reporting the

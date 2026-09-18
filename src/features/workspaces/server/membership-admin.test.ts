@@ -193,12 +193,9 @@ describe("removeMember — the departure reaches into channels", () => {
 
 /**
  * **LEAVE — R-09's server half** (Samuel, 2026-09-17: *"add remove + leave"*).
- *
- * ⚠ **THE RULING WAS COSTED AS A UI-ONLY CHANGE AND THE PREMISE WAS FALSE
- * (F-725).** `removeMember` above is `admin`+ by its first line and then denies
- * `isSelf` below owner, so a `member` peer had no exit from any container and an
- * owner is the last owner of one. `requireWorkspaceRole` is NOT called here, and
- * the cases below are what takes its place.
+ * ⚠ `requireWorkspaceRole` is NOT called here — `removeMember` above is `admin`+
+ * and then denies `isSelf` below owner (F-725) — and the cases below are what
+ * takes its place.
  */
 describe("leaveWorkspace — the caller's own exit", () => {
   it("runs the SAME delete → sweep → record sequence a removal does", async () => {

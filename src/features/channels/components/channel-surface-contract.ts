@@ -100,13 +100,10 @@ export interface ChannelInfoExtras {
   belowRoster?: ReactNode;
   /**
    * AT THE END OF EACH ROSTER ROW — /home's Remove / Leave (Samuel's ruling
-   * R-09, 2026-09-17).
-   *
-   * ⚠ **A FUNCTION, AND THAT DOES NOT REOPEN THE `infoTab` HOLE THE RETURN TYPE
-   * ABOVE CLOSED.** The fence is that a host may not hand back a BODY; this
-   * hands back one row's trailing control, asked per member because the answer
-   * is per member. The body still decides whether the roster exists at all.
-   * ⚠ `null` for a row is the default answer, not a disabled control (§5).
+   * R-09, 2026-09-17). ⚠ **A FUNCTION, AND THAT DOES NOT REOPEN THE `infoTab`
+   * HOLE THE RETURN TYPE ABOVE CLOSED:** the fence is that a host may not hand
+   * back a BODY, and this hands back one row's trailing control. The body still
+   * decides whether the roster exists at all.
    */
   rosterRowAction?: (member: ChannelMember) => ReactNode;
 }

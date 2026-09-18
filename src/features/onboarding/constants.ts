@@ -84,6 +84,4 @@ export const SIZE_LABEL: Record<Exclude<EntityType, "solo">, string> = {
   company: "How large is your company?",
 };
 
-export const MCP_SERVER_NAME = "dopl";
-
 export const DEFAULT_MCP_URL = "https://www.usedopl.com/api/mcp";

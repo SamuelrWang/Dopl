@@ -17,13 +17,9 @@ import {
 
 /**
  * **R-09 — REMOVE AND LEAVE ON /home's CONTAINER ROSTER** (Samuel, 2026-09-17:
- * *"add remove + leave"*).
- *
- * ⚠ **THE RULING WAS COSTED AS UI-ONLY AND THAT PREMISE WAS FALSE (F-725).**
- * `membership-admin.ts › removeMember` opens with `requireWorkspaceRole(…,
- * "admin")` and then denies `isSelf` below owner, and a link container's owner
- * is its LAST owner — so before this wave nobody could leave a container from
- * anywhere. The server half is `› leaveWorkspace`; this suite is its picture.
+ * *"add remove + leave"*). The server half is
+ * `membership-admin.ts › leaveWorkspace` (why it had to be written: F-725);
+ * this suite is its picture.
  *
  * ⚠ **THE GATES ARE PICTURES, NEVER FENCES** (INVARIANTS §5). Every case below
  * is refused server-side too; a green row here is not evidence a floor may move.
@@ -108,6 +104,22 @@ describe("who gets which control", () => {
 
     expect(await screen.findByRole("button", { name: "Leave" })).toBeTruthy();
     expect(remove()).toBeNull();
+  });
+
+  /** 🔒 THE TWO ROLES THE FIRST DRAFT LOCKED IN, AND THE SERVER NEVER DID. A
+   *  bound link may grant `viewer` (`home/schema.ts › HomeLinkMintSchema`) and a
+   *  legacy unbound claim seats its claimer at `admin`
+   *  (`repository-containers.ts › insertLinkContainer`); `leaveWorkspace` refuses
+   *  neither, so a hidden Leave would trap both in somebody else's container. */
+  it("shows a VIEWER and an ADMIN Leave too — the server refuses neither", async () => {
+    for (const role of ["viewer", "admin"] as const) {
+      serve(atRole(role));
+      const { view } = renderHome();
+      await openRoster();
+
+      expect(await screen.findByRole("button", { name: "Leave" })).toBeTruthy();
+      view.unmount();
+    }
   });
 
   it("shows a GUEST neither", async () => {

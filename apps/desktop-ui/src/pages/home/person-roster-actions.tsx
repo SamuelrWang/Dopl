@@ -86,24 +86,26 @@ export function PersonRosterActions({
  * body's per-row slot (`channel-surface-contract.ts › rosterRowAction`), so
  * /home adds a control to the one roster rather than growing a second.
  *
- * 🔒 **THE TWO GATES ARE PICTURES OF THE SERVER'S, NOT FENCES** (INVARIANTS §5):
- *  - **Remove** — `admin`+, which is `removeMember`'s own first line, narrowed
- *    per row by `member-policy.ts › canShowMemberControls` (never self, never an
- *    owner). One policy, shared with the members console.
- *  - **Leave** — the viewer's OWN row, for a member who is NOT `admin`+. An
- *    owner is the LAST owner of a link container, and `leaveWorkspace` answers
- *    `WORKSPACE_LAST_OWNER` there; a guest is refused by the DELETE route's
- *    resolver floor before it. Offering either would be a dead control.
+ * 🔒 **THE TWO GATES ARE PICTURES OF THE SERVER'S, NOT FENCES** (INVARIANTS §5),
+ * and each clause below is one of the server's refusals rather than a judgement:
+ *  - **Remove** — `admin`+ (`removeMember`'s first line) narrowed per row by
+ *    `member-policy.ts › canShowMemberControls`, the one policy the members
+ *    console reads too: never self, never an owner.
+ *  - **Leave** — the viewer's OWN row, `viewer`+ and not the owner.
+ *    `leaveWorkspace` has NO floor of its own; the `viewer` one is the DELETE
+ *    route's resolver default, which 404s a guest, and the owner is a link
+ *    container's LAST owner (`WORKSPACE_LAST_OWNER`). ⚠ **AN `admin` AND A
+ *    `viewer` BOTH GET IT** — a legacy unbound claim seats its claimer at
+ *    `admin` and a bound link may grant `viewer` (`home/schema.ts`), and the
+ *    server lets both walk out.
  *
  * ⚠ **A PERSONAL CONTAINER FALLS OUT OF THOSE TWO AND NEEDS NO THIRD RULE**: its
- * one member is its owner, so the row is self (no Remove) and the viewer is
- * `admin`+ (no Leave). The server refuses it besides — `leaveWorkspace` runs
+ * one member is its owner, so the row is self (no Remove) and the owner (no
+ * Leave). The server refuses it besides — `leaveWorkspace` runs
  * `assertWorkspacePermanentById` (R-35).
  *
  * ⚠ **CONFIRMED, NOT ONE-CLICK.** Both are membership DELETEs, and leaving a
  * link container is one-way: the claim link that let the viewer in was spent.
- * The popup is the kit's `FormDialog` and carries a name and a verb — label +
- * control, no explainer (INVARIANTS §5's minimal-copy ruling).
  */
 export function PersonRosterRowAction({
   member,
@@ -130,10 +132,8 @@ export function PersonRosterRowAction({
   const isSelf = member.userId === viewerUserId;
   const targetRole = member.workspaceRole ?? EMPTY_WORKSPACE_ROLE;
 
-  const canLeave =
-    isSelf && meetsMinRole(role, "member") && !meetsMinRole(role, "admin");
-  const canRemove =
-    !isSelf && canShowMemberControls(role, targetRole, false);
+  const canLeave = isSelf && meetsMinRole(role, "viewer") && role !== "owner";
+  const canRemove = !isSelf && canShowMemberControls(role, targetRole, false);
 
   // ⚠ CLOSE FIRST, then tell the host: leaving unmounts this row with the
   // container, and a dialog left open over a row that no longer exists is the

@@ -18,9 +18,8 @@ import { findMembership } from "./repository";
  * ⚠ NO `assertMemberAddable` GATE HERE, and its absence is the rule: no write
  * here ADDS anybody. `updateMemberRole` re-grades an existing row and
  * `removeMember` / `leaveWorkspace` delete one, and removal from a `kind='link'`
- * container is
- * deliberately allowed (`authz.ts › assertMemberAddable`). A member-ADD write
- * added to this file would need the gate.
+ * container is deliberately allowed (`authz.ts › assertMemberAddable`). A
+ * member-ADD write added to this file would need the gate.
  *
  * ⚠ **`assertWorkspacePermanentById` IS HERE, THOUGH, AND IT IS A DIFFERENT
  * QUESTION** (R-35, 2026-09-17): not "may this container gain a member" but
@@ -168,20 +167,16 @@ export async function removeMember(
 /**
  * LEAVE — the caller deletes their OWN membership row.
  *
- * 🔒 **Samuel's ruling R-09 (2026-09-17): "add remove + leave".**
- * ⚠ **NOT AN ARM OF `removeMember`, AND THE RULING WAS COSTED AS UI-ONLY ON A
- * PREMISE THAT WAS FALSE (F-725).** That write opens with
- * `requireWorkspaceRole(…, "admin")` and then denies `isSelf` for everyone but
- * an owner, and a link container's owner is its LAST owner — so before this
- * function NOBODY could leave a container from any surface.
+ * 🔒 **Samuel's ruling R-09 (2026-09-17): "add remove + leave".** ⚠ NOT an arm
+ * of `removeMember`: that write is `admin`+ and then denies `isSelf` below
+ * owner, so before this function no role a container holds could leave one
+ * (F-725).
  * ⚠ SAME THREE REFUSALS removal has, for the same reasons: a `kind='personal'`
  * home space is permanent (R-35), the last owner may not go, and a caller with
  * no active row is an idempotent no-op.
  * ⚠ NO ROLE FLOOR OF ITS OWN, and the DELETE route's resolver still carries
- * one: `resolveApiWorkspace`'s inverted default refuses a `guest` with a 404,
- * so a guest has no exit through that door. The /home roster hides Leave from
- * them for R2/R3's reason too (their claim link is spent, so leaving is
- * one-way) — the hide is a picture of that 404, not a second fence.
+ * one: `resolveApiWorkspace`'s inverted default 404s a `guest`, so a guest has
+ * no exit through that door. Every other role does.
  */
 export async function leaveWorkspace(
   workspaceId: string,

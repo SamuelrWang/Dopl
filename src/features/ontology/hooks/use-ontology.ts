@@ -110,8 +110,7 @@ export function useOntology(
   useEffect(() => {
     dirtyRef.current = false;
     seededRef.current = false;
-    // One-shot reset on workspace switch, no render-loop risk (same sanctioned
-    // pattern as connect-agent-banner's mount read).
+    // One-shot reset on workspace switch, no render-loop risk.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSeeded(false);
   }, [workspaceId]);
