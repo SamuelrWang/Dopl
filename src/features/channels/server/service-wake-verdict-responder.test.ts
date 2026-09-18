@@ -16,7 +16,6 @@ vi.mock("./repository", async (importOriginal) => ({
 import * as repoMessages from "./repository-messages";
 import {
   NOW,
-  lastAddress,
   projection,
   recentAgentPosts,
   resolve,
@@ -39,7 +38,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   projection();
   roomProjection();
-  lastAddress(null);
   recentAgentPosts();
   unaddressedResponder();
 });
@@ -444,27 +442,33 @@ describe("🔒 an unresolved handle blocks the repair — it is not an unaddress
   });
 
   /**
-   * 🔒 **THE GATE IS ON RR3 ALONE, AND THIS IS THE CASE THAT KEEPS IT THERE.** An AGENT author's
-   * `null` is a SCOPE REFUSAL (*"I may not resolve that"*), not an unknown name — the same value
-   * and a different claim from a HUMAN's, whose door reads the whole room. RR2 repairs a MEMBER,
-   * which takes nothing from the handle in the prose; only RR3 can substitute one agent for
-   * another. Widening the gate to `repairable` re-stamps #963/#965/#969/#973 `unreachable` for
-   * deliveries that happened (`service-wake-verdict-resilience.test.ts › never reports
-   * 'unreachable' for a delivery that happened` is the other end of this wire).
+   * 🔴 **THESE TWO CASES DROVE RR2, WHICH IS DELETED (2026-09-18, Samuel's ruling).** They pinned
+   * that an AGENT author's `null` from the handle door is a SCOPE REFUSAL rather than an unknown
+   * name, and that such a post therefore fell to RR2's MEMBER repair instead of being stamped
+   * `unreachable` — the #963/#965/#969/#973 defect.
+   *
+   * ⚠ **THE CLAIM THEY PROTECTED IS STRONGER NOW, WHICH IS WHY THEY ARE REWRITTEN AND NOT
+   * DROPPED.** An agent's prose is not read at all, so there is no `null` to misread: the answer
+   * is `[]`, the verdict is `none`, and `unreachable` — the field an orchestrator ACTS on — is
+   * unreachable for an agent author by construction rather than by an arm catching it. That is
+   * the half of this wire that must not rot, and it is asserted below in both shapes.
    */
-  it("🔒 an AGENT naming a PEER's agent still gets RR2 — the gate is not on `repairable`", async () => {
+  it("🔴 an AGENT naming a PEER's agent lands on `none`, and never on `unreachable`", async () => {
     projection(sessionRow({ name: "k3v7d2mq" }));
-    lastAddress({ author_user_id: "user-9" });
     const out = await resolve(
       "done — over to @agent-deynelz3",
       { session_id: "chan-1::k3v7d2mq" },
       { authorKind: "agent", clientMsgId: "my-own-idempotency-key" }
     );
-    expect(out).toMatchObject({ verdict: "reciprocal", delivery: "delivered" });
+    expect(out).toMatchObject({ verdict: "none", delivery: "none" });
     expect(out.recipientAgentIds).toEqual([]);
+    // 🔒 THE REPORTED DEFECT, PINNED AS AN IMPOSSIBILITY. `unreachable` said "you addressed
+    // somebody and nothing answers" over posts that were delivered; an agent author cannot
+    // produce it now, because it cannot address anybody through prose in the first place.
+    expect(out.delivery).not.toBe("unreachable");
   });
 
-  it("🔒 a self-tag resolves to `[]`, which still reaches the repair", async () => {
+  it("🔴 a self-tag is `[]` too, and still never `unreachable`", async () => {
     roomProjection(
       sessionRow({ id: "s-1", name: "k3v7d2mq" }),
       sessionRow({ id: "s-2", name: "y1uun32v" })
@@ -475,7 +479,7 @@ describe("🔒 an unresolved handle blocks the repair — it is not an unaddress
       { session_id: "chan-1:task-1:k3v7d2mq" },
       { authorKind: "agent" }
     );
-    // The body named only the author, so nothing was addressed — RR2's lane, not `unreachable`.
     expect(out.delivery).not.toBe("unreachable");
+    expect(out.recipientAgentIds).toEqual([]);
   });
 });

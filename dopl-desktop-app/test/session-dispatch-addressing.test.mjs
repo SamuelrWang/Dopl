@@ -7,10 +7,14 @@
 // RULING: that file is the standing delivery table, this one is what Samuel's addressing ruling
 // changed about it.
 //
-// THREE CLAIMS, AND EACH IS A DIFFERENT FAILURE IF IT SLIPS:
+// THE RULE: an agent session takes a turn ONLY when it is addressed — named in `to`, the other
+// party of a two-party thread, or the structured escalation-answer field. FIVE CLAIMS, each a
+// different failure if it slips:
 //   1. an UNADDRESSED agent post feeds NOBODY — the wake-all report itself, pinned as an absence;
-//   2. a verdict may name SEVERAL agents, and each is fed and woken exactly ONCE;
-//   3. the OLD-SERVER row still fans out — ruling 4, kept whole, asserted here so the narrowing
+//   2. an AGENT addressing a PERSON feeds no agent either — the second half of the same report;
+//   3. a PERSON addressing me STILL feeds, and a THREAD address feeds either author kind;
+//   4. a verdict may name SEVERAL agents, and each is fed and woken exactly ONCE;
+//   5. the OLD-SERVER row still fans out — ruling 4, kept whole, asserted here so the narrowing
 //      above cannot be mistaken for a change to it.
 
 import { test } from "node:test";
@@ -77,4 +81,48 @@ test("an OLD-SERVER row (no verdict at all) still fans out — ruling 4, kept wh
   const unknown = harness({ agents: both() });
   assert.equal(unknown.feedLiveSession(entry, peerMsg({ wakeVerdict: "some_new_word" }), ME), true);
   assert.deepEqual(fedIds(unknown), [A1, A2]);
+});
+
+test("an AGENT addressing a PERSON feeds NO agent session — a person is not their agents", () => {
+  // 🔒 **SAMUEL, 2026-09-18: *"Agents should only be woken up when addressed (besides the logic
+  // for a user with no @ in their message)."*** An agent posting `to=<operator>` is asking for a
+  // PERSON: they are notified and any external held read sees it, and their channel agents get
+  // no turn. This was the second half of the wake-all report — `reciprocal` was the first, and
+  // closing only that one would have left the same fan-out reachable by writing `to=<me>`.
+  const siblings = [agent(A1), agent(A2), agent("c3d4e5f6")];
+  for (const who of [ME, PEER]) {
+    const h = harness({ agents: siblings.map((s) => ({ ...s })) });
+    const m = verdictMsg("member", {
+      authorKind: "agent",
+      authorUserId: ME,
+      recipientUserIds: [who],
+      body: "the migration is applied, over to you",
+    });
+    assert.equal(h.feedLiveSession(entry, m, ME), false, `member -> ${who}`);
+    assert.deepEqual(fedIds(h), [], `member -> ${who}: no agent hears it`);
+  }
+});
+
+test("a PERSON addressing me STILL feeds — that asymmetry is the ruling, not an oversight", () => {
+  // ⚠ **THE NEGATIVE CLAIM.** A build that read the rule as "member never feeds" would pass the
+  // case above and silence the one lane where my side IS expected to decide what runs: a human
+  // in the room addressing me, with my agents on the thread.
+  const h = harness({ agents: [agent(A1), agent(A2)] });
+  const m = verdictMsg("member", { authorUserId: PEER, recipientUserIds: [ME], body: "can you take this?" });
+  assert.equal(h.feedLiveSession(entry, m, ME), true);
+  assert.deepEqual(fedIds(h), [A1, A2]);
+  assert.deepEqual(h.calls.feedInbound.map((c) => c.wake), [false, false], "heard, not woken");
+});
+
+test("a THREAD address feeds whoever wrote it — agent or person", () => {
+  // ⚠ **`thread_peer` IS AN ADDRESS, NOT A REPAIR**, which is why it survives the rule above for
+  // BOTH author kinds: a thread has exactly two parties, so "the other one" is the thread's own
+  // structure answering. Killing it would break every cross-machine agent-to-agent thread.
+  for (const authorKind of ["agent", undefined]) {
+    const h = harness({ agents: [agent(A1)] });
+    const m = verdictMsg("thread_peer", { authorKind, authorUserId: PEER, recipientUserIds: [ME] });
+    assert.equal(h.feedLiveSession(entry, m, ME), true, String(authorKind));
+    assert.deepEqual(fedIds(h), [A1]);
+    assert.equal(h.calls.feedInbound[0].wake, false);
+  }
 });

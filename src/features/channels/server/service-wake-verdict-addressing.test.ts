@@ -10,7 +10,6 @@ vi.mock("./repository", async (importOriginal) => ({
 }));
 
 import {
-  lastAddress,
   projection,
   recentAgentPosts,
   resolve,
@@ -52,7 +51,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   projection();
   roomProjection();
-  lastAddress(null);
   recentAgentPosts();
   unaddressedResponder();
 });
@@ -100,7 +98,6 @@ describe("a RECORD is a post for nobody, and no arm repairs it", () => {
     // then fed every one of that operator's main-room sessions. A record must not
     // reach it — it LOOKS unaddressed and is not missing an address.
     projection(sessionRow({ name: AGENT }));
-    lastAddress({ author_user_id: PEER });
     const out = await resolve("filing the migration notes", {}, {
       authorKind: "agent",
       intent: "chat",
@@ -120,6 +117,29 @@ describe("a RECORD is a post for nobody, and no arm repairs it", () => {
     });
     expect(out.verdict).toBe("none");
     expect(out.delivery).toBe("none");
+  });
+
+  it("THE ONE EXCEPTION: a PERSON's unaddressed post is still answered, all three arms", async () => {
+    // 🔒 **SAMUEL, 2026-09-18, VERBATIM: *"Agents should only be woken up when addressed (besides
+    // the logic for a user with no @ in their messsage)."*** That parenthesis is RR3, and it is
+    // the ONLY repair left in the product. Driven on all three of its arms, because a build that
+    // over-read the wave as "stop repairing addresses" would pass every other case in this file
+    // and silence the one path a human depends on.
+    // ARM: the room's ONE live agent.
+    roomProjection(sessionRow({ name: AGENT }));
+    const solo = await resolve("can someone look at the build?", {}, { authorKind: "user" });
+    expect(solo).toMatchObject({ verdict: "responder", recipientAgentIds: [AGENT] });
+
+    // ARM: several live, so the one THIS PERSON addressed most recently.
+    roomProjection(sessionRow({ name: AGENT }), sessionRow({ id: "s-2", name: AGENT2 }));
+    recentAgentPosts({ recipient_agent_ids: [AGENT2] });
+    const recent = await resolve("and this one?", {}, { authorKind: "user" });
+    expect(recent).toMatchObject({ verdict: "responder", recipientAgentIds: [AGENT2] });
+
+    // ARM: the asking person's own `none` setting is honoured, and is not a failure.
+    unaddressedResponder("none");
+    const off = await resolve("thinking aloud", {}, { authorKind: "user" });
+    expect(off.verdict).toBe("none");
   });
 
   it("a PERSON's unaddressed post is still ANSWERED — the arms are not disabled", async () => {

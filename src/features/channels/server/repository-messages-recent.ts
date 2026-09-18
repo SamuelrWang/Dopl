@@ -30,7 +30,7 @@ import type { ChannelMessageRow } from "./dto";
  * {@link RECENT_AGENT_POSTS_LIMIT} — the window bounds it in TIME, and a busy
  * room can still put thousands of rows inside 15 minutes.
  * ⚠ **`thread IS NULL` IS SPELLED `metadata->>taskId IS NULL`**, the expression
- * `findLastRoomAddressToAgent` and `listMessages` already use.
+ * `listMessages` already uses (RR2's read, the other citation, was deleted 2026-09-18).
  */
 const RECENT_AGENT_POSTS_LIMIT = 50;
 

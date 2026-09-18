@@ -233,7 +233,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   liveHere([]);
   vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([]);
-  vi.mocked(repoMessages.findLastRoomAddressToAgent).mockResolvedValue(null);
   // RR3's third input since 2026-09-07: the AUTHOR's own membership setting. Seeded to the
   // default, which is what a member who never opened Settings has.
   vi.mocked(repo.findUnaddressedResponder).mockResolvedValue("last_addressed");

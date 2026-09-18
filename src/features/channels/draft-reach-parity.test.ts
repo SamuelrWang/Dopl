@@ -235,7 +235,6 @@ const CASES: Case[] = [
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(repoMessages.findLastRoomAddressToAgent).mockResolvedValue(null);
 });
 
 describe("🔒 the composer's line and the server's verdict agree, case for case", () => {
@@ -334,12 +333,14 @@ describe("🔒 the composer's line and the server's verdict agree, case for case
   });
 });
 
-describe("⚠ RR2 is predicted by NOBODY, and that is the recorded gap (F-551)", () => {
-  it("the client module models three arms and names the fourth as out of scope", async () => {
-    // ⚠ An agent author's reciprocal arm has no client prediction because no
-    // browser holds an agent credential — so the ONE arm with no preview is the
-    // one whose author is a machine, i.e. the caller least able to notice a
-    // silent non-delivery. Pinned as a DECISION rather than left as an absence.
+describe("🔴 RR2 IS DELETED, so the gap it left the client (F-551) is closed", () => {
+  it("the client models every arm the server still has — there is no unpredicted one", async () => {
+    // ⚠ **F-551 WAS A PARITY GAP AND IT IS CLOSED BY SUBTRACTION (2026-09-18).** The composer
+    // could preview RR1 and RR3 and not RR2 — no browser holds an agent credential — so the ONE
+    // unpreviewed arm was the one whose author is a machine, the caller least able to notice a
+    // silent non-delivery. Samuel's ruling deletes that arm, so the set the client models and
+    // the set the server runs are the same set. ⚠ The client's own NOTE may still name it, as
+    // the record of what it is not predicting; what must not exist is a live producer.
     const { readFileSync } = await import("node:fs");
     // ⚠ Comment prose wraps, so the scan squashes whitespace and the leading
     // `*` of each continuation line — a regex over the raw text would pin the
@@ -350,10 +351,12 @@ describe("⚠ RR2 is predicted by NOBODY, and that is the recorded gap (F-551)",
     )
       .replace(/^\s*\*/gm, "")
       .replace(/\s+/g, " ");
-    expect(src).toContain(
-      "RR2 is an agent author's arm and no browser holds an agent credential"
-    );
     expect(src).not.toMatch(/reciprocalParty/);
+    // 🔒 AND THE SERVER HAS NO PRODUCER EITHER — what makes the closure real rather than a
+    // comment: `reciprocal` is a tombstone in the resolver, never an assignment.
+    expect(
+      readFileSync(new URL("./server/service-wake-verdict.ts", import.meta.url), "utf8"),
+    ).not.toMatch(/verdict: "reciprocal"/);
   });
 
   /**
@@ -409,14 +412,12 @@ describe("⚠ RR2 is predicted by NOBODY, and that is the recorded gap (F-551)",
     expect(server.reason).toBe("most recent");
   });
 
-  it("and the server's RR2 answers where the client would have said `none`", async () => {
-    // The behaviour the client cannot show: same body, same room, agent author.
+  it("…and the server now says `none` too, which is what the client already predicted", async () => {
+    // ⚠ **THE PARITY ASSERTION, INVERTED BY THE RULING.** It pinned the DIVERGENCE — the client
+    // said `none`, the server answered `reciprocal`, and only the server was right. Both say
+    // `none` now, so the case that recorded the gap records its closure.
     vi.mocked(repoSessions.listSessionStates).mockResolvedValue([sessionRow("k3v7d2mq")]);
     vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([sessionRow("k3v7d2mq")]);
-    vi.mocked(repoMessages.findLastRoomAddressToAgent).mockResolvedValue({
-      seq: 7,
-      author_user_id: PEER,
-    } as never);
 
     const server = await resolveWakeVerdict(
       CTX,
@@ -426,8 +427,7 @@ describe("⚠ RR2 is predicted by NOBODY, and that is the recorded gap (F-551)",
       { authorKind: "agent", toAgentIds: [], toUserIds: [] },
       NOW
     );
-    expect(server.verdict).toBe("reciprocal");
-    expect(server.recipientUserIds).toEqual([PEER]);
+    expect(server).toMatchObject({ verdict: "none", recipientUserIds: [], delivery: "none" });
   });
 });
 

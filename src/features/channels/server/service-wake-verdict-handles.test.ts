@@ -7,7 +7,6 @@ import * as repoSessions from "./repository-sessions";
 import { resolveAgentRecipients } from "./service-wake-verdict-handles";
 import {
   CTX,
-  lastAddress,
   projection,
   recentAgentPosts,
   resolve,
@@ -33,7 +32,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   projection();
   roomProjection();
-  lastAddress(null);
   recentAgentPosts();
 });
 
