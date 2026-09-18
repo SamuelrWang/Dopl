@@ -248,25 +248,41 @@ export function AppShellLayout() {
               composed here rather than restated, so the panel /home wears and
               the panel this wears are one recipe. `styles.panel` adds layout
               only; see `app-shell.module.css`'s header for the level table. */}
-          <div className={cn("page-float", styles.panel)}>
-            <AppSidebarCore
-              workspaceSegment={segment}
-              activeSection={activeSectionFromPath(location.pathname)}
-              onOpenSettings={openSettings}
-              Link={RouterLink}
-              brand={
-                <WorkspaceSwitcherCore
-                  workspaceSegment={segment}
-                  workspacePublicId={workspace.publicId}
-                  workspaceName={workspace.name}
-                  workspaces={workspaces}
-                  isLoading={workspacesQuery.isPending}
-                  onNavigate={(path) => navigate(path)}
-                  onOpenSettings={openSettings}
-                  onCreateWorkspace={() => setCreateWsOpen(true)}
-                />
-              }
-            />
+          {/* ⚠ `data-no-nav`, NOT a second class on the panel: the panel's and
+              the card's class expressions are byte-shared with the shell ghost
+              (`skeletons/frame-skeletons.test.tsx`), so the no-sidebar inset is
+              an ATTRIBUTE hook and the CSS module owns the geometry. */}
+          <div
+            className={cn("page-float", styles.panel)}
+            data-no-nav={isContainerMember ? "" : undefined}
+          >
+            {/* 🔒 R-13 (Samuel, 2026-09-17): **THE CONTAINER MEMBER GETS NO
+                NAV**, and it is DELETED rather than disarmed or filtered. The
+                redirect above leaves them exactly one reachable shell route —
+                their channel record — so all eight rows, the switcher, the Team
+                upsell and the settings gear pointed at pages that bounce
+                straight back. ⚠ It is the same fence as the redirect, asked
+                once: a nav-only rule would be a SECOND reading of the kind. */}
+            {isContainerMember ? null : (
+              <AppSidebarCore
+                workspaceSegment={segment}
+                activeSection={activeSectionFromPath(location.pathname)}
+                onOpenSettings={openSettings}
+                Link={RouterLink}
+                brand={
+                  <WorkspaceSwitcherCore
+                    workspaceSegment={segment}
+                    workspacePublicId={workspace.publicId}
+                    workspaceName={workspace.name}
+                    workspaces={workspaces}
+                    isLoading={workspacesQuery.isPending}
+                    onNavigate={(path) => navigate(path)}
+                    onOpenSettings={openSettings}
+                    onCreateWorkspace={() => setCreateWsOpen(true)}
+                  />
+                }
+              />
+            )}
             {/* Order matches the web layout: tour wraps the routed page. */}
             <TourProviderCore
               workspaceSegment={segment}

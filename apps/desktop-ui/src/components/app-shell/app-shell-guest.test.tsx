@@ -263,6 +263,34 @@ describe("the shell sends a container member to their channel", () => {
     });
   }
 
+  /**
+   * 🔒 R-13 (Samuel, 2026-09-17) — **AND IT IS DELETED, NOT HIDDEN.** ASK-2 left
+   * the guest *"still wearing a nav they cannot use"*: the redirect leaves a
+   * container member exactly one reachable shell route, so all eight rows, the
+   * switcher and the settings gear pointed at pages that bounce straight back.
+   * ⚠ `queryByRole("link")` is the assertion, not a class or a `hidden` prop —
+   * a nav that renders and hides is the thing this forbids.
+   */
+  it("renders NO workspace nav for a container member", async () => {
+    role = "member";
+    renderShell(`/${SEGMENT}/overview`);
+
+    expect(await screen.findByText("channel body")).toBeTruthy();
+    for (const label of ["Overview", "Channels", "Members", "Skills", "Chats"]) {
+      expect(screen.queryByRole("link", { name: label })).toBeNull();
+    }
+  });
+
+  it("keeps the nav for a standard workspace", async () => {
+    // The other half, or the case above passes on a shell that never renders a
+    // nav for anybody.
+    role = "owner";
+    workspaceRow = STANDARD;
+    renderShell(`/${SEGMENT}/overview`);
+
+    expect(await screen.findByRole("link", { name: "Members" })).toBeTruthy();
+  });
+
   it("leaves a STANDARD workspace alone, and never even ASKS", async () => {
     // ⚠ THE UNASKED QUESTION IS THE ASSERTION. "Still on /overview" alone is
     // VACUOUS here: the redirect needs a round trip, and the render assertion

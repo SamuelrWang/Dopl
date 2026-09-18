@@ -149,6 +149,16 @@
   overflow: hidden;
 }
 
+/* ⚠ NO SIDEBAR BESIDE IT (R-13, 2026-09-17): a member of a home-channel
+   container renders the channel record with no nav, and `.pageCard`'s zero left
+   margin was the sidebar's own 12px padding standing in for it. Same value as
+   the rule above, so the card keeps one inset on all four sides. Selected off
+   the panel's `data-no-nav` because both class EXPRESSIONS are byte-shared with
+   the shell ghost (`skeletons/frame-skeletons.test.tsx`). */
+.panel[data-no-nav] .pageCard {
+  margin-left: 12px;
+}
+
 /* ⚠ THE PAGE'S OWN `.page-float` COLLAPSES INSIDE THE CARD, and this is the
    seam the restructure turned on. Sixteen surfaces across two trees compose
    `.page-float` to mean "THE full-page surface" — every workspace page, its
