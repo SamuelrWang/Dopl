@@ -26,7 +26,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { Avatar } from "@/shared/ui/avatar";
-import { formatShortDate } from "@/shared/lib/format-time";
+import { formatDate } from "@/shared/lib/format-time";
 import {
   MetaRow,
   MetaRowDivider,
@@ -38,7 +38,7 @@ import { MemberRoster } from "./member-roster";
 import { ThreadActivityStrip, type ActivityBin } from "./thread-activity";
 import { MentionsDisclosure } from "./mentions-disclosure";
 import { memberPerson, type AuthorIndex } from "./view-model";
-import { memberLabel } from "../lib/channel-display";
+import { CREATED_ROW_LABEL, memberLabel } from "../lib/channel-display";
 import type { Channel, ChannelMember, ChannelMention } from "../types";
 
 export function InfoTab({
@@ -180,9 +180,14 @@ export function InfoTab({
           )}
         </MetaRow>
         <MetaRowDivider />
-        <MetaRow icon={Calendar} label="Date of creation">
+        {/* ⚠ **"Created" + `formatDate`, NOT "Date of creation" + `formatShortDate`
+            (Samuel's ruling R-20, 2026-09-17).** The label is a CONSTANT shared with
+            /home's own card, and the formatter keeps the YEAR — which on a creation
+            date is the component that matters. See `channel-display.ts ›
+            CREATED_ROW_LABEL` for why the string is not written here. */}
+        <MetaRow icon={Calendar} label={CREATED_ROW_LABEL}>
           <span className="text-body text-text-primary">
-            {formatShortDate(channel.createdAt)}
+            {formatDate(channel.createdAt)}
           </span>
         </MetaRow>
         <MetaRowDivider />

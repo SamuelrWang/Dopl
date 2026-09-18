@@ -27,7 +27,10 @@ import { MentionsList } from "@/features/channels/components/mentions-list";
 import type { MentionsBundle } from "@/features/channels/components/mentions-disclosure";
 import { useChannelInfoCardWrite } from "@/features/channels/hooks/use-channel-info-card-writes";
 import { useChannelMembers } from "@/features/channels/hooks/use-channel-members";
-import { memberLabel } from "@/features/channels/lib/channel-display";
+import {
+  CREATED_ROW_LABEL,
+  memberLabel,
+} from "@/features/channels/lib/channel-display";
 import { memberPerson } from "@/features/channels/components/view-model";
 import { Avatar } from "@/shared/ui/avatar";
 import {
@@ -222,7 +225,11 @@ export function PersonInfoTab({
     {
       key: "created",
       icon: CalendarDays,
-      label: "Created",
+      // ⚠ ONE DECLARATION, BOTH BODIES (Samuel's ruling R-20, 2026-09-17) — this
+      // row's label and `formatDate` are what the workspace tab adopted, and the
+      // string moved to `channel-display.ts › CREATED_ROW_LABEL` so the next edit
+      // cannot land on one card only.
+      label: CREATED_ROW_LABEL,
       value: (
         <span className="text-body text-text-primary">
           {formatDate(homeChannel.createdAt)}

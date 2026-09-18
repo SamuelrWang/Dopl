@@ -16,6 +16,36 @@ import type { Channel, ChannelDirectPeer, ChannelMember } from "../types";
  */
 
 /**
+ * 🔒 **THE CHANNEL-CREATION ROW'S LABEL — ONE DECLARATION, BOTH INFO BODIES
+ * (Samuel's ruling R-20, 2026-09-17).**
+ *
+ * The workspace tab said **"Date of creation"** with `formatShortDate` and /home's
+ * said **"Created"** with `formatDate` — three differences on one row (label,
+ * formatter, source) with nothing recording a decision either way. R-20 is (a):
+ * **"Created" + `formatDate` on both.**
+ *
+ * ⚠ **A CONSTANT RATHER THAN THE STRING TWICE, AND THAT IS THE POINT OF THE
+ * RULING.** Two literals is exactly how the divergence happened: each body was
+ * edited on its own day by somebody who could not see the other. The FORMATTER is
+ * `shared/lib/format-time.ts › formatDate` — already one declaration — so the
+ * label was the half with no single home. ⚠ `formatShortDate` drops the YEAR,
+ * which on a creation date is the one component that matters; it is still the
+ * right answer for recency stamps, and nothing else about it changed.
+ *
+ * ⚠ **THE THREAD INFO TAB IS NOT COVERED AND STILL SAYS "Date of creation" +
+ * `formatShortDate`** (`components/thread-info-tab.tsx`). R-20 ruled on the two
+ * CHANNEL bodies, and a thread's created row is a different row about a different
+ * object — so it is left alone rather than swept, and recorded as **F-721** rather
+ * than accepted silently. ⚠ Do NOT import this constant there to "fix" it; that is
+ * a copy decision Samuel has not made.
+ *
+ * ⚠ **THE SOURCE IS STILL THE HOST'S** (`channel.createdAt` vs
+ * `homeChannel.createdAt` — the same column, projected twice); collapsing that is
+ * the ONE-BODY step, not this one.
+ */
+export const CREATED_ROW_LABEL = "Created";
+
+/**
  * How a human is NAMED in this feature's UI: display name, then email, then
  * the raw user id as a last resort so a row is never blank.
  *

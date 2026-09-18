@@ -9960,3 +9960,12 @@ The claim had been restated in five places from one sentence, which is how it su
 - ⚠ **NOTHING IS LOST IN THE MEANTIME, WHICH IS WHY (a) WAS SAFE.** **Add members** is on the Settings tab (`settings-tab.tsx`), capability-gated on `memberManagement` so /home's link container — where the act cannot happen at all (§4A `LINK_CONTAINER_CLOSED`) — does not offer it. The Info-tab button was a second opener for an act that already has one, and it had no `onClick` at all.
 - ⚠ **"Filter members" is NOT part of this.** It was deleted outright and no ticket follows it: the roster is bounded and short, and R-46's (b) named only the add affordance.
 - Status: OPEN, small. Wire the heading's affordance to `channels/components/invite-dialog.tsx › InviteDialog` behind the same `memberManagement` capability the Settings row uses, or decide the Settings row is the one place and close this.
+
+### F-721 — R-20 made the two CHANNEL info bodies agree and left the THREAD one saying "Date of creation" (2026-09-17)
+
+- Location: `src/features/channels/components/thread-info-tab.tsx` — the `MetaRow` at `Calendar` / `formatShortDate`, against `channels/lib/channel-display.ts › CREATED_ROW_LABEL`, which the two channel bodies now share.
+- ⚠ **Id note:** re-derived across every live branch on 2026-09-17; `F-720` was the highest, claimed by this same wave.
+- Found during: wave 1B, executing Samuel's ruling **R-20** ("Created" + `formatDate` on both info bodies).
+- **THE STATE AFTER R-20.** The workspace channel tab and /home's card now read **"Created"** and format with `formatDate` (year kept), from one exported constant. The THREAD info tab — the same column, one selection away, same `Calendar` glyph, same `MetaRow` — still reads **"Date of creation"** and formats with `formatShortDate` (year dropped). Before R-20 there were two spellings of this row and it was a channel-vs-home split; there are still two, and it is now a channel-vs-thread split.
+- ⚠ **THIS IS NOT AN ARGUMENT THAT R-20 WAS WRONG, AND IT IS NOT A LICENCE TO SWEEP.** A thread's created row is a row about a different object, and R-20's text is explicitly about the two channel bodies (01 §E-2). Extending a ruling to a surface it did not name is the failure the visual-match rules exist to prevent. Recorded so the next reader does not assume the constant was simply forgotten there.
+- Status: OPEN, one line either way. Needs Samuel's word: does the thread row take "Created" + `formatDate` too, or is the thread card deliberately terser?
