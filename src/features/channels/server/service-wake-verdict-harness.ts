@@ -136,12 +136,9 @@ export function recentAgentPosts(
   );
 }
 
-/** RR2's one read — the last main-room row addressed to this agent. */
-export function lastAddress(row: Partial<ChannelMessageRow> | null): void {
-  vi.mocked(repoMessages.findLastRoomAddressToAgent).mockResolvedValue(
-    row === null ? null : ({ seq: 7, author_user_id: "user-2", ...row } as ChannelMessageRow)
-  );
-}
+// 🔴 **`lastAddress` IS DELETED (2026-09-18)** — it seeded RR2's one read, and RR2 is gone with
+// the repair it performed. A seeder for a deleted arm is how a suite keeps testing a product
+// that is not there.
 
 export function channelRow(over: Partial<ChannelRow> = {}): ChannelRow {
   return { id: "chan-1", workspace_id: "ws-1", ...over } as ChannelRow;

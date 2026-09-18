@@ -53,9 +53,14 @@ export type ChannelWakeVerdict =
   /** **RR1** — a reply in a thread with no `to`, resolved to the thread's OTHER
    *  party. A thread has exactly two parties, so "other" is total. */
   | "thread_peer"
-  /** **RR2** — an unaddressed AGENT-authored post in the main room, resolved to
-   *  the party that last addressed this agent in this room inside
-   *  `shared/channels/caps.ts › RESILIENCE_WINDOW_MS`. */
+  /** 🔴 **RR2, DELETED 2026-09-18 (Samuel's ruling) — A TOMBSTONE.** It resolved an
+   *  unaddressed AGENT-authored main-room post to the party that last addressed that
+   *  agent here. An agent now addresses somebody or files a record, so nothing
+   *  PRODUCES this; the word stays because rows written before today carry it, the
+   *  column's `CHECK` still admits it, and a reader of an old row must not be handed
+   *  a value the type cannot express. ⚠ **DO NOT ADD A PRODUCER.** The desktop feeds
+   *  such a row to nobody (`main/session-dispatch.js`), which is what makes an old
+   *  row inert rather than dangerous. */
   | "reciprocal"
   /** **RR3** — an unaddressed HUMAN message, resolved to the channel's
    *  configured default responder, or to the room's one live agent. */

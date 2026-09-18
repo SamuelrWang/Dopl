@@ -38,7 +38,7 @@ export const ESCALATION_SCAN_LIMIT = 25;
 /**
  * The channel's most recent escalation CARDS, newest first.
  *
- * ⚠ `seq` DESC IS THE ORDER, matching `findLastRoomAddressToAgent`'s reason:
+ * ⚠ `seq` DESC IS THE ORDER, for the reason RR2's deleted read also gave:
  * `seq` is unique per channel and the advisory-locked insert RPC makes commit
  * order monotonic, so "the most recent" is TOTAL — no tie is representable.
  * `created_at` would reintroduce a tie-break to get wrong.

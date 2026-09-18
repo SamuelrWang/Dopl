@@ -410,7 +410,6 @@ describe("postMessage — addressing + author derivation", () => {
         updated_at: new Date().toISOString(),
       } as never,
     ]);
-    vi.mocked(repoMessages.findLastRoomAddressToAgent).mockResolvedValue(null);
 
     await postMessage(agentCtx, "general", { body: "status?", authorKind: "user" });
     const row = vi.mocked(repoMessages.insertMessage).mock.calls[0][0];

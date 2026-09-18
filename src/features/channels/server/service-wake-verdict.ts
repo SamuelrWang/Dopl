@@ -6,7 +6,6 @@ import type { ChannelRow } from "./dto";
 // 2026-09-04) — one place decides which agent a handle names and whose sessions
 // it may look through. This file decides PRECEDENCE and nothing else about it.
 import {
-  ownLiveAgentIds,
   resolveAgentRecipients,
   selfAgentIdOf,
 } from "./service-wake-verdict-handles";
@@ -14,7 +13,6 @@ import type { ResponderReason } from "../lib/agent-mentions";
 import {
   defaultResponder,
   liveChannelSessions,
-  reciprocalParty,
   recentRoomAgents,
   threadOtherParty,
   // 2026-09-06 (items 10/11): the AUTHOR's own per-member setting, replacing the channel's
@@ -73,6 +71,8 @@ export interface WakeVerdictResult {
  * a wake that is about to happen, and `delivery=` is the one ack an orchestrator
  * acts on.
  */
+// ⚠ `reciprocal` IS UNREACHABLE SINCE 2026-09-18 (RR2 is deleted) and its row stays because the
+// TYPE still names the word for old rows. A `Record` over the union cannot omit it.
 const DELIVERY_FOR: Record<ChannelWakeVerdict, ChannelDelivery> = {
   none: "none",
   member: "delivered",
@@ -155,12 +155,13 @@ export interface WakeVerdictContext {
  * ⚠ **AND A RECORD IS NOT A FORGOTTEN `@`** — `intent:"chat"` short-circuits
  * every arm and lands on `none`. See {@link isRecord}.
  *
- * ⚠ **THE RESILIENCE ARMS RUN ONLY WHEN NOTHING WAS ADDRESSED, AND THEY ARE
- * DISJOINT BY (in a thread?) × (author kind), SO EXACTLY ONE FIRES.** RR1 is the
- * threaded case; RR2 and RR3 are the main room, split by whether an agent or a
- * person wrote it. They exist because the fan-out narrows (`b-fanout-narrow`)
- * and Samuel's ruling in the same breath is that a forgotten `@` must never
- * stall a conversation (INVARIANTS §5 › THE RESILIENCE ARMS).
+ * ⚠ **TWO RESILIENCE ARMS SINCE 2026-09-18, AND THEY RUN ONLY WHEN NOTHING WAS
+ * ADDRESSED.** RR1 `thread_peer` is the threaded case, for either author kind —
+ * a thread has exactly two parties, so the other one is an address rather than a
+ * repair. RR3 `responder` is the main room and is a PERSON's arm only. 🔴 **RR2
+ * `reciprocal` IS DELETED**: an unaddressed AGENT post in the main room is a
+ * RECORD by Samuel's structural ruling, not a forgotten `@`, so there is nothing
+ * to repair and it lands on `none`.
  *
  * ⚠ **A STRIPPED THREAD TAG SHORT-CIRCUITS EVERY ARM.** A post whose legacy tag
  * was dropped LOOKS like a main-room post and is not one: the author was talking
@@ -173,12 +174,11 @@ export interface WakeVerdictContext {
  * the address of a `task_progress` would aim a wake at a note about a run.
  *
  * ⚠ **THE LOOP FENCE IS STRUCTURAL, NOT A BRANCH.** An agent-authored message
- * cannot reach an agent that is not its own operator's, because both agent doors
- * are own-scoped when the credential is an agent's ({@link resolveAgentRecipients}
- * here, `liveAgentHandles` in the `to=` resolver) and RR2 resolves a MEMBER by
- * construction. `authorKind` appears TWICE and only twice — to SPLIT RR2 from
- * RR3, and to choose the body parse's candidate set (2026-09-04); the second use
- * is the fence expressed as a scope rather than as a guard a reader can forget.
+ * cannot reach an agent that is not its own operator's, because the `to=`
+ * resolver is own-scoped for an agent credential (`liveAgentHandles`) and the
+ * BODY door is not open to an agent author at all. `authorKind` appears twice —
+ * to close the body door, and to keep RR3 a person's arm — and each use is the
+ * fence expressed as a scope rather than as a guard a reader can forget.
  *
  * ⚠ **THE ESCALATION-ANSWER DOOR IS NOT RESOLVED HERE, DELIBERATELY.**
  * `metadata.escalationAnswer.agentId` names the agent that ASKED, which belongs
@@ -350,20 +350,17 @@ export async function resolveWakeVerdict(
     if (other !== null) {
       resilience = { verdict: "thread_peer", userIds: [other], agentIds: [] };
     }
-  } else if (repairable && wakeCtx.authorKind === "agent") {
-    // RR2 — whoever last addressed this agent in this room, inside the window.
-    // ⚠ THE AUTHOR'S OWN LIVE AGENT IDS GO WITH IT (F-589): one half of the arm's
-    // key is the `client_msg_id` stamp, which is CALLER-SUPPLIED, so the claim
-    // "I am agent X" is checked against the projection before it may select a
-    // recipient. ⚠ THE METADATA GOES WITH IT TOO (2026-09-04): the arm's OTHER
-    // key is `metadata.session_id`, the server's own stamp, which is what makes
-    // it fire for a post that supplied its own idempotency key.
-    const { ids } = await ownLiveAgentIds(ctx, channelId, now);
-    const party = await reciprocalParty(channelId, input, metadata, now, ids);
-    if (party !== null) {
-      resilience = { verdict: "reciprocal", userIds: [party], agentIds: [] };
-    }
-  } else if (repairable && !namedButUnresolved) {
+    // 🔴 **RR2 STOOD HERE AND IS DELETED (2026-09-18, Samuel's ruling).** *"Agents
+    // should only be woken up when addressed (besides the logic for a user with
+    // no @ in their message)."* It repaired an unaddressed AGENT post's address
+    // back to whoever last addressed that agent in the room — a repair whose
+    // whole charter, *a forgotten `@` must never stall a conversation*, is a
+    // PERSON's problem. An agent chooses now: address somebody, or file a record.
+    // So an unaddressed agent post in the MAIN room falls through every arm and
+    // lands on `none` — nobody, `→ nobody`, and no notification.
+    // ⚠ The verdict WORD survives for old rows; see the tombstone in
+    // `service-wake-verdict-resilience.ts`.
+  } else if (repairable && wakeCtx.authorKind !== "agent" && !namedButUnresolved) {
     // ⚠ **`!namedButUnresolved` IS ON RR3 ALONE, AND THE ASYMMETRY IS THE WHOLE
     // POINT** (2026-09-14). RR1 and RR2 answer with a **MEMBER**; RR3 is the only
     // arm that answers with an **AGENT**, so it is the only one that can replace
