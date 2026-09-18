@@ -136,7 +136,30 @@ export default function RootLayout({
             routes so the grid pattern never flashes. Inline scripts in
             <body> are render-blocking, so this runs before the browser
             paints body's class-driven background. Must stay in sync with
-            isNoChrome in layout-shell.tsx. */}
+            isNoChrome in layout-shell.tsx.
+
+            🔒 ⚠ **IF YOU ARE HERE BECAUSE OF *"Encountered a script tag while
+            rendering React component. Scripts inside React components are never
+            executed when rendering on the client"*, THAT WARNING IS A SYMPTOM
+            AND THIS TAG IS NOT THE DEFECT (measured 2026-09-17).** It is the
+            ONLY `<script>` in `src/` (`grep -rn "<script" src/`), and this is a
+            SERVER component — its tag is part of the initial HTML and runs
+            there. The warning appears when React RE-RENDERS the document on the
+            client, which is what a RECOVERABLE hydration failure anywhere in the
+            tree makes it do (*"this tree will be regenerated on the client"*).
+            **Find the hydration mismatch; this stops logging when that is
+            fixed.** The 2026-09-17 instance was the landing hero's scripted
+            scene, fixed at `hero-banner.tsx`'s `ssr: false` boundary.
+
+            🚫 **AND DO NOT "FIX" IT WITH `next/script strategy="beforeInteractive"`.**
+            Next hoists that strategy into `<head>`, where `document.body` is
+            still null — the body writes below would no-op inside their own
+            `try`, silently, and the mosaic flash this exists to prevent would
+            come back with every gate still green. Targeting
+            `document.documentElement` instead would work, but `globals.css ›
+            body.landing-active` and `layout-shell.tsx`'s four `document.body`
+            writes all key off BODY, so that is a four-file ruling and not a
+            drive-by. */}
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var p=location.pathname;if(p==='/'||p==='/pricing'){document.body.classList.remove('mosaic-bg');document.body.classList.add('landing-active');}}catch(e){}})();`,

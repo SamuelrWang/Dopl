@@ -1,9 +1,50 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { LiquidGlass } from "@/shared/design/liquid-glass/liquid-glass";
-import { BannerDemo } from "./banner-demo/banner-demo";
 import { NotificationCard } from "./notification-card";
 import { useBannerScrub } from "./use-banner-scrub";
+
+/**
+ * 🔒 **THE SCENE IS CLIENT-ONLY, AND THAT IS A CORRECTNESS FENCE RATHER THAN A
+ * PERFORMANCE ONE (2026-09-17).** Server-rendering it threw
+ * *"Hydration failed because the server rendered text didn't match the client"*
+ * on every fresh load, naming `DemoChannelList → WellsColumn`.
+ *
+ * ⚠ **THREE INDEPENDENT CLOCKS MAKE IT UNFIXABLE ON THE SERVER, not one bug.**
+ * The scene prints channel-row timestamps through the product's own
+ * `shared/lib/format-time.ts › formatChannelTimestamp`, and that function is
+ * correct for an app that only ever runs in a browser:
+ *   1. the fixture's anchor is `Date.now()` at MODULE SCOPE, and the server and
+ *      client bundles are separate module instances evaluated seconds apart — so
+ *      any row can land on a different minute in the two renders
+ *      (`banner-demo-hydration.test.tsx` reproduces exactly this with a 61s skew);
+ *   2. `toLocaleTimeString` / `toLocaleDateString` read the RUNTIME's time zone —
+ *      UTC on the deploy, whatever the reader is in on the client;
+ *   3. its same-day test is against a fresh `new Date()`, which can flip between
+ *      the two renders on its own.
+ * **(2) cannot be fixed here without forking the shared formatter**, which the
+ * visual-match rules forbid — the scene shares the product's recipes or it is a
+ * look-alike. So the honest fix is to stop asking a server to render a scene
+ * whose whole job is to animate on a clock.
+ *
+ * ⚠ **IT COSTS NOTHING VISIBLE.** The slot below is `opacity: var(--lp-slot-opacity, 0)`
+ * and only fades in when the scroll engine flips it (`use-banner-scrub`), and the
+ * whole subtree is `aria-hidden` decoration with no SEO value. Under
+ * `prefers-reduced-motion` the slot IS visible at once and the scene arrives a
+ * beat later, which is a decorative element painting late rather than an error.
+ *
+ * 🚫 **DO NOT "OPTIMISE" THIS BACK TO A STATIC IMPORT.** The hydration failure it
+ * prevents is RECOVERABLE, so React discards the server HTML and re-renders the
+ * whole document on the client — which is also what made the root layout's
+ * pre-paint `<script>` render client-side and log *"Scripts inside React
+ * components are never executed when rendering on the client"*. One boundary,
+ * two symptoms.
+ */
+const BannerDemo = dynamic(
+  () => import("./banner-demo/banner-demo").then((m) => m.BannerDemo),
+  { ssr: false }
+);
 
 /** Markup only. Scroll maths, beats, mode selection: ./use-banner-scrub. */
 export function HeroBanner() {
