@@ -47,3 +47,34 @@ describe("🔒 the mirror is spelled once", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("🔒 nothing computes a manage verdict without the gate", () => {
+  /**
+   * The disjunction census above cannot see the failure that actually shipped:
+   * `channel-manage.tsx` wrote `const canManage = channel.role === "owner"`, a
+   * NARROWER spelling with no `meetsMinRole` in it, so a workspace admin who was
+   * a plain member saw no Delete and no visibility toggle on routes the server
+   * would have accepted. A regex for the full rule can only catch a copy of the
+   * full rule. This one asks the other question: who binds the NAME.
+   */
+  it("binds `canManage` only from canManageChannelHere", () => {
+    const root = join(process.cwd(), "src/features/channels");
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(path);
+          continue;
+        }
+        if (!/\.tsx?$/.test(entry.name) || entry.name.includes(".test.")) continue;
+        const src = readFileSync(path, "utf8").replace(/\s+/g, " ");
+        for (const [, rhs] of src.matchAll(/const canManage = ([^;]+);/g)) {
+          if (!rhs.includes("canManageChannelHere(")) offenders.push(`${path}: ${rhs}`);
+        }
+      }
+    };
+    walk(root);
+    expect(offenders).toEqual([]);
+  });
+});

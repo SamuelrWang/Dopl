@@ -54,8 +54,11 @@ import type { Channel } from "../types";
 
 export interface ChannelsSettingsTabProps {
   channel: Channel;
-  /** True for the channel owner — gates the manage half, as the kebab did. */
+  /** Owner OR workspace admin — the server gate (`service-shared.ts › canManageChannel`). */
   canManage: boolean;
+  /** Channel ownership alone. Only "Leave channel" asks this: an admin who is a
+   *  member may still leave, and the owner may not. */
+  isChannelOwner: boolean;
   /**
    * `settings-agent.tsx › ChannelAgentSettings`, injected as a SLOT: it needs
    * the roster, the trust set and three write handlers, all of which live in
@@ -121,6 +124,7 @@ export interface ChannelsSettingsTabProps {
 export function ChannelsSettingsTab({
   channel,
   canManage,
+  isChannelOwner,
   agent,
   channelAgents,
   memberManagement = true,
@@ -139,7 +143,7 @@ export function ChannelsSettingsTab({
   // is what destroys the conversation permanently. Both DM participants get the
   // reversible "Delete conversation" instead.
   const canLeave =
-    selfManagement && channel.isMember && !canManage && !channel.isDirect;
+    selfManagement && channel.isMember && !isChannelOwner && !channel.isDirect;
   // ⚠ `memberManagement: false` KILLS DELETE TOO, not just invite. In a fixed
   // two-person container the channel IS the relationship: deleting it leaves a
   // container whose relationship can no longer be rendered by either side, and

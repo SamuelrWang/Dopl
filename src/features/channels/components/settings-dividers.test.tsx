@@ -100,6 +100,7 @@ describe("the channel face — a line between every setting", () => {
       <ChannelsSettingsTab
         channel={channel()}
         canManage
+        isChannelOwner
         onInvite={noop}
         onToggleVisibility={noop}
         onRequestDelete={noop}

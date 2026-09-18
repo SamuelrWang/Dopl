@@ -72,6 +72,7 @@ function mount(over: Partial<Channel>, canManage: boolean, handlers = {}) {
     <ChannelsSettingsTab
       channel={ch}
       canManage={canManage}
+      isChannelOwner={canManage}
       agent={
         ch.isMember ? (
           <ChannelAgentSettings
@@ -209,6 +210,7 @@ describe("no dead rows, and nothing behind a click", () => {
       <ChannelsSettingsTab
         channel={channel({ isMember: false, role: null })}
         canManage={false}
+        isChannelOwner={false}
         agent={null}
         onInvite={vi.fn()}
         onToggleVisibility={vi.fn()}

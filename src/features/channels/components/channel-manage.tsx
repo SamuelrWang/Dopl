@@ -48,13 +48,14 @@
  */
 
 import { useState } from "react";
-import { meetsMinRole, type Role } from "@/features/workspaces/types";
+import { type Role } from "@/features/workspaces/types";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import { UNRESOLVED_TOOL_PROFILE } from "../constants";
 import { useChannelLifecycleWrites } from "../hooks/use-channel-lifecycle-writes";
 import { useChannelPreferenceWrites } from "../hooks/use-channel-preference-writes";
 import { channelDisplayName } from "../lib/channel-display";
+import { canManageChannelHere } from "../lib/channel-manage-gate";
 import { CreateChannelDialog } from "./create-channel-dialog";
 import { DirectMessageDialog } from "./direct-message-dialog";
 import { GoPublicDialog, needsGoPublicConfirm } from "./go-public-dialog";
@@ -133,7 +134,11 @@ export function ChannelsManageActions({
     onDeselect,
   });
 
-  const canManage = channel.role === "owner";
+  // The SERVER gate is owner OR workspace admin (`service-shared.ts › canManageChannel`).
+  // This read said `role === "owner"` alone, so an admin who was a plain member saw no
+  // Delete and no visibility toggle on routes that would have accepted both.
+  const canManage = canManageChannelHere(channel, role);
+  const isChannelOwner = channel.role === "owner";
   // ⚠ **THE PEER-SESSIONS POLL IS DELETED FROM THIS SURFACE (2026-09-07, items 10 and 11).**
   // It existed for ONE consumer: the old responder PICKER, whose options were the room's live
   // agents. The replacement control names no agent — it is a two-value rule, because agents are
@@ -167,6 +172,7 @@ export function ChannelsManageActions({
       <ChannelsSettingsTab
         channel={channel}
         canManage={canManage}
+        isChannelOwner={isChannelOwner}
         memberManagement={memberManagement}
         selfManagement={selfManagement}
         // The agent half, INLINE (2026-08-19 ruling — see the file docblock).
@@ -247,7 +253,7 @@ export function ChannelsManageActions({
           workspaceSlug={workspaceSlug}
           channelId={channel.id}
           currentUserId={currentUserId}
-          canManage={canManage || meetsMinRole(role, "admin")}
+          canManage={canManage}
           open={inviteOpen}
           onOpenChange={setInviteOpen}
           onChanged={onRosterChanged}

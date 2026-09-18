@@ -119,6 +119,7 @@ describe("NO DEAD ROWS — the tab shows the panel only when it is given one", (
       <ChannelsSettingsTab
         channel={channelFixture()}
         canManage
+        isChannelOwner
         channelAgents={<div>channel agent settings</div>}
         onInvite={() => {}}
         onToggleVisibility={() => {}}
@@ -143,6 +144,7 @@ describe("NO DEAD ROWS — the tab shows the panel only when it is given one", (
       <ChannelsSettingsTab
         channel={{ ...channelFixture(), role: "member" }}
         canManage={false}
+        isChannelOwner={false}
         channelAgents={<div>channel agent settings</div>}
         onInvite={() => {}}
         onToggleVisibility={() => {}}
@@ -161,6 +163,7 @@ describe("NO DEAD ROWS — the tab shows the panel only when it is given one", (
       <ChannelsSettingsTab
         channel={{ ...channelFixture(), isMember: false, role: null }}
         canManage={false}
+        isChannelOwner={false}
         memberManagement={false}
         onInvite={() => {}}
         onToggleVisibility={() => {}}
