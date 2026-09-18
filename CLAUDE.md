@@ -98,7 +98,11 @@ second typecheck):
 3. the `size-check` CI job — the 500-line cap over `packages/`, an inline `find`/`awk` in ci.yml.
 4. `npx tsx scripts/check-knowledge-type-drift.ts` — knowledge types, server vs SDK.
 5. `npx tsx scripts/check-role-drift.ts` — the workspace ROLE SET, the `GET /api/workspaces` row
-   shape, and `isStandardWorkspace`'s positive form. ⚠ **THE TYPE HALVES OF (A) AND (C) LEFT ON
+   shape, `isStandardWorkspace`'s positive form, and — since 2026-09-17 (R-32) — the CONTAINER KIND:
+   `@dopl/contracts › WorkspaceKind` against the `workspaces_kind_check` SQL `CHECK`, `› ContainerKind`
+   against it, and `workspace-directory.ts › containerKind`'s written arms. ⚠ **A FOURTH FAMILY IN THE
+   SAME SCRIPT AND THE SAME CI STEP — the gate count below does not move**, and the row landed here and
+   in §14 in the same change, which is what the warnings in this file keep asking for. ⚠ **THE TYPE HALVES OF (A) AND (C) LEFT ON
    2026-09-02** when `@dopl/contracts` took them (INVARIANTS §1): what is checked is the role-keyed
    decision MAPS, the SQL rank `CASE`, the two DTO interfaces and the three copies of the
    PREDICATE — a type-only package cannot hold a function.
