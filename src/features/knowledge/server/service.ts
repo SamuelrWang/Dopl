@@ -16,10 +16,27 @@ import "server-only";
  *   - `service-startup-context.ts` — the capped payload a session starts with
  *   - `service-seed.ts`     — workspace fixture seeding
  *
- * Deletes are PERMANENT — no soft-delete, trash, restore or purge. The
- * `deleted_at` columns and read-path filters remain only so pre-switch
- * tombstones stay hidden until
- * `20260807110000_purge_soft_deleted_rows.sql` sweeps them.
+ * Deletes are PERMANENT — no soft-delete, trash, restore or purge (Samuel's
+ * ruling, restated 2026-09-18: *"When a user deletes a KB, it's just gone."*).
+ *
+ * ⚠ **THE SWEEP THIS BLOCK USED TO WAIT ON HAS HAPPENED.**
+ * `20260807110000_purge_soft_deleted_rows.sql` applied and there are no
+ * tombstones left to hide (a COUNT is a measurement — re-derive with `SELECT
+ * count(*) FROM knowledge_bases WHERE deleted_at IS NOT NULL`, and the same on
+ * `knowledge_entries` / `knowledge_folders`; all three read 0 on 2026-09-18).
+ * The DATABASE half of the retirement landed with
+ * `20261013120000_drop_knowledge_soft_delete.sql`, which drops the trash/restore
+ * RPCs and the two trigger functions that still wrote the dropped
+ * `workflow_*` tables.
+ *
+ * What survives here is the `deleted_at` COLUMNS, their indexes and the
+ * `deleted_at IS NULL` read filters — inert, because nothing in this tree
+ * writes the column and `includeDeleted` is `false` at every call site. They
+ * stay because removing them is not mechanical: three of the indexes are
+ * PARTIAL UNIQUE constraints that would have to be rebuilt, and `deletedAt` is
+ * on the `@dopl/client` mirror that `scripts/check-knowledge-type-drift.ts`
+ * pins. **F-730 carries the exact remaining work.** A column nothing writes is
+ * not a soft delete; it is a column.
  */
 
 export { buildKnowledgeContext, assertBaseWritable } from "./service-shared";
