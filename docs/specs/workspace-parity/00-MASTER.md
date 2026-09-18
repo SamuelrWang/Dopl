@@ -1274,8 +1274,26 @@ work in the same surface.
 P36 `isSoleAudience` · P37 `containerNoun(kind)` · P38 one liveness mechanism ·
 X18/V16 decide `lastMessagePreview`'s fate · X21/R-48 drop `channel_personal_arming`.
 
-🟢 **LANDED 2026-09-17 on `wave3/one-channel-projection`: P30, P31, P32, P35, R-28's COUNT, R-48 and
-F-719.** One endpoint (`GET|POST /api/channels?scope=container|account`), one row type
+✅ **MERGED TO `master` 2026-09-17** (branch `wave3/one-channel-projection`, 5 build commits + 1
+review commit, fast-forward, full gate set green). **What the review changed, one line each:** the
+`scope=account` membership PROOF was written TWICE (`repository-account.ts › listAccountChannelRefs`
+and `repository-list-extras.ts › listAccountChannelRows` each spelled the container lock, the stable
+order and the `>=` ceiling) and is now ONE function, `listMyChannelMemberships`, pinned by a twin
+test · `repository-collab.ts › presenceForWorkspaces` collapsed a person's N container rows by
+"last row read wins", which PostgREST does not order — it takes the FRESHEST `last_seen_at` now,
+pinned in both row orders · `ChannelListPayload` gained the `truncated` key the handler was already
+emitting and the SDK already declared · the two /home surfaces that want channels-without-rows went
+through one memoised `use-home-channels.ts` instead of two un-memoised call sites · INVARIANTS §4A
+still described `HomeChannel.peers`/`peer` as LIVE (the doc-refs gate passed only because a docblock
+happened to carry the string) and now states the `ChannelRowExtras.peers` that replaced them; three
+findings-log anchors at the deleted `hydrateChannels` were repointed · 153 comment lines removed
+across the wave's files, mostly the same R-26 ruling restated in nine headers. **New coverage:**
+`app/api/channels/route-scope-fence.test.ts` (which wrapper each arm carries, both account arms
+`withUserAuth`, the B1 lock, a bad `scope` reaching neither) and
+`channels/server/service-list-fence.test.ts` (the four personas — non-member, guest, departed member,
+a container the caller cannot see — asserting the channel is never NAMED, not merely filtered).
+
+🟢 **WHAT LANDED: P30, P31, P32, P35, R-28's COUNT, R-48 and F-719.** One endpoint (`GET|POST /api/channels?scope=container|account`), one row type
 (`Channel & types-list.ts › ChannelRowExtras`), one client cache per scope, both bridges deleted,
 `myFavoritedAt` everywhere, `Channel.mentionCount` server-computed off the inbox's own predicate,
 the arming table's drop written (not applied), and the MCP's ambiguous-slug refusal.
@@ -1384,7 +1402,8 @@ each:
    🔒 **THE DESTINATION IS THE CHANNEL RECORD, AND THAT IS DECIDED, NOT ASSUMED (2026-09-17
    review).** The brief said *"the container's channel record"*; Samuel's literal wording under R-01
    said *"redirects to /home"*. **The channel record stands** — it is the same ruling with a better
-   landing, and the code shows it always resolves: the read is `GET /api/home/channels`, fenced by
+   landing, and the code shows it always resolves: the read is `GET /api/channels?scope=account`
+   (it was `GET /api/home/channels` until Wave 3's R-26 repointed it), fenced by
    the caller's own membership rows, and EVERY member of the container (guest, member, admin, owner)
    is on those rows, so the match on `workspaceId` cannot come up empty for somebody the shell is
    refusing. `/home` remains the answer when it does come up empty or fails, which is Samuel's

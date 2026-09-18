@@ -7,26 +7,20 @@ import { channelsPath, type ChannelScope } from "../client/query-keys";
 const selectChannels = (body: ChannelListPayload) => body.channels ?? [];
 
 /**
- * 🔒 **THE ONE CHANNEL LIST — `?scope=container|account`** (Samuel's ruling
- * R-26 (b), 2026-09-17: *one endpoint*).
- *
+ * 🔒 **THE ONE CHANNEL LIST — `?scope=container|account`** (R-26 (b), 2026-09-17).
  * `container` is the workspace page's list; `account` spans every container the
- * caller is a member of and is what /home reads. **One hook, one cache entry per
- * scope, one row type** — `GET /api/home/channels`, `HomeChannel` and the two
- * cache-to-cache bridges are deleted.
+ * caller is a member of and is what /home reads. One hook, one cache entry per
+ * scope, one row type.
  *
  * ⚠ **THE SCOPE IS ALWAYS SENT, INCLUDING `container`**, so the two entries are
  * distinct key tuples rather than one entry two fences write into. It is also the
- * CACHE MIGRATION: `["/api/channels", ws, undefined]` — the 24h IndexedDB-persisted
- * entry the previous bundle wrote — is not a tuple any reader registers any more,
- * so it is orphaned and garbage-collected instead of being served with five fields
- * missing. That is this wave's answer to the version gate (§13); the new fields
- * still spell their `?? EMPTY_X` inline, because a per-key migration is an argument
- * and §8 is a rule.
+ * CACHE MIGRATION: `["/api/channels", ws, undefined]` — the 24h IndexedDB entry the
+ * previous bundle wrote — is no longer a tuple any reader registers, so it is
+ * orphaned rather than served with five fields missing. The new fields still spell
+ * their `?? EMPTY_X` inline: a per-key migration is an argument and §8 is a rule.
  *
- * ⚠ **NO `includeArchived` SINCE 2026-09-17 (R-21).** There is no archived state:
- * the read answers every live channel, and a channel carrying an old `archived_at`
- * stamp comes back as an ordinary channel.
+ * ⚠ **NO `includeArchived` SINCE R-21** — there is no archived state; a channel
+ * carrying an old `archived_at` stamp comes back as an ordinary channel.
  */
 export function useChannels(
   target: string | { scope: ChannelScope; workspaceId?: string }
@@ -54,12 +48,10 @@ export function useChannels(
 }
 
 /**
- * The account scope's own payload, for the ONE reader that needs more than the
- * rows: /home also renders the caller's LEGACY unbound links, which have no
- * channel to hang off and so are not rows.
- *
- * ⚠ **THE SAME CACHE ENTRY `useChannels({scope:"account"})` REGISTERS** — same
- * path, same params, so mounting both costs one request and one entry.
+ * The account scope's RAW payload, for the readers that need more than the rows:
+ * /home also renders the caller's LEGACY unbound links, which have no channel to
+ * hang off. ⚠ **THE SAME CACHE ENTRY `useChannels({scope:"account"})` REGISTERS** —
+ * same path, same params, so mounting both costs one request and one entry.
  */
 export function useAccountChannels() {
   const query = useApiQuery<ChannelListPayload>(channelsPath(), {

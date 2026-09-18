@@ -134,19 +134,15 @@ export interface WorkspaceListItem extends WorkspaceSummary {
 
 /**
  * 🔒 **THE CONTAINER A CHANNEL ROW NAMES, TYPED** — the SDK's mirror of
- * `src/features/channels/types-list.ts › ChannelContainer` (Samuel's ruling
- * R-26 (b), 2026-09-17). It rides EVERY row of BOTH scopes of
- * `GET /api/channels`, so it is a property of a channel and not of a scope.
+ * `src/features/channels/types-list.ts › ChannelContainer` (R-26 (b), 2026-09-17).
+ * It rides EVERY row of BOTH scopes, so it is a property of a channel, not a scope.
  *
- * ⚠ **IT IS DECLARED HERE, NOT IN `channel-types.ts`, BECAUSE THAT FILE IS AT
- * §1's 500-LINE CAP** — and a shape whose three fields are a workspace's id,
- * kind and segment belongs beside {@link WorkspaceKind} anyway. `index.ts` is
- * still the one path a consumer imports it by.
+ * ⚠ **DECLARED HERE, NOT IN `channel-types.ts`, BECAUSE THAT FILE IS AT §1's CAP** —
+ * and a shape of a workspace's id, kind and segment belongs beside
+ * {@link WorkspaceKind}. `index.ts` is still the one import path.
  *
- * ⚠ **ASK `kind` POSITIVELY** (`kind === "link"`), never
- * `!isStandardWorkspace(…)` — §4A, F-564. A caller of `getHomeChannels` that
- * wants only the HOME channels out of an account-wide answer filters on this,
- * and a fourth kind is then excluded by construction rather than admitted.
+ * ⚠ **ASK `kind` POSITIVELY** (`kind === "link"`), never `!isStandardWorkspace(…)` —
+ * §4A, F-564, so a fourth kind is excluded by construction rather than admitted.
  */
 export interface ChannelContainer {
   /** `workspaces.id` — the `workspace=` handle every other tool takes. */

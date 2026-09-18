@@ -71,28 +71,23 @@ export function mentionContainmentFilter(userId: string): [string, string] {
  * WHEN the caller was tagged across these channels, newest first, bounded — the
  * raw material for the row badge `Channel.mentionCount` (R-28).
  *
- * 🔒 ⚠ **READ-STATE HERE IS THE WATERMARK, NOT `channel_mention_reads`, AND THAT
- * IS THE DECISION.** The inbox above marks mentions read ONE AT A TIME because
- * that list is picked over out of order. A row badge is ONE mark whose clearing
- * act is OPENING THE CHANNEL, so its boundary is `channel_members.last_read_at` —
- * the same watermark the dot beside it takes. **The consequence, stated rather
- * than discovered:** clicking one mention read in the inbox does not decrement the
- * badge, and scrolling the transcript does clear it.
+ * 🔒 ⚠ **READ-STATE HERE IS THE WATERMARK, NOT `channel_mention_reads`.** The inbox
+ * above marks mentions read ONE AT A TIME because that list is picked over out of
+ * order; a row badge is ONE mark whose clearing act is OPENING THE CHANNEL, so its
+ * boundary is `channel_members.last_read_at`, the same watermark the dot takes.
  *
- * ⚠ **THE PER-CHANNEL CUTOFF IS APPLIED IN CODE** (`mention-tally.ts`): every
- * channel has its own watermark and PostgREST cannot express one cutoff per row's
- * channel. `since` is the OLDEST of them, a GLOBAL floor — every row it drops was
- * already read in its own channel, so the tally can only lose rows it would have
- * discarded. A MAXIMUM there would filter an earlier-read channel's unread
- * mentions out in SQL.
+ * ⚠ **THE PER-CHANNEL CUTOFF IS APPLIED IN CODE** (`mention-tally.ts`) — PostgREST
+ * cannot express one cutoff per row's channel. `since` is the OLDEST of them, a
+ * GLOBAL floor, so every row it drops was already read in its own channel; a
+ * MAXIMUM would filter an earlier-read channel's unread mentions out in SQL.
  *
  * ⚠ **THE LIMIT IS A NON-REPORTING CEILING** on §9's terms for this family: at the
  * ceiling the badge UNDER-counts rather than claiming there is nothing, and
- * `created_at DESC` makes the clip take the OLDEST stamps — the ones nearest their
- * watermark — rather than an arbitrary page.
+ * `created_at DESC` discards the OLDEST stamps — the ones nearest their watermark —
+ * rather than an arbitrary page.
  *
- * ⚠ TWO COLUMNS. The body, the author and the metadata are the INBOX's business;
- * a count that fetched message bodies would put a transcript scan behind a badge.
+ * ⚠ TWO COLUMNS. A count that fetched message bodies would put a transcript scan
+ * behind a badge.
  */
 export async function listMentionStamps(
   channelIds: string[],

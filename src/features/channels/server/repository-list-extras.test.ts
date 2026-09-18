@@ -18,6 +18,12 @@ import {
   listContainers,
   listLinksByWorkspaces,
 } from "./repository-list-extras";
+// 🔒 THE OTHER READER OF THE ONE PROOF — imported so the twin case below can
+// compare what the two ask for rather than trusting that they agree.
+import {
+  ACCOUNT_CHANNEL_LIMIT,
+  listAccountChannelRefs,
+} from "./repository-account";
 
 const WS = "cccccccc-3333-4333-8333-333333333333";
 const WS2 = "dddddddd-4444-4444-8444-444444444444";
@@ -202,5 +208,32 @@ describe("listAccountChannelRows — the scope=account fence", () => {
     const out = await listAccountChannelRows(ME, null, 500);
     expect(out).toEqual({ rows: [], truncated: false });
     expect(rec.tables).toEqual(["channel_members"]);
+  });
+
+  /**
+   * 🔒 **ONE PROOF, TWO READERS, AND THIS IS WHAT SAYS SO.** The account-wide
+   * STATUS answer (`repository-account.ts › listAccountChannelRefs`) and the
+   * account-wide LIST answer (this file) both enter through
+   * `listMyChannelMemberships`. Each spells the container lock, the stable order
+   * and the `>=` ceiling — three clauses that used to be written twice, which is
+   * how one of them silently loses one. The pin is that the two ask the database
+   * the SAME question, so a re-fork fails here rather than in production.
+   */
+  it("🔒 asks the SAME proof question as the account STATUS read", async () => {
+    primeSupabase([{ channel_id: "chan-1", workspace_id: WS }], []);
+    await listAccountChannelRows(ME, WS2, ACCOUNT_CHANNEL_LIMIT);
+    const list = { ...rec };
+
+    rec = { tables: [], selects: [], filters: [], order: [], limits: [] };
+    primeSupabase([{ channel_id: "chan-1", workspace_id: WS }], []);
+    await listAccountChannelRefs(ME, WS2);
+    const status = rec;
+
+    expect(list.tables[0]).toBe("channel_members");
+    expect(status.tables[0]).toBe(list.tables[0]);
+    expect(status.selects[0]).toBe(list.selects[0]);
+    expect(status.filters.slice(0, 2)).toEqual(list.filters.slice(0, 2));
+    expect(status.order[0]).toEqual(list.order[0]);
+    expect(status.limits[0]).toBe(list.limits[0]);
   });
 });

@@ -7,9 +7,8 @@ import { isStandardWorkspace } from "@/features/workspaces/types";
 import { workspaceSegment } from "@/features/workspaces/url";
 import { Crossfade } from "@/shared/ui/crossfade";
 import type { WorkspaceLike } from "@/shared/layout/app-shell/workspace-types";
-// 🔒 **THE ONE CHANNEL LIST (R-26 (b))** — `GET /api/channels?scope=account`.
-// `GET /api/home/channels` and its hook are deleted; this page reads the same
-// cache entry, under the same key, as every other reader of that projection.
+// 🔒 **THE ONE CHANNEL LIST (R-26 (b))** — `GET /api/channels?scope=account`,
+// read under the same key as every other reader of that projection.
 import { useAccountChannels } from "@/features/channels/hooks/use-channels";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
 import home from "./home.module.css";
@@ -127,8 +126,7 @@ export default function HomePage() {
     WorkspaceLike[]
   >("/api/workspaces", { select: selectStandardWorkspaces });
   // ⚠ **THE RAW PAYLOAD, NOT `useChannels`' SELECTED ROWS** — /home also renders
-  // the caller's LEGACY unbound links, which have no channel to hang off. Same
-  // path, same params, so mounting it costs one request and one cache entry.
+  // the caller's LEGACY unbound links, which have no channel to hang off.
   const channelsQuery = useAccountChannels();
   const identity = useQuery({
     queryKey: bootQueryKey(null),

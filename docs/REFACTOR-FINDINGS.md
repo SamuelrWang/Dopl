@@ -2592,11 +2592,13 @@ renumbers.
 
 ## F-299 — a claim reveals both parties' email addresses immediately, with no accept step (2026-08-23, DEFERRED TO SAMUEL)
 
-- Location: `src/features/home/server/service-reads.ts › hydrateChannels` →
-  `src/features/home/types.ts › HomePeer` (`email`), returned by `GET /api/home/channels` and
-  directly in `POST …/claim`'s `HomeLinkClaimResult`. ⚠ **Re-anchored 2026-08-24** (`hydrateRelationships`
-  → `hydrateChannels`, `/api/home/relationships` → `/api/home/channels`): the rename does not touch the
-  exposure, and the peer being NULLABLE now does not either — a claim still fills it in one unilateral
+- Location: `src/features/channels/server/service-list.ts › hydrate` →
+  `src/features/channels/types-list.ts › ChannelPeer` (`email`), returned by
+  `GET /api/channels?scope=account` and directly in `POST …/claim`'s `HomeLinkClaimResult`.
+  ⚠ **Re-anchored TWICE and the exposure never moved**: 2026-08-24 (`hydrateRelationships` →
+  `hydrateChannels`, `/api/home/relationships` → `/api/home/channels`), then 2026-09-17 (R-26 deleted
+  `hydrateChannels`, `HomePeer` and `/api/home/channels`; the email now rides the ONE projection).
+  The peer being NULLABLE does not touch it either — a claim still fills it in one unilateral
   step.
 - Found during: the home-channels security review.
 - Severity: **question** (product). Not a leak — every field is a workspace peer's ordinary profile
@@ -2926,8 +2928,10 @@ at four members"*. Samuel made that call: build the list.
   carrying NULL) would still have flipped between loads, which is the bug itself. `nullsFirst: false`
   keeps an unstamped legacy row from stealing the head of the list.
 - `home/types.ts › HomeChannel.peers: HomePeer[]` — everybody else, in that order. `peer` **survives as
-  a DERIVED back-compat projection of `peers[0]`**, computed in exactly one place
-  (`service-reads.ts › hydrateChannels`). **Keeping it is a §8 decision, not sentiment:** a cache entry
+  a DERIVED back-compat projection of `peers[0]`**, computed in exactly one place (`hydrateChannels`,
+  ⚠ **a symbol R-26 DELETED on 2026-09-17** along with `HomeChannel` itself — the roster is
+  `channels/types-list.ts › ChannelRowExtras.peers` and there is no `peer` half any more).
+  **Keeping it was a §8 decision, not sentiment:** a cache entry
   written before this wave HAS `peer` and LACKS `peers`, so a client that only knew the list would fall
   back to `[]` and paint every channel as SOLO on the first paint after the upgrade — a FALSE sentence,
   where degrading to one face is merely the old correct one. Its meaning is now STATED ("the member who
@@ -4548,9 +4552,10 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   every write itself, and `accessSegment: null` on that mount means `MyAccessProvider` resolves
   nothing (F-330's fall-open) — so a guest peer opening a shared base sees edit affordances that
   the API then refuses. **UI that offers what the server will refuse, not access it grants.**
-- **The fix, when someone wants it.** Add the caller's container role to `HomeChannel` (the
-  hydrate already reads the membership row — `server/service-reads.ts › hydrateChannels`) and
-  branch both sites on it. ⚠ **It is a new key on an INDEXEDDB-PERSISTED payload**, so it owes §8 a
+- ✅ **THE FIX WAS TAKEN ON 2026-09-17 (Wave 3, R-26).** The caller's container role is
+  `channels/types-list.ts › ChannelRowExtras.myWorkspaceRole`, read off the membership row alone by
+  `channels/server/repository-list-extras.ts › listMyContainerRoles`, and both sites branch on it.
+  The sketch below is kept because its §8 argument is what decided the fallback direction: ⚠ **It is a new key on an INDEXEDDB-PERSISTED payload**, so it owes §8 a
   spelled-out inline fallback — and the fail-safe direction is genuinely contested here: defaulting
   to `guest` hides the button from every existing member on the first paint after the upgrade,
   defaulting to `member` keeps today's behaviour. That trade is why this is filed rather than done

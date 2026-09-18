@@ -3,12 +3,10 @@ import type { Role } from "@/features/workspaces/types";
 /**
  * A minted, not-yet-claimed CHANNEL LINK, as it appears on the wire.
  *
- * 🔒 **IN `shared/` BECAUSE TWO FEATURES NOW STATE IT** (Wave 3, R-26). The link
- * table is the HOME feature's (`channel_links`, its claim gate and its mint), but
- * an OPEN BOUND link is a STATE OF A CHANNEL and therefore a field of
- * `channels/types.ts › Channel`. §1 forbids `channels → home`, and a second
- * hand-written copy of this shape is exactly the fork this wave is removing — so
- * the type moves DOWN rather than being duplicated or imported sideways.
+ * 🔒 **IN `shared/` BECAUSE TWO FEATURES NOW STATE IT** (Wave 3, R-26): the table
+ * is the HOME feature's, but an OPEN BOUND link is a STATE OF A CHANNEL and so a
+ * field of `Channel`. §1 forbids `channels → home`, so the type moves DOWN rather
+ * than being duplicated or imported sideways.
  *
  * ⚠ **TYPE-ONLY AND CLIENT-SAFE.** The mappers and the DB row shape are
  * `shared/links/dto.ts`, which is `server-only`.

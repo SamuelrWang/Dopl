@@ -28,43 +28,31 @@ import { createHomeChannel } from "@/features/home/server/service-writes";
 import { listMyPendingLinks } from "@/features/home/server/service-reads";
 
 /**
- * 🔒 **THE ONE CHANNEL-LIST RESOURCE — `?scope=container|account`** (Samuel's
- * ruling R-26 (b), 2026-09-17: *one endpoint*).
+ * 🔒 **THE ONE CHANNEL-LIST RESOURCE — `?scope=container|account`** (R-26 (b),
+ * 2026-09-17). The projection and the ruling are `channels/server/service-list.ts`;
+ * what this file decides is the FENCE, which is the only thing that may differ per
+ * scope:
  *
- * *"Which channels am I in and what is their state"* was three types off three
- * routes into three client caches. `GET /api/home/channels` is **DELETED**, not
- * aliased; `HomeChannel`, both cache-to-cache bridges and the second query key
- * went with it.
- *
- * ⚠ **THE FENCE DIFFERS PER SCOPE; THE PROJECTION DOES NOT.** That is the whole
- * ruling, and it is why the two arms are two WRAPPERS over one service rather than
- * two services:
- *
- * - `scope=container` — `withWorkspaceAuth` at `minRole: "guest"`. A guest reaches
- *   the LISTING (§4A, §2B); the real gate is the per-channel membership fence in
- *   the service (`repository-visibility.ts › visibleChannelsOr`), and the workspace
- *   floor is only a tripwire. A non-member of the named container 403s upstream.
- * - `scope=account` — `withUserAuth`, and it **could not be `withWorkspaceAuth`**:
- *   that wrapper resolves exactly ONE workspace and answers 400 `WORKSPACE_REQUIRED`
- *   to a caller with 2+ standard memberships (§4) — precisely the caller this scope
+ * - `container` — `withWorkspaceAuth` at `minRole: "guest"`. A guest reaches the
+ *   LISTING (§4A, §2B); the real gate is the per-channel membership fence in the
+ *   service, and the workspace floor is only a tripwire.
+ * - `account` — `withUserAuth`, and it **could not be `withWorkspaceAuth`**: that
+ *   wrapper resolves exactly ONE workspace and answers 400 `WORKSPACE_REQUIRED` to
+ *   a caller with 2+ standard memberships (§4) — precisely the caller this scope
  *   exists for — and it filters `kind='link'` containers out of auto-targeting
- *   (§4A), so a home channel would be unreachable through it even for a
- *   single-workspace caller. **The fence is the USER**, exactly as it is for
- *   `GET /api/channels/account/status`.
+ *   (§4A). **The fence is the USER**, as it is for `GET /api/channels/account/status`.
  *
  * 🔒 **B1 — `ctx.apiKeyWorkspaceId` — IS APPLIED ON THE ACCOUNT ARM AND HAS TO BE
- * (R3).** A container-locked credential's lock is a property of the CREDENTIAL, and
+ * (R3).** A container-locked credential's lock is a property of the CREDENTIAL and
  * `withWorkspaceAuth` 403s on it everywhere else; this arm does not use that
- * wrapper, so nothing upstream enforces it. It is passed to the service, which
- * narrows the membership PROOF. There is no caller-supplied scoping parameter, so
- * the lock is the only thing that can narrow this answer.
+ * wrapper, so nothing upstream enforces it. There is no caller-supplied scoping
+ * parameter, so the lock is the only thing that can narrow this answer.
  *
- * ⚠ **`GET /api/channels/account/status` STAYS, AND IT ANSWERS A DIFFERENT
- * QUESTION.** That route is the "needs you" read — addressed-to-you items, session
- * telemetry, per-channel unread tallies since a cursor — and its caller is
- * `dopl_channel(op="status")` and the Overview card. This route answers what the
- * ROWS are. Folding them would give one handler two payload shapes and two
- * ceilings; the projections they share (`Channel`) is already one type.
+ * ⚠ **`GET /api/channels/account/status` STAYS AND ANSWERS A DIFFERENT QUESTION** —
+ * what NEEDS you, not what the ROWS are. Folding them would give one handler two
+ * payload shapes and two ceilings.
+ *
+ * Fences pinned by `route-scope-fence.test.ts`.
  */
 
 async function handleContainerGet(
@@ -119,14 +107,12 @@ async function handleContainerPost(
 
 /**
  * POST `?scope=account` — "New channel": a solo `kind='link'` CONTAINER plus one
- * private channel inside it. The channel half is the shared `createChannel`; what
- * this scope adds is the container mint.
+ * private channel inside it.
  *
- * ⚠ **DELIBERATELY NOT `sessionOnly`** (Samuel's ruling, 2026-08-24), matching
- * `POST /api/workspaces`. An agent token MAY create a home channel — that is the
- * point of a channel you are alone in — because it mints nothing that reaches
- * another person. The write that DOES is `POST /api/home/links`, and that one is
- * session-gated.
+ * ⚠ **DELIBERATELY NOT `sessionOnly`** (Samuel, 2026-08-24), matching
+ * `POST /api/workspaces`: an agent token may mint a channel it is alone in,
+ * because that reaches nobody. `POST /api/home/links` — which reaches a PERSON —
+ * is the session-gated one.
  */
 async function handleAccountPost(
   request: NextRequest,

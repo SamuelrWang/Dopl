@@ -70,19 +70,16 @@ function SidebarRow({
  *
  * 🔒 **THE `@ N` MENTION BADGE IS HERE SINCE R-28 (Samuel, 2026-09-17: *mention
  * badges YES on workspace rows*), AND THE OLD REFUSAL IS WHY IT TOOK A RULING.**
- * This row said NO UNREAD BADGE for a stated reason: `Channel.unread` is a
- * BOOLEAN, the mock drew a count, and **a badge is a claim about HOW MUCH is
- * waiting** — inventing one from a boolean is the defect, not the omission. R-28
- * did not overturn that rule; it BOUGHT THE COUNT. `Channel.mentionCount` is a
- * server aggregate on every row of both scopes (Wave 3, R-26), so the badge now
- * has a real number behind it and the rule stands unchanged: **a numeric badge
- * only where a real count exists.**
+ * This row said NO UNREAD BADGE because `Channel.unread` is a BOOLEAN and **a badge
+ * is a claim about HOW MUCH is waiting**. R-28 did not overturn that rule; it
+ * BOUGHT THE COUNT (`Channel.mentionCount`, a server aggregate on every row since
+ * R-26), so the rule stands unchanged: **a numeric badge only where a real count
+ * exists.**
  *
- * ⚠ **IT IS `home-card-marks.tsx › MentionBadge`, THE SAME MARK /home DRAWS**, not
- * a second pill — the count and its ink are one statement across both surfaces.
- * ⚠ **AND IT IS THE DOT'S ALTERNATIVE, NOT ITS COMPANION** (the design's own
- * rule, which `UnreadDot`'s docblock states): a channel with unread mentions
- * already says the louder thing, and two markers for one fact reads as two facts.
+ * ⚠ **IT IS `home-card-marks.tsx › MentionBadge`, THE SAME MARK /home DRAWS** — one
+ * statement across both surfaces, not a second pill.
+ * ⚠ **AND IT IS THE DOT'S ALTERNATIVE, NOT ITS COMPANION**: a channel with unread
+ * mentions already says the louder thing, and two markers read as two facts.
  *
  * ⚠ The DM section's rows are people; a person is already a face, so they are
  * never tiled.
@@ -142,11 +139,10 @@ export function ChannelRow({
         {label}
       </span>
       {/* ⚠ THE ASK BADGE SHARED THIS CORNER UNTIL 2026-08-22 and is DELETED with
-          the rest of the inbound consent lane (Samuel). It counted threads in
-          this channel awaiting the viewer's ANSWER — a question the product no
-          longer asks, so the count had nothing true left to say. The unread dot
-          is what remains, and it means what it always did: something here is
-          newer than your `lastReadAt`. */}
+          the rest of the inbound consent lane (Samuel) — it counted threads
+          awaiting the viewer's ANSWER, a question the product no longer asks.
+          What occupies the corner now is the mention pill OR the unread dot,
+          never both: see this component's docblock. */}
       {mentions > 0 ? (
         <span className="ml-auto">
           <MentionBadge count={mentions} />

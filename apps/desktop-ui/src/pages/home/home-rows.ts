@@ -7,15 +7,14 @@ import type {
 } from "@/features/channels/types";
 
 /**
- * /home's LEFT-PANE ROWS, derived from **the ONE channel projection** (Samuel's
- * ruling R-26 (b), 2026-09-17: *one endpoint*).
+ * /home's LEFT-PANE ROWS, derived from **the ONE channel projection** (R-26 (b),
+ * 2026-09-17).
  *
  * 🔒 **`HOME_CHANNELS_PATH` IS DELETED WITH THE ROUTE IT NAMED.** This page reads
- * `GET /api/channels?scope=account` — `channels/hooks/use-channels.ts ›
- * useAccountChannels`, keyed by `channelKeys.list()` — and its rows are
- * `Channel`, the same type the workspace channels page renders. `HomeChannel`,
- * `HomeChannelsPayload`, `HomePeer`, `HomePendingLink` and both cache-to-cache
- * BRIDGES went with the second cache: **one cache needs no bridge** (G4).
+ * `GET /api/channels?scope=account` (`use-channels.ts › useAccountChannels`), and
+ * its rows are `Channel` — the same type the workspace channels page renders.
+ * `HomeChannel` and both cache-to-cache BRIDGES went with the second cache: **one
+ * cache needs no bridge** (G4).
  */
 
 /** ⚠ NOT workspace-scoped — `withUserAuth`, no `X-Workspace-Id`. ⚠ The LEGACY
@@ -55,25 +54,17 @@ export function linkRowId(linkId: string): string {
 /**
  * Newest-first over both kinds, so a fresh link sits where a fresh message would.
  *
- * 🔒 **THIS IS THE ONE PLACE /home NARROWS THE ACCOUNT PAYLOAD TO HOME CHANNELS,
- * AND THE TEST IS POSITIVE — master §4.2 rule G3.** `scope=account` answers every
- * container the caller is a member of, of EVERY kind; /home is the account surface
- * for `kind='link'` containers and nothing else. ⚠ **`container.kind === "link"`,
- * NEVER `!isStandardWorkspace(…)`** — a fourth container kind is then excluded by
- * construction rather than silently admitted into a column that cannot address it
- * (a standard workspace has a route and a sidebar; this pane has neither).
+ * 🔒 **THE ONE PLACE /home NARROWS THE ACCOUNT PAYLOAD TO HOME CHANNELS, AND THE
+ * TEST IS POSITIVE — master §4.2 rule G3.** ⚠ **`container.kind === "link"`, NEVER
+ * `!isStandardWorkspace(…)`**, so a fourth container kind is excluded by
+ * construction rather than admitted into a column that cannot address it.
+ * ⚠ **ONE PLACE**: anything else on this page that wants "the operator's home
+ * channels" goes through {@link homeChannels}.
  *
- * ⚠ **ONE PLACE.** Anything else on this page that wants "the operator's home
- * channels" derives them from {@link homeChannels}, which is this filter read
- * through this function — a second `container.kind` test is a second answer to
- * the question the wave exists to make singular.
- *
- * ⚠ `pendingLinks` is ABSENT under `scope=container` and present under `account`
- * (`channels/types.ts › ChannelListPayload`), so its `?? []` is the §8 read of an
- * optional key. `channels`' `?? []` is the ordinary §8 one — the payload is
- * IndexedDB-persisted, and a `.filter` on an absent key THROWS inside the page
- * rather than inside one pane (`useChannels › selectChannels` spells the same
- * fallback over the same body).
+ * ⚠ `pendingLinks` is ABSENT under `scope=container` and present under `account`,
+ * so its `?? []` is the §8 read of an optional key; `channels`' is the ordinary §8
+ * one — the payload is IndexedDB-persisted, and a `.filter` on an absent key throws
+ * inside the PAGE rather than inside one pane.
  */
 export function homeRows(payload: ChannelListPayload): HomeRow[] {
   const rows: HomeRow[] = [
@@ -96,13 +87,9 @@ export function homeRows(payload: ChannelListPayload): HomeRow[] {
 }
 
 /**
- * THE OPERATOR'S HOME CHANNELS, in the order the left pane shows them — for the
- * two surfaces that want the channels without the rows (the Ontology share popup
- * and the Overview usage filter).
- *
- * ⚠ **DERIVED FROM {@link homeRows} ON PURPOSE**, so G3's filter and this page's
- * order are stated once. A `payload.channels.filter(…)` here would be the second
- * copy of the rule the day one of them learns about a new container kind.
+ * THE OPERATOR'S HOME CHANNELS, in the order the left pane shows them. ⚠ **DERIVED
+ * FROM {@link homeRows} ON PURPOSE**, so G3's filter and this page's order are
+ * stated once. Its hook is `use-home-channels.ts`.
  */
 export function homeChannels(payload: ChannelListPayload): Channel[] {
   return homeRows(payload).flatMap((row) =>
@@ -143,19 +130,14 @@ export function hasLinkOut(row: HomeRow): boolean {
  * EVERYBODY ELSE IN THIS CHANNEL, oldest join first — the ONE read of
  * `Channel.peers` on this page.
  *
- * 🔒 **IT IS A PLAIN `?? EMPTY_PEERS` NOW, SPELLED INLINE, AND THE TWO-FIELD
- * MERGE IS GONE (Wave 3, R-26).** It used to fall back through a second field
- * (`HomeChannel.peer`) because `GET /api/home/channels` was IndexedDB-persisted
- * with a 24h `gcTime`, so the first paint after the 2026-08-26 upgrade served
- * entries that HAD `peer` and LACKED `peers`. **That payload and its cache entry
- * no longer exist.** The account list is read under
- * `["/api/channels", undefined, {scope:"account"}]` — a tuple no bundle has ever
- * written — so there is no persisted entry carrying `peer`, nothing to degrade
- * from, and the §8 exception this function held is retired with it.
+ * 🔒 **A PLAIN `?? EMPTY_PEERS` NOW, AND THE TWO-FIELD MERGE IS GONE (R-26).** It
+ * used to fall back through `HomeChannel.peer` for entries the 2026-08-26 upgrade
+ * left in a 24h-`gcTime` cache; that payload and its entry no longer exist, and the
+ * account list is read under a tuple no bundle has ever written — so there is
+ * nothing to degrade from and the §8 exception is retired with it.
  *
  * ⚠ **IT STAYS A FUNCTION, AND ITS ENFORCEMENT STAYS**: `home-rows.test.ts` reads
- * this directory's SOURCE and fails if any other file names `.peers`. One named
- * presenter is also what `agent-panel-cards.tsx` memoises against.
+ * this directory's SOURCE and fails if any other file names `.peers`.
  */
 export function channelPeople(channel: Channel): readonly ChannelPeer[] {
   return channel.peers ?? EMPTY_PEERS;

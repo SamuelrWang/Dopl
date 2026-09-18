@@ -7,8 +7,7 @@ import {
   USAGE_SCOPE_ALL,
   USAGE_SCOPE_DESKTOP,
 } from "@/features/home/overview-types";
-import { useAccountChannels } from "@/features/channels/hooks/use-channels";
-import { homeChannels } from "./home-rows";
+import { useHomeChannels } from "./use-home-channels";
 
 /**
  * THE /home USAGE HISTOGRAM'S TWO CONTROLS — the scope dropdown that replaced
@@ -48,11 +47,10 @@ export { USAGE_SCOPE_ALL, USAGE_SCOPE_DESKTOP };
  * ⚠ **THE CHANNEL LIST IS THE LEFT PANE'S OWN READ, NOT A SECOND ONE.**
  * `GET /api/channels?scope=account` is already mounted by `pages/home/index.tsx`
  * on the same key, so this is a cache hit and the dropdown costs no request.
- * ⚠ **AND IT IS THE SAME ROWS, THROUGH THE SAME FILTER** — `home-rows.ts ›
- * homeChannels`, which is `homeRows`' G3 narrowing read without the link rows.
- * The account scope answers every container kind; this menu is the list Samuel
- * means by "specific channels", i.e. the rows he can see in the pane beside the
- * chart, in the order that pane shows them.
+ * ⚠ **AND IT IS THE SAME ROWS, THROUGH THE SAME FILTER** — `use-home-channels.ts`,
+ * which is `homeRows`' G3 narrowing read without the link rows. This menu is the
+ * list Samuel means by "specific channels": the rows he can see in the pane beside
+ * the chart, in the order that pane shows them.
  *
  * 🔒 **THE CHANNEL'S OWN ID IS THE VALUE SINCE 2026-09-13 (rule B).** ⚠ **IT
  * WAS `workspaceId` — the CONTAINER — UNTIL THIS WAVE**, because the ledger had no
@@ -73,11 +71,7 @@ export function UsageScopeMenu({
   value: string;
   onChange: (next: string) => void;
 }) {
-  const channels = useAccountChannels();
-  // ⚠ `? … : []` INLINE (§8): the payload is IndexedDB-persisted, and `homeRows`
-  // walks `channels` — an entry lacking that key must yield no options, never a
-  // throw inside the Overview face.
-  const rows = channels.data ? homeChannels(channels.data) : [];
+  const rows = useHomeChannels();
   const options: SelectMenuOption<string>[] = [
     { value: USAGE_SCOPE_ALL, label: "All channels" },
     ...rows.map((channel) => ({

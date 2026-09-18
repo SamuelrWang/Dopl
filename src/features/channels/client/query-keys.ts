@@ -19,11 +19,8 @@ import {
  * per-channel reads use `keepPreviousData`.
  */
 
-/**
- * 🔒 **THE SCOPE OF A CHANNEL LIST (R-26).** `container` = one container's list;
- * `account` = every container the caller is a member of. ⚠ The fence differs, the
- * ROW does not — that is the whole ruling.
- */
+/** 🔒 **THE SCOPE OF A CHANNEL LIST (R-26).** ⚠ The fence differs, the ROW does
+ *  not — that is the whole ruling. */
 export type ChannelScope = "container" | "account";
 
 export function channelsPath(): string {
@@ -90,12 +87,9 @@ export const channelKeys = {
   /**
    * The channel list. ⚠ **TWO VARIANTS SINCE R-26 (2026-09-17) AND ONE PREFIX** —
    * `?scope=container` and `?scope=account` are two cache entries under one path,
-   * so `.all` reaches both and every existing optimistic patch keeps working
-   * unchanged. (There was a second variant once before, `?include=archived`, and
-   * the archive feature took it.)
-   *
-   * 🔒 **THE ACCOUNT ENTRY IS WHAT /home READS.** `apiPathKey("/api/home/channels")`
-   * is DELETED with the route, the payload and both cache-to-cache bridges.
+   * so `.all` reaches both and every existing optimistic patch keeps working.
+   * 🔒 **THE ACCOUNT ENTRY IS WHAT /home READS**; `apiPathKey("/api/home/channels")`
+   * is deleted with the route, the payload and both bridges.
    */
   list: (): ApiResourceKeys => apiResource(channelsPath()),
   messages: (channelId: string): ApiResourceKeys =>

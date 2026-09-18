@@ -96,16 +96,13 @@ export const DELETE_IS_APP_ONLY: ToolError = {
 
 /**
  * 🔒 **THE SAME `ambiguous_slug` LITERAL `KB_ERRORS` DECLARES, ONE TABLE OVER**
- * (F-719). A `container=` slug that names two rows the caller can SEE is
- * refused rather than picked, exactly as a base slug is — and an agent that
- * learned the code from `dopl_kb`'s description matches the same characters
- * here, which is the whole point of declaring it in this file rather than
- * inventing `ambiguous_container` beside it.
+ * (F-719) — a `container=` slug naming two rows the caller can SEE is refused
+ * rather than picked, exactly as a base slug is. Declaring it HERE rather than
+ * inventing `ambiguous_container` is what lets an agent match the same characters.
  *
- * ⚠ **CROSS-CUTTING, SO IT IS PUSHED INTO NO DESCRIPTION.** It is raised by the
- * registrar's address resolver for every tool that takes an address, like the
- * four above it; the remedy is in the refusal itself, which names every
- * candidate's id.
+ * ⚠ **CROSS-CUTTING, SO IT IS PUSHED INTO NO DESCRIPTION** — raised by the
+ * registrar's address resolver for every tool that takes an address, like the four
+ * above it; the remedy is in the refusal, which names every candidate's id.
  */
 export const AMBIGUOUS_CONTAINER: ToolError = {
   reason: "ambiguous_slug",

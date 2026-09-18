@@ -28,30 +28,26 @@ import {
 
 /**
  * 🔒 **THE ONE CHANNEL-LIST PROJECTION — `GET /api/channels` at BOTH SCOPES**
- * (Samuel's ruling R-26 (b), 2026-09-17: *one endpoint*).
- *
- * *"which channels am I in, and what is their state"* was answered by THREE types
- * off THREE routes into THREE client caches. This file is the one answer.
+ * (Samuel's ruling R-26 (b), 2026-09-17: *one endpoint*). *"Which channels am I
+ * in, and what is their state"* was answered by THREE types off THREE routes into
+ * THREE client caches; this file is the one answer, and `types-list.ts` is its row.
  *
  * ── WHAT DIFFERS PER SCOPE IS THE FENCE, AND ONLY THE FENCE ────────────────
  *
- * - **`container`** — `withWorkspaceAuth`, so membership of the named container is
- *   already proved and a non-member 403s upstream. The visible set is
- *   `repository.ts › listChannels`: the caller's own private rooms, plus the
- *   PUBLIC ones when they are `viewer`+ (a guest gets no public arm).
- * - **`account`** — `withUserAuth`, and the fence is `channel_members.user_id =
- *   <caller>` through `repository-account.ts › listAccountChannelRefs`. **MEMBERSHIP,
- *   not visibility**: a public channel the caller never joined is not here, which
- *   is the same narrowing `GET /api/channels/account/status` makes and for the
- *   same reason.
+ * - **`container`** — membership of the named container is already proved by
+ *   `withWorkspaceAuth`. The visible set is `repository.ts › listChannels`: the
+ *   caller's own private rooms plus the PUBLIC ones at `viewer`+ (a guest gets no
+ *   public arm).
+ * - **`account`** — the fence is `channel_members.user_id = <caller>`, through
+ *   `repository-account.ts › listMyChannelMemberships`. **MEMBERSHIP, not
+ *   visibility**: a public channel the caller never joined is not here.
  *
  * ⚠ **THE HYDRATION BELOW IS SHARED BY BOTH.** A field computed in one branch and
- * not the other is the fork R-26 removed; if a future scope needs a field the
- * others do not, that is a new argument, not a new branch here.
+ * not the other is the fork R-26 removed; a future scope that needs one the others
+ * do not is a new argument, not a new branch here.
  *
- * ⚠ **BOUNDED FANS, NEVER A PER-ROW QUERY** (§9). Two tiers: the ids-and-rows
- * tier, then the tier that needs those ids (profiles, mention stamps). Every read
- * is one `.in()`.
+ * ⚠ **BOUNDED FANS, NEVER A PER-ROW QUERY** (§9). Two tiers — the ids-and-rows
+ * tier, then the tier that needs those ids — and every read is one `.in()`.
  */
 
 /**
@@ -76,12 +72,10 @@ const PEER_ROW_LIMIT = 2_000;
 const LINK_ROW_LIMIT = 500;
 
 // ⚠ **THE ACCOUNT CEILING IS `repository-account.ts › ACCOUNT_CHANNEL_LIMIT`,
-// IMPORTED RATHER THAN RESTATED.** It is the same bound over the same fence —
-// every channel the caller is a member of — and this read and
-// `GET /api/channels/account/status` disagreeing about how many rooms an account
-// has is exactly the drift one projection exists to remove. ⚠ **A REPORTED
-// ceiling**: the answer carries `truncated`, which is what §9 says a merged read
-// must pick over the three silent ones /home used to carry.
+// IMPORTED RATHER THAN RESTATED** — the same bound over the same fence, and this
+// read disagreeing with `GET /api/channels/account/status` about how many rooms an
+// account has is the drift one projection exists to remove. ⚠ **A REPORTED
+// ceiling**: the answer carries `truncated` (§9, P35).
 
 /** Everything a row needs that is not on its own `channels` row. */
 interface ListExtras {
@@ -202,7 +196,7 @@ async function hydrate(
       extras.listContainers(workspaceIds),
       extras.listMyContainerRoles(workspaceIds, viewerId),
       extras.listChannelPeerIds(ids, viewerId, CHANNEL_PEER_LIMIT, PEER_ROW_LIMIT),
-          extras.listLinksByWorkspaces(workspaceIds, LINK_ROW_LIMIT),
+      extras.listLinksByWorkspaces(workspaceIds, LINK_ROW_LIMIT),
       listMentionStamps(
         [...cutoffs.keys()],
         viewerId,
@@ -298,20 +292,17 @@ export async function listChannels(ctx: ChannelContext): Promise<Channel[]> {
  * `scope=account` — every channel the caller is a MEMBER of, across every
  * container of every kind, in one read.
  *
- * ⚠ **THE FENCE IS THE USER**, so there is no `withWorkspaceAuth` above this and no
- * membership resolution behind it: every read enters through the caller's own
- * `channel_members` rows, and a channel they do not belong to is never NAMED by any
+ * ⚠ **THE FENCE IS THE USER**: every read enters through the caller's own
+ * `channel_members` rows, so a channel they do not belong to is never NAMED by any
  * query here.
  *
  * ⚠ **A ROW CARRIES ITS OWN CONTAINER KIND** (`Channel.container.kind`), which is
- * how a host that wants only home channels narrows — POSITIVELY, on `kind ===
- * "link"`. Filtering HERE would rebuild `/api/home/channels` inside the one route.
+ * how a host that wants only home channels narrows — POSITIVELY. Filtering HERE
+ * would rebuild `/api/home/channels` inside the one route.
  *
- * ⚠ **`truncated` IS REPORTED**, unlike the three non-reporting ceilings the
- * deleted /home read carried (`HOME_CHANNEL_LIMIT` 200 / `HOME_LINK_LIMIT` 50 /
- * `HOME_MENTION_SCAN_LIMIT` 500). §9 says a merged read picks one vocabulary and
- * the answer is `truncated`; the MENTION scan stays non-reporting because a badge
- * that under-counts is a nudge, not a claim about the list.
+ * ⚠ **`truncated` IS REPORTED** (§9, P35), where the deleted /home read carried
+ * three silent ceilings. The MENTION scan stays non-reporting: a badge that
+ * under-counts is a nudge, not a claim about the list.
  */
 export async function listAccountChannels(
   userId: string,

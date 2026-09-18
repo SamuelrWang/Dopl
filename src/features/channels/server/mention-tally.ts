@@ -2,17 +2,14 @@
  * THE ROW BADGE'S ARITHMETIC — pure, and the ONE rule behind `@ N` on every
  * channel row of both scopes (Samuel's ruling R-28, 2026-09-17).
  *
- * ⚠ **IT MOVED HERE FROM `home/server/unread-tally.ts` (Wave 3).** That file
- * existed because the /home list had its own projection; the badge is now a field
- * of `Channel`, and `channels → home` is a forbidden import (§1), so the rule has
- * to live on this side. `isChannelUnread` did NOT come with it: the dot is
- * `dto.ts › mapChannelRow`'s `unread` and always was — /home's copy was the
- * duplicate, and it is deleted rather than moved.
+ * ⚠ **IT MOVED HERE FROM `home/server/unread-tally.ts` (Wave 3)** — the badge is a
+ * field of `Channel` now and `channels → home` is forbidden (§1). `isChannelUnread`
+ * did NOT come with it: the dot is `dto.ts › mapChannelRow`'s `unread` and always
+ * was, so /home's copy is deleted rather than moved.
  *
  * ⚠ **INSTANTS, NEVER ISO STRINGS.** `created_at` comes from Postgres (`+00:00`,
- * microseconds) while `last_read_at` is written by JS `toISOString()` (`Z`,
- * milliseconds), so lexicographic `>` is WRONG on this pair. `mapChannelRow`
- * names the same trap; both sides compare `Date.parse`.
+ * microseconds) and `last_read_at` from JS `toISOString()` (`Z`, milliseconds), so
+ * lexicographic `>` is WRONG on this pair. Both sides compare `Date.parse`.
  */
 
 /** When one message tagging the caller landed, and where. */

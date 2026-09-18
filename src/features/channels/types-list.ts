@@ -6,18 +6,16 @@
  * 🔒 **THERE WAS A SECOND PROJECTION AND IT IS DELETED.** `GET /api/home/channels`
  * answered `home/types.ts › HomeChannel` — a 15-field type over the same question
  * `Channel` answers with 26 — into a second client cache, with `myFavoritedAt`
- * spelled `favoritedAt` (R-27) and two hand-written cache-to-cache BRIDGES
- * keeping the two entries from disagreeing. The bridges are gone because the
- * second cache is: one projection needs no bridge.
+ * spelled `favoritedAt` (R-27) and two hand-written cache-to-cache BRIDGES keeping
+ * the two entries from disagreeing. The bridges are gone because the second cache
+ * is: one projection needs no bridge.
  *
  * ⚠ **THESE FIELDS ARE ON EVERY ROW OF BOTH SCOPES, NEVER ONLY THE ACCOUNT ONE.**
- * A field present under one scope and absent under the other is the fork this
- * change removes, one layer down. What DIFFERS per scope is the FENCE (the
- * container's membership vs the caller's own), never the shape.
+ * What DIFFERS per scope is the FENCE, never the shape.
  *
  * ⚠ **IN ITS OWN FILE ONLY BECAUSE `types.ts` IS AT §1's 500-LINE CAP.** It is one
- * type with `Channel`, re-exported from there under the names every importer
- * already uses; `@/features/channels/types` stays the one import path.
+ * type with `Channel`, re-exported from there, so `@/features/channels/types` stays
+ * the one import path.
  */
 
 import type { Role, WorkspaceKind } from "@/features/workspaces/types";
@@ -26,15 +24,13 @@ import type { Role, WorkspaceKind } from "@/features/workspaces/types";
 export const CHANNEL_PEER_LIMIT = 20;
 
 /**
- * 🔒 **THE CHANNEL'S CONTAINER, TYPED — R-32's addressing contract on the row
+ * 🔒 **THE CHANNEL'S CONTAINER, TYPED — R-32's addressing contract on the row**
  * (Samuel, 2026-09-17: home must be *structurally distinct, never just a prompt
- * line*).**
+ * line*).
  *
  * ⚠ **`kind` IS ASKED POSITIVELY** (`kind === "link"`, or a `switch` with a
- * `default`), never `!isStandardWorkspace(…)` — INVARIANTS §4A / master §4.2 G3.
- * A host that wants only home channels out of `scope=account` filters on this,
- * and a fourth kind is then excluded by construction rather than silently
- * admitted.
+ * `default`), never `!isStandardWorkspace(…)` — §4A / master §4.2 G3. A fourth kind
+ * is then excluded by construction rather than silently admitted.
  */
 export interface ChannelContainer {
   /** `workspaces.id` — the `workspace=` handle every other tool takes. */
@@ -127,21 +123,17 @@ export interface ChannelRowExtras {
   peers: ChannelPeer[];
   /**
    * 🔒 **HOW MANY MESSAGES NEWER THAN THE CALLER'S WATERMARK TAG THE CALLER** — the
-   * row's `@ N` pill, hidden at 0 (Samuel's ruling R-28, 2026-09-17: mention
-   * badges YES on workspace rows, *which means carrying the count*).
+   * row's `@ N` pill, hidden at 0 (R-28, 2026-09-17).
    *
    * ⚠ **THE BOUNDARY IS `channel_members.last_read_at`, NOT `channel_mention_reads`.**
-   * The Tags inbox marks mentions read ONE AT A TIME because that list is picked
-   * over out of order; a row badge is one mark whose clearing act is OPENING THE
-   * CHANNEL. So it shares the dot's watermark. **The consequence, stated rather
-   * than discovered:** clicking one mention read in the inbox does not decrement
-   * this, and scrolling the transcript does clear it.
+   * The Tags inbox marks mentions read one at a time because that list is picked
+   * over out of order; a row badge is ONE mark whose clearing act is OPENING THE
+   * CHANNEL, so it shares the dot's watermark. **The consequence, stated rather than
+   * discovered:** clicking one mention read in the inbox does not decrement this,
+   * and scrolling the transcript does clear it.
    *
-   * ⚠ **0 FOR A NON-MEMBER** — the `isMember` clause `unread` carries. There is no
-   * watermark to advance, so a badge there could never clear.
-   *
-   * ⚠ Every read spells `?? 0` inline (§8): `0` hides the pill rather than
-   * printing `@ NaN`.
+   * ⚠ **0 FOR A NON-MEMBER** — no watermark to advance, so a badge could never clear.
+   * ⚠ Every read spells `?? 0` inline (§8): `0` hides the pill, never `@ NaN`.
    */
   mentionCount: number;
   /** The open BOUND invitation on this channel, or null. Judged by the SAME

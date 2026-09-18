@@ -5,6 +5,7 @@ vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import {
   presenceForWorkspace,
+  presenceForWorkspaces,
   presenceForUser,
   upsertPresenceEverywhere,
 } from "./repository-collab";
@@ -54,6 +55,7 @@ function makeAdmin(
     from: (t: string) => rec("from", [t]),
     select: (c: string) => rec("select", [c]),
     eq: (c: string, v: unknown) => rec("eq", [c, v]),
+    in: (c: string, v: unknown) => rec("in", [c, v]),
     limit: (n: number) => rec("limit", [n]),
     maybeSingle: () => ({ then: settle }),
     then: settle,
@@ -262,5 +264,54 @@ describe("20260930140000_presence_heartbeat_all.sql", () => {
     expect(SQL).toMatch(/replica identity moved off DEFAULT/);
     expect(SQL).not.toMatch(/ALTER PUBLICATION/);
     expect(SQL).not.toMatch(/REPLICA IDENTITY USING/);
+  });
+});
+
+/**
+ * **PRESENCE ACROSS MANY CONTAINERS — what `GET /api/channels?scope=account`
+ * needs** (Wave 3, R-26), and the one thing its collapse has to get right.
+ *
+ * ⚠ **A PERSON IS IN N CONTAINERS AND HAS N ROWS.** They agree only while
+ * `upsertPresenceEverywhere` is the writer; the per-workspace fallback loop it
+ * replaced stamps them one at a time, which is how tail rows aged past the online
+ * window in the first place. PostgREST promises no row order, so the collapse has
+ * to pick by a total order rather than by arrival.
+ */
+describe("presenceForWorkspaces — one entry per PERSON, freshest stamp wins", () => {
+  it("ONE `.in()` over every container, never a query per container", async () => {
+    const calls = makeAdmin([]);
+    await presenceForWorkspaces([WS, "ws-2", "ws-3"]);
+    expect(calls.filter((c) => c.op === "from")).toHaveLength(1);
+    expect(calls.find((c) => c.op === "in")?.args).toEqual([
+      "workspace_id",
+      [WS, "ws-2", "ws-3"],
+    ]);
+  });
+
+  it("🔒 takes the FRESHEST row for a member of two containers, in EITHER order", async () => {
+    const stale = { user_id: ME, last_seen_at: ago(60 * 60_000), status: null };
+    const live = { user_id: ME, last_seen_at: ago(1_000), status: "listening" };
+    makeAdmin([stale, live]);
+    expect((await presenceForWorkspaces([WS, "ws-2"])).get(ME)?.online).toBe(true);
+    // ⚠ THE SAME ANSWER WITH THE ROWS REVERSED. "Last row read wins" passes the
+    // case above and fails this one, which is the whole point of it.
+    makeAdmin([live, stale]);
+    expect((await presenceForWorkspaces([WS, "ws-2"])).get(ME)?.online).toBe(true);
+  });
+
+  it("keeps each PERSON's own answer — the collapse is per user, not per page", async () => {
+    makeAdmin([
+      { user_id: ME, last_seen_at: ago(1_000), status: "listening" },
+      { user_id: PEER, last_seen_at: ago(PRESENCE_ONLINE_WINDOW_MS * 2), status: null },
+    ]);
+    const map = await presenceForWorkspaces([WS, "ws-2"]);
+    expect(map.get(ME)?.online).toBe(true);
+    expect(map.get(PEER)?.online).toBe(false);
+  });
+
+  it("short-circuits on an empty container list", async () => {
+    const calls = makeAdmin([]);
+    expect((await presenceForWorkspaces([])).size).toBe(0);
+    expect(calls).toEqual([]);
   });
 });

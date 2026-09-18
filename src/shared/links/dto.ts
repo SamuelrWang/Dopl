@@ -6,14 +6,13 @@ import type { ChannelPendingLink } from "./types";
  * `snake_case` → `camelCase` for a CHANNEL LINK, and the claim gate's own
  * predicate. No row shape leaves here.
  *
- * 🔒 **MOVED OUT OF `home/server/dto.ts` IN WAVE 3 (R-26).** An open BOUND link is
- * a field of `Channel` now (`linkOut`), so the channels projection has to read
- * it — and §1 forbids `channels → home`. `home/server/dto.ts` RE-EXPORTS every
- * name below, so no home caller moved.
+ * 🔒 **MOVED OUT OF `home/server/dto.ts` IN WAVE 3 (R-26)** — an open BOUND link is
+ * `Channel.linkOut` now, and §1 forbids `channels → home`. `home/server/dto.ts`
+ * RE-EXPORTS every name below, so no home caller moved.
  *
- * ⚠ **ONE DEFINITION OF "still claimable", READ BY THE GATE AND BY THE CHIP.** A
- * row saying "invite out" over a link that 410s is exactly what {@link isClaimable}
- * exists to prevent; a second spelling anywhere re-opens it.
+ * ⚠ **ONE DEFINITION OF "still claimable", READ BY THE GATE AND BY THE CHIP** — a
+ * row saying "invite out" over a link that 410s is what {@link isClaimable}
+ * prevents, and a second spelling anywhere re-opens it.
  */
 
 export const CHANNEL_LINK_COLS =

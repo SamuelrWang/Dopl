@@ -54,12 +54,9 @@ import {
  *     `recency-wells.tsx › wellFor` rather than owning a second clock;
  *   - the PIN — `Channel.myFavoritedAt`, i.e. `channel_members.favorited_at`,
  *     written by the channel header's own toggle. 🔒 **NO MIRROR SINCE WAVE 3
- *     (R-26 (b))**: that toggle patches `channelKeys.list().all`, which is the
- *     entry THIS column reads, so the well moves on the click with nothing in
- *     between. `use-home-channel-sync.ts` — the bridge that copied the pin, the
- *     name and the description across two caches — is DELETED with the second
- *     cache. ⚠ **NOT a per-device store** either — the one this file read for an
- *     afternoon is deleted; do not mint a second.
+ *     (R-26 (b))**: that toggle patches `channelKeys.list().all`, the entry THIS
+ *     column reads, so the well moves on the click with nothing in between.
+ *     ⚠ **NOT a per-device store** either — do not mint a second.
  *
  * ⚠ **THE "no sections to manage" NOTE ABOVE WAS ABOUT THE WORKSPACE CHANNELS
  * TREE AND STILL IS.** These wells are not folders: nothing is filed by hand
@@ -186,26 +183,22 @@ function RelationshipRow({
    */
   const pendingLine = row.kind === "link" ? "Not yet claimed" : null;
   /**
-   * ⚠ `?? EMPTY_X` INLINE AT EVERY NEW KEY (INVARIANTS §8): `mentionCount` is
-   * new on an IndexedDB-persisted payload with a 24h `gcTime`, and `?? 0` hides
-   * the pill rather than printing `@ NaN`. **The rule holds even though this
-   * wave's cache keys are new ones** (`{scope:"account"}` is a tuple no bundle
-   * has written) — a per-key migration is an argument and §8 is a rule.
-   * ⚠ `channelPeople` is the one named presenter, and it spells its own `??`.
+   * ⚠ `?? EMPTY_X` INLINE AT EVERY NEW KEY (§8) — `?? 0` hides the pill rather
+   * than printing `@ NaN`. **The rule holds even though this wave's cache keys are
+   * new ones**: a per-key migration is an argument and §8 is a rule.
    * ⚠ **THE FALLBACKS STAY HERE, WITH THE READER OF THE CACHE.** `HomeChannelRow`
-   * takes ANSWERS and owns no `?? EMPTY_X` of its own — a fallback applied twice
-   * is a fallback nobody can audit.
+   * takes ANSWERS and owns no `?? EMPTY_X` — a fallback applied twice is a
+   * fallback nobody can audit.
    */
   const channel = row.kind === "channel" ? row.channel : null;
   const mentions = channel?.mentionCount ?? 0;
   const unread = channel?.unread ?? false;
   /**
    * ⚠ **`channelPeople` IS THE ONE READ OF `peers`** — a plain `?? EMPTY_PEERS`
-   * since the second cache went (its docblock carries why the two-field merge is
-   * retired), and what decides whether the description takes line two.
-   * ⚠ `AvatarStack` takes a NON-NULL name and initials it; a nameless member
-   * degrades to their address exactly as `Avatar`'s own fallback does, never to
-   * "?" when we hold one.
+   * since the second cache went — and what decides whether the description takes
+   * line two. ⚠ `AvatarStack` takes a NON-NULL name and initials it; a nameless
+   * member degrades to their address as `Avatar`'s own fallback does, never to "?"
+   * when we hold one.
    */
   const faces = (channel ? channelPeople(channel) : []).map((person) => ({
     userId: person.userId,

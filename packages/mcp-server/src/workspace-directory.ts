@@ -39,26 +39,23 @@ export type { ContainerKind };
 export const HOME_ADDRESS = "home";
 
 /**
- * 🔒 **A SLUG THAT NAMES TWO CONTAINERS IS REFUSED, NOT PICKED** (F-719,
- * Samuel 2026-09-17) — the shape `knowledge-shared.ts › resolveBaseRef` already
- * carries, one table over.
+ * 🔒 **A SLUG THAT NAMES TWO CONTAINERS IS REFUSED, NOT PICKED** (F-719, Samuel
+ * 2026-09-17) — the shape `knowledge-shared.ts › resolveBaseRef` already carries.
  *
  * ⚠ **`workspaces.slug` HAS NO UNIQUENESS CONSTRAINT AND IS NOT GETTING ONE.**
- * `20260504000000_workspaces_public_id.sql` dropped it deliberately and minted
- * `public_id` instead, because global uniqueness makes one account's workspace
- * name deny another's. R-32 then made a slug an ADDRESS, so one caller can
- * legitimately see two rows spelled the same — a home channel a PEER minted and
- * named, against their own workspace — and `Array.find` picked whichever it
- * reached first, silently. That is F-701's ten days of notes written into the
- * wrong base, one table over, so it gets F-701's answer: REFUSE and NAME BOTH.
+ * `20260504000000_workspaces_public_id.sql` dropped it deliberately, because global
+ * uniqueness makes one account's workspace name deny another's. R-32 then made a
+ * slug an ADDRESS, so a caller can legitimately see two rows spelled the same — a
+ * home channel a PEER named, against their own workspace — and `Array.find` picked
+ * whichever it reached first, silently. That is F-701 one table over, so it gets
+ * F-701's answer: REFUSE and NAME BOTH.
  *
- * ⚠ **AND THE TIE-BREAKS ARE ALL WRONG, WHICH IS WHY THERE IS NONE.** "The
- * bound container wins" is the rule a caller holding a peer's room slug is
- * already violating; "newest wins" acts on an identity the caller did not
- * choose. Every ordering reports success against a container nobody named.
+ * ⚠ **AND THE TIE-BREAKS ARE ALL WRONG, WHICH IS WHY THERE IS NONE.** "The bound
+ * container wins" is the rule a caller holding a peer's room slug is already
+ * violating; "newest wins" acts on an identity the caller did not choose.
  *
- * ⚠ **AN ID CAN NEVER BE AMBIGUOUS**, which is the escape hatch the refusal
- * points at: ids are unique account-wide, so the id arm is untouched.
+ * ⚠ **AN ID CAN NEVER BE AMBIGUOUS** — ids are unique account-wide, which is why
+ * the remedy is an id and the by-id arm is untouched.
  */
 export interface AmbiguousContainerRef {
   /** Every row the ref matched, id-ordered so a re-read is stable. */

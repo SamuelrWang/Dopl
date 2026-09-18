@@ -7,9 +7,8 @@ import {
   useOntologyShares,
 } from "@/features/ontology/hooks/use-ontology-shares";
 import type { OntologyLevel, OntologyShare } from "@/features/ontology/types";
-import { useAccountChannels } from "@/features/channels/hooks/use-channels";
 import type { Channel } from "@/features/channels/types";
-import { homeChannels } from "./home-rows";
+import { useHomeChannels } from "./use-home-channels";
 
 /**
  * SHARING ONE ONTOLOGY INTO HOME CHANNELS — the popup, and the delete confirm
@@ -31,10 +30,9 @@ import { homeChannels } from "./home-rows";
  * per member would be a matrix nobody asked for. The only agent control is the
  * OWNER's, because only the owner's agents can exceed what the room can see.
  *
- * ⚠ **THE CHANNEL LIST IS THE SERVER'S** — `GET /api/channels?scope=account`, the read
- * this page already mounted, so the popup costs no request and cannot show a
- * room the caller does not reach. Home channels only (Q5): a `kind='standard'`
- * workspace channel is out of scope this wave and is not in this payload.
+ * ⚠ **THE CHANNEL LIST IS THE SERVER'S** — `use-home-channels.ts`, over the read
+ * this page already mounted, so the popup costs no request and cannot show a room
+ * the caller does not reach. Home channels only (Q5).
  *
  * 🔒 **`canManage` IS THE SERVER'S TOO**, the same predicate the write applies —
  * so the dialog cannot render an editor for somebody the PUT will refuse. It
@@ -199,20 +197,6 @@ export function DeleteOntologyConfirm({
   );
 }
 
-/**
- * ⚠ THE SAME CACHE ENTRY THE PAGE ALREADY MOUNTED (`GET /api/channels?scope=account`),
- * so this costs no request.
- *
- * ⚠ **AND THE SAME ROWS THE LEFT PANE SHOWS.** `scope=account` answers every
- * container kind; an ontology is shared into HOME channels, so the list goes
- * through `homeRows`' own G3 filter (`home-rows.ts › homeChannels`) rather than
- * restating `container.kind === "link"` here — one filter, one answer.
- */
-function useHomeChannels(): readonly Channel[] {
-  const query = useAccountChannels();
-  return query.data ? homeChannels(query.data) : EMPTY_CHANNELS;
-}
-
 /** The three audiences a share row states, in the order the popup asks them. */
 const AUDIENCES = [
   { field: "membersLevel", label: "Members" },
@@ -276,4 +260,3 @@ function describeDelete(names: string[], resolved: boolean): string {
   return `This deletes the ontology and everything in it, and unshares it from ${names.join(", ")}.`;
 }
 
-const EMPTY_CHANNELS = Object.freeze([]) as readonly Channel[];

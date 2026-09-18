@@ -73,6 +73,49 @@ export interface AccountChannelRef {
  */
 export const ACCOUNT_CHANNEL_LIMIT = 500;
 
+/** One row of the account fence's PROOF. */
+export interface AccountMembershipRef {
+  channel_id: string;
+  workspace_id: string;
+}
+
+/**
+ * 🔒 **THE `scope=account` PROOF, WRITTEN ONCE** — every channel the caller is a
+ * MEMBER of, in any container of any kind. Read by BOTH account-wide channel
+ * reads: {@link listAccountChannelRefs} (the "needs you" status) and
+ * `repository-list-extras.ts › listAccountChannelRows` (the one list projection).
+ *
+ * 🔒 **`lockedWorkspaceId` IS `ctx.apiKeyWorkspaceId`, NEVER A REQUEST FIELD
+ * (R3).** Absent ⇒ every tenancy, which is what a session or device token gets.
+ * Set ⇒ that one, and the narrowing is TOTAL because it is applied to the PROOF:
+ * no query downstream can name a channel outside it, since none of them is handed
+ * an id from outside it. A filter downstream of the proof is one a future caller
+ * forgets.
+ *
+ * ⚠ **ORDERED BECAUSE IT IS LIMITED.** An un-ordered `.limit` takes an ARBITRARY
+ * page, so a clipped account would show a different set of rooms on every load
+ * with nothing saying why. `channel_id` is the stable key.
+ *
+ * ⚠ **IT IS ONE FUNCTION BECAUSE IT IS ONE FENCE.** Two spellings of the lock,
+ * the order and the `>=` ceiling is how one of them silently loses a clause.
+ */
+export async function listMyChannelMemberships(
+  userId: string,
+  lockedWorkspaceId: string | null,
+  limit: number
+): Promise<AccountScan<AccountMembershipRef>> {
+  let query = supabaseAdmin()
+    .from("channel_members")
+    .select("channel_id, workspace_id")
+    .eq("user_id", userId);
+  if (lockedWorkspaceId) query = query.eq("workspace_id", lockedWorkspaceId);
+  const { data, error } = await query
+    .order("channel_id", { ascending: true })
+    .limit(limit);
+  if (error) throw error;
+  return scan((data ?? []) as AccountMembershipRef[], limit);
+}
+
 /** One account-wide message page. ⚠ The same 200 every other channel page uses
  *  — the page is wider in CHANNELS, not in messages, and a bigger cap here would
  *  let one busy room's burst crowd every other room off the page. */
@@ -120,32 +163,11 @@ export async function listAccountChannelRefs(
   lockedWorkspaceId?: string | null
 ): Promise<AccountScan<AccountChannelRef>> {
   const db = supabaseAdmin();
-  let memberQuery = db
-    .from("channel_members")
-    .select("channel_id, workspace_id")
-    .eq("user_id", userId);
-  // 🔒 B1's CEILING, APPLIED AT THE PROOF (R3, 2026-09-02). A container-locked
-  // credential may act in ONE workspace, and these reads are the only ones in
-  // the tree that span tenancies — so the lock has to narrow the very array that
-  // becomes every `WHERE channel_id IN (…)` below. Applied here rather than in
-  // the service because a filter downstream of the proof is a filter a future
-  // caller can forget.
-  if (lockedWorkspaceId) {
-    memberQuery = memberQuery.eq("workspace_id", lockedWorkspaceId);
-  }
-  // ⚠ **ORDERED, BECAUSE IT IS LIMITED (2026-09-02).** An un-ordered `.limit` takes
-  // an ARBITRARY page: at the ceiling two identical calls could return different
-  // channels, so a clipped account would show a different set of rooms on every
-  // check-in with nothing saying why. `channel_id` is the stable key — the page is
-  // reported as clipped either way, and this makes the reported page repeatable.
-  const { data: memberships, error: memberError } = await memberQuery
-    .order("channel_id", { ascending: true })
-    .limit(ACCOUNT_CHANNEL_LIMIT);
-  if (memberError) throw memberError;
-  const rows = (memberships ?? []) as Array<{
-    channel_id: string;
-    workspace_id: string;
-  }>;
+  const { rows, truncated } = await listMyChannelMemberships(
+    userId,
+    lockedWorkspaceId ?? null,
+    ACCOUNT_CHANNEL_LIMIT
+  );
   if (rows.length === 0) return { rows: [], truncated: false };
   const workspaceByChannel = new Map(
     rows.map((r) => [r.channel_id, r.workspace_id])
@@ -174,7 +196,7 @@ export async function listAccountChannelRefs(
   // ⚠ The MEMBERSHIP read is the one that can clip: the channel read is bounded
   // by the id set it was handed, so a truncated answer there would mean rows
   // vanished between the two statements, not that a page ended.
-  return { rows: channels, truncated: rows.length >= ACCOUNT_CHANNEL_LIMIT };
+  return { rows: channels, truncated };
 }
 
 /**

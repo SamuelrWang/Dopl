@@ -445,4 +445,17 @@ describe("the mention badge — a count, never an invented number", () => {
     expect(screen.getByText("Front-end")).toBeTruthy();
     expect(screen.queryByText(/^@ /)).toBeNull();
   });
+
+  it("still draws the DOT on a stale payload that HAS unread messages", () => {
+    // 🔒 THE PARITY CASE, and the one a `?? 0` regression would break silently:
+    // the badge's new branch must not swallow the mark this row has always drawn
+    // for a key the row does not carry yet.
+    const stale: Record<string, unknown> = {
+      ...channel({ id: "ch-fe", name: "Front-end", unread: true }),
+    };
+    delete stale.mentionCount;
+    renderSidebar({ rooms: [stale as unknown as ReturnType<typeof channel>] });
+    expect(screen.getByLabelText("Unread messages")).toBeTruthy();
+    expect(screen.queryByText(/^@ /)).toBeNull();
+  });
 });

@@ -177,20 +177,16 @@ export async function resolveCallAddress(
 /**
  * THE AMBIGUITY REFUSAL — **it lists, and it does not pick** (F-719).
  *
- * ⚠ **IT IS `knowledge-shared.ts › ambiguousBase`'s CONTRACT, ONE TABLE OVER,
- * AND DELIBERATELY NOT A SECOND IDIOM**: the same `reason=ambiguous_slug`
- * literal (declared once, in `tool-errors.ts`), the same "nothing happened"
- * opening, the same one-line-per-candidate list keyed by the ID to re-issue
- * with. An agent that learned the remedy from `dopl_kb` applies it unchanged.
+ * ⚠ **IT IS `knowledge-shared.ts › ambiguousBase`'s CONTRACT, ONE TABLE OVER, AND
+ * DELIBERATELY NOT A SECOND IDIOM**: the same `reason=ambiguous_slug` literal, the
+ * same opening, the same one-line-per-candidate list keyed by the ID to re-issue
+ * with — so an agent that learned the remedy from `dopl_kb` applies it unchanged.
  *
- * ⚠ **THE LIST IS THE WHOLE VALUE.** "That slug is ambiguous" alone sends the
- * caller to `dopl_workspaces` for ids it was already holding. Each row carries
- * the two things that tell the containers apart — the id, and the KIND, which
- * is what says "one of these is a room somebody else named".
- *
- * ⚠ **THE LIST IS NOT AN ORACLE.** Every row came back from this caller's own
- * directory, narrowed by the container lock, so it discloses exactly what
- * `dopl_workspaces` would.
+ * ⚠ **THE LIST IS THE WHOLE VALUE.** "That slug is ambiguous" alone sends the caller
+ * to `dopl_workspaces` for ids it was already holding; each row carries the id and
+ * the KIND, which is what says "one of these is a room somebody else named".
+ * ⚠ **AND IT IS NOT AN ORACLE** — every row came back from this caller's own
+ * lock-narrowed directory, so it discloses exactly what `dopl_workspaces` would.
  */
 function ambiguousContainer(
   argName: string,

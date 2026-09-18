@@ -11,12 +11,9 @@ import * as repo from "./repository";
  * Read side of the home surface: the caller's own LEGACY unbound links, the
  * pre-auth claim-page lookup, and ONE container hydrated for a write echo.
  *
- * 🔒 **THE CHANNEL LIST LEFT THIS FILE IN WAVE 3 (Samuel's ruling R-26 (b)).**
- * `getHomeChannels` / `hydrateChannels` / `HomeChannel` answered the SAME question
- * `GET /api/channels` answers — *"which channels am I in and what is their state"* —
- * with a second type, a second cache and two hand-written bridges. There is one
- * projection now, `channels/server/service-list.ts`, and `?scope=account` is what
- * /home reads. **Do not re-derive a home-shaped channel row here.**
+ * 🔒 **THE CHANNEL LIST LEFT THIS FILE IN WAVE 3 (R-26 (b)).** There is one
+ * projection now — `channels/server/service-list.ts`, read at `?scope=account`.
+ * **Do not re-derive a home-shaped channel row here.**
  *
  * ⚠ NOTHING HERE IS WORKSPACE-SCOPED, so there is no `withWorkspaceAuth` above it.
  * The fence is the USER: every read enters through a row keyed on the caller.
@@ -30,14 +27,10 @@ export const HOME_LINK_LIMIT = 50;
  * ONE container, hydrated through the CHANNELS projection — what every home WRITE
  * path returns after it has changed something (create, and both claim branches).
  *
- * 🔒 **IT RETURNS `Channel`, THE ONE ROW TYPE.** A write echo that answered a
- * different shape from the list it patches is the fork R-26 removed; this is the
- * seam that keeps the two identical.
- *
- * ⚠ **A CONTAINER WITH NO CHANNEL IS A 500, NOT AN EMPTY RENDER**, and the decision
- * lives here rather than in each write: it is the state the create/claim rollbacks
- * exist to prevent producing, and a card that opens nothing is worse than an
- * absent one.
+ * 🔒 **IT RETURNS `Channel`, THE ONE ROW TYPE**, so a write echo and a list row are
+ * the same shape. ⚠ **A CONTAINER WITH NO CHANNEL IS A 500, NOT AN EMPTY RENDER** —
+ * the state the create/claim rollbacks exist to prevent producing, and the decision
+ * lives here rather than in each write.
  */
 export async function hydrateOneChannel(
   container: LinkContainerRow,

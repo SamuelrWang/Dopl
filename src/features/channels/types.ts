@@ -23,9 +23,8 @@ import type { ChannelDelivery, ChannelWakeVerdict } from "./types-delivery";
 // and its coercion are ONE statement in `lib/agent-mentions.ts`, twinned by a SQL CHECK.
 import type { UnaddressedResponderSetting } from "./lib/agent-mentions";
 import type { Role } from "@/features/workspaces/types";
-// 🔒 THE ONE LIST PROJECTION (R-26). In its own file ONLY because this one is at
-// §1's cap, and re-exported WHOLE so `@/features/channels/types` stays the single
-// import path — a second path to a type is how two of them drift.
+// 🔒 THE ONE LIST PROJECTION (R-26) — its own file only because this one is at §1's
+// cap, re-exported WHOLE so `@/features/channels/types` stays the single import path.
 import type { ChannelPendingLink, ChannelRowExtras } from "./types-list";
 export * from "./types-list";
 
@@ -209,14 +208,12 @@ export type Channel = {
   myNotifyScope: NotifyScope | null;
   myAgentToolProfile: AgentToolProfile | null;
   /**
-   * When the CALLER favourited this channel; null = not favourited, and null
-   * for a non-member. Caller-relative like `role` and `lastReadAt`.
+   * When the CALLER favourited this channel; null = not favourited, and null for a
+   * non-member. Caller-relative like `role` and `lastReadAt`.
    *
-   * ⚠ THE SIDEBAR'S FAVORITES SECTION READS THIS AND NOTHING ELSE — it rides
-   * the channel list the sidebar already has, so no extra read, no endpoint.
-   *
-   * 🔒 **THE ONE WIRE NAME FOR `channel_members.favorited_at` SINCE R-27** — the
-   * home payload and the roster row each spelled it `favoritedAt`, and three
+   * ⚠ THE SIDEBAR'S FAVORITES SECTION READS THIS AND NOTHING ELSE — it rides the
+   * channel list the sidebar already has, so no extra read, no endpoint.
+   * 🔒 **THE ONE WIRE NAME FOR `channel_members.favorited_at` SINCE R-27** — three
    * names for one fact is what produced the pin bug (2026-09-15).
    */
   myFavoritedAt: string | null;
@@ -240,22 +237,24 @@ export type Channel = {
   // and 11)** — the room-wide pin of ONE agent to answer EVERY member's unaddressed
   // messages: *"if there's another member in the room, their last agent address would be
   // different from my last agent address."* Replaced by
-  // `ChannelMember.unaddressedResponder` on the VIEWER'S OWN roster row — deliberately
-  // not a `my*` field here, so there is one client-side source.
+  // `ChannelMember.unaddressedResponder` on the VIEWER'S OWN roster row — not a
+  // `my*` field here, so there is one client-side source.
 } & ChannelRowExtras;
 
 /**
  * The payload of `GET /api/channels` at BOTH scopes (R-26 (b)).
  *
- * ⚠ **`pendingLinks` IS AN ABSENT KEY UNDER `scope=container`, NEVER `[]`** —
- * `channelGrants` on `GET /api/knowledge/bases` is the §9 precedent: an absent
- * param yields an absent key, where `[]` would assert "asked, none open". Under
- * `scope=account` it is the caller's LEGACY UNBOUND links, which have no channel
- * to hang off and so must be rows of their own.
+ * ⚠ **`pendingLinks` IS AN ABSENT KEY UNDER `scope=container`, NEVER `[]`** (§9's
+ * `channelGrants` precedent: an absent param yields an absent key, where `[]` would
+ * assert "asked, none open"). Under `scope=account` it is the caller's LEGACY
+ * UNBOUND links, which have no channel to hang off and so are rows of their own.
  */
 export type ChannelListPayload = {
   channels: Channel[];
   pendingLinks?: ChannelPendingLink[];
+  /** ⚠ **THE ACCOUNT SCOPE'S REPORTED CLIP (§9, P35).** Absent under
+   *  `scope=container`, which has no ceiling of its own; read `?? false` inline. */
+  truncated?: boolean;
 };
 
 export type ChannelMessage = {

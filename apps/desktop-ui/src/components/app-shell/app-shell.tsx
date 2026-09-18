@@ -105,19 +105,15 @@ export function AppShellLayout() {
    * "Workspace not found" in a guest's popped-out thread. The floor says WHO
    * MAY ASK; this says WHERE THEY LAND.
    *
-   * ⚠ THE CONTAINER HAS EXACTLY ONE CHANNEL, and this resolves it THE WAY THE
-   * GUEST WEB LANE DOES — `src/app/c/[workspaceId]/page.tsx` calls
-   * `getHomeChannel(user, workspaceId)`, whose HTTP twin reachable from a renderer
-   * is `GET /api/channels?scope=account` (`withUserAuth`, no `X-Workspace-Id`,
-   * fenced by the caller's own membership rows — so a guest may ask it and a
-   * container they do not belong to is not in the answer). Matching on
-   * `workspaceId` is what makes it the SAME container, not merely a channel.
-   * ⚠ **IT WAS `GET /api/home/channels` UNTIL R-26 (2026-09-17)**, which deleted
-   * that route and its second row type; one projection, and this read shares the
-   * ONE account cache entry rather than minting a second.
-   * ⚠ **NO `container.kind` FILTER HERE, AND THAT IS NOT AN ESCAPE FROM G3.** G3
-   * narrows /home's COLUMN to the containers it can address; this addresses ONE
-   * container BY ID, which is a stricter fence than any kind test would be.
+   * ⚠ THE CONTAINER HAS EXACTLY ONE CHANNEL, resolved the way the guest WEB lane
+   * resolves it: `GET /api/channels?scope=account` (`withUserAuth`, no
+   * `X-Workspace-Id`, fenced by the caller's own membership rows — so a guest may
+   * ask it and a container they do not belong to is not in the answer), matched on
+   * `workspaceId`, which is what makes it the SAME container and not merely a
+   * channel. ⚠ **IT WAS `GET /api/home/channels` UNTIL R-26 (2026-09-17)**; this
+   * read shares the ONE account cache entry rather than minting a second.
+   * ⚠ **NO `container.kind` FILTER HERE, AND THAT IS NOT AN ESCAPE FROM G3** — this
+   * addresses ONE container BY ID, a stricter fence than any kind test.
    *
    * ⚠ NO CHANNEL ⇒ `/home`, and a FAILED read lands there too. Not
    * UNKNOWN-rendered-as-EMPTY (INVARIANTS §11): `/home` asserts nothing, and

@@ -325,9 +325,16 @@ export async function presenceForWorkspace(
  * is the shape §9 forbids, and the per-workspace heartbeat loop below is the
  * worked example of what it costs at 13+ containers.
  *
- * ⚠ **KEYED BY USER ID, LIKE ITS SIBLING, so a member of two containers collapses
- * to one entry** — which is right: presence is a property of the PERSON's machine,
- * not of a room. The last row read wins, and they carry the same answer.
+ * ⚠ **KEYED BY USER ID, so a member of N containers collapses to ONE entry** —
+ * which is right: presence is a property of the PERSON's machine, not of a room.
+ *
+ * 🔒 ⚠ **THE FRESHEST STAMP WINS, AND "LAST ROW READ" WOULD NOT DO.** The rows
+ * agree only while `upsertPresenceEverywhere` is the writer; the per-workspace
+ * FALLBACK loop it replaced stamps them one at a time and is exactly what let tail
+ * rows age past the online window. PostgREST promises no row order, so picking by
+ * arrival would flip a member between online and offline across two identical
+ * reads. `last_seen_at` is the only total order here, and taking its maximum is
+ * also the honest one: the machine was up at the latest instant anything saw it.
  */
 export async function presenceForWorkspaces(
   workspaceIds: string[]
@@ -341,12 +348,22 @@ export async function presenceForWorkspaces(
     .limit(PRESENCE_ROWS_LIMIT);
   if (error) throw error;
   const now = Date.now();
+  const freshest = new Map<string, { last_seen_at: string; status: string | null }>();
   for (const row of (data ?? []) as Array<{
     user_id: string;
     last_seen_at: string;
     status: string | null;
   }>) {
-    out.set(row.user_id, derivePresence(row.last_seen_at, row.status, now));
+    const held = freshest.get(row.user_id);
+    if (
+      held === undefined ||
+      Date.parse(row.last_seen_at) > Date.parse(held.last_seen_at)
+    ) {
+      freshest.set(row.user_id, row);
+    }
+  }
+  for (const [userId, row] of freshest) {
+    out.set(userId, derivePresence(row.last_seen_at, row.status, now));
   }
   return out;
 }
