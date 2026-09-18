@@ -35,10 +35,17 @@ const code = (rel: string) =>
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/^\s*\/\/.*$/gm, "");
 
-const GHOST = file("./channel-record-skeleton.tsx");
-const GHOST_CODE = code("./channel-record-skeleton.tsx");
+/** ⚠ **THE GHOST MOVED DOWN ON 2026-09-17** (wave 1 item 6) and these reads
+ *  followed it rather than being rewritten: it is `channel-record-skeleton.tsx`
+ *  in the SAME folder as everything it byte-shares with now, and the /home path
+ *  this suite imports from is a re-export. The pins are unchanged — which is the
+ *  evidence the move carried no edit. */
 const v2 = (name: string) =>
   file(`../../../../../src/features/channels/components/${name}`);
+const GHOST = v2("channel-record-skeleton.tsx");
+const GHOST_CODE = code(
+  "../../../../../src/features/channels/components/channel-record-skeleton.tsx"
+);
 
 /** Every visible string on the surface. A skeleton's only text is `sr-only`. */
 function visibleText(container: HTMLElement) {

@@ -120,7 +120,7 @@ describe("every per-page skeleton", () => {
 
   it.each(SHAPES)("%s stands inside the reduced-motion surface", (_n, el) => {
     // ⚠ The opt-out is a scoped rule keyed on the surface class
-    // (`skeletons.module.css`); the CSS never runs in jsdom, so what is pinned
+    // (`skeleton-surface.module.css`); the CSS never runs in jsdom, so what is pinned
     // here is that the class is ON the announcing element — the only thing this
     // suite can know, and the thing a refactor would drop.
     const { container } = render(el);

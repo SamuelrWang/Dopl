@@ -125,7 +125,7 @@ describe("the shell's own loading state mirrors the shell", () => {
     expect(container.querySelectorAll("button")).toHaveLength(0);
     expect(container.querySelectorAll("a")).toHaveLength(0);
     expect(visibleText(container)).toBe("");
-    // Every shimmering block stands inside a `skeletons.module.css` surface.
+    // Every shimmering block stands inside a `skeleton-surface.module.css` surface.
     ghosts(container).forEach((node) => {
       expect(node.closest('[class*="surface"]')).not.toBeNull();
     });
