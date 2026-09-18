@@ -9,7 +9,8 @@
  * rename. The two panes are separate compositions of one ladder and are MEANT
  * TO MATCH — this file's Description row says the same thing.
  *
- * WIRED: channel info (creator / created / status) off the channel row, MEMBERS off `use-channel-members` (presence is the
+ * WIRED: channel info (creator / created / status) off the channel row, the CURATED
+ * rows off `channels.info_card` (R-19, 2026-09-17), MEMBERS off `use-channel-members` (presence is the
  * server's verdict — `view-model.ts › isPresentForViewer`, 2026-09-08), the MENTIONS
  * inbox off `use-channel-mentions` (Phase 6), and the activity strip since
  * 2026-09-05 (F-316).
@@ -34,6 +35,15 @@ import {
   StatusPill,
 } from "./bits";
 import { InlineEditText, type ChannelHeaderEdit } from "./info-inline-edit";
+import {
+  InfoCardCustomRow,
+  type ChannelInfoCardEdit,
+} from "./info-card-rows";
+import {
+  EMPTY_INFO_CARD,
+  removeInfoCardRow,
+  upsertInfoCardRow,
+} from "../info-card";
 import { MemberRoster } from "./member-roster";
 import { ThreadActivityStrip, type ActivityBin } from "./thread-activity";
 import { MentionsDisclosure } from "./mentions-disclosure";
@@ -54,6 +64,7 @@ export function InfoTab({
   onOpenMention,
   onMarkAllMentionsRead,
   headerEdit,
+  infoCardEdit,
 }: {
   channel: Channel;
   channelName: string;
@@ -76,6 +87,22 @@ export function InfoTab({
    * "may this line open" (`surface-info-panel.tsx`).
    */
   headerEdit?: ChannelHeaderEdit;
+  /**
+   * 🔒 **THE CURATED `channels.info_card` ROWS' WRITE (Samuel's ruling R-19,
+   * 2026-09-17).** The column is on `channels` — every channel can carry curated
+   * rows — and until this ruling exactly ONE surface rendered them, so a workspace
+   * channel could hold rows no workspace surface showed. A stored row nothing
+   * displays is a data trap.
+   *
+   * ⚠ **ABSENT MEANS THE ROWS ARE NOT DRAWN AT ALL, NOT DRAWN INERT.** Every row
+   * carries a hover × and its value is the edit target (`info-card-rows.tsx ›
+   * InfoCardCustomRow`), so a body whose host has not wired the write would ship
+   * two dead controls per row — the thing INVARIANTS §5 forbids, and worse here
+   * than showing nothing, because a × that does not remove reads as data loss.
+   * The one product host (`surface-info-panel.tsx`) always passes it; what does
+   * not is a test harness with no card to draw.
+   */
+  infoCardEdit?: ChannelInfoCardEdit;
 }) {
   // ⚠ THE TAGS ROW MOVED TO `mentions-disclosure.tsx` (2026-09-15) — its open
   // state, its unread arithmetic and its markup went with it, because a SECOND
@@ -94,6 +121,12 @@ export function InfoTab({
    * the moment the row must not become editable.
    */
   const headerEditable = headerEdit?.canEdit === true && !channel.isDirect;
+  // ⚠ §8 STALE-CACHE, SPELLED INLINE AT THE READ and never behind an accessor:
+  // the channel list is IndexedDB-persisted with a 24h `gcTime`, so the first
+  // paint after an upgrade serves rows minted before this column existed and the
+  // key is simply ABSENT. `EMPTY_INFO_CARD` is the frozen shared default
+  // (`info-card.ts`), which is also what `{}` parses to server-side.
+  const card = channel.infoCard ?? EMPTY_INFO_CARD;
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto pb-6">
@@ -198,6 +231,29 @@ export function InfoTab({
             <StatusPill label="Active" />
           )}
         </MetaRow>
+        {/* 🔒 **THE CURATED ROWS (Samuel's ruling R-19, 2026-09-17) — the same
+            `info-card-rows.tsx › InfoCardCustomRow` /home has rendered since
+            2026-08-25, not a second renderer.** `channels.info_card` is a column on
+            `channels`, validated and PATCH-writable on every channel, and until
+            this ruling only /home's card drew it: a workspace channel could carry
+            curated rows that no workspace surface showed.
+            ⚠ **BELOW THE BUILT-INS AND ABOVE MENTIONS**, which is /home's order —
+            these are card FACTS, and the inbox below them is not.
+            ⚠ **NO ADD AFFORDANCE HERE.** `InfoCardAddRow` is commented out on
+            /home at Samuel's explicit instruction (2026-09-15) and this body does
+            not revive it; R-19 is about DISPLAYING what is stored. Reading, editing
+            in place and removing are what the column already supported. */}
+        {infoCardEdit !== undefined &&
+          card.rows.map((row) => (
+            <div key={row.id}>
+              <MetaRowDivider />
+              <InfoCardCustomRow
+                row={row}
+                onChange={(next) => infoCardEdit.onSave(upsertInfoCardRow(card, next))}
+                onRemove={() => infoCardEdit.onSave(removeInfoCardRow(card, row.id))}
+              />
+            </div>
+          ))}
         <MetaRowDivider />
         {/* The mentions inbox — ONE component, shared with the home space's Info
             tab (`mentions-disclosure.tsx`), which owns the label and the badge. */}

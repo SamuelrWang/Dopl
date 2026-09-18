@@ -117,6 +117,13 @@ vi.mock("../hooks/use-channel-header-writes", () => ({
     pending: false,
   }),
 }));
+// The curated info card's write (R-19, 2026-09-17) — mocked for exactly the
+// reason the header write above it is: `SurfaceInfoPanel` mints it from this
+// surface's one gate, it says nothing about which channel is open, and unmocked it
+// pulls the real `useApiMutationWith` out of the stub below.
+vi.mock("../hooks/use-channel-info-card-writes", () => ({
+  useChannelInfoCardWrite: () => ({ save: () => {}, pending: false }),
+}));
 vi.mock("../client/realtime", () => ({
   useChannelsRealtime: () => {},
   usePresenceRealtime: () => {},

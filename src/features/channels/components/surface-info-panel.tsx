@@ -17,6 +17,7 @@
 
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { useChannelHeaderWrite } from "../hooks/use-channel-header-writes";
+import { useChannelInfoCardWrite } from "../hooks/use-channel-info-card-writes";
 import { ChannelsSettingsSlot } from "./settings-slot";
 import { ChannelsInfoPanel, type TabKey } from "./info-panel";
 import type { ChannelSurfaceData } from "./channel-surface-data";
@@ -99,6 +100,27 @@ export function SurfaceInfoPanel({
     onSaveTopic: headerWrite.saveTopic,
     busy: headerWrite.pending,
   };
+  /**
+   * THE CURATED INFO CARD'S WRITE (Samuel's ruling R-19, 2026-09-17).
+   *
+   * ⚠ **THE SAME GATE AGAIN, AND THAT IS WHY IT IS MINTED HERE AND NOT IN THE
+   * TAB** (INVARIANTS §7/§8: one `useRefetchGate` per live surface). /home's own
+   * card already minted this hook from the gate this file hands down
+   * (`pages/home/person-info-tab.tsx`); the DEFAULT body had no write at all, which
+   * is why a workspace channel's curated rows were stored, validated,
+   * PATCH-writable — and invisible.
+   * ⚠ **MEMBERSHIP-GATED, NOT MANAGE-GATED, AND DELIBERATELY SO** (Samuel,
+   * 2026-08-25; `service-writes.ts › updateChannel`): the card is content the room
+   * carries, not part of its lifecycle. So there is no `canEdit` half to mirror
+   * here — unlike `headerEdit` directly above.
+   * ⚠ **NO NEW ENDPOINT** — `PATCH /api/channels/[channelId]`, the same route the
+   * header write and the lifecycle writes already use.
+   */
+  const infoCardWrite = useChannelInfoCardWrite({
+    channelId: channel.id,
+    workspaceId,
+    gate,
+  });
 
   // ⚠ ON ONE COLUMN, OPENING A TRANSCRIPT HAS TO MOVE THE FACE TOO — a picked
   // thread, a jumped-to mention and a new-thread ask all land in the
@@ -183,6 +205,11 @@ export function SurfaceInfoPanel({
       // CLICK-TO-EDIT NAME + DESCRIPTION (Samuel, 2026-09-16) — see `headerEdit`
       // above for the permission and why it is mirrored.
       headerEdit={headerEdit}
+      // THE CURATED `channels.info_card` ROWS (Samuel, 2026-09-17) — see
+      // `infoCardWrite` above. ⚠ NOT on the `infoTab` context: /home's injected tab
+      // mints this same hook from the same gate already, and collapsing the two is
+      // the ONE-BODY step, not this one.
+      infoCardEdit={{ onSave: infoCardWrite.save }}
       // ⚠ CALLED, not passed. The tab is a render function so it can be
       // handed THIS surface's refetch gate — see `ChannelInfoTabContext`.
       // ⚠ THE BUNDLE GOES WITH THE GATE (2026-09-15). The slot REPLACES the tab

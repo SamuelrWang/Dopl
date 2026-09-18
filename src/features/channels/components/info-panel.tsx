@@ -30,6 +30,7 @@ import { Crossfade } from "@/shared/ui/crossfade";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { InfoTab } from "./info-tab";
 import type { ChannelHeaderEdit } from "./info-inline-edit";
+import type { ChannelInfoCardEdit } from "./info-card-rows";
 import { ThreadInfoTab } from "./thread-info-tab";
 import { ThreadsTab } from "./threads-tab";
 import { ArtifactsTab } from "./artifacts-tab";
@@ -87,6 +88,7 @@ export function ChannelsInfoPanel({
   onMarkAllMentionsRead,
   artifacts = false,
   headerEdit,
+  infoCardEdit,
   infoTabSignal = 0,
   fullTab,
   infoTab,
@@ -157,6 +159,10 @@ export function ChannelsInfoPanel({
   mentionsLoading: boolean;
   onOpenMention: (mention: ChannelMention) => void;
   onMarkAllMentionsRead: () => void;
+  /** THE CURATED `channels.info_card` ROWS' WRITE (R-19, 2026-09-17) — minted by
+   *  the surface with its one gate and forwarded, exactly as {@link headerEdit}
+   *  is. See `info-tab.tsx`'s own prop for why ABSENT draws no rows at all. */
+  infoCardEdit?: ChannelInfoCardEdit;
   /**
    * Draw the ARTIFACTS FACE toggle in the Threads tab (Samuel, 2026-09-16).
    *
@@ -322,6 +328,7 @@ export function ChannelsInfoPanel({
                 onOpenMention={onOpenMention}
                 onMarkAllMentionsRead={onMarkAllMentionsRead}
                 headerEdit={headerEdit}
+                infoCardEdit={infoCardEdit}
               />
             )
           ) : shown === "threads" ? (

@@ -21,6 +21,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { InfoTab } from "./info-tab";
 import type { ChannelHeaderEdit } from "./info-inline-edit";
+import type { ChannelInfoCardEdit } from "./info-card-rows";
 import { channel, member, ME } from "./test-fixtures";
 import type { Channel } from "../types";
 
@@ -31,7 +32,8 @@ const MEMBERS = [member({ userId: ME, displayName: "Sam Wang" })];
 function mountTab(
   over: Partial<Channel>,
   headerEdit?: ChannelHeaderEdit,
-  channelName = "Website"
+  channelName = "Website",
+  infoCardEdit?: ChannelInfoCardEdit
 ) {
   render(
     <InfoTab
@@ -45,6 +47,7 @@ function mountTab(
       onOpenMention={vi.fn()}
       onMarkAllMentionsRead={vi.fn()}
       headerEdit={headerEdit}
+      infoCardEdit={infoCardEdit}
     />
   );
 }
@@ -211,5 +214,83 @@ describe("who gets the editable face", () => {
     mountTab({ name: "Website" });
     expect(screen.queryByLabelText("Edit Channel name")).toBeNull();
     expect(screen.queryByLabelText("Edit Channel description")).toBeNull();
+  });
+});
+
+/**
+ * 🔒 **THE CURATED `channels.info_card` ROWS, ON THE SHARED BODY (Samuel's ruling
+ * R-19, 2026-09-17).**
+ *
+ * ⚠ **WHAT THIS PINS IS A DATA TRAP CLOSING, NOT A FEATURE ARRIVING.** The column
+ * is on `channels`, validated and PATCH-writable on EVERY channel, and until this
+ * ruling only /home's card rendered it — so a workspace channel could carry
+ * curated rows that no workspace surface showed. `grep -c infoCard info-tab.tsx`
+ * was **0**.
+ *
+ * ⚠ **THE RENDERER IS `info-card-rows.tsx › InfoCardCustomRow`, THE ONE /home HAS
+ * USED SINCE 2026-08-25** — pinned by asserting the row's own affordances (the
+ * hover × and the value-as-edit-target), which a second, re-typed renderer would
+ * not have.
+ *
+ * ⚠ **AND ABSENT `infoCardEdit` DRAWS NOTHING.** Every row carries a × and an
+ * editable value; a body whose host has not wired the write would ship two dead
+ * controls per row, and a × that does not remove reads as data loss. That case is
+ * the last one here.
+ *
+ * MUTATION-VERIFY: drop the `infoCardEdit !== undefined` guard and the last case
+ * fails; hand `onRemove` the wrong card and the removal case fails on the surviving
+ * row's id.
+ */
+describe("the curated info-card rows", () => {
+  const CARD = {
+    hidden: [],
+    rows: [
+      { id: "r1", label: "Launch", value: "March" },
+      { id: "r2", label: "Repo", value: "dopl/web" },
+    ],
+  };
+
+  function saving() {
+    const onSave = vi.fn();
+    return { onSave, edit: { onSave } satisfies ChannelInfoCardEdit };
+  }
+
+  it("renders every stored row, label and value", () => {
+    mountTab({ infoCard: CARD }, undefined, "Website", saving().edit);
+    expect(screen.getByText("Launch")).toBeTruthy();
+    expect(screen.getByText("March")).toBeTruthy();
+    expect(screen.getByText("Repo")).toBeTruthy();
+    expect(screen.getByText("dopl/web")).toBeTruthy();
+  });
+
+  it("carries the shared renderer's own affordances — the × and the edit target", () => {
+    mountTab({ infoCard: CARD }, undefined, "Website", saving().edit);
+    expect(screen.getByLabelText("Remove Launch from this card")).toBeTruthy();
+    expect(screen.getByLabelText("Edit Launch")).toBeTruthy();
+  });
+
+  it("removes a row by handing the host the WHOLE next card", () => {
+    // ⚠ The server REPLACES rather than merges (`service-writes.ts ›
+    // updateChannel`), which is why the editors in `info-card.ts` return a whole
+    // card and this body never assembles one itself.
+    const { onSave, edit } = saving();
+    mountTab({ infoCard: CARD }, undefined, "Website", edit);
+    fireEvent.click(screen.getByLabelText("Remove Launch from this card"));
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls[0][0].rows.map((r: { id: string }) => r.id)).toEqual([
+      "r2",
+    ]);
+  });
+
+  it("an EMPTY card draws no rows and no heading of its own", () => {
+    mountTab({ infoCard: { hidden: [], rows: [] } }, undefined, "Website", saving().edit);
+    expect(screen.queryByText("Launch")).toBeNull();
+  });
+
+  it("🔒 a host that wires NO card write draws no curated row at all", () => {
+    // Not "draws them inert": a × that does not remove reads as data loss.
+    mountTab({ infoCard: CARD });
+    expect(screen.queryByText("Launch")).toBeNull();
+    expect(screen.queryByLabelText("Remove Launch from this card")).toBeNull();
   });
 });

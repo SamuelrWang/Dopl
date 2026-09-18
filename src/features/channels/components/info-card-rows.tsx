@@ -40,8 +40,26 @@ import { MetaRow } from "./bits";
 import {
   INFO_CARD_LABEL_MAX,
   INFO_CARD_VALUE_MAX,
+  type ChannelInfoCard,
   type ChannelInfoCardRow,
 } from "../info-card";
+
+/**
+ * THE CURATED CARD'S WRITE, AS A HOST FACT (Samuel's ruling R-19, 2026-09-17).
+ *
+ * ⚠ **IT RIDES WITH THE GATE, FOR THE REASON `ChannelHeaderEdit` DOES.**
+ * `use-channel-info-card-writes.ts › useChannelInfoCardWrite` takes THE surface's
+ * one `useRefetchGate` (INVARIANTS §7/§8), so a TAB may not mint its own — a
+ * second coordinator lets the realtime doorbell repaint the old card mid-write.
+ * `surface-info-panel.tsx` mints it once, exactly where `headerEdit` is minted.
+ *
+ * ⚠ **THE CALLER HANDS BACK THE WHOLE CARD.** The pure editors are
+ * `info-card.ts` (`upsertInfoCardRow` / `removeInfoCardRow`), so no surface
+ * assembles a card by hand and two surfaces cannot assemble one differently.
+ */
+export interface ChannelInfoCardEdit {
+  onSave: (card: ChannelInfoCard) => void;
+}
 
 /**
  * THE HOVER GROUP the add affordance waits for, as a class pair.
