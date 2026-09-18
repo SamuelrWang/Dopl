@@ -1435,8 +1435,11 @@ the change that breaks everything at once. ⚠ Adding or removing a page is a **
 
 ---
 
-### Wave 6 — Section language, paint and dialogs.
-**Worktree `parity/w6-recipes`.**
+### ✅ Wave 6 — Section language, paint and dialogs.
+
+🟢 **MERGED TO `master` 2026-09-17** (branch `wave6/palette-flat`, 3 build commits + 1 review commit,
+fast-forward, full gate set). **R-38, R-39, R-40 and R-42 are in the tree; the row stays OPEN for
+P29, P26 and U8/U9.**
 
 **Goal:** one section language, one dialog kit, one decision about the account palette.
 
