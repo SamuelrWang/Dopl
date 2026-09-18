@@ -25,6 +25,7 @@ import {
 } from "./repository";
 import { findPersonalContainerId } from "@/shared/tenancy/personal-container";
 import { assertWorkspacePermanent } from "./authz";
+import { scrubHiddenPresence } from "./dto";
 
 export interface ResolvedMembership {
   workspace: Workspace;
@@ -355,12 +356,20 @@ export async function deleteWorkspaceForUser(
   await deleteWorkspace(workspaceId);
 }
 
+/**
+ * The roster, with presence already scrubbed per caller (R-12(a), 2026-09-17).
+ * ⚠ **THE SCRUB IS HERE BECAUSE THE CALLER'S ROLE IS** — the resolve above
+ * already read the membership row, so the rule costs nothing and no route can
+ * forget it. This function has ONE consumer (`GET /api/workspaces/[slug]/members`),
+ * which is why scrubbing it scrubs the wire.
+ */
 export async function listWorkspaceMembers(
   workspaceId: string,
   userId: string
 ): Promise<WorkspaceMembership[]> {
-  await resolveMembershipOrThrow(workspaceId, userId);
-  return listMembers(workspaceId);
+  const { membership } = await resolveMembershipOrThrow(workspaceId, userId);
+  const members = await listMembers(workspaceId);
+  return scrubHiddenPresence(members, userId, membership.role);
 }
 
 export function requireMinRole(role: Role, min: Role): void {

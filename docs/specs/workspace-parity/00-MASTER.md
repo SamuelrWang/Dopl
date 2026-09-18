@@ -1509,8 +1509,11 @@ distinctly from PENDING — **do not flip `canEdit` closed**) · ✅ V9 **remove
 denies `isSelf` below owner, so no role a link container holds could leave one; the wave added
 `membership-admin.ts › leaveWorkspace` beside it, sharing one `› completeRemoval` tail. The row action
 is `person-roster-actions.tsx › PersonRosterRowAction` through the shared body's new
-`ChannelInfoExtras.rosterRowAction`; the rule is INVARIANTS §4A · **R-12(a)** scrub `lastSeenAt` per caller **in the members DTO, in this wave and not
-before** · 🔴 **DELETE the guidance layer** (R-49).
+`ChannelInfoExtras.rosterRowAction`; the rule is INVARIANTS §4A · ✅ **R-12(a)** scrub `lastSeenAt` per caller **in the members DTO** — **DONE
+2026-09-17**: `workspaces/server/dto.ts › scrubHiddenPresence`, applied by
+`› service.ts › listWorkspaceMembers` (one consumer, so the wire is the payload); the
+client rule stays as the LAST line. `docs/MEMBERS-AUTHORIZATION.md` §*Not yet enforced
+server-side* loses its one row · 🔴 **DELETE the guidance layer** (R-49).
 🔴 **DROPPED: V1/V3 Chats and Skills.** **R-33 — NO, Skills and Chats stay out of home.**
 ⚠ **V2 therefore stays a live orphan class**: `dopl_chats(op="export")` with no container still files
 chats nothing lists, and *what the export should do instead is still owed an answer.* Record it, do

@@ -708,6 +708,10 @@ where the pairing is missing"* and *"a members-console defect and **not** a gues
 **Recommendation: scrub it in the same wave that touches the members DTO**, and not before — it is the
 kind of fix that is free while you are already in the file and expensive as its own change.
 
+→ ✅ **DONE 2026-09-17 (wave 7, R-12(a)).** `workspaces/server/dto.ts › scrubHiddenPresence`, applied
+by `› service.ts › listWorkspaceMembers`; the client rule is kept as the last line and both halves are
+pinned by `members/presence-pairing.test.tsx`. This row is closed.
+
 ### E-11. Execute F-513 before anything else in this document
 
 **What is true.** The ruling exists (§0.6-i): *"shared" is ANY channel with more than one member,

@@ -162,22 +162,30 @@ entry would carry, kept here until that file is free to edit:
 
 ## Not yet enforced server-side
 
-- **Presence withholding is cosmetic.** The console now applies `showPresence`
-  to the detail header, the facts group AND the roster rows, so a peer sees no
-  last-active anywhere. But `lastSeenAt` still ships in the roster payload
-  (`GET /members`), because one payload feeds every row
-  (`workspaces/server/dto.ts` emits it; `members/types.ts › WorkspaceMemberView`
-  declares it; `members-v2/{member-rows,member-facts,member-header}.tsx` read
-  it). Making it real means scrubbing the column per-caller in the members DTO.
-  **The only row in this doc where the pairing is missing.**
-  - ⚠ **CHECKED JOINTLY WITH THE GUEST COLUMN, 2026-08-30, AND THE ANSWER IS
-    THAT THE EXPOSURE IS BOUNDED BY THE ROUTE FLOOR RATHER THAN BY THE DTO.**
-    The population that can read an undisclosed `lastSeenAt` off the wire is
-    **`viewer` and up**, not "anyone with the link" — the 2026-08-26 floor
-    correction removed guests from it. That does not close this row: a `viewer`
-    peer is still shown nothing on screen and can still read the timestamp in
-    devtools, which is precisely the pairing this doc says is missing. It does
-    mean the row is a members-console defect and **not** a guest-lane
-    disclosure, so do not fold it into the guest work.
+- ✅ **Presence withholding IS enforced server-side — Samuel's ruling R-12(a),
+  2026-09-17 (wave 7), and this row is CLOSED.** `workspaces/server/dto.ts ›
+  scrubHiddenPresence` nulls `lastSeenAt` on every row the caller may not see
+  presence for, applied by `workspaces/server/service.ts › listWorkspaceMembers`
+  — which has exactly ONE consumer (`GET /members`), so scrubbing it scrubs the
+  wire. A hidden presence no longer crosses it, in devtools or anywhere else.
+  - ⚠ **THE SCRUB READS THE CONSOLE'S OWN RULE, NOT A SECOND ONE.**
+    `members-v2/visibility.ts › showPresence` is `isAdmin || isSelf`; the server
+    half is that expression, and the two must move together or this row reopens.
+  - 🔒 **THE CLIENT RULE STAYS, AS THE LAST LINE.** The detail header, the facts
+    group and the roster rows still apply `showPresence` — the server decides
+    what a caller may HAVE, the components decide what this surface DRAWS from
+    what it was handed, and a stamp on screen the rule says is hidden is the
+    defect either way. Pinned on both halves by
+    `members/presence-pairing.test.tsx`, whose render fixtures deliberately
+    carry a stamp the server would have scrubbed.
+  - ⚠ **`null` NOW MEANS TWO THINGS ON THIS FIELD and the difference is not on
+    the wire**: "never seen" and "not yours to see". Nothing may read it as a
+    heartbeat — same rule the channel roster's viewer-only fields carry
+    (`channels/server/dto.ts › mapMemberRow`).
+  - ⚠ Historical bound, kept because it is why this was never a guest-lane item:
+    the population that could read an undisclosed `lastSeenAt` off the wire was
+    **`viewer` and up**, not "anyone with the link" (checked jointly with the
+    guest column, 2026-08-30). It was a members-console defect, and it is fixed
+    as one.
 - **Peer access-tab suppression is belt-and-braces, not the fence.** The route
   already 404s a peer; the client simply does not ask.

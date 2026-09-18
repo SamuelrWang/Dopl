@@ -7,6 +7,10 @@
  *
  * ⚠ CLIENT-SIDE RENDERING ONLY. Each rule needs a server counterpart, and the
  * doc names which route owns which. Hiding a control is not authorization.
+ * 🔒 `showPresence` GOT ITS COUNTERPART 2026-09-17 (R-12(a)) —
+ * `workspaces/server/dto.ts › scrubHiddenPresence` is this same
+ * `isAdmin || isSelf`, applied before the payload leaves. **The two move
+ * together**; this stays as the last line, not as the only one.
  */
 
 import { meetsMinRole } from "@/features/workspaces/types";
