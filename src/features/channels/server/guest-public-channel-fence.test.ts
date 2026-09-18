@@ -209,7 +209,7 @@ describe("listChannels — CALL SITE 1, the service, driven for real", () => {
   });
 
   it("hands the repository includePublic:FALSE for a guest", async () => {
-    await listChannels(ctx("guest"), false);
+    await listChannels(ctx("guest"));
     expect(vi.mocked(repo.listChannels).mock.calls[0]?.[1]).toMatchObject({
       includePublic: false,
     });
@@ -218,7 +218,7 @@ describe("listChannels — CALL SITE 1, the service, driven for real", () => {
   it.each(["viewer", "member", "admin", "owner"] as const)(
     "hands it includePublic:TRUE for a %s (unchanged)",
     async (role) => {
-      await listChannels(ctx(role), false);
+      await listChannels(ctx(role));
       expect(vi.mocked(repo.listChannels).mock.calls[0]?.[1]).toMatchObject({
         includePublic: true,
       });
@@ -229,7 +229,7 @@ describe("listChannels — CALL SITE 1, the service, driven for real", () => {
     // The repository's own default is `true` (§5's rule for everybody above the
     // floor), so an argument that stops being passed reads as the WIDE answer.
     // Assert presence, not just value.
-    await listChannels(ctx("guest"), false);
+    await listChannels(ctx("guest"));
     const opts = vi.mocked(repo.listChannels).mock.calls[0]?.[1] as unknown as
       | Record<string, unknown>
       | undefined;
@@ -262,11 +262,7 @@ describe("repository.listChannels — CALL SITE 2, the opts pass-through", () =>
     const real = await vi.importActual<typeof import("./repository")>(
       "./repository"
     );
-    await real.listChannels(WS, {
-      memberChannelIds: ids,
-      includeArchived: false,
-      includePublic,
-    });
+    await real.listChannels(WS, { memberChannelIds: ids, includePublic });
     return calls.find((c) => c.op === "or")?.args[0] ?? null;
   }
 

@@ -51,10 +51,7 @@ export function RelationshipRecord({
   /** The container's channel was deleted from Settings — drop the selection. */
   onDeleted: () => void;
 }) {
-  const { channels, loading, error, refetch } = useChannels(
-    homeChannel.workspaceId,
-    false
-  );
+  const { channels, loading, error, refetch } = useChannels(homeChannel.workspaceId);
 
   // ⚠ THE PANE'S OWN SHAPE, NOT THE KIT'S TWO GENERIC GHOSTS (Samuel,
   // 2026-09-13: *"this is the skeleton for the channel, it doesn't look accurate

@@ -99,7 +99,6 @@ vi.mock("../hooks/use-channel-preference-writes", () => ({
 }));
 vi.mock("../hooks/use-channel-lifecycle-writes", () => ({
   useChannelLifecycleWrites: () => ({
-    toggleArchive: () => {},
     toggleVisibility: () => {},
     remove: () => {},
     join: () => {},

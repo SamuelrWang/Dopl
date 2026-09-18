@@ -102,14 +102,14 @@ describe("the channel face — a line between every setting", () => {
         canManage
         onInvite={noop}
         onToggleVisibility={noop}
-        onToggleArchive={noop}
         onRequestDelete={noop}
         onRequestLeave={noop}
       />
     );
-    // Add members, Make private, Archive, Delete channel.
-    expect(rows(container)).toBe(4);
-    expect(renderedLines(container)).toHaveLength(3);
+    // Add members, Make private, Delete channel. ⚠ FOUR rows / 3 lines until
+    // 2026-09-17, when the Archive row went with the feature (R-21).
+    expect(rows(container)).toBe(3);
+    expect(renderedLines(container)).toHaveLength(2);
   });
 });
 

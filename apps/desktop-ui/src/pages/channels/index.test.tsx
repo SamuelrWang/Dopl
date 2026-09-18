@@ -346,8 +346,14 @@ describe("channels page", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add members" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Make public" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Archive" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete channel" })).toBeInTheDocument();
+    // 🔴 **ARCHIVE WAS ON THIS LIST AND IS DELETED (Samuel's ruling R-21,
+    // 2026-09-17): *"a user can delete a channel; no point in archives."*** The
+    // assertion is INVERTED rather than dropped, because this case exists to catch
+    // a control that became unreachable — and "reachable" and "gone on purpose"
+    // must not look the same from here.
+    expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Unarchive" })).toBeNull();
 
     // ⚠ THE TAB NO LONGER OPENS A READ OF ITS OWN (2026-08-22). It used to fire
     // `useTrustRules` on mount, and this asserted the read ARRIVED WITH the tab

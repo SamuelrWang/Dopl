@@ -46,8 +46,8 @@ const client_members_js_1 = require("./client-members.js");
 const channel = __importStar(require("./channel.js"));
 const channelAccount = __importStar(require("./channel-account.js"));
 class ChannelMethods extends client_members_js_1.MemberMethods {
-    listChannels(opts) {
-        return channel.listChannels(this.transport, opts);
+    listChannels() {
+        return channel.listChannels(this.transport);
     }
     /**
      * ⚠ ACCOUNT-WIDE AND USER-SCOPED — every channel the caller is in, across

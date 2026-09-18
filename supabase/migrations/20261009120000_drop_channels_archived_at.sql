@@ -1,0 +1,76 @@
+-- ============================================================================
+-- DROP `channels.archived_at` — THE ARCHIVE FEATURE IS GONE (Samuel's R-21)
+-- ============================================================================
+--
+-- ⛔ **WRITTEN, NOT APPLIED. DO NOT APPLY IN THIS WAVE.**
+--
+-- This directory's standing gate is that a migration file records the COMMAND
+-- rather than a claim about deploy state (CLAUDE.md doc rule 4). This one goes
+-- further: it is written so the DECISION is recorded in the place the next
+-- reader looks, and it is deliberately left unapplied because the code change
+-- that makes it safe shipped first and wants a release between the two.
+--
+-- ── WHAT ALREADY SHIPPED (2026-09-17, wave 1B) ──────────────────────────────
+--
+-- Samuel's ruling **R-21**: *"a user can delete a channel; no point in
+-- archives."* The whole feature was deleted in application code:
+--
+--   · the Archive / Unarchive row in the channel Settings tab
+--   · the Status row (Active / Archived) on the channel Info tab
+--   · `archiveConfig` / `ArchiveDraft` / `toggleArchive` — the client write
+--   · `archived` on `ChannelUpdateSchema` and on `MANAGED_CHANNEL_FIELDS`
+--   · `service-writes-channel.ts`'s `archived_at = now | null` stamp — **the
+--     only writer of this column anywhere in the codebase**
+--   · `repository.ts › listChannels`'s `.is("archived_at", null)` filter, and
+--     both of `repository-overview.ts`'s
+--   · `?include=archived`, `channelListParams`, `useChannels(…, includeArchived)`
+--     and `DoplClient.listChannels({ includeArchived })`
+--
+-- 🔴 **SO ROWS THAT CARRY A STAMP ARE ORDINARY CHANNELS AS OF THAT COMMIT.**
+-- Nothing hides them, nothing reads the column, nothing writes it. That is the
+-- intended outcome of the ruling and not a side effect: an archived channel
+-- simply came back.
+--
+-- ── WHY THE COLUMN IS STILL HERE ────────────────────────────────────────────
+--
+-- A column drop is not reversible from the application side, and the DTO field
+-- `Channel.archivedAt` (plus `@dopl/client › Channel.archivedAt`, the
+-- `channels` row types in `src/shared/supabase/types.ts`, and roughly thirty
+-- test fixtures that spell `archived_at: null`) still projects it. **Those go
+-- with THIS migration, in one change, in a later wave** — not before it, or the
+-- projection breaks against a live column, and not after, or the drop breaks a
+-- live projection.
+--
+-- ⚠ **MEASURE BEFORE YOU DROP. Do not trust a number written here** — this file
+-- deliberately records no count, because a count in a doc is a future wrong
+-- answer (CLAUDE.md doc rule 1). Re-derive how many rows would silently change
+-- meaning:
+--
+--   SELECT count(*) AS archived_rows,
+--          count(*) FILTER (WHERE deleted_at IS NULL) AS archived_and_live
+--     FROM public.channels
+--    WHERE archived_at IS NOT NULL;
+--
+-- ⚠ **AND TELL SAMUEL THE NUMBER BEFORE APPLYING.** Every one of those rooms is
+-- a channel somebody deliberately put away and that has now reappeared in their
+-- list. Dropping the column makes that permanent and unauditable; while the
+-- column survives, the question "which rooms came back?" still has an answer.
+--
+-- ── HOW TO APPLY IT, WHEN THAT WAVE COMES ───────────────────────────────────
+--
+-- 🔒 **BY NAME, BYTE-EXACT, NEVER `db push`, NEVER BY FILENAME VERSION** —
+-- F-304's re-stamp means a history row's version is not this file's
+-- `20261009120000` prefix. Verify with `supabase migration list` / MCP
+-- `list_migrations`, JOINED ON THE NAME (`drop_channels_archived_at`).
+--
+-- ============================================================================
+
+-- ALTER TABLE public.channels DROP COLUMN archived_at;
+--
+-- ⚠ The statement is COMMENTED OUT, which is what makes this file inert if it
+-- is ever swept up by a `db push` somebody runs against this directory. Uncomment
+-- it in the wave that also deletes `Channel.archivedAt` from the DTO, the client
+-- package and the fixtures — and regenerate `src/shared/supabase/types.ts` in the
+-- same change.
+
+SELECT 1 WHERE false;

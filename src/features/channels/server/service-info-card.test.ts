@@ -1,7 +1,7 @@
 /**
  * `updateChannel`'s TWO GATES (Samuel, 2026-08-25).
  *
- * The channel HEADER — name, topic, visibility, archived — stays MANAGE-gated
+ * The channel HEADER — name, topic, visibility — stays MANAGE-gated
  * exactly as it was. The INFO CARD is gated on MEMBERSHIP, because a home
  * channel is "a relationship, not a tenancy" (INVARIANTS §4A, the same ruling
  * that lets any member of a container mint its link) and the card is that
@@ -158,7 +158,10 @@ describe("updateChannel — the header is still MANAGE-gated", () => {
     ["name", { name: "Renamed" }],
     ["topic", { topic: "New topic" }],
     ["visibility", { visibility: "public" as const }],
-    ["archived", { archived: true }],
+    // ⚠ `["archived", { archived: true }]` was a fourth row here until R-21
+    // deleted the archive feature (2026-09-17). The field is off
+    // `ChannelUpdateSchema` and off `MANAGED_CHANNEL_FIELDS`, so it is unwritable
+    // rather than merely ungated — there is no gate left to pin.
   ])("refuses a plain member's %s", async (_field, patch) => {
     await expect(
       updateChannel(ctx(MEMBER), "chan-1", patch)

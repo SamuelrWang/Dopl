@@ -7,17 +7,17 @@ const selectChannels = (body: { channels: Channel[] }) => body.channels ?? [];
 
 /**
  * Workspace channels the caller can see (public + their private ones).
- * `includeArchived` flips the `?include=archived` query param, which also
- * re-keys the cache so the two lists don't collide.
+ *
+ * ⚠ **NO `includeArchived` SINCE 2026-09-17 (Samuel's ruling R-21).** It flipped
+ * `?include=archived`, which re-keyed the cache so an ACTIVE-only list and an
+ * everything list did not collide. There is no archived state now: the read
+ * answers every live channel, and a channel that carries an old `archived_at`
+ * stamp comes back as an ordinary channel like any other. ONE list, ONE key.
  */
-export function useChannels(workspaceId: string, includeArchived: boolean) {
+export function useChannels(workspaceId: string) {
   const query = useApiQuery<{ channels: Channel[] }, Channel[]>(
     "/api/channels",
-    {
-      workspaceId,
-      query: includeArchived ? { include: "archived" } : undefined,
-      select: selectChannels,
-    }
+    { workspaceId, select: selectChannels }
   );
   return {
     channels: query.data ?? [],

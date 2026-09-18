@@ -94,9 +94,10 @@ export function parseSeriesMetric(raw: string | null): OverviewSeriesMetric {
  * owns the status code — and the caller answers 404, never 403, so a private
  * channel's existence is not confirmed to somebody who cannot read it.
  *
- * ⚠ Archived channels are OUT, because that read excludes them. A series for an
- * archived channel therefore 404s rather than answering — fail-closed, and the
- * strip has no archived surface to render on anyway.
+ * ⚠ **ARCHIVED CHANNELS USED TO BE OUT, because that read excluded them — and
+ * they are IN since 2026-09-17 (R-21), along with every other reader of the flag.**
+ * A channel carrying an old `archived_at` stamp is an ordinary channel now, so its
+ * series answers rather than 404ing.
  */
 export async function isChannelVisibleTo(
   workspaceId: string,

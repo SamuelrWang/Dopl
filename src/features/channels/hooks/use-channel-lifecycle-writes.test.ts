@@ -28,7 +28,6 @@ import { EMPTY_INFO_CARD } from "../info-card";
 import type { ChannelsCache } from "../lib/optimistic-cache";
 import type { Channel } from "../types";
 import {
-  archiveConfig,
   deleteConfig,
   dropChannelRow,
   joinConfig,
@@ -44,10 +43,10 @@ const ME = "u-me";
 
 const LIST = "/api/channels";
 const ACTIVE_KEY = apiQueryKey(LIST, { workspaceId: WORKSPACE });
-const ARCHIVED_KEY = apiQueryKey(LIST, {
-  workspaceId: WORKSPACE,
-  query: { include: "archived" },
-});
+// ⚠ **`ARCHIVED_KEY` STOOD HERE AND IS DELETED (Samuel's ruling R-21,
+// 2026-09-17).** `/api/channels` was cached twice — the default holding ACTIVE
+// only and `?include=archived` holding everything — and the archive toggle was the
+// one write that patched both. There is ONE list key now.
 const MESSAGES_KEY = apiQueryKey(`${LIST}/${CHANNEL}/messages`, {
   workspaceId: WORKSPACE,
   query: { limit: 200 },
@@ -122,10 +121,7 @@ function harness(rows: Channel[]): Harness {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  client.setQueryData(ACTIVE_KEY, {
-    channels: rows.filter((c) => c.archivedAt === null),
-  } satisfies ChannelsCache);
-  client.setQueryData(ARCHIVED_KEY, { channels: rows } satisfies ChannelsCache);
+  client.setQueryData(ACTIVE_KEY, { channels: rows } satisfies ChannelsCache);
   const gate = {
     begun: 0,
     ended: 0,
@@ -161,7 +157,7 @@ function harness(rows: Channel[]): Harness {
   };
 }
 
-/** Ids in the ACTIVE list variant (the read that excludes archived rows). */
+/** Ids in the channel list — ONE variant since R-21. */
 function activeIds(h: Harness): string[] {
   return (
     h.client.getQueryData<ChannelsCache>(ACTIVE_KEY)?.channels.map((c) => c.id) ??
@@ -169,9 +165,9 @@ function activeIds(h: Harness): string[] {
   );
 }
 
-/** Rows in the ARCHIVED variant (the read that holds everything). */
+/** Rows in the channel list. */
 function allRows(h: Harness): Channel[] {
-  return h.client.getQueryData<ChannelsCache>(ARCHIVED_KEY)?.channels ?? [];
+  return h.client.getQueryData<ChannelsCache>(ACTIVE_KEY)?.channels ?? [];
 }
 
 function row(h: Harness, id = CHANNEL): Channel | undefined {
@@ -224,62 +220,16 @@ describe("dropChannelRow", () => {
   });
 });
 
-describe("archive — the two list variants move in OPPOSITE directions", () => {
-  it("drops the row from the ACTIVE list and stamps it in the ARCHIVED one, before the network answers", async () => {
-    const h = harness([channel(), channel({ id: OTHER })]);
-    const { inFlight, settle, calls } = run(h, archiveConfig(h.deps), {
-      channelId: CHANNEL,
-      archived: true,
-    });
-    await flush();
-
-    expect(calls[0].path).toBe(`${LIST}/${CHANNEL}`);
-    expect(calls[0].opts).toMatchObject({
-      method: "PATCH",
-      body: { archived: true },
-      workspaceId: WORKSPACE,
-    });
-    expect(activeIds(h)).toEqual([OTHER]);
-    expect(row(h)?.archivedAt).not.toBeNull();
-    expect([h.gate.begun, h.gate.ended]).toEqual([1, 0]);
-
-    settle({ channel: channel({ archivedAt: "2026-08-08T00:00:00.000Z" }) });
-    await inFlight;
-    expect(h.gate.ended).toBe(1);
-  });
-
-  it("unarchiving clears the stamp, so the archived tab's own filter drops it", async () => {
-    const h = harness([channel({ archivedAt: "2026-08-01T00:00:00.000Z" })]);
-    const { inFlight, settle } = run(h, archiveConfig(h.deps), {
-      channelId: CHANNEL,
-      archived: false,
-    });
-    await flush();
-    expect(row(h)?.archivedAt).toBeNull();
-    settle({ channel: channel() });
-    await inFlight;
-  });
-
-  it("restores BOTH variants verbatim when the PATCH fails, and still opens the gate", async () => {
-    const h = harness([channel(), channel({ id: OTHER })]);
-    const before = {
-      active: h.client.getQueryData(ACTIVE_KEY),
-      archived: h.client.getQueryData(ARCHIVED_KEY),
-    };
-    const { inFlight, fail } = run(h, archiveConfig(h.deps), {
-      channelId: CHANNEL,
-      archived: true,
-    });
-    await flush();
-    expect(activeIds(h)).toEqual([OTHER]);
-
-    fail(new Error("network"));
-    await inFlight;
-    expect(h.client.getQueryData(ACTIVE_KEY)).toEqual(before.active);
-    expect(h.client.getQueryData(ARCHIVED_KEY)).toEqual(before.archived);
-    expect(h.gate.ended).toBe(1);
-  });
-});
+// ⚠ **`describe("archive — the two list variants move in OPPOSITE directions")`
+// STOOD HERE AND IS DELETED (Samuel's ruling R-21, 2026-09-17):** *"a user can
+// delete a channel; no point in archives."* Three cases over `archiveConfig` — the
+// optimistic drop-from-one-and-stamp-in-the-other, the unarchive, and the
+// two-variant rollback. The write, the schema field, the `archived_at` stamp, the
+// list filter and the Settings row are all gone. ⚠ **THE PROPERTY THEY UNIQUELY
+// PINNED — that two DISJOINT cache entries can be patched in one `onMutate`
+// without the second snapshot capturing the first patch — has no other writer left
+// to demonstrate it.** Every surviving write names ONE entry and the prefix. If a
+// write ever patches two entries again, restore a case of this shape with it.
 
 describe("visibility — the header pill's value, on the click", () => {
   it("flips visibility in every list variant before the network answers", async () => {

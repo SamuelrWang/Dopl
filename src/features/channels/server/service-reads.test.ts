@@ -468,7 +468,7 @@ describe("listChannels — direct peer resolution", () => {
       { id: OTHER, email: "o@x.com", display_name: "Otto", avatar_url: "http://x/o.png" },
     ]);
 
-    const channels = await listChannels(ctx, false);
+    const channels = await listChannels(ctx);
     const normal = channels.find((c) => c.id === "chan-1");
     const dm = channels.find((c) => c.id === "dm-1");
     expect(normal?.isDirect).toBe(false);

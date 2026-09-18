@@ -191,7 +191,8 @@ export interface WorkspaceOverview {
     /** `channel_sessions` rows with `state <> 'ended'` — live agent sessions. */
     agentsRunning: number;
     members: number;
-    /** Non-direct, non-deleted, non-archived channels. */
+    /** Non-direct, non-deleted channels. ⚠ The archived exclusion went with the
+     *  archive feature (R-21, 2026-09-17). */
     channels: number;
   };
   /** Newest first, viewer-filtered, at most 8 rows. */

@@ -85,7 +85,6 @@ export async function removeWorkspaceDepartedMember(
   const mine = new Set(memberChannelIds);
   const rows = await repo.listChannels(workspaceId, {
     memberChannelIds,
-    includeArchived: true,
   });
   const liveDirectIds = new Set(
     rows.filter((r) => r.is_direct && mine.has(r.id)).map((r) => r.id)

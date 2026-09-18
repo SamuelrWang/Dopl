@@ -80,7 +80,8 @@ export const CHANNEL_CONSENT_PATH = "/api/channels/consent";
 // left standing is how a deleted endpoint gets called again.
 
 export const channelKeys = {
-  /** The workspace channel list. `.all` covers both archived variants. */
+  /** The workspace channel list. ⚠ ONE variant since R-21 (2026-09-17) — there
+   *  was a second, `?include=archived`, and the archive feature took it. */
   list: (): ApiResourceKeys => apiResource(channelsPath()),
   messages: (channelId: string): ApiResourceKeys =>
     apiResource(channelMessagesPath(channelId)),
@@ -96,10 +97,10 @@ export const channelKeys = {
   consent: (): ApiResourceKeys => apiResource(CHANNEL_CONSENT_PATH),
 };
 
-/** The exact query params `useChannels` reads with. */
-export function channelListParams(includeArchived: boolean) {
-  return includeArchived ? { include: "archived" } : undefined;
-}
+// ⚠ **`channelListParams` IS DELETED (Samuel's ruling R-21, 2026-09-17).** It
+// answered `{ include: "archived" }` or `undefined` — the ONE reason the channel
+// list had two cache entries. The archive feature is gone, so `useChannels` reads
+// with no params at all and `channelKeys.list()` names a single entry.
 
 /**
  * The exact query params `useChannelMessages` reads its NEWEST page with — and

@@ -63,7 +63,6 @@ function mount(over: Partial<Channel>, canManage: boolean, handlers = {}) {
   const props = {
     onInvite: vi.fn(),
     onToggleVisibility: vi.fn(),
-    onToggleArchive: vi.fn(),
     onRequestDelete: vi.fn(),
     onRequestLeave: vi.fn(),
     ...handlers,
@@ -118,13 +117,14 @@ describe("the DM has no Leave", () => {
 });
 
 describe("the owner's manage set", () => {
-  it("keeps all four items on a non-direct channel", () => {
+  it("keeps all three items on a non-direct channel", () => {
+    // ⚠ FOUR until 2026-09-17 — the ARCHIVE row went with the feature (R-21).
     mount({ role: "owner", visibility: "private" }, true);
     expect(row("Add members")).not.toBeNull();
     expect(row("Make public")).not.toBeNull();
-    expect(row("Archive")).not.toBeNull();
     expect(row("Delete channel")).not.toBeNull();
     expect(row("Leave channel")).toBeNull();
+    expect(row("Archive")).toBeNull();
   });
 
   it("flips the visibility label to match the current state", () => {
@@ -133,10 +133,16 @@ describe("the owner's manage set", () => {
     expect(row("Make public")).toBeNull();
   });
 
-  it("offers Unarchive on an archived channel", () => {
+  it("🔴 offers NO archive control, even on a channel that carries an old stamp", () => {
+    // ⚠ **`it("offers Unarchive on an archived channel")` STOOD HERE** and is
+    // inverted rather than deleted (Samuel's ruling R-21, 2026-09-17: *"a user can
+    // delete a channel; no point in archives."*). The stamped row is the case worth
+    // keeping: `archived_at` survives this wave as a column with no writer and no
+    // reader, and a channel that carries one must look like every other channel.
     mount({ role: "owner", archivedAt: "2026-08-01T00:00:00.000Z" }, true);
-    expect(row("Unarchive")).not.toBeNull();
+    expect(row("Unarchive")).toBeNull();
     expect(row("Archive")).toBeNull();
+    expect(row("Delete channel")).not.toBeNull();
   });
 
   it("hides the manage half from a plain member", () => {
@@ -206,7 +212,6 @@ describe("no dead rows, and nothing behind a click", () => {
         agent={null}
         onInvite={vi.fn()}
         onToggleVisibility={vi.fn()}
-        onToggleArchive={vi.fn()}
         onRequestDelete={vi.fn()}
         onRequestLeave={vi.fn()}
       />

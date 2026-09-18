@@ -95,19 +95,25 @@ export const ChannelCreateSchema = z.union([
 export type ChannelCreateInput = z.infer<typeof ChannelCreateSchema>;
 
 /**
- * Update a channel header. `archived` toggles the archive state; at least one field
- * is required. ⚠ `infoCard` IS NOT A HEADER FIELD AND DOES NOT WEAR THE HEADER'S GATE
- * (2026-08-25): the other four are MANAGE writes (`service-writes.ts › updateChannel`
- * requires `canManageChannel`), while the info card is the channel's shared scratch
- * surface and is gated on MEMBERSHIP. SHAPE in `./info-card.ts`.
+ * Update a channel header. At least one field is required. ⚠ `infoCard` IS NOT A
+ * HEADER FIELD AND DOES NOT WEAR THE HEADER'S GATE (2026-08-25): the other three are
+ * MANAGE writes (`service-writes.ts › updateChannel` requires `canManageChannel`),
+ * while the info card is the channel's shared scratch surface and is gated on
+ * MEMBERSHIP. SHAPE in `./info-card.ts`.
  */
 export const ChannelUpdateSchema = z
   .object({
     name: ChannelNameSchema.optional(),
     topic: ChannelTopicSchema.optional(),
     visibility: VisibilitySchema.optional(),
-    archived: z.boolean().optional(),
     infoCard: ChannelInfoCardSchema.optional(),
+    // 🔴 **`archived` IS DELETED (Samuel's ruling R-21, 2026-09-17):** *"a user can
+    // delete a channel; no point in archives."* It toggled `channels.archived_at`,
+    // and the whole feature went with it — the Settings row, the client write, the
+    // list filter and the Status row. ⚠ THE COLUMN SURVIVES THIS WAVE and nothing
+    // writes it; a channel carrying an old stamp is now an ordinary channel. ⚠ An
+    // old client sending `archived` is IGNORED rather than refused, like the two
+    // dead fields below: this object is not `.strict()`.
     // ⚠ **`agentPosture` IS DELETED (2026-09-06, items 12, 13, 14)** — the posture CEILING
     // a launch was clamped to. It is off `MANAGED_CHANNEL_FIELDS` too, so it is unwritable,
     // not merely unvalidated.

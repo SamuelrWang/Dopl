@@ -86,8 +86,10 @@ export function channelNotFound(ref: string): ToolResponse {
 
 /**
  * Resolve a channel reference (slug or UUID) to a `Channel` row, or a not-found
- * error. Lists channels once INCLUDING ARCHIVED, so an archived channel stays
- * addressable, and matches on id or slug.
+ * error. Lists channels once and matches on id or slug. ⚠ **It passed
+ * `includeArchived: true` until 2026-09-17** so an archived channel stayed
+ * addressable; the archive feature is gone (R-21) and the plain list already
+ * carries every channel.
  *
  * Used by the write ops so a confirmation can name the channel and a bad ref is
  * caught before the mutation. ⚠ The hot read and hold shapes must NOT call this —
@@ -98,7 +100,7 @@ export async function resolveChannelOr(
   client: DoplClient,
   ref: string,
 ): Promise<Channel | ToolResponse> {
-  const channels = await client.listChannels({ includeArchived: true });
+  const channels = await client.listChannels();
   const match = channels.find((c) => c.id === ref || c.slug === ref);
   if (!match) {
     return channelNotFound(ref);

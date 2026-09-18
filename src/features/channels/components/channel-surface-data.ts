@@ -252,9 +252,10 @@ export function useChannelSurfaceData({
     workspaceId,
     refetchAll: () => {
       // ⚠ INVALIDATE THE PREFIX, don't refetch ONE observer: `query.refetch()`
-      // revalidates only the mounted key-variant, leaving `include=archived` stale
-      // behind a doorbell that fired for it. The list belongs to the TREE, so its
-      // invalidation arrives as the host's `onDoorbell`.
+      // revalidates only the mounted key-variant, leaving any other stale behind a
+      // doorbell that fired for it (`?include=archived` was the channel list's,
+      // until R-21 deleted the archive feature on 2026-09-17). The list belongs to
+      // the TREE, so its invalidation arrives as the host's `onDoorbell`.
       onDoorbell?.();
       void refetchMessages();
       void refetchMembers();

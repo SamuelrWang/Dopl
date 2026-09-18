@@ -30,7 +30,6 @@ export function pgErrorCode(err: unknown): string | null {
 interface ListOpts {
   /** Channel ids the caller is a member of — private channels join here. */
   memberChannelIds: string[];
-  includeArchived: boolean;
   /** ⚠ `false` for a GUEST (`service-shared.ts › mayReadPublicChannels`). */
   includePublic?: boolean;
 }
@@ -39,6 +38,17 @@ interface ListOpts {
  * Every channel the caller may see: workspace-public plus any private channel
  * they belong to. Soft-deleted always excluded. ⚠ A `null` predicate = may see
  * NOTHING; PostgREST rejects a no-term `or`, so answer the empty list.
+ *
+ * 🔴 **THE ARCHIVE FILTER IS DELETED (Samuel's ruling R-21, 2026-09-17).** This
+ * query carried `.is("archived_at", null)` unless a caller opted out of it, and
+ * that one line was what made an archived channel disappear from every list.
+ * **Channels that carry an old `archived_at` stamp now come back as ordinary
+ * channels** — which is the intended outcome, not a side effect: there is no
+ * archived state any more, so nothing may hide a row for having one. ⚠ **The
+ * COLUMN is still there** and nothing writes it; dropping it is a later wave's
+ * migration (WRITTEN NOT APPLIED under `supabase/migrations/`). ⚠ **`deleted_at`
+ * is a different thing and still filters** — a tombstoned channel is NOT-FOUND to
+ * every read.
  */
 export async function listChannels(
   workspaceId: string,
@@ -52,7 +62,6 @@ export async function listChannels(
     .select("*")
     .eq("workspace_id", workspaceId)
     .is("deleted_at", null);
-  if (!opts.includeArchived) query = query.is("archived_at", null);
   query = query.or(visible);
   const { data, error } = await query.order("updated_at", { ascending: false });
   if (error) throw error;

@@ -46,9 +46,12 @@ export interface VisibleChannelRef {
  * takes the returned ids AS THE ENTIRE FENCE, because every activity read runs
  * on the RLS-bypassing admin client.
  *
- * Archived channels are excluded: an archived room's traffic is not "recent
- * activity". DMs are INCLUDED — they are channels the caller belongs to, and
- * this feed is the caller's own view, not a workspace broadcast.
+ * ⚠ **THE ARCHIVE FILTER IS DELETED (Samuel's ruling R-21, 2026-09-17).** This
+ * read carried `.is("archived_at", null)` on the reasoning that an archived room's
+ * traffic is not "recent activity". There is no archived state now, so a channel
+ * carrying an old stamp contributes its activity like any other. DMs are INCLUDED —
+ * they are channels the caller belongs to, and this feed is the caller's own view,
+ * not a workspace broadcast.
  */
 export async function listVisibleChannelRefs(
   workspaceId: string,
@@ -80,7 +83,6 @@ export async function listVisibleChannelRefs(
     .select("id, name")
     .eq("workspace_id", workspaceId)
     .is("deleted_at", null)
-    .is("archived_at", null)
     .or(visible)
     .order("updated_at", { ascending: false })
     .limit(VISIBLE_CHANNEL_LIMIT);
@@ -148,15 +150,16 @@ export async function countActiveMembers(workspaceId: string): Promise<number> {
   return count ?? 0;
 }
 
-/** Channels the workspace has: live, unarchived, and NOT direct messages — a
- *  DM is a conversation, not a channel, and the channels page counts neither. */
+/** Channels the workspace has: live and NOT direct messages — a DM is a
+ *  conversation, not a channel, and the channels page counts neither.
+ *  ⚠ **`.is("archived_at", null)` LEFT THIS COUNT ON 2026-09-17 (R-21)** with the
+ *  archive feature, so a previously-archived room is counted again. */
 export async function countOpenChannels(workspaceId: string): Promise<number> {
   const { count, error } = await supabaseAdmin()
     .from("channels")
     .select("id", { count: "exact", head: true })
     .eq("workspace_id", workspaceId)
     .is("deleted_at", null)
-    .is("archived_at", null)
     .eq("is_direct", false);
   if (error) throw error;
   return count ?? 0;

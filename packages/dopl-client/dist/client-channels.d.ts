@@ -12,9 +12,7 @@ import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelArtifact, Chann
 import type { AgentDirectiveCreateInput, AgentDirectiveCreated, LaunchDirective, LaunchDirectiveCreateInput, LaunchDirectiveCreated } from "./launch-types.js";
 import type { AgentDirection, AgentDirectionCreateInput, AgentDirectionCreated } from "./direction-types.js";
 export declare class ChannelMethods extends MemberMethods {
-    listChannels(opts?: {
-        includeArchived?: boolean;
-    }): Promise<Channel[]>;
+    listChannels(): Promise<Channel[]>;
     /**
      * ⚠ ACCOUNT-WIDE AND USER-SCOPED — every channel the caller is in, across
      * every workspace AND every home-channel container. It ENUMERATES and is not

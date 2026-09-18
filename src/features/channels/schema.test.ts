@@ -132,14 +132,22 @@ describe("ChannelUpdateSchema", () => {
     expect(ChannelUpdateSchema.safeParse({}).success).toBe(false);
   });
 
-  it("accepts a single-field patch, incl. the archived toggle", () => {
-    expect(ChannelUpdateSchema.safeParse({ archived: true }).success).toBe(true);
+  it("accepts a single-field patch", () => {
     expect(ChannelUpdateSchema.safeParse({ name: "Renamed" }).success).toBe(true);
     expect(ChannelUpdateSchema.safeParse({ topic: "" }).success).toBe(true);
   });
 
-  it("archived must be a boolean", () => {
-    expect(ChannelUpdateSchema.safeParse({ archived: "yes" }).success).toBe(false);
+  it("🔴 IGNORES `archived` rather than refusing it (R-21, 2026-09-17)", () => {
+    // Two cases stood here — that `{archived: true}` parsed, and that a
+    // non-boolean did not. The archive feature is deleted and the field is off the
+    // schema. ⚠ THE OBJECT IS NOT `.strict()` ON PURPOSE, so an OLD BUILD still
+    // patching a name alongside `archived` is not rejected over a dead field; the
+    // key is simply dropped and never reaches `MANAGED_CHANNEL_FIELDS`.
+    const out = ChannelUpdateSchema.safeParse({ name: "Renamed", archived: true });
+    expect(out.success).toBe(true);
+    expect(out.success && "archived" in out.data).toBe(false);
+    // ⚠ And `archived` ALONE is now an EMPTY patch, which the refine refuses.
+    expect(ChannelUpdateSchema.safeParse({ archived: true }).success).toBe(false);
   });
 });
 

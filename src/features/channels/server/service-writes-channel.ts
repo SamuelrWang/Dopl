@@ -82,7 +82,10 @@ const MANAGED_CHANNEL_FIELDS = [
   "name",
   "topic",
   "visibility",
-  "archived",
+  // 🔴 **`archived` IS DELETED FROM THIS LIST AND FROM THE PRODUCT (Samuel's
+  // ruling R-21, 2026-09-17):** *"a user can delete a channel; no point in
+  // archives."* It is off `ChannelUpdateSchema` too, so it is unwritable rather
+  // than merely ungated — and `channels.archived_at` has no writer at all now.
   // ⚠ **`agentPosture` IS DELETED FROM THIS LIST AND FROM THE PRODUCT (2026-09-06,
   // Samuel's rulings on items 12, 13 and 14).** It was MANAGED rather than
   // member-gated because it decided how much room somebody ELSE's agent got in
@@ -112,8 +115,8 @@ export async function updateChannel(
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
 
   // ⚠ TWO GATES ON ONE VERB, AND THE STRICTER ONE IS STILL THE DEFAULT
-  // (2026-08-25). The header — name, topic, visibility, archived — stays
-  // MANAGE-gated exactly as it was; nothing about it moved.
+  // (2026-08-25). The header — name, topic, visibility — stays MANAGE-gated
+  // exactly as it was; nothing about it moved.
   //
   // `infoCard` is gated on MEMBERSHIP, and the reason is INVARIANTS §4A's own,
   // in Samuel's words: a home channel is "a relationship, not a tenancy" —
@@ -143,9 +146,9 @@ export async function updateChannel(
   if (patch.name !== undefined) dbPatch.name = patch.name;
   if (patch.topic !== undefined) dbPatch.topic = patch.topic;
   if (patch.visibility !== undefined) dbPatch.visibility = patch.visibility;
-  if (patch.archived !== undefined) {
-    dbPatch.archived_at = patch.archived ? new Date().toISOString() : null;
-  }
+  // ⚠ **THE `archived_at` STAMP WAS WRITTEN HERE AND IS DELETED (R-21,
+  // 2026-09-17).** `archived ? now : null` was the only writer of that column in
+  // the codebase; nothing sets or clears it now.
   // ⚠ WHOLE-CARD REPLACE, never a merge. The client read this card, edited it
   // and is sending it back — merging server-side would make "remove the last
   // custom row" unexpressible, since an empty `rows` would read as "no opinion".

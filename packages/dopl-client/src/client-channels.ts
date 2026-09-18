@@ -53,8 +53,8 @@ import type {
 } from "./direction-types.js";
 
 export class ChannelMethods extends MemberMethods {
-  listChannels(opts?: { includeArchived?: boolean }): Promise<Channel[]> {
-    return channel.listChannels(this.transport, opts);
+  listChannels(): Promise<Channel[]> {
+    return channel.listChannels(this.transport);
   }
 
   /**

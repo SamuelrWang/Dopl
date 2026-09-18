@@ -122,17 +122,13 @@ function onlineCounts(
 }
 
 /** Every channel the caller may see, newest-active first. */
-export async function listChannels(
-  ctx: ChannelContext,
-  includeArchived: boolean
-): Promise<Channel[]> {
+export async function listChannels(ctx: ChannelContext): Promise<Channel[]> {
   const myMemberships = await repo.listMyMemberships(ctx.workspaceId, ctx.userId);
   const membershipByChannel = new Map(
     myMemberships.map((m) => [m.channel_id, m])
   );
   const rows = await repo.listChannels(ctx.workspaceId, {
     memberChannelIds: [...membershipByChannel.keys()],
-    includeArchived,
     // ⚠ A GUEST GETS NO PUBLIC ARM (2026-08-26) — the list half of the fence
     // `loadVisibleChannel` applies to a single ref. Without it a container's
     // public channel appears in a guest's list and every route then admits it.

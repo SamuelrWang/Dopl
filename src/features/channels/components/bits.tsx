@@ -459,12 +459,10 @@ export function RolePill({ owner, guest }: { owner: boolean; guest?: boolean }) 
   );
 }
 
-/** Green dot + label status pill ("Active"). */
-export function StatusPill({ label }: { label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-success/25 bg-success/10 px-2 py-px text-caption font-medium text-success">
-      <span className="h-1.5 w-1.5 rounded-full bg-success" />
-      {label}
-    </span>
-  );
-}
+// ⚠ **`StatusPill` IS DELETED (Samuel's ruling R-21, 2026-09-17).** A green dot
+// and a label, and the channel Info tab's Status row was its only caller — that
+// row went with the archive feature, so the pill had nothing left to say
+// ("Active" against no other state is not a status). ⚠ Do not revive it as a
+// generic pill: `agent-bits.tsx` argues at its own site for why agent liveness is
+// deliberately NOT this chrome, and that argument is the reason there was one
+// caller rather than five.

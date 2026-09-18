@@ -89,7 +89,9 @@ async function mount() {
 describe("the mount", () => {
   it("addresses the CONTAINER and pins the surface to the row it names", async () => {
     await mount();
-    expect(mocks.useChannels).toHaveBeenCalledWith(WS, false);
+    // ⚠ ONE ARGUMENT SINCE 2026-09-17 — `includeArchived` went with the archive
+    // feature (R-21), so there is no list variant left for a host to choose.
+    expect(mocks.useChannels).toHaveBeenCalledWith(WS);
     expect(mocks.surfaceProps).toMatchObject({
       workspaceId: WS,
       workspaceSlug: "ada-grace-abc123def456",

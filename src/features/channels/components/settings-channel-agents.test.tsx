@@ -122,7 +122,6 @@ describe("NO DEAD ROWS — the tab shows the panel only when it is given one", (
         channelAgents={<div>channel agent settings</div>}
         onInvite={() => {}}
         onToggleVisibility={() => {}}
-        onToggleArchive={() => {}}
         onRequestDelete={() => {}}
         onRequestLeave={() => {}}
       />
@@ -147,7 +146,6 @@ describe("NO DEAD ROWS — the tab shows the panel only when it is given one", (
         channelAgents={<div>channel agent settings</div>}
         onInvite={() => {}}
         onToggleVisibility={() => {}}
-        onToggleArchive={() => {}}
         onRequestDelete={() => {}}
         onRequestLeave={() => {}}
       />
@@ -166,7 +164,6 @@ describe("NO DEAD ROWS — the tab shows the panel only when it is given one", (
         memberManagement={false}
         onInvite={() => {}}
         onToggleVisibility={() => {}}
-        onToggleArchive={() => {}}
         onRequestDelete={() => {}}
         onRequestLeave={() => {}}
       />

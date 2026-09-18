@@ -14,10 +14,12 @@ import { ChannelCreateSchema } from "@/features/channels/schema";
 
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
+    // ⚠ **NO `?include=archived` SINCE 2026-09-17 (Samuel's ruling R-21).** This
+    // route took one query param, and it existed only to widen the list past the
+    // archive filter. The filter is gone with the feature, so the read answers
+    // every live channel the caller may see and there is nothing left to opt into.
     const ctx = buildChannelContext(auth);
-    const includeArchived =
-      request.nextUrl.searchParams.get("include") === "archived";
-    const channels = await listChannels(ctx, includeArchived);
+    const channels = await listChannels(ctx);
     return NextResponse.json({ channels });
   } catch (err) {
     return toChannelErrorResponse(err);

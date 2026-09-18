@@ -23,7 +23,6 @@ import {
 import {
   CHANNEL_CONSENT_PATH,
   channelKeys,
-  channelListParams,
   channelMessagesParams,
   channelMessagesPath,
   channelThreadsPath,
@@ -74,12 +73,12 @@ describe("channel paths", () => {
     );
   });
 
-  it("agrees with the archived / limit params those reads carry", () => {
-    expect(channelListParams(true)).toEqual({ include: "archived" });
-    expect(channelListParams(false)).toBeUndefined();
-    expect(source("../hooks/use-channels.ts")).toContain(
-      'includeArchived ? { include: "archived" } : undefined'
-    );
+  it("agrees with the limit params those reads carry", () => {
+    // ⚠ **`channelListParams` AND ITS TWO ASSERTIONS ARE DELETED (R-21,
+    // 2026-09-17).** They pinned `?include=archived` against the hook that sent
+    // it. The archive feature is gone and the channel list reads with NO params,
+    // which the case below now states directly.
+    expect(source("../hooks/use-channels.ts")).not.toContain('include: "archived"');
     // ⚠ THE TRANSCRIPT'S PAGE, AND SINCE 2026-09-08 IT IS TWO NUMBERS: the
     // ESTIMATED-LINE budget that actually sizes it, plus the hard row cap the
     // budget can never exceed. The key CARRIES both, so they are part of the
@@ -93,20 +92,23 @@ describe("channel paths", () => {
 });
 
 describe("channelKeys", () => {
-  it("patches the channel list in BOTH its archived variants at once", () => {
+  it("patches the channel list through its PREFIX, whatever a reader keyed on", () => {
+    // ⚠ **THIS CASE MOUNTED TWO VARIANTS UNTIL 2026-09-17 (R-21)** — the ACTIVE
+    // list and `?include=archived` — because the archive toggle was the one write
+    // that had to reach both. There is ONE variant now. The property being pinned
+    // is unchanged and is the one that matters: a write names the PREFIX
+    // (`channelKeys.list().all`), so it reaches whatever params a reader
+    // actually mounted rather than only the entry the writer imagined.
     const client = new QueryClient();
     const active = apiQueryKey(channelsPath(), { workspaceId: "ws" });
-    const archived = apiQueryKey(channelsPath(), {
-      workspaceId: "ws",
-      query: channelListParams(true),
-    });
+    const other = apiQueryKey(channelsPath(), { workspaceId: "ws-2" });
     client.setQueryData(active, { channels: [] });
-    client.setQueryData(archived, { channels: [] });
+    client.setQueryData(other, { channels: [] });
     client.setQueriesData({ queryKey: channelKeys.list().all }, () => ({
       channels: ["patched"],
     }));
     expect(client.getQueryData(active)).toEqual({ channels: ["patched"] });
-    expect(client.getQueryData(archived)).toEqual({ channels: ["patched"] });
+    expect(client.getQueryData(other)).toEqual({ channels: ["patched"] });
   });
 
   it("SCOPES a per-channel patch to that channel and no other", () => {

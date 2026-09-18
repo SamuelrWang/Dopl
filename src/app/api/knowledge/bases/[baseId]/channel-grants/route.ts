@@ -111,7 +111,7 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
     const ctx = buildKnowledgeContext(auth);
     const base = await getBaseById(ctx, requireBaseId(auth));
     const [visible, grantsByChannel] = await Promise.all([
-      listChannels(buildChannelContext(auth), false),
+      listChannels(buildChannelContext(auth)),
       getBaseGrantMap(ctx.workspaceId, base.id),
     ]);
 

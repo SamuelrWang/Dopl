@@ -87,10 +87,7 @@ export function GuestChannel({
    * the surface tree is router-free by construction.
    */
   const webView = useChannelWebView();
-  const { channels, loading, error, refetch } = useChannels(
-    homeChannel.workspaceId,
-    false
-  );
+  const { channels, loading, error, refetch } = useChannels(homeChannel.workspaceId);
   const onDeleted = useCallback(() => setDeleted(true), []);
 
   const channel = channels.find((row) => row.id === homeChannel.channelId);

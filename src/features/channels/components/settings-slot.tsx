@@ -5,7 +5,7 @@
  *
  * ⚠ THE SETTINGS TAB IS THREAD-SCOPED WHILE A THREAD IS OPEN, the same ruling the
  * Info tab took the day before. Channel view keeps `channel-manage.tsx` verbatim —
- * invite, visibility, archive, delete, leave, the agent settings and the trust
+ * invite, visibility, delete, leave, the agent settings and the trust
  * roster, all untouched; thread view gets `thread-manage.tsx`, which is the
  * thread's own two controls.
  *

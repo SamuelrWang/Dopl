@@ -34,8 +34,6 @@
  */
 
 import {
-  Archive,
-  ArchiveRestore,
   Hash,
   LogOut,
   Settings2,
@@ -110,7 +108,6 @@ export interface ChannelsSettingsTabProps {
   selfManagement?: boolean;
   onInvite: () => void;
   onToggleVisibility: () => void;
-  onToggleArchive: () => void;
   /** Opens the delete CONFIRMATION — this tab never deletes directly. */
   onRequestDelete: () => void;
   /**
@@ -130,7 +127,6 @@ export function ChannelsSettingsTab({
   selfManagement = true,
   onInvite,
   onToggleVisibility,
-  onToggleArchive,
   onRequestDelete,
   onRequestLeave,
 }: ChannelsSettingsTabProps) {
@@ -198,13 +194,10 @@ export function ChannelsSettingsTab({
                 onSelect={onToggleVisibility}
               />
             )}
-            {canManage && (
-              <ActionRow
-                icon={channel.archivedAt ? ArchiveRestore : Archive}
-                label={channel.archivedAt ? "Unarchive" : "Archive"}
-                onSelect={onToggleArchive}
-              />
-            )}
+            {/* ⚠ **THE ARCHIVE / UNARCHIVE ROW STOOD HERE AND IS DELETED
+                (Samuel's ruling R-21, 2026-09-17): *"a user can delete a channel;
+                no point in archives."* It was the whole feature's only control.
+                The act a user has instead is DELETE, one row down. */}
             {canDelete && (
               <ActionRow
                 icon={Trash2}
@@ -229,7 +222,7 @@ export function ChannelsSettingsTab({
  *
  * ⚠ THESE KEEP THEIR GLYPHS while the settings above shed theirs, and the split
  * is the rule, not an oversight: an ACTION row is a verb the reader is scanning
- * for (add / archive / delete / leave), where a glyph is the fastest way in. A
+ * for (add / delete / leave), where a glyph is the fastest way in. A
  * SETTING row is a noun with a value beside it, and an icon per row there was
  * exactly the visual noise the inlining ruling removed.
  *
@@ -251,7 +244,7 @@ function ActionRow({
     <>
       {/* ⚠ SAME RECIPE AS A SETTING ROW'S (2026-09-13): the leading hairline, with
           `:first-child` keeping it off the top of the section. These rows are
-          CONDITIONAL — invite, visibility, archive, delete and leave each have their
+          CONDITIONAL — invite, visibility, delete and leave each have their
           own gate — so whichever one renders first is a render-time fact and no flag
           here could be right on every viewer. */}
       <SettingDivider />

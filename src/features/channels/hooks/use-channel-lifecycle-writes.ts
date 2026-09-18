@@ -11,7 +11,6 @@ import { toast } from "@/shared/ui/toast";
 import { ChannelApiError, channelRequest } from "../client/api";
 import {
   channelKeys,
-  channelListParams,
   channelMembersPath,
   channelPath,
 } from "../client/query-keys";
@@ -19,13 +18,13 @@ import { patchChannel, type ChannelsCache } from "../lib/optimistic-cache";
 import type { Channel, ChannelVisibility } from "../types";
 
 /**
- * The channel LIFECYCLE writes — archive, visibility, delete, join, leave — on
+ * The channel LIFECYCLE writes — visibility, delete, join, leave — on
  * `useApiMutation`.
  *
  * ⚠ Every config carries `settleWith: gate` (the same `useRefetchGate` gate the
  * send and thread ops hold), or the write races the realtime doorbell's four
  * refetches and survives only because some other surface shadows the server
- * value. `onSettled` releases it on the THROWING path too, so a failed archive
+ * value. `onSettled` releases it on the THROWING path too, so a failed write
  * cannot strand a deferred refetch.
  *
  * ⚠ Every draft carries its own `channelId`, snapshotted AT THE CLICK, and every
@@ -33,13 +32,17 @@ import type { Channel, ChannelVisibility } from "../types";
  * reads are `keepPreviousData`, so a channel switch keeps rendering the previous
  * channel under the new header. Nothing here re-reads the selection.
  *
- * ⚠ The two list variants are patched SEPARATELY (archive toggle only).
- * `/api/channels` is cached twice — default holds ACTIVE only,
- * `?include=archived` holds everything — so archiving is a row LEAVING one entry
- * and changing state in the other. The keys are DISJOINT on purpose: `onMutate`
- * snapshots per patch in order, so an overlapping pair (a prefix plus one of its
- * members) snapshots the already-patched entry and rolls back to the optimistic
- * value.
+ * ⚠ **THERE IS ONE LIST VARIANT SINCE 2026-09-17 (Samuel's ruling R-21).**
+ * `/api/channels` used to be cached twice — the default holding ACTIVE only and
+ * `?include=archived` holding everything — and the archive toggle was the one
+ * write that patched both, because archiving was a row LEAVING one entry and
+ * changing state in the other. The archive feature is gone, the query param with
+ * it, and the list has a single key. ⚠ **THE RULE THAT BOUGHT THE SPLIT SURVIVES**
+ * and is why this is written down: patched keys must be DISJOINT, because
+ * `onMutate` snapshots per patch in order, so an overlapping pair (a prefix plus
+ * one of its members) snapshots the already-patched entry and rolls back to the
+ * optimistic value. Every write below still names ONE entry and invalidates the
+ * prefix.
  *
  * ⚠ DELETE IS TWO MECHANICS BEHIND ONE VERB:
  *  - a DM SOFT-closes — either side's next open revives the SAME row with its
@@ -51,11 +54,14 @@ import type { Channel, ChannelVisibility } from "../types";
  *    `removeQueries` messages/members/threads — and NEVER for a DM.
  */
 
-export interface ArchiveDraft {
-  /** Captured at the click; never re-read from the selection. */
-  channelId: string;
-  archived: boolean;
-}
+// ⚠ **`ArchiveDraft` AND `archiveConfig` ARE DELETED (Samuel's ruling R-21,
+// 2026-09-17): *"a user can delete a channel; no point in archives."* The whole
+// feature went — the Settings row, this write, the `archived` field on
+// `ChannelUpdateSchema`, the `archived_at` stamp in `service-writes-channel.ts`
+// and the list filter that hid stamped rows. ⚠ **The COLUMN is still there** and
+// the rows that carry a stamp now simply appear as ordinary channels; dropping it
+// is a later wave's migration (see the WRITTEN-NOT-APPLIED file under
+// `supabase/migrations/`).
 
 export interface VisibilityDraft {
   channelId: string;
@@ -106,13 +112,6 @@ export function dropChannelRow(
   };
 }
 
-/** The EXACT key one list variant was read under (`useChannels`'s own params). */
-function channelListKey(workspaceId: string, includeArchived: boolean) {
-  return channelKeys
-    .list()
-    .entry({ workspaceId, query: channelListParams(includeArchived) });
-}
-
 function failed(err: unknown, fallback: string) {
   toast({ title: err instanceof ChannelApiError ? err.message : fallback });
 }
@@ -132,48 +131,8 @@ function failed(err: unknown, fallback: string) {
 //
 // ⚠ WHAT THE DELETION MUST NOT TAKE WITH IT is the rule this docblock stated, because the rest
 // of the file still keeps it: **`null` is a VALUE on every field and `undefined` is
-// "unchanged"** (`service-writes.ts › updateChannel`). It survives on `infoCard` and on
-// `archived`, and a draft that collapsed the two could not express a removal at all.
-
-export function archiveConfig(
-  deps: LifecycleWriteDeps
-): UseApiMutationConfig<ArchiveDraft, { channel: Channel }> {
-  return {
-    request: (draft) => ({
-      path: channelPath(draft.channelId),
-      method: "PATCH",
-      workspaceId: deps.workspaceId,
-      body: { archived: draft.archived },
-    }),
-    // Archiving REMOVES the row from the active list and STAMPS it in the
-    // archived one. Unarchiving mirrors that: clearing the stamp drops it from
-    // the archived tab, and the active list gets it back from the settle-time
-    // invalidate rather than a row invented in the server's sort order.
-    optimistic: (draft) => [
-      patchCache<ChannelsCache>(
-        channelListKey(deps.workspaceId, false),
-        (cache) => (draft.archived ? dropChannelRow(cache, draft.channelId) : cache)
-      ),
-      patchCache<ChannelsCache>(channelListKey(deps.workspaceId, true), (cache) =>
-        patchChannel(cache, draft.channelId, {
-          archivedAt: draft.archived ? new Date().toISOString() : null,
-        })
-      ),
-    ],
-    // PATCH answers with the caller-relative channel, so true `archivedAt` /
-    // `updatedAt` land without a read. ⚠ `patchChannel` maps over rows that
-    // EXIST, so this cannot re-add the row the optimistic patch just dropped.
-    reconcile: (data) =>
-      patchCache<ChannelsCache>(channelKeys.list().all, (cache) =>
-        patchChannel(cache, data.channel.id, data.channel)
-      ),
-    // Ordering (`updated_at` desc) and membership of the OTHER variant are the
-    // two things this write changes and cannot compute.
-    invalidate: () => [channelKeys.list().all],
-    settleWith: deps.gate,
-    onError: (err) => failed(err, "Couldn't update the channel"),
-  };
-}
+// "unchanged"** (`service-writes.ts › updateChannel`). It survives on `infoCard`; it survived on
+// `archived` too until R-21 deleted that field (2026-09-17).
 
 export function visibilityConfig(
   deps: LifecycleWriteDeps
@@ -324,10 +283,6 @@ export function useChannelLifecycleWrites({
     },
   };
 
-  const archive = useApiMutationWith<ArchiveDraft, { channel: Channel }>(
-    channelRequest,
-    archiveConfig(deps)
-  );
   const visibility = useApiMutationWith<VisibilityDraft, { channel: Channel }>(
     channelRequest,
     visibilityConfig(deps)
@@ -349,13 +304,6 @@ export function useChannelLifecycleWrites({
   // PATCH with nothing to say.
 
   return {
-    toggleArchive: () => {
-      if (!channel) return;
-      archive.mutate({
-        channelId: channel.id,
-        archived: channel.archivedAt === null,
-      });
-    },
     // ⚠ A DM is always private (DB CHECK). Guarded here as well as in the menu,
     // so nothing can send a request the server must 400.
     toggleVisibility: () => {
@@ -394,7 +342,6 @@ export function useChannelLifecycleWrites({
     // four days. The ceiling is deleted end to end now, so the surface has nothing to edit.
     /** True while any lifecycle write is in flight. */
     pending:
-      archive.pending ||
       visibility.pending ||
       remove.pending ||
       joinChannel.pending ||

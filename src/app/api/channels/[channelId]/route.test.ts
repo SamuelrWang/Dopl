@@ -155,14 +155,12 @@ describe("visibility is session-only", () => {
 });
 
 describe("the OTHER fields on the same PATCH stay agent-reachable", () => {
-  it("an agent bearer may archive", async () => {
-    state.token = WRITE_TOKEN;
-    const res = await PATCH(agentReq({ archived: true }), params);
-    expect(res.status).toBe(200);
-    expect(updateChannel).toHaveBeenCalledWith(expect.anything(), CHANNEL, {
-      archived: true,
-    });
-  });
+  // ⚠ **`it("an agent bearer may archive")` STOOD HERE AND IS DELETED (Samuel's
+  // ruling R-21, 2026-09-17).** `archived` is off `ChannelUpdateSchema`, so an
+  // agent patching it now sends a field the parser drops rather than a MANAGE write
+  // the route forwards. The property this block is about — that the NON-audience
+  // fields stay agent-reachable while `visibility` does not — is unchanged and is
+  // pinned by the rename/re-topic case below.
 
   it("an agent bearer may rename / re-topic", async () => {
     state.token = WRITE_TOKEN;

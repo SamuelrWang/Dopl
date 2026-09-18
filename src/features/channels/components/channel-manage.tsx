@@ -98,7 +98,7 @@ export interface ChannelsManageProps {
 
 /**
  * The right panel's SETTINGS tab, whole: per-channel settings, the desktop-only
- * working folder, invite, and the lifecycle rows (visibility / archive / delete
+ * working folder, invite, and the lifecycle rows (visibility / delete
  * / leave) with their confirm dialogs. It rendered as a header icon cluster
  * until 2026-08-19 — see the file docblock.
  *
@@ -228,7 +228,6 @@ export function ChannelsManageActions({
         }
         onInvite={() => setInviteOpen(true)}
         onToggleVisibility={handleToggleVisibility}
-        onToggleArchive={lifecycle.toggleArchive}
         onRequestDelete={() => setConfirmDelete(true)}
         onRequestLeave={() => setConfirmLeave(true)}
       />

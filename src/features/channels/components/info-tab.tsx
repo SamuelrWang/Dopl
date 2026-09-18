@@ -9,7 +9,7 @@
  * rename. The two panes are separate compositions of one ladder and are MEANT
  * TO MATCH — this file's Description row says the same thing.
  *
- * WIRED: channel info (creator / created / status) off the channel row, the CURATED
+ * WIRED: channel info (creator / created) off the channel row, the CURATED
  * rows off `channels.info_card` (R-19, 2026-09-17), MEMBERS off `use-channel-members` (presence is the
  * server's verdict — `view-model.ts › isPresentForViewer`, 2026-09-08), the MENTIONS
  * inbox off `use-channel-mentions` (Phase 6), and the activity strip since
@@ -22,18 +22,12 @@
 import {
   AlignLeft,
   Calendar,
-  CircleDot,
   Type,
   UserRound,
 } from "lucide-react";
 import { Avatar } from "@/shared/ui/avatar";
 import { formatDate } from "@/shared/lib/format-time";
-import {
-  MetaRow,
-  MetaRowDivider,
-  PanelHeading,
-  StatusPill,
-} from "./bits";
+import { MetaRow, MetaRowDivider, PanelHeading } from "./bits";
 import { InlineEditText, type ChannelHeaderEdit } from "./info-inline-edit";
 import {
   InfoCardCustomRow,
@@ -223,14 +217,13 @@ export function InfoTab({
             {formatDate(channel.createdAt)}
           </span>
         </MetaRow>
-        <MetaRowDivider />
-        <MetaRow icon={CircleDot} label="Status">
-          {channel.archivedAt ? (
-            <span className="text-body text-text-muted">Archived</span>
-          ) : (
-            <StatusPill label="Active" />
-          )}
-        </MetaRow>
+        {/* ⚠ **THE STATUS ROW (Active / Archived) STOOD HERE AND IS DELETED
+            (Samuel's ruling R-21, 2026-09-17): *"a user can delete a channel; no
+            point in archives."* It was the only reader of `channel.archivedAt` on
+            either info body. ⚠ **R-21 WAS ASKED AS "should /home get this row too"
+            and answered in the other direction** — there is no Status row to add
+            because there is no archived state to show. A channel exists or it is
+            deleted. */}
         {/* 🔒 **THE CURATED ROWS (Samuel's ruling R-19, 2026-09-17) — the same
             `info-card-rows.tsx › InfoCardCustomRow` /home has rendered since
             2026-08-25, not a second renderer.** `channels.info_card` is a column on

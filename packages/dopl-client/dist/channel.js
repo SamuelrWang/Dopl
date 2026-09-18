@@ -47,12 +47,17 @@ exports.AWAIT_TIMEOUT_MS = 55_000;
  */
 exports.DEFAULT_AWAIT_TIMEOUT_MS = 50_000;
 // ─── Read ───────────────────────────────────────────────────────────
-async function listChannels(t, opts = {}) {
-    const params = new URLSearchParams();
-    if (opts.includeArchived)
-        params.set("include", "archived");
-    const qs = params.toString();
-    const data = await t.request(`/api/channels${qs ? `?${qs}` : ""}`, { toolName: "channel_list" });
+/**
+ * ⚠ **`opts.includeArchived` IS DELETED (Samuel's ruling R-21, 2026-09-17).** It
+ * set `?include=archived`, the route's only query param, so a caller could see
+ * rooms the archive filter hid. Both the filter and the feature are gone: this
+ * read answers every live channel the caller may see, archived-stamped rows
+ * included.
+ */
+async function listChannels(t) {
+    const data = await t.request("/api/channels", {
+        toolName: "channel_list",
+    });
     return data.channels;
 }
 async function getChannel(t, channelId) {
@@ -174,10 +179,11 @@ async function createChannel(t, input) {
  * Patch a channel. ⚠ **`infoCard` IS THE ONLY FIELD BOUND HERE, AND THAT IS A
  * RULING, NOT A GAP** (Samuel's ruling Q12, 2026-08-28).
  *
- * `PATCH /api/channels/{id}` also accepts `name`, `topic`, `archived` and
- * `visibility`. `visibility` is field-level `sessionOnly` and an agent token is
- * refused it outright. The other three are MANAGE writes the route accepts and
- * **no UI can ask for** (F-346) — shipping RENAME first on the AGENT surface
+ * `PATCH /api/channels/{id}` also accepts `name`, `topic` and `visibility` (it
+ * accepted `archived` until R-21 deleted the archive feature, 2026-09-17).
+ * `visibility` is field-level `sessionOnly` and an agent token is refused it
+ * outright. The other two are MANAGE writes the route accepts and **no UI can ask
+ * for** (F-346) — shipping RENAME first on the AGENT surface
  * would mean the operator's only way to undo one is to ask an agent. So
  * {@link ChannelUpdateInput} carries one key, and widening it is a product
  * decision rather than a type edit.

@@ -55,7 +55,13 @@ export interface Channel {
         avatarUrl: string | null;
     } | null;
     createdBy: string;
-    /** ISO datetime archived, null when active. */
+    /**
+     * ⚠ **VESTIGIAL SINCE 2026-09-17 (Samuel's ruling R-21).** The archive feature
+     * is deleted and nothing writes `channels.archived_at` any more; rows that
+     * carry an old stamp are ordinary channels. The field stays on the wire only
+     * because the COLUMN does — dropping both is one later migration. **Do not
+     * branch on it.**
+     */
     archivedAt: string | null;
     createdAt: string;
     updatedAt: string;

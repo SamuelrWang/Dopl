@@ -158,10 +158,7 @@ export function ChannelsCore({
   const [searchSeq, setSearchSeq] = useState<number | null>(null);
   const queryClient = useQueryClient();
 
-  const { channels, loading, refetch: refetchChannels } = useChannels(
-    workspaceId,
-    false
-  );
+  const { channels, loading, refetch: refetchChannels } = useChannels(workspaceId);
 
   /**
    * OPENING WHAT A SEARCH-POPUP ROW NAMES (2026-09-17).
@@ -209,9 +206,12 @@ export function ChannelsCore({
   //
   // ⚠ INVALIDATE THE PREFIX, don't refetch ONE observer. `query.refetch()`
   // revalidates only the mounted key-variant, so any other variant of the
-  // channels list (`include=archived` is the one that exists) stays stale
-  // behind a doorbell that fired for it. `client/query-keys.ts` designs the
-  // WRITE path around prefix invalidation for exactly this reason.
+  // channels list stays stale behind a doorbell that fired for it.
+  // `client/query-keys.ts` designs the WRITE path around prefix invalidation for
+  // exactly this reason. ⚠ **The list's one other variant, `?include=archived`,
+  // went with the archive feature on 2026-09-17 (R-21)** — so this is kept for the
+  // NEXT variant, not for a live case, and it stays because the rule is cheaper
+  // than rediscovering it.
   const data = useChannelSurfaceData({
     workspaceId,
     // The Info tab's activity strip is channel-scoped and the route is

@@ -6,11 +6,12 @@
  *
  * ── WHY ONE FIELD (Samuel's ruling Q12 (b), 2026-08-28) ────────────────────
  *
- * `PATCH /api/channels/{id}` accepts five things and they do not share a gate:
+ * `PATCH /api/channels/{id}` accepts four things and they do not share a gate:
  *   - `visibility` is field-level `sessionOnly` — an agent token is refused it
  *     outright, in the route, and nothing here goes near it.
- *   - `name` / `topic` / `archived` are MANAGE writes the route accepts and
- *     **no UI on /home or the workspace channels page can ask for** (F-346).
+ *   - `name` / `topic` are MANAGE writes the route accepts and **no UI on /home
+ *     or the workspace channels page can ask for** (F-346). ⚠ `archived` was a
+ *     third until R-21 deleted the archive feature (2026-09-17).
  *     Shipping RENAME first on the AGENT surface would leave the operator's only
  *     undo as "ask an agent", which is a worse first surface than none.
  *   - `infoCard` is documented as *deliberately* agent-writable and gated on

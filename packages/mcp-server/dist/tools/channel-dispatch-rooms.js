@@ -111,7 +111,7 @@ async function dispatchRoomsAction(action, args, client, selfUserId, isAdmin) {
                 return miss;
             return (0, channel_ops_threads_1.opSetThreadMode)(client, args.channel, args.thread, args.mode);
         }
-        // ⚠ THE INFO CARD ONLY. `name` / `topic` / `archived` are accepted by the
+        // ⚠ THE INFO CARD ONLY. `name` / `topic` are accepted by the
         // same route and are deliberately NOT routed here (Samuel's ruling Q12 (b);
         // F-346 holds the rename hole open). ⚠ `info_card` OMITTED is the READ — the
         // card is replaced whole, so a blind write clobbers.

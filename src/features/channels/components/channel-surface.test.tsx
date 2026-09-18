@@ -113,7 +113,6 @@ vi.mock("../hooks/use-channel-preference-writes", () => ({
 }));
 vi.mock("../hooks/use-channel-lifecycle-writes", () => ({
   useChannelLifecycleWrites: () => ({
-    toggleArchive: () => {},
     toggleVisibility: () => {},
     remove: () => {},
     join: () => {},
@@ -287,7 +286,9 @@ describe("StandaloneChannelSurface — the host's two knobs", () => {
     fireEvent.click(screen.getByRole("tab", { name: /^Settings/ }));
     // The rest of the tab is untouched — and awaiting it is what proves the two
     // absences below are absences, not a body that has not arrived yet.
-    expect(await screen.findByText("Archive")).toBeTruthy();
+    // ⚠ WAS `findByText("Archive")` until R-21 deleted that row (2026-09-17) —
+    // the anchor is now the row every viewer of this capability set still gets.
+    expect(await screen.findByText("Channel")).toBeTruthy();
     expect(screen.queryByText("Add members")).toBeNull();
     // ⚠ Not merely hidden — the dialog opens a roster read of its own, and there
     // is no row left to open it.
@@ -301,7 +302,7 @@ describe("StandaloneChannelSurface — the host's two knobs", () => {
     // whose only outcome is a broken card.
     mount({ capabilities: { memberManagement: false } });
     fireEvent.click(screen.getByRole("tab", { name: /^Settings/ }));
-    await screen.findByText("Archive");
+    await screen.findByText("Channel");
     expect(screen.queryByText(/^Delete /)).toBeNull();
   });
 

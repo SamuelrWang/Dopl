@@ -309,25 +309,27 @@ describe("H-3 write-gate coverage", () => {
    * field gate names `visibility`, `agentPosture` and
    * `defaultResponderAgentName`; the service derives the
    * MANAGE set by SUBTRACTION and leaves `infoCard` alone. Both are correct only
-   * while the schema's fields are EXACTLY these seven — an eighth added to
+   * while the schema's fields are EXACTLY the ones listed below — one more added to
    * `ChannelUpdateSchema` would silently inherit the loose (member) gate unless
    * somebody decides otherwise. This asserts the set against the real schema, so
    * that decision cannot be skipped. (A pin on a symbol is not a pin — INVARIANTS
    * §14 — so it reads the schema's own shape.)
    */
-  it("ChannelUpdateSchema's fields are EXACTLY the five gated ones", () => {
+  it("ChannelUpdateSchema's fields are EXACTLY the four gated ones", () => {
     // zod 4: `.refine()` adds a check to the same object type, so `.shape` is the
     // object's own field map (no ZodEffects wrapper to unwrap).
     expect(Object.keys(ChannelUpdateSchema.shape).sort()).toEqual(
-      // ⚠ **IT WAS SEVEN AND IT IS FIVE (2026-09-06 and 2026-09-07).** `agentPosture` and
-      // `defaultResponderAgentName` are DELETED FIELDS, not ungated ones — the two settings
-      // this schema carried about OTHER members' agents are gone from the product, and both
-      // arguments for their gates are preserved verbatim in the route's docblock so a reader
-      // finding either name in history is not left guessing whether it was relaxed.
-      // ⚠ THE POINT OF THIS CASE IS UNCHANGED: a SIXTH field added to `ChannelUpdateSchema`
+      // ⚠ **IT WAS SEVEN, THEN FIVE, AND IT IS FOUR (2026-09-06, 2026-09-07, 2026-09-17).**
+      // `agentPosture` and `defaultResponderAgentName` are DELETED FIELDS, not ungated ones —
+      // the two settings this schema carried about OTHER members' agents are gone from the
+      // product, and both arguments for their gates are preserved verbatim in the route's
+      // docblock so a reader finding either name in history is not left guessing whether it
+      // was relaxed. 🔴 **`archived` IS THE THIRD, deleted with the whole archive feature
+      // (Samuel's ruling R-21): *"a user can delete a channel; no point in archives."***
+      // ⚠ THE POINT OF THIS CASE IS UNCHANGED: a FIFTH field added to `ChannelUpdateSchema`
       // would silently inherit the loose (member) gate unless somebody decides otherwise, and
       // this assertion is what stops that decision being skipped.
-      ["archived", "infoCard", "name", "topic", "visibility"].sort()
+      ["infoCard", "name", "topic", "visibility"].sort()
     );
   });
 });

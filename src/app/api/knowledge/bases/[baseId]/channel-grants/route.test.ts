@@ -138,11 +138,13 @@ describe("GET …/channel-grants", () => {
       // ABSENT, never `{level:"none"}` — the map mirrors storage.
       grants: { "chan-1": { level: "visible", guestWrite: true } },
     });
-    // Archived channels are out of the fence read: `includeArchived` is false.
-    expect(mockListChannels).toHaveBeenCalledWith(
-      { workspaceId: "ws-1", userId: "user-1" },
-      false
-    );
+    // ⚠ The fence read takes the CONTEXT and nothing else. It took a second
+    // `includeArchived` argument until R-21 deleted the archive feature
+    // (2026-09-17); there is no list variant left to choose.
+    expect(mockListChannels).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      userId: "user-1",
+    });
   });
 
   it("DROPS a grant on a channel the caller cannot see, rather than naming it", async () => {
