@@ -225,23 +225,20 @@
   flex-direction: column;
   overflow-y: auto;
 }
-/* LAYOUT ONLY, like the shell sidebar's `.nav`. Rows are the kit's `.nav-chip` /
-   `.nav-chip-active` (+ `.raised-tab` when selected). ⚠ No local nav-item
-   recipe, deliberately — nothing to drift. */
-.navGroup {
-  margin-bottom: 14px;
+/* LAYOUT ONLY, and it is `app-shell.module.css › .nav` VALUE FOR VALUE — same
+   column, same 7px gap, same `flex-start` so a chip is as wide as its own label
+   on both rails. Rows are the kit's `.nav-chip` / `.nav-chip-active`
+   (+ `.raised-tab` when selected). ⚠ No local nav-item recipe, deliberately —
+   nothing to drift.
+
+   ⚠ `.navGroup` AND `.navGroupLabel` STOOD HERE AND ARE DELETED (Samuel,
+   2026-09-18): an uppercase "WORKSPACE" / "ACCOUNT" strip over a padded column
+   was the indent the rail was rebuilt to lose. One flat list, one level. */
+.navList {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 7px;
-}
-.navGroupLabel {
-  font-size: var(--text-label);
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  padding: 4px 10px 6px;
 }
 
 .navFoot { margin-top: auto; padding-top: 12px; }

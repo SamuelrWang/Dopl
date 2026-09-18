@@ -2,7 +2,13 @@
 
 import type { Role } from "@/features/workspaces/types";
 import { AccountSection } from "./sections/account-section";
-import { WorkspaceSection } from "./sections/workspace-section";
+// ⚠ `WorkspaceSection` (the General pane) IS NO LONGER MOUNTED HERE — the popup
+// lists workspaces now and EDITS none (`./settings-modal-core.tsx ›
+// SettingsSection`). The file and its icon uploader are left standing rather
+// than deleted, recorded as a finding: the uploader is the tree's only
+// workspace-image control and the page that should host it is mid-overhaul.
+import { WorkspacesSectionCore } from "./sections/workspaces-section-core";
+import { ConnectSectionCore } from "./sections/connect-section-core";
 import { PlansBilling } from "./sections/plans-billing";
 import { SettingsModalCore, type SettingsSection } from "./settings-modal-core";
 
@@ -13,10 +19,13 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   section: SettingsSection;
   onSectionChange: (section: SettingsSection) => void;
-  workspaceSegment: string;
+  /** ⚠ UNREAD SINCE 2026-09-18 and kept on the shape deliberately: it is what a
+   *  General pane needed, and the web's host for that pane is mid-overhaul. */
+  workspaceSegment?: string;
   workspaceId: string;
   role: Role;
-  onWorkspaceChanged: () => void;
+  /** ⚠ See `workspaceSegment` — no pane in this modal writes a workspace now. */
+  onWorkspaceChanged?: () => void;
   /** Set from a Stripe redirect — Plans & Billing polls until state settles.
    *  "success" (checkout) celebrates + finalizes; "return" (portal
    *  cancel/downgrade) polls quietly so a stale Pro doesn't linger. */
@@ -34,10 +43,8 @@ export function SettingsModal({
   onOpenChange,
   section,
   onSectionChange,
-  workspaceSegment,
   workspaceId,
   role,
-  onWorkspaceChanged,
   billingReturn = null,
 }: Props) {
   return (
@@ -46,12 +53,8 @@ export function SettingsModal({
       onOpenChange={onOpenChange}
       section={section}
       onSectionChange={onSectionChange}
-      workspacePane={
-        <WorkspaceSection
-          workspaceSegment={workspaceSegment}
-          onWorkspaceChanged={onWorkspaceChanged}
-        />
-      }
+      workspacesPane={<WorkspacesSectionCore activeWorkspaceId={workspaceId} />}
+      connectPane={<ConnectSectionCore />}
       accountPane={<AccountSection />}
       billingPane={
         <PlansBilling

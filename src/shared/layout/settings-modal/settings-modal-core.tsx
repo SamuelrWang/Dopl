@@ -1,6 +1,9 @@
 "use client";
 
+import { CreditCard, LayoutGrid, Plug, UserRound } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
 import { ModalShell } from "./modal-shell";
 import styles from "./settings-modal.module.css";
 
@@ -14,26 +17,39 @@ import styles from "./settings-modal.module.css";
  * and the ghost/real grid mismatch (P10). **Do not re-add a row here**; a nav
  * entry that opens a second console is how the two drifted apart in the first
  * place.
+ *
+ * ⚠ **`"workspace"` (General) IS GONE AND `"workspaces"` IS NOT ITS RENAME
+ * (Samuel, 2026-09-18 — the R-10 overhaul).** General was THIS workspace's
+ * rename/description/danger form; Workspaces is a LIST of every container the
+ * account belongs to, home space included. The form itself is untouched and
+ * still lives on `/{segment}/settings`
+ * (`sections/workspace-section-core.tsx › WorkspaceSectionBody`), which is the
+ * one surface that edits a workspace now.
+ *
+ * ⚠ **THERE IS NO `"agents"` MEMBER HERE ON PURPOSE.** A second coder owns that
+ * tab on its own branch; the only expected collision is this list.
  */
-export type SettingsSection = "account" | "workspace" | "billing";
+export type SettingsSection = "workspaces" | "connect" | "account" | "billing";
 
 interface NavItem {
   id: SettingsSection;
   label: string;
+  icon: LucideIcon;
 }
 
-const NAV: ReadonlyArray<{ label: string; items: NavItem[] }> = [
-  {
-    label: "Workspace",
-    items: [{ id: "workspace", label: "General" }],
-  },
-  {
-    label: "Account",
-    items: [
-      { id: "account", label: "Account" },
-      { id: "billing", label: "Plans & Billing" },
-    ],
-  },
+/**
+ * ONE FLAT LIST, NO GROUP HEADERS (Samuel, 2026-09-18: *"kill the indented
+ * sidebar"*, *"remove the Account/Workspace headers"*).
+ *
+ * ⚠ The uppercase "WORKSPACE" / "ACCOUNT" strips and the `.navGroup` column they
+ * titled are DELETED, not hidden: they were the only thing indenting this rail,
+ * and a header over a single row was naming a group of one.
+ */
+const NAV: ReadonlyArray<NavItem> = [
+  { id: "workspaces", label: "Workspaces", icon: LayoutGrid },
+  { id: "connect", label: "Connect", icon: Plug },
+  { id: "account", label: "Account", icon: UserRound },
+  { id: "billing", label: "Plans & Billing", icon: CreditCard },
 ];
 
 export interface SettingsModalCoreProps {
@@ -41,9 +57,10 @@ export interface SettingsModalCoreProps {
   onOpenChange: (open: boolean) => void;
   section: SettingsSection;
   onSectionChange: (section: SettingsSection) => void;
-  /** From `WorkspaceSectionCore` in both apps; web adds the multipart icon
-   *  uploader, which the desktop's JSON-only IPC bridge cannot carry. */
-  workspacePane: React.ReactNode;
+  /** Every container this account belongs to, home space included. */
+  workspacesPane: React.ReactNode;
+  /** The MCP "Connect & log in" block + the account's live grants. */
+  connectPane: React.ReactNode;
   /** From `AccountSectionCore` in both apps; danger zone differs (web deletes
    *  in place, desktop links out). */
   accountPane: React.ReactNode;
@@ -53,7 +70,7 @@ export interface SettingsModalCoreProps {
 }
 
 /**
- * Next-free settings-modal core: chrome and section list are shared; the three
+ * Next-free settings-modal core: chrome and section list are shared; the
  * platform-divergent panes arrive as slots. `./settings-modal` = web binding,
  * desktop's is `apps/desktop-ui/src/components/settings-modal`.
  *
@@ -67,38 +84,42 @@ export function SettingsModalCore({
   onOpenChange,
   section,
   onSectionChange,
-  workspacePane,
+  workspacesPane,
+  connectPane,
   accountPane,
   billingPane,
 }: SettingsModalCoreProps) {
   return (
     <ModalShell open={open} onClose={() => onOpenChange(false)} label="Settings">
       <nav className={styles.nav}>
-        {NAV.map((group) => (
-          <div key={group.label} className={styles.navGroup}>
-            <p className={styles.navGroupLabel}>{group.label}</p>
-            {group.items.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => onSectionChange(item.id)}
-                className={cn(
-                  // SAME kit chip as the app-shell sidebar — one recipe, two
-                  // nav rails. `.navGroup` supplies column layout.
-                  "nav-chip",
-                  section === item.id && "nav-chip-active raised-tab"
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        ))}
+        {/* ⚠ THE APP SIDEBAR'S ROW, NOT A LOOKALIKE — same `nav-chip` recipe,
+            same `--shell-chip` resting gray, same 20px lucide glyph at the same
+            stroke (`app-shell/app-sidebar-core.tsx`). The two rails read one
+            declaration, so neither can drift to a second gray. */}
+        <div className={styles.navList}>
+          {NAV.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onSectionChange(id)}
+              className={cn(
+                "nav-chip",
+                section === id && "nav-chip-active raised-tab"
+              )}
+            >
+              <Icon size={20} strokeWidth={1.8} />
+              {label}
+            </button>
+          ))}
+        </div>
         <div className={styles.navFoot}>
+          {/* The popup kit's flat text button (`shared/ui/form-dialog.tsx` ›
+              Discard), so this footer and every New-agent-style popup footer
+              are one declaration. */}
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="btn-light w-full rounded-md px-2.5 py-1.5 text-small font-medium text-text-primary"
+            className={SMALL_TEXT_BUTTON}
           >
             Close
           </button>
@@ -106,8 +127,9 @@ export function SettingsModalCore({
       </nav>
 
       <div className={styles.pane}>
+        {section === "workspaces" && workspacesPane}
+        {section === "connect" && connectPane}
         {section === "account" && accountPane}
-        {section === "workspace" && workspacePane}
         {section === "billing" && billingPane}
       </div>
     </ModalShell>

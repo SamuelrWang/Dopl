@@ -2380,10 +2380,32 @@ recommendation in any spec; a spec that disagrees is the thing that is wrong.
     fails loudly rather than returning quietly. Deleting that test deletes the ruling.
 
 - 🔒 **THE SETTINGS PAGE IS FROZEN (Samuel's ruling R-10, 2026-09-17), pending his own overhaul.** No restyle, no
-  header migration, no section-language sweep, no dialog conformance pass touches `/settings` or the
-  body it shares with the settings modal. ⚠ **It is shared** — `WorkspaceSectionBody` is mounted by
-  both the page and the modal, and the modal is reachable from /home, so "I only touched the modal"
-  is not an exemption. A wave that needs a settings change waits for the overhaul or asks.
+  header migration, no section-language sweep, no dialog conformance pass touches `/settings`.
+  A wave that needs a settings change waits for the overhaul or asks.
+  - ⚠ **THE POPUP HALF OF THIS FREEZE IS SPENT: THE OVERHAUL RAN ON 2026-09-18**, directed by
+    Samuel, and the two are no longer one surface. **The settings POPUP** (the gear, and /home's
+    black **Profile** pill — `apps/desktop-ui/src/pages/home/home-settings-control.tsx`) is now a
+    FLAT four-row rail with no group headers: **Workspaces · Connect · Account · Plans & Billing**
+    (`shared/layout/settings-modal/settings-modal-core.tsx › NAV`). The rail's rows are the app
+    sidebar's own recipe — `nav-chip` / `nav-chip-active raised-tab`, resting fill `--shell-chip`,
+    a 20px lucide glyph at `strokeWidth={1.8}` — so the two rails read ONE declaration and cannot
+    drift to a second gray; `.navGroup` / `.navGroupLabel` are deleted from
+    `settings-modal.module.css`.
+  - ⚠ **"General" IS NOT RENAMED, IT IS GONE FROM THE POPUP.** `SettingsSection` is
+    `"workspaces" | "connect" | "account" | "billing"`; **Workspaces** LISTS the home space plus
+    every standard workspace (`sections/workspaces-section-core.tsx`, filtered through
+    `isStandardWorkspace` — §4A) and EDITS none. **The one surface that edits a workspace is
+    `/{segment}/settings`**, which still mounts `WorkspaceSectionBody` and IS still frozen.
+  - ⚠ **THE CONNECT/LOGIN BLOCK MOVED, AND ONLY ITS MOUNT POINTS CHANGED.** `RemoteConnect` left
+    `WorkspaceSectionBody` and `ConnectedAppsSection` left the desktop page's `extras` slot; both
+    are `sections/connect-section-core.tsx` now. Both are ACCOUNT-scoped (`/api/mcp`,
+    `/api/oauth/grants`) and neither reads a workspace. **`extras` has no caller left** and is kept
+    as the body's one extension point. Pinned in both directions:
+    `apps/desktop-ui/src/pages/settings/index.test.tsx › renders no connect block and reads no
+    grants` and `components/settings-modal/settings-modal.test.tsx › revokes a connected app from
+    the Connect tab`.
+  - ⚠ **The web's now-unmounted General composition is F-733, not a deletion** — its icon uploader
+    is the tree's only workspace-image control.
 
 - 🔴 **CHANNEL DELETE IS CREATOR-ONLY, AND BLOCKED WHILE OTHERS ARE MEMBERS (R-14, 2026-09-17).**
   The creator removes people first. Ruled in the same breath: the public claim surface gets a RATE

@@ -6,7 +6,11 @@ import {
   WorkspaceSectionBody,
   workspaceReadPath,
 } from "@/shared/layout/settings-modal/sections/workspace-section-core";
-import { ConnectedAppsSection } from "@/features/mcp-connect/components/connected-apps-section";
+// ⚠ `ConnectedAppsSection` STOOD IN THE BODY'S `extras` SLOT AND IS GONE
+// (Samuel, 2026-09-18): the connect/login content — that list AND the MCP URL
+// block the body itself used to render — is the settings popup's **Connect**
+// tab now (`shared/layout/settings-modal/sections/connect-section-core.tsx`).
+// Both are ACCOUNT-scoped and this page is a WORKSPACE page.
 import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError, PageLoading } from "#/components/page-states";
 import { useWorkspaceRoute } from "#/components/app-shell";
@@ -77,7 +81,6 @@ export default function SettingsPage() {
               // /onboarding.
               navigate(next ? `/${workspaceSegment(next)}` : "/", { replace: true });
             }}
-            extras={<ConnectedAppsSection />}
           />
         </div>
       </div>

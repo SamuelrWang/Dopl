@@ -74,14 +74,28 @@ describe("settings page", () => {
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
     expect(screen.getByText("/acme")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Acme")).toBeInTheDocument();
-    expect(screen.getByText("Connect & log in")).toBeInTheDocument();
-    expect(await screen.findByText("Claude Code")).toBeInTheDocument();
 
     const paths = calls().map((c) => c.path);
     expect(paths).toContain("/api/boot");
     expect(paths).toContain(`/api/workspaces/${SEGMENT}`);
-    expect(paths).toContain("/api/oauth/grants");
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  /**
+   * 🔒 THE CONNECT BLOCK LEFT THIS PAGE (Samuel, 2026-09-18) — MCP URL and the
+   * grant list are the settings popup's **Connect** tab, and both are
+   * ACCOUNT-scoped where this page is WORKSPACE-scoped. Pinned on the READ as
+   * well as the copy: a re-added section would fetch grants here again, and the
+   * page's own bridge stub rejects a path it does not know, so this asserts the
+   * read is not merely hidden.
+   */
+  it("renders no connect block and reads no grants", async () => {
+    renderPage();
+
+    await screen.findByDisplayValue("Acme");
+    expect(screen.queryByText("Connect & log in")).not.toBeInTheDocument();
+    expect(screen.queryByText("Claude Code")).not.toBeInTheDocument();
+    expect(calls().some((c) => c.path === "/api/oauth/grants")).toBe(false);
   });
 
   // ⚠ Trash is gone app-wide. Only the ENDPOINT half is asserted: a re-imported
@@ -113,20 +127,10 @@ describe("settings page", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("revokes a connected app over the bridge, never fetch", async () => {
-    renderPage();
-
-    fireEvent.click(await screen.findByRole("button", { name: "Disconnect" }));
-
-    await waitFor(() =>
-      expect(
-        calls().some(
-          (c) => c.path === "/api/oauth/grants/grant-1" && c.opts.method === "DELETE"
-        )
-      ).toBe(true)
-    );
-    expect(fetch).not.toHaveBeenCalled();
-  });
+  // ⚠ "revokes a connected app over the bridge" MOVED WITH THE SECTION — it is
+  // `components/settings-modal/settings-modal.test.tsx › revokes a connected app
+  // from the Connect tab` now. The fixture below is what it still needs here:
+  // nothing, which is what the test above asserts.
 
   it("shows the danger zone to owners only", async () => {
     renderPage();

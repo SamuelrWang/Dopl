@@ -4,9 +4,10 @@ import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { meetsMinRole, type Role, type Workspace } from "@/features/workspaces/types";
 import { WorkspaceSettingsFormCore } from "@/features/workspaces/components/workspace-settings-form-core";
 import { WorkspaceDangerZoneCore } from "@/features/workspaces/components/workspace-danger-zone-core";
-// ⚠ Deep import, NOT the `mcp-connect` barrel — the barrel drags sibling
-// components the desktop renderer doesn't need into its bundle.
-import { RemoteConnect } from "@/features/mcp-connect/components/remote-connect";
+// ⚠ `RemoteConnect` STOOD HERE AND IS GONE (Samuel, 2026-09-18). The
+// connect/login block is the settings popup's own **Connect** tab now
+// (`./connect-section-core.tsx`), account-scoped where it always belonged: it
+// renders one `/api/mcp` URL for the caller and reads no workspace at all.
 import { SectionShell } from "./section-shell";
 
 /** `GET /api/workspaces/{segment}` → `{ workspace, role }`. ⚠ Exported because
@@ -28,8 +29,11 @@ interface BodyProps {
   /** Editors only, above the form. Web only: the upload is multipart, which the
    *  desktop's JSON IPC bridge can't carry. */
   imageUploader?: (workspace: Workspace) => React.ReactNode;
-  /** Rendered after the MCP block, before the owner-only danger zone. Desktop
-   *  `/settings` PAGE hangs connected-apps here; the modal has none. */
+  /** Rendered after the form, before the owner-only danger zone. ⚠ NO CALLER
+   *  SINCE 2026-09-18 — the desktop `/settings` page hung connected-apps here
+   *  and that block is the popup's Connect tab now. Kept as the body's one
+   *  extension point; a second composition of this fragment is what the slot
+   *  exists to avoid. */
   extras?: React.ReactNode;
 }
 
@@ -66,7 +70,6 @@ export function WorkspaceSectionBody({
         role={role}
         onSaved={(updated) => onSaved(updated, workspace)}
       />
-      <RemoteConnect />
       {extras}
       {role === "owner" && (
         <WorkspaceDangerZoneCore workspace={workspace} onDeleted={onDeleted} />

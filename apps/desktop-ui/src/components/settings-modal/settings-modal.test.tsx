@@ -140,6 +140,10 @@ function renderShell() {
 /** The sidebar's gear. */
 const gear = () => screen.getByRole("button", { name: "Settings" });
 
+/** The rail, in order. ⚠ NO "Agents" ROW — a second branch owns that tab; this
+ *  list is the expected merge point and nothing else in the file is. */
+const NAV_LABELS = ["Workspaces", "Connect", "Account", "Plans & Billing"];
+
 describe("settings modal", () => {
   beforeEach(() => {
     apiRequest.mockImplementation((path: string) => defaultBridge(path));
@@ -162,7 +166,7 @@ describe("settings modal", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("opens on General from the workspace switcher", async () => {
+  it("opens on Workspaces from the workspace switcher", async () => {
     renderShell();
     await screen.findByText("page body");
 
@@ -174,26 +178,85 @@ describe("settings modal", () => {
     fireEvent.click(await screen.findByText("Workspace settings"));
 
     expect(await screen.findByRole("dialog", { name: "Settings" })).toBeInTheDocument();
-    expect(await screen.findByDisplayValue("Acme")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "General" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Workspaces" })
+    ).toBeInTheDocument();
   });
 
-  it("renames the workspace with a PATCH over the bridge", async () => {
+  /**
+   * 🔒 THE RAIL IS ONE FLAT LIST (Samuel, 2026-09-18). The uppercase
+   * "WORKSPACE" / "ACCOUNT" group strips are DELETED and the four rows are
+   * siblings — this is what pins the indent from coming back, and the rows are
+   * asserted IN ORDER because the list is the shape, not a set.
+   */
+  it("shows four flat nav rows and no group headers", async () => {
     renderShell();
     await screen.findByText("page body");
+    fireEvent.click(gear());
 
+    const dialog = await screen.findByRole("dialog", { name: "Settings" });
+    const rail = within(dialog).getAllByRole("button");
+    expect(
+      rail.map((b) => b.textContent).filter((t) => NAV_LABELS.includes(t ?? ""))
+    ).toEqual(NAV_LABELS);
+    expect(within(dialog).queryByText("WORKSPACE")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("ACCOUNT")).not.toBeInTheDocument();
+  });
+
+  /**
+   * 🔒 THE WORKSPACES PANE LISTS THE HOME SPACE FIRST, then every workspace the
+   * account is in. It EDITS none of them — the rename form lives on
+   * `/{segment}/settings` since this overhaul, and its own suite covers it.
+   */
+  it("lists the home space and every workspace, editing none", async () => {
+    renderShell();
+    await screen.findByText("page body");
+    fireEvent.click(gear());
+    const dialog = await screen.findByRole("dialog", { name: "Settings" });
+    fireEvent.click(screen.getByRole("button", { name: "Workspaces" }));
+
+    // ⚠ Scoped to the DIALOG: the shell's own switcher pill names "Acme" too,
+    // and an unscoped query would pass on the chrome behind the overlay.
+    expect(await within(dialog).findByText("Home")).toBeInTheDocument();
+    expect(await within(dialog).findByText("Acme")).toBeInTheDocument();
+    // The General form is gone from this popup, so its field is too.
+    expect(screen.queryByDisplayValue("Acme")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+  });
+
+  /** Connect carries the MCP block and the account's grants — both MOVED here
+   *  from the workspace settings page in the same change. */
+  it("revokes a connected app from the Connect tab", async () => {
+    apiRequest.mockImplementation((path: string) =>
+      path === "/api/oauth/grants"
+        ? Promise.resolve(
+            ok({
+              grants: [
+                {
+                  id: "grant-1",
+                  client_name: "Claude Code",
+                  scopes: ["dopl.write"],
+                  last_used_at: null,
+                  created_at: "2026-07-01T00:00:00Z",
+                },
+              ],
+            })
+          )
+        : defaultBridge(path)
+    );
+    renderShell();
+    await screen.findByText("page body");
     fireEvent.click(gear());
     await screen.findByRole("dialog", { name: "Settings" });
-    fireEvent.click(screen.getByRole("button", { name: "General" }));
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
 
-    const input = await screen.findByDisplayValue("Acme");
-    fireEvent.change(input, { target: { value: "Acme Rebranded" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(await screen.findByText("Connect & log in")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Disconnect" }));
 
     await waitFor(() =>
       expect(
         calls().some(
-          (c) => c.path === `/api/workspaces/${SEGMENT}` && c.opts.method === "PATCH"
+          (c) => c.path === "/api/oauth/grants/grant-1" && c.opts.method === "DELETE"
         )
       ).toBe(true)
     );

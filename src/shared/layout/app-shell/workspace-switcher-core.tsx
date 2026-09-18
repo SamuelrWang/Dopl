@@ -24,7 +24,10 @@ export interface WorkspaceSwitcherCoreProps {
   isLoading: boolean;
   /** `router.push` / SPA `navigate`. */
   onNavigate: (path: string) => void;
-  onOpenSettings: (section: "workspace") => void;
+  /** ⚠ `"workspace"` UNTIL 2026-09-18 — the popup's General pane it opened is
+   *  gone, so this row opens the WORKSPACES list instead. Editing a workspace
+   *  lives at `/{segment}/settings` now. */
+  onOpenSettings: (section: "workspaces") => void;
   onCreateWorkspace: () => void;
   /** Web app uses it to enable its lazy fetch. */
   onOpenChange?: (open: boolean) => void;
@@ -123,7 +126,7 @@ export function WorkspaceSwitcherCore({
           icon={<Settings size={13} />}
           onSelect={() => {
             close();
-            onOpenSettings("workspace");
+            onOpenSettings("workspaces");
           }}
         >
           Workspace settings
