@@ -5,9 +5,17 @@ import "server-only";
  * and MCP tools. Builds `SkillContext` from auth metadata at the route
  * boundary, resolves slugs to ids, enforces per-skill `agent_write_enabled`
  * on every agent-origin mutation.
- * ⚠ DELETES ARE PERMANENT — no trash, restore or purge. `deleted_at` and the
- * read-path `deleted_at IS NULL` filters stay only to keep pre-switch
- * tombstones hidden until the cleanup migration sweeps them.
+ * ⚠ DELETES ARE PERMANENT — no trash, restore or purge. ⚠ **THE CLEANUP
+ * MIGRATION THIS BLOCK WAITED ON HAS RUN**
+ * (`20260807110000_purge_soft_deleted_rows.sql`; `SELECT count(*) FROM skills
+ * WHERE deleted_at IS NOT NULL` read 0 on 2026-09-18 — a measurement, so
+ * re-derive it). `20261013120000_drop_knowledge_soft_delete.sql` also drops
+ * this table's `skill_soft_delete_cascade_attachments` trigger, whose function
+ * still wrote `workflow_skills` — a table gone since 2026-08-11. The
+ * `deleted_at` column and the read-path `deleted_at IS NULL` filters survive as
+ * INERT relics (nothing writes the column); **F-730 carries their removal**,
+ * which is not mechanical while `skills_workspace_slug_active_idx` is a PARTIAL
+ * UNIQUE on the predicate.
  *
  * Barrel over per-domain siblings; cross-cutting gates live in
  * `service-shared.ts`, and every history-recording mutation funnels through
