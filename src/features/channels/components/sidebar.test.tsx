@@ -6,8 +6,10 @@
  *  - channels and DMs come from the REAL channel list, split on `is_direct`;
  *  - threads nest one indent step under the OPEN channel, from the real thread
  *    read, windowed by `SIDEBAR_THREAD_ACTIVE_WINDOW_MS`;
- *  - NO unread COUNT badge — `Channel.unread` is a boolean and a count would be
- *    a number no read established;
+ *  - THE `@ N` MENTION BADGE, and the rule it does NOT break (R-28, 2026-09-17):
+ *    a numeric badge only where a real count exists. `Channel.unread` is still a
+ *    boolean and still draws a DOT; `Channel.mentionCount` is a server aggregate
+ *    and draws the pill, which suppresses the dot;
  *  - selection MIRRORS the center pane (thread wins over its channel);
  *  - the section chevrons COLLAPSE and the search FILTERS, per Samuel's
  *    interaction-completeness ruling (2026-08-18);
@@ -404,5 +406,43 @@ describe("the sidebar's thread glyph", () => {
     renderSidebar();
     expect(screen.getByRole("button", { name: "UI-kit design" })).not.toBeNull();
     expect(screen.queryByRole("button", { name: /awaiting your approval/ })).toBeNull();
+  });
+});
+
+/**
+ * 🔒 **THE `@ N` MENTION BADGE ON THE WORKSPACE ROW (Samuel's ruling R-28,
+ * 2026-09-17).** It was refused before for a stated reason — `Channel.unread` is a
+ * BOOLEAN and a numeric badge over it would be a claim with no number behind it.
+ * R-28 did not overturn that; it bought the COUNT (`Channel.mentionCount`, a
+ * server aggregate on every row since R-26), so the rule is unchanged and the
+ * badge now qualifies under it.
+ */
+describe("the mention badge — a count, never an invented number", () => {
+  it("draws `@ N` and SUPPRESSES the dot, because two marks read as two facts", () => {
+    renderSidebar({
+      rooms: [channel({ id: "ch-fe", name: "Front-end", unread: true, mentionCount: 3 })],
+    });
+    expect(screen.getByTitle("3 unread mentions")).toBeTruthy();
+    expect(screen.queryByLabelText("Unread messages")).toBeNull();
+  });
+
+  it("falls back to the DOT when there are unread messages but no mentions", () => {
+    renderSidebar({
+      rooms: [channel({ id: "ch-fe", name: "Front-end", unread: true, mentionCount: 0 })],
+    });
+    expect(screen.getByLabelText("Unread messages")).toBeTruthy();
+    expect(screen.queryByText(/^@ /)).toBeNull();
+  });
+
+  it("draws NEITHER on a payload written before `mentionCount` existed", () => {
+    // ⚠ §8: the key is new on an IndexedDB-persisted payload, and `?? 0` is what
+    // the row spells — `0` hides the pill rather than printing `@ NaN`.
+    const stale: Record<string, unknown> = {
+      ...channel({ id: "ch-fe", name: "Front-end", unread: false }),
+    };
+    delete stale.mentionCount;
+    renderSidebar({ rooms: [stale as unknown as ReturnType<typeof channel>] });
+    expect(screen.getByText("Front-end")).toBeTruthy();
+    expect(screen.queryByText(/^@ /)).toBeNull();
   });
 });

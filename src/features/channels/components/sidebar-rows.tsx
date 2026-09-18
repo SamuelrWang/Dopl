@@ -13,6 +13,8 @@ import { Bot, CornerDownRight, Hash } from "lucide-react";
 import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
 import { cn } from "@/shared/lib/utils";
 import { CountBadge, IconTile } from "./bits";
+// ⚠ THE SAME MARK /home DRAWS (R-28), never a second pill.
+import { MentionBadge } from "@/shared/ui/home-card-marks";
 import type { ChannelThread } from "../types";
 
 const DEPTH_PAD = ["pl-2", "pl-5"] as const;
@@ -66,17 +68,31 @@ function SidebarRow({
 /**
  * A channel or DM row.
  *
- * ⚠ NO UNREAD BADGE. `Channel.unread` is a BOOLEAN — "something newer than my
- * `lastReadAt`" — and the mock drew a count. A badge is a claim about HOW MUCH
- * is waiting, and there is no such number in the read (wiring plan: unread
- * badges only where a real count exists, else omit). The DM section's rows are
- * people; a person is already a face, so they are never tiled.
+ * 🔒 **THE `@ N` MENTION BADGE IS HERE SINCE R-28 (Samuel, 2026-09-17: *mention
+ * badges YES on workspace rows*), AND THE OLD REFUSAL IS WHY IT TOOK A RULING.**
+ * This row said NO UNREAD BADGE for a stated reason: `Channel.unread` is a
+ * BOOLEAN, the mock drew a count, and **a badge is a claim about HOW MUCH is
+ * waiting** — inventing one from a boolean is the defect, not the omission. R-28
+ * did not overturn that rule; it BOUGHT THE COUNT. `Channel.mentionCount` is a
+ * server aggregate on every row of both scopes (Wave 3, R-26), so the badge now
+ * has a real number behind it and the rule stands unchanged: **a numeric badge
+ * only where a real count exists.**
+ *
+ * ⚠ **IT IS `home-card-marks.tsx › MentionBadge`, THE SAME MARK /home DRAWS**, not
+ * a second pill — the count and its ink are one statement across both surfaces.
+ * ⚠ **AND IT IS THE DOT'S ALTERNATIVE, NOT ITS COMPANION** (the design's own
+ * rule, which `UnreadDot`'s docblock states): a channel with unread mentions
+ * already says the louder thing, and two markers for one fact reads as two facts.
+ *
+ * ⚠ The DM section's rows are people; a person is already a face, so they are
+ * never tiled.
  */
 export function ChannelRow({
   label,
   person,
   selected,
   unread,
+  mentions = 0,
   reserveTrailing = false,
   onSelect,
 }: {
@@ -85,6 +101,12 @@ export function ChannelRow({
   person: AvatarPerson | null;
   selected: boolean;
   unread: boolean;
+  /**
+   * `Channel.mentionCount`. ⚠ **`?? 0` AT THE CALL SITE (INVARIANTS §8)** — a new
+   * key on an IndexedDB-persisted payload, and `0` hides the pill rather than
+   * printing `@ NaN`.
+   */
+  mentions?: number;
   /**
    * Leave room at the row's right edge for a control that is NOT part of this
    * button (2026-08-20: the thread disclosure, `sidebar.tsx › ChannelBranch`).
@@ -125,11 +147,17 @@ export function ChannelRow({
           longer asks, so the count had nothing true left to say. The unread dot
           is what remains, and it means what it always did: something here is
           newer than your `lastReadAt`. */}
-      {unread && (
-        <span
-          aria-label="Unread messages"
-          className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-link"
-        />
+      {mentions > 0 ? (
+        <span className="ml-auto">
+          <MentionBadge count={mentions} />
+        </span>
+      ) : (
+        unread && (
+          <span
+            aria-label="Unread messages"
+            className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-link"
+          />
+        )
       )}
     </SidebarRow>
   );

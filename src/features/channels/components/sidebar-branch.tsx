@@ -86,6 +86,9 @@ export function ChannelBranch({
           person={person}
           selected={selected}
           unread={channel.unread}
+          // ⚠ `?? 0` INLINE (§8): a new key on a persisted payload; `0` hides the
+          // pill rather than printing `@ NaN`.
+          mentions={channel.mentionCount ?? 0}
           reserveTrailing={canCollapse}
           onSelect={() => onSelectChannel(channel.id)}
         />
