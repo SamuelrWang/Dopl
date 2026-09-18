@@ -209,6 +209,12 @@ export type Channel = {
    *
    * ⚠ THE SIDEBAR'S FAVORITES SECTION READS THIS AND NOTHING ELSE — it rides
    * the channel list the sidebar already has, so no extra read, no endpoint.
+   *
+   * 🔒 **AND IT IS THE ONE WIRE NAME FOR `channel_members.favorited_at` SINCE
+   * R-27 (Samuel, 2026-09-17).** The home payload spelled the same column
+   * `favoritedAt` and the roster row spelled it that way too; three names for one
+   * fact is what produced the pin bug (*"the bookmark icon like alway breaks"*,
+   * 2026-09-15) and the two cache-to-cache bridges that papered over it.
    */
   myFavoritedAt: string | null;
   /** Members whose agent heartbeat is within PRESENCE_ONLINE_WINDOW_MS. */
@@ -410,8 +416,10 @@ export type ChannelMember = {
   unaddressedResponder?: UnaddressedResponderSetting | null;
   /** ⚠ Private preference — present ONLY on the caller's own row. The
    *  favourite-toggle PATCH echoes it back; the sidebar reads
-   *  `Channel.myFavoritedAt` instead, off a list it already has. */
-  favoritedAt: string | null;
+   *  `Channel.myFavoritedAt` instead, off a list it already has.
+   *  ⚠ **RENAMED FROM `favoritedAt` BY R-27** — one wire name for the column,
+   *  on every payload that carries it. */
+  myFavoritedAt: string | null;
   agentOnline: boolean;
   lastSeenAt: string | null;
   addedBy: string | null;

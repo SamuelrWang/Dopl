@@ -506,7 +506,7 @@ visibility gate` is the pin that says so.
    Do not re-inline it.
 9. **Cached payload fields with mandatory fallbacks** (INVARIANTS §8), all of which a
    parity refactor will touch: `HomeChannel.peers ?? EMPTY_PEERS`, `.topic ?? ""`,
-   `.unread ?? false`, `.unreadMentions ?? 0`, `.favoritedAt ?? null`,
+   `.unread ?? false`, `.unreadMentions ?? 0`, `.myFavoritedAt ?? null`,
    `HomePendingLink.grantedRole ?? "guest"`, `WorkspaceListItem.memberCount ?? 0`
    (**fail-CLOSED, zero means "not solo"**), `containerKind ?? "standard"`,
    `KnowledgeBase list › channelGrants ?? EMPTY_GRANTS`, `chats › truncated ?? false`.

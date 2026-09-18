@@ -55,7 +55,7 @@ const CHANNEL: HomeChannel = {
   lastMessagePreview: null,
   unread: false,
   unreadMentions: 0,
-  favoritedAt: null,
+  myFavoritedAt: null,
   // The guest lane's reader, at the role a bound claim's default link grants.
   role: "guest",
       linkOut: null,

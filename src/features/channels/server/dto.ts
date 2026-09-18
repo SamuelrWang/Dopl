@@ -238,7 +238,7 @@ export function mapArtifactRow(row: ChannelArtifactRow): ChannelArtifact {
  * Presence IS public to the workspace — you need it to know whether the agent
  * you are addressing is live.
  *
- * ⚠ `favoritedAt` rides here so the members PATCH's own response tells the truth
+ * ⚠ `myFavoritedAt` rides here so the members PATCH's own response tells the truth
  * about what it just wrote. The SIDEBAR does not read it from this DTO — it
  * reads `Channel.myFavoritedAt` off the channel list, which already loads the
  * caller's membership row. One column, two mappers, one scrub rule.
@@ -276,7 +276,7 @@ export function mapMemberRow(
     agentToolProfile: isSelf
       ? ((row.agent_tool_profile as AgentToolProfile) ?? "full")
       : null,
-    favoritedAt: isSelf ? (row.favorited_at ?? null) : null,
+    myFavoritedAt: isSelf ? (row.favorited_at ?? null) : null,
     // ⚠ **VIEWER-ONLY, ON `agentToolProfile`'S PRECEDENT EXACTLY** (2026-09-07, items 10/11).
     // It is nobody else's business whether a given member's agents auto-answer them: the roster
     // says WHO is here, this would say how somebody works. `null` on a peer's row therefore

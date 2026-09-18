@@ -187,7 +187,7 @@ export async function hydrateChannels(
       // reached this container THROUGH that row, so an absent entry is a torn
       // read rather than a state, and rank 0 is the answer that offers nothing.
       role: roles.get(container.id) ?? "guest",
-      favoritedAt: reads.get(channel.id)?.favoritedAt ?? null,
+      myFavoritedAt: reads.get(channel.id)?.favoritedAt ?? null,
       // ⚠ Claimability is judged by the SAME predicate the claim gate uses — a
       // chip that says "invite out" over a link that 410s is the disagreement
       // `isClaimable` exists to prevent.

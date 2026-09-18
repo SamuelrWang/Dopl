@@ -71,7 +71,7 @@ export function member(over: Partial<ChannelMember> = {}): ChannelMember {
      *  member who never opened Settings. A PEER's row is `unaddressedResponder: null`
      *  ("not yours to see"), which suites asserting the scrub must set explicitly. */
     unaddressedResponder: "last_addressed",
-    favoritedAt: null,
+    myFavoritedAt: null,
     agentOnline: true,
     lastSeenAt: new Date().toISOString(),
     addedBy: null,

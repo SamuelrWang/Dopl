@@ -77,7 +77,7 @@ const CHANNEL = {
   lastMessagePreview: null,
   unread: false,
   unreadMentions: 0,
-  favoritedAt: null,
+  myFavoritedAt: null,
   // What a bound claim's default link seats its claimer at (F-343's field).
   role: "guest" as const,
       linkOut: null,

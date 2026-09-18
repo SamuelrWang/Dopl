@@ -50,7 +50,7 @@ function channel(over: Partial<HomeChannel> = {}): HomeChannel {
     lastMessagePreview: null,
     unread: false,
     unreadMentions: 0,
-    favoritedAt: null,
+    myFavoritedAt: null,
     role: "owner",
     linkOut: null,
     ...over,

@@ -14,16 +14,16 @@ const HOUR = 3_600_000;
 const NOW = Date.UTC(2026, 8, 15, 12, 0, 0);
 /** A channel row stamped `ms` before {@link NOW}, pinned or not. ⚠ The stamp is an
  *  ISO STRING on the wire, which is the shape `channelWellOf` has to survive; the
- *  pin is `HomeChannel.favoritedAt`, the SERVER's `channel_members.favorited_at`. */
+ *  pin is `HomeChannel.myFavoritedAt`, the SERVER's `channel_members.favorited_at`. */
 function rowAgedMs(
   ms: number,
-  over: { id?: string; favoritedAt?: string | null } = {}
+  over: { id?: string; myFavoritedAt?: string | null } = {}
 ): HomeRow {
   return {
     kind: "channel",
     id: over.id ?? "rel:ws-1",
     at: new Date(NOW - ms).toISOString(),
-    channel: { favoritedAt: over.favoritedAt ?? null },
+    channel: { myFavoritedAt: over.myFavoritedAt ?? null },
   } as unknown as HomeRow;
 }
 
@@ -57,9 +57,9 @@ describe("channelWellOf — Samuel's 24h cut", () => {
     // 🔒 PINNED MEANS FAVOURITED (Samuel, 2026-09-15) — `channel_members.favorited_at`
     // off the wire, not a per-device set this page invented.
     const pin = "2026-09-14T10:00:00.000Z";
-    expect(channelWellOf(rowAgedMs(HOUR, { favoritedAt: pin }), NOW)).toBe("pinned");
+    expect(channelWellOf(rowAgedMs(HOUR, { myFavoritedAt: pin }), NOW)).toBe("pinned");
     expect(
-      channelWellOf(rowAgedMs(90 * 24 * HOUR, { favoritedAt: pin }), NOW)
+      channelWellOf(rowAgedMs(90 * 24 * HOUR, { myFavoritedAt: pin }), NOW)
     ).toBe("pinned");
     // …and a row that is not pinned is unaffected by one that is.
     expect(channelWellOf(rowAgedMs(HOUR, { id: "rel:ws-2" }), NOW)).toBe("recent");
@@ -68,12 +68,12 @@ describe("channelWellOf — Samuel's 24h cut", () => {
   /**
    * 🔒 **THE STALE-CACHE CASE (INVARIANTS §8).** `GET /api/home/channels` is
    * IndexedDB-persisted with a 24h `gcTime`, so the FIRST PAINT after this bundle
-   * ships serves entries written by the previous one — which have NO `favoritedAt`.
+   * ships serves entries written by the previous one — which have NO `myFavoritedAt`.
    * The row must file under its own recency, which is the answer that was true for
    * every row before the field existed; `undefined !== null` would put the whole
    * list in **Pinned**.
    */
-  it("files a row written before `favoritedAt` existed by its recency", () => {
+  it("files a row written before `myFavoritedAt` existed by its recency", () => {
     const stale = { ...rowAgedMs(HOUR) } as HomeRow & { channel: object };
     stale.channel = {};
     expect(channelWellOf(stale, NOW)).toBe("recent");

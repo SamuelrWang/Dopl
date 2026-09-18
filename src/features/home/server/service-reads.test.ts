@@ -147,10 +147,10 @@ describe("getHomeChannels", () => {
         // exact-shape assertion rather than left to `toMatchObject`.
         unread: false,
         unreadMentions: 0,
-        // ⚠ AND THE PIN IS OFF FOR THE SAME REASON (2026-09-15) — `favoritedAt`
+        // ⚠ AND THE PIN IS OFF FOR THE SAME REASON (2026-09-15) — `myFavoritedAt`
         // rides the SAME `channel_members` read, so an absent row means "not
         // pinned" exactly as it means "no marks".
-        favoritedAt: null,
+        myFavoritedAt: null,
         // ⚠ **THE CALLER'S OWN ROLE, AND `"guest"` HERE IS THE FAIL-CLOSED FLOOR
         // rather than a fixture choice** (F-343, 2026-09-17): this fixture's
         // `listMyContainerRoles` answers an EMPTY map, exactly as it answers no

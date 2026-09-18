@@ -10,7 +10,7 @@
  * ⚠ **THE SET ONLY. WHICH WELL A ROW LANDS IN IS
  * `apps/desktop-ui/src/pages/home/channel-wells.ts › channelWellOf`**, because
  * that answer reads a `HomeRow` — a SPA type over a cached payload, with the
- * `favoritedAt` fallback INVARIANTS §8 requires. The seam is the one
+ * `myFavoritedAt` fallback INVARIANTS §8 requires. The seam is the one
  * `collapse-wells.tsx` already draws between a caller's set and the box: this
  * file is the set, that one is the box, and the filing rule stays with the data.
  *

@@ -75,7 +75,7 @@ export function useHomeChannelSync(): void {
           const channels = prev.channels.map((row) => {
             const next = facts.get(row.channelId);
             if (!next) return row;
-            const favoritedAt = next.myFavoritedAt ?? null;
+            const myFavoritedAt = next.myFavoritedAt ?? null;
             // 🔒 ⚠ **A FIELD THE ENTRY DOES NOT CARRY IS NOT AN EMPTY FIELD** —
             // this is the "copies, never invents" rule at the KEY level. An
             // optimistic patch names the one field it wrote
@@ -92,18 +92,18 @@ export function useHomeChannelSync(): void {
             const topic =
               typeof next.topic === "string" ? next.topic : (row.topic ?? "");
             // ⚠ `?? null` / `?? ""` ON THE CACHED SIDE TOO (INVARIANTS §8): a
-            // payload written before `favoritedAt` or `topic` existed has no such
+            // payload written before `myFavoritedAt` or `topic` existed has no such
             // key, and `undefined` must compare equal to "not pinned" / "no
             // description" or every such row rewrites on every event.
             if (
-              (row.favoritedAt ?? null) === favoritedAt &&
+              (row.myFavoritedAt ?? null) === myFavoritedAt &&
               row.name === name &&
               (row.topic ?? "") === topic
             ) {
               return row;
             }
             moved = true;
-            return { ...row, favoritedAt, name, topic };
+            return { ...row, myFavoritedAt, name, topic };
           });
           return moved ? { ...prev, channels } : prev;
         }

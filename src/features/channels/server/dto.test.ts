@@ -182,17 +182,17 @@ describe("mapMemberRow", () => {
       // column (2026-08-19). It is one half of INVARIANTS §2's two-edit rule for
       // a new per-member setting; the other half is its absence from
       // `20260810120000`'s GRANT list, which is what binds PostgREST and CDC.
-      favoritedAt: null,
+      myFavoritedAt: null,
     });
   });
 
-  it("shows favoritedAt on the viewer's OWN row", () => {
+  it("shows myFavoritedAt on the viewer's OWN row", () => {
     expect(
       mapMemberRow({ ...row, favorited_at: "2026-08-19T10:00:00Z" }, undefined, asSelf)
-    ).toMatchObject({ favoritedAt: "2026-08-19T10:00:00Z" });
+    ).toMatchObject({ myFavoritedAt: "2026-08-19T10:00:00Z" });
     // Not favourited is `null`, never absent — the field always answers.
     expect(mapMemberRow(row, undefined, asSelf)).toMatchObject({
-      favoritedAt: null,
+      myFavoritedAt: null,
     });
   });
 

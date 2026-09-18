@@ -217,6 +217,6 @@ describe("updateMyMemberSettings — the favourite, and whose row it lands on", 
   it("scrubs the echoed row to the viewer, so the response is the caller's own", async () => {
     const member = await updateMyMemberSettings(ctx, "room", asFavorite);
     expect(member.userId).toBe(USER);
-    expect(member.favoritedAt).toBeNull(); // the mocked row's stored value
+    expect(member.myFavoritedAt).toBeNull(); // the mocked row's stored value
   });
 });

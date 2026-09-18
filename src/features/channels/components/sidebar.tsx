@@ -58,7 +58,7 @@
  *     threads nest under it here. Under move semantics this section IS the
  *     channel's home, so a favourited channel that lost its thread rows would
  *     have lost them from the sidebar entirely.
- *  3. **ORDERED BY NAME**, not by `favoritedAt` and not by the list's own
+ *  3. **ORDERED BY NAME**, not by `myFavoritedAt` and not by the list's own
  *     recency. A shortcut list is used by POINTING, and alphabetical is the only
  *     order that never reorders under traffic. (The column stores WHEN anyway —
  *     see the migration; a boolean could not be turned into an order later.)

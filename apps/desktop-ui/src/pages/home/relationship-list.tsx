@@ -53,7 +53,7 @@ import {
  *     variant he asked for that morning was retracted the same day.
  *   - the SET and the 24h cut — `channel-wells.ts`, which asks
  *     `recency-wells.tsx › wellFor` rather than owning a second clock;
- *   - the PIN — `HomeChannel.favoritedAt`, i.e. `channel_members.favorited_at`,
+ *   - the PIN — `HomeChannel.myFavoritedAt`, i.e. `channel_members.favorited_at`,
  *     written by the channel header's own toggle and mirrored into this page's
  *     cache by `use-home-channel-sync.ts` (the pin, and since 2026-09-17 the name and
  *     description the Info tab edits in place). ⚠ **NOT a per-device store** — the

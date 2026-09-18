@@ -26,7 +26,7 @@
  * 🔒 ⚠ **PINNED MEANS FAVOURITED, AND THE PIN IS THE BOOKMARK (Samuel,
  * 2026-09-15):** *"remove the pin icon that appears when i hover over the picker.
  * instead replace the bookmark icon next to the channel name with the pin icon."*
- * `HomeChannel.favoritedAt` — `channel_members.favorited_at`, written by the
+ * `HomeChannel.myFavoritedAt` — `channel_members.favorited_at`, written by the
  * channel header's own toggle. ⚠ **THE PER-DEVICE `localStorage` SET THIS FILE
  * READ FOR ONE AFTERNOON IS DELETED. Do not mint a second pin store.**
  */
@@ -76,12 +76,12 @@ function rowStamp(at: string): number | null {
  * pure function, not a `Date.now()` in a component body (`react-hooks/purity`).
  */
 export function channelWellOf(row: HomeRow, now?: number): HomeChannelWellId {
-  // ⚠ `?? null` INLINE AT A NEW CACHED KEY (INVARIANTS §8): `favoritedAt` is new
+  // ⚠ `?? null` INLINE AT A NEW CACHED KEY (INVARIANTS §8): `myFavoritedAt` is new
   // on an IndexedDB-persisted payload with a 24h `gcTime`, so the first paint
   // after this bundle ships reads entries that DO NOT HAVE IT. `null` is the
   // fail-safe — the row files under its own recency, which is the answer that was
   // true for every row before the field existed.
-  if (row.kind === "channel" && (row.channel.favoritedAt ?? null) !== null) {
+  if (row.kind === "channel" && (row.channel.myFavoritedAt ?? null) !== null) {
     return "pinned";
   }
   return wellFor(rowStamp(row.at), now) === "recent" ? "recent" : "earlier";

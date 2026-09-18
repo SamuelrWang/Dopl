@@ -137,7 +137,7 @@ export const HOME: HomeChannelsPayload = {
       unreadMentions: 0,
       // ⚠ NOT PINNED BY DEFAULT — the **Pinned** well is opt-in per case, so no
       // existing suite grows a row in a well it never asked about.
-      favoritedAt: null,
+      myFavoritedAt: null,
       // ⚠ **THE DEFAULT READER OWNS THIS CONTAINER** (F-343's field, 2026-09-17)
       // — they minted it, which is what every suite predating the field assumed
       // when /home hardcoded `"owner"`. A case about a GUEST or a MEMBER peer
@@ -208,7 +208,7 @@ export const MEMBERS: { members: ChannelMember[] } = {
       lastReadAt: null,
       notifyScope: null,
       agentToolProfile: null,
-      favoritedAt: null,
+      myFavoritedAt: null,
       agentOnline: false,
       lastSeenAt: null,
       addedBy: null,
@@ -225,7 +225,7 @@ export const MEMBERS: { members: ChannelMember[] } = {
       lastReadAt: null,
       notifyScope: null,
       agentToolProfile: null,
-      favoritedAt: null,
+      myFavoritedAt: null,
       agentOnline: false,
       lastSeenAt: null,
       addedBy: USER_ID,

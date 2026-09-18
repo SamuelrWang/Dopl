@@ -197,18 +197,23 @@ export interface HomeChannel {
    * and that did not survive a second machine was the wrong model, and Samuel's
    * own screenshot named the control that already held the right one.
    *
-   * 🔒 ⚠ **NEW KEY ON AN INDEXEDDB-PERSISTED PAYLOAD — EVERY READ SPELLS
-   * `?? null` INLINE (INVARIANTS §8).** `GET /api/home/channels` is cached with a
-   * 24h `gcTime`, so an entry written by the previous bundle survives the upgrade
-   * WITHOUT this key. `null` is the fail-safe reading: the row files under its own
-   * recency instead of appearing in **Pinned**, which is the answer that was true
-   * for every row before this field existed.
+   * 🔒 **ONE WIRE NAME FOR `channel_members.favorited_at`, AND IT IS THIS ONE
+   * (Samuel's ruling R-27, 2026-09-17).** It was `favoritedAt` here and
+   * `myFavoritedAt` on `channels/types.ts › Channel` — two names for one column,
+   * which is the whole of the pin bug Samuel reported on 2026-09-15. The `my*`
+   * prefix is what survives: it states the caller-relativity an ACCOUNT-WIDE
+   * payload stops being able to assume.
+   *
+   * 🔒 ⚠ **EVERY READ SPELLS `?? null` INLINE (INVARIANTS §8)** — the key is new
+   * under this name, so an entry written by the previous bundle carries the old
+   * one and nothing under this. `null` is the fail-safe: the row files under its
+   * own recency instead of appearing in **Pinned**.
    */
-  favoritedAt: string | null;
+  myFavoritedAt: string | null;
   /**
    * 🔒 **THE CALLER'S OWN ROLE IN THIS CONTAINER — `workspace_members.role`,
-   * caller-relative like `unread` / `favoritedAt` and carrying no `my*` prefix
-   * for the same reason (a home payload is only ever the caller's own).**
+   * caller-relative like `unread`, and carrying no `my*` prefix for the reason
+   * `unread` does not (a home payload is only ever the caller's own).**
    * Added 2026-09-17, closing F-343.
    *
    * ⚠ **IT IS THE SAME ROLE VOCABULARY AND THE SAME LADDER THE WORKSPACE USES**

@@ -91,7 +91,7 @@ function member(
     lastReadAt: minsAgo(1),
     notifyScope: null,
     agentToolProfile: null,
-    favoritedAt: null,
+    myFavoritedAt: null,
     agentOnline: true,
     lastSeenAt: minsAgo(0),
     addedBy: null,

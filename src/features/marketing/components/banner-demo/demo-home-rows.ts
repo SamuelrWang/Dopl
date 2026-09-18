@@ -18,7 +18,7 @@
  * demo cannot host — the FACE is what it must not fork.
  *
  * ⚠ **THE WELL IS AUTHORED HERE TOO, AND THAT IS THE ONE HONEST DIFFERENCE.**
- * `channel-wells.ts › channelWellOf` reads a `HomeRow`'s `favoritedAt` and its
+ * `channel-wells.ts › channelWellOf` reads a `HomeRow`'s `myFavoritedAt` and its
  * stamp against `wellFor`'s 24h cut; the demo has neither, so each row names its
  * well. The SET those ids belong to is the product's own
  * (`channels/components/home-channel-wells.ts`), so a fourth well or a renamed

@@ -212,7 +212,7 @@ describe("the list column's THREE WELLS", () => {
    * 2026-09-15):** *"remove the pin icon that appears when i hover over the
    * picker. instead replace the bookmark icon next to the channel name with the
    * pin icon."* ⚠ **THE ROW'S OWN HOVER TOGGLE AND ITS `localStorage` STORE ARE
-   * DELETED** — the well reads `HomeChannel.favoritedAt` off the wire, which is
+   * DELETED** — the well reads `HomeChannel.myFavoritedAt` off the wire, which is
    * `channel_members.favorited_at`, which is what the channel header's one toggle
    * has always written.
    */
@@ -220,7 +220,7 @@ describe("the list column's THREE WELLS", () => {
     apiRequest.mockImplementation(
       withHome({
         channels: [
-          { ...HOME.channels[0], favoritedAt: "2026-09-14T09:00:00.000Z" },
+          { ...HOME.channels[0], myFavoritedAt: "2026-09-14T09:00:00.000Z" },
           ANCIENT,
         ],
         pendingLinks: [],
@@ -243,15 +243,15 @@ describe("the list column's THREE WELLS", () => {
   });
 
   /**
-   * 🔒 **THE STALE-CACHE CASE FOR THE NEW KEY (INVARIANTS §8).** `favoritedAt` is
+   * 🔒 **THE STALE-CACHE CASE FOR THE NEW KEY (INVARIANTS §8).** `myFavoritedAt` is
    * new on an IndexedDB-persisted payload with a 24h `gcTime`, so the FIRST PAINT
    * after this bundle ships reads entries that DO NOT HAVE IT. The row must file
    * by its own recency — `undefined !== null` would drop the whole list into
    * **Pinned**.
    */
-  it("files a row written before `favoritedAt` existed by its recency", async () => {
+  it("files a row written before `myFavoritedAt` existed by its recency", async () => {
     const stale: Record<string, unknown> = { ...HOME.channels[0] };
-    delete stale.favoritedAt;
+    delete stale.myFavoritedAt;
     apiRequest.mockImplementation(
       withHome({
         channels: [stale as unknown as HomeChannelsPayload["channels"][number]],
