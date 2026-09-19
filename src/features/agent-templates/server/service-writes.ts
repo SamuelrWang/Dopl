@@ -220,7 +220,7 @@ export async function createTemplate(
 
 // ─── Update ─────────────────────────────────────────────────────────────
 
-/** ⚠ **`expectedUpdatedAt` IS OPTIONAL HERE AND REQUIRED ONE LAYER UP** (F-739),
+/** ⚠ **`expectedUpdatedAt` IS OPTIONAL HERE AND REQUIRED ONE LAYER UP** (F-747),
  *  where the KB lane puts the same decision: the strictness lives in
  *  `packages/dopl-client/src/agent-templates.ts`, because the MCP server ships
  *  INSIDE the desktop app and a route demanding the header would refuse every
@@ -369,7 +369,7 @@ export async function updateTemplate(
   // 3-arg overload is TOTAL (it throws or returns a row) and the 4-arg one is
   // the CAS, and a caller that reads one of them should not have to know the
   // other exists. The un-versioned path is therefore byte-identical to what it
-  // was before F-739.
+  // was before F-747.
   const touchesRow = Object.values(rowPatch).some((value) => value !== undefined);
   if (expectedUpdatedAt !== undefined) {
     const saved = await repo.updateTemplateRow(

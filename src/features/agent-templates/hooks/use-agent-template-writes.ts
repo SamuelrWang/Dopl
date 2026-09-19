@@ -72,7 +72,7 @@ export interface UpdateDraft {
   optimistic: AgentTemplate;
   /**
    * 🔒 The `X-Updated-At` precondition — the `updatedAt` of the row the editor
-   * was OPENED on (F-739). Absent = last-writer-wins, which is the shape this
+   * was OPENED on (F-747). Absent = last-writer-wins, which is the shape this
    * page had until 2026-09-18 and is kept only so a host that has no version
    * to give still saves.
    */
@@ -190,7 +190,7 @@ export function useAgentTemplateWrites(
     ),
     update: useApiMutationWith(agentTemplateRequest, {
       ...updateConfig(workspaceId, shelf),
-      // 🔒 **THE 412 REFETCH (F-739), AND IT LIVES HERE BECAUSE THE CLIENT DOES.**
+      // 🔒 **THE 412 REFETCH (F-747), AND IT LIVES HERE BECAUSE THE CLIENT DOES.**
       // The optimistic patch has already rolled back by now, so the cache holds
       // the version that just LOST the race; without this the operator reopens
       // the same stale row and the next Save 412s again. ⚠ Only on 412 — every

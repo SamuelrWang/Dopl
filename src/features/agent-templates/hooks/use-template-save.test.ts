@@ -113,7 +113,7 @@ describe("patching", () => {
   });
 
   /**
-   * 🔒 **THE EDITOR SAVES UNDER THE VERSION IT WAS OPENED ON** (F-739,
+   * 🔒 **THE EDITOR SAVES UNDER THE VERSION IT WAS OPENED ON** (F-747,
    * 2026-09-18). Both authoring surfaces run through this one function, so this
    * case is what makes the app's half of the precondition true on BOTH of them.
    */

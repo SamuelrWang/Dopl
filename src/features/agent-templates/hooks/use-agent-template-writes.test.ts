@@ -192,7 +192,7 @@ describe("a write patches ONE workspace's list", () => {
     expect(names(view.result.current.home.templates)).toEqual(["Home Scout"]);
   });
 
-  /** 🔒 F-739 — the PATCH carries the precondition the caller handed it. */
+  /** 🔒 F-747 — the PATCH carries the precondition the caller handed it. */
   it("UPDATE sends `expectedUpdatedAt` through to the request", async () => {
     const view = await warm();
     await act(async () => {

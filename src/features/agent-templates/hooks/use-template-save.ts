@@ -80,7 +80,7 @@ export function useTemplateSave({
             // ⚠ NO NAME LOOKUP SINCE 2026-09-08: the draft holds resolved knowledge REFS, so
             // every chip already carries its own label.
             optimistic: optimisticTemplate(template, draft),
-            // 🔒 THE VERSION THE EDITOR WAS OPENED ON (F-739). The optimistic
+            // 🔒 THE VERSION THE EDITOR WAS OPENED ON (F-747). The optimistic
             // patch rolls itself back on the 412, so a lost race leaves the
             // operator's typing on screen and the row as the other writer left
             // it.

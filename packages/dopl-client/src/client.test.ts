@@ -240,7 +240,7 @@ describe("parseRetryAfter", () => {
 });
 
 /**
- * `updateAgentTemplate`'s TRI-STATE (F-739, 2026-09-18).
+ * `updateAgentTemplate`'s TRI-STATE (F-747, 2026-09-18).
  *
  * ⚠ **THE STRICT ARM IS CLIENT-SIDE ON PURPOSE**, exactly as
  * `knowledge.ts › writeKbFileByPath`'s is: the route still accepts an absent

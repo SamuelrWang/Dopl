@@ -157,7 +157,7 @@ describe("updateTemplateRow — a real patch still writes", () => {
 });
 
 /**
- * THE COMPARE-AND-SWAP (F-739, 2026-09-18).
+ * THE COMPARE-AND-SWAP (F-747, 2026-09-18).
  *
  * ⚠ **WHAT THESE TESTS EXIST TO DISTINGUISH IS A CAS FROM A CHECK-THEN-ACT**,
  * which is the whole reason the finding was filed rather than shipped cheaply.

@@ -185,7 +185,7 @@ export interface UpdateTemplatePatch {
 }
 
 /**
- * ⚠ **THE PRECONDITION IS A `WHERE` CLAUSE, NOT A READ-THEN-COMPARE** (F-739,
+ * ⚠ **THE PRECONDITION IS A `WHERE` CLAUSE, NOT A READ-THEN-COMPARE** (F-747,
  * 2026-09-18). The service already holds `existing` from `getTemplateForWrite`,
  * so `existing.updatedAt !== expected → 412` is four lines away — and it is
  * CHECK-THEN-ACT: a write landing between that read and this UPDATE passes it.

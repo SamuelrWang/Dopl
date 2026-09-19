@@ -1,5 +1,5 @@
 /**
- * `dopl_agent op="update"` — THE OPTIMISTIC-CONCURRENCY CONTRACT (F-739,
+ * `dopl_agent op="update"` — THE OPTIMISTIC-CONCURRENCY CONTRACT (F-747,
  * 2026-09-18).
  *
  * ⚠ **THE SURFACE'S HALF IS THE VOCABULARY, NOT THE ATOMICITY.** Postgres does

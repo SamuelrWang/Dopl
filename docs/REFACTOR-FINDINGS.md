@@ -28,6 +28,38 @@ done | grep -oE 'F-[0-9]{3}' | sort -u | tail -1
 - **Ids are never reused and never reassigned once merged.** Two entries under one id makes both
   unreadable, which is the whole cost being avoided here. Gaps are fine — `F-160`, `F-161` and
   `F-162` have been permanently unused since 2026-08-08.
+
+- **⚠ RENUMBERED AT THE 2026-09-19 ROUND-1 INTEGRATION (`integrate/r1-2026-09-19`) — THE SAME
+  FAILURE AS 2026-09-01, AND WORSE.** Eight branches of one wave allocated from master's `F-737`
+  independently: SIX entries claimed `F-738` and SIX claimed `F-739`. Two of those twelve were the
+  SAME finding filed twice and are FOLDED rather than renumbered — the KB write rules (refusal half
+  on `fix/r1-c`, human-editor half on `fix/r1-leftovers`) and the agent-template CAS (filed on
+  `fix/r1-d-consistency`, built on `fix/r1-leftovers`) — because they are two halves of one ruling,
+  which is what both branches asked for in their own entries. The FIRST-MERGED claimant keeps each
+  id; the rest moved, in merge order:
+
+  | was | now | entry | branch |
+  |---|---|---|---|
+  | F-738 | **F-738** *(kept)* | `packages/mcp-server`'s own test files are typechecked by nothing | `fix/r1-a` |
+  | F-739 | **F-739** *(kept)* | the outside-session author label ships ahead of its mechanism — ✅ RESOLVED at this merge | `fix/r1-a` |
+  | F-740 | **F-740** *(kept)* | `@desktop` is an address with no presence | `fix/r1-desktop-tag` |
+  | F-741 | **F-741** *(kept)* | the outside-session discriminator reads a forgeable header | `fix/r1-desktop-tag` |
+  | F-738 | **F-742** | `chats.pinned` survived the pinning purge | `fix/r1-pin-removal` |
+  | F-738 | **F-743** | the KB idempotency migration is written, not applied | `fix/r1-b` |
+  | F-739 | **F-744** | `knowledge_entries` holds only the most recent `client_write_id` | `fix/r1-b` |
+  | F-738 | **F-745** | the KB write rules are enforced on the MCP surface, not the route | `fix/r1-c` + `fix/r1-leftovers` *(folded)* |
+  | F-739 | **F-746** | `getBaseTree(headings)` reads every body on the page | `fix/r1-c` |
+  | F-739 | **F-747** | agent templates have no optimistic concurrency — ✅ RESOLVED | `fix/r1-leftovers` + `fix/r1-d-consistency` *(folded)* |
+  | F-738 | **F-748** | the `#`-heading path leaf is not entity-decoded | `fix/r1-d-bugs` |
+  | F-739 | **F-749** | `dopl_kb(op="grant")` cannot revoke | `fix/r1-d-bugs` |
+  | F-738 | **F-750** | `to` advertises an agent handle for `op="manage"` | `fix/r1-d-consistency` |
+
+  ⚠ **EVERY REFERENCE MOVED WITH ITS ENTRY**, including 16 files of code, tests and committed
+  `dist/` that cite `F-747` (the template CAS was the only renumbered finding with references
+  outside this log). `check-doc-refs.mjs` catches a DANGLING id and never a COLLIDING one, which
+  is why this happened twice and why the re-derive command above is the only defence.
+  **The next free id is `F-751`.**
+
 - **Renumber on the BRANCH, before the merge, in one commit that also moves every reference** —
   `docs/`, code comments, and any test that pins an id. `scripts/check-doc-refs.mjs` resolves
   `F-NNN` refs in the SOURCE trees too, so a half-done renumber fails the gate rather than rotting.
@@ -4509,7 +4541,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   one: `packages/mcp-server/src/tools/agent-ops-write.ts › opUpdate` answers *"op=\"update\" does not
   take `shelf`, and nothing was changed … the copy and the original are STRANGERS"*, and
   `› knowledge-ops-base-writes.ts › opUpdateBase` carries the twin for bases. `home_scoped` is still set at
-  `› knowledge-ops-base-write.ts › opUpdateBase` carries the twin for bases. `home_scoped` is still set at
+  `› knowledge-ops-base-writes.ts › opUpdateBase` carries the twin for bases. `home_scoped` is still set at
   create and never written again, and that is now a stated rule with a refusal behind it. ⚠ **The
   refusal is what stops a silent 2xx over a move that never happened**, which is why it counts as a
   resolution and an unaccepted field would not.
@@ -7133,7 +7165,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 ### F-441 — `dopl_kb(op="set_visibility")` is now gated by the server and cannot preview: its registrar arm passes no caller id and no `confirm_token` (2026-09-02)
 
 - Location: `packages/mcp-server/src/tools/knowledge.ts` — the `case "set_visibility"` arm calls `opSetVisibility(client, args.base, args.visibility)`; the handler is `packages/mcp-server/src/tools/knowledge-ops-base-writes.ts › opSetVisibility`. The gate it now meets is `src/features/workspaces/server/shared-publish.ts › assertSharedPublishAcknowledged`, reached through `knowledge/server/service-base-writes.ts › updateBase`.
-- Location: `packages/mcp-server/src/tools/knowledge.ts` — the `case "set_visibility"` arm calls `opSetVisibility(client, args.base, args.visibility)`; the handler is `packages/mcp-server/src/tools/knowledge-ops-base-write.ts › opSetVisibility`. The gate it now meets is `src/features/workspaces/server/shared-publish.ts › assertSharedPublishAcknowledged`, reached through `knowledge/server/service-base-writes.ts › updateBase`.
+- Location: `packages/mcp-server/src/tools/knowledge.ts` — the `case "set_visibility"` arm calls `opSetVisibility(client, args.base, args.visibility)`; the handler is `packages/mcp-server/src/tools/knowledge-ops-base-writes.ts › opSetVisibility`. The gate it now meets is `src/features/workspaces/server/shared-publish.ts › assertSharedPublishAcknowledged`, reached through `knowledge/server/service-base-writes.ts › updateBase`.
 - Found during: A11 (G16), wiring the confirm class's spent token to the server's `acknowledgeShared` precondition.
 - Severity: an ops gap opened BY a fix, in the safe direction — a refusal where there used to be a silent publish — but not the designed end state.
 - **The shape.** G16 puts the precondition on the knowledge UPDATE path, which is the door `set_visibility` uses. `create_base` can satisfy it because its registrar arm hands the handler `caller.userId` and `args.confirm_token`, so `confirmGate` can preview and mint. This arm hands over neither, so the handler cannot run the gate at all: inside a `kind='link'` container with a peer, an agent publishing a base it created gets a 400 it has no argument to answer.
@@ -10245,7 +10277,7 @@ The claim had been restated in five places from one sentence, which is how it su
 - ⚠ **IT IS A LABEL AND IT GATES NOTHING, WHICH IS THE ONLY REASON THIS SHIPPED AS-IS.** Both failure directions cost a wrong word in a transcript line and a wrong mark on a `dopl_status` row; neither changes who is woken, who is notified, or what anybody may read. Widening `ChannelContext` for a cosmetic field mid-wave was the larger risk.
 - Proposed resolution: carry `containerId` on `ChannelContext` (built in `service-shared.ts › buildChannelContext` from the same auth record that already supplies `credentialSubjectUserId`), then make `isExternalSessionAuthor` OR the two marks exactly as `isDesktopRun` does. ⚠ Land it with a test for the script-sending-`desktop-session` case, which is the direction that currently escapes.
 - Status: OPEN.
-### F-738 — `chats.pinned` survived the pinning purge, and nothing has ruled on it (2026-09-18)
+### F-742 — `chats.pinned` survived the pinning purge, and nothing has ruled on it (2026-09-18)
 
 - Samuel's ruling removed pinning — *"let's remove pinning for now, remove the code for pinning stuff. lioke kbs. ill reimplement it down the line."* — and **`lioke kbs` is what scoped the change**: the KNOWLEDGE pins (T81) are deleted whole (§10's removal bullet, `20261016120000_drop_knowledge_pinned.sql`). A SECOND, unrelated `pinned` column was left standing, deliberately and without a decision behind it.
 - ⚠ **WHAT IS STILL LIVE**: `chats.pinned` — a boolean on the chat archive, written by `dopl_chats(op="update", pinned=…)` (`packages/mcp-server/src/tools/chats.ts`, whose `op=update` describe still reads *"pin/unpin the chat"*) through `src/features/chats/server/service-writes.ts`, and rendered in the chats list. It is a per-row ORDERING flag on an archive: it decides where a chat sorts, reaches no prompt, and costs nothing per agent launch.
@@ -10254,7 +10286,7 @@ The claim had been restated in five places from one sentence, which is how it su
 - 🔒 **THE REMOVAL GATE DOES NOT COVER EITHER OF THEM, ON PURPOSE.** `src/features/knowledge/pinning-stays-removed.test.ts` matches the deleted feature's IDENTIFIERS and its endpoint, never the bare word `pin` — a gate that fired on `chats.pinned` or on a suite saying a property is "pinned here" would be red on arrival and would get deleted, which is the failure mode `b10-no-derived-default.test.ts`'s header warns about. Its migration half asserts `chats.pinned` **still exists**, positively, so a later sweep reading `20261016120000_drop_knowledge_pinned.sql` cannot take it by mistake.
 - Proposed resolution: **ask Samuel one question** — does "remove pinning" reach the chat-list pin, or was it the knowledge force-feed only? If it reaches, the removal is small and the same shape (op field + describe, service arm, column drop, extend the gate's pattern); if not, this entry closes as a deliberate scope boundary and the word keeps two meanings in the codebase.
 - Status: open — needs a ruling, not a fix.
-### F-738 — the KB idempotency migration is WRITTEN, NOT APPLIED, and the feature is silently absent until it is (2026-09-18)
+### F-743 — the KB idempotency migration is WRITTEN, NOT APPLIED, and the feature is silently absent until it is (2026-09-18)
 
 - Location: `supabase/migrations/20261014120000_knowledge_client_write_id.sql` (the two columns and the two partial unique indexes); readers are `src/features/knowledge/server/repository-entries.ts › findEntryByClientWriteId` and `repository-bases.ts › findBaseByClientWriteId`.
 - Found during: Round 1 fix wave, batch B (S53). Filed BY the change that introduced it, per §12's rule that deploy state is a measurement rather than a claim.
@@ -10263,7 +10295,7 @@ The claim had been restated in five places from one sentence, which is how it su
 - Proposed resolution: apply `20261014120000` before the release that ships this MCP surface, and re-derive the applied set with `supabase migration list` rather than recording an answer here. If it cannot be applied in the same release, gate `client_write_id` off the published schema rather than shipping a param whose promise the database cannot keep.
 - Status: open (deploy action, not code).
 
-### F-739 — `knowledge_entries` holds only the MOST RECENT `client_write_id`, so an older key's retry writes again (2026-09-18)
+### F-744 — `knowledge_entries` holds only the MOST RECENT `client_write_id`, so an older key's retry writes again (2026-09-18)
 
 - Location: `src/features/knowledge/server/service-paths.ts › writeFileByPath` (the probe and the stamp), `repository-entries.ts › UpdateEntryPatch.clientWriteId`.
 - Found during: the same change (S53), recorded rather than designed around.
@@ -10271,7 +10303,7 @@ The claim had been restated in five places from one sentence, which is how it su
 - ⚠ **The alternative was measured and not built**: a side table of `(base, key, entry_id, written_at)` with a TTL would make every key permanent, at the cost of a second write per entry write and a reaper nobody has asked for. The channel lane has the same bound for the same reason (`channel_messages.client_msg_id` is a column on the row, not a log).
 - Proposed resolution: none needed unless a caller is observed reusing keys across sessions. If it is, the fix is the side table plus a retention decision, not a wider index.
 - Status: open (bound recorded; not a defect).
-### F-738 — the KB write rules are enforced on the MCP surface, not on the route (2026-09-18) — ⚠ HUMAN HALF BUILT, route half still open
+### F-745 — the KB write rules are enforced on the MCP surface, not on the route (2026-09-18) — ⚠ HUMAN HALF BUILT, route half still open
 
 - Location: `packages/mcp-server/src/tools/knowledge-write-rules.ts` (the rules), called from `packages/mcp-server/src/tools/knowledge-ops-write.ts › opWriteFile`. The un-fenced half is `src/features/knowledge/server/service-paths.ts › writeFileByPath`, which accepts an agent-authored write with no excerpt and a long unsectioned body exactly as it always has.
 - Found during: Round 1 fix wave, Batch C, implementing Samuel's ruling on the fix list's Q1 (option A).
@@ -10286,7 +10318,7 @@ The claim had been restated in five places from one sentence, which is how it su
 - ✅ **AND THE MERGE OBLIGATION IS DISCHARGED (2026-09-19).** `excerptRefusal` / `unsectionedRefusal` derived these two questions themselves on the refusal branch; they now call `kbSummaryFault` / `kbBodyIsUnsectioned` and keep only their agent-facing sentences, so the byte-pin guards the one predicate all three surfaces ask. The local `fold` and `ANY_HEADING_RE` in `knowledge-write-rules.ts` are deleted — a second predicate is the failure this finding is about.
 - Status: open (human half built 2026-09-18, predicates unified 2026-09-19; the ROUTE refusal and the credential→surface verification remain).
 
-### F-739 — `getBaseTree(headings)` reads every body on the page to derive heading names (2026-09-18)
+### F-746 — `getBaseTree(headings)` reads every body on the page to derive heading names (2026-09-18)
 
 - Location: `src/features/knowledge/server/service-folders.ts › getBaseTree`, reached by `GET /api/knowledge/bases/[baseId]/tree?headings=1` and sent by `packages/mcp-server/src/tools/knowledge-ops-read.ts › opGetTree`.
 - Found during: the same batch, implementing Wave 4 a1 (heading lists on tree rows).
@@ -10295,7 +10327,7 @@ The claim had been restated in five places from one sentence, which is how it su
 - ⚠ **THE CHEAP FORM WAS MEASURED AND REFUSED, TWICE.** A stored `section_count` / heading list is a schema change plus a backfill whose SQL would have to agree with `shared/knowledge/markdown-sections.ts` about code fences, YAML frontmatter and setext underlines — a drift seam for a hint. INVARIANTS §10 records the same refusal from 2026-09-03.
 - Proposed resolution: leave it until there is a measurement. If a second caller appears, the next cheapest step is a server-side per-entry cache keyed on `(entry_id, updated_at)` rather than a stored column — it needs no backfill and cannot disagree with the parser, because it stores the parser's own output.
 - Status: open.
-### F-739 — agent templates have no optimistic concurrency anywhere on the write path (2026-09-18) — ✅ RESOLVED 2026-09-18
+### F-747 — agent templates have no optimistic concurrency anywhere on the write path (2026-09-18) — ✅ RESOLVED 2026-09-18
 
 - Location: `src/features/agent-templates/server/repository.ts › updateTemplateRow`, `› service-writes.ts › updateTemplate`, `src/app/api/agent-templates/[templateId]/route.ts`, `packages/dopl-client/src/agent-templates.ts › updateAgentTemplate`, `packages/mcp-server/src/tools/agent.ts` (`expected_version`, `force`) and `› agent-ops-write.ts › opUpdate`.
 - Filed on `fix/r1-d-consistency` during the Round 1 fix wave (study S46 / D-c1); built on `fix/r1-leftovers` the same day.
@@ -10306,7 +10338,7 @@ The claim had been restated in five places from one sentence, which is how it su
 - ⚠ **IT COST +302 SERVED CHARS**, not the ~150 the finding estimated, because `force` was mirrored alongside `expected_version` rather than leaving the strict arm with no escape. `SCHEMA_CEILINGS.dopl_agent` 5,133 → 5,435 and the served total 48,791 → 49,093, recorded with the argument in `tool-budget.test.ts` — and recorded rather than funded: the only restatement left inside that shape is `confirm_token`'s home-channel clause, which is character-identical to `knowledge.ts`'s, so trimming it here would buy 72 chars by making two tools disagree about one gate.
 - ⚠ **NO MIGRATION** — `agent_templates_touch_updated_at` already stamps the column (§12), which is also why the repository still never writes `updated_at` by hand.
 - Status: ✅ RESOLVED.
-### F-738 — the `#`-heading path LEAF is not entity-decoded, so a decoded title can sit under an escaped address (2026-09-18)
+### F-748 — the `#`-heading path LEAF is not entity-decoded, so a decoded title can sit under an escaped address (2026-09-18)
 
 - Location: `src/features/knowledge/schema.ts › EntryTitleSchema` (the decode) vs `src/features/knowledge/server/service-paths.ts › writeFileByPath` (the leaf default and `resolvePath`).
 - Found during: the round-1 fix wave, batch D-bugs, closing S35 (titles stored HTML-escaped with no signal).
@@ -10316,7 +10348,7 @@ The claim had been restated in five places from one sentence, which is how it su
 - Proposed resolution: either decode the leaf AND make `resolvePath` decode its argument symmetrically (one rule, both ends — the shape `normalizeQuery` already has for headings), or state the asymmetry in `path`'s own `.describe()`. The first is correct and costs a path-matching change that wants its own suite; the second is a served-description spend and needs the budget.
 - Status: OPEN — no behaviour is wrong, and the fix is a choice between two consistent worlds.
 
-### F-739 — `dopl_kb(op="grant")` cannot revoke, so the new home-channel revoke fence is unreachable over MCP (2026-09-18)
+### F-749 — `dopl_kb(op="grant")` cannot revoke, so the new home-channel revoke fence is unreachable over MCP (2026-09-18)
 
 - Location: `packages/mcp-server/src/tools/grant.ts › GRANT_LEVEL_VALUES` (`visible | agent_only | read | edit` — no `none`) vs `src/features/knowledge/server/service-channel-grants.ts › assertRevokeLeavesNoOrphan`.
 - Found during: the round-1 fix wave, batch D-bugs, closing S2's residual (the create fence had no revoke twin).
@@ -10325,7 +10357,7 @@ The claim had been restated in five places from one sentence, which is how it su
 - ⚠ **IT IS ADJACENT TO Q2 (pin/unpin over MCP) AND SHOULD BE RULED WITH IT** — both are "the op list implies a capability the surface refuses", and Samuel has parked Q2.
 - Proposed resolution: ask Samuel. Either publish `none` on `op="grant"` (and add the refusal's mapping arm in the same change), or say in the op's own text that a grant is not revocable from here and name the surface that is.
 - Status: OPEN — needs Samuel's word, and deliberately not built (the wave's brief leaves clean seams for parked questions).
-### F-738 — `to` advertises an agent HANDLE for `op="manage"`, and that lane cannot resolve one (2026-09-18)
+### F-750 — `to` advertises an agent HANDLE for `op="manage"`, and that lane cannot resolve one (2026-09-18)
 
 Found while splitting `to`'s three meanings into three lines (S13) and **not fixed there**, because the
 fix is in the manage lane rather than in the text.
@@ -10343,27 +10375,3 @@ send lane has (`main/agent-handles.js` already does it on the desktop side), or 
 name handle on `op="manage"` by NAME, with a line saying an id is required there and where to read
 one. Today it is an opaque `-32602`. ⚠ It is S51's residual in the study, whose `wait_ms` half is
 already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not carry that half forward.
-
-### F-739 — agent templates have no optimistic concurrency anywhere on the write path (2026-09-18)
-
-S46 / D-c1 reads as a wording fix ("`expected_version` on template update, matching the KB contract")
-and is not one: **nothing in any of the four layers implements it.** `grep -n 'expectedVersion' src/features/agent-templates/ packages/dopl-client/src/agent-template-types.ts` is
-empty; `repository.ts › updateTemplateRow` issues a bare PostgREST update with no precondition, the
-route carries no `X-Updated-At`, and `client-agent-templates.ts` has no argument to send one. The KB
-lane's contract is a real compare-and-swap (`packages/dopl-client/src/knowledge.ts › writeKbFileByPath`,
-tri-state on `expectedVersion`), and it is the only thing "matching the KB contract" can mean.
-
-⚠ **THE CHEAP VERSION IS WORSE THAN NOTHING AND IS WHY THIS IS FILED RATHER THAN SHIPPED.**
-`service-writes.ts › updateTemplate` already reads `existing` through `getTemplateForWrite`, so a
-service-level `existing.updatedAt !== expected → 412` is four lines — and it is CHECK-THEN-ACT, not a
-CAS: a write landing between the read and the update passes it. Shipping that under the name
-`expected_version`, on a surface where the KB lane's identical argument IS atomic, teaches one
-contract and honours two.
-
-**The shape of the real fix:** `updateTemplateRow` takes an optional `expectedUpdatedAt` and adds
-`.eq("updated_at", expected)`; a zero-row result becomes `AgentTemplateConflictError` → 412 in
-`http-mapping.ts`; the client sends `X-Updated-At` exactly as the KB lane does; `dopl_agent` gains
-`expected_version` and maps the 412 with the remedy sentence `knowledge-ops-write.ts › opWriteFile`
-already words. ⚠ **It costs roughly 150 pushed chars on `SCHEMA_CEILINGS.dopl_agent`** and needs
-funding in the same change — no migration, `agent_templates_touch_updated_at` already stamps the
-column (INVARIANTS §12).

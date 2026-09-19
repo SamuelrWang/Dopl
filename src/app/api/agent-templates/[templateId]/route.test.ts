@@ -102,7 +102,7 @@ function req(method: string, body?: unknown, expectedVersion?: string): NextRequ
           body: JSON.stringify(body),
           headers: {
             "content-type": "application/json",
-            // 🔒 F-739's precondition, when a case states one.
+            // 🔒 F-747's precondition, when a case states one.
             ...(expectedVersion ? { "x-updated-at": expectedVersion } : {}),
           },
         }),
@@ -159,7 +159,7 @@ describe("PATCH", () => {
   it("passes the parsed patch through and answers `{ template }`", async () => {
     const res = await PATCH(req("PATCH", { name: "Renamed" }), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
-    // ⚠ FOUR ARGUMENTS SINCE F-739, and the fourth is `undefined` here: this
+    // ⚠ FOUR ARGUMENTS SINCE F-747, and the fourth is `undefined` here: this
     // request sends no `X-Updated-At`, which is last-writer-wins and is exactly
     // what an older bundled client still does.
     expect(mockUpdate).toHaveBeenCalledWith(
@@ -170,7 +170,7 @@ describe("PATCH", () => {
     );
   });
 
-  /** 🔒 F-739 — the header is the precondition, and the route only relays it. */
+  /** 🔒 F-747 — the header is the precondition, and the route only relays it. */
   it("relays `X-Updated-At` as the update's expected version", async () => {
     const res = await PATCH(
       req("PATCH", { name: "Renamed" }, "2026-01-01T00:00:00Z"),

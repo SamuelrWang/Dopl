@@ -1,5 +1,5 @@
 /**
- * `updateTemplate`'s OPTIMISTIC-CONCURRENCY arm (F-739, 2026-09-18).
+ * `updateTemplate`'s OPTIMISTIC-CONCURRENCY arm (F-747, 2026-09-18).
  *
  * ⚠ **THE SERVICE'S JOB HERE IS THE THREE THINGS THE REPOSITORY CANNOT DO**:
  * hand the version down as a precondition rather than comparing it to the row it
