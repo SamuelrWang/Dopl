@@ -121,7 +121,31 @@ export function attributionName({
  * carries the elevated shadow, and this chip must read as a label, not a card.
  * ⚠ Lower-case "agent", one word, never pluralized — it is a type marker, not a title.
  */
-export function AgentChip({ paint }: { paint?: string | null }) {
+export function AgentChip({
+  paint,
+  external = false,
+}: {
+  paint?: string | null;
+  /**
+   * **AN OUTSIDE SESSION WROTE THIS ROW** (2026-09-18, Samuel's ruling on the
+   * external-session group tag) — a Claude Code / Codex / Cursor run on the
+   * operator's own token, which this product did not spawn.
+   *
+   * ⚠ **IT REPLACES THE WORD, IT DOES NOT QUALIFY IT.** `agent · outside
+   * session` reads as two facts about one row where there is only one, and the
+   * retired `Agent · <id>` chip is this file's own precedent against rebuilding
+   * that idiom (see `agent-attribution.test.tsx`, which records the
+   * screen-reader argument for killing it).
+   *
+   * ⚠ **IT IS ALWAYS THE GREY FACE, AND THAT FOLLOWS FROM THE EXISTING RULE
+   * RATHER THAN BEING A NEW ONE.** The colour says WHICH agent, drawn from the
+   * channel's sixteen-key bank; an outside session holds no `channel_sessions`
+   * row and therefore no key, exactly like the "Desktop agent" post the docblock
+   * below already describes. So `paint` is ignored here — there is nothing for
+   * it to be.
+   */
+  external?: boolean;
+}) {
   /**
    * 🔒 **THE CHIP WEARS THE AGENT'S OWN IDENTITY COLOUR (Samuel, 2026-09-15):
    * background = that agent's assigned `agent-01…16` key, the word in white.**
@@ -170,6 +194,15 @@ export function AgentChip({ paint }: { paint?: string | null }) {
    */
   const shape =
     "inline-flex h-[16px] shrink-0 items-center justify-center rounded-full px-1.5 text-micro leading-none";
+  // ⚠ BEFORE the paint branch: an outside session has no colour to wear, so
+  // there is no arm below for it to fall into.
+  if (external) {
+    return (
+      <span className={cn(shape, "bg-bg-inset text-text-muted")}>
+        outside session
+      </span>
+    );
+  }
   if (!paint) {
     return <span className={cn(shape, "bg-bg-inset text-text-muted")}>agent</span>;
   }
@@ -209,6 +242,10 @@ export function AttributionPill({
   author,
   authorLabel,
   agent,
+  // ⚠ DEFAULTED, AND THE DEFAULT IS LOAD-BEARING: without the destructure the
+  // identifier resolves to the DOM's global `external`, which typechecks as a
+  // truthy object and would mark EVERY agent row an outside session.
+  external = false,
   agentId = null,
   agentName = null,
   agentPaint = null,
@@ -219,6 +256,9 @@ export function AttributionPill({
 }: {
   author: AvatarPerson;
   authorLabel: string;
+  /** An OUTSIDE SESSION wrote it — narrows {@link agent}, never a sibling.
+   *  See {@link AgentChip}'s own prop for why it replaces the word. */
+  external?: boolean;
   /** Display claim off `authorKind` — never a side, never an identity. */
   agent: boolean;
   /** WHICH agent, when the writer stamped it; `null` is "cannot say". */
@@ -343,7 +383,7 @@ export function AttributionPill({
             keeps the chip on the name's own line; the flex row wraps if a long rename must. */}
         <span className="flex min-w-0 flex-wrap items-center gap-1.5">
           <span className="wrap-anywhere text-body font-semibold leading-tight">{label}</span>
-          {agent && <AgentChip paint={agentPaint} />}
+          {agent && <AgentChip paint={agentPaint} external={external} />}
         </span>
         <span className="text-micro leading-tight text-text-muted">{time}</span>
       </span>

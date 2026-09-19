@@ -17,6 +17,9 @@
  */
 
 import { mentionedUserIdsOf } from "../lib/mentions";
+// ⚠ ONE projection, shared with the server and the MCP renderer — see
+// `lib/desktop-handle.ts` for why this is not a DTO field.
+import { authorViewOf, desktopAddresseeOf } from "../lib/desktop-handle";
 // ⚠ THE `lib/` COPY, NOT A LOCAL ONE: the same module the SERVER's arm 3 reads,
 // so the tag this transcript faces and the agent the router woke are one answer.
 import { serverRoutedAgentIds } from "../lib/agent-post-stamp";
@@ -107,6 +110,12 @@ export interface MessageRow {
   side: MessageSide;
   /** Display claim only: renders the "Agent" chip beside the author name. */
   agent: boolean;
+  /** An OUTSIDE SESSION wrote it. ⚠ A NARROWING of {@link MessageRow.agent},
+   *  never a sibling — both are true and the chip shows the specific word. */
+  external: boolean;
+  /** It was addressed `to=@desktop`. ⚠ A RECIPIENT, unrelated to `external`
+   *  (which is about the AUTHOR); a row can be either, both or neither. */
+  routedDesktop: boolean;
   /**
    * WHICH of the author's agents typed this, when the writer said so — the
    * stamped per-instance id off `client_msg_id`
@@ -301,6 +310,10 @@ function toMessageRow(
     // DISPLAY CLAIM (INVARIANTS §5). The chip says "an agent typed this"; the
     // SIDE above still comes from the server-stamped author id.
     agent: message.authorKind === "agent",
+    // OUTSIDE SESSION (2026-09-18). ⚠ Both DERIVED from server-stamped metadata,
+    // so no DTO field and no fixture moves. `lib/desktop-handle.ts`.
+    external: authorViewOf(message) === "external",
+    routedDesktop: desktopAddresseeOf(message) !== null,
     // ⚠ ONLY ON AN AGENT ROW. A human post can carry any `client_msg_id` the
     // client chose, including one shaped like the stamp, and reading it here
     // unconditionally would let a caller hang an agent id off their own words.
