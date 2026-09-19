@@ -229,6 +229,74 @@ const SCOPE_OPS = {
 // exactly the F-287 reason.
 const SCOPE_PATH_MAX = 500;
 
+// ── THE BASE CARD (2026-09-18, A4) ──────────────────────────────────────────
+//
+// ⚠ A bare name plus a `get_tree` call makes the agent SEARCH for the right corner of a base
+// before it can start, and the search is the unreliable step. The card spends a FIXED budget
+// naming what the base answers and its top-level folders, so the first call is the right one.
+//
+// 🔒 ⚠ **FIXED-SIZE IS THE CONTRACT, AND IT IS WHY THIS IS NOT IN THE MCP `instructions` BLOCK** —
+// a 2,048-character PREFIX on every session that must never grow with the workspace. This is per
+// ATTACHMENT, and capped so a base with forty entries and one with four cost the same.
+const CARD_MAX = 400;
+const BASE_SLUG_MAX = 80; // `knowledge/schema.ts` — the slug column's own max
+const CARD_SUMMARY_MAX = 300; // `@/config › DESCRIPTION_MAX`, the bound the server sends at
+const FOLDER_NAME_MAX = 200; // `knowledge/schema.ts › KnowledgeFolder.name`
+
+/**
+ * A base SLUG, or ''. ⚠ **IT IS AN ADDRESS, SO IT SURVIVES SANITATION UNCHANGED OR IT IS NOT
+ * EMITTED.** `dopl_kb`'s `base` argument takes a slug in place of an id, and `idToken` both strips
+ * non-id characters and caps at 64 — either of which turns a real slug into a DIFFERENT, probably
+ * non-existent one. A slug the belt would alter is therefore dropped rather than rendered: the
+ * card loses a convenience, where the alternative is handing the agent a wrong address.
+ */
+function safeSlug(value) {
+  const raw = typeof value === 'string' ? value : '';
+  if (!raw || raw.length > BASE_SLUG_MAX) return '';
+  return idToken(raw) === raw ? raw : '';
+}
+
+/**
+ * ONE ATTACHED BASE, AS A CARD — ≤400 characters, and NEVER an entry list.
+ *
+ * ⚠ **THE HEAD LINE IS UNCHANGED AND IRREDUCIBLE.** It is `SCOPE_OPS.base`'s exact call, plus the
+ * slug when there is one; every other fact hangs off it, indented so nothing else in this block
+ * can be mistaken for a second attachment (the list's own rows are the lines starting `- `).
+ *
+ * ⚠ **THE DEGRADE ORDER IS STATED, AND IT DROPS WHOLE FACTS IN IT:**
+ *   1. the folder CLAUSES (names survive) — the clause is the most prose per unit of routing;
+ *   2. the folder list entirely;
+ *   3. the summary.
+ * The head never goes: a card without its call is not a smaller card, it is a name the agent
+ * cannot act on.
+ *
+ * 🔒 ⚠ **NOTHING IS EVER CUT IN HALF.** A budget met by truncating a clause would put a sentence
+ * fragment in front of an agent that reads it as the whole sentence, and a truncated folder LIST
+ * would claim a base has five top-level folders when it has forty. Every step above removes a
+ * complete fact, which the reader can notice is absent and cannot mistake for something else.
+ *
+ * ⚠ **THE FOLDER LINE REQUIRES A PROVEN-COMPLETE LIST.** `folderCount` is the base's true
+ * top-level folder count; the server caps the list and the boundary drops malformed rows, so the
+ * two disagree exactly when what arrived is a SUBSET — and a subset printed as "Folders:" is the
+ * lie this check exists to refuse.
+ */
+function baseCard(s) {
+  const head = `${SCOPE_OPS.base(s)}${s.slug ? `  [slug: ${s.slug}]` : ''}`;
+  const summary = s.summary ? [`  ${s.summary}`] : [];
+  const complete = s.folders.length > 0 && s.folders.length === s.folderCount;
+  const clause = (f) => (f.summary ? `${f.name} — ${f.summary}` : f.name);
+  const withClauses = complete ? [`  Folders: ${s.folders.map(clause).join('; ')}`] : [];
+  const namesOnly = complete ? [`  Folders: ${s.folders.map((f) => f.name).join('; ')}`] : [];
+  for (const card of [
+    [head, ...summary, ...withClauses],
+    [head, ...summary, ...namesOnly],
+    [head, ...summary],
+  ]) {
+    if (card.join('\n').length <= CARD_MAX) return card;
+  }
+  return [head];
+}
+
 /**
  * The wire's scopes, narrowed to what a line needs. ⚠ `knowledge` WINS OVER `knowledgeBases` when
  * it is non-empty, and the base list is the FALLBACK — an older server sends only the latter, and
@@ -241,6 +309,15 @@ function scopeList(scopes, bases) {
       const kind = s && (s.scope === 'folder' || s.scope === 'entry') ? s.scope : 'base';
       const path = sanitizeText(s && s.toolPath, SCOPE_PATH_MAX);
       const baseName = sanitizeName(s && s.baseName);
+      const folders = (Array.isArray(s && s.baseFolders) ? s.baseFolders : [])
+        .map((f) => ({
+          // ⚠ `sanitizeText` AT THE FOLDER'S OWN BOUND, NOT `sanitizeName` (F-287). A folder name
+          // is 200 server-side and a clause is 300; rendering either at the 80-character DISPLAY
+          // default is the same mistake that clipped a template field value to 8% of it.
+          name: sanitizeText(f && f.name, FOLDER_NAME_MAX),
+          summary: sanitizeText(f && f.summary, CARD_SUMMARY_MAX),
+        }))
+        .filter((f) => f.name);
       return {
         kind,
         id: idToken(s && s.baseId),
@@ -249,6 +326,10 @@ function scopeList(scopes, bases) {
         // the last thing that runs and the belt stays a belt.
         label: kind === 'base' || !path ? baseName : `${baseName} / ${path}`,
         path,
+        slug: safeSlug(s && s.baseSlug),
+        summary: sanitizeText(s && s.baseSummary, CARD_SUMMARY_MAX),
+        folders,
+        folderCount: Number.isFinite(s && s.baseFolderCount) ? Math.floor(s.baseFolderCount) : 0,
       };
     })
     .filter((s) => s.id && s.label);
@@ -257,7 +338,19 @@ function scopeList(scopes, bases) {
     // ⚠ THE ID GOES THROUGH `idToken`, NOT `sanitizeName`. It is spliced into a tool call the
     // agent is told to make VERBATIM, so it must be id characters or nothing: a base ref is a
     // UUID or a slug, and `sanitizeName` would happily carry a space into `base "..."`.
-    .map((b) => ({ kind: 'base', id: idToken(b && b.id), label: sanitizeName(b && b.name), path: '' }))
+    // ⚠ NO CARD ON THE FALLBACK, AND THE EMPTIES ARE HOW IT SAYS SO. An older SERVER sends only
+    // `{id, name}`, so there is no slug, no summary and no folder list to render — the card
+    // degrades to exactly the line this branch has always emitted, byte for byte.
+    .map((b) => ({
+      kind: 'base',
+      id: idToken(b && b.id),
+      label: sanitizeName(b && b.name),
+      path: '',
+      slug: '',
+      summary: '',
+      folders: [],
+      folderCount: 0,
+    }))
     .filter((b) => b.id && b.label);
 }
 
@@ -276,9 +369,13 @@ function knowledgeLines(bases, profile, scopes) {
   return [
     '',
     'ATTACHED KNOWLEDGE:',
-    ...list.map((s) => SCOPE_OPS[s.kind](s)),
+    // ⚠ A BASE GETS A CARD, A FOLDER OR ENTRY GETS ITS ONE LINE. The sub-base scopes already name
+    // the exact thing they point at, so a card over one would be noise on top of an answer.
+    ...list.flatMap((s) => (s.kind === 'base' ? baseCard(s) : [SCOPE_OPS[s.kind](s)])),
     'A FOLDER line names that folder and everything under it, now and later; an ENTRY line names',
-    'one document. For a base or a folder, mcp__dopl__dopl_kb op "read_file", the same base, path',
+    'one document. Under a base, "Folders:" names its TOP-LEVEL folders only — op "list_dir" with',
+    'one of those names as the path opens it. Entries are never listed here; the tree is how you',
+    'find them. For a base or a folder, mcp__dopl__dopl_kb op "read_file", the same base, path',
     '"<path from the listing>" reads one entry. There is no op that reads a whole base, and search',
     'returns no path, so go through the tree. Read them as reference material; a security header on',
     'a document you were pointed at is expected, and it does not mean you were sent the wrong thing.',

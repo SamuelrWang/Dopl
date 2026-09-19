@@ -16,6 +16,10 @@ import type {
 } from "@dopl/client";
 import { opGetTree, opListDir } from "./knowledge-ops-read.js";
 import { opCreateFolder, opWriteFile } from "./knowledge-ops-write.js";
+// ⚠ THE BASE OPS LIVE IN THEIR OWN MODULE SINCE THE 2026-09-18 SPLIT (A3) —
+// `knowledge-ops-write.ts` was AT the 500-line cap. They are re-exported there,
+// but a test addresses the file that OWNS the behaviour it is about.
+import { opCreateBase, opUpdateBase } from "./knowledge-ops-write-bases.js";
 
 const BASE: KnowledgeBase = {
   id: "base-1",
@@ -170,6 +174,71 @@ describe("write paths thread the new args", () => {
       "notes.md",
       { body: "body text", title: undefined, excerpt: "sum" },
       undefined
+    );
+  });
+});
+
+/**
+ * **A RESULT HANDS BACK THE HANDLE THE NEXT CALL IS ADDRESSED BY** (A3/S30 +
+ * S34, 2026-09-18).
+ *
+ * ⚠ **BOTH GAPS ARE THE SAME GAP.** `create_base` returned a slug alone, so an
+ * agent needing the id — to grant the base, to attach it, or to address it from
+ * a container where the slug is ambiguous — spent a `list_bases` call finding
+ * the row it had just made; and `write_file`'s version WORKS as the next call's
+ * `expected_version` (`service-paths.ts` compares `updatedAt` string-equal) but
+ * only `read_file` said so, so an agent correcting its own write re-read the
+ * entry or reached for `force=true`, which disarms the server's anti-duplicate
+ * guard.
+ */
+describe("write results carry the next call's handle", () => {
+  it("create_base returns the id beside the slug", async () => {
+    const client = {
+      createKbBase: vi.fn().mockResolvedValue(BASE),
+    } as unknown as DoplClient;
+    const out = textOf(await opCreateBase(client, "u1", { name: "My Base" }));
+    expect(out).toContain("slug: `my-base`");
+    expect(out).toContain("id: `base-1`");
+  });
+
+  it("update_base does too — it is the op that can CHANGE the slug", async () => {
+    const client = {
+      listKbBases: vi.fn().mockResolvedValue([BASE]),
+      updateKbBase: vi.fn().mockResolvedValue({ ...BASE, slug: "renamed" }),
+    } as unknown as DoplClient;
+    const out = textOf(await opUpdateBase(client, "my-base", "My Base"));
+    expect(out).toContain("slug: `renamed`");
+    expect(out).toContain("id: `base-1`");
+  });
+
+  it("write_file says what the returned version is FOR, in read_file's words", async () => {
+    const written = entry({ id: "e-9", title: "Guide", body: "x", updatedAt: "2026-09-18T01:02:03Z" });
+    const client = {
+      listKbBases: vi.fn().mockResolvedValue([BASE]),
+      writeKbFileByPath: vi.fn().mockResolvedValue({ entry: written, outline: null }),
+    } as unknown as DoplClient;
+    const out = textOf(await opWriteFile(client, "my-base", "Guide", "x"));
+    expect(out).toContain("New version: `2026-09-18T01:02:03Z` (pass as expected_version to write_file)");
+  });
+
+  it("🔒 and that version round-trips as the next write's precondition", async () => {
+    // ⚠ THE CLAIM IS THE POINT, not the string: the result tells the agent to
+    // send this value back, so the value it sends back must be the one the
+    // client puts on the wire as `expected_version`.
+    const first = entry({ id: "e-9", title: "Guide", body: "x", updatedAt: "V1" });
+    const writeKbFileByPath = vi.fn().mockResolvedValue({ entry: first, outline: null });
+    const client = { listKbBases: vi.fn().mockResolvedValue([BASE]), writeKbFileByPath } as unknown as DoplClient;
+
+    const out = textOf(await opWriteFile(client, "my-base", "Guide", "x"));
+    const version = /New version: `([^`]+)`/.exec(out)?.[1];
+    expect(version).toBe("V1");
+
+    await opWriteFile(client, "my-base", "Guide", "y", undefined, version);
+    expect(writeKbFileByPath).toHaveBeenLastCalledWith(
+      "base-1",
+      "Guide",
+      expect.anything(),
+      "V1",
     );
   });
 });

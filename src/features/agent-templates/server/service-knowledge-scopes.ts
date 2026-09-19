@@ -1,13 +1,18 @@
 import "server-only";
+import { DESCRIPTION_MAX } from "@/config";
 import type {
   AgentTemplateContext,
+  TemplateKnowledgeFolderBrief,
   TemplateKnowledgeRef,
   TemplateKnowledgeScope,
 } from "../types";
 import { refKey, scopeKey } from "../lib/knowledge-scopes";
 import { TemplateKnowledgeBaseNotFoundError } from "./errors";
 import * as repo from "./repository";
-import { resolveVisibleKnowledgeBases } from "./service-shared";
+import {
+  resolveVisibleKnowledgeBases,
+  type VisibleKnowledgeBase,
+} from "./service-shared";
 
 /**
  * SCOPE RESOLUTION — a set of `{baseId, scope, folderId?, entryId?}` in, a set
@@ -39,9 +44,35 @@ import { resolveVisibleKnowledgeBases } from "./service-shared";
  * closed here; nothing in this file may be read as enforcing it.
  */
 
+/**
+ * ── THE BASE CARD'S TWO BOUNDS (2026-09-18, A4) ────────────────────────────
+ *
+ * 🔒 ⚠ **BOTH ARE ALL-OR-NOTHING, NEVER A SLICE.** The desktop renders the card
+ * at a hard 400 characters per base and degrades by dropping WHOLE FACTS, so a
+ * fact arriving already cut in half would defeat the one rule that makes the
+ * card trustworthy: half a clause read as the whole clause is wrong in a way
+ * the agent cannot detect, where a missing clause is merely missing.
+ */
+const CARD_SUMMARY_MAX = DESCRIPTION_MAX;
+
+/**
+ * ⚠ **AND THE CAP IS SAFE ONLY BECAUSE `baseFolderCount` TRAVELS BESIDE IT.**
+ * Fifty short folder names fit inside 400 characters, so a silent truncation
+ * here would render as a COMPLETE list of a base that has more; the renderer
+ * compares the two and drops the line whenever they disagree.
+ */
+const MAX_CARD_FOLDERS = 50;
+
 /** Query count: at most THREE beyond the base resolution, and flat in the number
  *  of scopes — bases, then every live folder of the bases involved, then the
- *  named entries. */
+ *  named entries.
+ *
+ *  ⚠ **THE FOLDER READ NOW ALSO SERVES WHOLE-BASE SCOPES (2026-09-18, A4)**, so
+ *  a template attaching only whole bases pays ONE query it did not pay before —
+ *  and a template with any sub-base scope pays exactly what it already did, the
+ *  base ids being unioned into the one call. That query is the card's whole
+ *  cost: `slug` and `description` ride the access row, and the READ-THIS-FIRST
+ *  index pointer was DROPPED rather than bought with a second one. */
 export async function resolveVisibleKnowledgeScopes(
   ctx: AgentTemplateContext,
   scopes: ReadonlyArray<TemplateKnowledgeScope>
@@ -55,41 +86,52 @@ export async function resolveVisibleKnowledgeScopes(
   // may not see this base" with "this base has no name" — and the second is a
   // display defect, never a reason to drop an attachment the operator made.
   const visibleBaseIds = new Set(visibleBases.map((b) => b.id));
-  const baseName = new Map(visibleBases.map((b) => [b.id, b.name ?? ""]));
+  const baseById = new Map(visibleBases.map((b) => [b.id, b]));
 
   // ⚠ ONLY THE BASES THAT SURVIVED. Reading folders of a base the caller cannot
   // see would be a probe whose result we would then have to remember to discard.
-  const subBaseScopes = scopes.filter(
-    (s) => s.scope !== "base" && visibleBaseIds.has(s.baseId)
-  );
-  const needsTree = subBaseScopes.length > 0;
+  const visibleScopes = scopes.filter((s) => visibleBaseIds.has(s.baseId));
+  const entryIds = visibleScopes
+    .filter((s): s is Extract<TemplateKnowledgeScope, { scope: "entry" }> =>
+      s.scope === "entry"
+    )
+    .map((s) => s.entryId);
+  // ⚠ **ONE FOLDER READ, TWO JOBS.** A sub-base scope needs the ancestor chain
+  // its path is walked from; a whole-base scope needs that base's TOP-LEVEL
+  // folders for its card. Both are "every live folder of these bases", so the
+  // base ids are unioned into the call that already existed rather than a
+  // second one being added beside it.
+  const folderBaseIds = [
+    ...new Set(visibleScopes.map((s) => s.baseId)),
+  ];
   const [folders, entries] = await Promise.all([
-    needsTree
-      ? repo.listLiveFoldersForBases(
-          ctx.workspaceId,
-          [...new Set(subBaseScopes.map((s) => s.baseId))]
-        )
+    folderBaseIds.length > 0
+      ? repo.listLiveFoldersForBases(ctx.workspaceId, folderBaseIds)
       : Promise.resolve([]),
-    needsTree
-      ? repo.listLiveEntryRows(
-          ctx.workspaceId,
-          subBaseScopes
-            .filter((s): s is Extract<TemplateKnowledgeScope, { scope: "entry" }> =>
-              s.scope === "entry"
-            )
-            .map((s) => s.entryId)
-        )
+    entryIds.length > 0
+      ? repo.listLiveEntryRows(ctx.workspaceId, entryIds)
       : Promise.resolve([]),
   ]);
   const folderById = new Map(folders.map((f) => [f.id, f]));
   const entryById = new Map(entries.map((e) => [e.id, e]));
+  const rootFolders = rootFoldersByBase(folders);
 
   const out: TemplateKnowledgeRef[] = [];
   for (const scope of scopes) {
     if (!visibleBaseIds.has(scope.baseId)) continue;
-    const base = baseName.get(scope.baseId) ?? "";
+    const baseRow = baseById.get(scope.baseId);
+    const base = baseRow?.name ?? "";
     if (scope.scope === "base") {
-      out.push({ baseId: scope.baseId, baseName: base, scope: "base", path: base });
+      out.push({
+        baseId: scope.baseId,
+        baseName: base,
+        scope: "base",
+        path: base,
+        // ⚠ THE CARD IS BASE-SCOPE ONLY. A folder or entry scope already names
+        // the exact thing it points at; a card over it would be noise on top of
+        // an answer, and noise is how the useful line stops being read.
+        ...baseCard(baseRow, rootFolders.get(scope.baseId) ?? []),
+      });
       continue;
     }
     if (scope.scope === "folder") {
@@ -128,6 +170,77 @@ export async function resolveVisibleKnowledgeScopes(
     });
   }
   return out;
+}
+
+/**
+ * The TOP-LEVEL folders of each base, in read order, keyed by base.
+ *
+ * ⚠ **`parentId === null` IS THE WHOLE TEST, AND IT IS NOT A DEPTH BUDGET.** A
+ * card names where to start looking; the subtree under a folder is what
+ * `get_tree` and `list_dir` are for. Recursing here is how a fixed-size fact
+ * becomes a function of how big the base got — the exact thing the ≤400-char
+ * rule exists to forbid.
+ */
+function rootFoldersByBase(
+  folders: repo.KnowledgeFolderRow[]
+): Map<string, repo.KnowledgeFolderRow[]> {
+  const byBase = new Map<string, repo.KnowledgeFolderRow[]>();
+  for (const folder of folders) {
+    if (folder.parentId !== null) continue;
+    const list = byBase.get(folder.knowledgeBaseId);
+    if (list) list.push(folder);
+    else byBase.set(folder.knowledgeBaseId, [folder]);
+  }
+  return byBase;
+}
+
+/**
+ * The four CARD facts for one whole-base attachment (2026-09-18, A4) — name,
+ * slug, what the base answers, and its top-level folders with a clause each.
+ *
+ * 🔒 ⚠ **NO ENTRY REACHES THIS FUNCTION, AT ANY DEPTH, AND THAT IS STRUCTURAL
+ * RATHER THAN A RULE SOMEONE REMEMBERS.** It is handed base row + folder rows
+ * and nothing else, so "a base with forty entries renders a card listing zero
+ * of them" is not a behaviour to test for so much as a shape that cannot
+ * express the alternative.
+ *
+ * ⚠ **A SUMMARY LONGER THAN A CARD IS NOT A SUMMARY.** `description` is bounded
+ * at 2000 by its own editor and a card spends 400 on EVERYTHING, so carrying
+ * the long ones would guarantee the renderer dropped them — and slicing one
+ * here would put a half-sentence on the wire that reads like a whole one.
+ * Omitted whole, at {@link CARD_SUMMARY_MAX}, on both this key and each folder
+ * clause.
+ *
+ * ⚠ `baseFolders` / `baseFolderCount` ARE EMITTED EVEN WHEN THE BASE HAS NO
+ * FOLDERS — a DECIDED ZERO, the same argument `service-knowledge-decoration.ts`
+ * makes for its own: a base that was read and has none must not be
+ * indistinguishable from a base nobody read.
+ */
+function baseCard(
+  base: VisibleKnowledgeBase | undefined,
+  roots: repo.KnowledgeFolderRow[]
+): Partial<TemplateKnowledgeRef> {
+  if (!base) return {};
+  const summary = base.description ?? "";
+  const folders: TemplateKnowledgeFolderBrief[] = roots
+    .slice(0, MAX_CARD_FOLDERS)
+    .map((folder) => {
+      const clause = folder.description ?? "";
+      return clause && clause.length <= CARD_SUMMARY_MAX
+        ? { name: folder.name, summary: clause }
+        : { name: folder.name };
+    });
+  return {
+    ...(base.slug ? { baseSlug: base.slug } : {}),
+    ...(summary && summary.length <= CARD_SUMMARY_MAX
+      ? { baseSummary: summary }
+      : {}),
+    baseFolders: folders,
+    // ⚠ THE TRUE TOTAL, NOT `folders.length`. They differ exactly when the cap
+    // bit, and that difference is the only thing standing between a capped list
+    // and a confident wrong claim about the base's shape.
+    baseFolderCount: roots.length,
+  };
 }
 
 /**

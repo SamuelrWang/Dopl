@@ -337,3 +337,88 @@ describe("folder and entry scopes", () => {
     expect(mockRepo.listLiveFoldersForBases).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * **THE ATTACHED-BASE CARD** (A4, 2026-09-18) — the four facts a `scope: "base"`
+ * ref now carries so a role block can name a base well enough to open the right
+ * thing without a `get_tree`-and-guess round trip.
+ *
+ * ⚠ **THE VIEWER FILTER IS UNCHANGED AND IS ASSERTED HERE TOO.** The card is
+ * more detail about a base, so the case that matters most is the one where the
+ * base is not visible: nothing about it may appear, and the disclosure stays the
+ * bare COUNT this file's other half pins.
+ */
+describe("the base card", () => {
+  const folder = (id: string, name: string, description: string | null = null) => ({
+    id,
+    knowledgeBaseId: REACHABLE,
+    parentId: null,
+    name,
+    description,
+  });
+
+  beforeEach(() => {
+    mockRepo.findTemplateById.mockResolvedValue(template());
+    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([link(REACHABLE)]);
+    mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([
+      {
+        ...visibleBase(REACHABLE, "Deploys"),
+        slug: "deploys",
+        description: "How this service is released.",
+      },
+    ]);
+  });
+
+  it("carries the slug, the summary, the TOP-LEVEL folders and the true count", async () => {
+    mockRepo.listLiveFoldersForBases.mockResolvedValue([
+      folder("f-1", "Runbooks", "one per incident class"),
+      folder("f-2", "Postmortems"),
+      // ⚠ A CHILD FOLDER IS NOT A CARD FOLDER — the whole subtree is what
+      // `get_tree` is for, and a recursive list is the unbounded thing the card
+      // refuses to be.
+      { ...folder("f-3", "2026"), parentId: "f-2" },
+    ]);
+
+    const [ref] = (await resolveTemplateForLaunch(ctx(), "tpl-1")).knowledge;
+    expect(ref.baseSlug).toBe("deploys");
+    expect(ref.baseSummary).toBe("How this service is released.");
+    expect(ref.baseFolders).toEqual([
+      { name: "Runbooks", summary: "one per incident class" },
+      { name: "Postmortems" },
+    ]);
+    expect(ref.baseFolderCount).toBe(2);
+  });
+
+  it("🔒 says NOTHING about a base the viewer cannot see — not even its shape", async () => {
+    // ⚠ The ruling's line: a dropped attachment discloses a COUNT and nothing
+    // else. A card would be a name, a slug and a folder list — the exact
+    // location information the filter exists to withhold.
+    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([link(OUT_OF_REACH)]);
+    mockRepo.listKnowledgeBaseAccessRows.mockResolvedValue([]);
+
+    const resolved = await resolveTemplateForLaunch(ctx(), "tpl-1");
+    expect(resolved.knowledge).toEqual([]);
+    expect(resolved.unreachableKnowledgeBaseCount).toBe(1);
+    expect(JSON.stringify(resolved)).not.toContain(OUT_OF_REACH);
+  });
+
+  it("a FOLDER scope gets no card — it already names the thing it points at", async () => {
+    mockRepo.listKnowledgeLinksForTemplates.mockResolvedValue([
+      folderLink(REACHABLE, "f-1"),
+    ]);
+    mockRepo.listLiveFoldersForBases.mockResolvedValue([folder("f-1", "Runbooks")]);
+
+    const [ref] = (await resolveTemplateForLaunch(ctx(), "tpl-1")).knowledge;
+    expect(ref.scope).toBe("folder");
+    expect(ref.baseSlug).toBeUndefined();
+    expect(ref.baseFolders).toBeUndefined();
+    expect(ref.baseFolderCount).toBeUndefined();
+  });
+
+  it("a base with no folders carries a count of 0, which is an ANSWER", async () => {
+    mockRepo.listLiveFoldersForBases.mockResolvedValue([]);
+    const [ref] = (await resolveTemplateForLaunch(ctx(), "tpl-1")).knowledge;
+    expect(ref.baseFolders).toEqual([]);
+    expect(ref.baseFolderCount).toBe(0);
+  });
+});

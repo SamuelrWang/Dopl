@@ -295,17 +295,32 @@ export function canSeeBaseRow(
 }
 
 /**
- * Resolve KB ids to `{id, name}` refs, dropping every base the CALLER cannot
+ * A base that survived the viewer filter, plus the two CARD facts (2026-09-18,
+ * A4). ⚠ **A SUPERSET OF {@link TemplateKnowledgeBaseRef}, NOT A REPLACEMENT** —
+ * that type is the DTO's `knowledgeBases` shape and widening it would push a
+ * slug and a description onto every reader of it, including the SDK mirror. The
+ * extra keys stay inside the service and reach the wire only where the card
+ * puts them (`service-knowledge-scopes.ts`).
+ */
+export interface VisibleKnowledgeBase extends TemplateKnowledgeBaseRef {
+  slug: string;
+  description: string | null;
+}
+
+/**
+ * Resolve KB ids to visible base refs, dropping every base the CALLER cannot
  * currently read. Used by BOTH the attach gate (where a dropped id is an
  * error) and the read path (where it is simply omitted) — one predicate, two
  * consumers, so an attach can never permit what a read would hide.
  *
- * Fixed query count: at most three, regardless of how many bases.
+ * Fixed query count: at most three, regardless of how many bases. ⚠ **AND THE
+ * CARD FACTS ADDED NONE** — `slug` and `description` ride the access row this
+ * already reads for the predicate.
  */
 export async function resolveVisibleKnowledgeBases(
   ctx: AgentTemplateContext,
   ids: string[]
-): Promise<TemplateKnowledgeBaseRef[]> {
+): Promise<VisibleKnowledgeBase[]> {
   if (ids.length === 0) return [];
   const unique = [...new Set(ids)];
   const bases = await repo.listKnowledgeBaseAccessRows(ctx.workspaceId, unique);
@@ -339,5 +354,14 @@ export async function resolveVisibleKnowledgeBases(
   const myTeamIds = new Set(myTeams);
   return bases
     .filter((b) => canSeeBaseRow(ctx, b, grantedTeamsByBase, myTeamIds))
-    .map((b) => ({ id: b.id, name: b.name }));
+    // ⚠ `?? ""` / `?? null` PER KEY: the access row's two card fields are
+    // optional (a stale PostgREST schema cache, and every fixture built before
+    // 2026-09-18), and an `undefined` reaching the wire is a key a consumer
+    // cannot tell from a decided empty.
+    .map((b) => ({
+      id: b.id,
+      name: b.name,
+      slug: b.slug ?? "",
+      description: b.description ?? null,
+    }));
 }

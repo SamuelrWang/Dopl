@@ -50,6 +50,16 @@ const MAX_SCOPES = 200;
 // a path is several of them, so this is deliberately roomier than `MAX_BASE_LABEL`.
 const MAX_SCOPE_PATH = 500;
 
+// ── THE BASE CARD'S BOUNDS (2026-09-18, A4), EACH THE SERVER'S OWN ──────────
+const MAX_BASE_SLUG = 80; // `knowledge/schema.ts` — the slug column's own max
+const MAX_CARD_SUMMARY = 300; // `@/config › DESCRIPTION_MAX`, the bound the card is SENT at
+const MAX_FOLDER_NAME = 200; // `knowledge/schema.ts › KnowledgeFolder.name`
+const MAX_CARD_FOLDERS = 50; // `service-knowledge-scopes.ts › MAX_CARD_FOLDERS`
+// ⚠ A CEILING ON THE *COUNT*, AND IT MUST STAY WELL ABOVE `MAX_CARD_FOLDERS`. The renderer proves a
+// folder list is COMPLETE by comparing the two, so a ceiling at or below the list cap would clamp a
+// truncated list into agreement and turn the completeness check into a rubber stamp.
+const MAX_FOLDER_COUNT = 10000;
+
 // ── 🔒 ONE BOUND PER FIELD, EACH THE SERVER'S OWN (F-287, 2026-08-23) ───────────────────────
 //
 // ⚠ A BOUNDARY BOUND MUST MATCH THE WRITER'S, NOT UNDERCUT IT. One shared `MAX_LABEL = 200`
@@ -82,6 +92,43 @@ function label(value, max) {
 }
 
 /**
+ * A CARD FACT: whole, or gone. ⚠ **THE ONE PLACE THIS BOUNDARY MUST NOT `slice`.**
+ *
+ * Every other bounded value here is prose or a label, where a clip costs the tail of a sentence.
+ * A card fact is read as a COMPLETE statement about a base — its slug is an ADDRESS, its summary
+ * is "what this base answers" — so the half that survives a slice reads exactly like the whole
+ * thing and is wrong in a way the agent cannot detect. The server already sends these
+ * all-or-nothing (`service-knowledge-scopes.ts › baseCard`); this is the same rule, restated at
+ * the boundary, because a boundary that trusts the far side's discipline is not one.
+ */
+function whole(value, max) {
+  return typeof value === 'string' && value.length <= max ? value : '';
+}
+
+/**
+ * The card's TOP-LEVEL FOLDERS, narrowed to `{name, summary}` and nothing else.
+ *
+ * ⚠ **A MALFORMED ROW IS DROPPED, AND DROPPING IT IS SAFE ONLY BECAUSE `baseFolderCount` NOTICES.**
+ * A folder this loop refuses leaves the list SHORTER than the count the server sent, and the
+ * renderer prints the folder line only when the two agree — so a dropped row costs the whole line
+ * rather than producing a list that silently omits one.
+ * ⚠ AND NO ENTRIES, EVER. The allowlist is what makes "the card lists zero entries" a property of
+ * the shape rather than a promise about the server: a future payload carrying `entries` beside
+ * these keys is dropped here and cannot reach a line of prompt text.
+ */
+function cardFolders(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const f of value.slice(0, MAX_CARD_FOLDERS)) {
+    if (!f || typeof f !== 'object') continue;
+    const name = whole(f.name, MAX_FOLDER_NAME);
+    if (!name) continue;
+    out.push({ name, summary: whole(f.summary, MAX_CARD_SUMMARY) });
+  }
+  return out;
+}
+
+/**
  * A COUNT OFF THE WIRE — a non-negative integer or 0, never NaN and never a float.
  *
  * ⚠ 0 IS THE FAIL DIRECTION ON PURPOSE. An older server does not send the key, a proxy may drop
@@ -89,14 +136,19 @@ function label(value, max) {
  * guess here costs a sentence the agent did not say; the opposite would be a role block telling
  * an agent it has been denied something nobody attached.
  */
-function count(value) {
+function count(value, max) {
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0) return 0;
-  return Math.min(Math.floor(n), MAX_BASES);
+  return Math.min(Math.floor(n), typeof max === 'number' ? max : MAX_BASES);
 }
 
 /**
  * Narrow the wire payload to the eight keys the ROLE BLOCK reads, and nothing else.
+ *
+ * ⚠ EACH `knowledge` SCOPE GAINED THE FOUR BASE-CARD KEYS ON 2026-09-18 (A4) — `baseSlug`,
+ * `baseSummary`, `baseFolders` and `baseFolderCount`. They are NOT a ninth top-level key: a card
+ * describes ONE attachment, so it rides the scope it is about. See `whole` / `cardFolders` above
+ * for why two of them refuse to `slice`.
  *
  * ⚠ THE EIGHTH IS `knowledge` (2026-09-08) — every attached scope, base / folder / entry — and it
  * rides BESIDE `knowledgeBases` rather than replacing it: an older SERVER sends only the base
@@ -135,6 +187,10 @@ function narrow(body) {
     // ⚠ `scope` FAILS TO `'base'`, never to a folder or an entry. An unknown discriminator from a
     // newer server renders the whole-base call, which is the WIDER instruction and therefore the one
     // that cannot point an agent at a document that does not exist.
+    // ⚠ THE FOUR CARD KEYS JOINED 2026-09-18 (A4) and they are BASE-SCOPE facts: the server sends
+    // them only on a whole-base scope, and this narrow does not care — a folder scope that arrives
+    // carrying them narrows them anyway and `knowledgeLines` renders a card for no kind but `base`.
+    // One place decides what a card is attached to, and it is the renderer.
     knowledge: scopes
       .filter((k) => k && typeof k === 'object')
       .map((k) => ({
@@ -142,6 +198,10 @@ function narrow(body) {
         baseId: label(k.baseId, MAX_BASE_LABEL),
         baseName: label(k.baseName, MAX_BASE_LABEL),
         toolPath: label(k.toolPath, MAX_SCOPE_PATH),
+        baseSlug: whole(k.baseSlug, MAX_BASE_SLUG),
+        baseSummary: whole(k.baseSummary, MAX_CARD_SUMMARY),
+        baseFolders: cardFolders(k.baseFolders),
+        baseFolderCount: count(k.baseFolderCount, MAX_FOLDER_COUNT),
       })),
     // ⚠ HOW MANY ATTACHMENTS THIS OPERATOR CANNOT REACH HERE — see `count` above and
     // `prompt-framing-template.js › knowledgeLines`, its one consumer.
