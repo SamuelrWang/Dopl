@@ -192,3 +192,49 @@ const BASE = "https://api.example.test";
         (0, vitest_1.expect)((0, client_js_1.parseRetryAfter)(past, now)).toBe(0);
     });
 });
+/**
+ * `updateAgentTemplate`'s TRI-STATE (F-739, 2026-09-18).
+ *
+ * ⚠ **THE STRICT ARM IS CLIENT-SIDE ON PURPOSE**, exactly as
+ * `knowledge.ts › writeKbFileByPath`'s is: the route still accepts an absent
+ * header, so a desktop in the field whose bundled client predates this argument
+ * keeps last-writer-wins instead of losing the op to a 412 it cannot satisfy.
+ * ⚠ AND IT NEEDS NO EXISTENCE PROBE where the KB one does — a template update
+ * always overwrites, so there is no create arm to distinguish.
+ */
+(0, vitest_1.describe)("updateAgentTemplate — optimistic concurrency", () => {
+    let mock;
+    const TPL = "11111111-1111-4111-8111-111111111111";
+    const VERSION = "2026-01-01T00:00:00Z";
+    (0, vitest_1.beforeEach)(() => {
+        mock = installFetchMock([
+            () => jsonResponse(200, { template: { id: TPL, updatedAt: VERSION } }),
+        ]);
+    });
+    (0, vitest_1.afterEach)(() => mock.restore());
+    const client = () => new client_js_1.DoplClient(BASE, "k");
+    (0, vitest_1.it)("a version rides as `X-Updated-At`", async () => {
+        await client().updateAgentTemplate(TPL, { name: "Renamed" }, VERSION);
+        const headers = new Headers(mock.calls[0].init.headers);
+        (0, vitest_1.expect)(headers.get("x-updated-at")).toBe(VERSION);
+    });
+    (0, vitest_1.it)("`null` is FORCE — the request goes, with no precondition on it", async () => {
+        await client().updateAgentTemplate(TPL, { name: "Renamed" }, null);
+        const headers = new Headers(mock.calls[0].init.headers);
+        (0, vitest_1.expect)(headers.get("x-updated-at")).toBeNull();
+        (0, vitest_1.expect)(mock.calls).toHaveLength(1);
+    });
+    (0, vitest_1.it)("OMITTING it is refused BEFORE the wire, naming what to pass", async () => {
+        await (0, vitest_1.expect)(client().updateAgentTemplate(TPL, { name: "Renamed" })).rejects.toBeInstanceOf(errors_js_1.DoplApiError);
+        // ⚠ NOTHING WAS SENT. A refusal that still made the PATCH would be the
+        // silent overwrite this whole contract exists to remove.
+        (0, vitest_1.expect)(mock.calls).toHaveLength(0);
+    });
+    (0, vitest_1.it)("…and the refusal carries the code the MCP layer maps on", async () => {
+        const failed = client().updateAgentTemplate(TPL, { name: "Renamed" });
+        await (0, vitest_1.expect)(failed).rejects.toMatchObject({
+            status: 412,
+            code: "EXPECTED_VERSION_REQUIRED",
+        });
+    });
+});

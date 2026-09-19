@@ -119,3 +119,26 @@ export class TemplateTeamScopeAgentForbiddenError extends Error {
     this.name = "TemplateTeamScopeAgentForbiddenError";
   }
 }
+
+/**
+ * `expectedUpdatedAt` precondition ≠ the row's `updated_at`. → 412; the caller
+ * re-reads, reconciles and retries with the version it saw.
+ *
+ * ⚠ **WORDED AS THE KB LANE'S TWIN** (`knowledge/server/errors.ts ›
+ * KnowledgeStaleVersionError`), deliberately: the two are one contract with two
+ * nouns, and an agent that learned `expected_version` on `dopl_kb` must not have
+ * to learn a second vocabulary to use it here.
+ */
+export class TemplateStaleVersionError extends Error {
+  readonly code = "AGENT_TEMPLATE_STALE_VERSION";
+  readonly expected: string;
+  readonly actual: string;
+  constructor(expected: string, actual: string) {
+    super(
+      `Stale write rejected — row was modified at ${actual} but the request expected ${expected}. Refetch and retry.`
+    );
+    this.name = "TemplateStaleVersionError";
+    this.expected = expected;
+    this.actual = actual;
+  }
+}

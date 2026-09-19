@@ -33,4 +33,4 @@ export declare function listAgentTemplates(t: DoplTransport, opts?: {
 }): Promise<AgentTemplate[]>;
 export declare function getAgentTemplate(t: DoplTransport, templateId: string): Promise<AgentTemplate>;
 export declare function createAgentTemplate(t: DoplTransport, input: AgentTemplateCreateInput): Promise<AgentTemplate>;
-export declare function updateAgentTemplate(t: DoplTransport, templateId: string, patch: AgentTemplateUpdateInput): Promise<AgentTemplate>;
+export declare function updateAgentTemplate(t: DoplTransport, templateId: string, patch: AgentTemplateUpdateInput, expectedVersion?: string | null): Promise<AgentTemplate>;

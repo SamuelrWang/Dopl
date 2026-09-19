@@ -41,10 +41,19 @@ export class AgentTemplateMethods extends SkillMethods {
     return templates.createAgentTemplate(this.transport, input);
   }
 
+  /** ⚠ `expectedVersion` is TRI-STATE and OMITTING IT REFUSES — see
+   *  `agent-templates.ts › updateAgentTemplate`. Same three arms as
+   *  `knowledge.ts › writeKbFileByPath`. */
   updateAgentTemplate(
     templateId: string,
-    patch: AgentTemplateUpdateInput
+    patch: AgentTemplateUpdateInput,
+    expectedVersion?: string | null
   ): Promise<AgentTemplate> {
-    return templates.updateAgentTemplate(this.transport, templateId, patch);
+    return templates.updateAgentTemplate(
+      this.transport,
+      templateId,
+      patch,
+      expectedVersion
+    );
   }
 }

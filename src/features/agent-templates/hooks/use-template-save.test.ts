@@ -13,6 +13,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
+import { AgentTemplateApiError } from "../client/api";
 import type { AgentTemplate } from "../client/types";
 import { draftFromTemplate } from "../lib/template-draft";
 
@@ -110,6 +111,23 @@ describe("patching", () => {
     expect(call.body).toEqual({ name: "Renamed", acknowledgeShared: true });
     expect(call.optimistic).toMatchObject({ id: "tpl-1", name: "Renamed" });
   });
+
+  /**
+   * 🔒 **THE EDITOR SAVES UNDER THE VERSION IT WAS OPENED ON** (F-739,
+   * 2026-09-18). Both authoring surfaces run through this one function, so this
+   * case is what makes the app's half of the precondition true on BOTH of them.
+   */
+  it("🔒 carries the loaded row's `updatedAt` as the write's precondition", async () => {
+    const { result } = mount();
+    await act(async () => {
+      await result.current.save(
+        { ...draftFromTemplate(TEMPLATE), name: "Renamed" },
+        TEMPLATE
+      );
+    });
+    const call = writes.update.mutateAsync.mock.calls.at(-1)![0];
+    expect(call.expectedUpdatedAt).toBe("2026-08-01T00:00:00Z");
+  });
 });
 
 describe("when the write fails", () => {
@@ -122,6 +140,30 @@ describe("when the write fails", () => {
       await result.current.save({ ...draftFromTemplate(TEMPLATE), name: "Scout" }, null);
     });
     expect(result.current.error).toMatch(/Couldn't save the agent/);
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  /**
+   * ⚠ **THE 412 GETS THE EDITOR'S OWN SENTENCE**, not the server's — that one
+   * ("Stale write rejected — row was modified at …") is written for an agent
+   * reconciling two bodies. ⚠ AND THE DIALOG STAYS OPEN, because the operator's
+   * typing is the only copy of it left once the optimistic patch rolled back.
+   */
+  it("🔒 says the row changed elsewhere on a conflict, in the host's own noun", async () => {
+    writes.update.mutateAsync.mockRejectedValueOnce(
+      new AgentTemplateApiError(412, "AGENT_TEMPLATE_STALE_VERSION", "Stale write rejected — row was modified at X.")
+    );
+    const { result, onDone } = mount({ noun: "agent" });
+    await act(async () => {
+      await result.current.save(
+        { ...draftFromTemplate(TEMPLATE), name: "Renamed" },
+        TEMPLATE
+      );
+    });
+    expect(result.current.error).toBe(
+      "This agent changed elsewhere. Reopen it to see the current version."
+    );
+    expect(result.current.error).not.toMatch(/Stale write rejected/);
     expect(onDone).not.toHaveBeenCalled();
   });
 

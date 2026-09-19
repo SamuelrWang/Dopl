@@ -43,6 +43,7 @@ exports.opGrantTemplate = opGrantTemplate;
 const narration_js_1 = require("./narration.js");
 const grant_js_1 = require("./grant.js");
 const respond_js_1 = require("./respond.js");
+const tool_errors_js_1 = require("./tool-errors.js");
 const confirm_token_js_1 = require("./confirm-token.js");
 const agent_shared_js_1 = require("./agent-shared.js");
 const channel_shared_js_1 = require("./channel-shared.js");
@@ -83,6 +84,13 @@ function knowledgeDigest(input) {
             : `base:${s.baseId}`)
         .sort();
 }
+/**
+ * ⚠ **DECLARED, NOT HAND-WRITTEN** — `tool-errors.ts › versionConflict` is the
+ * one producer of this `reason=` string, so the wire and any description that
+ * teaches it move together. `op="get"` is the remedy because that is the op
+ * whose result carries a template's Version.
+ */
+const TEMPLATE_VERSION_CONFLICT = (0, tool_errors_js_1.versionConflict)('op="get"');
 /** Map the write errors that have an actionable sentence; rethrow anything
  *  else. ⚠ ONE mapper for both verbs so the two cannot answer differently. */
 function mapWriteError(e) {
@@ -260,9 +268,21 @@ async function opUpdate(client, callerUserId, ref, input) {
         updated = await client.updateAgentTemplate(template.id, {
             ...patch,
             acknowledgeShared: verdict.acknowledgedShared || undefined,
-        });
+        }, 
+        // ⚠ THE CLIENT'S TRI-STATE, SPELLED OUT: `force` → null (blind
+        // overwrite), else the version the caller passed — and `undefined` is the
+        // arm the SDK refuses without a round trip.
+        input.force ? null : input.expected_version);
     }
     catch (e) {
+        // ⚠ **BOTH 412s, AND THEY ARE ONE REFUSAL TO THE AGENT.** The SDK raises
+        // `EXPECTED_VERSION_REQUIRED` before the wire when no version was passed;
+        // the server raises `AGENT_TEMPLATE_STALE_VERSION` when the row moved. The
+        // remedy is the same call either way, so a second wording would be a second
+        // string for an agent to match on and no new fact.
+        if ((0, respond_js_1.isApiError)(e, 412, "EXPECTED_VERSION_REQUIRED") || (0, respond_js_1.isConflict)(e)) {
+            return (0, respond_js_1.err)((0, tool_errors_js_1.refusal)(TEMPLATE_VERSION_CONFLICT, `Nothing was written to ${(0, narration_js_1.inlineOr)(template.name, narration_js_1.NO_NAME)} (id: \`${template.id}\`). Re-read it, reconcile your changes, and retry with that Version — or pass force=true to overwrite the other edit.`));
+        }
         const mapped = mapWriteError(e);
         if (mapped)
             return mapped;
@@ -271,7 +291,10 @@ async function opUpdate(client, callerUserId, ref, input) {
     const note = patch.visibility !== undefined
         ? ` Sharing is now: ${updated.visibility}.`
         : "";
-    return (0, respond_js_1.ok)(`Updated agent template ${(0, narration_js_1.inlineOr)(updated.name, narration_js_1.NO_NAME)} (id: \`${updated.id}\`).${note}`);
+    // ⚠ THE NEW VERSION IS PART OF THE SUCCESS, not something to go and fetch —
+    // an agent making two edits in a row would otherwise have to `op="get"`
+    // between them to satisfy the precondition it just satisfied.
+    return (0, respond_js_1.ok)(`Updated agent template ${(0, narration_js_1.inlineOr)(updated.name, narration_js_1.NO_NAME)} (id: \`${updated.id}\`).${note}\nVersion: \`${updated.updatedAt}\` (pass as expected_version to the next op="update")`);
 }
 /**
  * `op="grant"` — lend ONE template to a channel, container or team. The op that

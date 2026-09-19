@@ -54,6 +54,10 @@ export interface TemplateWriteInput {
         entry?: string;
     }>;
     confirm_token?: string;
+    /** op="update" only — the Version from `op="get"`. See {@link opUpdate}. */
+    expected_version?: string;
+    /** op="update" only — the `expected_version` escape. */
+    force?: boolean;
 }
 export declare function opCreate(client: DoplClient, callerUserId: string | null, input: TemplateWriteInput & {
     name: string;

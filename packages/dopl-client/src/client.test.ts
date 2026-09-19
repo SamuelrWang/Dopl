@@ -238,3 +238,58 @@ describe("parseRetryAfter", () => {
     expect(parseRetryAfter(past, now)).toBe(0);
   });
 });
+
+/**
+ * `updateAgentTemplate`'s TRI-STATE (F-739, 2026-09-18).
+ *
+ * ⚠ **THE STRICT ARM IS CLIENT-SIDE ON PURPOSE**, exactly as
+ * `knowledge.ts › writeKbFileByPath`'s is: the route still accepts an absent
+ * header, so a desktop in the field whose bundled client predates this argument
+ * keeps last-writer-wins instead of losing the op to a 412 it cannot satisfy.
+ * ⚠ AND IT NEEDS NO EXISTENCE PROBE where the KB one does — a template update
+ * always overwrites, so there is no create arm to distinguish.
+ */
+describe("updateAgentTemplate — optimistic concurrency", () => {
+  let mock: ReturnType<typeof installFetchMock>;
+  const TPL = "11111111-1111-4111-8111-111111111111";
+  const VERSION = "2026-01-01T00:00:00Z";
+
+  beforeEach(() => {
+    mock = installFetchMock([
+      () => jsonResponse(200, { template: { id: TPL, updatedAt: VERSION } }),
+    ]);
+  });
+  afterEach(() => mock.restore());
+
+  const client = () => new DoplClient(BASE, "k");
+
+  it("a version rides as `X-Updated-At`", async () => {
+    await client().updateAgentTemplate(TPL, { name: "Renamed" }, VERSION);
+    const headers = new Headers(mock.calls[0].init.headers as HeadersInit);
+    expect(headers.get("x-updated-at")).toBe(VERSION);
+  });
+
+  it("`null` is FORCE — the request goes, with no precondition on it", async () => {
+    await client().updateAgentTemplate(TPL, { name: "Renamed" }, null);
+    const headers = new Headers(mock.calls[0].init.headers as HeadersInit);
+    expect(headers.get("x-updated-at")).toBeNull();
+    expect(mock.calls).toHaveLength(1);
+  });
+
+  it("OMITTING it is refused BEFORE the wire, naming what to pass", async () => {
+    await expect(
+      client().updateAgentTemplate(TPL, { name: "Renamed" })
+    ).rejects.toBeInstanceOf(DoplApiError);
+    // ⚠ NOTHING WAS SENT. A refusal that still made the PATCH would be the
+    // silent overwrite this whole contract exists to remove.
+    expect(mock.calls).toHaveLength(0);
+  });
+
+  it("…and the refusal carries the code the MCP layer maps on", async () => {
+    const failed = client().updateAgentTemplate(TPL, { name: "Renamed" });
+    await expect(failed).rejects.toMatchObject({
+      status: 412,
+      code: "EXPECTED_VERSION_REQUIRED",
+    });
+  });
+});

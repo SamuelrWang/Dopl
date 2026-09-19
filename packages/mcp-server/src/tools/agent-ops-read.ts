@@ -157,6 +157,12 @@ export async function opGet(
   const lines = [
     `# ${inlineOr(template.name, NO_NAME)}`,
     `id: \`${template.id}\` · ${template.visibility} · model ${template.model ? inlineOr(template.model, NO_NAME) : "(the desktop's default)"}`,
+    // ⚠ **THE VERSION IS WHY `op="update"` CAN REFUSE A STALE WRITE**, and it is
+    // rendered on the HEADER rows rather than at the end: this op clips its
+    // INSTRUCTIONS body (A16), and a token printed after a clipped system prompt
+    // is a token the caller may never see. Same line `dopl_kb`'s read_file and
+    // `dopl_skill`'s read carry, for the same contract.
+    `Version: \`${template.updatedAt}\` (pass as expected_version to op="update")`,
     ...(template.description ? [inlineOr(template.description, "")] : []),
   ];
   // ⚠ **`knowledge` WINS AND THE BASE LIST IS THE FALLBACK** (2026-09-08). A

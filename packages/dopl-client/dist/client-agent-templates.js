@@ -60,8 +60,11 @@ class AgentTemplateMethods extends client_skills_js_1.SkillMethods {
     createAgentTemplate(input) {
         return templates.createAgentTemplate(this.transport, input);
     }
-    updateAgentTemplate(templateId, patch) {
-        return templates.updateAgentTemplate(this.transport, templateId, patch);
+    /** ⚠ `expectedVersion` is TRI-STATE and OMITTING IT REFUSES — see
+     *  `agent-templates.ts › updateAgentTemplate`. Same three arms as
+     *  `knowledge.ts › writeKbFileByPath`. */
+    updateAgentTemplate(templateId, patch, expectedVersion) {
+        return templates.updateAgentTemplate(this.transport, templateId, patch, expectedVersion);
     }
 }
 exports.AgentTemplateMethods = AgentTemplateMethods;

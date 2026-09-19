@@ -4,6 +4,7 @@ import { ContainerPublishUnacknowledgedError } from "@/features/workspaces/serve
 import {
   AgentTemplateNotFoundError,
   TemplateKnowledgeBaseNotFoundError,
+  TemplateStaleVersionError,
   TemplateTeamNotGrantableError,
   TemplateWriteForbiddenError,
   TemplateTeamScopeAgentForbiddenError,
@@ -30,6 +31,16 @@ export function mapAgentTemplateError(err: unknown): HttpError | null {
     // would turn the attach endpoint into an existence oracle for private KBs.
     return new HttpError(404, "KNOWLEDGE_BASE_NOT_FOUND", err.message, {
       knowledgeBaseIds: err.missingIds,
+    });
+  }
+  // ⚠ 412 AND THE SAME `details` PAIR THE KB LANE SENDS (`knowledge/server/
+  // http-mapping.ts`) — the app's editor and `dopl_agent` both read `actual` to
+  // say what the row moved to, and a second shape here would need a second
+  // reader in each.
+  if (err instanceof TemplateStaleVersionError) {
+    return new HttpError(412, "AGENT_TEMPLATE_STALE_VERSION", err.message, {
+      expected: err.expected,
+      actual: err.actual,
     });
   }
   if (err instanceof TemplateTeamNotGrantableError) {

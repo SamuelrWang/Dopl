@@ -78,9 +78,11 @@ describe("dopl_agent — a spent token acknowledges the audience", () => {
       ...input,
       confirm_token: tokenIn(textOf(preview)),
     });
+    // ⚠ THIRD ARG = THE F-739 VERSION, `undefined` because this fixture passes none.
     expect(update).toHaveBeenCalledWith(
       TEMPLATE.id,
-      expect.objectContaining({ visibility: "workspace", acknowledgeShared: true })
+      expect.objectContaining({ visibility: "workspace", acknowledgeShared: true }),
+      undefined
     );
   });
 });
