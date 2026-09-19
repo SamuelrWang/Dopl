@@ -30,8 +30,10 @@ export interface TemplateSectionDef {
   visibility: TemplateVisibility;
   /** What the panel is titled. */
   label: string;
-  /** The quiet line a section with no templates says. */
-  emptyLine: string;
+  /** The quiet line a section with no templates says. Absent = an empty
+   *  section says nothing under its header (the /home Agents face's shared
+   *  section, Samuel 2026-09-19). */
+  emptyLine?: string;
 }
 
 export const SECTIONS: ReadonlyArray<TemplateSectionDef> = [
@@ -77,7 +79,6 @@ export const SECTIONS_CONTAINER: ReadonlyArray<TemplateSectionDef> = [
   {
     visibility: "workspace",
     label: "Shared in this channel",
-    emptyLine: "No agent is shared into this channel yet.",
   },
 ];
 

@@ -51,7 +51,7 @@ describe("what a flat section is", () => {
   it("puts the heading, the caption and the content on ONE ground", () => {
     // No header strip, no nested well: three children of one section, in order.
     render(
-      <SectionPanel id="s" label="Personal" caption="Yours alone." action={<button>New</button>}>
+      <SectionPanel id="s" label="Personal" caption="A caption." action={<button>New</button>}>
         <p>a card</p>
       </SectionPanel>
     );
@@ -66,7 +66,7 @@ describe("what a flat section is", () => {
     expect(heading.className).not.toMatch(/\buppercase\b|text-label/);
     // The action rides in the heading's own row, not in a band of its own.
     expect(heading.parentElement).toContain(screen.getByRole("button", { name: "New" }));
-    expect(panel.textContent).toContain("Yours alone.");
+    expect(panel.textContent).toContain("A caption.");
     expect(panel.textContent).toContain("a card");
   });
 

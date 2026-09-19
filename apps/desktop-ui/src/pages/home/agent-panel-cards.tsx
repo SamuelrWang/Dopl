@@ -100,7 +100,6 @@ export function SharedAgentSection({
 export function PrivateAgentSection({
   section,
   templates,
-  caption,
   action,
   unavailable,
   failure,
@@ -110,7 +109,6 @@ export function PrivateAgentSection({
 }: {
   section: TemplateSectionDef;
   templates: ReadonlyArray<AgentTemplate>;
-  caption: string;
   /** The create button and the scope pill; the pill wears `pendingRow` while
    *  its scope is in flight. */
   action: ReactNode;
@@ -134,7 +132,6 @@ export function PrivateAgentSection({
       id="home-agents-private"
       label={section.label}
       action={action}
-      caption={caption}
     >
       {unavailable !== null ? (
         <p className="px-1 pb-1 text-caption text-text-muted">{unavailable}</p>

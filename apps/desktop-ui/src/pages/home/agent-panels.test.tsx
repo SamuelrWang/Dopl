@@ -157,7 +157,7 @@ describe("the two sections", () => {
 });
 
 describe("empty scopes", () => {
-  it("states each one in its OWN words", async () => {
+  it("says nothing under an empty shared section, and states an empty Personal shelf", async () => {
     apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
       path.split("?")[0] === "/api/agent-templates"
         ? Promise.resolve(ok({ templates: [] }))
@@ -166,14 +166,13 @@ describe("empty scopes", () => {
     renderHome();
     await openAgents();
 
-    // Two sentences, two states, on screen AT THE SAME TIME — which is the part
-    // the pill made impossible to assert.
-    expect(
-      await screen.findByText("No agent is shared into this channel yet.")
-    ).toBeInTheDocument();
     expect(
       await screen.findByText("You haven't created an agent here yet.")
     ).toBeInTheDocument();
+    // Samuel, 2026-09-19: the shared section's empty line and the Personal
+    // caption are removed, not reworded.
+    expect(screen.queryByText(/shared into this channel yet/)).toBeNull();
+    expect(screen.queryByText(/Yours alone/)).toBeNull();
   });
 
   it("offers no Personal shelf, and asks for no home templates, when boot has no workspace", async () => {

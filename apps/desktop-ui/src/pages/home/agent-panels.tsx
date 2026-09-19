@@ -245,7 +245,6 @@ export function HomeAgentPanels({
       <PrivateAgentSection
         section={SECTION_PRIVATE_EVERYWHERE}
         templates={personal}
-        caption={PERSONAL_CAPTION}
         unavailable={scopeUnavailable ? SCOPE_UNAVAILABLE : null}
         pending={scopePending}
         // ⚠ THE SECTION'S OWN FAILURE, NOT THE PANE'S. The container read gets
@@ -359,23 +358,6 @@ interface EditorTarget {
   /** `null` = create. */
   template: AgentTemplate | null;
 }
-
-/**
- * ONE CAPTION LINE, and it is a RULING rather than an explainer (minimal UI
- * copy; plan §4.4).
- *
- * ⚠ IT NAMES A CONTROL, AND THAT CONTROL EXISTS — "Share into this channel" on
- * every Personal card (`agent-share.tsx`).
- * ⚠ **IT SAID "make a shared COPY" UNTIL 2026-09-02, AND HAD BEEN STALE TWICE
- * OVER (F-471).** First the JUSTIFICATION under it moved (A12: a personal
- * template could not launch into a container, then it could) and the caption did
- * not; then B11 replaced the copy with a GRANT, which is what the word "copy"
- * was naming. **The caption and the control move together or neither is true** —
- * the sentence promises the peer can USE it, which launching your own agent in
- * the room still does not give them.
- */
-const PERSONAL_CAPTION =
-  "Yours alone. Share one into this channel to let everyone here use it.";
 
 /** No home workspace yet — a different sentence from "none here". */
 const SCOPE_UNAVAILABLE = "Finish setting up your home space to keep agents there.";

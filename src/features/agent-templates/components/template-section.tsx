@@ -40,7 +40,7 @@ import type { TemplateSectionDef } from "../lib/visibility";
  */
 
 /**
- * The flat panel shell: heading, optional header control, optional caption.
+ * The flat panel shell: heading and optional header control.
  *
  * ⚠ THE STRUCTURE IS `shared/ui/section-panel.tsx › SectionPanel` SINCE
  * 2026-08-27. The /home Knowledge sections were `SectionBox` (a header strip
@@ -109,7 +109,6 @@ export function TemplatePanel({
   id,
   label,
   action,
-  caption,
   children,
 }: {
   /** Id the heading carries, so the section is a NAMED region. */
@@ -117,9 +116,6 @@ export function TemplatePanel({
   label: string;
   /** Header-right control (the /home face's scope pill). */
   action?: ReactNode;
-  /** ONE quiet line under the heading. ⚠ Minimal-copy ruling (INVARIANTS §5):
-   *  a RULE the operator needs, never an explainer paragraph. */
-  caption?: string;
   children: ReactNode;
 }) {
   return (
@@ -127,7 +123,6 @@ export function TemplatePanel({
       id={id}
       label={label}
       action={action}
-      caption={caption}
       // ⚠ NO `className` SINCE R-38 (2026-09-17): the ground is the
       // component's default, and the last readers of the constant are the
       // loading ghosts.
@@ -148,8 +143,9 @@ export function TemplateGrid({
 }: {
   templates: ReadonlyArray<AgentTemplate>;
   /** ⚠ Only ever rendered against a RESOLVED read — see `resolved` on
-   *  `../hooks/use-agent-templates.ts`. */
-  emptyLine: string;
+   *  `../hooks/use-agent-templates.ts`. Absent = an empty grid renders
+   *  nothing. */
+  emptyLine?: string;
   /** Absent = the cards are not openable on this surface yet (see
    *  {@link TemplateCard}). */
   onOpen?: (template: AgentTemplate) => void;
@@ -161,7 +157,9 @@ export function TemplateGrid({
   actionFor?: (template: AgentTemplate) => ReactNode;
 }) {
   if (templates.length === 0) {
-    return <p className="px-1 pb-1 text-caption text-text-muted">{emptyLine}</p>;
+    return emptyLine ? (
+      <p className="px-1 pb-1 text-caption text-text-muted">{emptyLine}</p>
+    ) : null;
   }
   return (
     <div className={TEMPLATE_GRID}>
