@@ -31,6 +31,8 @@ import {
   KB_SECTION_NUDGE_CHARS,
   type Outline,
 } from "./knowledge-sections";
+import { AUDIENCE_LABELS, type AudienceLabel } from "./audience-label";
+import { bodyFact } from "./body-digest";
 import {
   DESTINATION_HEADINGS,
   resolveHomeChannelContainer,
@@ -145,32 +147,44 @@ export async function opListBases(
   // same table the template lane reads its own wording from — two surfaces
   // naming one destination differently is how an agent learns a sharing model
   // the operator does not have.
-  const groups: Array<readonly [string | null, typeof bases]> =
+  // ⚠ **EACH GROUP CARRIES THE ROW LABEL AS WELL AS THE HEADING (S21/S23,
+  // 2026-09-18).** A base shared into a home channel is STORED `private` — the
+  // grant is the audience — so printing the column made the rows under "Shared
+  // in this channel" read `· private`, which is the opposite of the truth.
+  // `audience-label.ts` is the table; a `null` label means "ask the column",
+  // which is only ever the standard-workspace case.
+  const groups: Array<readonly [string | null, typeof bases, AudienceLabel | null]> =
     grants === undefined
-      ? [[null, here]]
+      ? [[null, here, null]]
       : [
           [
             DESTINATION_HEADINGS.shared,
             here.filter((b) => grants[b.id] !== undefined),
+            AUDIENCE_LABELS.channel,
           ],
           [
             DESTINATION_HEADINGS.legacy,
             here.filter((b) => grants[b.id] === undefined),
+            AUDIENCE_LABELS.nobody,
           ],
         ];
   const lines = ["## Knowledge bases\n"];
-  for (const [heading, rows] of [
+  for (const [heading, rows, audience] of [
     ...groups,
-    [DESTINATION_HEADINGS.personal, personal] as const,
+    [DESTINATION_HEADINGS.personal, personal, AUDIENCE_LABELS.you] as const,
   ]) {
     if (rows.length === 0) continue;
     if (heading !== null) lines.push(`### ${heading}`);
     for (const b of rows) {
       // ⚠ Immutable id beside the slug — the slug changes on rename.
-      const vis = b.visibility === "private" ? "private" : "public";
+      const seenBy =
+        audience ??
+        (b.visibility === "private"
+          ? AUDIENCE_LABELS.you
+          : AUDIENCE_LABELS.workspace);
       const desc = b.description ? `\n  ${inlineOr(b.description, "")}` : "";
       lines.push(
-        `- ${inlineOr(b.name, NO_NAME)} (slug: \`${b.slug}\` · id: \`${b.id}\` · ${vis})${desc}`,
+        `- ${inlineOr(b.name, NO_NAME)} (slug: \`${b.slug}\` · id: \`${b.id}\` · seen by ${seenBy})${desc}`,
       );
     }
     lines.push("");
@@ -513,7 +527,11 @@ export async function opReadFile(
     ...(terse
       ? [`Version: \`${entry.updatedAt}\` (pass as expected_version to write_file)`]
       : [
-          `Path: \`${path}\` · entry id: \`${entry.id}\` · type: ${entry.entryType}`,
+          // ⚠ **THE WHOLE ENTRY'S SIZE AND FINGERPRINT, OFF THE STORED BODY**
+          // (S47/S33) — never off `body` above, which a `section`, a `max_chars`
+          // or an `offset` may have windowed. A digest that moved with the READ
+          // would compare a window to a document. See `body-digest.ts`.
+          `Path: \`${path}\` · entry id: \`${entry.id}\` · type: ${entry.entryType} · ${bodyFact(entry.body)}`,
           `Version: \`${entry.updatedAt}\` (pass as expected_version to write_file) · last edited by ${entry.lastEditedSource} · created ${entry.createdAt}`,
         ]),
     ...(sectionLine ? [sectionLine] : []),

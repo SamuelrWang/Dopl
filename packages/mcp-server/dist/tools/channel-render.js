@@ -36,9 +36,6 @@ Object.defineProperty(exports, "formatAuthor", { enumerable: true, get: function
 Object.defineProperty(exports, "memberRef", { enumerable: true, get: function () { return channel_render_identity_2.memberRef; } });
 Object.defineProperty(exports, "sessionIdOf", { enumerable: true, get: function () { return channel_render_identity_2.sessionIdOf; } });
 Object.defineProperty(exports, "NO_MEMBER_VIEW", { enumerable: true, get: function () { return channel_render_identity_2.NO_MEMBER_VIEW; } });
-// ⚠ **MARKS, NEVER FILTERS** — see that module for Samuel's ruling (b) and for
-// why the one-place seam lives on `OutsideRelevance` rather than on the page.
-const channel_desktop_tag_1 = require("./channel-desktop-tag");
 const response_size_1 = require("./response-size");
 // Which exchange a message belongs to, and whether it is a real THREAD or one
 // machine's ad-hoc grouping label. ⚠ import stays one-way.
@@ -127,29 +124,10 @@ function clipBody(m, ref, clip) {
  * slot. ⚠ SHOUTED, and it is the only tag here that is: every other clause is a
  * label, this one is the reason a waiting agent should stop waiting.
  */
-/**
- * **THE MARK AN OUTSIDE SESSION SEES, AND NOBODY ELSE DOES** (2026-09-18).
- *
- * ⚠ **IT IS A SUFFIX ON A LINE THAT WAS RENDERED ANYWAY.** Nothing is hidden
- * from anybody — Samuel's ruling (b) is that a dropped message costs more than
- * a noisy one — so this only ever ADDS a token to the head of a line the page
- * already contained.
- *
- * ⚠ **SHOUTED FOR `addressed`, QUIET FOR `likely`, AND THE ASYMMETRY IS THE
- * POINT.** `@desktop` is a fact: somebody named this lane. "Likely" is a guess
- * this server is making on the reader's behalf, and a guess that shouts as loud
- * as a fact teaches the reader to stop trusting the fact.
- */
-function outsideMark(relevance) {
-    if (relevance === "addressed")
-        return " · ⚠ FOR YOU";
-    if (relevance === "likely")
-        return " · likely for you";
-    return "";
-}
-function formatMessage(m, anyThreaded, view, ref, clip, terse, relevance = null) {
-    // ⚠ THE READER GOES IN (A2): a sibling agent renders `for you`, another
-    // member's renders their name — see `channel-render-identity.ts`.
+function formatMessage(m, anyThreaded, view, ref, clip, terse) {
+    // ⚠ **THE VIEW IS PASSED (S45, 2026-09-18)** so a SIBLING agent — one whose
+    // operator is the reader — renders `for you` instead of the operator's name
+    // and id, which is what a reader cannot tell apart otherwise.
     const author = (0, channel_render_identity_1.formatAuthor)(m, view);
     const ended = sessionEnded(m);
     const kindTag = ended
@@ -178,15 +156,13 @@ function formatMessage(m, anyThreaded, view, ref, clip, terse, relevance = null)
     const memberTag = (0, channel_render_identity_1.addressTag)(m, view);
     // ⚠ **THE ACK, BESIDE THE ADDRESS IT IS AN ACK FOR.** `delivery` alone is the
     // server's write-time PREDICTION and `deliveryAt` is what turns it into a
-    // receipt; `deliveryFact` carries that one-character distinction (`woken?` vs
-    // `woken`) and is the SAME renderer the write result uses, so a caller reads
+    // receipt; `deliveryFact` names the tense outright (`woken(predicted)` vs
+    // `woken(confirmed)`) and is the SAME renderer the write result uses, so a caller reads
     // one vocabulary on both sides of a send. Absent when this server computes no
     // verdict — which is not `none`.
     const ack = (0, channel_facts_1.deliveryFact)(m.delivery, m.deliveryAt);
     const deliveryTag = ack ? ` · ${ack}` : "";
-    // ⚠ THE MARK GOES LAST AMONG THE TAGS AND BEFORE THE TIMESTAMP, so it reads
-    // as the line's verdict rather than as another attribute of the addressing.
-    const head = `**#${m.seq}** ${author}${sessionTag}${kindTag}${threadTag}${memberTag}${deliveryTag}${outsideMark(relevance)}${terse ? "" : ` · ${m.createdAt}`}`;
+    const head = `**#${m.seq}** ${author}${sessionTag}${kindTag}${threadTag}${memberTag}${deliveryTag}${terse ? "" : ` · ${m.createdAt}`}`;
     return `- ${head}${clipBody(m, ref, clip)}`;
 }
 /**
@@ -199,17 +175,7 @@ function formatMessage(m, anyThreaded, view, ref, clip, terse, relevance = null)
  * not an optimization: never clip a single-message page, or the remedy the
  * marker names stops working and there is no other way to read a long body.
  */
-function formatMessages(messages, ref, selfUserId = null, format, 
-/**
- * **IS THE CALLER AN OUTSIDE SESSION?** — when true, lines carry the marks
- * {@link outsideMark} renders (2026-09-18).
- *
- * ⚠ **DEFAULT `false`, SO EVERY OTHER CALLER'S BYTES ARE UNCHANGED.** A
- * desktop-run agent has its own addressing and must not be handed a second,
- * weaker one — marking its page "likely for you" would be this server
- * guessing at an audience the `→` arrow already states exactly.
- */
-outside = false) {
+function formatMessages(messages, ref, selfUserId = null, format) {
     const view = {
         selfUserId,
         names: (0, channel_render_identity_1.namesFromMessages)(messages),
@@ -218,13 +184,7 @@ outside = false) {
     const anyThreaded = messages.some((m) => (0, channel_render_threads_1.threadIdOf)(m) !== undefined);
     const clip = messages.length > 1;
     const terse = (0, response_size_1.isConcise)(format);
-    // ⚠ ONE PASS FOR THE WHOLE PAGE — class (ii) is positional (see
-    // `channel-desktop-tag.ts › outsideRelevance`), so it cannot be decided per
-    // line. Skipped entirely when the caller is not an outside session.
-    const relevance = outside
-        ? (0, channel_desktop_tag_1.outsideRelevance)(messages, selfUserId)
-        : new Map();
-    const lines = messages.map((m) => formatMessage(m, anyThreaded, view, ref, clip, terse, relevance.get(m.id) ?? null));
+    const lines = messages.map((m) => formatMessage(m, anyThreaded, view, ref, clip, terse));
     // ⚠ The LEGEND is standing teaching about the id shapes, identical on every
     // page — metadata by the definition `response-size.ts` sets, so `concise`
     // drops it. A body never does.

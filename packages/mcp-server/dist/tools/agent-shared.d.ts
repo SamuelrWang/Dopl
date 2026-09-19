@@ -25,6 +25,7 @@
  * §5A), and this surface must not rebuild on a new door what the route closed.
  */
 import type { AgentTemplate, DoplClient } from "@dopl/client";
+import type { AudienceLabel } from "./audience-label.js";
 import { type ToolResponse } from "./respond.js";
 /**
  * The server's 403 code for "a credential that may be shared between humans
@@ -164,8 +165,14 @@ export declare function knowledgeBaseNotAttachable(e: unknown): ToolResponse | n
 export declare function sharedCredentialPrivateDenied(e: unknown): ToolResponse | null;
 /** One template rendered as a list row. ⚠ Every displayed field is a VALUE
  *  spliced into a line we wrote — name and description are length-bounded only,
- *  so a newline in either would otherwise start a row of its own. */
-export declare function templateRow(t: AgentTemplate): string;
+ *  so a newline in either would otherwise start a row of its own.
+ *
+ *  ⚠ **`audience` IS PASSED IN, NOT READ OFF `t.visibility` (S21/S23,
+ *  2026-09-18).** The column answers "what is in the visibility field"; a
+ *  caller asks "who can see this", and inside a home channel `workspace` means
+ *  the room rather than the company. The GROUP the caller put this row in is
+ *  the only place that distinction exists — see `audience-label.ts`. */
+export declare function templateRow(t: AgentTemplate, audience: AudienceLabel): string;
 /**
  * ⚠ WHOSE VIEW THIS IS, stated ON THE RESULT and not only in the description.
  * `listTemplates` is filtered server-side by `canSeeTemplate`, so another

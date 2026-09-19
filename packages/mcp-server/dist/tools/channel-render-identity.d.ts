@@ -21,15 +21,6 @@ import type { ChannelMessage } from "@dopl/client";
  * Author label for a message line. `agent` row renders "agent for <name>",
  * never bare name — reader treats counterparty as another member's agent.
  *
- * ⚠ **IT TAKES THE READER SINCE 2026-09-18 (A2/S45), AND THAT IS WHAT LETS IT
- * SAY `for you`.** A label built from the MESSAGE ALONE can name an operator
- * and never say whether that operator is the reader's own, so a sibling worker
- * launched by the same person and a stranger's agent rendered identically —
- * and an agent deciding whether to answer, escalate or ignore was reading the
- * one distinction it needed out of a uuid it had to go and look up. `view` is
- * the reader `formatMessages` already holds; a caller that has none passes
- * {@link NO_MEMBER_VIEW} and gets exactly the old line.
- *
  * ⚠ Two rules, both because nothing validates `display_name`:
  *   1. Name NEUTRALIZED and user row prefixed `member`, never bare. Raw name
  *      may contain newlines → can close the line and forge fresh ones (a
@@ -37,45 +28,24 @@ import type { ChannelMessage } from "@dopl/client";
  *      "system" would render as the bare token `system`.
  *   2. `authorUserId` appended ALWAYS, not only as name-missing fallback. Name
  *      = author's claim; id = server's record. Claim alone is uncheckable.
+ *
+ * 🔒 **AND SINCE 2026-09-18 IT SAYS WHEN AN AGENT IS A SIBLING** (S45). An
+ * agent post is authored by its OPERATOR'S ACCOUNT, so `agent @x for Samuel
+ * Wang (<id>)` is what a reader saw whether that agent was ITS OWN sibling or a
+ * stranger's — and wave 3 spent two whole waves believing a sibling was another
+ * member's agent, then filed a false security finding off it. `memberRef` has
+ * answered `you` for the caller's own id since it was written; this is that
+ * same join, applied to the author half.
+ *
+ * ⚠ **THE JOIN IS ON `authorUserId`, THE HALF THE AUTHOR DOES NOT CONTROL** —
+ * never on a name, and never on the agent handle. Two agents of one operator
+ * share that id; two operators cannot.
+ *
+ * ⚠ **`view` IS OPTIONAL AND AN UNRESOLVED CALLER RENDERS EXACTLY AS BEFORE.**
+ * `selfUserId` is null when the boot ping failed, and "I do not know who I am"
+ * must not render as "not yours" — see {@link NO_MEMBER_VIEW}.
  */
 export declare function formatAuthor(m: ChannelMessage, view?: MemberView): string;
-/**
- * 🔒 **THE GROUP HANDLE FOR AN OPERATOR'S OUTSIDE SESSIONS** — one built-in
- * handle meaning *the operator's MCP sessions that are not app-spawned agents*
- * (Claude Code, Codex, Cursor, a script).
- *
- * ⚠ **THE SEAM IS CLOSED AND THE MECHANISM ARRIVED** (integration, 2026-09-19).
- * The handle's minting, its reservation against the member/agent namespaces and
- * the author kind on the wire were built on the SIBLING BRANCH that is now
- * merged, so this is an ALIAS of `channel-desktop-tag.ts ›
- * DESKTOP_GROUP_HANDLE` and not a second declaration of the string. Two copies
- * of a handle is exactly how a rename lands in one renderer and not the other.
- */
-export declare const OUTSIDE_SESSION_HANDLE = "desktop";
-/**
- * ⚠ **THE THIRD AUTHOR SHAPE IS NOT A NEW `authorKind`, AND IT IS NOT A DTO
- * FIELD EITHER.** `@dopl/contracts › MessageAuthorKind` is a CLOSED union guarded
- * by `scripts/check-message-kind-drift.ts` and the column's own `CHECK`, and both
- * `ChannelMessage` declarations sit at the 500-line cap — so the outside-session
- * marker rides server-owned `metadata.external_session` and is READ THROUGH A
- * FUNCTION on the sibling branch (`authorViewOf(message)` →
- * `MessageAuthorKind | "external"`).
- *
- * 🔒 **THIS IS THE ONE PLACE THIS TIER ASKS THE QUESTION**, and since the merge
- * (2026-09-19) it does not ask it itself: the body IS
- * `authorViewOf(m) === "external"`, and nothing else in this package moved.
- * Reading `metadata.external_session` directly would label a `user` row an
- * outside session; `authorViewOf` is the ONE place the "only an `agent` row can
- * be one" rule lives, and this function is now a named reading of it.
- *
- * ⚠ **THE OLD-PAYLOAD ANSWER IS `false`, AND IT IS `false` ON PURPOSE** (§8's
- * rule for a new payload field): a row written or cached before the marker
- * existed carries no `external_session`, and `undefined === true` is false — so
- * an old row renders exactly the line it always did rather than being reported
- * as an outside session nobody marked.
- */
-export declare const EXTERNAL_SESSION_META_KEY = "external_session";
-export declare function isOutsideSession(m: ChannelMessage): boolean;
 /**
  * **WHICH AGENT — BY THE NAME ITS OPERATOR GAVE IT** (2026-09-04).
  *

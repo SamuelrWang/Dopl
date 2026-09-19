@@ -109,7 +109,7 @@ const KB_INPUT_SHAPE = {
   description: z.string().optional().describe("create_base/update_base: base description (max 2000); create_folder: the folder's agent-facing summary (max 300), which re-calling create_folder updates."),
   slug: z.string().optional().describe("update_base: optional new slug (1-80 chars)."),
   body: z.string().max(1_048_576).optional().describe("write_file: required markdown body. Can't be empty — pass a single space for a deliberate stub."),
-  title: z.string().optional().describe("write_file: the entry's title, which can't contain '/' — it doubles as the addressable path for a new entry when `path` is omitted."),
+  title: z.string().optional().describe("write_file: the entry's title, which can't contain '/'. It RENAMES the path's last segment, and becomes the path itself when `path` is omitted."),
   excerpt: z.string().optional().describe("write_file: the entry's agent-facing summary (max 300), shown in get_tree/list_dir; on an update it changes only when provided."),
   expected_version: z.string().optional().describe("write_file: the entry's Version from a prior read_file — required when overwriting (412 without it, and only force=true skips the check); creates need none."),
   force: z.boolean().optional().describe("write_file: overwrite even if the entry changed since you read it. Discards the other edit. REFUSED if the entry moved — a forced write at a vacated path would duplicate it."),
@@ -137,7 +137,7 @@ const KB_INPUT_SHAPE = {
   limit: z.coerce.number().int().min(1).max(100).optional().describe("search: max hits (default 20)."),
   entry_limit: z.coerce.number().int().min(1).max(1000).optional().describe("get_tree: max entries per page (default 400). Folders always ship in full."),
   entry_cursor: z.string().optional().describe("get_tree: opaque cursor from a prior page's 'more entries' notice — fetches the next page."),
-  visibility: z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' publishes a base you created workspace-wide and is one-way ('private' is rejected); op=create_base: initial visibility (default 'private')."),
+  visibility: z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' publishes a base you created to every member, ONE WAY ('private' is rejected). op=create_base: initial visibility — 'private' (default) = you and your own agents."),
   scope: z.enum(GRANT_SCOPE_VALUES).optional().describe(GRANT_SCOPE_ARG_DESCRIPTION),
   to: z.string().optional().describe(GRANT_TO_ARG_DESCRIPTION),
   level: z.enum(GRANT_LEVEL_VALUES).optional().describe(GRANT_LEVEL_ARG_DESCRIPTION),
@@ -145,7 +145,7 @@ const KB_INPUT_SHAPE = {
     .string()
     .optional()
     .describe(
-      "op=create_base/set_visibility: the one-time token from this call's own dry-run preview, echoed back to go ahead — needed only when the write would publish into a home channel somebody else is in, refused on any other call, and never guessable.",
+      "op=create_base/set_visibility: TWO CALLS — send this call WITHOUT it for a dry-run preview plus a one-time token, then re-send it WITH that token. Only when the write would publish into a home channel somebody else is in; refused elsewhere, never guessable.",
     ),
 };
 

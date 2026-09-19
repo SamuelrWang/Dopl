@@ -428,7 +428,7 @@ export async function opPost(
       // ⚠ READ OFF THE STORED ROW SINCE 2026-09-18 — see {@link wakeFact}.
       wake: wakeFact(message.recipientAgentIds),
       // ⚠ WHAT BECAME OF IT — A9's keystone contract, rendered where the caller
-      // already reads the rest of the write's outcome. `woken?` is the server's
+      // already reads the rest of the write's outcome. `woken(predicted)` is the server's
       // write-time prediction (no `deliveryAt` yet); `woken` is the operator's
       // machine reporting what it did. Absent = this server computes no verdict,
       // which is NOT `none`. See `channel-facts.ts › deliveryFact`.

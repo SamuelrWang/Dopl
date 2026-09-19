@@ -47,6 +47,7 @@ const tool_errors_js_1 = require("./tool-errors.js");
 const confirm_token_js_1 = require("./confirm-token.js");
 const agent_shared_js_1 = require("./agent-shared.js");
 const channel_shared_js_1 = require("./channel-shared.js");
+const duplicate_name_js_1 = require("./duplicate-name.js");
 const container_destination_js_1 = require("./container-destination.js");
 /**
  * THE ONE TRANSLATION between the agent-facing shape (`{base, folder?, entry?}`)
@@ -218,8 +219,13 @@ directory) {
         : inHomeChannel
             ? "Shared in this channel — everyone here can list it and launch it."
             : "Shared with everyone in this workspace — every member can list it and launch it.";
+    // ⚠ Q3's warning — AFTER the create, so a list that throws costs the caller
+    // nothing. A template collision is the sharper of the two: `resolveTemplateRef`
+    // REFUSES every name-addressed `get`/`update` from now on. See
+    // `duplicate-name.ts`.
+    const dup = await (0, duplicate_name_js_1.duplicateNameNoteFor)(template, () => client.listAgentTemplates(), "agent template", true);
     return (0, respond_js_1.ok)([
-        `Created agent template ${(0, narration_js_1.inlineOr)(template.name, narration_js_1.NO_NAME)} (id: \`${template.id}\`). ${audience}`,
+        `Created agent template ${(0, narration_js_1.inlineOr)(template.name, narration_js_1.NO_NAME)} (id: \`${template.id}\`). ${audience}${dup}`,
         `Launch it into a channel with dopl_channel(op="manage", action="launch", channel=…, template="${template.id}") — which ASKS the operator's machine and does not start anything by itself.`,
     ].join("\n"));
 }

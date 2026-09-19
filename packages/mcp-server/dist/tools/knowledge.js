@@ -8,12 +8,8 @@
  *
  * Thin registrar: one tool schema + op routing, delegating to
  *   - `knowledge-shared.ts`    — base resolution + error/validation mappers
- *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/outline/read_file
- *   - `knowledge-ops-search.ts` — search
- *   - `knowledge-ops-write.ts` — folder + entry writes, and their authoring rules
- *   - `knowledge-ops-base-writes.ts` — create/update/publish a BASE
- *   - `knowledge-ops-grant.ts`  — lend one base to a channel, container or team
- *   - `knowledge-entity-titles.ts` — the `&amp;`-in-a-title rule, both lanes
+ *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/read_file/search
+ *   - `knowledge-ops-write.ts` — create/update/move/write/grant ops
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerKnowledgeTools = registerKnowledgeTools;
@@ -25,25 +21,21 @@ const tool_errors_1 = require("./tool-errors");
 const identity_1 = require("./identity");
 const respond_1 = require("./respond");
 const knowledge_ops_read_1 = require("./knowledge-ops-read");
-// ⚠ The one read op whose result is a RANKING — split out for the 500-line cap.
-const knowledge_ops_search_1 = require("./knowledge-ops-search");
-// ⚠ The GRANT has its own file: it writes no base content, it lends one
-// (S52, 2026-09-18). Pinning's ops left the surface entirely on the same day.
-const knowledge_ops_grant_1 = require("./knowledge-ops-grant");
+const knowledge_ops_pin_1 = require("./knowledge-ops-pin");
 const knowledge_ops_write_1 = require("./knowledge-ops-write");
-// ⚠ Base-level writes split out for the 500-line cap (2026-09-18).
-const knowledge_ops_base_writes_1 = require("./knowledge-ops-base-writes");
+// ⚠ THE BASE LANE — its own module since 2026-09-18 (§1's 500-line cap).
+const knowledge_ops_base_write_1 = require("./knowledge-ops-base-write");
 const grant_1 = require("./grant");
 const retired_copy_ops_1 = require("./retired-copy-ops");
 /**
- * The THIRTEEN published ops. ⚠ Hoisted so the runtime enum can be the union of
+ * The FIFTEEN published ops. ⚠ Hoisted so the runtime enum can be the union of
  * this and the retired name while `.meta()` publishes only this — see the `op`
  * field.
  */
 const KB_OPS = [
     "list_bases", "get_tree", "list_dir", "create_base", "update_base",
     "grant", "create_folder", "move_folder", "outline", "read_file",
-    "write_file", "move_file", "search", "set_visibility",
+    "write_file", "move_file", "search", "set_visibility", "pin", "unpin",
 ];
 /**
  * 🔒 THE PUBLISHED ARGUMENT SHAPE, HOISTED SO THERE IS ONE COPY OF IT (A14).
@@ -75,31 +67,19 @@ const KB_INPUT_SHAPE = {
         .enum([...KB_OPS, ...retired_copy_ops_1.RETIRED_COPY_OP_NAMES])
         .meta({ enum: [...KB_OPS] })
         .describe("Operation to perform."),
-    base: zod_1.z.string().optional().describe("Base slug or id. Required for get_tree/list_dir/update_base/grant/create_folder/move_folder/read_file/write_file/move_file; optional scope for search."),
+    base: zod_1.z.string().optional().describe("Base slug or id. Required for get_tree/list_dir/update_base/grant/create_folder/move_folder/read_file/write_file/move_file/pin/unpin; optional scope for search."),
     section: zod_1.z.string().max(300).optional().describe('read_file: only this HEADING\'s section, down to the next heading of the same or higher level — case-insensitive; an unknown one answers with the outline. write_file: replace that section (`body` is its new content), appended at "##" if absent.'),
-    path: zod_1.z.string().optional().describe("Path within the base. list_dir: '/' or '' for root. create_folder: required, e.g. 'projects/foo'. outline/read_file: required entry path. write_file: entry path — required unless you pass `title` (then the title becomes the path). There is no delete op — deletion is app-only."),
+    path: zod_1.z.string().optional().describe("Path within the base. list_dir: '/' or '' for root. create_folder: required, e.g. 'projects/foo'. outline/read_file: required entry path. write_file: entry path — required unless you pass `title` (then the title becomes the path). pin/unpin: OPTIONAL, and it picks the target — with a path you pin that ONE entry, without one you pin the whole base. There is no delete op — deletion is app-only."),
     from_path: zod_1.z.string().optional().describe("move_folder/move_file: source path."),
     to_path: zod_1.z.string().optional().describe("move_folder/move_file: destination path (leaf becomes the new name/title)."),
     name: zod_1.z.string().optional().describe("create_base: required base name (1-120 chars). update_base: optional new name."),
     description: zod_1.z.string().optional().describe("create_base/update_base: base description (max 2000); create_folder: the folder's agent-facing summary (max 300), which re-calling create_folder updates."),
     slug: zod_1.z.string().optional().describe("update_base: optional new slug (1-80 chars)."),
     body: zod_1.z.string().max(1_048_576).optional().describe("write_file: required markdown body. Can't be empty — pass a single space for a deliberate stub."),
-    title: zod_1.z.string().optional().describe("write_file: the entry's title, which can't contain '/' — it doubles as the addressable path for a new entry when `path` is omitted."),
+    title: zod_1.z.string().optional().describe("write_file: the entry's title, which can't contain '/'. It RENAMES the path's last segment, and becomes the path itself when `path` is omitted."),
     excerpt: zod_1.z.string().optional().describe("write_file: the entry's agent-facing summary (max 300), shown in get_tree/list_dir; on an update it changes only when provided."),
-    expected_version: zod_1.z.string().optional().describe("write_file: the entry's Version from a prior read_file — required when overwriting (412 without it, and only force=true skips the check); creates need none."),
-    force: zod_1.z.boolean().optional().describe("write_file: overwrite even if the entry changed since you read it. Discards the other edit. REFUSED if the entry moved — a forced write at a vacated path would duplicate it."),
-    // 🔒 **THE ONE PUSHED COST OF THIS WAVE, AND IT BUYS THE ANSWER TO "DID MY
-    // WRITE LAND"** (S53). Without a key, a timed-out write leaves an agent with
-    // `force=true` as its only recovery — a blind overwrite aimed at a row it
-    // cannot verify. ⚠ THE DESCRIBE STATES THE CONTRACT AND NOT THE MECHANISM:
-    // author-scoping, the partial unique index and the race arm are server facts
-    // the caller cannot act on.
-    client_write_id: zod_1.z
-        .string()
-        .min(1)
-        .max(200)
-        .optional()
-        .describe('write_file/create_base: your idempotency key. Re-sending the same call with the same key returns the FIRST write instead of writing twice. Use after a timeout, never force=true.'),
+    expected_version: zod_1.z.string().optional().describe("write_file: the entry's Version from a prior read_file — required when overwriting (412 without it); creates need none."),
+    force: zod_1.z.boolean().optional().describe("write_file: overwrite even if the entry changed since you read it. Discards the other edit — use only when intentional."),
     query: zod_1.z.string().optional().describe("search: required free-text query."),
     // ⚠ coerce: MCP clients sometimes send numbers as strings, which strict
     // z.number() rejects with an opaque -32602.
@@ -110,14 +90,14 @@ const KB_INPUT_SHAPE = {
     limit: zod_1.z.coerce.number().int().min(1).max(100).optional().describe("search: max hits (default 20)."),
     entry_limit: zod_1.z.coerce.number().int().min(1).max(1000).optional().describe("get_tree: max entries per page (default 400). Folders always ship in full."),
     entry_cursor: zod_1.z.string().optional().describe("get_tree: opaque cursor from a prior page's 'more entries' notice — fetches the next page."),
-    visibility: zod_1.z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' publishes a base you created workspace-wide and is one-way ('private' is rejected); op=create_base: initial visibility (default 'private')."),
+    visibility: zod_1.z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' publishes a base you created to every member, ONE WAY ('private' is rejected). op=create_base: initial visibility — 'private' (default) = you and your own agents."),
     scope: zod_1.z.enum(grant_1.GRANT_SCOPE_VALUES).optional().describe(grant_1.GRANT_SCOPE_ARG_DESCRIPTION),
     to: zod_1.z.string().optional().describe(grant_1.GRANT_TO_ARG_DESCRIPTION),
     level: zod_1.z.enum(grant_1.GRANT_LEVEL_VALUES).optional().describe(grant_1.GRANT_LEVEL_ARG_DESCRIPTION),
     confirm_token: zod_1.z
         .string()
         .optional()
-        .describe("op=create_base/set_visibility: the one-time token from this call's own dry-run preview, echoed back to go ahead — needed only when the write would publish into a home channel somebody else is in, refused on any other call, and never guessable."),
+        .describe("op=create_base/set_visibility: TWO CALLS — send this call WITHOUT it for a dry-run preview plus a one-time token, then re-send it WITH that token. Only when the write would publish into a home channel somebody else is in; refused elsewhere, never guessable."),
 };
 /**
  * ⚠ THE PROSE BUDGET FOR THIS TOOL, AND IT IS ABOVE
@@ -160,9 +140,10 @@ const KB_INPUT_SHAPE = {
 // (see the paragraph above on what left in A14): a description carries nothing its
 // own `.describe()` already says, because both are pushed on the SAME connection.
 // Three glosses were exactly that — `read_file`'s (`section`, `offset`, `max_chars`
-// and `expected_version` each describe their own half) and `grant`'s scope list
-// (`scope`'s and `level`'s own describes). The op NAMES all stayed quoted, which is
-// what `parity.test.ts` reads.
+// and `expected_version` each describe their own half), `grant`'s scope list
+// (`scope`'s and `level`'s own describes), and `pin`/`unpin`'s target rule (VERBATIM
+// in `path`'s describe). The op NAMES all stayed quoted, which is what
+// `parity.test.ts` reads.
 // ⚠ **NOTHING PINNED WAS TOUCHED, AND THAT WAS THE CONSTRAINT RATHER THAN A
 // PREFERENCE.** `tool-scope-claims.test.ts` greps the DESCRIPTION for the three
 // filtered-op bullets — `list_bases` (can READ / private / no grant on), `get_tree`
@@ -174,21 +155,11 @@ const KB_INPUT_SHAPE = {
 // ⚠ **THE CEILING IN `tool-budget.test.ts` IS NOW STALE BY CONSTRUCTION and must be
 // LOWERED to the measured size in this same change — never raised.** That ratchet
 // fails on a SHRINK as loudly as on a growth, which is how the win gets banked.
-const KB_PROSE_BUDGET = 1_294; // ⚠ 13 ops glossed for parity.test.ts, plus the fence
-// ⚠ **1,586 → 1,294 (2026-09-18, −292): PINNING LEFT, AND THE WHOLE FALL IS BANKED
-// RATHER THAN HELD AS HEADROOM.** Samuel's ruling deleted knowledge pinning (the
-// feature, not just its two ops), so the op list lost the bullet that glossed them and
-// two `.describe()`s lost the op names and the target rule.
-// ⚠ **THE DELETED BULLET IS NOT QUOTED HERE, AND THAT COST ONE REVISION** — the removal
-// gate (`src/features/knowledge/pinning-stays-removed.test.ts`) scans this file, and the
-// first draft of this comment reintroduced the very string it was recording the loss of. ⚠ **MEASURED, NOT ARITHMETIC** — 1,294 is what `composeDescription`
-// reports for the composed prose, read back off its own over-cap throw.
-// ⚠ **AND 1,586 WAS ALREADY HEADROOM, WHICH IS WHY THE FALL IS BIGGER THAN THE CUT.**
-// The block above used to note that its narrative described a rise to 1,760 this
-// constant never took and that the prose had fitted under 1,586 the whole time. A
-// budget kept above the measurement is a licence for the next sentence, and the rule
-// three lines up — lower to the MEASURED size, never to a round number — applies to a
-// removal exactly as it applies to a trim.
+const KB_PROSE_BUDGET = 1_586; // ⚠ 16 ops glossed for parity.test.ts, plus the fence
+// ⚠ THE COMMENT BLOCK ABOVE NARRATES A RISE TO 1,760 THAT THIS CONSTANT NEVER TOOK —
+// it reads 1,586, and the prose has fitted under it the whole time. Left as measured
+// rather than "corrected" upward: raising a budget to match a comment is exactly the
+// move these ratchets exist to refuse.
 /**
  * ⚠ RENDERED, NOT WRITTEN (A14, 2026-09-02) — `tool-style.ts › composeDescription`
  * holds the house order (what it returns and what it does NOT, the capability
@@ -201,7 +172,7 @@ const KB_PROSE_BUDGET = 1_294; // ⚠ 13 ops glossed for parity.test.ts, plus th
  * own `.describe()` already carries, because a description and its arg
  * descriptions are pushed on the SAME connection and a fact in both is paid for
  * twice. The `expected_version`/412 rule and the `force` escape are
- * `expected_version`'s and `force`'s; the
+ * `expected_version`'s and `force`'s; the pin/unpin target rule is `path`'s; the
  * grant scope/level pairing is `scope`'s and `level`'s; the home-channel preview is
  * `confirm_token`'s AND the errors table. ⚠ AND EVERY BOUND: `limit` and
  * `entry_limit` stopped hand-typing their ranges into their own describes on the
@@ -229,7 +200,8 @@ const KB_DESCRIPTION = (0, tool_style_1.composeDescription)({
 - "get_tree" — the tree, metadata only. Folders whole, ENTRIES are paged: 400 a call, entry_cursor for more.
 - "search" — over the BODIES of bases you can read: a ranked SAMPLE, not an exhaustive scan (20 by default); zero hits is not proof of absence.
 - "outline" (headings + what each costs, no body), "read_file", "list_dir", "write_file" (upsert — entries past ~1.5k chars carry ## headings, one topic each; writes land in the changelog), "move_file", "create_folder" (mkdir -p), "move_folder".
-- "create_base", "update_base", "set_visibility" (publish, one way), "grant" (lend one YOU made).`,
+- "create_base", "update_base", "set_visibility" (publish, one way), "grant" (lend one YOU made).
+- "pin"/"unpin" — the STARTUP CONTEXT every session here gets.`,
     ],
     limits: { shape: KB_INPUT_SHAPE, only: ["limit", "entry_limit"] },
     errors: tool_errors_1.KB_ERRORS,
@@ -281,25 +253,24 @@ directory) {
                 const miss = (0, respond_1.missingParams)("create_base", args, ["name"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_base_writes_1.opCreateBase)(client, caller.userId, {
+                return (0, knowledge_ops_base_write_1.opCreateBase)(client, caller.userId, {
                     name: args.name,
                     description: args.description,
                     visibility: args.visibility,
                     confirm_token: args.confirm_token,
-                    client_write_id: args.client_write_id,
                 });
             }
             case "update_base": {
                 const miss = (0, respond_1.missingParams)("update_base", args, ["base"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_base_writes_1.opUpdateBase)(client, args.base, args.name, args.description, args.slug);
+                return (0, knowledge_ops_base_write_1.opUpdateBase)(client, args.base, args.name, args.description, args.slug);
             }
             case "grant": {
                 const miss = (0, respond_1.missingParams)("grant", args, ["base", "scope", "to"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_grant_1.opGrantBase)(client, directory, caller.userId, args.base, args.scope, args.to, args.level);
+                return (0, knowledge_ops_base_write_1.opGrantBase)(client, directory, caller.userId, args.base, args.scope, args.to, args.level);
             }
             case "create_folder": {
                 const miss = (0, respond_1.missingParams)("create_folder", args, ["base", "path"]);
@@ -345,7 +316,7 @@ directory) {
                 if (args.body === "") {
                     return (0, respond_1.err)(`write_file: body cannot be empty — pass content (or a single space for a stub).`);
                 }
-                return (0, knowledge_ops_write_1.opWriteFile)(client, args.base, path, args.body, args.title, args.expected_version, args.force, args.excerpt, args.section, args.client_write_id);
+                return (0, knowledge_ops_write_1.opWriteFile)(client, args.base, path, args.body, args.title, args.expected_version, args.force, args.excerpt, args.section);
             }
             case "move_file": {
                 const miss = (0, respond_1.missingParams)("move_file", args, ["base", "from_path", "to_path"]);
@@ -357,7 +328,7 @@ directory) {
                 const miss = (0, respond_1.missingParams)("search", args, ["query"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_search_1.opSearch)(client, args.query, args.base, args.limit);
+                return (0, knowledge_ops_read_1.opSearch)(client, args.query, args.base, args.limit);
             }
             case "set_visibility": {
                 const miss = (0, respond_1.missingParams)("set_visibility", args, ["base", "visibility"]);
@@ -366,7 +337,17 @@ directory) {
                 // 🔒 F-441 — the caller id and the confirm token, which this arm used
                 // to drop. Without them `opSetVisibility` could not preview and a
                 // shared-container publish answered with a refusal instead.
-                return (0, knowledge_ops_base_writes_1.opSetVisibility)(client, caller.userId, args.base, args.visibility, args.confirm_token);
+                return (0, knowledge_ops_base_write_1.opSetVisibility)(client, caller.userId, args.base, args.visibility, args.confirm_token);
+            }
+            // ⚠ TWO CASES, ONE HANDLER, AND THE BOOLEAN IS THE WHOLE DIFFERENCE —
+            // see `knowledge-ops-write.ts › opPin` for why they are two ops rather
+            // than one op carrying a flag. `path` is OPTIONAL and picks the target.
+            case "pin":
+            case "unpin": {
+                const miss = (0, respond_1.missingParams)(args.op, args, ["base"]);
+                if (miss)
+                    return miss;
+                return (0, knowledge_ops_pin_1.opPin)(client, args.base, args.path, args.op === "pin");
             }
             // ── THE ONE-RELEASE MIGRATION WINDOW ──────────────────────────────
             //

@@ -39,8 +39,14 @@ const { AGENT_ID_RE } = require('./agent-id');
 // formatAuthor` renders `agent @x for you` for a SIBLING — another session this same operator
 // launched — and `outside session for you` for the operator's own Claude Code / Codex / Cursor
 // connection. Without them the agent has the label and no rule for it, which is the lookup this
-// wave exists to delete. ⚠ **`@desktop` IS THE GROUP HANDLE FOR THOSE OUTSIDE SESSIONS** and is
-// minted on a sibling branch (`OUTSIDE_SESSION_HANDLE`); the two land together.
+// wave exists to delete. ⚠ **`@desktop` IS THE GROUP HANDLE FOR THOSE OUTSIDE SESSIONS**, minted
+// on what was a sibling branch and is now merged (`channel-desktop-tag.ts › DESKTOP_GROUP_HANDLE`).
+//
+// ⚠ **ONE LINE PER FACT, AND TWO BRANCHES WROTE THE SIBLING ONE** (merge, 2026-09-19). Batch D
+// added `A post marked "for you" is a SIBLING: your operator's, not a peer's.` beside the line
+// already here, which is the same fact in two sentences — the shape this block exists to refuse.
+// The surviving wording is the one that also says what the OTHER case looks like ("another name
+// means another member's"), so the legend covers both directions in the characters of one line.
 //
 // ⚠ THE NAME IS SPOKEN ONLY WHEN THE CALLER SUPPLIES ONE. `ctx.agentName` is optional and this
 // module is PURE, so a caller that has the name passes it; inventing one here, or asserting the

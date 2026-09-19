@@ -18,6 +18,8 @@ const channel_shared_1 = require("./channel-shared");
 const response_size_1 = require("./response-size");
 const untrusted_fence_1 = require("./untrusted-fence");
 const knowledge_sections_1 = require("./knowledge-sections");
+const audience_label_1 = require("./audience-label");
+const body_digest_1 = require("./body-digest");
 const container_destination_1 = require("./container-destination");
 const knowledge_entity_titles_1 = require("./knowledge-entity-titles");
 /** ⚠ §8 STALE-CACHE, SPELLED INLINE. ⚠ **ONE FROZEN EMPTY, NOT TWO** — a set of
@@ -117,22 +119,30 @@ directory) {
     // same table the template lane reads its own wording from — two surfaces
     // naming one destination differently is how an agent learns a sharing model
     // the operator does not have.
+    // ⚠ **EACH GROUP CARRIES THE ROW LABEL AS WELL AS THE HEADING (S21/S23,
+    // 2026-09-18).** A base shared into a home channel is STORED `private` — the
+    // grant is the audience — so printing the column made the rows under "Shared
+    // in this channel" read `· private`, which is the opposite of the truth.
+    // `audience-label.ts` is the table; a `null` label means "ask the column",
+    // which is only ever the standard-workspace case.
     const groups = grants === undefined
-        ? [[null, here]]
+        ? [[null, here, null]]
         : [
             [
                 container_destination_1.DESTINATION_HEADINGS.shared,
                 here.filter((b) => grants[b.id] !== undefined),
+                audience_label_1.AUDIENCE_LABELS.channel,
             ],
             [
                 container_destination_1.DESTINATION_HEADINGS.legacy,
                 here.filter((b) => grants[b.id] === undefined),
+                audience_label_1.AUDIENCE_LABELS.nobody,
             ],
         ];
     const lines = ["## Knowledge bases\n"];
-    for (const [heading, rows] of [
+    for (const [heading, rows, audience] of [
         ...groups,
-        [container_destination_1.DESTINATION_HEADINGS.personal, personal],
+        [container_destination_1.DESTINATION_HEADINGS.personal, personal, audience_label_1.AUDIENCE_LABELS.you],
     ]) {
         if (rows.length === 0)
             continue;
@@ -140,9 +150,12 @@ directory) {
             lines.push(`### ${heading}`);
         for (const b of rows) {
             // ⚠ Immutable id beside the slug — the slug changes on rename.
-            const vis = b.visibility === "private" ? "private" : "public";
+            const seenBy = audience ??
+                (b.visibility === "private"
+                    ? audience_label_1.AUDIENCE_LABELS.you
+                    : audience_label_1.AUDIENCE_LABELS.workspace);
             const desc = b.description ? `\n  ${(0, narration_1.inlineOr)(b.description, "")}` : "";
-            lines.push(`- ${(0, narration_1.inlineOr)(b.name, narration_1.NO_NAME)} (slug: \`${b.slug}\` · id: \`${b.id}\` · ${vis})${desc}`);
+            lines.push(`- ${(0, narration_1.inlineOr)(b.name, narration_1.NO_NAME)} (slug: \`${b.slug}\` · id: \`${b.id}\` · seen by ${seenBy})${desc}`);
         }
         lines.push("");
     }
@@ -463,7 +476,11 @@ callerUserId = null, format, maxChars, section, offset) {
         ...(terse
             ? [`Version: \`${entry.updatedAt}\` (pass as expected_version to write_file)`]
             : [
-                `Path: \`${path}\` · entry id: \`${entry.id}\` · type: ${entry.entryType}`,
+                // ⚠ **THE WHOLE ENTRY'S SIZE AND FINGERPRINT, OFF THE STORED BODY**
+                // (S47/S33) — never off `body` above, which a `section`, a `max_chars`
+                // or an `offset` may have windowed. A digest that moved with the READ
+                // would compare a window to a document. See `body-digest.ts`.
+                `Path: \`${path}\` · entry id: \`${entry.id}\` · type: ${entry.entryType} · ${(0, body_digest_1.bodyFact)(entry.body)}`,
                 `Version: \`${entry.updatedAt}\` (pass as expected_version to write_file) · last edited by ${entry.lastEditedSource} · created ${entry.createdAt}`,
             ]),
         ...(sectionLine ? [sectionLine] : []),

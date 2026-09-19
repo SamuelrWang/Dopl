@@ -110,8 +110,15 @@ export declare function tagFact(resolved: number, attempted: number): string | u
  * operator's machine reports back, `deliveryAt` carries the stamp and the same
  * word becomes what actually HAPPENED. A caller that reads only the word cannot
  * tell a forecast from a receipt, and the forecast is the one it must not act on
- * as if a machine had answered — so the prediction is rendered `woken?` and the
- * receipt `woken`, one character carrying the whole distinction.
+ * as if a machine had answered.
+ *
+ * ⚠ **IT WAS ONE CHARACTER — `woken?` AGAINST `woken` — AND A QUESTION MARK IS
+ * NOT A TENSE (S26, 2026-09-18).** Every reader tested read `woken?` as the
+ * server being UNSURE whether a wake happened, which is the one thing it does
+ * not mean: the server is certain it asked, and has not yet been told the
+ * answer. So the pair NAMES ITSELF — `woken(predicted)` is the write-time
+ * forecast, `woken(confirmed)` is the operator's machine reporting back — and
+ * no reader has to know that a suffix is doing the work.
  *
  * ⚠ `undefined` (the field never printed) means THIS SERVER DOES NOT COMPUTE ONE
  * — a deployment older than `20260912120000_channel_delivery_verdict`. That is
