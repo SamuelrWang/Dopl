@@ -77,14 +77,20 @@ export async function getKbBase(
   return data.base;
 }
 
+/**
+ * ⚠ `headings` COSTS THE BODY COLUMN SERVER-SIDE and is therefore opt-in —
+ * see `features/knowledge/server/service-folders.ts › getBaseTree`. An older
+ * server ignores the parameter and answers without `entryHeadings`.
+ */
 export async function getKbTree(
   t: DoplTransport,
   baseId: string,
-  opts?: { entryLimit?: number; entryCursor?: string }
+  opts?: { entryLimit?: number; entryCursor?: string; headings?: boolean }
 ): Promise<KnowledgeTreeSnapshot> {
   const params = new URLSearchParams();
   if (opts?.entryLimit !== undefined) params.set("entryLimit", String(opts.entryLimit));
   if (opts?.entryCursor !== undefined) params.set("entryCursor", opts.entryCursor);
+  if (opts?.headings) params.set("headings", "1");
   const qs = params.toString();
   return t.request<KnowledgeTreeSnapshot>(
     `/api/knowledge/bases/${enc(baseId)}/tree${qs ? `?${qs}` : ""}`,
@@ -178,11 +184,15 @@ export async function readKbFilePart(
   t: DoplTransport,
   baseId: string,
   path: string,
-  opts: { section?: string; outline?: boolean } = {}
+  opts: { section?: string; outline?: boolean; headings?: boolean } = {}
 ): Promise<KnowledgeReadFileResult> {
   const params = new URLSearchParams({ path });
   if (opts.section !== undefined) params.set("section", opts.section);
   if (opts.outline) params.set("outline", "1");
+  // ⚠ THE OPPOSITE TRADE FROM `outline`: the WHOLE body, plus the addresses
+  // this reader can use next time. See the route for why it is a third flag
+  // rather than an option on the second.
+  if (opts.headings) params.set("headings", "1");
   return t.request<KnowledgeReadFileResult>(
     `/api/knowledge/bases/${enc(baseId)}/files?${params.toString()}`,
     { toolName: "kb_read_file" }

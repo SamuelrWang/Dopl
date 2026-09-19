@@ -19,7 +19,7 @@ import { opCreateFolder, opWriteFile } from "./knowledge-ops-write.js";
 // ⚠ THE BASE OPS LIVE IN THEIR OWN MODULE SINCE THE 2026-09-18 SPLIT (A3) —
 // `knowledge-ops-write.ts` was AT the 500-line cap. They are re-exported there,
 // but a test addresses the file that OWNS the behaviour it is about.
-import { opCreateBase, opUpdateBase } from "./knowledge-ops-write-bases.js";
+import { opCreateBase, opUpdateBase } from "./knowledge-ops-base-writes.js";
 
 const BASE: KnowledgeBase = {
   id: "base-1",
@@ -79,8 +79,12 @@ function textOf(res: { content: Array<{ text: string }> }): string {
 }
 
 describe("get_tree renders folder descriptions + entry excerpts", () => {
-  it("shows `— summary`, flattens newlines, and truncates long text", async () => {
-    const longDesc = "a".repeat(200);
+  it("shows `— summary`, flattens newlines, and renders the FULL 300", async () => {
+    // ⚠ **300, NOT 160 — AND THE 300 IS THE FIELD'S OWN CAP** (S36 / Wave 4
+    // a3, 2026-09-18). `descSuffix` reclassified the curated excerpt as
+    // body-class content: `narration.ts › INLINE_TEXT_MAX` (160) was NOT
+    // raised, because it still guards every name, label and error echo.
+    const longDesc = "a".repeat(400);
     const client = {
       listKbBases: vi.fn().mockResolvedValue([BASE]),
       getKbTree: vi.fn().mockResolvedValue({
@@ -100,22 +104,104 @@ describe("get_tree renders folder descriptions + entry excerpts", () => {
 
     const out = textOf(await opGetTree(client, "my-base"));
 
-    // ⚠ `descSuffix` defers to the shared neutralizer, so the bound is
-    // INLINE_TEXT_MAX and the row renders as a VALUE — bounded, one line,
-    // separator only when there is something to show.
-    expect(out).toContain(`📁 \`Deep\`/ — \`${"a".repeat(157)}...\``);
-    expect(out).not.toContain("a".repeat(200));
-    expect(out).toContain("📁 `Notes`/ — `line1 line2`");
+    expect(out).toContain(`📁 \`Deep\`/ — ${"a".repeat(300)}`);
+    expect(out).not.toContain("a".repeat(301));
+    // ⚠ A NEWLINE IS STILL REMOVED. A row is a LINE, and flattening is
+    // structural — the fence says where a BLOCK ends, never where a row does.
+    expect(out).toContain("📁 `Notes`/ — line1 line2");
     expect(out).toContain("📁 `Empty`/");
     expect(out).not.toContain("Empty`/ —");
-    expect(out).toContain("📄 `Guide` — `how to X`");
+    expect(out).toContain("📄 `Guide` — how to X");
     expect(out).toContain("📄 `Plain`");
     expect(out).not.toContain("Plain` —");
+  });
+
+  // 🔒 **WAVE 4 a1 — THE TOP ASK IN 3 OF 4 RUNS.** Three runs spent calls
+  // guessing heading names; one spent three `outline` calls whose only purpose
+  // was learning names it should already have been handed.
+  it("carries each entry's heading list on its row", async () => {
+    const getKbTree = vi.fn().mockResolvedValue({
+      base: BASE,
+      folders: [],
+      entries: [
+        entry({ id: "e-h", title: "Runbook", excerpt: "what to do", folderId: null }),
+        entry({ id: "e-none", title: "Stub", excerpt: "a short note", folderId: null }),
+      ],
+      entryTotal: 2,
+      entryHeadings: { "e-h": ["## Setup", "## Escalation Timers"] },
+    });
+    const client = {
+      listKbBases: vi.fn().mockResolvedValue([BASE]),
+      getKbTree,
+    } as unknown as DoplClient;
+
+    const out = textOf(await opGetTree(client, "my-base"));
+    expect(out).toContain("📄 `Runbook` — what to do · ## Setup · ## Escalation Timers");
+    // An entry with no headings simply carries none — no empty separator.
+    expect(out).toContain("📄 `Stub` — a short note");
+    expect(out).not.toContain("a short note ·");
+    // ⚠ The flag is what makes the server read the body column at all.
+    expect(getKbTree).toHaveBeenCalledWith(
+      "base-1",
+      expect.objectContaining({ headings: true }),
+    );
+  });
+
+  // ⚠ §8 STALE-CACHE. A payload from a bundle that predates `entryHeadings`
+  // renders every row WITHOUT a heading list rather than crashing or claiming
+  // the entries have none.
+  it("survives a payload with no entryHeadings key at all", async () => {
+    const client = {
+      listKbBases: vi.fn().mockResolvedValue([BASE]),
+      getKbTree: vi.fn().mockResolvedValue({
+        base: BASE,
+        folders: [],
+        entries: [entry({ id: "e1", title: "Old", excerpt: "from an old server" })],
+        entryTotal: 1,
+      }),
+    } as unknown as DoplClient;
+
+    const out = textOf(await opGetTree(client, "my-base"));
+    expect(out).toContain("📄 `Old` — from an old server");
+  });
+
+  // 🔒 **THE FENCE IS WHAT PAYS FOR VERBATIM MARKDOWN** (Wave 4 b2). An
+  // excerpt may now quote a heading name in backticks, which is only safe
+  // because the whole row block is delimited by a tag its author cannot know.
+  it("keeps backticks intact, inside a fence, with our narration outside it", async () => {
+    const client = {
+      listKbBases: vi.fn().mockResolvedValue([BASE]),
+      getKbTree: vi.fn().mockResolvedValue({
+        base: BASE,
+        folders: [],
+        entries: [
+          entry({
+            id: "e1",
+            title: "Rates",
+            excerpt: "$3.18/gal base peg; the ladder is under `Escalation Timers`",
+          }),
+        ],
+        entryTotal: 1,
+      }),
+    } as unknown as DoplClient;
+
+    const out = textOf(await opGetTree(client, "my-base"));
+    expect(out).toContain("`Escalation Timers`");
+    expect(out).toContain("$3.18/gal base peg");
+    const open = out.match(/<body_([0-9a-f]{16})>/);
+    expect(open).not.toBeNull();
+    const suffix = open![1];
+    expect(out).toContain(`</body_${suffix}>`);
+    // ⚠ The scope line is OURS and must sit OUTSIDE the fence — that boundary
+    // is the whole informational content of the delimiter.
+    expect(out.indexOf(`</body_${suffix}>`)).toBeLessThan(
+      out.indexOf("entries complete for this base"),
+    );
   });
 });
 
 describe("list_dir renders folder descriptions + entry excerpts", () => {
-  it("shows `— summary` on rows and truncates long text", async () => {
+  it("shows `— summary` on rows, fenced, at the field's own bound", async () => {
     const longDesc = "b".repeat(150);
     const client = {
       listKbBases: vi.fn().mockResolvedValue([BASE]),
@@ -127,9 +213,27 @@ describe("list_dir renders folder descriptions + entry excerpts", () => {
     } as unknown as DoplClient;
 
     const out = textOf(await opListDir(client, "my-base", ""));
-    // Under INLINE_TEXT_MAX, so this survives whole.
-    expect(out).toContain(`📁 \`Deep\`/ — \`${"b".repeat(150)}\``);
-    expect(out).toContain("📄 `Guide` — `short`");
+    expect(out).toContain(`📁 \`Deep\`/ — ${"b".repeat(150)}`);
+    expect(out).toContain("📄 `Guide` — short");
+    expect(out).toMatch(/<body_[0-9a-f]{16}>/);
+  });
+
+  // ⚠ Wave 4 a3: the OLD cut landed mid-clause — one agent quoted
+  // `"...the $5..."` as the point where an excerpt died before naming its
+  // heading. A clip now backs up to the last clause boundary in the budget.
+  it("clips a long excerpt at a clause boundary, not mid-word", async () => {
+    const excerpt = `${"x".repeat(240)}. And then a trailing clause that does not fit at all in the budget.`;
+    const client = {
+      listKbBases: vi.fn().mockResolvedValue([BASE]),
+      listKbDirByPath: vi.fn().mockResolvedValue({
+        folder: null,
+        folders: [],
+        entries: [entry({ id: "e1", title: "Long", excerpt })],
+      }),
+    } as unknown as DoplClient;
+
+    const out = textOf(await opListDir(client, "my-base", ""));
+    expect(out).toContain(`📄 \`Long\` — ${"x".repeat(240)}. …`);
   });
 });
 
@@ -152,7 +256,7 @@ describe("write paths thread the new args", () => {
 
   it("write_file forwards `excerpt` in the write input", async () => {
     const write = vi.fn().mockResolvedValue({
-      entry: entry({ id: "e-new", title: "notes", excerpt: "sum" }),
+      entry: entry({ id: "e-new", title: "notes", excerpt: "the on-call rota" }),
     });
     const client = {
       listKbBases: vi.fn().mockResolvedValue([BASE]),
@@ -167,12 +271,12 @@ describe("write paths thread the new args", () => {
       undefined,
       undefined,
       undefined,
-      "sum"
+      "the on-call rota"
     );
     expect(write).toHaveBeenCalledWith(
       "base-1",
       "notes.md",
-      { body: "body text", title: undefined, excerpt: "sum" },
+      { body: "body text", title: undefined, excerpt: "the on-call rota" },
       undefined
     );
   });

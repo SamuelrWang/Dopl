@@ -67,7 +67,11 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
     // make — `outline` and `section` are additive and opt-in (INVARIANTS §8).
     const section = request.nextUrl.searchParams.get("section") ?? undefined;
     const outline = request.nextUrl.searchParams.get("outline") === "1";
-    return NextResponse.json(projectFile(entry, { section, outline }));
+    // ⚠ A THIRD OPT-IN, AND IT IS ADDITIVE FOR THE SAME REASON THE OTHER TWO
+    // ARE: `headings=1` keeps the whole body and adds the outline beside it, so
+    // a reader learns the addresses of what it just read without a second call.
+    const headings = request.nextUrl.searchParams.get("headings") === "1";
+    return NextResponse.json(projectFile(entry, { section, outline, headings }));
   } catch (err) {
     return toKnowledgeErrorResponse(err);
   }

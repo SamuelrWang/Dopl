@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from "vitest";
 import type { KnowledgeEntry } from "../types";
-import { outlinePayload, projectFile } from "./service-sections";
+import { headingNames, outlinePayload, projectFile } from "./service-sections";
 
 const BODY = "# Title\nintro\n\n## Setup\ninstall\n\n## Usage\nrun\n";
 
@@ -71,5 +71,61 @@ describe("projectFile", () => {
     const original = entry(BODY);
     projectFile(original, { section: "Setup" });
     expect(original.body).toBe(BODY);
+  });
+});
+
+/**
+ * 🔒 **WAVE 4 a1 — THE HEADING LIST, WHICH IS NOT AN OUTLINE.** `outlinePayload`
+ * carries four numbers per heading because a caller deciding WHETHER to read
+ * one needs the cost; a caller deciding WHICH ENTRY to open needs only the
+ * words, and a tree renders hundreds of rows.
+ */
+describe("headingNames", () => {
+  it("returns level-prefixed names, and nothing else", () => {
+    expect(headingNames(BODY)).toEqual(["# Title", "## Setup", "## Usage"]);
+  });
+
+  it("is empty for a body with no headings", () => {
+    expect(headingNames("just prose\n")).toEqual([]);
+  });
+
+  // ⚠ The prefix is not decoration: `## Errors` and `### Errors` are different
+  // addresses, and a bare `Errors` is one the caller cannot always pass back.
+  it("distinguishes two headings that share a name at different levels", () => {
+    expect(headingNames("## Errors\na\n### Errors\nb\n")).toEqual([
+      "## Errors",
+      "### Errors",
+    ]);
+  });
+});
+
+/**
+ * ⚠ **`headings` IS NOT `outline` WITH THE BODY LEFT IN — THEY ARE OPPOSITE
+ * TRADES.** `outline` returns the map INSTEAD of the document; `headings`
+ * returns it WITH the document, so a caller that has already decided to read
+ * never pays a second call to learn what it can address next time.
+ */
+describe("projectFile({ headings })", () => {
+  it("keeps the WHOLE body and adds the outline beside it", () => {
+    const out = projectFile(entry(BODY), { headings: true });
+    expect(out.entry.body).toBe(BODY);
+    expect(out.outline?.sections.map((s) => s.heading)).toEqual([
+      "Title",
+      "Setup",
+      "Usage",
+    ]);
+    expect(out.section).toBeUndefined();
+  });
+
+  // ⚠ `outline` WINS when both are asked for: it is the narrower answer, and
+  // returning the document anyway would spend exactly what it exists to save.
+  it("still empties the body when outline is asked for too", () => {
+    expect(projectFile(entry(BODY), { outline: true, headings: true }).entry.body).toBe("");
+  });
+
+  // ⚠ INVARIANTS §8: a client that sends neither flag gets byte-for-byte what
+  // it always got — no new key on a call it already makes.
+  it("adds nothing at all when neither flag is passed", () => {
+    expect(projectFile(entry(BODY), {})).toEqual({ entry: entry(BODY) });
   });
 });

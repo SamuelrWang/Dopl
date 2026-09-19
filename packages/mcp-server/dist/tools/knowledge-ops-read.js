@@ -11,7 +11,6 @@ exports.opGetTree = opGetTree;
 exports.opListDir = opListDir;
 exports.opOutline = opOutline;
 exports.opReadFile = opReadFile;
-exports.opSearch = opSearch;
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const knowledge_shared_1 = require("./knowledge-shared");
@@ -25,6 +24,10 @@ const container_destination_1 = require("./container-destination");
  *  takes a fallback. `channelGrants` does NOT get one: see {@link opListBases}
  *  for why absent and `{}` are different answers there. */
 const EMPTY_BASE_IDS = Object.freeze([]);
+/** ⚠ §8 STALE-CACHE — the frozen empty for `entryHeadings`, a key a payload
+ *  from an older bundle does not carry. Absent and `{}` mean the same thing
+ *  here (no row states a heading list), so one fallback is correct. */
+const EMPTY_HEADINGS = Object.freeze({});
 /**
  * ⚠ WHAT IS AND ISN'T NEUTRALIZED IN A KNOWLEDGE READ. A published base is
  * workspace-visible, so every name, description, title and excerpt can be
@@ -154,12 +157,22 @@ async function opGetTree(client, ref, entryLimit, entryCursor) {
     // Entries are paged at the API (folders always ship in full), so the wire
     // payload matches what gets rendered.
     const limit = Math.min(Math.max(1, Math.floor(entryLimit ?? TREE_ENTRY_CAP)), TREE_ENTRY_MAX);
+    // 🔒 **`headings: true` IS THE AGENT SURFACE'S STANDING ASK** (Wave 4 a1).
+    // The flag costs the body column server-side, which is why the app's tree
+    // pane does not send it and this op always does — see `service-folders.ts ›
+    // getBaseTree`.
     const tree = await client.getKbTree(base.id, {
         entryLimit: limit,
         entryCursor,
+        headings: true,
     });
     const entryTotal = tree.entryTotal ?? tree.entries.length;
     const vis = tree.base.visibility === "private" ? "private" : "public";
+    // ⚠ §8 STALE-CACHE, SPELLED INLINE. A payload from a bundle that predates
+    // `entryHeadings` carries no such key; `EMPTY_HEADINGS` makes that read as
+    // "not measured" — every row simply renders without a heading list — rather
+    // than crashing or claiming an entry has none.
+    const headings = tree.entryHeadings ?? EMPTY_HEADINGS;
     const lines = [
         `## ${(0, narration_1.inlineOr)(tree.base.name, narration_1.NO_NAME)} \`${tree.base.slug}\``,
         `id: \`${tree.base.id}\` · ${vis} · agent-write ${tree.base.agentWriteEnabled ? "on" : "off"}`,
@@ -183,16 +196,24 @@ async function opGetTree(client, ref, entryLimit, entryCursor) {
     }
     for (const arr of childEntries.values())
         arr.sort((a, b) => a.position - b.position || a.title.localeCompare(b.title));
+    // 🔒 **THE ROWS GO IN THEIR OWN FENCE, THE NARRATION STAYS OUT OF IT**
+    // (2026-09-18). Every row below is author-written metadata rendered as
+    // ITSELF — full 300-char excerpt, backticks intact — which is only safe
+    // because the block is delimited by a tag the author could not know. The
+    // header, the paging notice and the scope line above and below it are this
+    // server's and stay outside, so the boundary is informative.
+    const rows = [];
     function dump(parentId, prefix) {
         for (const f of childFolders.get(parentId) ?? []) {
-            lines.push(`${prefix}📁 ${(0, narration_1.inlineOr)(f.name, narration_1.NO_NAME)}/${descSuffix(f.description)}`);
+            rows.push(`${prefix}📁 ${(0, narration_1.inlineOr)(f.name, narration_1.NO_NAME)}/${descSuffix(f.description)}`);
             dump(f.id, prefix + "  ");
         }
         for (const e of childEntries.get(parentId) ?? []) {
-            lines.push(`${prefix}📄 ${(0, narration_1.inlineOr)(e.title, narration_1.NO_NAME)}${descSuffix(e.excerpt)}`);
+            rows.push(`${prefix}📄 ${(0, narration_1.inlineOr)(e.title, narration_1.NO_NAME)}${descSuffix(e.excerpt)}${headingSuffix(headings[e.id])}`);
         }
     }
     dump(null, "");
+    lines.push(...(0, untrusted_fence_1.fenceLines)(rows, "knowledge tree, member-written names and summaries"));
     if (tree.nextEntryCursor) {
         lines.push("", `_Showing ${tree.entries.length} of ${entryTotal} entries. Pass entry_cursor="${tree.nextEntryCursor}" for the next page, or narrow with op="list_dir" / op="search"._`);
     }
@@ -204,20 +225,70 @@ async function opGetTree(client, ref, entryLimit, entryCursor) {
     return (0, respond_1.ok)(lines.join("\n"));
 }
 /**
+ * 🔒 **THE EXCERPT'S OWN BUDGET, AND IT IS THE FIELD'S CAP RATHER THAN THE
+ * NARRATION CAP** (2026-09-18, Wave 4 a3/b2 + S36). `excerpt` and a folder
+ * `description` are bounded at 300 by `DESCRIPTION_MAX` at the schema, so
+ * rendering 300 of them cannot be a dump: the author already paid for every
+ * character, for this exact purpose.
+ *
+ * ⚠ **`narration.ts › INLINE_TEXT_MAX` (160) WAS NOT RAISED AND MUST NOT BE.**
+ * It guards every NAME, LABEL and ERROR ECHO on the whole surface, none of
+ * which is curated and all of which are spliced into lines this server wrote.
+ * What changed is the CLASS of this one value, not the bound on that one.
+ */
+const EXCERPT_MAX = 300;
+/**
  * ` — description` suffix for tree / directory rows. Folder `description` and
  * entry `excerpt` are the user-curated, agent-facing summaries (≤300 chars) —
  * surfacing them here lets agents pick the right file from a listing instead of
  * read_file-ing everything.
  *
- * ⚠ Defers to the shared neutralizer — a hand-rolled flatten-and-truncate
- * misses U+0085 (NEL is not in JavaScript's `\s` class) and touches neither
- * backticks nor `**`. Separator renders only when something survives.
+ * 🔒 **BODY-CLASS, NOT VALUE-CLASS, SINCE 2026-09-18 — AND THE FENCE IS WHAT
+ * PAYS FOR IT.** This used to run `inlineOr`, which clipped at 160 mid-clause
+ * and stripped backticks; Wave 4 measured both as routing failures (an excerpt
+ * that died before naming its heading, and a rule — *"quote the heading name in
+ * backticks"* — that the renderer made unfollowable). The caller renders every
+ * row this produces inside ONE `untrusted-fence.ts` fence, which is the
+ * structural claim that makes verbatim markdown safe here; a caller that does
+ * not fence must not use this function.
  */
 function descSuffix(text) {
     if (!text)
         return "";
-    const rendered = (0, narration_1.inlineOr)(text, "");
+    const rendered = (0, narration_1.flattenFenced)(text, EXCERPT_MAX);
     return rendered ? ` — ${rendered}` : "";
+}
+/** ⚠ A ROW, NOT AN OUTLINE — see `service-sections.ts › headingNames`. Capped
+ *  because a listing renders hundreds of these; the Wave 4 bases measured 5-6
+ *  headings and well under this. */
+const ROW_HEADINGS_MAX = 150;
+/**
+ * 🔒 **THE HEADING LIST ON A LISTING ROW** (Wave 4 a1 — its top ask in 3 of 4
+ * runs). It is what makes the `outline` rung skippable BY DESIGN rather than by
+ * luck: three of four runs spent calls guessing heading names, and one spent
+ * three `outline` calls whose only purpose was learning names it should have
+ * been handed.
+ *
+ * ⚠ Heading text is author-written, so this renders only inside the same fence
+ * the excerpt does.
+ */
+function headingSuffix(names) {
+    if (!names || names.length === 0)
+        return "";
+    const parts = [];
+    let used = 0;
+    for (const raw of names) {
+        const one = (0, narration_1.flattenFenced)(raw, 60);
+        if (!one)
+            continue;
+        if (used + one.length + 3 > ROW_HEADINGS_MAX) {
+            parts.push(`+${names.length - parts.length} more`);
+            break;
+        }
+        used += one.length + 3;
+        parts.push(one);
+    }
+    return parts.length > 0 ? ` · ${parts.join(" · ")}` : "";
 }
 async function opListDir(client, ref, path) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
@@ -233,10 +304,14 @@ async function opListDir(client, ref, path) {
         lines.push("Empty.");
     }
     else {
+        // ⚠ SAME FENCE, SAME REASON as `opGetTree`'s — `descSuffix` renders
+        // author-written markdown verbatim and owes its caller a delimiter.
+        const rows = [];
         for (const f of listing.folders)
-            lines.push(`📁 ${(0, narration_1.inlineOr)(f.name, narration_1.NO_NAME)}/${descSuffix(f.description)}`);
+            rows.push(`📁 ${(0, narration_1.inlineOr)(f.name, narration_1.NO_NAME)}/${descSuffix(f.description)}`);
         for (const e of listing.entries)
-            lines.push(`📄 ${(0, narration_1.inlineOr)(e.title, narration_1.NO_NAME)}${descSuffix(e.excerpt)}`);
+            rows.push(`📄 ${(0, narration_1.inlineOr)(e.title, narration_1.NO_NAME)}${descSuffix(e.excerpt)}`);
+        lines.push(...(0, untrusted_fence_1.fenceLines)(rows, "knowledge listing, member-written names and summaries"));
     }
     return (0, respond_1.ok)(lines.join("\n"));
 }
@@ -309,7 +384,17 @@ callerUserId = null, format, maxChars, section, offset) {
     let part;
     try {
         if (section === undefined) {
-            entry = await client.readKbFileByPath(base.id, path);
+            // 🔒 **THE HEADINGS COME BACK WITH THE DOCUMENT** (Wave 4 a1). Same body
+            // as before, plus the addresses this reader can use next time — which is
+            // the difference between an agent that pages a 3k entry by section and
+            // one that spends an `outline` call to learn the names it should already
+            // have. ⚠ **AND IT IS `readKbFilePart`, NOT `readKbFileByPath`, SINCE
+            // 2026-09-19** — the headings ride the part reader's own `outline` key,
+            // and routing the unsectioned lane through it is what lets ONE catch
+            // below map the 404 for both (S41's rule, unchanged).
+            part = await client.readKbFilePart(base.id, path, { headings: true });
+            entry = part.entry;
+            outline = part.outline;
         }
         else {
             part = await client.readKbFilePart(base.id, path, { section });
@@ -361,6 +446,10 @@ callerUserId = null, format, maxChars, section, offset) {
                 `Version: \`${entry.updatedAt}\` (pass as expected_version to write_file) · last edited by ${entry.lastEditedSource} · created ${entry.createdAt}`,
             ]),
         ...(sectionLine ? [sectionLine] : []),
+        // ⚠ ON EVERY READ, `concise` INCLUDED, and that is the one metadata line
+        // `concise` may not drop: it is what a later call costs, not what this one
+        // was. Same argument as the Version token two lines up.
+        ...[(0, knowledge_sections_1.readHeadingsLine)(outline, entry.body.length)].filter((l) => l !== null),
         ...(notice ? ["", notice] : []),
         "",
         "---",
@@ -375,40 +464,3 @@ callerUserId = null, format, maxChars, section, offset) {
     ];
     return (0, respond_1.ok)(lines.join("\n"));
 }
-async function opSearch(client, query, base, limit) {
-    // ⚠ `base` accepts a slug OR a UUID, but the search endpoint narrows by SLUG
-    // only — resolve first; a UUID forwarded to `baseSlug` 404s with
-    // KNOWLEDGE_BASE_NOT_FOUND.
-    let baseSlug;
-    if (base) {
-        const resolved = await (0, knowledge_shared_1.resolveBaseOr)(client, base);
-        if ((0, channel_shared_1.isErr)(resolved))
-            return resolved;
-        baseSlug = resolved.slug;
-    }
-    const hits = await client.searchKb(query, { baseSlug, limit });
-    const shownQuery = (0, narration_1.inlineOr)(query, "`(unreadable query)`");
-    if (hits.length === 0) {
-        return (0, respond_1.ok)(`No matches for ${shownQuery}. ${SEARCH_SCOPE_NOTE}`);
-    }
-    const lines = [`## ${hits.length} match${hits.length === 1 ? "" : "es"} for ${shownQuery}\n`];
-    for (const h of hits) {
-        // ⚠ Do not turn highlight tags into `**` — that is our own markdown wrapped
-        // around an excerpt of a member-authored body on an unframed line.
-        const cleanSnippet = (0, narration_1.inlineOr)(h.snippet.replace(/<\/?b>/g, ""), "`(no snippet)`");
-        lines.push(`- ${(0, narration_1.inlineOr)(h.title, narration_1.NO_NAME)} _(rank ${h.rank.toFixed(2)})_ — entry id: \`${h.entryId}\`\n  ${cleanSnippet}`);
-    }
-    lines.push("", SEARCH_SCOPE_NOTE);
-    return (0, respond_1.ok)(lines.join("\n"));
-}
-/**
- * ⚠ A SHORT RESULT LIST IS NOT AN ANSWER. Three invisible reductions apply: the
- * ranking RPC caps its CANDIDATE set per leg before fusing, drops chunks past a
- * semantic-distance cutoff, and `search.ts` removes hits in unreadable bases
- * AFTER ranking. So `limit` is an upper bound the result routinely falls short
- * of for reasons unrelated to how much matched, and "2 matches" read as "there
- * are two" is a recall-capped, visibility-filtered sample read as a census.
- *
- * ⚠ States the SHAPE, not a number — the true count needs another query.
- */
-const SEARCH_SCOPE_NOTE = `_A ranked SAMPLE of the bases you can read, not an exhaustive scan: candidates are capped before ranking, distant matches are dropped, and hits in bases you cannot read are removed after ranking. Fewer hits than \`limit\` does not mean there are no others, and zero hits is not proof of absence — try op="get_tree" or different wording._`;

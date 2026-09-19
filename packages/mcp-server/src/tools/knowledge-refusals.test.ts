@@ -96,7 +96,13 @@ describe("S52: the 300-char fields name the field, the number and their own rule
       undefined,
       undefined,
       undefined,
-      "x".repeat(301),
+      // ⚠ **A REAL SENTENCE, 303 CHARS** (integration, 2026-09-19). The fixture
+      // was `"x".repeat(301)` — one word — and the agent-side authoring rule
+      // that landed on a sibling branch refuses a one-word excerpt BEFORE the
+      // write, so this case stopped reaching the server 400 it is about. The
+      // rules run first by design; the fixture has to clear them to test the
+      // mapper underneath.
+      `${"a summary sentence ".repeat(16)}end`,
     );
     const out = textOf(res);
     expect(res.isError).toBe(true);
@@ -162,9 +168,13 @@ describe("S41: a missing path refuses with a reason, a retry and the MOVE caveat
     ["an intermediate folder", "KNOWLEDGE_PATH_NOT_FOUND"],
   ] as const) {
     it(`read_file maps ${label}'s 404`, async () => {
+      // ⚠ **`readKbFilePart`, NOT `readKbFileByPath` (integration, 2026-09-19).**
+      // The unsectioned lane routes through the part reader since the headings
+      // work landed on a sibling branch — that is what lets ONE catch map the
+      // 404 for both lanes, which is this case's whole subject.
       const res = await opReadFile(
         clientWith({
-          readKbFileByPath: vi.fn().mockRejectedValue(apiError(404, code)),
+          readKbFilePart: vi.fn().mockRejectedValue(apiError(404, code)),
         }),
         "my-base",
         "gone/notes.md",
@@ -198,7 +208,7 @@ describe("S41: a missing path refuses with a reason, a retry and the MOVE caveat
     await expect(
       opReadFile(
         clientWith({
-          readKbFileByPath: vi.fn().mockRejectedValue(apiError(503, "UPSTREAM")),
+          readKbFilePart: vi.fn().mockRejectedValue(apiError(503, "UPSTREAM")),
         }),
         "my-base",
         "notes.md",

@@ -214,6 +214,12 @@ export interface KnowledgeTreeSnapshot {
   entryTotal?: number;
   /** Opaque cursor for the next entry page; null = last page. */
   nextEntryCursor?: string | null;
+  /**
+   * Heading names per entry id (`## Errors`), present only when `headings=1`
+   * was asked for. ⚠ Entries with NO headings are absent from the map rather
+   * than carrying `[]` — the two mean the same thing and one of them is free.
+   */
+  entryHeadings?: Record<string, string[]>;
 }
 
 // ─── Source provider types ──────────────────────────────────────────

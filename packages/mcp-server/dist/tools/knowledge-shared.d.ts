@@ -121,5 +121,9 @@ export declare function sharedCredentialPrivateBaseDenied(e: unknown): ToolRespo
  * ⚠ **IT MOVED HERE FROM `knowledge-ops-write.ts` ON 2026-09-18**, when that
  * file was split at the base/tree seam (A3) and both halves needed it. A second
  * copy is how one half comes to map a refusal the other rethrows.
+ * ⚠ **AND RE-EXPORTING IT FROM EITHER HALF WAS REFUSED**: that would make one
+ * write module the other one's dependency for no reason but where the text
+ * happened to sit. Two branches reached this file independently; ONE copy
+ * survives (integration, 2026-09-19).
  */
 export declare function writeOr<T>(run: () => Promise<T>, more?: (e: unknown) => ToolResponse | null): Promise<T | ToolResponse>;

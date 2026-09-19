@@ -1,21 +1,26 @@
 "use strict";
 /**
- * `dopl_kb` TREE writes — folders and entries inside a base: create a folder,
- * move a folder or an entry, write an entry. Routed from the registrar in
- * `knowledge.ts`.
+ * `dopl_kb` TREE writes — what lives INSIDE a base: create a folder, move a
+ * folder or an entry, write an entry, and the AUTHORING RULES those entries
+ * owe. Routed from the registrar in `knowledge.ts`.
  *
  * ⚠ **THE BASE OPS LEFT ON 2026-09-18 (A3)** for
- * `knowledge-ops-write-bases.ts`, which carries the seam's argument: a base is
+ * `knowledge-ops-base-writes.ts`, which carries the seam's argument: a base is
  * a container with an AUDIENCE, a folder or an entry is a PATH inside one whose
  * audience is already settled. This file was at §1's 500-line hard cap, so the
  * split came before the edit. The base ops are re-exported below, so no
- * importer moved.
+ * importer moved. ⚠ The GRANT went further out still, to
+ * `knowledge-ops-grant.ts`: it writes no base content, it lends one.
+ *
+ * ⚠ **AND THE AUTHORING RULES THEMSELVES LIVE IN `knowledge-write-rules.ts`**,
+ * which is where the predicates and the refusal sentences are; this file
+ * decides WHEN to ask them.
  *
  * ⚠ Errors map as they always did — conflict (412), already-exists (409),
  * agent-write-denied (403), validation (400) — and anything unmapped rethrows.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.opUpdateBase = exports.opSetVisibility = exports.opGrantBase = exports.opCreateBase = void 0;
+exports.opUpdateBase = exports.opSetVisibility = exports.opCreateBase = void 0;
 exports.opCreateFolder = opCreateFolder;
 exports.opMove = opMove;
 exports.opWriteFile = opWriteFile;
@@ -31,11 +36,11 @@ const knowledge_sections_1 = require("./knowledge-sections");
 // ⚠ RE-EXPORTED, NOT RE-IMPLEMENTED — `knowledge.ts` and four suites address
 // the base ops through this module's name, and a split is not a reason to move
 // every call site.
-var knowledge_ops_write_bases_1 = require("./knowledge-ops-write-bases");
-Object.defineProperty(exports, "opCreateBase", { enumerable: true, get: function () { return knowledge_ops_write_bases_1.opCreateBase; } });
-Object.defineProperty(exports, "opGrantBase", { enumerable: true, get: function () { return knowledge_ops_write_bases_1.opGrantBase; } });
-Object.defineProperty(exports, "opSetVisibility", { enumerable: true, get: function () { return knowledge_ops_write_bases_1.opSetVisibility; } });
-Object.defineProperty(exports, "opUpdateBase", { enumerable: true, get: function () { return knowledge_ops_write_bases_1.opUpdateBase; } });
+var knowledge_ops_base_writes_1 = require("./knowledge-ops-base-writes");
+Object.defineProperty(exports, "opCreateBase", { enumerable: true, get: function () { return knowledge_ops_base_writes_1.opCreateBase; } });
+Object.defineProperty(exports, "opSetVisibility", { enumerable: true, get: function () { return knowledge_ops_base_writes_1.opSetVisibility; } });
+Object.defineProperty(exports, "opUpdateBase", { enumerable: true, get: function () { return knowledge_ops_base_writes_1.opUpdateBase; } });
+const knowledge_write_rules_1 = require("./knowledge-write-rules");
 /*
  * ⚠ Write confirmations read back the STORED value, not the argument (a title
  * derived from a path), spliced into our own narration — and a path can carry a
@@ -84,15 +89,32 @@ async function opMove(client, ref, from_path, to_path, kind) {
  * a sectioned write is exactly as safe as a whole-body one — where a caller
  * merging locally would be merging onto a body it fetched in an earlier request.
  *
- * ⚠ **THE RESULT ALWAYS ENDS WITH THE OUTLINE OF WHAT WAS SAVED**, which is the
- * addresses the next read can use, and it LEADS with `reason=UNSECTIONED` when a
- * long body carries no headings at all. **The write lands either way** (Samuel's
- * ruling): refusing would refuse the user's content over our formatting taste.
+ * 🔒 **THE AUTHORING RULES RUN BEFORE THE WRITE, AND TWO OF THEM REFUSE IT**
+ * (Samuel's ruling 2026-09-18, option A). An agent save with no real summary,
+ * and a long body with no `##` headings, are REFUSED — *"saves should be
+ * blocked if there's no description"*. A human typing in the app is never
+ * blocked: that half of the ruling lives in the editor, and nothing on this
+ * surface can reach a person. The two remaining rules — a pointer that names no
+ * path, and a buried supersession marker — are nudges on a landed write.
+ *
+ * ⚠ **THE RESULT STILL ALWAYS ENDS WITH THE OUTLINE OF WHAT WAS SAVED**, which
+ * is the addresses the next read can use. `unsectionedNudge` survives for the
+ * `section=` path alone, where the merged body is the server's and a pre-write
+ * length test would measure the wrong document.
  */
 async function opWriteFile(client, ref, path, body, title, expected_version, force, excerpt, section, clientWriteId) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
     if ((0, channel_shared_1.isErr)(base))
         return base;
+    // 🔒 **REFUSED BEFORE THE WRITE, NEVER AFTER IT.** A rule reported on a
+    // success is a rule the agent has already decided it does not need, and a
+    // refusal printed over a row that landed is worse than no rule at all.
+    const unsectioned = (0, knowledge_write_rules_1.unsectionedRefusal)(body, section);
+    if (unsectioned)
+        return (0, respond_1.err)(unsectioned);
+    const excerptVerdict = await excerptVerdictFor(client, base.id, path, title, excerpt);
+    if (excerptVerdict)
+        return (0, respond_1.err)(excerptVerdict);
     const res = await (0, knowledge_shared_1.writeOr)(() => client.writeKbFileByPath(base.id, path, { body, title, excerpt, section, clientWriteId }, force ? null : expected_version), (e) => {
         // ⚠ THE ONE REFUSAL `section` ADDS, and it is a refusal rather than a
         // first-match because the write it would have made is unrecoverable.
@@ -146,8 +168,15 @@ async function opWriteFile(client, ref, path, body, title, expected_version, for
         : "";
     // ⚠ THE NUDGE LEADS, because a `reason=` line read after the success sentence
     // is a line an agent has already decided it does not need.
-    const unsectioned = entry.body.length > knowledge_sections_1.KB_SECTION_NUDGE_CHARS &&
+    // ⚠ **ONLY THE `section=` PATH CAN STILL REACH IT.** A whole-body write that
+    // would trip this was refused above, before anything was written; here the
+    // merged body is the server's and this is the first place its length is known.
+    const unsectionedLanded = entry.body.length > knowledge_sections_1.KB_SECTION_NUDGE_CHARS &&
         (outline?.sections.length ?? 0) === 0;
+    // ⚠ NUDGES, NOT REFUSALS (the ruling names two refusals and these are not
+    // them) — and they run on the body the caller SENT, which is the prose this
+    // call is responsible for even when the server merged it into more.
+    const advisories = [(0, knowledge_write_rules_1.crossRefNudge)(body), (0, knowledge_write_rules_1.supersessionNudge)(body)].filter((l) => l !== null);
     const sectionNote = section === undefined
         ? ""
         : sectionCreated
@@ -155,7 +184,8 @@ async function opWriteFile(client, ref, path, body, title, expected_version, for
             : ` Replaced section ${(0, narration_1.inlineOr)(section, "`(unreadable)`")}; the rest of the entry is untouched.`;
     return (0, respond_1.ok)([
         ...(convergedNote ? [convergedNote, ""] : []),
-        ...(unsectioned ? [(0, knowledge_sections_1.unsectionedNudge)(), ""] : []),
+        ...(unsectionedLanded ? [(0, knowledge_sections_1.unsectionedNudge)(), ""] : []),
+        ...(advisories.length > 0 ? [...advisories, ""] : []),
         // ⚠ **THE VERSION SAYS WHAT IT IS FOR (A3/S34, 2026-09-18).** The returned
         // version ALREADY works as the next call's `expected_version`
         // (`service-paths.ts` compares `updatedAt` string-equal), and only
@@ -166,4 +196,45 @@ async function opWriteFile(client, ref, path, body, title, expected_version, for
         `Wrote ${(0, narration_1.inlineOr)(canonicalPath, narration_1.NO_PATH)} (entry id: \`${entry.id}\`, ${entry.body.length} chars). New version: \`${entry.updatedAt}\` (pass as expected_version to write_file).${note}${sectionNote}`,
         ...[(0, knowledge_sections_1.outlineFooter)(outline)].filter((l) => l !== null),
     ].join("\n"));
+}
+/**
+ * 🔒 **WHAT THE ENTRY WILL HAVE AS A SUMMARY ONCE THIS WRITE LANDS** — which is
+ * not the same question as "what did the caller pass" (2026-09-18).
+ *
+ * ⚠ **AN OMITTED `excerpt` PRESERVES THE STORED ONE** (the field's own
+ * contract: *"on an update it changes only when provided"*), so refusing every
+ * omission would refuse the ordinary update of an entry that is already
+ * summarised — including every `section=` write. The only honest test is
+ * against the value that will be there afterwards, so when the argument is
+ * absent this reads the row to find out.
+ *
+ * ⚠ **ONE EXTRA ROUND TRIP, AND ONLY ON THE OMISSION.** A caller that passes an
+ * excerpt is judged on it and reads nothing; the probe is the price of leaving
+ * the field out, which is the behaviour the rule exists to discourage.
+ *
+ * ⚠ **THE PROBE FAILS OPEN, DELIBERATELY.** A rule this process could not
+ * measure is not a rule it may assert: a 404 is a CREATE (no stored excerpt to
+ * inherit, so the refusal stands), and any other failure means "unknown", where
+ * blocking the user's content on our own transport error would be the worse
+ * error by far. The server's gates still run either way.
+ */
+async function excerptVerdictFor(client, baseId, path, title, excerpt) {
+    const leaf = path.split("/").filter(Boolean).pop() ?? path;
+    if (excerpt !== undefined)
+        return (0, knowledge_write_rules_1.excerptRefusal)(excerpt, title ?? leaf);
+    let stored;
+    try {
+        const existing = await client.readKbFileByPath(baseId, path);
+        stored = existing.excerpt;
+        // ⚠ The STORED title is the one the rule compares against when the caller
+        // passes none — a summary that restates a title it never sent is still a
+        // summary that says nothing.
+        return (0, knowledge_write_rules_1.excerptRefusal)(stored, title ?? existing.title);
+    }
+    catch (e) {
+        if (typeof e === "object" && e !== null && e.status === 404) {
+            return (0, knowledge_write_rules_1.excerptRefusal)(undefined, title ?? leaf);
+        }
+        return null;
+    }
 }

@@ -59,12 +59,19 @@ async function getKbBase(t, baseId) {
     const data = await t.request(`/api/knowledge/bases/${enc(baseId)}`, { toolName: "kb_get_base" });
     return data.base;
 }
+/**
+ * ⚠ `headings` COSTS THE BODY COLUMN SERVER-SIDE and is therefore opt-in —
+ * see `features/knowledge/server/service-folders.ts › getBaseTree`. An older
+ * server ignores the parameter and answers without `entryHeadings`.
+ */
 async function getKbTree(t, baseId, opts) {
     const params = new URLSearchParams();
     if (opts?.entryLimit !== undefined)
         params.set("entryLimit", String(opts.entryLimit));
     if (opts?.entryCursor !== undefined)
         params.set("entryCursor", opts.entryCursor);
+    if (opts?.headings)
+        params.set("headings", "1");
     const qs = params.toString();
     return t.request(`/api/knowledge/bases/${enc(baseId)}/tree${qs ? `?${qs}` : ""}`, { toolName: "kb_get_tree" });
 }
@@ -120,6 +127,11 @@ async function readKbFilePart(t, baseId, path, opts = {}) {
         params.set("section", opts.section);
     if (opts.outline)
         params.set("outline", "1");
+    // ⚠ THE OPPOSITE TRADE FROM `outline`: the WHOLE body, plus the addresses
+    // this reader can use next time. See the route for why it is a third flag
+    // rather than an option on the second.
+    if (opts.headings)
+        params.set("headings", "1");
     return t.request(`/api/knowledge/bases/${enc(baseId)}/files?${params.toString()}`, { toolName: "kb_read_file" });
 }
 async function writeKbFileByPath(t, baseId, path, input = {}, expectedVersion) {

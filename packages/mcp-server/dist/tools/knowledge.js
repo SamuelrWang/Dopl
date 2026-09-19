@@ -8,8 +8,11 @@
  *
  * Thin registrar: one tool schema + op routing, delegating to
  *   - `knowledge-shared.ts`    — base resolution + error/validation mappers
- *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/read_file/search
- *   - `knowledge-ops-write.ts` — create/update/move/write/grant ops
+ *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/outline/read_file
+ *   - `knowledge-ops-search.ts` — search
+ *   - `knowledge-ops-write.ts` — folder + entry writes, and their authoring rules
+ *   - `knowledge-ops-base-writes.ts` — create/update/publish a BASE
+ *   - `knowledge-ops-grant.ts`  — lend one base to a channel, container or team
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerKnowledgeTools = registerKnowledgeTools;
@@ -21,8 +24,14 @@ const tool_errors_1 = require("./tool-errors");
 const identity_1 = require("./identity");
 const respond_1 = require("./respond");
 const knowledge_ops_read_1 = require("./knowledge-ops-read");
+// ⚠ The one read op whose result is a RANKING — split out for the 500-line cap.
+const knowledge_ops_search_1 = require("./knowledge-ops-search");
+// ⚠ The GRANT has its own file: it writes no base content, it lends one
+// (S52, 2026-09-18). Pinning's ops left the surface entirely on the same day.
 const knowledge_ops_grant_1 = require("./knowledge-ops-grant");
 const knowledge_ops_write_1 = require("./knowledge-ops-write");
+// ⚠ Base-level writes split out for the 500-line cap (2026-09-18).
+const knowledge_ops_base_writes_1 = require("./knowledge-ops-base-writes");
 const grant_1 = require("./grant");
 const retired_copy_ops_1 = require("./retired-copy-ops");
 /**
@@ -271,7 +280,7 @@ directory) {
                 const miss = (0, respond_1.missingParams)("create_base", args, ["name"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_write_1.opCreateBase)(client, caller.userId, {
+                return (0, knowledge_ops_base_writes_1.opCreateBase)(client, caller.userId, {
                     name: args.name,
                     description: args.description,
                     visibility: args.visibility,
@@ -283,7 +292,7 @@ directory) {
                 const miss = (0, respond_1.missingParams)("update_base", args, ["base"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_write_1.opUpdateBase)(client, args.base, args.name, args.description, args.slug);
+                return (0, knowledge_ops_base_writes_1.opUpdateBase)(client, args.base, args.name, args.description, args.slug);
             }
             case "grant": {
                 const miss = (0, respond_1.missingParams)("grant", args, ["base", "scope", "to"]);
@@ -347,7 +356,7 @@ directory) {
                 const miss = (0, respond_1.missingParams)("search", args, ["query"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_read_1.opSearch)(client, args.query, args.base, args.limit);
+                return (0, knowledge_ops_search_1.opSearch)(client, args.query, args.base, args.limit);
             }
             case "set_visibility": {
                 const miss = (0, respond_1.missingParams)("set_visibility", args, ["base", "visibility"]);
@@ -356,7 +365,7 @@ directory) {
                 // 🔒 F-441 — the caller id and the confirm token, which this arm used
                 // to drop. Without them `opSetVisibility` could not preview and a
                 // shared-container publish answered with a refusal instead.
-                return (0, knowledge_ops_write_1.opSetVisibility)(client, caller.userId, args.base, args.visibility, args.confirm_token);
+                return (0, knowledge_ops_base_writes_1.opSetVisibility)(client, caller.userId, args.base, args.visibility, args.confirm_token);
             }
             // ── THE ONE-RELEASE MIGRATION WINDOW ──────────────────────────────
             //

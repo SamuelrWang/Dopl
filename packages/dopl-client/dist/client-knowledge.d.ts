@@ -21,6 +21,7 @@ export declare class KnowledgeMethods extends WorkspaceMethods {
     getKbTree(baseId: string, opts?: {
         entryLimit?: number;
         entryCursor?: string;
+        headings?: boolean;
     }): Promise<KnowledgeTreeSnapshot>;
     createKbBase(input: KnowledgeBaseCreateInput): Promise<KnowledgeBase>;
     /** 🔒 {@link createKbBase}'s gates without its write — resolves if that body
@@ -34,6 +35,7 @@ export declare class KnowledgeMethods extends WorkspaceMethods {
     readKbFilePart(baseId: string, path: string, opts?: {
         section?: string;
         outline?: boolean;
+        headings?: boolean;
     }): Promise<KnowledgeReadFileResult>;
     writeKbFileByPath(baseId: string, path: string, input?: KnowledgeWriteFileInput, expectedVersion?: string | null): Promise<KnowledgeWriteFileResult>;
     listKbDirByPath(baseId: string, path?: string): Promise<KnowledgeDirListing>;

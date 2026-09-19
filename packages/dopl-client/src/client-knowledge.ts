@@ -44,7 +44,7 @@ export class KnowledgeMethods extends WorkspaceMethods {
 
   getKbTree(
     baseId: string,
-    opts?: { entryLimit?: number; entryCursor?: string }
+    opts?: { entryLimit?: number; entryCursor?: string; headings?: boolean }
   ): Promise<KnowledgeTreeSnapshot> {
     return kb.getKbTree(this.transport, baseId, opts);
   }
@@ -79,7 +79,7 @@ export class KnowledgeMethods extends WorkspaceMethods {
   readKbFilePart(
     baseId: string,
     path: string,
-    opts: { section?: string; outline?: boolean } = {}
+    opts: { section?: string; outline?: boolean; headings?: boolean } = {}
   ): Promise<KnowledgeReadFileResult> {
     return kb.readKbFilePart(this.transport, baseId, path, opts);
   }

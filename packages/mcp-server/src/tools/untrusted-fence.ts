@@ -111,3 +111,35 @@ export function fenceBody(body: string, label: string): string[] {
     `</body_${suffix}>`,
   ];
 }
+
+/**
+ * 🔒 **ONE FENCE AROUND A WHOLE LISTING** — the shape a TREE needs, where
+ * {@link fenceBody} is the shape a DOCUMENT needs (2026-09-18).
+ *
+ * ⚠ **WHY THIS IS NOT THE WAKE-SURFACE CASE THE HEADER ABOVE REFUSES.** There,
+ * many short bodies from many authors interleave with this server's own
+ * narration, so a fence around all of them says nothing useful about any. Here
+ * the fenced block is HOMOGENEOUS — one base's curated folder descriptions and
+ * entry excerpts, every line of it author-written metadata, and this server's
+ * narration (the header, the paging notice, the scope line) stays OUTSIDE the
+ * fence. That is what makes the boundary informative: everything inside is
+ * data, everything outside is ours, and the close tag says exactly where the
+ * switch happens.
+ *
+ * ⚠ **ONE HEADER PER RESPONSE, NOT ONE PER ROW.** A 400-row tree that repeated
+ * {@link FENCE_HEADER} per row would spend ~100,000 characters restating a rule
+ * the reader already read — which is the cost that retired the old banners.
+ *
+ * @param label what the fenced block IS, in one or two words. Ours, never peer
+ * text.
+ */
+export function fenceLines(lines: string[], label: string): string[] {
+  const suffix = mintSuffix();
+  return [
+    FENCE_HEADER,
+    "",
+    `<body_${suffix}> (${label}, untrusted)`,
+    ...lines,
+    `</body_${suffix}>`,
+  ];
+}

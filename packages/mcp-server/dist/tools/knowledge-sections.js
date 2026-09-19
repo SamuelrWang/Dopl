@@ -21,6 +21,7 @@ exports.KB_SECTION_NUDGE_CHARS = void 0;
 exports.renderOutline = renderOutline;
 exports.outlineHeading = outlineHeading;
 exports.outlineFooter = outlineFooter;
+exports.readHeadingsLine = readHeadingsLine;
 exports.unsectionedNudge = unsectionedNudge;
 exports.sectionMiss = sectionMiss;
 exports.sectionAmbiguous = sectionAmbiguous;
@@ -97,6 +98,29 @@ function outlineFooter(outline) {
         line = `${parts.slice(0, Math.max(1, kept)).join(" · ")} · +${parts.length - Math.max(1, kept)} more`;
     }
     return `_Sections: ${line}_`;
+}
+/**
+ * 🔒 **WHAT EVERY `read_file` HEADER SAYS ABOUT ADDRESSING THE THING IT JUST
+ * RETURNED** (Wave 4 a1 + a4, 2026-09-18).
+ *
+ * Two answers, and the third is silence:
+ *   - headings exist ⇒ the one-line list, which is the addresses `section=`
+ *     takes. The reader that has them never spends an `outline` call to learn
+ *     names it was already handed.
+ *   - the entry HAS none ⇒ say so, with the length, so the reader can decide to
+ *     page instead of swallowing a wall of prose (Wave 4: on the Poor base,
+ *     agents inferred "unsectioned" only after receiving one).
+ *   - ⚠ **no outline in the payload at all ⇒ NOTHING**, because that is a
+ *     server that did not measure, and "no headings" is a claim about the
+ *     document rather than about the response (§8 stale-cache).
+ */
+function readHeadingsLine(outline, fallbackChars) {
+    if (!outline)
+        return null;
+    const footer = outlineFooter(outline);
+    if (footer)
+        return footer;
+    return `_No headings; ${n(outline.totalChars || fallbackChars)} chars whole — nothing to address with section=; page it with offset= / max_chars=._`;
 }
 /**
  * `reason=UNSECTIONED` — a long entry a section read cannot address.

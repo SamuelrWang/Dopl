@@ -1,14 +1,19 @@
 /**
- * `dopl_kb` TREE writes — folders and entries inside a base: create a folder,
- * move a folder or an entry, write an entry. Routed from the registrar in
- * `knowledge.ts`.
+ * `dopl_kb` TREE writes — what lives INSIDE a base: create a folder, move a
+ * folder or an entry, write an entry, and the AUTHORING RULES those entries
+ * owe. Routed from the registrar in `knowledge.ts`.
  *
  * ⚠ **THE BASE OPS LEFT ON 2026-09-18 (A3)** for
- * `knowledge-ops-write-bases.ts`, which carries the seam's argument: a base is
+ * `knowledge-ops-base-writes.ts`, which carries the seam's argument: a base is
  * a container with an AUDIENCE, a folder or an entry is a PATH inside one whose
  * audience is already settled. This file was at §1's 500-line hard cap, so the
  * split came before the edit. The base ops are re-exported below, so no
- * importer moved.
+ * importer moved. ⚠ The GRANT went further out still, to
+ * `knowledge-ops-grant.ts`: it writes no base content, it lends one.
+ *
+ * ⚠ **AND THE AUTHORING RULES THEMSELVES LIVE IN `knowledge-write-rules.ts`**,
+ * which is where the predicates and the refusal sentences are; this file
+ * decides WHEN to ask them.
  *
  * ⚠ Errors map as they always did — conflict (412), already-exists (409),
  * agent-write-denied (403), validation (400) — and anything unmapped rethrows.
@@ -37,10 +42,15 @@ import {
 // every call site.
 export {
   opCreateBase,
-  opGrantBase,
   opSetVisibility,
   opUpdateBase,
-} from "./knowledge-ops-write-bases";
+} from "./knowledge-ops-base-writes";
+import {
+  crossRefNudge,
+  excerptRefusal,
+  supersessionNudge,
+  unsectionedRefusal,
+} from "./knowledge-write-rules";
 
 /*
  * ⚠ Write confirmations read back the STORED value, not the argument (a title
@@ -102,14 +112,31 @@ export async function opMove(
  * a sectioned write is exactly as safe as a whole-body one — where a caller
  * merging locally would be merging onto a body it fetched in an earlier request.
  *
- * ⚠ **THE RESULT ALWAYS ENDS WITH THE OUTLINE OF WHAT WAS SAVED**, which is the
- * addresses the next read can use, and it LEADS with `reason=UNSECTIONED` when a
- * long body carries no headings at all. **The write lands either way** (Samuel's
- * ruling): refusing would refuse the user's content over our formatting taste.
+ * 🔒 **THE AUTHORING RULES RUN BEFORE THE WRITE, AND TWO OF THEM REFUSE IT**
+ * (Samuel's ruling 2026-09-18, option A). An agent save with no real summary,
+ * and a long body with no `##` headings, are REFUSED — *"saves should be
+ * blocked if there's no description"*. A human typing in the app is never
+ * blocked: that half of the ruling lives in the editor, and nothing on this
+ * surface can reach a person. The two remaining rules — a pointer that names no
+ * path, and a buried supersession marker — are nudges on a landed write.
+ *
+ * ⚠ **THE RESULT STILL ALWAYS ENDS WITH THE OUTLINE OF WHAT WAS SAVED**, which
+ * is the addresses the next read can use. `unsectionedNudge` survives for the
+ * `section=` path alone, where the merged body is the server's and a pre-write
+ * length test would measure the wrong document.
  */
 export async function opWriteFile(client: DoplClient, ref: string, path: string, body: string, title?: string, expected_version?: string, force?: boolean, excerpt?: string, section?: string, clientWriteId?: string): Promise<ToolResponse> {
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
+
+  // 🔒 **REFUSED BEFORE THE WRITE, NEVER AFTER IT.** A rule reported on a
+  // success is a rule the agent has already decided it does not need, and a
+  // refusal printed over a row that landed is worse than no rule at all.
+  const unsectioned = unsectionedRefusal(body, section);
+  if (unsectioned) return err(unsectioned);
+  const excerptVerdict = await excerptVerdictFor(client, base.id, path, title, excerpt);
+  if (excerptVerdict) return err(excerptVerdict);
+
   const res = await writeOr(
     () =>
       client.writeKbFileByPath(
@@ -186,9 +213,18 @@ export async function opWriteFile(client: DoplClient, ref: string, path: string,
       : "";
   // ⚠ THE NUDGE LEADS, because a `reason=` line read after the success sentence
   // is a line an agent has already decided it does not need.
-  const unsectioned =
+  // ⚠ **ONLY THE `section=` PATH CAN STILL REACH IT.** A whole-body write that
+  // would trip this was refused above, before anything was written; here the
+  // merged body is the server's and this is the first place its length is known.
+  const unsectionedLanded =
     entry.body.length > KB_SECTION_NUDGE_CHARS &&
     (outline?.sections.length ?? 0) === 0;
+  // ⚠ NUDGES, NOT REFUSALS (the ruling names two refusals and these are not
+  // them) — and they run on the body the caller SENT, which is the prose this
+  // call is responsible for even when the server merged it into more.
+  const advisories = [crossRefNudge(body), supersessionNudge(body)].filter(
+    (l): l is string => l !== null,
+  );
   const sectionNote =
     section === undefined
       ? ""
@@ -198,7 +234,8 @@ export async function opWriteFile(client: DoplClient, ref: string, path: string,
   return ok(
     [
       ...(convergedNote ? [convergedNote, ""] : []),
-      ...(unsectioned ? [unsectionedNudge(), ""] : []),
+      ...(unsectionedLanded ? [unsectionedNudge(), ""] : []),
+      ...(advisories.length > 0 ? [...advisories, ""] : []),
       // ⚠ **THE VERSION SAYS WHAT IT IS FOR (A3/S34, 2026-09-18).** The returned
       // version ALREADY works as the next call's `expected_version`
       // (`service-paths.ts` compares `updatedAt` string-equal), and only
@@ -211,3 +248,51 @@ export async function opWriteFile(client: DoplClient, ref: string, path: string,
     ].join("\n")
   );
 }
+
+/**
+ * 🔒 **WHAT THE ENTRY WILL HAVE AS A SUMMARY ONCE THIS WRITE LANDS** — which is
+ * not the same question as "what did the caller pass" (2026-09-18).
+ *
+ * ⚠ **AN OMITTED `excerpt` PRESERVES THE STORED ONE** (the field's own
+ * contract: *"on an update it changes only when provided"*), so refusing every
+ * omission would refuse the ordinary update of an entry that is already
+ * summarised — including every `section=` write. The only honest test is
+ * against the value that will be there afterwards, so when the argument is
+ * absent this reads the row to find out.
+ *
+ * ⚠ **ONE EXTRA ROUND TRIP, AND ONLY ON THE OMISSION.** A caller that passes an
+ * excerpt is judged on it and reads nothing; the probe is the price of leaving
+ * the field out, which is the behaviour the rule exists to discourage.
+ *
+ * ⚠ **THE PROBE FAILS OPEN, DELIBERATELY.** A rule this process could not
+ * measure is not a rule it may assert: a 404 is a CREATE (no stored excerpt to
+ * inherit, so the refusal stands), and any other failure means "unknown", where
+ * blocking the user's content on our own transport error would be the worse
+ * error by far. The server's gates still run either way.
+ */
+async function excerptVerdictFor(
+  client: DoplClient,
+  baseId: string,
+  path: string,
+  title: string | undefined,
+  excerpt: string | undefined,
+): Promise<string | null> {
+  const leaf = path.split("/").filter(Boolean).pop() ?? path;
+  if (excerpt !== undefined) return excerptRefusal(excerpt, title ?? leaf);
+  let stored: string | null | undefined;
+  try {
+    const existing = await client.readKbFileByPath(baseId, path);
+    stored = existing.excerpt;
+    // ⚠ The STORED title is the one the rule compares against when the caller
+    // passes none — a summary that restates a title it never sent is still a
+    // summary that says nothing.
+    return excerptRefusal(stored, title ?? existing.title);
+  } catch (e) {
+    if (typeof e === "object" && e !== null && (e as { status?: number }).status === 404) {
+      return excerptRefusal(undefined, title ?? leaf);
+    }
+    return null;
+  }
+}
+
+

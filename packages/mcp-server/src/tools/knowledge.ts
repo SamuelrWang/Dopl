@@ -7,8 +7,11 @@
  *
  * Thin registrar: one tool schema + op routing, delegating to
  *   - `knowledge-shared.ts`    — base resolution + error/validation mappers
- *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/read_file/search
- *   - `knowledge-ops-write.ts` — create/update/move/write/grant ops
+ *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/outline/read_file
+ *   - `knowledge-ops-search.ts` — search
+ *   - `knowledge-ops-write.ts` — folder + entry writes, and their authoring rules
+ *   - `knowledge-ops-base-writes.ts` — create/update/publish a BASE
+ *   - `knowledge-ops-grant.ts`  — lend one base to a channel, container or team
  */
 
 import { z } from "zod";
@@ -25,17 +28,19 @@ import {
   opListDir,
   opOutline,
   opReadFile,
-  opSearch,
 } from "./knowledge-ops-read";
+// ⚠ The one read op whose result is a RANKING — split out for the 500-line cap.
+import { opSearch } from "./knowledge-ops-search";
+// ⚠ The GRANT has its own file: it writes no base content, it lends one
+// (S52, 2026-09-18). Pinning's ops left the surface entirely on the same day.
 import { opGrantBase } from "./knowledge-ops-grant";
+import { opCreateFolder, opMove, opWriteFile } from "./knowledge-ops-write";
+// ⚠ Base-level writes split out for the 500-line cap (2026-09-18).
 import {
   opCreateBase,
-  opCreateFolder,
-  opMove,
   opSetVisibility,
   opUpdateBase,
-  opWriteFile,
-} from "./knowledge-ops-write";
+} from "./knowledge-ops-base-writes";
 import {
   GRANT_LEVEL_ARG_DESCRIPTION,
   GRANT_LEVEL_VALUES,

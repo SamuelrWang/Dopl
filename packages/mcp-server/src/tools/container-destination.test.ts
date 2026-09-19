@@ -29,7 +29,7 @@ import type { DoplClient, AgentTemplate, KnowledgeBase } from "@dopl/client";
 import { opList } from "./agent-ops-read";
 import { opCreate } from "./agent-ops-write";
 import { opListBases } from "./knowledge-ops-read";
-import { opCreateBase } from "./knowledge-ops-write";
+import { opCreateBase } from "./knowledge-ops-base-writes";
 import { stub } from "./narration-fixtures";
 import type { WorkspaceDirectory } from "../workspace-directory";
 
