@@ -30,18 +30,14 @@ exports.excerptRefusal = excerptRefusal;
 exports.unsectionedRefusal = unsectionedRefusal;
 exports.crossRefNudge = crossRefNudge;
 exports.supersessionNudge = supersessionNudge;
-const knowledge_sections_1 = require("./knowledge-sections");
-/**
- * Fold to comparable words: lowercase, punctuation to spaces, runs collapsed.
- * ⚠ Used for the title comparison only — "Fuel." and "fuel" are the same
- * summary and the whole point is that neither is one.
- */
-function fold(raw) {
-    return raw
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, " ")
-        .trim();
-}
+// 🔒 **THE PREDICATES ARE NOT DERIVED HERE — THEY ARE THE PINNED COPY**
+// (integration, 2026-09-19, closing the merge note in that file's header).
+// `knowledge-write-predicates.ts` is held byte-for-byte against
+// `src/shared/knowledge/write-rules.ts` by `src/shared/knowledge/write-rules.test.ts`,
+// so the agent's refusal and the person's editor warning ask ONE question. This
+// file owns the WORDING, which is deliberately not shared: an agent gets
+// `reason=` / `retry=` naming what to add, a person gets a label.
+const knowledge_write_predicates_1 = require("./knowledge-write-predicates");
 /**
  * **THE EXCERPT RULE.** Refuse an absent, empty, one-word, or title-restating
  * summary. Returns the refusal line, or `null` when the excerpt is real.
@@ -54,29 +50,17 @@ function fold(raw) {
  * with no legitimate case.
  */
 function excerptRefusal(excerpt, title) {
-    const folded = excerpt ? fold(excerpt) : "";
-    if (folded === "") {
-        return `reason=EXCERPT_REQUIRED · this entry has no summary · retry=pass excerpt= — one sentence saying what a reader will FIND here (a value, a decision, a heading name), not the title again`;
+    switch ((0, knowledge_write_predicates_1.kbSummaryFault)(excerpt, title)) {
+        case "missing":
+            return `reason=EXCERPT_REQUIRED · this entry has no summary · retry=pass excerpt= — one sentence saying what a reader will FIND here (a value, a decision, a heading name), not the title again`;
+        case "one_word":
+            return `reason=EXCERPT_TOO_THIN · excerpt is one word · retry=pass excerpt= — one sentence saying what a reader will FIND here, not a category label`;
+        case "restates_title":
+            return `reason=EXCERPT_RESTATES_TITLE · excerpt repeats the title and adds nothing · retry=pass excerpt= — say what is IN the entry (a value, a decision, a heading name), not what it is called`;
+        default:
+            return null;
     }
-    if (!folded.includes(" ")) {
-        return `reason=EXCERPT_TOO_THIN · excerpt is one word · retry=pass excerpt= — one sentence saying what a reader will FIND here, not a category label`;
-    }
-    if (folded === fold(title)) {
-        return `reason=EXCERPT_RESTATES_TITLE · excerpt repeats the title and adds nothing · retry=pass excerpt= — say what is IN the entry (a value, a decision, a heading name), not what it is called`;
-    }
-    return null;
 }
-/**
- * ⚠ **A PERMISSIVE HEADING DETECTOR, AND THE PERMISSIVENESS IS THE SAFETY
- * PROPERTY.** `packages/mcp-server` cannot import the app's `src/`, so the real
- * parser (`shared/knowledge/markdown-sections.ts`, which knows that a `#`
- * inside a fenced code block is not a heading) is out of reach. This regex
- * therefore sees code-fence `#`s as headings — a FALSE NEGATIVE for a refusal,
- * which lets a write through. The opposite error, refusing a body that IS
- * sectioned, is the one an agent cannot recover from, so the detector is tuned
- * to never make it.
- */
-const ANY_HEADING_RE = /^[ \t]{0,3}#{1,3}[ \t]+\S/m;
 /**
  * **THE HEADINGS RULE.** A long body with no `##` at all is refused.
  *
@@ -89,11 +73,7 @@ const ANY_HEADING_RE = /^[ \t]{0,3}#{1,3}[ \t]+\S/m;
  * addressed a heading.
  */
 function unsectionedRefusal(body, section) {
-    if (section !== undefined)
-        return null;
-    if (body.length <= knowledge_sections_1.KB_SECTION_NUDGE_CHARS)
-        return null;
-    if (ANY_HEADING_RE.test(body))
+    if (!(0, knowledge_write_predicates_1.kbBodyIsUnsectioned)(body, section))
         return null;
     return `reason=UNSECTIONED · ${body.length} chars with no headings, so no part of it can be addressed with section= · retry=add \`##\` headings, one topic each, then write again`;
 }

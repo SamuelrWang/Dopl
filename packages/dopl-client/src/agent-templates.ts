@@ -14,6 +14,7 @@
  * visibility-filtered list this module returns.
  */
 
+import { DoplApiError } from "./errors.js";
 import type { DoplTransport } from "./transport.js";
 import type {
   AgentTemplate,
@@ -77,11 +78,41 @@ export async function createAgentTemplate(
 export async function updateAgentTemplate(
   t: DoplTransport,
   templateId: string,
-  patch: AgentTemplateUpdateInput
+  patch: AgentTemplateUpdateInput,
+  expectedVersion?: string | null
 ): Promise<AgentTemplate> {
+  // Optimistic concurrency, tri-state on `expectedVersion` — the SAME three
+  // arms as `knowledge.ts › writeKbFileByPath` and `skills.ts ›
+  // writeSkillBody`, which is what "matching the KB contract" means:
+  //   - string    → atomic compare-and-swap (`X-Updated-At`; 412 on mismatch).
+  //   - undefined → strict: REFUSED. A template update always overwrites
+  //                 something — there is no create arm here, which is why this
+  //                 branch needs no existence probe where the KB one does.
+  //   - null      → force: blind overwrite, no precondition.
+  // ⚠ THE STRICTNESS IS CLIENT-SIDE ON PURPOSE. The route still accepts an
+  // absent header, so a desktop in the field whose bundled client predates this
+  // argument keeps its old last-writer-wins behaviour instead of losing the op
+  // to a 412 it cannot satisfy.
+  if (expectedVersion === undefined) {
+    throw new DoplApiError(
+      412,
+      JSON.stringify({
+        error: {
+          code: "EXPECTED_VERSION_REQUIRED",
+          message:
+            "Read this template first and pass its Version as expected_version (or force to overwrite).",
+        },
+      })
+    );
+  }
   const data = await t.request<{ template: AgentTemplate }>(
     `/api/agent-templates/${enc(templateId)}`,
-    { method: "PATCH", body: patch, toolName: "agent_update_template" }
+    {
+      method: "PATCH",
+      body: patch,
+      toolName: "agent_update_template",
+      customHeaders: expectedVersion ? { "X-Updated-At": expectedVersion } : undefined,
+    }
   );
   return data.template;
 }

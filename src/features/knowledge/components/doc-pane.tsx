@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRefetchOnFocus } from "@/shared/hooks/use-refetch-on-focus";
 import { useCurrentProfile } from "@/shared/auth/use-current-profile";
 import { usePresence } from "@/shared/realtime/use-presence";
@@ -15,7 +15,12 @@ import type { KnowledgeEntry } from "../types";
 import { toast } from "@/shared/ui/toast";
 import type { Editor } from "@tiptap/react";
 import { DocEditor, SaveStatusIndicator, type SaveStatus } from "@/shared/editor/doc-editor";
-import { ConflictBanner, reportError } from "./doc-pane-chrome";
+import {
+  ConflictBanner,
+  WriteRuleWarnings,
+  reportError,
+  writeRuleLabels,
+} from "./doc-pane-chrome";
 
 const AUTOSAVE_DELAY_MS = 1500;
 
@@ -333,6 +338,25 @@ export function DocPane({
     setStatus("idle");
   }, [conflict]);
 
+  /**
+   * 🔒 **SAMUEL'S KB WRITE RULES, ON THE HUMAN SIDE — WARN, NEVER BLOCK**
+   * (2026-09-18). The predicate is shared with the agent REFUSALS
+   * (`@/shared/knowledge/write-rules`); the consequence is not.
+   *
+   * ⚠ **IT READS THE DRAFT, WHICH IS WHAT "at save time" MEANS ON AN AUTOSAVING
+   * EDITOR.** There is no Save button to hang this off: `title`, `description`
+   * and `body` ARE the next write's payload, so asking them is asking what a
+   * save would send — and the label clears as the person fixes it rather than
+   * one round trip later.
+   * ⚠ **NOTHING ON THE SAVE PATH READS THIS.** It is derived here and rendered
+   * once; "never blocked" is a property of where this value is USED, and
+   * `doc-pane-chrome.test.tsx` pins the use count at exactly one.
+   */
+  const ruleLabels = useMemo(
+    () => writeRuleLabels({ title, description, body }),
+    [body, description, title],
+  );
+
   return (
     <article className="flex flex-col">
       {conflict && (
@@ -349,6 +373,7 @@ export function DocPane({
           <span className="flex-1 text-label font-semibold uppercase tracking-wide text-text-secondary">
             Overview
           </span>
+          <WriteRuleWarnings labels={ruleLabels} />
           <AvatarStack users={otherEditors} />
           <SaveStatusIndicator state={status} />
         </div>

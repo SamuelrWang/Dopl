@@ -53,7 +53,12 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
     const ctx = buildAgentTemplateContext(auth);
     const id = requireTemplateId(auth.params);
     const patch = await parseJson(request, AgentTemplateUpdateSchema);
-    const template = await updateTemplate(ctx, id, patch);
+    // Optional `X-Updated-At` precondition — the same wire convention the KB,
+    // skills and ontology writes carry. Mismatch → 412
+    // AGENT_TEMPLATE_STALE_VERSION; absent → last-writer-wins, which is what an
+    // older bundled client still sends.
+    const expectedUpdatedAt = request.headers.get("x-updated-at") ?? undefined;
+    const template = await updateTemplate(ctx, id, patch, expectedUpdatedAt);
     return NextResponse.json({ template });
   } catch (err) {
     return toAgentTemplateErrorResponse(err);

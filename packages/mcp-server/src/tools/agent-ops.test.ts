@@ -21,6 +21,8 @@ import { __resetConfirmTokensForTest } from "./confirm-token";
 
 const ME = "user-1";
 const PEER = "user-2";
+/** The `updatedAt` {@link template} carries — a version a caller really could have read off `op="get"` (F-739), and the client's tri-state THIRD argument rather than a body field: it rides as `X-Updated-At`. */
+const VERSION = "2026-01-01T00:00:00Z";
 
 function template(over: Partial<AgentTemplate> = {}): AgentTemplate {
   return {
@@ -288,12 +290,11 @@ describe("op=update", () => {
       updateAgentTemplate: update,
     }) as DoplClient;
 
-    const text = textOf(
-      await opUpdate(client, ME, "Researcher", { visibility: "workspace" }),
-    );
+    const text = textOf(await opUpdate(client, ME, "Researcher", { visibility: "workspace", expected_version: VERSION }));
     expect(update).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       expect.objectContaining({ visibility: "workspace" }),
+      VERSION,
     );
     expect(text).toContain("Sharing is now: workspace.");
   });
@@ -471,14 +472,13 @@ describe("knowledge scopes", () => {
         }) as DoplClient,
         ME,
         "Researcher",
-        { knowledge: [{ base: BASE, folder: FOLDER }] },
+        { knowledge: [{ base: BASE, folder: FOLDER }], expected_version: VERSION },
       ),
     );
     expect(update).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
-      expect.objectContaining({
-        knowledge: [{ baseId: BASE, scope: "folder", folderId: FOLDER }],
-      }),
+      expect.objectContaining({ knowledge: [{ baseId: BASE, scope: "folder", folderId: FOLDER }] }),
+      VERSION,
     );
     // ⚠ NOT the "changed nothing" refusal — that arm counts only fields that
     // move a column, and this moves the junction.

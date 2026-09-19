@@ -189,6 +189,22 @@ const AGENT_INPUT_SHAPE = {
     .describe(
       'op=create / op=update: scoped attachments, a REPLACE-SET — {base} whole base, {base, folder} that folder and all under it now and later, {base, entry} one document. Ids from dopl_kb(op="get_tree"); the folder/entry must live in that base.',
     ),
+  // ⚠ THE OPTIMISTIC-CONCURRENCY PAIR, WORDED AS `dopl_kb`'s AND `dopl_skill`'s
+  // ARE — one contract, three tools, and an agent that learned it on one of them
+  // must not have to learn a second vocabulary here. What this costs on
+  // `SCHEMA_CEILINGS.dopl_agent` is argued in `tool-budget.test.ts`.
+  expected_version: z
+    .string()
+    .optional()
+    .describe(
+      'op=update: the Version from a prior op="get". Required — 412 without it; only force=true skips the check.',
+    ),
+  force: z
+    .boolean()
+    .optional()
+    .describe(
+      "op=update: overwrite even though the template changed since you read it. Discards the other edit.",
+    ),
   confirm_token: z
     .string()
     .optional()
@@ -383,6 +399,8 @@ export function registerAgentTools(
             knowledge_bases: args.knowledge_bases,
             knowledge: args.knowledge,
             confirm_token: args.confirm_token,
+            expected_version: args.expected_version,
+            force: args.force,
           });
         }
 

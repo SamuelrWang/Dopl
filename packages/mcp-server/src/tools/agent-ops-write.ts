@@ -55,7 +55,8 @@ import {
   type GrantLevelArg,
   type GrantScopeArg,
 } from "./grant.js";
-import { ok, err, type ToolResponse } from "./respond.js";
+import { ok, err, isApiError, isConflict, type ToolResponse } from "./respond.js";
+import { refusal, versionConflict } from "./tool-errors.js";
 import {
   confirmGate,
   containerPublishUnacknowledged,
@@ -84,6 +85,10 @@ export interface TemplateWriteInput {
   knowledge_bases?: string[];
   knowledge?: Array<{ base: string; folder?: string; entry?: string }>;
   confirm_token?: string;
+  /** op="update" only — the Version from `op="get"`. See {@link opUpdate}. */
+  expected_version?: string;
+  /** op="update" only — the `expected_version` escape. */
+  force?: boolean;
 }
 
 /**
@@ -128,6 +133,14 @@ function knowledgeDigest(input: TemplateWriteInput): string[] {
     )
     .sort();
 }
+
+/**
+ * ⚠ **DECLARED, NOT HAND-WRITTEN** — `tool-errors.ts › versionConflict` is the
+ * one producer of this `reason=` string, so the wire and any description that
+ * teaches it move together. `op="get"` is the remedy because that is the op
+ * whose result carries a template's Version.
+ */
+const TEMPLATE_VERSION_CONFLICT = versionConflict('op="get"');
 
 /** Map the write errors that have an actionable sentence; rethrow anything
  *  else. ⚠ ONE mapper for both verbs so the two cannot answer differently. */
@@ -331,11 +344,31 @@ export async function opUpdate(
     // 🔒 G16 — the spent token, as the server's precondition. ⚠ SET AFTER the
     // "changed nothing" check above, which counts only fields that move a
     // column: an acknowledgement is an assertion ABOUT a change, never one.
-    updated = await client.updateAgentTemplate(template.id, {
-      ...patch,
-      acknowledgeShared: verdict.acknowledgedShared || undefined,
-    });
+    updated = await client.updateAgentTemplate(
+      template.id,
+      {
+        ...patch,
+        acknowledgeShared: verdict.acknowledgedShared || undefined,
+      },
+      // ⚠ THE CLIENT'S TRI-STATE, SPELLED OUT: `force` → null (blind
+      // overwrite), else the version the caller passed — and `undefined` is the
+      // arm the SDK refuses without a round trip.
+      input.force ? null : input.expected_version,
+    );
   } catch (e) {
+    // ⚠ **BOTH 412s, AND THEY ARE ONE REFUSAL TO THE AGENT.** The SDK raises
+    // `EXPECTED_VERSION_REQUIRED` before the wire when no version was passed;
+    // the server raises `AGENT_TEMPLATE_STALE_VERSION` when the row moved. The
+    // remedy is the same call either way, so a second wording would be a second
+    // string for an agent to match on and no new fact.
+    if (isApiError(e, 412, "EXPECTED_VERSION_REQUIRED") || isConflict(e)) {
+      return err(
+        refusal(
+          TEMPLATE_VERSION_CONFLICT,
+          `Nothing was written to ${inlineOr(template.name, NO_NAME)} (id: \`${template.id}\`). Re-read it, reconcile your changes, and retry with that Version — or pass force=true to overwrite the other edit.`,
+        ),
+      );
+    }
     const mapped = mapWriteError(e);
     if (mapped) return mapped;
     throw e;
@@ -344,8 +377,11 @@ export async function opUpdate(
     patch.visibility !== undefined
       ? ` Sharing is now: ${updated.visibility}.`
       : "";
+  // ⚠ THE NEW VERSION IS PART OF THE SUCCESS, not something to go and fetch —
+  // an agent making two edits in a row would otherwise have to `op="get"`
+  // between them to satisfy the precondition it just satisfied.
   return ok(
-    `Updated agent template ${inlineOr(updated.name, NO_NAME)} (id: \`${updated.id}\`).${note}`,
+    `Updated agent template ${inlineOr(updated.name, NO_NAME)} (id: \`${updated.id}\`).${note}\nVersion: \`${updated.updatedAt}\` (pass as expected_version to the next op="update")`,
   );
 }
 

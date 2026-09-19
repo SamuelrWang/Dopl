@@ -9,6 +9,7 @@ import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import type {
   AgentTemplate,
   AgentTemplateContext,
+  TemplateField,
   TemplateKnowledgeBaseRef,
 } from "../types";
 import * as repo from "./repository";
@@ -59,6 +60,36 @@ export function stripNullBytes<T extends string | null | undefined>(value: T): T
 
 export function isWorkspaceAdmin(ctx: AgentTemplateContext): boolean {
   return ctx.role !== null && meetsMinRole(ctx.role, "admin");
+}
+
+// ─── Write normalizers ──────────────────────────────────────────────────
+// ⚠ MOVED HERE FROM `service-writes.ts` (2026-09-18) FOR THE 500-LINE CAP, and
+// for nothing else: they were private to that file, they are pure, and the
+// alternative to moving them was splitting the create/update pair that the
+// F-289 fence argument reads as one document.
+
+/** Empty / whitespace-only prose becomes NULL — one "absent" spelling in the
+ *  column, so a cleared textarea and an omitted field read the same. */
+export function normalizeProse(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const trimmed = stripNullBytes(value).trim();
+  return trimmed === "" ? null : trimmed;
+}
+
+/** Same for a short label. Separate function so the two can diverge if a label
+ *  ever needs different treatment; today they agree. */
+export function normalizeLabel(value: string | null | undefined): string | null {
+  return normalizeProse(value);
+}
+
+export function normalizeFieldsInput(
+  fields: TemplateField[] | undefined
+): TemplateField[] {
+  if (!fields) return [];
+  return fields.map((f) => ({
+    key: stripNullBytes(f.key),
+    value: stripNullBytes(f.value),
+  }));
 }
 
 // ─── Visibility ─────────────────────────────────────────────────────────

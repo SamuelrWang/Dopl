@@ -184,11 +184,34 @@ export interface UpdateTemplatePatch {
   visibility?: TemplateVisibility;
 }
 
+/**
+ * ⚠ **THE PRECONDITION IS A `WHERE` CLAUSE, NOT A READ-THEN-COMPARE** (F-739,
+ * 2026-09-18). The service already holds `existing` from `getTemplateForWrite`,
+ * so `existing.updatedAt !== expected → 412` is four lines away — and it is
+ * CHECK-THEN-ACT: a write landing between that read and this UPDATE passes it.
+ * Shipping that under the name `expected_version`, on a surface where the KB
+ * lane's identical argument IS atomic (`knowledge/server/repository-entries.ts
+ * › updateEntryRow`), would teach one contract and honour two. The overloads,
+ * the `.eq("updated_at", …)` and the `null` return are that function's, by
+ * construction rather than by resemblance.
+ */
 export async function updateTemplateRow(
   workspaceId: string,
   id: string,
   patch: UpdateTemplatePatch
-): Promise<AgentTemplate> {
+): Promise<AgentTemplate>;
+export async function updateTemplateRow(
+  workspaceId: string,
+  id: string,
+  patch: UpdateTemplatePatch,
+  expectedUpdatedAt: string | undefined
+): Promise<AgentTemplate | null>;
+export async function updateTemplateRow(
+  workspaceId: string,
+  id: string,
+  patch: UpdateTemplatePatch,
+  expectedUpdatedAt?: string
+): Promise<AgentTemplate | null> {
   const db = supabaseAdmin();
   const update: Record<string, unknown> = {};
   if (patch.name !== undefined) update.name = patch.name;
@@ -216,16 +239,28 @@ export async function updateTemplateRow(
   // instead of making each one remember the special case, and it deliberately
   // does NOT fire the touch trigger: a no-op UPDATE that bumps `updated_at` is
   // the second thing the old comment was right to want to avoid.
-  const query =
+  const query = (
     Object.keys(update).length === 0
       ? db.from("agent_templates").select(AGENT_TEMPLATE_COLS)
-      : db.from("agent_templates").update(update).select(AGENT_TEMPLATE_COLS);
-  const { data, error } = await query
+      : db.from("agent_templates").update(update).select(AGENT_TEMPLATE_COLS)
+  )
     .eq("workspace_id", workspaceId)
-    .eq("id", id)
-    .single();
-  if (error || !data) {
-    throw error || new Error("Failed to update agent template");
+    .eq("id", id);
+  // ⚠ ON BOTH BRANCHES, INCLUDING THE EMPTY-PATCH READ. A junction-only patch
+  // moves no scalar column, so its "update" is a SELECT — and a caller that
+  // passed a version still asked to be refused if the row moved under it. The
+  // clause costs nothing there and makes the contract one sentence instead of
+  // two.
+  const { data, error } = await (expectedUpdatedAt === undefined
+    ? query
+    : query.eq("updated_at", expectedUpdatedAt)
+  ).maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    // ⚠ `null`, NEVER A THROW, when a precondition was given: zero rows is the
+    // CAS losing the race, which is a 412 the service words — not a failure.
+    if (expectedUpdatedAt !== undefined) return null;
+    throw new Error("Failed to update agent template");
   }
   return mapAgentTemplateRow(data as unknown as AgentTemplateRow);
 }
