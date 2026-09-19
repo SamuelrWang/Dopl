@@ -4508,7 +4508,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   BY NAME on update rather than merely unaccepted, which is the decision rather than the absence of
   one: `packages/mcp-server/src/tools/agent-ops-write.ts › opUpdate` answers *"op=\"update\" does not
   take `shelf`, and nothing was changed … the copy and the original are STRANGERS"*, and
-  `› knowledge-ops-write.ts › opUpdateBase` carries the twin for bases. `home_scoped` is still set at
+  `› knowledge-ops-base-writes.ts › opUpdateBase` carries the twin for bases. `home_scoped` is still set at
   create and never written again, and that is now a stated rule with a refusal behind it. ⚠ **The
   refusal is what stops a silent 2xx over a move that never happened**, which is why it counts as a
   resolution and an unaccepted field would not.
@@ -7131,7 +7131,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-441 — `dopl_kb(op="set_visibility")` is now gated by the server and cannot preview: its registrar arm passes no caller id and no `confirm_token` (2026-09-02)
 
-- Location: `packages/mcp-server/src/tools/knowledge.ts` — the `case "set_visibility"` arm calls `opSetVisibility(client, args.base, args.visibility)`; the handler is `packages/mcp-server/src/tools/knowledge-ops-write.ts › opSetVisibility`. The gate it now meets is `src/features/workspaces/server/shared-publish.ts › assertSharedPublishAcknowledged`, reached through `knowledge/server/service-base-writes.ts › updateBase`.
+- Location: `packages/mcp-server/src/tools/knowledge.ts` — the `case "set_visibility"` arm calls `opSetVisibility(client, args.base, args.visibility)`; the handler is `packages/mcp-server/src/tools/knowledge-ops-base-writes.ts › opSetVisibility`. The gate it now meets is `src/features/workspaces/server/shared-publish.ts › assertSharedPublishAcknowledged`, reached through `knowledge/server/service-base-writes.ts › updateBase`.
 - Found during: A11 (G16), wiring the confirm class's spent token to the server's `acknowledgeShared` precondition.
 - Severity: an ops gap opened BY a fix, in the safe direction — a refusal where there used to be a silent publish — but not the designed end state.
 - **The shape.** G16 puts the precondition on the knowledge UPDATE path, which is the door `set_visibility` uses. `create_base` can satisfy it because its registrar arm hands the handler `caller.userId` and `args.confirm_token`, so `confirmGate` can preview and mint. This arm hands over neither, so the handler cannot run the gate at all: inside a `kind='link'` container with a peer, an agent publishing a base it created gets a 400 it has no argument to answer.
@@ -10198,3 +10198,24 @@ The claim had been restated in five places from one sentence, which is how it su
 - Proposed resolution: after one release in which every supported desktop ships the `record` vocabulary, add the same refusal to `postMessage` — agent credential, `kind: 'message'`, no `to`, no `taskId`, `intent !== 'chat'` ⇒ 400 with the two choices named. Re-derive the supported-build floor from the update feed before doing it, and land the route refusal, the MCP mapping arm for its code, and the INVARIANTS row in one change.
 - ⚠ **AND THE MIGRATION-SHAPED HALF IS NOT THIS FINDING'S.** Narrowing `channel_messages_wake_verdict_check` to drop `reciprocal` would fail against existing rows and needs a backfill decision; it is deliberately NOT bundled here. The word is a tombstone in `types-delivery.ts`, the SDK copy and the SQL `CHECK`, with no producer in any tree.
 - Status: open (narrowed 2026-09-18).
+
+### F-738 — the KB write rules are enforced on the MCP surface, not on the route (2026-09-18)
+
+- Location: `packages/mcp-server/src/tools/knowledge-write-rules.ts` (the rules), called from `packages/mcp-server/src/tools/knowledge-ops-write.ts › opWriteFile`. The un-fenced half is `src/features/knowledge/server/service-paths.ts › writeFileByPath`, which accepts an agent-authored write with no excerpt and a long unsectioned body exactly as it always has.
+- Found during: Round 1 fix wave, Batch C, implementing Samuel's ruling on the fix list's Q1 (option A).
+- **THE SAME VERSION-SKEW ARGUMENT AS F-737, AND THE SAME SHAPE.** The MCP server ships INSIDE the desktop app, so a route-level 400 would be enforced by a web deployment against every desktop in the field — including builds whose bundled tool does not know the rule and therefore cannot tell the agent what to add. The refusal is on the surface that ships WITH the vocabulary it requires.
+- ⚠ **THERE IS A SECOND REASON HERE THAT F-737 DOES NOT HAVE: the route cannot tell the two audiences apart cheaply.** Samuel's ruling is that an AGENT save is refused and **a human typing in the app is only warned**. `KnowledgeContext.source` (`service-shared.ts`: `auth.agentTokenId ? "agent" : "user"`) is the nearest available discriminator, and it keys on the CREDENTIAL rather than on the surface — so a route-level rule gated on it would have to be verified against every way the desktop authenticates a human's own session before it could be trusted to refuse. That verification was not done in this wave, and guessing it wrong refuses a person.
+- ⚠ **THE HUMAN HALF OF THE RULING IS THEREFORE UNBUILT.** Nothing in the web/desktop editor warns a person about an absent excerpt or an unsectioned long entry. That is a real gap in the ruling, not a deliberate omission, and it is the larger half of this finding.
+- ⚠ **AND THE HEADING DETECTOR IS A SECOND OPINION.** `packages/mcp-server` cannot import `src/`, so `knowledge-write-rules.ts › ANY_HEADING_RE` is a regex, not `shared/knowledge/markdown-sections.ts`. It is tuned to FALSE NEGATIVES (a code-fence `#` reads as a heading, so the write goes through) because the opposite error refuses a body that really is sectioned. A route-side rule would not need the second opinion.
+- Proposed resolution: (1) build the human-facing WARNING in the editor, which is what the ruling actually asks for and what nothing currently does; (2) once the credential→surface mapping is verified, add the same two refusals to `writeFileByPath` gated on `ctx.source === "agent"`, and land the route refusal, the MCP mapping arm for its code and the INVARIANTS row in one change. Re-derive the supported-build floor from the update feed first.
+- Status: open.
+
+### F-739 — `getBaseTree(headings)` reads every body on the page to derive heading names (2026-09-18)
+
+- Location: `src/features/knowledge/server/service-folders.ts › getBaseTree`, reached by `GET /api/knowledge/bases/[baseId]/tree?headings=1` and sent by `packages/mcp-server/src/tools/knowledge-ops-read.ts › opGetTree`.
+- Found during: the same batch, implementing Wave 4 a1 (heading lists on tree rows).
+- **THE COST IS REAL AND IT IS BOUNDED, BUT IT IS NOT SMALL.** The flag is the only thing that turns `includeBody: false` off, and it does so for a whole entry page — up to `TREE_ENTRY_MAX` (1,000) rows, each body capped at 1 MB by the write schema. The bodies never leave the server (they are dropped before the snapshot returns), so the wire cost is unchanged; the DB read is not. A base of 2.6k-char entries costs ~1 MB per call against ~80 kB of metadata.
+- ⚠ **WHAT MAKES IT ACCEPTABLE TODAY** is that nothing on a hot path sends it: the app's tree pane does not, and the agent surface is paged at 400 and called rarely. ⚠ **WHAT WOULD MAKE IT NOT ACCEPTABLE** is a second caller, or an agent looping `entry_cursor` over a large base.
+- ⚠ **THE CHEAP FORM WAS MEASURED AND REFUSED, TWICE.** A stored `section_count` / heading list is a schema change plus a backfill whose SQL would have to agree with `shared/knowledge/markdown-sections.ts` about code fences, YAML frontmatter and setext underlines — a drift seam for a hint. INVARIANTS §10 records the same refusal from 2026-09-03.
+- Proposed resolution: leave it until there is a measurement. If a second caller appears, the next cheapest step is a server-side per-entry cache keyed on `(entry_id, updated_at)` rather than a stored column — it needs no backfill and cannot disagree with the parser, because it stores the parser's own output.
+- Status: open.

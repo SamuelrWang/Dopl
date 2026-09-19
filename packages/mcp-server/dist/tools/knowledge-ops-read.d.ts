@@ -50,4 +50,3 @@ export declare function opOutline(client: DoplClient, ref: string, path: string)
  * costs no round trip.
  */
 export declare function opReadFile(client: DoplClient, ref: string, path: string, callerUserId?: string | null, format?: ResponseFormat, maxChars?: number, section?: string, offset?: number): Promise<ToolResponse>;
-export declare function opSearch(client: DoplClient, query: string, base?: string, limit?: number): Promise<ToolResponse>;

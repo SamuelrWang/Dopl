@@ -7,7 +7,8 @@
  *
  * Thin registrar: one tool schema + op routing, delegating to
  *   - `knowledge-shared.ts`    — base resolution + error/validation mappers
- *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/read_file/search
+ *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/outline/read_file
+ *   - `knowledge-ops-search.ts` — search
  *   - `knowledge-ops-write.ts` — folder + entry writes, and their authoring rules
  *   - `knowledge-ops-base-writes.ts` — create/update/publish/grant a BASE
  */
@@ -26,8 +27,9 @@ import {
   opListDir,
   opOutline,
   opReadFile,
-  opSearch,
 } from "./knowledge-ops-read";
+// ⚠ The one read op whose result is a RANKING — split out for the 500-line cap.
+import { opSearch } from "./knowledge-ops-search";
 import { opPin } from "./knowledge-ops-pin";
 import { opCreateFolder, opMove, opWriteFile } from "./knowledge-ops-write";
 // ⚠ Base-level writes split out for the 500-line cap (2026-09-18).

@@ -50,15 +50,15 @@ exports.KNOWLEDGE_DOCTRINE = `# Sections
 
 READ: excerpt (get_tree) → section → body; stop at the first that answers.
 get_tree and read_file list an entry's headings; op="outline" adds what each
-one COSTS. read_file(section=) returns that heading, and an unknown one
-answers with the outline.
+COSTS. read_file(section=) returns one; an unknown heading answers with the
+outline.
 
-WRITE — the first two REFUSE an agent's save:
+WRITE: the first two REFUSE an agent's save.
 - excerpt= required: what a reader FINDS here (a value, a decision, a heading
   name). One word, or the title again, is refused.
-- entries past ~1.5k chars carry ## headings, one topic each; unsectioned
-  cannot be read in sections. write_file(section=) replaces one.
+- entries past ~1.5k chars carry ## headings, one topic each; an unsectioned
+  one cannot be read in sections. write_file(section=) replaces one.
 - point at a target by base/path; "see the approval ladder" names nothing.
 - an entry that replaces another says so in its FIRST line, and in the
-  superseded entry's excerpt.
+  superseded one's excerpt.
 `;

@@ -8,7 +8,8 @@
  *
  * Thin registrar: one tool schema + op routing, delegating to
  *   - `knowledge-shared.ts`    — base resolution + error/validation mappers
- *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/read_file/search
+ *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/outline/read_file
+ *   - `knowledge-ops-search.ts` — search
  *   - `knowledge-ops-write.ts` — folder + entry writes, and their authoring rules
  *   - `knowledge-ops-base-writes.ts` — create/update/publish/grant a BASE
  */
@@ -22,6 +23,8 @@ const tool_errors_1 = require("./tool-errors");
 const identity_1 = require("./identity");
 const respond_1 = require("./respond");
 const knowledge_ops_read_1 = require("./knowledge-ops-read");
+// ⚠ The one read op whose result is a RANKING — split out for the 500-line cap.
+const knowledge_ops_search_1 = require("./knowledge-ops-search");
 const knowledge_ops_pin_1 = require("./knowledge-ops-pin");
 const knowledge_ops_write_1 = require("./knowledge-ops-write");
 // ⚠ Base-level writes split out for the 500-line cap (2026-09-18).
@@ -329,7 +332,7 @@ directory) {
                 const miss = (0, respond_1.missingParams)("search", args, ["query"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_read_1.opSearch)(client, args.query, args.base, args.limit);
+                return (0, knowledge_ops_search_1.opSearch)(client, args.query, args.base, args.limit);
             }
             case "set_visibility": {
                 const miss = (0, respond_1.missingParams)("set_visibility", args, ["base", "visibility"]);

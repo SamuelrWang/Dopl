@@ -7,7 +7,8 @@
  *
  * Thin registrar: one tool schema + op routing, delegating to
  *   - `knowledge-shared.ts`    — base resolution + error/validation mappers
- *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/read_file/search
+ *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/outline/read_file
+ *   - `knowledge-ops-search.ts` — search
  *   - `knowledge-ops-write.ts` — folder + entry writes, and their authoring rules
  *   - `knowledge-ops-base-writes.ts` — create/update/publish/grant a BASE
  */
