@@ -204,7 +204,7 @@ const KB_INPUT_SHAPE = {
 // ⚠ **THE CEILING IN `tool-budget.test.ts` IS NOW STALE BY CONSTRUCTION and must be
 // LOWERED to the measured size in this same change — never raised.** That ratchet
 // fails on a SHRINK as loudly as on a growth, which is how the win gets banked.
-const KB_PROSE_BUDGET = 1_294; // ⚠ 13 ops glossed for parity.test.ts, plus the fence
+const KB_PROSE_BUDGET = 1_294; // ⚠ 13 ops glossed for parity.test.ts, plus the fence // ⚠ 16 ops glossed for parity.test.ts, plus the fence
 // ⚠ **1,586 → 1,294 (2026-09-18, −292): PINNING LEFT, AND THE WHOLE FALL IS BANKED
 // RATHER THAN HELD AS HEADROOM.** Samuel's ruling deleted knowledge pinning (the
 // feature, not just its two ops), so the op list lost the bullet that glossed them and

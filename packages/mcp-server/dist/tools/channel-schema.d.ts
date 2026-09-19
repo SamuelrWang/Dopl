@@ -61,7 +61,7 @@ export type { ChannelOp, ManageAction, RoomsAction, ArtifactAction, } from "./ch
  * is `body`, a hold is `wait_ms`. Eighteen op names // left the published enum. A cut a re-worded
  * sentence cannot make twice.
  */
-export declare const SCHEMA_MAX_CHARS = 8646;
+export declare const SCHEMA_MAX_CHARS = 8715;
 /**
  * ⚠ THE PER-FIELD HALF, AND IT IS THE ONE THAT ACTUALLY HOLDS THE LINE. A total can absorb one
  * 900-character paragraph by trimming nine short fields; this cannot. A `.describe()` states the
@@ -136,6 +136,19 @@ export declare const CHANNEL_INPUT_SHAPE: {
         waiting: "waiting";
         rooms: "rooms";
     }>>;
+    artifact: z.ZodOptional<z.ZodString>;
+    messages: z.ZodOptional<z.ZodArray<z.ZodCoercedNumber<unknown>>>;
+    since: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
+    limit: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
+    wait_ms: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
+    options: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        label: z.ZodString;
+        consequence: z.ZodString;
+    }, z.core.$strip>>>;
+    recommendation: z.ZodOptional<z.ZodObject<{
+        index: z.ZodNumber;
+        why: z.ZodString;
+    }, z.core.$strip>>;
     response_format: z.ZodOptional<z.ZodEnum<{
         concise: "concise";
         detailed: "detailed";
@@ -163,17 +176,4 @@ export declare const CHANNEL_INPUT_SHAPE: {
     thread: z.ZodOptional<z.ZodString>;
     summary: z.ZodOptional<z.ZodString>;
     client_msg_id: z.ZodOptional<z.ZodString>;
-    options: z.ZodOptional<z.ZodArray<z.ZodObject<{
-        label: z.ZodString;
-        consequence: z.ZodString;
-    }, z.core.$strip>>>;
-    recommendation: z.ZodOptional<z.ZodObject<{
-        index: z.ZodNumber;
-        why: z.ZodString;
-    }, z.core.$strip>>;
-    artifact: z.ZodOptional<z.ZodString>;
-    messages: z.ZodOptional<z.ZodArray<z.ZodCoercedNumber<unknown>>>;
-    since: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
-    limit: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
-    wait_ms: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
 };
