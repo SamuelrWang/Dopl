@@ -18,7 +18,7 @@ import { describe, it, expect, vi } from "vitest";
 import type { DoplClient, KnowledgeBase, WorkspaceListItem } from "@dopl/client";
 import { createWorkspaceDirectory } from "../workspace-directory";
 
-import { opGrantBase } from "./knowledge-ops-write";
+import { opGrantBase } from "./knowledge-ops-base-writes";
 import { channelScopeRefusal, levelForScope } from "./grant";
 import { stub } from "./narration-fixtures";
 

@@ -102,6 +102,7 @@ function clientFor(over: Partial<Record<string, unknown>> = {}) {
       entryTotal: TOTALS[id] ?? 0,
     })),
     readKbFileByPath: vi.fn(async () => ENTRY),
+    readKbFilePart: vi.fn(async () => ({ entry: ENTRY })),
     writeKbFileByPath: vi.fn(async () => ({ entry: ENTRY, created: false })),
     ...over,
   } as unknown as DoplClient;
@@ -115,7 +116,7 @@ describe("🔒 an ambiguous slug is refused rather than resolved", () => {
     const res = await opReadFile(client, SLUG, "change-log.md");
     expect(res.isError).toBe(true);
     expect(textOf(res)).toContain("reason=ambiguous_slug");
-    expect(client.readKbFileByPath).not.toHaveBeenCalled();
+    expect(client.readKbFilePart).not.toHaveBeenCalled();
   });
 
   it("LISTS every match with its id, container and entry count", async () => {
@@ -154,7 +155,9 @@ describe("🔒 an ambiguous slug is refused rather than resolved", () => {
     const client = clientFor();
     const res = await opReadFile(client, REAL.id, "change-log.md");
     expect(res.isError).toBeFalsy();
-    expect(client.readKbFileByPath).toHaveBeenCalledWith(REAL.id, "change-log.md");
+    expect(client.readKbFilePart).toHaveBeenCalledWith(REAL.id, "change-log.md", {
+      headings: true,
+    });
   });
 
   it("🔒 matches an id whatever its SHAPE, not just a UUID", async () => {
@@ -166,7 +169,9 @@ describe("🔒 an ambiguous slug is refused rather than resolved", () => {
     const client = clientFor({ listKbBases: vi.fn(async () => [odd, REAL]) });
     const res = await opReadFile(client, "kb-1", "x.md");
     expect(res.isError).toBeFalsy();
-    expect(client.readKbFileByPath).toHaveBeenCalledWith("kb-1", "x.md");
+    expect(client.readKbFilePart).toHaveBeenCalledWith("kb-1", "x.md", {
+      headings: true,
+    });
   });
 
   it("resolves normally when the slug names exactly ONE base", async () => {
