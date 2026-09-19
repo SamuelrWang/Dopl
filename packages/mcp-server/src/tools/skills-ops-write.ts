@@ -9,6 +9,7 @@ import { inlineOr } from "./narration";
 import { ok, err, isConflict, type ToolResponse } from "./respond";
 import { agentWriteDenied, failureDetail, NO_NAME } from "./skills-shared";
 import { confirmGate, containerPublishUnacknowledged } from "./confirm-token";
+import { duplicateNameNoteFor } from "./duplicate-name";
 
 export async function opWrite(
   client: DoplClient,
@@ -77,10 +78,18 @@ export async function opCreate(
         : skill.visibility === "private"
           ? ` Other members' op="list" will not show it while it is private.`
           : "";
+    // ⚠ Q3's warning — AFTER the create, so a list that throws costs the caller
+    // nothing. See `duplicate-name.ts` for why it warns rather than refuses.
+    const dup = await duplicateNameNoteFor(
+      skill,
+      () => client.listSkills(),
+      "skill",
+      true,
+    );
     return ok(
       `Created skill ${inlineOr(skill.name, NO_NAME)} (slug: \`${skill.slug}\`). ` +
         `Status: ${skill.status}. ${visNote}${listNote} ` +
-        `SKILL.md (${primaryFile.body.length} chars) is ready to edit with \`dopl_skill\` op="write".`
+        `SKILL.md (${primaryFile.body.length} chars) is ready to edit with \`dopl_skill\` op="write".${dup}`
     );
   } catch (e) {
     return err(`Couldn't create skill: ${failureDetail(e)}`);

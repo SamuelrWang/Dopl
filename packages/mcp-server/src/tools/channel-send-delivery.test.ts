@@ -185,16 +185,19 @@ describe("`delivery=` is the ack, and it is the only one", () => {
     });
   }
 
-  it("marks the server's write-time PREDICTION with `?` until a machine acks", async () => {
-    // ⚠ ONE CHARACTER CARRYING THE WHOLE DISTINCTION (A9). `woken?` is what the
-    // server expects to happen; `woken` is what the operator's machine reported.
+  it("NAMES the server's write-time PREDICTION until a machine acks", async () => {
+    // ⚠ **THE PAIR NAMES ITS OWN TENSE SINCE 2026-09-18 (S26).** It was `woken?`
+    // against `woken`, and every reader tested took the question mark for the
+    // server being UNSURE that a wake happened — the one thing it never meant.
+    // `woken(predicted)` is what the
+    // server expects to happen; `woken(confirmed)` is what the operator's machine reported.
     // An orchestrator that reads the first as the second waits on a turn that
     // may never have started.
     const out = await send(
       sendStub(vi.fn(async () => message({ delivery: "woken", deliveryAt: null }))),
       { to: "@agent-k3wpf7c5" },
     );
-    expect(out).toContain("delivery=woken?");
+    expect(out).toContain("delivery=woken(predicted)");
   });
 
   it("renders `delivery=-` when the server computes none — absent is not `none`", async () => {

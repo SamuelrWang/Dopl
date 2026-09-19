@@ -69,6 +69,7 @@ import {
   type OfferedTemplateVisibility,
 } from "./agent-shared.js";
 import { isErr } from "./channel-shared.js";
+import { duplicateNameNoteFor } from "./duplicate-name.js";
 import {
   homeChannelRowNotShared,
   resolveHomeChannelContainer,
@@ -269,9 +270,19 @@ export async function opCreate(
       : inHomeChannel
         ? "Shared in this channel — everyone here can list it and launch it."
         : "Shared with everyone in this workspace — every member can list it and launch it.";
+  // ⚠ Q3's warning — AFTER the create, so a list that throws costs the caller
+  // nothing. A template collision is the sharper of the two: `resolveTemplateRef`
+  // REFUSES every name-addressed `get`/`update` from now on. See
+  // `duplicate-name.ts`.
+  const dup = await duplicateNameNoteFor(
+    template,
+    () => client.listAgentTemplates(),
+    "agent template",
+    true,
+  );
   return ok(
     [
-      `Created agent template ${inlineOr(template.name, NO_NAME)} (id: \`${template.id}\`). ${audience}`,
+      `Created agent template ${inlineOr(template.name, NO_NAME)} (id: \`${template.id}\`). ${audience}${dup}`,
       `Launch it into a channel with dopl_channel(op="manage", action="launch", channel=…, template="${template.id}") — which ASKS the operator's machine and does not start anything by itself.`,
     ].join("\n"),
   );

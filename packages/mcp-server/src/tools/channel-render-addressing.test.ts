@@ -72,7 +72,7 @@ describe("addressing is rendered from the columns that decided it", () => {
       msg({ recipientAgentIds: ["deynelz3"], recipientUserIds: [], delivery: "woken" }),
     ]);
     // ⚠ No `deliveryAt` — the server's write-time PREDICTION, not a receipt.
-    expect(predicted).toContain("· woken?");
+    expect(predicted).toContain("· woken(predicted)");
 
     const acked = await lineOf([
       msg({
@@ -83,7 +83,8 @@ describe("addressing is rendered from the columns that decided it", () => {
       }),
     ]);
     expect(acked).toContain("· woken");
-    expect(acked).not.toContain("woken?");
+    expect(acked).toContain("woken(confirmed)");
+    expect(acked).not.toContain("woken(predicted)");
   });
 
   it("`[]` on both columns is `→ nobody` — an ANSWER, not an absence", async () => {

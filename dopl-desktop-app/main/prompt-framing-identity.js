@@ -30,8 +30,21 @@ const { AGENT_ID_RE } = require('./agent-id');
 // nothing left to disambiguate — and a line teaching an id "for the rare case" is a line an agent
 // will use in the common one.
 //
-// ⚠ **IT IS FOUR SHORT LINES AND MUST STAY SHORT** — a FACT and a PROHIBITION is the smallest
+// ⚠ **IT IS FIVE SHORT LINES AND MUST STAY SHORT** — a FACT and a PROHIBITION is the smallest
 // shape that can be followed.
+//
+// ⚠ **THE FIFTH LINE IS THE SIBLING FACT (S45, 2026-09-18), AND IT IS A FACT RATHER THAN A
+// DECISION TO MAKE.** An agent post is authored by its OPERATOR'S ACCOUNT, so a transcript
+// rendered `agent @x for Samuel Wang (<id>)` whether that agent was this one's SIBLING or a
+// stranger's — and wave 3 spent two waves believing a sibling was another member's agent and
+// filed a false security finding off it. The renderer now prints `for you` on a sibling
+// (`channel-render-identity.ts › formatAuthor`); this line is what tells a session what that
+// label MEANS. It does not ask the reader to adjudicate anything — the label is server-joined
+// on the immutable author id, and the delivery verdict is still the server's.
+//
+// ⚠ **NOTHING HERE NAMES AN OUTSIDE SESSION YET.** The group tag for a session running outside
+// the operator's desktop (`@desktop`) and its author label are a separate change in flight; one
+// short line belongs here when it lands, and it is not this one.
 //
 // ⚠ THE NAME IS SPOKEN ONLY WHEN THE CALLER SUPPLIES ONE. `ctx.agentName` is optional and this
 // module is PURE, so a caller that has the name passes it; inventing one here, or asserting the
@@ -48,6 +61,7 @@ function agentIdentityFraming(ctx) {
     `THE ID IS INTERNAL: read it, never write it in a message.`,
     `ADDRESS AN AGENT BY ITS NAME, as a tag: lower case, spaces as dashes (@bug-reviewer).`,
     `Names are unique among live agents, so a tag reaches exactly one.`,
+    `A post marked "for you" is a SIBLING: your operator's, not a peer's.`,
   ];
 }
 

@@ -234,8 +234,14 @@ function sharedCredentialPrivateDenied(e) {
 }
 /** One template rendered as a list row. ⚠ Every displayed field is a VALUE
  *  spliced into a line we wrote — name and description are length-bounded only,
- *  so a newline in either would otherwise start a row of its own. */
-function templateRow(t) {
+ *  so a newline in either would otherwise start a row of its own.
+ *
+ *  ⚠ **`audience` IS PASSED IN, NOT READ OFF `t.visibility` (S21/S23,
+ *  2026-09-18).** The column answers "what is in the visibility field"; a
+ *  caller asks "who can see this", and inside a home channel `workspace` means
+ *  the room rather than the company. The GROUP the caller put this row in is
+ *  the only place that distinction exists — see `audience-label.ts`. */
+function templateRow(t, audience) {
     const desc = t.description ? `\n  ${(0, narration_js_1.inlineOr)(t.description, "")}` : "";
     const model = t.model ? ` · model ${(0, narration_js_1.inlineOr)(t.model, narration_js_1.NO_NAME)}` : "";
     // ⚠ **"knowledge scope(s)", NOT "knowledge base(s)" (2026-09-08).** An
@@ -247,7 +253,7 @@ function templateRow(t) {
     const kbs = scopeCount > 0
         ? ` · ${scopeCount} knowledge scope${scopeCount === 1 ? "" : "s"}`
         : "";
-    return `- ${(0, narration_js_1.inlineOr)(t.name, narration_js_1.NO_NAME)} (id: \`${t.id}\` · ${t.visibility}${model}${kbs})${desc}`;
+    return `- ${(0, narration_js_1.inlineOr)(t.name, narration_js_1.NO_NAME)} (id: \`${t.id}\` · seen by ${audience}${model}${kbs})${desc}`;
 }
 /**
  * ⚠ WHOSE VIEW THIS IS, stated ON THE RESULT and not only in the description.

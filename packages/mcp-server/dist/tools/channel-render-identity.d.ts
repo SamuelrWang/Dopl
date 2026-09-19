@@ -28,8 +28,24 @@ import type { ChannelMessage } from "@dopl/client";
  *      "system" would render as the bare token `system`.
  *   2. `authorUserId` appended ALWAYS, not only as name-missing fallback. Name
  *      = author's claim; id = server's record. Claim alone is uncheckable.
+ *
+ * 🔒 **AND SINCE 2026-09-18 IT SAYS WHEN AN AGENT IS A SIBLING** (S45). An
+ * agent post is authored by its OPERATOR'S ACCOUNT, so `agent @x for Samuel
+ * Wang (<id>)` is what a reader saw whether that agent was ITS OWN sibling or a
+ * stranger's — and wave 3 spent two whole waves believing a sibling was another
+ * member's agent, then filed a false security finding off it. `memberRef` has
+ * answered `you` for the caller's own id since it was written; this is that
+ * same join, applied to the author half.
+ *
+ * ⚠ **THE JOIN IS ON `authorUserId`, THE HALF THE AUTHOR DOES NOT CONTROL** —
+ * never on a name, and never on the agent handle. Two agents of one operator
+ * share that id; two operators cannot.
+ *
+ * ⚠ **`view` IS OPTIONAL AND AN UNRESOLVED CALLER RENDERS EXACTLY AS BEFORE.**
+ * `selfUserId` is null when the boot ping failed, and "I do not know who I am"
+ * must not render as "not yours" — see {@link NO_MEMBER_VIEW}.
  */
-export declare function formatAuthor(m: ChannelMessage): string;
+export declare function formatAuthor(m: ChannelMessage, view?: MemberView): string;
 /**
  * **WHICH AGENT — BY THE NAME ITS OPERATOR GAVE IT** (2026-09-04).
  *

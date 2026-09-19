@@ -61,7 +61,7 @@ export type { ChannelOp, ManageAction, RoomsAction, ArtifactAction, } from "./ch
  * is `body`, a hold is `wait_ms`. Eighteen op names // left the published enum. A cut a re-worded
  * sentence cannot make twice.
  */
-export declare const SCHEMA_MAX_CHARS = 8648;
+export declare const SCHEMA_MAX_CHARS = 8646;
 /**
  * ⚠ THE PER-FIELD HALF, AND IT IS THE ONE THAT ACTUALLY HOLDS THE LINE. A total can absorb one
  * 900-character paragraph by trimming nine short fields; this cannot. A `.describe()` states the
@@ -109,6 +109,33 @@ export declare const CHANNEL_INPUT_SHAPE: {
             inherit: "inherit";
         }>>;
     }, z.core.$strip>>;
+    name: z.ZodOptional<z.ZodString>;
+    visibility: z.ZodOptional<z.ZodEnum<{
+        private: "private";
+        public: "public";
+    }>>;
+    mode: z.ZodOptional<z.ZodEnum<{
+        interactive: "interactive";
+        autonomous: "autonomous";
+    }>>;
+    info_card: z.ZodOptional<z.ZodObject<{
+        hidden: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        rows: z.ZodOptional<z.ZodArray<z.ZodObject<{
+            id: z.ZodOptional<z.ZodString>;
+            label: z.ZodString;
+            value: z.ZodOptional<z.ZodString>;
+        }, z.core.$strip>>>;
+    }, z.core.$strip>>;
+    section: z.ZodOptional<z.ZodEnum<{
+        read: "read";
+        fields: "fields";
+        send: "send";
+        manage: "manage";
+        law: "law";
+        model: "model";
+        waiting: "waiting";
+        rooms: "rooms";
+    }>>;
     response_format: z.ZodOptional<z.ZodEnum<{
         concise: "concise";
         detailed: "detailed";
@@ -149,31 +176,4 @@ export declare const CHANNEL_INPUT_SHAPE: {
     since: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
     limit: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
     wait_ms: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
-    name: z.ZodOptional<z.ZodString>;
-    visibility: z.ZodOptional<z.ZodEnum<{
-        private: "private";
-        public: "public";
-    }>>;
-    mode: z.ZodOptional<z.ZodEnum<{
-        interactive: "interactive";
-        autonomous: "autonomous";
-    }>>;
-    info_card: z.ZodOptional<z.ZodObject<{
-        hidden: z.ZodOptional<z.ZodArray<z.ZodString>>;
-        rows: z.ZodOptional<z.ZodArray<z.ZodObject<{
-            id: z.ZodOptional<z.ZodString>;
-            label: z.ZodString;
-            value: z.ZodOptional<z.ZodString>;
-        }, z.core.$strip>>>;
-    }, z.core.$strip>>;
-    section: z.ZodOptional<z.ZodEnum<{
-        read: "read";
-        fields: "fields";
-        send: "send";
-        manage: "manage";
-        law: "law";
-        model: "model";
-        waiting: "waiting";
-        rooms: "rooms";
-    }>>;
 };

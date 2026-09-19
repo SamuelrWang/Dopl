@@ -56,7 +56,7 @@ const SKILL_SHAPE = {
     body: zod_1.z.string().max(1_048_576).optional().describe("op=create: initial SKILL.md content. op=write (required): the new full SKILL.md body."),
     expected_version: zod_1.z.string().optional().describe("op=write: the Version from a prior read. Required when overwriting an existing body — omitting it fails with 412; only force=true skips the check."),
     force: zod_1.z.boolean().optional().describe("op=write: overwrite even if the body changed since you read it. Discards the other edit — use only when intentional."),
-    visibility: zod_1.z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' shares the skill workspace-wide (every member can list and read it); 'private' makes it owner-only again. Owner or workspace-admin only. Team-scoped sharing is web-UI-managed."),
+    visibility: zod_1.z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' shares the skill workspace-wide (every member can list and read it); 'private' reverses it (a knowledge base cannot). Owner or workspace-admin only. Team-scoped sharing is web-UI-managed."),
     detail: zod_1.z.enum(["summary", "full"]).optional().describe("op=get: 'summary' returns metadata + body length WITHOUT the body (cheap orientation); 'full' (default) includes the SKILL.md body."),
     confirm_token: zod_1.z
         .string()

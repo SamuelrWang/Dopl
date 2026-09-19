@@ -124,8 +124,20 @@ kinds = new Map()) {
     const sessionCount = channels.reduce((n, c) => n + c.sessions.length, 0);
     const waitingCount = channels.reduce((n, c) => n + c.waiting.length, 0);
     const cursor = status.since === null ? "no cursor given" : `since seq ${status.since}`;
+    // ⚠ **WHY THE COUNT OVER-REPORTS, SAID WHERE IT IS PRINTED (S16(d),
+    // 2026-09-18).** `dopl_status`'s description said only that it "over-reports"
+    // — a warning an agent can do nothing with, on a tool held to a 450-char cap
+    // where the explanation does not fit. It fits HERE, once, and only when there
+    // is a count to explain: `service-account.ts › resolveWaiting` has no reply
+    // EDGE to read, so an addressed message stays open until the caller posts
+    // ANYTHING LATER in that channel. The bias is deliberate and one-directional
+    // — an extra row, never a missed one — which is the direction this surface
+    // has to fail in, and an agent told the RULE can act on it.
+    const waitingNote = waitingCount === 0
+        ? ""
+        : `\n_"waiting on you" clears when you next POST in that channel — there is no reply edge, so answering elsewhere leaves the row up. It over-counts rather than missing one._`;
     const lines = [
-        `## Status — ${channels.length} channel${channels.length === 1 ? "" : "s"} · ${sessionCount} live session${sessionCount === 1 ? "" : "s"} · ${waitingCount} waiting on you · ${cursor}`,
+        `## Status — ${channels.length} channel${channels.length === 1 ? "" : "s"} · ${sessionCount} live session${sessionCount === 1 ? "" : "s"} · ${waitingCount} waiting on you · ${cursor}${waitingNote}`,
         "",
         // ⚠ NO SECURITY BANNER, AND NO HANDLE NOTE — T11/T13, the same cut every
         // other READ surface took on 2026-09-02. `dopl_status` is the call an

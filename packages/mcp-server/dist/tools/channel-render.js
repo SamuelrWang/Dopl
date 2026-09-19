@@ -125,7 +125,10 @@ function clipBody(m, ref, clip) {
  * label, this one is the reason a waiting agent should stop waiting.
  */
 function formatMessage(m, anyThreaded, view, ref, clip, terse) {
-    const author = (0, channel_render_identity_1.formatAuthor)(m);
+    // ⚠ **THE VIEW IS PASSED (S45, 2026-09-18)** so a SIBLING agent — one whose
+    // operator is the reader — renders `for you` instead of the operator's name
+    // and id, which is what a reader cannot tell apart otherwise.
+    const author = (0, channel_render_identity_1.formatAuthor)(m, view);
     const ended = sessionEnded(m);
     const kindTag = ended
         ? " · SESSION ENDED"
@@ -153,8 +156,8 @@ function formatMessage(m, anyThreaded, view, ref, clip, terse) {
     const memberTag = (0, channel_render_identity_1.addressTag)(m, view);
     // ⚠ **THE ACK, BESIDE THE ADDRESS IT IS AN ACK FOR.** `delivery` alone is the
     // server's write-time PREDICTION and `deliveryAt` is what turns it into a
-    // receipt; `deliveryFact` carries that one-character distinction (`woken?` vs
-    // `woken`) and is the SAME renderer the write result uses, so a caller reads
+    // receipt; `deliveryFact` names the tense outright (`woken(predicted)` vs
+    // `woken(confirmed)`) and is the SAME renderer the write result uses, so a caller reads
     // one vocabulary on both sides of a send. Absent when this server computes no
     // verdict — which is not `none`.
     const ack = (0, channel_facts_1.deliveryFact)(m.delivery, m.deliveryAt);

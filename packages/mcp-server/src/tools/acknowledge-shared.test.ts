@@ -21,7 +21,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import type { DoplClient } from "@dopl/client";
 
 import { opCreate, opUpdate } from "./agent-ops-write";
-import { opCreateBase, opSetVisibility } from "./knowledge-ops-write";
+import { opCreateBase, opSetVisibility } from "./knowledge-ops-base-write";
 import { stub } from "./narration-fixtures";
 import { __resetConfirmTokensForTest } from "./confirm-token";
 import { registerKnowledgeTools } from "./knowledge";

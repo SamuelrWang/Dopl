@@ -14,6 +14,7 @@ const response_size_js_1 = require("./response-size.js");
 const agent_shared_js_1 = require("./agent-shared.js");
 const channel_shared_js_1 = require("./channel-shared.js");
 const container_destination_js_1 = require("./container-destination.js");
+const audience_label_js_1 = require("./audience-label.js");
 /** One heading per OFFERED visibility, in the order `op="list"` prints them.
  *  ⚠ THE WORKSPACE VOCABULARY, and it is only ever printed for a workspace —
  *  inside a home channel `container-destination.ts › DESTINATION_HEADINGS`
@@ -21,6 +22,13 @@ const container_destination_js_1 = require("./container-destination.js");
 const VISIBILITY_HEADINGS = {
     private: "Private to you",
     workspace: "Shared with the whole workspace",
+};
+/** ⚠ **THE ROW LABEL, PAIRED WITH THE HEADING ABOVE IT AND NOT WITH THE COLUMN**
+ *  (S21/S23) — see `audience-label.ts`. A workspace heading and a home-channel
+ *  heading answer "who can see this" differently for the SAME stored value. */
+const WORKSPACE_AUDIENCES = {
+    private: audience_label_js_1.AUDIENCE_LABELS.you,
+    workspace: audience_label_js_1.AUDIENCE_LABELS.workspace,
 };
 const OFFERED_VISIBILITIES = new Set(agent_shared_js_1.TEMPLATE_VISIBILITY_VALUES);
 /** The heading for every OTHER stored visibility. ⚠ It names no axis on
@@ -84,33 +92,43 @@ directory) {
             [
                 container_destination_js_1.DESTINATION_HEADINGS.shared,
                 here.filter((t) => t.visibility === "workspace"),
+                audience_label_js_1.AUDIENCE_LABELS.channel,
             ],
             [
                 container_destination_js_1.DESTINATION_HEADINGS.legacy,
                 here.filter((t) => t.visibility !== "workspace"),
+                audience_label_js_1.AUDIENCE_LABELS.nobody,
             ],
         ]
         : [
             ...agent_shared_js_1.TEMPLATE_VISIBILITY_VALUES.map((v) => [
                 VISIBILITY_HEADINGS[v],
                 here.filter((t) => t.visibility === v),
+                WORKSPACE_AUDIENCES[v],
             ]),
-            [OTHER_HEADING, here.filter((t) => !OFFERED_VISIBILITIES.has(t.visibility))],
+            // ⚠ A visibility this surface does not offer (`team`) is a row we
+            // cannot answer the audience question for — `not stated` rather than
+            // a guess, on `channel-facts.ts › postureFacts`'s rule.
+            [
+                OTHER_HEADING,
+                here.filter((t) => !OFFERED_VISIBILITIES.has(t.visibility)),
+                "an audience this surface cannot state",
+            ],
         ];
     // ⚠ THE CHANNEL'S OWN ROWS FIRST, the personal shelf under them: the call
     // named a container, and a heading order that led with rows from somewhere
     // else would read as that container's roster.
     const groups = [
         ...hereGroups,
-        [container_destination_js_1.DESTINATION_HEADINGS.personal, personal],
+        [container_destination_js_1.DESTINATION_HEADINGS.personal, personal, audience_label_js_1.AUDIENCE_LABELS.you],
     ];
     const lines = ["## Agent templates\n"];
-    for (const [heading, rows] of groups) {
+    for (const [heading, rows, audience] of groups) {
         if (rows.length === 0)
             continue;
         lines.push(`### ${heading}`);
         for (const t of rows)
-            lines.push((0, agent_shared_js_1.templateRow)(t));
+            lines.push((0, agent_shared_js_1.templateRow)(t, audience));
         lines.push("");
     }
     lines.push(agent_shared_js_1.TEMPLATES_SCOPE_NOTE);

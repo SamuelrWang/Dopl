@@ -13,6 +13,7 @@ const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const skills_shared_1 = require("./skills-shared");
 const confirm_token_1 = require("./confirm-token");
+const duplicate_name_1 = require("./duplicate-name");
 async function opWrite(client, slug, body, expected_version, force) {
     try {
         const { file } = await client.writeSkillBody(slug, body, force ? null : expected_version);
@@ -52,9 +53,12 @@ async function opCreate(client, params) {
             : skill.visibility === "private"
                 ? ` Other members' op="list" will not show it while it is private.`
                 : "";
+        // ⚠ Q3's warning — AFTER the create, so a list that throws costs the caller
+        // nothing. See `duplicate-name.ts` for why it warns rather than refuses.
+        const dup = await (0, duplicate_name_1.duplicateNameNoteFor)(skill, () => client.listSkills(), "skill", true);
         return (0, respond_1.ok)(`Created skill ${(0, narration_1.inlineOr)(skill.name, skills_shared_1.NO_NAME)} (slug: \`${skill.slug}\`). ` +
             `Status: ${skill.status}. ${visNote}${listNote} ` +
-            `SKILL.md (${primaryFile.body.length} chars) is ready to edit with \`dopl_skill\` op="write".`);
+            `SKILL.md (${primaryFile.body.length} chars) is ready to edit with \`dopl_skill\` op="write".${dup}`);
     }
     catch (e) {
         return (0, respond_1.err)(`Couldn't create skill: ${(0, skills_shared_1.failureDetail)(e)}`);

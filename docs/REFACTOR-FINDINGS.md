@@ -4508,7 +4508,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   BY NAME on update rather than merely unaccepted, which is the decision rather than the absence of
   one: `packages/mcp-server/src/tools/agent-ops-write.ts › opUpdate` answers *"op=\"update\" does not
   take `shelf`, and nothing was changed … the copy and the original are STRANGERS"*, and
-  `› knowledge-ops-write.ts › opUpdateBase` carries the twin for bases. `home_scoped` is still set at
+  `› knowledge-ops-base-write.ts › opUpdateBase` carries the twin for bases. `home_scoped` is still set at
   create and never written again, and that is now a stated rule with a refusal behind it. ⚠ **The
   refusal is what stops a silent 2xx over a move that never happened**, which is why it counts as a
   resolution and an unaccepted field would not.
@@ -7131,7 +7131,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-441 — `dopl_kb(op="set_visibility")` is now gated by the server and cannot preview: its registrar arm passes no caller id and no `confirm_token` (2026-09-02)
 
-- Location: `packages/mcp-server/src/tools/knowledge.ts` — the `case "set_visibility"` arm calls `opSetVisibility(client, args.base, args.visibility)`; the handler is `packages/mcp-server/src/tools/knowledge-ops-write.ts › opSetVisibility`. The gate it now meets is `src/features/workspaces/server/shared-publish.ts › assertSharedPublishAcknowledged`, reached through `knowledge/server/service-base-writes.ts › updateBase`.
+- Location: `packages/mcp-server/src/tools/knowledge.ts` — the `case "set_visibility"` arm calls `opSetVisibility(client, args.base, args.visibility)`; the handler is `packages/mcp-server/src/tools/knowledge-ops-base-write.ts › opSetVisibility`. The gate it now meets is `src/features/workspaces/server/shared-publish.ts › assertSharedPublishAcknowledged`, reached through `knowledge/server/service-base-writes.ts › updateBase`.
 - Found during: A11 (G16), wiring the confirm class's spent token to the server's `acknowledgeShared` precondition.
 - Severity: an ops gap opened BY a fix, in the safe direction — a refusal where there used to be a silent publish — but not the designed end state.
 - **The shape.** G16 puts the precondition on the knowledge UPDATE path, which is the door `set_visibility` uses. `create_base` can satisfy it because its registrar arm hands the handler `caller.userId` and `args.confirm_token`, so `confirmGate` can preview and mint. This arm hands over neither, so the handler cannot run the gate at all: inside a `kind='link'` container with a peer, an agent publishing a base it created gets a 400 it has no argument to answer.
@@ -10198,3 +10198,46 @@ The claim had been restated in five places from one sentence, which is how it su
 - Proposed resolution: after one release in which every supported desktop ships the `record` vocabulary, add the same refusal to `postMessage` — agent credential, `kind: 'message'`, no `to`, no `taskId`, `intent !== 'chat'` ⇒ 400 with the two choices named. Re-derive the supported-build floor from the update feed before doing it, and land the route refusal, the MCP mapping arm for its code, and the INVARIANTS row in one change.
 - ⚠ **AND THE MIGRATION-SHAPED HALF IS NOT THIS FINDING'S.** Narrowing `channel_messages_wake_verdict_check` to drop `reciprocal` would fail against existing rows and needs a backfill decision; it is deliberately NOT bundled here. The word is a tombstone in `types-delivery.ts`, the SDK copy and the SQL `CHECK`, with no producer in any tree.
 - Status: open (narrowed 2026-09-18).
+
+### F-738 — `to` advertises an agent HANDLE for `op="manage"`, and that lane cannot resolve one (2026-09-18)
+
+Found while splitting `to`'s three meanings into three lines (S13) and **not fixed there**, because the
+fix is in the manage lane rather than in the text.
+
+`channel-schema.ts › CHANNEL_INPUT_SHAPE.to` says the field takes *"an agent (`@agent-<id>` **or its
+handle**)"*, and that is true for `op="send"` — the server resolves the union at the door
+(`service-writes-metadata-recipient.ts › resolveToRecipients`). It is FALSE for `op="manage"`:
+`channel-ops-agent.ts › opEndAgent` strips the `@agent-` prefix without validating what is left, and
+`AgentDirectiveCreateSchema.agentId` is an ANCHORED 8-character grammar, so a name handle fails
+validation rather than resolving. The describe is one sentence for one field and cannot carry a
+per-op exception without becoming the run-on S13 exists to remove.
+
+**The honest fixes, in order of preference:** (a) teach the manage lane the same handle resolution the
+send lane has (`main/agent-handles.js` already does it on the desktop side), or (b) refuse a
+name handle on `op="manage"` by NAME, with a line saying an id is required there and where to read
+one. Today it is an opaque `-32602`. ⚠ It is S51's residual in the study, whose `wait_ms` half is
+already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not carry that half forward.
+
+### F-739 — agent templates have no optimistic concurrency anywhere on the write path (2026-09-18)
+
+S46 / D-c1 reads as a wording fix ("`expected_version` on template update, matching the KB contract")
+and is not one: **nothing in any of the four layers implements it.** `grep -n 'expectedVersion' src/features/agent-templates/ packages/dopl-client/src/agent-template-types.ts` is
+empty; `repository.ts › updateTemplateRow` issues a bare PostgREST update with no precondition, the
+route carries no `X-Updated-At`, and `client-agent-templates.ts` has no argument to send one. The KB
+lane's contract is a real compare-and-swap (`packages/dopl-client/src/knowledge.ts › writeKbFileByPath`,
+tri-state on `expectedVersion`), and it is the only thing "matching the KB contract" can mean.
+
+⚠ **THE CHEAP VERSION IS WORSE THAN NOTHING AND IS WHY THIS IS FILED RATHER THAN SHIPPED.**
+`service-writes.ts › updateTemplate` already reads `existing` through `getTemplateForWrite`, so a
+service-level `existing.updatedAt !== expected → 412` is four lines — and it is CHECK-THEN-ACT, not a
+CAS: a write landing between the read and the update passes it. Shipping that under the name
+`expected_version`, on a surface where the KB lane's identical argument IS atomic, teaches one
+contract and honours two.
+
+**The shape of the real fix:** `updateTemplateRow` takes an optional `expectedUpdatedAt` and adds
+`.eq("updated_at", expected)`; a zero-row result becomes `AgentTemplateConflictError` → 412 in
+`http-mapping.ts`; the client sends `X-Updated-At` exactly as the KB lane does; `dopl_agent` gains
+`expected_version` and maps the 412 with the remedy sentence `knowledge-ops-write.ts › opWriteFile`
+already words. ⚠ **It costs roughly 150 pushed chars on `SCHEMA_CEILINGS.dopl_agent`** and needs
+funding in the same change — no migration, `agent_templates_touch_updated_at` already stamps the
+column (INVARIANTS §12).

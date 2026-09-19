@@ -173,7 +173,7 @@ const AGENT_INPUT_SHAPE = {
     .enum(TEMPLATE_VISIBILITY_VALUES, { error: VISIBILITY_ENUM_MESSAGE })
     .optional()
     .describe(
-      'op=create / op=update: who may use this identity — "private" (create default) = you and workspace admins, "workspace" = every member. ⚠ Inside a home channel someone else is in, "workspace" publishes your agent into their room and previews first.',
+      'op=create / op=update: who may use this identity — "private" (create default) = you and workspace admins; "workspace" = everyone in THIS container, which inside a home channel is that ROOM and nobody else, and previews first.',
     ),
   knowledge_bases: z
     .array(z.string().uuid())
@@ -193,7 +193,7 @@ const AGENT_INPUT_SHAPE = {
     .string()
     .optional()
     .describe(
-      "op=create / op=update: the one-time token from this call's own dry-run preview, echoed back to go ahead — needed only when the write would publish into a home channel somebody else is in, refused on any other call, and never guessable.",
+      "op=create / op=update: TWO CALLS — send this call WITHOUT it for a dry-run preview plus a one-time token, then re-send it WITH that token. Only when the write would publish into a home channel somebody else is in; refused elsewhere, never guessable.",
     ),
   // ⚠ A16's third response-size knob, and the only one on THIS surface: an
   // INSTRUCTIONS block is a system prompt up to 32 KB, and an agent looking for

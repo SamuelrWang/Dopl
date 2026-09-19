@@ -23,6 +23,8 @@ const respond_1 = require("./respond");
 const knowledge_ops_read_1 = require("./knowledge-ops-read");
 const knowledge_ops_pin_1 = require("./knowledge-ops-pin");
 const knowledge_ops_write_1 = require("./knowledge-ops-write");
+// ⚠ THE BASE LANE — its own module since 2026-09-18 (§1's 500-line cap).
+const knowledge_ops_base_write_1 = require("./knowledge-ops-base-write");
 const grant_1 = require("./grant");
 const retired_copy_ops_1 = require("./retired-copy-ops");
 /**
@@ -74,9 +76,9 @@ const KB_INPUT_SHAPE = {
     description: zod_1.z.string().optional().describe("create_base/update_base: base description (max 2000); create_folder: the folder's agent-facing summary (max 300), which re-calling create_folder updates."),
     slug: zod_1.z.string().optional().describe("update_base: optional new slug (1-80 chars)."),
     body: zod_1.z.string().max(1_048_576).optional().describe("write_file: required markdown body. Can't be empty — pass a single space for a deliberate stub."),
-    title: zod_1.z.string().optional().describe("write_file: the entry's title, which can't contain '/' — it doubles as the addressable path for a new entry when `path` is omitted."),
+    title: zod_1.z.string().optional().describe("write_file: the entry's title, which can't contain '/'. It RENAMES the path's last segment, and becomes the path itself when `path` is omitted."),
     excerpt: zod_1.z.string().optional().describe("write_file: the entry's agent-facing summary (max 300), shown in get_tree/list_dir; on an update it changes only when provided."),
-    expected_version: zod_1.z.string().optional().describe("write_file: the entry's Version from a prior read_file — required when overwriting (412 without it, and only force=true skips the check); creates need none."),
+    expected_version: zod_1.z.string().optional().describe("write_file: the entry's Version from a prior read_file — required when overwriting (412 without it); creates need none."),
     force: zod_1.z.boolean().optional().describe("write_file: overwrite even if the entry changed since you read it. Discards the other edit — use only when intentional."),
     query: zod_1.z.string().optional().describe("search: required free-text query."),
     // ⚠ coerce: MCP clients sometimes send numbers as strings, which strict
@@ -88,14 +90,14 @@ const KB_INPUT_SHAPE = {
     limit: zod_1.z.coerce.number().int().min(1).max(100).optional().describe("search: max hits (default 20)."),
     entry_limit: zod_1.z.coerce.number().int().min(1).max(1000).optional().describe("get_tree: max entries per page (default 400). Folders always ship in full."),
     entry_cursor: zod_1.z.string().optional().describe("get_tree: opaque cursor from a prior page's 'more entries' notice — fetches the next page."),
-    visibility: zod_1.z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' publishes a base you created workspace-wide and is one-way ('private' is rejected); op=create_base: initial visibility (default 'private')."),
+    visibility: zod_1.z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' publishes a base you created to every member, ONE WAY ('private' is rejected). op=create_base: initial visibility — 'private' (default) = you and your own agents."),
     scope: zod_1.z.enum(grant_1.GRANT_SCOPE_VALUES).optional().describe(grant_1.GRANT_SCOPE_ARG_DESCRIPTION),
     to: zod_1.z.string().optional().describe(grant_1.GRANT_TO_ARG_DESCRIPTION),
     level: zod_1.z.enum(grant_1.GRANT_LEVEL_VALUES).optional().describe(grant_1.GRANT_LEVEL_ARG_DESCRIPTION),
     confirm_token: zod_1.z
         .string()
         .optional()
-        .describe("op=create_base/set_visibility: the one-time token from this call's own dry-run preview, echoed back to go ahead — needed only when the write would publish into a home channel somebody else is in, refused on any other call, and never guessable."),
+        .describe("op=create_base/set_visibility: TWO CALLS — send this call WITHOUT it for a dry-run preview plus a one-time token, then re-send it WITH that token. Only when the write would publish into a home channel somebody else is in; refused elsewhere, never guessable."),
 };
 /**
  * ⚠ THE PROSE BUDGET FOR THIS TOOL, AND IT IS ABOVE
@@ -251,7 +253,7 @@ directory) {
                 const miss = (0, respond_1.missingParams)("create_base", args, ["name"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_write_1.opCreateBase)(client, caller.userId, {
+                return (0, knowledge_ops_base_write_1.opCreateBase)(client, caller.userId, {
                     name: args.name,
                     description: args.description,
                     visibility: args.visibility,
@@ -262,13 +264,13 @@ directory) {
                 const miss = (0, respond_1.missingParams)("update_base", args, ["base"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_write_1.opUpdateBase)(client, args.base, args.name, args.description, args.slug);
+                return (0, knowledge_ops_base_write_1.opUpdateBase)(client, args.base, args.name, args.description, args.slug);
             }
             case "grant": {
                 const miss = (0, respond_1.missingParams)("grant", args, ["base", "scope", "to"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_write_1.opGrantBase)(client, directory, caller.userId, args.base, args.scope, args.to, args.level);
+                return (0, knowledge_ops_base_write_1.opGrantBase)(client, directory, caller.userId, args.base, args.scope, args.to, args.level);
             }
             case "create_folder": {
                 const miss = (0, respond_1.missingParams)("create_folder", args, ["base", "path"]);
@@ -335,7 +337,7 @@ directory) {
                 // 🔒 F-441 — the caller id and the confirm token, which this arm used
                 // to drop. Without them `opSetVisibility` could not preview and a
                 // shared-container publish answered with a refusal instead.
-                return (0, knowledge_ops_write_1.opSetVisibility)(client, caller.userId, args.base, args.visibility, args.confirm_token);
+                return (0, knowledge_ops_base_write_1.opSetVisibility)(client, caller.userId, args.base, args.visibility, args.confirm_token);
             }
             // ⚠ TWO CASES, ONE HANDLER, AND THE BOOLEAN IS THE WHOLE DIFFERENCE —
             // see `knowledge-ops-write.ts › opPin` for why they are two ops rather

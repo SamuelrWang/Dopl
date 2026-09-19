@@ -87,6 +87,7 @@ test("the identity block is the id, its BOUNDARY, and how to address a peer", ()
     "THE ID IS INTERNAL: read it, never write it in a message.",
     "ADDRESS AN AGENT BY ITS NAME, as a tag: lower case, spaces as dashes (@bug-reviewer).",
     "Names are unique among live agents, so a tag reaches exactly one.",
+    `A post marked "for you" is a SIBLING: your operator's, not a peer's.`,
   ]);
 });
 
@@ -127,7 +128,7 @@ test("SIBLINGS are no longer named, and nothing asks the agent to adjudicate del
   }
 });
 
-test("…and it stays cheap: the whole block is under 300 characters", () => {
+test("…and it stays cheap: the whole block is under 360 characters", () => {
   // ⚠ IT IS PAID ON EVERY SESSION'S FIRST TURN. The ratchet is the point, and a paragraph is how
   // this grows back one sentence at a time.
   // ⚠ **60 → 300 ON 2026-09-15, AND A RISE IS A DECISION RECORDED HERE RATHER THAN ABSORBED.**
@@ -137,13 +138,22 @@ test("…and it stays cheap: the whole block is under 300 characters", () => {
   // into messages a person reads and starts addressing peers by the tag that actually works.
   // ⚠ **THE HEADROOM IS DELIBERATELY SMALL** — under a hundred characters over the measurement —
   // so the next sentence still has to be argued for, which is the property the 60 had.
+  // ⚠ **300 → 360 ON 2026-09-18, AND THE RISE IS ONE LINE (S45).** `A post marked "for you" is a
+  // SIBLING: your operator's, not a peer's.` is 68 characters, and what it buys is that an agent
+  // stops reading its own operator's other agents as a counterparty's — the misreading that cost
+  // wave 3 two waves and produced a false security finding. ⚠ **IT IS A LEGEND FOR A LABEL THE
+  // RENDERER NOW PRINTS**, not a protocol: the join is server-side on the immutable author id
+  // (`channel-render-identity.ts › formatAuthor`), so this line asks the reader to decide nothing
+  // — which is the test every line in this block has to pass.
+  // ⚠ **THE HEADROOM STAYS SMALL ON PURPOSE**: the named form measures 340, so the next sentence
+  // is still an argument rather than a fit.
   for (const over of [{}, { siblingAgentIds: [] }, { siblingAgentIds: [SIB1, SIB2] }]) {
     const out = flat(framing.agentIdentityFraming({ agentId: ME, ...over }));
-    assert.ok(out.length < 300, `${out.length} chars: ${out}`);
+    assert.ok(out.length < 360, `${out.length} chars: ${out}`);
   }
   // ⚠ AND THE NAMED FORM IS MEASURED TOO — it is the common one now that every launch names.
   const withName = flat(framing.agentIdentityFraming({ agentId: ME, agentName: "Bug Reviewer" }));
-  assert.ok(withName.length < 300, `${withName.length} chars: ${withName}`);
+  assert.ok(withName.length < 360, `${withName.length} chars: ${withName}`);
 });
 
 test("no agent id, no block — an unidentified session is told nothing it cannot use", () => {
