@@ -26,6 +26,7 @@ import "server-only";
 
 export {
   findBaseById,
+  findBaseByClientWriteId,
   listBasesByIds,
   findBaseBySlug,
   findBaseByPublicId,
@@ -55,6 +56,7 @@ export type { InsertFolderArgs, UpdateFolderPatch } from "./repository-folders";
 
 export {
   findEntryById,
+  findEntryByClientWriteId,
   findActiveEntryByTitle,
   listActiveEntryTitlesIn,
   findActiveEntryById,

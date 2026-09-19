@@ -10198,3 +10198,21 @@ The claim had been restated in five places from one sentence, which is how it su
 - Proposed resolution: after one release in which every supported desktop ships the `record` vocabulary, add the same refusal to `postMessage` — agent credential, `kind: 'message'`, no `to`, no `taskId`, `intent !== 'chat'` ⇒ 400 with the two choices named. Re-derive the supported-build floor from the update feed before doing it, and land the route refusal, the MCP mapping arm for its code, and the INVARIANTS row in one change.
 - ⚠ **AND THE MIGRATION-SHAPED HALF IS NOT THIS FINDING'S.** Narrowing `channel_messages_wake_verdict_check` to drop `reciprocal` would fail against existing rows and needs a backfill decision; it is deliberately NOT bundled here. The word is a tombstone in `types-delivery.ts`, the SDK copy and the SQL `CHECK`, with no producer in any tree.
 - Status: open (narrowed 2026-09-18).
+
+### F-738 — the KB idempotency migration is WRITTEN, NOT APPLIED, and the feature is silently absent until it is (2026-09-18)
+
+- Location: `supabase/migrations/20261014120000_knowledge_client_write_id.sql` (the two columns and the two partial unique indexes); readers are `src/features/knowledge/server/repository-entries.ts › findEntryByClientWriteId` and `repository-bases.ts › findBaseByClientWriteId`.
+- Found during: Round 1 fix wave, batch B (S53). Filed BY the change that introduced it, per §12's rule that deploy state is a measurement rather than a claim.
+- **The feature degrades to ABSENT, not to broken — and that is deliberate, at a cost worth naming.** The insert helpers OMIT both columns entirely when no key was passed (`...(args.clientWriteId ? { … } : {})`), so an unapplied migration leaves every ordinary write byte-identical. What it does NOT do is make a write that PASSES `client_write_id` fail loudly: against an unmigrated database the probe errors (unknown column) and the insert errors too, so the agent sees a 500 rather than "this build cannot converge".
+- ⚠ **AND WITHOUT THE UNIQUE INDEXES THE PROBE IS NOT A GUARANTEE, ONLY A LIKELIHOOD.** Convergence is read-then-write; the index is what makes a concurrent pair collide instead of double-writing, and `service-base-writes.ts › createBase`'s 23505 race arm has nothing to catch. Two simultaneous retries of one timed-out write would produce the duplicate the key exists to prevent.
+- Proposed resolution: apply `20261014120000` before the release that ships this MCP surface, and re-derive the applied set with `supabase migration list` rather than recording an answer here. If it cannot be applied in the same release, gate `client_write_id` off the published schema rather than shipping a param whose promise the database cannot keep.
+- Status: open (deploy action, not code).
+
+### F-739 — `knowledge_entries` holds only the MOST RECENT `client_write_id`, so an older key's retry writes again (2026-09-18)
+
+- Location: `src/features/knowledge/server/service-paths.ts › writeFileByPath` (the probe and the stamp), `repository-entries.ts › UpdateEntryPatch.clientWriteId`.
+- Found during: the same change (S53), recorded rather than designed around.
+- **The bound: a key protects ONE in-flight call, not the history of the row.** `write_file` is an upsert, so an entry written twice under two keys carries the second; a retry bearing the FIRST key then misses the probe and writes a third time — onto the same entry, which is harmless for the body but means the promise "the same key twice writes once" is true only within one call's retry window.
+- ⚠ **The alternative was measured and not built**: a side table of `(base, key, entry_id, written_at)` with a TTL would make every key permanent, at the cost of a second write per entry write and a reaper nobody has asked for. The channel lane has the same bound for the same reason (`channel_messages.client_msg_id` is a column on the row, not a log).
+- Proposed resolution: none needed unless a caller is observed reusing keys across sessions. If it is, the fix is the side table plus a retention decision, not a wider index.
+- Status: open (bound recorded; not a defect).
