@@ -192,3 +192,81 @@ describe("an agent author is named by the name its operator gave it", () => {
     expect(text).toContain("→ @`Mobile Main`");
   });
 });
+
+/**
+ * **WHO ASKED, AND HOW TO ANSWER THEM** (A2/S45 + the outside-session seam,
+ * 2026-09-18).
+ *
+ * ⚠ **THE READER IS THE NEW INPUT, AND IT IS THE WHOLE FIX.** A label built
+ * from the message alone can name an operator and never say whether that
+ * operator is the reader's own, so one of this operator's own workers and a
+ * stranger's agent rendered identically — and the agent deciding whether to
+ * answer, escalate or ignore had to spend a roster call on the one distinction
+ * that decides it.
+ *
+ * ⚠ **THE THIRD SHAPE IS A PROJECTION** (`authorView`), never a new
+ * `authorKind`: that union is drift-gated against the column's `CHECK`. An old
+ * payload carries no `authorView` at all, and the fallback is what keeps it
+ * rendering exactly as it did.
+ */
+describe("who asked — sibling, stranger's agent, or an outside session", () => {
+  const AGENT = {
+    authorKind: "agent",
+    authorAgentName: "Bug Reviewer",
+    metadata: { session_id: "chan-1:task-1:deynelz3" },
+  };
+
+  const readerLine = async (over: Record<string, unknown>) => {
+    const text = (
+      await opRead(stubClient([msg(over)]), "general", undefined, undefined, SELF)
+    ).content[0].text;
+    return text.split("\n").filter((l: string) => l.startsWith("- **#"))[0];
+  };
+
+  it("a SIBLING agent — same operator as the reader — renders `for you`", async () => {
+    const line = await readerLine({ ...AGENT, authorUserId: SELF });
+    expect(line).toContain("agent @`Bug Reviewer` for you");
+    // ⚠ The uuid is NOT printed for the reader's own account: `you` is the
+    // answer to the question the id was being looked up to answer.
+    expect(line).not.toContain(`for \`Samuel Wang\` (\`${SELF}\`)`);
+  });
+
+  it("ANOTHER member's agent still renders their name and immutable id", async () => {
+    const line = await readerLine({ ...AGENT, authorUserId: OPERATOR });
+    expect(line).toContain(
+      `agent @\`Bug Reviewer\` for \`Samuel Wang\` (\`${OPERATOR}\`)`,
+    );
+    expect(line).not.toContain("for you");
+  });
+
+  it("a member's own line still names them, and `you` when it is the reader", async () => {
+    expect(await readerLine({ authorUserId: OPERATOR })).toContain(
+      `member \`Samuel Wang\` (\`${OPERATOR}\`)`,
+    );
+    expect(await readerLine({ authorUserId: SELF })).toContain("member you");
+  });
+
+  it("an OUTSIDE SESSION of the reader's own account hands back the reply handle", async () => {
+    const line = await readerLine({ authorUserId: SELF, authorView: "external" });
+    expect(line).toContain("outside session for you — reply @desktop");
+  });
+
+  it("another member's outside session names THEM, and offers no @desktop", async () => {
+    // ⚠ The group handle is PER OPERATOR, so offering it for somebody else's
+    // session would hand back an address that reaches the reader's own machine.
+    const line = await readerLine({ authorUserId: OPERATOR, authorView: "external" });
+    expect(line).toContain(
+      `outside session for \`Samuel Wang\` (\`${OPERATOR}\`)`,
+    );
+    expect(line).not.toContain("@desktop");
+  });
+
+  it("🔒 a STALE payload with no `authorView` renders exactly as it always did", async () => {
+    // ⚠ §8's rule for a new projected field: the fallback is `authorKind`, so a
+    // row cached before the projection existed is a member line, not an
+    // "outside session" the server never marked.
+    const line = await readerLine({ authorUserId: OPERATOR });
+    expect(line).toContain("member `Samuel Wang`");
+    expect(line).not.toContain("outside session");
+  });
+});

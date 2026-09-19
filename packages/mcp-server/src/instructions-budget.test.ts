@@ -296,3 +296,72 @@ describe("the briefing answers who this connection is before it asks", () => {
     expect(text).toContain("id=`user-77`");
   });
 });
+
+/**
+ * **THE TWO PER-CONNECTION FACTS THE BRIEFING GAINED** (A1/S48 and A5/S9,
+ * 2026-09-18). Both exist to delete a round trip, which is the only test
+ * `ConnectionIdentity` admits, and both are ABSENT-BY-DEFAULT: a connection
+ * that supplied neither renders exactly what it rendered before.
+ */
+describe("the briefing names the operator, and waits the way this runtime waits", () => {
+  const withIdentity = (over: Record<string, unknown> = {}) =>
+    buildInstructions(directoryOf(1), {
+      identity: {
+        userId: "u-me",
+        boundChannelId: null,
+        ...over,
+      },
+    });
+
+  it("renders the operator's handle as the tag to write", () => {
+    expect(withIdentity({ operatorHandle: "samuel-wang" })).toContain(
+      "address your operator as @samuel-wang",
+    );
+  });
+
+  it("says NOTHING when the ping brought no handle back", () => {
+    // ⚠ UNKNOWN IS NOT EMPTY, and it is certainly not a guess: an invented
+    // handle tags nobody while reading as though it had.
+    for (const absent of [undefined, null, "", "   "]) {
+      expect(withIdentity({ operatorHandle: absent })).not.toContain(
+        "address your operator",
+      );
+    }
+  });
+
+  it("DROPS a handle that could not be a handle, rather than neutralizing it", () => {
+    // ⚠ The line is read as rules and the value is copied into a message body,
+    // so a neutralized form would be a tag that resolves to nobody. Validate
+    // and drop — the discipline the agent-id handles already follow.
+    for (const bad of ["two words", "back`tick", "-leading", "**bold**", "a".repeat(80)]) {
+      expect(withIdentity({ operatorHandle: bad })).not.toContain("address your operator");
+    }
+  });
+
+  it("a DESKTOP-run connection is told to end its turn; everyone else holds", () => {
+    const desktop = buildInstructions(directoryOf(1), { desktopRun: true });
+    expect(desktop).toContain("end your turn");
+    expect(desktop).not.toContain("wait_ms");
+
+    // ⚠ The default is the sentence that was always there — an unstamped
+    // caller is NOT known to be external, and the hold is what it gets.
+    const external = buildInstructions(directoryOf(1));
+    expect(external).toContain('dopl_channel(op="read", wait_ms)');
+    expect(external).not.toContain("end your turn");
+  });
+
+  it("both shapes still fit the prefix the model is handed", () => {
+    const full = buildInstructions(directoryOf(40), {
+      desktopRun: true,
+      identity: {
+        userId: "u-me",
+        operatorHandle: "samuel-wang",
+        boundChannelId: "chan-1",
+        liveAgents: ["deynelz3", "abcdefgh"],
+        posture: "full/full chain=on",
+      },
+    });
+    expect(full.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX_CHARS);
+    expect(full).toContain("address your operator as @samuel-wang");
+  });
+});

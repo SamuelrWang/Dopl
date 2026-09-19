@@ -82,17 +82,23 @@ export function formatAuthor(m: ChannelMessage, view: MemberView = NO_MEMBER_VIE
 export const OUTSIDE_SESSION_HANDLE = "desktop";
 
 /**
- * ⚠ **THE THIRD AUTHOR SHAPE, READ AS A STRING ON PURPOSE.**
+ * ⚠ **THE THIRD AUTHOR SHAPE IS A PROJECTION, NOT A NEW `authorKind`.**
  * `@dopl/contracts › MessageAuthorKind` is a CLOSED union guarded by
- * `check-message-kind-drift.ts` and by the column's own `CHECK`, so widening it
- * is a migration plus a gate — the sibling branch's work, not this file's. This
- * predicate therefore asks the wire value directly and answers false for every
- * row written today, which is exactly what an un-merged seam should do: no
- * behaviour changes until the kind exists.
+ * `scripts/check-message-kind-drift.ts` and by the column's own `CHECK`, so the
+ * outside-session marker rides `metadata.external_session` server-side and
+ * arrives on the DTO as a SEPARATE field, `authorView`, whose vocabulary is the
+ * kind's plus `external`.
+ *
+ * ⚠ **`authorView ?? authorKind` IS THE STALE-PAYLOAD FALLBACK** the §8 rule
+ * requires of every new projected field: a row read from a cache written before
+ * the field existed has no `authorView`, and reading `undefined === "external"`
+ * as false would be right by accident — the fallback makes it right on purpose,
+ * and keeps an old payload rendering exactly as it always did.
  */
-export const EXTERNAL_AUTHOR_KIND = "external";
+export const EXTERNAL_AUTHOR_VIEW = "external";
 export function isExternalSessionAuthor(m: ChannelMessage): boolean {
-  return (m.authorKind as string) === EXTERNAL_AUTHOR_KIND;
+  const view = (m as { authorView?: string }).authorView ?? m.authorKind;
+  return view === EXTERNAL_AUTHOR_VIEW;
 }
 
 /**
