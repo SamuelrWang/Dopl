@@ -74,7 +74,3 @@ export declare function sectionAmbiguous(heading: string, matches: OutlineRow[])
  * an un-pinned copy is the actual bug. **Every REASON lives in the app's file.**
  */
 export declare const KB_SECTION_NUDGE_CHARS = 1500;
-/** @see KB_SECTION_NUDGE_CHARS — hand-copied from the same file, same test. */
-export declare const KB_PIN_WARN_CHARS = 4000;
-/** @see KB_SECTION_NUDGE_CHARS — hand-copied from the same file, same test. */
-export declare const KB_PIN_MAX_CHARS = 12000;

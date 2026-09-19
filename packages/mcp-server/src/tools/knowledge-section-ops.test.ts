@@ -4,17 +4,15 @@
  * ⚠ What is proved here is what an AGENT SEES, not what the parser does — the
  * split has its own suite in `src/shared/knowledge/markdown-sections.test.ts`
  * and does not run in this package at all. Every assertion below is about a
- * rendered string: does the miss carry the outline (so the retry is free), does
- * the nudge LEAD (so it is read), does the pin state its per-launch cost, and
- * does a refused pin leave nothing behind.
+ * rendered string: does the miss carry the outline (so the retry is free), and
+ * does the nudge LEAD (so it is read).
  */
 
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient, KnowledgeBase, KnowledgeEntry } from "@dopl/client";
 import { opOutline, opReadFile } from "./knowledge-ops-read.js";
 import { opWriteFile } from "./knowledge-ops-write.js";
-import { opPin } from "./knowledge-ops-pin.js";
-import { KB_PIN_MAX_CHARS, KB_SECTION_NUDGE_CHARS } from "./knowledge-sections.js";
+import { KB_SECTION_NUDGE_CHARS } from "./knowledge-sections.js";
 
 const BASE: KnowledgeBase = {
   id: "base-1",
@@ -280,93 +278,5 @@ describe('write_file(section=…) and the nudge', () => {
     const out = text((await opWriteFile(w.client, "my-base", "r.md", long, undefined, "v1")) as never);
     expect(out).not.toContain("UNSECTIONED");
     expect(out).toContain("_Sections: ## `A`_");
-  });
-});
-
-describe("the pin ceiling", () => {
-  function pinClient(pinnedChars: number[], over: Record<string, unknown> = {}) {
-    const seq = [...pinnedChars];
-    return client({
-      getKbStartupContext: vi.fn(async () => ({
-        items: [],
-        omitted: [],
-        chars: 0,
-        pinnedChars: seq.shift() ?? 0,
-        truncated: false,
-      })),
-      setKbBasePinned: vi.fn().mockResolvedValue(undefined),
-      setKbEntryPinned: vi.fn().mockResolvedValue(undefined),
-      readKbFilePart: vi.fn().mockResolvedValue({ entry: entry(), outline: OUTLINE }),
-      ...over,
-    });
-  }
-
-  it("a small pin says nothing about size", async () => {
-    const out = text((await opPin(pinClient([100, 900]), "my-base", undefined, true)) as never);
-    expect(out).not.toContain("PIN_LARGE");
-    expect(out).toContain("Pinned knowledge base");
-  });
-
-  it("past the warn cap the pin LANDS and states the per-launch cost", async () => {
-    const res = await opPin(pinClient([3_000, 5_500]), "my-base", undefined, true);
-    expect(res.isError).toBeFalsy();
-    const out = text(res as never);
-    expect(out.startsWith("reason=PIN_LARGE")).toBe(true);
-    expect(out).toContain("EVERY agent session launched in this workspace");
-    expect(out).toContain("retry=none, the pin landed");
-    expect(out).toContain("Pinned knowledge base");
-  });
-
-  it("past the max cap the pin is REVERTED and refused", async () => {
-    const setKbBasePinned = vi.fn().mockResolvedValue(undefined);
-    const c = pinClient([5_000, KB_PIN_MAX_CHARS + 1], { setKbBasePinned });
-    const res = await opPin(c, "my-base", undefined, true);
-    expect(res.isError).toBe(true);
-    expect(setKbBasePinned).toHaveBeenNthCalledWith(1, "base-1", true);
-    expect(setKbBasePinned).toHaveBeenNthCalledWith(2, "base-1", false);
-    const out = text(res as never);
-    expect(out).toContain("REFUSED and REVERTED");
-    expect(out).toContain("Pin ONE entry instead");
-  });
-
-  it("an over-cap ENTRY pin is refused with that entry's outline", async () => {
-    const res = await opPin(
-      pinClient([5_000, KB_PIN_MAX_CHARS + 1]),
-      "my-base",
-      "runbook.md",
-      true,
-    );
-    expect(res.isError).toBe(true);
-    const out = text(res as never);
-    expect(out).toContain("## `Setup` · 812");
-    expect(out).toContain("no way to pin ONE section");
-  });
-
-  it("re-pinning something already pinned is never reverted", async () => {
-    // ⚠ `after <= before` means the write changed nothing, so undoing it would
-    // UN-pin what the caller asked to pin.
-    const setKbBasePinned = vi.fn().mockResolvedValue(undefined);
-    const c = pinClient([KB_PIN_MAX_CHARS + 5, KB_PIN_MAX_CHARS + 5], { setKbBasePinned });
-    const res = await opPin(c, "my-base", undefined, true);
-    expect(res.isError).toBeFalsy();
-    expect(setKbBasePinned).toHaveBeenCalledTimes(1);
-    expect(text(res as never)).toContain("PIN_LARGE");
-  });
-
-  it("an UNPIN is never measured — it can only shrink the payload", async () => {
-    const getKbStartupContext = vi.fn();
-    const c = pinClient([], { getKbStartupContext });
-    const out = text((await opPin(c, "my-base", undefined, false)) as never);
-    expect(getKbStartupContext).not.toHaveBeenCalled();
-    expect(out).toContain("Unpinned knowledge base");
-  });
-
-  it("a measurement that THROWS never fails the pin", async () => {
-    const c = pinClient([], {
-      getKbStartupContext: vi.fn().mockRejectedValue(new Error("offline")),
-    });
-    const res = await opPin(c, "my-base", undefined, true);
-    expect(res.isError).toBeFalsy();
-    expect(text(res as never)).toContain("Pinned knowledge base");
   });
 });

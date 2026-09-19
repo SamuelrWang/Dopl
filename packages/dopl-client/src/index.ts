@@ -79,10 +79,6 @@ export type {
   KnowledgeWriteFileInput,
   KnowledgeWriteFileResult,
   KnowledgeWriteSource,
-  // PINNED STARTUP CONTEXT (T81) — the payload `getKbStartupContext` returns.
-  StartupContext,
-  StartupContextItem,
-  StartupContextPointer,
 } from "./knowledge-types.js";
 export type {
   ResolvedSkill,

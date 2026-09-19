@@ -203,7 +203,7 @@ export async function listBaseStats(
  * once per container, {@link getBaseForWrite} is that plus the landed context.
  *
  * Not a write gate for a row the caller may name elsewhere (2026-09-06). Sites
- * still on it — `service-pins.ts`, `service-stars.ts`, the channel-grants route
+ * still on it — `service-stars.ts` and the channel-grants route
  * — keep a workspace-keyed refusal on a cross-container id; migrating one means
  * switching to {@link getBaseForWrite} AND passing the returned `ctx` to
  * everything after it, never just the first half.

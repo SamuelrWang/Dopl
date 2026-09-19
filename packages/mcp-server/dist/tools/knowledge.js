@@ -21,19 +21,18 @@ const tool_errors_1 = require("./tool-errors");
 const identity_1 = require("./identity");
 const respond_1 = require("./respond");
 const knowledge_ops_read_1 = require("./knowledge-ops-read");
-const knowledge_ops_pin_1 = require("./knowledge-ops-pin");
 const knowledge_ops_write_1 = require("./knowledge-ops-write");
 const grant_1 = require("./grant");
 const retired_copy_ops_1 = require("./retired-copy-ops");
 /**
- * The FIFTEEN published ops. ⚠ Hoisted so the runtime enum can be the union of
+ * The THIRTEEN published ops. ⚠ Hoisted so the runtime enum can be the union of
  * this and the retired name while `.meta()` publishes only this — see the `op`
  * field.
  */
 const KB_OPS = [
     "list_bases", "get_tree", "list_dir", "create_base", "update_base",
     "grant", "create_folder", "move_folder", "outline", "read_file",
-    "write_file", "move_file", "search", "set_visibility", "pin", "unpin",
+    "write_file", "move_file", "search", "set_visibility",
 ];
 /**
  * 🔒 THE PUBLISHED ARGUMENT SHAPE, HOISTED SO THERE IS ONE COPY OF IT (A14).
@@ -65,9 +64,9 @@ const KB_INPUT_SHAPE = {
         .enum([...KB_OPS, ...retired_copy_ops_1.RETIRED_COPY_OP_NAMES])
         .meta({ enum: [...KB_OPS] })
         .describe("Operation to perform."),
-    base: zod_1.z.string().optional().describe("Base slug or id. Required for get_tree/list_dir/update_base/grant/create_folder/move_folder/read_file/write_file/move_file/pin/unpin; optional scope for search."),
+    base: zod_1.z.string().optional().describe("Base slug or id. Required for get_tree/list_dir/update_base/grant/create_folder/move_folder/read_file/write_file/move_file; optional scope for search."),
     section: zod_1.z.string().max(300).optional().describe('read_file: only this HEADING\'s section, down to the next heading of the same or higher level — case-insensitive; an unknown one answers with the outline. write_file: replace that section (`body` is its new content), appended at "##" if absent.'),
-    path: zod_1.z.string().optional().describe("Path within the base. list_dir: '/' or '' for root. create_folder: required, e.g. 'projects/foo'. outline/read_file: required entry path. write_file: entry path — required unless you pass `title` (then the title becomes the path). pin/unpin: OPTIONAL, and it picks the target — with a path you pin that ONE entry, without one you pin the whole base. There is no delete op — deletion is app-only."),
+    path: zod_1.z.string().optional().describe("Path within the base. list_dir: '/' or '' for root. create_folder: required, e.g. 'projects/foo'. outline/read_file: required entry path. write_file: entry path — required unless you pass `title` (then the title becomes the path). There is no delete op — deletion is app-only."),
     from_path: zod_1.z.string().optional().describe("move_folder/move_file: source path."),
     to_path: zod_1.z.string().optional().describe("move_folder/move_file: destination path (leaf becomes the new name/title)."),
     name: zod_1.z.string().optional().describe("create_base: required base name (1-120 chars). update_base: optional new name."),
@@ -138,10 +137,9 @@ const KB_INPUT_SHAPE = {
 // (see the paragraph above on what left in A14): a description carries nothing its
 // own `.describe()` already says, because both are pushed on the SAME connection.
 // Three glosses were exactly that — `read_file`'s (`section`, `offset`, `max_chars`
-// and `expected_version` each describe their own half), `grant`'s scope list
-// (`scope`'s and `level`'s own describes), and `pin`/`unpin`'s target rule (VERBATIM
-// in `path`'s describe). The op NAMES all stayed quoted, which is what
-// `parity.test.ts` reads.
+// and `expected_version` each describe their own half) and `grant`'s scope list
+// (`scope`'s and `level`'s own describes). The op NAMES all stayed quoted, which is
+// what `parity.test.ts` reads.
 // ⚠ **NOTHING PINNED WAS TOUCHED, AND THAT WAS THE CONSTRAINT RATHER THAN A
 // PREFERENCE.** `tool-scope-claims.test.ts` greps the DESCRIPTION for the three
 // filtered-op bullets — `list_bases` (can READ / private / no grant on), `get_tree`
@@ -153,11 +151,21 @@ const KB_INPUT_SHAPE = {
 // ⚠ **THE CEILING IN `tool-budget.test.ts` IS NOW STALE BY CONSTRUCTION and must be
 // LOWERED to the measured size in this same change — never raised.** That ratchet
 // fails on a SHRINK as loudly as on a growth, which is how the win gets banked.
-const KB_PROSE_BUDGET = 1_586; // ⚠ 16 ops glossed for parity.test.ts, plus the fence
-// ⚠ THE COMMENT BLOCK ABOVE NARRATES A RISE TO 1,760 THAT THIS CONSTANT NEVER TOOK —
-// it reads 1,586, and the prose has fitted under it the whole time. Left as measured
-// rather than "corrected" upward: raising a budget to match a comment is exactly the
-// move these ratchets exist to refuse.
+const KB_PROSE_BUDGET = 1_294; // ⚠ 13 ops glossed for parity.test.ts, plus the fence
+// ⚠ **1,586 → 1,294 (2026-09-18, −292): PINNING LEFT, AND THE WHOLE FALL IS BANKED
+// RATHER THAN HELD AS HEADROOM.** Samuel's ruling deleted knowledge pinning (the
+// feature, not just its two ops), so the op list lost the bullet that glossed them and
+// two `.describe()`s lost the op names and the target rule.
+// ⚠ **THE DELETED BULLET IS NOT QUOTED HERE, AND THAT COST ONE REVISION** — the removal
+// gate (`src/features/knowledge/pinning-stays-removed.test.ts`) scans this file, and the
+// first draft of this comment reintroduced the very string it was recording the loss of. ⚠ **MEASURED, NOT ARITHMETIC** — 1,294 is what `composeDescription`
+// reports for the composed prose, read back off its own over-cap throw.
+// ⚠ **AND 1,586 WAS ALREADY HEADROOM, WHICH IS WHY THE FALL IS BIGGER THAN THE CUT.**
+// The block above used to note that its narrative described a rise to 1,760 this
+// constant never took and that the prose had fitted under 1,586 the whole time. A
+// budget kept above the measurement is a licence for the next sentence, and the rule
+// three lines up — lower to the MEASURED size, never to a round number — applies to a
+// removal exactly as it applies to a trim.
 /**
  * ⚠ RENDERED, NOT WRITTEN (A14, 2026-09-02) — `tool-style.ts › composeDescription`
  * holds the house order (what it returns and what it does NOT, the capability
@@ -170,7 +178,7 @@ const KB_PROSE_BUDGET = 1_586; // ⚠ 16 ops glossed for parity.test.ts, plus th
  * own `.describe()` already carries, because a description and its arg
  * descriptions are pushed on the SAME connection and a fact in both is paid for
  * twice. The `expected_version`/412 rule and the `force` escape are
- * `expected_version`'s and `force`'s; the pin/unpin target rule is `path`'s; the
+ * `expected_version`'s and `force`'s; the
  * grant scope/level pairing is `scope`'s and `level`'s; the home-channel preview is
  * `confirm_token`'s AND the errors table. ⚠ AND EVERY BOUND: `limit` and
  * `entry_limit` stopped hand-typing their ranges into their own describes on the
@@ -198,8 +206,7 @@ const KB_DESCRIPTION = (0, tool_style_1.composeDescription)({
 - "get_tree" — the tree, metadata only. Folders whole, ENTRIES are paged: 400 a call, entry_cursor for more.
 - "search" — over the BODIES of bases you can read: a ranked SAMPLE, not an exhaustive scan (20 by default); zero hits is not proof of absence.
 - "outline" (headings + what each costs, no body), "read_file", "list_dir", "write_file" (upsert — entries past ~1.5k chars carry ## headings, one topic each; writes land in the changelog), "move_file", "create_folder" (mkdir -p), "move_folder".
-- "create_base", "update_base", "set_visibility" (publish, one way), "grant" (lend one YOU made).
-- "pin"/"unpin" — the STARTUP CONTEXT every session here gets.`,
+- "create_base", "update_base", "set_visibility" (publish, one way), "grant" (lend one YOU made).`,
     ],
     limits: { shape: KB_INPUT_SHAPE, only: ["limit", "entry_limit"] },
     errors: tool_errors_1.KB_ERRORS,
@@ -336,16 +343,6 @@ directory) {
                 // to drop. Without them `opSetVisibility` could not preview and a
                 // shared-container publish answered with a refusal instead.
                 return (0, knowledge_ops_write_1.opSetVisibility)(client, caller.userId, args.base, args.visibility, args.confirm_token);
-            }
-            // ⚠ TWO CASES, ONE HANDLER, AND THE BOOLEAN IS THE WHOLE DIFFERENCE —
-            // see `knowledge-ops-write.ts › opPin` for why they are two ops rather
-            // than one op carrying a flag. `path` is OPTIONAL and picks the target.
-            case "pin":
-            case "unpin": {
-                const miss = (0, respond_1.missingParams)(args.op, args, ["base"]);
-                if (miss)
-                    return miss;
-                return (0, knowledge_ops_pin_1.opPin)(client, args.base, args.path, args.op === "pin");
             }
             // ── THE ONE-RELEASE MIGRATION WINDOW ──────────────────────────────
             //

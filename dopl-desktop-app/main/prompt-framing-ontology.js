@@ -63,7 +63,7 @@ function ontologyLine(o) {
  *
  * ⚠ `[]` WHEN THERE IS NOTHING TO SAY, and that emptiness is the contract: a
  * lane no ontology reaches must be BYTE-IDENTICAL to the turn before this module
- * existed, so not even a stray blank line (`prompt-framing-startup.js` makes the
+ * existed, so not even a stray blank line (`prompt-framing-template.js` makes the
  * same promise).
  * ⚠ IT EMITS ITS OWN LEADING BLANK LINE when it emits anything, so the splice
  * site is exactly one line of assembly.

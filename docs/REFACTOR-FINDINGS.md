@@ -8257,7 +8257,8 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ✅ **RESOLVED 2026-09-09** — the lane was built as its own slice, in three parts.
   **THE READ IS NEW, NOT FOLDED INTO AN EXISTING ONE**, and the alternatives were measured rather
   than assumed: `main/template-resolve.js` is per-TEMPLATE (`GET /api/agent-templates/{id}/resolve`),
-  `launch-directive-spawn.js › fetchStartupContext` is per-WORKSPACE knowledge and lives on ONE lane,
+  the knowledge fetch that used to sit beside it was per-WORKSPACE and on ONE lane (deleted with
+  pinning, 2026-09-18),
   and the reach is a third question on a third axis. It is
   `src/app/api/ontology/reach/route.ts` → `src/features/ontology/server/service-reach.ts › getReach`,
   which composes `› service-audience.ts › levelForCluster` per cluster and drops `none`.
@@ -10198,3 +10199,13 @@ The claim had been restated in five places from one sentence, which is how it su
 - Proposed resolution: after one release in which every supported desktop ships the `record` vocabulary, add the same refusal to `postMessage` — agent credential, `kind: 'message'`, no `to`, no `taskId`, `intent !== 'chat'` ⇒ 400 with the two choices named. Re-derive the supported-build floor from the update feed before doing it, and land the route refusal, the MCP mapping arm for its code, and the INVARIANTS row in one change.
 - ⚠ **AND THE MIGRATION-SHAPED HALF IS NOT THIS FINDING'S.** Narrowing `channel_messages_wake_verdict_check` to drop `reciprocal` would fail against existing rows and needs a backfill decision; it is deliberately NOT bundled here. The word is a tombstone in `types-delivery.ts`, the SDK copy and the SQL `CHECK`, with no producer in any tree.
 - Status: open (narrowed 2026-09-18).
+
+### F-738 — `chats.pinned` survived the pinning purge, and nothing has ruled on it (2026-09-18)
+
+- Samuel's ruling removed pinning — *"let's remove pinning for now, remove the code for pinning stuff. lioke kbs. ill reimplement it down the line."* — and **`lioke kbs` is what scoped the change**: the KNOWLEDGE pins (T81) are deleted whole (§10's removal bullet, `20261014120000_drop_knowledge_pinned.sql`). A SECOND, unrelated `pinned` column was left standing, deliberately and without a decision behind it.
+- ⚠ **WHAT IS STILL LIVE**: `chats.pinned` — a boolean on the chat archive, written by `dopl_chats(op="update", pinned=…)` (`packages/mcp-server/src/tools/chats.ts`, whose `op=update` describe still reads *"pin/unpin the chat"*) through `src/features/chats/server/service-writes.ts`, and rendered in the chats list. It is a per-row ORDERING flag on an archive: it decides where a chat sorts, reaches no prompt, and costs nothing per agent launch.
+- ⚠ **WHY IT WAS NOT SWEPT IN.** It is not the thing the ruling describes. T81's pin was a FORCE-FEED — content prepended to every session this workspace launched, paid whether or not the session needed it — which is what made it worth deleting under the hand-don't-hunt principle. A chat-list pin is a display preference. Taking it on the strength of a shared English word would be reading a ruling wider than it was written, and the standing rule is to ask rather than guess when the model is unclear.
+- ⚠ **AND THERE IS A THIRD USE OF THE WORD**, named here so a future sweep does not find it and assume it was missed: `apps/desktop-ui/src/pages/home/channel-wells.ts` returns the literal `"pinned"` as one of its three wells. Different subject again (a channel's membership row), no column, no agent surface.
+- 🔒 **THE REMOVAL GATE DOES NOT COVER EITHER OF THEM, ON PURPOSE.** `src/features/knowledge/pinning-stays-removed.test.ts` matches the deleted feature's IDENTIFIERS and its endpoint, never the bare word `pin` — a gate that fired on `chats.pinned` or on a suite saying a property is "pinned here" would be red on arrival and would get deleted, which is the failure mode `b10-no-derived-default.test.ts`'s header warns about. Its migration half asserts `chats.pinned` **still exists**, positively, so a later sweep reading `20261014120000_drop_knowledge_pinned.sql` cannot take it by mistake.
+- Proposed resolution: **ask Samuel one question** — does "remove pinning" reach the chat-list pin, or was it the knowledge force-feed only? If it reaches, the removal is small and the same shape (op field + describe, service arm, column drop, extend the gate's pattern); if not, this entry closes as a deliberate scope boundary and the word keeps two meanings in the codebase.
+- Status: open — needs a ruling, not a fix.

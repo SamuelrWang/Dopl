@@ -90,8 +90,7 @@ export async function getEntry(
  * which is `EntryNotFoundError`, never the base's error.
  *
  * {@link getEntry} stays workspace-keyed and is the WRITE gate: `updateEntry`,
- * `moveEntry`, `deleteEntry` and `service-pins.ts` funnel through it
- * (INVARIANTS §T35).
+ * `moveEntry` and `deleteEntry` funnel through it (INVARIANTS §T35).
  */
 export async function readEntry(
   ctx: KnowledgeContext,

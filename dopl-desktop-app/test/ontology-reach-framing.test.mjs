@@ -1,6 +1,6 @@
 // WHICH ONTOLOGIES A SESSION IS TOLD IT REACHES (2026-09-09, home-ontology S5).
 //
-// Two ends, as `launch-startup-context.test.mjs` covers its own half:
+// Two ends, the block and the turn:
 //   THE BLOCK   `prompt-framing-ontology.js › ontologyReachLines` — what it says,
 //               what it refuses to say, and how it sanitizes.
 //   THE TURN    through the REAL `buildFencedTurn`, because the assertion that

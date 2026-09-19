@@ -4,7 +4,9 @@
 // (F-681, closed 2026-09-09).
 //
 // ⚠ **IT IS ENRICHMENT, NOT AN IDENTITY, SO EVERY FAILURE DEGRADES TO `[]`** —
-// `launch-directive-spawn.js › fetchStartupContext`'s rule, inherited verbatim.
+// this lane's rule for an enrichment read, and this module is now its one
+// carrier (the knowledge-curation fetch that used to state it was deleted with
+// that feature, 2026-09-18).
 // A timeout, a dead socket, a 5xx, an older deployment's 404, a pre-sign-in
 // launch all answer "no ontology reaches this lane", which `ontologyReachLines`
 // renders BYTE-IDENTICALLY to the turn before that module existed. A launch is
