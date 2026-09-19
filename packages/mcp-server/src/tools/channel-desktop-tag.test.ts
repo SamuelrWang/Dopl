@@ -83,9 +83,15 @@ describe("the author label", () => {
     // ⚠ THE DEFECT: a Claude Code run posts under the operator's ACCOUNT, so
     // this line read `agent for Samuel Wang` and an in-channel agent answered
     // "@samuel-wang …" in short human-facing prose to another agent's question.
+    // ⚠ **ANOTHER MEMBER'S SESSION, DELIBERATELY** (integration, 2026-09-19).
+    // `PEER` rather than `SELF`: batch A's reader-aware `formatAuthor` renders
+    // the READER'S OWN rows as `for you` and appends the reply handle, so a
+    // self-authored row is the wrong fixture for the "is the operator NAMED"
+    // question. The reader's own case is asserted immediately below, and in
+    // `channel-render-addressing.test.ts`.
     const [line] = await linesOf([
       msg({
-        authorUserId: SELF,
+        authorUserId: PEER,
         authorName: "Samuel Wang",
         metadata: { external_session: true },
       }),
@@ -95,6 +101,20 @@ describe("the author label", () => {
     expect(line).toContain("outside session for");
     expect(line).toContain("Samuel Wang");
     expect(line).not.toContain("agent for");
+    // ⚠ The group handle is PER OPERATOR: somebody else's session is never
+    // offered a reply address that reaches the reader's own machine.
+    expect(line).not.toContain("reply @desktop");
+  });
+
+  it("the READER'S OWN outside session says `for you` and offers the handle", async () => {
+    const [line] = await linesOf([
+      msg({
+        authorUserId: SELF,
+        authorName: "Samuel Wang",
+        metadata: { external_session: true },
+      }),
+    ]);
+    expect(line).toContain("outside session for you — reply @desktop");
   });
 
   it("falls back to `an outside session` when the name is unknown", async () => {

@@ -206,9 +206,11 @@ describe("an agent author is named by the name its operator gave it", () => {
  *
  * ⚠ **THE THIRD SHAPE IS SERVER-OWNED METADATA** (`metadata.external_session`),
  * never a new `authorKind`: that union is drift-gated against the column's
- * `CHECK`, and it is read through ONE local helper so the merge with the
- * sibling branch swaps a single body to `authorViewOf(m) === "external"`. An old
- * payload carries no marker at all and renders as it always did.
+ * `CHECK`, and it is read through ONE local helper whose body IS
+ * `authorViewOf(m) === "external"` since the sibling branch merged
+ * (2026-09-19). An old payload carries no marker at all and renders as it
+ * always did — and a `user` row carrying the marker is never promoted, because
+ * `authorViewOf` requires an `agent` row.
  */
 describe("who asked — sibling, stranger's agent, or an outside session", () => {
   const AGENT = {
@@ -248,14 +250,27 @@ describe("who asked — sibling, stranger's agent, or an outside session", () =>
   });
 
   it("an OUTSIDE SESSION of the reader's own account hands back the reply handle", async () => {
-    const line = await readerLine({ authorUserId: SELF, metadata: { external_session: true } });
+    // ⚠ **`authorKind: "agent"` IS LOAD-BEARING SINCE THE MERGE (2026-09-19).**
+    // The predicate is `authorViewOf`, and that projection promotes only an
+    // `agent` row — a `user` row carrying the same metadata stays a member line
+    // (asserted in `channel-desktop-tag.test.ts › never promotes a HUMAN row`).
+    // The default fixture here is a `user` row, so the kind is stated.
+    const line = await readerLine({
+      authorKind: "agent",
+      authorUserId: SELF,
+      metadata: { external_session: true },
+    });
     expect(line).toContain("outside session for you — reply @desktop");
   });
 
   it("another member's outside session names THEM, and offers no @desktop", async () => {
     // ⚠ The group handle is PER OPERATOR, so offering it for somebody else's
     // session would hand back an address that reaches the reader's own machine.
-    const line = await readerLine({ authorUserId: OPERATOR, metadata: { external_session: true } });
+    const line = await readerLine({
+      authorKind: "agent",
+      authorUserId: OPERATOR,
+      metadata: { external_session: true },
+    });
     expect(line).toContain(
       `outside session for \`Samuel Wang\` (\`${OPERATOR}\`)`,
     );
