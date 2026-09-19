@@ -9,7 +9,8 @@
  * Thin registrar: one tool schema + op routing, delegating to
  *   - `knowledge-shared.ts`    — base resolution + error/validation mappers
  *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/read_file/search
- *   - `knowledge-ops-write.ts` — create/update/move/write/grant ops
+ *   - `knowledge-ops-write.ts` — folder + entry writes, and their authoring rules
+ *   - `knowledge-ops-base-writes.ts` — create/update/publish/grant a BASE
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerKnowledgeTools = registerKnowledgeTools;
@@ -23,6 +24,8 @@ const respond_1 = require("./respond");
 const knowledge_ops_read_1 = require("./knowledge-ops-read");
 const knowledge_ops_pin_1 = require("./knowledge-ops-pin");
 const knowledge_ops_write_1 = require("./knowledge-ops-write");
+// ⚠ Base-level writes split out for the 500-line cap (2026-09-18).
+const knowledge_ops_base_writes_1 = require("./knowledge-ops-base-writes");
 const grant_1 = require("./grant");
 const retired_copy_ops_1 = require("./retired-copy-ops");
 /**
@@ -251,7 +254,7 @@ directory) {
                 const miss = (0, respond_1.missingParams)("create_base", args, ["name"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_write_1.opCreateBase)(client, caller.userId, {
+                return (0, knowledge_ops_base_writes_1.opCreateBase)(client, caller.userId, {
                     name: args.name,
                     description: args.description,
                     visibility: args.visibility,
@@ -262,13 +265,13 @@ directory) {
                 const miss = (0, respond_1.missingParams)("update_base", args, ["base"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_write_1.opUpdateBase)(client, args.base, args.name, args.description, args.slug);
+                return (0, knowledge_ops_base_writes_1.opUpdateBase)(client, args.base, args.name, args.description, args.slug);
             }
             case "grant": {
                 const miss = (0, respond_1.missingParams)("grant", args, ["base", "scope", "to"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_write_1.opGrantBase)(client, directory, caller.userId, args.base, args.scope, args.to, args.level);
+                return (0, knowledge_ops_base_writes_1.opGrantBase)(client, directory, caller.userId, args.base, args.scope, args.to, args.level);
             }
             case "create_folder": {
                 const miss = (0, respond_1.missingParams)("create_folder", args, ["base", "path"]);
@@ -335,7 +338,7 @@ directory) {
                 // 🔒 F-441 — the caller id and the confirm token, which this arm used
                 // to drop. Without them `opSetVisibility` could not preview and a
                 // shared-container publish answered with a refusal instead.
-                return (0, knowledge_ops_write_1.opSetVisibility)(client, caller.userId, args.base, args.visibility, args.confirm_token);
+                return (0, knowledge_ops_base_writes_1.opSetVisibility)(client, caller.userId, args.base, args.visibility, args.confirm_token);
             }
             // ⚠ TWO CASES, ONE HANDLER, AND THE BOOLEAN IS THE WHOLE DIFFERENCE —
             // see `knowledge-ops-write.ts › opPin` for why they are two ops rather

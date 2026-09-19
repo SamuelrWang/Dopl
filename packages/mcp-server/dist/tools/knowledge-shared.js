@@ -10,6 +10,7 @@ exports.agentWriteDenied = agentWriteDenied;
 exports.sharedCredentialPrivateBaseDenied = sharedCredentialPrivateBaseDenied;
 exports.writeFileValidationError = writeFileValidationError;
 exports.updateBaseValidationError = updateBaseValidationError;
+exports.writeOr = writeOr;
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const agent_shared_1 = require("./agent-shared");
@@ -341,4 +342,28 @@ function updateBaseValidationError(e) {
         return (0, respond_1.err)(`update_base: description is too long.`);
     }
     return (0, respond_1.err)(`update_base: request body failed validation${fields.size ? ` (field: ${[...fields].join(", ")})` : ""}.`);
+}
+/**
+ * Run a write, mapping the ONE 403 EVERY base write can raise. Six hand-written
+ * copies of this catch lived in `knowledge-ops-write.ts` (2026-09-17).
+ *
+ * ⚠ `more` runs FIRST, for the per-op codes — 409, 412 and 400, every one of
+ * them disjoint from `AGENT_WRITE_DISABLED`, so the order is a convenience and
+ * not a precedence. Anything neither maps RETHROWS: a catch that swallowed an
+ * outage would report it as a refusal.
+ *
+ * ⚠ **IT LIVES HERE SINCE THE 2026-09-18 SPLIT**, because both write modules
+ * need it and re-exporting it from one of them would make that module the other
+ * one's dependency for no reason other than where the text happened to sit.
+ */
+async function writeOr(run, more = () => null) {
+    try {
+        return await run();
+    }
+    catch (e) {
+        const mapped = more(e) ?? agentWriteDenied(e);
+        if (mapped)
+            return mapped;
+        throw e;
+    }
 }

@@ -49,6 +49,22 @@ export declare function outlineHeading(title: string, outline: Outline): string;
  */
 export declare function outlineFooter(outline: Outline | undefined): string | null;
 /**
+ * 🔒 **WHAT EVERY `read_file` HEADER SAYS ABOUT ADDRESSING THE THING IT JUST
+ * RETURNED** (Wave 4 a1 + a4, 2026-09-18).
+ *
+ * Two answers, and the third is silence:
+ *   - headings exist ⇒ the one-line list, which is the addresses `section=`
+ *     takes. The reader that has them never spends an `outline` call to learn
+ *     names it was already handed.
+ *   - the entry HAS none ⇒ say so, with the length, so the reader can decide to
+ *     page instead of swallowing a wall of prose (Wave 4: on the Poor base,
+ *     agents inferred "unsectioned" only after receiving one).
+ *   - ⚠ **no outline in the payload at all ⇒ NOTHING**, because that is a
+ *     server that did not measure, and "no headings" is a claim about the
+ *     document rather than about the response (§8 stale-cache).
+ */
+export declare function readHeadingsLine(outline: Outline | undefined, fallbackChars: number): string | null;
+/**
  * `reason=UNSECTIONED` — a long entry a section read cannot address.
  *
  * ⚠ **IT LEADS THE RESULT AND THE WRITE STILL LANDED** (Samuel's ruling). A

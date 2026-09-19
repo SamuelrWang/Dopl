@@ -8,7 +8,8 @@
  * Thin registrar: one tool schema + op routing, delegating to
  *   - `knowledge-shared.ts`    — base resolution + error/validation mappers
  *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/read_file/search
- *   - `knowledge-ops-write.ts` — create/update/move/write/grant ops
+ *   - `knowledge-ops-write.ts` — folder + entry writes, and their authoring rules
+ *   - `knowledge-ops-base-writes.ts` — create/update/publish/grant a BASE
  */
 import type { DoplClient } from "@dopl/client";
 import { type CallerIdentity } from "./identity";

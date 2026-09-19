@@ -95,3 +95,17 @@ export declare function writeFileValidationError(e: unknown, title?: string): To
  * Null when unrecognized, so the caller rethrows.
  */
 export declare function updateBaseValidationError(e: unknown): ToolResponse | null;
+/**
+ * Run a write, mapping the ONE 403 EVERY base write can raise. Six hand-written
+ * copies of this catch lived in `knowledge-ops-write.ts` (2026-09-17).
+ *
+ * ⚠ `more` runs FIRST, for the per-op codes — 409, 412 and 400, every one of
+ * them disjoint from `AGENT_WRITE_DISABLED`, so the order is a convenience and
+ * not a precedence. Anything neither maps RETHROWS: a catch that swallowed an
+ * outage would report it as a refusal.
+ *
+ * ⚠ **IT LIVES HERE SINCE THE 2026-09-18 SPLIT**, because both write modules
+ * need it and re-exporting it from one of them would make that module the other
+ * one's dependency for no reason other than where the text happened to sit.
+ */
+export declare function writeOr<T>(run: () => Promise<T>, more?: (e: unknown) => ToolResponse | null): Promise<T | ToolResponse>;

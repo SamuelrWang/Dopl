@@ -27,9 +27,15 @@ export declare function listKbBases(t: DoplTransport, opts?: {
     shelf?: KbShelf;
 }): Promise<KnowledgeBase[]>;
 export declare function getKbBase(t: DoplTransport, baseId: string): Promise<KnowledgeBase>;
+/**
+ * ⚠ `headings` COSTS THE BODY COLUMN SERVER-SIDE and is therefore opt-in —
+ * see `features/knowledge/server/service-folders.ts › getBaseTree`. An older
+ * server ignores the parameter and answers without `entryHeadings`.
+ */
 export declare function getKbTree(t: DoplTransport, baseId: string, opts?: {
     entryLimit?: number;
     entryCursor?: string;
+    headings?: boolean;
 }): Promise<KnowledgeTreeSnapshot>;
 export declare function createKbBase(t: DoplTransport, input: KnowledgeBaseCreateInput): Promise<KnowledgeBase>;
 /**
@@ -90,6 +96,7 @@ export declare function readKbFileByPath(t: DoplTransport, baseId: string, path:
 export declare function readKbFilePart(t: DoplTransport, baseId: string, path: string, opts?: {
     section?: string;
     outline?: boolean;
+    headings?: boolean;
 }): Promise<KnowledgeReadFileResult>;
 export declare function writeKbFileByPath(t: DoplTransport, baseId: string, path: string, input?: KnowledgeWriteFileInput, expectedVersion?: string | null): Promise<KnowledgeWriteFileResult>;
 export declare function listKbDirByPath(t: DoplTransport, baseId: string, path?: string): Promise<KnowledgeDirListing>;

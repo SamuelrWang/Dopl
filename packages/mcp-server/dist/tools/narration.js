@@ -20,6 +20,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.NO_PATH = exports.NO_NAME = exports.INLINE_TEXT_MAX = void 0;
 exports.neutralizeInline = neutralizeInline;
+exports.flattenFenced = flattenFenced;
 exports.inlineOr = inlineOr;
 exports.isForeignAuthored = isForeignAuthored;
 /** Longest untrusted value carried inline into a result — one terse span, no dump. */
@@ -49,6 +50,47 @@ function neutralizeInline(raw) {
         ? `${flattened.slice(0, exports.INLINE_TEXT_MAX - 3)}...`
         : flattened;
     return `\`${clipped}\``;
+}
+/**
+ * 🔒 **THE BODY-CLASS ONE-LINER — FOR TEXT THAT WILL BE RENDERED INSIDE A
+ * FENCE, AND NOWHERE ELSE** (2026-09-18, Wave 4 a3/b2).
+ *
+ * ⚠ **IT IS NOT A LONGER {@link neutralizeInline}, AND THE DIFFERENCE IS THE
+ * FENCE.** `neutralizeInline` strips backticks and markdown punctuation because
+ * its output is spliced into a line THIS SERVER WROTE, where a backtick escapes
+ * the code span and the rest of the value becomes narration. A curated excerpt
+ * is not that: it is the 300-char summary the author wrote FOR the agent, it is
+ * the one signpost Wave 4 measured as load-bearing on routing, and stripping
+ * its backticks is what made *"quote the heading name in backticks"* impossible
+ * to ask for. So the markdown survives — and the caller owes it a
+ * `untrusted-fence.ts` fence, which is what makes rendering it verbatim safe.
+ *
+ * ⚠ **WHAT IS STILL REMOVED: CONTROL CHARACTERS.** A row is a LINE, and a
+ * newline inside a value makes it two — one of which the reader has no frame
+ * for. Flattening is structural, not cosmetic, and it survives the fence
+ * because a fence says where a block ends, never where a row does.
+ *
+ * ⚠ **THE CLIP LANDS ON A CLAUSE BOUNDARY** (Wave 4 a3: the old cut produced
+ * `"...the $5..."`). Past `max`, back up to the last `.`/`;`/`,`/`—`/`:` inside
+ * the budget — but only when that leaves at least 60% of it, because a clip
+ * that discards a third of the excerpt to end tidily has bought punctuation
+ * with content.
+ */
+function flattenFenced(raw, max) {
+    const flattened = raw
+        .replace(/[\u0000-\u001F\u007F\u0085\u2028\u2029]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    if (flattened === "")
+        return null;
+    if (flattened.length <= max)
+        return flattened;
+    const window = flattened.slice(0, max);
+    const boundary = Math.max(window.lastIndexOf(". "), window.lastIndexOf("; "), window.lastIndexOf(", "), window.lastIndexOf(" — "), window.lastIndexOf(": "));
+    if (boundary >= Math.floor(max * 0.6))
+        return `${window.slice(0, boundary + 1)} …`;
+    const space = window.lastIndexOf(" ");
+    return `${(space >= Math.floor(max * 0.6) ? window.slice(0, space) : window).trimEnd()} …`;
 }
 /**
  * An untrusted string as one inline code span, or `fallback` when nothing
