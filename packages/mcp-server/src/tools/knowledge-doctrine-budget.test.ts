@@ -35,7 +35,7 @@ import {
 const KNOWLEDGE_DOCTRINE_MAX = 750;
 
 describe("dopl://doctrine/knowledge", () => {
-  it("fits its 500-character budget", () => {
+  it(`fits its ${KNOWLEDGE_DOCTRINE_MAX}-character budget`, () => {
     expect(KNOWLEDGE_DOCTRINE.length).toBeLessThanOrEqual(KNOWLEDGE_DOCTRINE_MAX);
   });
 
@@ -48,6 +48,27 @@ describe("dopl://doctrine/knowledge", () => {
     expect(KNOWLEDGE_DOCTRINE).toContain("## headings");
     expect(KNOWLEDGE_DOCTRINE).toMatch(/READ:/);
     expect(KNOWLEDGE_DOCTRINE).toMatch(/WRITE:/);
+  });
+
+  // 🔒 **A RULE THAT REFUSES MUST BE READABLE BEFORE IT FIRES** (Samuel's
+  // ruling 2026-09-18, option A). Two of the four write rules now BLOCK an
+  // agent's save, and the doctrine is the only place an agent can read them
+  // ahead of time — `knowledge.ts`'s description has ~112 characters of room
+  // before `HARD_DESCRIPTION_CEILING` throws at import.
+  it("states BOTH refusals, and says they are refusals", () => {
+    expect(KNOWLEDGE_DOCTRINE).toContain("REFUSE");
+    expect(KNOWLEDGE_DOCTRINE).toContain("excerpt=");
+    expect(KNOWLEDGE_DOCTRINE).toMatch(/one word|One word/i);
+    expect(KNOWLEDGE_DOCTRINE).toContain("~1.5k");
+  });
+
+  // ⚠ The two NUDGED rules, which a refusal never teaches because it never
+  // fires for them. Wave 4 measured both as real routing costs: a pointer that
+  // names no destination hit all four runs, and the supersession marker was the
+  // one piece of signposting that worked with no metadata help at all.
+  it("carries the two nudged authoring rules as well", () => {
+    expect(KNOWLEDGE_DOCTRINE).toMatch(/base\/path/);
+    expect(KNOWLEDGE_DOCTRINE).toMatch(/FIRST line/);
   });
 
   it("is addressed under the doctrine scheme the channels one uses", () => {

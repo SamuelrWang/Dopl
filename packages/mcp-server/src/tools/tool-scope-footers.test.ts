@@ -258,6 +258,35 @@ describe("dopl_search carries its own scope", () => {
     expect(text).toContain("named with reason=partial_read opening this line");
   });
 
+  // 🔒 **S15 / S49 — THE RECALL CAP, DISCLOSED ON THIS SURFACE TOO**
+  // (2026-09-18). `dopl_kb`'s own search has said this for months
+  // (`knowledge-ops-read.ts › SEARCH_SCOPE_NOTE`) and this one never did, so
+  // "2 matches" here read as a census when it is a recall-capped,
+  // visibility-filtered sample. ⚠ It rides the FOOTER, not the description:
+  // `dopl_search` is held to `READ_DESCRIPTION_MAX_CHARS` (450), the tightest
+  // budget on the surface, and a per-call footer is not in the served total.
+  it("states the knowledge recall cap the other search has always stated", async () => {
+    const text = await callTool(registerSearchTool, searchStub(2), "dopl_search", {
+      query: "ship",
+    });
+    expect(text).toContain("ranked SAMPLE");
+    expect(text).toContain("capped before ranking");
+    expect(text).toContain("removed after ranking");
+    expect(text).toContain("fewer hits than `limit` does not mean there are no others");
+  });
+
+  // ⚠ `concise` drops what the DESCRIPTION already carries, and the
+  // description cannot afford to carry this — so the cap survives in one
+  // clause rather than disappearing at the smaller level.
+  it("keeps the cap, in one clause, at response_format=concise", async () => {
+    const text = await callTool(registerSearchTool, searchStub(2), "dopl_search", {
+      query: "ship",
+      response_format: "concise",
+    });
+    expect(text).toContain("a recall-capped sample, not a census");
+    expect(text).not.toContain("capped before ranking");
+  });
+
   it("does not mark a group that did not hit the cap", async () => {
     const text = await callTool(registerSearchTool, searchStub(2), "dopl_search", {
       query: "ship",

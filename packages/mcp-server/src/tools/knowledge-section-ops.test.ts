@@ -176,27 +176,78 @@ describe('read_file(section=…)', () => {
     expect(out).toContain("line 12");
   });
 
-  it("no section argument makes the plain whole-entry read, untouched", async () => {
-    const readKbFileByPath = vi.fn().mockResolvedValue(entry({ body: "plain" }));
-    const readKbFilePart = vi.fn();
+  // 🔒 **WAVE 4 a1 — THE WHOLE BODY, PLUS THE ADDRESSES FOR NEXT TIME.** A
+  // sectionless read now asks for `headings`, which is the opposite trade from
+  // `outline`: that one returns the map INSTEAD of the document, this one
+  // returns it WITH the document, so no second call buys the heading names.
+  it("no section argument reads the whole entry AND lists its headings", async () => {
+    const readKbFilePart = vi
+      .fn()
+      .mockResolvedValue({ entry: entry({ body: "plain" }), outline: OUTLINE });
     const out = text(
       (await opReadFile(
-        client({ readKbFileByPath, readKbFilePart }),
+        client({ readKbFilePart }),
         "my-base",
         "runbook.md",
         "u1",
       )) as never,
     );
-    expect(readKbFilePart).not.toHaveBeenCalled();
+    expect(readKbFilePart).toHaveBeenCalledWith("base-1", "runbook.md", {
+      headings: true,
+    });
     expect(out).toContain("plain");
     expect(out).not.toContain("Section:");
+    expect(out).toContain("_Sections: # `Title` · ## `Setup` · ## `Errors`_");
+  });
+
+  // ⚠ **S32 / WAVE 4 a4.** On the Poor base, agents inferred "unsectioned"
+  // only after receiving a wall of prose. The read now says so, with the
+  // length, so the reader can decide to page instead of swallowing.
+  it("says plainly when an entry has NO headings, and how long it is", async () => {
+    const readKbFilePart = vi.fn().mockResolvedValue({
+      entry: entry({ body: "z".repeat(3299) }),
+      outline: { sections: [], totalChars: 3299 },
+    });
+    const out = text(
+      (await opReadFile(
+        client({ readKbFilePart }),
+        "my-base",
+        "runbook.md",
+        "u1",
+      )) as never,
+    );
+    expect(out).toContain("No headings; 3,299 chars whole");
+    expect(out).toContain("offset=");
+    expect(out).toContain("max_chars=");
+  });
+
+  // ⚠ §8 STALE-CACHE. No outline in the payload is a server that did NOT
+  // measure, and "no headings" is a claim about the document rather than about
+  // the response — so the line is omitted entirely rather than guessed.
+  it("says nothing about headings when the payload carries no outline", async () => {
+    const readKbFilePart = vi
+      .fn()
+      .mockResolvedValue({ entry: entry({ body: "plain" }) });
+    const out = text(
+      (await opReadFile(
+        client({ readKbFilePart }),
+        "my-base",
+        "runbook.md",
+        "u1",
+      )) as never,
+    );
+    expect(out).toContain("plain");
+    expect(out).not.toContain("No headings");
+    expect(out).not.toContain("_Sections:");
   });
 
   it("offset renders a WINDOW that says so and names the resume point", async () => {
-    const readKbFileByPath = vi.fn().mockResolvedValue(entry({ body: "0123456789" }));
+    const readKbFilePart = vi
+      .fn()
+      .mockResolvedValue({ entry: entry({ body: "0123456789" }) });
     const out = text(
       (await opReadFile(
-        client({ readKbFileByPath }),
+        client({ readKbFilePart }),
         "my-base",
         "runbook.md",
         "u1",
@@ -209,6 +260,30 @@ describe('read_file(section=…)', () => {
     expect(out).toContain("⚠ WINDOW — characters 2–6 of 10");
     expect(out).toContain("Resume with offset=6");
     expect(out).toContain("2345");
+  });
+
+  // ⚠ The heading list rides a SECTION read too — the fix list asks for it on
+  // "every read_file", and a reader that landed on the wrong heading needs the
+  // others without paying for `outline`.
+  it("lists the headings on a SECTION read as well", async () => {
+    const readKbFilePart = vi.fn().mockResolvedValue({
+      entry: entry({ body: "## Errors\nbody" }),
+      outline: OUTLINE,
+      section: { ok: true, heading: "Errors", level: 2, start: 852, end: 1492, chars: 640 },
+    });
+    const out = text(
+      (await opReadFile(
+        client({ readKbFilePart }),
+        "my-base",
+        "runbook.md",
+        "u1",
+        undefined,
+        undefined,
+        "Errors",
+      )) as never,
+    );
+    expect(out).toContain("Section: ## `Errors`");
+    expect(out).toContain("_Sections: # `Title` · ## `Setup` · ## `Errors`_");
   });
 });
 
@@ -249,15 +324,56 @@ describe('write_file(section=…) and the nudge', () => {
     expect(out).toContain("APPENDED at `##` level");
   });
 
-  it("a LONG unsectioned body lands, and the reason LEADS the result", async () => {
+  // 🔒 **THE POLARITY FLIPPED ON 2026-09-18, AND IT IS SAMUEL'S RULING THAT
+  // FLIPPED IT** (fix list Q1, option A: *"saves should be blocked if there's
+  // no description? I think I agree with A"*). This case used to assert the
+  // write LANDS with a nudge stapled to it; on the WHOLE-BODY path it is now
+  // refused before anything is written. Wave 4 measured what the nudge bought:
+  // nothing — 18,000 characters read to extract 900, on a base that had been
+  // nudged eight times.
+  it("a LONG unsectioned WHOLE-BODY write is refused before it lands", async () => {
     const long = "x".repeat(KB_SECTION_NUDGE_CHARS + 1);
     const w = writer({
       entry: entry({ body: long }),
       outline: { sections: [], totalChars: long.length },
     });
-    const res = await opWriteFile(w.client, "my-base", "r.md", long, undefined, "v1");
-    // ⚠ LANDS. Never refuses (Samuel's ruling) — the entry it would refuse is
-    // the entry the user wanted.
+    const res = await opWriteFile(
+      w.client,
+      "my-base",
+      "r.md",
+      long,
+      undefined,
+      "v1",
+      undefined,
+      "the rota, and who covers a gap",
+    );
+    const out = text(res as never);
+    expect(out).toContain("reason=UNSECTIONED");
+    expect(out).toContain("retry=add");
+    expect(w.writeKbFileByPath).not.toHaveBeenCalled();
+  });
+
+  // ⚠ **THE `section=` PATH STILL NUDGES**, because `body` there is one
+  // section's new content and the merged body is the server's — the first
+  // place its length is known is the RESULT.
+  it("the same length on a SECTION write lands, with the reason LEADING", async () => {
+    const long = "x".repeat(KB_SECTION_NUDGE_CHARS + 1);
+    const w = writer({
+      entry: entry({ body: long }),
+      outline: { sections: [], totalChars: long.length },
+      sectionCreated: false,
+    });
+    const res = await opWriteFile(
+      w.client,
+      "my-base",
+      "r.md",
+      long,
+      undefined,
+      "v1",
+      undefined,
+      undefined,
+      "A",
+    );
     expect(res.isError).toBeFalsy();
     const out = text(res as never);
     expect(out.startsWith("reason=UNSECTIONED")).toBe(true);
