@@ -204,3 +204,36 @@ describe("a PERSONAL container passes through unchanged", () => {
     expect(stripeCalls.listParams).toMatchObject({ customer: "cus_123" });
   });
 });
+
+describe("history outlives the subscription", () => {
+  it("still lists a CANCELED container's invoices — the webhook keeps the customer id", async () => {
+    // Account → Billing history reads this after a cancel lands: the
+    // `subscription.deleted` write nulls the subscription pointers but keeps
+    // `stripeCustomerId`, so past charges must stay visible.
+    mockRepo.getWorkspaceBilling.mockResolvedValue(
+      billing({
+        plan: "free",
+        status: "canceled",
+        stripeSubscriptionId: null,
+        stripePriceId: null,
+        seatCount: null,
+      })
+    );
+    stripeCalls.data = [
+      {
+        id: "in_1",
+        number: "A-1",
+        created: 1_756_000_000,
+        amount_paid: 899,
+        amount_due: 899,
+        currency: "usd",
+        status: "paid",
+        hosted_invoice_url: "https://invoice.stripe.com/i/1",
+      },
+    ];
+    const body = await (await GET(request(), { params: Promise.resolve({}) })).json();
+    expect(stripeCalls.listParams).toMatchObject({ customer: "cus_123" });
+    expect(body.invoices).toHaveLength(1);
+    expect(body.invoices[0]).toMatchObject({ amountPaid: 899, status: "paid" });
+  });
+});

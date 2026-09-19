@@ -8,6 +8,7 @@ import { useBridgedImageSrc } from "@/shared/hooks/use-bridged-image-src";
 import type { Role } from "@/features/workspaces/types";
 import { SectionShell } from "./section-shell";
 import { AccountSubscription } from "./account-subscription";
+import { AccountBillingHistory } from "./account-billing-history";
 
 interface ProfileData {
   display_name: string | null;
@@ -135,6 +136,7 @@ export function AccountSectionCore({
       </div>
 
       <AccountSubscription workspaceId={workspaceId} role={role} />
+      <AccountBillingHistory workspaceId={workspaceId} role={role} />
       {machineSection}
       {dangerZone}
     </SectionShell>
