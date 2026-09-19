@@ -353,6 +353,46 @@ export async function listAddressedToMe(
 }
 
 /**
+ * **MESSAGES ADDRESSED TO THE CALLER'S OUTSIDE SESSIONS** — `metadata.to_desktop`
+ * (2026-09-18, the `@desktop` group tag).
+ *
+ * ⚠ **A SECOND QUERY RATHER THAN AN `.or()` ON THE FIRST, AND THE REASON IS THE
+ * LABEL.** The two lanes are different claims — `to_user_id` means *a person was
+ * asked*, `to_desktop` means *this operator's tooling was asked* — and
+ * `status-render.ts` prints them differently. One `.or()` would return them
+ * interleaved with no column saying which, so the service would have to re-read
+ * the metadata of every row to tell them apart, which is a second read of the
+ * same fact and the shape this file avoids everywhere else.
+ *
+ * ⚠ **THE SAME BOUND AND THE SAME CLIP REPORT** as {@link listAddressedToMe}
+ * (§9): newest first, `ACCOUNT_ADDRESSED_LIMIT`, and a clipped answer says so.
+ * An unbounded scan of everything ever aimed at this lane is a different
+ * feature.
+ *
+ * ⚠ **THE KEY HOLDS THE OPERATOR ID, WHICH IS WHY THIS IS A PLAIN EQUALITY.**
+ * `service-writes.ts` stamps `metadata.to_desktop = <operator user id>`
+ * precisely so this predicate is the same indexable shape the member lane
+ * already uses. No index yet — see the migration's section 3 for the
+ * measurement that decision is waiting on.
+ */
+export async function listDesktopAddressedToMe(
+  channelIds: string[],
+  userId: string
+): Promise<AccountScan<ChannelMessageRow>> {
+  if (channelIds.length === 0) return { rows: [], truncated: false };
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_messages")
+    .select("*")
+    .in("channel_id", channelIds)
+    .eq("metadata->>to_desktop", userId)
+    .order("seq", { ascending: false })
+    .limit(ACCOUNT_ADDRESSED_LIMIT);
+  if (error) throw error;
+  return scan((data ?? []) as ChannelMessageRow[], ACCOUNT_ADDRESSED_LIMIT);
+}
+
+/**
  * The caller's OWN highest seq per channel, above `sinceSeq` — the evidence that
  * an addressed message has been answered.
  *

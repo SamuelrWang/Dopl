@@ -131,6 +131,29 @@ export function isExternalSessionAuthor(
   return authorKind === "agent" && runtime !== "desktop-session";
 }
 
+/**
+ * **IS THE *CALLER* AN OUTSIDE SESSION?** — the same two marks
+ * {@link isExternalSessionAuthor} reads, asked about the credential making this
+ * request rather than about the one that wrote a row.
+ *
+ * ⚠ **IT EXISTS SO `dopl_status` CANNOT SHOW `@desktop` ASKS TO THE WRONG
+ * READER.** A desktop-run agent shares the operator's ACCOUNT, so a query keyed
+ * on the user id alone would hand it every ask aimed at the operator's laptop —
+ * work it would then adopt, which is the exact confusion `@desktop` was created
+ * to end. A human in the web app is not an outside session either.
+ *
+ * ⚠ **SAME FAILURE MODES AS THE AUTHOR PREDICATE**, and the same conclusion:
+ * it decides what is SHOWN, never what may be read. An older desktop build sees
+ * a few extra rows on its status table; nothing is disclosed that the caller
+ * could not already read in the transcript.
+ */
+export function isOutsideSessionCaller(
+  source: string,
+  runtime: string | null | undefined
+): boolean {
+  return isExternalSessionAuthor(source === "agent" ? "agent" : "user", runtime);
+}
+
 // ── THE READ SIDE ───────────────────────────────────────────────────────────
 
 /** Just enough of a stored message to answer the two questions below. ⚠ Both

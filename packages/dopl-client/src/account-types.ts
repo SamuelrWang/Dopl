@@ -33,6 +33,16 @@ export interface AccountWaitingItem {
   createdAt: string;
   /** The message carries a structured escalation card, not an ordinary request. */
   isEscalation: boolean;
+  /**
+   * **WHY THIS ITEM IS ON THE LIST** — `person` (default) | `desktop` | `likely`
+   * (2026-09-18). ⚠ Mirror of `src/features/channels/types-account.ts ›
+   * AccountWaitingLane`, which carries the argument.
+   *
+   * ⚠ **OPTIONAL, AND ABSENT MEANS `person`** — every item an older server
+   * produces, and every payload cached before the field existed. `desktop` and
+   * `likely` only ever reach an OUTSIDE-SESSION caller.
+   */
+  lane?: "person" | "desktop" | "likely";
 }
 
 /** One channel's line in an account-wide status answer. */

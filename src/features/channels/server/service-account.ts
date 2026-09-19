@@ -12,12 +12,14 @@ import type {
   AccountStatus,
   AccountStatusClips,
   AccountWaitingItem,
+  AccountWaitingLane,
 } from "../types-account";
 export type {
   AccountChannelStatus,
   AccountStatus,
   AccountStatusClips,
   AccountWaitingItem,
+  AccountWaitingLane,
 };
 import { mapOwnSessionStateRow } from "./collab-dto";
 import { mapMessageRow, type ChannelMessageRow, type ProfileRef } from "./dto";
@@ -108,6 +110,19 @@ export interface AccountStatusOptions {
   view?: AccountStatusView;
   /** 🔒 `ctx.apiKeyWorkspaceId` — B1's ceiling, NEVER a request field (R3). */
   lockedWorkspaceId?: string | null;
+  /**
+   * **THE CALLER IS AN OUTSIDE SESSION**, so the `@desktop` lanes are theirs to
+   * see (2026-09-18). Resolved from the CREDENTIAL by the route
+   * (`lib/desktop-handle.ts › isOutsideSessionCaller`), never from a request
+   * field — a desktop-run agent shares this account and must not be handed asks
+   * aimed at the operator's laptop.
+   *
+   * ⚠ **DEFAULT `false` KEEPS EVERY EXISTING CALLER BYTE-IDENTICAL**, and it is
+   * the restrictive direction: the two extra lanes are a VIEW over rows the
+   * caller can already read in the transcript, so a false negative costs a
+   * convenience and never a disclosure.
+   */
+  outsideSession?: boolean;
 }
 
 const EMPTY_CLIPS: AccountStatusClips = {
@@ -158,15 +173,45 @@ export async function getAccountStatus(
     };
   }
 
-  const [highWater, tally, addressed] = await Promise.all([
+  // ⚠ **THE `@desktop` SCAN JOINS THE SAME WAVE RATHER THAN ADDING A ROUND TRIP
+  // TO THE CRITICAL PATH**, and it is issued only for the caller it is for — an
+  // ordinary agent or a human pays nothing at all for a lane that is not theirs.
+  const outside = opts.outsideSession === true;
+  const [highWater, tally, addressed, desktopAddressed] = await Promise.all([
     accountRepo.lastSeqByChannel(ids),
     opts.since === undefined
       ? Promise.resolve(null)
       : accountRepo.tallyAccountMessagesAfter(ids, opts.since, userId),
     accountRepo.listAddressedToMe(ids, userId),
+    outside
+      ? accountRepo.listDesktopAddressedToMe(ids, userId)
+      // ⚠ The EMPTY SCAN, spelled out rather than skipped: `truncated: false`
+      // is a real answer ("nothing was clipped because nothing was read"), and
+      // the clip line below reads it.
+      : Promise.resolve({ rows: [] as ChannelMessageRow[], truncated: false }),
   ]);
 
-  const waitingByChannel = await resolveWaiting(addressed.rows, ids, userId);
+  const waitingByChannel = await resolveWaiting(
+    addressed.rows,
+    ids,
+    userId,
+    // ⚠ **THE PARTITION, AND IT IS THE WHOLE OF THE `likely` CLASS ON THIS
+    // SURFACE.** An AGENT that addressed the operator as a PERSON is the exact
+    // untagged case `@desktop` replaces — before the tag existed it was the only
+    // way to reach this lane at all — so for an outside session it is a guess
+    // worth showing, labelled as one. A HUMAN asking is a human asking, and
+    // stays a fact. ⚠ For every other caller this is the constant it was.
+    outside
+      ? (row) => (row.author_kind === "agent" ? "likely" : "person")
+      : () => "person"
+  );
+  // ⚠ **A SECOND PASS, NOT A CONCATENATION.** `resolveWaiting` bounds its
+  // "has this been answered" scan by the LOWEST seq of the rows it is judging;
+  // merging the two row sets first would widen that bound to cover both lanes
+  // and read rows neither needed. Two passes, two honest bounds.
+  const desktopWaiting = outside
+    ? await resolveWaiting(desktopAddressed.rows, ids, userId, () => "desktop")
+    : new Map<string, AccountWaitingItem[]>();
 
   const channels = refs.map((ref) => ({
     channelId: ref.id,
@@ -177,7 +222,16 @@ export async function getAccountStatus(
     lastMessageAt: highWater.get(ref.id)?.at ?? null,
     unread: tally === null ? null : countFor(tally.rows, ref.id),
     sessions: sessionsByChannel.get(ref.id) ?? [],
-    waiting: waitingByChannel.get(ref.id) ?? [],
+    // ⚠ **THE `@desktop` LANE LEADS, AND THE GUESSES RIDE INSIDE THE PERSON
+    // LANE LABELLED AS SUCH.** `status-render.ts` prints these in array order
+    // and marks each by its `lane`, so a guess never renders as loud as a fact —
+    // the same rule the transcript marks follow.
+    waiting: [
+      // FACTS the author wrote: the `@desktop` lane first (it names this
+      // caller's own lane), then the person lane.
+      ...(desktopWaiting.get(ref.id) ?? []),
+      ...(waitingByChannel.get(ref.id) ?? []),
+    ],
   }));
 
   return {
@@ -187,7 +241,10 @@ export async function getAccountStatus(
     truncated: {
       channels: refScan.truncated,
       unread: tally?.truncated ?? false,
-      waiting: addressed.truncated,
+      // ⚠ EITHER LANE CLIPPING CLIPS THE LIST — a reader told the page is whole
+      // while one of its two scans hit a ceiling is exactly the false negative
+      // §9 forbids.
+      waiting: addressed.truncated || desktopAddressed.truncated,
     },
   };
 }
@@ -324,7 +381,16 @@ function byNothingButName(
 async function resolveWaiting(
   addressed: ChannelMessageRow[],
   channelIds: string[],
-  userId: string
+  userId: string,
+  /**
+   * Which lane a row belongs to. ⚠ A FUNCTION rather than a constant because the
+   * PERSON scan is PARTITIONED for an outside session: a row an AGENT addressed
+   * to the operator is the untagged case `@desktop` exists to replace, so it is
+   * the `likely` guess — while a row a HUMAN addressed is a person asking a
+   * person, and stays a fact. ⚠ Defaults to `person` for every row, which keeps
+   * every pre-2026-09-18 caller byte-identical.
+   */
+  lane: (row: ChannelMessageRow) => AccountWaitingLane = () => "person"
 ): Promise<Map<string, AccountWaitingItem[]>> {
   const out = new Map<string, AccountWaitingItem[]>();
   if (addressed.length === 0) return out;
@@ -344,6 +410,7 @@ async function resolveWaiting(
     const metadata = row.metadata as Record<string, unknown> | null;
     const bucket = out.get(row.channel_id) ?? [];
     const profile = profiles.get(row.author_user_id ?? "");
+    const laneOf = lane(row);
     bucket.push({
       messageId: row.id,
       seq,
@@ -356,6 +423,10 @@ async function resolveWaiting(
       createdAt: row.created_at,
       isEscalation:
         typeof metadata?.escalation === "object" && metadata.escalation !== null,
+      // ⚠ STAMPED ONLY WHEN IT IS NOT THE DEFAULT, so the wire shape of every
+      // person-lane item is byte-identical to what it was — the same discipline
+      // the metadata fold applies to `intent`.
+      ...(laneOf === "person" ? {} : { lane: laneOf }),
     });
     out.set(row.channel_id, bucket);
   }
