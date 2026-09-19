@@ -29,7 +29,11 @@ export type ChannelWakeVerdict =
   | "reciprocal"
   /** RR3 — an unaddressed human message, resolved to the channel's default
    *  responder or to the room's one live agent. */
-  | "responder";
+  | "responder"
+  /** `to=@desktop` — the author's OWN operator's OUTSIDE SESSIONS. ⚠ Not a weak
+   *  `member`: it notifies nobody and wakes nothing, and the recipient rides
+   *  `metadata.to_desktop` rather than `recipient_user_ids`. */
+  | "desktop";
 
 /**
  * WHAT HAPPENED to a message — the `delivery=` verdict that IS the
@@ -43,4 +47,8 @@ export type ChannelDelivery =
   | "idle"
   | "delivered"
   | "woken"
-  | "refused";
+  | "refused"
+  /** It is in the room, addressed to `@desktop`, and nothing was started. ⚠ The
+   *  one word that is true without a presence system — never `held`, never
+   *  `woken`. No machine reports it. */
+  | "posted";

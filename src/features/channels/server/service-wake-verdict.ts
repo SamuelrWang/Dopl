@@ -81,6 +81,13 @@ const DELIVERY_FOR: Record<ChannelWakeVerdict, ChannelDelivery> = {
   thread_peer: "delivered",
   reciprocal: "delivered",
   responder: "woken",
+  // ⚠ **`posted`, AND IT MAY NEVER BECOME `woken` OR `delivered`.** Both of
+  // those are claims about a REACH: `delivered` says a live recipient has it,
+  // `woken` says something was started. Addressing `@desktop` does neither —
+  // nothing on this server can see whether an outside session is holding, so the
+  // only honest report is that the message is in the room. See
+  // `lib/desktop-handle.ts › DESKTOP_DELIVERY`.
+  desktop: "posted",
 };
 
 
@@ -110,6 +117,18 @@ export interface WakeVerdictContext {
    * what every machine routes on (`serverNamesMember`).
    */
   toUserIds: string[];
+  /**
+   * **THE OPERATORS WHOSE OUTSIDE SESSIONS `to=@desktop` NAMED** (2026-09-18).
+   * `[]` for every post that named none, which is almost all of them.
+   *
+   * ⚠ **IT IS NOT `toUserIds` AND MUST NEVER BE FOLDED INTO IT.** That list
+   * becomes `recipient_user_ids`, the column every machine routes on
+   * (`main/session-dispatch.js › serverNamesMember`) and the one a member
+   * notification keys off. `@desktop` deliberately reaches neither the person
+   * nor their desktop-run agents — it marks a lane for tooling that is not
+   * running under this product — so it rides `metadata.to_desktop` alone.
+   */
+  toDesktopOperatorIds: string[];
   /** A legacy thread tag the poster was not entitled to was dropped
    *  (`service-writes-metadata.ts › PostMetadataResult.threadTagStripped`). */
   threadTagStripped?: boolean;
@@ -263,9 +282,23 @@ export async function resolveWakeVerdict(
         );
   const namedAgentIds = toAgentIds.length > 0 ? toAgentIds : bodyAgentIds;
 
+  /**
+   * **`to=@desktop` COUNTS AS ADDRESSED, AND THAT IS THE POINT OF PUTTING IT ON
+   * THIS LINE** (2026-09-18).
+   *
+   * ⚠ **OTHERWISE THE RESILIENCE ARMS WOULD REPAIR IT.** They fire on "the
+   * author addressed NOBODY", and a `@desktop`-only send satisfies that reading
+   * while being the opposite of a forgotten `@` — the author named a lane
+   * deliberately. RR3 would then hand the post to the room's default responder:
+   * a wake the author did not ask for, aimed at a different audience than the
+   * one they wrote. Same failure `isRecord` and `threadTagStripped` already
+   * short-circuit, arriving by a third road.
+   */
+  const toDesktop = wakeCtx.toDesktopOperatorIds;
   const addressed =
     (namedAgentIds !== null && namedAgentIds.length > 0) ||
     wakeCtx.toUserIds.length > 0 ||
+    toDesktop.length > 0 ||
     toUserId !== null;
 
   /**
@@ -417,15 +450,24 @@ export async function resolveWakeVerdict(
   // can do; the members named alongside are not dropped, they ride
   // `recipient_user_ids` exactly as a member-only send's would, and every
   // machine routes on the COLUMNS rather than on the word.
+  // ⚠ **`desktop` SITS BELOW `member` AND ABOVE THE ARMS.** The order is
+  // "loudest reach first", and this reach is the quietest of the three written
+  // ones: it wakes nothing and notifies nobody. It still outranks every REPAIR,
+  // because a repair only ever answers a post that named nobody — and this one
+  // named something. A mixed `to=@desktop,@coder` takes `agent` and stores both,
+  // exactly as a mixed member/agent send does; nothing is dropped, because every
+  // machine routes on the COLUMNS and reads the word only to explain itself.
   const verdict: ChannelWakeVerdict =
     namedAgentIds !== null && namedAgentIds.length > 0
       ? "agent"
       : wakeCtx.toUserIds.length > 0 || toUserId
         ? "member"
-        : (resilience?.verdict ??
-          (threaded && wakeCtx.threadTagStripped !== true && !isRecord
-            ? "thread"
-            : "none"));
+        : toDesktop.length > 0
+          ? "desktop"
+          : (resilience?.verdict ??
+            (threaded && wakeCtx.threadTagStripped !== true && !isRecord
+              ? "thread"
+              : "none"));
 
   // ⚠ **A REPAIRED RECIPIENT IS STORED IN THE SAME TWO COLUMNS AS A WRITTEN
   // ONE.** The desktop executes `recipient_*` and reads `wake_verdict` to
@@ -469,11 +511,20 @@ export async function resolveWakeVerdict(
     // A REGRESSION** (2026-09-18): its prose names nobody by construction, so
     // there is no missed reach to report. The loud path for an agent that meant
     // to address somebody is the `to=` resolver's own 400.
+    // ⚠ **A FIFTH TERM SINCE 2026-09-18: `verdict !== "desktop"`.** It is the
+    // same argument `verdict !== "member"` makes — the post REACHED something,
+    // so "the handle you named answers to nobody" would describe the one thing
+    // that did not happen. It is reachable in practice: a person writing
+    // *"handing this to @desktop, @some-dead-agent will pick it up"* with
+    // `to="@desktop"` has a body handle that resolves to nothing AND a written
+    // address, and reporting `unreachable` there would bury a delivery that
+    // occurred under a complaint about prose.
     delivery:
       isMessage &&
       bodyAgentIds === null &&
       toAgentIds.length === 0 &&
       verdict !== "member" &&
+      verdict !== "desktop" &&
       resilience === null
         ? "unreachable"
         : DELIVERY_FOR[verdict],

@@ -301,3 +301,79 @@ describe("🔒 the refusal lists what the caller can actually reach", () => {
     expect(err.liveHandles).toEqual(["agent-k3v7d2mq"]);
   });
 });
+
+/**
+ * **`@desktop` — THE BUILT-IN GROUP HANDLE** (2026-09-18, Samuel's ruling on the
+ * external-session group tag).
+ *
+ * ⚠ **THE TWO PROPERTIES WORTH PINNING ARE "COSTS NO READ" AND "CANNOT BE
+ * SHADOWED".** The first is what makes the address always-resolvable and never
+ * stale; the second is what stops an operator (or a peer) from quietly taking
+ * the token by naming an agent "Desktop".
+ */
+describe("the desktop group handle", () => {
+  it("resolves to the CALLER'S OWN operator, with no read at all", async () => {
+    expect(await resolveToRecipient(AGENT_CALLER, CHANNEL, "@desktop")).toEqual({
+      kind: "desktop",
+      operatorUserId: AGENT_CALLER.userId,
+    });
+    // ⚠ NO ROSTER READ AND NO SESSION READ. It is a built-in, not a row: that is
+    // what makes it resolvable in every channel, with no setup and no staleness.
+    expect(vi.mocked(repo.listMembers)).not.toHaveBeenCalled();
+    expect(vi.mocked(repoSessions.listSessionStates)).not.toHaveBeenCalled();
+    expect(vi.mocked(repoSessions.listChannelSessionStates)).not.toHaveBeenCalled();
+  });
+
+  it("is the caller's own even when a DIFFERENT member is the one asking", async () => {
+    // ⚠ TWO MEMBERS IN ONE ROOM HOLD TWO `@desktop`s AND THEY NEVER CONTEST,
+    // because the resolution never reads the room. Diana's agent writing
+    // `to=@desktop` means DIANA's outside sessions.
+    const diana = { ...HUMAN, userId: "user-diana" } as ChannelContext;
+    expect(await resolveToRecipient(diana, CHANNEL, "@desktop")).toEqual({
+      kind: "desktop",
+      operatorUserId: "user-diana",
+    });
+  });
+
+  it("accepts the bare spelling, like every other handle on this door", async () => {
+    expect(await resolveToRecipient(HUMAN, CHANNEL, "desktop")).toEqual({
+      kind: "desktop",
+      operatorUserId: HUMAN.userId,
+    });
+  });
+
+  it("is RESERVED — an agent named \"Desktop\" cannot take the token", async () => {
+    // 🔒 THE CASE THE SERVER-SIDE RESERVATION EXISTS FOR. `main/agent-name-unique.js`
+    // would suffix a NEW launch to `desktop-1`, but that rule runs on ONE machine
+    // and cannot see a row written before it, or a PEER's agent whose name was
+    // minted elsewhere. This row is exactly such a row.
+    vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([
+      sessionRow({ name: "k3v7d2mq", display_name: "Desktop" }),
+    ]);
+    expect(await resolveToRecipient(HUMAN, CHANNEL, "@desktop")).toEqual({
+      kind: "desktop",
+      operatorUserId: HUMAN.userId,
+    });
+    // ⚠ AND THE AGENT IS NOT WITHDRAWN FROM ADDRESSING — it keeps the id form,
+    // the handle that never stops working.
+    expect(await resolveToRecipient(HUMAN, CHANNEL, "@agent-k3v7d2mq")).toEqual({
+      kind: "agent",
+      agentId: "k3v7d2mq",
+    });
+  });
+
+  it("is listed in the refusal, so a mistyped `to` teaches the built-in", async () => {
+    // ⚠ A REFUSAL IS THE ONE PLACE A CALLER RELIABLY READS A HANDLE LIST, and a
+    // built-in absent from it is a built-in nobody discovers.
+    await expect(
+      resolveToRecipient(HUMAN, CHANNEL, "@nobody-at-all")
+    ).rejects.toBeInstanceOf(ChannelRecipientUnresolvedError);
+    const err = await resolveToRecipient(HUMAN, CHANNEL, "@nobody-at-all").catch(
+      (e: ChannelRecipientUnresolvedError) => e
+    );
+    // ⚠ NOT in `liveHandles` — that list is published as "Live agents:" and the
+    // built-in is neither an agent nor live. It rides the MESSAGE instead.
+    expect(err.liveHandles).not.toContain("desktop");
+    expect(err.message).toContain("@desktop always resolves");
+  });
+});

@@ -317,7 +317,7 @@ describe("🔒 the composer's line and the server's verdict agree, case for case
       { id: CHAN, workspace_id: WS } as ChannelRow,
       { body: c.body, kind: "message" } as ChannelMessageCreateInput,
       metadata,
-      { authorKind: "user", toAgentIds: [], toUserIds: [] },
+      { authorKind: "user", toAgentIds: [], toUserIds: [], toDesktopOperatorIds: [] },
       NOW
     );
     expect(server.verdict, "server verdict").toBe(c.expect.verdict);
@@ -405,7 +405,7 @@ describe("🔴 RR2 IS DELETED, so the gap it left the client (F-551) is closed",
       { id: CHAN, workspace_id: WS } as ChannelRow,
       { body: "can someone look at the build?", kind: "message" } as ChannelMessageCreateInput,
       {},
-      { authorKind: "user", toAgentIds: [], toUserIds: [] },
+      { authorKind: "user", toAgentIds: [], toUserIds: [], toDesktopOperatorIds: [] },
       NOW
     );
     expect(server.recipientAgentIds ?? []).toEqual(["m8q1zzzz"]);
@@ -424,7 +424,7 @@ describe("🔴 RR2 IS DELETED, so the gap it left the client (F-551) is closed",
       { id: CHAN, workspace_id: WS } as ChannelRow,
       { body: "done", kind: "message", clientMsgId: "agent-k3v7d2mq-4" } as ChannelMessageCreateInput,
       {},
-      { authorKind: "agent", toAgentIds: [], toUserIds: [] },
+      { authorKind: "agent", toAgentIds: [], toUserIds: [], toDesktopOperatorIds: [] },
       NOW
     );
     expect(server).toMatchObject({ verdict: "none", recipientUserIds: [], delivery: "none" });

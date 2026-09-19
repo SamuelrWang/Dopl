@@ -19,6 +19,13 @@ import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import { resolvePostMetadata } from "./service-writes-metadata";
 import { resolveToRecipients } from "./service-writes-metadata-recipient";
+// ⚠ The outside-session vocabulary and the ONE discriminator — see
+// `lib/desktop-handle.ts` for the two marks it reads and its failure modes.
+import {
+  DESKTOP_TO_METADATA_KEY,
+  EXTERNAL_SESSION_METADATA_KEY,
+  isExternalSessionAuthor,
+} from "../lib/desktop-handle";
 import { resolveWakeVerdict } from "./service-wake-verdict";
 import {
   requireMemberChannel,
@@ -123,11 +130,17 @@ export async function postMessage(
   // that a retry can replay out of storage is not one.
   let toAgentIds: string[] = [];
   let toUserIds: string[] = [];
+  // ⚠ **A THIRD NAMESPACE SINCE 2026-09-18 — `@desktop`.** It becomes NO
+  // `toUserId` and NO agent id: it stamps `metadata.to_desktop` alone, which is
+  // what keeps it off `recipient_user_ids` and therefore out of every machine's
+  // routing. See `lib/desktop-handle.ts`.
+  let toDesktopOperatorIds: string[] = [];
   let input = raw;
   if (raw.to) {
     const resolved = await resolveToRecipients(ctx, channel, raw.to);
     toAgentIds = resolved.agentIds;
     toUserIds = resolved.memberUserIds;
+    toDesktopOperatorIds = resolved.desktopOperatorIds;
     if (toUserIds.length > 0) input = { ...raw, toUserId: toUserIds[0] };
   }
   // ⚠ Same placement rule, same reason. Takes no `opts` since 2026-08-20 — the
@@ -244,6 +257,7 @@ export async function postMessage(
     authorKind,
     toAgentIds,
     toUserIds,
+    toDesktopOperatorIds,
     // ⚠ **MEMBERS OUTRANK AGENTS, AND THIS LINE IS THE WHOLE OF IT ON THE SERVER** (2026-09-07,
     // Samuel's suffix ruling). The handles are the metadata fold's own leftover — derived from
     // the roster and profiles it read for `mentionedUserIds`, on this same request — so the
@@ -258,7 +272,31 @@ export async function postMessage(
   // rather than in the metadata fold because only the verdict knows it, which is
   // why that fold STRIPS it. ⚠ ABSENT, never `null`, on an address the author
   // wrote: a key on every row would make the pick unreadable.
-  const stored = wake.reason ? { ...metadata, wake_reason: wake.reason } : metadata;
+  // ⚠ **THE TWO OUTSIDE-SESSION STAMPS RIDE HERE, ON `wake_reason`'S TERMS**
+  // (2026-09-18) — the metadata fold STRIPS both and re-stamps neither, because
+  // each needs a fact that fold does not hold (see its own note).
+  //
+  //   · `to_desktop` — WHOSE outside sessions were addressed, from the resolver.
+  //     ⚠ ABSENT rather than `null` when nobody was: a key on every row would
+  //     make the lane unreadable at a glance and would index every message into
+  //     the `dopl_status` query below.
+  //   · `external_session` — whether an OUTSIDE SESSION wrote this. ⚠ Stamped
+  //     `true` ONLY, never `false`: the absence of the key is what an old row and
+  //     an older server both carry, and writing an explicit `false` would make
+  //     "we looked and it was a desktop agent" indistinguishable from "we never
+  //     looked" for every reader downstream. One value, one meaning.
+  const stored: Record<string, unknown> = { ...metadata };
+  if (wake.reason) stored.wake_reason = wake.reason;
+  if (toDesktopOperatorIds.length > 0) {
+    // ⚠ THE FIRST, because `@desktop` always resolves to the caller's own
+    // operator and therefore collapses to one. Stored as a scalar so the
+    // `metadata->>to_desktop` predicate `dopl_status` runs is a plain equality
+    // against an indexable text value, exactly as the `to_user_id` lane is.
+    stored[DESKTOP_TO_METADATA_KEY] = toDesktopOperatorIds[0];
+  }
+  if (isExternalSessionAuthor(authorKind, ctx.runtime ?? null)) {
+    stored[EXTERNAL_SESSION_METADATA_KEY] = true;
+  }
 
   // ⚠ THE INSERT, PARAMETERISED ON ITS METADATA FOR ONE REASON: the typed
   // escalation answer below has to be droppable and the row written anyway.

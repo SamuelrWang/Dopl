@@ -178,7 +178,7 @@ describe("F-704 — my own agent's tag moves neither the line nor the verdict", 
       { id: CHAN, workspace_id: WS } as ChannelRow,
       { body: "what is left to do?", kind: "message" } as ChannelMessageCreateInput,
       {},
-      { authorKind: "user", toAgentIds: [], toUserIds: [] },
+      { authorKind: "user", toAgentIds: [], toUserIds: [], toDesktopOperatorIds: [] },
       NOW
     );
     expect(server.reason, "server reason").toBe("most recent");
@@ -228,7 +228,7 @@ describe("F-704 — my own agent's tag moves neither the line nor the verdict", 
       { id: CHAN, workspace_id: WS } as ChannelRow,
       { body: "and now?", kind: "message" } as ChannelMessageCreateInput,
       {},
-      { authorKind: "user", toAgentIds: [], toUserIds: [] },
+      { authorKind: "user", toAgentIds: [], toUserIds: [], toDesktopOperatorIds: [] },
       NOW
     );
     expect(server.reason).toBe("most recent");
@@ -304,7 +304,7 @@ describe("F-705 — nobody I addressed is alive, so nobody answers", () => {
       { id: CHAN, workspace_id: WS } as ChannelRow,
       { body: "what is left to do?", kind: "message" } as ChannelMessageCreateInput,
       {},
-      { authorKind: "user", toAgentIds: [], toUserIds: [] },
+      { authorKind: "user", toAgentIds: [], toUserIds: [], toDesktopOperatorIds: [] },
       NOW
     );
     return { client, server };

@@ -154,6 +154,10 @@ export interface ResolveOpts {
   toAgentId?: string | null;
   toAgentIds?: string[];
   toUserIds?: string[];
+  /** The operators whose OUTSIDE SESSIONS `to=@desktop` named (2026-09-18).
+   *  Defaults to `[]`, so every case written before the group tag existed
+   *  resolves exactly as it did. */
+  toDesktopOperatorIds?: string[];
   /** `"chat"` is the RECORD marker — the MCP surface's `kind="record"`. */
   intent?: "chat" | "request";
   threadTagStripped?: boolean;
@@ -205,6 +209,7 @@ export function resolve(
       toAgentIds:
         opts.toAgentIds ?? (opts.toAgentId ? [opts.toAgentId] : []),
       toUserIds: opts.toUserIds ?? [],
+      toDesktopOperatorIds: opts.toDesktopOperatorIds ?? [],
       threadTagStripped: opts.threadTagStripped,
       reservedHandles: opts.reservedHandles,
     },
