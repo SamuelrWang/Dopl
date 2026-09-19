@@ -130,3 +130,73 @@ export function isExternalSessionAuthor(
 ): boolean {
   return authorKind === "agent" && runtime !== "desktop-session";
 }
+
+// ── THE READ SIDE ───────────────────────────────────────────────────────────
+
+/** Just enough of a stored message to answer the two questions below. ⚠ Both
+ *  fields OPTIONAL: a caller may hold a row, a DTO or a fixture, and every one
+ *  of them must be answerable without a cast. */
+export interface DesktopTagReadable {
+  authorKind?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+/**
+ * **WAS THIS POST WRITTEN BY AN OUTSIDE SESSION?** — read off the stored stamp.
+ *
+ * ⚠ **STRICTLY `=== true`, AND THAT IS THE STALE-PAYLOAD RULE APPLIED**
+ * (INVARIANTS: a new cached/payload field needs an explicit fallback). The write
+ * path stamps the key ONLY when the answer is yes and never writes `false`, so
+ * every other value — absent, `null`, whatever an older build left — means *this
+ * server did not say*, and the honest rendering of that is the ordinary agent
+ * label. A `!!` here would promote truthy junk into a confident claim about who
+ * wrote somebody else's message.
+ */
+export function isExternalSessionPost(m: DesktopTagReadable): boolean {
+  return m.metadata?.[EXTERNAL_SESSION_METADATA_KEY] === true;
+}
+
+/**
+ * **THE AUTHOR VIEW — the word a renderer labels this row with.**
+ *
+ * ⚠ **A PROJECTION, DELIBERATELY NOT A DTO FIELD AND DELIBERATELY NOT
+ * `MessageAuthorKind`.** The column's set is closed at three and gated by
+ * `scripts/check-message-kind-drift.ts`; and BOTH `ChannelMessage` declarations
+ * (`../types.ts` and the SDK's `channel-types.ts`) sit AT the 500-line cap, so a
+ * new field would have forced a §1 split in two trees to carry one boolean. The
+ * projection costs nothing and degrades correctly: an unstamped row renders
+ * exactly as it rendered yesterday.
+ *
+ * ⚠ **ONLY AN `agent` ROW CAN BE ONE.** A human composer post is `user`
+ * whatever metadata it carries and `system` is server-minted; promoting either
+ * would be inventing an authorship claim out of a flag that was never about it.
+ */
+export type MessageAuthorView = "user" | "agent" | "system" | "external";
+
+export function authorViewOf(m: DesktopTagReadable): MessageAuthorView {
+  if (m.authorKind === "agent" && isExternalSessionPost(m)) return "external";
+  const kind = m.authorKind;
+  return kind === "user" || kind === "agent" || kind === "system"
+    ? kind
+    : // ⚠ AN UNRECOGNIZED COLUMN VALUE RENDERS AS `agent`, which is the table's
+      // own DEFAULT (`channel_messages.author_kind DEFAULT 'agent'`) and the
+      // restrictive reading: it never upgrades an unknown row into a human or
+      // into server narration.
+      "agent";
+}
+
+/**
+ * **WHOSE OUTSIDE SESSIONS THIS MESSAGE WAS ADDRESSED TO**, or `null`.
+ *
+ * ⚠ `null` IS "NO DESKTOP LANE WAS ADDRESSED" AND THERE IS NO SECOND READING —
+ * it is also what every pre-2026-09-18 row and every older server carry, and all
+ * three collapse to the same rendering. Unlike `recipientAgentIds`, there is no
+ * `[]`-versus-`null` distinction to preserve here: nothing downstream falls back
+ * to its own parse for this key.
+ */
+export function desktopAddresseeOf(m: DesktopTagReadable): string | null {
+  const value = m.metadata?.[DESKTOP_TO_METADATA_KEY];
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+}

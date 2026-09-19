@@ -368,8 +368,11 @@ describe("the desktop group handle", () => {
     await expect(
       resolveToRecipient(HUMAN, CHANNEL, "@nobody-at-all")
     ).rejects.toBeInstanceOf(ChannelRecipientUnresolvedError);
-    const err = await resolveToRecipient(HUMAN, CHANNEL, "@nobody-at-all").catch(
-      (e: ChannelRecipientUnresolvedError) => e
+    const err = await resolveToRecipient(HUMAN, CHANNEL, "@nobody-at-all").then(
+      () => {
+        throw new Error("expected a refusal");
+      },
+      (e: unknown) => e as ChannelRecipientUnresolvedError
     );
     // ⚠ NOT in `liveHandles` — that list is published as "Live agents:" and the
     // built-in is neither an agent nor live. It rides the MESSAGE instead.
