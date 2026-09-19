@@ -277,6 +277,7 @@ export function AuthoredRow({
   authorLabel,
   time,
   agent,
+  external = false,
   agentId = null,
   agentName = null,
   routedTo = null,
@@ -293,6 +294,9 @@ export function AuthoredRow({
   authorLabel: string;
   time: string;
   agent: boolean;
+  /** An OUTSIDE SESSION wrote it. ⚠ Forwarded, never re-derived — the one
+   *  projection is `lib/desktop-handle.ts › authorViewOf`. */
+  external?: boolean;
   /** WHICH agent, when the writer stamped it — see `attribution-pill.tsx`. */
   agentId?: string | null;
   /** ⚠ ITS CURRENT NAME, RESOLVED BY THE CALLER from `AuthorIndex.agents` and passed in — this
@@ -334,6 +338,7 @@ export function AuthoredRow({
       author={author}
       authorLabel={authorLabel}
       agent={agent}
+      external={external}
       agentId={agentId}
       agentName={agentName}
       // 🔒 **THE CHIP'S FILL COMES OFF THE ROW'S OWN ACCENT (Samuel, 2026-09-15)**

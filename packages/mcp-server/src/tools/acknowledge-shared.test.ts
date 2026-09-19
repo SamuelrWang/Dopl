@@ -21,7 +21,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import type { DoplClient } from "@dopl/client";
 
 import { opCreate, opUpdate } from "./agent-ops-write";
-import { opCreateBase, opSetVisibility } from "./knowledge-ops-write";
+import { opCreateBase, opSetVisibility } from "./knowledge-ops-base-writes";
 import { stub } from "./narration-fixtures";
 import { __resetConfirmTokensForTest } from "./confirm-token";
 import { registerKnowledgeTools } from "./knowledge";
@@ -78,9 +78,11 @@ describe("dopl_agent — a spent token acknowledges the audience", () => {
       ...input,
       confirm_token: tokenIn(textOf(preview)),
     });
+    // ⚠ THIRD ARG = THE F-747 VERSION, `undefined` because this fixture passes none.
     expect(update).toHaveBeenCalledWith(
       TEMPLATE.id,
-      expect.objectContaining({ visibility: "workspace", acknowledgeShared: true })
+      expect.objectContaining({ visibility: "workspace", acknowledgeShared: true }),
+      undefined
     );
   });
 });

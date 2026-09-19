@@ -173,7 +173,7 @@ const AGENT_INPUT_SHAPE = {
     .enum(TEMPLATE_VISIBILITY_VALUES, { error: VISIBILITY_ENUM_MESSAGE })
     .optional()
     .describe(
-      'op=create / op=update: who may use this identity — "private" (create default) = you and workspace admins, "workspace" = every member. ⚠ Inside a home channel someone else is in, "workspace" publishes your agent into their room and previews first.',
+      'op=create / op=update: who may use this identity — "private" (create default) = you and workspace admins; "workspace" = everyone in THIS container, which inside a home channel is that ROOM and nobody else, and previews first.',
     ),
   knowledge_bases: z
     .array(z.string().uuid())
@@ -189,11 +189,27 @@ const AGENT_INPUT_SHAPE = {
     .describe(
       'op=create / op=update: scoped attachments, a REPLACE-SET — {base} whole base, {base, folder} that folder and all under it now and later, {base, entry} one document. Ids from dopl_kb(op="get_tree"); the folder/entry must live in that base.',
     ),
+  // ⚠ THE OPTIMISTIC-CONCURRENCY PAIR, WORDED AS `dopl_kb`'s AND `dopl_skill`'s
+  // ARE — one contract, three tools, and an agent that learned it on one of them
+  // must not have to learn a second vocabulary here. What this costs on
+  // `SCHEMA_CEILINGS.dopl_agent` is argued in `tool-budget.test.ts`.
+  expected_version: z
+    .string()
+    .optional()
+    .describe(
+      'op=update: the Version from a prior op="get". Required — 412 without it; only force=true skips the check.',
+    ),
+  force: z
+    .boolean()
+    .optional()
+    .describe(
+      "op=update: overwrite even though the template changed since you read it. Discards the other edit.",
+    ),
   confirm_token: z
     .string()
     .optional()
     .describe(
-      "op=create / op=update: the one-time token from this call's own dry-run preview, echoed back to go ahead — needed only when the write would publish into a home channel somebody else is in, refused on any other call, and never guessable.",
+      "op=create / op=update: TWO CALLS — send this call WITHOUT it for a dry-run preview plus a one-time token, then re-send it WITH that token. Only when the write would publish into a home channel somebody else is in; refused elsewhere, never guessable.",
     ),
   // ⚠ A16's third response-size knob, and the only one on THIS surface: an
   // INSTRUCTIONS block is a system prompt up to 32 KB, and an agent looking for
@@ -336,7 +352,7 @@ export function registerAgentTools(
     async (args): Promise<ToolResponse> => {
       switch (args.op) {
         case "list":
-          return opList(client);
+          return opList(client, directory);
         case "get": {
           const miss = missingParams("get", args, ["template"]);
           if (miss) return miss;
@@ -383,6 +399,8 @@ export function registerAgentTools(
             knowledge_bases: args.knowledge_bases,
             knowledge: args.knowledge,
             confirm_token: args.confirm_token,
+            expected_version: args.expected_version,
+            force: args.force,
           });
         }
 

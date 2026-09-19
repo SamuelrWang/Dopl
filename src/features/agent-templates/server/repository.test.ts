@@ -37,6 +37,9 @@ interface Recorded {
 
 let rec: Recorded;
 
+/** Mutable so a test can play the CONCURRENT WRITER — see the CAS describe. */
+let liveUpdatedAt = "2026-09-01T00:00:00Z";
+
 const ROW = {
   id: ID,
   workspace_id: WS,
@@ -74,6 +77,18 @@ function primeSupabase() {
       rec.single += 1;
       return Promise.resolve({ data: ROW, error: null });
     },
+    // ⚠ THE FAKE HONOURS THE `updated_at` FILTER, which is the only way a test
+    // can tell a real CAS from a check-then-act: Postgres matches zero rows and
+    // PostgREST answers `null`, and so does this.
+    maybeSingle: () => {
+      rec.single += 1;
+      const expected = rec.filters.find(([c]) => c === "updated_at")?.[1];
+      const matched = expected === undefined || expected === liveUpdatedAt;
+      return Promise.resolve({
+        data: matched ? { ...ROW, updated_at: liveUpdatedAt } : null,
+        error: null,
+      });
+    },
   });
   vi.mocked(supabaseAdmin).mockReturnValue(builder as never);
 }
@@ -81,6 +96,7 @@ function primeSupabase() {
 beforeEach(() => {
   vi.clearAllMocks();
   rec = { tables: [], select: "", updates: [], filters: [], single: 0 };
+  liveUpdatedAt = "2026-09-01T00:00:00Z";
   primeSupabase();
 });
 
@@ -137,5 +153,68 @@ describe("updateTemplateRow — a real patch still writes", () => {
   it("`null` clears a column and is NOT confused with `undefined`", async () => {
     await updateTemplateRow(WS, ID, { description: null });
     expect(rec.updates).toEqual([{ description: null }]);
+  });
+});
+
+/**
+ * THE COMPARE-AND-SWAP (F-747, 2026-09-18).
+ *
+ * ⚠ **WHAT THESE TESTS EXIST TO DISTINGUISH IS A CAS FROM A CHECK-THEN-ACT**,
+ * which is the whole reason the finding was filed rather than shipped cheaply.
+ * The fake above answers the `updated_at` filter the way Postgres does — zero
+ * rows matched is `null` — so a service-level `existing.updatedAt !== expected`
+ * would pass every case here and fail the RACE case below.
+ */
+describe("updateTemplateRow — the `expected_version` precondition", () => {
+  it("puts the version in the WHERE clause, not in the update body", async () => {
+    await updateTemplateRow(WS, ID, { name: "Renamed" }, "2026-09-01T00:00:00Z");
+
+    expect(rec.updates).toEqual([{ name: "Renamed" }]);
+    expect(rec.filters).toEqual([
+      ["workspace_id", WS],
+      ["id", ID],
+      ["updated_at", "2026-09-01T00:00:00Z"],
+    ]);
+  });
+
+  it("answers `null` — never a throw — when the row moved under the caller", async () => {
+    const lost = await updateTemplateRow(
+      WS,
+      ID,
+      { name: "Renamed" },
+      "2026-08-30T00:00:00Z"
+    );
+    expect(lost).toBeNull();
+  });
+
+  it("THE RACE: two writers hold one version and exactly one lands", async () => {
+    const version = "2026-09-01T00:00:00Z";
+
+    // Writer A wins and the trigger stamps a new `updated_at`.
+    const first = await updateTemplateRow(WS, ID, { name: "A" }, version);
+    expect(first).not.toBeNull();
+    liveUpdatedAt = "2026-09-01T00:00:05Z";
+
+    // Writer B read the SAME version before A committed. A check-then-act
+    // would have compared against its own stale read and written anyway.
+    const second = await updateTemplateRow(WS, ID, { name: "B" }, version);
+    expect(second).toBeNull();
+  });
+
+  it("fences the EMPTY patch too — a junction-only write still honours a version", async () => {
+    liveUpdatedAt = "2026-09-01T00:00:05Z";
+    const lost = await updateTemplateRow(WS, ID, {}, "2026-09-01T00:00:00Z");
+
+    expect(rec.updates).toEqual([]);
+    expect(rec.filters).toContainEqual(["updated_at", "2026-09-01T00:00:00Z"]);
+    expect(lost).toBeNull();
+  });
+
+  it("STALE PAYLOAD: an older caller that passes no version keeps last-writer-wins", async () => {
+    liveUpdatedAt = "2026-09-01T00:00:05Z";
+    const saved = await updateTemplateRow(WS, ID, { name: "Renamed" });
+
+    expect(rec.filters.map(([c]) => c)).not.toContain("updated_at");
+    expect(saved.id).toBe(ID);
   });
 });

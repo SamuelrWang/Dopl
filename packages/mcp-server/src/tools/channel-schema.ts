@@ -42,9 +42,13 @@
 
 import { z } from "zod";
 import { RESPONSE_FORMAT_FIELD } from "./response-size";
-import { DOCTRINE_SECTION_NAMES } from "./channel-doctrine";
 // ⚠ THE LAUNCH LANE'S FIELDS — their own module since 2026-09-14 (§1's cap).
 import { LAUNCH_INPUT_FIELDS } from "./channel-schema-launch-fields";
+// ⚠ THE ROOMS LANE'S FIELDS — their own module since 2026-09-18, same cap.
+import { ROOMS_INPUT_FIELDS } from "./channel-schema-rooms-fields";
+// ⚠ AND THE `kind="decision"` FIELDS SINCE 2026-09-18, on that file's precedent and for the
+// same reason. Both are spread in their original positions, so nothing published moved.
+import { DECISION_INPUT_FIELDS } from "./channel-schema-decision-fields";
 import { HOLD_CAP_MS } from "./channel-hold-budget";
 
 /**
@@ -93,7 +97,7 @@ export type {
  * is `body`, a hold is `wait_ms`. Eighteen op names // left the published enum. A cut a re-worded
  * sentence cannot make twice.
  */
-export const SCHEMA_MAX_CHARS = 8_656; // ⚠ **8,628 → 8,654 (2026-09-15, +28): THE LAUNCH-TIME NAME-UNIQUENESS RULE (Samuel, 2026-09-15), AND IT IS A RISE ON A DOCUMENT THAT FELL EARLIER THE SAME DAY.** *"I think we should enforce a rule where no two agents that are addressable can have the same name … it will automatically auto-resolve to coder-1 … coder-2 and so on and so forth."* ⚠ **WHAT A CALLER CANNOT DERIVE IS THE PART THAT COSTS**: that the name it ASKED for may not be the name it GOT, and that the result's `name=` is therefore the tag to use. An orchestrator that assumed its own argument came back would tag `@coder` and reach the OTHER agent — a silent mis-delivery, which is the class this whole surface's prose budget exists to buy out of. ⚠ **THE RULE ITSELF IS IN THE PULLED DOCTRINE AND THE CONTRACT IS IN THE DESCRIBE**, which is this gate's own instruction followed rather than worked around: `FIELDS` carries why names are unique and what `-1` means; the pushed `name` describe carries only *a launch answers the name it GOT, so read its `name=`*. ⚠ **AND THE DAY IS NET-DOWN AGAINST WHERE IT STARTED**: the morning's id-visibility wave deleted three FALSE clauses from this same surface, which is what left the room for this one. ⚠ **NEVER QUOTE THIS NUMBER — re-derive it.** // ⚠ **8,632 → 8,628 (2026-09-15, −4): THE AGENT-ID-VISIBILITY WAVE.** `name` gained the op="manage" action="launch" clause — an agent that launches an agent NAMES it (Samuel's ruling) — and lost `@agent-<id>` stays the only address, nothing resolves an agent by its name, and the label reaches no server`, which had been PUSHED to every client on every connection since 2026-09-06 and had been false since 2026-08-28: the name door resolves in all three trees (`main/agent-handles.js`, `lib/agent-mentions.ts`, `server/service-wake-verdict-handles.ts`), and `channel_sessions.display_name` has carried the name to the server and to peers since `20260905120000`. ⚠ **DELETING A FALSE SENTENCE IS NOT A SAVING TO SPEND ELSEWHERE — it is the reason the true one fits**, and the net is DOWN, which is the only direction this constant takes without an argument. ⚠ **NEVER QUOTE THIS NUMBER — re-derive it.** // ⚠ **8,634 → 8,632 (2026-09-15, −2): THE TOPIC→DESCRIPTION RELABEL PAID FOR ITSELF.** `summary`'s "it is the channel topic" became "it is the description" — the clause is already scoped to action="open", so "channel" was a word the sentence's own subject already carried. Down-only, and lowered in the same change that measured it. // ⚠ **8,405 → 8,634 (2026-09-13, +229): THE AGENT-COLOUR PARAM, AND THE FIRST RISE THIS CONSTANT HAS TAKEN.** `op="manage" action="launch"` gained `color`, which costs 363 served — 233 of it the sixteen `enum` members. **134 was funded rather than recorded**, all of it standing contract prose MOVED into the PULLED doctrine and WRITTEN there first on `template`'s precedent: `model`'s silent-fallback sentence (101) to `MANAGE`, `info_card`'s "everyone sees it" (33) to `ROOMS`. ⚠ **TWO CHEAPER SHAPES WERE MEASURED AND REFUSED, WHICH IS THE PART THAT LICENSES THE OTHER 229.** (a) `z.string().regex(/^agent-(0[1-9]|1[0-6])$/)` measures 80 against the enum's 233 — refused by `tool-style.test.ts › no published schema validates a date with a regex`, because a character class is a contract the agent must reverse-engineer and its failure is an opaque -32602 where an enum's NAMES THE SIXTEEN. (b) `posture`'s clamp sentence (135) was moved to the doctrine and PUT BACK: `channel-ops-agent-mode.test.ts` and `channel-session-handle.test.ts` pin it on that describe by phrase. ⚠ **AND WHY THE REMAINDER IS RECORDED RATHER THAN ABSORBED**, on `tool-budget.test.ts › SCHEMA_CEILINGS.dopl_agent`'s +1,093 precedent: this gate counts what a connection costs BEFORE it has done anything, and every describe still standing is at its smallest honest size — buying 229 more would mean deleting a disclosure, which is paying a budget by telling the truth less. ⚠ **NEVER QUOTE THIS NUMBER — re-derive it** with `channel-schema-budget.test.ts`. // ⚠ 8,410 → 8,405 ON 2026-09-03: `section=`'s enum gained `waiting` (the hold-not-poll doctrine is unreachable without a name to pull it by) and that field's own `.describe()` more than paid for it. It still only ever moves DOWN.
+export const SCHEMA_MAX_CHARS = 8_715; // ⚠ **8,653 → 8,708 (2026-09-19, +55): RECORDED AT THE MERGE, NOT FUNDED — AND THIS CONSTANT'S OWN GATE SAYS "DO NOT RAISE THE NUMBER", SO READ THE NEXT THREE SENTENCES BEFORE ACCEPTING IT.** Two branches of one wave each ADDED to this shape and each FUNDED its addition out of the same slack, so the funding netted once and the spend netted twice. The contributors, largest first: batch D's `kind` record CHOOSER (Samuel's ruling Q5, *"record = nobody needs to act or know now; if in doubt, address someone"*), batch D's `artifact` DEFINITION (+28 measured, *"An artifact folds messages into ONE named card"*), batch B's `body` launch cap `(launch: <=2000)` (+17), and ~21 for the merged `to`, which carries batch D's three-line layout AND batch B's per-op handle scoping because both are true and neither is derivable from the other. ⚠ **THE TRIM CAME FIRST AND IT WAS NOT ENOUGH**: the merged `to` was written at 308 and cut to 280 (batch B shipped 259, batch D 256), which is 28 of the 90 this started at. ⚠ **AND IT COULD NOT GO LOWER**: `channel-ops-agent-target.test.ts` pins this describe in BOTH directions by phrase — `` `@agent-<id>` ONLY `` for the manage half and `agent handle` for the send half — so two shorter spellings were written, failed that pin, and were reverted. 🔴 **THE SANCTIONED FIX IS A MOVE, NOT A RAISE, AND IT IS OWED.** `kind`'s chooser and `artifact`'s definition are standing RULES, which is exactly what `channel-doctrine.ts › FIELDS` is for and what this gate's own message asks for; moving both measures ~8,645 and puts this back UNDER 8,653 without deleting a word an agent reads. It was NOT done at the merge because moving Samuel-ruled prose between the PUSHED and PULLED surfaces changes what every connection is handed and what several suites pin BY PHRASE — a product decision, not a conflict resolution. **Samuel rules on the move; until he does, the cost is visible here rather than hidden.** ⚠ **NEVER QUOTE THIS NUMBER — re-derive it** with `channel-schema-budget.test.ts`. // ⚠ **8,648 → 8,646 (2026-09-18, −2): THE R1 CONSISTENCY WAVE, AND IT IS A NET FALL OVER FOUR ADDITIONS.** Three describes gained a fact an agent could not derive — `to` states its THREE meanings as three lines instead of one run-on (S13), `kind` carries Samuel's record CHOOSER (*"record = nobody needs to act or know now; if in doubt, address someone"*, ruling Q5), and `artifact` finally says WHAT an artifact IS in one clause (S16) — and all of it was FUNDED inside this same shape rather than recorded. ⚠ **WHAT PAID FOR IT IS THIS FILE'S OWN TWO RULES, APPLIED FOUR MORE TIMES**: `recommendation` lost *"but almost always right"* (editorial, not contract), `options` lost the hand-typed `2-6` and `to` lost a sentence the three lines under it demonstrate (a BOUND the schema publishes as `minItems`/`maxItems`, which is the rule the header states), and `artifact` lost *"exactly"*. ⚠ **THE TRIM CAME FIRST AND THE NUMBER WENT DOWN, WHICH IS THE ONLY SHAPE THIS CONSTANT ACCEPTS.** ⚠ **NEVER QUOTE THIS NUMBER — re-derive it** with `channel-schema-budget.test.ts`. // ⚠ **8,628 → 8,654 (2026-09-15, +28): THE LAUNCH-TIME NAME-UNIQUENESS RULE (Samuel, 2026-09-15), AND IT IS A RISE ON A DOCUMENT THAT FELL EARLIER THE SAME DAY.** *"I think we should enforce a rule where no two agents that are addressable can have the same name … it will automatically auto-resolve to coder-1 … coder-2 and so on and so forth."* ⚠ **WHAT A CALLER CANNOT DERIVE IS THE PART THAT COSTS**: that the name it ASKED for may not be the name it GOT, and that the result's `name=` is therefore the tag to use. An orchestrator that assumed its own argument came back would tag `@coder` and reach the OTHER agent — a silent mis-delivery, which is the class this whole surface's prose budget exists to buy out of. ⚠ **THE RULE ITSELF IS IN THE PULLED DOCTRINE AND THE CONTRACT IS IN THE DESCRIBE**, which is this gate's own instruction followed rather than worked around: `FIELDS` carries why names are unique and what `-1` means; the pushed `name` describe carries only *a launch answers the name it GOT, so read its `name=`*. ⚠ **AND THE DAY IS NET-DOWN AGAINST WHERE IT STARTED**: the morning's id-visibility wave deleted three FALSE clauses from this same surface, which is what left the room for this one. ⚠ **NEVER QUOTE THIS NUMBER — re-derive it.** // ⚠ **8,632 → 8,628 (2026-09-15, −4): THE AGENT-ID-VISIBILITY WAVE.** `name` gained the op="manage" action="launch" clause — an agent that launches an agent NAMES it (Samuel's ruling) — and lost `@agent-<id>` stays the only address, nothing resolves an agent by its name, and the label reaches no server`, which had been PUSHED to every client on every connection since 2026-09-06 and had been false since 2026-08-28: the name door resolves in all three trees (`main/agent-handles.js`, `lib/agent-mentions.ts`, `server/service-wake-verdict-handles.ts`), and `channel_sessions.display_name` has carried the name to the server and to peers since `20260905120000`. ⚠ **DELETING A FALSE SENTENCE IS NOT A SAVING TO SPEND ELSEWHERE — it is the reason the true one fits**, and the net is DOWN, which is the only direction this constant takes without an argument. ⚠ **NEVER QUOTE THIS NUMBER — re-derive it.** // ⚠ **8,634 → 8,632 (2026-09-15, −2): THE TOPIC→DESCRIPTION RELABEL PAID FOR ITSELF.** `summary`'s "it is the channel topic" became "it is the description" — the clause is already scoped to action="open", so "channel" was a word the sentence's own subject already carried. Down-only, and lowered in the same change that measured it. // ⚠ **8,405 → 8,634 (2026-09-13, +229): THE AGENT-COLOUR PARAM, AND THE FIRST RISE THIS CONSTANT HAS TAKEN.** `op="manage" action="launch"` gained `color`, which costs 363 served — 233 of it the sixteen `enum` members. **134 was funded rather than recorded**, all of it standing contract prose MOVED into the PULLED doctrine and WRITTEN there first on `template`'s precedent: `model`'s silent-fallback sentence (101) to `MANAGE`, `info_card`'s "everyone sees it" (33) to `ROOMS`. ⚠ **TWO CHEAPER SHAPES WERE MEASURED AND REFUSED, WHICH IS THE PART THAT LICENSES THE OTHER 229.** (a) `z.string().regex(/^agent-(0[1-9]|1[0-6])$/)` measures 80 against the enum's 233 — refused by `tool-style.test.ts › no published schema validates a date with a regex`, because a character class is a contract the agent must reverse-engineer and its failure is an opaque -32602 where an enum's NAMES THE SIXTEEN. (b) `posture`'s clamp sentence (135) was moved to the doctrine and PUT BACK: `channel-ops-agent-mode.test.ts` and `channel-session-handle.test.ts` pin it on that describe by phrase. ⚠ **AND WHY THE REMAINDER IS RECORDED RATHER THAN ABSORBED**, on `tool-budget.test.ts › SCHEMA_CEILINGS.dopl_agent`'s +1,093 precedent: this gate counts what a connection costs BEFORE it has done anything, and every describe still standing is at its smallest honest size — buying 229 more would mean deleting a disclosure, which is paying a budget by telling the truth less. ⚠ **NEVER QUOTE THIS NUMBER — re-derive it** with `channel-schema-budget.test.ts`. // ⚠ 8,410 → 8,405 ON 2026-09-03: `section=`'s enum gained `waiting` (the hold-not-poll doctrine is unreachable without a name to pull it by) and that field's own `.describe()` more than paid for it. It still only ever moves DOWN. // ⚠ **8,648 → 8,653 (2026-09-18, +5 ON THE CONSTANT, +10 ON THE MEASUREMENT): THE LAUNCH GOAL'S CAP, PUBLISHED — AND 5 CHARS OF STALE SLACK BANKED IN THE SAME CHANGE (S50/S51).** ⚠ **THE CONSTANT AND THE MEASUREMENT HAD DRIFTED APART**: the served shape measured 8,643 against a ceiling of 8,648, i.e. five characters somebody's trim had won and nobody had banked — exactly what this ratchet's own down-arm exists to catch, and it does not, because its slack window is 500. **So this number is a FRESH MEASUREMENT, not arithmetic on the old one**, and the five are gone for good. ⚠ **THE +10 IS TWO EDITS, AND ONE OF THEM PAYS FOR PART OF THE OTHER.** `body` gained `(launch: <=2000)` (+17): the schema publishes `.max(16000)`, which is `op="send"`'s and is right, while `schema-launch.ts › LaunchCreateSchema.goal` enforces 2000 — an 8× gap with NO pre-flight, so an over-long launch goal came back as a bare `VALIDATION_FAILED: Request body failed validation` naming no field at all. ⚠ **IT IS NOT THE HAND-TYPED-BOUND ANTI-PATTERN** `tool-style.test.ts` forbids: that rule is about restating a bound the JSON Schema ALREADY publishes, and this field serves three routes with three caps (16000 / 4000 / 2000), of which the schema can publish exactly one. The other two are per-call text in `channel-errors.ts › FIELD_CAPS_NOTE`, which is governed by `write-result-budget.test.ts` and costs nothing on connection. ⚠ `to` FUNDED −7 BY LOSING A PROMISE THAT WAS HALF FALSE: *"an agent (`@agent-<id>` or its handle)"* sat in the HEADLINE, over every op. It is true on `op="send"` (the server's union resolver takes a name) and false on `op="manage"`, where nothing resolves a name to an instance id — `bareAgentId` stripped the `@` and the value died against an anchored eight-character grammar. The forms moved DOWN into the per-op clauses, which is where they differ, and the headline's type list is DELETED rather than reworded. **A half-false sentence deleted is not a saving to spend elsewhere; it is why the true one fits.** ⚠ **NEVER QUOTE THIS NUMBER — re-derive it** with `channel-schema-budget.test.ts`.
 
 /**
  * ⚠ THE PER-FIELD HALF, AND IT IS THE ONE THAT ACTUALLY HOLDS THE LINE. A total can absorb one
@@ -104,11 +108,10 @@ export const SCHEMA_MAX_CHARS = 8_656; // ⚠ **8,628 → 8,654 (2026-09-15, +28
 export const PARAM_DESCRIPTION_MAX_CHARS = 400;
 
 export const CHANNEL_INPUT_SHAPE = {
-  // ⚠ ONE FIELD, TWO READ OPS ("read" and "status"), and its wording is
-  // `response-size.ts`'s so the five tools that take this knob cannot promise
-  // five different things about what `concise` drops. It is INERT on every
-  // other op rather than refused: a knob that 400s where it is meaningless
-  // teaches an agent to stop passing it where it is not.
+  // ⚠ ONE FIELD, TWO READ OPS ("read" and "status"), and its wording is `response-size.ts`'s
+  // so the five tools that take this knob cannot promise five different things about what
+  // `concise` drops. It is INERT on every other op rather than refused: a knob that 400s where
+  // it is meaningless teaches an agent to stop passing it where it is not.
   response_format: RESPONSE_FORMAT_FIELD,
 
   // ⚠ **ONE ENUM NOW — THE RUNTIME SET AND THE PUBLISHED SET ARE THE SAME FIVE**
@@ -124,9 +127,8 @@ export const CHANNEL_INPUT_SHAPE = {
     .enum(CHANNEL_OPS, { error: (issue) => unknownOpRefusal(issue.input) })
     .describe("Operation to perform."),
 
-  // ⚠ ONE SUB-VERB PARAM FOR BOTH DISPATCHERS, not two. The vocabularies are
-  // disjoint, so one field can never be ambiguous — and two spellings for "which
-  // act" is how a caller learns to guess which one an op wants.
+  // ⚠ ONE SUB-VERB PARAM FOR BOTH DISPATCHERS, not two. The vocabularies are disjoint, so one
+  // field can never be ambiguous — and two spellings for "which act" is how a caller guesses.
   action: z
     .enum(CHANNEL_ACTION_NAMES)
     .optional()
@@ -147,23 +149,33 @@ export const CHANNEL_INPUT_SHAPE = {
       'Channel slug or id. Required except on op="rooms" action="list" / "open" / "help"; omitting it WIDENS op="read" and op="status".',
     ),
 
-  // ⚠ **ONE RECIPIENT PARAM FOR THE WHOLE SURFACE** (B8). It replaced `to`,
-  // `member`, `recipient` and `agent_id` — four spellings of "the one party this
-  // call is about", each with its own resolution story. The server resolves the
-  // union once, at the door (`service-writes-metadata-recipient.ts ›
-  // resolveToRecipient`), and an `@name` that resolves to NOBODY is a 400
-  // listing the live handles rather than a silent `delivery=none`.
+  // ⚠ **ONE RECIPIENT PARAM FOR THE WHOLE SURFACE** (B8). It replaced `to`, `member`,
+  // `recipient` and `agent_id` — four spellings of "the party this call is about", each with
+  // its own resolution story. The server resolves the union at the door
+  // (`service-writes-metadata-recipient.ts › resolveToRecipients`), and an `@name` that
+  // resolves to NOBODY is a 400 listing the live handles, never a silent `delivery=none`.
+  // ⚠ **ON `op="send"` IT IS A COMMA-SEPARATED LIST SINCE 2026-09-18** (Samuel's
+  // multi-recipient ruling), inside the SAME string field: a `string | string[]` union
+  // publishes as `anyOf` on a schema every client introspects, and a single-string `to` had to
+  // keep working byte-for-byte.
   to: z
     .string()
     .trim()
     .min(1)
     .optional()
     .describe(
-      // ⚠ "which triggers their side" IS THE LAW'S SENTENCE, not this field's:
-      // `CHANNEL_LAW` states that addressing a person asks for their machine and
-      // that THEIR side decides what runs. The per-op meanings stay, because they
-      // are what a caller cannot derive from the type.
-      'The ONE party this call is about — a member (email or user id) or an agent (`@agent-<id>` or its handle). op="send": who it is FOR; op="manage": which of your own operator\'s agents; op="rooms": the member to "invite", or the one to open a 1:1 with.',
+      // ⚠ "which triggers their side" IS THE LAW'S SENTENCE, not this field's. The per-op
+      // meanings stay, because they are what a caller cannot derive from the type.
+      // ⚠ **THREE MEANINGS, THREE LINES (S13), AND THE HANDLE PROMISE SCOPED TO THE OP
+      // THAT KEEPS IT (S51).** Both halves were written on separate branches of this wave
+      // and are one string here (merge, 2026-09-19). The run-on said `an agent
+      // (@agent-<id> or its handle)` over the WHOLE field: true on op="send", where the
+      // server's union resolver takes a name, and FALSE on op="manage", where nothing
+      // resolves a name to an instance id and the value dies against an anchored
+      // eight-character grammar. So the forms live on the per-op lines, which is where
+      // they differ, and `channel-agent-target.ts` refuses by name what this no longer
+      // promises.
+      'WHO this call is about.\nop="send": who it is FOR — a member (email or user id), `@agent-<id>` or an agent handle; SEVERAL, comma-separated, mixed.\nop="manage": which ONE of YOUR OWN agents — `@agent-<id>` ONLY, no handle.\nop="rooms": the member to "invite", or open a 1:1 with.',
     ),
 
   body: z
@@ -177,25 +189,38 @@ export const CHANNEL_INPUT_SHAPE = {
       // "kind=\"decision\": … `body` what they need to know"). A field's describe
       // carries which ops take it and what it is; the per-kind shape is the op's
       // contract and is pulled with the op.
-      'op="send" (required): the message text. op="manage" (required on "launch" and "direct"): the agent\'s opening instruction, or the private message.',
+      // ⚠ **THE LAUNCH CAP IS PUBLISHED HERE BECAUSE THE SCHEMA CANNOT PUBLISH IT** (S50,
+      // 2026-09-18). `.max(16000)` above is `op="send"`'s and is CORRECT; the launch route
+      // enforces 2000 (`schema-launch.ts › LaunchCreateSchema.goal`), so the published bound
+      // and the enforced one disagreed by 8× with nothing in between — an over-long goal came
+      // back as a bare `VALIDATION_FAILED`. ⚠ THIS IS NOT THE HAND-TYPED-BOUND ANTI-PATTERN
+      // (`tool-style.test.ts`): that rule forbids restating a bound the JSON Schema ALREADY
+      // publishes, and 2000 is one it cannot — this field serves three routes with three caps.
+      // ⚠ 17 CHARS, WHICH IS THE SMALLEST TRUE FORM; the other two caps are per-call text
+      // (`channel-errors.ts › FIELD_CAPS_NOTE`) and are not pushed.
+      'op="send" (required): the message text. op="manage" (required on "launch" and "direct"): the agent\'s opening instruction (launch: <=2000), or the private message.',
     ),
 
-  // ⚠ THREE VALUES, EACH WITH A FENCE (spec §2.1). `milestone` stores
-  // `task_progress` and keeps G14's one-line cap; `decision` stores `message`
-  // plus the validated escalation payload, and it MUST stay `message` or
-  // `targeting.js › classify` drops the card and the human it asks is never
-  // notified. ⚠ `question` / `blocked` / `done` are NOT adopted: a value with no
-  // distinct behaviour is prose wearing a schema.
+  // ⚠ FOUR VALUES, EACH WITH A FENCE (spec §2.1). `milestone` stores `task_progress` and
+  // keeps G14's one-line cap; `decision` stores `message` plus the validated escalation
+  // payload, and it MUST stay `message` or `targeting.js › classify` drops the card and the
+  // human it asks is never notified. ⚠ `question` / `blocked` / `done` are NOT adopted: a
+  // value with no distinct behaviour is prose wearing a schema.
+  //
+  // ⚠ **`record` IS THE FOURTH (2026-09-18, Samuel's ruling), AND IT IS AN EXISTING
+  // CONCEPT GIVEN A NAME RATHER THAN A NEW STORED SHAPE.** It sends `intent:"chat"` —
+  // the route's own *"it STATES that this post is not work for anybody"* — on an ordinary
+  // `message` row, so no migration and no renderer arm is involved. What it buys is the
+  // SECOND HALF of the addressing structure: with a record available, a send that names
+  // nobody can be REFUSED instead of guessed at. ⚠ NOT `milestone`, which is a thread
+  // marker capped at one line and required to carry a `thread`.
   kind: z
-    .enum(["message", "milestone", "decision"])
+    .enum(["message", "milestone", "decision", "record"])
     .optional()
     .describe(
-      // ⚠ WHICH FIELDS A DECISION NEEDS IS SAID BY THOSE FIELDS AND BY THE
-      // DOCTRINE, not a third time here: `options`' own describe says REQUIRED on
-      // kind="decision", `recommendation`'s says "almost always right", and the
-      // doctrine's `send` section lists the four parts of a card together. This
-      // one keeps what the VALUES mean, which is the enum's own contract.
-      'op="send" (optional, default "message"): "milestone" marks a step on a thread and addresses nobody; "decision" posts a card a person answers with one press.',
+      // ⚠ WHICH FIELDS A DECISION NEEDS IS SAID BY THOSE FIELDS AND BY THE DOCTRINE, not a
+      // third time here. This one keeps what the VALUES mean, the enum's own contract.
+      'op="send" (optional, default "message"): "record" takes no `to`: nobody need act or know now — in doubt, address someone. "milestone" marks a step on a thread; "decision" is a card answered in one press.',
     ),
 
   thread: z
@@ -227,13 +252,11 @@ export const CHANNEL_INPUT_SHAPE = {
       'The one-line intent. ALWAYS set it on op="send" — it becomes the notification the receiving member sees; on kind="decision" it is the QUESTION the card asks, on op="rooms" action="open" it is the description, and on op="artifact" it is what the folded run was about.',
     ),
 
-  // ⚠ ONE SENTENCE, BECAUSE THERE IS NOW ONE RULE (2026-09-02, C14). Both routes
-  // dedupe PER-AUTHOR: `channel_messages` on
-  // `(channel_id, client_msg_id, author_user_id)` and `channel_tasks` on
-  // `(channel_id, client_msg_id, created_by)`. Until the second landed this
-  // description had to teach the WEAKER of two keys — that a peer's key hands
-  // you back THEIR thread — which is a documented way to be silently redirected
-  // into somebody else's exchange.
+  // ⚠ ONE SENTENCE, BECAUSE THERE IS NOW ONE RULE (2026-09-02, C14). Both routes dedupe
+  // PER-AUTHOR: `channel_messages` on `(channel_id, client_msg_id, author_user_id)` and
+  // `channel_tasks` on `(channel_id, client_msg_id, created_by)`. Until the second landed this
+  // description had to teach the WEAKER of two keys — a documented way to be silently
+  // redirected into somebody else's exchange.
   client_msg_id: z
     .string()
     .min(1)
@@ -250,60 +273,11 @@ export const CHANNEL_INPUT_SHAPE = {
     ),
 
   // ── kind="decision" ──────────────────────────────────────────────────────
-  // ⚠ TWO SEPARATE PARAMS RATHER THAN ONE `escalation` OBJECT, deliberately.
-  // The whole point of the kind is that an agent has to SAY these things; a
-  // nested object lets a model fill one key with a paragraph and satisfy the
-  // schema. The other two fields it used to need are gone because the surface
-  // already had them: the ISSUE is `summary`, the CONTEXT is `body`. Caps mirror
-  // `src/features/channels/escalation.ts` — sync all three (that file, this one,
-  // `channel-errors.ts › FIELD_CAPS_NOTE`).
-  options: z
-    .array(
-      z.object({
-        label: z
-          .string()
-          .trim()
-          .min(1)
-          .max(80)
-          .describe("The button's face — one short imperative."),
-        consequence: z
-          .string()
-          .trim()
-          .min(1)
-          .max(200)
-          .describe(
-            "ONE line saying what happens if they press it. Required on every option.",
-          ),
-      }),
-    )
-    .min(2)
-    .max(6)
-    .optional()
-    .describe(
-      // ⚠ "One option is not a question" WAS THE PROSE COPY OF `.min(2)`, which
-      // the published schema enforces and states as `minItems`. The doctrine's
-      // `send` section carries the shape of a card ("`options` 2-6 choices each
-      // with its consequence"), so the rule is both enforced and taught.
-      'op="send" with kind="decision" (required): 2-6 things a person could decide, each with the consequence of choosing it.',
-    ),
-
-  recommendation: z
-    .object({
-      index: z
-        .number()
-        .int()
-        .min(0)
-        .describe("0-based index into `options` — the one you would take."),
-      why: z.string().trim().min(1).max(200).describe("ONE line for why."),
-    })
-    .optional()
-    .describe(
-      // ⚠ ITS OWN TWO PROPERTIES SAY WHAT IT IS — `index` "the one you would
-      // take", `why` "ONE line for why" — and both are pushed on the same
-      // connection as this line was. What only the parent can say is the
-      // cross-field rule, which is what is left.
-      'op="send" with kind="decision" (optional but almost always right): `index` MUST be inside `options` — an out-of-range one refuses the whole call.',
-    ),
+  // ⚠ **`options` AND `recommendation` MOVED TO `channel-schema-decision-fields.ts`
+  // (2026-09-18)** and are spread here IN THEIR ORIGINAL POSITION, so the published schema is
+  // unchanged to the byte. What forced it is this file passing the 500-line cap again (§1,
+  // `size-check`) — the same move, for the same reason, that `LAUNCH_INPUT_FIELDS` made below.
+  ...DECISION_INPUT_FIELDS,
 
   // ── op="artifact" ────────────────────────────────────────────────────────
   // ⚠ TWO FIELDS FOR FOUR ACTIONS, and the name+summary+key they also need are
@@ -329,7 +303,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .string()
     .optional()
     .describe(
-      'op="artifact" (required on "add", "remove" and "dissolve"): the artifact id, exactly as action="create" returned it.',
+      'An artifact folds messages into ONE named card. op="artifact" (required on "add", "remove", "dissolve"): its id, as action="create" returned it.',
     ),
 
   // ⚠ **ONE PARAM, AND THE "EXACTLY ONE" RULE IS A SEAM CHECK RATHER THAN A
@@ -357,8 +331,7 @@ export const CHANNEL_INPUT_SHAPE = {
     ),
 
   // ── op="read" ────────────────────────────────────────────────────────────
-  // ⚠ coerce: MCP clients sometimes send numbers as strings, and strict
-  // z.number() rejects those with an opaque -32602.
+  // ⚠ coerce: MCP clients send numbers as strings, and strict z.number() 400s an opaque -32602.
   since: z.coerce
     .number()
     .int()
@@ -381,16 +354,18 @@ export const CHANNEL_INPUT_SHAPE = {
     .max(200)
     .optional()
     .describe(
-      'op="read" (optional): max messages to return — with no `since` that is the NEWEST page, and older ones are absent rather than reported.',
+      // ⚠ **THE TAIL CAME OFF 2026-09-18 UNDER THIS FILE'S OWN NO-FACT-TWICE RULE**, to
+      // fund `kind="record"`. The doctrine's `read` section carries the whole sentence
+      // verbatim and is PULLED, where this is pushed on every connection.
+      'op="read" (optional): max messages to return — with no `since` that is the NEWEST page.',
     ),
 
-  // ⚠ **ONE HOLD PARAM, TWO LANES, AND THEY ARE THE SAME QUESTION.** `wait_ms`
-  // asked the operator's desktop to answer a directive; `timeout_ms` asked the
-  // server to hold for a message. Both are "how long may this call take before
-  // it comes back with nothing", both cap server-side, and two names for one
-  // knob is how a caller learns to guess. ⚠ The published cap is the HOLD's
-  // (`HOLD_CAP_MS`); the directive lane clamps to its own, which it has
-  // always done in code (`channel-ops-launch.ts › WAIT_CAP_MS`).
+  // ⚠ **ONE HOLD PARAM, TWO LANES, AND THEY ARE THE SAME QUESTION.** `wait_ms` asked the
+  // operator's desktop to answer a directive; `timeout_ms` asked the server to hold for a
+  // message. Both are "how long may this call take before it comes back with nothing", both
+  // cap server-side, and two names for one knob is how a caller learns to guess. ⚠ The
+  // published cap is the HOLD's (`HOLD_CAP_MS`); the directive lane clamps to its own
+  // (`channel-ops-launch.ts › WAIT_CAP_MS`).
   wait_ms: z.coerce
     .number()
     .int()
@@ -408,90 +383,11 @@ export const CHANNEL_INPUT_SHAPE = {
     ),
 
   // ── op="rooms" ───────────────────────────────────────────────────────────
-  // ⚠ `name` SERVES FOUR ACTIONS AND THEY ARE ALL LABELS, which is why one field carries
-  // them. ⚠ **"Neither addresses anything" CLOSED THAT SENTENCE AND WAS FALSE** (corrected
-  // 2026-09-15): the name has been an ADDRESS in all three trees since 2026-08-28, while the
-  // describe pushed *"nothing resolves an agent by its name"* to every client, every connection.
-  name: z
-    .string()
-    .optional()
-    .describe(
-      // ⚠ THE 1:1 CLAUSE CAME OFF ON 2026-09-06 TO PAY FOR THE ARTIFACT ONE:
-      // `to`'s describe already says op="rooms" takes it for "the one to open a
-      // 1:1 with", and both are pushed on the same connection. ⚠ **AND IT TEACHES
-      // TITLE CASE RATHER THAN "slugged" SINCE 2026-09-17** — that word read as an
-      // instruction to PASS `picker-fix`. The tag is DERIVED, and
-      // `agent-display-name.ts` repairs a slug that arrives anyway.
-      'op="rooms" action="open" (required for a NAMED channel): the channel name. op="manage" action="launch" (REQUIRED), action="rename": what to call that agent — a DISPLAY NAME in Title Case ("Picker Fix" → `@picker-fix`), never a slug. 1-60 visible characters on ONE line, an id is not a name, "" clears; a launch answers the name it GOT — read `name=`. op="artifact" action="create": the card\'s name.',
-    ),
-
-  visibility: z
-    .enum(["private", "public"])
-    .optional()
-    .describe(
-      'op="rooms" action="open" (optional): "private" (default, invite-only) or "public" (any workspace member can see and join).',
-    ),
-
-  mode: z
-    .enum(["interactive", "autonomous"])
-    .optional()
-    .describe(
-      'op="rooms" action="thread_mode" (required): the thread execution mode.',
-    ),
-
-  info_card: z
-    .object({
-      hidden: z
-        .array(z.string())
-        .max(3)
-        .optional()
-        .describe(
-          'Built-in rows to HIDE, by key: "email", "created", "lastActivity".',
-        ),
-      rows: z
-        .array(
-          z.object({
-            id: z
-              .string()
-              .max(64)
-              .optional()
-              .describe(
-                "Omit on a NEW row (one is minted for you); pass it to EDIT the row that already has it. Unique within a card.",
-              ),
-            label: z
-              .string()
-              .min(1)
-              .max(40)
-              .describe("The left column — one short line."),
-            value: z
-              .string()
-              .max(200)
-              .optional()
-              .describe("The right column. May be empty."),
-          }),
-        )
-        .max(12)
-        .optional()
-        .describe("The card's CUSTOM rows."),
-    })
-    .optional()
-    .describe(
-      // ⚠ Its "everyone sees it" moved to `channel-doctrine.ts › ROOMS` (2026-09-13; why:
-      // `SCHEMA_MAX_CHARS`).
-      'op="rooms" action="update": the channel\'s whole info card, REPLACED — an omitted row is DELETED and `info_card={}` clears the card. Omit the argument entirely to READ the card unchanged.',
-    ),
-
-  // ⚠ **THE DOCTRINE IS PULLED, SO IT MUST BE PULLABLE IN PIECES** (2026-09-02).
-  // Help returned the whole document or nothing, which makes the one surface
-  // designed to be read on demand too expensive to read on demand. The names
-  // come from `channel-doctrine.ts › DOCTRINE_SECTIONS`, so an unknown one is a
-  // -32602 naming this field rather than a silently empty answer.
-  section: z
-    .enum(DOCTRINE_SECTION_NAMES)
-    .optional()
-    .describe(
-      'op="rooms" action="help" (optional): ONE section instead of the whole document. Omit for everything, index of section names included.',
-    ),
+  // ⚠ **THE ROOMS LANE'S FIELDS MOVED TO `channel-schema-rooms-fields.ts` (2026-09-18)**
+  // and are spread here IN THEIR ORIGINAL POSITION, so the published schema is unchanged.
+  // What forced it was this file sitting AT the 500-line cap (§1, `size-check`, F-689) —
+  // the same seam, and the same reason, as the launch lane's below.
+  ...ROOMS_INPUT_FIELDS,
 
   // ⚠ **THE LAUNCH LANE'S FIELDS MOVED TO `channel-schema-launch-fields.ts` (2026-09-14)**
   // and are spread here IN THEIR ORIGINAL POSITION, so the published schema is unchanged.

@@ -101,3 +101,98 @@ describe("dopl_map reports a clipped ontology read", () => {
     expect(text).toContain("`Dopl Playbook`");
   });
 });
+
+/**
+ * 🔒 **S29c — THE TWO MYSTERY ONTOLOGIES IN A BRAND-NEW CHANNEL.**
+ *
+ * `createHomeChannel` seeds nothing: what a fresh channel lists is the CALLER'S
+ * OWN personal shelf, which `service-audience.ts › computeAudience` folds into
+ * the read scope exactly as the knowledge lane does. The knowledge lane labels
+ * its half; this one rendered the widening and never named it.
+ */
+describe("dopl_map labels the personal shelf", () => {
+  const SHELF = {
+    ...SUMMARY,
+    clusters: [
+      SUMMARY.clusters[0],
+      {
+        id: "c-2",
+        slug: "my-notes",
+        name: "My Notes",
+        purpose: "",
+        columnIds: [],
+      },
+    ],
+    personalClusterIds: ["c-2"],
+  };
+
+  it("names the shelf and files only its rows under it", async () => {
+    const text = await callTool(
+      registerMapFixture,
+      client({ getOntology: vi.fn(async () => SHELF) }),
+      "dopl_map",
+      {},
+    );
+    expect(text).toContain("Home (personal)");
+    // ⚠ ORDER IS THE CLAIM: the container's own rows come first, the shelf after
+    // its heading — otherwise the heading appears to cover both.
+    expect(text.indexOf("`playbook`")).toBeLessThan(text.indexOf("Home (personal)"));
+    expect(text.indexOf("Home (personal)")).toBeLessThan(text.indexOf("`my-notes`"));
+  });
+
+  it("counts every cluster, shelf included — the label splits, it does not filter", async () => {
+    const text = await callTool(
+      registerMapFixture,
+      client({ getOntology: vi.fn(async () => SHELF) }),
+      "dopl_map",
+      {},
+    );
+    expect(text).toContain("## Ontology (2)");
+    expect(text).toContain("`my-notes`");
+  });
+
+  /**
+   * ⚠ **§8 STALE-CACHE — ABSENT IS "NOT ANSWERED", NEVER "NONE".** A payload
+   * cached against a server older than this wave carries no
+   * `personalClusterIds`, and the render must be byte-identical to what it was
+   * before the field existed rather than filing every row under one shelf or
+   * the other.
+   */
+  it("a payload with NO personalClusterIds renders exactly as before", async () => {
+    const before = await callTool(registerMapFixture, client(), "dopl_map", {});
+    const stale = await callTool(
+      registerMapFixture,
+      client({ getOntology: vi.fn(async () => ({ ...SUMMARY })) }),
+      "dopl_map",
+      {},
+    );
+    expect(stale).toBe(before);
+    expect(stale).not.toContain("Home (personal)");
+  });
+
+  it("an EMPTY personalClusterIds also renders exactly as before", async () => {
+    const before = await callTool(registerMapFixture, client(), "dopl_map", {});
+    const none = await callTool(
+      registerMapFixture,
+      client({ getOntology: vi.fn(async () => ({ ...SUMMARY, personalClusterIds: [] })) }),
+      "dopl_map",
+      {},
+    );
+    expect(none).toBe(before);
+  });
+
+  // ⚠ An id naming no listed cluster files nothing — the label is computed from
+  // the SAME admitted list the response carries, so a mismatch is a stale
+  // payload, not a row to invent a heading for.
+  it("an id matching no listed cluster adds no heading", async () => {
+    const text = await callTool(
+      registerMapFixture,
+      client({
+        getOntology: vi.fn(async () => ({ ...SUMMARY, personalClusterIds: ["c-99"] })),
+      }),
+      "dopl_map",
+      {},
+    );
+    expect(text).not.toContain("Home (personal)");
+  });
+});

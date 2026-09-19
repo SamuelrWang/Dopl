@@ -12,7 +12,6 @@ import {
   listBaseStats,
   listBases,
   listHomeScopedBaseIds,
-  listPinnedBaseIds,
   listStarredBaseIds,
   resolveKbStorageLimit,
 } from "@/features/knowledge/server/service";
@@ -55,17 +54,6 @@ import { KnowledgeBaseCreateSchema } from "@/features/knowledge/schema";
  *     direction under-states a base's exposure to its own owner. Failing the whole list instead is
  *     worse — `kb_list_bases` over MCP rides this route.
  *
- *   - `pinnedBaseIds` (2026-09-01, T81): which of the listed bases are PINNED — their entries are
- *     handed to every agent session launched in this workspace
- *     (`GET /api/knowledge/startup-context`). 🔒 A SIBLING KEY for the same reason
- *     `homeScopedBaseIds` is one: `pinned` stays out of `server/dto.ts › KNOWLEDGE_BASE_COLS`, so
- *     no client re-implements the startup-context read from a projected column, and the
- *     SDK-mirrored `KnowledgeBase` does not widen (`check-knowledge-type-drift`).
- *     ⚠ Unlike `starredBaseIds` this is a WORKSPACE fact, not the caller's own: two members get
- *     the same array. `[]` degrades to "no card is marked pinned", which is what every surface
- *     showed before the key existed; the unsafe direction — a pinned base rendering as unpinned
- *     to the person about to unpin it — is a display gap, never a content leak.
- *
  *   - `channelGrants` (ONLY when `?channelId=<uuid>` is sent): `{baseId → {level, guestWrite}}` for
  *     the grants of THAT channel among the visible bases — the scope-A grant map behind Home
  *     Knowledge Panels. ABSENT param ⇒ ABSENT key (never `{}`); a sent-but-ungranted channel yields
@@ -103,7 +91,6 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
       starredBaseIds,
       homeScopedBaseIds,
       sharedBaseIds,
-      pinnedBaseIds,
     ] = await Promise.all([
         listBaseOwnerNames(ctx, bases).catch(
           () => ({}) as Record<string, string>
@@ -130,12 +117,6 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
               bases.map((b) => b.id)
             ).catch(() => [] as string[])
           : Promise.resolve([] as string[]),
-        // ⚠ SAME `[]` DEGRADE as its siblings, and the direction is the display
-        // gap rather than the leak: an unreadable flag leaves every card
-        // UNMARKED, which is what shipped before this key existed. A pin decides
-        // what agents are HANDED, never what anyone may read, so no failure here
-        // can widen an audience.
-        listPinnedBaseIds(ctx, bases).catch(() => [] as string[]),
       ]);
     const base = {
       bases,
@@ -145,7 +126,6 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
       starredBaseIds,
       homeScopedBaseIds,
       sharedBaseIds,
-      pinnedBaseIds,
     };
 
     // ⚠ THE GRANT READ RUNS ONLY WHEN A CHANNEL WAS ASKED FOR. Absent param ⇒

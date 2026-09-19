@@ -13,31 +13,71 @@ const respond_js_1 = require("./respond.js");
 const response_size_js_1 = require("./response-size.js");
 const agent_shared_js_1 = require("./agent-shared.js");
 const channel_shared_js_1 = require("./channel-shared.js");
-/** One heading per OFFERED visibility, in the order `op="list"` prints them. */
+const container_destination_js_1 = require("./container-destination.js");
+const audience_label_js_1 = require("./audience-label.js");
+/** One heading per OFFERED visibility, in the order `op="list"` prints them.
+ *  ⚠ THE WORKSPACE VOCABULARY, and it is only ever printed for a workspace —
+ *  inside a home channel `container-destination.ts › DESTINATION_HEADINGS`
+ *  answers instead. */
 const VISIBILITY_HEADINGS = {
     private: "Private to you",
     workspace: "Shared with the whole workspace",
+};
+/** ⚠ **THE ROW LABEL, PAIRED WITH THE HEADING ABOVE IT AND NOT WITH THE COLUMN**
+ *  (S21/S23) — see `audience-label.ts`. A workspace heading and a home-channel
+ *  heading answer "who can see this" differently for the SAME stored value. */
+const WORKSPACE_AUDIENCES = {
+    private: audience_label_js_1.AUDIENCE_LABELS.you,
+    workspace: audience_label_js_1.AUDIENCE_LABELS.workspace,
 };
 const OFFERED_VISIBILITIES = new Set(agent_shared_js_1.TEMPLATE_VISIBILITY_VALUES);
 /** The heading for every OTHER stored visibility. ⚠ It names no axis on
  *  purpose: it exists so a row SHOWS, not so a retired sharing model gets taught
  *  back to the reader one heading at a time. */
 const OTHER_HEADING = "Shared";
+/** ⚠ §8 STALE-CACHE, SPELLED INLINE. A list payload from a bundle that predates
+ *  the sibling key carries NO `homeScopedTemplateIds` at all, and the fail-safe
+ *  reading of "I do not know which container this row is in" is NO GROUPING —
+ *  never "personal" and never "the channel's". One frozen empty, so the fallback
+ *  is one allocation and cannot be mutated into a real answer. */
+const EMPTY_TEMPLATE_IDS = Object.freeze([]);
 /**
  * ⚠ **THE `shelf` ARGUMENT AND ITS `· personal` LABEL LEFT ON 2026-09-02**
  * (slice B15, ruling B10) — the twin of `dopl_kb(op="list_bases")`'s, for the
  * same reason: a personal template is an ordinary row in the caller's own
  * `kind='personal'` CONTAINER, so "which shelf" is the tenancy the call is
  * already in.
+ *
+ * 🔒 **AND THE ARGUMENT THAT RETIRED THE LABEL STOPPED BEING TRUE ON 2026-09-06**
+ * (invariant 4 of #1077, closed here 2026-09-18). `personal-container.ts ›
+ * resolveShelfScope` widened an UNFILTERED read to the calling container PLUS
+ * the caller's own personal one, so this list has held rows from TWO tenancies
+ * since that day while its heading still said "Private to you" over all of them
+ * — one undifferentiated bucket spanning both destinations. **The container is
+ * the first axis now**, off the `homeScopedTemplateIds` sibling key this op used
+ * to discard, and the visibility axis only ever splits what is left.
  */
-async function opList(client) {
-    const templates = (await client.listAgentTemplatesPayload()).templates;
+async function opList(client, 
+/** ⚠ OPTIONAL — see `container-destination.ts ›
+ *  resolveHomeChannelContainer`: absent means "not known", and the list falls
+ *  back to the workspace's own visibility headings. */
+directory) {
+    const payload = await client.listAgentTemplatesPayload();
+    const templates = payload.templates;
     if (templates.length === 0) {
         return (0, respond_js_1.ok)(`No agent templates visible to you here. ${agent_shared_js_1.TEMPLATES_SCOPE_NOTE}\n\nCreate one with \`dopl_agent(op='create')\`.`);
     }
-    // ⚠ GROUPED BY VISIBILITY because that is the axis a caller acts on ("the
-    // private one is mine, the workspace one is everyone's") — and it is what
-    // makes an ambiguity refusal actionable when two rows share a name.
+    // 🔒 **CONTAINER FIRST, VISIBILITY SECOND** (2026-09-18). The two destinations
+    // are two CONTAINERS, so that is the axis a caller acts on; visibility only
+    // says who inside one of them may use the row.
+    const personalIds = new Set(payload.homeScopedTemplateIds ?? EMPTY_TEMPLATE_IDS);
+    const personal = templates.filter((t) => personalIds.has(t.id));
+    const here = templates.filter((t) => !personalIds.has(t.id));
+    const inHomeChannel = await (0, container_destination_js_1.resolveHomeChannelContainer)(client, directory);
+    // ⚠ GROUPED BY VISIBILITY **WITHIN A WORKSPACE** because that is the axis a
+    // caller acts on there ("the private one is mine, the workspace one is
+    // everyone's") — and it is what makes an ambiguity refusal actionable when two
+    // rows share a name.
     //
     // ⚠ A ROW IS NEVER DROPPED FOR HAVING A VISIBILITY THIS SURFACE NO LONGER
     // OFFERS. The write enum lost `team` (`agent-shared.ts ›
@@ -45,20 +85,50 @@ async function opList(client) {
     // fixed table of the OFFERED values would have made any surviving row
     // invisible with no error anywhere — the silent-drop shape, not a retirement.
     // Unoffered values fall through to one trailing bucket that names no axis.
+    // ⚠ THE SAME RULE HOLDS IN A CHANNEL, where the trailing bucket is the LEGACY
+    // one: everything that is not `workspace` there is reachable from no surface.
+    const hereGroups = inHomeChannel
+        ? [
+            [
+                container_destination_js_1.DESTINATION_HEADINGS.shared,
+                here.filter((t) => t.visibility === "workspace"),
+                audience_label_js_1.AUDIENCE_LABELS.channel,
+            ],
+            [
+                container_destination_js_1.DESTINATION_HEADINGS.legacy,
+                here.filter((t) => t.visibility !== "workspace"),
+                audience_label_js_1.AUDIENCE_LABELS.nobody,
+            ],
+        ]
+        : [
+            ...agent_shared_js_1.TEMPLATE_VISIBILITY_VALUES.map((v) => [
+                VISIBILITY_HEADINGS[v],
+                here.filter((t) => t.visibility === v),
+                WORKSPACE_AUDIENCES[v],
+            ]),
+            // ⚠ A visibility this surface does not offer (`team`) is a row we
+            // cannot answer the audience question for — `not stated` rather than
+            // a guess, on `channel-facts.ts › postureFacts`'s rule.
+            [
+                OTHER_HEADING,
+                here.filter((t) => !OFFERED_VISIBILITIES.has(t.visibility)),
+                "an audience this surface cannot state",
+            ],
+        ];
+    // ⚠ THE CHANNEL'S OWN ROWS FIRST, the personal shelf under them: the call
+    // named a container, and a heading order that led with rows from somewhere
+    // else would read as that container's roster.
     const groups = [
-        ...agent_shared_js_1.TEMPLATE_VISIBILITY_VALUES.map((v) => [
-            VISIBILITY_HEADINGS[v],
-            templates.filter((t) => t.visibility === v),
-        ]),
-        [OTHER_HEADING, templates.filter((t) => !OFFERED_VISIBILITIES.has(t.visibility))],
+        ...hereGroups,
+        [container_destination_js_1.DESTINATION_HEADINGS.personal, personal, audience_label_js_1.AUDIENCE_LABELS.you],
     ];
     const lines = ["## Agent templates\n"];
-    for (const [heading, rows] of groups) {
+    for (const [heading, rows, audience] of groups) {
         if (rows.length === 0)
             continue;
         lines.push(`### ${heading}`);
         for (const t of rows)
-            lines.push((0, agent_shared_js_1.templateRow)(t));
+            lines.push((0, agent_shared_js_1.templateRow)(t, audience));
         lines.push("");
     }
     lines.push(agent_shared_js_1.TEMPLATES_SCOPE_NOTE);
@@ -81,6 +151,12 @@ maxChars) {
     const lines = [
         `# ${(0, narration_js_1.inlineOr)(template.name, narration_js_1.NO_NAME)}`,
         `id: \`${template.id}\` · ${template.visibility} · model ${template.model ? (0, narration_js_1.inlineOr)(template.model, narration_js_1.NO_NAME) : "(the desktop's default)"}`,
+        // ⚠ **THE VERSION IS WHY `op="update"` CAN REFUSE A STALE WRITE**, and it is
+        // rendered on the HEADER rows rather than at the end: this op clips its
+        // INSTRUCTIONS body (A16), and a token printed after a clipped system prompt
+        // is a token the caller may never see. Same line `dopl_kb`'s read_file and
+        // `dopl_skill`'s read carry, for the same contract.
+        `Version: \`${template.updatedAt}\` (pass as expected_version to op="update")`,
         ...(template.description ? [(0, narration_js_1.inlineOr)(template.description, "")] : []),
     ];
     // ⚠ **`knowledge` WINS AND THE BASE LIST IS THE FALLBACK** (2026-09-08). A

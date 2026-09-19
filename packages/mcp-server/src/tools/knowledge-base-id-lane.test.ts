@@ -70,6 +70,7 @@ function clientFor(over: Partial<DoplClient> = {}) {
     listKbBases: vi.fn(async () => []),
     getKbBase: vi.fn(async () => ELSEWHERE),
     readKbFileByPath: vi.fn(async () => ENTRY),
+    readKbFilePart: vi.fn(async () => ({ entry: ENTRY })),
     getKbTree: vi.fn(async () => ({
       base: ELSEWHERE,
       folders: [],

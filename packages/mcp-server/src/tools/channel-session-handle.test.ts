@@ -166,8 +166,8 @@ describe("the handle rule survived the move to the doctrine, clause for clause",
     // ⚠ WHAT THE CASE IS STILL FOR IS UNCHANGED: the form is NAMED, and its exclusivity clause
     // ("ONLY BY NAME" / "never without naming one") travels with it, so a reader cannot take the
     // capability without its boundary.
-    expect(CHANNEL_DOCTRINE).toContain("that tag, in a body or in `to`, wakes THAT agent");
-    expect(CHANNEL_DOCTRINE).toContain("AND ONLY BY NAME");
+    expect(CHANNEL_DOCTRINE).toContain("that tag, in `to`, wakes THAT agent");
+    expect(CHANNEL_DOCTRINE).toContain("AND ONLY IN `to`, BY NAME");
     expect(CHANNEL_DOCTRINE).toContain("never without naming one");
     expect(CHANNEL_DOCTRINE).toContain("what people see and what agents tag it by");
     // ⚠ AND THE ID RULE IS PINNED BESIDE IT, because it is the half a caller cannot infer: the
@@ -202,7 +202,7 @@ describe("the handle rule survived the move to the doctrine, clause for clause",
     // ⚠ RE-SPELLED AGAIN 2026-09-15 — the bullet now also says the launch ANSWERS the name it
     // got, which is the half a caller acts on when the uniqueness rule appended a `-1`.
     expect(CHANNEL_DOCTRINE).toContain(
-      'op="manage" action="launch" starts one and answers the name it got; that tag, in a body or in `to`, wakes THAT agent',
+      'op="manage" action="launch" starts one and answers the name it got; that tag, in `to`, wakes THAT agent',
     );
   });
 
@@ -235,7 +235,7 @@ describe("the handle rule survived the move to the doctrine, clause for clause",
     // is spelled. The property is the one this pin has always protected: the capability and its
     // boundary in ONE breath.
     expect(DOCTRINE_SECTIONS.law).toContain(
-      "YOUR OWN AGENTS ARE THE ONE EXCEPTION, AND ONLY BY NAME",
+      "YOUR OWN AGENTS ARE THE ONE EXCEPTION, AND ONLY IN `to`, BY NAME",
     );
   });
 
@@ -272,7 +272,7 @@ describe("the handle rule survived the move to the doctrine, clause for clause",
     // the doctrine actually ships now, or the departure guard would be trivially
     // true against copy nothing writes any more.
     const page = sessionBlockLines([ownRow({})], NOW).join("\n");
-    expect(page).not.toContain("AND ONLY BY NAME");
+    expect(page).not.toContain("AND ONLY IN `to`, BY NAME");
     expect(page).not.toContain("wakes THAT agent");
     expect(page).not.toContain("reaches no server");
   });

@@ -5,6 +5,7 @@
  * error listing candidates, never a guess).
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.personalShelfGroups = personalShelfGroups;
 exports.resolveObjectRef = resolveObjectRef;
 exports.resolveClusterRef = resolveClusterRef;
 exports.resolveResourceHandles = resolveResourceHandles;
@@ -12,6 +13,11 @@ exports.renderObject = renderObject;
 const response_size_1 = require("./response-size");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
+// ⚠ ONE TABLE FOR BOTH LANES — `container-destination.ts` owns the destination
+// wording, and the knowledge lane reads its own headings from the same place.
+// Two hand-typed copies is how an agent ends up holding a sharing model the
+// operator does not have.
+const container_destination_1 = require("./container-destination");
 /*
  * ⚠ THE VALUE/BODY LINE, DRAWN TWICE. The graph is workspace-scoped and nothing
  * in `features/ontology/schema.ts` carries a charset rule (object `name`
@@ -37,6 +43,53 @@ function indented(text) {
         .split(/\r?\n/)
         .map((line, i) => (i === 0 ? line : `  ${line}`))
         .join("\n");
+}
+/**
+ * ⚠ §8 STALE-CACHE, SPELLED INLINE, AND **ONE FROZEN EMPTY RATHER THAN TWO**.
+ * A payload cached against a server older than S29c carries no
+ * `personalClusterIds`, and this is what the absent key falls back to: no row is
+ * filed under the personal label, which is the reading that states nothing the
+ * response did not measure. The knowledge lane's twin is
+ * `knowledge-ops-read.ts › EMPTY_BASE_IDS`.
+ */
+const EMPTY_CLUSTER_IDS = Object.freeze([]);
+/**
+ * 🔒 **THE PERSONAL SHELF, LABELLED ON THE ONTOLOGY LANE** (S29c, 2026-09-18).
+ *
+ * ⚠ **THE COMPLAINT THIS ANSWERS.** A BRAND-NEW home channel listed two
+ * ontologies nobody had put there, with nothing saying where they came from —
+ * `createHomeChannel` seeds none, and what is actually happening is that
+ * `service-audience.ts › computeAudience` folds the caller's own personal shelf
+ * into the read scope, exactly as the knowledge lane does. The KB lane labels
+ * its half `container-destination.ts › DESTINATION_HEADINGS.personal`; the
+ * ontology lane rendered the widening and never named it, which is how two rows
+ * a caller owns read as two rows a caller must go and investigate.
+ *
+ * ⚠ **THE SPLIT KEYS ON THE ANSWER, NOT ON THE QUESTION**, the same rule
+ * `opListBases` states: an ABSENT key means "not answered" and puts every
+ * cluster in the unlabelled group, which is byte-identical to what this render
+ * did before the field existed. It never files a row under a shelf it did not
+ * measure.
+ *
+ * ⚠ **THE HEADING IS A FACT, SO IT SURVIVES `concise`** — which container a row
+ * lives in is not a legend, and the whole point of the label is that a reader
+ * is wrong without it.
+ *
+ * @returns the two groups in render order; the personal one carries the shared
+ *          heading text, the other carries `null` (no heading at all).
+ */
+function personalShelfGroups(clusters, personalClusterIds) {
+    const shelf = new Set(personalClusterIds ?? EMPTY_CLUSTER_IDS);
+    if (shelf.size === 0)
+        return [[null, clusters]];
+    const personal = clusters.filter((c) => shelf.has(c.id));
+    const here = clusters.filter((c) => !shelf.has(c.id));
+    if (personal.length === 0)
+        return [[null, here]];
+    return [
+        [null, here],
+        [container_destination_1.DESTINATION_HEADINGS.personal, personal],
+    ];
 }
 function resolveObjectRef(snapshot, ref) {
     const byId = snapshot.objects[ref];

@@ -3,7 +3,15 @@
  * `server/dto.ts`, server-only so the row schema stays out of client bundles.
  *
  * Bases are workspace-scoped folder/file trees; `KnowledgeEntry.body` is
- * markdown. Soft-delete: `deletedAt` on every type, `null` = active.
+ * markdown.
+ *
+ * ⚠ **`deletedAt` IS NOT A SOFT DELETE AND HAS NOT BEEN ONE SINCE THE PERMANENT-
+ * DELETES RULING.** It is always `null`: nothing in this tree writes it, the
+ * trash/restore RPCs are dropped by
+ * `20261013120000_drop_knowledge_soft_delete.sql`, and a delete is a `DELETE`
+ * (`server/service-base-writes.ts › deleteBase`). The field stays because it is
+ * on the `@dopl/client` mirror `scripts/check-knowledge-type-drift.ts` pins
+ * field-for-field, so it cannot leave one side alone — **F-730**.
  */
 
 import type { Role } from "@/features/workspaces/types";
@@ -206,6 +214,12 @@ export interface KnowledgeTreeSnapshot {
   entryTotal?: number;
   /** Opaque cursor for the next entry page; null = last page. */
   nextEntryCursor?: string | null;
+  /**
+   * Heading names per entry id (`## Errors`), present only when `headings=1`
+   * was asked for. ⚠ Entries with NO headings are absent from the map rather
+   * than carrying `[]` — the two mean the same thing and one of them is free.
+   */
+  entryHeadings?: Record<string, string[]>;
 }
 
 // ─── Source provider types ──────────────────────────────────────────

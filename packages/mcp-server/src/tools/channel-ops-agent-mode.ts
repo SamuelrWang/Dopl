@@ -54,7 +54,9 @@ import type {
 } from "@dopl/client";
 import { ok, type ToolResponse } from "./respond";
 import { isErr, resolveChannelOr } from "./channel-shared";
-import { bareAgentId } from "./channel-agent-id";
+// ⚠ THE SHARED TARGET CHECK (`channel-agent-target.ts`, S51, 2026-09-18) — the strip every
+// manage verb already did, plus the check three of them were missing.
+import { agentTarget, isAgentTargetRefusal } from "./channel-agent-target";
 import { fileAndHold, pendingFacts } from "./channel-ops-agent";
 // ⚠ SHARED WITH THE LAUNCH OP, NOT COPIED. Both lanes can be clamped and both
 // must say "not reported" in the same word; two statements of that distinction
@@ -144,13 +146,17 @@ export async function opSetAgentMode(
   // its NAME no longer reaches the result: a fact line names the AGENT and the
   // posture, and the room the caller just addressed by ref is not news to it
   // (T10). Every sibling verb on this tool renders the same way.
+  // ⚠ **STRIPPED AND NOW VALIDATED** — the shared helper `end`, `rename` and `direct` also
+  // use (S51). `read_sessions` prints `@agent-<id>`, so the pasted form stays accepted; a NAME
+  // handle is refused BY NAME here instead of dying at the create schema as a bare
+  // `VALIDATION_FAILED`. ⚠ AHEAD OF THE CHANNEL LOOKUP: a refusal needing no round trip
+  // must not cost one.
+  const target = agentTarget(agentId);
+  if (isAgentTargetRefusal(target)) return target;
+  const agent = target.agent;
+
   const channel = await resolveChannelOr(client, ref);
   if (isErr(channel)) return channel;
-  // ⚠ STRIPPED, NOT VALIDATED — the shared helper `end_agent` and `direct_agent`
-  // both use. `read_sessions` prints `@agent-<id>`, so that is what a model
-  // copies, and refusing the pasted form would 400 a caller for doing exactly
-  // what the neighbouring op taught.
-  const agent = bareAgentId(agentId);
   const want = asked(modes.tools, modes.messages);
 
   const filed = await fileAndHold(

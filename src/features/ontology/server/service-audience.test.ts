@@ -285,6 +285,46 @@ describe("the arms that are not matrix rows", () => {
     );
   });
 
+  /**
+   * 🔒 **S29c — THE SHELF'S OWN IDS SURVIVE THE UNION.** The scope above is a
+   * set, so a reader downstream cannot tell which of its members came from the
+   * shelf — which is why a brand-new channel listed ontologies nobody had put
+   * there with nothing able to say so. The label is carried separately, never
+   * re-derived.
+   */
+  it("🔒 the shelf's ids are kept BESIDE the scope, not merged away", async () => {
+    prime({
+      members: 2,
+      personal: [OWNER_CONTAINER],
+      shares: [shareRow({ members: "view", container: "ws-lender" })],
+    });
+    const audience = await resolveOntologyAudience(ctx({ userId: "user-me" }));
+    if (audience.kind !== "resolved") throw new Error("unreachable");
+    expect([...audience.personalWorkspaceIds]).toEqual([OWNER_CONTAINER]);
+    // ⚠ A LENDER'S CONTAINER IS IN THE SCOPE AND IS NOT THE SHELF — somebody
+    // else's ontology lent into this room is not the caller's own.
+    expect(audience.personalWorkspaceIds).not.toContain("ws-lender");
+    // ⚠ …and it is not the CALLING container either, which is what the label
+    // distinguishes rows FROM.
+    expect(audience.personalWorkspaceIds).not.toContain(LINK);
+  });
+
+  it("no shelf resolved ⇒ an empty label, never a guessed one", async () => {
+    prime({ members: 2, personal: [] });
+    const audience = await resolveOntologyAudience(ctx({ userId: "user-me" }));
+    if (audience.kind !== "resolved") throw new Error("unreachable");
+    expect([...audience.personalWorkspaceIds]).toEqual([]);
+  });
+
+  it("🔒 a SHARED CREDENTIAL has no shelf to label (M-10)", async () => {
+    prime({ members: 1 });
+    const audience = await resolveOntologyAudience(
+      ctx({ credentialSubjectUserId: null, source: "agent" })
+    );
+    if (audience.kind !== "resolved") throw new Error("unreachable");
+    expect([...audience.personalWorkspaceIds]).toEqual([]);
+  });
+
   it("⚠ ONE RESOLUTION PER REQUEST — two calls on one context probe the DB once", async () => {
     const request = ctx();
     await Promise.all([

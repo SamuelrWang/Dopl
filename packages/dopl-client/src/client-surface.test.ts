@@ -64,26 +64,28 @@ const BASE = "https://api.example.test";
  *        all-sessions read (T22) is `getAccountStatus({view:"sessions"})`, a
  *        query PARAMETER over one resource rather than a second endpoint
  *        (INVARIANTS §9), so it costs no third name and no third route to gate.
- *   80 — PLUS THREE with PINNED STARTUP CONTEXT (2026-09-01, T81):
- *        `setKbBasePinned`, `setKbEntryPinned` and `getKbStartupContext`.
- *        ⚠ TWO WRITE NAMES FOR ONE FLAG, and that is the count being deliberate
- *        rather than lazy: a base and an entry are different objects with
- *        different gates (the entry write chases the row up to its base), so
- *        folding them into one `setKbPinned(kind, id)` would put two
- *        authorization stories behind one signature. ⚠ And THREE, not five —
- *        each write is ONE method covering both directions, because `pinned` is
- *        an argument choosing the VERB (`PUT`/`DELETE`) rather than a second
- *        binding: two idempotent verbs, never a toggle, and never two names.
- *   83 — PLUS THREE with THE "NEEDS YOU" SIGNAL (2026-09-01, T70): `createPing`,
+ *   80 — PLUS THREE with THE "NEEDS YOU" SIGNAL (2026-09-01, T70): `createPing`,
  *        `listPings`, `awaitPings`.
- *   80 — LESS THOSE SAME THREE (2026-09-02, slice B16, Samuel's ruling B8). The
+ *   77 — LESS THOSE SAME THREE (2026-09-02, slice B16, Samuel's ruling B8). The
  *        ping lane is DELETED, table and all: a directed `send` IS the delivery
  *        record, and "what is addressed to me and unanswered" is DERIVED by
  *        `getAccountStatus` from the transcript rather than kept in a second
  *        mailbox. ⚠ **THE NUMBER GOING DOWN IS THE POINT** — this list has only
  *        ever grown by a capability arriving, so a shrink is a capability
  *        leaving, and it must be argued for exactly like an arrival.
- *   81 — PLUS ONE with SECTION READS (2026-09-03): `readKbFilePart`.
+ *   78 — PLUS ONE with SECTION READS (2026-09-03): `readKbFilePart`.
+ *        ⚠ **AND THE T81 KNOWLEDGE-CURATION TRIO NEVER APPEARS ABOVE, BECAUSE
+ *        IT LEFT (2026-09-18, Samuel's ruling: *"let's remove pinning for now
+ *        … ill reimplement it down the line"*).** Two writes and a read were on
+ *        this list from 2026-09-01 and are DELETED with the feature — routes,
+ *        services, columns and all. A shrink is a capability leaving and is
+ *        argued for exactly like an arrival (the B16 rule above); this one is a
+ *        ruling, and a reimplementation starts from a clean surface rather than
+ *        from three methods with nothing behind them. ⚠ **THE NAMES ARE NOT
+ *        WRITTEN HERE ON PURPOSE** — the removal gate
+ *        (`src/features/knowledge/pinning-stays-removed.test.ts`) scans this
+ *        package, and a sentence describing a removal can be written without
+ *        naming the thing removed.
  *        ⚠ ONE, NOT TWO, AND NOT A FLAG ON `readKbFileByPath`. The whole-entry
  *        read is on every existing caller's path and answers a different SHAPE
  *        (an entry, not an entry-plus-outline), so widening it would have made
@@ -172,10 +174,6 @@ const PUBLIC_SURFACE = [
   "getChat",
   "getHomeChannels",
   "getKbBase",
-  // PINNED STARTUP CONTEXT (2026-09-01, T81) — the capped reading list a
-  // session starts with. ⚠ Read `truncated`/`omitted`: a clipped payload that
-  // renders as the whole of what is pinned is the bug (INVARIANTS §9).
-  "getKbStartupContext",
   "getKbTree",
   "getMemberAccess",
   "getMyAccess",
@@ -219,10 +217,6 @@ const PUBLIC_SURFACE = [
   "readSkillBody",
   "searchKb",
   "setChannelThreadMode",
-  // T81 — ONE method per object, each covering BOTH directions: `pinned` picks
-  // the verb (PUT/DELETE), so there is no `unpinKbBase` to forget to gate.
-  "setKbBasePinned",
-  "setKbEntryPinned",
   "setWorkspaceId",
   "updateAgentTemplate",
   "updateChannel",
@@ -288,8 +282,12 @@ interface Wire {
   tool: string | undefined;
 }
 
-/** Captures the single request a method makes: path / verb / tool header. */
-function captureWire(): { wires: Wire[]; restore: () => void } {
+/** Captures the single request a method makes: path / verb / tool header.
+ *  ⚠ `body` lets a case drive the NORMALISATION as well as the wire — the ping's
+ *  envelope is optional in every key, so "what a missing one becomes" is a claim
+ *  that needs a served answer to test against. Default `{}` is the empty
+ *  envelope every existing case here relies on. */
+function captureWire(body: Record<string, unknown> = {}): { wires: Wire[]; restore: () => void } {
   const wires: Wire[] = [];
   const original = global.fetch;
   global.fetch = (async (...args: Parameters<typeof fetch>) => {
@@ -300,7 +298,7 @@ function captureWire(): { wires: Wire[]; restore: () => void } {
       method: init?.method ?? "GET",
       tool: headers["X-MCP-Tool"],
     });
-    return new Response(JSON.stringify({}), {
+    return new Response(JSON.stringify(body), {
       status: 200,
       headers: { "content-type": "application/json" },
     });
@@ -381,8 +379,24 @@ describe("routes that MOVED out of client.ts", () => {
   });
 
   it("pingMcpStatus still normalises a missing envelope to false / null", async () => {
+    // ⚠ **`handle` JOINED THE ENVELOPE ON 2026-09-18 (A1/S48)** — the operator's mention handle,
+    // carried on the ping because boot may add no round trip. It normalises the same way its two
+    // neighbours do: a key the deployment does not send is `null`, never `undefined`, so a
+    // consumer never has to tell "absent" from "unknown".
     cap = captureWire();
     const res = await new DoplClient(BASE, "k").pingMcpStatus();
-    expect(res).toEqual({ is_admin: false, user_id: null });
+    expect(res).toEqual({ is_admin: false, user_id: null, handle: null });
+  });
+
+  it("…and a blank or non-string handle is null, not an empty tag", async () => {
+    // ⚠ The briefing renders the handle as `@<handle>`, so an empty string would print `@` and a
+    // number would print a tag nobody answers to. Both are the absent case.
+    for (const bad of ["", "   ", 42, null]) {
+      cap = captureWire({ handle: bad });
+      const res = await new DoplClient(BASE, "k").pingMcpStatus();
+      expect(res.handle, JSON.stringify(bad)).toBeNull();
+    }
+    cap = captureWire({ handle: "samuel-wang" });
+    expect((await new DoplClient(BASE, "k").pingMcpStatus()).handle).toBe("samuel-wang");
   });
 });

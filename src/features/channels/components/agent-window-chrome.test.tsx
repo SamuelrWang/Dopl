@@ -187,7 +187,18 @@ describe("the chrome, left to right", () => {
     expect(idle!.className).toContain("hover:bg-surface-raised-2");
     expect(idle!.className).toContain("cursor-pointer");
     expect(active!.className).not.toContain("hover:bg-");
-    expect(active!.className).not.toContain("cursor-pointer");
+    /**
+     * 🔒 **THE ACTIVE TAB CARRIES NO CURSOR UTILITY AT ALL, AND THAT IS WHAT GIVES IT THE HAND
+     * (Samuel's OVERRIDE, 2026-09-18).** The 2026-09-15 ruling took BOTH the fill and the cursor
+     * off the active tab; the cursor half is superseded — *"anytime there's a button or something
+     * that can be clicked, the cursor should change into the hand cursor"*. The base layer now
+     * reaches every `[role="tab"]` (`globals.css › ANYTHING CLICKABLE SHOWS THE HAND`), so the
+     * ABSENCE asserted here is load-bearing in the opposite direction from before: a
+     * `cursor-default` bolted back on would out-layer the global rule and silently re-take the
+     * override. ⚠ **Hence `cursor-`, not `cursor-pointer`** — the old spelling passes with
+     * `cursor-default` present, which is the exact regression this now has to catch.
+     */
+    expect(active!.className).not.toMatch(/(^|\s)cursor-/);
   });
 
   it("selects on click and closes on the tab's own ×", () => {

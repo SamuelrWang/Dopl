@@ -133,7 +133,11 @@ async function opRead(client, ref, since, limit, selfUserId = null, thread, form
 // poll detector must not judge (a desktop-run session, or one whose user id
 // the boot could not resolve). Defaulting to `null` is what keeps every
 // test-constructed call and every other caller of this function unchanged.
-subject = null) {
+subject = null, 
+/** ⚠ The caller is an OUTSIDE SESSION — lines carry the never-drop marks
+ *  (2026-09-18). Default `false`, so a desktop-run agent's page is unchanged
+ *  and is not handed a second, weaker addressing beside the `→` arrow. */
+outside = false) {
     const scope = thread?.trim() ? thread.trim() : undefined;
     // ⚠ Id ROUND TRIPS: agent copies it from a `read` legend, and a legend id is
     // `metadata.taskId`, stored verbatim by a peer for any non-UUID value. A
@@ -200,7 +204,7 @@ subject = null) {
     // arrived too late. `memberNames` is fail-soft and is read only on this branch.
     lines.push(...card);
     // ⚠ No roster read here — hot path, the whole reason `read` skips `resolveChannelOr`.
-    lines.push(...(0, channel_render_1.formatMessages)(messages, ref, selfUserId, format));
+    lines.push(...(0, channel_render_1.formatMessages)(messages, ref, selfUserId, format, outside));
     const lastSeq = messages[messages.length - 1].seq;
     if (!scope) {
         // A channel-wide read already IS the channel-wide cursor.

@@ -5,6 +5,10 @@ import { meetsMinRole } from "@/features/workspaces/types";
 // shared with `agent-templates/server/service-writes.ts`; two copies of a
 // tenancy predicate is how the shelf fence ended up divergent (findings §6 #3).
 import { assertSharedPublishAcknowledged } from "@/features/workspaces/server/shared-publish";
+// The ONE statement of "a home channel holds only what is shared into it"
+// (Samuel, 2026-09-18), shared with `agent-templates/server/service-writes.ts`
+// for the same reason the line above it is shared.
+import { assertHomeChannelRowIsShared } from "@/features/workspaces/server/home-channel-destination";
 import { listTeamIdsForUser } from "@/features/teams/server/repository";
 import { personalShelfRefusal } from "@/shared/tenancy/personal-container";
 import { resolvePersonalReach } from "@/shared/tenancy/personal-reach";
@@ -233,6 +237,23 @@ export async function assertCreateBaseAllowed(
     publishes: resolvedVisibility === "public",
     acknowledged: input.acknowledgeShared,
     noun: "knowledge base",
+  });
+
+  // 🔒 **THE THIRD DESTINATION DOES NOT EXIST** (Samuel, 2026-09-18) — a
+  // `private`, ungranted base inside a home channel is listed by nothing: /home's
+  // Knowledge face lists only the container bases carrying a channel grant, and a
+  // container has no Knowledge page of its own. The twin of the same call in
+  // `agent-templates/server/service-writes.ts`, one axis apart because the two
+  // features answer "is it shared into the channel?" differently — a grant here,
+  // the audience column there.
+  // ⚠ THE DESTINATION, not the room: a personal row has already been re-routed
+  // above and is destination 1, which this must not refuse.
+  await assertHomeChannelRowIsShared({
+    workspaceId: destination.workspaceId,
+    shared:
+      resolvedVisibility !== "private" || input.shareToChannelId !== undefined,
+    noun: "knowledge base",
+    remedy: "shareToChannelId",
   });
 
   return { destination, visibility: resolvedVisibility, teamGrants };

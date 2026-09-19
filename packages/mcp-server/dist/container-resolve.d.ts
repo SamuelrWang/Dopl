@@ -14,8 +14,11 @@
  *                           same name — `home/server/service-writes.ts ›
  *                           createHomeChannel`)
  *   container=<id>        → any container the caller is an active member of
- *   workspace=<…>         → DEPRECATED alias, same resolver, one release
  *   (omitted)             → the connection's container, else `home`
+ *
+ * ⚠ **`workspace=` IS GONE (2026-09-18)** — one release as a bare alias, then
+ * deleted from the schema, so it is now a `-32602` that NAMES the field rather
+ * than a second spelling this file has to keep mapping.
  *
  * ⚠ **THE LAST LINE IS THE RULING'S POINT AND IT IS STRUCTURE, NOT COPY.** An
  * unaddressed READ resolves to the caller's own container because the SERVER
@@ -26,11 +29,9 @@
 import type { ToolResponse } from "./tools/respond.js";
 import type { ActiveWorkspaceState, EffectiveWorkspace, WorkspaceDirectory } from "./workspace-directory.js";
 import type { WorkspaceListItem } from "@dopl/client";
-/** The two spellings, as the caller sent them. */
+/** The address the caller sent, if any. ⚠ ONE KEY since the alias retired. */
 export interface AddressArgs {
     container?: string;
-    /** ⚠ DEPRECATED — mapped to the same resolver for one release. */
-    workspace?: string;
 }
 /**
  * ⚠ THREE OUTCOMES AND NO FOURTH. `addressed` carries the container the call
@@ -56,10 +57,10 @@ export interface AddressDeps {
 /**
  * Resolve one call's container.
  *
- * ⚠ **`container=` WINS OVER `workspace=` AND BOTH DROPS ARE ANNOUNCED.** A
- * caller that sent two addresses, or sent one on an op that takes none, is told
- * which one the call used — the whole difference between a deprecation window
- * and a silent re-target (B13's argument, one argument later).
+ * ⚠ **A DROP IS ANNOUNCED.** A caller that addressed an op which takes no
+ * address is told the argument was ignored — the whole difference between a
+ * deprecation window and a silent re-target (B13's argument, one argument
+ * later). The alias half of that announcement retired with the alias.
  */
 export declare function resolveCallAddress(tool: string, op: string | undefined, args: AddressArgs, { directory, activeWorkspace }: AddressDeps): Promise<AddressOutcome>;
 /**

@@ -66,6 +66,12 @@ export interface KnowledgeTreeSnapshot {
     entryTotal?: number;
     /** Opaque cursor for next entry page; null = last page. */
     nextEntryCursor?: string | null;
+    /**
+     * Heading names per entry id (`## Errors`), present only when `headings`
+     * was asked for. ⚠ `?? EMPTY` at every reader (INVARIANTS §8): an older
+     * server sends no such key and this response is cached.
+     */
+    entryHeadings?: Record<string, string[]>;
 }
 export interface KnowledgeDirListing {
     folder: KnowledgeFolder | null;
@@ -117,76 +123,36 @@ export interface KnowledgeBaseListPayload {
      *  ⚠ Only ever ids that are in `bases` — never a wider set. */
     homeScopedBaseIds?: string[];
     /**
-     * Ids of the listed bases that are PINNED — their entries are handed to every
-     * agent session launched in this workspace ({@link StartupContext}).
+     * 🔒 **WHICH OF THESE BASES ARE SHARED INTO ONE CHANNEL** — present ONLY when
+     * the read named a `channelId`, absent otherwise.
      *
-     * ⚠ A WORKSPACE FACT, NOT THE CALLER'S OWN, which is the difference from the
-     * star list: two members reading this response get the same array.
+     * ⚠ **ABSENT AND `{}` ARE DIFFERENT ANSWERS, AND THE DIFFERENCE IS THE POINT**
+     * (the server states it too): absent means NOT ASKED, `{}` means asked and
+     * none granted. A reader that collapses the two reports "nothing is shared in
+     * this channel" about a call that never asked.
      *
-     * ⚠ SAME `?? []` RULE as `homeScopedBaseIds` (INVARIANTS §8) — an older
-     * server sends no such key and this response is cached. Absent reads as "no
-     * card is marked", which is what the surface showed before the key existed.
-     */
-    pinnedBaseIds?: string[];
-}
-/**
- * PINNED STARTUP CONTEXT (T81) — what an agent session is handed the moment it
- * starts, so nobody re-pastes the same three documents by hand.
- *
- * `GET /api/knowledge/startup-context` returns every entry of a PINNED base plus
- * every individually pinned entry, de-duped on entry id and capped so a launch
- * prompt cannot be made unbounded by curating one large base.
- *
- * ⚠ Mirrors `src/features/knowledge/server/service-startup-context.ts`. It is
- * deliberately NOT in `src/features/knowledge/types.ts`, so
- * `scripts/check-knowledge-type-drift.ts` (which pins the four row types) has
- * nothing new to compare and this shape can move with its one endpoint.
- */
-export interface StartupContextItem {
-    baseId: string;
-    baseName: string;
-    baseSlug: string;
-    entryId: string;
-    path: string;
-    title: string;
-    body: string;
-}
-/** ⚠ AN ADDRESS, NEVER A BODY — enough to fetch the entry
- *  (`dopl_kb(op="read_file", base, path)`) and nothing of its content. */
-export interface StartupContextPointer {
-    baseId: string;
-    baseSlug: string;
-    entryId: string;
-    path: string;
-    title: string;
-}
-export interface StartupContext {
-    items: StartupContextItem[];
-    /** Pinned content that did NOT fit under the cap — an address, never a body. */
-    omitted: StartupContextPointer[];
-    /** Body characters actually included, i.e. the sum over `items`. */
-    chars: number;
-    /**
-     * Body characters of everything PINNED, `omitted` included — what the curated
-     * set costs, as against what a launch is handed.
+     * ⚠ Same `?? EMPTY` rule as the two id lists above (INVARIANTS §8) — an older
+     * server sends no such key and this response is cached.
      *
-     * ⚠ **OPTIONAL, AND READ AS `?? chars` (INVARIANTS §8).** An older server
-     * sends no such key and this response is cached; `chars` is bounded by the
-     * server's 8k delivery cap, so the fallback is a FLOOR and can only ever
-     * under-report — the safe direction for a number a pin is refused on.
+     * ⚠ **THE VALUE IS DELIBERATELY LOOSE.** Every SDK reader asks only whether a
+     * key is PRESENT; mirroring `src/features/knowledge/types.ts ›
+     * ChannelResourceGrant`'s level union here would be a hand-copy with no gate
+     * over it, bought for a field nothing in this package reads.
      */
-    pinnedChars?: number;
-    /**
-     * ⚠ LOAD-BEARING (INVARIANTS §9): a clipped read that renders like an
-     * exhausted one is the bug. `true` means there IS pinned content this payload
-     * does not carry — say so, rather than presenting `items` as the whole of what
-     * the workspace pinned. `omitted` names what was measured and dropped; a row
-     * ceiling can additionally hide content it does not name.
-     */
-    truncated: boolean;
+    channelGrants?: Record<string, {
+        level: string;
+        guestWrite: boolean;
+    }>;
 }
 export interface KnowledgeBaseCreateInput {
     name: string;
+    /**
+     * 🔒 **IDEMPOTENCY KEY (S53)** — a create re-sent under the same key returns
+     * the FIRST base instead of minting a second. Author-scoped server-side by a
+     * partial unique index; the same contract `client_msg_id` carries on the
+     * channel lane.
+     */
+    clientWriteId?: string;
     description?: string;
     slug?: string;
     agentWriteEnabled?: boolean;
@@ -205,6 +171,23 @@ export interface KnowledgeBaseCreateInput {
      * rather than downgrading. Omitted/false = the container the call is in.
      */
     homeScoped?: boolean;
+    /**
+     * 🔒 **CREATE THE BASE *AND* SHARE IT INTO THIS CHANNEL, IN ONE CALL** —
+     * DESTINATION 2, and the only way to reach it (Samuel's rulings 2026-08-27
+     * and 2026-09-18). Mirrors `src/features/knowledge/schema.ts ›
+     * KnowledgeBaseCreateSchema.shareToChannelId`.
+     *
+     * The grant is always `level: 'visible'`, `guestWrite: false`, and the base is
+     * rolled back if it fails — so this never half-lands. It is what the /home
+     * Shared section's create button sends, and since 2026-09-18 a `kind='link'`
+     * container REFUSES a private create without it
+     * (`features/workspaces/server/home-channel-destination.ts`).
+     *
+     * ⚠ NOT the same question as `acknowledgeShared` below: this asks for ONE
+     * channel's grant row while the base stays private, that one is the WORKSPACE
+     * axis — every member of the container at once.
+     */
+    shareToChannelId?: string;
     /**
      * 🔒 "I know this publishes into a room somebody else is standing in."
      *
@@ -248,6 +231,14 @@ export interface KnowledgeWriteFileInput {
      * (409 `KNOWLEDGE_SECTION_AMBIGUOUS`).
      */
     section?: string;
+    /**
+     * 🔒 **IDEMPOTENCY KEY (S53)** — a write re-sent under the same key converges
+     * on the FIRST call's entry instead of upserting a second one, and the result
+     * says `converged: true`. Author-scoped server-side by a partial unique index,
+     * so one member's key can never hand back another member's row. The same
+     * contract `client_msg_id` carries on the channel lane.
+     */
+    clientWriteId?: string;
 }
 /** One heading, as an address. */
 export interface KnowledgeOutlineRow {
@@ -305,6 +296,13 @@ export interface KnowledgeWriteFileResult {
     outline?: KnowledgeOutline;
     /** `true` when `section` named no existing heading and one was appended. */
     sectionCreated?: boolean;
+    /**
+     * 🔒 **`true` WHEN THIS CALL WROTE NOTHING** (S53) — the entry came back off
+     * `clientWriteId` and is an EARLIER call's result. ⚠ `?? false` at every
+     * reader (INVARIANTS §8): an older server sends no such key, and absent must
+     * read as "this call wrote" — the behaviour before the field existed.
+     */
+    converged?: boolean;
 }
 export interface KnowledgePathOpResult {
     kind: "folder" | "entry";
@@ -320,4 +318,11 @@ export interface KnowledgeSearchHit {
     snippet: string;
     rank: number;
     updatedAt: string;
+    /**
+     * The base's slug and the entry's `/`-path — what a follow-up
+     * `read_file(base, path)` takes. ⚠ `?? EMPTY` at every reader (INVARIANTS
+     * §8): an older server sends neither key and this response is cached.
+     */
+    baseSlug?: string;
+    path?: string;
 }

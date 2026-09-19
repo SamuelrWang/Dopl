@@ -91,18 +91,80 @@ export declare const CREDITS_EXHAUSTED: ToolError;
  */
 export declare function versionConflict(readOp: string): ToolError;
 /**
+ * ⚠ **A FIELD OVER ITS CAP, AND THE TWO NUMBERS AN AGENT NEEDS ARE IN THE
+ * `meaning` RATHER THAN IN THE DETAIL** (B3, 2026-09-18). The refusal these
+ * produce reads `reason=field_too_long · field=excerpt limit=300 …`, so WHICH
+ * field and WHAT bound are on the same line as the code a model matches on.
+ *
+ * ⚠ **A FACTORY, BECAUSE A SHARED ROW WOULD HAVE TO DROP THE NUMBERS.** One
+ * static `field_too_long` would say "a field is over its cap" — which is what
+ * `VALIDATION_FAILED` already said, and the whole defect S52 records is a
+ * refusal that named the field and then printed the rule for a DIFFERENT one.
+ * ⚠ **EMIT-ONLY: it is deliberately in no per-tool table.** `renderErrors`
+ * pushes three rows per tool and `dopl_kb` has ~112 characters of headroom
+ * before `HARD_DESCRIPTION_CEILING` throws at import; a fourth row there would
+ * silently drop `ambiguous_slug`, which is the one KB failure an agent cannot
+ * diagnose from the answer it gets instead.
+ */
+export declare function fieldTooLong(field: string, limit: number): ToolError;
+/**
+ * ⚠ **A FIELD THAT BREAKS ITS OWN RULE RATHER THAN ITS LENGTH** — the sibling of
+ * {@link fieldTooLong}, and emit-only for the same headroom reason. The RULE
+ * itself goes in the detail, because it differs per field and a shared `meaning`
+ * that tried to cover all of them is how a refusal ends up printing a title rule
+ * over an excerpt failure (S52).
+ */
+export declare const KB_INVALID_FIELD: ToolError;
+/**
+ * 🔒 **THE ENTRY 404, AND IT IS EMIT-ONLY FOR THE REASON DIRECTLY BELOW** (S41,
+ * 2026-09-18). `src/features/knowledge/server/errors.ts › EntryNotFoundError`
+ * becomes a 404 `KNOWLEDGE_ENTRY_NOT_FOUND`; until this wave NO MCP module
+ * mapped it, so it rethrew past the registrar as an unhandled transport error
+ * over a read that had simply missed.
+ *
+ * ⚠ **"MAY HAVE MOVED" IS THE LOAD-BEARING HALF, NOT A HEDGE.** A path is a
+ * position, not an identity: `move_file` and a retitle both vacate one, and an
+ * agent told only "not found" re-writes at the old path — which `write_file`
+ * upserts into a SECOND entry. The remedy therefore names the op that lists,
+ * and the detail names the entry id as the handle that survives a move.
+ */
+export declare const KB_ENTRY_NOT_FOUND: ToolError;
+/**
+ * 🔒 **THE UPSERT'S OWN HAZARD, NAMED (S40, 2026-09-18).** The entry this write
+ * meant to overwrite is no longer at that path — and because `write_file` is an
+ * UPSERT, the obvious "recovery" (re-issue with `force=true`) writes a SECOND
+ * entry at the vacated position rather than failing. So the remedy is the op
+ * that says where it went, and the detail spells the duplicate out.
+ * Emit-only, like its neighbours here.
+ */
+export declare const KB_TARGET_VANISHED: ToolError;
+/**
+ * ⚠ **AN MCP-REFUSED OP, ANSWERED AS A REFUSAL RATHER THAN AS A THROW** (S43).
+ * `shared/auth/with-auth.ts`'s `sessionOnly` answers a 403 `SESSION_REQUIRED`
+ * to every OAuth caller, and every MCP caller is one — so this is not a
+ * permission an agent can be granted and `retry` says so. Emit-only for the
+ * same headroom reason as {@link KB_ENTRY_NOT_FOUND}; making the OP LIST itself
+ * honest about the refusal is a separate change (Q2, pending Samuel).
+ */
+export declare const SESSION_REQUIRED: ToolError;
+/**
  * THE PER-TOOL TABLES. ⚠ Each is ordered by FREQUENCY, because
  * {@link renderErrors} pushes the first three and drops the rest — the order is
  * an editorial decision about which failure an agent is warned about, not a
  * list.
  */
 /**
- * ⚠ **THREE ROWS, AND `entry_not_found` IS NOT ONE OF THEM.** It was drafted as
- * one and removed before it shipped: no code path emits that literal — a missing
- * PATH comes back through the same resolver that answers `base_not_found` — so
- * teaching it would promise an agent a string it can never match, which is the
- * break this whole table exists to prevent, pointed the other way. Where to
- * look when a path misses is `path`'s own `.describe()` and `op="list_dir"`.
+ * ⚠ **THREE ROWS, AND `entry_not_found` IS STILL NOT ONE OF THEM — BUT THE
+ * REASON IN THIS DOCBLOCK WAS WRONG AND IS CORRECTED (S41, 2026-09-18).** It
+ * said *"no code path emits that literal — a missing PATH comes back through
+ * the same resolver that answers `base_not_found`"*. That described the absence
+ * of a MAPPER, not the absence of an error: the server has always raised
+ * `EntryNotFoundError` → 404 `KNOWLEDGE_ENTRY_NOT_FOUND` for a path that
+ * resolves to nothing, and with nothing mapping it the refusal reached the
+ * agent as an unhandled throw. {@link KB_ENTRY_NOT_FOUND} maps it now, so the
+ * literal IS emitted — it stays off this table because `renderErrors` pushes
+ * exactly three and a fourth row would silently drop `ambiguous_slug`, which is
+ * the one KB failure an agent cannot diagnose from the answer it gets instead.
  * ⚠ `MISSING_PARAMS` is not here either: it is raised by `respond.ts` for every
  * op on every tool, so pushing it into one description buys nothing an agent
  * could act on differently.

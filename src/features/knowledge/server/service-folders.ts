@@ -26,6 +26,7 @@ import {
 import { getBaseById, readBaseInContext } from "./service-bases";
 // Awaited, after the write, inside the request (`./service-revisions.ts`).
 import { recordFolderRevision } from "./service-revisions";
+import { headingNames } from "./service-sections";
 
 /** Folder reads + writes, plus `getBaseTree` — the snapshot shared by REST and
  *  the MCP get_tree op. */
@@ -46,32 +47,58 @@ export async function listFolders(
  *
  * Entry paging is opt-in (`entryLimit` + `entryOffset`); folders always ship in
  * full. Without `entryLimit`: full snapshot, no extra fields, no count query.
+ *
+ * 🔒 **`headings` IS OPT-IN AND IT COSTS THE BODY COLUMN** (Wave 4 a1,
+ * 2026-09-18). Deriving a heading list means reading the markdown, so the one
+ * optimisation this snapshot has ever had — `includeBody: false`, which is why
+ * the web sidebar can render a 400-entry base — is exactly what the flag turns
+ * off. So it is a FLAG rather than a default: the app's tree pane never sends
+ * it, and the agent surface, which is paged and called rarely, always does.
+ *
+ * ⚠ **THE BODIES ARE DROPPED BEFORE THIS RETURNS.** A snapshot that carried
+ * them would hand every caller of this one composition a payload two orders of
+ * magnitude larger than the one it asked for; the headings ride in their OWN
+ * key, so `entries` keeps the shape `check-knowledge-type-drift.ts` pins.
  */
 export async function getBaseTree(
   ctx: KnowledgeContext,
   baseId: string,
-  opts?: { entryLimit: number; entryOffset: number }
+  opts?: { entryLimit: number; entryOffset: number },
+  extra?: { headings?: boolean }
 ): Promise<{
   base: KnowledgeBase;
   folders: KnowledgeFolder[];
   entries: KnowledgeEntry[];
   entryTotal?: number;
   nextEntryCursor?: string | null;
+  entryHeadings?: Record<string, string[]>;
 }> {
   // A read by id follows the id, and everything under it is keyed on `base.id`
   // rather than on a workspace, so the snapshot is the base's own wherever it
   // lives (F-470).
   const { value: base } = await readBaseInContext(ctx, baseId);
-  const [folders, entries, entryTotal] = await Promise.all([
+  const wantHeadings = extra?.headings === true;
+  const [folders, loaded, entryTotal] = await Promise.all([
     repo.listFoldersForBase(base.id, false),
     repo.listEntriesForBase(base.id, {
-      includeBody: false,
+      includeBody: wantHeadings,
       includeDeleted: false,
       ...(opts ? { limit: opts.entryLimit, offset: opts.entryOffset } : {}),
     }),
     opts ? repo.countEntriesForBase(base.id) : Promise.resolve(undefined),
   ]);
-  if (!opts || entryTotal === undefined) return { base, folders, entries };
+  let entryHeadings: Record<string, string[]> | undefined;
+  let entries = loaded;
+  if (wantHeadings) {
+    entryHeadings = {};
+    for (const e of loaded) {
+      const names = headingNames(e.body ?? "");
+      if (names.length > 0) entryHeadings[e.id] = names;
+    }
+    entries = loaded.map((e) => ({ ...e, body: "" }));
+  }
+  if (!opts || entryTotal === undefined)
+    return { base, folders, entries, ...(entryHeadings ? { entryHeadings } : {}) };
   const nextOffset = opts.entryOffset + entries.length;
   return {
     base,
@@ -79,6 +106,7 @@ export async function getBaseTree(
     entries,
     entryTotal,
     nextEntryCursor: nextOffset < entryTotal ? String(nextOffset) : null,
+    ...(entryHeadings ? { entryHeadings } : {}),
   };
 }
 

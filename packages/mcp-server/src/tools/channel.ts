@@ -80,7 +80,14 @@ import { opHold } from "./channel-ops-hold";
 import { opHoldWorkspace } from "./channel-ops-hold-workspace";
 // ⚠ G14's cap travels WITH the lane it bounds — the seam enforces it, the
 // send lane owns the number and the sentence.
-import { decisionRefusal, milestoneRefusal, opPost } from "./channel-ops-write";
+import {
+  decisionRefusal,
+  milestoneRefusal,
+  opPost,
+  recordAddressedRefusal,
+  tooManyRecipientsRefusal,
+  unaddressedRefusal,
+} from "./channel-ops-write";
 import { opCreateThread } from "./channel-ops-threads";
 // ⚠ A structured SEND, not a second delivery path — it delegates to `opPost`.
 import { opEscalate } from "./channel-ops-escalate";
@@ -242,6 +249,40 @@ export function registerChannelTool(
             );
           }
 
+          // ⚠ **THE RECORD LANE, AND IT IS THE SECOND HALF OF THE ADDRESSING
+          // STRUCTURE** (2026-09-18, Samuel's ruling). It stores `intent:"chat"`
+          // on an ordinary `message` row — an existing concept given a name
+          // rather than a new stored shape — and the server then refuses to
+          // repair its address, so it wakes and feeds nobody. ⚠ `to` is REFUSED
+          // here rather than ignored: the two say opposite things, and the
+          // server's own 400 for the same contradiction narrates as a
+          // membership problem.
+          if (args.kind === "record") {
+            const addressed = recordAddressedRefusal(Boolean(args.to));
+            if (addressed) return addressed;
+            return opPost(client, channel, body, {
+              clientMsgId: args.client_msg_id,
+              intent: "chat",
+              summary: args.summary,
+              thread: args.thread,
+              runtime,
+              // ⚠ ITS OWN VERB, on `milestone`'s precedent: a result opening
+              // `posted` would report a delivery on the one lane whose contract
+              // is that there was none.
+              resultHead: "recorded",
+            });
+          }
+
+          // ⚠ **A PLAIN SEND ADDRESSES SOMEBODY OR IT IS REFUSED** — the other
+          // half of the same ruling. Checked AFTER the three kinds above, each
+          // of which is already an address or already a post for nobody, and
+          // carved out for a THREAD send, where the thread's two parties are the
+          // address (INVARIANTS §5, RR1).
+          const bare = unaddressedRefusal(Boolean(args.to), Boolean(args.thread));
+          if (bare) return bare;
+          const crowded = tooManyRecipientsRefusal(args.to);
+          if (crowded) return crowded;
+
           return opPost(client, channel, body, {
             clientMsgId: args.client_msg_id,
             to: args.to,
@@ -313,6 +354,12 @@ export function registerChannelTool(
               args.limit,
               selfUserId,
               pollSubject(caller),
+              // ⚠ NOT KNOWN TO BE DESKTOP-RUN ⇒ treat as an outside session for
+              // MARKING purposes only. False positives here (an older desktop
+              // build) cost a few tokens on a line; a false NEGATIVE would be a
+              // message meant for this lane arriving with nothing to notice it
+              // by, which is the failure Samuel's ruling (b) weighs heaviest.
+              !isDesktopRun(caller),
             );
           }
           return opRead(
@@ -326,6 +373,8 @@ export function registerChannelTool(
             args.thread,
             args.response_format,
             pollSubject(caller),
+            // ⚠ See the account branch above for why the uncertain case marks.
+            !isDesktopRun(caller),
           );
         }
 

@@ -1,12 +1,19 @@
 import "server-only";
 import { meetsMinRole } from "@/features/workspaces/types";
 import { isUuid } from "@/shared/lib/id/uuid";
+import { CHANNEL_SEND_MAX_RECIPIENTS } from "../constants";
 import {
   agentIdHandle,
   buildAgentMentionIndex,
   resolveAgentHandle,
 } from "../lib/agent-mentions";
 import { mentionHandleOf } from "../lib/mentions";
+// ⚠ ONE statement of the reserved handle and its stored key — see that file for
+// why `@desktop` resolves to the CALLER'S own operator and reads no roster.
+import {
+  DESKTOP_GROUP_HANDLE,
+  isDesktopGroupHandle,
+} from "../lib/desktop-handle";
 import type { ChannelRow } from "./dto";
 import { ChannelRecipientUnresolvedError } from "./errors";
 import * as repo from "./repository";
@@ -14,8 +21,9 @@ import * as repoSessions from "./repository-sessions";
 import type { ChannelContext } from "./service-shared";
 
 /**
- * **`to=` IS ONE RECIPIENT AND TWO NAMESPACES** (2026-09-02, v2 wave B slice B4
- * — Samuel's ruling B1).
+ * **`to=` IS ONE OR MORE RECIPIENTS ACROSS TWO NAMESPACES** (2026-09-02, v2 wave
+ * B slice B4 — Samuel's ruling B1; widened to a LIST on 2026-09-18 by his
+ * multi-recipient ruling).
  *
  * ⚠ **THIS WIDENS A FENCE, WHICH IS THE OPPOSITE OF WHAT MOST OF THIS FAMILY
  * DOES, SO READ WHY.** Until now `to` was `z.string().uuid()` and an agent in it
@@ -56,7 +64,16 @@ import type { ChannelContext } from "./service-shared";
  */
 export type ResolvedRecipient =
   | { kind: "member"; userId: string }
-  | { kind: "agent"; agentId: string };
+  | { kind: "agent"; agentId: string }
+  /**
+   * **`@desktop` — the CALLER'S OWN operator's outside sessions** (2026-09-18).
+   *
+   * ⚠ **IT CARRIES THE OPERATOR ID EVEN THOUGH IT IS ALWAYS `ctx.userId`.** The
+   * verdict and the stored key both need the id, and deriving it a second time
+   * downstream is how "whose desktop" comes to have two answers in a room with
+   * two members.
+   */
+  | { kind: "desktop"; operatorUserId: string };
 
 /** `@handle` / `handle` → the bare handle, or null when the token is not one. */
 function handleTokenOf(to: string): string | null {
@@ -116,7 +133,13 @@ export async function liveAgentHandles(
   const candidates = rows
     .map((row) => ({ agentId: row.name, displayName: row.display_name }))
     .filter((c) => c.agentId.length > 0);
-  const index = buildAgentMentionIndex(candidates);
+  // 🔒 **`desktop` IS RESERVED HERE, AND THIS IS THE HALF THAT MATTERS**
+  // (2026-09-18). `main/agent-name-unique.js` suffixing a new launch to
+  // `desktop-1` is a courtesy on ONE machine; this line is what makes the token
+  // unclaimable whatever any machine already stored, including a row written
+  // before the rule existed and a PEER's agent whose name was minted elsewhere.
+  // The agent keeps its `agent-<id>` form, the handle that never stops working.
+  const index = buildAgentMentionIndex(candidates, [DESKTOP_GROUP_HANDLE]);
   // ⚠ THE `agent-<id>` FORM, which every agent claims and never loses. A custom
   // name is machine-local and may be contested by a second agent (the index
   // answers `null` for a slug two agents claim), so listing slugs in a refusal
@@ -124,7 +147,94 @@ export async function liveAgentHandles(
   // second refusal.
   const handles = [...new Set(candidates.map((c) => agentIdHandle(c.agentId)))];
   handles.sort();
+  // ⚠ **`@desktop` IS DELIBERATELY *NOT* IN THIS LIST.** It is rendered by the
+  // refusal as its own clause instead (see {@link unresolved}). This array is
+  // published under the words "Live agents:", and the built-in is not an agent
+  // and is not live — putting it here told a caller that `@desktop` was one of
+  // their running sessions, and turned an empty room's honest "Live agents:
+  // none" into "Live agents: @desktop". A discoverability win is not worth a
+  // false statement about what is running.
   return { handles, index };
+}
+
+/**
+ * **`to=` NAMES ONE OR MORE RECIPIENTS, COMMA-SEPARATED** (2026-09-18, Samuel's
+ * multi-recipient ruling).
+ *
+ * ⚠ **THE LIST LIVES INSIDE THE EXISTING STRING FIELD, AND THAT IS THE WHOLE OF
+ * THE WIRE CHANGE.** A `string | string[]` union publishes as `anyOf` on every
+ * MCP schema that carries the field, and a single-string `to` had to keep
+ * working byte-for-byte on every installed caller; one separator no address in
+ * either namespace can contain (a uuid, an email local/domain part and an agent
+ * handle are all comma-free) costs nothing on the wire and nothing in the
+ * published schema.
+ *
+ * ⚠ **EVERY TOKEN IS RESOLVED BY {@link resolveToRecipient}** — one resolver,
+ * one refusal, so a list of one behaves exactly as `to` always did and a list
+ * where ONE token misses is refused whole rather than partly delivered.
+ *
+ * ⚠ **ORDER IS PRESERVED AND DUPLICATES COLLAPSE.** The order is what the read's
+ * `→` arrow prints, and naming the same agent twice is one address, not two
+ * wakes.
+ */
+export interface ResolvedRecipients {
+  memberUserIds: string[];
+  agentIds: string[];
+  /**
+   * **THE OPERATORS WHOSE OUTSIDE SESSIONS WERE ADDRESSED** — `@desktop`
+   * (2026-09-18). At most one today, because the handle always resolves to the
+   * CALLER'S own operator, so a `to` naming it twice collapses to one.
+   *
+   * ⚠ **A LIST ANYWAY, FOR THE SAME REASON THE OTHER TWO ARE.** The shape is
+   * what the verdict and the stored key read, and a scalar here would have to
+   * become a list the day `@desktop` means anything but "mine" — which is
+   * exactly the kind of one-to-many widening this file already absorbed once.
+   */
+  desktopOperatorIds: string[];
+}
+
+export async function resolveToRecipients(
+  ctx: ChannelContext,
+  channel: ChannelRow,
+  to: string
+): Promise<ResolvedRecipients> {
+  const tokens = to
+    .split(",")
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0);
+  // ⚠ A `to` that trims to nothing is the caller's mistake, not "no recipient":
+  // answering `{[], []}` here would post it as an unaddressed message.
+  if (tokens.length === 0) throw await unresolved(ctx, channel, to);
+  if (tokens.length > CHANNEL_SEND_MAX_RECIPIENTS) {
+    throw new ChannelRecipientUnresolvedError(
+      `${tokens.length} recipients`,
+      [],
+      [],
+      `A send addresses at most ${CHANNEL_SEND_MAX_RECIPIENTS} recipients.`
+    );
+  }
+  const memberUserIds: string[] = [];
+  const agentIds: string[] = [];
+  const desktopOperatorIds: string[] = [];
+  for (const token of tokens) {
+    const recipient = await resolveToRecipient(ctx, channel, token);
+    if (recipient.kind === "member") {
+      if (!memberUserIds.includes(recipient.userId)) {
+        memberUserIds.push(recipient.userId);
+      }
+    } else if (recipient.kind === "desktop") {
+      // ⚠ A THIRD NAMESPACE, NOT A MEMBER. Pushing this onto `memberUserIds`
+      // would make `@desktop` notify the operator as a PERSON and put the id in
+      // `recipient_user_ids`, which every machine routes on — the two things
+      // this address exists NOT to do.
+      if (!desktopOperatorIds.includes(recipient.operatorUserId)) {
+        desktopOperatorIds.push(recipient.operatorUserId);
+      }
+    } else if (!agentIds.includes(recipient.agentId)) {
+      agentIds.push(recipient.agentId);
+    }
+  }
+  return { memberUserIds, agentIds, desktopOperatorIds };
 }
 
 /**
@@ -154,6 +264,17 @@ export async function resolveToRecipient(
 ): Promise<ResolvedRecipient> {
   const raw = to.trim();
   if (isUuid(raw)) return { kind: "member", userId: raw };
+
+  // **`@desktop` — RESOLVED BEFORE ANY READ, AND THAT IS DELIBERATE**
+  // (2026-09-18). It is a BUILT-IN address rather than a row: it resolves in
+  // every channel the operator is in, needs no setup, cannot go stale, and costs
+  // ZERO round trips — which is also what makes it impossible for a live-agent
+  // lookup to shadow it. ⚠ The operator is the CALLER'S own, never the room's:
+  // `@desktop` from Diana's agent means Diana's outside sessions, so two members
+  // in one room hold two of these and they never contest.
+  if (isDesktopGroupHandle(handleTokenOf(raw))) {
+    return { kind: "desktop", operatorUserId: ctx.userId };
+  }
 
   const looksLikeEmail = raw.includes("@") && !raw.startsWith("@");
   if (looksLikeEmail) {
@@ -215,5 +336,19 @@ async function unresolved(
     })
     .filter((label): label is string => label.length > 0)
     .sort();
-  return new ChannelRecipientUnresolvedError(to, handles, labels);
+  // ⚠ **THE BUILT-IN IS NAMED AS ITS OWN CLAUSE, NOT AS A LIVE AGENT**
+  // (2026-09-18). A refusal is the one place a caller reliably reads a handle
+  // list, so a built-in absent from it is a built-in nobody discovers — but it
+  // may not be folded into "Live agents", which is a claim about what is
+  // RUNNING. The whole message is composed here rather than in the error class
+  // because only this function knows the two lists are the room's.
+  const agents = handles.map((h) => `@${h}`).join(", ") || "none";
+  return new ChannelRecipientUnresolvedError(
+    to,
+    handles,
+    labels,
+    `No recipient in this channel matches "${to}". ` +
+      `Live agents: ${agents}. Members: ${labels.join(", ") || "none"}. ` +
+      `@desktop always resolves — it addresses YOUR OWN outside sessions (a Claude Code, Codex or Cursor run on your device token) and wakes no agent.`
+  );
 }

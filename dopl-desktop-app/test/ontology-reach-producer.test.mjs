@@ -140,10 +140,13 @@ test("the ONE spawn funnel awaits it — all three launch lanes, not one of them
   const src = read("session-launch.js");
   assert.match(src, /require\('\.\/ontology-reach'\)/);
   assert.match(src, /const ontologies = await ontologyReach\.fetchOntologyReach\(a\.workspaceId\);/);
-  assert.match(
-    src,
-    /const context = ontologies\.length \? \{ \.\.\.\(a\.context \|\| \{\}\), ontologies \} : a\.context;/
-  );
+  // ⚠ **THE KEY IS ADDED ONLY WHEN THERE IS SOMETHING TO SAY**, which is the property, not the
+  // spelling. It was a one-line ternary until 2026-09-18, when the ROOM ROSTER joined the same
+  // funnel for the same reasons (one producer, three lanes, fail-open) and the two facts became
+  // an `extra` object — so this pins the CONTRACT both halves keep: a lane that reaches nothing
+  // hands `startSession` the caller's own context, unchanged.
+  assert.match(src, /if \(ontologies\.length\) extra\.ontologies = ontologies;/);
+  assert.match(src, /const context = Object\.keys\(extra\)\.length \? \{ \.\.\.\(a\.context \|\| \{\}\), \.\.\.extra \} : a\.context;/);
   // ⚠ AND NO REFUSAL RIDES IT. A `skipped` branch on this read would take agent
   // launching down over a slow enrichment endpoint.
   assert.equal(/ontologies[\s\S]{0,80}skipped/.test(src), false);

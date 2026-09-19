@@ -216,7 +216,7 @@ describe("per-call workspace= (M-4 footer)", () => {
       role: null,
       workspaceSource: null,
     });
-    const res = await map({ workspace: "beta" });
+    const res = await map({ container: "beta" });
     expect(res.isError).toBeFalsy();
     const text = textOf(res);
     expect(text).toContain("active_workspace: `Beta`");
@@ -230,7 +230,7 @@ describe("per-call workspace= (M-4 footer)", () => {
       role: null,
       workspaceSource: null,
     });
-    const res = await map({ workspace: "   " });
+    const res = await map({ container: "   " });
     expect(res.isError).toBe(true);
     expect(textOf(res)).toContain("blank");
     expect(client.listKbBases).not.toHaveBeenCalled();
@@ -243,7 +243,7 @@ describe("per-call workspace= (M-4 footer)", () => {
       role: null,
       workspaceSource: null,
     });
-    const res = await map({ workspace: "does-not-exist" });
+    const res = await map({ container: "does-not-exist" });
     expect(res.isError).toBe(true);
     expect(textOf(res)).toContain("Container not found");
   });
@@ -290,7 +290,7 @@ describe("_dopl_status — the caller line", () => {
       workspaceSource: null,
       caller: CALLER,
     });
-    expect(textOf(await map({ workspace: "beta" }))).toContain("caller: id=`u-me`");
+    expect(textOf(await map({ container: "beta" }))).toContain("caller: id=`u-me`");
   });
 
   it("comes BEFORE the workspace, because who precedes where", async () => {

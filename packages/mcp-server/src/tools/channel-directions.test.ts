@@ -101,30 +101,34 @@ describe("🔒 the lane reaches the caller's OWN operator and nobody else", () =
     }
   });
 
-  it("routes NO member-shaped argument into a direction, even when one is passed", async () => {
+  it("routes NO member-shaped argument into a direction — it never reaches the wire at all", async () => {
     // ⚠ THE SHARPER HALF: the question is not whether an operator is declarable
     // but whether this op can be made to READ a member-shaped value as one.
     // ⚠ `member` LEFT THE SHAPE IN THE FIVE-OP COLLAPSE and `to` is what replaced
     // every recipient spelling — so the member-shaped value is fed through `to`,
-    // the ONE param that could carry it. It reaches the wire as `agentId` (the
-    // one field this op addresses) and as NOTHING ELSE: no operator field, no
-    // second copy, no member column. `member` is still passed beside it, because
-    // an undeclared key must not be readable either.
+    // the ONE param that could carry it. `member` is still passed beside it,
+    // because an undeclared key must not be readable either.
+    //
+    // ⚠ **THE FENCE GOT STRICTER ON 2026-09-18 (S51) AND THIS CASE MOVED WITH IT.** It used
+    // to assert that the email reached the wire as `agentId` AND AS NOTHING ELSE — no
+    // operator field, no second copy, no member column — because `bareAgentId` stripped
+    // without validating and the value was the create schema's to refuse. `channel-agent-target.ts`
+    // now refuses anything that is not an agent instance id BEFORE the call, so the guarantee
+    // this case exists for is strictly stronger and is asserted in its strongest form: the
+    // create was NEVER MADE, so there is no payload for a member-shaped value to appear in.
+    // ⚠ **THE OLD ASSERTION IS NOT DROPPED, IT IS ELSEWHERE**: the next case pins the exact key
+    // set of a real direction's payload, which is the half that could regress on its own.
     const create = vi.fn(async () => ({ offline: false, direction: DIRECTION }));
-    await run(directionStub({ createAgentDirection: create }), {
+    const out = await run(directionStub({ createAgentDirection: create }), {
       ...ASK,
       member: "someone-else@example.com",
       to: "someone-else@example.com",
     });
-    const sent = create.mock.calls[0][0] as Record<string, unknown>;
-    expect(Object.keys(sent).sort()).toEqual(
-      ["agentId", "body", "channel", "clientMsgId", "threadId"].sort(),
-    );
-    expect(sent.agentId).toBe("someone-else@example.com");
-    for (const [key, value] of Object.entries(sent)) {
-      if (key === "agentId") continue;
-      expect(JSON.stringify(value ?? null), key).not.toContain("someone-else");
-    }
+    expect(create).not.toHaveBeenCalled();
+    // ⚠ AND THE REFUSAL NAMES THE FIELD — a bare `VALIDATION_FAILED` out of the route is
+    // exactly what this change replaced, so a refusal that named nothing would be no better.
+    expect(out).toContain("field=to");
+    expect(out).toContain("reason=not_an_agent_id");
   });
 
   it("sends no operator field to the server either", async () => {

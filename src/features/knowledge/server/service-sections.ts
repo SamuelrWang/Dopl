@@ -59,6 +59,26 @@ export function outlinePayload(body: string): KnowledgeOutlinePayload {
 }
 
 /**
+ * 🔒 **THE HEADING LIST — WHAT A LISTING ROW CARRIES SO THE OUTLINE RUNG IS
+ * SKIPPABLE BY DESIGN** (Wave 4 a1, 2026-09-18).
+ *
+ * ⚠ **NAMES ONLY, NOT AN OUTLINE.** {@link outlinePayload} carries four numbers
+ * per heading because a caller deciding WHETHER to read one needs the cost; a
+ * caller deciding WHICH ENTRY to open needs only the words, and a tree renders
+ * hundreds of rows. The cost of the wrong shape here is measured in the whole
+ * listing, not in one row.
+ *
+ * ⚠ **THE LEVEL RIDES ALONG AS A PREFIX**, because `## Errors` and `### Errors`
+ * are different addresses and a bare `Errors` is one the caller cannot always
+ * pass back to `section=` unambiguously.
+ */
+export function headingNames(body: string): string[] {
+  return outlineOf(body).sections.map(
+    (s) => `${"#".repeat(Math.min(3, Math.max(1, s.level)))} ${s.heading}`,
+  );
+}
+
+/**
  * Project a read.
  *
  * An unknown section is a 200 carrying the outline, not a 404: the entry
@@ -67,15 +87,23 @@ export function outlinePayload(body: string): KnowledgeOutlinePayload {
  *
  * The body is emptied on a miss and on an outline-only read — sending the whole
  * document beside a refusal would spend the characters this exists to save.
+ *
+ * ⚠ **`headings` IS NOT `outline` WITH THE BODY LEFT IN — THEY ARE OPPOSITE
+ * TRADES** (2026-09-18). `outline` returns the map INSTEAD of the document, for
+ * a caller deciding whether to read; `headings` returns the map WITH it, so a
+ * caller that has already decided never pays a second call to learn what it can
+ * address next time. Both are opt-in and absent-by-default: a client that sends
+ * neither gets byte-for-byte what it always got (INVARIANTS §8).
  */
 export function projectFile(
   entry: KnowledgeEntry,
-  opts: { section?: string; outline?: boolean },
+  opts: { section?: string; outline?: boolean; headings?: boolean },
 ): KnowledgeFileProjection {
   const body = entry.body ?? "";
   if (opts.section === undefined) {
-    if (!opts.outline) return { entry };
-    return { entry: { ...entry, body: "" }, outline: outlinePayload(body) };
+    if (opts.outline) return { entry: { ...entry, body: "" }, outline: outlinePayload(body) };
+    if (opts.headings) return { entry, outline: outlinePayload(body) };
+    return { entry };
   }
   const outline = outlinePayload(body);
   const found = findSection(body, opts.section);

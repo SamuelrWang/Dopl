@@ -7,7 +7,6 @@ import * as repoSessions from "./repository-sessions";
 import { resolveAgentRecipients } from "./service-wake-verdict-handles";
 import {
   CTX,
-  lastAddress,
   projection,
   recentAgentPosts,
   resolve,
@@ -33,7 +32,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   projection();
   roomProjection();
-  lastAddress(null);
   recentAgentPosts();
 });
 
@@ -235,7 +233,13 @@ describe("resolveWakeVerdict — a human's tag reaches a PEER's agent", () => {
     expect(out.verdict).toBe("agent");
   });
 
-  it("🔒 an AGENT author still cannot reach a peer's agent — the carve is unmoved", async () => {
+  it("🔒 an AGENT author cannot reach a peer's agent — now because it names NOBODY", async () => {
+    // ⚠ **THE CARVE IS UNMOVED AND THE ANSWER CHANGED (2026-09-18).** It used to
+    // be `null` — *"unresolved against the author's OWN sessions, the machine
+    // decides"* — because an agent's prose was an address the own-scoped door
+    // fenced. Samuel's ruling closes the door: an agent's body names nobody at
+    // all, so the answer is `[]`, which is STRONGER. `null` sent the desktop back
+    // to its own unfenced parse; `[]` is authoritative and stops there.
     projection(sessionRow({ name: "k3v7d2mq" }));
     roomProjection(
       sessionRow({ name: "k3v7d2mq" }),
@@ -244,9 +248,26 @@ describe("resolveWakeVerdict — a human's tag reaches a PEER's agent", () => {
     const out = await resolve("@agent-deynelz3 do this for me", {
       session_id: "chan-1::k3v7d2mq",
     }, { authorKind: "agent" });
-    // Unresolved against the author's OWN sessions → `null`, the machine decides.
-    expect(out.recipientAgentIds).toBeNull();
+    expect(out.recipientAgentIds).toEqual([]);
     expect(out.verdict).not.toBe("agent");
+  });
+
+  it("🔒 …and the own-scoped BELT under it still answers, driven directly", async () => {
+    // ⚠ **THE FENCE THIS FILE IS ABOUT IS STILL THERE, ONE LAYER DOWN.**
+    // `resolveWakeVerdict` no longer asks this function about an agent author's
+    // body, so the scope rule would go untested if the suite only drove the
+    // verdict — and an untested fence is how a later edit that re-opens the body
+    // door re-opens the carve with it. A PEER's row resolves nothing here.
+    projection();
+    roomProjection(sessionRow({ name: "deynelz3", user_id: "user-2" }));
+    expect(
+      await resolveAgentRecipients(CTX, "chan-1", "@agent-deynelz3 go", null, "agent"),
+    ).toBeNull();
+    // And the author's OWN row resolves, presence-keyed, however quiet it is.
+    projection(sessionRow({ name: "k3v7d2mq" }));
+    expect(
+      await resolveAgentRecipients(CTX, "chan-1", "@agent-k3v7d2mq go", null, "agent"),
+    ).toEqual(["k3v7d2mq"]);
   });
 });
 

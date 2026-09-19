@@ -263,12 +263,36 @@ describe("🔒 team visibility outside a standard workspace", () => {
     ).resolves.toBeTruthy();
   });
 
-  it("asks NOTHING on a lane that is not landing at `team`", async () => {
-    // ⚠ ONE READ, ON ONE LANE — a private create pays nothing. ⚠ `private` and
-    // not `workspace`: G16's own predicate reads the same row for the SHARED
-    // lane (`shared-publish.ts`), so a public create would prove nothing here.
+  it("asks ONCE on a private lane — the DESTINATION fence, never the team one", async () => {
+    // 🔒 **THIS CASE SAID "asks NOTHING" UNTIL 2026-09-18, AND THE RULE MOVED
+    // RATHER THAN BROKE.** `assertTeamScopeGrantable` still asks on ONE lane
+    // only; what joined it is `workspaces/server/home-channel-destination.ts ›
+    // assertHomeChannelRowIsShared`, whose lane is the PRIVATE one — a home
+    // channel holds only what is shared into it, so `private` is exactly the
+    // value that has to be checked (Samuel's ruling). The two lanes are
+    // disjoint, so a create still pays exactly one workspace read, never two.
+    // ⚠ `private` and not `workspace`: G16's own predicate reads the same row
+    // for the SHARED lane (`shared-publish.ts`), so a public create would prove
+    // nothing here.
     containerKind("standard");
     await createTemplate(ctx(), { name: "Scout", visibility: "private" });
-    expect(mockWorkspace).not.toHaveBeenCalled();
+    expect(mockWorkspace).toHaveBeenCalledTimes(1);
+  });
+
+  it("🔒 REFUSES a private template landing in a home channel — the destination fence", async () => {
+    // ⚠ The wiring case: this feature passes `shared: visibility !== "private"`,
+    // and the rule itself is pinned by
+    // `workspaces/server/home-channel-destination.test.ts`.
+    containerKind("link");
+    await expect(
+      createTemplate(ctx(), { name: "Scout", visibility: "private" })
+    ).rejects.toMatchObject({ code: "HOME_CHANNEL_ROW_NOT_SHARED" });
+  });
+
+  it("🔒 …AND ON THE UPDATE PATH TOO — a fence with no update twin is defeated in two calls", async () => {
+    containerKind("link");
+    await expect(
+      updateTemplate(ctx(), "tpl-1", { visibility: "private" })
+    ).rejects.toMatchObject({ code: "HOME_CHANNEL_ROW_NOT_SHARED" });
   });
 });

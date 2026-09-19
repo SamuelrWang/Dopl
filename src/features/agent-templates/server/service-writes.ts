@@ -3,7 +3,6 @@ import { isSharedCredential } from "@/shared/auth/credential-audience";
 import type {
   AgentTemplate,
   AgentTemplateContext,
-  TemplateField,
   TemplateVisibility,
 } from "../types";
 import type {
@@ -14,7 +13,12 @@ import type {
 // shared with `knowledge/server/service-base-writes.ts`. Two copies of a
 // tenancy predicate is how the shelf fence ended up divergent (findings §6 #3).
 import { assertSharedPublishAcknowledged } from "@/features/workspaces/server/shared-publish";
+// 🔒 The ONE statement of "a home channel holds only what is shared into it",
+// shared with `knowledge/server/service-base-gates.ts` for the same reason the
+// line above it is shared — see that module's header for the ruling.
+import { assertHomeChannelRowIsShared } from "@/features/workspaces/server/home-channel-destination";
 import {
+  TemplateStaleVersionError,
   TemplateTeamScopeAgentForbiddenError,
   TemplateTeamNotGrantableError,
   TemplateWriteForbiddenError,
@@ -37,7 +41,13 @@ import {
   assertAttachableKnowledgeScopes,
   requestedKnowledgeScopes,
 } from "./service-knowledge-scopes";
-import { isWorkspaceAdmin, stripNullBytes } from "./service-shared";
+import {
+  isWorkspaceAdmin,
+  normalizeFieldsInput,
+  normalizeLabel,
+  normalizeProse,
+  stripNullBytes,
+} from "./service-shared";
 
 /**
  * Agent-template writes — create / update (metadata, sharing, attachments) /
@@ -134,6 +144,20 @@ export async function createTemplate(
     noun: "agent",
   });
 
+  // 🔒 **THE THIRD DESTINATION DOES NOT EXIST** (Samuel, 2026-09-18) — a
+  // `private` template inside a home channel is listed by nothing, because
+  // `lib/visibility.ts › SECTIONS_CONTAINER` stopped offering the value on
+  // 2026-08-27 and a container has no Agents page of its own. That ruling
+  // trimmed ONE array in the editor and left every other door open; this is the
+  // server half. ⚠ THE DESTINATION, like both gates above it: a row re-routed to
+  // the personal container is destination 1 and must not be refused.
+  await assertHomeChannelRowIsShared({
+    workspaceId: destination.workspaceId,
+    shared: visibility !== "private",
+    noun: "agent template",
+    remedy: 'visibility: "workspace"',
+  });
+
   const template = await repo.insertTemplate({
     // 🔒 THE DESTINATION, and the flag beside it cannot disagree with it: both
     // resolve the personal container by OWNER through `findPersonalContainerId`
@@ -196,10 +220,16 @@ export async function createTemplate(
 
 // ─── Update ─────────────────────────────────────────────────────────────
 
+/** ⚠ **`expectedUpdatedAt` IS OPTIONAL HERE AND REQUIRED ONE LAYER UP** (F-747),
+ *  where the KB lane puts the same decision: the strictness lives in
+ *  `packages/dopl-client/src/agent-templates.ts`, because the MCP server ships
+ *  INSIDE the desktop app and a route demanding the header would refuse every
+ *  field build that cannot send one. Absent is last-writer-wins, not a door. */
 export async function updateTemplate(
   ctx: AgentTemplateContext,
   id: string,
-  patch: AgentTemplateUpdateInput
+  patch: AgentTemplateUpdateInput,
+  expectedUpdatedAt?: string
 ): Promise<AgentTemplate> {
   // ⚠ 404 for an invisible template happens HERE, before the write gate, so a
   // 403 can only ever be returned for a row the caller already knew about.
@@ -256,6 +286,20 @@ export async function updateTemplate(
     noun: "agent",
   });
 
+  // 🔒 **THE UPDATE TWIN OF THE CREATE'S HOME-CHANNEL FENCE** (Samuel,
+  // 2026-09-18). A create fence with no update twin is a fence defeated in two
+  // calls — F-289's own argument, which this file already makes twice.
+  // ⚠ `nextVisibility`, so a patch that leaves a row already `private` in a home
+  // channel alone is refused too. That is deliberate and it is the narrow
+  // reading of "do not touch the orphans": nothing MIGRATES them, and the first
+  // write that reaches one has to move it to a destination that exists.
+  await assertHomeChannelRowIsShared({
+    workspaceId: tplCtx.workspaceId,
+    shared: nextVisibility !== "private",
+    noun: "agent template",
+    remedy: 'visibility: "workspace"',
+  });
+
   // VISIBILITY TRANSITIONS ARE FREE FOR THE OWNER, in any direction —
   // `private → workspace → team → private`. Nothing here guards narrowing (the
   // skills service makes the same note), because narrowing removes reach and
@@ -299,9 +343,7 @@ export async function updateTemplate(
   // and `http-mapping.ts` had no arm for: the agent got a bare INTERNAL_ERROR
   // 500 for a request that was entirely valid. The repo is now total on the
   // empty patch too, so this is the round trip we skip rather than the guard we
-  // depend on. Mirrors `workspaces/server/service.ts › renameWorkspace`, which
-  // has guarded this exact class all along.
-  //
+  // depend on. Mirrors `workspaces/server/service.ts › renameWorkspace`.
   // ⚠ TYPED AS THE REPOSITORY'S OWN PATCH, so the emptiness test and the column
   // set cannot drift: a seventh scalar column added to `UpdateTemplatePatch` and
   // forgotten here is a compile-time absence to notice, not a silent skip.
@@ -317,7 +359,32 @@ export async function updateTemplate(
     fields: patch.fields === undefined ? undefined : normalizeFieldsInput(patch.fields),
     visibility: patch.visibility,
   };
-  if (Object.values(rowPatch).some((value) => value !== undefined)) {
+  // ⚠ **THE PRECONDITION IS WHAT MAKES THE SKIP CONDITIONAL.** A junction-only
+  // patch still has a version to honour, so a caller that passed one gets the
+  // round trip; a caller that passed none keeps the F-404 skip byte for byte.
+  // 🔒 **BEFORE BOTH JUNCTION WRITES** — there is no transaction across these
+  // three statements (the create path says the same), so a refusal must land
+  // first or a lost race moves the row's LINKS and not its columns.
+  // ⚠ TWO CALL SHAPES, NOT A FOURTH ARGUMENT THAT IS SOMETIMES `undefined`: the
+  // 3-arg overload is TOTAL (it throws or returns a row) and the 4-arg one is
+  // the CAS, and a caller that reads one of them should not have to know the
+  // other exists. The un-versioned path is therefore byte-identical to what it
+  // was before F-747.
+  const touchesRow = Object.values(rowPatch).some((value) => value !== undefined);
+  if (expectedUpdatedAt !== undefined) {
+    const saved = await repo.updateTemplateRow(
+      tplCtx.workspaceId,
+      id,
+      rowPatch,
+      expectedUpdatedAt
+    );
+    // null = the CAS lost the race. Re-read for the version it actually holds,
+    // exactly as `knowledge/server/service-entries.ts › updateEntry` does.
+    if (saved === null) {
+      const fresh = await getTemplateById(tplCtx, id);
+      throw new TemplateStaleVersionError(expectedUpdatedAt, fresh.updatedAt);
+    }
+  } else if (touchesRow) {
     await repo.updateTemplateRow(tplCtx.workspaceId, id, rowPatch);
   }
 
@@ -431,28 +498,3 @@ async function assertGrantableTeams(
   return ids;
 }
 
-// ─── Normalizers ────────────────────────────────────────────────────────
-
-/** Empty / whitespace-only prose becomes NULL — one "absent" spelling in the
- *  column, so a cleared textarea and an omitted field read the same. */
-function normalizeProse(value: string | null | undefined): string | null {
-  if (value == null) return null;
-  const trimmed = stripNullBytes(value).trim();
-  return trimmed === "" ? null : trimmed;
-}
-
-/** Same for a short label. Separate function so the two can diverge if a label
- *  ever needs different treatment; today they agree. */
-function normalizeLabel(value: string | null | undefined): string | null {
-  return normalizeProse(value);
-}
-
-function normalizeFieldsInput(
-  fields: TemplateField[] | undefined
-): TemplateField[] {
-  if (!fields) return [];
-  return fields.map((f) => ({
-    key: stripNullBytes(f.key),
-    value: stripNullBytes(f.value),
-  }));
-}

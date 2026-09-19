@@ -10,6 +10,7 @@ exports.registerMapTool = registerMapTool;
 const workspace_directory_js_1 = require("../workspace-directory.js");
 const narration_1 = require("./narration");
 const ontology_clipped_1 = require("./ontology-clipped");
+const ontology_render_1 = require("./ontology-render");
 const partial_read_1 = require("./partial-read");
 const respond_1 = require("./respond");
 const tool_errors_1 = require("./tool-errors");
@@ -174,14 +175,25 @@ directory) {
         if (activeSkills.length === 0)
             lines.push("_None._");
         lines.push("", `## Ontology (${ontology.clusters.length}) — dopl_ontology`);
-        for (const c of ontology.clusters) {
-            const columns = c.columnIds
-                .map((id) => ontology.objects[id]?.name)
-                .filter((n) => Boolean(n))
-                .map((n) => (0, narration_1.inlineOr)(n, narration_1.NO_NAME))
-                .join(", ");
-            const purpose = c.purpose ? ` — ${(0, narration_1.inlineOr)(c.purpose, "")}` : "";
-            lines.push(`- ${(0, narration_1.inlineOr)(c.name, narration_1.NO_NAME)} \`${c.slug}\`${purpose}${columns ? ` (objects: ${columns})` : ""}`);
+        // 🔒 **S29c — THE ROUTING SURFACE IS WHERE THE MYSTERY WAS REPORTED.** A
+        // brand-new home channel listed ontologies nobody had put there; they are
+        // the caller's own personal shelf, which `service-audience.ts` folds into
+        // the read scope. The heading is `ontology-render.ts › personalShelfGroups`,
+        // reading the SAME table the `dopl_kb` list does.
+        for (const [heading, clusters] of (0, ontology_render_1.personalShelfGroups)(ontology.clusters, ontology.personalClusterIds)) {
+            if (clusters.length === 0)
+                continue;
+            if (heading !== null)
+                lines.push(`### ${heading}`);
+            for (const c of clusters) {
+                const columns = c.columnIds
+                    .map((id) => ontology.objects[id]?.name)
+                    .filter((n) => Boolean(n))
+                    .map((n) => (0, narration_1.inlineOr)(n, narration_1.NO_NAME))
+                    .join(", ");
+                const purpose = c.purpose ? ` — ${(0, narration_1.inlineOr)(c.purpose, "")}` : "";
+                lines.push(`- ${(0, narration_1.inlineOr)(c.name, narration_1.NO_NAME)} \`${c.slug}\`${purpose}${columns ? ` (objects: ${columns})` : ""}`);
+            }
         }
         if (ontology.clusters.length === 0)
             lines.push("_None._");

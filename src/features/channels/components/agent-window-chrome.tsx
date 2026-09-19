@@ -105,6 +105,19 @@ const TAB_WIDTH = `${TAB_MAX} shrink-0`;
  */
 const TAB_BASE =
   "group relative flex h-[34px] items-center gap-1.5 rounded-[8px] px-2 transition-colors";
+/**
+ * 🔒 **THE ACTIVE TAB TAKES NO FILL AND CARRIES NO CURSOR CLASS — BUT IT DOES SHOW THE HAND
+ * (Samuel's OVERRIDE, 2026-09-18).** The 2026-09-15 ruling was *"the ACTIVE tab takes neither the
+ * fill nor the cursor"*, and it held by SILENCE: a `<button>` had no hand unless a component asked
+ * for one. **The CURSOR half is superseded** — *"anytime there's a button or something that can be
+ * clicked, the cursor should change into the hand cursor"* — so this constant states NO cursor at
+ * all and lets the base layer reach it (`globals.css › ANYTHING CLICKABLE SHOWS THE HAND`). **The
+ * FILL half stands**: no `hover:bg-*` here, because a highlight on the tab you are already looking
+ * at still promises a state change that will not happen.
+ * ⚠ **SO "NO CURSOR UTILITY" IS NOW LOAD-BEARING, NOT AN ABSENCE.** A `cursor-default` bolted on
+ * here would out-layer the global rule and quietly re-take the override. Pinned by
+ * `agent-window-chrome.test.tsx`.
+ */
 const TAB_ACTIVE = "text-text-primary";
 /**
  * 🔒 **AN INACTIVE TAB LIGHTS UP GRAY UNDER THE POINTER** (Samuel, 2026-09-15: *"On the tabs when I
@@ -117,9 +130,16 @@ const TAB_ACTIVE = "text-text-primary";
  * ⚠ **AND IT IS SPELLED OUT HERE RATHER THAN IMPORTED**, which is not an oversight: Tailwind
  * extracts CLASS LITERALS from source, so a `hover:${SOME_CONSTANT}` would emit no rule at all.
  * The equality is pinned in `agent-window-chrome.test.tsx` instead.
- * ⚠ **THE ACTIVE TAB TAKES NEITHER THE FILL NOR THE CURSOR.** It is already where you are; a
- * highlight that says "clickable" on the thing you are looking at is a promise of a state change
- * that will not happen.
+ * ⚠ **THE ACTIVE TAB TAKES NEITHER THE FILL NOR — UNTIL 2026-09-18 — THE CURSOR.** It is already
+ * where you are; a highlight that says "clickable" on the thing you are looking at is a promise of
+ * a state change that will not happen. **The FILL half still stands. The CURSOR half was overruled
+ * by Samuel on 2026-09-18** ("anytime there's a button or something that can be clicked, the cursor
+ * should change into the hand cursor"), so the active tab now takes the base layer's hand like
+ * every other control — see {@link TAB_ACTIVE}.
+ * ⚠ **`cursor-pointer` STAYS SPELLED HERE ANYWAY.** It is now redundant with the global rule
+ * rather than the only thing granting the hand, and it is what the test reads back to tell the two
+ * tab states apart; the repo left every other redundant `cursor-pointer` in place for the same
+ * reason (INVARIANTS §15).
  */
 const TAB_IDLE =
   "cursor-pointer text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary";

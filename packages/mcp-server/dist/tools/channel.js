@@ -204,6 +204,41 @@ directory) {
                         runtime,
                     });
                 }
+                // ⚠ **THE RECORD LANE, AND IT IS THE SECOND HALF OF THE ADDRESSING
+                // STRUCTURE** (2026-09-18, Samuel's ruling). It stores `intent:"chat"`
+                // on an ordinary `message` row — an existing concept given a name
+                // rather than a new stored shape — and the server then refuses to
+                // repair its address, so it wakes and feeds nobody. ⚠ `to` is REFUSED
+                // here rather than ignored: the two say opposite things, and the
+                // server's own 400 for the same contradiction narrates as a
+                // membership problem.
+                if (args.kind === "record") {
+                    const addressed = (0, channel_ops_write_1.recordAddressedRefusal)(Boolean(args.to));
+                    if (addressed)
+                        return addressed;
+                    return (0, channel_ops_write_1.opPost)(client, channel, body, {
+                        clientMsgId: args.client_msg_id,
+                        intent: "chat",
+                        summary: args.summary,
+                        thread: args.thread,
+                        runtime,
+                        // ⚠ ITS OWN VERB, on `milestone`'s precedent: a result opening
+                        // `posted` would report a delivery on the one lane whose contract
+                        // is that there was none.
+                        resultHead: "recorded",
+                    });
+                }
+                // ⚠ **A PLAIN SEND ADDRESSES SOMEBODY OR IT IS REFUSED** — the other
+                // half of the same ruling. Checked AFTER the three kinds above, each
+                // of which is already an address or already a post for nobody, and
+                // carved out for a THREAD send, where the thread's two parties are the
+                // address (INVARIANTS §5, RR1).
+                const bare = (0, channel_ops_write_1.unaddressedRefusal)(Boolean(args.to), Boolean(args.thread));
+                if (bare)
+                    return bare;
+                const crowded = (0, channel_ops_write_1.tooManyRecipientsRefusal)(args.to);
+                if (crowded)
+                    return crowded;
                 return (0, channel_ops_write_1.opPost)(client, channel, body, {
                     clientMsgId: args.client_msg_id,
                     to: args.to,
@@ -251,12 +286,20 @@ directory) {
                     ]);
                     if (missAcct)
                         return missAcct;
-                    return (0, channel_ops_account_1.opReadAccount)(client, directory, args.since, args.limit, selfUserId, (0, channel_poll_detector_1.pollSubject)(caller));
+                    return (0, channel_ops_account_1.opReadAccount)(client, directory, args.since, args.limit, selfUserId, (0, channel_poll_detector_1.pollSubject)(caller), 
+                    // ⚠ NOT KNOWN TO BE DESKTOP-RUN ⇒ treat as an outside session for
+                    // MARKING purposes only. False positives here (an older desktop
+                    // build) cost a few tokens on a line; a false NEGATIVE would be a
+                    // message meant for this lane arriving with nothing to notice it
+                    // by, which is the failure Samuel's ruling (b) weighs heaviest.
+                    !(0, identity_1.isDesktopRun)(caller));
                 }
                 return (0, channel_ops_read_1.opRead)(client, args.channel, args.since, args.limit, selfUserId, 
                 // ⚠ Any non-empty string is legal — legacy `task-<channelId>-<seq>`
                 // ids are real `metadata.taskId` values and must stay filterable.
-                args.thread, args.response_format, (0, channel_poll_detector_1.pollSubject)(caller));
+                args.thread, args.response_format, (0, channel_poll_detector_1.pollSubject)(caller), 
+                // ⚠ See the account branch above for why the uncertain case marks.
+                !(0, identity_1.isDesktopRun)(caller));
             }
             // ⚠ `channel` is an OPTIONAL filter; own-scoped in the service, and the
             // transport credential IS the caller, so no identity is passed.

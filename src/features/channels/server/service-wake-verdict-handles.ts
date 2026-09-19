@@ -2,6 +2,10 @@ import "server-only";
 import { agentIdHandle, buildAgentMentionIndex } from "../lib/agent-mentions";
 import { agentIdOfSessionKey } from "../lib/agent-post-stamp";
 import { mentionHandleOf, mentionTokensOf } from "../lib/mentions";
+// ⚠ The built-in group handle. It is RESERVED on this door too — see the reserve
+// set below for why a body `@desktop` must resolve as PLACED rather than as an
+// agent this server could not find.
+import { DESKTOP_GROUP_HANDLE } from "../lib/desktop-handle";
 import type { SessionStateRow } from "./collab-dto";
 // ⚠ `ChannelAgentHandleAmbiguousError` IS DELIBERATELY NOT IMPORTED (2026-09-15). Samuel's
 // commit-time rule means no two ADDRESSABLE agents in a channel share a name — the second is
@@ -150,6 +154,16 @@ export async function resolveAgentRecipients(
       (handle) => handle.length > 0
     )
   );
+  // **`@desktop` IN A BODY IS PLACED PROSE, NOT AN UNRESOLVED AGENT**
+  // (2026-09-18). `to=` is the door for it, exactly as for an agent handle — but
+  // the two failure shapes are NOT the same, and that is why it joins the
+  // RESERVED set rather than being ignored. An unknown handle answers `null`,
+  // which `service-wake-verdict.ts › namedButUnresolved` reads as *"the author
+  // typed a handle this server could not place"* and stamps `unreachable`. This
+  // server CAN place `@desktop`; it simply does not route a body tag. Reserved
+  // ⇒ `resolvedAny` ⇒ no false `unreachable` on a post whose author merely
+  // mentioned the lane in passing.
+  reserved.add(DESKTOP_GROUP_HANDLE);
 
   // ⚠ **BOTH DOORS ARE PRESENCE-KEYED SINCE 2026-09-05, AND THE ONLY DIFFERENCE
   // LEFT BETWEEN THEM IS SCOPE — which is the only difference there was ever
@@ -162,9 +176,16 @@ export async function resolveAgentRecipients(
     authorKind === "agent"
       ? await ownSessions(ctx, channelId)
       : await liveChannelSessions(ctx, channelId);
+  // ⚠ **THE INDEX IS MINTED AROUND `reserved`, NOT AROUND `reservedHandles`** —
+  // the set the line above just widened. Handing the raw parameter here would
+  // reserve `desktop` for the `resolvedAny` bookkeeping and leave the INDEX free
+  // to hand the slug to an agent named "Desktop", so one token would have two
+  // answers on one door. The set is the answer; pass the set.
+  // (`buildAgentMentionIndex` takes an `Iterable<string>`, so a `Set` is the
+  // shape it already accepts.)
   const index = buildAgentMentionIndex(
     rows.map((row) => ({ agentId: row.name, displayName: row.display_name })),
-    reservedHandles
+    reserved
   );
   const out: string[] = [];
   // ⚠ **"SOMETHING RESOLVED" IS TRACKED SEPARATELY FROM "SOMETHING IS LEFT".**

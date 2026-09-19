@@ -35,6 +35,9 @@ const profiles = require('./session-profiles');
 // to `test/session-engine-slot.test.mjs`'s slice as an injected handle like `profiles`.
 const ontologyReach = require('./ontology-reach');
 const { diag } = require('./diag');
+// ⚠ Lazily-required like `ontology-reach`, and for the same reason: `main/` truth tables load
+// this module directly and must not pull the IPC/electron surface in behind it.
+const roomRoster = require('./room-roster');
 
 let deps = { sessions: null, acquireRuntime: null, startSession: null, liveOnThread: null, sessionOn: null };
 
@@ -176,7 +179,28 @@ async function launch(a) {
   // so its turn stays byte-identical to what it was before this module existed — which is
   // exactly the contract `prompt-framing-ontology.js › ontologyReachLines` makes about its `[]`.
   const ontologies = await ontologyReach.fetchOntologyReach(a.workspaceId);
-  const context = ontologies.length ? { ...(a.context || {}), ontologies } : a.context;
+  // ── ⚠ WHO ELSE IS IN THIS ROOM (2026-09-18) — THE SAME FUNNEL, FOR THE SAME REASON ────────
+  //
+  // Three lanes arrive here, so the producer sits here rather than beside one of them (F-510's
+  // lesson, applied once more). `room-roster.js` never throws and never refuses a launch: the
+  // operator's OWN agents come from the registry with no network at all, the rest is one bounded
+  // read phase that fails open, and a solo room skips it entirely.
+  // ⚠ THE KEY IS ADDED ONLY WHEN THERE IS SOMETHING TO SAY, exactly as `ontologies` is — a lane
+  // that reaches nobody hands `startSession` the caller's context unchanged, so its turn stays
+  // byte-identical to what it was before this module existed.
+  const roster = await roomRoster.fetchRoomRoster({
+    channelId: a.channelId,
+    workspaceId: a.workspaceId,
+    selfAgentId: agentId,
+    selfUserId: a.selfUserId || null,
+    memberCount: a.memberCount,
+  });
+  const extra = {};
+  if (ontologies.length) extra.ontologies = ontologies;
+  if (roster && (roster.agents.length || roster.people.length || roster.read === 'failed')) {
+    extra.roster = roster;
+  }
+  const context = Object.keys(extra).length ? { ...(a.context || {}), ...extra } : a.context;
   const s = await deps.startSession({
     key,
     agentId,

@@ -390,21 +390,50 @@ test("CRASH: there is no restart sweep, and that is the documented decision, not
 
 // ── 7. THE BACKSTOP ──────────────────────────────────────────────────────────────────────
 //
-// ⚠ IT IS FOR THE BREAKER, NOT FOR CORRECTNESS. `realtime.js`'s breaker holds a LONG cooldown by
-// design, and a directive is a request somebody is waiting on — without this, arming the lane
-// and then flapping the WS would leave an orchestrator waiting out the whole expiry window.
-test("BACKSTOP: a healthy workspace is never polled — push already delivers those", async () => {
-  const h = boot({ healthy: true });
-  await h.api.handle(row(), WS); // prove the module is live
-  // ⚠ **THE CLAIM IS ABOUT THE *POLL*, NOT ABOUT EVERY GET THIS LANE MAKES**, and it was written
-  // as `h.gets.length === 0` while the poll was the only read there was. A SPAWN now reads the
-  // pinned startup context too (2026-09-01, T81), on a different route and for a different
-  // reason, so counting all GETs would fail on an unrelated feature and — worse — would have gone
-  // green if the poll moved to a path this file does not name. Filtered on the backstop's own route.
+// ⚠ IT COVERS THE BREAKER **AND** A DROPPED FRAME (2026-09-18, S18/S56). It used to check
+// `realtime.isWorkspaceHealthy` and skip, which is right for an outage and wrong for the failure
+// it was reported under: ONE `postgres_changes` INSERT that never arrives on a socket that is
+// perfectly healthy. A health signal is evidence about the TRANSPORT and never about a row.
+test("BACKSTOP: a HEALTHY workspace is still reconciled — a live socket is not a delivery receipt", async () => {
+  const h = boot({ healthy: true, pending: [row()] });
+  await h.api.poll();
+  // ⚠ Filtered on the backstop's own route: a SPAWN reads the pinned startup context too
+  // (2026-09-01, T81), so counting every GET would fail on an unrelated feature.
   const polls = h.gets.filter((g) => g.path === wire.ROUTES.pending);
-  // The interval is 60s and `unref`'d; the behaviour is driven directly.
-  assert.equal(polls.length, 0, "no backstop GET while push is up");
+  assert.equal(polls.length, 1, "the reconcile read runs while push is up");
   assert.equal(h.api.POLL_MS, 60000);
+});
+
+// ⚠ 60s IS THE RECONCILE'S CEILING, NOT A PREFERENCE: `LAUNCH_DIRECTIVE_TTL_MS` is 120s, so a
+// slower tick could not reach a dropped row before it lapsed and the whole reconcile would be
+// decorative. This pins the relationship rather than the number alone.
+test("BACKSTOP: the tick fits inside the directive TTL, with room for one miss", () => {
+  const TTL_MS = 120000; // src/features/channels/constants.ts › LAUNCH_DIRECTIVE_TTL_MS
+  assert.ok(h_POLL_MS() * 2 <= TTL_MS, "two ticks must fit inside the TTL");
+});
+function h_POLL_MS() { return boot({}).api.POLL_MS; }
+
+test("BACKSTOP: a DOWN workspace is polled too — the recovery lane is unchanged", async () => {
+  const h = boot({ healthy: false, pending: [row()] });
+  await h.api.poll();
+  assert.equal(h.gets.filter((g) => g.path === wire.ROUTES.pending).length, 1);
+});
+
+// ⚠ THE HEALTH SIGNAL IS STILL WORTH HAVING — it is the difference between "push is down, this
+// read IS the lane" and "push is up, this read is a reconcile" — so it is LOGGED rather than
+// acted on, and edge-triggered so an outage does not bury it one line a minute.
+test("BACKSTOP: push going down is logged ONCE, not once per tick", async () => {
+  const h = boot({ healthy: false });
+  await h.api.poll();
+  await h.api.poll();
+  const down = h.logged.filter((l) => l.includes("push is DOWN"));
+  assert.equal(down.length, 1, "edge-triggered, not per tick");
+});
+
+test("BACKSTOP: an unreadable health signal polls rather than skipping", async () => {
+  const h = boot({ pending: [row()], healthyThrows: true });
+  await h.api.poll();
+  assert.equal(h.gets.filter((g) => g.path === wire.ROUTES.pending).length, 1);
 });
 
 test("BACKSTOP: the poll runs the SAME funnel, so every guard above still applies to it", () => {
@@ -412,7 +441,11 @@ test("BACKSTOP: the poll runs the SAME funnel, so every guard above still applie
   // toggle, the owner check and the dedupe in one edit — the exact shape of a lane that is safe
   // through the door everyone reads and open through the one nobody does.
   assert.match(SRC, /for \(const row of rows\) await handle\(row, wsId\);/);
-  assert.match(SRC, /if \(realtime\.isWorkspaceHealthy\(wsId\)\) continue;/);
+  // ⚠ AND THE HEALTH GATE IS GONE FROM THE CONTROL FLOW. It read
+  // `if (realtime.isWorkspaceHealthy(wsId)) continue;` until 2026-09-18; a re-introduction would
+  // restore the dropped-frame hole in one line and pass every behavioural test that does not
+  // boot a healthy workspace.
+  assert.equal(/isWorkspaceHealthy\(wsId\)\) continue;/.test(SRC), false);
   assert.match(SRC, /function deliver\(workspaceId, row\) \{\s*void handle\(row, workspaceId\);/);
 });
 

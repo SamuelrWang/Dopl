@@ -113,10 +113,15 @@ export async function bootServer(
   // Status ping → admin flag + user id. ⚠ Safe default on failure: non-admin.
   let isAdmin = false;
   let userId: string | null = null;
+  // ⚠ THE OPERATOR'S HANDLE RIDES THE PING (A1/S48) — no second call, which the
+  // docblock above forbids. Null on a failed ping, an older deployment, or a
+  // profile with nothing sluggable; the briefing then names no handle at all.
+  let operatorHandle: string | null = null;
   try {
     const ping = await pingWithRetry(client, opts.pingRetries ?? 0);
     isAdmin = ping.is_admin;
     userId = ping.user_id;
+    operatorHandle = ping.handle ?? null;
   } catch (err) {
     diag(`[dopl-mcp] status ping failed (continuing as non-admin): ${errText(err)}`);
   }
@@ -230,6 +235,7 @@ export async function bootServer(
     toolProfile: opts.toolProfile,
     liveAgents: opts.liveAgents,
     posture: opts.posture,
+    operatorHandle,
   });
 
   const activeWorkspace = active
@@ -253,7 +259,9 @@ export async function bootServer(
 async function pingWithRetry(
   client: DoplClient,
   retries: number,
-): Promise<{ is_admin: boolean; user_id: string | null }> {
+  // ⚠ `handle` RIDES THE SAME PING (A1/S48) — the operator's mention handle, or
+  // null from an older deployment that does not send the key.
+): Promise<{ is_admin: boolean; user_id: string | null; handle: string | null }> {
   const delays = [1000, 2000, 4000].slice(0, Math.max(0, retries));
   for (let attempt = 0; attempt <= delays.length; attempt++) {
     try {
@@ -264,5 +272,5 @@ async function pingWithRetry(
     }
   }
   // Unreachable — the loop either returns or throws on the last attempt.
-  return { is_admin: false, user_id: null };
+  return { is_admin: false, user_id: null, handle: null };
 }

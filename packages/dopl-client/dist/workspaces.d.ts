@@ -18,11 +18,20 @@ export declare function getWorkspace(t: DoplTransport, slug: string): Promise<Re
  */
 export declare function getActiveWorkspace(t: DoplTransport): Promise<ResolvedWorkspace>;
 /**
- * Liveness + privilege probe. `is_admin` / `user_id` are OPTIONAL on the wire,
- * normalised HERE not at the call site — a missing key means "not admin" /
- * "unknown user", never `undefined` leaking into a caller's boolean.
+ * Liveness + privilege probe. `is_admin` / `user_id` / `handle` are OPTIONAL on
+ * the wire, normalised HERE not at the call site — a missing key means "not
+ * admin" / "unknown user" / "no handle", never `undefined` leaking into a
+ * caller's boolean.
+ *
+ * ⚠ **`handle` IS THE OPERATOR'S MENTION HANDLE (A1/S48, 2026-09-18)** — the
+ * tag an agent writes to address the person whose account this connection is.
+ * It rides THIS request because boot may add no round trip
+ * (`mcp-server/src/factory.ts › bootServer`). ⚠ An older deployment does not
+ * send the key, so `null` is an ordinary answer and the briefing prints no
+ * handle rather than a guess — the §11 rule that UNKNOWN IS NOT EMPTY.
  */
 export declare function pingMcpStatus(t: DoplTransport): Promise<{
     is_admin: boolean;
     user_id: string | null;
+    handle: string | null;
 }>;

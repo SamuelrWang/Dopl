@@ -18,7 +18,14 @@ import { hydrateOne, replayOf } from "./service-writes-ack";
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
 import { resolvePostMetadata } from "./service-writes-metadata";
-import { resolveToRecipient } from "./service-writes-metadata-recipient";
+import { resolveToRecipients } from "./service-writes-metadata-recipient";
+// ⚠ The outside-session vocabulary and the ONE discriminator — see
+// `lib/desktop-handle.ts` for the two marks it reads and its failure modes.
+import {
+  DESKTOP_TO_METADATA_KEY,
+  EXTERNAL_SESSION_METADATA_KEY,
+  isExternalSessionAuthor,
+} from "../lib/desktop-handle";
 import { resolveWakeVerdict } from "./service-wake-verdict";
 import {
   requireMemberChannel,
@@ -106,23 +113,35 @@ export async function postMessage(
   assertChatIsUnaddressed(raw);
   assertOneRecipientField(raw);
 
-  // **`to=` RESOLVED ONCE, HERE** (2026-09-02, B4 — ruling B1). A MEMBER becomes
-  // the `toUserId` every fence below already knows how to check, so there is one
-  // addressee path and not two; an AGENT rides `toAgentId` into the verdict and
-  // stamps no metadata key (see `service-writes-metadata-recipient.ts`).
+  // **`to=` RESOLVED ONCE, HERE** (2026-09-02, B4 — ruling B1; a LIST since
+  // 2026-09-18). MEMBERS become the `toUserId` every fence below already knows
+  // how to check — the FIRST of them, because `metadata.to_user_id` is one key
+  // that consent cards and thread inheritance index on — and every one of them
+  // rides `toUserIds` into the verdict, which is what `recipient_user_ids`
+  // stores. AGENTS ride `toAgentIds` and stamp no metadata key at all (see
+  // `service-writes-metadata-recipient.ts`).
+  //
+  // ⚠ **THE MEMBERSHIP FENCE BELOW LOOPS OVER ALL OF THEM, NOT OVER THE FIRST.**
+  // A list whose second name is a departed teammate must be refused exactly as a
+  // single one is, or the multi form becomes the way around the check.
   //
   // ⚠ IT RUNS BEFORE THE IDEMPOTENCY SHORT-CIRCUIT for the same reason the two
   // asserts above do: `to` naming nobody is a REFUSAL (ruling B1), and a refusal
   // that a retry can replay out of storage is not one.
-  let toAgentId: string | null = null;
+  let toAgentIds: string[] = [];
+  let toUserIds: string[] = [];
+  // ⚠ **A THIRD NAMESPACE SINCE 2026-09-18 — `@desktop`.** It becomes NO
+  // `toUserId` and NO agent id: it stamps `metadata.to_desktop` alone, which is
+  // what keeps it off `recipient_user_ids` and therefore out of every machine's
+  // routing. See `lib/desktop-handle.ts`.
+  let toDesktopOperatorIds: string[] = [];
   let input = raw;
   if (raw.to) {
-    const recipient = await resolveToRecipient(ctx, channel, raw.to);
-    if (recipient.kind === "member") {
-      input = { ...raw, toUserId: recipient.userId };
-    } else {
-      toAgentId = recipient.agentId;
-    }
+    const resolved = await resolveToRecipients(ctx, channel, raw.to);
+    toAgentIds = resolved.agentIds;
+    toUserIds = resolved.memberUserIds;
+    toDesktopOperatorIds = resolved.desktopOperatorIds;
+    if (toUserIds.length > 0) input = { ...raw, toUserId: toUserIds[0] };
   }
   // ⚠ Same placement rule, same reason. Takes no `opts` since 2026-08-20 — the
   // `internalLifecycle` exemption it used to read is deleted, so the credential
@@ -141,14 +160,25 @@ export async function postMessage(
   // consumption" until 2026-08-22. That file is DELETED with the trust retirement
   // (INVARIANTS §6), so this is now the only place the rule is stated — it is not
   // a second copy of a check that lives elsewhere, and nothing re-asserts it later.
-  if (
-    input.toUserId &&
-    !(
-      (await repo.findMembership(channel.id, input.toUserId)) &&
-      (await repo.isActiveWorkspaceMember(ctx.workspaceId, input.toUserId))
-    )
-  ) {
-    throw new ChannelAddresseeNotMemberError(input.toUserId);
+  // ⚠ **EVERY ADDRESSEE, NOT JUST `toUserId`** (2026-09-18). `toUserIds` holds
+  // the whole resolved list and `toUserId` is only its first element, so
+  // checking the field alone would let the second name through unchecked. The
+  // `?? [input.toUserId]` arm keeps the single `toUserId` caller (the web
+  // composer, every older client) on exactly the path it has always taken.
+  const addressees = toUserIds.length > 0
+    ? toUserIds
+    : input.toUserId
+      ? [input.toUserId]
+      : [];
+  for (const addressee of addressees) {
+    if (
+      !(
+        (await repo.findMembership(channel.id, addressee)) &&
+        (await repo.isActiveWorkspaceMember(ctx.workspaceId, addressee))
+      )
+    ) {
+      throw new ChannelAddresseeNotMemberError(addressee);
+    }
   }
 
   // Re-sent client_msg_id returns the stored message and writes nothing.
@@ -225,7 +255,9 @@ export async function postMessage(
 
   const wake = await resolveWakeVerdict(ctx, channel, input, metadata, {
     authorKind,
-    toAgentId,
+    toAgentIds,
+    toUserIds,
+    toDesktopOperatorIds,
     // ⚠ **MEMBERS OUTRANK AGENTS, AND THIS LINE IS THE WHOLE OF IT ON THE SERVER** (2026-09-07,
     // Samuel's suffix ruling). The handles are the metadata fold's own leftover — derived from
     // the roster and profiles it read for `mentionedUserIds`, on this same request — so the
@@ -240,7 +272,31 @@ export async function postMessage(
   // rather than in the metadata fold because only the verdict knows it, which is
   // why that fold STRIPS it. ⚠ ABSENT, never `null`, on an address the author
   // wrote: a key on every row would make the pick unreadable.
-  const stored = wake.reason ? { ...metadata, wake_reason: wake.reason } : metadata;
+  // ⚠ **THE TWO OUTSIDE-SESSION STAMPS RIDE HERE, ON `wake_reason`'S TERMS**
+  // (2026-09-18) — the metadata fold STRIPS both and re-stamps neither, because
+  // each needs a fact that fold does not hold (see its own note).
+  //
+  //   · `to_desktop` — WHOSE outside sessions were addressed, from the resolver.
+  //     ⚠ ABSENT rather than `null` when nobody was: a key on every row would
+  //     make the lane unreadable at a glance and would index every message into
+  //     the `dopl_status` query below.
+  //   · `external_session` — whether an OUTSIDE SESSION wrote this. ⚠ Stamped
+  //     `true` ONLY, never `false`: the absence of the key is what an old row and
+  //     an older server both carry, and writing an explicit `false` would make
+  //     "we looked and it was a desktop agent" indistinguishable from "we never
+  //     looked" for every reader downstream. One value, one meaning.
+  const stored: Record<string, unknown> = { ...metadata };
+  if (wake.reason) stored.wake_reason = wake.reason;
+  if (toDesktopOperatorIds.length > 0) {
+    // ⚠ THE FIRST, because `@desktop` always resolves to the caller's own
+    // operator and therefore collapses to one. Stored as a scalar so the
+    // `metadata->>to_desktop` predicate `dopl_status` runs is a plain equality
+    // against an indexable text value, exactly as the `to_user_id` lane is.
+    stored[DESKTOP_TO_METADATA_KEY] = toDesktopOperatorIds[0];
+  }
+  if (isExternalSessionAuthor(authorKind, ctx.runtime ?? null)) {
+    stored[EXTERNAL_SESSION_METADATA_KEY] = true;
+  }
 
   // ⚠ THE INSERT, PARAMETERISED ON ITS METADATA FOR ONE REASON: the typed
   // escalation answer below has to be droppable and the row written anyway.

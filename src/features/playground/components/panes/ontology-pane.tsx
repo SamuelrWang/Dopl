@@ -188,7 +188,14 @@ function PaneColumnHeader({
       className="kanban-card shrink-0 rounded-[10px] border bg-bg-elevated"
       data-selected={selected ? "true" : undefined}
     >
-      <div className="flex items-center gap-1 px-1.5 py-1" onClick={() => setOpen((v) => !v)}>
+      {/* ⚠ `data-clickable` is the row's hand cursor — read by the base layer's one clickable-
+          cursor rule (`globals.css › ANYTHING CLICKABLE SHOWS THE HAND`), never a style hook.
+          No `role="button"`: the row holds buttons of its own. */}
+      <div
+        className="flex items-center gap-1 px-1.5 py-1"
+        data-clickable=""
+        onClick={() => setOpen((v) => !v)}
+      >
         <button
           type="button"
           aria-expanded={open}
@@ -283,6 +290,10 @@ function PaneObjectCard({
   return (
     <div
       onClick={() => onSelect(card.id)}
+      /* ⚠ The card's hand cursor, read by the base layer's one clickable-cursor rule
+         (`globals.css › ANYTHING CLICKABLE SHOWS THE HAND`). No `role="button"`: it holds
+         buttons of its own. */
+      data-clickable=""
       data-selected={selected ? "true" : undefined}
       className="kanban-card flex h-[216px] shrink-0 flex-col rounded-[10px] border bg-bg-elevated"
     >

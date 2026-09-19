@@ -78,6 +78,28 @@ export type TemplateKnowledgeScope =
   | { baseId: string; scope: "entry"; entryId: string };
 
 /**
+ * ONE TOP-LEVEL FOLDER OF AN ATTACHED BASE, as the base CARD names it
+ * (2026-09-18, A4). A name and, when the folder has one, the clause its own
+ * editor wrote.
+ *
+ * ⚠ **NO IDS AND NO ENTRIES.** The card exists so an agent can pick a
+ * `list_dir` target without a `get_tree` round trip; a folder is addressed by
+ * its NAME inside a knowledge path, so an id would be a fact with no call to
+ * put it in. Entries are never carried at any depth — that is what makes the
+ * card FIXED-SIZE rather than a function of how big the base got.
+ */
+export interface TemplateKnowledgeFolderBrief {
+  name: string;
+  /**
+   * `knowledge_folders.description`, the agent-facing summary (≤`DESCRIPTION_MAX`).
+   * ⚠ **ABSENT, NEVER CLIPPED.** A clause longer than a card can carry is
+   * omitted whole: half a sentence read as the whole one is a lie the reader
+   * cannot detect.
+   */
+  summary?: string;
+}
+
+/**
  * The READ shape — one attached scope, resolved against what the READING caller
  * may see. Names are for DISPLAY; the ids are what anything acts on.
  *
@@ -105,6 +127,52 @@ export interface TemplateKnowledgeRef {
    * a wrong path here is an agent silently pointed at the wrong document.
    */
   toolPath?: string;
+  /**
+   * ── THE BASE CARD (2026-09-18, A4) — `baseSlug` … `baseFolderCount` ───────
+   *
+   * Four facts that let a role block NAME an attached base well enough to open
+   * the right thing without a `get_tree`-and-guess round trip. All four are
+   * **`scope: "base"` ONLY**: a folder or entry scope already names the exact
+   * thing it points at, so a card on one would be noise over an answer.
+   *
+   * 🔒 ⚠ **THE CARD IS FIXED-SIZE BY CONSTRUCTION, NOT BY TRUNCATION.** Nothing
+   * here grows with the base — no entry list, no recursive folder tree, no
+   * counts of content — so a base with forty entries and a base with four
+   * produce the same card. The desktop caps the RENDERED card at 400 characters
+   * per base and degrades by DROPPING WHOLE FACTS
+   * (`prompt-framing-template.js › baseCard`); this payload never hands it a
+   * fact it would have to cut in half.
+   *
+   * The base's kebab-case slug. ⚠ **AN ADDRESS, NOT A LABEL** — `dopl_kb`'s
+   * `base` argument accepts it in place of the id — so the desktop emits it
+   * only when it survives `idToken` unchanged.
+   */
+  baseSlug?: string;
+  /**
+   * One line on what the base answers — `knowledge_bases.description`.
+   * ⚠ **CARRIED WHOLE OR NOT AT ALL**: a description longer than
+   * `DESCRIPTION_MAX` is omitted rather than sliced, for the reason
+   * {@link TemplateKnowledgeFolderBrief.summary} gives.
+   */
+  baseSummary?: string;
+  /**
+   * The base's TOP-LEVEL folders, in read order, each with its own clause.
+   * ⚠ **TOP LEVEL ONLY** — the whole subtree is what `get_tree` is for, and a
+   * recursive list is exactly the unbounded thing this card refuses to be.
+   */
+  baseFolders?: TemplateKnowledgeFolderBrief[];
+  /**
+   * How many top-level folders the base REALLY has.
+   *
+   * 🔒 ⚠ **THE COMPLETENESS SIGNAL, AND IT IS THE POINT OF THE FIELD.**
+   * {@link TemplateKnowledgeRef.baseFolders} is capped — server-side and again
+   * at the desktop boundary — and a capped list rendered as if it were the
+   * whole list is a lie about a base's shape. The renderer prints the folder
+   * line ONLY when `baseFolders.length === baseFolderCount`, so any cap, any
+   * dropped malformed row, and any newer server that carries fewer, all fail
+   * the same way: the fact disappears instead of becoming wrong.
+   */
+  baseFolderCount?: number;
 }
 
 /**

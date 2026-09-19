@@ -45,7 +45,11 @@ import type { WorkspaceDirectory } from "../workspace-directory.js";
  */
 export declare function opReadAccount(client: DoplClient, directory: WorkspaceDirectory, since: number, limit: number | undefined, selfUserId?: string | null, 
 /** @see opRead — the credential this read is counted under, or `null`. */
-subject?: string | null): Promise<ToolResponse>;
+subject?: string | null, 
+/** ⚠ @see opRead — the caller is an OUTSIDE SESSION, so lines carry the
+ *  never-drop marks. This page spans CHANNELS, which is exactly where class
+ *  (ii) of `outsideRelevance` has to keep its per-room fence. */
+outside?: boolean): Promise<ToolResponse>;
 /**
  * `op="status"` WITH NO `channel` — every session of the caller's,
  * grouped by the room it is working in.

@@ -52,7 +52,8 @@ const TARGETING = M("targeting.js");
 const LEGACY_SRC = M("legacy-threads.js");
 
 const require = createRequire(import.meta.url);
-const targeting = require("../main/targeting.js"); // dependency-free; the REAL gate
+const targeting = require("../main/targeting.js");
+const realRoomRoster = require(join(HERE, "..", "main", "room-roster.js")); // dependency-free; the REAL gate
 const agentHandles = require("../main/agent-handles.js"); // pure; the REAL slug rule
 
 // ── STATIC PIN 1: the listener's dispatch ORDER ──────────────────────────────────
@@ -219,9 +220,9 @@ function harness(over = {}) {
     // ⚠ `deliveryAck` joined the block's free vars with the wake ack (2026-09-02, A9). A no-op
     // recorder is enough here: this suite asserts routing, and `delivery-ack.test.mjs` owns
     // the buffer.
-    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag",
+    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag", "agentAuthorNote",
     `${BLOCK}\n return { feedLiveSession };`
-  )(targeting, sessionEngine, io, agentHandles, { note: () => true, verdictFor: () => '' }, () => {});
+  )(targeting, sessionEngine, io, agentHandles, { note: () => true, verdictFor: () => '' }, () => {}, realRoomRoster.agentAuthorNote);
 
   // listener-messages.dispatchMessage verbatim in SHAPE (pinned by STATIC PIN 1 above).
   //

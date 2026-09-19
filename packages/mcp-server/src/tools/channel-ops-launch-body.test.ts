@@ -253,9 +253,18 @@ describe("the call itself", () => {
       "THIS CHANNEL'S container",
     );
     expect(TENANCY_RULE).toContain("a home channel IS its own container");
+    // 🔒 **THE RULE IS ABOUT THE NAME PATH, AND SAYING SO IS THE FIX OF
+    // 2026-09-18.** It read "A template resolves ONLY in the container the
+    // channel lives in", which stopped being true for a UUID at B2 (2026-09-02):
+    // `src/features/agent-templates/server/service-resolve-ref.ts` follows an id
+    // through `read-resource.ts › readResourceById` to whichever container of
+    // the caller's it lives in. ⚠ **BOTH HALVES ARE PINNED** — dropping the ID
+    // clause would restore a refusal that tells an agent its Home template
+    // cannot launch here at the moment an id would have worked.
     expect(TENANCY_RULE).toContain(
-      "A template resolves ONLY in the container the channel lives in",
+      "A NAME resolves only in the container the channel lives in",
     );
+    expect(TENANCY_RULE).toContain("an id resolves wherever the row lives");
     // ⚠ AND IT NAMES NO PLACE, because it CANNOT: this refusal came back from a
     // DESKTOP over a closed vocabulary with no detail field, so the honest
     // classification `template-resolve.js` made stays a local log. The RULE
@@ -301,4 +310,117 @@ describe("the call itself", () => {
       vi.useRealTimers();
     }
   }, 40_000);
+});
+
+/**
+ * **THE GOAL CAP — S50, 2026-09-18.**
+ *
+ * ⚠ **IT BELONGS IN THIS FILE AND NOT THE SIBLING'S**, on the seam this suite's header
+ * draws: these cases are about WHAT THE CREATE BODY CONTAINS — and, in the refusing case,
+ * about the create body never being built at all. The sibling asserts what a RESULT teaches.
+ *
+ * ⚠ **THE ASSERTION THAT MATTERS IS `not.toHaveBeenCalled()`.** A refusal rendered AFTER the
+ * request went out would be the defect wearing better prose: the 2,000 is the route's, so a
+ * post-hoc refusal still costs the round trip and still leaves the caller guessing whether
+ * anything was filed. The whole point of a pre-flight is that nothing crossed the wire.
+ */
+describe("the launch goal has its own cap, and it is refused before the wire", () => {
+  it("refuses a 2,001-character body BY NAME, and files nothing", async () => {
+    const createLaunchDirective = vi.fn(async () => ({
+      offline: false,
+      directive: directive({ status: "launched", agentId: "abcd1234" }),
+    }));
+    const res = await opLaunchAgent(client({ createLaunchDirective }), "general", {
+      name: "Scout",
+      goal: "x".repeat(2_001),
+    });
+    // 🔒 NOTHING WENT OUT. This is the case, not a detail of it.
+    expect(createLaunchDirective).not.toHaveBeenCalled();
+    expect(res.isError).toBe(true);
+    const out = res.content[0].text as string;
+    // ⚠ THE FIELD IS `body`, THE NAME THE CALLER PASSED — never `goal`, which is what the
+    // wire calls it. Telling an agent to shorten an argument it never sent is the
+    // mis-narration this whole change exists to end.
+    expect(out).toContain("field=body");
+    expect(out).toContain("limit=2000");
+    expect(out).toContain("reason=goal_too_long");
+    expect(out).toContain("retry=no");
+    // ⚠ AND IT SAYS NOTHING WAS FILED, plus where a long brief actually goes — a refusal
+    // with no next action gets an agent to retry the same call.
+    expect(out).toContain("Nothing was filed");
+    expect(out).toContain("knowledge entry");
+  });
+
+  it("a 2,000-character body still goes through, untouched", async () => {
+    const goal = "x".repeat(2_000);
+    const createLaunchDirective = vi.fn(async () => ({
+      offline: false,
+      directive: directive({ status: "launched", agentId: "abcd1234" }),
+    }));
+    await opLaunchAgent(client({ createLaunchDirective }), "general", {
+      name: "Scout",
+      goal,
+    });
+    // ⚠ THE BOUNDARY IS INCLUSIVE ON BOTH SIDES, because the route's is
+    // (`.max(2000)`). A pre-flight one character tighter than the fence it mirrors refuses
+    // legal calls, which is worse than the bare 400 it replaced.
+    expect(createLaunchDirective).toHaveBeenCalledWith(
+      expect.objectContaining({ goal }),
+    );
+  });
+
+  it("measures the TRIMMED length, because the route trims before it measures", async () => {
+    // ⚠ 2,000 characters inside 40 of whitespace is a LEGAL goal — `.trim().max(2000)`.
+    // Measuring the raw string would refuse a call the server would have taken.
+    const goal = `${" ".repeat(20)}${"x".repeat(2_000)}${" ".repeat(20)}`;
+    const createLaunchDirective = vi.fn(async () => ({
+      offline: false,
+      directive: directive({ status: "launched", agentId: "abcd1234" }),
+    }));
+    await opLaunchAgent(client({ createLaunchDirective }), "general", {
+      name: "Scout",
+      goal,
+    });
+    // ⚠ AND THE CALLER'S OWN STRING IS WHAT IS FILED. The trim is a MEASUREMENT here; the
+    // route does its own, and substituting a normalized string would be this lane quietly
+    // editing the instruction an agent was handed.
+    expect(createLaunchDirective).toHaveBeenCalledWith(
+      expect.objectContaining({ goal }),
+    );
+  });
+
+  it("an ABSENT goal is not a refusal — a stand-by agent is a supported launch", async () => {
+    const createLaunchDirective = vi.fn(async () => ({
+      offline: false,
+      directive: directive({ status: "launched", agentId: "abcd1234" }),
+    }));
+    await opLaunchAgent(client({ createLaunchDirective }), "general", { name: "Scout" });
+    expect(createLaunchDirective).toHaveBeenCalled();
+  });
+
+  it("refuses a 61-character name the same way, and that cap was unpublished too", async () => {
+    const createLaunchDirective = vi.fn(async () => ({
+      offline: false,
+      directive: directive({ status: "launched", agentId: "abcd1234" }),
+    }));
+    const res = await opLaunchAgent(client({ createLaunchDirective }), "general", {
+      name: "N".repeat(61),
+    });
+    expect(createLaunchDirective).not.toHaveBeenCalled();
+    expect(res.isError).toBe(true);
+    const out = res.content[0].text as string;
+    expect(out).toContain("field=name");
+    expect(out).toContain("limit=60");
+    expect(out).toContain("reason=name_too_long");
+    expect(out).toContain("Nothing was filed");
+  });
+
+  it("publishes the launch cap on `body`, so the published bound matches the enforced one", () => {
+    // ⚠ **THE DEFECT WAS THE GAP, NOT THE NUMBER.** `.max(16000)` is CORRECT — it is
+    // `op="send"`'s — so this asserts the LAUNCH cap is stated as well, not that the
+    // schema's was lowered. Both halves are pinned, in both directions.
+    const described = CHANNEL_INPUT_SHAPE.body.description ?? "";
+    expect(described).toContain("2000");
+    expect(JSON.stringify(CHANNEL_INPUT_SHAPE.body.def)).toContain("16000");
+  });
 });

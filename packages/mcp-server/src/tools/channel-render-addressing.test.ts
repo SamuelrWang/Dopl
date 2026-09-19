@@ -72,7 +72,7 @@ describe("addressing is rendered from the columns that decided it", () => {
       msg({ recipientAgentIds: ["deynelz3"], recipientUserIds: [], delivery: "woken" }),
     ]);
     // ⚠ No `deliveryAt` — the server's write-time PREDICTION, not a receipt.
-    expect(predicted).toContain("· woken?");
+    expect(predicted).toContain("· woken(predicted)");
 
     const acked = await lineOf([
       msg({
@@ -83,7 +83,8 @@ describe("addressing is rendered from the columns that decided it", () => {
       }),
     ]);
     expect(acked).toContain("· woken");
-    expect(acked).not.toContain("woken?");
+    expect(acked).toContain("woken(confirmed)");
+    expect(acked).not.toContain("woken(predicted)");
   });
 
   it("`[]` on both columns is `→ nobody` — an ANSWER, not an absence", async () => {
@@ -190,5 +191,99 @@ describe("an agent author is named by the name its operator gave it", () => {
       )
     ).content[0].text;
     expect(text).toContain("→ @`Mobile Main`");
+  });
+});
+
+/**
+ * **WHO ASKED, AND HOW TO ANSWER THEM** (A2/S45 + the outside-session seam,
+ * 2026-09-18).
+ *
+ * ⚠ **THE READER IS THE NEW INPUT, AND IT IS THE WHOLE FIX.** A label built
+ * from the message alone can name an operator and never say whether that
+ * operator is the reader's own, so one of this operator's own workers and a
+ * stranger's agent rendered identically — and the agent deciding whether to
+ * answer, escalate or ignore had to spend a roster call on the one distinction
+ * that decides it.
+ *
+ * ⚠ **THE THIRD SHAPE IS SERVER-OWNED METADATA** (`metadata.external_session`),
+ * never a new `authorKind`: that union is drift-gated against the column's
+ * `CHECK`, and it is read through ONE local helper whose body IS
+ * `authorViewOf(m) === "external"` since the sibling branch merged
+ * (2026-09-19). An old payload carries no marker at all and renders as it
+ * always did — and a `user` row carrying the marker is never promoted, because
+ * `authorViewOf` requires an `agent` row.
+ */
+describe("who asked — sibling, stranger's agent, or an outside session", () => {
+  const AGENT = {
+    authorKind: "agent",
+    authorAgentName: "Bug Reviewer",
+    metadata: { session_id: "chan-1:task-1:deynelz3" },
+  };
+
+  const readerLine = async (over: Record<string, unknown>) => {
+    const text = (
+      await opRead(stubClient([msg(over)]), "general", undefined, undefined, SELF)
+    ).content[0].text;
+    return text.split("\n").filter((l: string) => l.startsWith("- **#"))[0];
+  };
+
+  it("a SIBLING agent — same operator as the reader — renders `for you`", async () => {
+    const line = await readerLine({ ...AGENT, authorUserId: SELF });
+    expect(line).toContain("agent @`Bug Reviewer` for you");
+    // ⚠ The uuid is NOT printed for the reader's own account: `you` is the
+    // answer to the question the id was being looked up to answer.
+    expect(line).not.toContain(`for \`Samuel Wang\` (\`${SELF}\`)`);
+  });
+
+  it("ANOTHER member's agent still renders their name and immutable id", async () => {
+    const line = await readerLine({ ...AGENT, authorUserId: OPERATOR });
+    expect(line).toContain(
+      `agent @\`Bug Reviewer\` for \`Samuel Wang\` (\`${OPERATOR}\`)`,
+    );
+    expect(line).not.toContain("for you");
+  });
+
+  it("a member's own line still names them, and `you` when it is the reader", async () => {
+    expect(await readerLine({ authorUserId: OPERATOR })).toContain(
+      `member \`Samuel Wang\` (\`${OPERATOR}\`)`,
+    );
+    expect(await readerLine({ authorUserId: SELF })).toContain("member you");
+  });
+
+  it("an OUTSIDE SESSION of the reader's own account hands back the reply handle", async () => {
+    // ⚠ **`authorKind: "agent"` IS LOAD-BEARING SINCE THE MERGE (2026-09-19).**
+    // The predicate is `authorViewOf`, and that projection promotes only an
+    // `agent` row — a `user` row carrying the same metadata stays a member line
+    // (asserted in `channel-desktop-tag.test.ts › never promotes a HUMAN row`).
+    // The default fixture here is a `user` row, so the kind is stated.
+    const line = await readerLine({
+      authorKind: "agent",
+      authorUserId: SELF,
+      metadata: { external_session: true },
+    });
+    expect(line).toContain("outside session for you — reply @desktop");
+  });
+
+  it("another member's outside session names THEM, and offers no @desktop", async () => {
+    // ⚠ The group handle is PER OPERATOR, so offering it for somebody else's
+    // session would hand back an address that reaches the reader's own machine.
+    const line = await readerLine({
+      authorKind: "agent",
+      authorUserId: OPERATOR,
+      metadata: { external_session: true },
+    });
+    expect(line).toContain(
+      `outside session for \`Samuel Wang\` (\`${OPERATOR}\`)`,
+    );
+    expect(line).not.toContain("@desktop");
+  });
+
+  it("🔒 a STALE payload with no `external_session` renders exactly as it always did", async () => {
+    // ⚠ §8's rule for a new payload field: a row written or cached before the
+    // marker existed carries no `external_session`, so it is a member line and
+    // not an "outside session" the server never marked.
+    const line = await readerLine({ authorUserId: OPERATOR });
+    expect(line).toContain("member `Samuel Wang`");
+    expect(line).not.toContain("outside session");
   });
 });

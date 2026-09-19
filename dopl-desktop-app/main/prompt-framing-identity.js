@@ -30,14 +30,93 @@ const { AGENT_ID_RE } = require('./agent-id');
 // nothing left to disambiguate — and a line teaching an id "for the rare case" is a line an agent
 // will use in the common one.
 //
-// ⚠ **IT IS FOUR SHORT LINES AND MUST STAY SHORT** — a FACT and a PROHIBITION is the smallest
+// ⚠ **IT IS SIX SHORT LINES AND MUST STAY SHORT** — a FACT and a PROHIBITION is the smallest
 // shape that can be followed.
+//
+// ⚠ **THE LAST TWO LINES ARE WHO THE COUNTERPARTY IS, ADDED 2026-09-18 (A2/S45).** They are the
+// reading half of the same rule the first four are the writing half of, and each names a label
+// the MCP read really prints: `packages/mcp-server/src/tools/channel-render-identity.ts ›
+// formatAuthor` renders `agent @x for you` for a SIBLING — another session this same operator
+// launched — and `outside session for you` for the operator's own Claude Code / Codex / Cursor
+// connection. Without them the agent has the label and no rule for it, which is the lookup this
+// wave exists to delete. ⚠ **`@desktop` IS THE GROUP HANDLE FOR THOSE OUTSIDE SESSIONS**, minted
+// on what was a sibling branch and is now merged (`channel-desktop-tag.ts › DESKTOP_GROUP_HANDLE`).
+//
+// ⚠ **ONE LINE PER FACT, AND TWO BRANCHES WROTE THE SIBLING ONE** (merge, 2026-09-19). Batch D
+// added `A post marked "for you" is a SIBLING: your operator's, not a peer's.` beside the line
+// already here, which is the same fact in two sentences — the shape this block exists to refuse.
+// The surviving wording is the one that also says what the OTHER case looks like ("another name
+// means another member's"), so the legend covers both directions in the characters of one line.
 //
 // ⚠ THE NAME IS SPOKEN ONLY WHEN THE CALLER SUPPLIES ONE. `ctx.agentName` is optional and this
 // module is PURE, so a caller that has the name passes it; inventing one here, or asserting the
 // agent "has none", would both be claims this module cannot check. ⚠ **AND IT IS THE STORED
 // NAME, SUFFIX AND ALL** — an agent launched as the second "Coder" is `Coder-1`, which is the tag
 // peers will use for it.
+
+// ── THE ROOM ROSTER — WHO ELSE IS HERE, AT LAUNCH (2026-09-18) ────────────────────────────────
+//
+// ⚠ **IT IS THE READING HALF OF THE FOUR LINES ABOVE, MADE CONCRETE.** Those say how to address
+// an agent; this says WHICH agents there are to address, whose each one is, and what role it is
+// playing — so picking a collaborator costs no `dopl_channel(op="status")` call. Samuel's rule
+// for the wave is that recipients and agents are *structurally conveyed*, and a roster an agent
+// has to go and fetch is the case that makes collaboration unreliable.
+//
+// 🔒 ⚠ **FIXED SIZE, AND THE DEGRADE ORDER IS THE DESIGN.** A room can hold forty agents; a
+// prompt block may not grow with it. Five of each kind, then a pointer; and when the block is
+// still over {@link ROSTER_MAX_CHARS} the ROLE names go first (the richest text per unit of
+// routing), then the PEOPLE line, and never the same-operator flag — which is the one fact that
+// cannot be recovered by looking at a handle.
+//
+// ⚠ **IT SAYS "as of launch" BECAUSE IT IS A SNAPSHOT.** Agents start and end while a session
+// runs. The clause plus the pointer is what stops an agent reading a stale list as the room's
+// current state, and an agent that arrives LATER introduces itself: `session-seed.js` names an
+// unknown agent author on the turn it writes.
+const ROSTER_MAX_CHARS = 420;
+
+function agentRow(a) {
+  const whose = a.mine ? 'yours' : `${a.owner || 'another member'}'s`;
+  return `- @${a.handle} · ${whose}`;
+}
+
+function rosterLines(roster, withRoles) {
+  const r = roster || {};
+  const agents = Array.isArray(r.agents) ? r.agents : [];
+  const people = Array.isArray(r.people) ? r.people : [];
+  if (!agents.length && !people.length && r.read !== 'failed') return [];
+  const lines = [`IN THIS ROOM as of launch (live: dopl_channel op "status"):`];
+  for (const a of agents) {
+    const role = withRoles && a.role ? ` · ${a.role}` : '';
+    lines.push(`${agentRow(a)}${role}`);
+  }
+  if (r.agentsMore > 0) lines.push(`- and ${r.agentsMore} more agents: dopl_channel op "status"`);
+  if (people.length) {
+    const tags = people.map((p) => `@${p.handle}`).join(', ');
+    const more = r.peopleMore > 0 ? `, and ${r.peopleMore} more` : '';
+    lines.push(`- people: ${tags}${more}`);
+  }
+  // ⚠ SAID OUT LOUD. An unread half is not an empty room, and an agent told nothing would read
+  // the local half as the whole roster.
+  if (r.read === 'failed') lines.push(`- others: not read; ask dopl_channel op "status"`);
+  return lines;
+}
+
+/**
+ * The roster block, inside its own budget. ⚠ Each fallback DROPS A WHOLE FACT — roles, then the
+ * people line — so nothing is ever rendered as half of itself.
+ */
+function roomRosterLines(roster) {
+  const withRoles = rosterLines(roster, true);
+  if (!withRoles.length) return [];
+  const withoutRoles = rosterLines(roster, false);
+  const withoutPeople = withoutRoles.filter((l) => l.indexOf('- people: ') !== 0);
+  for (const block of [withRoles, withoutRoles, withoutPeople]) {
+    if (block.join('\n').length <= ROSTER_MAX_CHARS) return block;
+  }
+  // ⚠ THE LAST RESORT KEEPS THE FLAG: handles and whose each one is, nothing else.
+  return withoutPeople.slice(0, 1 + (roster && roster.agents ? roster.agents.length : 0));
+}
+
 function agentIdentityFraming(ctx) {
   const c = ctx || {};
   const mine = AGENT_ID_RE.test(String(c.agentId || '')) ? String(c.agentId) : '';
@@ -48,8 +127,11 @@ function agentIdentityFraming(ctx) {
     `THE ID IS INTERNAL: read it, never write it in a message.`,
     `ADDRESS AN AGENT BY ITS NAME, as a tag: lower case, spaces as dashes (@bug-reviewer).`,
     `Names are unique among live agents, so a tag reaches exactly one.`,
+    `"for you" on an agent line means YOUR operator's agent; another name means another member's.`,
+    `"outside session" is your operator's own coding session: address it @desktop, in full detail.`,
+    ...roomRosterLines(c.roster),
   ];
 }
 
 
-module.exports = { agentIdentityFraming };
+module.exports = { agentIdentityFraming, roomRosterLines, ROSTER_MAX_CHARS };

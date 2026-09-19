@@ -145,7 +145,7 @@ const AGENT_INPUT_SHAPE = {
     visibility: zod_1.z
         .enum(agent_shared_js_1.TEMPLATE_VISIBILITY_VALUES, { error: agent_shared_js_1.VISIBILITY_ENUM_MESSAGE })
         .optional()
-        .describe('op=create / op=update: who may use this identity — "private" (create default) = you and workspace admins, "workspace" = every member. ⚠ Inside a home channel someone else is in, "workspace" publishes your agent into their room and previews first.'),
+        .describe('op=create / op=update: who may use this identity — "private" (create default) = you and workspace admins; "workspace" = everyone in THIS container, which inside a home channel is that ROOM and nobody else, and previews first.'),
     knowledge_bases: zod_1.z
         .array(zod_1.z.string().uuid())
         .max(MAX_KNOWLEDGE_BASE_IDS)
@@ -156,10 +156,22 @@ const AGENT_INPUT_SHAPE = {
         .max(MAX_KNOWLEDGE_SCOPES)
         .optional()
         .describe('op=create / op=update: scoped attachments, a REPLACE-SET — {base} whole base, {base, folder} that folder and all under it now and later, {base, entry} one document. Ids from dopl_kb(op="get_tree"); the folder/entry must live in that base.'),
+    // ⚠ THE OPTIMISTIC-CONCURRENCY PAIR, WORDED AS `dopl_kb`'s AND `dopl_skill`'s
+    // ARE — one contract, three tools, and an agent that learned it on one of them
+    // must not have to learn a second vocabulary here. What this costs on
+    // `SCHEMA_CEILINGS.dopl_agent` is argued in `tool-budget.test.ts`.
+    expected_version: zod_1.z
+        .string()
+        .optional()
+        .describe('op=update: the Version from a prior op="get". Required — 412 without it; only force=true skips the check.'),
+    force: zod_1.z
+        .boolean()
+        .optional()
+        .describe("op=update: overwrite even though the template changed since you read it. Discards the other edit."),
     confirm_token: zod_1.z
         .string()
         .optional()
-        .describe("op=create / op=update: the one-time token from this call's own dry-run preview, echoed back to go ahead — needed only when the write would publish into a home channel somebody else is in, refused on any other call, and never guessable."),
+        .describe("op=create / op=update: TWO CALLS — send this call WITHOUT it for a dry-run preview plus a one-time token, then re-send it WITH that token. Only when the write would publish into a home channel somebody else is in; refused elsewhere, never guessable."),
     // ⚠ A16's third response-size knob, and the only one on THIS surface: an
     // INSTRUCTIONS block is a system prompt up to 32 KB, and an agent looking for
     // a template's model or attached bases pays for all of it. ONE `.describe()`,
@@ -291,7 +303,7 @@ directory) {
     register("dopl_agent", AGENT_DESCRIPTION, AGENT_INPUT_SHAPE, async (args) => {
         switch (args.op) {
             case "list":
-                return (0, agent_ops_read_js_1.opList)(client);
+                return (0, agent_ops_read_js_1.opList)(client, directory);
             case "get": {
                 const miss = (0, respond_js_1.missingParams)("get", args, ["template"]);
                 if (miss)
@@ -334,6 +346,8 @@ directory) {
                     knowledge_bases: args.knowledge_bases,
                     knowledge: args.knowledge,
                     confirm_token: args.confirm_token,
+                    expected_version: args.expected_version,
+                    force: args.force,
                 });
             }
             // ── THE ONE-RELEASE MIGRATION WINDOW ──────────────────────────────

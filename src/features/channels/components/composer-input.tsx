@@ -246,7 +246,12 @@ export function ComposerInputRow(props: ComposerInputRowProps) {
           against it, and a wrapper that appeared only for the tinted mount would be the second
           tree this file exists to prevent — so the box is always here and pays nothing when
           nothing is painted in it. `min-w-0 flex-1` moved here off the textarea, unchanged in
-          effect: the box now stretches and the field fills it. */}
+          effect: the box now stretches and the field fills it.
+          🔒 **AND ITS HEIGHT MUST BE THE FIELD'S HEIGHT, EXACTLY** — `inset-0` is only a mirror
+          if this box is the field's box. It is, because the field is `block` (see the textarea
+          below); while the field was `inline-block` this wrapper carried 6px of strut descender
+          the field did not, and the mirror clamped that far short at full scroll. A wrapper with
+          any inline content beside the field re-opens it. */}
       <div className="relative min-w-0 flex-1">
         {highlight && (
           <div
@@ -301,8 +306,31 @@ export function ComposerInputRow(props: ComposerInputRowProps) {
         // keeps `text-lead` exactly as drawn.
         // ⚠ THE TYPOGRAPHY IS `FIELD_TEXT` AND IS NOT SPELLED HERE — the mirror wears the same
         // constant, which is what keeps the two layers on the same glyph positions.
+        // 🔒 **`block` IS THE THIRD CARET FIX AND IT IS NOT A DISPLAY PREFERENCE** (Samuel,
+        // 2026-09-18: *"the cursor like gets misaligned. Look at how far up it is"*). A textarea
+        // is `inline-block`, so it sits on the wrapper's TEXT BASELINE — and because this one
+        // scrolls, its baseline is its own bottom edge, which leaves the inherited strut's
+        // DESCENT hanging below it. Measured in Chrome at the app's inherited `line-height: 1.5`
+        // over 16px: the positioned wrapper came out **6px taller than the field**. The mirror is
+        // `inset-0` against that wrapper, so the mirror's box was 6px taller than the box it
+        // mirrors — same content, same scrollHeight, **6px more room** — and therefore
+        // `mirror.scrollTop = field.scrollTop` CLAMPED 6px short at the bottom of the scroll
+        // range. The layer the operator reads then sat 6px BELOW the caret they steer by.
+        // ⚠ **WHICH IS WHY IT WAS "OCCASIONAL".** Nothing drifts until the field actually
+        // scrolls, and it only scrolls past `use-auto-grow.ts`'s three-line ceiling — so one-,
+        // two- and three-line drafts are pixel-perfect and the fourth line is not. Typing always
+        // sits at the END of the draft, which is exactly where the browser holds the field at its
+        // MAXIMUM scroll, which is the one offset the clamp bites.
+        // ⚠ **IT IS THE WRAPPER'S CONTRACT, PAID ON THE FIELD.** `block` takes the field off the
+        // line box entirely, so the wrapper hugs it and `inset-0` means *the field's box*, which
+        // is the only thing that made the mirror a mirror. Reverting this class re-opens the
+        // drift with every other guard in this file still green — `composer-input.test.ts` pins
+        // it for that reason.
+        // ⚠ **THE ROW IS 6px SHORTER AND THAT IS THE PHANTOM LEAVING, NOT A RESIZE.** The
+        // comment above has claimed a 30px row since 2026-09-04; it was 36px, and the 6px was
+        // descender space under a field nobody had asked to sit on a baseline.
         className={cn(
-          "h-[30px] w-full resize-none overflow-y-auto bg-transparent outline-none placeholder:text-text-muted",
+          "block h-[30px] w-full resize-none overflow-y-auto bg-transparent outline-none placeholder:text-text-muted",
           FIELD_WRAP,
           FIELD_TEXT,
           // ⚠ THE TEXT GOES TRANSPARENT ONLY WHERE SOMETHING IS PAINTED UNDER IT, AND THE CARET

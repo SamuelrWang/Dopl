@@ -25,6 +25,7 @@
  * §5A), and this surface must not rebuild on a new door what the route closed.
  */
 import type { AgentTemplate, DoplClient } from "@dopl/client";
+import type { AudienceLabel } from "./audience-label.js";
 import { type ToolResponse } from "./respond.js";
 /**
  * The server's 403 code for "a credential that may be shared between humans
@@ -33,6 +34,10 @@ import { type ToolResponse } from "./respond.js";
  * paths can raise it and neither may guess at the string.
  */
 export declare const PRIVATE_VISIBILITY_DENIED_CODE = "WORKSPACE_KEY_PRIVATE_VISIBILITY";
+/** The server's 404 code for a template this caller cannot name — the one
+ *  refusal {@link resolveTemplateRef}'s id door swallows. ⚠ ONE SPELLING, and it
+ *  is `src/features/agent-templates/server/http-mapping.ts`'s. */
+export declare const TEMPLATE_NOT_FOUND_CODE = "AGENT_TEMPLATE_NOT_FOUND";
 /**
  * 🔒 THE VISIBILITY AXIS THIS SURFACE OFFERS — **TWO values, not three.**
  *
@@ -78,13 +83,33 @@ export type TemplateRefResolution = {
  * Resolve `ref` — a template ID or an exact NAME — against what this caller may
  * see.
  *
- *   1. UUID → id match, exact. ⚠ NEVER falls back to a name lookup on a miss:
- *      a fallback would make "no such id" and "no such name" answer through each
- *      other.
+ *   1. UUID → id match over the visible list, then **the server's own id door**.
+ *      ⚠ NEVER falls back to a name lookup on a miss: a fallback would make "no
+ *      such id" and "no such name" answer through each other.
  *   2. Otherwise → CASE-INSENSITIVE EXACT match on `name`. Not a prefix, not
  *      fuzzy: an orchestrator naming "Auditor" must not silently get "Contract
  *      Auditor".
  *   3. More than one → AMBIGUOUS, listing each. 4. Zero → not found.
+ *
+ * 🔒 **THE ID DOOR IS THE PORT OF F-470, WHICH THE KNOWLEDGE LANE HAS HAD SINCE
+ * 2026-09-06 AND THIS ONE DID NOT (2026-09-18).** `listAgentTemplates` answers
+ * for the container this call is in plus the caller's own personal one, so
+ * matching a ref against that list made `get` and `update` CONTAINER-KEYED —
+ * including the two ops whose whole argument is an id. A template in another
+ * home channel the caller is a member of answered "no such template" for an id
+ * that `GET /api/agent-templates/<id>` resolves, which is the wave's headline
+ * claim ("an id resolves its own container") being untrue on this surface, and
+ * it is why `get`/`update` are not in `workspace-arg.ts › WORKSPACE_ARG_OPS`:
+ * there is nothing for a `container=` to fix once the id answers for itself.
+ *
+ * ⚠ **THE SECOND LOOKUP IS NOT A SECOND FENCE AND ADDS NO REACH.** It is the
+ * server's own id door, which runs `canSeeTemplate` in the container the id
+ * names. A ref this caller may not name comes back a 404 and is reported as
+ * not-found — the same answer as before, and 404-never-403 is preserved.
+ *
+ * ⚠ **UUID ONLY, AND ONLY AN API REFUSAL IS SWALLOWED.** A transport failure
+ * must not read as "no such template" — that is how an outage becomes a deletion
+ * in an agent's notes (`knowledge-shared.ts › resolveBaseRef`'s own rule).
  */
 export declare function resolveTemplateRef(client: DoplClient, ref: string): Promise<TemplateRefResolution>;
 /**
@@ -140,8 +165,14 @@ export declare function knowledgeBaseNotAttachable(e: unknown): ToolResponse | n
 export declare function sharedCredentialPrivateDenied(e: unknown): ToolResponse | null;
 /** One template rendered as a list row. ⚠ Every displayed field is a VALUE
  *  spliced into a line we wrote — name and description are length-bounded only,
- *  so a newline in either would otherwise start a row of its own. */
-export declare function templateRow(t: AgentTemplate): string;
+ *  so a newline in either would otherwise start a row of its own.
+ *
+ *  ⚠ **`audience` IS PASSED IN, NOT READ OFF `t.visibility` (S21/S23,
+ *  2026-09-18).** The column answers "what is in the visibility field"; a
+ *  caller asks "who can see this", and inside a home channel `workspace` means
+ *  the room rather than the company. The GROUP the caller put this row in is
+ *  the only place that distinction exists — see `audience-label.ts`. */
+export declare function templateRow(t: AgentTemplate, audience: AudienceLabel): string;
 /**
  * ⚠ WHOSE VIEW THIS IS, stated ON THE RESULT and not only in the description.
  * `listTemplates` is filtered server-side by `canSeeTemplate`, so another
@@ -149,11 +180,17 @@ export declare function templateRow(t: AgentTemplate): string;
  * absent — an untraced filter makes a four-row heading read as the workspace's
  * roster.
  *
- * ⚠ **THE `· personal` MARKER LEFT ON 2026-09-02 (slice B15, ruling B10).** It
- * rode a `homeScopedTemplateIds` SIBLING KEY over the `home_scoped` boolean, and
- * that column is dropped: a personal template is an ordinary row in the caller's
- * own `kind='personal'` container, so every row a single list returns is on the
- * same shelf and a per-row label says nothing. **The tenancy is what answers
- * now**, and the status footer already names it.
+ * ⚠ **THE `· personal` MARKER LEFT ON 2026-09-02 (slice B15, ruling B10)** on the
+ * argument that *"every row a single list returns is on the same shelf, so a
+ * per-row label says nothing"*.
+ *
+ * 🔒 **THAT ARGUMENT WAS FALSE FROM 2026-09-06, AND THE CORRECTION IS A
+ * HEADING RATHER THAN A MARKER (2026-09-18).** Gap 1 of #1077 widened
+ * `personal-container.ts › resolveShelfScope` so an UNFILTERED read returns the
+ * calling container PLUS the caller's own personal one — two shelves in one
+ * list, twelve days after the sentence above was written, and the footer names
+ * only the container the call was ADDRESSED to. `agent-ops-read.ts › opList`
+ * groups by the `homeScopedTemplateIds` sibling key this note's argument had
+ * retired; the key never went anywhere, only its reader did.
  */
 export declare const TEMPLATES_SCOPE_NOTE = "_Agent templates you can SEE here. Another member's private templates, and any you have no grant on, are not listed \u2014 this is your view, not the workspace's roster._";

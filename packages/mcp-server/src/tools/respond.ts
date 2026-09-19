@@ -6,7 +6,12 @@
  */
 
 import { z, type ZodRawShape } from "zod";
-import { CREDITS_EXHAUSTED, MISSING_PARAMS, refusal } from "./tool-errors";
+import {
+  CREDITS_EXHAUSTED,
+  MISSING_PARAMS,
+  refusal,
+  SESSION_REQUIRED,
+} from "./tool-errors";
 
 /** A tool result: text blocks, plus the error flag. */
 export type ToolResponse = {
@@ -112,6 +117,36 @@ export function apiMessage(e: unknown): string | null {
   if (typeof e !== "object" || e === null) return null;
   const msg = (e as { apiMessage?: unknown }).apiMessage;
   return typeof msg === "string" && msg ? msg : null;
+}
+
+/**
+ * 🔒 **AN APP-ONLY ROUTE, ANSWERED AS A REFUSAL (S43, 2026-09-18).**
+ * `shared/auth/with-auth.ts`'s `sessionOnly` refuses every OAuth bearer with a
+ * 403 `SESSION_REQUIRED` — and every MCP caller is an OAuth bearer, so this is
+ * not a permission that can be granted to a session; it is the door being
+ * closed to this whole class of caller.
+ *
+ * ⚠ **IT LIVES HERE RATHER THAN IN ONE TOOL BECAUSE THE GATE IS CROSS-CUTTING.**
+ * ⚠ **AND IT HAS NO CALLER AS OF 2026-09-19, WHICH IS A FACT AND NOT AN
+ * OVERSIGHT.** The pin verbs raised it, and Samuel's ruling deleted knowledge
+ * pinning outright; the delete routes, `channel-grants` and the template delete
+ * carry the same `sessionOnly` wrapper option, so the next op that grows an arm
+ * gets this sentence rather than a second wording of it. It is asserted
+ * directly by `knowledge-refusals.test.ts › S43`, which is what keeps an
+ * uncalled helper from quietly rotting.
+ * ⚠ **IT NAMES THE OP AND SAYS NOTHING CHANGED**, because a caller that reads
+ * "forbidden" alone re-issues, and this call can only ever answer the same way.
+ *
+ * Null when the error is anything else, so the caller rethrows.
+ */
+export function sessionRequired(e: unknown, op: string): ToolResponse | null {
+  if (!isApiError(e, 403, "SESSION_REQUIRED")) return null;
+  return err(
+    refusal(
+      SESSION_REQUIRED,
+      `op="${op}" is app-only and NOTHING changed. Your token is an agent credential, which this route refuses whatever scopes it carries — there is no permission to request and no other route in. Ask your operator to do it in the Dopl app.`,
+    ),
+  );
 }
 
 /** True for a 409 (name/title/slug already-exists collision). */

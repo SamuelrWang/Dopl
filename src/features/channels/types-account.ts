@@ -38,7 +38,31 @@ export interface AccountWaitingItem {
   /** True when the message carries the reserved `metadata.escalation` payload —
    *  a structured question with option buttons, not an ordinary request. */
   isEscalation: boolean;
+  /**
+   * **WHY THIS ITEM IS ON THE CALLER'S LIST** (2026-09-18, the `@desktop` tag).
+   *
+   *   · `person`  — `metadata.to_user_id` named them. The lane this list has
+   *                 always had, and the DEFAULT, so every older producer and
+   *                 every stale cached payload reads as it always did.
+   *   · `desktop` — `metadata.to_desktop` named their OUTSIDE SESSIONS. A FACT,
+   *                 and it is rendered as loudly as the person lane.
+   *   · `likely`  — nobody tagged the lane, but the shape says it is probably
+   *                 theirs. ⚠ **A GUESS, AND IT IS LABELLED SEPARATELY SO IT
+   *                 NEVER READS AS A FACT** — same rule the transcript marks
+   *                 follow (`channel-desktop-tag.ts › OutsideRelevance`): a
+   *                 guess that shouts as loud as a fact teaches the reader to
+   *                 stop trusting the fact.
+   *
+   * ⚠ **ONLY AN OUTSIDE-SESSION CALLER EVER SEES THE LAST TWO** — a desktop-run
+   * agent shares the operator's account and would otherwise adopt asks aimed at
+   * their laptop (`lib/desktop-handle.ts › isOutsideSessionCaller`).
+   */
+  lane?: AccountWaitingLane;
 }
+
+/** @see AccountWaitingItem.lane. ⚠ Absent means `person`, which is what every
+ *  row written before this field carries. */
+export type AccountWaitingLane = "person" | "desktop" | "likely";
 
 /** One channel's line in an account-wide status answer. */
 export interface AccountChannelStatus {

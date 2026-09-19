@@ -53,13 +53,32 @@ export type ChannelWakeVerdict =
   /** **RR1** — a reply in a thread with no `to`, resolved to the thread's OTHER
    *  party. A thread has exactly two parties, so "other" is total. */
   | "thread_peer"
-  /** **RR2** — an unaddressed AGENT-authored post in the main room, resolved to
-   *  the party that last addressed this agent in this room inside
-   *  `shared/channels/caps.ts › RESILIENCE_WINDOW_MS`. */
+  /** 🔴 **RR2, DELETED 2026-09-18 (Samuel's ruling) — A TOMBSTONE.** It resolved an
+   *  unaddressed AGENT-authored main-room post to the party that last addressed that
+   *  agent here. An agent now addresses somebody or files a record, so nothing
+   *  PRODUCES this; the word stays because rows written before today carry it, the
+   *  column's `CHECK` still admits it, and a reader of an old row must not be handed
+   *  a value the type cannot express. ⚠ **DO NOT ADD A PRODUCER.** The desktop feeds
+   *  such a row to nobody (`main/session-dispatch.js`), which is what makes an old
+   *  row inert rather than dangerous. */
   | "reciprocal"
   /** **RR3** — an unaddressed HUMAN message, resolved to the channel's
    *  configured default responder, or to the room's one live agent. */
-  | "responder";
+  | "responder"
+  /**
+   * **`to=@desktop`** — the author addressed their OWN operator's OUTSIDE
+   * SESSIONS (2026-09-18). ⚠ **IT IS NOT A WEAK `"member"`.** A member verdict
+   * notifies a PERSON and lets their machine decide what runs; this one
+   * deliberately reaches neither — it names a lane the server cannot see into,
+   * and its whole content is *"this was aimed at the operator's own tooling, not
+   * at the operator"*. The recipient rides `metadata.to_desktop` and NOT
+   * `recipient_user_ids`, so no machine routes on it.
+   * ⚠ **AN OLDER DESKTOP FALLS THROUGH TO NO WAKE**, because
+   * `main/session-dispatch.js › VERDICTS` does not list this word and
+   * `storedVerdict` answers `''` for anything it does not know — which is the
+   * correct behaviour here rather than a degradation.
+   */
+  | "desktop";
 
 /**
  * **WHAT HAPPENED TO A MESSAGE** — the one vocabulary, written by two authors.
@@ -85,7 +104,20 @@ export type ChannelDelivery =
   /** A dormant agent was started on it. */
   | "woken"
   /** The machine declined to feed it — a full queue, or a gate. */
-  | "refused";
+  | "refused"
+  /**
+   * **It is in the room, addressed to `@desktop`, and nothing was started.**
+   *
+   * ⚠ **THE ONE WORD THAT IS TRUE WITHOUT A PRESENCE SYSTEM.** A hold is a long
+   * poll that registers nothing server-side, so no server can say whether an
+   * outside session is listening right now; `held` would be a claim and `woken`
+   * would be a lie. `posted` states what actually happened and lets the reader
+   * draw no further conclusion — which is the honest shape for a lane whose
+   * reader may be asleep, mid-turn, or not running at all.
+   * ⚠ **NOT A MEMBER OF {@link MachineDelivery}** — no machine performs this
+   * delivery, so none may report it.
+   */
+  | "posted";
 
 /**
  * **THE SUBSET A MACHINE MAY REPORT.**

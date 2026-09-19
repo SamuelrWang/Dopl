@@ -12,6 +12,12 @@ import {
 import { takeCalmFlags } from "./service-writes-metadata-markers";
 import { resolveBodyMentions } from "./service-writes-metadata-mentions";
 import { MENTIONS_METADATA_KEY } from "../lib/mentions";
+// ⚠ The outside-session vocabulary, stated once — the reserved key names and the
+// ONE discriminator. See `lib/desktop-handle.ts` for its failure modes.
+import {
+  DESKTOP_TO_METADATA_KEY,
+  EXTERNAL_SESSION_METADATA_KEY,
+} from "../lib/desktop-handle";
 import {
   ESCALATION_ANSWER_METADATA_KEY,
   ESCALATION_METADATA_KEY,
@@ -287,6 +293,20 @@ export async function resolvePostMetadata(
   // re-stamped here: `service-writes.ts` writes it from the VERDICT, after the
   // fold, because only the verdict knows the answer.
   delete metadata.wake_reason;
+  // ⚠ **THE TWO OUTSIDE-SESSION KEYS, STRIPPED ON `to_user_id`'s TERMS**
+  // (2026-09-18). `to_desktop` is an ADDRESS — a caller able to set it could put
+  // its words on another operator's `dopl_status` board. `external_session` is
+  // an ATTRIBUTION, and the whole basis of the "outside session for <operator>"
+  // label, so a settable copy would let either kind pose as the other.
+  // ⚠ **BOTH ARE RE-STAMPED IN `service-writes.ts`, NOT HERE — the `wake_reason`
+  // precedent, not an exception to this file's charter.** Each needs a fact this
+  // fold does not hold: the RESOLVER's answer, and the settled `authorKind`
+  // (computed after this fold, and it may ESCALATE a cookie session's claim,
+  // F-580). Re-deriving the author kind here off `ctx.source` would be a second
+  // definition of "is this an agent post" that disagrees with the first for the
+  // desktop's own cookie-lane agent posts.
+  delete metadata[DESKTOP_TO_METADATA_KEY];
+  delete metadata[EXTERNAL_SESSION_METADATA_KEY];
   // ⚠ Desktop reads `handoff` to decide whether to OPEN A WINDOW, so a
   // caller-set value could open a session on the operator's machine without
   // going through validated `create_thread`. Re-stamped only from `opts` below.

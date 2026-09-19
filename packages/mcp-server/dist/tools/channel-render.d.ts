@@ -28,7 +28,17 @@ import { type ResponseFormat } from "./response-size";
  * not an optimization: never clip a single-message page, or the remedy the
  * marker names stops working and there is no other way to read a long body.
  */
-export declare function formatMessages(messages: ChannelMessage[], ref: string, selfUserId?: string | null, format?: ResponseFormat): string[];
+export declare function formatMessages(messages: ChannelMessage[], ref: string, selfUserId?: string | null, format?: ResponseFormat, 
+/**
+ * **IS THE CALLER AN OUTSIDE SESSION?** — when true, lines carry the marks
+ * {@link outsideMark} renders (2026-09-18).
+ *
+ * ⚠ **DEFAULT `false`, SO EVERY OTHER CALLER'S BYTES ARE UNCHANGED.** A
+ * desktop-run agent has its own addressing and must not be handed a second,
+ * weaker one — marking its page "likely for you" would be this server
+ * guessing at an audience the `→` arrow already states exactly.
+ */
+outside?: boolean): string[];
 /**
  * One rendered channel line for `list`. ⚠ `name` (120 chars) and `topic` (2000
  * chars, interior newlines allowed) are creator-typed and public channels list

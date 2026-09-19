@@ -25,6 +25,7 @@ const agentHandles = require(join(HERE, "..", "main", "agent-handles.js"));
 // ⚠ THE REAL RECEIPT VOCABULARY (2026-09-02, A9) — `delivery-ack.js` is pure above its buffer,
 // and `verdictFor` is the one place the four outcome words are ordered.
 const realDeliveryAck = require(join(HERE, "..", "main", "delivery-ack.js"));
+const realRoomRoster = require(join(HERE, "..", "main", "room-roster.js"));
 
 const BEGIN = "// \u2500\u2500\u2500 BEGIN SESSION-DISPATCH-PURE";
 const END = "// \u2500\u2500\u2500 END SESSION-DISPATCH-PURE";
@@ -116,10 +117,14 @@ export function harness(over = {}) {
     verdictFor: realDeliveryAck.verdictFor,
     note: (...a) => { calls.acks.push(a); return true; },
   };
+  // ⚠ `agentAuthorNote` JOINED 2026-09-18 — the room roster's one reader inside this block. The
+  // REAL one: it is a pure function of (session, message, userId, names) and faking it would let
+  // these tables assert a sentence the app does not produce, which is the rule `deliveryAck.
+  // verdictFor` beside it already follows.
   const api = new Function(
-    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag",
+    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag", "agentAuthorNote",
     `${BLOCK}\n return { feedLiveSession, authorLabel, mentionedAgentIds, serverAddressed, serverNamesMember, storedVerdict, planFor, escalationAnswerAgentIds, addressingFor, mayFeed, mayWake, unwoken, dormant };`
-  )(targeting, sessionEngine, io, agentHandles, deliveryAck, () => {});
+  )(targeting, sessionEngine, io, agentHandles, deliveryAck, () => {}, realRoomRoster.agentAuthorNote);
   return { ...api, calls, cfg };
 }
 

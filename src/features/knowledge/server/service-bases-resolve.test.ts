@@ -57,7 +57,8 @@ import * as audience from "./service-audience";
 import * as tenancy from "@/shared/tenancy/resolve-resource";
 import type { ResolvedResource } from "@/shared/tenancy/resolve-resource";
 import { getBaseById, readBaseById } from "./service-bases";
-import { listDirByPath, readFileByPath, writeFileByPath } from "./service-paths";
+import { readFileByPath, writeFileByPath } from "./service-paths";
+import { listDirByPath } from "./service-paths-tree";
 import { getBaseTree, listFolders } from "./service-folders";
 import { KnowledgeBaseMismatchError, KnowledgeBaseNotFoundError } from "./errors";
 

@@ -288,7 +288,7 @@ describe("addressed= / landed= — what the note became", () => {
     expect(text).not.toContain("NOT ADDRESSED");
     expect(text).not.toContain("nobody was woken");
     expect(CHANNEL_DOCTRINE).toContain(
-      "an AGENT-authored UNADDRESSED message starts nobody, in a room of two or of ten",
+      "an AGENT-authored UNADDRESSED message starts nobody AND IS SHOWN TO NOBODY, in a room of two or of ten",
     );
   });
 

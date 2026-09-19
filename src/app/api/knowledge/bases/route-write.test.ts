@@ -3,8 +3,8 @@
  * filter and the create-and-share branch.
  *
  * ⚠ **A SIBLING OF `route.test.ts`, SPLIT OFF AT THE 500-LINE CAP (2026-09-01,
- * §1).** That file was ONE line under it, and T81's `pinnedBaseIds` fold could
- * not be absorbed — §1's rule that a file at the cap cannot take a line, applied
+ * §1).** That file was ONE line under it and a new fold could not be absorbed —
+ * §1's rule that a file at the cap cannot take a line, applied
  * to a test. The split is by QUESTION, not by size: `route.test.ts` keeps "what
  * does the GET fold onto the list", this file keeps "what does a PARAMETER
  * change" (the shelf filter) and "what does the POST fence" (the share branch).
@@ -14,8 +14,7 @@
  * a split test file must restate the module mocks it needs. What must NOT drift
  * is the service mock's COMPLETENESS: the route imports every one of those
  * exports, so an omission here rejects at property access and 500s every case —
- * the trap `listSharedIntoChannelBaseIds` and `listPinnedBaseIds` each record in
- * `route.test.ts`.
+ * the trap `listSharedIntoChannelBaseIds` records in `route.test.ts`.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -53,10 +52,6 @@ vi.mock("@/features/knowledge/server/service", () => ({
   listHomeScopedBaseIds: vi.fn(),
   // ⚠ THE PINNED-BASE READ (2026-09-01, T81). It rides the same `Promise.all`
   // as the other folded maps, so an UNMOCKED export here is not a missing
-  // assertion — vitest throws on the property access BEFORE the route's own
-  // `.catch` can attach, and every case in this file 500s. Same trap
-  // `listSharedIntoChannelBaseIds` records one mock down.
-  listPinnedBaseIds: vi.fn(),
   resolveKbStorageLimit: vi.fn(),
 }));
 
@@ -81,7 +76,6 @@ import {
   listBases,
   listStarredBaseIds,
   listHomeScopedBaseIds,
-  listPinnedBaseIds,
   resolveKbStorageLimit,
 } from "@/features/knowledge/server/service";
 import { listSharedIntoChannelBaseIds } from "@/features/knowledge/server/service-channel-grants";
@@ -94,7 +88,6 @@ const mockBaseStats = vi.mocked(listBaseStats);
 const mockStorageLimit = vi.mocked(resolveKbStorageLimit);
 const mockStarred = vi.mocked(listStarredBaseIds);
 const mockHomeScoped = vi.mocked(listHomeScopedBaseIds);
-const mockPinned = vi.mocked(listPinnedBaseIds);
 const mockShared = vi.mocked(listSharedIntoChannelBaseIds);
 const mockChannelVisible = vi.mocked(isChannelVisibleTo);
 
@@ -140,7 +133,6 @@ beforeEach(() => {
   mockStorageLimit.mockResolvedValue(5_000_000);
   mockStarred.mockResolvedValue(["kb-2"]);
   mockHomeScoped.mockResolvedValue(["kb-1"]);
-  mockPinned.mockResolvedValue([]);
   // ⚠ NOT the shelf flag's base: two keys always naming the same row would pass
   // whichever one the route dropped.
   mockShared.mockResolvedValue(["kb-2"]);

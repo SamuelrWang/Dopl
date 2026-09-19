@@ -20,21 +20,26 @@ const OWNER = "owner-1";
 const PEER = "peer-2";
 
 function kbClient(body: string, createdBy: string): DoplClient {
+  const entry = {
+    id: "e1",
+    title: "Runbook",
+    body,
+    entryType: "doc",
+    updatedAt: "2026-09-02T00:00:00Z",
+    lastEditedSource: "human",
+    createdAt: "2026-09-01T00:00:00Z",
+    createdBy,
+    lastEditedBy: createdBy,
+  };
   return {
     listKbBases: vi.fn().mockResolvedValue([
       { id: "b1", slug: "notes", name: "Notes", visibility: "private" },
     ]),
-    readKbFileByPath: vi.fn().mockResolvedValue({
-      id: "e1",
-      title: "Runbook",
-      body,
-      entryType: "doc",
-      updatedAt: "2026-09-02T00:00:00Z",
-      lastEditedSource: "human",
-      createdAt: "2026-09-01T00:00:00Z",
-      createdBy,
-      lastEditedBy: createdBy,
-    }),
+    readKbFileByPath: vi.fn().mockResolvedValue(entry),
+    // ⚠ The sectionless read goes through `readKbFilePart` since Wave 4 a1:
+    // the whole body, PLUS the heading list. No outline here, so the header
+    // states nothing about headings — which is the §8 stale-cache arm.
+    readKbFilePart: vi.fn().mockResolvedValue({ entry }),
   } as unknown as DoplClient;
 }
 

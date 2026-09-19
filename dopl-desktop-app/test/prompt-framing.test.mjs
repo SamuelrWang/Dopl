@@ -210,7 +210,7 @@ const ids = (over = {}) => ({ channelName: "Ops", authorName: "Alice", channelId
 
 test("buildFencedTurn responder: the delivery section states the EXACT dopl_channel call", () => {
   const out = buildFencedTurn({ side: "responder", message: "summarize it", nonce: "n1", context: ids() });
-  assert.ok(out.includes(`op "send", channel "${CH}", workspace "${WS}"`), "the concrete call, ids and all");
+  assert.ok(out.includes(`op "send", channel "${CH}", container "${WS}"`), "the concrete call, ids and all");
   assert.match(out, /Make the call exactly like this/, "stated as the call to make, not as trivia");
   assert.match(out, /post your reply into this channel with the mcp__dopl__dopl_channel MCP tool/, "the v1.9 line survives");
   assert.match(out, /there is no other capture/);
@@ -221,7 +221,7 @@ test("buildFencedTurn requester: the same concrete call rides the requester fram
     side: "requester", message: "ship it", nonce: "n2",
     context: ids({ taskTitle: "Q3 report" }),
   });
-  assert.ok(out.includes(`op "send", channel "${CH}", workspace "${WS}"`));
+  assert.ok(out.includes(`op "send", channel "${CH}", container "${WS}"`));
   assert.match(out, /Deliver every message to the peer by posting into this channel/, "the v1.9 line survives");
   assert.match(out, /That is how the peer's agent receives you/);
 });
@@ -243,7 +243,7 @@ test("the WORKSPACE UUID is what the prompt carries (a slug can name two workspa
   // The framing prints the ids it is GIVEN, verbatim and quoted — the spawn sites pass the
   // record/entry workspace UUID. Nothing here resolves or substitutes a slug.
   const out = buildFencedTurn({ side: "responder", message: "x", nonce: "n4", context: ids() });
-  assert.ok(out.includes(`workspace "${WS}"`), "the uuid, quoted");
+  assert.ok(out.includes(`container "${WS}"`), "the uuid, quoted");
   assert.ok(!out.includes("samuels-workspace"));
   const line = callLine(out);
   assert.equal(line.length, 1, "exactly one call line");
@@ -267,7 +267,7 @@ test("a MISSING id degrades to the pre-fix wording — never `undefined` or empt
       });
       const label = `${side} ${JSON.stringify(over)}`;
       assert.ok(!/undefined|null/.test(out), `${label}: no placeholder leaks into the prompt`);
-      assert.ok(!out.includes('channel ""') && !out.includes('workspace ""'), `${label}: no empty quotes`);
+      assert.ok(!out.includes('channel ""') && !out.includes('container ""'), `${label}: no empty quotes`);
       assert.ok(!out.includes("Make the"), `${label}: no half-addressed call`);
       assert.ok(out.includes('(op "send",'), `${label}: the v1.9 wording is what it falls back to`);
       assert.match(out, /dopl_channel/, `${label}: delivery is still named`);
@@ -317,7 +317,7 @@ test("FIX F4: sanitizing an id can no longer RECONSTRUCT a fence token (the belt
   });
   assert.deepEqual(callLine(ws), [], "a half-addressed call is never printed");
   assert.ok(buildFencedTurn({ side: "responder", message: "b", nonce: "n9", context: ids() })
-    .includes(`op "send", channel "${CH}", workspace "${WS}"`), "a real pair still states the call");
+    .includes(`op "send", channel "${CH}", container "${WS}"`), "a real pair still states the call");
 });
 
 // ── THE THREAD TAG (incident 2026-07-31) ─────────────────────────────────────────
@@ -347,7 +347,7 @@ test("the delivery call NAMES the thread, legacy ids included, on both sides", (
       const line = callLine(out);
       assert.equal(line.length, 1, `${side} ${taskId}: exactly one call line`);
       assert.ok(
-        line[0].includes(`op "send", channel "${CH}", workspace "${WS}", thread "${taskId}"`),
+        line[0].includes(`op "send", channel "${CH}", container "${WS}", thread "${taskId}"`),
         `${side} ${taskId}: ${line[0]}`
       );
     }

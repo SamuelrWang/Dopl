@@ -23,12 +23,17 @@ export type ChannelWakeVerdict =
   | "thread"
   /** RR1 — a threaded reply with no `to`, resolved to the thread's other party. */
   | "thread_peer"
-  /** RR2 — an unaddressed agent post in the main room, resolved to whoever last
-   *  addressed that agent there inside the 15-minute resilience window. */
+  /** 🔴 RR2, DELETED 2026-09-18 — A TOMBSTONE for rows written before it. Nothing
+   *  produces this; an agent addresses somebody or files a record. Do not add a
+   *  producer. */
   | "reciprocal"
   /** RR3 — an unaddressed human message, resolved to the channel's default
    *  responder or to the room's one live agent. */
-  | "responder";
+  | "responder"
+  /** `to=@desktop` — the author's OWN operator's OUTSIDE SESSIONS. ⚠ Not a weak
+   *  `member`: it notifies nobody and wakes nothing, and the recipient rides
+   *  `metadata.to_desktop` rather than `recipient_user_ids`. */
+  | "desktop";
 
 /**
  * WHAT HAPPENED to a message — the `delivery=` verdict that IS the
@@ -42,4 +47,8 @@ export type ChannelDelivery =
   | "idle"
   | "delivered"
   | "woken"
-  | "refused";
+  | "refused"
+  /** It is in the room, addressed to `@desktop`, and nothing was started. ⚠ The
+   *  one word that is true without a presence system — never `held`, never
+   *  `woken`. No machine reports it. */
+  | "posted";

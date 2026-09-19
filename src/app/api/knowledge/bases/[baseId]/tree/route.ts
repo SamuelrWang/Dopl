@@ -33,7 +33,12 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
     const id = auth.params?.baseId;
     if (!id) throw HttpError.badRequest("baseId is required");
     const ctx = buildKnowledgeContext(auth);
-    const tree = await getBaseTree(ctx, id, parseTreeOpts(request.nextUrl));
+    // ⚠ OPT-IN, because it turns off the `includeBody: false` read this
+    // snapshot exists on — see `service-folders.ts › getBaseTree`.
+    const headings = request.nextUrl.searchParams.get("headings") === "1";
+    const tree = await getBaseTree(ctx, id, parseTreeOpts(request.nextUrl), {
+      headings,
+    });
     return NextResponse.json(tree);
   } catch (err) {
     return toKnowledgeErrorResponse(err);

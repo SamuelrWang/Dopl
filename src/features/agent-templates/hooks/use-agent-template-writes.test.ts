@@ -192,6 +192,25 @@ describe("a write patches ONE workspace's list", () => {
     expect(names(view.result.current.home.templates)).toEqual(["Home Scout"]);
   });
 
+  /** 🔒 F-747 — the PATCH carries the precondition the caller handed it. */
+  it("UPDATE sends `expectedUpdatedAt` through to the request", async () => {
+    const view = await warm();
+    await act(async () => {
+      await view.result.current.containerWrites.update.mutateAsync({
+        templateId: "tpl-c1",
+        body: { name: "Renamed" },
+        optimistic: template("tpl-c1", WS_CONTAINER, "Renamed"),
+        expectedUpdatedAt: "2026-08-26T00:00:00.000Z",
+      });
+    });
+    const patch = apiRequest.mock.calls.find(
+      ([, opts]) => (opts as { method?: string })?.method === "PATCH"
+    );
+    expect(patch?.[1]).toMatchObject({
+      expectedUpdatedAt: "2026-08-26T00:00:00.000Z",
+    });
+  });
+
   it("DELETE in the home list leaves the container list alone", async () => {
     const view = await warm();
     await act(async () => {

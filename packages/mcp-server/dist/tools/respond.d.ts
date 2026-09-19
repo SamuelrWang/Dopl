@@ -66,6 +66,27 @@ export declare function isApiError(e: unknown, status: number, code: string): bo
  * credential class or gate refused, and this layer does not.
  */
 export declare function apiMessage(e: unknown): string | null;
+/**
+ * 🔒 **AN APP-ONLY ROUTE, ANSWERED AS A REFUSAL (S43, 2026-09-18).**
+ * `shared/auth/with-auth.ts`'s `sessionOnly` refuses every OAuth bearer with a
+ * 403 `SESSION_REQUIRED` — and every MCP caller is an OAuth bearer, so this is
+ * not a permission that can be granted to a session; it is the door being
+ * closed to this whole class of caller.
+ *
+ * ⚠ **IT LIVES HERE RATHER THAN IN ONE TOOL BECAUSE THE GATE IS CROSS-CUTTING.**
+ * ⚠ **AND IT HAS NO CALLER AS OF 2026-09-19, WHICH IS A FACT AND NOT AN
+ * OVERSIGHT.** The pin verbs raised it, and Samuel's ruling deleted knowledge
+ * pinning outright; the delete routes, `channel-grants` and the template delete
+ * carry the same `sessionOnly` wrapper option, so the next op that grows an arm
+ * gets this sentence rather than a second wording of it. It is asserted
+ * directly by `knowledge-refusals.test.ts › S43`, which is what keeps an
+ * uncalled helper from quietly rotting.
+ * ⚠ **IT NAMES THE OP AND SAYS NOTHING CHANGED**, because a caller that reads
+ * "forbidden" alone re-issues, and this call can only ever answer the same way.
+ *
+ * Null when the error is anything else, so the caller rethrows.
+ */
+export declare function sessionRequired(e: unknown, op: string): ToolResponse | null;
 /** True for a 409 (name/title/slug already-exists collision). */
 export declare function isAlreadyExists(e: unknown): boolean;
 /**

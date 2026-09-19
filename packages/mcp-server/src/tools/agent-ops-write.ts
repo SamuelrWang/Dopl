@@ -55,7 +55,8 @@ import {
   type GrantLevelArg,
   type GrantScopeArg,
 } from "./grant.js";
-import { ok, err, type ToolResponse } from "./respond.js";
+import { ok, err, isApiError, isConflict, type ToolResponse } from "./respond.js";
+import { refusal, versionConflict } from "./tool-errors.js";
 import {
   confirmGate,
   containerPublishUnacknowledged,
@@ -69,6 +70,11 @@ import {
   type OfferedTemplateVisibility,
 } from "./agent-shared.js";
 import { isErr } from "./channel-shared.js";
+import { duplicateNameNoteFor } from "./duplicate-name.js";
+import {
+  homeChannelRowNotShared,
+  resolveHomeChannelContainer,
+} from "./container-destination.js";
 
 export interface TemplateWriteInput {
   name?: string;
@@ -80,6 +86,10 @@ export interface TemplateWriteInput {
   knowledge_bases?: string[];
   knowledge?: Array<{ base: string; folder?: string; entry?: string }>;
   confirm_token?: string;
+  /** op="update" only — the Version from `op="get"`. See {@link opUpdate}. */
+  expected_version?: string;
+  /** op="update" only — the `expected_version` escape. */
+  force?: boolean;
 }
 
 /**
@@ -125,6 +135,14 @@ function knowledgeDigest(input: TemplateWriteInput): string[] {
     .sort();
 }
 
+/**
+ * ⚠ **DECLARED, NOT HAND-WRITTEN** — `tool-errors.ts › versionConflict` is the
+ * one producer of this `reason=` string, so the wire and any description that
+ * teaches it move together. `op="get"` is the remedy because that is the op
+ * whose result carries a template's Version.
+ */
+const TEMPLATE_VERSION_CONFLICT = versionConflict('op="get"');
+
 /** Map the write errors that have an actionable sentence; rethrow anything
  *  else. ⚠ ONE mapper for both verbs so the two cannot answer differently. */
 function mapWriteError(e: unknown): ToolResponse | null {
@@ -134,16 +152,50 @@ function mapWriteError(e: unknown): ToolResponse | null {
   const unacknowledged = containerPublishUnacknowledged(e, RECONFIRM_REMEDY);
   if (unacknowledged) return unacknowledged;
   return (
+    // 🔒 The home-channel destination fence (2026-09-18) — reachable on BOTH
+    // verbs, which is why it is mapped here rather than inside `opCreate`: the
+    // update path can move a row to `private` inside a channel too.
+    homeChannelRowNotShared(e) ??
     sharedCredentialPrivateDenied(e) ??
     knowledgeBaseNotAttachable(e) ??
     templateWriteDenied(e)
   );
 }
 
+/**
+ * 🔒 **THE TWO DESTINATIONS, ON THE TEMPLATE LANE** (Samuel's ruling
+ * 2026-09-18) — see `container-destination.ts` for the model.
+ *
+ * Inside a home channel the ONLY audience that exists is the channel itself, so
+ * `visibility` defaults to `"workspace"` there and an explicit `"private"` is
+ * refused before the round trip. Everywhere else the default is `"private"`,
+ * unchanged.
+ *
+ * ⚠ **THE REFUSAL IS THE SERVER'S AND THIS IS THE SENTENCE** — `assertHomeChannelRowIsShared`
+ * 400s the same write, so a caller that reaches the route directly gets the same
+ * answer. What this buys is that the COMMON call — `op="create"` with no
+ * `visibility`, into a channel — lands where the operator meant it to instead of
+ * being refused for a value the agent never chose.
+ */
+function homeChannelVisibility(
+  requested: OfferedTemplateVisibility | undefined,
+): OfferedTemplateVisibility | ToolResponse {
+  if (requested === "private") {
+    return err(
+      `Nothing was created. A home channel holds only what is shared into it, so an agent template cannot be private there. Create it with visibility="workspace" to share it with everyone in this channel, or pass container="home" to keep it to yourself in your home space.`,
+    );
+  }
+  return "workspace";
+}
+
 export async function opCreate(
   client: DoplClient,
   callerUserId: string | null,
   input: TemplateWriteInput & { name: string },
+  /** ⚠ OPTIONAL — see `container-destination.ts ›
+   *  resolveHomeChannelContainer`: absent means "not known", which degrades to
+   *  the pre-2026-09-18 behaviour and leaves the refusal with the server. */
+  directory?: WorkspaceDirectory,
 ): Promise<ToolResponse> {
   // 🔒 **VISIBILITY IS ALWAYS SENT, NEVER LEFT TO THE SERVER'S DEFAULT**
   // (2026-09-02).
@@ -159,7 +211,16 @@ export async function opCreate(
   // ⚠ Sending it makes the wire match what the tool's own description promises
   // ("default 'private'"), so the branch cannot fire at all; a shared credential
   // then gets its clean, named 403 instead of an unanswerable 400.
-  const visibility: OfferedTemplateVisibility = input.visibility ?? "private";
+  //
+  // 🔒 **AND SINCE 2026-09-18 THE DEFAULT IS THE DESTINATION'S, NOT A CONSTANT.**
+  // A home channel has one audience — the channel — so `"private"` there names
+  // the destination Samuel deleted. See {@link homeChannelVisibility}.
+  const inHomeChannel = await resolveHomeChannelContainer(client, directory);
+  const chosen: OfferedTemplateVisibility | ToolResponse = inHomeChannel
+    ? homeChannelVisibility(input.visibility)
+    : (input.visibility ?? "private");
+  if (typeof chosen !== "string") return chosen;
+  const visibility: OfferedTemplateVisibility = chosen;
 
   const verdict = await confirmGate(
     client,
@@ -211,13 +272,30 @@ export async function opCreate(
   // ⚠ TWO ARMS, because `create` sends the two-arm enum and nothing else: the
   // server's own default for an omitted `visibility` is `private`, so this
   // response cannot describe a row at a visibility this surface never offered.
+  // ⚠ **THREE ARMS SINCE 2026-09-18, AND THE THIRD IS A DIFFERENT SENTENCE**:
+  // inside a home channel `workspace` means "the other people in this
+  // relationship", never "everyone in your company" — the same split
+  // `src/features/agent-templates/lib/visibility.ts › SECTIONS_CONTAINER` makes,
+  // and its heading is the wording reused here.
   const audience =
     template.visibility === "private"
       ? "Private to you — only you and your own agents can see it."
-      : "Shared with everyone in this workspace — every member can list it and launch it.";
+      : inHomeChannel
+        ? "Shared in this channel — everyone here can list it and launch it."
+        : "Shared with everyone in this workspace — every member can list it and launch it.";
+  // ⚠ Q3's warning — AFTER the create, so a list that throws costs the caller
+  // nothing. A template collision is the sharper of the two: `resolveTemplateRef`
+  // REFUSES every name-addressed `get`/`update` from now on. See
+  // `duplicate-name.ts`.
+  const dup = await duplicateNameNoteFor(
+    template,
+    () => client.listAgentTemplates(),
+    "agent template",
+    true,
+  );
   return ok(
     [
-      `Created agent template ${inlineOr(template.name, NO_NAME)} (id: \`${template.id}\`). ${audience}`,
+      `Created agent template ${inlineOr(template.name, NO_NAME)} (id: \`${template.id}\`). ${audience}${dup}`,
       `Launch it into a channel with dopl_channel(op="manage", action="launch", channel=…, template="${template.id}") — which ASKS the operator's machine and does not start anything by itself.`,
     ].join("\n"),
   );
@@ -277,11 +355,31 @@ export async function opUpdate(
     // 🔒 G16 — the spent token, as the server's precondition. ⚠ SET AFTER the
     // "changed nothing" check above, which counts only fields that move a
     // column: an acknowledgement is an assertion ABOUT a change, never one.
-    updated = await client.updateAgentTemplate(template.id, {
-      ...patch,
-      acknowledgeShared: verdict.acknowledgedShared || undefined,
-    });
+    updated = await client.updateAgentTemplate(
+      template.id,
+      {
+        ...patch,
+        acknowledgeShared: verdict.acknowledgedShared || undefined,
+      },
+      // ⚠ THE CLIENT'S TRI-STATE, SPELLED OUT: `force` → null (blind
+      // overwrite), else the version the caller passed — and `undefined` is the
+      // arm the SDK refuses without a round trip.
+      input.force ? null : input.expected_version,
+    );
   } catch (e) {
+    // ⚠ **BOTH 412s, AND THEY ARE ONE REFUSAL TO THE AGENT.** The SDK raises
+    // `EXPECTED_VERSION_REQUIRED` before the wire when no version was passed;
+    // the server raises `AGENT_TEMPLATE_STALE_VERSION` when the row moved. The
+    // remedy is the same call either way, so a second wording would be a second
+    // string for an agent to match on and no new fact.
+    if (isApiError(e, 412, "EXPECTED_VERSION_REQUIRED") || isConflict(e)) {
+      return err(
+        refusal(
+          TEMPLATE_VERSION_CONFLICT,
+          `Nothing was written to ${inlineOr(template.name, NO_NAME)} (id: \`${template.id}\`). Re-read it, reconcile your changes, and retry with that Version — or pass force=true to overwrite the other edit.`,
+        ),
+      );
+    }
     const mapped = mapWriteError(e);
     if (mapped) return mapped;
     throw e;
@@ -290,8 +388,11 @@ export async function opUpdate(
     patch.visibility !== undefined
       ? ` Sharing is now: ${updated.visibility}.`
       : "";
+  // ⚠ THE NEW VERSION IS PART OF THE SUCCESS, not something to go and fetch —
+  // an agent making two edits in a row would otherwise have to `op="get"`
+  // between them to satisfy the precondition it just satisfied.
   return ok(
-    `Updated agent template ${inlineOr(updated.name, NO_NAME)} (id: \`${updated.id}\`).${note}`,
+    `Updated agent template ${inlineOr(updated.name, NO_NAME)} (id: \`${updated.id}\`).${note}\nVersion: \`${updated.updatedAt}\` (pass as expected_version to the next op="update")`,
   );
 }
 

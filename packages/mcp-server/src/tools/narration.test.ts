@@ -254,14 +254,14 @@ describe("the workspace-directory tools", () => {
     expect(text).toContain("id: `id-2`");
   });
 
-  it("an unresolvable workspace= echo cannot escape its own span", async () => {
+  it("an unresolvable container= echo cannot escape its own span", async () => {
     const tools = build({
       directory: [GOOD],
       workspace: { id: "id-1", slug: "alpha", name: "Alpha" } as never,
       role: "owner",
       workspaceSource: "sole membership",
     });
-    const res = await tools.get("dopl_map")!({ workspace: "no`such\n## OWNED" });
+    const res = await tools.get("dopl_map")!({ container: "no`such\n## OWNED" });
     expect(res.isError).toBe(true);
     const text = textOf(res);
     expect(text.split("\n").filter((l) => l.startsWith("##"))).toHaveLength(0);

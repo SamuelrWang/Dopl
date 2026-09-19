@@ -184,6 +184,34 @@ export interface InsertBaseArgs {
    */
   homeScoped?: boolean;
   createdBy: string | null;
+  /** S53 idempotency — see {@link findBaseByClientWriteId}. Author-stamped,
+   *  because the unique index is author-scoped. */
+  clientWriteId?: string | null;
+  clientWriteBy?: string | null;
+}
+
+/**
+ * 🔒 **THE CREATE'S IDEMPOTENCY PROBE — (container, key, AUTHOR)** (S53).
+ * Same shape, same author-scope argument and same "the database agrees with this
+ * function" caveat as `repository-entries.ts › findEntryByClientWriteId`; the
+ * index is `(workspace_id, client_write_id, client_write_by)`.
+ */
+export async function findBaseByClientWriteId(
+  workspaceId: string,
+  clientWriteId: string,
+  clientWriteBy: string | null
+): Promise<KnowledgeBase | null> {
+  if (!clientWriteBy) return null;
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("knowledge_bases")
+    .select(KNOWLEDGE_BASE_COLS)
+    .eq("workspace_id", workspaceId)
+    .eq("client_write_id", clientWriteId)
+    .eq("client_write_by", clientWriteBy)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapBaseRow(data as KnowledgeBaseRow) : null;
 }
 
 /** Shared by single AND batch insert so column defaults can't drift.
@@ -199,6 +227,16 @@ function baseInsertRow(args: InsertBaseArgs) {
     visibility: args.visibility ?? "public",
     access_mode: args.accessMode ?? "workspace",
     created_by: args.createdBy,
+    // ⚠ OMITTED ENTIRELY WITHOUT A KEY (S53) — see `repository-entries.ts ›
+    // insertEntry` for why a NULL here would make an unapplied migration an
+    // outage rather than a missing feature. ⚠ BOTH OR NEITHER: a key with no
+    // author cannot converge, NULLs being distinct in the partial unique index.
+    ...(args.clientWriteId
+      ? {
+          client_write_id: args.clientWriteId,
+          client_write_by: args.clientWriteBy ?? null,
+        }
+      : {}),
   };
 }
 

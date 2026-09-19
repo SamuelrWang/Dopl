@@ -10,10 +10,7 @@ import {
   readFileByPath,
   writeFileByPath,
 } from "@/features/knowledge/server/service";
-import {
-  NAME_RE,
-  NAME_INVALID_MESSAGE,
-} from "@/features/knowledge/schema";
+import { EntryTitleSchema } from "@/features/knowledge/schema";
 import {
   outlinePayload,
   projectFile,
@@ -36,19 +33,25 @@ function requirePathParam(request: NextRequest): string {
   return path;
 }
 
-// ⚠ `title` constraints + the 1 MB body cap MIRROR KnowledgeEntryUpdateSchema in
-// features/knowledge/schema.ts — keep in sync. NAME_RE / NAME_INVALID_MESSAGE are imported from
-// that module so the literal lives in exactly one place.
+// ⚠ `title` IS `EntryTitleSchema` ITSELF now, not a hand-mirror of it — the chain
+// this line used to re-type carried an entity-decoding `.transform()` on the
+// other three entry-title sites and not here, which is the MCP write lane
+// (`writeKbFileByPath` → this route) and therefore the one that mattered. The
+// 1 MB body cap is still a mirror of features/knowledge/schema.ts; keep in sync.
 const MAX_BODY_BYTES = 1_048_576;
 const WriteFileSchema = z.object({
   path: z.string(),
   body: z.string().max(MAX_BODY_BYTES, "Body must be 1 MB or less").optional(),
-  title: z.string().min(1).max(300).regex(NAME_RE, NAME_INVALID_MESSAGE).optional(),
+  title: EntryTitleSchema.optional(),
   // Agent-facing summary (≤300 chars) shown in get_tree / list_dir. `null` clears; omit keeps.
   excerpt: z.string().max(DESCRIPTION_MAX).nullable().optional(),
   // Replace ONE heading's section instead of the whole document; `body` is that
   // section's new content. Bounded like a title — a heading is one line.
   section: z.string().min(1).max(300).optional(),
+  // 🔒 S53 IDEMPOTENCY KEY — a re-sent write under the same key converges on the
+  // first call's entry instead of upserting a second one. Author-scoped by a
+  // partial unique index (`20261014120000`). Bounded like `client_msg_id`.
+  clientWriteId: z.string().min(1).max(200).optional(),
 });
 
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
@@ -63,7 +66,11 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
     // make — `outline` and `section` are additive and opt-in (INVARIANTS §8).
     const section = request.nextUrl.searchParams.get("section") ?? undefined;
     const outline = request.nextUrl.searchParams.get("outline") === "1";
-    return NextResponse.json(projectFile(entry, { section, outline }));
+    // ⚠ A THIRD OPT-IN, AND IT IS ADDITIVE FOR THE SAME REASON THE OTHER TWO
+    // ARE: `headings=1` keeps the whole body and adds the outline beside it, so
+    // a reader learns the addresses of what it just read without a second call.
+    const headings = request.nextUrl.searchParams.get("headings") === "1";
+    return NextResponse.json(projectFile(entry, { section, outline, headings }));
   } catch (err) {
     return toKnowledgeErrorResponse(err);
   }
@@ -76,12 +83,21 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
     const ctx = buildKnowledgeContext(auth);
     // Precondition on the resolved entry's updated_at. Mismatch → 412 KNOWLEDGE_STALE_VERSION.
     const expectedUpdatedAt = request.headers.get("x-updated-at") ?? undefined;
-    const { entry, sectionCreated } = await writeFileByPath(ctx, baseId, input.path, {
+    // 🔒 S40 — THE CALLER'S BELIEF THAT SOMETHING IS ALREADY THERE, carried as a
+    // HEADER beside the precondition it belongs with rather than as a body field:
+    // it is a property of the WRITE ATTEMPT, not of the document, and the body
+    // schema is mirrored by the type-drift gate. `force` on the MCP surface sends
+    // no `X-Updated-At` and this header instead, so a forced write at a path a
+    // move vacated refuses (409) rather than upserting a duplicate.
+    const expectExisting = request.headers.get("x-expect-existing") === "1";
+    const { entry, sectionCreated, converged } = await writeFileByPath(ctx, baseId, input.path, {
       body: input.body,
       title: input.title,
       excerpt: input.excerpt,
       section: input.section,
       expectedUpdatedAt,
+      expectExisting,
+      clientWriteId: input.clientWriteId,
     });
     // ⚠ THE OUTLINE OF WHAT WAS SAVED, ON EVERY WRITE. It is what lets the
     // agent surface answer "and here is how to read this back in parts" without
@@ -91,6 +107,9 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
       entry,
       outline: outlinePayload(entry.body ?? ""),
       ...(sectionCreated === undefined ? {} : { sectionCreated }),
+      // ⚠ ADDITIVE AND OMITTED WHEN FALSE (INVARIANTS §8): an older client that
+      // knows nothing of the key sees a byte-identical response.
+      ...(converged ? { converged } : {}),
     });
   } catch (err) {
     return toKnowledgeErrorResponse(err);

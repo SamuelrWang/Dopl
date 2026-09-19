@@ -87,6 +87,13 @@ test("the identity block is the id, its BOUNDARY, and how to address a peer", ()
     "THE ID IS INTERNAL: read it, never write it in a message.",
     "ADDRESS AN AGENT BY ITS NAME, as a tag: lower case, spaces as dashes (@bug-reviewer).",
     "Names are unique among live agents, so a tag reaches exactly one.",
+    // ⚠ **THE READING HALF (2026-09-18, A2/S45).** Each of these names a label the MCP read
+    // really prints (`channel-render-identity.ts › formatAuthor`): `for you` marks a SIBLING
+    // session of this same operator, and `outside session` marks the operator's own external
+    // MCP connection, whose reply handle is the group tag rather than the author's own name.
+    // A rule about a label the transcript does not carry would be worse than no rule.
+    "\"for you\" on an agent line means YOUR operator's agent; another name means another member's.",
+    "\"outside session\" is your operator's own coding session: address it @desktop, in full detail.",
   ]);
 });
 
@@ -127,7 +134,7 @@ test("SIBLINGS are no longer named, and nothing asks the agent to adjudicate del
   }
 });
 
-test("…and it stays cheap: the whole block is under 300 characters", () => {
+test("…and it stays cheap: the whole block is under 460 characters", () => {
   // ⚠ IT IS PAID ON EVERY SESSION'S FIRST TURN. The ratchet is the point, and a paragraph is how
   // this grows back one sentence at a time.
   // ⚠ **60 → 300 ON 2026-09-15, AND A RISE IS A DECISION RECORDED HERE RATHER THAN ABSORBED.**
@@ -137,13 +144,22 @@ test("…and it stays cheap: the whole block is under 300 characters", () => {
   // into messages a person reads and starts addressing peers by the tag that actually works.
   // ⚠ **THE HEADROOM IS DELIBERATELY SMALL** — under a hundred characters over the measurement —
   // so the next sentence still has to be argued for, which is the property the 60 had.
+  // ⚠ **300 → 460 ON 2026-09-18 (A2/S45), AND HERE IS THE ARGUMENT.** Two lines were added, 188
+  // chars, and each names a label the MCP read really prints
+  // (`channel-render-identity.ts › formatAuthor`): `for you` marks a SIBLING — another session
+  // this same operator launched — and `outside session` marks the operator's own external MCP
+  // connection, whose reply handle is a group tag rather than the author's name. The first four
+  // lines are how this agent WRITES an address; these are how it READS one, and without them the
+  // transcript carries a distinction the agent has no rule for — which is a roster lookup, on the
+  // surface this wave exists to take lookups off. ⚠ The headroom stays under a hundred characters
+  // over the measurement, which is the property the 60 and the 300 both had.
   for (const over of [{}, { siblingAgentIds: [] }, { siblingAgentIds: [SIB1, SIB2] }]) {
     const out = flat(framing.agentIdentityFraming({ agentId: ME, ...over }));
-    assert.ok(out.length < 300, `${out.length} chars: ${out}`);
+    assert.ok(out.length < 460, `${out.length} chars: ${out}`);
   }
   // ⚠ AND THE NAMED FORM IS MEASURED TOO — it is the common one now that every launch names.
   const withName = flat(framing.agentIdentityFraming({ agentId: ME, agentName: "Bug Reviewer" }));
-  assert.ok(withName.length < 300, `${withName.length} chars: ${withName}`);
+  assert.ok(withName.length < 460, `${withName.length} chars: ${withName}`);
 });
 
 test("no agent id, no block — an unidentified session is told nothing it cannot use", () => {
@@ -308,7 +324,7 @@ const turn = (over = {}) => framing.buildFencedTurn({
 test("a WOKEN requester (`scope: 'thread'`) IS ordered to read the thread it is joining", () => {
   const out = turn({ scope: "thread" });
   assert.match(out, /Your SECOND action is to read the exchange you are joining/);
-  assert.ok(out.includes(`with op "read", channel "${CH}", workspace "${WS}", thread "${TASK}"`), out);
+  assert.ok(out.includes(`with op "read", channel "${CH}", container "${WS}", thread "${TASK}"`), out);
   assert.equal(out.split('op "read"').length - 1, 1, "stated once");
 });
 

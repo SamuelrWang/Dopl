@@ -405,10 +405,12 @@ describe("the predicate is narrow, and every clause is load-bearing", () => {
     expect(mockWorkspace).not.toHaveBeenCalled();
   });
 
-  it("a PRIVATE create never asks the room anything", async () => {
+  it("a PRIVATE create never asks the room anything — G16 is the COUNT", async () => {
+    // 🔒 NARROWED 2026-09-18, THE CLAUSE UNCHANGED: G16's predicate is the COUNT;
+    room("standard", 2); // `mockWorkspace` is the DESTINATION fence's read now
     await createTemplate(templateCtx(), { name: "Scout", visibility: "private" });
     expect(mockTemplates.insertTemplate).toHaveBeenCalled();
-    expect(mockWorkspace).not.toHaveBeenCalled();
+    expect(mockCount).not.toHaveBeenCalled();
   });
 
   it("🔒 a room that counts ZERO refuses, and writes NOTHING", async () => {

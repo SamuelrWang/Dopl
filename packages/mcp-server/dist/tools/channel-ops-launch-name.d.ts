@@ -15,6 +15,18 @@ import { type ToolResponse } from "./respond";
  * orchestrator as a validation string it cannot act on, and that is a retry loop.
  */
 /**
+ * **HAND-MIRRORED FROM `schema-launch.ts › LaunchCreateSchema.agentName`'s `.max(60)`** — and
+ * from `main/agent-names.js › MAX_NAME`, the store at the far end that would bounce a longer
+ * one with `bad-name` even if the route took it (S50, 2026-09-18).
+ *
+ * ⚠ **IT WAS UNPUBLISHED UNTIL 2026-09-18.** `name` carries no `.max()` in the published shape
+ * — it serves four actions and the other three have no such bound — so a 61-character name
+ * reached the route and came back as a bare `VALIDATION_FAILED` naming no field. The number is
+ * in `name`'s own `.describe()` ("1-60 visible characters") and in `channel-errors.ts ›
+ * FIELD_CAPS_NOTE`; this is the third statement of it, and the only one that can refuse.
+ */
+export declare const LAUNCH_NAME_MAX_CHARS = 60;
+/**
  * The name this launch should file, or the refusal to return instead.
  *
  * ⚠ **IT ANSWERS A UNION RATHER THAN THROWING**, matching every other refusal on this lane: the
@@ -45,27 +57,41 @@ export declare function isNameRefusal(answer: {
 export declare function launchedTag(name: string): string;
 /**
  * What the launch result prints when the machine reported NO name (found reviewing
- * `4782677b`, 2026-09-16).
+ * `4782677b`, 2026-09-16; re-worded for F-736, 2026-09-18).
  *
  * ⚠ **NOT A TAG, AND DELIBERATELY UNTYPEABLE.** Every other value of `name=` is an address a
  * caller copies; this one says the address is not known, so it carries no `@` and no slug.
  * `channel-facts.ts › renderValue` quotes it for the space, which is what keeps the
  * `key=value` pairs parseable.
- */
-export declare const NAME_NOT_APPLIED = "(not applied)";
-/**
- * **THE `name=` FIELD ON A LAUNCHED RESULT** — the machine's value, the older-desktop fallback,
- * and the third case that used to be silently folded into the second (found reviewing
- * `4782677b`, 2026-09-16).
  *
- * ⚠ **`null` AND `undefined` ARE DIFFERENT ANSWERS AND `??` COLLAPSED THEM.** The field is
- * OPTIONAL on the SDK's `LaunchDirective`, so:
- *   · `undefined` — the desktop/server predates the field. The name it stored IS the one that was
- *     asked for, and echoing the request is the honest answer. This is the only fallback.
- *   · `null` — the field IS carried and the machine reported no name. `4782677b` closed the two
- *     desktop arms that produced it, so it should now be unreachable; echoing the REQUEST here
- *     published a tag nothing answers to, on exactly the launch that went wrong.
- * ⚠ **AN UNREACHABLE CASE STILL GETS A SPELLING.** "Cannot happen" is what the previous version
- * relied on, and the six unnamed launches of 2026-09-16 are what it cost.
+ * ⚠ **"NOT REPORTED", NOT "NOT APPLIED", AND THE DIFFERENCE IS THE WHOLE OF F-736.** The name
+ * very likely WAS applied — the desktop stores it before it answers — and what is missing is the
+ * REPORT of it. `(not applied)` stated the stronger of the two as if this process had observed
+ * it, on exactly the launch where it had observed least. ⚠ **IT IS ALSO THE WORD `postureFacts`
+ * ALREADY USES** for the same shape of silence on the same result line, so one line no longer
+ * carries two vocabularies for one fact.
  */
-export declare function launchedName(applied: string | null | undefined, requested: string): string;
+export declare const NAME_NOT_REPORTED = "(not reported)";
+/**
+ * **THE `name=` FIELD ON A LAUNCHED RESULT** — the machine's value, or the one spelling of
+ * "the machine did not say" (F-736, resolved 2026-09-18).
+ *
+ * ⚠ **IT USED TO SPLIT `undefined` FROM `null` AND ONE HALF WAS UNREACHABLE.** The `undefined`
+ * arm meant *"this peer predates the field, so the name it stored IS the one that was asked for"*
+ * and echoed the request. But the DTO never produces `undefined`:
+ * `src/features/channels/server/service-launch-dto.ts` maps `applied_agent_name ?? null`, and the
+ * column is `null` for a refusal, for a non-launch kind AND for every desktop older than
+ * 2026-09-15 — so all three crossed the wire as `null` and a launch whose name was applied but
+ * not reported rendered `(not applied)`. **Two halves each pretending the other existed**, which
+ * is F-736's own phrasing of it.
+ *
+ * ⚠ **THE FIX IS TO DROP THE ARM, NOT TO RE-CARRY THE DISTINCTION.** The alternative on the
+ * finding was an absent KEY for a directive predating the field — which needs this process to
+ * date another machine's build from a row, and would buy one echo of a request this process
+ * cannot confirm. `undefined` and `null` therefore land on the same honest answer, and no caller
+ * is handed a tag nothing answers to.
+ *
+ * ⚠ **THE REQUEST IS NO LONGER AN ARGUMENT.** Echoing it was the only reason to pass it, and a
+ * parameter that can only produce the wrong answer is worse than no parameter.
+ */
+export declare function launchedName(applied: string | null | undefined): string;

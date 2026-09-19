@@ -146,7 +146,7 @@ describe("postMentionFacts — says what it knows and nothing past it", () => {
     expect(facts("@k3v7d2mq", []).tags).toBeUndefined();
     expect(facts("@k3v7d2mq", []).wake).toBe("@agent-k3v7d2mq");
     // ⚠ RE-POINTED 2026-09-15 — the cause names the rule that DOES reach an agent.
-    expect(CHANNEL_DOCTRINE).toContain("an agent is reached by the LAW's rule");
+    expect(CHANNEL_DOCTRINE).toContain("an agent is reached by `to` alone");
     // ⚠ RE-POINTED: "starts no inbox entry" and "lands in no Tags inbox" were
     // two spellings of one claim in the old text; the compressed list keeps the
     // one that names WHICH inbox, which is the half a reader can act on.
@@ -212,15 +212,23 @@ describe("what a post result actually carries about its `@` tokens", () => {
     return res.content[0].text;
   }
 
-  it("⚠ AN AGENT-ONLY BODY GETS NO ROSTER VERDICT", async () => {
+  it("⚠ AN AGENT-ONLY BODY GETS NO ROSTER VERDICT, AND NO WAKE EITHER", async () => {
     // ⚠ THE SECOND HALF OF THE 2026-08-31 FIX. `tagOutcomeNote`'s zero branch was
     // five causes about spelling, membership and ambiguity — printed over a body
     // that named no member at all, it answered a question the caller did not ask,
     // in the voice of a defect, about the one thing they did right. There is no
-    // fraction to misread now: `tags=-`, and the handle is reported as a wake.
+    // fraction to misread now: `tags=-`.
+    //
+    // ⚠ **AND `wake=` NO LONGER ANSWERS OFF THE BODY (2026-09-18).** It printed
+    // `wake=@agent-x2sz1ztt` here, which was true while prose was an agent
+    // address and is false now — an agent's body reaches no agent, so the fixture
+    // below stores no recipient and the honest report is `wake=-`. The field is
+    // read off the stored row (`channel-ops-write.ts › wakeFact`), so it cannot
+    // disagree with `addressed=` or with the read's own `→` arrow.
     const out = await resultOf("@agent-x2sz1ztt read the room", []);
     expect(out).toContain("tags=-");
-    expect(out).toContain("wake=@agent-x2sz1ztt");
+    expect(out).toContain("wake=-");
+    expect(out).not.toContain("wake=@agent-x2sz1ztt");
     expect(out).not.toContain("tags=0/1");
     expect(out).not.toContain("RESOLVED TO NOBODY");
     expect(out).not.toContain("FIVE");
@@ -236,10 +244,13 @@ describe("what a post result actually carries about its `@` tokens", () => {
     expect(CHANNEL_DOCTRINE).toContain("WHY A TAG RESOLVES TO NOBODY — FIVE CAUSES");
   });
 
-  it("a MIXED body reports both, in the two fields that cannot be confused", async () => {
+  it("a MIXED body reports the MEMBER verdict, and no wake it cannot prove", async () => {
+    // ⚠ The two fields still cannot be confused; what changed is that the agent
+    // half of a BODY is no longer an address at all (2026-09-18), so the only
+    // thing this body did was tag a member — and `tags=0/1` says it missed.
     const out = await resultOf("@dia and @agent-x2sz1ztt", []);
     expect(out).toContain("tags=0/1");
-    expect(out).toContain("wake=@agent-x2sz1ztt");
+    expect(out).toContain("wake=-");
   });
 
   it("the standing lines are OUT of the result and IN the doctrine", async () => {

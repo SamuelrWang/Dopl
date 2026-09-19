@@ -78,6 +78,9 @@ function kbClient(e: KnowledgeEntry): DoplClient {
   return {
     listKbBases: vi.fn(async () => [BASE]),
     readKbFileByPath: vi.fn(async () => e),
+    // ⚠ The sectionless read asks for `headings` since Wave 4 a1 — same
+    // document, plus the addresses for next time.
+    readKbFilePart: vi.fn(async () => ({ entry: e })),
   } as unknown as DoplClient;
 }
 

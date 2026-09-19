@@ -8,7 +8,11 @@ import "server-only";
  * `hardDelete*` throw on error.
  * - `includeDeleted` is a legacy-tombstone escape hatch, not a trash surface
  *     — deletes are permanent. Default `false` keeps the `deleted_at IS NULL`
- *     filter hiding pre-switch rows.
+ *     filter hiding pre-switch rows. ⚠ **THERE ARE NO SUCH ROWS LEFT** (the
+ *     purge migration ran; counts read 0 on 2026-09-18) and **NO CALL SITE
+ *     PASSES `true`** — re-derive with `grep -rn includeDeleted src`. The
+ *     parameter and the filters are inert; **F-730** carries removing them and
+ *     the columns together, which the partial-unique indexes make non-mechanical.
  * - The service-role client BYPASSES RLS, so every method taking
  *     `workspaceId` filters by it explicitly.
  *
@@ -17,11 +21,11 @@ import "server-only";
  *   - `repository-folders.ts` — folder reads + ancestor walk + writes + delete
  *   - `repository-entries.ts` — entry reads (incl. path helpers) + writes + delete
  *   - `repository-stars.ts`   — PER-USER base stars, every statement by user_id
- *   - `repository-pins.ts`    — WORKSPACE-WIDE pins + the startup-context reads
  */
 
 export {
   findBaseById,
+  findBaseByClientWriteId,
   listBasesByIds,
   findBaseBySlug,
   findBaseByPublicId,
@@ -51,6 +55,7 @@ export type { InsertFolderArgs, UpdateFolderPatch } from "./repository-folders";
 
 export {
   findEntryById,
+  findEntryByClientWriteId,
   findActiveEntryByTitle,
   listActiveEntryTitlesIn,
   findActiveEntryById,
@@ -76,12 +81,3 @@ export {
   insertBaseStar,
   deleteBaseStar,
 } from "./repository-stars";
-
-export {
-  listPinnedBaseIds,
-  setBasePinned,
-  setEntryPinned,
-  listPinnedEntriesForBases,
-  listFolderNodesForBases,
-} from "./repository-pins";
-export type { KnowledgeFolderNode } from "./repository-pins";

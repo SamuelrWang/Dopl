@@ -67,6 +67,10 @@ test("feed: EVERY live agent on the thread is fed, and each is told which it is"
     channelId: "c1", taskId: TASK, agentId: A1, message: "reply body",
     seq: 7, // the turn's seq — the windowless outbound bridge's thread join
     authorName: `name:${PEER}`,
+    // ⚠ `authorNote` JOINED THE FEED 2026-09-18 (`room-roster.js › agentAuthorNote`): one line
+    // naming an agent this session's LAUNCH SNAPSHOT never saw. NULL here and on almost every
+    // turn — a PERSON wrote this one — which is what keeps the fed turn byte-identical.
+    authorNote: null,
     addressing: null, // nobody was @-mentioned
     // ⚠ THE WAKE VERDICT RIDES WITH EVERY FEED SINCE 2026-08-28, and `false` is the ordinary
     // answer: these two agents are RUNNING, so the fan-out delivered the message without any
@@ -425,11 +429,13 @@ test("verdict `none`: nobody is fed, and nothing is acked", () => {
   assert.deepEqual(h.calls.acks, [], "nothing was aimed here, so nothing was refused");
 });
 
-test("the three MEMBER verdicts route on WHOSE machine this is", () => {
-  // 🔒 **NO CROSS-ACCOUNT DELIVERY.** `member` / `thread_peer` / `reciprocal` name a PERSON, and
-  // their side decides what runs. Named me -> my live sessions hear it as context and none wakes.
-  // Named a PEER -> this machine feeds nothing at all, which is the fan-out that used to run.
-  for (const verdict of ["member", "thread_peer", "reciprocal"]) {
+test("the two ADDRESSED member verdicts route on WHOSE machine this is", () => {
+  // 🔒 **NO CROSS-ACCOUNT DELIVERY.** `member` and `thread_peer` name a PERSON, and their side
+  // decides what runs. Named me -> my live sessions hear it as context and none wakes. Named a
+  // PEER -> this machine feeds nothing at all, which is the fan-out that used to run.
+  // ⚠ **`reciprocal` LEFT THIS TABLE ON 2026-09-18** and has a case of its own below: the two
+  // here name a recipient that exists independently of the post, and it does not.
+  for (const verdict of ["member", "thread_peer"]) {
     const mine = harness({ agents: both() });
     mine.feedLiveSession(entry, verdictMsg(verdict, { recipientUserIds: [ME] }), ME);
     assert.deepEqual(fedIds(mine), [A1, A2], `${verdict} -> me`);

@@ -193,11 +193,44 @@ function unresolvableScope(scope, to) {
  */
 exports.GRANT_SCOPE_ARG_DESCRIPTION = `op=grant (required): WHERE to lend it — "channel" (a home channel's room) or "container" (a home channel or workspace, by ref). The scope decides the audience; the row itself never moves.`;
 exports.GRANT_TO_ARG_DESCRIPTION = `op=grant (required): the scope's handle — a channel UUID, or for scope="container" a workspace slug/UUID or a home-channel CONTAINER id from dopl_workspaces(op="list"). It must be one you are a member of; an id that does not resolve for you refuses and shares nothing, and there is no fallback to the workspace you are calling from.`;
-exports.GRANT_LEVEL_ARG_DESCRIPTION = `op=grant: "visible" or "agent_only" on a CHANNEL scope (two audiences inside the room, not a high/low pair); "read" or "edit" on a container. Omitted, the narrower one for the scope. Mixing the two vocabularies is refused.`;
+exports.GRANT_LEVEL_ARG_DESCRIPTION = `op=grant: "visible" or "agent_only" on a CHANNEL scope — two AUDIENCES in the room, not a high/low pair, and both READ-ONLY; "read" or "edit" on a container. Omitted, the narrower one. Mixing the vocabularies is refused.`;
+/**
+ * 🔒 **WHAT A LEVEL ACTUALLY PERMITS, SAID ON THE RESULT** (fix-list Q4,
+ * 2026-09-18). Samuel has PARKED the product question — whether `guest_write`
+ * should become a third argument here — until a second account can be tested.
+ * What was not parked is the SILENCE: wave 2 looked for a read-only share,
+ * found no way to ask for one, and filed a false security finding saying none
+ * existed.
+ *
+ * ⚠ **A CHANNEL LEVEL IS AN AUDIENCE, NOT A PERMISSION.**
+ * `resource_grants_level_check` admits only `agent_only` or `visible` on a
+ * channel scope — WHO in the room sees the row. The WRITE axis is a separate
+ * column, `resource_grants.guest_write`, DEFAULT FALSE, honoured by
+ * `src/features/knowledge/server/service-channel-grants.ts` and **neither
+ * settable nor reportable over MCP**. So every grant an agent can file here is
+ * read-only to the peer, and the only way to widen it is the app.
+ *
+ * ⚠ **IT IS ON THE RESULT RATHER THAN THE `.describe()` ON PURPOSE.** The
+ * describe carries the CONTRACT of the argument (which words pair with which
+ * scope) and is PUSHED on every connection to every client, most of which never
+ * grant anything; this is the one moment the fact is actionable, and it costs
+ * the pushed budget nothing (`write-result-budget.test.ts` is its ratchet).
+ *
+ * ⚠ **A CONTAINER SCOPE IS NOT CLAIMED EITHER WAY.** `read`/`edit` there is a
+ * different table and a different question, and this surface has never tested
+ * what a peer can do with `edit`. Saying nothing is the honest arm.
+ */
+function levelReach(scope) {
+    if (scope !== "channel")
+        return "";
+    return (` A channel level is an AUDIENCE, not a permission: everyone it names can READ this,` +
+        ` and NOBODY gains write access. The write axis (\`guest_write\`) is off by default and can only be` +
+        ` turned on from the Dopl app.`);
+}
 /** The `granted` line both tools answer with. ⚠ ONE sentence per fact, and the
  *  DIVERGENCE sentence is the one the copy ops had to carry as a warning: a
  *  grant does not have that problem, and saying so is what stops a caller
  *  reaching for a copy that no longer exists. */
 function grantedLine(noun, name, scope, scopeId, level) {
-    return (0, respond_js_1.ok)(`Shared the ${noun} ${(0, narration_js_1.inlineOr)(name, narration_js_1.NO_NAME)} into the ${scope} \`${scopeId}\` at \`${level}\`. It is ONE row, still yours and still where you edit it — an edit reaches everyone it is lent to, which is the whole difference from the copy this replaced. Re-sending the same call only changes the level.`);
+    return (0, respond_js_1.ok)(`Shared the ${noun} ${(0, narration_js_1.inlineOr)(name, narration_js_1.NO_NAME)} into the ${scope} \`${scopeId}\` at \`${level}\`. It is ONE row, still yours and still where you edit it — an edit reaches everyone it is lent to, which is the whole difference from the copy this replaced. Re-sending the same call only changes the level.${levelReach(scope)}`);
 }

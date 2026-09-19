@@ -144,7 +144,10 @@ async function opHoldWorkspace(client, since, waitMs, selfUserId = null, runtime
         // follow-up call, because the message lines below carry per-message remedies
         // that assume it.
         lines.push(`\n### ${g.label} — \`${g.ref}\``);
-        lines.push(...(0, channel_render_1.formatMessages)(g.messages, g.ref, selfUserId));
+        // ⚠ `outside = true` UNCONDITIONALLY, AND IT IS NOT AN ASSUMPTION: the hold
+        // is fenced to non-desktop callers in `channel.ts` (`isDesktopRun` →
+        // DESKTOP_HOLD_REFUSAL), so every caller that reaches this line is one.
+        lines.push(...(0, channel_render_1.formatMessages)(g.messages, g.ref, selfUserId, undefined, true));
     }
     // ⚠ THE CURSOR IS THE MAX OVER THE WHOLE PAGE, not the last line of the last
     // group. Grouping reordered the page relative to seq, so "the last message

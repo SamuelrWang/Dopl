@@ -91,7 +91,11 @@ function enqueue(s, a) {
   // `addressing` rides with the message from `session-dispatch` (the @agent-id verdict for THIS
   // reader) all the way to `session-seed.frameContinuation`. It is FRAMING, never a gate: a
   // message addressed to a sibling is still delivered here, in full, and the turn says so.
-  const item = { pendingId: crypto.randomUUID(), message: a.message, authorName: a.authorName, addressing: a.addressing || null };
+  // ⚠ `authorNote` RIDES BESIDE `authorName` AND IS THE SAME KIND OF THING: one line of OUR
+  // narration about the message, composed by `session-dispatch.js` (which holds both the author
+  // and this session's launch snapshot) and rendered above the fence. Null on every turn whose
+  // author the start card already named — which is almost all of them.
+  const item = { pendingId: crypto.randomUUID(), message: a.message, authorName: a.authorName, authorNote: a.authorNote || null, addressing: a.addressing || null };
   const disp = io.queueInbound(s, item, !auto);
   // AUDIT D2: a REJECTED message is not a gated one. noteGatedBody used to run BEFORE this
   // early return, so a reply that overflowed the queue (MAX_PENDING_INBOUND) fell through to
@@ -133,7 +137,7 @@ function enqueue(s, a) {
   if (disp === 'dispatch') {
     deps.dispatch(s, {
       type: 'inbound_arrived', pendingId: item.pendingId, message: a.message, authorName: a.authorName,
-      addressing: item.addressing,
+      authorNote: item.authorNote, addressing: item.addressing,
     });
   }
   return true;

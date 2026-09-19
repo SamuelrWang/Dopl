@@ -22,7 +22,7 @@
  */
 
 import { useState } from "react";
-import { agentTemplateErrorMessage } from "../client/api";
+import { AgentTemplateApiError, agentTemplateErrorMessage } from "../client/api";
 import type { AgentTemplate, TemplateShelf } from "../client/types";
 import { useAgentTemplateWrites } from "./use-agent-template-writes";
 import {
@@ -80,11 +80,27 @@ export function useTemplateSave({
             // ⚠ NO NAME LOOKUP SINCE 2026-09-08: the draft holds resolved knowledge REFS, so
             // every chip already carries its own label.
             optimistic: optimisticTemplate(template, draft),
+            // 🔒 THE VERSION THE EDITOR WAS OPENED ON (F-747). The optimistic
+            // patch rolls itself back on the 412, so a lost race leaves the
+            // operator's typing on screen and the row as the other writer left
+            // it.
+            expectedUpdatedAt: template.updatedAt,
           });
         }
       }
       onDone();
     } catch (err) {
+      // ⚠ 412 GETS THE EDITOR'S OWN SENTENCE, NOT THE SERVER'S. The server's
+      // wording ("Stale write rejected — row was modified at …") is written for
+      // an agent reconciling two bodies; an operator needs the one fact and the
+      // one action. ⚠ THE REFETCH THAT MAKES "reopen" TRUE is the update
+      // mutation's own `onError` (`./use-agent-template-writes.ts`), where a
+      // query client is already in scope — it must not be a second hook here,
+      // because this function is mounted by hosts that stub the writes layer.
+      if (err instanceof AgentTemplateApiError && err.status === 412) {
+        setError(`This ${noun} changed elsewhere. Reopen it to see the current version.`);
+        return;
+      }
       setError(agentTemplateErrorMessage(err, `Couldn't save the ${noun}`));
     }
   }

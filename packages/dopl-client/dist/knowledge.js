@@ -12,9 +12,6 @@ exports.createKbBase = createKbBase;
 exports.dryRunKbBase = dryRunKbBase;
 exports.updateKbBase = updateKbBase;
 exports.deleteKbBase = deleteKbBase;
-exports.setKbBasePinned = setKbBasePinned;
-exports.setKbEntryPinned = setKbEntryPinned;
-exports.getKbStartupContext = getKbStartupContext;
 exports.readKbFileByPath = readKbFileByPath;
 exports.readKbFilePart = readKbFilePart;
 exports.writeKbFileByPath = writeKbFileByPath;
@@ -35,8 +32,18 @@ const enc = encodeURIComponent;
  * for never reaches the wire.
  */
 async function listKbBasesPayload(t, opts = {}) {
-    const qs = opts.shelf ? `?shelf=${enc(opts.shelf)}` : "";
-    return t.request(`/api/knowledge/bases${qs}`, { toolName: "kb_list_bases" });
+    // ⚠ `channelId` IS WHAT MAKES `channelGrants` APPEAR, and its absence is why
+    // the key is absent — see {@link KnowledgeBaseListPayload.channelGrants}. The
+    // route FENCES the channel (`isChannelVisibleTo`) before it reads a grant, and
+    // answers an invisible one exactly as it answers an unknown one.
+    const qs = new URLSearchParams();
+    if (opts.shelf)
+        qs.set("shelf", opts.shelf);
+    if (opts.channelId)
+        qs.set("channelId", opts.channelId);
+    const query = qs.toString();
+    const suffix = query ? `?${query}` : "";
+    return t.request(`/api/knowledge/bases${suffix}`, { toolName: "kb_list_bases" });
 }
 /**
  * The rows alone. ⚠ DELEGATES to {@link listKbBasesPayload} rather than issuing
@@ -52,12 +59,19 @@ async function getKbBase(t, baseId) {
     const data = await t.request(`/api/knowledge/bases/${enc(baseId)}`, { toolName: "kb_get_base" });
     return data.base;
 }
+/**
+ * ⚠ `headings` COSTS THE BODY COLUMN SERVER-SIDE and is therefore opt-in —
+ * see `features/knowledge/server/service-folders.ts › getBaseTree`. An older
+ * server ignores the parameter and answers without `entryHeadings`.
+ */
 async function getKbTree(t, baseId, opts) {
     const params = new URLSearchParams();
     if (opts?.entryLimit !== undefined)
         params.set("entryLimit", String(opts.entryLimit));
     if (opts?.entryCursor !== undefined)
         params.set("entryCursor", opts.entryCursor);
+    if (opts?.headings)
+        params.set("headings", "1");
     const qs = params.toString();
     return t.request(`/api/knowledge/bases/${enc(baseId)}/tree${qs ? `?${qs}` : ""}`, { toolName: "kb_get_tree" });
 }
@@ -94,43 +108,6 @@ async function updateKbBase(t, baseId, patch) {
 async function deleteKbBase(t, baseId) {
     await t.requestNoContent(`/api/knowledge/bases/${enc(baseId)}`, "DELETE", "kb_delete_base");
 }
-// ─── Pins + startup context (T81) ───────────────────────────────────
-/**
- * Pin or unpin a whole base — whether its entries are handed to every agent
- * session launched in this workspace.
- *
- * ⚠ TWO IDEMPOTENT VERBS BEHIND ONE BOOLEAN, NEVER A TOGGLE. `pinned` picks the
- * HTTP verb (`PUT` / `DELETE`); the request states the END STATE, so a retry
- * after a timeout that actually landed re-asserts it instead of flipping it
- * back. On workspace-wide state a silent un-do would change what every session
- * launched afterwards starts with.
- *
- * ⚠ A WORKSPACE FACT, NOT A FAVOURITE — the star methods write the caller's own
- * row and this writes the base. Hence a `member` floor server-side where a star
- * takes the viewer default.
- */
-async function setKbBasePinned(t, baseId, pinned) {
-    await t.requestNoContent(`/api/knowledge/bases/${enc(baseId)}/pin`, pinned ? "PUT" : "DELETE", "kb_pin_base");
-}
-/** The single-entry half of {@link setKbBasePinned} — one document joins the
- *  startup context without its whole base. Same two-verb contract. */
-async function setKbEntryPinned(t, entryId, pinned) {
-    await t.requestNoContent(`/api/knowledge/entries/${enc(entryId)}/pin`, pinned ? "PUT" : "DELETE", "kb_pin_entry");
-}
-/**
- * The pinned reading list a session starts with — every entry of a pinned base
- * plus every individually pinned entry, capped.
- *
- * ⚠ READ `truncated` AND `omitted`. A payload that renders as the whole of what
- * is pinned when it is not is the bug this shape exists to prevent
- * (INVARIANTS §9); `omitted` carries addresses to fetch the rest with
- * `readKbFileByPath`.
- */
-async function getKbStartupContext(t) {
-    return t.request("/api/knowledge/startup-context", {
-        toolName: "kb_startup_context",
-    });
-}
 // ─── Path-based file/folder ops ─────────────────────────────────────
 async function readKbFileByPath(t, baseId, path) {
     const data = await t.request(`/api/knowledge/bases/${enc(baseId)}/files?path=${enc(path)}`, { toolName: "kb_read_file" });
@@ -150,6 +127,11 @@ async function readKbFilePart(t, baseId, path, opts = {}) {
         params.set("section", opts.section);
     if (opts.outline)
         params.set("outline", "1");
+    // ⚠ THE OPPOSITE TRADE FROM `outline`: the WHOLE body, plus the addresses
+    // this reader can use next time. See the route for why it is a third flag
+    // rather than an option on the second.
+    if (opts.headings)
+        params.set("headings", "1");
     return t.request(`/api/knowledge/bases/${enc(baseId)}/files?${params.toString()}`, { toolName: "kb_read_file" });
 }
 async function writeKbFileByPath(t, baseId, path, input = {}, expectedVersion) {
@@ -162,9 +144,16 @@ async function writeKbFileByPath(t, baseId, path, input = {}, expectedVersion) {
     //                 writes landing after the caller's real read. 404 → create,
     //                 no precondition.
     //   - null      → force: blind overwrite, no precondition.
+    //   🔒 AND `null` ALSO SENDS `X-Expect-Existing` (S40, 2026-09-18). "Force"
+    //     means overwrite what is there, which is a BELIEF that something is; with
+    //     no precondition on the wire the server could not tell it from a create,
+    //     so a forced write at a path a move had vacated upserted a SECOND entry.
+    //     The header restores the guard without restoring the 412.
     let version;
+    let expectExisting = false;
     if (expectedVersion === null) {
         version = undefined;
+        expectExisting = true;
     }
     else if (expectedVersion === undefined) {
         let exists = false;
@@ -190,9 +179,16 @@ async function writeKbFileByPath(t, baseId, path, input = {}, expectedVersion) {
     }
     const data = await t.request(`/api/knowledge/bases/${enc(baseId)}/files`, {
         method: "PUT",
+        // ⚠ `clientWriteId` RIDES THE BODY like every other write field — the two
+        // HEADERS on this call are both about the write ATTEMPT (a precondition,
+        // and the "something is there" belief), which this is not.
         body: { path, ...input },
         toolName: "kb_write_file",
-        customHeaders: version ? { "X-Updated-At": version } : undefined,
+        customHeaders: version
+            ? { "X-Updated-At": version }
+            : expectExisting
+                ? { "X-Expect-Existing": "1" }
+                : undefined,
     });
     return data;
 }

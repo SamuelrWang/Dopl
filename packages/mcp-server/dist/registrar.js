@@ -9,7 +9,7 @@
  * through `registerTool`'s wrapper. Do not fold the gate calls into one wrapper.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.workspaceArgTargets = exports.refusesUnaddressedWrite = exports.acceptsWorkspaceArg = exports.UNADDRESSED_WRITE_REFUSALS = exports.WORKSPACE_ARG_OPS = exports.WORKSPACE_ARG_DESCRIPTION = exports.WORKSPACE_ALIAS_DESCRIPTION = exports.CONTAINER_ARG_DESCRIPTION = void 0;
+exports.workspaceArgTargets = exports.refusesUnaddressedWrite = exports.acceptsWorkspaceArg = exports.UNADDRESSED_WRITE_REFUSALS = exports.WORKSPACE_ARG_OPS = exports.CONTAINER_ARG_DESCRIPTION = void 0;
 exports.createToolRegistrars = createToolRegistrars;
 const zod_1 = require("zod");
 const client_1 = require("@dopl/client");
@@ -20,8 +20,6 @@ const container_resolve_js_1 = require("./container-resolve.js");
 // through the registrar that injects it, which is where an agent meets it.
 var workspace_arg_js_2 = require("./workspace-arg.js");
 Object.defineProperty(exports, "CONTAINER_ARG_DESCRIPTION", { enumerable: true, get: function () { return workspace_arg_js_2.CONTAINER_ARG_DESCRIPTION; } });
-Object.defineProperty(exports, "WORKSPACE_ALIAS_DESCRIPTION", { enumerable: true, get: function () { return workspace_arg_js_2.WORKSPACE_ALIAS_DESCRIPTION; } });
-Object.defineProperty(exports, "WORKSPACE_ARG_DESCRIPTION", { enumerable: true, get: function () { return workspace_arg_js_2.WORKSPACE_ARG_DESCRIPTION; } });
 Object.defineProperty(exports, "WORKSPACE_ARG_OPS", { enumerable: true, get: function () { return workspace_arg_js_2.WORKSPACE_ARG_OPS; } });
 Object.defineProperty(exports, "UNADDRESSED_WRITE_REFUSALS", { enumerable: true, get: function () { return workspace_arg_js_2.UNADDRESSED_WRITE_REFUSALS; } });
 Object.defineProperty(exports, "acceptsWorkspaceArg", { enumerable: true, get: function () { return workspace_arg_js_2.acceptsWorkspaceArg; } });
@@ -33,24 +31,24 @@ const status_footer_js_1 = require("./status-footer.js");
 // its consequence legible (`credits-unmetered.ts`).
 const credits_unmetered_js_1 = require("./credits-unmetered.js");
 /**
- * 🔒 **THE TWO ADDRESSING ARGS INJECTED INTO EVERY DOMAIN TOOL'S SCHEMA** —
- * `container` (R-32, Samuel 2026-09-17) and `workspace`, its deprecated alias.
- * Slug, id or the reserved `home`; routes via the transport's
- * AsyncLocalStorage override, leaving the connection's container unchanged.
- * Const so each description renders verbatim — and identically — in every
- * tool's MCP introspection.
+ * 🔒 **THE ONE ADDRESSING ARG INJECTED INTO EVERY DOMAIN TOOL'S SCHEMA** —
+ * `container` (R-32, Samuel 2026-09-17). Slug, id or the reserved `home`;
+ * routes via the transport's AsyncLocalStorage override, leaving the
+ * connection's container unchanged. Const so each description renders verbatim
+ * — and identically — in every tool's MCP introspection.
  *
- * ⚠ BOTH ARE INJECTED EVEN WHERE THEY ARE IGNORED, and that is the point of the
- * one-release window: `strictInput` refuses an unknown key, so dropping either
- * from the schema would turn "ignored" into `-32602`, which is the one thing a
- * deprecation window rules out. The alias is the reason the rename is not a
- * wire break; `container-resolve.ts` maps it to the same resolver and says so
- * on the result.
+ * 🔒 **`workspace=` RETIRED HERE ON 2026-09-18, AND THE RETIREMENT IS THE
+ * WAVE'S FUNDING.** The alias was published as a bare key for ONE release so a
+ * caller that still sent it got its answer instead of a `-32602`; that release
+ * shipped, and the key cost 21 chars × 9 schemas ≈ 189 characters PUSHED TO
+ * EVERY CLIENT ON EVERY CONNECTION to advertise an argument nobody should have
+ * newly adopted. `strictInput` now answers an unknown `workspace` with
+ * `-32602 … Unrecognized key: "workspace"`, which NAMES the field — the one
+ * outcome a deprecation window rules out, and exactly the outcome a completed
+ * deprecation is for.
  */
 const WORKSPACE_ARG_SHAPE = {
     container: zod_1.z.string().optional().describe(workspace_arg_js_1.CONTAINER_ARG_DESCRIPTION),
-    // ⚠ NO `.describe()` — see `workspace-arg.ts › WORKSPACE_ALIAS_DESCRIPTION`.
-    workspace: zod_1.z.string().optional(),
 };
 /**
  * ⚠ AN UNKNOWN ARGUMENT MUST BE REFUSED, NOT STRIPPED. A raw shape becomes a
@@ -171,7 +169,7 @@ function createToolRegistrars(deps) {
         // stripped again before the handler, whose signature does not know it.
         const enhancedSchema = { ...schema, ...WORKSPACE_ARG_SHAPE };
         const wrapped = async (args) => {
-            const { container: _c, workspace: _w, ...rest } = args;
+            const { container: _c, ...rest } = args;
             const innerArgs = rest;
             // ⚠ Both per-call refusals before any work: delete block, then read-only
             // write-scope gate. `op` read ONCE, and it is also the routing key below.
@@ -179,10 +177,14 @@ function createToolRegistrars(deps) {
             const refusal = gates.opRefusal(name, op);
             if (refusal)
                 return refusal;
+            // ⚠ READ ONCE, BESIDE `op`, AND FOR THE SAME REASON (S37/S54,
+            // 2026-09-18): the knob is applied inside the renderers and this footer is
+            // appended after them, so the handler's own answer cannot carry it here.
+            const format = (0, status_footer_js_1.requestedFormat)(innerArgs);
             // 🔒 ONE DECISION, ONE PLACE — `container-resolve.ts` owns the grammar,
             // the alias, the blank/not-found refusals and R-32's unaddressed-mint
             // refusal. This wrapper only spends the answer.
-            const address = await (0, container_resolve_js_1.resolveCallAddress)(name, op, { container: _c, workspace: _w }, { directory, activeWorkspace });
+            const address = await (0, container_resolve_js_1.resolveCallAddress)(name, op, { container: _c }, { directory, activeWorkspace });
             if (address.kind === "refusal")
                 return address.response;
             if (address.kind === "addressed") {
@@ -191,12 +193,16 @@ function createToolRegistrars(deps) {
                 // reports the EFFECTIVE container with a `per-call arg` source.
                 const { effective } = address;
                 const result = await runWithCredits(effective.id, () => client_1.workspaceContext.run(effective.id, () => handler(innerArgs)));
-                return (0, status_footer_js_1.appendDoplStatus)(result, effective, caller, (0, credits_unmetered_js_1.joinNotes)(address.note, (0, credits_unmetered_js_1.unmeteredNote)()));
+                return (0, status_footer_js_1.appendDoplStatus)(result, effective, caller, (0, credits_unmetered_js_1.joinNotes)(address.note, (0, credits_unmetered_js_1.unmeteredNote)()), format, 
+                // ⚠ S29b: `effective` is the PER-CALL override and this is the
+                // connection's own binding, which the override did not touch. The
+                // footer says so rather than letting one flipping line mean both.
+                sessionEffective());
             }
             const result = await runWithCredits(await billingTarget(), () => handler(innerArgs));
             // ⚠ BOTH NOTES, NOT ONE: a dropped address and an unmetered call are
             // independent facts about the same call, and dropping either is a silence.
-            return (0, status_footer_js_1.appendDoplStatus)(result, sessionEffective(), caller, (0, credits_unmetered_js_1.joinNotes)(address.note, (0, credits_unmetered_js_1.unmeteredNote)()));
+            return (0, status_footer_js_1.appendDoplStatus)(result, sessionEffective(), caller, (0, credits_unmetered_js_1.joinNotes)(address.note, (0, credits_unmetered_js_1.unmeteredNote)()), format);
         };
         server.registerTool(name, { description, inputSchema: strictInput(enhancedSchema) }, 
         // ⚠ THE SCOPE ENCLOSES THE HANDLER **AND** THE FOOTER, which is what makes

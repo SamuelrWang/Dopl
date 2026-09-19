@@ -18,8 +18,9 @@
  * by the immutable `authorUserId`, the one half the author does not control.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.NO_MEMBER_VIEW = void 0;
+exports.NO_MEMBER_VIEW = exports.EXTERNAL_SESSION_META_KEY = exports.OUTSIDE_SESSION_HANDLE = void 0;
 exports.formatAuthor = formatAuthor;
+exports.isOutsideSession = isOutsideSession;
 exports.agentHandleOf = agentHandleOf;
 exports.sessionIdOf = sessionIdOf;
 exports.addresseeOf = addresseeOf;
@@ -32,9 +33,21 @@ exports.addressTag = addressTag;
 exports.sessionTail = sessionTail;
 const channel_shared_1 = require("./channel-shared");
 const channel_render_threads_1 = require("./channel-render-threads");
+// ⚠ The outside-session vocabulary — hand-copied constants pinned against the
+// web tree, plus the two projections a renderer reads. See that file.
+const channel_desktop_tag_1 = require("./channel-desktop-tag");
 /**
  * Author label for a message line. `agent` row renders "agent for <name>",
  * never bare name — reader treats counterparty as another member's agent.
+ *
+ * ⚠ **IT TAKES THE READER SINCE 2026-09-18 (A2/S45), AND THAT IS WHAT LETS IT
+ * SAY `for you`.** A label built from the MESSAGE ALONE can name an operator
+ * and never say whether that operator is the reader's own, so a sibling worker
+ * launched by the same person and a stranger's agent rendered identically —
+ * and an agent deciding whether to answer, escalate or ignore was reading the
+ * one distinction it needed out of a uuid it had to go and look up. `view` is
+ * the reader `formatMessages` already holds; a caller that has none passes
+ * {@link NO_MEMBER_VIEW} and gets exactly the old line.
  *
  * ⚠ Two rules, both because nothing validates `display_name`:
  *   1. Name NEUTRALIZED and user row prefixed `member`, never bare. Raw name
@@ -43,21 +56,125 @@ const channel_render_threads_1 = require("./channel-render-threads");
  *      "system" would render as the bare token `system`.
  *   2. `authorUserId` appended ALWAYS, not only as name-missing fallback. Name
  *      = author's claim; id = server's record. Claim alone is uncheckable.
+ *
+ * 🔒 **AND SINCE 2026-09-18 IT SAYS WHEN AN AGENT IS A SIBLING** (S45). An
+ * agent post is authored by its OPERATOR'S ACCOUNT, so `agent @x for Samuel
+ * Wang (<id>)` is what a reader saw whether that agent was ITS OWN sibling or a
+ * stranger's — and wave 3 spent two whole waves believing a sibling was another
+ * member's agent, then filed a false security finding off it. `memberRef` has
+ * answered `you` for the caller's own id since it was written; this is that
+ * same join, applied to the author half.
+ *
+ * ⚠ **THE JOIN IS ON `authorUserId`, THE HALF THE AUTHOR DOES NOT CONTROL** —
+ * never on a name, and never on the agent handle. Two agents of one operator
+ * share that id; two operators cannot.
+ *
+ * ⚠ **`view` IS OPTIONAL AND AN UNRESOLVED CALLER RENDERS EXACTLY AS BEFORE.**
+ * `selfUserId` is null when the boot ping failed, and "I do not know who I am"
+ * must not render as "not yours" — see {@link NO_MEMBER_VIEW}.
  */
-function formatAuthor(m) {
+function formatAuthor(m, view = exports.NO_MEMBER_VIEW) {
     const id = m.authorUserId ? `\`${m.authorUserId}\`` : null;
     // `system` is a server-controlled enum, not user text; `PostableAuthorKindSchema`
     // blocks a caller minting one. Only label here with no untrusted half.
     if (m.authorKind === "system")
         return id ? `system ${id}` : "system";
     const named = m.authorName ? (0, channel_shared_1.neutralizeInline)(m.authorName) : null;
-    const who = named && id ? `${named} (${id})` : (named ?? id);
+    // ⚠ **`for you` IS AN ASSERTION ABOUT THE READER, SO IT IS MADE OFF THE
+    // IMMUTABLE ID AND NOTHING ELSE** — the same half `memberRef` matches on, and
+    // never the name.
+    // ⚠ **BOTH SIDES MUST BE PRESENT** (batch D): a null `authorUserId` on a row
+    // with an unresolved reader would otherwise compare `null === null` and claim
+    // every anonymous row as the reader's own.
+    const mine = view.selfUserId != null &&
+        m.authorUserId != null &&
+        m.authorUserId === view.selfUserId;
+    const who = mine ? "you" : named && id ? `${named} (${id})` : (named ?? id);
+    /**
+     * **AN OUTSIDE SESSION SAYS SO** (2026-09-18, Samuel's ruling).
+     *
+     * ⚠ **THE DEFECT THIS CLOSES IS A STYLE ONE WITH A REAL COST.** A Claude Code
+     * or Codex run on the operator's device token posts under the operator's
+     * ACCOUNT, so this line read `agent for Samuel Wang` — or, with no session
+     * stamp to build a handle from, simply `an agent`. An in-channel agent reading
+     * that answered "@samuel-wang …" in short, human-facing prose to what was
+     * actually another agent's question. The label is what lets it choose the
+     * right register, which is the whole of ruling (a).
+     *
+     * ⚠ **IT REPLACES THE `agent` LABEL RATHER THAN QUALIFYING IT**, for the same
+     * reason `SESSION ENDED` takes the kind slot in `channel-render.ts`: `agent ·
+     * outside session` reads as two facts about one row where there is only one,
+     * and the retired `Agent · <id>` chip is the in-repo precedent for not
+     * building that idiom back.
+     *
+     * ⚠ **`for <who>` IS KEPT AND IS THE HALF THAT IS CHECKABLE.** `authorUserId`
+     * is the server's own record and the one thing the author does not control —
+     * the label is a projection off a server-stamped flag, and the id is what
+     * backs it.
+     *
+     * ⚠ **AND `for you` WHEN THE READER IS THE OPERATOR** (A2/S45): the reader's
+     * own outside session is the one case where the label can also say what to do
+     * about it, so it carries the reply handle. Both halves were written on
+     * separate branches and are ONE line here (integration, 2026-09-19).
+     */
+    // ⚠ **THROUGH `authorViewOf`, NEVER THE RAW FLAG.** Read directly, the flag
+    // labelled a `user` row an outside session — the write path cannot produce
+    // one, but a renderer must not be the thing that trusts that, and the
+    // projection is the ONE place the "only an agent row can be one" rule lives.
+    if (isOutsideSession(m)) {
+        const label = who ? `outside session for ${who}` : "an outside session";
+        return mine ? `${label} — reply ${channel_desktop_tag_1.DESKTOP_HANDLE_TAG}` : label;
+    }
     if (m.authorKind === "agent") {
         const handle = agentHandleOf(m);
         const label = handle ? `agent ${handle}` : "agent";
+        // ⚠ **`for you` REPLACES THE OPERATOR CLAUSE, IT DOES NOT JOIN IT.** The
+        // operator IS the reader here, so `for you (Samuel Wang (<id>))` would be
+        // the same fact twice and the id is already on every other row of the page.
+        if (mine)
+            return `${label} for you — YOUR OWN agent`;
         return who ? `${label} for ${who}` : (handle ? label : "an agent");
     }
     return who ? `member ${who}` : "a member";
+}
+/**
+ * 🔒 **THE GROUP HANDLE FOR AN OPERATOR'S OUTSIDE SESSIONS** — one built-in
+ * handle meaning *the operator's MCP sessions that are not app-spawned agents*
+ * (Claude Code, Codex, Cursor, a script).
+ *
+ * ⚠ **THE SEAM IS CLOSED AND THE MECHANISM ARRIVED** (integration, 2026-09-19).
+ * The handle's minting, its reservation against the member/agent namespaces and
+ * the author kind on the wire were built on the SIBLING BRANCH that is now
+ * merged, so this is an ALIAS of `channel-desktop-tag.ts ›
+ * DESKTOP_GROUP_HANDLE` and not a second declaration of the string. Two copies
+ * of a handle is exactly how a rename lands in one renderer and not the other.
+ */
+exports.OUTSIDE_SESSION_HANDLE = channel_desktop_tag_1.DESKTOP_GROUP_HANDLE;
+/**
+ * ⚠ **THE THIRD AUTHOR SHAPE IS NOT A NEW `authorKind`, AND IT IS NOT A DTO
+ * FIELD EITHER.** `@dopl/contracts › MessageAuthorKind` is a CLOSED union guarded
+ * by `scripts/check-message-kind-drift.ts` and the column's own `CHECK`, and both
+ * `ChannelMessage` declarations sit at the 500-line cap — so the outside-session
+ * marker rides server-owned `metadata.external_session` and is READ THROUGH A
+ * FUNCTION on the sibling branch (`authorViewOf(message)` →
+ * `MessageAuthorKind | "external"`).
+ *
+ * 🔒 **THIS IS THE ONE PLACE THIS TIER ASKS THE QUESTION**, and since the merge
+ * (2026-09-19) it does not ask it itself: the body IS
+ * `authorViewOf(m) === "external"`, and nothing else in this package moved.
+ * Reading `metadata.external_session` directly would label a `user` row an
+ * outside session; `authorViewOf` is the ONE place the "only an `agent` row can
+ * be one" rule lives, and this function is now a named reading of it.
+ *
+ * ⚠ **THE OLD-PAYLOAD ANSWER IS `false`, AND IT IS `false` ON PURPOSE** (§8's
+ * rule for a new payload field): a row written or cached before the marker
+ * existed carries no `external_session`, and `undefined === true` is false — so
+ * an old row renders exactly the line it always did rather than being reported
+ * as an outside session nobody marked.
+ */
+exports.EXTERNAL_SESSION_META_KEY = channel_desktop_tag_1.EXTERNAL_SESSION_METADATA_KEY;
+function isOutsideSession(m) {
+    return (0, channel_desktop_tag_1.authorViewOf)(m) === "external";
 }
 /**
  * **WHICH AGENT — BY THE NAME ITS OPERATOR GAVE IT** (2026-09-04).
@@ -226,9 +343,34 @@ function addressTag(m, view) {
         const to = addresseeOf(m);
         return to ? ` · to ${memberRef(to, view)}` : " · unaddressed";
     }
+    /**
+     * **`→ @desktop` — THE OUTSIDE-SESSION LANE, RENDERED AS ITS OWN ADDRESSEE**
+     * (2026-09-18).
+     *
+     * ⚠ **IT IS READ OFF `metadata.to_desktop` BECAUSE IT IS DELIBERATELY IN
+     * NEITHER RECIPIENT COLUMN.** Those two are what machines route on, and this
+     * address must reach no machine; so the arrow — which is a READER'S view of
+     * the same decision — has to join the third source itself, or a
+     * `@desktop`-addressed post renders `→ nobody` and reads as a record.
+     *
+     * ⚠ **IT NAMES WHOSE, UNLESS IT IS YOURS.** One operator per handle means a
+     * room with two members holds two `@desktop`s; an unqualified tag on a peer's
+     * would invite an outside session to adopt a message aimed at somebody else's
+     * tooling. `you` is spelled by the bare tag, which is the form the reader
+     * types back.
+     */
+    const desktopFor = (0, channel_desktop_tag_1.desktopAddresseeOf)(m);
+    const desktopTag = desktopFor === null
+        ? []
+        : [
+            view.selfUserId !== null && desktopFor === view.selfUserId
+                ? channel_desktop_tag_1.DESKTOP_HANDLE_TAG
+                : `${channel_desktop_tag_1.DESKTOP_HANDLE_TAG} (${memberRef(desktopFor, view)})`,
+        ];
     const names = [
         ...(agents ?? []).map((id) => agentRef(id, view)),
         ...(users ?? []).map((id) => memberRef(id, view)),
+        ...desktopTag,
     ];
     if (names.length === 0)
         return " · → nobody";

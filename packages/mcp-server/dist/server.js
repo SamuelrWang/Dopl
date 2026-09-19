@@ -107,10 +107,16 @@ function createServer(client, options = {}) {
             // — no loopback is added, which `factory.ts › bootServer` forbids.
             identity: {
                 userId: caller.userId,
+                operatorHandle: options.operatorHandle ?? null,
                 boundChannelId: (0, identity_js_1.boundChannelId)(caller),
                 liveAgents: options.liveAgents,
                 posture: options.posture ?? null,
             },
+            // ⚠ A5/S9 — the briefing's WAIT sentence branches on the same predicate
+            // the hold itself is fenced by (`identity.ts › isDesktopRun`), so the
+            // one surface read before the first call stops teaching the one call
+            // this server refuses to that caller.
+            desktopRun: (0, identity_js_1.isDesktopRun)(caller),
         }),
     });
     // ⚠ PULLED, NOT PUSHED. The channels doctrine is a resource (and

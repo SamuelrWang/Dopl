@@ -537,6 +537,85 @@ html {
   body {
     overscroll-behavior: none;
   }
+
+  /* 🔒 ANYTHING CLICKABLE SHOWS THE HAND — ONE RULE, NOT A CLASS PER CONTROL
+     (Samuel, 2026-09-18: *"for a lot of buttons across the desktop app, when I hover over
+     them, the cursor does not change into the clickable cursor. … Is there one way you can
+     set one piece of code that will make it so that, anytime there's a button or something
+     that can be clicked, the cursor should change into the hand cursor? That's super
+     important."*).
+
+     ⚠ THE ARROW IS THE BROWSER'S DEFAULT AND TAILWIND v4 NO LONGER OVERRIDES IT. v3's
+     Preflight carried `button { cursor: pointer }`; v4's carries no `cursor` declaration at
+     all (`node_modules/tailwindcss/preflight.css`, 4.2.2), so every `<button>` fell back to
+     the UA `cursor: default` and only the components that happened to spell `cursor-pointer`
+     had a hand. THAT is the bug — it was never one component at a time.
+
+     ⚠ EVERY COMPOUND IS `:where()`, SO THE WHOLE SELECTOR HAS ZERO SPECIFICITY, and it sits
+     in `@layer base`, which Tailwind orders BELOW `components` and `utilities`. So any
+     explicit cursor still wins, from either direction: `cursor-text` on the inline editors,
+     `cursor-col-resize` on the channel info divider, `cursor-ns-resize` on a `SectionBox`
+     grip, `cursor-grabbing` on a dragged graph card, and every `disabled:cursor-*` variant a
+     component already spells. **This rule can only fill a gap; it can never overrule a
+     decision.** Do not raise its specificity to "make it stick" — that inverts the contract.
+
+     ⚠ `[data-clickable]` IS THE ESCAPE HATCH, and it is an ATTRIBUTE rather than a kit class
+     so the declaration stays in these two stylesheets instead of being re-decided per
+     component. It marks a clickable that is neither a control nor an ARIA role — a card or a
+     header row that selects on click while a real `<button>` inside it carries the keyboard
+     path. It is also how a `<label for>` would opt IN: `label[for]` is deliberately NOT in the
+     list, because every `htmlFor` in this tree points at a TEXT field (re-derive:
+     `grep -rn htmlFor src apps --include='*.tsx'`), where a hand promises a press that is
+     really a focus. A label tied to a CHECKBOX or a RADIO is the case that wants one, and it
+     takes the attribute the day it exists. `src/shared/ui/clickable-cursor.test.ts` is the gate that keeps a new one from
+     skipping it.
+
+     ⚠ DISABLED IS A SEPARATE, SHORTER RULE ON PURPOSE — a second copy of the list above is a
+     second thing to drift. `:disabled` only ever matches a form control and `aria-disabled` is
+     only ever put on something that could otherwise be used, so the bare state selector is
+     precise enough, and it is stated AFTER the pointer rule so it wins the tie at equal
+     specificity.
+
+     ⚠ MIRRORED — `apps/desktop-ui/src/styles/tokens.css` carries the same block verbatim
+     (F-074: two hand-copied stylesheets, no shared module). Pinned in BOTH copies by
+     `src/shared/ui/clickable-cursor.test.ts`; `check-css-token-drift.ts` cannot see it,
+     because a `cursor` declaration is neither a `--*` token nor a `@layer components` name. */
+  :where(
+    button,
+    a[href],
+    summary,
+    select,
+    [role="button"],
+    [role="link"],
+    [role="tab"],
+    [role="menuitem"],
+    [role="menuitemcheckbox"],
+    [role="menuitemradio"],
+    [role="option"],
+    [role="treeitem"],
+    [role="switch"],
+    [role="checkbox"],
+    [role="radio"],
+    input[type="checkbox"],
+    input[type="radio"],
+    input[type="submit"],
+    input[type="button"],
+    input[type="reset"],
+    [data-clickable]
+  ) {
+    cursor: pointer;
+  }
+
+  /* A pseudo-element cannot appear inside `:where()`, so the file input's button is its own
+     rule. Same zero-ish weight, same layer. */
+  input[type="file"]::file-selector-button {
+    cursor: pointer;
+  }
+
+  /* Unavailable, not un-clickable: the arrow says "not now". */
+  :where(:disabled, [aria-disabled="true"], [data-disabled]) {
+    cursor: not-allowed;
+  }
 }
 
 /* Background grid pattern — applied to body via .design-grid */

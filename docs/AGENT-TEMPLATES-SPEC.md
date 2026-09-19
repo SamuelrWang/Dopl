@@ -448,7 +448,7 @@ dopl_kb(op="read_file", base="<id>", path="…")  → the entry body
 
 There is **no "read a whole base" op**. Minimum two calls. Do not tell the agent to *search then
 read* — `opSearch` returns `entryId`, not `path`, and `read_file` takes only `path`
-(`knowledge-ops-read.ts › opSearch`, `knowledge-types.ts › KnowledgeSearchHit`). **UNKNOWN / doc-vs-code:** `knowledge.ts › KB_DESCRIPTION`
+(`knowledge-ops-search.ts › opSearch`, `knowledge-types.ts › KnowledgeSearchHit`). **UNKNOWN / doc-vs-code:** `knowledge.ts › KB_DESCRIPTION`
 claims search returns a path. It does not. A KB instruction that chains search→read dead-ends.
 
 **⚠ THE BLOCKER — RESOLVED BY ORCHESTRATOR, 2026-08-22 (OQ-1). Fixed, not accepted.**

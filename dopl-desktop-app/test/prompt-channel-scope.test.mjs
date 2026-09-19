@@ -130,7 +130,7 @@ test("PULL: every read call carries the channel UUID — that is a GATING fact, 
   assert.equal(calls.length, 3, "one line per read call");
   for (const line of calls) {
     assert.ok(line.includes(`channel "${CHAN}"`), line);
-    assert.ok(line.includes(`workspace "${WS}"`), line);
+    assert.ok(line.includes(`container "${WS}"`), line);
   }
   assert.match(out, /treated as a DIFFERENT channel and will be refused/);
 });
@@ -146,7 +146,7 @@ test("PULL: it DEGRADES to generic wording rather than printing a half-built cal
     const out = text(ctx);
     assert.match(out, /op "read", this channel/, "degraded wording");
     assert.ok(!/channel ""/.test(out), "never an empty id in a printed call");
-    assert.ok(!/workspace ""/.test(out), "…nor an empty workspace");
+    assert.ok(!/container ""/.test(out), "…nor an empty workspace");
     // The scope statement and the pull statement both survive the degrade.
     assert.match(out, /YOU CAN READ EVERY THREAD IN THIS CHANNEL/);
   }

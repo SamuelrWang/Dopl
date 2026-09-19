@@ -88,7 +88,7 @@ function machine(live: Session[]) {
   const fed: Array<{ agentId: string; wake: boolean }> = [];
   const acked: Array<[string, string, number, string, string, string]> = [];
   const api = new Function(
-    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag",
+    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag", "agentAuthorNote",
     `${dispatchBlock()}\n return { feedLiveSession };`
   )(
     { firstClassTaskId: (m: { taskId?: string }) => m.taskId || "" },
@@ -107,7 +107,11 @@ function machine(live: Session[]) {
       // would leak one case's receipts into the next. `delivery-ack.test.mjs` drives it.
       note: (...a: [string, string, number, string, string, string]) => { acked.push(a); return true; },
     },
-    () => {}
+    () => {},
+    // ⚠ `agentAuthorNote` JOINED THE BLOCK'S FREE VARS 2026-09-18 (`main/room-roster.js`): one
+    // line naming an agent a session's launch snapshot never saw. This suite is about WHO IS
+    // FED, so a no-op is enough — `dopl-desktop-app/test/room-roster.test.mjs` owns the sentence.
+    () => null
   ) as Machine;
   return { ...api, fed, acked };
 }
@@ -188,7 +192,16 @@ async function post(
       clientMsgId: over.clientMsgId,
     } as Parameters<typeof resolveWakeVerdict>[2],
     { ...(threaded ? { taskId: THREAD } : {}), ...over.metadata },
-    { authorKind: over.authorKind ?? "user", toAgentId: over.toAgentId ?? null },
+    {
+      authorKind: over.authorKind ?? "user",
+      // ⚠ A LIST SINCE 2026-09-18 — the fixture still names at most one.
+      toAgentIds: over.toAgentId ? [over.toAgentId] : [],
+      toUserIds: [],
+      // ⚠ This composition drives the SERVER verdict into the real desktop
+      // routing predicates; `@desktop` is deliberately absent from every case
+      // because it is the one address no machine routes on.
+      toDesktopOperatorIds: [],
+    },
     NOW
   );
   const desktop = machine(live);
@@ -228,7 +241,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   liveHere([]);
   vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([]);
-  vi.mocked(repoMessages.findLastRoomAddressToAgent).mockResolvedValue(null);
   // RR3's third input since 2026-09-07: the AUTHOR's own membership setting. Seeded to the
   // default, which is what a member who never opened Settings has.
   vi.mocked(repo.findUnaddressedResponder).mockResolvedValue("last_addressed");

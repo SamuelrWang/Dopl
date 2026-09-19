@@ -77,3 +77,42 @@ test("`knowledgeBases` SURVIVES beside it — dropping it would silence an older
   const t = narrow({ ...BODY, knowledge: [{ scope: "base", baseId: "kb-1", baseName: "H" }] });
   assert.deepEqual(t.knowledgeBases, [{ id: "kb-1", name: "Handbook" }]);
 });
+
+test("a BASE scope carries the four card keys, and a folder scope carries none of them", () => {
+  // ⚠ **THE CARD IS BASE-SCOPE ONLY, AND THE BOUNDARY ENFORCES IT RATHER THAN TRUSTING THE
+  // SERVER** (A4, 2026-09-18). A folder or entry scope already names the exact thing it points
+  // at, so a card over one is noise on top of an answer — and a key that reaches no renderer is
+  // a key somebody later starts depending on.
+  const card = {
+    baseSlug: "handbook",
+    baseSummary: "How we work.",
+    baseFolders: [{ name: "Deploys", summary: "release steps" }],
+    baseFolderCount: 1,
+  };
+  const t = narrow({
+    ...BODY,
+    knowledge: [
+      { scope: "base", baseId: "kb-1", baseName: "Handbook", toolPath: "", ...card },
+      // ⚠ The same keys on a FOLDER scope are dropped, even though the server does not send them
+      // there: the whitelist is the fence, not the sender's good manners.
+      { scope: "folder", baseId: "kb-1", baseName: "Handbook", toolPath: "Deploys", ...card },
+    ],
+  });
+  assert.deepEqual(Object.keys(t.knowledge[0]).sort(), [
+    "baseFolderCount",
+    "baseFolders",
+    "baseId",
+    "baseName",
+    "baseSlug",
+    "baseSummary",
+    "scope",
+    "toolPath",
+  ]);
+  assert.deepEqual(t.knowledge[0].baseFolders, [{ name: "Deploys", summary: "release steps" }]);
+  assert.deepEqual(Object.keys(t.knowledge[1]).sort(), [
+    "baseId",
+    "baseName",
+    "scope",
+    "toolPath",
+  ]);
+});

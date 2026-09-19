@@ -17,7 +17,7 @@ import { REVISION_COLS, mapRevisionRow, type RevisionRow } from "./dto";
  * 🔒 ⚠ **THIS CLIENT IS THE SERVICE ROLE AND BYPASSES RLS** (INVARIANTS §2), so
  * `revisions_member_select` evaluates for nobody on this path. Every read here
  * takes an id set or a `workspace_id` that a FENCED read has already produced —
- * the id set IS the fence, exactly as `repository-pins.ts` requires. Nothing in
+ * the id set IS the fence, exactly as `repository-stars.ts` requires. Nothing in
  * this module knows what a knowledge base is, let alone who may see one.
  */
 

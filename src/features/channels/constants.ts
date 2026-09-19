@@ -215,6 +215,21 @@ export const CHANNEL_MENTION_MARK_MAX = CHANNEL_MENTION_LIST_LIMIT;
  */
 export const CHANNEL_FANOUT_MAX_ADDRESSEES = 25;
 
+/**
+ * **HOW MANY RECIPIENTS ONE `to=` MAY NAME** (2026-09-18, Samuel's ruling: *"agents might
+ * need to respond to multiple agents, not necessarily to only one agent … and it could be
+ * multiple people on the channel"*).
+ *
+ * ⚠ **A BOUND ON READS, not a product rule.** Each token is resolved against this channel's
+ * roster and live-session index on the write path, so an unbounded list turns one send into
+ * an unbounded resolve. Ten is well past any real address list and small enough that the
+ * refusal arrives as a 400 rather than as a slow post.
+ *
+ * ⚠ **IT IS NOT {@link CHANNEL_FANOUT_MAX_ADDRESSEES}.** That one bounds N sequential THREAD
+ * creates; this one bounds the addressee list of ONE message row. Two different costs.
+ */
+export const CHANNEL_SEND_MAX_RECIPIENTS = 10;
+
 /** Default page size for a message read when `limit` is omitted. */
 export const DEFAULT_MESSAGE_LIMIT = 100;
 

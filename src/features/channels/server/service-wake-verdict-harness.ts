@@ -136,12 +136,9 @@ export function recentAgentPosts(
   );
 }
 
-/** RR2's one read — the last main-room row addressed to this agent. */
-export function lastAddress(row: Partial<ChannelMessageRow> | null): void {
-  vi.mocked(repoMessages.findLastRoomAddressToAgent).mockResolvedValue(
-    row === null ? null : ({ seq: 7, author_user_id: "user-2", ...row } as ChannelMessageRow)
-  );
-}
+// 🔴 **`lastAddress` IS DELETED (2026-09-18)** — it seeded RR2's one read, and RR2 is gone with
+// the repair it performed. A seeder for a deleted arm is how a suite keeps testing a product
+// that is not there.
 
 export function channelRow(over: Partial<ChannelRow> = {}): ChannelRow {
   return { id: "chan-1", workspace_id: "ws-1", ...over } as ChannelRow;
@@ -150,7 +147,19 @@ export function channelRow(over: Partial<ChannelRow> = {}): ChannelRow {
 export interface ResolveOpts {
   kind?: "message" | "task_progress";
   authorKind?: string;
+  /** ⚠ THE SINGULAR FORM IS THE FIXTURE'S CONVENIENCE, NOT THE CONTRACT
+   *  (2026-09-18). `WakeVerdictContext` takes `toAgentIds: string[]`; every case
+   *  written before the multi-recipient ruling names one agent, so this keeps
+   *  reading as it did and folds into a one-element list below. */
   toAgentId?: string | null;
+  toAgentIds?: string[];
+  toUserIds?: string[];
+  /** The operators whose OUTSIDE SESSIONS `to=@desktop` named (2026-09-18).
+   *  Defaults to `[]`, so every case written before the group tag existed
+   *  resolves exactly as it did. */
+  toDesktopOperatorIds?: string[];
+  /** `"chat"` is the RECORD marker — the MCP surface's `kind="record"`. */
+  intent?: "chat" | "request";
   threadTagStripped?: boolean;
   clientMsgId?: string;
   channel?: Partial<ChannelRow>;
@@ -192,11 +201,15 @@ export function resolve(
       body,
       kind: opts.kind ?? "message",
       clientMsgId: opts.clientMsgId,
+      intent: opts.intent,
     } as Parameters<typeof resolveWakeVerdict>[2],
     metadata,
     {
       authorKind: opts.authorKind ?? "user",
-      toAgentId: opts.toAgentId ?? null,
+      toAgentIds:
+        opts.toAgentIds ?? (opts.toAgentId ? [opts.toAgentId] : []),
+      toUserIds: opts.toUserIds ?? [],
+      toDesktopOperatorIds: opts.toDesktopOperatorIds ?? [],
       threadTagStripped: opts.threadTagStripped,
       reservedHandles: opts.reservedHandles,
     },

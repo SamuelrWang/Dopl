@@ -111,7 +111,7 @@ export function authorAgentIdOf(row: {
  *
  * ⚠ **ORDERED BY `seq`, DESCENDING, AND NOT BY THE CALLER'S ARRAY ORDER.** `seq`
  * is unique per channel and monotonic on commit, so the ordering is TOTAL and no
- * tie is representable — the same argument `findLastRoomAddressToAgent` makes.
+ * tie is representable — the argument RR2's now-deleted read also made.
  * Sorting here rather than trusting the caller is what lets one ascending
  * transcript and one descending query answer identically.
  *

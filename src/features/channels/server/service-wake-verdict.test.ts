@@ -22,7 +22,6 @@ import * as repoSessions from "./repository-sessions";
 import {
   CTX,
   NOW,
-  lastAddress,
   projection,
   recentAgentPosts,
   resolve,
@@ -50,7 +49,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   projection();
   roomProjection();
-  lastAddress(null);
   recentAgentPosts();
   // RR3's per-member setting, seeded at its default — see the `./repository` mock above.
   unaddressedResponder();
@@ -108,12 +106,18 @@ describe("resolveWakeVerdict — the author's own session is never a recipient",
   });
 
   it("still reaches the operator's OTHER agent — the drop is one identity, not a branch", async () => {
+    // ⚠ **RE-POINTED ONTO `to` ON 2026-09-18.** It drove the BODY, which was an
+    // agent's only agent-address until this wave and is inert now (an agent's
+    // prose names nobody — `service-wake-verdict-addressing.test.ts`). The RULE
+    // is untouched and is what is asserted: the drop is ONE IDENTITY, so a list
+    // naming the author alongside a sibling still reaches the sibling.
     projection(
       sessionRow({ name: "k3v7d2mq" }),
       sessionRow({ id: "s-2", name: "a1b2c3d4" })
     );
-    const out = await resolve("@agent-k3v7d2mq @agent-a1b2c3d4 go", SELF, {
+    const out = await resolve("go", SELF, {
       authorKind: "agent",
+      toAgentIds: ["k3v7d2mq", "a1b2c3d4"],
     });
     expect(out).toMatchObject({
       verdict: "agent",
@@ -145,9 +149,13 @@ describe("resolveWakeVerdict — the author's own session is never a recipient",
   });
 
   it("leaves an UNSTAMPED agent post alone — 'cannot say' is not 'the author'", async () => {
+    // ⚠ RE-POINTED ONTO `to` ON 2026-09-18, same reason as the case above. With
+    // no `metadata.session_id` the server cannot say WHICH session wrote this, and
+    // "cannot say" must not become "the author" — the address stands.
     projection(sessionRow({ name: "k3v7d2mq" }));
-    const out = await resolve("@agent-k3v7d2mq take this", {}, {
+    const out = await resolve("take this", {}, {
       authorKind: "agent",
+      toAgentIds: ["k3v7d2mq"],
     });
     expect(out.recipientAgentIds).toEqual(["k3v7d2mq"]);
   });
@@ -264,10 +272,22 @@ describe("resolveWakeVerdict — the three-way distinction", () => {
     expect((await resolve("@agent-k3v7d2mq go")).recipientAgentIds).toBeNull();
   });
 
-  it("the AGENT-AUTHOR door is presence-keyed too — a stale but present OWN row resolves", async () => {
-    // ⚠ THE RULING IS ONE LINE AND IT COVERS BOTH DOORS: presence licenses
-    // RESOLUTION, freshness licenses only REFUSAL. Filtering here made an
-    // operator's own quiet agent unaddressable by that operator's own agents.
+  it("🔒 AN AGENT AUTHOR'S BODY IS NOT READ AT ALL — `[]`, and no projection read", async () => {
+    // ⚠ **THIS CASE REPLACES TWO (2026-09-18), AND BOTH OF THEM DROVE A DOOR THAT
+    // IS NOW CLOSED.** They asserted that an AGENT author's body parse was
+    // presence-keyed (a stale but present OWN row still resolved) and that SCOPE
+    // was the only thing it fenced (a PEER's row answered `null`). Samuel's
+    // ruling closes the door itself: an agent's prose names nobody, so the
+    // question those two answered no longer arises here.
+    //
+    // ⚠ **WHAT THEY GUARDED IS NOT LOST — IT MOVED DOWN ONE LAYER.**
+    // `resolveAgentRecipients`' own-scoped branch is still there and still
+    // presence-keyed, as the BELT under this gate, and
+    // `service-wake-verdict-handles.test.ts` drives it directly. What this file
+    // asserts is the gate: `[]`, authoritative, and no ROOM read — the channel-wide
+    // door is a person's, and an agent author must never reach through it.
+    // ⚠ THE OWN-SCOPED READ IS STILL MADE, and that is not the body parse: RR2
+    // pays for it to check the author's stamped agent-id claim (F-589).
     projection(
       sessionRow({
         name: "k3v7d2mq",
@@ -275,19 +295,8 @@ describe("resolveWakeVerdict — the three-way distinction", () => {
       })
     );
     const out = await resolve("@agent-k3v7d2mq go", {}, { authorKind: "agent" });
-    expect(out.recipientAgentIds).toEqual(["k3v7d2mq"]);
-  });
-
-  it("🔒 …and SCOPE is the only thing that door still fences: a PEER's row resolves nothing", async () => {
-    // ⚠ THE SAME-ACCOUNT CARVE (F-589, Samuel 2026-08-31), and the case that
-    // proves dropping the freshness filter did not widen it. The own read is
-    // EMPTY and the room read has the agent, so a human would resolve it here
-    // and an agent author must not: `null` hands the question to the machine
-    // that owns the session rather than answering for it.
-    projection();
-    roomProjection(sessionRow({ name: "k3v7d2mq", user_id: "user-9" }));
-    const out = await resolve("@agent-k3v7d2mq go", {}, { authorKind: "agent" });
-    expect(out.recipientAgentIds).toBeNull();
+    expect(out.recipientAgentIds).toEqual([]);
+    expect(repoSessions.listChannelSessionStates).not.toHaveBeenCalled();
   });
 });
 
@@ -345,20 +354,20 @@ describe("resolveWakeVerdict — what it does NOT do", () => {
     expect(out.delivery).toBe("unreachable");
   });
 
-  it("scopes an AGENT author's projection read to the caller and this channel", async () => {
+  it("reads NO projection at all for an AGENT author — neither door is opened", async () => {
+    // ⚠ **RE-POINTED TWICE IN ONE DAY, AND THE SECOND TIME IS THE STRONGER CLAIM.** It asserted
+    // that an agent author's body parse read the OWN-scoped door and never the channel-wide one
+    // — the same-account carve as an assertion on which function is called. Then the body door
+    // closed for agent authors, leaving the own read to RR2 alone; now RR2 is deleted too, so an
+    // unaddressed agent post reads NOTHING. The carve is not weakened by having no read to scope:
+    // it is enforced one layer down, in `resolveAgentRecipients`, and driven there directly.
     projection(sessionRow({ name: "k3v7d2mq" }));
-    await resolve("@agent-k3v7d2mq go", { session_id: "chan-1::a1b2c3d4" }, {
+    const out = await resolve("@agent-k3v7d2mq go", { session_id: "chan-1::a1b2c3d4" }, {
       authorKind: "agent",
     });
-    expect(vi.mocked(repoSessions.listSessionStates).mock.calls).toEqual([
-      ["user-1", "ws-1", "chan-1"],
-    ]);
-    // 🔒 THE CARVE, AS AN ASSERTION ON THE READ ITSELF. An agent author must
-    // never reach the channel-wide door — that is the one path Samuel's
-    // same-account carve closes, and it is closed by which function is called.
-    expect(
-      vi.mocked(repoSessions.listChannelSessionStates)
-    ).not.toHaveBeenCalled();
+    expect(out).toMatchObject({ verdict: "none", recipientAgentIds: [] });
+    expect(vi.mocked(repoSessions.listSessionStates)).not.toHaveBeenCalled();
+    expect(vi.mocked(repoSessions.listChannelSessionStates)).not.toHaveBeenCalled();
   });
 
 

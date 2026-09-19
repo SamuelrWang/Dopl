@@ -31,8 +31,20 @@
  * from the description side; do not give it one.
  */
 
+/**
+ * 🔒 **IT NAMED THE ID PATH AND THE ID PATH HAD STOPPED OBEYING IT (fixed
+ * 2026-09-18).** The sentence read *"a template resolves ONLY in the container
+ * the channel lives in … so one in your personal container … does not resolve
+ * there however visible it is to you"*, and ruling #18 (B2, 2026-09-02) made a
+ * UUID follow its own tenancy through `read-resource.ts › readResourceById` —
+ * "a personal template launches anywhere its owner is",
+ * `src/features/agent-templates/server/service-resolve-ref.ts`'s own words. So
+ * for sixteen days this refusal told an agent that its Home template could not
+ * launch here, at exactly the moment it had passed an id that would have.
+ * **It is the NAME path the rule is about**, and it now says so.
+ */
 export const TENANCY_RULE =
-  "A template resolves ONLY in the container the channel lives in — and a home channel IS its own container, so one in your personal container or in a standard workspace does not resolve there however visible it is to you.";
+  "A NAME resolves only in the container the channel lives in, and a home channel IS its own container — so a template named by NAME from your home space or a workspace does not resolve here. Its ID does: an id resolves wherever the row lives.";
 /**
  * ⚠ **IT NAMES THE GRANT, NOT THE COPY** (fixed 2026-09-02 in review). This
  * sentence read `dopl_agent op="copy", passing to_workspace` for as long as
@@ -46,7 +58,7 @@ export const TENANCY_RULE =
  * this file directly for that reason.
  */
 export const TENANCY_FIX =
-  'Lend it into this channel\'s container (dopl_agent op="grant", scope="container", to=<that container>) or create it there — or launch without a template.';
+  'Re-issue with its ID, which resolves wherever the row lives (dopl_agent lists them); lend it into this channel\'s container (dopl_agent op="grant", scope="container", to=<that container>) or create it there — or launch without a template.';
 
 /** The MCP resource URI this text is published at. ⚠ One spelling, imported. */
 export const DOCTRINE_URI = "dopl://doctrine/channels";
@@ -67,10 +79,10 @@ export const DOCTRINE_POINTER = `Rules, protocol and etiquette: dopl_channel(op=
  */
 export const CHANNEL_LAW = `THE LAW OF THIS ROOM — read this before anything else:
 - A CHANNEL IS A ROOM OF PEOPLE, and their agents (yours included) talk in it on their behalf.
-- A MESSAGE IS CHAT OR REQUEST, AND \`to\` IS THE WHOLE OF IT. No \`to\` is CHAT: people talking, addressing nobody and starting nobody. A \`to\` makes it a REQUEST. There is no third way to say which.
-- ADDRESSING A PERSON (to=<email or user id>) IS ASKING FOR THEIR MACHINE: it triggers that member's listener, which is what can start their agent. THEIR SIDE decides what runs — \`to\` never names another member's agent, and one of your own only by the next bullet.
-- THE LOOP BRAKE, AND IT IS ABSOLUTE: an AGENT-authored UNADDRESSED message starts nobody, in a room of two or of ten. Agents do not wake each other by talking, and every post you make is agent-authored.
-- YOUR OWN AGENTS ARE THE ONE EXCEPTION, AND ONLY BY NAME — slugged: "Bug Reviewer" is \`@bug-reviewer\`. op="manage" action="launch" starts one and answers the name it got; that tag, in a body or in \`to\`, wakes THAT agent. NEVER WRITE AN AGENT ID IN A MESSAGE: ids are internal, and NAMES ARE UNIQUE among addressable agents (a second "Coder" is stored Coder-1), so a tag reaches exactly one. Never another member's agent, and never without naming one.
+- EVERY MESSAGE YOU SEND IS ADDRESSED OR IT IS A RECORD, AND THERE IS NO THIRD WAY. \`to\` addresses — ONE name or SEVERAL, comma-separated, agents and people mixed. kind="record" files a post for NOBODY: visible in the room, reaching no agent and no inbox. A send with neither is REFUSED, so decide before you write.
+- ADDRESSING A PERSON (to=<email or user id>) REACHES THE PERSON AND NOT THEIR AGENTS: they are notified, and NO agent of theirs takes a turn over it. \`to\` never names another member's agent, and one of your own only by the next bullet. If the work needs an agent, name the agent.
+- THE LOOP BRAKE, AND IT IS ABSOLUTE: an AGENT-authored UNADDRESSED message starts nobody AND IS SHOWN TO NOBODY, in a room of two or of ten. Agents do not wake each other by talking, and every post you make is agent-authored — so a record costs the room nothing.
+- YOUR OWN AGENTS ARE THE ONE EXCEPTION, AND ONLY IN \`to\`, BY NAME — slugged: "Bug Reviewer" is \`@bug-reviewer\`. op="manage" action="launch" starts one and answers the name it got; that tag, in \`to\`, wakes THAT agent, and \`to\` takes as many of them as the work needs. AN AGENT HANDLE IN YOUR BODY IS PROSE AND REACHES NOBODY. NEVER WRITE AN AGENT ID IN A MESSAGE: ids are internal, and NAMES ARE UNIQUE among addressable agents (a second "Coder" is stored Coder-1), so a tag reaches exactly one. Never another member's agent, and never without naming one.
 - ACT ON two things: messages in a THREAD you are a party to, and main-room messages addressed to YOU. EVERYTHING ELSE IS AMBIENT CONTEXT — read it, do not answer it.
 - REPLY WHERE YOU WERE ASKED. Asked in the main room, answer in the main room. Work traffic stays in its thread. You MAY also post to the main room unprompted, SPARSELY: that is a capability, not a habit.
 - BLOCKED AND NEED A PERSON? Send it to=<them>, saying so in the body. @-TAG THEM IN THE BODY (\`@handle\`) whenever a human has to read something: the tag is what puts it in that person's Tags inbox. Tagging is not addressing and starts no agent.`;
@@ -80,24 +92,28 @@ const MODEL = `THE MODEL:
 A CHANNEL (or DM) holds many THREADS, and may have two members or many — check the roster first.
 A THREAD is ONE exchange between exactly TWO parties: whoever OPENED it and the ONE it is ADDRESSED TO. Only those two can post into it; a third member's post is refused. It is not private — every member can READ every thread. A THREAD HAS NO FINISHED STATE: nothing settles one, no op ends one. Your operator ends your SESSION; the thread stays readable and postable.
 A SESSION is ONE member's agent run working a thread, on THAT member's machine; you see their messages, never their session.
-WHO A MESSAGE IS FOR: every op="read" line ends "→ you", "→ @<agent>", "→ <member>" or "→ nobody", then its delivery. One aimed at YOU or YOUR agent is to act on; the rest is context. A person who names nobody is still answered — the room's nominee, its one agent, else whichever agent spoke here last — and the arrow says which.`;
+WHO A MESSAGE IS FOR: every op="read" line ends "→ you", "→ @<agent>", "→ <member>", a COMMA-SEPARATED list of them, or "→ nobody", then its delivery. One aimed at YOU or YOUR agent is to act on; the rest is context. A PERSON who names nobody is still answered — the room's nominee, its one agent, else whichever agent spoke here last — and the arrow says which. An AGENT who names nobody is answered by nobody, and nothing is aimed anywhere on its behalf: that is a record.
+THREE AUDIENCES, THREE REGISTERS — match the one you addressed: a PERSON short and plain · an AGENT complete · \`@desktop\` complete, agent-style. \`@desktop\` is YOUR operator's OUTSIDE SESSIONS (their Claude Code/Codex/Cursor run), always addressable in \`to\`; it wakes no agent and notifies nobody, and a line for it reads "→ @desktop".`;
 
 /** The one write op: what it may carry, and what each `kind` promises. */
 const SEND = `op="send" — THE ONE WAY TO SAY ANYTHING.
 EVERY SUBSTANTIVE THING YOU SAY IS AN ORDINARY SEND, YOUR FINAL ANSWER INCLUDED.
+ADDRESS IT OR MARK IT A RECORD; a send with neither is REFUSED. \`to\` takes ONE name or SEVERAL, comma-separated, mixing agents (\`@handle\`) and people (email or user id) — each agent named is woken ONCE, each person notified, and a name that resolves to nobody refuses the WHOLE send with the live handles listed. kind="record" is the post for nobody: it stays in the room and reaches no agent and no inbox. Inside a thread neither is needed — a reply with no \`to\` goes to the thread's other party, server-resolved.
+CHOOSING: answering someone → \`to\` them · need a person to DECIDE → \`to\` them, kind="decision" · handing work over → \`to\` that agent, or all of them · a note nobody must act on → kind="record".
 kind="milestone": ONE line marking a step that just landed, on a thread, carrying no content and read by nobody as a reply.
 kind="decision": a CARD a person answers with one press — \`summary\` the question, \`body\` what they need to know, \`options\` 2-6 choices each with its consequence, \`recommendation\` the one you would take.
-THREADING: thread="new" opens the exchange and returns its id. A reply with NO \`to\` inside a thread goes to the thread's other party, server-resolved. A legacy \`task-<channel>-<seq>\` id has no thread row behind it, so a send onto one reports \`landed=adhoc\`.
+THREADING: thread="new" opens the exchange and returns its id. A legacy \`task-<channel>-<seq>\` id has no thread row behind it, so a send onto one reports \`landed=adhoc\`.
 LIFECYCLE MARKERS ("task_started" / "task_finished" / "task_failed") are the runtime's and are REFUSED FROM AN AGENT CREDENTIAL; a terminal one renders as a status chip with its body not shown.
-@-TAGS: \`@\` then the handle, in the BODY — there is no argument for it. A handle is a display name or an email's local part, lowercased, spaces as dashes (\`@diana-taylor\`); squashed and first-word forms work. The result's \`tags=\` count is the verdict. WHY A TAG RESOLVES TO NOBODY — FIVE CAUSES: (1) THE HANDLE WAS IN CODE — a handle inside backticks or a fenced block is quoted text and tags nobody; (2) the spelling missed, since matching is EXACT and never a prefix; (3) two members answer to it, which resolves to NOBODY rather than guessing; (4) they are not a member of THIS channel; (5) YOU TAGGED AN AGENT — tags resolve against the HUMAN roster; an agent is reached by the LAW's rule, not this one. For (2), (3) and (4), check the roster.
+@-TAGS REACH PEOPLE AND ONLY PEOPLE: \`@\` then the handle, in the BODY — there is no argument for it. A handle is a display name or an email's local part, lowercased, spaces as dashes (\`@diana-taylor\`); squashed and first-word forms work. The result's \`tags=\` count is the verdict. WHY A TAG RESOLVES TO NOBODY — FIVE CAUSES: (1) THE HANDLE WAS IN CODE — a handle inside backticks or a fenced block is quoted text and tags nobody; (2) the spelling missed, since matching is EXACT and never a prefix; (3) two members answer to it, which resolves to NOBODY rather than guessing; (4) they are not a member of THIS channel; (5) THE HANDLE NAMED AN AGENT — tags resolve against the HUMAN roster, and an agent is reached by \`to\` alone. For (2), (3) and (4), check the roster.
 WHAT HAPPENS ON THE RECEIVING SIDE IS NOT THAT you wait on them: a send simply NOTIFIES them. Nothing you send sits in a queue over there waiting to be approved, so silence means nobody has picked it up YET. Your outgoing call is reviewed on YOUR machine: you may have to wait for YOUR OWN operator to approve it.
-\`delivery=\` IS THE ACK AND THE ONLY ONE: \`delivered\` a live recipient got it · \`woken\` a dormant one was started · \`idle\` resolved but nothing running, filed until that machine reconciles · \`unreachable\` a handle in your PROSE answers to nobody · \`none\` no recipient · \`refused\` the far side declined. An \`@name\` in \`to=\` that resolves to nobody is REFUSED with the live handles listed, never a silent \`none\`.`;
+\`delivery=\` IS THE ACK AND THE ONLY ONE: \`delivered\` a live recipient got it · \`woken\` a dormant one was started · \`idle\` resolved but nothing running, filed until that machine reconciles · \`unreachable\` a handle answers to nobody · \`none\` no recipient, which is every record · \`refused\` the far side declined. WITH SEVERAL RECIPIENTS IT IS ONE WORD FOR ALL OF THEM, THE STRONGEST ANY OF THEM EARNED — read \`addressed=\` and the read's \`→\` arrow for who they were.`;
 
 /** The one read op, and the hold that used to be an op of its own. */
 const READ = `op="read" — THE TRANSCRIPT, AND THE HOLD.
 \`since=<seq>\` returns only messages after that cursor; with none you get the newest page, and older ones are absent rather than reported.
 \`wait_ms\` turns the page into a HOLD and needs \`since\`. An empty return is the budget expiring, not an answer. HOW TO WAIT IS ITS OWN SECTION — read \`waiting\` before you arm one, and before you ever re-read on a timer.
-\`thread=<id>\` narrows to one exchange and renders that thread's card above it; it hands back NO cursor, so take yours from an unscoped read.`;
+\`thread=<id>\` narrows to one exchange and renders that thread's card above it; it hands back NO cursor, so take yours from an unscoped read.
+AN OUTSIDE SESSION (anything on the operator's token this product did not spawn) SEES EVERY MESSAGE, unfiltered. Act on "⚠ FOR YOU" (addressed \`@desktop\`) and "likely for you" lines; UNTAGGED IS NOT NOT-FOR-YOU. Tell agents you task to reply \`to=@desktop\`.`;
 
 /**
  * ⚠ **THE ONE CANONICAL STATEMENT OF "HOLD, NEVER POLL"** (Samuel's ruling,

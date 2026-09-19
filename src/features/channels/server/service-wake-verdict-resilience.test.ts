@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { RESILIENCE_WINDOW_MS } from "@/shared/channels/caps";
 import { SESSION_PROJECTION_FRESH_MS } from "../constants";
 
 vi.mock("./repository-sessions");
@@ -20,11 +19,9 @@ vi.mock("./repository", async (importOriginal) => ({
   findUnaddressedResponder: vi.fn(),
 }));
 
-import * as repoMessages from "./repository-messages";
 import * as repoSessions from "./repository-sessions";
 import {
   NOW,
-  lastAddress,
   projection,
   recentAgentPosts,
   resolve,
@@ -56,7 +53,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   projection();
   roomProjection();
-  lastAddress(null);
   recentAgentPosts();
   unaddressedResponder();
 });
@@ -92,7 +88,6 @@ describe("RR1 — a thread reply with no `to` goes to the thread's other party",
       taskTarget: "user-2",
     });
     expect(vi.mocked(repoSessions.listChannelSessionStates)).not.toHaveBeenCalled();
-    expect(vi.mocked(repoMessages.findLastRoomAddressToAgent)).not.toHaveBeenCalled();
   });
 
   it("DEGENERATE: an unaddressed thread has no other party — `thread`, not a guess", async () => {
@@ -136,217 +131,61 @@ describe("RR1 — a thread reply with no `to` goes to the thread's other party",
   });
 });
 
-describe("RR2 — an unaddressed agent post in the main room goes back to whoever addressed it", () => {
-  // 🔒 THE AUTHOR'S OWN LIVE SESSION. The stamp on `client_msg_id` is a CLAIM
-  // (F-589) and the arm checks it against this projection before it selects a
-  // recipient, so every case below must stand up an agent for the author to BE.
+describe("🔴 RR2 IS DELETED — an unaddressed AGENT post reaches nobody", () => {
+  // **THIS BLOCK REPLACES TWELVE CASES** (2026-09-18, Samuel: *"agree with stopping that. Agents
+  // should only be woken up when addressed (besides the logic for a user with no @ in their
+  // message)"*). They drove the arm that re-addressed an unaddressed agent post back to whoever
+  // last addressed that agent in the room: that it selected the highest `seq` inside the window,
+  // that it read the STORED recipient set rather than the body, that an unstamped post fired
+  // nothing, that a courtesy stamp was not an agent stamp, and that a `client_msg_id` claiming
+  // somebody else's agent id was refused (F-589).
+  //
+  // ⚠ **THE RULE THEY PROTECTED IS NOT LOST — IT BECAME STRUCTURE.** Every one of them was an
+  // answer to *"which member should this unaddressed agent post be aimed at?"*, and that
+  // question no longer arises: an agent addresses somebody or files a record, and the send path
+  // refuses anything else. What is pinned here instead is the ONE outcome that replaces all
+  // twelve, plus the two negatives that are now the whole of the arm's former surface.
   beforeEach(() => {
     projection(sessionRow({ name: "k3v7d2mq" }));
   });
 
-  it("🔒 REFUSES a stamp naming an agent the author does not run (F-589)", async () => {
-    // ⚠ AGENT IDS ARE NOT SECRET — the desktop stamps `agent-<id>-<n>` and the
-    // id is publicly readable off `channel_sessions.name`. Without the check,
-    // any caller could claim a PEER's agent id and be handed the member who
-    // last addressed that agent: their reply lands in front of somebody who was
-    // mid-conversation with a different agent, in the wrong exchange. Same
-    // class as the author-scoped idempotency probe, on the same field.
-    lastAddress({ author_user_id: "user-9" });
-    const out = await resolve("summary", {}, {
-      authorKind: "agent",
-      clientMsgId: "agent-peerpeer-4",
-    });
-    expect(out).toMatchObject({ verdict: "none", delivery: "none" });
-    // …and it never even asks: the claim is refused before the read.
-    expect(vi.mocked(repoMessages.findLastRoomAddressToAgent)).not.toHaveBeenCalled();
-  });
-
-  it("a STALE but PRESENT own row still answers the arm — the check is WHOSE, not how recent (2026-09-05)", async () => {
-    // ⚠ **THIS CASE ASSERTED `none` UNTIL 2026-09-05, AND FLIPPING IT WEAKENS
-    // NOTHING.** F-589's lock is the test ABOVE — a stamp naming an agent the
-    // author does not run is refused, and it is refused on `ownAgentIds`
-    // MEMBERSHIP, which is fenced by the read's `user_id`. Age was never the
-    // security property; it was a freshness filter sitting on the same list, and
-    // it meant an agent that had been quiet five minutes could not answer the
-    // person who had just written to it — the same defect as RR3's empty
-    // candidate set, one arm along. Presence licenses resolution; freshness
-    // licenses only refusal, and RR2 refuses on identity instead.
-    projection(
-      sessionRow({
-        name: "k3v7d2mq",
-        updated_at: new Date(NOW - SESSION_PROJECTION_FRESH_MS - 1).toISOString(),
-      })
-    );
-    lastAddress({ author_user_id: "user-9" });
-    const out = await resolve("summary", {}, {
-      authorKind: "agent",
-      clientMsgId: "agent-k3v7d2mq-4",
-    });
-    expect(out).toMatchObject({
-      verdict: "reciprocal",
-      recipientUserIds: ["user-9"],
-    });
-  });
-
-  it("resolves the AUTHOR of the last row addressed to this agent, inside the window", async () => {
-    lastAddress({ author_user_id: "user-9", seq: 12 });
-    const out = await resolve("here is the summary", {}, {
-      authorKind: "agent",
-      clientMsgId: "agent-k3v7d2mq-4",
-    });
-    expect(out).toMatchObject({
-      verdict: "reciprocal",
-      recipientUserIds: ["user-9"],
-      recipientAgentIds: [],
-      delivery: "delivered",
-    });
-  });
-
-  it("asks over the RESILIENCE WINDOW, read from `caps.ts` and never quoted", async () => {
-    lastAddress({ author_user_id: "user-9" });
-    await resolve("done", {}, { authorKind: "agent", clientMsgId: "agent-k3v7d2mq-4" });
-    expect(vi.mocked(repoMessages.findLastRoomAddressToAgent).mock.calls).toEqual([
-      ["chan-1", "k3v7d2mq", new Date(NOW - RESILIENCE_WINDOW_MS).toISOString()],
-    ]);
-  });
-
-  it("resolves a MEMBER, never an agent — which is what keeps the same-account carve total", async () => {
-    // 🔒 THE CROSS-ACCOUNT FENCE. "The party that addressed me" is an account,
-    // whose own machine decides what runs. An arm that answered an AGENT id here
-    // could aim an agent-authored wake at a PEER's agent through a rule the
-    // author never wrote — exactly what Samuel's 2026-08-31 carve forbids.
-    lastAddress({ author_user_id: "user-9" });
-    const out = await resolve("reply", {}, {
-      authorKind: "agent",
-      clientMsgId: "agent-k3v7d2mq-4",
-    });
-    expect(out.recipientAgentIds).toEqual([]);
-  });
-
-  it("DEGENERATE: nobody addressed it inside the window — `none`, a broadcast", async () => {
-    lastAddress(null);
+  it("lands on `none` — nobody, no repair, and NO READ paid for one", async () => {
     const out = await resolve("thinking out loud", {}, {
       authorKind: "agent",
-      clientMsgId: "agent-k3v7d2mq-4",
+      clientMsgId: "agent-k3v7d2mq-1",
     });
-    expect(out).toMatchObject({ verdict: "none", delivery: "none" });
-  });
-
-  it("DEGENERATE: an agent post with NEITHER key cannot say which agent it is — no arm, no read", async () => {
-    // `null` from `authorAgentIdOf` is "cannot say", never "some other agent".
-    // Guessing would aim somebody's reply at the wrong conversation.
-    const out = await resolve("no key", {}, { authorKind: "agent" });
-    expect(out.verdict).toBe("none");
-    expect(vi.mocked(repoMessages.findLastRoomAddressToAgent)).not.toHaveBeenCalled();
-  });
-
-  /**
-   * **AN AGENT THAT SUPPLIED ITS OWN `client_msg_id` IS NOT ANONYMOUS**
-   * (2026-09-04, follow-up 2 to the self-wake investigation).
-   *
-   * ⚠ **THE ARM KEYED ON THE STAMP ALONE, AND THE STAMP IS THE HALF AN AGENT CAN
-   * OVERWRITE.** `main/session-outbound-tag.js › threadTagFor` deliberately never
-   * replaces a `client_msg_id` an agent chose, so `parseAgentPostStamp` answered
-   * `null` for every such post: no arm fired, `resilience` stayed null, and the
-   * verdict's `unreachable` term fired instead. Rows #963, #965, #969 and #973
-   * were stamped `delivery=unreachable` for a failure that never happened — and
-   * `delivery=` is the one ack an orchestrator acts on.
-   *
-   * ⚠ **`metadata.session_id` IS THE STRONGER FACT, NOT A WEAKER FALLBACK.** It
-   * is stripped from caller input and re-stamped from `X-Dopl-Session-Id`
-   * (`service-writes-metadata.ts` fold 6b), so it cannot be posed — where the
-   * stamp can. The F-589 own-scope check still runs over both.
-   */
-  describe("the author's identity comes off the session stamp too", () => {
-    const OWN_SESSION = { session_id: "chan-1::k3v7d2mq" };
-
-    it("fires for a post that supplied its own key — the #963 / #965 / #969 / #973 rows", async () => {
-      lastAddress({ author_user_id: "user-9" });
-      const out = await resolve("here is the answer", OWN_SESSION, {
-        authorKind: "agent",
-        clientMsgId: "reply-2",
-      });
-      expect(out).toMatchObject({
-        verdict: "reciprocal",
-        recipientUserIds: ["user-9"],
-        delivery: "delivered",
-      });
+    expect(out).toMatchObject({
+      verdict: "none",
+      recipientUserIds: [],
+      recipientAgentIds: [],
+      delivery: "none",
     });
-
-    it("🔒 and therefore never reports `unreachable` for a delivery that happened", async () => {
-      // ⚠ THE PRODUCTION SHAPE, EXACTLY. The body names a PEER's agent, which an
-      // AGENT author cannot resolve (the carve), so `recipientAgentIds` is
-      // `null` — and with no arm firing, the verdict's `unreachable` term is
-      // what an orchestrator reads about a message that was delivered.
-      lastAddress({ author_user_id: "user-9" });
-      const out = await resolve("done — over to @agent-deynelz3", OWN_SESSION, {
-        authorKind: "agent",
-        clientMsgId: "my-own-idempotency-key",
-      });
-      // ⚠ `[]` HERE, NOT `null`: a repaired address is stored in the same two
-      // columns as a written one, so the arm firing IS what replaces the null
-      // the `unreachable` term keys on.
-      expect(out.recipientAgentIds).toEqual([]);
-      expect(out.delivery).not.toBe("unreachable");
-      expect(out.delivery).toBe("delivered");
-    });
-
-    it("the STAMP still wins when both are present — it is the older form and some rows carry it alone", async () => {
-      lastAddress({ author_user_id: "user-9" });
-      await resolve("x", { session_id: "chan-1::m8q1zzzz" }, {
-        authorKind: "agent",
-        clientMsgId: "agent-k3v7d2mq-4",
-      });
-      expect(
-        vi.mocked(repoMessages.findLastRoomAddressToAgent).mock.calls[0][1]
-      ).toBe("k3v7d2mq");
-    });
-
-    it("🔒 F-589 STILL APPLIES to the session door — a key naming a peer's agent resolves nothing", async () => {
-      // The projection holds only `k3v7d2mq`, so a session key claiming
-      // `peerpeer` fails the own-scope check exactly as a forged stamp does.
-      lastAddress({ author_user_id: "user-9" });
-      const out = await resolve("summary", { session_id: "chan-1::peerpeer" }, {
-        authorKind: "agent",
-        clientMsgId: "reply-2",
-      });
-      expect(out).toMatchObject({ verdict: "none", delivery: "none" });
-      expect(
-        vi.mocked(repoMessages.findLastRoomAddressToAgent)
-      ).not.toHaveBeenCalled();
-    });
-
-    it("a PERSON's cookie session_id starts no reciprocal arm — a person is not an agent", async () => {
-      lastAddress({ author_user_id: "user-9" });
-      const out = await resolve("morning", OWN_SESSION, { authorKind: "user" });
-      expect(out.verdict).not.toBe("reciprocal");
-    });
-  });
-
-  it("DEGENERATE: a MACHINE-level courtesy stamp is not an agent stamp", async () => {
-    // `main/channel-post.js › postCourtesy` stamps `agent-<channelUUID>-<seq>`,
-    // and the parser is ANCHORED for exactly this reason.
-    const out = await resolve("courtesy", {}, {
-      authorKind: "agent",
-      clientMsgId: "agent-3f2b9c1e-4a5d-4c8e-9f01-2b3c4d5e6f70-1",
-    });
-    expect(out.verdict).toBe("none");
-    expect(vi.mocked(repoMessages.findLastRoomAddressToAgent)).not.toHaveBeenCalled();
   });
 
   it("never reaches RR3 — an agent author does not get the room's default responder", async () => {
-    // 🔒 THE ARMS ARE DISJOINT. RR3 exists so a PERSON is answered; handing an
-    // agent's unaddressed thinking to the room's responder is the fan-out this
-    // wave is deleting, wearing a new name.
+    // 🔒 THE ARMS ARE DISJOINT, and this is the half that survived the deletion. RR3 exists so a
+    // PERSON is answered; handing an agent's unaddressed thinking to the room's responder is the
+    // fan-out this wave deleted, wearing a new name.
     projection(sessionRow({ name: "m8q1zzzz" }));
     roomProjection(sessionRow({ name: "k3v7d2mq" }));
-    lastAddress(null);
     const out = await resolve("musing", {}, {
       authorKind: "agent",
       clientMsgId: "agent-m8q1zzzz-2",
     });
     expect(out.verdict).toBe("none");
     expect(vi.mocked(repoSessions.listChannelSessionStates)).not.toHaveBeenCalled();
+  });
+
+  it("a THREADED agent post is UNTOUCHED — RR1 is an address, not a repair", async () => {
+    // ⚠ **THE CARVE-OUT, PINNED BESIDE THE DELETION** so the two cannot be confused. A thread has
+    // exactly two parties, so "the other one" is the thread's own structure answering — which is
+    // why `thread_peer` survives for either author kind while `reciprocal` does not.
+    const out = await resolve("here is the diff", {
+      taskId: "task-1",
+      taskCreatedBy: "user-1",
+      taskTarget: "user-2",
+    }, { authorKind: "agent", clientMsgId: "agent-k3v7d2mq-3" });
+    expect(out).toMatchObject({ verdict: "thread_peer", recipientUserIds: ["user-2"] });
   });
 });
 

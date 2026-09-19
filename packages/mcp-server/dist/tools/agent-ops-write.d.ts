@@ -54,10 +54,18 @@ export interface TemplateWriteInput {
         entry?: string;
     }>;
     confirm_token?: string;
+    /** op="update" only — the Version from `op="get"`. See {@link opUpdate}. */
+    expected_version?: string;
+    /** op="update" only — the `expected_version` escape. */
+    force?: boolean;
 }
 export declare function opCreate(client: DoplClient, callerUserId: string | null, input: TemplateWriteInput & {
     name: string;
-}): Promise<ToolResponse>;
+}, 
+/** ⚠ OPTIONAL — see `container-destination.ts ›
+ *  resolveHomeChannelContainer`: absent means "not known", which degrades to
+ *  the pre-2026-09-18 behaviour and leaves the refusal with the server. */
+directory?: WorkspaceDirectory): Promise<ToolResponse>;
 export declare function opUpdate(client: DoplClient, callerUserId: string | null, ref: string, input: TemplateWriteInput): Promise<ToolResponse>;
 /**
  * `op="grant"` — lend ONE template to a channel, container or team. The op that

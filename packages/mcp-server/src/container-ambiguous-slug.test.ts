@@ -144,17 +144,17 @@ describe("an ambiguous container slug refuses and names every candidate", () => 
     expect(outcome.kind).toBe("addressed");
   });
 
-  it("refuses on the DEPRECATED alias too, and names the arg the caller sent", async () => {
+  it("names the argument the caller sent — one spelling since the alias retired", async () => {
     const outcome = await resolveCallAddress(
       "dopl_kb",
       "list_bases",
-      { workspace: "ops" },
+      { container: "ops" },
       { directory: directoryOf([MINE, THEIRS, HOME]), activeWorkspace: null },
     );
     expect(outcome.kind).toBe("refusal");
     const text = outcome.kind === "refusal" ? textOf(outcome.response) : "";
     expect(text).toContain("reason=ambiguous_slug");
     // ⚠ A remedy naming an argument the caller did not send is a dead end.
-    expect(text).toContain("`workspace=<id>`");
+    expect(text).toContain("`container=<id>`");
   });
 });

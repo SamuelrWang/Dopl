@@ -1,6 +1,4 @@
 import "server-only";
-import { RESILIENCE_WINDOW_MS } from "@/shared/channels/caps";
-import type { ChannelMessageCreateInput } from "../schema";
 import {
   normalizeUnaddressedResponder,
   resolveDefaultResponder,
@@ -9,7 +7,7 @@ import {
   // 2026-09-06 (items 10/11): the per-member setting that replaced the room-wide pin.
   type UnaddressedResponderSetting,
 } from "../lib/agent-mentions";
-import { authorAgentIdOf, recentAgentsAddressedBy } from "../lib/agent-post-stamp";
+import { recentAgentsAddressedBy } from "../lib/agent-post-stamp";
 import type { SessionStateRow } from "./collab-dto";
 // ⚠ `ChannelRow` LEFT THIS IMPORT ON 2026-09-07 with the room-wide pin that was its only
 // reader (see `defaultResponder`'s docblock below, which keeps the record of the parameter).
@@ -144,104 +142,26 @@ export function threadOtherParty(
   return null;
 }
 
-/**
- * **RR2 — AN UNADDRESSED AGENT POST IN THE MAIN ROOM GOES BACK TO WHOEVER LAST
- * ADDRESSED THAT AGENT THERE.**
- *
- * SELECTION, EXACTLY: the highest `seq` among rows in THIS channel with no
- * thread tag, created inside `RESILIENCE_WINDOW_MS`, whose STORED
- * `recipient_agent_ids` names this agent. **`seq` is unique per channel, so the
- * ordering is total and NO TIE IS REPRESENTABLE** — there is no tie-break to
- * specify and none to get wrong.
- *
- * ⚠ **IT RESOLVES TO A MEMBER, NEVER TO AN AGENT, AND THAT IS WHAT MAKES THE
- * SAME-ACCOUNT CARVE HOLD THROUGH THIS ARM.** "The party that addressed me" is
- * the `author_user_id` of that row — a person's account, whose own machine
- * decides what runs. An arm that resolved an AGENT id here could aim an
- * agent-authored wake at a peer's agent, which is precisely what Samuel's
- * 2026-08-31 carve forbids, and it would do it through a rule the author never
- * wrote.
- *
- * ⚠ **THE AUTHOR'S OWN AGENT ID COMES OFF `lib/agent-post-stamp.ts ›
- * authorAgentIdOf`, THE ONE PARSER** — the `client_msg_id` stamp, else the
- * server's own `metadata.session_id`. `null` there is "cannot say", never "some
- * other agent": an agent post that carries neither gets NO reciprocal arm and
- * answers `delivery=none`. Guessing which agent wrote it would aim somebody's
- * reply at the wrong conversation.
- *
- * ⚠ **IT KEYED ON THE STAMP ALONE UNTIL 2026-09-04, AND THAT STAMPED
- * `delivery=unreachable` OVER A FAILURE THAT NEVER HAPPENED.**
- * `main/session-outbound-tag.js › threadTagFor` deliberately never overwrites a
- * `client_msg_id` an agent supplied, so `parseAgentPostStamp` was `null` for
- * every such post — no arm fired, `resilience` stayed null, and the verdict's
- * `unreachable` term (the one an orchestrator ACTS on) fired instead: rows #963,
- * #965, #969 and #973 of the Mobile Command Center incident all reported a
- * delivery failure for messages that were delivered. `metadata.session_id` is
- * stripped from caller input and re-stamped from `X-Dopl-Session-Id`
- * (`service-writes-metadata.ts` fold 6b), so it is present on every
- * desktop-session post and cannot be posed — the STRONGER fact, not a fallback.
- * ⚠ The F-589 own-scope check below is unchanged and still applies to both
- * doors: the `client_msg_id` half remains caller-supplied.
- *
- * 🔒 ⚠ **AND `client_msg_id` IS CALLER-SUPPLIED, SO THE STAMP IS A CLAIM AND IS
- * CHECKED (2026-09-02, F-589).** It was not. Agent ids are not secret — the
- * desktop stamps `agent-<agentId>-<n>` and `agentId` is publicly readable off
- * `channel_sessions.name` — so any caller could post `client_msg_id:
- * "agent-<someone else's id>-1"` and have this arm answer with the member who
- * last addressed THAT agent. The message then lands in front of a person who was
- * mid-conversation with a different agent, attributed to the wrong exchange,
- * from a room they may not have been talking in at all. It is the same class of
- * defect the author-scoped idempotency probe closed in `service-writes.ts`, on
- * the same field, and one door along.
- *
- * ⚠ **THE CHECK IS `ownAgentIds`, PASSED IN RATHER THAN COMPUTED HERE.** "A live
- * agent of mine" has ONE definition (`service-wake-verdict.ts ›
- * ownLiveAgentIds`) and this module cannot import it — that file imports this
- * one. A second spelling of the own-scope rule is exactly what the desktop's
- * three-module version cost, so the caller resolves it and hands it over.
- * ⚠ A STALE PROJECTION THEREFORE ANSWERS `null`, not "trust the stamp": this arm
- * RESOLVES a recipient off a CALLER-SUPPLIED claim, and `service-wake-freshness.ts
- * › isFresh`'s asymmetry says a fresh row is evidence enough to resolve while a
- * stale one is not evidence of anything.
- * ⚠ **THAT IS A DIFFERENT QUESTION FROM {@link liveChannelSessions}'S, WHICH
- * DROPPED ITS FRESHNESS FILTER ON 2026-09-05.** Here freshness gates a stamp
- * whose subject the CALLER named and could have posed (F-589); there it decided
- * whether an agent EXISTS, which the projection's full-set replace already
- * answers. The own-scoped read behind `ownAgentIds` still filters — see this
- * file's report of 2026-09-05 for why that half was left to a ruling rather than
- * taken in the same pass.
- *
- * ⚠ **NO ROW ⇒ `delivery=none`, AND THAT IS THE RULE RATHER THAN A GAP.** An
- * agent talking to the room with nobody having addressed it inside the window is
- * a BROADCAST, and the standing "agent-authored unaddressed starts nobody" rule
- * holds for exactly that case.
- */
-export async function reciprocalParty(
-  channelId: string,
-  input: ChannelMessageCreateInput,
-  /** The metadata fold's OUTPUT — `session_id` is the server's own stamp, so
-   *  the caller's copy has already been stripped. */
-  metadata: Record<string, unknown>,
-  now: number,
-  /** The agent ids the AUTHOR'S OWN fresh sessions answer to, from
-   *  `service-wake-verdict-handles.ts › ownLiveAgentIds`. The claim must name
-   *  one. */
-  ownAgentIds: readonly string[]
-): Promise<string | null> {
-  const authorAgentId = authorAgentIdOf({
-    clientMsgId: input.clientMsgId,
-    metadata,
-  });
-  if (authorAgentId === null) return null;
-  if (!ownAgentIds.includes(authorAgentId)) return null;
-  const sinceIso = new Date(now - RESILIENCE_WINDOW_MS).toISOString();
-  const row = await repoMessages.findLastRoomAddressToAgent(
-    channelId,
-    authorAgentId,
-    sinceIso
-  );
-  return row?.author_user_id ?? null;
-}
+// ── 🔴 **RR2 `reciprocal` IS DELETED (2026-09-18, Samuel's ruling)** ─────────────────────────
+//
+// *"Agents should only be woken up when addressed (besides the logic for a user with no @ in
+// their message)."* RR2 was the arm that REPAIRED an unaddressed AGENT post's address, aiming it
+// back at whoever last addressed that agent in the room — and its whole charter, *a forgotten
+// `@` must never stall a conversation*, is a PERSON's problem. An agent now chooses: it addresses
+// somebody, or it files a record. There is nothing left to repair, so `reciprocalParty` and the
+// read under it (`repository-messages.ts › findLastRoomAddressToAgent`) are deleted rather than
+// left unreachable.
+//
+// ⚠ **THE VERDICT VALUE SURVIVES AS A TOMBSTONE AND MUST**: rows written before today carry
+// `wake_verdict = 'reciprocal'`, the column's `CHECK` still admits it
+// (`20260918120000_channel_default_responder.sql`), and `types-delivery.ts › ChannelWakeVerdict`
+// still names it so a reader of an old row is not handed a word the type cannot express. What is
+// gone is the PRODUCER. ⚠ The desktop treats such a row as context-free and wake-free
+// (`main/session-dispatch.js`), so an old row is inert rather than dangerous.
+//
+// ⚠ **`RESILIENCE_WINDOW_MS` LEFT THIS FILE WITH IT** — it was RR2's window and nothing here
+// reads it any more. It is still live in `shared/channels/caps.ts` for the composer's own
+// recency derivations; only this module stopped importing it.
 
 /**
  * **RR3 — AN UNADDRESSED HUMAN MESSAGE IS ANSWERED BY ONE AGENT, DECIDED BY THE
@@ -411,9 +331,10 @@ function launchOrder(
  * is still live: fifty of one person's own room posts is far more than the handful it takes to find
  * their last surviving tag, and a person whose last fifty room posts named no live agent has no
  * stickiness to honour — falling to arm 4 there is the correct answer, not a truncation.
- * ⚠ **THE WINDOW STILL BOUNDS THE OTHER ARMS.** RR2's `findLastRoomAddressToAgent` above keeps
- * `RESILIENCE_WINDOW_MS`, and so does `recentAgentPosters`: "who spoke here lately" is freshness
- * and goes stale; "who did this person address" is a habit and does not.
+ * ⚠ **THE WINDOW IS NOT THIS READ'S.** `RESILIENCE_WINDOW_MS` bounded RR2, which is deleted
+ * (2026-09-18), and it still bounds the composer's own recency derivations. It never bounded
+ * this one: "who spoke here lately" is freshness and goes stale; "who did this person address"
+ * is a habit and does not.
  *
  * ⚠ **IT WAS "who posted here last" UNTIL 2026-09-04, AND THAT IS THE BUG IT FIXES.** One agent
  * addressing another re-pointed the room's default responder, so the operator saw the answer wander

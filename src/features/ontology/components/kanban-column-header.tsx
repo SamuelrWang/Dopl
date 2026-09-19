@@ -63,8 +63,14 @@ export function KanbanColumnHeader({
       className="kanban-card shrink-0 rounded-[10px] border bg-bg-elevated"
       data-selected={selected ? "true" : undefined}
     >
+      {/* ⚠ `data-clickable` IS THE WHOLE ROW'S HAND CURSOR, not a style hook — the base layer's
+          one clickable-cursor rule reads it (`globals.css › ANYTHING CLICKABLE SHOWS THE HAND`).
+          The row toggles on click while the chevron button beside it carries the keyboard path,
+          so the div takes no `role`: a `role="button"` here would nest the actions button and
+          the `+` inside a button. */}
       <div
         className="flex items-center gap-1 px-1.5 py-1"
+        data-clickable=""
         onClick={() => setOpen((v) => !v)}
       >
         <button

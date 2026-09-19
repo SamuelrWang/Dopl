@@ -135,13 +135,6 @@ async function spawn(d, deps) {
     return { refused: 'no-template' };
   }
 
-  // ── THE PINNED STARTUP CONTEXT, UNDER THIS OPERATOR'S CREDENTIAL (T81) ────────────────
-  // AFTER the template, for the same ordering reason: the tool profile and the identity are both
-  // already decided by the time any workspace prose exists here. It is the ONE fetch on this lane
-  // that cannot refuse the launch — `fetchStartupContext` answers `null` on every failure, because
-  // a startup context is ENRICHMENT and a template is an IDENTITY.
-  const startupContext = await fetchStartupContext(d.workspaceId);
-
   const res = await deps.launch({
     channelId: d.channelId,
     taskId: d.taskId,
@@ -169,12 +162,6 @@ async function spawn(d, deps) {
       // at WAKE from what was captured here, so a template edited or deleted afterwards neither
       // changes nor stops this session (E-1 / E-2). `null` when none was named.
       template,
-      // THE PINNED WORKSPACE CONTEXT, CAPTURED AT SPAWN AND NEVER RE-READ (T81). Same key
-      // discipline as `template` above, with ONE consumer
-      // (`prompt-framing-startup.js › startupContextFraming`). `null` when nothing is pinned AND
-      // when the fetch failed — one state deliberately, because the framer returns `[]` for either
-      // and the turn stays byte-identical to what this lane produced before T81.
-      startupContext,
     },
     // THE CHANNEL'S PROFILE, NARROWED FOR A SHARED ROOM (2026-09-02, ruling B7). The READ is
     // unchanged and is still MAIN's own full server DTO; what is new is one NARROWING, which can
@@ -236,7 +223,13 @@ async function spawn(d, deps) {
     // name that never reaches the projection is a name the @-picker and every peer's card do not
     // have. A refusal is NOT a failed launch. The STORED name is reported back, because it may not
     // be the one asked for (the uniqueness rule may have stored `Coder-1`).
-    let applied = null;
+    // ⚠ **THE `try` WRAPS THE COMMIT AND NOTHING ELSE (F-736, 2026-09-18).** It used to enclose
+    // the diagnostics as well, so a throw from a `diag` AFTER a successful `commitRename` landed
+    // in the catch with `applied` still null — and this machine then reported "no name" for an
+    // agent it had just named. The report is the half an orchestrator addresses by, so losing it
+    // to a logging failure is a mis-delivery bought with a log line. Everything that can throw
+    // is inside; everything that reads the answer is outside.
+    let stored = null;
     try {
       // THE FALLBACK IS LOGGED, because a nameless agent used to be indistinguishable from a named
       // one here (F-708, 2026-09-16). `'' -> New Agent` is the older-client arm and is legitimate,
@@ -249,21 +242,22 @@ async function spawn(d, deps) {
           NEW_AGENT_NAME, '(an older client sends none; a NEWER one that asked for a name and'
           + ' landed here has lost it upstream of this machine)');
       }
-      const stored = require('./agent-identity-commit')
+      stored = require('./agent-identity-commit')
         .commitRename(res.agentId, asked || NEW_AGENT_NAME);
-      applied = stored && stored.ok ? stored.name : null;
-      // THE REFUSAL ARM, WHICH LOGGED NOTHING AT ALL. `commitRename` answers
-      // `agent-self-ops.js › applyRenameTo`'s verdict, and a sanitizer refusal is `ok: false` — so
-      // an agent could run unnamed with no line anywhere, and `appliedAgentName` went back as null,
-      // which `channel-ops-launch.ts` renders by ECHOING THE REQUEST: the launcher reads the name it
-      // asked for while the machine stored none. Still not a failed launch — a line, not a verdict.
-      if (!applied) {
-        diag('launch-directive: the agent name was REFUSED by the store —',
-          (stored && stored.reason) || 'no reason given',
-          '— agent', res.agentId, 'is running UNNAMED');
-      }
     } catch (err) {
       diag('launch-directive: could not store the agent name —', err && err.message);
+    }
+    const applied = stored && stored.ok ? stored.name : null;
+    // THE REFUSAL ARM, WHICH LOGGED NOTHING AT ALL. `commitRename` answers
+    // `agent-self-ops.js › applyRenameTo`'s verdict, and a sanitizer refusal is `ok: false` — so
+    // an agent could run unnamed with no line anywhere, and `appliedAgentName` goes back as null.
+    // ⚠ `channel-ops-launch.ts` renders that null as `(not reported)` since F-736 closed; it used
+    // to ECHO THE REQUEST, so the launcher read the name it asked for while the machine stored
+    // none. Still not a failed launch — a line, not a verdict.
+    if (!applied) {
+      diag('launch-directive: the agent name was REFUSED by the store —',
+        (stored && stored.reason) || 'no reason given',
+        '— agent', res.agentId, 'is running UNNAMED');
     }
     return {
       agentId: res.agentId,
@@ -276,68 +270,12 @@ async function spawn(d, deps) {
   return { refused: wire.refusalFor(res && res.skipped) };
 }
 
-// ⚠ SHORTER THAN `launch-directive-calls.js`'s `HTTP_TIMEOUT_MS` (15 s), and the reason is the
-// difference between a REFUSAL and an ENRICHMENT: a claim that times out costs the orchestrator a
-// wait, while this one costs a launch that is otherwise ready to go. Five seconds is the same
-// budget `template-resolve.js` spends for the same "do not hold a spawn open" reason.
-const STARTUP_CONTEXT_TIMEOUT_MS = 5000;
-
 /**
  * THE FACE AN UNNAMED AGENT WEARS (Samuel, 2026-09-15: an agent launched with no name is called
  * `New Agent`) — HAND-COPIED from `src/shared/lib/agent-name.ts › NEW_AGENT_NAME`, which main
  * cannot import. Its only reader here is the directive lane's older-client arm.
  */
 const NEW_AGENT_NAME = 'New Agent';
-
-/**
- * THE PINNED STARTUP CONTEXT (T81) — `GET /api/knowledge/startup-context`, at spawn, under THIS
- * OPERATOR's credential. Returns the payload, or `null`. NEVER THROWS AND NEVER REFUSES.
- *
- * The error discipline is the template resolve's shape with the OPPOSITE verdict.
- * `template-resolve.js` returns a REFUSAL word because a template is an IDENTITY the caller
- * deliberately chose, and an agent silently wearing none is not noticed for several turns. A
- * startup context is ENRICHMENT — standing reference material the workspace pinned for every
- * session — so refusing here would let an unreachable, slow, or too-old knowledge route take down
- * agent launching altogether: a hard failure bought for a soft benefit. It degrades to ABSENT (the
- * pre-T81 turn, byte for byte) and says so via `diag`.
- *
- * ABSENT IS INDISTINGUISHABLE FROM "NOTHING IS PINNED", deliberately: a prompt line saying "your
- * workspace may have pinned something I could not fetch" is unactionable by the agent, and would
- * report a machine-local blocker into a shared channel — what `prompt-framing.js ›
- * counterpartyFraming` exists to stop. The operator sees it in `diag`.
- */
-async function fetchStartupContext(workspaceId) {
-  try {
-    const res = await require('./api').apiFetch('/api/knowledge/startup-context', {
-      method: 'GET',
-      // ⚠ THE CHANNEL'S CONTAINER, not "the operator's active workspace". `apiFetch` sends this as
-      // `X-Workspace-Id`, and a launch into a home channel's own container must read THAT
-      // container's pins — the same scoping the template resolve on this lane takes.
-      workspaceId: typeof workspaceId === 'string' && workspaceId ? workspaceId : undefined,
-      timeoutMs: STARTUP_CONTEXT_TIMEOUT_MS,
-      noStore: true,
-    });
-    // ⚠ A 404 IS THE OLDER-DEPLOYMENT CASE AND IS NOT AN ERROR (INVARIANTS §13 — an older peer is
-    // supported), which is the same reading `launch-directive-wire.js`'s `pollWorkspace` note
-    // gives its own 404. It lands on the identical degrade as every other failure.
-    if (!res || !res.ok) {
-      diag('startup-context: not fetched —', res ? `HTTP ${res.status}` : 'no response',
-        '— launching without pinned context');
-      return null;
-    }
-    const body = await res.json();
-    if (!body || typeof body !== 'object' || !Array.isArray(body.items)) return null;
-    // ⚠ NARROWED, NOT SPREAD, for `template-resolve.js › narrow`'s reason: a key the server adds
-    // later must not arrive on a session object and start being depended on by accident. The
-    // per-field BOUNDS are the render's (`prompt-framing-startup.js`), where the neutralizers are.
-    return { items: body.items, omitted: Array.isArray(body.omitted) ? body.omitted : [] };
-  } catch (err) {
-    // An abort (the timeout) and a dead socket land here identically, and so they should.
-    diag('startup-context: network —', (err && err.message) || 'error',
-      '— launching without pinned context');
-    return null;
-  }
-}
 
 /** The goal a directive with none falls back to — the same sentence the New Agent button
  *  composes, because a directive with no goal is asking for exactly that agent. */
