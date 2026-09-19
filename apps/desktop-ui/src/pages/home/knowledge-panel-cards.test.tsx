@@ -210,9 +210,11 @@ describe("the /home card face is a rebind, not a fork", () => {
     expect(templateCard).toContain(
       'TEMPLATE_NAME_TEXT = "text-title font-medium text-text-primary"'
     );
-    // Floor and cap read ONE number, or the row reserves lines it cannot draw.
+    // The clamp reads the rebindable line count. No floor (2026-09-19): the
+    // description is CENTRED in its row, and a line-count floor would pin short
+    // text to the top of a taller box.
     expect(cardCss).toContain("-webkit-line-clamp: var(--kv-card-desc-lines, 3)");
-    expect(cardCss).toContain(
+    expect(cardCss).not.toContain(
       "calc(var(--text-caption) * 1.45 * var(--kv-card-desc-lines, 3))"
     );
   });

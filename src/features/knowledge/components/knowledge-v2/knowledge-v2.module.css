@@ -688,10 +688,16 @@
      `.cardAccent` sliver. One variable so they cannot drift; scope modifiers
      below rebind it. Neutral default = scope with no modifier. */
   --kv-scope: var(--kv-text-3);
+  /* The private hue — the one the "Shared" pill wears (a shared base is a
+     private one, `kbCardLabel`) — and the pill's tint amount. Named here so
+     `.cardInset` reads the Shared pill's gray BY REFERENCE (Samuel,
+     2026-09-19: "use the same gray as that of the shared pill"). */
+  --kv-hue-private: var(--text-secondary);
+  --kv-pill-tint: 12%;
 }
 /* Scope hues from the global status/link palette — no local colours. */
 .scopePrivate {
-  --kv-scope: var(--text-secondary);
+  --kv-scope: var(--kv-hue-private);
 }
 .scopeTeam {
   --kv-scope: var(--link);
@@ -756,24 +762,34 @@
   border-radius: 999px;
   font-size: var(--text-caption);
   font-weight: 500;
-  background: color-mix(in oklab, var(--kv-scope) 12%, white);
+  background: color-mix(in oklab, var(--kv-scope) var(--kv-pill-tint), white);
   color: var(--kv-scope);
 }
 
 /* Inset well spans everything below the name; description/meta/Open are rows
    fenced by hairlines. Description row flexes so the foot stays pinned to the
-   card bottom at fixed heights. */
+   card bottom at fixed heights.
+   The well is the "Shared" pill's gray on every card, whatever its scope —
+   the pill's own recipe on the private hue, not a second gray. */
 .cardInset {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
   border-radius: 9px;
-  background: var(--bg-inset);
+  background: color-mix(in oklab, var(--kv-hue-private) var(--kv-pill-tint), white);
   overflow: hidden;
 }
+/* ⚠ CENTRED, NOT TOP-ANCHORED (Samuel, 2026-09-19: the description sat
+   closer to the bottom hairline than the top). The grid row is a FIXED height
+   and this row is the inset's only `flex: 1; min-height: 0` child, so it takes
+   whatever the meta row (with its storage meter) and the foot leave — which is
+   less than 9 + clamp + 9 on both surfaces. A top-anchored description with a
+   line-count floor then spilled the whole deficit into the BOTTOM padding.
+   Centred, content-height text splits any slack or deficit evenly. */
 .cardDescRow {
   display: flex;
+  align-items: center;
   gap: 9px;
   flex: 1;
   min-height: 0;
@@ -801,12 +817,11 @@
   font-size: var(--text-caption);
   font-style: italic;
   line-height: 1.45;
-  /* ⚠ FLOOR AND CAP ARE ONE NUMBER — the clamp and the min-height must state
-     the same line count or the row reserves space for lines that can never be
-     drawn. `--kv-card-desc-lines` is that number, defaulted to the workspace
-     page's 3; /home rebinds it to 2 on `.kbCards` so the shorter grid row still
-     fits the meta row and the foot. */
-  min-height: calc(var(--text-caption) * 1.45 * var(--kv-card-desc-lines, 3));
+  /* `--kv-card-desc-lines` is the clamp, defaulted to the workspace page's 3;
+     /home rebinds it to 2 on `.kbCards` so the shorter grid row still fits the
+     meta row and the foot. ⚠ NO LINE-COUNT FLOOR (removed 2026-09-19): the
+     row's height is set by the fixed grid row, never by this span, so a floor
+     only pinned short text to the top of a taller box and kept it off centre. */
   color: var(--kv-text-2);
   display: -webkit-box;
   -webkit-line-clamp: var(--kv-card-desc-lines, 3);
