@@ -209,15 +209,8 @@ exports.WRITE_OPS = {
         "write_file",
         "move_file",
         "set_visibility",
-        // ⚠ `pin` and `unpin` WRITE, and UNPIN is the one easiest to wave through:
-        // both set a WORKSPACE-WIDE boolean deciding what every agent session
-        // launched here is handed at startup, so a read-only token must be refused
-        // both or a dopl.read session can silently empty its operator's launch
-        // context through a non-admin tool.
         // ⚠ NO DOUBLE QUOTES IN THIS BLOCK: the parity harness parses this set out
         // of the SOURCE TEXT, so a quoted phrase in a comment is read as an op name.
-        "pin",
-        "unpin",
         // ⚠ grant LENDS THE BASE TO A SCOPE, so it is the widest write on this
         // tool — it changes who can READ the operator's knowledge — and a read-only
         // token must be refused it. ⚠ The refusal is the ONE that costs nothing:

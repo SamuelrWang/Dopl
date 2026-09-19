@@ -62,26 +62,28 @@ const BASE = "https://api.example.test";
  *        all-sessions read (T22) is `getAccountStatus({view:"sessions"})`, a
  *        query PARAMETER over one resource rather than a second endpoint
  *        (INVARIANTS §9), so it costs no third name and no third route to gate.
- *   80 — PLUS THREE with PINNED STARTUP CONTEXT (2026-09-01, T81):
- *        `setKbBasePinned`, `setKbEntryPinned` and `getKbStartupContext`.
- *        ⚠ TWO WRITE NAMES FOR ONE FLAG, and that is the count being deliberate
- *        rather than lazy: a base and an entry are different objects with
- *        different gates (the entry write chases the row up to its base), so
- *        folding them into one `setKbPinned(kind, id)` would put two
- *        authorization stories behind one signature. ⚠ And THREE, not five —
- *        each write is ONE method covering both directions, because `pinned` is
- *        an argument choosing the VERB (`PUT`/`DELETE`) rather than a second
- *        binding: two idempotent verbs, never a toggle, and never two names.
- *   83 — PLUS THREE with THE "NEEDS YOU" SIGNAL (2026-09-01, T70): `createPing`,
+ *   80 — PLUS THREE with THE "NEEDS YOU" SIGNAL (2026-09-01, T70): `createPing`,
  *        `listPings`, `awaitPings`.
- *   80 — LESS THOSE SAME THREE (2026-09-02, slice B16, Samuel's ruling B8). The
+ *   77 — LESS THOSE SAME THREE (2026-09-02, slice B16, Samuel's ruling B8). The
  *        ping lane is DELETED, table and all: a directed `send` IS the delivery
  *        record, and "what is addressed to me and unanswered" is DERIVED by
  *        `getAccountStatus` from the transcript rather than kept in a second
  *        mailbox. ⚠ **THE NUMBER GOING DOWN IS THE POINT** — this list has only
  *        ever grown by a capability arriving, so a shrink is a capability
  *        leaving, and it must be argued for exactly like an arrival.
- *   81 — PLUS ONE with SECTION READS (2026-09-03): `readKbFilePart`.
+ *   78 — PLUS ONE with SECTION READS (2026-09-03): `readKbFilePart`.
+ *        ⚠ **AND THE T81 KNOWLEDGE-CURATION TRIO NEVER APPEARS ABOVE, BECAUSE
+ *        IT LEFT (2026-09-18, Samuel's ruling: *"let's remove pinning for now
+ *        … ill reimplement it down the line"*).** Two writes and a read were on
+ *        this list from 2026-09-01 and are DELETED with the feature — routes,
+ *        services, columns and all. A shrink is a capability leaving and is
+ *        argued for exactly like an arrival (the B16 rule above); this one is a
+ *        ruling, and a reimplementation starts from a clean surface rather than
+ *        from three methods with nothing behind them. ⚠ **THE NAMES ARE NOT
+ *        WRITTEN HERE ON PURPOSE** — the removal gate
+ *        (`src/features/knowledge/pinning-stays-removed.test.ts`) scans this
+ *        package, and a sentence describing a removal can be written without
+ *        naming the thing removed.
  *        ⚠ ONE, NOT TWO, AND NOT A FLAG ON `readKbFileByPath`. The whole-entry
  *        read is on every existing caller's path and answers a different SHAPE
  *        (an entry, not an entry-plus-outline), so widening it would have made
@@ -170,10 +172,6 @@ const PUBLIC_SURFACE = [
     "getChat",
     "getHomeChannels",
     "getKbBase",
-    // PINNED STARTUP CONTEXT (2026-09-01, T81) — the capped reading list a
-    // session starts with. ⚠ Read `truncated`/`omitted`: a clipped payload that
-    // renders as the whole of what is pinned is the bug (INVARIANTS §9).
-    "getKbStartupContext",
     "getKbTree",
     "getMemberAccess",
     "getMyAccess",
@@ -217,10 +215,6 @@ const PUBLIC_SURFACE = [
     "readSkillBody",
     "searchKb",
     "setChannelThreadMode",
-    // T81 — ONE method per object, each covering BOTH directions: `pinned` picks
-    // the verb (PUT/DELETE), so there is no `unpinKbBase` to forget to gate.
-    "setKbBasePinned",
-    "setKbEntryPinned",
     "setWorkspaceId",
     "updateAgentTemplate",
     "updateChannel",

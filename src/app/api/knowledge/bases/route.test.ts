@@ -56,10 +56,6 @@ vi.mock("@/features/knowledge/server/service", () => ({
   listHomeScopedBaseIds: vi.fn(),
   // ⚠ THE PINNED-BASE READ (2026-09-01, T81). It rides the same `Promise.all`
   // as the other folded maps, so an UNMOCKED export here is not a missing
-  // assertion — vitest throws on the property access BEFORE the route's own
-  // `.catch` can attach, and every case in this file 500s. Same trap
-  // `listSharedIntoChannelBaseIds` records one mock down.
-  listPinnedBaseIds: vi.fn(),
   resolveKbStorageLimit: vi.fn(),
 }));
 
@@ -85,7 +81,6 @@ import {
   listBases,
   listStarredBaseIds,
   listHomeScopedBaseIds,
-  listPinnedBaseIds,
   resolveKbStorageLimit,
 } from "@/features/knowledge/server/service";
 import {
@@ -100,7 +95,6 @@ const mockBaseStats = vi.mocked(listBaseStats);
 const mockStorageLimit = vi.mocked(resolveKbStorageLimit);
 const mockStarred = vi.mocked(listStarredBaseIds);
 const mockHomeScoped = vi.mocked(listHomeScopedBaseIds);
-const mockPinned = vi.mocked(listPinnedBaseIds);
 const mockGrantMap = vi.mocked(getChannelGrantMap);
 const mockShared = vi.mocked(listSharedIntoChannelBaseIds);
 const mockChannelVisible = vi.mocked(isChannelVisibleTo);
@@ -141,7 +135,6 @@ beforeEach(() => {
   mockStorageLimit.mockResolvedValue(5_000_000);
   mockStarred.mockResolvedValue(["kb-2"]);
   mockHomeScoped.mockResolvedValue(["kb-1"]);
-  mockPinned.mockResolvedValue([]);
   // ⚠ NOT the shelf flag's base: two keys always naming the same row would pass
   // whichever one the route dropped.
   mockShared.mockResolvedValue(["kb-2"]);
@@ -159,7 +152,6 @@ describe("GET /api/knowledge/bases", () => {
       starredBaseIds: ["kb-2"],
       homeScopedBaseIds: ["kb-1"],
       sharedBaseIds: ["kb-2"],
-      pinnedBaseIds: [],
     });
   });
 
@@ -242,7 +234,6 @@ describe("GET /api/knowledge/bases", () => {
       starredBaseIds: [],
       homeScopedBaseIds: [],
       sharedBaseIds: [],
-      pinnedBaseIds: [],
     });
   });
 

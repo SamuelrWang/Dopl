@@ -17,7 +17,7 @@
  * ({@link OUTLINE_MAX_ROWS}).
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.KB_PIN_MAX_CHARS = exports.KB_PIN_WARN_CHARS = exports.KB_SECTION_NUDGE_CHARS = void 0;
+exports.KB_SECTION_NUDGE_CHARS = void 0;
 exports.renderOutline = renderOutline;
 exports.outlineHeading = outlineHeading;
 exports.outlineFooter = outlineFooter;
@@ -144,7 +144,3 @@ function sectionAmbiguous(heading, matches) {
  * an un-pinned copy is the actual bug. **Every REASON lives in the app's file.**
  */
 exports.KB_SECTION_NUDGE_CHARS = 1_500;
-/** @see KB_SECTION_NUDGE_CHARS — hand-copied from the same file, same test. */
-exports.KB_PIN_WARN_CHARS = 4_000;
-/** @see KB_SECTION_NUDGE_CHARS — hand-copied from the same file, same test. */
-exports.KB_PIN_MAX_CHARS = 12_000;

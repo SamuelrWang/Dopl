@@ -23,7 +23,6 @@ import type {
   KnowledgeTreeSnapshot,
   KnowledgeWriteFileInput,
   KnowledgeWriteFileResult,
-  StartupContext,
 } from "./knowledge-types.js";
 
 export class KnowledgeMethods extends WorkspaceMethods {
@@ -71,23 +70,6 @@ export class KnowledgeMethods extends WorkspaceMethods {
 
   deleteKbBase(baseId: string): Promise<void> {
     return kb.deleteKbBase(this.transport, baseId);
-  }
-
-  /** Pin/unpin a base for the WORKSPACE's agent launches (T81). ⚠ `pinned`
-   *  picks the verb — two idempotent verbs, never a toggle. */
-  setKbBasePinned(baseId: string, pinned: boolean): Promise<void> {
-    return kb.setKbBasePinned(this.transport, baseId, pinned);
-  }
-
-  /** The single-entry half of {@link setKbBasePinned}. */
-  setKbEntryPinned(entryId: string, pinned: boolean): Promise<void> {
-    return kb.setKbEntryPinned(this.transport, entryId, pinned);
-  }
-
-  /** The pinned reading list a session starts with. ⚠ Read `truncated` /
-   *  `omitted` — see {@link StartupContext}. */
-  getKbStartupContext(): Promise<StartupContext> {
-    return kb.getKbStartupContext(this.transport);
   }
 
   readKbFileByPath(baseId: string, path: string): Promise<KnowledgeEntry> {

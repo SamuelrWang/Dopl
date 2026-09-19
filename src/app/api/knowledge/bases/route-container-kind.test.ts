@@ -51,7 +51,6 @@ vi.mock("@/features/knowledge/server/service", () => ({
   listBaseStats: vi.fn(),
   listStarredBaseIds: vi.fn(),
   listHomeScopedBaseIds: vi.fn(),
-  listPinnedBaseIds: vi.fn(),
   resolveKbStorageLimit: vi.fn(),
 }));
 
@@ -71,7 +70,6 @@ import {
   listBases,
   listStarredBaseIds,
   listHomeScopedBaseIds,
-  listPinnedBaseIds,
   resolveKbStorageLimit,
 } from "@/features/knowledge/server/service";
 import {
@@ -105,7 +103,6 @@ beforeEach(() => {
   vi.mocked(resolveKbStorageLimit).mockResolvedValue(null);
   vi.mocked(listStarredBaseIds).mockResolvedValue([]);
   vi.mocked(listHomeScopedBaseIds).mockResolvedValue([]);
-  vi.mocked(listPinnedBaseIds).mockResolvedValue([]);
   mockShared.mockResolvedValue(["kb-1"]);
   mockGrantMap.mockResolvedValue({ "kb-1": { level: "visible", guestWrite: false } });
 });
@@ -151,7 +148,6 @@ describe("🔒 GET /api/knowledge/bases in a STANDARD workspace", () => {
       "baseStats",
       "starredBaseIds",
       "homeScopedBaseIds",
-      "pinnedBaseIds",
     ]) {
       expect(key in body, key).toBe(true);
     }
