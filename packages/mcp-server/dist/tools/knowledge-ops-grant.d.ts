@@ -3,10 +3,11 @@
  * op that REPLACED `op="copy_base"` (Wave B slice B15, ruling B11).
  *
  * ⚠ **ITS OWN MODULE SINCE 2026-09-18 (S53), BECAUSE `knowledge-ops-write.ts`
- * PASSED THE §1 500-LINE CAP.** The seam is the one `knowledge-ops-pin.ts`
- * already draws: a write with its OWN fence story (R2's ownership narrowing, the
- * scope/level pairing, the container-kind refusal) rather than another arm of the
- * entry/base CRUD. Nothing else in that file reads `grant.ts`.
+ * PASSED THE §1 500-LINE CAP.** The seam is a write with its OWN fence story
+ * (R2's ownership narrowing, the scope/level pairing, the container-kind
+ * refusal) rather than another arm of the entry/base CRUD — nothing else in
+ * that file reads `grant.ts`. ⚠ Two branches of the 2026-09-18 wave drew this
+ * same seam and wrote this same module; ONE survives (merge, 2026-09-19).
  */
 import type { DoplClient } from "@dopl/client";
 import type { ToolResponse } from "./respond";

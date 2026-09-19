@@ -51,6 +51,9 @@ import {
   supersessionNudge,
   unsectionedRefusal,
 } from "./knowledge-write-rules";
+// ⚠ THE `&amp;`-IN-A-TITLE RULE LIVES APART — `knowledge-entity-titles.ts`
+// carries both lanes (the write-side note here, the read-side signal there).
+import { titleDecodedNote } from "./knowledge-entity-titles";
 
 /*
  * ⚠ Write confirmations read back the STORED value, not the argument (a title
@@ -243,7 +246,7 @@ export async function opWriteFile(client: DoplClient, ref: string, path: string,
       // entry it had just written, or reached for `force=true`, which disarms
       // the server's anti-duplicate guard. The parenthetical is `read_file`'s,
       // word for word, because two wordings read as two facts.
-      `Wrote ${inlineOr(canonicalPath, NO_PATH)} (entry id: \`${entry.id}\`, ${entry.body.length} chars). New version: \`${entry.updatedAt}\` (pass as expected_version to write_file).${note}${sectionNote}`,
+      `Wrote ${inlineOr(canonicalPath, NO_PATH)} (entry id: \`${entry.id}\`, ${entry.body.length} chars). New version: \`${entry.updatedAt}\` (pass as expected_version to write_file).${note}${sectionNote}${titleDecodedNote(title, entry.title)}`,
       ...[outlineFooter(outline)].filter((l): l is string => l !== null),
     ].join("\n")
   );
@@ -296,3 +299,5 @@ async function excerptVerdictFor(
 }
 
 
+/** ⚠ `op="grant"` MOVED OUT on 2026-09-18 — `knowledge-ops-grant.ts`. This
+ *  file was on the 500-line cap. */

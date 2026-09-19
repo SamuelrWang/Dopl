@@ -13,6 +13,7 @@
  *   - `knowledge-ops-write.ts` — folder + entry writes, and their authoring rules
  *   - `knowledge-ops-base-writes.ts` — create/update/publish a BASE
  *   - `knowledge-ops-grant.ts`  — lend one base to a channel, container or team
+ *   - `knowledge-entity-titles.ts` — the `&amp;`-in-a-title rule, both lanes
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerKnowledgeTools = registerKnowledgeTools;

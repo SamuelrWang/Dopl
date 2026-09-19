@@ -166,7 +166,7 @@ describe("🔒 knowledge pinning stays removed", () => {
 });
 
 /**
- * The SQL half. `20261014120000_drop_knowledge_pinned.sql` drops both columns;
+ * The SQL half. `20261016120000_drop_knowledge_pinned.sql` drops both columns;
  * the file that ADDED them stays on disk unedited, because history is the record
  * of what was true and a replay of an older checkout must still work.
  *
@@ -195,11 +195,11 @@ describe("🔒 the pinned columns are dropped in migration order", () => {
       )
     );
     expect(touching.length).toBeGreaterThanOrEqual(2);
-    expect(touching.at(-1)).toBe("20261014120000_drop_knowledge_pinned.sql");
+    expect(touching.at(-1)).toBe("20261016120000_drop_knowledge_pinned.sql");
   });
 
   it("the drop is idempotent on both tables", () => {
-    const sql = readFileSync(join(DIR, "20261014120000_drop_knowledge_pinned.sql"), "utf8");
+    const sql = readFileSync(join(DIR, "20261016120000_drop_knowledge_pinned.sql"), "utf8");
     for (const tbl of ["knowledge_bases", "knowledge_entries"]) {
       expect(sql).toMatch(
         new RegExp(`ALTER TABLE\\s+${tbl}\\s+DROP COLUMN IF EXISTS pinned;`, "i")
@@ -217,7 +217,7 @@ describe("🔒 the pinned columns are dropped in migration order", () => {
 
   it("the chat-list pin is NOT dropped by it", () => {
     // Same word, different feature, and no ruling covers it.
-    const sql = readFileSync(join(DIR, "20261014120000_drop_knowledge_pinned.sql"), "utf8");
+    const sql = readFileSync(join(DIR, "20261016120000_drop_knowledge_pinned.sql"), "utf8");
     expect(statementsOf(sql)).not.toMatch(/ALTER TABLE\s+chats\s+DROP COLUMN/i);
   });
 });

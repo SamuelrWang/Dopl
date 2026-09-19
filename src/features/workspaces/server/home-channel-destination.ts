@@ -57,6 +57,19 @@ import { findWorkspaceById } from "./repository";
  *
  * ⚠ **IT DOES NOT MIGRATE THE ROWS THAT ARE ALREADY THERE.** Cleanup is a
  * separate, Samuel-approved step (F-735); every read path keeps listing them.
+ *
+ * ⚠ **TWO ARMS ASK THIS, NOT ONE, AND THEY ASK IT WITH ONE PROBE**
+ * ({@link isHomeChannelContainer}). {@link assertHomeChannelRowIsShared} is the
+ * arm a row LANDING somewhere passes — the create on both features, and the
+ * template PATCH. The other is a REVOKE: `knowledge/server/
+ * service-channel-grants.ts › setChannelKnowledgeGrant`'s `"none"` branch, where
+ * dropping the last channel grant re-mints exactly the orphan this file exists
+ * to prevent. It throws {@link HomeChannelRowNotSharedError} directly, with its
+ * own sentence, because a revoke and a create share a RULE and not a REMEDY:
+ * nothing was created, the grant was not removed, and "share it into the
+ * channel" is the act the caller is trying to undo. **One probe, one error
+ * class, one wire code, two sentences** — the split the refusal earns, and no
+ * further.
  */
 
 /**
@@ -95,6 +108,27 @@ export interface HomeChannelDestination {
 }
 
 /**
+ * Is this container one that holds ONLY what is shared into it? — the ONE kind
+ * probe behind every arm of the rule, so a second arm cannot answer the kind
+ * question differently from the first.
+ *
+ * ⚠ **`kind === "link"` POSITIVELY, NEVER `!isStandardWorkspace`** (F-564) — the
+ * header's argument, and it lives on the predicate now rather than beside one of
+ * its callers.
+ *
+ * ⚠ **A MISSING WORKSPACE ROW ANSWERS `false`**, which is the only direction
+ * this may fail open: `withWorkspaceAuth` proved an active membership before it
+ * ran, so `null` means the row vanished mid-request and the write underneath is
+ * about to fail on its own.
+ */
+export async function isHomeChannelContainer(
+  workspaceId: string
+): Promise<boolean> {
+  const workspace = await findWorkspaceById(workspaceId);
+  return workspace?.kind === "link";
+}
+
+/**
  * Refuse a row that would land private and ungranted inside a home channel.
  *
  * ⚠ **ONE READ, AND ONLY ON THE PRIVATE LANE.** A shared row asks nothing, so
@@ -107,8 +141,7 @@ export async function assertHomeChannelRowIsShared({
   remedy,
 }: HomeChannelDestination): Promise<void> {
   if (shared) return;
-  const workspace = await findWorkspaceById(workspaceId);
-  if (workspace?.kind !== "link") return;
+  if (!(await isHomeChannelContainer(workspaceId))) return;
   throw new HomeChannelRowNotSharedError(
     `A home channel holds only what is shared into it, so this ${noun} was not created. ` +
       `Either share it into the channel (${remedy}), or keep it to yourself in your home space.`

@@ -78,6 +78,24 @@ export type OntologyAudience =
        *  is the only cell of the matrix an agent does not simply inherit. */
       readonly ownerAgents: ReadonlyMap<string, OntologyLevel>;
       readonly source: "user" | "agent";
+      /**
+       * 🔒 **WHICH OF {@link OntologyAudience.workspaceIds} ARE THE CALLER'S OWN
+       * PERSONAL SHELF** — the subset `personalShelfContainerIds` contributed,
+       * kept rather than merged away (S29c, 2026-09-18).
+       *
+       * ⚠ **THE WIDENING WAS INVISIBLE AND THAT IS THE BUG.** The shelf reaches
+       * into every home channel by design, so a BRAND-NEW channel lists
+       * ontologies nobody put there — and with the ids folded into one read
+       * scope, no reader downstream could say which those were. The KB lane
+       * answers the same question with `homeScopedBaseIds` and labels its rows
+       * `container-destination.ts › DESTINATION_HEADINGS.personal`; this is the
+       * ontology lane's half of that pair.
+       *
+       * ⚠ **IT IS A LABEL, NEVER A FENCE.** Every row still has to clear
+       * {@link levelForCluster}; nothing here widens or narrows what is
+       * returned. Empty on every arm that resolves no shelf.
+       */
+      readonly personalWorkspaceIds: readonly string[];
       /** The person this request acts as, or `null` for a credential standing
        *  for nobody in particular — which owns nothing and inherits nobody. */
       readonly userId: string | null;
@@ -143,6 +161,10 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
       reach: NO_ONTOLOGY_SHARES,
       ownerAgents: new Map(),
       source: ctx.source,
+      // ⚠ NO SHELF WAS RESOLVED ON THIS ARM, so there is nothing to label —
+      // which is a different statement from "the shelf is empty" only in a
+      // world where this arm returned rows, and it returns none.
+      personalWorkspaceIds: [],
       userId: null,
       solo: false,
     };
@@ -160,6 +182,9 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
       reach: NO_ONTOLOGY_SHARES,
       ownerAgents: new Map(),
       source: ctx.source,
+      // ⚠ A SHARED CREDENTIAL STANDS FOR NOBODY, so it has no shelf to reach
+      // into and none to label (M-10, unchanged).
+      personalWorkspaceIds: [],
       userId: null,
       solo: false,
     };
@@ -211,6 +236,9 @@ async function computeAudience(ctx: OntologyContext): Promise<OntologyAudience> 
     reach,
     ownerAgents,
     source: ctx.source,
+    // ⚠ THE SHELF'S OWN IDS, KEPT SEPARATE FROM THE SCOPE ABOVE — see the field.
+    // The scope is a UNION and cannot be un-mixed by a later reader.
+    personalWorkspaceIds: personalIds,
     userId: ctx.userId,
     // Fail closed, through the ONE predicate (F-718, 2026-09-18): `0`, `null`
     // and `undefined` are all "not one", so a roster race cannot widen an

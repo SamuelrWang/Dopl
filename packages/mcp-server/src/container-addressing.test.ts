@@ -262,6 +262,18 @@ describe("every list that NAMES a container renders its typed kind", () => {
     const text = textOf(await tool("dopl_kb")({ op: "list_bases" }));
     expect(text).toContain("kind=`personal`");
   });
+
+  // ⚠ THE REGISTRAR THREADS THE KNOB, and this is the end-to-end half of
+  // `status-footer.test.ts` (S37/S54, 2026-09-18): the footer is appended AFTER
+  // the handler, so only the wrapper can see what the call asked for.
+  it("`concise` drops that footer, through the real registrar", async () => {
+    build([WS, ROOM, HOME], HOME);
+    const text = textOf(
+      await tool("dopl_kb")({ op: "list_bases", response_format: "concise" }),
+    );
+    expect(text).not.toContain("_dopl_status:");
+    expect(text).not.toContain("active_workspace:");
+  });
 });
 
 // ── 3. THE HOME-SPACE NODE ──────────────────────────────────────────────────

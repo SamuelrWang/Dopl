@@ -171,7 +171,33 @@ export async function getSnapshot(ctx: OntologyContext): Promise<OntologySnapsho
     pushEdge(source.relationships, r.label, r.target_object_id);
   }
 
-  return { clusters, objects };
+  return { clusters, objects, personalClusterIds: personalClusterIds(audience, admitted) };
+}
+
+/**
+ * 🔒 **WHICH ADMITTED CLUSTERS CAME OFF THE CALLER'S OWN PERSONAL SHELF**
+ * (S29c, 2026-09-18) — the ontology twin of the knowledge lane's
+ * `homeScopedBaseIds`, and the only thing a reader needs to stop calling them
+ * mystery rows.
+ *
+ * ⚠ **A LABEL OVER ROWS THAT ALREADY CLEARED THE FENCE.** It is computed from
+ * the SAME `admitted` list the response carries, so it can neither add a row nor
+ * hide one; `service-audience.ts › personalWorkspaceIds` is where the widening
+ * itself is decided and argued.
+ *
+ * ⚠ **`unrestricted` ANSWERS AN EMPTY LIST, NOT A GUESS.** A standard workspace
+ * resolves no shelf at all (`computeAudience`'s first arm returns before
+ * `personalShelfContainerIds` is ever called), so nothing there is personal and
+ * saying so costs one empty array.
+ */
+function personalClusterIds(
+  audience: OntologyAudience,
+  admitted: readonly { id: string; workspace_id: string }[]
+): string[] {
+  if (audience.kind !== "resolved") return [];
+  const shelf = new Set(audience.personalWorkspaceIds);
+  if (shelf.size === 0) return [];
+  return admitted.filter((c) => shelf.has(c.workspace_id)).map((c) => c.id);
 }
 
 /**
@@ -260,5 +286,10 @@ export async function getSummary(ctx: OntologyContext): Promise<OntologySummary>
     objectRows.length >= ONTOLOGY_READ_LIMITS.objects ||
     membershipCount >= ONTOLOGY_READ_LIMITS.memberships;
 
-  return { clusters, objects, truncated };
+  return {
+    clusters,
+    objects,
+    truncated,
+    personalClusterIds: personalClusterIds(audience, admitted),
+  };
 }

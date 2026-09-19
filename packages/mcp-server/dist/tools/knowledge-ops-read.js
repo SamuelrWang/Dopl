@@ -19,6 +19,7 @@ const response_size_1 = require("./response-size");
 const untrusted_fence_1 = require("./untrusted-fence");
 const knowledge_sections_1 = require("./knowledge-sections");
 const container_destination_1 = require("./container-destination");
+const knowledge_entity_titles_1 = require("./knowledge-entity-titles");
 /** ⚠ §8 STALE-CACHE, SPELLED INLINE. ⚠ **ONE FROZEN EMPTY, NOT TWO** — a set of
  *  personal ids has the same meaning empty as absent, so `homeScopedBaseIds`
  *  takes a fallback. `channelGrants` does NOT get one: see {@link opListBases}
@@ -203,17 +204,32 @@ async function opGetTree(client, ref, entryLimit, entryCursor) {
     // header, the paging notice and the scope line above and below it are this
     // server's and stay outside, so the boundary is informative.
     const rows = [];
+    // ⚠ COLLECTED WHILE DUMPING, NOT IN A SECOND PASS — a tree render is the one
+    // place every label in the base goes past, and walking it twice to count
+    // `&amp;` would cost the whole listing again.
+    const escaped = [];
     function dump(parentId, prefix) {
         for (const f of childFolders.get(parentId) ?? []) {
+            if ((0, knowledge_entity_titles_1.looksEntityEscaped)(f.name))
+                escaped.push(f.name);
             rows.push(`${prefix}📁 ${(0, narration_1.inlineOr)(f.name, narration_1.NO_NAME)}/${descSuffix(f.description)}`);
             dump(f.id, prefix + "  ");
         }
         for (const e of childEntries.get(parentId) ?? []) {
+            if ((0, knowledge_entity_titles_1.looksEntityEscaped)(e.title))
+                escaped.push(e.title);
             rows.push(`${prefix}📄 ${(0, narration_1.inlineOr)(e.title, narration_1.NO_NAME)}${descSuffix(e.excerpt)}${headingSuffix(headings[e.id])}`);
         }
     }
     dump(null, "");
     lines.push(...(0, untrusted_fence_1.fenceLines)(rows, "knowledge tree, member-written names and summaries"));
+    // ⚠ ONE LINE FOR THE WHOLE TREE, not one per row: the fix is the same call
+    // every time, and repeating it per entry would bury the listing it annotates.
+    // 🔒 **AND IT SITS OUTSIDE THE FENCE, WHICH IS WHY IT IS AFTER THE PUSH** —
+    // it is this server's narration about the rows, not one of them. It quotes a
+    // member-written title, so `escapedTitleLine` neutralizes what it splices.
+    if (escaped.length > 0)
+        lines.push("", (0, knowledge_entity_titles_1.escapedTitleLine)(escaped[0], escaped.length));
     if (tree.nextEntryCursor) {
         lines.push("", `_Showing ${tree.entries.length} of ${entryTotal} entries. Pass entry_cursor="${tree.nextEntryCursor}" for the next page, or narrow with op="list_dir" / op="search"._`);
     }
@@ -439,6 +455,11 @@ callerUserId = null, format, maxChars, section, offset) {
         // feed the write it exists to precede — a knob that quietly costs a round
         // trip is a knob nobody uses twice.
         `# ${(0, narration_1.inlineOr)(entry.title, narration_1.NO_NAME)}`,
+        // ⚠ DIRECTLY UNDER THE TITLE IT IS ABOUT, and it survives `concise` — the
+        // smaller read is the one an agent takes before a write, which is exactly
+        // the call that can fix this. It is not an error: the read succeeded and
+        // the title is what storage holds.
+        ...((0, knowledge_entity_titles_1.looksEntityEscaped)(entry.title) ? [(0, knowledge_entity_titles_1.escapedTitleLine)(entry.title)] : []),
         ...(terse
             ? [`Version: \`${entry.updatedAt}\` (pass as expected_version to write_file)`]
             : [

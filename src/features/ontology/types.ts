@@ -87,6 +87,20 @@ export interface OntologyCluster {
 export interface OntologySnapshot {
   clusters: OntologyCluster[];
   objects: Record<string, OntologyObject>;
+  /**
+   * 🔒 **WHICH CLUSTERS CAME OFF THE CALLER'S OWN PERSONAL SHELF** (S29c,
+   * 2026-09-18) — the ontology twin of `KbBasesPayload.homeScopedBaseIds`.
+   *
+   * ⚠ **ABSENT IS "NOT ANSWERED", NEVER "NONE".** A payload cached against an
+   * older server carries no such key, and a reader that defaulted it to `[]`
+   * would state that every row lives in the calling container — the exact claim
+   * this field exists to stop being made by accident. Every render falls back to
+   * a FROZEN EMPTY and files no row under the personal label.
+   *
+   * ⚠ **A LABEL, NOT A FENCE.** Nothing filters on it: every cluster listed
+   * already cleared `levelForCluster`.
+   */
+  personalClusterIds?: string[];
 }
 
 /** A workspace knowledge base or skill, with the caller's access resolved. */

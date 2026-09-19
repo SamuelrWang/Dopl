@@ -2,6 +2,14 @@ import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { meetsMinRole } from "@/features/workspaces/types";
 import { assertChannelScopeAllowedInContainer } from "@/shared/tenancy/channel-scope";
+// The REVOKE half of "a home channel holds only what is shared into it"
+// (Samuel, 2026-09-18). The kind probe and the error class are that module's;
+// only the sentence is this lane's, because a revoke and a create share a rule
+// and not a remedy.
+import {
+  HomeChannelRowNotSharedError,
+  isHomeChannelContainer,
+} from "@/features/workspaces/server/home-channel-destination";
 import type {
   ChannelGrantLevelInput,
   ChannelResourceGrant,
@@ -155,6 +163,53 @@ export function canManageChannelGrants(
 }
 
 /**
+ * 🔒 **THE REVOKE TWIN OF THE CREATE'S HOME-CHANNEL FENCE** (Samuel's ruling
+ * 2026-09-18; `workspaces/server/home-channel-destination.ts` states the rule).
+ *
+ * **A create fence with no twin on the verb that UNDOES it is a fence defeated
+ * in two calls** — F-289's argument, which the template lane already makes on
+ * its PATCH. `service-base-gates.ts › assertCreateBaseAllowed` refuses a
+ * `private`, ungranted base landing in a `kind='link'` container; dropping that
+ * base's LAST channel grant re-mints exactly that row, in place, with no refusal
+ * anywhere. The end state is the orphan: a private row inside a home-channel
+ * container, listed by /home's Knowledge face (grant-only) nowhere and by the
+ * container's own pages nowhere, because a container has none.
+ *
+ * ⚠ **THE THREE EARLY RETURNS ARE THE CREATE'S OWN `shared` EXPRESSION, READ
+ * BACKWARDS.** The create calls a base shared when
+ * `visibility !== "private" || shareToChannelId !== undefined`; this asks the
+ * same question of the state the DELETE would leave behind. A revoke stricter
+ * than the create would refuse its way out of a state the create hands out.
+ *
+ * ⚠ **THE CONTAINER THE ROW LIVES IN** (`base.workspaceId`), not the room the
+ * call stands in — the correction both create gates carry. `getBaseById`'s
+ * `assertSameWorkspace` makes the two equal on this door; naming the row's own
+ * container is what keeps them from drifting if a second door opens.
+ *
+ * ⚠ **AND IT COSTS NOTHING OFF THE PRIVATE LANE.** A `public` base asks no
+ * workspace read; a home-space base asks one and stops; only the last grant on a
+ * private base inside a home channel pays the grant read too.
+ */
+async function assertRevokeLeavesNoOrphan(
+  base: KnowledgeBase,
+  channelId: string
+): Promise<void> {
+  if (base.visibility !== "private") return;
+  if (!(await isHomeChannelContainer(base.workspaceId))) return;
+  // Every channel BUT the one being revoked: a base lent into a second room is
+  // still shared after this delete, so no orphan forms and the caller keeps the
+  // three-state control they were given.
+  const granted = await getBaseGrantMap(base.workspaceId, base.id);
+  if (Object.keys(granted).some((id) => id !== channelId)) return;
+  throw new HomeChannelRowNotSharedError(
+    "A home channel holds only what is shared into it, so this grant was not removed. " +
+      "Revoking the last channel grant would leave the knowledge base inside the " +
+      "channel's container, where nothing in the app lists it — move it to your home " +
+      "space, or delete it, instead."
+  );
+}
+
+/**
  * Set one (KB, channel) grant to its three-state end value. Returns the stored
  * grant, or `null` for `"none"` — `null` means "remove the key", never "level
  * none".
@@ -194,6 +249,11 @@ export async function setChannelKnowledgeGrant(
 
   const db = supabaseAdmin();
   if (input.level === "none") {
+    // 🔒 …AND THE ROW MAY NOT BE ORPHANED BY THE REVOKE. Below the manage gate
+    // and below the container-KIND fence, so a caller who may not administer
+    // this base — or who is standing in a workspace, where channel scope does
+    // not exist at all — never reaches it.
+    await assertRevokeLeavesNoOrphan(base, input.channelId);
     await deleteChannelKnowledgeGrant(
       db,
       ctx.workspaceId,

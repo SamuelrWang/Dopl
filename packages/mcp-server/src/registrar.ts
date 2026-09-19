@@ -36,7 +36,11 @@ export {
 } from "./workspace-arg.js";
 import type { CallerIdentity } from "./tools/identity.js";
 import type { Gates } from "./gating.js";
-import { appendDoplStatus, withDoplStatus } from "./status-footer.js";
+import {
+  appendDoplStatus,
+  requestedFormat,
+  withDoplStatus,
+} from "./status-footer.js";
 // 🔒 A CALL THAT WAS NOT CHARGED SAYS SO — once in the log, and on the call's own
 // `_dopl_status` footer. The fail-open decision below is unchanged; this only makes
 // its consequence legible (`credits-unmetered.ts`).
@@ -318,6 +322,11 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
       const refusal = gates.opRefusal(name, op);
       if (refusal) return refusal;
 
+      // ⚠ READ ONCE, BESIDE `op`, AND FOR THE SAME REASON (S37/S54,
+      // 2026-09-18): the knob is applied inside the renderers and this footer is
+      // appended after them, so the handler's own answer cannot carry it here.
+      const format = requestedFormat(innerArgs);
+
       // 🔒 ONE DECISION, ONE PLACE — `container-resolve.ts` owns the grammar,
       // the alias, the blank/not-found refusals and R-32's unaddressed-mint
       // refusal. This wrapper only spends the answer.
@@ -342,6 +351,11 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
           effective,
           caller,
           joinNotes(address.note, unmeteredNote()),
+          format,
+          // ⚠ S29b: `effective` is the PER-CALL override and this is the
+          // connection's own binding, which the override did not touch. The
+          // footer says so rather than letting one flipping line mean both.
+          sessionEffective(),
         );
       }
 
@@ -355,6 +369,7 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
         sessionEffective(),
         caller,
         joinNotes(address.note, unmeteredNote()),
+        format,
       );
     };
 

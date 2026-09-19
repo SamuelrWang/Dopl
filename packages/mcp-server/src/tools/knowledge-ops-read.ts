@@ -36,6 +36,7 @@ import {
   resolveHomeChannelContainer,
   resolveHomeChannelId,
 } from "./container-destination";
+import { escapedTitleLine, looksEntityEscaped } from "./knowledge-entity-titles";
 import type { WorkspaceDirectory } from "../workspace-directory";
 
 /** ⚠ §8 STALE-CACHE, SPELLED INLINE. ⚠ **ONE FROZEN EMPTY, NOT TWO** — a set of
@@ -238,12 +239,18 @@ export async function opGetTree(
   // header, the paging notice and the scope line above and below it are this
   // server's and stay outside, so the boundary is informative.
   const rows: string[] = [];
+  // ⚠ COLLECTED WHILE DUMPING, NOT IN A SECOND PASS — a tree render is the one
+  // place every label in the base goes past, and walking it twice to count
+  // `&amp;` would cost the whole listing again.
+  const escaped: string[] = [];
   function dump(parentId: string | null, prefix: string): void {
     for (const f of childFolders.get(parentId) ?? []) {
+      if (looksEntityEscaped(f.name)) escaped.push(f.name);
       rows.push(`${prefix}📁 ${inlineOr(f.name, NO_NAME)}/${descSuffix(f.description)}`);
       dump(f.id, prefix + "  ");
     }
     for (const e of childEntries.get(parentId) ?? []) {
+      if (looksEntityEscaped(e.title)) escaped.push(e.title);
       rows.push(
         `${prefix}📄 ${inlineOr(e.title, NO_NAME)}${descSuffix(e.excerpt)}${headingSuffix(headings[e.id])}`,
       );
@@ -251,6 +258,12 @@ export async function opGetTree(
   }
   dump(null, "");
   lines.push(...fenceLines(rows, "knowledge tree, member-written names and summaries"));
+  // ⚠ ONE LINE FOR THE WHOLE TREE, not one per row: the fix is the same call
+  // every time, and repeating it per entry would bury the listing it annotates.
+  // 🔒 **AND IT SITS OUTSIDE THE FENCE, WHICH IS WHY IT IS AFTER THE PUSH** —
+  // it is this server's narration about the rows, not one of them. It quotes a
+  // member-written title, so `escapedTitleLine` neutralizes what it splices.
+  if (escaped.length > 0) lines.push("", escapedTitleLine(escaped[0], escaped.length));
   if (tree.nextEntryCursor) {
     lines.push(
       "",
@@ -492,6 +505,11 @@ export async function opReadFile(
     // feed the write it exists to precede — a knob that quietly costs a round
     // trip is a knob nobody uses twice.
     `# ${inlineOr(entry.title, NO_NAME)}`,
+    // ⚠ DIRECTLY UNDER THE TITLE IT IS ABOUT, and it survives `concise` — the
+    // smaller read is the one an agent takes before a write, which is exactly
+    // the call that can fix this. It is not an error: the read succeeded and
+    // the title is what storage holds.
+    ...(looksEntityEscaped(entry.title) ? [escapedTitleLine(entry.title)] : []),
     ...(terse
       ? [`Version: \`${entry.updatedAt}\` (pass as expected_version to write_file)`]
       : [

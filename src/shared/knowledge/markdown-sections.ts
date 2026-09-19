@@ -297,6 +297,20 @@ function repeatsHeading(text: string, section: MarkdownSection): boolean {
  * replacement that forgets one cannot weld two headings onto one line. Nothing
  * is added when the section is the LAST thing in the entry — an entry with no
  * trailing newline keeps not having one.
+ *
+ * ⚠ **AND THE BLANK LINE UNDER THE HEADING SURVIVES** (S29, 2026-09-18). The
+ * heading line and the gap below it are both the DOCUMENT's formatting, not the
+ * section's content: {@link headingEnd} stops at the heading's EOL, so a write
+ * that kept the heading used to eat the blank line under it and glue the new
+ * prose to the `##`. Every write of the same section then rendered a document
+ * the author had not written, and no caller could see it happen. The gap is
+ * measured from the ORIGINAL body and re-emitted verbatim — CRLF and all, per
+ * this file's offsets rule.
+ *
+ * ⚠ **NOT ADDED WHEN THE CALLER SUPPLIED ONE.** Content that already opens on a
+ * blank line, and content that brings its own heading back, are the caller's own
+ * shape; re-emitting the gap on top of either would insert a second blank line
+ * per write and grow the entry once per edit.
  */
 export function replaceSection(
   body: string,
@@ -306,10 +320,14 @@ export function replaceSection(
   const found = findSection(body, heading);
   if (!found.ok) return found;
   const { section } = found;
-  const headingLine = body.slice(section.start, headingEnd(body, section));
+  const bodyStart = headingEnd(body, section);
+  const headingLine = body.slice(section.start, bodyStart);
+  const gap = OPENS_BLANK_RE.test(newContent)
+    ? ""
+    : headingGap(body, bodyStart, section.end);
   let replacement = repeatsHeading(newContent, section)
     ? newContent
-    : headingLine + newContent;
+    : headingLine + gap + newContent;
   const hasFollowing = section.end < body.length;
   if (hasFollowing && !replacement.endsWith("\n")) replacement += "\n";
   return {
@@ -325,6 +343,33 @@ function headingEnd(body: string, section: MarkdownSection): number {
     if (h.start === section.start) return h.bodyStart;
   }
   return section.start;
+}
+
+/** New content that already begins on a blank line — see {@link replaceSection}. */
+const OPENS_BLANK_RE = /^[ \t]*\r?\n/;
+
+/**
+ * The run of BLANK LINES between a heading's EOL and the section's first real
+ * line, exactly as stored.
+ *
+ * ⚠ **VERBATIM, NOT REBUILT.** Returning `"\n"` for any gap would normalise
+ * CRLF to LF and collapse a deliberate two-line gap — both are edits to a
+ * document nobody asked to reformat, made invisibly by a write that named one
+ * section.
+ * ⚠ **BOUNDED BY `end`**, so a section that is nothing BUT blank lines cannot
+ * reach past its own span and claim the next section's leading whitespace.
+ */
+function headingGap(body: string, bodyStart: number, end: number): string {
+  let i = bodyStart;
+  while (i < end) {
+    const nl = body.indexOf("\n", i);
+    if (nl === -1 || nl >= end) break;
+    if (!BLANK_RE.test(body.slice(i, body.charCodeAt(nl - 1) === 13 ? nl - 1 : nl))) {
+      break;
+    }
+    i = nl + 1;
+  }
+  return body.slice(bodyStart, i);
 }
 
 /**

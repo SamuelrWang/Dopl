@@ -50,3 +50,5 @@ export declare function opMove(client: DoplClient, ref: string, from_path: strin
  * length test would measure the wrong document.
  */
 export declare function opWriteFile(client: DoplClient, ref: string, path: string, body: string, title?: string, expected_version?: string, force?: boolean, excerpt?: string, section?: string, clientWriteId?: string): Promise<ToolResponse>;
+/** ⚠ `op="grant"` MOVED OUT on 2026-09-18 — `knowledge-ops-grant.ts`. This
+ *  file was on the 500-line cap. */

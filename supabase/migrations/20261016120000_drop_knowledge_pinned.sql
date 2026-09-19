@@ -1,3 +1,9 @@
+-- ⚠ **RE-STAMPED FROM `20261014120000` AT THE 2026-09-19 MERGE** — three
+-- branches of this wave each claimed that timestamp. The NAME is unchanged,
+-- and this directory is applied BY NAME (F-304, INVARIANTS §12), so the
+-- re-stamp is a re-ordering and nothing else. Apply order in the wave:
+-- `knowledge_client_write_id` (20261014120000), THIS, then
+-- `backfill_entity_escaped_knowledge_titles` (20261016120000).
 -- ============================================================================
 -- DROP knowledge_bases.pinned / knowledge_entries.pinned — PINNED STARTUP
 -- CONTEXT (T81) IS DELETED (Samuel's ruling, 2026-09-18).

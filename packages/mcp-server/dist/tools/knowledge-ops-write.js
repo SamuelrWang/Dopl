@@ -41,6 +41,9 @@ Object.defineProperty(exports, "opCreateBase", { enumerable: true, get: function
 Object.defineProperty(exports, "opSetVisibility", { enumerable: true, get: function () { return knowledge_ops_base_writes_1.opSetVisibility; } });
 Object.defineProperty(exports, "opUpdateBase", { enumerable: true, get: function () { return knowledge_ops_base_writes_1.opUpdateBase; } });
 const knowledge_write_rules_1 = require("./knowledge-write-rules");
+// ⚠ THE `&amp;`-IN-A-TITLE RULE LIVES APART — `knowledge-entity-titles.ts`
+// carries both lanes (the write-side note here, the read-side signal there).
+const knowledge_entity_titles_1 = require("./knowledge-entity-titles");
 /*
  * ⚠ Write confirmations read back the STORED value, not the argument (a title
  * derived from a path), spliced into our own narration — and a path can carry a
@@ -193,7 +196,7 @@ async function opWriteFile(client, ref, path, body, title, expected_version, for
         // entry it had just written, or reached for `force=true`, which disarms
         // the server's anti-duplicate guard. The parenthetical is `read_file`'s,
         // word for word, because two wordings read as two facts.
-        `Wrote ${(0, narration_1.inlineOr)(canonicalPath, narration_1.NO_PATH)} (entry id: \`${entry.id}\`, ${entry.body.length} chars). New version: \`${entry.updatedAt}\` (pass as expected_version to write_file).${note}${sectionNote}`,
+        `Wrote ${(0, narration_1.inlineOr)(canonicalPath, narration_1.NO_PATH)} (entry id: \`${entry.id}\`, ${entry.body.length} chars). New version: \`${entry.updatedAt}\` (pass as expected_version to write_file).${note}${sectionNote}${(0, knowledge_entity_titles_1.titleDecodedNote)(title, entry.title)}`,
         ...[(0, knowledge_sections_1.outlineFooter)(outline)].filter((l) => l !== null),
     ].join("\n"));
 }
@@ -238,3 +241,5 @@ async function excerptVerdictFor(client, baseId, path, title, excerpt) {
         return null;
     }
 }
+/** ⚠ `op="grant"` MOVED OUT on 2026-09-18 — `knowledge-ops-grant.ts`. This
+ *  file was on the 500-line cap. */

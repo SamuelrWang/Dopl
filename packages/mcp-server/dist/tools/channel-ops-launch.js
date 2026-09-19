@@ -268,9 +268,10 @@ async function opLaunchAgent(client, ref, opts = {}) {
         //
         // ⚠ **`name=` IS THE ADDRESS AND `agent=` IS THE RECORD (Samuel, 2026-09-15).** The NAME is
         // what a body tags now; a second "Coder" is stored `Coder-1`, so a caller that went on
-        // tagging `@coder` would reach the OTHER agent. ⚠ THE THREE CASES ARE THE NEIGHBOUR'S
-        // (`channel-ops-launch-name.ts › launchedName`): the machine's value; the ABSENT-field
-        // fallback; carried-but-`null` → `(not applied)`, NEVER the request (`4782677b`).
+        // tagging `@coder` would reach the OTHER agent. ⚠ **TWO CASES SINCE F-736 CLOSED
+        // (2026-09-18), NOT THREE** (`channel-ops-launch-name.ts › launchedName`): the machine's
+        // value, or `(not reported)`. The request is never echoed — the arm that did was reachable
+        // only through a DTO that cannot produce it, and it published a tag nothing answers to.
         // ⚠ **THE ID FORM IS STILL PUBLISHED, UNCHANGED**: the handle that never stops working and the
         // third coordinate of every other agent op. Nothing TELLS the caller to address with it — that
         // is what `name=` is for — but withdrawing it would be a different and worse decision.
@@ -280,7 +281,7 @@ async function opLaunchAgent(client, ref, opts = {}) {
         // belong in this record the moment the wire carries them.
         return (0, respond_1.ok)((0, channel_facts_1.factsLine)("launched", {
             agent: `@agent-${directive.agentId}`,
-            name: (0, channel_ops_launch_name_1.launchedName)(directive.appliedAgentName, named.name),
+            name: (0, channel_ops_launch_name_1.launchedName)(directive.appliedAgentName),
             thread: directive.threadId ?? undefined,
             template: directive.templateName ?? undefined,
             model: directive.model ?? undefined,
@@ -316,7 +317,27 @@ async function opLaunchAgent(client, ref, opts = {}) {
         // ⚠ LAPSED IS NOT REFUSED AND NOT PENDING: no machine ever answered, so
         // nothing is outstanding and asking once more is legitimate — which is the
         // opposite of the branch below.
-        return (0, respond_1.ok)((0, channel_facts_1.factsLine)("expired", { directive: directive.id, filed: true, ...converged }));
+        //
+        // ⚠ **AND THAT PERMISSION IS NOW A FIELD, NOT A COMMENT** (S18/S56,
+        // 2026-09-18). This arm carried NO `retry=` at all, on the one result line
+        // where the neighbouring shapes all publish one — so the arm that MAY be
+        // re-issued was the only one that said nothing about re-issuing, beside a
+        // `pending` arm whose whole point is `retry=no`. An orchestrator reading
+        // silence next to that either stalls on a directive nobody will ever answer
+        // or re-issues on a guess, and a guess here is how a second agent is
+        // started on the same work.
+        // ⚠ `once`, NOT `yes`: it is `RETRY_ADVICE`'s own word for "ask again, once"
+        // — the same vocabulary the refusal arm above prints, so a caller branches
+        // on one set of values across the whole op.
+        // ⚠ `converged` SPREADS LAST, so an `existing` verdict still wins it: "this
+        // call filed nothing" is the stronger statement and names whose directive
+        // the id below is.
+        return (0, respond_1.ok)((0, channel_facts_1.factsLine)("expired", {
+            directive: directive.id,
+            filed: true,
+            retry: "once",
+            ...converged,
+        }));
     }
     // PENDING and CLAIMED (taken but not yet answered) both end here: the next
     // action is identical.
