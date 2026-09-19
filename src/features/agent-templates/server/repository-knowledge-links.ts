@@ -134,6 +134,16 @@ export interface KnowledgeFolderRow {
   knowledgeBaseId: string;
   parentId: string | null;
   name: string;
+  /**
+   * `knowledge_folders.description` — the folder's own agent-facing summary,
+   * added to this read on 2026-09-18 (A4) so the base CARD can carry a clause
+   * per top-level folder without a second query.
+   *
+   * ⚠ **OPTIONAL FOR THE `scope_kind` REASON STATED ABOVE**, one layer up: a
+   * response served through a stale PostgREST schema cache has no such key, and
+   * a row type that swears it is present is the lie. Read it `?? null`.
+   */
+  description?: string | null;
 }
 
 export async function listLiveFoldersForBases(
@@ -144,7 +154,7 @@ export async function listLiveFoldersForBases(
   const db = readClient();
   const { data, error } = await db
     .from("knowledge_folders")
-    .select("id, knowledge_base_id, parent_id, name")
+    .select("id, knowledge_base_id, parent_id, name, description")
     .eq("workspace_id", workspaceId)
     .in("knowledge_base_id", baseIds)
     .is("deleted_at", null);
@@ -155,12 +165,14 @@ export async function listLiveFoldersForBases(
       knowledge_base_id: string;
       parent_id: string | null;
       name: string;
+      description?: string | null;
     }>
   ).map((r) => ({
     id: r.id,
     knowledgeBaseId: r.knowledge_base_id,
     parentId: r.parent_id,
     name: r.name,
+    description: r.description ?? null,
   }));
 }
 
@@ -218,6 +230,20 @@ export interface KnowledgeBaseAccessRow {
   visibility: "public" | "private";
   accessMode: "workspace" | "teams";
   createdBy: string | null;
+  /**
+   * ── THE CARD FACTS (2026-09-18, A4) ──────────────────────────────────────
+   *
+   * `slug` and `description`, read HERE rather than in a second query: this
+   * row is already fetched for every attached base on every resolve, so the
+   * base CARD's two cheapest facts cost nothing at all.
+   *
+   * ⚠ **OPTIONAL, AND NOT AS A HEDGE.** The predicate above
+   * (`service-shared.ts › canSeeBaseRow`) is the row's REASON for existing and
+   * neither key participates in it, so every existing caller and every test
+   * fixture constructs this row without them. Read `?? ""` / `?? null`.
+   */
+  slug?: string;
+  description?: string | null;
 }
 
 export async function listKnowledgeBaseAccessRows(
@@ -228,7 +254,7 @@ export async function listKnowledgeBaseAccessRows(
   const db = readClient();
   const { data, error } = await db
     .from("knowledge_bases")
-    .select("id, name, visibility, access_mode, created_by")
+    .select("id, name, visibility, access_mode, created_by, slug, description")
     .eq("workspace_id", workspaceId)
     .in("id", ids)
     .is("deleted_at", null);
@@ -240,6 +266,8 @@ export async function listKnowledgeBaseAccessRows(
       visibility: "public" | "private";
       access_mode: "workspace" | "teams";
       created_by: string | null;
+      slug?: string | null;
+      description?: string | null;
     }>
   ).map((r) => ({
     id: r.id,
@@ -247,6 +275,8 @@ export async function listKnowledgeBaseAccessRows(
     visibility: r.visibility,
     accessMode: r.access_mode,
     createdBy: r.created_by,
+    slug: r.slug ?? "",
+    description: r.description ?? null,
   }));
 }
 

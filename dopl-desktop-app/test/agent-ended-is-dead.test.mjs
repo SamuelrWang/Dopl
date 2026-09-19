@@ -35,6 +35,8 @@ const require = createRequire(import.meta.url);
 const read = (f) => readFileSync(join(MAIN, f), "utf8");
 // The SHIPPED tier rule (pure; no electron) — see `dispatch()` below.
 const agentHandles = require(join(MAIN, "agent-handles.js"));
+// ⚠ THE REAL ROOM-ROSTER NOTE (2026-09-18) — injected into the dispatch block below.
+const realRoomRoster = require(join(MAIN, "room-roster.js"));
 
 const CH = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 const TASK = "11111111-2222-3333-4444-555555555555";
@@ -101,7 +103,7 @@ function dispatch(agents) {
     // ⚠ `deliveryAck` joined the block's free vars with the wake ack (2026-09-02, A9). A no-op
     // recorder is enough here: this suite asserts routing, and `delivery-ack.test.mjs` owns
     // the buffer.
-    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag",
+    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag", "agentAuthorNote",
     `${BLOCK}\n return { feedLiveSession, mentionedAgentIds };`
   )(
     { firstClassTaskId: (m) => m.taskId || "" },
@@ -109,7 +111,10 @@ function dispatch(agents) {
     { displayNameFor: (id) => `name:${id}` },
     agentHandles,
     { note: () => true, verdictFor: () => '' },
-    () => {}
+    () => {},
+    // ⚠ THE REAL ONE (2026-09-18): a pure function of (session, message, userId, names), so a
+    // fake would let this table assert a sentence the app does not produce.
+    realRoomRoster.agentAuthorNote
   );
   return { ...api, fed };
 }

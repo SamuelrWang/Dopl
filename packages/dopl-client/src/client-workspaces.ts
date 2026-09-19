@@ -36,7 +36,12 @@ export class WorkspaceMethods extends DoplClientBase {
     return grants.grantResource(this.transport, input);
   }
 
-  async pingMcpStatus(): Promise<{ is_admin: boolean; user_id: string | null }> {
+  async pingMcpStatus(): Promise<{
+    is_admin: boolean;
+    user_id: string | null;
+    /** The operator's mention handle, or null — see `workspaces.ts › pingMcpStatus`. */
+    handle: string | null;
+  }> {
     return workspaces.pingMcpStatus(this.transport);
   }
 }

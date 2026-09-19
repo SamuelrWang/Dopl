@@ -160,7 +160,7 @@ describe("🔒 the footer says the call was not charged", () => {
     const { map, client } = build({ sole: false });
     client.consumeCredits.mockResolvedValue(DEGRADED);
 
-    const text = textOf(await map({ workspace: "beta" }));
+    const text = textOf(await map({ container: "beta" }));
     expect(text).toContain("workspace_source: per-call arg");
     expect(text).toContain(NOTE_PREFIX);
   });

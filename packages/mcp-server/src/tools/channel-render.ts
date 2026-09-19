@@ -153,7 +153,9 @@ function formatMessage(
   clip: boolean,
   terse: boolean,
 ): string {
-  const author = formatAuthor(m);
+  // ⚠ THE READER GOES IN (A2): a sibling agent renders `for you`, another
+  // member's renders their name — see `channel-render-identity.ts`.
+  const author = formatAuthor(m, view);
   const ended = sessionEnded(m);
   const kindTag = ended
     ? " · SESSION ENDED"

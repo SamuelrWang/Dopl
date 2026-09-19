@@ -113,4 +113,11 @@ export declare function createServer(client: DoplClient, options?: {
      * resolved value, so absent means unreported and renders as nothing.
      */
     posture?: string | null;
+    /**
+     * HOW TO ADDRESS THE OPERATOR — the mention handle the boot status ping
+     * returned (A1/S48). ⚠ Same terms as the two above: absent renders as
+     * NOTHING, never as a derived guess, and it costs no loopback because the
+     * ping already ran. See `instructions.ts › ConnectionIdentity.operatorHandle`.
+     */
+    operatorHandle?: string | null;
 }): McpServer;

@@ -272,8 +272,12 @@ function prototypeChainMethods(instance) {
         (0, vitest_1.expect)(withOpts.getWorkspaceId()).toBe("ws-1");
     });
 });
-/** Captures the single request a method makes: path / verb / tool header. */
-function captureWire() {
+/** Captures the single request a method makes: path / verb / tool header.
+ *  ⚠ `body` lets a case drive the NORMALISATION as well as the wire — the ping's
+ *  envelope is optional in every key, so "what a missing one becomes" is a claim
+ *  that needs a served answer to test against. Default `{}` is the empty
+ *  envelope every existing case here relies on. */
+function captureWire(body = {}) {
     const wires = [];
     const original = global.fetch;
     global.fetch = (async (...args) => {
@@ -284,7 +288,7 @@ function captureWire() {
             method: init?.method ?? "GET",
             tool: headers["X-MCP-Tool"],
         });
-        return new Response(JSON.stringify({}), {
+        return new Response(JSON.stringify(body), {
             status: 200,
             headers: { "content-type": "application/json" },
         });
@@ -357,8 +361,23 @@ function captureWire() {
         (0, vitest_1.expect)(headers[0]["X-Workspace-Id"]).toBe("ws-42");
     });
     (0, vitest_1.it)("pingMcpStatus still normalises a missing envelope to false / null", async () => {
+        // ⚠ **`handle` JOINED THE ENVELOPE ON 2026-09-18 (A1/S48)** — the operator's mention handle,
+        // carried on the ping because boot may add no round trip. It normalises the same way its two
+        // neighbours do: a key the deployment does not send is `null`, never `undefined`, so a
+        // consumer never has to tell "absent" from "unknown".
         cap = captureWire();
         const res = await new client_js_1.DoplClient(BASE, "k").pingMcpStatus();
-        (0, vitest_1.expect)(res).toEqual({ is_admin: false, user_id: null });
+        (0, vitest_1.expect)(res).toEqual({ is_admin: false, user_id: null, handle: null });
+    });
+    (0, vitest_1.it)("…and a blank or non-string handle is null, not an empty tag", async () => {
+        // ⚠ The briefing renders the handle as `@<handle>`, so an empty string would print `@` and a
+        // number would print a tag nobody answers to. Both are the absent case.
+        for (const bad of ["", "   ", 42, null]) {
+            cap = captureWire({ handle: bad });
+            const res = await new client_js_1.DoplClient(BASE, "k").pingMcpStatus();
+            (0, vitest_1.expect)(res.handle, JSON.stringify(bad)).toBeNull();
+        }
+        cap = captureWire({ handle: "samuel-wang" });
+        (0, vitest_1.expect)((await new client_js_1.DoplClient(BASE, "k").pingMcpStatus()).handle).toBe("samuel-wang");
     });
 });

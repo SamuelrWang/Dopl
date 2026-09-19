@@ -47,6 +47,7 @@ const DISPATCH = M("session-dispatch.js");
 // a legacy id this file and the shipped minter disagreed about is exactly the class of bug the
 // deleted route existed to fix, and the minter is still the one classify reads.
 const targeting = require("../main/targeting.js");
+const realRoomRoster = require(join(HERE, "..", "main", "room-roster.js"));
 const agentHandles = require("../main/agent-handles.js"); // pure; the REAL slug rule
 
 function slice(src, name) {
@@ -106,10 +107,10 @@ function harness(over = {}) {
     // ⚠ `deliveryAck` joined the block's free vars with the wake ack (2026-09-02, A9). A no-op
     // recorder is enough here: this suite asserts routing, and `delivery-ack.test.mjs` owns
     // the buffer.
-    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag",
+    "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag", "agentAuthorNote",
     `${DISPATCH_BLOCK}\n return { feedLiveSession };`
   )(targeting, sessionEngine, { displayNameFor: (id) => `name:${id}` },
-    agentHandles, { note: () => true, verdictFor: () => '' }, () => {});
+    agentHandles, { note: () => true, verdictFor: () => '' }, () => {}, realRoomRoster.agentAuthorNote);
 
   const api = new Function(
     "versionSkew", "sessionDispatch", "targeting", "trigger", "taskNotify", "diag",

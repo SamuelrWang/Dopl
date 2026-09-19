@@ -73,6 +73,36 @@ function agentIdsOnThread(a) {
 // scoped in `session-dispatch.js`. A channel-wide roster must never become the fan-out's input.
 
 /**
+ * EVERY LIVE SESSION OF THIS OPERATOR'S IN ONE CHANNEL, thread-scoped or not —
+ * the ROOM ROSTER's local half (2026-09-18).
+ *
+ * 🔒 ⚠ **`agentIdsInChannel` WAS DELETED HERE ON 2026-09-02 (F-579) AND THIS IS NOT IT COMING
+ * BACK.** That read existed for the ~870-character voluntary CLAIM PROTOCOL — a paragraph that
+ * asked an agent to decide whether an unaddressed message was its own — and its deletion note
+ * carries the rule that survives: **a channel-wide roster must never become the FAN-OUT's
+ * input.** It is not one here. `session-dispatch.js` still feeds only the recipient the server
+ * resolved; what this answers is a DISPLAY question — *who else is in this room, so an agent can
+ * ADDRESS the right one* — which is the opposite of deciding whether to answer.
+ *
+ * ⚠ **IT RETURNS SESSION OBJECTS, NOT IDS.** The card names an agent by its handle, says whose
+ * it is, and names its ROLE when it has one, so an id alone would send the caller back into the
+ * registry for the other two fields.
+ * ⚠ SPAWN ORDER, like {@link liveOnThread}, and for the same reason: a list read by a human or
+ * an agent reads better oldest-first.
+ */
+function liveInChannel(channelId) {
+  const prefix = `${String(channelId || '')}:`;
+  const out = [];
+  if (!deps.sessions || !channelId) return out;
+  for (const s of deps.sessions.values()) {
+    if (s.settled) continue;
+    if (String(s.key || '').indexOf(prefix) !== 0) continue;
+    out.push(s);
+  }
+  return out;
+}
+
+/**
  * ONE session, for an op that names (channel, thread) and MAY name an agent.
  *
  * ⚠ THE AMBIGUITY RULE IS DELIBERATE AND IT IS THE COMPATIBLE ONE. An `agentId` resolves
@@ -116,4 +146,4 @@ function noteSiblings(s) {
 
 // ─── END SESSION-REGISTRY-PURE ────────────────────────────────────────────────────
 
-module.exports = { bind, liveOnThread, agentIdsOnThread, sessionOn, noteSiblings };
+module.exports = { bind, liveOnThread, liveInChannel, agentIdsOnThread, sessionOn, noteSiblings };

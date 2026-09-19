@@ -42,7 +42,6 @@ vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
 import { createServer } from "./server.js";
 import {
   CONTAINER_ARG_DESCRIPTION,
-  WORKSPACE_ALIAS_DESCRIPTION,
 } from "./registrar.js";
 import { createWorkspaceDirectory, HOME_ADDRESS } from "./workspace-directory.js";
 import { UNADDRESSED_WRITE_REFUSALS, WORKSPACE_ARG_OPS } from "./workspace-arg.js";
@@ -192,21 +191,18 @@ describe("the container address grammar", () => {
     expect(text).toContain("workspace_source: per-call arg");
   });
 
-  it("`workspace=` is a DEPRECATED ALIAS onto the same resolver, and says so", async () => {
-    build([WS, ROOM, HOME]);
-    const text = textOf(await tool("dopl_map")({ workspace: "acme" }));
-    // It still WORKS — that is the whole point of the one-release window.
-    expect(text).toContain("active_workspace: `Acme`");
-    expect(text).toMatch(/`workspace=` is DEPRECATED/);
-  });
-
-  it("`container=` wins when both are sent, and the drop is announced", async () => {
+  it("`workspace=` reaches the resolver NOWHERE — the alias is retired", async () => {
+    // 🔒 2026-09-18: the one-release window closed. The handler never sees the
+    // key (the SDK refuses it at the schema), so what this case pins is that
+    // nothing downstream still MAPS it: a caller's `workspace=` must not be
+    // quietly honoured by a second code path after the schema stopped
+    // publishing it.
     build([WS, ROOM, HOME]);
     const text = textOf(
-      await tool("dopl_map")({ container: "acme", workspace: "with-dana" }),
+      await tool("dopl_map")({ workspace: "acme" } as Record<string, unknown>),
     );
-    expect(text).toContain("active_workspace: `Acme`");
-    expect(text).toMatch(/`workspace=` was IGNORED/);
+    expect(text).not.toContain("active_workspace: `Acme`");
+    expect(text).not.toMatch(/DEPRECATED/);
   });
 
   it("a BLANK container= is refused, and names the argument the caller sent", async () => {
@@ -406,17 +402,21 @@ describe("the injected addressing pair (C9 + R-32)", () => {
     expect(carrying.sort()).toEqual(domainTools());
   });
 
-  it("publishes the alias on every domain tool, and describes it on none", () => {
-    // ⚠ **THE KEY IS THE WHOLE CONTRACT.** It must be PUBLISHED or `strictInput`
-    // answers `-32602` to a caller that has been passing it for a release; it
-    // must not be DESCRIBED, because a description is pushed to every client on
-    // every connection whether or not it ever sends the argument.
-    expect(WORKSPACE_ALIAS_DESCRIPTION).toBeUndefined();
+  it("publishes the alias NOWHERE — it retired on 2026-09-18", () => {
+    // 🔒 **THE DEPRECATION RAN ITS COURSE.** The key was published bare, and
+    // undescribed, for ONE release so a caller still sending the old spelling
+    // got its answer rather than a `-32602`; that release shipped, and the key
+    // cost ~21 chars on each of nine schemas, on every connection, to advertise
+    // an argument nobody should newly adopt. Now `strictInput` answers it with
+    // `-32602 … Unrecognized key: "workspace"`, which NAMES the field — the
+    // outcome a window defers and a finished deprecation is for.
+    // ⚠ **THE MONEY IS THE POINT**: those 189 characters are what funded this
+    // wave's additions (`tool-budget.test.ts › SERVED_TOTAL_CEILING`).
     for (const name of domainTools()) {
       const shape = (registry.schemas.get(name) as { shape?: Record<string, unknown> })
         ?.shape;
-      expect(shape, name).toHaveProperty("workspace");
-      expect(argOf(registry.schemas.get(name), "workspace"), name).toBeUndefined();
+      expect(shape, name).not.toHaveProperty("workspace");
+      expect(shape, name).toHaveProperty("container");
     }
   });
 

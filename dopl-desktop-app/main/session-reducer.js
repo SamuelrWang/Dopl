@@ -74,7 +74,7 @@ function inboundAutoAccepted(state) {
 // (`session-dispatch.js` parses it, `session-seed.frameContinuation` renders it). The reducer
 // CARRIES it and reads nothing from it, which keeps "addressed or not, it is delivered" true.
 function pushInboundEffect(event) {
-  return { type: 'pushInbound', message: event.message, authorName: event.authorName, addressing: event.addressing || null };
+  return { type: 'pushInbound', message: event.message, authorName: event.authorName, authorNote: event.authorNote || null, addressing: event.addressing || null };
 }
 
 function feedInboundEffects(state, event) {

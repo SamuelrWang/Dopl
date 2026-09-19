@@ -150,7 +150,7 @@ describe("exactly once, on both terminal paths", () => {
 
   it("charges the RESOLVED workspace on the `workspace=` branch, once", async () => {
     const { map, client } = build({ sole: false });
-    await map({ workspace: "beta" });
+    await map({ container: "beta" });
     expect(client.consumeCredits).toHaveBeenCalledTimes(1);
     expect(client.consumeCredits).toHaveBeenCalledWith("id-2");
   });
@@ -201,7 +201,7 @@ describe("exhaustion", () => {
     const { map, client } = build({ sole: false });
     client.consumeCredits.mockResolvedValue(exhausted());
 
-    const res = await map({ workspace: "beta" });
+    const res = await map({ container: "beta" });
     expect(res.isError).toBe(true);
     expect(textOf(res)).toContain("out of credits");
     expect(client.listKbBases).not.toHaveBeenCalled();
@@ -342,14 +342,14 @@ describe("what is NOT charged", () => {
 
   it("a blank `workspace=` is refused before any charge", async () => {
     const { map, client } = build({ sole: false });
-    const res = await map({ workspace: "   " });
+    const res = await map({ container: "   " });
     expect(res.isError).toBe(true);
     expect(client.consumeCredits).not.toHaveBeenCalled();
   });
 
   it("an unknown `workspace=` ref is refused before any charge", async () => {
     const { map, client } = build({ sole: false });
-    const res = await map({ workspace: "does-not-exist" });
+    const res = await map({ container: "does-not-exist" });
     expect(res.isError).toBe(true);
     expect(client.consumeCredits).not.toHaveBeenCalled();
   });

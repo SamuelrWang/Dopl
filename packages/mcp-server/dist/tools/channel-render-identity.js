@@ -18,8 +18,9 @@
  * by the immutable `authorUserId`, the one half the author does not control.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.NO_MEMBER_VIEW = void 0;
+exports.NO_MEMBER_VIEW = exports.EXTERNAL_SESSION_META_KEY = exports.OUTSIDE_SESSION_HANDLE = void 0;
 exports.formatAuthor = formatAuthor;
+exports.isOutsideSession = isOutsideSession;
 exports.agentHandleOf = agentHandleOf;
 exports.sessionIdOf = sessionIdOf;
 exports.addresseeOf = addresseeOf;
@@ -36,6 +37,15 @@ const channel_render_threads_1 = require("./channel-render-threads");
  * Author label for a message line. `agent` row renders "agent for <name>",
  * never bare name — reader treats counterparty as another member's agent.
  *
+ * ⚠ **IT TAKES THE READER SINCE 2026-09-18 (A2/S45), AND THAT IS WHAT LETS IT
+ * SAY `for you`.** A label built from the MESSAGE ALONE can name an operator
+ * and never say whether that operator is the reader's own, so a sibling worker
+ * launched by the same person and a stranger's agent rendered identically —
+ * and an agent deciding whether to answer, escalate or ignore was reading the
+ * one distinction it needed out of a uuid it had to go and look up. `view` is
+ * the reader `formatMessages` already holds; a caller that has none passes
+ * {@link NO_MEMBER_VIEW} and gets exactly the old line.
+ *
  * ⚠ Two rules, both because nothing validates `display_name`:
  *   1. Name NEUTRALIZED and user row prefixed `member`, never bare. Raw name
  *      may contain newlines → can close the line and forge fresh ones (a
@@ -44,20 +54,66 @@ const channel_render_threads_1 = require("./channel-render-threads");
  *   2. `authorUserId` appended ALWAYS, not only as name-missing fallback. Name
  *      = author's claim; id = server's record. Claim alone is uncheckable.
  */
-function formatAuthor(m) {
+function formatAuthor(m, view = exports.NO_MEMBER_VIEW) {
     const id = m.authorUserId ? `\`${m.authorUserId}\`` : null;
     // `system` is a server-controlled enum, not user text; `PostableAuthorKindSchema`
     // blocks a caller minting one. Only label here with no untrusted half.
     if (m.authorKind === "system")
         return id ? `system ${id}` : "system";
     const named = m.authorName ? (0, channel_shared_1.neutralizeInline)(m.authorName) : null;
-    const who = named && id ? `${named} (${id})` : (named ?? id);
+    // ⚠ **`for you` IS AN ASSERTION ABOUT THE READER, SO IT IS MADE OFF THE
+    // IMMUTABLE ID AND NOTHING ELSE** — the same half `memberRef` matches on, and
+    // never the name.
+    const mine = view.selfUserId !== null && m.authorUserId === view.selfUserId;
+    const who = mine ? "you" : named && id ? `${named} (${id})` : (named ?? id);
+    // THE OPERATOR'S OWN OUTSIDE SESSION — see {@link isOutsideSession}.
+    if (isOutsideSession(m)) {
+        const label = who ? `outside session for ${who}` : "an outside session";
+        return mine ? `${label} — reply @${exports.OUTSIDE_SESSION_HANDLE}` : label;
+    }
     if (m.authorKind === "agent") {
         const handle = agentHandleOf(m);
         const label = handle ? `agent ${handle}` : "agent";
         return who ? `${label} for ${who}` : (handle ? label : "an agent");
     }
     return who ? `member ${who}` : "a member";
+}
+/**
+ * 🔒 **THE GROUP HANDLE FOR AN OPERATOR'S OUTSIDE SESSIONS** — one built-in
+ * handle meaning *the operator's MCP sessions that are not app-spawned agents*
+ * (Claude Code, Codex, Cursor, a script).
+ *
+ * ⚠ **A SEAM, AND IT IS DELIBERATELY NOT THE MECHANISM** (2026-09-18). The
+ * handle's minting, its reservation against the member/agent namespaces and the
+ * author kind on the wire are built on a SIBLING BRANCH; what lives here is the
+ * RENDER side: the label a reader gets and the one non-derivable fact that goes
+ * with it — the reply for an outside session is this handle, never the author's
+ * own name.
+ */
+exports.OUTSIDE_SESSION_HANDLE = "desktop";
+/**
+ * ⚠ **THE THIRD AUTHOR SHAPE IS NOT A NEW `authorKind`, AND IT IS NOT A DTO
+ * FIELD EITHER.** `@dopl/contracts › MessageAuthorKind` is a CLOSED union guarded
+ * by `scripts/check-message-kind-drift.ts` and the column's own `CHECK`, and both
+ * `ChannelMessage` declarations sit at the 500-line cap — so the outside-session
+ * marker rides server-owned `metadata.external_session` and is READ THROUGH A
+ * FUNCTION on the sibling branch (`authorViewOf(message)` →
+ * `MessageAuthorKind | "external"`).
+ *
+ * 🔒 **THIS IS THE ONE PLACE THIS TIER ASKS THE QUESTION**, deliberately: at
+ * merge, the body below becomes `authorViewOf(m) === "external"` and nothing
+ * else in this package moves.
+ *
+ * ⚠ **THE OLD-PAYLOAD ANSWER IS `false`, AND IT IS `false` ON PURPOSE** (§8's
+ * rule for a new payload field): a row written or cached before the marker
+ * existed carries no `external_session`, and `undefined === true` is false — so
+ * an old row renders exactly the line it always did rather than being reported
+ * as an outside session nobody marked.
+ */
+exports.EXTERNAL_SESSION_META_KEY = "external_session";
+function isOutsideSession(m) {
+    const meta = m.metadata;
+    return !!meta && meta[exports.EXTERNAL_SESSION_META_KEY] === true;
 }
 /**
  * **WHICH AGENT — BY THE NAME ITS OPERATOR GAVE IT** (2026-09-04).

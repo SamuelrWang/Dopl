@@ -15,8 +15,11 @@
  *                           same name — `home/server/service-writes.ts ›
  *                           createHomeChannel`)
  *   container=<id>        → any container the caller is an active member of
- *   workspace=<…>         → DEPRECATED alias, same resolver, one release
  *   (omitted)             → the connection's container, else `home`
+ *
+ * ⚠ **`workspace=` IS GONE (2026-09-18)** — one release as a bare alias, then
+ * deleted from the schema, so it is now a `-32602` that NAMES the field rather
+ * than a second spelling this file has to keep mapping.
  *
  * ⚠ **THE LAST LINE IS THE RULING'S POINT AND IT IS STRUCTURE, NOT COPY.** An
  * unaddressed READ resolves to the caller's own container because the SERVER
@@ -41,16 +44,14 @@ function err(text) {
 /**
  * Resolve one call's container.
  *
- * ⚠ **`container=` WINS OVER `workspace=` AND BOTH DROPS ARE ANNOUNCED.** A
- * caller that sent two addresses, or sent one on an op that takes none, is told
- * which one the call used — the whole difference between a deprecation window
- * and a silent re-target (B13's argument, one argument later).
+ * ⚠ **A DROP IS ANNOUNCED.** A caller that addressed an op which takes no
+ * address is told the argument was ignored — the whole difference between a
+ * deprecation window and a silent re-target (B13's argument, one argument
+ * later). The alias half of that announcement retired with the alias.
  */
 async function resolveCallAddress(tool, op, args, { directory, activeWorkspace }) {
-    const usedAlias = args.container === undefined && args.workspace !== undefined;
-    const ref = usedAlias ? args.workspace : args.container;
-    const argName = usedAlias ? "workspace" : "container";
-    const bothSent = args.container !== undefined && args.workspace !== undefined;
+    const ref = args.container;
+    const argName = "container";
     if (!(0, workspace_arg_js_1.acceptsWorkspaceArg)(tool, op)) {
         // ⚠ NO HONOURED ADDRESS. The call runs in this connection's container, and
         // when the connection names none the SERVER resolves the caller's own.
@@ -58,7 +59,7 @@ async function resolveCallAddress(tool, op, args, { directory, activeWorkspace }
             kind: "unaddressed",
             note: ref === undefined
                 ? null
-                : (0, workspace_arg_js_1.ignoredWorkspaceNote)(op, typeof ref === "string" ? ref.trim() : "", argName),
+                : (0, workspace_arg_js_1.ignoredWorkspaceNote)(op, typeof ref === "string" ? ref.trim() : ""),
         };
     }
     if (ref === undefined) {
@@ -115,7 +116,7 @@ async function resolveCallAddress(tool, op, args, { directory, activeWorkspace }
             kind: (0, workspace_directory_js_1.containerKind)(resolved),
             source: "per-call arg",
         },
-        note: bothSent ? (0, workspace_arg_js_1.aliasIgnoredNote)() : usedAlias ? (0, workspace_arg_js_1.deprecatedAliasNote)() : null,
+        note: null,
     };
 }
 /**

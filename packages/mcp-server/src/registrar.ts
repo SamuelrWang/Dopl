@@ -28,8 +28,6 @@ import { resolveCallAddress } from "./container-resolve.js";
 // through the registrar that injects it, which is where an agent meets it.
 export {
   CONTAINER_ARG_DESCRIPTION,
-  WORKSPACE_ALIAS_DESCRIPTION,
-  WORKSPACE_ARG_DESCRIPTION,
   WORKSPACE_ARG_OPS,
   UNADDRESSED_WRITE_REFUSALS,
   acceptsWorkspaceArg,
@@ -55,24 +53,24 @@ import type {
 } from "./workspace-directory.js";
 
 /**
- * 🔒 **THE TWO ADDRESSING ARGS INJECTED INTO EVERY DOMAIN TOOL'S SCHEMA** —
- * `container` (R-32, Samuel 2026-09-17) and `workspace`, its deprecated alias.
- * Slug, id or the reserved `home`; routes via the transport's
- * AsyncLocalStorage override, leaving the connection's container unchanged.
- * Const so each description renders verbatim — and identically — in every
- * tool's MCP introspection.
+ * 🔒 **THE ONE ADDRESSING ARG INJECTED INTO EVERY DOMAIN TOOL'S SCHEMA** —
+ * `container` (R-32, Samuel 2026-09-17). Slug, id or the reserved `home`;
+ * routes via the transport's AsyncLocalStorage override, leaving the
+ * connection's container unchanged. Const so each description renders verbatim
+ * — and identically — in every tool's MCP introspection.
  *
- * ⚠ BOTH ARE INJECTED EVEN WHERE THEY ARE IGNORED, and that is the point of the
- * one-release window: `strictInput` refuses an unknown key, so dropping either
- * from the schema would turn "ignored" into `-32602`, which is the one thing a
- * deprecation window rules out. The alias is the reason the rename is not a
- * wire break; `container-resolve.ts` maps it to the same resolver and says so
- * on the result.
+ * 🔒 **`workspace=` RETIRED HERE ON 2026-09-18, AND THE RETIREMENT IS THE
+ * WAVE'S FUNDING.** The alias was published as a bare key for ONE release so a
+ * caller that still sent it got its answer instead of a `-32602`; that release
+ * shipped, and the key cost 21 chars × 9 schemas ≈ 189 characters PUSHED TO
+ * EVERY CLIENT ON EVERY CONNECTION to advertise an argument nobody should have
+ * newly adopted. `strictInput` now answers an unknown `workspace` with
+ * `-32602 … Unrecognized key: "workspace"`, which NAMES the field — the one
+ * outcome a deprecation window rules out, and exactly the outcome a completed
+ * deprecation is for.
  */
 const WORKSPACE_ARG_SHAPE = {
   container: z.string().optional().describe(CONTAINER_ARG_DESCRIPTION),
-  // ⚠ NO `.describe()` — see `workspace-arg.ts › WORKSPACE_ALIAS_DESCRIPTION`.
-  workspace: z.string().optional(),
 };
 type WorkspaceArgShape = typeof WORKSPACE_ARG_SHAPE;
 
@@ -309,9 +307,8 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
     type EnhancedArgs = z.infer<z.ZodObject<S & WorkspaceArgShape>>;
 
     const wrapped = async (args: EnhancedArgs): Promise<ToolResponse> => {
-      const { container: _c, workspace: _w, ...rest } = args as EnhancedArgs & {
+      const { container: _c, ...rest } = args as EnhancedArgs & {
         container?: string;
-        workspace?: string;
       };
       const innerArgs = rest as unknown as z.infer<z.ZodObject<S>>;
 
@@ -327,7 +324,7 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
       const address = await resolveCallAddress(
         name,
         op,
-        { container: _c, workspace: _w },
+        { container: _c },
         { directory, activeWorkspace },
       );
       if (address.kind === "refusal") return address.response;

@@ -102,17 +102,20 @@ describe("the published input schema forbids extra properties", () => {
 
   it("…and nothing else about the published schema changed", () => {
     // ⚠ Strictness is a NARROWING, not a rewrite — params, prose and caps are
-    // unchanged and `workspace` is still injected. A schema that LOST a field
+    // unchanged and `container` is still injected. A schema that LOST a field
     // would also pass the test above.
+    // ⚠ **`workspace` LEFT THIS LIST ON 2026-09-18**, when the deprecated alias
+    // retired: the key is gone from every domain schema, so an old caller's
+    // `workspace=` is now the `-32602` this file's subject produces.
     const channel = listed.tools.find((t) => t.name === "dopl_channel");
     const props = channel?.inputSchema?.properties as
       | Record<string, unknown>
       | undefined;
     expect(Object.keys(props ?? {})).toEqual(
-      expect.arrayContaining(["op", "channel", "body", "to", "thread", "workspace"]),
+      expect.arrayContaining(["op", "channel", "body", "to", "thread", "container"]),
     );
     expect(channel?.inputSchema?.required).toEqual(["op"]);
-    for (const gone of ["to_agent", "to_agents", "as_agent", "participants"]) {
+    for (const gone of ["to_agent", "to_agents", "as_agent", "participants", "workspace"]) {
       expect(Object.keys(props ?? {})).not.toContain(gone);
     }
   });

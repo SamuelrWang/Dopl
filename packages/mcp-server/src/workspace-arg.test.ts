@@ -165,15 +165,15 @@ describe("`WORKSPACE_ARG_OPS` — the list/create set (B2/B13)", () => {
   });
 });
 
-describe("a `workspace=` the op no longer takes is IGNORED, never refused", () => {
+describe("a `container=` the op does not take is IGNORED, never refused", () => {
   it("runs the handler, does not route, and SAYS the arg was dropped", async () => {
     const { client } = build(true);
     // ⚠ A container-independent op with no loopback of its own, so the case is
     // about the WRAPPER and cannot go green or red on a stub's fixtures.
-    const res = await tool("dopl_skill")({ op: "authoring_guide", workspace: "beta" });
+    const res = await tool("dopl_skill")({ op: "authoring_guide", container: "beta" });
     expect(res.isError).toBeFalsy();
     const text = textOf(res);
-    expect(text).toContain("workspace_arg: IGNORED on authoring_guide");
+    expect(text).toContain("container_arg: IGNORED on authoring_guide");
     // ⚠ The call stayed in the connection's container — the dropped arg did not
     // quietly re-target it, which is the one outcome a silent ignore allows.
     expect(text).toContain("active_workspace: `Alpha`");
@@ -182,14 +182,18 @@ describe("a `workspace=` the op no longer takes is IGNORED, never refused", () =
 
   it("a BLANK one is ignored too, on an op that does not take it", async () => {
     build(true);
-    const res = await tool("dopl_skill")({ op: "authoring_guide", workspace: "  " });
+    const res = await tool("dopl_skill")({ op: "authoring_guide", container: "  " });
     expect(res.isError).toBeFalsy();
   });
 
   it("but a blank one is still REFUSED where the op DOES take it", async () => {
     build(true);
-    const res = await tool("dopl_map")({ workspace: "  " });
+    const res = await tool("dopl_map")({ container: "  " });
     expect(res.isError).toBe(true);
     expect(textOf(res)).toContain("blank");
   });
 });
+
+// 🔒 **THE RETIRED `workspace=` ALIAS** is asserted where the SCHEMAS are read
+// — `container-addressing.test.ts` — because the refusal is the SDK's, at the
+// boundary, and this file drives handlers directly.

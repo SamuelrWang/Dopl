@@ -421,3 +421,29 @@ export function updateBaseValidationError(e: unknown): ToolResponse | null {
     `update_base: request body failed validation${fields.size ? ` (field: ${[...fields].join(", ")})` : ""}.`
   );
 }
+
+/**
+ * Run a write, mapping the ONE 403 EVERY base write can raise. Six hand-written
+ * copies of this catch lived in `knowledge-ops-write.ts` (2026-09-17).
+ *
+ * ⚠ `more` runs FIRST, for the per-op codes — 409, 412 and 400, every one of
+ * them disjoint from `AGENT_WRITE_DISABLED`, so the order is a convenience and
+ * not a precedence. Anything neither maps RETHROWS: a catch that swallowed an
+ * outage would report it as a refusal.
+ *
+ * ⚠ **IT MOVED HERE FROM `knowledge-ops-write.ts` ON 2026-09-18**, when that
+ * file was split at the base/tree seam (A3) and both halves needed it. A second
+ * copy is how one half comes to map a refusal the other rethrows.
+ */
+export async function writeOr<T>(
+  run: () => Promise<T>,
+  more: (e: unknown) => ToolResponse | null = () => null,
+): Promise<T | ToolResponse> {
+  try {
+    return await run();
+  } catch (e) {
+    const mapped = more(e) ?? agentWriteDenied(e);
+    if (mapped) return mapped;
+    throw e;
+  }
+}
