@@ -10198,3 +10198,22 @@ The claim had been restated in five places from one sentence, which is how it su
 - Proposed resolution: after one release in which every supported desktop ships the `record` vocabulary, add the same refusal to `postMessage` — agent credential, `kind: 'message'`, no `to`, no `taskId`, `intent !== 'chat'` ⇒ 400 with the two choices named. Re-derive the supported-build floor from the update feed before doing it, and land the route refusal, the MCP mapping arm for its code, and the INVARIANTS row in one change.
 - ⚠ **AND THE MIGRATION-SHAPED HALF IS NOT THIS FINDING'S.** Narrowing `channel_messages_wake_verdict_check` to drop `reciprocal` would fail against existing rows and needs a backfill decision; it is deliberately NOT bundled here. The word is a tombstone in `types-delivery.ts`, the SDK copy and the SQL `CHECK`, with no producer in any tree.
 - Status: open (narrowed 2026-09-18).
+
+### F-738 — `packages/mcp-server`'s own test files are typechecked by nothing (2026-09-18)
+
+- Location: `packages/mcp-server/tsconfig.json` (its `include`/`exclude` decide this) — the visible symptom is `packages/mcp-server/src/tool-budget.test.ts`, which constructs a `ConnectionIdentity` with `homeChannels: 0`, a property `src/instructions.ts › ConnectionIdentity` does not declare. An excess property in an object literal is a compile error everywhere that file is actually compiled; this one has been green for as long as it has been wrong.
+- Found during: the Round-1 fix wave, batch A (`fix/r1-a`), adding `operatorHandle` to that same interface — the new field typechecked, and so did a neighbouring field that does not exist.
+- **WHAT IS AND IS NOT COVERED.** `npm run build -w @dopl/mcp-server` compiles `src/` MINUS the test files, and vitest does not typecheck at all (`transform`, not `tsc`). So a test may reference a deleted export, pass a misspelled option or assert against a field no type has, and nothing in the definition of green says so. The suites still RUN, which is why this is a gap and not an outage: a test that references a truly missing symbol fails at import.
+- ⚠ **THE LINE IS LEFT AS IT IS, DELIBERATELY.** Deleting `homeChannels: 0` would remove the evidence and leave the hole; per `CLAUDE.md`'s rule, the code disagreement is filed rather than quietly tidied.
+- Proposed resolution: a `typecheck` script in that package over a tsconfig that INCLUDES `*.test.ts`, wired into CI's existing type-drift job (it is a script step, so the gate count moves and both doc rows move with it). Expect a first run to surface several stale argument shapes, `homeChannels` among them.
+- Status: open.
+
+### F-739 — the outside-session author label ships ahead of the mechanism that sets it (2026-09-18)
+
+- Location: `packages/mcp-server/src/tools/channel-render-identity.ts › isExternalSessionAuthor` / `OUTSIDE_SESSION_HANDLE`, and the two lines it is read by in `dopl-desktop-app/main/prompt-framing-identity.js`.
+- Found during: the Round-1 fix wave, batch A, building the "who asked + how to reply" half of the start card while the `@desktop` group handle was being built on a sibling branch (`fix/r1-desktop-tag`).
+- **THE SEAM IS ONE READ, AND IT ANSWERS FALSE FOR EVERY ROW WRITTEN TODAY.** The marker is NOT a new `authorKind` — that union is drift-gated against the column's own `CHECK` (`scripts/check-message-kind-drift.ts`) — it is a server-stamped `metadata.external_session`, projected as `authorView: MessageAuthorKind | "external"`. This tier reads `authorView ?? authorKind`, so until the sibling branch lands nothing renders differently, and the stale-payload fallback is the same expression that makes an old cached row render as it always did.
+- ⚠ **THE TWO HALVES MUST MERGE TOGETHER OR THE PROMPT LINE IS A RULE ABOUT A LABEL THE TRANSCRIPT NEVER CARRIES.** The spawn prompt tells an agent what an `outside session` line means and that its reply address is `@desktop`; that is true only once the projection and the handle exist.
+- ⚠ **AND `@desktop` IS PER OPERATOR.** The render offers the handle only when the outside session belongs to the READER'S OWN account; another member's outside session is named and offered no handle, because the group tag would otherwise hand back an address that reaches the reader's own machine.
+- Proposed resolution: merge `fix/r1-desktop-tag` and this branch in one integration, then replace the `(m as { authorView?: string })` cast with the DTO field once `@dopl/client` declares it.
+- Status: open (a seam, by design).

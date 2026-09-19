@@ -57,8 +57,8 @@ function agentIdentityFraming(ctx) {
     `THE ID IS INTERNAL: read it, never write it in a message.`,
     `ADDRESS AN AGENT BY ITS NAME, as a tag: lower case, spaces as dashes (@bug-reviewer).`,
     `Names are unique among live agents, so a tag reaches exactly one.`,
-    `A line reading "for you" is YOUR OPERATOR'S own agent; any other name is another member's.`,
-    `An "outside session" line is your operator's own coding session: address it @desktop, in full agent detail.`,
+    `"for you" on an agent line means YOUR operator's agent; another name means another member's.`,
+    `"outside session" is your operator's own coding session: address it @desktop, in full detail.`,
   ];
 }
 

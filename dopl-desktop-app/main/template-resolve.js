@@ -187,22 +187,30 @@ function narrow(body) {
     // ⚠ `scope` FAILS TO `'base'`, never to a folder or an entry. An unknown discriminator from a
     // newer server renders the whole-base call, which is the WIDER instruction and therefore the one
     // that cannot point an agent at a document that does not exist.
-    // ⚠ THE FOUR CARD KEYS JOINED 2026-09-18 (A4) and they are BASE-SCOPE facts: the server sends
-    // them only on a whole-base scope, and this narrow does not care — a folder scope that arrives
-    // carrying them narrows them anyway and `knowledgeLines` renders a card for no kind but `base`.
-    // One place decides what a card is attached to, and it is the renderer.
+    // ⚠ THE FOUR CARD KEYS JOINED 2026-09-18 (A4) AND THEY RIDE THE BASE SCOPE ALONE. A folder or
+    // entry scope already names the exact thing it points at, so a card over one would be noise on
+    // top of an answer — and a key that reaches no renderer is a key a later reader starts
+    // depending on. The server sends them only on a whole-base scope; this narrow enforces it
+    // rather than trusting it, which is the reason the outer whitelist exists at all.
     knowledge: scopes
       .filter((k) => k && typeof k === 'object')
-      .map((k) => ({
-        scope: k.scope === 'folder' || k.scope === 'entry' ? k.scope : 'base',
-        baseId: label(k.baseId, MAX_BASE_LABEL),
-        baseName: label(k.baseName, MAX_BASE_LABEL),
-        toolPath: label(k.toolPath, MAX_SCOPE_PATH),
-        baseSlug: whole(k.baseSlug, MAX_BASE_SLUG),
-        baseSummary: whole(k.baseSummary, MAX_CARD_SUMMARY),
-        baseFolders: cardFolders(k.baseFolders),
-        baseFolderCount: count(k.baseFolderCount, MAX_FOLDER_COUNT),
-      })),
+      .map((k) => {
+        const scope = k.scope === 'folder' || k.scope === 'entry' ? k.scope : 'base';
+        const ref = {
+          scope,
+          baseId: label(k.baseId, MAX_BASE_LABEL),
+          baseName: label(k.baseName, MAX_BASE_LABEL),
+          toolPath: label(k.toolPath, MAX_SCOPE_PATH),
+        };
+        if (scope !== 'base') return ref;
+        return {
+          ...ref,
+          baseSlug: whole(k.baseSlug, MAX_BASE_SLUG),
+          baseSummary: whole(k.baseSummary, MAX_CARD_SUMMARY),
+          baseFolders: cardFolders(k.baseFolders),
+          baseFolderCount: count(k.baseFolderCount, MAX_FOLDER_COUNT),
+        };
+      }),
     // ⚠ HOW MANY ATTACHMENTS THIS OPERATOR CANNOT REACH HERE — see `count` above and
     // `prompt-framing-template.js › knowledgeLines`, its one consumer.
     unreachableKnowledgeBaseCount: count(b.unreachableKnowledgeBaseCount),

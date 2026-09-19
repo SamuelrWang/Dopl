@@ -241,7 +241,7 @@ function buildInstructions(directory, guidance = {}) {
 
 WHICH TOOL (each is its own contract; long rules are PULLED): dopl_map first (a routing view, not a count) · dopl_search when you don't know where it lives · dopl_kb bases and entries · dopl_skill SKILL.md procedures, dopl_skill(op="authoring_guide") before authoring · dopl_agent agent identities · dopl_ontology the object graph · dopl_members who is here, who sees what · dopl_chats archive/recall a session (op="guide" first) · dopl_workspaces your containers · dopl_status rooms, sessions, unanswered asks · dopl_channel to reach a MEMBER or their agent — DEFERRED in some clients, so load it with ToolSearch, then dopl_channel(op="rooms", action="list"); its law: action="help" or dopl://doctrine/channels. No op deletes anything — deletion is app-only.
 
-To WAIT, HOLD — dopl_channel(op="read", wait_ms) in a background task; never poll on a timer (dopl://doctrine/channels › Waiting).
+${waiting}
 
 WORKSPACES: ${membershipLine(directory, guidance.pin ?? null, guidance.directoryLoadFailed ?? false)}${workspaces}`;
     // ⚠ IDENTITY BEFORE THE DIRECTORY: server-issued ids ahead of peer-typed

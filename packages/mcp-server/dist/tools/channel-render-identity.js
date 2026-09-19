@@ -18,7 +18,7 @@
  * by the immutable `authorUserId`, the one half the author does not control.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.NO_MEMBER_VIEW = exports.EXTERNAL_AUTHOR_KIND = exports.OUTSIDE_SESSION_HANDLE = void 0;
+exports.NO_MEMBER_VIEW = exports.EXTERNAL_AUTHOR_VIEW = exports.OUTSIDE_SESSION_HANDLE = void 0;
 exports.formatAuthor = formatAuthor;
 exports.isExternalSessionAuthor = isExternalSessionAuthor;
 exports.agentHandleOf = agentHandleOf;
@@ -92,17 +92,23 @@ function formatAuthor(m, view = exports.NO_MEMBER_VIEW) {
  */
 exports.OUTSIDE_SESSION_HANDLE = "desktop";
 /**
- * ⚠ **THE THIRD AUTHOR SHAPE, READ AS A STRING ON PURPOSE.**
+ * ⚠ **THE THIRD AUTHOR SHAPE IS A PROJECTION, NOT A NEW `authorKind`.**
  * `@dopl/contracts › MessageAuthorKind` is a CLOSED union guarded by
- * `check-message-kind-drift.ts` and by the column's own `CHECK`, so widening it
- * is a migration plus a gate — the sibling branch's work, not this file's. This
- * predicate therefore asks the wire value directly and answers false for every
- * row written today, which is exactly what an un-merged seam should do: no
- * behaviour changes until the kind exists.
+ * `scripts/check-message-kind-drift.ts` and by the column's own `CHECK`, so the
+ * outside-session marker rides `metadata.external_session` server-side and
+ * arrives on the DTO as a SEPARATE field, `authorView`, whose vocabulary is the
+ * kind's plus `external`.
+ *
+ * ⚠ **`authorView ?? authorKind` IS THE STALE-PAYLOAD FALLBACK** the §8 rule
+ * requires of every new projected field: a row read from a cache written before
+ * the field existed has no `authorView`, and reading `undefined === "external"`
+ * as false would be right by accident — the fallback makes it right on purpose,
+ * and keeps an old payload rendering exactly as it always did.
  */
-exports.EXTERNAL_AUTHOR_KIND = "external";
+exports.EXTERNAL_AUTHOR_VIEW = "external";
 function isExternalSessionAuthor(m) {
-    return m.authorKind === exports.EXTERNAL_AUTHOR_KIND;
+    const view = m.authorView ?? m.authorKind;
+    return view === exports.EXTERNAL_AUTHOR_VIEW;
 }
 /**
  * **WHICH AGENT — BY THE NAME ITS OPERATOR GAVE IT** (2026-09-04).

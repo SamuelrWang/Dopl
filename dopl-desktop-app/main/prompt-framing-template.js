@@ -284,7 +284,10 @@ function baseCard(s) {
   const head = `${SCOPE_OPS.base(s)}${s.slug ? `  [slug: ${s.slug}]` : ''}`;
   const summary = s.summary ? [`  ${s.summary}`] : [];
   const complete = s.folders.length > 0 && s.folders.length === s.folderCount;
-  const clause = (f) => (f.summary ? `${f.name} — ${f.summary}` : f.name);
+  // ⚠ PARENTHESES, NOT AN EM DASH: §H-13's house voice bans the character in emitted prompt text
+  // (`prompt-framing-template.test.mjs` scans every built line for it), and a clause has to be
+  // visibly attached to the folder it describes inside a `; `-joined list.
+  const clause = (f) => (f.summary ? `${f.name} (${f.summary})` : f.name);
   const withClauses = complete ? [`  Folders: ${s.folders.map(clause).join('; ')}`] : [];
   const namesOnly = complete ? [`  Folders: ${s.folders.map((f) => f.name).join('; ')}`] : [];
   for (const card of [
@@ -373,7 +376,7 @@ function knowledgeLines(bases, profile, scopes) {
     // the exact thing they point at, so a card over one would be noise on top of an answer.
     ...list.flatMap((s) => (s.kind === 'base' ? baseCard(s) : [SCOPE_OPS[s.kind](s)])),
     'A FOLDER line names that folder and everything under it, now and later; an ENTRY line names',
-    'one document. Under a base, "Folders:" names its TOP-LEVEL folders only — op "list_dir" with',
+    'one document. Under a base, "Folders:" names its TOP-LEVEL folders only; op "list_dir" with',
     'one of those names as the path opens it. Entries are never listed here; the tree is how you',
     'find them. For a base or a folder, mcp__dopl__dopl_kb op "read_file", the same base, path',
     '"<path from the listing>" reads one entry. There is no op that reads a whole base, and search',

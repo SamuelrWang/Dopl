@@ -73,7 +73,7 @@ test('the card names the base, its id, its slug, what it answers, and its folder
   assert.match(card[0], /mcp__dopl__dopl_kb, op "get_tree", base "11111111-2222-3333-4444-555555555555"/);
   assert.match(text, /\[slug: deploys\]/);
   assert.match(text, /How this service is released/);
-  assert.match(text, /Folders: Runbooks — step-by-step, one per incident class; Postmortems/);
+  assert.match(text, /Folders: Runbooks \(step-by-step, one per incident class\); Postmortems/);
 });
 
 test('🔒 a base with FORTY entries renders the same card, and lists none of them', () => {
