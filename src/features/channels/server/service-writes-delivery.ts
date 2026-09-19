@@ -51,6 +51,27 @@ const DELIVERY_RANK: Record<ChannelDelivery, number> = {
   idle: 3,
   delivered: 4,
   woken: 5,
+  /**
+   * **ABOVE EVERY MACHINE OUTCOME, AND THAT IS AN OVERWRITE RULE RATHER THAN A
+   * CLAIM THAT IT GOT FURTHER** (2026-09-18).
+   *
+   * ⚠ **READ THE SCALE BY ITS ONE CONSUMER.** {@link weakerOrEqual} is the only
+   * reader, and the question it actually answers is *"what may a machine's
+   * receipt overwrite"* — the "how far did it get" gloss above is what that
+   * ordering happens to mean for the six words a machine can report. `posted` is
+   * not one of them: it is excluded from `MachineDelivery`, so no receipt ever
+   * ARRIVES carrying it, and the only way it can appear here is as a stored
+   * value some machine is about to write over.
+   *
+   * ⚠ **NOTHING MAY WRITE OVER IT, BECAUSE NOTHING OBSERVED THE LANE.** A row
+   * stamped `posted` was addressed to `@desktop` and to nobody a machine routes
+   * on, so any receipt landing on it is a machine reporting about a message it
+   * was never handed — and `refused` from such a machine would read, to the
+   * outside session the post was FOR, as "your operator's tooling turned this
+   * away". Ranking it above `woken` makes that unrepresentable instead of
+   * unlikely.
+   */
+  posted: 6,
 };
 
 /** Every outcome a receipt of `delivery` is allowed to overwrite — itself

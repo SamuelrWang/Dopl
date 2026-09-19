@@ -110,6 +110,10 @@ export async function opReadAccount(
   selfUserId: string | null = null,
   /** @see opRead — the credential this read is counted under, or `null`. */
   subject: string | null = null,
+  /** ⚠ @see opRead — the caller is an OUTSIDE SESSION, so lines carry the
+   *  never-drop marks. This page spans CHANNELS, which is exactly where class
+   *  (ii) of `outsideRelevance` has to keep its per-room fence. */
+  outside = false,
 ): Promise<ToolResponse> {
   const page = await accountMessages(client, directory, { since, limit });
   if (page.messages.length === 0) {
@@ -156,7 +160,7 @@ export async function opReadAccount(
     lines.push(
       `\n### ${g.label} — \`${g.ref}\` · container=\`${workspaceId}\`${kindTag(kinds, workspaceId)}`,
     );
-    lines.push(...formatMessages(g.messages, g.ref, selfUserId));
+    lines.push(...formatMessages(g.messages, g.ref, selfUserId, undefined, outside));
   }
   // ⚠ THE CURSOR IS THE MAX OVER THE WHOLE PAGE, not the last line of the last
   // group. Grouping reordered the page relative to seq, so "the last message

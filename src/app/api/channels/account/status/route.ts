@@ -3,6 +3,9 @@ import { withUserAuth } from "@/shared/auth/with-auth";
 import { parseQuery } from "@/shared/api/parse-json";
 import { toChannelErrorResponse } from "@/shared/api/channel-route";
 import { getAccountStatus } from "@/features/channels/server/service";
+// ⚠ ONE predicate, shared with the write path — see `lib/desktop-handle.ts`.
+import { isOutsideSessionCaller } from "@/features/channels/lib/desktop-handle";
+import { readRuntimeHeader } from "@/shared/auth/runtime-header";
 import { AccountStatusQuerySchema } from "@/features/channels/schema";
 
 /**
@@ -54,7 +57,14 @@ async function handleGet(
   {
     userId,
     apiKeyWorkspaceId,
-  }: { userId: string; apiKeyWorkspaceId?: string | null }
+    agentTokenId,
+  }: {
+    userId: string;
+    apiKeyWorkspaceId?: string | null;
+    /** ⚠ Present for a `dopl_at_*` credential — see `with-auth.ts`. It is the
+     *  CREDENTIAL half of the outside-session question below. */
+    agentTokenId?: string;
+  }
 ): Promise<Response> {
   try {
     const { since, view } = parseQuery(
@@ -69,6 +79,19 @@ async function handleGet(
       // upstream applies the lock — so a container-locked credential would
       // otherwise read every workspace its operator belongs to.
       lockedWorkspaceId: apiKeyWorkspaceId ?? null,
+      // **THE `@desktop` LANES ARE FOR AN OUTSIDE SESSION AND NOBODY ELSE**
+      // (2026-09-18). Both halves come from things a request cannot ask for: the
+      // CREDENTIAL (`agentTokenId`) and the runtime HEADER, read through the one
+      // predicate so this cannot drift from the write path's.
+      //
+      // 🔒 **THE EXCLUSION THAT MATTERS IS THE DESKTOP-RUN AGENT.** It posts and
+      // reads on the operator's own account, so a lane keyed on the user id
+      // alone would hand it every ask aimed at the operator's laptop — work it
+      // would then adopt, which is the confusion `@desktop` was created to end.
+      outsideSession: isOutsideSessionCaller(
+        agentTokenId ? "agent" : "user",
+        readRuntimeHeader(request) ?? null
+      ),
     });
     return NextResponse.json(status, {
       // ⚠ Per-caller and volatile by construction — never cacheable.

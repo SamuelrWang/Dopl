@@ -75,11 +75,31 @@ function channelLine(channel, kinds) {
  */
 function waitingLine(item) {
     const who = (0, narration_js_1.inlineOr)(item.authorName ?? item.authorUserId ?? "", NO_ONE);
-    const mark = item.isEscalation ? "ESCALATION" : "to you";
+    const mark = item.isEscalation ? "ESCALATION" : markForLane(item.lane);
     const thread = item.threadId
         ? ` · thread \`${(0, narration_js_1.inlineOr)(item.threadId, NO_TEXT)}\``
         : "";
     return `  ⚠ ${mark} #${item.seq} from ${who}${thread} — ${(0, narration_js_1.inlineOr)(item.preview, NO_TEXT)}`;
+}
+/**
+ * **WHICH LANE PUT THIS ITEM ON THE LIST** (2026-09-18, the `@desktop` tag).
+ *
+ * ⚠ **A GUESS MAY NOT READ AS LOUD AS A FACT**, which is the same rule the
+ * transcript marks follow (`channel-desktop-tag.ts › outsideMark`). `to you` and
+ * `to @desktop` both say somebody NAMED this caller; `likely for you` says this
+ * server inferred it, and the wording is what keeps the two apart when they sit
+ * in one list under one ⚠.
+ *
+ * ⚠ **ABSENT ⇒ `to you`, WHICH IS EVERY ITEM AN OLDER SERVER PRODUCES** and
+ * every item on a payload cached before the field existed. The lane is optional
+ * on the wire precisely so no stale payload has to be re-fetched to render.
+ */
+function markForLane(lane) {
+    if (lane === "desktop")
+        return "to @desktop";
+    if (lane === "likely")
+        return "likely for you";
+    return "to you";
 }
 /** What a clipped read could not see, as one line — or nothing. */
 function clipLine(status) {

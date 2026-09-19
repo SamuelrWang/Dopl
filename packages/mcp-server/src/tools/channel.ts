@@ -354,6 +354,12 @@ export function registerChannelTool(
               args.limit,
               selfUserId,
               pollSubject(caller),
+              // ⚠ NOT KNOWN TO BE DESKTOP-RUN ⇒ treat as an outside session for
+              // MARKING purposes only. False positives here (an older desktop
+              // build) cost a few tokens on a line; a false NEGATIVE would be a
+              // message meant for this lane arriving with nothing to notice it
+              // by, which is the failure Samuel's ruling (b) weighs heaviest.
+              !isDesktopRun(caller),
             );
           }
           return opRead(
@@ -367,6 +373,8 @@ export function registerChannelTool(
             args.thread,
             args.response_format,
             pollSubject(caller),
+            // ⚠ See the account branch above for why the uncertain case marks.
+            !isDesktopRun(caller),
           );
         }
 

@@ -125,7 +125,10 @@ async function opHold(client, ref, since, waitMs, selfUserId = null, runtime = n
         // read now, and only the second one can carry an injected line.
         `${channel_framing_1.UNTRUSTED_BODY_HEADER}\n`,
     ];
-    lines.push(...(0, channel_render_1.formatMessages)(messages, ref, selfUserId));
+    // ⚠ `outside = true` UNCONDITIONALLY, AND IT IS NOT AN ASSUMPTION: the hold
+    // is fenced to non-desktop callers in `channel.ts` (`isDesktopRun` →
+    // DESKTOP_HOLD_REFUSAL), so every caller that reaches this line is one.
+    lines.push(...(0, channel_render_1.formatMessages)(messages, ref, selfUserId, undefined, true));
     const lastSeq = messages[messages.length - 1].seq;
     // ⚠ A hold is CHANNEL-WIDE and unfiltered: every message wakes every armed
     // listener, including ones addressed elsewhere or to nobody — so a wake is

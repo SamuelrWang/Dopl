@@ -197,6 +197,10 @@ async function post(
       // ⚠ A LIST SINCE 2026-09-18 — the fixture still names at most one.
       toAgentIds: over.toAgentId ? [over.toAgentId] : [],
       toUserIds: [],
+      // ⚠ This composition drives the SERVER verdict into the real desktop
+      // routing predicates; `@desktop` is deliberately absent from every case
+      // because it is the one address no machine routes on.
+      toDesktopOperatorIds: [],
     },
     NOW
   );

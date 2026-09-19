@@ -44,12 +44,12 @@ export declare function formatAuthor(m: ChannelMessage, view?: MemberView): stri
  * handle meaning *the operator's MCP sessions that are not app-spawned agents*
  * (Claude Code, Codex, Cursor, a script).
  *
- * ⚠ **A SEAM, AND IT IS DELIBERATELY NOT THE MECHANISM** (2026-09-18). The
- * handle's minting, its reservation against the member/agent namespaces and the
- * author kind on the wire are built on a SIBLING BRANCH; what lives here is the
- * RENDER side: the label a reader gets and the one non-derivable fact that goes
- * with it — the reply for an outside session is this handle, never the author's
- * own name.
+ * ⚠ **THE SEAM IS CLOSED AND THE MECHANISM ARRIVED** (integration, 2026-09-19).
+ * The handle's minting, its reservation against the member/agent namespaces and
+ * the author kind on the wire were built on the SIBLING BRANCH that is now
+ * merged, so this is an ALIAS of `channel-desktop-tag.ts ›
+ * DESKTOP_GROUP_HANDLE` and not a second declaration of the string. Two copies
+ * of a handle is exactly how a rename lands in one renderer and not the other.
  */
 export declare const OUTSIDE_SESSION_HANDLE = "desktop";
 /**
@@ -61,9 +61,12 @@ export declare const OUTSIDE_SESSION_HANDLE = "desktop";
  * FUNCTION on the sibling branch (`authorViewOf(message)` →
  * `MessageAuthorKind | "external"`).
  *
- * 🔒 **THIS IS THE ONE PLACE THIS TIER ASKS THE QUESTION**, deliberately: at
- * merge, the body below becomes `authorViewOf(m) === "external"` and nothing
- * else in this package moves.
+ * 🔒 **THIS IS THE ONE PLACE THIS TIER ASKS THE QUESTION**, and since the merge
+ * (2026-09-19) it does not ask it itself: the body IS
+ * `authorViewOf(m) === "external"`, and nothing else in this package moved.
+ * Reading `metadata.external_session` directly would label a `user` row an
+ * outside session; `authorViewOf` is the ONE place the "only an `agent` row can
+ * be one" rule lives, and this function is now a named reading of it.
  *
  * ⚠ **THE OLD-PAYLOAD ANSWER IS `false`, AND IT IS `false` ON PURPOSE** (§8's
  * rule for a new payload field): a row written or cached before the marker

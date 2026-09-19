@@ -90,7 +90,11 @@ function accountScopeNote(channelCount) {
  */
 async function opReadAccount(client, directory, since, limit, selfUserId = null, 
 /** @see opRead — the credential this read is counted under, or `null`. */
-subject = null) {
+subject = null, 
+/** ⚠ @see opRead — the caller is an OUTSIDE SESSION, so lines carry the
+ *  never-drop marks. This page spans CHANNELS, which is exactly where class
+ *  (ii) of `outsideRelevance` has to keep its per-room fence. */
+outside = false) {
     const page = await (0, account_scope_1.accountMessages)(client, directory, { since, limit });
     if (page.messages.length === 0) {
         // 🔒 Same strike, same rule — see `opRead`. ⚠ The scope note SURVIVES the
@@ -130,7 +134,7 @@ subject = null) {
         // cannot tell apart from its own home space.
         const workspaceId = g.messages[0].workspaceId;
         lines.push(`\n### ${g.label} — \`${g.ref}\` · container=\`${workspaceId}\`${kindTag(kinds, workspaceId)}`);
-        lines.push(...(0, channel_render_1.formatMessages)(g.messages, g.ref, selfUserId));
+        lines.push(...(0, channel_render_1.formatMessages)(g.messages, g.ref, selfUserId, undefined, outside));
     }
     // ⚠ THE CURSOR IS THE MAX OVER THE WHOLE PAGE, not the last line of the last
     // group. Grouping reordered the page relative to seq, so "the last message
