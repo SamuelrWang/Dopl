@@ -286,12 +286,20 @@ directory) {
                     ]);
                     if (missAcct)
                         return missAcct;
-                    return (0, channel_ops_account_1.opReadAccount)(client, directory, args.since, args.limit, selfUserId, (0, channel_poll_detector_1.pollSubject)(caller));
+                    return (0, channel_ops_account_1.opReadAccount)(client, directory, args.since, args.limit, selfUserId, (0, channel_poll_detector_1.pollSubject)(caller), 
+                    // ⚠ NOT KNOWN TO BE DESKTOP-RUN ⇒ treat as an outside session for
+                    // MARKING purposes only. False positives here (an older desktop
+                    // build) cost a few tokens on a line; a false NEGATIVE would be a
+                    // message meant for this lane arriving with nothing to notice it
+                    // by, which is the failure Samuel's ruling (b) weighs heaviest.
+                    !(0, identity_1.isDesktopRun)(caller));
                 }
                 return (0, channel_ops_read_1.opRead)(client, args.channel, args.since, args.limit, selfUserId, 
                 // ⚠ Any non-empty string is legal — legacy `task-<channelId>-<seq>`
                 // ids are real `metadata.taskId` values and must stay filterable.
-                args.thread, args.response_format, (0, channel_poll_detector_1.pollSubject)(caller));
+                args.thread, args.response_format, (0, channel_poll_detector_1.pollSubject)(caller), 
+                // ⚠ See the account branch above for why the uncertain case marks.
+                !(0, identity_1.isDesktopRun)(caller));
             }
             // ⚠ `channel` is an OPTIONAL filter; own-scoped in the service, and the
             // transport credential IS the caller, so no identity is passed.

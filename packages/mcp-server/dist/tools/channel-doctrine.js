@@ -89,7 +89,8 @@ const MODEL = `THE MODEL:
 A CHANNEL (or DM) holds many THREADS, and may have two members or many — check the roster first.
 A THREAD is ONE exchange between exactly TWO parties: whoever OPENED it and the ONE it is ADDRESSED TO. Only those two can post into it; a third member's post is refused. It is not private — every member can READ every thread. A THREAD HAS NO FINISHED STATE: nothing settles one, no op ends one. Your operator ends your SESSION; the thread stays readable and postable.
 A SESSION is ONE member's agent run working a thread, on THAT member's machine; you see their messages, never their session.
-WHO A MESSAGE IS FOR: every op="read" line ends "→ you", "→ @<agent>", "→ <member>", a COMMA-SEPARATED list of them, or "→ nobody", then its delivery. One aimed at YOU or YOUR agent is to act on; the rest is context. A PERSON who names nobody is still answered — the room's nominee, its one agent, else whichever agent spoke here last — and the arrow says which. An AGENT who names nobody is answered by nobody, and nothing is aimed anywhere on its behalf: that is a record.`;
+WHO A MESSAGE IS FOR: every op="read" line ends "→ you", "→ @<agent>", "→ <member>", a COMMA-SEPARATED list of them, or "→ nobody", then its delivery. One aimed at YOU or YOUR agent is to act on; the rest is context. A PERSON who names nobody is still answered — the room's nominee, its one agent, else whichever agent spoke here last — and the arrow says which. An AGENT who names nobody is answered by nobody, and nothing is aimed anywhere on its behalf: that is a record.
+THREE AUDIENCES, THREE REGISTERS — match the one you addressed: a PERSON short and plain · an AGENT complete · \`@desktop\` complete, agent-style. \`@desktop\` is YOUR operator's OUTSIDE SESSIONS (their Claude Code/Codex/Cursor run), always addressable in \`to\`; it wakes no agent and notifies nobody, and a line for it reads "→ @desktop".`;
 /** The one write op: what it may carry, and what each `kind` promises. */
 const SEND = `op="send" — THE ONE WAY TO SAY ANYTHING.
 EVERY SUBSTANTIVE THING YOU SAY IS AN ORDINARY SEND, YOUR FINAL ANSWER INCLUDED.
@@ -106,7 +107,8 @@ WHAT HAPPENS ON THE RECEIVING SIDE IS NOT THAT you wait on them: a send simply N
 const READ = `op="read" — THE TRANSCRIPT, AND THE HOLD.
 \`since=<seq>\` returns only messages after that cursor; with none you get the newest page, and older ones are absent rather than reported.
 \`wait_ms\` turns the page into a HOLD and needs \`since\`. An empty return is the budget expiring, not an answer. HOW TO WAIT IS ITS OWN SECTION — read \`waiting\` before you arm one, and before you ever re-read on a timer.
-\`thread=<id>\` narrows to one exchange and renders that thread's card above it; it hands back NO cursor, so take yours from an unscoped read.`;
+\`thread=<id>\` narrows to one exchange and renders that thread's card above it; it hands back NO cursor, so take yours from an unscoped read.
+AN OUTSIDE SESSION (anything on the operator's token this product did not spawn) SEES EVERY MESSAGE, unfiltered. Act on "⚠ FOR YOU" (addressed \`@desktop\`) and "likely for you" lines; UNTAGGED IS NOT NOT-FOR-YOU. Tell agents you task to reply \`to=@desktop\`.`;
 /**
  * ⚠ **THE ONE CANONICAL STATEMENT OF "HOLD, NEVER POLL"** (Samuel's ruling,
  * 2026-09-03), and the reason it is a SECTION rather than a paragraph on every

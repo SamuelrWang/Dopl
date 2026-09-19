@@ -24,11 +24,19 @@ export type ChannelWakeVerdict = "none" | "member" | "agent" | "thread"
  | "reciprocal"
 /** RR3 — an unaddressed human message, resolved to the channel's default
  *  responder or to the room's one live agent. */
- | "responder";
+ | "responder"
+/** `to=@desktop` — the author's OWN operator's OUTSIDE SESSIONS. ⚠ Not a weak
+ *  `member`: it notifies nobody and wakes nothing, and the recipient rides
+ *  `metadata.to_desktop` rather than `recipient_user_ids`. */
+ | "desktop";
 /**
  * WHAT HAPPENED to a message — the `delivery=` verdict that IS the
  * acknowledgement. The server stamps its write-time answer; the operator's
  * machine overwrites it with what it did.
  * ⚠ Mirror of `src/features/channels/types.ts › ChannelDelivery`.
  */
-export type ChannelDelivery = "none" | "unreachable" | "idle" | "delivered" | "woken" | "refused";
+export type ChannelDelivery = "none" | "unreachable" | "idle" | "delivered" | "woken" | "refused"
+/** It is in the room, addressed to `@desktop`, and nothing was started. ⚠ The
+ *  one word that is true without a presence system — never `held`, never
+ *  `woken`. No machine reports it. */
+ | "posted";
