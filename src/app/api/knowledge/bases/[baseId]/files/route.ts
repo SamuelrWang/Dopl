@@ -49,6 +49,10 @@ const WriteFileSchema = z.object({
   // Replace ONE heading's section instead of the whole document; `body` is that
   // section's new content. Bounded like a title — a heading is one line.
   section: z.string().min(1).max(300).optional(),
+  // 🔒 S53 IDEMPOTENCY KEY — a re-sent write under the same key converges on the
+  // first call's entry instead of upserting a second one. Author-scoped by a
+  // partial unique index (`20261014120000`). Bounded like `client_msg_id`.
+  clientWriteId: z.string().min(1).max(200).optional(),
 });
 
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
@@ -76,12 +80,21 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
     const ctx = buildKnowledgeContext(auth);
     // Precondition on the resolved entry's updated_at. Mismatch → 412 KNOWLEDGE_STALE_VERSION.
     const expectedUpdatedAt = request.headers.get("x-updated-at") ?? undefined;
-    const { entry, sectionCreated } = await writeFileByPath(ctx, baseId, input.path, {
+    // 🔒 S40 — THE CALLER'S BELIEF THAT SOMETHING IS ALREADY THERE, carried as a
+    // HEADER beside the precondition it belongs with rather than as a body field:
+    // it is a property of the WRITE ATTEMPT, not of the document, and the body
+    // schema is mirrored by the type-drift gate. `force` on the MCP surface sends
+    // no `X-Updated-At` and this header instead, so a forced write at a path a
+    // move vacated refuses (409) rather than upserting a duplicate.
+    const expectExisting = request.headers.get("x-expect-existing") === "1";
+    const { entry, sectionCreated, converged } = await writeFileByPath(ctx, baseId, input.path, {
       body: input.body,
       title: input.title,
       excerpt: input.excerpt,
       section: input.section,
       expectedUpdatedAt,
+      expectExisting,
+      clientWriteId: input.clientWriteId,
     });
     // ⚠ THE OUTLINE OF WHAT WAS SAVED, ON EVERY WRITE. It is what lets the
     // agent surface answer "and here is how to read this back in parts" without
@@ -91,6 +104,9 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
       entry,
       outline: outlinePayload(entry.body ?? ""),
       ...(sectionCreated === undefined ? {} : { sectionCreated }),
+      // ⚠ ADDITIVE AND OMITTED WHEN FALSE (INVARIANTS §8): an older client that
+      // knows nothing of the key sees a byte-identical response.
+      ...(converged ? { converged } : {}),
     });
   } catch (err) {
     return toKnowledgeErrorResponse(err);

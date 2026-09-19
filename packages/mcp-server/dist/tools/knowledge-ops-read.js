@@ -252,7 +252,20 @@ async function opOutline(client, ref, path) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
     if ((0, channel_shared_1.isErr)(base))
         return base;
-    const read = await client.readKbFilePart(base.id, path, { outline: true });
+    // ⚠ **THE 404 IS A REFUSAL, NOT A THROW (S41, 2026-09-18)** — the mapper and
+    // the argument for "it may have moved" are in `knowledge-shared.ts ›
+    // entryNotFound`. Anything else rethrows: a catch that swallowed an outage
+    // would report it as a missing document.
+    let read;
+    try {
+        read = await client.readKbFilePart(base.id, path, { outline: true });
+    }
+    catch (e) {
+        const missing = (0, knowledge_shared_1.entryNotFound)(e, path, ref);
+        if (missing)
+            return missing;
+        throw e;
+    }
     const outline = read.outline;
     if (!outline || outline.sections.length === 0) {
         // ⚠ NOT AN ERROR, AND IT MUST NOT READ AS ONE. An entry with no headings is
@@ -289,12 +302,31 @@ callerUserId = null, format, maxChars, section, offset) {
     let outline;
     let sectionLine = null;
     let entry;
-    if (section === undefined) {
-        entry = await client.readKbFileByPath(base.id, path);
+    // ⚠ **BOTH LANES SIT INSIDE ONE TRY (S41, 2026-09-18).** A missing path 404s
+    // identically whether or not `section` was passed, so mapping one of them
+    // would make the refusal depend on an argument that says nothing about
+    // whether the entry is there. `knowledge-shared.ts › entryNotFound` writes it.
+    let part;
+    try {
+        if (section === undefined) {
+            entry = await client.readKbFileByPath(base.id, path);
+        }
+        else {
+            part = await client.readKbFilePart(base.id, path, { section });
+            entry = part.entry;
+        }
     }
-    else {
-        const read = await client.readKbFilePart(base.id, path, { section });
-        entry = read.entry;
+    catch (e) {
+        const missing = (0, knowledge_shared_1.entryNotFound)(e, path, ref);
+        if (missing)
+            return missing;
+        throw e;
+    }
+    // ⚠ `section !== undefined` IS A NARROWING, NOT A SECOND CONDITION: `part` is
+    // only ever set on the sectioned lane, and the compiler cannot see that across
+    // the try above.
+    if (part !== undefined && section !== undefined) {
+        const read = part;
         outline = read.outline;
         const found = read.section;
         if (found && found.ok === false) {

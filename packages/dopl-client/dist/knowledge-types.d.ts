@@ -140,6 +140,13 @@ export interface KnowledgeBaseListPayload {
 }
 export interface KnowledgeBaseCreateInput {
     name: string;
+    /**
+     * 🔒 **IDEMPOTENCY KEY (S53)** — a create re-sent under the same key returns
+     * the FIRST base instead of minting a second. Author-scoped server-side by a
+     * partial unique index; the same contract `client_msg_id` carries on the
+     * channel lane.
+     */
+    clientWriteId?: string;
     description?: string;
     slug?: string;
     agentWriteEnabled?: boolean;
@@ -218,6 +225,14 @@ export interface KnowledgeWriteFileInput {
      * (409 `KNOWLEDGE_SECTION_AMBIGUOUS`).
      */
     section?: string;
+    /**
+     * 🔒 **IDEMPOTENCY KEY (S53)** — a write re-sent under the same key converges
+     * on the FIRST call's entry instead of upserting a second one, and the result
+     * says `converged: true`. Author-scoped server-side by a partial unique index,
+     * so one member's key can never hand back another member's row. The same
+     * contract `client_msg_id` carries on the channel lane.
+     */
+    clientWriteId?: string;
 }
 /** One heading, as an address. */
 export interface KnowledgeOutlineRow {
@@ -275,6 +290,13 @@ export interface KnowledgeWriteFileResult {
     outline?: KnowledgeOutline;
     /** `true` when `section` named no existing heading and one was appended. */
     sectionCreated?: boolean;
+    /**
+     * 🔒 **`true` WHEN THIS CALL WROTE NOTHING** (S53) — the entry came back off
+     * `clientWriteId` and is an EARLIER call's result. ⚠ `?? false` at every
+     * reader (INVARIANTS §8): an older server sends no such key, and absent must
+     * read as "this call wrote" — the behaviour before the field existed.
+     */
+    converged?: boolean;
 }
 export interface KnowledgePathOpResult {
     kind: "folder" | "entry";

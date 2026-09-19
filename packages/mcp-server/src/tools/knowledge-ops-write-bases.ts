@@ -19,9 +19,11 @@ import { inlineOr, NO_NAME } from "./narration";
 import { ok, err, type ToolResponse } from "./respond";
 import {
   resolveBaseOr,
-  updateBaseValidationError,
   writeOr,
 } from "./knowledge-shared";
+// ⚠ THE `zod` → SENTENCE TRANSLATION LIVES APART (S52, 2026-09-18) — see
+// `knowledge-validation.ts`'s header for the seam and for the rule it enforces.
+import { updateBaseValidationError } from "./knowledge-validation";
 import { isErr } from "./channel-shared";
 import {
   confirmGate,
@@ -94,6 +96,9 @@ export async function opCreateBase(
     description?: string;
     visibility?: "public" | "private";
     confirm_token?: string;
+    /** S53 — passed through untouched; the server probes it and returns the
+     *  first base rather than minting a second. */
+    client_write_id?: string;
   },
   /** ⚠ OPTIONAL — absent means "not known": the create goes out unshared and
    *  the SERVER refuses it (`container-destination.ts`). */
@@ -182,6 +187,7 @@ export async function opCreateBase(
   try {
     base = await client.createKbBase({
       name: input.name,
+      clientWriteId: input.client_write_id,
       description: input.description,
       visibility,
       // 🔒 DESTINATION 2, ATOMIC — the base rolls back if the grant fails.

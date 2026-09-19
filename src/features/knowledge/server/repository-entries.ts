@@ -238,6 +238,47 @@ export async function listEntriesByIds(
   );
 }
 
+/**
+ * 🔒 **THE IDEMPOTENCY PROBE — (base, key, AUTHOR)** (S53, 2026-09-18).
+ *
+ * ⚠ **AUTHOR-SCOPED, AND THE REASON IS A VULNERABILITY RATHER THAN A
+ * PREFERENCE** — `repository-artifacts.ts › findOwnArtifactByClientId` holds the
+ * argument in full and this is the same shape one feature over: base-scoped
+ * alone, idempotency would be a contract with everyone who can write in that
+ * base, so a member reusing a key another member's agent had just used would be
+ * handed back THEIR entry and told it was their own write converging.
+ *
+ * ⚠ **THE DATABASE AGREES WITH THIS FUNCTION AND IT HAS TO** — the partial
+ * unique index is `(knowledge_base_id, client_write_id, client_write_by) WHERE
+ * client_write_id IS NOT NULL` (`20261014120000`). Scoping only the read turns
+ * the convergence into a 23505 the caller sees as a 500. Change one, change both.
+ *
+ * ⚠ **A ROW HOLDS ONLY ITS MOST RECENT KEY.** `write_file` is an upsert, so an
+ * entry written twice under two keys answers for the second; the first key then
+ * misses and a retry carrying it writes again. That is the bound of the
+ * guarantee and it is the right one: a key protects ONE in-flight call, not the
+ * history of the row.
+ */
+export async function findEntryByClientWriteId(
+  knowledgeBaseId: string,
+  clientWriteId: string,
+  clientWriteBy: string | null
+): Promise<KnowledgeEntry | null> {
+  // ⚠ A NULL AUTHOR CANNOT CONVERGE, matching the index: Postgres treats NULLs
+  // as distinct, so asking would find at most a row this caller cannot claim.
+  if (!clientWriteBy) return null;
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("knowledge_entries")
+    .select(KNOWLEDGE_ENTRY_COLS)
+    .eq("knowledge_base_id", knowledgeBaseId)
+    .eq("client_write_id", clientWriteId)
+    .eq("client_write_by", clientWriteBy)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapEntryRow(data as KnowledgeEntryRow) : null;
+}
+
 export interface InsertEntryArgs {
   workspaceId: string;
   knowledgeBaseId: string;
@@ -249,6 +290,10 @@ export interface InsertEntryArgs {
   position?: number;
   createdBy: string | null;
   source: WriteSource;
+  /** S53 idempotency — see {@link findEntryByClientWriteId}. Stamped with the
+   *  author, because the unique index is author-scoped. */
+  clientWriteId?: string | null;
+  clientWriteBy?: string | null;
 }
 
 export async function insertEntry(
@@ -275,6 +320,20 @@ export async function insertEntry(
       created_by: args.createdBy,
       last_edited_by: args.createdBy,
       last_edited_source: args.source,
+      // ⚠ **THE COLUMNS ARE OMITTED ENTIRELY WHEN THERE IS NO KEY**, not sent
+      // as NULL — a deploy where `20261014120000` has not been applied yet would
+      // otherwise fail EVERY write with "column does not exist", turning an
+      // additive feature into an outage. Sending them only on the calls that
+      // asked for them keeps the blast radius the feature itself.
+      // ⚠ BOTH OR NEITHER: a key with no author cannot converge (NULLs are
+      // distinct in the partial unique index), so one without the other would
+      // store a key that buys nothing.
+      ...(args.clientWriteId
+        ? {
+            client_write_id: args.clientWriteId,
+            client_write_by: args.clientWriteBy ?? null,
+          }
+        : {}),
     })
     .select(KNOWLEDGE_ENTRY_COLS)
     .single();
@@ -333,6 +392,11 @@ export interface UpdateEntryPatch {
   lastEditedBy?: string | null;
   /** Caller's source — written to last_edited_source. */
   lastEditedSource?: WriteSource;
+  /** S53 idempotency — the key for THIS write, replacing whatever the row
+   *  carried. See {@link findEntryByClientWriteId} for why a row holds only its
+   *  most recent key. */
+  clientWriteId?: string | null;
+  clientWriteBy?: string | null;
 }
 
 export async function updateEntryRow(
@@ -360,6 +424,10 @@ export async function updateEntryRow(
   if (patch.lastEditedBy !== undefined) update.last_edited_by = patch.lastEditedBy;
   if (patch.lastEditedSource !== undefined)
     update.last_edited_source = patch.lastEditedSource;
+  if (patch.clientWriteId !== undefined) {
+    update.client_write_id = patch.clientWriteId;
+    update.client_write_by = patch.clientWriteId ? (patch.clientWriteBy ?? null) : null;
+  }
   // Optimistic-concurrency CAS (see updateBaseRow).
   let query = db.from("knowledge_entries").update(update).eq("id", id);
   if (expectedUpdatedAt !== undefined) {

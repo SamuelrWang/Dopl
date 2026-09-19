@@ -4,10 +4,10 @@
  */
 
 import type { DoplClient, KnowledgeBase } from "@dopl/client";
-import { inlineOr, NO_NAME } from "./narration";
+import { inlineOr, NO_NAME, NO_PATH } from "./narration";
 import { apiMessage, err, isApiError, type ToolResponse } from "./respond";
 import { PRIVATE_VISIBILITY_DENIED_CODE } from "./agent-shared";
-import { KB_ERRORS, refusal } from "./tool-errors";
+import { KB_ENTRY_NOT_FOUND, KB_ERRORS, refusal } from "./tool-errors";
 import { FENCE_HEADER } from "./untrusted-fence";
 
 /** ⚠ The row `dopl_kb`'s description teaches first — one declaration, both uses. */
@@ -26,6 +26,7 @@ const MAX_LISTED_MATCHES = 10;
 /** ⚠ Local, like `agent-shared.ts` and `channel-addressing.ts` — this package
  *  already carries several copies and unifying them is not this change. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 
 /**
  * Base reference (slug or UUID) → `KnowledgeBase` row, null when nothing
@@ -270,6 +271,47 @@ async function entryCount(client: DoplClient, baseId: string): Promise<number | 
 export const UNTRUSTED_ENTRY_BODY_HEADER = FENCE_HEADER;
 
 /**
+ * 🔒 **THE ENTRY 404, MAPPED (S41, 2026-09-18) — AND UNTIL THIS WAVE NOTHING
+ * MAPPED IT.** `readFileByPath` raises `EntryNotFoundError` → 404
+ * `KNOWLEDGE_ENTRY_NOT_FOUND` for a path that resolves to nothing, to a FOLDER,
+ * or to the root; `resolvePath` raises `PathTraversalError` → 404
+ * `KNOWLEDGE_PATH_NOT_FOUND` when an INTERMEDIATE segment is the one missing.
+ * Neither had an MCP arm, so both rethrew past the registrar as an unhandled
+ * transport error — "the call failed" over a read that had simply missed.
+ *
+ * ⚠ **THE TWO CODES ARE ONE REFUSAL, AND THE DIFFERENCE IS IN THE DETAIL.** The
+ * agent's next call is `op="list_dir"` either way; what changes is WHERE to look
+ * — the parent folder, or the segment that does not exist.
+ *
+ * ⚠ **"IT MAY HAVE MOVED OR BEEN RENAMED" IS NOT A HEDGE.** A path is a
+ * POSITION, not an identity: `op="move_file"` and a retitle both vacate one
+ * (`opWriteFile`'s `canonicalPath` line says a title renames the leaf), and an
+ * agent told only "not found" writes at the old path again — which `write_file`
+ * UPSERTS into a second entry. So the refusal names the move, and names the
+ * entry id as the handle that survives one.
+ *
+ * ⚠ Returns null when the error is not one of the two, so the caller rethrows:
+ * a catch that swallowed an outage would report it as a missing document.
+ */
+export function entryNotFound(
+  e: unknown,
+  path: string,
+  baseRef: string,
+): ToolResponse | null {
+  const traversal = isApiError(e, 404, "KNOWLEDGE_PATH_NOT_FOUND");
+  if (!traversal && !isApiError(e, 404, "KNOWLEDGE_ENTRY_NOT_FOUND")) return null;
+  const where = traversal
+    ? `A FOLDER in that path does not exist${apiMessage(e) ? ` — ${inlineOr(apiMessage(e) ?? "", "")}` : ""}, so nothing below it can.`
+    : `The path resolved to nothing, or to a folder rather than an entry.`;
+  return err(
+    refusal(
+      KB_ENTRY_NOT_FOUND,
+      `${inlineOr(path, NO_PATH)} in ${inlineOr(baseRef, "`(unreadable ref)`")}. ${where} List the folder it should be in with op="list_dir", or op="get_tree" for the whole base. An ENTRY ID survives a move and a rename; a path does not.`,
+    ),
+  );
+}
+
+/**
  * 403 `AGENT_WRITE_DISABLED` — an agent deleting inside a base flagged
  * `agent_write_enabled=false`. Surfaces the server's actionable message rather
  * than a raw throw; null otherwise so the caller rethrows. ⚠ Duck-typed on
@@ -301,124 +343,6 @@ export function sharedCredentialPrivateBaseDenied(
   if (!isApiError(e, 403, PRIVATE_VISIBILITY_DENIED_CODE)) return null;
   return err(
     `${apiMessage(e) ?? "This credential cannot own a private knowledge base."} NOTHING was created — the copy stopped at the base itself, so there is no partial tree to clean up. A credential that may be shared between humans has no "private to me" to write to, and this op only ever creates PRIVATE bases: reconnect with a personal credential, or ask the user to copy it in the Dopl app.`
-  );
-}
-
-/**
- * True for a 400 schema-validation failure
- * (`{ error: { code: "VALIDATION_FAILED", details } }`). ⚠ Duck-typed to work
- * across the @dopl/client boundary without importing the error class.
- */
-function isValidationError(
-  e: unknown
-): e is { status: number; code: string; details: unknown } {
-  return (
-    typeof e === "object" &&
-    e !== null &&
-    (e as { status?: number }).status === 400 &&
-    (e as { code?: unknown }).code === "VALIDATION_FAILED"
-  );
-}
-
-/** Field names named by a validation error's zod-issue `details` array. */
-function validationFields(details: unknown): Set<string> {
-  const fields = new Set<string>();
-  if (Array.isArray(details)) {
-    for (const issue of details) {
-      const path = (issue as { path?: unknown }).path;
-      const first = Array.isArray(path) ? path[0] : undefined;
-      if (typeof first === "string") fields.add(first);
-    }
-  }
-  return fields;
-}
-
-/**
- * Bidi / directional-formatting control chars the name schema rejects as
- * anti-spoofing: embeddings + overrides (U+202A–U+202E), isolates
- * (U+2066–U+2069), LTR/RTL marks (U+200E/U+200F), Arabic letter mark (U+061C).
- * ⚠ Built from numeric code points, not a regex literal, so the source stays
- * pure-ASCII with no raw bidi controls sitting invisibly in this file.
- */
-const BIDI_CONTROL_RANGES: ReadonlyArray<readonly [number, number]> = [
-  [0x202a, 0x202e],
-  [0x2066, 0x2069],
-  [0x200e, 0x200f],
-  [0x061c, 0x061c],
-];
-
-const BIDI_CONTROL_RE = new RegExp(
-  `[${BIDI_CONTROL_RANGES.map(([lo, hi]) =>
-    lo === hi
-      ? String.fromCodePoint(lo)
-      : `${String.fromCodePoint(lo)}-${String.fromCodePoint(hi)}`
-  ).join("")}]`
-);
-
-/** `U+XXXX` for the first bidi control char in `text`, else null. */
-function namedBidiChar(text: string): string | null {
-  const m = BIDI_CONTROL_RE.exec(text);
-  if (!m) return null;
-  const cp = m[0].codePointAt(0) ?? 0;
-  return `U+${cp.toString(16).toUpperCase().padStart(4, "0")}`;
-}
-
-/**
- * `write_file` validation failure → a message naming field + rule + recovery.
- * Null when unrecognized, so the caller rethrows.
- */
-export function writeFileValidationError(e: unknown, title?: string): ToolResponse | null {
-  if (!isValidationError(e)) return null;
-  const fields = validationFields(e.details);
-  // `path` carries no schema rule (z.string()), so a validation failure here is
-  // a title or body-size issue.
-  if (fields.has("title") || fields.size === 0) {
-    const t = title ?? "";
-    const bidi = namedBidiChar(t);
-    if (bidi) {
-      return err(
-        `write_file: title contains a disallowed bidirectional control character (${bidi}) — remove it and retry (this block prevents right-to-left path spoofing).`
-      );
-    }
-    if (t.includes("/")) {
-      return err(
-        `write_file: titles can't contain '/' (it's the path separator) — use a different title, or create the folder via the path and give the entry a clean title.`
-      );
-    }
-    if (fields.has("title")) {
-      return err(
-        `write_file: title is invalid — it can't contain control or zero-width characters or leading/trailing whitespace. Use a plain title.`
-      );
-    }
-  }
-  if (fields.has("body")) {
-    return err(`write_file: body is too large — the limit is 1 MB. Split it into multiple entries.`);
-  }
-  return err(
-    `write_file: request body failed validation${fields.size ? ` (field: ${[...fields].join(", ")})` : ""}. Titles can't contain '/', control, or zero-width characters.`
-  );
-}
-
-/**
- * `update_base` validation failure → a message naming field + rule + recovery.
- * Null when unrecognized, so the caller rethrows.
- */
-export function updateBaseValidationError(e: unknown): ToolResponse | null {
-  if (!isValidationError(e)) return null;
-  const fields = validationFields(e.details);
-  if (fields.has("slug")) {
-    return err(
-      `update_base: slug must match ^[a-z0-9-]+$ — lowercase letters, digits, and hyphens only (no leading/trailing hyphen, no spaces).`
-    );
-  }
-  if (fields.has("name")) {
-    return err(`update_base: name can't be blank — pass a non-empty name, or omit it to leave the name unchanged.`);
-  }
-  if (fields.has("description")) {
-    return err(`update_base: description is too long.`);
-  }
-  return err(
-    `update_base: request body failed validation${fields.size ? ` (field: ${[...fields].join(", ")})` : ""}.`
   );
 }
 

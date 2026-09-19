@@ -179,6 +179,17 @@ export const KnowledgeBaseCreateSchema = z
      * the WORKSPACE axis — every member of the container at once.
      */
     acknowledgeShared: z.boolean().optional(),
+    /**
+     * 🔒 **IDEMPOTENCY KEY (S53, 2026-09-18) — a create re-sent under the same
+     * key returns the FIRST base instead of minting a second.**
+     *
+     * The same contract `channel_messages.client_msg_id` has had since
+     * `20260725120000`, author-scoped for the same reason: it is a partial
+     * unique index on `(workspace_id, client_write_id, client_write_by)`
+     * (`20261014120000`), so one member's key can never hand back another
+     * member's row. Bounded like `client_msg_id`.
+     */
+    clientWriteId: z.string().min(1).max(200).optional(),
   })
   .superRefine(refineScope(true));
 export type KnowledgeBaseCreateInput = z.infer<typeof KnowledgeBaseCreateSchema>;

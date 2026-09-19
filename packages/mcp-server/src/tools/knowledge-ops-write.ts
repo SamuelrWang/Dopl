@@ -17,11 +17,14 @@
 import type { DoplClient } from "@dopl/client";
 import { inlineOr, NO_NAME, NO_PATH } from "./narration";
 import { ok, err, isConflict, isAlreadyExists, isApiError, apiMessage, type ToolResponse } from "./respond";
+import { KB_TARGET_VANISHED, refusal, versionConflict } from "./tool-errors";
+import { agentWriteDenied, resolveBaseOr, writeOr } from "./knowledge-shared";
+// ⚠ THE `zod` → SENTENCE TRANSLATION LIVES APART (S52, 2026-09-18) — see
+// `knowledge-validation.ts`'s header for the seam and for the rule it enforces.
 import {
-  resolveBaseOr,
+  createFolderValidationError,
   writeFileValidationError,
-  writeOr,
-} from "./knowledge-shared";
+} from "./knowledge-validation";
 import { isErr } from "./channel-shared";
 import {
   KB_SECTION_NUDGE_CHARS,
@@ -51,8 +54,13 @@ export {
 export async function opCreateFolder(client: DoplClient, ref: string, path: string, description?: string): Promise<ToolResponse> {
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
-  const folder = await writeOr(() =>
-    client.createKbFolderByPath(base.id, path, description),
+  // ⚠ **THE 400 WAS RETHROWN RAW UNTIL 2026-09-18 (S52).** `description` is
+  // capped at 300 like an entry's `excerpt`, and this op had no mapper at all —
+  // so the folder half of the pair reached the agent as an unhandled
+  // `VALIDATION_FAILED` with no field, no number and no remedy.
+  const folder = await writeOr(
+    () => client.createKbFolderByPath(base.id, path, description),
+    createFolderValidationError,
   );
   if (isErr(folder)) return folder;
   const descNote = description !== undefined ? " Description set." : "";
@@ -99,7 +107,7 @@ export async function opMove(
  * long body carries no headings at all. **The write lands either way** (Samuel's
  * ruling): refusing would refuse the user's content over our formatting taste.
  */
-export async function opWriteFile(client: DoplClient, ref: string, path: string, body: string, title?: string, expected_version?: string, force?: boolean, excerpt?: string, section?: string): Promise<ToolResponse> {
+export async function opWriteFile(client: DoplClient, ref: string, path: string, body: string, title?: string, expected_version?: string, force?: boolean, excerpt?: string, section?: string, clientWriteId?: string): Promise<ToolResponse> {
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
   const res = await writeOr(
@@ -107,7 +115,7 @@ export async function opWriteFile(client: DoplClient, ref: string, path: string,
       client.writeKbFileByPath(
         base.id,
         path,
-        { body, title, excerpt, section },
+        { body, title, excerpt, section, clientWriteId },
         force ? null : expected_version
       ),
     (e) => {
@@ -118,9 +126,30 @@ export async function opWriteFile(client: DoplClient, ref: string, path: string,
           `reason=SECTION_AMBIGUOUS · ${apiMessage(e) ?? "that heading names more than one section."} · retry=none, they have the same name\n\nNOTHING was written. Rename one of them, or drop \`section\` and write the whole body.`,
         );
       }
+      // 🔒 **THE TARGET VANISHED, AND IT IS NOT A VERSION PROBLEM (S40,
+      // 2026-09-18).** Discriminated on the CODE and placed BEFORE both
+      // status-only arms below, which would otherwise read this 409 as
+      // "an entry with that title already exists" — the opposite fact.
+      if (isApiError(e, 409, "KNOWLEDGE_TARGET_VANISHED")) {
+        return err(
+          refusal(
+            KB_TARGET_VANISHED,
+            `NOTHING was written at ${inlineOr(path, NO_PATH)}. A path is a POSITION, not an identity: op="move_file" and a retitle both vacate one. ⚠ Do NOT re-issue this call with force=true — write_file is an UPSERT, so a forced write at a vacated path CREATES A SECOND ENTRY that nothing afterwards can tell from the first. Find where it went with op="list_dir" (or op="get_tree"), then write at the path it is at now. An ENTRY ID survives a move; a path does not.`,
+          ),
+        );
+      }
+      // ⚠ **THE MOVE AND THE DUPLICATE RISK ARE NAMED HERE TOO (S40).** A
+      // conflict says somebody wrote after your read — and the write that
+      // "somebody" made may have been a MOVE, in which case the path you are
+      // holding is about to stop resolving. An agent told only "reconcile and
+      // retry" reaches for `force`, which is the one input that used to walk
+      // past the server's own anti-duplicate guard.
       if (isConflict(e)) {
         return err(
-          `${inlineOr(path, NO_PATH)} changed since you last read it. Call dopl_kb(op="read_file", base, path) to get the current content + version, reconcile your changes, then retry write_file with that expected_version (or pass force=true to overwrite).`
+          refusal(
+            versionConflict('op="read_file"'),
+            `NOTHING was written at ${inlineOr(path, NO_PATH)}. Read it again for the current body and Version, reconcile, then re-issue with that expected_version. ⚠ The other write may have MOVED or RENAMED this entry rather than edited it — check op="list_dir" before you retry, because write_file is an UPSERT and a forced write at a vacated path creates a DUPLICATE rather than overwriting anything.`,
+          ),
         );
       }
       if (isAlreadyExists(e)) {
@@ -134,6 +163,18 @@ export async function opWriteFile(client: DoplClient, ref: string, path: string,
   );
   if (isErr(res)) return res;
   const { entry, outline, sectionCreated } = res;
+  // 🔒 **THE CONVERGED RESULT SAYS SO, FIRST, AND IT IS NOT AN ERROR** (S53).
+  // The row came back off `client_write_id`, so THIS call wrote nothing and the
+  // body stored is the FIRST call's. An agent told only "Wrote …" over a
+  // converged result would believe its second, different body is what is saved
+  // — which is worse than the timeout it was recovering from.
+  // ⚠ `retry=none` BECAUSE THE WRITE LANDED: the same grammar the PIN_LARGE
+  // warning uses for a nudge that rides a SUCCESS, so nothing here reads as a
+  // refusal. ⚠ `?? false` (INVARIANTS §8): an older server sends no such key and
+  // absent must read as "this call wrote", the behaviour before the field.
+  const convergedNote = (res.converged ?? false)
+    ? `reason=converged · this call wrote NOTHING — client_write_id matched an earlier write of yours, and what is below is THAT write's entry · retry=none, it landed. If the body you just sent differs from the stored one, read_file it and write again with a NEW key.`
+    : null;
   // ⚠ The addressable path's leaf is the entry's TITLE, not the input path's
   // leaf segment — print it, and surface the canonical form when a passed
   // `title` slugs differently from the input leaf.
@@ -156,6 +197,7 @@ export async function opWriteFile(client: DoplClient, ref: string, path: string,
         : ` Replaced section ${inlineOr(section, "`(unreadable)`")}; the rest of the entry is untouched.`;
   return ok(
     [
+      ...(convergedNote ? [convergedNote, ""] : []),
       ...(unsectioned ? [unsectionedNudge(), ""] : []),
       // ⚠ **THE VERSION SAYS WHAT IT IS FOR (A3/S34, 2026-09-18).** The returned
       // version ALREADY works as the next call's `expected_version`
@@ -169,5 +211,3 @@ export async function opWriteFile(client: DoplClient, ref: string, path: string,
     ].join("\n")
   );
 }
-
-

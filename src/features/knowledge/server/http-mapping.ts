@@ -17,6 +17,7 @@ import {
   KnowledgePathConflictError,
   KnowledgeSectionAmbiguousError,
   KnowledgeStaleVersionError,
+  KnowledgeTargetVanishedError,
   PathTraversalError,
   ScopeChangeForbiddenError,
   TeamScopeForbiddenError,
@@ -73,6 +74,13 @@ export function mapKnowledgeError(err: unknown): HttpError | null {
     return new HttpError(409, "KNOWLEDGE_SECTION_AMBIGUOUS", err.message, {
       heading: err.heading,
       lines: err.lines,
+    });
+  }
+  // S40 — 409 and NOT 412: no version mismatched, the row is gone. A 412 here
+  // sent the caller to `read_file` for a version that cannot exist.
+  if (err instanceof KnowledgeTargetVanishedError) {
+    return new HttpError(409, "KNOWLEDGE_TARGET_VANISHED", err.message, {
+      path: err.path,
     });
   }
   if (err instanceof KnowledgeStaleVersionError) {

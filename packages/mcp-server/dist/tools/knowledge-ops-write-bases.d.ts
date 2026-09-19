@@ -39,6 +39,9 @@ export declare function opCreateBase(client: DoplClient, callerUserId: string | 
     description?: string;
     visibility?: "public" | "private";
     confirm_token?: string;
+    /** S53 — passed through untouched; the server probes it and returns the
+     *  first base rather than minting a second. */
+    client_write_id?: string;
 }, 
 /** ⚠ OPTIONAL — absent means "not known": the create goes out unshared and
  *  the SERVER refuses it (`container-destination.ts`). */

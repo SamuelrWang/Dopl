@@ -36,4 +36,4 @@ export declare function opMove(client: DoplClient, ref: string, from_path: strin
  * long body carries no headings at all. **The write lands either way** (Samuel's
  * ruling): refusing would refuse the user's content over our formatting taste.
  */
-export declare function opWriteFile(client: DoplClient, ref: string, path: string, body: string, title?: string, expected_version?: string, force?: boolean, excerpt?: string, section?: string): Promise<ToolResponse>;
+export declare function opWriteFile(client: DoplClient, ref: string, path: string, body: string, title?: string, expected_version?: string, force?: boolean, excerpt?: string, section?: string, clientWriteId?: string): Promise<ToolResponse>;

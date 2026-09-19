@@ -8,7 +8,7 @@
 import type { DoplClient } from "@dopl/client";
 import { inlineOr, isForeignAuthored, NO_NAME } from "./narration";
 import { ok, type ToolResponse } from "./respond";
-import { resolveBaseOr } from "./knowledge-shared";
+import { entryNotFound, resolveBaseOr } from "./knowledge-shared";
 import { isErr } from "./channel-shared";
 import {
   isConcise,
@@ -285,7 +285,18 @@ export async function opOutline(
 ): Promise<ToolResponse> {
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
-  const read = await client.readKbFilePart(base.id, path, { outline: true });
+  // ⚠ **THE 404 IS A REFUSAL, NOT A THROW (S41, 2026-09-18)** — the mapper and
+  // the argument for "it may have moved" are in `knowledge-shared.ts ›
+  // entryNotFound`. Anything else rethrows: a catch that swallowed an outage
+  // would report it as a missing document.
+  let read;
+  try {
+    read = await client.readKbFilePart(base.id, path, { outline: true });
+  } catch (e) {
+    const missing = entryNotFound(e, path, ref);
+    if (missing) return missing;
+    throw e;
+  }
   const outline = read.outline;
   if (!outline || outline.sections.length === 0) {
     // ⚠ NOT AN ERROR, AND IT MUST NOT READ AS ONE. An entry with no headings is
@@ -334,11 +345,28 @@ export async function opReadFile(
   let outline: Outline | undefined;
   let sectionLine: string | null = null;
   let entry;
-  if (section === undefined) {
-    entry = await client.readKbFileByPath(base.id, path);
-  } else {
-    const read = await client.readKbFilePart(base.id, path, { section });
-    entry = read.entry;
+  // ⚠ **BOTH LANES SIT INSIDE ONE TRY (S41, 2026-09-18).** A missing path 404s
+  // identically whether or not `section` was passed, so mapping one of them
+  // would make the refusal depend on an argument that says nothing about
+  // whether the entry is there. `knowledge-shared.ts › entryNotFound` writes it.
+  let part;
+  try {
+    if (section === undefined) {
+      entry = await client.readKbFileByPath(base.id, path);
+    } else {
+      part = await client.readKbFilePart(base.id, path, { section });
+      entry = part.entry;
+    }
+  } catch (e) {
+    const missing = entryNotFound(e, path, ref);
+    if (missing) return missing;
+    throw e;
+  }
+  // ⚠ `section !== undefined` IS A NARROWING, NOT A SECOND CONDITION: `part` is
+  // only ever set on the sectioned lane, and the compiler cannot see that across
+  // the try above.
+  if (part !== undefined && section !== undefined) {
+    const read = part;
     outline = read.outline;
     const found = read.section;
     if (found && found.ok === false) {

@@ -27,10 +27,10 @@ import {
   opReadFile,
   opSearch,
 } from "./knowledge-ops-read";
+import { opGrantBase } from "./knowledge-ops-grant";
 import {
   opCreateBase,
   opCreateFolder,
-  opGrantBase,
   opMove,
   opSetVisibility,
   opUpdateBase,
@@ -106,7 +106,21 @@ const KB_INPUT_SHAPE = {
   title: z.string().optional().describe("write_file: the entry's title, which can't contain '/' — it doubles as the addressable path for a new entry when `path` is omitted."),
   excerpt: z.string().optional().describe("write_file: the entry's agent-facing summary (max 300), shown in get_tree/list_dir; on an update it changes only when provided."),
   expected_version: z.string().optional().describe("write_file: the entry's Version from a prior read_file — required when overwriting (412 without it, and only force=true skips the check); creates need none."),
-  force: z.boolean().optional().describe("write_file: overwrite even if the entry changed since you read it. Discards the other edit — use only when intentional."),
+  force: z.boolean().optional().describe("write_file: overwrite even if the entry changed since you read it. Discards the other edit. REFUSED if the entry moved — a forced write at a vacated path would duplicate it."),
+  // 🔒 **THE ONE PUSHED COST OF THIS WAVE, AND IT BUYS THE ANSWER TO "DID MY
+  // WRITE LAND"** (S53). Without a key, a timed-out write leaves an agent with
+  // `force=true` as its only recovery — a blind overwrite aimed at a row it
+  // cannot verify. ⚠ THE DESCRIBE STATES THE CONTRACT AND NOT THE MECHANISM:
+  // author-scoping, the partial unique index and the race arm are server facts
+  // the caller cannot act on.
+  client_write_id: z
+    .string()
+    .min(1)
+    .max(200)
+    .optional()
+    .describe(
+      'write_file/create_base: your idempotency key. Re-sending the same call with the same key returns the FIRST write instead of writing twice. Use after a timeout, never force=true.',
+    ),
   query: z.string().optional().describe("search: required free-text query."),
   // ⚠ coerce: MCP clients sometimes send numbers as strings, which strict
   // z.number() rejects with an opaque -32602.
@@ -302,6 +316,7 @@ export function registerKnowledgeTools(
             description: args.description,
             visibility: args.visibility,
             confirm_token: args.confirm_token,
+            client_write_id: args.client_write_id,
           });
         }
         case "update_base": {
@@ -375,7 +390,7 @@ export function registerKnowledgeTools(
               `write_file: body cannot be empty — pass content (or a single space for a stub).`
             );
           }
-          return opWriteFile(client, args.base as string, path, args.body, args.title, args.expected_version, args.force, args.excerpt, args.section);
+          return opWriteFile(client, args.base as string, path, args.body, args.title, args.expected_version, args.force, args.excerpt, args.section, args.client_write_id);
         }
         case "move_file": {
           const miss = missingParams("move_file", args, ["base", "from_path", "to_path"]);

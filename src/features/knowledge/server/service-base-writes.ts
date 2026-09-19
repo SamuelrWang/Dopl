@@ -64,6 +64,18 @@ export async function createBase(
     teamGrants,
   } = await assertCreateBaseAllowed(ctx, input);
 
+  // 🔒 S53 — THE PROBE, AFTER THE GATES AND BEFORE THE INSERT. After, because a
+  // caller who may not create here must be refused rather than handed a row;
+  // before, because the whole point is to write nothing on a re-send.
+  if (input.clientWriteId) {
+    const prior = await repo.findBaseByClientWriteId(
+      destination.workspaceId,
+      input.clientWriteId,
+      ctx.userId
+    );
+    if (prior) return prior;
+  }
+
   let attempt = 0;
   let baseSlug =
     input.slug ?? deriveSlug(input.name, await listSlugs(destination.workspaceId));
@@ -88,10 +100,25 @@ export async function createBase(
         // caller has no personal container.
         homeScoped: destination.homeScoped,
         createdBy: ctx.userId,
+        clientWriteId: input.clientWriteId,
+        clientWriteBy: ctx.userId,
       });
       break;
     } catch (err) {
       const code = errorCode(err);
+      // 🔒 S53 — THE RACE ARM. Two concurrent creates under one key: the loser's
+      // 23505 may be the CLIENT-WRITE index rather than the slug one, and
+      // deriving a new slug would not help (the key is still taken). Re-probe;
+      // if the winner's row is there, converge on it exactly as the pre-check
+      // would have. A miss falls through to the slug handling below.
+      if (code === "23505" && input.clientWriteId) {
+        const won = await repo.findBaseByClientWriteId(
+          destination.workspaceId,
+          input.clientWriteId,
+          ctx.userId
+        );
+        if (won) return won;
+      }
       if (code === "23505" && attempt < SLUG_RETRY_MAX) {
         attempt += 1;
         baseSlug = deriveSlug(input.name, await listSlugs(destination.workspaceId));

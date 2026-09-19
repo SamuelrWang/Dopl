@@ -38,6 +38,11 @@ import { factsLine } from "./channel-facts";
 // and `rename_agent` became its second and third callers; the whole argument for
 // why four characters of logic still deserve one home is in that module.
 import { bareAgentId } from "./channel-agent-id";
+// ⚠ AND THE CHECK THAT GOES WITH IT ON THE MANAGE LANE (`channel-agent-target.ts`, S51,
+// 2026-09-18). ⚠ **`opReadDirections` BELOW DELIBERATELY KEEPS THE BARE STRIP**: its `agent`
+// is a FILTER over rows the caller already owns, not an address, so an unmatchable value
+// answers an empty list rather than filing anything — there is nothing there to refuse.
+import { agentTarget, isAgentTargetRefusal } from "./channel-agent-target";
 
 import { NO_NAME } from "./narration";
 
@@ -115,6 +120,13 @@ export async function opDirectAgent(
     waitMs?: number;
   } = {},
 ): Promise<ToolResponse> {
+  // ⚠ **THE TARGET IS CHECKED FIRST** (S51, 2026-09-18) — a direction to a NAME HANDLE used to
+  // reach the route and die as a bare `VALIDATION_FAILED` naming no field. The pasted
+  // `@agent-<id>` form is still accepted, and this costs no round trip.
+  const target = agentTarget(agentId);
+  if (isAgentTargetRefusal(target)) return target;
+  const agent = target.agent;
+
   // ⚠ PRE-RESOLVED, like the launch op and unlike the hot read paths: this op is
   // cold (one call, then a hold), and the result names the channel repeatedly.
   const channel = await resolveChannelOr(client, ref);
@@ -122,7 +134,6 @@ export async function opDirectAgent(
   // ⚠ THE CHANNEL NAME IS NO LONGER RENDERED. Every result below is a fact line
   // keyed on the AGENT, which is what the caller acts on; the channel is the
   // caller's own argument from this call and repeating it back bought nothing.
-  const agent = bareAgentId(agentId);
 
   let created;
   try {

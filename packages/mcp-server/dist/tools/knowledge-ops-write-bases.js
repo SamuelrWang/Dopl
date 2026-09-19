@@ -22,6 +22,9 @@ exports.opGrantBase = opGrantBase;
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const knowledge_shared_1 = require("./knowledge-shared");
+// ⚠ THE `zod` → SENTENCE TRANSLATION LIVES APART (S52, 2026-09-18) — see
+// `knowledge-validation.ts`'s header for the seam and for the rule it enforces.
+const knowledge_validation_1 = require("./knowledge-validation");
 const channel_shared_1 = require("./channel-shared");
 const confirm_token_1 = require("./confirm-token");
 const container_destination_1 = require("./container-destination");
@@ -152,6 +155,7 @@ directory) {
     try {
         base = await client.createKbBase({
             name: input.name,
+            clientWriteId: input.client_write_id,
             description: input.description,
             visibility,
             // 🔒 DESTINATION 2, ATOMIC — the base rolls back if the grant fails.
@@ -201,7 +205,7 @@ async function opUpdateBase(client, ref, name, description, slug) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
     if ((0, channel_shared_1.isErr)(base))
         return base;
-    const updated = await (0, knowledge_shared_1.writeOr)(() => client.updateKbBase(base.id, { name, description, slug }), knowledge_shared_1.updateBaseValidationError);
+    const updated = await (0, knowledge_shared_1.writeOr)(() => client.updateKbBase(base.id, { name, description, slug }), knowledge_validation_1.updateBaseValidationError);
     if ((0, channel_shared_1.isErr)(updated))
         return updated;
     // ⚠ THE ID HERE TOO (A3/S30): an update can CHANGE the slug, so the result of
