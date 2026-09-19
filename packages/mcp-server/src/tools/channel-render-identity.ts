@@ -20,6 +20,13 @@
 import type { ChannelMessage } from "@dopl/client";
 import { inlineOr, metaString, neutralizeInline } from "./channel-shared";
 import { UNREADABLE_ID } from "./channel-render-threads";
+// ⚠ The outside-session vocabulary — hand-copied constants pinned against the
+// web tree, plus the two projections a renderer reads. See that file.
+import {
+  DESKTOP_HANDLE_TAG,
+  authorViewOf,
+  desktopAddresseeOf,
+} from "./channel-desktop-tag";
 
 
 /**
@@ -41,6 +48,35 @@ export function formatAuthor(m: ChannelMessage): string {
   if (m.authorKind === "system") return id ? `system ${id}` : "system";
   const named = m.authorName ? neutralizeInline(m.authorName) : null;
   const who = named && id ? `${named} (${id})` : (named ?? id);
+  /**
+   * **AN OUTSIDE SESSION SAYS SO** (2026-09-18, Samuel's ruling).
+   *
+   * ⚠ **THE DEFECT THIS CLOSES IS A STYLE ONE WITH A REAL COST.** A Claude Code
+   * or Codex run on the operator's device token posts under the operator's
+   * ACCOUNT, so this line read `agent for Samuel Wang` — or, with no session
+   * stamp to build a handle from, simply `an agent`. An in-channel agent reading
+   * that answered "@samuel-wang …" in short, human-facing prose to what was
+   * actually another agent's question. The label is what lets it choose the
+   * right register, which is the whole of ruling (a).
+   *
+   * ⚠ **IT REPLACES THE `agent` LABEL RATHER THAN QUALIFYING IT**, for the same
+   * reason `SESSION ENDED` takes the kind slot in `channel-render.ts`: `agent ·
+   * outside session` reads as two facts about one row where there is only one,
+   * and the retired `Agent · <id>` chip is the in-repo precedent for not
+   * building that idiom back.
+   *
+   * ⚠ **`for <who>` IS KEPT AND IS THE HALF THAT IS CHECKABLE.** `authorUserId`
+   * is the server's own record and the one thing the author does not control —
+   * the label is a projection off a server-stamped flag, and the id is what
+   * backs it.
+   */
+  // ⚠ **THROUGH `authorViewOf`, NEVER THE RAW FLAG.** Read directly, the flag
+  // labelled a `user` row an outside session — the write path cannot produce
+  // one, but a renderer must not be the thing that trusts that, and the
+  // projection is the ONE place the "only an agent row can be one" rule lives.
+  if (authorViewOf(m) === "external") {
+    return who ? `outside session for ${who}` : "an outside session";
+  }
   if (m.authorKind === "agent") {
     const handle = agentHandleOf(m);
     const label = handle ? `agent ${handle}` : "agent";
@@ -246,9 +282,35 @@ export function addressTag(m: ChannelMessage, view: MemberView): string {
     const to = addresseeOf(m);
     return to ? ` · to ${memberRef(to, view)}` : " · unaddressed";
   }
+  /**
+   * **`→ @desktop` — THE OUTSIDE-SESSION LANE, RENDERED AS ITS OWN ADDRESSEE**
+   * (2026-09-18).
+   *
+   * ⚠ **IT IS READ OFF `metadata.to_desktop` BECAUSE IT IS DELIBERATELY IN
+   * NEITHER RECIPIENT COLUMN.** Those two are what machines route on, and this
+   * address must reach no machine; so the arrow — which is a READER'S view of
+   * the same decision — has to join the third source itself, or a
+   * `@desktop`-addressed post renders `→ nobody` and reads as a record.
+   *
+   * ⚠ **IT NAMES WHOSE, UNLESS IT IS YOURS.** One operator per handle means a
+   * room with two members holds two `@desktop`s; an unqualified tag on a peer's
+   * would invite an outside session to adopt a message aimed at somebody else's
+   * tooling. `you` is spelled by the bare tag, which is the form the reader
+   * types back.
+   */
+  const desktopFor = desktopAddresseeOf(m);
+  const desktopTag =
+    desktopFor === null
+      ? []
+      : [
+          view.selfUserId !== null && desktopFor === view.selfUserId
+            ? DESKTOP_HANDLE_TAG
+            : `${DESKTOP_HANDLE_TAG} (${memberRef(desktopFor, view)})`,
+        ];
   const names = [
     ...(agents ?? []).map((id) => agentRef(id, view)),
     ...(users ?? []).map((id) => memberRef(id, view)),
+    ...desktopTag,
   ];
   if (names.length === 0) return " · → nobody";
   const why = wakeReasonOf(m);

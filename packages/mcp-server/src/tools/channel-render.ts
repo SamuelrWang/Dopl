@@ -47,6 +47,12 @@ export {
   NO_MEMBER_VIEW,
   type MemberView,
 } from "./channel-render-identity";
+// ⚠ **MARKS, NEVER FILTERS** — see that module for Samuel's ruling (b) and for
+// why the one-place seam lives on `OutsideRelevance` rather than on the page.
+import {
+  outsideRelevance,
+  type OutsideRelevance,
+} from "./channel-desktop-tag";
 import { isConcise, type ResponseFormat } from "./response-size";
 // Which exchange a message belongs to, and whether it is a real THREAD or one
 // machine's ad-hoc grouping label. ⚠ import stays one-way.
@@ -145,6 +151,25 @@ function clipBody(m: ChannelMessage, ref: string, clip: boolean): string {
  * slot. ⚠ SHOUTED, and it is the only tag here that is: every other clause is a
  * label, this one is the reason a waiting agent should stop waiting.
  */
+/**
+ * **THE MARK AN OUTSIDE SESSION SEES, AND NOBODY ELSE DOES** (2026-09-18).
+ *
+ * ⚠ **IT IS A SUFFIX ON A LINE THAT WAS RENDERED ANYWAY.** Nothing is hidden
+ * from anybody — Samuel's ruling (b) is that a dropped message costs more than
+ * a noisy one — so this only ever ADDS a token to the head of a line the page
+ * already contained.
+ *
+ * ⚠ **SHOUTED FOR `addressed`, QUIET FOR `likely`, AND THE ASYMMETRY IS THE
+ * POINT.** `@desktop` is a fact: somebody named this lane. "Likely" is a guess
+ * this server is making on the reader's behalf, and a guess that shouts as loud
+ * as a fact teaches the reader to stop trusting the fact.
+ */
+function outsideMark(relevance: OutsideRelevance): string {
+  if (relevance === "addressed") return " · ⚠ FOR YOU";
+  if (relevance === "likely") return " · likely for you";
+  return "";
+}
+
 function formatMessage(
   m: ChannelMessage,
   anyThreaded: boolean,
@@ -152,6 +177,7 @@ function formatMessage(
   ref: string,
   clip: boolean,
   terse: boolean,
+  relevance: OutsideRelevance = null,
 ): string {
   const author = formatAuthor(m);
   const ended = sessionEnded(m);
@@ -187,7 +213,9 @@ function formatMessage(
   // verdict — which is not `none`.
   const ack = deliveryFact(m.delivery, m.deliveryAt);
   const deliveryTag = ack ? ` · ${ack}` : "";
-  const head = `**#${m.seq}** ${author}${sessionTag}${kindTag}${threadTag}${memberTag}${deliveryTag}${terse ? "" : ` · ${m.createdAt}`}`;
+  // ⚠ THE MARK GOES LAST AMONG THE TAGS AND BEFORE THE TIMESTAMP, so it reads
+  // as the line's verdict rather than as another attribute of the addressing.
+  const head = `**#${m.seq}** ${author}${sessionTag}${kindTag}${threadTag}${memberTag}${deliveryTag}${outsideMark(relevance)}${terse ? "" : ` · ${m.createdAt}`}`;
   return `- ${head}${clipBody(m, ref, clip)}`;
 }
 
@@ -206,6 +234,16 @@ export function formatMessages(
   ref: string,
   selfUserId: string | null = null,
   format?: ResponseFormat,
+  /**
+   * **IS THE CALLER AN OUTSIDE SESSION?** — when true, lines carry the marks
+   * {@link outsideMark} renders (2026-09-18).
+   *
+   * ⚠ **DEFAULT `false`, SO EVERY OTHER CALLER'S BYTES ARE UNCHANGED.** A
+   * desktop-run agent has its own addressing and must not be handed a second,
+   * weaker one — marking its page "likely for you" would be this server
+   * guessing at an audience the `→` arrow already states exactly.
+   */
+  outside = false,
 ): string[] {
   const view: MemberView = {
     selfUserId,
@@ -215,8 +253,22 @@ export function formatMessages(
   const anyThreaded = messages.some((m) => threadIdOf(m) !== undefined);
   const clip = messages.length > 1;
   const terse = isConcise(format);
+  // ⚠ ONE PASS FOR THE WHOLE PAGE — class (ii) is positional (see
+  // `channel-desktop-tag.ts › outsideRelevance`), so it cannot be decided per
+  // line. Skipped entirely when the caller is not an outside session.
+  const relevance = outside
+    ? outsideRelevance(messages, selfUserId)
+    : new Map<string, OutsideRelevance>();
   const lines = messages.map((m) =>
-    formatMessage(m, anyThreaded, view, ref, clip, terse),
+    formatMessage(
+      m,
+      anyThreaded,
+      view,
+      ref,
+      clip,
+      terse,
+      relevance.get(m.id) ?? null,
+    ),
   );
   // ⚠ The LEGEND is standing teaching about the id shapes, identical on every
   // page — metadata by the definition `response-size.ts` sets, so `concise`
