@@ -140,6 +140,16 @@ describe("cancelling", () => {
     expect(patch).not.toHaveProperty("lastStripeEventCreated");
   });
 
+  it("a repeat cancel (double click, retried request) is idempotent — same flag, 200, never an immediate cancel", async () => {
+    mockRepo.getWorkspaceBilling.mockResolvedValue(
+      billing({ cancelAtPeriodEnd: true })
+    );
+    const res = await POST(request({}), { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    expect(stripeCalls.updated?.params).toEqual({ cancel_at_period_end: true });
+    expect(stripeCalls.canceledImmediately).toBe(false);
+  });
+
   it("answers with the date access actually ends", async () => {
     const body = await (await POST(request({}), { params: Promise.resolve({}) })).json();
     expect(body).toEqual({

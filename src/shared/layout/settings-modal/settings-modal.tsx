@@ -55,7 +55,7 @@ export function SettingsModal({
       onSectionChange={onSectionChange}
       workspacesPane={<WorkspacesSectionCore activeWorkspaceId={workspaceId} />}
       connectPane={<ConnectSectionCore />}
-      accountPane={<AccountSection />}
+      accountPane={<AccountSection workspaceId={workspaceId} role={role} />}
       billingPane={
         <PlansBilling
           billingReturn={billingReturn}

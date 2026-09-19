@@ -5,7 +5,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/shared/api/api-client";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { useBridgedImageSrc } from "@/shared/hooks/use-bridged-image-src";
+import type { Role } from "@/features/workspaces/types";
 import { SectionShell } from "./section-shell";
+import { AccountSubscription } from "./account-subscription";
 
 interface ProfileData {
   display_name: string | null;
@@ -29,9 +31,15 @@ const PROFILE_PATH = "/api/user/profile";
  * `dangerZone` because the danger zone is by convention last.
  */
 export function AccountSectionCore({
+  workspaceId,
+  role,
   machineSection,
   dangerZone,
 }: {
+  /** Workspace whose settings are open — its Team plan is cancellable here
+   *  for an admin/owner (`./account-subscription`). Personal Pro needs neither. */
+  workspaceId?: string;
+  role?: Role;
   /** Desktop-only per-machine controls. Absent on web. */
   machineSection?: React.ReactNode;
   dangerZone?: React.ReactNode;
@@ -126,6 +134,7 @@ export function AccountSectionCore({
         </button>
       </div>
 
+      <AccountSubscription workspaceId={workspaceId} role={role} />
       {machineSection}
       {dangerZone}
     </SectionShell>

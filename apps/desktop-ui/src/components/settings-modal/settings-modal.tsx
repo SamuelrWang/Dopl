@@ -97,6 +97,8 @@ export function SettingsModal({
       connectPane={<ConnectSectionCore />}
       accountPane={
         <AccountSectionCore
+          workspaceId={workspaceId}
+          role={me.data?.role ?? role}
           // ⚠ `machineSection={<TurnCapRow />}` STOOD HERE AND IS DELETED (2026-09-07, Samuel:
           // "Remove the turn/cost limit"). ⚠ THE SLOT ITSELF IS LEFT ALONE and that is a
           // decision, not an oversight: `machineSection` is a GENERIC per-machine slot in a
