@@ -236,7 +236,13 @@ async function spawn(d, deps) {
     // name that never reaches the projection is a name the @-picker and every peer's card do not
     // have. A refusal is NOT a failed launch. The STORED name is reported back, because it may not
     // be the one asked for (the uniqueness rule may have stored `Coder-1`).
-    let applied = null;
+    // ⚠ **THE `try` WRAPS THE COMMIT AND NOTHING ELSE (F-736, 2026-09-18).** It used to enclose
+    // the diagnostics as well, so a throw from a `diag` AFTER a successful `commitRename` landed
+    // in the catch with `applied` still null — and this machine then reported "no name" for an
+    // agent it had just named. The report is the half an orchestrator addresses by, so losing it
+    // to a logging failure is a mis-delivery bought with a log line. Everything that can throw
+    // is inside; everything that reads the answer is outside.
+    let stored = null;
     try {
       // THE FALLBACK IS LOGGED, because a nameless agent used to be indistinguishable from a named
       // one here (F-708, 2026-09-16). `'' -> New Agent` is the older-client arm and is legitimate,
@@ -249,21 +255,22 @@ async function spawn(d, deps) {
           NEW_AGENT_NAME, '(an older client sends none; a NEWER one that asked for a name and'
           + ' landed here has lost it upstream of this machine)');
       }
-      const stored = require('./agent-identity-commit')
+      stored = require('./agent-identity-commit')
         .commitRename(res.agentId, asked || NEW_AGENT_NAME);
-      applied = stored && stored.ok ? stored.name : null;
-      // THE REFUSAL ARM, WHICH LOGGED NOTHING AT ALL. `commitRename` answers
-      // `agent-self-ops.js › applyRenameTo`'s verdict, and a sanitizer refusal is `ok: false` — so
-      // an agent could run unnamed with no line anywhere, and `appliedAgentName` went back as null,
-      // which `channel-ops-launch.ts` renders by ECHOING THE REQUEST: the launcher reads the name it
-      // asked for while the machine stored none. Still not a failed launch — a line, not a verdict.
-      if (!applied) {
-        diag('launch-directive: the agent name was REFUSED by the store —',
-          (stored && stored.reason) || 'no reason given',
-          '— agent', res.agentId, 'is running UNNAMED');
-      }
     } catch (err) {
       diag('launch-directive: could not store the agent name —', err && err.message);
+    }
+    const applied = stored && stored.ok ? stored.name : null;
+    // THE REFUSAL ARM, WHICH LOGGED NOTHING AT ALL. `commitRename` answers
+    // `agent-self-ops.js › applyRenameTo`'s verdict, and a sanitizer refusal is `ok: false` — so
+    // an agent could run unnamed with no line anywhere, and `appliedAgentName` goes back as null.
+    // ⚠ `channel-ops-launch.ts` renders that null as `(not reported)` since F-736 closed; it used
+    // to ECHO THE REQUEST, so the launcher read the name it asked for while the machine stored
+    // none. Still not a failed launch — a line, not a verdict.
+    if (!applied) {
+      diag('launch-directive: the agent name was REFUSED by the store —',
+        (stored && stored.reason) || 'no reason given',
+        '— agent', res.agentId, 'is running UNNAMED');
     }
     return {
       agentId: res.agentId,

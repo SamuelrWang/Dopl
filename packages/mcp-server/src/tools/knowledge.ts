@@ -8,7 +8,9 @@
  * Thin registrar: one tool schema + op routing, delegating to
  *   - `knowledge-shared.ts`    — base resolution + error/validation mappers
  *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/read_file/search
- *   - `knowledge-ops-write.ts` — create/update/move/write/grant ops
+ *   - `knowledge-ops-write.ts` — create/update/move/write ops
+ *   - `knowledge-ops-grant.ts` — grant
+ *   - `knowledge-entity-titles.ts` — the `&amp;`-in-a-title rule, both lanes
  */
 
 import { z } from "zod";
@@ -28,10 +30,10 @@ import {
   opSearch,
 } from "./knowledge-ops-read";
 import { opPin } from "./knowledge-ops-pin";
+import { opGrantBase } from "./knowledge-ops-grant";
 import {
   opCreateBase,
   opCreateFolder,
-  opGrantBase,
   opMove,
   opSetVisibility,
   opUpdateBase,

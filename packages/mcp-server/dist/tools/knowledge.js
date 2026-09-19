@@ -9,7 +9,9 @@
  * Thin registrar: one tool schema + op routing, delegating to
  *   - `knowledge-shared.ts`    — base resolution + error/validation mappers
  *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/read_file/search
- *   - `knowledge-ops-write.ts` — create/update/move/write/grant ops
+ *   - `knowledge-ops-write.ts` — create/update/move/write ops
+ *   - `knowledge-ops-grant.ts` — grant
+ *   - `knowledge-entity-titles.ts` — the `&amp;`-in-a-title rule, both lanes
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerKnowledgeTools = registerKnowledgeTools;
@@ -22,6 +24,7 @@ const identity_1 = require("./identity");
 const respond_1 = require("./respond");
 const knowledge_ops_read_1 = require("./knowledge-ops-read");
 const knowledge_ops_pin_1 = require("./knowledge-ops-pin");
+const knowledge_ops_grant_1 = require("./knowledge-ops-grant");
 const knowledge_ops_write_1 = require("./knowledge-ops-write");
 const grant_1 = require("./grant");
 const retired_copy_ops_1 = require("./retired-copy-ops");
@@ -268,7 +271,7 @@ directory) {
                 const miss = (0, respond_1.missingParams)("grant", args, ["base", "scope", "to"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_write_1.opGrantBase)(client, directory, caller.userId, args.base, args.scope, args.to, args.level);
+                return (0, knowledge_ops_grant_1.opGrantBase)(client, directory, caller.userId, args.base, args.scope, args.to, args.level);
             }
             case "create_folder": {
                 const miss = (0, respond_1.missingParams)("create_folder", args, ["base", "path"]);

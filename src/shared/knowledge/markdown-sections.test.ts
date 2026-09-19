@@ -324,6 +324,50 @@ describe("replaceSection", () => {
       reason: "SECTION_NOT_FOUND",
     });
   });
+
+  // ── S29: the blank line under the heading is the DOCUMENT's, not the
+  //    section's content, and a write that kept the heading used to eat it.
+  it("keeps the blank line under the heading", () => {
+    const out = replaceSection("## A\n\nold\n## B\nkeep\n", "A", "new\n");
+    expect(out).toMatchObject({ ok: true, body: "## A\n\nnew\n## B\nkeep\n" });
+  });
+
+  it("keeps a TWO-line gap verbatim rather than normalising it to one", () => {
+    const out = replaceSection("## A\n\n\nold\n", "A", "new\n");
+    expect(out).toMatchObject({ ok: true, body: "## A\n\n\nnew\n" });
+  });
+
+  it("keeps a CRLF gap as CRLF", () => {
+    const out = replaceSection("## A\r\n\r\nold\r\n", "A", "new\r\n");
+    expect(out).toMatchObject({ ok: true, body: "## A\r\n\r\nnew\r\n" });
+  });
+
+  it("does not add a SECOND blank line when the caller supplied one", () => {
+    const out = replaceSection("## A\n\nold\n## B\nkeep\n", "A", "\nnew\n");
+    expect(out).toMatchObject({ ok: true, body: "## A\n\nnew\n## B\nkeep\n" });
+  });
+
+  it("adds no gap where the document had none", () => {
+    const out = replaceSection("## A\nold\n## B\nkeep\n", "A", "new\n");
+    expect(out).toMatchObject({ ok: true, body: "## A\nnew\n## B\nkeep\n" });
+  });
+
+  it("is IDEMPOTENT — rewriting the same section twice does not grow the gap", () => {
+    const once = replaceSection("## A\n\nold\n## B\nkeep\n", "A", "new\n");
+    if (!once.ok) throw new Error("unreachable");
+    const twice = replaceSection(once.body, "A", "new\n");
+    expect(twice).toMatchObject({ ok: true, body: once.body });
+  });
+
+  it("a section that is nothing but blank lines does not eat the next heading", () => {
+    const out = replaceSection("## A\n\n\n## B\nkeep\n", "A", "new\n");
+    expect(out).toMatchObject({ ok: true, body: "## A\n\n\nnew\n## B\nkeep\n" });
+  });
+
+  it("the caller's own heading still wins, gap and all", () => {
+    const out = replaceSection("## A\n\nold\n", "A", "## A\nnew\n");
+    expect(out).toMatchObject({ ok: true, body: "## A\nnew\n" });
+  });
 });
 
 describe("appendSection", () => {

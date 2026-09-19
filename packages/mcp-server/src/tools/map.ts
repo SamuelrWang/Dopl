@@ -14,6 +14,7 @@ import {
 } from "../workspace-directory.js";
 import { inlineOr, NO_NAME } from "./narration";
 import { clippedNote } from "./ontology-clipped";
+import { personalShelfGroups } from "./ontology-render";
 import { partialRead } from "./partial-read";
 import { ok, type RegisterTool, type ToolResponse } from "./respond";
 import { SEARCH_ERRORS } from "./tool-errors";
@@ -195,16 +196,28 @@ export function registerMapTool(
     if (activeSkills.length === 0) lines.push("_None._");
 
     lines.push("", `## Ontology (${ontology.clusters.length}) — dopl_ontology`);
-    for (const c of ontology.clusters) {
-      const columns = c.columnIds
-        .map((id) => ontology.objects[id]?.name)
-        .filter((n): n is string => Boolean(n))
-        .map((n) => inlineOr(n, NO_NAME))
-        .join(", ");
-      const purpose = c.purpose ? ` — ${inlineOr(c.purpose, "")}` : "";
-      lines.push(
-        `- ${inlineOr(c.name, NO_NAME)} \`${c.slug}\`${purpose}${columns ? ` (objects: ${columns})` : ""}`
-      );
+    // 🔒 **S29c — THE ROUTING SURFACE IS WHERE THE MYSTERY WAS REPORTED.** A
+    // brand-new home channel listed ontologies nobody had put there; they are
+    // the caller's own personal shelf, which `service-audience.ts` folds into
+    // the read scope. The heading is `ontology-render.ts › personalShelfGroups`,
+    // reading the SAME table the `dopl_kb` list does.
+    for (const [heading, clusters] of personalShelfGroups(
+      ontology.clusters,
+      ontology.personalClusterIds,
+    )) {
+      if (clusters.length === 0) continue;
+      if (heading !== null) lines.push(`### ${heading}`);
+      for (const c of clusters) {
+        const columns = c.columnIds
+          .map((id) => ontology.objects[id]?.name)
+          .filter((n): n is string => Boolean(n))
+          .map((n) => inlineOr(n, NO_NAME))
+          .join(", ");
+        const purpose = c.purpose ? ` — ${inlineOr(c.purpose, "")}` : "";
+        lines.push(
+          `- ${inlineOr(c.name, NO_NAME)} \`${c.slug}\`${purpose}${columns ? ` (objects: ${columns})` : ""}`
+        );
+      }
     }
     if (ontology.clusters.length === 0) lines.push("_None._");
     // ⚠ A ceiling that renders identically to an exhausted list is the bug, so

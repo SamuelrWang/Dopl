@@ -12,6 +12,7 @@ import { ok, type ToolResponse } from "./respond";
 import { isConcise, type ResponseFormat } from "./response-size";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 import {
+  personalShelfGroups,
   renderObject,
   resolveObjectRef,
   resolveResourceHandles,
@@ -65,19 +66,31 @@ export async function opMap(
     );
   }
   const lines: string[] = [];
-  for (const c of snapshot.clusters) {
-    const purpose = c.purpose ? ` — ${inlineOr(c.purpose, "")}` : "";
-    lines.push(`## ${inlineOr(c.name, NO_NAME)} \`${c.slug}\`${purpose}`);
-    for (const columnId of c.columnIds) {
-      const column = snapshot.objects[columnId];
-      if (!column) continue;
-      const members = column.childIds
-        .map((id) => snapshot.objects[id]?.name)
-        .filter((n): n is string => Boolean(n))
-        .map((n) => inlineOr(n, NO_NAME));
-      lines.push(`- ${inlineOr(column.name, NO_NAME)} (${members.length}): ${members.join(", ") || "empty"}`);
+  // 🔒 **THE PERSONAL SHELF IS NAMED, NOT LEFT AS A MYSTERY** (S29c) —
+  // `ontology-render.ts › personalShelfGroups` holds the argument and the table.
+  // ⚠ THE LABEL IS A BOLD LINE, NOT A HEADING: cluster names are already `##`
+  // here, so a heading would be indistinguishable from an ontology called
+  // "Home (personal) …".
+  for (const [heading, clusters] of personalShelfGroups(
+    snapshot.clusters,
+    snapshot.personalClusterIds,
+  )) {
+    if (clusters.length === 0) continue;
+    if (heading !== null) lines.push(`**${heading}**`, "");
+    for (const c of clusters) {
+      const purpose = c.purpose ? ` — ${inlineOr(c.purpose, "")}` : "";
+      lines.push(`## ${inlineOr(c.name, NO_NAME)} \`${c.slug}\`${purpose}`);
+      for (const columnId of c.columnIds) {
+        const column = snapshot.objects[columnId];
+        if (!column) continue;
+        const members = column.childIds
+          .map((id) => snapshot.objects[id]?.name)
+          .filter((n): n is string => Boolean(n))
+          .map((n) => inlineOr(n, NO_NAME));
+        lines.push(`- ${inlineOr(column.name, NO_NAME)} (${members.length}): ${members.join(", ") || "empty"}`);
+      }
+      lines.push("");
     }
-    lines.push("");
   }
   // ⚠ With the clusters, not the footer: MAP_SCOPE_NOTE is about levels this op
   // CHOOSES not to render — a different fact from the read stopping short, and

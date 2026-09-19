@@ -55,20 +55,31 @@ async function opMap(client, format) {
             : `No ontologies yet — the graph is empty. Start one with op="create_cluster".`);
     }
     const lines = [];
-    for (const c of snapshot.clusters) {
-        const purpose = c.purpose ? ` — ${(0, narration_1.inlineOr)(c.purpose, "")}` : "";
-        lines.push(`## ${(0, narration_1.inlineOr)(c.name, narration_1.NO_NAME)} \`${c.slug}\`${purpose}`);
-        for (const columnId of c.columnIds) {
-            const column = snapshot.objects[columnId];
-            if (!column)
-                continue;
-            const members = column.childIds
-                .map((id) => snapshot.objects[id]?.name)
-                .filter((n) => Boolean(n))
-                .map((n) => (0, narration_1.inlineOr)(n, narration_1.NO_NAME));
-            lines.push(`- ${(0, narration_1.inlineOr)(column.name, narration_1.NO_NAME)} (${members.length}): ${members.join(", ") || "empty"}`);
+    // 🔒 **THE PERSONAL SHELF IS NAMED, NOT LEFT AS A MYSTERY** (S29c) —
+    // `ontology-render.ts › personalShelfGroups` holds the argument and the table.
+    // ⚠ THE LABEL IS A BOLD LINE, NOT A HEADING: cluster names are already `##`
+    // here, so a heading would be indistinguishable from an ontology called
+    // "Home (personal) …".
+    for (const [heading, clusters] of (0, ontology_render_1.personalShelfGroups)(snapshot.clusters, snapshot.personalClusterIds)) {
+        if (clusters.length === 0)
+            continue;
+        if (heading !== null)
+            lines.push(`**${heading}**`, "");
+        for (const c of clusters) {
+            const purpose = c.purpose ? ` — ${(0, narration_1.inlineOr)(c.purpose, "")}` : "";
+            lines.push(`## ${(0, narration_1.inlineOr)(c.name, narration_1.NO_NAME)} \`${c.slug}\`${purpose}`);
+            for (const columnId of c.columnIds) {
+                const column = snapshot.objects[columnId];
+                if (!column)
+                    continue;
+                const members = column.childIds
+                    .map((id) => snapshot.objects[id]?.name)
+                    .filter((n) => Boolean(n))
+                    .map((n) => (0, narration_1.inlineOr)(n, narration_1.NO_NAME));
+                lines.push(`- ${(0, narration_1.inlineOr)(column.name, narration_1.NO_NAME)} (${members.length}): ${members.join(", ") || "empty"}`);
+            }
+            lines.push("");
         }
-        lines.push("");
     }
     // ⚠ With the clusters, not the footer: MAP_SCOPE_NOTE is about levels this op
     // CHOOSES not to render — a different fact from the read stopping short, and

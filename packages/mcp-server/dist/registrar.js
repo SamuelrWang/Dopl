@@ -179,6 +179,10 @@ function createToolRegistrars(deps) {
             const refusal = gates.opRefusal(name, op);
             if (refusal)
                 return refusal;
+            // ⚠ READ ONCE, BESIDE `op`, AND FOR THE SAME REASON (S37/S54,
+            // 2026-09-18): the knob is applied inside the renderers and this footer is
+            // appended after them, so the handler's own answer cannot carry it here.
+            const format = (0, status_footer_js_1.requestedFormat)(innerArgs);
             // 🔒 ONE DECISION, ONE PLACE — `container-resolve.ts` owns the grammar,
             // the alias, the blank/not-found refusals and R-32's unaddressed-mint
             // refusal. This wrapper only spends the answer.
@@ -191,12 +195,16 @@ function createToolRegistrars(deps) {
                 // reports the EFFECTIVE container with a `per-call arg` source.
                 const { effective } = address;
                 const result = await runWithCredits(effective.id, () => client_1.workspaceContext.run(effective.id, () => handler(innerArgs)));
-                return (0, status_footer_js_1.appendDoplStatus)(result, effective, caller, (0, credits_unmetered_js_1.joinNotes)(address.note, (0, credits_unmetered_js_1.unmeteredNote)()));
+                return (0, status_footer_js_1.appendDoplStatus)(result, effective, caller, (0, credits_unmetered_js_1.joinNotes)(address.note, (0, credits_unmetered_js_1.unmeteredNote)()), format, 
+                // ⚠ S29b: `effective` is the PER-CALL override and this is the
+                // connection's own binding, which the override did not touch. The
+                // footer says so rather than letting one flipping line mean both.
+                sessionEffective());
             }
             const result = await runWithCredits(await billingTarget(), () => handler(innerArgs));
             // ⚠ BOTH NOTES, NOT ONE: a dropped address and an unmetered call are
             // independent facts about the same call, and dropping either is a silence.
-            return (0, status_footer_js_1.appendDoplStatus)(result, sessionEffective(), caller, (0, credits_unmetered_js_1.joinNotes)(address.note, (0, credits_unmetered_js_1.unmeteredNote)()));
+            return (0, status_footer_js_1.appendDoplStatus)(result, sessionEffective(), caller, (0, credits_unmetered_js_1.joinNotes)(address.note, (0, credits_unmetered_js_1.unmeteredNote)()), format);
         };
         server.registerTool(name, { description, inputSchema: strictInput(enhancedSchema) }, 
         // ⚠ THE SCOPE ENCLOSES THE HANDLER **AND** THE FOOTER, which is what makes

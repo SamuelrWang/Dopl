@@ -70,7 +70,9 @@
 //
 // ── HOW A DIRECTIVE IS ACTED ON ──────────────────────────────────────────────────────────
 //
-//   1. ARRIVE   a realtime INSERT frame, or the 60s backstop poll when push is down.
+//   1. ARRIVE   a realtime INSERT frame, or the 60s backstop poll — which runs whether or not
+//               push is healthy (2026-09-18): a healthy socket says frames are FLOWING and
+//               cannot say THIS one arrived. See POLL_MS.
 //   2. IGNORE   toggle off -> silently, with no server write at all. ⚠ THE SILENCE IS THE
 //               DESIGN: the row expires server-side, which the orchestrator SEES, and that beats
 //               a refusal — a refusal from a machine that has not opted in is an admission that
@@ -106,13 +108,22 @@ const { diag } = require('./diag');
 
 const HTTP_TIMEOUT_MS = 15000;
 
-// ⚠ THE BACKSTOP IS FOR THE BREAKER, NOT FOR CORRECTNESS. When realtime is healthy this poll
-// does nothing at all — it checks `isWorkspaceHealthy` first and returns. It exists because a
-// directive is a REQUEST somebody is waiting on, and `realtime.js`'s breaker holds a long
-// cooldown by design: without this, arming the lane and then flapping the WS would leave an
-// orchestrator waiting for the row's whole expiry window with no signal.
-// ⚠ 60s IS DELIBERATELY SLOW. The push path is the normal one and is near-instant; polling this
-// degraded one faster would spend steady-state request budget on an already-broken case.
+// ⚠ THE BACKSTOP COVERS THE BREAKER **AND** A DROPPED FRAME, AND UNTIL 2026-09-18 IT COVERED
+// ONLY THE FIRST. It checked `isWorkspaceHealthy` and returned, so a workspace whose socket was
+// UP polled nothing — which is correct for an outage and wrong for the failure it was reported
+// under (S18/S56): ONE `postgres_changes` INSERT frame that never arrives. Realtime says healthy
+// because the SOCKET is healthy; it cannot say every frame was delivered, and nothing else on
+// this lane was looking. The row then sat `pending` for its whole TTL and the orchestrator read
+// `expired` on a launch no machine had ever declined.
+// ⚠ **THE HEALTH GATE NOW STEERS THE LOG LINE, NOT WHETHER THE READ HAPPENS** — a health signal
+// is evidence about the transport and was never evidence about a row.
+// ⚠ 60s IS DELIBERATELY SLOW, and it is ALSO the reconcile's ceiling: `LAUNCH_DIRECTIVE_TTL_MS`
+// is 120s, so a slower tick could not reach a dropped row before it lapsed and the reconcile
+// would be decorative. Faster spends steady-state budget on the rare case. One authenticated
+// collection GET per armed workspace per minute is what this costs, and it buys the one failure
+// realtime cannot report about itself.
+// ⚠ A RECONCILE THAT RACES A LIVE FRAME IS A NORMAL NO-OP: `handle` de-dupes on `decided` /
+// `inflight`, and the server CAS is the real guarantee behind both.
 // `unref`'d, so it never holds a quit open.
 const POLL_MS = 60000;
 
@@ -242,6 +253,11 @@ function deliver(workspaceId, row) {
 // the orchestrator already handles (a closed laptop produces it too).
 let pollUnavailable = false;
 
+/** Workspaces currently logged as push-DOWN. ⚠ EDGE-TRIGGERED, not per tick: the whole point of
+ *  the line is that an operator reading `listener.log` sees the transition, and one line a
+ *  minute for the life of an outage buries it. */
+const pollDegraded = new Set();
+
 async function pollWorkspace(wsId) {
   try {
     const res = await apiFetch(wire.ROUTES.pending, {
@@ -270,11 +286,28 @@ async function poll() {
   if (!armed || pollUnavailable) return;
   const list = (deps.workspaces && deps.workspaces()) || [];
   for (const wsId of list) {
-    // ⚠ ONLY WHILE PUSH IS DOWN FOR **THIS** WORKSPACE. A healthy sub already delivers these,
-    // and polling beside it would double every claim attempt for no benefit.
-    if (realtime.isWorkspaceHealthy(wsId)) continue;
+    // ⚠ **EVERY WORKSPACE, HEALTHY OR NOT (2026-09-18, S18/S56).** The `continue` that used to
+    // sit here read a transport signal as an answer about a ROW: a healthy socket means frames
+    // are FLOWING, never that this particular INSERT arrived. See POLL_MS for the cost and the
+    // de-dupe. The health signal is still worth having — it is the difference between "push is
+    // down, this read IS the lane" and "push is up, this read is a reconcile" — so it is logged
+    // rather than acted on.
+    const healthy = isHealthy(wsId);
+    if (!healthy && !pollDegraded.has(wsId)) {
+      pollDegraded.add(wsId);
+      diag('launch-directives: push is DOWN for', wsId, '— the backstop poll IS the lane now');
+    } else if (healthy && pollDegraded.has(wsId)) {
+      pollDegraded.delete(wsId);
+      diag('launch-directives: push recovered for', wsId, '— the poll is a reconcile again');
+    }
     await pollWorkspace(wsId);
   }
+}
+
+/** ⚠ FAIL-SAFE TOWARDS POLLING. An unreadable health signal is not evidence that frames are
+ *  arriving, and the expensive direction here is the one that skips the read. */
+function isHealthy(wsId) {
+  try { return realtime.isWorkspaceHealthy(wsId) === true; } catch (_err) { return false; }
 }
 
 // ── Arming ───────────────────────────────────────────────────────────────────────────────
@@ -340,6 +373,7 @@ function refresh() {
 function stop() {
   armed = false;
   pollUnavailable = false; // a new run may reach a newer server
+  pollDegraded.clear();
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   decided.clear();
   inflight.clear();
@@ -352,6 +386,7 @@ module.exports = {
   refresh, // the toggle moved: rebind realtime
   deliver, // main/realtime.js's handler
   handle, // the one funnel — exported for the suite
+  poll, // the backstop tick — exported for the suite, which must be able to DRIVE it
   POLL_MS,
   MAX_REMEMBERED,
 };

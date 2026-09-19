@@ -152,7 +152,12 @@ export function boot(over = {}) {
     if (id === "./realtime") {
       return {
         setDirectives: (on, handler) => { arms.push({ on, handler: typeof handler }); },
-        isWorkspaceHealthy: () => cfg.healthy !== false,
+        // ⚠ `healthyThrows` IS A CASE, NOT A CONVENIENCE (2026-09-18): the poll reads this
+        // signal defensively, and the expensive direction is the one that SKIPS the read.
+        isWorkspaceHealthy: () => {
+          if (cfg.healthyThrows) throw new Error("realtime state unreadable");
+          return cfg.healthy !== false;
+        },
         desiredWorkspaceIds: () => [WS],
       };
     }

@@ -166,35 +166,31 @@ describe("LAUNCHED — the id, and how to direct it", () => {
     expect(out).not.toContain("name=@coder ");
   });
 
-  it("falls back to the REQUESTED name only when the field is ABSENT", async () => {
-    // ⚠ A DESKTOP OLDER THAN THIS WAVE SENDS NO `appliedAgentName` (§13, a supported peer), and
-    // the honest thing to print is the name that was asked for — it is what that machine stored.
+  /**
+   * 🔒 **F-736, RESOLVED 2026-09-18 — AN ABSENT FIELD AND A `null` ONE GET ONE ANSWER.**
+   *
+   * ⚠ **THE OLDER-PEER ARM WAS UNREACHABLE, AND IT WAS THE ONE ECHOING THE REQUEST.**
+   * `service-launch-dto.ts` maps `applied_agent_name ?? null`, so a refusal, a non-launch kind
+   * and every desktop older than 2026-09-15 all crossed the wire as `null` — and a launch whose
+   * name WAS applied but not reported printed `(not applied)`, a claim nothing had observed.
+   * ⚠ **NEITHER ARM MAY ECHO THE REQUEST.** An orchestrator handed `@coder` for an agent the
+   * machine filed as `Coder-1` or as `New Agent` addresses nobody, silently, forever.
+   */
+  it("🔒 says (not reported) when the field is ABSENT", async () => {
     const out = await text(created({ status: "launched", agentId: "abcd1234" }), {
       name: "Bug Reviewer",
     });
-    expect(out).toContain("name=@bug-reviewer");
+    expect(out).toContain('name="(not reported)"');
+    expect(out).not.toContain("@bug-reviewer");
   });
 
-  /**
-   * 🔒 **A CARRIED-BUT-`null` FIELD IS NOT THE OLDER-DESKTOP CASE** (found reviewing
-   * `4782677b`, 2026-09-16).
-   *
-   * ⚠ **`?? named.name` COLLAPSED THE TWO AND PUBLISHED A TAG NOTHING ANSWERS TO.** `null`
-   * means the machine CARRIES the field and reported no name — the store's refusal arm, which
-   * `4782677b` says must now be impossible — and the launch it describes is exactly the one
-   * where the caller's own request is the wrong answer. An orchestrator handed `@coder` for an
-   * agent the machine filed as `New Agent` addresses nobody, silently, forever.
-   * ⚠ **AN "IMPOSSIBLE" CASE STILL GETS A SPELLING** rather than a fallback: the previous
-   * version relied on it not happening, and six launches on one machine on 2026-09-16 are
-   * what that cost.
-   */
-  it("🔒 says (not applied) when the machine CARRIES the field and it is null", async () => {
+  it("🔒 says (not reported) when the machine CARRIES the field and it is null", async () => {
     const out = await text(
       created({ status: "launched", agentId: "abcd1234", appliedAgentName: null }),
       { name: "Coder" }
     );
-    expect(out).toContain('name="(not applied)"');
-    // ⚠ THE WHOLE POINT: the REQUEST is not echoed as an address on this arm.
+    expect(out).toContain('name="(not reported)"');
+    // ⚠ THE WHOLE POINT: the REQUEST is not echoed as an address on either arm.
     expect(out).not.toContain("@coder");
   });
 
@@ -452,12 +448,21 @@ describe("TIMEOUT — pending, and the strongest possible do-not-re-issue", () =
     expect(out).toContain("retry=no");
   });
 
-  it("EXPIRED says it lapsed, and does NOT forbid asking again", async () => {
+  /**
+   * 🔒 **S18/S56 (2026-09-18) — THE PERMISSION IS A FIELD NOW, NOT AN ABSENCE.**
+   *
+   * ⚠ **AN ABSENT `retry=` IS NOT A STATEMENT, AND THE NEIGHBOURS ALL MAKE ONE.** `refused`
+   * prints `RETRY_ADVICE`'s verdict and `pending` prints `retry=no`; this arm — the ONE an
+   * orchestrator may legitimately re-issue — said nothing at all. A parallel launch whose
+   * directive is never claimed lands here, so the caller either stalls on a row nobody will
+   * answer or re-issues on a guess, and a guess is how two agents end up on one job.
+   * ⚠ `once` IS `RETRY_ADVICE`'s OWN WORD, so one op does not publish two vocabularies.
+   */
+  it("EXPIRED says it lapsed, and says asking again is legitimate", async () => {
     const out = await text(created({ status: "expired" }), { waitMs: 0 });
-    // ⚠ LAPSED IS NOT REFUSED AND NOT PENDING: no machine ever answered, so
-    // nothing is outstanding and asking once more is legitimate. The ABSENCE of
-    // `retry=no` is the whole difference from the branch above.
-    expect(out).toBe("expired directive=55555555-5555-5555-5555-555555555555 filed=yes");
+    expect(out).toBe(
+      "expired directive=55555555-5555-5555-5555-555555555555 filed=yes retry=once",
+    );
   });
 
   it("a FAILED poll ends on the PENDING shape, not on an error", async () => {

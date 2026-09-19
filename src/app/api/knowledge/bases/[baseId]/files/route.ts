@@ -10,10 +10,7 @@ import {
   readFileByPath,
   writeFileByPath,
 } from "@/features/knowledge/server/service";
-import {
-  NAME_RE,
-  NAME_INVALID_MESSAGE,
-} from "@/features/knowledge/schema";
+import { EntryTitleSchema } from "@/features/knowledge/schema";
 import {
   outlinePayload,
   projectFile,
@@ -36,14 +33,16 @@ function requirePathParam(request: NextRequest): string {
   return path;
 }
 
-// ⚠ `title` constraints + the 1 MB body cap MIRROR KnowledgeEntryUpdateSchema in
-// features/knowledge/schema.ts — keep in sync. NAME_RE / NAME_INVALID_MESSAGE are imported from
-// that module so the literal lives in exactly one place.
+// ⚠ `title` IS `EntryTitleSchema` ITSELF now, not a hand-mirror of it — the chain
+// this line used to re-type carried an entity-decoding `.transform()` on the
+// other three entry-title sites and not here, which is the MCP write lane
+// (`writeKbFileByPath` → this route) and therefore the one that mattered. The
+// 1 MB body cap is still a mirror of features/knowledge/schema.ts; keep in sync.
 const MAX_BODY_BYTES = 1_048_576;
 const WriteFileSchema = z.object({
   path: z.string(),
   body: z.string().max(MAX_BODY_BYTES, "Body must be 1 MB or less").optional(),
-  title: z.string().min(1).max(300).regex(NAME_RE, NAME_INVALID_MESSAGE).optional(),
+  title: EntryTitleSchema.optional(),
   // Agent-facing summary (≤300 chars) shown in get_tree / list_dir. `null` clears; omit keeps.
   excerpt: z.string().max(DESCRIPTION_MAX).nullable().optional(),
   // Replace ONE heading's section instead of the whole document; `body` is that
