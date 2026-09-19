@@ -147,7 +147,7 @@ function runEffect(s, eff) {
       break;
     case 'pushInbound':
       noteSiblings(s);
-      if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName, eff.addressing))));
+      if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName, eff.addressing, eff.authorNote))));
       break;
     case 'interruptQuery': // ⚠ ON A RUNTIME THAT DECLARES NO INTERRUPT THIS SILENTLY DOES NOTHING, and the honest two-line log for it DID NOT FIT — this file is AT the 500-line cap with no headroom, which is F-388 demonstrated rather than asserted. `main/runtime/capability.js › interruptRefusal` holds the sentence; the SPA hides the control and the launch surface warns with it (design §3.2). Add the log when this file splits.
       try { if (s.query && s.query.interrupt) s.query.interrupt().catch(() => {}); } catch (_) { /* best effort */ }

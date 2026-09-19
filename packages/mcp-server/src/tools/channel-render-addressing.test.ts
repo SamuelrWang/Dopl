@@ -204,10 +204,11 @@ describe("an agent author is named by the name its operator gave it", () => {
  * answer, escalate or ignore had to spend a roster call on the one distinction
  * that decides it.
  *
- * ⚠ **THE THIRD SHAPE IS A PROJECTION** (`authorView`), never a new
- * `authorKind`: that union is drift-gated against the column's `CHECK`. An old
- * payload carries no `authorView` at all, and the fallback is what keeps it
- * rendering exactly as it did.
+ * ⚠ **THE THIRD SHAPE IS SERVER-OWNED METADATA** (`metadata.external_session`),
+ * never a new `authorKind`: that union is drift-gated against the column's
+ * `CHECK`, and it is read through ONE local helper so the merge with the
+ * sibling branch swaps a single body to `authorViewOf(m) === "external"`. An old
+ * payload carries no marker at all and renders as it always did.
  */
 describe("who asked — sibling, stranger's agent, or an outside session", () => {
   const AGENT = {
@@ -247,24 +248,24 @@ describe("who asked — sibling, stranger's agent, or an outside session", () =>
   });
 
   it("an OUTSIDE SESSION of the reader's own account hands back the reply handle", async () => {
-    const line = await readerLine({ authorUserId: SELF, authorView: "external" });
+    const line = await readerLine({ authorUserId: SELF, metadata: { external_session: true } });
     expect(line).toContain("outside session for you — reply @desktop");
   });
 
   it("another member's outside session names THEM, and offers no @desktop", async () => {
     // ⚠ The group handle is PER OPERATOR, so offering it for somebody else's
     // session would hand back an address that reaches the reader's own machine.
-    const line = await readerLine({ authorUserId: OPERATOR, authorView: "external" });
+    const line = await readerLine({ authorUserId: OPERATOR, metadata: { external_session: true } });
     expect(line).toContain(
       `outside session for \`Samuel Wang\` (\`${OPERATOR}\`)`,
     );
     expect(line).not.toContain("@desktop");
   });
 
-  it("🔒 a STALE payload with no `authorView` renders exactly as it always did", async () => {
-    // ⚠ §8's rule for a new projected field: the fallback is `authorKind`, so a
-    // row cached before the projection existed is a member line, not an
-    // "outside session" the server never marked.
+  it("🔒 a STALE payload with no `external_session` renders exactly as it always did", async () => {
+    // ⚠ §8's rule for a new payload field: a row written or cached before the
+    // marker existed carries no `external_session`, so it is a member line and
+    // not an "outside session" the server never marked.
     const line = await readerLine({ authorUserId: OPERATOR });
     expect(line).toContain("member `Samuel Wang`");
     expect(line).not.toContain("outside session");

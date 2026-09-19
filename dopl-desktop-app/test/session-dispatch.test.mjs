@@ -67,6 +67,10 @@ test("feed: EVERY live agent on the thread is fed, and each is told which it is"
     channelId: "c1", taskId: TASK, agentId: A1, message: "reply body",
     seq: 7, // the turn's seq — the windowless outbound bridge's thread join
     authorName: `name:${PEER}`,
+    // ⚠ `authorNote` JOINED THE FEED 2026-09-18 (`room-roster.js › agentAuthorNote`): one line
+    // naming an agent this session's LAUNCH SNAPSHOT never saw. NULL here and on almost every
+    // turn — a PERSON wrote this one — which is what keeps the fed turn byte-identical.
+    authorNote: null,
     addressing: null, // nobody was @-mentioned
     // ⚠ THE WAKE VERDICT RIDES WITH EVERY FEED SINCE 2026-08-28, and `false` is the ordinary
     // answer: these two agents are RUNNING, so the fan-out delivered the message without any

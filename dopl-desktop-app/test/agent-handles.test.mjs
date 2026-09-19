@@ -156,7 +156,7 @@ function sliceDispatch() {
     // ⚠ `deliveryAck` joined the block's free vars with the wake ack (2026-09-02, A9). A no-op
     // recorder is enough here: this suite asserts routing, and `delivery-ack.test.mjs` owns
     // the buffer.
-    "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "deliveryAck", "diag",
+    "targeting", "sessionEngine", "io", "wakeTiers", "sessionTriage", "agentHandles", "deliveryAck", "diag", "agentAuthorNote",
     `${block}\n return { mentionedAgentIds };`
   )({}, {}, {}, {}, {}, handles, { note: () => true, verdictFor: () => '' }, () => {});
 }

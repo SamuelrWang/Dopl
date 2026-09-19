@@ -92,11 +92,10 @@ const targeting = require('./targeting');
 const io = require('./listener-io');
 const sessionEngine = require('./session-engine');
 const agentHandles = require('./agent-handles');
-// THE RECEIPT BUFFER (2026-09-02, A9). Above the sentinel like every other dep, so the
-// extracted block reaches it as a free var and the truth tables can inject a fake.
+// THE RECEIPT BUFFER (2026-09-02, A9) and the ROOM-ROSTER note (2026-09-18). Above the sentinel like every other dep, so the extracted block reaches each as a free var and the truth tables can inject a fake.
 const deliveryAck = require('./delivery-ack');
 const { diag } = require('./diag');
-
+const { agentAuthorNote } = require('./room-roster');
 // ─── BEGIN SESSION-DISPATCH-PURE (routing; unit-tested via source extraction) ──
 
 // ⚠ THE SERVER'S OWN VOCABULARY, RESTATED — `src/features/channels/types-delivery.ts ›
@@ -138,6 +137,7 @@ function authorLabel(m) {
   if (!(m && m.authorKind === 'agent')) return person;
   return person ? person + "'s agent" : 'an agent';
 }
+
 
 // The verdict the server stored, or '' when it stored none this build understands.
 function storedVerdict(m) {
@@ -453,7 +453,7 @@ function feedLiveSession(entry, m, myUserId) {
       agentId: s.agentId,
       message: m.body,
       seq: m.seq, // the turn's seq — the windowless outbound bridge's thread join
-      authorName: authorName,
+      authorName: authorName, authorNote: agentAuthorNote(s, m, myUserId), // ⚠ ONLY when THIS session's launch snapshot missed the author
       addressing: addressing,
       // ⚠ THE VERDICT, NOT THE INPUTS. `session-gate.js › feedInbound` is the entry point the
       // engine exports and is the BELT on this rule; handing it the answer is what stops it

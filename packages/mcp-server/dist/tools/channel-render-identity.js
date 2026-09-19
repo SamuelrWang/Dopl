@@ -18,9 +18,9 @@
  * by the immutable `authorUserId`, the one half the author does not control.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.NO_MEMBER_VIEW = exports.EXTERNAL_AUTHOR_VIEW = exports.OUTSIDE_SESSION_HANDLE = void 0;
+exports.NO_MEMBER_VIEW = exports.EXTERNAL_SESSION_META_KEY = exports.OUTSIDE_SESSION_HANDLE = void 0;
 exports.formatAuthor = formatAuthor;
-exports.isExternalSessionAuthor = isExternalSessionAuthor;
+exports.isOutsideSession = isOutsideSession;
 exports.agentHandleOf = agentHandleOf;
 exports.sessionIdOf = sessionIdOf;
 exports.addresseeOf = addresseeOf;
@@ -66,8 +66,8 @@ function formatAuthor(m, view = exports.NO_MEMBER_VIEW) {
     // never the name.
     const mine = view.selfUserId !== null && m.authorUserId === view.selfUserId;
     const who = mine ? "you" : named && id ? `${named} (${id})` : (named ?? id);
-    // THE OPERATOR'S OWN OUTSIDE SESSION — see {@link isExternalSessionAuthor}.
-    if (isExternalSessionAuthor(m)) {
+    // THE OPERATOR'S OWN OUTSIDE SESSION — see {@link isOutsideSession}.
+    if (isOutsideSession(m)) {
         const label = who ? `outside session for ${who}` : "an outside session";
         return mine ? `${label} — reply @${exports.OUTSIDE_SESSION_HANDLE}` : label;
     }
@@ -92,23 +92,28 @@ function formatAuthor(m, view = exports.NO_MEMBER_VIEW) {
  */
 exports.OUTSIDE_SESSION_HANDLE = "desktop";
 /**
- * ⚠ **THE THIRD AUTHOR SHAPE IS A PROJECTION, NOT A NEW `authorKind`.**
- * `@dopl/contracts › MessageAuthorKind` is a CLOSED union guarded by
- * `scripts/check-message-kind-drift.ts` and by the column's own `CHECK`, so the
- * outside-session marker rides `metadata.external_session` server-side and
- * arrives on the DTO as a SEPARATE field, `authorView`, whose vocabulary is the
- * kind's plus `external`.
+ * ⚠ **THE THIRD AUTHOR SHAPE IS NOT A NEW `authorKind`, AND IT IS NOT A DTO
+ * FIELD EITHER.** `@dopl/contracts › MessageAuthorKind` is a CLOSED union guarded
+ * by `scripts/check-message-kind-drift.ts` and the column's own `CHECK`, and both
+ * `ChannelMessage` declarations sit at the 500-line cap — so the outside-session
+ * marker rides server-owned `metadata.external_session` and is READ THROUGH A
+ * FUNCTION on the sibling branch (`authorViewOf(message)` →
+ * `MessageAuthorKind | "external"`).
  *
- * ⚠ **`authorView ?? authorKind` IS THE STALE-PAYLOAD FALLBACK** the §8 rule
- * requires of every new projected field: a row read from a cache written before
- * the field existed has no `authorView`, and reading `undefined === "external"`
- * as false would be right by accident — the fallback makes it right on purpose,
- * and keeps an old payload rendering exactly as it always did.
+ * 🔒 **THIS IS THE ONE PLACE THIS TIER ASKS THE QUESTION**, deliberately: at
+ * merge, the body below becomes `authorViewOf(m) === "external"` and nothing
+ * else in this package moves.
+ *
+ * ⚠ **THE OLD-PAYLOAD ANSWER IS `false`, AND IT IS `false` ON PURPOSE** (§8's
+ * rule for a new payload field): a row written or cached before the marker
+ * existed carries no `external_session`, and `undefined === true` is false — so
+ * an old row renders exactly the line it always did rather than being reported
+ * as an outside session nobody marked.
  */
-exports.EXTERNAL_AUTHOR_VIEW = "external";
-function isExternalSessionAuthor(m) {
-    const view = m.authorView ?? m.authorKind;
-    return view === exports.EXTERNAL_AUTHOR_VIEW;
+exports.EXTERNAL_SESSION_META_KEY = "external_session";
+function isOutsideSession(m) {
+    const meta = m.metadata;
+    return !!meta && meta[exports.EXTERNAL_SESSION_META_KEY] === true;
 }
 /**
  * **WHICH AGENT — BY THE NAME ITS OPERATOR GAVE IT** (2026-09-04).

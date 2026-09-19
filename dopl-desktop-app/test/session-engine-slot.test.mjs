@@ -142,7 +142,7 @@ function harness(cfg = {}) {
   };
   const api = new Function(
     "deps", "store", "sessionWindowless", "diag", "newAgentId", "isAgentId", "profiles",
-    "ontologyReach",
+    "ontologyReach", "roomRoster",
     `${LAUNCH_SRC}\n${fnOf(ENGINE, "hasLiveSession")}\n${fnOf(ENGINE, "isAuthHeldSession")}\n` +
       ` return { launch, hasLiveSession, isAuthHeldSession };`
   )(
@@ -164,16 +164,20 @@ function harness(cfg = {}) {
       // point: the predicate had no consumer at all before this.
       axisBOpScopedWarning: (id) => REAL_PROFILES.axisBOpScopedWarning(id),
     },
-    // ⚠ 2026-09-09 (F-681): the ontology-reach PRODUCER, faked — the real one is an HTTP read
-    // behind a device token this file has neither of. `test/ontology-reach-producer.test.mjs`
-    // pins the real module's promise never to throw; here the point is only that the funnel
-    // AWAITS it and never lets it refuse a launch.
+    // ⚠ 2026-09-09 (F-681): the ontology-reach PRODUCER, faked — an HTTP read behind a device
+    // token this file has neither of. `test/ontology-reach-producer.test.mjs` pins the real
+    // module's promise never to throw.
     {
       fetchOntologyReach: async () => {
         if (cfg.reachThrows) throw new Error("reach exploded");
         return cfg.ontologies || [];
       },
-    }
+    },
+    // ⚠ 2026-09-18: the ROOM-ROSTER producer, faked like the one above it — the real one reads two
+    // HTTP routes, and `room-roster.test.mjs` pins its own promises (no call in a solo room, one
+    // bounded read otherwise, fail-open). Here the funnel only has to AWAIT it and survive a throw.
+    { fetchRoomRoster: async () => { if (cfg.rosterThrows) throw new Error("roster exploded"); return cfg.roster || { agents: [], agentsMore: 0, people: [], peopleMore: 0, read: 'skipped' };
+    } }
   );
   return { ...api, sessions, calls };
 }
