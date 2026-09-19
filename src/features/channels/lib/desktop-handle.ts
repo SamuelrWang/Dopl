@@ -120,7 +120,7 @@ export function isDesktopGroupHandle(handle: string | null): boolean {
  *      routing hint that grants nothing. The unforgeable second mark is
  *      `mcp_tokens.container_id` — only the desktop's container minter sets it,
  *      and `packages/mcp-server/src/tools/identity.ts › isDesktopRun` ORs both —
- *      but `ChannelContext` does not carry it today. **F-739.**
+ *      but `ChannelContext` does not carry it today. **F-741.**
  *   3. A row written before this key existed has no flag and reads as `agent`.
  *      Intended: that is yesterday's rendering, unchanged.
  */
