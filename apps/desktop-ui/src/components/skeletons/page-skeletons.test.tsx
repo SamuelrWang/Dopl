@@ -232,8 +232,10 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
       // The centred column and its scroll box.
       [page, "mx-auto flex max-w-5xl flex-col gap-4"],
       [page, "px-6 pt-6 pb-10"],
-      // The uneven bottom row — 48/52, not two halves.
-      [page, "grid grid-cols-[48fr_52fr] gap-3"],
+      // ⚠ THE 48/52 BOTTOM ROW IS GONE (2026-09-18) — "Recent activity" was
+      // its left half, and a one-child grid is not a grid. Member load stands
+      // full width, in both the page and the ghost, so there is no shared
+      // grid class left to pin here.
       // Four equal stat cards.
       [stats, "grid grid-cols-4 gap-3"],
       // The period group's inset well, and the two cards inside it.

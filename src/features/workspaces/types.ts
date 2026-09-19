@@ -324,20 +324,6 @@ export interface WorkspaceTokenSpend {
   truncated: boolean;
 }
 
-/** One row of the overview "Recent activity" feed. Viewer-filtered server-side. */
-export interface OverviewActivityRow {
-  id: string;
-  channelId: string;
-  channelName: string;
-  kind: "message" | "thread_opened" | "thread_closed";
-  /** Display name of the acting user/agent; null when unattributable. */
-  actorName: string | null;
-  /** Message snippet or thread title, pre-truncated server-side. */
-  preview: string;
-  /** ISO timestamp. */
-  at: string;
-}
-
 /** One bar of the overview member-load card: share of user messages, last 30 days. */
 export interface OverviewMemberLoadRow {
   userId: string;
@@ -362,8 +348,12 @@ export interface WorkspaceOverview {
      *  archive feature (R-21, 2026-09-17). */
     channels: number;
   };
-  /** Newest first, viewer-filtered, at most 8 rows. */
-  activity: OverviewActivityRow[];
+  // ⚠ `activity: OverviewActivityRow[]` STOOD HERE AND IS DELETED (Samuel,
+  // 2026-09-18: remove the Activity panel completely). The row type, the
+  // service's `mergeActivity`, and the three repository reads that fed it went
+  // with it — the panel was the payload's only reader. ⚠ An OLDER desktop
+  // bundle reads `.activity` UNGUARDED, so this is a wire break the version
+  // gate is what covers (`dopl-desktop-app/main/version-gate.js`).
   /**
    * Top members by 30-day user-authored message count, at most 6 rows,
    * descending. `totalMessages` is the shared denominator.

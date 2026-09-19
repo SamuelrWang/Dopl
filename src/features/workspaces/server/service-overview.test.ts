@@ -13,9 +13,6 @@ vi.mock("./repository-overview", () => ({
   countActiveMembers: vi.fn(),
   countOpenChannels: vi.fn(),
   listVisibleChannelRefs: vi.fn(),
-  listRecentMessages: vi.fn(),
-  listRecentTasksOpened: vi.fn(),
-  listRecentTasksClosed: vi.fn(),
   listRecentUserMessageAuthors: vi.fn(),
   countMessagesInWindow: vi.fn(),
   countMcpCallsInWindow: vi.fn(),
@@ -34,7 +31,6 @@ vi.mock("./service-usage", () => ({
 import {
   getWorkspaceOverview,
   getWorkspaceOverviewSeries,
-  mergeActivity,
   parseSeriesMetric,
   seriesWindows,
   tallyMemberLoad,
@@ -61,9 +57,6 @@ beforeEach(() => {
   mocked.countActiveMembers.mockResolvedValue(0);
   mocked.countOpenChannels.mockResolvedValue(0);
   mocked.listVisibleChannelRefs.mockResolvedValue([]);
-  mocked.listRecentMessages.mockResolvedValue([]);
-  mocked.listRecentTasksOpened.mockResolvedValue([]);
-  mocked.listRecentTasksClosed.mockResolvedValue([]);
   mocked.listRecentUserMessageAuthors.mockResolvedValue([]);
   mocked.countMessagesInWindow.mockResolvedValue(0);
   mocked.countMcpCallsInWindow.mockResolvedValue(0);
@@ -253,103 +246,14 @@ describe("tallyMemberLoad", () => {
   });
 });
 
-describe("mergeActivity", () => {
-  const channelNames = new Map([["c1", "general"]]);
-  const names = new Map<string, string | null>([["u1", "Ada"]]);
-
-  it("interleaves the three feeds newest-first and caps at 8", () => {
-    const rows = mergeActivity({
-      messages: Array.from({ length: 8 }, (_, i) => ({
-        id: `m${i}`,
-        channel_id: "c1",
-        author_user_id: "u1",
-        body: "hello",
-        created_at: `2026-08-${10 + i}T00:00:00.000Z`,
-      })),
-      opened: [
-        {
-          id: "t1",
-          channel_id: "c1",
-          title: "Ship it",
-          created_by: "u1",
-          created_at: "2026-08-21T00:00:00.000Z",
-          closed_at: null,
-        },
-      ],
-      closed: [
-        {
-          id: "t0",
-          channel_id: "c1",
-          title: "Old thing",
-          created_by: "u1",
-          created_at: "2026-08-01T00:00:00.000Z",
-          closed_at: "2026-08-22T00:00:00.000Z",
-        },
-      ],
-      channelNames,
-      names,
-    });
-
-    expect(rows).toHaveLength(8);
-    expect(rows[0]).toMatchObject({
-      id: "thread_closed:t0",
-      kind: "thread_closed",
-    });
-    expect(rows[1]).toMatchObject({
-      id: "thread_opened:t1",
-      kind: "thread_opened",
-      actorName: "Ada",
-    });
-    expect(rows.map((r) => r.at)).toEqual(
-      [...rows].map((r) => r.at).sort().reverse()
-    );
-  });
-
-  it("leaves thread_closed unattributed — the schema records no closer", () => {
-    const [row] = mergeActivity({
-      messages: [],
-      opened: [],
-      closed: [
-        {
-          id: "t0",
-          channel_id: "c1",
-          title: "Done",
-          created_by: "u1",
-          created_at: "2026-08-01T00:00:00.000Z",
-          closed_at: "2026-08-22T00:00:00.000Z",
-        },
-      ],
-      channelNames,
-      names,
-    });
-    // ⚠ Naming the OPENER here would be a fabrication, not a fallback.
-    expect(row.actorName).toBeNull();
-  });
-
-  it("truncates the preview server-side and collapses whitespace", () => {
-    const [row] = mergeActivity({
-      messages: [
-        {
-          id: "m1",
-          channel_id: "c1",
-          author_user_id: null,
-          body: `${"x".repeat(400)}\n\n  y`,
-          created_at: "2026-08-22T00:00:00.000Z",
-        },
-      ],
-      opened: [],
-      closed: [],
-      channelNames,
-      names,
-    });
-    expect(row.preview).toHaveLength(120);
-    expect(row.preview.endsWith("…")).toBe(true);
-    expect(row.actorName).toBeNull();
-  });
-});
-
 describe("getWorkspaceOverview", () => {
-  it("fences activity to the caller's VISIBLE channels, server-side", async () => {
+  /**
+   * ⚠ THE FENCE READ SURVIVES THE ACTIVITY PANEL (2026-09-18). Its three
+   * consumers went with the feed, but `listVisibleChannelRefs` is ALSO the
+   * usage rails' fence (`service-usage.ts`), so what is pinned here is that the
+   * caller's own id still decides the channel set — not that a feed reads it.
+   */
+  it("asks the visible-channel fence for THIS caller", async () => {
     mocked.listVisibleChannelRefs.mockResolvedValue([
       { id: "c1", name: "general" },
       { id: "c2", name: "private-ops" },
@@ -361,22 +265,13 @@ describe("getWorkspaceOverview", () => {
       WORKSPACE,
       "user-1"
     );
-    // ⚠ Every activity read takes the fenced id list as its ENTIRE fence —
-    // these run on the RLS-bypassing admin client.
-    for (const fn of [
-      mocked.listRecentMessages,
-      mocked.listRecentTasksOpened,
-      mocked.listRecentTasksClosed,
-    ]) {
-      expect(fn).toHaveBeenCalledWith(["c1", "c2"], 8);
-    }
   });
 
-  it("never reads activity at all when the caller can see no channel", async () => {
-    mocked.listVisibleChannelRefs.mockResolvedValue([]);
+  /** 🔒 THE PANEL IS GONE FROM THE WIRE, NOT MERELY FROM THE PAGE (Samuel,
+   *  2026-09-18): no `activity` key, and no read that would fill one. */
+  it("answers no activity key at all", async () => {
     const overview = await getWorkspaceOverview(WORKSPACE, "user-1", NOW);
-    expect(mocked.listRecentMessages).toHaveBeenCalledWith([], 8);
-    expect(overview.activity).toEqual([]);
+    expect("activity" in overview).toBe(false);
   });
 
   it("counts workspace-wide — an unfenced caller still gets true totals", async () => {

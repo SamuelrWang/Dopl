@@ -24,7 +24,6 @@ import { OverviewHeader } from "./overview-header";
 import { OverviewSkeleton } from "./overview-skeleton";
 import { PeriodStats } from "./period-stats";
 import { ACCOUNT_STATUS_PATH, NeedsYou, needsYouRows } from "./needs-you";
-import { RecentActivity } from "./recent-activity";
 import { StatCards } from "./stat-cards";
 
 /**
@@ -32,7 +31,7 @@ import { StatCards } from "./stat-cards";
  * it are pure props (there is no `overview-data.ts` any more).
  *
  * THREE reads, ONE gate:
- *   - `…/overview`         counts + recent activity + member load
+ *   - `…/overview`         counts + member load + the wave-8 panels
  *   - `…/overview-series`  the histogram, one metric at a time
  *   - `/api/billing/status` credits, via the SAME hook the settings modal's
  *     billing pane uses — one cache entry serves both, no second credits read.
@@ -168,14 +167,13 @@ function OverviewSurface({
             rows={needsYouRows(waiting.data, workspaceId)}
             segment={segment}
           />
-          {/* 48/52 split, matching the reference's uneven bottom row. */}
-          <div className="grid grid-cols-[48fr_52fr] gap-3">
-            <RecentActivity rows={overview.data.activity} />
-            <MemberLoad
-              totalMessages={overview.data.memberLoad.totalMessages}
-              rows={overview.data.memberLoad.rows}
-            />
-          </div>
+          {/* ⚠ FULL WIDTH SINCE THE ACTIVITY PANEL LEFT (Samuel, 2026-09-18).
+              It shared a 48/52 grid with "Recent activity"; a one-child grid
+              would be a row waiting for a sibling that is not coming back. */}
+          <MemberLoad
+            totalMessages={overview.data.memberLoad.totalMessages}
+            rows={overview.data.memberLoad.rows}
+          />
         </div>
       </div>
     </div>

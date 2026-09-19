@@ -1,8 +1,6 @@
 import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
-import { truncatePreview } from "@/shared/lib/preview";
 import type {
-  OverviewActivityRow,
   OverviewMemberLoadRow,
   OverviewSeriesMetric,
   OverviewSeriesPoint,
@@ -31,15 +29,9 @@ import {
   countOpenChannels,
   countRunningSessions,
   countThreadsInWindow,
-  listRecentMessages,
-  listRecentTasksClosed,
-  listRecentTasksOpened,
   listRecentUserMessageAuthors,
   listVisibleChannelRefs,
   type DayWindow,
-  type OverviewMessageRow,
-  type OverviewTaskRow,
-  type VisibleChannelRef,
 } from "./repository-overview";
 import { listProfileSummaries } from "./repository";
 
@@ -60,8 +52,6 @@ import { listProfileSummaries } from "./repository";
  *    ruling: filtering in the renderer would still put the rows on the wire.
  */
 
-/** Rows the activity feed shows. */
-const ACTIVITY_LIMIT = 8;
 /** Bars the member-load card shows. */
 const MEMBER_LOAD_ROWS = 6;
 /** Window the member-load card describes. */
@@ -127,7 +117,7 @@ export function parseSeriesRange(raw: string | null): WorkspaceSeriesRange {
  * `channels/server/repository-visibility.ts › visibleChannelsOr`, the one
  * statement `listChannels` also builds from, so this route and the channels
  * page can never disagree about what "visible" means — the same argument the
- * activity feed's fence makes one function up.
+ * usage rails' fence makes with the same read.
  *
  * ⚠ IT LIVES IN THE SERVICE, not in the route, because the route may not talk
  * to a repository (§2). It answers a BOOLEAN rather than throwing so the caller
@@ -256,64 +246,6 @@ export async function getWorkspaceOverviewSeries(
   return { metric, range, days, truncated: false };
 }
 
-interface ActivityInput {
-  messages: OverviewMessageRow[];
-  opened: OverviewTaskRow[];
-  closed: OverviewTaskRow[];
-  channelNames: Map<string, string>;
-  names: Map<string, string | null>;
-}
-
-/**
- * Merge the three feeds into one newest-first list.
- *
- * ⚠ `thread_closed` rows carry `actorName: null` ON PURPOSE. `channel_tasks`
- * records `closed_at` but no closer, so who closed a thread is a fact this
- * schema does not hold; the contract's "null when unattributable" is that case,
- * and naming the OPENER there would be a fabrication in an audit-shaped feed.
- */
-export function mergeActivity(input: ActivityInput): OverviewActivityRow[] {
-  const channelName = (id: string) => input.channelNames.get(id) ?? "";
-  const rows: OverviewActivityRow[] = [
-    ...input.messages.map((m) => ({
-      id: `message:${m.id}`,
-      channelId: m.channel_id,
-      channelName: channelName(m.channel_id),
-      kind: "message" as const,
-      actorName: m.author_user_id
-        ? (input.names.get(m.author_user_id) ?? null)
-        : null,
-      preview: truncatePreview(m.body),
-      at: m.created_at,
-    })),
-    ...input.opened.map((t) => ({
-      id: `thread_opened:${t.id}`,
-      channelId: t.channel_id,
-      channelName: channelName(t.channel_id),
-      kind: "thread_opened" as const,
-      actorName: input.names.get(t.created_by) ?? null,
-      preview: truncatePreview(t.title),
-      at: t.created_at,
-    })),
-    ...input.closed
-      .filter((t): t is OverviewTaskRow & { closed_at: string } =>
-        Boolean(t.closed_at)
-      )
-      .map((t) => ({
-        id: `thread_closed:${t.id}`,
-        channelId: t.channel_id,
-        channelName: channelName(t.channel_id),
-        kind: "thread_closed" as const,
-        actorName: null,
-        preview: truncatePreview(t.title),
-        at: t.closed_at,
-      })),
-  ];
-  return rows
-    .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
-    .slice(0, ACTIVITY_LIMIT);
-}
-
 /** Top authors by share of the scanned window, descending. */
 export function tallyMemberLoad(
   authorIds: string[],
@@ -347,10 +279,6 @@ async function resolveNames(
   return out;
 }
 
-function channelNameMap(refs: VisibleChannelRef[]): Map<string, string> {
-  return new Map(refs.map((r) => [r.id, r.name]));
-}
-
 /**
  * The whole page in one round trip, minus the histogram (its own route, because
  * the metric is a query PARAMETER the user switches) and credits (already
@@ -379,13 +307,6 @@ export async function getWorkspaceOverview(
       ),
     ]);
 
-  const channelIds = visible.map((c) => c.id);
-  const [messages, opened, closed] = await Promise.all([
-    listRecentMessages(channelIds, ACTIVITY_LIMIT),
-    listRecentTasksOpened(channelIds, ACTIVITY_LIMIT),
-    listRecentTasksClosed(channelIds, ACTIVITY_LIMIT),
-  ]);
-
   // ⚠ **THE WAVE-8 PANELS RIDE THE SAME ROUND TRIP (R-29(b)).** The rails and
   // the board are part of the page's FIRST FRAME — the skeleton is this page's
   // own shape, module for module — so a second endpoint would paint them in
@@ -393,24 +314,16 @@ export async function getWorkspaceOverview(
   // ⚠ The SERIES stays its own route, because its `metric` and `range` are
   // parameters the reader switches (§9).
   const [names, usage, agents] = await Promise.all([
-    resolveNames([
-      ...authorIds,
-      ...messages.flatMap((m) => (m.author_user_id ? [m.author_user_id] : [])),
-      ...opened.map((t) => t.created_by),
-    ]),
+    // ⚠ MEMBER LOAD'S AUTHORS AND NOTHING ELSE since the activity feed left
+    // (2026-09-18). It also carried the feed's message authors and thread
+    // openers, which is why this list was a spread of three.
+    resolveNames(authorIds),
     getWorkspaceUsage(workspaceId, visible, now),
     getWorkspaceAgentBoard(workspaceId, userId, visible),
   ]);
 
   return {
     counts: { messagesToday, agentsRunning, members, channels },
-    activity: mergeActivity({
-      messages,
-      opened,
-      closed,
-      channelNames: channelNameMap(visible),
-      names,
-    }),
     memberLoad: tallyMemberLoad(authorIds, names),
     usage,
     agents,
