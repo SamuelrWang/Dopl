@@ -23,7 +23,7 @@ import type { DoplClient } from "@dopl/client";
 import { inlineOr, NO_NAME, NO_PATH } from "./narration";
 import { ok, err, isConflict, isAlreadyExists, isApiError, apiMessage, type ToolResponse } from "./respond";
 import { KB_TARGET_VANISHED, refusal, versionConflict } from "./tool-errors";
-import { agentWriteDenied, resolveBaseOr, writeOr } from "./knowledge-shared";
+import { resolveBaseOr, writeOr } from "./knowledge-shared";
 // ⚠ THE `zod` → SENTENCE TRANSLATION LIVES APART (S52, 2026-09-18) — see
 // `knowledge-validation.ts`'s header for the seam and for the rule it enforces.
 import {

@@ -35,16 +35,6 @@ import {
   homeChannelRowNotShared,
   resolveChannelShareTarget,
 } from "./container-destination";
-import {
-  channelScopeRefusal,
-  grantedLine,
-  isGrantRefusal,
-  levelForScope,
-  notOwnedRefusal,
-  resolveGrantScopeId,
-  type GrantLevelArg,
-  type GrantScopeArg,
-} from "./grant";
 
 /*
  * ⚠ Write confirmations read back the STORED value, not the argument (a
