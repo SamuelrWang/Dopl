@@ -50,7 +50,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.opSetAgentMode = opSetAgentMode;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
-const channel_agent_id_1 = require("./channel-agent-id");
+// ⚠ THE SHARED TARGET CHECK (`channel-agent-target.ts`, S51, 2026-09-18) — the strip every
+// manage verb already did, plus the check three of them were missing.
+const channel_agent_target_1 = require("./channel-agent-target");
 const channel_ops_agent_1 = require("./channel-ops-agent");
 // ⚠ SHARED WITH THE LAUNCH OP, NOT COPIED. Both lanes can be clamped and both
 // must say "not reported" in the same word; two statements of that distinction
@@ -130,14 +132,18 @@ async function opSetAgentMode(client, ref, agentId, modes, opts = {}) {
     // its NAME no longer reaches the result: a fact line names the AGENT and the
     // posture, and the room the caller just addressed by ref is not news to it
     // (T10). Every sibling verb on this tool renders the same way.
+    // ⚠ **STRIPPED AND NOW VALIDATED** — the shared helper `end`, `rename` and `direct` also
+    // use (S51). `read_sessions` prints `@agent-<id>`, so the pasted form stays accepted; a NAME
+    // handle is refused BY NAME here instead of dying at the create schema as a bare
+    // `VALIDATION_FAILED`. ⚠ AHEAD OF THE CHANNEL LOOKUP: a refusal needing no round trip
+    // must not cost one.
+    const target = (0, channel_agent_target_1.agentTarget)(agentId);
+    if ((0, channel_agent_target_1.isAgentTargetRefusal)(target))
+        return target;
+    const agent = target.agent;
     const channel = await (0, channel_shared_1.resolveChannelOr)(client, ref);
     if ((0, channel_shared_1.isErr)(channel))
         return channel;
-    // ⚠ STRIPPED, NOT VALIDATED — the shared helper `end_agent` and `direct_agent`
-    // both use. `read_sessions` prints `@agent-<id>`, so that is what a model
-    // copies, and refusing the pasted form would 400 a caller for doing exactly
-    // what the neighbouring op taught.
-    const agent = (0, channel_agent_id_1.bareAgentId)(agentId);
     const want = asked(modes.tools, modes.messages);
     const filed = await (0, channel_ops_agent_1.fileAndHold)(client, ref, {
         kind: "set_agent_mode",

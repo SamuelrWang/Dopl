@@ -40,6 +40,11 @@ const channel_facts_1 = require("./channel-facts");
 // and `rename_agent` became its second and third callers; the whole argument for
 // why four characters of logic still deserve one home is in that module.
 const channel_agent_id_1 = require("./channel-agent-id");
+// ⚠ AND THE CHECK THAT GOES WITH IT ON THE MANAGE LANE (`channel-agent-target.ts`, S51,
+// 2026-09-18). ⚠ **`opReadDirections` BELOW DELIBERATELY KEEPS THE BARE STRIP**: its `agent`
+// is a FILTER over rows the caller already owns, not an address, so an unmatchable value
+// answers an empty list rather than filing anything — there is nothing there to refuse.
+const channel_agent_target_1 = require("./channel-agent-target");
 const narration_1 = require("./narration");
 /** Default and cap for the bounded hold. ⚠ Mirrors `channel-schema.ts › wait_ms`;
  *  the schema is what an MCP client sees, this is what runs. */
@@ -95,6 +100,13 @@ const RETRY_ADVICE = {
  * (one of five sentences), PENDING/EXPIRED (the id, and do not re-issue).
  */
 async function opDirectAgent(client, ref, agentId, body, opts = {}) {
+    // ⚠ **THE TARGET IS CHECKED FIRST** (S51, 2026-09-18) — a direction to a NAME HANDLE used to
+    // reach the route and die as a bare `VALIDATION_FAILED` naming no field. The pasted
+    // `@agent-<id>` form is still accepted, and this costs no round trip.
+    const target = (0, channel_agent_target_1.agentTarget)(agentId);
+    if ((0, channel_agent_target_1.isAgentTargetRefusal)(target))
+        return target;
+    const agent = target.agent;
     // ⚠ PRE-RESOLVED, like the launch op and unlike the hot read paths: this op is
     // cold (one call, then a hold), and the result names the channel repeatedly.
     const channel = await (0, channel_shared_1.resolveChannelOr)(client, ref);
@@ -103,7 +115,6 @@ async function opDirectAgent(client, ref, agentId, body, opts = {}) {
     // ⚠ THE CHANNEL NAME IS NO LONGER RENDERED. Every result below is a fact line
     // keyed on the AGENT, which is what the caller acts on; the channel is the
     // caller's own argument from this call and repeating it back bought nothing.
-    const agent = (0, channel_agent_id_1.bareAgentId)(agentId);
     let created;
     try {
         created = await client.createAgentDirection({

@@ -37,10 +37,18 @@ exports.pendingFacts = pendingFacts;
 exports.fileAndHold = fileAndHold;
 exports.opEndAgent = opEndAgent;
 exports.opRenameAgent = opRenameAgent;
+// ⚠ NO `err` HERE SINCE 2026-09-18 — every refusal this file used to WRITE now lives in
+// `channel-agent-target.ts` (the not-an-id arm and `foreignAgent`), so this module builds
+// only `ok` fact lines and returns refusals its neighbour composed.
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 const agent_display_name_1 = require("./agent-display-name");
-const channel_agent_id_1 = require("./channel-agent-id");
+// ⚠ **THE TWO "WHICH AGENT IS THIS" REFUSALS ARE A NEIGHBOUR** (`channel-agent-target.ts`,
+// 2026-09-18) — this file was at the §1 cap, and the seam is the one
+// `channel-ops-launch-name.ts` draws for the launch lane: the STRIP plus the CHECK plus the
+// sentence, in one module the four manage verbs share. `foreignAgent` moved with them because
+// it answers the same question one step later ("that id is not yours").
+const channel_agent_target_1 = require("./channel-agent-target");
 // ⚠ ONE write-result renderer, shared with post / create_thread / launch / direct.
 const channel_facts_1 = require("./channel-facts");
 /** Peer-influenced display text, neutralized — never an empty span. */
@@ -105,30 +113,6 @@ const RETRY_ADVICE = {
     // asked to chain. Arriving here means the machines disagree; still `no`.
     "no-chain": "no",
 };
-/**
- * ⚠ **THE FOREIGN-AGENT REFUSAL IS THE ONE THIS SURFACE ANSWERS ITSELF**, before
- * any row exists — a 403 `CHANNEL_AGENT_FOREIGN` out of the create. Every other
- * outcome comes back from a machine.
- *
- * ⚠ IT NAMES THE FACT PLAINLY RATHER THAN 404-ING, and the server's error
- * docblock argues why that discloses nothing: the caller already proved
- * membership of the channel, inside which `op="rooms" action="members"` and `op="status"`
- * are readable anyway. A 404 here would tell an orchestrator its OWN agent had
- * vanished and send it to re-launch — the expensive wrong answer.
- *
- * ⚠ IT STAYS PROSE WHERE THE SUCCESS PATHS BECAME FACT LINES (T10, 2026-09-02),
- * and the distinction is the tier's own: a REFUSAL is not narration under a write
- * that happened, it is the answer to a call that was never made. It also has to
- * close a door — "do not look for another route" — which is an instruction, not
- * a fact about a row.
- */
-function foreignAgent(agentId, verb) {
-    return (0, respond_1.err)([
-        `Nothing was ${verb} — agent \`${agentId}\` is ANOTHER MEMBER'S, and **no request was filed**.`,
-        `You can only manage agents running on YOUR OWN operator's machine. A peer's agent appears in a channel as a handle and is not reachable from here at all — there is no permission that would change that, so do not look for another route and do not ask anyone to grant one.`,
-        `dopl_channel(op="status") lists exactly the agents you CAN manage. If you meant one of yours, take the id from there.`,
-    ].join("\n"));
-}
 /**
  * THE PENDING FACTS. ⚠ **`retry=no` IS THE ONE INSTRUCTION THAT COULD NOT BECOME
  * A BARE FACT AND DID NOT**: a second directive is a second request for the same
@@ -232,7 +216,7 @@ input, waitMs) {
         if (apiErrorCode(e) === "CHANNEL_AGENT_FOREIGN") {
             return {
                 done: true,
-                response: foreignAgent(input.agentId, VERB_PAST[input.kind]),
+                response: (0, channel_agent_target_1.foreignAgent)(input.agentId, VERB_PAST[input.kind]),
             };
         }
         if ((0, respond_1.isNotFound)(e))
@@ -276,18 +260,21 @@ input, waitMs) {
  * abort the calling turn; nothing on this lane can be in that position.
  */
 async function opEndAgent(client, ref, agentId, opts = {}) {
+    // ⚠ **THE TARGET IS CHECKED BEFORE THE CHANNEL LOOKUP** (S51, 2026-09-18): a refusal that
+    // needs no round trip must not cost one. ⚠ STRIPPED **AND NOW VALIDATED** — the pasted
+    // `@agent-<id>` form is still accepted, exactly as before; what is refused is a NAME HANDLE,
+    // which `to`'s describe used to offer flatly and which nothing on this lane can resolve. It
+    // used to reach the create schema and die as a bare `VALIDATION_FAILED` naming no field.
+    const target = (0, channel_agent_target_1.agentTarget)(agentId);
+    if ((0, channel_agent_target_1.isAgentTargetRefusal)(target))
+        return target;
+    const agent = target.agent;
     const channel = await (0, channel_shared_1.resolveChannelOr)(client, ref);
     if ((0, channel_shared_1.isErr)(channel))
         return channel;
     // ⚠ THE CHANNEL NAME IS NO LONGER RENDERED. Every result on this lane is a
     // fact line keyed on the AGENT, which is what the caller acts on; the channel
     // is the caller's own argument from this call and echoing it bought nothing.
-    // ⚠ STRIPPED, NOT VALIDATED, and the shared helper is the one `direct_agent`
-    // uses: `read_sessions` prints `@agent-<id>`, so that is what a model copies,
-    // and refusing the pasted form would 400 a caller for doing exactly what the
-    // neighbouring op taught. A value that is not an id after this is refused by the
-    // create schema with a message that NAMES the field.
-    const agent = (0, channel_agent_id_1.bareAgentId)(agentId);
     const filed = await fileAndHold(client, ref, { kind: "end", channel: channel.id, agentId: agent }, opts.waitMs);
     if (filed.done)
         return filed.response;
@@ -340,13 +327,19 @@ async function opEndAgent(client, ref, agentId, opts = {}) {
  * ⚠ AN EMPTY `name` CLEARS, back to `Agent #<id>`. One verb, not two.
  */
 async function opRenameAgent(client, ref, agentId, name, opts = {}) {
+    // ⚠ **THE SAME TARGET CHECK `opEndAgent` MAKES, AND FOR THE SAME REASON** (S51): a rename
+    // addressed to a name handle reached the create schema and came back as a bare
+    // `VALIDATION_FAILED`. The pasted `@agent-<id>` form is still accepted.
+    const target = (0, channel_agent_target_1.agentTarget)(agentId);
+    if ((0, channel_agent_target_1.isAgentTargetRefusal)(target))
+        return target;
+    const agent = target.agent;
     const channel = await (0, channel_shared_1.resolveChannelOr)(client, ref);
     if ((0, channel_shared_1.isErr)(channel))
         return channel;
     // ⚠ THE CHANNEL NAME IS NO LONGER RENDERED. Every result on this lane is a
     // fact line keyed on the AGENT, which is what the caller acts on; the channel
     // is the caller's own argument from this call and echoing it bought nothing.
-    const agent = (0, channel_agent_id_1.bareAgentId)(agentId);
     // ⚠ A SLUG IS NORMALIZED TO A DISPLAY NAME HERE — `agent-display-name.ts`, Samuel
     // 2026-09-17. It files and reports the string it measured, never the raw argument.
     const display = (0, agent_display_name_1.agentDisplayName)(name);

@@ -9,7 +9,8 @@ import "server-only";
  *   - `service-base-writes.ts` — base create/update/delete
  *   - `service-folders.ts`  — folder reads + writes + `getBaseTree`
  *   - `service-entries.ts`  — entry reads + writes + `resolveEntryRefs`
- *   - `service-paths.ts`    — path-addressed reads + writes
+ *   - `service-paths.ts`    — path-addressed entry reads + writes
+ *   - `service-paths-tree.ts` — path-addressed folder/tree ops (mkdir -p, move, list)
  *   - `service-storage.ts`  — per-KB storage cap (growth gate + limit)
  *   - `service-stars.ts`    — PER-USER base stars, scoped to ctx.userId
  *   - `service-pins.ts`     — WORKSPACE-WIDE pins (the launch reading list)
@@ -92,15 +93,17 @@ export {
   restoreEntryRevision,
 } from "./service-revisions-read";
 
+export { readFileByPath, writeFileByPath } from "./service-paths";
+export type { WriteFileByPathInput } from "./service-paths";
+// ⚠ THE TREE-SHAPE OPS SPLIT OFF AT THE §1 CAP (2026-09-18) — see
+// `service-paths-tree.ts`'s header. Re-exported here, so every importer is
+// unchanged and the seam is invisible outside this feature.
 export {
-  readFileByPath,
-  writeFileByPath,
   createFolderByPath,
   deleteByPath,
   moveByPath,
   listDirByPath,
-} from "./service-paths";
-export type { WriteFileByPathInput } from "./service-paths";
+} from "./service-paths-tree";
 
 export {
   assertStorageHeadroom,

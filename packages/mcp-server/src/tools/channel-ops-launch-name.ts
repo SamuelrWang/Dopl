@@ -19,6 +19,19 @@ import { err, type ToolResponse } from "./respond";
  */
 
 /**
+ * **HAND-MIRRORED FROM `schema-launch.ts › LaunchCreateSchema.agentName`'s `.max(60)`** — and
+ * from `main/agent-names.js › MAX_NAME`, the store at the far end that would bounce a longer
+ * one with `bad-name` even if the route took it (S50, 2026-09-18).
+ *
+ * ⚠ **IT WAS UNPUBLISHED UNTIL 2026-09-18.** `name` carries no `.max()` in the published shape
+ * — it serves four actions and the other three have no such bound — so a 61-character name
+ * reached the route and came back as a bare `VALIDATION_FAILED` naming no field. The number is
+ * in `name`'s own `.describe()` ("1-60 visible characters") and in `channel-errors.ts ›
+ * FIELD_CAPS_NOTE`; this is the third statement of it, and the only one that can refuse.
+ */
+export const LAUNCH_NAME_MAX_CHARS = 60;
+
+/**
  * The name this launch should file, or the refusal to return instead.
  *
  * ⚠ **IT ANSWERS A UNION RATHER THAN THROWING**, matching every other refusal on this lane: the
@@ -45,7 +58,23 @@ export function launchName(raw: string | undefined): { name: string } | ToolResp
   // ⚠ **A SLUG IS REPAIRED RATHER THAN REFUSED, AND ONLY AFTER THE TWO REFUSALS ABOVE**
   // (Samuel, 2026-09-17): `agent-display-name.ts` explains why this arm normalizes, and why
   // casing an id-shaped string BEFORE `looksLikeAgentId` would walk it past its own check.
-  return { name: agentDisplayName(name) };
+  const display = agentDisplayName(name);
+  // ⚠ **THE LENGTH IS MEASURED ON THE NORMALIZED VALUE, WHICH IS THE ONE THAT GETS FILED**
+  // (S50, 2026-09-18). `agentDisplayName` cannot LENGTHEN a string (its own docblock argues
+  // why), so this can never refuse a name the route would have taken — and measuring the raw
+  // argument instead would refuse on characters that were about to collapse.
+  if (display.length > LAUNCH_NAME_MAX_CHARS) {
+    return err(
+      [
+        // ⚠ THE SAME TOKEN GRAMMAR THE GOAL CAP USES (`channel-ops-launch-goal.ts`), and the
+        // same reason: a caller branches on the line, and two neighbours of one op spelling
+        // one verdict two ways is how a caller learns to parse prose instead.
+        `No agent was requested — field=name limit=${LAUNCH_NAME_MAX_CHARS} reason=name_too_long retry=no`,
+        `**Nothing was filed**: that name is ${display.length} characters. A name is a short ROLE a person reads on a card and other agents @-tag ("Research", "Bug reviewer") — what the agent is FOR goes in \`body\`, which is the opening instruction.`,
+      ].join("\n"),
+    );
+  }
+  return { name: display };
 }
 
 /**

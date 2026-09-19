@@ -172,9 +172,16 @@ async function writeKbFileByPath(t, baseId, path, input = {}, expectedVersion) {
     //                 writes landing after the caller's real read. 404 → create,
     //                 no precondition.
     //   - null      → force: blind overwrite, no precondition.
+    //   🔒 AND `null` ALSO SENDS `X-Expect-Existing` (S40, 2026-09-18). "Force"
+    //     means overwrite what is there, which is a BELIEF that something is; with
+    //     no precondition on the wire the server could not tell it from a create,
+    //     so a forced write at a path a move had vacated upserted a SECOND entry.
+    //     The header restores the guard without restoring the 412.
     let version;
+    let expectExisting = false;
     if (expectedVersion === null) {
         version = undefined;
+        expectExisting = true;
     }
     else if (expectedVersion === undefined) {
         let exists = false;
@@ -200,9 +207,16 @@ async function writeKbFileByPath(t, baseId, path, input = {}, expectedVersion) {
     }
     const data = await t.request(`/api/knowledge/bases/${enc(baseId)}/files`, {
         method: "PUT",
+        // ⚠ `clientWriteId` RIDES THE BODY like every other write field — the two
+        // HEADERS on this call are both about the write ATTEMPT (a precondition,
+        // and the "something is there" belief), which this is not.
         body: { path, ...input },
         toolName: "kb_write_file",
-        customHeaders: version ? { "X-Updated-At": version } : undefined,
+        customHeaders: version
+            ? { "X-Updated-At": version }
+            : expectExisting
+                ? { "X-Expect-Existing": "1" }
+                : undefined,
     });
     return data;
 }

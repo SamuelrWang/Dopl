@@ -156,6 +156,22 @@ export function serverDetail(e: unknown): string {
  * Route-enforced caps, quoted in invalid-request messages so an agent has a
  * number to act on. ⚠ HAND-COPIED from `src/features/channels/schema.ts`, and
  * `channel-schema.ts`'s zod mirrors the same numbers — sync all three.
+ *
+ * ⚠ **IT IS PER-CALL TEXT, NOT PUSHED PROSE**, and that is why it can afford to be complete
+ * where a `.describe()` cannot. It is governed by `write-result-budget.test.ts`, not by the
+ * connection budget (`tool-budget.test.ts`), so a cap listed here costs only the callers who
+ * actually got a 400 — which is exactly the audience that needs the number.
+ *
+ * ⚠ **`body` HAS THREE CAPS, NOT ONE, AND LISTING ONLY THE LOOSEST WAS THE DEFECT** (S50,
+ * 2026-09-18). One published param feeds three routes: `op="send"` at 16000
+ * (`schema.ts › ChannelMessageCreateSchema`), `op="manage" action="direct"` at 4000
+ * (`schema-direction.ts`), and `op="manage" action="launch"` at 2000 — the goal
+ * (`schema-launch.ts › LaunchCreateSchema.goal`). An agent told "body <=16000" after a launch
+ * was rejected has been handed the one number that does not apply to its call.
+ * ⚠ **`name` WAS MISSING ENTIRELY** for the same reason — it carries no `.max()` in the
+ * published shape because it serves four actions, and the launch/rename arms cap at 60
+ * (`LaunchCreateSchema.agentName`, `AgentDirectiveCreateSchema`'s rename arm, and
+ * `main/agent-names.js › MAX_NAME` at the far end).
  */
 export const FIELD_CAPS_NOTE =
-  "Field caps: summary <=200 characters, body <=16000, client_msg_id <=200.";
+  "Field caps: summary <=200 characters, body <=16000 on op=\"send\" but <=4000 as a direction and <=2000 as a launch goal, name <=60, client_msg_id <=200.";

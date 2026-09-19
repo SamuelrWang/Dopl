@@ -22,6 +22,7 @@ const identity_1 = require("./identity");
 const respond_1 = require("./respond");
 const knowledge_ops_read_1 = require("./knowledge-ops-read");
 const knowledge_ops_pin_1 = require("./knowledge-ops-pin");
+const knowledge_ops_grant_1 = require("./knowledge-ops-grant");
 const knowledge_ops_write_1 = require("./knowledge-ops-write");
 const grant_1 = require("./grant");
 const retired_copy_ops_1 = require("./retired-copy-ops");
@@ -77,7 +78,19 @@ const KB_INPUT_SHAPE = {
     title: zod_1.z.string().optional().describe("write_file: the entry's title, which can't contain '/' — it doubles as the addressable path for a new entry when `path` is omitted."),
     excerpt: zod_1.z.string().optional().describe("write_file: the entry's agent-facing summary (max 300), shown in get_tree/list_dir; on an update it changes only when provided."),
     expected_version: zod_1.z.string().optional().describe("write_file: the entry's Version from a prior read_file — required when overwriting (412 without it, and only force=true skips the check); creates need none."),
-    force: zod_1.z.boolean().optional().describe("write_file: overwrite even if the entry changed since you read it. Discards the other edit — use only when intentional."),
+    force: zod_1.z.boolean().optional().describe("write_file: overwrite even if the entry changed since you read it. Discards the other edit. REFUSED if the entry moved — a forced write at a vacated path would duplicate it."),
+    // 🔒 **THE ONE PUSHED COST OF THIS WAVE, AND IT BUYS THE ANSWER TO "DID MY
+    // WRITE LAND"** (S53). Without a key, a timed-out write leaves an agent with
+    // `force=true` as its only recovery — a blind overwrite aimed at a row it
+    // cannot verify. ⚠ THE DESCRIBE STATES THE CONTRACT AND NOT THE MECHANISM:
+    // author-scoping, the partial unique index and the race arm are server facts
+    // the caller cannot act on.
+    client_write_id: zod_1.z
+        .string()
+        .min(1)
+        .max(200)
+        .optional()
+        .describe('write_file/create_base: your idempotency key. Re-sending the same call with the same key returns the FIRST write instead of writing twice. Use after a timeout, never force=true.'),
     query: zod_1.z.string().optional().describe("search: required free-text query."),
     // ⚠ coerce: MCP clients sometimes send numbers as strings, which strict
     // z.number() rejects with an opaque -32602.
@@ -256,6 +269,7 @@ directory) {
                     description: args.description,
                     visibility: args.visibility,
                     confirm_token: args.confirm_token,
+                    client_write_id: args.client_write_id,
                 });
             }
             case "update_base": {
@@ -268,7 +282,7 @@ directory) {
                 const miss = (0, respond_1.missingParams)("grant", args, ["base", "scope", "to"]);
                 if (miss)
                     return miss;
-                return (0, knowledge_ops_write_1.opGrantBase)(client, directory, caller.userId, args.base, args.scope, args.to, args.level);
+                return (0, knowledge_ops_grant_1.opGrantBase)(client, directory, caller.userId, args.base, args.scope, args.to, args.level);
             }
             case "create_folder": {
                 const miss = (0, respond_1.missingParams)("create_folder", args, ["base", "path"]);
@@ -314,7 +328,7 @@ directory) {
                 if (args.body === "") {
                     return (0, respond_1.err)(`write_file: body cannot be empty — pass content (or a single space for a stub).`);
                 }
-                return (0, knowledge_ops_write_1.opWriteFile)(client, args.base, path, args.body, args.title, args.expected_version, args.force, args.excerpt, args.section);
+                return (0, knowledge_ops_write_1.opWriteFile)(client, args.base, path, args.body, args.title, args.expected_version, args.force, args.excerpt, args.section, args.client_write_id);
             }
             case "move_file": {
                 const miss = (0, respond_1.missingParams)("move_file", args, ["base", "from_path", "to_path"]);

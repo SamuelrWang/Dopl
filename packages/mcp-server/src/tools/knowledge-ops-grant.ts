@@ -10,7 +10,7 @@
  */
 
 import type { DoplClient } from "@dopl/client";
-import { ok, type ToolResponse } from "./respond";
+import type { ToolResponse } from "./respond";
 import { resolveBaseOr } from "./knowledge-shared";
 import { isErr } from "./channel-shared";
 import type { WorkspaceDirectory } from "../workspace-directory";

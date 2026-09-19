@@ -110,6 +110,19 @@ async function opPin(client, ref, path, pinned) {
         ].join("\n"));
     }
     catch (e) {
+        // 🔒 **THE 403 EVERY MCP CALLER GETS, MAPPED (S43, 2026-09-18) — AND IT WAS
+        // THE FIRST THING THIS OP COULD HIT.** Both pin routes are `sessionOnly`
+        // (`src/app/api/knowledge/bases/[baseId]/pin/route.ts`,
+        // `…/entries/[entryId]/pin/route.ts`), and `shared/auth/with-auth.ts`
+        // answers every OAuth bearer 403 `SESSION_REQUIRED` — which is EVERY MCP
+        // caller. With no arm here that refusal rethrew past the registrar as an
+        // unhandled transport error, so the one op an agent can never perform was
+        // also the one that reported "the call failed" instead of saying why.
+        // ⚠ `retry=no` IS THE WHOLE POINT: this is not a permission anybody can
+        // grant this session, so an agent that re-issues re-issues forever.
+        const sessionOnly = (0, respond_1.sessionRequired)(e, pinned ? "pin" : "unpin");
+        if (sessionOnly)
+            return sessionOnly;
         // Read-only-to-agents base — clean message, not a raw dump.
         const denied = (0, knowledge_shared_1.agentWriteDenied)(e);
         if (denied)
