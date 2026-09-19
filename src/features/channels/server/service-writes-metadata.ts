@@ -294,26 +294,17 @@ export async function resolvePostMetadata(
   // fold, because only the verdict knows the answer.
   delete metadata.wake_reason;
   // ⚠ **THE TWO OUTSIDE-SESSION KEYS, STRIPPED ON `to_user_id`'s TERMS**
-  // (2026-09-18).
-  //   · `to_desktop` is an ADDRESS. A caller able to set it could put its words
-  //     on another operator's `dopl_status` board — the same forgery
-  //     `mentionedUserIds` is stripped to prevent, in a lane with no inbox to
-  //     audit it. Re-stamped in `service-writes.ts` from the RESOLVER's answer,
-  //     after the fold, because only the resolution knows whose it is — the same
-  //     placement `wake_reason` has, and for the same reason.
-  //   · `external_session` is an ATTRIBUTION. It is the whole basis of the
-  //     "outside session for <operator>" label a reader sees, so a settable copy
-  //     would let a desktop-run agent disguise itself as the operator's own
-  //     tooling, or an outside session pose as a product-run agent.
-  // ⚠ **BOTH ARE RE-STAMPED IN `service-writes.ts`, NOT HERE, AND THAT IS THE
-  // `wake_reason` PRECEDENT RATHER THAN AN EXCEPTION TO THIS FILE'S CHARTER.**
-  // Each needs a fact this fold does not hold: `to_desktop` needs the RESOLVER's
-  // answer, and `external_session` needs the settled `authorKind` — which is
-  // computed after this fold and may ESCALATE a cookie session's claim (F-580).
-  // Deriving the author kind a second time here, off `ctx.source`, would be a
-  // second definition of "is this an agent post" sitting one function away from
-  // the first, and the two would answer differently for the desktop's own
-  // cookie-lane agent posts.
+  // (2026-09-18). `to_desktop` is an ADDRESS — a caller able to set it could put
+  // its words on another operator's `dopl_status` board. `external_session` is
+  // an ATTRIBUTION, and the whole basis of the "outside session for <operator>"
+  // label, so a settable copy would let either kind pose as the other.
+  // ⚠ **BOTH ARE RE-STAMPED IN `service-writes.ts`, NOT HERE — the `wake_reason`
+  // precedent, not an exception to this file's charter.** Each needs a fact this
+  // fold does not hold: the RESOLVER's answer, and the settled `authorKind`
+  // (computed after this fold, and it may ESCALATE a cookie session's claim,
+  // F-580). Re-deriving the author kind here off `ctx.source` would be a second
+  // definition of "is this an agent post" that disagrees with the first for the
+  // desktop's own cookie-lane agent posts.
   delete metadata[DESKTOP_TO_METADATA_KEY];
   delete metadata[EXTERNAL_SESSION_METADATA_KEY];
   // ⚠ Desktop reads `handoff` to decide whether to OPEN A WINDOW, so a
