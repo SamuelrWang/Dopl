@@ -35,6 +35,7 @@
  */
 
 import { cn } from "@/shared/lib/utils";
+import { AgentPill } from "./agent-bits";
 import { agentBoxOf, agentPostAccent } from "./agent-box-rule";
 import { AuthoredRow } from "./authored-row";
 import {
@@ -203,20 +204,28 @@ export function EscalationCardMessage({
 
           <ul className="flex flex-col gap-1">
             {escalation.options.map((option, i) => (
-              <li key={i} className={BODY_TYPE}>
+              /* 🔒 **THE NAME IS A BLACK BADGE AND THE WORDS GO UNDER IT — NO
+                 DASH** (Samuel, 2026-09-20: *"it should be a black badge similar
+                 to what you have on the agents, where you have the ended badge …
+                 the badge and then under it is the text … No more dashes"*).
+                 ⚠ It is `agent-bits.tsx › AgentPill`, the ENDED badge's own face,
+                 by import — the third option that file's header names, so a
+                 fourth copy of those utility classes is not minted here. */
+              <li key={i} className="flex flex-col items-start gap-0.5">
+                <AgentPill>{decisionOptionName(i)}</AgentPill>
                 {/* ⚠ THE LABEL AND THE CONSEQUENCE ARE THEIR OWN ELEMENTS, not
                     one interpolated string: the same words are the BUTTON's
                     accessible name, and a test (or a reader) must be able to
                     find either one on its own. */}
-                <span className="font-medium">{decisionOptionName(i)}</span>
-                {" — "}
-                <span>{option.label}</span>
-                {option.consequence && (
-                  <>
-                    {": "}
-                    <span>{option.consequence}</span>
-                  </>
-                )}
+                <p className={BODY_TYPE}>
+                  <span>{option.label}</span>
+                  {option.consequence && (
+                    <>
+                      {": "}
+                      <span>{option.consequence}</span>
+                    </>
+                  )}
+                </p>
               </li>
             ))}
           </ul>
@@ -225,17 +234,20 @@ export function EscalationCardMessage({
               the agent should say its recommendation"*) — so it sits below the
               options and above the controls, never beside the option it names. */}
           {escalation.recommendation && (
-            <p className={BODY_TYPE}>
-              <span className="font-medium">
-                Recommended: {decisionOptionName(escalation.recommendation.index)}
-              </span>
+            /* ⚠ THE SAME BADGE AND THE SAME STACK — the recommendation NAMES an
+               option, so spelling it any other way here would be the dash back
+               in a second costume. */
+            <div className="flex flex-col items-start gap-0.5">
+              <p className={cn(BODY_TYPE, "flex items-center gap-1.5")}>
+                Recommended:
+                <AgentPill>
+                  {decisionOptionName(escalation.recommendation.index)}
+                </AgentPill>
+              </p>
               {escalation.recommendation.why && (
-                <>
-                  {" — "}
-                  <span>{escalation.recommendation.why}</span>
-                </>
+                <p className={BODY_TYPE}>{escalation.recommendation.why}</p>
               )}
-            </p>
+            </div>
           )}
 
           <div className="flex flex-wrap items-center gap-1.5 pt-0.5">

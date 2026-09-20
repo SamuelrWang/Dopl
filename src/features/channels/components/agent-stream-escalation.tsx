@@ -30,6 +30,7 @@
  */
 
 import { cn } from "@/shared/lib/utils";
+import { AgentPill } from "./agent-bits";
 import {
   DECISION_BTN_BASE,
   DECISION_BTN_BLACK,
@@ -96,32 +97,35 @@ export function AgentStreamEscalation({
           <p className={cn(BODY_TYPE, "whitespace-pre-wrap")}>{escalation.context}</p>
         )}
         <ul className="flex flex-col gap-0.5">
+          {/* ⚠ THE BADGE-OVER-TEXT STACK IS THE TRANSCRIPT CARD'S, verbatim
+              (Samuel, 2026-09-20) — same `AgentPill`, same absence of a dash. */}
           {escalation.options.map((option, i) => (
-            <li key={i} className={BODY_TYPE}>
-              <span className="font-medium">{decisionOptionName(i)}</span>
-              {" — "}
-              <span>{option.label}</span>
-              {option.consequence && (
-                <>
-                  {": "}
-                  <span>{option.consequence}</span>
-                </>
-              )}
+            <li key={i} className="flex flex-col items-start gap-0.5">
+              <AgentPill>{decisionOptionName(i)}</AgentPill>
+              <p className={BODY_TYPE}>
+                <span>{option.label}</span>
+                {option.consequence && (
+                  <>
+                    {": "}
+                    <span>{option.consequence}</span>
+                  </>
+                )}
+              </p>
             </li>
           ))}
         </ul>
         {escalation.recommendation && (
-          <p className={BODY_TYPE}>
-            <span className="font-medium">
-              Recommended: {decisionOptionName(escalation.recommendation.index)}
-            </span>
+          <div className="flex flex-col items-start gap-0.5">
+            <p className={cn(BODY_TYPE, "flex items-center gap-1.5")}>
+              Recommended:
+              <AgentPill>
+                {decisionOptionName(escalation.recommendation.index)}
+              </AgentPill>
+            </p>
             {escalation.recommendation.why && (
-              <>
-                {" — "}
-                <span>{escalation.recommendation.why}</span>
-              </>
+              <p className={BODY_TYPE}>{escalation.recommendation.why}</p>
             )}
-          </p>
+          </div>
         )}
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
           {escalation.options.map((option, i) => {

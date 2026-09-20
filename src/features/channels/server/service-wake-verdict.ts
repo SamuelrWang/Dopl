@@ -9,6 +9,7 @@ import {
   resolveAgentRecipients,
   selfAgentIdOf,
 } from "./service-wake-verdict-handles";
+import { isRecordPost } from "./service-wake-verdict-record";
 import type { ResponderReason } from "../lib/agent-mentions";
 import {
   defaultResponder,
@@ -279,25 +280,10 @@ export async function resolveWakeVerdict(
     toDesktop.length > 0 ||
     toUserId !== null;
 
-  /**
-   * **A RECORD — A POST FOR NOBODY, ON PURPOSE** (2026-09-18, Samuel: *"there
-   * are cases where maybe the agent … needs to post something to channel to have
-   * a record of it, but it's like really not meant for agents and it might not be
-   * meant for like users"*).
-   *
-   * ⚠ **IT IS `intent:"chat"`, THE FIELD THAT ALREADY MEANT THIS**, rather than a
-   * fourth `kind` and a second stored shape. `MessageIntentSchema`'s own contract
-   * is *"it STATES that this post is not work for anybody"*, `chat` + an address
-   * is already a 400 (`ChannelChatAddressedError`), and the row stays an ordinary
-   * `message` — same seq, same realtime, same transcript, no migration and no
-   * renderer arm. The MCP surface spells it `kind="record"`.
-   *
-   * ⚠ **WHAT IT ADDS IS THE ARMS.** Until now a `chat` post was still REPAIRED:
-   * the arms read only "nobody was addressed", which a record satisfies for a
-   * reason opposite to a forgotten `@`. Repairing one aims a wake at a post whose
-   * author said it was for nobody.
-   */
-  const isRecord = input.intent === "chat";
+  // **A RECORD — A POST FOR NOBODY, ON PURPOSE** (2026-09-18), and an AGENT'S
+  // CLAIM ONLY since 2026-09-20. The whole argument, and why a person's composer
+  // message is not one, is `service-wake-verdict-record.ts`.
+  const isRecord = isRecordPost(input.intent, wakeCtx.authorKind);
 
   /**
    * **THE AUTHOR TYPED A HANDLE AND THIS SERVER COULD NOT SAY WHOSE IT IS** —

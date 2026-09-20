@@ -142,6 +142,46 @@ describe("a RECORD is a post for nobody, and no arm repairs it", () => {
     expect(off.verdict).toBe("none");
   });
 
+  it("AND ON THE WIRE SHAPE THE COMPOSER ACTUALLY SENDS — `intent:\"chat\"` from a PERSON", async () => {
+    // 🔒 **SAMUEL, 2026-09-20: *"the auto-resolving to the most recent agent address is not
+    // working … I see it say Decision Card Coder as the most recent but then when I send a
+    // message, it is not properly sending to you."*** Every case above passed and the feature was
+    // off for four days, because none of them drove the shape a human message really has:
+    // `components/composer.tsx` stamps `intent:"chat"` on EVERY message a person types, and the
+    // record term read that as *a post for nobody*. RR3 never ran; tagging still worked, because
+    // a named agent is decided above the arms.
+    // ⚠ THIS CASE IS THE WIRE SHAPE, NOT A VARIANT. The arms above take no `intent` at all, which
+    // is a message no client sends.
+    roomProjection(sessionRow({ name: AGENT }));
+    const solo = await resolve("can someone look at the build?", {}, {
+      authorKind: "user",
+      intent: "chat",
+    });
+    expect(solo).toMatchObject({ verdict: "responder", recipientAgentIds: [AGENT] });
+
+    // …and the stickiness arm, the one Samuel watched drop off.
+    roomProjection(sessionRow({ name: AGENT }), sessionRow({ id: "s-2", name: AGENT2 }));
+    recentAgentPosts({ recipient_agent_ids: [AGENT2] });
+    const recent = await resolve("and this one?", {}, {
+      authorKind: "user",
+      intent: "chat",
+    });
+    expect(recent).toMatchObject({ verdict: "responder", recipientAgentIds: [AGENT2] });
+  });
+
+  it("an AGENT's record is UNCHANGED by that — the term still holds where it was ruled", async () => {
+    // ⚠ THE OTHER HALF OF THE 2026-09-20 NARROWING. `intent:"chat"` from an AGENT is still the
+    // post for nobody Samuel asked for; only the PERSON's composer stopped claiming it.
+    projection(sessionRow({ name: AGENT }));
+    const out = await resolve("filing the migration notes", {}, {
+      authorKind: "agent",
+      intent: "chat",
+    });
+    expect(out.verdict).toBe("none");
+    expect(out.recipientAgentIds).toEqual([]);
+    expect(out.delivery).toBe("none");
+  });
+
   it("a PERSON's unaddressed post is still ANSWERED — the arms are not disabled", async () => {
     // 🔒 **THE NEGATIVE CLAIM.** Samuel's *"a forgotten `@` must never stall a
     // conversation"* is about PEOPLE, and RR3 is what keeps it true. A build that

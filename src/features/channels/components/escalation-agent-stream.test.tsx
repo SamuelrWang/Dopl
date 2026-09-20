@@ -196,9 +196,19 @@ describe("the 2026-09-20 face, shared with the transcript card", () => {
     expect(card.style.backgroundColor).toBe("var(--surface-cta)");
   });
 
-  it("names the recommendation by the BUTTON's own word", () => {
-    draw([ESCALATION_POST], { onAnswerEscalation: () => {} });
-    expect(screen.getByText("Recommended: Option A")).toBeTruthy();
+  it("names the recommendation in the option's own badge, and carries no dash", () => {
+    const { container } = draw([ESCALATION_POST], {
+      onAnswerEscalation: () => {},
+    });
+    expect(screen.getByText("Recommended:")).toBeTruthy();
+    const card = container.querySelector(
+      "[data-agent-escalation]"
+    ) as HTMLElement;
+    const badge = Array.from(card.querySelectorAll("span")).find(
+      (el) => el.textContent === "Option A" && el.className.includes("rounded-[6px]")
+    );
+    expect(badge?.className).toContain("bg-surface-cta");
+    expect(card.textContent).not.toContain(" — ");
   });
 });
 
