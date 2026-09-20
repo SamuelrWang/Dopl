@@ -3,25 +3,19 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import { visibleChannelsOr } from "@/features/channels/server/repository-visibility";
 
 /**
- * Pure data access for the desktop Overview page: four head-counts, the
- * visible-channel fence, the 30-day member-load scan, and the daily bins behind
- * the histogram.
- *
- * ⚠ **THE THREE ACTIVITY FEEDS LEFT ON 2026-09-18** (`listRecentMessages`,
- * `listRecentTasksOpened`, `listRecentTasksClosed`, with their row types and
- * column lists) when Samuel removed the Activity panel completely. The FENCE
- * they were built around stayed: {@link listVisibleChannelRefs} is the usage
- * rails' scope too.
+ * Pure data access for the desktop Overview page: four head-counts, the three
+ * feeds its activity list merges, the 30-day member-load scan, and the daily
+ * bins behind the histogram.
  *
  * ⚠ Every function here uses the service-role admin client (RLS-BYPASSING).
  * The counts and the series are WORKSPACE-WIDE on purpose — they are aggregate
  * integers, and RLS would silently clip them to the caller's own channels,
  * which turns "messages today" into a per-caller number wearing a
- * workspace-wide label. Anything carrying CONTENT is the opposite case, and
- * {@link listVisibleChannelRefs} is why: it computes the fence from the
- * channels feature's one visibility statement, and every content read takes the
- * resulting id list AS ITS ENTIRE FENCE. ⚠ Never build that array from anything
- * a caller sent.
+ * workspace-wide label. The ACTIVITY feed is the opposite case: it carries
+ * CONTENT, so {@link listVisibleChannelRefs} computes its fence from the
+ * channels feature's one visibility statement and every activity read below
+ * takes the resulting id list AS ITS ENTIRE FENCE. ⚠ Never build that array
+ * from anything a caller sent.
  *
  * The generated `Database` type does not carry the channels tables, so
  * `supabaseAdmin()` is untyped here and results are cast at the boundary.
@@ -49,16 +43,15 @@ export interface VisibleChannelRef {
  * `channels/server/repository-visibility.ts › visibleChannelsOr`, the one
  * statement `listChannels` also builds from, so the overview and the channels
  * page can never disagree about what "visible" means. Everything downstream
- * takes the returned ids AS THE ENTIRE FENCE, because every content read runs
+ * takes the returned ids AS THE ENTIRE FENCE, because every activity read runs
  * on the RLS-bypassing admin client.
  *
  * ⚠ **THE ARCHIVE FILTER IS DELETED (Samuel's ruling R-21, 2026-09-17).** This
  * read carried `.is("archived_at", null)` on the reasoning that an archived room's
  * traffic is not "recent activity". There is no archived state now, so a channel
- * carrying an old stamp counts like any other. DMs are INCLUDED — they are
- * channels the caller belongs to, and this fence is the caller's own view, not a
- * workspace broadcast. ⚠ The feed that phrasing came from is gone (2026-09-18);
- * the fence it justified is not.
+ * carrying an old stamp contributes its activity like any other. DMs are INCLUDED —
+ * they are channels the caller belongs to, and this feed is the caller's own view,
+ * not a workspace broadcast.
  */
 export async function listVisibleChannelRefs(
   workspaceId: string,
@@ -97,6 +90,27 @@ export async function listVisibleChannelRefs(
   return (data ?? []) as VisibleChannelRef[];
 }
 
+/** Rows the activity merge reads. Narrow by design — no `metadata`, no body of
+ *  a non-`message` kind, nothing the feed does not render. */
+export interface OverviewMessageRow {
+  id: string;
+  channel_id: string;
+  author_user_id: string | null;
+  body: string;
+  created_at: string;
+}
+
+export interface OverviewTaskRow {
+  id: string;
+  channel_id: string;
+  title: string;
+  created_by: string;
+  created_at: string;
+  closed_at: string | null;
+}
+
+const MESSAGE_COLS = "id, channel_id, author_user_id, body, created_at";
+const TASK_COLS = "id, channel_id, title, created_by, created_at, closed_at";
 
 /** `channel_messages` of kind `message` created at or after `sinceIso`. */
 export async function countMessagesSince(
@@ -151,8 +165,55 @@ export async function countOpenChannels(workspaceId: string): Promise<number> {
   return count ?? 0;
 }
 
+/** Newest `message` rows across the already-fenced channel ids. */
+export async function listRecentMessages(
+  channelIds: string[],
+  limit: number
+): Promise<OverviewMessageRow[]> {
+  if (channelIds.length === 0) return [];
+  const { data, error } = await supabaseAdmin()
+    .from("channel_messages")
+    .select(MESSAGE_COLS)
+    .in("channel_id", channelIds)
+    .eq("kind", "message")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as OverviewMessageRow[];
+}
 
+/** Newest threads OPENED across the already-fenced channel ids. */
+export async function listRecentTasksOpened(
+  channelIds: string[],
+  limit: number
+): Promise<OverviewTaskRow[]> {
+  if (channelIds.length === 0) return [];
+  const { data, error } = await supabaseAdmin()
+    .from("channel_tasks")
+    .select(TASK_COLS)
+    .in("channel_id", channelIds)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as OverviewTaskRow[];
+}
 
+/** Newest threads CLOSED across the already-fenced channel ids. */
+export async function listRecentTasksClosed(
+  channelIds: string[],
+  limit: number
+): Promise<OverviewTaskRow[]> {
+  if (channelIds.length === 0) return [];
+  const { data, error } = await supabaseAdmin()
+    .from("channel_tasks")
+    .select(TASK_COLS)
+    .in("channel_id", channelIds)
+    .not("closed_at", "is", null)
+    .order("closed_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as OverviewTaskRow[];
+}
 
 /**
  * Author ids of user-authored messages in the window, NEWEST FIRST.

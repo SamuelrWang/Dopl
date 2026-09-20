@@ -30,6 +30,35 @@ const SERIES_PATH = `/api/workspaces/${SEGMENT}/overview-series`;
 
 const OVERVIEW: WorkspaceOverview = {
   counts: { messagesToday: 10, agentsRunning: 3, members: 13, channels: 7 },
+  activity: [
+    {
+      id: "a-1",
+      channelId: "c-1",
+      channelName: "general",
+      kind: "message",
+      actorName: "Samuel Wang",
+      preview: "Shipping the overview wiring",
+      at: "2026-08-22T09:05:00.000Z",
+    },
+    {
+      id: "a-2",
+      channelId: "c-2",
+      channelName: "research",
+      kind: "thread_opened",
+      actorName: "Research agent",
+      preview: "Competitor sweep",
+      at: "2026-08-22T08:40:00.000Z",
+    },
+    {
+      id: "a-3",
+      channelId: "c-2",
+      channelName: "research",
+      kind: "thread_closed",
+      actorName: null,
+      preview: "Pricing teardown",
+      at: "2026-08-21T17:10:00.000Z",
+    },
+  ],
   memberLoad: {
     totalMessages: 735,
     rows: [
@@ -159,16 +188,14 @@ describe("overview page", () => {
 
     // ⚠ AND IT IS THIS PAGE'S SHAPE, module for module (`./overview-skeleton.tsx`).
     // The shared ghost painted a 52px top bar over a THREE-up card row; the
-    // page is a `max-w-5xl` column with four stat cards, so a stat tile landed
-    // in a different place than its ghost.
-    // ⚠ The 48/52 bottom row went with the Activity panel (2026-09-18); the
-    // ghost's last card is full width, like the page's.
+    // page is a `max-w-5xl` column with four stat cards and the uneven 48/52
+    // bottom row, so a stat tile landed in a different place than its ghost.
     expect(container.querySelector(".max-w-5xl")).not.toBeNull();
     expect(container.querySelector(".grid-cols-4")).not.toBeNull();
-    expect(container.querySelector(".grid-cols-\\[48fr_52fr\\]")).toBeNull();
+    expect(container.querySelector(".grid-cols-\\[48fr_52fr\\]")).not.toBeNull();
   });
 
-  it("renders the header, the sections and every live figure", async () => {
+  it("renders the header, the five sections and every live figure", async () => {
     renderPage();
 
     expect(
@@ -201,12 +228,9 @@ describe("overview page", () => {
       // reader, so a position below the fold would reproduce the unread-card
       // failure it was built to fix.
       "Needs you",
-      // ⚠ "Recent activity" STOOD BETWEEN THESE TWO AND IS DELETED (Samuel,
-      // 2026-09-18): the panel, the payload key and the three reads behind it.
-      // Member load stands alone on the bottom row now, full width.
+      "Recent activity",
       "Member load, last 30 days",
     ]);
-    expect(screen.queryByText("Recent activity")).not.toBeInTheDocument();
 
     // Counts: single digits zero-padded, the rest grouped.
     expect(screen.getByText("10")).toBeInTheDocument();
@@ -220,9 +244,9 @@ describe("overview page", () => {
     expect(screen.getByText("37,520")).toBeInTheDocument();
     expect(screen.getByText("of 50,000 allowed")).toBeInTheDocument();
 
-    // ⚠ THE ACTIVITY ROWS WERE ASSERTED HERE AND ARE DELETED WITH THE PANEL
-    // (2026-09-18) — a message preview and the two thread chips. The payload
-    // carries no `activity` key at all now; the server suite pins that half.
+    expect(screen.getByText("Shipping the overview wiring")).toBeInTheDocument();
+    expect(screen.getByText("Thread opened")).toBeInTheDocument();
+    expect(screen.getByText("Thread closed")).toBeInTheDocument();
     expect(
       screen.getByText("Share of 735 messages, last 30 days")
     ).toBeInTheDocument();

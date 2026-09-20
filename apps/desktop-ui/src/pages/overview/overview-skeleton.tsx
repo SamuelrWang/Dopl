@@ -11,7 +11,7 @@ import { cn } from "@/shared/lib/utils";
  * widths: the `max-w-5xl` column inside `px-6 pt-6 pb-10`, `gap-4`, then
  * header → four `grid-cols-4` stat cards → the two-up period stats in their
  * `bg-bg-inset` well → the chart card over its `h-40` plot → the uneven
- * full-width bottom card. The generic ghost resolved into a 52px top bar and a
+ * `48fr_52fr` bottom row. The generic ghost resolved into a 52px top bar and a
  * three-up card row this page does not have, which is what "way off" meant
  * here.
  *
@@ -82,11 +82,11 @@ export function OverviewSkeleton({
             </div>
           </div>
 
-          {/* ⚠ ONE FULL-WIDTH CARD, NOT A 48/52 PAIR (2026-09-18). The row
-              held "Recent activity" beside Member load; the panel is deleted,
-              so ghosting two cards would promise a second one that never
-              arrives — the mismatch this file exists to prevent. */}
-          <Skeleton className="h-[228px] rounded-[14px]" />
+          {/* THE UNEVEN BOTTOM ROW — 48/52, matching the reference. */}
+          <div className="grid grid-cols-[48fr_52fr] gap-3">
+            <Skeleton className="h-[228px] rounded-[14px]" />
+            <Skeleton className="h-[228px] rounded-[14px]" />
+          </div>
         </div>
       </div>
     </SkeletonSurface>

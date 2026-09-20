@@ -13,7 +13,7 @@ interface Ctx {
 
 /**
  * GET — the desktop Overview page in one round trip: `WorkspaceOverview`
- * (stat-card counts, the member-load card, the wave-8 panels).
+ * (stat-card counts, the viewer-filtered activity feed, the member-load card).
  * The histogram is `./overview-series` — a separate route only because its
  * `metric` is a switchable query parameter, not a second view of this resource.
  *
@@ -61,7 +61,7 @@ export const GET = withUserAuth(
 
       const overview = await getWorkspaceOverview(workspace.id, userId);
 
-      // ⚠ Per-caller data (the content panels are fenced to THIS viewer's channels) —
+      // ⚠ Per-caller data (activity is fenced to THIS viewer's channels) —
       // never CDN-cacheable by URL alone.
       return NextResponse.json(overview, {
         headers: { "Cache-Control": "private, no-store" },

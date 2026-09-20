@@ -59,6 +59,17 @@ const WORKSPACE: Workspace = {
 
 const OVERVIEW: WorkspaceOverview = {
   counts: { messagesToday: 12, agentsRunning: 2, members: 5, channels: 7 },
+  activity: [
+    {
+      id: "message:m1",
+      channelId: "c1",
+      channelName: "general",
+      kind: "message",
+      actorName: "Ada",
+      preview: "shipped it",
+      at: "2026-08-22T09:00:00.000Z",
+    },
+  ],
   memberLoad: {
     totalMessages: 40,
     rows: [{ userId: "u1", name: "Ada", percent: 60 }],
@@ -92,7 +103,7 @@ describe("GET /api/workspaces/[workspaceSlug]/overview", () => {
     expect(await res.json()).toEqual(OVERVIEW);
   });
 
-  it("passes the RESOLVED workspace AND the caller — the payload is viewer-fenced", async () => {
+  it("passes the RESOLVED workspace AND the caller — activity is viewer-fenced", async () => {
     await GET(getReq(), routeCtx());
     // 🔒 …and the third argument is the CONTAINER LOCK, threaded from the
     // credential (2026-08-26). Every route in this family passes it; the scan in
