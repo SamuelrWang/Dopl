@@ -202,6 +202,7 @@ export function Transcript({
             <EscalationCardMessage
               key={row.id}
               row={row}
+              index={index}
               flash={row.id === flashId}
               busy={answerBusy}
               onAnswer={

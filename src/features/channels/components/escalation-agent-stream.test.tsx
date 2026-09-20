@@ -119,7 +119,9 @@ describe("answering from the stream", () => {
   it("reports the escalation's own message id and the index", () => {
     const onAnswer = vi.fn();
     draw([ESCALATION_POST], { onAnswerEscalation: onAnswer });
-    fireEvent.click(screen.getByRole("button", { name: "Wait for review" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Option B: Wait for review" })
+    );
     expect(onAnswer).toHaveBeenCalledWith("m-esc", 1);
   });
 
@@ -145,17 +147,58 @@ describe("answering from the stream", () => {
       answerBusy: true,
     });
     expect(
-      screen.getByRole("button", { name: "Ship now" }).hasAttribute("disabled")
+      screen
+        .getByRole("button", { name: "Option A: Ship now" })
+        .hasAttribute("disabled")
     ).toBe(true);
   });
 
   it("an ANSWERED card shows the choice and drops the buttons", () => {
-    draw([ESCALATION_POST], {
+    const { container } = draw([ESCALATION_POST], {
       onAnswerEscalation: () => {},
       answeredEscalations: new Map([["m-esc", 1]]),
     });
     expect(screen.queryAllByRole("button")).toHaveLength(0);
     expect(screen.getByText("Wait for review")).toBeTruthy();
+    // ⚠ THE STRIP STAYS AND SAYS WHICH ONE WON (Samuel, 2026-09-20): the chosen
+    // option keeps the black face, the rest take the switcher's grey. It is the
+    // transcript card's rule, in the surface that must not drift from it.
+    const options = Array.from(
+      container.querySelectorAll("[data-agent-escalation] [data-option-index]")
+    ) as HTMLElement[];
+    expect(options.map((el) => el.textContent)).toEqual(["Option A", "Option B"]);
+    expect(options[1].className).toContain("auth-btn-3d");
+    expect(options[0].className).toContain("bg-[var(--seg-fill)]");
+  });
+});
+
+describe("the 2026-09-20 face, shared with the transcript card", () => {
+  it("says Needs Your Decision and wears THIS agent's colour", () => {
+    const { container } = draw([ESCALATION_POST], {
+      onAnswerEscalation: () => {},
+      color: "agent-07",
+    });
+    expect(screen.getByText("Needs Your Decision")).toBeTruthy();
+    expect(screen.queryByText("Needs a decision")).toBeNull();
+    const card = container.querySelector(
+      "[data-agent-escalation]"
+    ) as HTMLElement;
+    expect(card.style.backgroundColor).toBe("var(--agent-color-07)");
+  });
+
+  it("falls back to BLACK with no colour assigned", () => {
+    const { container } = draw([ESCALATION_POST], {
+      onAnswerEscalation: () => {},
+    });
+    const card = container.querySelector(
+      "[data-agent-escalation]"
+    ) as HTMLElement;
+    expect(card.style.backgroundColor).toBe("var(--surface-cta)");
+  });
+
+  it("names the recommendation by the BUTTON's own word", () => {
+    draw([ESCALATION_POST], { onAnswerEscalation: () => {} });
+    expect(screen.getByText("Recommended: Option A")).toBeTruthy();
   });
 });
 

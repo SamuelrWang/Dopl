@@ -9,6 +9,7 @@
  */
 
 import { mentionedUserIdsOf } from "../lib/mentions";
+import { authorAgentIdOf } from "./agents-model";
 import {
   escalationAnswerOf,
   escalationOf,
@@ -48,6 +49,19 @@ export interface EscalationRow {
   author: AvatarPerson;
   authorLabel: string;
   time: string;
+  /**
+   * **AN AGENT WROTE IT**, and **WHICH AGENT** when the writer stamped one —
+   * the two fields `view-model-rows.ts › MessageRow` carries, under the same
+   * contract and read by the same predicate (`agent-box-rule.ts › agentBoxOf`).
+   *
+   * ⚠ **THEY ARE HERE FOR THE CARD'S BAR COLOUR** (Samuel, 2026-09-20: the bar
+   * wears the posting agent's colour, black when that agent has ended). ⚠ **AND
+   * THE COLOUR ITSELF IS NOT A FIELD**: a key returns to the channel's bank when
+   * a session ends, so it is resolved at RENDER off the live index, exactly as
+   * an agent's display name is.
+   */
+  agent: boolean;
+  agentId: string | null;
   /** The four fields, as the server stamped them. */
   escalation: ChannelEscalation;
   /** This viewer is one of the members it asked. */
@@ -128,6 +142,13 @@ export function toEscalationRow(
     id: message.id,
     seq: message.seq,
     side: message.authorUserId === index.currentUserId ? "me" : "peer",
+    // ⚠ THE SAME TWO LINES `view-model-rows.ts › toMessageRow` writes, and the
+    // `authorKind` guard is load-bearing on BOTH: a human post may carry any
+    // `client_msg_id` the client chose, including one shaped like the agent
+    // stamp, so reading the id unconditionally would let a caller hang an
+    // agent's identity — and its colour — off their own words.
+    agent: message.authorKind === "agent",
+    agentId: message.authorKind === "agent" ? authorAgentIdOf(message) : null,
     author: personFor(message, index),
     authorLabel: labelFor(message, index),
     time: formatTime(message.createdAt),

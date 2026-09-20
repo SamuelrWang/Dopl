@@ -48,6 +48,20 @@ import type { MessageRow } from "./view-model-rows";
 export type AgentBox = { color: AgentColorKey | null };
 
 /**
+ * **WHAT THIS PREDICATE ACTUALLY NEEDS OFF A ROW — the two stamped fields, and
+ * nothing else.**
+ *
+ * ⚠ **IT IS STRUCTURAL SO A SECOND ROW KIND CAN ASK THE SAME QUESTION** (the
+ * DECISION CARD, 2026-09-20: `view-model-escalation.ts › EscalationRow` carries
+ * the identical pair and the card's bar must be the colour the author's message
+ * rows already wear). Taking `MessageRow` whole would have forced either a cast
+ * at that call site or a second copy of the rule, which is the exact drift this
+ * module's docblock exists to prevent. `MessageRow` still satisfies it, so no
+ * caller moved.
+ */
+export type AgentAuthored = Pick<MessageRow, "agent" | "agentId">;
+
+/**
  * **AN ENDED AGENT'S PAINT** — the token, not a colour (Samuel's ruling: *"ended → neutral
  * `--border-strong`"*).
  *
@@ -110,7 +124,7 @@ export function agentPostAccent(box: AgentBox): AuthoredRowAccent {
  * carries the argument in full: the key returns to the channel's bank when the session
  * ends, so a stamped colour would keep painting a hue another member now owns.
  */
-export function agentBoxOf(row: MessageRow, index: AuthorIndex): AgentBox | null {
+export function agentBoxOf(row: AgentAuthored, index: AuthorIndex): AgentBox | null {
   if (!row.agent) return null;
   const agentId = row.agentId;
   if (agentId === null) return null;

@@ -106,7 +106,11 @@ describe("the card renders the four fields", () => {
     expect(
       screen.getByText("Reversible, nothing depends on it.")
     ).toBeTruthy();
-    expect(screen.getByText("Recommended")).toBeTruthy();
+    // ⚠ THE RECOMMENDATION IS THE LAST LINE, NOT A BADGE BESIDE AN OPTION
+    // (Samuel, 2026-09-20) — and it names the option by the BUTTON's own word,
+    // which is the only thing tying the prose to the control strip.
+    expect(screen.getByText("Recommended: Option A")).toBeTruthy();
+    expect(screen.queryByText("Recommended")).toBeNull();
   });
 
   it("is a CARD, not a message bubble — and it is keyed on METADATA, not on `kind`", () => {
@@ -176,12 +180,12 @@ describe("who gets buttons — the server's rule, restated", () => {
         onAnswerEscalation={() => {}}
       />
     );
-    expect(screen.getByRole("button", { name: "Ship now" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Option A: Ship now" })).toBeTruthy();
   });
 
   it("with NOBODY tagged, the AUTHOR's operator gets them", () => {
     draw([escalationMessage()], { onAnswerEscalation: () => {} });
-    expect(screen.getByRole("button", { name: "Ship now" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Option A: Ship now" })).toBeTruthy();
   });
 
   it("a member the escalation did not tag gets NO buttons — absent, not disabled", () => {
@@ -225,7 +229,9 @@ describe("pressing an option", () => {
     // escalation's stamp; a client-supplied id would aim the wake anywhere.
     const onAnswer = vi.fn();
     draw([escalationMessage()], { onAnswerEscalation: onAnswer });
-    fireEvent.click(screen.getByRole("button", { name: "Wait for review" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Option B: Wait for review" })
+    );
     expect(onAnswer).toHaveBeenCalledWith("m-esc", 1);
   });
 
@@ -235,7 +241,9 @@ describe("pressing an option", () => {
       answerBusy: true,
     });
     expect(
-      screen.getByRole("button", { name: "Ship now" }).hasAttribute("disabled")
+      screen
+        .getByRole("button", { name: "Option A: Ship now" })
+        .hasAttribute("disabled")
     ).toBe(true);
   });
 });
@@ -299,6 +307,115 @@ describe("an ANSWERED card", () => {
     );
     expect(screen.getByText(/Diana Taylor chose/)).toBeTruthy();
     expect(screen.queryByText(/Ada Lovelace chose/)).toBeNull();
+  });
+});
+
+describe("the 2026-09-20 face — the bar, and the buttons", () => {
+  const bar = (container: HTMLElement) =>
+    container.querySelector("[data-escalation-id='m-esc']") as HTMLElement;
+  const strip = (container: HTMLElement) =>
+    Array.from(
+      container.querySelectorAll("[data-escalation-id='m-esc'] [data-option-index]")
+    ) as HTMLElement[];
+
+  it("the bar says Needs Your Decision, in the PILL's own name type", () => {
+    // ⚠ Samuel: *"make the font styling of that header to be the same as that of
+    // the bolded text that's in the badge for the name of the agent"* — the pill
+    // spells it inline (`attribution-pill.tsx`), so the pairing can only be held
+    // by asserting both faces carry the same three classes.
+    draw([escalationMessage()], { onAnswerEscalation: () => {} });
+    const label = screen.getByText("Needs Your Decision");
+    for (const face of ["text-body", "font-semibold", "leading-tight"]) {
+      expect(label.className).toContain(face);
+    }
+    expect(screen.queryByText("Needs a decision")).toBeNull();
+  });
+
+  it("the bar wears the POSTING AGENT's colour", () => {
+    // The fixture's `client_msg_id` stamps agent `k3wpf7c5`; the index is what
+    // says which key that session currently holds.
+    const index = indexMembers(
+      [member({ userId: ME, displayName: "Sam Wang" })],
+      ME,
+      new Map([
+        [
+          "k3wpf7c5",
+          { displayName: "Builder", description: null, color: "agent-04" as const },
+        ],
+      ])
+    );
+    const { container } = render(
+      <Transcript
+        rows={channelRows([escalationMessage()], [], index, formatChannelTimestamp)}
+        index={index}
+        flashId={null}
+        onOpenThread={() => {}}
+        onAnswerEscalation={() => {}}
+      />
+    );
+    expect(bar(container).style.backgroundColor).toBe("var(--agent-color-04)");
+  });
+
+  it("an ENDED or UNKNOWN agent's card turns BLACK, not the row's neutral grey", () => {
+    // ⚠ NOT `--border-strong`: Samuel ruled the ENDED face for this card
+    // literally black, which is also the face every card wore before the
+    // restyle. The row's ring keeps its own neutral; they are different marks.
+    const { container } = draw([escalationMessage()], {
+      onAnswerEscalation: () => {},
+    });
+    expect(bar(container).style.backgroundColor).toBe("var(--surface-cta)");
+  });
+
+  it("every option is BLACK before a press, and they are named Option A / Option B", () => {
+    const { container } = draw([escalationMessage()], {
+      onAnswerEscalation: () => {},
+    });
+    const options = strip(container);
+    expect(options.map((el) => el.textContent)).toEqual(["Option A", "Option B"]);
+    for (const el of options) expect(el.className).toContain("auth-btn-3d");
+  });
+
+  it("AFTER a press the chosen one stays black and the rest go the switcher's grey", () => {
+    const { container } = draw(
+      [
+        escalationMessage(),
+        message({
+          id: "m-ans",
+          seq: 5,
+          authorUserId: PEER,
+          authorName: "Diana Taylor",
+          body: "Ship now",
+          metadata: {
+            [ESCALATION_ANSWER_METADATA_KEY]: {
+              escalationMessageId: "m-esc",
+              optionIndex: 0,
+              agentId: "k3wpf7c5",
+            },
+          },
+        }),
+      ],
+      { onAnswerEscalation: () => {} }
+    );
+    const [chosen, rest] = strip(container);
+    expect(chosen.className).toContain("auth-btn-3d");
+    // ⚠ `--seg-fill` BY NAME — the same variable `shared/ui/segmented-control.tsx`
+    // reads for Overview / Channel / Knowledge / Agents, which is the gray Samuel
+    // pointed at. A literal here would be a second grey the day that token moves.
+    expect(rest.className).toContain("bg-[var(--seg-fill)]");
+    expect(chosen.className).not.toContain("bg-[var(--seg-fill)]");
+  });
+
+  it("THE CHOICE IS THE ANSWER MESSAGE, so it survives a reload by construction", () => {
+    // ⚠ The card holds NO selection state: the grey/black split above is derived
+    // from a second ROW in the page (`answersByEscalation`). This is the same
+    // card drawn with that row absent — the state cannot be stale because there
+    // is none to keep.
+    const { container } = draw([escalationMessage()], {
+      onAnswerEscalation: () => {},
+    });
+    for (const el of strip(container)) {
+      expect(el.className).not.toContain("bg-[var(--seg-fill)]");
+    }
   });
 });
 

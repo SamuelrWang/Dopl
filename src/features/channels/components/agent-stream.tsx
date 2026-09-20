@@ -346,10 +346,10 @@ function StreamRow({
       <li>
         <AgentStreamEscalation
           escalation={item.escalation.payload}
+          // ⚠ THE GROUP'S ALREADY-RESOLVED KEY, never a second lookup — the bar is this agent's colour (2026-09-20).
+          color={color ?? null}
           answerable={escalationAnswerable !== false}
-          answeredIndex={
-            answeredEscalations?.get(item.escalation.messageId) ?? null
-          }
+          answeredIndex={answeredEscalations?.get(item.escalation.messageId) ?? null}
           busy={answerBusy === true}
           onAnswer={
             onAnswerEscalation
