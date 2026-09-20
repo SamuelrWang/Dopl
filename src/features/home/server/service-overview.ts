@@ -17,7 +17,6 @@ import {
   countMetricInWindow,
   listContainerRoles,
   listOwnedPersonalContainerIds,
-  listRunningSessions,
   scanCreditEvents,
   scanMcpCalls,
   scanMessageChannels,
@@ -28,7 +27,6 @@ import {
 import {
   binCredits,
   isPersonalWalletBurn,
-  mapAgents,
   tallyChannels,
   tallyCreditPeople,
   tallyTools,
@@ -88,9 +86,6 @@ const HOME_CONTAINER_TALLY_LIMIT = 200;
  * 2026-09-07 a home burn spends the owner's PERSONAL WALLET, so the allowance
  * this page shows is a person's, not a workspace's.
  */
-
-/** How many live agent sessions the board carries, across all channels. */
-const AGENT_ROWS = 24;
 
 /**
  * `range` off the query string, or a 400.
@@ -367,9 +362,15 @@ export async function getHomeOverviewSeries(
 /**
  * The face minus the histogram, in one round trip.
  *
- * ⚠ **A BOUNDED FAN, never a query per channel (§9).** Seven statements for any
- * number of home channels — every `.in()` spans the whole fence — plus the
- * mention lane's second, id-bounded statement.
+ * ⚠ **A BOUNDED FAN, never a query per channel (§9).** A FIXED number of
+ * statements for any number of home channels — every `.in()` spans the whole
+ * fence. ⚠ **The count is deliberately not written down here**: it has been
+ * wrong twice already (the mention lane's extra statement outlived the lane,
+ * and the running-session read outlived its panel). Read the `Promise.all`.
+ *
+ * ⚠ **THE RUNNING-SESSION LEG LEFT 2026-09-20** with the Activity panel that
+ * was its only reader (Samuel's ruling) — see `../overview-types.ts`'s
+ * `HomeOverview` docblock for the whole removal and why it breaks no wire.
  */
 export async function getHomeOverview(
   userId: string,
@@ -379,12 +380,11 @@ export async function getHomeOverview(
   const { ids, names, channelContainers } = await resolveScope(userId);
   const since = rangeSince(range, now);
 
-  const [credits, calls, msgChannels, roles, liveAgents] = await Promise.all([
+  const [credits, calls, msgChannels, roles] = await Promise.all([
     scanPersonalWalletBurns(userId, since),
     scanMcpCalls(ids, since),
     scanMessageChannels(ids, since),
     listContainerRoles(ids),
-    listRunningSessions(ids, AGENT_ROWS),
   ]);
 
   const people = await resolvePeople(credits.rows, roles);
@@ -400,7 +400,6 @@ export async function getHomeOverview(
     ),
     people,
     tools: tallyTools(calls.rows),
-    agents: mapAgents(liveAgents.rows, names, userId),
     // ⚠ THE DENOMINATOR IS THE LARGEST SCAN'S, because the breakdowns that can
     // be clipped are read off one of the three.
     scanned: Math.max(

@@ -2,7 +2,15 @@ import { useState } from "react";
 import { channelRowId } from "./home-rows";
 
 /**
- * JUMPING FROM AN OVERVIEW ACTIVITY ROW TO THE THING IT NAMES (2026-09-01).
+ * JUMPING FROM A ROW TO THE THING IT NAMES (2026-09-01).
+ *
+ * ⚠ **THE OVERVIEW FACE IS NO LONGER A CALLER (2026-09-20).** The Activity
+ * panel and its agent board were deleted from `/home`, so the one surface left
+ * holding {@link OpenActivity} is the SEARCH popup (`index.tsx ›
+ * openSearchHit`). **The hook did not die with it** — the three moves below are
+ * exactly what a search hit needs, and `threadFor`/`seqFor` are read by the
+ * record pane on every render (`home-panes.tsx`), caller or no caller. The name
+ * is kept because the MOVE is what it describes, not the card that starts it.
  *
  * 🔒 **ON /home A JUMP IS A SELECTION, NOT A ROUTE, AND THAT IS FORCED BY THE
  * MODEL RATHER THAN CHOSEN.** A home channel lives in a `kind='link'`
@@ -24,13 +32,15 @@ import { channelRowId } from "./home-rows";
  * leaving the jump armed would re-raise it every time the pane remounted.
  */
 /**
- * What an Overview activity row DOES when it is clicked.
+ * What a row DOES when it is clicked.
  *
  * ⚠ **THE TYPE LIVES WITH THE HOOK, NOT WITH A CARD (2026-09-05).** It moved
  * here when **Waiting on you** and **Recent threads** were cut and
  * `overview-activity.tsx` went with them: it describes the JUMP, and the jump is
  * this hook's argument — parking it on whichever component happens to render a
- * row is how it ended up outliving one.
+ * row is how it ended up outliving one. ⚠ **That call was made twice over on
+ * 2026-09-20**, when the Activity panel — the agent board that inherited the
+ * type — was itself deleted and this type simply changed callers again.
  */
 export type OpenActivity = (
   workspaceId: string,
@@ -38,15 +48,18 @@ export type OpenActivity = (
   threadId: string | null,
   /**
    * A `channel_messages.seq` to land the transcript ON (F-714, 2026-09-17) —
-   * a SEARCH row on a message is the only caller that has one, and an Overview
-   * activity row never does. `null`/absent leaves the transcript where the
-   * surface puts it, which is every other jump byte for byte.
+   * a SEARCH row on a message is the only caller that has one, and since
+   * 2026-09-20 it is the only caller at all. `null`/absent leaves the
+   * transcript where the surface puts it, which is every other jump byte for
+   * byte.
    */
   seq?: number | null
 ) => void;
 
 export interface ActivityJump {
-  /** Hand to `HomeOverviewPanels` — see {@link OpenActivity}. */
+  /** Hand to whatever opens a row — the SEARCH popup, and nothing else since
+   *  2026-09-20 (it was `HomeOverviewPanels` until the Activity panel was cut).
+   *  See {@link OpenActivity}. */
   open: OpenActivity;
   /** The thread to raise when THIS row's record pane mounts, or `null`. */
   threadFor: (rowId: string) => string | null;

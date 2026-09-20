@@ -2,22 +2,32 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import { USER_ID, bridgeCalls, installBridge, ok } from "#/test-utils/bridge";
-import { HOME_OVERVIEW, renderHome, routes } from "./home-test-harness";
+import { renderHome, routes } from "./home-test-harness";
 
 /**
  * /home → OVERVIEW — the account surface's analytics face (2026-09-01, rebuilt
  * the same day after Samuel's live review).
  *
  * ⚠ WHAT THIS SUITE OWNS is the STRUCTURE Samuel asked for, not the arithmetic:
- * the page OPENS on this face, it renders exactly ONE of each section, the agent
- * board groups by channel, and every activity row jumps. The tallies are pinned
- * server-side in `src/features/home/server/service-overview.test.ts`.
+ * the page OPENS on this face and it renders exactly ONE of each section. The
+ * tallies are pinned server-side in
+ * `src/features/home/server/service-overview.test.ts`.
+ *
+ * 🔒 **THE ACTIVITY PANEL IS GONE ENTIRELY (Samuel, 2026-09-20 — he saw it in
+ * the app and ruled it out).** Its cases — the board's channel grouping, the
+ * lane that drops when nothing runs in it, and the two jump cases — are DELETED
+ * rather than skipped, and ONE REGRESSION stands in their place: neither the
+ * panel nor the **Active agents** heading may come back on this face.
+ * ⚠ **WHAT THE DELETED CASES USED TO COVER STILL HAS A HOME.** The board itself
+ * is the WORKSPACE Overview's now (`pages/overview/agent-board.test.tsx`), and
+ * /home's jump — selection + face + `seq`/thread, keyed by row — is pinned by
+ * the SEARCH popup's suite (`home-search-popup.test.tsx`), which is the only
+ * caller of `use-activity-jump.ts › open` left.
  *
  * ⚠ **`Waiting on you` AND `Recent threads` WERE CUT ON 2026-09-05** (Samuel:
- * Activity carries running agents and nothing else). Their cases are gone and
- * two REGRESSIONS stand in their place — the headings must not come back, and
- * the Activity panel must FOLD AWAY rather than stand empty, which is what those
- * two cards used to hide.
+ * Activity carries running agents and nothing else). Their regression stands
+ * below too — the headings must not come back on a face that no longer even has
+ * the panel they lived in.
  *
  * ⚠ THE CHANNEL SURFACE IS STUBBED, like every other suite on this page.
  */
@@ -27,8 +37,10 @@ const apiRequest = vi.hoisted(() => vi.fn());
 vi.mock(
   "@/features/channels/components/channel-surface-standalone",
   () => ({
-    // ⚠ `initialThreadId` IS REFLECTED, because it is the whole assertion of the
-    // activity jump: the page hands the surface a thread to raise.
+    // ⚠ STUBBED ONLY SO A RAISED CHANNEL FACE COSTS THIS SUITE NOTHING — the
+    // selection case below raises it. `initialThreadId` is still reflected, but
+    // the case that ASSERTED it was the Activity board's jump and is deleted
+    // (2026-09-20); `home-search-popup.test.tsx` carries that assertion now.
     StandaloneChannelSurface: (props: { initialThreadId?: string | null }) => (
       <div
         data-testid="channel-surface"
@@ -44,18 +56,11 @@ const overviewCalls = () =>
   );
 
 /** A PANEL by its heading (Samuel's layout ruling, 2026-09-01).
- *  ⚠ **`Activity` IS NO LONGER A FIRST-PAINT GATE.** `Usage` and `All channels`
- *  still draw their own ghost, but Activity lost its skeleton with its two cards
- *  on 2026-09-05 and now renders only once the payload has landed AND an agent is
- *  running — so awaiting it proves DATA, not that the face is up. Use
- *  {@link loadedFace} for the latter. */
+ *  ⚠ **ONLY `Usage` AND `All channels` ARE FIRST-PAINT GATES.** They draw their
+ *  own ghost; Token spend folds away until a row exists, so awaiting IT proves
+ *  DATA rather than that the face is up. Use {@link loadedFace} for the latter.
+ *  (`Activity` was the other folding panel and is deleted — 2026-09-20.) */
 const panel = (name: string) => screen.findByRole("region", { name });
-
-/** A CARD inside a panel, by its heading. */
-async function card(name: string): Promise<HTMLElement> {
-  const heading = await screen.findByRole("heading", { name });
-  return heading.closest("section") as HTMLElement;
-}
 
 /** The face WITH ITS DATA. ⚠ Gated on a rail heading, which only exists once
  *  `/api/home/overview` has answered — the panels themselves are up before it. */
@@ -111,10 +116,11 @@ describe("home overview face", () => {
     renderHome();
     await loadedFace();
 
-    for (const region of ["Activity", "Usage", "All channels"]) {
+    // ⚠ TWO REGIONS, NOT THREE — `Activity` left the list on 2026-09-20 and its
+    // absence is asserted in its own case below, not by an omission here.
+    for (const region of ["Usage", "All channels"]) {
       expect(screen.getAllByRole("region", { name: region })).toHaveLength(1);
     }
-    expect(screen.getAllByRole("heading", { name: "Active agents" })).toHaveLength(1);
     // ⚠ **`Credits used` WAS ON THIS LIST UNTIL 2026-09-13** — the histogram's
     // heading was deleted for Samuel's scope dropdown, so the card is counted by
     // its own region name now (and the ABSENCE is pinned below).
@@ -156,9 +162,10 @@ describe("home overview face", () => {
 
     fireEvent.click(await screen.findByText("Link out"));
 
-    // Still one read, and the face is still on screen.
+    // Still one read, and the face is still on screen. ⚠ Gated on `Usage`
+    // since 2026-09-20: `Activity` was the panel this line used to name.
     await waitFor(() => expect(overviewCalls()).toHaveLength(1));
-    expect(await panel("Activity")).toBeInTheDocument();
+    expect(await panel("Usage")).toBeInTheDocument();
   });
 
   /** ⚠ THE STAT TILES ARE GONE ENTIRELY (Samuel) — not hidden, not collapsed. */
@@ -188,126 +195,28 @@ describe("home overview face", () => {
   });
 
   /**
-   * 🔒 **AN EMPTY ACTIVITY PANEL DOES NOT RENDER AT ALL** (Samuel's ruling on
-   * the cut, 2026-09-05). The board was already `null` for an empty lane set;
-   * with the two cards gone there is nothing else in the panel, so the guard is
-   * on the `SectionPanel` itself. ⚠ The alternative — a heading over an empty box
-   * — is the exact defect the first Overview attempt was rejected for, and this
-   * is the test that stops it coming back the next time something is added here.
+   * 🔒 **THE ACTIVITY PANEL IS NOT ON THIS FACE AT ALL (Samuel, 2026-09-20).**
+   * It used to FOLD AWAY when no agent was running, which is what this case
+   * asserted; it is now deleted outright — panel, **Active agents** board, the
+   * `onOpenActivity` prop and the `HomeOverview.agents` read behind it. **Delete,
+   * never disarm**, so the assertion is absence on the LOADED face rather than
+   * absence under an empty payload: there is no payload key left that could
+   * bring it back.
+   * ⚠ **THE BOARD COMPONENT IS NOT WHAT THIS FORBIDS** — it lives in
+   * `#/components/overview/agent-board.tsx` and the WORKSPACE Overview still
+   * hosts it (`pages/overview/agent-board.test.tsx`). What is forbidden is a
+   * SECOND host, here.
    */
-  it("hides the whole Activity panel when no agent is running", async () => {
-    apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
-      path.split("?")[0] === "/api/home/overview"
-        ? Promise.resolve(ok({ ...HOME_OVERVIEW, agents: [] }))
-        : (routes(path, opts) ?? Promise.reject(new Error(`unexpected: ${path}`)))
-    );
+  it("renders no Activity panel and no Active agents board", async () => {
     renderHome();
     await loadedFace();
 
     expect(screen.queryByRole("region", { name: "Activity" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "Active agents" })).toBeNull();
-    // ⚠ AND THE REST OF THE FACE IS UNTOUCHED — the panel folds away on its own,
-    // it does not take the page with it.
+    // ⚠ AND THE REST OF THE FACE IS UNTOUCHED — the panel was removed, it did
+    // not take the page with it.
     expect(await panel("Usage")).toBeInTheDocument();
     expect(await panel("All channels")).toBeInTheDocument();
-  });
-
-  /**
-   * 🔒 **THE BOARD IS GROUPED BY CHANNEL** (Samuel), which is the whole reason
-   * it is a board and not a list — and a channel with no live agent gets no
-   * column at all.
-   *
-   * 🔒 **AND IT CARRIES NO TELEMETRY.** `model`, `tool_label`, `tokens_spent`
-   * and the context pair are the OPERATOR-ONLY seven; a home container holds
-   * another PERSON, and a peer learns THAT an agent is working, never what it
-   * costs its operator.
-   */
-  it("groups active agents into one column per channel, with the thread on each card", async () => {
-    renderHome();
-    await loadedFace();
-    const board = await card("Active agents");
-
-    const lanes = within(board).getAllByRole("heading", { level: 4 });
-    expect(lanes.map((lane) => lane.textContent)).toEqual([
-      "Priya Shah",
-      "Q3 Fundraise",
-    ]);
-
-    // The card says WHICH THREAD, and a channel-level launch says so instead.
-    expect(within(board).getByText("Q3 renewals")).toBeInTheDocument();
-    expect(within(board).getByText("Deck review")).toBeInTheDocument();
-    expect(within(board).getByText("Channel")).toBeInTheDocument();
-    // The closed `detail` vocabulary in words — never the raw key.
-    expect(within(board).getByText("Thinking")).toBeInTheDocument();
-    expect(within(board).queryByText("thinking")).toBeNull();
-    // A peer's session is MARKED, and the mark is a boolean.
-    expect(within(board).getByText("Peer")).toBeInTheDocument();
-    expect(board.textContent).not.toMatch(/token|context|opus|sonnet/i);
-  });
-
-  it("drops a channel from the board when nothing is running in it", async () => {
-    apiRequest.mockImplementation((path: string, opts: BridgeRequestOpts = {}) =>
-      path.split("?")[0] === "/api/home/overview"
-        ? Promise.resolve(
-            ok({
-              ...HOME_OVERVIEW,
-              agents: HOME_OVERVIEW.agents.filter(
-                (agent) => agent.channelName === "Priya Shah"
-              ),
-            })
-          )
-        : (routes(path, opts) ?? Promise.reject(new Error(`unexpected: ${path}`)))
-    );
-    renderHome();
-    await loadedFace();
-    const board = await card("Active agents");
-
-    expect(
-      within(board).getAllByRole("heading", { level: 4 }).map((h) => h.textContent)
-    ).toEqual(["Priya Shah"]);
-  });
-
-  /**
-   * 🔒 **A JUMP ON /home IS A SELECTION, NOT A ROUTE** — a home channel lives in
-   * a `kind='link'` container and containers have no page
-   * (`use-activity-jump.ts`). So clicking an agent card raises the CHANNELS face
-   * on that row and hands the surface the thread the agent is in.
-   */
-  it("jumps from an agent card to its thread, on the Channels face", async () => {
-    renderHome();
-    await loadedFace();
-    const board = await card("Active agents");
-
-    // ⚠ `flint`, NOT `quill`: the jump lands by SELECTING the container's row in
-    // the left list, so the target has to be a container the channels payload
-    // actually holds. `quill` runs in the board's second lane, which this
-    // fixture deliberately gives no channel row — that case is covered below.
-    fireEvent.click(within(board).getByRole("button", { name: /flint/ }));
-
-    const surface = await screen.findByTestId("channel-surface");
-    expect(surface).toHaveAttribute("data-thread", "task-1");
-    expect(
-      screen.getByRole("tab", { name: "Channel", selected: true })
-    ).toBeInTheDocument();
-  });
-
-  /**
-   * ⚠ A jump into a container the left list does not hold RAISES NO THREAD —
-   * `use-activity-jump.ts` keys the held thread by ROW, and a row that is not in
-   * `visible` never matches. The pane falls back to the first visible row with
-   * no thread, which is the honest degradation: never another channel's thread.
-   */
-  it("raises no thread when the jump names a container the list has not got", async () => {
-    renderHome();
-    await loadedFace();
-    const board = await card("Active agents");
-
-    fireEvent.click(within(board).getByRole("button", { name: /quill/ }));
-
-    expect(await screen.findByTestId("channel-surface")).toHaveAttribute(
-      "data-thread",
-      ""
-    );
   });
 
   /**

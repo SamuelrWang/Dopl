@@ -114,10 +114,11 @@ export function HomePane({
     // workspace seat. ⚠ The standard-workspace reroute this comment used to name
     // was deleted 2026-09-07. NULL until the caller is onboarded.
     return (
-      <HomeOverviewPanels
-        homeWorkspaceId={identity.workspace?.id ?? null}
-        onOpenActivity={jump.open}
-      />
+      // ⚠ **NO `onOpenActivity` SINCE 2026-09-20** — the Activity panel that
+      // was the jump's only Overview caller is deleted. `jump` still reaches
+      // this file for `threadFor`/`seqFor` below, and `jump.open` is now the
+      // SEARCH popup's alone (`index.tsx › openSearchHit`).
+      <HomeOverviewPanels homeWorkspaceId={identity.workspace?.id ?? null} />
     );
   }
   if (shown === ONTOLOGY_PANE) {

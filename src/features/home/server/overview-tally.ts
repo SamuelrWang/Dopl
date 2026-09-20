@@ -1,9 +1,6 @@
 import type { Role } from "@/features/workspaces/types";
-import { agentFaceName } from "@/shared/lib/agent-name";
 import { binByWindow } from "@/features/overview-series/windows";
-import { narrowSessionDetail } from "@/features/overview-series/session-detail";
 import type {
-  HomeAgentRow,
   HomeChannelUsage,
   HomePersonUsage,
   HomeSeriesPoint,
@@ -14,12 +11,15 @@ import {
   type CreditEventScanRow,
   type HomeWindow,
   type McpCallScanRow,
-  type RunningSessionRow,
 } from "./repository-overview";
 
 /**
- * The /home Overview face's PURE half — the tallies over scanned rows and the
- * agent row→payload mapper.
+ * The /home Overview face's PURE half — the tallies over scanned rows.
+ *
+ * ⚠ **AND THE AGENT ROW→PAYLOAD MAPPER LEFT ON 2026-09-20**, with the Activity
+ * panel it fed (Samuel's ruling). Nothing on this face reads a session row any
+ * more; the WORKSPACE Overview's board has its own mapper
+ * (`workspaces/server/service-usage.ts`) and is untouched.
  *
  * ⚠ SPLIT OUT OF `service-overview.ts` ON 2026-09-01, when the thread and agent
  * sections took that file past the 500-line cap (§1 —
@@ -267,49 +267,3 @@ export function tallyChannels(
     .slice(0, CHANNEL_ROWS);
 }
 
-/**
- * Rows → the agent section's shape.
- *
- * 🔒 **CONSTRUCTED, NOT SPREAD — the same discipline `collab-dto.ts ›
- * mapPeerSessionStateRow` states.** Naming each field means a column added to
- * `channel_sessions` (including a new OPERATOR-ONLY one) cannot reach this
- * payload by accident; an omit-list would fail OPEN.
- *
- * ⚠ `mine` REPLACES THE `user_id`, and that is the privacy shape: the caller
- * needs to tell their own agents from a peer's, and does not need the peer's id
- * to do it.
- *
- * ⚠ **`name` FELL BACK TO `channel_sessions.name` UNTIL 2026-09-15, AND THAT COLUMN IS THE RAW
- * AGENT ID** (`main/session-summary.js › nameOf` answers `s.agentId` and nothing else). So the
- * Home pane's agent board printed eight machine characters as the card's title for every agent
- * nobody had named — the same leak `channels/components/agents-model.ts › agentDisplayName`
- * carried on the channels surface, reached through a SERVER projection instead of a component,
- * which is why the `.tsx` source sweep could never have caught it. Samuel, 2026-09-15: *"I want
- * to make it so that the user really doesnt see it"*.
- * ⚠ **THE FALLBACK IS THE SHARED FACE** (`shared/lib/agent-name.ts › agentFaceName`), not a
- * local `|| "New Agent"`: three readers spelling one string is what produced this in the first
- * place.
- */
-export function mapAgents(
-  rows: RunningSessionRow[],
-  names: Map<string, string>,
-  viewerId: string
-): HomeAgentRow[] {
-  return rows.map((row) => ({
-    id: row.id,
-    workspaceId: row.workspace_id,
-    // The container's own channel name is authoritative; the denormalised
-    // `channel_name` on the session can lag a rename.
-    channelName: names.get(row.workspace_id) ?? row.channel_name ?? "",
-    name: agentFaceName(row.display_name),
-    state: row.state,
-    detail: narrowSessionDetail(row.detail),
-    // ⚠ THE ID AND THE TITLE ARE TWO DIFFERENT ANSWERS AND BOTH RIDE. The title
-    // is what the row PRINTS; the id is where clicking it LANDS, and a session
-    // launched at channel level has neither.
-    threadId: row.task_id,
-    threadTitle: row.thread_title,
-    mine: row.user_id === viewerId,
-    updatedAt: row.updated_at,
-  }));
-}

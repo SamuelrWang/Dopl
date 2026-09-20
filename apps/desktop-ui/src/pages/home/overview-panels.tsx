@@ -7,7 +7,6 @@ import { SectionPanel } from "@/shared/ui/section-panel";
 import { Skeleton } from "@/shared/ui/skeleton";
 import { useWorkspaceEntitlements } from "@/features/billing/components/use-workspace-entitlements";
 import {
-  EMPTY_AGENTS,
   EMPTY_CHANNEL_USAGE,
   EMPTY_PERSON_USAGE,
   EMPTY_SERIES,
@@ -38,8 +37,6 @@ import {
   monthKey,
   usageSeriesPath,
 } from "./overview-usage-filter";
-import type { OpenActivity } from "./use-activity-jump";
-import { ActiveAgentBoard } from "./overview-agent-board";
 import { TokenSpendPanel } from "./overview-token-spend";
 
 /**
@@ -54,16 +51,25 @@ import { TokenSpendPanel } from "./overview-token-spend";
  * panel here** — the left list scopes the CHANNELS face; Overview is about the
  * account, and every section on it is cross-channel by construction.
  *
- * 🔒 **TWO DENSE PANELS OF BENTO CARDS — NOT A COLUMN OF FULL-WIDTH STRIPS
+ * 🔒 **DENSE PANELS OF BENTO CARDS — NOT A COLUMN OF FULL-WIDTH STRIPS
  * (Samuel, 2026-09-01, live review: "this looks so bad, the other one looked so
  * much better").** The first rebuild gave every section its own full-width
  * `SectionPanel`, so the page became five giant boxes with holes where the empty
- * ones were. **The grid is the spec**: ACTIVITY is the agent board alone (its
- * two cards were cut 2026-09-05 and the panel now folds away with them when no
- * agent is running); USAGE is the capacity bar beside the chart over two rows of
- * rails. Cards are sized to content and empty ones say so in one line.
+ * ones were. **The grid is the spec**: USAGE is the capacity bar over the chart,
+ * then Token spend, then two rows of rails. Cards are sized to content and empty
+ * ones say so in one line.
  * ⚠ **The panel is the GROUPING, the card is the surface.** A section that
  * wants to be a full-width strip needs a reason that is not "it has a heading".
+ *
+ * 🔒 **AND THERE IS NO ACTIVITY PANEL ANY MORE (Samuel, 2026-09-20: he saw it
+ * in the app and ruled it gone).** The **Active agents** board, its `/home`
+ * adapter file, the `onOpenActivity` prop that fed it and the whole server read
+ * behind it (`HomeOverview.agents`, `HomeAgentRow`, `mapAgents`, the running-
+ * session repository read and its `Promise.all` leg) went in the same change —
+ * delete, never disarm. ⚠ **The BOARD ITSELF IS NOT GONE**: it is
+ * `#/components/overview/agent-board.tsx`, and the WORKSPACE Overview
+ * (`pages/overview/agent-board.tsx`) is its one remaining host. Do not bring a
+ * second host back here.
  *
  * ⚠ **NO RANGE SWITCHER.** The window is the current month
  * (`HOME_OVERVIEW_DEFAULT_RANGE`), which is also the credit period the capacity
@@ -75,7 +81,6 @@ import { TokenSpendPanel } from "./overview-token-spend";
  */
 export function HomeOverviewPanels({
   homeWorkspaceId,
-  onOpenActivity,
 }: {
   /**
    * The caller's own workspace from `POST /api/boot`, for the credit bar.
@@ -83,13 +88,6 @@ export function HomeOverviewPanels({
    * asking about a workspace that does not exist.
    */
   homeWorkspaceId: string | null;
-  /**
-   * Open a thread (or a channel, for a channel-level agent) from an activity
-   * row. ⚠ THE PAGE OWNS THE ACT — a home channel has no route of its own, so
-   * "navigate" here is: select that row and raise the Channels face. See
-   * `use-activity-jump.ts`.
-   */
-  onOpenActivity: OpenActivity;
 }) {
   const overview = useApiQuery<HomeOverview>(
     `/api/home/overview?range=${HOME_OVERVIEW_DEFAULT_RANGE}`,
@@ -108,43 +106,18 @@ export function HomeOverviewPanels({
   }
 
   const data = overview.data;
-  // ⚠ `?? EMPTY_X` INLINE AT EVERY READ (§8): this payload is IndexedDB-
-  // persisted, so an entry written by an older bundle can lack a key this one
-  // `.map`s over — and `.map` on `undefined` THROWS and blanks the whole pane.
-  const agents = data?.agents ?? EMPTY_AGENTS;
 
   return (
     <div className="min-w-0 flex-1 overflow-y-auto p-3">
+      {/* ⚠ **A COLUMN, AND IT OPENS ON USAGE SINCE 2026-09-20.** Activity stood
+          above this panel and folded away on its own, so the column has always
+          had to read correctly without it — removing it moved no sibling and
+          left no hole. ⚠ **AND THERE IS NO ONE-CHILD ROW HIDING IN HERE**: the
+          only grids on this face are the rails' own `grid-cols-2` PAIRS, which
+          still hold two each. A row left with one child is a row waiting for a
+          sibling that is not coming back (the precedent is the workspace
+          Overview's own Activity cut, `cb7b4d61`). */}
       <div className="flex flex-col gap-3">
-        {/* ⚠ **THE WHOLE PANEL FOLDS AWAY WHEN NOTHING IS RUNNING (Samuel,
-            2026-09-05).** **Waiting on you** and **Recent threads** were CUT
-            from this pane — the ruling is that Activity carries running agents
-            and nothing else — and the board was already the only other thing in
-            it. So the guard moved OUT to the `SectionPanel`: with the cards gone
-            an `agents.length === 0` render would have been a heading over an
-            empty box, which is the exact defect the first Overview attempt was
-            rejected for ("five giant boxes with holes where the empty ones
-            were"). An empty state must not cost a full-width strip.
-            ⚠ **AND THERE IS NO SKELETON HERE ANY MORE.** The two-card
-            `ActivityGhost` was sized to the deleted cards, and a ghost for a
-            panel that may legitimately not render at all is a promise the data
-            need not keep — it would flash a box and then remove it for every
-            operator with no agents running. This section renders NOTHING until
-            the payload lands. */}
-        {agents.length > 0 && (
-          <SectionPanel id="home-overview-activity" label="Activity">
-            {/* ⚠ A `<section>`, not a `<div>`: the board's heading has to BOUND
-                it, so a query scoped to "Active agents" cannot widen to the
-                whole panel. */}
-            <section className="flex flex-col gap-2">
-              <h3 className="px-1 text-label font-semibold uppercase tracking-wide text-text-secondary">
-                Active agents
-              </h3>
-              <ActiveAgentBoard rows={agents} onOpen={onOpenActivity} />
-            </section>
-          </SectionPanel>
-        )}
-
         {/* 🔒 **THE LAYERING IS THE PAGE'S, NOT THIS PANEL'S OWN (Samuel,
             verbatim: "White panel background, then there's the gray background,
             then white panel on top. That's how everything else is").** Three
@@ -189,10 +162,16 @@ export function HomeOverviewPanels({
             one billing period, exact counts — and this is a different ledger
             with a different accuracy story (a floor, and a 31-day window rather
             than the credit period). The panel folds itself away when no agent
-            has ever spent anything, exactly as Activity does. */}
+            has ever spent anything — ⚠ **it is the LAST panel on this face that
+            still does that**, now that Activity (which folded on the same
+            argument) is deleted. */}
         <TokenSpendPanel />
 
-        {/* The comparison rails — OUTSIDE Usage, same card styling as before. */}
+        {/* The comparison rails — OUTSIDE Usage, same card styling as before.
+            ⚠ `?? EMPTY_X` INLINE AT EVERY READ (§8): this payload is IndexedDB-
+            persisted, so an entry written by an older bundle can lack a key this
+            one `.map`s over — and `.map` on `undefined` THROWS and blanks the
+            whole pane. */}
         <SectionPanel id="home-overview-breakdown" label="All channels">
           {data ? (
             <div className="flex flex-col gap-3">

@@ -149,7 +149,11 @@ describe("the stale-cache fallbacks (INVARIANTS §8)", () => {
 
   it("keeps a `?? EMPTY_` on every array read on both faces", () => {
     for (const [face, source, reads] of [
-      ["/home", HOME_PANELS, ["channels", "people", "tools", "agents"]],
+      // ⚠ **`agents` LEFT THIS LIST ON 2026-09-20** — the Activity panel it
+      // guarded was deleted from /home Overview (Samuel), and the payload key
+      // went with it, so a `?? EMPTY_AGENTS` here would be a guard on a read
+      // that no longer happens. The three that remain are the rails' own.
+      ["/home", HOME_PANELS, ["channels", "people", "tools"]],
       ["workspace", WORKSPACE_RAILS, ["channels", "people", "tools"]],
     ] as const) {
       for (const key of reads) {

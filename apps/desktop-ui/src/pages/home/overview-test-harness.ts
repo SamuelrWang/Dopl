@@ -28,8 +28,9 @@ import { LINK_WORKSPACE_ID } from "./home-test-ids";
  * module has no surface to get wrong and does not belong in that list.
  */
 
-/** A second container, so the by-channel rails and the agent BOARD have more
- *  than one lane to sort and group. */
+/** A second container, so the by-channel rails have more than one row to sort.
+ *  ⚠ It also gave the agent BOARD a second lane until 2026-09-20, when the
+ *  Activity panel and the `agents` payload key were deleted from this face. */
 export const SECOND_WORKSPACE_ID = "ws-link-2";
 
 /**
@@ -67,50 +68,6 @@ export const HOME_OVERVIEW: HomeOverview = {
   tools: [
     { tool: "channel", op: "list", calls: 319 },
     { tool: "kb", op: "read_file", calls: 52 },
-  ],
-  /**
-   * ⚠ THREE SESSIONS ACROSS **TWO** CHANNELS, on purpose: the board groups by
-   * channel, so a fixture confined to one container could not tell a board from
-   * a list. ⚠ One is a PEER's and one is a channel-level launch (no `threadId`),
-   * which are the two degradations the card has to render.
-   */
-  agents: [
-    {
-      id: "sess-1",
-      workspaceId: LINK_WORKSPACE_ID,
-      channelName: "Priya Shah",
-      name: "flint",
-      state: "working",
-      detail: "thinking",
-      threadId: "task-1",
-      threadTitle: "Q3 renewals",
-      mine: true,
-      updatedAt: "2026-09-01T10:05:00.000Z",
-    },
-    {
-      id: "sess-2",
-      workspaceId: LINK_WORKSPACE_ID,
-      channelName: "Priya Shah",
-      name: "scout",
-      state: "idle",
-      detail: null,
-      threadId: null,
-      threadTitle: null,
-      mine: false,
-      updatedAt: "2026-09-01T09:00:00.000Z",
-    },
-    {
-      id: "sess-3",
-      workspaceId: SECOND_WORKSPACE_ID,
-      channelName: "Q3 Fundraise",
-      name: "quill",
-      state: "working",
-      detail: "tool",
-      threadId: "task-9",
-      threadTitle: "Deck review",
-      mine: true,
-      updatedAt: "2026-09-01T08:40:00.000Z",
-    },
   ],
   scanned: 476,
   truncated: false,

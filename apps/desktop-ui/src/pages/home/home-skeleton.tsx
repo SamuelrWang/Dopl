@@ -265,8 +265,8 @@ function HomeListGhost() {
  *
  * ⚠ **NO GHOST FOR THE UNREAD MARKS, deliberately.** A dot or an `@ N` pill is
  * present on SOME rows, so ghosting one would promise a notification that the
- * loaded row usually does not have — the same argument `overview-panels.tsx` makes
- * for having no Activity ghost.
+ * loaded row usually does not have — the same argument `OverviewFaceGhost` below
+ * makes for ghosting neither of the Overview face's folding panels.
  */
 function HomeRowGhost() {
   return (
@@ -368,11 +368,16 @@ function HomeHeaderGhost() {
  * written. A skeleton for a face the page does not open on is the "way off"
  * defect in its purest form: correct geometry, wrong pane.
  *
- * ⚠ TWO PANELS AND NOT FOUR. `overview-panels.tsx` renders Activity and Token
- * spend ONLY when their rows exist — both fold away entirely — so ghosting them
- * would flash a box and then remove it for every operator with nothing running,
- * which is the argument that file's own docblock makes for having no Activity
- * ghost. Usage and All channels always render.
+ * ⚠ TWO PANELS, AND THE FACE NOW HAS ONLY THREE TO CHOOSE FROM. `overview-
+ * panels.tsx` renders Token spend ONLY when a row exists — it folds away
+ * entirely — so ghosting it would flash a box and then remove it for every
+ * operator whose agents have never spent anything. Usage and All channels always
+ * render, and they are the whole ghost.
+ * ⚠ **THE THIRD PANEL WAS ACTIVITY AND IT IS DELETED (Samuel, 2026-09-20).**
+ * This ghost never drew it — same fold-away argument — so the frame it mirrors
+ * did not change when the panel left, which is the one case where "skeletons
+ * mirror the frame" costs nothing. ⚠ **Do not read that as licence to skip a
+ * ghost for a panel that always renders.**
  *
  * ⚠ THE COLUMN, THE CARDS AND THE PLOT ARE THE PAGE'S. `p-3` / `gap-3`, the
  * `.bento` recipe `RailCard` and the TWO Usage cards share, the `grid-cols-2 gap-3`

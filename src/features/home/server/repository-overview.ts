@@ -403,62 +403,6 @@ export async function scanCreditEvents(
   return clipped((data ?? []) as CreditEventScanRow[], limit);
 }
 
-export interface RunningSessionRow {
-  id: string;
-  workspace_id: string;
-  user_id: string;
-  /** The thread this session runs in, or `null` for a channel-level launch.
-   *  ⚠ CLASSIFIED **PUBLIC** by `20260822150000_channel_sessions_telemetry.sql`
-   *  ("which thread. Already on the peer card."), which is why a jump target
-   *  can be built from it without widening the operator-only fence. */
-  task_id: string | null;
-  name: string;
-  display_name: string | null;
-  state: string;
-  detail: string | null;
-  channel_name: string | null;
-  thread_title: string | null;
-  updated_at: string;
-}
-
-/**
- * Agent sessions the desktop has not reported as `ended`, newest activity first.
- *
- * 🔒 **PUBLIC COLUMNS ONLY — NOT ONE OF THE SEVEN OPERATOR-ONLY ONES.**
- * The select below is drawn from the PUBLIC half of
- * `20260822150000_channel_sessions_telemetry.sql`'s classification table:
- * identity, whose machine, state, the closed-vocabulary `detail`, the two names
- * and the timestamps. **`model`, `tool_label`, `context_used`,
- * `context_window`, `tokens_spent`, `started_at` and `last_activity_at` are
- * absent and must stay absent.** A home container holds another PERSON, this
- * read runs service-role (so neither the RLS policy nor the column GRANT applies),
- * and the DTO fence that normally protects them
- * (`collab-dto.ts › mapPeerSessionStateRow`) is not on this path — so **the
- * column list IS the fence here**, and it fails closed the way that function
- * does: by naming what may be read rather than omitting what may not.
- *
- * ⚠ `detail` IS PEER-VISIBLE AND ONLY BECAUSE ITS VOCABULARY IS CLOSED (six
- * coarse keys). The renderer must narrow it the way `collab-dto.ts ›
- * narrowSessionDetail` does — an unknown key renders as nothing.
- */
-export async function listRunningSessions(
-  workspaceIds: string[],
-  limit: number
-): Promise<Scan<RunningSessionRow>> {
-  if (workspaceIds.length === 0) return { rows: [], truncated: false };
-  const { data, error } = await supabaseAdmin()
-    .from("channel_sessions")
-    .select(
-      "id, workspace_id, user_id, task_id, name, display_name, state, detail, channel_name, thread_title, updated_at"
-    )
-    .in("workspace_id", workspaceIds)
-    .neq("state", "ended")
-    .order("updated_at", { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return clipped((data ?? []) as RunningSessionRow[], limit);
-}
-
 /**
  * `(workspaceId, userId) → role` across the fence — THE guest/member split.
  *

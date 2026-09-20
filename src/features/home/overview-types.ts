@@ -195,47 +195,6 @@ export interface HomeToolUsage {
 }
 
 /**
- * One live agent session.
- *
- * 🔒 **PUBLIC COLUMNS ONLY, AND THE OMISSIONS ARE THE CONTRACT.** There is no
- * `model`, no `toolLabel`, no `tokensSpent`, no context pair — those are the
- * OPERATOR-ONLY seven (`20260822150000_channel_sessions_telemetry.sql`), and a
- * home container holds another PERSON whose sessions run on THEIR machine.
- * Samuel's ruling: a peer learns THAT an agent is working, never what it costs
- * its operator. ⚠ **Do not widen this interface** — the repository's column list
- * and this shape are the fence on a service-role path where the usual DTO fence
- * (`collab-dto.ts › mapPeerSessionStateRow`) does not run.
- */
-export interface HomeAgentRow {
-  id: string;
-  workspaceId: string;
-  channelName: string;
-  /** The agent's handle. */
-  name: string;
-  /** `working` / `idle` — anything the desktop has not reported as `ended`. */
-  state: string;
-  /** One of six CLOSED situation keys, or `null`. ⚠ Narrowed on the way out; an
-   *  unrecognised key reads as `null` rather than being rendered. */
-  detail: string | null;
-  /** The thread it is working in, or `null` for a channel-level launch. */
-  threadTitle: string | null;
-  /**
-   * `channel_sessions.task_id` — where clicking this row LANDS, `null` for a
-   * channel-level launch (the jump then opens the channel with no thread).
-   *
-   * ⚠ **PUBLIC, and the migration says so in as many words** —
-   * `20260822150000_channel_sessions_telemetry.sql` classifies `task_id` PUBLIC
-   * ("which thread. Already on the peer card."). It is a jump TARGET, not
-   * telemetry: it says where the work is, never what it costs.
-   */
-  threadId: string | null;
-  /** TRUE when this session runs on the CALLER'S machine. ⚠ The only thing that
-   *  distinguishes "my agent" from "theirs" without naming the peer. */
-  mine: boolean;
-  updatedAt: string;
-}
-
-/**
  * Payload of `GET /api/home/overview` — one round trip for a whole face.
  *
  * ⚠ **CROSS-CHANNEL, FULL STOP (Samuel, 2026-09-01).** The `scope` field and the
@@ -245,6 +204,19 @@ export interface HomeAgentRow {
  * channel got every section, rail and stat tile drawn twice from two payloads
  * that were by definition identical. Every section on this face is now
  * account-wide by construction, so there is no second panel to disagree with.
+ *
+ * 🔒 **THE `agents` FIELD IS GONE (Samuel, 2026-09-20: the Activity panel is
+ * removed from /home Overview).** The panel was its ONLY reader, so the read
+ * went with the face rather than sitting in the payload feeding nobody — the
+ * same call the workspace Overview's own Activity cut made (`cb7b4d61`).
+ * `HomeAgentRow`, `EMPTY_AGENTS`, `overview-tally.ts`'s agent mapper and
+ * `repository-overview.ts`'s running-session read all left in that change.
+ * ⚠ **NO WIRE BREAK HERE, unlike that one**: /home's reader always spelled the
+ * §8 `?? EMPTY_AGENTS` fallback, so an older installed bundle reading this
+ * payload draws an empty board rather than throwing.
+ * ⚠ **THE BOARD COMPONENT IS NOT GONE** — `apps/desktop-ui/src/components/
+ * overview/agent-board.tsx` and the WORKSPACE Overview that hosts it are
+ * untouched; that face has its own read (`workspaces/server/service-usage.ts`).
  */
 export interface HomeOverview {
   range: HomeOverviewRange;
@@ -256,9 +228,6 @@ export interface HomeOverview {
   people: HomePersonUsage[];
   /** Descending by `calls`, capped. */
   tools: HomeToolUsage[];
-  /** Live agent sessions, newest activity first, capped. ⚠ NOT window-scoped —
-   *  a session row is live STATE, not an event. */
-  agents: HomeAgentRow[];
   /**
    * Rows the per-channel / per-person / per-tool SCANS covered.
    *
@@ -295,7 +264,6 @@ export const EMPTY_SERIES: readonly HomeSeriesPoint[] = Object.freeze([]);
 export const EMPTY_CHANNEL_USAGE: readonly HomeChannelUsage[] = Object.freeze([]);
 export const EMPTY_PERSON_USAGE: readonly HomePersonUsage[] = Object.freeze([]);
 export const EMPTY_TOOL_USAGE: readonly HomeToolUsage[] = Object.freeze([]);
-export const EMPTY_AGENTS: readonly HomeAgentRow[] = Object.freeze([]);
 
 /**
  * THE USAGE HISTOGRAM'S SCOPE VOCABULARY — the two values that are not a
