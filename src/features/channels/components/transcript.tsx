@@ -204,6 +204,7 @@ export function Transcript({
               row={row}
               index={index}
               flash={row.id === flashId}
+              onOpenAgent={onOpenAgent}
               busy={answerBusy}
               onAnswer={
                 onAnswerEscalation

@@ -9,6 +9,7 @@
  */
 
 import { mentionedUserIdsOf } from "../lib/mentions";
+import { authorViewOf } from "../lib/desktop-handle";
 import { authorAgentIdOf } from "./agents-model";
 import {
   escalationAnswerOf,
@@ -62,6 +63,11 @@ export interface EscalationRow {
    */
   agent: boolean;
   agentId: string | null;
+  /** An OUTSIDE SESSION wrote it — a Claude Code / Codex / Cursor run on the
+   *  operator's own token. ⚠ Forwarded, never re-derived: the one projection is
+   *  `lib/desktop-handle.ts › authorViewOf`, and the chip it drives REPLACES the
+   *  word "agent" rather than qualifying it (`attribution-pill.tsx`). */
+  external: boolean;
   /** The four fields, as the server stamped them. */
   escalation: ChannelEscalation;
   /** This viewer is one of the members it asked. */
@@ -149,6 +155,7 @@ export function toEscalationRow(
     // agent's identity — and its colour — off their own words.
     agent: message.authorKind === "agent",
     agentId: message.authorKind === "agent" ? authorAgentIdOf(message) : null,
+    external: authorViewOf(message) === "external",
     author: personFor(message, index),
     authorLabel: labelFor(message, index),
     time: formatTime(message.createdAt),

@@ -366,6 +366,48 @@ describe("the 2026-09-20 face — the bar, and the buttons", () => {
     expect(bar(container).style.backgroundColor).toBe("var(--surface-cta)");
   });
 
+  it("ATTRIBUTES THE CARD TO THE AGENT THAT ASKED, not to the bare operator", () => {
+    // 🔒 Samuel, 2026-09-20, on the first live card: *"I see the decision card as
+    // being sent from me? Is that a bug…"* — it was. The card passed
+    // `agent={false}` and no agent id, so a question written by a NAMED agent
+    // drew its operator's bare pill while that agent's ordinary posts, three
+    // rows up, drew the name, the chip and the colour. The row data was right the
+    // whole time; only this component refused to say so.
+    const index = indexMembers(
+      [member({ userId: ME, displayName: "Sam Wang" })],
+      ME,
+      new Map([
+        [
+          "k3wpf7c5",
+          {
+            displayName: "Decision Card Coder",
+            description: null,
+            color: "agent-09" as const,
+          },
+        ],
+      ])
+    );
+    const { container } = render(
+      <Transcript
+        rows={channelRows([escalationMessage()], [], index, formatChannelTimestamp)}
+        index={index}
+        flashId={null}
+        onOpenThread={() => {}}
+        onAnswerEscalation={() => {}}
+      />
+    );
+    expect(screen.getByText("Decision Card Coder")).toBeTruthy();
+    // ⚠ AND THE ROW WEARS THE ACCENT, so the card is not a second opinion about
+    // which agent posted: one key reaches the bar, the side bar and the chip.
+    expect(container.querySelector("[data-agent-color='agent-09']")).toBeTruthy();
+    // ⚠ THE SIDE DOES NOT MOVE. An agent posts on its OPERATOR's account
+    // (INVARIANTS §5), so this still hangs on the viewer's side — the same as
+    // every other agent post, and NOT part of the bug.
+    expect(bar(container).closest("article")?.className).toContain(
+      "flex-row-reverse"
+    );
+  });
+
   it("every option is BLACK before a press, and they are named Option A / Option B", () => {
     const { container } = draw([escalationMessage()], {
       onAnswerEscalation: () => {},

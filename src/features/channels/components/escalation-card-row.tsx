@@ -35,7 +35,7 @@
  */
 
 import { cn } from "@/shared/lib/utils";
-import { agentBoxOf } from "./agent-box-rule";
+import { agentBoxOf, agentPostAccent } from "./agent-box-rule";
 import { AuthoredRow } from "./authored-row";
 import {
   DECISION_BTN_BASE,
@@ -86,12 +86,14 @@ export function EscalationCardMessage({
   flash,
   busy,
   onAnswer,
+  onOpenAgent,
 }: {
   row: EscalationRow;
-  /** ⚠ FOR THE COLOUR AND NOTHING ELSE — `agent-box-rule.ts › agentBoxOf` reads
-   *  the LIVE projection, because a key goes back to the channel's bank when its
-   *  session ends and a colour stamped on the row would keep painting a hue
-   *  another agent now owns. */
+  /** ⚠ THE LIVE PROJECTION — the card reads THREE things off it and stamps
+   *  none of them on the row: the agent's COLOUR (a key returns to the channel's
+   *  bank when its session ends, so a stamped hue would keep painting one another
+   *  agent now owns), its current NAME, and whether this machine knows the
+   *  session well enough for its pill to open a pane. */
   index: AuthorIndex;
   flash: boolean;
   /** An answer is in flight — the double-submit guard, NOT a capability. */
@@ -105,6 +107,11 @@ export function EscalationCardMessage({
    * The pop-out thread window and the guest lane hand none.
    */
   onAnswer?: (optionIndex: number) => void;
+  /** ⚠ GATED HERE THE WAY `transcript.tsx › Message` GATES IT — on
+   *  `index.agents`, because a pane can only be opened for a session this
+   *  machine knows. A card's pill that could not be pressed while an ordinary
+   *  post's could is the same fork this whole wave closed. */
+  onOpenAgent?: (agentId: string) => void;
 }) {
   const { escalation, answer } = row;
   // ⚠ TWO CONJUNCTS AND THEY ARE DIFFERENT FACTS. `answerable` is the SERVER's
@@ -118,7 +125,39 @@ export function EscalationCardMessage({
   // channel-less MCP post, an ENDED session — resolves to black in
   // `decisionCardPaint`, which is Samuel's ended rule and also the pre-restyle
   // face, so nothing regresses when a colour is unavailable.
-  const paint = decisionCardPaint(agentBoxOf(row, index)?.color);
+  const box = agentBoxOf(row, index);
+  const paint = decisionCardPaint(box?.color);
+  /**
+   * 🔒 **THE CARD IS ATTRIBUTED LIKE EVERY OTHER AGENT POST, AND UNTIL
+   * 2026-09-20 IT WAS NOT** (Samuel, on the first live card: *"I see the
+   * decision card as being sent from me? Is that a bug…"*).
+   *
+   * ⚠ **IT WAS A BUG AND THE CAUSE WAS ONE HARD-CODED PROP.** This component
+   * passed `agent={false}` and handed the shell no `agentId`, no `agentName` and
+   * no accent — so a card WRITTEN BY AN AGENT drew the operator's bare pill, with
+   * no name, no `agent` chip and no colour, while the same agent's ordinary posts
+   * three rows up drew all three. The row data was never wrong: `authorKind` is
+   * `agent` and the session id is server-stamped. The card simply refused to say
+   * so, which is the one fork `authored-row.tsx`'s header spends itself forbidding.
+   *
+   * ⚠ **THE SIDE IS NOT PART OF THE BUG AND DOES NOT MOVE.** An agent posts on
+   * its OPERATOR's account (INVARIANTS §5), so `author_user_id` is the operator's
+   * and the row hangs on their side — true of every agent post in the app, and
+   * changing it here would make one row kind disagree with the rest about what a
+   * side means.
+   *
+   * ⚠ **RESOLVED AT RENDER, off the live index** — the same contract the message
+   * row is under: a rename reaches every card the moment main pushes the next
+   * summary, and an ENDED agent keeps its name while its colour goes neutral.
+   */
+  const agentName = row.agentId
+    ? (index.agents.get(row.agentId)?.displayName ?? null)
+    : null;
+  const agentId = row.agentId;
+  const openAgent =
+    onOpenAgent && agentId && index.agents.has(agentId)
+      ? () => onOpenAgent(agentId)
+      : undefined;
   return (
     <AuthoredRow
       id={row.id}
@@ -126,7 +165,12 @@ export function EscalationCardMessage({
       author={row.author}
       authorLabel={row.authorLabel}
       time={row.time}
-      agent={false}
+      agent={row.agent}
+      external={row.external}
+      agentId={row.agentId}
+      agentName={agentName}
+      accent={box && agentPostAccent(box)}
+      onOpenAgent={openAgent}
       continuation={false}
       flash={flash}
     >
