@@ -190,9 +190,15 @@ async function resolveModel(runtimeId, d, template) {
   // Every link is `chainModel` — "a real pick, or '' meaning KEEP GOING" — INCLUDING the
   // directive's own (F-285): an unrecognised id FALLS THROUGH rather than committing the chain.
   if (!runtimeId || runtimeId === defaultId) {
+    // ⚠ `getLaunchModelLink`, NOT `aliasForModelId(getLaunchModel(...))` (U5, 2026-09-21). The
+    // channel's stored model is now RUNTIME-KEYED (`launch-selection.js › byRuntime`), and the old
+    // pair read the DEFAULT runtime's record through Claude's alias table — so a channel whose
+    // stored pick belongs to another runtime silently contributed nothing to this chain. The link
+    // form resolves the pick on ITS OWN runtime and still answers `''` for "keep going", which is
+    // what every other link in this expression means.
     return sessionModel.chainModel(d.model)
       || require('./session-launch-op').templateModel(sessionModel, template)
-      || sessionModel.aliasForModelId(channelPrefs.getLaunchModel(d.channelId));
+      || channelPrefs.getLaunchModelLink(d.channelId);
   }
   const asked = typeof d.model === 'string' ? d.model.trim() : '';
   if (!asked) return '';
