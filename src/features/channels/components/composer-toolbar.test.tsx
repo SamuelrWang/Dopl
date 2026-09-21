@@ -92,6 +92,34 @@ function mount() {
 const btn = (name: string) => screen.getByRole("button", { name });
 
 /**
+ * **A MOUNT WHOSE DRAFT ACTUALLY REACHES SOMEBODY** — required since 2026-09-20,
+ * when an empty reach stopped drawing the line at all (Samuel: *"if there is no
+ * addressee just have it be nothing"*).
+ *
+ * ⚠ **THE THREE PLACEMENT CASES BELOW ARE ABOUT WHERE THE LINE HANGS, NOT ABOUT
+ * WHAT IT SAYS**, and they used the bare mount only because `→ nobody` used to
+ * render unconditionally. Addressing a live agent is the smallest change that
+ * keeps each of them testing its own property; `composer-recipients.test.tsx`
+ * owns the "nobody draws nothing" rule itself.
+ */
+function mountAddressed() {
+  const container = render(
+    <ChannelsComposer
+      channelId={CHANNEL_ID}
+      workspaceId="ws-1"
+      members={MEMBERS}
+      currentUserId={ME}
+      liveAgents={[{ name: "ab12cd34", displayName: "Scout" }]}
+      gate={{ begin: vi.fn(), end: vi.fn() }}
+    />
+  ).container;
+  fireEvent.change(screen.getByRole("textbox"), {
+    target: { value: "@scout look at the build" },
+  });
+  return container;
+}
+
+/**
  * ⚠ `act`, BECAUSE THE ENGINE'S EVENTS ARE NOT CLICKS. `fireEvent` wraps its own dispatch; a
  * callback we invoke straight off the fake recognition object is a state write from outside
  * React's batching, and the render it schedules never flushes before the next assertion.
@@ -107,7 +135,7 @@ describe("the recipient tag sits ABOVE the card, outside it, hard left", () => {
     // ⚠ THE CARD IS `.raised-tab` — the bordered box (`composer.tsx`'s own note says the 1px
     // moved into its padding). "Outside the box" is exactly "not a descendant of that element",
     // and asserting it this way survives the next radius/padding rewrite.
-    const container = mount();
+    const container = mountAddressed();
     const card = container.querySelector(".raised-tab");
     const tag = screen.getByRole("status", { name: "Recipients" });
     expect(card).not.toBeNull();
@@ -116,26 +144,28 @@ describe("the recipient tag sits ABOVE the card, outside it, hard left", () => {
 
   it("comes BEFORE the card in document order — above it, not below", () => {
     // ⚠ THE OTHER HALF: a tag lifted out of the card but appended after it is still outside it.
-    const container = mount();
+    const container = mountAddressed();
     const card = container.querySelector(".raised-tab") as HTMLElement;
     const tag = screen.getByRole("status", { name: "Recipients" });
     expect(tag.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("packs LEFT, and still says → nobody with nothing addressed", () => {
+  it("packs LEFT, and names who it reaches", () => {
     // ⚠ `justify-start`, NOT `justify-end` — the 2026-09-04 top-RIGHT placement's class. The two
     // halves (which element it hangs off, which way it packs) have to move together.
-    mount();
+    // ⚠ THE TAIL OF THIS CASE CHANGED ON 2026-09-20: it asserted `nobody` on an unaddressed
+    // draft, and an unaddressed draft now draws no line to assert anything about.
+    mountAddressed();
     const tag = screen.getByRole("status", { name: "Recipients" });
     expect(tag.className).toContain("justify-start");
     expect(tag.className).not.toContain("justify-end");
-    expect(tag.textContent).toContain("nobody");
+    expect(tag.textContent).toContain("scout");
   });
 
   it("nothing else moved out of the card — the field is still the card's first row", () => {
     // ⚠ Samuel: *"nothing else in the card moves up"*. The mutation this catches is a rewrite
     // that lifts the whole first row out on the way to lifting the tag.
-    const container = mount();
+    const container = mountAddressed();
     const card = container.querySelector(".raised-tab") as HTMLElement;
     expect(card.contains(screen.getByLabelText("Message"))).toBe(true);
     expect(card.contains(btn("Send"))).toBe(true);

@@ -199,6 +199,30 @@ export const ChannelMessageCreateSchema = z.object({
   summary: z.string().trim().min(1).max(200).optional(),
   intent: MessageIntentSchema.optional(),
   /**
+   * **THE AUTHOR CANCELLED THE DEFAULT ADDRESS FOR THIS ONE MESSAGE** — `false`
+   * turns RR3 off for this post and nothing else (Samuel, 2026-09-20: *"esc just
+   * removes it for that message currently"*).
+   *
+   * ⚠ **IT EXISTS BECAUSE THE COMPOSER NOW WRITES THE TAG ITSELF.** An
+   * auto-addressed message leaves the box with `@handle` really in its body
+   * (`components/composer.tsx`), so the server sees a TYPED address and RR3 is
+   * not consulted at all. Cancelling means the tag is not inserted — and without
+   * this field the server would then repair the very address the author just
+   * dismissed, which would make Escape a lie.
+   *
+   * ⚠ **ABSENT IS TODAY'S BEHAVIOUR, AND THAT IS THE WHOLE COMPATIBILITY STORY.**
+   * Every other client — the web build, MCP, an installed desktop — sends
+   * nothing here and keeps the repair. It is `false` or it is not there; `true`
+   * is accepted and means the same as absent, so a caller cannot use it to ASK
+   * for a repair it would not otherwise get.
+   *
+   * ⚠ **IT IS NOT `intent`.** That field already carries two meanings from two
+   * clients and cost four days of silent misrouting for it
+   * (`server/service-wake-verdict-record.ts`); overloading it a third time is the
+   * same mistake with a new name.
+   */
+  autoAddress: z.boolean().optional(),
+  /**
    * A STRUCTURED ESCALATION, and AN ANSWER to one. ⚠ TOP-LEVEL VALIDATED FIELDS
    * AND NOT CALLER METADATA — the whole shape, and why, is stated once in
    * `./escalation.ts`; `resolvePostMetadata` folds 10 and 11 are what enforce it.

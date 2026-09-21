@@ -13,9 +13,8 @@
  *    a person's `to=` against.
  *  - **AND NOTHING SAID WHO WOULD ANSWER.** An untagged message looked exactly
  *    like a tagged one until nothing came back. The recipient line states the
- *    prediction `server/service-wake-verdict.ts › resolveWakeVerdict` will
- *    store — the tags, else RR1's thread party, else RR3's responder, else
- *    `nobody`.
+ *    prediction `resolveWakeVerdict` will store — the tags, else RR1's thread
+ *    party, else RR3's responder, else nothing at all (2026-09-20).
  *
  * ⚠ **THE LAST CASE IS THE ONE THAT MATTERS**: whatever the picker put in the
  * draft, feeding it back through the SERVER'S OWN index must name the agent that
@@ -90,6 +89,12 @@ const type = (field: HTMLTextAreaElement, value: string) =>
   fireEvent.change(field, { target: { value } });
 
 const line = () => screen.getByLabelText("Recipients").textContent ?? "";
+/** 🔴 **NO REACH DRAWS NO LINE SINCE 2026-09-20** (*"if there is no addressee just
+ *  have it be nothing"*). ⚠ Assertion 2 proves `REACH_NOBODY` renders nowhere. */
+const noLine = () => {
+  expect(screen.queryByLabelText("Recipients")).toBeNull();
+  expect(document.body.textContent ?? "").not.toContain(REACH_NOBODY);
+};
 
 describe("the picker offers the CHANNEL's live agents", () => {
   it("opens on `@` and lists a PEER's agent by NAME and by HANDLE", () => {
@@ -158,22 +163,21 @@ describe("the recipient line — always on, whatever the draft says", () => {
    *
    * ⚠ This REPLACED a test that set the channel's `defaultResponderAgentName` and expected the
    * line to name it — RR3's configured arm, deleted with the room-wide field. The case worth
-   * pinning in its place is the opposite one: a member who chose "No one" must see `nobody`
-   * even in a room with agents live, because the server will wake none of them. A line that
-   * still named one here would be OVERSTATING reach, which this file calls worse than no line.
-   *
-   * ⚠ It is set on the ROSTER, not on a prop, which is the other half of the change: the
-   * composer reads the viewer's own membership row rather than being handed a channel value.
+   * pinning in its place is the opposite one: a member who chose "No one" must be shown NO
+   * reach at all, because the server will wake none of them. A line naming one would be
+   * OVERSTATING reach, which this file calls worse than no line — and since 2026-09-20 the
+   * honest rendering of no reach is no element.
+   * ⚠ It is set on the ROSTER, not on a prop: the composer reads the viewer's own membership
+   * row rather than being handed a channel value.
    */
-  it("🔒 says `nobody` when the VIEWER chose No one, with two agents live", () => {
+  it("🔒 draws NOTHING when the VIEWER chose No one, with two agents live", () => {
     const body = mount({
       liveAgents: [PEER_AGENT, BARE_AGENT],
       members: [{ ...MEMBERS[0], unaddressedResponder: "none" }, MEMBERS[1]],
     });
     type(body, "who is around");
-    expect(line()).toContain(REACH_NOBODY);
+    noLine();
   });
-
   /**
    * 🔒 **TWO LIVE, NEITHER ADDRESSED → THE LINE SAYS `nobody`** (2026-09-15, Samuel's ruling —
    * F-705).
@@ -189,12 +193,11 @@ describe("the recipient line — always on, whatever the draft says", () => {
    * will not wake tells a person their message was seen when it was not. Silence predicted,
    * silence delivered; the server half of this exact fixture is in `draft-reach-parity.test.ts`.
    */
-  it("🔒 says `nobody` with TWO live and neither addressed", () => {
+  it("🔒 draws NOTHING with TWO live and neither addressed", () => {
     const body = mount({ liveAgents: [PEER_AGENT, BARE_AGENT] });
     type(body, "who is around");
-    expect(line()).toContain(REACH_NOBODY);
+    noLine();
   });
-
   /**
    * 🔒 **AND A POST THAT WILL ROUTE STILL MUST NOT READ AS `nobody`** — the 2026-09-04 intent of
    * the case above, kept where it still applies: the asker HAS addressed one of these two, so
@@ -221,9 +224,9 @@ describe("the recipient line — always on, whatever the draft says", () => {
     expect(line()).toContain("@agent-z9q1w4er");
   });
 
-  it("says `nobody` in an empty room, and renders BEFORE anything is typed", () => {
+  it("draws NOTHING in an empty room, before anything is typed", () => {
     mount();
-    expect(line()).toContain(REACH_NOBODY);
+    noLine();
   });
 
   it("takes the room's ONE live agent with no nomination at all (RR3 arm 2)", () => {
@@ -479,7 +482,7 @@ describe("🔒 the settings control and the composer read one source", () => {
         currentUserId={ME}
       />
     );
-    expect(screen.getByLabelText("Recipients").textContent).toContain(REACH_NOBODY);
+    noLine();
   });
 
   it("the default renders as Last addressed, and the line still names an agent", () => {

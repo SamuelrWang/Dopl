@@ -1,25 +1,31 @@
 // @vitest-environment jsdom
 /**
- * **A MESSAGE THE SERVER ROUTED MUST NOT READ AS ADDRESSED TO NOBODY** (Samuel,
- * 2026-09-05: *"even though it did reach the agent, it's confusing for someone
- * looking back that there was no tag… it should still auto-add the agent tag
- * before the message"*).
+ * 🔴 **THE SERVER-ROUTED `→ @agent` LINE IS DELETED (Samuel, 2026-09-20), AND
+ * THIS FILE IS WHAT THAT RULING LOOKS LIKE NOW.**
  *
- * ⚠ **THE PROPERTY THIS FILE EXISTS FOR IS THE PAIR**, and neither half is worth
- * pinning alone: a row the SERVER aimed shows the resolved tag, and a row whose
- * author TYPED the tag shows no extra line — because that tag is already in the
- * body, where they put it, and a second one reads as two addressees. The rule
- * that separates them is `lib/agent-post-stamp.ts › serverRoutedAgentIds`, the
- * exact complement of the predicate RR3's own arm 3 turns on.
+ * ⚠ **THE PROBLEM IT SOLVED IS SOLVED FURTHER UP.** It existed for Samuel's
+ * 2026-09-05 report — *"even though it did reach the agent, it's confusing for
+ * someone looking back that there was no tag … it should still auto-add the agent
+ * tag before the message"* — and it answered the second half by drawing chrome
+ * under the pill, because the stored body could not be touched. The composer now
+ * writes the tag INTO the draft before it is sent (`composer.tsx › submit`), so
+ * the tag really is before the message, in the author's own words, exactly as the
+ * original ask said. Drawing it a second time as chrome would be the thing this
+ * wave was called to stop: *"we can consolidate to one surface"*.
  *
- * ⚠ **AND THE BODY IS NEVER REWRITTEN.** The stored text is what the author typed
- * on every surface that reads the row — MCP reads, notifications, quotes — so the
- * displayed tag is chrome the transcript draws over a stamped decision, never an
- * edit to somebody's words. The last case measures exactly that.
+ * ⚠ **SO THE CASES BELOW ARE ABSENCE CASES AND THEY ARE THE RULING.** Do not
+ * "restore" them: a row that faces a routed address again puts one fact in two
+ * places, and for a post sent by this build it would sit beside the identical tag
+ * in the body.
  *
- * ⚠ ITS OWN FILE: `transcript.test.tsx` states it has no headroom under the
- * 500-line cap, the same reason `agent-attribution.test.tsx` and
- * `agent-pill-open.test.tsx` stand apart.
+ * ⚠ **THE STORED DATA IS UNTOUCHED AND STILL READ.** `recipient_agent_ids` and
+ * `metadata.wake_reason` are still stamped, still carried on the row
+ * (`view-model-rows.ts › routedAgentIds`) and still what every machine routes on;
+ * `lib/agent-mentions.ts › routedTagLabel` and `lib/agent-post-stamp.ts ›
+ * serverRoutedAgentIds` keep their own tests. What went is one renderer.
+ * ⚠ **AND THE BODY IS STILL NEVER REWRITTEN AT REST** — the last case measures
+ * that, unchanged. The composer adds the tag to a DRAFT on this machine, before
+ * anything is stored; nothing edits a post after the fact.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -71,63 +77,37 @@ function routed(body: string, agentIds: string[]) {
   });
 }
 
-// ⚠ FACES ARE SLUGGED (Samuel, 2026-09-05): a routed tag is spelled by `agentMentionFace`,
-// the same function the typed tags use, and it now answers lower-case-with-dashes so every
-// tag a reader sees is one they could retype. "Dopl Worker" reads `@dopl-worker`. The raw
-// address is unchanged and still rides on `title`.
-describe("the resolved tag on a message that named nobody", () => {
-  it("faces the agent the server picked, by NAME", () => {
+describe("a routed row draws NO address chrome — the 2026-09-20 deletion", () => {
+  it("faces nothing at all for an agent the server picked", () => {
+    // 🔒 The exact row that used to render `→ @dopl-worker` under the pill.
     renderWith(routed("ship it", [A]));
-    expect(screen.getByText("→ @dopl-worker")).toBeTruthy();
+    expect(screen.queryByText(/^→ /)).toBeNull();
+    expect(screen.queryByText(/@dopl-worker/)).toBeNull();
   });
 
-  it("keeps the raw address one hover away", () => {
-    // ⚠ THE SAME ARRANGEMENT `message-markdown.tsx › MentionText` USES for a
-    // typed tag: the face is the name, the `title` is the thing it replaced. The
-    // id is the address — stored, on the wire, what the desktop routes on — and
-    // it must never become unreachable just because it is unpleasant to read.
-    renderWith(routed("ship it", [A]));
-    expect(screen.getByText("→ @dopl-worker").getAttribute("title")).toBe(
-      "@agent-k3v7d2mq"
-    );
-  });
-
-  /**
-   * 🔒 **AN UNNAMED AGENT FACES `New Agent`, NOT ITS ID (Samuel, 2026-09-15:
-   * the arrow "shows the raw slug/ID; show the proper agent name it was sent
-   * to").**
-   *
-   * ⚠ **THIS CASE ASSERTED THE OPPOSITE UNTIL THIS FIX, AND IT WAS NOT WRONG WHEN
-   * IT WAS WRITTEN** — "falls back to the id, degradation not breakage" was the
-   * 2026-09-05 contract, back when `#<id>` was still a face an operator was
-   * expected to read. The 2026-09-15 ruling withdrew that everywhere
-   * (`shared/lib/agent-name.ts`), and `routedTagLabel` was the one reader the
-   * sweep missed, so this expectation is what kept the miss green.
-   * ⚠ **NOTHING IS LOST, AND THE NEXT CASE IS THE PROOF**: the id is still one
-   * hover away on `title`.
-   * ⚠ **NO `@`** — this branch is reached precisely when there is no retypable
-   * handle, so an `@`-prefixed face would render an address resolving to nobody.
-   */
-  it("faces an agent with no name as `New Agent`, never as its id", () => {
+  it("faces nothing for an agent the feed has no name for either", () => {
+    // ⚠ THE UNNAMED ARM WAS THE ONE THAT LEAKED A RAW ID ONCE (2026-09-15). It
+    // cannot leak anything now, and this is the case that says so.
     renderWith(routed("ship it", [B]));
-    expect(screen.getByText("→ New Agent")).toBeTruthy();
-    expect(screen.queryByText(/agent-h1anog51/)).toBeNull();
+    expect(screen.queryByText(/^→ /)).toBeNull();
+    expect(screen.queryByText(/h1anog51/)).toBeNull();
   });
 
-  it("keeps the unnamed agent's raw address on the hover too", () => {
-    renderWith(routed("ship it", [B]));
-    expect(screen.getByText("→ New Agent").getAttribute("title")).toBe(
-      "@agent-h1anog51"
-    );
-  });
-
-  it("names BOTH when the server resolved two", () => {
+  it("faces nothing when the server resolved TWO", () => {
     renderWith(routed("ship it", [A, B]));
-    expect(screen.getByText("→ @dopl-worker New Agent")).toBeTruthy();
+    expect(screen.queryByText(/^→ /)).toBeNull();
+  });
+
+  it("🔒 and the BODY still carries the words the author wrote, untouched", () => {
+    // ⚠ THE INVARIANT THE DELETION MUST NOT BE READ AS RELAXING: nothing rewrites
+    // a stored post. The tag a reader sees on a message sent by this build was put
+    // in the draft before it left the composer, which is a different act entirely.
+    renderWith(routed("ship it", [A]));
+    expect(screen.getByText("ship it")).toBeTruthy();
   });
 });
 
-describe("what must NOT grow a line", () => {
+describe("the cases that already added nothing, and still do", () => {
   it("🔒 a tag the AUTHOR TYPED adds nothing — recipients without a `wake_reason`", () => {
     // ⚠ THE CASE THE WHOLE RULE TURNS ON. `recipient_agent_ids` alone cannot
     // tell "the server chose this" from "the author typed this": the server's

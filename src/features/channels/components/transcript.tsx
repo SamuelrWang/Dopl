@@ -47,7 +47,6 @@ import { agentBoxOf, agentPostAccent } from "./agent-box-rule";
 import { ThreadCardMessage } from "./thread-card-row";
 import { EscalationCardMessage } from "./escalation-card-row";
 import { MessageMarkdown } from "./message-markdown";
-import { routedTagLabel } from "../lib/agent-mentions";
 import type { AuthorIndex } from "./view-model";
 import type { MessageRow, ReceiptRow, TranscriptRow } from "./view-model-rows";
 
@@ -369,24 +368,6 @@ function Message({
     onOpenAgent && agentId && index.agents.has(agentId)
       ? () => onOpenAgent(agentId)
       : undefined;
-  // ⚠ THE STORED VERDICT, FACED AT RENDER (Samuel, 2026-09-05). A post that named
-  // nobody and was routed anyway read back as unaddressed, which is a lie the
-  // transcript was telling about its own history. The ids come off the row's
-  // SERVER stamps (`view-model-rows.ts › routedAgentIds`) and the name off the
-  // live index, exactly like the sender pill's — so a rename re-faces old rows
-  // and no body is ever rewritten.
-  const routedAgents = routedTagLabel(row.routedAgentIds, index.agents);
-  // **`→ @desktop` RIDES THE SAME TAG** (2026-09-18). It is a recipient of the
-  // same class the tag already draws — not a person, addressed explicitly — so
-  // showing it anywhere else would be one fact in two places, which the note
-  // above is exactly about. ⚠ It carries NO title: the handle IS the address a
-  // reader would retype, so there is no raw id to reveal on hover.
-  const routed = row.routedDesktop
-    ? {
-        face: routedAgents ? `${routedAgents.face}, @desktop` : "@desktop",
-        title: routedAgents?.title,
-      }
-    : routedAgents;
   // ⚠ RESOLVED AT RENDER from the live feed, never read off the row (2026-08-27). A rename
   // reaches every message an agent has ever posted the moment main pushes the next summary.
   const agentName = row.agentId
@@ -448,8 +429,6 @@ function Message({
       external={row.external}
       agentId={row.agentId}
       agentName={agentName}
-      routedTo={routed?.face ?? null}
-      routedTitle={routed?.title}
       continuation={row.continuation}
       flash={flash}
       accent={box && agentPostAccent(box)}

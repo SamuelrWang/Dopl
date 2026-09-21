@@ -33,6 +33,7 @@
  * works"). One word here, the detail one click away.
  */
 
+import { cn } from "@/shared/lib/utils";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { agentDisplayName, ownAgentsFor } from "./agents-model";
 
@@ -73,52 +74,106 @@ export function ownAgentsWorking(
   );
 }
 
-/** What one row says. ⚠ Pure and exported: the NAME is the whole point of the
- *  row, and `agentDisplayName` prefers the operator's own rename — so a renamed
- *  agent must read by its new name here the moment the feed carries it. */
+/**
+ * What one row says. ⚠ **THE NAME, AND NOTHING ELSE** (Samuel, 2026-09-20:
+ * *"right now it says, [agent name] is working… remove the is working… just have
+ * it be the flashing dot and the name of the agent"*).
+ *
+ * ⚠ **THE DOT ALREADY SAID IT, AND SAYING IT TWICE IS WHAT COST THE ROOM.** The
+ * pulse is the "working" signal; the words repeated it once per agent, which is
+ * the same one-fact-twice rule `AgentEndedPill` follows against a dot beside a
+ * pill reading "Ended". With the strip now inline at the end of the recipient
+ * line, three agents' worth of *"… is working…"* is also the difference between
+ * fitting and eliding.
+ * ⚠ **STILL PURE AND STILL EXPORTED**: `agentDisplayName` prefers the operator's
+ * own rename, so a renamed agent must read by its new name the moment the feed
+ * carries it.
+ */
 export function agentActivityText(agent: DesktopSessionSummary): string {
-  return `${agentDisplayName(agent)} is working…`;
+  return agentDisplayName(agent);
 }
 
 /**
- * The rows. Renders NOTHING when nothing is working, rather than an empty
- * reserved strip — this sits directly above the composer, and a permanent blank
- * band there is chrome every channel pays for forever.
+ * **THE WORKING STRIP — one line, newest agent first, at the END OF THE
+ * RECIPIENT LINE** (Samuel, 2026-09-20).
  *
- * ⚠ THERE IS NO FRESHNESS GUARD HERE AND ITS ABSENCE IS THE DESIGN.
- * `peer-activity.tsx` compares against `PRESENCE_ONLINE_WINDOW_MS` because a
- * `channel_sessions` row outlives the process that wrote it. The local feed has
- * no such failure mode — see this file's header — so a window here would be
- * inventing doubt about a fact this machine holds directly. Stated rather than
- * left as an absence, because the asymmetry reads as an oversight otherwise.
+ * 🔒 **IT WAS A STACK OF ROWS UNDER A HAIRLINE AND ALL THREE OF THOSE ARE GONE**:
+ * *"no more line created, and instead of having it above the most recent, put
+ * agents working to the right … instead of a green dot, have the dot be the
+ * colour of that agent … if it runs off the page, just have it do `…`, no
+ * scrolling necessary … for a new agent working, have it at the front"*.
+ *
+ * ⚠ **THE DOT CARRIES THE IDENTITY NOW, NOT THE STATE, AND ONLY HERE.** Green
+ * said "working" beside text that also said "working"; the agent's own
+ * `agent-01…16` key says WHICH agent, which is the fact a reader cannot get any
+ * other way once the words are gone. **The Agents tab's dot stays `bg-success`**
+ * — that surface lists idle, working and ended together, so there the dot is the
+ * only thing carrying state. Two dots, two jobs, stated here because they now
+ * differ on purpose.
+ * ⚠ **THE PULSE STAYS.** It is what separates an identity mark from a live one,
+ * and it is the half of the green dot that was never redundant.
+ *
+ * ⚠ **NEWEST FIRST IS A REVERSE, AND THE FEED'S ORDER IS WHY THAT IS EXACT.**
+ * `main/session-summary.js › reportList` walks `deps.sessions.values()` — a `Map`,
+ * so iteration is INSERTION order and the oldest live session is first. Reversing
+ * it is therefore launch order newest-first, not an approximation of one; there is
+ * no timestamp on this feed to sort by and inventing one would be a second
+ * ordering to keep in step.
+ * ⚠ **`…` IS `truncate`, AND THERE IS DELIBERATELY NO SCROLLER.** A strip that
+ * scrolls is a control; this is a caption, and the operator who needs the full
+ * list has the Agents tab.
  */
 export function AgentActivityRows({
   agents,
+  colors = null,
 }: {
   /** Already scoped by {@link ownAgentsWorking} — this component does not decide. */
   agents: readonly DesktopSessionSummary[];
+  /**
+   * **EACH AGENT'S PAINT, ALREADY RESOLVED** — `agentId` → a `var()` reference.
+   *
+   * ⚠ **RESOLVED BY THE CALLER, exactly as `authored-row.tsx › AuthoredRowAccent`
+   * is.** `lib/agent-colors.ts › agentColorVar` stays the one place the token name
+   * is spelled and no colour appears in this component. A missing entry — an agent
+   * the live set has not published a colour for — falls back to the neutral mark
+   * rather than painting nothing at all.
+   */
+  colors?: ReadonlyMap<string, string> | null;
 }) {
   if (agents.length === 0) return null;
+  // ⚠ A COPY, NOT `.reverse()` ON THE ARGUMENT — the caller's array is the feed's
+  // own derivation and several surfaces read it this render.
+  const newestFirst = [...agents].reverse();
   return (
-    <div className="flex shrink-0 flex-col border-t border-border-subtle">
-      {agents.map((agent) => (
-        <div
-          // ⚠ KEYED ON THE BLENDED SLOT, not `agentId` alone — `agents-model.ts ›
-          // agentKey` is `(channel, thread, agent)`, and since multiplayer one
-          // operator can run several agents whose ids collide across threads.
-          key={`${agent.channelId}:${agent.taskId}:${agent.agentId ?? agent.sessionId}`}
-          role="status"
-          className="flex items-center gap-2 px-8 py-1.5"
-        >
+    <span className="flex min-w-0 items-center gap-2 truncate">
+      {newestFirst.map((agent) => {
+        const paint = agent.agentId ? (colors?.get(agent.agentId) ?? null) : null;
+        return (
           <span
-            aria-hidden
-            className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-success motion-reduce:animate-none"
-          />
-          <span className="min-w-0 truncate text-caption text-text-secondary">
-            {agentActivityText(agent)}
+            // ⚠ KEYED ON THE BLENDED SLOT, not `agentId` alone — `agents-model.ts ›
+            // agentKey` is `(channel, thread, agent)`, and since multiplayer one
+            // operator can run several agents whose ids collide across threads.
+            key={`${agent.channelId}:${agent.taskId}:${agent.agentId ?? agent.sessionId}`}
+            role="status"
+            className="flex min-w-0 shrink items-center gap-1.5"
+          >
+            <span
+              aria-hidden
+              className={cn(
+                "h-1.5 w-1.5 shrink-0 animate-pulse rounded-full motion-reduce:animate-none",
+                // ⚠ THE FALLBACK IS THE TRANSCRIPT'S OWN NEUTRAL, not green: an
+                // uncoloured agent here is the same fact as an uncoloured agent
+                // on a row (`agent-box-rule.ts › AGENT_ACCENT_NEUTRAL`).
+                paint === null && "bg-border-strong"
+              )}
+              style={paint ? { backgroundColor: paint } : undefined}
+            />
+            <span className="min-w-0 truncate text-caption text-text-secondary">
+              {agentActivityText(agent)}
+            </span>
           </span>
-        </div>
-      ))}
-    </div>
+        );
+      })}
+    </span>
   );
 }

@@ -37,7 +37,7 @@
  * Agents tab's button — a second BUTTON, never a second launch path.
  */
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import { cn } from "@/shared/lib/utils";
 import { COMPOSER_BOTTOM, ComposerInputRow } from "./composer-input";
@@ -45,6 +45,8 @@ import { ComposerToolbar } from "./composer-toolbar";
 import { NewThreadDialog } from "./new-thread-dialog";
 import { MentionPopover } from "./composer-mentions";
 import { ComposerRecipients } from "./composer-recipients";
+// ⚠ THE SAME RULE THE LINE DRAWS, ASKED ONCE MORE AT SEND TIME — see `autoTag`.
+import { draftReach, viewerUnaddressedResponder } from "../lib/draft-recipients";
 import { ComposerTint } from "./composer-tint";
 import { useComposerMentions } from "./use-composer-mentions";
 import type { LiveAgentSession } from "../lib/draft-recipients";
@@ -74,6 +76,7 @@ export function ChannelsComposer({
   openThreadId = null,
   newThreadSignal = 0,
   liveAgents = EMPTY_LIVE_AGENTS,
+  working = null,
   recentAgentIds = EMPTY_RECENT,
   threadOtherParty = null,
 }: {
@@ -106,6 +109,11 @@ export function ChannelsComposer({
    * set the server resolves a person's `to=` against. Empty where a surface has no sessions read.
    */
   liveAgents?: readonly LiveAgentSession[];
+  /** **MY OWN AGENTS MID-TURN**, drawn at the END of the recipient line since
+   *  2026-09-20 (Samuel: *"put agents working to the right"*). ⚠ A NODE BUILT BY
+   *  `channel-surface.tsx` — it was its own band above this card, under a
+   *  hairline; both are gone. This card states WHERE it sits, never what it says. */
+  working?: ReactNode;
   // ⚠ **`defaultResponderAgentName` IS GONE FROM THIS PROP CHAIN (2026-09-07, items 10 and
   // 11).** The question is PER MEMBER now, so `ComposerRecipients` reads it off the VIEWER'S OWN
   // roster row and no host has to remember to hand it over.
@@ -133,6 +141,16 @@ export function ChannelsComposer({
     currentUserAvatarUrl,
     gate,
   });
+
+  /**
+   * **ESCAPE DECLINED THE DEFAULT ADDRESS FOR THIS DRAFT** (Samuel, 2026-09-20).
+   *
+   * ⚠ **IT IS PER MESSAGE AND IT IS NOT A SETTING.** `channel_members
+   * .unaddressed_responder = "none"` is the standing opt-out and lives in
+   * Settings; this is one keystroke about one draft, cleared on send. Conflating
+   * them would let a reflex turn the feature off for good.
+   */
+  const [addressOff, setAddressOff] = useState(false);
 
   // THE @-PICKER — `use-composer-mentions.ts` (the §1 split at the cap, 2026-08-27).
   const mentions = useComposerMentions({ draft, setDraft, members, sessions: liveAgents, currentUserId });
@@ -194,15 +212,63 @@ export function ChannelsComposer({
     if (!canSend) return;
     // ⚠ THE LAUNCH AND REQUEST ARMS ARE BOTH GONE FROM HERE (2026-09-08) — each dialog owns its
     // own act and its own submit.
+    /**
+     * 🔒 **AN AUTO-ADDRESS IS WRITTEN INTO THE MESSAGE, AS A REAL TAG** (Samuel,
+     * 2026-09-20: *"if a user sends a message but didn't tag, but it has an auto
+     * address agent resolved, can we make it so that a tag is put in the text,
+     * before their message, and it just gets auto added? That way it makes it
+     * more clear too who it sent to, and we can consolidate to one surface"*).
+     *
+     * ⚠ **IT REPLACES THE GREY ARROW UNDER THE BADGE, IT DOES NOT JOIN IT.** The
+     * transcript used to FACE a server pick as chrome under the pill
+     * (`authored-row.tsx › routedTo`, deleted the same day) precisely because the
+     * body could not be touched. Writing the tag HERE, before the post leaves,
+     * makes the address a thing the author sent rather than a thing the server
+     * reports — one surface, and the same words in the notification, the MCP read
+     * and the quote.
+     * ⚠ **AND IT IS NOT A BODY REWRITE.** The old rule — *the stored body is never
+     * touched, a rewrite would put words in somebody's mouth* — is about the
+     * SERVER editing a post at rest. Nothing edits anything at rest: the draft
+     * gains the tag in the composer, on this machine, from the line the author is
+     * already reading, and Escape declines it.
+     * ⚠ **SO THE SERVER SEES A TYPED ADDRESS AND RR3 NEVER RUNS FOR THIS POST.**
+     * That is the consolidation: one path (a named agent), one stored shape, and
+     * `metadata.wake_reason` stays empty because nobody guessed.
+     * ⚠ **AGENTS ONLY, AND `responder` ONLY.** RR1's thread party is a MEMBER and
+     * is the thread's own address, not a default — there is no handle to insert
+     * and nothing to cancel.
+     */
+    const reach = draftReach({
+      body,
+      members,
+      sessions: liveAgents,
+      currentUserId,
+      unaddressedResponder: viewerUnaddressedResponder(members, currentUserId),
+      recentAgentIds,
+      threadOtherParty,
+    });
+    const auto =
+      !addressOff && reach.via === "responder" ? reach.recipients[0] : undefined;
+    const tagged =
+      auto && auto.kind === "agent" ? `@${auto.handle} ${body}` : body;
     const message = {
       channelId,
       clientMsgId: newClientMsgId(),
-      body,
+      body: tagged,
       // ⚠ EXPLICIT, never omitted. Absence reads as `request` on the wire
       // (`schema.ts › MessageIntentSchema`), and the plain composer is human chat.
       intent: "chat" as const,
+      // ⚠ **ONLY EVER `false`, AND ONLY WHEN THE AUTHOR PRESSED ESCAPE.** Absent
+      // is the wire's default and every other client's behaviour; sending `true`
+      // would be asking for a repair this composer has just done itself.
+      ...(addressOff ? { autoAddress: false as const } : {}),
     };
     clear();
+    // ⚠ **THE CANCEL IS FOR ONE MESSAGE** (*"esc just removes it for that message
+    // currently"*). Cleared with the draft, so the next message starts from the
+    // default again — and addressing an agent by hand meanwhile simply moves what
+    // that default resolves to.
+    setAddressOff(false);
     send.mutate(message);
   };
 
@@ -235,6 +301,8 @@ export function ChannelsComposer({
         currentUserId={currentUserId}
         recentAgentIds={recentAgentIds}
         threadOtherParty={threadOtherParty}
+        cancelled={addressOff}
+        working={working}
       />
       {/* ⚠ THE CARD WEARS THE WHOLE FACE THE AGENT PILL WEARS, VERBATIM (Samuel, live review
           2026-08-27) — not `.bento`, and not an extracted layer of it: a lone 1px ring read FLAT
@@ -266,7 +334,17 @@ export function ChannelsComposer({
             // ⚠ THE HANDLER IS THE PICKER'S (`use-composer-mentions.ts › keyDown`, moved
             // there 2026-09-02 at the cap): four of its five branches are about the shortlist,
             // and what stays this file's is the one act it owns — send.
-            onKeyDown={(e) => mentions.keyDown(e, submit)}
+            onKeyDown={(e) => {
+              // ⚠ **ESCAPE IS THIS ROW'S ONLY NEW KEY, AND IT IS READ BEFORE THE
+              // PICKER'S HANDLER** — which ignores it, so nothing is intercepted.
+              // ⚠ IME-SAFE for `keyDown`'s own reason: a composition Escape is
+              // the input method cancelling a candidate, not the author
+              // declining an address.
+              if (e.key === "Escape" && !e.nativeEvent.isComposing) {
+                setAddressOff(true);
+              }
+              mentions.keyDown(e, submit);
+            }}
             placeholder="Write a message"
             ariaLabel="Message"
             highlight={tintDraft}

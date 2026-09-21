@@ -357,7 +357,17 @@ export async function resolveWakeVerdict(
     // lands on `none` — nobody, `→ nobody`, and no notification.
     // ⚠ The verdict WORD survives for old rows; see the tombstone in
     // `service-wake-verdict-resilience.ts`.
-  } else if (repairable && wakeCtx.authorKind !== "agent" && !namedButUnresolved) {
+  } else if (
+    repairable &&
+    wakeCtx.authorKind !== "agent" &&
+    !namedButUnresolved &&
+    // **THE AUTHOR PRESSED ESCAPE** (2026-09-20) — `autoAddress:false` cancels
+    // RR3 for this one post. ⚠ IT GATES RR3 ALONE, never RR1: a thread still has
+    // two parties whatever the main room's default was doing, and the key is the
+    // composer saying "not this message", not "not this thread".
+    // ⚠ ABSENT IS UNCHANGED BEHAVIOUR — see the field on `schema.ts`.
+    input.autoAddress !== false
+  ) {
     // ⚠ **`!namedButUnresolved` IS ON RR3 ALONE, AND THE ASYMMETRY IS THE WHOLE
     // POINT** (2026-09-14). RR1 and RR2 answer with a **MEMBER**; RR3 is the only
     // arm that answers with an **AGENT**, so it is the only one that can replace

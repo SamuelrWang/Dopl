@@ -95,7 +95,7 @@ describe("the rows themselves", () => {
     // instance id — which is the leak `shared/lib/agent-name.ts` removes; the next case names
     // its two agents, because that is how the product now tells two rows apart.
     render(<AgentActivityRows agents={ownAgentsWorking([session()], CHANNEL_ID)} />);
-    expect(screen.getByText("New Agent is working…")).toBeTruthy();
+    expect(screen.getByText("New Agent")).toBeTruthy();
   });
 
   it("STACKS two, one row each — never a count", () => {
@@ -114,8 +114,8 @@ describe("the rows themselves", () => {
       />
     );
     expect(screen.getAllByRole("status")).toHaveLength(2);
-    expect(screen.getByText("Scout is working…")).toBeTruthy();
-    expect(screen.getByText("Rover is working…")).toBeTruthy();
+    expect(screen.getByText("Scout")).toBeTruthy();
+    expect(screen.getByText("Rover")).toBeTruthy();
     expect(screen.queryByText(/2 agents/)).toBeNull();
   });
 
@@ -133,7 +133,7 @@ describe("the rows themselves", () => {
         agents={ownAgentsWorking([session({ displayName: "Scout" })], CHANNEL_ID)}
       />
     );
-    expect(screen.getByText("Scout is working…")).toBeTruthy();
+    expect(screen.getByText("Scout")).toBeTruthy();
     expect(screen.queryByText(/#ab12cd34/)).toBeNull();
   });
 
@@ -141,6 +141,12 @@ describe("the rows themselves", () => {
     // ⚠ One vocabulary for "this agent is busy" across both lanes. The finer
     // local signal (`agentDetailLabel`) belongs on the cards, not on a caption
     // that would flicker once per tool call.
-    expect(agentActivityText(session())).toMatch(/ is working…$/);
+    // 🔒 **THE WORDS ARE GONE (Samuel, 2026-09-20: *"remove the is working… just
+    // have it be the flashing dot and the name of the agent"*).** The pulse is the
+    // working signal; the sentence repeated it once per agent, and the strip is
+    // inline at the end of the recipient line now, where that is the difference
+    // between fitting and eliding.
+    expect(agentActivityText(session())).toBe("New Agent");
+    expect(agentActivityText(session())).not.toMatch(/working/);
   });
 });

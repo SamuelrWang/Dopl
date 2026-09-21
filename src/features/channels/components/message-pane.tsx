@@ -471,13 +471,13 @@ export function ChannelsMessagePane({
         busy={outboundBusy}
         onDecide={onDecideOutbound}
       />
-      {/* ⚠ TWO ACTIVITY LANES, MINE FIRST — `agent-activity.tsx` then
-          `peer-activity.tsx`. Separate slots because they read different facts with
-          opposite failure modes, and mine renders in CHANNEL view too while the
-          peer row is thread-only. Neither reserves a blank band. */}
-      {agentActivity}
+      {/* ⚠ THE PEER LANE IS STILL ITS OWN BAND; MINE MOVED INTO THE COMPOSER'S
+          recipient line on 2026-09-20 (`working=` below). They read different
+          facts with opposite failure modes and neither reserves a blank band. */}
       {peerActivity}
       <ChannelsComposer
+        // ⚠ 2026-09-20: rides the recipient line's right edge, not its own band.
+        working={agentActivity}
         newThreadSignal={newThreadSignal}
         channelId={channelId}
         workspaceId={workspaceId}

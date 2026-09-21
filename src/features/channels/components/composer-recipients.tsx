@@ -26,7 +26,7 @@
  * for. `role="status"` because it changes under a caret that is elsewhere.
  */
 
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
   draftReach,
   viewerUnaddressedResponder,
@@ -36,12 +36,20 @@ import {
 import type { ChannelMember } from "../types";
 
 /**
- * What the line says when the draft would wake nobody.
+ * 🔴 **THE `→ nobody` FACE IS DELETED (Samuel, 2026-09-20: *"instead of having it
+ * show an arrow pointing to nobody, just have no arrow basically … if there is no
+ * addressee just have it be nothing"*).**
  *
- * ⚠ **THE WORD IS "nobody", NOT "the channel" OR "everyone".** An unaddressed
- * message lands in the room and triggers no agent, at any member count
- * (INVARIANTS §5) — **"broadcast" is not a shape this product has**, and copy
- * implying reach it does not have is the failure this line was added to fix.
+ * ⚠ **THE WORD IS KEPT AS AN EXPORT AND NOTHING RENDERS IT.** Two suites and the
+ * parity tests name this constant as the line's own vocabulary; deleting the
+ * symbol would be a rename dressed as a behaviour change. What changed is that an
+ * empty reach now draws NO ELEMENT AT ALL — see the early return below.
+ * ⚠ **AND THE OLD ARGUMENT FOR SHOWING IT IS SPENT.** It read "nobody" rather
+ * than "the channel" because *"broadcast" is not a shape this product has* — true,
+ * and it is exactly why the line is unnecessary now: since 2026-09-20 an
+ * auto-addressed draft carries its tag in the BODY, so the line has something to
+ * say precisely when somebody will be reached, and silence is the honest rest
+ * state rather than a fact withheld.
  */
 export const REACH_NOBODY = "nobody";
 
@@ -67,12 +75,21 @@ const VIA_NOTE: Partial<Record<DraftReach["via"], string>> = {
  * are live and the server named one. Same string as the stored
  * `metadata.wake_reason` and the MCP read line, so three surfaces say one thing.
  */
-const REASON_NOTE: Record<NonNullable<DraftReach["reason"]>, string> = {
-  default: "default",
-  "only agent": "default",
-  "most recent": "most recent",
-  "most recently launched": "newest agent",
-};
+/**
+ * 🔒 **THE BADGE ON AN AUTO-ADDRESS SAYS HOW TO REFUSE IT** (Samuel, 2026-09-20:
+ * *"instead of saying most recent, put esc to cancel"*).
+ *
+ * ⚠ **ONE WORD FOR ALL FOUR ARMS, AND THAT IS THE POINT.** `default`, `only
+ * agent`, `most recent` and `most recently launched` used to name WHICH arm
+ * picked — a distinction the author cannot act on and did not ask for. What they
+ * can act on is the same in every case: the tag is about to be written for them,
+ * and Escape stops it. The arm is still stored on `metadata.wake_reason` for the
+ * read surfaces that explain a routing after the fact.
+ * ⚠ **IT IS AN INSTRUCTION, SO IT IS ONLY EVER SHOWN BESIDE A CANCELLABLE
+ * ADDRESS** — `via: "responder"`. RR1's `thread` note is untouched: that address
+ * is the thread's own two parties and Escape does not apply to it.
+ */
+export const CANCEL_NOTE = "esc to cancel";
 
 /**
  * ⚠ **IT TAKES THE FACTS AND DERIVES THE ANSWER, rather than being handed one** — the derivation
@@ -86,11 +103,21 @@ export function ComposerRecipients({
   currentUserId,
   recentAgentIds = EMPTY_RECENT,
   threadOtherParty = null,
+  cancelled = false,
+  working = null,
 }: {
   body: string;
   members: ChannelMember[];
   sessions: readonly LiveAgentSession[];
   currentUserId: string;
+  /** **ESCAPE WAS PRESSED FOR THIS DRAFT** — the whole line goes, because the
+   *  address did (`components/composer.tsx` owns the flag and clears it on send). */
+  cancelled?: boolean;
+  /** **"N WORKING" — MY OWN AGENTS MID-TURN, TO THE RIGHT** (Samuel, 2026-09-20:
+   *  *"put agents working to the right"*). ⚠ A NODE, NOT A LIST: this component
+   *  reports the DRAFT's reach and must not learn to read a session feed.
+   *  `channel-surface.tsx` builds it, `agent-activity.tsx` draws it. */
+  working?: ReactNode;
   /** RR3 arm 3's input, derived once from the transcript this pane already
    *  holds (`derivations.ts`). ⚠ A STABLE reference — see {@link EMPTY_RECENT}. */
   recentAgentIds?: readonly string[];
@@ -120,7 +147,12 @@ export function ComposerRecipients({
       threadOtherParty,
     ]
   );
-  const note = reach.reason ? REASON_NOTE[reach.reason] : VIA_NOTE[reach.via];
+    // ⚠ **CANCELLED DRAWS NOTHING, THE SAME AS AN EMPTY REACH** — Escape removed the
+  // address, so there is no address to report and the line must not linger as a
+  // ghost of one.
+  if (cancelled || reach.recipients.length === 0) return null;
+  const note =
+    reach.via === "responder" ? CANCEL_NOTE : VIA_NOTE[reach.via];
   return (
     <p
       role="status"
@@ -133,18 +165,20 @@ export function ComposerRecipients({
       className="flex min-w-0 items-center justify-start gap-1 px-0.5 pb-1 text-caption text-text-muted"
     >
       <span aria-hidden>→</span>
-      {reach.recipients.length === 0 ? (
-        <span>{REACH_NOBODY}</span>
-      ) : (
-        <span className="truncate">
-          {reach.recipients.map((r) => r.label).join(", ")}
-        </span>
-      )}
+      <span className="truncate">
+        {reach.recipients.map((r) => r.label).join(", ")}
+      </span>
       {note && (
         <span className="shrink-0 rounded-[6px] bg-surface-raised-1 px-1.5 text-micro">
           {note}
         </span>
       )}
+      {/* ⚠ **THE WORKING STRIP RIDES THIS ROW'S RIGHT EDGE** (2026-09-20) — it
+          used to be its own band ABOVE this line with a hairline over it, which
+          spent a row of height and drew a rule across the pane for a caption.
+          `ml-auto` is the whole of "to the right"; `min-w-0` lets IT truncate
+          rather than pushing the recipients out. */}
+      {working && <span className="ml-auto min-w-0 shrink">{working}</span>}
     </p>
   );
 }
