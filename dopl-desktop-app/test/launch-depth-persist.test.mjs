@@ -40,7 +40,13 @@ const { DOPL_CHANNEL_TOOL } = require_(join(MAIN, "tool-profiles.js"));
 
 const IO = readFileSync(join(MAIN, "session-io.js"), "utf8");
 const STORE = readFileSync(join(MAIN, "session-store.js"), "utf8");
-const baseRecord = new Function(`${fnOf(IO, "baseRecord")}\n return baseRecord;`)();
+// ⚠ `runtimeRegistry` / `runtimeTruth` ARE INJECTED SINCE 2026-09-21 (U10): `baseRecord` also
+// projects what the conversation was RUNNING AS off the session's own descriptor. Both are REAL —
+// neither pulls electron — so this round trip still drives the SHIPPED projection.
+const baseRecord = new Function(
+  "runtimeRegistry", "runtimeTruth",
+  `${fnOf(IO, "baseRecord")}\n return baseRecord;`
+)(require_(join(MAIN, "runtime/index.js")), require_(join(MAIN, "session-runtime-truth.js")));
 const durable = new Function(`${fnOf(STORE, "durableName")}\n${fnOf(STORE, "durableSessionRecord")}
                               return durableSessionRecord;`)();
 

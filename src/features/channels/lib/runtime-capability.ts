@@ -110,6 +110,17 @@ export interface RuntimeDescriptor {
       { denyList?: ReadonlyArray<string> | null } | null | undefined
     > | null;
   } | null;
+  /**
+   * ⚠ THE CREDENTIAL BRANCH, NARROWED TO THE ONE FIELD §3 RENDERS (2026-09-21,
+   * U10). `interactiveSignIn` is `true` only where Dopl can drive the sign-in
+   * inside its own window; Codex and Cursor answer `null` because their flows
+   * are a browser/device-code hop Dopl cannot complete. It is the capability
+   * behind {@link signInAction} in `runtime-copy.ts` — the surface still SAYS a
+   * machine is signed out, and hides only the button (hide, never gray).
+   * ⚠ OPTIONAL like every other branch here: the value crossed a process
+   * boundary from a build that may be older than this bundle.
+   */
+  credential?: { interactiveSignIn?: Verifiable | null } | null;
   models?: { dimensions?: ReadonlyArray<string> | null } | null;
   meter?: {
     mode?: string | null;
@@ -124,96 +135,19 @@ const NO_OPTIONS: ReadonlyArray<RuntimeModeOption> = [];
 const NO_CATEGORIES: ReadonlyArray<string> = [];
 
 // ── THE REGISTRY, AS THE WIRE HANDS IT OVER ──────────────────────────────────
-
-/**
- * DID THIS REPLY CARRY A RUNTIME FIELD AT ALL — the capability probe, and the
- * TWIN of `permission-modes.ts › hasModelKey` rather than a new idea.
- *
- * ⚠ IT IS AN OWN-KEY TEST, NOT A TRUTHINESS TEST, and the distinction is the
- * whole feature. `runtime: ''` is a current desktop saying "no pick, the DEFAULT
- * adapter applies"; NO KEY is a desktop that predates the runtime concept
- * entirely. A `!!raw.runtime` check collapses those into one answer and would
- * hide the row from every operator who had not yet chosen — INVARIANTS §11,
- * UNKNOWN is not EMPTY.
- *
- * ⚠ WHY A VALUE PROBE RATHER THAN A BRIDGE-MEMBER DETECTION, restated because it
- * is the same constraint the model hit: the runtime rides the EXISTING
- * `getLaunchPosture` / `setLaunchPosture` pair (`main/channel-dir-ipc.js` states
- * why it gets no op of its own), so there is no new member to feature-detect on.
- * ⚠ IT PROBES `runtime`, NOT `runtimes`. Both always ride the read together on a
- * build that has either, and the singular is the one whose ABSENCE is meaningful
- * on its own — an empty `runtimes` array is a legal answer from a build with the
- * concept and no adapters to offer.
- */
-export function hasRuntimeKey(raw: unknown): boolean {
-  return (
-    !!raw &&
-    typeof raw === "object" &&
-    Object.prototype.hasOwnProperty.call(raw, "runtime")
-  );
-}
-
-/**
- * Coerce a bridge reply's `runtimes` into a descriptor list. Anything that is
- * not an array of objects carrying a string `id` is dropped — a half-shaped
- * entry would render a row naming an adapter nothing can resolve.
- */
-export function normalizeRuntimes(raw: unknown): RuntimeDescriptor[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.filter(
-    (d): d is RuntimeDescriptor =>
-      !!d &&
-      typeof d === "object" &&
-      typeof (d as RuntimeDescriptor).id === "string" &&
-      !!(d as RuntimeDescriptor).id
-  );
-}
-
-/**
- * Coerce an arbitrary value to a REGISTERED runtime id, or `''` for the default.
- *
- * ⚠ THE MIRROR OF `main/channel-runtime.js › normalizeRuntimeId`, AND THE ARITY
- * IS THE ONLY DIFFERENCE. Main validates against `runtime/index.js › ids()`, the
- * one enumeration of what that build ships; the web has no registry of its own
- * and must never grow one — the list is whatever THIS desktop just said it
- * registered, so it is a parameter. A hardcoded `['claude','codex','cursor']`
- * here would be a second authority that goes stale the day an adapter ships.
- *
- * ⚠ `''` IS THE ONLY SPELLING OF "NO PICK", so a channel that never chose and a
- * channel whose pick was cleared are one record — main's own rule, and what
- * keeps a reader from growing a third state to get wrong.
- */
-export function normalizeRuntimeId(
-  runtimes: ReadonlyArray<RuntimeDescriptor>,
-  raw: unknown
-): string {
-  const id = typeof raw === "string" ? raw.trim() : "";
-  if (!id) return "";
-  return runtimes.some((d) => d.id === id) ? id : "";
-}
-
-/**
- * THE DESCRIPTOR A CHANNEL'S AGENTS WOULD LAUNCH ON — the pick if it resolves,
- * else the default adapter, else `null`.
- *
- * ⚠ IT FAILS TOWARD THE DEFAULT, NEVER TOWARD A REFUSAL, because main does: an
- * unknown stored id reads as `''` and `runtime/index.js › resolve` answers the
- * one adapter the build is certain it ships. Rendering nothing there would show
- * a channel with no vocabulary at all while its agents launch perfectly well.
- * ⚠ `null` MEANS "THIS BUILD OFFERED NO ADAPTERS" and every caller renders
- * nothing — the older-desktop case, and the plain browser.
- */
-export function descriptorFor(
-  runtimes: ReadonlyArray<RuntimeDescriptor>,
-  id: unknown,
-  defaultRuntime?: unknown
-): RuntimeDescriptor | null {
-  const picked = normalizeRuntimeId(runtimes, id);
-  if (picked) return runtimes.find((d) => d.id === picked) ?? null;
-  const fallback = normalizeRuntimeId(runtimes, defaultRuntime);
-  if (fallback) return runtimes.find((d) => d.id === fallback) ?? null;
-  return runtimes[0] ?? null;
-}
+//
+// ⚠ **MOVED TO `runtime-registry.ts` ON 2026-09-21 (U10)**, at the §1 cap and on a
+// real seam: that file changes when the WIRE changes (which keys a posture reply
+// carries, what an older desktop omits, how an unknown id fails toward the
+// default), where this one changes when the meaning of an ABSENT capability does.
+// Re-exported here so no caller and no suite moved — the idiom
+// `main/runtime/capability.js` sets for `selection-vocabulary.js`.
+export {
+  hasRuntimeKey,
+  normalizeRuntimes,
+  normalizeRuntimeId,
+  descriptorFor,
+} from "./runtime-registry";
 
 // ── SESSION LIFECYCLE — TWO OF THE THREE REFUSALS ────────────────────────────
 

@@ -30,7 +30,7 @@ const { metricOrNull, metrics } = require('./session-metrics');
 // sessions exist and what rides with each". The compatibility re-export went with it and had no
 // production reader — a second import path for one derivation is the drift the split prevents.
 const { PILL_ENDED, pillState, listeningState } = require('./session-pill');
-const { noteEvent, detailFor } = require('./session-detail');
+const { noteEvent, detailFor, endReasonFor } = require('./session-detail'); // ⚠ `endReasonFor` joined 2026-09-21 (U10): WHY a run stopped, as a structured code re-said in the OWNING runtime's own words — the same "a second fact beside the pill" seam `detailFor` is, so a third surface cannot word it a third way
 // ⚠ WHAT THE OPERATOR CALLS AN AGENT (2026-08-25) — read HERE, not in the renderer: one
 // projection, one answer. The reasoning is `agent-names.js`'s own header.
 const { displayNameFor, descriptionForAgent } = require('./agent-names');
@@ -125,6 +125,20 @@ function liveSummary(s, name) {
     // that produce one, where `labelOrNull` would pass `agent-99` through. `null` is "none
     // reported" and cannot erase one (`server/session-colors.ts` rule 1).
     color: (s && s.color) || null,
+    // ── 2026-09-21 (U10) — WHICH RUNTIME IS ANSWERING, AND ON WHAT USAGE TERMS ───────────────
+    // ⚠ THE SPAWN STAMP, READ AND NEVER RE-CHOSEN (INVARIANTS §11). `model` one screen up says
+    // WHAT is answering; without this the row could not say WHO, so a Codex agent and a Claude
+    // agent on one thread were two identical pills. `''` is a session from before the stamp.
+    // ⚠ LOCAL ONLY, like `heldGates` — `session-state-push.js › reportRow` is an allowlist and
+    // does not name either, so neither widens `channel_sessions`.
+    runtimeId: (s && s.runtimeId) || '',
+    // ⚠ WHETHER A RESUME WOULD KEEP THE COST CAP HONEST, in the record's own three words
+    // (`session-runtime-truth.js`). `'unverified'` is a REAL answer and not a gap — it is the one
+    // `capability.js › canResume` refuses on, and UNKNOWN is not EMPTY.
+    usageBaseline: (s && s.usageBaseline) || null,
+    // ⚠ null on a LIVE row, stated rather than omitted so no reader branches on absence — the
+    // rule `endedAt` above follows. A running agent has not stopped, so it has no end reason.
+    endReason: null,
     heldGates: heldGatesFor(s), // ⚠ **THE CALLS THIS SESSION IS BLOCKED ON, WITH ENOUGH TO DECIDE THEM** (Samuel, 2026-09-17: *"i dont see like a surface where I can approve the permission either inline"*). `[]` is the ordinary answer and the field is UNIFORM so no reader branches on absence. ⚠ **LOCAL ONLY** — `session-state-push.js › reportRow` is an allowlist and does not name it, so a tool input summary never reaches the server; the answering op is `sessions:answerPermission`
     ...metrics(s),
   };
@@ -154,7 +168,18 @@ function endedSummary(e, name) {
     // Nothing finer to say about a session that is doing nothing, and a retained detail
     // would outlive the run it described.
     detail: null,
-    toolLabel: null, diag: (e && typeof e.diag === 'string' && e.diag) || null, // F-692: `diag` is FROZEN, unlike `detail` — it says WHY IT STOPPED, and an MCP-connect failure ENDS the session, so this row is the only place that sentence survives. The LIVE half rides `session-metrics.js › metrics`; this file was AT the 500 cap
+    toolLabel: null,
+    // ⚠ WHICH RUNTIME RAN IT, frozen with the rest of the identity (2026-09-21, U10) — the live
+    // row's twin. The session object is gone, so this is the only thing left that can say whose
+    // failure `endReason` below is describing.
+    runtimeId: (e && e.runtimeId) || '',
+    usageBaseline: (e && e.usageBaseline) || null,
+    // ⚠ WHY IT STOPPED, AS A STRUCTURED CODE RE-SAID IN THAT RUNTIME'S OWN WORDS (U10). The CODE
+    // is what was frozen; the sentence is rebuilt at read time from the owning runtime's
+    // descriptor, which is what a generic SDK string could never be. `null` is the ordinary
+    // ending — an agent the operator ended has no failure and must not grow a line claiming one.
+    endReason: endReasonFor(e),
+    diag: (e && typeof e.diag === 'string' && e.diag) || null, // F-692: `diag` is FROZEN, unlike `detail` — it says WHY IT STOPPED, and an MCP-connect failure ENDS the session, so this row is the only place that sentence survives. The LIVE half rides `session-metrics.js › metrics`; this file was AT the 500 cap
     // No posture to change; a retained one would offer a control over nothing.
     toolMode: null,
     messageMode: null,

@@ -18,6 +18,9 @@
 // test/session-store.test.mjs slices and evaluates it verbatim (WATCHER-PURE idiom).
 
 const Store = require('electron-store');
+// 2026-09-21 (U10): the RUNTIME-TRUTH whitelist — see `saveRecord`. ⚠ ABOVE the PURE sentinel and
+// consumed only BELOW the closing one, so the sliced block still evaluates with no free vars.
+const runtimeTruth = require('./session-runtime-truth');
 
 const store = new Store();
 const RECORDS_KEY = 'sessionRecords'; // { [sessionKey]: durable record }
@@ -363,8 +366,18 @@ function stampParked(record) {
   return record;
 }
 
+// ⚠ THE RUNTIME-TRUTH FIELDS ARE WHITELISTED HERE AND NOT IN `durableSessionRecord` (2026-09-21,
+// U10), AND THE REASON IS THE PURE BLOCK RATHER THAN THE §1 CAP. That function lives inside
+// SESSION-STORE-PURE, which three suites slice and evaluate with `new Function` and NO injected
+// free vars — so it cannot reach a helper, and a helper it inlined would be a fourth hand-copy of
+// a coercion (`knownProfile`'s warning, one file over). `saveRecord` is outside the block, is the
+// ONE write every record goes through, and is already where `stampParked` applies the other
+// non-pure field. Same discipline: nothing but coerced primitives is ever added.
 function saveRecord(rec) {
-  const record = stampParked(durableSessionRecord(rec));
+  const record = stampParked({
+    ...durableSessionRecord(rec),
+    ...runtimeTruth.durableRuntimeTruth(rec),
+  });
   if (!record.key) return;
   const all = loadRecords();
   all[record.key] = record;

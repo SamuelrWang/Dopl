@@ -64,17 +64,26 @@ test("REPORT: `list()` narrows the report-only `key` back off — `workspaceId` 
     // `diag` (2026-09-13, F-692) is the sentence an operator reads when a launch could not run at
     // all — the one state the three-value pill cannot express.
     "diag",
-    "displayName", "endedAt",
+    "displayName",
+    // ── 2026-09-21 (U10) — `endReason` / `runtimeId` / `usageBaseline`, ALL THREE LOCAL-ONLY ──
+    // `endReason` is the STRUCTURED half of `diag` above: the code was frozen, the sentence is
+    // rebuilt at read time from the runtime that produced it, so a Codex failure reads as a Codex
+    // failure. `runtimeId` says WHO is answering where `model` says WHAT. `usageBaseline` is the
+    // three-word answer to whether a resume would keep the cost cap honest. None is named by
+    // `session-state-push.js › reportRow`, so none of them reaches `channel_sessions`.
+    // ⚠ `endReason` SORTS BEFORE `endedAt` — capital `R`, and this list is asserted SORTED.
+    "endReason", "endedAt",
     // `heldGates` (2026-09-17, Samuel's inline-approval ruling) is local-only, and that matters
     // more here than elsewhere: an entry carries a one-line summary of a TOOL INPUT, which is a
     // fact about this machine and nobody else's business.
     "heldGates",
     "lastActivityAt", "lastDeniedTool", "lastWakeAt", "lastWakeSeq", "listening", "messageMode",
     "model",
-    "name", "sessionId", "stale", "startedAt", "state", "taskId",
+    "name", "runtimeId", "sessionId", "stale", "startedAt", "state", "taskId",
     // `templateName` (2026-08-22) is named in `reportRow` on purpose — Phase 4 added the column.
     "templateName", "threadTitle", "tokensDelta", "tokensSpent", "toolLabel", "toolMode",
     "turns",
+    "usageBaseline",
     // `workspaceId` joined the WIRE on 2026-09-14 (the pop-out rail routes by it).
     "workspaceId",
   ]);

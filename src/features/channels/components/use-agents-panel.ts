@@ -15,6 +15,9 @@
 
 import { useState } from "react";
 import { useChannelAgentSessions } from "../hooks/use-channel-agent-sessions";
+import { useChannelLaunchPosture } from "../hooks/use-channel-launch-posture";
+import type { RuntimeDescriptor } from "../lib/runtime-capability";
+import { noRuntimeCopy, signedOutLaunchCopy } from "../lib/runtime-copy";
 import {
   approveTemplate,
   canLaunchAgents,
@@ -59,8 +62,16 @@ const LAUNCH_REFUSALS: Record<string, string> = {
   // and about to work. What main can still be is momentarily unable to start one.
   busy: "Busy right now — try again",
   cap: "Session limit reached",
-  "no-sdk": "No Claude runtime on this Mac",
-  "auth-hold": "Sign in to Claude to start an agent",
+  // ── ⚠ THE TWO RUNTIME-OWNED WORDS ARE NOT IN THIS MAP (2026-09-21, U10) ────────────────
+  //
+  // They read `"No Claude runtime on this Mac"` and `"Sign in to Claude to start an agent"`, on a
+  // path EVERY runtime reaches. Main's own vocabulary was already vendor-neutral —
+  // `session-launch.js` says in as many words that `no-sdk` means "this machine has no agent
+  // runtime" ON EVERY RUNTIME — so the Claude was invented here, in the copy. A signed-out Codex
+  // therefore sent the operator to fix a Claude credential the session does not use.
+  // ⚠ THEY ARE BUILT FROM THE SELECTED RUNTIME'S DESCRIPTOR INSTEAD (`runtime-copy.ts`), which is
+  // why they are absent here rather than re-worded: a constant cannot name a runtime, and a map
+  // entry that looked right would be the thing the next reader copied.
   // ⚠ REACHABLE, and NOT a settings state. It is the `attachSurface` rollback —
   // the spawn was refused on the way up. The old copy ("Sessions are turned off")
   // described the deleted session-window master switch and sent the operator
@@ -87,7 +98,35 @@ const LAUNCH_REFUSALS: Record<string, string> = {
  */
 export const LAUNCH_APPROVAL_REASON = "template-approval";
 
-export function launchRefusalText(reason: string | undefined): string {
+/**
+ * ⚠ THE TWO RUNTIME-OWNED REFUSALS, KEYED BY THE SAME WIRE WORDS (2026-09-21, U10). They are a
+ * function of the DESCRIPTOR rather than entries in {@link LAUNCH_REFUSALS} because the copy
+ * depends on which runtime this channel would launch on — see that map's own note.
+ * ⚠ DATA-DRIVEN, SO A THIRD RUNTIME NEEDS NO BRANCH: `runtime-copy.ts` builds both from
+ * `descriptor.label`, and a descriptor nobody sent (a plain browser, a desktop older than the
+ * runtime port) falls back to a sentence that names no vendor at all.
+ */
+const RUNTIME_REFUSALS: Record<
+  string,
+  (d: RuntimeDescriptor | null | undefined) => string
+> = {
+  "no-sdk": noRuntimeCopy,
+  "auth-hold": signedOutLaunchCopy,
+};
+
+/**
+ * One refusal word -> the line the operator reads.
+ *
+ * ⚠ `descriptor` IS OPTIONAL AND ABSENT IS A REAL ANSWER, not a bug: a plain browser and a
+ * desktop older than the runtime port both send none, and the copy then names the runtime
+ * generically rather than naming the wrong one. ⚠ An unrecognized reason still falls back rather
+ * than rendering a raw enum at the operator.
+ */
+export function launchRefusalText(
+  reason: string | undefined,
+  descriptor?: RuntimeDescriptor | null
+): string {
+  if (reason && RUNTIME_REFUSALS[reason]) return RUNTIME_REFUSALS[reason](descriptor);
   return (reason && LAUNCH_REFUSALS[reason]) || "Could not start the agent";
 }
 
@@ -208,6 +247,16 @@ export function useAgentsPanel({
     workspaceId,
     PEER_SESSIONS_POLL_MS
   );
+  // ⚠ THE RUNTIME THIS CHANNEL'S NEXT LAUNCH WOULD LAND ON (2026-09-21, U10), for the two
+  // refusals that name one ({@link RUNTIME_REFUSALS}). `descriptor` is the pick, else the default,
+  // else `null` — the precedence main applies, mirrored once in `runtime-capability.ts ›
+  // descriptorFor` so no surface re-derives it.
+  // ⚠ THIS IS NOT THE PEER POLL AND THE SINGLE-MOUNT RULE ABOVE DOES NOT REACH IT. That rule is
+  // about `useChannelAgentSessions` — a second mount is a second 30s poll of `channel_sessions`.
+  // `useChannelLaunchPosture` is a one-shot bridge read plus a broadcast subscription and is
+  // ALREADY mounted by four other surfaces (the settings tab, both launch panels, the agent
+  // controls); it feature-detects `window.dopl` and does nothing at all in a plain browser.
+  const { descriptor: runtimeDescriptor } = useChannelLaunchPosture(channel?.id ?? "");
   const [launchBusy, setLaunchBusy] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
 
@@ -239,7 +288,7 @@ export function useAgentsPanel({
     // resolved, which is a different fact and still has to be said — this used
     // to return silently, the same blank screen a discarded `{ok:false}` gave.
     if (threadId !== null && !counterpartyId) {
-      setLaunchError(launchRefusalText("no-counterparty"));
+      setLaunchError(launchRefusalText("no-counterparty", runtimeDescriptor));
       return { ok: false, reason: "no-counterparty" };
     }
     setLaunchBusy(true);
@@ -276,7 +325,7 @@ export function useAgentsPanel({
       });
       // ⚠ THE APPROVAL WORD IS NOT AN ERROR LINE — see LAUNCH_APPROVAL_REASON.
       if (!res.ok && res.reason !== LAUNCH_APPROVAL_REASON) {
-        setLaunchError(launchRefusalText(res.reason));
+        setLaunchError(launchRefusalText(res.reason, runtimeDescriptor));
       }
       if (res.ok) refreshDesktopSessions?.();
       void refetch();

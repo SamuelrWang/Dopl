@@ -161,6 +161,12 @@ function failVisibly(s, status, attempt) {
   const text = mcpConnect.mcpDownText(status, attempt);
   diag('mcp-connect:', text);
   s.mcpDiag = text;
+  // ⚠ THE STRUCTURED TWIN OF THAT SENTENCE (2026-09-21, U10). `mcpDiag` is prose a card renders;
+  // this is the vendor-neutral CODE a projection can branch on and re-say in the owning runtime's
+  // own words (`runtime-copy.js › RUNTIME_ERROR_CODES`, rebuilt by `session-detail.js ›
+  // endReasonFor`). Both, because neither replaces the other: the code cannot carry the server
+  // name and the attempt count, and the sentence cannot be re-worded for a different runtime.
+  s.endCode = 'mcp-unreachable';
   try { if (deps.denyPending) deps.denyPending(s, mcpConnect.MCP_UNAVAILABLE_LABEL); } catch (_) { /* best effort */ }
   try { store.setRecordPhase(s.key, 'ended'); } catch (_) { /* the visible end matters more than the record */ }
   try { deps.emit(s, { type: 'error', message: text }); } catch (_) { /* best effort */ }

@@ -34,6 +34,13 @@ const directedTurn = require('./session-directed'); // 2026-08-31: attribution +
 // 2026-08-22: the frozen model enum + the id -> alias seam. A free var inside the block below,
 // like `store` and `framing`, so the source-extraction test injects it.
 const sessionModel = require('./session-model');
+// ⚠ THE RUNTIME'S OWN ANSWER TO "CAN A RUNNING AGENT'S MODEL BE SWITCHED" (2026-09-21, U10). A free
+// var inside the PURE block below, like `store` and `framing`, so the source-extraction test
+// injects it. Neither require pulls electron — `main/runtime/index.js` is electron-free by
+// contract and `runtime-copy.js` requires nothing at all.
+const runtimeRegistry = require('./runtime');
+const runtimeCapability = runtimeRegistry.capability;
+const runtimeCopy = runtimeRegistry.copy;
 
 // ─── BEGIN SESSION-REOPEN-PURE (injectable; unit-tested via source extraction) ────
 
@@ -282,6 +289,25 @@ async function setModelByTask(a) {
   if (!deps.sessions) return { ok: false };
   const s = resolveSession(a, channelId, taskId);
   if (!s || s.settled) return { ok: false, reason: 'no-session' };
+  // ── ⚠ IS A LIVE SWITCH A THING THIS RUNTIME DOES? (2026-09-21, U10) ──────────────────────
+  //
+  // ⚠ THIS FUNCTION'S OWN HEADER STATES THE RULE IT WAS BREAKING: *"a recorded pick nothing
+  // applied is a lie."* The `setModel` call below is guarded by `typeof … === 'function'`, so on a
+  // runtime whose live handle has no model verb NOTHING WAS APPLIED — and the write two lines
+  // further down still recorded the alias and answered `{ ok: true }`. That value is what
+  // `buildLaunchSpec` reads on the NEXT assembly, so the session came back on a model the operator
+  // was told it was already using. It also wrote one runtime's ALIAS onto another runtime's
+  // session, which is exactly the cross-vocabulary coercion the adapter seam exists to stop.
+  // ⚠ `capability.js › canSwitchModelLive` HAD NO CONSUMER IN `main/` UNTIL THIS. It was declared,
+  // mirrored on the web side, and read by nothing — the `axisBOpScoped` shape (D3), one capability
+  // along. ⚠ REFUSED WITH A SENTENCE, NEVER SILENTLY: `runtime-copy.js › liveModelSwitchRefusal`
+  // names the runtime and says what to do instead, and `'unverified'` and `false` are worded apart
+  // because the operator can act on the difference.
+  // ⚠ IT REFUSES A CONTROL, NOT A LAUNCH — the boundary `interruptRefusal` draws. A runtime that
+  // cannot hot-swap a model is perfectly launchable on any model it offers.
+  const descriptor = runtimeRegistry.descriptorFor(s.runtimeId);
+  const liveSwitchRefusal = runtimeCopy.liveModelSwitchRefusal(descriptor);
+  if (liveSwitchRefusal) return { ok: false, reason: 'unsupported', detail: liveSwitchRefusal };
   const alias = sessionModel.aliasForModelId(a && a.model);
   // 2026-09-06: `modelArg` no longer answers null for `'default'` — it answers the PRODUCT fallback,
   // because "Default" stopped being an option an operator can pick (`session-model.js ›
@@ -290,7 +316,18 @@ async function setModelByTask(a) {
   // that cannot resolve at all, and is what a runtime with no model concept relies on.
   const arg = sessionModel.modelArg(alias);
   try {
-    if (s.query && typeof s.query.setModel === 'function') await s.query.setModel(arg || undefined);
+    // ⚠ A LIVE SESSION WHOSE HANDLE HAS NO MODEL VERB IS A REFUSAL, NOT A NO-OP (2026-09-21, U10).
+    // The declaration above is the runtime's PROMISE; this is the handle in hand disagreeing with
+    // it, and recording a switch over either one is the lie this function's header forbids.
+    // ⚠ A session with NO QUERY AT ALL is the spawn-idle / parked shape and is untouched: there is
+    // nothing running to disagree with, and the recorded pick is what its first turn will spend.
+    if (s.query) {
+      if (typeof s.query.setModel !== 'function') {
+        return { ok: false, reason: 'unsupported', detail: runtimeCopy.liveModelSwitchRefusal(descriptor)
+          || `${runtimeCopy.runtimeLabel(descriptor)} did not offer a live model switch on this session.` };
+      }
+      await s.query.setModel(arg || undefined);
+    }
   } catch (_) {
     return { ok: false, reason: 'switch-failed' };
   }

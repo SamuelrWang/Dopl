@@ -107,6 +107,19 @@ function settle(s, outcome, keepWindow) {
       // ⚠ null on every ordinary ending, and `durableHistory` is a WHITELIST — a field this line
       // omits is DROPPED at the write, which is the trap `templateName` above records.
       diag: s.mcpDiag || null,
+      // ── 2026-09-21 (U10) — THE STRUCTURED HALF OF "WHY IT STOPPED", AND WHOSE FAILURE IT WAS ──
+      //
+      // ⚠ `diag` ALONE CANNOT BE RE-SAID. It is one runtime's sentence frozen at settle, so a card
+      // rendering it reports a Codex failure in whatever words that adapter happened to use, and
+      // nothing downstream can branch on it, count it, or word it for a different runtime. The
+      // CODE is a member of `runtime-copy.js › RUNTIME_ERROR_CODES` — vendor-neutral by
+      // construction — and `session-detail.js › endReasonFor` rebuilds the sentence at READ time
+      // from the runtime this session actually ran on. Hence both fields, and hence `runtimeId`.
+      // ⚠ `durableHistory` IS A WHITELIST: a field this line omits is DROPPED at the write, which
+      // is the trap `templateName` above records. ⚠ null on every ordinary ending.
+      endCode: s.endCode || null,
+      runtimeId: s.runtimeId || null,
+      usageBaseline: s.usageBaseline || null,
       // The final measurement, frozen here for the same reason the identity is: the registry
       // entry is about to go and `metrics(s)` is the only reader of it.
       ...sessionMetrics.metrics(s),

@@ -71,12 +71,23 @@ export function harness(over = {}) {
   // surface — and `session-gate.js › enqueue` then holds the peer's next reply with no drain left
   // to release it. The REAL rule is injected rather than a stub: it is pure, and it is the
   // behaviour these cases are about.
+  // ⚠ `runtimeCopy` AND `copyFor` JOINED THE INJECTED SET ON 2026-09-21 (U10). The two sentences
+  // this block says on a SHARED path — the held-tool denial and the post-sign-in nudge — are now
+  // built from the SESSION'S OWN runtime descriptor instead of being frozen Claude strings, so a
+  // Codex agent is no longer told to sign in to Claude. Both are REAL rather than stubbed
+  // (`main/runtime/index.js` is electron-free by contract and `runtime-copy.js` requires
+  // nothing), which is what lets a case assert the SHIPPED wording per runtime.
+  const runtimeRegistry = require(M("runtime/index.js"));
+  const runtimeCopy = runtimeRegistry.copy;
+  const copyFor = (s) => runtimeRegistry.descriptorFor(s && s.runtimeId);
   const api = new Function(
     "deps", "detect", "store", "diag", "credentialState", "floorWindowlessMessage",
+    "runtimeCopy", "copyFor",
     `${HOLD_BLOCK}\n return { holdIfNoCredential, holdIfAuthFailure, holdIfAuthMessage, resumeAfterSignIn };`
   )(deps, detect, { setRecordPhase: (key, phase) => calls.phase.push({ key, phase }) }, () => {},
     () => ({ usable: state.usable, source: state.usable ? "cli-store" : null }),
-    require(M("session-profiles.js")).floorWindowlessMessage);
+    require(M("session-profiles.js")).floorWindowlessMessage,
+    runtimeCopy, copyFor);
   return { ...api, calls, state };
 }
 

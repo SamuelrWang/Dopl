@@ -201,7 +201,10 @@ test("MID-SESSION: an auth-shaped failure parks and HOLDS (never `crash`)", () =
   s.abortController = { aborted: false, abort() { this.aborted = true; } };
   s.pushIterator = { closed: false, close() { this.closed = true; } };
   assert.equal(h.holdIfAuthFailure(s, "API Error: 401 unauthorized"), true);
-  assert.deepEqual(h.calls.denyPending, ["Sign in to Claude to continue"], "awaited tool promises fail CLOSED first");
+  // ⚠ THE SENTENCE IS THE RUNTIME'S OWN SINCE 2026-09-21 (U10) — `Claude Code` is this
+  // descriptor's own `label`, not a frozen literal, and the Codex/Cursor twin is at the bottom
+  // of this file. What is pinned here is unchanged: the awaited tool promises fail CLOSED FIRST.
+  assert.deepEqual(h.calls.denyPending, ["Sign in to Claude Code to continue"], "awaited tool promises fail CLOSED first");
   assert.equal(s.pushIterator.closed, true, "the prompt stream is closed");
   assert.equal(s.abortController.aborted, true, "and the query torn down");
   assert.deepEqual(h.calls.dispatch.map((e) => e.type), ["auth_hold"],
@@ -377,4 +380,58 @@ test("the engine injects its OWN startQuery + denyPending (no second query assem
   assert.match(readFileSync(M("runtime/claude/launch-spec.js"), "utf8"),
     /env: sessionAuth\.withStoredCredential\(loader\.buildScrubbedEnv\(\)\)/,
     "and the stored setup-token reaches the spawn env through the SAME scrubbed base");
+});
+
+// ── 4. U10 (2026-09-21): THE SENTENCES ON THIS SHARED PATH NAME THE SESSION'S OWN RUNTIME ────
+//
+// ⚠ BOTH OF THEM ARE REACHED BY EVERY RUNTIME. `session-query.js › consume` calls
+// `holdIfAuthFailure` whatever adapter produced the stream, so before this both a Codex and a
+// Cursor agent were told — in a tool denial the AGENT reads, and in a steer pushed into its own
+// turn — to sign in to Claude. That is not a cosmetic wrong: it names a credential the session
+// does not use and sends the operator to fix something that is not broken.
+//
+// ⚠ AND THE OTHER HALF IS THAT CLAUDE IS UNTOUCHED. A de-naming that fires on every runtime is a
+// regression, not a feature — the same rule `runtime-refusals.test.tsx` states on the web side.
+
+test("U10: the held-tool denial names the runtime the AGENT is running on", () => {
+  const seen = {};
+  for (const [runtimeId, want] of [["claude", "Claude Code"], ["codex", "Codex"], ["cursor", "Cursor"]]) {
+    const h = harness({ usable: true });
+    const s = session({ runtimeId, state: { phase: "running", parked: false, activity: "working" } });
+    s.abortController = { abort() {} };
+    s.pushIterator = { close() {} };
+    assert.equal(h.holdIfAuthFailure(s, "API Error: 401 unauthorized"), true);
+    assert.deepEqual(h.calls.denyPending, [`Sign in to ${want} to continue`]);
+    seen[runtimeId] = h.calls.denyPending[0];
+  }
+  // ⚠ THREE DISTINCT SENTENCES, ASSERTED AS A SET. A copy function that ignored the descriptor
+  // and answered one string would satisfy every line above if they were read one at a time.
+  assert.equal(new Set(Object.values(seen)).size, 3, "one runtime's words must not be another's");
+});
+
+test("U10: the post-sign-in nudge is the session's own runtime's, and Codex never says Claude", async () => {
+  for (const [runtimeId, want] of [["claude", "Claude Code"], ["codex", "Codex"]]) {
+    const h = harness({ usable: true });
+    const s = session({ runtimeId, state: { phase: "running", parked: false, activity: "working" } });
+    h.holdIfAuthFailure(s, "401");
+    await h.resumeAfterSignIn(s);
+    const steer = h.calls.dispatch.find((e) => e.type === "steer");
+    assert.ok(steer, "the error hold still steers rather than re-launching");
+    assert.ok(steer.text.startsWith(`${want} sign-in is restored on this Mac`), steer.text);
+    if (runtimeId !== "claude") {
+      assert.ok(!/Claude/.test(steer.text), `a ${runtimeId} agent must not be told about Claude: ${steer.text}`);
+    }
+  }
+});
+
+// ⚠ A RECORD FROM BEFORE THE RUNTIME STAMP STILL GETS A SENTENCE. `descriptorFor(undefined)`
+// answers the DEFAULT adapter, which is the runtime such a session really ran on — failing toward
+// a refusal here would leave a held agent with no reason at all.
+test("U10: a session with no runtime stamp falls back to the default adapter's words", () => {
+  const h = harness({ usable: true });
+  const s = session({ state: { phase: "running", parked: false, activity: "working" } });
+  s.abortController = { abort() {} };
+  s.pushIterator = { close() {} };
+  h.holdIfAuthFailure(s, "401");
+  assert.match(h.calls.denyPending[0], /^Sign in to \S/);
 });

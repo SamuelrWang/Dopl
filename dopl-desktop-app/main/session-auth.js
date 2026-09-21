@@ -33,6 +33,26 @@ const store = require('./session-store');
 // release has to put the floor back; see `resumeAfterSignIn`.
 const { floorWindowlessMessage } = require('./session-profiles');
 const { diag } = require('./diag');
+// ⚠ THE RUNTIME'S OWN WORDS (2026-09-21, U10). Two sentences on this file's SHARED paths named
+// Claude — the held-tool denial and the post-sign-in nudge — and both are reached by EVERY
+// runtime's auth hold (`session-query.js › consume` calls `holdIfAuthFailure` whatever adapter
+// produced the stream). An agent told to sign in to a runtime it is not running on has been
+// handed a false statement about its own machine. `runtime-copy.js` builds both from the
+// session's own descriptor; it requires nothing and `main/runtime/index.js` is electron-free by
+// contract, so neither require can cycle or pull a platform handle.
+// ⚠ WHAT IS DELIBERATELY *NOT* DE-NAMED HERE: `claude-auth.js` / `claude-token.js` and
+// `session-auth-detect.js`'s banner copy. Those are the CLAUDE-OWNED credential surfaces
+// INVARIANTS §11.0a names as a single later step (the five vendor-named modules, the IPC channel
+// and its two test pins move together); doing half of it here would leave the pin and the op
+// disagreeing, which is the exact reason that step is fenced.
+const runtimeRegistry = require('./runtime');
+const runtimeCopy = runtimeRegistry.copy;
+
+/** The descriptor of the runtime THIS session was stamped with at spawn. ⚠ READ, NEVER RE-CHOSEN
+ *  (INVARIANTS §11): an unknown id resolves to the default, which is what such a session ran on. */
+function copyFor(s) {
+  return runtimeRegistry.descriptorFor(s && s.runtimeId);
+}
 
 // The auth-critical env vars sdk-loader.buildScrubbedEnv deliberately preserves (its
 // PERMISSION_ENV_RE cannot match any of them). Present => the SDK child can authenticate.
@@ -162,7 +182,7 @@ function dispatchHold(s) {
 // usable credential, where the launch continues untouched.
 function holdIfNoCredential(s) {
   if (!deps || !s || credentialState().usable) return false;
-  diag('session-auth: preflight HOLD — no Claude Code credential on this machine');
+  diag('session-auth: preflight HOLD — no credential on this machine for', runtimeCopy.runtimeLabel(copyFor(s)));
   s.authHold = { kind: 'preflight' };
   dispatchHold(s);
   deps.emit(s, { type: 'status', phase: 'parked' });
@@ -189,7 +209,7 @@ function holdIfAuthFailure(s, text) {
   // Fail closed FIRST (P1 discipline): every awaited canUseTool promise is denied before the
   // teardown, so no resolver dangles on a session that is about to stop consuming. (parkEffects
   // denies again via the reducer; both are idempotent.)
-  try { if (deps.denyPending) deps.denyPending(s, 'Sign in to Claude to continue'); } catch (_) { /* best effort */ }
+  try { if (deps.denyPending) deps.denyPending(s, runtimeCopy.heldToolDenial(copyFor(s))); } catch (_) { /* best effort */ } // U10: the AGENT reads this, and it must name the runtime the AGENT is running on
   try { if (s.pushIterator) s.pushIterator.close(); } catch (_) { /* best effort */ }
   try { if (s.abortController) s.abortController.abort(); } catch (_) { /* best effort */ }
   if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; }
@@ -212,7 +232,11 @@ function holdIfAuthMessage(s, msg) {
 // own startQuery with the first turn it never got to push (byte-identical to a healthy launch);
 // an error hold takes the ordinary lazy-wake (`steer` -> resumeQuery with options.resume), which
 // is the same route an operator typing into a parked window takes.
-const RESUME_NUDGE = 'Claude Code sign-in is restored on this Mac. Continue where you left off.';
+// ⚠ PER RUNTIME SINCE 2026-09-21 (U10), where it was one frozen Claude sentence. It is STEERED
+// INTO THE SESSION, so a Codex agent was being told its Claude sign-in was restored — a statement
+// about a credential its own turn does not use. `runtime-copy.js › resumeNudge` builds it from
+// the session's descriptor; the shape and the `priority: 'next'` are unchanged.
+const resumeNudgeFor = (s) => runtimeCopy.resumeNudge(copyFor(s));
 
 // H1 — IDEMPOTENT BY CONSTRUCTION. The old version read s.authHold, nulled it, and on a
 // preflight hold called startQuery unconditionally — while startQuery itself overwrote
@@ -259,7 +283,7 @@ async function resumeAfterSignIn(s) {
       await deps.startQuery(s, rt);
       return;
     }
-    deps.dispatch(s, { type: 'steer', text: RESUME_NUDGE, priority: 'next' });
+    deps.dispatch(s, { type: 'steer', text: resumeNudgeFor(s), priority: 'next' });
   } finally {
     s.authResuming = false;
   }

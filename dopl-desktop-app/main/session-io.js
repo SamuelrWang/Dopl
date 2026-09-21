@@ -34,6 +34,13 @@ const sessionModel = require('./session-model');
 // electron/fs require, which is what lets this file keep the property a dozen suites rely on
 // (`session-outbound-tag.test.mjs` pins it: `diag` requires electron; this file must not).
 const mcpConnect = require('./mcp-connect');
+// 2026-09-21 (U10): WHAT THIS CONVERSATION WAS RUNNING AS — the effective model, the native
+// policy summary and this runtime's usage-baseline semantics, projected off the session's OWN
+// descriptor. ⚠ Both modules require nothing that pulls electron (`main/runtime/index.js` is
+// electron-free by contract and `session-runtime-truth.js` requires nothing at all), so the
+// property `session-outbound-tag.test.mjs` pins about this file is unchanged.
+const runtimeRegistry = require('./runtime');
+const runtimeTruth = require('./session-runtime-truth');
 
 // I-LOW(a): a bounded FIFO of pending inbound counterparty replies, on the session object
 // (`s.pendingInbound`, an array). INTERACTIVE mode releases them one at a time, so a second
@@ -288,6 +295,19 @@ function baseRecord(s) {
     // platform's conversation handle on another platform's adapter. `runtime/index.js › resolve`
     // turns an unknown id into the default, which is the runtime every pre-port record ran on.
     runtimeId: s.runtimeId || null,
+    // ── 2026-09-21 (U10) — AND WHAT IT WAS RUNNING AS, beside WHICH ADAPTER ran it ───────────
+    //
+    // ⚠ `runtimeId` ALONE CANNOT ANSWER A RESUME'S REAL QUESTIONS. It says which adapter owns the
+    // handle; it does not say which model actually answered (the operator's pick is usually "no
+    // pick"), what native policy the spawn was made under, or — the one that decides something —
+    // whether this runtime's cumulative usage RESETS on a resume, which is the bet
+    // `session-park.js › resumeParked` makes when it zeroes both delta baselines. A record that
+    // cannot state its own baseline is a record a later build re-interprets under a newer answer.
+    // ⚠ THE DESCRIPTOR IS READ OFF `s.runtimeId`, THE SPAWN STAMP, AND NEVER RE-CHOSEN HERE
+    // (INVARIANTS §11): an unknown id resolves to the default, which is the runtime such a session
+    // really ran on. ⚠ PLAIN VALUES — coerced on the way OUT by `session-store.js › saveRecord`
+    // through `session-runtime-truth.js › durableRuntimeTruth`, the division `model` above uses.
+    ...runtimeTruth.runtimeTruthFields(runtimeRegistry.descriptorFor(s.runtimeId), s),
   };
 }
 

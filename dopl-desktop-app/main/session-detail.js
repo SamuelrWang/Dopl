@@ -34,6 +34,12 @@
 // the block, so test/session-detail.test.mjs evaluates the real code verbatim.
 
 const { mcpShortName } = require('./mcp-tool-names');
+// ⚠ THE RUNTIME REGISTRY AND ITS COPY TABLE (2026-09-21, U10) — free vars inside the block below,
+// exactly like `mcpShortName`, so the suite keeps evaluating this file as source. Neither pulls
+// electron: `main/runtime/index.js` is electron-free BY CONTRACT (INVARIANTS §11.0) and
+// `runtime-copy.js` requires nothing at all.
+const runtimeRegistry = require('./runtime');
+const runtimeCopy = runtimeRegistry.copy;
 
 // ─── BEGIN SESSION-DETAIL-PURE (injectable; unit-tested via source extraction) ────────
 // `mcpShortName` is a free var from here down.
@@ -130,6 +136,43 @@ function detailFor(state, lastEventKind, pill) {
   return DETAIL_THINKING;
 }
 
+/**
+ * WHY A RUN STOPPED, AS A STRUCTURED CODE MAPPED TO THE RUNTIME'S OWN COPY (2026-09-21, U10).
+ *
+ * ⚠ IT IS THE SAME SHAPE `detailFor` IS AND FOR THE SAME REASON: a second fact BESIDE the pill,
+ * local-only, derived once here so three surfaces cannot word it three ways. `state` stays
+ * three-valued because the SERVER's enum is (`session-state-push.js › reportRow` picks columns by
+ * name, so nothing here widens a table).
+ *
+ * ⚠ THE CODE TRAVELS AND THE SENTENCE IS REBUILT. A frozen row carries `endCode` — a member of
+ * `runtime-copy.js › RUNTIME_ERROR_CODES`, vendor-neutral by construction — plus the `runtimeId`
+ * it ran on, and the sentence is built HERE from that runtime's descriptor at read time. That is
+ * what makes a Codex failure read as a Codex failure on a card frozen before anyone asked, and it
+ * is why a generic SDK string was the wrong thing to persist: a string cannot be re-said in
+ * another runtime's words, cannot be branched on, and carries one vendor's name into a projection
+ * every runtime shares.
+ *
+ * ⚠ `detail` IS THE ADAPTER'S OWN SENTENCE AND IS PASSED THROUGH, NEVER PARSED. It is the one
+ * part allowed to name a runtime, because it came from one (`session-teardown.js` freezes it as
+ * `diag`). 🔒 Its PRODUCERS are the redaction boundary: no token, prompt, approval payload or
+ * full filesystem path may be stamped into it.
+ *
+ * ⚠ `null` WHEN THERE IS NOTHING TO SAY, which is the ordinary ending. An agent the operator
+ * ended, or one that finished its work, has no failure and must not grow a line claiming one.
+ */
+function endReasonFor(rec) {
+  const r = rec || {};
+  const code = typeof r.endCode === 'string' ? r.endCode : '';
+  const detail = typeof r.diag === 'string' && r.diag ? r.diag : null;
+  if (!code && !detail) return null;
+  // ⚠ THE DESCRIPTOR COMES OFF THE RECORD'S OWN `runtimeId`, the spawn stamp, and is never
+  // re-chosen (INVARIANTS §11). An id this build does not ship resolves to the DEFAULT adapter,
+  // which is the runtime such a record really ran on.
+  const descriptor = runtimeRegistry.descriptorFor(r.runtimeId);
+  const copy = runtimeCopy.errorCopy(descriptor, code, detail);
+  return { code: copy.code, text: copy.body, action: copy.action, detail: copy.detail };
+}
+
 // ─── END SESSION-DETAIL-PURE ─────────────────────────────────────────────────────────
 
 module.exports = {
@@ -138,4 +181,5 @@ module.exports = {
   noteEvent,
   toolLabel,
   detailFor,
+  endReasonFor, // U10: the structured runtime end code, in the owning runtime's own words
 };

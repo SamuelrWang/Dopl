@@ -181,11 +181,14 @@ function harness(over = {}) {
   const boot = new Function(
     "crypto", "store", "initialSessionState", "floorWindowlessMessage", "sessionModel",
     "sessionPark", "toolProfiles", "sessionSummary", "agentHistory", "sessionEffects",
-    "runtimeRegistry", "runtimeCapability", "diag",
+    "runtimeRegistry", "runtimeCapability", "runtimeTruth", "diag",
     `${BOOT_BLOCK}\n return { bind, parkedSessionFromRecord, endInterrupted, reparkDormant, withinReparkWindow, REPARK_WINDOW_MS };`
   )(crypto, store, initialSessionState, PROFILES.floorWindowlessMessage, sessionModel,
     parkReaders, TOOL_PROFILES, sessionSummary, agentHistory, EFFECTS,
-    RUNTIME, RUNTIME.capability, diag);
+    // ⚠ THE REAL `session-runtime-truth.js` (2026-09-21, U10), REQUIRED rather than faked: it
+    // requires nothing at all, so a plain require works, and what `parkedSessionFromRecord` has
+    // to assert is that the SHIPPED coercion is what a restored record lands on.
+    RUNTIME, RUNTIME.capability, require_(join(MAIN, "session-runtime-truth.js")), diag);
 
   boot.bind({
     sessions,

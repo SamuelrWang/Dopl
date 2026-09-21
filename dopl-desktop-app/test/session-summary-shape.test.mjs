@@ -78,6 +78,18 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       // PROJECTION of `state.pendingPermissions`, never a second set. It does not reach the
       // server: an entry carries a one-line summary of a TOOL INPUT, nobody else's business.
       heldGates: [],
+      // ── 2026-09-21 (U10) — THE RUNTIME-HONEST TRIPLE ────────────────────────────────────
+      // `runtimeId` says WHO is answering where `model` says WHAT: without it a Codex agent and
+      // a Claude agent on one thread were two identical pills. `''` is a session from before the
+      // spawn stamp and is a REAL value, not a gap. `usageBaseline` is this runtime's three-word
+      // answer to "would a resume keep the cost cap honest" — `'unverified'` is the one
+      // `capability.js › canResume` refuses on, so null here is "the session said nothing".
+      // `endReason` is null on a LIVE row by construction (a running agent has not stopped) and
+      // is stated rather than omitted so no reader branches on absence. All three are LOCAL-ONLY:
+      // `session-state-push.js › reportRow` picks columns BY NAME, so none widens the table.
+      runtimeId: "",
+      usageBaseline: null,
+      endReason: null,
       contextUsed: 84000,
       contextWindow: 200000, // the frozen table's row for claude-haiku-4-5
       tokensSpent: 1200000,
@@ -137,6 +149,65 @@ test("SHAPE: a RETAINED ENDED pill keeps the measurement it settled with", () =>
   assert.equal(row.contextWindow, 200000);
   assert.equal(row.tokensSpent, 1200000);
   assert.equal(row.startedAt, 1700000000000);
+  // ⚠ REGRESSION GUARD (2026-09-21, U10): the record shape gained three fields and an ENDED
+  // CLAUDE row must still read exactly as it did. A record written before them carries none, and
+  // `endReasonFor` answers `null` when there is neither a code nor a sentence — an agent that
+  // simply finished must never grow a line claiming it failed.
+  assert.equal(row.endReason, null, "an ordinary ending has no failure to report");
+  assert.equal(row.runtimeId, "");
+  assert.equal(row.usageBaseline, null);
+});
+
+// ── U10 (2026-09-21): WHY A RUN STOPPED, RE-SAID IN THE OWNING RUNTIME'S OWN WORDS ───────────
+//
+// ⚠ THE CODE IS WHAT WAS FROZEN AND THE SENTENCE IS REBUILT AT READ TIME. A generic SDK string
+// persisted as the reason cannot be branched on, cannot be counted, and — the part that matters —
+// cannot be said in another runtime's words, so every Codex failure read as a Claude-shaped
+// "SDK problem". These cases drive the SHIPPED descriptors through the SHIPPED mapping.
+test("SHAPE: an ENDED row states its failure in the runtime that produced it", () => {
+  const m = load();
+  const rows = {};
+  for (const runtimeId of ["claude", "codex"]) {
+    m.bind({
+      sessions: new Map(),
+      endedRecords: () => [endedRecord({ runtimeId, endCode: "mcp-unreachable", diag: "the dopl server never connected" })],
+    });
+    rows[runtimeId] = m.list()[0].endReason;
+  }
+  assert.equal(rows.claude.code, "mcp-unreachable");
+  assert.match(rows.claude.text, /Claude Code/);
+  assert.equal(rows.codex.code, "mcp-unreachable");
+  assert.match(rows.codex.text, /Codex/);
+  assert.ok(!/Claude/.test(rows.codex.text), `a Codex row must not name Claude: ${rows.codex.text}`);
+  // ⚠ THE ADAPTER'S OWN SENTENCE SURVIVES BESIDE THE CODE, never parsed and never re-worded: it
+  // is the one part allowed to name a runtime, because it came FROM one.
+  assert.equal(rows.codex.detail, "the dopl server never connected");
+});
+
+test("SHAPE: an end code this build does not know renders the GENERIC arm, not a raw key", () => {
+  // ⚠ A ROW FROZEN BY A NEWER BUILD. Rendering `endCode` verbatim would put an enum in front of
+  // an operator; answering `null` would drop a failure. The generic arm still names the RUNTIME,
+  // which is the half that was missing before U10.
+  const m = load();
+  m.bind({ sessions: new Map(), endedRecords: () => [endedRecord({ runtimeId: "codex", endCode: "quantum-decoherence" })] });
+  const { endReason } = m.list()[0];
+  assert.equal(endReason.code, null, "an unrecognised code is not passed through as one");
+  assert.ok(!/quantum-decoherence/.test(endReason.text));
+  assert.match(endReason.text, /Codex/);
+});
+
+test("SHAPE: only the signed-out code offers a sign-in, and only where one exists", () => {
+  // ⚠ HIDE, NEVER GRAY, APPLIED TO A REMEDY. Codex declares `credential.interactiveSignIn: null`
+  // (`codex login` drives a browser flow Dopl cannot complete in its own window), so the sentence
+  // is still said and the BUTTON is absent — a button that opens nothing is the control that lies.
+  const m = load();
+  const actionFor = (runtimeId, endCode) => {
+    m.bind({ sessions: new Map(), endedRecords: () => [endedRecord({ runtimeId, endCode })] });
+    return m.list()[0].endReason.action;
+  };
+  assert.equal(actionFor("claude", "runtime-signed-out"), "Sign in to Claude Code");
+  assert.equal(actionFor("codex", "runtime-signed-out"), null, "no in-app flow => no button");
+  assert.equal(actionFor("claude", "runtime-crashed"), null, "a crash is not fixed by signing in");
 });
 
 test("SHAPE: counterparty-influenced text is bounded and single-line", () => {

@@ -215,6 +215,20 @@ function parkedSessionFromRecord(key, rec, sdkId) {
     direct: rec.direct === true, // H2: does the server address our unaddressed posts
     counterpartyName: rec.counterpartyName || null,
     model: sessionModel.normalizeModel(rec.model), // the operator's pick, re-coerced on the way in
+    // ── 2026-09-21 (U10) — THE RUNTIME TRUTH, RESTORED AND NOT RE-DERIVED ────────────────────
+    //
+    // ⚠ THE RECORD'S ANSWER WINS OVER TODAY'S DESCRIPTOR, DELIBERATELY. Re-deriving
+    // `usageBaseline` here would read the CURRENT build's `session.usageResetsOnResume` and
+    // silently re-interpret a conversation that already happened under the old one — a build that
+    // later flips `'unverified'` to `true` would be claiming a measurement about a run nobody
+    // measured. A record states what was true when it was written. ⚠ IT DECIDES NOTHING:
+    // `reparkDormant` below still asks `capability.js › resumeRefusal` of the LIVE descriptor, so
+    // a runtime whose resume is refused is ENDED here exactly as before, and this weakens nothing.
+    // ⚠ `session-runtime-truth.js › durableRuntimeTruth` coerced these on the way out, so a
+    // hand-edited store lands on `null` / `'unverified'` — the fail-closed members.
+    effectiveModel: rec.effectiveModel || null,
+    nativePolicy: rec.nativePolicy || null,
+    usageBaseline: runtimeTruth.durableRuntimeTruth(rec).usageBaseline,
     state: state,
     context: sessionPark.contextFromRecord(rec), // channel/thread/peer names + the template NAME (F-288)
     nonce: crypto.randomBytes(8).toString('hex'),
@@ -298,6 +312,13 @@ function endInterrupted(key, rec, why, opts) {
     // tells the three end reasons apart in a log; it is not copy. The machine-readable half is the
     // `{ interrupted: true }` extra above, which every renderer keys the calm terminal off.
     diag: null,
+    // ⚠ WHICH RUNTIME IT RAN ON, CARRIED (2026-09-21, U10) — and DELIBERATELY WITHOUT AN
+    // `endCode`. Samuel's 2026-09-13 ruling above stands: a restart is not a runtime failure and
+    // the card says "Ended" and nothing more. `session-detail.js › endReasonFor` answers `null`
+    // when BOTH `endCode` and `diag` are absent, so this line adds identity to the row without
+    // reviving the reason line that ruling deleted.
+    runtimeId: rec.runtimeId || null,
+    usageBaseline: rec.usageBaseline || null,
     entries: [],
   });
   diag('session-boot: ended dormant agent —', why, '| agent', String(rec.agentId || ''), 'channel', String(rec.channelId || '').slice(0, 8), 'thread', String(rec.taskId || '').slice(0, 8));

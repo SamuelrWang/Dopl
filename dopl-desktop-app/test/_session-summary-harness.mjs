@@ -21,7 +21,7 @@ const req = createRequire(import.meta.url);
 const { metricOrNull, metrics } = req(join(MAIN, "session-metrics.js"));
 // The `detail` signal, joined 2026-08-20. Injected REAL; `session-detail.test.mjs` owns the table
 // that derives it, and a stub here would let the two drift.
-const { noteEvent, detailFor } = req(join(MAIN, "session-detail.js"));
+const { noteEvent, detailFor, endReasonFor } = req(join(MAIN, "session-detail.js")); // ⚠ `endReasonFor` joined 2026-09-21 (U10): the structured end code, re-said in the OWNING runtime's words. Injected REAL like its two neighbours — `session-detail.test.mjs` owns the mapping, this file owns the projection
 // THE NAME STORE IS STUBBED, NOT LOADED (2026-08-25): `main/agent-names.js` opens an electron-store
 // on require. The stub answers null (nobody renamed this agent); a test that wants a name overrides
 // `names.value`.
@@ -81,6 +81,7 @@ export function load() {
     "metrics",
     "noteEvent",
     "detailFor",
+    "endReasonFor",
     "displayNameFor",
     "descriptionForAgent",
     "displayText",
@@ -95,7 +96,7 @@ export function load() {
     "diag",
     `${BLOCK}\n return { ${EXPORTED.join(", ")} };`
   )(
-    metricOrNull, metrics, noteEvent, detailFor, displayNameFor, descriptionForAgent,
+    metricOrNull, metrics, noteEvent, detailFor, endReasonFor, displayNameFor, descriptionForAgent,
     displayText, TEMPLATE_NAME_MAX, heldGatesFor,
     PILL_STATES, ACTIVITY_PILL, PILL_ENDED, pillState, queryTornDown, listeningState,
     (...parts) => logged.push(parts.join(" "))

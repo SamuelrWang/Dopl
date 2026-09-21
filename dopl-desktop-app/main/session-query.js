@@ -187,6 +187,20 @@ async function consume(s, q, rt) {
       const held = rt.normalize({ type: 'error', text: String(text == null ? '' : text) }, normalizeCtx(s));
       if (held.length && sessionAuth.holdIfAuthFailure(s, held[0].text)) return;
       diag('session-engine: query error', text);
+      // ── ⚠ THE STRUCTURED END CODE (2026-09-21, U10) ───────────────────────────────────────
+      //
+      // ⚠ THE CODE, NOT THE STRING. `text` is one runtime's own error prose; stamping it as the
+      // reason is how a Codex process failure came to be reported as a generic SDK problem —
+      // unbrandable, unbranchable, and un-re-sayable for another runtime. The CODE is
+      // vendor-neutral (`runtime-copy.js › RUNTIME_ERROR_CODES`) and `session-detail.js ›
+      // endReasonFor` rebuilds the sentence from THIS session's descriptor at read time.
+      // ⚠ `launchVia` IS WHAT SPLITS THE TWO, and it is already stamped at both query-start
+      // sites: a stream that died before this session ever launched is a START failure, and one
+      // that died mid-run is a CRASH. 🔒 The runtime's own words stay on the local diag line
+      // above and never on the code.
+      // ⚠ IT SETS A FIELD AND DECIDES NOTHING — `crash` is dispatched exactly as before, so no
+      // terminal path moved.
+      if (!s.endCode) s.endCode = s.sdkSessionId ? 'runtime-crashed' : 'runtime-start-failed';
       if (!s.settled) deps.dispatch(s, { type: 'crash' });
     }
   }

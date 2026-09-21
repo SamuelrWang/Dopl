@@ -12,11 +12,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fnOf } from "./helpers/source-probe.mjs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = readFileSync(join(HERE, "..", "main", "session-store.js"), "utf8");
+// ⚠ REQUIRED, NOT SLICED: `session-runtime-truth.js` requires nothing (no electron, no store), so
+// `saveRecord`'s U10 whitelist is driven against the shipped module rather than a lookalike.
+const RUNTIME_TRUTH = createRequire(import.meta.url)(join(HERE, "..", "main", "session-runtime-truth.js"));
 
 const BEGIN = "// ─── BEGIN SESSION-STORE-PURE";
 const END = "// ─── END SESSION-STORE-PURE";
@@ -298,13 +302,17 @@ test("durableSessionRecord defaults sdkSessionId->null and taskId->'' for a task
 const storeWrites = (() => {
   const fake = { data: {} };
   const api = new Function(
-    "store", "RECORDS_KEY", "durableSessionRecord",
+    "store", "RECORDS_KEY", "durableSessionRecord", "runtimeTruth",
     `${fnOf(SRC, "stampParked")}\n${fnOf(SRC, "loadRecords")}\n${fnOf(SRC, "saveRecord")}\n${fnOf(SRC, "setRecordPhase")}\n` +
       ` return { saveRecord, setRecordPhase, stampParked };`
   )(
     { get: (k) => fake.data[k], set: (k, v) => { fake.data[k] = v; } },
     "sessionRecords",
-    durableSessionRecord
+    durableSessionRecord,
+    // ⚠ THE REAL U10 WHITELIST (2026-09-21), required rather than faked: `session-runtime-truth.js`
+    // requires nothing, so a plain require works here, and what `saveRecord` has to be driven
+    // against is the SHIPPED coercion — a fake would let a widened whitelist pass unnoticed.
+    RUNTIME_TRUTH
   );
   return { ...api, fake };
 })();

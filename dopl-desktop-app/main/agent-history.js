@@ -109,6 +109,20 @@ function durableHistory(rec) {
     // ⚠ A WHITELIST DROPS WHAT IT DOES NOT NAME — the same trap `templateName` records — so this
     // line is what makes `session-summary.js › endedSummary`'s `diag` survive a restart.
     diag: historyName(r.diag, 200),
+    // ── 2026-09-21 (U10) — THE STRUCTURED END CODE, AND THE RUNTIME IT BELONGS TO ────────────
+    //
+    // ⚠ WHY A CODE AS WELL AS THE SENTENCE. `diag` above is ONE runtime's words, frozen; it cannot
+    // be branched on and it cannot be re-said for another runtime. `endCode` is a member of
+    // `main/runtime/runtime-copy.js › RUNTIME_ERROR_CODES` (vendor-neutral by construction) and
+    // `session-detail.js › endReasonFor` rebuilds the sentence at READ time off `runtimeId`'s own
+    // descriptor — which is what makes a Codex failure read as a Codex failure on a card written
+    // before anyone asked. ⚠ A WHITELIST DROPS WHAT IT DOES NOT NAME, so both lines are what make
+    // either survive a restart. ⚠ COERCED TO A BOUNDED STRING OR `null`: a hand-edited history
+    // file must not put an unbounded blob or a non-string into a projection, and an unrecognised
+    // code renders `errorCopy`'s GENERIC arm rather than a raw key.
+    endCode: historyName(r.endCode, 40),
+    runtimeId: historyName(r.runtimeId, 32),
+    usageBaseline: historyName(r.usageBaseline, 16),
     // ⚠ THE FINAL MEASUREMENT, FROZEN WITH THE IDENTITY. The session object is gone by the time
     // anything reads this, so a live read would blank every number at exactly the moment the
     // operator wants to know what the run cost. `session-summary.js › endedSummary` already

@@ -223,7 +223,13 @@ describe("what the panel's composer sends", () => {
    * and `resumeAfterSignIn` both shipped with ZERO callers, so re-posting was
    * refused with `auth-hold` forever. The button is that missing call.
    */
-  const SIGN_IN = { name: "Sign in to Claude" };
+  // ⚠ `"Sign in to Claude"` UNTIL 2026-09-21 (U10). This composer is shared with every runtime, so
+  // the label is now the SELECTED runtime's own (`runtime-copy.ts › signInAction`). The bridges
+  // below carry no `channels.getLaunchPosture`, which is the OLDER-DESKTOP / plain-browser lane:
+  // no descriptor arrives, the surface cannot name a runtime, and it says `Sign in` — while the
+  // BRIDGE op stays the whole gate, so the affordance is byte-identical to what those builds had.
+  // The per-runtime labels are pinned in `runtime-refusals.test.tsx`.
+  const SIGN_IN = { name: "Sign in" };
 
   /** A bridge whose message op refuses with the auth hold, optionally carrying
    *  the sign-in op. ⚠ `apiRequest` is the SPA marker `getSpaBridge` keys on. */

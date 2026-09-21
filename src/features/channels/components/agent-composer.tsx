@@ -58,14 +58,26 @@ import { cn } from "@/shared/lib/utils";
 import { TAB_ACTION } from "./bits";
 import { canMessageAgent, messageAgent } from "./agents-controls";
 import { canSignInToClaude, signInToClaude } from "./claude-signin";
+import { useChannelLaunchPosture } from "../hooks/use-channel-launch-posture";
+import { agentAuthHeldCopy, canSignIn as runtimeCanSignIn, signInAction } from "../lib/runtime-copy";
 
 /** What a refused 1:1 message says. ⚠ Exported for the tests — a swallowed
  *  refusal and a sent message are indistinguishable on screen, which is the
  *  failure this whole surface was built to stop repeating. */
 export const MESSAGE_REFUSED =
   "That didn't reach your agent. It may have just ended.";
-export const MESSAGE_AUTH_HELD =
-  "Your agent is waiting for you to sign in to Claude Code.";
+/**
+ * ⚠ THE AUTH-HELD LINE IS THE RUNTIME'S OWN SINCE 2026-09-21 (U10), where it was a frozen
+ * `"…sign in to Claude Code."` on a path every runtime reaches — the agent held here may be a
+ * Codex or a Cursor one, and naming Claude at it points the operator at a credential the session
+ * does not use. {@link agentAuthHeldCopy} builds it from the channel's own descriptor.
+ *
+ * ⚠ THE EXPORT SURVIVES AS THE **DEFAULT-RUNTIME** SPELLING, and it is still the honest fallback:
+ * a plain browser and a desktop older than the runtime port send no descriptor at all, and
+ * `runtimeLabel` then names no vendor. It is no longer an equality key — the suites compare
+ * against `agentAuthHeldCopy(descriptor)` for the runtime under test.
+ */
+export const MESSAGE_AUTH_HELD = agentAuthHeldCopy(null);
 
 /**
  * CAN THIS BUILD REACH AN AGENT AT ALL — one read, both hosts.
@@ -125,7 +137,24 @@ export function AgentComposer({
   const [notice, setNotice] = useState<string | null>(null);
   const [signingIn, setSigningIn] = useState(false);
   const canSend = useCanMessageAgent();
-  const canSignIn = useCanSignInToClaude();
+  // ⚠ TWO GATES, AND BOTH HAVE TO HOLD (2026-09-21, U10). The BRIDGE gate is unchanged and is
+  // this file's oldest rule: only a build carrying `claude.signIn` can do anything here, so an
+  // older main paints no button. The RUNTIME gate is new: `credential.interactiveSignIn` is
+  // `null` on Codex and Cursor (their sign-in is a browser/device-code hop Dopl cannot complete
+  // in its own window), and the op behind this button drives the DEFAULT runtime's flow — so
+  // showing it on a Codex channel would open the wrong sign-in, which is worse than opening none.
+  // ⚠ HIDE, NEVER GRAY, AND THE SENTENCE IS NOT HIDDEN WITH IT: the banner still says the agent
+  // is waiting on a sign-in; what goes away is a remedy that would not work.
+  const bridgeCanSignIn = useCanSignInToClaude();
+  const { descriptor: runtime } = useChannelLaunchPosture(channelId);
+  // ⚠ UNKNOWN IS NOT EMPTY (INVARIANTS §11), AND THAT IS WHY THIS IS A THREE-WAY TEST. `runtime`
+  // is `null` on a plain browser and on every desktop older than the runtime port — reading that
+  // absence as "this runtime has no sign-in" would DELETE the button on exactly the builds where
+  // it is the only remedy that exists. A descriptor that is PRESENT and declares no in-app flow
+  // hides it; one that was never sent decides nothing and the bridge op is the whole gate, which
+  // is byte-identical to what those builds did before U10.
+  const canSignIn = bridgeCanSignIn && (runtime == null || runtimeCanSignIn(runtime));
+  const authHeldNotice = agentAuthHeldCopy(runtime);
 
   // ⚠ ONE COMPONENT INSTANCE SERVES EVERY AGENT, so its state has to be told
   // WHICH agent it is holding (Samuel, 2026-09-05: typing to A, switching to B
@@ -240,7 +269,7 @@ export function AgentComposer({
           setText("");
           return;
         }
-        setNotice(res.reason === "auth-hold" ? MESSAGE_AUTH_HELD : MESSAGE_REFUSED);
+        setNotice(res.reason === "auth-hold" ? authHeldNotice : MESSAGE_REFUSED);
       })
       // ⚠ SAME FENCE: a late `finally` from A's send must not unlock a box that
       // is now B's and may have a request of its own in flight.
@@ -332,14 +361,18 @@ export function AgentComposer({
               ⚠ `TAB_ACTION`, THE SHARED DARK PILL, not a local recipe: it is the
               same 36px object as "New thread" and "Launch agent", which is what
               makes it read as the surface's one action rather than as chrome. */}
-          {notice === MESSAGE_AUTH_HELD && canSignIn && (
+          {notice === authHeldNotice && canSignIn && (
             <button
               type="button"
               onClick={signIn}
               disabled={signingIn}
               className={TAB_ACTION}
             >
-              Sign in to Claude
+              {/* ⚠ THE RUNTIME'S OWN WORDS (2026-09-21, U10), never a literal. `signInAction`
+                  answers `null` exactly where `canSignIn` above is false, so the `??` arm is
+                  unreachable in practice and is there so a partial descriptor cannot render an
+                  empty button. */}
+              {signInAction(runtime) ?? "Sign in"}
             </button>
           )}
         </div>

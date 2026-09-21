@@ -17,7 +17,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
-import { REAL_DESCRIPTORS } from "../lib/runtime-descriptors-harness";
+import { REAL_DESCRIPTORS, realDescriptor } from "../lib/runtime-descriptors-harness";
+import {
+  agentAuthHeldCopy,
+  canSignIn,
+  liveModelSwitchRefusal,
+  noRuntimeCopy,
+  runtimeLabel,
+  signInAction,
+  signInPointer,
+  signedOutLaunchCopy,
+} from "../lib/runtime-copy";
+import { launchRefusalText } from "./use-agents-panel";
 import { AgentControls } from "./agent-panel-controls";
 import { AgentLaunchPanelView } from "./composer-launch-panel";
 import type { AgentLaunchPanel } from "./use-agent-launch";
@@ -192,5 +203,94 @@ describe("the launch surface", () => {
     render(<AgentLaunchPanelView panel={panelStub()} templates={[]} />);
     expect(screen.queryByLabelText("Agent runtime")).toBeNull();
     expect(screen.queryByRole("note")).toBeNull();
+  });
+});
+
+// ── U10 (2026-09-21): THE COPY IS THE SELECTED RUNTIME'S, NOT ONE VENDOR'S ──────────────────
+//
+// ⚠ THE DEFECT THESE CLOSE. `use-agents-panel.ts` answered `no-sdk` with "No Claude runtime on
+// this Mac" and `auth-hold` with "Sign in to Claude to start an agent" — on a path EVERY runtime
+// reaches. Main's own words were already vendor-neutral (`session-launch.js` says `no-sdk` means
+// "this machine has no agent runtime" on every runtime), so the Claude was invented in the COPY.
+// A signed-out Codex therefore sent the operator to fix a credential the session does not use.
+//
+// ⚠ AND THE OTHER HALF IS THAT CLAUDE IS UNTOUCHED — the rule the Stop-control block above
+// states. A de-naming that fires on every runtime is a regression, not a feature.
+//
+// ⚠ DRIVEN OFF THE REAL DESCRIPTORS, never fixtures: what is being asserted is that the SHIPPED
+// adapters carry the labels and credential declarations this copy is built from.
+
+describe("the signed-out and no-runtime copy", () => {
+  it("a signed-out Codex says `Sign in to Codex`, and the Claude path still says Claude", () => {
+    expect(signInAction(realDescriptor("codex"))).toBe(null);
+    expect(signedOutLaunchCopy(realDescriptor("codex"))).toBe("Sign in to Codex to start an agent");
+    expect(signInPointer(realDescriptor("codex"))).toMatch(/^Sign in to Codex/);
+    expect(agentAuthHeldCopy(realDescriptor("codex"))).toBe(
+      "Your agent is waiting for you to sign in to Codex."
+    );
+    // ⚠ THE CLAUDE PATH, UNCHANGED IN SUBSTANCE: it still names Claude, and it names it because
+    // the DESCRIPTOR does — `Claude Code` is that adapter's own `label`, never a literal here.
+    expect(signInAction(realDescriptor("claude"))).toBe("Sign in to Claude Code");
+    expect(signedOutLaunchCopy(realDescriptor("claude"))).toMatch(/Claude/);
+    expect(agentAuthHeldCopy(realDescriptor("claude"))).toMatch(/Claude/);
+  });
+
+  it("the `auth-hold` / `no-sdk` launch refusals name the runtime the channel would launch on", () => {
+    for (const id of ["claude", "codex", "cursor"]) {
+      const d = realDescriptor(id);
+      expect(launchRefusalText("auth-hold", d)).toBe(signedOutLaunchCopy(d));
+      expect(launchRefusalText("no-sdk", d)).toBe(`No ${runtimeLabel(d)} runtime on this Mac`);
+    }
+    // ⚠ NOT ONE SENTENCE WEARING THREE HATS: a copy function that ignored the descriptor would
+    // satisfy every line above if they were read one at a time.
+    const said = REAL_DESCRIPTORS.map((d) => launchRefusalText("no-sdk", d));
+    expect(new Set(said).size).toBe(REAL_DESCRIPTORS.length);
+    // ⚠ AND CODEX MUST NOT BE ABLE TO SAY CLAUDE, which is the whole verification bar.
+    for (const line of [
+      launchRefusalText("no-sdk", realDescriptor("codex")),
+      launchRefusalText("auth-hold", realDescriptor("codex")),
+    ]) {
+      expect(line).not.toMatch(/Claude|Anthropic/);
+    }
+  });
+
+  it("with NO descriptor the copy names no vendor at all — the plain-browser lane", () => {
+    // ⚠ UNKNOWN IS NOT EMPTY (INVARIANTS §11). A desktop older than the runtime port sends no
+    // descriptor, and the old code answered with Claude's name whether or not that was the
+    // runtime. Naming nothing is the honest answer; the REFUSAL is still said.
+    for (const line of [launchRefusalText("no-sdk"), launchRefusalText("auth-hold")]) {
+      expect(line).not.toMatch(/Claude|Codex|Cursor|Anthropic|OpenAI/);
+      expect(line.length).toBeGreaterThan(0);
+    }
+    // ⚠ THE UNNAMED FORM IS ITS OWN SENTENCE, not the named one with a placeholder spliced in —
+    // "No the agent runtime runtime on this Mac" is what a `${runtimeLabel(d)}` fallback produces.
+    expect(noRuntimeCopy(null)).toBe("No agent runtime on this Mac");
+    expect(signedOutLaunchCopy(null)).toBe("Sign in to your agent runtime to start an agent");
+    expect(agentAuthHeldCopy(null)).toBe("Your agent is waiting for you to sign in to its runtime.");
+  });
+
+  it("an unrecognized reason still falls back rather than rendering a raw enum", () => {
+    expect(launchRefusalText("kaboom", realDescriptor("codex"))).toBe("Could not start the agent");
+    expect(launchRefusalText(undefined)).toBe("Could not start the agent");
+  });
+
+  it("hide, never gray: only a runtime with a real in-app flow offers a button", () => {
+    // ⚠ CODEX AND CURSOR DECLARE `credential.interactiveSignIn: null` — their sign-in is a
+    // browser/device-code hop Dopl cannot complete inside its own window. The SENTENCE is still
+    // said; what is absent is a button that would open nothing (or, worse, the wrong runtime's).
+    expect(canSignIn(realDescriptor("claude"))).toBe(true);
+    expect(canSignIn(realDescriptor("codex"))).toBe(false);
+    expect(canSignIn(realDescriptor("cursor"))).toBe(false);
+    expect(signInAction(realDescriptor("cursor"))).toBe(null);
+  });
+
+  it("the live-model-switch refusal is per runtime, and Claude keeps the control", () => {
+    // ⚠ `canSwitchModelLive` HAD NO CONSUMER IN `main/` UNTIL U10 — it was declared, mirrored
+    // here, and read by nothing, so a Codex session recorded a model switch that never happened.
+    expect(liveModelSwitchRefusal(realDescriptor("claude"))).toBe(null);
+    const codex = liveModelSwitchRefusal(realDescriptor("codex"));
+    expect(codex).toMatch(/Codex/);
+    expect(codex).toMatch(/has not been measured/);
+    expect(codex).not.toMatch(/Claude/);
   });
 });

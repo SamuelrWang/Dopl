@@ -191,9 +191,14 @@ export const SETTINGS_HELP: Readonly<Record<string, SettingHelpCopy>> = {
   // ⚠ IT NAMES WHAT A DIRECTION *IS* — a private turn inside an agent that is
   // already running — because the operator is granting something different from a
   // launch, and "directions" alone does not say that.
+  // ⚠ "your other Claude sessions" UNTIL 2026-09-21 (U10). The sessions this setting is ABOUT are
+  // whatever runs on this Mac's device token — `service-writes-metadata-recipient.ts` enumerates
+  // them as "a Claude Code, Codex or Cursor run" — so naming one vendor told a Codex operator the
+  // switch was not about them. The option text one line down already said "your outside sessions";
+  // the body now agrees with it.
   "Direct agents": {
     body:
-      "Whether your other Claude sessions can send private instructions to agents already running here. It starts a turn inside an agent that exists; it never launches one. In every channel flips a machine-wide switch — it is not limited to this room.",
+      "Whether your other coding sessions on this Mac can send private instructions to agents already running here. It starts a turn inside an agent that exists; it never launches one. In every channel flips a machine-wide switch — it is not limited to this room.",
     options: [
       { label: "Cannot direct agents", text: "directions are refused and the sender is told why" },
       { label: "In every channel", text: "your outside sessions may direct agents on this Mac" },
