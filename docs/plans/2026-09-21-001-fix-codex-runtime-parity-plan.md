@@ -913,6 +913,74 @@ need a live turn.
 `npm run test:codex-compat` — ⚠ **not bare `npm test`, which lets the live tier skip and report
 green.**
 
+#### E. U9 — IMPLEMENTED (runtime on a launch directive, end to end)
+
+**Commit:** `7964ea17` (45 files, +2478/−311). Not pushed.
+
+**The precedence, as built** (`main/launch-directive-spawn.js › resolveRuntime`):
+1. **explicit directive `runtime`** → membership test against `registry.ids()`, THEN `acquire()`.
+   Either miss ⇒ **`{refused:'no-sdk'}`**, nothing launched, the runtime named in the diag.
+2. channel runtime — unchanged, fails open.
+3. registry default.
+
+🔒 ⚠ **THE ASYMMETRY IS THE POINT, AND SO IS THE ORDER.** Links 2–3 fail OPEN (a downgrade must not
+strand a room); link 1 fails CLOSED (Decision #4, R5). ⚠ **The `ids()` check MUST stay before
+`acquire()`** — `runtime/index.js › resolve` fails open, so `acquire('nonsense')` would SUCCEED by
+acquiring Claude, which is the exact bug U9 exists to close. There is a named test pinning that
+ordering; do not "simplify" it away.
+
+**No 11th refusal word:** the vocabulary is closed in four places (desktop vocab,
+`schema-launch-modes.ts`, the column CHECK, the MCP retry-advice map). `no-sdk` already means
+"there is no such agent runtime on this Mac" and already advises `no` retry.
+
+**`runtime` is a string, not an enum, on the MCP wire** — deliberately: the roster is the operator's
+desktop registry and moves with a DESKTOP release, so a closed set in a pushed schema would refuse a
+runtime a newer machine already ships. Grammar (`LAUNCH_RUNTIME_ID_RE`) is checked in four places
+and pinned to agree, including against the migration's CHECK.
+
+**Requested vs applied:** `runtime` / `model` are what was ASKED; `applied_runtime` /
+`applied_model` are what the desktop REPORTS it used; `null` means *not reported*, never a guessed
+vendor. 🔒 **There is deliberately NO `resolved_runtime`** — the server holds no roster, so a third
+group would be a fabricated resolution, and a test fails if one appears.
+
+**Model within the resolved runtime:** the Claude chain (chain → template → channel-prefs) is now
+scoped to the DEFAULT adapter only. Any other runtime gets its own roster, or no model argument at
+all. A cross-vendor model is DROPPED and diag'd — **it never changes the runtime**.
+
+**Migration — WRITTEN, NOT APPLIED:**
+`supabase/migrations/20261017120000_channel_launch_directives_runtime.sql` — three nullable `TEXT`
+columns with grammar CHECKs and launch-only kind fences. No `NOT NULL`, no backfill, no value enum;
+every existing row reads `NULL`, which is correct. ⚠ **Applying it is Samuel's, against the target
+project.** Nothing was run anywhere.
+
+**Tests:** 24 desktop cases + 13 MCP + 13 schema + 11 service, covering precedence, all four
+refusals, the roster-outage path, the requested/applied audit, idempotent retry (including a retry
+that asks for a DIFFERENT runtime converging on the stored row), and rows written before the
+columns existed. All 8 launch-directive suites pass, 156/156.
+
+⚠ **KNOWN GAP, AND IT IS U5's SEAM — READ THIS BEFORE CALLING U9 DONE.** `applied_model` is what the
+DIRECTIVE lane applied, not yet what the SESSION runs on a non-default runtime:
+`session-engine.js › startSession` still re-coerces `spec.model` through Claude's `session-model.js`
+table, so a roster-valid Codex id is coerced to `'default'` downstream and the session runs the
+platform default. That file belongs to U5 and was owned by another agent at the time. The gap is
+marked in a block comment at the return site with an explicit *do not re-implement the coercion
+here*. **When U5 moves model validation behind the selected adapter, the two agree by construction —
+verify that they do.**
+
+⚠ **NOT LIVE-VERIFIED.** U9's own verification line ("repeating the original live MCP experiment
+creates a genuine Codex session") is UNPROVEN: no supported CLI here. Everything is proven against
+the real modules with stubbed leaves.
+
+**Bug found and fixed in passing:** the decide route never forwarded `appliedAgentName`, though
+every other layer was built — filed as **F-752** (RESOLVED), the same shape as F-708 on the other
+end of the same lane.
+
+⚠ **FIVE MCP BUDGET RATCHETS WERE RAISED** for the new field (schema, two tool ceilings, two
+doctrine ceilings). The trim came first and the remainder is RECORDED, NOT FUNDED. If Samuel wants
+it funded, the sanctioned move already owed on that constant is `kind`'s chooser and `artifact`'s
+definition → `channel-doctrine.ts › FIELDS`, which would put the pushed number back under where it
+started.
+
 ---
 
 ## Sources & References

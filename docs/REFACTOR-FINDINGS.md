@@ -10385,3 +10385,12 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - Proposed resolution: land the icon uploader on `/{segment}/settings` when Samuel's settings-page overhaul (R-10) reaches it, then delete all three symbols in one change.
 - Status: OPEN.
   - ⚠ **FILED IN THE LOW 730s AND RENUMBERED HERE ON MERGE (2026-09-18).** ⚠ The old id is deliberately NOT written in `F-NNN` notation: this file's header forbids citing an id that lives only on another branch, and `check-doc-refs.mjs` resolves such a citation and fails on it (measured, on this very line). It was derived across live branches before `fix/channel-addressing` reached master carrying the same number for its own finding (there as F-737); re-derived at integration, the highest claimed anywhere was F-750. This is the renumber-on-the-branch-before-the-merge rule in the header, applied — the gate cannot see a COLLISION, only a dangling id.
+
+### F-752 — the decide route dropped `appliedAgentName`, so a named agent reported as unnamed (2026-09-21, FIXED)
+
+- Location: `src/app/api/channels/launch-directives/decide/route.ts` — the handler's field enumeration.
+- Found during: U9 (`docs/plans/2026-09-21-001-fix-codex-runtime-parity-plan.md`), while adding `appliedRuntime` / `appliedModel` to the same enumeration.
+- ⚠ **EVERY OTHER LAYER WAS BUILT.** The field reached `LaunchDecideSchema`, `DecideLaunchInput`, the `applied_agent_name` column and the DTO; only the handler failed to forward it. So the machine's real name for an agent never reached a row, and the MCP result rendered `name=(not reported)` for an agent that HAD been named — a silent lane, no error anywhere.
+- ⚠ **THIS IS THE SAME SHAPE AS F-708, ON THE OTHER END OF THE SAME LANE.** A field built end to end and dropped by one handler's explicit field list is now a repeat defect class, not an incident: an enumeration that must be edited in lockstep with a schema is the thing that keeps not being edited.
+- Resolution: forwarded, and `launch-directives-route-forwards.test.ts` — a SOURCE-READING test that was already guarding the create handler — now guards the decide handler too, so the next dropped field fails a gate rather than a support conversation. FIXED in the U9 commit.
+- Status: RESOLVED.
