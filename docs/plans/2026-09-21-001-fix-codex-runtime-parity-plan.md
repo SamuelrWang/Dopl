@@ -756,10 +756,23 @@ code-side claims, and **one implementation unit** (part of U2).
 
 #### A. Machine fact that changes U2's framing
 
-🔒 **There is no `codex` CLI on this machine at all.** `which codex` fails, and none of
+> 🔒 ⚠ **CORRECTED LATER THE SAME DAY — READ THE CORRECTION BELOW BEFORE ACTING ON THIS PARAGRAPH.**
+
+🔒 **There is no `codex` CLI on this machine's `PATH`.** `which codex` fails, and none of
 `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, `~/.bun/bin` or an nvm prefix holds one.
 Only `~/.codex/` exists (config + `.codex-global-state.json`), written by the ChatGPT desktop app's
 Codex, which is not the CLI this adapter spawns.
+
+**CORRECTION (2026-09-21, later, from the U1 work):** the original claim above was written as *"no
+`codex` CLI on this machine at all"*, and **that was wrong** — it was true of `PATH` and false of
+the machine. There is a `codex-cli 0.155.0-alpha.9.2` at
+`/Applications/ChatGPT.app/Contents/Resources/codex`, and it was running an app-server at the time.
+
+⚠ **IT IS NOT A SUPPORTED SOURCE AND NOTHING MEASURED FROM IT MAY BE COMMITTED AS THE CONTRACT.**
+The plan's Scope Boundaries exclude depending on *"the private executable inside another
+application bundle"*, and a private alpha's protocol may differ from the public CLI's — a fixture
+captured from it that later reads as measured truth is the same failure as the synthetic fixtures,
+in a different costume. It is usable only to PROVE tooling runs, which is what U1 used it for.
 
 Consequences for the plan:
 - **U1, U3 and U4 cannot be characterized from this machine.** Every "current protocol" correction
@@ -829,6 +842,76 @@ the packaged-Finder smoke test. The resolver is the seam those should build on �
 `npm run lint` in `dopl-desktop-app` exits with 1 error. It arrived with the unpushed commit
 `a1a4e1da` (default agent settings). Desktop CI's lint step runs bare `npm run lint`, where an
 error fails the job — this will go red on push unless the file is split first.
+
+⚠ **THREE MORE 500-CAP LINT ERRORS FOUND SINCE, ALSO NOT FROM THIS PLAN'S WORK** (re-derive before
+acting — this is a count, and the tree is moving): `dopl-desktop-app/main/listener-io.js` (532,
+from `de12cf89`) on the DESKTOP lint, and `src/features/channels/components/message-pane.tsx` (501)
+plus `src/features/channels/server/repository-launch.ts` (554) on the ROOT lint, which runs
+`--max-warnings 0`. **Four files, two lint jobs, both red on push.**
+
+#### D. U1 — IMPLEMENTED (contract harness, gate, and generator)
+
+**Commits:** `9556b777`, `94a3d0fe`. Nothing pushed.
+
+**What landed:**
+- `dopl-desktop-app/test/_codex-app-server.mjs` — bounded handshake helper. Resolves through
+  `resolve-bin.js`, spawns through `client.connect` (so `client.js` stays the only module touching a
+  child process), hard timeout, and one `finally` that closes → waits → `SIGKILL` → records any pid
+  still answering `kill(pid, 0)`.
+- `dopl-desktop-app/test/codex-app-server-contract.test.mjs` — 29 tests in TWO TIERS. Tier 1 always
+  runs and measures *Dopl*; **tier 2 (`CODEX_APP_SERVER_LIVE=1`) is the only tier allowed to say
+  what the protocol IS.**
+- `dopl-desktop-app/scripts/codex-app-server-schema.js` + `test/fixtures/codex-app-server.json` —
+  `npm run codex:schema`. Captures method NAMES and value TYPES only; never prompts or tokens.
+  Ships as `UNVERIFIED-PLACEHOLDER` with every measured slot `null`.
+- `dopl-desktop-app/scripts/codex-compat.js` — `npm run test:codex-compat`; exits 2 (no Codex),
+  1 (suites failed), 3 (a leaked app-server outlived the run).
+- `main/runtime/codex/client.js › checkProtocol()` — the capability/version gate. **Additive and
+  NOT yet wired into the connected-state path** (that seam is U2/U3's).
+
+🔒 **SKIPPING IS LOUD, IN THREE LAYERS**, because a skip that reads as a pass is this tier's whole
+failure mode: a banner at import, a `t.diagnostic("SKIPPED, NOT PASSED — …")` per test, and two
+separately reported gates ("flag unset" vs "flag set, no binary"). **The skip is itself tested.**
+
+🔒 **`SUPPORTED_CLI` IS DELIBERATELY UNPINNED** (`{ min: null, max: null }`), so `versionGate`
+refuses nothing. A range written without a measured *public* CLI is a guess in a measurement's
+costume. `npm run codex:schema` prints the line to paste once one is measured.
+🔒 **Unknown ≠ empty:** `methods: null` → `unverified-protocol`; `methods: []` →
+`unsupported-protocol`. Four states (`missing`, `signed-out`, `unsupported-protocol`,
+`unverified-protocol`) are four different operator actions and must not be collapsed.
+
+**Measured against the ChatGPT-bundled alpha — TOOLING PROOF ONLY, NO FIXTURE COMMITTED:**
+- ⚠ **`codex app-server generate-json-schema --out <dir>` exists** (marked `[experimental]`). Its
+  `ClientRequest.json` is a `oneOf` of **101 `method` consts** — the CLI's own enumeration — and
+  **all seven methods this adapter sends are present**.
+- ⚠ **`initialize` DECLARES NO METHODS.** It answers `{ codexHome, platformFamily, platformOs,
+  userAgent }`. **That is why the SCHEMA, not the handshake, must be the method source.**
+- **`model/list` returns `{ data, nextCursor }`** with `id`, `displayName`, `isDefault`, `hidden`,
+  `defaultReasoningEffort`, and `supportedReasoningEfforts` as `{reasoningEffort, description}`
+  objects — **confirming U6's field list**; one default across five models.
+- 🔒 ⚠ **`app-server --help` SHOWS NO `--ignore-user-config` FLAG.** What it does show:
+  `-c key=value`, `--enable/--disable <FEATURE>`, and **`--strict-config`**. **U4 now has real
+  evidence for the replacement isolation mechanism**, and ⚠ **both `launch-spec.js` AND `models.js`
+  pass the dead flag — the model picker breaks independently of launch.** Per instruction, the
+  existing `codex-gate.test.mjs` assertions were left alone; they are U4's to change.
+
+**Results:** the contract suite is **24 pass / 5 loud skips / 0 fail** with no CLI, and **29/29 with
+no skips** when armed. The live tier was proven non-vacuous: against a binary that never answers it
+fails on the timeout, and against the placeholder fixture it fails naming `npm run codex:schema`.
+
+⚠ **DO NOT READ THE DESKTOP SUITE'S TOTALS AS A VERDICT ON THIS WORK** — three other agents were
+mid-flight in the tree during it (totals moved 3380 → 3336 → 3409 across the session). Read
+`node --test test/codex-app-server-contract.test.mjs`.
+
+**Still needs a SUPPORTED (public) CLI:** pin `SUPPORTED_CLI`; commit a measured fixture; every
+wire-shape row in the research table (thread-id location, `input` as a sequence,
+`expectedTurnId`/`turnId`, `thread/tokenUsage/updated`) — the run confirms those methods EXIST, and
+says nothing about their params, because none were sent; the steer/interrupt bounded probes, which
+need a live turn.
+
+**CI:** `.github/**` untouched. A runner that provisions Codex should call
+`npm run test:codex-compat` — ⚠ **not bare `npm test`, which lets the live tier skip and report
+green.**
 
 ---
 
