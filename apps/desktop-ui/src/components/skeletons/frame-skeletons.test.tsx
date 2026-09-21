@@ -161,6 +161,41 @@ describe("the shell's own loading state mirrors the shell", () => {
   });
 
   /**
+   * 🔒 **THE GHOST'S OWN BOXES ARE FLAT (Samuel, 2026-09-21: *"on the left side,
+   * where the rails are for the channel, that is also elevated … we basically
+   * just shouldn't have elevated components"*).** TWO boxes here had a raised
+   * face — the brand pill (the `.auth-btn-3d-light` gradient, a 1px line and
+   * four shadows) and the Pro card (`--home-card` over `--border-strong`) — and
+   * both are stripped by an ATTRIBUTE rule, not by dropping their class: the
+   * class is the only statement of their padding, radius and margin, and the
+   * ghost restating those is the drift `pt-[7px]` already cost this file once.
+   *
+   * ⚠ THE FRAME IS NOT A SKELETON CONTAINER. `.root` / `.surface` / `.pageCard`
+   * and the rail are the app's own chrome, on screen before and after the read;
+   * the pin above already fixes them, and flattening them would tear the frame
+   * down for the load — the defect this ghost exists to close.
+   */
+  it("strips the raised faces without restating an inset", () => {
+    const { container } = render(
+      <ShellChromeSkeleton>{sectionSkeleton("overview")}</ShellChromeSkeleton>
+    );
+    expect(container.querySelectorAll("[data-skeleton]")).toHaveLength(2);
+
+    // BIDIRECTIONAL: the rule that flattens them lives with the real recipes,
+    // gated on the attribute, so the LOADED sidebar is untouched.
+    const shellCss = file(
+      "../../../../../src/shared/layout/app-shell/app-shell.module.css"
+    );
+    expect(shellCss).toContain(".brandPill[data-skeleton]");
+    expect(shellCss).toContain(".wordsCard[data-skeleton]");
+    // 🚫 and the ghost still names no inset of its own.
+    const ghost = code("./shell-skeleton.tsx");
+    for (const inset of ["p-[18px]", "rounded-[10px]", "px-[10px]"]) {
+      expect(ghost).not.toContain(inset);
+    }
+  });
+
+  /**
    * ⚠ THE SWITCH GHOSTS THE PAGE IT IS HEADING FOR, off the same
    * `activeSectionFromPath` the nav highlights with — so the card under the
    * sidebar is the section's own shape and not a generic one.
@@ -273,9 +308,10 @@ describe("the /home shapes are /home's own geometry", () => {
     const panels =
       file("../../pages/home/overview-panels.tsx") +
       file("../overview/rank-rail.tsx");
+    // ⚠ GEOMETRY ONLY SINCE 2026-09-21 — see the FACE block below. The two
+    // `.bento` strings left this list when the ghost stopped drawing a face;
+    // what the two sides still share is the column, the grid and the rail size.
     for (const shared of [
-      '"bento p-3.5"',
-      '"bento flex flex-col p-3.5"',
       'className="flex flex-col gap-3"',
       'className="grid grid-cols-2 gap-3"',
       'className="h-40 rounded-[14px]"',
@@ -283,6 +319,20 @@ describe("the /home shapes are /home's own geometry", () => {
       expect(panels).toContain(shared);
       expect(HOME_SKELETON).toContain(shared);
     }
+    // 🔒 THE FACE IS THE PAGE'S ALONE (Samuel, 2026-09-21: the skeletons are
+    // FLAT — *"we basically just shouldn't have elevated components"*). The two
+    // Usage cards keep `.bento` on the PAGE and the ghost wears
+    // `home-skeleton.tsx › GHOST_FLAT_FACE`, so this pins the split in BOTH
+    // directions: parity here would re-elevate the loading state, and a bare
+    // `rounded-[14px]` on the ghost would drop the 1px border box and pull every
+    // block inside in by a pixel.
+    for (const face of ['"bento p-3.5"', '"bento flex flex-col p-3.5"']) {
+      expect(panels).toContain(face);
+      expect(HOME_SKELETON).not.toContain(face);
+    }
+    expect(HOME_SKELETON).toContain(
+      'const GHOST_FLAT_FACE = "rounded-[14px] border border-transparent"'
+    );
     // The plot height is IMPORTED, the way the Overview page's ghost takes it.
     expect(HOME_SKELETON).toContain(
       'import { PLOT_HEIGHT_CLASS } from "#/components/charts/bar-series"'

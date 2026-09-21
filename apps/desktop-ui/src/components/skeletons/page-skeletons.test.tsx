@@ -236,8 +236,11 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
       [page, "grid grid-cols-[48fr_52fr] gap-3"],
       // Four equal stat cards.
       [stats, "grid grid-cols-4 gap-3"],
-      // The period group's inset well, and the two cards inside it.
-      [period, "rounded-[14px] border border-border-default bg-bg-inset p-3.5"],
+      // The two cards inside the period group.
+      // ⚠ THE WELL'S OWN STRING LEFT THIS LIST ON 2026-09-21, when Samuel ruled
+      // the skeletons flat: the ghost may not wear a face, so it cannot
+      // byte-share a string that IS one. The flatness pin below replaces it and
+      // is bidirectional in the same way.
       [period, "mt-3 grid grid-cols-2 gap-3"],
     ] as const) {
       expect(source).toContain(geometry);
@@ -261,6 +264,36 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
     // The value it names is still the plot's own.
     expect(file("../charts/bar-series.tsx")).toContain(
       'export const PLOT_HEIGHT_CLASS = "h-40"'
+    );
+  });
+
+  /**
+   * 🔒 **THE OVERVIEW GHOST IS FLAT — SHIMMER BLOCKS ONLY (Samuel, 2026-09-21:
+   * *"we basically just shouldn't have elevated components"*).** Two containers
+   * carried a face: the period group's `bg-bg-inset` well with a
+   * `border-border-default` hairline, and the chart card on the kit's `.bento`.
+   * ⚠ BIDIRECTIONAL the other way round: the REAL modules must STILL wear those
+   * faces — this was a restyle of the LOADING STATE and not of the page — and
+   * the ghost must not. A pass that "fixed" it by flattening `period-stats.tsx`
+   * fails the first half; a raised container creeping back fails the second.
+   * ⚠ Comment-stripped, for this suite's stated reason: the ghost's docblock
+   * NAMES what it dropped.
+   */
+  it("the overview ghost paints no container face, and the page still does", () => {
+    expect(file("../../pages/overview/period-stats.tsx")).toContain(
+      "rounded-[14px] border border-border-default bg-bg-inset p-3.5"
+    );
+    expect(file("../../pages/overview/activity-chart.tsx")).toContain(
+      'className="bento p-3.5"'
+    );
+    const ghost = code("../../pages/overview/overview-skeleton.tsx");
+    for (const face of ["bento", "bg-bg-inset", "border-border-default", "shadow"]) {
+      expect(ghost).not.toContain(face);
+    }
+    // The geometry survived the face: radius and padding, on a border box that
+    // is still there and cannot be seen.
+    expect(ghost).toContain(
+      'const FLAT_PANEL = "rounded-[14px] border border-transparent p-3.5"'
     );
   });
 

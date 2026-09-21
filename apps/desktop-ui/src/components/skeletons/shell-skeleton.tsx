@@ -29,6 +29,23 @@ import { SkeletonChrome } from "./skeleton-surface";
  * because it omits `.sidebar`, which this ghost draws and `frame-skeletons.test.tsx`
  * pins. Count the boxes below, not the adjective.
  *
+ * 🔒 ⚠ **THE GHOST'S OWN BOXES ARE FLAT (Samuel's ruling, 2026-09-21).** *"On
+ * the left side, where the rails are for the channel, that is also elevated …
+ * we basically just shouldn't have elevated components."* Flat here is SHIMMER
+ * BLOCKS ONLY — a skeleton container keeps its geometry and loses its fill, its
+ * hairline and its shadow. TWO boxes in this file had a raised face and both are
+ * stripped by `app-shell.module.css › .brandPill[data-skeleton]`: the brand pill
+ * (the `.auth-btn-3d-light` gradient, its 1px line and four shadows) and the Pro
+ * card (`--home-card` fill over `--border-strong`).
+ *
+ * ⚠ **THE FRAME IS NOT A SKELETON CONTAINER AND KEEPS ITS PAINT.** `.root` /
+ * `.surface` / `.pageCard` and `account-rail.module.css › .rail` are the app's
+ * OWN chrome, on screen before and after the read; flattening those would tear
+ * the frame down for the load, which is the exact defect this ghost exists to
+ * close. `.tile` and `.sidebar` paint nothing at rest already, and the nav rows
+ * wear the kit's `.nav-chip` — flat by construction (no border, no shadow) and
+ * the only statement of the 36px row height and its gutter, so they stay.
+ *
  * ⚠ THE RAIL IS RENDERED FOR REAL WHEN IT CAN BE. `GET /api/workspaces` is
  * cached and IndexedDB-persisted, so on a switch the tile strip is already known
  * — the caller passes the live `AccountRail` and the operator keeps a working
@@ -110,7 +127,11 @@ function ShellSidebarSkeleton() {
   return (
     <SkeletonChrome className={shell.sidebar}>
       <div className={shell.brand}>
-        <div className={shell.brandPill}>
+        {/* ⚠ `data-skeleton` IS THE FLATTENING HOOK, not decoration — see
+            `app-shell.module.css › .brandPill[data-skeleton]`. The pill keeps its
+            padding, gap and radius by wearing its own class and loses its
+            gradient, its line and its four shadows to that rule. */}
+        <div className={shell.brandPill} data-skeleton>
           <Skeleton className="h-[22px] w-[22px] shrink-0 rounded-[6px]" />
           <div className={shell.brandPillText}>
             <SkeletonLine w={96} h={10} />
@@ -129,9 +150,10 @@ function ShellSidebarSkeleton() {
         ))}
       </div>
 
-      {/* The Pro upsell — the card's own class, so its margin, fill, 1px line
-          and 18px pad are the sidebar's, not this file's. */}
-      <div className={shell.wordsCard}>
+      {/* The Pro upsell — the card's own class, so its margin and 18px pad are
+          the sidebar's, not this file's; `data-skeleton` drops the fill and the
+          1px line the loaded card keeps. */}
+      <div className={shell.wordsCard} data-skeleton>
         <SkeletonLine w={128} h={14} className="mb-[9px]" />
         <div className="mb-4 space-y-2">
           <SkeletonLine w="100%" h={9} />

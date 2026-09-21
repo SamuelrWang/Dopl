@@ -294,6 +294,29 @@
   border-radius: 8px;
   padding: 18px;
 }
+/* 🔒 THE GHOST WEARS THE GEOMETRY WITHOUT THE FACE (Samuel, 2026-09-21: the
+   skeletons are FLAT — *"we basically just shouldn't have elevated
+   components"*, and flat here means SHIMMER BLOCKS ONLY). The workspace-switch
+   ghost draws this pill and this card so nothing moves when the boot read lands,
+   but a raised 3D pill and a white bordered card full of shimmer are two
+   elevated components on a loading screen.
+
+   ⚠ FACE ONLY. Padding, radius, gap and margin are untouched, so the ghost
+   restates none of them — the whole reason it wears these classes at all.
+   ⚠ `border-color`, NOT `border: none`: the border box stays, so the blocks
+   inside sit exactly where the real pill's and card's content sits.
+   ⚠ ATTRIBUTE-SCOPED, the `.panel[data-no-nav] .pageCard` idiom above.
+   `data-skeleton` is set by `apps/desktop-ui/src/components/skeletons/shell-skeleton.tsx`
+   and by nothing else, so the LOADED sidebar is untouched — and it is an
+   attribute rather than a second class because the ghost's class expressions are
+   byte-shared with `app-shell.tsx` and pinned in `frame-skeletons.test.tsx`. */
+.brandPill[data-skeleton],
+.wordsCard[data-skeleton] {
+  background: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
 .wcTitle { font-size: 16px; font-weight: 600; margin-bottom: 9px; letter-spacing: -0.01em; }
 .wcTitle b { color: var(--ink); font-weight: 700; }
 .wcDesc { font-size: 13.5px; color: var(--ink-soft); line-height: 1.45; margin-bottom: 16px; }

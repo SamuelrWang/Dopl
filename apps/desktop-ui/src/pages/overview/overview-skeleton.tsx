@@ -4,6 +4,17 @@ import { PLOT_HEIGHT_CLASS } from "#/components/charts/bar-series";
 import { cn } from "@/shared/lib/utils";
 
 /**
+ * THE ONE CONTAINER A GHOST ON THIS PAGE MAY DRAW — radius and padding, and
+ * nothing that can be seen. See `OverviewSkeleton`'s docblock for the ruling.
+ *
+ * ⚠ `border border-transparent`, NEVER a dropped border: both boxes this
+ * replaces had a 1px line, the background paints under the border box, and
+ * removing it would pull every block inside in by a pixel. Same reasoning, and
+ * the same spelling, as `shared/ui/section-panel.tsx › SECTION_PANEL_GROUND`.
+ */
+const FLAT_PANEL = "rounded-[14px] border border-transparent p-3.5";
+
+/**
  * `/:workspaceSegment/overview`'s loading shape — the page's OWN column, not
  * the shared page ghost.
  *
@@ -19,6 +30,26 @@ import { cn } from "@/shared/lib/utils";
  * Rendering the stat row against zeroes and letting it jump when the payload
  * lands is the filed defect the gate in `index.tsx` exists to close — so this
  * shape stands for THREE reads (overview, series, billing status), not one.
+ *
+ * 🔒 ⚠ **IT PAINTS NO CONTAINER FACE (Samuel's ruling, 2026-09-21).** *"I like
+ * the skeletons for the knowledge and the agents … they're very simple and
+ * they're flattened. I notice that when I go to the overview page, it is not as
+ * simple. I see some stuff that is elevated UI, and some is not … We basically
+ * just shouldn't have elevated components."* Asked what flat means here he
+ * defined it as SHIMMER BLOCKS ONLY: a skeleton container keeps its geometry
+ * and loses its fill, its hairline and its shadow, so the only thing on screen
+ * is `Skeleton` on the page's own ground.
+ *
+ * ⚠ WHAT LEFT, AND WHERE IT STILL LIVES. The period group's well was
+ * `rounded-[14px] border border-border-default bg-bg-inset p-3.5`
+ * (`period-stats.tsx`'s own string, byte-shared) and the chart card was the kit's
+ * `.bento` (fill + 1px line + `--shadow-bento`). **Both remain on the REAL page
+ * — only the ghost dropped them**, which is the one thing that makes this a
+ * restyle of the loading state and not of the page. The cost is stated plainly:
+ * those two boxes no longer byte-share their padding with the modules they stand
+ * for, so a re-tune of `period-stats.tsx` / `activity-chart.tsx` padding has to
+ * move `FLAT_PANEL` by hand. `components/skeletons/page-skeletons.test.tsx`
+ * pins the flatness in both directions instead.
  */
 export function OverviewSkeleton({
   label = "Loading overview",
@@ -47,8 +78,8 @@ export function OverviewSkeleton({
             ))}
           </div>
 
-          {/* PERIOD STATS — two cards inside their own inset well. */}
-          <div className="rounded-[14px] border border-border-default bg-bg-inset p-3.5">
+          {/* PERIOD STATS — the two cards, on the group's geometry and no face. */}
+          <div className={FLAT_PANEL}>
             <SkeletonLine w={112} h={9} />
             <div className="mt-3 grid grid-cols-2 gap-3">
               <Skeleton className="h-[104px] rounded-[14px]" />
@@ -56,8 +87,9 @@ export function OverviewSkeleton({
             </div>
           </div>
 
-          {/* ACTIVITY CHART — heading row, then the plot at its real height. */}
-          <div className="bento p-3.5">
+          {/* ACTIVITY CHART — heading row, then the plot at its real height.
+              The card's geometry, none of `.bento`'s elevation. */}
+          <div className={FLAT_PANEL}>
             <div className="flex items-center justify-between gap-4">
               <SkeletonLine w={104} h={9} />
               <div className="flex items-center gap-3">
