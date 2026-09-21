@@ -213,6 +213,71 @@ function descriptorProblems(descriptor) {
       }
     }
   }
+  problems.push(...selectionProblems(d));
+  return problems;
+}
+
+// ── ⚠ THE LAUNCH-SELECTION DECLARATIONS (2026-09-21, U5) ─────────────────────────────────────
+//
+// `runtime/capability.js › storeModelPick` / `› launchModelPick` / `› nativeDimensions` read three
+// descriptor declarations — `models.pick`, `models.dimensions` and `models.dimensionOptions` —
+// and shared storage validates every runtime's launch selection through them. So the descriptor is
+// no longer only a RENDERING table: it is the vocabulary a durable record is checked against, and
+// a malformed one is a record that stores whatever it is handed.
+//
+// ⚠ THESE REFUSE REGISTRATION RATHER THAN HIDING A CONTROL, WHICH IS THE `denyList` PRECEDENT AND
+// NOT THE `deepLink` ONE. A missing `pick` does not degrade to "no model control"; it degrades to
+// a validator with no list, which either stores nothing at all (a picker that silently forgets) or
+// — if a later reader is less careful — stores anything. ⚠ AND A DECLARED DIMENSION WITH NO
+// OPTIONS IS THE EXACT SHAPE F-390 RECORDS: Codex declared `dimensions: ['reasoningEffort']`,
+// nothing said what its values were, and `launch-spec.js` read a `state.reasoningEffort` that had
+// no producer anywhere in the tree — a control that writes nowhere. INVARIANTS §11's rule is that
+// such a control must be ABSENT, so naming a dimension you cannot back is refused at load.
+function selectionProblems(d) {
+  const problems = [];
+  const id = (d && d.id) || '(unknown)';
+  const models = (d && d.models) || null;
+  if (!models || typeof models !== 'object') {
+    problems.push(`${id}: descriptor.models is missing — shared storage validates every model pick `
+      + 'through it, so an adapter without one has no model vocabulary and cannot be registered');
+    return problems;
+  }
+  const pick = models.pick;
+  if (!pick || typeof pick !== 'object') {
+    problems.push(`${id}: descriptor.models.pick is missing — `
+      + 'capability.js › storeModelPick has no list and no pattern to validate against');
+  } else if (pick.kind === 'closed') {
+    if (!Array.isArray(pick.stored) || !pick.stored.length) {
+      problems.push(`${id}: a CLOSED model roster must declare a non-empty models.pick.stored — `
+        + 'membership is the whole check on a closed roster');
+    }
+    if (!Array.isArray(pick.accepted) || !pick.accepted.length) {
+      problems.push(`${id}: a CLOSED model roster must declare a non-empty models.pick.accepted`);
+    }
+  } else if (pick.kind === 'open') {
+    if (typeof pick.pattern !== 'string' || !pick.pattern) {
+      problems.push(`${id}: an OPEN model roster must declare models.pick.pattern — the stored `
+        + 'value becomes a launch argument, so the alphabet is the gate that replaces membership');
+    }
+  } else {
+    problems.push(`${id}: descriptor.models.pick.kind must be "closed" or "open", not `
+      + `${JSON.stringify(pick.kind)}`);
+  }
+  const dims = models.dimensions;
+  if (dims != null && !Array.isArray(dims)) {
+    problems.push(`${id}: descriptor.models.dimensions must be a list or null — `
+      + 'null says "no such dimension", and [] would render an empty control');
+  } else if (Array.isArray(dims)) {
+    const declared = models.dimensionOptions || {};
+    for (const key of dims) {
+      const entry = declared[key];
+      if (!entry || !Array.isArray(entry.options) || !entry.options.length) {
+        problems.push(`${id}: models.dimensions names "${key}" but models.dimensionOptions declares `
+          + 'no options for it — that is a control that writes nowhere (F-390\'s shape). Declare '
+          + 'its values, or drop the dimension: an unbackable capability must be ABSENT.');
+      }
+    }
+  }
   return problems;
 }
 
@@ -318,6 +383,7 @@ module.exports = {
   UNRESTRICTED_PROFILE, // D2: the one profile an empty deny list is a posture rather than a hole
   deepFreeze,
   descriptorProblems,
+  selectionProblems, // U5: the model-pick + native-dimension declarations storage validates against
   runtimeProblems,
   mirrorProblems, // D2: declaration vs. the structure grantDecision actually consumes
   sealAdapter,

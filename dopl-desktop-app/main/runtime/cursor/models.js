@@ -110,6 +110,20 @@ const descriptor = {
   // re-stamps from the session's own pick, and the `dopl/agentCreated` frame carries it so the
   // meter's denominator and the transcript agree about which model ran.
   reStampOnResume: true,
+  // ⚠ THE PICK RULE (2026-09-21, U5) — `open`, for the live-roster reason the Codex lane states in
+  // full. Shared storage keeps the operator's pick as an opaque string after a SHAPE check and
+  // interprets nothing; the value becomes an argument to the platform, so the alphabet is a gate.
+  pick: {
+    kind: 'open',
+    stored: null,
+    accepted: null,
+    canonical: null,
+    absent: '',
+    pattern: '^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$',
+  },
+  // ⚠ null, matching `dimensions: null` above — no model-scoped second dimension, so nothing
+  // renders and nothing is storable.
+  dimensionOptions: null,
 };
 
 module.exports = { models, descriptor, idsFrom, listFn, LIST_TIMEOUT_MS };

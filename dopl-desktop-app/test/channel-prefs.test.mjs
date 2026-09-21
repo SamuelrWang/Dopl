@@ -104,8 +104,20 @@ const FAKE_RUNTIMES = Object.freeze([
 // `runtimes`, never a replacement for it: the popup lists every registered adapter and labels the
 // ones this Mac could not start. The stub reports one of two, so a handler that answered the
 // roster here would fail — see `launch-posture-connected.test.mjs` for the probe's own cases.
+// ⚠ THREE MORE KEYS SINCE 2026-09-21 (U5), ADDITIVE AGAIN: the record VERSION main writes, the
+// whole VERSIONED, RUNTIME-KEYED selection, and the `needs review` sentences for a record this
+// build could not fully honour (empty here — the harness's records are clean). The legacy three
+// keys are unchanged and must stay: every renderer older than U5 feature-probes them by OWN KEY
+// and renders NO row when one is missing.
 const onWire = (pair) => ({
-  ...pair, model: null, runtime: "", runtimes: FAKE_RUNTIMES, defaultRuntime: "claude",
+  ...pair,
+  model: null,
+  selectionVersion: 2,
+  selection: { v: 2, runtime: "", messages: pair.messages, byRuntime: {} },
+  needsReview: [],
+  runtime: "",
+  runtimes: FAKE_RUNTIMES,
+  defaultRuntime: "claude",
   connected: ["claude"],
 });
 
@@ -225,6 +237,14 @@ function bootIpc() {
   const handlers = {};
   const map = {};
   const runtimePicks = {};
+  // U5: the versioned, runtime-keyed record the posture read now also carries, derived from the
+  // same fake map so the two halves of a reply cannot disagree.
+  const SELECTION = (channelId) => ({
+    v: 2,
+    runtime: runtimePicks[channelId] || "",
+    messages: prefs.effectivePosture(map, channelId).messages,
+    byRuntime: {},
+  });
   const prefsStub = {
     // The two ops this section drives, backed by the REAL sliced map ops.
     // ⚠ `effectivePosture` IS THE REAL COMPOSITION, not a re-spelling of it. This stub used to
@@ -236,9 +256,25 @@ function bootIpc() {
       const res = prefs.postureInto(map, channelId, raw);
       return res.ok ? { ok: true } : { ok: false };
     },
+    // ⚠ **THE ONE VALIDATING WRITER SINCE 2026-09-21 (U5)** — `channels:setLaunchPosture` calls
+    // this, not `setLaunchPosture`, because the runtime pick is a FIELD of the same versioned
+    // record now rather than a second store write issued after the pair. Backed by the SAME real
+    // sliced map ops, so what this section drives is still the HANDLER's gates over the real
+    // validator: a rejected write must store nothing, and a non-UUID id must be refused before the
+    // store is touched at all.
+    setLaunchSelection: (channelId, raw) => {
+      const res = prefs.postureInto(map, channelId, raw);
+      return res.ok
+        ? { ok: true, preset: res.preset, selection: SELECTION(channelId), review: [] }
+        : { ok: false };
+    },
+    getLaunchSelection: (channelId) => SELECTION(channelId),
+    getLaunchSelectionDetail: (channelId) => ({
+      selection: SELECTION(channelId), review: [], stored: !!map[channelId],
+    }),
     // Required by registration paths this section does not drive; stubbed so a typo in one
     // surfaces here rather than as a mystery throw.
-    launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
+    launchStartModes: () => ({ tools: "manual", messages: "auto_inbound", native: {} }),
     // ⚠ `getAutoSend` / `setAutoSend` REMOVED 2026-09-06 (item 8) — the module under test no
     // longer exports them, so a stub for them would be describing a surface that is gone.
   };
@@ -313,6 +349,10 @@ function bootIpc() {
     // resolve; this section drives none of its ops, and it is built with the SAME stub so a
     // typo in one of its registration paths still surfaces here.
     if (id === "./session-ipc-ops") return ops;
+    // U5 (2026-09-21): the record SHAPE module. `channel-dir-ipc.js` reads one constant off it —
+    // the version every posture/defaults reply declares — and this section drives the handler's
+    // gates, not the record's shape.
+    if (id === "./launch-selection") return { SELECTION_VERSION: 2 };
     // 🔒 THE `./settings` AND `./session-state` STUBS STOOD HERE AND ARE DELETED (2026-09-07,
     // Samuel's ruling). They backed `settings:getTurnCap` / `settings:setTurnCap` — the cap and
     // the two issuer-keyed defaults the pair shipped over the wire. Both ops are unregistered,
@@ -370,7 +410,19 @@ test("round trip: set then get returns the stored pair", async () => {
   // same way `applied` was. `''` is the DEFAULT adapter — this preset carries no `runtime` key at
   // all, and a write that does not mention one must LEAVE the channel's pick alone rather than
   // clearing it, which is what the own-key test in the handler is for.
-  assert.deepEqual(set, { ok: true, applied: 0, runtime: "" });
+  // ⚠ `preset`, `selection`, `review` AND `selectionVersion` JOINED ON 2026-09-21 (U5), the same
+  // ADDITIVE way. The write goes through ONE validating writer now — the runtime is a field of the
+  // same versioned record rather than a second store write — so a rejected write cannot
+  // half-apply a runtime, and the reply states what was actually stored.
+  assert.deepEqual(set, {
+    ok: true,
+    preset: OK,
+    selection: { v: 2, runtime: "", messages: OK.messages, byRuntime: {} },
+    review: [],
+    applied: 0,
+    runtime: "",
+    selectionVersion: 2,
+  });
   assert.deepEqual(await handlers["channels:getLaunchPosture"](event, CH_A), onWire(OK));
 });
 

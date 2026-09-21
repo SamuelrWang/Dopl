@@ -51,179 +51,25 @@
 // This module OWNS the storage + validation. The IPC surface lives in channel-dir-ipc.js.
 
 const Store = require('electron-store');
-// ⚠ THE MODEL'S FROZEN LIST LIVES IN `session-model.js`, NOT HERE, and this file only validates
-// against it — the same discipline the two axes follow against `session-profiles.js`. That module
-// is PURE (no electron), so requiring it costs this one nothing.
-const { normalizeModelId } = require('./session-model');
+// ⚠ **THE RECORD'S SHAPE AND ITS VALIDATION MOVED TO `main/launch-selection.js` ON 2026-09-21
+// (U5)**, at the §1 cap and on a real seam: that file changes when the SHAPE of a stored launch
+// selection changes — its version, what migrates into it, what an unreadable version falls back to
+// — where this one changes when a CHANNEL PREFERENCE moves. The whole `CHANNEL-PREFS-VALIDATE`
+// fence went with it and is re-exported below, so no caller and no suite moved; the block is
+// sliced from its new home by `test/_channel-prefs-block.mjs`.
+const selection = require('./launch-selection');
+// ⚠ THE REGISTRY, FOR THE ADAPTER VOCABULARY A SELECTION IS VALIDATED AGAINST. It is
+// electron-free at load by contract (`main/runtime/contract.js`), so requiring it costs this one
+// nothing — and it is what replaced `require('./session-model')` here. **That import was the bug
+// U5 exists to remove**: it validated EVERY runtime's model against the DEFAULT runtime's frozen
+// id list, so a Codex pick could not be stored at all.
+const runtimeRegistry = require('./runtime');
 const { diag } = require('./diag');
 
 const store = new Store();
 
-// ─── BEGIN CHANNEL-PREFS-VALIDATE (pure; unit-tested via source extraction) ──
-// No electron/fs/store/require refs below, so test/channel-prefs.test.mjs can
-// slice this block and evaluate it verbatim (same pattern as CHANNEL-DIR-RESOLVE).
+const ctx = () => runtimeRegistry.selectionContext();
 
-// The FROZEN enums. They mirror session-profiles.js TOOL_MODES / MESSAGE_MODES;
-// a value outside them is not "unknown, treat as default" on the WRITE path — it
-// is a rejected write, so a hostile or version-skewed page cannot park a garbage
-// posture that some later reader coerces in an unexpected direction.
-const TOOL_MODES = ['manual', 'accept_edits', 'auto', 'bypass'];
-const MESSAGE_MODES = ['ask', 'auto_inbound', 'auto_outbound', 'auto_both'];
-
-// The most restrictive pair — what an unset channel resolves to.
-const DEFAULT_PRESET = { tools: 'manual', messages: 'ask' };
-
-// Validate an arbitrary value into a preset, or null when it is not one. BOTH
-// axes must be present and known: a half-valid pair is rejected whole, because a
-// partially applied posture is exactly the "one switch, two meanings" confusion
-// the two axes exist to remove. Extra properties are dropped (nothing else is
-// ever stored). ⚠ It added "including any `at` the caller tried to supply, so a renderer cannot
-// mint itself an arm that never expires" until 2026-08-20: there is no arm and no `at` — the
-// single-use record is deleted (F-233) and what this validates is the DURABLE posture, which
-// has no timestamp to forge. Dropping extra properties is still the rule; the reason is simply
-// that nothing else is ever stored.
-function normalizePreset(raw) {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-  const tools = typeof raw.tools === 'string' ? raw.tools : '';
-  const messages = typeof raw.messages === 'string' ? raw.messages : '';
-  if (TOOL_MODES.indexOf(tools) === -1) return null;
-  if (MESSAGE_MODES.indexOf(messages) === -1) return null;
-  // ── ⚠ THE MODEL IS A THIRD FIELD AND IT IS NOT A THIRD AXIS (2026-08-22, Samuel's ruling) ──
-  //
-  // It rides the same record because it is the same decision — what the operator's own agent
-  // starts as when they press Launch — but it is NOT permission. The two axes decide whether the
-  // operator is ASKED; this decides which model answers. Nothing about containment reads it, and
-  // it must never be folded into the pair the H2 argument is about.
-  //
-  // ⚠ IT VALIDATES SOFT, WHERE THE AXES VALIDATE HARD. An unknown TOOL or MESSAGE value rejects
-  // the WHOLE write (a half-applied posture is the "one switch, two meanings" confusion the two
-  // axes exist to remove); an unknown MODEL is simply ABSENT, which is the SDK default and is
-  // exactly today's behaviour for every channel that has never chosen one. Failing the whole
-  // write would mean a desktop that has not heard of a newer model could not store a posture at
-  // all — refusing the permission pair over a model name is the wrong trade in both directions.
-  // ⚠ AND ABSENT IS NOT A MEMBER: the key is OMITTED rather than written as '' or null, so a
-  // record from before this field and a record whose model was cleared are the same record.
-  const model = normalizeModelId(raw.model);
-  return model
-    ? { tools: tools, messages: messages, model: model }
-    : { tools: tools, messages: messages };
-}
-
-// The restrictive pair every non-consenting launch shape gets. A helper rather
-// than a bare literal so there is ONE spelling of "no posture was approved".
-function defaultPreset() {
-  return { tools: DEFAULT_PRESET.tools, messages: DEFAULT_PRESET.messages };
-}
-
-// ── THE DURABLE LAUNCH POSTURE (2026-08-20) ─────────────────────────────────
-// A SECOND, SEPARATE pair with the same two axes and the OPPOSITE lifetime, and
-// the difference is the whole point of both.
-//
-// ⚠ READ THE H2 BLOCK ABOVE BEFORE TOUCHING ANY OF THIS. What H2 forbids is not
-// DURABILITY — it is an AMBIENT read at a spawn no human is attending.
-// `session-engine.startSession` is the single construction site for every spawn
-// shape, so a durable pair folded in THERE re-armed peer-driven wakes, crash
-// resumes, recreated parked shells and requester auto-opens alike: bypass /
-// auto_both chosen once became a standing, clickless grant for the channel.
-//
-// SO THE SPLIT IS BY CONSUMER, NOT BY LIFETIME, AND IT IS NOT NEGOTIABLE:
-//   THE ARM (above)      single use, 30-min TTL, ONE consumer —
-//                        `trigger.js › inboundApproved`, the consent-APPROVED
-//                        responder launch. A peer's request; a human clicking
-//                        Allow on a card they are looking at right now.
-//   THIS POSTURE         durable, no TTL, ONE consumer —
-//                        `session-ipc-ops.js › sessions:launch`, the Agents
-//                        tab's own button. The operator launching THEIR OWN
-//                        agent onto THEIR OWN thread, with no peer involved and
-//                        no consent row raised, because the click IS the
-//                        consent.
-//
-// ⚠ NEITHER IS EVER READ BY `startSession` ITSELF. Both travel as `spec.startModes`,
-// handed in per launch by a caller executing a decision a human is making right
-// now; anything that passes nothing inherits the reducer's manual/ask. A bare
-// recreate, reopen, resume or peer wake passes nothing and must keep passing
-// nothing. `test/session-preset-start.test.mjs` pins that this module's
-// `getLaunchPosture` appears in `channel-dir-ipc.js` and NOWHERE ELSE.
-//
-// WHY IT IS DURABLE AT ALL. It is rendered on the channel's SETTINGS tab beside
-// the tool profile, the working folder and auto-send — all durable — and the
-// single-use arm shown there was indistinguishable from a setting: the operator
-// picked bypass, the first launch spent it (or 30 minutes passed), and every
-// later session silently started manual/ask while the control still read
-// "Bypass". A fuse rendered as a switch is worse than either.
-//
-// WHAT IT CANNOT DO. It is SUPERVISION, never CONTAINMENT: `bypass` is still
-// bounded by the channel's tool profile and by session-profiles' SESSION_HARD_DENY,
-// and Axis B still refuses to let ANY tool posture send a message. It is
-// local-only (electron-store), never POSTed, never in a channel message.
-// Default OFF-equivalent: an absent, corrupt or half-valid record reads
-// manual/ask, the same restrictive floor an unset arm has.
-
-// The channel's stored posture, or null when nothing valid is stored. ⚠ NO `at`
-// and NO expiry check — that asymmetry with `readArmFrom` is the entire
-// difference between the two records and must not be "tidied" into symmetry.
-function readPostureFrom(map, channelId) {
-  if (!map || !channelId) return null;
-  return normalizePreset(map[channelId]);
-}
-
-// THE EFFECTIVE POSTURE AS THE RENDERER SEES IT — the stored pair or the restrictive default,
-// and ALWAYS carrying a `model` key.
-//
-// ⚠ THE KEY IS PRESENT ON THE WAY OUT EVEN WHEN THE STORED RECORD OMITS IT, and that asymmetry
-// with `readPostureFrom` is the whole point rather than an inconsistency to tidy away. STORAGE
-// omits the key so a record from before this field and a record whose model was cleared are the
-// same record (see `normalizePreset`). The WIRE cannot: the web's capability probe
-// (`lib/permission-modes.ts › hasModelKey`) is an OWN-KEY test, and it reads a missing key as
-// "this desktop has no model concept" and renders NO model row at all. Answering the pair alone
-// therefore told every channel that had not already stored a model that the feature did not
-// exist — and the only way to store one is the row that was never drawn. `model: null` is this
-// build saying "I know the field; nothing is chosen; the SDK default applies", which is a
-// different fact from silence (INVARIANTS §11 — UNKNOWN is not EMPTY).
-function effectivePosture(map, channelId) {
-  const stored = readPostureFrom(map, channelId);
-  const base = stored || defaultPreset();
-  return { tools: base.tools, messages: base.messages, model: (stored && stored.model) || null };
-}
-
-// Write the pair in place. { ok: false } and NO mutation when the id is missing
-// or either axis is unknown — fail-closed, so a rejected write can never leave a
-// half-applied posture behind.
-function postureInto(map, channelId, raw) {
-  const preset = normalizePreset(raw);
-  if (!map || !channelId || !preset) return { ok: false };
-  // ── ⚠ THE MODEL IS CARRIED THROUGH A WRITE THAT DOES NOT MENTION IT (2026-09-05) ───────────
-  // THE KEY'S PRESENCE IS THE SIGNAL, NOT ITS VALUE — the RUNTIME's rule
-  // (`channel-dir-ipc.js › channels:setLaunchPosture` branches on `hasOwnProperty`), applied on
-  // the axis the runtime copied it FROM. `''` is a real supplied value here (the "Default" row:
-  // clear the pick, the SDK's own model), and so is an unrecognised id, which validates SOFT to
-  // the same absence — both are the caller SAYING something and both still clear. What must not
-  // clear is a write that never carried the field: this record is rewritten whole on every
-  // posture change, so a Permissions or Sends pick from a surface with no model concept dropped
-  // the operator's stored model on the floor, and the next launch quietly ran the SDK default
-  // with the Settings row still reading Opus. Absent now means UNCHANGED (INVARIANTS §11 —
-  // UNKNOWN is not EMPTY), which is what makes "launches send no model unless one was explicitly
-  // picked" a statement about the PICK rather than about who happened to write last.
-  const model = Object.prototype.hasOwnProperty.call(raw, 'model')
-    ? preset.model
-    : (readPostureFrom(map, channelId) || {}).model;
-  // ⚠ WRITTEN FIELD BY FIELD, never `{...preset}`: this is the boundary that guarantees nothing
-  // but the validated members is ever stored, and a spread would carry whatever `normalizePreset`
-  // grew next. `model` is omitted when absent (see above) so the stored shape is unchanged for
-  // every channel that has not chosen one.
-  // ⚠ AND THE CARRIED VALUE IS RE-VALIDATED BY CONSTRUCTION: it can only have come from
-  // `readPostureFrom`, which is `normalizePreset` on the stored record, so nothing reaches the
-  // store that did not pass the same frozen id list on its way in.
-  const next = model
-    ? { tools: preset.tools, messages: preset.messages, model: model }
-    : { tools: preset.tools, messages: preset.messages };
-  map[channelId] = next;
-  // ⚠ THE ANSWER IS WHAT WAS STORED, not what was asked for — a caller that omitted the model is
-  // told which one survived, rather than being handed back its own silence to log.
-  return { ok: true, preset: next };
-}
-
-// ─── END CHANNEL-PREFS-VALIDATE ─────
 
 // ── AUTO-SEND (2026-08-20, when the session window was deleted) — a DURABLE per-channel
 // setting: it narrows nothing (it governs whether the operator's OWN agent's reply posts
@@ -262,66 +108,14 @@ function postureInto(map, channelId, raw) {
 // ⚠ IF SOMETHING STILL NEEDS THIS: it wants `getLaunchPosture(channelId).messages`. There is no
 // separate send flag any more, on purpose.
 
-// ── ⚠ AGENT CHAINING (2026-08-31, Samuel's ruling) — THE ONE-GENERATION BOUND, MADE A SETTING ──
-//
-// `session-own-launch.js › MAX_LAUNCH_DEPTH` limits a chain of launches to ONE generation: an
-// operator's orchestrator may staff itself and its staff may not staff themselves. Samuel ruled
-// that bound a CHANNEL SETTING after a field run where five worker-launch attempts by a launched
-// agent were all refused — the operator wanted an orchestrator that staffs supervisors that staff
-// workers, in the ONE room they run orchestrators in.
-//
-// DEFAULT OFF, which is the CURRENT bound. An absent, corrupt or non-boolean record reads false,
-// the same fail-closed rule auto-send, the template approvals and the two orchestrator toggles all
-// follow — so nothing about a machine that has never seen this key changes.
-//
-// ⚠ IT IS PER CHANNEL AND IT IS LOCAL, for auto-send's reason and for `orchestratorLaunch`'s. A
-// spawned session has `Bash` and this operator's device token on disk (§6), so a SERVER-STORED
-// version of this flag is one an agent holding the operator's own credential could flip for
-// itself. There is no route, no MCP op and no column, deliberately.
-//
-// ⚠ WHAT IT DOES **NOT** DO, and the list is the whole safety argument. It lifts a DEPTH bound and
-// nothing else. A launch still needs, unchanged and in conjunction: the Axis-A `bypass` posture,
-// the Axis-B outbound half, the machine-wide `orchestratorLaunchEnabled` consent that turns a
-// directive into a process, this channel's tool profile, `SESSION_HARD_DENY`, and the machine's
-// `MAX_CONCURRENT_SESSIONS` ceiling. With this ON and any one of those closed, nothing launches.
-//
-// ⚠ AND WITH IT ON THERE IS NO GENERATION BOUND LEFT — SAID PLAINLY RATHER THAN IMPLIED. Depth
-// cannot cross the wire (`session-own-launch.js`'s header carries the argument), so "N
-// generations" is not a bound this build can express. What stands in its place is stated where it
-// is enforced: `MAX_CONCURRENT_SESSIONS` (fifteen live sessions, instantaneous — 6 until 2026-09-01) and
-// `launch-budget.js` (a rolling per-channel launch budget, over time). Neither is a generation
-// count and neither is described as one.
-const AGENT_CHAIN_KEY = 'channelAgentChain'; // { [channelId]: true }
-
-/** May a LAUNCHED session in this channel launch further agents? Default false. */
-function getAgentChain(channelId) {
-  if (!channelId) return false;
-  try {
-    const map = store.get(AGENT_CHAIN_KEY);
-    return !!(map && typeof map === 'object' && map[channelId] === true);
-  } catch (_err) {
-    return false; // an unreadable store is not a grant
-  }
-}
-
-/** Persist the channel's chaining setting. ⚠ OFF DELETES THE KEY — the same "absent and false are
- *  the same record" rule the auto-send map follows, so nothing distinguishes never-set from
- *  turned-off and no reader can grow a third state to get wrong. */
-function setAgentChain(channelId, on) {
-  if (!channelId) return false;
-  try {
-    const map = store.get(AGENT_CHAIN_KEY);
-    const next = map && typeof map === 'object' && !Array.isArray(map) ? { ...map } : {};
-    if (on === true) next[channelId] = true;
-    else delete next[channelId];
-    store.set(AGENT_CHAIN_KEY, next);
-  } catch (err) {
-    diag('channel-prefs: could not persist agent chaining —', err && err.message);
-    return false;
-  }
-  diag('channel-prefs: agentChain', String(channelId).slice(0, 8), on === true ? 'on' : 'off');
-  return on === true;
-}
+// ⚠ **AGENT CHAINING MOVED TO `main/channel-agent-chain.js` ON 2026-09-21 (U5)**, at the §1 cap
+// and on the same seam the two MCP consents and the template approval moved on: it changes when
+// the rules for how far a chain of launches may reach change, where the rest of this file changes
+// when the shape of a channel's launch settings does — and it is the only record in this family
+// that lifts a BOUND rather than storing a posture or a pick. Its header carries the whole safety
+// argument (what it does NOT lift, and what stands in for a generation count when it is on).
+// Re-exported below, so no caller moved.
+const agentChain = require('./channel-agent-chain');
 
 // ⚠ **THE TWO MCP CONSENTS MOVED TO `main/orchestrator-consent.js` ON 2026-08-31**, at the
 // §1 cap and on a real seam: they change when a capability an EXTERNAL agent may ask for is
@@ -337,25 +131,73 @@ const orchestratorConsent = require('./orchestrator-consent');
 // a channel at all. Re-exported below, so no caller moved.
 const templateApproval = require('./template-approval');
 
-// ── Storage for the durable posture ─────────────────────────────────────────
-const POSTURE_KEY = 'channelLaunchPosture'; // { [channelId]: { tools, messages } }
+// ── Storage for the durable selection ─────────────────────────────────────
+//
+// ⚠ **TWO KEYS, ONE AUTHORITY, AND THE SECOND IS A MIRROR RATHER THAN A FALLBACK (2026-09-21,
+// U5).** `channelLaunchSelection` is the VERSIONED, RUNTIME-KEYED record and it is the only thing
+// a read trusts. `channelLaunchPosture` — the pre-U5 `{tools, messages, model}` pair — survives
+// for exactly two jobs:
+//
+//   MIGRATION  a channel with no selection record reads its legacy pair (and `channel-runtime.js`'s
+//              separately stored pick) through `launch-selection.js › fromLegacy`. **Reading
+//              never writes**, so a machine that only ever launches keeps both records untouched
+//              and can be downgraded with nothing lost.
+//   DOWNGRADE  every selection WRITE re-derives the legacy pair for the SELECTED runtime and
+//              stores it too. An older build reads the pair and gets the settings actually in
+//              force, instead of whatever was last written before the upgrade.
+//
+// ⚠ THE MIRROR IS NEVER READ WHILE A SELECTION RECORD PARSES. If it were, the two could disagree
+// and nothing would say which won — which is the failure the auto-send/`messages` overlap already
+// cost this tree once (2026-09-06, item 8).
+const POSTURE_KEY = 'channelLaunchPosture'; // LEGACY MIRROR: { [channelId]: { tools, messages, model? } }
+const SELECTION_KEY = 'channelLaunchSelection'; // { [channelId]: { v, runtime, messages, byRuntime } }
+
+function readMap(key) {
+  try {
+    const map = store.get(key);
+    return map && typeof map === 'object' && !Array.isArray(map) ? map : {};
+  } catch (_err) {
+    return {}; // an unreadable store is the RESTRICTIVE selection, never a grant
+  }
+}
 
 function getAllPostures() {
-  const map = store.get(POSTURE_KEY);
-  return map && typeof map === 'object' && !Array.isArray(map) ? map : {};
+  return readMap(POSTURE_KEY);
 }
 
 /**
- * THE EFFECTIVE launch posture for this channel — the stored pair, or the
- * restrictive default. ⚠ NEVER null, unlike `getPermissionPreset`: an arm that
- * is absent has NOT been chosen and the card must not claim it was, but a
- * durable setting that is absent IS manual/ask, and saying so is the truth.
- * Reading never writes.
- * ⚠ AND IT ALWAYS CARRIES `model` (2026-08-22) — `null` when none is stored. See
- * `effectivePosture` for why the WIRE shape and the STORED shape differ here.
+ * THE CHANNEL'S DURABLE LAUNCH SELECTION — `{ selection, review, stored }`, never null.
+ *
+ * ⚠ MIGRATION HAPPENS ON THE READ AND IS NOT PERSISTED BY IT. A read that wrote would turn every
+ * launch, every Settings mount and every posture probe into a store write, and would mean a
+ * DOWNGRADE lost the operator's pre-U5 settings the first time the new build looked at them.
+ * ⚠ `review` IS THE `needs review` STATE THE PLAN ASKS FOR. It is never empty on a record this
+ * build could not fully honour, and the settings it describes are always the narrower ones — there
+ * is no path here that answers a WIDER setting than what was stored.
+ */
+function getLaunchSelectionDetail(channelId) {
+  if (!channelId) return { selection: selection.emptySelection(), review: [], stored: false };
+  const c = ctx();
+  const raw = readMap(SELECTION_KEY)[channelId];
+  if (raw != null) return selection.normalizeSelection(c, raw);
+  // ⚠ LAZY, AND ONLY HERE. `channel-runtime.js` reads its pick THROUGH this function now, so a
+  // top-level require there plus one here would cycle; the legacy key is read directly instead,
+  // which is also the only place in this tree that still touches it for a decision.
+  return selection.fromLegacy(c, getAllPostures()[channelId], readMap('channelRuntime')[channelId]);
+}
+
+/** The selection alone, for the callers that cannot act on a review. */
+const getLaunchSelection = (channelId) => getLaunchSelectionDetail(channelId).selection;
+
+/**
+ * THE EFFECTIVE launch posture for this channel, in the LEGACY WIRE SHAPE — the selected runtime's
+ * pair, or the restrictive default. ⚠ NEVER null: a durable setting that is absent IS the
+ * narrowest pair, and saying so is the truth. Reading never writes.
+ * ⚠ AND IT ALWAYS CARRIES `model` — `null` when none is stored. See
+ * `launch-selection.js › toLegacyPosture` for why the WIRE shape and the STORED shape differ.
  */
 function getLaunchPosture(channelId) {
-  return effectivePosture(getAllPostures(), channelId);
+  return selection.toLegacyPosture(ctx(), getLaunchSelection(channelId));
 }
 
 /**
@@ -372,24 +214,84 @@ function getLaunchPosture(channelId) {
  * ⚠ IT DISCLOSES NO POSTURE, only whether one was written, so it is not a second reader of the
  * permission pair in the sense the H2 census is about (`channel-runtime.test.mjs`,
  * `agent-model-selection.test.mjs`): nothing can widen a launch with a boolean.
+ * ⚠ **IT ASKS BOTH RECORDS, AND THAT IS WHAT KEEPS THE WRITE-ONCE SEED HONEST ACROSS THE
+ * MIGRATION** (`agent-defaults.js › seedChannel` refuses when this answers true). A channel
+ * configured before U5 has only the legacy pair; reading the new key alone would call it
+ * unconfigured and let the profile defaults overwrite settings its operator chose.
  */
 function hasLaunchPosture(channelId) {
-  return readPostureFrom(getAllPostures(), channelId) !== null;
+  if (!channelId) return false;
+  if (readMap(SELECTION_KEY)[channelId] != null) return true;
+  return selection.readPostureFrom(getAllPostures(), channelId) !== null;
 }
 
 /**
- * Persist the channel's launch posture. { ok: true } only when BOTH axes
- * validated; an unknown value on either writes NOTHING.
- * ⚠ SPENT BY NOTHING. There is no consume twin on purpose — that is what makes
- * this the durable half of the split described above.
+ * Persist a PATCH to the channel's launch selection. `{ ok, preset, selection, review }`.
+ *
+ * ⚠ **OWN-KEY, LIKE THE RUNTIME PICK IT NOW CARRIES.** A key the caller did not send is left
+ * alone; `''` is a real "clear it". The pre-U5 writer rewrote the whole pair on every change,
+ * which is how a Permissions pick from a surface with no model concept dropped the operator's
+ * stored model (2026-09-05).
+ * ⚠ **`{ ok: false }` AND NO MUTATION WHEN THE LEGACY PAIR IS HALF-VALID.** A caller sending
+ * `tools`/`messages` in the pre-U5 way still gets the whole-pair-or-nothing rule, because a
+ * partially applied posture is the "one switch, two meanings" confusion the two axes exist to
+ * remove. A caller sending only runtime/model/native is not making that claim and is not held to
+ * it.
+ * ⚠ **EVERY VALUE IS RE-VALIDATED HERE, IN MAIN, AGAINST THE SELECTED ADAPTER.** The app window
+ * hosts remote content, so a renderer one version ahead is a hostile input: an unregistered
+ * runtime, a mode outside the adapter's declared options, a model outside its roster/alphabet and
+ * a native key the adapter cannot spend are each refused or floored on THIS side of the bridge.
+ */
+function setLaunchSelection(channelId, patch) {
+  if (!channelId) return { ok: false };
+  const p = patch && typeof patch === 'object' && !Array.isArray(patch) ? patch : {};
+  const c = ctx();
+  const current = getLaunchSelection(channelId);
+  // ⚠ FAIL-CLOSED BEFORE ANYTHING IS WRITTEN. A rejected write mutates nothing, so it can never
+  // leave a half-applied record behind — and the SPA's hook reverts its optimistic pick on
+  // `{ok:false}`, which only works if the refusal precedes the store.
+  const rejected = selection.patchRejections(c, current, p);
+  if (rejected.length) {
+    diag('channel-prefs: refused a launch-selection write —', rejected.join('; '));
+    return { ok: false, rejected: rejected };
+  }
+  const res = selection.patchSelection(c, current, p);
+  const preset = selection.toLegacyPosture(c, res.selection);
+  try {
+    const map = readMap(SELECTION_KEY);
+    map[channelId] = res.selection;
+    store.set(SELECTION_KEY, map);
+    // THE DOWNGRADE MIRROR — see the block above. Best-effort: a mirror that fails costs an older
+    // build a stale read, never this build a lost setting, so it does not fail the write.
+    const legacy = getAllPostures();
+    legacy[channelId] = preset.model
+      ? { tools: preset.tools, messages: preset.messages, model: preset.model }
+      : { tools: preset.tools, messages: preset.messages };
+    store.set(POSTURE_KEY, legacy);
+  } catch (err) {
+    diag('channel-prefs: could not persist the launch selection —', err && err.message);
+    return { ok: false };
+  }
+  diag('channel-prefs selection', String(channelId).slice(0, 8),
+    res.selection.runtime || '(default)', preset.tools, preset.messages);
+  return { ok: true, preset: preset, selection: res.selection, review: res.review };
+}
+
+/**
+ * Persist the channel's launch posture — the LEGACY WRITE NAME, kept because it is what
+ * `channel-dir-ipc.js › channels:setLaunchPosture` and `agent-defaults.js › seedChannel` call.
+ * ⚠ SPENT BY NOTHING. There is no consume twin on purpose — that is what makes this the durable
+ * half of the split described above.
  */
 function setLaunchPosture(channelId, raw) {
-  const map = getAllPostures();
-  const res = postureInto(map, channelId, raw);
-  if (!res.ok) return { ok: false };
-  store.set(POSTURE_KEY, map);
-  diag('channel-prefs posture', String(channelId).slice(0, 8), res.preset.tools, res.preset.messages);
-  return { ok: true, preset: res.preset };
+  // ⚠ THE LEGACY WRITE REQUIRED BOTH AXES AND THIS KEEPS THAT, because its callers send both and
+  // a pre-U5 renderer sending one of them means something it cannot mean here. `setLaunchSelection`
+  // itself is own-key — that is what lets a native-settings write leave the pair alone.
+  const p = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const hasTools = Object.prototype.hasOwnProperty.call(p, 'tools');
+  const hasMessages = Object.prototype.hasOwnProperty.call(p, 'messages');
+  if (hasTools !== hasMessages) return { ok: false };
+  return setLaunchSelection(channelId, p);
 }
 
 /**
@@ -432,15 +334,32 @@ function windowlessMessageMode(channelId, picked) {
  * derivation above. The one place the durable posture becomes a spawn.
  */
 function launchStartModes(channelId) {
-  const posture = getLaunchPosture(channelId);
+  const c = ctx();
+  const sel = getLaunchSelection(channelId);
+  const rec = selection.activeRecord(c, sel);
   return {
-    tools: posture.tools,
-    messages: windowlessMessageMode(channelId, posture.messages),
+    // ⚠ IN THE SELECTED RUNTIME'S OWN WORDS SINCE 2026-09-21 (U5), where this used to hand over
+    // the DEFAULT runtime's vocabulary on every runtime. Nothing observable changed for a launch:
+    // the gate already coerced the value through `capability.js › normalizeToolMode` against the
+    // session's own descriptor, so `manual` on a Codex channel already fail-closed to Codex's
+    // narrowest. What changed is that the operator can now STORE the Codex word.
+    tools: rec.tools || c.narrowestToolFor(sel.runtime),
+    messages: windowlessMessageMode(channelId, sel.messages),
+    // ⚠ **THE NATIVE SETTINGS, AND THIS IS THE ONE PLACE THEY BECOME A SPAWN** (U5). Codex's
+    // `sandbox_mode` and reasoning effort had a READER (`runtime/codex/launch-spec.js › nativePair`)
+    // and **no producer anywhere in the tree** — F-390's shape exactly, a control that writes
+    // nowhere. They travel as `spec.startModes`, handed in per launch by a caller executing a
+    // decision a human is making right now, which is the SAME rule and the same single consumer
+    // the permission pair has (H2). A shape that passes nothing inherits the runtime's own
+    // declared defaults, exactly as it does for the pair.
+    // ⚠ CORE NEVER LOOKS INSIDE THIS BAG. It is `{ <declared key>: <declared value> }` validated
+    // by the selected adapter and stamped verbatim; the adapter's launch spec is its only reader.
+    native: rec.native ? { ...rec.native } : {},
   };
 }
 
 /**
- * THE CHANNEL'S CHOSEN MODEL, as a full id, or '' for the SDK default (2026-08-22).
+ * THE CHANNEL'S CHOSEN MODEL FOR THE RUNTIME IT WILL LAUNCH ON, or '' for the platform default.
  *
  * ⚠ IT IS A SEPARATE READER FROM `getLaunchPosture` ON PURPOSE, AND THE REASON IS H2. That
  * function has exactly ONE consumer — `session-ipc-ops.js › sessions:launch`, the operator's own
@@ -449,10 +368,42 @@ function launchStartModes(channelId) {
  * nobody is attending). The MODEL is not that: it grants nothing, widens nothing, and reaches no
  * gate, so the PEER-TRIGGERED lane (`trigger.js`) may inherit it and must not be able to inherit
  * the pair alongside it. Two readers, so the census stays honest about which one is which.
+ *
+ * ⚠ **RUNTIME-SCOPED SINCE 2026-09-21 (U5).** It used to read ONE global field, which is why
+ * `channel-runtime.js` had to CLEAR it on every runtime switch: a Claude id left behind on a Codex
+ * channel sat ABOVE the platform default in the launch precedence chain, so the stale id WON and
+ * Codex was asked for a model it has never heard of. With one record per runtime there is no stale
+ * id to win — and switching back restores the pick instead of finding it deleted.
  */
 function getLaunchModel(channelId) {
-  const posture = readPostureFrom(getAllPostures(), channelId);
-  return (posture && posture.model) || '';
+  const c = ctx();
+  return selection.activeRecord(c, getLaunchSelection(channelId)).model || '';
+}
+
+/**
+ * THE CHANNEL'S MODEL AS THE LAST LINK OF A LAUNCH'S MODEL PRECEDENCE CHAIN — the value a spawn is
+ * stamped with when no sheet pick and no template default outranked it.
+ *
+ * ⚠ **IT EXISTS BECAUSE THE CALL SITES USED TO ALIAS THE STORED ID THROUGH THE DEFAULT RUNTIME'S
+ * TABLE** (`sessionModel.aliasForModelId(channelPrefs.getLaunchModel(id))`). That was correct while
+ * only one roster could ever be stored; now that a Codex id can be, aliasing it answers the default
+ * runtime's "no pick" member and the operator's choice is silently dropped. Resolving it HERE,
+ * against the channel's own runtime, is what keeps one rule in one place across the three launch
+ * lanes — `session-launch-op.js › launchFromButton`, `trigger.js › launchResponderSession` and the
+ * orchestrator directive lane.
+ *
+ * ⚠ **IT ENDS THE CHAIN RATHER THAN STEPPING ASIDE, AND THAT IS THE EXPRESSION IT REPLACED, VERB
+ * FOR VERB.** `chainModel`'s `''` means "keep going" (F-285) and belongs to the links ABOVE this
+ * one — a template naming a model this build does not know must fall THROUGH to the channel. This
+ * is the bottom link: when nothing is stored it answers the runtime's own "no pick" member
+ * (`descriptor.models.defaultMeansAbsent`), which is what every spawn got before a picker existed.
+ */
+function getLaunchModelLink(channelId) {
+  const sel = getLaunchSelection(channelId);
+  const picked = selection.activeRecord(ctx(), sel).model || '';
+  return runtimeRegistry.capability.launchModelPick(
+    runtimeRegistry.descriptorFor(sel.runtime), picked
+  );
 }
 
 module.exports = {
@@ -462,9 +413,9 @@ module.exports = {
   // 2026-08-31 (Samuel's ruling): the per-channel AGENT-CHAINING setting — the one-generation
   // launch bound, made toggleable. Default OFF = today's bound. The block above states what it
   // lifts, what it does not, and what stands in for a generation count when it is on.
-  AGENT_CHAIN_KEY,
-  getAgentChain,
-  setAgentChain,
+  AGENT_CHAIN_KEY: agentChain.AGENT_CHAIN_KEY,
+  getAgentChain: agentChain.getAgentChain,
+  setAgentChain: agentChain.setAgentChain,
   // THE MACHINE-WIDE STANDING CONSENTS for the two MCP-driven capabilities — launching an
   // agent (2026-08-22) and DIRECTING one (2026-08-31). ⚠ RE-EXPORTED from
   // `orchestrator-consent.js` (§1 split), which carries why "outside the server entirely" is
@@ -481,19 +432,28 @@ module.exports = {
   TEMPLATE_APPROVAL_KEY: templateApproval.TEMPLATE_APPROVAL_KEY,
   isTemplateApproved: templateApproval.isTemplateApproved,
   approveTemplate: templateApproval.approveTemplate,
-  // The DURABLE launch posture — see the block above for why it is not the arm.
-  readPostureFrom,
-  effectivePosture, // 2026-08-22: the WIRE shape — the pair plus an always-present `model`
-  postureInto,
+  // The DURABLE launch selection. ⚠ THE SHAPE AND ITS VALIDATION LIVE IN
+  // `main/launch-selection.js` (§1 split, 2026-09-21 — U5); the five names below are re-exported
+  // from there so no caller and no suite moved, and they are the LEGACY READER for one
+  // compatibility window, not the write path.
+  readPostureFrom: selection.readPostureFrom,
+  effectivePosture: selection.effectivePosture, // the pre-U5 WIRE shape
+  postureInto: selection.postureInto,
+  TOOL_MODES: selection.TOOL_MODES,
+  MESSAGE_MODES: selection.MESSAGE_MODES,
+  DEFAULT_PRESET: selection.DEFAULT_PRESET,
+  normalizePreset: selection.normalizePreset,
+  defaultPreset: selection.defaultPreset,
+  POSTURE_KEY, // the legacy mirror's key — see the storage block
+  SELECTION_KEY, // U5: the versioned, runtime-keyed record — the one a read trusts
+  getLaunchSelection,
+  getLaunchSelectionDetail, // U5: the selection PLUS its `needs review` sentences
+  setLaunchSelection,
   getLaunchPosture,
   hasLaunchPosture, // 2026-09-07: presence only — see the block above and `session-private.js`
   setLaunchPosture,
   windowlessMessageMode,
   launchStartModes,
   getLaunchModel, // 2026-08-22: the model half, readable WITHOUT the permission pair
-  TOOL_MODES,
-  MESSAGE_MODES,
-  DEFAULT_PRESET,
-  normalizePreset,
-  defaultPreset,
+  getLaunchModelLink, // U5: the same pick, resolved as a launch-chain link on its OWN runtime
 };

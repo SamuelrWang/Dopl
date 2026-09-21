@@ -38,7 +38,15 @@
 // OBSERVER below the block is the imperative half: it takes the session object and a dispatch,
 // holds no module state, and reaches only the shared diag logger.
 
-const { diag } = require('./diag');
+// ⚠ **THIS MODULE REQUIRES NOTHING, AND THAT IS NOW LOAD-BEARING (2026-09-21, U5).** It carried
+// `const { diag } = require('./diag')` from the days of the `› observe` watcher; that watcher left
+// on 2026-08-31 and the import went unused, but `diag.js` requires `electron` at its top level, so
+// the dead line made this file un-loadable outside an Electron main process. `main/runtime/
+// claude/models.js` had to reach it through a LAZY `modelTable()` for exactly that reason, and the
+// Claude descriptor could therefore not DECLARE its own model vocabulary — which is what forced
+// every shared storage module to import this file's enums directly and validate a CODEX pick
+// against them. Dropping one dead require is what let the ids move behind the adapter.
+// ⚠ SO DO NOT ADD A REQUIRE HERE. If this file ever needs to log, hand the logger in.
 
 // ─── BEGIN SESSION-MODEL (pure; unit-tested via source extraction) ───────────
 

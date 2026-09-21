@@ -53,6 +53,22 @@ const isClassifiedTool = (toolName, runtimeId) =>
 // BEFORE a runtime is chosen, so there is one answer to give them today. When a second adapter
 // registers, the UI renders `descriptor.toolMode.options` per agent (§3.1) and these coercions
 // take the agent's runtime — a step-5 change, not a step-3 one.
+// ⚠ **THE MODEL PICK AND THE NATIVE LAUNCH SETTINGS, DELEGATED THE SAME WAY (2026-09-21, U5).**
+// They are here for the reason every other delegate above is: these questions used to be answered
+// in core by importing the DEFAULT runtime's frozen enums, which meant a Codex launch was
+// validated against another vendor's vocabulary — the exact coupling this file exists to remove.
+// Core asks for a session's runtime and gets back that runtime's own answer; it holds no id and
+// no setting name of its own.
+// ⚠ `launchModelPick` IS THE **STAMP** AND `storeModelPick` IS THE **RECORD**, and they are not
+// interchangeable: one may answer an argv-stable alias, the other must round-trip exactly what a
+// picker offered. `runtime/selection-vocabulary.js` carries the argument.
+const launchModelPick = (value, runtimeId) => cap.launchModelPick(descriptorFor(runtimeId), value);
+const storeModelPick = (value, runtimeId) => cap.storeModelPick(descriptorFor(runtimeId), value);
+const normalizeNative = (raw, runtimeId) => cap.normalizeNative(descriptorFor(runtimeId), raw);
+// The native launch dimensions this runtime declares AND can spend, or `null` for "no such
+// concept" — never `{}` (INVARIANTS §11: UNKNOWN is not EMPTY).
+const nativeDimensions = (runtimeId) => cap.nativeDimensions(descriptorFor(runtimeId));
+
 const TOOL_MODES = cap.toolModes(descriptorFor(null));
 
 // ⚠ THE AXIS-A TAXONOMY, READ OFF THE DEFAULT RUNTIME'S DESCRIPTOR — NOT A COPY AND NOT A
@@ -80,5 +96,6 @@ module.exports = {
   runtimeFor, descriptorFor, cap,
   buildSessionToolConfig, toolModeAllows, normalizeToolMode, floorWindowlessTool,
   windowlessFloorRefusal, axisBOpScopedWarning, isClassifiedTool,
+  launchModelPick, storeModelPick, normalizeNative, nativeDimensions, // U5
   TOOL_MODES, TAXONOMY, AUTO_TOOLS, BYPASS_TOOLS, BYPASS_READS, ESCALATION_TOOLS, EDIT_TOOLS,
 };

@@ -119,7 +119,18 @@ function nativePair(s, cfg) {
   // mode picker, on any runtime.
   if (cfg.native) return { approval_policy: cfg.native.approval_policy, sandbox_mode: cfg.native.sandbox_mode };
   const st = (s && s.state) || {};
-  const sandbox = SANDBOX_MODES.indexOf(st.sandboxMode) === -1 ? DEFAULT_SANDBOX : st.sandboxMode;
+  // ⚠ **THE SANDBOX PICK ARRIVES ON `state.native` SINCE 2026-09-21 (U5), AND BEFORE THAT IT
+  // ARRIVED FROM NOWHERE.** This read was `st.sandboxMode`, a field **no producer in the tree ever
+  // set** — so the `toolMode.secondaryAxis` row this adapter declares was rendered as data, could
+  // not be written, and every `full` session launched at `workspace-write` whatever the operator
+  // picked (`docs/REFACTOR-FINDINGS.md` F-390). The bag is validated by
+  // `runtime/selection-vocabulary.js › normalizeNative` against the options THIS descriptor
+  // declares, stamped at spawn by `session-engine.js`, and read here.
+  // ⚠ THE LOCAL RE-CHECK STAYS AND MUST STAY. It is the last step before the value becomes a
+  // launch argument, and every other coercion in this tree is re-run at that step.
+  const native = (st.native && typeof st.native === 'object') ? st.native : {};
+  const asked = native.sandbox_mode;
+  const sandbox = SANDBOX_MODES.indexOf(asked) === -1 ? DEFAULT_SANDBOX : asked;
   return { approval_policy: tools.normalizeToolMode(st.toolMode), sandbox_mode: sandbox };
 }
 
@@ -150,7 +161,12 @@ function buildLaunchSpec(request) {
   // `''` (or anything the roster does not know) sets no field at all — the platform's own pick,
   // which is `descriptor.models.defaultMeansAbsent`.
   if (model) config.model = model;
-  const effort = (s.state && s.state.reasoningEffort) || '';
+  // ⚠ SAME STORY AS THE SANDBOX ABOVE: this read was `s.state.reasoningEffort`, which nothing
+  // produced. It rides the validated native bag now, checked against the six efforts
+  // `models.js › REASONING_EFFORTS` declares. An unrecognised one was DROPPED on the way in
+  // (`dimensionOptions.reasoningEffort.fallback: 'absent'`), so no field is set and the platform
+  // picks — there is no narrowest member to floor to on a dimension that is not containment.
+  const effort = (s.state && s.state.native && s.state.native.reasoningEffort) || '';
   if (effort) config.model_reasoning_effort = effort;
 
   return {

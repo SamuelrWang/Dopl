@@ -295,9 +295,15 @@ async function launchFromButton(payload) {
     // one, so a template author may write either. `buildSdkOptions` re-coerces at the last step
     // before argv, so nothing here is trusted downstream either.
     // ⚠ A MODEL GRANTS NOTHING AND REACHES NO GATE, which is why it may travel further than the
-    // permission pair. `getLaunchModel` is deliberately not `getLaunchPosture`.
+    // permission pair. `getLaunchModelLink` is deliberately not `getLaunchPosture`.
+    // ⚠ **THE CHANNEL LINK RESOLVES ON THE CHANNEL'S OWN RUNTIME SINCE 2026-09-21 (U5).** It read
+    // `sessionModel.aliasForModelId(getLaunchModel(...))` — the DEFAULT runtime's table — which
+    // was correct while only that runtime's ids could ever be stored. Now that a Codex id can be,
+    // aliasing it answers that runtime's "no pick" member and the operator's choice is silently
+    // dropped rather than spent. `channel-prefs.js › getLaunchModelLink` is the one spelling of
+    // the resolution, so the three launch lanes cannot drift.
     model: overrides.model || templateModel(sessionModel, template)
-      || sessionModel.aliasForModelId(channelPrefs.getLaunchModel(p.channelId)),
+      || channelPrefs.getLaunchModelLink(p.channelId),
     // ⚠ **THE AGENT COLOUR THE OPERATOR PICKED IN THE NEW-AGENT POPUP** (Samuel, 2026-09-13;
     // docs/specs/agent-colors.md). ⚠ IT SITS BESIDE `model` BECAUSE IT IS THE SAME KIND OF
     // FIELD, and that block's argument transfers line for line: forwarded, never invented,

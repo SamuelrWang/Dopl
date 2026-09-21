@@ -278,19 +278,43 @@ test("config overrides flatten to leaf scalars, and header names are quoted", ()
 });
 
 test("a RESTRICTED profile pins the native pair; `full` rides the operator's own picks", () => {
+  // ⚠ **THE PICK ARRIVES ON `state.native` SINCE 2026-09-21 (U5), AND `state.sandboxMode` NEVER
+  // HAD A PRODUCER.** The field this case used to drive was read by `nativePair` and written by
+  // nothing anywhere in the tree — F-390's shape exactly, a declared control with no write path —
+  // so every `full` Codex session launched at `workspace-write` whatever the operator picked. The
+  // bag is validated against the options THIS descriptor declares
+  // (`runtime/selection-vocabulary.js › normalizeNative`) and stamped at spawn by
+  // `session-engine.js`. What this case is about — containment is not the operator's to widen from
+  // the mode picker, and an unreadable pick lands on Codex's own default rather than the widest —
+  // is unchanged.
   const restricted = launchSpec.nativePair(
-    { state: { toolMode: "never", sandboxMode: "danger-full-access" } },
+    { state: { toolMode: "never", native: { sandbox_mode: "danger-full-access" } } },
     RT.toolConfigFor("read_only")
   );
   assert.deepEqual(restricted, { approval_policy: "untrusted", sandbox_mode: "read-only" },
     "containment is not the operator's to widen from the mode picker");
   const full = launchSpec.nativePair(
-    { state: { toolMode: "on-request", sandboxMode: "danger-full-access" } }, RT.toolConfigFor("full")
+    { state: { toolMode: "on-request", native: { sandbox_mode: "danger-full-access" } } },
+    RT.toolConfigFor("full")
   );
-  assert.deepEqual(full, { approval_policy: "on-request", sandbox_mode: "danger-full-access" });
+  assert.deepEqual(full, { approval_policy: "on-request", sandbox_mode: "danger-full-access" },
+    "…and at `full` the operator's own pick finally REACHES the launch");
   // An absent or unrecognised sandbox pick lands on Codex's OWN default, not on the widest.
-  const bare = launchSpec.nativePair({ state: { toolMode: "junk", sandboxMode: "junk" } }, RT.toolConfigFor("full"));
+  const bare = launchSpec.nativePair(
+    { state: { toolMode: "junk", native: { sandbox_mode: "junk" } } }, RT.toolConfigFor("full")
+  );
   assert.deepEqual(bare, { approval_policy: "untrusted", sandbox_mode: "workspace-write" });
+  // ⚠ AND A SESSION STAMPED WITH NO BAG AT ALL IS THE SAME ANSWER — every spawn shape that hands
+  // in no posture (a peer wake, a crash resume, a woken shell) keeps exactly today's behaviour.
+  assert.deepEqual(launchSpec.nativePair({ state: { toolMode: "on-request" } }, RT.toolConfigFor("full")),
+    { approval_policy: "on-request", sandbox_mode: "workspace-write" });
+  // ⚠ THE OLD FIELD NAME IS DEAD AND MUST STAY DEAD: reading it again would restore a control
+  // whose value nothing writes.
+  assert.deepEqual(
+    launchSpec.nativePair({ state: { toolMode: "on-request", sandboxMode: "danger-full-access" } },
+      RT.toolConfigFor("full")),
+    { approval_policy: "on-request", sandbox_mode: "workspace-write" }
+  );
 });
 
 test("`--ignore-user-config` is first, and it is the fence the operator's config cannot cross", () => {

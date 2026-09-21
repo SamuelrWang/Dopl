@@ -111,6 +111,45 @@ const descriptor = {
   // ⚠ false: the thread carries its model through a resume by itself (`thread/resume` reopens the
   // conversation, it does not re-specify it), so nothing re-stamps it.
   reStampOnResume: false,
+  // ── ⚠ THE PICK RULE (2026-09-21, U5) — `open`, WHICH IS THE OPPOSITE OF THE CLAUDE LANE'S ────
+  //
+  // That runtime's roster is FROZEN, so membership is the check. This one is `source: 'live'`:
+  // the authoritative list is `model/list` off the connected binary, which shared storage cannot
+  // call (it is async, it spawns a child, and a settings page must open without one). So storage
+  // keeps the operator's pick as an OPAQUE STRING after a SHAPE check and interprets nothing —
+  // `descriptor.models.pick.kind === 'open'` is the declaration that makes that legal.
+  //
+  // ⚠ A SHAPE CHECK IS NOT A ROSTER CHECK, AND SAYING SO IS THE POINT. This admits any id the
+  // live roster could plausibly carry and rejects only what could not BE an id — anything with a
+  // space, a quote, a shell metacharacter, a newline, or more than 64 characters. Narrowing it to
+  // the live catalog (and refusing a stale id at PICK time while still rendering it raw on a
+  // historical session card) is U6's job and needs the catalog U6 delivers.
+  // ⚠ IT IS STILL A GATE, BECAUSE THE VALUE BECOMES `config.model` IN THE LAUNCH ARGV
+  // (`launch-spec.js › overrideArgs`). `[A-Za-z0-9]` first, then the id alphabet, and nothing else.
+  pick: {
+    kind: 'open',
+    stored: null, // no closed list to offer — the roster is the wire's
+    accepted: null,
+    canonical: null,
+    absent: '', // `defaultMeansAbsent` — no `model` field at all, i.e. the platform's own pick
+    pattern: '^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$',
+  },
+  // ── ⚠ THE SECOND DIMENSION'S OPTIONS, DECLARED SO IT CAN BE WRITTEN (2026-09-21, U5) ─────────
+  //
+  // `dimensions: ['reasoningEffort']` above says THAT this runtime has the dimension; until now
+  // nothing said what its values are, so `capability.js` could not validate a write and
+  // `launch-spec.js`'s `config.model_reasoning_effort` read a `state.reasoningEffort` **that had
+  // no producer anywhere in the tree** (F-390's shape: a control that writes nowhere). Declaring
+  // the options is what turns it into a real storable setting.
+  // ⚠ `contract.js › descriptorProblems` REFUSES a descriptor that names a dimension with no
+  // options, so this pair cannot come apart.
+  // ⚠ `fallback: 'absent'` — an unrecognised effort is DROPPED rather than floored, because there
+  // is no narrowest member here: dropping it sets no field and the platform picks, which is what
+  // every Codex session did before a picker existed. A CONTAINMENT dimension floors instead (see
+  // `toolMode.secondaryAxis`, whose options are declared narrowest-first).
+  dimensionOptions: {
+    reasoningEffort: { options: REASONING_EFFORTS.slice(), default: null, fallback: 'absent' },
+  },
 };
 
 module.exports = { models, descriptor, idsFrom, REASONING_EFFORTS };

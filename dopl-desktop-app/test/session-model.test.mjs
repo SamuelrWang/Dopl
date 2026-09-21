@@ -44,6 +44,10 @@ const require = createRequire(import.meta.url);
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 
 const model = require("../main/session-model.js");
+// U10 (2026-09-21): `baseRecord`'s two new free vars — the runtime REGISTRY (for the session's own
+// descriptor) and the runtime-truth projection. Required, never faked: neither pulls electron.
+const RUNTIME_REGISTRY = require("../main/runtime/index.js");
+const RUNTIME_TRUTH = require("../main/session-runtime-truth.js");
 const SPEC = M("runtime/claude/launch-spec.js");
 const IO = M("session-io.js");
 const STORE = M("session-store.js");
@@ -356,7 +360,15 @@ test("the model changed NOTHING else about the assembled options", () => {
 
 // ── 4. the durable round trip ────────────────────────────────────────────────
 
-const baseRecord = new Function(`${fnOf(IO, "baseRecord")}\n return baseRecord;`)();
+// ⚠ `runtimeRegistry` / `runtimeTruth` ARE INJECTED SINCE 2026-09-21 (U10): `baseRecord` now also
+// projects what the conversation was RUNNING AS (effective model, native policy summary, usage
+// baseline) off the session's own descriptor. Both are REAL — `main/runtime/index.js` is
+// electron-free by contract and `session-runtime-truth.js` requires nothing — so this round trip
+// still drives the shipped projection rather than a lookalike.
+const baseRecord = new Function(
+  "runtimeRegistry", "runtimeTruth",
+  `${fnOf(IO, "baseRecord")}\n return baseRecord;`
+)(RUNTIME_REGISTRY, RUNTIME_TRUTH);
 const durable = new Function(`${fnOf(STORE, "durableName")}\n${fnOf(STORE, "durableSessionRecord")}
                               return durableSessionRecord;`)();
 const live = (over = {}) => ({
@@ -404,11 +416,28 @@ test("the ONE construction site coerces what a spec hands in", () => {
   // only term left. The COERCION is the half that survives and it is asserted nowhere else:
   // buildSdkOptions (§3) re-coerces, and the store (§4) coerces, but each of those is a second
   // fence — this is the first, and a hand-edited durable record reaches it before either.
-  const line = ENGINE.split("\n").find((l) => l.includes("model: sessionModel.normalizeModel("));
-  assert.ok(line, "the model assignment moved — reslice it");
-  assert.match(line, /model: sessionModel\.normalizeModel\(spec\.model\)/,
-    "the spec's value is coerced against the frozen enum, never trusted");
+  // ⚠ **THE COERCION IS THE SELECTED ADAPTER'S SINCE 2026-09-21 (U5), NOT THIS FILE'S FROZEN
+  // ENUM.** `sessionModel.normalizeModel` answers in the DEFAULT runtime's alias vocabulary, so it
+  // mapped any OTHER runtime's model id to that runtime's "no pick" member — which reached the
+  // Codex launch spec as the literal string `default`. Core asks the registry for the session's own
+  // runtime now and gets that runtime's answer; the FENCE is unchanged and is still the first of
+  // three (this one, the store's, and the adapter's own last-step re-coercion).
+  const at = ENGINE.indexOf("model: runtimeRegistry.capability.launchModelPick(");
+  assert.notEqual(at, -1, "the model assignment moved — reslice it");
+  const line = ENGINE.slice(at, ENGINE.indexOf("),", ENGINE.indexOf("spec.model", at)) + 2).replace(/\s+/g, " ");
+  assert.match(line, /launchModelPick\(\s*runtimeRegistry\.descriptorFor\(\(rt && rt\.id\) \|\| null\), spec\.model\s*\)/,
+    "the spec's value is coerced against THIS SESSION'S runtime, never trusted");
   assert.ok(!/takeStartModel|adoptsConsent/.test(line), "no second term on this line");
+  // ⚠ AND CORE NO LONGER HOLDS THE DEFAULT RUNTIME'S TABLE AT ALL, which is the U5 bar: no
+  // session-core path imports one runtime's model enums to validate another runtime's launch.
+  // ⚠ CODE LINES ONLY — the engine's header NAMES the require it dropped, in the words it may no
+  // longer execute, which is the documentation this repo treats as load-bearing.
+  const engineCode = ENGINE.split("\n")
+    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+    .map((l) => { const i = l.indexOf("//"); return i === -1 ? l : l.slice(0, i); })
+    .join("\n");
+  assert.ok(!/require\('\.\/session-model'\)/.test(engineCode),
+    "session-engine.js must not require the model table it used to coerce every runtime through");
   assert.ok(!/takeStartModel/.test(ENGINE), "and the consent module is unreachable from the engine");
   // ⚠ `adoptsConsent` is deliberately NOT asserted absent from the whole file: `launch()` still
   // passes `adoptsConsent: adoptable` on an identifier that no longer exists anywhere in it.

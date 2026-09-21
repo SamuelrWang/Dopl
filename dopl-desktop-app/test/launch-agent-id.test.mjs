@@ -69,6 +69,7 @@ function boot() {
       return {
         launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
         getLaunchModel: () => null,
+        getLaunchModelLink: () => "", // U5
         isTemplateApproved: () => true,
       };
     }

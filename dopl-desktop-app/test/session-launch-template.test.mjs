@@ -71,7 +71,7 @@ function boot(api = {}, opts = {}) {
     if (id === "./channel-prefs") {
       return {
         launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
-        getLaunchModel: () => opts.channelModel || null,
+        getLaunchModelLink: () => ({ "claude-opus-5": "opus", "claude-sonnet-5": "sonnet", "claude-haiku-4-5-20251001": "haiku", "claude-fable-5": "fable" })[opts.channelModel] || "default", // ⚠ U5 replaced `getLaunchModel` here: the LAST chain link, resolved on the CHANNEL'S OWN runtime, ending the chain on that runtime's own "no pick" member. Inline + trailing because this file is at the §1 cap.
         isTemplateApproved: () => opts.approved === true,
         approveTemplate: (t) => { approvals.push(t); return opts.storeWrites !== false; },
       };

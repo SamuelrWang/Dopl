@@ -40,7 +40,19 @@ const RUNTIME = createRequire(import.meta.url)(join(MAIN, "runtime", "index.js")
 const CH_A = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
 const CH_B = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb";
 
-/** The module, with a fake electron-store and a real registry. */
+/**
+ * The module, with a fake electron-store and a REAL registry.
+ *
+ * ⚠ **`./channel-prefs` IS EVALUATED FOR REAL SINCE 2026-09-21 (U5), NOT STUBBED, AND THAT IS THE
+ * POINT OF THE CHANGE.** The pick used to be its own store key written by this file directly; it is
+ * a FIELD of the channel's VERSIONED LAUNCH SELECTION now, beside the per-runtime model and native
+ * settings it selects between. Stubbing the writer would mean these cases assert about a copy of
+ * the program — and the property that matters most (switching runtime no longer destroys the other
+ * runtime's remembered model) lives entirely in that writer.
+ *
+ * Three modules are sliced over ONE fake store document, exactly as electron-store behaves: a
+ * second handle reads and writes the same JSON file.
+ */
 function load(opts = {}) {
   const disk = { ...(opts.disk || {}) };
   const logged = [];
@@ -54,15 +66,46 @@ function load(opts = {}) {
       disk[key] = value;
     },
   };
+  const diag = { diag: (...p) => logged.push(p.join(" ")) };
+  const cache = {};
+  const evaluate = (file) => {
+    if (cache[file]) return cache[file].exports;
+    const mod = { exports: {} };
+    cache[file] = mod;
+    new Function("require", "module", "exports", readFileSync(join(MAIN, file), "utf8"))(
+      stub, mod, mod.exports
+    );
+    return mod.exports;
+  };
   const stub = (id) => {
     if (id === "electron-store") return function Store() { return store; };
-    if (id === "./diag") return { diag: (...p) => logged.push(p.join(" ")) };
+    if (id === "./diag") return diag;
     if (id === "./runtime") return RUNTIME;
+    if (id === "./launch-selection") return evaluate("launch-selection.js");
+    if (id === "./launch-posture-legacy") return evaluate("launch-posture-legacy.js");
+    if (id === "./channel-prefs") return evaluate("channel-prefs.js");
+    // The three records `channel-prefs.js` re-exports and this file never touches. Stubbed rather
+    // than evaluated because each opens its own store handle and none of them is under test here.
+    if (id === "./channel-agent-chain") return { AGENT_CHAIN_KEY: "channelAgentChain", getAgentChain: () => false, setAgentChain: () => false };
+    if (id === "./orchestrator-consent") return {};
+    if (id === "./template-approval") return {};
     throw new Error(`unexpected require: ${id}`);
   };
   const mod = { exports: {} };
   new Function("require", "module", "exports", SRC)(stub, mod, mod.exports);
-  return { ...mod.exports, disk, logged };
+  const prefs = evaluate("channel-prefs.js");
+  // ⚠ **THE WRITE DOOR IS `setLaunchSelection`, AND THERE IS NO `setChannelRuntime` ANY MORE
+  // (2026-09-21, U5).** The pick is a FIELD of the versioned record, so it is written by that
+  // record's ONE validating writer in the same write as everything it selects between — a second
+  // named door issuing a second store write is exactly how a rejected posture came to half-apply a
+  // runtime, and a zero-caller export would have added a name to `session-preset-start.js`'s
+  // writer census that nothing calls. This local helper keeps the cases below reading as "set the
+  // pick" while driving the real path the Settings tab uses.
+  const setRuntime = (channelId, raw) => {
+    const res = prefs.setLaunchSelection(channelId, { runtime: raw });
+    return res && res.ok ? res.selection.runtime : mod.exports.getChannelRuntime(channelId);
+  };
+  return { ...mod.exports, prefs, setChannelRuntime: setRuntime, disk, logged };
 }
 
 // ── 1. WHAT MAY BE STORED ────────────────────────────────────────────────────────────────────
@@ -90,11 +133,15 @@ test("round trip: a pick is stored, read back, and is per channel", () => {
   assert.equal(m.getChannelRuntime(CH_B), "", "a neighbour's pick is never inherited");
 });
 
-test("clearing DELETES the key — absent and default are one record", () => {
+test("clearing is `''` — absent and default are one record", () => {
   const m = load();
   m.setChannelRuntime(CH_A, "codex");
   assert.equal(m.setChannelRuntime(CH_A, ""), "");
-  assert.deepEqual(m.disk[m.CHANNEL_RUNTIME_KEY], {}, "no tombstone, no third state");
+  // ⚠ THE PICK IS A FIELD OF THE SELECTION SINCE U5, so "cleared" is `runtime: ''` on that record
+  // rather than a deleted key in a map of its own. The RULE is unchanged and is what this case is
+  // about: there is ONE spelling of "no pick", so a channel that never chose and a channel whose
+  // pick was cleared read identically and no reader can grow a third state to get wrong.
+  assert.equal(m.disk.channelLaunchSelection[CH_A].runtime, "", "no tombstone, no third state");
   assert.equal(m.getChannelRuntime(CH_A), "");
 });
 
@@ -105,7 +152,7 @@ test("an UNREGISTERED id clears rather than being parked in the store", () => {
   const m = load();
   m.setChannelRuntime(CH_A, "codex");
   assert.equal(m.setChannelRuntime(CH_A, "some-future-runtime"), "");
-  assert.deepEqual(m.disk[m.CHANNEL_RUNTIME_KEY], {});
+  assert.equal(m.disk.channelLaunchSelection[CH_A].runtime, "");
 });
 
 // ── 2. READING NEVER REPAIRS, AND NEVER REFUSES ──────────────────────────────────────────────
@@ -162,4 +209,78 @@ test("every id this record can hold belongs to an adapter that PASSED the contra
       assert.ok(Array.isArray(p.denyList), `${d.id}: profile ${name} carries a real deny list`);
     }
   }
+});
+
+// ── 4. U5: A RUNTIME SWITCH REMEMBERS, IT NO LONGER CLEARS ───────────────────────────────────
+//
+// ⚠ **THIS SECTION REVERSES A RULE THIS FILE'S MODULE USED TO ENFORCE, AND THE REVERSAL IS A
+// SAMUEL RULING** (Decisions #1 and #2 of the 2026-09-21 runtime-parity plan: Claude and Codex
+// native settings and model choices are stored SEPARATELY and never translated, so Claude → Codex
+// → Claude restores BOTH sets). From 2026-09-06 `setChannelRuntime` DELETED the channel's stored
+// model on every switch. That was correct for the record it had: ONE global model field held a
+// model for whatever runtime happened to be selected, so a Claude id left on a Codex channel sat
+// ABOVE the platform default in the launch precedence chain — the stale id WON, and Codex was
+// asked for a model it has never heard of. The record is runtime-keyed now, so the stale id is
+// unreachable from the wrong adapter by construction and clearing it would be nothing but the
+// operator losing a pick every time they look at another runtime.
+
+test("switching runtime and back RESTORES both remembered models — it clears neither", () => {
+  const m = load();
+  m.setChannelRuntime(CH_A, "claude");
+  m.prefs.setLaunchSelection(CH_A, { tools: "bypass", messages: "auto_both", model: "claude-opus-5" });
+  m.setChannelRuntime(CH_A, "codex");
+  // The Claude record is untouched, and the Codex side starts at Codex's own defaults rather than
+  // inheriting a word Codex does not speak.
+  assert.equal(m.prefs.getLaunchPosture(CH_A).model, null, "no model on the runtime just switched to");
+  assert.equal(m.prefs.getLaunchPosture(CH_A).tools, "untrusted", "…and its own narrowest mode");
+  m.prefs.setLaunchSelection(CH_A, { tools: "on-request", messages: "auto_both", model: "gpt-5-codex" });
+  m.setChannelRuntime(CH_A, "claude");
+  assert.deepEqual(m.prefs.getLaunchPosture(CH_A), { tools: "bypass", messages: "auto_both", model: "claude-opus-5" });
+  m.setChannelRuntime(CH_A, "codex");
+  assert.deepEqual(m.prefs.getLaunchPosture(CH_A), { tools: "on-request", messages: "auto_both", model: "gpt-5-codex" });
+});
+
+test("the two runtimes' NATIVE settings are remembered side by side, never translated", () => {
+  // ⚠ Codex declares a `sandbox_mode` axis and a reasoning-effort dimension; the default adapter
+  // declares neither. A switch must not carry one into the other, invent a synonym, or drop it.
+  const m = load();
+  m.setChannelRuntime(CH_A, "codex");
+  m.prefs.setLaunchSelection(CH_A, { native: { sandbox_mode: "read-only", reasoningEffort: "high" } });
+  m.setChannelRuntime(CH_A, "claude");
+  assert.deepEqual(m.prefs.launchStartModes(CH_A).native, {}, "the runtime with no such axis gets no bag");
+  m.setChannelRuntime(CH_A, "codex");
+  assert.deepEqual(m.prefs.launchStartModes(CH_A).native,
+    { sandbox_mode: "read-only", reasoningEffort: "high" }, "…and the runtime that owns it gets its own back");
+});
+
+test("a pre-U5 record migrates into the DEFAULT runtime's half, untranslated, on first read", () => {
+  // ⚠ THE LEGACY PAIR IS THE DEFAULT RUNTIME'S VOCABULARY BY CONSTRUCTION — it is the only thing
+  // the pre-U5 validators could store — so it lands in that runtime's record whatever runtime the
+  // channel had selected. Putting it under the SELECTED runtime would be the migration asserting
+  // that `bypass` "is" some Codex approval mode, which is the one-to-one mapping the plan refuses.
+  const m = load({
+    disk: {
+      channelLaunchPosture: { [CH_A]: { tools: "bypass", messages: "auto_both", model: "claude-opus-5" } },
+      channelRuntime: { [CH_A]: "codex" },
+    },
+  });
+  assert.equal(m.getChannelRuntime(CH_A), "codex", "the separately stored pick is carried over");
+  const sel = m.prefs.getLaunchSelection(CH_A);
+  assert.deepEqual(sel.byRuntime.claude, { tools: "bypass", model: "claude-opus-5" });
+  assert.equal(sel.byRuntime.codex, undefined, "nothing is invented for the selected runtime");
+  // ⚠ AND THE EFFECTIVE BEHAVIOUR IS UNCHANGED BY THE MIGRATION. `bypass` is not a Codex mode, so
+  // before U5 it was coerced to Codex's narrowest at every gate decision anyway; the migration
+  // stores what was already in force rather than changing it.
+  assert.equal(m.prefs.launchStartModes(CH_A).tools, "untrusted");
+  // ⚠ READING NEVER WROTE. A machine that only launches keeps both legacy records untouched and
+  // can be downgraded with nothing lost.
+  assert.equal(m.disk.channelLaunchSelection, undefined);
+  assert.deepEqual(m.disk.channelRuntime, { [CH_A]: "codex" });
+});
+
+test("a WRITE re-stamps the legacy mirror, so a downgraded build reads what is in force", () => {
+  const m = load();
+  m.setChannelRuntime(CH_A, "codex");
+  m.prefs.setLaunchSelection(CH_A, { tools: "never", messages: "auto_both" });
+  assert.deepEqual(m.disk.channelLaunchPosture[CH_A], { tools: "never", messages: "auto_both" });
 });

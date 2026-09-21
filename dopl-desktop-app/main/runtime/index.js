@@ -22,6 +22,10 @@ const capability = require('./capability');
 // actually connected to. It lives in its own file because its one reason to change is the caching
 // and leash policy, not the roster — this module stays "the only place an adapter is named".
 const connectivity = require('./connectivity');
+// 2026-09-21 (U10): the operator-facing COPY, built from a descriptor's own label rather than from
+// one vendor's name. A sibling of `capability.js` on a different clock — see that file's header.
+// ⚠ IT REQUIRES NOTHING, so this line cannot cycle and cannot pull electron.
+const runtimeCopy = require('./runtime-copy');
 
 const REGISTRY = new Map();
 
@@ -112,8 +116,45 @@ const all = () => Array.from(REGISTRY.values());
  */
 const connectedIds = () => connectivity.connectedIds(all());
 
+/**
+ * THE VALIDATION CONTEXT A DURABLE LAUNCH SELECTION IS CHECKED AGAINST (2026-09-21, U5).
+ *
+ * ⚠ **IT EXISTS SO `main/launch-selection.js` CAN STAY PURE.** That module owns the versioned
+ * record's SHAPE — which version is current, what migrates, what a future version falls back to —
+ * and it must be sliceable and evaluable standalone, like every other validator in this family.
+ * The vocabulary it validates against belongs to the adapters, so the vocabulary is handed IN.
+ *
+ * ⚠ EVERY MEMBER IS RESOLVED PER CALL, AND THAT IS WHY IT IS A FUNCTION RATHER THAN A CONSTANT.
+ * `descriptorFor` fail-closes an unknown id to the DEFAULT adapter, so a record whose runtime this
+ * build does not ship is validated against the runtime it will actually launch on rather than
+ * against nothing.
+ *
+ * ⚠ THE CALLER MUST STILL ASK `known()` BEFORE IT TRUSTS A RUNTIME ID. `descriptorFor('borg')`
+ * answers the default adapter's descriptor by design (a downgrade must not strand a channel), so a
+ * storage path that wants to know whether the id is REAL has to ask — otherwise a stored
+ * `runtime: 'borg'` would validate cleanly and then read back as a pick nobody made.
+ */
+function selectionContext() {
+  return {
+    ids: ids(),
+    defaultId: DEFAULT_ID,
+    known: (id) => typeof id === 'string' && REGISTRY.has(id),
+    toolModeFor: (id, mode) => capability.normalizeToolMode(descriptorFor(id), mode),
+    narrowestToolFor: (id) => capability.narrowestToolMode(descriptorFor(id)),
+    storeModelFor: (id, value) => capability.storeModelPick(descriptorFor(id), value),
+    nativeFor: (id, raw) => capability.normalizeNative(descriptorFor(id), raw),
+    labelFor: (id) => descriptorFor(id).label,
+  };
+}
+
 module.exports = {
   register, resolve, descriptorFor, runtimeFor, acquire, ids, all, connectedIds,
   DEFAULT_ID,
   capability, // re-exported so a consumer needs ONE require to ask a capability question
+  selectionContext, // U5: the adapter vocabulary `main/launch-selection.js` validates against
+  // U10 (2026-09-21): every operator-facing SENTENCE about a runtime, built from that runtime's
+  // own descriptor. Re-exported here for `capability`'s reason — a core module asking "what does
+  // this runtime tell the operator" must not need a second require, and must not reach past the
+  // registry into an adapter directory to find out.
+  copy: runtimeCopy,
 };

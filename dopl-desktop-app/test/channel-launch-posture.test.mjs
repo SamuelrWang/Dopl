@@ -36,7 +36,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { prefs, SRC, CH_A, CH_B } from "./_channel-prefs-block.mjs";
+import { prefs, SRC, LEGACY_SRC, SELECTION_SRC, CH_A, CH_B } from "./_channel-prefs-block.mjs";
 
 const { readPostureFrom, postureInto } = prefs;
 
@@ -68,7 +68,10 @@ test("the posture does NOT expire — reading it is not a clock question at all"
   // …and a year of calls later it is still the same answer.
   for (let i = 0; i < 5; i += 1) assert.deepEqual(readPostureFrom(map, CH_A), OK);
   assert.equal(readPostureFrom.length, 2, "(map, channelId) — no clock, so no expiry to have");
-  assert.match(SRC, /function readPostureFrom\(map, channelId\) \{/,
+  // ⚠ THE SHIPPED SIGNATURE LIVES IN `main/launch-posture-legacy.js` SINCE 2026-09-21 (U5) —
+  // the pre-U5 posture is the LEGACY READER now and moved to its own file, which is deleted whole
+  // when the compatibility window closes. The property is unchanged: no clock, so no expiry.
+  assert.match(LEGACY_SRC, /function readPostureFrom\(map, channelId\) \{/,
     "the shipped signature, not just the sliced one");
 });
 
@@ -81,8 +84,8 @@ test("the posture is never SPENT by reading it", () => {
   postureInto(map, CH_A, OK);
   for (let i = 0; i < 5; i += 1) assert.deepEqual(readPostureFrom(map, CH_A), OK);
   assert.ok(Object.prototype.hasOwnProperty.call(map, CH_A), "reading must not delete");
-  assert.ok(!/function consumeLaunchPosture|takePostureFrom/.test(SRC),
-    "no take-and-remove twin has appeared beside it");
+  assert.ok(!/function consumeLaunchPosture|takePostureFrom/.test(SRC + LEGACY_SRC + SELECTION_SRC),
+    "no take-and-remove twin has appeared beside it, in any of the three files the record now spans");
 });
 
 test("no `at` is ever written — nothing bookkeeping-shaped rides in on a valid pair", () => {
@@ -173,9 +176,18 @@ test("getLaunchPosture falls back to the restrictive default, never to null", ()
   // own-key capability probe needs. Driven for real — shape and all — in
   // `agent-model-selection.test.mjs`'s two WIRE cases; pinned here as the SPELLING, because the
   // store-backed reader is the half source extraction cannot reach.
+  // ⚠ THE COMPOSITION CHANGED SHAPE ON 2026-09-21 (U5) AND THE PROPERTY DID NOT. The reader is
+  // the VERSIONED, RUNTIME-KEYED selection now, rendered back into the legacy three-key wire for
+  // every renderer older than U5; the fallback it falls back TO is `emptySelection()`, which is
+  // the restrictive one by construction. Pinned as the SPELLING, because the store-backed reader
+  // is the half source extraction cannot reach.
   const body = SRC.slice(SRC.indexOf("function getLaunchPosture("));
-  assert.match(body.slice(0, 220), /effectivePosture\(getAllPostures\(\), channelId\)/);
-  const helper = SRC.slice(SRC.indexOf("function effectivePosture("));
-  assert.match(helper.slice(0, 400), /stored \|\| defaultPreset\(\)/,
+  assert.match(body.slice(0, 260), /toLegacyPosture\(ctx\(\), getLaunchSelection\(channelId\)\)/);
+  const helper = SELECTION_SRC.slice(SELECTION_SRC.indexOf("function toLegacyPosture("));
+  assert.match(helper.slice(0, 400), /rec\.tools \|\| ctx\.narrowestToolFor\(selection\.runtime\)/,
     "the restrictive fallback must survive the move, or an unset channel reads as no constraint");
+  // …and the thing it falls back to really is the narrowest, not "whatever parsed".
+  const empty = SELECTION_SRC.slice(SELECTION_SRC.indexOf("function emptySelection("));
+  assert.match(empty.slice(0, 400), /messages: SELECTION_MESSAGE_MODES\[0\]/,
+    "an unset selection resolves to the restrictive messaging member, never a wider one");
 });

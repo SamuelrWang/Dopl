@@ -139,6 +139,7 @@ function bootLaunch(entries) {
       return {
         launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
         getLaunchModel: () => null,
+        getLaunchModelLink: () => "", // U5
       };
     }
     // ⚠ `chainModel` IS THE ONE LINK OF THE PRECEDENCE CHAIN (`session-model.js`, 2026-08-23) and

@@ -36,86 +36,114 @@
 // off this machine. The diag line carries the two enum values and nothing else.
 
 const Store = require('electron-store');
-const { normalizeModelId } = require('./session-model');
+// ⚠ **`require('./session-model')` LEFT ON 2026-09-21 (U5), AND THAT REMOVAL IS THE UNIT.** This
+// file validated the defaults record's MODEL against the DEFAULT runtime's frozen id list, so an
+// operator whose default runtime was Codex could not store a Codex model at all — the write was
+// simply dropped as "unknown". The vocabulary lives behind each adapter's own descriptor now and
+// the shape lives in `main/launch-selection.js`; both arrive through the registry below.
+const selection = require('./launch-selection');
+const runtimeRegistry = require('./runtime');
 const channelPrefs = require('./channel-prefs');
-const channelRuntime = require('./channel-runtime');
 const { diag } = require('./diag');
 
 const store = new Store();
 
+const ctx = () => runtimeRegistry.selectionContext();
+
 // ─── BEGIN AGENT-DEFAULTS-VALIDATE (pure; unit-tested via source extraction) ──
 // No electron/fs/store/require refs below, so test/agent-defaults.test.mjs can slice this block
-// and evaluate it verbatim (same pattern as CHANNEL-PREFS-VALIDATE).
+// and evaluate it verbatim. Every runtime vocabulary arrives through the injected `sel` (the
+// `main/launch-selection.js` module) and `ctx` (the adapter vocabulary), which is what keeps it
+// pure — and, since U5, what keeps ONE runtime's enums out of another runtime's validation.
 
-// The FROZEN enums, mirroring `session-profiles.js` TOOL_MODES / MESSAGE_MODES exactly as
-// `channel-prefs.js` does. A value outside them is a REJECTED write, not a coerced one.
-const TOOL_MODES = ['manual', 'accept_edits', 'auto', 'bypass'];
+// The DOPL-OWNED half of the record, and the only enum this file still spells. ⚠ `tools` IS NOT
+// HERE ANY MORE: it is per-runtime now and is validated against the selected adapter's own
+// declared options, because `accept_edits` is not a word Codex speaks and refusing a Codex
+// operator's write for not saying it is F-390 in the defaults record.
 const MESSAGE_MODES = ['ask', 'auto_inbound', 'auto_outbound', 'auto_both'];
 
-// ⚠ THE SAME MOST-RESTRICTIVE PAIR `channel-prefs.js › DEFAULT_PRESET` SPELLS, and it must stay
-// the same pair: this is what the Agents tab shows an operator who has never opened it, and a
-// machine with no defaults record must seed nothing different from what it seeds today.
-const FACTORY_DEFAULTS = { tools: 'manual', messages: 'ask', agentChain: false };
+// ⚠ THE SAME MOST-RESTRICTIVE ANSWER THE PER-CHANNEL RECORD RESOLVES TO, and it must stay the
+// same: this is what the Agents tab shows an operator who has never opened it, and a machine with
+// no defaults record must seed nothing different from what it seeds today.
+const FACTORY_DEFAULTS = { messages: 'ask', agentChain: false };
 
 /**
  * Validate an arbitrary value into a defaults record, or null when it is not one.
  *
- * ⚠ BOTH AXES HARD, MODEL AND RUNTIME SOFT, CHAIN FAIL-CLOSED — the three disciplines this tree
- * already uses, unchanged:
- *  · a half-valid PAIR is rejected whole (`channel-prefs.js`: a partially applied posture is the
- *    "one switch, two meanings" confusion the two axes exist to remove);
- *  · an unknown MODEL or RUNTIME is ABSENT rather than fatal, so a desktop that has not heard of
- *    a newer id can still store a pair;
+ * ⚠ **IT IS A LAUNCH SELECTION PLUS ONE FLAG.** The defaults record and a channel's record now
+ * answer the same question in the same shape — which runtime, which messaging, and which model +
+ * native settings PER RUNTIME — because `seedChannel` copies one into the other. Two shapes for
+ * one copy is how a field comes to be seeded on some channels and not others.
+ *
+ * ⚠ THE THREE DISCIPLINES THIS TREE ALREADY USES, UNCHANGED IN DIRECTION:
+ *  · MESSAGING is Dopl's own axis and validates HARD — an unknown value rejects the whole record,
+ *    because a partially applied record is the "one switch, two meanings" confusion the axes exist
+ *    to remove;
+ *  · the RUNTIME-KEYED half validates SOFT and FAIL-CLOSED — an unknown model is ABSENT (so a
+ *    desktop that predates an id can still store the rest) and an unknown MODE or NATIVE value
+ *    falls to that adapter's NARROWEST, never to its widest and never to unrestricted;
  *  · `agentChain` is `=== true` and nothing else, because it lifts a bound.
  * Extra properties are dropped; nothing else is ever stored.
+ *
+ * ⚠ A LEGACY RECORD MIGRATES IN PLACE. A pre-U5 `{tools, messages, agentChain, model?, runtime?}`
+ * has no `v`, so it is read through `sel.fromLegacy` — its global `tools`/`model` land in the
+ * DEFAULT runtime's record untranslated, exactly as a channel's do.
  */
-function normalizeDefaults(raw, normalizeModel, normalizeRuntime) {
+function normalizeDefaults(sel, ctx, raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-  const tools = typeof raw.tools === 'string' ? raw.tools : '';
-  const messages = typeof raw.messages === 'string' ? raw.messages : '';
-  if (TOOL_MODES.indexOf(tools) === -1) return null;
-  if (MESSAGE_MODES.indexOf(messages) === -1) return null;
-  const next = { tools: tools, messages: messages, agentChain: raw.agentChain === true };
-  // ⚠ OMITTED WHEN ABSENT, never written as '' or null — `channel-prefs.js › normalizePreset`'s
-  // rule, for its reason: a record from before a field and a record whose field was cleared must
-  // be the SAME record, so no reader can grow a third state to get wrong.
-  const model = normalizeModel(raw.model);
-  if (model) next.model = model;
-  // ⚠ `''` IS THE DEFAULT ADAPTER AND IS NOT A PICK (`channel-runtime.js › normalizeRuntimeId`),
-  // so it is stored as an absence exactly like an unregistered id.
-  const runtime = normalizeRuntime(raw.runtime);
-  if (runtime) next.runtime = runtime;
-  return next;
+  const legacy = raw.v == null;
+  const res = legacy
+    ? sel.fromLegacy(ctx, { tools: raw.tools, messages: raw.messages, model: raw.model }, raw.runtime)
+    : sel.normalizeSelection(ctx, raw);
+  // ⚠ THE HARD HALF, ASKED OF THE INPUT RATHER THAN OF THE RESULT. `normalizeSelection` FLOORS an
+  // unknown messaging value to `ask` and says so in its review; this record's contract is that such
+  // a write is REJECTED WHOLE, so the check has to look at what was asked for.
+  const asked = typeof raw.messages === 'string' ? raw.messages : '';
+  if (MESSAGE_MODES.indexOf(asked) === -1) return null;
+  return {
+    v: res.selection.v,
+    runtime: res.selection.runtime,
+    messages: res.selection.messages,
+    byRuntime: res.selection.byRuntime,
+    agentChain: raw.agentChain === true,
+  };
 }
 
 /**
- * The record as the RENDERER sees it — the stored one or the factory pair, and ALWAYS carrying
- * `model` and `runtime` keys.
+ * The record as the RENDERER sees it — the stored one or the factory answer, and ALWAYS carrying
+ * `model`, `runtime`, `tools`, `byRuntime` and `v` keys.
  *
- * ⚠ THE KEYS ARE PRESENT ON THE WAY OUT EVEN WHEN STORAGE OMITS THEM, and that asymmetry is the
- * point rather than an inconsistency to tidy away. It is the SAME rule
- * `channel-prefs.js › effectivePosture` states: the web's capability probes
- * (`lib/permission-modes.ts › hasModelKey`, `lib/runtime-capability.ts › hasRuntimeKey`) are
- * OWN-KEY tests, and a missing key reads as "this desktop has no such concept" — which would
- * render NO row, and the only way to store a value is the row that was never drawn.
+ * ⚠ THE LEGACY KEYS ARE PRESENT ON THE WAY OUT EVEN THOUGH STORAGE HOLDS THEM PER RUNTIME, and
+ * that asymmetry is the point rather than an inconsistency to tidy away. The web's capability
+ * probes (`lib/permission-modes.ts › hasModelKey`, `lib/runtime-capability.ts › hasRuntimeKey`) are
+ * OWN-KEY tests, and a missing key reads as "this desktop has no such concept" — which renders NO
+ * row, and the only way to store a value is the row that was never drawn. So `tools` and `model`
+ * answer the SELECTED runtime's values, in that runtime's own words.
+ * ⚠ `v` AND `byRuntime` ARE ADDITIVE AND ARE THE CAPABILITY FIELDS U5 ASKS REPLIES TO CARRY: a
+ * renderer that knows about them reads the whole per-runtime truth, and one that does not sees the
+ * shape it always saw.
  */
-function effectiveDefaults(stored) {
-  const base = stored || FACTORY_DEFAULTS;
+function effectiveDefaults(sel, ctx, stored) {
+  const base = stored || { ...sel.emptySelection(), agentChain: false };
+  const rec = sel.activeRecord(ctx, base);
   return {
-    tools: base.tools,
+    tools: rec.tools || ctx.narrowestToolFor(base.runtime),
     messages: base.messages,
     agentChain: base.agentChain === true,
-    model: (stored && stored.model) || null,
-    runtime: (stored && stored.runtime) || '',
+    model: rec.model || null,
+    runtime: base.runtime || '',
+    v: base.v,
+    byRuntime: base.byRuntime,
+    native: rec.native ? { ...rec.native } : {},
   };
 }
 
 // ─── END AGENT-DEFAULTS-VALIDATE ─────
 
-const DEFAULTS_KEY = 'agentDefaults'; // { tools, messages, agentChain, model?, runtime? }
+const DEFAULTS_KEY = 'agentDefaults'; // { v, runtime, messages, byRuntime, agentChain }
 
 function normalizeStored(raw) {
-  return normalizeDefaults(raw, normalizeModelId, channelRuntime.normalizeRuntimeId);
+  return normalizeDefaults(selection, ctx(), raw);
 }
 
 function readStored() {
@@ -131,7 +159,7 @@ function readStored() {
  * does start new channels at manual/ask, and saying so is the truth. Reading never writes.
  */
 function getAgentDefaults() {
-  return effectiveDefaults(readStored());
+  return effectiveDefaults(selection, ctx(), readStored());
 }
 
 /**
@@ -153,8 +181,9 @@ function setAgentDefaults(raw) {
     diag('agent-defaults: could not persist —', err && err.message);
     return { ok: false };
   }
-  diag('agent-defaults', next.tools, next.messages, next.agentChain ? 'chain' : 'no-chain');
-  return { ok: true, defaults: effectiveDefaults(next) };
+  diag('agent-defaults', next.runtime || '(default)', next.messages,
+    next.agentChain ? 'chain' : 'no-chain');
+  return { ok: true, defaults: effectiveDefaults(selection, ctx(), next) };
 }
 
 /**
@@ -174,25 +203,38 @@ function setAgentDefaults(raw) {
 function seedChannel(channelId) {
   if (!channelId) return { ok: false, seeded: false };
   if (channelPrefs.hasLaunchPosture(channelId)) return { ok: true, seeded: false };
-  const defaults = getAgentDefaults();
-  // ⚠ `model` IS PASSED ONLY WHEN ONE IS STORED. `channel-prefs.js › postureInto` treats the
-  // KEY'S PRESENCE as the signal and `''` as a real "clear it" value, so forwarding a null model
-  // would be this seed making a pick nobody made.
-  const preset = { tools: defaults.tools, messages: defaults.messages };
-  if (defaults.model) preset.model = defaults.model;
-  const res = channelPrefs.setLaunchPosture(channelId, preset);
+  const stored = readStored();
+  // ⚠ A MACHINE WITH NO DEFAULTS RECORD SEEDS NOTHING. `getAgentDefaults` answers the factory
+  // record so the Agents tab has something to render, but writing it into a channel would stamp
+  // every new room with a posture nobody chose — and the channel resolves to exactly the same
+  // restrictive settings when it is unset. `seeded: false` is the honest answer.
+  if (!stored) return { ok: true, seeded: false };
+  // ⚠ **THE WHOLE SELECTION IS COPIED, EVERY RUNTIME'S RECORD INCLUDED (2026-09-21, U5).** The
+  // pre-U5 seed copied one global tool mode, one global model and the runtime pick, in three
+  // writes; a new channel therefore inherited the operator's Claude model and LOST the Codex model
+  // and sandbox setting they had configured on the same tab. Decisions #1 and #2 say both sets are
+  // remembered and neither is translated, so the seed carries both.
+  // ⚠ STILL ONE WRITE THROUGH ONE VALIDATING WRITER, which re-validates every field against the
+  // selected adapter on arrival — the defaults record is not a trusted source, it is just another
+  // stored record.
+  const res = channelPrefs.setLaunchSelection(channelId, {
+    runtime: stored.runtime,
+    messages: stored.messages,
+    byRuntime: stored.byRuntime,
+  });
   if (!res || res.ok !== true) return { ok: false, seeded: false };
-  // ⚠ AFTER THE PAIR AND ONLY ON A SUCCESSFUL ONE, the order `channels:setLaunchPosture` already
-  // uses: a rejected posture must never half-apply a runtime or a bound.
-  if (defaults.runtime) channelRuntime.setChannelRuntime(channelId, defaults.runtime);
-  if (defaults.agentChain) channelPrefs.setAgentChain(channelId, true);
-  diag('agent-defaults: seeded', String(channelId).slice(0, 8), defaults.tools, defaults.messages);
+  // ⚠ AFTER THE SELECTION AND ONLY ON A SUCCESSFUL ONE, the order `channels:setLaunchPosture`
+  // already uses: a rejected write must never half-apply a bound.
+  if (stored.agentChain) channelPrefs.setAgentChain(channelId, true);
+  diag('agent-defaults: seeded', String(channelId).slice(0, 8),
+    stored.runtime || '(default)', stored.messages);
   return { ok: true, seeded: true };
 }
 
 module.exports = {
   DEFAULTS_KEY,
   FACTORY_DEFAULTS,
+  MESSAGE_MODES,
   normalizeDefaults,
   effectiveDefaults,
   getAgentDefaults,

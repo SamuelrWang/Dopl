@@ -394,12 +394,14 @@ test("the THIRD copy — channel-prefs' WRITE validator — agrees with the cano
   // fifth mode added to the canonical axis would make the durable launch posture silently
   // unwritable for that value, with every suite green.
   //
-  // Read as SOURCE because channel-prefs.js requires electron-store, and the enums sit inside
-  // its own extraction block.
-  const PREFS = readFileSync(M("channel-prefs.js"), "utf8");
+  // Read as SOURCE because the module requires electron-store, and the enums sit in its own block.
+  // ⚠ IT MOVED TO `main/launch-posture-legacy.js` ON U5: the WRITE validator is runtime-scoped now
+  // (`launch-selection.js › patchRejections` — F-390's fix), and these two frozen lists survive as
+  // the LEGACY READER — what the records on disk were written in, which must still agree here.
+  const PREFS = readFileSync(M("launch-posture-legacy.js"), "utf8");
   const prefsList = (name) => {
     const at = PREFS.indexOf("const " + name + " = [");
-    assert.notEqual(at, -1, name + " missing from channel-prefs.js");
+    assert.notEqual(at, -1, name + " missing from launch-posture-legacy.js");
     return PREFS.slice(PREFS.indexOf("[", at) + 1, PREFS.indexOf("]", at))
       .split(",").map((x) => x.trim().replace(/['"]/g, ""));
   };

@@ -14,6 +14,13 @@
 // all, so this cannot cycle; the value is the one profile whose supervision is a MODE rather than
 // a list, which both files need and neither may restate (D2).
 const { UNRESTRICTED_PROFILE } = require('./contract');
+// ⚠ **THE LAUNCH-SELECTION VOCABULARY MOVED TO `main/runtime/selection-vocabulary.js` ON
+// 2026-09-21 (U5)**, at the §1 cap and on a real seam: that file changes when the shape of a
+// DURABLE LAUNCH SELECTION changes (which model vocabularies exist, which native dimensions an
+// adapter may declare and spend), where the rest of this file changes when the meaning of an
+// ABSENT capability does. Re-exported below, so no caller moved. It requires nothing but this
+// module's own sibling constants, so it cannot cycle either.
+const selection = require('./selection-vocabulary');
 
 /** Absent, in the descriptor's sense: `null`, `undefined`, or an omitted key. Never `false`. */
 const absent = (v) => v == null;
@@ -320,6 +327,14 @@ module.exports = {
   toolModes, narrowestToolMode, widestToolMode, normalizeToolMode, floorWindowlessTool,
   windowlessFloorRefusal, // D1: the sentence behind `floorWindowlessTool`'s `null`
   editScopedTools, toolTaxonomy,
+  // U5 (2026-09-21): RE-EXPORTED from `selection-vocabulary.js` (§1 cap), which carries why the
+  // launch-selection vocabulary is a different reason to change from what `null` means to a
+  // control. No caller moved.
+  pickRule: selection.pickRule,
+  storeModelPick: selection.storeModelPick,
+  launchModelPick: selection.launchModelPick,
+  nativeDimensions: selection.nativeDimensions,
+  normalizeNative: selection.normalizeNative,
   windowlessToolFloor: windowlessToolFloorValue, axisBEnforcement, axisBOpScoped, inputRewrite,
   axisBOpScopedWarning, // D3: `axisBOpScoped`'s consumer — the sentence a launch carries
   toolSearchVerb, entryFile, hasDeepLink, hasInteractiveSignIn, showsLocationPicker,

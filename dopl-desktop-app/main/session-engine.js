@@ -30,7 +30,11 @@ const { floorWindowlessMessage } = require('./session-profiles'); // AXIS B's wi
 const runtimeRegistry = require('./runtime'); const acquireRuntime = runtimeRegistry.acquire; // THE REGISTRY — the only place an adapter is named
 const sessionQuery = require('./session-query'); const { buildLaunchSpec, startQuery, consume } = sessionQuery; // §3 split: the launch spec + the query lifecycle (H1)
 const sessionNarration = require('./session-narration'); // 2026-08-20: the agent window's work lane (F-212)
-const sessionModel = require('./session-model'); // the frozen model enum (argv), coerced here too
+// ⚠ `require('./session-model')` LEFT HERE ON 2026-09-21 (U5). This file coerced EVERY session's
+// model through the DEFAULT runtime's alias table, so a Codex id normalized to that runtime's "no
+// pick" member and reached the Codex launch spec as the literal string `default`. The coercion is
+// the SELECTED ADAPTER's now — `runtimeRegistry.capability.launchModelPick` over its own declared
+// descriptor — and core names no vendor and no id.
 const sessionGate = require('./session-gate'); // v2.5 D1: the inbound message gate
 const sessionWindowless = require('./session-windowless'); // §2 split: the windowless spawn shape
 // 2026-08-21: the multiplayer ADDRESSING reads — (channel, thread) names a GROUP of this
@@ -241,8 +245,15 @@ async function startSession(spec, rt) {
   // a bare recreate, reopen, resume or wake sets neither.
   const armedModes = spec.startModes;
   const operatorArmed = spec.operatorArmed === true;
+  // ⚠ **`native` RIDES THE SAME GATE AS THE PAIR, AND THAT IS THE WHOLE REASON IT IS HERE
+  // (2026-09-21, U5).** It carries the SELECTED runtime's own containment/advanced settings —
+  // Codex's `sandbox_mode` above all — which had a reader (`runtime/codex/launch-spec.js ›
+  // nativePair`) and no producer anywhere in the tree. A settings axis that reaches a spawn is
+  // subject to H2 exactly as the tool axis is: handed in per launch by a caller executing a
+  // decision a human is making right now, and a parked shell still refuses a posture no human
+  // armed. A shape that passes nothing inherits the runtime's own declared defaults.
   const startModes = armedModes && (!spec.parkedShell || operatorArmed)
-    ? { toolMode: armedModes.tools, messageMode: armedModes.messages }
+    ? { toolMode: armedModes.tools, messageMode: armedModes.messages, native: armedModes.native }
     : {};
   const state = initialSessionState({ mode: spec.mode, side: spec.side, ...readCaps(spec), ...startModes });
   // THE WINDOWLESS MESSAGE FLOOR, AT THE ONE CONSTRUCTION SITE (2026-08-22, F-236's last hole).
@@ -311,7 +322,13 @@ async function startSession(spec, rt) {
     // looking at WINS (single use, entry-scoped), and a durable record's stored pick is the
     // fallback every other shape carries. Coerced against the frozen enum HERE, so a hand-edited
     // store can only land on 'default'. NOT reducer state: buildSdkOptions is its one reader.
-    model: sessionModel.normalizeModel(spec.model),
+    // ⚠ COERCED AGAINST THE **SELECTED RUNTIME'S** DECLARED VOCABULARY, NOT A FROZEN ONE (U5).
+    // Still the same discipline — fail closed at EVERY boundary, so a hand-edited store can only
+    // land on this runtime's "no pick" member — and `buildLaunchSpec` re-coerces once more at the
+    // last step before a child process can see it. NOT reducer state.
+    model: runtimeRegistry.capability.launchModelPick(
+      runtimeRegistry.descriptorFor((rt && rt.id) || null), spec.model
+    ),
     // THE AGENT COLOUR THIS SPAWN ASKED FOR (Samuel, 2026-09-13; docs/specs/agent-colors.md). It
     // was forwarded the whole way down the funnel and DROPPED on this literal until then, so
     // `session-summary.js › liveSummary` had no value to report and every push asked for nothing.

@@ -414,34 +414,31 @@ test("H2: nothing in the session path ever WRITES a posture back", () => {
   // now the only writable permission record on the machine. If anything on the session path ever
   // writes one, a session can widen the posture its own next launch starts at — which is the
   // v3.1 failure H2 was filed for, arriving by a different door.
-  assert.ok(!/setLaunchPosture|setAutoSend/.test(stripComments(ENGINE)),
+  assert.ok(!/setLaunchPosture|setLaunchSelection|setAutoSend/.test(stripComments(ENGINE)),
     "the engine never writes a posture");
+  // ⚠ **THE ONE VALIDATING WRITER IS `setLaunchSelection` SINCE U5**, and the census follows the
+  // writer rather than the name: `setLaunchPosture` survives as the legacy both-axes-or-nothing
+  // wrapper, so scanning for either is what keeps the enumeration complete.
   const writers = readdirSync(MAIN)
     .filter((f) => f.endsWith(".js") && f !== "channel-prefs.js")
-    .filter((f) => /channelPrefs\.setLaunchPosture\(|\.setLaunchPosture\(/.test(stripComments(read(f))))
+    .filter((f) => /\.setLaunchPosture\(|\.setLaunchSelection\(/.test(stripComments(read(f))))
     .sort();
-  // ⚠ `channel-runtime.js` JOINED 2026-09-07 AND THE RULE IS UNCHANGED, which is why it is
-  // admitted by NAME with its reachability asserted rather than by loosening the census. It
-  // clears the channel's stored MODEL stamp when the operator switches that channel's runtime
-  // (`clearLaunchModelForRuntimeSwitch`) and it writes through `setLaunchPosture` precisely
-  // because the record has one validating writer. The rule this case pins is "nothing on the
-  // SESSION path re-arms its own future", and that holds: its only entry point is
-  // `setChannelRuntime`, which no session-path module calls — the assertion below is what keeps
-  // that true rather than merely stated.
-  // ⚠ `agent-defaults.js` JOINED 2026-09-18 AND THE RULE IS UNCHANGED, on `channel-runtime.js`'s
-  // own terms: admitted by NAME with its reachability asserted, never by loosening the census. It
-  // SEEDS a brand-new channel's record from the operator's defaults, and it writes through
-  // `setLaunchPosture` precisely because the record has one validating writer. The rule this case
-  // pins is "nothing on the SESSION path re-arms its own future", and that holds twice over: its
-  // only entry point is `seedChannel`, which the assertion below shows no session-path module
-  // calls, AND `seedChannel` refuses a channel that already has a posture — so even reached from
-  // the wrong place it could not rewrite a room a session is running in.
+  // ⚠ **`channel-runtime.js` LEFT THIS CENSUS ON U5 BY LOSING ITS WRITER, NOT BY BEING EXCUSED.**
+  // It joined 2026-09-07 to clear the channel's model on a runtime switch; the pick is a FIELD of
+  // the versioned selection now (one writer, one write) and the clear is DELETED (Decisions #1/#2).
+  // ⚠ `agent-defaults.js` JOINED 2026-09-18 AND THE RULE IS UNCHANGED: admitted by NAME with its
+  // reachability asserted, never by loosening the census. It SEEDS a brand-new channel's record
+  // from the operator's defaults through the one validating writer. "Nothing on the SESSION path
+  // re-arms its own future" holds twice over: its only entry point is `seedChannel`, which the
+  // assertion below shows no session-path module calls, AND `seedChannel` refuses a channel that
+  // already has a posture — so even reached from the wrong place it could not rewrite a room a
+  // session is running in.
   assert.deepEqual(
     writers,
-    ["agent-defaults.js", "channel-dir-ipc.js", "channel-runtime.js"],
-    "the Settings tab's own control (`channels:setLaunchPosture`), the runtime switch's model " +
-      "clear and the new-channel seed — a posture written from anywhere on the SESSION path is a " +
-      "session re-arming its own future"
+    ["agent-defaults.js", "channel-dir-ipc.js"],
+    "the Settings tab's own control (`channels:setLaunchPosture`) and " +
+      "new-channel seed — a posture written from anywhere on the SESSION path is a session " +
+      "re-arming its own future"
   );
   // ⚠ THE SEED'S OWN REACHABILITY CENSUS, and it is the half that makes admitting it by name
   // honest. `seedChannel` must be callable from the bound-sender IPC surface and from nowhere
@@ -462,15 +459,14 @@ test("H2: nothing in the session path ever WRITES a posture back", () => {
     .sort();
   assert.deepEqual(defaultsReaders, ["channel-dir-ipc.js"],
     "the defaults record is read by the Agents tab's own op and by nothing else — never at a spawn");
+  // ⚠ **AND `setChannelRuntime` MUST STAY DELETED (U5)** — re-adding it puts back a writer this
+  // census cannot see (it excludes a module from its own count) of a record designed to have one.
   const runtimeCallers = readdirSync(MAIN)
-    .filter((f) => f.endsWith(".js") && f !== "channel-runtime.js")
-    .filter((f) => /\.setChannelRuntime\(/.test(stripComments(read(f))))
+    .filter((f) => f.endsWith(".js"))
+    .filter((f) => /setChannelRuntime/.test(stripComments(read(f))))
     .sort();
-  // ⚠ `agent-defaults.js` is here for the SAME reason it is in the writer census above: the seed
-  // carries the operator's default RUNTIME into the new channel, through the one validating
-  // writer, and it is reachable only from `channel-dir-ipc.js` (asserted directly above).
-  assert.deepEqual(runtimeCallers, ["agent-defaults.js", "channel-dir-ipc.js"],
-    "the runtime switch is reachable only from the same bound-sender IPC surface, never from a session");
+  assert.deepEqual(runtimeCallers, [],
+    "the runtime pick has no second writer — it is a field of the record with one validating writer");
   // The one writer is behind the app-window sender gate, not reachable from a session at all.
   const handler = read("channel-dir-ipc.js");
   assert.match(handler, /ipcMain\.handle\('channels:setLaunchPosture', appWindowOnly\(/,

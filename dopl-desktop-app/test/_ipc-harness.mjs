@@ -20,6 +20,10 @@ const realAgentId = req(join(HERE, "..", "main", "agent-id.js"));
 // REAL for the same reason (2026-09-05): `main/session-state.js` is pure and DECLARES the caps the
 // read hands the SPA, so the refusal shape below cannot assert numbers main never answers with.
 const realState = req(join(HERE, "..", "main", "session-state.js"));
+// REAL for the same reason (U5, 2026-09-21): `main/launch-selection.js` is pure — it reaches the
+// runtime registry and nothing else — and `channel-dir-ipc.js` reads one constant off it, the
+// record VERSION every posture/defaults reply declares. A faked version number would pin nothing.
+const realSelection = req(join(HERE, "..", "main", "launch-selection.js"));
 export const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 export const SRC = M("channel-dir-ipc.js");
 export const OPS_SRC = M("session-ipc-ops.js");
@@ -91,6 +95,20 @@ export function bootIpc({ blocked = false } = {}) {
         setLaunchPosture: (channelId, preset) => { writes.push({ channelId, preset }); return { ok: true }; },
         launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
         getLaunchModel: () => "",
+        // U5 (2026-09-21): the versioned, runtime-keyed record the two posture ops now read and
+        // write. `setLaunchSelection` records into the SAME `writes` ledger — it is the one
+        // validating writer, so a second ledger would let one op's forged write pass unseen.
+        getLaunchSelection: () => ({ v: 2, runtime: "", messages: "auto_both", byRuntime: {} }),
+        getLaunchSelectionDetail: () => ({
+          selection: { v: 2, runtime: "", messages: "auto_both", byRuntime: {} },
+          review: [],
+          stored: true,
+        }),
+        setLaunchSelection: (channelId, preset) => {
+          writes.push({ channelId, preset });
+          return { ok: true, preset, selection: { v: 2, runtime: "", messages: "auto_both", byRuntime: {} }, review: [] };
+        },
+        getLaunchModelLink: () => "",
         // `getAutoSend` / `setAutoSend` removed 2026-09-06 (item 8). The fakes go WITH the real
         // functions: a harness offering a method `channel-prefs.js` no longer exports would let a
         // handler reading it pass here and throw in production.
@@ -177,6 +195,10 @@ export function bootIpc({ blocked = false } = {}) {
     if (id === "./session-delete-op") return deleteOpModule;
   if (id === "./session-answer-permission") return answerPermModule;
     if (id === "./session-ipc-ops") return opsModule;
+    // U5: the record SHAPE module. `channel-dir-ipc.js` reads one constant off it — the version
+    // every posture/defaults reply declares — so the REAL module is handed over: it is pure (it
+    // reaches nothing but the registry) and a faked version number would pin nothing.
+    if (id === "./launch-selection") return realSelection;
     throw new Error("unexpected require: " + id);
   };
   const realGuards = new Function(`${BLOCK}\n return { isAppWindowSender, isUuid, UUID_RE };`)();

@@ -225,7 +225,19 @@ function bootIpc(opts = {}) {
       return {
         getLaunchPosture: () => ({ tools: "manual", messages: "ask", model: null }),
         setLaunchPosture: () => ({ ok: true, preset: { tools: "manual", messages: "ask" } }),
-        launchStartModes: () => ({ tools: "manual", messages: "ask" }),
+        launchStartModes: () => ({ tools: "manual", messages: "ask", native: {} }),
+        // U5 (2026-09-21): the versioned, runtime-keyed record the posture read now also carries.
+        // These cases are about `connected`, so the record is the restrictive one and says nothing.
+        getLaunchSelectionDetail: () => ({
+          selection: { v: 2, runtime: "", messages: "ask", byRuntime: {} }, review: [], stored: false,
+        }),
+        getLaunchSelection: () => ({ v: 2, runtime: "", messages: "ask", byRuntime: {} }),
+        setLaunchSelection: () => ({
+          ok: true,
+          preset: { tools: "manual", messages: "ask" },
+          selection: { v: 2, runtime: "", messages: "ask", byRuntime: {} },
+          review: [],
+        }),
       };
     }
     if (id === "./channel-runtime") return { getChannelRuntime: () => "", setChannelRuntime: () => "" };
@@ -251,6 +263,9 @@ function bootIpc(opts = {}) {
     if (id === "./popout-window") return { openThreadWindow: () => ({ ok: true }) };
     if (id === "./diag") return { diag: () => {} };
     if (id === "./agent-id") return { isAgentId: () => true };
+    // U5 (2026-09-21) — the record SHAPE module, stubbed so `channel-dir-ipc.js` loads. These
+    // cases drive the POSTURE read's `connected` field and nothing about the record's version.
+    if (id === "./launch-selection") return { SELECTION_VERSION: 2 };
     if (id === "./session-ipc-ops") return ops;
     throw new Error(`unexpected require: ${id}`);
   };

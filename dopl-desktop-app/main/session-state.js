@@ -88,6 +88,16 @@ function coerceMode(list, value) {
 // durable record); as of v2.5 D1 it NO LONGER gates the inbound path — every counterparty turn waits
 // on an Accept unless AXIS B or the standing grant says otherwise. Caps (and, v3.1, both axes) fall
 // back to the documented defaults on an absent or invalid value.
+// The validated native bag, copied. ⚠ An absent, corrupt or non-string-valued entry is DROPPED,
+// so the runtime's own declared default applies — which is what every session did before this
+// field existed. It is never a guessed value and never a widened one.
+function nativeBag(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const key of Object.keys(raw)) if (typeof raw[key] === 'string' && raw[key]) out[key] = raw[key];
+  return out;
+}
+
 function initialSessionState(opts) {
   const o = opts || {};
   // 2026-09-07: `o.turnCap` / `o.costCapUsd` from an older persisted record are ignored rather than
@@ -117,6 +127,16 @@ function initialSessionState(opts) {
     // reducer's `set_tool_mode` arm is its one producer. Never persisted, like both axes.
     toolModeSet: false,
     messageMode: coerceMode(MESSAGE_MODES, o.messageMode),
+    // ⚠ **THE SELECTED RUNTIME'S OWN LAUNCH SETTINGS, AS AN OPAQUE BAG (2026-09-21, U5).** Core
+    // stores it, stamps it and NEVER looks inside: every key and every value was validated by the
+    // adapter that declared it (`runtime/selection-vocabulary.js › normalizeNative`), and the
+    // adapter's launch spec is its only reader. Holding one runtime's setting NAMES here is
+    // exactly what `test/core-vocabulary.test.mjs` exists to prevent.
+    // ⚠ COPIED, NOT ALIASED, and string values only — a shared object would let one session's
+    // containment change when another's did, and a non-string is a shape no adapter declares.
+    // ⚠ STAMPED AT SPAWN AND NEVER READ LIVE, like the runtime id itself (INVARIANTS §11): a
+    // sandbox that could change under a running turn is not a fence.
+    native: nativeBag(o.native),
     // v2.5 D1/D4: the standing INBOUND grant ("Accept for this session") — when true an inbound turn
     // is fed with no Accept. Never persisted, and reset on park with the two axes (MEDIUM-3 / C9),
     // so a peer cannot restart a parked query and drive turns with the operator away.

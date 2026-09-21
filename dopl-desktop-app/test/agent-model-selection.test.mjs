@@ -30,6 +30,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
 const read = (f) => readFileSync(join(MAIN, f), "utf8");
 const model = require(join(MAIN, "session-model.js"));
+// U10 (2026-09-21): `setModelByTask`'s new free vars. REAL, never stubbed — `main/runtime/index.js`
+// is electron-free by contract, so the live-switch refusal is asked of the SHIPPED descriptors.
+const RUNTIME_REGISTRY = require(join(MAIN, "runtime/index.js"));
 
 const JUNK = ["", " ", null, undefined, 0, 1, true, {}, [], "opus", "claude-opus-4-5",
   "claude-opus-5 ", "--dangerously-skip-permissions", "claude-opus-5\n--model=x"];
@@ -105,9 +108,13 @@ test("WIRE: `getLaunchPosture` is that composition, not a second spelling of it"
   // A REGEX BECAUSE THE REAL FUNCTION NEEDS electron-store. It pins the one property source
   // extraction cannot: that the store-backed reader routes through the same helper the case above
   // drives, rather than re-deriving the shape and drifting from it.
+  // ⚠ THE COMPOSITION MOVED ON 2026-09-21 (U5): the reader is the VERSIONED, RUNTIME-KEYED
+  // selection, rendered back into the legacy three-key wire the case above drives. The PROPERTY is
+  // unchanged — one helper, not a second spelling that can drift from it.
   const PREFS = read("channel-prefs.js");
   const body = PREFS.slice(PREFS.indexOf("function getLaunchPosture("));
-  assert.match(body.slice(0, body.indexOf("}")), /effectivePosture\(getAllPostures\(\), channelId\)/);
+  assert.match(body.slice(0, body.indexOf("}")),
+    /toLegacyPosture\(ctx\(\), getLaunchSelection\(channelId\)\)/);
 });
 
 test("DURABLE: two channels hold independent models", () => {
@@ -163,8 +170,13 @@ test("SUPPLIED-ONLY: the two ends agree — the preload spreads, the validator p
     "the preload forwards the key ONLY when the caller supplied one");
   assert.ok(!/model: asMode\(preset && preset\.model\)/.test(PRELOAD),
     "…and the unconditional coercion is gone, not merely shadowed by a second spelling");
-  assert.match(read("channel-prefs.js"), /hasOwnProperty\.call\(raw, 'model'\)/,
+  // ⚠ THE OWN-KEY PROBE MOVED WITH THE RECORD (U5). It is `launch-selection.js › patchSelection`
+  // that decides whether the caller SAID something about the model, and it now applies the same
+  // test to every field of the runtime-keyed record rather than to `model` alone.
+  assert.match(read("launch-selection.js"), /const has = \(k\) => Object\.prototype\.hasOwnProperty\.call\(p, k\);/,
     "…and main tells a missing key from a supplied one, which is the other half");
+  assert.match(read("launch-posture-legacy.js"), /hasOwnProperty\.call\(raw, 'model'\)/,
+    "…and the legacy reader still does too, for the records already on disk");
 });
 
 // ── 2. TWO READERS, AND WHY ──────────────────────────────────────────────────────────────────
@@ -181,7 +193,9 @@ test("READERS: the model has its OWN reader, so H2's posture census stays honest
     "the model reader must not go through the posture reader, or the census cannot tell them apart");
   // …and the peer-triggered lane reads the MODEL and nothing else from that record.
   const TRIGGER = read("trigger.js");
-  assert.match(TRIGGER, /channelPrefs\.getLaunchModel\(entry\.channel\.id\)/);
+  // ⚠ `getLaunchModelLink` SINCE U5 — the same record, the same field, resolved on the channel's
+  // own runtime instead of through the DEFAULT runtime's alias table.
+  assert.match(TRIGGER, /channelPrefs\.getLaunchModelLink\(entry\.channel\.id\)/);
   const code = TRIGGER.split("\n")
     .filter((l) => !/^\s*\/\//.test(l))
     .map((l) => { const i = l.indexOf("//"); return i === -1 ? l : l.slice(0, i); })
@@ -210,8 +224,13 @@ test("LAUNCH: both lanes convert the ID to the argv-safe ALIAS before it travels
   const OPS = read("session-launch-op.js");
   // The launch sheet sits in front of both since Phase 2: `overrides.model` is a DELIBERATE PER-CALL
   // CHOICE and the other two are DEFAULTS.
+  // ⚠ THE CHANNEL LINK IS `getLaunchModelLink` SINCE 2026-09-21 (U5), NOT `aliasForModelId` OVER
+  // `getLaunchModel`. That spelling aliased the stored id through the DEFAULT runtime's table,
+  // which was right while only that runtime's ids could be stored and silently DROPS a pick made
+  // on any other runtime now that they can be. The new helper resolves the same link against the
+  // channel's own runtime, in one place, so the three launch lanes cannot drift.
   assert.match(OPS,
-    /model: overrides\.model \|\| templateModel\(sessionModel, template\)\s*\|\| sessionModel\.aliasForModelId\(channelPrefs\.getLaunchModel\(p\.channelId\)\)/,
+    /model: overrides\.model \|\| templateModel\(sessionModel, template\)\s*\|\| channelPrefs\.getLaunchModelLink\(p\.channelId\)/,
     "the operator's own Launch: the sheet, then the template default, then the channel's pick");
   // The rule itself moved to `session-model.js › chainModel` on 2026-08-23 (F-285): the DIRECTIVE
   // lane needed the identical answer, and a rule written once per lane drifts in one of them.
@@ -220,10 +239,16 @@ test("LAUNCH: both lanes convert the ID to the argv-safe ALIAS before it travels
   assert.match(OPS, /return sessionModel\.chainModel\(/,
     "the button lane must not restate the rule — it delegates");
   // The chain moved with `spawn` on 2026-09-01 (the §1 split); the precedence is unchanged.
-  assert.match(read("launch-directive-spawn.js"), /model: sessionModel\.chainModel\(d\.model\)/,
+  // ⚠ THE SPELLING MOVED AGAIN ON 2026-09-21 (U9, `7964ea17`): the directive lane's chain is
+  // inside `resolveModel` now, because an explicit `runtime: codex` has to resolve its model
+  // against THAT runtime rather than through the default adapter's table. The PROPERTY this
+  // asserts is unchanged and is the only thing it ever asserted — the lane DELEGATES the
+  // "unrecognised model falls through" rule to `chainModel` instead of restating it — so the match
+  // is on the delegation, not on the assignment syntax around it.
+  assert.match(read("launch-directive-spawn.js"), /sessionModel\.chainModel\(d\.model\)/,
     "…and so does the directive lane's own link, which used to be a ternary on aliasForModelId");
   assert.match(read("trigger.js"),
-    /aliasForModelId\(channelPrefs\.getLaunchModel\(entry\.channel\.id\)\)/, "the peer-triggered lane");
+    /channelPrefs\.getLaunchModelLink\(entry\.channel\.id\)/, "the peer-triggered lane");
 });
 
 test("LAUNCH: an unknown stored model degrades to the PRODUCT FALLBACK, never to argv", () => {
@@ -244,23 +269,28 @@ test("LAUNCH: an unknown stored model degrades to the PRODUCT FALLBACK, never to
 // ── 4. THE LIVE SWITCH ───────────────────────────────────────────────────────────────────────
 
 /** `setModelByTask`, sliced from the shipped op and driven against a fake registry + query. */
-function live({ query, settled = false } = {}) {
+function live({ query, settled = false, runtimeId = "claude" } = {}) {
   const src = read("session-reopen.js");
   const resolver = src.slice(src.indexOf("function resolveSession("), src.indexOf("// PURE READ —"));
   const body = resolver + src.slice(
     src.indexOf("async function setModelByTask("),
     src.indexOf("// ── THE DIRECT 1:1 LANE")
   );
-  const s = { key: "c:t:a1b2c3d4", agentId: "a1b2c3d4", settled, model: "default", query };
+  const s = { key: "c:t:a1b2c3d4", agentId: "a1b2c3d4", settled, model: "default", query, runtimeId };
   const sessions = new Map([[s.key, s]]);
+  // ⚠ `runtimeRegistry` / `runtimeCopy` JOINED THE INJECTED SET ON 2026-09-21 (U10) AND ARE REAL.
+  // `setModelByTask` now asks the SESSION'S OWN descriptor whether a live model switch is a thing
+  // this runtime does — `capability.js › canSwitchModelLive`'s first consumer in `main/` — so
+  // driving it against a stub would pin nothing about the refusal that matters.
   const fn = new Function(
-    "deps", "store", "sessionModel",
+    "deps", "store", "sessionModel", "runtimeRegistry", "runtimeCopy",
     `${body}\n return setModelByTask;`
   )(
     { sessions },
     { slotKey: (x) => `${x.channelId || ""}:${x.taskId || ""}:${x.agentId || ""}`,
       threadKeyPrefix: (c, t) => `${c || ""}:${t || ""}:` },
-    model
+    model,
+    RUNTIME_REGISTRY, RUNTIME_REGISTRY.copy
   );
   return { fn, s };
 }
@@ -376,4 +406,44 @@ test("REPORT: the bridge declares the field and the op, in BOTH trees", () => {
     "the durable posture's third field is declared where the SPA writes it");
   assert.match(readFileSync(join(HERE, "..", "renderer", "app-preload.js"), "utf8"), /setModel: \(channelId, taskId, model, agentId\) =>/,
     "and the preload is the ground truth all three follow");
+});
+
+// ── 5. U10 (2026-09-21): A RECORDED PICK NOTHING APPLIED IS A LIE, ON EVERY RUNTIME ──────────
+//
+// ⚠ THE DEFECT THESE CLOSE. The `setModel` call is guarded by `typeof … === 'function'`, so on a
+// runtime whose live handle has no model verb NOTHING was applied — and the write below it still
+// recorded the alias and answered `{ ok: true }`. `buildLaunchSpec` reads that value on the NEXT
+// assembly, so the session came back on a model the operator had been told it was already using.
+// It also wrote CLAUDE's alias onto another runtime's session, which is the cross-vocabulary
+// coercion the adapter seam exists to stop.
+
+test("U10: a runtime whose live model switch is UNVERIFIED refuses, with a reason", async () => {
+  const seen = [];
+  const h = live({ runtimeId: "codex", query: { setModel: async (m) => { seen.push(m); } } });
+  const res = await h.fn({ ...address, model: "claude-opus-5" });
+  assert.equal(res.ok, false);
+  assert.equal(res.reason, "unsupported");
+  assert.match(res.detail, /Codex/, res.detail);
+  assert.match(res.detail, /has not been measured/, "unverified is worded apart from a measured no");
+  assert.deepEqual(seen, [], "nothing was told");
+  assert.equal(h.s.model, "default", "and nothing was recorded — the whole point");
+});
+
+test("U10: a handle with no model verb refuses instead of recording a switch it did not make", async () => {
+  // ⚠ THE DECLARATION AND THE HANDLE CAN DISAGREE, and the handle wins. Cursor DECLARES
+  // `liveModelSwitch: true`; a query object with no `setModel` is the promise not being kept, and
+  // recording over either one is the same lie.
+  const h = live({ runtimeId: "cursor", query: { __noModelVerb: true } });
+  const res = await h.fn({ ...address, model: "claude-opus-5" });
+  assert.equal(res.ok, false);
+  assert.equal(res.reason, "unsupported");
+  assert.match(res.detail, /Cursor/, res.detail);
+  assert.equal(h.s.model, "default");
+});
+
+test("U10: Claude is untouched — the refusal is per runtime, not a new blanket rule", async () => {
+  const seen = [];
+  const h = live({ runtimeId: "claude", query: { setModel: async (m) => { seen.push(m); } } });
+  assert.deepEqual(await h.fn({ ...address, model: "claude-opus-5" }), { ok: true, model: "opus" });
+  assert.deepEqual(seen, ["opus"]);
 });

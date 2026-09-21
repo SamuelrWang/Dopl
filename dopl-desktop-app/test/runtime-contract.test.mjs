@@ -366,6 +366,120 @@ test("no adapter declares a capability nothing calls", () => {
   }
 });
 
+// ── 5. U5: THE LAUNCH-SELECTION DECLARATIONS (2026-09-21) ────────────────────────────────────
+//
+// ⚠ **THE DESCRIPTOR STOPPED BEING ONLY A RENDERING TABLE HERE.** `runtime/selection-vocabulary.js`
+// reads `models.pick`, `models.dimensions` and `models.dimensionOptions`, and SHARED STORAGE
+// validates every runtime's durable launch selection through them — which is what let
+// `main/channel-prefs.js`, `main/agent-defaults.js` and `main/session-engine.js` stop importing
+// the DEFAULT runtime's frozen id table to validate a Codex launch. A malformed declaration here
+// is therefore a record that stores whatever it is handed, so these refuse REGISTRATION.
+
+test("every adapter declares a usable model PICK RULE, and a malformed one is REFUSED", () => {
+  for (const { descriptor } of ADAPTERS) {
+    const pick = capability.pickRule(descriptor);
+    assert.ok(pick, `${descriptor.id}: declares no models.pick`);
+    assert.ok(pick.kind === "closed" || pick.kind === "open", `${descriptor.id}: models.pick.kind`);
+    if (pick.kind === "closed") {
+      assert.ok(Array.isArray(pick.stored) && pick.stored.length, `${descriptor.id}: closed roster, no stored list`);
+      assert.ok(Array.isArray(pick.accepted) && pick.accepted.length, `${descriptor.id}: closed roster, no accepted list`);
+    } else {
+      // ⚠ A SHAPE CHECK REPLACES MEMBERSHIP ON A LIVE ROSTER, AND IT IS A GATE: the stored value
+      // becomes a launch argument, so the alphabet is what stands in for the list.
+      assert.ok(typeof pick.pattern === "string" && pick.pattern, `${descriptor.id}: open roster, no pattern`);
+      assert.equal(capability.storeModelPick(descriptor, "a; rm -rf /"), "", `${descriptor.id}: shell metacharacters`);
+      assert.equal(capability.storeModelPick(descriptor, "a b"), "", `${descriptor.id}: whitespace`);
+      assert.equal(capability.storeModelPick(descriptor, "x".repeat(200)), "", `${descriptor.id}: length`);
+    }
+    // ⚠ AND FAIL-CLOSED IN BOTH DIRECTIONS on every adapter: nothing this runtime cannot vouch
+    // for is ever stored, and a launch that cannot resolve one lands on the runtime's OWN "no pick"
+    // member — never on another runtime's.
+    // ⚠ `pick.absent` IS NOT `models.defaultMeansAbsent`, AND THE DIFFERENCE IS REAL RATHER THAN A
+    // SLIP. `defaultMeansAbsent` is the CHAIN's spelling of "this link has no opinion, keep going"
+    // (`session-model.js › chainModel`, F-285); `pick.absent` is what a SESSION is stamped with
+    // when nothing resolved, which on a closed roster is that platform's own "no pick" WORD and is
+    // resolved one step later by the adapter's launch spec. Collapsing them would end every chain
+    // at its first link.
+    for (const junk of [null, undefined, 7, {}, [], "   "]) {
+      assert.equal(capability.storeModelPick(descriptor, junk), "", `${descriptor.id}: ${JSON.stringify(junk)}`);
+      assert.equal(capability.launchModelPick(descriptor, junk), pick.absent,
+        `${descriptor.id}: ${JSON.stringify(junk)}`);
+    }
+  }
+  // A descriptor with no pick rule at all does not register.
+  for (const adapter of ADAPTERS) {
+    const bad = clone(adapter);
+    delete bad.descriptor.models.pick;
+    assert.throws(() => contract.sealAdapter(bad), /models\.pick is missing/, bad.descriptor.id);
+  }
+});
+
+test("a DECLARED model dimension with no options REFUSES registration — F-390's shape", () => {
+  // ⚠ **THIS IS THE RULE THAT CLOSES THE LOOP.** Codex declared `dimensions: ['reasoningEffort']`,
+  // nothing said what its values were, and `runtime/codex/launch-spec.js` read a
+  // `state.reasoningEffort` that **had no producer anywhere in the tree** — a control that writes
+  // nowhere. INVARIANTS §11 says such a control must be ABSENT, so naming a dimension an adapter
+  // cannot back is caught at module load rather than discovered in a settings panel.
+  for (const adapter of ADAPTERS) {
+    const bad = clone(adapter);
+    bad.descriptor.models.dimensions = ["somethingNobodyDeclared"];
+    assert.throws(() => contract.sealAdapter(bad), /control that writes nowhere/, bad.descriptor.id);
+  }
+});
+
+test("a declared NATIVE dimension is really writable, and UNKNOWN is not EMPTY", () => {
+  for (const { descriptor } of ADAPTERS) {
+    const dims = capability.nativeDimensions(descriptor);
+    if (dims === null) {
+      // ⚠ `null`, NEVER `{}`. "This runtime has no native launch setting" and "it has none right
+      // now" are different facts, and the UI hides on the first.
+      assert.deepEqual(capability.normalizeNative(descriptor, { anything: "x" }).value, {},
+        `${descriptor.id}: a runtime with no dimensions stores none`);
+      continue;
+    }
+    for (const [key, dim] of Object.entries(dims)) {
+      assert.ok(dim.options.length, `${descriptor.id}.${key}: a dimension with no options is a control that writes nowhere`);
+      // Every declared option round-trips — a declaration the adapter cannot accept is a claim
+      // it cannot back.
+      for (const option of dim.options) {
+        assert.equal(capability.normalizeNative(descriptor, { [key]: option }).value[key], option,
+          `${descriptor.id}.${key}=${option}`);
+      }
+      // ⚠ NARROWEST-FIRST IS LOAD-BEARING on a CONTAINMENT dimension: `[0]` is where an
+      // unreadable value fail-closes, and it must never be the widest.
+      const fell = capability.normalizeNative(descriptor, { [key]: "not-a-real-value" });
+      if (dim.fallback === "narrowest") {
+        assert.equal(fell.value[key], dim.options[0], `${descriptor.id}.${key} floors to its narrowest`);
+        assert.notEqual(fell.value[key], dim.options[dim.options.length - 1],
+          `${descriptor.id}.${key} must never fall to its WIDEST`);
+      } else {
+        assert.equal(fell.value[key], undefined, `${descriptor.id}.${key} drops rather than guessing`);
+      }
+      assert.ok(fell.review.length, `${descriptor.id}.${key}: a fallback must be reviewable, not silent`);
+      // ⚠ AN ABSENT KEY IS NOT AN UNKNOWN ONE. Absent means "no pick, the platform's own default"
+      // and says nothing; present-and-unreadable falls closed and says so.
+      assert.deepEqual(capability.normalizeNative(descriptor, {}), { value: {}, review: [] }, descriptor.id);
+    }
+  }
+});
+
+test("no adapter claims a native dimension it cannot spend", () => {
+  // ⚠ CODEX'S GRANULAR APPROVAL CATEGORIES ARE THE LIVE CASE AND THEY ARE DELIBERATELY ABSENT.
+  // `approval.categories` names them and `approval.js › toolNameFor` classifies a request that
+  // arrives under one, but the structured `approval_policy = { granular = { … } }` WRITE shape is
+  // unmeasured. A dimension declared becomes a storable, spendable setting; declaring that one
+  // would be claiming a capability the adapter cannot back.
+  for (const { descriptor } of ADAPTERS) {
+    const dims = capability.nativeDimensions(descriptor) || {};
+    const categories = (descriptor.approval && descriptor.approval.categories) || null;
+    if (!categories) continue;
+    for (const category of categories) {
+      assert.equal(dims[category], undefined,
+        `${descriptor.id}: ${category} is classified, not configured — do not declare it writable until it is`);
+    }
+  }
+});
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 // A MUTABLE deep copy of a sealed adapter, so a case can build the failing descriptor the

@@ -32,14 +32,25 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  *  a TTL) rather than a behaviour. */
 export const SRC = readFileSync(join(HERE, "..", "main", "channel-prefs.js"), "utf8");
 
+/** ⚠ THE FENCE MOVED TO `main/launch-posture-legacy.js` ON 2026-09-21 (U5), AND SO DID THE SLICE.
+ *  The pre-U5 posture — one global tool mode and one global model, both in the DEFAULT runtime's
+ *  vocabulary — is now the LEGACY READER: it migrates records already on disk and re-derives the
+ *  three own-keys an older renderer feature-probes, and it is deleted whole when the compatibility
+ *  window closes. That lifetime is why it is a file rather than a block inside the new one.
+ *  The exports below are unchanged, so every case built on them is still about the same program. */
+export const LEGACY_SRC = readFileSync(join(HERE, "..", "main", "launch-posture-legacy.js"), "utf8");
+
+/** The VERSIONED, RUNTIME-KEYED record that replaced it. */
+export const SELECTION_SRC = readFileSync(join(HERE, "..", "main", "launch-selection.js"), "utf8");
+
 const BEGIN = "// ─── BEGIN CHANNEL-PREFS-VALIDATE";
 const END = "// ─── END CHANNEL-PREFS-VALIDATE";
-const from = SRC.indexOf(BEGIN);
-const to = SRC.indexOf(END);
+const from = LEGACY_SRC.indexOf(BEGIN);
+const to = LEGACY_SRC.indexOf(END);
 assert.notEqual(from, -1, "BEGIN CHANNEL-PREFS-VALIDATE sentinel missing");
 assert.notEqual(to, -1, "END CHANNEL-PREFS-VALIDATE sentinel missing");
 assert.ok(to > from, "channel-prefs sentinels out of order");
-const BLOCK = SRC.slice(from, to);
+const BLOCK = LEGACY_SRC.slice(from, to);
 
 // The sliced block must stay electron/fs/store-free (§H-7). Scan CODE only
 // (strip // comments — they legitimately say "electron-free").

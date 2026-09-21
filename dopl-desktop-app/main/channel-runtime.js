@@ -6,6 +6,14 @@
 // and this changes when the set of registered adapters does — a different clock, and the only
 // module in this family that has to ask `main/runtime/index.js` anything.
 //
+// ⚠ **THE PICK STOPPED BEING ITS OWN RECORD ON 2026-09-21 (U5), AND THIS FILE IS NOW THE NAMED
+// DOOR ONTO ONE FIELD OF THE CHANNEL'S LAUNCH SELECTION.** The reason is the two rulings U5
+// encodes: a runtime SELECTS BETWEEN per-runtime model and native settings stored side by side
+// (`main/launch-selection.js › byRuntime`), so the pick and the things it selects between cannot
+// live in two records that a crash, a downgrade or a failed write could leave disagreeing. What
+// did NOT change is anything below: what may be stored, what an unknown id does, and why a pick
+// may travel where a posture may not.
+//
 // ── ⚠ WHY IT IS NOT PART OF THE LAUNCH POSTURE, WHICH IS THE FIRST THING TO ASK ──────────────
 //
 // `channel-prefs.js › getLaunchPosture` carries the two permission axes and has exactly ONE
@@ -39,32 +47,38 @@
 // PRIVACY — electron-store, local to this Mac. Never POSTed, never in a channel message. The diag
 // line carries the channel id PREFIX and the runtime id, both non-secret.
 
-const Store = require('electron-store');
+// ⚠ NO `electron-store` HANDLE SINCE 2026-09-21 (U5). This file opened its own and wrote the
+// `channelRuntime` map directly; the pick lives on the channel's launch selection now, so every
+// read and write goes through `channel-prefs.js`'s one validating writer. A second handle on the
+// same document is a second writer of a record whose whole design is that it has one.
 const { diag } = require('./diag');
 const runtimeRegistry = require('./runtime');
 
-// The same `electron-store` instance shape `channel-prefs.js` uses — one JSON file per app, so a
-// second handle reads and writes the same document. Same idiom as `orchestrator-consent.js`.
-const store = new Store();
+// ⚠ **THE LEGACY KEY, AND IT IS NO LONGER THE AUTHORITY (2026-09-21, U5).** The pick now rides
+// the channel's VERSIONED LAUNCH SELECTION (`main/launch-selection.js`), beside the per-runtime
+// model and native settings it selects between — which is what makes "switch to Codex and back
+// and find your Claude model still there" expressible at all. This key survives as
+// `channel-prefs.js`'s MIGRATION SOURCE (a channel with no selection record seeds its runtime from
+// here) and as its DOWNGRADE MIRROR (every selection write re-stamps it), so an older build reads
+// the pick actually in force. Nothing in this file reads it directly any more.
+const CHANNEL_RUNTIME_KEY = 'channelRuntime'; // LEGACY MIRROR: { [channelId]: '<runtime id>' }
 
-const CHANNEL_RUNTIME_KEY = 'channelRuntime'; // { [channelId]: '<runtime id>' }
+// ⚠ LAZY, the idiom this tree uses at every module edge that touches `channel-prefs.js`: that
+// module instantiates an electron-store at load, it requires THIS file's sibling registry, and
+// plain-node callers of this file must keep working.
+const prefs = () => require('./channel-prefs');
 
 /**
  * Coerce an arbitrary value to a REGISTERED runtime id, or `''` for the default.
  *
  * ⚠ `''` IS THE ONLY SPELLING OF "NO PICK", so a channel that never chose and a channel whose
- * pick was cleared are the same record — the rule auto-send, agent chaining and the posture's
- * `model` all follow, and it is what keeps a reader from growing a third state to get wrong.
+ * pick was cleared are the same record — the rule agent chaining and the selection's own model
+ * field both follow, and it is what keeps a reader from growing a third state to get wrong.
  */
 function normalizeRuntimeId(raw) {
   const id = typeof raw === 'string' ? raw.trim() : '';
   if (!id) return '';
   return runtimeRegistry.ids().indexOf(id) === -1 ? '' : id;
-}
-
-function allRuntimes() {
-  const map = store.get(CHANNEL_RUNTIME_KEY);
-  return map && typeof map === 'object' && !Array.isArray(map) ? map : {};
 }
 
 /**
@@ -75,95 +89,39 @@ function allRuntimes() {
 function getChannelRuntime(channelId) {
   if (!channelId) return '';
   try {
-    return normalizeRuntimeId(allRuntimes()[channelId]);
+    return normalizeRuntimeId(prefs().getLaunchSelection(channelId).runtime);
   } catch (_err) {
     return ''; // an unreadable store is the default runtime, never a refusal
   }
 }
 
-/**
- * Persist the channel's runtime. ⚠ AN UNKNOWN ID CLEARS THE KEY rather than being stored: the
- * store is not a place to park a value this build cannot resolve, and the SPA's own list comes
- * from the same registry, so the only way to reach this branch is a hand-edited store or a
- * version-skewed page.
- * ⚠ RETURNS THE VALUE THE STORE ACTUALLY HOLDS (re-read on failure), which is what lets the IPC
- * layer answer `{ok:false}` and the SPA revert an optimistic pick — `orchestrator-consent.js`'s
- * rule, for its reason.
- */
-function setChannelRuntime(channelId, raw) {
-  if (!channelId) return '';
-  const id = normalizeRuntimeId(raw);
-  const before = getChannelRuntime(channelId);
-  try {
-    const map = allRuntimes();
-    const next = { ...map };
-    if (id) next[channelId] = id;
-    else delete next[channelId];
-    store.set(CHANNEL_RUNTIME_KEY, next);
-  } catch (err) {
-    diag('channel-runtime: could not persist the runtime pick —', err && err.message);
-    return getChannelRuntime(channelId);
-  }
-  diag('channel-runtime:', String(channelId).slice(0, 8), id || '(default)');
-  // ⚠ **A RUNTIME SWITCH CLEARS THE CHANNEL'S MODEL STAMP** (2026-09-06, z5ztx9ts's audit).
-  //
-  // MODEL ROSTERS ARE PER-RUNTIME. A channel stamped `claude-sonnet-5` that later switches to
-  // codex or cursor is carrying an id THAT RUNTIME HAS NEVER HEARD OF — and this is not a
-  // cosmetic mismatch, because `channel-prefs.js › getLaunchModel` sits ABOVE the SDK default in
-  // the launch precedence chain. The stale id would WIN instead of stepping aside, so the new
-  // runtime would be asked for a model that does not exist there rather than falling back to its
-  // own default.
-  //
-  // ⚠ IT BECAME REACHABLE WITH SAMUEL'S BACK-FILL RULING THE SAME DAY. Before it, an unset
-  // channel stored NO model and had nothing to go stale; now every channel the operator touches
-  // carries a real id, so "switched runtime while stamped" is the ordinary path rather than an
-  // edge case. The ruling stands — this only keeps it honest across a switch.
-  //
-  // ⚠ CLEARED, NOT TRANSLATED. There is no mapping between one vendor's roster and another's, and
-  // inventing one would be this file claiming to know which of Codex's models "is" Sonnet. Absent
-  // is a state the chain already handles: the new runtime's own default applies, and the operator
-  // picks again from a list that is actually its.
-  //
-  // ⚠ ONLY ON A REAL CHANGE, and only after the write LANDED. Re-selecting the same runtime must
-  // not wipe a deliberate pick, and a failed write returns above without reaching this line.
-  if (id !== before) clearLaunchModelForRuntimeSwitch(channelId, before, id);
-  return id;
-}
-
-/**
- * Drop the channel's stored launch model after its runtime changed. Best-effort and never in the
- * way of the switch itself.
- *
- * ⚠ LAZY-REQUIRED, the idiom this tree uses at every module edge that touches `channel-prefs.js`
- * (`session-private.js › channelMessageMode` states it): that module instantiates an
- * electron-store at load, and plain-node callers of this file must keep working.
- *
- * ⚠ IT WRITES THROUGH `setLaunchPosture`, NOT INTO THE STORE. The posture record validates BOTH
- * axes on write and refuses the whole thing on an unknown value; reaching around it to delete one
- * field would be a second writer of a record whose whole design is that it has one.
- */
-function clearLaunchModelForRuntimeSwitch(channelId, before, after) {
-  try {
-    const prefs = require('./channel-prefs');
-    const posture = prefs.getLaunchPosture(channelId);
-    if (!posture || !posture.model) return; // nothing stamped — nothing to go stale
-    prefs.setLaunchPosture(channelId, {
-      tools: posture.tools,
-      messages: posture.messages,
-      model: null,
-    });
-    diag('channel-runtime: cleared the model stamp on a runtime switch',
-      String(channelId).slice(0, 8), (before || '(default)') + ' -> ' + (after || '(default)'));
-  } catch (err) {
-    // ⚠ A FAILURE HERE COSTS A STALE STAMP, NEVER THE SWITCH. Loud in the log, silent to the
-    // caller: the operator asked to change runtime and that has already happened.
-    diag('channel-runtime: could not clear the model stamp —', (err && err.message) || String(err));
-  }
-}
+// ── ⚠ `setChannelRuntime` IS DELETED (2026-09-21, U5) ──────────────────────────────
+//
+// It persisted the pick into this file's own store key and then, since 2026-09-06, CLEARED the
+// channel's stored model as a side effect. Both halves are gone and neither is coming back:
+//
+//   THE WRITE   the pick is a FIELD of the channel's versioned launch selection, so it is written
+//               by the record's ONE validating writer (`channel-prefs.js › setLaunchSelection`),
+//               in the same write as the messaging axis and the runtime-keyed settings it selects
+//               between. A named door that issued a SECOND store write is exactly how a rejected
+//               posture came to half-apply a runtime.
+//   THE CLEAR   Samuel's Decisions #1 and #2: Claude → Codex → Claude restores BOTH remembered
+//               model choices and BOTH native settings, translating neither. The clear existed
+//               because ONE global model field could not hold two rosters and a stale id WON over
+//               the new runtime's default; a runtime-keyed record makes the stale id unreachable
+//               from the wrong adapter by construction.
+//
+// ⚠ **A ZERO-CALLER EXPORT IS NOT A FREE SEAM.** `test/session-preset-start.js`'s writer census
+// is what keeps H2 honest — "nothing on the session path re-arms its own future" — and it can only
+// stay honest if every writer it enumerates is a writer something actually reaches. Leaving this
+// here would have added a name to that census that nothing calls, which reads as coverage.
+//
+// ⚠ IF SOMETHING NEEDS TO SET A CHANNEL'S RUNTIME: `channel-prefs.js › setLaunchSelection(id,
+// { runtime })`. It is own-key, so it leaves every other field alone.
 
 module.exports = {
+
   CHANNEL_RUNTIME_KEY,
   normalizeRuntimeId,
   getChannelRuntime,
-  setChannelRuntime,
 };

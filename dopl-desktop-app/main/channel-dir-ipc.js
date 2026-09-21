@@ -60,6 +60,9 @@ const runtimeRegistry = require('./runtime');
 // seed that copies it into a brand-new channel. Read that module's header before wiring
 // anything else to it — it is deliberately NOT a second consumer of the launch posture.
 const agentDefaults = require('./agent-defaults');
+// U5: the record VERSION every posture/defaults reply declares, so a renderer never has to infer
+// which shape it is holding.
+const selectionShape = require('./launch-selection');
 const sessionIpcOps = require('./session-ipc-ops');
 const { diag } = require('./diag');
 
@@ -235,7 +238,20 @@ function register(opts = {}) {
     const connected = await Promise.resolve()
       .then(() => runtimeRegistry.connectedIds())
       .catch(() => []);
+    // ⚠ **THE VERSIONED SELECTION RIDES BESIDE THE LEGACY PAIR, ADDITIVELY (2026-09-21, U5).**
+    // The three legacy OWN KEYS stay exactly where they were, because every renderer older than
+    // U5 feature-probes them and renders NO row when one is missing — dropping them would not
+    // migrate those builds, it would make the controls vanish. The new fields say what this build
+    // can actually do, in the terms INVARIANTS §11 asks for: `selectionVersion` is the record
+    // version main WRITES (a renderer that reads a different one must not assume the shape),
+    // `selection` is the whole runtime-keyed record, and `needsReview` is the non-empty list of
+    // sentences for a record this build could not fully honour. **`needsReview` is never a
+    // failure of the read** — the settings it describes are already the narrower ones.
+    const detail = channelPrefs.getLaunchSelectionDetail(channelId);
     return Object.assign({}, channelPrefs.getLaunchPosture(channelId), {
+      selectionVersion: selectionShape.SELECTION_VERSION,
+      selection: detail.selection,
+      needsReview: detail.review,
       // The channel's pick, `''` for the default adapter. ⚠ ALWAYS PRESENT ON THE WIRE even when
       // nothing is stored, for `model`'s reason: an OWN-KEY probe is how the SPA tells "this
       // desktop has no runtime concept" (render no row) from "no pick, the default applies".
@@ -251,7 +267,12 @@ function register(opts = {}) {
   ipcMain.handle('channels:setLaunchPosture', appWindowOnly('setLaunchPosture', { ok: false }, (_event, payload) => {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false };
-    const res = channelPrefs.setLaunchPosture(p.channelId, p.preset);
+    // ⚠ ONE WRITE, NOT TWO, SINCE 2026-09-21 (U5). The runtime pick used to be a SECOND store
+    // write issued after the pair; it is a field of the same versioned record now, so a rejected
+    // write cannot half-apply a runtime and a successful one cannot leave the two disagreeing.
+    // `setLaunchSelection` is own-key throughout, so a patch that omits `runtime` still leaves the
+    // pick alone — which is the contract this op already had.
+    const res = channelPrefs.setLaunchSelection(p.channelId, p.preset);
     if (!res || res.ok !== true) return res || { ok: false };
     // ⚠ THE RUNTIME IS WRITTEN AFTER THE PAIR AND ONLY ON A SUCCESSFUL ONE, so a rejected posture
     // never half-applies. `setChannelRuntime` answers the value the store ACTUALLY holds, and an
@@ -263,14 +284,16 @@ function register(opts = {}) {
     // startSession`), because the conversation handle, the tool vocabulary and the Axis-A modes
     // all belong to ONE runtime. Re-pointing a running session would hand one platform's
     // conversation id to another platform's adapter.
-    const runtime = Object.prototype.hasOwnProperty.call(p.preset || {}, 'runtime')
-      ? channelRuntime.setChannelRuntime(p.channelId, (p.preset || {}).runtime)
-      : channelRuntime.getChannelRuntime(p.channelId);
+    const runtime = res.selection.runtime;
     // ⚠ AND IT APPLIES TO THE AGENTS ALREADY RUNNING (2026-08-25, Samuel's ruling: "permission
     // settings must apply to running sessions"). See `applyPostureToLive` below for the whole
     // argument. ADDITIVE on the wire — `applied` is a new field beside the existing
     // `{ok, preset}`, so a renderer that does not read it is unaffected.
-    return Object.assign({}, res, { applied: applyPostureToLive(p.channelId, res.preset), runtime });
+    return Object.assign({}, res, {
+      applied: applyPostureToLive(p.channelId, res.preset),
+      runtime,
+      selectionVersion: selectionShape.SELECTION_VERSION,
+    });
   }));
 
   // ⚠ `channels:getAutoSend` / `channels:setAutoSend` ARE DELETED (2026-09-06, item 8).
@@ -331,7 +354,10 @@ function register(opts = {}) {
     const connected = await Promise.resolve()
       .then(() => runtimeRegistry.connectedIds())
       .catch(() => []);
+    // ⚠ THE DEFAULTS RECORD CARRIES ITS OWN `v` AND `byRuntime` (U5, additive), for the reason
+    // `channels:getLaunchPosture` states one op above.
     return Object.assign({}, agentDefaults.getAgentDefaults(), {
+      selectionVersion: selectionShape.SELECTION_VERSION,
       runtimes: runtimeRegistry.all().map((a) => a.descriptor),
       defaultRuntime: runtimeRegistry.DEFAULT_ID,
       // ⚠ A PLAIN ARRAY OF IDS, and a LABEL rather than a gate — `channels:getLaunchPosture`'s

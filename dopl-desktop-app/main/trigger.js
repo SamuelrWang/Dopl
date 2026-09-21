@@ -42,7 +42,9 @@ const io = require('./listener-io');
 const targeting = require('./targeting');
 const channelPrefs = require('./channel-prefs'); // the shared windowless message derivation
 const channelRuntime = require('./channel-runtime'); // 2026-08-31: which runtime this channel's agents run on
-const sessionModel = require('./session-model'); // the frozen model enum + the id -> alias map
+// ⚠ `require('./session-model')` LEFT ON 2026-09-21 (U5). This lane aliased the channel's stored
+// model through the DEFAULT runtime's table, which silently dropped a pick made on any other
+// runtime; `channel-prefs.js › getLaunchModelLink` resolves it on the channel's own runtime now.
 const spawner = require('./session-spawner');
 const sessionEngine = require('./session-engine');
 const channelDirs = require('./channel-dirs');
@@ -280,7 +282,8 @@ async function launchResponderSession(entry, m, { taskId, toolProfile, requester
     // A peer-triggered launch inherits the operator's model choice — it is a fact about how this
     // machine answers, not a grant — while H2 keeps it from inheriting the stored posture, which
     // is why `channel-prefs.js` exposes the two through separate readers.
-    model: sessionModel.aliasForModelId(channelPrefs.getLaunchModel(entry.channel.id)),
+    // ⚠ U5: resolved on the CHANNEL'S OWN runtime (`channel-prefs.js › getLaunchModelLink`).
+    model: channelPrefs.getLaunchModelLink(entry.channel.id),
     // ⚠ H2 IS UNCHANGED AND THIS PATH STILL OBEYS IT. A peer-triggered launch carries NO tool
     // posture: `manual` is the reducer's own most-restrictive value, and the operator's durable
     // pick applies to the launch shape they press themselves (`sessions:launch`) and to nothing

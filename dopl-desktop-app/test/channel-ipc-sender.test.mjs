@@ -59,6 +59,12 @@ import {
 // so the two IPC suites cannot drift into booting different programs.
 
 
+// U5 (2026-09-21): the VERSIONED, RUNTIME-KEYED record the two posture ops read and write, beside
+// the legacy pair `PRESET` spells. Module scope, because both the refusal harness (where it backs
+// a success path these cases must never reach) and the bound-sender case (where it is half the
+// expected reply) need the same literal.
+const SELECTION = { v: 2, runtime: "", messages: "auto_both", byRuntime: {} };
+
 test("the guard ACCEPTS a registered window's own top frame", () => {
   const { webContents, mainFrame } = mkWin();
   assert.equal(isAppWindowSender(evt(webContents, mainFrame), idsOf(webContents)), true);
@@ -197,7 +203,11 @@ test("every op REFUSES when no registry accessor was supplied (an unbound surfac
     // ⚠ `getAutoSend` / `setAutoSend` REMOVED FROM THE STUB 2026-09-06 (item 8) — the real
     // module no longer exports them, and a stub that offers more than the module does can only
     // hide a call that would throw in production.
-    if (id === "./channel-prefs") return { getLaunchPosture: () => PRESET, setLaunchPosture: () => ({ ok: true }), launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }) };
+    if (id === "./channel-prefs") return { getLaunchPosture: () => PRESET, setLaunchPosture: () => ({ ok: true }), launchStartModes: () => ({ tools: "manual", messages: "auto_inbound", native: {} }), getLaunchSelection: () => SELECTION, getLaunchSelectionDetail: () => ({ selection: SELECTION, review: [], stored: true }), setLaunchSelection: () => ({ ok: true, preset: PRESET, selection: SELECTION, review: [] }) };
+    // U5 (2026-09-21) — the record SHAPE module, present only so `channel-dir-ipc.js` loads: it
+    // reads one constant off it, the version every posture/defaults reply declares. Every call
+    // below is on an UNBOUND surface, so the success path this backs must never be reached.
+    if (id === "./launch-selection") return { SELECTION_VERSION: 2 };
     // 2026-08-31 (port wave D) — the channel's RUNTIME pick and the adapter registry. They ride
     // the EXISTING posture pair rather than growing a fourth op (see `channel-dir-ipc.js`), so
     // there is no new row in the OPS table; what they need here is only to exist, because the
@@ -268,12 +278,26 @@ test("EVERY BOUND SENDER gets the real behaviour — the shell and the pop-out a
     // ⚠ `connected` JOINED THE REPLY 2026-09-08 (Samuel's connectivity correction) and is
     // ADDITIVE the same way the three above were: the ids this Mac could start today, beside a
     // `runtimes` roster it does not shorten. This harness registers no adapters, so it is empty.
+    // ⚠ AND THREE MORE SINCE 2026-09-21 (U5), ADDITIVE AGAIN: the record VERSION main writes,
+    // the whole VERSIONED, RUNTIME-KEYED selection, and the `needs review` sentences for a record
+    // this build could not fully honour (empty here — the fake record is clean). The legacy three
+    // keys are unchanged and must stay, because every renderer older than U5 feature-probes them.
     assert.deepEqual(await ipc.handlers["channels:getLaunchPosture"](sender, CH),
-      { ...PRESET, runtime: "", runtimes: [], defaultRuntime: "claude", connected: [] }, which);
+      {
+        ...PRESET,
+        selectionVersion: 2,
+        selection: SELECTION,
+        needsReview: [],
+        runtime: "",
+        runtimes: [],
+        defaultRuntime: "claude",
+        connected: [],
+      }, which);
     // ⚠ `applied` (2026-08-25) is the live fan-out's count — see test/channel-posture-live.test.mjs.
     // This harness binds no session engine, so a bound sender's write succeeds with nothing to
     // apply it to; what is being driven HERE is the sender binding, not the fan-out.
-    assert.deepEqual(await ipc.handlers["channels:setLaunchPosture"](sender, { channelId: CH, preset: PRESET }), { ok: true, applied: 0, runtime: "" }, which);
+    assert.deepEqual(await ipc.handlers["channels:setLaunchPosture"](sender, { channelId: CH, preset: PRESET }),
+      { ok: true, preset: PRESET, selection: SELECTION, review: [], applied: 0, runtime: "", selectionVersion: 2 }, which);
     assert.deepEqual(ipc.writes, [{ channelId: CH, preset: PRESET }], `${which}: the legitimate write lands`);
     await ipc.handlers["channels:chooseFolder"](sender, CH);
     assert.equal(ipc.dialogs.length, 1, `${which}: the operator's own picker still opens`);
