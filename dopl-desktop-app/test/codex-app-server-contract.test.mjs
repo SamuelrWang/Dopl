@@ -63,6 +63,19 @@ describe('the fixture cannot lie about where it came from', () => {
     assert.ok(FIXTURE.capturedAt, 'a measured fixture names when it was captured');
     assert.match(FIXTURE.generatedBy, /codex-app-server-schema\.js$/);
     assert.ok(FIXTURE.handshake.initialize, 'a measured fixture holds an initialize shape');
+    // 🔒 A MEASURED FIXTURE MUST NAME ITS BINARY, because a binary inside another application
+    // bundle is excluded by the plan's Scope Boundaries and a reviewer has to be able to see that
+    // from the fixture alone.
+    assert.ok(FIXTURE.cli.path, 'a measured fixture names the file it measured');
+  });
+
+  test('a MEASURED fixture declares every method Dopl sends, or it is not a supported CLI', () => {
+    if (!fixtureIsMeasured(FIXTURE)) return;
+    const declared = FIXTURE.handshake.declaredMethods;
+    assert.ok(declared, 'the CLI must enumerate its methods — `generate-json-schema` is the source');
+    const have = new Set(declared.names);
+    const absent = client.REQUIRED_METHODS.filter((m) => !have.has(m));
+    assert.deepEqual(absent, [], `this CLI does not offer ${absent.join(', ')}`);
   });
 
   test('the fixture states the one command that regenerates it', () => {

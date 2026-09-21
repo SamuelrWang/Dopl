@@ -15,6 +15,11 @@
     "command": "codex app-server --help",
     "text": null
   },
+  "schema": {
+    "ok": false,
+    "command": "codex app-server generate-json-schema --out <dir>",
+    "reason": "not run — no Codex CLI was resolvable where this placeholder was written"
+  },
   "handshake": {
     "initialize": null,
     "declaredMethods": null,

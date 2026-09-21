@@ -27,6 +27,7 @@
 // DIFFERENT spawn path than the app uses would measure a binary the app may never run.
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { execFile } = require('node:child_process');
 
@@ -36,6 +37,23 @@ const resolveBin = require('../main/runtime/codex/resolve-bin.js');
 const FIXTURE = path.join(__dirname, '..', 'test', 'fixtures', 'codex-app-server.json');
 const HANDSHAKE_TIMEOUT_MS = 20000;
 const HELP_TIMEOUT_MS = 10000;
+const SCHEMA_TIMEOUT_MS = 60000;
+
+// ⚠ THE GENERATED SCHEMA IS THE AUTHORITATIVE METHOD LIST, NOT `initialize`. Measured 2026-09-21
+// against `codex-cli 0.155.0-alpha.9.2`: `initialize` answers `{ codexHome, platformFamily,
+// platformOs, userAgent }` and declares NO methods, while
+// `codex app-server generate-json-schema --out <dir>` writes a bundle whose `ClientRequest.json`
+// enumerates every client→server method as a `oneOf` of `method` consts. That is what the plan
+// means by "generate the schema during a deliberate compatibility-update workflow" — and it is
+// why `client.js`'s gate treats an undeclared list as `unverified-protocol` rather than as empty.
+// ⚠ The subcommand is marked `[experimental]`. A CLI that lacks it is recorded as such, not
+// guessed around.
+const SCHEMA_FILES = Object.freeze({
+  clientRequests: 'ClientRequest.json',
+  serverRequests: 'ServerRequest.json',
+  serverNotifications: 'ServerNotification.json',
+  clientNotifications: 'ClientNotification.json',
+});
 
 // ── SHAPE REDUCTION ──────────────────────────────────────────────────────────────────────────
 
@@ -83,6 +101,48 @@ function modelRow(row) {
     isDefault: flag === true,
     keys: Object.keys(row).sort(),
   };
+}
+
+// ── THE GENERATED SCHEMA ─────────────────────────────────────────────────────────────────────
+
+/** The `method` consts out of one `oneOf`-of-variants schema file. ⚠ Names only, never bodies. */
+function methodsIn(file) {
+  let doc;
+  try { doc = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { return null; }
+  const variants = doc.oneOf || doc.anyOf || [];
+  const names = [];
+  for (const variant of variants) {
+    const method = variant && variant.properties && variant.properties.method;
+    if (!method) continue;
+    const name = method.const || (Array.isArray(method.enum) ? method.enum[0] : null);
+    if (typeof name === 'string' && name) names.push(name);
+  }
+  return names.length ? names.sort() : null;
+}
+
+/**
+ * `codex app-server generate-json-schema --out <tmp>`, reduced to method NAMES.
+ * ⚠ The bundle is written to a temp directory and deleted; only the name lists are kept, because
+ * a 200KB schema checked into `test/fixtures/` would rot without anything reading it.
+ */
+async function generatedSchema(bin) {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'dopl-codex-schema-'));
+  try {
+    const run1 = await run(bin, ['app-server', 'generate-json-schema', '--out', out], SCHEMA_TIMEOUT_MS);
+    if (!run1.ok) {
+      return {
+        ok: false,
+        command: `${bin} app-server generate-json-schema --out <dir>`,
+        reason: (run1.err.trim() || run1.error || 'the subcommand failed').slice(0, 400),
+      };
+    }
+    const result = { ok: true, command: `${bin} app-server generate-json-schema --out <dir>` };
+    for (const [key, file] of Object.entries(SCHEMA_FILES)) result[key] = methodsIn(path.join(out, file));
+    result.files = fs.readdirSync(out).sort();
+    return result;
+  } finally {
+    try { fs.rmSync(out, { recursive: true, force: true }); } catch (_) { /* best effort */ }
+  }
 }
 
 // ── THE CAPTURE ──────────────────────────────────────────────────────────────────────────────
@@ -136,18 +196,24 @@ async function capture() {
   const versionText = version.out.trim() || version.err.trim();
 
   const help = await run(found.path, ['app-server', '--help'], HELP_TIMEOUT_MS);
+  const schema = await generatedSchema(found.path);
 
   const handshake = await withAppServer(async (conn) => {
     const out = { initialize: null, declaredMethods: null, modelList: null, errors: [] };
     const init = await conn.request('initialize', client.initializeParams(versionText));
     out.initialize = { shape: shapeOf(init), raw: null };
-    // ⚠ NO PATH IS ASSUMED. Whatever the server offers that LOOKS like a method list is recorded
-    // with the key it arrived under; when nothing does, `declaredMethods` stays null — which the
-    // gate reads as `unverified-protocol`, not as `[]`.
+    // ⚠ THE GENERATED SCHEMA ANSWERS FIRST — it is the CLI's own enumeration of its methods.
+    if (schema.ok && Array.isArray(schema.clientRequests)) {
+      out.declaredMethods = { from: 'generate-json-schema/ClientRequest', names: schema.clientRequests };
+    }
+    // ⚠ NO PATH IS ASSUMED in the fallback either. Whatever `initialize` offers that LOOKS like a
+    // method list is recorded with the key it arrived under; when nothing does, `declaredMethods`
+    // stays null — which the gate reads as `unverified-protocol`, not as `[]`.
     for (const key of ['methods', 'supportedMethods', 'capabilities']) {
+      if (out.declaredMethods) break;
       const value = init && init[key];
       if (Array.isArray(value) && value.every((v) => typeof v === 'string')) {
-        out.declaredMethods = { key, names: value.slice().sort() };
+        out.declaredMethods = { from: `initialize.${key}`, names: value.slice().sort() };
         break;
       }
     }
@@ -184,6 +250,7 @@ async function capture() {
       command: `${found.path} app-server --help`,
       text: help.ok ? help.out.trim().slice(0, 4000) : null,
     },
+    schema,
     handshake,
     doplRequires: {
       note: 'THIS BLOCK IS NOT A MEASUREMENT — it is Dopl\'s own requirement, mirrored from `main/runtime/codex/client.js` (REQUIRED_METHODS / REQUIRED_FACTS) so the contract suite can prove the two have not drifted.',
@@ -208,10 +275,27 @@ function advise(fixture) {
     lines.push('');
     lines.push(`      const SUPPORTED_CLI = Object.freeze({ min: '${shown}', max: null, measuredFrom: '${shown}' });`);
   }
-  if (!fixture.handshake.declaredMethods) {
+  // 🔒 A BINARY INSIDE ANOTHER APP'S BUNDLE IS NOT A SUPPORTED SOURCE. The plan's Scope
+  // Boundaries forbid depending on the private executable inside another application bundle, so a
+  // fixture measured from one must not quietly become the supported contract.
+  if (/\.app\//.test(String(fixture.cli.path))) {
     lines.push('');
-    lines.push('⚠ This app-server declared NO method list in `initialize`, so the gate can only');
-    lines.push('  report `unverified-protocol` from a handshake. U3 must decide what else it reads.');
+    lines.push('🔒 ⚠ THIS BINARY LIVES INSIDE ANOTHER APPLICATION BUNDLE.');
+    lines.push(`     ${fixture.cli.path}`);
+    lines.push('     The plan\'s Scope Boundaries exclude it as a supported source, and a private');
+    lines.push('     build\'s protocol may differ from the public CLI\'s. Measure a real install');
+    lines.push('     before committing this fixture as the supported contract.');
+  }
+  const declared = fixture.handshake.declaredMethods;
+  if (!declared) {
+    lines.push('');
+    lines.push('⚠ This CLI declared NO method list — neither `generate-json-schema` nor `initialize`');
+    lines.push('  produced one, so the gate can only report `unverified-protocol`.');
+  } else {
+    const have = new Set(declared.names);
+    const absent = client.REQUIRED_METHODS.filter((m) => !have.has(m));
+    lines.push(`methods: ${declared.names.length} declared via ${declared.from}`
+      + (absent.length ? ` — ⚠ MISSING ${absent.join(', ')}` : ' — all of Dopl\'s required methods present'));
   }
   const defaults = (fixture.handshake.modelList && fixture.handshake.modelList.defaults) || [];
   if (defaults.length !== 1) {
