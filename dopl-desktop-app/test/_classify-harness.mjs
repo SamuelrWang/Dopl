@@ -117,7 +117,17 @@ function oracle(m, entry, myId) {
   if (!m || m.kind !== "message" || !m.authorUserId) return "ignore";
   if (m.authorKind !== "user" && m.authorKind !== "agent") return "ignore";
   if (!myId) return "ignore";
-  if (m.authorUserId === myId) return "ignore";
+  // 🔒 **MY OWN AGENT TAGGING ME IS A MENTION (2026-09-20).** An agent posts under
+  // its OPERATOR's `author_user_id`, so this guard could not tell *I wrote it* from
+  // *my agent wrote it* and every tag from the agents an operator actually works
+  // with was silent. `author_kind` is the only field that separates them.
+  // ⚠ 'fyi' AND NEVER 'trigger' — a banner, no spawn. The blanket guard was a LOOP
+  // BRAKE and it stays one; returning 'trigger' here would launch an agent in
+  // answer to my own agent.
+  // ⚠ A POST I TYPED MYSELF IS STILL 'ignore', tag or no tag.
+  if (m.authorUserId === myId) {
+    return m.authorKind === "agent" && mentionsMe(m, myId) ? "fyi" : "ignore";
+  }
 
   const ch = entry.channel;
   const isMember = !(ch && ch.isMember === false);

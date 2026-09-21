@@ -207,10 +207,14 @@ describe("the @-picker over a just-launched agent", () => {
     feed.sessions = [LAUNCHED];
     mount();
     typeAt();
+    // ⚠ **THE ROW IS THE NAME ALONE SINCE 2026-09-20** (Samuel: *"remove the slug
+    // … so it shows just the name of the agent"*). What this case pins is that the
+    // just-launched agent is OFFERED AT ALL — the minute he waited — and the next
+    // case still pins that picking it inserts the resolvable handle, which is where
+    // F-210's lesson actually lives.
     const row = screen.getByRole("option", { name: /Scout/ });
-    // The HANDLE, beside the name: the string the row inserts, so the offer is a
-    // token the resolver accepts (F-210's whole lesson).
-    expect(row.textContent).toContain("@scout");
+    expect(row.textContent).toContain("Scout");
+    expect(row.textContent).not.toContain("@scout");
   });
 
   it("inserts the handle it showed, into the draft", () => {

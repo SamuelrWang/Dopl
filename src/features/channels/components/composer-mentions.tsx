@@ -227,18 +227,23 @@ export function MentionPopover({
             ) : (
               <Bot size={14} aria-hidden className="shrink-0 text-text-secondary" />
             )}
+            {/* 🔴 **THE HANDLE CHIP BESIDE THE NAME IS DELETED (Samuel,
+                2026-09-20: *"it shows the name of the agent, and then to the
+                right, the slug for the agent. I want you to remove the slug …
+                so it shows just the name of the agent"*).**
+                ⚠ **THE 2026-09-02 ARGUMENT FOR IT IS SPENT, NOT OVERRULED.** It
+                was shown because the handle is what the row INSERTS and what the
+                resolver accepts, so a reader seeing only "Research Bot" was left
+                guessing at `@Research Bot`. Picking the row still inserts that
+                exact handle and the composer TINTS it the moment it lands
+                (`composer-tint.tsx`), so the spelling is now demonstrated rather
+                than captioned — and the recipient line under the box names who
+                the draft reaches. Three surfaces said one thing; one says it now.
+                ⚠ **THE HANDLE ITSELF IS UNTOUCHED** — `MentionSuggestion.handle`
+                is still what `onPick` inserts, still minted with its uniqueness
+                suffix, and `composer-recipients.tsx` still shows it as the
+                ADDRESS. Only this chip went. */}
             <span className="truncate">{suggestion.label}</span>
-            {/* ⚠ THE HANDLE, BESIDE THE NAME, ON AGENT ROWS ONLY (2026-09-02,
-                slice B10). It is the string the row INSERTS and the one the
-                resolver accepts — showing only the friendly name is what left a
-                reader guessing at `@Research Bot`. A member's handle is derived
-                from the name already on the row, so a second string there would
-                be noise. */}
-            {suggestion.kind === "agent" && (
-              <span className="ml-auto shrink-0 text-micro text-text-muted">
-                @{suggestion.handle}
-              </span>
-            )}
           </button>
         ))
       )}

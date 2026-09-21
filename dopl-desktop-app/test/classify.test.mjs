@@ -102,6 +102,72 @@ test("mentionsMe: every shape a wire value can take degrades to SILENCE", () => 
   assert.equal(mentionsMe({ metadata: { mentionedUserIds: [ME] } }, ""), false);
 });
 
+// ── MY OWN AGENT TAGGING ME (Samuel, 2026-09-20) ─────────────────────────────
+
+/** An ordinary room: member, two people. ⚠ The harness's factory takes the sweep's
+ *  own vocabulary, so these four cases spell it rather than inventing a shape. */
+const ENTRY = makeEntry({ memberCount: 2, isMember: "undefined" });
+
+test("🔒 my OWN agent tagging me is a mention — the banner that never fired", () => {
+  // 🔒 **SAMUEL, 2026-09-20: *"when I got tagged by you, i didnt get a dopl desktop
+  // app notification … Mentions to the user should get a desktop notif."*** He had
+  // never had one for the agents he actually works with, and the sweep above was
+  // green the whole time because its oracle stated the same wrong rule.
+  //
+  // ⚠ **CAUSE: AN AGENT POSTS UNDER ITS OPERATOR'S `author_user_id`** (server
+  // `service-writes.ts`), so `author === me` was true of my agent's posts and
+  // `classify` returned before it could ask whether the message tagged me.
+  const m = makeMsg({
+    to: "absent",
+    author: "me",
+    authorKind: "agent",
+    kind: "message",
+    mentions: "me",
+  });
+  assert.equal(classify(m, ENTRY, ME), "fyi");
+});
+
+test("🔒 …and it is 'fyi', never 'trigger' — the loop brake is intact", () => {
+  // ⚠ THE BLANKET GUARD WAS A LOOP BRAKE AND STAYS ONE. 'fyi' is notify-only
+  // (`trigger.js › sendFyi`): a banner, no spawn, no consent row. 'trigger' here
+  // would launch one of my agents in answer to my own agent, forever.
+  const addressed = makeMsg({
+    to: "me",
+    author: "me",
+    authorKind: "agent",
+    kind: "message",
+    mentions: "me",
+  });
+  assert.equal(classify(addressed, ENTRY, ME), "fyi");
+});
+
+test("a message I TYPED myself stays silent, tag or no tag", () => {
+  // ⚠ `mentionsMe` is true of a post where I tagged myself, and notifying somebody
+  // about their own words is noise. `author_kind` is what separates the two cases.
+  const mine = makeMsg({
+    to: "absent",
+    author: "me",
+    authorKind: "user",
+    kind: "message",
+    mentions: "me",
+  });
+  assert.equal(classify(mine, ENTRY, ME), "ignore");
+});
+
+test("my own agent posting WITHOUT tagging me is still silent", () => {
+  // ⚠ THE NARROWING IS THE TAG, not the author kind: most channel traffic is agents
+  // reporting, and a banner per post is the 2026-08-18 defect this verdict was
+  // narrowed to fix.
+  const untagged = makeMsg({
+    to: "absent",
+    author: "me",
+    authorKind: "agent",
+    kind: "message",
+    mentions: "absent",
+  });
+  assert.equal(classify(untagged, ENTRY, ME), "ignore");
+});
+
 // ── Explicit, hand-reasoned expectations (independent of the oracle) ─────────
 
 const foreign = { authorUserId: U2, authorKind: "user", kind: "message", id: "x", seq: 1, body: "hi" };

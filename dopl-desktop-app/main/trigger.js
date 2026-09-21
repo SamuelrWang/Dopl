@@ -113,7 +113,21 @@ function sendFyi(entry, m) {
         body: `${author} mentioned you: ${detail}`,
         silent: true,
       });
-      n.on('click', () => targeting.openChannelForEntry(entry));
+      // 🔒 **THE CLICK LANDS ON THE MESSAGE, NOT JUST THE CHANNEL** (Samuel,
+      // 2026-09-20: *"if the user double clicks on it, it should bring dopl into
+      // focus, and auto go to the channel and auto scroll to the message (same as
+      // if they clicked on the mention in the info area)"*).
+      // ⚠ **THE SEQ IS THE ADDRESS AND THE SPA ALREADY KNEW HOW TO USE IT** — the
+      // Tags inbox, a citation pill and a search hit all end at
+      // `use-message-jump.ts › jumpToMessage`, and `initialSeq` is its mount-time
+      // door. What was missing was only the carry: this banner threw the seq away.
+      // ⚠ **THE THREAD RIDES TOO**, because a seq belongs to a VIEW: a tagged post
+      // inside a thread is not in the channel transcript, so landing on the room
+      // and scrolling to it would find nothing.
+      n.on('click', () => targeting.openChannelForEntry(entry, {
+        threadId: targeting.metaStr(m, 'taskId') || null,
+        seq: m.seq,
+      }));
       n.show();
     }
   } catch (_) { /* best-effort */ }

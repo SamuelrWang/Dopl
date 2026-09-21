@@ -52,6 +52,10 @@ export interface ChannelsCoreProps {
    * channel's list falls back to the channel view rather than an empty thread.
    */
   initialThreadId?: string | null;
+  /** **A MESSAGE SEQ THE ROUTE NAMED** — `?seq=`, set by a clicked mention
+   *  notification (2026-09-20). ⚠ Scoped to {@link initialChannelId}; `null` is
+   *  every other mount, byte for byte. */
+  initialSeq?: number | null;
   /**
    * WHERE A SEARCH-POPUP ROW GOES WHEN IT IS NOT IN THIS PAGE (2026-09-17).
    *
@@ -146,6 +150,7 @@ export function ChannelsCore({
   Link,
   initialChannelId = null,
   initialThreadId = null,
+  initialSeq = null,
   onNavigatePath,
 }: ChannelsCoreProps) {
   // WHAT THIS PAGE HAS OPEN — `use-channels-selection.ts`, including the
@@ -157,6 +162,19 @@ export function ChannelsCore({
   // `use-message-jump.ts` keys on `channelId:threadId:seq` and a new channel is a
   // new key. /home has always keyed it (`use-activity-jump.ts › seqFor(rowId)`).
   const [searchSeq, setSearchSeq] = useState<{ channelId: string; seq: number } | null>(null);
+  /**
+   * **THE SEQ A ROUTE NAMED** — `?seq=`, from a clicked mention notification
+   * (2026-09-20). ⚠ **KEYED TO `initialChannelId` FOR `searchSeq`'S OWN REASON**:
+   * a bare number would re-fire into whatever the reader opened next.
+   * ⚠ **THE SEARCH ROW WINS WHEN BOTH EXIST**, because it is the later act: the
+   * route is where this mount STARTED, and a row the reader has since clicked is
+   * where they are trying to go.
+   */
+  const routedSeq =
+    initialSeq !== null && initialChannelId
+      ? { channelId: initialChannelId, seq: initialSeq }
+      : null;
+  const jumpSeq = searchSeq ?? routedSeq;
   const queryClient = useQueryClient();
 
   const { channels, loading, refetch: refetchChannels } = useChannels(workspaceId);
@@ -288,7 +306,7 @@ export function ChannelsCore({
           role={role}
           data={data}
           selection={sel}
-          initialSeq={searchSeq?.channelId === channel?.id ? searchSeq.seq : null}
+          initialSeq={jumpSeq?.channelId === channel?.id ? jumpSeq.seq : null}
           onRosterChanged={refetchChannels}
           // 🔒 `artifacts: true` — THE ARTIFACTS FACE COMES TO THIS PAGE (Samuel's
           // ruling R-16, 2026-09-17, after F-712): the inline artifact card already

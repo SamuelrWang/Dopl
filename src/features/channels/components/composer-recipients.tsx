@@ -173,12 +173,19 @@ export function ComposerRecipients({
           {note}
         </span>
       )}
-      {/* ⚠ **THE WORKING STRIP RIDES THIS ROW'S RIGHT EDGE** (2026-09-20) — it
-          used to be its own band ABOVE this line with a hairline over it, which
-          spent a row of height and drew a rule across the pane for a caption.
-          `ml-auto` is the whole of "to the right"; `min-w-0` lets IT truncate
-          rather than pushing the recipients out. */}
-      {working && <span className="ml-auto min-w-0 shrink">{working}</span>}
+      {/* **THE WORKING STRIP FOLLOWS THE BADGE, PACKED LEFT** (Samuel,
+          2026-09-20, twice: first *"put agents working to the right"* — out of
+          its own band above the line — then *"I want it to be left aligned,
+          except after the most recent agent thingy"*, once he saw it pinned to
+          the far edge).
+          ⚠ **SO THERE IS NO `ml-auto`, AND ITS ABSENCE IS THE RULING.** This row
+          is `justify-start`; the strip is simply the last item in it, one gap
+          after the badge. A spacer would push it to the pane's right edge, which
+          is what he corrected — the two facts read as one line together, not as
+          two things at opposite ends of the pane.
+          ⚠ `min-w-0` + `shrink` so the strip is what elides (`…`) when the room
+          runs out, rather than the recipients it follows. */}
+      {working && <span className="min-w-0 shrink">{working}</span>}
     </p>
   );
 }

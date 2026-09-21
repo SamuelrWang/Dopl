@@ -134,8 +134,32 @@ function classify(m, entry, myId) {
   if (!myId) return 'ignore';
   if (m.authorUserId === myId) {
     // ⚠ My OWN addressed message is the only place this machine ever learns which LEGACY
-    // threads it opened, so record on the way past. Still 'ignore' for targeting.
+    // threads it opened, so record on the way past.
     noteMyLegacyThread(m, entry, myId);
+    // 🔒 **MY OWN AGENT TAGGING ME IS A MENTION, AND IT WAS SILENT UNTIL 2026-09-20**
+    // (Samuel: *"when I got tagged by you, i didnt get a dopl desktop app notification …
+    // Mentions to the user should get a desktop notif"*).
+    //
+    // ⚠ **CAUSE: AN AGENT POSTS UNDER ITS OPERATOR'S `author_user_id`** (server
+    // `service-writes.ts` — `author_user_id: ctx.userId` for every author kind), so on this
+    // line *Samuel wrote it* and *Samuel's agent wrote it* were the same row, and the whole
+    // function returned before Question 2 could ask whether it tagged him. Every tag from
+    // the operator's OWN agents — the ones they are actually working with — has therefore
+    // never raised a banner, while a peer's agent always did.
+    //
+    // ⚠ **`authorKind` IS THE DISCRIMINATOR, and it is the SAME fix the server's own
+    // recency walk needed for the same reason** (`lib/agent-post-stamp.ts ›
+    // recentAgentsAddressedBy`, F-704): the author id cannot tell a person from their agent
+    // and `author_kind` is the only field that can.
+    //
+    // ⚠ **'fyi' AND NEVER 'trigger' — THE LOOP BRAKE IS INTACT.** This returns the
+    // notify-only verdict: a banner, no spawn, no consent row (`trigger.js › sendFyi`).
+    // Returning 'trigger' here would launch one of my agents in answer to my own agent and
+    // is exactly what the blanket `ignore` was protecting against.
+    // ⚠ **A POST I TYPED MYSELF STILL RETURNS `ignore`** (`authorKind === 'user'`), tag or
+    // no tag: notifying somebody about their own words is noise, and `mentionsMe` is true of
+    // a message where I tagged myself.
+    if (m.authorKind === 'agent' && mentionsMe(m, myId)) return 'fyi';
     return 'ignore';
   }
 

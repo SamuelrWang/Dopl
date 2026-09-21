@@ -104,7 +104,7 @@ function makeShellHelpers(deps) {
   // nowhere; an unusable channel id degrades to the page, which is exactly what
   // a notification with no channel already does. Required LAZILY (the tray.js
   // idiom above) so this file keeps its module-scope dependency freedom.
-  function navigateToChannels(segment, channelId, threadId) {
+  function navigateToChannels(segment, channelId, threadId, seq) {
     deps.showMainWindow();
     if (!segment) return;
     const { isSafeSegment } = require('./deep-link-target');
@@ -113,7 +113,15 @@ function makeShellHelpers(deps) {
     if (!isSafeSegment(channelId)) return navigateTo(page);
     // `?thread=` is a SELECTION the channels page already reads (Phase 10); a
     // notification about a THREAD lands on the thread (Samuel, 2026-08-20).
-    const suffix = isSafeSegment(threadId) ? `?thread=${threadId}` : '';
+    // ⚠ `?seq=` IS A SELECTION LIKE `?thread=`, NOT A ROUTE — the channels page
+    // reads it and hands it down as `initialSeq` (2026-09-20, the mention
+    // banner's scroll-to-message). DIGITS ONLY, validated here rather than
+    // trusted: this string is built into a URL the renderer navigates to, and a
+    // `seq` is a bigint on the wire, never free text.
+    const params = [];
+    if (isSafeSegment(threadId)) params.push(`thread=${threadId}`);
+    if (Number.isSafeInteger(Number(seq)) && Number(seq) > 0) params.push(`seq=${Number(seq)}`);
+    const suffix = params.length ? `?${params.join('&')}` : '';
     navigateTo(`${page}/${channelId}${suffix}`);
   }
 

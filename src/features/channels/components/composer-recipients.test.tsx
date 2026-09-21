@@ -97,15 +97,15 @@ const noLine = () => {
 };
 
 describe("the picker offers the CHANNEL's live agents", () => {
-  it("opens on `@` and lists a PEER's agent by NAME and by HANDLE", () => {
+  it("opens on `@` and lists a PEER's agent by NAME, and by name ONLY", () => {
     const body = mount({ liveAgents: [PEER_AGENT] });
     type(body, "@res");
     const row = screen.getByRole("option", { name: /Research Bot/ });
-    // ⚠ BOTH strings on the row: the name is what a reader recognises, the
-    // handle is what the resolver accepts — and showing only the first is what
-    // left them guessing at `@Research Bot`.
+    // 🔴 **THE HANDLE CHIP IS DELETED** (Samuel, 2026-09-20: *"remove the slug"*).
+    // ⚠ Its 2026-09-02 argument is SPENT, not overruled: the case below proves the
+    // row still INSERTS `@research-bot`, so the spelling is demonstrated not captioned.
     expect(row.textContent).toContain("Research Bot");
-    expect(row.textContent).toContain("@research-bot");
+    expect(row.textContent).not.toContain("@research-bot");
   });
 
   it("🔒 inserts the EXACT token the server resolves — and it round-trips through the server's own index", () => {

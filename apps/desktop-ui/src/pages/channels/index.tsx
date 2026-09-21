@@ -74,6 +74,21 @@ export default function ChannelsPage() {
   // as no selection, so a stale link cannot strand the pane.
   const [search] = useSearchParams();
   const threadId = search.get("thread");
+  /**
+   * **`?seq=` — THE MESSAGE A NOTIFICATION WAS ABOUT** (Samuel, 2026-09-20:
+   * a mention banner must *"auto go to the channel and auto scroll to the
+   * message"*).
+   *
+   * ⚠ **A SELECTION, LIKE `?thread=`, NOT A ROUTE** — read here for the reason
+   * every param on this page is: `ChannelsCore` is router-free by construction,
+   * so it becomes a plain prop.
+   * ⚠ **PARSED, NEVER TRUSTED.** A non-numeric or non-positive value is `null`,
+   * which is the same mount every other route gets; `use-message-jump.ts` then
+   * resolves the seq against the LOADED page and does nothing if it is not there.
+   */
+  const seqParam = Number(search.get("seq"));
+  const initialSeq =
+    Number.isSafeInteger(seqParam) && seqParam > 0 ? seqParam : null;
 
   if (error) return <PageError error={error} onRetry={refetch} />;
   if (isPending || !access) {
@@ -92,6 +107,7 @@ export default function ChannelsPage() {
       Link={RouterLink}
       initialChannelId={channelId ?? null}
       initialThreadId={threadId}
+      initialSeq={initialSeq}
       onNavigatePath={(path) => navigate(path)}
     />
   );

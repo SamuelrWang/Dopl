@@ -290,13 +290,24 @@ test("a clicked notification navigates to the CHANNEL, not just the page", () =>
   // the window, push a route) already existed — what was missing was the
   // channel, which every caller's `entry` had carried the whole time.
   const chan = fnOf(SHELL, "navigateToChannels");
-  assert.match(chan, /function navigateToChannels\(segment, channelId, threadId\)/);
+  assert.match(chan, /function navigateToChannels\(segment, channelId, threadId, seq\)/);
   assert.match(chan, /deps\.showMainWindow\(\)/, "the window comes up either way");
   // A usable channel id deepens the route; anything else degrades to the page —
   // and a usable THREAD id (2026-08-20) deepens it once more, as the `?thread=`
   // SELECTION the channels page already reads. Same one segment rule for all three.
   assert.match(chan, /if \(!isSafeSegment\(channelId\)\) return navigateTo\(page\);/);
-  assert.match(chan, /const suffix = isSafeSegment\(threadId\) \? `\?thread=\$\{threadId\}` : '';/);
+  // ⚠ **TWO SELECTIONS NOW, BUILT AS A LIST** (2026-09-20): `?thread=` and
+  // `?seq=`, the second so a clicked MENTION banner scrolls to the message it was
+  // about. The thread still goes through `isSafeSegment`; the seq is DIGITS,
+  // checked numerically rather than as a segment, because it is a bigint on the
+  // wire and `isSafeSegment` would be the wrong question about it.
+  assert.match(chan, /if \(isSafeSegment\(threadId\)\) params\.push\(`thread=\$\{threadId\}`\);/);
+  assert.match(
+    chan,
+    /if \(Number\.isSafeInteger\(Number\(seq\)\) && Number\(seq\) > 0\) params\.push\(`seq=\$\{Number\(seq\)\}`\);/,
+    "a seq reaching a URL must be a validated number, never caller text"
+  );
+  assert.match(chan, /const suffix = params\.length \? `\?\$\{params\.join\('&'\)\}` : '';/);
   assert.match(chan, /navigateTo\(`\$\{page\}\/\$\{channelId\}\$\{suffix\}`\)/);
   // The page is ONE named string, which is what made the Phase 12 cutover's
   // rename an edit rather than a grep: `channels-v2` → `channels`, 2026-08-18.
@@ -334,10 +345,13 @@ test("the notification seam hands the channel over, and never invents one", () =
   // route rather than a per-kind fork.
   const TW = M("targeting-window.js");
   const fn = fnOf(TW, "openChannelForEntry");
+  // ⚠ FOUR ARGUMENTS SINCE 2026-09-20 — the SEQ joined the thread so a clicked
+  // mention banner lands ON the message, not merely in the room. Both optionals
+  // are still the CALLER's claim or nothing: `|| null`, never a fabricated value.
   assert.match(
     fn,
-    /handlers\.openChannel\(\s*entry\.workspaceSegment,\s*\(entry\.channel && entry\.channel\.id\) \|\| null,\s*\(opts && opts\.threadId\) \|\| null\s*\)/,
-    "an entry with no channel must degrade to the page, never to a fabricated id — and the thread is the CALLER's claim or nothing"
+    /handlers\.openChannel\(\s*entry\.workspaceSegment,\s*\(entry\.channel && entry\.channel\.id\) \|\| null,\s*\(opts && opts\.threadId\) \|\| null,\s*\(opts && opts\.seq\) \|\| null\s*\)/,
+    "an entry with no channel must degrade to the page, never to a fabricated id — and the thread and seq are the CALLER's claim or nothing"
   );
   assert.match(fn, /if \(!handlers\.openChannel \|\| !entry \|\| !entry\.workspaceSegment\) return;/);
   // index.js still wires this seam to the shell helper that grew the parameter.

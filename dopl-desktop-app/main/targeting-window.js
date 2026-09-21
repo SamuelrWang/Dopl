@@ -49,10 +49,14 @@ function openChannelForEntry(entry, opts) {
     // the navigator's (shell-mode → deep-link-target.isSafeSegment), not ours.
     // 2026-08-20: an optional THREAD lands the operator on the thread view —
     // the outbound send box's home — over the same one destination.
+    // ⚠ 2026-09-20: an optional SEQ scrolls the transcript to the message the
+    // notification was about — the mention banner's own ask. Every other caller
+    // passes none and is byte-for-byte unchanged.
     handlers.openChannel(
       entry.workspaceSegment,
       (entry.channel && entry.channel.id) || null,
-      (opts && opts.threadId) || null
+      (opts && opts.threadId) || null,
+      (opts && opts.seq) || null
     );
   } catch (_) { /* window may be gone */ }
 }
