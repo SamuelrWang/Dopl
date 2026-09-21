@@ -1,0 +1,40 @@
+{
+  "fixtureFormat": "dopl:codex-app-server/1",
+  "status": "UNVERIFIED-PLACEHOLDER",
+  "statusNote": "NOTHING IN THIS FILE WAS MEASURED. There was no `codex` CLI on the machine where U1 landed (see the plan's Implementation Log, 2026-09-21), so every measured slot below is null ON PURPOSE. Do NOT hand-fill them: a synthetic protocol shape that later reads as measured truth is the exact failure this unit exists to correct. Regenerate it from a real CLI instead.",
+  "regenerate": "cd dopl-desktop-app && npm run codex:schema",
+  "generatedBy": null,
+  "capturedAt": null,
+  "cli": {
+    "version": null,
+    "versionCommand": "codex --version",
+    "path": null,
+    "source": null
+  },
+  "help": {
+    "command": "codex app-server --help",
+    "text": null
+  },
+  "handshake": {
+    "initialize": null,
+    "declaredMethods": null,
+    "modelList": null,
+    "errors": null
+  },
+  "doplRequires": {
+    "note": "THIS BLOCK IS NOT A MEASUREMENT — it is Dopl's own requirement, mirrored from `main/runtime/codex/client.js` (REQUIRED_METHODS / REQUIRED_FACTS) so the contract suite can prove the two have not drifted. It stays true whether or not a CLI has ever been measured.",
+    "methods": [
+      "initialize",
+      "thread/start",
+      "thread/resume",
+      "turn/start",
+      "turn/steer",
+      "turn/interrupt",
+      "model/list"
+    ],
+    "facts": [
+      "threadId",
+      "modelDefault"
+    ]
+  }
+}
