@@ -71,6 +71,20 @@ export type LaunchDirective = {
   goal: string | null;
   model: string | null;
   /**
+   * **THE RUNTIME THIS LAUNCH ASKED FOR — THE REQUEST, AND ONLY THE REQUEST** (2026-09-21, U9).
+   *
+   * ⚠ **`null` IS "DID NOT ASK", WHICH IS NOT "CLAUDE" AND IS EMPHATICALLY NOT "CODEX".** It
+   * means the documented default chain applies on the machine — the channel's stored runtime,
+   * then the registry default — and the machine reports what that came to in
+   * {@link LaunchDirective.appliedRuntime}. A reader that filled this in from
+   * {@link LaunchDirective.model} would be re-creating the exact defect U9 closes.
+   * ⚠ **READ IT BESIDE `appliedRuntime`, NEVER INSTEAD OF IT.** This one explains a REFUSAL
+   * (an explicit runtime this machine cannot start answers `no-sdk` and never launches another
+   * vendor); that one explains a LAUNCH.
+   * ⚠ `null` on every kind but `launch`, which the column CHECK enforces at rest.
+   */
+  runtime: string | null;
+  /**
    * The agent template this directive asks the machine to run AS — resolved
    * server-side, under the ORCHESTRATOR's visibility, before the row was written
    * (2026-08-23). `null` when none was named, **or when the template has since
@@ -233,6 +247,27 @@ export type LaunchDirective = {
   appliedToolMode: LaunchToolMode | null;
   appliedMessageMode: LaunchMessageMode | null;
   appliedChain: boolean | null;
+  /**
+   * **THE RUNTIME AND MODEL THE MACHINE ACTUALLY STARTED THIS SESSION ON** (2026-09-21, U9).
+   *
+   * ⚠ **THIS IS THE FIELD AN AUDIT READS, AND {@link LaunchDirective.runtime} IS THE ONE IT
+   * READS BESIDE IT.** Requested and applied are two facts: they agree on an explicit,
+   * honoured request; they differ on every launch that asked for nothing (the ordinary case,
+   * where the channel or the registry default decided); and a request that could NOT be
+   * honoured produces no `launched` row at all, because this lane refuses rather than
+   * substituting a vendor.
+   * ⚠ **`null` MEANS "NOT REPORTED"** — an older desktop, or a non-launch kind — and never
+   * "Claude". The echo trio's rule, for the echo trio's reason: a render that read `null` as
+   * the default runtime would tell an orchestrator which vendor ran on the strength of a
+   * column nobody filled in.
+   * ⚠ **`appliedModel` IS NOT {@link LaunchDirective.resolvedModel}.** That is the SERVER's
+   * create-time echo of an id it recognised, from a Claude-shaped table. This is what the
+   * MACHINE handed its launch funnel inside the resolved runtime, and `null` there legitimately
+   * means "no model argument at all — that runtime's own default", which is what a dropped
+   * cross-vendor model correctly becomes.
+   */
+  appliedRuntime: string | null;
+  appliedModel: string | null;
   /**
    * **WHAT THE SERVER PERMITTED** (2026-09-02, A9 — G6/G7/G8), decided at
    * creation from the request and `Channel.agentPosture`.

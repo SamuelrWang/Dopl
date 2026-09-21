@@ -54,3 +54,41 @@ export const LAUNCH_REFUSAL_REASONS = [
   "bad-name",
   "no-chain",
 ] as const;
+
+/**
+ * **THE SHAPE OF A RUNTIME ID — AND IT IS A SHAPE, NOT A SET** (2026-09-21, U9).
+ *
+ * ⚠ **THERE IS DELIBERATELY NO CLOSED ENUM OF RUNTIMES ON THE SERVER, AND THAT IS THE ONE
+ * DECISION TO UNDERSTAND BEFORE TOUCHING THIS.** The roster of runtimes is
+ * `dopl-desktop-app/main/runtime/index.js`'s REGISTRY — a list that lives on the operator's
+ * machine and moves with a DESKTOP release, not a server one. A `z.enum(["claude","codex",
+ * "cursor"])` here would refuse a runtime a NEWER desktop ships, which is the same mistake
+ * {@link LAUNCH_TOOL_MODES}' neighbour `model` already declines to make ("the effective model set
+ * is the DESKTOP's and it is free-form"). So the wire bounds the SHAPE and the MACHINE decides
+ * membership.
+ *
+ * ⚠ **WHICH MEANS THE REFUSAL IS THE DESKTOP'S, AND IT REALLY IS A REFUSAL.** An explicit runtime
+ * this machine does not have registered, or has and cannot start, answers `no-sdk` —
+ * `dopl-desktop-app/main/launch-directive-spawn.js › resolveRuntime`. It is NEVER swapped for
+ * another vendor: that silent fallback is the defect U9 exists to close (a live MCP launch
+ * carrying `model: "codex"` was accepted and started Claude Sonnet).
+ *
+ * ⚠ **AND A MODEL NAME IS NEVER A RUNTIME SELECTOR** (the plan's Key Technical Decision #4).
+ * `runtime` chooses the adapter; `model` chooses a model INSIDE it. Nothing on this lane infers
+ * one from the other, in either direction, and a missing `runtime` is never read as Codex.
+ *
+ * ⚠ ANCHORED, LOWERCASE, 1-32. It is hand-mirrored by
+ * `dopl-desktop-app/main/launch-directive-vocab.js › RUNTIME_ID_RE` (main cannot import from
+ * `src/`), by the column's own CHECK in
+ * `20261017120000_channel_launch_directives_runtime.sql`, and by
+ * `packages/mcp-server/src/tools/channel-schema-launch-fields.ts`. Four statements of one
+ * pattern; `launch-runtime-parity.test.ts` drives this one against the other three rather than
+ * trusting this sentence.
+ */
+export const LAUNCH_RUNTIME_ID_RE = /^[a-z][a-z0-9_-]{0,31}$/;
+
+/** The message a caller gets for a value outside {@link LAUNCH_RUNTIME_ID_RE}. ⚠ It NAMES the
+ *  field rather than restating the pattern: a character class is a contract a caller has to
+ *  reverse-engineer (`tool-style.test.ts`'s standing rule). */
+export const LAUNCH_RUNTIME_ID_MESSAGE =
+  "A runtime id is 1-32 lowercase characters, e.g. claude or codex";

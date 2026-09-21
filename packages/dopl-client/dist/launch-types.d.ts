@@ -48,6 +48,18 @@ export interface LaunchDirective {
     goal: string | null;
     model: string | null;
     /**
+     * **THE RUNTIME THIS LAUNCH ASKED FOR — THE REQUEST, AND NOTHING ELSE** (2026-09-21, U9).
+     *
+     * ⚠ **`null` IS "DID NOT ASK", WHICH IS NOT "claude" AND EMPHATICALLY NOT "codex".** It means
+     * the documented chain applies on the machine (the channel's stored runtime, then the registry
+     * default), and what that came to is {@link LaunchDirective.appliedRuntime}.
+     * ⚠ **NEVER DERIVE IT FROM `model` ABOVE.** `runtime` picks the ADAPTER, `model` picks a model
+     * INSIDE it — a live launch carrying `model: "codex"` was accepted and started Claude Sonnet,
+     * which is the defect this field closes.
+     * ⚠ Absent on a server older than 2026-09-21, and on every kind but `launch`.
+     */
+    runtime?: string | null;
+    /**
      * The agent template the machine is asked to run AS, resolved SERVER-SIDE under
      * the requester's visibility before the row was written (2026-08-23). `null`
      * when none was named — **or when the template was deleted afterwards**.
@@ -74,6 +86,19 @@ export interface LaunchDirective {
      *  ⚠ **THIS, NOT `agentName`, IS THE TAG TO ADDRESS IT BY.** A second agent asking for "Coder"
      *  is stored as `Coder-1`, and `@coder` would reach the first one. `null` = not reported. */
     appliedAgentName?: string | null;
+    /**
+     * **WHAT THE MACHINE ACTUALLY STARTED ON — RUNTIME AND MODEL** (2026-09-21, U9).
+     *
+     * ⚠ **READ THIS, NOT {@link LaunchDirective.runtime}, WHEN YOU MEAN "which vendor ran".** They
+     * agree on an explicit honoured request and DIFFER on the ordinary launch that asked for
+     * nothing; a request that could not be honoured produces no `launched` row at all, because the
+     * machine REFUSES (`no-sdk`) rather than swapping vendors.
+     * ⚠ `null` = NOT REPORTED (an older desktop, or a non-launch kind), never "the default". And
+     * on `appliedModel`, `null` also legitimately means "no model argument at all" — the resolved
+     * runtime's own default, which is what a dropped cross-vendor model correctly becomes.
+     */
+    appliedRuntime?: string | null;
+    appliedModel?: string | null;
     /** ⚠ `done` IS THE NON-LAUNCH KINDS' SUCCESS and `launched` IS THE LAUNCH'S.
      *  They are two words because this row is rendered into an agent-facing
      *  sentence, and "launched" on the record of an agent being STOPPED is the one
@@ -165,6 +190,19 @@ export interface LaunchDirectiveCreateInput {
     threadId?: string;
     goal?: string;
     model?: string;
+    /**
+     * **WHICH RUNTIME TO RUN THE AGENT ON — SEPARATE FROM `model`, ALWAYS** (2026-09-21, U9).
+     *
+     * ⚠ `runtime` picks the ADAPTER (`claude`, `codex`, …); `model` picks a model INSIDE it.
+     * **Never send a runtime name as a model.** A launch that did was accepted and started the
+     * default vendor, which is the defect this field exists to close.
+     * ⚠ **OMIT IT UNLESS THE CALLER GENUINELY CARES.** Omitted follows the operator's own chain:
+     * the channel's stored runtime, then their machine's default adapter. Omitted is NEVER read as
+     * a particular vendor.
+     * ⚠ **A RUNTIME THE OPERATOR'S MACHINE CANNOT START IS REFUSED (`no-sdk`), NEVER SWAPPED.**
+     * That refusal is the contract: an explicit request is honoured or it is declined.
+     */
+    runtime?: string;
     /**
      * The agent template to run as — **an id OR an exact name** (2026-08-23). One
      * param for both, the same idiom `dopl_kb`'s `base` already uses.

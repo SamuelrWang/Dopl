@@ -165,10 +165,16 @@ const REFUSAL_REASONS = ['cap', 'busy', 'no-sdk', 'auth-hold', 'no-bridge', 'no-
 // branch's only. They do not GATE the body — `decideBody` builds it — but this list is the
 // module's stated answer to "what crosses", and one that omits a field that really does is worse
 // than none.
+// ⚠ AND `appliedRuntime` / `appliedModel` JOINED THE LAUNCHED BRANCH ON 2026-09-21 (U9) — WHICH
+// RUNTIME AND MODEL THIS MACHINE ACTUALLY STARTED ON, the `applied` half of a requested/applied
+// pair whose request half is the row's own `runtime` column. They are here for this list's stated
+// purpose: it is the module's answer to "what crosses", and one that omits a field that really
+// does is worse than none.
 const REQUEST_KEYS = {
   claim: ['directiveId'],
   decide: ['directiveId', 'status', 'agentId', 'refusalReason',
-    'appliedTools', 'appliedMessages', 'appliedChain'],
+    'appliedTools', 'appliedMessages', 'appliedChain',
+    'appliedRuntime', 'appliedModel'],
 };
 
 // ⚠ `agent-names.js › MAX_NAME`, RESTATED AS A WIRE BOUND. It is the SAME number
@@ -193,6 +199,30 @@ const RESPONSE_KEYS = { claim: ['ok', 'directive', 'reason'] };
 // inside the sentinel. ⚠ The suite drives this constant against `agent-id.js`'s
 // own source, so the two cannot drift.
 const AGENT_ID_RE = /^[a-z][a-z0-9]{7}$/;
+
+/**
+ * **THE SHAPE OF A RUNTIME ID — AND IT IS A SHAPE, NOT THE REGISTRY** (2026-09-21, U9).
+ *
+ * ⚠ **THIS BLOCK IS PURE AND MUST STAY PURE**, which is exactly why the membership test is NOT
+ * here. `main/runtime/index.js` is the only enumeration of what this build ships, and requiring
+ * it from a leaf whose suite slices and evaluates it with no module system would break that
+ * suite — and would make the same mistake `channel-runtime.js`'s header names: a second copy of
+ * the roster is the drift the registry exists to prevent. So `directiveFrom` narrows the SHAPE
+ * and `launch-directive-spawn.js › resolveRuntime` asks the REGISTRY, which is also the only
+ * layer that can say whether the runtime would actually start.
+ *
+ * ⚠ **AND THE TWO STEPS ARE BOTH REQUIRED, FOR THE SECURITY REASON (INVARIANTS: main revalidates
+ * every process-boundary value).** This row arrives over a realtime frame or an MCP-filed
+ * directive; an id that passes this pattern is still an arbitrary string until the registry has
+ * been asked, and an unregistered one must REFUSE rather than fall through to a default.
+ *
+ * ⚠ HAND-MIRRORED, LIKE `AGENT_ID_RE` ABOVE AND FOR THE SAME REASON (main cannot import from
+ * `src/`): `src/features/channels/schema-launch-modes.ts › LAUNCH_RUNTIME_ID_RE`, the column
+ * CHECK in `20261017120000_channel_launch_directives_runtime.sql`, and the MCP field's own
+ * bound. `test/launch-directive-runtime.test.mjs` drives this constant against the web file's
+ * source rather than trusting this sentence.
+ */
+const RUNTIME_ID_RE = /^[a-z][a-z0-9_-]{0,31}$/;
 
 /** Bounded, whitespace-collapsed display text, or ''. */
 function text(value, max) {
@@ -237,6 +267,7 @@ module.exports = {
   RESPONSE_KEYS,
   TARGET_NAME_MAX,
   AGENT_ID_RE,
+  RUNTIME_ID_RE,
   GOAL_MAX,
   TEMPLATE_NAME_MAX,
   text,

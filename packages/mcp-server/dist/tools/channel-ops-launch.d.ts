@@ -40,6 +40,17 @@ export declare function opLaunchAgent(client: DoplClient, ref: string, opts?: {
     thread?: string;
     goal?: string;
     model?: string;
+    /**
+     * **WHICH RUNTIME — ASKED FOR, AND REFUSED RATHER THAN SUBSTITUTED** (2026-09-21, U9).
+     *
+     * ⚠ **A SEPARATE FIELD FROM `model` ABOVE, ALWAYS.** `runtime` picks the ADAPTER, `model`
+     * picks a model inside it; neither is ever derived from the other. A live launch carrying
+     * `model: "codex"` was accepted and started Claude Sonnet, which is the defect this closes.
+     * ⚠ PASSED THROUGH UNTOUCHED, like `template` and `color`: the roster is the operator's own
+     * desktop registry and this process cannot see it. Omitted means the documented chain (the
+     * channel's runtime, then that machine's default) — never a particular vendor.
+     */
+    runtime?: string;
     /** Template id OR exact name. ⚠ Passed through untouched — the id/name
      *  disambiguation and the visibility check both happen server-side. */
     template?: string;

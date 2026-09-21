@@ -126,10 +126,17 @@ test("LANE: a directive naming NO posture launches exactly as it did before T24"
     // one word for it. What must not move is `handed()` above: the posture the session runs at.
     // ⚠ `appliedAgentName` JOINED THE BODY ON 2026-09-15 (Samuel's uniqueness ruling) — a FOURTH
     // echo of the same kind, and `New Agent` here because this fixture's row carries no name.
+    // ⚠ `appliedRuntime` / `appliedModel` JOINED ON 2026-09-21 (U9) — the same kind of echo
+    // again, and reported on EVERY launch for the reason two paragraphs up: silence must keep
+    // meaning "an older desktop said nothing". ⚠ NEITHER IS A THING THIS FIXTURE ASKED FOR —
+    // `claude` is the registry default and `opus` is the Claude chain's answer to the row's
+    // `claude-opus-5` — so this line is also the regression guard that the ordinary,
+    // runtime-silent launch still runs on the default adapter.
     assert.deepEqual(decided(h), [{
       directiveId: DID, status: "launched", agentId: "a1b2c3d4",
       appliedTools: "bypass", appliedMessages: "auto_both", appliedChain: false,
       appliedAgentName: "New Agent",
+      appliedRuntime: "claude", appliedModel: "opus",
     }]);
   });
 });
@@ -153,6 +160,9 @@ test("LANE: a WIDER request is CLAMPED to the operator's stored pair, and still 
     directiveId: DID, status: "launched", agentId: "a1b2c3d4",
     appliedTools: "accept_edits", appliedMessages: "auto_inbound", appliedChain: false,
     appliedAgentName: "New Agent",
+    // ⚠ U9's pair, unaffected by a posture clamp: a runtime is not narrowed, it is honoured or
+    // refused, and nothing on this path may change which vendor runs.
+    appliedRuntime: "claude", appliedModel: "opus",
   }]);
   assert.ok(h.logged.some((l) => l.includes("CLAMPED")), "and the clamp is recorded, not hidden");
 });

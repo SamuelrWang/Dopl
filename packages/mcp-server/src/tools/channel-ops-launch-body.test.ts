@@ -118,6 +118,12 @@ describe("the call itself", () => {
       "threadId",
       "goal",
       "model",
+      // ⚠ **`runtime` (2026-09-21, U9), AND IT IS A SECOND KEY BECAUSE IT IS A SECOND FACT.**
+      // It sits beside `model` and is never derived from it: a live launch carrying
+      // `model: "codex"` was accepted and started a Claude Sonnet agent. ⚠ IT NAMES NO OPERATOR
+      // EITHER — it says which ENGINE on the caller's own machine, and that machine REFUSES a
+      // runtime it cannot start rather than substituting one.
+      "runtime",
       "template",
       // THE POSTURE REQUEST (2026-09-01, T24). Three keys added by a CONSCIOUS
       // edit here, which is this assertion working rather than being worked

@@ -348,10 +348,18 @@ test("DECIDE: a successful launch writes `launched` and the AGENT ID", async () 
   // orchestrator that never learned it would tag the wrong agent on its next post.
   // ⚠ **`New Agent` HERE BECAUSE THIS FIXTURE'S DIRECTIVE CARRIES NO NAME** — an older client's
   // row, which the claiming machine names rather than launching nameless.
+  // ⚠ **`appliedRuntime` / `appliedModel` JOINED IT ON 2026-09-21 (U9)** — the fifth and sixth
+  // echoes, and the pair whose absence WAS the shipped defect: a live MCP launch carrying
+  // `model: "codex"` started a Claude Sonnet agent and nothing in the record said so. ⚠ `claude`
+  // HERE IS THE REGISTRY DEFAULT, not a value the directive asked for — the fixture names no
+  // runtime, so this line is also the assertion that the ORDINARY launch reports what it ran on
+  // rather than staying silent. ⚠ `opus` IS THE CLAUDE CHAIN'S ANSWER to the fixture's
+  // `claude-opus-5`, i.e. the model resolved INSIDE the resolved runtime.
   assert.deepEqual(decidePosts(h)[0].body, {
     directiveId: DID, status: "launched", agentId: "a1b2c3d4",
     appliedTools: "bypass", appliedMessages: "auto_both", appliedChain: false,
     appliedAgentName: "New Agent",
+    appliedRuntime: "claude", appliedModel: "opus",
   });
   assert.equal(decidePosts(h)[0].workspaceId, WS, "fenced on the workspace, like every write here");
 });

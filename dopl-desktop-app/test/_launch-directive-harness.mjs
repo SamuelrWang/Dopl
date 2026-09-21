@@ -111,6 +111,8 @@ export function boot(over = {}) {
   const flushes = [];  // every `session-summary.touch()` the commit wrapper announced
   const modes = [];    // every `session-engine.setModeByTask` call the lane made (2026-09-01)
   const resolves = [];
+  const acquires = []; // every `runtime.acquire` this lane made (2026-09-21, U9)
+  const rosters = [];  // every `runtime.models()` read this lane made (2026-09-21, U9)
   const stub = (id) => {
     if (id === "./api") {
       return {
@@ -154,6 +156,8 @@ export function boot(over = {}) {
         getOrchestratorLaunch: () => cfg.enabled === true,
         launchStartModes: () => ({ tools: "bypass", messages: "auto_both" }),
         getLaunchModel: () => "claude-sonnet-5",
+        // U5: the same pick, resolved as a launch-chain link on the channel's OWN runtime.
+        getLaunchModelLink: () => "sonnet",
         // ⚠ THE CHANNEL'S AGENT-CHAINING SETTING (2026-08-31, Samuel's ruling). Default here is
         // FALSE — the one-generation bound — so every existing case in this suite keeps asserting
         // the shipped behaviour; `cfg.chain` opts a case in, and `launch-chain.test.mjs` drives it.
@@ -205,6 +209,39 @@ export function boot(over = {}) {
     // this file asserts byte-identical to the ones that shipped. The INHERITANCE itself is
     // asserted in `test/launch-chain.test.mjs`, against a channel that really has a pick.
     if (id === "./channel-runtime") return { getChannelRuntime: () => cfg.channelRuntime || "" };
+    // ⚠ **THE RUNTIME REGISTRY, STUBBED AT ITS SEAM** (2026-09-21, U9). The real
+    // `main/runtime/index.js` registers three adapters AT LOAD and each of them reaches Electron
+    // and a live binary probe, so it cannot be required under `node --test` — the same reason
+    // `./channel-runtime` and `./targeting` are stubbed above. What is controlled here is exactly
+    // the four members `launch-directive-spawn.js › resolveRuntime` / `resolveModel` use, and the
+    // DEFAULTS reproduce a machine with the shipped roster where everything is available, so
+    // every case written before U9 keeps asserting the launch it always did.
+    // ⚠ **`acquire` REJECTS FOR AN ID IN `cfg.runtimeUnavailable`**, which is how a case drives
+    // the "registered but not usable here" refusal — the arm that must NOT fall back.
+    // ⚠ **`ids` DOES NOT CONTAIN AN UNKNOWN ID, WHICH IS THE POINT OF THE MEMBERSHIP TEST**: the
+    // real `resolve()` fails OPEN to the default, so `acquire('nonsense')` would SUCCEED. A case
+    // asking for an unregistered runtime must be refused by `ids()`, before `acquire` is reached.
+    if (id === "./runtime") {
+      const rids = cfg.runtimeIds || ["claude", "codex", "cursor"];
+      return {
+        DEFAULT_ID: rids[0],
+        ids: () => rids.slice(),
+        acquire: async (rid) => {
+          acquires.push(rid);
+          if ((cfg.runtimeUnavailable || []).indexOf(rid) !== -1) {
+            throw new Error(`${rid} is not available on this Mac`);
+          }
+          return {};
+        },
+        runtimeFor: (rid) => ({
+          models: async () => {
+            rosters.push(rid);
+            if (cfg.rosterThrows) throw new Error("model/list did not answer in time");
+            return (cfg.rosters || {})[rid] || { source: "live", ids: [], aliases: [] };
+          },
+        }),
+      };
+    }
     if (id === "./session-model") return require_(join(MAIN, "session-model.js"));
     // ⚠ THE TEMPLATE RESOLVE IS STUBBED AT ITS SEAM, not faked at the transport. The real module
     // is `main/template-resolve.js` and it rides `api.js`, which reaches Electron — so what is
@@ -295,7 +332,8 @@ export function boot(over = {}) {
   // ⚠ THE FRAME IS RECORDED BEFORE IT IS HANDED IN, so the claim stub above can grant the row it
   // was actually asked about. Nothing about the module is wrapped — `handle` is the real one.
   const handle = (frame, ws) => { cfg.lastFrame = frame; return api.handle(frame, ws); };
-  return { api: { ...api, handle }, cfg, posts, gets, arms, logged, resolves, controls, names, flushes, modes };
+  return { api: { ...api, handle }, cfg, posts, gets, arms, logged, resolves, controls, names,
+    flushes, modes, acquires, rosters };
 }
 
 /**

@@ -107,6 +107,12 @@ export function toDirective(
     threadId: row.task_id,
     goal: row.goal,
     model: row.model,
+    // ⚠ **THE RUNTIME THE CALLER ASKED FOR** (2026-09-21, U9). ON THE DTO OR THE DESKTOP NEVER
+    // SEES IT — the CLAIM's answer IS this mapper's output, so a runtime mapped nowhere is a
+    // launch argument the spawn cannot read, which is the whole shape of the defect U9 closes.
+    // ⚠ `?? null` on this file's stale-cache rule, and `null` here means DID NOT ASK — never
+    // "claude", never "codex", and never inferred from `model` one line up.
+    runtime: row.runtime ?? null,
     // ⚠ BOTH, ALWAYS, AND NEVER ONE. `template_id` is `ON DELETE SET NULL`, so a
     // null id ALONE cannot say whether no template was named or the named one was
     // deleted — and the desktop's answer to those two is opposite (launch blank
@@ -172,6 +178,14 @@ export function toDirective(
     // uniqueness rule may have stored `Coder-1`; an orchestrator still tagging `@coder` would
     // reach the OTHER agent. ⚠ `?? null` on this file's stale-cache rule.
     appliedAgentName: row.applied_agent_name ?? null,
+    // ⚠ **WHAT THE MACHINE ACTUALLY STARTED ON** (2026-09-21, U9) — the `applied` half of the
+    // requested/applied pair `runtime` above opens. ⚠ `null` IS "NOT REPORTED" on the echo
+    // trio's rule (an older desktop), and on `appliedModel` it ALSO legitimately means "no model
+    // argument at all", i.e. the resolved runtime's own default. ⚠ IT WOULD BE EASY AND WRONG TO
+    // DEFAULT EITHER TO ITS REQUEST COLUMN: the row would then assert that the machine ran the
+    // vendor that was asked for, which is the one claim this lane exists to stop guessing at.
+    appliedRuntime: row.applied_runtime ?? null,
+    appliedModel: row.applied_model ?? null,
     // ── THE SERVER'S RESOLVED POSTURE (2026-09-02, A9 — G6/G7/G8) ──────────
     // ⚠ SAME `?? null` DISCIPLINE, SAME REASON, DIFFERENT MEANING FROM BOTH
     // NEIGHBOURS: `null` here is "did not ask" (or, on `resolvedModel`, "not

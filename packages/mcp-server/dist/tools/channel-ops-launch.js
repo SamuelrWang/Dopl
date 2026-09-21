@@ -156,6 +156,11 @@ async function opLaunchAgent(client, ref, opts = {}) {
             // hands back the argument it actually bounded, the discipline `agentName` follows.
             goal: goal.goal,
             model: opts.model,
+            // ⚠ PASSED THROUGH UNTOUCHED, on `template`'s rule and for a sharper reason: the only
+            // list of runtimes is the one on the operator's machine, so this process can neither
+            // validate membership nor predict whether the runtime would start. What it CAN do is
+            // print what came back — see the `runtime=` / `runtimeAsked=` facts below.
+            runtime: opts.runtime,
             template: opts.template,
             // ⚠ PASSED THROUGH UNTOUCHED, exactly like `template` above and for a
             // sharper reason: the ceiling these are clamped against lives on the
@@ -285,6 +290,13 @@ async function opLaunchAgent(client, ref, opts = {}) {
             thread: directive.threadId ?? undefined,
             template: directive.templateName ?? undefined,
             model: directive.model ?? undefined,
+            // ⚠ **WHICH RUNTIME ACTUALLY RAN, AND — WHEN THEY DIFFER — WHICH WAS ASKED FOR**
+            // (2026-09-21, U9). ⚠ **ALWAYS PRINTED, INCLUDING WHEN NOTHING WAS ASKED FOR**, on
+            // `postureFacts`' argument one line down: a caller that named no runtime still ran on
+            // SOME vendor, and `not reported` is the only thing between an orchestrator and the
+            // assumption that silence means Claude. ⚠ `runtimeAsked=` prints ONLY on a
+            // disagreement, because on the ordinary launch it would be a `-` on every line.
+            ...(0, channel_facts_1.runtimeFacts)(directive),
             // ⚠ `idle=yes` means STANDING BY AND RUNNING NOTHING.
             idle: !(typeof opts.goal === "string" && opts.goal.trim() !== ""),
             // ⚠ ALWAYS PRINTED, INCLUDING WHEN NOTHING WAS ASKED FOR (T24). A caller

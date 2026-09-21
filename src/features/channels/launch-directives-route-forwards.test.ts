@@ -34,11 +34,28 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { LaunchCreateSchema } from "./schema-launch";
+import { LaunchCreateSchema, LaunchDecideSchema } from "./schema-launch";
 
 const ROUTE_PATH = path.join(
   process.cwd(),
   "src/app/api/channels/launch-directives/route.ts",
+);
+
+/**
+ * ⚠ **THE DECIDE HANDLER ENUMERATES FIELDS TOO, AND IT HAD ALREADY LOST ONE** (found
+ * 2026-09-21, while U9 added two more to the same object).
+ *
+ * 🔒 **`appliedAgentName` WAS VALIDATED, TYPED, STORED-FOR AND DROPPED.** It reached
+ * `LaunchDecideSchema`, `DecideLaunchInput`, `applied_agent_name` and the DTO — every layer
+ * built — and `decide/route.ts › handlePost` never mentioned it, so the machine's real name for
+ * the agent never reached a row. The MCP result then rendered `name=(not reported)` for an agent
+ * that HAD been named, on the one field Samuel's 2026-09-15 ruling makes the ADDRESS. That is
+ * F-708 for the third time on this lane, in the other direction, and it is why this file now
+ * guards BOTH handlers rather than only the create.
+ */
+const DECIDE_ROUTE_PATH = path.join(
+  process.cwd(),
+  "src/app/api/channels/launch-directives/decide/route.ts",
 );
 
 /**
@@ -99,5 +116,62 @@ describe("POST /api/channels/launch-directives — the handler forwards the whol
     const schemaKeys = new Set(Object.keys(LaunchCreateSchema.shape));
     const invented = [...forwardedKeys()].filter((k) => !schemaKeys.has(k));
     expect(invented, `not on LaunchCreateSchema: ${invented.join(", ")}`).toEqual([]);
+  });
+});
+
+/**
+ * THE `launched` ARM of `LaunchDecideSchema`, as the handler re-builds it.
+ *
+ * ⚠ ANCHORED ON THE ARM, NOT THE FILE. The handler's ternary also builds a `done` and a
+ * `refused` object, and a whole-file scan would pass because some other arm happened to mention
+ * the key.
+ */
+function decidedKeys(): Set<string> {
+  const src = readFileSync(DECIDE_ROUTE_PATH, "utf8");
+  const arm = /status:\s*"launched",([\s\S]*?)\n\s*\}\n/.exec(src);
+  expect(arm, "the decide handler no longer builds a `launched` arm").not.toBeNull();
+  const keys = new Set<string>();
+  for (const line of arm![1].split("\n")) {
+    const code = line.trim();
+    if (code.startsWith("//") || code.startsWith("*") || code.startsWith("/*")) continue;
+    const key = /^(\w+):/.exec(code);
+    if (key) keys.add(key[1]);
+  }
+  return keys;
+}
+
+describe("POST /api/channels/launch-directives/decide — the machine's whole report lands", () => {
+  it("forwards every `launched`-arm field the schema validates", () => {
+    // ⚠ THE SHAPE OF A DISCRIMINATED-UNION ARM, read off the schema rather than hand-listed, so
+    // the field added next month is covered by the case written today.
+    const arm = LaunchDecideSchema.options.find(
+      (o) => o.shape.status.value === "launched",
+    );
+    expect(arm, "the schema still has a `launched` arm").toBeDefined();
+    // ⚠ `status` IS THE DISCRIMINATOR AND `directiveId` IS A SEPARATE ARGUMENT to the service —
+    // `decideLaunchDirective(ctx, input.directiveId, { … })` — so neither belongs in the object
+    // this case reads. Everything else the machine reported does.
+    const schemaKeys = Object.keys(arm!.shape).filter(
+      (k) => k !== "status" && k !== "directiveId",
+    );
+    const forwarded = decidedKeys();
+    const missing = schemaKeys.filter((k) => !forwarded.has(k));
+    expect(
+      missing,
+      `the machine REPORTED these and the route DROPS them, so the row records "not reported" `
+        + `for something that was reported: ${missing.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  /**
+   * ⚠ **THE THREE THE DEFECTS WERE ABOUT, NAMED.** `appliedAgentName` is the one that was
+   * actually lost; `appliedRuntime` / `appliedModel` are U9's pair, added to the same object
+   * the same day this was found — which is precisely the situation where a fourth goes missing.
+   */
+  it("forwards appliedAgentName, appliedRuntime and appliedModel by name", () => {
+    const forwarded = decidedKeys();
+    for (const k of ["appliedAgentName", "appliedRuntime", "appliedModel"]) {
+      expect(forwarded.has(k), `${k} is dropped by the decide handler`).toBe(true);
+    }
   });
 });

@@ -74,6 +74,24 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
             appliedTools: input.appliedTools,
             appliedMessages: input.appliedMessages,
             appliedChain: input.appliedChain,
+            // ⚠ **`appliedAgentName` WAS MISSING FROM THIS ENUMERATION UNTIL 2026-09-21, WHICH
+            // IS F-708 A THIRD TIME ON THE OTHER END OF THE SAME LANE.** The field reached
+            // `LaunchDecideSchema`, `DecideLaunchInput`, the column and the DTO — every layer
+            // built — and this handler never mentioned it, so the machine's real name for the
+            // agent was validated, typed, and dropped here. The MCP result then rendered
+            // `name=(not reported)` for an agent that HAD been named, on the one field Samuel's
+            // ruling makes the address. A missing optional property is not a type error
+            // anywhere, which is why the guard is a SOURCE-READING test
+            // (`launch-directives-route-forwards.test.ts`) and now covers this handler too.
+            appliedAgentName: input.appliedAgentName,
+            // ⚠ WHICH RUNTIME AND MODEL THE MACHINE ACTUALLY STARTED ON (2026-09-21, U9) —
+            // carried through UNTOUCHED and never defaulted, on the echo trio's rule directly
+            // above: an older desktop sends neither, and `undefined` must reach the service as
+            // `undefined` so it maps to `null` = "not reported" rather than being filled in from
+            // the row's own REQUEST column, which would make the row assert the machine ran the
+            // vendor that was asked for.
+            appliedRuntime: input.appliedRuntime,
+            appliedModel: input.appliedModel,
           }
         : input.status === "done"
           ? { status: "done" }

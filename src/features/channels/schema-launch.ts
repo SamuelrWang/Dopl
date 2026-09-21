@@ -55,6 +55,8 @@ import {
   LAUNCH_MESSAGE_MODES,
   LAUNCH_TOOL_MODES,
   LAUNCH_REFUSAL_REASONS,
+  LAUNCH_RUNTIME_ID_MESSAGE,
+  LAUNCH_RUNTIME_ID_RE,
 } from "./schema-launch-modes";
 
 const ToolModeSchema = closedEnum<LaunchToolMode>()(LAUNCH_TOOL_MODES);
@@ -104,6 +106,45 @@ export const LaunchCreateSchema = z.object({
    *  refuse a model a newer machine can run. Shape-bounded because it is
    *  rendered back into an MCP result. */
   model: safeLabel("Model", 120).optional(),
+  /**
+   * **WHICH RUNTIME THE NEW AGENT RUNS ON — A FIRST-CLASS FIELD, NEVER INFERRED FROM
+   * {@link LaunchCreateSchema.model}** (2026-09-21, U9 of the Codex runtime-parity plan).
+   *
+   * 🔒 **THE BUG THIS CLOSES, VERBATIM FROM THE PLAN**: *a live MCP launch carrying
+   * `model: "codex"` was accepted but started a Claude Sonnet agent, because the MCP contract
+   * has no runtime field and an unknown model falls through to the default adapter.* Both halves
+   * were real. There was no `runtime` anywhere on this lane, and `session-model.js ›
+   * chainModel` answers `''` for an id it does not know — so `codex` was read as "no model
+   * opinion", the chain fell through to the channel's Claude model, and the launch succeeded
+   * while naming the wrong vendor.
+   *
+   * ⚠ **A MODEL NAME MUST NEVER DOUBLE AS A RUNTIME SELECTOR** (the plan's Decision #4), and the
+   * rule has a direction on each side: this field never reads `model`, and `model` is never
+   * consulted to pick an adapter. **A MISSING VALUE IS NEVER CODEX AND IS NEVER GUESSED.**
+   *
+   * ⚠ **OPTIONAL, AND OMITTING IT IS TODAY'S BEHAVIOUR BYTE FOR BYTE** — the documented default
+   * chain, on the machine that owns it: the CHANNEL's stored runtime
+   * (`main/channel-runtime.js › getChannelRuntime`), then the REGISTRY DEFAULT
+   * (`main/runtime/index.js › DEFAULT_ID`, the first registered adapter). An older
+   * `@dopl/mcp-server` in the field sends no such key and must keep working (INVARIANTS §13).
+   *
+   * ⚠ **AN EXPLICIT RUNTIME THAT IS UNAVAILABLE IS REFUSED, NEVER SUBSTITUTED.** The registry's
+   * own `resolve()` FAILS OPEN to the default for an unknown id — right for a stored session
+   * record written by a build that knew a runtime this one does not, and exactly wrong for a
+   * request somebody just made — so the directive path refuses instead
+   * (`main/launch-directive-spawn.js › resolveRuntime`, answering `no-sdk`). That asymmetry is
+   * the whole point of the field.
+   *
+   * ⚠ **A SHAPE, NOT AN ENUM, AND {@link LAUNCH_RUNTIME_ID_RE} CARRIES THE ARGUMENT.** The
+   * roster is the DESKTOP's registry and moves with a desktop release; a closed enum here would
+   * refuse a runtime a newer machine ships. Membership is decided by the machine, which is also
+   * the only party that can say whether the runtime would actually start.
+   */
+  runtime: z
+    .string()
+    .trim()
+    .regex(LAUNCH_RUNTIME_ID_RE, LAUNCH_RUNTIME_ID_MESSAGE)
+    .optional(),
   /**
    * THE AGENT TEMPLATE TO RUN AS — **an id OR an exact name** (2026-08-23).
    *

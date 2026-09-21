@@ -76,7 +76,148 @@ const { diag } = require('./diag');
  * `session-dispatch.js › mayWake` refuses. The FENCE did not move and must not; the SPAWN SHAPE
  * did. `buildFencedTurn` fences the goal on both branches, and only the WHEN differs.
  */
+/**
+ * **WHICH RUNTIME THIS DIRECTIVE RUNS ON — AND THE ONE PLACE AN EXPLICIT ASK IS REFUSED RATHER
+ * THAN SWAPPED** (2026-09-21, U9).
+ *
+ * 🔒 **THE DEFECT, VERBATIM FROM THE PLAN**: *a live MCP launch carrying `model: "codex"` was
+ * accepted but started a Claude Sonnet agent, because the MCP contract has no runtime field and
+ * an unknown model falls through to the default adapter.* Both halves were real, and this
+ * function is the second half's answer.
+ *
+ * ── THE PRECEDENCE, AND WHY IT IS NOT SYMMETRIC ──────────────────────────────────────────────
+ *   1. THE DIRECTIVE'S OWN `runtime` — an EXPLICIT ask. Honoured, or REFUSED. Never swapped.
+ *   2. THE CHANNEL'S stored runtime (`channel-runtime.js › getChannelRuntime`) — the inherited
+ *      default this lane has always used, unchanged.
+ *   3. THE REGISTRY DEFAULT (`main/runtime/index.js › DEFAULT_ID`, the first registered).
+ * Links 2 and 3 FAIL OPEN, exactly as they did before this wave: an absent or unknown channel
+ * pick reads as "no pick" and the default adapter runs. Link 1 FAILS CLOSED. **That asymmetry IS
+ * the ticket**: a stored channel pick from a build that knew an adapter this one does not must
+ * not strand the room, while a request somebody just made must not quietly become another vendor.
+ *
+ * ⚠ **THE MEMBERSHIP TEST IS `ids()` AND IT MUST COME BEFORE `acquire()`, WHICH IS THE ONE TRAP
+ * HERE.** `runtime/index.js › resolve` FAILS OPEN to the default for an unknown id — correct for
+ * a stored session record, and exactly wrong for a live request — so `acquire('nonsense')`
+ * SUCCEEDS by acquiring Claude. Asking the registry for its `ids()` first is what makes the
+ * refusal real. **Do not reorder these two.**
+ *
+ * ⚠ **AND THE SECOND CHECK IS A REAL ONE, NOT BELT AND BRACES.** `acquire` runs the adapter's own
+ * `available()` gate, so "registered but not installed / not signed in" is refused HERE with the
+ * runtime NAMED in the diag, instead of reaching `session-launch.js` and coming back as the
+ * anonymous `no-sdk` that means "this machine has no agent runtime" on every runtime.
+ *
+ * ⚠ **`no-sdk` RATHER THAN AN ELEVENTH REFUSAL WORD**, deliberately. The vocabulary is CLOSED on
+ * the wire in four places (this tree's `REFUSAL_REASONS`, `schema-launch-modes.ts`, the column
+ * CHECK, and the MCP `RETRY_ADVICE` map), and `no-sdk` already means precisely *"there is no such
+ * agent runtime on this Mac"* — which is the true statement in both arms below. Its retry advice
+ * is already `no`, which is also right: nothing the caller does changes the answer.
+ *
+ * ⚠ **THE REGISTRY IS LAZY-REQUIRED**, the idiom this lane already uses for `./targeting` and
+ * `./template-resolve`: `main/runtime/index.js` registers three adapters at load and the suites
+ * evaluate this module against stubbed leaves.
+ */
+async function resolveRuntime(requested, channelId) {
+  const registry = require('./runtime');
+  const asked = typeof requested === 'string' ? requested.trim() : '';
+  if (asked) {
+    // ⚠ MEMBERSHIP FIRST — see the docblock. `ids()` is the ONLY enumeration of what this build
+    // ships, and a second copy anywhere is the drift the registry exists to prevent.
+    if (registry.ids().indexOf(asked) === -1) {
+      diag('launch-directive: the directive asked for runtime', asked,
+        '— this build has no such adapter registered (' + registry.ids().join(', ') + ');'
+        + ' REFUSING rather than launching another vendor');
+      return { refused: 'no-sdk' };
+    }
+    try {
+      await registry.acquire(asked);
+    } catch (err) {
+      diag('launch-directive: runtime', asked, 'is registered but NOT usable here —',
+        (err && err.message) || String(err), '— REFUSING rather than falling back');
+      return { refused: 'no-sdk' };
+    }
+    return { id: asked, explicit: true };
+  }
+  // ⚠ THE INHERITED CHAIN, UNCHANGED FROM BEFORE U9. `getChannelRuntime` already normalizes
+  // against the same registry and answers `''` for "no pick", which `session-launch.js` reads as
+  // the default adapter — so `''` is passed on rather than being resolved to a literal here.
+  const channel = channelRuntime.getChannelRuntime(channelId);
+  return { id: channel, explicit: false };
+}
+
+/**
+ * **THE ID THIS LANE REPORTS AS `appliedRuntime`** — the resolved pick spelled out.
+ *
+ * ⚠ `''` MEANS THE DEFAULT ADAPTER AND MUST BE REPORTED AS ITS NAME, NOT AS SILENCE. `null` on
+ * the column means NOT REPORTED (an older desktop), and an orchestrator reading that word beside
+ * a successful launch learns nothing. The registry is the only thing that can name the default.
+ */
+function appliedRuntimeId(id) {
+  if (id) return id;
+  try { return require('./runtime').DEFAULT_ID || ''; } catch (_err) { return ''; }
+}
+
+/**
+ * **THE MODEL, RESOLVED INSIDE THE RUNTIME THAT WILL ACTUALLY RUN IT** (2026-09-21, U9).
+ *
+ * ⚠ **THE OLD CHAIN WAS CLAUDE'S, ON EVERY RUNTIME, AND THAT IS HALF THE ORIGINAL DEFECT.**
+ * `sessionModel.chainModel` / `aliasForModelId` resolve against `session-model.js`'s FROZEN
+ * CLAUDE TABLE, so on a Codex launch the directive's own `codex` id collapsed to `''` ("no
+ * opinion") and the chain fell through to the TEMPLATE's and then the CHANNEL's model — both
+ * Claude ids — which were then handed to a non-Claude adapter.
+ *
+ * ⚠ **SO THE CHAIN IS NOW SCOPED TO THE DEFAULT (CLAUDE) ADAPTER, AND EVERY OTHER RUNTIME GETS
+ * ITS OWN ROSTER OR NOTHING.** `''` is not a degradation: it is `descriptor.models
+ * .defaultMeansAbsent`, the convention the whole precedence chain rests on — no model argument at
+ * all, i.e. that platform's own default — which is the only correct answer once a cross-vendor id
+ * has been refused.
+ *
+ * ⚠ **THE ROSTER IS ASKED ONLY WHEN THERE IS A QUESTION TO ANSWER** — a non-default runtime AND a
+ * requested model. `runtime.models()` on a live-roster adapter spawns a process, so asking it on
+ * every launch would put a Codex app-server in the path of every Claude launch. It is also
+ * allowed to FAIL: an unreachable roster answers "drop the model", never "guess", and never
+ * another runtime's list (the plan's R11 — catalog failure must not substitute a vendor).
+ *
+ * ⚠ **IT REJECTS, IT NEVER RE-ROUTES.** A Claude model named on a Codex launch changes NOTHING
+ * about the runtime — the session still starts on Codex, on Codex's own default model, and the
+ * drop is named in the diag and in the `model=` / `appliedModel=` pair the MCP result prints.
+ */
+async function resolveModel(runtimeId, d, template) {
+  const registry = require('./runtime');
+  let defaultId = '';
+  try { defaultId = registry.DEFAULT_ID || ''; } catch (_err) { defaultId = ''; }
+  // ⚠ THE DEFAULT ADAPTER KEEPS THE EXISTING CHAIN, BYTE FOR BYTE (spec §3c):
+  //   directive.model > template.model > channelPrefs.getLaunchModel > SDK default
+  // Every link is `chainModel` — "a real pick, or '' meaning KEEP GOING" — INCLUDING the
+  // directive's own (F-285): an unrecognised id FALLS THROUGH rather than committing the chain.
+  if (!runtimeId || runtimeId === defaultId) {
+    return sessionModel.chainModel(d.model)
+      || require('./session-launch-op').templateModel(sessionModel, template)
+      || sessionModel.aliasForModelId(channelPrefs.getLaunchModel(d.channelId));
+  }
+  const asked = typeof d.model === 'string' ? d.model.trim() : '';
+  if (!asked) return '';
+  let roster = null;
+  try {
+    roster = await registry.runtimeFor(runtimeId).models();
+  } catch (err) {
+    diag('launch-directive: could not read', runtimeId, "'s model roster —",
+      (err && err.message) || String(err), '— launching on that runtime\'s own default model');
+    return '';
+  }
+  const ids = (roster && Array.isArray(roster.ids) ? roster.ids : []);
+  if (ids.indexOf(asked) !== -1) return asked;
+  diag('launch-directive: model', asked, 'is not in', runtimeId, "'s roster —",
+    'DROPPING the model and launching on that runtime\'s own default.',
+    'The runtime is NOT changed: a model never selects a vendor.');
+  return '';
+}
+
 async function spawn(d, deps) {
+  // ⚠ **ANSWERED BEFORE ANY WORK, BESIDE THE CHAIN REFUSAL BELOW**, and for the same reason: an
+  // explicit runtime this machine cannot run is a REFUSAL, and a refusal that costs a template
+  // fetch and a spawn attempt first is a refusal the operator pays for.
+  const runtime = await resolveRuntime(d.runtime, d.channelId);
+  if (runtime.refused) return { refused: runtime.refused };
   const plan = launchPosture.resolveLaunch({
     requested: { tools: d.startToolMode, messages: d.startMessageMode },
     ceiling: channelPrefs.getLaunchPosture(d.channelId),
@@ -135,15 +276,23 @@ async function spawn(d, deps) {
     return { refused: 'no-template' };
   }
 
+  // ⚠ **RESOLVED BEFORE THE MODEL, BECAUSE THE MODEL IS RESOLVED INSIDE IT** (U9). The old order
+  // had no such dependency — there was one model table and it was Claude's.
+  const modelArg = await resolveModel(runtime.id, d, template);
   const res = await deps.launch({
     channelId: d.channelId,
     taskId: d.taskId,
     workspaceId: d.workspaceId || null,
-    // THE CHANNEL'S RUNTIME, INHERITED (2026-08-31, port wave D) — `trigger.js ›
-    // launchResponderSession` carries the argument for why this record travels where the permission
-    // pair may not. A directive lane has no human at the keyboard, so it inherits the channel's
-    // setting exactly as it inherits the tool profile and the model. Absent => the default.
-    runtime: channelRuntime.getChannelRuntime(d.channelId),
+    // ── THE RUNTIME (2026-08-31, port wave D; the DIRECTIVE'S OWN ask added 2026-09-21, U9) ──
+    //
+    // THE CHANNEL'S RUNTIME, INHERITED — `trigger.js › launchResponderSession` carries the
+    // argument for why this record travels where the permission pair may not. A directive lane
+    // has no human at the keyboard, so it inherits the channel's setting exactly as it inherits
+    // the tool profile. Absent => the default.
+    // ⚠ **AND SINCE U9 A DIRECTIVE MAY NAME ONE ITSELF, WHICH OVERRIDES THE CHANNEL AND IS
+    // REFUSED RATHER THAN SWAPPED WHEN THIS MACHINE CANNOT RUN IT.** `resolveRuntime` above is
+    // the whole rule, including why link 1 fails CLOSED while links 2 and 3 fail OPEN.
+    runtime: runtime.id,
     goal: d.goal || defaultGoal(channelLevel),
     counterpartyId: null,
     direct: false,
@@ -174,22 +323,11 @@ async function spawn(d, deps) {
     mode: 'interactive',
     windowless: true,
     startModes: plan.modes, // T24: the operator's stored pair, or a narrower one the directive asked for
-    // ── ⚠ THE MODEL PRECEDENCE CHAIN, DIRECTIVE LANE (spec §3c) ────────────────────────────
-    //   directive.model  >  template.model  >  channelPrefs.getLaunchModel  >  SDK default
-    //                                                     (`modelArg` null ⇒ no --model at all)
-    //
-    // ⚠ THE ORCHESTRATOR'S EXPLICIT `model` BEATS THE TEMPLATE'S, for the same reason the launch
-    // sheet does on the button lane: one is a deliberate per-call choice, the other a default.
-    // The template's named position is BELOW it and ABOVE the channel, and nowhere else.
-    // EVERY LINK IS `chainModel` — "a real pick, or '' meaning KEEP GOING" — INCLUDING THE
-    // DIRECTIVE'S OWN (F-285, 2026-08-23). It used to be a ternary coercing `d.model` through
-    // `aliasForModelId`, which knows FULL IDS ONLY, so a legitimate alias like `opus` collapsed to
-    // `'default'`, committed the ternary, and threw the template's AND the channel's picks away. An
-    // unrecognised id now FALLS THROUGH — F-5's tree-wide rule: unknown model falls back, never
-    // refuses.
-    model: sessionModel.chainModel(d.model)
-      || require('./session-launch-op').templateModel(sessionModel, template)
-      || sessionModel.aliasForModelId(channelPrefs.getLaunchModel(d.channelId)),
+    // ── ⚠ THE MODEL, RESOLVED INSIDE THE RESOLVED RUNTIME (U9; spec §3c for the Claude chain) ──
+    // `resolveModel` above holds the whole rule and the reason it is now runtime-scoped: the old
+    // chain was Claude's on EVERY runtime, so a Codex launch fell through the directive's own
+    // `codex` id and handed a CLAUDE model to a non-Claude adapter.
+    model: modelArg,
     // THE COLOUR THE ORCHESTRATOR ASKED FOR (Samuel, 2026-09-13; docs/specs/agent-colors.md).
     // `dopl_channel(op="manage", action="launch", color=…)` reaches this lane as a directive column
     // and nowhere else — a parameter the server accepts and the spawning machine cannot see would be
@@ -265,6 +403,25 @@ async function spawn(d, deps) {
       appliedMessages: plan.modes.messages,
       appliedChain: plan.chain,
       appliedAgentName: applied,
+      // ⚠ **WHICH RUNTIME AND MODEL THIS LANE SETTLED ON** (2026-09-21, U9) — `runtime`'s and
+      // `modelArg`'s values, NEVER `d.runtime` / `d.model`, on the echo trio's own rule directly
+      // above: `d.*` is what the ORCHESTRATOR ASKED FOR and these are what this machine RESOLVED,
+      // and they are the SAME objects handed to `deps.launch` one screen up, so the report cannot
+      // drift from the launch. REPORTED ON EVERY LAUNCH, including one that asked for nothing,
+      // so that "not reported" keeps meaning "this machine said nothing" (an older desktop).
+      // ⚠ `appliedRuntimeId('')` NAMES THE DEFAULT ADAPTER rather than reporting silence — the
+      // whole value of the field is that an orchestrator stops having to assume which vendor ran.
+      // ⚠ **A KNOWN GAP, NAMED RATHER THAN PAPERED OVER (U5 is open):**
+      // `session-engine.js › startSession` still re-coerces `spec.model` through `session-model
+      // .js › normalizeModel`, which is the CLAUDE table — so on a non-default runtime a
+      // roster-valid id resolved here is coerced to `'default'` downstream and the session runs
+      // that platform's own default. `appliedModel` is therefore what the DIRECTIVE LANE applied.
+      // It is already strictly more than nothing (the requested/applied split is what an audit
+      // needs), and when U5 moves that coercion behind the selected adapter the two agree by
+      // construction. Do not "fix" this by re-implementing the coercion here — a second copy of
+      // the engine's rule is how the two come to disagree while both suites stay green.
+      appliedRuntime: appliedRuntimeId(runtime.id),
+      appliedModel: modelArg || '',
     };
   }
   return { refused: wire.refusalFor(res && res.skipped) };

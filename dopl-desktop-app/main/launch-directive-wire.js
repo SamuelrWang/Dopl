@@ -72,7 +72,7 @@ const {
   STATUSES,
   KIND_LAUNCH, KIND_END, KIND_RENAME, KIND_SET_MODE, KINDS, KINDS_NEEDING_LAUNCH_CONSENT,
   TOOL_MODES, MESSAGE_MODES, REFUSAL_REASONS, REQUEST_KEYS, RESPONSE_KEYS,
-  TARGET_NAME_MAX, AGENT_ID_RE, GOAL_MAX, TEMPLATE_NAME_MAX, text,
+  TARGET_NAME_MAX, AGENT_ID_RE, RUNTIME_ID_RE, GOAL_MAX, TEMPLATE_NAME_MAX, text,
 } = vocab;
 
 // ⚠ **THE UUID RULE STAYS HERE**, with `directiveFrom`, which is its only reader. It is one of
@@ -150,6 +150,23 @@ function colorKey(value) {
 }
 
 /**
+ * **A REGISTRY-SHAPED RUNTIME ID, OR `''`** (2026-09-21, U9).
+ *
+ * ⚠ `''` RATHER THAN `null`, on `colorKey`'s rule one function up: `text()` answers `''` for an
+ * absent value and this row is consumed by code that tests these fields for truthiness, so a
+ * `null` here would be a second spelling of "absent" on one object.
+ * ⚠ **A SHAPE TEST, NOT A MEMBERSHIP TEST, AND THE DIFFERENCE IS DELIBERATE** — see
+ * `directiveFrom`'s note on the field. A value that fails this pattern could not be a runtime id
+ * on any build, so dropping it costs nothing; a value that PASSES it may still be a runtime this
+ * machine does not have, and that one must produce a REFUSAL rather than a fallback, which only
+ * the registry can decide.
+ */
+function runtimeId(value) {
+  return typeof value === 'string' && RUNTIME_ID_RE.test(value.trim())
+    ? value.trim() : '';
+}
+
+/**
  * A TRI-STATE OFF THE WIRE: `true`, `false`, or `null` for "did not ask".
  *
  * ⚠ `'false'` IS ACCEPTED BESIDE `false` for the same reason `'true'` is: a row may arrive over
@@ -205,6 +222,27 @@ function directiveFrom(raw, workspaceId) {
     // Coerced by `session-model.js` at the call site, not here — this module owns the WIRE, and
     // the frozen model list is that module's.
     model: text(r.model, 64),
+    // ⚠ **WHICH RUNTIME THIS DIRECTIVE ASKED FOR** (2026-09-21, U9;
+    // `channel_launch_directives.runtime`). ⚠ BOTH SPELLINGS READ, like `template_name` and
+    // `color` above and for the identical reason: the row reaches this machine as the CLAIM's
+    // DTO (camel) and, on the realtime lane, as the raw column (snake). A field read in one
+    // spelling is a field silently absent on the other lane — and THIS field's absence is the
+    // whole defect U9 closes, so it is the last one that may go missing quietly.
+    //
+    // ⚠ **SHAPE-NARROWED HERE, MEMBERSHIP-CHECKED IN `launch-directive-spawn.js`, AND BOTH STEPS
+    // ARE REQUIRED.** `RUNTIME_ID_RE` refuses a string that could never be a runtime id at all,
+    // which is what stops an arbitrary value off a realtime frame travelling into main. It does
+    // NOT say the runtime EXISTS — the only enumeration of that is `main/runtime/index.js`'s
+    // registry, which a PURE module may not require. `resolveRuntime` asks it, and REFUSES
+    // (`no-sdk`) rather than falling through to a default.
+    //
+    // ⚠ **`''` IS "DID NOT ASK" AND IS NEVER READ AS A VENDOR** — the documented chain applies
+    // (the channel's runtime, then the registry default), which is the pre-U9 behaviour byte for
+    // byte and what every client older than this wave sends. ⚠ **AND IT IS NEVER DERIVED FROM
+    // `model` ONE LINE UP** (Decision #4): a live launch carrying `model: "codex"` started
+    // Claude Sonnet, because `session-model.js › chainModel` answers `''` for an id it does not
+    // know — so `codex` read as silence and the chain fell through.
+    runtime: runtimeId(r.runtime || r.runtimeId),
     // ⚠ '' IS "NO TEMPLATE ID", and a non-uuid collapses to it rather than being carried: this
     // value is about to be interpolated into `/api/agent-templates/<id>/resolve`.
     templateId: UUID_RE.test(templateId) ? templateId : '',
@@ -379,6 +417,23 @@ function decideBody(directiveId, outcome) {
     if (typeof o.appliedAgentName === 'string' && o.appliedAgentName.trim() !== '') {
       body.appliedAgentName = o.appliedAgentName.trim();
     }
+    // ⚠ **WHICH RUNTIME AND MODEL THIS MACHINE ACTUALLY STARTED ON** (2026-09-21, U9), on this
+    // function's own rule for the echo: EMITTED ONLY WHEN THERE REALLY IS A VALUE, because
+    // OMITTED is "not reported" — which is also what a desktop older than this wave produces,
+    // and why the route's schema keeps both OPTIONAL (INVARIANTS §13). Sending `''` would be
+    // this machine claiming to report and reporting nothing.
+    // ⚠ **NARROWED AGAIN ON THE WAY OUT**, as the posture pair above is: a value outside the
+    // runtime-id grammar would pass nothing useful and would be refused by the column CHECK at
+    // rest — a decide refused for a launch that really happened.
+    // ⚠ `appliedModel` ABSENT IS A REAL AND ORDINARY REPORT: it means NO MODEL ARGUMENT AT ALL,
+    // i.e. the resolved runtime's own default, which is exactly what a cross-vendor model
+    // correctly becomes once it is dropped rather than smuggled into another adapter.
+    if (RUNTIME_ID_RE.test(String(o.appliedRuntime || ''))) {
+      body.appliedRuntime = String(o.appliedRuntime);
+    }
+    if (typeof o.appliedModel === 'string' && o.appliedModel.trim() !== '') {
+      body.appliedModel = o.appliedModel.trim().slice(0, 120);
+    }
     return body;
   }
   // ⚠ THE NON-LAUNCH KINDS' SUCCESS (2026-09-01). ORDER MATTERS AND IS THE WHOLE
@@ -430,6 +485,7 @@ module.exports = {
   TOOL_MODES,
   MESSAGE_MODES,
   AGENT_ID_RE,
+  RUNTIME_ID_RE,
   REFUSAL_REASONS,
   REQUEST_KEYS,
   RESPONSE_KEYS,

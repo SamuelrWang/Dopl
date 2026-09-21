@@ -228,6 +228,12 @@ test("CONTRACT: a directive in the DTO's spelling survives `handle`'s owner chec
     threadId: TH,
     goal: "Draft the release notes",
     model: "claude-opus-5",
+    // ⚠ THE RUNTIME REQUEST (2026-09-21, U9). Same argument as the colour and the posture keys
+    // below: `toDirective` emits it on EVERY row, so a fixture without it would be testing a
+    // shape the server does not send — and the `dtoKeys()` belt at the end is what says so.
+    // ⚠ `null` IS THE ORDINARY LAUNCH: the caller named no runtime, so the machine's documented
+    // chain applies. It is NOT "claude", and it is never read off `model` one line up.
+    runtime: null,
     templateId: null,
     templateName: null,
     targetAgentId: null,
@@ -269,6 +275,12 @@ test("CONTRACT: a directive in the DTO's spelling survives `handle`'s owner chec
     // ⚠ WHAT THE MACHINE STORED (2026-09-15) — `null` on a row nothing has decided yet, which is
     // what a PENDING fixture is. It differs from `agentName` whenever the uniqueness rule fired.
     appliedAgentName: null,
+    // ⚠ WHICH RUNTIME AND MODEL THE MACHINE ACTUALLY STARTED ON (2026-09-21, U9) — the `applied`
+    // half of the pair `runtime` above opens, and `null` on a row nothing has decided yet, which
+    // is what a PENDING fixture is. ⚠ `null` NEVER MEANS "claude": on a decided row it is an
+    // older desktop that reported nothing, which is a different statement from a vendor.
+    appliedRuntime: null,
+    appliedModel: null,
     status: "pending",
     refusalReason: null,
     agentId: null,
@@ -340,8 +352,12 @@ test("CONTRACT: a row is NARROWED, so a widened table cannot start influencing t
   // MCP op now REFUSES a nameless launch, so a name the server accepts and this whitelist does
   // not name would leave every agent-launched agent nameless anyway — the exact defect the
   // requirement exists to close, shipped as a no-op.
+  // ⚠ **`runtime` JOINED ON 2026-09-21 (U9) AND IT IS THAT RISK A THIRD TIME — EXCEPT THAT THIS
+  // ONE ALREADY HAPPENED IN THE FIELD.** A live MCP launch carrying `model: "codex"` was accepted
+  // and started a Claude Sonnet agent; U9 adds the runtime field end to end, and a whitelist that
+  // did not name it would ship that fix as a no-op with every other layer built.
   assert.deepEqual(Object.keys(d).sort(),
-    ["agentId", "agentName", "channelId", "color", "goal", "id", "kind", "model",
+    ["agentId", "agentName", "channelId", "color", "goal", "id", "kind", "model", "runtime",
       "operatorUserId", "status",
       "chain", "startMessageMode", "startToolMode",
       "targetAgentId", "targetMessageMode", "targetName", "targetToolMode", "taskId",

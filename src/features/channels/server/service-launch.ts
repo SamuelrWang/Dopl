@@ -69,6 +69,15 @@ export type CreateLaunchInput = {
   goal?: string;
   model?: string;
   /**
+   * **WHICH RUNTIME — A FIRST-CLASS FIELD, NEVER INFERRED FROM `model`** (2026-09-21, U9).
+   * ⚠ **CARRIED, NOT RESOLVED, AND THIS SERVICE CANNOT RESOLVE IT** — hence no `resolvedRuntime`
+   * beside the posture's `resolved*` group, and there must not be one. The roster is the
+   * operator's desktop registry; the MACHINE decides membership, REFUSES an explicit runtime it
+   * cannot start (`no-sdk`) rather than substituting a vendor, and reports what it did start on.
+   * Omitted is the pre-U9 chain byte for byte. `schema-launch.ts › runtime` argues it in full.
+   */
+  runtime?: string;
+  /**
    * The agent template to run as — **an id OR an exact name**, resolved here (2026-08-23).
    *
    * ⚠ IT IS A REF, NOT AN ID, AND THE RESOLUTION IS THE FENCE. `channels/` never sees a template
@@ -245,6 +254,10 @@ export async function createLaunchDirective(
       task_id: taskId,
       goal: input.goal ?? null,
       model: input.model ?? null,
+      // ⚠ **THE REQUESTED RUNTIME, VERBATIM AND RESOLVED NOWHERE HERE** (U9). `?? null` maps
+      // "did not ask" onto the column's spelling for it, which the machine reads as the
+      // documented chain. ⚠ **NEVER DERIVED FROM `model` ABOVE** — that inference IS the defect.
+      runtime: input.runtime ?? null,
       // ⚠ THE PAIR, WRITTEN TOGETHER. `template_name` is a SNAPSHOT and is what
       // survives the FK's `ON DELETE SET NULL` — without it a template deleted
       // between here and the claim is indistinguishable from no template at all,
@@ -393,6 +406,10 @@ export type DecideLaunchInput =
       /** ⚠ THE MACHINE'S OWN VALUE (2026-09-15) — the uniqueness rule may have stored `Coder-1`,
        *  and that is the name the launcher must address from now on. */
       appliedAgentName?: string;
+      /** ⚠ WHAT THE MACHINE STARTED ON (U9). Optional on the echo trio's rule — an older desktop
+       *  reports neither, and `undefined` must reach the column as `null` = not reported. */
+      appliedRuntime?: string;
+      appliedModel?: string;
     }
   /** ⚠ THE NON-LAUNCH KINDS' SUCCESS (2026-09-01). No agent id: the row already
    *  NAMES its target, so a second id on the decide would be a field the machine
@@ -458,6 +475,13 @@ export async function decideLaunchDirective(
         input.status === "launched" ? input.appliedChain ?? null : null,
       applied_agent_name:
         input.status === "launched" ? input.appliedAgentName ?? null : null,
+      // ⚠ **WHAT THE MACHINE STARTED ON** (U9), on the echo trio's contract above: `launched`
+      // only, `null` elsewhere so a retried decide leaves no stale runtime beside a refusal, and
+      // `undefined` from an older desktop is NOT REPORTED, never the request column echoed back.
+      applied_runtime:
+        input.status === "launched" ? input.appliedRuntime ?? null : null,
+      applied_model:
+        input.status === "launched" ? input.appliedModel ?? null : null,
       decided_at: new Date(now).toISOString(),
     }
   );

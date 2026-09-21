@@ -36,7 +36,7 @@ import type {
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
 import { channelNotFound, isErr, resolveChannelOr } from "./channel-shared";
 // ⚠ ONE write-result renderer, shared with `post` / `create_thread`.
-import { factsLine, postureFacts } from "./channel-facts";
+import { factsLine, postureFacts, runtimeFacts } from "./channel-facts";
 // ⚠ THE COLOUR REFUSAL IS A NEIGHBOUR, not a branch in here — this file is at the §1
 // cap and a refusal is prose about one server code (`channel-ops-launch-color.ts`).
 import { colorTaken, freeColors } from "./channel-ops-launch-color";
@@ -153,6 +153,17 @@ export async function opLaunchAgent(
     thread?: string;
     goal?: string;
     model?: string;
+    /**
+     * **WHICH RUNTIME — ASKED FOR, AND REFUSED RATHER THAN SUBSTITUTED** (2026-09-21, U9).
+     *
+     * ⚠ **A SEPARATE FIELD FROM `model` ABOVE, ALWAYS.** `runtime` picks the ADAPTER, `model`
+     * picks a model inside it; neither is ever derived from the other. A live launch carrying
+     * `model: "codex"` was accepted and started Claude Sonnet, which is the defect this closes.
+     * ⚠ PASSED THROUGH UNTOUCHED, like `template` and `color`: the roster is the operator's own
+     * desktop registry and this process cannot see it. Omitted means the documented chain (the
+     * channel's runtime, then that machine's default) — never a particular vendor.
+     */
+    runtime?: string;
     /** Template id OR exact name. ⚠ Passed through untouched — the id/name
      *  disambiguation and the visibility check both happen server-side. */
     template?: string;
@@ -213,6 +224,11 @@ export async function opLaunchAgent(
       // hands back the argument it actually bounded, the discipline `agentName` follows.
       goal: goal.goal,
       model: opts.model,
+      // ⚠ PASSED THROUGH UNTOUCHED, on `template`'s rule and for a sharper reason: the only
+      // list of runtimes is the one on the operator's machine, so this process can neither
+      // validate membership nor predict whether the runtime would start. What it CAN do is
+      // print what came back — see the `runtime=` / `runtimeAsked=` facts below.
+      runtime: opts.runtime,
       template: opts.template,
       // ⚠ PASSED THROUGH UNTOUCHED, exactly like `template` above and for a
       // sharper reason: the ceiling these are clamped against lives on the
@@ -348,6 +364,13 @@ export async function opLaunchAgent(
         thread: directive.threadId ?? undefined,
         template: directive.templateName ?? undefined,
         model: directive.model ?? undefined,
+        // ⚠ **WHICH RUNTIME ACTUALLY RAN, AND — WHEN THEY DIFFER — WHICH WAS ASKED FOR**
+        // (2026-09-21, U9). ⚠ **ALWAYS PRINTED, INCLUDING WHEN NOTHING WAS ASKED FOR**, on
+        // `postureFacts`' argument one line down: a caller that named no runtime still ran on
+        // SOME vendor, and `not reported` is the only thing between an orchestrator and the
+        // assumption that silence means Claude. ⚠ `runtimeAsked=` prints ONLY on a
+        // disagreement, because on the ordinary launch it would be a `-` on every line.
+        ...runtimeFacts(directive),
         // ⚠ `idle=yes` means STANDING BY AND RUNNING NOTHING.
         idle: !(typeof opts.goal === "string" && opts.goal.trim() !== ""),
         // ⚠ ALWAYS PRINTED, INCLUDING WHEN NOTHING WAS ASKED FOR (T24). A caller

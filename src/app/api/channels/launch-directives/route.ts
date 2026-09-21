@@ -48,6 +48,14 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
       threadId: input.threadId,
       goal: input.goal,
       model: input.model,
+      // ⚠ **WHICH RUNTIME, AND IT IS A SEPARATE FIELD FROM `model` ON PURPOSE** (2026-09-21,
+      // U9). `runtime` picks the ADAPTER; `model` picks a model INSIDE it, and neither is ever
+      // derived from the other — a live MCP launch carrying `model: "codex"` was accepted and
+      // started a Claude Sonnet agent, which is the defect the field closes.
+      // ⚠ THE SERVER BOUNDS ITS SHAPE AND DECIDES NOTHING ELSE: the roster is the operator's
+      // desktop registry, so an explicit runtime that machine cannot start is REFUSED there
+      // (`no-sdk`) rather than swapped for another vendor. Absent follows the documented chain.
+      runtime: input.runtime,
       // ⚠ A REF (id OR exact name), resolved in the service under THIS caller's
       // visibility. An ambiguous name is a 409 `AGENT_TEMPLATE_AMBIGUOUS` whose
       // `details.matches` lists every row the caller can already see; an

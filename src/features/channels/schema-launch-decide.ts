@@ -4,6 +4,8 @@ import {
   LAUNCH_MESSAGE_MODES,
   LAUNCH_TOOL_MODES,
   LAUNCH_REFUSAL_REASONS,
+  LAUNCH_RUNTIME_ID_MESSAGE,
+  LAUNCH_RUNTIME_ID_RE,
 } from "./schema-launch-modes";
 import type {
   LaunchMessageMode,
@@ -104,6 +106,33 @@ export const LaunchDecideSchema = z.discriminatedUnion("status", [
         "Control, zero-width and bidi characters are refused, not stripped",
       )
       .optional(),
+    /**
+     * **WHICH RUNTIME THE SESSION ACTUALLY STARTED ON, AND WHICH MODEL IT ACTUALLY GOT**
+     * (2026-09-21, U9).
+     *
+     * ⚠ **THE `applied_*` HALF OF THE REQUESTED/APPLIED PAIR, AND THEY ARE NOT SPELLINGS OF THE
+     * REQUEST.** `LaunchCreateSchema.runtime` is what the orchestrator ASKED for; these are what
+     * the machine SETTLED ON after the channel/registry chain resolved. They differ on every
+     * launch that named no runtime — the ordinary case — which is precisely why an audit record
+     * that carried only the request could not explain what ran.
+     *
+     * ⚠ **`appliedModel` IS NOT `resolved_model`.** That column is the SERVER's echo of the
+     * model id it recognised at create time, and it is Claude-shaped. This is what the machine
+     * handed its own launch funnel, inside the resolved runtime — `''`/absent meaning "no model
+     * argument at all", i.e. that runtime's own default, which is the honest answer whenever a
+     * cross-vendor model was dropped rather than smuggled.
+     *
+     * ⚠ **OPTIONAL, ON THE ECHO TRIO'S CONTRACT** (INVARIANTS §13): a desktop older than this
+     * wave reports neither, the columns stay `null`, and `null` renders as `not reported` —
+     * never as agreement with the request.
+     * ⚠ NOT ON THE `done` ARM: only a LAUNCH starts a session on a runtime.
+     */
+    appliedRuntime: z
+      .string()
+      .trim()
+      .regex(LAUNCH_RUNTIME_ID_RE, LAUNCH_RUNTIME_ID_MESSAGE)
+      .optional(),
+    appliedModel: z.string().trim().min(1).max(120).optional(),
   }),
   // ⚠ THE NON-LAUNCH KINDS' SUCCESS, 2026-09-01. It carries NO agent id: an end
   // and a rename both NAME their target in the row already (`target_agent_id`),

@@ -293,3 +293,57 @@ export function allowedFacts(d: LaunchDirective): Record<string, FactValue> {
   if (model !== null && model !== d.model) facts.resolvedModel = model;
   return facts;
 }
+
+/**
+ * **WHICH RUNTIME ACTUALLY RAN — AND, WHEN THEY DIFFER, WHICH WAS ASKED FOR**
+ * (2026-09-21, U9).
+ *
+ * 🔒 **THE FACT THIS EXISTS FOR.** A live MCP launch carrying `model: "codex"`
+ * was accepted and started a Claude Sonnet agent, and the result said nothing
+ * that could have revealed it: there was no runtime field on the wire, so the
+ * line named a model, a template and a posture while the one thing that had
+ * gone wrong — the VENDOR — was unprinted. `runtime=` is that missing verdict.
+ *
+ * ⚠ **`runtime=` IS THE APPLIED VALUE AND IS PRINTED ON EVERY LAUNCH**, exactly
+ * as {@link postureFacts} prints a posture even when none was asked for, and
+ * for the identical reason: a caller that named no runtime still ran on SOME
+ * vendor, and `not reported` is the only thing standing between an orchestrator
+ * and the assumption that silence means Claude. An older desktop reports
+ * nothing and gets that word — which is a different statement from a vendor.
+ *
+ * ⚠ **`runtimeAsked=` PRINTS ONLY ON A DISAGREEMENT, AND THE ASYMMETRY IS
+ * DELIBERATE.** On the ordinary launch — no runtime named, the channel's or the
+ * machine's default applied — the two differ trivially and a field saying so on
+ * every line is noise the write-result budget cannot afford
+ * ({@link WRITE_RESULT_MAX_CHARS}). It prints when a request was made AND the
+ * machine reports something else, which is the one case a caller must see: it
+ * means an explicit ask was NOT honoured as asked, and the caller should stop
+ * assuming its argument won.
+ *
+ * ⚠ **AND IT IS NOT HOW A REFUSAL IS COMMUNICATED.** An explicit runtime the
+ * operator's machine cannot start does not produce a `launched` row at all —
+ * `main/launch-directive-spawn.js › resolveRuntime` refuses (`no-sdk`) rather
+ * than swapping vendors, and the refusal arm renders that. This function only
+ * ever describes a launch that happened.
+ *
+ * ⚠ **`model=` HERE IS THE MACHINE'S, AND IT IS SEPARATE FROM THE `model=` THE
+ * OP ALREADY PRINTS** (which is the REQUEST) and from `resolvedModel=` in
+ * {@link allowedFacts} (which is the SERVER's create-time echo of an id IT
+ * recognised, off a Claude-shaped table). This one prints only when the machine
+ * reports a model different from the one asked for — the case a caller cannot
+ * otherwise see, and the case a dropped cross-vendor model produces.
+ */
+export function runtimeFacts(d: LaunchDirective): Record<string, FactValue> {
+  const applied = d.appliedRuntime ?? null;
+  const asked = d.runtime ?? null;
+  const facts: Record<string, FactValue> = {
+    // ⚠ NEVER `asked` AS A FALLBACK. Echoing the request back would be right
+    // whenever it was honoured and confidently wrong exactly when it was not,
+    // which is the reading `postureFacts` refuses for the posture echo.
+    runtime: applied ?? "not reported",
+  };
+  if (asked !== null && asked !== applied) facts.runtimeAsked = asked;
+  const model = d.appliedModel ?? null;
+  if (model !== null && model !== d.model) facts.appliedModel = model;
+  return facts;
+}

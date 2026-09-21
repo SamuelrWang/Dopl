@@ -87,6 +87,16 @@ async function dispatchManageAction(action, args, client) {
                 // "what to say", and the launch one was the one nobody could guess.
                 goal: args.body,
                 model: args.model,
+                // ⚠ **A SECOND, SEPARATE FIELD — AND THE SEPARATION IS WHAT U9 IS** (2026-09-21).
+                // `runtime` picks the ADAPTER, `model` picks a model INSIDE it. Nothing here derives
+                // one from the other in either direction: a live launch carrying `model: "codex"` was
+                // accepted and started Claude Sonnet, because an unrecognised model reads as "no
+                // opinion" and there was no runtime argument to say otherwise.
+                // ⚠ PASSED THROUGH UNTOUCHED, like `template` and `color` below and for the same
+                // reason: whether this machine has that runtime REGISTERED, and whether it would
+                // actually start, are facts only the operator's own desktop holds. It REFUSES an
+                // explicit runtime it cannot start rather than swapping vendors.
+                runtime: args.runtime,
                 // ⚠ PASSED THROUGH AS A STRING, NEVER PARSED HERE. Whether it is an
                 // id or a name — and whether a name is ambiguous — is decided
                 // SERVER-SIDE, against the caller's own template visibility, which

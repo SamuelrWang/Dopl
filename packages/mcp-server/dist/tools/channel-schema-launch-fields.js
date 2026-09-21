@@ -32,6 +32,40 @@ exports.LAUNCH_INPUT_FIELDS = {
     // ⚠ Its silent-fallback sentence moved to `channel-doctrine.ts › MANAGE` (2026-09-13; why:
     // `SCHEMA_MAX_CHARS`).
     'op="manage" action="launch" (optional): the model to run the agent on. Omit it for whatever the operator set for that channel.'),
+    /**
+     * **WHICH RUNTIME — A SECOND, SEPARATE FIELD, AND THE SEPARATION IS THE POINT** (2026-09-21,
+     * U9 of the Codex runtime-parity plan).
+     *
+     * 🔒 **THE DEFECT, VERBATIM FROM THE PLAN**: *a live MCP launch carrying `model: "codex"` was
+     * accepted but started a Claude Sonnet agent, because the MCP contract has no runtime field
+     * and an unknown model falls through to the default adapter.* Both halves were true. There was
+     * no runtime argument anywhere on this lane, and an unrecognised model id resolves to "no
+     * model opinion" on the machine — so `codex` read as silence and the chain fell through.
+     *
+     * ⚠ **A SHAPE, NOT AN ENUM, AND THAT IS DELIBERATE** — the opposite call from `color` one
+     * field down, for the opposite reason. The sixteen colour keys are OURS (two CSS files), so
+     * anything else is a caller error worth naming. The runtime roster is the OPERATOR'S DESKTOP
+     * REGISTRY and moves with a desktop release; an enum here would refuse a runtime a newer
+     * machine ships, and it would cost the members' characters on every connection
+     * (`channel-schema.ts › SCHEMA_MAX_CHARS`) to publish a list this process cannot keep current.
+     * The machine decides membership, and it is also the only party that can say whether the
+     * runtime would actually start.
+     *
+     * ⚠ **THE REFUSAL IS THE CONTRACT AND IS STATED IN THE DESCRIBE**, because it is the one thing
+     * a caller cannot derive and the one thing it must plan for: an explicit runtime the operator's
+     * machine cannot start comes back REFUSED, never quietly launched on another vendor.
+     */
+    runtime: zod_1.z
+        .string()
+        .trim()
+        .min(1)
+        .max(32)
+        .optional()
+        .describe(
+    // ⚠ **THE SHORTEST HONEST FORM, AND THE STANDING RULE IS IN THE PULLED DOCTRINE** — this
+    // gate's own instruction (`channel-doctrine.ts › MANAGE`, which now carries the full
+    // asymmetry: an unknown MODEL falls back silently, an unknown RUNTIME is refused).
+    'op="manage" action="launch" (optional): WHICH RUNTIME, e.g. claude or codex — NOT a `model`, which picks a model inside it. Omit for the channel\'s own. One that machine cannot start is REFUSED, never swapped.'),
     // ⚠ ID **OR** EXACT NAME, in ONE param — `dopl_kb`'s `base` already works this
     // way (`knowledge-shared.ts`), so this reuses the tree's idiom rather than
     // inventing a second convention.
