@@ -41,7 +41,14 @@ function runStatus() {
     const timer = setTimeout(() => finish({ usable: true, source: 'probe-timeout' }), STATUS_TIMEOUT_MS);
     try {
       const { execFile } = require('child_process');
-      execFile('codex', ['login', 'status'], { timeout: STATUS_TIMEOUT_MS }, (err) => {
+      // ⚠ THE SAME RESOLVED FILE THE PROBE AND THE SPAWN USE (U2, 2026-09-21). Asking `codex` by
+      // name asked a DIFFERENT question than the one `available()` answers — under Finder's PATH
+      // it could not find the binary at all and every machine read as `probe-unavailable`, i.e.
+      // fails-open UNKNOWN. An unresolvable binary stays UNKNOWN here on purpose: "is there a
+      // codex" is `available()`'s question, not this one's.
+      const found = require('./resolve-bin').resolveCodexBin();
+      if (!found.ok) { clearTimeout(timer); finish({ usable: true, source: 'probe-unavailable' }); return; }
+      execFile(found.path, ['login', 'status'], { timeout: STATUS_TIMEOUT_MS }, (err) => {
         clearTimeout(timer);
         // ⚠ THE THREE OUTCOMES ARE NOT TWO. A spawn failure (no binary, EACCES) is UNKNOWN and
         // fails open — `available()` is the probe that owns "is there a codex at all", and

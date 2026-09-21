@@ -23,10 +23,15 @@
 // work around.
 
 const { spawn, execFile } = require('child_process');
+const resolveBin = require('./resolve-bin');
 
 // ── THE BINARY ───────────────────────────────────────────────────────────────────────────────
 
-const BIN = 'codex';
+// ⚠ **THE NAME IS FOR MESSAGES, THE PATH IS FOR `spawn`** (U2, 2026-09-21). `spawn('codex')`
+// searched the PATH of whoever started Dopl, which for a Finder launch is `launchd`'s — so a
+// machine with a working `codex` in Terminal reported it missing the moment Dopl was opened from
+// the Dock. `resolve-bin.js` owns the search and the trust check; this module owns the process.
+const BIN = resolveBin.BIN_NAME;
 // ⚠ BOUNDED, because a probe that hangs takes the whole launch with it: `available()` is awaited
 // on the spawn path, and a `codex` that never answers must read as absent rather than as a stuck
 // session.
@@ -41,20 +46,32 @@ const PROBE_TIMEOUT_MS = 5000;
  */
 function probe() {
   return new Promise((resolve) => {
+    // ⚠ THE RESOLVER ANSWERS FIRST, and its refusal is the one an operator can act on: "not
+    // installed where Dopl can find it" and "found but group-writable" are different problems, and
+    // an errno from `execFile` is neither.
+    const found = resolveBin.resolveCodexBin();
+    if (!found.ok) {
+      resolve({ ok: false, reason: found.reason, version: null, path: null, source: null });
+      return;
+    }
     let done = false;
-    const finish = (value) => { if (!done) { done = true; resolve(value); } };
+    const finish = (value) => {
+      if (!done) { done = true; resolve(Object.assign({ path: found.path, source: found.source }, value)); }
+    };
     const timer = setTimeout(() => finish({
       ok: false,
-      reason: `\`${BIN}\` did not answer \`${BIN} --version\` within ${PROBE_TIMEOUT_MS}ms — Dopl cannot start a Codex session on this Mac.`,
+      reason: `\`${found.path}\` did not answer \`${BIN} --version\` within ${PROBE_TIMEOUT_MS}ms — Dopl cannot start a Codex session on this Mac.`,
       version: null,
     }), PROBE_TIMEOUT_MS);
     try {
-      execFile(BIN, ['--version'], { timeout: PROBE_TIMEOUT_MS }, (err, stdout) => {
+      execFile(found.path, ['--version'], { timeout: PROBE_TIMEOUT_MS }, (err, stdout) => {
         clearTimeout(timer);
         if (err) {
+          // ⚠ IT RESOLVED AND THEN FAILED TO RUN — an unsupported build, a quarantined download, a
+          // broken toolchain shim. Naming the file is the whole value of saying so.
           finish({
             ok: false,
-            reason: `\`${BIN}\` is not on this Mac's PATH. Install the Codex CLI and re-open Dopl — this release does not bundle it.`,
+            reason: `\`${found.path}\` could not answer \`${BIN} --version\`: ${(err && err.message) || err}`,
             version: null,
           });
           return;
@@ -63,7 +80,7 @@ function probe() {
       });
     } catch (err) {
       clearTimeout(timer);
-      finish({ ok: false, reason: `\`${BIN}\` could not be started: ${(err && err.message) || err}`, version: null });
+      finish({ ok: false, reason: `\`${found.path}\` could not be started: ${(err && err.message) || err}`, version: null });
     }
   });
 }
@@ -119,7 +136,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function connect(opts) {
   const o = opts || {};
   const log = typeof o.log === 'function' ? o.log : function () {};
-  const child = spawn(BIN, ['app-server'].concat(o.args || []), {
+  // ⚠ THE RESOLVED FILE, NEVER THE BARE NAME (U2) — see the BINARY block. A connect on a machine
+  // where the resolver found nothing throws here rather than handing `spawn` a name that will fail
+  // asynchronously with an `ENOENT` nobody can read.
+  const resolved = resolveBin.resolveCodexBin();
+  if (!resolved.ok) throw new Error(resolved.reason);
+  const child = spawn(resolved.path, ['app-server'].concat(o.args || []), {
     cwd: o.cwd || undefined,
     env: o.env || process.env,
     stdio: ['pipe', 'pipe', 'pipe'],
