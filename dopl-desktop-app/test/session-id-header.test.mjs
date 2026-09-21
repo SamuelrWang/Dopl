@@ -106,10 +106,16 @@ test("the helper answers a header or an EMPTY OBJECT, never a blank header", () 
 
 test("listener-io stamps at the SEAM, so a post site cannot forget it", () => {
   // The version stamp's own argument (`app-version-header.test.mjs`): a header set at each call
-  // site is a header a new call site omits. Both stamps ride on the one headers literal.
+  // site is a header a new call site omits. All THREE stamps ride on the one headers literal.
+  // ⚠ **THE PIN NO LONGER REQUIRES THE LITERAL TO CLOSE HERE (2026-09-20)**, for the reason
+  // `app-version-header.test.mjs` widened its own on 2026-09-15: closing it asserted the
+  // ABSENCE of every other seam-level stamp as a side effect, so adding one — here the RUNTIME
+  // stamp that stops this lane's lifecycle posts being labelled outside sessions — failed a
+  // case about the session id without touching the session id. What this file owns is that the
+  // session stamp rides the seam; which others ride beside it is each stamp's own test.
   assert.match(
     IO,
-    /const headers = \{ Accept: 'application\/json', \.\.\.appVersion\.versionHeaders\(\), \.\.\.sessionStamp\.sessionHeaders\(sessionId\) \};/,
+    /const headers = \{ Accept: 'application\/json', \.\.\.appVersion\.versionHeaders\(\), \.\.\.sessionStamp\.sessionHeaders\(sessionId\)/,
     "listener-io does not spread the session stamp onto every request"
   );
   assert.match(IO, /const \{[^}]*sessionId[^}]*\} = opts;/, "sendOnce must read it off the call's opts");

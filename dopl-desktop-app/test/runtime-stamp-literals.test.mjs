@@ -133,6 +133,28 @@ test("the CLI-entry lane sends NO runtime stamp, and that is the intended state"
     "and mcp-config holds no runtime literal now that the spawn-config file is gone");
 });
 
+test("🔒 the SESSION lane stamps `desktop-session`, or its own agents read as OUTSIDE sessions", () => {
+  // 🔒 **SAMUEL, 2026-09-20: *"agents that were spun in dopl, after they get ended, they are
+  // being marked with a badge that says outside session when they weren't."***
+  //
+  // ⚠ **THE LABEL IS THE ABSENCE OF THIS HEADER.** The server's one discriminator is
+  // `src/features/channels/lib/desktop-handle.ts › isExternalSessionAuthor` — `authorKind ===
+  // 'agent' && runtime !== 'desktop-session'` — and it stamps `metadata.external_session` at
+  // WRITE time, per row, permanently. `channel-post.js › postTaskEvent` posts every task
+  // lifecycle event through this transport as `authorKind: 'agent'`, so with no runtime on the
+  // request every `Started working on this request.`, every `Session ended` and every `This
+  // session went inactive.` was recorded as an outside session's work. It surfaced on ENDED
+  // agents because the end note is the last row they leave.
+  // ⚠ **THE VALUE IS CHECKED, NOT MERELY ITS PRESENCE.** Any other string fails the server's
+  // `!==` and the badge comes straight back.
+  const io = M("listener-io.js");
+  assert.match(
+    io,
+    /'X-Dopl-Runtime': 'desktop-session'/,
+    "listener-io must claim the SESSION runtime, or its own agents' lifecycle rows label as outside sessions"
+  );
+});
+
 test("the LISTENER and SESSION-POST lanes are deliberately NOT stamped desktop-ui", () => {
   // main/api.js (consent, presence, session posts) and listener-io.js (the long poll and the
   // channel posts a session makes) carry other people's posts, not the operator typing. A stamp

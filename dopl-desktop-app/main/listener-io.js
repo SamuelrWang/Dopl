@@ -216,7 +216,39 @@ async function sendOnce(pathname, opts) {
   // line, and app-version.js for why the header — not the body — carries it).
   // channel-post.js posts every task lifecycle event and headless reply through
   // here, so those are the messages a peer can read a version off. ⚠ The SESSION stamp rides beside it, at the seam and for its reason; `{}` when the caller named none (session-id-header.js).
-  const headers = { Accept: 'application/json', ...appVersion.versionHeaders(), ...sessionStamp.sessionHeaders(sessionId) };
+  // 🔒 **THE RUNTIME STAMP, AND ITS ABSENCE WAS A BUG** (Samuel, 2026-09-20: *"agents that
+  // were spun in dopl, after they get ended, they are being marked with a badge that says
+  // outside session when they weren't"*).
+  //
+  // ⚠ **CAUSE: THE LABEL IS THE ABSENCE OF THIS HEADER.** The server's one discriminator is
+  // `lib/desktop-handle.ts › isExternalSessionAuthor` — `authorKind === 'agent' && runtime
+  // !== 'desktop-session'` — and it stamps `metadata.external_session` at write time, per
+  // row, forever. `channel-post.js` posts EVERY task lifecycle event and headless reply
+  // through this transport as `authorKind: 'agent'` and sent no runtime at all, so every
+  // `Started working on this request.`, every `Session ended` and every `This session went
+  // inactive.` was recorded as written by a session this product did not spawn. It showed up
+  // on ENDED agents because the end note is the last row they leave.
+  //
+  // ⚠ **`desktop-session` IS THE HONEST VALUE, NOT A WORKAROUND.** These posts are written by
+  // Dopl, about sessions Dopl spawned, on this machine — the exact population the label
+  // exists to EXCLUDE. The MCP lane already sends it for the same sessions' own messages
+  // (`targeting.js`'s DESKTOP_RUNTIMES note), so the two lanes now agree about one fact
+  // instead of disagreeing per row.
+  // ⚠ **NOT THE UI RUNTIME VALUE** — that one means the OPERATOR TYPED IT and belongs to
+  // `ui-bridge.js` alone. Its docblock deliberately leaves this file unstamped for it and is
+  // right to: nothing here is a person typing. This is the SESSION lane, and it says so.
+  // ⚠ **A ROUTING HINT, NOT AUTHORIZATION** (`src/shared/auth/runtime-header.ts`): the header
+  // proves nothing, the server refuses the value to credentials that may not claim it, and
+  // nothing about who may read or write this channel moves.
+  // ⚠ **IT DOES NOT REPAIR ROWS ALREADY WRITTEN.** The flag is stamped at write time, so
+  // every lifecycle row posted before this build keeps its wrong badge; only new ones are
+  // right. There is no read-time fallback to add — an unstamped row already renders as a
+  // plain agent, which is the correct answer for the rows that predate the key entirely.
+  // ⚠ **THE PAIR IS SPELLED INLINE, NOT LIFTED TO A MODULE CONST.** Four suites brace-balance
+  // this function out of the source and evaluate it standalone (`api-auth-retry.test.mjs` and
+  // friends), so a free variable declared at module scope is `undefined` in every one of them —
+  // a green file and a broken header. Same constraint `targeting.js`'s harnesses impose.
+  const headers = { Accept: 'application/json', ...appVersion.versionHeaders(), ...sessionStamp.sessionHeaders(sessionId), 'X-Dopl-Runtime': 'desktop-session' };
   if (cookie) headers.Cookie = cookie;
   if (workspaceId) headers['X-Workspace-Id'] = workspaceId;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
