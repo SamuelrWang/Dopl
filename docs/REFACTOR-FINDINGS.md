@@ -10394,3 +10394,13 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - ⚠ **THIS IS THE SAME SHAPE AS F-708, ON THE OTHER END OF THE SAME LANE.** A field built end to end and dropped by one handler's explicit field list is now a repeat defect class, not an incident: an enumeration that must be edited in lockstep with a schema is the thing that keeps not being edited.
 - Resolution: forwarded, and `launch-directives-route-forwards.test.ts` — a SOURCE-READING test that was already guarding the create handler — now guards the decide handler too, so the next dropped field fails a gate rather than a support conversation. FIXED in the U9 commit.
 - Status: RESOLVED.
+
+### F-753 — `setModelByTask` recorded a model switch that never happened, on every runtime without a live-switch verb (2026-09-21, FIXED)
+
+- Location: `dopl-desktop-app/main/session-reopen.js › setModelByTask`.
+- Found during: U10 (`docs/plans/2026-09-21-001-fix-codex-runtime-parity-plan.md`).
+- ⚠ **IT VIOLATED ITS OWN HEADER RULE** — *"a recorded pick nothing applied is a lie"*. The `setModel` call was guarded by `typeof … === 'function'`, so on a runtime whose handle has no model verb NOTHING WAS APPLIED, and the op still recorded a **Claude alias** onto that session and answered `{ok:true}`.
+- ⚠ **THE RECORDED VALUE IS NOT INERT**: it is what the next launch assembly reads, so a switch that silently did nothing became the next spawn's input.
+- Resolution: it now refuses with `{ok:false, reason:'unsupported'}` from `liveModelSwitchRefusal`. ⚠ That makes `runtime/capability.js › canSwitchModelLive` **reachable for the first time in `main/`** — it had been declared, mirrored on the web, and read by nothing, which is the `axisBOpScoped` shape (a declared capability with no consumer is a capability nobody can trust). FIXED in the U10 commit.
+- ⚠ **A RELATED SHARED-PATH COERCION SURVIVES**: the same function still routes through Claude's `aliasForModelId` / `modelArg` for a runtime that DOES declare a live switch (Cursor declares `true`). Today's refusal makes that arm unreachable, so it is latent, not live — U6's runtime-scoped catalog should remove it.
+- Status: RESOLVED (with the latent coercion above left to U6).

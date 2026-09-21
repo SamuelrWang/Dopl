@@ -981,6 +981,129 @@ it funded, the sanctioned move already owed on that constant is `kind`'s chooser
 definition → `channel-doctrine.ts › FIELDS`, which would put the pushed number back under where it
 started.
 
+#### F. U5 — IMPLEMENTED (runtime-neutral launch settings and migration)
+
+**Commit:** `683d4fe6`. Desktop suite green at 3507. Not pushed.
+
+**The shape** (`main/launch-selection.js`, store keys `channelLaunchSelection` per channel and
+`agentDefaults` per machine-user):
+
+```
+{ v: 2, runtime, messages, byRuntime: { '<runtimeId>': { tools?, model?, native? } } }
+```
+
+`v` is read BEFORE any other field. `messages` stays Dopl-owned and runtime-neutral — **Dopl gates
+channel delivery, not a vendor**. Everything a runtime owns sits under `byRuntime`, one record per
+runtime, SIDE BY SIDE — which is what makes Decisions #1/#2 true: **Claude → Codex → Claude restores
+both remembered models and both native sets, with no translation.** Absent fields are OMITTED,
+never `''`/`null`/`{}`.
+
+**Migration happens ON READ AND NEVER WRITES**, so a machine that only launches keeps its legacy
+records intact and downgrades losslessly; every WRITE re-stamps the legacy keys as a downgrade
+mirror, which are never read while the new record parses. Legacy `tools`/`model` land in
+`byRuntime[DEFAULT_ID]` **whatever runtime is selected** — that is the only vocabulary the old
+validators could store, and filing them under the SELECTED runtime would assert that `accept_edits`
+"is" some Codex approval mode.
+
+**Adapter-owned vocabulary** (`main/runtime/selection-vocabulary.js`, split out of `capability.js`
+at the 500 cap): descriptors now declare `models.pick` (`closed` for Claude — stored ids, aliases,
+canonical id→alias; `open` for Codex/Cursor — a shape check over a live roster),
+`models.dimensions` + `dimensionOptions`, and `toolMode.secondaryAxis`. 🔒 **No storage or
+session-core path imports another runtime's enums any more** — `channel-prefs.js`,
+`agent-defaults.js`, `session-engine.js` and `trigger.js` all dropped `require('./session-model')`,
+and a test asserts the pure block contains no vendor vocabulary at all. **That was U5's verification
+bar and it is met.**
+
+🔒 **READS FLOOR, WRITES REJECT.** Unknown record version → only the runtime pick survives (picking
+a runtime widens nothing). Stored tool mode the adapter does not offer → that adapter's NARROWEST.
+Unknown containment value → narrowest declared option, **never the widest and never the platform
+default**. Unknown model dimension → dropped to platform default. Unregistered runtime id → reads as
+default, **is not repaired**, and its record is kept verbatim and never read. Every floor surfaces a
+`needsReview` sentence. **Nothing anywhere resolves to unrestricted** (Scope Boundaries).
+
+⚠ **`sandbox_mode` AND REASONING EFFORT NOW REACH THE LAUNCH** (`codex/launch-spec.js` reads
+`state.native`) — they were the display-only illusion F-390 records, and **F-390 can be closed once
+U8 wires the controls**. ⚠ **Codex's GRANULAR APPROVAL CATEGORIES are deliberately NOT declared
+configurable** — the structured write shape is unmeasured, and `runtime-contract.test.mjs` now
+asserts no adapter claims otherwise. That flips when U4 measures it.
+
+⚠ **`setChannelRuntime` WAS DELETED** — zero callers, and a second writer of a one-writer record.
+⚠ **The 2026-09-06 rule that a runtime switch CLEARS the channel's model stamp is REVERSED** by
+Decisions #1/#2: the whole point is that the other runtime's pick survives.
+
+**Additive bridge:** `channels:getLaunchPosture` now carries `selectionVersion`, `selection` and
+`needsReview` beside the three legacy own-keys older renderers feature-probe.
+
+**Orchestrator follow-up, DONE:** `launch-directive-spawn.js` still read the channel model as
+`aliasForModelId(getLaunchModel(...))` — the default runtime's record through Claude's alias table —
+so a Codex channel's stored pick contributed nothing to the chain. Fixed in `51f6f410` with
+`getLaunchModelLink`. ⚠ **The same pattern is latent in `session-ipc-ops.js`, `session-boot.js`,
+`session-reopen.js` and `template-resolve.js`** — Claude-only paths today, so not yet wrong.
+
+#### G. U10 — IMPLEMENTED (runtime-honest lifecycle, telemetry, resume, copy)
+
+**Commit:** `dac1e8d6` (35 files). Desktop suite 3507, 0 fail. Not pushed.
+
+**Copy.** `main/runtime/runtime-copy.js` + its web mirror `src/features/channels/lib/runtime-copy.ts`
+template every sentence over `descriptor.label`, with **no per-runtime branch anywhere** — a fourth
+adapter gets correct copy by registering. `No Claude runtime on this Mac` → `No Codex runtime…`;
+`Sign in to Claude to start an agent` → **`Sign in to Codex to start an agent`**; the held-tool
+denial, the resume nudge and the auth diag all follow the session's own descriptor. 🔒 **The ACTION
+is a capability, not a string**: `signInAction` answers `null` when the descriptor declares no
+in-app flow (Codex, Cursor), so the sentence is still said and **the button is hidden** rather than
+offering a flow that does not exist. Each sentence carries its own UNNAMED form, so an unknown
+descriptor never renders "the agent runtime runtime".
+⚠ **THE FIVE CLAUDE-OWNED MODULES KEEP THEIR NAMES ON PURPOSE** — INVARIANTS §11.0a fences
+`claude-auth.js`, `claude-token.js`, `claude-resolve.js`, `claude-signin-op.js`, `claude-runtime.js`
+plus the IPC channel and its two test pins as ONE later de-naming step; splitting it leaves the pin
+and the op disagreeing.
+
+**Structured error codes.** A closed set (`runtime-missing`, `runtime-signed-out`,
+`runtime-incompatible`, `runtime-start-failed`, `runtime-crashed`, `runtime-interrupted`,
+`mcp-unreachable`, `resume-refused`), produced in `session-query.js › consume` (start-failure vs
+crash, split on whether a conversation handle existed) and `mcp-connect-guard.js`, frozen through
+allowlists in `settle` / `durableHistory`, and **re-rendered at READ time** from the record's own
+`runtimeId` — so the sentence follows the runtime, not the build that wrote it. All local-only;
+`reportRow` picks columns by name, so nothing widens `channel_sessions`.
+⚠ **`runtime-missing` and `runtime-incompatible` HAVE NO PRODUCER YET** — the codes exist; U1's
+handshake and U2's unfinished state set are what would stamp them.
+
+**Resume records** (`main/session-runtime-truth.js`) add `effectiveModel` (the runtime's own
+reported id — never `'default'`, never coerced through any model table), `nativePolicy` (a REPORT of
+the adapter's own option labels, never a synthetic cross-runtime word), and `usageBaseline`
+(`resets` / `continues` / `unverified`). 🔒 **`usageBaseline` is PERSISTED, NOT RE-DERIVED**, so a
+later build that flips `usageResetsOnResume` cannot re-interpret a finished run.
+
+🔒 **CODEX RESUME IS STILL REFUSED AND WAS NOT WEAKENED.** The refusal now names the MEASUREMENT
+(*usage accounting on resume is unverified*), the delta baselines are not zeroed, nothing is
+acquired or consumed, and a test asserts `declared === 'unverified'` — **so answering the plan's
+"Usage on resume" question turns that test red until someone measures it.** That is the intended
+trip-wire.
+
+**Failed-launch cleanup** is proven in three layers (`test/session-launch-cleanup.test.mjs`): the
+adapter returns a closeable handle rather than throwing into the funnel with the slot already taken;
+`consume` emits exactly one crash and never overwrites an existing code; `settle` sweeps once —
+registry entry deleted, pending approval denied fail-closed, iterator closed, controller aborted,
+one history row — and a second and third `settle` change nothing. A source-shape pin holds
+`if (s.settled) return` ahead of the flag, because **a late flag is not a guard**.
+
+**Bug fixed in passing:** `session-reopen.js › setModelByTask` recorded a model switch that never
+happened on any runtime without a live-switch verb — filed as **F-753** (RESOLVED).
+
+⚠ **PLAN CORRECTIONS FROM THIS UNIT:** U10's file list says
+`src/features/channels/hooks/use-agents-panel.ts`; the file is at
+`src/features/channels/components/use-agents-panel.ts` and there is no hooks copy. And
+`session-engine-slot.test.mjs` sits at **499/500** with no headroom, so the cleanup cases live in
+`test/session-launch-cleanup.test.mjs` and `session-park.test.mjs` had to be split.
+
+⚠ **TREE-SHARING INCIDENT, RECORDED SO IT IS NOT REPEATED.** Four agents shared one worktree during
+this wave. Three of U10's edits were swept into U5's commits (`683d4fe6`, `51f6f410`) — they are on
+master and green, but they are under the wrong sha. Worse, U10 ran `git stash` / `git stash pop`
+ACROSS THE WHOLE TREE to get a clean baseline, which briefly held all four agents' uncommitted work;
+it restored cleanly and was not repeated. 🔒 **This is exactly what Samuel's one-worktree-per-team
+rule exists to prevent: a stash is tree-wide, so it is never a safe way to get a baseline in a
+shared checkout.** Future waves get a worktree each.
+
 ---
 
 ## Sources & References
