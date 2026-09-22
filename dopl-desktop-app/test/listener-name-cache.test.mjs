@@ -1,4 +1,4 @@
-// THE LISTENER'S MEMBER CACHES ARE BOUNDED (main/listener-io.js).
+// THE LISTENER'S MEMBER CACHES ARE BOUNDED (main/listener-identity.js).
 //
 // REGRESSION CONTEXT: swept out during the 17 GB dev-RSS incident, 2026-08-30. `nameCache` and
 // `avatarUrlCache` were the ONLY two structures in `main/` with no cap, no TTL, no `delete`, no
@@ -13,8 +13,13 @@
 // `queued-notice.js › MAX_ANNOUNCED` (256), `version-skew.js › SEEN_CAP` (200),
 // `agent-names.js › MAX_NAMES` (500). These two were the exception.
 //
-// WHY SOURCE EXTRACTION: listener-io.js is CommonJS and pulls in electron + electron-store, so
-// it cannot be imported under `node --test`. `cacheMember` is dependency-free (a Map and a
+// ⚠ REPOINTED 2026-09-22 (§2): the caches, `MAX_CACHED_MEMBERS` and `cacheMember` moved out of
+// `listener-io.js` — which stood at 532 of the 500-line cap — into `listener-identity.js`, with
+// `resolveIdentity` and `refreshNameCache`. Nothing about the bound changed; only the file it
+// lives in. listener-io.js re-exports the accessors, so no caller moved.
+//
+// WHY SOURCE EXTRACTION: listener-identity.js is CommonJS and reaches electron through auth.js,
+// so it cannot be imported under `node --test`. `cacheMember` is dependency-free (a Map and a
 // number), so it is sliced and driven verbatim — this exercises what ships.
 //
 // Run: `node --test dopl-desktop-app/test/listener-name-cache.test.mjs`
@@ -27,7 +32,7 @@ import { dirname, join } from "node:path";
 import { fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SRC = readFileSync(join(HERE, "..", "main", "listener-io.js"), "utf8");
+const SRC = readFileSync(join(HERE, "..", "main", "listener-identity.js"), "utf8");
 
 const MAX = Number(/const MAX_CACHED_MEMBERS = (\d+);/.exec(SRC)?.[1]);
 const cacheMember = new Function(

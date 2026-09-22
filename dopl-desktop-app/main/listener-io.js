@@ -1,13 +1,19 @@
-// Channels listener — I/O layer (persistence + HTTP + identity + name cache).
+// Channels listener — I/O layer (persistence + HTTP + workspace/channel enumeration).
 //
 // SPLIT NOTE (§2 refactor): extracted from channel-listener.js so that file
 // could come under the 500-line cap. This module owns the cursor / seed /
-// pending-consent stores, the listener's authenticated fetch + list helpers, the
-// operator-identity resolution, and the requester/target display-name cache. It
+// pending-consent stores and the listener's authenticated fetch + list helpers. It
 // also owns the two HTTP-status flags those helpers set (`featureAvailable`,
 // `staleNotified`) and the stale-session notification, so listWorkspaces /
 // listChannels stay self-contained and this module never has to import back into
 // channel-listener.js (no import cycle).
+//
+// ⚠ SPLIT AGAIN ON 2026-09-22, at the same cap and for the same reason (532 lines): the
+// operator-identity resolution and the requester/target display-name + avatar cache — the
+// two responsibilities here that were about PEOPLE rather than plumbing — moved to
+// `listener-identity.js`. It reaches `apiFetch` / `normalizeList` back through these
+// exports LAZILY, per call, so neither module needs the other at load time and the no-cycle
+// property above still holds. No caller moved; see the pointer where they stood.
 //
 // Auth is via forwarded Supabase cookies (see auth.js for why not a bearer).
 
@@ -21,35 +27,13 @@ const { fetchWithAuthRepair, discardBody } = require('./api-repair');
 const budget = require('./listener-budget'); // poll budgets + what an abort means (split 2026-08-30)
 const { API_BASE, LISTENER, REALTIME } = require('./config');
 const { diag } = require('./diag');
+const identity = require('./listener-identity'); // who the operator is + who the peers are (split 2026-09-22)
 
 const store = new Store();
-const nameCache = new Map(); // userId -> displayName, refreshed once per reconcile
-const avatarUrlCache = new Map(); // userId -> avatarUrl (item 1/5/6), refreshed with the name cache
-
-/**
- * ⚠ THE ONLY TWO CACHES IN `main/` WITH NO BOUND AT ALL (2026-08-30, swept out during the 17 GB
- * dev incident): no cap, no TTL, no `delete`, no `clear` — every member of every workspace ever
- * enumerated stayed for the life of the process. Every comparable structure here already carries
- * one (`avatar-cache.js › MAX_CACHE`, `legacy-threads.js › LEGACY_THREAD_CAP`,
- * `version-skew.js › SEEN_CAP`, `agent-names.js › MAX_NAMES`). ⚠ NOT what ate the 17 GB — that was `session-narration.js`'s per-flush fan-out
- * and abandoned `fetch` bodies — and bounded anyway, so nobody has to re-derive "how many members
- * could this operator see" the next time a workspace is added.
- * ⚠ OLDEST-OUT (insertion order) IS THE RIGHT EVICTION rather than an LRU because
- * `refreshNameCache` REWRITES every member it sees once per reconcile: a still-watched
- * workspace's members are re-inserted continuously, one the operator left never is. A miss is
- * not a failure — `displayNameFor` answers 'A teammate'. Pinned by test/listener-name-cache.test.mjs.
- */
-const MAX_CACHED_MEMBERS = 1000;
-
-function cacheMember(cache, userId, value) {
-  if (cache.has(userId)) cache.delete(userId); // re-insert so the order is "last seen"
-  cache.set(userId, value);
-  while (cache.size > MAX_CACHED_MEMBERS) {
-    const oldest = cache.keys().next();
-    if (oldest.done) break;
-    cache.delete(oldest.value);
-  }
-}
+// ⚠ THE DISPLAY-NAME / AVATAR CACHES AND THEIR NAMED BOUND LEFT FOR `listener-identity.js` ON
+// 2026-09-22 (§2, the 500-line cap), with `resolveIdentity` and `refreshNameCache` — see the
+// pointer where those stood, below. `MAX_CACHED_MEMBERS` and the oldest-out argument moved WITH
+// the code they explain; test/listener-name-cache.test.mjs slices them from there now.
 
 let featureAvailable = true; // false once /api/channels 404s (feature not deployed)
 let staleNotified = false; // one-shot guard for the "session expired" notification
@@ -421,88 +405,12 @@ async function listChannelsWithRetry(workspaceId) {
   }
 }
 
-// ── Identity ─────────────────────────────────────────────────────────────────
-// Resolve the operator's own user id so we never self-trigger. Layered so it
-// works for BOTH deep-link sessions (stored JWT) and cookie-only web sign-ins
-// (H2): (1) stored session blob, (2) the Supabase auth cookie's JWT `sub`,
-// (3) the /api/workspaces/me whoami endpoint as a last resort.
-async function resolveIdentity(preferWorkspaceId) {
-  let id = auth.getUserId();
-  diag('identity tier1 (stored blob):', id ? 'hit' : 'miss');
-  if (!id) {
-    id = await auth.getUserIdFromCookies();
-    diag('identity tier2 (cookie jwt):', id ? 'hit' : 'miss');
-  }
-  if (!id) {
-    try {
-      const res = await apiFetch('/api/workspaces/me', {
-        workspaceId: preferWorkspaceId,
-        timeoutMs: 15000,
-      });
-      if (res.ok) {
-        const d = await res.json();
-        if (d && d.userId) id = d.userId;
-      }
-      diag('identity tier3 (whoami):', res.ok ? `hit ${res.status}` : `miss ${res.status}`);
-    } catch (err) {
-      diag('identity tier3 (whoami): error', err && err.message);
-    }
-  }
-  return id || null;
-}
-
-// ── Display-name cache (Feature B/C) ─────────────────────────────────────────
-// Requester + target names for notification copy. Filled once per workspace per
-// reconcile from the workspace members listing. Falls back to 'A teammate'.
-function displayNameFor(userId) {
-  return (userId && nameCache.get(userId)) || 'A teammate';
-}
-
-// The member's remote avatar URL (Google photo etc.), cached from the members DTO
-// for the session window's main-fetched data: URI pipeline (avatar-cache.js). Null
-// when unknown. NEVER handed to the renderer as a URL — only as a bounded data: URI.
-function avatarUrlFor(userId) {
-  return (userId && avatarUrlCache.get(userId)) || null;
-}
-
-async function refreshNameCache(ws) {
-  // Canonical `{slug}-{publicId}` segment resolves by publicId (no legacy-slug
-  // redirect event). Cookie-authed (withUserAuth); X-Workspace-Id is harmless.
-  //
-  // GUARDED, like its twins (channel-listener.js reconcile, channel-context.resolve),
-  // which both yield null on a DTO missing either half. This one interpolated blind:
-  // a workspace with no `publicId` produced `slug-undefined`, which 404s, and the
-  // whole name+avatar cache for that workspace then stayed empty — so every peer
-  // rendered as "A teammate" with only a `namecache miss 404` line to explain it.
-  const segment = ws && ws.slug && ws.publicId ? `${ws.slug}-${ws.publicId}` : null;
-  if (!segment) {
-    diag('namecache skip — workspace DTO has no slug/publicId', (ws && ws.id) || '?');
-    return;
-  }
-  try {
-    const res = await apiFetch(`/api/workspaces/${encodeURIComponent(segment)}/members`, {
-      workspaceId: ws.id,
-      timeoutMs: 15000,
-    });
-    if (!res.ok) {
-      diag('namecache miss', res.status, 'ws', ws.slug);
-      return;
-    }
-    const members = normalizeList(await res.json(), 'members');
-    for (const mem of members) {
-      if (mem && mem.userId) {
-        const dn = mem.displayName || mem.email || null;
-        if (dn) cacheMember(nameCache, mem.userId, dn);
-        // Cache the avatar URL alongside the name (covers the operator AND every peer,
-        // since the members list includes the operator). Consumed only by avatar-cache.
-        if (mem.avatarUrl) cacheMember(avatarUrlCache, mem.userId, mem.avatarUrl);
-      }
-    }
-    diag('namecache loaded', members.length, 'ws', ws.slug);
-  } catch (err) {
-    diag('namecache error', err && err.message);
-  }
-}
+// ── Identity + display names → `listener-identity.js` (§2 split, 2026-09-22) ─
+// ⚠ MOVED, NOT DELETED: `resolveIdentity` (who this operator is, so a loop never self-triggers)
+// and the peer name/avatar cache (`displayNameFor`, `avatarUrlFor`, `refreshNameCache`). They
+// read ONE surface — the workspace members listing, with `/api/workspaces/me` behind it — and
+// change for that DTO's reasons, never the transport's; that is the seam. What they call stays
+// here (`apiFetch`, `normalizeList`), resolved lazily from that side (its docblock says why).
 
 module.exports = {
   sleep,
@@ -525,8 +433,10 @@ module.exports = {
   listWorkspaces,
   listChannels,
   listChannelsWithRetry,
-  resolveIdentity,
-  displayNameFor,
-  avatarUrlFor,
-  refreshNameCache,
+  // The four below are listener-identity.js's OWN function objects, never re-spellings (the
+  // property test/module-split-identity.test.mjs pins): one instance of the two member caches.
+  resolveIdentity: identity.resolveIdentity,
+  displayNameFor: identity.displayNameFor,
+  avatarUrlFor: identity.avatarUrlFor,
+  refreshNameCache: identity.refreshNameCache,
 };

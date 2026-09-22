@@ -4,14 +4,19 @@
 // builders already refused to compose one from a half-empty DTO:
 //   channel-listener.js  reconcile      → `ws.slug && ws.publicId ? … : null`
 //   channel-context.js   resolve        → the same guard
-// `listener-io.refreshNameCache` interpolated blind, so a DTO with no publicId
-// produced `slug-undefined`, which 404s. That request is the ONLY filler for the
+// `listener-identity.refreshNameCache` (then listener-io s own) interpolated blind, so a DTO
+// with no publicId produced `slug-undefined`, which 404s. That request is the ONLY filler for the
 // display-name AND avatar caches, so every peer in that workspace then rendered
 // as "A teammate" (displayNameFor's fallback) with a lone `namecache miss 404`
 // line to explain it — a cosmetic-looking symptom with a data-shape cause.
 //
 // This file pins the guard and the twin-parity, so a future builder cannot
 // quietly reintroduce the unguarded form.
+//
+// ⚠ REPOINTED 2026-09-22 (§2): `refreshNameCache` moved from `listener-io.js` (532 lines, over
+// the 500-line cap) to `listener-identity.js`, with `resolveIdentity` and the two member
+// caches. The guard travelled with it verbatim; listener-io.js re-exports the function object,
+// so the third builder of a segment is the same one, in a new file.
 //
 // Run: `node --test dopl-desktop-app/test/namecache-segment-guard.test.mjs`
 
@@ -24,7 +29,7 @@ import { fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
-const IO = M("listener-io.js");
+const IDENTITY = M("listener-identity.js");
 const LISTENER = M("channel-listener.js");
 const CONTEXT = M("channel-context.js");
 
@@ -41,7 +46,7 @@ function loadRefresh(ws) {
   const calls = { fetched: [], logged: [] };
   const fn = new Function(
     "apiFetch", "diag", "normalizeList", "nameCache", "avatarUrlCache",
-    `${asyncFnOf(IO, "refreshNameCache")}\n return refreshNameCache;`
+    `${asyncFnOf(IDENTITY, "refreshNameCache")}\n return refreshNameCache;`
   )(
     async (path) => {
       calls.fetched.push(path);
@@ -85,13 +90,13 @@ test("a DTO missing slug is refused the same way, and so is no DTO at all", asyn
 test("the guard matches its twins — one shape for the segment across the listener", () => {
   // If these ever diverge again, the odd one out is the bug.
   const guard = /ws\.slug && ws\.publicId \? `\$\{ws\.slug\}-\$\{ws\.publicId\}` : null/;
-  assert.match(fnOf(IO, "refreshNameCache"), guard, "listener-io (the one that was missing it)");
+  assert.match(fnOf(IDENTITY, "refreshNameCache"), guard, "listener-identity (the one that was missing it)");
   assert.match(LISTENER, guard, "channel-listener reconcile");
   assert.match(CONTEXT, guard, "channel-context resolve");
   assert.ok(
     !/`\$\{ws\.slug\}-\$\{ws\.publicId\}`/.test(
-      fnOf(IO, "refreshNameCache").replace(guard, "")
+      fnOf(IDENTITY, "refreshNameCache").replace(guard, "")
     ),
-    "no second, unguarded interpolation survives in listener-io"
+    "no second, unguarded interpolation survives in listener-identity"
   );
 });

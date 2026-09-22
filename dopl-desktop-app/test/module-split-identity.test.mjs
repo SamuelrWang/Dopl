@@ -1,4 +1,4 @@
-// THE 2026-09-14 §2 SPLITS — IDENTITY PINS.
+// THE §2 SPLITS — IDENTITY PINS (2026-09-14, and §5b on 2026-09-22).
 //
 // WHAT THIS FILE IS FOR. Seven desktop files had crossed the 500-line `max-lines` cap
 // (`eslint.config.js`, ZERO exemptions), so `cd dopl-desktop-app && npm run lint` — the CI
@@ -10,6 +10,10 @@
 // the old module still publishes IS the very function object the new module exports (`===`), so a
 // future edit that "restores" a helper by copying it back — the second-spelling failure this tree
 // spends INVARIANTS §1 warning about — fails here instead of quietly shipping two answers.
+//
+// ⚠ LATER SPLITS LAND HERE TOO, rather than in a file of their own: the claim is the same one
+// ("the old name IS the moved object"), so §5b — listener-io.js → listener-identity.js, 2026-09-22 —
+// is a section below rather than a second suite making the same argument.
 //
 // ⚠ WHY SOME CASES READ SOURCE INSTEAD OF REQUIRING. `session-engine.js` and `session-ipc-ops.js`
 // pull in electron at load, so they cannot be `require`d from a credential-less `npm test`. For
@@ -127,6 +131,33 @@ test("SPLIT: the escalation-answer door is ONE function, reached through agent-h
   assert.deepEqual(handles.escalationAnswerAgentIds(answer("a1b2c3d4"), ["a1b2c3d4", "z9y8x7w6"]), ["a1b2c3d4"]);
   assert.deepEqual(handles.escalationAnswerAgentIds(answer("zzzzzzzz"), ["a1b2c3d4"]), []);
   assert.deepEqual(handles.escalationAnswerAgentIds(answer("a1b2c3d4"), []), []);
+});
+
+// ── 5b. listener-io.js → listener-identity.js (2026-09-22) ───────────────────────────
+
+test("SPLIT: the listener's identity + name-cache names are re-exported, never respelled", () => {
+  // ⚠ SOURCE, NOT `require`, FOR THE SAME REASON AS §2 AND §3: listener-io.js loads electron +
+  // electron-store, so a credential-less `npm test` cannot import it. The pin is the require LINE
+  // plus the four re-export lines, which is the object-identity claim one level out — each value
+  // is `identity.<name>`, so a body copied back here would read as a second spelling on sight.
+  const io = read("listener-io.js");
+  const moved = read("listener-identity.js");
+  assert.match(io, /const identity = require\('\.\/listener-identity'\);/);
+  for (const n of ["resolveIdentity", "displayNameFor", "avatarUrlFor", "refreshNameCache"]) {
+    assert.match(io, new RegExp(`\\n  ${n}: identity\\.${n},`), `${n} is not re-exported from the split`);
+    assert.equal(new RegExp(`function ${n}\\(`).test(io), false,
+      `${n}'s body is back in listener-io.js — that is a second answer, not a split`);
+    assert.match(moved, new RegExp(`function ${n}\\(`), `${n} must live in listener-identity.js`);
+  }
+  // ⚠ THE TWO MEMBER CACHES ARE ONE INSTANCE, and that is what the re-export buys: a copy of
+  // either Map here would bound nothing and answer 'A teammate' for members the other had.
+  assert.equal(/new Map\(\)/.test(io), false, "the caches went with their bound");
+  assert.match(moved, /const MAX_CACHED_MEMBERS = \d+;/);
+  // Both sides are back under the cap the split was for.
+  for (const f of ["listener-io.js", "listener-identity.js"]) {
+    const lines = read(f).split("\n").length;
+    assert.ok(lines <= 500, `main/${f} is ${lines} lines — over the §2 cap again`);
+  }
 });
 
 // ── 6. THE CAP ITSELF ────────────────────────────────────────────────────────────────
