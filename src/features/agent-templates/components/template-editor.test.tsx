@@ -96,18 +96,28 @@ const field = (selector: string) =>
   document.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector)!;
 
 /**
- * ⚠ SCOPED BY DIALOG NAME, ALWAYS. Adding a field opens a SECOND
- * `StandardDialog` over the editor (2026-08-27), so from that moment "Cancel"
- * is two buttons and `getByRole` on the bare name throws. Every add-field
- * interaction goes through this helper, or through
- * `within(screen.getByRole("dialog", { name: "Add field" }))`.
+ * ⚠ **INLINE SINCE 2026-09-22 — THERE IS NO ADD-FIELD DIALOG (Samuel).** The
+ * gray "New field" box appends a BLANK row and the operator types in it, so this
+ * helper fills the first empty row and only presses the box when every row on
+ * screen already has a key. A new template opens holding one blank row
+ * (`lib/template-draft.ts › emptyDraft`), which is why the press is conditional
+ * rather than unconditional.
  */
-async function addField(key: string, value: string) {
-  fireEvent.click(screen.getByRole("button", { name: "Add field" }));
-  const dialog = await screen.findByRole("dialog", { name: "Add field" });
-  fireEvent.change(field("#add-field-key"), { target: { value: key } });
-  fireEvent.change(field("#add-field-value"), { target: { value } });
-  fireEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+function addField(key: string, value: string) {
+  const keys = () =>
+    Array.from(
+      document.querySelectorAll<HTMLInputElement>('input[aria-label$=" key"]')
+    );
+  let at = keys().findIndex((input) => input.value === "");
+  if (at === -1) {
+    fireEvent.click(screen.getByRole("button", { name: "New field" }));
+    at = keys().length - 1;
+  }
+  fireEvent.change(keys()[at], { target: { value: key } });
+  fireEvent.change(
+    field(`input[aria-label="Field ${at + 1} value"]`),
+    { target: { value } }
+  );
 }
 
 /** The create verb, in ONE place — the kit conversion shortened the word. */
@@ -142,10 +152,10 @@ describe("what the editor renders", () => {
     expect(field("#agent-template-instructions")).toBeTruthy();
     expect(scopeLabels()).toEqual(["Private", "Team", "Public"]);
     expect(row("Model").getByRole("tab", { name: "Default" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Add field" })).toBeTruthy();
-    // ⚠ "Add", not "Attach": the picker is a TREE now and what it adds is a
-    // scope — a base, a folder, or one entry.
-    expect(screen.getByRole("button", { name: "Add knowledge" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "New field" })).toBeTruthy();
+    // ⚠ **THE KNOWLEDGE TREE IS IN THE FORM, NOT BEHIND AN ADD BUTTON**
+    // (Samuel, 2026-09-22) — so what this asserts is the tree itself.
+    expect(screen.getByRole("tree", { name: "Knowledge" })).toBeTruthy();
   });
 
   it("loads an existing template's values, chips included", async () => {
@@ -395,8 +405,9 @@ describe("the save payload", () => {
     fireEvent.change(field("#agent-template-instructions"), {
       target: { value: "Search first." },
     });
-    await addField("repo", "dopl");
-    fireEvent.click(screen.getByRole("button", { name: "Add knowledge" }));
+    addField("repo", "dopl");
+    // ⚠ NO ADD BUTTON SINCE 2026-09-22: the tree is in the form, so the base is
+    // checked where it is listed (Samuel).
     fireEvent.click(screen.getByRole("treeitem", { name: "Specs" }));
     fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
 
@@ -412,30 +423,39 @@ describe("the save payload", () => {
     });
   });
 
-  it("adds nothing when the Add-field dialog is abandoned", async () => {
-    // ⚠ THE OLD SHAPE OF THIS TEST ("drops a field ROW the operator added and
-    // abandoned") described the inline `+` that appended a blank pair. Adding
-    // is a dialog since 2026-08-27, so an abandoned add leaves no row at all —
-    // the `cleanFields` backstop it used to exercise stays pinned in
-    // `../lib/template-draft.test.ts`, where it does not depend on the chrome.
+  it("writes NO field for a row the operator opened and never typed in", async () => {
+    // 🔒 **THE STARTER ROW MUST COST NOTHING (Samuel, 2026-09-22).** A new
+    // template opens holding one blank row and the gray box appends more, so an
+    // untouched row is the COMMON case rather than an edge one — and the create
+    // body has to be byte-identical to what it was when adding was a dialog.
+    // `cleanFields` is the backstop and it is pinned on its own in
+    // `../lib/template-draft.test.ts`; this is the face's half.
     const { onSave } = await open();
     fireEvent.change(field("#agent-template-name"), { target: { value: "Scout" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add field" }));
-    const dialog = await screen.findByRole("dialog", { name: "Add field" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Discard" }));
+    fireEvent.click(screen.getByRole("button", { name: "New field" }));
     fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
     const draft = onSave.mock.calls[0][0] as TemplateDraft;
     expect(draftToCreateBody(draft).fields).toBeUndefined();
   });
 
-  it("refuses a pair with no key — the value alone would vanish at save", async () => {
+  it("opens a NEW template on one blank row, and the box adds another", async () => {
+    // 🔒 Samuel, 2026-09-22: a new template *"should have an existing blank
+    // field that is already in, just have it blank"*. ⚠ The row is
+    // `emptyDraft()`'s, not the component's — a template being EDITED with no
+    // fields gets none, because there an empty row reads as one somebody
+    // deleted.
     await open();
-    fireEvent.click(screen.getByRole("button", { name: "Add field" }));
-    const dialog = await screen.findByRole("dialog", { name: "Add field" });
-    const add = () => within(dialog).getByRole("button", { name: "Add" }) as HTMLButtonElement;
-    expect(add().disabled).toBe(true);
-    fireEvent.change(field("#add-field-key"), { target: { value: "repo" } });
-    expect(add().disabled).toBe(false);
+    expect(field('input[aria-label="Field 1 key"]')).toBeTruthy();
+    expect(field('input[aria-label="Field 1 key"]').value).toBe("");
+    expect(document.querySelector('input[aria-label="Field 2 key"]')).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "New field" }));
+    expect(field('input[aria-label="Field 2 key"]')).toBeTruthy();
+  });
+
+  it("removes the row the X names, and leaves the rest", async () => {
+    await open({ template: template() });
+    fireEvent.click(screen.getByRole("button", { name: "Remove field 1" }));
+    expect(document.querySelector('input[aria-label="Field 1 key"]')).toBeNull();
   });
 });
 

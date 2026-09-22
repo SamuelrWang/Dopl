@@ -1,20 +1,14 @@
 "use client";
 
-import { useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { Plus } from "lucide-react";
-import { Popover } from "@/shared/ui/popover-menu";
-import {
-  OPEN_SCALE_ICON,
-  OpenScaleButton,
-} from "@/shared/ui/open-scale-button";
+import { useMemo, useRef, type KeyboardEvent } from "react";
 import type { TemplateKnowledgeRef } from "../client/types";
 import { refKey, scopeChipLabel } from "../lib/knowledge-scopes";
 import { RemovableChip } from "./template-editor-rows";
 import { BaseNode, type ScopeToggle } from "./knowledge-scope-tree";
 
 /**
- * THE KNOWLEDGE PICKER — chips for what is attached, and one **Add** button
- * opening a CHECKABLE TREE (Samuel, 2026-09-08: *"right now, you can only
+ * THE KNOWLEDGE PICKER — chips for what is attached, over a CHECKABLE TREE that
+ * is rendered IN THE FORM (Samuel, 2026-09-08: *"right now, you can only
  * select entire bases, but I want to be able to specific folders or
  * entries/files. also i dont think a dropdown is the best way to do it"*).
  *
@@ -43,9 +37,11 @@ import { BaseNode, type ScopeToggle } from "./knowledge-scope-tree";
  * member may attach is the two-readers-one-fact defect with an ACCESS GRANT as
  * the thing that drifts. The server refuses an unreadable scope with a 404.
  *
- * ⚠ `Popover` in COORDINATE mode, like the control it replaces — the editor is a
- * scrolling, overflow-clipping modal body, where a trigger-anchored panel
- * renders as a clipped sliver.
+ * 🔒 **IT IS RENDERED IN PLACE SINCE 2026-09-22 (Samuel)** — no Add button and
+ * no `Popover`. The old note here argued for COORDINATE mode *"because the
+ * editor is a scrolling, overflow-clipping modal body, where a trigger-anchored
+ * panel renders as a clipped sliver"*: an argument against ANCHORING a panel,
+ * which an inline list does not do. See the render for the rest.
  */
 
 export interface KnowledgeBaseOption {
@@ -70,7 +66,6 @@ export function KnowledgeScopePicker({
    *  only once its own read has answered. */
   emptyLine: string;
 }) {
-  const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
   const treeRef = useRef<HTMLDivElement | null>(null);
 
   const selectedKeys = useMemo(
@@ -120,60 +115,52 @@ export function KnowledgeScopePicker({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {selected.map((ref) => {
-        const label = scopeChipLabel(ref);
-        return (
-          <RemovableChip
-            key={refKey(ref)}
-            label={label}
-            detachLabel={`Detach ${label}`}
-            onDetach={() =>
-              onChange(selected.filter((s) => refKey(s) !== refKey(ref)))
-            }
-          />
-        );
-      })}
-      <OpenScaleButton
-        onClick={(e) => {
-          if (anchor) {
-            setAnchor(null);
-            return;
-          }
-          const rect = e.currentTarget.getBoundingClientRect();
-          setAnchor({ x: rect.left, y: rect.bottom + 4 });
-        }}
-        // ⚠ **THE VISIBLE WORD IS "Add" AND THE ACCESSIBLE NAME SAYS WHAT OF.**
-        // The editor's own Add-field dialog puts a second "Add" on screen
-        // (`template-editor-rows.tsx › AddFieldDialog`, whose docblock makes
-        // exactly this argument about its own label), and two controls with one
-        // accessible name is ambiguous for an operator on a screen reader and
-        // unaddressable for every `getByRole`. The label is not repeated
-        // visually — the section heading above already says "Knowledge".
-        aria-label="Add knowledge"
-        aria-haspopup="tree"
-        aria-expanded={anchor !== null}
-        disabled={bases.length === 0}
-        className="disabled:opacity-40"
-      >
-        <Plus size={OPEN_SCALE_ICON} aria-hidden="true" />
-        Add
-      </OpenScaleButton>
-      {bases.length === 0 && (
-        <span className="text-caption text-text-muted">{emptyLine}</span>
+    <div className="flex flex-col gap-1.5">
+      {/* THE PICKED ONES, ABOVE THE LIST THEY CAME FROM. ⚠ They stay CHIPS and
+          keep their own X: the tree row below is the same attachment and toggles
+          it too, but a scope whose base is collapsed (or whose base the operator
+          has scrolled past) has no visible row to uncheck. */}
+      {selected.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {selected.map((ref) => {
+            const label = scopeChipLabel(ref);
+            return (
+              <RemovableChip
+                key={refKey(ref)}
+                label={label}
+                detachLabel={`Detach ${label}`}
+                onDetach={() =>
+                  onChange(selected.filter((s) => refKey(s) !== refKey(ref)))
+                }
+              />
+            );
+          })}
+        </div>
       )}
-      <Popover
-        open={anchor !== null}
-        at={anchor ?? undefined}
-        onClose={() => setAnchor(null)}
-        className="max-h-[320px] min-w-[280px] overflow-y-auto"
-      >
+      {bases.length === 0 ? (
+        <span className="text-caption text-text-muted">{emptyLine}</span>
+      ) : (
+        /* 🔒 **THE TREE IS IN THE FORM, NOT BEHIND A BUTTON (Samuel, 2026-09-22:
+            *"for knowledge, instead of it being a dropdown add button, put the
+            knowledge/items directly into there"*).** ⚠ **THE POPOVER IS GONE AND
+            SO IS THE ADD PILL** — the argument that put them there was about the
+            editor being *"a scrolling, overflow-clipping modal body, where a
+            trigger-anchored panel renders as a clipped sliver"*, and that is an
+            argument against ANCHORING a panel, not against listing the bases.
+            Rendered in place there is nothing to anchor and nothing to clip.
+            ⚠ **STILL LAZY, AND THAT IS WHAT MAKES IT AFFORDABLE**: `BaseNode`
+            holds its own `open` and asks `useKnowledgeTree` for nothing until it
+            is expanded, so an inline list of twenty bases is twenty rows and
+            zero reads — the same drill-in the popover had.
+            ⚠ BOUNDED AND SCROLLABLE, because this list is the one part of the
+            form whose height is the workspace's rather than the form's.
+            ⚠ FLAT FILL, NEVER PRESSED IN (`template-editor-surface.test.tsx`). */
         <div
           ref={treeRef}
           role="tree"
           aria-label="Knowledge"
           onKeyDown={onTreeKeyDown}
-          className="flex flex-col"
+          className="flex max-h-[220px] flex-col overflow-y-auto rounded-lg bg-bg-inset p-1"
         >
           {bases.map((base) => (
             <BaseNode
@@ -185,7 +172,7 @@ export function KnowledgeScopePicker({
             />
           ))}
         </div>
-      </Popover>
+      )}
     </div>
   );
 }

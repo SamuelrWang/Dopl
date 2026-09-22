@@ -60,13 +60,28 @@ export interface TemplateDraft {
   knowledge: TemplateKnowledgeRef[];
 }
 
+/**
+ * A BRAND-NEW TEMPLATE'S DRAFT.
+ *
+ * 🔒 **IT OPENS WITH ONE BLANK FIELD ROW (Samuel, 2026-09-22: a new template
+ * *"should have an existing blank field that is already in, just have it
+ * blank"*).** The row is a DRAFT fact and lives here rather than in
+ * `CustomFieldRows`, which renders both a create and an EDIT: a starter row
+ * painted by the component would also appear over a saved template whose fields
+ * were all removed, where an empty row reads as a field somebody deleted.
+ *
+ * ⚠ **IT COSTS NOTHING IF IT IS NEVER TYPED IN.** `cleanFields` drops a row with
+ * a blank key at both body builders, so an untouched starter row is not in the
+ * POST — the create still writes `fields: []`, byte for byte what it wrote
+ * before this ruling.
+ */
 export function emptyDraft(): TemplateDraft {
   return {
     name: "",
     description: "",
     instructions: "",
     model: "",
-    fields: [],
+    fields: [{ key: "", value: "" }],
     visibility: "private",
     teamIds: [],
     knowledge: [],

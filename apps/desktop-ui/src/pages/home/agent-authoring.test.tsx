@@ -278,9 +278,10 @@ describe("what the editor is allowed to ask for", () => {
     // The container's own bases, off the PLAIN key (`useKnowledgeBaseList`) —
     // the channel-scoped entry carries `channelGrants` and belongs to the
     // Knowledge pane; the attach picker has no use for it.
-    // ⚠ "Add knowledge" + tree rows since 2026-09-08 (`knowledge-scope-picker.tsx`);
-    // the chip menu it replaced answered "Attach" + `menuitem`s.
-    fireEvent.click(screen.getByRole("button", { name: "Add knowledge" }));
+    // ⚠ TREE ROWS since 2026-09-08 (`knowledge-scope-picker.tsx`); the chip menu
+    // it replaced answered "Attach" + `menuitem`s. ⚠ **AND THE TREE IS IN THE
+    // FORM SINCE 2026-09-22 (Samuel)** — there is no "Add knowledge" button left
+    // to press, so the rows are on screen with the editor.
     expect(await screen.findByRole("treeitem", { name: "Call notes" })).toBeTruthy();
     expect(screen.queryByRole("treeitem", { name: "Fundraise memos" })).toBeNull();
 
