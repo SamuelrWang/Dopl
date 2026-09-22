@@ -457,6 +457,13 @@ test("the vocabulary grants the sparse channel post and the @-tag, on both sides
     assert.ok(/You MAY post to the CHANNEL itself/.test(flat), `${side}: the capability is granted`);
     assert.ok(/needs a reason a human would name out loud/.test(flat), `${side}: with an applicable bar`);
     assert.ok(/@-TAG A PERSON when you need one/.test(flat), `${side}: tagging is taught`);
+    // 🔒 SAMUEL, 2026-09-22 — the recipient is set ONLY by `to=` and the app renders them from
+    // it, so the tag is for somebody the post is NOT already addressed to, and the body carries
+    // no envelope. Both halves are pinned because the unscoped sentence read, to an agent
+    // filling in `to=`, as licence to repeat the recipient in the body — and nothing corrects
+    // that: a body with a header in it posts perfectly.
+    assert.ok(/a person you did NOT address/.test(flat), `${side}: …scoped to who it is for`);
+    assert.ok(/never opens with a routing header/.test(flat), `${side}: …and no envelope in the body`);
     assert.ok(/The match is exact/.test(flat), `${side}: …with the resolver's real rule`);
     assert.ok(/Tags inbox/.test(flat), `${side}: what a tag DOES`);
     assert.ok(/not an address and it starts no agent/.test(flat), `${side}: and what it does not do`);

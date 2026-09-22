@@ -69,7 +69,19 @@ const VOCABULARY = [
   // the composer's picker inserts, what the MCP doctrine publishes, and what the transcript tints.
   // The older forms are still recognised and the copy still says so — they resolve for bodies
   // already written — but they are named as FALLBACKS rather than choices.
-  '- @-TAG A PERSON when you need one. Write `@` and then their handle, in the BODY of the',
+  // 🔒 **SCOPED TO SOMEBODY YOU DID NOT ADDRESS (Samuel's ruling, 2026-09-22).** The recipient
+  // of a post is set ONLY by `to=` and every surface RENDERS them from that metadata, so an
+  // agent that also writes the recipient's handle into the body has put the envelope inside the
+  // letter — and nothing corrects it, because a body with a header in it posts perfectly. The
+  // TAG ITSELF IS UNCHANGED and so is what it does: it reaches a human, it addresses nobody, it
+  // starts no agent. What is narrowed is WHO it is for — a person the post is not already
+  // addressed to. Same wording as `packages/mcp-server/src/tools/channel-doctrine.ts` (the LAW's
+  // "@-TAG A HUMAN YOU DID NOT ADDRESS" and THE MODEL's rule), so the spawn prompt and the
+  // pulled doctrine teach one rule rather than two.
+  '- @-TAG A PERSON when you need one — a person you did NOT address. Who a post is FOR is',
+  '  `to=`, and the app renders them from it, so a body never opens with a routing header',
+  '  (`FROM→TO | KIND |`), your own name, or the recipient\'s handle written out again.',
+  '  Write `@` and then their handle, in the BODY of the',
   '  post: their display name, lowercased, with spaces as dashes — "Samuel Wang" is',
   '  `@samuel-wang`. That is the handle the app itself inserts and tints, so it is the one to',
   '  write. (The squashed form `@samuelwang`, the first word `@samuel`, and the same three',
@@ -246,7 +258,11 @@ const ADDRESSING = [
   `  already your address.`,
   `- AN @HANDLE IN YOUR BODY REACHES NO AGENT. Writing "@builder please take this" into a`,
   `  message tells a human reader and starts nothing; to= is the only way to reach an agent.`,
-  `  @-tagging a PERSON in the body still works and still puts it in their Tags inbox.`,
+  // ⚠ SAME RULING, ON THE OTHER SURFACE THAT TEACHES TAGGING (2026-09-22): the sentence was
+  // true and unscoped, and an agent reading it while filling in `to=` read it as licence to
+  // repeat the recipient in the body. The capability is unchanged; its audience is named.
+  `  @-tagging a PERSON YOU DID NOT ADDRESS still works and still puts it in their Tags inbox —`,
+  `  never the recipient you just named in to=, whom the app already renders.`,
 ];
 
 module.exports = { THREAD_TAG, VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, REPLY_ROUTING, PERSONAL_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING };
