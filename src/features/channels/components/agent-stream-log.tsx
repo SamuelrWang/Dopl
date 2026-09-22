@@ -166,11 +166,17 @@ export function LogLine({ item }: { item: StreamItem }) {
     : text.slice(0, COLLAPSED_CHARS);
 
   return (
-    <li className="flex min-w-0 gap-2 text-caption">
+    // ⚠ STACKED, NOT SIDE BY SIDE (Samuel, 2026-09-22). The label used to sit in
+    // a left column with the payload beside it, which spent the width the payload
+    // needs on a name that is never longer than one word — in a 380px panel the
+    // JSON then wrapped to a ragged two-line block next to a one-line label. The
+    // name reads as a heading over its own line of work now: same rows, same
+    // label, one axis.
+    <li className="flex min-w-0 flex-col gap-0.5 text-caption">
       {label && (
-        <span className="shrink-0 font-medium text-text-primary">{label}</span>
+        <span className="min-w-0 truncate font-medium text-text-primary">{label}</span>
       )}
-      <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
+      <span className="flex w-full min-w-0 flex-col items-start gap-0.5">
         <span
           className={cn(
             "wrap-anywhere min-w-0 whitespace-pre-wrap text-left",
