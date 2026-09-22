@@ -6,6 +6,7 @@ import { agentModelShortLabel } from "@/features/channels/lib/agent-models";
 import { pendingRow } from "@/shared/ui/pending";
 import { SectionPanel } from "@/shared/ui/section-panel";
 import { SECTION_HEADING_TEXT } from "@/shared/ui/section-heading";
+import { CARD_LIFT_CLASS } from "@/shared/ui/card-lift";
 import type { AgentTemplate } from "../client/types";
 import type { TemplateSectionDef } from "../lib/visibility";
 
@@ -274,8 +275,12 @@ function TemplateCard({
     </>
   );
   const face = "bento flex min-h-[92px] flex-col gap-1.5 p-3 text-left";
-  const raise =
-    "transition-shadow hover:shadow-[0_2px_4px_rgba(0,0,0,0.06),0_10px_24px_rgba(0,0,0,0.07)]";
+  // ⚠ THE SHARED LIFT, NOT A LOCAL STRING (Samuel, 2026-09-21: the two card
+  // faces "should have the same animation"). This face used to transition the
+  // SHADOW ONLY and never move, which is the difference he saw. The Knowledge
+  // card's `.card:hover` carries the same numbers; `card-lift.test.ts` pins the
+  // pair bidirectionally, because a CSS module cannot import this constant.
+  const raise = CARD_LIFT_CLASS;
 
   // ⚠ A SECOND CONTROL MOVES THE PRESSABLE ELEMENT *INSIDE* THE CARD, it does
   // not overlay one. A `<button>` may not contain a `<button>` — an absolutely

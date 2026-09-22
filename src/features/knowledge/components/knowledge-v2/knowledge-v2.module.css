@@ -694,6 +694,14 @@
      2026-09-19: "use the same gray as that of the shared pill"). */
   --kv-hue-private: var(--text-secondary);
   --kv-pill-tint: 12%;
+  /* ⚠ THE WELL IS THE PILL'S GRAY, LIGHTER — A SECOND TINT, NOT A SECOND HUE
+     (Samuel, 2026-09-21: "that gray ... can you make that gray color lighter?
+     I think it's too dark right now"). The hue stays shared, so the well and
+     the "Shared" pill still cannot drift apart; only the amount differs, which
+     is the whole of what he asked to change. ⚠ Do NOT lower `--kv-pill-tint`
+     to achieve this — that is the PILL's tint, and the pill is not what he
+     called too dark. */
+  --kv-well-tint: 6%;
 }
 /* Scope hues from the global status/link palette — no local colours. */
 .scopePrivate {
@@ -705,10 +713,15 @@
 .scopePublic {
   --kv-scope: var(--success);
 }
+/* ⚠ ONE LIFT ACROSS BOTH CARD FACES (Samuel, 2026-09-21) — the values are
+   `src/shared/ui/card-lift.ts`'s, and `card-lift.test.ts` scans BOTH this rule
+   and the Agents face's Tailwind string and fails when they drift. A CSS module
+   cannot import the constant, so the pin is a source read, not an import.
+   ⚠ Change them THERE first, then here, in one commit. */
 .card:hover {
   border-color: var(--kv-border-strong);
-  transform: translateY(-1px);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 20px rgba(0, 0, 0, 0.05);
+  transform: translateY(-3px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.07), 0 12px 28px rgba(0, 0, 0, 0.10);
 }
 .cardHead {
   display: flex;
@@ -770,14 +783,15 @@
    fenced by hairlines. Description row flexes so the foot stays pinned to the
    card bottom at fixed heights.
    The well is the "Shared" pill's gray on every card, whatever its scope —
-   the pill's own recipe on the private hue, not a second gray. */
+   the pill's own HUE, at `--kv-well-tint` rather than the pill's own amount
+   (Samuel, 2026-09-21: lighter). */
 .cardInset {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
   border-radius: 9px;
-  background: color-mix(in oklab, var(--kv-hue-private) var(--kv-pill-tint), white);
+  background: color-mix(in oklab, var(--kv-hue-private) var(--kv-well-tint), white);
   overflow: hidden;
 }
 /* ⚠ CENTRED, NOT TOP-ANCHORED (Samuel, 2026-09-19: the description sat
