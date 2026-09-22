@@ -129,8 +129,8 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     channelName: "Ops",
     taskTitle: "Ship the invoice import",
     templateName: "Code Auditor", // F-288: the agent's TEMPLATE identity, persisted for a resume
-    turns: 7, // FIX #9: the running cap counters, persisted for a P2 rehydrate
-    costUsd: 0.42,
+    turns: 7, // FIX #9: the running counter, persisted for a P2 rehydrate
+    costUsd: 0.42, // ⚠ DELETED 2026-09-22 — still handed IN here, to prove the whitelist drops it
     ownPostSeq: 11, // 2026-08-22: the outbound post counter, persisted for the SAME resume
     runtimeId: "codex", // 2026-08-31: WHICH RUNTIME this session ran on — see the note below
   });
@@ -172,7 +172,12 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     // the CAP, and was denied `launch-depth-capped` for the rest of its life. ⚠ THE OMISSION IS
     // STILL THE DEFAULT for a record written by an OLDER build — neither key is there, absent is
     // the cap, and nothing migrates it.
-    "agentId", "bind", "channelId", "channelName", "costUsd", "counterpartyId",
+    // 🔒 ⚠ **`costUsd` WAS ON THIS LIST AND IS DELETED (2026-09-22, Samuel: *"there shouldnt be
+    // cost? Claude theres no cost tracking. we dont need cost tracking"*).** The input above
+    // still HANDS ONE IN, deliberately: this is a WHITELIST, so its absence from the expected
+    // keys is the proof that a record written by an older build drops the field on read rather
+    // than carrying it forward — the same treatment `turnCap` got when the caps went.
+    "agentId", "bind", "channelId", "channelName", "counterpartyId",
     "counterpartyName", "direct", "key", "launchChain", "launchDepth", "mode", "model",
     "ownPostSeq", "parkedAt", "phase", "profile", "runtimeId", "sdkSessionId", "sessionId",
     "side", "startedAt", "taskId", "taskTitle", "templateName", "turns", "workspaceId",
@@ -197,7 +202,7 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
   for (const junk of [undefined, null, "", "   ", 7, {}]) {
     assert.equal(durableSessionRecord({ templateName: junk }).templateName, null, JSON.stringify(junk));
   }
-  // Same NaN discipline as `turns` / `costUsd`: a hand-edited store lands on 0, never NaN.
+  // Same NaN discipline as `turns`: a hand-edited store lands on 0, never NaN.
   for (const junk of [undefined, null, "x", NaN, {}, -1 / 0]) {
     assert.equal(durableSessionRecord({ ownPostSeq: junk }).ownPostSeq, 0, JSON.stringify(junk));
   }
@@ -239,26 +244,25 @@ test("durableName bounds an identity string exactly like prompt-framing.sanitize
   }
 });
 
-test("durableSessionRecord persists the cap counters (FIX #9) and coerces bad values to 0", () => {
+test("durableSessionRecord persists the turn counter (FIX #9) and coerces bad values to 0", () => {
   const rec = durableSessionRecord({ key: "c1:t1", channelId: "c1", phase: "parked", turns: 24, costUsd: 1.5 });
-  assert.equal(rec.turns, 24, "the running turn count survives so a P2 recreate does not reset the budget");
-  assert.equal(rec.costUsd, 1.5, "the running cost survives for the cost cap");
-  // A hand-edited store (or a legacy record missing the fields) can never inject NaN.
+  assert.equal(rec.turns, 24, "the running turn count survives so a P2 recreate does not reset it");
+  assert.equal(rec.costUsd, undefined, "…and the COST counter beside it is deleted, not zeroed");
+  // A hand-edited store (or a legacy record missing the field) can never inject NaN.
   const legacy = durableSessionRecord({ key: "c1:", channelId: "c1", phase: "launching" });
   assert.equal(legacy.turns, 0);
-  assert.equal(legacy.costUsd, 0);
-  const bad = durableSessionRecord({ key: "c1:", channelId: "c1", phase: "parked", turns: "x", costUsd: NaN });
+  const bad = durableSessionRecord({ key: "c1:", channelId: "c1", phase: "parked", turns: "x" });
   assert.equal(bad.turns, 0);
-  assert.equal(bad.costUsd, 0);
 });
 
 // 🔒 "…and the CAP those counters are measured against (9a)" STOOD HERE AND IS DELETED
 // (2026-09-07, Samuel's ruling). It pinned `turnCap` as a DURABLE field — persisted because the
-// default was issuer-keyed and a recreate carries no issuer, coerced harder than turns/costUsd so
+// default was issuer-keyed and a recreate carries no issuer, coerced harder than `turns` so
 // a hand-edited store could not hand a session `Infinity` (no bound at all). The caps are gone,
 // the field is off the state and off the record, and the whitelist case above now pins its
-// ABSENCE. `turns` and `costUsd` are still durable: they are the context meter's numbers, and the
-// case above them still owns their coercion.
+// ABSENCE. `turns` is still durable — a reopened session must show what it has already run — and
+// the case above it still owns the coercion. ⚠ `costUsd` JOINED `turnCap` IN THAT DELETED SET on
+// 2026-09-22, for a different reason: not "nothing enforces it" but "nothing reads it at all".
 
 test("durableSessionRecord defaults counterpartyId -> null when absent", () => {
   const rec = durableSessionRecord({ key: "c1:", channelId: "c1", phase: "launching" });

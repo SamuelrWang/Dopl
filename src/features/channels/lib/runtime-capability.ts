@@ -139,10 +139,12 @@ export interface RuntimeDescriptor {
       { options?: ReadonlyArray<string> | null; default?: string | null } | null
     > | null;
   } | null;
-  meter?: {
-    mode?: string | null;
-    cost?: { currency?: string; billed?: boolean } | null;
-  } | null;
+  /** ⚠ `cost` WAS THE SECOND MEMBER AND IS DELETED (2026-09-22, Samuel: *"we
+   *  dont need cost tracking"*) — off the adapter contract, off all three
+   *  descriptors, and out of main along with `state.costUsd`, the durable
+   *  record's field and both cost delta baselines. `mode` stays: it is about
+   *  TOKENS, which three surfaces show. */
+  meter?: { mode?: string | null } | null;
   execution?: { locations?: ReadonlyArray<string> | null } | null;
   deepLink?: unknown;
 }
@@ -271,19 +273,13 @@ export const canSwitchModelLive = (
 export const meterMode = (d: RuntimeDescriptor | null | undefined): string =>
   d?.meter?.mode || "none";
 
-/**
- * ⚠ HIDDEN, NOT ZEROED (§3.2, and it is bolded there). `main/session-state.js ›
- * costCapReached` is fed by exactly one number; a cap over a field the platform
- * does not emit is a control that silently does not exist. `null`-means-
- * unmeasured, applied to a control instead of to a number. Codex today.
- */
-export const showsCostCap = (d: RuntimeDescriptor | null | undefined): boolean =>
-  !absent(d?.meter?.cost);
-
-/** §3.2: a BILLED cost line the other runtimes never show. Cursor today. */
-export const showsBilledCost = (
-  d: RuntimeDescriptor | null | undefined
-): boolean => d?.meter?.cost?.billed === true;
+// 🔒 ⚠ **`showsCostCap` AND `showsBilledCost` ARE DELETED (2026-09-22, Samuel: *"there shouldnt
+// be cost? Claude theres no cost tracking. we dont need cost tracking"*).** They read
+// `descriptor.meter.cost`, which every adapter declared and which is now gone from the contract
+// along with the whole column in main — `state.costUsd`, the durable record's field, both cost
+// delta baselines and `events.result`'s cost argument. ⚠ NEITHER EVER HAD A PRODUCTION CONSUMER
+// in this tree: the only importer was this file's own suite. ⚠ `meterMode` ABOVE STAYS — it
+// answers a different question (per-message vs per-turn) about TOKENS, which three surfaces show.
 
 // ── CONTAINMENT — THE THIRD REFUSAL ──────────────────────────────────────────
 

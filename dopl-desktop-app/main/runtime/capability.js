@@ -139,12 +139,14 @@ const canSwitchModelLive = (d) => !!(d && d.session && d.session.liveModelSwitch
 /** `'per-message' | 'per-turn' | 'none'`. `'none'` removes the meter row; it never zeroes it. */
 const meterMode = (d) => (d && d.meter && d.meter.mode) || 'none';
 
-/**
- * ⚠ HIDDEN, NOT ZEROED. `main/session-state.js › costCapReached` is fed by exactly one number;
- * a cap over a field the platform does not emit is a control that silently does not exist. The
- * `null`-means-unmeasured rule, applied to a control instead of a number.
- */
-const showsCostCap = (d) => !absent(d && d.meter && d.meter.cost);
+// 🔒 ⚠ **`showsCostCap` IS DELETED (2026-09-22, Samuel: *"we dont need cost tracking"*).** It
+// asked whether `descriptor.meter.cost` was present so a caller could hide a cost control on a
+// runtime that reports none — and it HAD NO CALLER, in either tree, from the day it was written.
+// The column it guarded is gone with it: `meter.cost` on all three adapters, `state.costUsd`, the
+// durable record's field, both cost delta baselines and `events.result`'s cost argument.
+// ⚠ WHAT REMAINS IS `meterMode`, WHICH IS A DIFFERENT QUESTION and also currently unconsumed:
+// that one says whether a runtime meters per MESSAGE or per TURN, which is about TOKENS — and
+// tokens are displayed on three surfaces.
 
 // ── CONTAINMENT ──────────────────────────────────────────────────────────────────────────────
 
@@ -375,7 +377,7 @@ module.exports = {
   // CXP-4 (2026-09-22): the baseline rule BOTH record-driven rebuilds and the in-place resume ask.
   // The two words are exported so the suite can hold them equal to `session-runtime-truth.js`'s.
   resumeZeroesBaseline, USAGE_BASELINE_RESETS, USAGE_BASELINE_CONTINUES,
-  meterMode, showsCostCap,
+  meterMode,
   canLaunchProfile, profileRefusal,
   toolModes, narrowestToolMode, widestToolMode, normalizeToolMode, floorWindowlessTool,
   windowlessFloorRefusal, // D1: the sentence behind `floorWindowlessTool`'s `null`

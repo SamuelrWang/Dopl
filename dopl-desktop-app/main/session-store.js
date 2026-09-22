@@ -212,12 +212,15 @@ function durableSessionRecord(rec) {
     // another member's prompt text on disk to answer a question nobody asks after spawn.
     // ⚠ 120, NOT THE 80 DEFAULT: this is an identity, bounded by the column's own CHECK.
     templateName: durableName(r.templateName, 120),
-    // FIX #9, now a DISPLAY rehydrate rather than a budget one (2026-09-07): these two counters
-    // survive a recreate so a reopened session shows what it has already spent. They bound
-    // nothing — the caps are deleted — and they are still coerced to a finite number so a
+    // FIX #9, now a DISPLAY rehydrate rather than a budget one (2026-09-07): this counter
+    // survives a recreate so a reopened session shows what it has already run. It bounds
+    // nothing — the caps are deleted — and it is still coerced to a finite number so a
     // hand-edited store cannot inject NaN into the reducer.
+    // 🔒 ⚠ **`costUsd` WAS WHITELISTED BESIDE IT AND IS DELETED (2026-09-22, Samuel: *"we dont
+    // need cost tracking"*).** ⚠ AN OLDER RECORD STILL CARRIES THE FIELD AND STILL READS: this is
+    // a WHITELIST, so an unknown key is DROPPED on read rather than migrated or refused — the
+    // identical treatment `turnCap` got when the caps went, and the reason that rule exists.
     turns: Number(r.turns) || 0,
-    costUsd: Number(r.costUsd) || 0,
     // 2026-09-07: `turnCap` was whitelisted here so the bound survived with the budget. Deleted
     // with the caps. A record written by an older build still carries the field; it is dropped on
     // read rather than migrated, because nothing downstream asks for it.
@@ -227,7 +230,7 @@ function durableSessionRecord(rec) {
     // `session-park.js › startResume`, so a counter that restarted at 0 on resume re-minted
     // `client_msg_id`s the server had already stored — and the server's idempotency
     // short-circuit answers the OLD row and silently discards the resumed agent's reply.
-    // ⚠ COERCED HARDER THAN `turns` / `costUsd` ABOVE, and deliberately: `Number(x) || 0` lets
+    // ⚠ COERCED HARDER THAN `turns` ABOVE, and deliberately: `Number(x) || 0` lets
     // `Infinity` through (it is truthy), and this number is CONCATENATED into a client_msg_id
     // rather than compared against a cap. A non-finite or negative one lands on 0.
     ownPostSeq: Number.isFinite(Number(r.ownPostSeq)) ? Math.max(0, Math.floor(Number(r.ownPostSeq))) : 0,

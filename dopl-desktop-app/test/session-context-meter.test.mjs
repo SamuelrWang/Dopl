@@ -286,7 +286,7 @@ function core(evs) {
   io.applyCoreEvents(s, evs, (_s, e) => out.push(e), NO_STORE_2);
   return { s, context: out.filter((e) => e.type === "context") };
 }
-const RESULT_EV = { type: "result", costUsd: null, sessionTokens: 23591, model: "gpt-5.6-terra" };
+const RESULT_EV = { type: "result", sessionTokens: 23591, model: "gpt-5.6-terra" };
 
 test("the SERVER's window is the denominator — the table is not even consulted", () => {
   const { context } = core([reported(258400), RESULT_EV]);
@@ -302,7 +302,7 @@ test("a runtime that reports NO window falls back to the table — Claude's path
   // arguments, so `window` is null on the wire and §1's table is what answers.
   const { context } = core([
     { type: "context", tokens: 120000, model: "claude-opus-5", window: null },
-    { type: "result", costUsd: 0.4, sessionTokens: 1, model: "claude-opus-5" },
+    { type: "result", sessionTokens: 1, model: "claude-opus-5" },
   ]);
   assert.deepEqual(context, [
     { type: "context", tokens: 120000, window: 1000000, model: "claude-opus-5" },
@@ -315,7 +315,7 @@ test("a reported window that is JUNK or ZERO falls through — absent is never a
   for (const junk of [0, -1, NaN, null, undefined, "lots", {}, []]) {
     const { context } = core([
       { type: "context", tokens: 61000, model: "claude-haiku-4-5", window: junk },
-      { type: "result", costUsd: 0, sessionTokens: 1, model: "claude-haiku-4-5" },
+      { type: "result", sessionTokens: 1, model: "claude-haiku-4-5" },
     ]);
     assert.equal(context[0].window, 200000, JSON.stringify(junk));
   }
@@ -404,18 +404,22 @@ test("NO MEASUREMENT DOES NOT CLOBBER: a zero-token event leaves the gauge exact
   assert.equal(blank.state.contextTokens, 23586);
 });
 
-test("the COST path is untouched: a result still emits exactly status + scheduleIdle", () => {
-  // The meter rides its own event precisely so it cannot perturb the cap accounting.
-  const r = sessionReducer(running(), { type: "result", turnCostUsd: 0.02 });
+test("the RESULT path is untouched: a result still emits exactly status + scheduleIdle", () => {
+  // The meter rides its own event precisely so it cannot perturb the turn accounting.
+  // ⚠ THIS CASE READ "the COST path is untouched" and asserted `state.costUsd === 0.02` off an
+  // `event.turnCostUsd`. The cost column is deleted (2026-09-22, Samuel: *"we dont need cost
+  // tracking"*); the EFFECT SHAPE it really guards — a result emits exactly these two and never a
+  // third — is what it was for, and that is unchanged.
+  const r = sessionReducer(running(), { type: "result" });
   assert.deepEqual(r.effects.map((e) => e.type), ["emit", "scheduleIdle"]);
-  assert.equal(r.state.costUsd, 0.02);
+  assert.equal(r.state.turns, running().turns + 1, "and the turn counter is the one that moves");
 });
 
 test("a result DOES now capture the model that served it (it was computed and discarded)", () => {
-  const r = sessionReducer(running(), { type: "result", turnCostUsd: 0.01, model: "claude-haiku-4-5" });
+  const r = sessionReducer(running(), { type: "result", model: "claude-haiku-4-5" });
   assert.equal(r.state.model, "claude-haiku-4-5");
   // ...and an older event with no model keeps whatever we had, never blanks it.
-  assert.equal(sessionReducer(r.state, { type: "result", turnCostUsd: 0 }).state.model, "claude-haiku-4-5");
+  assert.equal(sessionReducer(r.state, { type: "result" }).state.model, "claude-haiku-4-5");
 });
 
 test("a PARKED session is inert to a late measurement from its drained tail", () => {

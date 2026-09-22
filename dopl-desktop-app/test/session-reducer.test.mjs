@@ -35,7 +35,6 @@ test("initialSessionState defaults: interactive/responder, documented caps, empt
   assert.equal(s.mode, "interactive");
   assert.equal(s.side, "responder");
   assert.equal(s.turns, 0);
-  assert.equal(s.costUsd, 0);
   assert.equal(s.idleMs, DEFAULT_IDLE_MS);
   // 2026-09-07: the caps are DELETED. The two fields are not merely defaulted, they are absent.
   assert.equal(s.turnCap, undefined);
@@ -245,11 +244,14 @@ test("the axis setters are ignored by a settled session (terminal idempotency)",
 
 // ── result / caps ────────────────────────────────────────────────────────────────
 
-test("result: accumulates cost + turns for the caps, reschedules idle, emits NO usage (item 6)", () => {
+test("result: accumulates turns, reschedules idle, emits NO usage (item 6)", () => {
   const s = running({ turnCap: 5 });
-  const r = sessionReducer(s, { type: "result", turnCostUsd: 0.02, model: "m" });
+  const r = sessionReducer(s, { type: "result", model: "m" });
   assert.equal(r.state.turns, 1);
-  assert.equal(r.state.costUsd, 0.02, "cost still accumulates internally for the cost cap");
+  // 🔒 ⚠ **`costUsd` ACCUMULATED HERE OFF `event.turnCostUsd` UNTIL 2026-09-22** (Samuel: *"we
+  // dont need cost tracking"*). Both ends are deleted — the event carries no such field and the
+  // state has no such member — so the assertion is that neither came back.
+  assert.equal(r.state.costUsd, undefined, "the cost column is deleted, not zeroed");
   assert.equal(r.state.phase, "running");
   // The display-only usage emit is GONE; a status emit replaces it.
   assert.deepEqual(effTypes(r.effects), ["emit", "scheduleIdle"]);
@@ -261,7 +263,7 @@ test("result WITH a post this turn -> awaiting_peer; WITHOUT -> idle; postedThis
   // A turn that posted to the peer ends `awaiting_peer` (waiting for a reply).
   const posted = sessionReducer(
     { ...running({ turnCap: 9 }), postedThisTurn: true },
-    { type: "result", turnCostUsd: 0.01 }
+    { type: "result" }
   );
   assert.equal(posted.state.activity, "awaiting_peer");
   assert.equal(posted.state.postedThisTurn, false, "the flag resets at turn end");
@@ -269,20 +271,20 @@ test("result WITH a post this turn -> awaiting_peer; WITHOUT -> idle; postedThis
     type: "status", phase: "running", activity: "awaiting_peer",
   });
   // A turn with no post ends `idle`.
-  const idle = sessionReducer(running({ turnCap: 9 }), { type: "result", turnCostUsd: 0.01 });
+  const idle = sessionReducer(running({ turnCap: 9 }), { type: "result" });
   assert.equal(idle.state.activity, "idle");
   assert.deepEqual(findEff(idle.effects, "emit").payload, { type: "status", phase: "running", activity: "idle" });
 });
 
 // 2026-09-07 — THE CAP ENDS ARE DELETED. Three cases stood here: "result at the turn cap ends
 // the session (turn_cap)", "result crossing the cost cap ends (cost_cap)" and "cost cap of 0 is
-// disabled". Nothing ends a session on turns or cost any more (session-state.js's header), so
-// what is pinned instead is the ABSENCE: a huge turn count and a huge cost keep running.
-test("result never ends the session on turns or cost (the caps are deleted)", () => {
-  const many = sessionReducer({ ...running(), turns: 9_999 }, { type: "result", turnCostUsd: 999 });
+// disabled". Nothing ends a session on turns any more (session-state.js's header), so what is
+// pinned instead is the ABSENCE: a huge turn count keeps running. (The cost half of this note
+// described a column deleted outright on 2026-09-22.)
+test("result never ends the session on turns (the caps are deleted)", () => {
+  const many = sessionReducer({ ...running(), turns: 9_999 }, { type: "result" });
   assert.equal(many.state.phase, "running");
   assert.equal(many.state.turns, 10_000, "still COUNTED — the context meter reads it");
-  assert.equal(many.state.costUsd, 999, "still counted; it simply ends nothing");
   assert.deepEqual(effTypes(many.effects), ["emit", "scheduleIdle"]);
   assert.ok(!many.effects.some((e) => e.type === "settle"), "no cap settle");
 });

@@ -126,13 +126,13 @@ function resumeParked(s) {
   if (!deps || !s || s.settled || s.resuming) return;
   // ── ⚠ RESUME IS A DECLARED CAPABILITY, AND AN UNMEASURED METER REFUSES IT (2026-08-31) ─────
   //
-  // ⚠ THE BILLING IS WHAT IS AT STAKE, NOT THE RESUME. Further down, this function decides whether
-  // to zero `s.lastTotalCost` / `s.lastTotalTokens` — the baselines every later delta is measured
-  // against. A runtime that RESTARTS its cumulative total on a resumed conversation must have them
-  // zeroed; one that CONTINUES the total must have them CARRIED FORWARD, or the first post-resume
-  // `result` re-bills the entire thread. Both are handled now (`usageZeroes` below), so what is
+  // ⚠ THE TOKEN ACCOUNTING IS WHAT IS AT STAKE, NOT THE RESUME. Further down, this function
+  // decides whether to zero `s.lastTotalTokens` — the baseline every later delta is measured
+  // against. A runtime that RESTARTS its cumulative total on a resumed conversation must have it
+  // zeroed; one that CONTINUES the total must have it CARRIED FORWARD, or the first post-resume
+  // `result` re-counts the entire thread. Both are handled now (`usageZeroes` below), so what is
   // left to refuse is the runtime that has told us NEITHER: zero it and a continuing runtime
-  // re-bills paid history, preserve it and a resetting runtime reports every later turn as zero
+  // re-counts spent history, preserve it and a resetting runtime reports every later turn as zero
   // through `session-io.js › applyCoreEvents`'s `Math.max(0, …)` clamp. Neither branch is safe,
   // which is why `capability.js › canResume` refuses rather than picks, and why a COLD launch is
   // unaffected.
@@ -182,20 +182,22 @@ function resumeParked(s) {
   // `thread/tokenUsage/updated.total` is RUNNING, PER-THREAD and PERSISTED, and `thread/resume`
   // does not reset it — three turns across two app-server children read 18,838 → 42,429 → 71,194,
   // each step the previous total plus that turn's `.last` exactly.
-  // ⚠ SO A `continues` RUNTIME KEEPS ITS BASELINE AND ONLY NEW WORK IS BILLED. Zeroing there would
-  // make the first post-resume delta the WHOLE THREAD — history the operator already paid for,
-  // charged again, and the longer the thread the bigger the double-charge.
-  // ⚠ AND A `resets` RUNTIME IS UNCHANGED, DELIBERATELY. Claude restarts `total_cost_usd` and
-  // `result.usage` from zero on a resumed query, so its baselines must drop or the first delta
-  // goes negative and clamps to nothing. This is the same line it always ran; what is new is that
-  // the runtime is ASKED instead of assumed.
+  // ⚠ SO A `continues` RUNTIME KEEPS ITS BASELINE AND ONLY NEW WORK IS COUNTED. Zeroing there
+  // would make the first post-resume delta the WHOLE THREAD — tokens `tokensSpent` already holds,
+  // added a second time, and the longer the thread the bigger the double-count.
+  // ⚠ AND A `resets` RUNTIME IS UNCHANGED, DELIBERATELY. Claude restarts `result.usage` from zero
+  // on a resumed query, so its baseline must drop or the first delta goes negative and clamps to
+  // nothing. This is the same line it always ran; what is new is that the runtime is ASKED
+  // instead of assumed.
   // ⚠ `s.tokensSpent` IS NOT TOUCHED ON EITHER BRANCH — it is the lifetime accumulation the Agents
   // tab shows, and a park is not a new agent. The INVARIANT the two branches keep is that the
   // baseline always pairs with the accumulator its deltas are added to.
-  if (usageZeroes) {
-    s.lastTotalCost = 0;
-    s.lastTotalTokens = 0;
-  }
+  // 🔒 ⚠ **`s.lastTotalCost = 0` STOOD BESIDE THE LINE BELOW AND IS DELETED (2026-09-22,
+  // Samuel: *"we dont need cost tracking"*). THE CXP-4 RULE ITSELF IS UNTOUCHED** — the
+  // descriptor's `usageResetsOnResume`, the record's `usageBaseline`, `canResume` and
+  // `resumeZeroesBaseline` all still decide exactly what they decided; there is simply one
+  // accumulator left for them to decide about, and it is the one with a reader.
+  if (usageZeroes) s.lastTotalTokens = 0;
   startResumedConsumer(s);
 }
 
@@ -370,16 +372,17 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
   // resumeZeroesBaseline` states the precedence once and both rebuilds ask it.
   // ⚠ AND THE BASELINE IS THE ACCUMULATOR IT PAIRS WITH, which is the whole of the arithmetic.
   // `session-io.js › applyCoreEvents` adds `platformTotal - baseline` to an accumulator, so the
-  // two must start level or the difference is billed twice (or never). This rebuild restores the
-  // COST accumulator from `rec.costUsd` below, so on a `continues` runtime the cost baseline must
-  // be that same figure — on such a runtime `state.costUsd` IS the platform's cumulative total,
-  // because the deltas telescope from a cold launch's zero.
-  // ⚠ THE TOKEN TWIN NEEDS NOTHING AND THAT IS NOT AN OVERSIGHT: `s.tokensSpent` is NOT in the
-  // durable record (`session-io.js › baseRecord`), so the rebuilt session's token accumulator
-  // starts at 0 and its baseline must start at 0 to match. If a later wave persists `tokensSpent`,
-  // it owes this lane the matching `usageBaselineTokens` hand-in.
-  const usageBaselineCost = runtimeCapability.resumeZeroesBaseline(descriptor, rec.usageBaseline)
-    ? 0 : (Number(rec.costUsd) || 0);
+  // two must start level or the difference is counted twice (or never).
+  // 🔒 ⚠ **THIS LANE HANDS IN NOTHING NOW, AND THAT IS THE COST DELETION RATHER THAN A REGRESSION**
+  // (2026-09-22). It computed `usageBaselineCost` — `resumeZeroesBaseline(...) ? 0 :
+  // Number(rec.costUsd)` — because the COST accumulator WAS restored from the durable record, so
+  // on a `continues` runtime its baseline had to start at that same figure. The record no longer
+  // carries `costUsd` and nothing restores it, so there is nothing left to pair.
+  // ⚠ THE TOKEN TWIN NEEDED NOTHING THEN AND NEEDS NOTHING NOW, and that is not an oversight:
+  // `s.tokensSpent` is NOT in the durable record (`session-io.js › baseRecord`), so the rebuilt
+  // session's token accumulator starts at 0 and its baseline must start at 0 to match. If a later
+  // wave persists `tokensSpent`, it owes this lane a `usageBaselineTokens` hand-in — and
+  // `capability.js › resumeZeroesBaseline` is already the predicate it would ask.
   let rt;
   try { rt = await deps.acquireRuntime(rec.runtimeId); } catch (_) { return false; }
   // ⚠ Re-check AFTER the await: a reopen shell or racing launch may have created this slot
@@ -423,15 +426,10 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
     windowless: true,
     counterpartyId: rec.counterpartyId || null, direct: rec.direct === true, // L1 binding + the DM flag
     context: contextFromRecord(rec), rawFirstTurn, resumeSdkId: sdkSessionId,
-    // ⚠ Rehydrate the running cap budget. Without both counters a
-    // session that burned 23 of 24 turns, crashed and was resumed starts again at zero, so
-    // every crash+resume mints a fresh turn AND cost budget.
-    turns: rec.turns, costUsd: rec.costUsd,
-    // ⚠ AND THE DELTA BASELINE THAT COST FIGURE IS MEASURED FROM (2026-09-22, CXP-4) — derived
-    // above, handed to the construction site rather than written onto `s` after it returns,
-    // because `startSession` starts the query BEFORE it resolves and a baseline set afterwards is
-    // a race against the first `result`.
-    usageBaselineCost: usageBaselineCost,
+    // ⚠ Rehydrate the running counter, so a session that ran 23 turns, crashed and
+    // was resumed does not start again at zero.
+    // ⚠ `costUsd: rec.costUsd` AND `usageBaselineCost` RODE HERE AND ARE DELETED (2026-09-22).
+    turns: rec.turns,
     // 2026-09-07: the cap those counters were measured against travelled here too. Deleted with
     // the caps — a resumed session now carries its spent counters and no bound at all.
     // ⚠ AND THE OUTBOUND POST COUNTER, for the same class of reason and a different symptom

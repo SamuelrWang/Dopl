@@ -61,14 +61,15 @@ const USAGE = {
   usage: { inputTokens: 41000, cacheReadTokens: 9000, outputTokens: 1200, totalTokens: 51200 },
 };
 
-// The synthetic turn frame. ⚠ §"Context / token metering" again for the COST half:
-// `agent.getUsage()` -> `{rawCostCents, chargedCents}` — a CALL, not a stream event, which is the
-// whole reason this frame exists.
+// The synthetic turn frame. ⚠ IT CARRIED A `cost` KEY — `agent.getUsage()` ->
+// `{rawCostCents, chargedCents}`, a CALL rather than a stream event, which was the original reason
+// this frame existed at all — AND THE COST COLUMN IS DELETED (2026-09-22, Samuel: *"we dont need
+// cost tracking"*). The frame survives because the TOKEN half still needs it: `run.usage` is not
+// reachable from a pure normalizer once the stream has ended.
 const TURN_DONE = {
   type: normalize.TURN_COMPLETED,
   model: "composer-2.5",
   usage: { inputTokens: 41000, cacheReadTokens: 9000, outputTokens: 1200, totalTokens: 51200 },
-  cost: { rawCostCents: 812, chargedCents: 640 },
 };
 
 // §"Custom tools" — Dopl's own channel op, arriving as a `tool_call` because `customTools` are
@@ -116,29 +117,22 @@ test("a FAILED call reports ok:false — and an UNRECOGNISED status reads as suc
   assert.equal(run(odd)[0].payload.ok, true);
 });
 
-test("a finished turn meters TOKENS and reports the CHARGED cost, never the raw one", () => {
+test("a finished turn meters TOKENS, and a `cost` key on the frame is now inert", () => {
   const out = run(TURN_DONE);
   assert.deepEqual(types(out), ["context", "result"]);
   // The window occupancy is the PROMPT half (input + cached read), not the whole turn.
   assert.equal(out[0].tokens, 50000);
   assert.equal(out[1].sessionTokens, 51200);
-  // ⚠ `chargedCents`, NOT `rawCostCents`. The cost cap is a BUDGET control — it answers "how much
-  // has this operator spent" — and raw is the pre-plan figure, which would trip a cap over money
-  // nobody paid.
-  assert.equal(out[1].costUsd, 6.4);
-  // …and raw is the fallback only when charged is absent, so a build reporting one still meters.
-  const rawOnly = run({ ...TURN_DONE, cost: { rawCostCents: 812 } });
-  assert.equal(rawOnly[1].costUsd, 8.12);
-});
+  // 🔒 ⚠ **TWO CASES STOOD HERE UNTIL 2026-09-22** — "reports the CHARGED cost, never the raw one"
+  // (`chargedCents` 640 -> 6.4, with `rawCostCents` as the fallback) and "a cost this platform did
+  // not report is NULL, never 0". They were the only real cost NORMALISATION in the tree, and
+  // `normalize.js › costFrom` is deleted with the column (Samuel: *"we dont need cost tracking"*).
+  // ⚠ ASSERTED AS AN ABSENCE, AND WITH A `cost` KEY STILL ON THE FRAME: an older `launch-spec.js`
+  // — or a re-added `getUsage()` call — must not quietly revive the field by putting one there.
+  assert.ok(!("costUsd" in out[1]), "the result event carries no cost field at all");
+  const withCost = run({ ...TURN_DONE, cost: { chargedCents: 640, rawCostCents: 812 } });
+  assert.deepEqual(withCost[1], out[1], "a cost on the frame changes nothing about the result");
 
-test("…and a cost this platform did not report is NULL, never 0", () => {
-  // ⚠ A ZERO IS A BUDGET THAT NEVER TRIPS. `main/session-state.js › costCapReached` is fed by
-  // exactly one number, and this runtime is the one whose cap can really fire — so a failed
-  // `getUsage()` must read as unmeasured rather than as free.
-  for (const cost of [null, undefined, {}, { chargedCents: "640" }, { chargedCents: -1 }]) {
-    const out = run({ ...TURN_DONE, cost });
-    assert.equal(out[1].costUsd, null, JSON.stringify(cost));
-  }
   const empty = run({ type: normalize.TURN_COMPLETED });
   assert.deepEqual(types(empty), ["result"], "no usage at all paints no context row");
   assert.equal(empty[0].sessionTokens, 0);

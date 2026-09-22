@@ -25,12 +25,13 @@ const io = require('../../session-io');
 // for each rather than core learning to read them:
 //   `dopl/agentCreated`  the agent handle `Agent.resume()` needs, which arrives as the RESULT of
 //                        `Agent.create()`. There is no `created` notification to read.
-//   `dopl/turnCompleted` the turn's usage AND ITS COST. ⚠ The cost is the reason this frame
-//                        exists at all: `agent.getUsage()` is a CALL (`{rawCostCents,
-//                        chargedCents}`), not a stream event, so a normalizer that only read the
-//                        stream would report `costUsd: null` on a platform that DOES emit a cost
-//                        — and `descriptor.meter.cost` would then be declaring a cap that never
-//                        fires. That is §1.4a's silent failure, arriving from the other direction.
+//   `dopl/turnCompleted` the turn's TOKEN usage, which `run.usage` carries but which core needs
+//                        as one terminal frame. ⚠ THE COST WAS THE ORIGINAL REASON THIS FRAME
+//                        EXISTED — `agent.getUsage()` is a CALL (`{rawCostCents, chargedCents}`),
+//                        not a stream event, so only a minted frame could carry it — AND THE COST
+//                        COLUMN IS DELETED TREE-WIDE (2026-09-22, Samuel: *"we dont need cost
+//                        tracking"*). The frame stays because the TOKEN half still needs it: a
+//                        pure normalizer cannot reach `run.usage` after the stream has ended.
 const AGENT_CREATED = 'dopl/agentCreated';
 const TURN_COMPLETED = 'dopl/turnCompleted';
 const ERROR_MESSAGE_TYPE = 'error';
@@ -126,24 +127,14 @@ function tokensFrom(usage) {
   return { prompt: input + cached, session: total || (input + cached + output) };
 }
 
-/**
- * USD from `agent.getUsage()`'s cents, or `null`.
- *
- * ⚠ `chargedCents`, NOT `rawCostCents`, AND THE COST CAP IS THE REASON. `main/session-state.js ›
- * costCapReached` is a BUDGET control — it answers "how much has this operator spent" — and
- * `chargedCents` is what they are billed. `rawCostCents` is the pre-plan figure and would trip a
- * cap over money nobody paid. Raw is the fallback only because a build that reports one and not
- * the other should still meter something rather than nothing.
- * ⚠ `null`, NEVER `0`. A zero is a budget that never trips (§1.4a).
- */
-function costFrom(usage) {
-  const u = usage && typeof usage === 'object' ? usage : {};
-  for (const key of ['chargedCents', 'charged_cents', 'rawCostCents', 'raw_cost_cents']) {
-    const v = u[key];
-    if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return v / 100;
-  }
-  return null;
-}
+// 🔒 ⚠ **`costFrom` IS DELETED (2026-09-22).** It turned `agent.getUsage()`'s `chargedCents` into
+// USD and was the only real cost NORMALISATION in the tree — the other two adapters passed a
+// platform field straight through or passed `null`. It fed `events.result`'s first argument, which
+// fed `state.costUsd`, which fed the durable record and NOTHING ELSE: no projection, no wire
+// field, no renderer. Samuel deleted the column outright (*"there shouldnt be cost? Claude theres
+// no cost tracking. we dont need cost tracking"*), so the reader goes with it rather than becoming
+// a function nobody calls. ⚠ THIS IS NOT A PARITY CHANGE — it is the same deletion applied here
+// as everywhere else; nothing about this runtime's BEHAVIOUR was investigated or altered.
 
 // ── THE RENDER MAPPING ───────────────────────────────────────────────────────────────────────
 //
@@ -235,9 +226,9 @@ function normalize(msg, ctx) {
     // ⚠ PER-TURN, NOT PER-MESSAGE, AND THAT IS `descriptor.meter.mode`. `run.usage` is live and
     // `result.usage` cumulative; the honest context reading rides the turn's end.
     if (t.prompt > 0 || model) out.push(events.context(t.prompt, model));
-    // ⚠ CUMULATIVE BY CONTRACT, DELTA'D IN CORE. Whether a RESUMED agent restarts these totals is
+    // ⚠ CUMULATIVE BY CONTRACT, DELTA'D IN CORE. Whether a RESUMED agent restarts this total is
     // §5 item X4, which is why `usageResetsOnResume` is `'unverified'` and a resume is refused.
-    out.push(events.result(costFrom(msg.cost), t.session, model));
+    out.push(events.result(t.session, model));
     return out;
   }
 
@@ -268,6 +259,6 @@ function normalize(msg, ctx) {
 }
 
 module.exports = {
-  normalize, toolCallEvents, tokensFrom, costFrom, usageOf, isAuthShaped, callIdOf, textOf,
+  normalize, toolCallEvents, tokensFrom, usageOf, isAuthShaped, callIdOf, textOf,
   AGENT_CREATED, TURN_COMPLETED, ERROR_MESSAGE_TYPE,
 };

@@ -107,10 +107,15 @@ function initialSessionState(opts) {
     phase: 'launching',
     mode: o.mode === 'autonomous' ? 'autonomous' : 'interactive',
     side: o.side === 'requester' ? 'requester' : 'responder',
-    // Still COUNTED, no longer enforced (2026-09-07): the window and the context meter read these;
-    // nothing ends a session on either number now.
+    // Still COUNTED, no longer enforced (2026-09-07): the window reads it; nothing ends a session
+    // on it now.
+    // 🔒 ⚠ **`costUsd` STOOD HERE AND IS DELETED (2026-09-22, Samuel: *"there shouldnt be cost?
+    // Claude theres no cost tracking. we dont need cost tracking"*).** It survived the 2026-09-07
+    // cap deletion as a "still counted" number, and in the fifteen days since, nothing read it:
+    // not `session-summary.js`, not `session-metrics.js`, not the wire, not a renderer, and not
+    // the CREDITS system, which is separate and untouched. A counter with no reader is a field
+    // every resume, every durable record and every adapter had to keep honest for nobody.
     turns: 0,
-    costUsd: 0,
     idleMs: idleMs,
     pendingPermissions: [], // requestIds awaiting a button (models a Set)
     allowForTask: [], // scoped grant KEYS granted for the task (models a Set); cleared on park
@@ -201,9 +206,10 @@ function idleTimeout(state) {
     ? { ms: nextAbandonMs(state), type: 'abandon_timeout' }
     : { ms: nextIdleMs(state), type: 'idle_timeout' };
 }
-// 2026-09-07: `turnCapReached` and `costCapReached` are deleted with the caps. `state.turns` and
-// `state.costUsd` are STILL COUNTED — the context meter's and the window's numbers — but end
-// nothing.
+// 2026-09-07: `turnCapReached` and `costCapReached` are deleted with the caps. `state.turns` is
+// STILL COUNTED — the window's number — but ends nothing.
+// 2026-09-22: `state.costUsd` is DELETED OUTRIGHT (Samuel: *"we dont need cost tracking"*). It was
+// the last thing the cost column existed for after the caps went, and it reached no surface.
 
 // ─── END SESSION-STATE ───────────────────────────────────────────────────────
 

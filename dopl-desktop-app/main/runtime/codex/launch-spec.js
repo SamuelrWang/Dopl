@@ -448,13 +448,13 @@ function handleFor(conn, frames, threadIdOf, turnIdOf) {
 /**
  * Resume a parked conversation — ⚠ REFUSED ON THIS RUNTIME, AND THE REFUSAL IS THE POINT.
  *
- * `session-park.js › resumeParked` zeroes both cost/token delta baselines on the explicit
- * ASSUMPTION that a resumed conversation restarts its cumulative totals. 🔒 **§5 item C8 IS NOW
- * MEASURED (2026-09-22, `codex-cli 0.155.1`): this runtime CONTINUES the total across
- * `thread/resume` in a fresh child** — one thread read total 18,838 → 42,429 → 71,194 over three
- * turns spanning two app-server processes, each step the previous total plus that turn's `last`.
- * So the baseline reset would re-bill the entire thread on the first post-resume `result`, and
- * `session-state.js › costCapReached` would fire on history the operator already paid for.
+ * `session-park.js › resumeParked` zeroes the TOKEN delta baseline on the explicit ASSUMPTION
+ * that a resumed conversation restarts its cumulative total. 🔒 **§5 item C8 IS NOW MEASURED
+ * (2026-09-22, `codex-cli 0.155.1`): this runtime CONTINUES the total across `thread/resume` in a
+ * fresh child** — one thread read total 18,838 → 42,429 → 71,194 over three turns spanning two
+ * app-server processes, each step the previous total plus that turn's `last`. So the baseline
+ * reset would re-count the entire thread on the first post-resume `result`, doubling `tokensSpent`
+ * on the agent card.
  *
  * ⚠ SO THE ADAPTER STILL REFUSES AT ITS OWN DOOR rather than declaring a block nothing enforces.
  * `descriptor.session.usageResetsOnResume` is `false`, `capability.js › canResume` requires

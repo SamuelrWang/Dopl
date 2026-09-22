@@ -347,12 +347,17 @@ test("resume is REFUSED with a readable reason, and a cold launch is unaffected"
     "the adapter refuses at its own door rather than declaring a block nothing enforces");
 });
 
-test("the cost cap is SHOWN here and HIDDEN on the other native runtime — the field earns its keep", () => {
-  // ⚠ THIS IS THE ONLY RUNTIME THAT REPORTS A REAL BILLED COST (`agent.getUsage()` ->
-  // `{rawCostCents, chargedCents}`), so the cap is a control that can actually fire.
-  assert.equal(capability.showsCostCap(D), true);
-  assert.equal(D.meter.cost.billed, true, "…and a billed-cost line the others never show");
-  assert.equal(capability.showsCostCap(registry.descriptorFor("codex")), false);
+test("no adapter declares a cost any more, and the denominator is honestly absent", () => {
+  // 🔒 ⚠ **THIS CASE USED TO READ "the cost cap is SHOWN here and HIDDEN on the other native
+  // runtime — the field earns its keep".** It did earn its keep: this was the ONE runtime
+  // declaring `meter.cost: {currency:'usd', billed:true}`, off a real `agent.getUsage()` ->
+  // `{rawCostCents, chargedCents}` call. Samuel deleted the whole column on 2026-09-22 (*"there
+  // shouldnt be cost? Claude theres no cost tracking. we dont need cost tracking"*), so the field
+  // is gone from the contract and from all three descriptors — asserted here in the NEGATIVE
+  // rather than deleted, because this is the adapter the field would most plausibly come back on.
+  for (const id of ["claude", "codex", "cursor"]) {
+    assert.equal(registry.descriptorFor(id).meter.cost, undefined, id);
+  }
   // ⚠ AND THE DENOMINATOR IS HONESTLY ABSENT. The design's §1.4 predicts `windowSource: 'hook'`;
   // §7 ships no hooks on this runtime, so naming one would declare a measurement nobody takes.
   assert.equal(D.meter.windowSource, null);

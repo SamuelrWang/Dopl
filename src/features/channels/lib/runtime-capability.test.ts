@@ -33,8 +33,6 @@ import {
   profileRefusal,
   resumeRefusal,
   secondaryAxis,
-  showsBilledCost,
-  showsCostCap,
   showsLocationPicker,
   toolModes,
   widestToolMode,
@@ -173,8 +171,10 @@ describe("the REFUSALS — a sentence, never a control that vanished", () => {
   });
 
   it("resume is refused only where the usage-reset is UNMEASURED (CXP-4)", () => {
-    // §1.4a: an UNMEASURED reset clamps every cost delta to zero and the cost cap
-    // never fires — no error, no symptom, until a bill arrives.
+    // §1.4a: an UNMEASURED reset clamps every usage delta to zero, so the session's
+    // spend silently stops climbing — no error and no symptom on a number the agent
+    // card shows. (§1.4a said "the cost cap never fires"; that column was deleted on
+    // 2026-09-22 and `tokensSpent` is the measurement the argument now rests on.)
     // ⚠ A MEASURED `false` IS NOT THAT CASE SINCE 2026-09-22, and this suite asserted
     // it was. Codex's totals were MEASURED to continue across `thread/resume`
     // (`main/runtime/codex/index.js › session.usageResetsOnResume`), main's baseline
@@ -221,17 +221,18 @@ describe("the REFUSALS — a sentence, never a control that vanished", () => {
 });
 
 describe("hide-on-absent — §3.2's table, over the shipped descriptors", () => {
-  it("hides the cost cap on Codex and shows it on the other two", () => {
-    // ⚠ HIDDEN, NOT ZEROED. `main/session-state.js › costCapReached` reads one number.
-    expect(showsCostCap(CODEX)).toBe(false);
-    expect(showsCostCap(CLAUDE)).toBe(true);
-    expect(showsCostCap(CURSOR)).toBe(true);
-  });
-
-  it("gives only Cursor the BILLED cost line", () => {
-    expect(showsBilledCost(CURSOR)).toBe(true);
-    expect(showsBilledCost(CLAUDE)).toBe(false);
-    expect(showsBilledCost(CODEX)).toBe(false);
+  it("🔒 declares no cost on any runtime — the whole column is deleted", () => {
+    // 🔒 ⚠ **TWO CASES STOOD HERE: "hides the cost cap on Codex and shows it on the other two"
+    // and "gives only Cursor the BILLED cost line".** Both were real — Claude `{usd,
+    // billed:false}`, Codex `null`, Cursor `{usd, billed:true}` — and both predicates were dead
+    // code with no production consumer in this tree. Samuel deleted the column on 2026-09-22
+    // (*"there shouldnt be cost? Claude theres no cost tracking. we dont need cost tracking"*),
+    // in main and on every adapter. ⚠ PINNED AS AN ABSENCE rather than removed: `meter.cost` is
+    // the sort of declaration a later adapter copies from an old example, and it would arrive
+    // here as a field nothing on this side defines.
+    for (const d of [CLAUDE, CODEX, CURSOR]) {
+      expect(d.meter?.cost, d.id).toBeUndefined();
+    }
   });
 
   it("offers Fork on Codex and NOWHERE else", () => {

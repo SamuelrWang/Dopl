@@ -9,11 +9,14 @@
 // and the v2 request/notification shapes below are pinned by generated-schema fixtures. That is
 // implementation evidence, not a supported distribution contract: a packaged-Dopl smoke and
 // long-wait wake behavior remain unmeasured. Anything still ungrounded stays DECLARED UNVERIFIED
-// rather than assumed. Two declarations have teeth today: `meter.cost: null` hides the cost meter,
-// and `session.usageResetsOnResume: false` — MEASURED 2026-09-22 on the public `codex-cli
-// 0.155.1` — tells core to CARRY the usage baseline across a resume rather than zero it, because
-// this runtime continues its totals through one (CXP-4; it refused the resume outright until the
-// baseline became runtime-aware).
+// rather than assumed. Two declarations have teeth today: `meter.windowSource: 'reported'` — this
+// runtime states its own context denominator on the wire, which BEATS `session-model.js ›
+// CONTEXT_WINDOWS` — and `session.usageResetsOnResume: false`, MEASURED 2026-09-22 on the public
+// `codex-cli 0.155.1`, which tells core to CARRY the usage baseline across a resume rather than
+// zero it, because this runtime continues its totals through one (CXP-4; it refused the resume
+// outright until the baseline became runtime-aware).
+// ⚠ A THIRD ONE USED TO BE LISTED HERE — `meter.cost: null` — and the whole COST COLUMN is DELETED
+// (2026-09-22, Samuel: *"we dont need cost tracking"*), on every adapter and in core.
 //
 // ⚠ ELECTRON-FREE AT LOAD, BY CONTRACT. `main/session-profiles.js` is a PURE module two suites
 // slice and evaluate standalone, and it asks the registry for every gate decision — so requiring
@@ -104,8 +107,8 @@ const descriptor = {
     // that turn's `last` EXACTLY. The resume did not restart anything.
     //
     // ⚠ **THE MEASUREMENT HAS NOT MOVED AND MUST NOT. WHAT MOVED IS WHAT CORE DOES WITH IT**
-    // (CXP-4, 2026-09-22). `session-park.js › resumeParked` used to zero `lastTotalCost` /
-    // `lastTotalTokens` unconditionally, on the assumption every runtime restarts its totals — so
+    // (CXP-4, 2026-09-22). `session-park.js › resumeParked` used to zero `lastTotalTokens`
+    // unconditionally, on the assumption every runtime restarts its totals — so
     // against this one the first post-resume `result` re-billed the WHOLE thread, and `false` was
     // read as disqualifying to stop that. The baseline is RUNTIME-AWARE now: a runtime declaring
     // `false` has its baseline CARRIED FORWARD (`capability.js › resumeZeroesBaseline`, asked by
@@ -226,14 +229,15 @@ const descriptor = {
     // ⚠ AND IT IS WHY NO `gpt-…` ROW WAS ADDED TO THAT TABLE: a runtime that reports its own window
     // each turn cannot go stale, where a transcribed table goes stale the week a vendor ships.
     windowSource: 'reported',
-    // ⚠ NULL, AND THE COST CAP IS THEREFORE HIDDEN — not zeroed, not rendered-and-inert. Nothing
-    // in the research says Codex reports a USD cost at all; `total_cost_usd` is the other
-    // runtime's field. `session-state.js › costCapReached` is fed by exactly one number, so a cap
-    // over a field the platform never emits is a control that silently does not exist. §5 item
-    // C11 is what would turn this on, and Samuel's open question 4 is whether "hide it and say so"
-    // is the right answer at all — this design's answer is yes; deriving a cost from tokens times a
-    // price table would be a guess against the null-never-zero rule.
-    cost: null,
+    // 🔒 ⚠ **THERE IS NO `cost` MEMBER ON THIS DESCRIPTOR, AND THAT IS A DELETION RATHER THAN AN
+    // OMISSION (2026-09-22, Samuel: *"there shouldnt be cost? Claude theres no cost tracking. we
+    // dont need cost tracking"*).** Every adapter declared one — Claude `{usd, billed:false}`,
+    // Codex `null`, Cursor `{usd, billed:true}` — and a `showsCostCap` predicate (deleted with
+    // it) read it to decide whether to render a control that did not exist on any surface. The whole column is
+    // gone: `state.costUsd`, the durable record's field, both cost delta baselines and
+    // `events.result`'s cost argument with it. ⚠ DO NOT ADD IT BACK ON ONE ADAPTER — a field one
+    // runtime declares and the contract does not define is a question the next adapter author has
+    // to answer for no reason, which is exactly what deleting it bought.
   },
 
   mcp: mcp.descriptor,

@@ -39,7 +39,7 @@ function liveSession(over = {}) {
     counterpartyId: "peer-1",
     counterpartyName: "David",
     context: { channelName: "Ops", taskTitle: "Ship the invoice import", authorName: "David" },
-    state: { phase: "running", turns: 3, costUsd: 0.25 },
+    state: { phase: "running", turns: 3, costUsd: 0.25 }, // ⚠ `costUsd` is deleted (2026-09-22); handed in to prove `baseRecord` drops it
     ...over,
   };
 }
@@ -54,7 +54,7 @@ test("baseRecord projects the header identity from the session + its context", (
   // The pre-v1.7.5 fields are untouched (the park feature's rehydrate contract).
   assert.equal(rec.phase, "running");
   assert.equal(rec.turns, 3);
-  assert.equal(rec.costUsd, 0.25);
+  assert.equal(rec.costUsd, undefined, "the cost projection is deleted, not zeroed");
   assert.equal(rec.counterpartyId, "peer-1");
 });
 

@@ -148,19 +148,33 @@ test("the OTHER runtime's cache convention is additive, and the two are never re
   }), 1600, "Claude's occupancy SUMS the cache terms — the opposite convention, declared apart");
 });
 
-// ── 3. `meter.cost` — HIDDEN, NEVER ZEROED ───────────────────────────────────────────────────
+// ── 3. `meter.cost` — DELETED, ON EVERY ADAPTER AND IN CORE ──────────────────────────────────
 
-test("a runtime that reports no cost emits `null`, and `0` would be a budget that never trips", () => {
-  assert.equal(registry.descriptorFor("codex").meter.cost, null);
-  assert.equal(registry.capability.showsCostCap(registry.descriptorFor("codex")), false);
-  const res = first(codexNormalize.normalize(codexTurn(), CTX), "result");
-  assert.ok(res);
-  assert.strictEqual(res.costUsd, null, "⚠ NOT 0 — `session-state.js › costCapReached` reads one number");
-  // …and the runtimes that DO report one declare a currency, so the control is real.
-  for (const id of ["claude", "cursor"]) {
-    assert.equal(registry.capability.showsCostCap(registry.descriptorFor(id)), true, id);
-    assert.equal(registry.descriptorFor(id).meter.cost.currency, "usd", id);
+test("🔒 no adapter declares a cost, and no result event carries one", () => {
+  // 🔒 ⚠ **THIS CASE READ "a runtime that reports no cost emits `null`, and `0` would be a budget
+  // that never trips".** Samuel deleted the column outright hours later (*"there shouldnt be
+  // cost? Claude theres no cost tracking. we dont need cost tracking"*), so the honest assertion
+  // is no longer "the absence is `null`" but "there is no field to be absent". ⚠ PINNED IN THE
+  // NEGATIVE RATHER THAN DELETED, because `meter.cost` is exactly the kind of declaration a later
+  // adapter author re-adds from an old example — and one adapter declaring a field the contract
+  // does not define is the question deleting it was meant to stop.
+  for (const id of registry.ids()) {
+    assert.equal(registry.descriptorFor(id).meter.cost, undefined, id);
   }
+  assert.equal(registry.capability.showsCostCap, undefined, "the predicate went with the field");
+  for (const [label, ev] of [
+    ["codex", first(codexNormalize.normalize(codexTurn(), CTX), "result")],
+    ["claude", first(claudeNormalize.normalize({
+      type: "result", total_cost_usd: 0.42, usage: { input_tokens: 10, output_tokens: 2 }, model: "claude-sonnet-5",
+    }, CTX), "result")],
+  ]) {
+    assert.ok(ev, label);
+    assert.ok(!("costUsd" in ev), `${label}: the result event carries no cost field`);
+  }
+  // ⚠ AND THE FACTORY'S ARITY MOVED WITH IT, which is the silent half: `result(tokens, model)`
+  // against the OLD signature would have read the token total as a cost and the model as tokens.
+  assert.deepEqual(events.result(51200, "gpt-5-codex"),
+    { type: "result", sessionTokens: 51200, model: "gpt-5-codex" });
 });
 
 // ── 4. ⚠ THE SYNTHETIC FOURTH ADAPTER — NO DERIVATION MAY BE KEYED ON A RUNTIME ID ───────────

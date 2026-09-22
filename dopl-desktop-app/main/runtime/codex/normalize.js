@@ -92,13 +92,13 @@ function toolNameOf(item) {
   return '';
 }
 
-// ⚠ TOKENS ONLY, AND NEVER A COST. `codex-research.md` §3 says `usage` on `turn/completed` is
-// tokens; `total_cost_usd` is a CLAUDE field and nothing in the research says Codex reports a USD
-// figure at all (§5 item C11). So `result` is built with an explicit `null` cost, which HIDES the
-// cost cap (`descriptor.meter.cost`) rather than rendering a budget fed by a zero that never trips.
-// ⚠ THE SPELLING SWEEP STAYS, because `descriptor.meter.fields` is still `null` and a payload
-// spelled another way must meter rather than read as zero. What is no longer unmeasured is the
-// ARITHMETIC — see `tokensFrom`.
+// ⚠ TOKENS, AND THERE IS NO LONGER ANY OTHER KIND. `codex-research.md` §3 says `usage` on
+// `turn/completed` is tokens, and this adapter used to pass an explicit `null` cost as
+// `events.result`'s first argument to say so. The COST COLUMN IS DELETED TREE-WIDE (2026-09-22,
+// Samuel: *"we dont need cost tracking"*), so there is no longer an absence to declare.
+// ⚠ THE SPELLING SWEEP STAYS even though `descriptor.meter.fields` now names the four measured
+// spellings: the list is what THIS build measured, not a promise about every later CLI, and a
+// renamed field must still meter rather than read as zero.
 const TOTAL_KEYS = ['total_tokens', 'totalTokens', 'total'];
 const IN_KEYS = ['input_tokens', 'inputTokens', 'prompt_tokens', 'promptTokens'];
 const OUT_KEYS = ['output_tokens', 'outputTokens', 'completion_tokens', 'completionTokens'];
@@ -311,7 +311,7 @@ function normalize(msg, ctx) {
     // here and core's `Math.max(0, total - last)` are both correct on a LIVE session. ⚠ The same
     // measurement continued the total ACROSS a `thread/resume` in a fresh child, which is why
     // `usageResetsOnResume` is now `false` and resume stays refused — for a measured reason.
-    out.push(events.result(null, t.session, model));
+    out.push(events.result(t.session, model));
     return out;
   }
 

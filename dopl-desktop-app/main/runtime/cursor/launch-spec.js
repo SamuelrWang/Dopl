@@ -145,9 +145,10 @@ function buildLaunchSpec(request) {
  * Every raw frame this run produces, in order, with the two synthetic ones spliced in.
  *
  * ⚠ THE SYNTHETIC FRAMES ARE WHY THIS IS A GENERATOR AND NOT `run.stream()` HANDED STRAIGHT BACK.
- * The agent handle arrives as the RESULT of `Agent.create()` and the turn's COST arrives from
- * `agent.getUsage()` — neither is a stream event, and a pure normalizer cannot go and fetch them.
- * See `normalize.js`'s header for why the cost one is load-bearing rather than tidy.
+ * The agent handle arrives as the RESULT of `Agent.create()` and the turn's token usage hangs off
+ * the finished `run` — neither is a stream event, and a pure normalizer cannot go and fetch them.
+ * ⚠ A THIRD FACT USED TO RIDE HERE — `agent.getUsage()`'s cost — and it is DELETED with the rest
+ * of the cost column (2026-09-22); see `normalize.js`'s note where `costFrom` stood.
  */
 async function* frames(spec, live) {
   let agent = null;
@@ -207,18 +208,14 @@ async function* frames(spec, live) {
   }
 }
 
-/** The turn's usage AND its cost, as one synthetic frame. */
+/** The turn's TOKEN usage, as one synthetic frame.
+ *  ⚠ IT NO LONGER AWAITS `agent.getUsage()` (2026-09-22). That call was here for the COST alone,
+ *  which is deleted — so a turn no longer ends on a network round trip whose only consumer was an
+ *  accumulator nothing displayed. `agent` stays in the signature for the model below. */
 async function turnFrame(agent, run, spec) {
   let usage = null;
-  let cost = null;
   try { usage = (run && run.usage) || null; } catch (_) { usage = null; }
-  try {
-    cost = (agent && typeof agent.getUsage === 'function') ? await agent.getUsage() : null;
-  } catch (_) {
-    // ⚠ A COST READ THAT FAILED IS `null`, NEVER `0`. A zero is a budget that never trips.
-    cost = null;
-  }
-  return { type: normalizer.TURN_COMPLETED, usage, cost, model: (agent && agent.model) || spec.model || null };
+  return { type: normalizer.TURN_COMPLETED, usage, model: (agent && agent.model) || spec.model || null };
 }
 
 /**
@@ -265,15 +262,13 @@ function start(spec) {
 /**
  * Resume a parked conversation — ⚠ REFUSED ON THIS RUNTIME, AND THE REFUSAL IS THE POINT.
  *
- * `session-park.js › resumeParked` zeroes both cost/token delta baselines on the explicit
- * ASSUMPTION that a resumed conversation restarts its cumulative totals. `cursor-research.md` says
- * nothing about `Agent.resume`'s usage semantics (§5 item X4), and a runtime that CONTINUES the
- * total makes every delta negative, `session-io.js` clamps it to zero, cost stops accumulating and
- * `session-state.js › costCapReached` is never reached — the budget control silently stops
- * existing, with no error and no symptom until a bill arrives. ⚠ AND THE STAKE IS HIGHER HERE THAN
- * ON EITHER OTHER RUNTIME, because this is the one platform that reports a REAL BILLED COST
- * (`meter.cost.billed`), so the cap it would silently disable is a cap over money actually
- * charged.
+ * `session-park.js › resumeParked` zeroes the TOKEN delta baseline on the explicit ASSUMPTION
+ * that a resumed conversation restarts its cumulative total. `cursor-research.md` says nothing
+ * about `Agent.resume`'s usage semantics (§5 item X4), and a runtime that CONTINUES the total
+ * makes every delta negative, `session-io.js` clamps it to zero, and the session's token spend
+ * silently stops climbing — no error and no symptom, on the number the Agents tab shows.
+ * ⚠ THE COST HALF OF THIS ARGUMENT IS GONE WITH THE COLUMN (2026-09-22) and the refusal is
+ * unchanged: `tokensSpent` is a real displayed fact and mis-accumulating it is reason enough.
  *
  * ⚠ SO THE ADAPTER REFUSES AT ITS OWN DOOR rather than declaring a block nothing enforces. This
  * asks `capability.js › canResume` rather than restating the rule — one declaration, one

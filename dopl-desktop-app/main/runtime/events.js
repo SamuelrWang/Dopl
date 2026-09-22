@@ -44,19 +44,29 @@ const launched = (sessionId, model, mcpServers) => ({
 });
 
 /**
- * A finished turn, reported as the platform's CUMULATIVE totals.
+ * A finished turn, reported as the platform's CUMULATIVE TOKEN TOTAL.
  *
  * ⚠ CUMULATIVE, NOT A DELTA, AND THAT IS THE SEAM. `main/session-io.js` owns the delta arithmetic
- * (`Math.max(0, total - s.lastTotalCost)`) because it is the twin of `session-park.js ›
+ * (`Math.max(0, total - s.lastTotalTokens)`) because it is the twin of `session-park.js ›
  * resumeParked`'s baseline reset — one assumption, stated in one place. An adapter that
  * pre-deltaed here would hide a platform whose totals do not restart on resume, which is the
  * failure `descriptor.session.usageResetsOnResume` exists to refuse.
- * ⚠ `costUsd: null` MEANS THE PLATFORM EMITS NO COST, and must never become `0`: a zero is a
- * budget that never trips.
+ *
+ * ── 🔒 ⚠ **THE COST FIELD IS DELETED (2026-09-22, Samuel: *"there shouldnt be cost? Claude
+ * theres no cost tracking. we dont need cost tracking"*)** ────────────────────────────────────
+ *
+ * This took `(costUsd, sessionTokens, model)` and every adapter passed a first argument: one a
+ * real `total_cost_usd`, one an explicit `null`, one a figure normalised off `agent.getUsage()`.
+ * Core accumulated it into `state.costUsd`, persisted it in the durable record, carried a second
+ * delta baseline for it across every resume, and shipped it to exactly NOTHING — no projection,
+ * no wire field, no renderer, and not the credits system, which is separate and untouched.
+ * ⚠ THE ARITY MOVED, WHICH IS WHY THIS IS A NOTE AND NOT A DIFF. A dropped leading argument is
+ * silent — `result(tokens, model)` against the old signature would have read the token total as a
+ * cost and the model as a token count — so the three call sites moved in the same change and
+ * `test/runtime-contract.test.mjs` pins the shape this now produces.
  */
-const result = (costUsd, sessionTokens, model) => ({
+const result = (sessionTokens, model) => ({
   type: 'result',
-  costUsd: typeof costUsd === 'number' && Number.isFinite(costUsd) ? costUsd : null,
   sessionTokens: typeof sessionTokens === 'number' && Number.isFinite(sessionTokens) ? sessionTokens : 0,
   model: model || null,
 });

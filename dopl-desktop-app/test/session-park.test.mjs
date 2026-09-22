@@ -12,12 +12,14 @@ import { test, assert, harness, flush, agentId, RUNTIME, REAL_MAX, SRC } from ".
 
 test("resumeParked sets up a fresh controller + iterator SYNCHRONOUSLY and resumes the sdk id", () => {
   const h = harness();
-  const s = { settled: false, sdkSessionId: "sdk-abc", resumeSdkId: null, query: { __old: true }, lastTotalCost: 0.42 };
+  const s = { settled: false, sdkSessionId: "sdk-abc", resumeSdkId: null, query: { __old: true }, lastTotalTokens: 1200 };
   h.resumeParked(s);
   assert.ok(s.abortController instanceof AbortController, "a fresh abort controller is created");
   assert.ok(s.pushIterator && s.pushIterator.__iter, "a fresh push iterator exists BEFORE the async consumer");
   assert.equal(s.resumeSdkId, "sdk-abc", "options.resume will carry the retained sdkSessionId");
-  assert.equal(s.lastTotalCost, 0, "cost counter resets so the resumed run accrues from 0");
+  // ⚠ THE DEFAULT ADAPTER RESETS ITS TOTALS, so the baseline drops. It was `lastTotalCost` until
+  // 2026-09-22; the cost column is deleted and the TOKEN baseline is the one left.
+  assert.equal(s.lastTotalTokens, 0, "the token baseline resets so the resumed run accrues from 0");
   assert.equal(s.resuming, true);
   // FIX #2: the old sdk id is dropped so a pre-init crash's lifecycle id can't collide with
   // the prior cycle (it was captured into resumeSdkId above for options.resume first).
@@ -94,7 +96,7 @@ test("resumeParked is a no-op for a settled session or a resume already in fligh
 // and the same corrupt-input table. Only the recreate CALLER went.
 
 // ⚠ THE FIX #9 COUNTER-REHYDRATE TEST STOOD HERE (recreateParkedShell threads the persisted
-// turns/costUsd). Same story: the RULE survives on startResume and on session-engine's preamble,
+// the turn counter). Same story: the RULE survives on startResume and on session-engine's preamble,
 // and test/main-audit-resume-budget.test.mjs pins both halves (D3(a) and D3(b)).
 
 // ⚠ THE D1 IDENTITY-RESTORE BLOCK (four tests, plus the IDENTITY_REC fixture) STOOD HERE. Two of

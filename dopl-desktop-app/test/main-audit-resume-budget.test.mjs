@@ -1,8 +1,13 @@
-// AUDIT D3 — the turn and cost caps must survive a crash -> opt-in-resume cycle.
+// AUDIT D3 — the spent counters must survive a crash -> opt-in-resume cycle.
+//
+// ⚠ IT WAS "the turn and COST caps" WHEN THIS WAS WRITTEN. The caps went on 2026-09-07 and the
+// counters stayed as DISPLAY; the COST counter went outright on 2026-09-22 (Samuel: *"there
+// shouldnt be cost? Claude theres no cost tracking. we dont need cost tracking"*). One counter is
+// left — `turns` — and the two halves below are unchanged in every other respect.
 //
 // Two halves, both pinned here:
 //   (a) main/session-park.js startResume (the shared resume the startup interrupted-notice
-//       drives) built its startSession spec with NO turns / costUsd. A session that burned 23 of
+//       drives) built its startSession spec with NO turns. A session that ran 23 of
 //       24 turns, crashed, and was resumed from the notification started again at zero.
 //   (b) main/session-engine.js startSession gated the rehydrate on `if (spec.parkedShell)`, so
 //       even a spec that DID carry the counters was ignored on any non-shell resume.
@@ -55,7 +60,7 @@ function harness() {
   };
   // ⚠ `sessionWindowless` JOINED 2026-08-22 (F-272): `startResume` now enforces
   // `MAX_CONCURRENT_SESSIONS`, which it did not before — a resume could reach seven. These cases
-  // are about the CAP BUDGET (turns and cost) rehydrating, so the CONCURRENCY ceiling is
+  // are about the spent COUNTER rehydrating, so the CONCURRENCY ceiling is
   // deliberately out of their way; its own cases live in `session-park.test.mjs`. A resume
   // refused here would pass every budget assertion vacuously by constructing nothing.
   const sessionWindowless = { MAX_CONCURRENT_SESSIONS: Number.MAX_SAFE_INTEGER, liveCount: () => 0 };
@@ -67,8 +72,8 @@ function harness() {
     sessionWindowless, () => {},
     // ⚠ THE RESUME CAPABILITY (2026-08-31, port wave D). `resumeParked` / `startResume` refuse a
     // resume on a runtime whose `session.usageResetsOnResume` is `'unverified'`, because a runtime
-    // that CONTINUES the cumulative total makes every cost delta negative, clamps it to zero and
-    // stops the cost cap ever firing — silently. The REAL predicate is injected (`capability.js`
+    // that CONTINUES the cumulative total makes every token delta negative, clamps it to zero and
+    // stops `tokensSpent` ever climbing — silently. The REAL predicate is injected (`capability.js`
     // is pure and names no vendor); the descriptor is the DEFAULT adapter's, which answers `true`,
     // so every case in this file drives the path that shipped.
     RUNTIME, RUNTIME.capability);
@@ -92,15 +97,17 @@ function harness() {
 const spentRecord = {
   key: "c1:t1", channelId: "c1", taskId: "t1", workspaceId: "w1",
   side: "responder", profile: "full", mode: "interactive", phase: "ended",
+  // ⚠ `costUsd: 4.75` STAYS ON THIS INPUT, deliberately: the field is deleted from the record and
+  // from the spec, and handing one in is how the case below proves neither carries it forward.
   counterpartyId: "peer", turns: 23, costUsd: 4.75,
 };
 
-test("D3(a): startResume passes the record's spent turn + cost counters into the new session", async () => {
+test("D3(a): startResume passes the record's spent turn counter into the new session", async () => {
   const h = harness();
   assert.equal(await h.startResume(spentRecord, "sdk-1", "continue where you left off"), true);
   const spec = h.calls.startSession[0];
-  assert.equal(spec.turns, 23, "the spent turn count rides the resume, so the cap still bites");
-  assert.equal(spec.costUsd, 4.75, "and so does the spent cost");
+  assert.equal(spec.turns, 23, "the spent turn count rides the resume");
+  assert.equal(spec.costUsd, undefined, "…and the cost counter beside it is deleted, not zeroed");
   assert.equal(spec.resumeSdkId, "sdk-1", "unchanged: the resume is still the retained sdk session");
 });
 
@@ -112,12 +119,11 @@ test("D3(a): a legacy record with no counters resumes at zero, never NaN", async
   assert.ok(spec.turns === undefined || spec.turns === 0, "nothing to rehydrate");
   // The engine's own coercion (pinned in D3(b) below) turns that into 0, never NaN.
   assert.equal(Number(spec.turns) || 0, 0);
-  assert.equal(Number(spec.costUsd) || 0, 0);
 });
 
 // ⚠ "D3(a): recreateParkedShell (FIX #9) still carries them too, so both resume paths agree"
 // STOOD HERE. It was an AGREEMENT test between two record-driven spawns, and there is one left.
-// The rule it asserted for the shell — persisted turns/costUsd ride into the new session — is
+// The rule it asserted for the shell — the persisted counter rides into the new session — is
 // exactly what the two tests above assert for startResume, so nothing about the budget is
 // unpinned; only the second caller is.
 
@@ -134,12 +140,14 @@ const preamble = (() => {
   return seg.slice(seg.indexOf("\n") + 1); // drop the initialSessionState line itself
 })();
 const applyPreamble = new Function("state", "spec", `${preamble}\n return state;`);
-const freshState = () => ({ phase: "launching", parked: false, activity: "working", turns: 0, costUsd: 0 });
+const freshState = () => ({ phase: "launching", parked: false, activity: "working", turns: 0 });
 
-test("D3(b): a NON-shell resume rehydrates the cap budget (the parkedShell gate is gone)", () => {
+test("D3(b): a NON-shell resume rehydrates the counter (the parkedShell gate is gone)", () => {
+  // ⚠ `costUsd` IS STILL HANDED IN AND MUST STILL NOT LAND: the preamble is sliced from the
+  // SHIPPING source, so a re-added `state.costUsd = …` line would show up right here.
   const state = applyPreamble(freshState(), { turns: 23, costUsd: 4.75 });
-  assert.equal(state.turns, 23, "a crash/resume must not mint a fresh turn budget");
-  assert.equal(state.costUsd, 4.75, "nor a fresh cost budget");
+  assert.equal(state.turns, 23, "a crash/resume must not mint a fresh turn counter");
+  assert.equal(state.costUsd, undefined, "and the cost line is gone from the preamble entirely");
   assert.equal(state.phase, "launching", "and a non-shell resume still boots live, not parked");
   assert.equal(state.parked, false);
 });
@@ -154,9 +162,8 @@ test("D3(b): a NON-shell resume rehydrates the cap budget (the parkedShell gate 
 // non-window dormant shape can set it and get the safe behaviour". A producerless branch that
 // nothing tests is a branch that rots into the wrong behaviour before its first caller arrives.
 test("D3(b): the producerless parkedShell flag STILL boots dormant and still rehydrates", () => {
-  const state = applyPreamble(freshState(), { turns: 24, costUsd: 1.5, parkedShell: true });
+  const state = applyPreamble(freshState(), { turns: 24, parkedShell: true });
   assert.equal(state.turns, 24);
-  assert.equal(state.costUsd, 1.5);
   assert.equal(state.phase, "parked");
   assert.equal(state.parked, true);
   assert.equal(state.activity, "parked");
@@ -168,9 +175,7 @@ test("D3(b): the producerless parkedShell flag STILL boots dormant and still reh
 test("D3(b): a fresh launch passes no counters and starts at zero, never NaN", () => {
   const state = applyPreamble(freshState(), { side: "responder" });
   assert.equal(state.turns, 0);
-  assert.equal(state.costUsd, 0);
   // A hand-edited store cannot inject NaN through the spec either.
-  const bad = applyPreamble(freshState(), { turns: "x", costUsd: NaN });
+  const bad = applyPreamble(freshState(), { turns: "x" });
   assert.equal(bad.turns, 0);
-  assert.equal(bad.costUsd, 0);
 });

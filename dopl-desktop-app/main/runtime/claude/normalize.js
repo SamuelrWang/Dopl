@@ -17,9 +17,10 @@
 //
 // ⚠ SO THE STATE THIS USED TO WRITE IS NOW CARRIED ON EVENTS, AND CORE WRITES IT:
 //   `s.sdkSessionId`      -> `launched.sessionId`   (core also persists the durable record)
-//   `s.lastTotalCost` etc -> `result.costUsd` / `.sessionTokens`, reported CUMULATIVE. The delta
-//                            arithmetic stays in core because it is the twin of the resume
-//                            baseline reset — one assumption, one place.
+//   `s.lastTotalTokens`   -> `result.sessionTokens`, reported CUMULATIVE. The delta arithmetic
+//                            stays in core because it is the twin of the resume baseline reset —
+//                            one assumption, one place. ⚠ The COST twin that rode beside it is
+//                            DELETED (2026-09-22, Samuel: *"we dont need cost tracking"*).
 //   `s.promptTokens`      -> a `context` event per assistant message; core keeps the last one and
 //                            dispatches it when the turn ends. Exactly what `observe` did, on the
 //                            side of the seam that is allowed to have state.
@@ -157,13 +158,14 @@ function normalize(msg, ctx) {
   }
 
   if (msg.type === 'result') {
-    // ⚠ REPORTED CUMULATIVE, DELTA'D IN CORE. `total_cost_usd` and `usage` are this QUERY's
-    // running totals, so a resumed query restarts them from zero — and summing DELTAS is what
-    // makes the figure survive a park+resume where the raw total would collapse it. The
-    // arithmetic and the resume baselines are one assumption and live together in core.
-    const total = Number(msg.total_cost_usd);
+    // ⚠ REPORTED CUMULATIVE, DELTA'D IN CORE. `usage` is this QUERY's running total, so a resumed
+    // query restarts it from zero — and summing DELTAS is what makes the figure survive a
+    // park+resume where the raw total would collapse it. The arithmetic and the resume baseline
+    // are one assumption and live together in core.
+    // ⚠ `total_cost_usd` IS ON THIS MESSAGE AND IS DELIBERATELY NOT READ (2026-09-22). It was the
+    // first argument to `events.result` and it fed an accumulator no surface ever showed; Samuel's
+    // ruling deleted the whole column, so the field the platform offers is simply not taken.
     return [events.result(
-      Number.isFinite(total) ? total : null,
       sessionModel.sessionTokens(msg.usage),
       msg.model || (msg.modelUsage && Object.keys(msg.modelUsage)[0]) || null
     )];

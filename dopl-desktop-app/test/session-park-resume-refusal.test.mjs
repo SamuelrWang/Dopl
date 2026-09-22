@@ -16,10 +16,13 @@
 // The refusal was never about the protocol. `thread/resume` was always real and always declared
 // (`session.resume: true`). What refused was `capability.js › canResume` requiring
 // `usageResetsOnResume === true`, and the reason it required that is one line of CORE: `resumeParked`
-// ZEROED `s.lastTotalCost` / `s.lastTotalTokens` unconditionally, on the assumption that every
-// runtime restarts its cumulative total on a resumed conversation. Measured, Codex does not — so
-// against it that reset made the first post-resume `result` re-bill the WHOLE thread. The refusal
-// was protecting the billing from core, not protecting core from the protocol.
+// ZEROED the delta baseline unconditionally, on the assumption that every runtime restarts its
+// cumulative total on a resumed conversation. Measured, Codex does not — so against it that reset
+// made the first post-resume `result` re-count the WHOLE thread. The refusal was protecting the
+// accounting from core, not protecting core from the protocol.
+// ⚠ THERE WERE TWO BASELINES WHEN THIS WAS WRITTEN — `s.lastTotalCost` AND `s.lastTotalTokens`.
+// The COST column was deleted hours later (2026-09-22, Samuel: *"we dont need cost tracking"*),
+// so one accumulator is left and it is the one with a reader: `tokensSpent`, on the agent card.
 //
 // ⚠ SO THE FIX WAS TO REMOVE THE HARM, NOT THE MEASUREMENT. `usageResetsOnResume` is STILL `false`
 // for Codex — that is what was measured and it must never move — and the baseline is now decided
@@ -93,13 +96,12 @@ test("CXP-4: an UNMEASURED runtime is still refused IN PLACE, with a readable re
   const h = harness();
   const s = {
     settled: false, runtimeId: unmeasuredId, sdkSessionId: "sdk-abc", resumeSdkId: null,
-    query: { __old: true }, lastTotalCost: 0.42, lastTotalTokens: 1200,
+    query: { __old: true }, lastTotalTokens: 1200,
   };
   h.resumeParked(s);
   assert.equal(s.resuming, undefined, "nothing was started");
   assert.equal(s.query.__old, true, "the torn-down query was not superseded");
-  assert.equal(s.lastTotalCost, 0.42, "and the delta BASELINES were not touched");
-  assert.equal(s.lastTotalTokens, 1200);
+  assert.equal(s.lastTotalTokens, 1200, "and the delta BASELINE was not touched");
   assert.deepEqual(h.calls.acquired, [], "no runtime was acquired");
   assert.deepEqual(h.calls.consume, [], "no consumer loop was started");
   const line = h.calls.diag.find((l) => l.includes("resume refused"));
@@ -113,22 +115,20 @@ test("CXP-4: a `continues` runtime keeps its baseline; a `resets` runtime still 
   const cont = harness();
   const continuing = {
     settled: false, runtimeId: "codex", sdkSessionId: "codex-thread-1",
-    lastTotalCost: 0.42, lastTotalTokens: TOTAL_BEFORE_RESUME,
+    lastTotalTokens: TOTAL_BEFORE_RESUME,
   };
   cont.resumeParked(continuing);
   assert.equal(continuing.resuming, true, "the resume really started");
   assert.equal(continuing.lastTotalTokens, TOTAL_BEFORE_RESUME,
-    "the pre-resume total is CARRIED FORWARD — post-resume deltas bill only new work");
-  assert.equal(continuing.lastTotalCost, 0.42);
+    "the pre-resume total is CARRIED FORWARD — post-resume deltas count only new work");
 
   const res = harness();
   const resetting = {
-    settled: false, runtimeId: "claude", sdkSessionId: "sdk-abc",
-    lastTotalCost: 0.42, lastTotalTokens: 1200,
+    settled: false, runtimeId: "claude", sdkSessionId: "sdk-abc", lastTotalTokens: 1200,
   };
   res.resumeParked(resetting);
-  assert.equal(resetting.lastTotalCost, 0, "Claude DOES restart its totals, so zeroing is correct there");
-  assert.equal(resetting.lastTotalTokens, 0);
+  assert.equal(resetting.lastTotalTokens, 0,
+    "Claude DOES restart its total, so zeroing is correct there");
 });
 
 test("CXP-4: the carried baseline bills only the new turn — through the REAL arithmetic", () => {
@@ -139,24 +139,24 @@ test("CXP-4: the carried baseline bills only the new turn — through the REAL a
   const h = harness();
   const s = {
     settled: false, runtimeId: "codex", sdkSessionId: "codex-thread-1",
-    state: { turns: 2, costUsd: 0 },
-    lastTotalCost: 0, lastTotalTokens: TOTAL_BEFORE_RESUME, tokensSpent: TOTAL_BEFORE_RESUME,
+    state: { turns: 2 },
+    lastTotalTokens: TOTAL_BEFORE_RESUME, tokensSpent: TOTAL_BEFORE_RESUME,
   };
   h.resumeParked(s);
   io.applyCoreEvents(
-    s, [{ type: "result", costUsd: 0, sessionTokens: TOTAL_AFTER_ONE_MORE_TURN }], () => {}, fakeStore
+    s, [{ type: "result", sessionTokens: TOTAL_AFTER_ONE_MORE_TURN }], () => {}, fakeStore
   );
   assert.equal(s.tokensSpent, TOTAL_AFTER_ONE_MORE_TURN,
     "the lifetime figure is the platform's own running total — nothing was counted twice");
   assert.equal(s.tokensSpent - TOTAL_BEFORE_RESUME, THAT_TURN, "and the turn cost what it cost");
 
   // The counterfactual, stated rather than trusted: the pre-CXP-4 zeroing on this same runtime.
-  const rebilled = { state: { turns: 2, costUsd: 0 }, lastTotalTokens: 0, tokensSpent: TOTAL_BEFORE_RESUME };
+  const rebilled = { state: { turns: 2 }, lastTotalTokens: 0, tokensSpent: TOTAL_BEFORE_RESUME };
   io.applyCoreEvents(
-    rebilled, [{ type: "result", costUsd: 0, sessionTokens: TOTAL_AFTER_ONE_MORE_TURN }], () => {}, fakeStore
+    rebilled, [{ type: "result", sessionTokens: TOTAL_AFTER_ONE_MORE_TURN }], () => {}, fakeStore
   );
   assert.equal(rebilled.tokensSpent, TOTAL_BEFORE_RESUME + TOTAL_AFTER_ONE_MORE_TURN,
-    "zeroing bills the whole thread again — 42,429 of it already paid for");
+    "zeroing counts the whole thread again — 42,429 of it already recorded");
 });
 
 test("CXP-4: the PERSISTED baseline beats today's descriptor, in both directions", () => {
@@ -166,7 +166,7 @@ test("CXP-4: the PERSISTED baseline beats today's descriptor, in both directions
   const a = harness();
   const wroteContinues = {
     settled: false, runtimeId: "claude", usageBaseline: "continues",
-    sdkSessionId: "sdk-abc", lastTotalCost: 0.42, lastTotalTokens: 1200,
+    sdkSessionId: "sdk-abc", lastTotalTokens: 1200,
   };
   a.resumeParked(wroteContinues);
   assert.equal(wroteContinues.lastTotalTokens, 1200,
@@ -175,7 +175,7 @@ test("CXP-4: the PERSISTED baseline beats today's descriptor, in both directions
   const b = harness();
   const wroteResets = {
     settled: false, runtimeId: "codex", usageBaseline: "resets",
-    sdkSessionId: "codex-thread-1", lastTotalCost: 0.42, lastTotalTokens: 1200,
+    sdkSessionId: "codex-thread-1", lastTotalTokens: 1200,
   };
   b.resumeParked(wroteResets);
   assert.equal(wroteResets.lastTotalTokens, 0,
@@ -238,51 +238,55 @@ test("CXP-4: CLAUDE's resume path is byte-for-byte what it was — the regressio
   const priorQuery = { interrupt: () => Promise.resolve() }; // no `close` — the SDK shape
   const s = {
     settled: false, runtimeId: "claude", sdkSessionId: "sdk-abc",
-    query: priorQuery, abortController: priorController,
-    lastTotalCost: 0.42, lastTotalTokens: 1200,
+    query: priorQuery, abortController: priorController, lastTotalTokens: 1200,
   };
   h.resumeParked(s);
   await flush();
   assert.equal(s.resuming, false, "the resumed consumer ran to its handoff");
   assert.equal(priorController.aborted, true, "the abort controller is still the reaper here");
-  assert.equal(s.lastTotalCost, 0, "and the baselines still zero on a runtime that resets");
-  assert.equal(s.lastTotalTokens, 0);
+  assert.equal(s.lastTotalTokens, 0, "and the baseline still zeroes on a runtime that resets");
   assert.equal(h.calls.query.length, 1);
   assert.equal(h.calls.consume.length, 1, "the consumer loop was handed the new query");
 
-  // The record-driven door, unchanged for Claude: it still resumes, and it hands in a ZERO baseline.
+  // The record-driven door, unchanged for Claude: it still resumes, and it hands in no baseline.
   const g = harness();
-  const rec = { channelId: "c1", taskId: "t1", agentId: "a1b2c3d4", runtimeId: "claude", costUsd: 3.5 };
+  const rec = { channelId: "c1", taskId: "t1", agentId: "a1b2c3d4", runtimeId: "claude" };
   assert.equal(await g.startResume(rec, "sdk-1", "continue"), true);
-  assert.equal(g.calls.startSession[0].usageBaselineCost, 0,
-    "a resetting runtime's resumed session starts measuring its deltas from zero");
+  assert.equal(g.calls.startSession[0].usageBaselineCost, undefined,
+    "no cost baseline is handed in by any lane any more — the column is deleted");
 });
 
-test("CXP-4: the RECORD-driven door resumes Codex, and hands in the baseline it bills from", async () => {
+test("CXP-4: the RECORD-driven door resumes Codex, and pairs no baseline it cannot pair", async () => {
   // ⚠ THE OTHER RESUME SHAPE — `startResume` rebuilds from the DURABLE RECORD after a crash, so
-  // there is no live session object to carry a baseline on. The construction site takes it as
-  // `usageBaselineCost`, and the value is `rec.costUsd`, because on a CONTINUING runtime the
-  // restored cost accumulator IS the platform's cumulative total (the deltas telescope from the
-  // cold launch's zero). A baseline that did not pair with its accumulator would bill the gap.
+  // there is no live session object to carry a baseline on.
+  // 🔒 ⚠ **THIS CASE USED TO READ "…and hands in the baseline it bills from".** It asserted
+  // `spec.costUsd === 1.25` and `spec.usageBaselineCost === 1.25`: on a CONTINUING runtime the
+  // restored COST accumulator was the platform's cumulative total, so its baseline had to start
+  // level with it. **The cost column is deleted (2026-09-22, Samuel: *"we dont need cost
+  // tracking"*), and the invariant it served now has nothing to pair on this lane** — the TOKEN
+  // accumulator is not in the durable record (`session-io.js › baseRecord`), so it restarts at 0
+  // and its baseline is the hard 0 `session-engine.js` sets. Asserted as an ABSENCE, because a
+  // wave that later persists `tokensSpent` owes this lane a `usageBaselineTokens` hand-in and
+  // this is where that omission would be caught.
   const h = harness();
   const rec = {
     channelId: "c1", taskId: "t1", agentId: "a1b2c3d4", runtimeId: "codex",
-    costUsd: 1.25, usageBaseline: "continues",
+    usageBaseline: "continues",
   };
   const ok = await h.startResume(rec, "codex-thread-1", "continue");
   assert.equal(ok, true, "a Codex crash record resumes now");
   assert.equal(h.calls.startSession.length, 1);
   const spec = h.calls.startSession[0];
-  assert.equal(spec.costUsd, 1.25, "the accumulator is restored…");
-  assert.equal(spec.usageBaselineCost, 1.25, "…and the baseline it is measured from starts level with it");
+  assert.equal(spec.costUsd, undefined, "no cost accumulator is restored…");
+  assert.equal(spec.usageBaselineCost, undefined, "…and no cost baseline is handed in");
   assert.equal(spec.resumeSdkId, "codex-thread-1", "and it is the SAME conversation");
 
-  // ⚠ THE RECORD'S WORD DECIDES HERE TOO: a record that says `resets` gets a zero baseline even
-  // though today's Codex descriptor says `continues`.
+  // ⚠ AND THE RECORD'S WORD STILL DECIDES WHAT IT DECIDES: `usageBaseline` crosses into the
+  // rebuilt session, where `resumeParked` asks `resumeZeroesBaseline` with it on the next resume.
   const g = harness();
   const zeroed = await g.startResume(
     { ...rec, usageBaseline: "resets" }, "codex-thread-1", "continue"
   );
   assert.equal(zeroed, true);
-  assert.equal(g.calls.startSession[0].usageBaselineCost, 0);
+  assert.equal(g.calls.startSession[0].usageBaselineCost, undefined);
 });

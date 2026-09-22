@@ -130,7 +130,7 @@ test("both DELTA streams are dropped — the outbound card must never be painted
   assert.deepEqual(normalize.normalize({ method: "turn/started", params: {} }, CTX), []);
 });
 
-test("a finished turn meters TOKENS and reports NO COST — the cap is hidden, never zeroed", () => {
+test("a finished turn meters TOKENS, and there is no other kind of meter to report", () => {
   const out = normalize.normalize(TURN_DONE, CTX);
   assert.deepEqual(types(out), ["context", "result"]);
   // 🔒 The window occupancy is the PROMPT half — `inputTokens` ALONE. `cached_input_tokens` is a
@@ -138,10 +138,12 @@ test("a finished turn meters TOKENS and reports NO COST — the cap is hidden, n
   // satisfied `totalTokens === inputTokens + outputTokens`), so adding it overstated the meter.
   assert.equal(out[0].tokens, 41000);
   assert.equal(out[1].sessionTokens, 51200);
-  // ⚠ NULL, NOT 0. `main/session-state.js › costCapReached` is fed by exactly one number, and a
-  // zero is a budget that never trips. `total_cost_usd` is the OTHER runtime's field; nothing in
-  // the research says Codex reports a USD cost at all (§5 item C11).
-  assert.equal(out[1].costUsd, null, "a cost this platform does not emit must never become 0");
+  // 🔒 ⚠ **THIS CASE ALSO ASSERTED `out[1].costUsd === null` UNTIL 2026-09-22** — that a cost this
+  // platform does not emit must never become `0`. The whole COST COLUMN is deleted (Samuel: *"we
+  // dont need cost tracking"*), so `events.result` no longer takes or carries one; the assertion
+  // is a NOT-PRESENT rather than a deletion, because a `costUsd: 0` reappearing here would be the
+  // original lie coming back through a re-added field.
+  assert.ok(!("costUsd" in out[1]), "the result event carries no cost field at all");
 });
 
 test("…and an unmeasured usage spelling still meters rather than reading as zero", () => {
@@ -238,7 +240,6 @@ test("an INTERRUPTED turn is ONE terminal result and does NOT zero the context m
   assert.deepEqual(types(out), ["result"]);
   assert.equal(out[0].model, "gpt-6-astra");
   assert.equal(out[0].sessionTokens, 0);
-  assert.equal(out[0].costUsd, null);
 });
 
 test("an own-channel post becomes ONE outbound_post, and the generic tool card is suppressed", () => {

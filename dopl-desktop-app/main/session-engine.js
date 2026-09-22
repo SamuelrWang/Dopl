@@ -273,8 +273,8 @@ async function startSession(spec, rt) {
   // FIX #9 / AUDIT D3: the running cap budget rehydrates on EVERY resume shape. It used to sit
   // inside the parkedShell branch below, so a crash then opt-in resume (session-park.startResume)
   // would have reset a spent turn/cost budget to zero even once the counters were passed.
+  // 2026-09-22: `state.costUsd = Number(spec.costUsd) || 0` stood beside this, deleted with cost.
   state.turns = Number(spec.turns) || 0;
-  state.costUsd = Number(spec.costUsd) || 0;
   // ⚠ `parkedShell` HAS A PRODUCER AGAIN, AND IT IS THE SPAWN-IDLE LANE (2026-08-21, ruling 3).
   // "New Agent" registers an agent with prepared context and sends NO first SDK turn. The PARKED
   // shape already had every piece: `parked: true` makes `wakeEffects` fire `resumeQuery` on the
@@ -346,14 +346,14 @@ async function startSession(spec, rt) {
     firstTurn,
     resumeSdkId: spec.resumeSdkId || null,
     startedAt: Date.now(),
-    // ⚠ 0 ON EVERY COLD LAUNCH, AND HANDED IN BY THE ONE LANE THAT HAS A PRIOR TOTAL (CXP-4,
-    // 2026-09-22). `session-park.js › startResume` rebuilds a crashed session from its durable
-    // record, and on a runtime whose cumulative usage CONTINUES across a resume this baseline must
-    // start level with the cost accumulator `spec.costUsd` restores — or the first post-resume
-    // `result` bills the whole thread again. That function carries the argument; this is the
-    // construction site, so it is where the value has to land (setting it after `startSession`
-    // resolves races the query it already started).
-    lastTotalCost: Number(spec.usageBaselineCost) || 0,
+    // 🔒 ⚠ **`lastTotalCost: Number(spec.usageBaselineCost) || 0` IS DELETED** (2026-09-22, with
+    // the cost column) — CXP-4's construction-site half, hours old. ⚠ **THAT ARGUMENT SURVIVES
+    // INTACT ON THE TOKEN SIDE:** `session-park.js › resumeParked` and `session-boot.js ›
+    // parkedSessionFromRecord` still ask `capability.js › resumeZeroesBaseline` and still
+    // carry-or-zero `lastTotalTokens`; nothing about `usageResetsOnResume` / `canResume` / the
+    // `usageBaseline` record field moved. This lane needs no hand-in: the token accumulator is NOT
+    // in the durable record, so it restarts at 0 (`session-io.js › baseRecord`) and must match.
+    lastTotalTokens: 0,
     pendingPermissions: new Map(),
     pendingNames: new Map(),
     pendingInbound: [], // bounded FIFO of held interactive inbound replies

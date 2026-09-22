@@ -454,8 +454,12 @@ test("resume is ALLOWED on the measured baseline, and the adapter's own door ope
   assert.equal(typeof launchSpec.resume, "function");
 });
 
-test("the cost cap is HIDDEN, the sign-in button is HIDDEN, and neither is grayed", () => {
-  assert.equal(capability.showsCostCap(D), false, "a cap fed by a field the platform never emits");
+test("the sign-in button, the deep link and the tool-search verb are HIDDEN, never grayed", () => {
+  // ⚠ THE COST CAP WAS THE FIRST ASSERTION HERE AND IS DELETED WITH THE COLUMN (2026-09-22,
+  // Samuel: *"we dont need cost tracking"*). It read `showsCostCap(D) === false` — a control
+  // hidden because this runtime emits no cost — and there is no control, no predicate and no
+  // `meter.cost` on any descriptor now. The HIDE-NEVER-GRAY rule the case belonged to is still
+  // exercised by the four assertions below it.
   assert.equal(capability.hasInteractiveSignIn(D), false);
   assert.equal(RT.signIn(), null, "a method whose capability is absent still EXISTS and answers null");
   assert.equal(capability.hasDeepLink(D), false);

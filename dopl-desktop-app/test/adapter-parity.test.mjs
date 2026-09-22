@@ -62,7 +62,14 @@ const VARIES = [
   ["models.dimensions", (d) => d.models.dimensions, true],
   ["meter.mode", (d) => d.meter.mode, false],
   ["meter.windowSource", (d) => d.meter.windowSource, false],
-  ["meter.cost", (d) => d.meter.cost, true],
+  // 🔒 ⚠ **`["meter.cost", …, true]` STOOD HERE AND IS DELETED (2026-09-22, Samuel: *"there
+  // shouldnt be cost? Claude theres no cost tracking. we dont need cost tracking"*).** It was a
+  // genuine VARIES row — Claude `{usd, billed:false}`, Codex `null`, Cursor `{usd, billed:true}`,
+  // three different answers — and that is exactly why deleting the FIELD had to delete the row:
+  // the census reads every path off the live descriptors, so a row naming one that no adapter
+  // declares fails "the VARIES list itself still points at real fields" below. ⚠ IT IS NOT A
+  // PREDICTION EXPIRING UNCHECKED, the thing this file exists to prevent — the field is gone from
+  // the contract, not merely from one runtime, and the column it described reached no surface.
   ["mcp.sessionTransport", (d) => d.mcp.sessionTransport, false],
   ["mcp.hostRegistration", (d) => d.mcp.hostRegistration, false],
   ["mcp.eagerLoadFlag", (d) => d.mcp.eagerLoadFlag, true],

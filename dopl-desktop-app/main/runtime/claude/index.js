@@ -143,10 +143,15 @@ const descriptor = {
     mode: 'per-message',
     fields: ['input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens'],
     windowSource: 'table',
-    // ⚠ A COST SIGNAL EXISTS, so the cost cap is a real control. `null` here would HIDE the cap
-    // rather than render one that can never fire — `session-state.js › costCapReached` is fed by
-    // exactly this number, and a zero is a budget that never trips.
-    cost: { currency: 'usd', billed: false },
+    // 🔒 ⚠ **THERE IS NO `cost` MEMBER ON THIS DESCRIPTOR, AND THAT IS A DELETION RATHER THAN AN
+    // OMISSION (2026-09-22, Samuel: *"there shouldnt be cost? Claude theres no cost tracking. we
+    // dont need cost tracking"*).** Every adapter declared one — Claude `{usd, billed:false}`,
+    // Codex `null`, Cursor `{usd, billed:true}` — and a `showsCostCap` predicate (deleted with
+    // it) read it to decide whether to render a control that did not exist on any surface. The whole column is
+    // gone: `state.costUsd`, the durable record's field, both cost delta baselines and
+    // `events.result`'s cost argument with it. ⚠ DO NOT ADD IT BACK ON ONE ADAPTER — a field one
+    // runtime declares and the contract does not define is a question the next adapter author has
+    // to answer for no reason, which is exactly what deleting it bought.
   },
 
   mcp: mcp.descriptor,

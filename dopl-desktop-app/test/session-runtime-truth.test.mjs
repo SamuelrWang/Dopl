@@ -53,7 +53,7 @@ const persist = (s) => ({ ...durableSessionRecord(baseRecord(s)), ...truth.durab
 const live = (over = {}) => ({
   key: "c1:t1:a1", sessionId: "s1", channelId: "c1", taskId: "t1", workspaceId: "w1",
   side: "responder", profile: "full", mode: "interactive", startedAt: 1,
-  state: { phase: "running", turns: 0, costUsd: 0, toolMode: "manual" }, context: {}, ...over,
+  state: { phase: "running", turns: 0, toolMode: "manual" }, context: {}, ...over,
 });
 
 // ── 1. THE USAGE BASELINE ────────────────────────────────────────────────────────────────────
@@ -177,7 +177,7 @@ test("the summary is bounded and single-line on the way to disk", () => {
 test("a Codex session's record states its runtime, its model, its policy and its baseline", () => {
   const rec = persist(live({
     runtimeId: "codex", liveModel: "gpt-6-astra",
-    state: { phase: "running", turns: 0, costUsd: 0, toolMode: "untrusted" },
+    state: { phase: "running", turns: 0, toolMode: "untrusted" },
   }));
   assert.equal(rec.runtimeId, "codex");
   assert.equal(rec.effectiveModel, "gpt-6-astra");
@@ -189,12 +189,11 @@ test("a Codex session's record states its runtime, its model, its policy and its
 test("REGRESSION: a Claude record still round-trips, and the metrics beside it are untouched", () => {
   const rec = persist(live({
     runtimeId: "claude", model: "opus", liveModel: "claude-opus-5",
-    state: { phase: "running", turns: 7, costUsd: 0.42, toolMode: "auto" },
+    state: { phase: "running", turns: 7, toolMode: "auto" },
     ownPostSeq: 3, sdkSessionId: "sdk-1",
   }));
   assert.equal(rec.model, "opus", "the operator's pick is unchanged by the new fields");
   assert.equal(rec.turns, 7);
-  assert.equal(rec.costUsd, 0.42);
   assert.equal(rec.ownPostSeq, 3);
   assert.equal(rec.sdkSessionId, "sdk-1");
   assert.equal(rec.usageBaseline, "resets");

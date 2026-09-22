@@ -49,9 +49,12 @@ test("a parked record with an sdk id comes back as a registered PARKED session",
   assert.equal(s.context.template.name, "Coder", "F-288: a null templateName here ERASES channel_sessions.template_name");
   assert.equal(s.context.channelName, "Dopl");
   assert.equal(s.profile, "channel_agent", "the stored profile, through the fail-restrictive reader");
-  // The counters: spent turns/cost for display, and the post counter with its crash slack.
+  // The counters: spent turns for display, and the post counter with its crash slack.
   assert.equal(s.state.turns, 7);
-  assert.equal(s.state.costUsd, 0.42);
+  // ⚠ `s.state.costUsd === 0.42` STOOD HERE. The cost column is deleted (2026-09-22, Samuel: *"we
+  // dont need cost tracking"*) and the record above still HANDS ONE IN, so this is the proof that
+  // a record written by an older build cannot revive it.
+  assert.equal(s.state.costUsd, undefined);
   assert.equal(s.ownPostSeq, storePure_resumedPostSeq(3), "2026-08-22: a re-minted client_msg_id is silently discarded by the server");
   // Nothing live is fabricated.
   assert.equal(s.query, null);
@@ -73,45 +76,53 @@ test("rehydration preserves an open Codex model id in Codex's vocabulary", () =>
   assert.equal(restored.model, "gpt-6-astra");
 });
 
-test("CXP-4: a restored baseline PAIRS with the accumulator its deltas are added to", () => {
-  // 🔒 ⚠ **THE RESTART HOLE, AND IT IS THE HALF PRESERVING AN IN-MEMORY BASELINE CANNOT COVER.**
-  // `session-io.js › applyCoreEvents` adds `platformTotal - baseline` to an accumulator, so the
-  // two must start LEVEL. Both baselines were hard `0` here, which is right for a runtime that
-  // restarts its totals and wrong for one that continues them: the cost accumulator is restored
-  // from the record (`state.costUsd`), so a zero baseline against a continuing runtime bills that
-  // whole restored figure a second time on the first post-resume turn.
+test("CXP-4: a restart restores the record's own WORD, and pairs a baseline of 0 with 0", () => {
+  // 🔒 ⚠ **THIS CASE WAS "a restored baseline PAIRS with the accumulator its deltas are added
+  // to", AND IT WAS ENTIRELY ABOUT THE COST PAIR.** `session-io.js › applyCoreEvents` adds
+  // `platformTotal - baseline` to an accumulator, so the two must start LEVEL — and the COST
+  // accumulator WAS restored from the record (`state.costUsd`), so on a CONTINUING runtime its
+  // baseline had to be that same figure or the first post-resume turn re-counted it. The column
+  // is deleted (2026-09-22, Samuel: *"we dont need cost tracking"*), so the pair it protected no
+  // longer exists on this lane.
+  //
+  // ⚠ **WHAT SURVIVES IS THE HALF THAT STILL DECIDES SOMETHING, AND IT IS WHAT THIS NOW PINS:**
+  // the record's WORD crosses into the rebuilt session as `usageBaseline`, where
+  // `session-park.js › resumeParked` asks `capability.js › resumeZeroesBaseline` with it on the
+  // very next resume and carries-or-zeroes `lastTotalTokens`. Lose that and a `continues` runtime
+  // silently goes back to re-counting its whole thread.
+  // ⚠ AND THE TOKEN BASELINE IS 0 ON EVERY ARM, WHICH IS THE PAIRING RULE RATHER THAN AN
+  // EXCEPTION: `tokensSpent` is NOT in the durable record (`session-io.js › baseRecord`), so the
+  // accumulator restarts at 0 and its baseline must too. A wave that persists `tokensSpent` owes
+  // this case the arm the cost pair used to be.
   const h = harness();
   const continuing = h.boot.parkedSessionFromRecord(
-    KEY, parkedRecord({ runtimeId: "codex", costUsd: 1.25, usageBaseline: "continues" }), "thread-codex-1"
+    KEY, parkedRecord({ runtimeId: "codex", usageBaseline: "continues" }), "thread-codex-1"
   );
-  assert.equal(continuing.state.costUsd, 1.25, "the accumulator is restored…");
-  assert.equal(continuing.lastTotalCost, 1.25, "…and the baseline starts level with it");
-  // ⚠ THE TOKEN TWIN STAYS 0 AND THAT IS THE SAME RULE, NOT AN EXCEPTION: `tokensSpent` is NOT in
-  // the durable record (`session-io.js › baseRecord`), so the token accumulator restarts at 0 and
-  // its baseline must too. A wave that persists `tokensSpent` owes this line its twin.
+  assert.equal(continuing.usageBaseline, "continues", "the record's word is what the next resume asks");
   assert.equal(continuing.lastTotalTokens, 0);
   assert.equal(continuing.tokensSpent, undefined, "…which is exactly why 0 is the right baseline");
+  assert.equal(continuing.lastTotalCost, undefined, "and no cost baseline is rebuilt at all");
 
   // The resetting runtime is untouched — the line Claude always ran.
   const resetting = h.boot.parkedSessionFromRecord(
-    KEY, parkedRecord({ runtimeId: "claude", costUsd: 1.25, usageBaseline: "resets" }), "sdk-y1uun32v"
+    KEY, parkedRecord({ runtimeId: "claude", usageBaseline: "resets" }), "sdk-y1uun32v"
   );
-  assert.equal(resetting.state.costUsd, 1.25);
-  assert.equal(resetting.lastTotalCost, 0, "a resumed Claude query restarts its total, so the baseline drops");
+  assert.equal(resetting.usageBaseline, "resets");
+  assert.equal(resetting.lastTotalTokens, 0);
 
-  // ⚠ THE RECORD'S WORD DECIDES, NOT TODAY'S DESCRIPTOR — a record written under one answer must
-  // not be re-read under a newer one. And a record that says NOTHING (every one written before
-  // U10) falls through to the descriptor rather than refusing, which is what keeps upgrade day
-  // from mis-billing every session on the operator's disk.
+  // ⚠ THE RECORD'S WORD IS CARRIED VERBATIM, NOT RE-DERIVED FROM TODAY'S DESCRIPTOR — a record
+  // written under one answer must not be re-read under a newer one, and that precedence is
+  // applied at `resumeParked`. A record that says NOTHING (every one written before U10) crosses
+  // as `'unverified'`, the fail-closed member, which falls through to the descriptor THERE rather
+  // than refusing here — what keeps upgrade day from mis-counting every session on the disk.
   const crossed = h.boot.parkedSessionFromRecord(
-    KEY, parkedRecord({ runtimeId: "claude", costUsd: 1.25, usageBaseline: "continues" }), "sdk-y1uun32v"
+    KEY, parkedRecord({ runtimeId: "claude", usageBaseline: "continues" }), "sdk-y1uun32v"
   );
-  assert.equal(crossed.lastTotalCost, 1.25, "the RECORD said continues, so the live `resets` descriptor loses");
+  assert.equal(crossed.usageBaseline, "continues", "a `resets` descriptor does not overwrite the record");
   const silent = h.boot.parkedSessionFromRecord(
-    KEY, parkedRecord({ runtimeId: "codex", costUsd: 1.25 }), "thread-codex-1"
+    KEY, parkedRecord({ runtimeId: "codex" }), "thread-codex-1"
   );
-  assert.equal(silent.usageBaseline, "unverified", "a pre-U10 record states no measurement…");
-  assert.equal(silent.lastTotalCost, 1.25, "…so the descriptor answers, and Codex's says continues");
+  assert.equal(silent.usageBaseline, "unverified", "a pre-U10 record states no measurement");
 });
 
 function storePure_resumedPostSeq(n) {

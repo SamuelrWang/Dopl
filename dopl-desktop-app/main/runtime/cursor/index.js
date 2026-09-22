@@ -213,12 +213,15 @@ const descriptor = {
     // denominator: `session-model.js › contextWindowFor` answers `null` for an unknown window and
     // the meter shows tokens without a percentage, which is the null-never-zero rule doing its job.
     windowSource: null,
-    // ⚠ A REAL BILLED COST, AND THIS IS THE ONLY RUNTIME THAT REPORTS ONE. `agent.getUsage()` ->
-    // `{rawCostCents, chargedCents}`. `billed: true` is what gives this runtime a cost line the
-    // others never show. ⚠ IT IS A CALL, NOT A STREAM EVENT, which is why `launch-spec.js` mints
-    // the `dopl/turnCompleted` frame — a normalizer that only read the stream would report
-    // `costUsd: null` on a platform that DOES emit a cost, and the cap would silently never fire.
-    cost: { currency: 'usd', billed: true },
+    // 🔒 ⚠ **THERE IS NO `cost` MEMBER ON THIS DESCRIPTOR, AND THAT IS A DELETION RATHER THAN AN
+    // OMISSION (2026-09-22, Samuel: *"there shouldnt be cost? Claude theres no cost tracking. we
+    // dont need cost tracking"*).** Every adapter declared one — Claude `{usd, billed:false}`,
+    // Codex `null`, Cursor `{usd, billed:true}` — and a `showsCostCap` predicate (deleted with
+    // it) read it to decide whether to render a control that did not exist on any surface. The whole column is
+    // gone: `state.costUsd`, the durable record's field, both cost delta baselines and
+    // `events.result`'s cost argument with it. ⚠ DO NOT ADD IT BACK ON ONE ADAPTER — a field one
+    // runtime declares and the contract does not define is a question the next adapter author has
+    // to answer for no reason, which is exactly what deleting it bought.
   },
 
   mcp: mcp.descriptor,

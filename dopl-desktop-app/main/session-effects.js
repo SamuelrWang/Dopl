@@ -45,13 +45,20 @@ function gateActivity(state, activity) {
   return pending && pending.length > 0 ? 'awaiting_permission' : activity;
 }
 
-// The effect set shared by every end (operator End, turn/cost cap): abort the query, tell the
+// The effect set shared by every end (operator End, and the ends that remain): abort the query, tell the
 // renderer, settle the record. ⚠ Leaves the channel TASK untouched — no task_finished, and
 // since thread closing was removed (wiring plan Phase 4, 2026-08-18) there is no other end that
 // touches it either. A real end ALSO posts a CALM lifecycle so the web card stops pulsing
 // "Working…". ⚠ Idle never reaches here; it PARKS instead.
 function endedEmit(state, outcome, reason, summary) {
-  const payload = { type: 'ended', outcome: outcome, totalCostUsd: state.costUsd, reason: reason };
+  // 🔒 ⚠ **`totalCostUsd` RODE THIS PAYLOAD AND IS DELETED (2026-09-22, Samuel: *"we dont need
+  // cost tracking"*).** It was the ONLY place `state.costUsd` ever left the reducer, and the one
+  // consumer it ever had was a cap that was deleted on 2026-09-07 — since then it crossed the IPC
+  // boundary to a renderer that reads `type`, `outcome`, `reason` and `summary` and has never
+  // named it. ⚠ `state` STAYS IN THE SIGNATURE: `endedEmit` is called from four sites and the
+  // parameter is what a later field would ride; deleting it would be a churn this ruling did not
+  // ask for.
+  const payload = { type: 'ended', outcome: outcome, reason: reason };
   if (summary !== undefined) payload.summary = summary;
   return { type: 'emit', payload: payload };
 }

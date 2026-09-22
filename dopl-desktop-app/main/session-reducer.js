@@ -225,17 +225,18 @@ function sessionReducer(state, event) {
   }
 
   if (type === 'result') {
-    // Turn end. costUsd/turns accumulate for the SAFETY caps (item 6 keeps every cap; only the
-    // display-only `usage` emit is dropped). Reset postedThisTurn now the turn closed.
-    const turnCost = Number(event.turnCostUsd) || 0;
+    // Turn end. `turns` accumulates; reset postedThisTurn now the turn closed.
+    // 🔒 ⚠ **THE COST ACCUMULATION STOOD HERE AND IS DELETED (2026-09-22, Samuel: *"we dont need
+    // cost tracking"*).** It read `event.turnCostUsd` — a per-turn delta `session-io.js` computed
+    // against `s.lastTotalCost` — and added it to `state.costUsd`. Both ends of that arithmetic
+    // are gone, so the event no longer carries the field and nothing here reads one.
     const turns = state.turns + 1;
-    const costUsd = state.costUsd + turnCost;
     // 2026-08-02: `event.model` was computed by session-io and then thrown away here. It is the
     // model that really served this turn, so a mid-session Query.setModel shows up on the header
     // and in the meter's denominator at the NEXT turn end rather than waiting for a fresh `init`
     // that a live switch never produces. Absent (an older event) keeps what we had.
     const model = typeof event.model === 'string' && event.model ? event.model : state.model;
-    const ns = clone(state, { turns: turns, costUsd: costUsd, model: model, postedThisTurn: false, postedToolUseIds: [] });
+    const ns = clone(state, { turns: turns, model: model, postedThisTurn: false, postedToolUseIds: [] });
     // THE TWO CAP CHECKS STOOD HERE AND ARE DELETED (2026-09-07, Samuel's ruling). A `result` event
     // no longer ends a session for turn count or spend; it only updates the counters and arms the
     // idle timer. The SDK's `maxTurns` backstop in `runtime/claude/launch-spec.js` is the only

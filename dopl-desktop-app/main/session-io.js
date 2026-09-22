@@ -276,7 +276,9 @@ function baseRecord(s) {
     taskTitle: (s.context && s.context.taskTitle) || null, templateName: (s.context && s.context.template && s.context.template.name) || null,
     // FIX #9: the running cap counters, so a P2 recreate rehydrates a turn/cost-capped (or
     turns: s.state.turns, // parked) session's budget instead of resetting it to a fresh one.
-    costUsd: s.state.costUsd,
+    // 🔒 ⚠ **`costUsd` RODE HERE AND IS DELETED (2026-09-22, Samuel: *"we dont need cost
+    // tracking"*).** `session-store.js › durableSessionRecord` is a whitelist, so a record written
+    // by an older build still carries the key and simply drops it on read.
     // 2026-09-07: `turnCap` travelled here so a resumed session kept the bound its counters were
     // measured against. There is no bound now, so there is nothing to carry.
     // 2026-08-22: the OUTBOUND POST COUNTER, so a crash resume does not re-mint client_msg_ids the
@@ -370,14 +372,16 @@ function applyCoreEvents(s, list, dispatch, store, log) {
       continue;
     }
     if (ev.type === 'result') {
-      // THE DELTAS. Both numbers arrive CUMULATIVE for the current run, so a resumed run restarts
-      // them from zero and `session-park.js › resumeParked` zeroes the baselines to match. Summing
-      // DELTAS is what makes the figures survive a park+resume. `Math.max(0, …)` is the clamp that
+      // THE DELTA. The number arrives CUMULATIVE for the current run, so a resumed run restarts it
+      // from zero and `session-park.js › resumeParked` zeroes the baseline to match. Summing
+      // DELTAS is what makes the figure survive a park+resume. `Math.max(0, …)` is the clamp that
       // makes a platform which does NOT restart on resume fail SILENTLY — which is why
       // `descriptor.session.usageResetsOnResume` is launch-blocking rather than a footnote.
-      const total = Number(ev.costUsd) || 0;
-      const turnCost = Math.max(0, total - (s.lastTotalCost || 0));
-      s.lastTotalCost = total;
+      // 🔒 ⚠ **THERE WERE TWO OF THESE UNTIL 2026-09-22** — an identical cost pair
+      // (`ev.costUsd` / `s.lastTotalCost` / `turnCost`) ran beside the token one, with its own
+      // baseline to carry across every resume and its own field in the durable record. Samuel
+      // deleted the column (*"we dont need cost tracking"*); the TOKEN half is untouched, and it
+      // is the half that has a reader — `tokensSpent` is on the agent card and on the wire.
       const tokenTotal = Number(ev.sessionTokens) || 0;
       s.tokensSpent = (s.tokensSpent || 0) + Math.max(0, tokenTotal - (s.lastTotalTokens || 0));
       s.lastTotalTokens = tokenTotal;
@@ -386,7 +390,7 @@ function applyCoreEvents(s, list, dispatch, store, log) {
       // reason: both accumulate on the session object rather than reading a per-run cumulative total
       // back, which is what makes "12 turns and nothing posted" a readable sentence.
       s.turns = (Number(s.turns) || 0) + 1;
-      dispatch(s, { type: 'result', turnCostUsd: turnCost, model: ev.model });
+      dispatch(s, { type: 'result', model: ev.model });
       // ⚠ AFTER the result, and only when something was measured: say nothing rather than paint a
       // zero (`session-model.js › contextEvent`).
       // ⚠ THE REPORTED WINDOW IS HANDED IN AND BEATS THE TABLE — the precedence rule and its

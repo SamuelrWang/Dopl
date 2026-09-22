@@ -170,10 +170,10 @@ function parkedSessionFromRecord(key, rec, sdkId) {
   // message axis left at the reducer's `ask` makes `session-gate.js › enqueue` HOLD the peer's
   // next reply with nothing left able to release it. The SAME shared rule `startSession` applies.
   state.messageMode = floorWindowlessMessage(state.messageMode);
-  // The spent counters, rehydrated for DISPLAY (the caps are deleted, 2026-09-07) — a resumed
-  // agent must show what it has already spent rather than reading as fresh.
+  // The spent counter, rehydrated for DISPLAY (the caps are deleted, 2026-09-07) — a resumed
+  // agent must show what it has already run rather than reading as fresh.
+  // 2026-09-22: `state.costUsd = Number(rec.costUsd) || 0` stood beside it, deleted with cost.
   state.turns = Number(rec.turns) || 0;
-  state.costUsd = Number(rec.costUsd) || 0;
   // PARKED, all three fields: `phase` is what the durable record round-trips, `parked` is what
   // `session-pill.js › queryTornDown` reads (hence the Idle pill and `listening: false`), and
   // `activity` is the coarse word. The reducer's `wakeEffects` fires `resumeQuery` off `parked`.
@@ -181,28 +181,27 @@ function parkedSessionFromRecord(key, rec, sdkId) {
   state.parked = true;
   state.activity = 'parked';
   const profile = sessionPark.knownProfile(rec.profile);
-  // ── ⚠ THE DELTA BASELINES A RESTART REBUILDS (2026-09-22, CXP-4) ────────────────────────────
+  // ── ⚠ THE DELTA BASELINE A RESTART REBUILDS (2026-09-22, CXP-4) ─────────────────────────────
   //
   // ⚠ THE INVARIANT IS THAT A BASELINE PAIRS WITH THE ACCUMULATOR ITS DELTAS ARE ADDED TO.
   // `session-io.js › applyCoreEvents` adds `platformTotal - baseline` to an accumulator on every
-  // `result`, so the two must start level. Both were hard `0` here, which is correct for a runtime
-  // that RESTARTS its cumulative total on a resumed query and wrong for one that CONTINUES it: the
-  // cost accumulator is restored from the record four lines up (`state.costUsd`), so a zero
-  // baseline against a continuing runtime bills that whole restored figure a second time on the
-  // first post-resume turn.
-  // ⚠ SO A `continues` RECORD PAIRS ITS COST BASELINE WITH `state.costUsd` — and on such a runtime
-  // that IS the platform's cumulative total, because the deltas telescope from the cold launch's
-  // zero. ⚠ AND ITS TOKEN BASELINE STAYS 0, which is the same rule and not an exception:
+  // `result`, so the two must start level.
+  // ⚠ THE TOKEN BASELINE IS A HARD `0` HERE, AND IT IS THE RULE RATHER THAN AN EXCEPTION:
   // `s.tokensSpent` is NOT in the durable record (`session-io.js › baseRecord`), so the token
   // accumulator restarts at 0 and its baseline must too. A wave that persists `tokensSpent` owes
-  // this line the twin.
+  // this line the twin, and `capability.js › resumeZeroesBaseline` is the predicate it would ask.
+  // 🔒 ⚠ **THERE WAS A SECOND BASELINE HERE UNTIL 2026-09-22 AND THE COST DELETION TOOK IT.**
+  // `lastTotalCost` was `usageZeroes ? 0 : Number(rec.costUsd)`, because the COST accumulator WAS
+  // restored from the record (`state.costUsd`, four lines up) and a zero baseline against a
+  // CONTINUING runtime would have re-counted that whole restored figure on the first post-resume
+  // turn. Neither the accumulator nor the record field exists now, so `usageZeroes` had no reader
+  // left and went with them. ⚠ THE CXP-4 RULE IS UNTOUCHED: `recordedBaseline` below still crosses
+  // into the rebuilt session as `usageBaseline`, and `session-park.js › resumeParked` still asks
+  // `resumeZeroesBaseline` with it before deciding the TOKEN baseline on the very next resume.
   // ⚠ THE RECORD'S WORD DECIDES, NOT TODAY'S DESCRIPTOR — `capability.js › resumeZeroesBaseline`
   // states that precedence once, and `reparkDormant` below still gates the resume itself on the
   // LIVE descriptor's `resumeRefusal`, exactly as it did.
   const recordedBaseline = runtimeTruth.durableRuntimeTruth(rec).usageBaseline;
-  const usageZeroes = runtimeCapability.resumeZeroesBaseline(
-    runtimeRegistry.descriptorFor(rec.runtimeId || null), recordedBaseline
-  );
   return {
     key: key,
     sessionId: rec.sessionId,
@@ -257,10 +256,9 @@ function parkedSessionFromRecord(key, rec, sdkId) {
     nonce: crypto.randomBytes(8).toString('hex'),
     firstTurn: '',
     startedAt: Number(rec.startedAt) || 0,
-    // The delta baselines a resumed query is measured from — see `usageZeroes` above for why the
-    // cost one is not always 0 and the token one always is. ⚠ `resumeParked` applies the SAME
-    // rule when it resumes this object, so a `continues` runtime's baselines survive both hops.
-    lastTotalCost: usageZeroes ? 0 : (Number(rec.costUsd) || 0),
+    // The delta baseline a resumed query is measured from — see the block above for why it is
+    // always 0 here. ⚠ `resumeParked` applies the RUNTIME-AWARE rule when it resumes this object,
+    // so a `continues` runtime's baseline is decided there rather than assumed here.
     lastTotalTokens: 0,
     pendingPermissions: new Map(),
     pendingNames: new Map(),

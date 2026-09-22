@@ -112,10 +112,11 @@ const LAUNCH_BLOCKING = [
   {
     path: 'session.usageResetsOnResume',
     why: '`unverified` blocks RESUME (a cold launch is unaffected). session-park.js › '
-      + 'resumeParked zeroes both delta baselines on an explicit assumption; a platform that '
-      + 'CONTINUES the cumulative total instead makes every delta negative, clamped to 0 by '
-      + 'session-io\'s Math.max — so cost stops accumulating, costCapReached is never reached, '
-      + 'and the budget control silently stops existing with no error until a bill arrives.',
+      + 'resumeParked decides the TOKEN delta baseline off this word; with no measurement there '
+      + 'is no safe direction — zero it against a platform that CONTINUES its cumulative total '
+      + 'and the first post-resume result re-counts the whole thread, carry it against one that '
+      + 'RESTARTS and every later delta goes negative and clamps to 0 by session-io\'s Math.max, '
+      + 'so tokensSpent silently stops climbing on the number the Agents tab shows.',
   },
   {
     path: 'toolMode.windowlessFloor',
