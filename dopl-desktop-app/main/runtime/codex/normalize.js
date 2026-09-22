@@ -96,11 +96,11 @@ function toolNameOf(item) {
 // tokens; `total_cost_usd` is a CLAUDE field and nothing in the research says Codex reports a USD
 // figure at all (§5 item C11). So `result` is built with an explicit `null` cost, which HIDES the
 // cost cap (`descriptor.meter.cost`) rather than rendering a budget fed by a zero that never trips.
-// ⚠ THE FIELD NAMES ARE UNMEASURED (§5 item C12) — hence the spelling sweep, and hence
-// `descriptor.meter.fields` being `null` rather than a list somebody guessed.
+// ⚠ THE SPELLING SWEEP STAYS, because `descriptor.meter.fields` is still `null` and a payload
+// spelled another way must meter rather than read as zero. What is no longer unmeasured is the
+// ARITHMETIC — see `tokensFrom`.
 const TOTAL_KEYS = ['total_tokens', 'totalTokens', 'total'];
 const IN_KEYS = ['input_tokens', 'inputTokens', 'prompt_tokens', 'promptTokens'];
-const CACHED_KEYS = ['cached_input_tokens', 'cachedInputTokens', 'cache_read_input_tokens'];
 const OUT_KEYS = ['output_tokens', 'outputTokens', 'completion_tokens', 'completionTokens'];
 
 function usageOf(params) {
@@ -124,14 +124,31 @@ function pick(usage, keys) {
   return 0;
 }
 
-/** `{ prompt, session }` — the window occupancy, and the turn's whole token total. 0 says nothing. */
+/**
+ * `{ prompt, session }` — the window occupancy, and the turn's whole token total. 0 says nothing.
+ *
+ * 🔒 ⚠ **`cachedInputTokens` IS A SUBSET OF `inputTokens` ON THIS RUNTIME — MEASURED 2026-09-22
+ * AGAINST `codex-cli 0.155.1`, AND IT USED TO BE ADDED ON TOP.** Three live
+ * `thread/tokenUsage/updated` breakdowns from one thread, each satisfying
+ * `totalTokens === inputTokens + outputTokens` exactly:
+ *
+ *     last { totalTokens 18838, inputTokens 18833, cachedInputTokens  7040, outputTokens  5 }
+ *     last { totalTokens 23591, inputTokens 23586, cachedInputTokens 18688, outputTokens  5 }
+ *     last { totalTokens 28765, inputTokens 28760, cachedInputTokens 23424, outputTokens  5 }
+ *
+ * The cached figure is never added into the platform's own total, so adding it here reported a
+ * prompt of 25,873 against a real 18,833 — a context meter that overstates occupancy by whatever
+ * fraction of the prompt was cached, which on a long thread approaches double. The other runtime's
+ * `cache_read_input_tokens` IS additive; this normalizer only ever sees Codex payloads, so the
+ * two conventions do not have to be reconciled here — and the sum fallback drops the cached term
+ * for the same reason.
+ */
 function tokensFrom(usage) {
   if (!usage || typeof usage !== 'object') return { prompt: 0, session: 0 };
   const input = pick(usage, IN_KEYS);
-  const cached = pick(usage, CACHED_KEYS);
   const output = pick(usage, OUT_KEYS);
   const total = pick(usage, TOTAL_KEYS);
-  return { prompt: input + cached, session: total || (input + cached + output) };
+  return { prompt: input, session: total || (input + output) };
 }
 
 // ── THE RENDER MAPPING ───────────────────────────────────────────────────────────────────────
@@ -241,12 +258,23 @@ function normalize(msg, ctx) {
     // ⚠ PER-TURN, NOT PER-MESSAGE, AND THAT IS `descriptor.meter.mode`. This runtime reports usage
     // once a turn ends (`codex-research.md` §3: "not a live running meter"), so the context event
     // rides the same frame as the result instead of the last assistant message's own usage.
-    if (prompt.prompt > 0 || model) out.push(events.context(prompt.prompt, model));
+    // 🔒 ⚠ **ONLY WHEN THERE IS A MEASUREMENT — `|| model` USED TO BE HERE AND IT WIPED THE METER
+    // ON EVERY INTERRUPT** (MEASURED 2026-09-22: an interrupted turn ends on `turn/completed` with
+    // `status: "interrupted"` and NO `thread/tokenUsage/updated` at all, so `prompt.prompt` is 0
+    // while `model` is still the one `thread/start` selected). `session-reducer.js`'s `context`
+    // branch writes `contextTokens` unconditionally, so that zero reset a live window gauge to
+    // empty the moment an operator pressed Stop. The model is not lost: `result` below carries it
+    // and the reducer reads it from there. This is the same rule as
+    // `session-model.js › contextEvent`, which answers `null` for a zero on the other runtime.
+    if (prompt.prompt > 0) out.push(events.context(prompt.prompt, model));
     // ⚠ CUMULATIVE BY CONTRACT, DELTA'D IN CORE — and the cost is an explicit `null`, not a 0.
-    // ⚠ THE TOTAL MAY NOT BE CUMULATIVE ON THIS RUNTIME AT ALL (§5 item C12/C8): if `usage` is
-    // PER-TURN rather than running, core's `Math.max(0, total - last)` under-counts. That is the
-    // same class as the resume-reset question and is why `usageResetsOnResume` is `'unverified'`
-    // and resume is refused until both are measured together.
+    // 🔒 **MEASURED 2026-09-22 (`codex-cli 0.155.1`): `tokenUsage.total` IS RUNNING, PER THREAD,
+    // AND `tokenUsage.last` IS THE TURN.** Three consecutive turns on one thread reported
+    // total 18,838 → 42,429 → 71,194 while `last` read 18,838 / 23,591 / 28,765, and each step is
+    // the previous total plus that turn's `last` exactly. So `launch-spec.js` attaching `total`
+    // here and core's `Math.max(0, total - last)` are both correct on a LIVE session. ⚠ The same
+    // measurement continued the total ACROSS a `thread/resume` in a fresh child, which is why
+    // `usageResetsOnResume` is now `false` and resume stays refused — for a measured reason.
     out.push(events.result(null, t.session, model));
     return out;
   }

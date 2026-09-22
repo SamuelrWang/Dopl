@@ -133,8 +133,10 @@ test("both DELTA streams are dropped — the outbound card must never be painted
 test("a finished turn meters TOKENS and reports NO COST — the cap is hidden, never zeroed", () => {
   const out = normalize.normalize(TURN_DONE, CTX);
   assert.deepEqual(types(out), ["context", "result"]);
-  // The window occupancy is the PROMPT half (input + cached input), not the whole turn.
-  assert.equal(out[0].tokens, 50000);
+  // 🔒 The window occupancy is the PROMPT half — `inputTokens` ALONE. `cached_input_tokens` is a
+  // SUBSET of it on this runtime (MEASURED 2026-09-22, `codex-cli 0.155.1`: every live breakdown
+  // satisfied `totalTokens === inputTokens + outputTokens`), so adding it overstated the meter.
+  assert.equal(out[0].tokens, 41000);
   assert.equal(out[1].sessionTokens, 51200);
   // ⚠ NULL, NOT 0. `main/session-state.js › costCapReached` is fed by exactly one number, and a
   // zero is a budget that never trips. `total_cost_usd` is the OTHER runtime's field; nothing in
@@ -146,9 +148,34 @@ test("…and an unmeasured usage spelling still meters rather than reading as ze
   const out = normalize.normalize(TURN_DONE_CAMEL, CTX);
   assert.equal(out[0].tokens, 2000);
   assert.equal(out[1].sessionTokens, 2100, "no `total`, so the parts are summed");
+  // ⚠ AND THE SUM FALLBACK DOES NOT ADD THE CACHED TERM EITHER, for the same measured reason.
+  const cachedOnly = normalize.normalize({
+    method: "turn/completed",
+    params: { usage: { inputTokens: 1000, cachedInputTokens: 800, outputTokens: 10 } },
+  }, CTX);
+  assert.equal(cachedOnly[0].tokens, 1000, "cached input is inside input, never on top of it");
+  assert.equal(cachedOnly[1].sessionTokens, 1010);
   const empty = normalize.normalize({ method: "turn/completed", params: {} }, CTX);
   assert.deepEqual(types(empty), ["result"], "no usage at all paints no context row");
   assert.equal(empty[0].sessionTokens, 0);
+});
+
+test("an INTERRUPTED turn is ONE terminal result and does NOT zero the context meter", () => {
+  // 🔒 MEASURED 2026-09-22 (`codex-cli 0.155.1`): `turn/interrupt` ends the turn on the SAME
+  // `turn/completed` notification a successful turn ends on, carrying `status: "interrupted"`, and
+  // NO `thread/tokenUsage/updated` is sent for it — so `launch-spec.js` attaches a null usage.
+  // The live wire is pinned in `codex-live-session.test.mjs`; this is the normalizer's half.
+  const out = normalize.normalize({
+    method: "turn/completed",
+    params: { threadId: "th_1", turn: { id: "tu_1", status: "interrupted" }, usage: null, promptUsage: null, model: "gpt-6-astra" },
+  }, CTX);
+  // ⚠ NO `context` ROW. `session-reducer.js`'s context branch writes `contextTokens`
+  // unconditionally, so emitting a zero here emptied a live window gauge every time an operator
+  // pressed Stop. The model still reaches the reducer — on the `result` below.
+  assert.deepEqual(types(out), ["result"]);
+  assert.equal(out[0].model, "gpt-6-astra");
+  assert.equal(out[0].sessionTokens, 0);
+  assert.equal(out[0].costUsd, null);
 });
 
 test("an own-channel post becomes ONE outbound_post, and the generic tool card is suppressed", () => {

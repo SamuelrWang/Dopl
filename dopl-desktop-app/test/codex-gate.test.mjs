@@ -381,9 +381,13 @@ test("a session with NO token gets NO Dopl entry, and still launches", () => {
 // ── REFUSALS THAT ARE DECLARATIONS ───────────────────────────────────────────────────────────
 
 test("resume is REFUSED with a readable reason, and a cold launch is unaffected", () => {
+  // 🔒 ⚠ **THE REASON IS NOW A MEASUREMENT, NOT AN ABSENCE** (2026-09-22, `codex-cli 0.155.1`):
+  // `thread/tokenUsage/updated.total` CONTINUES across `thread/resume` in a fresh app-server, so
+  // the declaration moved from `'unverified'` to `false` and `canResume` — which requires `true`
+  // — still refuses. `codex-live-session.test.mjs` holds the measurement.
   assert.equal(capability.canResume(D), false);
-  assert.match(String(capability.resumeRefusal(D)), /unverified/);
-  assert.throws(() => launchSpec.resume({ session: {} }, null), /unverified/,
+  assert.match(String(capability.resumeRefusal(D)), /continues cumulative usage across a resume/);
+  assert.throws(() => launchSpec.resume({ session: {} }, null), /continues cumulative usage/,
     "the adapter refuses at its own door rather than declaring a block nothing enforces");
 });
 

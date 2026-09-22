@@ -60,8 +60,11 @@ const live = (over = {}) => ({
 
 test("the usage baseline is the descriptor's tri-state, named so a record is readable", () => {
   assert.equal(truth.usageBaseline(registry.descriptorFor("claude")), "resets");
-  assert.equal(truth.usageBaseline(registry.descriptorFor("codex")), "unverified");
+  // ⚠ `'continues'` SINCE 2026-09-22, MEASURED: Codex's cumulative total survives a
+  // `thread/resume`, so the record names that rather than an absence of knowledge.
+  assert.equal(truth.usageBaseline(registry.descriptorFor("codex")), "continues");
   assert.equal(truth.usageBaseline({ session: { usageResetsOnResume: false } }), "continues");
+  assert.equal(truth.usageBaseline({ session: { usageResetsOnResume: "unverified" } }), "unverified");
   // ⚠ AN ABSENT DECLARATION IS `'unverified'`, the fail-closed member: `canResume` already
   // refuses anything that is not exactly `true`, and a missing field must not read as a yes.
   assert.equal(truth.usageBaseline(null), "unverified");
@@ -129,7 +132,7 @@ test("a Codex session's record states its runtime, its model, its policy and its
   assert.equal(rec.runtimeId, "codex");
   assert.equal(rec.effectiveModel, "gpt-6-astra");
   assert.ok(rec.nativePolicy && rec.nativePolicy.length > 0);
-  assert.equal(rec.usageBaseline, "unverified",
+  assert.equal(rec.usageBaseline, "continues",
     "and the record says WHY a resume of it will be refused");
 });
 

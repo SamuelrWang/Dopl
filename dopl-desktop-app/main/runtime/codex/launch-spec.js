@@ -314,6 +314,7 @@ function start(spec) {
     threadId = (threadValue && (threadValue.threadId || threadValue.thread_id || threadValue.id))
       || spec.resumeThreadId || null;
     selectedModel = (thread && thread.model) || (threadValue && threadValue.model) || null;
+    assertPolicyTook(params, thread);
     // ⚠ SYNTHETIC, AND NAMESPACED `dopl/` SO NOBODY MISTAKES IT FOR PROTOCOL. The app-server
     // documents no `thread/started` notification — the conversation handle arrives as a RESULT —
     // and core's consume loop only ever sees frames. This is where `launched` comes from, and
@@ -347,6 +348,69 @@ function start(spec) {
   return handleFor(conn, frames, () => threadId, () => activeTurnId);
 }
 
+/**
+ * 🔒 THE POLICY ACTUALLY TOOK — checked against the app-server's own echo.
+ *
+ * ⚠ **`thread/start` IGNORES A FIELD IT DOES NOT RECOGNISE AND ANSWERS WITH ITS DEFAULT**
+ * (MEASURED 2026-09-22, `codex-cli 0.155.1`): sending the pre-v2 `approval_policy` / `sandbox_mode`
+ * spellings is ACCEPTED, the thread starts, and the response reports `approvalPolicy: "on-request"`
+ * — the server's own default, not the `never` that was asked for. Nothing errors. So a renamed
+ * field in a future CLI, or a typo here, does not break a launch: it SILENTLY WIDENS one, and a
+ * session runs at a supervision level the operator did not choose with no symptom anywhere.
+ *
+ * ⚠ THE RESPONSE ECHO IS THE ONLY DEFENCE, and it is a real one: `ThreadStartResponse` /
+ * `ThreadResumeResponse` both REQUIRE `approvalPolicy`, so it is there to be read. This compares
+ * only the STRING form — `granular` is an object whose echo shape is the server's own normalised
+ * one, and an inequality there would be a false alarm rather than a caught downgrade.
+ *
+ * 🔒 UNKNOWN IS NOT A MISMATCH (`docs/INVARIANTS.md`). A response that carries no `approvalPolicy`
+ * has told us nothing and is left alone; only a value that is PRESENT and DIFFERENT throws.
+ */
+function assertPolicyTook(sent, response) {
+  const asked = sent && sent.approvalPolicy;
+  if (typeof asked !== 'string' || !asked) return;
+  const got = response && response.approvalPolicy;
+  if (typeof got !== 'string' || !got) return;
+  if (got === asked) return;
+  throw new Error(
+    `Codex started the thread at approval policy \`${got}\` after Dopl asked for \`${asked}\` — `
+    + 'refusing a session that would run wider than the operator chose.'
+  );
+}
+
+// 🔒 ⚠ **`turn/interrupt` IS THE ONE VERB THAT CAN ANSWER NOTHING AT ALL** (MEASURED 2026-09-22,
+// `codex-cli 0.155.1`), and this is the bound that keeps that off Dopl's side of the wire.
+//
+// Three aims, three different answers, all measured on a real app-server:
+//   an ACTIVE turn                   → `{}`, and `turn/completed` follows with `status: interrupted`
+//   a turn that ENDED NORMALLY       → JSON-RPC `-32600` "no active turn to interrupt"
+//   a turn ALREADY INTERRUPTED       → **NO RESPONSE, EVER.** 20s of waiting produced neither a
+//                                      result nor an error; the request simply stays outstanding.
+//
+// `turn/steer` rejects cleanly in every one of those states, so this asymmetry belongs to
+// interrupt alone. Today's blast radius is small — `session-engine.js › runEffect` case
+// `interruptQuery` is fire-and-forget (`.catch(() => {})`) — but the promise it drops never
+// settles and the entry in `client.js`'s `pending` map lives until the child exits. The moment any
+// caller AWAITS this (a graceful shutdown that wants the interrupt to land before closing is the
+// obvious one), an un-bounded version hangs that caller forever.
+//
+// ⚠ IT RESOLVES, IT NEVER REJECTS. An interrupt is a best-effort stop, and its caller has nothing
+// useful to do with a failure — the terminal state arrives on the frame stream either way.
+// ⚠ AND THE TIMER IS `unref`'d, so a pending bound cannot hold a Node process open at exit (the
+// desktop CI runs Node 22, where that is the difference between a green run and a hung one).
+const INTERRUPT_TIMEOUT_MS = 5000;
+
+function boundedInterrupt(pending) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, INTERRUPT_TIMEOUT_MS);
+    if (typeof timer.unref === 'function') timer.unref();
+    pending.then(
+      () => { clearTimeout(timer); resolve(); },
+      () => { clearTimeout(timer); resolve(); }
+    );
+  });
+}
+
 function handleFor(conn, frames, threadIdOf, turnIdOf) {
   return {
     [Symbol.asyncIterator]() { return frames[Symbol.asyncIterator](); },
@@ -360,8 +424,10 @@ function handleFor(conn, frames, threadIdOf, turnIdOf) {
       if (!conn) return Promise.resolve();
       const threadId = threadIdOf();
       const turnId = turnIdOf();
+      // ⚠ NO ACTIVE TURN, NO REQUEST. `activeTurnId` is cleared on `turn/completed`, which is the
+      // first half of the defence measured below.
       if (!threadId || !turnId) return Promise.resolve();
-      return conn.request('turn/interrupt', { threadId, turnId }).catch(() => {});
+      return boundedInterrupt(conn.request('turn/interrupt', { threadId, turnId }));
     },
     close() {
       frames.close();
@@ -374,16 +440,18 @@ function handleFor(conn, frames, threadIdOf, turnIdOf) {
  * Resume a parked conversation — ⚠ REFUSED ON THIS RUNTIME, AND THE REFUSAL IS THE POINT.
  *
  * `session-park.js › resumeParked` zeroes both cost/token delta baselines on the explicit
- * ASSUMPTION that a resumed conversation restarts its cumulative totals. `codex-research.md` says
- * nothing about `thread/resume`'s usage semantics (§5 item C8), and a runtime that CONTINUES the
- * total makes every delta negative, `session-io.js` clamps it to zero, cost stops accumulating and
- * `session-state.js › costCapReached` is never reached — the budget control silently stops
- * existing, with no error and no symptom until a bill arrives.
+ * ASSUMPTION that a resumed conversation restarts its cumulative totals. 🔒 **§5 item C8 IS NOW
+ * MEASURED (2026-09-22, `codex-cli 0.155.1`): this runtime CONTINUES the total across
+ * `thread/resume` in a fresh child** — one thread read total 18,838 → 42,429 → 71,194 over three
+ * turns spanning two app-server processes, each step the previous total plus that turn's `last`.
+ * So the baseline reset would re-bill the entire thread on the first post-resume `result`, and
+ * `session-state.js › costCapReached` would fire on history the operator already paid for.
  *
- * ⚠ SO THE ADAPTER REFUSES AT ITS OWN DOOR rather than declaring a block nothing enforces.
- * `descriptor.session.usageResetsOnResume` is `'unverified'`, `capability.js › canResume` reads
- * that as false, and this asks that predicate rather than restating it — one declaration, one
- * enforcement, and answering C8 turns both green with no code change here.
+ * ⚠ SO THE ADAPTER STILL REFUSES AT ITS OWN DOOR rather than declaring a block nothing enforces.
+ * `descriptor.session.usageResetsOnResume` is `false`, `capability.js › canResume` requires
+ * `true`, and this asks that predicate rather than restating it — one declaration, one
+ * enforcement. ⚠ WHAT LIFTS IT IS A CORE CHANGE: `resumeParked` must PRESERVE the baseline for a
+ * runtime that declares `false`. That is CXP-4's remaining half, in `main/session-park.js`.
  * ⚠ A COLD LAUNCH IS UNAFFECTED, which is the whole design of the field: this refuses a RESUME.
  */
 function resume(spec, _priorHandle) {
@@ -401,5 +469,6 @@ function appVersion() {
 module.exports = {
   buildLaunchSpec, start, resume,
   buildScrubbedEnv, nativePair, approvalPolicy, makeFrameQueue, makeApprovalHandler,
-  DEFAULT_SANDBOX, SANDBOX_MODES,
+  assertPolicyTook, boundedInterrupt,
+  DEFAULT_SANDBOX, SANDBOX_MODES, INTERRUPT_TIMEOUT_MS,
 };

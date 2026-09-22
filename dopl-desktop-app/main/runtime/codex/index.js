@@ -7,11 +7,11 @@
 //
 // ⚠ THE CORE START/TURN PATH HAS NOW COMPLETED A LIVE TURN against the ChatGPT-bundled Codex alpha,
 // and the v2 request/notification shapes below are pinned by generated-schema fixtures. That is
-// implementation evidence, not a supported distribution contract: a standalone public CLI,
-// packaged-Dopl smoke, resume-usage behavior, and long-wait wake behavior remain unmeasured.
-// Anything still ungrounded stays DECLARED UNVERIFIED rather than assumed. Two declarations have
-// teeth today: `meter.cost: null` hides the cost cap and `session.usageResetsOnResume:
-// 'unverified'` refuses resume.
+// implementation evidence, not a supported distribution contract: a packaged-Dopl smoke and
+// long-wait wake behavior remain unmeasured. Anything still ungrounded stays DECLARED UNVERIFIED
+// rather than assumed. Two declarations have teeth today: `meter.cost: null` hides the cost cap,
+// and `session.usageResetsOnResume: false` — MEASURED 2026-09-22 on the public `codex-cli
+// 0.155.1` — refuses resume because this runtime CONTINUES its totals across one.
 //
 // ⚠ ELECTRON-FREE AT LOAD, BY CONTRACT. `main/session-profiles.js` is a PURE module two suites
 // slice and evaluate standalone, and it asks the registry for every gate decision — so requiring
@@ -79,13 +79,26 @@ const descriptor = {
     // core's push iterator is Dopl's own transport and `launch-spec.js` pumps it into those two
     // verbs. The other runtime consumes the iterable directly, which is why this is declared.
     promptModes: ['string'],
-    // ⚠ `'unverified'`, AND IT REFUSES A RESUME (§5 item C8). `session-park.js › resumeParked`
-    // zeroes both delta baselines on an explicit assumption; a runtime that CONTINUES the
-    // cumulative total makes every delta negative, clamps it to zero, and stops the cost cap ever
-    // firing — silently, with no symptom until a bill arrives. A COLD LAUNCH IS UNAFFECTED.
-    // `launch-spec.js › resume` asks `capability.js › canResume` rather than restating this, so
-    // answering C8 turns both green with no code change.
-    usageResetsOnResume: 'unverified',
+    // 🔒 ⚠ **`false` — MEASURED 2026-09-22 AGAINST `codex-cli 0.155.1`, AND IT STILL REFUSES A
+    // RESUME.** §5 item C8 is ANSWERED: this runtime CONTINUES its cumulative total across
+    // `thread/resume`. One thread, one turn in a cold `codex app-server` child, then the thread
+    // resumed in a SECOND child for two more turns; `thread/tokenUsage/updated.total.totalTokens`
+    // read 18,838 → 42,429 → 71,194 while `.last.totalTokens` read 18,838 / 23,591 / 28,765, and
+    // every step is the previous total plus that turn's `last` EXACTLY. The resume did not restart
+    // anything.
+    //
+    // ⚠ SO THE REFUSAL STANDS, WITH A DIFFERENT REASON. `session-park.js › resumeParked` zeroes
+    // `lastTotalCost` / `lastTotalTokens` on the assumption that a resumed conversation restarts
+    // its totals. On a continuing runtime that baseline reset re-bills the WHOLE thread on the
+    // first post-resume `result` — the cost cap fires on history the operator already paid for,
+    // and a longer thread hits it sooner. `capability.js › canResume` requires `=== true`, so
+    // `false` keeps the door shut and `capability.js › resumeRefusal` now states the measured
+    // sentence ("continues cumulative usage across a resume") instead of "unverified".
+    //
+    // ⚠ WHAT OPENS IT IS A CORE CHANGE, NOT THIS FIELD: `resumeParked` must PRESERVE the baseline
+    // for a runtime that declares `false` rather than zero it. That is CXP-4's remaining half and
+    // it lives in `main/session-park.js`. A COLD LAUNCH IS UNAFFECTED, as it always was.
+    usageResetsOnResume: false,
   },
 
   axisB: axisB.descriptor,

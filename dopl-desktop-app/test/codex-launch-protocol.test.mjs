@@ -1,20 +1,37 @@
-// THE LIVE APP-SERVER STATE MACHINE, WITHOUT SPAWNING A BINARY.
+// THE APP-SERVER STATE MACHINE — pinned to the schema, plus ONE live end-to-end turn.
 //
-// The fake connection below speaks the measured v2 response shapes from the generated schema.
-// This keeps the launch adapter pinned to the real protocol while leaving process discovery,
-// authentication and network access to their own integration gates.
+// The fake connection below speaks the measured v2 response shapes from the generated schema, so
+// the launch adapter stays pinned to the real protocol with no binary, no account and no network.
+// The last case in the file is the exception: it drives the SAME adapter against a real
+// `codex app-server`, and it runs only when `CODEX_APP_SERVER_LIVE=1` arms the tier.
+//
+// ⚠ Turn-level behaviour a fixture cannot decide — what a steer targets, what an interrupt leaves
+// behind, what a resume does to the token totals — lives in `codex-live-session.test.mjs`, which
+// is live-only by construction.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+
+import { liveGate, announceGate, skipLive, appEnv } from "./_codex-app-server.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const CODEX = join(HERE, "..", "main", "runtime", "codex");
 const client = require(join(CODEX, "client.js"));
 const launchSpec = require(join(CODEX, "launch-spec.js"));
+
+// 🔒 ⚠ **ONE LIVE FLAG IN THIS TREE, AND IT IS `CODEX_APP_SERVER_LIVE`.** This case used to gate
+// on a SECOND name, `CODEX_ADAPTER_LIVE`, which nothing ever set: not `npm test`, not
+// `scripts/codex-compat.js`, not CI. So the one test that drives the real adapter against a real
+// app-server had never executed anywhere, and it skipped with a bare `skip:` — no banner, no
+// reason, indistinguishable from a pass in the summary. That is precisely the failure U1's helper
+// exists to remove, so it now shares that helper's gate and its loud skip.
+const GATE = announceGate(liveGate());
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -133,10 +150,31 @@ test("start drives the measured v2 thread/turn state machine", async () => {
   }
 });
 
-test("LIVE: the adapter completes a real app-server turn", {
-  skip: process.env.CODEX_ADAPTER_LIVE !== "1",
-  timeout: 60000,
-}, async () => {
+test("a thread that started at a WIDER policy than Dopl asked for is refused", () => {
+  // 🔒 MEASURED 2026-09-22 (`codex-cli 0.155.1`): `thread/start` IGNORES a field it does not
+  // recognise and answers with its own default. Sending the pre-v2 `approval_policy` spelling
+  // started a thread and reported `approvalPolicy: "on-request"` while `never` had been asked for
+  // — no error anywhere. The response echo is the only thing that can catch that, and
+  // `ThreadStartResponse` REQUIRES the field, so it is always there to read.
+  assert.throws(
+    () => launchSpec.assertPolicyTook({ approvalPolicy: "untrusted" }, { approvalPolicy: "on-request" }),
+    /started the thread at approval policy `on-request` after Dopl asked for `untrusted`/
+  );
+  // The agreeing case is silent.
+  launchSpec.assertPolicyTook({ approvalPolicy: "never" }, { approvalPolicy: "never" });
+  // 🔒 UNKNOWN IS NOT A MISMATCH. A response that says nothing about the policy has told us
+  // nothing, and a `granular` ask is an OBJECT whose echo is the server's normalised form — an
+  // inequality there would be a false alarm, not a caught downgrade.
+  launchSpec.assertPolicyTook({ approvalPolicy: "never" }, {});
+  launchSpec.assertPolicyTook({ approvalPolicy: "never" }, { approvalPolicy: null });
+  launchSpec.assertPolicyTook({ approvalPolicy: { granular: { rules: true } } }, { approvalPolicy: "on-request" });
+  launchSpec.assertPolicyTook({}, { approvalPolicy: "on-request" });
+});
+
+// 💰 ⚠ ONE MODEL TURN PER ARMED RUN. The prompt asks for a single token and forbids tools; the
+// thread is `read-only`, so nothing it could decide to do can touch this checkout.
+test("LIVE: the adapter completes a real app-server turn", { timeout: 120000 }, async (t) => {
+  if (skipLive(t, GATE)) return;
   async function* onePrompt() {
     yield { message: { content: "Reply with exactly DOPL_CODEX_OK. Do not use tools." } };
   }
@@ -144,8 +182,10 @@ test("LIVE: the adapter completes a real app-server turn", {
     session: { key: "live:codex:adapter", profile: "full", channelId: null, state: {} },
     args: [],
     threadStart: { approvalPolicy: "untrusted", sandbox: "read-only" },
-    env: process.env,
-    cwd: HERE,
+    // ⚠ THE ISOLATED HOME, NOT `~/.codex`. A live turn run through the operator's own
+    // `config.toml` measures their machine; `appEnv()` is the child the app would spawn.
+    env: appEnv(),
+    cwd: mkdtempSync(join(tmpdir(), "dopl-codex-adapter-live-")),
     prompt: onePrompt(),
     log: (...parts) => process.stderr.write(`${parts.join(" ")}\n`),
     dispatch: () => {},

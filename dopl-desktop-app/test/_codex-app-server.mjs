@@ -37,6 +37,9 @@ const require = createRequire(import.meta.url);
 const CODEX = join(HERE, '..', 'main', 'runtime', 'codex');
 export const client = require(join(CODEX, 'client.js'));
 export const resolveBin = require(join(CODEX, 'resolve-bin.js'));
+// ⚠ THE DESCRIPTOR ITSELF, so a live test can assert that what it MEASURED is what the adapter
+// DECLARES. `index.js` is electron-free at load by contract, which is what makes this safe here.
+export const RUNTIME_DESCRIPTOR = require(join(CODEX, 'index.js')).descriptor;
 
 export const LIVE_ENV = 'CODEX_APP_SERVER_LIVE';
 export const FIXTURE_PATH = join(HERE, 'fixtures', 'codex-app-server.json');
@@ -138,6 +141,28 @@ function alive(pid) {
 /** Pids this helper started that were still answering after their `finally` ran. */
 export function leakedPids() {
   return LEAKED.filter((pid) => alive(pid));
+}
+
+/**
+ * THE ENVIRONMENT THE APP ACTUALLY LAUNCHES WITH — an app-owned `CODEX_HOME` holding no config,
+ * with the operator's auth linked in (`main/runtime/codex/config-home.js`).
+ *
+ * ⚠ **A LIVE TEST THAT RUNS AGAINST `~/.codex` IS MEASURING THE OPERATOR, NOT DOPL.** Their
+ * `config.toml` can pin a model, register MCP servers, or widen a policy, and a contract measured
+ * through it is a contract about that machine. This is the same call `launch-spec.js › start`
+ * makes, so what the live tier measures is the child the app would spawn.
+ */
+export function appEnv() {
+  const configHome = require(join(CODEX, 'config-home.js'));
+  return configHome.isolatedEnv(process.env);
+}
+
+/**
+ * Close a connection this file did not open through `withAppServer`, on the SAME discipline:
+ * close, wait for `exit`, `SIGKILL` on a grace timeout, and record the pid if it still answers.
+ */
+export async function terminateConn(conn) {
+  return terminate(conn);
 }
 
 async function terminate(conn) {
