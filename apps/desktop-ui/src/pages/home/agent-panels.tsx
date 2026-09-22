@@ -3,6 +3,7 @@ import { Bot } from "lucide-react";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { agentTemplateErrorMessage } from "@/features/agent-templates/client/api";
 import { useAgentTemplates } from "@/features/agent-templates/hooks/use-agent-templates";
+import { EMPTY_KNOWLEDGE } from "@/features/agent-templates/lib/knowledge-scopes";
 import {
   SECTIONS_CONTAINER,
   SECTION_PRIVATE_EVERYWHERE,
@@ -24,7 +25,8 @@ import {
   ContainerTemplateEditor,
   HomeWorkspaceTemplateEditor,
 } from "./agent-editor";
-import { ShareIntoChannelButton, ShareIntoChannelDialog } from "./agent-share";
+import { LaunchIntoChannelButton, useCardLaunch } from "./agent-card-launch";
+import { AddKnowledgeWell, AgentKnowledgeDialog } from "./agent-card-knowledge";
 import { CreateButton } from "./panel-buttons";
 import { HomeAgentPanelsSkeleton } from "./home-skeleton";
 
@@ -50,10 +52,16 @@ import { HomeAgentPanelsSkeleton } from "./home-skeleton";
  * **Agents** tab (`channels/components/agents-tab.tsx`) lists RUNNING SESSIONS. The
  * collision is RECORDED (INVARIANTS §5A), not resolved; a rename needs his word.
  *
- * ⚠ NO LAUNCH CONTROL, DELIBERATELY (§4.6, §5A) — the Channels face's
- * `TemplateLaunchPicker` reads THIS SAME list and launches from it, and a second
- * launch surface fights `resolve`'s singularity. The absence is tested
- * (`agent-panels.test.tsx`). CREATE and EDIT are the authoring half and stay.
+ * 🔒 **THE PERSONAL CARD LAUNCHES SINCE 2026-09-22 (Samuel), SUPERSEDING
+ * "NO LAUNCH CONTROL, DELIBERATELY" (§4.6, §5A).** That rule was written against
+ * a second launch FORM — the Channels face's popup reads this same list, and two
+ * places to CHOOSE a model, a runtime and a colour is how the two come to
+ * disagree. The card offers no choices: one click sends the template id and
+ * nothing else (`agent-card-launch.tsx`), so `resolve` is still resolved in one
+ * place and the popup is still the only surface that can re-point a spawn.
+ * ⚠ **THE SHARED SECTION HAS NO LAUNCH.** Its rows are the CONTAINER's, the
+ * launch payload resolves a template in ONE workspace, and Samuel's ruling names
+ * the personal card. CREATE and EDIT are the authoring half and stay.
  *
  * ⚠ THE CREATE AFFORDANCE FOLLOWS THE SCOPE PILL (Knowledge-wave ruling 6): "in
  * this channel" writes into the CONTAINER, "across all channels" into the home
@@ -99,9 +107,18 @@ export function HomeAgentPanels({
   currentUserId: string;
 }) {
   const [editing, setEditing] = useState<EditorTarget | null>(null);
-  /** The PERSONAL row waiting on its confirm step. ⚠ **A GRANT SINCE
-   *  2026-09-02 (slice B15), where it was a COPY** — see `agent-share.tsx`. */
-  const [sharing, setSharing] = useState<AgentTemplate | null>(null);
+  /**
+   * The PERSONAL row whose knowledge popup is open (Samuel, 2026-09-22).
+   *
+   * ⚠ **IT REPLACED `sharing`**, which held the row waiting on the grant
+   * dialog's confirm step — the card's second control is a LAUNCH now, and
+   * `agent-share.tsx` is deleted with it (`dopl_agent(op="grant")` still writes
+   * a grant). The state is kept in the PANE rather than in the card so a channel
+   * switch tears it down: a dialog held across one would silently retarget.
+   */
+  const [attaching, setAttaching] = useState<AgentTemplate | null>(null);
+  /** The card launch lane — one in flight, per-row spinner, per-row refusal. */
+  const cardLaunch = useCardLaunch(channel);
 
   // ⚠ A CONTAINER READ IS UNFILTERED. A shelf is a TENANCY and this container is
   // not the caller's personal one, so `?shelf=` here would be a question with one
@@ -272,17 +289,45 @@ export function HomeAgentPanels({
         // ⚠ EVERY PERSONAL ROW CARRIES IT. It used to be scope-C only because
         // scope B's rows were already in the container; there is no scope B any
         // more, so the condition has no second branch to guard against.
-        // ⚠ AND NOT WITH NO CHANNEL TO SHARE INTO. The dialog takes
-        // `channel.id`; offering the button with nothing selected would be
-        // an affordance whose only outcome is a crash.
+        // ⚠ AND NOT WITH NO CHANNEL TO LAUNCH INTO. The launch takes
+        // `channel.id`; offering the button with nothing selected would be an
+        // affordance whose only outcome is a crash. ⚠ THE KNOWLEDGE BOX GOES
+        // WITH IT even though attaching needs no channel — the two are ONE
+        // control slot (`template-section.tsx › TemplateCard` carries exactly
+        // one), and a card that showed half of it would be a second layout
+        // nobody ruled on.
         cardActionFor={
           channel === null
             ? undefined
             : (template) => (
-                <ShareIntoChannelButton
-                  disabled={sharing !== null}
-                  onClick={() => setSharing(template)}
-                />
+                <div className="flex w-full flex-col gap-1.5">
+                  <AddKnowledgeWell
+                    // ⚠ §8's STALE-CACHE FALLBACK, SPELLED INLINE: `knowledge`
+                    // was added to an already-persisted payload.
+                    refs={template.knowledge ?? EMPTY_KNOWLEDGE}
+                    templateName={template.name}
+                    onClick={() => setAttaching(template)}
+                  />
+                  {cardLaunch.error?.templateId === template.id && (
+                    <p role="alert" className="text-caption text-danger">
+                      {cardLaunch.error.message}
+                    </p>
+                  )}
+                  {/* ⚠ BOTTOM-RIGHT (Samuel, 2026-09-22). The row is what puts
+                      it there; the slot itself is full-width and bottom-anchored
+                      in `TemplateCard`. */}
+                  <div className="flex justify-end">
+                    <LaunchIntoChannelButton
+                      busy={cardLaunch.busyId === template.id}
+                      // ⚠ EVERY OTHER ROW IS INERT WHILE ONE LAUNCHES — the
+                      // double-submit guard is the pane's, so the cards say so.
+                      disabled={
+                        !cardLaunch.canLaunch || cardLaunch.busyId !== null
+                      }
+                      onClick={() => cardLaunch.launch(template)}
+                    />
+                  </div>
+                </div>
               )
         }
         action={
@@ -314,15 +359,15 @@ export function HomeAgentPanels({
         />
       )}
 
-      {sharing && channel !== null && (
-        <ShareIntoChannelDialog
-          source={sharing}
-          // ⚠ THE CHANNEL, NOT THE CONTAINER. A `channel` scope is what puts the
-          // row in front of the people in the room; a `container` grant would
-          // name the tenancy and no audience.
-          channelId={channel.id}
-          onClose={() => setSharing(null)}
-          onShared={() => setSharing(null)}
+      {/* ⚠ MOUNTED ONLY WHILE OPEN, and against the HOME workspace: a personal
+          row's knowledge lives where the row does, and the patch must address
+          the same shelf-keyed cache entry the section read
+          (`HOME_SHELF`, F-331 with the shelf as the second axis). */}
+      {attaching && homeWorkspaceId && (
+        <AgentKnowledgeDialog
+          template={attaching}
+          workspaceId={homeWorkspaceId}
+          onClose={() => setAttaching(null)}
         />
       )}
     </div>

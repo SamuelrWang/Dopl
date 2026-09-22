@@ -7,10 +7,21 @@
  *
  * Mount `<ToastHost />` once at the root; fire `toast({title, description,
  * action})` from any client component.
+ *
+ * ⚠ **TWO FACES, ONE HOST (2026-09-22, Samuel's agent-card launch ruling: *"a
+ * notification popup, small, black, bottom right of the screen"*).** The default
+ * face is the light card every existing caller already fires; `variant:
+ * "invert"` is the SMALL BLACK one — one line, no chrome, auto-dismiss only.
+ * ⚠ **IT IS A VARIANT RATHER THAN A SECOND PRIMITIVE** because a second host
+ * would be a second "one active toast at a time" — two stacked popups in the
+ * same corner, each certain it is alone.
  */
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
+
+/** The light card (default) or the small black line. */
+export type ToastVariant = "default" | "invert";
 
 interface ToastAction {
   label: string;
@@ -23,6 +34,7 @@ interface ToastData {
   description?: string;
   action?: ToastAction;
   durationMs: number;
+  variant: ToastVariant;
 }
 
 type Listener = (t: ToastData | null) => void;
@@ -41,6 +53,8 @@ export function toast(opts: {
   description?: string;
   action?: ToastAction;
   durationMs?: number;
+  /** ⚠ ADDITIVE AND OPTIONAL — every existing caller omits it and is unchanged. */
+  variant?: ToastVariant;
 }) {
   const id = nextId++;
   setCurrent({
@@ -49,6 +63,7 @@ export function toast(opts: {
     description: opts.description,
     action: opts.action,
     durationMs: opts.durationMs ?? 4000,
+    variant: opts.variant ?? "default",
   });
 }
 
@@ -75,6 +90,24 @@ export function ToastHost() {
   }, [active]);
 
   if (!active) return null;
+
+  // ⚠ **THE BLACK FACE CARRIES NO CONTROLS, AND THAT IS THE POINT.** It reports
+  // something that already happened — an agent is running — so there is nothing
+  // to undo and nothing to dismiss: it slides in from the right and goes on its
+  // own. A × on a one-line report is more chrome than report.
+  if (active.variant === "invert") {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="fixed bottom-4 right-4 z-[9999] max-w-xs rounded-lg bg-surface-invert px-3 py-2 text-caption text-text-on-invert shadow-[var(--shadow-elevated)] animate-in fade-in slide-in-from-right-4 duration-200"
+      >
+        <span className="block truncate" title={active.title}>
+          {active.title}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div

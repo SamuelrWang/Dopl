@@ -34,7 +34,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { BaseCard } from "@/features/knowledge/components/knowledge-v2/home/base-card";
 import type { KnowledgeBase } from "@/features/knowledge/types";
-import { ShareIntoChannelButton } from "./agent-share";
+import { LaunchIntoChannelButton } from "./agent-card-launch";
 import { CreateButton, PAGE_ACTION_BTN, PAGE_ACTION_ICON } from "./panel-buttons";
 import { HOME_CARD_FACE_SELECTED } from "./channel-row-marks";
 
@@ -202,7 +202,7 @@ describe("no page-local copy of either recipe is left in pages/home", () => {
 });
 
 describe("the CARD-scale pill survives where the ruling did not reach", () => {
-  it("🔒 `ShareIntoChannelButton` is still the card Open's face", () => {
+  it("🔒 `LaunchIntoChannelButton` is still the card Open's face", () => {
     // ⚠ THE HALF THAT DID NOT MOVE. It sits ON a template card beside the
     // card's own controls, not in a section header, so the 2026-08-28 ruling
     // still governs it — and the two buttons parting company is exactly the
@@ -216,13 +216,15 @@ describe("the CARD-scale pill survives where the ruling did not reach", () => {
           onOpen={() => {}}
           onToggleStar={() => {}}
         />
-        <ShareIntoChannelButton onClick={() => {}} disabled={false} />
+        <LaunchIntoChannelButton onClick={() => {}} disabled={false} busy={false} />
       </>
     );
 
     const open = faceOf(/Open Renewals/);
-    expect(faceOf("Share into this channel")).toEqual(
-      new Set([...open, "disabled:opacity-60"])
+    // ⚠ THE LAYOUT GAP IS THE CALLER'S, exactly as `open-scale-button.tsx`
+    // says: the pill is the FACE and the spinner's spacing is not part of it.
+    expect(faceOf("Launch")).toEqual(
+      new Set([...open, "gap-1.5", "disabled:opacity-60"])
     );
     expect(open.has("btn-light")).toBe(true);
     expect(open.size).toBeGreaterThan(1);

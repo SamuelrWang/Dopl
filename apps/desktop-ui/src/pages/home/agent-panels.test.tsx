@@ -271,11 +271,11 @@ describe("the pane token", () => {
    * a cosmetic bug is what the survivors point at — `ContainerTemplateEditor`
    * and the share dialog take their target as a PROP, so one held open across
    * the switch silently retargets at the NEW room and its write SUCCEEDS there:
-   * no 404, no rollback, the wrong relationship. ⚠ **THE TARGET IS A CHANNEL ID
-   * SINCE 2026-09-02 (slice B15), NOT A CONTAINER ID** — the copy dialog became
-   * `agent-share.tsx › ShareIntoChannelDialog` and writes a grant — and the
-   * defect is IDENTICAL in shape, which is why this case moved with it rather
-   * than being deleted.
+   * no 404, no rollback, the wrong relationship. ⚠ **THE HELD DIALOG IS THE CARD'S
+   * KNOWLEDGE POPUP SINCE 2026-09-22** (`agent-card-knowledge.tsx`), where it
+   * was the share dialog and, before that, the copy — the defect is IDENTICAL
+   * in shape each time, which is why this case keeps moving with it rather than
+   * being deleted.
    */
   it("TEARS THE PANE DOWN on a channel switch — no held state retargets", async () => {
     twoChannels();
@@ -284,14 +284,14 @@ describe("the pane token", () => {
     await screen.findByText("Renewal chaser");
 
     // ⚠ ONE PIECE OF HELD STATE SINCE 2026-08-27, NOT TWO. The scope pill was
-    // the second, and it is gone — which makes the share dialog the whole of
-    // this pin, and the sharper half anyway: it is the one that holds the id it
-    // will write against.
+    // the second, and it is gone — which makes the CARD DIALOG the whole of
+    // this pin, and the sharper half anyway: it is the one that holds the row it
+    // will write against. ⚠ **IT IS THE KNOWLEDGE POPUP SINCE 2026-09-22**,
+    // where it was the share dialog; the defect is identical in shape, which is
+    // why this case moved with it rather than being deleted.
     await screen.findByText("Fundraise analyst");
-    fireEvent.click(
-      screen.getByRole("button", { name: "Share into this channel" })
-    );
-    await screen.findByRole("button", { name: "Share" });
+    fireEvent.click(screen.getByRole("button", { name: /add knowledge/i }));
+    await screen.findByRole("button", { name: "Save" });
 
     fireEvent.click(screen.getByText("Dana Ruiz"));
     // ⚠ THE PICK RAISES THE CHANNEL FACE NOW (2026-09-13), so come back — and
@@ -301,10 +301,10 @@ describe("the pane token", () => {
     await screen.findByText("Dana's assistant");
 
     // The dialog went with the pane it belonged to. Held across the switch it
-    // would still be open — now addressing Dana's channel, where its write
-    // would SUCCEED.
+    // would still be open — now addressing the OTHER room's pane, where its
+    // write would land on a row this operator was no longer looking at.
     await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Share" })).toBeNull()
+      expect(screen.queryByRole("button", { name: "Save" })).toBeNull()
     );
   });
 });
@@ -449,36 +449,43 @@ describe("🔒 with no channels, PERSONAL still renders", () => {
     expect(screen.queryByText("Loading agents")).not.toBeInTheDocument();
   });
 
-  it("⚠ offers NO share-into-channel action — there is no channel to share into", async () => {
-    // The dialog takes `channel.channelId`; a button whose only outcome is a
-    // crash is worse than a missing one.
+  it("⚠ offers NO card action — there is no channel to launch into", async () => {
+    // The launch takes `channel.id`; a button whose only outcome is a crash is
+    // worse than a missing one. ⚠ THE KNOWLEDGE BOX GOES WITH IT: the two are
+    // ONE control slot (`template-section.tsx › TemplateCard`).
     renderHome();
     await openAgents();
     await screen.findByText("Fundraise analyst");
 
+    expect(screen.queryByRole("button", { name: "Launch" })).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /share into/i })
+      screen.queryByRole("button", { name: /add knowledge/i })
     ).not.toBeInTheDocument();
   });
 });
 
 describe("what this pane deliberately leaves out", () => {
-  it("offers no launch control — the Channels face's picker is the one launch surface", async () => {
+  it("launches as-is from the PERSONAL card, and keeps every launch CHOICE in the popup", async () => {
+    // 🔒 **THE RULING MOVED, THE BOUNDARY DID NOT (Samuel, 2026-09-22).** This
+    // pane used to carry no launch at all; the personal card launches now, and
+    // what is still kept out is the launch FORM — a second place to pick a
+    // model, a runtime or a colour is how the two come to disagree.
+    // ⚠ SCOPED TO THE PANELS, never the document: /home's own empty states say
+    // "launch an agent into it".
     renderHome();
     await openAgents();
-    await screen.findByText("Renewal chaser");
+    await screen.findByText("Fundraise analyst");
 
-    // ⚠ SCOPED TO THE PANELS, not to the document: /home's own empty states say
-    // "launch an agent into it" and the header has its own controls, so a
-    // page-wide sweep would be measuring the wrong surface.
-    // ⚠ WORD-BOUNDARY regexes — "Renewal" contains "ewa", "Runbooks" contains
-    // "run"; a loose /run/i would fail on a template NAME and prove nothing.
-    const panels = screen.getAllByRole("region");
-    expect(panels.length).toBe(2);
-    for (const panel of panels) {
-      expect(panel.textContent).not.toMatch(/\blaunch\b/i);
-      expect(panel.textContent).not.toMatch(/\brun\b/i);
-      expect(within(panel).queryByRole("button", { name: /launch|run|start/i })).toBeNull();
+    const personal = screen.getByRole("region", {
+      name: SECTION_PRIVATE_EVERYWHERE.label,
+    });
+    const shared = screen.getByRole("region", { name: "Shared in this channel" });
+    expect(within(personal).getAllByRole("button", { name: "Launch" }).length).toBeGreaterThan(0);
+    // The container's rows resolve in ANOTHER workspace, and his ruling names
+    // the personal card.
+    expect(within(shared).queryByRole("button", { name: "Launch" })).toBeNull();
+    for (const row of ["Agent model", "Agent runtime", "Agent instructions"]) {
+      expect(screen.queryByLabelText(row)).toBeNull();
     }
   });
 });

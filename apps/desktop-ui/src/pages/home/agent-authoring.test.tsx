@@ -1,7 +1,8 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import { WORKSPACE_ID, bootBody, bridgeCalls, installBridge } from "#/test-utils/bridge";
+import { ToastHost } from "@/shared/ui/toast";
 import { LINK_WORKSPACE_ID, renderHome } from "./home-test-harness";
 import { CHANNEL_ID } from "./home-test-ids";
 import {
@@ -370,93 +371,108 @@ describe("the writes stay in their own workspace", () => {
 });
 
 /**
- * "SHARE INTO THIS CHANNEL" — the GRANT (Samuel's ruling B11, 2026-09-02, wave B
- * slice B15: *grants replace copies*).
+ * **LAUNCH, FROM THE CARD** (Samuel, 2026-09-22) — the control that was "Share
+ * into this channel" and, before that, the copy.
  *
- * ⚠ **THIS BLOCK WAS SIX CASES ABOUT A COPY AND IS NOW FOUR ABOUT A GRANT.**
- * The three that went were about what a COPY carried and dropped — the exact
- * create body, the "attached knowledge base stays behind" line, and the
- * stale-cache guard on `source.knowledgeBases.length` that the KB line needed.
- * A grant lends the ONE row: nothing is composed, nothing is dropped, and the
- * cached row's `knowledgeBases` is never read, so all three were assertions
- * about a mechanism rather than about a promise.
+ * ⚠ **THE BLOCK IT REPLACED PINNED A GRANT BODY AND IS GONE WITH THE CONTROL.**
+ * `agent-share.tsx` is deleted; `dopl_agent(op="grant")` still writes a grant and
+ * `resource-grants` is still the endpoint, so nothing about the GRANT was
+ * withdrawn — what left is the /home card's way of writing one.
  *
- * ⚠ **THE LOAD-BEARING ASSERTION IS STILL ON THE REQUEST BODY**, and for the
- * same reason: a grant into the CHANNEL and a grant into the CONTAINER render
- * identically (as nothing), and only one of them puts the agent in front of the
- * people in the room.
+ * 🔒 **THE LOAD-BEARING ASSERTION IS ON THE LAUNCH PAYLOAD.** A launch that
+ * carried an override, a runtime or a colour would render identically (as a
+ * spinner and a toast) and would NOT be the as-is launch he asked for — and the
+ * `workspaceId` is the one field that decides whether main can resolve the
+ * template at all (`main/template-resolve.js` reads `(workspace_id, id)`).
  */
-describe("share into this channel", () => {
-  /** Reach the share control on the PERSONAL card. */
-  async function openShareConfirm(): Promise<void> {
+describe("launch from the card", () => {
+  const launch = vi.fn();
+  const rename = vi.fn();
+  const describeOp = vi.fn();
+
+  /** The desktop, with the three ops this lane uses. ⚠ `installBridge` REPLACES
+   *  the surface, so `apiRequest` is re-supplied here. */
+  function installDesktop(
+    outcome: { ok: boolean; agentId?: string; reason?: string } = {
+      ok: true,
+      agentId: "ag-1",
+    }
+  ) {
+    launch.mockReset().mockResolvedValue(outcome);
+    rename.mockReset().mockResolvedValue({ ok: true });
+    describeOp.mockReset().mockResolvedValue({ ok: true });
+    installBridge({
+      apiRequest,
+      sessions: { launch, rename, describe: describeOp },
+    });
+  }
+
+  /** Press Launch on the PERSONAL card. */
+  async function pressLaunch(): Promise<void> {
     renderHome();
     await openAgents();
     await screen.findByText("Fundraise analyst");
-    fireEvent.click(
-      screen.getByRole("button", { name: "Share into this channel" })
-    );
-    await screen.findByRole("button", { name: "Share" });
+    fireEvent.click(screen.getByRole("button", { name: "Launch" }));
   }
 
-  /** The grant call, or `undefined`. */
-  function grantCall() {
-    return bridgeCalls(apiRequest).find(
-      (c) => c.path === "/api/resource-grants"
-    );
-  }
+  it("🔒 launches the template AS-IS, into the selected channel", async () => {
+    installDesktop();
+    await pressLaunch();
 
-  it("🔒 grants the template into the CHANNEL, at the narrower channel level", async () => {
-    await openShareConfirm();
-    fireEvent.click(screen.getByRole("button", { name: "Share" }));
-
-    await waitFor(() => expect(grantCall()).toBeDefined());
-    const call = grantCall()!;
-    expect(call.opts.method).toBe("PUT");
-    // 🔒 EXACT EQUALITY. `scopeType: "channel"` is the whole difference between
-    // putting the agent in front of the people in the room and filing it against
-    // a tenancy nobody reads; `level: "visible"` is the narrower of the two
-    // channel words, where `agent_only` names no human audience at all.
-    expect(call.opts.body).toEqual({
-      resourceType: "agent_template",
-      resourceId: T_HOME.id,
-      scopeType: "channel",
-      scopeId: CHANNEL_ID,
-      level: "visible",
+    await waitFor(() => expect(launch).toHaveBeenCalled());
+    // 🔒 EXACT EQUALITY. An extra key here is a per-spawn DECISION the operator
+    // never made, and `taskId: null` is a CHANNEL-level agent rather than a
+    // missing value.
+    expect(launch.mock.calls[0][0]).toEqual({
+      channelId: CHANNEL_ID,
+      taskId: null,
+      // 🔒 THE TEMPLATE'S OWN WORKSPACE, never the channel's container: main
+      // resolves the row by `(workspace_id, id)`, so the container id would 404
+      // every personal template.
+      workspaceId: WORKSPACE_ID,
+      channelName: expect.any(String),
+      threadTitle: null,
+      counterpartyId: null,
+      // ⚠ THE CHANNEL'S OWN FLAG, FORWARDED UNTOUCHED — the harness's row is a
+      // direct one, and main reads this to decide how the session addresses the
+      // room.
+      direct: true,
+      templateId: T_HOME.id,
     });
   });
 
-  it("🔒 writes NOTHING until the confirm — the dialog alone is not consent", async () => {
-    // 🔒 THE SHAPE OF THE CONSENT STEP, CARRIED OVER FROM THE COPY (A11/G16).
-    // The audience sentence is what the operator is pressing through, and it
-    // must be on screen before anything reaches the wire.
-    await openShareConfirm();
-    expect(document.body.textContent).toContain("everyone here will see it");
-    expect(grantCall()).toBeUndefined();
+  it("names the new agent after the template, and says so", async () => {
+    installDesktop();
+    // ⚠ THE HOST IS MOUNTED BY HAND — `renderHome` renders the PAGE, and the
+    // toast host lives at the app root (`app.tsx`), above every route.
+    render(<ToastHost />);
+    await pressLaunch();
 
-    fireEvent.click(screen.getByRole("button", { name: "Share" }));
-    await waitFor(() => expect(grantCall()).toBeDefined());
+    // ⚠ KEYED BY MAIN'S OWN ADDRESS — neither write can happen until the spawn
+    // has answered with one.
+    await waitFor(() => expect(rename).toHaveBeenCalledWith("ag-1", T_HOME.name));
+    expect(describeOp).toHaveBeenCalledWith("ag-1", "Reads the data room");
+    // The popup Samuel asked for, in his own words.
+    await screen.findByText(/"Fundraise analyst" launched into/);
   });
 
-  it("🔒 CREATES NO TEMPLATE — the row is lent, not copied", async () => {
-    // ⚠ THE ASSERTION THE WHOLE RULING TURNS ON, and it is the one a DOM-level
-    // test cannot make: the old control POSTed a second `agent_templates` row.
-    await openShareConfirm();
-    fireEvent.click(screen.getByRole("button", { name: "Share" }));
-    await waitFor(() => expect(grantCall()).toBeDefined());
-    expect(createCall()).toBeUndefined();
-    // …and the operator is told the thing that follows from that.
-    expect(document.body.textContent).toContain("It stays yours");
+  it("🔒 says a refusal ON THE ROW — a control that silently does nothing is the bug", async () => {
+    installDesktop({ ok: false, reason: "cap" });
+    await pressLaunch();
+
+    await screen.findByRole("alert");
+    expect(screen.getByRole("alert").textContent).toContain("Session limit");
+    expect(rename).not.toHaveBeenCalled();
   });
 
-  it("offers no share control on a row already IN this channel", async () => {
+  it("offers no launch control on a SHARED row — that list is the container's", async () => {
+    installDesktop();
     renderHome();
     await openAgents();
     await screen.findByText("Renewal chaser");
     // ⚠ Scoped to the SHARED region: the control lives on every Personal card,
     // so a document-wide query would find those and prove nothing about this one.
     const shared = screen.getByRole("region", { name: "Shared in this channel" });
-    expect(
-      within(shared).queryByRole("button", { name: "Share into this channel" })
-    ).toBeNull();
+    expect(within(shared).queryByRole("button", { name: "Launch" })).toBeNull();
   });
 });
