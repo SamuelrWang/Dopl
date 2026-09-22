@@ -273,6 +273,15 @@ function start(spec) {
       const enriched = Object.assign({}, params, {
         usage: latestUsage && latestUsage.total ? latestUsage.total : null,
         promptUsage: latestUsage && latestUsage.last ? latestUsage.last : null,
+        // ⚠ **A SIBLING OF `last`/`total`, NOT A MEMBER OF EITHER** — and forwarding only those two
+        // is what left a Codex session with no context DENOMINATOR (2026-09-22). The server reports
+        // `tokenUsage.modelContextWindow` on every one of these notifications (measured: 258400 on
+        // `codex-cli 0.155.1`); dropping it here meant `normalize.js › windowFrom` never saw a
+        // window to read and the gauge showed used tokens over nothing.
+        // ⚠ ABSENT STAYS ABSENT: `null` here means "this runtime reported no window", which
+        // `session-model.js › contextEvent` answers by falling back to its table. It is NOT zero,
+        // and a `0` denominator would render as a full meter on an empty session.
+        contextWindow: latestUsage ? latestUsage.modelContextWindow : null,
         model: selectedModel,
       });
       frames.push(Object.assign({}, msg, { params: enriched }));
