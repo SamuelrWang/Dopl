@@ -484,31 +484,3 @@ test("a PARKED session is inert to a late measurement from its drained tail", ()
 // model picker could not be driven while a consent decision was mid-flight. If a future surface
 // offers a mid-session model switch, that gap is a live requirement and it is currently pinned
 // NOWHERE — this comment is its only remaining trace.
-
-// ─── THE FORWARD THAT MAKES ALL OF THE ABOVE REACHABLE (2026-09-22) ──────────────────────────
-//
-// 🔒 The window is a SIBLING of `last`/`total` inside `tokenUsage`, and `launch-spec.js` folds the
-// out-of-band `thread/tokenUsage/updated` snapshot onto the `turn/completed` frame core consumes.
-// It forwarded only those two, so `normalize.js › windowFrom` never saw a window and every case
-// above was inert against a real session — the meter showed used tokens over nothing.
-//
-// ⚠ A SOURCE PIN, because the fold happens inside a closure over a live connection that a unit
-// test cannot drive without a child process. The live half is `codex-live-session.test.mjs`.
-
-test("launch-spec forwards the reported window onto the completed frame", async () => {
-  const { readFileSync } = await import("node:fs");
-  const { fileURLToPath } = await import("node:url");
-  const src = readFileSync(
-    fileURLToPath(new URL("../main/runtime/codex/launch-spec.js", import.meta.url)),
-    "utf8"
-  );
-  const fold = src.slice(src.indexOf("const enriched = Object.assign("));
-  const body = fold.slice(0, fold.indexOf("});"));
-  assert.match(body, /contextWindow:\s*latestUsage \? latestUsage\.modelContextWindow : null/,
-    "the window must ride the same fold as usage/promptUsage");
-  // ⚠ ABSENT, NOT ZERO — a `0` denominator renders a FULL meter on an empty session, and
-  // `contextEvent` can only fall back to its table when it is handed a non-number.
-  assert.ok(!/contextWindow:\s*latestUsage\s*&&/.test(body),
-    "`latestUsage && latestUsage.modelContextWindow` would answer `null` for a 0 but `undefined` " +
-    "for a missing snapshot — the ternary answers null for both");
-});
