@@ -179,15 +179,27 @@ const descriptor = {
   hostRegistration: 'cli-verb',
   // ⚠ false: see `probeMcp` — a capability claim, not an absence.
   probe: false,
-  // ⚠ null: the prefix a Codex host puts on an MCP tool name is NOT documented anywhere in
-  // `codex-research.md`, and it is load-bearing far beyond prose. `main/mcp-tool-names.js` strips
-  // `^mcp__.*__` and canonicalises a KNOWN short name back onto `mcp__dopl__…`; a bare name
-  // (`dopl_channel`) canonicalises correctly and so does the `mcp__<server>__` form, but any THIRD
-  // shape misses every list in the gate at once — Axis B, the pre-approvals, both Axis-A modes and
-  // HARD-DENY — which is exactly the F-139 defect, reproduced. §5 item C22, and it is a
-  // design-changing item rather than a prose one.
-  toolNamePrefix: null,
+  // 🔒 MEASURED 2026-09-22, codex-cli 0.155.1 (§5 item C22 / U4) — `test/codex-mcp-surface.test.mjs`
+  // holds the capture. It was `null` for "nobody has ever seen a Codex MCP tool name", and the
+  // answer turned out to be that THERE IS NO SINGLE NAME: the app-server's `mcpToolCall` thread
+  // item carries `{ server: 'dopl', tool: 'dopl_channel' }` as TWO FIELDS, and the tool half is
+  // BARE — no `mcp__<server>__`, no prefix of any kind. `mcpServer/tool/call` takes the same two
+  // parameters. So `main/mcp-tool-names.js › canonicalDoplName` canonicalises the `tool` field
+  // correctly and the F-139 spelling hazard does NOT apply here.
+  // ⚠ WHAT DOES APPLY IS WORSE AND IS NOT A NAMING PROBLEM: the APPROVAL for that call arrives as
+  // `mcpServer/elicitation/request`, which carries `serverName` and a `message` and NO tool-name
+  // field at all, so nothing downstream can be handed the name above. `server-requests.js`
+  // answers it with an unconditional `{ action: 'decline' }` — fail-closed, and with no ALLOW
+  // path for a Dopl channel call on this runtime. That is U4's remaining release blocker and it
+  // is pinned by test rather than left as prose.
+  toolNamePrefix: '<tool>',
+  // The companion half of the shape above — named so a reader cannot take `toolNamePrefix` for a
+  // claim that the server is absent from the wire. It is present, on its own field.
+  toolNameServerField: 'server',
   // ⚠ GENUINELY PER-TOOL, AND IT IS AXIS B'S PIN. See `buildDoplServerEntry`.
+  // 🔒 MEASURED 2026-09-22: the real app-server retains `mcp_servers.dopl.tools.dopl_channel.
+  // approval_mode` through `config/read` EVEN UNDER `--strict-config`, which errors on any field
+  // this CLI does not recognise. The key is supported; what it produces is the elicitation above.
   perToolApproval: 'tools.<tool>.approval_mode',
   // ⚠ null: this runtime has no eager-load flag. Claude's `alwaysLoad` exists because its CLI
   // defers every MCP tool behind a tool-search verb; nothing in the research says Codex defers

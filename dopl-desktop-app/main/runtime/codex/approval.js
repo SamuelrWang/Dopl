@@ -34,13 +34,41 @@ const tools = require('./tools');
 // would be the opposite: a new escalation inheriting an existing mode's grant.
 const REQUEST_ITEM_RE = /^item\/([A-Za-z0-9_]+)\/requestApproval$/;
 
+// 🔒 ⚠ AN MCP TOOL CALL'S APPROVAL IS AN ELICITATION, AND IT CARRIES NO TOOL NAME. MEASURED
+// 2026-09-22 against codex-cli 0.155.1 (U4; the capture is in `test/codex-mcp-surface.test.mjs`).
+// `tools.dopl_channel.approval_mode = 'prompt'` does NOT produce an `item/*/requestApproval`; it
+// produces `mcpServer/elicitation/request` with:
+//   { serverName: 'dopl', threadId, turnId, mode: 'form',
+//     message: 'Allow the dopl MCP server to run tool "dopl_channel"?',
+//     _meta: { codex_approval_kind: 'mcp_tool_call', tool_params: { … }, … } }
+// There is no `toolName`, no `tool`, and no `itemId` to join back to the `mcpToolCall` item that
+// does carry `{ server, tool }`. The name exists only inside the operator-facing SENTENCE, and a
+// prose read is not a bound — so this classifies the request by Codex's OWN category word for it
+// and stops there. `mcp_elicitations` is in no Axis-A positive allow-list, so it gates in every
+// mode including `never`, which is the fail-closed answer and the one that is true today.
+// ⚠ THE OTHER HALF OF THAT MEASUREMENT IS A RELEASE BLOCKER, NOT A CLASSIFICATION DETAIL: this
+// request's reply is `{ action: 'accept'|'decline'|'cancel' }`, NOT `{ decision }`, and
+// `server-requests.js` answers it with an unconditional decline without consulting the gate. So
+// a Dopl MCP call on Codex cannot be ALLOWED at all. Naming it here does not change that; it
+// makes the log and any future wiring speak one vocabulary when it is fixed.
+const MCP_ELICITATION = 'mcpServer/elicitation/request';
+const MCP_TOOL_CALL_KIND = 'mcp_tool_call';
+
 function toolNameFor(request) {
   const req = request || {};
   if (typeof req.toolName === 'string' && req.toolName) return req.toolName; // an MCP tool call
   const method = typeof req.method === 'string' ? req.method : '';
   const m = REQUEST_ITEM_RE.exec(method);
   if (m) return m[1]; // commandExecution | fileChange | whatever a later build adds
-  const category = req.params && req.params.category;
+  const params = (req.params && typeof req.params === 'object') ? req.params : {};
+  if (method === MCP_ELICITATION) {
+    // ⚠ THE `_meta` DISCRIMINATOR IS CHECKED, NOT ASSUMED. An elicitation a server raises for its
+    // own reasons (a form, a credential prompt) is NOT a tool-call approval, and both still land
+    // on a name in no allow-list — but they are different facts and the log should not fuse them.
+    const kind = params._meta && params._meta.codex_approval_kind;
+    return kind === MCP_TOOL_CALL_KIND ? 'mcp_elicitations' : method;
+  }
+  const category = params.category;
   if (typeof category === 'string' && tools.GRANULAR_CATEGORIES.indexOf(category) !== -1) {
     return category;
   }
@@ -139,4 +167,4 @@ const descriptor = {
   hotSwapModes: 'unverified',
 };
 
-module.exports = { answerApproval, stampOutbound, toolNameFor, descriptor };
+module.exports = { answerApproval, stampOutbound, toolNameFor, descriptor, MCP_ELICITATION, MCP_TOOL_CALL_KIND };

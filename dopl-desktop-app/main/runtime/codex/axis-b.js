@@ -15,24 +15,31 @@
 // (`codex-research.md` §1). A request that blocks the turn on OUR answer is exactly what makes the
 // outbound consent card representable.
 //
-// ⚠ AND THE ONE THING THAT IS NOT PROVEN ABOUT IT IS WHERE AXIS B'S OWN CALL ENTERS.
-// `dopl_channel` is an MCP tool, not a command execution or a file change, and the research does
-// not settle two things about MCP-tool approvals:
-//   §5 C3 — are MCP tool calls a DISTINCT client-answerable request type, or folded into
-//           `commandExecution`? The `granular` table naming `mcp_elicitations` separately suggests
-//           distinct. ⚠ IF THERE IS NO CLIENT-ANSWERABLE REQUEST FOR AN MCP TOOL AT ALL, THIS
-//           RUNTIME'S `enforcementPoint` IS NOT `held-callback` FOR AXIS B AND THE ADAPTER MUST
-//           NOT SHIP. That is a higher stake than the research's own framing of C3 and it is
-//           recorded as such in the design's §5 amendment.
-//   §5 C1 — does that request carry the call's ARGUMENTS? Dopl's Axis B is op-scoped and
-//           input-scoped (`isOwnChannelPost` / `isOwnChannelRead` read `input.op` and
-//           `input.channel`; `postFieldsOk` validates `to`/`kind`; `grantKeyFor` scopes a standing
-//           grant to body/to/kind). Argument-less means Axis B collapses from op-scoped to
-//           WHOLE-TOOL: every channel call gates, READS INCLUDED, and a held inbound on a
-//           windowless session is then held forever — the exact failure
-//           `session-profiles.js › floorWindowlessMessage` exists to prevent.
-// `descriptor.opScoped` is `'unverified'` until C1 answers, which `capability.js › axisBOpScoped`
-// reads as NOT op-scoped — the fail-closed direction, and the one that is true today.
+// 🔒 ⚠ **C3 AND C1 ARE MEASURED NOW (2026-09-22, codex-cli 0.155.1, U4). BOTH ANSWERS ARE GOOD
+// AND THE ADAPTER IS STILL NOT SHIPPABLE FOR AXIS B — FOR A THIRD REASON NEITHER ITEM ASKED.**
+// The capture lives in `test/codex-mcp-surface.test.mjs`; what it found:
+//   §5 C3 — ARE MCP TOOL CALLS A DISTINCT CLIENT-ANSWERABLE REQUEST? **YES, AND IT IS HELD.**
+//           `tools.dopl_channel.approval_mode = 'prompt'` produces a server->client REQUEST that
+//           blocks the turn — but NOT an `item/*/requestApproval`. It is
+//           `mcpServer/elicitation/request`, discriminated by
+//           `_meta.codex_approval_kind === 'mcp_tool_call'`, answered with
+//           `{ action: 'accept'|'decline'|'cancel' }` rather than `{ decision }`. So
+//           `enforcementPoint: 'held-callback'` is TRUE for Axis B on this runtime.
+//   §5 C1 — DOES IT CARRY THE CALL'S ARGUMENTS? **YES** — `_meta.tool_params` held `{op:'rooms'}`
+//           verbatim, so op-scoping is representable in principle.
+//   🔴 THE THIRD THING, WHICH IS THE BLOCKER: **THE REQUEST CARRIES NO TOOL NAME.** Its params
+//           are `serverName`, `threadId`, `turnId`, `mode`, `_meta` and a `message` — the tool's
+//           name appears only inside that operator-facing sentence, and there is no `itemId` to
+//           join it to the `mcpToolCall` item that DOES carry `{ server, tool }`. Nothing can
+//           hand this gate the name `dopl_channel`, so `server-requests.js` answers the
+//           elicitation with an unconditional `{ action: 'decline' }` WITHOUT asking the gate.
+//           Fail-closed, and also: **there is no ALLOW path for a Dopl channel call on Codex.**
+//           An agent cannot post, cannot read, and cannot be told why by the gate that did not
+//           run. That is U4's open release blocker and it is a design item, not a wiring one.
+// `descriptor.opScoped` therefore STAYS `'unverified'`, which `capability.js › axisBOpScoped`
+// reads as NOT op-scoped. C1 answering yes does not change it: arguments that are carried on the
+// wire but never delivered to the gate are not a capability the adapter may declare, and the
+// warning `session-launch.js` logs is the honest one until the name reaches this callback.
 //
 // ⚠ `axisBTools()` IS NULL HERE BY DECLARATION, NOT BY OMISSION: the enforcement point is the held
 // callback, so there is nothing to implement in-process. A runtime whose channel ops ARE in-process
