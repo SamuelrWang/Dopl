@@ -221,10 +221,13 @@ export function TemplateSection({
  * cannot author. ⚠ **A row may carry ONE second control (`action`), and it goes
  * INSIDE the face rather than on top of it** — a `<button>` may not contain a
  * `<button>`, so an action turns the card into a `div` whose body is the button.
- * The /home face's scope-C rows use it for "Use in this channel" (the COPY, §3).
- * There is no kebab, no per-card delete, and **no launch control** —
- * launch-time SELECTION belongs to the Chat face's picker and must not grow a
- * beachhead here (§5A: a second launch surface fights `resolve`'s singularity).
+ * ⚠ **SINCE 2026-09-22 THE /home CARD'S ACTION IS A KNOWLEDGE BOX AND A LAUNCH**
+ * (Samuel), superseding the note that stood here — *"no launch control …
+ * a second launch surface fights `resolve`'s singularity"*. That argument was
+ * about launch-time SELECTION, which is still the New-agent popup's alone; the
+ * card launches a template AS-IS and offers no choices at all
+ * (`pages/home/agent-card-launch.tsx`). There is still no kebab and no per-card
+ * delete.
  *
  * ⚠ THE AUTHORSHIP MARKER IS A SECURITY SIGNAL, NOT DECORATION
  * (`template-picker.tsx › authorMarker`). A template another member wrote
@@ -302,7 +305,12 @@ function TemplateCard({
         ) : (
           body
         )}
-        <div className="pt-0.5">{action}</div>
+        {/* ⚠ **`mt-auto` AND FULL WIDTH SINCE 2026-09-22** (Samuel: the card's
+            Launch control sits *"on the bottom right of the card"*, over a
+            full-width knowledge box). The slot used to hug the body, so a short
+            description floated the control halfway up the face and two cards in
+            one row put their buttons at two heights. */}
+        <div className="mt-auto w-full pt-1.5">{action}</div>
       </div>
     );
   }

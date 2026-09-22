@@ -122,9 +122,10 @@ export function PrivateAgentSection({
    *  container on "in this channel", the caller's own workspace on "across all
    *  channels". A row is always edited where it lives (plan §4.5). */
   onOpen: (template: AgentTemplate) => void;
-  /** ONE second control per row. Scope C's rows carry "Use in this channel"
-   *  (the COPY, plan §3); scope B's carry nothing, because a row already in this
-   *  container has nothing to copy itself into. */
+  /** ONE second control per row — the PERSONAL card's knowledge box and its
+   *  Launch button since 2026-09-22 (Samuel), where it was "Share into this
+   *  channel" and, before that, the copy. ⚠ ONE SLOT, so the two travel
+   *  together: `template-section.tsx › TemplateCard` carries exactly one. */
   cardActionFor?: (template: AgentTemplate) => ReactNode;
 }) {
   return (

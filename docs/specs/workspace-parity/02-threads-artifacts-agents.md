@@ -157,7 +157,7 @@ host-specific-in-kind, workspace-only, home-only}.
 | E6 | Launch control on the template face | **absent by ruling** (`agent-panels.tsx:49-52`, tested) | absent (`agent-templates-core.tsx:42`) | shared-already | keep | one launch lane |
 | E7 | Author marker (`by <member>`) | `agent-panel-cards.tsx:191` › `useContainerAuthorMarker` | not shown (workspace page has no marker call) | home-only | keep | security signal specific to a shared container (`agent-panel-cards.tsx:168-190`) |
 | E8 | Teams scope | none (`agent-editor.tsx:82` `NO_TEAMS`) | `agent-templates-core.tsx:105` › `useTeams` | host-specific-in-kind | keep | Samuel 2026-09-08 |
-| E9 | Share-into-channel | `agent-share.tsx` (home only) | n/a | home-only | keep | a workspace template is already in its room |
+| E9 | Share-into-channel | ⚠ GONE 2026-09-22 — the card's control is `agent-card-launch.tsx › Launch`; the grant's door is `dopl_agent(op="grant")` | n/a | home-only | n/a | a workspace template is already in its room |
 
 ### A.7 Settings rows touching agents
 
