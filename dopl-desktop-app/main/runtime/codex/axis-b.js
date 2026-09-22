@@ -15,8 +15,8 @@
 // (`codex-research.md` §1). A request that blocks the turn on OUR answer is exactly what makes the
 // outbound consent card representable.
 //
-// 🔒 ⚠ **C3 AND C1 ARE MEASURED NOW (2026-09-22, codex-cli 0.155.1, U4). BOTH ANSWERS ARE GOOD
-// AND THE ADAPTER IS STILL NOT SHIPPABLE FOR AXIS B — FOR A THIRD REASON NEITHER ITEM ASKED.**
+// 🔒 ⚠ **C3 AND C1 ARE MEASURED (2026-09-22, codex-cli 0.155.1, U4), AND THE THIRD THING THEY
+// TURNED UP — A HELD APPROVAL THAT NAMES NO TOOL — IS RESOLVED BY SERVER, SAME DAY.**
 // The capture lives in `test/codex-mcp-surface.test.mjs`; what it found:
 //   §5 C3 — ARE MCP TOOL CALLS A DISTINCT CLIENT-ANSWERABLE REQUEST? **YES, AND IT IS HELD.**
 //           `tools.dopl_channel.approval_mode = 'prompt'` produces a server->client REQUEST that
@@ -27,19 +27,34 @@
 //           `enforcementPoint: 'held-callback'` is TRUE for Axis B on this runtime.
 //   §5 C1 — DOES IT CARRY THE CALL'S ARGUMENTS? **YES** — `_meta.tool_params` held `{op:'rooms'}`
 //           verbatim, so op-scoping is representable in principle.
-//   🔴 THE THIRD THING, WHICH IS THE BLOCKER: **THE REQUEST CARRIES NO TOOL NAME.** Its params
+//   ⚠ THE THIRD THING, WHICH WAS THE BLOCKER: **THE REQUEST CARRIES NO TOOL NAME.** Its params
 //           are `serverName`, `threadId`, `turnId`, `mode`, `_meta` and a `message` — the tool's
 //           name appears only inside that operator-facing sentence, and there is no `itemId` to
-//           join it to the `mcpToolCall` item that DOES carry `{ server, tool }`. Nothing can
-//           hand this gate the name `dopl_channel`, so `server-requests.js` answers the
-//           elicitation with an unconditional `{ action: 'decline' }` WITHOUT asking the gate.
-//           Fail-closed, and also: **there is no ALLOW path for a Dopl channel call on Codex.**
-//           An agent cannot post, cannot read, and cannot be told why by the gate that did not
-//           run. That is U4's open release blocker and it is a design item, not a wiring one.
-// `descriptor.opScoped` therefore STAYS `'unverified'`, which `capability.js › axisBOpScoped`
-// reads as NOT op-scoped. C1 answering yes does not change it: arguments that are carried on the
-// wire but never delivered to the gate are not a capability the adapter may declare, and the
-// warning `session-launch.js` logs is the honest one until the name reaches this callback.
+//           join it to the `mcpToolCall` item that DOES carry `{ server, tool }`. So for a day,
+//           `server-requests.js` answered the elicitation with an unconditional
+//           `{ action: 'decline' }` without asking the gate: fail-closed, and also a Dopl channel
+//           call that could never be ALLOWED at all — the agent could not post, could not read,
+//           and could not be told why by a gate that never ran.
+// 🔒 **RESOLVED BY SERVER (Samuel's ruling, 2026-09-22), AND NOT BY READING THE SENTENCE.** The
+// request does carry, structurally, the SERVER it came from — and Dopl mounts that server itself.
+// `mcp.js` now pins exactly ONE tool on Dopl's entry in a mode that can ask
+// (`TOOL_APPROVAL_MODES`, with `default_tools_approval_mode: 'auto'` beside it and the cost of
+// that change written out there), so server identity plus "an ask happened" resolves the tool with
+// nothing parsed. `approval.js › doplElicitation` performs both checks and
+// `server-requests.js › elicitationAnswer` hands the result — the name, and the call's own
+// `_meta.tool_params` — to `makeCanUseTool` below, i.e. to the SAME gate every other request
+// reaches. A non-Dopl server, a missing `_meta`, a different `codex_approval_kind` and a
+// non-singleton asking set all still decline.
+// ⚠ `descriptor.opScoped` STAYS `'unverified'` ANYWAY, AND THAT IS A DELIBERATE UNDER-CLAIM.
+// The op now genuinely reaches the gate, so the field COULD read `true` — but the join that
+// carries it is Dopl's own CONFIGURATION, not a measurement of the wire, and one thing that
+// configuration rests on is unmeasured: whether an `approval_policy` of
+// `{ granular: { mcp_elicitations: true, … } }` can raise an elicitation for a tool whose per-tool
+// mode is `auto`. If it can, the asking set is not the one `mcp.js` computes. Declaring a
+// capability on an unmeasured premise is the failure this descriptor exists to prevent, so the
+// field waits for that measurement (§5 item C1b) and the launch keeps carrying the warning, which
+// over-warns rather than over-claims. ⚠ FLIPPING IT LATER ALSO MOVES A TEST OUTSIDE THIS ADAPTER:
+// `test/session-engine-slot.test.mjs` uses Codex as its SHIPPED example of a runtime that warns.
 //
 // ⚠ `axisBTools()` IS NULL HERE BY DECLARATION, NOT BY OMISSION: the enforcement point is the held
 // callback, so there is nothing to implement in-process. A runtime whose channel ops ARE in-process
@@ -58,8 +73,10 @@ const approval = require('./approval');
  * The held approval callback this runtime's client wires.
  *
  * `name` is `approval.js › toolNameFor`'s answer for the raw request — one of Codex's own item or
- * category words, or an MCP tool name. `input` is the call's arguments where the request carries
- * them (§5 C1) and `{}` where it does not; `opts` carries the request id and title.
+ * category words, or, for a tool-call elicitation from DOPL'S OWN MCP server, the one tool that
+ * server's entry configures to ask (`approval.js › doplElicitation`). `input` is the call's
+ * arguments where the request carries them (§5 C1 — `_meta.tool_params` for an elicitation) and
+ * `{}` where it does not; `opts` carries the request id and title.
  *
  * ⚠ THE PROMISE IS THE MECHANISM, NOT A DETAIL: the app-server BLOCKS THE TURN on it, which is
  * what makes `gate` a real verdict rather than a pre-flight list.
@@ -168,10 +185,11 @@ function preToolUseStamp(payload, s, log) {
 // Descriptor half.
 const descriptor = {
   enforcementPoint: 'held-callback',
-  // ⚠ `'unverified'` — §5 C1, and `capability.js › axisBOpScoped` reads anything but `true` as
-  // NOT op-scoped, which is the fail-closed reading and the one that is true today. Declaring
-  // `true` would be assuming the answer to the item that changes step 7's design rather than one
-  // descriptor field.
+  // ⚠ `'unverified'` — and since 2026-09-22 this is an UNDER-claim rather than an absence. A
+  // channel call's op and arguments DO reach the gate now (see the header), but by a join through
+  // Dopl's own per-tool approval table whose premise is not yet measured (§5 item C1b).
+  // `capability.js › axisBOpScoped` reads anything but `true` as NOT op-scoped, which over-warns
+  // and never over-grants — the direction to be wrong in.
   opScoped: 'unverified',
   // The only documented input-rewrite lever this runtime has. ⚠ `null` is not a legal answer for a
   // shipped adapter — without the stamp, agents stop self-filtering their own posts in a shared

@@ -50,6 +50,90 @@ const STARTUP_TIMEOUT_SEC = 10;
 // The channel tool's bare, server-local name — `enabled_tools` and the per-tool policy both use it.
 const CHANNEL_TOOL = 'dopl_channel';
 
+// ⚠ THE KEY DOPL MOUNTS ITS OWN SERVER UNDER, AND THE ONE DEFINITION OF IT. `launch-spec.js ›
+// buildLaunchSpec` writes `config.mcp_servers.<SERVER_KEY>`, and `server-requests.js` compares an
+// elicitation's `serverName` against THIS constant to decide whether the request came from Dopl's
+// own surface. Those two must never be two literals: the whole allow path below turns on an
+// identity comparison, and a rename that moved the mount without moving the comparison would
+// either open the path to a FOREIGN server (if the comparison kept the old word and something
+// else claimed it) or close it silently (if the mount moved). `test/codex-gate.test.mjs` pins the
+// built launch spec's single `mcp_servers` key EQUAL to this value, so the two cannot drift even
+// though `launch-spec.js` still spells the key inline.
+const SERVER_KEY = 'dopl';
+
+// ── THE PER-TOOL APPROVAL POLICY, AND WHY IT IS A TABLE RATHER THAN TWO LITERALS ─────────────
+//
+// 🔒 ⚠ **THIS TABLE IS WHAT MAKES A NAMELESS ELICITATION NAMEABLE.** Measured 2026-09-22
+// (codex-cli 0.155.1, U4): the approval for an MCP tool call arrives as
+// `mcpServer/elicitation/request` carrying `serverName` and NO tool name and NO `itemId` — the
+// tool's name exists only inside the operator-facing SENTENCE, and reading a name out of prose is
+// not a bound. So the name is not recovered FROM THE WIRE at all. It is recovered from the
+// CONFIGURATION DOPL ITSELF WROTE: if exactly one tool on this server is configured in a mode that
+// can raise an ask, then an ask from this server is that tool. Server identity + "an ask happened"
+// resolves the name, structurally, with nothing parsed.
+//
+// ⚠ THAT IS ONLY TRUE IF THE DEFAULT NEVER ASKS, WHICH IS WHY `default_tools_approval_mode`
+// CHANGED FROM `'writes'` TO `'auto'` ON 2026-09-22, DELIBERATELY. Under `'writes'` every
+// non-read-only Dopl tool could also raise an ask, the asking set was not a singleton, and no ask
+// could be named — which is exactly the state in which `server-requests.js` had no choice but to
+// decline unconditionally, i.e. a Dopl-launched Codex agent could not post, read or do anything
+// else through Dopl's own MCP surface. What the change gives up is stated plainly rather than
+// hidden: Dopl's NON-channel tools (`dopl_kb` writes and the rest) now run on this runtime without
+// an Axis-A card. They are not ungoverned — the session is only OFFERED the tools in
+// `enabled_tools` (the profile's own policy, below), the profile's deny list is applied to that
+// list, and the bearer's scope bounds what the server will do for this session at all — but the
+// per-call Axis-A question is not asked for them here. It was never actually asked before either:
+// before this change those calls were DENIED outright, so nothing that used to reach a card stops
+// reaching one. Axis B — the invariant that matters, that NO tool posture can send a message —
+// is untouched: `CHANNEL_TOOL` still asks, and its ask now reaches Dopl's real gate.
+//
+// ⚠ ONE MORE TOOL IN AN ASKING MODE AND THE DERIVATION MUST STOP, NOT GUESS. `askingToolsIn`
+// answers a SET, `soleAskingTool` answers `null` for anything but a singleton, and the caller
+// treats `null` as "the Dopl surface as a whole" rather than as a name. Adding a second asking
+// tool therefore degrades to a gate, loudly, instead of mis-naming a call.
+const DEFAULT_TOOL_APPROVAL_MODE = 'auto';
+const TOOL_APPROVAL_MODES = Object.freeze({ [CHANNEL_TOOL]: 'prompt' });
+
+// The modes that CAN produce an ask. ⚠ MEMBERSHIP IS THE FAIL-CLOSED DIRECTION: `writes` only asks
+// for non-read-only tools, but "only sometimes" is still "can", and counting it as asking can only
+// make the set BIGGER — which makes `soleAskingTool` answer `null` and the caller fall back to the
+// un-named surface. Counting it as silent would be the unsafe error, so it is not made.
+const ASKING_MODES = Object.freeze(['prompt', 'approve', 'writes']);
+
+/**
+ * The tools on ONE server entry that can raise an approval ask, or `null` when EVERY tool can.
+ *
+ * ⚠ READ OFF THE ENTRY, NOT OFF THE CONSTANTS ABOVE, so this answer cannot drift from the entry
+ * the launch actually sends. `null` means "not a nameable set" — a default mode that asks puts
+ * every tool on the server in the set, including ones Dopl never enumerated.
+ */
+function askingToolsIn(entry) {
+  const e = entry && typeof entry === 'object' ? entry : {};
+  if (ASKING_MODES.indexOf(e.default_tools_approval_mode) !== -1) return null;
+  const table = (e.tools && typeof e.tools === 'object') ? e.tools : {};
+  return Object.keys(table)
+    .filter((tool) => {
+      const cfg = table[tool];
+      return !!cfg && ASKING_MODES.indexOf(cfg.approval_mode) !== -1;
+    })
+    .sort();
+}
+
+/**
+ * The ONE tool an ask from Dopl's server can be, or `null` when that is not derivable.
+ *
+ * ⚠ IT ASKS A REAL ENTRY, built the same way a launch builds one. `enabled_tools` is deliberately
+ * NOT intersected here: this function does not know the session's profile, and the failure that
+ * omission can produce is closed rather than open — a profile that does not offer `CHANNEL_TOOL`
+ * cannot make a call that elicits, and if one somehow arrived it would be judged as a channel call
+ * by a profile whose deny list already hard-denies the channel tool (`session-profiles.js ›
+ * grantDecision` step 1, which runs ahead of the Axis-B branch).
+ */
+function soleAskingTool(entry) {
+  const asking = askingToolsIn(entry || buildDoplServerEntry(null));
+  return asking && asking.length === 1 ? asking[0] : null;
+}
+
 function clientTimeoutSec() {
   // ⚠ ONE DEFINITION, READ NOT RESTATED. Lazy because `mcp-config` pulls auth, and an unwired
   // harness must read as "no token", never throw into a launch.
@@ -85,8 +169,10 @@ function doplBearer() {
  * "ask for non-read-only tools". Which of `prompt` and `approve` is the unconditional ask is NOT
  * disambiguated by the research, and Axis B's whole enforcement point rides on getting it right —
  * §5 item C24. `prompt` is the unambiguous reading of the two.
- * ⚠ `default_tools_approval_mode: 'writes'` for everything else, per the design's step-7 build
- * order: prompt for non-read-only tools, which is the heuristic Dopl's two-axis gate approximates.
+ * ⚠ `default_tools_approval_mode` IS `'auto'` SINCE 2026-09-22 AND THAT IS A RULING, NOT A
+ * DEFAULT. It was `'writes'`. The argument for the change — and what it costs — is written out in
+ * full beside `TOOL_APPROVAL_MODES` above; the short form is that a second asking tool makes every
+ * ask un-nameable on this runtime, and an un-nameable ask can only be declined.
  */
 function buildDoplServerEntry(doplToolsPolicy) {
   const entry = {
@@ -100,8 +186,13 @@ function buildDoplServerEntry(doplToolsPolicy) {
     enabled: true,
     startup_timeout_sec: STARTUP_TIMEOUT_SEC,
     tool_timeout_sec: clientTimeoutSec(),
-    default_tools_approval_mode: 'writes',
-    tools: { [CHANNEL_TOOL]: { approval_mode: 'prompt' } },
+    default_tools_approval_mode: DEFAULT_TOOL_APPROVAL_MODE,
+    // ⚠ BUILT FROM THE TABLE, NEVER RE-SPELLED. `askingToolsIn` reads this same field back, so the
+    // name the elicitation path derives is the name the entry actually pinned.
+    tools: Object.keys(TOOL_APPROVAL_MODES).reduce((acc, tool) => {
+      acc[tool] = { approval_mode: TOOL_APPROVAL_MODES[tool] };
+      return acc;
+    }, {}),
   };
   // ⚠ DEFENCE IN DEPTH, NOT THE BOUND. The real bound is `grantDecision` step 1 reading the
   // profile's deny list; this narrows what the session is even OFFERED. Absent (a `full` session)
@@ -186,12 +277,16 @@ const descriptor = {
   // BARE — no `mcp__<server>__`, no prefix of any kind. `mcpServer/tool/call` takes the same two
   // parameters. So `main/mcp-tool-names.js › canonicalDoplName` canonicalises the `tool` field
   // correctly and the F-139 spelling hazard does NOT apply here.
-  // ⚠ WHAT DOES APPLY IS WORSE AND IS NOT A NAMING PROBLEM: the APPROVAL for that call arrives as
+  // ⚠ WHAT DOES APPLY IS NOT A NAMING PROBLEM: the APPROVAL for that call arrives as
   // `mcpServer/elicitation/request`, which carries `serverName` and a `message` and NO tool-name
-  // field at all, so nothing downstream can be handed the name above. `server-requests.js`
-  // answers it with an unconditional `{ action: 'decline' }` — fail-closed, and with no ALLOW
-  // path for a Dopl channel call on this runtime. That is U4's remaining release blocker and it
-  // is pinned by test rather than left as prose.
+  // field at all, so nothing downstream can be handed the name above FROM THE WIRE.
+  // 🔒 RESOLVED BY SERVER, 2026-09-22 (Samuel's ruling). The request names the SERVER, and this
+  // file is the one place that server's entry is built — so the name is recovered from Dopl's own
+  // configuration instead of from the request: `TOOL_APPROVAL_MODES` puts exactly ONE tool on this
+  // server in an asking mode, `soleAskingTool` answers it, and `approval.js › doplElicitation`
+  // hands that name and `_meta.tool_params` to the SAME gate every other request reaches. A
+  // non-Dopl `serverName`, a missing `_meta`, a different `codex_approval_kind` and a
+  // non-singleton asking set all still fail closed.
   toolNamePrefix: '<tool>',
   // The companion half of the shape above — named so a reader cannot take `toolNamePrefix` for a
   // claim that the server is absent from the wire. It is present, on its own field.
@@ -211,5 +306,9 @@ const descriptor = {
 module.exports = {
   registerMcp, probeMcp, descriptor,
   buildDoplServerEntry, buildMcpEnv,
+  // The elicitation allow path's two structural inputs: WHICH server is Dopl's, and which tool an
+  // ask from it can be. Both are read off this file so neither can drift from the entry.
+  SERVER_KEY, askingToolsIn, soleAskingTool,
+  DEFAULT_TOOL_APPROVAL_MODE, TOOL_APPROVAL_MODES, ASKING_MODES,
   BEARER_ENV, WORKSPACE_ENV, SESSION_ENV, RUNTIME_HEADERS, CHANNEL_TOOL,
 };

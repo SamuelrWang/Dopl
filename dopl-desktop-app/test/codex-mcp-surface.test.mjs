@@ -8,14 +8,16 @@
 // `main/mcp-tool-names.js › canonicalDoplName` canonicalises the `tool` field correctly
 // (`dopl_channel` → `mcp__dopl__dopl_channel`); the F-139 hazard is NOT the spelling.
 //
-// 🔒 ⚠ **THE HAZARD IS THAT THE APPROVAL NEVER CARRIES THAT FIELD.** A Dopl MCP call does not
-// arrive as an `item/*/requestApproval`. It arrives as **`mcpServer/elicitation/request`**, whose
-// params carry `serverName`, `message` and `_meta.codex_approval_kind === 'mcp_tool_call'` — and
-// NO tool-name field. Its reply is `{ action }` (`accept|decline|cancel`), not `{ decision }`.
-// `main/runtime/codex/server-requests.js` answers it with an UNCONDITIONAL `{ action: 'decline' }`,
-// so on this runtime today a Dopl MCP tool call is HARD-DENIED and Dopl's gate is never asked.
-// That is fail-closed, and it is also U4's open release blocker: nothing Dopl can decide will
-// ALLOW a channel call. The cases below pin both halves so neither can drift silently.
+// 🔒 ⚠ **THE HAZARD IS THAT THE APPROVAL NEVER CARRIES THAT FIELD.** A Dopl MCP call arrives as
+// **`mcpServer/elicitation/request`**, not an `item/*/requestApproval`: its params carry
+// `serverName`, `message` and `_meta.codex_approval_kind === 'mcp_tool_call'` and NO tool-name
+// field, and its reply is `{ action }` (`accept|decline|cancel`), not `{ decision }`. For one day
+// `server-requests.js` answered it with an UNCONDITIONAL `{ action: 'decline' }`.
+// 🔒 ⚠ **RESOLVED BY SERVER (Samuel, 2026-09-22), NEVER BY READING THE SENTENCE**: the request
+// names the SERVER, Dopl mounts that server itself, and `mcp.js` puts exactly ONE tool on Dopl's
+// entry in a mode that can ask — so identity plus "an ask happened" resolves the tool.
+// `test/codex-server-requests.test.mjs` pins the route and every decline against a synthetic
+// request; here it is pinned against the CAPTURED one.
 //
 // ⚠ **THE DOPL SIDE OF THE HTTP HOP IS A LOCAL STAND-IN; THE CODEX SIDE IS ENTIRELY REAL.**
 // `mcp-config.js`'s device token lives in Electron `safeStorage`, so a spawned-session bearer for
@@ -208,13 +210,16 @@ describe('the measured MCP tool-name shape', () => {
   });
 });
 
-describe('a Dopl MCP call is hard-denied today, and the gate is never asked', () => {
-  test('the elicitation reply is `{action}`, not `{decision}` — and it is an unconditional decline', async () => {
-    let asked = false;
-    const answer = await serverRequests.answer(CAPTURED.mcpElicitation, async () => { asked = true; return 'allow'; });
-    assert.deepEqual(answer, { action: 'decline' });
-    assert.equal(asked, false,
-      "U4 BLOCKER: Dopl's gate is not consulted for an MCP tool call — there is no ALLOW path");
+describe('a Dopl MCP call reaches Dopl\'s gate, resolved by SERVER', () => {
+  test('the elicitation reply is `{action}`, not `{decision}` — and the gate is what decides it', async () => {
+    // ⚠ VOCABULARY AS MUCH AS VERDICT: `{ action }` here, `{ decision }` there, crossing hangs.
+    const asked = [];
+    const allowed = await serverRequests.answer(CAPTURED.mcpElicitation,
+      async (name, input) => { asked.push({ name, input }); return 'allow'; });
+    assert.deepEqual(allowed, { action: 'accept' });
+    assert.deepEqual(asked, [{ name: mcp.CHANNEL_TOOL, input: { op: 'rooms' } }], 'gate consulted');
+    assert.deepEqual(
+      await serverRequests.answer(CAPTURED.mcpElicitation, async () => 'deny'), { action: 'decline' });
   });
 
   test('the elicitation carries NO tool-name field, which is why it cannot be classified', () => {
@@ -223,19 +228,20 @@ describe('a Dopl MCP call is hard-denied today, and the gate is never asked', ()
     assert.equal(p.tool, undefined);
     assert.equal(p.itemId, undefined, 'and no itemId either, so it cannot be joined to the item by id');
     assert.equal(p._meta.codex_approval_kind, 'mcp_tool_call', 'the only structured discriminator');
-    // ⚠ §5 item C1 IS ANSWERED, AND THE ANSWER IS YES: the call's ARGUMENTS are on the request
-    // (`_meta.tool_params`). Axis B's `opScoped` nevertheless stays `'unverified'`, because the
-    // gate is not reached at all — a capability that is carried but never delivered is not one
-    // the adapter may declare.
+    // ⚠ §5 C1 ANSWERED YES: the ARGUMENTS ride `_meta.tool_params` and reach the gate since
+    // 2026-09-22. `opScoped` still reads `'unverified'` — a deliberate UNDER-claim (§5 C1b).
     assert.deepEqual(p._meta.tool_params, { op: 'rooms' });
   });
 
-  test('`toolNameFor` names it with Codex\'s own category and still fails closed', () => {
-    const name = approval.toolNameFor(CAPTURED.mcpElicitation);
-    assert.equal(name, 'mcp_elicitations', "Codex's own `granular` category for this request type");
-    assert.notEqual(name, mcp.CHANNEL_TOOL,
-      'it must NOT resolve to the channel tool: the request does not carry that name');
-    // In no Axis-A positive allow-list, therefore gated in EVERY mode, `never` included.
+  test('`toolNameFor` names DOPL\'s by its entry, and everyone else\'s by Codex\'s category', () => {
+    // ⚠ NOT IN THE REQUEST, NOT FROM THE MESSAGE — from the entry `mcp.js` builds.
+    assert.equal(approval.toolNameFor(CAPTURED.mcpElicitation), mcp.soleAskingTool());
+    assert.equal(mcp.soleAskingTool(), mcp.CHANNEL_TOOL);    // ⚠ FAIL-CLOSED FOR EVERY OTHER SERVER: one field different, and it lands on a category in
+    // no Axis-A allow-list.
+    const params = Object.assign({}, CAPTURED.mcpElicitation.params, { serverName: 'somebody-else' });
+    const name = approval.toolNameFor({ method: CAPTURED.mcpElicitation.method, params });
+    assert.equal(name, 'mcp_elicitations');
+    assert.notEqual(name, mcp.CHANNEL_TOOL, "a third party must NOT resolve to Dopl's channel tool");
     const tools = require(join(CODEX, 'tools.js'));
     for (const mode of tools.TOOL_MODES) {
       assert.equal(tools.axisAAllows(mode, name), false, `${mode} must not auto-allow it`);
@@ -312,7 +318,9 @@ describe('the real app-server accepts the entry Dopl builds', () => {
         assert.equal(back.env_http_headers['X-Dopl-Session-Id'], mcp.SESSION_ENV, why);
         assert.equal(back.startup_timeout_sec, entry.startup_timeout_sec, why);
         assert.equal(back.tool_timeout_sec, entry.tool_timeout_sec, why);
-        assert.equal(back.default_tools_approval_mode, 'writes', why);
+        // 🔒 `auto` SINCE 2026-09-22: a default that can ask makes every elicitation un-nameable.
+        assert.equal(back.default_tools_approval_mode, mcp.DEFAULT_TOOL_APPROVAL_MODE, why);
+        assert.deepEqual(mcp.askingToolsIn(back), [mcp.CHANNEL_TOOL], `${why}: nameable as read BACK`);
         assert.deepEqual(back.enabled_tools, ['dopl_channel', 'dopl_kb'], why);
         // 🔒 AXIS B'S PIN IS A REAL, RECOGNISED KEY ON THIS CLI — `mcp.descriptor.perToolApproval`
         // is not a hopeful string. (What it does NOT do is reach Dopl's gate; see the tier-1

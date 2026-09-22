@@ -20,6 +20,10 @@
 // click, one ledger, one scope — the one the operator was shown.
 
 const tools = require('./tools');
+// ⚠ THE SERVER KEY AND THE ASKING TABLE COME FROM THE FILE THAT BUILDS THE ENTRY, so the
+// comparison below and the mount can never be two different words. `mcp.js` requires nothing
+// from here, so there is no cycle.
+const mcp = require('./mcp');
 
 // ── THE REQUEST -> NAME MAPPING ──────────────────────────────────────────────────────────────
 //
@@ -42,17 +46,71 @@ const REQUEST_ITEM_RE = /^item\/([A-Za-z0-9_]+)\/requestApproval$/;
 //     message: 'Allow the dopl MCP server to run tool "dopl_channel"?',
 //     _meta: { codex_approval_kind: 'mcp_tool_call', tool_params: { … }, … } }
 // There is no `toolName`, no `tool`, and no `itemId` to join back to the `mcpToolCall` item that
-// does carry `{ server, tool }`. The name exists only inside the operator-facing SENTENCE, and a
-// prose read is not a bound — so this classifies the request by Codex's OWN category word for it
-// and stops there. `mcp_elicitations` is in no Axis-A positive allow-list, so it gates in every
-// mode including `never`, which is the fail-closed answer and the one that is true today.
-// ⚠ THE OTHER HALF OF THAT MEASUREMENT IS A RELEASE BLOCKER, NOT A CLASSIFICATION DETAIL: this
-// request's reply is `{ action: 'accept'|'decline'|'cancel' }`, NOT `{ decision }`, and
-// `server-requests.js` answers it with an unconditional decline without consulting the gate. So
-// a Dopl MCP call on Codex cannot be ALLOWED at all. Naming it here does not change that; it
-// makes the log and any future wiring speak one vocabulary when it is fixed.
+// does carry `{ server, tool }`. The name exists only inside the operator-facing SENTENCE.
+//
+// 🔒 ⚠ **AND THE NAME IS STILL NEVER READ OUT OF THAT SENTENCE.** Samuel's ruling, 2026-09-22:
+// *resolve it by server.* What the request DOES carry structurally is `serverName`, and Dopl
+// mounts its own server itself — so `doplElicitation` below answers two questions in order:
+//   1. IS THIS DOPL'S OWN SERVER? `serverName === mcp.SERVER_KEY`, the same constant the mount is
+//      keyed on. Anything else is somebody else's server and is not ours to allow.
+//   2. WHICH TOOL? Not from the request — from `mcp.js`'s own per-tool approval table. Exactly one
+//      tool on Dopl's entry is configured in a mode that can ask, so an ask from that server IS
+//      that tool. `mcp.soleAskingTool()` answers it and answers `null` the moment that stops being
+//      true, in which case the honest name is the Dopl tool SURFACE and not a tool at all.
+// Nothing is parsed, nothing is guessed, and every unknown shape falls out at step 1 or 2.
+//
+// ⚠ WHY AN ELICITATION FROM DOPL'S OWN SERVER IS A QUESTION DOPL MAY ANSWER AT ALL. Dopl's MCP
+// surface is not an unknown third party: the session reaches it with a bearer Dopl minted, scoped
+// server-side; it is offered only the tools in `enabled_tools`, which is the profile's own policy;
+// and the profile's deny list is applied to that list. Codex asking "may the dopl server run its
+// tool?" is Codex asking permission to do the thing Dopl launched the session to do. The answer is
+// therefore not "yes" — it is *"ask Dopl's gate"*, which is what `server-requests.js` now does,
+// with the call's own arguments (`_meta.tool_params`, §5 item C1 — measured present).
+//
+// ⚠ AND THE CATEGORY WORD SURVIVES FOR EVERYTHING ELSE. A tool-call elicitation from a server that
+// is NOT Dopl's still classifies as `mcp_elicitations`, which is in no Axis-A positive allow-list
+// and therefore gates in every mode, `never` included — the fail-closed answer, unchanged.
 const MCP_ELICITATION = 'mcpServer/elicitation/request';
 const MCP_TOOL_CALL_KIND = 'mcp_tool_call';
+
+// ⚠ THE NAME FOR "A TOOL ON DOPL'S SERVER THAT THIS REQUEST DID NOT NAME AND CONFIGURATION CANNOT
+// RESOLVE". It is deliberately NOT a real tool name: it is in no Axis-A allow-list and in no
+// pre-approval list, so `grantDecision` reaches its final `return 'gate'` and the operator is
+// ASKED — which is the honest answer when Dopl knows the server and not the tool. Naming it
+// `dopl_channel` instead would hand an unknown call the channel tool's own Axis-B lanes.
+// ⚠ IT MUST NOT CLASSIFY AS THE CHANNEL TOOL. `session-profiles.js › isChannelTool` matches the
+// short name `dopl_channel` or a `dopl_channel_` prefix; this name is neither, and
+// `test/codex-server-requests.test.mjs` pins that.
+const DOPL_TOOL_SURFACE = 'dopl_unnamed_tool';
+
+/**
+ * Is this elicitation a tool-call approval from DOPL'S OWN MCP server, and under what name?
+ *
+ * Returns `{ name, input, derived }` or `null`. `null` is the fail-closed answer for EVERY shape
+ * that is not provably Dopl's: a missing or non-object `_meta`, a `codex_approval_kind` that is
+ * not `mcp_tool_call` (a server's own form or credential prompt is not a tool-call approval and
+ * must not borrow one's allow path), an absent `serverName`, and any `serverName` that is not the
+ * key Dopl mounted its own server under.
+ *
+ * `derived` says WHICH of the two names came back — the configured sole asking tool, or the
+ * un-named surface. It exists so a caller and a log can tell "Dopl knows this is the channel tool"
+ * from "Dopl knows only that it is Dopl's" without re-deriving either.
+ */
+function doplElicitation(params) {
+  const p = (params && typeof params === 'object') ? params : {};
+  const meta = (p._meta && typeof p._meta === 'object') ? p._meta : null;
+  if (!meta || meta.codex_approval_kind !== MCP_TOOL_CALL_KIND) return null;
+  // ⚠ IDENTITY AGAINST THE MOUNT KEY, and `typeof` first so a non-string `serverName` (an object
+  // with a coincidental `valueOf`, say) can never reach the comparison at all.
+  if (typeof p.serverName !== 'string' || p.serverName !== mcp.SERVER_KEY) return null;
+  const sole = mcp.soleAskingTool();
+  const params_ = meta.tool_params;
+  // The call's OWN arguments where they are carried, `{}` where they are not. Arrays are rejected
+  // with everything else non-object: the gate's channel classifiers read `input.op`, and an array
+  // answering `undefined` there would classify as a malformed call rather than as no call.
+  const input = (params_ && typeof params_ === 'object' && !Array.isArray(params_)) ? params_ : {};
+  return { name: sole || DOPL_TOOL_SURFACE, input, derived: !!sole };
+}
 
 function toolNameFor(request) {
   const req = request || {};
@@ -62,6 +120,11 @@ function toolNameFor(request) {
   if (m) return m[1]; // commandExecution | fileChange | whatever a later build adds
   const params = (req.params && typeof req.params === 'object') ? req.params : {};
   if (method === MCP_ELICITATION) {
+    // ⚠ ONE PLACE NAMES IT, AND `server-requests.js` ROUTES ON THE SAME ANSWER. A second copy of
+    // the server comparison at the wire would be a classification in two places, which is how the
+    // diag line and the decision come to describe different calls.
+    const dopl = doplElicitation(params);
+    if (dopl) return dopl.name;
     // ⚠ THE `_meta` DISCRIMINATOR IS CHECKED, NOT ASSUMED. An elicitation a server raises for its
     // own reasons (a form, a credential prompt) is NOT a tool-call approval, and both still land
     // on a name in no allow-list — but they are different facts and the log should not fuse them.
@@ -167,4 +230,8 @@ const descriptor = {
   hotSwapModes: 'unverified',
 };
 
-module.exports = { answerApproval, stampOutbound, toolNameFor, descriptor, MCP_ELICITATION, MCP_TOOL_CALL_KIND };
+module.exports = {
+  answerApproval, stampOutbound, toolNameFor, descriptor,
+  doplElicitation, DOPL_TOOL_SURFACE,
+  MCP_ELICITATION, MCP_TOOL_CALL_KIND,
+};
