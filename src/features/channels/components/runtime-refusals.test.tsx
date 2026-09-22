@@ -30,6 +30,7 @@ import {
 } from "../lib/runtime-copy";
 import { launchRefusalText } from "./use-agents-panel";
 import { AgentControls } from "./agent-panel-controls";
+import { PostureControls } from "./agent-posture";
 import { AgentLaunchPanelView } from "./composer-launch-panel";
 import type { AgentLaunchPanel } from "./use-agent-launch";
 
@@ -64,6 +65,11 @@ function installBridge(runtime: string, omitRuntime = false) {
     sessions: {
       pause: vi.fn().mockResolvedValue({ ok: true }),
       end: vi.fn().mockResolvedValue({ ok: true }),
+      // ⚠ BOTH BRIDGE OPS PRESENT ON PURPOSE. They are the FIRST gate on the posture strip
+      // below, so a case that proved a hidden model picker without them would be proving the
+      // wrong absence — the runtime gate has to be the only thing left deciding.
+      setMode: vi.fn().mockResolvedValue({ ok: true }),
+      setModel: vi.fn().mockResolvedValue({ ok: true }),
     },
   };
 }
@@ -293,5 +299,57 @@ describe("the signed-out and no-runtime copy", () => {
     expect(codex).toMatch(/Codex/);
     expect(codex).toMatch(/has not been measured/);
     expect(codex).not.toMatch(/Claude/);
+  });
+});
+
+/**
+ * THE LIVE MODEL PICKER, AGAINST THE CHANNEL'S RUNTIME (2026-09-22).
+ *
+ * ⚠ **THE DECLARATION EXISTED, WAS MIRRORED, AND WAS READ BY NOTHING ON THIS SIDE.**
+ * `runtime-capability.ts › canSwitchModelLive`'s own docblock is the rule — *"absent ⇒ the live
+ * model picker is hidden on a RUNNING agent"* — and `agent-posture.tsx` rendered it regardless,
+ * so a Codex agent was offered a control `main/session-reopen.js › setModel` refuses AND shown
+ * **"Model: Sonnet 5"** as its running model, because `agent-models.ts › agentModelSelection`
+ * back-fills `claude-sonnet-5` and `agentModelOptionsFor` offers that file's four Claude ids.
+ * ⚠ **AND THE NEGATIVE IS HALF THE CASE.** A hide-on-absent rule that fires on all three
+ * runtimes is a regression: Claude and Cursor both declare `liveModelSwitch: true` and keep the
+ * control exactly as they had it.
+ */
+async function mountPosture(runtime: string, omitRuntime = false) {
+  installBridge(runtime, omitRuntime);
+  await act(async () => {
+    render(<PostureControls agent={AGENT} channelId={CH} taskId="t1" />);
+  });
+}
+
+const modelPicker = () => screen.queryByLabelText("Model for this agent");
+const toolPicker = () => screen.queryByLabelText("Tool permissions for this agent");
+
+describe("the live model picker, against the channel's runtime", () => {
+  it("Codex: the picker is ABSENT — main would refuse the switch anyway", async () => {
+    await mountPosture("codex");
+    expect(modelPicker()).toBeNull();
+    // ⚠ IT REFUSES A CONTROL, NOT THE STRIP. The two permission axes are a different
+    // capability and are untouched — hiding them would be this fix overreaching.
+    expect(toolPicker()).not.toBeNull();
+    // ⚠ AND THE CLAUDE BACK-FILL GOES WITH IT: no "Sonnet 5" anywhere on a Codex agent.
+    expect(screen.queryByText(/Sonnet 5/)).toBeNull();
+  });
+
+  it("Claude and Cursor declare a live switch and KEEP the picker", async () => {
+    for (const id of ["claude", "cursor"]) {
+      await mountPosture(id);
+      expect(modelPicker(), id).not.toBeNull();
+      cleanup();
+    }
+  });
+
+  it("a desktop with no runtime concept keeps the picker — UNKNOWN IS NOT EMPTY", async () => {
+    // ⚠ A descriptor nobody sent decides nothing. Reading its ABSENCE as a refusal would
+    // DELETE a working control on every desktop older than the runtime port, where the one
+    // registered adapter has always been the one that can switch. The bridge op stays the
+    // whole gate there, byte-identical to before this rule existed.
+    await mountPosture("", true);
+    expect(modelPicker()).not.toBeNull();
   });
 });

@@ -172,17 +172,37 @@ describe("the REFUSALS — a sentence, never a control that vanished", () => {
     expect(interruptRefusal(CURSOR)).not.toMatch(/Cursor|Anysphere/);
   });
 
-  it("resume is refused on BOTH runtimes whose usage-reset is unverified", () => {
-    // §1.4a: an unverified reset clamps every cost delta to zero and the cost cap
+  it("resume is refused only where the usage-reset is UNMEASURED (CXP-4)", () => {
+    // §1.4a: an UNMEASURED reset clamps every cost delta to zero and the cost cap
     // never fires — no error, no symptom, until a bill arrives.
-    expect(canResume(CLAUDE)).toBe(true);
+    // ⚠ A MEASURED `false` IS NOT THAT CASE SINCE 2026-09-22, and this suite asserted
+    // it was. Codex's totals were MEASURED to continue across `thread/resume`
+    // (`main/runtime/codex/index.js › session.usageResetsOnResume`), main's baseline
+    // became runtime-aware, and this mirror kept refusing — so the web said "Codex
+    // cannot resume a conversation" about sessions the desktop resumes fine.
+    expect(canResume(CLAUDE)).toBe(true); // measured `true` — resets, zero the baseline
     expect(resumeRefusal(CLAUDE)).toBeNull();
-    expect(canResume(CODEX)).toBe(false);
+    expect(canResume(CODEX)).toBe(true); // measured `false` — continues, CARRY it
+    expect(resumeRefusal(CODEX)).toBeNull();
+    // ⚠ CURSOR IS THE ONE STILL UNMEASURED, and it is what keeps this case honest:
+    // with every runtime measured the assertion would pass over an empty set.
     expect(canResume(CURSOR)).toBe(false);
-    for (const d of [CODEX, CURSOR]) {
-      expect(resumeRefusal(d)).toMatch(/usage accounting on resume is unverified/);
-      expect(resumeRefusal(d)).toMatch(/stops the cost cap firing/);
-    }
+    expect(resumeRefusal(CURSOR)).toMatch(/usage accounting on resume is unverified/);
+    expect(resumeRefusal(CURSOR)).toMatch(/stops the cost cap firing/);
+    // ⚠ AND ABSENT READS LIKE `'unverified'`, never like a measurement.
+    expect(canResume({ session: { resume: true } })).toBe(false);
+  });
+
+  it("the web mirror and main's `capability.js` answer resume with ONE rule", () => {
+    // ⚠ THIS FILE'S HEADER: *"The ONE reason this file changes is that
+    // `main/runtime/capability.js` changed."* It changed on 2026-09-22 and this half
+    // did not, which is a drift that fails NOWHERE — the two just disagree. Driven
+    // off the three synthetic shapes rather than the three registered adapters, so
+    // the rule is pinned for an adapter nobody has written yet.
+    expect(canResume({ session: { resume: true, usageResetsOnResume: true } })).toBe(true);
+    expect(canResume({ session: { resume: true, usageResetsOnResume: false } })).toBe(true);
+    expect(canResume({ session: { resume: true, usageResetsOnResume: "unverified" } })).toBe(false);
+    expect(canResume({ session: { resume: false, usageResetsOnResume: true } })).toBe(false);
   });
 
   it("a profile with a deny list launches; one without is refused BY NAME", () => {

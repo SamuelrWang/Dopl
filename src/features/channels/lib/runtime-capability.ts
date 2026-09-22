@@ -169,29 +169,55 @@ export {
 // ── SESSION LIFECYCLE — TWO OF THE THREE REFUSALS ────────────────────────────
 
 /**
- * ⚠ ONE THAT REFUSES RATHER THAN HIDING. An unverified resume-reset makes every
- * cost delta negative, clamps it to zero, and stops the cost cap ever firing —
- * with no error and no symptom until a bill arrives (design §1.4a). Cold launch
- * is unaffected, which is why the sentence names RESUME and not the runtime.
+ * Declared in EITHER direction, i.e. somebody measured it.
+ *
+ * ⚠ **THE CXP-4 RULE, PORTED FROM `main/runtime/capability.js ›
+ * usageBaselineMeasured` (2026-09-22) — AND THIS MIRROR HAD MISSED IT.** A
+ * measured `false` used to be disqualifying here AND there, for a reason that
+ * was about CORE rather than about the runtime: `session-park.js ›
+ * resumeParked` ZEROED the delta baseline unconditionally, so against a runtime
+ * whose totals continue the reset re-billed the whole thread on the first
+ * post-resume `result`. The baseline is runtime-aware now
+ * (`capability.js › resumeZeroesBaseline`), so `false` stopped being
+ * disqualifying while the MEASUREMENT it records did not move.
+ * ⚠ **THIS FILE'S HEADER STATES ITS ONE REASON TO CHANGE — *"that
+ * `main/runtime/capability.js` changed"* — AND IT HAD.** The desktop half
+ * shipped the new rule and the web half kept the old one, so this surface said
+ * "Codex cannot resume a conversation" about sessions main resumes without
+ * complaint. A mirror that drifts does not fail loudly; it just disagrees.
+ * ⚠ `'unverified'` AND ABSENT STILL REFUSE, and that has not moved: neither
+ * baseline treatment is safe on an unmeasured runtime — zero it and a
+ * continuing one re-bills its history, carry it and a resetting one counts
+ * every later turn as zero through `session-io.js`'s `Math.max(0, …)` clamp.
+ * UNKNOWN IS NOT EMPTY, so the resume does not happen.
+ */
+const usageBaselineMeasured = (v: unknown): boolean =>
+  v === true || v === false;
+
+/**
+ * ⚠ ONE THAT REFUSES RATHER THAN HIDING. An UNMEASURED resume-reset leaves core
+ * with no safe way to carry the cost/token delta baseline across the resume —
+ * one direction re-bills history the operator already paid for, the other
+ * silently counts every later turn as zero (design §1.4a). Cold launch is
+ * unaffected, which is why the sentence names RESUME and not the runtime.
  */
 export function canResume(d: RuntimeDescriptor | null | undefined): boolean {
   const s = d?.session ?? {};
-  return s.resume === true && s.usageResetsOnResume === true;
+  return s.resume === true && usageBaselineMeasured(s.usageResetsOnResume);
 }
 
 /** Why a resume was refused, for the operator. `null` when it was not.
- *  ⚠ ONE SENTENCE, and it names no vendor — the descriptor's own label does that. */
+ *  ⚠ ONE SENTENCE, and it names no vendor — the descriptor's own label does that.
+ *  ⚠ A MEASURED `false` IS NOT A REFUSAL SINCE CXP-4: "this runtime continues its
+ *  totals" is a fact core now ACTS on, not a reason to withhold the resume, so
+ *  saying it here would be a sentence under a control that is not refused. */
 export function resumeRefusal(
   d: RuntimeDescriptor | null | undefined
 ): string | null {
   const s = d?.session ?? {};
   if (s.resume !== true) return "This runtime cannot resume a conversation.";
-  if (unverified(s.usageResetsOnResume)) {
-    return "This runtime's usage accounting on resume is unverified, and a wrong answer stops the cost cap firing.";
-  }
-  return s.usageResetsOnResume === true
-    ? null
-    : "This runtime continues cumulative usage across a resume.";
+  if (usageBaselineMeasured(s.usageResetsOnResume)) return null;
+  return "This runtime's usage accounting on resume is unverified, and a wrong answer stops the cost cap firing.";
 }
 
 /**

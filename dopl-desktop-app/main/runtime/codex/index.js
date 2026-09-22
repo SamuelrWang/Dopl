@@ -200,13 +200,32 @@ const descriptor = {
     // live running meter". Dopl accumulates, which is the same discipline as the NEVER-trust-a-
     // cumulative-total rule the other runtime already runs under.
     mode: 'per-turn',
-    // ⚠ NULL RATHER THAN A GUESSED LIST (§5 item C12). The research says the payload is TOKENS and
-    // does not name its fields, so `normalize.js` reads them tolerantly across the plausible
-    // spellings and finds nothing rather than painting a wrong number. A list here would read as a
-    // measurement.
-    fields: null,
-    // `model_context_window` in config — a configured denominator, not a live one.
-    windowSource: 'config',
+    // 🔒 ⚠ **A LIST SINCE 2026-09-22, BECAUSE THE SHAPE WAS READ — MEASURED against `codex-cli
+    // 0.155.1`.** It was `null` (§5 item C12) for as long as that was the honest word: `null` here
+    // means UNMEASURED, and a list is a claim to have read the payload, so it may only be written
+    // once somebody has. Three live `thread/tokenUsage/updated` breakdowns off one thread name
+    // exactly these four, on both `last` and `total`, and `normalize.js`'s header records them.
+    // ⚠ **`cachedInputTokens` IS A SUBSET OF `inputTokens`, NOT A TERM BESIDE IT**, which is the
+    // one thing this list must not be read as implying. `totalTokens === inputTokens +
+    // outputTokens` holds exactly in every observed breakdown; adding the cached figure on top
+    // over-reported a prompt of 18,833 as 25,873 and that defect was fixed the same day
+    // (`normalize.js › tokensFrom`). The other runtime's `cache_read_input_tokens` IS additive —
+    // the two conventions are declared per adapter precisely so neither is assumed of the other.
+    // ⚠ THE TOLERANT SPELLING SWEEP IN `normalize.js` STAYS. A list is what this build MEASURED,
+    // not a promise that no later CLI renames a field, and a spelling nobody has seen must still
+    // meter rather than read as zero.
+    fields: ['inputTokens', 'cachedInputTokens', 'outputTokens', 'totalTokens'],
+    // 🔒 ⚠ **`'reported'` SINCE 2026-09-22 — THIS RUNTIME STATES ITS OWN DENOMINATOR ON THE WIRE.**
+    // It read `'config'` (`model_context_window` in `config.toml` — a configured denominator, not a
+    // live one) and that was stale the moment the fold landed: every `thread/tokenUsage/updated`
+    // carries `tokenUsage.modelContextWindow` as a SIBLING of `last`/`total` (MEASURED at 258400 on
+    // `codex-cli 0.155.1`), `launch-spec.js` forwards it onto the `turn/completed` frame,
+    // `normalize.js › windowFrom` reads it, and `session-model.js › contextEvent` PREFERS it over
+    // the frozen `CONTEXT_WINDOWS` table. A descriptor naming a source core does not consult is
+    // the "declared but not applied" failure this file exists to prevent.
+    // ⚠ AND IT IS WHY NO `gpt-…` ROW WAS ADDED TO THAT TABLE: a runtime that reports its own window
+    // each turn cannot go stale, where a transcribed table goes stale the week a vendor ships.
+    windowSource: 'reported',
     // ⚠ NULL, AND THE COST CAP IS THEREFORE HIDDEN — not zeroed, not rendered-and-inert. Nothing
     // in the research says Codex reports a USD cost at all; `total_cost_usd` is the other
     // runtime's field. `session-state.js › costCapReached` is fed by exactly one number, so a cap
