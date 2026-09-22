@@ -166,10 +166,24 @@ WHAT IS ASKED FOR AND WHAT RUNS ARE NOT THE SAME THING: a \`model\` that machine
 const ROOMS = `op="rooms" — WHAT THIS PLACE IS, and op="status" — WHAT IS RUNNING.
 Four actions READ and four WRITE; a read-only session is refused the writes BY NAME while the reads answer. "open" makes a channel (\`name\`) or a 1:1 (\`to\`, and only with \`name\` omitted — both together is refused, never resolved by precedence); "update" REPLACES the info card whole, so an omitted row is deleted and a blind write clobbers — and EVERYONE IN THE CHANNEL SEES the card, which is what makes a blind write somebody else's problem.
 op="status" reads your own machine's live sessions and the directions waiting for them. Template, model, context, tokens, current tool and start time are YOUR OWN sessions only — a peer's agent is a handle and a state. The MODEL is always ONE unbroken token, so a name with a space in it is a template. A \`—\` cell was NOT REPORTED, and is not a zero.`;
-/** The arguments whose rule does not fit in a `.describe()`. */
+/**
+ * The arguments whose rule does not fit in a `.describe()`.
+ *
+ * ⚠ **`kind`'S CHOOSER AND `artifact`'S DEFINITION LANDED HERE ON 2026-09-22
+ * (Samuel's ruling, *"fund it"*), MOVED OFF THE PUSHED SCHEMA AND NOT ONE WORD
+ * DELETED.** Both had been living in `channel-schema.ts`'s `.describe()` text
+ * since the 2026-09-18/19 batch-D merge, whose own note called the move SANCTIONED
+ * and OWED: a chooser says WHEN to pick a value and a definition says what the
+ * NOUN is, and neither is the contract of one argument — which is exactly what
+ * this section is for. Every client paid for them on every connection; now the
+ * caller that asks pays once. `channel-schema-budget.test.ts` asserts the move as
+ * a move, in both directions, so a later trim cannot quietly delete either.
+ */
 const FIELDS = `THE ARGUMENTS THAT CARRY A RULE:
 OMITTING \`channel\` IS A WIDER READ, not a default one — op="read" and op="status" then answer for every channel you are in, across every workspace and home container.
 ONE CURSOR SPACE, ONE \`since\` — \`seq\` is table-wide, so one cursor covers every channel.
+CHOOSING \`kind\`: "record" when nobody need act or know now — IN DOUBT, ADDRESS SOMEONE.
+\`artifact\` NAMES A CARD, NOT A MESSAGE: an artifact folds messages into ONE named card.
 \`client_msg_id\` IS WHAT MAKES A RETRY SAFE; the dedupe is PER-AUTHOR.
 \`posture.chain\` NAMES ITS THREE STATES because "absent" is not "off": "inherit" takes the operator's setting, which may be ON.
 \`color\` IS AN IDENTITY, NEVER A STATUS — how a reader tells two agents apart; a red agent is not a failing one. The sixteen keys are UNIQUE PER CHANNEL ACROSS ALL MEMBERS, so another member's agent may hold the one you name: a 409 listing what is free, NOTHING FILED — re-issue with the SAME \`client_msg_id\`. A key returns to the bank when its agent ENDS; a room with all sixteen out runs UNCOLOURED. **NAMES are unique the same way and resolve it for you**, with \`-1\`, rather than refusing.`;

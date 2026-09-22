@@ -61,7 +61,7 @@ export type { ChannelOp, ManageAction, RoomsAction, ArtifactAction, } from "./ch
  * is `body`, a hold is `wait_ms`. Eighteen op names // left the published enum. A cut a re-worded
  * sentence cannot make twice.
  */
-export declare const SCHEMA_MAX_CHARS = 9106;
+export declare const SCHEMA_MAX_CHARS = 9001;
 /**
  * ⚠ THE PER-FIELD HALF, AND IT IS THE ONE THAT ACTUALLY HOLDS THE LINE. A total can absorb one
  * 900-character paragraph by trimming nine short fields; this cannot. A `.describe()` states the

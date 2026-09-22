@@ -177,13 +177,31 @@ describe("what the schema stopped carrying, the doctrine carries", () => {
     // FALLS BACK silently). `to`'s refusal is additionally stated in the doctrine's
     // `send` section. A third copy in FIELDS is the repetition this budget exists
     // to stop, not a relocation.
+    // ⚠ **TWO MORE LINES SINCE 2026-09-22 (Samuel's ruling, *"fund it"*), AND
+    // THE PIN IS THE POINT.** `kind`'s record CHOOSER (his ruling Q5) and
+    // `artifact`'s DEFINITION were written into `channel-schema.ts`'s PUSHED
+    // `.describe()` text at the 2026-09-18/19 merge, which raised
+    // `SCHEMA_MAX_CHARS` and recorded the move as OWED. Moving them is the
+    // sanctioned fix — a chooser and a definition are standing RULES, not one
+    // argument's contract — and pinning them HERE is what makes it a relocation
+    // rather than a deletion dressed as a budget win.
     for (const rule of [
       "OMITTING `channel` IS A WIDER READ",
       "ONE CURSOR SPACE, ONE `since`",
+      "IN DOUBT, ADDRESS SOMEONE",
+      "an artifact folds messages into ONE named card",
       "`client_msg_id` IS WHAT MAKES A RETRY SAFE",
       "`posture.chain` NAMES ITS THREE STATES",
     ])
       expect(CHANNEL_DOCTRINE, rule).toContain(rule);
+    // ⚠ AND THE OTHER DIRECTION: neither may come BACK onto the pushed schema.
+    // A fact in both places is the repetition this whole budget exists to stop,
+    // and re-pasting one is how a raise gets re-taken without an argument.
+    const prose = Object.values(served)
+      .map((schema) => (schema as { description?: string }).description ?? "")
+      .join("\n");
+    expect(prose).not.toContain("in doubt, address someone");
+    expect(prose).not.toContain("folds messages into ONE named card");
   });
 
   it("and the shape declares every field those rules are about", () => {
@@ -192,6 +210,8 @@ describe("what the schema stopped carrying, the doctrine carries", () => {
     for (const field of [
       "channel",
       "since",
+      "kind",
+      "artifact",
       "client_msg_id",
       "posture",
     ])
