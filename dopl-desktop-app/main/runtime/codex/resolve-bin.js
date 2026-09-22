@@ -1,6 +1,35 @@
 // WHERE `codex` IS ON THIS MACHINE — the ONE answer the probe, the credential check, the model
 // roster and the session spawn all ask for.
 //
+// ⚠ **THIS RELEASE BUNDLES ONE** (Samuel's ruling, 2026-09-22 — `packaging.js` holds the decision
+// and what it cost). The header below was written while `delivery` was `path` and said a bundled
+// binary "simply becomes the first thing `available()` finds". That is now TRUE, with one
+// deliberate exception, and the order is stated here because it is a POLICY and not an
+// implementation detail:
+//
+//   1. `DOPL_CODEX_BIN`  — THE OPERATOR'S OWN ANSWER, AND IT STILL OUTRANKS THE BUNDLE.
+//      Bundling does not make the override less necessary; it makes it MORE. It is the only lever
+//      that points a shipped build at a different CLI — a support session reproducing a skew, a
+//      developer testing an unreleased Codex, an operator on a build whose platform package did
+//      not install. An operator who names a file must get THAT file or an error, never a quiet
+//      substitution, and that rule predates the ruling and survives it.
+//   2. THE BUNDLED BINARY — the one this release PINNED, SIGNED and NOTARISED.
+//      ⚠ **IT OUTRANKS `PATH`, AND THAT IS THE POINT OF BUNDLING.** If a stray `codex` on PATH
+//      won, `packaging.versionPin` would be a false claim on every machine that happens to have
+//      one, and "two operators, two Codex versions" — the cost `path` accepted — would survive the
+//      decision taken to end it. A release that ships a protocol build must RUN that protocol
+//      build by default.
+//   3. `PATH`, then 4. the WELL-KNOWN prefixes — UNCHANGED, AND KEPT ON PURPOSE.
+//      The bundled candidate can legitimately be absent: `@openai/codex-<platform>-<arch>` is an
+//      OPTIONAL dependency gated on `os`/`cpu`, so a build produced where it did not install has
+//      no bundle at all. Degrading to the v1 behaviour is strictly better than degrading to
+//      nothing, and it costs one `require.resolve` that already failed.
+//
+// ⚠ **THE BUNDLED CANDIDATE IS NOT TRUSTED FOR BEING OURS.** It goes through `inspectCandidate`
+// like every other — same executability, same writable-by-others walk over the file, its canonical
+// target and every ancestor. An app bundle an attacker can rewrite is an attacker's binary no
+// matter whose build produced it.
+//
 // 🔒 ⚠ **A FINDER-LAUNCHED APP HAS NEARLY NO `PATH`, AND THAT IS THE WHOLE REASON THIS FILE
 // EXISTS** (U2, `docs/plans/2026-09-21-001-fix-codex-runtime-parity-plan.md`). macOS gives a GUI
 // app `launchd`'s environment — roughly `/usr/bin:/bin:/usr/sbin:/sbin` — and NOT the `PATH` the
@@ -9,7 +38,9 @@
 // `spawn('codex')` unless Dopl looks for it, so a machine with a working `codex` in Terminal
 // reports "not on this Mac's PATH" the moment Dopl is opened from the Dock. `delivery: 'path'`
 // (`packaging.js`) made the operator's install the supply chain; it did not make the operator's
-// SHELL the way to find it.
+// SHELL the way to find it. ⚠ **AND THE BUNDLE DOES NOT RETIRE THIS FILE**: candidates 3 and 4 are
+// still reached whenever the bundled candidate is absent or refused, on exactly the machines whose
+// PATH is `launchd`'s.
 //
 // ⚠ **IT RESOLVES, IT DOES NOT EXEC.** Nothing here spawns `codex` — `client.js` is still the only
 // module that touches a child process. This answers "which file", and every caller asks it.
@@ -27,11 +58,13 @@
 // INSTALLED. World-writable is always refused; group-writable is refused only when the owner is
 // neither this user nor root.
 //
-// ⚠ **SOURCE IS PART OF THE ANSWER.** Diagnostics have to be able to say WHICH file was resolved
-// and HOW it was found (`override` / `path` / `well-known`), because "two operators, two Codex
-// versions" is the cost `packaging.js` accepted and a version report that cannot name its binary
-// cannot settle a support question. ⚠ The path is a filesystem path, never an auth material —
-// `credential.js` still owns sign-in state and nothing here reads a token.
+// ⚠ **SOURCE IS PART OF THE ANSWER, AND IT MATTERS MORE NOW THAN IT DID.** Diagnostics have to be
+// able to say WHICH file was resolved and HOW it was found (`override` / `bundled` / `path` /
+// `well-known`). Under `delivery: 'path'` that was how a support session told two operators'
+// Codexes apart; under `delivery: 'bundled'` it is how it tells THE SHIPPED ONE from a machine's
+// own — the single fact that decides whether `packaging.versionPin` describes what actually ran.
+// ⚠ The path is a filesystem path, never an auth material — `credential.js` still owns sign-in
+// state and nothing here reads a token.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -58,6 +91,71 @@ const WELL_KNOWN = [
   '~/.volta/bin',
   '~/.npm-global/bin',
 ];
+
+// ⚠ **THE VENDOR LAYOUT, MIRRORED FROM THE LAUNCHER WE DO NOT RUN.** `@openai/codex`'s own
+// `bin/codex.js` maps `{platform, arch}` → a Rust target triple → `vendor/<triple>/bin/codex`, and
+// Dopl reproduces that mapping rather than executing the launcher: the launcher is a Node process
+// whose entire job is to `spawn` the same file, and `client.js` already owns the one child process
+// this runtime is allowed. ⚠ **DARWIN ONLY, DELIBERATELY** (Samuel's macOS-only ruling): the four
+// linux/win32 triples the launcher knows are omitted rather than carried as arms that can never be
+// taken, and an unmapped platform answers `null` so the search falls through to `PATH`.
+// ⚠ **`CODEX_MANAGED_PACKAGE_ROOT` IS NOT REPRODUCED AND MUST NOT BE.** The launcher sets it to
+// advertise which package manager owns the install, so the CLI can offer to update itself. A
+// bundled binary is updated by shipping a Dopl release; telling it otherwise would offer an
+// operator an update that our own `versionPin` then contradicts.
+const VENDOR_TRIPLE = {
+  'darwin-arm64': 'aarch64-apple-darwin',
+  'darwin-x64': 'x86_64-apple-darwin',
+};
+
+// ⚠ THE PLATFORM PACKAGE IS AN ALIAS DIRECTORY, NOT A PACKAGE NAME. Every one of them declares
+// `"name": "@openai/codex"` with the triple in its VERSION (`0.155.1-darwin-arm64`); npm installs
+// them under the alias `@openai/codex-<platform>-<arch>`, which is what `require.resolve` walks and
+// what `package.json › build.asarUnpack` globs. Resolving by the declared name would find the
+// launcher instead.
+const PLATFORM_PKG = (platform, arch) => `@openai/codex-${platform}-${arch}`;
+
+/**
+ * An in-asar path → its `app.asar.unpacked` twin. Pure string transform, no electron.
+ *
+ * ⚠ **THIS IS WHY THE BUNDLED PATH IS DERIVED AND NEVER HARDCODED.** `require.resolve` reports the
+ * IN-ASAR path in a packaged app (`…/Dopl.app/Contents/Resources/app.asar/node_modules/@openai/…`)
+ * even though `asarUnpack` put the real bytes beside it under `app.asar.unpacked`, and reports an
+ * ordinary `node_modules` path in a dev tree, which has no `app.asar` segment at all. One
+ * expression covers both, and a dev tree is left untouched because the regex matches nothing.
+ * ⚠ VERBATIM the transform `../claude/loader.js › rewriteAsarUnpacked` has used since the desktop
+ * shipped, negative lookahead included — an already-`.unpacked` path must be left alone, or a
+ * second rewrite produces `app.asar.unpacked.unpacked`. It is copied rather than imported because
+ * that module requires `electron` at load time and this one must stay spawn-free and electron-free.
+ */
+function rewriteAsarUnpacked(p) {
+  if (typeof p !== 'string') return p;
+  return p.replace(/app\.asar(?!\.unpacked)/, 'app.asar.unpacked');
+}
+
+/**
+ * The bundled `codex` this release ships, or `null` when this build has none.
+ *
+ * `resolvePackage` — `require.resolve`, injected so a test can drive both a dev tree and a packaged
+ * one without one existing on disk.
+ *
+ * ⚠ **`null` IS A NORMAL ANSWER, NOT A FAILURE.** `@openai/codex-<platform>-<arch>` is an OPTIONAL
+ * dependency gated on `os`/`cpu`, so it is absent by design on every platform but the build host's.
+ * The caller falls through to `PATH`; nothing is logged as an error.
+ */
+function bundledCandidate({ platform, arch, resolvePackage }) {
+  const triple = VENDOR_TRIPLE[`${platform}-${arch}`];
+  if (!triple || typeof resolvePackage !== 'function') return null;
+  let pkgJson;
+  try {
+    pkgJson = resolvePackage(`${PLATFORM_PKG(platform, arch)}/package.json`);
+  } catch (_) {
+    return null;
+  }
+  if (typeof pkgJson !== 'string' || !pkgJson) return null;
+  const root = path.dirname(rewriteAsarUnpacked(pkgJson));
+  return path.join(root, 'vendor', triple, 'bin', BIN);
+}
 
 /**
  * ⚠ **`npm i -g` DOES NOT INSTALL INTO ANY OF THE ABOVE, AND THAT IS HOW THE FIRST REAL INSTALL
@@ -196,12 +294,14 @@ function inspectCandidate(file, io, uid) {
  * this machine's.
  *
  * Returns `{ ok, path, source, reason, rejected }`:
- *   `source`   `override` | `path` | `well-known` — how it was found, for diagnostics.
+ *   `source`   `override` | `bundled` | `path` | `well-known` — how it was found, for diagnostics,
+ *              and searched in that order. The argument for the order is in this file's header;
+ *              it is a policy, so it is written down once and not re-litigated here.
  *   `rejected` every candidate that EXISTED and was refused, with its reason. ⚠ It is the
  *              difference between "you have no Codex" and "you have one Dopl will not run", and an
  *              operator who cannot tell those apart reinstalls the wrong thing.
  */
-function resolveWith({ env, home, io, uid, execPath }) {
+function resolveWith({ env, home, io, uid, execPath, platform, arch, resolvePackage }) {
   const rejected = [];
   const consider = (file, source) => {
     const verdict = inspectCandidate(file, io, uid);
@@ -225,6 +325,15 @@ function resolveWith({ env, home, io, uid, execPath }) {
     };
   }
 
+  // ⚠ SECOND, AND ABOVE `PATH` — see the header. A bundled candidate that is REFUSED lands in
+  // `rejected` like any other and the search continues: a tampered app bundle must not be the only
+  // thing the operator is told about when a perfectly good `codex` sits on their PATH.
+  const bundled = bundledCandidate({ platform, arch, resolvePackage });
+  if (bundled) {
+    const hit = consider(bundled, 'bundled');
+    if (hit) return hit;
+  }
+
   const entries = String((env && env.PATH) || '').split(':').filter(Boolean);
   for (const dir of entries) {
     const hit = consider(path.join(expandHome(dir, home), BIN), 'path');
@@ -245,7 +354,13 @@ function resolveWith({ env, home, io, uid, execPath }) {
     source: null,
     reason: rejected.length
       ? `A \`${BIN}\` was found but Dopl will not run it — ${rejected[0].reason}. Move it to a directory only you can write to, or set \`${OVERRIDE_ENV}\`.`
-      : `\`${BIN}\` is not installed where Dopl can find it. Install the Codex CLI and re-open Dopl — this release does not bundle it.`,
+      // ⚠ **THE SECOND CLAUSE STOPPED BEING TRUE ON 2026-09-22 AND WAS REWRITTEN RATHER THAN
+      // DROPPED.** It read "this release does not bundle it". This release DOES — so reaching here
+      // means the bundled candidate was ABSENT, which on a `bundled` delivery is itself the news:
+      // the build's optional platform package did not install, or the app bundle is missing its
+      // unpacked half. Telling the operator only "install the CLI" would hide a broken build
+      // behind a workaround that happens to work.
+      : `\`${BIN}\` is not installed where Dopl can find it, and this build carries no bundled copy. Install the Codex CLI and re-open Dopl, or reinstall Dopl.`,
     rejected,
   };
 }
@@ -268,6 +383,13 @@ function resolveCodexBin() {
     io: { realpathSync: fs.realpathSync, statSync: fs.statSync, accessSync: fs.accessSync },
     uid: typeof process.getuid === 'function' ? process.getuid() : undefined,
     execPath: process.execPath,
+    platform: process.platform,
+    arch: process.arch,
+    // ⚠ THIS MODULE'S OWN `require.resolve`, not the caller's. Resolution is relative to the file
+    // doing it, and `main/runtime/codex/` is inside the same package tree as the vendored binary
+    // in both a dev checkout and a packaged app — which is exactly what makes the derivation work
+    // without knowing which of the two it is standing in.
+    resolvePackage: require.resolve,
   });
   return cached;
 }
@@ -288,8 +410,11 @@ module.exports = {
   resolveWith,
   writableByOthers,
   nodeNeighbours,
+  bundledCandidate,
+  rewriteAsarUnpacked,
   forget,
   BIN_NAME,
   OVERRIDE_ENV,
   WELL_KNOWN,
+  VENDOR_TRIPLE,
 };

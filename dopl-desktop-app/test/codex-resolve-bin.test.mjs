@@ -105,6 +105,12 @@ const run = (env, files, directoryModes, opts = {}) => resolver.resolveWith({
   // default that swallowed it would assert the opposite of what it says.
   uid: "uid" in opts ? opts.uid : ME,
   execPath: opts.execPath,
+  // ⚠ OMITTED BY DEFAULT, WHICH IS WHAT KEEPS THE PRE-BUNDLE CASES MEANING WHAT THEY MEANT. With
+  // no `resolvePackage` the bundled candidate is `null` and the search starts at PATH, exactly as
+  // it did under `delivery: 'path'` — the cases below that DO exercise the bundle pass all three.
+  platform: opts.platform,
+  arch: opts.arch,
+  resolvePackage: opts.resolvePackage,
 });
 
 test("finds a Homebrew codex a Finder launch's PATH cannot see", () => {
@@ -327,4 +333,132 @@ test("THIS machine's own Codex resolves — the end-to-end case the unit fakes s
   }
   assert.equal(real.ok, true, `a codex exists here and was refused: ${real.reason}`);
   assert.ok(real.path && real.path.startsWith("/"), "an absolute path");
+});
+
+// ─── THE BUNDLED BINARY (Samuel's ruling, 2026-09-22) ─────────────────────────────────────────
+//
+// 🔒 `delivery` moved from `path` to `bundled` (`main/runtime/codex/packaging.js`). These cases
+// pin the ORDER — the one thing a reader cannot infer from the descriptor — and the DERIVATION of
+// the bundled path, which differs between a dev checkout and a packaged app and must never be a
+// constant.
+
+/** A dev checkout's `require.resolve` answer: an ordinary `node_modules` path, no asar segment. */
+const DEV_PKG_JSON = "/repo/dopl-desktop-app/node_modules/@openai/codex-darwin-arm64/package.json";
+const DEV_BIN = "/repo/dopl-desktop-app/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex";
+/** A packaged app's: `require.resolve` reports the IN-ASAR path even for an `asarUnpack`ed file. */
+const ASAR_PKG_JSON = "/Applications/Dopl.app/Contents/Resources/app.asar/node_modules/@openai/codex-darwin-arm64/package.json";
+const ASAR_BIN = "/Applications/Dopl.app/Contents/Resources/app.asar.unpacked/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex";
+
+const resolveTo = (answer) => () => answer;
+const resolveMissing = () => {
+  throw Object.assign(new Error("MODULE_NOT_FOUND"), { code: "MODULE_NOT_FOUND" });
+};
+/** `run` plus the three inputs the bundled candidate is derived from. */
+const runBundled = (env, files, directoryModes, opts = {}) => run(env, files, directoryModes, {
+  platform: "darwin",
+  arch: "arm64",
+  resolvePackage: resolveTo(DEV_PKG_JSON),
+  ...opts,
+});
+
+test("the bundled path is DERIVED, and dev and packaged derive differently", () => {
+  // ⚠ THE WHOLE CASE FOR DERIVING IT. `asarUnpack` puts the real bytes beside `app.asar` under
+  // `app.asar.unpacked`, but `require.resolve` still reports the IN-ASAR path — a hardcoded
+  // constant would be right in exactly one of these two trees.
+  const dev = resolver.bundledCandidate({ platform: "darwin", arch: "arm64", resolvePackage: resolveTo(DEV_PKG_JSON) });
+  assert.equal(dev, DEV_BIN, "a dev tree has no `app.asar` segment and is left untouched");
+  const packaged = resolver.bundledCandidate({ platform: "darwin", arch: "arm64", resolvePackage: resolveTo(ASAR_PKG_JSON) });
+  assert.equal(packaged, ASAR_BIN, "a packaged app resolves to the unpacked twin");
+
+  // ⚠ AND THE REWRITE IS NOT REPEATABLE-UNSAFE: an already-unpacked path must be left alone, or a
+  // second pass yields `app.asar.unpacked.unpacked`.
+  assert.equal(resolver.rewriteAsarUnpacked(ASAR_BIN), ASAR_BIN);
+});
+
+test("a platform with no vendor triple, and an absent package, both answer null rather than guessing", () => {
+  // ⚠ `null` IS A NORMAL ANSWER. The platform package is an OPTIONAL dependency gated on
+  // `os`/`cpu`, so it is absent by design everywhere but the build host — the caller falls through
+  // to PATH, which is why PATH was kept.
+  assert.equal(resolver.bundledCandidate({ platform: "linux", arch: "x64", resolvePackage: resolveTo(DEV_PKG_JSON) }), null);
+  assert.equal(resolver.bundledCandidate({ platform: "darwin", arch: "arm64", resolvePackage: resolveMissing }), null);
+  assert.equal(resolver.bundledCandidate({ platform: "darwin", arch: "arm64", resolvePackage: undefined }), null);
+  // Only the two macOS triples are carried — Samuel's macOS-only ruling, not an oversight.
+  assert.deepEqual(Object.keys(resolver.VENDOR_TRIPLE).sort(), ["darwin-arm64", "darwin-x64"]);
+});
+
+test("the bundled binary OUTRANKS a codex on PATH — the point of pinning a version", () => {
+  // If a stray PATH install won, `packaging.versionPin` would be a false claim on every machine
+  // that happens to have one, and the skew `bundled` was chosen to end would survive the choice.
+  const found = runBundled(
+    { PATH: SHELL_PATH },
+    { [DEV_BIN]: {}, "/opt/homebrew/bin/codex": {} }
+  );
+  assert.equal(found.ok, true, found.reason);
+  assert.equal(found.path, DEV_BIN);
+  assert.equal(found.source, "bundled");
+});
+
+test("the OVERRIDE still outranks the bundle — an operator naming a file gets that file", () => {
+  const files = { [DEV_BIN]: {}, "/custom/codex": {} };
+  const picked = runBundled({ PATH: SHELL_PATH, [resolver.OVERRIDE_ENV]: "/custom/codex" }, files);
+  assert.equal(picked.path, "/custom/codex");
+  assert.equal(picked.source, "override");
+
+  // 🔒 AND IT STILL REFUSES RATHER THAN FALLING BACK TO THE BUNDLE. Quietly running the shipped
+  // binary when the operator named another is how a support session measures the wrong thing —
+  // the failure mode bundling makes MORE likely, not less, because there is now always one to
+  // fall back to.
+  const missing = runBundled({ PATH: SHELL_PATH, [resolver.OVERRIDE_ENV]: "/custom/gone" }, files);
+  assert.equal(missing.ok, false);
+  assert.equal(missing.source, "override");
+  assert.match(missing.reason, /not found/);
+});
+
+test("no bundle in this build falls through to PATH, and says so when nothing is there", () => {
+  const found = run(
+    { PATH: SHELL_PATH },
+    { "/opt/homebrew/bin/codex": {} },
+    {},
+    { platform: "darwin", arch: "arm64", resolvePackage: resolveMissing }
+  );
+  assert.equal(found.path, "/opt/homebrew/bin/codex");
+  assert.equal(found.source, "path");
+
+  const absent = run({ PATH: FINDER_PATH }, {}, {}, { platform: "darwin", arch: "arm64", resolvePackage: resolveMissing });
+  assert.equal(absent.ok, false);
+  // ⚠ THE OLD SENTENCE SAID "this release does not bundle it" AND IS NOW FALSE. Reaching here on a
+  // bundled delivery means the BUILD is missing its binary, which is news in its own right.
+  assert.match(absent.reason, /no bundled copy/);
+  assert.doesNotMatch(absent.reason, /does not bundle/);
+});
+
+test("the bundled binary is NOT trusted for being ours — the writability walk still applies", () => {
+  // 🔒 An app bundle an attacker can rewrite is an attacker's binary whoever built it. And a
+  // REFUSED bundle must not end the search: a good codex on PATH is still a better answer than
+  // none, and the refusal is still reported.
+  const found = runBundled(
+    { PATH: SHELL_PATH },
+    { [DEV_BIN]: { dir: 0o777 }, "/opt/homebrew/bin/codex": {} }
+  );
+  assert.equal(found.ok, true, found.reason);
+  assert.equal(found.source, "path", "a refused bundle falls through rather than stranding the operator");
+  assert.equal(found.rejected.length, 1);
+  assert.equal(found.rejected[0].path, DEV_BIN);
+  assert.match(found.rejected[0].reason, /writable by other users/);
+});
+
+test("THIS checkout's bundled codex is the one that resolves", () => {
+  // ⚠ THE END-TO-END CASE, and it is unconditional BECAUSE the dependency is now in
+  // `package.json › dependencies` — on darwin-arm64 a checkout that installed cannot lack it.
+  // Anywhere else it is skipped loudly rather than asserted away.
+  if (process.platform !== "darwin" || process.arch !== "arm64") {
+    console.log("      ℹ not darwin-arm64 — the bundled half of this case did not run");
+    return;
+  }
+  resolver.forget();
+  const real = resolver.resolveCodexBin();
+  resolver.forget();
+  assert.equal(real.ok, true, real.reason);
+  assert.equal(real.source, "bundled", `resolved ${real.path} instead of the shipped binary`);
+  assert.match(real.path, /@openai\/codex-darwin-arm64\/vendor\/aarch64-apple-darwin\/bin\/codex$/);
 });

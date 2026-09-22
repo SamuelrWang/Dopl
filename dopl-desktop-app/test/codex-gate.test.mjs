@@ -27,6 +27,8 @@ const approval = require(join(CODEX, "approval.js"));
 const axisB = require(join(CODEX, "axis-b.js"));
 const mcp = require(join(CODEX, "mcp.js"));
 const launchSpec = require(join(CODEX, "launch-spec.js"));
+// ⚠ READ-ONLY HERE: the packaging pin is compared against `SUPPORTED_CLI`, which client.js owns.
+const client = require(join(CODEX, "client.js"));
 
 const D = registry.descriptorFor("codex");
 const RT = registry.runtimeFor("codex");
@@ -394,8 +396,30 @@ test("the cost cap is HIDDEN, the sign-in button is HIDDEN, and neither is graye
   assert.equal(capability.entryFile(D), "AGENTS.md");
 });
 
-test("packaging is `path`, so `available()` is a real probe with a readable refusal", () => {
-  assert.equal(D.packaging.delivery, "path");
-  assert.equal(D.packaging.unpackGlobs, null, "a path-delivered runtime unpacks nothing");
-  assert.equal(D.packaging.versionPin, null, "a pin would be a claim about a binary we do not ship");
+test("packaging is `bundled`, so the release makes a version claim it can keep", () => {
+  // 🔒 ⚠ **THIS CASE ASSERTED `path` UNTIL 2026-09-22**, when Samuel ruled the binary gets bundled
+  // — *"i think we should go with the binary. Let's just do it."* The three fields move together
+  // or the descriptor is lying: a `bundled` delivery that unpacks nothing ships a binary inside a
+  // read-only asar that cannot exec, and one with a null pin ships a protocol build it refuses to
+  // name.
+  assert.equal(D.packaging.delivery, "bundled");
+  assert.ok(Array.isArray(D.packaging.unpackGlobs) && D.packaging.unpackGlobs.length,
+    "a bundled runtime must name what the build unpacks");
+  assert.equal(D.packaging.signing, "inherits-app-identity",
+    "the vendor binaries are re-signed under the app's own identity — notarisation requires it");
+  assert.equal(D.packaging.versionPin, "@openai/codex@0.155.1",
+    "the pin is the version SUPPORTED_CLI was measured from, and package.json pins it EXACTLY");
+});
+
+test("the version pin, the SUPPORTED_CLI floor and the installed dependency are ONE version", () => {
+  // ⚠ THREE COPIES OF ONE NUMBER, AND NOTHING ELSE COMPARES THEM. `packaging.versionPin` is what
+  // the release CLAIMS, `client.js › SUPPORTED_CLI.measuredFrom` is what the adapter was BUILT
+  // against, and `package.json › dependencies['@openai/codex']` is what `npm install` actually
+  // PLACES. A bundled delivery is only worth anything if the three agree.
+  const pinned = String(D.packaging.versionPin).split("@").pop();
+  assert.equal(pinned, client.SUPPORTED_CLI.measuredFrom);
+  const dep = JSON.parse(
+    readFileSync(join(HERE, "..", "package.json"), "utf8")
+  ).dependencies["@openai/codex"];
+  assert.equal(dep, pinned, "an EXACT pin, not a caret — a range makes the claim a guess");
 });
