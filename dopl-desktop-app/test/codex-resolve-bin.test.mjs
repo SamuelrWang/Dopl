@@ -20,6 +20,9 @@ const require = createRequire(import.meta.url);
 const resolver = require(join(HERE, "..", "main", "runtime", "codex", "resolve-bin.js"));
 
 const HOME = "/Users/tester";
+/** This test process's pretend uid, and a stranger's. */
+const ME = 501;
+const SOMEONE_ELSE = 502;
 /** A GUI launch's PATH, verbatim — the whole point of the module. */
 const FINDER_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
 const SHELL_PATH = `/opt/homebrew/bin:${FINDER_PATH}`;
@@ -67,9 +70,14 @@ function fakeIo(files, directoryModes = {}) {
     statSync(p) {
       if (fileRecords.has(p)) {
         const spec = fileRecords.get(p);
-        return { isFile: () => true, mode: (spec && spec.mode) ?? 0o755 };
+        return { isFile: () => true, mode: (spec && spec.mode) ?? 0o755, uid: (spec && spec.uid) ?? ME };
       }
-      if (dirs.has(p)) return { isFile: () => false, mode: dirs.get(p) };
+      if (dirs.has(p)) {
+        const entry = dirs.get(p);
+        return typeof entry === 'object'
+          ? { isFile: () => false, mode: entry.mode, uid: entry.uid ?? ME }
+          : { isFile: () => false, mode: entry, uid: ME };
+      }
       const err = new Error(`ENOENT: ${p}`);
       err.code = "ENOENT";
       throw err;
@@ -89,10 +97,14 @@ function fakeIo(files, directoryModes = {}) {
   };
 }
 
-const run = (env, files, directoryModes) => resolver.resolveWith({
+const run = (env, files, directoryModes, opts = {}) => resolver.resolveWith({
   env,
   home: HOME,
   io: fakeIo(files, directoryModes),
+  // ⚠ `in`, not `=== undefined`: the strict-reading case passes uid EXPLICITLY undefined, and a
+  // default that swallowed it would assert the opposite of what it says.
+  uid: "uid" in opts ? opts.uid : ME,
+  execPath: opts.execPath,
 });
 
 test("finds a Homebrew codex a Finder launch's PATH cannot see", () => {
@@ -146,7 +158,7 @@ test("refuses a codex anyone can rewrite, and says which", () => {
   // The file itself is world-writable.
   const loose = run({ PATH: "/tmp/bin" }, { "/tmp/bin/codex": { mode: 0o777 } });
   assert.equal(loose.ok, false);
-  assert.match(loose.reason, /group- or world-writable/);
+  assert.match(loose.reason, /writable by other users/);
   assert.equal(loose.rejected.length, 1);
   assert.equal(loose.rejected[0].path, "/tmp/bin/codex");
 
@@ -176,7 +188,7 @@ test("refuses a symlink whose canonical target directory is writable", () => {
     }
   );
   assert.equal(found.ok, false);
-  assert.match(found.reason, /resolved target directory.*group- or world-writable/);
+  assert.match(found.reason, /resolved target directory.*writable by other users/);
 });
 
 test("refuses a canonical target beneath a writable ancestor", () => {
@@ -186,7 +198,7 @@ test("refuses a canonical target beneath a writable ancestor", () => {
     { "/shared/releases": 0o777 }
   );
   assert.equal(found.ok, false);
-  assert.match(found.reason, /ancestor.*group- or world-writable/);
+  assert.match(found.reason, /ancestor.*writable by other users/);
 });
 
 test("a refused install does not read as a missing one", () => {
@@ -231,4 +243,88 @@ test("no caller spawns the bare name any more", () => {
   for (const file of ["client.js", "credential.js"]) {
     assert.match(read(file), /resolve-bin/, `${file} must ask the resolver`);
   }
+});
+
+// ─── THE TWO REAL INSTALLS THAT WERE REFUSED (measured 2026-09-22) ────────────────────────────
+//
+// 🔒 Both of these are REGRESSION tests for a refusal that shipped, not hypotheticals. `codex-cli
+// 0.155.1` was installed on this machine and the resolver answered "not installed where Dopl can
+// find it" — twice, for two different reasons.
+
+test("accepts a Homebrew install, whose directories are group-writable BY DESIGN", () => {
+  // `/opt/homebrew` is `drwxrwxr-x <me>:admin` on every Homebrew Mac — that is how `brew install`
+  // works without `sudo`. The flat `& 0o022` reading refused it outright.
+  const brewDirs = { "/opt/homebrew": 0o775, "/opt/homebrew/bin": 0o775 };
+  const found = run({ PATH: "/opt/homebrew/bin" }, { "/opt/homebrew/bin/codex": {} }, brewDirs);
+  assert.equal(found.ok, true, found.reason);
+  assert.equal(found.path, "/opt/homebrew/bin/codex");
+});
+
+test("still refuses the same layout when the owner is someone else", () => {
+  // ⚠ THE NARROWING IS ABOUT OWNERSHIP, NOT ABOUT GIVING UP. Group-writable and owned by a THIRD
+  // party is the actual hole: another account can swap the binary.
+  const theirs = { "/opt/homebrew": { mode: 0o775, uid: SOMEONE_ELSE }, "/opt/homebrew/bin": { mode: 0o775, uid: SOMEONE_ELSE } };
+  const found = run({ PATH: "/opt/homebrew/bin" }, { "/opt/homebrew/bin/codex": {} }, theirs);
+  assert.equal(found.ok, false);
+  assert.match(found.reason, /writable by other users/);
+});
+
+test("world-writable is refused no matter who owns it", () => {
+  // /tmp is the case: world-writable and owned by root. Ownership never excuses `o+w`.
+  for (const uid of [ME, 0, SOMEONE_ELSE]) {
+    const found = run({ PATH: "/tmp/bin" }, { "/tmp/bin/codex": {} }, { "/tmp/bin": { mode: 0o777, uid } });
+    assert.equal(found.ok, false, `uid ${uid} must not excuse world-write`);
+    assert.match(found.reason, /writable by other users/);
+  }
+});
+
+test("an unknown uid keeps the strict reading — unknown is not a reason to widen", () => {
+  const found = run(
+    { PATH: "/opt/homebrew/bin" },
+    { "/opt/homebrew/bin/codex": {} },
+    { "/opt/homebrew": 0o775, "/opt/homebrew/bin": 0o775 },
+    { uid: undefined }
+  );
+  assert.equal(found.ok, false, "no uid → group-write is refused as before");
+});
+
+test("finds an `npm i -g` install beside the running node", () => {
+  // 🔒 THE SECOND REFUSAL: `npm prefix -g` under Homebrew's node is the KEG —
+  // `/opt/homebrew/Cellar/node/<version>/bin` — which carries a version and so cannot be a
+  // constant, and `/opt/homebrew/bin` holds no symlink for a non-formula package. WELL_KNOWN could
+  // not name it; `nodeNeighbours(process.execPath)` derives it.
+  const keg = "/opt/homebrew/Cellar/node/24.7.0";
+  const found = run(
+    { PATH: FINDER_PATH },
+    { [`${keg}/bin/codex`]: {} },
+    { "/opt/homebrew/Cellar": 0o775, "/opt/homebrew": 0o775 },
+    { execPath: `${keg}/bin/node` }
+  );
+  assert.equal(found.ok, true, found.reason);
+  assert.equal(found.path, `${keg}/bin/codex`);
+  assert.equal(found.source, "well-known");
+});
+
+test("nodeNeighbours derives the bin dir and the keg's .bin, and nothing from an empty path", () => {
+  const dirs = resolver.nodeNeighbours("/opt/homebrew/Cellar/node/24.7.0/bin/node");
+  assert.deepEqual(dirs, [
+    "/opt/homebrew/Cellar/node/24.7.0/bin",
+    "/opt/homebrew/Cellar/node/24.7.0/lib/node_modules/.bin",
+  ]);
+  assert.deepEqual(resolver.nodeNeighbours(""), []);
+  assert.deepEqual(resolver.nodeNeighbours(undefined), []);
+});
+
+test("THIS machine's own Codex resolves — the end-to-end case the unit fakes stand in for", () => {
+  // ⚠ CONDITIONAL ON A REAL INSTALL, and it says so rather than passing quietly: the suite runs on
+  // machines with no Codex. When one IS present it must RESOLVE — that is the whole bug.
+  resolver.forget();
+  const real = resolver.resolveCodexBin();
+  resolver.forget();
+  if (!real.ok && real.rejected.length === 0) {
+    console.log("      ℹ no codex on this machine — the live half of this case did not run");
+    return;
+  }
+  assert.equal(real.ok, true, `a codex exists here and was refused: ${real.reason}`);
+  assert.ok(real.path && real.path.startsWith("/"), "an absolute path");
 });

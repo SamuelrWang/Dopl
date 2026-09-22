@@ -16,11 +16,16 @@
 //
 // 🔒 ⚠ **A FILE NAMED `codex` IS NOT A REASON TO RUN IT.** A candidate is accepted only when it is
 // a regular file the current user may execute AND neither it nor any directory that resolves its
-// candidate or canonical path is group/world-writable. A safe-looking symlink into a writable tree
-// is still a code-execution hole, because anything that can replace the target chooses what Dopl
-// runs. Rejections are reported with the reason, never silently skipped, so an operator whose
+// candidate or canonical path is writable BY OTHER USERS. A safe-looking symlink into a writable
+// tree is still a code-execution hole, because anything that can replace the target chooses what
+// Dopl runs. Rejections are reported with the reason, never silently skipped, so an operator whose
 // install sits in a writable prefix is told why it was refused instead of being told Codex is
 // missing.
+// ⚠ **"BY OTHER USERS" IS NOT `& 0o022` — see `writableByOthers`.** Homebrew's own directories are
+// group-writable by design, so the flat reading refused `brew install codex` AND
+// `npm i -g @openai/codex` on this very machine (measured 2026-09-22) and reported them as NOT
+// INSTALLED. World-writable is always refused; group-writable is refused only when the owner is
+// neither this user nor root.
 //
 // ⚠ **SOURCE IS PART OF THE ANSWER.** Diagnostics have to be able to say WHICH file was resolved
 // and HOW it was found (`override` / `path` / `well-known`), because "two operators, two Codex
@@ -41,8 +46,10 @@ const OVERRIDE_ENV = 'DOPL_CODEX_BIN';
 
 // ⚠ SEARCHED IN ORDER, AND THE ORDER IS "MOST DELIBERATE FIRST". `$HOME`-relative entries are
 // expanded per call rather than at require time, because the tests drive a fake home.
-// ⚠ NOT A PROMISE THAT ANY OF THESE EXIST — it is where the four macOS installers put a CLI:
-// Homebrew (arm64 then Intel), a user-level prefix, then the three JS toolchain prefixes.
+// ⚠ NOT A PROMISE THAT ANY OF THESE EXIST — it is where the macOS installers put a CLI: Homebrew
+// (arm64 then Intel), a user-level prefix, then the JS toolchain prefixes.
+// ⚠ **AND IT IS NOT SUFFICIENT ON ITS OWN**: `npm i -g` lands beside the RUNNING NODE, which is a
+// version-carrying path no constant can name — `nodeNeighbours` below supplies it.
 const WELL_KNOWN = [
   '/opt/homebrew/bin',
   '/usr/local/bin',
@@ -51,6 +58,28 @@ const WELL_KNOWN = [
   '~/.volta/bin',
   '~/.npm-global/bin',
 ];
+
+/**
+ * ⚠ **`npm i -g` DOES NOT INSTALL INTO ANY OF THE ABOVE, AND THAT IS HOW THE FIRST REAL INSTALL
+ * WENT MISSING** (measured 2026-09-22). With Homebrew's node, `npm prefix -g` is the KEG —
+ * `/opt/homebrew/Cellar/node/<version>/bin` — a path that carries the node version in it and so
+ * cannot be a constant. `/opt/homebrew/bin` holds symlinks for FORMULA binaries, and an
+ * `npm i -g` package is not one, so nothing there points at it either.
+ *
+ * ⚠ **DERIVED FROM THE RUNNING NODE, NEVER SHELLED OUT FOR.** `process.execPath` is this process's
+ * own interpreter; its `bin` directory is the same one `npm -g` writes to for that install, and
+ * reading it costs nothing. Running `npm prefix -g` here would mean spawning a process inside the
+ * module whose whole contract is that it resolves without executing anything.
+ */
+function nodeNeighbours(execPath) {
+  const out = [];
+  const bin = execPath ? path.dirname(execPath) : '';
+  if (!bin) return out;
+  out.push(bin);
+  // Homebrew keg layout: `<keg>/bin/node` beside `<keg>/lib/node_modules/.bin`.
+  out.push(path.join(path.dirname(bin), 'lib', 'node_modules', '.bin'));
+  return out;
+}
 
 // ─── BEGIN CODEX-RESOLVE-PURE (no electron, no spawn; unit-tested directly) ───
 
@@ -71,7 +100,43 @@ function expandHome(entry, home) {
  * attacker can replace the target from `/shared`. Return the canonical path too, so the later
  * `spawn` executes the file whose full chain was inspected rather than resolving the symlink again.
  */
-function inspectCandidate(file, io) {
+/**
+ * 🔒 **WHO CAN REWRITE THIS, OTHER THAN ME?** — the question the mode bits are asked, and the one
+ * a bare `& 0o022` gets wrong on macOS.
+ *
+ * ⚠ **MEASURED 2026-09-22, AND IT REFUSED THE TWO COMMONEST INSTALLS.** Homebrew ships
+ * `/opt/homebrew` as `drwxrwxr-x samuelwang:admin` — GROUP-WRITABLE BY DESIGN, so that an admin
+ * can `brew install` without `sudo`. A flat group-write refusal therefore rejected
+ * `/opt/homebrew/bin/codex` AND the npm-global prefix under `/opt/homebrew/Cellar`, i.e. `brew
+ * install codex` and `npm i -g @openai/codex` both, telling the operator Codex was not installed
+ * while it sat on their PATH. A security check that no real install can pass is not a security
+ * check; it is an outage.
+ *
+ * THE RULE, and the threat model behind it:
+ *   - **WORLD-WRITABLE IS ALWAYS REFUSED.** Any local account could swap the binary. No exceptions,
+ *     sticky bit included — `/tmp` is exactly the case this exists for.
+ *   - **GROUP-WRITABLE IS REFUSED ONLY WHEN THE OWNER IS SOMEONE ELSE.** If the thing is owned by
+ *     ME, group-write grants nobody a power I do not already have: I can rewrite my own files, and
+ *     an attacker running as me has already won. If it is owned by ROOT, group-write is the
+ *     platform's own arrangement (`admin`), which is the posture the operator's package manager
+ *     chose. If it is owned by a THIRD party, group-write is a real hole and is refused.
+ *
+ * ⚠ **THIS IS A DELIBERATE NARROWING OF THE 2026-09-22 HARDENING, NOT A REVERT OF IT.** The
+ * symlink-and-ancestor walk it added stays exactly as it was — that caught a real hole (a safe
+ * name pointing into a writable tree). What changed is the PREDICATE at each step.
+ *
+ * `uid` absent (a platform with no `getuid`) falls back to the strict `& 0o022`: unknown identity
+ * is not a reason to widen.
+ */
+function writableByOthers(stat, uid) {
+  if (!stat) return true;
+  if ((stat.mode & 0o002) !== 0) return true; // world-writable, always
+  if ((stat.mode & 0o020) === 0) return false; // not group-writable, nothing more to ask
+  if (typeof uid !== 'number') return true; // unknown identity → the strict reading
+  return !(stat.uid === uid || stat.uid === 0); // group-writable is fine only if mine or root's
+}
+
+function inspectCandidate(file, io, uid) {
   let resolved;
   try {
     resolved = io.realpathSync(file);
@@ -90,9 +155,8 @@ function inspectCandidate(file, io) {
   } catch (_) {
     return { ok: false, reason: 'not executable by this user' };
   }
-  // ⚠ `0o022` — group-write OR other-write, on the file or any directory that selects it.
-  if ((st.mode & 0o022) !== 0) {
-    return { ok: false, reason: 'refused: the file is group- or world-writable' };
+  if (writableByOthers(st, uid)) {
+    return { ok: false, reason: 'refused: the file is writable by other users' };
   }
 
   const inspectDirectories = (candidate, label) => {
@@ -105,8 +169,8 @@ function inspectCandidate(file, io) {
       } catch (_) {
         return `refused: its ${label} ${immediate ? 'directory' : 'ancestor'} could not be read`;
       }
-      if ((dirStat.mode & 0o022) !== 0) {
-        return `refused: its ${label} ${immediate ? 'directory' : 'ancestor'} \`${dir}\` is group- or world-writable`;
+      if (writableByOthers(dirStat, uid)) {
+        return `refused: its ${label} ${immediate ? 'directory' : 'ancestor'} \`${dir}\` is writable by other users`;
       }
       const parent = path.dirname(dir);
       if (parent === dir) return '';
@@ -137,10 +201,10 @@ function inspectCandidate(file, io) {
  *              difference between "you have no Codex" and "you have one Dopl will not run", and an
  *              operator who cannot tell those apart reinstalls the wrong thing.
  */
-function resolveWith({ env, home, io }) {
+function resolveWith({ env, home, io, uid, execPath }) {
   const rejected = [];
   const consider = (file, source) => {
-    const verdict = inspectCandidate(file, io);
+    const verdict = inspectCandidate(file, io, uid);
     if (verdict.ok) return { ok: true, path: verdict.path, source, reason: '', rejected };
     if (verdict.reason !== 'not found') rejected.push({ path: file, reason: verdict.reason });
     return null;
@@ -150,7 +214,7 @@ function resolveWith({ env, home, io }) {
   if (override) {
     // ⚠ AN OVERRIDE THAT DOES NOT RESOLVE IS AN ERROR, NOT A FALLBACK. The operator named a file;
     // quietly running a different one is how a support session measures the wrong binary.
-    const verdict = inspectCandidate(override, io);
+    const verdict = inspectCandidate(override, io, uid);
     if (verdict.ok) return { ok: true, path: verdict.path, source: 'override', reason: '', rejected };
     return {
       ok: false,
@@ -167,7 +231,7 @@ function resolveWith({ env, home, io }) {
     if (hit) return hit;
   }
 
-  for (const dir of WELL_KNOWN) {
+  for (const dir of WELL_KNOWN.concat(nodeNeighbours(execPath))) {
     const expanded = expandHome(dir, home);
     // ⚠ Skip what `PATH` already covered — the same file refused twice reads as two problems.
     if (entries.includes(expanded) || entries.includes(dir)) continue;
@@ -202,6 +266,8 @@ function resolveCodexBin() {
     env: process.env,
     home: os.homedir(),
     io: { realpathSync: fs.realpathSync, statSync: fs.statSync, accessSync: fs.accessSync },
+    uid: typeof process.getuid === 'function' ? process.getuid() : undefined,
+    execPath: process.execPath,
   });
   return cached;
 }
@@ -220,6 +286,8 @@ const BIN_NAME = BIN;
 module.exports = {
   resolveCodexBin,
   resolveWith,
+  writableByOthers,
+  nodeNeighbours,
   forget,
   BIN_NAME,
   OVERRIDE_ENV,
