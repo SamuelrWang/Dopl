@@ -22,6 +22,7 @@ import {
   type ChannelAgentSettingsViewProps,
 } from "./settings-agent";
 import { DEFAULT_PERMISSION_PRESET } from "../lib/permission-modes";
+import { launchSelectionStub } from "../hooks/launch-selection-harness";
 
 /** The desktop modules these claims are ABOUT. ⚠ Off `process.cwd()` (the vitest
  *  root), not `import.meta.url`: under the jsdom environment these files declare, a
@@ -82,6 +83,12 @@ export function agentView(over: Partial<ChannelAgentSettingsViewProps> = {}) {
       posture={DEFAULT_PERMISSION_PRESET}
       postureBusy={false}
       onChangePosture={noop}
+      // ⚠ **A STUB, NOT A DEFAULT** (2026-09-21, U8). The launch group reads the versioned,
+      // runtime-keyed record now (`hooks/use-launch-selection.ts`), so a suite that renders the
+      // tab has to hand one — and a suite that cares about it overrides this. The stub's own
+      // defaults are the RESTRICTIVE, no-runtime-concept ones, which is the lane every pre-runtime
+      // case in these files was already written against.
+      selection={launchSelectionStub()}
       folder={null}
       {...over}
     />

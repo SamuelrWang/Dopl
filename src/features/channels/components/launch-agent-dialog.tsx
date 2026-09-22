@@ -17,8 +17,7 @@
  * for this."* Shell, section label, underline field, pill row and footer pair are the KIT's; what
  * is left here is this dialog's six rows and its launch lane.
  * ⚠ **THE SLIDE-OUT IS STILL IN THE TREE.** `composer-launch-panel.tsx` is unreferenced from the
- * Bot icon and keeps its own pins (`runtime-refusals.test.tsx`) until Samuel rules.
- * **Delete it when he does; do not let two launch forms live.**
+ * Bot icon and keeps its own pins until Samuel rules. **Do not let two launch forms live.**
  *
  * ⚠ **NOTHING ABOUT THE LAUNCH LANE CHANGED — the point of reusing {@link useLaunchRunner}.** The
  * act is still `use-agent-launch-run.ts › launchWithIdentity`. This file is a FACE: if a payload
@@ -40,11 +39,12 @@
  * and its Cancel/Launch pair is the kit's footer. The heading is {@link title}.
  *
  * ⚠ **PREFILL IS THE PICK, NOT A SECOND SCREEN** (*"when a user clicks a template, all of those
- * fields would be pre-filled"*; *"the name prefilled and the user can change the name if they
- * want"*): `applyTemplate` fills Name, Description and Instructions and never overwrites a field
- * the operator edited. **Model is NOT prefilled and must not become so** — {@link effectiveModel}
- * DISPLAYS the template's model while `panel.model` stays `''`, which is what keeps main's
- * precedence chain the one authority.
+ * fields would be pre-filled"*): `applyTemplate` fills Name, Description and Instructions and
+ * never overwrites a field the operator edited. **Model is NOT prefilled and must not become so**
+ * — `launch-agent-dialog-model.ts › modelRowFor` DISPLAYS the template's model while `panel.model`
+ * stays `''`, which is what keeps main's precedence chain the one authority; that file also
+ * carries the rule for a template whose model belongs to ANOTHER runtime (it is not used and the
+ * mismatch is said out loud, never translated).
  *
  * ⚠ **THE RUNTIME ROW SITS UNDER MODEL HERE.** The slide-out put it between Template and Model
  * because it *"decides what the two rows under it mean"*; Samuel's popup ordering is Name,
@@ -61,12 +61,10 @@
  * runtime still RENDERS the row**, so the operator sees what will run.
  *
  * ⚠ **EVERY REPORTED RUNTIME IS AN OPTION, CONNECTED OR NOT, AND THE PRESELECT IS A FOUR-LINK
- * CHAIN** — both rules, Samuel's 2026-09-08 correction verbatim, and every link's argument live in
- * `launch-agent-dialog-runtime.ts`'s header ({@link runtimeRowOptions}, {@link pickRuntime}).
+ * CHAIN** — both rules and Samuel's 2026-09-08 correction live in
+ * `launch-agent-dialog-runtime.ts`'s header; what the selected runtime then IMPLIES (the model
+ * roster, the native summary, the sign-in sentence) lives in `launch-agent-dialog-state.ts`.
  * Stated there and not restated here: a rule written twice drifts in one of the copies.
- * Connectivity buys only (a) the muted **"not connected"** hint and (b) where the preselect lands;
- * an unconnected pill stays SELECTABLE, because it is a setup step rather than a missing
- * capability, and `acquire`'s spawn-time refusal explains the rest.
  *
  * ⚠ **NOTHING IS REPORTED ⇒ NO ROW AND NO RUNTIME KEY** — a plain browser, and every desktop older
  * than the adapter port (`runtimeSupported` false). The only lane left where this popup sends no
@@ -75,20 +73,13 @@
  * `main/session-launch-op.js` still reads it for launches carrying no runtime (MCP's included).
  */
 
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useAgentTemplates } from "@/features/agent-templates/hooks/use-agent-templates";
 import { authorMarker } from "@/features/agent-templates/components/template-picker";
 import { TemplateApprovalDialog } from "@/features/agent-templates/components/template-approval";
 import { FormDialog, PillChoice, UnderlineField } from "@/shared/ui/form-dialog";
-import { useChannelLaunchPosture } from "../hooks/use-channel-launch-posture";
-import { interruptRefusal } from "../lib/runtime-capability";
-import {
-  EMPTY_CONNECTED,
-  EMPTY_RUNTIMES,
-  pickRuntime,
-  runtimeRowOptions,
-} from "./launch-agent-dialog-runtime";
-import { agentModelOptionsFor, agentModelSelection } from "../lib/agent-models";
+import { PLATFORM_DEFAULT_LABEL } from "./settings-agent-launch-rows";
+import { useLaunchDialogRuntime } from "./launch-agent-dialog-state";
 import { AgentColorCircles, agentColorsTaken } from "./agent-color-circles";
 import { firstFreeAgentColor } from "../lib/agent-colors";
 import type { AgentColorKey } from "../types";
@@ -168,7 +159,10 @@ export function LaunchAgentDialog({
   const { templates } = useAgentTemplates(workspaceId ?? "", {
     enabled: panel.open && workspaceId !== null,
   });
-  const posture = useChannelLaunchPosture(channelId);
+  // ⚠ **THE VERSIONED, RUNTIME-KEYED RECORD SINCE 2026-09-21 (U7), NOT THE LEGACY PAIR.** This
+  // dialog has to answer "what does THIS runtime remember" for whichever pill is selected right
+  // now, and the legacy `{tools, messages, model}` reply describes only the runtime the CHANNEL
+  // picked. `hooks/use-launch-selection.ts` carries the whole argument.
   // ⚠ THE RUNNER LIVES HERE NOW, beside the button that fires it — see the header's note on the
   // submit moving back inside the form. It reaches `launchWithIdentity` unchanged.
   const runner = useLaunchRunner({ newAgent, panel, openThreadId });
@@ -180,15 +174,6 @@ export function LaunchAgentDialog({
     () => new Map(members.map((m) => [m.userId, m.displayName || m.email || ""] as const)),
     [members]
   );
-
-  // ⚠ EMPTY UNTIL THE PROBE ANSWERS, and empty forever off-desktop — which renders NO runtime
-  // row and no warning, the correct direction while the answer is out (INVARIANTS §11).
-  const runtimes = posture.runtimeSupported ? posture.runtimes : EMPTY_RUNTIMES;
-  // ⚠ THE ROSTER IS NEVER FILTERED BY THIS (Samuel's correction, quoted in the header). It labels
-  // and it orders the preselect; it removes nothing.
-  const connected = posture.runtimeSupported ? posture.connected : EMPTY_CONNECTED;
-  const connectedKnown = posture.runtimeSupported && posture.connectedKnown;
-  const channelModel = posture.modelSupported ? posture.posture.model ?? "" : "";
 
   /**
    * 🔒 THE MARKER IS ATTACHED BESIDE THE READ, so no arm of this renders a template without one
@@ -217,45 +202,25 @@ export function LaunchAgentDialog({
   );
 
   /**
-   * WHAT THE MODEL ROW SHOWS — the operator's own pick, else the TEMPLATE's, else the CHANNEL's,
-   * else the Sonnet back-fill. ⚠ THE ORDER IS MAIN'S, LINK FOR LINK
-   * (`main/session-launch-op.js`), and it is DISPLAY ONLY: `panel.model` stays `''` until the
-   * operator touches the control, so an untouched dialog puts no model on the wire at all.
-   * A row that pre-selected the resolved id into `panel.model` would turn a channel's setting
-   * into a per-spawn pick that then stops following the setting.
+   * **WHAT THE DESKTOP'S ANSWER MEANS FOR THIS DIALOG** — the roster, the preselect, the model
+   * row, the native summary and the connection sentence, all derived from ONE selected runtime.
+   *
+   * ⚠ **ITS OWN FILE SINCE 2026-09-21 (U7)** — `launch-agent-dialog-state.ts`, past the §1 cap
+   * and on a real seam: this file is the FORM (six rows, the identity fields, the launch lane),
+   * that one is what the SELECTED RUNTIME implies. The two clocks came apart the moment a runtime
+   * switch had to re-derive a roster, a remembered pick, a native summary and a refusal sentence
+   * rather than just a label.
    */
-  const effectiveModel = useMemo(() => {
-    const fromTemplate = templates.find((t) => t.id === panel.templateId)?.model;
-    return agentModelSelection(panel.model || fromTemplate || channelModel);
-  }, [panel.model, templates, panel.templateId, channelModel]);
-  // ⚠ `agentModelOptionsFor`, not the bare roster: a template or a channel may carry an id this
-  // build predates, and an option list without it would render the row with no selection.
-  const modelOptions = useMemo(
-    () => agentModelOptionsFor(effectiveModel).map((o) => ({ key: o.value, label: o.label })),
-    [effectiveModel]
-  );
-
-  // ⚠ EVERY REPORTED RUNTIME, NOTHING PREPENDED AND NOTHING REMOVED — the roster plus the
-  // "not connected" hints. `launch-agent-dialog-runtime.ts` is the rule and Samuel's correction.
-  const runtimeOptions = useMemo(
-    () => runtimeRowOptions(runtimes, connected, connectedKnown),
-    [runtimes, connected, connectedKnown]
-  );
-
-  /**
-   * WHAT THIS SPAWN WILL RUN ON — one descriptor that is the SELECTION, the refusal sentence and
-   * the payload at once. ⚠ ONE OBJECT ON PURPOSE: a row selecting one runtime while the warning
-   * read another's refusals is what `runtime-capability.ts › descriptorFor` exists to prevent.
-   * ⚠ THE OPERATOR'S OWN PICK OUTRANKS THE CHANNEL'S — main's order (`p.runtime >
-   * getChannelRuntime`) with the fall-through removed, and since Samuel's 2026-09-08 correction
-   * the channel's pick yields to CONNECTIVITY. {@link pickRuntime} is the whole chain.
-   */
-  const effectiveRuntime = useMemo(
-    () => pickRuntime(runtimes, panel.runtime, posture.runtime, connected, connectedKnown),
-    [runtimes, panel.runtime, posture.runtime, connected, connectedKnown]
-  );
-  /** `''` only where the desktop reported nothing — the no-row, no-key lane. */
-  const selectedRuntime = effectiveRuntime?.id ?? "";
+  const runtime = useLaunchDialogRuntime(panel, channelId, templates);
+  const {
+    runtimes,
+    selectedRuntime,
+    runtimeOptions,
+    modelRow,
+    nativeLine,
+    connectionNote,
+    stopWarning,
+  } = runtime;
 
   /**
    * THE SELECTED TEMPLATE'S ROW, or `null` for None — the TITLE's one input and the PREFILL's.
@@ -324,22 +289,6 @@ export function LaunchAgentDialog({
     () => panel.color ?? firstFreeAgentColor(taken),
     [panel.color, taken]
   );
-  const stopWarning = runtimes.length ? interruptRefusal(effectiveRuntime) : null;
-
-  /**
-   * THE SELECTION IS WRITTEN BACK INTO THE PANEL, so the pill on screen and the argument on the
-   * wire are ONE value (`use-agent-launch.ts › launchWithIdentity` sends `panel.runtime`).
-   *
-   * ⚠ NOT THE MODEL ROW'S FORBIDDEN MOVE, AND THE DIFFERENCE IS THE RULING: `''` in the model row
-   * means "follow the channel's setting", so stamping it would freeze a per-spawn copy. The
-   * runtime row no longer has that meaning — Samuel removed the fall-through.
-   * ⚠ IT RUNS ONLY WHILE OPEN, and `reset()` clears the field on close, so a dialog reopened after
-   * the channel's pick moved re-derives.
-   */
-  useEffect(() => {
-    if (!panel.open || !selectedRuntime || panel.runtime === selectedRuntime) return;
-    setRuntime(selectedRuntime);
-  }, [panel.open, panel.runtime, selectedRuntime, setRuntime]);
 
   // ⚠ ESCAPE AND THE BACKDROP ARE DISCARD (Samuel's ruling names two exits and this is the
   // second). `reset` closes AND clears — a dialog that came back holding a half-typed identity
@@ -419,14 +368,52 @@ export function LaunchAgentDialog({
           className="flex-wrap"
         />
 
-        <PillChoice
-          label="Model"
-          options={modelOptions}
-          value={effectiveModel}
-          onChange={panel.setModel}
-          ariaLabel="Agent model"
-          className="flex-wrap"
-        />
+        {/* THE MODEL — THE SELECTED RUNTIME'S OWN ROSTER, AND NOBODY ELSE'S (2026-09-21, U7).
+            ⚠ A ROSTER THAT IS NOT `ready` OFFERS NOTHING TO PICK and the row states the platform
+            default instead: `loading` has not answered, `unavailable` measured a failure, and
+            `stale` holds models it may still LABEL with but may not newly select. **It never
+            falls back to another runtime's list** — that substitution is the one thing the whole
+            unit exists to remove, and `model-catalog.ts › catalogFor` has no arm for it.
+            ⚠ THE SENTENCE UNDER IT IS THE DESKTOP'S OWN WORDS, never Dopl's paraphrase. */}
+        {modelRow.selectable ? (
+          <PillChoice
+            label="Model"
+            options={modelRow.options}
+            value={modelRow.shown}
+            onChange={panel.setModel}
+            ariaLabel="Agent model"
+            className="flex-wrap"
+          />
+        ) : (
+          <PillChoice
+            label="Model"
+            options={
+              modelRow.shown
+                ? [{ key: modelRow.shown, label: modelRow.options[0]?.label ?? modelRow.shown }]
+                : [{ key: "", label: PLATFORM_DEFAULT_LABEL }]
+            }
+            value={modelRow.shown}
+            // ⚠ NO WRITER, SO NO PICK — a single pill stating the fact. It is not `disabled`
+            // chrome around a live control; there is one option and it is what will run.
+            onChange={() => {}}
+            ariaLabel="Agent model"
+            className="flex-wrap"
+          />
+        )}
+        {modelRow.reason && (
+          <p role="note" className="text-caption text-text-secondary">
+            {modelRow.reason}
+          </p>
+        )}
+        {/* ⚠ **THE TEMPLATE'S MODEL BELONGS TO ANOTHER RUNTIME, SAID OUT LOUD** (U7: *"surface
+            incompatibility instead of silently translating model IDs"*). The id is NOT used and
+            NOT translated; without this line the operator would see the runtime's default under a
+            template they picked for its model and have nothing to read about why. */}
+        {modelRow.mismatch && (
+          <p role="note" className="text-caption text-warning">
+            {modelRow.mismatch.sentence}
+          </p>
+        )}
 
         {/* ⚠ NO ROW WHERE THIS DESKTOP REPORTED NO RUNTIME — the no-dead-rows rule.
             ⚠ ONE REPORTED RUNTIME STILL RENDERS IT (Samuel, 2026-09-08): a single selected pill is
@@ -462,6 +449,19 @@ export function LaunchAgentDialog({
         {/* ⚠ ONE SENTENCE, AND THE ONE EXCEPTION TO THE MINIMAL-COPY RULING (INVARIANTS §5). It
             is the descriptor's own words, and it is a NOTE rather than an ALERT: nothing has
             failed, and the operator is told what this runtime cannot do BEFORE they start it. */}
+        {/* ⚠ WHAT THIS RUNTIME WILL ACTUALLY DO, in its own option labels — a REPORT of the
+            channel's stored native values, never a control (see {@link nativeLine}). */}
+        {nativeLine && (
+          <p role="note" className="text-caption text-text-secondary">
+            {nativeLine}
+          </p>
+        )}
+        {/* ⚠ THE SELECTED RUNTIME'S OWN SIGN-IN SENTENCE — never Claude's, on any runtime. */}
+        {connectionNote && (
+          <p role="note" className="text-caption text-warning">
+            {connectionNote}
+          </p>
+        )}
         {stopWarning && (
           <p role="note" className="text-caption text-warning">
             {stopWarning}

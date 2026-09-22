@@ -49,18 +49,13 @@ vi.mock("@/features/agent-templates/hooks/use-agent-templates", () => ({
 // ⚠ THE DESKTOP REPORTS NOTHING HERE, deliberately: no Runtime row, no posture model. Every case
 // in this file is about the three TEXT fields and the Template row, and a runtime pill in the tree
 // would only add a way for these cases to fail for somebody else's reason.
-vi.mock("../hooks/use-channel-launch-posture", () => ({
-  useChannelLaunchPosture: () => ({
-    posture: { model: null },
-    modelSupported: false,
-    runtimeSupported: false,
-    runtimes: [],
-    runtime: "",
-    connected: [],
-    connectedKnown: false,
-    defaultRuntime: "",
-  }),
-}));
+// ⚠ **THE DIALOG READS THE VERSIONED RECORD SINCE 2026-09-21 (U7)** — one hook, mounted inside
+// `launch-agent-dialog-state.ts`. This file is about PREFILL and says nothing about runtimes, so
+// the stub is the no-runtime-concept lane: no rows, no roster, no catalog.
+vi.mock("../hooks/use-launch-selection", async () => {
+  const harness = await import("../hooks/launch-selection-harness");
+  return { useLaunchSelection: () => harness.launchSelectionStub() };
+});
 
 import { LaunchAgentDialog } from "./launch-agent-dialog";
 import { useAgentLaunch } from "./use-agent-launch";

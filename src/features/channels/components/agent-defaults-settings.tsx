@@ -35,7 +35,7 @@
 
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import { SectionShell } from "@/shared/layout/settings-modal/sections/section-shell";
-import { useAgentDefaults } from "../hooks/use-agent-defaults";
+import { useLaunchSelection } from "../hooks/use-launch-selection";
 import { AgentLaunchPostureRows } from "./settings-agent-launch-rows";
 import { SettingRow } from "./settings-agent-rows";
 
@@ -61,7 +61,15 @@ const CHAIN_OPTIONS: ReadonlyArray<SelectMenuOption<DefaultChainValue>> = [
  * something they cannot.
  */
 export function AgentDefaultsSettings() {
-  const state = useAgentDefaults();
+  // ⚠ **THE SAME HOOK THE PER-CHANNEL TAB MOUNTS, AT THE OTHER SCOPE (2026-09-21, U8).** The
+  // defaults record and a channel's record are ONE SHAPE — `main/agent-defaults.js` says so in as
+  // many words, and `seedChannel` copies one straight into the other — so two hooks over it is
+  // how a field comes to be seeded on some channels and not others.
+  // ⚠ **AND IT IS WHAT MAKES THE WRITE STOP ERASING THE OPERATOR'S OTHER RUNTIME.** The previous
+  // hook sent `{tools, messages, model, agentChain, runtime}` — a record with no `v`, which
+  // `normalizeDefaults` reads as a pre-U5 LEGACY one and migrates into the DEFAULT runtime's slot,
+  // dropping every other runtime's model and native settings on every keystroke of this pane.
+  const state = useLaunchSelection({ kind: "defaults" });
 
   if (!state.bridge) {
     return (
@@ -87,18 +95,12 @@ export function AgentDefaultsSettings() {
       subtitle="What a new channel's agents start on. Channels you already have keep their own settings."
     >
       <div className="flex flex-col gap-1">
-        <AgentLaunchPostureRows
-          posture={state.defaults}
-          busy={state.busy}
-          // ⚠ STRAIGHT TO THE RECORD, not through `usePostureWarning` — see the file docblock for
-          // why the warning has nothing to measure here.
-          onChange={(patch) => void state.update(patch)}
-          modelSupported={state.modelSupported}
-          runtimeSupported={state.runtimeSupported}
-          runtime={state.runtime}
-          runtimes={state.runtimes}
-          descriptor={state.descriptor}
-        />
+        {/* ⚠ NO `onChangeMessages`, AND THAT IS DELIBERATE RATHER THAN AN OMISSION — the
+            messaging write goes STRAIGHT TO THE RECORD. `posture-warning.tsx`'s dialog fires on
+            `auto_both` + `full` + **a peer in the room**, which is a statement about a specific
+            channel's roster; this pane has no channel and therefore no roster. See the file
+            docblock. */}
+        <AgentLaunchPostureRows selection={state} />
         {/* ⚠ "Launch agents" IS THE PER-CHANNEL TAB'S OWN ROW NAME, kept word for word so the two
             surfaces read as one setting at two scopes. What differs is the OPTION list, and the
             reason is above {@link CHAIN_OPTIONS}. */}

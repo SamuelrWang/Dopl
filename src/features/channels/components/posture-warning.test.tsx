@@ -35,6 +35,7 @@ import {
   type PostureWarningInputs,
 } from "./posture-warning";
 import { agentView, postureSends, postureTools } from "./settings-agent-harness";
+import { launchSelectionStub } from "../hooks/launch-selection-harness";
 import type { MessageMode } from "../lib/permission-modes";
 import type { AgentToolProfile, ChannelMember } from "../types";
 
@@ -205,17 +206,31 @@ describe("the one production mount actually hands the roster over", () => {
 });
 
 /** The view at the combination minus ONE axis, so a single click completes it. */
+/**
+ * ⚠ **THE MESSAGING ROW READS THE VERSIONED RECORD SINCE 2026-09-21 (U8), SO `posture` ALONE NO
+ * LONGER DRIVES IT.** The warning's own input is still `posture.messages` — it is the view's
+ * `messageMode` conjunct — but the SELECT renders and writes `selection.messages`. Handing a
+ * `posture` without a matching record would leave a case picking an option the row already holds,
+ * which fires no `onChange` and reads as the dialog "staying silent" for the wrong reason. So
+ * this derives the record from the pair every case already states.
+ */
 function mount(over: Parameters<typeof agentView>[0] = {}) {
   const onChangePosture = vi.fn();
   const onSetToolProfile = vi.fn();
+  const posture = "posture" in over ? over.posture : undefined;
+  const selection = launchSelectionStub({
+    messages: posture?.messages ?? "ask",
+    byRuntime: posture ? { "": { tools: posture.tools } } : {},
+  });
   agentView({
     roster: WITH_PEER,
     currentUserId: ME,
     onChangePosture,
     onSetToolProfile,
+    selection,
     ...over,
   });
-  return { onChangePosture, onSetToolProfile };
+  return { onChangePosture, onSetToolProfile, selection };
 }
 
 /** Pick a Sends option by its rendered label. */
@@ -257,17 +272,20 @@ describe("the DIALOG fires on the transition, from EITHER axis", () => {
 
 describe("the DIALOG does NOT fire on anything else", () => {
   it("stays silent on a channel ALREADY in the combination", async () => {
-    const { onChangePosture } = mount({
+    const { selection } = mount({
       profile: "full",
       posture: { tools: "manual", messages: "auto_both" },
     });
-    // The OTHER axis — Permissions — on a channel that already sends
-    // automatically with full tools. Re-asking here is how a confirmation
-    // becomes a thing people click through.
+    // The OTHER axis — Tool use — on a channel that already sends automatically with full tools.
+    // Re-asking here is how a confirmation becomes a thing people click through.
+    // ⚠ **THE TOOL AXIS REACHES THE RECORD DIRECTLY SINCE 2026-09-21 (U8), NOT THE GATE.**
+    // `usePostureWarning › changePosture` reads ONLY `patch.messages`, so routing this axis
+    // through it never could open (or suppress) the dialog — the narrowing is a statement of
+    // what was already true, and the claim this case makes is unchanged.
     fireEvent.click(postureTools());
     fireEvent.click(screen.getByRole("menuitem", { name: /^Bypass/ }));
     await waitFor(() =>
-      expect(onChangePosture).toHaveBeenCalledWith({ tools: "bypass" })
+      expect(selection.update).toHaveBeenCalledWith({ tools: "bypass" })
     );
     expect(screen.queryByText(POSTURE_WARNING_TITLE)).toBeNull();
   });

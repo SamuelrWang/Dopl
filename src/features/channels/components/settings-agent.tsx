@@ -83,11 +83,8 @@
 // ⚠ `useChannelAutoSend` IS NO LONGER READ HERE (2026-09-06, item 8) — the hook file
 // still exists and is next in the teardown, but nothing on this tab may keep reading
 // a record the gate has stopped consulting.
-import { useChannelAgentChain } from "../hooks/use-channel-agent-chain";
-import { useOrchestratorLaunch } from "../hooks/use-orchestrator-launch";
 // ⚠ A SEPARATE GRANT, NEVER A SECOND SPELLING OF THE LAUNCH ONE (2026-09-16) —
 // `hooks/use-orchestrator-direct.ts` carries the ruling and what it cost.
-import { useOrchestratorDirect } from "../hooks/use-orchestrator-direct";
 // ⚠ THREE ROW COMPONENTS BECAME ONE (2026-09-06, items 8 and 9). `AutoSendRows`,
 // `AgentChainRows` and `OrchestratorLaunchRows` are deleted; `LaunchAgentsRow` is the
 // single control over the two launch records. `settings-desktop-rows.tsx` carries the
@@ -95,11 +92,15 @@ import { useOrchestratorDirect } from "../hooks/use-orchestrator-direct";
 import { AgentFolderRows, DirectAgentsRow, LaunchAgentsRow } from "./settings-desktop-rows";
 import { isSharedChannel } from "../lib/tool-profile-resolve";
 import { type PermissionPreset } from "../lib/permission-modes";
-import type { RuntimeDescriptor } from "../lib/runtime-capability";
-import { useChannelLaunchPosture } from "../hooks/use-channel-launch-posture";
-import { useChannelFolder } from "../hooks/use-channel-folder";
+import type { LaunchSelectionState } from "../hooks/use-launch-selection";
 import { PanelHeading } from "./bits";
 import { usePostureWarning, type PosturePatch } from "./posture-warning";
+// ⚠ **THE BRIDGE-BOUND CONTAINER LIVES IN `settings-agent-container.tsx` (§1 split, U8)** and is
+// re-exported here, so no caller and no suite moved. That file changes when a RECORD changes;
+// this one when a ROW does. ⚠ A `import type` would not do — the name is a COMPONENT callers
+// mount.
+export { ChannelAgentSettings } from "./settings-agent-container";
+export type { ChannelAgentSettingsProps } from "./settings-agent-container";
 import { AgentLaunchPostureRows } from "./settings-agent-launch-rows";
 // ⚠ `GroupLabel` IS NO LONGER IMPORTED (2026-09-06, item 2): all three group
 // headings on this tab are deleted, so nothing here renders one. The RECIPE stays
@@ -124,112 +125,6 @@ import type { AgentToolProfile, ChannelMember } from "../types";
 // — a rule that pre-approves an ask nobody is asked any more. It never fired
 // once in production. `agent_trust_rules` and its two routes are being deleted
 // server-side in the same wave.
-
-export interface ChannelAgentSettingsProps {
-  /** The channel's DB UUID — handed to both desktop bridges as-is. */
-  channelId: string;
-  /** The caller's own tool profile for THIS channel (never a teammate's). */
-  profile: AgentToolProfile;
-  onSetToolProfile: (profile: AgentToolProfile) => void;
-  /** True while the tool-profile write is in flight. */
-  toolProfileBusy: boolean;
-  /**
-   * The channel roster and the caller — the posture warning's third conjunct
-   * (`posture-warning.tsx › warrantsPostureWarning`). Read off the roster the
-   * host already holds; this surface opens NO read of its own.
-   *
-   * ⚠ OPTIONAL, AND ABSENT MEANS "THIS MOUNT CANNOT SAY WHO IS HERE" — which
-   * warns about nothing, deliberately. A warning naming a peer who might be the
-   * operator themselves is what teaches people to click the dialog away. The one
-   * production mount (`channel-manage.tsx`) always passes both.
-   */
-  roster?: readonly ChannelMember[];
-  currentUserId?: string | null;
-  /**
-   * **THE CHANNEL'S OWN MEMBER COUNT** — the FACT behind ruling B7's narrowing
-   * (2026-09-13, F-692). `lib/tool-profile-resolve.ts › isSharedChannel` turns it
-   * into "is this room shared", and `profileForChannel` then moves a stored `full`
-   * to `channel_agent`, which is what the desktop will really launch.
-   *
-   * ⚠ **NOT THE ROSTER'S LENGTH.** `roster` is optional and defaults to `[]` for a
-   * mount that cannot say who is here; using it would make an absent roster look
-   * like a nine-member room with a zero count. `channel.memberCount` is the column
-   * the desktop's own predicate reads (`targeting-window.js › isSharedChannel`).
-   * ⚠ **ABSENT READS AS SHARED**, there and here: the only thing the answer can do
-   * is remove the shell from a launch.
-   */
-  memberCount?: number | null;
-}
-
-/**
- * The bridge-bound half. Split from the view on the rule the deleted
- * `RequestPermissionRow` / `request-folder-row.tsx` pair also followed — they went
- * with the arm (2026-08-20), the rule did not: the view renders (and is asserted
- * on) with no window and no bridge, and this wrapper is the only thing needing one.
- */
-/** ONE MAPPING FOR BOTH PER-MACHINE CONSENTS — bridge-state to row-prop. ⚠ The two
- *  hooks return the same shape and must map the same way; written out twice when the
- *  second consent landed (2026-09-16), which is two places for "an absent bridge
- *  renders NO ROW" to be got right and one of them to later be got wrong. */
-function consentRow(state: {
-  bridge: unknown; enabled: boolean; busy: boolean; update: (next: boolean) => Promise<void>;
-}) {
-  return state.bridge
-    ? { on: state.enabled, busy: state.busy, onToggle: (n: boolean) => void state.update(n) }
-    : null;
-}
-
-export function ChannelAgentSettings(props: ChannelAgentSettingsProps) {
-  const launchPosture = useChannelLaunchPosture(props.channelId);
-  const folder = useChannelFolder(props.channelId);
-  // ⚠ PER CHANNEL, unlike the machine-wide toggle below it (Samuel, 2026-08-31).
-  const agentChain = useChannelAgentChain(props.channelId);
-  // ⚠ NO `channelId` — this one is per-MACHINE (`use-orchestrator-launch.ts`).
-  const orchestrator = useOrchestratorLaunch();
-  // ⚠ ALSO PER-MACHINE, and a DIFFERENT record from the one above.
-  const orchestratorDirect = useOrchestratorDirect();
-
-  return (
-    <ChannelAgentSettingsView
-      profile={props.profile}
-      onSetToolProfile={props.onSetToolProfile}
-      toolProfileBusy={props.toolProfileBusy}
-      roster={props.roster}
-      currentUserId={props.currentUserId}
-      memberCount={props.memberCount}
-      posture={launchPosture.bridge ? launchPosture.posture : null}
-      postureBusy={launchPosture.busy}
-      onChangePosture={(patch) => void launchPosture.update(patch)}
-      modelSupported={launchPosture.modelSupported}
-      runtimeSupported={launchPosture.runtimeSupported}
-      runtime={launchPosture.runtime}
-      runtimes={launchPosture.runtimes}
-      descriptor={launchPosture.descriptor}
-      folder={
-        folder.bridge
-          ? {
-              label: folder.label,
-              custom: folder.custom,
-              busy: folder.busy,
-              onChoose: () => void folder.choose(),
-              onClear: () => void folder.clear(),
-            }
-          : null
-      }
-      agentChain={
-        agentChain.bridge
-          ? {
-              on: agentChain.on,
-              busy: agentChain.busy,
-              onToggle: (next) => void agentChain.update(next),
-            }
-          : null
-      }
-      orchestrator={consentRow(orchestrator)}
-      orchestratorDirect={consentRow(orchestratorDirect)}
-    />
-  );
-}
 
 /** The desktop-only folder half, or null outside the desktop shell. */
 export interface AgentFolderState {
@@ -279,10 +174,7 @@ export interface ChannelAgentSettingsViewProps {
    * `modelSupported`'s reason: the two axes exist on desktops the runtime does
    * not, and false renders NO runtime row rather than a greyed one.
    */
-  runtimeSupported?: boolean;
-  runtime?: string;
-  runtimes?: ReadonlyArray<RuntimeDescriptor>;
-  descriptor?: RuntimeDescriptor | null;
+  selection?: LaunchSelectionState | null;
   /**
    * This desktop understands the posture record's `model` field (2026-08-22).
    *
@@ -341,13 +233,8 @@ export function ChannelAgentSettingsView({
   currentUserId = null,
   memberCount = null,
   posture,
-  postureBusy,
   onChangePosture,
-  modelSupported = false,
-  runtimeSupported = false,
-  runtime = "",
-  runtimes = EMPTY_RUNTIMES,
-  descriptor = null,
+  selection = null,
   folder,
   agentChain = null,
   orchestrator = null,
@@ -387,16 +274,16 @@ export function ChannelAgentSettingsView({
             ⚠ BOTH WRITES STILL GO THROUGH THE WARNING, unchanged: `changePosture`
             is what the group is handed, so the `auto_both` + `full` + a-peer dialog
             fires on exactly the transitions it always did. */}
-        {posture && (
+        {posture && selection && (
           <AgentLaunchPostureRows
-            posture={posture}
-            busy={postureBusy}
-            onChange={warning.changePosture}
-            modelSupported={modelSupported}
-            runtimeSupported={runtimeSupported}
-            runtime={runtime}
-            runtimes={runtimes}
-            descriptor={descriptor}
+            selection={selection}
+            // ⚠ THE MESSAGING WRITE IS THE ONLY ONE THAT GOES THROUGH THE WARNING, and that is
+            // narrower than before rather than looser: `usePostureWarning › changePosture` reads
+            // ONLY `patch.messages`, so the runtime, model, effort, tool-use and sandbox writes
+            // it used to carry could never open (or suppress) the dialog. They now reach the
+            // record directly, and the `auto_both` + `full` + a-peer dialog fires on exactly the
+            // transitions it always did.
+            onChangeMessages={warning.changePosture}
           />
         )}
 
@@ -488,7 +375,6 @@ const EMPTY_ROSTER: readonly ChannelMember[] = [];
 /** ⚠ Same rule, and it matters more here: the launch group memoizes nothing off
  *  this list, but a fresh `[]` per render would make every runtime row a new
  *  options identity. A desktop with no adapters and a plain browser share one. */
-const EMPTY_RUNTIMES: ReadonlyArray<RuntimeDescriptor> = [];
 
 // ⚠ `LAUNCH_POSTURE_HEADING`, `GroupLabel`, `SettingName`, `SettingRow` AND THE
 // `Note` TOMBSTONE MOVED TO `settings-agent-rows.tsx` ON 2026-08-26 — a PURE

@@ -49,6 +49,14 @@ import { agentRunningModel } from "./agents-model";
 import { ChannelAgentSettingsView } from "./settings-agent";
 import { PostureControls } from "./agent-posture";
 import { CHANNEL_ID } from "./test-fixtures";
+// ⚠ **THE DURABLE ROW READS THE SELECTED RUNTIME'S CATALOG SINCE 2026-09-21 (U6/U8), NOT THIS
+// FILE'S FROZEN TABLE.** Every claim below is unchanged; what moved is where the row gets its
+// options from, because a picker sourced from one runtime's list offered Fable under Codex. The
+// DEFAULT runtime's four ids are still what a desktop older than the catalog contract renders —
+// `agent-models.ts › defaultRuntimeFallbackCatalog` is that lane, and it is what these cases
+// drive.
+import { launchSelectionStub } from "../hooks/launch-selection-harness";
+import { defaultRuntimeFallbackCatalog } from "../lib/agent-models";
 
 afterEach(() => {
   cleanup();
@@ -268,11 +276,22 @@ describe("the DURABLE model row on the Settings tab", () => {
         postureBusy={false}
         onChangePosture={noop}
         folder={null}
+        selection={launchSelectionStub()}
         {...over}
       />
     );
 
   const modelSelect = () => screen.queryByLabelText("Model for agents you launch");
+
+  /** The DEFAULT runtime's frozen table — the older-desktop lane, which is what these cases are
+   *  about. ⚠ `""` is the wire's own spelling of "the default adapter". */
+  const claudeSelection = (model?: string) =>
+    launchSelectionStub({
+      modelSupported: true,
+      defaultRuntime: "",
+      catalogs: { "": defaultRuntimeFallbackCatalog("") },
+      byRuntime: model ? { "": { model } } : {},
+    });
 
   /**
    * ⚠ ABSENT, NOT DISABLED. An older main DROPS the field on write, so a live row
@@ -285,13 +304,13 @@ describe("the DURABLE model row on the Settings tab", () => {
   });
 
   it("renders the row when the desktop reported the field", () => {
-    view({ modelSupported: true });
+    view({ selection: claudeSelection() });
     expect(modelSelect()).not.toBeNull();
   });
 
   /** ⚠ It is gated on the POSTURE too: no bridge, no posture group at all. */
   it("renders no row outside the desktop shell, however supported it claims to be", () => {
-    view({ posture: null, modelSupported: true });
+    view({ posture: null, selection: claudeSelection() });
     expect(modelSelect()).toBeNull();
   });
 
@@ -303,15 +322,12 @@ describe("the DURABLE model row on the Settings tab", () => {
    * picks — that half is pinned by the write case below.
    */
   it("back-fills an unset model to Sonnet, and shows the full label for a set one", () => {
-    view({ modelSupported: true });
+    view({ selection: claudeSelection() });
     expect(screen.getByLabelText("Model for agents you launch").textContent).toContain(
       "Sonnet 5"
     );
     cleanup();
-    view({
-      modelSupported: true,
-      posture: { ...DEFAULT_PERMISSION_PRESET, model: "claude-opus-5" },
-    });
+    view({ selection: claudeSelection("claude-opus-5") });
     expect(screen.getByLabelText("Model for agents you launch").textContent).toContain(
       "Opus 5"
     );
@@ -325,23 +341,19 @@ describe("the DURABLE model row on the Settings tab", () => {
    * pinned above; nothing on this surface can reach that state by clicking.
    */
   it("writes an id for the model the operator picks", () => {
-    const onChangePosture = vi.fn();
-    view({
-      modelSupported: true,
-      onChangePosture,
-      posture: { ...DEFAULT_PERMISSION_PRESET, model: "claude-opus-5" },
-    });
+    const selection = claudeSelection("claude-opus-5");
+    view({ selection });
     fireEvent.click(screen.getByLabelText("Model for agents you launch"));
     act(() => {
       fireEvent.click(screen.getByRole("menuitem", { name: /^Fable 5/ }));
     });
-    expect(onChangePosture).toHaveBeenCalledWith({ model: "claude-fable-5" });
-    onChangePosture.mockClear();
+    expect(selection.update).toHaveBeenCalledWith({ model: "claude-fable-5" });
+    vi.mocked(selection.update).mockClear();
     fireEvent.click(screen.getByLabelText("Model for agents you launch"));
     act(() => {
       fireEvent.click(screen.getByRole("menuitem", { name: /^Sonnet 5/ }));
     });
-    expect(onChangePosture).toHaveBeenCalledWith({ model: "claude-sonnet-5" });
+    expect(selection.update).toHaveBeenCalledWith({ model: "claude-sonnet-5" });
     // 🔒 AND NO OPTION CLEARS THE RECORD. The menu is the four real models; a
     // "Default" item here would be the sentinel the ruling removed, back as a pick.
     expect(screen.queryByRole("menuitem", { name: /^Default/ })).toBeNull();
@@ -349,7 +361,14 @@ describe("the DURABLE model row on the Settings tab", () => {
 
   /** The posture write is one flight for all three controls. */
   it("goes inert with the other posture selects while a write is in flight", () => {
-    view({ modelSupported: true, postureBusy: true });
+    view({
+      selection: launchSelectionStub({
+        modelSupported: true,
+        defaultRuntime: "",
+        catalogs: { "": defaultRuntimeFallbackCatalog("") },
+        busy: true,
+      }),
+    });
     expect(
       (screen.getByLabelText("Model for agents you launch") as HTMLButtonElement).disabled
     ).toBe(true);

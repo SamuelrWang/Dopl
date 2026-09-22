@@ -28,7 +28,7 @@
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import {
   agentView,
@@ -39,6 +39,12 @@ import {
   postureSends,
   postureTools,
 } from "./settings-agent-harness";
+// ⚠ **THE GROUP READS THE VERSIONED RECORD SINCE 2026-09-21 (U8), NOT THE LEGACY PAIR.** The two
+// axes are still the two axes and still write the same two keys; what moved is WHERE the row gets
+// them from, because a pair with one global `tools` cannot hold two runtimes' vocabularies at once
+// (`hooks/use-launch-selection.ts`). The three cases below drive the record instead of the props —
+// the CLAIMS are unchanged.
+import { launchSelectionStub } from "../hooks/launch-selection-harness";
 import { SETTINGS_HELP } from "./settings-help";
 
 afterEach(cleanup);
@@ -47,21 +53,31 @@ const CHANNEL_PREFS = desktopSource("channel-prefs.js");
 
 describe("the LAUNCH POSTURE renders with its current values, and changes on selection", () => {
   it("shows both axes' current values without opening anything", () => {
-    agentView({ posture: { tools: "bypass", messages: "auto_both" } });
+    agentView({
+      posture: { tools: "bypass", messages: "auto_both" },
+      selection: launchSelectionStub({
+        runtime: "",
+        byRuntime: { "": { tools: "bypass" } },
+        messages: "auto_both",
+      }),
+    });
     expect(postureTools().textContent).toContain("Bypass");
     expect(postureSends().textContent).toContain("Automatic");
   });
 
   it("writes the picked mode back on the axis it belongs to", () => {
-    const onChangePosture = vi.fn();
-    agentView({ onChangePosture });
+    const selection = launchSelectionStub();
+    agentView({ selection });
     fireEvent.click(postureTools());
     fireEvent.click(screen.getByRole("menuitem", { name: /^Bypass/ }));
-    expect(onChangePosture).toHaveBeenCalledWith({ tools: "bypass" });
+    // ⚠ ON THE `tools` KEY ALONE. Main's write is own-key, so a patch that restated another
+    // field would re-stamp a setting nobody moved — and on a runtime switch it would file the
+    // OLD runtime's word under the NEW one, which main refuses outright.
+    expect(selection.update).toHaveBeenCalledWith({ tools: "bypass" });
   });
 
   it("goes inert while a posture write is in flight", () => {
-    agentView({ postureBusy: true });
+    agentView({ selection: launchSelectionStub({ busy: true }) });
     expect(disabled(postureTools())).toBe(true);
     expect(disabled(postureSends())).toBe(true);
   });

@@ -60,28 +60,44 @@ const posture = vi.hoisted(() => ({
    *  them is in that file. */
   connected: [] as string[],
   connectedKnown: false,
+  /** ⚠ U7: what each runtime REMEMBERS, and which models each one offers. */
+  modelSupported: false,
+  byRuntime: {} as Record<string, { tools?: string; model?: string; native?: Record<string, string> }>,
+  catalogs: {} as Record<string, unknown>,
 }));
-vi.mock("../hooks/use-channel-launch-posture", () => ({
-  useChannelLaunchPosture: () => ({
-    posture: { model: null },
-    modelSupported: false,
-    runtimeSupported: posture.runtimeSupported,
-    runtimes: !posture.runtimeSupported
-      ? []
-      : posture.only
-        ? REAL_DESCRIPTORS.filter((d) => d.id === posture.only)
-        : REAL_DESCRIPTORS,
-    runtime: posture.stored,
-    connected: posture.connected,
-    connectedKnown: posture.connectedKnown,
-    defaultRuntime: REAL_DEFAULT_RUNTIME,
-  }),
-}));
+// ⚠ **THE DIALOG READS THE VERSIONED, RUNTIME-KEYED RECORD SINCE 2026-09-21 (U7)** — one hook,
+// mounted inside `launch-agent-dialog-state.ts`, which is also where the roster, the preselect,
+// the model row and the sign-in sentence are derived. The fixture below is the desktop's answer.
+vi.mock("../hooks/use-launch-selection", async () => {
+  const harness = await import("../hooks/launch-selection-harness");
+  const { REAL_DEFAULT_RUNTIME, REAL_DESCRIPTORS } = await import(
+    "../lib/runtime-descriptors-harness"
+  );
+  return {
+    useLaunchSelection: () =>
+      harness.launchSelectionStub({
+        runtimeSupported: posture.runtimeSupported,
+        runtimes: !posture.runtimeSupported
+          ? []
+          : posture.only
+            ? REAL_DESCRIPTORS.filter((d) => d.id === posture.only)
+            : REAL_DESCRIPTORS,
+        runtime: posture.stored,
+        connected: posture.connected,
+        connectedKnown: posture.connectedKnown,
+        defaultRuntime: REAL_DEFAULT_RUNTIME,
+        modelSupported: posture.modelSupported,
+        byRuntime: posture.byRuntime,
+        catalogs: posture.catalogs as never,
+      }),
+  };
+});
 
 import {
   REAL_DEFAULT_RUNTIME,
   REAL_DESCRIPTORS,
 } from "../lib/runtime-descriptors-harness";
+import { catalog } from "../hooks/launch-selection-harness";
 import { LaunchAgentDialog } from "./launch-agent-dialog";
 import { useAgentLaunch, type AgentLaunchPanel } from "./use-agent-launch";
 // ⚠ THE ACT MOVED TO ITS OWN FILE ON 2026-09-13 (`use-agent-launch-run.ts`), on the seam
@@ -130,6 +146,9 @@ beforeEach(() => {
   posture.stored = "";
   posture.connected = [];
   posture.connectedKnown = false;
+  posture.modelSupported = false;
+  posture.byRuntime = {};
+  posture.catalogs = {};
   stubBridge();
 });
 afterEach(() => {
@@ -330,6 +349,7 @@ describe("the payload is the slide-out's, argument for argument", () => {
 
   it("matches on a FULLY PICKED dialog — template, model and runtime", async () => {
     posture.runtimeSupported = true;
+    posture.modelSupported = true;
     templateList.templates = [
       { id: "tpl-9", name: "Code auditor", workspaceId: "ws-1", createdBy: ME },
     ];
@@ -337,13 +357,25 @@ describe("the payload is the slide-out's, argument for argument", () => {
     // than passing because both sides dropped it.
     const other = REAL_DESCRIPTORS.find((d) => d.id !== REAL_DEFAULT_RUNTIME);
     expect(other).toBeTruthy();
+    // ⚠ **AND ITS OWN MODEL, NOT CLAUDE'S (2026-09-21, U7).** This case used to pick "Opus 5"
+    // while a NON-DEFAULT runtime was selected — a payload the product may no longer produce,
+    // because a model belongs to the runtime that offers it and the dialog will not submit one
+    // that belongs to another. The claim the case makes is unchanged: the popup's payload and
+    // `launchWithIdentity`'s are one call, argument for argument.
+    posture.catalogs = {
+      [other!.id]: catalog(other!.id, [
+        { id: "gpt-6-astra", label: "GPT-6 Astra", isDefault: true },
+        { id: "gpt-6-mini", label: "GPT-6 Mini" },
+      ]),
+    };
 
     const controls = await open({ openThreadId: "t-1" });
     fireEvent.change(nameField(), { target: { value: "Research" } });
     fireEvent.change(descField(), { target: { value: "Audits the diff." } });
     fireEvent.click(pill("Code auditor"));
-    fireEvent.click(pill("Opus 5"));
+    // ⚠ RUNTIME FIRST — it decides what the Model row below it OFFERS.
     fireEvent.click(pill(other!.label));
+    fireEvent.click(pill("GPT-6 Mini"));
     fireEvent.click(launchButton());
     await waitFor(() => expect(controls.launchAgent).toHaveBeenCalled());
 
@@ -354,7 +386,7 @@ describe("the payload is the slide-out's, argument for argument", () => {
         name: "Research",
         description: "Audits the diff.",
         templateId: "tpl-9",
-        model: "claude-opus-5",
+        model: "gpt-6-mini",
         runtime: other!.id,
       }),
       "t-1"
@@ -365,7 +397,7 @@ describe("the payload is the slide-out's, argument for argument", () => {
     );
     const [, templateId, overrides, , runtime] = vi.mocked(controls.launchAgent).mock.calls[0];
     expect(templateId).toBe("tpl-9");
-    expect(overrides).toEqual({ model: "claude-opus-5" });
+    expect(overrides).toEqual({ model: "gpt-6-mini" });
     expect(runtime).toBe(other!.id);
   });
 

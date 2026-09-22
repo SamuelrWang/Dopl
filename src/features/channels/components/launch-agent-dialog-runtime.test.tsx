@@ -57,23 +57,38 @@ const posture = vi.hoisted(() => ({
   stored: "",
   connected: [] as string[],
   connectedKnown: false,
+  /** ⚠ U7: what each runtime REMEMBERS, and which models each one offers. */
+  modelSupported: false,
+  byRuntime: {} as Record<string, { tools?: string; model?: string; native?: Record<string, string> }>,
+  catalogs: {} as Record<string, unknown>,
 }));
-vi.mock("../hooks/use-channel-launch-posture", () => ({
-  useChannelLaunchPosture: () => ({
-    posture: { model: null },
-    modelSupported: false,
-    runtimeSupported: posture.runtimeSupported,
-    runtimes: !posture.runtimeSupported
-      ? []
-      : posture.only
-        ? REAL_DESCRIPTORS.filter((d) => d.id === posture.only)
-        : REAL_DESCRIPTORS,
-    runtime: posture.stored,
-    connected: posture.connected,
-    connectedKnown: posture.connectedKnown,
-    defaultRuntime: REAL_DEFAULT_RUNTIME,
-  }),
-}));
+// ⚠ **THE DIALOG READS THE VERSIONED, RUNTIME-KEYED RECORD SINCE 2026-09-21 (U7)** — one hook,
+// mounted inside `launch-agent-dialog-state.ts`, which is also where the roster, the preselect,
+// the model row and the sign-in sentence are derived. The fixture below is the desktop's answer.
+vi.mock("../hooks/use-launch-selection", async () => {
+  const harness = await import("../hooks/launch-selection-harness");
+  const { REAL_DEFAULT_RUNTIME, REAL_DESCRIPTORS } = await import(
+    "../lib/runtime-descriptors-harness"
+  );
+  return {
+    useLaunchSelection: () =>
+      harness.launchSelectionStub({
+        runtimeSupported: posture.runtimeSupported,
+        runtimes: !posture.runtimeSupported
+          ? []
+          : posture.only
+            ? REAL_DESCRIPTORS.filter((d) => d.id === posture.only)
+            : REAL_DESCRIPTORS,
+        runtime: posture.stored,
+        connected: posture.connected,
+        connectedKnown: posture.connectedKnown,
+        defaultRuntime: REAL_DEFAULT_RUNTIME,
+        modelSupported: posture.modelSupported,
+        byRuntime: posture.byRuntime,
+        catalogs: posture.catalogs as never,
+      }),
+  };
+});
 
 import {
   REAL_DEFAULT_RUNTIME,
@@ -83,6 +98,7 @@ import { LaunchAgentDialog } from "./launch-agent-dialog";
 import { useAgentLaunch } from "./use-agent-launch";
 import type { AgentLaunchControls } from "./use-agents-panel";
 import { member, ME, PEER } from "./test-fixtures";
+
 
 const MINTED = "k3v7d2mq";
 const MEMBERS = [
@@ -126,6 +142,9 @@ beforeEach(() => {
   posture.stored = "";
   posture.connected = [];
   posture.connectedKnown = true;
+  posture.modelSupported = false;
+  posture.byRuntime = {};
+  posture.catalogs = {};
   stubBridge();
 });
 afterEach(() => {
