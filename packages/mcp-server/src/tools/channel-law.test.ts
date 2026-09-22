@@ -195,9 +195,30 @@ describe("THE LAW is stated, in full, in the doctrine", () => {
     // the second, a tag reads as a second way to ASK FOR A MACHINE, which no
     // part of the product honours (`metadata.mentionedUserIds` is not
     // `to_user_id` — INVARIANTS §5).
-    expect(CHANNEL_LAW).toContain("@-TAG THEM IN THE BODY");
+    // 🔒 **THE FIRST HALF WAS `@-TAG THEM IN THE BODY` UNTIL 2026-09-22 AND IT IS NOW
+    // SCOPED TO SOMEBODY YOU DID NOT ADDRESS** (Samuel: the recipient is set ONLY by
+    // `to=`, and the surface renders the tag from that metadata). "THEM" meant the
+    // person the post was already addressed to — so the law taught, in as many words,
+    // the duplicate envelope the ruling removes. **The claim is unchanged and its
+    // AUDIENCE is narrowed**: a tag still reaches a human and still addresses nobody.
+    expect(CHANNEL_LAW).toContain("@-TAG A HUMAN YOU DID NOT ADDRESS");
     expect(CHANNEL_LAW).toContain("Tags inbox");
     expect(CHANNEL_LAW).toContain("Tagging is not addressing and starts no agent");
+  });
+
+  it("🔒 puts the recipient in `to=` and keeps the envelope OUT of the body", () => {
+    // 🔒 SAMUEL, 2026-09-22 — the ruling this pin exists for: the recipient is set
+    // ONLY by `to=`, every surface renders it from that metadata, and a body carries
+    // no routing header, no sender name and no recipient handle.
+    // ⚠ BOTH HALVES, IN THE TWO PLACES THEY BELONG. The LAW says where the address
+    // lives; THE MODEL — whose whole subject is who a message is for — says what may
+    // therefore not be written, and names the header shape an agent would otherwise
+    // type. Nothing validates a body's first line, so prose is the only fence there is.
+    expect(CHANNEL_LAW).toContain("that IS the address and the room RENDERS it");
+    expect(CHANNEL_DOCTRINE).toContain(
+      "WHERE THE RECIPIENT IS WRITTEN: in `to=`, never in the body",
+    );
+    expect(CHANNEL_DOCTRINE).toContain("FROM→TO | KIND |");
   });
 
   it("keeps the law to at most 8 BULLETS — one rule per line, no line per rule", () => {

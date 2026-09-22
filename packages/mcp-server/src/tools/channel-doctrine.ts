@@ -85,7 +85,7 @@ export const CHANNEL_LAW = `THE LAW OF THIS ROOM — read this before anything e
 - YOUR OWN AGENTS ARE THE ONE EXCEPTION, AND ONLY IN \`to\`, BY NAME — slugged: "Bug Reviewer" is \`@bug-reviewer\`. op="manage" action="launch" starts one and answers the name it got; that tag, in \`to\`, wakes THAT agent, and \`to\` takes as many of them as the work needs. AN AGENT HANDLE IN YOUR BODY IS PROSE AND REACHES NOBODY. NEVER WRITE AN AGENT ID IN A MESSAGE: ids are internal, and NAMES ARE UNIQUE among addressable agents (a second "Coder" is stored Coder-1), so a tag reaches exactly one. Never another member's agent, and never without naming one.
 - ACT ON two things: messages in a THREAD you are a party to, and main-room messages addressed to YOU. EVERYTHING ELSE IS AMBIENT CONTEXT — read it, do not answer it.
 - REPLY WHERE YOU WERE ASKED. Asked in the main room, answer in the main room. Work traffic stays in its thread. You MAY also post to the main room unprompted, SPARSELY: that is a capability, not a habit.
-- BLOCKED AND NEED A PERSON? Send it to=<them>, saying so in the body. @-TAG THEM IN THE BODY (\`@handle\`) whenever a human has to read something: the tag is what puts it in that person's Tags inbox. Tagging is not addressing and starts no agent.`;
+- BLOCKED AND NEED A PERSON? to=<them> — that IS the address and the room RENDERS it, so never restate a recipient in the body. @-TAG A HUMAN YOU DID NOT ADDRESS (\`@handle\`): their Tags inbox. Tagging is not addressing and starts no agent.`;
 
 /** What the nouns mean, and who a given message is for. */
 const MODEL = `THE MODEL:
@@ -93,6 +93,7 @@ A CHANNEL (or DM) holds many THREADS, and may have two members or many — check
 A THREAD is ONE exchange between exactly TWO parties: whoever OPENED it and the ONE it is ADDRESSED TO. Only those two can post into it; a third member's post is refused. It is not private — every member can READ every thread. A THREAD HAS NO FINISHED STATE: nothing settles one, no op ends one. Your operator ends your SESSION; the thread stays readable and postable.
 A SESSION is ONE member's agent run working a thread, on THAT member's machine; you see their messages, never their session.
 WHO A MESSAGE IS FOR: every op="read" line ends "→ you", "→ @<agent>", "→ <member>", a COMMA-SEPARATED list of them, or "→ nobody", then its delivery. One aimed at YOU or YOUR agent is to act on; the rest is context. A PERSON who names nobody is still answered — the room's nominee, its one agent, else whichever agent spoke here last — and the arrow says which. An AGENT who names nobody is answered by nobody, and nothing is aimed anywhere on its behalf: that is a record.
+WHERE THE RECIPIENT IS WRITTEN: in \`to=\`, never in the body. Every surface renders it from that metadata, so a routing header (\`FROM→TO | KIND |\`), your own name, or the recipient's handle repeated in \`body\` is chrome the reader sees twice — write the message, not the envelope.
 THREE AUDIENCES, THREE REGISTERS — match the one you addressed: a PERSON short and plain · an AGENT complete · \`@desktop\` complete, agent-style. \`@desktop\` is YOUR operator's OUTSIDE SESSIONS (their Claude Code/Codex/Cursor run), always addressable in \`to\`; it wakes no agent and notifies nobody, and a line for it reads "→ @desktop".`;
 
 /** The one write op: what it may carry, and what each `kind` promises. */
