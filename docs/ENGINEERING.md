@@ -6719,3 +6719,142 @@ is a carve-out and not an oversight.
 surfaces because it was written down as *"and Samuel did not rule on it"* rather than as a rule. That
 phrasing is what made the reversal a one-line change to a shared call instead of an argument about
 which of two surfaces was right.
+
+---
+
+## 2026-09-22 — Codex compatibility: the flag that never existed, and the runbook for a runtime we do not ship
+
+### The claim that survived because it carried its own excuse
+
+`docs/INVARIANTS.md` said, of the Codex adapter, that **`--ignore-user-config` is the fence, first in
+argv** — and then added, in the same bullet, that *"it is documented under CLI config layering, not on
+the `app-server` subcommand — an unknown flag fails the spawn LOUDLY, which is the safe failure."*
+
+That caveat was the tell, and it was read as reassurance for three weeks. `codex app-server` has no
+such flag **at all**: `--help` shows `-c key=value`, `--enable/--disable <FEATURE>` and
+`--strict-config` (measured 2026-09-21; re-derive with `codex app-server --help`). So the
+sentence was not describing a fence that had weakened; it was describing an argument the CLI
+rejects. Every real spawn died at argument parsing, before `initialize` — the "loud
+failure" the caveat promised did happen, and nobody was there to hear it, because **no test ever ran a
+real `app-server`**. Targeted tests were green in bulk
+against synthetic fixtures that asserted the flag was present — `main/runtime/codex/client.js`'s own
+header records **94** of them, measured 2026-09-21.
+
+Two things are worth keeping from that.
+
+**The second surface failed for the same reason and nobody connected them.** The dead flag was passed
+by `main/runtime/codex/launch-spec.js` *and* by `main/runtime/codex/models.js`, so the model picker
+was broken independently of the launch. A reader working from the plan's file list — which named only
+the launch site — would have fixed one and shipped the other. The lesson is narrow and repeatable:
+**when a constant is wrong, grep for it before believing any list of where it is used.**
+
+**A synthetic fixture is a measurement's costume.** The fixtures asserted a wire shape nobody had
+observed, so they could only ever confirm what the adapter already believed. That is why U1's harness
+is two-tiered and why **only the tier behind `CODEX_APP_SERVER_LIVE=1` is allowed to say what the
+protocol IS** — and why the skip is loud in three layers, with the skip itself tested. A gate that
+reports success because nothing ran is worse than no gate.
+
+### Why the fix was not "delete the flag"
+
+Removing it with nothing in its place would have fixed startup and weakened security in the same
+commit: the operator's `~/.codex/config.toml` carries profiles, MCP servers, hooks and approval
+defaults, and a Dopl-launched session must not inherit any of them. The replacement had to be a
+*supported* isolation boundary, not the absence of one.
+
+`CODEX_HOME` is the documented root for app-server config, auth and state, so Dopl now owns one:
+`main/runtime/codex/config-home.js` points the child at a `0o700` directory inside the app's own
+`userData`, containing no config and exposing **only** the operator's existing `auth.json`, through a
+symlink. Policy, sandbox, model and MCP configuration moved onto `thread/start` fields, where they are
+explicit rather than ambient; reasoning effort rides `turn/start`.
+
+The two refusals in that module are the part worth remembering. A `config.toml` appearing in the
+private home means **something other than Dopl put it there**, and an `auth.json` there that is not a
+symlink means the same — so both refuse the launch rather than proceeding. An app-owned link may be
+repointed; a real file in the app's private home may not. The live rule, including which spawners go
+through it, is INVARIANTS §11.0d.
+
+### The compatibility runbook
+
+⚠ **Every number below is a measurement with a date, or a command instead of a number.** Re-derive;
+the CLI is the operator's and moves without us.
+
+**1 — Is there a usable Codex on this machine, and is it signed in?**
+
+```
+cd dopl-desktop-app
+node -e "console.log(require('./main/runtime/codex/resolve-bin').resolveCodexBin())"
+```
+
+Answers `{ ok, path, source, reason, rejected }`. `source` is `override` / `path` / `well-known`, and
+a REFUSED candidate comes back with its reason — *"found but Dopl will not run it"* must never read as
+*"not installed"*. `DOPL_CODEX_BIN` overrides the search and **an override that does not resolve is an
+error, not a fallback.** Sign-in is a separate question and a separate answer: `codex login status`
+exits 0 when this machine is logged in, which is what `runtime/codex/credential.js` execs.
+
+**2 — Regenerate the measured contract.**
+
+```
+npm run codex:schema              # writes test/fixtures/codex-app-server.json
+npm run codex:schema -- --print   # dump it, write nothing
+```
+
+It drives `codex app-server generate-json-schema --out <tmpdir>` and captures **method NAMES and value
+TYPES only** — no prompt, token or transcript content. It **fails loudly rather than writing an empty
+fixture**, and it **refuses a binary inside another application's `.app` bundle**: a private alpha's
+protocol may differ from the public CLI's, and a fixture captured from one that later reads as
+measured truth is the same failure as the synthetic fixtures in a different costume.
+
+⚠ **`initialize` declares no methods** — it answers `{ codexHome, platformFamily, platformOs,
+userAgent }`. That is why the SCHEMA, not the handshake, has to be the method source.
+
+**3 — Run the live tier.**
+
+```
+npm run test:codex-compat
+```
+
+Three steps in order: **preflight** (refuses to start without a resolvable binary), **suites** (the
+full desktop suite with `CODEX_APP_SERVER_LIVE=1`, so the contract tier executes instead of skipping),
+and **leaks** (any `codex`/`app-server` process that was not running before and is running after fails
+the command by pid and command line). Exit codes: **0** pass · **1** suites failed · **2** no usable
+Codex · **3** a leaked app-server outlived the run.
+
+⚠ **Do not substitute bare `npm test` for this.** There, the live tier skips — loudly, but it skips,
+and a release gate must not be satisfiable by not running.
+
+**4 — Update the supported version.**
+
+`main/runtime/codex/client.js › SUPPORTED_CLI` is a **`min`-only** floor and it is pinned from a
+measurement, not from memory. `npm run codex:schema` prints the exact line to paste; **re-measure, do
+not hand-edit**, and the live tier asserts the fixture's CLI version equals the executing CLI's, so a
+stale fixture fails by name and tells you the command.
+
+`max` stays `null` on purpose. Below the floor is a protocol nobody measured. Above it is the future,
+which has not happened — refusing it would strand operators on the day Codex ships a compatible
+release, and `› checkProtocol`'s method check already catches a genuinely incompatible newer CLI by
+naming the method that went missing. **A `max` becomes honest the day a newer CLI is measured and
+found to break something; write it then, with what broke.**
+
+Note what `SUPPORTED_CLI` is *not*: `runtime/codex/packaging.js › versionPin` is still `null` and must
+stay null while `delivery` is `'path'`. A pin there would claim that **this release ships that
+protocol build**, which a discovered binary makes unmakeable. The floor is a claim about what Dopl has
+been measured against; the pin would be a claim about what Dopl ships.
+
+**5 — The packaged smoke, which is still owed.**
+
+Nothing above proves the case that motivated the resolver: a **signed DMG, opened from Finder**, with
+`launchd`'s minimal `PATH`. Until that is run on a clean machine with the chosen install, "Codex
+connected" is a claim about a dev shell. Do it with the distribution that is actually chosen — a
+Homebrew prefix and an `npm -g` prefix have different ownership and different group bits, and the
+resolver's fake-tree unit is not a substitute for either.
+
+**6 — What still has no answer, so nobody re-derives it as if it did.**
+
+The `model/list` **request** side: the response shape is measured, but no second page was ever
+fetched, so the cursor parameter NAME is a symmetric guess and is marked as one in the code.
+`mcp.toolNamePrefix` is `null` and remains the highest-stakes unknown — a third tool-name shape misses
+every list in the gate at once. Codex **resume** is still refused, and the refusal names the
+measurement it is waiting on (usage accounting on resume), with a test asserting
+`declared === 'unverified'` — **so answering that question turns the test red, which is the intended
+trip-wire.** And `› checkProtocol` is additive: it is not yet in the connected-state path, so nothing
+refuses on it today.
