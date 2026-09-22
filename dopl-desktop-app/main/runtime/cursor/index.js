@@ -269,7 +269,9 @@ const descriptor = {
     // answer there is a real problem on this runtime rather than a line to add here.
     envDeny: [],
     // ⚠ ALSO EMPTY, AND THIS ONE IS THE REAL GAP. The other native runtime has
-    // `--ignore-user-config`, which skips the operator's own config entirely. Nothing in
+    // an app-owned `CODEX_HOME` that carries no config (`runtime/codex/config-home.js`).
+    // ⚠ THIS LINE USED TO CITE A `--ignore-user-config` FLAG; that flag never existed on
+    // `codex app-server` (measured 2026-09-22 from its `--help`). Nothing in
     // `cursor-research.md` gives this runtime an equivalent, and it reads permission strings from
     // `~/.cursor/cli-config.json`, `<project>/.cursor/cli.json`, a team dashboard and four hook
     // tiers (enterprise > team > project > user). What stands in for the flag is that DENY BEATS

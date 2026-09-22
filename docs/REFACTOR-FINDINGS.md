@@ -5920,7 +5920,12 @@ PROCESS and reads `process.env` directly, so a "scrub" would mean mutating Dopl'
 a global side effect on the app, not a fence on one session. `envDeny` is therefore `[]`.
 
 ⚠ **THE SECOND HALF IS THE ONE THAT MATTERS.** `configFlags` is `[]` too, and for a worse reason:
-`codex app-server` takes `--ignore-user-config`, which skips the operator's own config entirely.
+Codex isolates the operator's own config entirely and this runtime has no equivalent.
+⚠ **THE COMPARISON WAS WRITTEN AS A FLAG, `--ignore-user-config`, AND THAT FLAG NEVER EXISTED**
+(measured 2026-09-22 from `codex app-server --help`, which offers `-c key=value`,
+`--enable/--disable` and `--strict-config`). The real mechanism is an app-owned `CODEX_HOME`
+carrying no config — see the Codex adapter's config-home module. **The argument below is unchanged;
+only the thing Cursor is being compared TO was wrong.**
 Nothing in the Cursor research gives this runtime an equivalent, and it reads permission strings
 from `~/.cursor/cli-config.json`, `<project>/.cursor/cli.json`, a team dashboard and **four hook
 tiers** (enterprise > team > project > user). What stands in for the flag is that **deny beats

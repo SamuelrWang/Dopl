@@ -55,9 +55,13 @@ const packaging = {
   signing: null,
   // ⚠ NULL WHILE `delivery` IS `path`, AND THAT IS THE HONEST ANSWER RATHER THAN A GAP. A version
   // pin is a claim that THIS release ships THAT protocol build; a discovered binary makes the
-  // claim unmakeable. §5 item C15 pins a version the day delivery becomes `bundled`, and until
-  // then `initialize` capability negotiation is the only version check there is — which is why
-  // `client.js` treats the handshake as mandatory rather than optional.
+  // claim unmakeable. §5 item C15 pins a version the day delivery becomes `bundled`.
+  // ⚠ **`initialize` IS NO LONGER THE ONLY VERSION CHECK, AND IT NEVER COULD HAVE BEEN** (corrected
+  // 2026-09-22): the handshake DECLARES NO METHODS — it answers `{ codexHome, platformFamily,
+  // platformOs, userAgent }` — so it cannot say what the protocol offers. `client.js ›
+  // checkProtocol` is the real gate: a `SUPPORTED_CLI` floor measured from a real CLI
+  // (`0.155.1`), the method set read from `generate-json-schema`, and four distinct states. This
+  // field stays `null` because a DISCOVERED binary still cannot be pinned by a RELEASE.
   versionPin: null,
 };
 

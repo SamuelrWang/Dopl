@@ -285,7 +285,8 @@ describe("the signed-out and no-runtime copy", () => {
   });
 
   it("the live-model-switch refusal is per runtime, and Claude keeps the control", () => {
-    // ⚠ `canSwitchModelLive` HAD NO CONSUMER IN `main/` UNTIL U10 — it was declared, mirrored
+    // ⚠ `canSwitchModelLive` HAD NO CONSUMER IN `main/` UNTIL 2026-09-22 (NOT U10, which is what
+    // this said and what F-753 said: U10's refusal re-read the field itself) — it was declared, mirrored
     // here, and read by nothing, so a Codex session recorded a model switch that never happened.
     expect(liveModelSwitchRefusal(realDescriptor("claude"))).toBe(null);
     const codex = liveModelSwitchRefusal(realDescriptor("codex"));

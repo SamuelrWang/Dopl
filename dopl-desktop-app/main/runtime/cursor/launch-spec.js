@@ -26,8 +26,11 @@
 //      `descriptor.ambientFences.envDeny` is therefore `[]` and says so. The research names no
 //      permission-affecting environment variable for this runtime; §5 item X20 asks, and a
 //      POSITIVE answer there is a real problem on this runtime rather than a line to add.
-//   2. NO `--ignore-user-config` ANALOGUE. `codex app-server` takes a flag that skips the
-//      operator's own config file; nothing in `cursor-research.md` gives this runtime one, and it
+//   2. NO CONFIG-ISOLATION ANALOGUE. ⚠ **AND THE COMPARISON THIS ONCE DREW WAS TO A FLAG THAT DOES
+//      NOT EXIST**: `codex app-server` has no `--ignore-user-config` (measured 2026-09-22 from its
+//      own `--help`). What Codex actually does is launch against an app-owned `CODEX_HOME`
+//      (`runtime/codex/config-home.js`), which is a mechanism this runtime has no equivalent of
+//      either. Nothing in `cursor-research.md` gives this runtime one, and it
 //      reads permission strings from `~/.cursor/cli-config.json`, `<project>/.cursor/cli.json`,
 //      a team dashboard and up to four hook tiers. What stands in for the flag is that DENY BEATS
 //      ALLOW: an operator's `permissions.allow` cannot open something this launch denied. It does
