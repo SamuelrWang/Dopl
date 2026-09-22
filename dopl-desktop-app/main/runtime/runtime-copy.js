@@ -189,17 +189,26 @@ function resumeNudge(descriptor) {
  * Why a RUNNING agent's model cannot be switched on this runtime. `null` when it can.
  *
  * ⚠ THE TWIN OF `capability.js › interruptRefusal`, AND IT REFUSES A CONTROL RATHER THAN A LAUNCH.
- * It exists because `capability.js › canSwitchModelLive` had no consumer in `main/` at all: a
- * runtime whose live handle has no model verb was still RECORDED as switched, which is the one
- * thing `session-reopen.js › setModelByTask`'s own header forbids ("a recorded pick nothing
- * applied is a lie") — and the recorded value is what the NEXT launch assembly reads.
+ * It exists because a runtime whose live handle has no model verb was still RECORDED as switched,
+ * which is the one thing `session-reopen.js › setModelByTask`'s own header forbids ("a recorded
+ * pick nothing applied is a lie") — and the recorded value is what the NEXT launch assembly reads.
  * ⚠ `'unverified'` AND `false` GET DIFFERENT WORDS ON PURPOSE: one is a measurement nobody took
  * and the other is a measurement that came back no, and the operator can act on the difference
  * (report it, or stop asking).
+ *
+ * 🔒 ⚠ **IT ASKS `capability.js › canSwitchModelLive`; IT DOES NOT RE-READ THE FIELD** (corrected
+ * 2026-09-22). This function shipped reading `descriptor.session.liveModelSwitch` itself, which
+ * left the predicate with NO consumer in `main/` while three comments — this one included — claimed
+ * it had gained its first. That is the `denyList`-mirror shape §11.0 warns about: two readings of
+ * one field, free to disagree, with the WRONG one able to look right for as long as nobody checks.
+ * The lazy require keeps this module's own contract (it is required by pure callers) while making
+ * the predicate load-bearing, so a change to what "can switch live" MEANS reaches the sentence.
  */
 function liveModelSwitchRefusal(descriptor) {
   const declared = descriptor && descriptor.session ? descriptor.session.liveModelSwitch : null;
-  if (declared === true) return null;
+  // ⚠ Lazy: `capability.js` requires `contract.js` and `selection-vocabulary.js`, and this module
+  // is loaded by callers that must stay free of that graph.
+  if (require('./capability').canSwitchModelLive(descriptor)) return null;
   const name = runtimeLabel(descriptor);
   return declared === 'unverified'
     ? `Switching the model of a running ${name} agent has not been measured, so Dopl will not claim it worked. Start a new agent on the model you want.`
@@ -236,7 +245,7 @@ module.exports = {
   authHoldCopy,
   heldToolDenial,
   resumeNudge,
-  liveModelSwitchRefusal, // U10: `capability.js › canSwitchModelLive`'s first consumer's sentence
+  liveModelSwitchRefusal, // U10: the sentence; it ASKS `capability.js › canSwitchModelLive` (2026-09-22)
   noRuntimeCopy,
   signedOutLaunchCopy,
 };

@@ -298,7 +298,7 @@ async function setModelByTask(a) {
   // `buildLaunchSpec` reads on the NEXT assembly, so the session came back on a model the operator
   // was told it was already using. It also wrote one runtime's ALIAS onto another runtime's
   // session, which is exactly the cross-vocabulary coercion the adapter seam exists to stop.
-  // ⚠ `capability.js › canSwitchModelLive` HAD NO CONSUMER IN `main/` UNTIL THIS. It was declared,
+  // ⚠ `capability.js › canSwitchModelLive` IS ASKED HERE, THROUGH `liveModelSwitchRefusal`. It was declared,
   // mirrored on the web side, and read by nothing — the `axisBOpScoped` shape (D3), one capability
   // along. ⚠ REFUSED WITH A SENTENCE, NEVER SILENTLY: `runtime-copy.js › liveModelSwitchRefusal`
   // names the runtime and says what to do instead, and `'unverified'` and `false` are worded apart
