@@ -39,6 +39,15 @@ const HANDSHAKE_TIMEOUT_MS = 20000;
 const HELP_TIMEOUT_MS = 10000;
 const SCHEMA_TIMEOUT_MS = 60000;
 
+/**
+ * A private executable inside another application's bundle may prove that the capture tooling
+ * works, but it cannot define Dopl's supported public-CLI contract. Keep this as a pure predicate
+ * so the no-write boundary is unit tested rather than living only in the operator warning.
+ */
+function excludedFixtureSource(file) {
+  return /(?:^|[/\\])[^/\\]+\.app(?:[/\\]|$)/i.test(String(file || ''));
+}
+
 // ⚠ THE GENERATED SCHEMA IS THE AUTHORITATIVE METHOD LIST, NOT `initialize`. Measured 2026-09-21
 // against `codex-cli 0.155.0-alpha.9.2`: `initialize` answers `{ codexHome, platformFamily,
 // platformOs, userAgent }` and declares NO methods, while
@@ -190,6 +199,12 @@ async function withAppServer(fn) {
 async function capture() {
   const found = resolveBin.resolveCodexBin();
   if (!found.ok) fail(found.reason, 2);
+  if (excludedFixtureSource(found.path)) {
+    fail(
+      `\`${found.path}\` is inside another application's bundle. It may be used for an explicit smoke test, but it cannot generate Dopl's supported Codex CLI fixture.`,
+      2,
+    );
+  }
 
   const version = await run(found.path, ['--version'], HELP_TIMEOUT_MS);
   if (!version.ok) fail(`\`${found.path} --version\` failed: ${version.error}`, 2);
@@ -275,16 +290,10 @@ function advise(fixture) {
     lines.push('');
     lines.push(`      const SUPPORTED_CLI = Object.freeze({ min: '${shown}', max: null, measuredFrom: '${shown}' });`);
   }
-  // 🔒 A BINARY INSIDE ANOTHER APP'S BUNDLE IS NOT A SUPPORTED SOURCE. The plan's Scope
-  // Boundaries forbid depending on the private executable inside another application bundle, so a
-  // fixture measured from one must not quietly become the supported contract.
-  if (/\.app\//.test(String(fixture.cli.path))) {
-    lines.push('');
-    lines.push('🔒 ⚠ THIS BINARY LIVES INSIDE ANOTHER APPLICATION BUNDLE.');
-    lines.push(`     ${fixture.cli.path}`);
-    lines.push('     The plan\'s Scope Boundaries exclude it as a supported source, and a private');
-    lines.push('     build\'s protocol may differ from the public CLI\'s. Measure a real install');
-    lines.push('     before committing this fixture as the supported contract.');
+  // `capture()` has already refused application-bundle paths. Keep this assertion-like warning
+  // as a second fence in case a future capture path stops going through that function.
+  if (excludedFixtureSource(fixture.cli.path)) {
+    lines.push('', '🔒 ⚠ REFUSED SOURCE: a bundled private executable cannot define the fixture.');
   }
   const declared = fixture.handshake.declaredMethods;
   if (!declared) {
@@ -318,4 +327,8 @@ async function main() {
   process.stdout.write(advise(fixture));
 }
 
-main().catch((err) => fail((err && err.message) || String(err), 1));
+if (require.main === module) {
+  main().catch((err) => fail((err && err.message) || String(err), 1));
+}
+
+module.exports = { excludedFixtureSource };

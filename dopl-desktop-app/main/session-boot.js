@@ -55,7 +55,6 @@ const crypto = require('crypto');
 const store = require('./session-store');
 const { initialSessionState } = require('./session-state');
 const { floorWindowlessMessage } = require('./session-profiles'); // AXIS B's windowless floor (F-236)
-const sessionModel = require('./session-model'); // the frozen model enum, coerced on the way back in
 // ⚠ `contextFromRecord` AND `knownProfile` COME FROM `session-park.js`, NEVER A SECOND COPY. Both
 // answer "what does a durable record mean" for the OTHER record-driven rebuild (`startResume`),
 // and `knownProfile` in particular is fail-restrictive on purpose — a raw stored profile falls
@@ -214,7 +213,9 @@ function parkedSessionFromRecord(key, rec, sdkId) {
     agentId: rec.agentId || null, // the @-mention address, the pill's name, the post stamp
     direct: rec.direct === true, // H2: does the server address our unaddressed posts
     counterpartyName: rec.counterpartyName || null,
-    model: sessionModel.normalizeModel(rec.model), // the operator's pick, re-coerced on the way in
+    model: runtimeCapability.launchModelPick(
+      runtimeRegistry.descriptorFor(rec.runtimeId || null), rec.model
+    ), // the operator's pick, re-coerced in the stored runtime's own vocabulary
     // ── 2026-09-21 (U10) — THE RUNTIME TRUTH, RESTORED AND NOT RE-DERIVED ────────────────────
     //
     // ⚠ THE RECORD'S ANSWER WINS OVER TODAY'S DESCRIPTOR, DELIBERATELY. Re-deriving

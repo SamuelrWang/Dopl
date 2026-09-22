@@ -148,10 +148,7 @@ test("a roster that cannot be READ is `unavailable` WITH THE BINARY'S REASON —
   const catalog = loadCatalog();
   const cases = [
     [fakeClient([], { probeOk: false, probeReason: "`codex` is not installed where Dopl can find it." }), /not installed/],
-    // 🔒 THE `--ignore-user-config` CASE. The flag is dead on the measured CLI and BOTH this file
-    // and `launch-spec.js` still pass it, so `initialize` never answers. The flag is U4's to
-    // change; what U6 owes is that the failure READS as one.
-    [fakeClient([], { initializeRejects: "unexpected argument '--ignore-user-config' found" }), /ignore-user-config/],
+    [fakeClient([], { initializeRejects: "initialize rejected the client" }), /initialize rejected/],
     [fakeClient([], { listRejects: "method not found" }), /method not found/],
     [fakeClient([], { connectThrows: "spawn EACCES" }), /EACCES/],
     [fakeClient([{ data: [] }]), /no models/i],

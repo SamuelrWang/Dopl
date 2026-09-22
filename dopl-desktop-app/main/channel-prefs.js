@@ -133,24 +133,25 @@ const templateApproval = require('./template-approval');
 
 // ── Storage for the durable selection ─────────────────────────────────────
 //
-// ⚠ **TWO KEYS, ONE AUTHORITY, AND THE SECOND IS A MIRROR RATHER THAN A FALLBACK (2026-09-21,
-// U5).** `channelLaunchSelection` is the VERSIONED, RUNTIME-KEYED record and it is the only thing
-// a read trusts. `channelLaunchPosture` — the pre-U5 `{tools, messages, model}` pair — survives
-// for exactly two jobs:
+// ⚠ **THREE KEYS, ONE AUTHORITY, AND TWO DOWNGRADE MIRRORS (2026-09-21, U5).**
+// `channelLaunchSelection` is the VERSIONED, RUNTIME-KEYED record and it is the only thing a read
+// trusts. `channelLaunchPosture` — the pre-U5 `{tools, messages, model}` pair — and
+// `channelRuntime` — the old separately stored runtime pick — survive for exactly two jobs:
 //
 //   MIGRATION  a channel with no selection record reads its legacy pair (and `channel-runtime.js`'s
 //              separately stored pick) through `launch-selection.js › fromLegacy`. **Reading
 //              never writes**, so a machine that only ever launches keeps both records untouched
 //              and can be downgraded with nothing lost.
 //   DOWNGRADE  every selection WRITE re-derives the legacy pair for the SELECTED runtime and
-//              stores it too. An older build reads the pair and gets the settings actually in
-//              force, instead of whatever was last written before the upgrade.
+//              stores both it and that runtime pick. An older build therefore gets the runtime
+//              and settings actually in force, instead of two records left on different clocks.
 //
 // ⚠ THE MIRROR IS NEVER READ WHILE A SELECTION RECORD PARSES. If it were, the two could disagree
 // and nothing would say which won — which is the failure the auto-send/`messages` overlap already
 // cost this tree once (2026-09-06, item 8).
 const POSTURE_KEY = 'channelLaunchPosture'; // LEGACY MIRROR: { [channelId]: { tools, messages, model? } }
 const SELECTION_KEY = 'channelLaunchSelection'; // { [channelId]: { v, runtime, messages, byRuntime } }
+const RUNTIME_KEY = 'channelRuntime'; // LEGACY MIRROR: { [channelId]: '<runtime id>' }
 
 function readMap(key) {
   try {
@@ -183,7 +184,7 @@ function getLaunchSelectionDetail(channelId) {
   // ⚠ LAZY, AND ONLY HERE. `channel-runtime.js` reads its pick THROUGH this function now, so a
   // top-level require there plus one here would cycle; the legacy key is read directly instead,
   // which is also the only place in this tree that still touches it for a decision.
-  return selection.fromLegacy(c, getAllPostures()[channelId], readMap('channelRuntime')[channelId]);
+  return selection.fromLegacy(c, getAllPostures()[channelId], readMap(RUNTIME_KEY)[channelId]);
 }
 
 /** The selection alone, for the callers that cannot act on a review. */
@@ -268,6 +269,15 @@ function setLaunchSelection(channelId, patch) {
       ? { tools: preset.tools, messages: preset.messages, model: preset.model }
       : { tools: preset.tools, messages: preset.messages };
     store.set(POSTURE_KEY, legacy);
+    // The runtime was a separate pre-U5 record, so it needs its own downgrade mirror beside the
+    // posture mirror above. Use the NORMALIZED selection value rather than the patch: an unknown
+    // renderer-supplied id resolves to the default runtime, and an omitted runtime keeps the
+    // current effective pick. `''` deletes the legacy member, preserving the old record's one
+    // spelling of "default" and leaving every neighbouring channel untouched.
+    const runtimes = { ...readMap(RUNTIME_KEY) };
+    if (res.selection.runtime) runtimes[channelId] = res.selection.runtime;
+    else delete runtimes[channelId];
+    store.set(RUNTIME_KEY, runtimes);
   } catch (err) {
     diag('channel-prefs: could not persist the launch selection —', err && err.message);
     return { ok: false };

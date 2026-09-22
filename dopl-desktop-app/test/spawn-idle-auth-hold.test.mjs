@@ -39,7 +39,7 @@ const ENGINE = readFileSync(join(HERE, "..", "main", "session-engine.js"), "utf8
 // catch. The closing statements are re-appended because the end marker is one of them.
 const TAIL = between(
   ENGINE,
-  "if (spec.windowless && sessionAuth.holdIfNoCredential(s))",
+  "const credentialHeld = await sessionAuth.holdIfNoRuntimeCredential(s, rt);",
   "await startQuery(s, rt);",
   "startSession's spawn tail"
 ) + "await startQuery(s, rt);\n return s;";
@@ -54,7 +54,7 @@ function drive(spec, { credential }) {
   const s = { key: "k1", agentId: "a1b2c3d4", taskId: "t1", state: {} };
   const sessions = new Map([[s.key, s]]);
   const sessionAuth = {
-    holdIfNoCredential(sess) {
+    async holdIfNoRuntimeCredential(sess) {
       calls.holds += 1;
       if (credential) return false;
       sess.authHold = { kind: "preflight" }; // what the real one stamps
@@ -106,7 +106,7 @@ test("the preflight is asked BEFORE the spawn-idle return, in the shipping sourc
   // The behavioural cases above are the real guard; this states the ORDER by name, so a future
   // reordering fails saying what moved rather than only that a spawn-idle spec started a query.
   assert.ok(
-    orderOf(TAIL, "sessionAuth.holdIfNoCredential(s)", "if (spec.parkedShell)", "spawn tail order"),
+    orderOf(TAIL, "sessionAuth.holdIfNoRuntimeCredential(s, rt)", "if (spec.parkedShell)", "spawn tail order"),
     "the credential preflight must precede the spawn-idle early return"
   );
   // ⚠ AND THE RETURN IS STILL THERE. Moving the preflight in front of it would be no fix if the

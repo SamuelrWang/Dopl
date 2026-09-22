@@ -97,12 +97,11 @@ function launchModelPick(descriptor, value) {
  * ⚠ `null` AND `{}` MUST NOT COLLAPSE (§11 — UNKNOWN is not EMPTY): `null` says this runtime has
  * no native launch dimension at all and the UI renders NO row; an empty object cannot occur,
  * because a dimension with no options refuses registration.
- * ⚠ WHAT IS DELIBERATELY ABSENT: Codex's GRANULAR APPROVAL CATEGORIES. `approval.categories` names
- * them and `approval.js › toolNameFor` classifies a request that arrives under one, but the
- * structured `approval_policy = { granular = { … } }` WRITE shape is unmeasured (the plan's own
- * "deferred to implementation", and there is no `codex` CLI on this machine to measure it from).
- * A dimension declared here becomes a storable, spendable setting; declaring that one would be
- * claiming a capability the adapter cannot back.
+ * ⚠ WHAT IS DELIBERATELY ABSENT: Codex's GRANULAR APPROVAL CATEGORIES. Their structured launch
+ * shape is measured now, and the adapter spends the single `granular` mode as all five categories
+ * asking. What this shared record does not yet declare is a per-category persistence contract.
+ * A dimension declared here becomes a storable setting, so adding five toggles is a separate
+ * end-to-end product change rather than a descriptor-only edit.
  */
 function nativeDimensions(descriptor) {
   const out = {};

@@ -24,6 +24,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 
 import {
   client, LIVE_ENV, REGENERATE_CMD,
@@ -327,6 +328,14 @@ describe('live Codex app-server contract', () => {
     assert.equal(
       fixtureIsMeasured(FIXTURE), true,
       `the fixture is still ${FIXTURE.status}. A live CLI is present, so measure it: ${REGENERATE_CMD}`,
+    );
+    const liveVersion = String(execFileSync(GATE.bin.path, ['--version'], {
+      encoding: 'utf8', timeout: 10000,
+    })).trim();
+    assert.equal(
+      FIXTURE.cli.version,
+      liveVersion,
+      `the fixture describes ${FIXTURE.cli.version}, but this release machine runs ${liveVersion}; regenerate it with ${REGENERATE_CMD}`,
     );
     const live = await handshake({ timeoutMs: 30000 });
     assert.ok(live.initialize);

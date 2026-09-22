@@ -163,6 +163,21 @@ test("PREFLIGHT: a healthy credential changes NOTHING (the launch continues unto
   assert.deepEqual(h.calls.dispatch, [], "no reducer event at all");
 });
 
+test("PREFLIGHT: the selected runtime owns the credential verdict", async () => {
+  const h = harness({ usable: false }); // Claude's local markers say signed out.
+  const healthy = session({ runtimeId: "codex" });
+  assert.equal(await h.holdIfNoRuntimeCredential(healthy, {
+    credentialState: async () => ({ usable: true, source: "login-status" }),
+  }), false, "a valid Codex login is not blocked by Claude's credential state");
+  assert.deepEqual(h.calls.dispatch, []);
+
+  const missing = session({ runtimeId: "codex" });
+  assert.equal(await h.holdIfNoRuntimeCredential(missing, {
+    credentialState: async () => ({ usable: false, source: "login-status-nonzero" }),
+  }), true);
+  assert.equal(missing.state.authHeld, true);
+});
+
 test("PREFLIGHT: the resume runs the ORIGINAL first turn through the engine's own startQuery", async () => {
   // ⚠ RE-POINTED FROM `runSignIn` (F-228). Gone is the TRIGGER — the in-window button and its pty —
   // and with it two assertions: that the EXISTING claude-auth flow drove it, against the bundled
@@ -295,11 +310,13 @@ test("the engine preflights AFTER the parked-shell branch and BEFORE startQuery"
   // narrows the claim. ⚠ EVERY INDEX IS CHECKED NON-NEGATIVE FIRST: `indexOf` answers -1 for a
   // deleted symbol, and `hold > -1` is how a case goes green while measuring nothing.
   const guard = ENGINE.indexOf("if (spec.parkedShell) { state.phase = 'parked';");
-  const hold = ENGINE.indexOf("if (sessionAuth.holdIfNoCredential(s)) return s;");
+  const probe = ENGINE.indexOf("const credentialHeld = await sessionAuth.holdIfNoRuntimeCredential(s, rt);");
+  const hold = ENGINE.indexOf("if (credentialHeld) return s;");
   const start = ENGINE.indexOf("await startQuery(s, rt);");
-  const windowless = ENGINE.indexOf("if (spec.windowless && sessionAuth.holdIfNoCredential(s))");
-  assert.ok(Math.min(guard, hold, start, windowless) !== -1, "an anchor is gone — reslice rather than pass on -1");
-  assert.ok(hold > guard, "the dormant-phase decision is made before the credential is probed");
+  const windowless = ENGINE.indexOf("if (spec.windowless && credentialHeld)");
+  assert.ok(Math.min(guard, probe, hold, start, windowless) !== -1, "an anchor is gone — reslice rather than pass on -1");
+  assert.ok(probe > guard, "the dormant-phase decision is made before the credential is probed");
+  assert.ok(windowless > probe, "the runtime credential is known before either hold branch");
   assert.ok(start > hold, "and a held launch returns BEFORE the query is started");
   // The WINDOWLESS launch holds too and rolls the registration back, so `launch()` answers honestly
   // instead of handing out a sessionId for a session that will never run.

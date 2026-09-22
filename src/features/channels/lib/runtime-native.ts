@@ -10,12 +10,11 @@
  * `session-engine.js` stamps at spawn), so the pill becomes a real control and this module is the
  * one place that says which dimensions have one.
  *
- * ⚠ **AND IT DOES NOT GIVE ONE TO THE APPROVAL CATEGORIES.** U5 is explicit that no adapter
- * declares Codex's granular approval CATEGORIES as configurable, because the structured
- * `approval_policy = { granular = { … } }` write shape is unmeasured. A dimension this module
- * reported would become a storable setting the adapter cannot spend — F-390's exact shape, in a
- * new costume. The categories stay a REPORT of what the platform will do, which is what they
- * always were and what they honestly are.
+ * ⚠ **AND IT DOES NOT GIVE ONE TO THE APPROVAL CATEGORIES.** The structured app-server shape is
+ * now measured, and the adapter maps the single `granular` choice to all five declared categories
+ * asking. There is still no persisted per-category bag in the shared launch-selection contract.
+ * Exposing five toggles before that bag exists would recreate F-390: controls the adapter cannot
+ * receive. The categories therefore remain a REPORT of what `granular` currently means.
  *
  * ⚠ **TWO KINDS OF DIMENSION AND TWO FALL-BACK DIRECTIONS, AND THEY MUST NOT COLLAPSE** — the
  * main-process module's own rule, restated because the row has to render the difference:

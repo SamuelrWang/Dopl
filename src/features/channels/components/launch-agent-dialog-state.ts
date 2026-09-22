@@ -218,18 +218,37 @@ export function useLaunchDialogRuntime(
    * default"*). The operator picked Fable while Claude was selected; that is not a pick they made
    * for Codex, and carrying it would put a Claude id in front of them under a Codex heading and
    * then submit it.
-   * ⚠ **IT CLEARS ONLY WHAT THIS BUILD CAN SEE IS FOREIGN.** `ownPickSurvives` answers true for a
-   * roster it has not read, because the tree's standing rule is that an unknown model FALLS BACK
-   * rather than being refused (F-5), and a desktop that cannot read a catalog must stay launchable.
+   * ⚠ **IT CLEARS ONLY WHAT THIS BUILD CAN SEE IS FOREIGN.** The selected roster may be unread,
+   * but another READY roster can still positively identify the pick's owner. Genuinely unknown
+   * ids survive because the tree's standing rule is that an unknown model FALLS BACK rather than
+   * being refused (F-5), and a desktop that cannot read a catalog must stay launchable.
    * ⚠ IT CLEARS TO `''` RATHER THAN RE-POINTING. `''` is "no per-spawn pick", so the row falls to
    * the new runtime's REMEMBERED model and then to its platform default — the sentence the plan
    * asks for, made by doing nothing rather than by choosing for the operator.
    */
   useEffect(() => {
     if (!panel.open || !panel.model) return;
-    if (ownPickSurvives(catalog, panel.model)) return;
+    if (
+      ownPickSurvives(
+        runtimes,
+        selection.catalogs,
+        effectiveRuntime,
+        catalog,
+        panel.model
+      )
+    ) {
+      return;
+    }
     setModel("");
-  }, [panel.open, panel.model, catalog, setModel]);
+  }, [
+    panel.open,
+    panel.model,
+    runtimes,
+    selection.catalogs,
+    effectiveRuntime,
+    catalog,
+    setModel,
+  ]);
 
   return {
     runtimes,

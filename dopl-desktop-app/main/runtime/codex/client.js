@@ -182,6 +182,10 @@ function connect(opts) {
         .then((answer) => write({ jsonrpc: '2.0', id: msg.id, result: answer }))
         .catch((err) => {
           log('codex app-server: approval handler threw —', (err && err.message) || err, '(declining)');
+          if (err && Number.isInteger(err.rpcCode)) {
+            write({ jsonrpc: '2.0', id: msg.id, error: { code: err.rpcCode, message: err.message } });
+            return;
+          }
           // ⚠ FAIL CLOSED. A handler that throws is a gate that did not answer, and the only safe
           // answer to a question nobody answered is no.
           write({ jsonrpc: '2.0', id: msg.id, result: { decision: 'decline', message: 'Denied by operator' } });

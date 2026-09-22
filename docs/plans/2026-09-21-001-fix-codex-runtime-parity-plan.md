@@ -4,31 +4,33 @@ type: fix
 status: active
 date: 2026-09-21
 deepened: 2026-09-21
-implemented: 2026-09-21 (U1 partial, U2 partial, U5, U6, U7, U8, U9, U10 — by Claude; see Implementation Log)
+updated: 2026-09-22
+implemented: 2026-09-22 (cold-launch protocol, config isolation, approval responses, credential ownership, runtime-safe UI; release blockers remain)
 ---
 
 # Codex Runtime Parity and Launch Reliability
 
-> # ⚠ START HERE — SEVEN UNITS ALREADY LANDED (2026-09-21)
+> # ⚠ START HERE — CODEX COLD LAUNCH WORKS; RELEASE GATES REMAIN (2026-09-22)
 >
-> **This plan is PARTLY IMPLEMENTED.** Claude built every unit that does not require a live
-> `codex app-server`, while this document was still being drafted. **Read
+> **This plan is PARTLY IMPLEMENTED.** The modern app-server cold-launch path now completes a
+> real turn against the ChatGPT-bundled Codex alpha, while the shared runtime/model/settings work
+> from the prior pass remains intact. **Read
 > [Implementation Log](#implementation-log) and [Handoff](#handoff--what-to-do-next) before writing
-> any code, or you will rebuild work that is already on `master`.**
+> any code, or you will rebuild finished work.**
 >
 > | | |
 > |---|---|
-> | **Landed** | U5, U6, U7, U8, U9, U10 in full; U1 and U2 in part |
-> | **Yours** | **U3** and **U4** (both need a live app-server), U1's live fixtures, U2's packaging decision, U11 |
-> | **Commits** | `450fafcd` `9556b777` `94a3d0fe` `7964ea17` `683d4fe6` `51f6f410` `dac1e8d6` `6a4df5bb` `27f5a5a0` (+ docs) — all on `master`, **none pushed** |
+> | **Implemented this pass** | Current thread/turn/steer/interrupt/usage shapes; isolated `CODEX_HOME`; method-valid approval responses; runtime-owned credential preflight; stale cross-runtime model guard; downgrade runtime mirror |
+> | **Still release-blocking** | Supported standalone CLI/distribution decision; measured committed fixture + version pin; packaged Finder smoke; live Dopl-MCP approval/audit; Codex resume semantics; migration application; mixed-runtime release matrix |
+> | **Branch** | `codex/codex-runtime-parity` in the isolated `codex-runtime-parity` worktree; not yet merged into the user's dirty main checkout |
 > | **Migration** | **1 written, NOT APPLIED** — `supabase/migrations/20261017120000_channel_launch_directives_runtime.sql` |
-> | **Green** | desktop `npm test` **3526, 0 fail**; root vitest green but for one failure owned by another session's uncommitted composer work |
-> | ⚠ **Unproven** | **NOTHING here has run against a real Codex session.** Every unit is proven against real modules with stubbed leaves. |
+> | **Green** | desktop **3540 pass, 0 fail, 6 skip**; focused runtime UI **73 pass**; typecheck and changed-file lint green. Root vitest: **8458 pass, 1 unrelated marketing-demo failure, 42 skip** |
+> | ⚠ **Measured but unsupported** | One real full turn completed through the adapter using `codex-cli 0.155.0-alpha.9.2` bundled inside ChatGPT. This proves the implementation, **not** the supported distribution contract. |
 >
-> 🔒 **THE ONE FACT THAT CHANGES YOUR PLAN:** `app-server --help` shows **no `--ignore-user-config`
-> flag** — it shows `-c key=value`, `--enable/--disable <FEATURE>` and **`--strict-config`**. The dead
-> flag is still passed from **two** places (`codex/launch-spec.js` AND `codex/models.js`), so the
-> model roster breaks independently of launch. That is U4's opening move. Details in Log entry D.
+> 🔒 **THE SECURITY REPLACEMENT:** `app-server` has no `--ignore-user-config`. Dopl now launches
+> with an app-owned `CODEX_HOME`, links only the existing `auth.json`, refuses unexpected private
+> config, and sends approval/sandbox/model/MCP configuration through the measured `thread/start`
+> fields. The fixture generator refuses binaries inside another application's `.app` bundle.
 
 ## Summary
 
@@ -42,22 +44,22 @@ The recommended permissions UX uses stable Dopl category labels—`Tool use`, `M
 
 This table is the implementation index. Every row is independently assignable once its dependencies are complete; the detailed acceptance criteria live in the matching implementation unit.
 
-⚠ **THE `STATUS` COLUMN IS THE 2026-09-21 STATE. It is a measurement — re-derive from `git log` and the
-Implementation Log rather than trusting it after that date.**
+⚠ **THE `STATUS` COLUMN IS THE 2026-09-22 STATE.** “Live” below means the explicitly named private
+alpha smoke unless it says “supported standalone CLI.”
 
 | ID | Status | Ticket | Objective | Depends on | Exit signal |
 |---|---|---|---|---|---|
-| U1 | 🟡 **PART** — harness, generator, compat command, protocol gate landed (`9556b777`, `94a3d0fe`). **Live fixtures + `SUPPORTED_CLI` pin need a supported CLI.** | Freeze the live Codex protocol contract | Replace speculative fixtures with generated-schema and live-process evidence | None | Compatibility suite fails against old Dopl shapes and passes against supported Codex CLI |
-| U2 | 🟡 **PART** — GUI-safe binary resolver landed (`450fafcd`). **Packaging decision, structured state set, credential delegation, packaged Finder smoke are OPEN.** | Resolve Codex binary and credentials per runtime | Make Finder-launched Dopl locate Codex and gate on Codex login, not Claude login | U1 | Connected/launchable state is correct with normal, missing, and signed-out Codex installs |
-| U3 | 🔴 **NOT STARTED — YOURS.** Needs a live app-server. Nothing in the tree was changed against a guessed wire shape. | Modernize the Codex app-server client | Fix start, turn, steer, interrupt, usage, and lifecycle handling | U1, U2 | A real Codex turn launches, streams, completes, steers, and interrupts through Dopl |
-| U4 | 🔴 **NOT STARTED — YOURS.** ⚠ Evidence now exists: no `--ignore-user-config` on `app-server`; `--strict-config` does exist. Dead flag still passed from TWO sites. | Prove security isolation and Dopl MCP approvals | Replace the removed config-isolation flag without widening permissions | U1, U3 | Ambient config cannot silently widen a Dopl session; a Dopl MCP call is observed and gated end-to-end |
+| U1 | 🟡 **PART** — generated-schema shapes and a private-alpha live turn now agree; the fixture generator refuses `.app` bundle binaries and the live gate compares fixture/CLI versions. **A supported standalone CLI fixture and `SUPPORTED_CLI` pin remain open.** | Freeze the live Codex protocol contract | Replace speculative fixtures with generated-schema and live-process evidence | None | Compatibility suite fails against old Dopl shapes and passes against supported Codex CLI |
+| U2 | 🟡 **PART** — resolver now validates symlink candidate and canonical ancestor chains; credential preflight asks the selected adapter. **Distribution/trust decision, structured readiness state, and packaged Finder smoke remain open.** | Resolve Codex binary and credentials per runtime | Make Finder-launched Dopl locate Codex and gate on Codex login, not Claude login | U1 | Connected/launchable state is correct with normal, missing, and signed-out Codex installs |
+| U3 | 🟡 **COLD PATH DONE** — nested thread id, typed input items, active turn id, steer, interrupt, usage notifications, lifecycle errors, and one real start→complete turn are proven. **Live steer/interrupt and resume remain open.** | Modernize the Codex app-server client | Fix start, turn, steer, interrupt, usage, and lifecycle handling | U1, U2 | A real Codex turn launches, streams, completes, steers, and interrupts through Dopl |
+| U4 | 🟡 **ISOLATION/SCHEMAS DONE; MCP PROOF OPEN** — isolated `CODEX_HOME`, thread-native policy fields, structured granular policy, and method-valid server replies landed. **Hostile live config and real Dopl-MCP allow/deny/audit are not yet proven.** | Prove security isolation and Dopl MCP approvals | Replace the removed config-isolation flag without widening permissions | U1, U3 | Ambient config cannot silently widen a Dopl session; a Dopl MCP call is observed and gated end-to-end |
 | U5 | 🟢 **DONE** (`683d4fe6`, seam fix `51f6f410`) | Introduce runtime-neutral launch settings | Remove Claude enums and model coercion from shared session/default state | U1 | Shared state carries Dopl semantics plus runtime-keyed native settings without cross-runtime coercion |
-| U6 | 🟢 **DONE** (`6a4df5bb`) except the `model/list` REQUEST side (cursor param name is a guess, marked in code) | Deliver runtime-scoped model catalogs | Expose live Codex models, defaults, reasoning effort, and per-runtime remembered picks | U2, U5 | Switching runtime immediately shows a valid roster and preserves each runtime's prior choice |
-| U7 | 🟢 **DONE** (`27f5a5a0`) | Finish the New Agent dialog | Make runtime drive model, permission, default, template, and refusal behavior | U5, U6 | Codex selection never shows or submits a Claude model or Claude-only term |
-| U8 | 🟢 **DONE** (`27f5a5a0`) except granular approval categories — **blocked on U4** | Finish profile and channel settings | Make default runtime/model/permissions editable and persistent at both scopes | U5, U6 | New channels inherit the chosen runtime-aware profile defaults; existing channels remain unchanged |
+| U6 | 🟡 **FUNCTIONAL** — live first-page `model/list` works, per-model effort/default/hidden fields flow, and runtime picks persist. **Pagination request spelling and in-app refresh after a settled failure remain open.** | Deliver runtime-scoped model catalogs | Expose live Codex models, defaults, reasoning effort, and per-runtime remembered picks | U2, U5 | Switching runtime immediately shows a valid roster and preserves each runtime's prior choice |
+| U7 | 🟢 **DONE** — runtime drives the roster/copy/payload; the immediate-switch race now rejects a positively Claude-owned pick even while the Codex catalog is loading/unavailable. | Finish the New Agent dialog | Make runtime drive model, permission, default, template, and refusal behavior | U5, U6 | Codex selection never shows or submits a Claude model or Claude-only term |
+| U8 | 🟢 **DONE WITH A DEFINED GRANULAR MODE** — profile/channel runtime, model, sandbox, reasoning, and tool mode write. `granular` maps to all five measured categories asking; per-category toggles are intentionally absent because no persistence contract exists. | Finish profile and channel settings | Make default runtime/model/permissions editable and persistent at both scopes | U5, U6 | New channels inherit the chosen runtime-aware profile defaults; existing channels remain unchanged |
 | U9 | 🟢 **DONE** (`7964ea17`). ⚠ **Migration written, NOT APPLIED.** | Add runtime to MCP launch directives | Allow an MCP caller to deliberately launch Claude or Codex | U5 | `manage launch` with `runtime: codex` produces a Codex session and records the applied runtime |
-| U10 | 🟢 **DONE** (`dac1e8d6`) except codes whose producers are U1/U2, and Codex resume (blocked on the usage measurement) | Make lifecycle, telemetry, and refusals runtime-honest | Fix usage, active-turn state, resume, errors, and user-visible copy | U3, U5 | No Codex failure is reported as a Claude sign-in or generic SDK problem |
-| U11 | 🔴 **NOT STARTED — YOURS.** Needs U3/U4 plus a packaged build. | Run the release matrix and update the contract docs | Prove packaged desktop behavior and Claude regression safety | U2-U10 | All automated, live, packaging, UI, and MCP checks pass on a clean supported machine |
+| U10 | 🟡 **COLD PATH DONE** — active turn, cumulative/last usage, runtime copy, selected-runtime credentials, rehydrated model vocabulary, and crash visibility are fixed. **Resume stays deliberately refused until token baseline behavior is measured.** | Make lifecycle, telemetry, and refusals runtime-honest | Fix usage, active-turn state, resume, errors, and user-visible copy | U3, U5 | No Codex failure is reported as a Claude sign-in or generic SDK problem |
+| U11 | 🟡 **AUTOMATED MATRIX PARTIAL** — desktop full suite, focused web suites, typecheck, lint, and one private-alpha full turn pass. **Packaged app, supported CLI, mixed runtime, live MCP, migration, and runbook remain.** | Run the release matrix and update the contract docs | Prove packaged desktop behavior and Claude regression safety | U2-U10 | All automated, live, packaging, UI, and MCP checks pass on a clean supported machine |
 
 ---
 
@@ -718,28 +720,29 @@ The shared selection contains runtime, Dopl messaging policy, and runtime-keyed 
 
 ## Definition of Done Checklist
 
-> ⚠ **TICKED = PROVEN BY A TEST OR A MEASUREMENT ON 2026-09-21, NOT "CODE WAS WRITTEN".**
+> ⚠ **TICKED = PROVEN BY A TEST OR A MEASUREMENT THROUGH 2026-09-22, NOT "CODE WAS WRITTEN".**
 > `[~]` = built but **unproven against a live Codex session**. `[ ]` = not done, blocker named.
-> 🔒 **NOT ONE BOX BELOW HAS BEEN PROVEN AGAINST A RUNNING CODEX TURN.** Re-derive before trusting.
+> 🔒 A private-alpha full turn is implementation evidence. Only a supported standalone CLI plus
+> packaged Dopl can close distribution/release boxes.
 
 ### Runtime and protocol
 
 - [~] Supported Codex binary can be found from a signed app launched outside a shell. — resolver landed (`resolve-bin.js`, 9 tests incl. the Finder-PATH case); ⚠ **the packaged Finder smoke has NOT been run** (U2).
 - [ ] Missing, signed-out, incompatible, and ready states are distinct and actionable. — **U2 open.** The gate returns four states; `runtime-missing` / `runtime-incompatible` still have **no producer**.
-- [ ] No Codex launch uses `--ignore-user-config`. — ⚠ **STILL PASSED FROM TWO SITES** (`codex/launch-spec.js`, `codex/models.js`). U4's call; left deliberately untouched.
-- [ ] Current thread ID, input item, steer, interrupt, completion, and token-usage shapes are covered by fixtures generated/captured from a real supported CLI. — **U1 live half; the fixture ships as `UNVERIFIED-PLACEHOLDER`.**
-- [ ] App-server child exits cleanly on success, refusal, timeout, crash, interrupt, and app shutdown. — the test helper guarantees it for HANDSHAKES; a real turn is U3.
+- [x] No Codex launch uses `--ignore-user-config`. — both launch and roster use an isolated app-owned `CODEX_HOME`; source and tests forbid the dead flag.
+- [~] Current thread ID, input item, steer, interrupt, completion, and token-usage shapes are covered by generated schema, protocol tests, and one private-alpha full turn. — **supported standalone CLI fixture still open.**
+- [~] App-server child exits cleanly on success, refusal, timeout, crash, interrupt, and app shutdown. — intentional close vs unexpected exit is unit-pinned; live success is proven, remaining live lifecycle arms are U11.
 
 ### Security and MCP
 
-- [ ] Hostile ambient config cannot widen Dopl's sandbox, approvals, MCP servers, hooks, network, or chaining policy. — **U4, untouched.**
+- [~] Hostile ambient config cannot widen Dopl's sandbox, approvals, MCP servers, hooks, network, or chaining policy. — isolated-home unit proof passes; hostile live/packaged proof remains.
 - [ ] A real Codex Dopl-MCP read/post call is captured, classified, approved/denied, and audited through Dopl. — **U4.**
-- [ ] Dopl universal hard denies, tool-profile deny lists, outbound messaging gate, and launch-depth bound pass on Codex. — **U4** (the gate decision is pinned in Codex's vocabulary by `codex-gate.test.mjs`, but never against a live turn).
+- [~] Dopl universal hard denies, tool-profile deny lists, outbound messaging gate, and launch-depth bound pass on Codex. — unit gates pass in Codex vocabulary; live Dopl-MCP proof remains.
 - [x] Explicit `runtime: codex` never silently falls back to Claude. — U9; `{refused:'no-sdk'}`, with a test pinning that the `ids()` membership check stays AHEAD of `acquire()`, because `resolve()` fails open.
 
 ### Models
 
-- [~] Codex picker uses live `model/list` IDs/display names and respects `isDefault`. — U6 built to the measured response shape; ⚠ **no real `model/list` has answered** (the dead flag blocks it).
+- [~] Codex picker uses live `model/list` IDs/display names and respects `isDefault`. — private alpha answered successfully; supported CLI, pagination, and recovery-refresh proof remain.
 - [x] Hidden models are not ordinarily offered. — U6 (`hidden` honoured; semantics unverified against a real roster).
 - [x] Reasoning efforts come from the selected model's supported/default values. — U6 + U8; normalized when the model moves.
 - [x] Claude and Codex model choices are stored separately and restored on runtime switch. — U5 `byRuntime`; round-trip test.
@@ -751,7 +754,7 @@ The shared selection contains runtime, Dopl messaging policy, and runtime-keyed 
 - [x] Primary UI uses stable Dopl category labels and never presents Claude-native choices as Codex choices. — U7/U8.
 - [x] Claude and Codex options come from their respective adapter descriptors and are tested narrowest-to-widest. — U5 `selection-vocabulary.js`.
 - [x] Effective native approval/sandbox summary is visible where multiple controls compose the result. — U7 (a REPORT, not a control — a launch carries no per-spawn native override).
-- [~] Codex sandbox/granular/category controls persist and affect launch, or remain absent; none are display-only. — **sandbox and effort now WRITE and reach the launch; the granular CATEGORIES remain a value list** because the write shape is unmeasured, and a contract test forbids any adapter claiming otherwise. **Closes when U4 measures it.**
+- [x] Codex sandbox/granular/category behavior affects launch or remains absent; none masquerades as a writable control. — sandbox/effort write; measured `granular` sends all five categories as `true`; per-category rows remain an explicit report until a persistence contract is added.
 - [x] Structured granular/native combinations reload without translation or data loss. — U5; ⚠ and F-754 fixed the preload that was erasing them.
 - [x] Unrestricted choices retain warnings and never become a migration fallback. — U5 fail-closed table; reads floor, writes reject.
 
@@ -775,10 +778,10 @@ The shared selection contains runtime, Dopl messaging policy, and runtime-keyed 
 
 ### Regression and operations
 
-- [x] Existing Claude unit/integration/end-to-end tests pass. — desktop **3526, 0 fail**; root green but for one failure owned by another session's uncommitted composer work.
+- [x] Existing Claude unit/integration/end-to-end tests pass. — desktop **3540 pass, 0 fail, 6 skip**. Root web suite has one unrelated marketing banner-demo failure; **8458 pass, 42 skip**.
 - [ ] Mixed Claude + Codex agents run in one channel without crossing handles, approvals, model state, or authorship. — the storage makes it possible; **unproven without a live Codex session.**
 - [ ] Release compatibility command passes against the supported CLI and fails clearly against an unsupported one. — command exists (`npm run test:codex-compat`); **never run against a supported CLI.**
-- [~] `docs/INVARIANTS.md`, engineering docs, F-390, and Codex protocol notes match shipped behavior. — **F-390 rewritten and F-752/F-753/F-754 filed; ⚠ INVARIANTS still carries stale claims — see Handoff item 5.**
+- [~] This master sheet and changed-code comments match the new protocol/isolation behavior. — broader `docs/INVARIANTS.md`, engineering docs, F-390, and support runbook still need the U11 documentation pass.
 - [ ] Support runbook documents installation/discovery, sign-in, supported versions, diagnostics, and compatibility updates. — **drafted, paste-ready, in Log entry D; not yet in `docs/ENGINEERING.md`.**
 
 ---
@@ -788,11 +791,11 @@ The shared selection contains runtime, Dopl messaging policy, and runtime-keyed 
 ### 1. Verify what landed, in five commands
 
 ```
-git log --oneline 450fafcd~1..HEAD          # the wave
-cd dopl-desktop-app && npm test             # expect 3526, 0 fail
-node --test test/codex-app-server-contract.test.mjs   # 24 pass / 5 LOUD skips, no CLI
-cd .. && npx vitest run src/features/channels         # the UI half
-node scripts/check-doc-refs.mjs
+cd dopl-desktop-app && npm test             # expect 3540 pass, 0 fail, 6 skip
+node --test test/codex-{gate,launch-protocol,server-requests,config-home}.test.mjs
+cd .. && npx vitest run src/features/channels/components/{launch-agent-runtime-model,settings-agent-runtime,settings-agent-posture}.test.tsx
+npx tsc --noEmit --incremental false
+git diff --check
 ```
 
 ⚠ **Do not read the desktop suite's TOTAL as a verdict on any single unit** — several sessions were
@@ -810,13 +813,17 @@ Per the repo's standing rules: match migrations by NAME, apply byte-exact, never
 production. **Until it is applied, U9's columns do not exist in the database and the MCP result will
 report `not reported` for every applied runtime.**
 
-### 3. Open questions Samuel still owes an answer on
+### 3. Product/release decisions still needed
 
 1. **Codex distribution** — bundle and sign a binary, or keep `delivery: 'path'`? U2 cannot close
    without it. The resolver is built either way and a bundled binary simply becomes the first thing
    it finds.
-2. **The `--strict-config` design** — U4's isolation replacement. Evidence is in Log entry D; the
-   security property is fixed, the mechanism is not.
+2. **Per-category granular toggles** — the recommendation implemented here is: stable Dopl row
+   labels, runtime-native option words, and one Codex `granular` choice that makes all five measured
+   native categories ask. Add five switches only if individual category control is a real product
+   requirement; doing so requires a runtime-keyed persisted category bag, validation, migration,
+   both settings scopes, and launch mapping. Do not turn the current report rows into controls by
+   themselves.
 3. ⚠ **Agent-created channels do not inherit profile defaults** — and this is a RULING, not a bug.
    The seed is written by a renderer executing a creation a human just performed
    (`main/agent-defaults.js`'s header forbids a spawn-time read). A channel created over MCP by an
@@ -862,6 +869,118 @@ before rewriting — do not copy this list:
 - The latent Claude coercion in `session-reopen.js › setModelByTask` for a runtime that DOES declare a
   live switch (F-753's tail).
 
+### 7. Remaining ticket list — assign these without redoing completed work
+
+#### CXP-1 — Choose and support one Codex distribution path (release blocker)
+
+**Objective:** make “Codex connected” mean Dopl can safely execute a supported binary from a
+Finder-launched packaged app.
+
+**Current evidence:** this Mac only exposes
+`/Applications/ChatGPT.app/Contents/Resources/codex` (`0.155.0-alpha.9.2`). The resolver correctly
+rejects that private app-bundle executable under its current ancestor-trust policy, and the schema
+generator additionally refuses `.app` sources. Common Homebrew prefixes may also be group-writable,
+so test the resolver against the actual chosen installer rather than assuming the fake-tree unit is
+representative.
+
+**Work:** decide bundle/sign vs supported external CLI; update `runtime/codex/packaging.js` and
+`resolve-bin.js`; preserve canonical-path validation or replace it with an explicit signature/team-ID
+verification; add distinct missing/refused/incompatible/signed-out/ready diagnostics; run a signed
+DMG from Finder with a minimal GUI `PATH`.
+
+**Accept when:** packaged Dopl finds the chosen install, refuses a tampered equivalent, reports the
+five states distinctly, and launches without a shell-derived environment.
+
+#### CXP-2 — Freeze the supported public CLI contract (release blocker)
+
+**Objective:** turn the private-alpha implementation proof into an intentional supported-version
+contract.
+
+**Work:** install the chosen standalone CLI; run `npm run codex:schema`; review the generated
+method/model shapes; commit the measured fixture; pin `SUPPORTED_CLI`; run
+`npm run test:codex-compat`; verify too-old/too-new failures and that no app-server process leaks.
+Do not copy the ChatGPT-bundled binary to another path to bypass the generator's provenance fence.
+
+**Accept when:** the release command passes on the supported CLI, fails on a deliberately unsupported
+version, fixture and live `--version` match, and the fixture names a non-`.app` source.
+
+#### CXP-3 — Prove live Dopl MCP approvals and security (release blocker)
+
+**Objective:** prove the real Codex child reaches Dopl's held gate for channel reads/posts and cannot
+inherit ambient authority.
+
+**Work:** run packaged/dev Electron so the session has its real bearer and safeStorage context;
+launch Codex with a hostile user `config.toml` containing extra MCP/hooks/wide policy; request one
+safe read, one post, one denied work action, and one universal hard-deny action; exercise allow and
+deny; verify audit rows/cards and the forced thread tag; inspect the app-server config/trace without
+logging tokens or prompt contents.
+
+**Accept when:** only the Dopl MCP server is visible, sandbox/policy equal the selected settings,
+every outbound post reaches the Dopl gate, deny prevents execution, allow executes once, and the
+audit record identifies runtime/thread/turn without secrets.
+
+#### CXP-4 — Measure and enable resume safely
+
+**Objective:** remove the intentional Codex resume refusal without breaking token/cost deltas.
+
+**Work:** complete a turn, persist its thread id, restart/repark, call `thread/resume`, complete a
+second turn, and capture `thread/tokenUsage/updated.last` vs `.total`; determine whether totals reset
+or continue; update `usageResetsOnResume`, session baselines, and live tests accordingly; also prove
+model, effort, sandbox, and approval policy after resume.
+
+**Accept when:** restart resumes the same thread exactly once, usage deltas are non-negative and
+accurate, no cap can be bypassed by baseline reset, and the current refusal test is replaced by a
+passing live-resume contract.
+
+#### CXP-5 — Finish model-catalog recovery and pagination
+
+**Objective:** let an operator repair/install/sign in to Codex without restarting Dopl and prove a
+multi-page roster.
+
+**Work:** confirm the `model/list` continuation request key from the supported schema/live server;
+add a forced refresh/invalidation path after connectivity or credential changes; make the renderer
+re-read after a settled `unavailable` catalog rather than only during initial `loading`; retain the
+rule that no failure borrows another runtime's catalog.
+
+**Accept when:** a failed roster becomes ready in the same app process after repair, pagination
+returns every unique model without loops, and Codex never renders/submits a Claude-owned id during
+loading, failure, or refresh.
+
+#### CXP-6 — Apply and verify the MCP runtime migration (requires Samuel's deployment authority)
+
+**Objective:** make the already-implemented `runtime`, `applied_runtime`, and `applied_model` fields
+exist in the deployed database.
+
+**Work:** apply `20261017120000_channel_launch_directives_runtime.sql` byte-exact in the approved
+environment; regenerate deployed DB types by the repository's normal process; run old-client
+compatibility and idempotent-retry checks; repeat the original `runtime: codex` launch experiment.
+
+**Accept when:** a live directive reports requested/applied runtime and model, creates a Codex
+process/session, and a retry cannot silently change runtime.
+
+#### CXP-7 — Run the packaged mixed-runtime release matrix
+
+**Objective:** prove Claude and Codex coexist in one channel without crossing state or authority.
+
+**Work:** launch one Claude and one Codex agent; verify distinct process handles, model rosters,
+credentials, approvals, authorship, messages, stop behavior, restart/repark, and cleanup; run missing,
+signed-out, incompatible, timeout, crash, and app-quit arms; resolve or formally baseline the
+unrelated marketing-demo test before claiming the root suite is fully green.
+
+**Accept when:** the complete automated/live/packaged matrix passes on a clean machine and no child,
+approval, model, message, or attribution crosses runtime boundaries.
+
+#### CXP-8 — Finish operator/support documentation
+
+**Objective:** make installation and failures supportable without reading source.
+
+**Work:** update `docs/ENGINEERING.md`, `docs/INVARIANTS.md`, protocol notes, and F-390 references;
+document install path, sign-in, `DOPL_CODEX_BIN`, trust refusals, isolated `CODEX_HOME`, supported
+versions, schema regeneration, diagnostics, migration ordering, and release smoke commands.
+
+**Accept when:** a fresh operator can install/sign in/connect/launch, and support can distinguish
+missing vs refused vs signed-out vs incompatible vs MCP-gated failures from documented diagnostics.
+
 ## Documentation / Operational Notes
 
 - Update `docs/INVARIANTS.md` only after behavior/tests land; specifically remove the obsolete isolation-flag claim and document runtime-scoped model/policy state.
@@ -877,6 +996,30 @@ before rewriting — do not copy this list:
 > ⚠ **THIS SECTION IS WRITTEN BY IMPLEMENTERS, NOT BY THE PLANNER.** Each entry names who did the
 > work, what landed, the commit, and what a reviewer should re-check. An entry is a claim about the
 > tree at its date — verify it against the code rather than inheriting it.
+
+### 2026-09-22 — Codex continuation pass
+
+- Modernized the app-server state machine to the generated v2 schema: nested thread/turn ids,
+  typed text inputs, expected turn id on steer, turn id on interrupt, separate token-usage
+  notification capture, and explicit unexpected-child-exit failure.
+- Replaced the nonexistent `--ignore-user-config` flag with an app-owned isolated `CODEX_HOME` and
+  auth-only link. Policy/sandbox/model/MCP config now use `thread/start`; effort uses `turn/start`.
+- Added method-valid server-request responses for command, file, permissions, MCP elicitation, and
+  request-user-input; unknown methods receive JSON-RPC `-32601`; one-shot approval never expands to
+  `acceptForSession`.
+- Made credential preflight runtime-owned, restored parked models through the stored runtime's
+  vocabulary, hardened canonical symlink resolution, and kept legacy runtime/posture downgrade
+  mirrors synchronized.
+- Closed the immediate runtime-switch race that could display/submit a Claude-owned model while a
+  Codex catalog was loading or unavailable.
+- Hardened the fixture workflow: private `.app` binaries cannot generate the supported contract,
+  and an armed live release test requires the fixture's CLI version to equal the executing CLI.
+- Measured one full live turn using the ChatGPT-bundled `0.155.0-alpha.9.2` binary copied only for
+  the smoke, then removed. This is implementation evidence and intentionally did not replace the
+  placeholder supported-CLI fixture.
+- Verification: desktop 3540/0/6; focused settings/runtime UI 73/73; Codex/runtime unit set green;
+  TypeScript and changed-file lint green. Root Vitest has one unrelated marketing banner-demo
+  failure (`Recipients` absent), with 8458 passing tests.
 
 ### 2026-09-21 — Claude (Opus 5), session working ahead of the plan's completion
 

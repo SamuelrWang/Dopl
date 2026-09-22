@@ -39,7 +39,7 @@ import {
   type ModelCatalogs,
 } from "../lib/model-catalog";
 import {
-  modelSubmittableOn,
+  modelSubmittableForRuntime,
   templateModelMismatch,
   type ModelMismatch,
 } from "../lib/model-affinity";
@@ -85,11 +85,11 @@ export interface ModelRow {
  * belongs to another runtime is DROPPED FROM THE CHAIN and explained, rather than shown as this
  * launch's model and then silently coerced by main.
  *
- * ⚠ **THE OPERATOR'S OWN PICK IS GATED TOO, AND IT IS A DIFFERENT GATE.** `modelSubmittableOn`
- * answers `false` only where this build can SEE the id is another runtime's; an id it cannot
- * vouch for still travels, because the tree's standing rule is *"unknown model falls back, never
- * refuses"* (`main/session-launch-op.js`, F-5) and a desktop that cannot read a roster must
- * still be launchable.
+ * ⚠ **THE OPERATOR'S OWN PICK IS GATED TOO, AND IT IS A DIFFERENT GATE.**
+ * `modelSubmittableForRuntime` consults the selected catalog first, then positive ownership facts
+ * from the other ready catalogs. Thus a Claude pick cannot cross into Codex merely because the
+ * Codex catalog is loading/unavailable, while a genuinely unknown id still travels under the
+ * tree's standing *"unknown model falls back, never refuses"* rule (`session-launch-op.js`, F-5).
  */
 export function modelRowFor(input: ModelRowInput): ModelRow {
   const { catalog, selected, runtimes, catalogs } = input;
@@ -100,7 +100,16 @@ export function modelRowFor(input: ModelRowInput): ModelRow {
     input.fromTemplate
   );
   const usableTemplateModel = mismatch ? "" : input.fromTemplate;
-  const resolved = input.own || usableTemplateModel || input.remembered;
+  const usableOwn = modelSubmittableForRuntime(
+    runtimes,
+    catalogs,
+    selected,
+    catalog,
+    input.own
+  )
+    ? input.own
+    : "";
+  const resolved = usableOwn || usableTemplateModel || input.remembered;
   const shown = catalogSelection(catalog, resolved);
   return {
     shown,
@@ -109,7 +118,7 @@ export function modelRowFor(input: ModelRowInput): ModelRow {
     // option renders BLANK — the surface saying nothing where it has an answer (INVARIANTS §11).
     options: modelOptionsFor(catalog, shown).map((o) => ({ key: o.value, label: o.label })),
     selectable: catalogReady(catalog),
-    submit: input.own && modelSubmittableOn(catalog, input.own) ? input.own : "",
+    submit: usableOwn,
     mismatch,
     reason: catalogReason(catalog),
   };
@@ -123,12 +132,18 @@ export function modelRowFor(input: ModelRowInput): ModelRow {
  * operator made while Claude was selected is not a pick they made for Codex, and carrying it
  * across would put a Claude id in front of them under a Codex heading — the exact substitution
  * the whole unit exists to remove.
- * ⚠ **IT ONLY CLEARS WHAT IT CAN SEE IS FOREIGN.** A roster this build has not read answers
- * `true` and the pick survives, for `modelSubmittableOn`'s reason.
+ * ⚠ **IT ONLY CLEARS WHAT IT CAN SEE IS FOREIGN.** A selected roster this build has not read
+ * can still reject a pick when another READY roster positively owns it. With no positive owner,
+ * the pick survives: unknown remains distinct from empty.
  */
 export function ownPickSurvives(
+  runtimes: ReadonlyArray<RuntimeDescriptor>,
+  catalogs: ModelCatalogs | null | undefined,
+  selected: RuntimeDescriptor | null,
   catalog: ModelCatalog | null,
   own: string
 ): boolean {
-  return !own || modelSubmittableOn(catalog, own);
+  return (
+    !own || modelSubmittableForRuntime(runtimes, catalogs, selected, catalog, own)
+  );
 }

@@ -180,13 +180,29 @@ function dispatchHold(s) {
 // launch was HELD, in which case the caller returns the session as-is: the window is open, the
 // request is painted, and the operator has one button. Returns false on every machine with a
 // usable credential, where the launch continues untouched.
-function holdIfNoCredential(s) {
-  if (!deps || !s || credentialState().usable) return false;
+function holdMissingCredential(s, state) {
+  if (!deps || !s || !state || state.usable !== false) return false;
   diag('session-auth: preflight HOLD — no credential on this machine for', runtimeCopy.runtimeLabel(copyFor(s)));
   s.authHold = { kind: 'preflight' };
   dispatchHold(s);
   deps.emit(s, { type: 'status', phase: 'parked' });
   return true;
+}
+
+function holdIfNoCredential(s) {
+  return holdMissingCredential(s, credentialState());
+}
+
+// The spawn path already owns the selected runtime. Ask that adapter its own credential question
+// instead of applying Claude's file markers to every session. Probe failures remain fail-open;
+// the child will still fail loudly and the stream auth sentinel can park it recoverably.
+async function holdIfNoRuntimeCredential(s, runtime) {
+  if (!runtime || typeof runtime.credentialState !== 'function') return holdIfNoCredential(s);
+  try {
+    return holdMissingCredential(s, await runtime.credentialState());
+  } catch (_) {
+    return false;
+  }
 }
 
 // MID-SESSION (Q6.2). The query threw, or the SDK relayed the CLI's own login sentinel. Park
@@ -347,6 +363,7 @@ module.exports = {
   forget,
   withStoredCredential,
   holdIfNoCredential,
+  holdIfNoRuntimeCredential,
   holdIfAuthFailure,
   holdIfAuthMessage,
   resumeAfterSignIn, // H1: exported for the idempotency test

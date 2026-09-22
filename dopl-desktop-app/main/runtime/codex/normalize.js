@@ -110,6 +110,12 @@ function usageOf(params) {
   return null;
 }
 
+function promptUsageOf(params) {
+  const p = params && typeof params === 'object' ? params : {};
+  if (p.promptUsage && typeof p.promptUsage === 'object') return p.promptUsage;
+  return usageOf(p);
+}
+
 function pick(usage, keys) {
   for (const k of keys) {
     const v = usage[k];
@@ -229,12 +235,13 @@ function normalize(msg, ctx) {
   if (method === 'turn/completed') {
     const usage = usageOf(params);
     const t = tokensFrom(usage);
+    const prompt = tokensFrom(promptUsageOf(params));
     const model = (params.model || (params.turn && params.turn.model)) || null;
     const out = [];
     // ⚠ PER-TURN, NOT PER-MESSAGE, AND THAT IS `descriptor.meter.mode`. This runtime reports usage
     // once a turn ends (`codex-research.md` §3: "not a live running meter"), so the context event
     // rides the same frame as the result instead of the last assistant message's own usage.
-    if (t.prompt > 0 || model) out.push(events.context(t.prompt, model));
+    if (prompt.prompt > 0 || model) out.push(events.context(prompt.prompt, model));
     // ⚠ CUMULATIVE BY CONTRACT, DELTA'D IN CORE — and the cost is an explicit `null`, not a 0.
     // ⚠ THE TOTAL MAY NOT BE CUMULATIVE ON THIS RUNTIME AT ALL (§5 item C12/C8): if `usage` is
     // PER-TURN rather than running, core's `Math.max(0, total - last)` under-counts. That is the
@@ -251,6 +258,6 @@ function normalize(msg, ctx) {
 
 module.exports = {
   normalize,
-  startedEvents, completedEvents, tokensFrom, usageOf, isAuthShaped,
+  startedEvents, completedEvents, tokensFrom, usageOf, promptUsageOf, isAuthShaped,
   THREAD_STARTED, ERROR_MESSAGE_TYPE,
 };

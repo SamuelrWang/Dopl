@@ -181,6 +181,8 @@ test("a failed WRITE answers the value the store actually holds", () => {
   // only works if the answer is a re-read rather than an echo of the ask.
   const m = load({ disk: { channelRuntime: { [CH_A]: "codex" } }, writeThrows: true });
   assert.equal(m.setChannelRuntime(CH_A, "cursor"), "codex", "the ask is not echoed back");
+  assert.deepEqual(m.disk.channelRuntime, { [CH_A]: "codex" },
+    "a failed selection write leaves the downgrade mirror untouched");
   assert.ok(m.logged.some((l) => l.includes("could not persist")), "and the failure is said once");
 });
 
@@ -278,9 +280,16 @@ test("a pre-U5 record migrates into the DEFAULT runtime's half, untranslated, on
   assert.deepEqual(m.disk.channelRuntime, { [CH_A]: "codex" });
 });
 
-test("a WRITE re-stamps the legacy mirror, so a downgraded build reads what is in force", () => {
-  const m = load();
-  m.setChannelRuntime(CH_A, "codex");
-  m.prefs.setLaunchSelection(CH_A, { tools: "never", messages: "auto_both" });
+test("a WRITE re-stamps both legacy mirrors, so a downgraded build reads what is in force", () => {
+  const m = load({ disk: { channelRuntime: { [CH_A]: "claude", [CH_B]: "cursor" } } });
+  m.prefs.setLaunchSelection(CH_A, {
+    runtime: "codex", tools: "never", messages: "auto_both",
+  });
   assert.deepEqual(m.disk.channelLaunchPosture[CH_A], { tools: "never", messages: "auto_both" });
+  assert.deepEqual(m.disk.channelRuntime, { [CH_A]: "codex", [CH_B]: "cursor" },
+    "the normalized runtime replaces this channel and preserves its neighbour");
+
+  m.prefs.setLaunchSelection(CH_A, { runtime: "" });
+  assert.deepEqual(m.disk.channelRuntime, { [CH_B]: "cursor" },
+    "the default runtime deletes the legacy member instead of storing a second spelling");
 });

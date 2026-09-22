@@ -25,11 +25,10 @@
  *   · **THE CONTAINMENT AXIS WRITES.** It is a declared native dimension
  *     (`runtime/selection-vocabulary.js › nativeDimensions`), stored per runtime, validated
  *     against that runtime's own options, and stamped at spawn by `session-engine.js`.
- *   · **THE APPROVAL CATEGORIES STILL DO NOT, AND THEY ARE STILL NOT CONTROLS.** U5 is explicit
- *     that no adapter declares them as configurable because the structured
- *     `approval_policy = { granular = { … } }` write shape is UNMEASURED. They remain a REPORT of
- *     the platform's own words. ⚠ **Do not build a control for them until U4 captures the
- *     shape** — a control over an unmeasured wire is F-390 in a new costume.
+ *   · **THE APPROVAL CATEGORIES STILL DO NOT, AND THEY ARE STILL NOT CONTROLS.** The structured
+ *     app-server shape is measured now; `granular` safely maps to all five categories asking.
+ *     What does not exist yet is a persisted per-category bag. They remain a REPORT of the
+ *     platform's own words until that product surface is deliberately added end to end.
  *
  * ⚠ **NOTHING HERE INTERPRETS A `null`.** Every question is asked of `lib/runtime-capability.ts`
  * and `lib/runtime-native.ts`, because ABSENT hides a control almost everywhere and REFUSES in
@@ -178,10 +177,9 @@ export function AgentToolModeRows({
           `request_permissions` / `skill_approval` are Codex's, off the descriptor, rendered
           verbatim. The design's first revision declared four words of its own that appear
           nowhere in the platform's docs; the descriptor exists to stop exactly that.
-          ⚠ **STILL DATA, DELIBERATELY, AND THE REASON IS NOW MEASURED RATHER THAN ASSUMED.** U5
-          asserts that no adapter declares these as configurable because the structured write
-          shape is UNMEASURED (the plan's own "deferred to implementation"). A control here would
-          persist a value the adapter cannot spend. */}
+          ⚠ **STILL DATA, DELIBERATELY.** The structured launch shape is measured, and selecting
+          `granular` sends all five as `true`. A per-category persistence contract is not present,
+          so a toggle here would still write nowhere. */}
       {categoryMode !== null && value === categoryMode && (
         <ul className="flex flex-col gap-0.5 pt-0.5" aria-label="Approval categories">
           {categories.map((c) => (

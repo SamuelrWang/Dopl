@@ -6,14 +6,9 @@
 // what changes is the vocabulary.
 //
 // ⚠ THE THREE PINS THAT ARE NOT PREFERENCES ON THIS RUNTIME:
-//   `--ignore-user-config`   the operator's `~/.codex/config.toml` can never widen a session Dopl
-//                            launched. `codex-research.md` §3 documents the precedence chain (CLI
-//                            flags -> inline `-c` -> profile config -> base config) and this flag
-//                            as the thing that skips the user's file entirely. ⚠ It is documented
-//                            under CLI CONFIG LAYERING, not on the `app-server` subcommand — §5
-//                            item C9 — and if that subcommand rejects it the spawn fails LOUDLY on
-//                            an unknown flag, which is the safe failure. It is passed rather than
-//                            assumed for exactly that reason.
+//   isolated CODEX_HOME      `config-home.js` gives app-server an app-owned root with auth but no
+//                            user config. The previously assumed `--ignore-user-config` flag does
+//                            not exist on app-server and made every real launch fail at clap.
 //   `tools.dopl_channel.approval_mode`  AXIS B'S PIN, set in `mcp.js` and independent of Axis A.
 //                            The operator's tool posture may be as wide as `never`; the channel
 //                            tool must still reach the gate, because no tool posture can send a
@@ -34,7 +29,8 @@
 const client = require('./client');
 const tools = require('./tools');
 const axisB = require('./axis-b');
-const approval = require('./approval');
+const serverRequests = require('./server-requests');
+const configHome = require('./config-home');
 const mcp = require('./mcp');
 const normalizer = require('./normalize');
 const channelDirs = require('../../channel-dirs');
@@ -44,47 +40,13 @@ const sessionCredential = require('../../session-credential');
 const capability = require('../capability');
 const { diag } = require('../../diag');
 
-// ── CONFIG OVERRIDES ─────────────────────────────────────────────────────────────────────────
-//
-// ⚠ FLATTENED TO LEAF SCALARS ON PURPOSE. `-c key=value` is the documented inline override and it
-// takes a dotted path; what it accepts as a TABLE value is not documented, so every nested map
-// below is emitted as one override per leaf rather than as one JSON blob. A path segment that is
-// not a bare word is quoted, because header names carry `-`. §5 item C28 confirms the syntax; a
-// rejection is a clap error on stdout that `client.js` surfaces verbatim.
-const BARE_SEGMENT = /^[A-Za-z0-9_]+$/;
-
-function segment(key) {
-  return BARE_SEGMENT.test(key) ? key : JSON.stringify(key);
-}
-
-function flattenConfig(value, prefix, out) {
-  const acc = out || [];
-  if (value === null || value === undefined) return acc;
-  if (Array.isArray(value) || typeof value !== 'object') {
-    acc.push(`${prefix}=${JSON.stringify(value)}`);
-    return acc;
-  }
-  for (const key of Object.keys(value)) {
-    flattenConfig(value[key], `${prefix}.${segment(key)}`, acc);
-  }
-  return acc;
-}
-
-function overrideArgs(config) {
-  const args = [];
-  for (const pair of flattenConfig(config, '', []).map((p) => p.replace(/^\./, ''))) {
-    args.push('-c', pair);
-  }
-  return args;
-}
-
 // ── THE ENVIRONMENT ──────────────────────────────────────────────────────────────────────────
 //
 // ⚠ A CONSERVATIVE SCRUB OVER THIS VENDOR'S OWN PREFIXES, DECLARED AS UNPROVEN. The Claude lane
 // drops permission-affecting env knobs because it MEASURED which ones exist; `codex-research.md`
 // documents no environment knob for this runtime at all — its escape hatches are CLI FLAGS
 // (`--yolo`, `--dangerously-bypass-approvals-and-sandbox`, `--dangerously-bypass-hook-trust`) and
-// CONFIG, both of which `--ignore-user-config` and the explicit overrides above already fence.
+// CONFIG, both of which the isolated CODEX_HOME and explicit thread fields above fence.
 // So this is belt with no documented braces: a pattern that can only REMOVE, shaped like the one
 // that was measured on the other runtime, over `CODEX_` / `OPENAI_` keys. §5 item C21 asks whether
 // this runtime reads any permission-affecting env var; a positive answer adds names here, and a
@@ -114,6 +76,23 @@ function buildScrubbedEnv(extra) {
 const DEFAULT_SANDBOX = 'workspace-write';
 const SANDBOX_MODES = ['read-only', 'workspace-write', 'danger-full-access'];
 
+function approvalPolicy(mode) {
+  const normalized = tools.normalizeToolMode(mode);
+  if (normalized !== 'granular') return normalized;
+  // The current app-server schema requires the granular mode to be an object, not the literal
+  // string "granular". Until category toggles gain a persisted UI path, every declared category
+  // asks; this is the narrow, operator-visible meaning of selecting granular.
+  return {
+    granular: {
+      mcp_elicitations: true,
+      rules: true,
+      sandbox_approval: true,
+      request_permissions: true,
+      skill_approval: true,
+    },
+  };
+}
+
 function nativePair(s, cfg) {
   // A restricted profile PINS both values — containment is not the operator's to widen from the
   // mode picker, on any runtime.
@@ -131,7 +110,7 @@ function nativePair(s, cfg) {
   const native = (st.native && typeof st.native === 'object') ? st.native : {};
   const asked = native.sandbox_mode;
   const sandbox = SANDBOX_MODES.indexOf(asked) === -1 ? DEFAULT_SANDBOX : asked;
-  return { approval_policy: tools.normalizeToolMode(st.toolMode), sandbox_mode: sandbox };
+  return { approval_policy: approvalPolicy(st.toolMode), sandbox_mode: sandbox };
 }
 
 // ── THE SPEC ─────────────────────────────────────────────────────────────────────────────────
@@ -153,29 +132,35 @@ function buildLaunchSpec(request) {
   const server = mcp.buildDoplServerEntry(cfg.doplToolsPolicy);
   const wired = mcp.buildMcpEnv(s.workspaceId, sessionCredential.sessionBearer(s), store.slotKey(s));
 
-  const config = Object.assign({}, pair);
   // ⚠ NO DOPL SERVER WITHOUT A TOKEN, and the session still launches. A half-built entry that 401s
   // on every call would tell the agent it HAS a delivery path and let it watch that path fail.
-  if (wired.usable) config.mcp_servers = { dopl: server };
+  const threadStart = {
+    approvalPolicy: pair.approval_policy,
+    sandbox: pair.sandbox_mode,
+  };
+  if (wired.usable) threadStart.config = { mcp_servers: { dopl: server } };
   const model = typeof s.model === 'string' ? s.model.trim() : '';
   // `''` (or anything the roster does not know) sets no field at all — the platform's own pick,
   // which is `descriptor.models.defaultMeansAbsent`.
-  if (model) config.model = model;
+  if (model) threadStart.model = model;
   // ⚠ SAME STORY AS THE SANDBOX ABOVE: this read was `s.state.reasoningEffort`, which nothing
   // produced. It rides the validated native bag now, checked against the six efforts
   // `models.js › REASONING_EFFORTS` declares. An unrecognised one was DROPPED on the way in
   // (`dimensionOptions.reasoningEffort.fallback: 'absent'`), so no field is set and the platform
   // picks — there is no narrowest member to floor to on a dimension that is not containment.
   const effort = (s.state && s.state.native && s.state.native.reasoningEffort) || '';
-  if (effort) config.model_reasoning_effort = effort;
+  const turnStart = effort ? { effort } : {};
 
   return {
     session: s,
     dispatch: req.dispatch,
     emitQuiet: req.emitQuiet,
     prompt: s.pushIterator,
-    // ⚠ `--ignore-user-config` FIRST, so it is the first thing a reader (and a clap error) sees.
-    args: ['--ignore-user-config'].concat(overrideArgs(config)),
+    // Current app-server rejects approval_policy/sandbox_mode as process config. They are native
+    // thread fields; MCP config rides thread/start's explicit `config` object.
+    args: [],
+    threadStart,
+    turnStart,
     env: buildScrubbedEnv(wired.env),
     // Item 7: the per-channel folder (else ~/Downloads). CONTEXT, not a fence — the sandbox is the
     // fence. Set on the child AND passed to `thread/start`, because `thread/list` filters by `cwd`
@@ -206,7 +191,14 @@ function makeFrameQueue() {
   };
   return {
     push(frame) { if (!closed) { queue.push(frame); settle(); } },
-    fail(err) { failure = err instanceof Error ? err : new Error(String(err)); settle(); },
+    // An intentional `handle.close()` closes the queue before the child exits. Ignore the later
+    // exit callback in that state; otherwise a normal shutdown is reclassified as a crash on the
+    // consumer's next read.
+    fail(err) {
+      if (closed) return;
+      failure = err instanceof Error ? err : new Error(String(err));
+      settle();
+    },
     close() { closed = true; settle(); },
     [Symbol.asyncIterator]() { return this; },
     next() {
@@ -236,17 +228,13 @@ function makeApprovalHandler(s, dispatch, emitQuiet) {
   const gate = sessionOutbound.wrapGate(s, axisB.makeCanUseTool(s, dispatch, diag), emitQuiet);
   return async function onServerRequest(msg) {
     const params = msg && msg.params ? msg.params : {};
-    const name = approval.toolNameFor({ method: msg && msg.method, params: params, toolName: params.toolName });
-    // ⚠ `{}` WHERE THE REQUEST CARRIES NO ARGUMENTS (§5 item C1). The gate reads `input.op` /
-    // `input.channel` to op-scope a channel call; with no arguments every channel call gates,
-    // READS INCLUDED, which is the collapse `descriptor.axisB.opScoped: 'unverified'` declares.
-    const input = (params.arguments && typeof params.arguments === 'object') ? params.arguments
-      : ((params.input && typeof params.input === 'object') ? params.input : {});
-    const verdict = await gate(name, input, { requestId: String(msg.id), toolUseID: params.itemId || params.item_id || null });
-    return approval.answerApproval(
-      { message: verdict && verdict.message },
-      verdict && verdict.behavior === 'allow' ? 'allow' : 'deny'
-    );
+    return serverRequests.answer(msg, async (name, input) => {
+      const verdict = await gate(name, input, {
+        requestId: String(msg.id),
+        toolUseID: params.itemId || params.item_id || null,
+      });
+      return verdict && verdict.behavior === 'allow' ? 'allow' : 'deny';
+    });
   };
 }
 
@@ -264,56 +252,102 @@ function start(spec) {
   const frames = makeFrameQueue();
   let conn = null;
   let threadId = spec.resumeThreadId || null;
-  let started = false;
+  let activeTurnId = null;
+  let selectedModel = null;
+  let latestUsage = null;
+
+  // Token usage is reported on its own notification in the current v2 protocol, while core
+  // expects usage to travel with the terminal turn event. Hold the latest snapshot and attach it
+  // to `turn/completed`; the synthetic fields are namespaced by ownership rather than pretending
+  // the app-server put usage on that frame itself.
+  const onNotification = (msg) => {
+    const method = msg && msg.method;
+    const params = (msg && msg.params && typeof msg.params === 'object') ? msg.params : {};
+    if (method === 'thread/tokenUsage/updated') {
+      latestUsage = (params.tokenUsage && typeof params.tokenUsage === 'object')
+        ? params.tokenUsage : null;
+      return;
+    }
+    if (method === 'turn/completed') {
+      const terminalTurn = params.turn && params.turn.id ? String(params.turn.id) : null;
+      const enriched = Object.assign({}, params, {
+        usage: latestUsage && latestUsage.total ? latestUsage.total : null,
+        promptUsage: latestUsage && latestUsage.last ? latestUsage.last : null,
+        model: selectedModel,
+      });
+      frames.push(Object.assign({}, msg, { params: enriched }));
+      if (!terminalTurn || terminalTurn === activeTurnId) activeTurnId = null;
+      latestUsage = null;
+      return;
+    }
+    frames.push(msg);
+  };
 
   try {
     conn = client.connect({
       args: spec.args,
-      env: spec.env,
+      env: configHome.isolatedEnv(spec.env),
       cwd: spec.cwd,
-      log: diag,
-      onNotification: (msg) => frames.push(msg),
+      log: typeof spec.log === 'function' ? spec.log : diag,
+      onNotification,
       onServerRequest: makeApprovalHandler(s, spec.dispatch, spec.emitQuiet),
-      onExit: () => frames.close(),
+      // An app-server exit is never a successful end-of-stream for a live session. Failing the
+      // queue keeps clap/config/protocol errors visible instead of resolving a waiting consumer
+      // with `done: true` before the rejected initialize request can arrive.
+      onExit: (code, signal) => frames.fail(
+        new Error(`Codex app-server exited (code ${code}, signal ${signal})`)
+      ),
     });
   } catch (err) {
     frames.fail(err);
-    return handleFor(null, frames, () => threadId);
+    return handleFor(null, frames, () => threadId, () => activeTurnId);
   }
 
   (async () => {
     await conn.request('initialize', client.initializeParams(appVersion()));
     const method = spec.resumeThreadId ? 'thread/resume' : 'thread/start';
     const params = spec.resumeThreadId
-      ? { threadId: spec.resumeThreadId, cwd: spec.cwd }
-      : { cwd: spec.cwd };
+      ? Object.assign({ threadId: spec.resumeThreadId, cwd: spec.cwd }, spec.threadStart || {})
+      : Object.assign({ cwd: spec.cwd }, spec.threadStart || {});
     const thread = await conn.request(method, params);
-    threadId = (thread && (thread.threadId || thread.thread_id || thread.id)) || spec.resumeThreadId || null;
+    const threadValue = thread && thread.thread && typeof thread.thread === 'object' ? thread.thread : thread;
+    threadId = (threadValue && (threadValue.threadId || threadValue.thread_id || threadValue.id))
+      || spec.resumeThreadId || null;
+    selectedModel = (thread && thread.model) || (threadValue && threadValue.model) || null;
     // ⚠ SYNTHETIC, AND NAMESPACED `dopl/` SO NOBODY MISTAKES IT FOR PROTOCOL. The app-server
     // documents no `thread/started` notification — the conversation handle arrives as a RESULT —
     // and core's consume loop only ever sees frames. This is where `launched` comes from, and
     // `launched.sessionId` is the whole resume story: `session-store.js` persists nothing else
     // about a running query.
-    frames.push({ method: normalizer.THREAD_STARTED, params: { threadId, model: (thread && thread.model) || null } });
+    frames.push({ method: normalizer.THREAD_STARTED, params: { threadId, model: selectedModel } });
     // The prompt pump. ⚠ THE FIRST PUSH IS A TURN, EVERY LATER ONE IS A STEER — an unconditional
     // `turn/start` would begin a second turn while the first was live, which is the shape
     // `turn/steer` exists to replace.
     for await (const m of spec.prompt) {
       const text = String((m && m.message && m.message.content) || '');
       if (!text) continue;
-      if (!started) {
-        started = true;
-        await conn.request('turn/start', { threadId, input: text });
+      const input = [{ type: 'text', text }];
+      if (!activeTurnId) {
+        const turn = await conn.request('turn/start', Object.assign(
+          { threadId, input }, spec.turnStart || {}
+        ));
+        const turnValue = turn && turn.turn && typeof turn.turn === 'object' ? turn.turn : turn;
+        activeTurnId = turnValue && (turnValue.turnId || turnValue.turn_id || turnValue.id)
+          ? String(turnValue.turnId || turnValue.turn_id || turnValue.id) : null;
+        if (!activeTurnId) throw new Error('Codex turn/start returned no turn id');
       } else {
-        await conn.request('turn/steer', { threadId, input: text });
+        const steered = await conn.request('turn/steer', {
+          threadId, expectedTurnId: activeTurnId, input,
+        });
+        if (steered && steered.turnId) activeTurnId = String(steered.turnId);
       }
     }
   })().catch((err) => frames.fail(err));
 
-  return handleFor(conn, frames, () => threadId);
+  return handleFor(conn, frames, () => threadId, () => activeTurnId);
 }
 
-function handleFor(conn, frames, threadIdOf) {
+function handleFor(conn, frames, threadIdOf, turnIdOf) {
   return {
     [Symbol.asyncIterator]() { return frames[Symbol.asyncIterator](); },
     next() { return frames.next(); },
@@ -324,7 +358,10 @@ function handleFor(conn, frames, threadIdOf) {
      */
     interrupt() {
       if (!conn) return Promise.resolve();
-      return conn.request('turn/interrupt', { threadId: threadIdOf() }).catch(() => {});
+      const threadId = threadIdOf();
+      const turnId = turnIdOf();
+      if (!threadId || !turnId) return Promise.resolve();
+      return conn.request('turn/interrupt', { threadId, turnId }).catch(() => {});
     },
     close() {
       frames.close();
@@ -363,6 +400,6 @@ function appVersion() {
 
 module.exports = {
   buildLaunchSpec, start, resume,
-  flattenConfig, overrideArgs, buildScrubbedEnv, nativePair, makeFrameQueue, makeApprovalHandler,
+  buildScrubbedEnv, nativePair, approvalPolicy, makeFrameQueue, makeApprovalHandler,
   DEFAULT_SANDBOX, SANDBOX_MODES,
 };

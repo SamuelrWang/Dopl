@@ -42,6 +42,7 @@ export const loadCatalog = () =>
 export function loadCodexModels(client) {
   return evalModule(join(MAIN, "runtime", "codex", "models.js"), (id) => {
     if (id === "./client") return client;
+    if (id === "./config-home") return { isolatedEnv: (env) => env };
     throw new Error(`unexpected require: ${id}`);
   });
 }
@@ -125,4 +126,3 @@ export const CODEX_DESCRIPTOR = {
 
 /** Let the background refresh settle. ⚠ `snapshot()` never awaits; the test must. */
 export const settle = () => new Promise((r) => setTimeout(r, 0));
-

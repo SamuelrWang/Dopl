@@ -90,6 +90,35 @@ export function modelSubmittableOn(
   return modelBelongsTo(catalog, modelId) !== false;
 }
 
+/**
+ * IS THIS MODEL SUBMITTABLE ON THIS RUNTIME, INCLUDING WHAT THE OTHER READY CATALOGS KNOW?
+ *
+ * A selected runtime whose catalog is loading/unavailable cannot prove membership either way,
+ * but that does not erase a positive ownership fact from another runtime's ready catalog. This is
+ * the runtime-switch race: an operator picks Opus on Claude, switches to Codex while Codex's
+ * roster is unavailable, and launches before the roster can answer. The id is unknown TO CODEX,
+ * but it is not unknown TO DOPL — Claude's ready catalog already identifies its owner.
+ *
+ * ⚠ GENUINELY UNKNOWN IDS STILL PASS. The only new refusal is a positive cross-runtime match;
+ * absence/loading remains "I cannot tell", preserving the standing unknown-vs-empty contract.
+ * ⚠ THE SELECTED CATALOG WINS A POSITIVE MATCH before registry-order ownership is consulted. The
+ * shipped catalogs do not overlap, but if a future pair legitimately shares an id, a runtime
+ * that explicitly offers it must be allowed to receive it.
+ */
+export function modelSubmittableForRuntime(
+  runtimes: ReadonlyArray<RuntimeDescriptor>,
+  catalogs: ModelCatalogs | null | undefined,
+  selected: RuntimeDescriptor | null | undefined,
+  selectedCatalog: ModelCatalog | null | undefined,
+  modelId: string | null | undefined
+): boolean {
+  const membership = modelBelongsTo(selectedCatalog, modelId);
+  if (membership === true) return true;
+  if (membership === false) return false;
+  const owner = runtimeForModel(runtimes, catalogs, modelId);
+  return !owner || !selected || owner.id === selected.id;
+}
+
 /** What a mismatch is, once one is found. */
 export interface ModelMismatch {
   owner: RuntimeDescriptor;

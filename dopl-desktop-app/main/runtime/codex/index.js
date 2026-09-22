@@ -5,12 +5,13 @@
 // conformance case in `test/runtime-contract.test.mjs` applied to this adapter the moment it
 // registered, without anybody writing a second suite.
 //
-// ⚠ NOTHING HERE WAS TESTED AGAINST A LIVE `codex`. Per the design's locked decision (4) there
-// were no installs; every value below is read off `codex-research.md`, which was itself verified
-// against OpenAI's open source. WHAT COULD NOT BE GROUNDED IS DECLARED UNVERIFIED RATHER THAN
-// ASSUMED, and each one names the §5 smoke item that settles it. Three of those declarations have
+// ⚠ THE CORE START/TURN PATH HAS NOW COMPLETED A LIVE TURN against the ChatGPT-bundled Codex alpha,
+// and the v2 request/notification shapes below are pinned by generated-schema fixtures. That is
+// implementation evidence, not a supported distribution contract: a standalone public CLI,
+// packaged-Dopl smoke, resume-usage behavior, and long-wait wake behavior remain unmeasured.
+// Anything still ungrounded stays DECLARED UNVERIFIED rather than assumed. Two declarations have
 // teeth today: `meter.cost: null` hides the cost cap and `session.usageResetsOnResume:
-// 'unverified'` refuses a resume.
+// 'unverified'` refuses resume.
 //
 // ⚠ ELECTRON-FREE AT LOAD, BY CONTRACT. `main/session-profiles.js` is a PURE module two suites
 // slice and evaluate standalone, and it asks the registry for every gate decision — so requiring
@@ -217,12 +218,10 @@ const descriptor = {
     // config, both fenced by the flag below. Declared so the next reader knows the scrub is belt
     // rather than braces (§5 item C21).
     envDeny: ['^(CODEX_|OPENAI_).*(PERMISSION|BYPASS|APPROVAL|DONT_ASK|SKIP|AUTO_APPROVE|DANGEROUS|YOLO)'],
-    // ⚠ THE ONE THAT ACTUALLY FENCES. It skips the operator's own `~/.codex/config.toml`, so a
-    // policy they set for their own runs cannot silently widen a session Dopl launched. §5 item C9
-    // confirms `app-server` accepts it; C10 asks how far its reach goes (managed `requirements.toml`
-    // SHOULD survive it by design, and if it does the UI must say the operator's org policy still
-    // applies).
-    configFlags: ['--ignore-user-config'],
+    // The app-server has no `--ignore-user-config` flag. Dopl instead supplies an app-owned
+    // CODEX_HOME containing no config/profile files and a deliberately scoped auth link.
+    configFlags: [],
+    configRoot: 'isolated-CODEX_HOME',
   },
 
   prose: {

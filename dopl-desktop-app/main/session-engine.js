@@ -408,11 +408,12 @@ async function startSession(spec, rt) {
   // RETURN BELOW, AND THAT ORDER IS THE FIX (2026-08-22): the `parkedShell` branch returned FIRST,
   // so New Agent on a signed-out machine answered a SUCCESS and `{skipped:'auth-hold'}` was
   // unreachable on the one lane an operator reaches by clicking.
-  if (spec.windowless && sessionAuth.holdIfNoCredential(s)) { sessions.delete(s.key); sessionSummary.touch(); return { authHold: true }; }
-  // Q6 PREFLIGHT: a machine with no Claude Code sign-in can only produce a dead session, so HOLD the
-  // launch on the sign-in action instead. Nothing is settled, echoed, or thrown away; the request runs
-  // the moment sign-in succeeds.
-  if (sessionAuth.holdIfNoCredential(s)) return s;
+  const credentialHeld = await sessionAuth.holdIfNoRuntimeCredential(s, rt);
+  if (spec.windowless && credentialHeld) { sessions.delete(s.key); sessionSummary.touch(); return { authHold: true }; }
+  // Q6 PREFLIGHT: a machine with no credential for the SELECTED runtime can only produce a dead
+  // session, so HOLD the launch on that runtime's recovery action. Nothing is settled, echoed, or
+  // thrown away; the request runs the moment sign-in succeeds.
+  if (credentialHeld) return s;
   // SPAWN IDLE — THE ONE SHAPE THAT REGISTERS AND STARTS NOTHING (2026-08-21, ruling 3). Not
   // "build the query and hold the prompt": a held query is a live `claude` child holding this
   // session's pre-approved `dopl_channel` access with nobody watching it, the orphan shape C3/C-8

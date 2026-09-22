@@ -19,14 +19,10 @@
 // roster into `status: 'unavailable'` — a different sentence and a different operator action from
 // `loading`. **Empty is never "this runtime has no models".**
 //
-// 🔒 ⚠ **AND THE ROSTER READ IS BROKEN INDEPENDENTLY OF LAUNCH, ON THIS TREE, RIGHT NOW.** The
-// plan's Implementation Log entry D measured `codex app-server --help` and it shows NO
-// `--ignore-user-config` flag (it shows `--strict-config`). Both this file and `launch-spec.js`
-// pass the dead flag, so the app-server exits before `initialize` and `model/list` never answers.
-// **The flag is deliberately NOT changed here — the replacement isolation mechanism is U4's
-// decision, and changing it in a picker would be shipping a security posture nobody ruled.** What
-// U6 owes is that the failure READS as a failure: `unavailable`, with the reason the binary gave,
-// never an empty list that reads as "no models".
+// 🔒 The app-server has no `--ignore-user-config` flag. The roster uses the same app-owned
+// CODEX_HOME as a full launch, so model discovery cannot import user MCP servers, profiles or
+// permission defaults merely by opening a picker. A failure still reads as `unavailable`, with
+// the binary's reason, never an empty list that looks like "no models".
 //
 // ⚠ AND IT IS A SECOND CHILD PROCESS, WHICH IS THE COST OF `live`. Cached by RESOLVED BINARY AND
 // VERSION (`resolve-bin.js` + `probe()`), not merely "for the process": an operator who upgrades
@@ -34,6 +30,7 @@
 // for the life of the app (the cache layer's own TTL — `model-catalog.js › FAILURE_TTL_MS`).
 
 const client = require('./client');
+const configHome = require('./config-home');
 
 const LIST_TIMEOUT_MS = 8000;
 
@@ -191,10 +188,7 @@ async function fetchRoster(gate) {
       `\`${str(gate.path) || 'codex'} app-server\` did not answer \`model/list\` within ${LIST_TIMEOUT_MS}ms.`)),
     LIST_TIMEOUT_MS);
     try {
-      // 🔒 ⚠ `--ignore-user-config` IS DEAD AND IS DELIBERATELY STILL HERE. See the header: the
-      // flag's replacement is U4's isolation decision, not a picker's. What changed in U6 is that
-      // the resulting failure now SAYS SO instead of answering an empty roster.
-      conn = client.connect({ args: ['--ignore-user-config'] });
+      conn = client.connect({ args: [], env: configHome.isolatedEnv(process.env) });
       conn.request('initialize', client.initializeParams(appVersion()))
         .then(() => listPages(conn))
         .then(({ rows, truncated }) => {
@@ -308,8 +302,8 @@ const descriptor = {
   // written while Codex was reachable must not be silently erased by a read taken while it is not.
   // A stale id therefore keeps rendering as itself and stops being offered — which is exactly the
   // plan's "historical raw id still shown; a stale id cannot be newly selected".
-  // ⚠ IT IS STILL A GATE, BECAUSE THE VALUE BECOMES `config.model` IN THE LAUNCH ARGV
-  // (`launch-spec.js › overrideArgs`). `[A-Za-z0-9]` first, then the id alphabet, and nothing else.
+  // ⚠ IT IS STILL A GATE, BECAUSE THE VALUE BECOMES `thread/start.model` in `launch-spec.js`.
+  // `[A-Za-z0-9]` first, then the id alphabet, and nothing else.
   pick: {
     kind: 'open',
     stored: null, // no closed list to offer — the roster is the wire's

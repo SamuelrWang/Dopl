@@ -228,6 +228,32 @@ describe("the MODEL row follows the RUNTIME row", () => {
     expect(overridesArg(controls)).toBeUndefined();
   });
 
+  it.each(["loading", "unavailable"] as const)(
+    "does not submit a Claude pick after an immediate switch to Codex while its catalog is %s",
+    async (status) => {
+      posture.modelSupported = true;
+      posture.connected = ["claude", "codex"];
+      posture.catalogs = {
+        claude: CLAUDE_CATALOG,
+        codex: catalog("codex", [], {
+          status,
+          reason: status === "unavailable" ? "Codex models are unavailable." : "",
+        }),
+      };
+      const controls = await open();
+      fireEvent.click(modelPill("Opus 5"));
+      expect(modelSelected()).toContain("Opus 5");
+
+      fireEvent.click(pillFor(CODEX.label));
+      await waitFor(() => expect(modelPills()).toEqual(["Platform default"]));
+      fireEvent.click(launchButton());
+
+      await waitFor(() => expect(controls.launchAgent).toHaveBeenCalled());
+      expect(runtimeArg(controls)).toBe("codex");
+      expect(overridesArg(controls)).toBeUndefined();
+    }
+  );
+
   it("offers nothing to pick when the roster could not be read, and says why", async () => {
     posture.modelSupported = true;
     posture.connected = ["claude", "codex"];
@@ -299,4 +325,3 @@ describe("a TEMPLATE whose model belongs to another runtime", () => {
     expect(overridesArg(controls)).toBeUndefined();
   });
 });
-

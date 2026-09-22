@@ -265,18 +265,6 @@ test("Axis B declares a real enforcement point and an UNVERIFIED op scope", () =
 
 // ── THE LAUNCH SHAPE ─────────────────────────────────────────────────────────────────────────
 
-test("config overrides flatten to leaf scalars, and header names are quoted", () => {
-  const args = launchSpec.overrideArgs({
-    approval_policy: "untrusted",
-    mcp_servers: { dopl: { url: "https://x/api/mcp", http_headers: { "X-Dopl-Vendor": "codex" } } },
-  });
-  assert.deepEqual(args, [
-    "-c", 'approval_policy="untrusted"',
-    "-c", 'mcp_servers.dopl.url="https://x/api/mcp"',
-    "-c", 'mcp_servers.dopl.http_headers."X-Dopl-Vendor"="codex"',
-  ]);
-});
-
 test("a RESTRICTED profile pins the native pair; `full` rides the operator's own picks", () => {
   // ⚠ **THE PICK ARRIVES ON `state.native` SINCE 2026-09-21 (U5), AND `state.sandboxMode` NEVER
   // HAD A PRODUCER.** The field this case used to drive was read by `nativePair` and written by
@@ -317,12 +305,27 @@ test("a RESTRICTED profile pins the native pair; `full` rides the operator's own
   );
 });
 
-test("`--ignore-user-config` is first, and it is the fence the operator's config cannot cross", () => {
+test("`granular` uses the measured structured app-server shape and asks every shown category", () => {
+  assert.deepEqual(launchSpec.approvalPolicy("granular"), {
+    granular: {
+      mcp_elicitations: true,
+      rules: true,
+      sandbox_approval: true,
+      request_permissions: true,
+      skill_approval: true,
+    },
+  });
+});
+
+test("the removed `--ignore-user-config` flag is never sent; CODEX_HOME owns isolation", () => {
   const spec = launchSpec.buildLaunchSpec({
     session: { profile: "full", channelId: null, state: {}, workspaceId: "", model: "" },
     dispatch: () => {}, emitQuiet: () => {},
   });
-  assert.equal(spec.args[0], "--ignore-user-config");
+  assert.ok(!spec.args.includes("--ignore-user-config"));
+  assert.deepEqual(spec.args, []);
+  assert.equal(spec.threadStart.approvalPolicy, "untrusted");
+  assert.equal(spec.threadStart.sandbox, "workspace-write");
 });
 
 test("the env scrub can only REMOVE, and it never takes PATH, HOME or a credential", () => {

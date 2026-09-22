@@ -15,11 +15,12 @@
 // module that touches a child process. This answers "which file", and every caller asks it.
 //
 // 🔒 ⚠ **A FILE NAMED `codex` IS NOT A REASON TO RUN IT.** A candidate is accepted only when it is
-// a regular file the current user may execute AND neither it nor its directory is
-// group/world-writable — a writable directory on the search list is a code-execution hole, because
-// anything that can drop a file there chooses what Dopl runs. Rejections are reported with the
-// reason, never silently skipped, so an operator whose install sits in a writable prefix is told
-// why it was refused instead of being told Codex is missing.
+// a regular file the current user may execute AND neither it nor any directory that resolves its
+// candidate or canonical path is group/world-writable. A safe-looking symlink into a writable tree
+// is still a code-execution hole, because anything that can replace the target chooses what Dopl
+// runs. Rejections are reported with the reason, never silently skipped, so an operator whose
+// install sits in a writable prefix is told why it was refused instead of being told Codex is
+// missing.
 //
 // ⚠ **SOURCE IS PART OF THE ANSWER.** Diagnostics have to be able to say WHICH file was resolved
 // and HOW it was found (`override` / `path` / `well-known`), because "two operators, two Codex
@@ -63,45 +64,72 @@ function expandHome(entry, home) {
 /**
  * Is this path a file Dopl may execute, and is the place it sits in trustworthy?
  *
- * Returns `{ ok: true }` or `{ ok: false, reason }` — the reason is for an operator.
+ * Returns `{ ok: true, path }` or `{ ok: false, reason }` — the reason is for an operator.
  *
- * ⚠ **THE DIRECTORY IS CHECKED, NOT ONLY THE FILE.** A non-writable binary inside a
- * group-writable directory can simply be replaced; the write bit that matters is the one on the
- * thing that decides what the name points at.
+ * ⚠ **BOTH PATHS AND EVERY ANCESTOR ARE CHECKED.** `stat` follows symlinks. Checking only the
+ * candidate's immediate directory therefore accepts `/safe/bin/codex -> /shared/codex`, where an
+ * attacker can replace the target from `/shared`. Return the canonical path too, so the later
+ * `spawn` executes the file whose full chain was inspected rather than resolving the symlink again.
  */
 function inspectCandidate(file, io) {
+  let resolved;
+  try {
+    resolved = io.realpathSync(file);
+  } catch (_) {
+    return { ok: false, reason: 'not found' };
+  }
   let st;
   try {
-    st = io.statSync(file);
+    st = io.statSync(resolved);
   } catch (_) {
     return { ok: false, reason: 'not found' };
   }
   if (!st.isFile()) return { ok: false, reason: 'not a regular file' };
   try {
-    io.accessSync(file, fs.constants.X_OK);
+    io.accessSync(resolved, fs.constants.X_OK);
   } catch (_) {
     return { ok: false, reason: 'not executable by this user' };
   }
-  // ⚠ `0o022` — group-write OR other-write, on either the file or its directory.
+  // ⚠ `0o022` — group-write OR other-write, on the file or any directory that selects it.
   if ((st.mode & 0o022) !== 0) {
     return { ok: false, reason: 'refused: the file is group- or world-writable' };
   }
-  let dir;
-  try {
-    dir = io.statSync(path.dirname(file));
-  } catch (_) {
-    return { ok: false, reason: 'refused: its directory could not be read' };
+
+  const inspectDirectories = (candidate, label) => {
+    let dir = path.dirname(path.resolve(candidate));
+    let immediate = true;
+    while (true) {
+      let dirStat;
+      try {
+        dirStat = io.statSync(dir);
+      } catch (_) {
+        return `refused: its ${label} ${immediate ? 'directory' : 'ancestor'} could not be read`;
+      }
+      if ((dirStat.mode & 0o022) !== 0) {
+        return `refused: its ${label} ${immediate ? 'directory' : 'ancestor'} \`${dir}\` is group- or world-writable`;
+      }
+      const parent = path.dirname(dir);
+      if (parent === dir) return '';
+      dir = parent;
+      immediate = false;
+    }
+  };
+
+  const candidatePath = path.resolve(file);
+  const candidateRefusal = inspectDirectories(candidatePath, 'candidate');
+  if (candidateRefusal) return { ok: false, reason: candidateRefusal };
+  if (resolved !== candidatePath) {
+    const targetRefusal = inspectDirectories(resolved, 'resolved target');
+    if (targetRefusal) return { ok: false, reason: targetRefusal };
   }
-  if ((dir.mode & 0o022) !== 0) {
-    return { ok: false, reason: 'refused: its directory is group- or world-writable' };
-  }
-  return { ok: true, reason: '' };
+  return { ok: true, path: resolved, reason: '' };
 }
 
 /**
  * THE SEARCH, as a pure function of an environment and a filesystem.
  *
- * `io` — `{ statSync, accessSync }`, so a test drives a fake tree without touching this machine's.
+ * `io` — `{ realpathSync, statSync, accessSync }`, so a test drives a fake tree without touching
+ * this machine's.
  *
  * Returns `{ ok, path, source, reason, rejected }`:
  *   `source`   `override` | `path` | `well-known` — how it was found, for diagnostics.
@@ -113,7 +141,7 @@ function resolveWith({ env, home, io }) {
   const rejected = [];
   const consider = (file, source) => {
     const verdict = inspectCandidate(file, io);
-    if (verdict.ok) return { ok: true, path: file, source, reason: '', rejected };
+    if (verdict.ok) return { ok: true, path: verdict.path, source, reason: '', rejected };
     if (verdict.reason !== 'not found') rejected.push({ path: file, reason: verdict.reason });
     return null;
   };
@@ -123,7 +151,7 @@ function resolveWith({ env, home, io }) {
     // ⚠ AN OVERRIDE THAT DOES NOT RESOLVE IS AN ERROR, NOT A FALLBACK. The operator named a file;
     // quietly running a different one is how a support session measures the wrong binary.
     const verdict = inspectCandidate(override, io);
-    if (verdict.ok) return { ok: true, path: override, source: 'override', reason: '', rejected };
+    if (verdict.ok) return { ok: true, path: verdict.path, source: 'override', reason: '', rejected };
     return {
       ok: false,
       path: null,
@@ -173,7 +201,7 @@ function resolveCodexBin() {
   cached = resolveWith({
     env: process.env,
     home: os.homedir(),
-    io: { statSync: fs.statSync, accessSync: fs.accessSync },
+    io: { realpathSync: fs.realpathSync, statSync: fs.statSync, accessSync: fs.accessSync },
   });
   return cached;
 }

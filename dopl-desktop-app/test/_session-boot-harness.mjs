@@ -173,17 +173,12 @@ function harness(over = {}) {
       calls.history.push(r);
     },
   };
-  // ⚠ FAKED FOR ONE REASON ONLY (`session-model.js` requires `diag`, i.e. electron) and it still
-  // RECORDS what it was handed, so "the operator's model pick survives the restart" is asserted
-  // against the record rather than against a constant.
-  const sessionModel = { normalizeModel: (m) => (m == null ? "default" : String(m)) };
-
   const boot = new Function(
-    "crypto", "store", "initialSessionState", "floorWindowlessMessage", "sessionModel",
+    "crypto", "store", "initialSessionState", "floorWindowlessMessage",
     "sessionPark", "toolProfiles", "sessionSummary", "agentHistory", "sessionEffects",
     "runtimeRegistry", "runtimeCapability", "runtimeTruth", "diag",
     `${BOOT_BLOCK}\n return { bind, parkedSessionFromRecord, endInterrupted, reparkDormant, withinReparkWindow, REPARK_WINDOW_MS };`
-  )(crypto, store, initialSessionState, PROFILES.floorWindowlessMessage, sessionModel,
+  )(crypto, store, initialSessionState, PROFILES.floorWindowlessMessage,
     parkReaders, TOOL_PROFILES, sessionSummary, agentHistory, EFFECTS,
     // ⚠ THE REAL `session-runtime-truth.js` (2026-09-21, U10), REQUIRED rather than faked: it
     // requires nothing at all, so a plain require works, and what `parkedSessionFromRecord` has

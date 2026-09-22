@@ -65,6 +65,14 @@ test("a parked record with an sdk id comes back as a registered PARKED session",
   assert.equal(s.freshFraming, false, "the SDK resume carries the original ROLE block");
 });
 
+test("rehydration preserves an open Codex model id in Codex's vocabulary", () => {
+  const rec = parkedRecord({ runtimeId: "codex", model: "gpt-6-astra" });
+  const h = harness();
+  const restored = h.boot.parkedSessionFromRecord(KEY, rec, "thread-codex-1");
+  assert.equal(restored.runtimeId, "codex");
+  assert.equal(restored.model, "gpt-6-astra");
+});
+
 function storePure_resumedPostSeq(n) {
   const slack = Number((STORE_SRC.match(/RESUME_POST_SEQ_SLACK = (\d+)/) || [])[1]);
   assert.ok(slack > 0, "RESUME_POST_SEQ_SLACK moved or changed shape in session-store.js");

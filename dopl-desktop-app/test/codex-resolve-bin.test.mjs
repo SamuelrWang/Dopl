@@ -25,20 +25,48 @@ const FINDER_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
 const SHELL_PATH = `/opt/homebrew/bin:${FINDER_PATH}`;
 
 /**
- * A fake tree. `files` maps an absolute path to `{ mode, dir }`:
- *   `mode`  the file's own mode bits (0o755 = safe, 0o777 = world-writable).
- *   `dir`   its directory's mode bits (default 0o755).
+ * A fake tree. `files` maps an absolute path to `{ mode, dir, real, targetDir }`:
+ *   `mode`      the resolved file's own mode bits (0o755 = safe, 0o777 = world-writable).
+ *   `dir`       the candidate's immediate directory mode (default 0o755).
+ *   `real`      the canonical target when the candidate is a symlink.
+ *   `targetDir` the canonical target's immediate directory mode (default 0o755).
+ * `directoryModes` overrides any directory or ancestor mode.
  * Anything not named does not exist.
  */
-function fakeIo(files) {
+function fakeIo(files, directoryModes = {}) {
   const dirs = new Map();
+  const fileRecords = new Map();
+  const addAncestors = (file) => {
+    let dir = dirname(file);
+    while (!dirs.has(dir)) {
+      dirs.set(dir, 0o755);
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  };
   for (const [file, spec] of Object.entries(files)) {
-    dirs.set(file.slice(0, file.lastIndexOf("/")), (spec && spec.dir) ?? 0o755);
+    const record = spec || {};
+    const real = record.real || file;
+    fileRecords.set(file, record);
+    fileRecords.set(real, record);
+    addAncestors(file);
+    addAncestors(real);
+    dirs.set(dirname(file), record.dir ?? 0o755);
+    if (real !== file) dirs.set(dirname(real), record.targetDir ?? 0o755);
   }
+  for (const [dir, mode] of Object.entries(directoryModes)) dirs.set(dir, mode);
   return {
+    realpathSync(p) {
+      const spec = fileRecords.get(p);
+      if (spec) return spec.real || p;
+      const err = new Error(`ENOENT: ${p}`);
+      err.code = "ENOENT";
+      throw err;
+    },
     statSync(p) {
-      if (Object.prototype.hasOwnProperty.call(files, p)) {
-        const spec = files[p];
+      if (fileRecords.has(p)) {
+        const spec = fileRecords.get(p);
         return { isFile: () => true, mode: (spec && spec.mode) ?? 0o755 };
       }
       if (dirs.has(p)) return { isFile: () => false, mode: dirs.get(p) };
@@ -47,12 +75,12 @@ function fakeIo(files) {
       throw err;
     },
     accessSync(p) {
-      if (!Object.prototype.hasOwnProperty.call(files, p)) {
+      if (!fileRecords.has(p)) {
         const err = new Error(`ENOENT: ${p}`);
         err.code = "ENOENT";
         throw err;
       }
-      if (files[p] && files[p].noExec) {
+      if (fileRecords.get(p) && fileRecords.get(p).noExec) {
         const err = new Error(`EACCES: ${p}`);
         err.code = "EACCES";
         throw err;
@@ -61,7 +89,11 @@ function fakeIo(files) {
   };
 }
 
-const run = (env, files) => resolver.resolveWith({ env, home: HOME, io: fakeIo(files) });
+const run = (env, files, directoryModes) => resolver.resolveWith({
+  env,
+  home: HOME,
+  io: fakeIo(files, directoryModes),
+});
 
 test("finds a Homebrew codex a Finder launch's PATH cannot see", () => {
   const files = { "/opt/homebrew/bin/codex": {} };
@@ -122,6 +154,39 @@ test("refuses a codex anyone can rewrite, and says which", () => {
   const looseDir = run({ PATH: "/tmp/bin" }, { "/tmp/bin/codex": { dir: 0o777 } });
   assert.equal(looseDir.ok, false);
   assert.match(looseDir.reason, /directory/);
+});
+
+test("resolves a safe symlink to the canonical executable", () => {
+  const found = run(
+    { PATH: "/opt/homebrew/bin" },
+    { "/opt/homebrew/bin/codex": { real: "/opt/homebrew/Cellar/codex/1.0/bin/codex" } }
+  );
+  assert.equal(found.ok, true);
+  assert.equal(found.path, "/opt/homebrew/Cellar/codex/1.0/bin/codex");
+});
+
+test("refuses a symlink whose canonical target directory is writable", () => {
+  const found = run(
+    { PATH: "/opt/homebrew/bin" },
+    {
+      "/opt/homebrew/bin/codex": {
+        real: "/shared/tools/codex",
+        targetDir: 0o777,
+      },
+    }
+  );
+  assert.equal(found.ok, false);
+  assert.match(found.reason, /resolved target directory.*group- or world-writable/);
+});
+
+test("refuses a canonical target beneath a writable ancestor", () => {
+  const found = run(
+    { PATH: "/opt/homebrew/bin" },
+    { "/opt/homebrew/bin/codex": { real: "/shared/releases/codex/1.0/bin/codex" } },
+    { "/shared/releases": 0o777 }
+  );
+  assert.equal(found.ok, false);
+  assert.match(found.reason, /ancestor.*group- or world-writable/);
 });
 
 test("a refused install does not read as a missing one", () => {
