@@ -4,9 +4,31 @@ type: fix
 status: active
 date: 2026-09-21
 deepened: 2026-09-21
+implemented: 2026-09-21 (U1 partial, U2 partial, U5, U6, U7, U8, U9, U10 — by Claude; see Implementation Log)
 ---
 
 # Codex Runtime Parity and Launch Reliability
+
+> # ⚠ START HERE — SEVEN UNITS ALREADY LANDED (2026-09-21)
+>
+> **This plan is PARTLY IMPLEMENTED.** Claude built every unit that does not require a live
+> `codex app-server`, while this document was still being drafted. **Read
+> [Implementation Log](#implementation-log) and [Handoff](#handoff--what-to-do-next) before writing
+> any code, or you will rebuild work that is already on `master`.**
+>
+> | | |
+> |---|---|
+> | **Landed** | U5, U6, U7, U8, U9, U10 in full; U1 and U2 in part |
+> | **Yours** | **U3** and **U4** (both need a live app-server), U1's live fixtures, U2's packaging decision, U11 |
+> | **Commits** | `450fafcd` `9556b777` `94a3d0fe` `7964ea17` `683d4fe6` `51f6f410` `dac1e8d6` `6a4df5bb` `27f5a5a0` (+ docs) — all on `master`, **none pushed** |
+> | **Migration** | **1 written, NOT APPLIED** — `supabase/migrations/20261017120000_channel_launch_directives_runtime.sql` |
+> | **Green** | desktop `npm test` **3526, 0 fail**; root vitest green but for one failure owned by another session's uncommitted composer work |
+> | ⚠ **Unproven** | **NOTHING here has run against a real Codex session.** Every unit is proven against real modules with stubbed leaves. |
+>
+> 🔒 **THE ONE FACT THAT CHANGES YOUR PLAN:** `app-server --help` shows **no `--ignore-user-config`
+> flag** — it shows `-c key=value`, `--enable/--disable <FEATURE>` and **`--strict-config`**. The dead
+> flag is still passed from **two** places (`codex/launch-spec.js` AND `codex/models.js`), so the
+> model roster breaks independently of launch. That is U4's opening move. Details in Log entry D.
 
 ## Summary
 
@@ -20,19 +42,22 @@ The recommended permissions UX uses stable Dopl category labels—`Tool use`, `M
 
 This table is the implementation index. Every row is independently assignable once its dependencies are complete; the detailed acceptance criteria live in the matching implementation unit.
 
-| ID | Ticket | Objective | Depends on | Exit signal |
-|---|---|---|---|---|
-| U1 | Freeze the live Codex protocol contract | Replace speculative fixtures with generated-schema and live-process evidence | None | Compatibility suite fails against old Dopl shapes and passes against supported Codex CLI |
-| U2 | Resolve Codex binary and credentials per runtime | Make Finder-launched Dopl locate Codex and gate on Codex login, not Claude login | U1 | Connected/launchable state is correct with normal, missing, and signed-out Codex installs |
-| U3 | Modernize the Codex app-server client | Fix start, turn, steer, interrupt, usage, and lifecycle handling | U1, U2 | A real Codex turn launches, streams, completes, steers, and interrupts through Dopl |
-| U4 | Prove security isolation and Dopl MCP approvals | Replace the removed config-isolation flag without widening permissions | U1, U3 | Ambient config cannot silently widen a Dopl session; a Dopl MCP call is observed and gated end-to-end |
-| U5 | Introduce runtime-neutral launch settings | Remove Claude enums and model coercion from shared session/default state | U1 | Shared state carries Dopl semantics plus runtime-keyed native settings without cross-runtime coercion |
-| U6 | Deliver runtime-scoped model catalogs | Expose live Codex models, defaults, reasoning effort, and per-runtime remembered picks | U2, U5 | Switching runtime immediately shows a valid roster and preserves each runtime's prior choice |
-| U7 | Finish the New Agent dialog | Make runtime drive model, permission, default, template, and refusal behavior | U5, U6 | Codex selection never shows or submits a Claude model or Claude-only term |
-| U8 | Finish profile and channel settings | Make default runtime/model/permissions editable and persistent at both scopes | U5, U6 | New channels inherit the chosen runtime-aware profile defaults; existing channels remain unchanged |
-| U9 | Add runtime to MCP launch directives | Allow an MCP caller to deliberately launch Claude or Codex | U5 | `manage launch` with `runtime: codex` produces a Codex session and records the applied runtime |
-| U10 | Make lifecycle, telemetry, and refusals runtime-honest | Fix usage, active-turn state, resume, errors, and user-visible copy | U3, U5 | No Codex failure is reported as a Claude sign-in or generic SDK problem |
-| U11 | Run the release matrix and update the contract docs | Prove packaged desktop behavior and Claude regression safety | U2-U10 | All automated, live, packaging, UI, and MCP checks pass on a clean supported machine |
+⚠ **THE `STATUS` COLUMN IS THE 2026-09-21 STATE. It is a measurement — re-derive from `git log` and the
+Implementation Log rather than trusting it after that date.**
+
+| ID | Status | Ticket | Objective | Depends on | Exit signal |
+|---|---|---|---|---|---|
+| U1 | 🟡 **PART** — harness, generator, compat command, protocol gate landed (`9556b777`, `94a3d0fe`). **Live fixtures + `SUPPORTED_CLI` pin need a supported CLI.** | Freeze the live Codex protocol contract | Replace speculative fixtures with generated-schema and live-process evidence | None | Compatibility suite fails against old Dopl shapes and passes against supported Codex CLI |
+| U2 | 🟡 **PART** — GUI-safe binary resolver landed (`450fafcd`). **Packaging decision, structured state set, credential delegation, packaged Finder smoke are OPEN.** | Resolve Codex binary and credentials per runtime | Make Finder-launched Dopl locate Codex and gate on Codex login, not Claude login | U1 | Connected/launchable state is correct with normal, missing, and signed-out Codex installs |
+| U3 | 🔴 **NOT STARTED — YOURS.** Needs a live app-server. Nothing in the tree was changed against a guessed wire shape. | Modernize the Codex app-server client | Fix start, turn, steer, interrupt, usage, and lifecycle handling | U1, U2 | A real Codex turn launches, streams, completes, steers, and interrupts through Dopl |
+| U4 | 🔴 **NOT STARTED — YOURS.** ⚠ Evidence now exists: no `--ignore-user-config` on `app-server`; `--strict-config` does exist. Dead flag still passed from TWO sites. | Prove security isolation and Dopl MCP approvals | Replace the removed config-isolation flag without widening permissions | U1, U3 | Ambient config cannot silently widen a Dopl session; a Dopl MCP call is observed and gated end-to-end |
+| U5 | 🟢 **DONE** (`683d4fe6`, seam fix `51f6f410`) | Introduce runtime-neutral launch settings | Remove Claude enums and model coercion from shared session/default state | U1 | Shared state carries Dopl semantics plus runtime-keyed native settings without cross-runtime coercion |
+| U6 | 🟢 **DONE** (`6a4df5bb`) except the `model/list` REQUEST side (cursor param name is a guess, marked in code) | Deliver runtime-scoped model catalogs | Expose live Codex models, defaults, reasoning effort, and per-runtime remembered picks | U2, U5 | Switching runtime immediately shows a valid roster and preserves each runtime's prior choice |
+| U7 | 🟢 **DONE** (`27f5a5a0`) | Finish the New Agent dialog | Make runtime drive model, permission, default, template, and refusal behavior | U5, U6 | Codex selection never shows or submits a Claude model or Claude-only term |
+| U8 | 🟢 **DONE** (`27f5a5a0`) except granular approval categories — **blocked on U4** | Finish profile and channel settings | Make default runtime/model/permissions editable and persistent at both scopes | U5, U6 | New channels inherit the chosen runtime-aware profile defaults; existing channels remain unchanged |
+| U9 | 🟢 **DONE** (`7964ea17`). ⚠ **Migration written, NOT APPLIED.** | Add runtime to MCP launch directives | Allow an MCP caller to deliberately launch Claude or Codex | U5 | `manage launch` with `runtime: codex` produces a Codex session and records the applied runtime |
+| U10 | 🟢 **DONE** (`dac1e8d6`) except codes whose producers are U1/U2, and Codex resume (blocked on the usage measurement) | Make lifecycle, telemetry, and refusals runtime-honest | Fix usage, active-turn state, resume, errors, and user-visible copy | U3, U5 | No Codex failure is reported as a Claude sign-in or generic SDK problem |
+| U11 | 🔴 **NOT STARTED — YOURS.** Needs U3/U4 plus a packaged build. | Run the release matrix and update the contract docs | Prove packaged desktop behavior and Claude regression safety | U2-U10 | All automated, live, packaging, UI, and MCP checks pass on a clean supported machine |
 
 ---
 
@@ -206,6 +231,8 @@ The shared selection contains runtime, Dopl messaging policy, and runtime-keyed 
 
 ### U1. Characterize and Gate the Current Codex Protocol
 
+> 🟡 **PART-DONE 2026-09-21** (`9556b777`, `94a3d0fe`) — harness, schema generator, compat command and protocol gate landed. **The live fixtures and the `SUPPORTED_CLI` pin are still yours.** Log entry D.
+
 **Goal:** Establish a repeatable compatibility contract against the real installed app-server before changing production behavior.
 
 **Requirements:** R6, R11, R12
@@ -238,6 +265,8 @@ The shared selection contains runtime, Dopl messaging policy, and runtime-keyed 
 **Verification:** A reviewer can update the compatibility fixture from a real CLI using one documented command, and the suite detects each confirmed drift listed in the research table.
 
 ### U2. Codex Binary Discovery, Packaging, and Credential Ownership
+
+> 🟡 **PART-DONE 2026-09-21** (`450fafcd`) — the GUI-safe resolver landed, with the write-permission refusal. **Packaging decision, structured state set, credential delegation and the packaged Finder smoke are still yours.** Log entry C.
 
 **Goal:** Make the exact Codex executable and authentication state deterministic for a packaged macOS desktop app.
 
@@ -274,6 +303,8 @@ The shared selection contains runtime, Dopl messaging policy, and runtime-keyed 
 **Verification:** Probe, roster, login status, and launch all report the same resolved binary/version in diagnostics, including from a signed packaged app started outside a terminal.
 
 ### U3. Modernize the Codex App-Server Session State Machine
+
+> 🔴 **NOT STARTED — YOURS.** Needs a live app-server. ⚠ **Nothing in the adapter was changed against a guessed wire shape**, deliberately: the research table's corrections are still unverified. Log entry B has the code-side verification of each claim.
 
 **Goal:** Bring the adapter's process and JSON-RPC lifecycle into agreement with the supported current protocol.
 
@@ -313,6 +344,8 @@ The shared selection contains runtime, Dopl messaging policy, and runtime-keyed 
 
 ### U4. Security Isolation, Approval Capture, and Dopl MCP Proof
 
+> 🔴 **NOT STARTED — YOURS**, and it gates UI enablement. ⚠ **New evidence:** `app-server --help` shows **no `--ignore-user-config`**; it shows `-c key=value`, `--enable/--disable <FEATURE>` and **`--strict-config`**. The dead flag is still passed from **two** sites, so the roster breaks independently of launch. Log entry D.
+
 **Goal:** Preserve Dopl's containment and approval guarantees after removing the obsolete config-isolation flag.
 
 **Requirements:** R4, R6, R8, R12
@@ -347,6 +380,8 @@ The shared selection contains runtime, Dopl messaging policy, and runtime-keyed 
 **Verification:** Security tests prove the effective runtime policy, rather than only inspecting assembled arguments, and a real Dopl MCP call is observed end-to-end through Codex.
 
 ### U5. Runtime-Neutral Launch Settings and Migration
+
+> 🟢 **DONE 2026-09-21** (`683d4fe6`; seam fix `51f6f410`). The stored shape, the migration-on-read, the fail-closed table and the adapter-owned vocabulary are all in. Log entry F.
 
 **Goal:** Replace Claude-shaped shared model/tool fields with runtime-keyed records that adapters validate and interpret themselves.
 
@@ -389,6 +424,8 @@ The shared selection contains runtime, Dopl messaging policy, and runtime-keyed 
 
 ### U6. Runtime Model Catalog, Defaults, and Reasoning Effort
 
+> 🟢 **DONE 2026-09-21** (`6a4df5bb`) — four catalog states, one stale-id rule, additive over the existing bridge. ⚠ **The `model/list` REQUEST side is unverified** (the cursor parameter name is a marked guess). Log entry H.
+
 **Goal:** Provide the renderer with an authoritative, runtime-keyed model catalog and persist valid runtime-specific selections.
 
 **Requirements:** R1, R2, R3, R9, R11
@@ -427,6 +464,8 @@ The shared selection contains runtime, Dopl messaging policy, and runtime-keyed 
 
 ### U7. New Agent Runtime-Driven UX
 
+> 🟢 **DONE 2026-09-21** (`27f5a5a0`) — the Model row is the selected runtime's catalog with no fall-back arm; template affinity is derived, with "I cannot tell" as a third answer. Log entry I.
+
 **Goal:** Make the New Agent dialog's displayed and submitted configuration derive from the same selected runtime.
 
 **Requirements:** R1, R4, R9, R11
@@ -461,6 +500,8 @@ The shared selection contains runtime, Dopl messaging policy, and runtime-keyed 
 **Verification:** Component tests assert both what the user sees and the exact semantic payload consumed by main for every runtime switch path.
 
 ### U8. Profile Defaults and Per-Channel Settings
+
+> 🟢 **DONE 2026-09-21** (`27f5a5a0`) except the **granular approval categories**, which stay a value list until U4 measures the write shape. ⚠ It also fixed **F-754**, a preload coercion that had silently broken the Settings runtime row and was erasing stored Codex picks. Log entry I.
 
 **Goal:** Let users set default and channel-scoped runtime/model/supervision choices with honest runtime-specific controls.
 
@@ -498,6 +539,8 @@ The shared selection contains runtime, Dopl messaging policy, and runtime-keyed 
 **Verification:** Reload, restart, and new-channel creation tests prove persistence boundaries, and every rendered control has an exercised write/read path.
 
 ### U9. MCP Launch Runtime Field End to End
+
+> 🟢 **DONE 2026-09-21** (`7964ea17`) — explicit runtime is **refused, never swapped**; requested vs applied recorded. ⚠ **The migration is WRITTEN AND NOT APPLIED** — see Handoff item 2. Log entry E.
 
 **Goal:** Let Dopl's remote MCP surface deliberately request Codex without overloading the model field.
 
@@ -538,6 +581,8 @@ The shared selection contains runtime, Dopl messaging policy, and runtime-keyed 
 
 ### U10. Runtime-Honest Lifecycle, Telemetry, Resume, and Copy
 
+> 🟢 **DONE 2026-09-21** (`dac1e8d6`) — descriptor-templated copy with no per-runtime branch, structured end codes, three durable resume fields. ⚠ **Codex resume stays refused** and its test turns red if `usageResetsOnResume` is flipped without a measurement. Log entry G.
+
 **Goal:** Ensure every post-launch behavior and user-facing state remains tied to the runtime that owns the session.
 
 **Requirements:** R6, R7, R9, R11
@@ -574,6 +619,8 @@ The shared selection contains runtime, Dopl messaging policy, and runtime-keyed 
 **Verification:** Search of shared UI/core paths finds no hardcoded Claude error copy except inside Claude-owned adapter/sign-in surfaces, and lifecycle suites leave zero leaked resources.
 
 ### U11. End-to-End Release Matrix, Packaging Smoke, and Documentation
+
+> 🔴 **NOT STARTED — YOURS.** Needs U3/U4 and a packaged build. ⚠ Doc debt this wave created is itemised in **Handoff item 5**, and a paste-ready compatibility runbook is in Log entry D.
 
 **Goal:** Prove the integrated product on real runtime combinations and make the supported contract maintainable.
 
@@ -671,66 +718,149 @@ The shared selection contains runtime, Dopl messaging policy, and runtime-keyed 
 
 ## Definition of Done Checklist
 
+> ⚠ **TICKED = PROVEN BY A TEST OR A MEASUREMENT ON 2026-09-21, NOT "CODE WAS WRITTEN".**
+> `[~]` = built but **unproven against a live Codex session**. `[ ]` = not done, blocker named.
+> 🔒 **NOT ONE BOX BELOW HAS BEEN PROVEN AGAINST A RUNNING CODEX TURN.** Re-derive before trusting.
+
 ### Runtime and protocol
 
-- [ ] Supported Codex binary can be found from a signed app launched outside a shell.
-- [ ] Missing, signed-out, incompatible, and ready states are distinct and actionable.
-- [ ] No Codex launch uses `--ignore-user-config`.
-- [ ] Current thread ID, input item, steer, interrupt, completion, and token-usage shapes are covered by fixtures generated/captured from a real supported CLI.
-- [ ] App-server child exits cleanly on success, refusal, timeout, crash, interrupt, and app shutdown.
+- [~] Supported Codex binary can be found from a signed app launched outside a shell. — resolver landed (`resolve-bin.js`, 9 tests incl. the Finder-PATH case); ⚠ **the packaged Finder smoke has NOT been run** (U2).
+- [ ] Missing, signed-out, incompatible, and ready states are distinct and actionable. — **U2 open.** The gate returns four states; `runtime-missing` / `runtime-incompatible` still have **no producer**.
+- [ ] No Codex launch uses `--ignore-user-config`. — ⚠ **STILL PASSED FROM TWO SITES** (`codex/launch-spec.js`, `codex/models.js`). U4's call; left deliberately untouched.
+- [ ] Current thread ID, input item, steer, interrupt, completion, and token-usage shapes are covered by fixtures generated/captured from a real supported CLI. — **U1 live half; the fixture ships as `UNVERIFIED-PLACEHOLDER`.**
+- [ ] App-server child exits cleanly on success, refusal, timeout, crash, interrupt, and app shutdown. — the test helper guarantees it for HANDSHAKES; a real turn is U3.
 
 ### Security and MCP
 
-- [ ] Hostile ambient config cannot widen Dopl's sandbox, approvals, MCP servers, hooks, network, or chaining policy.
-- [ ] A real Codex Dopl-MCP read/post call is captured, classified, approved/denied, and audited through Dopl.
-- [ ] Dopl universal hard denies, tool-profile deny lists, outbound messaging gate, and launch-depth bound pass on Codex.
-- [ ] Explicit `runtime: codex` never silently falls back to Claude.
+- [ ] Hostile ambient config cannot widen Dopl's sandbox, approvals, MCP servers, hooks, network, or chaining policy. — **U4, untouched.**
+- [ ] A real Codex Dopl-MCP read/post call is captured, classified, approved/denied, and audited through Dopl. — **U4.**
+- [ ] Dopl universal hard denies, tool-profile deny lists, outbound messaging gate, and launch-depth bound pass on Codex. — **U4** (the gate decision is pinned in Codex's vocabulary by `codex-gate.test.mjs`, but never against a live turn).
+- [x] Explicit `runtime: codex` never silently falls back to Claude. — U9; `{refused:'no-sdk'}`, with a test pinning that the `ids()` membership check stays AHEAD of `acquire()`, because `resolve()` fails open.
 
 ### Models
 
-- [ ] Codex picker uses live `model/list` IDs/display names and respects `isDefault`.
-- [ ] Hidden models are not ordinarily offered.
-- [ ] Reasoning efforts come from the selected model's supported/default values.
-- [ ] Claude and Codex model choices are stored separately and restored on runtime switch.
-- [ ] A Codex surface never displays or submits Fable/Opus/Sonnet/Haiku unless it is showing historical raw data explicitly labeled as incompatible.
-- [ ] Catalog failure never substitutes another runtime's models.
+- [~] Codex picker uses live `model/list` IDs/display names and respects `isDefault`. — U6 built to the measured response shape; ⚠ **no real `model/list` has answered** (the dead flag blocks it).
+- [x] Hidden models are not ordinarily offered. — U6 (`hidden` honoured; semantics unverified against a real roster).
+- [x] Reasoning efforts come from the selected model's supported/default values. — U6 + U8; normalized when the model moves.
+- [x] Claude and Codex model choices are stored separately and restored on runtime switch. — U5 `byRuntime`; round-trip test.
+- [x] A Codex surface never displays or submits Fable/Opus/Sonnet/Haiku unless showing historical raw data. — U6/U7; `catalogFor` has **no fall-back arm**, and all five roster-failure paths assert no Claude id.
+- [x] Catalog failure never substitutes another runtime's models. — U6; failure surfaces `unavailable` + the binary's reason.
 
 ### Permissions
 
-- [ ] Primary UI uses stable Dopl category labels and never presents Claude-native choices as Codex choices.
-- [ ] Claude and Codex options come from their respective adapter descriptors and are tested narrowest-to-widest.
-- [ ] Effective native approval/sandbox summary is visible where multiple controls compose the result.
-- [ ] Codex sandbox/granular/category controls persist and affect launch, or remain absent; none are display-only pseudo-controls.
-- [ ] Structured granular/native combinations reload without translation or data loss.
-- [ ] Unrestricted choices retain warnings and never become a migration fallback.
+- [x] Primary UI uses stable Dopl category labels and never presents Claude-native choices as Codex choices. — U7/U8.
+- [x] Claude and Codex options come from their respective adapter descriptors and are tested narrowest-to-widest. — U5 `selection-vocabulary.js`.
+- [x] Effective native approval/sandbox summary is visible where multiple controls compose the result. — U7 (a REPORT, not a control — a launch carries no per-spawn native override).
+- [~] Codex sandbox/granular/category controls persist and affect launch, or remain absent; none are display-only. — **sandbox and effort now WRITE and reach the launch; the granular CATEGORIES remain a value list** because the write shape is unmeasured, and a contract test forbids any adapter claiming otherwise. **Closes when U4 measures it.**
+- [x] Structured granular/native combinations reload without translation or data loss. — U5; ⚠ and F-754 fixed the preload that was erasing them.
+- [x] Unrestricted choices retain warnings and never become a migration fallback. — U5 fail-closed table; reads floor, writes reject.
 
 ### UI and defaults
 
-- [ ] New Agent runtime selection updates model and native setting choices immediately.
-- [ ] New Agent always sends the displayed runtime; payload tests prove display and launch agree.
-- [ ] Profile Agents tab edits default runtime, model, reasoning, and supervision.
-- [ ] New channels inherit profile defaults exactly once; existing channels do not change.
-- [ ] Per-channel settings persist independently.
-- [ ] Templates cannot apply a model across incompatible runtimes without an explicit compatibility rule.
-- [ ] Runtime-specific refusals/actions name Codex when Codex is selected.
+- [x] New Agent runtime selection updates model and native setting choices immediately. — U7.
+- [x] New Agent always sends the displayed runtime; payload tests prove display and launch agree. — U7.
+- [x] Profile Agents tab edits default runtime, model, reasoning, and supervision. — U8.
+- [x] New channels inherit profile defaults exactly once; existing channels do not change. — U5 kept the write-once seed; ⚠ **an MCP/agent-created channel still does NOT inherit them** — see Handoff, open question 3.
+- [x] Per-channel settings persist independently. — U5 + U8 (⚠ this is what F-754 had silently broken).
+- [x] Templates cannot apply a model across incompatible runtimes without an explicit compatibility rule. — U7 `model-affinity.ts`, with "I cannot tell" as a third answer.
+- [x] Runtime-specific refusals/actions name Codex when Codex is selected. — U10; sign-in is a CAPABILITY, so the button hides where no in-app flow exists.
 
 ### MCP and auditability
 
-- [ ] MCP schema/documentation exposes optional runtime separately from model.
-- [ ] Directive persistence records requested and applied runtime/model.
-- [ ] Original reproduction—`model: codex` without runtime—cannot masquerade as a successful Codex selection.
-- [ ] Live MCP launch with `runtime: codex` creates a session whose runtime, process, model, and result are all Codex.
-- [ ] Retries remain idempotent.
+- [x] MCP schema/documentation exposes optional runtime separately from model. — U9 (a string, not an enum: the roster moves with a DESKTOP release).
+- [x] Directive persistence records requested and applied runtime/model. — U9; ⚠ **no fabricated `resolved_runtime`**, and a test fails if one appears.
+- [x] Original reproduction — `model: codex` without runtime — cannot masquerade as a successful Codex selection. — U9, pinned as a named test.
+- [ ] Live MCP launch with `runtime: codex` creates a session whose runtime, process, model, and result are all Codex. — **needs U3 + a live CLI. This is the experiment that started the plan; it has NOT been re-run.**
+- [x] Retries remain idempotent. — U9, including a retry asking for a DIFFERENT runtime.
 
 ### Regression and operations
 
-- [ ] Existing Claude unit/integration/end-to-end tests pass.
-- [ ] Mixed Claude + Codex agents can run in one channel without crossing conversation handles, approvals, model state, or message authorship.
-- [ ] Release compatibility command passes against the supported CLI and fails clearly against an unsupported one.
-- [ ] `docs/INVARIANTS.md`, engineering docs, F-390, and Codex protocol notes match the shipped behavior.
-- [ ] Support runbook documents installation/discovery, sign-in, supported versions, diagnostics, and compatibility updates.
+- [x] Existing Claude unit/integration/end-to-end tests pass. — desktop **3526, 0 fail**; root green but for one failure owned by another session's uncommitted composer work.
+- [ ] Mixed Claude + Codex agents run in one channel without crossing handles, approvals, model state, or authorship. — the storage makes it possible; **unproven without a live Codex session.**
+- [ ] Release compatibility command passes against the supported CLI and fails clearly against an unsupported one. — command exists (`npm run test:codex-compat`); **never run against a supported CLI.**
+- [~] `docs/INVARIANTS.md`, engineering docs, F-390, and Codex protocol notes match shipped behavior. — **F-390 rewritten and F-752/F-753/F-754 filed; ⚠ INVARIANTS still carries stale claims — see Handoff item 5.**
+- [ ] Support runbook documents installation/discovery, sign-in, supported versions, diagnostics, and compatibility updates. — **drafted, paste-ready, in Log entry D; not yet in `docs/ENGINEERING.md`.**
 
 ---
+
+## Handoff — what to do next
+
+### 1. Verify what landed, in five commands
+
+```
+git log --oneline 450fafcd~1..HEAD          # the wave
+cd dopl-desktop-app && npm test             # expect 3526, 0 fail
+node --test test/codex-app-server-contract.test.mjs   # 24 pass / 5 LOUD skips, no CLI
+cd .. && npx vitest run src/features/channels         # the UI half
+node scripts/check-doc-refs.mjs
+```
+
+⚠ **Do not read the desktop suite's TOTAL as a verdict on any single unit** — several sessions were
+in this tree at once. Read the named suites.
+
+### 2. The migration — WRITTEN, NOT APPLIED
+
+`supabase/migrations/20261017120000_channel_launch_directives_runtime.sql` — three nullable `TEXT`
+columns on the launch-directive table (`runtime`, `applied_runtime`, `applied_model`), grammar
+CHECKs, launch-only kind fences. **No `NOT NULL`, no backfill, no value enum**, so an older desktop
+keeps working and every existing row reads `NULL`, which is correct.
+
+🔒 **APPLYING IT IS SAMUEL'S, NOT AN AGENT'S.** It was not run anywhere — not local, not production.
+Per the repo's standing rules: match migrations by NAME, apply byte-exact, never `db push` against
+production. **Until it is applied, U9's columns do not exist in the database and the MCP result will
+report `not reported` for every applied runtime.**
+
+### 3. Open questions Samuel still owes an answer on
+
+1. **Codex distribution** — bundle and sign a binary, or keep `delivery: 'path'`? U2 cannot close
+   without it. The resolver is built either way and a bundled binary simply becomes the first thing
+   it finds.
+2. **The `--strict-config` design** — U4's isolation replacement. Evidence is in Log entry D; the
+   security property is fixed, the mechanism is not.
+3. ⚠ **Agent-created channels do not inherit profile defaults** — and this is a RULING, not a bug.
+   The seed is written by a renderer executing a creation a human just performed
+   (`main/agent-defaults.js`'s header forbids a spawn-time read). A channel created over MCP by an
+   agent therefore starts at the factory pair. Making it inherit means either sending local defaults
+   to the server or seeding after the fact — **a real security decision, because it would apply a
+   `bypass` default to rooms agents create unattended.** Samuel has not ruled.
+
+### 4. Two process rules this wave bought the hard way
+
+- 🔒 **ONE WORKTREE PER AGENT.** Four agents shared this checkout. Three edits landed under the wrong
+  sha, and **two separate agents ran a tree-wide `git stash`** — one of them while another was
+  mid-write, which cost a file round-trip to recover. ⚠ **`git stash` is never a safe way to get a
+  baseline in a shared tree; use `git show HEAD:<path>`.**
+- **Commit by path, never `git add -A`**, for the same reason.
+
+### 5. Doc debt this wave created, not yet paid
+
+`docs/INVARIANTS.md` still carries claims the code no longer honours. Re-verify each against the tree
+before rewriting — do not copy this list:
+- §11.0f's F-390 bullet (*"the runtime's own Axis-A value does not persist, and neither does the
+  secondary axis"*) is **now false**.
+- §11's *"the pick is the model's shape … `channel-runtime.js › getChannelRuntime`"* — that key is now
+  a migration source and downgrade mirror; the authority is `channelLaunchSelection`.
+  ⚠ **`setChannelRuntime` no longer exists.**
+- The 2026-09-06 rule that *a runtime switch clears the channel's model stamp* is **reversed** by
+  Decisions #1/#2.
+- The H2 writer census should read `["agent-defaults.js", "channel-dir-ipc.js"]`; the writer is
+  `setLaunchSelection`.
+- A NEW rule is owed for runtime-scoped model/native storage, its fail-closed table, and the
+  catalog's four states beside the existing unknown-≠-empty rule.
+- `capability.js` / §11.0's `LAUNCH_BLOCKING` narration should record that `canSwitchModelLive` now
+  has its first consumer in `main/` (F-753).
+- U10's file list in this plan names `hooks/use-agents-panel.ts`; the file is at
+  `components/use-agents-panel.ts`.
+
+### 6. Loose ends a reviewer should close
+
+- `src/features/channels/hooks/use-agent-defaults.ts` is **referenced by no component** — delete it
+  or re-point a consumer. It has its own suite, so nothing goes red to tell you.
+- **Three files are over the 500-line cap and will fail BOTH lint jobs on push**: `main/listener-io.js`
+  (532), `test/session-preset-start.test.mjs` (523), `src/features/channels/components/message-pane.tsx`
+  (501, another session's). ⚠ Re-derive — the tree is moving.
+- The latent Claude coercion in `session-reopen.js › setModelByTask` for a runtime that DOES declare a
+  live switch (F-753's tail).
 
 ## Documentation / Operational Notes
 
