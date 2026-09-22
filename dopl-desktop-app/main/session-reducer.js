@@ -260,6 +260,15 @@ function sessionReducer(state, event) {
     // assistant message) must change nothing about it. Coerced here as well as there, so a
     // junk number can never reach the renderer as a percentage.
     const tokens = Number(event.tokens) > 0 ? Number(event.tokens) : 0;
+    // ⚠ **A CONTEXT EVENT WITH NO MEASUREMENT CHANGES NOTHING** (2026-09-22). This branch used to
+    // write `contextTokens` and `contextWindow` UNCONDITIONALLY, so a reading of zero emptied a
+    // live gauge — the shape that wiped the meter on every Codex interrupt (`runtime/codex/
+    // normalize.js`'s `turn/completed` note). Both producers now refuse to emit one
+    // (`session-model.js › contextEvent` answers null for a zero, the normalizers guard on
+    // `tokens > 0`), and this is the third guard, at the layer that OWNS the stored value: no
+    // numerator means no news, so the last real reading and its denominator both stand. An
+    // unmeasured turn is UNKNOWN, and unknown is not empty.
+    if (!tokens) return { state: state, effects: [] };
     const window = Number(event.window) > 0 ? Number(event.window) : null;
     const model = typeof event.model === 'string' && event.model ? event.model : state.model;
     // After Claude Code auto-compacts, the next turn's prompt is SMALLER and this simply

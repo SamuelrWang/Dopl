@@ -27,6 +27,11 @@
 // A model this build has never heard of gets NO denominator, and the meter then shows raw
 // tokens instead of a made-up percentage.
 //
+// ⚠ **AND SINCE 2026-09-22 THE TABLE IS THE FALLBACK, NOT THE ANSWER.** A runtime that REPORTS its
+// own window on the wire (Codex: `tokenUsage.modelContextWindow`) beats it — see `› contextEvent`
+// for the rule and the argument. Do not grow this table a row for a runtime that already answers;
+// that is a maintenance debt taken on to duplicate a fact the platform states per turn.
+//
 // Query.supportedModels() would answer both questions authoritatively, but it needs a LIVE
 // query: the picker has to be usable on a pre-consent card, where by construction nothing is
 // running yet. Hence the frozen list.
@@ -265,9 +270,37 @@ function sessionTokens(usage) {
 
 // The reducer event a finished turn produces, or null when there is nothing measured to say.
 // Built here (rather than inline in the observer) so the shape is testable without a session.
-function contextEvent(tokens, model) {
+//
+// ── ⚠ THE PRECEDENCE RULE (2026-09-22): A SERVER-REPORTED WINDOW BEATS THIS FILE'S TABLE ─────
+//
+// `reportedWindow` is the denominator THE PLATFORM SAID IT IS METERING AGAINST, carried here from
+// the runtime's own stream (`runtime/events.js › context.window`; Codex reads it off
+// `tokenUsage.modelContextWindow`, MEASURED at 258400 on `codex-cli 0.155.1`). When it is present
+// it WINS, and `contextWindowFor` is the fallback. The argument, in order:
+//
+//   1. THE SERVER'S NUMBER IS CURRENT BY CONSTRUCTION; THE TABLE IS CURRENT BY MAINTENANCE.
+//      `CONTEXT_WINDOWS` above is a transcription of one bundled binary's model registry, frozen
+//      the day this build shipped. Every model a vendor releases makes it a little more wrong, and
+//      nothing in the running app can tell that it has gone stale. A number that arrives on the
+//      wire each turn cannot go stale at all. This is why Codex rows were NOT added to the table:
+//      that would buy one release's worth of correctness and owe an edit forever.
+//   2. THE SERVER'S NUMBER IS THE ONE BEING ENFORCED. The window a platform meters against is not
+//      purely a property of the model id — it moves with the account, the tier, and any per-thread
+//      configuration. A denominator that disagrees with the one the platform will actually
+//      compact against is worse than no denominator, because the operator's use for this gauge is
+//      a DECISION ("do I start a fresh session") rather than a statistic.
+//   3. THE TABLE STILL ANSWERS FOR EVERY RUNTIME THAT REPORTS NOTHING. The Claude lane reports no
+//      window (`runtime/claude/normalize.js` calls `events.context` with two arguments), so it
+//      lands on `contextWindowFor` exactly as it always did — this changes no Claude behaviour.
+//
+// ⚠ AND ABSENT IS NOT ZERO, ON BOTH ARMS. A `reportedWindow` that is missing, junk, or `0` falls
+// THROUGH to the table rather than being spent as a window; an unknown model then yields `null`,
+// which downstream renders as raw tokens with no percentage — never as "0 tokens available".
+function contextEvent(tokens, model, reportedWindow) {
   if (!(tokens > 0)) return null;
-  return { type: 'context', tokens: tokens, window: contextWindowFor(model), model: model || null };
+  const reported = Number(reportedWindow);
+  const window = Number.isFinite(reported) && reported > 0 ? reported : contextWindowFor(model);
+  return { type: 'context', tokens: tokens, window: window, model: model || null };
 }
 
 // ─── END SESSION-MODEL ───────────────────────────────────────────────────────

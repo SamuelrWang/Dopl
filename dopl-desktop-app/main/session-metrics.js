@@ -52,9 +52,9 @@ function metricOrNull(value) {
  * ⚠ EVERY ONE OF THESE ALREADY EXISTED — nothing here starts a counter:
  *   contextUsed    `s.promptTokens`, written by session-model's observer from the LAST assistant
  *                  message's own usage (occupancy, output excluded — see that file's header).
- *   contextWindow  `contextWindowFor(s.liveModel)`, the frozen model->window table. `null` for a
- *                  model this build has never heard of, which is what makes the meter show raw
- *                  tokens instead of a made-up percentage.
+ *   contextWindow  the window the RUNTIME reported (`s.promptWindow`), else `contextWindowFor(
+ *                  s.liveModel)`, the frozen model->window table. `null` when neither can say,
+ *                  which is what makes the meter show raw tokens instead of a made-up percentage.
  *   tokensSpent    `s.tokensSpent`, the lifetime accumulation session-io.js keeps beside the
  *                  identical cost arithmetic. A DIFFERENT question from occupancy.
  *   startedAt      `s.startedAt`, stamped when the engine created this session object.
@@ -72,10 +72,22 @@ function metricOrNull(value) {
  * bucketed, because `lastActivityAt` moves on every dispatch and an unquantized wire would turn
  * the state-change writer into a per-event one.
  */
+// The window `session-io.js` remembered off the runtime's own usage report, or 0 for "it reported
+// none" — which falls through to the table. ⚠ 0 RATHER THAN null so the `||` below reads as one
+// precedence chain; `metricOrNull` is what turns a final absence into the wire's null.
+function reportedWindow(s) {
+  const w = Number(s && s.promptWindow);
+  return Number.isFinite(w) && w > 0 ? w : 0;
+}
+
 function metrics(s, now) {
   return {
     contextUsed: metricOrNull(s && s.promptTokens),
-    contextWindow: metricOrNull(contextWindowFor(s && s.liveModel)),
+    // ⚠ THE SAME PRECEDENCE THE GAUGE USES (2026-09-22): the window the RUNTIME reported, with
+    // the frozen table as the fallback. Reading the table alone left every Codex session telling a
+    // peer an occupancy with no denominator, which is the agent-facing half of the same gap —
+    // `session-model.js › contextEvent` is where the rule and its argument are written down.
+    contextWindow: metricOrNull(reportedWindow(s) || contextWindowFor(s && s.liveModel)),
     tokensSpent: metricOrNull(s && s.tokensSpent),
     startedAt: metricOrNull(s && s.startedAt),
     lastActivityAt: metricOrNull(s && s.lastActivityAt),

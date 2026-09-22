@@ -116,6 +116,39 @@ function promptUsageOf(params) {
   return usageOf(p);
 }
 
+// ── ⚠ THE DENOMINATOR, REPORTED BY THE SERVER (2026-09-22) ───────────────────────────────────
+//
+// 🔒 **MEASURED against `codex-cli 0.155.1`: every `thread/tokenUsage/updated` carries
+// `tokenUsage.modelContextWindow` (observed `258400`), a SIBLING of `last` and `total` rather than
+// a field inside either breakdown** (`codex-live-session.test.mjs` asserts it on the live wire;
+// `codex-launch-protocol.test.mjs`'s fixture shows the nesting).
+//
+// ⚠ **THE SERVER'S NUMBER IS PREFERRED OVER ANY TABLE DOPL KEEPS, AND THAT IS THE WHOLE POINT.**
+// `session-model.js › CONTEXT_WINDOWS` is a transcription of ONE binary's model registry, frozen
+// at build time; it goes stale the week a vendor ships a model, and adding `gpt-…` rows to it
+// would commit Dopl to re-earning that table forever for a number the platform already states per
+// turn. The precedence rule and its argument live in `session-model.js › contextEvent`; this
+// function's only job is to carry the reported value across the seam.
+//
+// ⚠ TOLERANT ACROSS CARRIERS, FOR THE SAME REASON EVERY OTHER READER HERE IS. `launch-spec.js`
+// is what folds the out-of-band `thread/tokenUsage/updated` snapshot onto the `turn/completed`
+// frame core consumes, so the field can arrive as a `dopl/`-shaped sibling on `params` or still
+// nested on whichever usage block that layer forwards. A spelling this build has not seen reads as
+// ABSENT — `null`, never `0`: a window of zero would paint an empty gauge over a live session.
+const WINDOW_KEYS = ['modelContextWindow', 'model_context_window', 'contextWindow', 'context_window'];
+
+function windowFrom(params) {
+  const p = params && typeof params === 'object' ? params : {};
+  for (const src of [p, p.tokenUsage, p.promptUsage, p.usage, p.turn]) {
+    if (!src || typeof src !== 'object') continue;
+    for (const k of WINDOW_KEYS) {
+      const v = src[k];
+      if (typeof v === 'number' && Number.isFinite(v) && v > 0) return v;
+    }
+  }
+  return null; // this runtime told us nothing — NOT a window of zero
+}
+
 function pick(usage, keys) {
   for (const k of keys) {
     const v = usage[k];
@@ -266,7 +299,10 @@ function normalize(msg, ctx) {
     // empty the moment an operator pressed Stop. The model is not lost: `result` below carries it
     // and the reducer reads it from there. This is the same rule as
     // `session-model.js › contextEvent`, which answers `null` for a zero on the other runtime.
-    if (prompt.prompt > 0) out.push(events.context(prompt.prompt, model));
+    // ⚠ THE WINDOW RIDES THE SAME GUARD RATHER THAN A SECOND ONE. A turn that measured nothing
+    // emits NO context event at all, window or no window: an event carrying a denominator and a
+    // zero numerator would be exactly the interrupt regression above wearing a new field.
+    if (prompt.prompt > 0) out.push(events.context(prompt.prompt, model, windowFrom(params)));
     // ⚠ CUMULATIVE BY CONTRACT, DELTA'D IN CORE — and the cost is an explicit `null`, not a 0.
     // 🔒 **MEASURED 2026-09-22 (`codex-cli 0.155.1`): `tokenUsage.total` IS RUNNING, PER THREAD,
     // AND `tokenUsage.last` IS THE TURN.** Three consecutive turns on one thread reported
@@ -286,6 +322,6 @@ function normalize(msg, ctx) {
 
 module.exports = {
   normalize,
-  startedEvents, completedEvents, tokensFrom, usageOf, promptUsageOf, isAuthShaped,
+  startedEvents, completedEvents, tokensFrom, usageOf, promptUsageOf, windowFrom, isAuthShaped,
   THREAD_STARTED, ERROR_MESSAGE_TYPE,
 };

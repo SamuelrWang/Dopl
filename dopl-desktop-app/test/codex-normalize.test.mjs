@@ -160,6 +160,69 @@ test("…and an unmeasured usage spelling still meters rather than reading as ze
   assert.equal(empty[0].sessionTokens, 0);
 });
 
+// ══ THE DENOMINATOR (2026-09-22) — the server reports the window it is metering against ══════
+//
+// 🔒 MEASURED against `codex-cli 0.155.1`: every `thread/tokenUsage/updated` carries
+// `tokenUsage.modelContextWindow` (observed `258400`), a SIBLING of `last` and `total`.
+// `launch-spec.js` is what folds that out-of-band snapshot onto the `turn/completed` frame core
+// consumes, so these fixtures drive the shapes it can hand over.
+//
+// ⚠ WHY THIS IS NOT A ROW IN `session-model.js`'s TABLE: that table is a transcription of one
+// binary's model registry, frozen at build time, and it owes an edit every time a vendor ships a
+// model. The server answers per turn and cannot go stale. See `session-model.js › contextEvent`.
+
+test("a reported WINDOW rides the context event — the server's denominator, carried whole", () => {
+  const out = normalize.normalize({
+    method: "turn/completed",
+    params: {
+      model: "gpt-5.6-terra",
+      usage: { inputTokens: 23586, outputTokens: 5, totalTokens: 23591 },
+      promptUsage: { inputTokens: 23586, cachedInputTokens: 18688, outputTokens: 5, totalTokens: 23591 },
+      contextWindow: 258400,
+    },
+  }, CTX);
+  assert.deepEqual(types(out), ["context", "result"]);
+  assert.equal(out[0].tokens, 23586);
+  assert.equal(out[0].window, 258400, "the number the platform said it is metering against");
+});
+
+test("…and it is read TOLERANTLY, off whichever carrier the enrichment used", () => {
+  // The raw nesting (`tokenUsage.modelContextWindow`), and the snake twin, both find it. A reader
+  // that knew only one spelling would silently report no denominator on a CLI that moved it.
+  const win = (params) => normalize.normalize({ method: "turn/completed", params }, CTX)[0].window;
+  const usage = { inputTokens: 100, outputTokens: 5, totalTokens: 105 };
+  assert.equal(win({ usage, tokenUsage: { modelContextWindow: 258400 } }), 258400);
+  assert.equal(win({ usage, model_context_window: 400000 }), 400000);
+  assert.equal(win({ usage: { ...usage, modelContextWindow: 272000 } }), 272000);
+});
+
+test("a turn that reports NO window says so with ABSENT, never with a zero", () => {
+  // ⚠ THE INVARIANT: unknown must stay distinct from empty. A `0` here would reach a gauge as
+  // "0 tokens available" — a full session painted as having no room at all.
+  const out = normalize.normalize(TURN_DONE, CTX);
+  assert.equal(out[0].window, null);
+  assert.notEqual(out[0].window, 0);
+  // Junk and zeroes are absences too, on every carrier.
+  const win = (params) => normalize.normalize({ method: "turn/completed", params }, CTX)[0].window;
+  const usage = { inputTokens: 100, outputTokens: 5, totalTokens: 105 };
+  for (const junk of [0, -1, "258400", null, undefined, NaN, {}]) {
+    assert.equal(win({ usage, contextWindow: junk }), null, JSON.stringify(junk));
+  }
+});
+
+test("a window with NO measurement emits NOTHING — a denominator is not news on its own", () => {
+  // The interrupt shape below, plus a window. `session-reducer.js` stores what it is told, so an
+  // event carrying a live denominator and a zero numerator is the meter-wipe wearing a new field.
+  const out = normalize.normalize({
+    method: "turn/completed",
+    params: {
+      turn: { id: "tu_9", status: "interrupted" },
+      usage: null, promptUsage: null, contextWindow: 258400, model: "gpt-6-astra",
+    },
+  }, CTX);
+  assert.deepEqual(types(out), ["result"]);
+});
+
 test("an INTERRUPTED turn is ONE terminal result and does NOT zero the context meter", () => {
   // 🔒 MEASURED 2026-09-22 (`codex-cli 0.155.1`): `turn/interrupt` ends the turn on the SAME
   // `turn/completed` notification a successful turn ends on, carrying `status: "interrupted"`, and

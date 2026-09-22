@@ -161,7 +161,8 @@ function initialSessionState(opts) {
     // What the last finished turn measured, so a window RELOAD and a P2 recreate repaint from one
     // place. `model` is what the SDK says is really running (never the operator's PICK, which lives
     // on the session object as `s.model`) and moves mid-session when the picker calls
-    // Query.setModel. `contextWindow` is null whenever this build does not know that model's size,
+    // Query.setModel. `contextWindow` is the window the RUNTIME reported when it reports one and
+    // the frozen table's row otherwise; it is null whenever NEITHER can say that model's size,
     // and the renderer then shows tokens with NO percentage — a made-up denominator on the gauge
     // that decides "start a fresh session" is worse than no gauge. None of the three is persisted.
     model: null,

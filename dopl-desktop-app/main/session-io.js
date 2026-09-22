@@ -337,6 +337,18 @@ function applyCoreEvents(s, list, dispatch, store, log) {
       // WRITE, not the event: a turn that measured nothing must keep the LAST real reading rather
       // than fall back to a zero, because a zero would paint an empty gauge over a full window.
       if (ev.tokens > 0) s.promptTokens = ev.tokens;
+      // ⚠ THE DENOMINATOR THE RUNTIME REPORTED, UNDER THE SAME GUARD AND FOR THE SAME REASON
+      // (2026-09-22). Codex states `tokenUsage.modelContextWindow` on every usage notification;
+      // Claude and Cursor state nothing and leave this `undefined` forever, which is what keeps
+      // them on `session-model.js › contextWindowFor`. ⚠ A READING THAT CARRIES NO WINDOW LEAVES
+      // THE LAST ONE ALONE rather than blanking it — the numerator's rule exactly, and the
+      // INVARIANTS one behind it: unknown is not empty, so "told me nothing this turn" must not
+      // become "this session has no window".
+      // ⚠ COERCED ON THE WAY IN, the same arithmetic `session-reducer.js`'s context branch uses,
+      // so what is remembered is always a NUMBER — a string denominator stored here would reach
+      // `contextEvent` and then a percentage untouched by anything that checks its type.
+      const win = Number(ev.window);
+      if (Number.isFinite(win) && win > 0) s.promptWindow = win;
       if (ev.model) s.liveModel = ev.model; // a mid-session model switch
       continue;
     }
@@ -377,7 +389,10 @@ function applyCoreEvents(s, list, dispatch, store, log) {
       dispatch(s, { type: 'result', turnCostUsd: turnCost, model: ev.model });
       // ⚠ AFTER the result, and only when something was measured: say nothing rather than paint a
       // zero (`session-model.js › contextEvent`).
-      const context = sessionModel.contextEvent(s.promptTokens, s.liveModel);
+      // ⚠ THE REPORTED WINDOW IS HANDED IN AND BEATS THE TABLE — the precedence rule and its
+      // argument are written down at `session-model.js › contextEvent`, once, rather than restated
+      // at this call site.
+      const context = sessionModel.contextEvent(s.promptTokens, s.liveModel, s.promptWindow);
       // THE METER MAY NOT KILL THE SESSION, and this `try/catch` is the whole of that rule (it came
       // over from `session-model.js › observe` and was LOST in the port; restored 2026-09-01, D7.3).
       // The context event is a GAUGE READING dispatched from inside the consume loop's `for await`,

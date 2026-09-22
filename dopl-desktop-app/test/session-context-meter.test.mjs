@@ -263,6 +263,107 @@ test("AUTO-COMPACTION needs no special handling: the next turn simply measures s
   assert.deepEqual(evs.map((e) => e.tokens), [940000, 90000], "the meter corrects itself");
 });
 
+// ── ⚠ 3b. THE PRECEDENCE: A SERVER-REPORTED WINDOW BEATS THE FROZEN TABLE (2026-09-22) ───────
+//
+// THE GAP THIS CLOSES: a Codex session showed an occupancy with NOTHING TO DIVIDE IT BY. Claude's
+// denominator comes from §1's table; `codex-cli 0.155.1` reports its own
+// (`tokenUsage.modelContextWindow`, observed 258400) on every usage notification, and Dopl threw
+// it away — so the same gauge answered for one runtime and not the other.
+//
+// ⚠ THE FIX IS DELIBERATELY *NOT* CODEX ROWS IN §1'S TABLE. A table is a claim this build has to
+// re-earn every time a vendor ships a model; a number that arrives on the wire each turn cannot go
+// stale. So the rule is: THE SERVER WINS WHEN PRESENT, THE TABLE IS THE FALLBACK — stated at
+// `main/session-model.js › contextEvent` and driven here, through the shipped `applyCoreEvents`.
+
+const reported = (win) => ({ type: "context", tokens: 23586, model: "gpt-5.6-terra", window: win });
+const NO_STORE_2 = NO_STORE;
+
+// Drive core with hand-built CoreEvents — the adapter-neutral half, so this asserts the RULE and
+// not one normalizer's spelling. `result` is what makes core dispatch the turn's reading.
+function core(evs) {
+  const s = { state: { phase: "running", turns: 0, costUsd: 0 } };
+  const out = [];
+  io.applyCoreEvents(s, evs, (_s, e) => out.push(e), NO_STORE_2);
+  return { s, context: out.filter((e) => e.type === "context") };
+}
+const RESULT_EV = { type: "result", costUsd: null, sessionTokens: 23591, model: "gpt-5.6-terra" };
+
+test("the SERVER's window is the denominator — the table is not even consulted", () => {
+  const { context } = core([reported(258400), RESULT_EV]);
+  assert.deepEqual(context, [
+    { type: "context", tokens: 23586, window: 258400, model: "gpt-5.6-terra" },
+  ]);
+  // And the model it names has no row at all, which is exactly the case the table cannot serve.
+  assert.equal(model.contextWindowFor("gpt-5.6-terra"), null);
+});
+
+test("a runtime that reports NO window falls back to the table — Claude's path, unchanged", () => {
+  // The regression pin for the whole change: the Claude adapter calls `events.context` with TWO
+  // arguments, so `window` is null on the wire and §1's table is what answers.
+  const { context } = core([
+    { type: "context", tokens: 120000, model: "claude-opus-5", window: null },
+    { type: "result", costUsd: 0.4, sessionTokens: 1, model: "claude-opus-5" },
+  ]);
+  assert.deepEqual(context, [
+    { type: "context", tokens: 120000, window: 1000000, model: "claude-opus-5" },
+  ]);
+});
+
+test("a reported window that is JUNK or ZERO falls through — absent is never a denominator", () => {
+  // ⚠ THE INVARIANT: unknown must stay distinct from empty. A 0 spent as a window is a gauge that
+  // says "0 tokens available" over a live session.
+  for (const junk of [0, -1, NaN, null, undefined, "lots", {}, []]) {
+    const { context } = core([
+      { type: "context", tokens: 61000, model: "claude-haiku-4-5", window: junk },
+      { type: "result", costUsd: 0, sessionTokens: 1, model: "claude-haiku-4-5" },
+    ]);
+    assert.equal(context[0].window, 200000, JSON.stringify(junk));
+  }
+  // …and with no table row either, the answer is null — raw tokens, no percentage.
+  const { context } = core([reported(0), RESULT_EV]);
+  assert.equal(context[0].window, null);
+  assert.notEqual(context[0].window, 0);
+  // ⚠ A NUMERIC STRING IS A NUMBER, deliberately: `session-reducer.js` has always coerced this
+  // field with `Number(…)`, and a second, stricter rule one layer up is how the two come apart.
+  // What it must NOT stay is a STRING — `session-io.js` coerces before it remembers.
+  const coerced = core([reported("258400"), RESULT_EV]);
+  assert.equal(coerced.context[0].window, 258400);
+  assert.equal(typeof coerced.s.promptWindow, "number");
+});
+
+test("a later reading with NO window keeps the last reported one — it does not blank it", () => {
+  // The numerator's rule, applied to the denominator: "told me nothing this turn" must not become
+  // "this session has no window".
+  const s = { state: { phase: "running", turns: 0, costUsd: 0 } };
+  const out = [];
+  const push = (evs) => io.applyCoreEvents(s, evs, (_s, e) => out.push(e), NO_STORE_2);
+  push([reported(258400), RESULT_EV]);
+  push([{ type: "context", tokens: 51000, model: "gpt-5.6-terra", window: null }, RESULT_EV]);
+  const ctx = out.filter((e) => e.type === "context");
+  assert.deepEqual(ctx.map((e) => e.window), [258400, 258400]);
+  assert.equal(ctx[1].tokens, 51000);
+});
+
+test("the CODEX lane end to end: the window on the wire reaches the reducer's event", () => {
+  // The normalizer's own output, through core, with nothing hand-built — the seam both halves of
+  // this change meet at.
+  const codex = require("../main/runtime/codex/normalize.js").normalize;
+  const s = { state: { phase: "running", turns: 0, costUsd: 0 } };
+  const out = [];
+  io.applyCoreEvents(s, codex({
+    method: "turn/completed",
+    params: {
+      model: "gpt-5.6-terra",
+      usage: { inputTokens: 23586, outputTokens: 5, totalTokens: 23591 },
+      promptUsage: { inputTokens: 23586, outputTokens: 5, totalTokens: 23591 },
+      contextWindow: 258400,
+    },
+  }, {}), (_s, e) => out.push(e), NO_STORE_2);
+  assert.deepEqual(out.filter((e) => e.type === "context"), [
+    { type: "context", tokens: 23586, window: 258400, model: "gpt-5.6-terra" },
+  ]);
+});
+
 // ── 4. the reducer holds it, and tells the window ────────────────────────────
 
 const running = () => sessionReducer(initialSessionState({}), { type: "launched", payload: {} }).state;
@@ -283,6 +384,24 @@ test("the reducer coerces junk too — a bad number can never reach the window a
     assert.equal(r.state.contextTokens, 0, JSON.stringify(junk));
     assert.equal(r.state.contextWindow, null, JSON.stringify(junk));
   }
+});
+
+test("NO MEASUREMENT DOES NOT CLOBBER: a zero-token event leaves the gauge exactly as it was", () => {
+  // 🔒 THE SIBLING DEFECT THIS MUST NOT REINTRODUCE: an interrupted Codex turn ends on
+  // `turn/completed` with NO usage at all, and this branch used to write `contextTokens` and
+  // `contextWindow` UNCONDITIONALLY — so pressing Stop emptied a full window gauge. Three guards
+  // now stand between that and the state; this is the one at the layer that OWNS the value.
+  const full = sessionReducer(
+    sessionReducer(running(), { type: "context", tokens: 23586, window: 258400, model: "gpt-5.6-terra" }).state,
+    { type: "context", tokens: 0, window: 258400, model: "gpt-5.6-terra" },
+  );
+  assert.equal(full.state.contextTokens, 23586, "the last real reading stands");
+  assert.equal(full.state.contextWindow, 258400, "and so does its denominator");
+  assert.deepEqual(full.effects, [], "no news is not a repaint");
+  // ⚠ AND A MEASUREMENT-FREE EVENT MUST NOT BLANK A WINDOW BY CARRYING NONE EITHER.
+  const blank = sessionReducer(full.state, { type: "context", tokens: 0, window: null });
+  assert.equal(blank.state.contextWindow, 258400);
+  assert.equal(blank.state.contextTokens, 23586);
 });
 
 test("the COST path is untouched: a result still emits exactly status + scheduleIdle", () => {

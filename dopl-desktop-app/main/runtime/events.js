@@ -70,8 +70,29 @@ const result = (costUsd, sessionTokens, model) => ({
  * that is allowed to have state. A subagent's message must NOT produce one: a delegated run has
  * its own window, so counting its prompt as the session's makes the meter jump and snap back.
  * ⚠ `tokens` of 0 says nothing rather than painting a zero (`› contextEvent`).
+ *
+ * ── ⚠ `window` IS THE THIRD FIELD SINCE 2026-09-22, AND IT IS OPTIONAL BY DESIGN ──────────────
+ *
+ * THE DENOMINATOR THE PLATFORM ITSELF IS METERING AGAINST, when the platform says. Codex reports
+ * `tokenUsage.modelContextWindow` on every `thread/tokenUsage/updated` (MEASURED against
+ * `codex-cli 0.155.1`: 258400), and Dopl threw it away — so a Codex session showed an occupancy
+ * with nothing to divide it by while a Claude session showed a percentage. The fix is NOT a Codex
+ * row in `session-model.js`'s frozen table: a table is a claim this build re-earns every time a
+ * vendor ships a model, and the server already answers.
+ *
+ * ⚠ **OPTIONAL MEANS THREE-VALUED, AND `null` IS NOT `0`.** A runtime that reports no window (both
+ * the Claude and Cursor adapters call this with two arguments) produces `window: null`, which
+ * `session-model.js › contextEvent` reads as "ask the table" and a reader renders as NO
+ * percentage — raw tokens. A `0` would mean "this session has no window at all", i.e. a gauge that
+ * paints "0 tokens available", which is the INVARIANTS rule this coercion exists to keep: UNKNOWN
+ * STAYS DISTINCT FROM EMPTY. Anything that is not a finite positive number lands on `null`.
  */
-const context = (tokens, model) => ({ type: 'context', tokens: tokens > 0 ? tokens : 0, model: model || null });
+const context = (tokens, model, window) => ({
+  type: 'context',
+  tokens: tokens > 0 ? tokens : 0,
+  model: model || null,
+  window: typeof window === 'number' && Number.isFinite(window) && window > 0 ? window : null,
+});
 
 /**
  * THIS MACHINE HAS NO USABLE CREDENTIAL FOR THIS RUNTIME, recognised in the stream itself.

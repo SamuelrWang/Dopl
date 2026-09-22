@@ -85,6 +85,9 @@ test("the frozen tables evaluate standalone, with nothing in scope but themselve
   assert.equal(pure.modelArg("rm -rf /"), model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK));
   assert.equal(pure.contextWindowFor("claude-opus-5"), 1000000);
   assert.deepEqual(pure.contextEvent(0, "claude-opus-5"), null, "nothing measured, nothing said");
+  // 2026-09-22: THE PRECEDENCE, pinned in the pure slice (`session-model.js › contextEvent`).
+  assert.equal(pure.contextEvent(2, "claude-opus-5", 258400).window, 258400); // the server wins
+  assert.equal(pure.contextEvent(2, "claude-opus-5").window, 1000000); // the table is the fallback
 });
 
 // ── 1. the enum, and the argv it produces ────────────────────────────────────
