@@ -6132,6 +6132,32 @@ secondary-axis value, validated against `descriptor.toolMode.secondaryAxis.optio
 `session-launch-op.js` forwards it into `spec.state`. Only (1) is needed to make the Permissions row
 take on every runtime.
 
+---
+
+**RESOLVED 2026-09-21 (U5 + U7/U8), EXCEPT THE CATEGORIES — and the exception is the whole remaining
+entry.** All three closing steps landed, in a different and better shape than the one proposed above:
+the runtime's vocabulary is not validated *into* a Claude-shaped record, it is stored in its own
+record. `main/launch-selection.js` keys `tools`, `model` and `native` under `byRuntime[<runtimeId>]`,
+`main/runtime/selection-vocabulary.js` validates each against the SELECTED adapter's declared options,
+and `codex/launch-spec.js` reads `state.native`, so a sandbox pick reaches the launch.
+
+- **Tool use on a non-default runtime WRITES** — main validates against the selected adapter's options.
+- **`toolMode.secondaryAxis` (sandbox) is a real control** that is stamped at spawn.
+- **Reasoning effort** became a real control whose options come from the SELECTED MODEL
+  (`U6`'s catalog) — it previously had a reader in `launch-spec.js` and NO PRODUCER AT ALL.
+- ⚠ **THE GRANULAR APPROVAL CATEGORIES REMAIN DISPLAY-ONLY, DELIBERATELY.** `approval.categories` is
+  still a value list and not a control, because Codex's structured `approval_policy = { granular … }`
+  WRITE SHAPE IS UNMEASURED — this machine has no supported CLI. `runtime-contract.test.mjs` asserts
+  that no adapter declares a category as configurable, so the code cannot drift into claiming it.
+  **That flips when U4 captures the shape from a live app-server**
+  (`docs/plans/2026-09-21-001-fix-codex-runtime-parity-plan.md`).
+- ⚠ The docblock's own warning — *"the operator picks Opus, the write succeeds, and every agent keeps
+  launching on the default"* — is exactly what U6's four catalog states and `selectableModels` now
+  prevent for models, and what the `native` stamp prevents for the sandbox.
+
+Status: **RESOLVED for the tool axis, the secondary axis and the model dimensions; OPEN, scoped to
+the granular approval categories only.**
+
 ### F-391 — the descriptor does not say WHICH Axis-A option its approval categories belong to (2026-08-31, port wave D, the SPA half)
 
 Design §3.1: the five categories render *"under Codex's `granular` option only"*. The descriptor
@@ -10404,3 +10430,15 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - Resolution: it now refuses with `{ok:false, reason:'unsupported'}` from `liveModelSwitchRefusal`. ⚠ That makes `runtime/capability.js › canSwitchModelLive` **reachable for the first time in `main/`** — it had been declared, mirrored on the web, and read by nothing, which is the `axisBOpScoped` shape (a declared capability with no consumer is a capability nobody can trust). FIXED in the U10 commit.
 - ⚠ **A RELATED SHARED-PATH COERCION SURVIVES**: the same function still routes through Claude's `aliasForModelId` / `modelArg` for a runtime that DOES declare a live switch (Cursor declares `true`). Today's refusal makes that arm unreachable, so it is latent, not live — U6's runtime-scoped catalog should remove it.
 - Status: RESOLVED (with the latent coercion above left to U6).
+
+### F-754 — the preload coerced absent own-keys to `''`, so every runtime-only write was refused and every defaults write erased the operator's Codex record (2026-09-21, FIXED)
+
+- Location: `dopl-desktop-app/renderer/app-preload.js` — the launch-posture and agent-defaults bridge records.
+- Found during: U7/U8 (`docs/plans/2026-09-21-001-fix-codex-runtime-parity-plan.md`), while wiring the Settings runtime row.
+- ⚠ **TWO DEFECTS, ONE CAUSE — a bridge that COERCES instead of OMITTING.**
+  1. An absent `tools`/`messages` was coerced to `''`, so a runtime-only patch crossed as `{tools:'', messages:''}` and `launch-selection.js › patchRejections` refused it WHOLE (that validator rejects rather than floors on a write, by design). **The Settings runtime row was silently broken from the moment U5 landed** — the click registered, the write was refused, nothing said so.
+  2. The same record DROPPED `native`, `v` and `byRuntime`, so every profile-defaults write was read as a pre-U5 legacy record — **erasing the operator's stored Codex model and sandbox pick** on a write that touched neither.
+- 🔒 **THIS IS THE MIRROR OF THE STALE-CACHE RULE, AND IT DESERVES THE SAME STANDING TREATMENT.** That rule says a NEW field read from an OLD cached payload needs `?? EMPTY_X`. This is the other direction: a new field WRITTEN through an old bridge record needs the bridge to pass it through, and a bridge that coerces absence into a value converts "I am not changing this" into "set this to empty". ⚠ **A PATCH BRIDGE MUST SEND OWN-KEYS ONLY.**
+- ⚠ **NEITHER DEFECT COULD FAIL A TEST AT THE TIME**: main was correct, the renderer was correct, and only the record between them was wrong — the seam no suite crossed. It is now pinned by `dopl-desktop-app/test/launch-selection-bridge.test.mjs`.
+- Resolution: both records send own-keys only; the file is 488 lines, under the cap. FIXED in the U7/U8 commit.
+- Status: RESOLVED.

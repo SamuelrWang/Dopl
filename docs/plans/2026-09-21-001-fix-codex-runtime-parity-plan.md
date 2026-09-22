@@ -1104,6 +1104,115 @@ it restored cleanly and was not repeated. 🔒 **This is exactly what Samuel's o
 rule exists to prevent: a stash is tree-wide, so it is never a safe way to get a baseline in a
 shared checkout.** Future waves get a worktree each.
 
+#### H. U6 — IMPLEMENTED (runtime-scoped model catalogs)
+
+**Commit:** `6a4df5bb`. Desktop 3527, 0 fail.
+
+**The contract** (`CATALOG_VERSION = 1`, one record per runtime):
+`{ version, runtime, source, status, reason, key, models[], defaultId, dimensions[], truncated }`,
+each model `{ id, label, short, isDefault, hidden, dimensions }`.
+
+🔒 **FOUR STATES, AND COLLAPSING ANY TWO IS THE BUG:** `loading` (nothing read yet — the picker shows
+the platform default, **never "no models"**), `ready`, `unavailable` (a read was ATTEMPTED and
+failed, carrying the binary's own reason), `stale` (models from a binary/version we can no longer
+confirm — they still LABEL, they may not be SELECTED). ⚠ **An empty roster is never `ready`: no
+adapter may claim a platform has no models.** This is the unknown-≠-empty rule applied to a roster.
+
+**One stale-id rule, not three cases:** `selectableModels` is EMPTY unless `ready`, so a
+loading/unavailable/stale id cannot be NEWLY selected, while `modelLabel` reads any status so a
+historical card still shows its raw id. `catalogSelection` displays `defaultId` **without persisting
+it** (the display-versus-wire discipline).
+
+**Crosses the bridge additively** on `channels:getLaunchPosture` and `channels:getAgentDefaults` as
+`catalogs` + `catalogVersion`; **no preload change was needed** and `check-bridge-caller-drift` is
+unchanged at 20 members. Absence of the key is a THIRD state: the web falls back to the frozen list
+**for the default runtime only**. The runtime half of both replies moved to new
+`main/channel-runtime-reply.js`, which kept `channel-dir-ipc.js` under the cap and removed a
+hand-duplicated assembly.
+
+**Cache key is `<resolved path>@<version>`** from `resolve-bin.js` + `client.probe()`, so an upgrade
+or a repointed `DOPL_CODEX_BIN` re-reads by construction. ⚠ **A FAILED READ IS NEVER CACHED** — an
+operator who repairs their install with Dopl open recovers without restarting. A refresh that fails
+over models already held becomes `stale`, not `unavailable`.
+
+**Roster failure is honest:** the dead `--ignore-user-config` flag is left in place (U4's decision),
+and the `initialize` rejection it causes now surfaces as `unavailable` + the binary's message rather
+than an empty list. Five failure paths are pinned, each asserting **no Claude id appears**.
+
+⚠ **STILL UNVERIFIED:** the `model/list` REQUEST side. The response shape is entry D's alpha
+measurement, but **no second page was ever fetched**, so the cursor PARAMETER NAME (`cursor`) is a
+symmetric guess and is marked unverified in the code. Also unproven: that a real `model/list` answers
+at all (the dead flag blocks it), `hidden`'s semantics against a real roster, and that a Codex pick
+reaches `config.model` in argv end to end.
+
+#### I. U7 + U8 — IMPLEMENTED (the runtime drives the dialog and both settings scopes)
+
+**Commit:** `27f5a5a0`. Desktop 3531 → 3526 on the merged tree, 0 fail.
+
+**New Agent dialog:** the Model row is the selected runtime's catalog **and nothing else** —
+`catalogFor` has no fall-back arm, so no Claude id can reach a Codex surface. A roster that is not
+`ready` renders one **`Platform default`** pill plus the desktop's own reason sentence — never a
+greyed control, never another runtime's list. The native summary
+(`on-request approvals · workspace-write sandbox`) is a **REPORT, not a control**, because a launch
+carries no per-spawn native override and a picker there would write nowhere (INVARIANTS: a control
+that writes nowhere must be absent).
+
+**Launch payload for a Codex selection:** `runtime` is ALWAYS sent when the desktop reported any;
+`overrides.model` is sent **only** when the operator picked it and the catalog says it is
+submittable. An untouched Codex row sends no override at all.
+
+**Template mismatch is DERIVED, not schema'd** (`lib/model-affinity.ts`): a model a reported
+runtime's `ready` catalog offers belongs to that runtime; under any other runtime the id is dropped
+from the chain, not submitted, and one line explains why. ⚠ **"I cannot tell" is a THIRD answer**
+(loading/stale/unavailable/absent catalog) and never renders as a mismatch.
+
+**Both settings scopes** render one component over one data source, in dependency order: Runtime →
+Model → Reasoning effort → Tool use → Sandbox → Messaging (+ `Launch agents` at defaults scope).
+
+**Four controls stopped being display-only** — tool use on a non-default runtime, sandbox, reasoning
+effort (which previously had a READER in `launch-spec.js` and no producer at all), and the
+channel-scope runtime row. **F-390 is rewritten and RESOLVED except for the granular approval
+categories**, which stay a value list until U4 measures the write shape.
+
+🔒 ⚠ **A SILENT BREAKAGE WAS FOUND AND FIXED — F-754.** `renderer/app-preload.js` coerced an absent
+`tools`/`messages` to `''`, so every runtime-only write crossed as `{tools:'', messages:''}` and was
+refused WHOLE; and it dropped `native`, `v` and `byRuntime`, so **every profile-defaults write erased
+the operator's stored Codex model and sandbox**. The Settings runtime row had been silently broken
+from the moment U5 landed. ⚠ Neither defect could fail a test: main was right, the renderer was
+right, and only the record between them was wrong — the seam no suite crossed. Now pinned by
+`test/launch-selection-bridge.test.mjs`. **The standing lesson: a patch bridge must send OWN-KEYS
+ONLY; coercing absence into a value turns "not changing this" into "set this to empty".**
+
+⚠ **LEFT OPEN:** `src/features/channels/hooks/use-agent-defaults.ts` is now referenced by no
+component (the Agents pane uses the new hook) — delete it or re-point a consumer; it has its own
+suite, so nothing goes red to tell you. `useChannelLaunchPosture` remains a READER for four
+descriptor consumers and is no longer a writer anywhere.
+
+⚠ **NOT LIVE-VERIFIED:** every Codex-side assertion runs against real descriptors with stubbed
+catalogs. The Codex catalog path is exercised through the contract, never a real `model/list`.
+
+---
+
+### Where the plan stands after 2026-09-21
+
+| Unit | State |
+|---|---|
+| U1 | Harness, generator, compat command and protocol gate landed. **Live fixtures + `SUPPORTED_CLI` pin need a supported CLI.** |
+| U2 | **Discovery half landed.** Packaging decision, structured state set, credential delegation and the packaged Finder smoke are open. |
+| U3 | **NOT STARTED — needs a live app-server.** |
+| U4 | **NOT STARTED — needs a live app-server.** ⚠ Evidence now exists: `--ignore-user-config` does not exist on `app-server`; `--strict-config` does. |
+| U5 | **LANDED.** |
+| U6 | **LANDED** except the `model/list` request side. |
+| U7 | **LANDED.** |
+| U8 | **LANDED** except the granular approval categories (blocked on U4). |
+| U9 | **LANDED.** Migration written, **NOT APPLIED**. |
+| U10 | **LANDED** except the codes whose producers are U1/U2, and Codex resume (blocked on the usage measurement). |
+| U11 | **NOT STARTED** — it is the release matrix, and it needs U3/U4 plus a packaged build. |
+
+⚠ **NOTHING IN THIS PLAN HAS BEEN PROVEN AGAINST A RUNNING CODEX SESSION.** Every unit above is
+proven against real modules with stubbed leaves. The first live launch is expected to find something,
+and U3/U4 are where it will surface.
+
 ---
 
 ## Sources & References
