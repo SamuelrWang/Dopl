@@ -276,3 +276,46 @@ test("the record's OWN post counter rides the resume (client_msg_id collision gu
   assert.equal(h.calls.startSession[0].ownPostSeq, 7, "handed over RAW; startSession adds the slack");
 });
 
+
+// ─── BOTH DOORS OWE THE SAME TEARDOWN (2026-09-22) ───────────────────────────────────────────
+//
+// 🔒 The reap this file proves for the RESUME lane was owed at the PARK door too, and was missing
+// there — so a parked Codex session left an idle `codex app-server` alive for the whole park, and
+// that child still held the thread's SINGLE WRITER slot (measured: a second `thread/resume` while
+// it lives is refused `-32600 "thread … already has an active writer"`).
+//
+// ⚠ WHY IT WAS MISSED: aborting a signal and closing an iterator IS a full teardown on Claude,
+// whose SDK query watches the signal and whose async generator answers `close()`. The Codex
+// adapter reads no abort signal at all — `handle.close()` is the only thing that ends its child.
+// A teardown written against one runtime's shape silently stopped being one.
+//
+// ⚠ A SOURCE PIN over `session-engine.js › runEffect`, which has no harness in this tree: its
+// effects run against a live registry and a real query object. What is asserted is that the two
+// doors carry the SAME call, guarded the same way.
+
+test("the park door closes the runtime handle, exactly as the resume door does", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const read = (rel) =>
+    readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
+
+  const engine = read("../main/session-engine.js");
+  const abortCase = engine.slice(engine.indexOf("case 'abortQuery':"));
+  const body = abortCase.slice(0, abortCase.indexOf("case 'denyPending'"));
+
+  assert.match(body, /s\.query && typeof s\.query\.close === 'function'/,
+    "abortQuery must close the runtime's own handle, not only the abort signal");
+  // ⚠ THE GUARD IS THE PORTABILITY TEST, NOT DEFENSIVENESS: Claude's query is an async generator
+  // with no `close`, so the call is a no-op there and that lane is unchanged. An unguarded call
+  // would throw on every Claude park — so the guard and the call must be ONE statement, which is
+  // what this asserts rather than merely that both strings appear somewhere in the case.
+  assert.match(
+    body,
+    /if \(s\.query && typeof s\.query\.close === 'function'\) s\.query\.close\(\);/,
+    "the close must sit behind its typeof guard, in the same statement"
+  );
+
+  // The same shape, at the other door — `session-park.js › reapPriorChild`.
+  assert.match(SRC, /typeof prior\.close === 'function'/,
+    "the resume lane's reap is the pattern this one follows");
+});

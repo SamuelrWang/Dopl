@@ -165,6 +165,11 @@ function runEffect(s, eff) {
       sessionDirected.resetDirected(s); // 2026-08-31: a stray `result` must not report a partial answer
       try { if (s.abortController) s.abortController.abort(); } catch (_) { /* best effort */ }
       try { if (s.pushIterator) s.pushIterator.close(); } catch (_) { /* best effort */ }
+      // 🔒 ⚠ **AND THE RUNTIME'S HANDLE: an abort signal kills nothing on an adapter that reads
+      // none** (2026-09-22). Codex ends only on `handle.close()`, so park leaked a child that
+      // still held the thread's writer. Twin: `session-park.js › reapPriorChild`; the pair and the
+      // `typeof` guard's argument are pinned in `test/session-park.test.mjs`.
+      try { if (s.query && typeof s.query.close === 'function') s.query.close(); } catch (_) { /* best effort */ }
       break;
     case 'denyPending': // P1: DENY every awaited canUseTool promise (fail closed) before a
       sessionPrivate.resetPrivateTurn(s);
