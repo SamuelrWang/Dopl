@@ -328,11 +328,21 @@ const REQUIRED_FACTS = Object.freeze([
   Object.freeze({ key: 'modelDefault', why: 'the model catalog must declare exactly one default' }),
 ]);
 
-// 🔒 ⚠ **UNPINNED ON PURPOSE, AND AN UNPINNED RANGE REFUSES NOTHING.** No `codex` CLI existed on
-// the machine this landed from, so a version written here would be a guess wearing a
-// measurement's costume — the exact failure the plan corrects. Fill it from a real CLI:
-// `node scripts/codex-app-server-schema.js` prints the value to paste.
-const SUPPORTED_CLI = Object.freeze({ min: null, max: null, measuredFrom: null });
+// 🔒 ⚠ **PINNED FROM A MEASUREMENT, 2026-09-22 — `codex-cli 0.155.1`, installed from the public
+// `@openai/codex` package on this machine and captured by `npm run codex:schema`.** It was UNPINNED
+// until then, because the machine that landed the gate had no CLI and a version written from
+// memory is a guess wearing a measurement's costume.
+//
+// ⚠ **`min` ONLY, `max: null`, AND THAT ASYMMETRY IS THE HONEST ONE.** Below `min` is a CLI whose
+// protocol this adapter has never been measured against — refuse it and say so. ABOVE it is the
+// future, which has not happened yet: refusing it would strand operators on the day Codex ships a
+// compatible release, and the METHOD check below already catches a genuinely incompatible one by
+// naming the method that went missing. A `max` becomes honest the day a newer CLI is measured and
+// found to break something; write it THEN, with what broke.
+//
+// ⚠ **RE-MEASURE, DO NOT EDIT BY HAND.** `npm run codex:schema` prints this exact line, and the
+// live tier asserts the fixture's version equals the executing CLI's.
+const SUPPORTED_CLI = Object.freeze({ min: '0.155.1', max: null, measuredFrom: '0.155.1' });
 
 /** `"codex-cli 0.31.0"` → `[0, 31, 0]`. Returns `null` when no dotted number is present. */
 function parseVersion(text) {

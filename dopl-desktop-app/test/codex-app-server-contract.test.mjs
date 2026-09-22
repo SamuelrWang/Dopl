@@ -41,6 +41,18 @@ const S = client.PROTOCOL_STATE;
 // nothing in this file can be mistaken for a captured wire shape by a later reader or a grep.
 const hypothetical = (value) => value;
 
+/**
+ * A version the SUPPORTED_CLI floor accepts.
+ *
+ * ⚠ **THESE CASES ARE ABOUT METHODS AND FACTS, NOT ABOUT VERSIONS.** They used a placeholder
+ * `'0.0.0'` while `SUPPORTED_CLI` was unpinned and it did not matter. It does now: pinning the
+ * floor to the measured `0.155.1` (2026-09-22) made `0.0.0` fail the VERSION gate first, so seven
+ * cases reported `unsupported-protocol` for a reason none of them was testing. Passing the
+ * supported version keeps each case measuring the one gate it names — the version gate has its own
+ * describe block below.
+ */
+const SUPPORTED_VERSION = client.SUPPORTED_CLI.min || '0.0.0';
+
 // ══ TIER 1 — THE GATE'S OWN LOGIC, AND THE FIXTURE'S PROVENANCE ═════════════════════════════
 
 describe('the fixture cannot lie about where it came from', () => {
@@ -102,7 +114,7 @@ describe('the compatibility gate separates missing, signed-out and unsupported',
 
   test('a server that declares everything Dopl needs is READY', () => {
     const verdict = client.checkProtocol(hypothetical({
-      version: '0.0.0',
+      version: SUPPORTED_VERSION,
       methods: client.REQUIRED_METHODS.slice(),
       facts: { threadId: 'thread-1', modelDefault: 'a-model' },
     }));
@@ -113,7 +125,7 @@ describe('the compatibility gate separates missing, signed-out and unsupported',
   test('a MISSING METHOD is `unsupported-protocol`, names the method, and is NOT connected', () => {
     for (const dropped of client.REQUIRED_METHODS) {
       const verdict = client.checkProtocol(hypothetical({
-        version: '0.0.0',
+        version: SUPPORTED_VERSION,
         methods: client.REQUIRED_METHODS.filter((m) => m !== dropped),
         facts: { threadId: 't', modelDefault: 'm' },
       }));
@@ -129,7 +141,7 @@ describe('the compatibility gate separates missing, signed-out and unsupported',
       const facts = { threadId: 't', modelDefault: 'm' };
       delete facts[fact.key];
       const verdict = client.checkProtocol(hypothetical({
-        version: '0.0.0', methods: client.REQUIRED_METHODS.slice(), facts,
+        version: SUPPORTED_VERSION, methods: client.REQUIRED_METHODS.slice(), facts,
       }));
       assert.equal(verdict.ok, false);
       assert.equal(verdict.state, S.UNSUPPORTED);
@@ -138,7 +150,7 @@ describe('the compatibility gate separates missing, signed-out and unsupported',
     }
     // An EMPTY STRING is a missing field, not a present one.
     const blank = client.checkProtocol(hypothetical({
-      version: '0.0.0', methods: client.REQUIRED_METHODS.slice(), facts: { threadId: '', modelDefault: 'm' },
+      version: SUPPORTED_VERSION, methods: client.REQUIRED_METHODS.slice(), facts: { threadId: '', modelDefault: 'm' },
     }));
     assert.equal(blank.state, S.UNSUPPORTED);
   });
@@ -147,7 +159,7 @@ describe('the compatibility gate separates missing, signed-out and unsupported',
 describe('unknown is not empty, and extra is not a failure', () => {
   test('EXTRA unknown methods are IGNORED — a newer server is not an incompatible one', () => {
     const verdict = client.checkProtocol(hypothetical({
-      version: '0.0.0',
+      version: SUPPORTED_VERSION,
       methods: client.REQUIRED_METHODS.concat(['thread/somethingNew', 'account/whatever']),
       facts: { threadId: 't', modelDefault: 'm' },
     }));
@@ -156,7 +168,7 @@ describe('unknown is not empty, and extra is not a failure', () => {
 
   test('EXTRA unknown facts are IGNORED', () => {
     const verdict = client.checkProtocol(hypothetical({
-      version: '0.0.0',
+      version: SUPPORTED_VERSION,
       methods: client.REQUIRED_METHODS.slice(),
       facts: { threadId: 't', modelDefault: 'm', somethingTheSchemaGrew: 42 },
     }));
@@ -166,18 +178,18 @@ describe('unknown is not empty, and extra is not a failure', () => {
   test('UNDECLARED (`null`) is `unverified-protocol`; DECLARED-EMPTY (`[]`) is `unsupported`', () => {
     // 🔒 `docs/INVARIANTS.md`: unknown capability must stay different from an empty value. Folding
     // `null` into `[]` refuses working installs; folding it into READY restores false confidence.
-    const undeclared = client.checkProtocol(hypothetical({ version: '0.0.0', methods: null, facts: { threadId: 't', modelDefault: 'm' } }));
+    const undeclared = client.checkProtocol(hypothetical({ version: SUPPORTED_VERSION, methods: null, facts: { threadId: 't', modelDefault: 'm' } }));
     assert.equal(undeclared.state, S.UNVERIFIED);
     assert.equal(undeclared.ok, false, 'unverified is never connected');
     assert.deepEqual(undeclared.missingMethods, []);
 
-    const empty = client.checkProtocol(hypothetical({ version: '0.0.0', methods: [], facts: { threadId: 't', modelDefault: 'm' } }));
+    const empty = client.checkProtocol(hypothetical({ version: SUPPORTED_VERSION, methods: [], facts: { threadId: 't', modelDefault: 'm' } }));
     assert.equal(empty.state, S.UNSUPPORTED);
     assert.deepEqual(empty.missingMethods, client.REQUIRED_METHODS.slice());
   });
 
   test('no handshake at all is `unverified-protocol`, not `ready` and not `unsupported`', () => {
-    const verdict = client.checkProtocol(hypothetical({ version: '0.0.0', methods: client.REQUIRED_METHODS.slice(), facts: null }));
+    const verdict = client.checkProtocol(hypothetical({ version: SUPPORTED_VERSION, methods: client.REQUIRED_METHODS.slice(), facts: null }));
     assert.equal(verdict.state, S.UNVERIFIED);
     assert.match(verdict.reason, /no handshake was run/);
   });
