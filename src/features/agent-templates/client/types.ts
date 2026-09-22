@@ -19,6 +19,7 @@
 import type {
   AgentTemplate,
   TemplateField,
+  TemplateFieldType,
   TemplateKnowledgeBaseRef,
   TemplateKnowledgeRef,
   TemplateKnowledgeScope,
@@ -34,6 +35,7 @@ import type {
 export type {
   AgentTemplate,
   TemplateField,
+  TemplateFieldType,
   TemplateKnowledgeBaseRef,
   TemplateKnowledgeRef,
   TemplateKnowledgeScope,

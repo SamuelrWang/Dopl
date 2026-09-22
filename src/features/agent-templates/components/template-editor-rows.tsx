@@ -11,9 +11,13 @@ import {
   OpenScaleIconButton,
 } from "@/shared/ui/open-scale-button";
 import { DialogField } from "@/shared/ui/standard-dialog";
-import { FormDialog, UnderlineField } from "@/shared/ui/form-dialog";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
-import type { TemplateField } from "../client/types";
+import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
+import type { TemplateField, TemplateFieldType } from "../client/types";
+import {
+  TEMPLATE_FIELD_TYPES,
+  TEMPLATE_FIELD_TYPE_DEFAULT,
+} from "../types";
 
 /**
  * The editor's FIELD FURNITURE — the key/value rows and the chip picker.
@@ -27,9 +31,11 @@ import type { TemplateField } from "../client/types";
  *
  * 🔒 **IN-BODY BUTTONS ARE THE KIT'S 26px PILL (Samuel, 2026-08-28)** —
  * `shared/ui/open-scale-button.tsx`, the Open face /home's section buttons
- * already wear, so Add field, a row's Remove and the picker's Attach cannot
- * drift back into three scales inside one dialog. Glyphs size off
- * `OPEN_SCALE_ICON` / `OPEN_SCALE_ICON_ONLY`.
+ * already wear, so a row's Remove and the picker's Attach cannot drift back into
+ * three scales inside one dialog. Glyphs size off `OPEN_SCALE_ICON` /
+ * `OPEN_SCALE_ICON_ONLY`. ⚠ **THE FIELD LIST'S OWN ADD IS NOT ON THAT FACE SINCE
+ * 2026-09-22** — Samuel ruled it a full-width GRAY BOX, which is a different
+ * thing from a pill beside a row; see {@link CustomFieldRows}.
  * ⚠ The FOOTER pair is outside that ruling — it is `FormDialog`'s, at
  * `--action-h-sm`, so this dialog closes like every other popup form.
  *
@@ -44,16 +50,27 @@ export { RAISED_INPUT };
 export { DialogField as Field };
 
 /**
- * CUSTOM FIELDS — the pairs listed and edited INLINE, added through a
- * `FormDialog` (Samuel, 2026-08-27; a `FormDialog` since 2026-09-08).
+ * CUSTOM FIELDS — the pairs listed, added and edited INLINE.
  *
- * ⚠ ADDING IS A DIALOG because a field is about to be more than a key and a
- * value (type, default, required), and a row four controls wide is a form
- * pretending to be a list. Editing and removing stay inline — a pair already on
- * screen is cheaper to fix where it is than behind a modal round trip.
+ * 🔒 **THE ADD DIALOG IS GONE (Samuel, 2026-09-22: *"right now it's like a
+ * button. I don't like that … instead a gray box button that says New field"*,
+ * and a new template *"should have an existing blank field that is already in,
+ * just have it blank"*).** ⚠ **THE NOTE THAT STOOD HERE ARGUED THE OPPOSITE AND
+ * ITS PREMISE NEVER ARRIVED**: adding was a dialog *"because a field is about to
+ * be more than a key and a value (type, default, required), and a row four
+ * controls wide is a form pretending to be a list."* A year on, a field is still
+ * a key and a value — so the modal was a round trip charged for a column that
+ * does not exist, on the one control an operator uses most in this form.
  *
- * ⚠ An empty key is dropped at SAVE (`../lib/template-draft.ts › cleanFields`),
- * not at the keystroke; the dialog's own Add button refuses a blank one.
+ * ⚠ **A ROW IS ADDED BY TYPING IN ONE, NOT BY COMMITTING A FORM.** The gray box
+ * appends a BLANK row and nothing else, which is why there is no Add verb and
+ * nothing to refuse: an empty key is dropped at SAVE
+ * (`../lib/template-draft.ts › cleanFields`), so a row the operator opened and
+ * abandoned costs nothing and is never written.
+ * ⚠ **AND THE FIRST ROW IS ALREADY THERE ON A NEW TEMPLATE** — `emptyDraft()`,
+ * not this component: a starter row is a fact about a DRAFT, and putting it here
+ * would also paint one over a saved template that has no fields, where it would
+ * read as a field somebody removed.
  */
 export function CustomFieldRows({
   fields,
@@ -62,13 +79,6 @@ export function CustomFieldRows({
   fields: ReadonlyArray<TemplateField>;
   onChange: (next: TemplateField[]) => void;
 }) {
-  // ⚠ TWO PIECES OF STATE, NOT ONE. `adding` drives the modal's fade; `session`
-  // is bumped only on the way IN, and it is what remounts the form. Keying the
-  // form on `adding` alone would also remount on the way OUT — blanking the
-  // inputs on screen while the card is still fading.
-  const [adding, setAdding] = useState(false);
-  const [session, setSession] = useState(0);
-
   function edit(index: number, patch: Partial<TemplateField>) {
     onChange(fields.map((f, i) => (i === index ? { ...f, ...patch } : f)));
   }
@@ -87,12 +97,26 @@ export function CustomFieldRows({
             aria-label={`Field ${index + 1} key`}
             className={cn(RAISED_INPUT, "h-8 flex-[2] px-2.5 font-mono text-small")}
           />
-          <input
-            value={field.value}
-            onChange={(e) => edit(index, { value: e.target.value })}
-            placeholder="Value"
-            aria-label={`Field ${index + 1} value`}
-            className={cn(RAISED_INPUT, "h-8 flex-[3] px-2.5")}
+          <FieldValueInput
+            field={field}
+            index={index}
+            onChange={(value) => edit(index, { value })}
+          />
+          {/* 🔒 **THE TYPE (Samuel, 2026-09-22), THIRD IN THE ROW.** It says how
+              the VALUE is typed and nothing else — the value is a string on every
+              branch and the launch splice reads the same `key: value` line it
+              always did (`../types.ts › TemplateFieldType` carries the scope and
+              what was deliberately left out of it).
+              ⚠ THE DIALOG DROPDOWN'S OWN FACE (`variant="raised"`), so the row's
+              three controls are one recipe rather than an input, an input and a
+              pill. */}
+          <SelectMenu
+            value={field.type ?? TEMPLATE_FIELD_TYPE_DEFAULT}
+            options={FIELD_TYPE_OPTIONS}
+            onChange={(type) => edit(index, { type })}
+            ariaLabel={`Field ${index + 1} type`}
+            variant="raised"
+            className="h-8 shrink-0"
           />
           <OpenScaleIconButton
             onClick={() => onChange(fields.filter((_, i) => i !== index))}
@@ -103,97 +127,105 @@ export function CustomFieldRows({
           </OpenScaleIconButton>
         </div>
       ))}
-      {/* ⚠ `w-fit` IS THE CALLER'S, and it has to be: the pill is
-          `inline-flex`, but this column is a flex container, so a stretched
-          item would run the width of the dialog. Layout beyond the pill's own
-          inline row stays with the caller (`shared/ui/open-scale-button.tsx`). */}
-      <OpenScaleButton
-        onClick={() => {
-          setSession((n) => n + 1);
-          setAdding(true);
-        }}
-        className="w-fit"
+      {/* 🔒 **THE GRAY BOX (Samuel, 2026-09-22)** — full width, the flat inset
+          fill, and the WHOLE of it presses. It is not the kit's 26px pill: that
+          face is for a control sitting BESIDE something (a row's Remove, a
+          card's Open), and this one is the last row of a list, reading as the
+          empty slot the next field goes in.
+          ⚠ FLAT, NEVER PRESSED IN — `bg-bg-inset` and nothing else. The
+          pressed-in field recipe here is a regression with a source scan behind
+          it (`template-editor-surface.test.tsx`), which reads this file for the
+          banned class NAMES — so this note may not spell one either. */}
+      <button
+        type="button"
+        onClick={() =>
+          onChange([
+            ...fields,
+            // ⚠ THE DEFAULT IS STAMPED ON THE DRAFT ROW AND NOT ON THE WIRE:
+            // `cleanFields` drops it again on the way out, so `text` still
+            // travels as ABSENCE.
+            { key: "", value: "", type: TEMPLATE_FIELD_TYPE_DEFAULT },
+          ])
+        }
+        className="flex w-full cursor-pointer items-center gap-1.5 rounded-lg bg-bg-inset px-2.5 py-2 text-left text-caption text-text-muted transition-colors hover:bg-bg-inset-hover"
       >
         <Plus size={OPEN_SCALE_ICON} aria-hidden="true" />
-        Add field
-      </OpenScaleButton>
-      {/* ⚠ A DIALOG OVER A DIALOG, and `ModalShell` portals to `document.body`,
-          so the card is NOT clipped by the editor's scrolling body. The
-          editor's own `ConfirmDialog` is the precedent.
-          ⚠ **THE WHOLE DIALOG IS KEYED NOW, NOT ONLY ITS BODY (2026-09-08).**
-          The kit puts the verb on the SHELL, so the shell is what holds the
-          pair — and `session` still bumps only on the way IN, so the exit fade
-          plays with the typed values still on screen. */}
-      <AddFieldDialog
-        key={session}
-        open={adding}
-        onDiscard={() => setAdding(false)}
-        onAdd={(field) => {
-          setAdding(false);
-          onChange([...fields, field]);
-        }}
-      />
+        New field
+      </button>
     </div>
   );
 }
 
 /**
- * ADD A FIELD — its own popup form, mounted fresh per open (see `session`
- * above) so the draft pair is state that cannot outlive the surface that
- * collected it.
- *
- * ⚠ **IT IS A `FormDialog` LIKE EVERY OTHER DIALOG THAT COLLECTS INPUT**
- * (2026-09-08; `docs/DESIGN-SYSTEM.md` › Popup forms). A `StandardDialog` with
- * two `RAISED_INPUT` boxes and a Cancel/Add pair was the pre-kit face of the
- * same two questions.
+ * THE FIVE SHAPES, LABELLED FOR A PERSON. ⚠ Derived from `../types.ts ›
+ * TEMPLATE_FIELD_TYPES` rather than hand-listed, so a value the schema accepts
+ * and the row cannot offer is a TYPE ERROR rather than a missing option.
  */
-function AddFieldDialog({
-  open,
-  onDiscard,
-  onAdd,
-}: {
-  open: boolean;
-  onDiscard: () => void;
-  onAdd: (field: TemplateField) => void;
-}) {
-  const [key, setKey] = useState("");
-  const [value, setValue] = useState("");
-  // ⚠ THE KEY IS WHAT MAKES A PAIR REAL — a value with no key is dropped at
-  // save (`../lib/template-draft.ts › cleanFields`), so adding one here would
-  // be a row that disappears without a word.
-  const canAdd = key.trim().length > 0;
+const FIELD_TYPE_LABELS: Record<TemplateFieldType, string> = {
+  text: "Text",
+  number: "Number",
+  date: "Date",
+  boolean: "Yes / no",
+  url: "Link",
+};
 
+const FIELD_TYPE_OPTIONS: ReadonlyArray<SelectMenuOption<TemplateFieldType>> =
+  TEMPLATE_FIELD_TYPES.map((value) => ({
+    value,
+    label: FIELD_TYPE_LABELS[value],
+  }));
+
+/**
+ * THE VALUE CONTROL — the one thing the type actually changes.
+ *
+ * ⚠ **THE STORED VALUE IS A STRING ON EVERY BRANCH.** `number` and `date` are
+ * native input types, which is a KEYBOARD and a picker rather than a contract:
+ * the browser hands back a string, the schema takes a string, and the launch
+ * payload splices the same line. Nothing here validates, and nothing should —
+ * the server refusing "n/a" in a `number` field would be enforcing a rule no
+ * reader downstream honours.
+ * ⚠ **`boolean` IS THE ONE THAT SWAPS THE ELEMENT**, because there is no input
+ * type for a yes/no and a free-text box is how a field ends up holding "yes",
+ * "Y" and "true" in three templates. Its stored values are `"yes"` / `"no"`, and
+ * the EMPTY option stays — a yes/no nobody has answered is not a "no".
+ */
+function FieldValueInput({
+  field,
+  index,
+  onChange,
+}: {
+  field: TemplateField;
+  index: number;
+  onChange: (next: string) => void;
+}) {
+  const label = `Field ${index + 1} value`;
+  const type = field.type ?? TEMPLATE_FIELD_TYPE_DEFAULT;
+  if (type === "boolean") {
+    return (
+      <select
+        value={field.value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={label}
+        className={cn(RAISED_INPUT, "h-8 flex-[3] px-2.5")}
+      >
+        <option value="">—</option>
+        <option value="yes">Yes</option>
+        <option value="no">No</option>
+      </select>
+    );
+  }
   return (
-    <FormDialog
-      open={open}
-      onDiscard={onDiscard}
-      title="Add field"
-      closeLabel="Close add field"
-      primary={{
-        // ⚠ "Add", not "Add field": the TITLE already says which thing, and
-        // two buttons reading "Add field" on one screen is an ambiguous
-        // accessible name for the operator and for every `getByRole`.
-        label: "Add",
-        onClick: () => onAdd({ key: key.trim(), value }),
-        disabled: !canAdd,
-      }}
-    >
-      <UnderlineField
-        id="add-field-key"
-        label="Key"
-        ariaLabel="Field key"
-        value={key}
-        onChange={setKey}
-      />
-      <UnderlineField
-        id="add-field-value"
-        label="Value"
-        caption="optional"
-        ariaLabel="Field value"
-        value={value}
-        onChange={setValue}
-      />
-    </FormDialog>
+    <input
+      // ⚠ `url` STAYS A TEXT BOX. `type="url"` adds browser VALIDATION (and a
+      // refusal at submit) to a field whose value this product does not parse,
+      // so it would be the one branch that can refuse what the schema accepts.
+      type={type === "number" ? "number" : type === "date" ? "date" : "text"}
+      value={field.value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={type === "url" ? "https://…" : "Value"}
+      aria-label={label}
+      className={cn(RAISED_INPUT, "h-8 flex-[3] px-2.5")}
+    />
   );
 }
 

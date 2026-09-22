@@ -86,12 +86,29 @@ async function open(over: Partial<React.ComponentProps<typeof TemplateEditor>> =
 const field = (selector: string) =>
   document.querySelector(selector) as HTMLInputElement;
 
-async function addField(key: string, value: string) {
-  fireEvent.click(screen.getByRole("button", { name: "Add field" }));
-  const dialog = await screen.findByRole("dialog", { name: "Add field" });
-  fireEvent.change(field("#add-field-key"), { target: { value: key } });
-  fireEvent.change(field("#add-field-value"), { target: { value } });
-  fireEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+/**
+ * ⚠ **INLINE SINCE 2026-09-22 — THERE IS NO ADD-FIELD DIALOG (Samuel).** The
+ * gray "New field" box appends a BLANK row and the operator types in it, so this
+ * helper fills the first empty row and only presses the box when every row on
+ * screen already has a key. A new template opens holding one blank row
+ * (`lib/template-draft.ts › emptyDraft`), which is why the press is conditional
+ * rather than unconditional.
+ */
+function addField(key: string, value: string) {
+  const keys = () =>
+    Array.from(
+      document.querySelectorAll<HTMLInputElement>('input[aria-label$=" key"]')
+    );
+  let at = keys().findIndex((input) => input.value === "");
+  if (at === -1) {
+    fireEvent.click(screen.getByRole("button", { name: "New field" }));
+    at = keys().length - 1;
+  }
+  fireEvent.change(keys()[at], { target: { value: key } });
+  fireEvent.change(
+    field(`input[aria-label="Field ${at + 1} value"]`),
+    { target: { value } }
+  );
 }
 
 /** ⚠ THE TABLIST, addressed by its accessible name — `PillChoice` labels its
@@ -131,8 +148,9 @@ describe("the payload survives the face", () => {
     });
     pickModel("Opus 5");
     pickScope("Public");
-    await addField("repo", "dopl");
-    fireEvent.click(screen.getByRole("button", { name: "Add knowledge" }));
+    addField("repo", "dopl");
+    // ⚠ NO ADD BUTTON TO PRESS SINCE 2026-09-22 — the tree is in the form, so
+    // the base is checked where it is listed (Samuel).
     fireEvent.click(screen.getByRole("treeitem", { name: "Specs" }));
     fireEvent.click(screen.getByRole("button", { name: CREATE_VERB }));
 

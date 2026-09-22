@@ -95,12 +95,14 @@ const DECLARED: Array<{ file: string; fence: Fence; why: string }> = [
     fence: "exempt",
     why: "an EXAMPLE string in a tool description; the op's own refusal is `grant.ts › channelScopeRefusal`",
   },
-  {
-    file: "apps/desktop-ui/src/pages/home/agent-share.tsx",
-    fence: "exempt",
-    why: "the /home face, which only ever runs inside a `kind='link'` container (INVARIANTS §4A)",
-  },
 ];
+// ⚠ **ONE ENTRY LEFT THIS LIST ON 2026-09-22, AND IT LEFT WITH ITS FILE.**
+// `apps/desktop-ui/src/pages/home/agent-share.tsx` ("the /home face, which only
+// ever runs inside a `kind='link'` container") was DELETED when Samuel ruled the
+// agent card's control a LAUNCH; the grant's only door is `dopl_agent(op="grant")`
+// now, which this census already covers through `packages/mcp-server/src/tools/
+// agent.ts` and `src/shared/grants/schema.ts`. A declaration outliving its file
+// is what the EXACTLY in this suite's name exists to catch, in both directions.
 
 /** A container-kind test, in any of the spellings the tree uses. */
 const KIND_TEST =

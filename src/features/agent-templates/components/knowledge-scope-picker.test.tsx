@@ -46,9 +46,10 @@ function mount(selected: TemplateKnowledgeRef[] = []) {
   return onChange;
 }
 
-/** Open the popover and expand down to `Nightly`. */
+/** Expand down to `Nightly`. ⚠ THERE IS NOTHING TO OPEN SINCE 2026-09-22: the
+ *  tree is rendered IN the form (Samuel), so a suite that clicked its way in is
+ *  a suite pinning a control that no longer exists. */
 function openTree() {
-  fireEvent.click(screen.getByRole("button", { name: "Add knowledge" }));
   fireEvent.click(screen.getByRole("button", { name: "Expand Runbooks" }));
   fireEvent.click(screen.getByRole("button", { name: "Expand Deploys" }));
   fireEvent.click(screen.getByRole("button", { name: "Expand Nightly" }));
@@ -62,8 +63,7 @@ afterEach(cleanup);
 describe("the tree", () => {
   it("opens on the BASES and drills into folders and entries", () => {
     mount();
-    fireEvent.click(screen.getByRole("button", { name: "Add knowledge" }));
-    // ⚠ Bases at the root, and nothing beneath them until asked — the read is
+      // ⚠ Bases at the root, and nothing beneath them until asked — the read is
     // lazy, so an unexpanded base costs no request.
     expect(screen.getByRole("treeitem", { name: "Runbooks" })).toBeTruthy();
     expect(screen.getByRole("treeitem", { name: "Specs" })).toBeTruthy();
@@ -145,8 +145,7 @@ describe("the implied subtree", () => {
 
   it("does NOT imply a sibling outside the folder", () => {
     mount([folderRef]);
-    fireEvent.click(screen.getByRole("button", { name: "Add knowledge" }));
-    fireEvent.click(screen.getByRole("button", { name: "Expand Runbooks" }));
+      fireEvent.click(screen.getByRole("button", { name: "Expand Runbooks" }));
     // "Loose" sits at the base root, not under Deploys.
     expect(
       screen.getByRole("treeitem", { name: "Loose" }).getAttribute("aria-selected")
@@ -191,8 +190,7 @@ describe("the implied subtree", () => {
       toolPath: "Deploys",
     };
     const onChange = mount([nested, otherBase]);
-    fireEvent.click(screen.getByRole("button", { name: "Add knowledge" }));
-    fireEvent.click(screen.getByRole("button", { name: "Expand Runbooks" }));
+      fireEvent.click(screen.getByRole("button", { name: "Expand Runbooks" }));
     fireEvent.click(screen.getByRole("treeitem", { name: "Runbooks" }));
     const next = last(onChange);
     expect(next.map((r) => r.path).sort()).toEqual(["Runbooks", "Specs"]);
@@ -217,7 +215,11 @@ describe("the chips", () => {
       toolPath: "API",
     };
     const onChange = mount([base, folder]);
-    expect(screen.getByText("Runbooks")).toBeTruthy();
+    // ⚠ **BY THE CHIP'S OWN DETACH NAME, NOT BY TEXT (2026-09-22).** The tree
+    // is rendered in the form now, so a whole-base chip and that base's tree ROW
+    // carry the same words — `getByText("Runbooks")` matched both and proved
+    // neither. The detach label is the chip's and the chip's alone.
+    expect(screen.getByRole("button", { name: "Detach Runbooks" })).toBeTruthy();
     expect(screen.getByText("Specs / API")).toBeTruthy();
     // 🔒 THE IDENTITY IS THE SHAPE PLUS ITS OWN ID, never the base id — a
     // whole-base scope and a folder scope of that base share the base id, so
@@ -226,7 +228,7 @@ describe("the chips", () => {
     expect(last(onChange)).toEqual([base]);
   });
 
-  it("says so, and disables Add, when the container holds no knowledge", () => {
+  it("says so, and renders no tree, when the container holds no knowledge", () => {
     render(
       <KnowledgeScopePicker
         workspaceId="ws-1"
@@ -237,17 +239,18 @@ describe("the chips", () => {
       />
     );
     expect(screen.getByText("No knowledge here yet.")).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: "Add knowledge" }).hasAttribute("disabled")
-    ).toBe(true);
+    // ⚠ **THE SENTENCE STANDS IN FOR THE TREE, and there is no disabled Add to
+    // assert on any more (2026-09-22).** An empty container renders NO tree at
+    // all — a `role="tree"` with nothing in it is a control that looks live and
+    // holds nothing, which is the same defect the disabled button was avoiding.
+    expect(screen.queryByRole("tree")).toBeNull();
   });
 });
 
 describe("the keyboard", () => {
   it("moves focus with the arrows and toggles with Space", () => {
     const onChange = mount();
-    fireEvent.click(screen.getByRole("button", { name: "Add knowledge" }));
-    const rows = screen.getAllByRole("treeitem");
+      const rows = screen.getAllByRole("treeitem");
     rows[0].focus();
     fireEvent.keyDown(screen.getByRole("tree"), { key: "ArrowDown" });
     expect(document.activeElement).toBe(rows[1]);
@@ -257,8 +260,7 @@ describe("the keyboard", () => {
 
   it("expands and collapses with ArrowRight / ArrowLeft", () => {
     mount();
-    fireEvent.click(screen.getByRole("button", { name: "Add knowledge" }));
-    const base = screen.getByRole("treeitem", { name: "Runbooks" });
+      const base = screen.getByRole("treeitem", { name: "Runbooks" });
     fireEvent.keyDown(base, { key: "ArrowRight" });
     expect(screen.getByRole("treeitem", { name: "Deploys" })).toBeTruthy();
     fireEvent.keyDown(base, { key: "ArrowLeft" });

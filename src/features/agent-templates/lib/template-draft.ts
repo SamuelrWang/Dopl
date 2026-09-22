@@ -6,6 +6,7 @@ import type {
   TemplateKnowledgeRef,
   TemplateVisibility,
 } from "../client/types";
+import { TEMPLATE_FIELD_TYPE_DEFAULT } from "../types";
 import {
   EMPTY_KNOWLEDGE,
   refToScope,
@@ -60,13 +61,28 @@ export interface TemplateDraft {
   knowledge: TemplateKnowledgeRef[];
 }
 
+/**
+ * A BRAND-NEW TEMPLATE'S DRAFT.
+ *
+ * 🔒 **IT OPENS WITH ONE BLANK FIELD ROW (Samuel, 2026-09-22: a new template
+ * *"should have an existing blank field that is already in, just have it
+ * blank"*).** The row is a DRAFT fact and lives here rather than in
+ * `CustomFieldRows`, which renders both a create and an EDIT: a starter row
+ * painted by the component would also appear over a saved template whose fields
+ * were all removed, where an empty row reads as a field somebody deleted.
+ *
+ * ⚠ **IT COSTS NOTHING IF IT IS NEVER TYPED IN.** `cleanFields` drops a row with
+ * a blank key at both body builders, so an untouched starter row is not in the
+ * POST — the create still writes `fields: []`, byte for byte what it wrote
+ * before this ruling.
+ */
 export function emptyDraft(): TemplateDraft {
   return {
     name: "",
     description: "",
     instructions: "",
     model: "",
-    fields: [],
+    fields: [{ key: "", value: "", type: TEMPLATE_FIELD_TYPE_DEFAULT }],
     visibility: "private",
     teamIds: [],
     knowledge: [],
@@ -79,7 +95,13 @@ export function draftFromTemplate(template: AgentTemplate): TemplateDraft {
     description: template.description ?? "",
     instructions: template.instructions ?? "",
     model: template.model ?? "",
-    fields: template.fields.map((f) => ({ key: f.key, value: f.value })),
+    fields: template.fields.map((f) => ({
+      key: f.key,
+      value: f.value,
+      // ⚠ §8's FALLBACK, SPELLED INLINE AT THE READ: a row written before
+      // 2026-09-22 carries no `type`, and the dropdown has to show something.
+      type: f.type ?? TEMPLATE_FIELD_TYPE_DEFAULT,
+    })),
     visibility: template.visibility,
     teamIds: [...template.teamIds],
     // 🔒 §8 STALE-CACHE FALLBACK, SPELLED INLINE. A row cached by the bundle
@@ -117,9 +139,21 @@ export function draftFromTemplate(template: AgentTemplate): TemplateDraft {
  * legitimate half-filled form"), and it is a thing an operator can mean.
  */
 export function cleanFields(fields: ReadonlyArray<TemplateField>): TemplateField[] {
-  return fields
-    .map((f) => ({ key: f.key.trim(), value: f.value.trim() }))
-    .filter((f) => f.key !== "");
+  return (
+    fields
+      // ⚠ **THE TYPE RIDES ONLY WHEN IT IS NOT THE DEFAULT (2026-09-22).** A row
+      // the operator never touched the dropdown on must put the object on the
+      // wire it always did — `{key, value}` — so `text` is spelled by ABSENCE,
+      // exactly as it is read (`types.ts › TemplateFieldType`). Without this the
+      // create body gains a member on every field in the product and every
+      // payload pin in the suites becomes a snapshot of chrome.
+      .map((f) => ({
+        key: f.key.trim(),
+        value: f.value.trim(),
+        ...(f.type && f.type !== TEMPLATE_FIELD_TYPE_DEFAULT ? { type: f.type } : {}),
+      }))
+      .filter((f) => f.key !== "")
+  );
 }
 
 /** Save is refused on a nameless template; everything else is optional. */
@@ -224,13 +258,20 @@ export function isEmptyPatch(patch: AgentTemplateUpdateBody): boolean {
   return Object.keys(patch).length === 0;
 }
 
-/** ⚠ ORDER-SENSITIVE: rows are a list an operator arranged, not a set. */
+/** ⚠ ORDER-SENSITIVE: rows are a list an operator arranged, not a set.
+ *  ⚠ **AND THE TYPE IS PART OF THE ROW SINCE 2026-09-22** — both sides come from
+ *  `cleanFields`, where `text` is spelled by ABSENCE, so an untyped row compares
+ *  equal to an untyped row and a retyped one is a real change the PATCH has to
+ *  carry. Comparing only the pair would make the dropdown a control whose edits
+ *  are silently dropped by the empty-patch skip. */
 function sameFields(
   a: ReadonlyArray<TemplateField>,
   b: ReadonlyArray<TemplateField>
 ): boolean {
   if (a.length !== b.length) return false;
-  return a.every((f, i) => f.key === b[i].key && f.value === b[i].value);
+  return a.every(
+    (f, i) => f.key === b[i].key && f.value === b[i].value && f.type === b[i].type
+  );
 }
 
 /** ⚠ ORDER-INSENSITIVE: the pick order of a multi-select is not a fact. */
