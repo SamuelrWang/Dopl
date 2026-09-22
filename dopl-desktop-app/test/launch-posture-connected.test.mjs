@@ -267,8 +267,22 @@ function bootIpc(opts = {}) {
     // cases drive the POSTURE read's `connected` field and nothing about the record's version.
     if (id === "./launch-selection") return { SELECTION_VERSION: 2 };
     if (id === "./session-ipc-ops") return ops;
+    // U6 (2026-09-21): the runtime HALF of both settings replies moved here, so `connected` and
+    // the roster are assembled in THIS module now. ⚠ THE REAL SOURCE IS EVALUATED, not faked —
+    // "probing must not shorten the roster" is a claim about that code, and a stub would make
+    // every case below pin the stub instead. Its own `./runtime` is the same fake registry.
+    if (id === "./channel-runtime-reply") return runtimeReply;
+    // The catalog layer, stubbed: these cases drive `connected`, not the model roster.
+    if (id === "./runtime/model-catalog") return { CATALOG_VERSION: 1, catalogs: () => ({}) };
     throw new Error(`unexpected require: ${id}`);
   };
+  const runtimeReply = (() => {
+    const m = { exports: {} };
+    new Function("require", "module", "exports", readFileSync(join(MAIN, "channel-runtime-reply.js"), "utf8"))(
+      stub, m, m.exports
+    );
+    return m.exports;
+  })();
   const ops = (() => {
     const m = { exports: {} };
     new Function("require", "module", "exports", readFileSync(join(MAIN, "session-ipc-ops.js"), "utf8"))(

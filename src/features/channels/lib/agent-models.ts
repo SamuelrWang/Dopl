@@ -1,14 +1,30 @@
 /**
- * WHICH MODEL AN AGENT RUNS ON — the shared vocabulary, and nothing that reads or
- * writes it.
+ * WHICH MODEL AN AGENT RUNS ON **UNDER THE DEFAULT RUNTIME** — the shared
+ * vocabulary, and nothing that reads or writes it.
  *
- * ⚠ THIS IS THE ONE PLACE THE ID→LABEL MAP LIVES (Samuel, 2026-08-22). Four
- * surfaces name a model — the channel Settings tab's durable row, the live
- * posture strip on a running agent, the agent cards' effective-model chip, and
- * the panel/window headers — and a second table anywhere is the
- * two-readers-one-fact defect with a MODEL NAME as the thing that drifts. An
+ * ⚠ **IT STOPPED BEING EVERY RUNTIME'S SOURCE ON 2026-09-21 (U6), AND BEING ONE
+ * WAS THE DEFECT.** This table is four Claude ids with four labels; the New Agent
+ * dialog, the channel Settings row, the profile-defaults row and the agent cards
+ * all read it REGARDLESS of which runtime was selected — so choosing Codex
+ * offered Fable/Opus/Sonnet/Haiku and submitted one of them. The runtime-aware
+ * source is {@link ./model-catalog}, fed by the desktop's own per-runtime roster
+ * (`dopl-desktop-app/main/runtime/model-catalog.js`).
+ *
+ * ⚠ **WHAT THIS FILE IS NOW: THE DEFAULT RUNTIME'S OLDER-DESKTOP FALLBACK.** A
+ * desktop that predates U6 sends no `catalogs` key at all, and reading that
+ * absence as "no models" would empty every picker on a machine that works
+ * perfectly (INVARIANTS §11 — UNKNOWN is not EMPTY). So the frozen list survives
+ * as {@link defaultRuntimeFallbackCatalog}, scoped to the DEFAULT runtime and
+ * offered to nothing else. ⚠ A future reader widening it back to "the model
+ * list" is re-introducing the bug U6 closed.
+ *
+ * ⚠ THE ID→LABEL MAP STILL HAS ONE COPY PER TREE (Samuel, 2026-08-22): an
  * operator reading "Opus" on a card and "Sonnet" in Settings for one agent has no
- * way to tell which is lying.
+ * way to tell which is lying. The desktop declares the same table in
+ * `main/runtime/claude/models.js › LABELS` because the two trees cannot import
+ * each other, and `dopl-desktop-app/test/runtime-model-catalog.test.mjs` READS
+ * this file and fails when they disagree — the pin `session-model.js ›
+ * LAUNCH_MODEL_FALLBACK` already had.
  *
  * ⚠ NO HOOK, NO BRIDGE, NO REACT — the rule `permission-modes.ts` follows and the
  * precedent this file is built on (INVARIANTS §1: one file, one reason to
@@ -24,6 +40,8 @@
  * model this build has never heard of, and a blank chip would report that as "no
  * model" (INVARIANTS §11 — UNKNOWN is not EMPTY).
  */
+
+import type { ModelCatalog } from "./model-catalog";
 
 /**
  * ⚠ ABSENCE IS STILL "NO PICK ON THE WIRE" — but it is no longer OFFERED (2026-09-06,
@@ -48,7 +66,7 @@ export const AGENT_MODEL_DEFAULT = "" as const;
  * `short` is the ONE-WORD label for a glance surface (a card chip, a header); the
  * full `label` carries the version an operator needs when they are CHOOSING.
  */
-const AGENT_MODELS: ReadonlyArray<{
+export const AGENT_MODELS: ReadonlyArray<{
   id: string;
   label: string;
   short: string;
@@ -240,4 +258,49 @@ export function resolveAgentModelId(raw: string | null | undefined): string | nu
   // onto the launch line. `Object.freeze` bounds writes, not reads.
   if (!Object.hasOwn(AGENT_MODEL_ALIASES, alias)) return null;
   return AGENT_MODEL_ALIASES[alias];
+}
+
+/**
+ * **THE DEFAULT RUNTIME'S FROZEN LIST, AS A CATALOG — THE OLDER-DESKTOP LANE**
+ * (2026-09-21, U6).
+ *
+ * ⚠ **IT EXISTS FOR ONE CALLER AND ONE CONDITION**: a desktop that predates the
+ * catalog contract sends no `catalogs` key, and `model-catalog.ts › hasCatalogKey`
+ * is how a hook tells that absence from an empty map. Reading the absence as "no
+ * models" would empty the picker on a machine that works perfectly (INVARIANTS
+ * §11 — UNKNOWN is not EMPTY), so the hook substitutes this — **for the DEFAULT
+ * runtime only.**
+ *
+ * ⚠ **NEVER FOR ANOTHER RUNTIME, EVER.** That substitution is the exact failure
+ * the plan forbids ("catalog failure must never substitute another runtime's
+ * models"): an older desktop had no Codex catalog because it had no catalog
+ * contract, and answering Codex with Claude's four ids would be this file
+ * becoming every runtime's source again. A non-default runtime on such a build
+ * gets `null` and renders the platform default, which is what that build does.
+ *
+ * ⚠ `status: "ready"` IS HONEST HERE: a frozen table needs no read, so there is
+ * nothing to be loading or unavailable about. The default marker is
+ * {@link AGENT_MODEL_FALLBACK} — the PRODUCT's back-fill, not a measured platform
+ * answer; that constant's own block carries the argument.
+ */
+export function defaultRuntimeFallbackCatalog(runtimeId: string): ModelCatalog {
+  return {
+    runtime: runtimeId,
+    source: "frozen",
+    status: "ready",
+    reason: "",
+    models: AGENT_MODELS.map((m) => ({
+      id: m.id,
+      label: m.label,
+      short: m.short,
+      isDefault: m.id === AGENT_MODEL_FALLBACK,
+      hidden: false,
+      // ⚠ NO MODEL-SCOPED DIMENSIONS: this runtime declares none, so an empty
+      // record is the same statement made twice and cannot disagree with it.
+      dimensions: {},
+    })),
+    defaultId: AGENT_MODEL_FALLBACK,
+    dimensions: [],
+    truncated: false,
+  };
 }

@@ -40,6 +40,8 @@ import {
   normalizeRuntimes,
   type RuntimeDescriptor,
 } from "../lib/runtime-capability";
+import type { ModelCatalog, ModelCatalogs } from "../lib/model-catalog";
+import { useRuntimeCatalogs } from "./use-runtime-catalogs";
 
 /**
  * The read's reply, whole. ⚠ `runtimes` / `connected` are `unknown` for the posture reply's
@@ -53,6 +55,10 @@ export interface AgentDefaultsReply extends PermissionPreset {
   runtimes?: unknown;
   defaultRuntime?: string;
   connected?: unknown;
+  /** U6: every runtime's model roster, keyed by runtime id. ⚠ `unknown` for `runtimes`' reason,
+   *  and its ABSENCE is a third state — a desktop older than the catalog contract omits it. */
+  catalogs?: unknown;
+  catalogVersion?: unknown;
 }
 
 /** A defaults write. ⚠ THE WHOLE RECORD, ALWAYS — main rewrites it wholesale, so an omitted
@@ -104,6 +110,14 @@ export interface AgentDefaultsState {
   runtimes: ReadonlyArray<RuntimeDescriptor>;
   /** The descriptor a launch in a NEW channel would use — the pick, else the default, else null. */
   descriptor: RuntimeDescriptor | null;
+  /** Every runtime's model roster, keyed by runtime id (U6). ⚠ Each carries its own status; an
+   *  empty `models` list means NOTHING without it. `use-channel-launch-posture.ts` states why. */
+  catalogs: ModelCatalogs;
+  /** This desktop spoke the catalog contract. ⚠ FALSE IS "IT DID NOT SAY", not "no models". */
+  catalogsKnown: boolean;
+  /** THE CATALOG {@link descriptor}'s RUNTIME WOULD LAUNCH ON — the one object the model row
+   *  reads, so the Agents tab can never offer one runtime's models for another. */
+  catalog: ModelCatalog | null;
   /** True while a write is in flight — every control goes inert. */
   busy: boolean;
   /** Persist a new value on one field; the others are carried through unchanged. */
@@ -126,6 +140,10 @@ export function useAgentDefaults(): AgentDefaultsState {
   const [runtime, setRuntime] = useState("");
   const [runtimes, setRuntimes] = useState<RuntimeDescriptor[]>(EMPTY_RUNTIMES);
   const [defaultRuntime, setDefaultRuntime] = useState("");
+  // ⚠ U6: the roster half, shared with `use-channel-launch-posture.ts` — one module because it
+  // is one rule (`use-runtime-catalogs.ts` carries why).
+  const runtimeCatalogs = useRuntimeCatalogs();
+  const { adopt: adoptCatalogs, reloadToken } = runtimeCatalogs;
 
   // ⚠ Feature-detect after mount (window-only) so SSR and the first client render agree.
   useEffect(() => {
@@ -140,11 +158,14 @@ export function useAgentDefaults(): AgentDefaultsState {
     setAgentChain(next?.agentChain === true);
     if (hasModelKey(next)) setModelSupported(true);
     if (hasRuntimeKey(next)) setRuntimeSupported(true);
+    // ⚠ OFF THE SAME RAW REPLY, before the normalizer: the own-key probe is what tells an older
+    // desktop from a machine with no adapters registered.
+    adoptCatalogs(next);
     const list = normalizeRuntimes(next?.runtimes);
     setRuntimes(list.length ? list : EMPTY_RUNTIMES);
     setDefaultRuntime(normalizeRuntimeId(list, next?.defaultRuntime));
     setRuntime(normalizeRuntimeId(list, next?.runtime));
-  }, []);
+  }, [adoptCatalogs]);
 
   useEffect(() => {
     if (!bridge) return;
@@ -162,7 +183,10 @@ export function useAgentDefaults(): AgentDefaultsState {
     return () => {
       alive = false;
     };
-  }, [bridge, adopt]);
+    // ⚠ `reloadToken` IS A DEPENDENCY ON PURPOSE (U6): main answers `loading` for a live roster on
+    // a cold process and reads in the BACKGROUND, so something has to look again. Bounded — see
+    // `use-runtime-catalogs.ts`.
+  }, [bridge, adopt, reloadToken]);
 
   const update = useCallback(
     async (patch: Partial<AgentDefaultsWrite>) => {
@@ -194,6 +218,8 @@ export function useAgentDefaults(): AgentDefaultsState {
     [adopt, agentChain, bridge, busy, defaults, runtime]
   );
 
+  const descriptor = descriptorFor(runtimes, runtime, defaultRuntime);
+
   return {
     bridge,
     defaults,
@@ -202,7 +228,12 @@ export function useAgentDefaults(): AgentDefaultsState {
     runtimeSupported,
     runtime,
     runtimes,
-    descriptor: descriptorFor(runtimes, runtime, defaultRuntime),
+    descriptor,
+    catalogs: runtimeCatalogs.catalogs,
+    catalogsKnown: runtimeCatalogs.catalogsKnown,
+    // ⚠ DERIVED FROM THE DESCRIPTOR'S OWN ID, never from `runtime` alone: an unset record seeds
+    // the DEFAULT adapter, and the model row has to show THAT runtime's roster.
+    catalog: runtimeCatalogs.catalogFor(descriptor?.id ?? "", defaultRuntime),
     busy,
     update,
   };

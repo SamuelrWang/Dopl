@@ -4,23 +4,43 @@
 // The Claude adapter keeps a FROZEN table because its platform's authoritative roster needs a live
 // query and the picker has to be usable before anything is running. Codex answers `model/list`
 // over the same app-server protocol the session already speaks, WITH each model's reasoning-effort
-// options (`codex-research.md` §3) — so the picker is populated from the wire and an id this build
-// has never seen renders raw rather than being dropped.
+// options — so the picker is populated from the wire and an id this build has never seen renders
+// raw rather than being dropped.
 //
 // ⚠ A ROSTER CALL MUST NEVER THROW INTO A PICKER, AND MUST NEVER HANG ONE. It spawns a short-lived
 // `codex app-server` of its own — the session's connection is busy with a turn and is not a query
-// surface — bounded by a timeout, cached, and answering an EMPTY roster with a reason on any
-// failure. An empty live roster is a picker that shows the platform's own default and nothing
-// else, which is what every session did before a picker existed; a thrown one is a settings page
-// that will not open.
+// surface — bounded by a timeout, cached, and answering a FAILURE WITH A REASON.
 //
-// ⚠ AND IT IS A SECOND CHILD PROCESS, WHICH IS THE COST OF `live`. Cached for the life of the app
-// process: the roster changes when the operator upgrades their CLI, which they cannot do while it
-// is running.
+// ── ⚠ THE FAILURE PATH IS HONEST NOW, AND THAT IS THE POINT OF THE 2026-09-21 (U6) REWRITE ────
+//
+// 🔒 **AN EMPTY ROSTER USED TO BE THE ANSWER TO EVERY FAILURE**, and a picker cannot tell that
+// apart from a platform with no models. `main/runtime/model-catalog.js` is the contract that fixes
+// it: this file reports `reason` on every failure and the catalog turns a reason-carrying empty
+// roster into `status: 'unavailable'` — a different sentence and a different operator action from
+// `loading`. **Empty is never "this runtime has no models".**
+//
+// 🔒 ⚠ **AND THE ROSTER READ IS BROKEN INDEPENDENTLY OF LAUNCH, ON THIS TREE, RIGHT NOW.** The
+// plan's Implementation Log entry D measured `codex app-server --help` and it shows NO
+// `--ignore-user-config` flag (it shows `--strict-config`). Both this file and `launch-spec.js`
+// pass the dead flag, so the app-server exits before `initialize` and `model/list` never answers.
+// **The flag is deliberately NOT changed here — the replacement isolation mechanism is U4's
+// decision, and changing it in a picker would be shipping a security posture nobody ruled.** What
+// U6 owes is that the failure READS as a failure: `unavailable`, with the reason the binary gave,
+// never an empty list that reads as "no models".
+//
+// ⚠ AND IT IS A SECOND CHILD PROCESS, WHICH IS THE COST OF `live`. Cached by RESOLVED BINARY AND
+// VERSION (`resolve-bin.js` + `probe()`), not merely "for the process": an operator who upgrades
+// or repoints `DOPL_CODEX_BIN` gets the new roster, and a FAILURE is re-tried rather than pinned
+// for the life of the app (the cache layer's own TTL — `model-catalog.js › FAILURE_TTL_MS`).
 
 const client = require('./client');
 
 const LIST_TIMEOUT_MS = 8000;
+
+// ⚠ A CURSOR LOOP NEEDS A BOUND OR IT IS A HANG WITH EXTRA STEPS. A server that answers the same
+// cursor forever, or one with a genuinely enormous roster, stops here and the catalog says
+// `truncated` rather than pretending the list is complete.
+const MAX_PAGES = 10;
 
 // ⚠ THE SECOND DIMENSION, AND ITS VALUES ARE THE PLATFORM'S OWN (`model_reasoning_effort`:
 // none / minimal / low / medium / high / xhigh — `codex-research.md` §3). Declared here rather
@@ -29,15 +49,18 @@ const LIST_TIMEOUT_MS = 8000;
 // and `model/list` is what says which of them a given model offers.
 const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'];
 
-let cached = null;
+const DIMENSION = 'reasoningEffort';
 
-// ⚠ TOLERANT, LIKE EVERY OTHER READER IN THIS ADAPTER. The `model/list` result shape is not
-// written down in the research, only what it CONTAINS ("models + reasoning-effort options"), so
-// this takes the ids out of whichever of the plausible shapes arrives and renders them raw.
+let cached = null; // { key, roster }
+
+const str = (v) => (typeof v === 'string' ? v.trim() : '');
+
+// ⚠ TOLERANT, LIKE EVERY OTHER READER IN THIS ADAPTER. Kept and still exported because
+// `launch-directive-spawn.js` and the contract suites read ids off a roster, and because the row
+// shape below is MEASURED from one alpha build (Implementation Log D) rather than from a supported
+// CLI — a reader that accepts only the measured spelling would break on the first public one.
 function idsFrom(result) {
-  const rows = (result && (result.models || result.data || result.items))
-    || (Array.isArray(result) ? result : []);
-  if (!Array.isArray(rows)) return [];
+  const rows = rowsFrom(result);
   const out = [];
   for (const row of rows) {
     if (typeof row === 'string' && row) { out.push(row); continue; }
@@ -47,9 +70,114 @@ function idsFrom(result) {
   return out;
 }
 
-async function fetchRoster() {
-  const gate = await client.probe();
-  if (!gate.ok) return { source: 'live', ids: [], aliases: [], reason: gate.reason };
+/**
+ * ⚠ `data` FIRST, BECAUSE THAT IS THE ONE THAT WAS MEASURED. Implementation Log D:
+ * `model/list` answers `{ data, nextCursor }`. The other spellings stay as tolerance for a
+ * supported CLI nobody here has run — they are NOT a claim that any of them is real.
+ */
+function rowsFrom(result) {
+  const rows = (result && (result.data || result.models || result.items))
+    || (Array.isArray(result) ? result : []);
+  return Array.isArray(rows) ? rows : [];
+}
+
+/**
+ * ONE ROW → ONE NORMALIZED CATALOG ENTRY.
+ *
+ * ⚠ **THE FIELD NAMES ARE MEASURED, AND WHAT IS NOT MEASURED IS NOT INVENTED** (Implementation
+ * Log D, against the ChatGPT-bundled alpha — tooling proof, not the contract): `id`,
+ * `displayName`, `isDefault`, `hidden`, `defaultReasoningEffort`, and `supportedReasoningEfforts`
+ * as `{ reasoningEffort, description }` OBJECTS. Snake-case twins are accepted as tolerance for a
+ * CLI nobody here has run; nothing else is guessed at.
+ *
+ * ⚠ AN EFFORT THIS BUILD DOES NOT KNOW IS STILL OFFERED. `REASONING_EFFORTS` is what Dopl can
+ * STORE (`descriptor.models.dimensionOptions`), and the model's own list is what it SUPPORTS —
+ * when they disagree the intersection is what a picker may show, because an option Dopl cannot
+ * persist is a control that writes nowhere. The dropped ones are counted, never silently lost.
+ */
+function entryFrom(row) {
+  if (typeof row === 'string') {
+    const bare = str(row);
+    return bare ? { id: bare, label: null, short: null, isDefault: false, hidden: false, dimensions: {} } : null;
+  }
+  if (!row || typeof row !== 'object') return null;
+  const id = str(row.id) || str(row.model) || str(row.name);
+  if (!id) return null;
+  const label = str(row.displayName) || str(row.display_name) || null;
+  const isDefault = row.isDefault === true || row.is_default === true;
+  const hidden = row.hidden === true;
+  const supported = effortsFrom(row);
+  const dimensions = {};
+  if (supported.options.length) {
+    dimensions[DIMENSION] = {
+      options: supported.options,
+      default: supported.options.some((o) => o.value === supported.fallback) ? supported.fallback : null,
+    };
+  }
+  return { id, label, short: label, isDefault, hidden, dimensions };
+}
+
+/** `supportedReasoningEfforts` → `{ options: [{value,label,description}], fallback }`. */
+function effortsFrom(row) {
+  const raw = row.supportedReasoningEfforts || row.supported_reasoning_efforts || [];
+  const options = [];
+  for (const item of Array.isArray(raw) ? raw : []) {
+    const value = typeof item === 'string' ? str(item) : str(item && (item.reasoningEffort || item.reasoning_effort || item.value));
+    // ⚠ THE INTERSECTION IS THE GATE — see `entryFrom`'s note. An effort outside the declared
+    // dimension cannot be stored, so offering it would be F-390's shape again.
+    if (!value || REASONING_EFFORTS.indexOf(value) === -1) continue;
+    if (options.some((o) => o.value === value)) continue;
+    options.push({
+      value,
+      label: value,
+      description: (item && typeof item === 'object' && str(item.description)) || null,
+    });
+  }
+  return {
+    options,
+    fallback: str(row.defaultReasoningEffort) || str(row.default_reasoning_effort),
+  };
+}
+
+/** `<resolved path>@<version>` — the cache key. ⚠ BOTH HALVES: one operator, two installs. */
+function cacheKey(gate) {
+  return `${str(gate && gate.path) || '?'}@${str(gate && gate.version) || '?'}`;
+}
+
+function failure(key, reason) {
+  return { source: 'live', key, ids: [], aliases: [], models: [], defaultId: null, reason, truncated: false };
+}
+
+/**
+ * ⚠ PAGINATED, AND THE CURSOR PARAMETER NAME IS **UNVERIFIED**. Implementation Log D measured the
+ * RESPONSE (`{ data, nextCursor }`) and never sent a second page, so the REQUEST spelling here is
+ * the symmetric guess and is marked as one: `{ cursor }`. A server that ignores it answers page
+ * one again, which is why the loop also stops when a page repeats its own cursor.
+ */
+async function listPages(conn) {
+  const rows = [];
+  let cursor = '';
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const params = cursor ? { cursor } : {};
+    const result = await conn.request('model/list', params);
+    rows.push(...rowsFrom(result));
+    const next = str(result && (result.nextCursor || result.next_cursor));
+    // ⚠ **`truncated` MEANS "DOPL STOPPED", NOT "THE SERVER RAN OUT", AND ONLY THE FIRST ARM IS
+    // THE SERVER SAYING SO.** A repeated cursor and the page cap are both Dopl giving up on a
+    // list it cannot prove it finished, and reporting either as a complete roster would be a
+    // picker quietly claiming to know every model.
+    if (!next) return { rows, truncated: false };
+    if (next === cursor) return { rows, truncated: true };
+    cursor = next;
+  }
+  return { rows, truncated: true };
+}
+
+/** ⚠ TAKES THE PROBE IT WAS GIVEN — `probe()` execs the binary, and asking twice per read is a
+ *  second `--version` spawn for an answer the caller already holds. */
+async function fetchRoster(gate) {
+  const key = cacheKey(gate);
+  if (!gate || !gate.ok) return failure(key, (gate && gate.reason) || 'Dopl could not reach the Codex CLI.');
   return new Promise((resolve) => {
     let conn = null;
     let done = false;
@@ -59,46 +187,98 @@ async function fetchRoster() {
       try { if (conn) conn.close(); } catch (_) { /* best effort */ }
       resolve(value);
     };
-    const timer = setTimeout(() => finish({
-      source: 'live', ids: [], aliases: [], reason: 'model/list did not answer in time',
-    }), LIST_TIMEOUT_MS);
+    const timer = setTimeout(() => finish(failure(key,
+      `\`${str(gate.path) || 'codex'} app-server\` did not answer \`model/list\` within ${LIST_TIMEOUT_MS}ms.`)),
+    LIST_TIMEOUT_MS);
     try {
-      // ⚠ `--ignore-user-config` HERE TOO. A roster read is the cheapest possible place for the
-      // operator's own config to change what this app believes, and consistency across the two
-      // spawn shapes is the whole reason the Claude lane insists on ONE assembly point.
+      // 🔒 ⚠ `--ignore-user-config` IS DEAD AND IS DELIBERATELY STILL HERE. See the header: the
+      // flag's replacement is U4's isolation decision, not a picker's. What changed in U6 is that
+      // the resulting failure now SAYS SO instead of answering an empty roster.
       conn = client.connect({ args: ['--ignore-user-config'] });
       conn.request('initialize', client.initializeParams(appVersion()))
-        .then(() => conn.request('model/list', {}))
-        .then((result) => {
+        .then(() => listPages(conn))
+        .then(({ rows, truncated }) => {
           clearTimeout(timer);
-          const ids = idsFrom(result);
-          // ⚠ `aliases[0]` IS THE EMPTY STRING AND IT SETS NO MODEL AT ALL — the platform's own
-          // pick. `descriptor.models.defaultMeansAbsent` is the convention the whole launch
-          // precedence chain rests on: a link naming nothing this build knows STEPS ASIDE rather
-          // than spending the platform default and discarding the rest.
-          finish({ source: 'live', ids, aliases: [''].concat(ids), reason: '' });
+          finish(rosterFrom(key, rows, truncated));
         })
         .catch((err) => {
           clearTimeout(timer);
-          finish({ source: 'live', ids: [], aliases: [], reason: (err && err.message) || 'model/list failed' });
+          finish(failure(key, (err && err.message) || 'Codex refused `model/list`.'));
         });
     } catch (err) {
       clearTimeout(timer);
-      finish({ source: 'live', ids: [], aliases: [], reason: (err && err.message) || 'could not start codex app-server' });
+      finish(failure(key, (err && err.message) || 'Dopl could not start `codex app-server`.'));
     }
   });
+}
+
+/**
+ * ⚠ ORDER IS THE SERVER'S, UNTOUCHED. The plan's U6 scenario is "orders visible models FROM THE
+ * RESPONSE"; re-sorting would make Dopl an authority on a ranking only the platform holds.
+ * ⚠ HIDDEN MODELS ARE CARRIED, NOT DROPPED (Decision #2 keeps them "out of ordinary pickers"):
+ * a session already running on one still has to be LABELLED, and `model-catalog.js` is where the
+ * hidden flag stops it being offered.
+ * ⚠ EXACTLY ONE DEFAULT IS THE PROTOCOL'S OWN RULE — `client.js › catalogGate` calls anything else
+ * an unsupported protocol. Here the disagreement is REPORTED rather than silently tie-broken.
+ */
+function rosterFrom(key, rows, truncated) {
+  const models = [];
+  for (const row of rows) {
+    const entry = entryFrom(row);
+    if (entry && !models.some((m) => m.id === entry.id)) models.push(entry);
+  }
+  if (!models.length) {
+    return failure(key, 'Codex answered `model/list` with no models Dopl could read.');
+  }
+  const gate = client.catalogGate(rows);
+  const defaults = models.filter((m) => m.isDefault);
+  const ids = models.map((m) => m.id);
+  return {
+    source: 'live',
+    key,
+    ids,
+    // ⚠ `aliases[0]` IS THE EMPTY STRING AND IT SETS NO MODEL AT ALL — the platform's own pick.
+    // `descriptor.models.defaultMeansAbsent` is the convention the whole launch precedence chain
+    // rests on: a link naming nothing this build knows STEPS ASIDE rather than spending the
+    // platform default and discarding the rest.
+    aliases: [''].concat(ids),
+    models,
+    defaultId: defaults.length === 1 ? defaults[0].id : null,
+    // ⚠ A ROSTER THAT ARRIVED BUT DECLARED NO SINGLE DEFAULT IS STILL A ROSTER. The models are
+    // real and pickable; what is missing is the marker, and saying so beats refusing the list.
+    reason: gate.ok ? '' : `Codex's model list is unusual: ${gate.reason}.`,
+    truncated: truncated === true,
+  };
 }
 
 function appVersion() {
   try { return require('electron').app.getVersion(); } catch (_) { return '0.0.0'; }
 }
 
-/** The offerable roster. ⚠ Unknown ids still render raw and round-trip — only the PICKS are closed. */
+/**
+ * The offerable roster. ⚠ Unknown ids still render raw and round-trip — only the PICKS are closed.
+ *
+ * ⚠ **CACHED BY RESOLVED BINARY AND VERSION, NOT BY "THIS PROCESS"** (U6). The old cache pinned
+ * the FIRST answer — including a failure — for the life of the app, so an operator who installed
+ * or repaired Codex with Dopl open kept seeing an empty picker until they quit. The key is
+ * `<path>@<version>`, so a repointed `DOPL_CODEX_BIN` or an upgraded CLI re-reads by construction;
+ * a FAILED read is not cached here at all, and its retry cadence belongs to the one layer that can
+ * see how often a picker is asking (`main/runtime/model-catalog.js › FAILURE_TTL_MS`).
+ */
 async function models() {
-  if (cached) return cached;
-  cached = await fetchRoster();
-  return cached;
+  const gate = await client.probe();
+  const key = cacheKey(gate);
+  if (cached && cached.key === key) return cached.roster;
+  const roster = await fetchRoster(gate);
+  // ⚠ ONLY A ROSTER WITH MODELS IN IT IS KEPT. A cached failure is a picker that cannot recover,
+  // and `models.length` rather than `reason` is the predicate because a roster can arrive COMPLETE
+  // and still carry a sentence (an unusual default marker, a truncated page run).
+  if (roster.models.length) cached = { key: roster.key || key, roster };
+  return roster;
 }
+
+/** Drop the cache. ⚠ For tests and for an explicit reconnect/version-change re-probe. */
+function forget() { cached = null; }
 
 // Descriptor half.
 const descriptor = {
@@ -106,7 +286,7 @@ const descriptor = {
   // ⚠ REASONING EFFORT IS A SECOND DIMENSION THE OTHER RUNTIMES DO NOT HAVE, and declaring it is
   // what makes the control render at all (`§3.2`: absent -> no reasoning-effort control). `null`
   // elsewhere, a list here — never `[]`, which would render an empty control instead of none.
-  dimensions: ['reasoningEffort'],
+  dimensions: [DIMENSION],
   defaultMeansAbsent: '',
   // ⚠ false: the thread carries its model through a resume by itself (`thread/resume` reopens the
   // conversation, it does not re-specify it), so nothing re-stamps it.
@@ -121,9 +301,13 @@ const descriptor = {
   //
   // ⚠ A SHAPE CHECK IS NOT A ROSTER CHECK, AND SAYING SO IS THE POINT. This admits any id the
   // live roster could plausibly carry and rejects only what could not BE an id — anything with a
-  // space, a quote, a shell metacharacter, a newline, or more than 64 characters. Narrowing it to
-  // the live catalog (and refusing a stale id at PICK time while still rendering it raw on a
-  // historical session card) is U6's job and needs the catalog U6 delivers.
+  // space, a quote, a shell metacharacter, a newline, or more than 64 characters.
+  // ⚠ **U6 NARROWS THE PICK AT THE PICKER, NOT HERE, AND THAT ASYMMETRY IS DELIBERATE.** The live
+  // catalog decides what may be NEWLY SELECTED (`model-catalog.js`, and the renderer's
+  // `lib/model-catalog.ts › canSelectModel`); STORAGE stays shape-only, because a durable record
+  // written while Codex was reachable must not be silently erased by a read taken while it is not.
+  // A stale id therefore keeps rendering as itself and stops being offered — which is exactly the
+  // plan's "historical raw id still shown; a stale id cannot be newly selected".
   // ⚠ IT IS STILL A GATE, BECAUSE THE VALUE BECOMES `config.model` IN THE LAUNCH ARGV
   // (`launch-spec.js › overrideArgs`). `[A-Za-z0-9]` first, then the id alphabet, and nothing else.
   pick: {
@@ -141,6 +325,9 @@ const descriptor = {
   // `launch-spec.js`'s `config.model_reasoning_effort` read a `state.reasoningEffort` **that had
   // no producer anywhere in the tree** (F-390's shape: a control that writes nowhere). Declaring
   // the options is what turns it into a real storable setting.
+  // ⚠ **THESE ARE WHAT DOPL CAN STORE; THE CATALOG SAYS WHAT EACH MODEL SUPPORTS** (U6). The two
+  // are different questions and the picker shows the INTERSECTION — `model/list` reports a
+  // per-model `supportedReasoningEfforts`, and a model that offers none gets no control at all.
   // ⚠ `contract.js › descriptorProblems` REFUSES a descriptor that names a dimension with no
   // options, so this pair cannot come apart.
   // ⚠ `fallback: 'absent'` — an unrecognised effort is DROPPED rather than floored, because there
@@ -152,4 +339,7 @@ const descriptor = {
   },
 };
 
-module.exports = { models, descriptor, idsFrom, REASONING_EFFORTS };
+module.exports = {
+  models, forget, descriptor, idsFrom, rowsFrom, entryFrom, rosterFrom, cacheKey,
+  REASONING_EFFORTS, DIMENSION, LIST_TIMEOUT_MS, MAX_PAGES,
+};

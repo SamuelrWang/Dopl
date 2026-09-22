@@ -50,48 +50,84 @@ function listFn(sdk) {
   return null;
 }
 
+// ── ⚠ THE NORMALIZED CATALOG SHAPE (2026-09-21, U6) ──────────────────────────────────────────
+//
+// Every adapter's `models()` answers the same record now, and `main/runtime/model-catalog.js`
+// turns it into the catalog a picker reads. ⚠ **AN EMPTY ROSTER MUST CARRY A REASON** — the
+// catalog reads a reason-carrying empty list as `unavailable` (a measured failure) and a
+// never-read one as `loading`, and collapsing those is a picker that says "no models" about a
+// runtime nobody has asked yet.
+// ⚠ THIS PLATFORM NAMES NOTHING. `models.list()` answers ids, so every entry's `label` is `null`
+// and the picker renders the raw id — which is the honest answer, not a missing one.
+const failure = (reason) =>
+  ({ source: 'live', key: null, ids: [], aliases: [], models: [], defaultId: null, reason, truncated: false });
+
 function withTimeout(promise, ms, onTimeout) {
   return new Promise((resolve) => {
     let done = false;
     const finish = (v) => { if (!done) { done = true; resolve(v); } };
     const timer = setTimeout(() => finish(onTimeout()), ms);
     promise.then((v) => { clearTimeout(timer); finish(v); },
-      (err) => { clearTimeout(timer); finish({ source: 'live', ids: [], aliases: [], reason: (err && err.message) || 'models.list failed' }); });
+      (err) => { clearTimeout(timer); finish(failure((err && err.message) || 'models.list failed')); });
   });
 }
 
 async function fetchRoster() {
   const gate = await client.probe();
-  if (!gate.ok) return { source: 'live', ids: [], aliases: [], reason: gate.reason };
+  if (!gate.ok) return failure(gate.reason || 'Dopl could not reach this runtime.');
   let list = null;
   try {
     list = listFn(await client.loadSdk());
   } catch (err) {
-    return { source: 'live', ids: [], aliases: [], reason: (err && err.message) || 'the SDK would not load' };
+    return failure((err && err.message) || 'the SDK would not load');
   }
   if (!list) {
-    return { source: 'live', ids: [], aliases: [], reason: 'this SDK build exposes no models.list()' };
+    return failure('this SDK build exposes no models.list()');
   }
   return withTimeout(
     Promise.resolve().then(list).then((result) => {
       const ids = idsFrom(result);
+      if (!ids.length) return failure('this runtime answered models.list() with no models Dopl could read');
       // ⚠ `aliases[0]` IS THE EMPTY STRING AND IT SETS NO MODEL AT ALL — the platform's own pick.
       // `descriptor.models.defaultMeansAbsent` is the convention the whole launch precedence chain
       // rests on: a link naming nothing this build knows STEPS ASIDE rather than spending the
       // platform default and discarding the rest.
-      return { source: 'live', ids, aliases: [''].concat(ids), reason: '' };
+      return {
+        source: 'live',
+        // ⚠ THE SDK IS LOADED IN-PROCESS, so there is no binary path or CLI version to key on —
+        // `null` says "this roster has no invalidation key", which is a different claim from a
+        // key that never changes. `model-catalog.js › invalidate` is the reconnect hook instead.
+        key: null,
+        ids,
+        aliases: [''].concat(ids),
+        // ⚠ NO `isDefault`: this platform declares none, and marking one would be Dopl inventing
+        // a default it cannot back (INVARIANTS §11 — unknown is not empty).
+        models: ids.map((id) => ({ id, label: null, short: null, isDefault: false, hidden: false, dimensions: {} })),
+        defaultId: null,
+        reason: '',
+        truncated: false,
+      };
     }),
     LIST_TIMEOUT_MS,
-    () => ({ source: 'live', ids: [], aliases: [], reason: 'models.list() did not answer in time' })
+    () => failure('models.list() did not answer in time')
   );
 }
 
-/** The offerable roster. ⚠ Unknown ids still render raw and round-trip — only the PICKS are closed. */
+/**
+ * The offerable roster. ⚠ Unknown ids still render raw and round-trip — only the PICKS are closed.
+ * ⚠ **ONLY A ROSTER WITH MODELS IN IT IS CACHED** (U6). The old `if (cached) return cached` pinned
+ * the FIRST answer — including a failure — for the life of the app, so an operator who repaired
+ * their install with Dopl open kept seeing an empty picker until they quit.
+ */
 async function models() {
   if (cached) return cached;
-  cached = await fetchRoster();
-  return cached;
+  const roster = await fetchRoster();
+  if (roster.models.length) cached = roster;
+  return roster;
 }
+
+/** Drop the cache. ⚠ For tests and for an explicit reconnect re-probe. */
+function forget() { cached = null; }
 
 // Descriptor half.
 const descriptor = {
@@ -126,4 +162,4 @@ const descriptor = {
   dimensionOptions: null,
 };
 
-module.exports = { models, descriptor, idsFrom, listFn, LIST_TIMEOUT_MS };
+module.exports = { models, forget, descriptor, idsFrom, listFn, LIST_TIMEOUT_MS };

@@ -121,7 +121,24 @@ export interface RuntimeDescriptor {
    * boundary from a build that may be older than this bundle.
    */
   credential?: { interactiveSignIn?: Verifiable | null } | null;
-  models?: { dimensions?: ReadonlyArray<string> | null } | null;
+  /**
+   * ⚠ THE MODEL BRANCH, AND IT IS A DECLARATION ABOUT THE RUNTIME — NEVER THE
+   * ROSTER (2026-09-21, U6). `source` says whether the list is a frozen table or
+   * a live query, `dimensions` names the model-scoped axes this runtime has, and
+   * `dimensionOptions` says what Dopl can STORE for each. **The models
+   * themselves are not here** — they live in the per-runtime catalog
+   * (`model-catalog.ts`), because a descriptor is frozen at build time and a
+   * roster is read from the wire. A future reader hanging a model list off the
+   * descriptor is re-creating the frozen table U6 deleted.
+   */
+  models?: {
+    source?: string | null;
+    dimensions?: ReadonlyArray<string> | null;
+    dimensionOptions?: Record<
+      string,
+      { options?: ReadonlyArray<string> | null; default?: string | null } | null
+    > | null;
+  } | null;
   meter?: {
     mode?: string | null;
     cost?: { currency?: string; billed?: boolean } | null;
@@ -420,6 +437,31 @@ export const freeform = (
 export const hasReasoningEffort = (
   d: RuntimeDescriptor | null | undefined
 ): boolean => (d?.models?.dimensions ?? []).indexOf("reasoningEffort") !== -1;
+
+/**
+ * WHAT DOPL CAN **STORE** FOR A MODEL-SCOPED DIMENSION — the descriptor's own
+ * declared values, in its own order. Empty ⇒ no such dimension on this runtime.
+ *
+ * ⚠ **THIS IS NOT WHAT A PICKER OFFERS, AND CONFUSING THE TWO IS THE WHOLE
+ * REASON BOTH EXIST** (2026-09-21, U6). This is the closed set a durable record
+ * may hold; `model-catalog.ts › dimensionOptionsFor` is what the SELECTED MODEL
+ * actually supports, and Codex's supported reasoning efforts DIFFER between
+ * models. A control sourced from here would offer an effort the chosen model
+ * refuses; one sourced from the catalog alone could offer a value main cannot
+ * persist. The desktop already intersects them (`codex/models.js › effortsFrom`),
+ * and this accessor is here so a surface can SAY which set it is naming.
+ */
+export function modelDimensionOptions(
+  d: RuntimeDescriptor | null | undefined,
+  dimension: string
+): ReadonlyArray<string> {
+  const declared = d?.models?.dimensionOptions?.[dimension];
+  const options = declared?.options;
+  return Array.isArray(options) ? options : NO_DIMENSION_OPTIONS;
+}
+
+/** ⚠ Module-level so an absent list is the SAME identity every render. */
+const NO_DIMENSION_OPTIONS: ReadonlyArray<string> = [];
 
 /** §3.2: one location ⇒ NO location picker. All three are `['local']` today. */
 export const showsLocationPicker = (

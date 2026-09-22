@@ -119,6 +119,10 @@ const onWire = (pair) => ({
   runtimes: FAKE_RUNTIMES,
   defaultRuntime: "claude",
   connected: ["claude"],
+  // ⚠ TWO MORE SINCE U6, ADDITIVE AGAIN: the per-runtime MODEL CATALOG map and its shape
+  // version. `{}` is the stubbed catalog layer — `test/runtime-model-catalog.test.mjs` owns it.
+  catalogVersion: 1,
+  catalogs: {},
 });
 
 // ── The frozen enums ─────────────────────────────────────────────────────────
@@ -353,6 +357,10 @@ function bootIpc() {
     // the version every posture/defaults reply declares — and this section drives the handler's
     // gates, not the record's shape.
     if (id === "./launch-selection") return { SELECTION_VERSION: 2 };
+    // U6 (2026-09-21) — the runtime HALF of both replies. ⚠ THE REAL SOURCE, against the SAME
+    // `./runtime` stub two arms up: a fake would make every `onWire` comparison pin the fake.
+    if (id === "./channel-runtime-reply") return runtimeReply;
+    if (id === "./runtime/model-catalog") return { CATALOG_VERSION: 1, catalogs: () => ({}) };
     // 🔒 THE `./settings` AND `./session-state` STUBS STOOD HERE AND ARE DELETED (2026-09-07,
     // Samuel's ruling). They backed `settings:getTurnCap` / `settings:setTurnCap` — the cap and
     // the two issuer-keyed defaults the pair shipped over the wire. Both ops are unregistered,
@@ -366,6 +374,11 @@ function bootIpc() {
     const g = M("ipc-guards.js");
     const block = g.slice(g.indexOf("// ─── BEGIN IPC-GUARDS"), g.indexOf("// ─── END IPC-GUARDS"));
     return new Function(`${block}\n return { isAppWindowSender, isUuid, UUID_RE };`)();
+  })();
+  const runtimeReply = (() => {
+    const m = { exports: {} };
+    new Function("require", "module", "exports", M("channel-runtime-reply.js"))(stubRequire, m, m.exports);
+    return m.exports;
   })();
   const ops = (() => {
     const m = { exports: {} };

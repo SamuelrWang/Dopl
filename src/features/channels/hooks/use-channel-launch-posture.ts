@@ -14,6 +14,8 @@ import {
   normalizeRuntimes,
   type RuntimeDescriptor,
 } from "../lib/runtime-capability";
+import type { ModelCatalog, ModelCatalogs } from "../lib/model-catalog";
+import { useRuntimeCatalogs } from "./use-runtime-catalogs";
 
 /**
  * Per-channel DURABLE LAUNCH POSTURE over the desktop bridge
@@ -203,6 +205,25 @@ export interface ChannelLaunchPostureState {
    *  list plus an id, so no surface renders Codex's vocabulary against Cursor's
    *  refusals. */
   descriptor: RuntimeDescriptor | null;
+  /**
+   * EVERY RUNTIME'S MODEL ROSTER, KEYED BY RUNTIME ID (2026-09-21, U6).
+   *
+   * ⚠ **THIS IS WHAT REPLACED `agent-models.ts` AS THE MODEL ROW'S SOURCE.** That frozen Claude
+   * table was read whatever runtime was selected, so picking Codex offered Fable. Every
+   * runtime-aware surface reads {@link catalog} instead.
+   * ⚠ EACH CARRIES ITS OWN STATUS — `loading` / `ready` / `unavailable` / `stale` — and an empty
+   * `models` list means NOTHING without it (INVARIANTS §11).
+   */
+  catalogs: ModelCatalogs;
+  /**
+   * THIS DESKTOP SPOKE THE CATALOG CONTRACT AT ALL. ⚠ FALSE IS "IT DID NOT SAY", NOT "NO MODELS"
+   * — {@link connectedKnown}'s rule, for the same reason.
+   */
+  catalogsKnown: boolean;
+  /** THE CATALOG {@link descriptor}'s RUNTIME WOULD LAUNCH ON — the one object a model row reads,
+   *  so no surface can render one runtime's models beside another's refusals. `null` when this
+   *  build said nothing about a non-default runtime. */
+  catalog: ModelCatalog | null;
   /** True while a write is in flight. */
   busy: boolean;
   /** Persist a new value on one axis; the others are carried through unchanged.
@@ -225,6 +246,10 @@ export function useChannelLaunchPosture(
   const [defaultRuntime, setDefaultRuntime] = useState("");
   const [connected, setConnected] = useState<string[]>(EMPTY_CONNECTED);
   const [connectedKnown, setConnectedKnown] = useState(false);
+  // ⚠ U6: the roster half, shared with `use-agent-defaults.ts` because both hooks read the same
+  // two fields off the same main-process assembly and render the same model row.
+  const runtimeCatalogs = useRuntimeCatalogs();
+  const { adopt: adoptCatalogs, reloadToken } = runtimeCatalogs;
 
   // ⚠ Feature-detect after mount (window-only) so SSR and the first client render
   // agree; null forever in a plain browser, and consumers render NOTHING for null.
@@ -261,6 +286,9 @@ export function useChannelLaunchPosture(
         // ⚠ THE RUNTIME FAMILY IS PROBED AND LATCHED THE SAME WAY, off the SAME
         // raw reply — it rides the model's ops so there is one read to probe.
         if (hasRuntimeKey(next)) setRuntimeSupported(true);
+        // ⚠ THE CATALOGS ARE PROBED OFF THE SAME RAW REPLY, before any normalizer, and the
+        // own-key probe is what tells an older desktop from a machine with no adapters.
+        adoptCatalogs(next);
         // ⚠ NARROWED, NOT ASSERTED: `normalizeRuntimes` drops only entries with no
         // id, so a newer build's unknown field renders as nothing rather than
         // throwing a settings tab away.
@@ -293,7 +321,10 @@ export function useChannelLaunchPosture(
     return () => {
       alive = false;
     };
-  }, [bridge, channelId]);
+    // ⚠ `reloadToken` IS A DEPENDENCY ON PURPOSE (U6): main answers `loading` for a live roster on
+    // a cold process and reads in the BACKGROUND, so something has to look again. It changes at
+    // most six times and only while a catalog is still loading — see `use-runtime-catalogs.ts`.
+  }, [adoptCatalogs, bridge, channelId, reloadToken]);
 
   // Join the channel's reader set so a write from ANOTHER surface lands here.
   useEffect(() => {
@@ -388,9 +419,16 @@ export function useChannelLaunchPosture(
     [runtimes, runtime, defaultRuntime]
   );
 
+  // ⚠ DERIVED FROM THE DESCRIPTOR'S OWN ID, never from `runtime` alone: an unset channel launches
+  // on the DEFAULT adapter, and its model row has to show THAT runtime's roster.
+  const catalog = runtimeCatalogs.catalogFor(descriptor?.id ?? "", defaultRuntime);
+
   return {
     bridge,
     posture,
+    catalogs: runtimeCatalogs.catalogs,
+    catalogsKnown: runtimeCatalogs.catalogsKnown,
+    catalog,
     modelSupported,
     runtimeSupported,
     runtime,

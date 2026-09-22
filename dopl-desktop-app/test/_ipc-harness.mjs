@@ -158,6 +158,19 @@ export function bootIpc({ blocked = false } = {}) {
     // `connectedIds` joined 2026-09-08: which registered adapters this Mac could start right now.
     // It rides the SAME read and NARROWS NOTHING — `all()` is still the roster the popup renders.
     if (id === "./runtime") return { all: () => [], DEFAULT_ID: "claude", connectedIds: async () => [] };
+    // U6 (2026-09-21): the runtime HALF of both settings replies — roster, connectivity labels and
+    // the per-runtime MODEL CATALOGS — moved to its own module. Stubbed rather than evaluated: it
+    // requires the real registry (which would load three adapters and `electron`), and the two
+    // suites this harness serves are about the SENDER BINDING, not about what a roster says.
+    // ⚠ THE KEYS ARE THE CONTRACT: `catalogs` present-but-empty is "this build said nothing",
+    // which is a different state from the key being absent. See `main/channel-runtime-reply.js`.
+    if (id === "./channel-runtime-reply") {
+      return {
+        runtimeReply: async () => ({
+          runtimes: [], defaultRuntime: "claude", connected: [], catalogVersion: 1, catalogs: {},
+        }),
+      };
+    }
     if (id === "./channel-dirs") {
       return {
         liveChannelDirLabel: () => "~/Downloads/secret-repo",

@@ -1,0 +1,345 @@
+// THE MODEL CATALOG — ONE NORMALIZED SHAPE FOR EVERY RUNTIME'S ROSTER, AND THE FOUR STATES A
+// PICKER IS ALLOWED TO BE IN (2026-09-21, U6).
+//
+// ⚠ **IT EXISTS BECAUSE THE RENDERER HAD A HARDCODED CLAUDE TABLE AND EVERY RUNTIME READ IT.**
+// `src/features/channels/lib/agent-models.ts` is four Claude ids with four labels, and the New
+// Agent dialog, the channel Settings row, the profile defaults row and the agent cards all read
+// it — so selecting Codex showed Fable/Opus/Sonnet/Haiku and submitted one of them. The plan's R1
+// and its hardest invariant ("catalog failure must never substitute another runtime's models")
+// cannot be satisfied by a second hardcoded table; they need the roster to arrive FROM the runtime
+// that owns it, in one shape, with its own status.
+//
+// ⚠ **FOUR STATES, AND COLLAPSING ANY TWO IS THE BUG** (INVARIANTS §11 — UNKNOWN is not EMPTY):
+//
+//   ready        the roster was read and is current. `models` is what an operator may pick from.
+//   loading      nothing has been read YET. `models` is EMPTY and that emptiness means NOTHING.
+//                ⚠ A picker must render the platform default here, never "no models".
+//   unavailable  a read was ATTEMPTED and FAILED, and `reason` says why in an operator's words.
+//                `models` is empty, and that emptiness is a MEASUREMENT of a failure, not of a
+//                roster. It is a different sentence and a different operator action from loading.
+//   stale        we hold models read from a DIFFERENT binary/version than the one resolved now,
+//                or a refresh failed while we still held a prior answer. `models` is the OLD list:
+//                it still LABELS a historical id, and it may NOT be newly selected.
+//
+// ⚠ **EMPTY IS NEVER "THIS RUNTIME HAS NO MODELS".** No adapter can answer that, so no status
+// spells it. A `ready` catalog with zero models is refused below and becomes `unavailable`.
+//
+// ⚠ **NOTHING HERE NAMES A VENDOR AND NOTHING HERE HOLDS A MODEL ID.** The whole module is keyed
+// by the runtime id the registry hands it, and every entry comes off the adapter's own
+// `models()`. That is what makes "no Fable may reach a Codex surface" a structural property
+// rather than a rule somebody has to remember — there is no list here to leak.
+//
+// ⚠ **IT NEVER BLOCKS A READ ON A CHILD PROCESS.** A live roster costs a `codex app-server`
+// spawn; a settings page that awaited one would take seconds to open and would hang on a wedged
+// binary. So `snapshot()` answers from cache and kicks a BACKGROUND refresh, and the first answer
+// on a cold process is `loading` — which is exactly what `loading` is for.
+
+const CATALOG_VERSION = 1;
+
+const STATUS = Object.freeze({
+  READY: 'ready',
+  LOADING: 'loading',
+  UNAVAILABLE: 'unavailable',
+  STALE: 'stale',
+});
+
+// ⚠ A FAILED READ IS RETRIED, A SUCCESSFUL ONE IS NOT. The roster changes when the operator
+// upgrades their CLI, which they cannot do while it is running; a FAILURE, though, is routinely
+// the operator fixing an install with Dopl open, so it must not be cached for the life of the
+// process. Sixty seconds is `connectivity.js`'s own sweep interval, deliberately.
+const FAILURE_TTL_MS = 60000;
+
+const str = (v) => (typeof v === 'string' ? v.trim() : '');
+
+/**
+ * ONE MODEL, NORMALIZED. ⚠ EVERY FIELD BUT `id` IS OPTIONAL AND ABSENT IS `null`, NEVER `''`:
+ * a runtime that does not name its models (Cursor's `models.list()` answers bare ids) must be
+ * told apart from one that named it with an empty string.
+ *
+ * ⚠ `dimensions` IS PER MODEL, NOT PER RUNTIME, and that is the whole reason the entry is an
+ * object rather than an id. Codex reports `supportedReasoningEfforts` on each model and they
+ * DIFFER between models, so a reasoning-effort control sourced from the runtime would offer an
+ * effort the selected model refuses. The plan's U6 scenario ("effort options change with the
+ * selected model") is only satisfiable from here.
+ */
+function normalizeEntry(row) {
+  if (typeof row === 'string') {
+    const id = str(row);
+    return id ? { id, label: null, short: null, isDefault: false, hidden: false, dimensions: {} } : null;
+  }
+  if (!row || typeof row !== 'object') return null;
+  const id = str(row.id);
+  if (!id) return null;
+  const label = str(row.label) || str(row.displayName) || null;
+  return {
+    id,
+    label,
+    // ⚠ A GLANCE LABEL FALLS BACK TO THE FULL ONE, NEVER TO A TRUNCATION. A card chip that
+    // invented "Fab…" would be this surface making up a model name.
+    short: str(row.short) || label,
+    isDefault: row.isDefault === true,
+    // ⚠ HIDDEN MODELS STAY IN THE CATALOG AND OUT OF ORDINARY PICKERS (Decision #2). They are
+    // carried rather than dropped so a session ALREADY on one can still be LABELLED.
+    hidden: row.hidden === true,
+    dimensions: normalizeDimensions(row.dimensions),
+  };
+}
+
+/** `{ <dimensionKey>: { options: [{value,label,description}], default } }`, or `{}`. */
+function normalizeDimensions(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out = {};
+  for (const key of Object.keys(raw)) {
+    const d = raw[key];
+    if (!d || typeof d !== 'object') continue;
+    const options = [];
+    for (const opt of Array.isArray(d.options) ? d.options : []) {
+      const value = typeof opt === 'string' ? str(opt) : str(opt && opt.value);
+      if (!value || options.some((o) => o.value === value)) continue;
+      options.push({
+        value,
+        label: (opt && str(opt.label)) || value,
+        description: (opt && str(opt.description)) || null,
+      });
+    }
+    if (!options.length) continue; // a dimension with no options is a control that writes nowhere
+    const fallback = str(d.default);
+    out[key] = {
+      options,
+      default: options.some((o) => o.value === fallback) ? fallback : null,
+    };
+  }
+  return out;
+}
+
+/**
+ * THE CATALOG A RENDERER RECEIVES. ⚠ ALWAYS THE SAME KEYS, ON EVERY STATUS — a shape that grows
+ * fields when it succeeds is a shape every consumer has to feature-probe.
+ */
+function makeCatalog(runtimeId, source, status, extra) {
+  return Object.assign({
+    version: CATALOG_VERSION,
+    runtime: str(runtimeId),
+    source: str(source) || null,
+    status,
+    reason: '',
+    key: null,
+    models: [],
+    defaultId: null,
+    dimensions: [],
+    truncated: false,
+  }, extra || {});
+}
+
+/**
+ * AN ADAPTER'S OWN ROSTER REPLY, TURNED INTO A CATALOG.
+ *
+ * ⚠ **THE ADAPTER IS NOT TRUSTED TO HAVE GOT THE SHAPE RIGHT.** It crossed no process boundary,
+ * but it is the one piece of this contract each vendor directory writes for itself — so a
+ * malformed row is dropped here rather than rendered, and a roster that claims `ready` with no
+ * models becomes `unavailable` with a sentence instead of a picker that says nothing.
+ *
+ * ⚠ **EXACTLY ONE DEFAULT, AND A SECOND ONE IS NOT A TIE-BREAK.** `codex/client.js › catalogGate`
+ * already treats "two defaults" as an unsupported protocol; here the catalog keeps the FIRST and
+ * clears the flag on the rest, because a picker cannot render two defaults and a runtime that
+ * reports two has already told us its answer is unreliable.
+ */
+function catalogFromRoster(runtimeId, descriptor, roster) {
+  const declared = (descriptor && descriptor.models) || {};
+  const source = str(declared.source) || (roster && str(roster.source)) || null;
+  const dims = Array.isArray(declared.dimensions) ? declared.dimensions.slice() : [];
+  if (!roster || typeof roster !== 'object') {
+    return makeCatalog(runtimeId, source, STATUS.UNAVAILABLE, {
+      dimensions: dims,
+      reason: 'this runtime did not answer with a model roster',
+    });
+  }
+  const reason = str(roster.reason);
+  const key = str(roster.key) || null;
+  const rows = Array.isArray(roster.models) ? roster.models
+    : (Array.isArray(roster.ids) ? roster.ids : []);
+  const models = [];
+  for (const row of rows) {
+    const entry = normalizeEntry(row);
+    if (entry && !models.some((m) => m.id === entry.id)) models.push(entry);
+  }
+  let defaultId = null;
+  for (const m of models) {
+    if (!m.isDefault) continue;
+    if (defaultId === null) defaultId = m.id;
+    else m.isDefault = false;
+  }
+  const asked = str(roster.defaultId);
+  if (!defaultId && asked && models.some((m) => m.id === asked)) {
+    defaultId = asked;
+    for (const m of models) m.isDefault = m.id === asked;
+  }
+  if (!models.length) {
+    // ⚠ THE EMPTY ROSTER IS ALWAYS A FAILURE STATE, NEVER A `ready` ONE. See the header: no
+    // adapter can say "this platform has no models", so no status is allowed to spell it.
+    return makeCatalog(runtimeId, source, STATUS.UNAVAILABLE, {
+      dimensions: dims,
+      key,
+      reason: reason || 'Dopl could not read this runtime\'s model list.',
+    });
+  }
+  return makeCatalog(runtimeId, source, STATUS.READY, {
+    dimensions: dims,
+    key,
+    models,
+    defaultId,
+    truncated: roster.truncated === true,
+    // ⚠ A `ready` CATALOG MAY STILL CARRY A REASON, AND THAT IS NOT A CONTRADICTION. A roster can
+    // arrive COMPLETE and still be worth a sentence — pagination stopped at the page cap, or the
+    // server declared no single default. `reason` is a note here and a FAILURE only on the two
+    // statuses that have no models; a consumer reads the status, never the string.
+    reason,
+  });
+}
+
+// ── THE SNAPSHOT CACHE ───────────────────────────────────────────────────────────────────────
+//
+// ⚠ KEYED BY RUNTIME ID AND NOTHING ELSE, so one runtime's outage cannot reach another's picker.
+// ⚠ ONE REFRESH IN FLIGHT PER RUNTIME: opening a settings page in two windows must not spawn two
+// app-servers, and a peek during a refresh answers the PRIOR state rather than starting a second.
+
+const snapshots = new Map();
+
+function due(entry, now) {
+  if (!entry) return true;
+  if (entry.inflight) return false;
+  if (entry.catalog.status === STATUS.READY) return false; // a good roster is cached for the process
+  if (entry.catalog.status === STATUS.STALE) return true; // invalidated: re-read at the next look
+  return now - entry.at >= FAILURE_TTL_MS;
+}
+
+/**
+ * ⚠ THE ONLY PLACE A LIVE ROSTER IS CALLED, AND IT IS NEVER AWAITED BY A CALLER. A rejected
+ * `models()` becomes an `unavailable` catalog with the thrown message; it never escapes, because
+ * every caller of this module is a settings read and a settings page that will not open is a
+ * worse answer than a picker that says why it is empty.
+ */
+function refresh(adapter, now) {
+  const id = adapter.descriptor.id;
+  const prior = snapshots.get(id) || null;
+  const entry = prior || { catalog: makeCatalog(id, adapter.descriptor.models && adapter.descriptor.models.source, STATUS.LOADING), at: 0, inflight: null };
+  entry.inflight = Promise.resolve()
+    .then(() => adapter.runtime.models())
+    .then((roster) => catalogFromRoster(id, adapter.descriptor, roster))
+    .catch((err) => makeCatalog(id, adapter.descriptor.models && adapter.descriptor.models.source, STATUS.UNAVAILABLE, {
+      dimensions: Array.isArray(adapter.descriptor.models && adapter.descriptor.models.dimensions)
+        ? adapter.descriptor.models.dimensions.slice() : [],
+      reason: (err && err.message) || 'the model roster could not be read',
+    }))
+    .then((next) => {
+      const held = snapshots.get(id);
+      const kept = held && held.catalog && held.catalog.models.length ? held.catalog : null;
+      // ⚠ A FAILED REFRESH OVER A ROSTER WE ALREADY HAVE IS `stale`, NOT `unavailable`. The old
+      // models still LABEL a running session's model honestly; what they may no longer do is be
+      // newly SELECTED, which is what `stale` means and `unavailable` does not.
+      const settled = next.status === STATUS.UNAVAILABLE && kept
+        ? Object.assign({}, kept, { status: STATUS.STALE, reason: next.reason })
+        : next;
+      snapshots.set(id, { catalog: settled, at: Date.now(), inflight: null });
+      return settled;
+    });
+  entry.at = now;
+  snapshots.set(id, entry);
+  return entry.inflight;
+}
+
+/**
+ * THIS RUNTIME'S CATALOG, RIGHT NOW, WITHOUT WAITING FOR ANYTHING.
+ *
+ * ⚠ A FROZEN ROSTER IS READ INLINE AND IS ALWAYS `ready` — it is a table lookup, so making the
+ * settings page wait a render for it would be inventing a loading state nobody has to be in.
+ * ⚠ A LIVE ROSTER ANSWERS FROM CACHE AND KICKS A BACKGROUND READ. The first answer on a cold
+ * process is `loading`; the renderer re-reads and gets `ready` or `unavailable`.
+ */
+function snapshot(adapter) {
+  const descriptor = adapter && adapter.descriptor;
+  if (!descriptor) return null;
+  const id = descriptor.id;
+  const declared = descriptor.models || {};
+  if (str(declared.source) === 'frozen') {
+    let roster = null;
+    try { roster = adapter.runtime.models(); } catch (err) {
+      return makeCatalog(id, 'frozen', STATUS.UNAVAILABLE, { reason: (err && err.message) || 'the model table could not be read' });
+    }
+    // ⚠ A FROZEN ROSTER THAT ANSWERED A PROMISE IS A MIS-DECLARED ADAPTER, not a loading one.
+    if (roster && typeof roster.then === 'function') {
+      return makeCatalog(id, 'frozen', STATUS.UNAVAILABLE, {
+        reason: 'this runtime declares a frozen model table but answered asynchronously',
+      });
+    }
+    return catalogFromRoster(id, descriptor, roster);
+  }
+  const now = Date.now();
+  const entry = snapshots.get(id) || null;
+  if (due(entry, now)) refresh(adapter, now);
+  const held = snapshots.get(id);
+  return (held && held.catalog)
+    || makeCatalog(id, str(declared.source) || null, STATUS.LOADING, {
+      dimensions: Array.isArray(declared.dimensions) ? declared.dimensions.slice() : [],
+    });
+}
+
+/**
+ * EVERY REGISTERED RUNTIME'S CATALOG, KEYED BY ID — what a settings read puts on the wire.
+ * ⚠ ONE ADAPTER'S THROW TAKES NOTHING ELSE WITH IT.
+ */
+function catalogs(adapters) {
+  const out = {};
+  for (const adapter of Array.isArray(adapters) ? adapters : []) {
+    const id = adapter && adapter.descriptor && adapter.descriptor.id;
+    if (!id) continue;
+    try { out[id] = snapshot(adapter); } catch (err) {
+      out[id] = makeCatalog(id, null, STATUS.UNAVAILABLE, {
+        reason: (err && err.message) || 'the model roster could not be read',
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * MARK A RUNTIME'S CATALOG STALE — the reconnect / version-change hook.
+ *
+ * ⚠ IT KEEPS THE MODELS AND CHANGES THE STATUS, which is the whole difference between this and
+ * `forget`. A reconnect does not make the old labels wrong; it makes them unconfirmed. The next
+ * `snapshot()` re-reads, and until it answers a stale id still renders and still cannot be picked.
+ */
+function invalidate(runtimeId, reason) {
+  const id = str(runtimeId);
+  const held = snapshots.get(id);
+  if (!held || !held.catalog) return false;
+  snapshots.set(id, {
+    catalog: Object.assign({}, held.catalog, {
+      status: STATUS.STALE,
+      reason: str(reason) || 'this runtime reconnected, so its model list has not been re-read yet',
+    }),
+    at: 0,
+    inflight: null,
+  });
+  return true;
+}
+
+/** Drop everything cached. ⚠ For tests and for an explicit operator-driven re-probe only. */
+function forget(runtimeId) {
+  if (runtimeId === undefined) { snapshots.clear(); return; }
+  snapshots.delete(str(runtimeId));
+}
+
+module.exports = {
+  CATALOG_VERSION,
+  STATUS,
+  FAILURE_TTL_MS,
+  catalogFromRoster,
+  normalizeEntry,
+  normalizeDimensions,
+  makeCatalog,
+  snapshot,
+  catalogs,
+  invalidate,
+  forget,
+};

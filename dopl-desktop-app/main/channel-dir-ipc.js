@@ -55,7 +55,11 @@ const channelPrefs = require('./channel-prefs');
 // exist. Both ride the EXISTING posture pair below rather than growing a fourth op — see the
 // block over `channels:getLaunchPosture`.
 const channelRuntime = require('./channel-runtime');
-const runtimeRegistry = require('./runtime');
+// ⚠ 2026-09-21 (U6): THE RUNTIME HALF OF BOTH SETTINGS REPLIES MOVED TO `main/channel-runtime-reply.js`
+// — the roster, the connectivity labels and the per-runtime MODEL CATALOGS, which both handlers
+// below had been assembling by hand. That file carries why; this one keeps its own reason to
+// change, which is *which per-channel setting has an op*.
+const channelRuntimeReply = require('./channel-runtime-reply');
 // 2026-09-18 (the default-agent-settings ruling): the machine-user's DEFAULTS record and the
 // seed that copies it into a brand-new channel. Read that module's header before wiring
 // anything else to it — it is deliberately NOT a second consumer of the launch posture.
@@ -235,9 +239,6 @@ function register(opts = {}) {
   // names, and no path, credential, version or reason string.
   ipcMain.handle('channels:getLaunchPosture', appWindowOnly('getLaunchPosture', null, async (_event, channelId) => {
     if (!isUuid(channelId)) return null;
-    const connected = await Promise.resolve()
-      .then(() => runtimeRegistry.connectedIds())
-      .catch(() => []);
     // ⚠ **THE VERSIONED SELECTION RIDES BESIDE THE LEGACY PAIR, ADDITIVELY (2026-09-21, U5).**
     // The three legacy OWN KEYS stay exactly where they were, because every renderer older than
     // U5 feature-probes them and renders NO row when one is missing — dropping them would not
@@ -256,13 +257,7 @@ function register(opts = {}) {
       // nothing is stored, for `model`'s reason: an OWN-KEY probe is how the SPA tells "this
       // desktop has no runtime concept" (render no row) from "no pick, the default applies".
       runtime: channelRuntime.getChannelRuntime(channelId),
-      runtimes: runtimeRegistry.all().map((a) => a.descriptor),
-      defaultRuntime: runtimeRegistry.DEFAULT_ID,
-      // ⚠ A PLAIN ARRAY OF IDS, in registry order, and OPTIONAL by contract on the other end: a
-      // desktop older than this change omits it entirely, and the SPA must read that absence as
-      // "this build did not say" rather than as "nothing is connected" (INVARIANTS §8).
-      connected: Array.isArray(connected) ? connected.slice() : [],
-    });
+    }, await channelRuntimeReply.runtimeReply());
   }));
   ipcMain.handle('channels:setLaunchPosture', appWindowOnly('setLaunchPosture', { ok: false }, (_event, payload) => {
     const p = payload || {};
@@ -351,19 +346,13 @@ function register(opts = {}) {
   // and those rows feature-probe OWN KEYS (`runtime`, `model`) to decide whether to draw at all.
   // Answering the pair alone would tell the tab this desktop has no runtime and no model concept.
   ipcMain.handle('channels:getAgentDefaults', appWindowOnly('getAgentDefaults', null, async () => {
-    const connected = await Promise.resolve()
-      .then(() => runtimeRegistry.connectedIds())
-      .catch(() => []);
-    // ⚠ THE DEFAULTS RECORD CARRIES ITS OWN `v` AND `byRuntime` (U5, additive), for the reason
-    // `channels:getLaunchPosture` states one op above.
+    // ⚠ THE DEFAULTS RECORD CARRIES ITS OWN `v` AND `byRuntime` (U5, additive), and the SAME
+    // runtime half as `channels:getLaunchPosture` one op above — roster, connectivity labels and
+    // the per-runtime model CATALOGS. The Agents tab renders the same rows as the per-channel
+    // Settings tab, so a tab that sourced its own roster would be the second table U6 deletes.
     return Object.assign({}, agentDefaults.getAgentDefaults(), {
       selectionVersion: selectionShape.SELECTION_VERSION,
-      runtimes: runtimeRegistry.all().map((a) => a.descriptor),
-      defaultRuntime: runtimeRegistry.DEFAULT_ID,
-      // ⚠ A PLAIN ARRAY OF IDS, and a LABEL rather than a gate — `channels:getLaunchPosture`'s
-      // own rule, restated because the same 60s-stale probe answers both.
-      connected: Array.isArray(connected) ? connected.slice() : [],
-    });
+    }, await channelRuntimeReply.runtimeReply());
   }));
   // ⚠ NO `channelId` AND NOTHING TO UUID-GATE — the subject is the machine-user, like the two
   // orchestrator consents below. The sender binding is the only guard, which is why this pair is

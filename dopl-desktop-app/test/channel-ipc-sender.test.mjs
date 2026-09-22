@@ -226,6 +226,11 @@ test("every op REFUSES when no registry accessor was supplied (an unbound surfac
     // 2026-09-18 — DEFAULT AGENT SETTINGS. Present only so the module loads: every call below is
     // on an UNBOUND surface, so the success path these back is exactly what must never be reached.
     if (id === "./agent-defaults") return { getAgentDefaults: () => PRESET, setAgentDefaults: () => ({ ok: true }), seedChannel: () => ({ ok: true, seeded: true }) };
+    // U6 (2026-09-21): the runtime half of both settings replies. Present only so the module
+    // loads — every call below is on an UNBOUND surface, so nothing here is ever reached.
+    if (id === "./channel-runtime-reply") {
+      return { runtimeReply: async () => ({ runtimes: [], defaultRuntime: "claude", connected: [], catalogVersion: 1, catalogs: {} }) };
+    }
     if (id === "./deep-link-target") return { isSafeSegment: () => true };
     if (id === "./version-gate") return { isBlocked: () => false };
     if (id === "./popout-window") return { openThreadWindow: () => ({ ok: true }) };
@@ -282,6 +287,11 @@ test("EVERY BOUND SENDER gets the real behaviour — the shell and the pop-out a
     // the whole VERSIONED, RUNTIME-KEYED selection, and the `needs review` sentences for a record
     // this build could not fully honour (empty here — the fake record is clean). The legacy three
     // keys are unchanged and must stay, because every renderer older than U5 feature-probes them.
+    // ⚠ AND TWO MORE SINCE 2026-09-21 (U6), ADDITIVE AGAIN: the per-runtime MODEL CATALOG map and
+    // the version of its shape. `catalogs: {}` here is "this build registered no adapters", which
+    // is a DIFFERENT state from the key being absent (an older desktop) — the harness registers
+    // none, so the empty map is the honest answer. The runtime half of this reply now comes from
+    // `main/channel-runtime-reply.js`; that it still arrives is what this case pins.
     assert.deepEqual(await ipc.handlers["channels:getLaunchPosture"](sender, CH),
       {
         ...PRESET,
@@ -292,6 +302,8 @@ test("EVERY BOUND SENDER gets the real behaviour — the shell and the pop-out a
         runtimes: [],
         defaultRuntime: "claude",
         connected: [],
+        catalogVersion: 1,
+        catalogs: {},
       }, which);
     // ⚠ `applied` (2026-08-25) is the live fan-out's count — see test/channel-posture-live.test.mjs.
     // This harness binds no session engine, so a bound sender's write succeeds with nothing to
