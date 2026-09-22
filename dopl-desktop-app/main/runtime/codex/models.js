@@ -146,10 +146,25 @@ function failure(key, reason) {
 }
 
 /**
- * ⚠ PAGINATED, AND THE CURSOR PARAMETER NAME IS **UNVERIFIED**. Implementation Log D measured the
- * RESPONSE (`{ data, nextCursor }`) and never sent a second page, so the REQUEST spelling here is
- * the symmetric guess and is marked as one: `{ cursor }`. A server that ignores it answers page
- * one again, which is why the loop also stops when a page repeats its own cursor.
+ * 🔒 **PAGINATED, AND THE REQUEST SPELLING IS NOW MEASURED (2026-09-22).** It was a symmetric guess
+ * — Implementation Log D had measured the RESPONSE (`{ data, nextCursor }`) and never sent a second
+ * page. `codex app-server generate-json-schema` on the supported `codex-cli 0.155.1` declares
+ * `ModelListParams` as exactly three optional fields, and **`cursor` is the right one**:
+ *
+ *     cursor         "Opaque pagination cursor returned by a previous call."   string|null
+ *     includeHidden  "include models that are hidden from the default picker"  boolean|null
+ *     limit          "Optional page size; defaults to a reasonable server-side value."
+ *
+ * ⚠ **`includeHidden` IS DELIBERATELY NOT SENT.** Omitted, the server withholds hidden models,
+ * which is exactly the roster a picker should offer — asking for them and filtering here would
+ * make Dopl responsible for a policy the platform already has. `hidden` is still read off each row
+ * (`rowFrom`), because a model can be hidden in the catalog and still be the one a SESSION is
+ * already running, and a card must label what it cannot offer.
+ * ⚠ **`limit` IS NOT SENT EITHER** — the server's own default is the page size Dopl wants, and a
+ * number here would be Dopl guessing at a budget the platform tunes.
+ *
+ * The repeated-cursor guard below stays: it costs nothing and it is the one defence against a
+ * server that answers page one forever.
  */
 async function listPages(conn) {
   const rows = [];

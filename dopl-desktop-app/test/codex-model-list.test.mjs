@@ -18,9 +18,41 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { readFileSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import {
   loadCatalog, loadCodexModels, fakeClient, row, noClaude, CODEX_DESCRIPTOR,
 } from "./_model-catalog-harness.mjs";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const requireMain = createRequire(import.meta.url);
+
+/**
+ * The LIVE tier's two gates, stated separately so a skip names WHICH one is shut — the idiom
+ * `test/codex-app-server-contract.test.mjs` established, because a skip that reads as a pass is
+ * this tier's whole failure mode.
+ */
+function codexBinForTest() {
+  const resolver = requireMain(join(HERE, "..", "main", "runtime", "codex", "resolve-bin.js"));
+  resolver.forget();
+  const found = resolver.resolveCodexBin();
+  resolver.forget();
+  return found.ok ? found.path : null;
+}
+
+function liveSkipReason() {
+  if (process.env.CODEX_APP_SERVER_LIVE !== "1") {
+    return "SKIPPED, NOT PASSED — set CODEX_APP_SERVER_LIVE=1 to measure the real CLI";
+  }
+  if (!codexBinForTest()) {
+    return "SKIPPED, NOT PASSED — CODEX_APP_SERVER_LIVE=1 is set but no codex binary resolved";
+  }
+  return false;
+}
 
 // ── 1. THE HAPPY PATH ────────────────────────────────────────────────────────────────────────
 
@@ -217,4 +249,47 @@ test("a FAILED read is NOT cached — an operator who fixes their install with D
   installed = true;
   assert.deepEqual((await codex.models()).ids, ["gpt-a"], "it recovers without a restart");
   assert.equal(calls, 1);
+});
+
+// ─── THE REQUEST SPELLING, MEASURED (2026-09-22) ─────────────────────────────────────────────
+//
+// 🔒 `models.js › listPages` sent `{ cursor }` as an admitted SYMMETRIC GUESS: Implementation Log
+// D had measured the RESPONSE and never sent a second page. The supported CLI's own
+// `ModelListParams` schema settles it. These two cases keep it settled — one reads Dopl's source,
+// the other reads the CLI, and the live one is the only one allowed to say what the protocol IS.
+
+test("Dopl sends `cursor`, and sends neither `includeHidden` nor `limit`", () => {
+  const src = readFileSync(join(HERE, "..", "main", "runtime", "codex", "models.js"), "utf8");
+  assert.match(src, /const params = cursor \? \{ cursor \} : \{\};/);
+  // ⚠ OMITTING `includeHidden` IS THE POLICY, NOT AN OVERSIGHT: omitted, the server withholds
+  // models it hides from a picker, which is the roster a picker should offer. Asking for them and
+  // filtering here would make Dopl responsible for a policy the platform already has.
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  assert.ok(!/includeHidden/.test(code), "includeHidden must not be sent");
+  assert.ok(!/\blimit\b\s*:/.test(code), "limit must not be sent — the server's default is wanted");
+  // `hidden` is still READ off each row: a hidden model can be the one a session already runs, and
+  // a card must label what it cannot offer.
+  assert.match(code, /row\.hidden === true/);
+});
+
+test("the supported CLI declares `cursor` — LIVE, and it skips loudly", { skip: liveSkipReason() }, () => {
+  const dir = mkdtempSync(join(tmpdir(), "codex-modellist-"));
+  try {
+    execFileSync(codexBinForTest(), ["app-server", "generate-json-schema", "--out", dir], {
+      timeout: 60_000,
+      stdio: "ignore",
+    });
+    const params = JSON.parse(readFileSync(join(dir, "v2", "ModelListParams.json"), "utf8"));
+    const props = Object.keys(params.properties || {});
+    // ⚠ THE ASSERTION IS `cursor` EXISTS, NOT that the set is exactly these three: a newer CLI
+    // adding a field is not an incompatibility, and pinning the whole set would fail on it.
+    assert.ok(props.includes("cursor"), `ModelListParams must declare cursor; got ${props.join(", ")}`);
+    assert.match(
+      String(params.properties.cursor.description || ""),
+      /pagination cursor/i,
+      "and it must still MEAN pagination"
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
