@@ -35,9 +35,43 @@ export const TEMPLATE_VISIBILITIES: readonly TemplateVisibility[] = [
  * repo path, a customer id), so it does not model it. Both halves are short
  * labels: they are spliced into the launch payload an agent reads.
  */
+/**
+ * WHAT SHAPE A FIELD'S VALUE IS (Samuel, 2026-09-22, option 1 of the three he
+ * was offered: *"just the value's shape — text, number, date, yes/no, link.
+ * Changes how the box behaves when you type, nothing else"*).
+ *
+ * 🔒 **IT IS AN INPUT AFFORDANCE, AND THE SCOPE IS THE WHOLE OF ITS HONESTY.**
+ * The value is STORED as a string on every one of these, the launch payload
+ * splices the same `key: value` line it always did, and nothing downstream
+ * branches on it. So this says how the operator TYPES a value, never what the
+ * agent is handed — and the two richer readings (a `pill`, or a REF into
+ * knowledge/skills, which is what `dopl_ontology`'s `kind` means) are
+ * deliberately NOT in this union: those need resolution at launch, and a value
+ * nothing resolves would be prose wearing a schema.
+ *
+ * ⚠ **OPTIONAL EVERYWHERE, AND ABSENT MEANS `text`.** Every field written before
+ * today has no `type`, and every MCP write still sends `{key, value}` — reading
+ * absent as anything else would retype half the rows in the product on the next
+ * read (INVARIANTS §8: the wire type is what makes the optionality invisible).
+ */
+export type TemplateFieldType = "text" | "number" | "date" | "boolean" | "url";
+
+export const TEMPLATE_FIELD_TYPES: readonly TemplateFieldType[] = [
+  "text",
+  "number",
+  "date",
+  "boolean",
+  "url",
+];
+
+/** The fallback spelled ONCE — `?? TEMPLATE_FIELD_TYPE_DEFAULT` at every read. */
+export const TEMPLATE_FIELD_TYPE_DEFAULT: TemplateFieldType = "text";
+
 export interface TemplateField {
   key: string;
   value: string;
+  /** ⚠ ABSENT IS `text` — see {@link TemplateFieldType}. */
+  type?: TemplateFieldType;
 }
 
 /**

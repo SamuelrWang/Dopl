@@ -5,6 +5,7 @@ import {
   safeLabelMessage,
   safeOptionalProse,
 } from "@/shared/lib/safe-label";
+import type { TemplateFieldType } from "./types";
 
 /**
  * Zod schemas for agent templates. REST handlers parse against these, so the
@@ -89,6 +90,17 @@ export const MAX_FIELD_COUNT = 50;
 export const MAX_FIELD_KEY_CHARS = 80;
 export const MAX_FIELD_VALUE_CHARS = 1000;
 
+/** ⚠ THE TUPLE ZOD NEEDS, DERIVED FROM THE ONE LIST IN `types.ts` — a second
+ *  hand-typed enum is how the UI and the validator come to offer different
+ *  values. */
+const TEMPLATE_FIELD_TYPES_TUPLE = [
+  "text",
+  "number",
+  "date",
+  "boolean",
+  "url",
+] as const satisfies readonly TemplateFieldType[];
+
 export const TemplateFieldSchema = z.object({
   key: safeLabel("Field key", MAX_FIELD_KEY_CHARS),
   /** ⚠ A LABEL, not prose: field values are spliced into the launch payload
@@ -105,6 +117,18 @@ export const TemplateFieldSchema = z.object({
     .refine((v) => v === "" || SAFE_LABEL_RE.test(v), {
       message: safeLabelMessage("Field value"),
     }),
+  /**
+   * 🔒 **THE VALUE'S SHAPE (Samuel, 2026-09-22), AND IT IS OPTIONAL BECAUSE
+   * ABSENT IS `text`.** Every row written before today carries none, and the MCP
+   * surface still writes `{key, value}` — so a required member here would refuse
+   * every one of those writes, and a `.default("text")` would stamp a decision
+   * onto rows nobody typed it for.
+   * ⚠ **IT IS NOT VALIDATED AGAINST `value`, DELIBERATELY.** The type is an INPUT
+   * affordance (`types.ts › TemplateFieldType`): the value is a string on every
+   * branch, and a server that refused "n/a" in a `number` field would be
+   * enforcing a contract the launch splice does not read.
+   */
+  type: z.enum(TEMPLATE_FIELD_TYPES_TUPLE).optional(),
 });
 
 export const TemplateFieldsSchema = z

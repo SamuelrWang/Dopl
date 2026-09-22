@@ -12,7 +12,12 @@ import {
 } from "@/shared/ui/open-scale-button";
 import { DialogField } from "@/shared/ui/standard-dialog";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
-import type { TemplateField } from "../client/types";
+import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
+import type { TemplateField, TemplateFieldType } from "../client/types";
+import {
+  TEMPLATE_FIELD_TYPES,
+  TEMPLATE_FIELD_TYPE_DEFAULT,
+} from "../types";
 
 /**
  * The editor's FIELD FURNITURE — the key/value rows and the chip picker.
@@ -92,12 +97,26 @@ export function CustomFieldRows({
             aria-label={`Field ${index + 1} key`}
             className={cn(RAISED_INPUT, "h-8 flex-[2] px-2.5 font-mono text-small")}
           />
-          <input
-            value={field.value}
-            onChange={(e) => edit(index, { value: e.target.value })}
-            placeholder="Value"
-            aria-label={`Field ${index + 1} value`}
-            className={cn(RAISED_INPUT, "h-8 flex-[3] px-2.5")}
+          <FieldValueInput
+            field={field}
+            index={index}
+            onChange={(value) => edit(index, { value })}
+          />
+          {/* 🔒 **THE TYPE (Samuel, 2026-09-22), THIRD IN THE ROW.** It says how
+              the VALUE is typed and nothing else — the value is a string on every
+              branch and the launch splice reads the same `key: value` line it
+              always did (`../types.ts › TemplateFieldType` carries the scope and
+              what was deliberately left out of it).
+              ⚠ THE DIALOG DROPDOWN'S OWN FACE (`variant="raised"`), so the row's
+              three controls are one recipe rather than an input, an input and a
+              pill. */}
+          <SelectMenu
+            value={field.type ?? TEMPLATE_FIELD_TYPE_DEFAULT}
+            options={FIELD_TYPE_OPTIONS}
+            onChange={(type) => edit(index, { type })}
+            ariaLabel={`Field ${index + 1} type`}
+            variant="raised"
+            className="h-8 shrink-0"
           />
           <OpenScaleIconButton
             onClick={() => onChange(fields.filter((_, i) => i !== index))}
@@ -119,13 +138,94 @@ export function CustomFieldRows({
           banned class NAMES — so this note may not spell one either. */}
       <button
         type="button"
-        onClick={() => onChange([...fields, { key: "", value: "" }])}
+        onClick={() =>
+          onChange([
+            ...fields,
+            // ⚠ THE DEFAULT IS STAMPED ON THE DRAFT ROW AND NOT ON THE WIRE:
+            // `cleanFields` drops it again on the way out, so `text` still
+            // travels as ABSENCE.
+            { key: "", value: "", type: TEMPLATE_FIELD_TYPE_DEFAULT },
+          ])
+        }
         className="flex w-full cursor-pointer items-center gap-1.5 rounded-lg bg-bg-inset px-2.5 py-2 text-left text-caption text-text-muted transition-colors hover:bg-bg-inset-hover"
       >
         <Plus size={OPEN_SCALE_ICON} aria-hidden="true" />
         New field
       </button>
     </div>
+  );
+}
+
+/**
+ * THE FIVE SHAPES, LABELLED FOR A PERSON. ⚠ Derived from `../types.ts ›
+ * TEMPLATE_FIELD_TYPES` rather than hand-listed, so a value the schema accepts
+ * and the row cannot offer is a TYPE ERROR rather than a missing option.
+ */
+const FIELD_TYPE_LABELS: Record<TemplateFieldType, string> = {
+  text: "Text",
+  number: "Number",
+  date: "Date",
+  boolean: "Yes / no",
+  url: "Link",
+};
+
+const FIELD_TYPE_OPTIONS: ReadonlyArray<SelectMenuOption<TemplateFieldType>> =
+  TEMPLATE_FIELD_TYPES.map((value) => ({
+    value,
+    label: FIELD_TYPE_LABELS[value],
+  }));
+
+/**
+ * THE VALUE CONTROL — the one thing the type actually changes.
+ *
+ * ⚠ **THE STORED VALUE IS A STRING ON EVERY BRANCH.** `number` and `date` are
+ * native input types, which is a KEYBOARD and a picker rather than a contract:
+ * the browser hands back a string, the schema takes a string, and the launch
+ * payload splices the same line. Nothing here validates, and nothing should —
+ * the server refusing "n/a" in a `number` field would be enforcing a rule no
+ * reader downstream honours.
+ * ⚠ **`boolean` IS THE ONE THAT SWAPS THE ELEMENT**, because there is no input
+ * type for a yes/no and a free-text box is how a field ends up holding "yes",
+ * "Y" and "true" in three templates. Its stored values are `"yes"` / `"no"`, and
+ * the EMPTY option stays — a yes/no nobody has answered is not a "no".
+ */
+function FieldValueInput({
+  field,
+  index,
+  onChange,
+}: {
+  field: TemplateField;
+  index: number;
+  onChange: (next: string) => void;
+}) {
+  const label = `Field ${index + 1} value`;
+  const type = field.type ?? TEMPLATE_FIELD_TYPE_DEFAULT;
+  if (type === "boolean") {
+    return (
+      <select
+        value={field.value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={label}
+        className={cn(RAISED_INPUT, "h-8 flex-[3] px-2.5")}
+      >
+        <option value="">—</option>
+        <option value="yes">Yes</option>
+        <option value="no">No</option>
+      </select>
+    );
+  }
+  return (
+    <input
+      // ⚠ `url` STAYS A TEXT BOX. `type="url"` adds browser VALIDATION (and a
+      // refusal at submit) to a field whose value this product does not parse,
+      // so it would be the one branch that can refuse what the schema accepts.
+      type={type === "number" ? "number" : type === "date" ? "date" : "text"}
+      value={field.value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={type === "url" ? "https://…" : "Value"}
+      aria-label={label}
+      className={cn(RAISED_INPUT, "h-8 flex-[3] px-2.5")}
+    />
   );
 }
 
