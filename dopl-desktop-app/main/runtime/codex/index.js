@@ -9,9 +9,11 @@
 // and the v2 request/notification shapes below are pinned by generated-schema fixtures. That is
 // implementation evidence, not a supported distribution contract: a packaged-Dopl smoke and
 // long-wait wake behavior remain unmeasured. Anything still ungrounded stays DECLARED UNVERIFIED
-// rather than assumed. Two declarations have teeth today: `meter.cost: null` hides the cost cap,
+// rather than assumed. Two declarations have teeth today: `meter.cost: null` hides the cost meter,
 // and `session.usageResetsOnResume: false` — MEASURED 2026-09-22 on the public `codex-cli
-// 0.155.1` — refuses resume because this runtime CONTINUES its totals across one.
+// 0.155.1` — tells core to CARRY the usage baseline across a resume rather than zero it, because
+// this runtime continues its totals through one (CXP-4; it refused the resume outright until the
+// baseline became runtime-aware).
 //
 // ⚠ ELECTRON-FREE AT LOAD, BY CONTRACT. `main/session-profiles.js` is a PURE module two suites
 // slice and evaluate standalone, and it asks the registry for every gate decision — so requiring
@@ -69,35 +71,51 @@ const descriptor = {
     // documented verb; without one the reducer's `interrupt` and `abandon_timeout` effects have no
     // actuator and the Stop control would be a button that does nothing.
     interrupt: true,
-    // ⚠ `'unverified'` — a legal value and a DIFFERENT answer from absent. The research documents
-    // a per-thread/per-turn `model` for the SDK (`@openai/codex-sdk`), and this adapter targets
-    // `app-server`, where no per-turn model parameter is documented. The design's §1.2 comment
-    // asserts "Codex per-turn"; the research does not carry it, so the live picker stays hidden on
-    // a running agent until §5 item C19 answers. Nothing is lost — the model is set at launch.
+    // ⚠ `'unverified'` — a legal value and a DIFFERENT answer from absent.
+    //
+    // ⚠ **THE PARAMETER EXISTS, AND THAT IS STILL NOT THE QUESTION** (§5 item C19, narrowed
+    // 2026-09-22 from `codex app-server generate-json-schema`, `codex-cli 0.155.1` — a schema dump
+    // that costs no model turn). `TurnStartParams.model` is declared and documented verbatim as
+    // "Override the model for this turn and subsequent turns", so the old reason for this value —
+    // "no per-turn model parameter is documented for app-server" — is retired.
+    //
+    // 🔒 ⚠ **IT STAYS `'unverified'` BECAUSE THIS RUNTIME IS MEASURED TO ACCEPT A FIELD AND IGNORE
+    // IT.** `launch-spec.js › assertPolicyTook` records the measurement: `thread/start` took the
+    // pre-v2 `approval_policy` spelling, started the thread, and answered with its OWN default —
+    // no error anywhere. A declared parameter is therefore evidence the protocol has a slot, not
+    // evidence the override TOOK. And there is nothing to check it against: `TurnStartResponse` is
+    // `{ turn }` alone and `Turn` carries no model, so unlike `thread/start` (whose response
+    // REQUIRES `approvalPolicy`, which is what makes `assertPolicyTook` possible) this verb offers
+    // no echo. Confirming it means starting a real turn and reading which model answered.
+    // ⚠ AND THE COST OF A WRONG `true` IS OPERATOR-FACING COPY: `runtime-copy.js ›
+    // liveModelSwitchRefusal` asks `capability.js › canSwitchModelLive`, so `true` replaces "Dopl
+    // will not claim it worked" with a live picker that silently may not have. Nothing is lost by
+    // waiting — the model is set at launch.
     liveModelSwitch: 'unverified',
     // ⚠ A TURN TAKES A VALUE, NOT A STREAM. `turn/start` is a call and `turn/steer` appends to it;
     // core's push iterator is Dopl's own transport and `launch-spec.js` pumps it into those two
     // verbs. The other runtime consumes the iterable directly, which is why this is declared.
     promptModes: ['string'],
-    // 🔒 ⚠ **`false` — MEASURED 2026-09-22 AGAINST `codex-cli 0.155.1`, AND IT STILL REFUSES A
-    // RESUME.** §5 item C8 is ANSWERED: this runtime CONTINUES its cumulative total across
-    // `thread/resume`. One thread, one turn in a cold `codex app-server` child, then the thread
-    // resumed in a SECOND child for two more turns; `thread/tokenUsage/updated.total.totalTokens`
-    // read 18,838 → 42,429 → 71,194 while `.last.totalTokens` read 18,838 / 23,591 / 28,765, and
-    // every step is the previous total plus that turn's `last` EXACTLY. The resume did not restart
-    // anything.
+    // 🔒 ⚠ **`false` — MEASURED 2026-09-22 AGAINST `codex-cli 0.155.1`.** §5 item C8 is ANSWERED:
+    // this runtime CONTINUES its cumulative total across `thread/resume`. One thread, one turn in
+    // a cold `codex app-server` child, then the thread resumed in a SECOND child for two more
+    // turns; `thread/tokenUsage/updated.total.totalTokens` read 18,838 → 42,429 → 71,194 while
+    // `.last.totalTokens` read 18,838 / 23,591 / 28,765, and every step is the previous total plus
+    // that turn's `last` EXACTLY. The resume did not restart anything.
     //
-    // ⚠ SO THE REFUSAL STANDS, WITH A DIFFERENT REASON. `session-park.js › resumeParked` zeroes
-    // `lastTotalCost` / `lastTotalTokens` on the assumption that a resumed conversation restarts
-    // its totals. On a continuing runtime that baseline reset re-bills the WHOLE thread on the
-    // first post-resume `result` — the cost cap fires on history the operator already paid for,
-    // and a longer thread hits it sooner. `capability.js › canResume` requires `=== true`, so
-    // `false` keeps the door shut and `capability.js › resumeRefusal` now states the measured
-    // sentence ("continues cumulative usage across a resume") instead of "unverified".
+    // ⚠ **THE MEASUREMENT HAS NOT MOVED AND MUST NOT. WHAT MOVED IS WHAT CORE DOES WITH IT**
+    // (CXP-4, 2026-09-22). `session-park.js › resumeParked` used to zero `lastTotalCost` /
+    // `lastTotalTokens` unconditionally, on the assumption every runtime restarts its totals — so
+    // against this one the first post-resume `result` re-billed the WHOLE thread, and `false` was
+    // read as disqualifying to stop that. The baseline is RUNTIME-AWARE now: a runtime declaring
+    // `false` has its baseline CARRIED FORWARD (`capability.js › resumeZeroesBaseline`, asked by
+    // both `resumeParked` and `session-boot.js › parkedSessionFromRecord`), so only new work is
+    // billed and `false` is no longer a refusal. `'unverified'` still is, because an unmeasured
+    // runtime gives core no safe direction at all.
     //
-    // ⚠ WHAT OPENS IT IS A CORE CHANGE, NOT THIS FIELD: `resumeParked` must PRESERVE the baseline
-    // for a runtime that declares `false` rather than zero it. That is CXP-4's remaining half and
-    // it lives in `main/session-park.js`. A COLD LAUNCH IS UNAFFECTED, as it always was.
+    // ⚠ SO `capability.js › canResume` NOW ANSWERS TRUE HERE, AND `launch-spec.js › resume` —
+    // which asks that predicate rather than restating it — opens with it. ⚠ A COLD LAUNCH WAS
+    // NEVER AFFECTED, and still is not.
     usageResetsOnResume: false,
   },
 

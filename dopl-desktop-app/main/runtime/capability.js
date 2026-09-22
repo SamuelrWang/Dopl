@@ -30,24 +30,74 @@ const unverified = (v) => v === 'unverified';
 
 // ── SESSION LIFECYCLE ────────────────────────────────────────────────────────────────────────
 
+// ── THE RESUME USAGE BASELINE ────────────────────────────────────────────────────────────────
+//
+// ⚠ TWO MEASURED ANSWERS AND ONE ABSENCE, AND ONLY THE ABSENCE REFUSES (2026-09-22, CXP-4). This
+// used to read `usageResetsOnResume === true` as the ONLY resumable answer, which made a MEASURED
+// `false` disqualifying — and the harm it was protecting against was never the declaration, it was
+// `session-park.js › resumeParked` ZEROING the delta baseline unconditionally. Against a runtime
+// whose totals continue, that reset re-bills the whole thread on the first post-resume `result`.
+// The baseline is runtime-aware now (`resumeZeroesBaseline` below is the one statement of it), so
+// `false` stops being disqualifying while the MEASUREMENT it records does not move.
+// ⚠ WHAT STILL REFUSES IS `'unverified'` — and absence, which reads the same way. An unmeasured
+// runtime cannot be given either treatment: zero it and a continuing runtime re-bills its history,
+// preserve it and a resetting runtime under-counts every post-resume turn to zero through
+// `session-io.js › applyCoreEvents`'s `Math.max(0, …)` clamp. UNKNOWN IS NOT EMPTY (INVARIANTS
+// §11): neither branch is safe, so the resume does not happen.
+
+/** Declared in either direction, i.e. somebody measured it. ⚠ `'unverified'` and absent are not. */
+const usageBaselineMeasured = (d) => d.usageResetsOnResume === true || d.usageResetsOnResume === false;
+
 /**
  * ⚠ THE ONE THAT REFUSES RATHER THAN HIDING (`contract.js › LAUNCH_BLOCKING`). An unverified
- * resume-reset makes every cost delta negative, clamps it to zero, and stops the cost cap ever
- * firing — with no error and no symptom until a bill arrives. Cold launch is unaffected.
+ * resume-reset leaves core with no safe way to carry the cost/token delta baseline across the
+ * resume — one direction re-bills history the operator already paid for, the other silently
+ * counts every later turn as zero. Cold launch is unaffected.
  */
 function canResume(descriptor) {
   const d = (descriptor && descriptor.session) || {};
-  return d.resume === true && d.usageResetsOnResume === true;
+  return d.resume === true && usageBaselineMeasured(d);
 }
 
 /** Why a resume was refused, for the operator. `null` when it was not. */
 function resumeRefusal(descriptor) {
   const d = (descriptor && descriptor.session) || {};
   if (d.resume !== true) return 'this runtime cannot resume a conversation';
-  if (unverified(d.usageResetsOnResume)) {
-    return 'this runtime\'s usage accounting on resume is unverified, and a wrong answer stops the cost cap firing';
-  }
-  return d.usageResetsOnResume === true ? null : 'this runtime continues cumulative usage across a resume';
+  if (usageBaselineMeasured(d)) return null;
+  return 'this runtime\'s usage accounting on resume is unverified, so a resume could not bill it honestly';
+}
+
+// ⚠ A SECOND COPY OF `main/session-runtime-truth.js`'s TWO MEASURED WORDS, and it is the same
+// deliberate duplication `session-park.js › KNOWN_PROFILES` carries for the same class of reason:
+// that module is CORE (it owns what a durable record may say) and this one is the RUNTIME layer,
+// which may not depend on core. HELD EQUAL BY A TEST rather than by discipline —
+// `test/session-runtime-truth.test.mjs` asserts both spellings match — because a word that drifts
+// here does not fail loudly: it falls through to the descriptor, which is exactly the
+// re-interpretation the record was persisted to prevent.
+const USAGE_BASELINE_RESETS = 'resets';
+const USAGE_BASELINE_CONTINUES = 'continues';
+
+/**
+ * MUST A RESUME ZERO THE CUMULATIVE-USAGE DELTA BASELINE, or carry it forward?
+ *
+ * ⚠ THE RECORD'S OWN ANSWER WINS OVER TODAY'S DESCRIPTOR, WHICH IS WHY IT WAS PERSISTED.
+ * `recorded` is `session-runtime-truth.js › usageBaseline`'s word off a durable session record. A
+ * build that later flips an adapter's `usageResetsOnResume` must not re-interpret a conversation
+ * that already happened under the old answer — that would be claiming a measurement nobody took
+ * about work that is already billed. A record states what was true when it was written.
+ * ⚠ `'unverified'` AND ABSENT FALL THROUGH TO THE DESCRIPTOR, and that is not a weakening: a
+ * record that states no measurement has said nothing to honour, and EVERY record written before
+ * this field existed reads that way — deciding those off the record would refuse or mis-bill every
+ * pre-U10 Claude session on the operator's disk. The descriptor is what `resumeRefusal` gates on
+ * anyway, so a runtime with no measurement never reaches this function at all.
+ * ⚠ FAIL-SAFE DIRECTION: only a MEASURED `true` zeroes. Anything else preserves, because the two
+ * errors are not symmetric — preserving against a resetting runtime under-counts (clamped to zero
+ * by `session-io.js`), while zeroing against a continuing one RE-BILLS THE ENTIRE THREAD.
+ */
+function resumeZeroesBaseline(descriptor, recorded) {
+  if (recorded === USAGE_BASELINE_RESETS) return true;
+  if (recorded === USAGE_BASELINE_CONTINUES) return false;
+  return ((descriptor && descriptor.session) || {}).usageResetsOnResume === true;
 }
 
 /**
@@ -322,6 +372,9 @@ const showsLocationPicker = (d) => {
 module.exports = {
   absent, unverified,
   canResume, resumeRefusal, canInterrupt, interruptRefusal, canSteer, canFork, canSwitchModelLive,
+  // CXP-4 (2026-09-22): the baseline rule BOTH record-driven rebuilds and the in-place resume ask.
+  // The two words are exported so the suite can hold them equal to `session-runtime-truth.js`'s.
+  resumeZeroesBaseline, USAGE_BASELINE_RESETS, USAGE_BASELINE_CONTINUES,
   meterMode, showsCostCap,
   canLaunchProfile, profileRefusal,
   toolModes, narrowestToolMode, widestToolMode, normalizeToolMode, floorWindowlessTool,

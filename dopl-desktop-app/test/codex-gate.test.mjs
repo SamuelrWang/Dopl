@@ -434,15 +434,24 @@ test("a session with NO token gets NO Dopl entry, and still launches", () => {
 
 // ── REFUSALS THAT ARE DECLARATIONS ───────────────────────────────────────────────────────────
 
-test("resume is REFUSED with a readable reason, and a cold launch is unaffected", () => {
-  // 🔒 ⚠ **THE REASON IS NOW A MEASUREMENT, NOT AN ABSENCE** (2026-09-22, `codex-cli 0.155.1`):
-  // `thread/tokenUsage/updated.total` CONTINUES across `thread/resume` in a fresh app-server, so
-  // the declaration moved from `'unverified'` to `false` and `canResume` — which requires `true`
-  // — still refuses. `codex-live-session.test.mjs` holds the measurement.
-  assert.equal(capability.canResume(D), false);
-  assert.match(String(capability.resumeRefusal(D)), /continues cumulative usage across a resume/);
-  assert.throws(() => launchSpec.resume({ session: {} }, null), /continues cumulative usage/,
-    "the adapter refuses at its own door rather than declaring a block nothing enforces");
+test("resume is ALLOWED on the measured baseline, and the adapter's own door opens with it", () => {
+  // 🔒 ⚠ **THE REASON WAS A MEASUREMENT, AND CORE NOW ACTS ON IT** (2026-09-22, `codex-cli
+  // 0.155.1`): `thread/tokenUsage/updated.total` CONTINUES across `thread/resume` in a fresh
+  // app-server, so the declaration is `false`. Until CXP-4 that was read as disqualifying, because
+  // `session-park.js › resumeParked` ZEROED the delta baseline unconditionally and would have
+  // re-billed the whole thread. The baseline is runtime-aware now — a `false` runtime has it
+  // CARRIED FORWARD — so `false` is a resumable answer and only `'unverified'` still refuses.
+  // `codex-live-session.test.mjs` holds the measurement; `session-park-resume-refusal.test.mjs`
+  // holds the billing arithmetic and the argument for the change.
+  assert.equal(D.session.usageResetsOnResume, false, "the MEASUREMENT has not moved and must not");
+  assert.equal(capability.canResume(D), true);
+  assert.equal(capability.resumeRefusal(D), null);
+  assert.equal(capability.resumeZeroesBaseline(D, null), false,
+    "…and what changed is the arithmetic: this runtime's baseline is carried, never zeroed");
+  // ⚠ `launch-spec.js › resume` ASKS THAT PREDICATE RATHER THAN RESTATING IT, so its door opened
+  // with no edit. Asserted through the predicate rather than by CALLING it — `resume` falls
+  // through to `start`, which spawns a real app-server child.
+  assert.equal(typeof launchSpec.resume, "function");
 });
 
 test("the cost cap is HIDDEN, the sign-in button is HIDDEN, and neither is grayed", () => {

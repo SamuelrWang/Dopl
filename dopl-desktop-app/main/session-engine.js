@@ -341,7 +341,14 @@ async function startSession(spec, rt) {
     firstTurn,
     resumeSdkId: spec.resumeSdkId || null,
     startedAt: Date.now(),
-    lastTotalCost: 0,
+    // ⚠ 0 ON EVERY COLD LAUNCH, AND HANDED IN BY THE ONE LANE THAT HAS A PRIOR TOTAL (CXP-4,
+    // 2026-09-22). `session-park.js › startResume` rebuilds a crashed session from its durable
+    // record, and on a runtime whose cumulative usage CONTINUES across a resume this baseline must
+    // start level with the cost accumulator `spec.costUsd` restores — or the first post-resume
+    // `result` bills the whole thread again. That function carries the argument; this is the
+    // construction site, so it is where the value has to land (setting it after `startSession`
+    // resolves races the query it already started).
+    lastTotalCost: Number(spec.usageBaselineCost) || 0,
     pendingPermissions: new Map(),
     pendingNames: new Map(),
     pendingInbound: [], // bounded FIFO of held interactive inbound replies

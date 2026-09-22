@@ -181,32 +181,34 @@ test("D2: every SHIPPED adapter derives its declaration from its enforcement", (
   }
 });
 
-test("resume is REFUSED where the usage reset is unverified — the cost cap depends on it", () => {
-  // ⚠ IT BLOCKS RESUME, NOT REGISTRATION, and the difference is the whole design of the field:
-  // a cold launch on such a runtime is unaffected. `session-park.js › resumeParked` zeroes both
-  // delta baselines; a runtime that CONTINUES the cumulative total makes every delta negative,
-  // `session-io.js › applyCoreEvents` clamps it to zero, and `session-state.js › costCapReached`
-  // is then never reached — the budget control silently stops existing.
-  // ⚠ REPAIRED 2026-08-31, WHEN THE CODEX ADAPTER ARMED IT, AND THE OLD ASSERTION WAS THE DEFECT.
-  // It read `if (!session.resume) continue; assert.equal(canResume, true)` — i.e. "a runtime that
-  // declares resume MUST be able to resume", which is the exact opposite of the field's design and
-  // of this case's own comment. `usageResetsOnResume: 'unverified'` is supposed to REFUSE A RESUME
-  // on a runtime that HAS one; `adapter-architecture.md` §1.4 declares all three adapters
-  // unverified, so the old form would have rejected every honest declaration and rewarded the one
-  // adapter willing to assume its own answer. What the guard is really for is that a resume is
-  // never SILENTLY allowed over an unmeasured baseline — so that is what it asserts now.
+test("resume is REFUSED where the usage reset is UNMEASURED — the billing depends on it", () => {
+  // ⚠ IT BLOCKS RESUME, NOT REGISTRATION: a cold launch on such a runtime is unaffected.
+  // `session-park.js › resumeParked` must decide whether to ZERO both delta baselines or CARRY
+  // them forward, and an unmeasured runtime gives it no safe direction — zero against a continuing
+  // runtime and the first post-resume `result` re-bills the whole thread; carry against a resetting
+  // one and `session-io.js › applyCoreEvents`'s `Math.max(0, …)` clamps every later turn to zero.
+  // ⚠ **`false` IS NO LONGER DISQUALIFYING (CXP-4, 2026-09-22).** It is a MEASUREMENT, and
+  // `capability.js › resumeZeroesBaseline` acts on it, so this asks for a measured answer in
+  // EITHER direction rather than for `true`. What still refuses is `'unverified'` and absence.
+  // ⚠ REPAIRED 2026-08-31, WHEN THE CODEX ADAPTER ARMED IT: the old form read "a runtime that
+  // declares resume MUST be able to resume", the exact opposite of the field's design, which would
+  // have rejected every honest declaration and rewarded the one adapter willing to assume its own
+  // answer. The guard is that a resume is never SILENTLY allowed over an unmeasured baseline.
   for (const { descriptor } of ADAPTERS) {
     if (!descriptor.session.resume) continue;
     if (capability.canResume(descriptor)) {
-      assert.equal(descriptor.session.usageResetsOnResume, true,
+      assert.equal(typeof descriptor.session.usageResetsOnResume, 'boolean',
         `${descriptor.id}: resume is allowed on an unmeasured usage baseline`);
       assert.equal(capability.resumeRefusal(descriptor), null,
         `${descriptor.id}: resume is allowed and refused at the same time`);
+      // ⚠ AND THE MEASUREMENT REACHES THE ARITHMETIC: `resumeZeroesBaseline` is its one reader.
+      assert.equal(capability.resumeZeroesBaseline(descriptor, null),
+        descriptor.session.usageResetsOnResume === true, `${descriptor.id}: declared ≠ applied`);
       continue;
     }
     // Refused — and the refusal has to be READABLE, because a refusal an operator cannot read is
     // a refusal they work around.
-    assert.match(String(capability.resumeRefusal(descriptor)), /unverified|continues cumulative/,
+    assert.match(String(capability.resumeRefusal(descriptor)), /unverified|cannot resume/,
       `${descriptor.id}: resume is blocked with no reason an operator could act on`);
   }
   const unverified = clone(ADAPTERS[0]);
@@ -214,6 +216,9 @@ test("resume is REFUSED where the usage reset is unverified — the cost cap dep
   assert.doesNotThrow(() => contract.sealAdapter(unverified), "it must still REGISTER — cold launch is fine");
   assert.equal(capability.canResume(unverified.descriptor), false);
   assert.match(String(capability.resumeRefusal(unverified.descriptor)), /unverified/);
+  // ⚠ THE FOURTH ADAPTER GETS THE RIGHT BEHAVIOUR BY DECLARING, NEVER BY ITS ID (CXP-4) — the
+  // synthetic-descriptor cases for that live in `session-runtime-truth.test.mjs`, at this file's
+  // 500-line cap rather than in it.
 });
 
 // ── 2. THE DESCRIPTOR IS PURE DATA ────────────────────────────────────────────

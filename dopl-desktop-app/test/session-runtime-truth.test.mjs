@@ -65,10 +65,60 @@ test("the usage baseline is the descriptor's tri-state, named so a record is rea
   assert.equal(truth.usageBaseline(registry.descriptorFor("codex")), "continues");
   assert.equal(truth.usageBaseline({ session: { usageResetsOnResume: false } }), "continues");
   assert.equal(truth.usageBaseline({ session: { usageResetsOnResume: "unverified" } }), "unverified");
-  // ⚠ AN ABSENT DECLARATION IS `'unverified'`, the fail-closed member: `canResume` already
-  // refuses anything that is not exactly `true`, and a missing field must not read as a yes.
+  // ⚠ AN ABSENT DECLARATION IS `'unverified'`, the fail-closed member: `canResume` refuses
+  // anything that is not a MEASURED answer, and a missing field must not read as one.
   assert.equal(truth.usageBaseline(null), "unverified");
   assert.equal(truth.usageBaseline({ session: {} }), "unverified");
+});
+
+test("CXP-4: the record's two measured words and `capability.js`'s copy of them are ONE spelling", () => {
+  // 🔒 ⚠ **A DELIBERATE SECOND COPY, HELD EQUAL HERE RATHER THAN BY DISCIPLINE.** This module is
+  // CORE — it owns what a durable record may say — and `main/runtime/capability.js` is the RUNTIME
+  // layer, which may not depend on core; but `capability.js › resumeZeroesBaseline` is where a
+  // record's persisted word overrides today's descriptor, so it needs the same two strings. It is
+  // the `session-park.js › KNOWN_PROFILES` precedent and it carries the same hazard: a word that
+  // drifts does NOT fail loudly. It falls through to the descriptor, which is exactly the silent
+  // re-interpretation of a finished run that persisting the field was meant to prevent.
+  assert.equal(registry.capability.USAGE_BASELINE_RESETS, truth.USAGE_RESETS);
+  assert.equal(registry.capability.USAGE_BASELINE_CONTINUES, truth.USAGE_CONTINUES);
+  // ⚠ AND THE OVERRIDE ITSELF, IN BOTH DIRECTIONS, driven with the words this module produces.
+  const resetting = registry.descriptorFor("claude");
+  const continuing = registry.descriptorFor("codex");
+  assert.equal(registry.capability.resumeZeroesBaseline(resetting, null), true);
+  assert.equal(registry.capability.resumeZeroesBaseline(continuing, null), false);
+  assert.equal(registry.capability.resumeZeroesBaseline(resetting, truth.USAGE_CONTINUES), false,
+    "the RECORD's word wins — a later build must not re-interpret a run that already happened");
+  assert.equal(registry.capability.resumeZeroesBaseline(continuing, truth.USAGE_RESETS), true);
+  // ⚠ `'unverified'` FALLS THROUGH TO THE DESCRIPTOR, and so does junk. Every record written
+  // before U10 carries no baseline at all, so deciding those off the record would mis-bill every
+  // pre-U10 session on disk; `capability.js › resumeRefusal` is what gates an unmeasured RUNTIME.
+  for (const said of [truth.USAGE_UNVERIFIED, undefined, null, "", "RESETS", 1]) {
+    assert.equal(registry.capability.resumeZeroesBaseline(resetting, said), true, JSON.stringify(said));
+    assert.equal(registry.capability.resumeZeroesBaseline(continuing, said), false, JSON.stringify(said));
+  }
+});
+
+test("CXP-4: a FOURTH adapter gets the right baseline by DECLARING it, never by its id", () => {
+  // ⚠ THE RULE THIS WAVE IS MOST LIKELY TO LOSE. Nothing in core may key on `codex` — an adapter
+  // nobody has written yet must get the carried baseline purely by saying its totals continue,
+  // and the resume gate must open for it on the same word. Driven off synthetic descriptors for
+  // exactly that reason; `runtime-contract.test.mjs` asserts the same rule over the REGISTERED
+  // adapters and points here for these cases, being at its own 500-line cap.
+  const cap = registry.capability;
+  const continues = { session: { resume: true, usageResetsOnResume: false } };
+  assert.equal(cap.canResume(continues), true, "a measured `false` is resumable");
+  assert.equal(cap.resumeRefusal(continues), null);
+  assert.equal(cap.resumeZeroesBaseline(continues, null), false, "…and its baseline is CARRIED");
+  const resets = { session: { resume: true, usageResetsOnResume: true } };
+  assert.equal(cap.canResume(resets), true);
+  assert.equal(cap.resumeZeroesBaseline(resets, null), true, "…and a resetting one still zeroes");
+  // ⚠ THE UNMEASURED ONE IS REFUSED, AND FAILS SAFE IF IT EVER REACHED THE ARITHMETIC ANYWAY:
+  // PRESERVE, never zero. The two errors are not symmetric — preserving under-counts (clamped to
+  // zero by `session-io.js`), zeroing RE-BILLS history the operator already paid for.
+  const unmeasured = { session: { resume: true, usageResetsOnResume: "unverified" } };
+  assert.equal(cap.canResume(unmeasured), false);
+  assert.equal(cap.resumeZeroesBaseline(unmeasured, null), false);
+  assert.equal(cap.resumeZeroesBaseline({ session: { resume: true } }, null), false, "absent reads the same");
 });
 
 test("a hostile or absent stored baseline lands on `unverified`, never on a flattering answer", () => {

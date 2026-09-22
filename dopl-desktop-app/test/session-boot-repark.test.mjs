@@ -73,6 +73,47 @@ test("rehydration preserves an open Codex model id in Codex's vocabulary", () =>
   assert.equal(restored.model, "gpt-6-astra");
 });
 
+test("CXP-4: a restored baseline PAIRS with the accumulator its deltas are added to", () => {
+  // 🔒 ⚠ **THE RESTART HOLE, AND IT IS THE HALF PRESERVING AN IN-MEMORY BASELINE CANNOT COVER.**
+  // `session-io.js › applyCoreEvents` adds `platformTotal - baseline` to an accumulator, so the
+  // two must start LEVEL. Both baselines were hard `0` here, which is right for a runtime that
+  // restarts its totals and wrong for one that continues them: the cost accumulator is restored
+  // from the record (`state.costUsd`), so a zero baseline against a continuing runtime bills that
+  // whole restored figure a second time on the first post-resume turn.
+  const h = harness();
+  const continuing = h.boot.parkedSessionFromRecord(
+    KEY, parkedRecord({ runtimeId: "codex", costUsd: 1.25, usageBaseline: "continues" }), "thread-codex-1"
+  );
+  assert.equal(continuing.state.costUsd, 1.25, "the accumulator is restored…");
+  assert.equal(continuing.lastTotalCost, 1.25, "…and the baseline starts level with it");
+  // ⚠ THE TOKEN TWIN STAYS 0 AND THAT IS THE SAME RULE, NOT AN EXCEPTION: `tokensSpent` is NOT in
+  // the durable record (`session-io.js › baseRecord`), so the token accumulator restarts at 0 and
+  // its baseline must too. A wave that persists `tokensSpent` owes this line its twin.
+  assert.equal(continuing.lastTotalTokens, 0);
+  assert.equal(continuing.tokensSpent, undefined, "…which is exactly why 0 is the right baseline");
+
+  // The resetting runtime is untouched — the line Claude always ran.
+  const resetting = h.boot.parkedSessionFromRecord(
+    KEY, parkedRecord({ runtimeId: "claude", costUsd: 1.25, usageBaseline: "resets" }), "sdk-y1uun32v"
+  );
+  assert.equal(resetting.state.costUsd, 1.25);
+  assert.equal(resetting.lastTotalCost, 0, "a resumed Claude query restarts its total, so the baseline drops");
+
+  // ⚠ THE RECORD'S WORD DECIDES, NOT TODAY'S DESCRIPTOR — a record written under one answer must
+  // not be re-read under a newer one. And a record that says NOTHING (every one written before
+  // U10) falls through to the descriptor rather than refusing, which is what keeps upgrade day
+  // from mis-billing every session on the operator's disk.
+  const crossed = h.boot.parkedSessionFromRecord(
+    KEY, parkedRecord({ runtimeId: "claude", costUsd: 1.25, usageBaseline: "continues" }), "sdk-y1uun32v"
+  );
+  assert.equal(crossed.lastTotalCost, 1.25, "the RECORD said continues, so the live `resets` descriptor loses");
+  const silent = h.boot.parkedSessionFromRecord(
+    KEY, parkedRecord({ runtimeId: "codex", costUsd: 1.25 }), "thread-codex-1"
+  );
+  assert.equal(silent.usageBaseline, "unverified", "a pre-U10 record states no measurement…");
+  assert.equal(silent.lastTotalCost, 1.25, "…so the descriptor answers, and Codex's says continues");
+});
+
 function storePure_resumedPostSeq(n) {
   const slack = Number((STORE_SRC.match(/RESUME_POST_SEQ_SLACK = (\d+)/) || [])[1]);
   assert.ok(slack > 0, "RESUME_POST_SEQ_SLACK moved or changed shape in session-store.js");

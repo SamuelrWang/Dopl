@@ -90,6 +90,33 @@ function contextFromRecord(rec) {
   };
 }
 
+// 🔒 REAP THE PRIOR CHILD BEFORE A RESUME REBUILDS ANYTHING (2026-09-22, CXP-4).
+//
+// ⚠ **A THREAD HAS ONE WRITER, AND THIS LANE USED TO LEAVE TWO.** Measured against `codex-cli
+// 0.155.1`: `thread/resume` from a second app-server while the first child is still alive is
+// refused JSON-RPC `-32600` — "thread … already has an active writer". So a resume that starts its
+// new child before the old one is gone is not a resume, it is a race whose loser is the operator's
+// agent.
+// ⚠ AND THE OLD HANDLES WERE UNREACHABLE THE MOMENT THE REBUILD BEGAN. `resumeParked` assigned a
+// FRESH `abortController` and `pushIterator` over the live ones, so nothing could ever abort or
+// close what the previous cycle was holding — the same shape as H1, the two-children bug
+// `session-query.js › startQuery` fixed on the COLD lane with `abortInFlight` and this lane never
+// got. Capture first, reap, then rebuild.
+// ⚠ THREE REAPERS BECAUSE THE RUNTIMES DIE DIFFERENTLY, AND ONLY ONE IS SHARED. The abort
+// controller is what the Claude adapter passes to its SDK (`claude/launch-spec.js`); closing the
+// push iterator ends the prompt stream BOTH adapters block on; and `handle.close()` is the ONLY
+// thing that reaches the Codex app-server's `child.kill()` — `codex/launch-spec.js` never reads an
+// abort signal at all. A handle with no `close` (the Claude SDK's query is an async generator)
+// simply skips it, so the Claude path is byte-for-byte what it was.
+// ⚠ BEST EFFORT, NEVER A THROW. This runs on the wake path of an agent an operator is waiting for;
+// a teardown that throws would leave the session parked forever with no query and no refusal.
+function reapPriorChild(s) {
+  const prior = s.query;
+  try { if (s.abortController) s.abortController.abort(); } catch (_) { /* best effort */ }
+  try { if (s.pushIterator) s.pushIterator.close(); } catch (_) { /* best effort */ }
+  try { if (prior && typeof prior.close === 'function') prior.close(); } catch (_) { /* best effort */ }
+}
+
 // Resume a PARKED session IN PLACE: the session object survived park (registry entry and
 // window alive), only its live SDK query was torn down.
 // ⚠ Rebuild the abort controller + push iterator SYNCHRONOUSLY so the pushInbound / pushTurn
@@ -97,24 +124,36 @@ function contextFromRecord(rec) {
 // options.resume, continuing the SAME conversation.
 function resumeParked(s) {
   if (!deps || !s || s.settled || s.resuming) return;
-  // ── ⚠ RESUME IS A DECLARED CAPABILITY, AND AN UNVERIFIED METER REFUSES IT (2026-08-31) ─────
+  // ── ⚠ RESUME IS A DECLARED CAPABILITY, AND AN UNMEASURED METER REFUSES IT (2026-08-31) ─────
   //
-  // ⚠ THE COST CAP IS WHAT IS AT STAKE, NOT THE RESUME. Two lines below, this function zeroes
-  // `s.lastTotalCost` and `s.lastTotalTokens` because it ASSUMES the runtime restarts its
-  // cumulative total on a resumed conversation. A runtime that CONTINUES the total instead makes
-  // every subsequent delta negative; `session-io.js` clamps it to zero; `session-state.js ›
-  // costCapReached` is fed by that one number and is therefore never reached. The budget control
-  // stops existing with no error, no log and no symptom until a bill arrives — which is why
-  // `capability.js › canResume` refuses rather than hides, and why a COLD launch is unaffected.
+  // ⚠ THE BILLING IS WHAT IS AT STAKE, NOT THE RESUME. Further down, this function decides whether
+  // to zero `s.lastTotalCost` / `s.lastTotalTokens` — the baselines every later delta is measured
+  // against. A runtime that RESTARTS its cumulative total on a resumed conversation must have them
+  // zeroed; one that CONTINUES the total must have them CARRIED FORWARD, or the first post-resume
+  // `result` re-bills the entire thread. Both are handled now (`usageZeroes` below), so what is
+  // left to refuse is the runtime that has told us NEITHER: zero it and a continuing runtime
+  // re-bills paid history, preserve it and a resetting runtime reports every later turn as zero
+  // through `session-io.js › applyCoreEvents`'s `Math.max(0, …)` clamp. Neither branch is safe,
+  // which is why `capability.js › canResume` refuses rather than picks, and why a COLD launch is
+  // unaffected.
   // ⚠ IT REFUSES IN PLACE AND LEAVES THE SESSION PARKED. There is nothing to tear down (no query
   // was rebuilt yet) and a parked session is a resumable one the moment the answer lands, so the
   // operator's next wake retries. The reason is logged as a SENTENCE rather than a code, because
   // an operator is who has to read it.
-  const refusal = runtimeCapability.resumeRefusal(runtimeRegistry.descriptorFor(s.runtimeId));
+  const descriptor = runtimeRegistry.descriptorFor(s.runtimeId);
+  const refusal = runtimeCapability.resumeRefusal(descriptor);
   if (refusal) {
     diag('session-park: resume refused —', refusal);
     return;
   }
+  // ⚠ DECIDED BEFORE ANYTHING IS TORN DOWN, off the session's PERSISTED word where it has one.
+  // `s.usageBaseline` is what `session-boot.js › parkedSessionFromRecord` restored from the
+  // durable record; a session this process launched carries none and answers off the descriptor.
+  // `capability.js › resumeZeroesBaseline` is the one statement of that precedence.
+  const usageZeroes = runtimeCapability.resumeZeroesBaseline(descriptor, s.usageBaseline);
+  // 🔒 THE PRIOR CHILD DIES FIRST — see `reapPriorChild`. ⚠ BEFORE the fresh controller and
+  // iterator are assigned below, because assigning them is what makes the old ones unreachable.
+  reapPriorChild(s);
   s.resuming = true;
   // ⚠ THE PRIVATE WINDOW DOES NOT SURVIVE THE TORN-DOWN QUERY (2026-08-22). The depth is spent by
   // each turn's `result`, and the results this session was still owed died with the query the park
@@ -136,20 +175,27 @@ function resumeParked(s) {
   // ⚠ SYNCHRONOUSLY supersede the torn-down query's consume loop so its `s.query !== q` guard
   // trips — otherwise a late non-abort rejection from the OLD query crashes this session.
   s.query = null;
-  // ⚠ ASSUMPTION: the runtime restarts its cumulative cost from 0 on a resumed query, so resetting
-  // the delta baseline preserves the running cap total in state.costUsd (the cap keeps enforcing
-  // across park AND crash/resume).
-  // ⚠ IT IS A DECLARED CAPABILITY SINCE 2026-08-31, NOT A COMMENT ANYBODY HAS TO FIND:
-  // `descriptor.session.usageResetsOnResume`. An `'unverified'` answer REFUSES the resume (a cold
-  // launch is unaffected), because a runtime that CONTINUES the total makes every delta negative,
-  // clamps it to zero in `session-io.js › applyCoreEvents`, and stops the cost cap ever firing —
-  // silently, with no symptom until a bill arrives.
-  s.lastTotalCost = 0;
-  // ⚠ THE SAME ASSUMPTION, THE SAME RESET, ONE LINE APART ON PURPOSE. `result.usage` restarts
-  // from zero on the resumed query exactly like `total_cost_usd`, so its delta baseline drops
-  // here too; `s.tokensSpent` (the accumulated figure the Agents tab shows) is deliberately NOT
-  // touched — it is the lifetime spend and a park is not a new agent.
-  s.lastTotalTokens = 0;
+  // ── ⚠ THE DELTA BASELINE IS RUNTIME-AWARE, NOT AN ASSUMPTION (2026-09-22, CXP-4) ─────────────
+  //
+  // ⚠ IT WAS AN UNCONDITIONAL ZERO, AND THE ASSUMPTION UNDER IT WAS "every runtime restarts its
+  // cumulative total on a resumed query". One does not. Measured against `codex-cli 0.155.1`:
+  // `thread/tokenUsage/updated.total` is RUNNING, PER-THREAD and PERSISTED, and `thread/resume`
+  // does not reset it — three turns across two app-server children read 18,838 → 42,429 → 71,194,
+  // each step the previous total plus that turn's `.last` exactly.
+  // ⚠ SO A `continues` RUNTIME KEEPS ITS BASELINE AND ONLY NEW WORK IS BILLED. Zeroing there would
+  // make the first post-resume delta the WHOLE THREAD — history the operator already paid for,
+  // charged again, and the longer the thread the bigger the double-charge.
+  // ⚠ AND A `resets` RUNTIME IS UNCHANGED, DELIBERATELY. Claude restarts `total_cost_usd` and
+  // `result.usage` from zero on a resumed query, so its baselines must drop or the first delta
+  // goes negative and clamps to nothing. This is the same line it always ran; what is new is that
+  // the runtime is ASKED instead of assumed.
+  // ⚠ `s.tokensSpent` IS NOT TOUCHED ON EITHER BRANCH — it is the lifetime accumulation the Agents
+  // tab shows, and a park is not a new agent. The INVARIANT the two branches keep is that the
+  // baseline always pairs with the accumulator its deltas are added to.
+  if (usageZeroes) {
+    s.lastTotalCost = 0;
+    s.lastTotalTokens = 0;
+  }
   startResumedConsumer(s);
 }
 
@@ -310,11 +356,30 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
   // (`session-store.js › durableSessionRecord`) rather than off a live object. `false` is this
   // function's existing refusal shape and the notification click simply does not resume —
   // widening it would change a contract two callers read, for no gain.
-  const resumeRefusal = runtimeCapability.resumeRefusal(runtimeRegistry.descriptorFor(rec.runtimeId));
+  const descriptor = runtimeRegistry.descriptorFor(rec.runtimeId);
+  const resumeRefusal = runtimeCapability.resumeRefusal(descriptor);
   if (resumeRefusal) {
     diag('session-park: resume refused —', resumeRefusal);
     return false;
   }
+  // ── ⚠ THE DELTA BASELINE THIS REBUILD HANDS ITS NEW SESSION (2026-09-22, CXP-4) ─────────────
+  //
+  // ⚠ THE RECORD'S OWN WORD, NOT TODAY'S DESCRIPTOR, for `session-boot.js ›
+  // parkedSessionFromRecord`'s reason: a build that later flips an adapter's declaration must not
+  // re-interpret a conversation that already happened under the old one. `capability.js ›
+  // resumeZeroesBaseline` states the precedence once and both rebuilds ask it.
+  // ⚠ AND THE BASELINE IS THE ACCUMULATOR IT PAIRS WITH, which is the whole of the arithmetic.
+  // `session-io.js › applyCoreEvents` adds `platformTotal - baseline` to an accumulator, so the
+  // two must start level or the difference is billed twice (or never). This rebuild restores the
+  // COST accumulator from `rec.costUsd` below, so on a `continues` runtime the cost baseline must
+  // be that same figure — on such a runtime `state.costUsd` IS the platform's cumulative total,
+  // because the deltas telescope from a cold launch's zero.
+  // ⚠ THE TOKEN TWIN NEEDS NOTHING AND THAT IS NOT AN OVERSIGHT: `s.tokensSpent` is NOT in the
+  // durable record (`session-io.js › baseRecord`), so the rebuilt session's token accumulator
+  // starts at 0 and its baseline must start at 0 to match. If a later wave persists `tokensSpent`,
+  // it owes this lane the matching `usageBaselineTokens` hand-in.
+  const usageBaselineCost = runtimeCapability.resumeZeroesBaseline(descriptor, rec.usageBaseline)
+    ? 0 : (Number(rec.costUsd) || 0);
   let rt;
   try { rt = await deps.acquireRuntime(rec.runtimeId); } catch (_) { return false; }
   // ⚠ Re-check AFTER the await: a reopen shell or racing launch may have created this slot
@@ -362,6 +427,11 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
     // session that burned 23 of 24 turns, crashed and was resumed starts again at zero, so
     // every crash+resume mints a fresh turn AND cost budget.
     turns: rec.turns, costUsd: rec.costUsd,
+    // ⚠ AND THE DELTA BASELINE THAT COST FIGURE IS MEASURED FROM (2026-09-22, CXP-4) — derived
+    // above, handed to the construction site rather than written onto `s` after it returns,
+    // because `startSession` starts the query BEFORE it resolves and a baseline set afterwards is
+    // a race against the first `result`.
+    usageBaselineCost: usageBaselineCost,
     // 2026-09-07: the cap those counters were measured against travelled here too. Deleted with
     // the caps — a resumed session now carries its spent counters and no bound at all.
     // ⚠ AND THE OUTBOUND POST COUNTER, for the same class of reason and a different symptom

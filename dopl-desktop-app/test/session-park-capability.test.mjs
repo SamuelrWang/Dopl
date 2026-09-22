@@ -161,23 +161,27 @@ function harness(over = {}) {
   return { ...api, deps, sessions, calls, cfg, store };
 }
 
-// ── ⚠ RESUME IS A DECLARED CAPABILITY, AND THE COST CAP IS WHAT IS AT STAKE (2026-08-31) ──────
+// ── ⚠ RESUME IS A DECLARED CAPABILITY, AND THE BILLING IS WHAT IS AT STAKE (2026-08-31) ───────
 //
-// `resumeParked` zeroes `lastTotalCost` / `lastTotalTokens` because it ASSUMES the runtime
-// restarts its cumulative total on a resumed conversation. A runtime that CONTINUES it makes
-// every later delta negative; `session-io.js` clamps that to zero; `session-state.js ›
-// costCapReached` reads only that number and is never reached. The budget control stops existing
-// with no error and no symptom until a bill arrives — so `capability.js › canResume` REFUSES
-// rather than hides, and a COLD LAUNCH is unaffected.
+// `resumeParked` decides whether to zero `s.lastTotalCost` / `s.lastTotalTokens` — the baselines
+// every later delta is measured against. A runtime that RESTARTS its cumulative total on a resumed
+// query must have them zeroed; one that CONTINUES it must have them carried forward, or the first
+// post-resume `result` re-bills the whole thread. Both are handled since CXP-4
+// (`capability.js › resumeZeroesBaseline`); what is left to REFUSE is a runtime that declares
+// NEITHER, because there is no safe direction to pick for it. A COLD LAUNCH is unaffected.
 //
-// ⚠ THE REAL DESCRIPTORS DRIVE THESE CASES, and this is not a hypothetical branch: two of the
-// three registered adapters answer `'unverified'` today and will until §5 C8 / X4 come back.
+// ⚠ THE REAL DESCRIPTORS DRIVE THESE CASES, and this is not a hypothetical branch: one registered
+// adapter still answers `'unverified'` today and will until X4 comes back.
+//
+// ⚠ `MEASURED` REPLACED `VERIFIED` ON 2026-09-22 AND THE SET GREW, which is the whole of CXP-4 in
+// one line: `false` is a measurement, so a runtime declaring it is resumable. The old spelling
+// read `=== true` and would have shrunk this census to the one adapter that resets.
 
 const UNVERIFIED = RUNTIME.ids().filter(
   (id) => RUNTIME.descriptorFor(id).session.usageResetsOnResume === "unverified"
 );
 const VERIFIED = RUNTIME.ids().filter(
-  (id) => RUNTIME.descriptorFor(id).session.usageResetsOnResume === true
+  (id) => typeof RUNTIME.descriptorFor(id).session.usageResetsOnResume === "boolean"
 );
 
 test("RESUME: the census is real — at least one runtime each side of the refusal", () => {
@@ -199,7 +203,7 @@ test("RESUME: a runtime whose usage accounting is UNVERIFIED is refused, in plac
   assert.deepEqual(h.calls.buildLaunchSpec, [], "no spec is assembled, and no query is rebuilt");
   // ⚠ NOTHING IS TORN DOWN, and that is the point of refusing HERE rather than after the rebuild:
   // the session is still parked, so the operator's next wake retries the moment the answer lands.
-  assert.equal(s.lastTotalCost, 0.42, "the cost baseline is untouched — the cap still enforces");
+  assert.equal(s.lastTotalCost, 0.42, "the cost baseline is untouched — nothing was re-billed");
   assert.deepEqual(h.calls.dispatch, [], "and it is not a crash");
 });
 
@@ -209,7 +213,11 @@ test("RESUME: the refusal is a SENTENCE an operator can read, not a code", () =>
   const line = h.calls.diag.find((l) => l.includes("resume refused"));
   assert.ok(line, "the refusal is logged");
   assert.match(line, /unverified/, "…and it names WHY, in the descriptor's own words");
-  assert.match(line, /cost cap/, "…including what it is protecting");
+  // ⚠ THE OLD SPELLING ASKED FOR `/cost cap/` AND IS DELETED WITH THE THING IT NAMED. The turn and
+  // cost caps went on 2026-09-07 (`session-state.js` § "turnCapReached and costCapReached are
+  // deleted with the caps"), so a refusal promising to protect one was copy about a control that
+  // does not exist. What the refusal protects is the spend figures themselves.
+  assert.match(line, /bill it honestly/, "…including what it is protecting");
 });
 
 test("RESUME: a runtime that CAN resume is untouched — the shipped path", () => {
