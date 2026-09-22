@@ -14,13 +14,22 @@
 // `getLaunchPosture` appears in `channel-dir-ipc.js` and nowhere else.
 //
 // ⚠ NOTHING HERE IS EVER READ AT A SPAWN. This record is a SEED: it is copied INTO a channel's
-// own posture record, once, at the moment that channel is created, by a renderer executing a
-// creation a human just performed. Every later read is the per-channel record, through the one
-// consumer that already existed. **Do not wire `getAgentDefaults` into `session-engine.js`, into
-// any launch path, or into `getLaunchPosture`'s fallback** — a defaults record consulted at spawn
-// time is an ambient posture read at a spawn no human is attending, which is exactly what H2
-// forbids, and it would additionally re-point every EXISTING channel at a value its operator set
-// for new ones.
+// own posture record, once, at or right after the moment that channel is created. Every later
+// read is the per-channel record, through the one consumer that already existed. **Do not wire
+// `getAgentDefaults` into `session-engine.js`, into any launch path, or into `getLaunchPosture`'s
+// fallback** — a defaults record consulted at spawn time is an ambient posture read at a spawn no
+// human is attending, which is exactly what H2 forbids, and it would additionally re-point every
+// EXISTING channel at a value its operator set for new ones.
+//
+// ⚠ **THERE ARE TWO SEED SITES SINCE 2026-09-22, AND THE SECOND IS NOT A SECOND READER.** Until
+// then the only one was a RENDERER executing a creation a human had just performed, and the plan's
+// Handoff item 3 recorded "agent-created channels do not inherit" as a RULING. Samuel REVERSED it
+// (*"Agent created channels should inherit defaults"*). A channel created over MCP is created
+// server-side with no renderer to run, so `main/channel-seed-watch.js` seeds it from the reconcile
+// pass that first OBSERVES it — still a WRITE into that channel's own posture, still through
+// `seedChannel`, still on the operator's own machine (the record is never sent to Dopl), and still
+// gated so a channel that existed before the feature can never be reached. Its header carries the
+// first-seen watermark argument; `test/session-posture-writers.test.mjs` admits it by NAME.
 //
 // ⚠ AND THAT IS ALSO WHY THE SEED IS WRITE-ONCE PER CHANNEL. `seedChannel` refuses when the
 // channel already has a stored posture, so a re-created row, a retry, or a second renderer racing
@@ -187,7 +196,12 @@ function setAgentDefaults(raw) {
 }
 
 /**
- * SEED A NEWLY CREATED CHANNEL FROM THE DEFAULTS — the one and only inheritance point.
+ * SEED A NEWLY CREATED CHANNEL FROM THE DEFAULTS — the one and only inheritance MECHANISM, now
+ * reached from two places: the renderer's creation success path (`channels:applyAgentDefaults`)
+ * and `main/channel-seed-watch.js`, for a creation no renderer executed. ⚠ THE SECOND CALLER
+ * CHANGED NOTHING BELOW, deliberately: "which channels may be seeded" is that module's question
+ * and "may THIS channel be rewritten" is this function's, and keeping them apart is what makes
+ * "existing channels untouched" a property of the code rather than of a caller's discipline.
  *
  * `{ ok, seeded }`. `seeded: false` is the ordinary answer, not a failure: it means the channel
  * already had a posture of its own, so nothing was written.

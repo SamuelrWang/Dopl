@@ -4,11 +4,18 @@
  * THE INHERITANCE POINT — a channel that was JUST CREATED takes the operator's default agent
  * settings as its own (Samuel, 2026-09-18).
  *
- * ⚠ **ONE FUNCTION, CALLED FROM EVERY CREATION SUCCESS PATH, AND NOWHERE ELSE.** The three
- * callers are the three ways a channel comes into existence in this app: the account surface's
- * "New channel" (`apps/desktop-ui/src/pages/home/home-writes.ts`), the workspace channel dialog
- * (`components/create-channel-dialog.tsx`) and the DM dialog (`components/direct-message-dialog.tsx`).
- * A fourth creation surface needs this line; a reader adding one should grep for this module.
+ * ⚠ **ONE FUNCTION, CALLED FROM EVERY RENDERER CREATION SUCCESS PATH, AND NOWHERE ELSE.** The
+ * three callers are the three ways a channel comes into existence *in this app*: the account
+ * surface's "New channel" (`apps/desktop-ui/src/pages/home/home-writes.ts`), the workspace channel
+ * dialog (`components/create-channel-dialog.tsx`) and the DM dialog
+ * (`components/direct-message-dialog.tsx`). A fourth creation surface needs this line; a reader
+ * adding one should grep for this module.
+ *
+ * ⚠ **A CHANNEL CREATED OVER MCP DOES NOT COME THROUGH HERE, AND SINCE 2026-09-22 IT STILL
+ * INHERITS** (Samuel: *"Agent created channels should inherit defaults"*). That creation is
+ * server-side and no renderer runs, so the desktop seeds it from the reconcile pass that first
+ * observes it — `dopl-desktop-app/main/channel-seed-watch.js`, which owns the watermark that keeps
+ * pre-existing rooms out of it. Both paths end in the same write-once `seedChannel`.
  *
  * ⚠ **IT IS A SEED, NOT A FALLBACK, AND THE DISTINCTION IS THE REQUIREMENT.** It COPIES the
  * defaults into the new channel's own local records, once. It does not make an unconfigured

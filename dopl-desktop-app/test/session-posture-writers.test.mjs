@@ -12,8 +12,9 @@
 // enumerates every module that writes the durable posture, seeds one, or reads the defaults
 // record, then pins the list. It goes red when a MODULE joins or leaves — `channel-runtime.js`
 // left on U5 by losing its writer, `agent-defaults.js` joined 2026-09-18 by name with its
-// reachability asserted — which is a different event from a spawn path changing shape, and it is
-// the half that had grown to a third of the file on its own.
+// reachability asserted, and `channel-seed-watch.js` joined 2026-09-22 the same way when Samuel
+// reversed the no-inheritance ruling — which is a different event from a spawn path changing
+// shape, and it is the half that had grown to a third of the file on its own.
 //
 // ⚠ THE RULE IT KEEPS, in one line: if anything on the session path ever writes a posture, a
 // session can widen the posture its own NEXT launch starts at — the v3.1 failure H2 was filed
@@ -90,15 +91,27 @@ test("H2: nothing in the session path ever WRITES a posture back", () => {
       "re-arming its own future"
   );
   // ⚠ THE SEED'S OWN REACHABILITY CENSUS, and it is the half that makes admitting it by name
-  // honest. `seedChannel` must be callable from the bound-sender IPC surface and from nowhere
-  // else; a session-path module that could call it would be a session writing a posture through
-  // a door this case just opened.
+  // honest. `seedChannel` must be callable from the bound-sender IPC surface and from the
+  // listener's channel-observation watch, and from nowhere else; a session-path module that could
+  // call it would be a session writing a posture through a door this case just opened.
+  //
+  // ⚠ `channel-seed-watch.js` JOINED 2026-09-22 AND THE RULE IS UNCHANGED — admitted by NAME with
+  // its reachability asserted (`test/channel-seed-watch.test.mjs` pins that `channel-listener.js`
+  // is its ONLY requirer), never by loosening the census. Samuel REVERSED the standing guardrail
+  // that agent-created channels do not inherit (the plan's Handoff item 3), and the reversal is a
+  // second SEED SITE, not a second READER: a channel created over MCP has no renderer to run the
+  // creation-time seed, so the reconcile pass that first observes it writes the channel's own
+  // posture instead. The three properties that made the first site safe all still hold — it
+  // WRITES a per-channel record and never re-points a launch at the defaults, `seedChannel`
+  // refuses a channel that already has a posture, and the defaults record never leaves the
+  // machine — and the reader census below is what keeps the "never at a spawn" half true.
   const seedCallers = readdirSync(MAIN)
     .filter((f) => f.endsWith(".js") && f !== "agent-defaults.js")
     .filter((f) => /\.seedChannel\(/.test(stripComments(read(f))))
     .sort();
-  assert.deepEqual(seedCallers, ["channel-dir-ipc.js"],
-    "the new-channel seed is reachable only from the bound-sender IPC surface, never from a session");
+  assert.deepEqual(seedCallers, ["channel-dir-ipc.js", "channel-seed-watch.js"],
+    "the new-channel seed is reachable only from the bound-sender IPC surface and the " +
+      "listener's observation watch, never from a session");
   // ⚠ AND THE DEFAULTS RECORD ITSELF IS NEVER READ ON THE SESSION PATH. That is the OTHER half of
   // H2 for this feature: a defaults record consulted at spawn time is an ambient posture read at a
   // launch no human is attending, and it would additionally re-point every EXISTING channel.

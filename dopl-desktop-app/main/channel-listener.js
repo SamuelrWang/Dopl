@@ -35,6 +35,7 @@ const messages = require('./listener-messages');
 const sessionEngine = require('./session-engine'); const parkOnClaim = require('./session-park-on-claim'); // ...and RULING 5 (plan §4.5)
 const realtime = require('./realtime');
 const heal = require('./listener-heal');
+const seedWatch = require('./channel-seed-watch'); // a channel no renderer created inherits the defaults
 const { LISTENER, REALTIME } = require('./config');
 
 // Console output is invisible for a GUI-launched app, and the trigger path has
@@ -339,6 +340,10 @@ async function reconcileInner() {
   // A pass used to end by reading every watched channel's agent roster and starting any of
   // this operator's rows that were still `summoned`. Summoning is gone (channels rollback
   // §1), and with it the only reason this listener ever read that table.
+  // ⚠ THE INHERITANCE POINT FOR A CREATION NO RENDERER EXECUTED (2026-09-22, Samuel's ruling). It
+  // WRITES a new channel's own posture and reads none at any spawn; the first-seen watermark, the
+  // membership/creator gates and the H2 argument live in `channel-seed-watch.js`'s header.
+  seedWatch.observeChannels(desired, failedWorkspaces.size === 0, myUserId);
   // One bounded follow-up pass when a workspace never answered; no-op otherwise.
   healer.onEnumerationFailure(failedWorkspaces.size);
   setStatus();
