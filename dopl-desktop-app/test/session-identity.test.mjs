@@ -146,7 +146,7 @@ test("session-engine: startSession merges the spec ids into the context for EVER
   // identity-carrying lanes spawned idle, so `takeFraming` was the only builder an identity ever
   // reached; a running directive spawn reaches this one, and an undefined profile reads as "not
   // read_only" through `kbReadable`, i.e. the turn would ORDER a hard-denied tool.
-  assert.match(src, /framing\.buildFencedTurn\(\{ side: spec\.side, message: spec\.firstMessage, context: \{ \.\.\.context, profile: spec\.profile, mcpDiscovery: runtimeRegistry\.capability\.mcpDiscovery\([^}]*\) \}, nonce \}\)/);
+  assert.match(src, /framing\.buildFencedTurn\(\{ side: spec\.side, message: spec\.firstMessage, context: \{ \.\.\.context, profile: spec\.profile, mcpDiscovery: io\.discoveryFor\(rt && rt\.id\) \}, nonce \}\)/);
   assert.match(codeOf(src), /\n {4}context,\s*\n/, "the SAME merged object is what the session carries");
   assert.ok(!/context: spec\.context/.test(codeOf(src)), "no path keeps the un-merged context");
   // ⚠ …and the profile is NOT written INTO the merged object: `s.context` must stay
