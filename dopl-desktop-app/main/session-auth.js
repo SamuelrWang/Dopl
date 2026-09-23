@@ -186,15 +186,10 @@ function holdMissingCredential(s, state) {
   return true;
 }
 
-function holdIfNoCredential(s) {
-  return holdMissingCredential(s, credentialState());
-}
-
-// The spawn path already owns the selected runtime. Ask that adapter its own credential question
-// instead of applying Claude's file markers to every session. Probe failures remain fail-open;
-// the child will still fail loudly and the stream auth sentinel can park it recoverably.
+// Asks the session's own runtime (never Claude's file markers for every session). Fail-open: no
+// probe, or a probe that throws, is not a hold; the stream's auth sentinel parks it recoverably.
 async function holdIfNoRuntimeCredential(s, runtime) {
-  if (!runtime || typeof runtime.credentialState !== 'function') return holdIfNoCredential(s);
+  if (!runtime || typeof runtime.credentialState !== 'function') return false;
   try {
     return holdMissingCredential(s, await runtime.credentialState());
   } catch (_) {
@@ -257,9 +252,7 @@ const resumeNudgeFor = (s) => runtimeCopy.resumeNudge(copyFor(s));
 //      before assembling anything, so even a caller that gets past 1 and 2 cannot leave an
 //      orphan child behind. That one is the real backstop and is tested on its own.
 async function resumeAfterSignIn(s) {
-  const hold = s.authHold;
-  if (!hold || s.authResuming) return; // already resumed, or a resume is in flight
-  s.authResuming = true;
+  if (!s.authHold) return; // already resumed: the claim below is the ticket
   s.authHold = null;
   // Clear the reducer-visible hold BEFORE anything can spawn: `steer` below goes through
   // wakeEffects, which refuses to resume while authHeld is true.
@@ -280,17 +273,7 @@ async function resumeAfterSignIn(s) {
       try { deps.dispatch(s, { type: 'set_message_mode', mode: floored }); } catch (_) { /* best effort */ }
     }
   }
-  try {
-    if (hold.kind === 'preflight') {
-      if (s.state) { s.state.phase = 'launching'; s.state.parked = false; s.state.activity = 'working'; }
-      const rt = await deps.acquireRuntime(s.runtimeId); // the session's own runtime, never the default (P4-15)
-      await deps.startQuery(s, rt);
-      return;
-    }
-    deps.dispatch(s, { type: 'steer', text: resumeNudgeFor(s), priority: 'next' });
-  } finally {
-    s.authResuming = false;
-  }
+  deps.dispatch(s, { type: 'steer', text: resumeNudgeFor(s), priority: 'next' });
 }
 
 // ⚠ `runSignIn(s)` STOOD HERE AND IS DELETED (2026-08-20, F-228). It drove the IN-WINDOW
@@ -356,7 +339,7 @@ function reprobesOnWake(s) {
 
 /** Re-probe a held session's own credential; resolves true when the session was released. */
 async function reprobeHeld(s) {
-  if (!reprobesOnWake(s) || s.authResuming) return false;
+  if (!reprobesOnWake(s)) return false;
   let state = null;
   try { state = await runtimeRegistry.runtimeFor(s.runtimeId).credentialState(); } catch (_) { return false; }
   if (!state || state.usable === false || !s.authHold) return false;
@@ -370,7 +353,6 @@ module.exports = {
   credentialState,
   forget,
   withStoredCredential,
-  holdIfNoCredential,
   holdIfNoRuntimeCredential,
   holdIfAuthFailure,
   resumeAfterSignIn, // H1: exported for the idempotency test

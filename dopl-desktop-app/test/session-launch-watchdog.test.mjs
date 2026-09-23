@@ -170,11 +170,9 @@ test("…and the ended session really is inert: nothing can wake the jammed slot
 
 // ── THE ARMING SEAM ──────────────────────────────────────────────────────────────────
 
-test("startQuery arms it, which is what covers the post-sign-in relaunch too", () => {
-  // HERE rather than in startSession deliberately: `startQuery` is the ONE deferred launch
-  // (H1's supersede-before-relaunch), so a session held by the Q6 credential preflight and
-  // relaunched after sign-in — which re-enters with phase reset to 'launching' — is covered by
-  // the same line rather than by a second one somebody has to remember.
+test("startQuery arms it, so every launch through it is covered by one line", () => {
+  // HERE rather than in startSession: `startQuery` is the ONE deferred launch (the cold lane and
+  // the MCP-guard retry), so each is covered by the same line rather than a second one.
   const body = QUERY.slice(QUERY.indexOf("async function startQuery("));
   assert.match(body, /deps\.scheduleIdle\(s\)/, "the watchdog is armed inside startQuery");
   // ⚠ 2026-08-31 (runtime-adapter port): the query is started through the runtime rather than a
@@ -183,6 +181,4 @@ test("startQuery arms it, which is what covers the post-sign-in relaunch too", (
     "armed AFTER the query exists, so a throwing assembly leaves no orphan timer");
   assert.match(ENGINE, /sessionQuery\.bind\(\{ dispatch, emitQuiet: \(\) => \{\}, scheduleIdle \}\)/,
     "and the engine hands its OWN scheduleIdle in — never a second timer implementation");
-  assert.match(M("session-auth.js"), /await deps\.startQuery\(s, rt\);/,
-    "the sign-in relaunch goes through that same startQuery");
 });

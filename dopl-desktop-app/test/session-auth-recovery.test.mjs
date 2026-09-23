@@ -181,26 +181,6 @@ test("PREFLIGHT: the selected runtime owns the credential verdict", async () => 
   assert.equal(missing.state.authHeld, true);
 });
 
-test("PREFLIGHT: the resume runs the ORIGINAL first turn through the engine's own startQuery", async () => {
-  // ⚠ RE-POINTED FROM `runSignIn` (F-228). Gone is the TRIGGER — the in-window button and its pty —
-  // and with it two assertions: that the EXISTING claude-auth flow drove it, against the bundled
-  // binary. What survives can still lose a request: when a credential appears the held launch
-  // re-runs the turn it never pushed, through the engine's OWN startQuery.
-  const h = harness({ usable: false });
-  const s = session();
-  h.holdIfNoCredential(s);
-  await h.resumeAfterSignIn(s);
-  assert.equal(h.calls.startQuery.length, 1, "the deferred launch runs");
-  assert.equal(h.calls.startQuery[0].s.firstTurn, "FRAMED FIRST TURN", "the same framed turn, byte for byte");
-  assert.equal(h.calls.startQuery[0].rt.__runtime, true, "and through the engine's OWN runtime handle, not a second loader");
-  // The parked stamp is lifted (the reducer stops swallowing SDK messages) and the reducer-visible
-  // hold RELEASED before the relaunch — or wakeEffects refuses to resume this session forever.
-  assert.deepEqual([s.state.phase, s.state.parked, s.state.activity, s.state.authHeld],
-    ["launching", false, "working", false]);
-  assert.deepEqual(h.calls.dispatch.map((e) => e.type), ["auth_hold", "auth_release"]);
-  assert.equal(s.authHold, null);
-});
-
 // ⚠ "PREFLIGHT: a sign-in that does NOT finish leaves the hold answerable" STOOD HERE AND IS DELETED
 // (F-228). It ran `runSignIn` where the credential was STILL unusable and pinned the recovery loop's
 // failure arm: nothing spawned, the banner repainted `busy: false` with `note: detect.AUTH_FAILED`,
@@ -295,14 +275,14 @@ test("MID-SESSION: a second failure never stacks a second hold", () => {
 
 test("MID-SESSION: the resume takes the ordinary lazy wake (a steer), not a new query", async () => {
   // ⚠ RE-POINTED FROM `runSignIn` (F-228). The ROUTING is the point and lives entirely inside the
-  // surviving `resumeAfterSignIn`: a PREFLIGHT hold re-runs the deferred launch (above), an ERROR
-  // hold steers instead — re-launching would abandon the SDK session id and replay the exchange.
+  // surviving `resumeAfterSignIn`: a hold steers — re-launching would abandon the SDK session id
+  // and replay the exchange.
   const h = harness({ usable: true });
   const s = session({ state: { phase: "running", parked: false, activity: "working" } });
   h.holdIfAuthFailure(s, "401");
   await h.resumeAfterSignIn(s);
   assert.deepEqual(h.calls.startQuery, [], "an error hold never re-launches from scratch");
-  assert.equal(h.calls.sdk, 0, "and never even loads the SDK — that is the preflight branch's");
+  assert.equal(h.calls.sdk, 0, "and never even loads the SDK");
   // H1: hold -> release -> steer. RELEASE must precede the steer: the steer wakes through
   // wakeEffects, which refuses to resume while authHeld is still true.
   assert.deepEqual(h.calls.dispatch.map((e) => e.type), ["auth_hold", "auth_release", "steer"]);
@@ -321,18 +301,16 @@ test("the engine preflights AFTER the parked-shell branch and BEFORE startQuery"
   // deleted symbol, and `hold > -1` is how a case goes green while measuring nothing.
   const guard = ENGINE.indexOf("if (spec.parkedShell) { state.phase = 'parked';");
   const probe = ENGINE.indexOf("const credentialHeld = await sessionAuth.holdIfNoRuntimeCredential(s, rt);");
-  const hold = ENGINE.indexOf("if (credentialHeld) return s;");
+  const hold = ENGINE.indexOf("if (credentialHeld) { sessions.delete(s.key);");
   const start = ENGINE.indexOf("await startQuery(s, rt);");
-  const windowless = ENGINE.indexOf("if (spec.windowless && credentialHeld)");
-  assert.ok(Math.min(guard, probe, hold, start, windowless) !== -1, "an anchor is gone — reslice rather than pass on -1");
+  assert.ok(Math.min(guard, probe, hold, start) !== -1, "an anchor is gone — reslice rather than pass on -1");
   assert.ok(probe > guard, "the dormant-phase decision is made before the credential is probed");
-  assert.ok(windowless > probe, "the runtime credential is known before either hold branch");
+  assert.ok(hold > probe, "the runtime credential is known before the hold rolls back");
   assert.ok(start > hold, "and a held launch returns BEFORE the query is started");
-  // The WINDOWLESS launch holds too and rolls the registration back, so `launch()` answers honestly
-  // instead of handing out a sessionId for a session that will never run.
-  assert.ok(windowless < hold, "the windowless preflight precedes the generic one");
-  assert.match(ENGINE.slice(windowless, hold), /sessions\.delete\(s\.key\).*return \{ authHold: true \}/s,
-    "a held windowless launch un-registers itself and reports the hold");
+  // A held launch rolls the registration back, so `launch()` answers honestly instead of handing
+  // out a sessionId for a session that will never run.
+  assert.match(ENGINE.slice(hold, start), /sessions\.delete\(s\.key\).*return \{ authHold: true \}/s,
+    "a held launch un-registers itself and reports the hold");
 });
 
 test("the consume loop routes an auth failure to the hold before it can dispatch `crash`", () => {
@@ -389,16 +367,15 @@ test("what counts as a usable credential — and what the SPAWN env does about i
   assert.match(envFn, /if \(state\.source !== 'stored-token'\) return env;/, "untouched on every other machine");
 });
 
-test("the engine injects its OWN startQuery + denyPending (no second query assembly)", () => {
+test("the engine injects its OWN denyPending + teardown (the hold assembles no query)", () => {
   // ⚠ THE BIND OBJECT LOST ITS LAST MEMBER (F-228): `getSessionBySender` resolved a session from an
   // IPC `event.sender` (a window's webContents) for the two deleted auth handlers. The rest is the
-  // point and is unchanged — the hold reuses the engine's OWN startQuery, so a resumed launch
-  // inherits H1's supersede-before-relaunch instead of assembling a second query.
+  // point: the hold assembles no query of its own (a resume is a steer through the engine's wake).
   // ⚠ `denyPendingPermissions` MOVED TO `main/session-permissions.js` ON 2026-08-22 (the §2 cap +
   // the denial-copy ruling) and is destructured at the engine's module scope, so this bind reads
   // exactly as it did. What must stay true is that the auth hold is handed the REAL fail-closed
   // sweep and not a stub — a hold that leaves a resolver dangling blocks the SDK child forever.
-  assert.match(ENGINE, /sessionAuth\.bind\(\{ sessions, acquireRuntime, startQuery, dispatch, emit, denyPending: denyPendingPermissions, teardown: teardownHandles \}\)/);
+  assert.match(ENGINE, /sessionAuth\.bind\(\{ sessions, dispatch, emit, denyPending: denyPendingPermissions, teardown: teardownHandles \}\)/);
   assert.match(ENGINE, /const \{ denyPendingPermissions, resolvePerm \} = sessionPermissions;/,
     "…and it is the shared one, not a local re-declaration");
   assert.ok(!/getSessionBySender/.test(ENGINE), "no sender-keyed session lookup survives anywhere in the engine");

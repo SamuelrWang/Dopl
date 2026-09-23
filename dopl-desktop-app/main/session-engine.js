@@ -79,7 +79,7 @@ sessionQuery.bind({ dispatch, emitQuiet: () => {}, scheduleIdle });
 // Q6: same injection for the preflight + in-window sign-in, and F-692's MCP guard below it on the
 // same terms. `startQuery` is the SHARED deferred launch (session-query), so neither assembles a
 // second query and both inherit H1's supersede-before-relaunch; `denyPending` fail-closes first.
-sessionAuth.bind({ sessions, acquireRuntime, startQuery, dispatch, emit, denyPending: denyPendingPermissions, teardown: teardownHandles });
+sessionAuth.bind({ sessions, dispatch, emit, denyPending: denyPendingPermissions, teardown: teardownHandles });
 mcpGuard.bind({ acquireRuntime, startQuery, dispatch, emit, denyPending: denyPendingPermissions, resumeParked: sessionPark.resumeParked, abortInFlight: sessionQuery.abortInFlight }); // F-692: an init message saying the `dopl` MCP server did not connect re-runs the launch ONCE, then ends the session visibly. No registry — it acts on the one session whose stream reported it
 // v2.5 D1/D3: same for the inbound gate + history loader (neither imports back into the engine).
 sessionGate.bind({ sessions, dispatch });
@@ -382,11 +382,7 @@ async function startSession(spec, rt) {
   // so New Agent on a signed-out machine answered a SUCCESS and `{skipped:'auth-hold'}` was
   // unreachable on the one lane an operator reaches by clicking.
   const credentialHeld = await sessionAuth.holdIfNoRuntimeCredential(s, rt);
-  if (spec.windowless && credentialHeld) { sessions.delete(s.key); sessionSummary.touch(); return { authHold: true }; }
-  // Q6 PREFLIGHT: a machine with no credential for the SELECTED runtime can only produce a dead
-  // session, so HOLD the launch on that runtime's recovery action. Nothing is settled, echoed, or
-  // thrown away; the request runs the moment sign-in succeeds.
-  if (credentialHeld) return s;
+  if (credentialHeld) { sessions.delete(s.key); sessionSummary.touch(); return { authHold: true }; }
   // SPAWN IDLE — THE ONE SHAPE THAT REGISTERS AND STARTS NOTHING (2026-08-21, ruling 3). Not
   // "build the query and hold the prompt": a held query is a live `claude` child holding this
   // session's pre-approved `dopl_channel` access with nobody watching it, the orphan shape C3/C-8
