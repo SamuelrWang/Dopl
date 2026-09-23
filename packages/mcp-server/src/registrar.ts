@@ -1,11 +1,6 @@
 /**
- * registrar.ts — the two registration helpers every tool goes through. Owns
- * what happens to a tool between "a registrar declared it" and "the SDK
- * publishes it"; `server.ts` boots the session.
- *
- * ⚠ Gates live in `gating.ts` and BOTH helpers call them EXPLICITLY, because
- * `registerMetaTool` registers straight onto the SDK server and never goes
- * through `registerTool`'s wrapper. Do not fold the gate calls into one wrapper.
+ * The two registration helpers every tool goes through. Gates (`gating.ts`) are called
+ * explicitly on both paths, because `registerMetaTool` bypasses `registerTool`'s wrapper.
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -24,8 +19,7 @@ import {
 import { CONTAINER_ARG_DESCRIPTION } from "./workspace-arg.js";
 import { resolveCallAddress } from "./container-resolve.js";
 
-// ⚠ Re-exported: `tool-budget.test.ts` and `server.test.ts` read the contract
-// through the registrar that injects it, which is where an agent meets it.
+// Re-exported so tests read the addressing contract through the registrar that injects it.
 export {
   CONTAINER_ARG_DESCRIPTION,
   WORKSPACE_ARG_OPS,
@@ -41,9 +35,6 @@ import {
   requestedFormat,
   withDoplStatus,
 } from "./status-footer.js";
-// 🔒 A CALL THAT WAS NOT CHARGED SAYS SO — once in the log, and on the call's own
-// `_dopl_status` footer. The fail-open decision below is unchanged; this only makes
-// its consequence legible (`credits-unmetered.ts`).
 import {
   joinNotes,
   recordUnmetered,
@@ -56,44 +47,17 @@ import type {
   WorkspaceDirectory,
 } from "./workspace-directory.js";
 
-/**
- * 🔒 **THE ONE ADDRESSING ARG INJECTED INTO EVERY DOMAIN TOOL'S SCHEMA** —
- * `container` (R-32, Samuel 2026-09-17). Slug, id or the reserved `home`;
- * routes via the transport's AsyncLocalStorage override, leaving the
- * connection's container unchanged. Const so each description renders verbatim
- * — and identically — in every tool's MCP introspection.
- *
- * 🔒 **`workspace=` RETIRED HERE ON 2026-09-18, AND THE RETIREMENT IS THE
- * WAVE'S FUNDING.** The alias was published as a bare key for ONE release so a
- * caller that still sent it got its answer instead of a `-32602`; that release
- * shipped, and the key cost 21 chars × 9 schemas ≈ 189 characters PUSHED TO
- * EVERY CLIENT ON EVERY CONNECTION to advertise an argument nobody should have
- * newly adopted. `strictInput` now answers an unknown `workspace` with
- * `-32602 … Unrecognized key: "workspace"`, which NAMES the field — the one
- * outcome a deprecation window rules out, and exactly the outcome a completed
- * deprecation is for.
- */
+// The one addressing arg injected into every domain tool: `container` (slug, id or `home`), routed
+// via the transport's AsyncLocalStorage override without changing the connection's container.
 const WORKSPACE_ARG_SHAPE = {
   container: z.string().optional().describe(CONTAINER_ARG_DESCRIPTION),
 };
 type WorkspaceArgShape = typeof WORKSPACE_ARG_SHAPE;
 
 /**
- * ⚠ AN UNKNOWN ARGUMENT MUST BE REFUSED, NOT STRIPPED. A raw shape becomes a
- * plain `z.object`, which DROPS unknown keys — an invented param (e.g. a
- * removed addressing arg) then vanishes before the handler sees `args` and the
- * handler narrates a success for a delivery that never happened. Copy fixes do
- * not compose: a model can invent a param from a stale blog post or its own
- * prior. `z.strictObject` sets the catchall to `never`, so the SDK surfaces
- * `-32602 … Unrecognized key: "<name>"` — NAMING the field is what lets the
- * calling agent correct itself.
- *
- * ⚠ Requires `registerTool`, NOT the positional `tool()`: `tool()` accepts only
- * a RAW SHAPE (`isZodRawShapeCompat` is false for a schema INSTANCE, and the
- * next arm reads the object as annotations and throws). Published JSON Schema
- * is byte-identical apart from a gained `additionalProperties: false`.
- *
- * Applied at BOTH registration helpers below. Pinned in `server.test.ts`.
+ * Unknown keys must be REFUSED, not stripped (`z.strictObject`): a stripped key makes a handler
+ * narrate a success for an arg it never saw; the refusal names the key. Requires `registerTool`,
+ * not the positional `tool()`, which accepts only a raw shape. Pinned in `strict-args.test.ts`.
  */
 function strictInput<S extends ZodRawShape>(shape: S, tool: string): z.ZodObject<S> {
   return z.strictObject(shape, {
@@ -102,14 +66,10 @@ function strictInput<S extends ZodRawShape>(shape: S, tool: string): z.ZodObject
 }
 
 /**
- * 🔒 **A RENAMED ARGUMENT'S REFUSAL NAMES ITS SUCCESSOR, NOT ONLY ITSELF.** `template` became
- * `identity` on 2026-09-22 (Samuel: agent templates are AGENT IDENTITIES — a role of the user,
- * a piece of their digital twin) with NO alias. A bare `Unrecognized key: "template"` tells a
- * caller what is wrong but not what is right, and the caller most likely to send it learned it
- * from this server. Every other unknown key keeps the SDK's own message.
+ * Renamed args (no alias): the refusal names the successor. Keyed by tool: only a tool that
+ * accepts the successor may name it.
  */
 const RENAMED_ARGS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
-  // Keyed by tool: only the tools that accept the successor may name it (P8-17).
   dopl_agent: { template: "identity" },
   dopl_channel: { template: "identity" },
 };
@@ -124,55 +84,16 @@ function renamedArgMessage(
   const renamed = issue.keys.filter((k) => Object.prototype.hasOwnProperty.call(map, k));
   if (renamed.length === 0) return undefined;
   const keys = issue.keys.map((k) => `"${k}"`).join(", ");
-  // ⚠ The hint carries NO quotes: the SDK serializes the issue as JSON, so a quoted hint
-  // arrives backslash-escaped and reads worse than the bare words.
+  // No quotes in the hint: the SDK JSON-serializes the issue, so they would arrive escaped.
   const hints = renamed.map((k) => `renamed: send ${map[k]}, not ${k}`).join("; ");
   return `Unrecognized key${issue.keys.length === 1 ? "" : "s"}: ${keys} — ${hints}`;
 }
 
 /**
- * THE BILLING SEAM FOR ONE TOOL CALL — charge, then run. ⚠ Must stay ONE helper
- * called at exactly the two terminal paths of `registerTool`'s wrapper; that is
- * what makes the per-tool-call charge exactly-once. A separate charge helper
- * means two call sites per path and a future path that remembers one of them.
- *
- * ⚠ ORDERING, non-negotiable: AFTER `gates.opRefusal` (delete refusal stays
- * first and unconditional — a refused delete costs zero round trips), AFTER
- * workspace resolution (the ADDRESSED CONTAINER decides which wallet pays),
- * BEFORE the handler.
- *
- * ⚠ NOT in `withWorkspaceAuth` beside `logMcpToolCall` — that fires per
- * LOOPBACK request, and one tool call makes 0..N of them.
- */
-/**
- * Spend one credit for `workspaceId`. Returns the refusal, or null to proceed.
- *
- * ⚠ FAIL OPEN on anything that is not an honest "out of credits" — refusing on a
- * transient loopback blip bricks every agent and reads to the operator as an
- * exhausted wallet that is not exhausted.
- *
- * ⚠ ONLY `allowed === false` REFUSES, not "not truthy". A 200 missing `allowed`
- * (proxy error page, shape change, partial response) leaves it undefined, and a
- * truthiness test reads that as a refusal — fail-open for a THROWN error,
- * silently inverted for a malformed answer, which is the more likely of the two.
- * A body that does not say "no" is not a no.
- *
- * ⚠ **THE REFUSAL NAMES THE WALLET THAT STOPPED, SO THE WHOLE OUTCOME GOES TO
- * `creditsExhausted`, NOT ITS URL** (Samuel, 2026-09-07: allocations are
- * per-person and never pooled). A `seat` refusal is the caller's own allocation
- * inside that workspace; a `personal` one is their home space. ⚠ **EITHER ONE
- * CARRIES THE UPGRADE LINK WHEN THE SERVER SENT ONE** — a personal PRO tier
- * exists since 2026-09-08, so "nothing to buy" is `upgradeUrl === ""` and is
- * never inferred from the wallet. A server that sends no `wallet` gets the
- * generic sentence — this layer does not infer one.
- *
- * ⚠ **ONE CHARGE FUNCTION, THREE EXPLICIT CALL SITES** (2026-08-28). It was
- * private to `createCreditedRunner` while the domain wrapper was the only meter;
- * two more seams now call it BY NAME — `registerMetaTool`'s opt-in charge
- * (`dopl_status`, ruling Q2) and `dopl_search`'s PER-LEG charge (ruling Q3). That
- * is the shape `opRefusal` already has and the shape this module's header
- * demands: explicit at every path, never folded into a wrapper only one of them
- * passes through.
+ * Spend one credit for `workspaceId`; the refusal, or null to proceed. Charge AFTER `opRefusal` and
+ * container resolution (the addressed container's wallet pays), BEFORE the handler, exactly once per
+ * call. Fail open except on `allowed === false`: a transient blip must not read as an empty wallet.
+ * Called by name from the domain wrapper, `registerMetaTool`'s opt-in and `dopl_search`'s fan-out.
  */
 export type ChargeCredit = (workspaceId: string) => Promise<ToolResponse | null>;
 
@@ -182,15 +103,8 @@ function createCharger(client: DoplClient): ChargeCredit {
   ): Promise<ToolResponse | null> {
     try {
       const outcome = await client.consumeCredits(workspaceId);
-      // ⚠ THE WHOLE OUTCOME, not just the URL: which WALLET stopped decides the
-      // sentence, and the counters + reset date are on the same answer.
       if (outcome?.allowed === false) return creditsExhausted(outcome);
-      // 🔒 **`degraded` IS AN ANSWER, NOT AN ERROR, AND IT USED TO VANISH HERE.**
-      // The route fails open on any throw (`route.ts › failOpen`) and answers
-      // `{ allowed: true, degraded: true }` — so `allowed !== false` let the call
-      // run FREE with nothing said. Ship the web ahead of the migration and a
-      // `PGRST202` puts the WHOLE estate on that branch. The charge still fails
-      // open; it just stops being silent.
+      // The consume route failed open (`consume/route.ts › failOpen`): run free, but say so.
       if (outcome?.degraded === true) {
         recordUnmetered(
           "degraded",
@@ -201,10 +115,7 @@ function createCharger(client: DoplClient): ChargeCredit {
       }
       return null;
     } catch (err) {
-      // ⚠ ONCE PER PROCESS PER REASON, not once per CALL. Under a real outage the
-      // old per-call line was one error per tool call per agent, which buries the
-      // line that says what broke — and a deploy-ordering bug is a STATE, not an
-      // event.
+      // Recorded once per process per reason, not per call.
       recordUnmetered(
         "consume_failed",
         `Consume call failed for workspace ${workspaceId}; allowing the tool call: ${
@@ -217,16 +128,7 @@ function createCharger(client: DoplClient): ChargeCredit {
 }
 
 function createCreditedRunner(charge: ChargeCredit) {
-  /**
-   * Charge one credit, then run the handler. Converts an entitlement denial (403
-   * from any write op through @dopl/client) into a tool error; all other errors
-   * rethrow unchanged.
-   *
-   * ⚠ **`null` IS "NOTHING TO CHARGE", NOT "FREE BY DEFAULT"** (B13). It reaches
-   * here only from `billingTarget`, whose docblock owns the fail-open decision;
-   * folding a second skip-the-charge path in anywhere else is how a tool call
-   * stops being metered exactly once.
-   */
+  // Charge, then run. A `null` workspace is nothing to charge — only `billingTarget` produces it.
   return async function runWithCredits(
     workspaceId: string | null,
     run: () => Promise<ToolResponse>,
@@ -245,42 +147,24 @@ function createCreditedRunner(charge: ChargeCredit) {
 
 /** Everything one session's registration helpers need to close over. */
 export interface RegistrarDeps {
-  /** The SDK server both helpers publish onto. */
   server: McpServer;
-  /** The loopback client — used HERE only to charge MCP credits. */
+  /** The loopback client — used here only to charge credits. */
   client: DoplClient;
-  /** The four gates for this session (see `gating.ts`). */
   gates: Gates;
-  /** Membership cache + `workspace=` resolution. */
+  /** Membership cache + `container=` resolution. */
   directory: WorkspaceDirectory;
-  /**
-   * The container this CONNECTION is bound to (`X-Workspace-Id`), or null.
-   * ⚠ **NULL IS ORDINARY SINCE B13 AND IS NEVER A REFUSAL** — an unbound
-   * connection simply names no container, and the server resolves the caller's
-   * own when nothing is passed.
-   */
+  /** The connection's bound container (`X-Workspace-Id`); null is ordinary, never a refusal. */
   activeWorkspace: ActiveWorkspaceState | null;
   /** That binding rendered footer-ready, or null when there is none. */
   sessionEffective: () => EffectiveWorkspace | null;
-  /** The caller identity every footer renders from. */
   caller: CallerIdentity;
 }
 
 export interface ToolRegistrars {
-  /** The domain-tool path: workspace arg, ALS routing, footer, gates. */
   registerTool: RegisterTool;
-  /**
-   * The meta-tool path: no workspace arg, session footer, same gates — and an
-   * OPT-IN charge (`MetaToolOptions.charged`), which only `dopl_status` takes.
-   */
+  /** The meta path: no container arg, same gates and footer, opt-in charge. */
   registerMetaTool: RegisterMetaTool;
-  /**
-   * ⚠ THE CHARGE, EXPOSED BY NAME so a handler that does N workspaces' work on
-   * one call can pay for N (`dopl_search(scope="everywhere")`, ruling Q3). The
-   * wrapper has already charged for the RESOLVED workspace by the time a handler
-   * runs, so a fan-out charges the ADDITIONAL legs and the totals agree with the
-   * work. ⚠ Do not call this from a single-scope handler — that double-charges.
-   */
+  /** A fan-out's additional legs only: the wrapper already charged the resolved workspace. */
   chargeCredit: ChargeCredit;
 }
 
@@ -297,36 +181,18 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
   const chargeCredit = createCharger(client);
   const runWithCredits = createCreditedRunner(chargeCredit);
 
-  /**
-   * WHICH WORKSPACE PAYS when no per-call `workspace=` was honoured. ⚠ ONE
-   * RULE FOR BOTH REGISTRATION PATHS since B13 — the domain path used to refuse
-   * instead of answering this, and two rules is how a meta tool and a domain
-   * tool come to bill different workspaces for the same connection.
-   *
-   * ⚠ NO LISTABLE WORKSPACE ⇒ NO CHARGE, fail-open and stated. A caller whose
-   * container the SERVER resolves is exactly the caller this server cannot name
-   * one for, and refusing them would break the path B13 exists to open.
-   */
+  /** Which workspace pays when no per-call container was honoured; none listable ⇒ no charge. */
   async function billingTarget(): Promise<string | null> {
     if (activeWorkspace) return activeWorkspace.id;
     try {
       return (await directory.getWorkspaceList())[0]?.id ?? null;
     } catch {
-      // A metering target is not worth failing a call over.
       return null;
     }
   }
 
-  // Every domain tool funnels through here for three things:
-  //   1. `workspace` arg auto-injected. HONOURED on the ops in
-  //      `WORKSPACE_ARG_OPS` — the call then runs inside a transport-level
-  //      AsyncLocalStorage override so client.* requests carry the right
-  //      `X-Workspace-Id`. IGNORED everywhere else, and never refused (B13).
-  //   2. ⚠ THE IGNORE IS REPORTED, not swallowed — `_dopl_status` names the op
-  //      that dropped it, which is what makes a one-release window observable.
-  //   3. Mandatory `_dopl_status` footer naming the effective workspace + how
-  //      it was chosen.
-  // Signature mirrors the MCP SDK's zod inference so handler arg types resolve.
+  // Injects the `container` arg (honoured only on `WORKSPACE_ARG_OPS`; elsewhere ignored and
+  // reported in `_dopl_status`). Signature mirrors the SDK's zod inference for handler arg types.
   function registerTool<S extends ZodRawShape>(
     name: string,
     description: string,
@@ -334,8 +200,7 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
     handler: (args: z.infer<z.ZodObject<S>>) => Promise<ToolResponse>,
   ): void {
     if (gates.isSuppressedTool(name)) return;
-    // Spread into the published schema so every tool's introspection shows it;
-    // stripped again before the handler, whose signature does not know it.
+    // Published in every schema; stripped again before the handler.
     const enhancedSchema = { ...schema, ...WORKSPACE_ARG_SHAPE } as S &
       WorkspaceArgShape;
 
@@ -347,20 +212,15 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
       };
       const innerArgs = rest as unknown as z.infer<z.ZodObject<S>>;
 
-      // ⚠ Both per-call refusals before any work: delete block, then read-only
-      // write-scope gate. `op` read ONCE, and it is also the routing key below.
+      // Gates before any work; `op` is read once and is also the routing key.
       const op = gates.requestedOp(innerArgs);
       const refusal = gates.opRefusal(name, op);
       if (refusal) return refusal;
 
-      // ⚠ READ ONCE, BESIDE `op`, AND FOR THE SAME REASON (S37/S54,
-      // 2026-09-18): the knob is applied inside the renderers and this footer is
-      // appended after them, so the handler's own answer cannot carry it here.
+      // Read here: the footer is appended after the handler's renderers, which cannot carry it.
       const format = requestedFormat(innerArgs);
 
-      // 🔒 ONE DECISION, ONE PLACE — `container-resolve.ts` owns the grammar,
-      // the alias, the blank/not-found refusals and R-32's unaddressed-mint
-      // refusal. This wrapper only spends the answer.
+      // `container-resolve.ts` owns the address grammar and refusals; this only spends the answer.
       const address = await resolveCallAddress(
         name,
         op,
@@ -370,9 +230,7 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
       if (address.kind === "refusal") return address.response;
 
       if (address.kind === "addressed") {
-        // Handler runs inside the AsyncLocalStorage scope so client.* calls
-        // pick up the override in X-Workspace-Id; reverts on scope exit. Footer
-        // reports the EFFECTIVE container with a `per-call arg` source.
+        // Inside the ALS scope, client.* calls carry the override in `X-Workspace-Id`.
         const { effective } = address;
         const result = await runWithCredits(effective.id, () =>
           workspaceContext.run(effective.id, () => handler(innerArgs)),
@@ -383,9 +241,7 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
           caller,
           joinNotes(address.note, unmeteredNote()),
           format,
-          // ⚠ S29b: `effective` is the PER-CALL override and this is the
-          // connection's own binding, which the override did not touch. The
-          // footer says so rather than letting one flipping line mean both.
+          // The connection's own binding, which the per-call override did not touch.
           sessionEffective(),
         );
       }
@@ -393,8 +249,6 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
       const result = await runWithCredits(await billingTarget(), () =>
         handler(innerArgs),
       );
-      // ⚠ BOTH NOTES, NOT ONE: a dropped address and an unmetered call are
-      // independent facts about the same call, and dropping either is a silence.
       return appendDoplStatus(
         result,
         sessionEffective(),
@@ -407,34 +261,15 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
     server.registerTool(
       name,
       { description, inputSchema: strictInput(enhancedSchema, name) },
-      // ⚠ THE SCOPE ENCLOSES THE HANDLER **AND** THE FOOTER, which is what makes
-      // `dopl_search`'s PER-LEG charge reportable: it fires deep inside a handler
-      // and its return value never reaches `appendDoplStatus`.
+      // The scope encloses handler and footer, so `dopl_search`'s per-leg charges are reported.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ((args: EnhancedArgs) => withUnmeteredScope(() => wrapped(args))) as any,
     );
   }
 
-  // Meta-tools skip the `workspace` arg — an account-wide lookup is user-scoped,
-  // so ALS routing adds noise without changing behavior. The workspace arg is
-  // the ONLY difference between the two paths; everything else applies here too.
-  //
-  // ⚠ This path registers straight onto the SDK server, bypassing
-  // `registerTool`'s wrapper by construction — hence the explicit gate calls
-  // below. Never add a gate that only one path performs.
-  //
-  // ⚠ MCP CREDITS ARE NOT CHARGED HERE BY DEFAULT, by DECISION: `dopl_workspaces`
-  // is how a lost agent finds out where it is, and it is user-scoped.
-  //
-  // ⚠ **ONE TOOL OPTS IN, AND THE CALL IS EXPLICIT AND LOCAL** (Samuel's ruling
-  // Q2 (b), 2026-08-28; `dopl_status` is the one since B13 retired `dopl_home`).
-  // It reads content-adjacent data across the whole account, so it pays like a
-  // domain tool — but it cannot use the domain path, which injects a `workspace=`
-  // arg this tool exists to make unnecessary. The charge is therefore written
-  // HERE, by name, exactly as `opRefusal` is on both paths, rather than by
-  // routing this file's two registration helpers through one shared wrapper. A
-  // blanket charge on this path would meter the orientation tool and delete the
-  // decision above.
+  // Meta path: no container arg (account-wide lookups). It bypasses `registerTool`'s wrapper, so its
+  // gates are explicit — never add a gate only one path performs. Uncharged by default:
+  // `dopl_status` is the one meta tool that pays (`opts.charged`).
   function registerMetaTool<S extends ZodRawShape>(
     name: string,
     description: string,
@@ -449,9 +284,6 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
       const refusal = gates.opRefusal(name, gates.requestedOp(args));
       if (refusal) return refusal;
       if (!opts.charged) return handler(args);
-      // ⚠ WHICH WORKSPACE PAYS, for a tool that targets none — `billingTarget`
-      // above, the SAME rule the domain path uses since B13, and its docblock
-      // owns both halves (the container-lock reroute and the fail-open hole).
       const billTo = await billingTarget();
       if (billTo) {
         const denied = await chargeCredit(billTo);
@@ -459,8 +291,6 @@ export function createToolRegistrars(deps: RegistrarDeps): ToolRegistrars {
       }
       return handler(args);
     };
-    // ⚠ SAME TWO PIECES AS THE DOMAIN PATH — the opt-in charge above is a
-    // `chargeCredit` call like any other, so it reports through the same scope.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const framed = withDoplStatus(gated as any, sessionEffective, caller, unmeteredNote);
     server.registerTool(
