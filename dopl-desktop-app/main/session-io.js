@@ -382,9 +382,14 @@ function applyCoreEvents(s, list, dispatch, store, log) {
       // baseline to carry across every resume and its own field in the durable record. Samuel
       // deleted the column (*"we dont need cost tracking"*); the TOKEN half is untouched, and it
       // is the half that has a reader — `tokensSpent` is on the agent card and on the wire.
-      const tokenTotal = Number(ev.sessionTokens) || 0;
-      s.tokensSpent = (s.tokensSpent || 0) + Math.max(0, tokenTotal - (s.lastTotalTokens || 0));
-      s.lastTotalTokens = tokenTotal;
+      // An unmeasured turn (`sessionTokens: null`) moves neither the spend nor the baseline: a zero
+      // baseline would re-bill a runtime's whole cumulative total on the next turn (P4-04).
+      const measured = ev.sessionTokens != null && Number.isFinite(Number(ev.sessionTokens));
+      if (measured) {
+        const tokenTotal = Number(ev.sessionTokens);
+        s.tokensSpent = (s.tokensSpent || 0) + Math.max(0, tokenTotal - (s.lastTotalTokens || 0));
+        s.lastTotalTokens = tokenTotal;
+      }
       // THE TURN COUNT (2026-09-01, T83). A `result` IS one completed turn on every runtime, so
       // this is the one honest place to count them. It survives a park/resume for `tokensSpent`'s
       // reason: both accumulate on the session object rather than reading a per-run cumulative total
