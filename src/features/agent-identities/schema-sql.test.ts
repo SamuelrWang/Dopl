@@ -24,9 +24,9 @@
  *      match the writer's, not undercut it"* (F-287). Its own tree cannot see
  *      `src/` either.
  *
- * …plus `agent-identities/lib/launch-overrides.ts`, whose four numbers mirror the
- * per-field caps so an EPHEMERAL override cannot be shaped in a way the durable
- * row could never have held.
+ * …plus the desktop's OVERRIDE caps (`identity-resolve.js › MAX_OVERRIDE_*`), which
+ * mirror the per-field caps so an EPHEMERAL override cannot be shaped in a way the
+ * durable row could never have held.
  *
  * ⚠ NOT EVERY BOUND HAS A `CHECK`, AND THAT IS DELIBERATE — stated here so the
  * next reader does not "fix" it. The migration bounds the SERIALIZED size of
@@ -60,12 +60,6 @@ import {
   MAX_MODEL_CHARS,
   MAX_NAME_CHARS,
 } from "./schema";
-import {
-  MAX_OVERRIDE_FIELD_COUNT,
-  MAX_OVERRIDE_FIELDS_BYTES,
-  MAX_OVERRIDE_KEY_CHARS,
-  MAX_OVERRIDE_VALUE_CHARS,
-} from "./lib/launch-overrides";
 import { forwardRenamed } from "@/shared/supabase/migration-renames";
 import { LAUNCH_RUNTIME_ID_RE } from "@/features/channels/schema-launch-modes";
 
@@ -284,19 +278,10 @@ describe("🔒 the desktop BOUNDARY's copy matches the writer's, and does not un
     ["MAX_FIELD_KEY", MAX_FIELD_KEY_CHARS],
     ["MAX_FIELD_VALUE", MAX_FIELD_VALUE_CHARS],
     ["MAX_MODEL", MAX_MODEL_CHARS],
+    ["MAX_OVERRIDE_KEY", MAX_FIELD_KEY_CHARS],
+    ["MAX_OVERRIDE_VALUE", MAX_FIELD_VALUE_CHARS],
   ])("identity-resolve.js › %s", (name, expected) => {
     expect(declared(DESKTOP, name as string)).toBe(expected);
-  });
-});
-
-describe("🔒 the launch OVERRIDE caps mirror the durable row's", () => {
-  // An override that could be shaped past these would produce a prompt the
-  // durable identity could never have held.
-  it("the four numbers agree with schema.ts", () => {
-    expect(MAX_OVERRIDE_KEY_CHARS).toBe(MAX_FIELD_KEY_CHARS);
-    expect(MAX_OVERRIDE_VALUE_CHARS).toBe(MAX_FIELD_VALUE_CHARS);
-    expect(MAX_OVERRIDE_FIELD_COUNT).toBe(MAX_FIELD_COUNT);
-    expect(MAX_OVERRIDE_FIELDS_BYTES).toBe(MAX_FIELDS_BYTES);
   });
 });
 

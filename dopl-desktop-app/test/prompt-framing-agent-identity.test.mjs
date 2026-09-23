@@ -255,6 +255,10 @@ test("a KEYLESS row names nothing and is dropped; a field cannot forge a line", 
 const SCHEMA_SRC = readFileSync(
   fileURLToPath(new URL("../../src/features/agent-identities/schema.ts", import.meta.url)), "utf8"
 );
+// The name/description bounds live zod-free beside it (P7-05) and schema.ts re-exports them.
+const BOUNDS_SRC = readFileSync(
+  fileURLToPath(new URL("../../src/features/agent-identities/lib/bounds.ts", import.meta.url)), "utf8"
+);
 
 // ⚠ THE SERVER NAMED ITS BOUNDS ON 2026-08-30 (G3), so these read the CONSTANT
 // DECLARATIONS rather than the literals inside the schema expressions. The
@@ -265,7 +269,7 @@ const SCHEMA_SRC = readFileSync(
 // actually uses the constant — or this file would be pinning a number the
 // schema had stopped reading.
 const serverBound = (name) => {
-  const m = new RegExp(`const ${name} = ([0-9_]+)`).exec(SCHEMA_SRC);
+  const m = new RegExp(`const ${name} = ([0-9_]+)`).exec(`${SCHEMA_SRC}\n${BOUNDS_SRC}`);
   assert.ok(m, `no \`const ${name}\` in the server's schema`);
   return Number(m[1].replace(/_/g, ""));
 };
