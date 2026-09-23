@@ -233,8 +233,7 @@
 .nav-chip.nav-chip-active { color: #26282c; }
 .nav-chip.nav-chip-active svg { color: #4a4d52; }
 
-/* Dotted graph substrate. ⚠ NO CURRENT CONSUMER — kept with `.graph-node-*`
-   and `.graph-port` as one recipe set; delete the whole group or none of it. */
+/* Dotted graph substrate (the ontology kanban board). */
 .graph-substrate {
   background-image: radial-gradient(rgba(35, 42, 49, 0.07) 1px, transparent 1px);
   background-size: 24px 24px;
@@ -250,7 +249,7 @@
 
 /* Graph node resting/selected/drop-target elevation. Card shell (layout,
    radius, border WIDTH, bg) stays in the component; these set border COLOR +
-   shadow. ⚠ Must stay declared BEFORE `.graph-node-lift` so that class (same
+   shadow. Must stay declared BEFORE `.graph-node-lift` so that class (same
    layer) wins while dragging. */
 .graph-node {
   border-color: var(--border-default);
@@ -359,7 +358,7 @@
   animation: menuCardIn 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 .menu-card[data-origin="right"] { transform-origin: top right; }
-/* ⚠ Exit must stay pointer-events: none — backdrop is already gone, so a card
+/* Exit must stay pointer-events: none — backdrop is already gone, so a card
    still taking pointer events eats the click that follows a dismissal. */
 .menu-card[data-state="closing"] {
   animation: menuCardOut 140ms ease-in forwards;
@@ -446,7 +445,7 @@
     0 6px 14px rgba(0, 0, 0, 0.06);
 }
 
-/* ⚠ NO INNER CONCAVE WELL — a second bordered box inside a 36px pill leaves a
+/* No inner concave well — a second bordered box inside a 36px pill leaves a
    few px of surround and reads as a box in a box. Only the FOCUS signal is
    borrowed from `.concave-field`: darkened hairline + 3px halo. */
 .search-expand[data-open="true"] .search-expand-shell:focus-within {
@@ -484,7 +483,7 @@
   font-family: inherit;
   font-size: var(--text-small);
   color: var(--text-primary);
-  /* ⚠ Invisible AND unreachable while collapsed: the shell only CLIPS it, and
+  /* Invisible AND unreachable while collapsed: the shell only CLIPS it, and
      a field a screen reader can still reach is worse than a visible one.
      Delayed in, instant out, so the text never outruns the pill. */
   visibility: hidden;
@@ -605,7 +604,7 @@
   box-shadow: var(--raised-light-shadow);
 }
 
-/* ⚠ Outside `@layer components` on purpose — keyframes are not layered rules.
+/* Outside `@layer components` on purpose — keyframes are not layered rules.
    rotateX capped at 7deg: enough to read as an unfold, not enough to smear
    the labels. */
 @keyframes menuCardIn {
@@ -629,7 +628,7 @@
   }
 }
 
-/* ⚠ Coupled: `popover-menu.tsx` skips the closing phase under this same query,
+/* Coupled: `popover-menu.tsx` skips the closing phase under this same query,
    so nothing waits on an animation that will not run. */
 @media (prefers-reduced-motion: reduce) {
   .menu-card,
