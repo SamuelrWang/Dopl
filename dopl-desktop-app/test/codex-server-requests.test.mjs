@@ -8,7 +8,6 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const CODEX = join(HERE, "..", "main", "runtime", "codex");
 const requests = require(join(CODEX, "server-requests.js"));
-const approval = require(join(CODEX, "approval.js"));
 const mcp = require(join(CODEX, "mcp.js"));
 const codexTools = require(join(CODEX, "tools.js"));
 const profiles = require(join(HERE, "..", "main", "session-profiles.js"));
@@ -238,7 +237,7 @@ test("the server key is ONE constant, and the asking table is read off the ENTRY
   assert.equal(entry.tools[mcp.CHANNEL_TOOL].approval_mode, "prompt");
   assert.equal(entry.default_tools_approval_mode, "approve",
     "a default that can ask puts every tool in the asking set and makes every ask un-nameable");
-  assert.equal(approval.doplElicitation(elicitation().params).name, mcp.soleAskingTool());
+  assert.equal(requests.doplElicitation(elicitation().params).name, mcp.soleAskingTool());
 });
 
 test("a SECOND asking tool degrades to the un-named Dopl surface instead of guessing", () => {
@@ -258,7 +257,7 @@ test("a SECOND asking tool degrades to the un-named Dopl surface instead of gues
 });
 
 test("the un-named Dopl surface is NOT the channel tool, and is allowed by no mode", async () => {
-  const surface = approval.DOPL_TOOL_SURFACE;
+  const surface = requests.DOPL_TOOL_SURFACE;
   // ⚠ IT MUST NOT INHERIT AXIS B's CHANNEL LANES. A call Dopl cannot name must not be judged by
   // the classifier for the one tool it happens to be unable to name.
   assert.equal(profiles.isChannelTool(surface), false);

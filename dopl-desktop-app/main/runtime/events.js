@@ -16,6 +16,38 @@ const toolUse = (payload) => ({ type: 'tool_use', payload });
 const toolResult = (payload) => ({ type: 'tool_result', payload });
 const outboundPost = (payload) => ({ type: 'outbound_post', payload });
 
+/**
+ * One tool call `{ id, name, input }` as render events: an own-channel post is ONE `outbound_post`
+ * (its generic card suppressed so a sent message never double-renders), anything else a tool card.
+ * `ctx.willGatePost` marks the post pending so the renderer paints the Send / Deny card in place.
+ */
+function toolCallEvents(call, ctx) {
+  // Lazy: `session-io` reaches `session-profiles`, which asks this registry for every decision.
+  const io = require('../session-io');
+  const c = ctx || {};
+  const { id, name, input } = call;
+  if (io.isOutboundPost(name, input, c.channelId)) {
+    const payload = io.withPostSurface({
+      type: 'outbound_post',
+      toolUseId: id,
+      text: input && input.body != null ? String(input.body) : '',
+    }, input, c.peerName, c.peerId);
+    // `ownChannel` is a boolean, never another channel's id (§H-9).
+    if (typeof c.willGatePost === 'function' && c.willGatePost(input, name) === true) {
+      payload.pending = true;
+      payload.ownChannel = true;
+    }
+    return [outboundPost(payload)];
+  }
+  return [toolUse({
+    type: 'tool_use',
+    toolUseId: id,
+    name,
+    inputSummary: io.summarizeInput(input),
+    inputFull: io.safeInput(input),
+  })];
+}
+
 // ── THE THREE CORE APPLIES BEFORE (OR INSTEAD OF) DISPATCHING ───────────────────────────────
 
 /**
@@ -116,6 +148,6 @@ const context = (tokens, model, window) => ({
 const authHold = (text) => ({ type: 'auth_hold', text: String(text == null ? '' : text) });
 
 module.exports = {
-  assistant, thinking, toolUse, toolResult, outboundPost,
+  assistant, thinking, toolUse, toolResult, outboundPost, toolCallEvents,
   launched, result, context, authHold,
 };

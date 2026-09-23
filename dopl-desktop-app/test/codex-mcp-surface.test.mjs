@@ -49,7 +49,6 @@ const require = createRequire(import.meta.url);
 const CODEX = join(HERE, '..', 'main', 'runtime', 'codex');
 const mcp = require(join(CODEX, 'mcp.js'));
 const configHome = require(join(CODEX, 'config-home.js'));
-const approval = require(join(CODEX, 'approval.js'));
 const serverRequests = require(join(CODEX, 'server-requests.js'));
 const { canonicalDoplName } = require(join(HERE, '..', 'main', 'mcp-tool-names.js'));
 
@@ -224,26 +223,27 @@ describe('a Dopl MCP call reaches Dopl\'s gate, resolved by SERVER', () => {
     assert.deepEqual(p._meta.tool_params, { op: 'rooms' });
   });
 
-  test('`toolNameFor` names DOPL\'s by its entry, and everyone else\'s by Codex\'s category', () => {
+  test('the elicitation is named by DOPL\'s entry, and every other server is declined unasked', async () => {
     // ⚠ NOT IN THE REQUEST, NOT FROM THE MESSAGE — from the entry `mcp.js` builds.
-    assert.equal(approval.toolNameFor(CAPTURED.mcpElicitation), mcp.soleAskingTool());
-    assert.equal(mcp.soleAskingTool(), mcp.CHANNEL_TOOL);    // ⚠ FAIL-CLOSED FOR EVERY OTHER SERVER: one field different, and it lands on a category in
-    // no Axis-A allow-list.
+    assert.equal(serverRequests.doplElicitation(CAPTURED.mcpElicitation.params).name, mcp.soleAskingTool());
+    assert.equal(mcp.soleAskingTool(), mcp.CHANNEL_TOOL);
+    // ⚠ FAIL-CLOSED FOR EVERY OTHER SERVER: one field different, and the gate is never asked.
     const params = Object.assign({}, CAPTURED.mcpElicitation.params, { serverName: 'somebody-else' });
-    const name = approval.toolNameFor({ method: CAPTURED.mcpElicitation.method, params });
-    assert.equal(name, 'mcp_elicitations');
-    assert.notEqual(name, mcp.CHANNEL_TOOL, "a third party must NOT resolve to Dopl's channel tool");
-    const tools = require(join(CODEX, 'tools.js'));
-    for (const mode of tools.TOOL_MODES) {
-      assert.equal(tools.axisAAllows(mode, name), false, `${mode} must not auto-allow it`);
-    }
+    assert.equal(serverRequests.doplElicitation(params), null);
+    const asked = [];
+    const reply = await serverRequests.answer({ method: CAPTURED.mcpElicitation.method, params },
+      async (name) => { asked.push(name); return 'allow'; });
+    assert.deepEqual(reply, { action: 'decline' });
+    assert.deepEqual(asked, [], "a third party must NOT reach Dopl's gate");
   });
 });
 
 describe('the captured approval payloads for a command and a file change', () => {
-  test('a commandExecution approval carries the command, cwd and parsed actions', () => {
+  test('a commandExecution approval carries the command, cwd and parsed actions', async () => {
     const p = CAPTURED.commandApproval.params;
-    assert.equal(approval.toolNameFor(CAPTURED.commandApproval), 'commandExecution');
+    const asked = [];
+    await serverRequests.answer(CAPTURED.commandApproval, async (name) => { asked.push(name); return 'deny'; });
+    assert.deepEqual(asked, ['commandExecution']);
     const input = serverRequests.approvalInput(CAPTURED.commandApproval.method, p);
     assert.equal(input.command, "/bin/zsh -lc 'echo hi'",
       'the command is the FULL shell invocation, not the bare argv the model proposed');
@@ -252,15 +252,17 @@ describe('the captured approval payloads for a command and a file change', () =>
     // from `CommandExecutionRequestApprovalParams.json`. It offers `accept`, an
     // `acceptWithExecpolicyAmendment` object and `cancel` — and NOT `decline`, although `decline`
     // is what Dopl sends and what the live capture shows working (`status: 'declined'`, turn
-    // continues). It also never offers `acceptForSession`, so `approval.js`'s standing refusal to
+    // continues). It also never offers `acceptForSession`, so `server-requests.js`'s standing refusal to
     // send that word costs nothing here.
     assert.equal(p.availableDecisions.includes('decline'), false);
     assert.equal(p.availableDecisions.includes('acceptForSession'), false);
   });
 
-  test('a fileChange approval carries NO PATH — §5 item C2, answered', () => {
+  test('a fileChange approval carries NO PATH — §5 item C2, answered', async () => {
     const p = CAPTURED.fileChangeApproval.params;
-    assert.equal(approval.toolNameFor(CAPTURED.fileChangeApproval), 'fileChange');
+    const asked = [];
+    await serverRequests.answer(CAPTURED.fileChangeApproval, async (name) => { asked.push(name); return 'deny'; });
+    assert.deepEqual(asked, ['fileChange']);
     for (const key of ['path', 'paths', 'changes', 'diff', 'files']) {
       assert.equal(p[key], undefined, `a fileChange approval carries no \`${key}\``);
     }
@@ -273,10 +275,10 @@ describe('the captured approval payloads for a command and a file change', () =>
 
   test('a decline is the answer for every verdict that is not an explicit allow', () => {
     for (const verdict of ['deny', 'gate', undefined, null, 'accept', 'allow-once']) {
-      assert.equal(approval.answerApproval({}, verdict).decision, 'decline', String(verdict));
+      assert.equal(serverRequests.decisionReply(verdict).decision, 'decline', String(verdict));
     }
-    assert.equal(approval.answerApproval({}, 'allow').decision, 'accept');
-    assert.notEqual(approval.answerApproval({}, 'allow').decision, 'acceptForSession');
+    assert.equal(serverRequests.decisionReply('allow').decision, 'accept');
+    assert.notEqual(serverRequests.decisionReply('allow').decision, 'acceptForSession');
   });
 });
 

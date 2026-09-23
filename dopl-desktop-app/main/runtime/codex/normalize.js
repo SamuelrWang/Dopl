@@ -217,30 +217,7 @@ function startedEvents(item, ctx) {
   if (!id) return [];
   const type = itemType(item);
   if (MESSAGE_TYPES.indexOf(type) !== -1 || THINKING_TYPES.indexOf(type) !== -1) return [];
-  const name = toolNameOf(item) || type || 'unknown';
-  const input = argsOf(item);
-  if (io.isOutboundPost(name, input, ctx.channelId)) {
-    // The agent wants to SEND a message to the peer. ONE `outbound_post`, and the generic tool
-    // card for the same item is SUPPRESSED so a sent message never double-renders.
-    const payload = io.withPostSurface({
-      type: 'outbound_post',
-      toolUseId: id,
-      text: input && input.body != null ? String(input.body) : '',
-    }, input, ctx.peerName, ctx.peerId);
-    // The SAME item becomes the inline Send / Deny card while it waits, then resolves in place.
-    if (typeof ctx.willGatePost === 'function' && ctx.willGatePost(input, name) === true) {
-      payload.pending = true;
-      payload.ownChannel = true;
-    }
-    return [events.outboundPost(payload)];
-  }
-  return [events.toolUse({
-    type: 'tool_use',
-    toolUseId: id,
-    name: name,
-    inputSummary: io.summarizeInput(input),
-    inputFull: io.safeInput(input),
-  })];
+  return events.toolCallEvents({ id, name: toolNameOf(item) || type || 'unknown', input: argsOf(item) }, ctx);
 }
 
 function completedEvents(item, ctx) {

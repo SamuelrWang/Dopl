@@ -46,6 +46,7 @@ const crypto = require('crypto');
 // exports are `undefined` at exactly the moment it asks for a deny list.
 const bridge = () => require('../../session-gate-bridge');
 const approval = require('./approval');
+const { settledVerdict } = require('../held-gate');
 const { canonicalDoplName } = require('../../mcp-tool-names');
 
 // ── THE CLOSE LATCH ──────────────────────────────────────────────────────────────────────────
@@ -86,14 +87,8 @@ function makeGate(s, dispatch, log) {
       return Promise.resolve({ behavior: 'deny', message: 'This session has ended.' });
     }
     const decision = bridge().gateCall(s, name, input, opts, dispatch, log);
-    if (decision.settled) {
-      // ⚠ THE SAME TWO SHAPES CORE ITSELF MINTS. `allowResult` folds the forced thread tag onto
-      // the allow as `updatedInput`; `execute()` applies it below. Keeping the shape identical is
-      // what lets `wrapGate` and the tag machinery stay core on all three runtimes.
-      return Promise.resolve(decision.verdict === 'allow'
-        ? require('../../session-outbound-tag').allowResult(decision.tag || null)
-        : { behavior: 'deny', message: decision.message || 'Denied by operator' });
-    }
+    // The allow carries the forced thread tag as `updatedInput`; `execute()` applies it below.
+    if (decision.settled) return Promise.resolve(settledVerdict(decision));
     if (typeof dispatch !== 'function') {
       return Promise.resolve({ behavior: 'deny', message: 'This session has no surface to ask on.' });
     }

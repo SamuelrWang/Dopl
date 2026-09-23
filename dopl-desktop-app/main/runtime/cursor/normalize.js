@@ -152,39 +152,7 @@ function toolCallEvents(ev, ctx) {
   const status = String(ev.status || ev.state || '');
   const name = nameOf(ev) || 'unknown';
   const input = argsOf(ev);
-  if (RUNNING.indexOf(status) !== -1 || !status) {
-    if (io.isOutboundPost(name, input, ctx.channelId)) {
-      // The agent wants to SEND a message to the peer. ONE `outbound_post`, and the generic tool
-      // card for the same call is SUPPRESSED so a sent message never double-renders.
-      const payload = io.withPostSurface({
-        type: 'outbound_post',
-        toolUseId: id,
-        text: input && input.body != null ? String(input.body) : '',
-      }, input, ctx.peerName, ctx.peerId);
-      // v2.7 L3: the SAME item becomes the inline Send / Deny card while it waits, then resolves
-      // in place. ⚠ WHETHER IT REALLY RESOLVES IN PLACE ON THIS RUNTIME IS §5 ITEM X16: the gate's
-      // card is keyed on the id `axis-b.js › execute` was handed, and nothing in the research says
-      // an `execute()` implementation is handed the stream's `call_id`. If it is not, this card is
-      // painted and answered on a SEPARATE card rather than in place. The DECISION is unaffected —
-      // every call still stops at `grantDecision` — but the rendering is, so it is declared.
-      if (typeof ctx.willGatePost === 'function' && ctx.willGatePost(input, name) === true) {
-        payload.pending = true;
-        payload.ownChannel = true;
-      }
-      return [events.outboundPost(payload)];
-    }
-    return [events.toolUse({
-      type: 'tool_use',
-      toolUseId: id,
-      name: name,
-      inputSummary: io.summarizeInput(input),
-      inputFull: io.safeInput(input),
-    })];
-  }
-  // ⚠ `ok` IS FALSE ONLY ON AN EXPLICIT FAILURE. A call that reports an unrecognised status reads
-  // as SUCCESS, because a false negative retracts an `outbound_post` the operator already saw sent
-  // (the reducer un-counts a post on a failing result) — claiming a delivered message failed is
-  // worse than missing a failure.
+  if (RUNNING.indexOf(status) !== -1 || !status) return events.toolCallEvents({ id, name, input }, ctx);
   const ok = FAILED.indexOf(status) === -1 && !ev.error;
   return [events.toolResult({
     type: 'tool_result',

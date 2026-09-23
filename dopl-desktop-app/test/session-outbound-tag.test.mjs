@@ -163,7 +163,7 @@ test("makeCanUseTool computes the tag from isOutboundPost + s.taskId, and only r
   assert.ok(!/nextOwnPostId\(s\)[^)]*\n[\s\S]*nextOwnPostId/.test(fn), "exactly one mint site");
   // ⚠ THE ANSWER SHAPE MOVED, THE RULE DID NOT (2026-08-31). The bridge hands the verdict and
   // the tag back; the adapter writes them in the platform's own reply vocabulary
-  // (`runtime/claude/approval.js › answerApproval` -> `outboundTag.allowResult(tag)`), which is
+  // (`runtime/held-gate.js › settledVerdict` -> `outboundTag.allowResult(tag)`), which is
   // the half that is not portable. Both ends are pinned.
   assert.match(fn, /if \(decision === 'preapproved' \|\| decision === 'allow'\) \{[\s\S]*?return \{ settled: true, verdict: 'allow', tag \};/,
     "the auto-allowed path");
@@ -175,8 +175,8 @@ test("makeCanUseTool computes the tag from isOutboundPost + s.taskId, and only r
   assert.match(fn, /if \(outbound\) outboundTag\.markOwnPost\(s\);/, "stamped on the allow");
   assert.ok(!/markOwnPost/.test(fnOf(M("session-outbound-tag.js"), "nextOwnPostId")),
     "and the minter itself stamps nothing");
-  assert.match(fnOf(M("runtime/claude/approval.js"), "answerApproval"),
-    /if \(verdict === 'allow'\) return outboundTag\(\)\.allowResult\(req\.tag \|\| null\);/,
+  assert.match(fnOf(M("runtime/held-gate.js"), "settledVerdict"),
+    /d\.verdict === 'allow'\s*\?\s*outboundTag\(\)\.allowResult\(d\.tag \|\| null\)/,
     "…and the tag is what an allow carries");
   // ⚠ AND THE GATED ONE, whose allow is the OPERATOR's click — that is speech too, so the hook
   // rides `wrapAllow` and fires on their allow and on neither of their denies.
@@ -263,7 +263,8 @@ test("the decision is made BEFORE the tag can influence anything", () => {
 
 test("a conflicting thread id is logged, and the log is injected (session-io stays electron-free)", () => {
   const fn = fnOf(BRIDGE, "gateCall");
-  assert.match(fnOf(AXIS_B, "makeCanUseTool"), /function makeCanUseTool\(s, dispatch, log\)/);
+  assert.match(fnOf(M("runtime/held-gate.js"), "makeHeldGate"), /function makeHeldGate\(s, dispatch, log\)/);
+  assert.match(AXIS_B, /const makeCanUseTool = require\('\.\.\/held-gate'\)\.makeHeldGate;/);
   assert.match(fn, /tag\.action === 'conflict' && typeof log === 'function'/, "guarded, never assumed");
   assert.ok(!/require\('\.\/diag'\)/.test(IO), "diag requires electron; this file must not");
   assert.ok(!/require\('\.\/diag'\)/.test(BRIDGE),

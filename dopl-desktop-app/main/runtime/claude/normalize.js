@@ -63,37 +63,7 @@ function renderEvents(msg, ctx) {
       } else if (b && b.type === 'thinking' && b.thinking) {
         out.push(events.thinking(b.thinking)); // work lane, bounded downstream
       } else if (b && b.type === 'tool_use') {
-        if (io.isOutboundPost(b.name, b.input, ctx.channelId)) {
-          // The agent wants to SEND a message to the peer. Emit ONE `outbound_post` and SUPPRESS
-          // the generic tool card for the same tool_use, so a sent message never double-renders
-          // as a tool call. It flows THROUGH the reducer (case 'outbound_post') so it can set
-          // postedThisTurn: recorded optimistically here, un-counted on the two paths that
-          // retract a post — a failing tool_result (FIX F3) and a park (FIX F6). MEDIUM-2: `to`
-          // is the call's REAL addressee when it set one, the bound counterparty otherwise;
-          // `postKind` rides along for a lifecycle-kinded post.
-          const payload = io.withPostSurface({
-            type: 'outbound_post',
-            toolUseId: b.id,
-            text: b.input && b.input.body != null ? String(b.input.body) : '',
-          }, b.input, ctx.peerName, ctx.peerId);
-          // v2.7 L3: the SAME item becomes the inline Send / Deny card while it waits,
-          // then resolves in place. `ownChannel` feeds the card's destination line (the
-          // renderer is fail-suspicious: anything but an explicit true reads as another
-          // channel), and it is a boolean — never another channel's id (§H-9).
-          if (typeof ctx.willGatePost === 'function' && ctx.willGatePost(b.input, b.name) === true) {
-            payload.pending = true;
-            payload.ownChannel = true;
-          }
-          out.push(events.outboundPost(payload));
-        } else {
-          out.push(events.toolUse({
-            type: 'tool_use',
-            toolUseId: b.id,
-            name: b.name,
-            inputSummary: io.summarizeInput(b.input),
-            inputFull: io.safeInput(b.input),
-          }));
-        }
+        out.push(...events.toolCallEvents({ id: b.id, name: b.name, input: b.input }, ctx));
       }
     }
   } else if (msg && msg.type === 'user') {

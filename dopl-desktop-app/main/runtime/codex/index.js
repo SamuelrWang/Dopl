@@ -27,7 +27,7 @@
 
 const tools = require('./tools');
 const axisB = require('./axis-b');
-const approval = require('./approval');
+const serverRequests = require('./server-requests');
 const models = require('./models');
 const mcp = require('./mcp');
 const credential = require('./credential');
@@ -123,7 +123,7 @@ const descriptor = {
   },
 
   axisB: axisB.descriptor,
-  approval: approval.descriptor,
+  approval: serverRequests.descriptor,
 
   toolMode: {
     axis: 'tools',
@@ -345,8 +345,9 @@ const runtime = {
   resume(spec, priorHandle) { return launchSpec().resume(spec, priorHandle); },
   normalize(msg, ctx) { return normalizer().normalize(msg, ctx); },
 
-  answerApproval(request, verdict) { return approval.answerApproval(request, verdict); },
-  stampOutbound(input, tag) { return approval.stampOutbound(input, tag); },
+  answerApproval(_request, verdict) { return serverRequests.decisionReply(verdict); },
+  // `axisB.inputRewrite` is null here: no route carries a rewritten input.
+  stampOutbound(_input, _tag) { return null; },
   axisBTools(session) { return axisB.axisBTools(session); },
 
   toolConfigFor(profile) { return tools.buildSessionToolConfig(profile); },

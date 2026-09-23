@@ -9,7 +9,7 @@
 // object — all deny. That is the same rule `main/session-permissions.js › resolvePerm` applies to
 // the operator's own click, restated here because this is the OTHER end of the same promise.
 
-const outboundTag = () => require('../../session-outbound-tag');
+const { settledVerdict } = require('../held-gate');
 
 /**
  * The platform's reply object for one held call.
@@ -24,8 +24,7 @@ const outboundTag = () => require('../../session-outbound-tag');
  */
 function answerApproval(request, verdict) {
   const req = request || {};
-  if (verdict === 'allow') return outboundTag().allowResult(req.tag || null);
-  return { behavior: 'deny', message: req.message || 'Denied by operator' };
+  return settledVerdict({ verdict, tag: req.tag, message: req.message });
 }
 
 /**
