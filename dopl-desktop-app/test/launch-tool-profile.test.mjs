@@ -40,6 +40,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { fnOf } from "./helpers/source-probe.mjs";
 import { mkWin, evt, idsOf } from "./_ipc-harness.mjs";
+import { launchDefaultStub } from "./_launch-runtime-stub.mjs";
 
 const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -159,15 +160,8 @@ function bootLaunch(entries) {
         applyOverrides: (t) => t,
       };
     }
-    // 2026-08-31 (port wave D) — WHICH RUNTIME this channel's agents launch on. ⚠ Stubbed at its
-    // seam like `./channel-prefs` above (the real module opens an electron-store), and answering
-    // `''` is the DEFAULT adapter, which is what every launch resolved to before the port — so
-    // the specs this file asserts stay byte-identical to the ones that shipped.
-    if (id === "./channel-runtime") {
-      return { normalizeRuntimeId: (v) => (v === "codex" || v === "cursor" ? v : ""), getChannelRuntime: () => "" };
-    }
     // 2026-09-23: the identity link, asked of the launch runtime — passthrough here.
-    if (id === "./runtime/launch-default") return { identityModelFor: async (_rid, m) => m || "" };
+    if (id === "./runtime/launch-default") return launchDefaultStub(); // the REAL runtime order, a passthrough model link
     throw new Error("unexpected require: " + id);
   };
   const launchOp = { exports: {} };

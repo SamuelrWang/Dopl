@@ -11,6 +11,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { fnOf } from "./helpers/source-probe.mjs";
+import { launchDefaultStub } from "./_launch-runtime-stub.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const req = createRequire(import.meta.url);
@@ -141,7 +142,7 @@ export function bootIpc({ blocked = false } = {}) {
       };
     }
     // 2026-09-23: the identity link, asked of the launch runtime — passthrough here.
-    if (id === "./runtime/launch-default") return { identityModelFor: async (_rid, m) => m || "" };
+    if (id === "./runtime/launch-default") return launchDefaultStub(); // the REAL runtime order, a passthrough model link
     // 2026-09-18 — DEFAULT AGENT SETTINGS. ⚠ EVERY WRITER RECORDS INTO THE SAME `writes` LEDGER as
     // `channel-prefs`' fakes, because the refusal cases assert that ledger is EMPTY: a second
     // ledger would let a forged `setAgentDefaults` or `applyAgentDefaults` pass unseen. ⚠ AND BOTH

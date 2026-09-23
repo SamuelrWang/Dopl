@@ -65,7 +65,7 @@ const post = (over) => ({ op: "send", body: "shipping tonight", ...over });
 // each half has to be provable from source or the next edit silently merges them again.
 
 const branch = (from, to) => REDUCER_SRC.slice(REDUCER_SRC.indexOf(from), REDUCER_SRC.indexOf(to));
-const POSTURE_FIELDS = ["toolMode: 'manual'", "messageMode: 'ask'", "inboundForTask: false", "allowForTask: []"];
+const POSTURE_FIELDS = ["toolMode: toolModesOf(state)[0]", "messageMode: MESSAGE_MODES[0]", "inboundForTask: false", "allowForTask: []"]; // the SESSION's own narrowest word (X-01)
 
 test("M2: the idle_timeout patch resets NO posture and NO grant", () => {
   const patch = branch("if (type === 'idle_timeout')", "if (type === 'abandon_timeout')");

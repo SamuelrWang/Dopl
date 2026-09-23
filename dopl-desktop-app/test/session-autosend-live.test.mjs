@@ -60,6 +60,8 @@ const priv = require(M("session-private.js"));
 const profiles = require(M("session-profiles.js"));
 const io = require(M("session-io.js"));
 const { DOPL_CHANNEL_TOOL } = require(M("tool-profiles.js"));
+const posture = require(M("launch-posture.js"));
+const { sessionReducer } = require(M("session-reducer.js"));
 
 const CH = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 const THREAD = "11111111-2222-3333-4444-555555555555";
@@ -91,6 +93,8 @@ const slice = (channelMessageMode) =>
     "floorWindowlessMessage",
     "autoOutboundMode",
     "channelMessageMode",
+    "narrowTo",
+    "narrowMessageMode",
     `${body}\nreturn { effectiveMessageMode, openPrivateTurn, isPrivateTurn };`
   )(
     profiles.privateTurnMessageMode,
@@ -99,7 +103,9 @@ const slice = (channelMessageMode) =>
     // the out half. A local stub here could let this suite agree with itself about which postures
     // count as "auto" while `grantDecision` disagreed.
     profiles.autoOutboundMode,
-    channelMessageMode
+    channelMessageMode,
+    posture.narrowTo,
+    posture.narrowMessageMode
   );
 
 /** The real gate, with Axis B re-derived through the sliced live read. */
@@ -127,6 +133,19 @@ test("LIVE: it narrows as immediately as it widens — a channel back on `ask` g
   // operator sets Messaging back to `ask`, without a relaunch.
   const s = sess(); // frozen auto_both
   assert.equal(decideWith("ask", s, post()), "gate");
+});
+
+test("C2: a per-agent Messages pick holds under the channel's live value, never above it", () => {
+  // An orchestrator (or the agent view) narrowed THIS agent to inbound-only. The room is at
+  // auto_both: the agent still may not post unclicked. The room narrowing to `ask` wins at once.
+  const base = sess();
+  const picked = { ...base, state: sessionReducer(base.state, { type: "set_message_mode", mode: "auto_inbound", pinned: true }).state };
+  assert.equal(slice(() => "auto_both").effectiveMessageMode(picked), "auto_inbound");
+  assert.equal(decideWith("auto_both", picked, post()), "gate", "the narrower ask sticks for this agent");
+  assert.equal(slice(() => "ask").effectiveMessageMode(picked), "ask", "never wider than the channel");
+  // Capability bits, not a ladder: an out-only pick under an in-only room is `ask`, not either.
+  const outOnly = { ...base, state: sessionReducer(base.state, { type: "set_message_mode", mode: "auto_outbound", pinned: true }).state };
+  assert.equal(slice(() => "auto_inbound").effectiveMessageMode(outOnly), "ask");
 });
 
 test("LIVE: the frozen value is the fallback ONLY when the store cannot be read", () => {

@@ -213,9 +213,9 @@ function normalizeSelection(ctx, raw) {
     out.messages = messages;
   }
 
-  const by = raw.byRuntime && typeof raw.byRuntime === 'object' && !Array.isArray(raw.byRuntime)
+  const by = foldDefaultKey(ctx, raw.byRuntime && typeof raw.byRuntime === 'object' && !Array.isArray(raw.byRuntime)
     ? raw.byRuntime
-    : {};
+    : {});
   for (const id of Object.keys(by)) {
     // ⚠ A RECORD FOR A RUNTIME THIS BUILD DOES NOT REGISTER IS **KEPT VERBATIM AND NEVER READ**.
     // That is the same promise `channel-runtime.js` makes about the pick itself, applied to the
@@ -232,6 +232,21 @@ function normalizeSelection(ctx, raw) {
     for (const line of res.review) review.push(line);
   }
   return { selection: out, review: review, stored: true };
+}
+
+/**
+ * A `''` key is "the default runtime" written by a surface that keyed by the unpicked runtime (P3-05).
+ * It is folded into the default runtime's record, its fields winning (it is the newer write), so
+ * the setting is read instead of being carried as an unregistered id and never read.
+ */
+function foldDefaultKey(ctx, by) {
+  if (!Object.prototype.hasOwnProperty.call(by, '')) return by;
+  const out = { ...by };
+  const blank = out[''];
+  delete out[''];
+  const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : null);
+  if (obj(blank)) out[ctx.defaultId] = { ...(obj(out[ctx.defaultId]) || {}), ...blank };
+  return out;
 }
 
 /**

@@ -35,6 +35,7 @@ const { noteEvent, detailFor, endReasonFor } = require('./session-detail'); // �
 // projection, one answer. The reasoning is `agent-names.js`'s own header.
 const { displayNameFor, descriptionForAgent } = require('./agent-names');
 const { diag } = require('./diag');
+const { pickOf } = require('./runtime/selection-vocabulary'); // RC-15: `''`/`'default'` = no pick, spelled once
 // `displayText` and `IDENTITY_NAME_MAX` moved out on 2026-09-13 (`session-summary-text.js`), a
 // split forced by the 500-line cap. Injected by the harness like the rest.
 const { displayText, IDENTITY_NAME_MAX } = require('./session-summary-text'); const { heldGatesFor } = require('./session-held-gates'); // ⚠ THE SECOND REQUIRE SHARES THIS LINE BECAUSE THE FILE IS AT THE §1 CAP: `heldGatesFor` (2026-09-17) projects WHAT A HELD CALL IS ASKING off the reducer's own `pendingPermissions` — never a second opinion about what is live — and takes no requires of its own precisely so this file's source-extraction harness keeps loading
@@ -58,13 +59,10 @@ function nameOf(s) {
   return String((s && s.agentId) || '');
 }
 
-/** The operator's PICK, as something to display — or '' when they picked nothing. `'default'` is
- *  the frozen enum's "ask for no model at all", so it names no model and must not be rendered as
- *  one. Never coerced further here: `session-engine.js` already coerced it at the construction
- *  site against the frozen list, and this is a read. */
+/** The operator's PICK, as something to display — or null when they picked nothing. A read:
+ *  the construction site already coerced it against the session runtime's vocabulary. */
 function modelPick(s) {
-  const pick = String((s && s.model) || '');
-  return pick && pick !== 'default' ? pick : null;
+  return pickOf(s && s.model) || null;
 }
 
 
@@ -101,8 +99,8 @@ function liveSummary(s, name) {
     // THE LIVE POSTURE (2026-08-20), read-only here: a control that cannot read back what it set
     // lies after the auth hold resets both axes, after a resume, and after a change made in another
     // window. The REDUCER's state, not the channel's stored launch posture — a session can be moved
-    // off what it launched on. Absent reads fail-closed, as `session-io.js › grantArgs` treats it.
-    toolMode: (s && s.state && s.state.toolMode) || 'manual',
+    // off what it launched on. Absent reads fail-closed to THIS runtime's narrowest word.
+    toolMode: (s && s.state && (s.state.toolMode || (s.state.toolModes && s.state.toolModes[0]))) || null,
     messageMode: (s && s.state && s.state.messageMode) || 'ask',
     // WHICH MODEL IS REALLY ANSWERING (2026-08-22, Samuel's model-selection ruling). The SDK's own
     // reported id FIRST (`s.liveModel`, stamped from system/init and from every assistant message,

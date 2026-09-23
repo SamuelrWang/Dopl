@@ -23,8 +23,10 @@
 // ⚠ A runtime that declares no `launchDefault` is untouched here. Claude's default is its adapter's
 // own (`session-model.js › LAUNCH_MODEL_FALLBACK`, applied by `modelArg` on an absent pick).
 //
-// ⚠ IT REQUIRES NOTHING AT LOAD. The catalog is reached lazily (or injected), so the whole file can
-// be driven standalone by `test/runtime-launch-default.test.mjs`.
+// ⚠ IT REQUIRES NOTHING STATEFUL AT LOAD (only the pure `selection-vocabulary.js`). The catalog and
+// the registry are reached lazily (or injected), so the file is driven standalone by its suites.
+
+const { pickOf } = require('./selection-vocabulary');
 
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
 
@@ -45,11 +47,7 @@ function launchDefaultFrom(descriptor, catalog) {
   return catalogOffers(catalog, preferred) ? preferred : '';
 }
 
-/** Is this value a real pick? `'default'` is the Claude lane's "no opinion", not a model. */
-const named = (model) => {
-  const v = str(model);
-  return !!v && v !== 'default';
-};
+const named = (model) => !!pickOf(model);
 
 /**
  * The model this launch should carry on `adapter` (the SEALED adapter the launch acquired, never
@@ -110,7 +108,51 @@ async function identityModelFor(runtimeId, model, catalogs, registry) {
   }
 }
 
+// ── THE LAUNCH RUNTIME (Samuel's ruling 5, 2026-09-23) ───────────────────────────────────────
+//
+// Order: the launcher's explicit pick -> the identity's runtime -> the channel's runtime -> the
+// registry default. The first two are ASKS: one this Mac cannot run is refused (`no-sdk`), never
+// swapped for another vendor. The last two are inherited defaults and fail open, as they always did.
+// ⚠ Membership (`ids()`) before `acquire()`: `resolve` fails open to the default for an unknown id.
+
+async function usable(registry, id) {
+  if (registry.ids().indexOf(id) === -1) return false;
+  try {
+    await registry.acquire(id);
+    return true;
+  } catch (_err) {
+    return false;
+  }
+}
+
+/**
+ * Which runtime a launch runs on. `{ ok: true, runtimeId, source }` with a concrete registered id,
+ * or `{ ok: false, reason: 'no-sdk', runtimeId }` naming the asked id. `deps` is for the suites.
+ */
+async function resolveLaunchRuntime(args, deps) {
+  const a = args || {};
+  const d = deps || {};
+  const registry = d.registry || require('./index');
+  const asks = [
+    ['pick', str(a.pick)],
+    ['identity', str(a.identity && a.identity.runtime)],
+  ];
+  for (const [source, id] of asks) {
+    if (!id) continue;
+    if (!(await usable(registry, id))) return { ok: false, reason: 'no-sdk', runtimeId: id };
+    return { ok: true, runtimeId: id, source: source };
+  }
+  let channel = '';
+  try {
+    channel = str((d.channelRuntime || require('../channel-runtime')).getChannelRuntime(a.channelId));
+  } catch (_err) {
+    channel = '';
+  }
+  if (channel && registry.ids().indexOf(channel) !== -1) return { ok: true, runtimeId: channel, source: 'channel' };
+  return { ok: true, runtimeId: registry.DEFAULT_ID, source: 'default' };
+}
+
 module.exports = {
   preferredDefault, catalogOffers, launchDefaultFrom, withRuntimeDefault,
-  offeredBy, identityModelFor,
+  offeredBy, identityModelFor, resolveLaunchRuntime,
 };

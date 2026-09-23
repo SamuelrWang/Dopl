@@ -165,7 +165,7 @@ function withinReparkWindow(rec, now) {
  *                flag alone, and setting it would re-fence an agent that was past it.
  */
 function parkedSessionFromRecord(key, rec, sdkId) {
-  const state = initialSessionState({ mode: rec.mode, side: rec.side });
+  const state = initialSessionState({ mode: rec.mode, side: rec.side, toolModes: runtimeCapability.toolModes(runtimeRegistry.descriptorFor(rec.runtimeId)) });
   // ⚠ THE WINDOWLESS MESSAGE FLOOR (F-236). A rehydrated session has NO accept surface, and a
   // message axis left at the reducer's `ask` makes `session-gate.js › enqueue` HOLD the peer's
   // next reply with nothing left able to release it. The SAME shared rule `startSession` applies.

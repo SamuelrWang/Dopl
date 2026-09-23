@@ -113,7 +113,7 @@ function harness({ windowless = true, state = {} } = {}) {
   };
   const sessions = new Map([[s.key, s]]);
   const fn = new Function(
-    "deps", "store", "floorWindowlessMessage",
+    "deps", "store", "floorWindowlessMessage", "privateTurn",
     `${body}\n return setModeByTask;`
   )(
     {
@@ -129,7 +129,9 @@ function harness({ windowless = true, state = {} } = {}) {
       slotKey: (x) => `${x.channelId || ""}:${x.taskId || ""}:${x.agentId || ""}`,
       threadKeyPrefix: (c, t) => `${c || ""}:${t || ""}:`,
     },
-    floorWindowlessMessage
+    floorWindowlessMessage,
+    // The REAL module: it is what reads the mode in the session's own words (C2).
+    require(join(HERE, "..", "main", "session-private.js"))
   );
   return { fn, dispatched, s };
 }

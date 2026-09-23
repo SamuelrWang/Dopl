@@ -163,10 +163,8 @@ test("trigger.js: the responder spawn context carries the thread id (legacy ids 
   // header). The id is resolved once, from the message in hand, and the SAME binding rides both
   // the engine's `taskId` and the spawn `context` the framing reads.
   const src = M("trigger.js");
-  const call = src.slice(
-    src.indexOf("sessionEngine.launchResponderSession({"),
-    src.indexOf("startModes: { tools: 'manual', messages }")
-  );
+  const from = src.indexOf("sessionEngine.launchResponderSession({");
+  const call = src.slice(from, src.indexOf("startModes: {", from));
   assert.match(call, /^\s*taskId,$/m, "the engine runs the session under the resolved id");
   assert.match(call, /channelId: entry\.channel\.id, workspaceId: entry\.workspaceId, taskId,/,
     "…and the spawn CONTEXT carries the same one, which is what the framing reads");

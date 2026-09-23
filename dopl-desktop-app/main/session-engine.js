@@ -26,7 +26,7 @@ const framing = require('./prompt-framing');
 const sessionAuth = require('./session-auth'); const mcpGuard = require('./mcp-connect-guard'); // Q6 preflight + in-window sign-in; F-692's MCP-connect ACT half (kill / retry once / end visibly)
 const { initialSessionState, sessionReducer, idleTimeout } = require('./session-reducer');
 const sessionEffects = require('./session-effects'); // 2026-08-22: `terminalBody` — a terminal says why
-const { floorWindowlessMessage } = require('./session-profiles'); // AXIS B's windowless floor (F-236)
+const { floorWindowlessMessage, toolModesFor } = require('./session-profiles'); // AXIS B's windowless floor (F-236); the session runtime's Axis-A words
 const runtimeRegistry = require('./runtime'); const acquireRuntime = runtimeRegistry.acquire; // THE REGISTRY — the only place an adapter is named
 const sessionQuery = require('./session-query'); const { buildLaunchSpec, startQuery, consume } = sessionQuery; // §3 split: the launch spec + the query lifecycle (H1)
 const sessionNarration = require('./session-narration'); // 2026-08-20: the agent window's work lane (F-212)
@@ -258,9 +258,9 @@ async function startSession(spec, rt) {
   // decision a human is making right now, and a parked shell still refuses a posture no human
   // armed. A shape that passes nothing inherits the runtime's own declared defaults.
   const startModes = armedModes && (!spec.parkedShell || operatorArmed)
-    ? { toolMode: armedModes.tools, messageMode: armedModes.messages, native: armedModes.native }
+    ? { toolMode: armedModes.tools, messageMode: spec.windowless === true ? floorWindowlessMessage(armedModes.messages) : armedModes.messages, native: armedModes.native, pinned: armedModes.pinned === true } // C2: `pinned` = a per-agent pick; floored first so the pick is too
     : {};
-  const state = initialSessionState({ mode: spec.mode, side: spec.side, ...readCaps(spec), ...startModes });
+  const state = initialSessionState({ mode: spec.mode, side: spec.side, ...readCaps(spec), ...startModes, toolModes: toolModesFor(rt && rt.id) }); // Axis A in THIS runtime's words, never another's (X-01)
   // THE WINDOWLESS MESSAGE FLOOR, AT THE ONE CONSTRUCTION SITE (2026-08-22, F-236's last hole).
   // Both LAUNCH lanes already derive their message axis through `channel-prefs.js ›
   // windowlessMessageMode`, so for them this is a no-op. What it fixes is every shape that hands in

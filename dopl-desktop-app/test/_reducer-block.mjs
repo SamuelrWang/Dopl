@@ -39,11 +39,15 @@ function slice(src, name) {
 export const EFFECTS_SRC = readFileSync(MAIN("session-effects.js"), "utf8");
 export const STATE_SRC = readFileSync(MAIN("session-state.js"), "utf8");
 export const REDUCER_SRC = readFileSync(MAIN("session-reducer.js"), "utf8");
+// The narrowing rules a per-agent pick (C2) is held to; the reducer requires them from here.
+export const POSTURE_SRC = readFileSync(MAIN("launch-posture.js"), "utf8");
 
-// The effect builders and the state shape FIRST: session-reducer's block calls both as free vars.
+// The effect builders, the state shape and the posture narrowing FIRST: session-reducer's block
+// calls all three as free vars.
 export const BLOCK = [
   slice(EFFECTS_SRC, "SESSION-EFFECTS"),
   slice(STATE_SRC, "SESSION-STATE"),
+  slice(POSTURE_SRC, "LAUNCH-POSTURE"),
   slice(REDUCER_SRC, "SESSION-REDUCER"),
 ].join("\n");
 
@@ -56,7 +60,7 @@ export function loadReducer() {
               gatePhase, gateActivity, endedEmit, endLifecycle, endedStatusText, endEffects, modesEmit, parkEffects,
               endReasonOf, END_EVENT_REASONS,
               postureWasReset, POSTURE_RESET_NOTE, INACTIVE_NOTE, AUTH_HELD_NOTE, CLAIMED_NOTE,
-              wakeEffects, inboundAutoAccepted, feedInboundEffects, coerceMode,
+              wakeEffects, inboundAutoAccepted, feedInboundEffects, coerceMode, toolModesOf,
               nextAbandonMs, idleTimeout, AWAITING_PEER_IDLE_MS, ABANDONED_MS, LAUNCHING_MS,
               DEFAULT_IDLE_MS };`
   )();
