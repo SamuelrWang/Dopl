@@ -11,6 +11,7 @@
  * forever.
  */
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   SEARCH_MIN_QUERY_LENGTH,
@@ -91,7 +92,7 @@ export function useSearch({
           setState((prev) => ({
             groups: prev.groups,
             loading: false,
-            error: err instanceof Error ? err.message : "Search failed",
+            error: userFacingMessage(err),
           }));
         });
     }, SEARCH_DEBOUNCE_MS);

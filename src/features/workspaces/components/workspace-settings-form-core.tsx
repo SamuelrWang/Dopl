@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import { apiRequest } from "@/shared/api/api-client";
 import { meetsMinRole, type Workspace, type Role } from "../types";
@@ -61,7 +62,7 @@ export function WorkspaceSettingsFormCore({
       setSuccess("Saved.");
       onSaved(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(userFacingMessage(err));
     } finally {
       setSaving(false);
     }

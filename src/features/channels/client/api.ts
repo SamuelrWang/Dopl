@@ -34,10 +34,9 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 
 /**
  * The feature's transport, as `useApiMutationWith` consumes it.
- * ⚠ Every write driven through this still throws {@link ChannelApiError}, so the
- * `err instanceof ChannelApiError` branch that puts the server's own wording in
- * the toast keeps working. A mutation wired straight to `apiRequest` silently
- * degrades every channels error to its fallback string.
+ * ⚠ Every write driven through this still throws {@link ChannelApiError}, which
+ * keeps the status `userFacingMessage` reads to put the server's own 4xx
+ * wording in the toast.
  */
 export const channelRequest: ApiMutationRequestFn = request;
 

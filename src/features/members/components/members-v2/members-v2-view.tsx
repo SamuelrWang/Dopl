@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useMemo, useState, type ReactNode } from "react";
 import { UsersRound } from "lucide-react";
 import { ApiError } from "@/shared/api/api-client";
@@ -96,7 +97,7 @@ export function MembersV2View({
       : null;
 
   function reportError(err: unknown, fallback: string) {
-    toast({ title: err instanceof Error ? err.message : fallback });
+    toast({ title: userFacingMessage(err, fallback) });
   }
 
   const handleRoleChange = (userId: string, role: AssignableRole) => {

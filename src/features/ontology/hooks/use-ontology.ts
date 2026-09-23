@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -369,6 +370,6 @@ export function useOntology(
 function reportSaveError(what: string, err: unknown): void {
   toast({
     title: `Couldn't save ${what}`,
-    description: err instanceof Error ? err.message : "Unknown error",
+    description: userFacingMessage(err),
   });
 }

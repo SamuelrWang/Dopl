@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import { Pencil } from "lucide-react";
 import { InlineEditableRow } from "@/shared/ui/inline-editable-row";
@@ -108,7 +109,7 @@ function EditableName({
         }}
         onExit={() => setEditing(false)}
         onError={(err) =>
-          toast({ title: err instanceof Error ? err.message : "Couldn't save" })
+          toast({ title: userFacingMessage(err, "Couldn't save") })
         }
       />
     );
@@ -157,7 +158,7 @@ function BioEditor({
             await onSave(draft.trim());
           } catch (err) {
             setDraft(value);
-            toast({ title: err instanceof Error ? err.message : "Couldn't save bio" });
+            toast({ title: userFacingMessage(err, "Couldn't save bio") });
           } finally {
             setSaving(false);
           }

@@ -1,18 +1,11 @@
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { toast } from "@/shared/ui/toast";
-import { KnowledgeApiError } from "../../client/api";
 import { kbScope, type KbScope } from "../../scope";
 import type { KnowledgeBase } from "../../types";
 
 /** Toast a knowledge API/unknown error with a friendly fallback title. */
 export function reportError(err: unknown, fallback: string): void {
-  if (err instanceof KnowledgeApiError) {
-    toast({ title: fallback, description: err.message });
-    return;
-  }
-  toast({
-    title: fallback,
-    description: err instanceof Error ? err.message : "Unknown error",
-  });
+  toast({ title: fallback, description: userFacingMessage(err) });
 }
 
 /** Stable per-scope tile tint for KB / entry icons. Decorative. */

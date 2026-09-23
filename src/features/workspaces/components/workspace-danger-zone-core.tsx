@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import { apiRequest } from "@/shared/api/api-client";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
@@ -46,7 +47,7 @@ export function WorkspaceDangerZoneCore({
         .catch(() => null);
       onDeleted(next);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(userFacingMessage(err));
     }
   }
 

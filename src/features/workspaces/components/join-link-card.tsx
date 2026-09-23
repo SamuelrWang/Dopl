@@ -1,5 +1,7 @@
 "use client";
 
+import { apiErrorFrom } from "@/shared/api/api-envelope";
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import { DesktopHandoffPanel, JoinPendingPanel } from "./desktop-handoff-panel";
 
@@ -57,12 +59,10 @@ export function JoinLinkCard({
         method: "POST",
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(body?.error?.message || body?.error || "Failed to request");
-      }
+      if (!res.ok) throw apiErrorFrom(res.status, body);
       setOutcome(body as JoinOutcome);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(userFacingMessage(err));
       setJoining(false);
     }
   }

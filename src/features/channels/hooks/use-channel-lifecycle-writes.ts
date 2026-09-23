@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   patchCache,
@@ -8,7 +9,7 @@ import {
   type UseApiMutationConfig,
 } from "@/shared/hooks/use-api-mutation";
 import { toast } from "@/shared/ui/toast";
-import { ChannelApiError, channelRequest } from "../client/api";
+import { channelRequest } from "../client/api";
 import {
   channelKeys,
   channelMembersPath,
@@ -113,7 +114,7 @@ export function dropChannelRow(
 }
 
 function failed(err: unknown, fallback: string) {
-  toast({ title: err instanceof ChannelApiError ? err.message : fallback });
+  toast({ title: userFacingMessage(err, fallback) });
 }
 
 // ⚠ **`ChannelAgentSettingsDraft` AND `channelAgentSettingsConfig` ARE DELETED (2026-09-07,

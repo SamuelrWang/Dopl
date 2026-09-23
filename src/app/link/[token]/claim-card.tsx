@@ -1,5 +1,7 @@
 "use client";
 
+import { apiErrorFrom } from "@/shared/api/api-envelope";
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useEffect, useState } from "react";
 
 /**
@@ -131,11 +133,11 @@ export function LinkClaimCard({
           setGone(true);
           return;
         }
-        throw new Error(body?.error?.message || "Could not connect");
+        throw apiErrorFrom(res.status, body);
       }
       setOutcome(body as ClaimOutcome);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(userFacingMessage(err));
     } finally {
       setClaiming(false);
     }

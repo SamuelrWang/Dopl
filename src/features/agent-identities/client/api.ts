@@ -1,3 +1,4 @@
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { ApiError, apiRequest } from "@/shared/api/api-client";
 import type { ApiRequestOpts } from "@/shared/api/api-envelope";
 import type { ApiMutationRequestFn } from "@/shared/hooks/use-api-mutation";
@@ -41,9 +42,7 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
  */
 export const agentIdentityRequest: ApiMutationRequestFn = request;
 
-/** Human copy for anything a write threw — the server's own sentence when there is one. */
+/** Human copy for anything a write threw — the server's own 4xx sentence when there is one. */
 export function agentIdentityErrorMessage(err: unknown, fallback: string): string {
-  if (err instanceof AgentIdentityApiError) return err.message;
-  if (err instanceof Error && err.message) return err.message;
-  return fallback;
+  return userFacingMessage(err, fallback);
 }

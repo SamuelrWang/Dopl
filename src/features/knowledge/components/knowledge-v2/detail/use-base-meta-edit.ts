@@ -1,9 +1,10 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { KB_BASE_DESCRIPTION_MAX } from "@/config";
 import { toast } from "@/shared/ui/toast";
-import { KnowledgeApiError, updateBase } from "../../../client/api";
+import { updateBase } from "../../../client/api";
 import type { KnowledgeBase } from "../../../types";
 
 /** Text-input debounce, per the §15 200ms guideline with headroom. */
@@ -68,12 +69,7 @@ export function useBaseMetaEdit(
       };
       onSavedRef.current?.();
     } catch (err) {
-      const message =
-        err instanceof KnowledgeApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : "Save failed";
+      const message = userFacingMessage(err);
       toast({ title: "Couldn't save", description: message });
     }
   }, [base.id, workspaceId]);

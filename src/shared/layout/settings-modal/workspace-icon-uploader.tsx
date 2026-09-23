@@ -1,5 +1,7 @@
 "use client";
 
+import { apiErrorFrom } from "@/shared/api/api-envelope";
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useRef, useState } from "react";
 import { workspaceSegment } from "@/features/workspaces/url";
 import type { Workspace } from "@/features/workspaces/types";
@@ -34,13 +36,11 @@ export function WorkspaceIconUploader({ workspace, onChanged }: Props) {
         body: form,
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(body?.error?.message || body?.error || "Upload failed");
-      }
+      if (!res.ok) throw apiErrorFrom(res.status, body);
       setIconUrl(body.workspace?.iconUrl ?? null);
       onChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(userFacingMessage(err));
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -54,14 +54,11 @@ export function WorkspaceIconUploader({ workspace, onChanged }: Props) {
       const res = await fetch(`/api/workspaces/${segment}/icon`, {
         method: "DELETE",
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error?.message || body?.error || "Remove failed");
-      }
+      if (!res.ok) throw apiErrorFrom(res.status, await res.json().catch(() => ({})));
       setIconUrl(null);
       onChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(userFacingMessage(err));
     } finally {
       setBusy(false);
     }

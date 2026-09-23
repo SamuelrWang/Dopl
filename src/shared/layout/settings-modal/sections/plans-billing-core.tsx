@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import {
@@ -129,9 +130,7 @@ export function PlansBillingCore({
         setSwitchError("This workspace isn't on the legacy Pro plan anymore — refreshing.");
         void ent.refresh();
       } else {
-        setSwitchError(
-          err instanceof Error ? err.message : "Couldn't switch to Team"
-        );
+        setSwitchError(userFacingMessage(err, "Couldn't switch to Team"));
       }
     } finally {
       setSwitching(false);

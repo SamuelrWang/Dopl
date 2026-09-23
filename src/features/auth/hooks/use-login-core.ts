@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import { evaluatePassword, PASSWORD_REQUIREMENT_MESSAGE } from "../password-policy";
 
@@ -84,7 +85,7 @@ export function useLoginCore(actions: LoginActions, defaultMode: LoginMode) {
       if (next) setMessage(next);
       return true;
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(userFacingMessage(err));
       return false;
     } finally {
       setPending(null);

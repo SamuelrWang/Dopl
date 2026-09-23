@@ -1,6 +1,8 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
-import { PageLoading } from "./page-states";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createMemoryRouter, RouterProvider } from "react-router";
+import { ApiError, NetworkError } from "@/shared/api/api-envelope";
+import { PageError, PageLoading, RouteErrorBoundary } from "./page-states";
 
 /**
  * `PageLoading` is the loading state of EVERY desktop page, and a cold Channels
@@ -48,5 +50,69 @@ describe("PageLoading", () => {
     const a = render(<PageLoading label="Starting Dopl" />).container.innerHTML;
     const b = render(<PageLoading label="Opening workspace" />).container.innerHTML;
     expect(a.replace("Starting Dopl", "")).toBe(b.replace("Opening workspace", ""));
+  });
+});
+
+describe("PageError", () => {
+  let reload: ReturnType<typeof vi.fn>;
+  let realLocation: PropertyDescriptor | undefined;
+
+  beforeEach(() => {
+    reload = vi.fn();
+    realLocation = Object.getOwnPropertyDescriptor(window, "location");
+    Object.defineProperty(window, "location", { configurable: true, value: { reload } });
+  });
+
+  afterEach(() => {
+    if (realLocation) Object.defineProperty(window, "location", realLocation);
+  });
+
+  it("never renders Electron's raw wrapper text", () => {
+    const raw = new Error("Error invoking remote method 'dopl:api-request': TypeError: fetch failed");
+    render(<PageError error={raw} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Dopl ran into a problem.");
+    expect(screen.queryByText(/invoking remote method/)).toBeNull();
+  });
+
+  it("a network failure reads as can't-reach", () => {
+    render(<PageError error={new NetworkError()} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Can't reach Dopl.");
+  });
+
+  it("keeps a server 4xx's own sentence", () => {
+    render(<PageError error={new ApiError(404, "NOT_FOUND", "Channel not found")} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Channel not found");
+  });
+
+  it("offers Reload, which reloads the app", () => {
+    render(<PageError error={new NetworkError()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Reload" }));
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps Try again beside Reload when there is a retry", () => {
+    const onRetry = vi.fn();
+    render(<PageError error={new NetworkError()} onRetry={onRetry} />);
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(reload).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Reload" })).toBeInTheDocument();
+  });
+
+  it("the route boundary offers Reload over a render throw, with generic copy", () => {
+    function Boom(): never {
+      throw new TypeError("Cannot read properties of undefined (reading 'id')");
+    }
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const router = createMemoryRouter(
+      [{ path: "/", element: <Boom />, errorElement: <RouteErrorBoundary /> }],
+      { initialEntries: ["/"] }
+    );
+    render(<RouterProvider router={router} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Dopl ran into a problem.");
+    expect(screen.queryByText(/reading 'id'/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Reload" }));
+    expect(reload).toHaveBeenCalledTimes(1);
   });
 });

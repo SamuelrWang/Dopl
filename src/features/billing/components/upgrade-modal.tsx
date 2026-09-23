@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import { Check } from "lucide-react";
 // Deep import, not the `settings-modal` barrel: the barrel re-exports
@@ -113,9 +114,7 @@ export function UpgradeModal({
         );
         void ent.refresh();
       } else {
-        setSwitchError(
-          err instanceof Error ? err.message : "Couldn't switch to Team"
-        );
+        setSwitchError(userFacingMessage(err, "Couldn't switch to Team"));
       }
     } finally {
       setSwitching(false);

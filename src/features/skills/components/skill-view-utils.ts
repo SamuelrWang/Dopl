@@ -1,16 +1,14 @@
 /** Pure helpers for `skill-view.tsx`, split out to keep it under the
  *  500-line cap. */
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import {
   PRIMARY_SKILL_FILE_NAME,
   type SkillFile,
 } from "@/features/skills/types";
-import { SkillApiError } from "@/features/skills/client/api";
 
 export function errMessage(err: unknown): string {
-  if (err instanceof SkillApiError) return err.message;
-  if (err instanceof Error) return err.message;
-  return "Unknown error";
+  return userFacingMessage(err);
 }
 
 /** The single SKILL.md row. The resolved payload still carries a one-element

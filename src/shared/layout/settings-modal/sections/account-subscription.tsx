@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import {
   useWorkspaceEntitlements,
@@ -97,11 +98,10 @@ function SubscriptionRow({
       await cancel.submit({ resume });
     } catch (err) {
       setError(
-        err instanceof Error && err.message
-          ? err.message
-          : resume
-            ? "Couldn't resume subscription"
-            : "Couldn't cancel subscription"
+        userFacingMessage(
+          err,
+          resume ? "Couldn't resume subscription" : "Couldn't cancel subscription"
+        )
       );
     }
   }

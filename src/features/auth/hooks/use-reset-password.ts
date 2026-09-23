@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useEffect, useState } from "react";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
@@ -63,7 +64,7 @@ export function useResetPassword() {
       setMessage("Password updated. Redirecting…");
       window.location.assign(WEB_POST_AUTH_LANDING);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(userFacingMessage(err));
       setPending(false);
     }
   }

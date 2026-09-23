@@ -1,3 +1,4 @@
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 // ⚠ THE CEILINGS ARE THE SERVER'S OWN CONSTANTS, IMPORTED AND NOT RESTATED, so
 // the limit felt at the keyboard cannot drift from the one that answers 400.
@@ -6,7 +7,6 @@ import {
   HOME_CHANNEL_NAME_MAX,
 } from "@/features/home/schema";
 import { FormDialog, UnderlineField } from "@/shared/ui/form-dialog";
-import { errorMessage } from "#/components/page-states";
 import { useCreateHomeChannel } from "./home-writes";
 
 /**
@@ -121,7 +121,7 @@ export function NewChannelDialog({
           `add-person-dialog.tsx` uses. */}
       {create.error ? (
         <p role="alert" className="text-caption text-danger">
-          {errorMessage(create.error)}
+          {userFacingMessage(create.error)}
         </p>
       ) : null}
     </FormDialog>

@@ -1,5 +1,5 @@
 /**
- * Teams API client transport: error flattening, plus the one write that is
+ * Teams API client transport, plus the one write that is
  * not a cache patch. Every other write is a mutation config in
  * `hooks/use-{member,team,access}-writes.ts`.
  * `createTeam` stays a plain call on purpose — a CREATE with no row to patch
@@ -7,7 +7,7 @@
  * dialog closes onto a freshly-invalidated list.
  */
 
-import { ApiError, apiRequest } from "@/shared/api/api-client";
+import { apiRequest } from "@/shared/api/api-client";
 import type { ApiRequestOpts } from "@/shared/api/api-envelope";
 import type { ApiMutationRequestFn } from "@/shared/hooks/use-api-mutation";
 import type { AccessLevel, TeamResourceType } from "@/features/teams/access-levels";
@@ -19,16 +19,9 @@ type TeamsRequestOpts = Pick<
   "method" | "body" | "workspaceId" | "query" | "expectedUpdatedAt"
 >;
 
+// The ApiError is passed through whole: `userFacingMessage` reads its status.
 async function request<T>(url: string, init?: TeamsRequestOpts): Promise<T> {
-  try {
-    return await apiRequest<T>(url, init);
-  } catch (err) {
-    if (err instanceof ApiError) {
-      // Callers catch generic Error and surface .message.
-      throw new Error(err.message || "Request failed");
-    }
-    throw err;
-  }
+  return apiRequest<T>(url, init);
 }
 
 /** Same transport shaped for `useApiMutationWith`. ⚠ Module-level so the

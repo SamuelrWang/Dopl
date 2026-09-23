@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, Info, UserMinus } from "lucide-react";
@@ -18,7 +19,6 @@ import type { WorkspaceMemberView } from "@/features/members/types";
 import type { ChannelMember } from "../types";
 import {
   addChannelMember,
-  ChannelApiError,
   removeChannelMember,
 } from "../client/api";
 
@@ -147,7 +147,7 @@ export function InviteDialog({
       refresh();
     } catch (err) {
       toast({
-        title: err instanceof ChannelApiError ? err.message : "Couldn't add member",
+        title: userFacingMessage(err, "Couldn't add member"),
       });
     } finally {
       setBusyId(null);
@@ -161,7 +161,7 @@ export function InviteDialog({
       refresh();
     } catch (err) {
       toast({
-        title: err instanceof ChannelApiError ? err.message : "Couldn't remove member",
+        title: userFacingMessage(err, "Couldn't remove member"),
       });
     } finally {
       setBusyId(null);

@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "@/shared/ui/toast";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
@@ -110,8 +111,7 @@ export function KbSharingSection({
       toast({ title: "Sharing updated" });
       routing.refreshServerData();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Couldn't update sharing";
-      toast({ title: "Couldn't update sharing", description: msg });
+      toast({ title: "Couldn't update sharing", description: userFacingMessage(err) });
     } finally {
       setSaving(false);
     }

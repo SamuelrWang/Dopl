@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/shared/api/api-client";
@@ -80,7 +81,7 @@ export function AccountSectionCore({
       queryClient.setQueryData([PROFILE_PATH, undefined, undefined], updated);
       setStatus("Saved.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(userFacingMessage(err));
     } finally {
       setSaving(false);
     }

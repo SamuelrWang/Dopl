@@ -1,5 +1,7 @@
 "use client";
 
+import { apiErrorFrom } from "@/shared/api/api-envelope";
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import {
   createContext,
   useCallback,
@@ -103,7 +105,12 @@ export function PlaygroundSessionProvider({ children }: { children: ReactNode })
           | (PlaygroundSession & { message?: string })
           | null;
         if (!res.ok || !body?.token) {
-          setError(body?.message ?? "Could not start a playground session.");
+          setError(
+            userFacingMessage(
+              res.ok ? null : apiErrorFrom(res.status, body),
+              "Could not start a playground session."
+            )
+          );
           return;
         }
         const next: PlaygroundSession = {

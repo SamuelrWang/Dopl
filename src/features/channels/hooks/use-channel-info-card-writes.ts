@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import {
   patchCache,
   useApiMutationWith,
@@ -7,7 +8,7 @@ import {
   type UseApiMutationConfig,
 } from "@/shared/hooks/use-api-mutation";
 import { toast } from "@/shared/ui/toast";
-import { ChannelApiError, channelRequest } from "../client/api";
+import { channelRequest } from "../client/api";
 import { channelKeys, channelPath } from "../client/query-keys";
 import { patchChannel, type ChannelsCache } from "../lib/optimistic-cache";
 import type { ChannelInfoCard } from "../info-card";
@@ -82,10 +83,7 @@ export function infoCardConfig(
     settleWith: deps.gate,
     onError: (err) =>
       toast({
-        title:
-          err instanceof ChannelApiError
-            ? err.message
-            : "Couldn't save this info card",
+        title: userFacingMessage(err, "Couldn't save this info card"),
       }),
   };
 }

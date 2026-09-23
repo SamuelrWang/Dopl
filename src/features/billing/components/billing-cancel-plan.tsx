@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { formatDate } from "@/shared/lib/format-time";
@@ -42,11 +43,10 @@ export function BillingCancelPlan({
       await cancel.submit({ resume });
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : resume
-            ? "Couldn't resume the plan"
-            : "Couldn't cancel the plan"
+        userFacingMessage(
+          err,
+          resume ? "Couldn't resume the plan" : "Couldn't cancel the plan"
+        )
       );
     }
   }

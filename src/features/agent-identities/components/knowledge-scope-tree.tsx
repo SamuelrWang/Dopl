@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useMemo, useState } from "react";
 import { Check, ChevronRight, FileText, Folder, Library } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
@@ -97,7 +98,7 @@ export function BaseNode({
         ) : tree.status === "error" ? (
           // A failed read is not an empty base (INVARIANTS §11).
           <p role="alert" className="py-1.5 pr-2 pl-8 text-caption text-danger">
-            {tree.error?.message || "Couldn't load this base."}{" "}
+            {userFacingMessage(tree.error, "Couldn't load this base.")}{" "}
             <button type="button" className="underline" onClick={() => tree.refetch()}>
               Retry
             </button>

@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   coldKeys,
@@ -8,7 +9,7 @@ import {
   type MutationGate,
 } from "@/shared/hooks/use-api-mutation";
 import { toast } from "@/shared/ui/toast";
-import { ChatApiError, chatRequest } from "../client/api";
+import { chatRequest } from "../client/api";
 import {
   CHAT_FOLDERS_PATH,
   chatFolderPath,
@@ -86,7 +87,7 @@ export interface FolderScopeDraft {
 }
 
 function failed(err: unknown, fallback: string) {
-  toast({ title: err instanceof ChatApiError ? err.message : fallback });
+  toast({ title: userFacingMessage(err, fallback) });
 }
 
 export function useChatWrites({

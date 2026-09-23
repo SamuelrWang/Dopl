@@ -1,10 +1,10 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { AlertTriangle } from "lucide-react";
 import { toast } from "@/shared/ui/toast";
 import { SkeletonBar } from "@/shared/ui/skeleton";
 import { kbBodyIsUnsectioned, kbSummaryFault } from "@/shared/knowledge/write-rules";
-import { KnowledgeApiError } from "../client/api";
 
 /**
  * Presentational chrome for DocPane: body-loading skeleton + 412-conflict
@@ -138,12 +138,5 @@ export function WriteRuleWarnings({ labels }: { labels: readonly string[] }) {
 }
 
 export function reportError(err: unknown, fallback: string): void {
-  if (err instanceof KnowledgeApiError) {
-    toast({ title: fallback, description: err.message });
-    return;
-  }
-  toast({
-    title: fallback,
-    description: err instanceof Error ? err.message : "Unknown error",
-  });
+  toast({ title: fallback, description: userFacingMessage(err) });
 }

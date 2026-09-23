@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { Fragment, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Download, Settings, Trash2 } from "lucide-react";
@@ -11,7 +12,7 @@ import { toast } from "@/shared/ui/toast";
 import { cn } from "@/shared/lib/utils";
 import { DeleteBaseConfirm } from "../../delete-base-confirm";
 import { KnowledgeSearch } from "../../knowledge-search";
-import { KnowledgeApiError, deleteBase } from "../../../client/api";
+import { deleteBase } from "../../../client/api";
 import { evictDeletedBase } from "../../../client/hooks";
 import type { KnowledgeBase, KnowledgeFolder } from "../../../types";
 import type { BaseTree, Selection } from "../types";
@@ -98,12 +99,7 @@ export function BaseHeader({
       routing.goToBase(null, "replace");
       routing.refreshServerData();
     } catch (err) {
-      const msg =
-        err instanceof KnowledgeApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : "Couldn't delete";
+      const msg = userFacingMessage(err);
       toast({ title: "Couldn't delete", description: msg });
     } finally {
       setDeleting(false);

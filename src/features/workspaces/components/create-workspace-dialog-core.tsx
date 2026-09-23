@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import { X } from "lucide-react";
 import { apiRequest } from "@/shared/api/api-client";
@@ -63,7 +64,7 @@ export function CreateWorkspaceDialogCore({
       reset();
       onCreated?.(workspace);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(userFacingMessage(err));
     } finally {
       setSubmitting(false);
     }

@@ -90,7 +90,7 @@ const claimed = (existing: boolean): HomeLinkClaimResult => ({
 function answer(body: unknown, ok = true) {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => ({ ok, json: async () => body }) as unknown as Response)
+    vi.fn(async () => ({ ok, status: ok ? 200 : 400, json: async () => body }) as unknown as Response)
   );
 }
 

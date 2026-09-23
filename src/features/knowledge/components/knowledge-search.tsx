@@ -8,11 +8,11 @@
  * this hits the tsvector RPC, scores by ts_rank, and matches bodies.
  */
 
+import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/shared/lib/utils";
 import { SearchField } from "@/shared/ui/search-field";
 import {
-  KnowledgeApiError,
   searchKnowledge,
   type KnowledgeSearchHit,
 } from "../client/api";
@@ -68,13 +68,7 @@ export function KnowledgeSearch({
         })
         .catch((err: unknown) => {
           if (cancelled) return;
-          setError(
-            err instanceof KnowledgeApiError
-              ? err.message
-              : err instanceof Error
-                ? err.message
-                : "Search failed"
-          );
+          setError(userFacingMessage(err));
         })
         .finally(() => {
           if (!cancelled) setLoading(false);
