@@ -240,7 +240,7 @@ describe("what the panel's composer sends", () => {
         reopen: vi.fn(),
         message: vi.fn().mockResolvedValue({ ok: false, reason: "auth-hold" }),
       },
-      ...(signIn ? { claude: { signIn } } : {}),
+      ...(signIn ? { runtimeAuth: { signIn } } : {}),
     };
     return signIn;
   }
@@ -267,7 +267,7 @@ describe("what the panel's composer sends", () => {
   });
 
   it("and NOT on a build without the op — absent, never inert", async () => {
-    // ⚠ THE DETECTION IS ON THE BRIDGE OP (`claude.signIn`), never on the wrapper
+    // ⚠ THE DETECTION IS ON THE BRIDGE OP (`runtimeAuth.signIn`), never on the wrapper
     // exported by `agents-controls.ts` — that one is always a function, so
     // `typeof` it answers true in a plain browser and paints a button that can
     // only refuse. This composer shipped that exact bug once, with `messageAgent`.
@@ -289,6 +289,8 @@ describe("what the panel's composer sends", () => {
       fireEvent.click(screen.getByRole("button", SIGN_IN));
     });
     expect(signIn).toHaveBeenCalledTimes(1);
+    // No descriptor and no stamped runtime here: the default runtime, `''` (2026-09-23).
+    expect(signIn).toHaveBeenCalledWith("");
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByRole("button", SIGN_IN)).toBeNull();
   });
@@ -305,6 +307,17 @@ describe("what the panel's composer sends", () => {
     });
     expect(screen.getByRole("alert").textContent).toBe(MESSAGE_AUTH_HELD);
     expect(screen.getByRole("button", SIGN_IN)).toBeTruthy();
+    expect(screen.getByText("Couldn't sign in")).toBeTruthy();
+  });
+
+  it("signs in the AGENT's own runtime — a held Codex agent asks for Codex", async () => {
+    const signIn = heldBridge(vi.fn().mockResolvedValue({ ok: true }))!;
+    mount(summary({ runtimeId: "codex" }));
+    await provokeNotice();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", SIGN_IN));
+    });
+    expect(signIn).toHaveBeenCalledWith("codex");
   });
 
   it("an ORDINARY refusal never grows the button — nothing here would fix it", async () => {
@@ -312,7 +325,7 @@ describe("what the panel's composer sends", () => {
     (window as { dopl?: unknown }).dopl = {
       apiRequest: vi.fn(),
       sessions: { reopen: vi.fn(), message: vi.fn().mockResolvedValue({ ok: false }) },
-      claude: { signIn: vi.fn() },
+      runtimeAuth: { signIn: vi.fn() },
     };
     mount();
     await provokeNotice();

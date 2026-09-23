@@ -405,9 +405,11 @@ test("resume is ALLOWED on the measured baseline, and the adapter's own door ope
   assert.equal(typeof launchSpec.resume, "function");
 });
 
-test("the sign-in button is HIDDEN, never grayed; the tool-search verb is MEASURED", () => {
-  assert.equal(D.credential.interactiveSignIn, null);
-  assert.equal(RT.signIn(), null, "a method whose capability is absent still EXISTS and answers null");
+test("the in-app sign-in is DECLARED (2026-09-23); the tool-search verb is MEASURED", () => {
+  // The bundled app-server's own login (`login.js`); called here it would spawn one, so only its shape.
+  assert.equal(D.credential.interactiveSignIn, true);
+  assert.equal(D.credential.reprobeOnWake, true, "a terminal `codex login` still releases a held agent");
+  assert.equal(typeof RT.signIn, "function");
   // 🔒 CXP-3A (2026-09-22, 0.155.1): MEASURED, no longer null — Codex defers every MCP tool.
   assert.equal(D.prose.toolSearchVerb, "tool_search", "the measured verb, never Claude's");
   // …and code-mode models reach the same tool through `exec`'s `ALL_TOOLS` (measured, same day).

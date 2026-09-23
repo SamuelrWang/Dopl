@@ -190,11 +190,11 @@ contextBridge.exposeInMainWorld('dopl', {
     set: (e) => ipcRenderer.invoke('orchestrator:setDirectEnabled', { enabled: e === true }),
   },
 
-  // Sign this Mac in to Claude Code: the one entry into the auth-hold recovery flow
+  // Sign this Mac in to one runtime (`''` = the default): the one entry into the auth-hold recovery flow
   // (`main/session-auth.js`). No credential crosses in either direction — main runs the OAuth in the
   // system browser. Feature-probed: absent, not inert.
-  claude: {
-    signIn: () => ipcRenderer.invoke('claude:signIn'),
+  runtimeAuth: {
+    signIn: (runtimeId) => ipcRenderer.invoke('runtime:signIn', { runtimeId: asId(runtimeId) }),
   },
 
   // The operator's OWN agents on this machine. Main resolves (channelId, taskId[, agentId]) against

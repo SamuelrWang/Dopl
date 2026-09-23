@@ -170,6 +170,8 @@ export interface LaunchDialogRuntime {
   runtimes: ReadonlyArray<RuntimeDescriptor>;
   /** Always sent; `''` only where nothing was reported. */
   selectedRuntime: string;
+  /** The descriptor behind {@link selectedRuntime}, or `null`. */
+  launchRuntime: RuntimeDescriptor | null;
   runtimeOptions: Array<{ key: string; label: string; hint?: string }>;
   modelRow: ModelRow;
   /** A report, never a control: native values ride the channel's record, not the launch. */
@@ -281,6 +283,7 @@ export function useLaunchDialogRuntime(
   return {
     runtimes,
     selectedRuntime,
+    launchRuntime: effectiveRuntime ?? null,
     runtimeOptions,
     modelRow,
     nativeLine,

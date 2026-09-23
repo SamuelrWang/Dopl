@@ -57,13 +57,6 @@ export const APP_OPS = [
   "channels.setAgentDefaults", // 2026-09-18 — the review is on `channels.applyAgentDefaults` above
   // `channels.setAutoSend` left 2026-09-06 — the removal review is on `channels.getAutoSend` above.
   "channels.setLaunchPosture",
-  // 2026-08-25: `claude.signIn`, the ONE entry into the Claude Code auth recovery flow. It takes NO
-  // PAYLOAD — the subject is the MACHINE, so the sender binding is the only guard. It exists because
-  // the detection had no remedy: `session-auth.js` had HELD sessions on a missing credential since
-  // Q6 while `startSignInFlow` / `resumeAfterSignIn` had zero production callers. NO CREDENTIAL
-  // CROSSES IT: main opens the OAuth page in the SYSTEM BROWSER and answers a bare `{ ok }`. On
-  // success it RELEASES sessions this machine is already holding.
-  "claude.signIn",
   "getAuthState",
   "onAuthState",
   "onNavigate",
@@ -86,6 +79,13 @@ export const APP_OPS = [
   "orchestratorLaunch.get",
   "orchestratorLaunch.set",
   "passwordSignIn",
+  // 2026-09-23: `runtimeAuth.signIn(runtimeId)` REPLACES `claude.signIn` (2026-08-25) — the ONE entry into
+  // a runtime's auth recovery flow, routed through the registry's `credential.signIn`. Its only input
+  // is a runtime id (`''` = the default, shape-checked at the boundary, registration checked inside),
+  // so the sender binding is still the real guard. NO CREDENTIAL CROSSES IT: main opens the OAuth page
+  // in the SYSTEM BROWSER and answers a bare `{ ok }`; on success it RELEASES that runtime's held
+  // sessions only.
+  "runtimeAuth.signIn",
   // 2026-08-22 (OQ-3): `sessions.approveIdentity` records THIS MACHINE's first-use approval of
   // ANOTHER member's identity. It starts nothing and grants nothing — it decides only whether a
   // foreign identity's TEXT may become an agent's role here, and a launch from an approved identity

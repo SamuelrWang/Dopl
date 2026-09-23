@@ -137,7 +137,9 @@
       "turn/start",
       "turn/steer",
       "turn/interrupt",
-      "model/list"
+      "model/list",
+      "account/login/start",
+      "account/login/cancel"
     ]
   }
 }

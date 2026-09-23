@@ -1,4 +1,4 @@
-// The session + window IPC ops (`sessions:*`, `threads:*`, `agents:forgetThread`, `claude:signIn`), registered
+// The session + window IPC ops (`sessions:*`, `threads:*`, `agents:forgetThread`, `runtime:signIn`), registered
 // through `channel-dir-ipc.js › register`. Every handler is sender-bound: an app-owned window's TOP frame
 // (`ipc-guards.js › isAppWindowSender`), and `appWindowOnly(...)` is written literally at each `ipcMain.handle`
 // because test/channel-ipc-sender.test.mjs reads that shape. Every refusal matches the op's bad-payload shape.
@@ -16,6 +16,9 @@ function asAgentId(value) {
 
 // The 1:1 body bound, enforced at the boundary; pinned against the preload's own cap (preload-parity.test).
 const MESSAGE_CAP = 4000;
+
+// A runtime id's shape (`''` = the default); registration is checked inside the op.
+const RUNTIME_ID_RE = /^(?:[a-z][a-z0-9-]{0,31})?$/;
 
 /** Register the ops. With no `getSenderIds` (a harness), every handler fails CLOSED. */
 function register(opts = {}) {
@@ -195,11 +198,14 @@ function register(opts = {}) {
     { ok: true, agentId: newAgentId() }
   )));
 
-  // Sign this Mac in to Claude Code, then release held sessions (body: `claude-signin-op.js`). No payload, so the
-  // sender binding is the only guard.
-  ipcMain.handle('claude:signIn', appWindowOnly('claude:signIn', { ok: false }, () => (
-    require('./claude-signin-op').signIn()
-  )));
+  // Sign this Mac in to one runtime, then release that runtime's held sessions (body: `runtime-signin-op.js`).
+  // `runtimeId` is `''` (the default runtime) or a registry-shaped id; anything else refuses before any work.
+  ipcMain.handle('runtime:signIn', appWindowOnly('runtime:signIn', { ok: false }, (_event, payload) => {
+    const raw = payload && payload.runtimeId;
+    const runtimeId = raw == null ? '' : raw;
+    if (typeof runtimeId !== 'string' || !RUNTIME_ID_RE.test(runtimeId)) return { ok: false };
+    return require('./runtime-signin-op').signIn(runtimeId);
+  }));
 
   // The pop-out thread window: three router-path strings, none trusted; the version floor applies.
   ipcMain.handle('threads:openWindow', appWindowOnly('threads:openWindow', { ok: false }, (_event, payload) => {

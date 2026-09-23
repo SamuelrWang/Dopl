@@ -1,11 +1,15 @@
 // Ambient-config isolation: `CODEX_HOME` and `CODEX_SQLITE_HOME` both point at an app-owned home with no
-// config; only the operator's `auth.json` is linked in, so `~/.codex/config.toml` never reaches the child.
+// config; only a credential enters it, so `~/.codex/config.toml` never reaches the child.
 
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
 const PRIVATE_HOME = 'codex-runtime-home-v1';
+// The in-app sign-in's throwaway home; its `auth.json` is moved into PRIVATE_HOME on success.
+const LOGIN_HOME = 'codex-login-home-v1';
+// Every Dopl-run Codex reads and writes its login as a 0600 file in its own home, never the Keychain.
+const AUTH_STORE_ARGS = Object.freeze(['-c', 'cli_auth_credentials_store="file"']);
 
 function appUserData() {
   try {
@@ -66,20 +70,33 @@ function projectTrustFence(cwd) {
   }
 }
 
-function linkAuth(source, target) {
-  if (!fs.existsSync(source)) return;
-  try {
-    const current = fs.lstatSync(target);
-    if (!current.isSymbolicLink()) {
-      throw new Error(`Dopl private Codex home contains an unexpected auth.json (${target})`);
-    }
-    if (path.resolve(fs.realpathSync(target)) === path.resolve(fs.realpathSync(source))) return;
-    // Only the app-owned link is replaced; the credential file it points at is never removed.
-    fs.unlinkSync(target);
-  } catch (err) {
-    if (err && err.code !== 'ENOENT') throw err;
+const lstatOrNull = (file) => {
+  try { return fs.lstatSync(file); } catch (err) {
+    if (err && err.code === 'ENOENT') return null;
+    throw err;
   }
-  fs.symlinkSync(source, target, 'file');
+};
+const realOrNull = (file) => {
+  try { return path.resolve(fs.realpathSync(file)); } catch (_) { return null; }
+};
+
+// Precedence: Dopl-owned auth.json (in-app sign-in) > link to the operator's auth.json > none.
+function linkAuth(source, target) {
+  const current = lstatOrNull(target);
+  if (current && current.isFile()) {
+    try { fs.chmodSync(target, 0o600); } catch (_) { /* best effort */ }
+    return;
+  }
+  if (current && !current.isSymbolicLink()) {
+    throw new Error(`Dopl private Codex home contains an unexpected auth.json (${target})`);
+  }
+  const wanted = fs.existsSync(source) ? realOrNull(source) : null;
+  if (current) {
+    if (wanted && realOrNull(target) === wanted) return;
+    // A stale or repointed link goes; the file it pointed at is never touched.
+    fs.unlinkSync(target);
+  }
+  if (wanted) fs.symlinkSync(source, target, 'file');
 }
 
 /** The app-owned CODEX_HOME a launch runs against (created by `isolatedEnv`). */
@@ -87,11 +104,38 @@ function privateHome(userDataRoot) {
   return path.join(userDataRoot || appUserData(), PRIVATE_HOME);
 }
 
+function ownerOnlyDir(dir) {
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  try { fs.chmodSync(dir, 0o700); } catch (_) { /* best effort on non-POSIX filesystems */ }
+}
+
+/** A fresh, empty login home and the env a login app-server runs with. */
+function loginEnv(env, userDataRoot) {
+  const home = path.join(userDataRoot || appUserData(), LOGIN_HOME);
+  fs.rmSync(home, { recursive: true, force: true });
+  ownerOnlyDir(home);
+  return { home, env: Object.assign({}, env || {}, { CODEX_HOME: home, CODEX_SQLITE_HOME: home }) };
+}
+
+/** Remove the login home (idempotent). */
+function clearLoginHome(userDataRoot) {
+  fs.rmSync(path.join(userDataRoot || appUserData(), LOGIN_HOME), { recursive: true, force: true, maxRetries: 3 });
+}
+
+/** Move a login's `auth.json` into the private home as the Dopl-owned credential (replacing any link). */
+function installAuth(file, userDataRoot) {
+  const st = lstatOrNull(file);
+  if (!st || !st.isFile()) throw new Error('the Codex sign-in left no credential file');
+  const target = privateHome(userDataRoot);
+  ownerOnlyDir(target);
+  fs.chmodSync(file, 0o600);
+  fs.renameSync(file, path.join(target, 'auth.json'));
+}
+
 function isolatedEnv(env, userDataRoot) {
   const input = Object.assign({}, env || {});
   const target = privateHome(userDataRoot);
-  fs.mkdirSync(target, { recursive: true, mode: 0o700 });
-  try { fs.chmodSync(target, 0o700); } catch (_) { /* best effort on non-POSIX filesystems */ }
+  ownerOnlyDir(target);
   retireCodexTrustFile(target);
   if (hasAmbientConfig(target)) {
     throw new Error(`Dopl private Codex home contains config.toml; refusing an unisolated launch (${target})`);
@@ -103,4 +147,8 @@ function isolatedEnv(env, userDataRoot) {
   return input;
 }
 
-module.exports = { isolatedEnv, privateHome, hasAmbientConfig, onlyTrustEntries, projectTrustFence, PRIVATE_HOME };
+module.exports = {
+  isolatedEnv, privateHome, hasAmbientConfig, onlyTrustEntries, projectTrustFence,
+  loginEnv, clearLoginHome, installAuth,
+  PRIVATE_HOME, LOGIN_HOME, AUTH_STORE_ARGS,
+};

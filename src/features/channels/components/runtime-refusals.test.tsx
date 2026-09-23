@@ -144,7 +144,8 @@ describe("the Stop control, against the AGENT's runtime", () => {
 
 describe("the signed-out and no-runtime copy", () => {
   it("a signed-out Codex says `Sign in to Codex`, and the Claude path still says Claude", () => {
-    expect(signInAction(realDescriptor("codex"))).toBe(null);
+    // Codex has an in-app sign-in since 2026-09-23 (`main/runtime/codex/login.js`).
+    expect(signInAction(realDescriptor("codex"))).toBe("Sign in to Codex");
     expect(signedOutLaunchCopy(realDescriptor("codex"))).toBe("Sign in to Codex to start an agent");
     expect(agentAuthHeldCopy(realDescriptor("codex"))).toBe(
       "Your agent is waiting for you to sign in to Codex."
@@ -196,11 +197,11 @@ describe("the signed-out and no-runtime copy", () => {
   });
 
   it("hide, never gray: only a runtime with a real in-app flow offers a button", () => {
-    // ⚠ CODEX AND CURSOR DECLARE `credential.interactiveSignIn: null` — their sign-in is a
-    // browser/device-code hop Dopl cannot complete inside its own window. The SENTENCE is still
-    // said; what is absent is a button that would open nothing (or, worse, the wrong runtime's).
+    // ⚠ CURSOR DECLARES `credential.interactiveSignIn: null` — its sign-in is a hop Dopl cannot
+    // drive. The SENTENCE is still said; what is absent is a button that would open nothing (or,
+    // worse, the wrong runtime's). Codex drives its bundled app-server's login since 2026-09-23.
     expect(canSignIn(realDescriptor("claude"))).toBe(true);
-    expect(canSignIn(realDescriptor("codex"))).toBe(false);
+    expect(canSignIn(realDescriptor("codex"))).toBe(true);
     expect(canSignIn(realDescriptor("cursor"))).toBe(false);
     expect(signInAction(realDescriptor("cursor"))).toBe(null);
   });

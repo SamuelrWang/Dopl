@@ -151,7 +151,7 @@ async function resumeAfterSignIn(s) {
 // ─── END SESSION-AUTH-HOLD ───────────────────────────────────────────────────
 
 // ─── BEGIN AUTH-RESUME-FAN-OUT (injectable; unit-tested via source extraction) ─
-// The in-app sign-in's fan-out (`claude-signin-op.js`), scoped by runtime (P4-06). It does not re-probe (the
+// The in-app sign-in's fan-out (each runtime's `credential.signIn`), scoped by runtime (P4-06). It does not re-probe (the
 // caller asked once), takes the list before walking it, and resumes each alone so one failure strands none.
 async function resumeHeldSessions(runtimeId) {
   const registry = deps && deps.sessions;
@@ -171,10 +171,12 @@ async function resumeHeldSessions(runtimeId) {
 }
 // ─── END AUTH-RESUME-FAN-OUT ─────────────────────────────────────────────────
 
-// A runtime with no in-app sign-in (Codex: `codex login`) re-probes its credential on the next message and
-// resumes when it is back (P4-06).
+// A runtime with no in-app sign-in, or one declaring `credential.reprobeOnWake` (its credential can come back
+// outside Dopl), re-probes on the next message and resumes when it is back (P4-06).
 function reprobesOnWake(s) {
-  return !!(s && !s.settled && s.authHold && !runtimeCopy.canSignIn(copyFor(s)));
+  if (!s || s.settled || !s.authHold) return false;
+  const d = copyFor(s);
+  return !runtimeCopy.canSignIn(d) || !!(d && d.credential && d.credential.reprobeOnWake === true);
 }
 
 async function reprobeHeld(s) {

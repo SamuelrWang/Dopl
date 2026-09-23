@@ -100,32 +100,18 @@ export interface SpaBridgeSurface {
     set(enabled: boolean): Promise<{ ok: boolean; reason?: string; enabled?: boolean }>;
   };
   /**
-   * SIGN THIS MAC IN TO CLAUDE CODE (2026-08-25) — the ONE entry into the auth
-   * recovery flow, and the reason the "waiting for you to sign in" banner is now
-   * answerable rather than merely true.
+   * SIGN THIS MAC IN TO ONE RUNTIME (`runtime:signIn`; it was `claude.signIn` until 2026-09-23) — the
+   * entry into that runtime's auth recovery flow. `runtimeId` `''` = the default runtime.
    *
-   * ⚠ A SESSION RIDES A THIRD CREDENTIAL. Not the Dopl login and not the Claude
-   * app login: the Claude Code credential held by THIS Mac. When it is missing or
-   * expired the engine HOLDS the session instead of burning it
-   * (`main/session-auth.js`), and until this op existed nothing could ever enter
-   * the remedy — re-posting was refused with `auth-hold` forever.
-   *
-   * ⚠ ITS OWN NAMESPACE, because it takes no session and no channel: one
-   * operator, one Mac, one credential.
-   * ⚠ NO CREDENTIAL CROSSES THIS BRIDGE, and none is typed into a Dopl surface —
-   * main opens the OAuth page in the SYSTEM BROWSER and collects the pasted code
-   * in its own local window.
-   * ⚠ `ok` REPORTS THE CREDENTIAL, NOT THE FLOW: it is true when this Mac can run
-   * a session afterwards, whichever tier finished. A declined dialog, a failed
-   * sign-in and a call from an unbound sender all answer `{ ok: false }` alike.
-   * ⚠ ON SUCCESS MAIN HAS ALREADY RELEASED every session it was holding
-   * (`session-auth.js › resumeHeldSessions`), so the next post reaches a live
-   * agent with no second call from here.
-   * ⚠ FEATURE-DETECT IT at the call site — an older main has no handler and a
-   * plain browser has no bridge; the button must be ABSENT, never inert.
+   * ⚠ A SESSION RIDES A THIRD CREDENTIAL: not the Dopl login and not the vendor's app login, but
+   * the runtime credential THIS Mac holds. When it is missing the engine HOLDS the session.
+   * ⚠ NO CREDENTIAL CROSSES THIS BRIDGE: main opens the OAuth page in the SYSTEM BROWSER.
+   * ⚠ `ok` REPORTS THE CREDENTIAL, NOT THE FLOW; a declined, failed or refused sign-in all answer
+   * `{ ok: false }`. On `ok` main has already released that runtime's held sessions.
+   * ⚠ FEATURE-DETECT IT at the call site — the button must be ABSENT, never inert.
    */
-  claude?: {
-    signIn(): Promise<{ ok: boolean; resumed?: number }>;
+  runtimeAuth?: {
+    signIn(runtimeId?: string): Promise<{ ok: boolean; resumed?: number }>;
   };
   /** THE OPERATOR'S OWN AGENTS — the whole namespace, declared in `./spa-bridge-sessions`.
    *  ⚠ A §1 SPLIT (2026-09-17): this file stood at EXACTLY the 500-line cap, which is the

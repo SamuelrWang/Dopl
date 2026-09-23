@@ -13,10 +13,9 @@
 //
 // ⚠ THE FIVE VENDOR-NAMED CORE MODULES HAVE NOT MOVED YET, AND THIS FILE SAYS SO RATHER THAN
 // COPYING THEM. `claude-auth.js`, `claude-resolve.js`, `claude-runtime.js`, `claude-signin-op.js`
-// and `claude-token.js` are the credential/IPC de-naming step of the port (design §4 step 6),
-// which also renames the IPC channel and its two test pins and owes `preload-parity.test.mjs` a
-// written review paragraph. That is a wire rename across preload, bridge and SPA and the design
-// says to do it alone; doing half of it here would leave the pin and the op disagreeing.
+// and `claude-token.js` are the credential de-naming step of the port (design §4 step 6). Its wire
+// half landed 2026-09-23: the IPC op is `runtime:signIn` (`main/runtime-signin-op.js`), which
+// reaches this module's `signIn` through the registry.
 //
 // ⚠ EVERY REQUIRE BELOW IS LAZY, AND THAT IS A CONTRACT, NOT A STYLE. The sign-in flow is
 // dialog-bound and the loader pulls `electron.app` at module scope; `main/runtime/index.js` must

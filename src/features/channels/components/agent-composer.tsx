@@ -10,11 +10,10 @@ import { useEffect, useRef, useState } from "react";
 import { COMPOSER_BOTTOM, ComposerInputRow } from "./composer-input";
 import { useAutoGrow } from "./use-auto-grow";
 import { cn } from "@/shared/lib/utils";
-import { TAB_ACTION } from "./bits";
 import { canMessageAgent, messageAgent } from "./agents-controls";
-import { canSignInToClaude, signInToClaude } from "./claude-signin";
+import { RuntimeSignInButton } from "./runtime-signin-button";
 import { useChannelLaunchPosture } from "../hooks/use-channel-launch-posture";
-import { agentAuthHeldCopy, canSignIn as runtimeCanSignIn, signInAction } from "../lib/runtime-copy";
+import { agentAuthHeldCopy } from "../lib/runtime-copy";
 
 /** What a refused 1:1 message says. */
 export const MESSAGE_REFUSED =
@@ -27,13 +26,6 @@ export const MESSAGE_AUTH_HELD = agentAuthHeldCopy(null);
  *  so server and first client render agree. */
 export function useCanMessageAgent(): boolean {
   const [can] = useState(() => canMessageAgent());
-  return can;
-}
-
-/** `claude.signIn` — a separate capability from {@link useCanMessageAgent} (a strictly smaller set
- *  of builds); lazy state, like its twin. */
-export function useCanSignInToClaude(): boolean {
-  const [can] = useState(() => canSignInToClaude());
   return can;
 }
 
@@ -63,13 +55,9 @@ export function AgentComposer({
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [signingIn, setSigningIn] = useState(false);
   const canSend = useCanMessageAgent();
-  // Sign-in button: bridge op AND runtime. A null descriptor (plain browser / older desktop) leaves the
-  // bridge op to decide alone; a present one with no in-app flow hides the button (INVARIANTS §11).
-  const bridgeCanSignIn = useCanSignInToClaude();
+  // The agent's own runtime decides the sign-in control (`runtime-signin-button.tsx`).
   const runtime = useChannelLaunchPosture(channelId).descriptorOf(runtimeId);
-  const canSignIn = bridgeCanSignIn && (runtime == null || runtimeCanSignIn(runtime));
   const authHeldNotice = agentAuthHeldCopy(runtime);
 
   // One instance serves every agent, so its state is keyed by the addressee; an older main (no
@@ -147,18 +135,6 @@ export function AgentComposer({
       });
   };
 
-  // Clears the notice only on `ok`: main resumes held sessions before answering
-  // (`session-auth.js › resumeHeldSessions`).
-  const signIn = () => {
-    if (signingIn) return;
-    setSigningIn(true);
-    void signInToClaude()
-      .then((res) => {
-        if (res.ok) setNotice(null);
-      })
-      .finally(() => setSigningIn(false));
-  };
-
   const label = name ? `Message ${name}` : "Message this agent";
 
   // `COMPOSER_BOTTOM` aligns this box with the channel composer beside it.
@@ -193,17 +169,13 @@ export function AgentComposer({
           <p role="alert" className="text-caption text-danger">
             {notice}
           </p>
-          {notice === authHeldNotice && canSignIn && (
-            <button
-              type="button"
-              onClick={signIn}
-              disabled={signingIn}
-              className={TAB_ACTION}
-            >
-              {/* `signInAction` is null exactly where `canSignIn` is false; the fallback guards a
-                  partial descriptor. */}
-              {signInAction(runtime) ?? "Sign in"}
-            </button>
+          {/* Clears the notice only on `ok`: main resumes held sessions before answering. */}
+          {notice === authHeldNotice && (
+            <RuntimeSignInButton
+              runtime={runtime}
+              runtimeId={runtimeId}
+              onSignedIn={() => setNotice(null)}
+            />
           )}
         </div>
       )}

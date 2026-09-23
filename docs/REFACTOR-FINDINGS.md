@@ -3087,10 +3087,12 @@ constraint moves, and nothing connects the two.
   the flow exactly once, that success is measured from the CREDENTIAL rather than reported by the
   flow, and that the sessions this Mac holds are the ones released.
 - **Resolved by WIRING ONLY — neither function was rewritten**, which was the standing constraint:
-  `main/claude-signin-op.js` (new, the body), `session-ipc-ops.js › claude:signIn` (the
-  `appWindowOnly` surface), `renderer/app-preload.js › claude.signIn`, `spa-bridge.ts ›
-  SpaBridgeSurface.claude`, `channels/components/claude-signin.ts` (the web detector + wrapper), and the
-  button on the waiting banner in `channels/components/agent-composer.tsx`. The fan-out
+  `main/claude-signin-op.js` (new, the body), the `claude:signIn` handler in `session-ipc-ops.js` (the
+  `appWindowOnly` surface), the preload's `claude.signIn` member, `SpaBridgeSurface.claude` in
+  `spa-bridge.ts`, a web detector + wrapper module, and the button on the waiting banner in
+  `channels/components/agent-composer.tsx`. (2026-09-23: the wire went runtime-generic — `runtime:signIn`,
+  the preload's `runtimeAuth.signIn`, `channels/components/runtime-signin.ts` and
+  `runtime-signin-button.tsx`; `claude-signin-op.js` is unchanged. INVARIANTS §11.) The fan-out
   (`session-auth.js › resumeHeldSessions`) is the one new behaviour and it only chooses WHICH
   sessions get the existing per-session resume. INVARIANTS §11's preload-inventory bullet carries
   the contract.

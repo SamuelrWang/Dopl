@@ -37,7 +37,7 @@ const d = (id) => registry.descriptorFor(id);
 // ── 1. THE SIGN-IN SENTENCE, PER RUNTIME ─────────────────────────────────────────────────────
 
 test("a signed-out Codex says `Sign in to Codex`; the Claude path still says Claude", () => {
-  assert.equal(copy.errorCopy(d("codex"), "runtime-signed-out").action, null, "Codex has no in-app flow — no BUTTON");
+  assert.equal(copy.errorCopy(d("codex"), "runtime-signed-out").action, "Sign in to Codex", "Codex's in-app flow (2026-09-23)");
   assert.equal(copy.heldToolDenial(d("codex")), "Sign in to Codex to continue");
   // ⚠ AND CODEX MUST NOT BE ABLE TO SAY CLAUDE ANYWHERE — the verification bar itself.
   for (const line of [
@@ -63,13 +63,14 @@ test("three runtimes, three sentences — a copy function that ignored the descr
 });
 
 test("hide, never gray: only a runtime with a real in-app flow offers an ACTION", () => {
-  // ⚠ CODEX AND CURSOR DECLARE `credential.interactiveSignIn: null` — their sign-in is a
-  // browser/device-code hop Dopl cannot complete in its own window. What is hidden is the
-  // AFFORDANCE, never the FACT: the sentence is still said, and `authHoldCopy` falls back to a
-  // POINTER so the banner never goes silent.
+  // ⚠ CURSOR DECLARES `credential.interactiveSignIn: null` — its sign-in is a hop Dopl cannot drive.
+  // What is hidden is the AFFORDANCE, never the FACT: the sentence is still said. Codex has an in-app
+  // flow since 2026-09-23 (`runtime/codex/login.js`).
   assert.equal(copy.canSignIn(d("claude")), true);
-  assert.equal(copy.canSignIn(d("codex")), false);
-  assert.match(copy.errorCopy(d("codex"), "runtime-signed-out").body, /signed in to Codex/, "…but the fact is still said");
+  assert.equal(copy.canSignIn(d("codex")), true);
+  assert.equal(copy.canSignIn(d("cursor")), false);
+  assert.equal(copy.errorCopy(d("cursor"), "runtime-signed-out").action, null);
+  assert.match(copy.errorCopy(d("cursor"), "runtime-signed-out").body, /signed in to Cursor/, "…but the fact is still said");
 });
 
 // ── 2. THE STRUCTURED ERROR CODES ────────────────────────────────────────────────────────────
@@ -99,7 +100,8 @@ test("an UNKNOWN code renders the generic arm — never a raw key, never silence
 
 test("only the signed-out code offers a sign-in, and only where one exists", () => {
   assert.equal(copy.errorCopy(d("claude"), "runtime-signed-out").action, "Sign in to Claude Code");
-  assert.equal(copy.errorCopy(d("codex"), "runtime-signed-out").action, null);
+  assert.equal(copy.errorCopy(d("codex"), "runtime-signed-out").action, "Sign in to Codex");
+  assert.equal(copy.errorCopy(d("cursor"), "runtime-signed-out").action, null, "no in-app flow — no button");
   assert.equal(copy.errorCopy(d("claude"), "runtime-crashed").action, null,
     "a crash is not fixed by signing in");
 });

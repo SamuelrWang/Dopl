@@ -64,12 +64,11 @@ export const OPS = [
   // the SERVER's cascade, so an ended agent's frozen 7-day history would outlive the thread it
   // worked. LOCAL stores only — never a `channel_message`, never a LIVE session.
   ["agents:forgetThread", { channelId: CH, taskId: "t1" }, { ok: false }],
-  // 2026-08-25: the IN-APP CLAUDE CODE SIGN-IN. Its subject is the MACHINE and it takes no payload,
-  // so there is no id-shaped rejection for the refusal to be indistinguishable FROM and THE SENDER
-  // BINDING IS THE ONLY GUARD ON IT — hence its entry in NO_BAD_PAYLOAD below. It starts no turn:
-  // the OAuth flow is completed in the operator's own browser, and success RELEASES sessions this
-  // machine already holds.
-  ["claude:signIn", undefined, { ok: false }],
+  // 2026-09-23: the IN-APP SIGN-IN, runtime-scoped (was `claude:signIn`, 2026-08-25). Its subject is
+  // the MACHINE's credential for one runtime; the payload is only that id, so the fourth slot is a
+  // malformed id, refused at the boundary before any flow module loads. It starts no turn: the OAuth
+  // flow is completed in the operator's own browser, and success RELEASES that runtime's held sessions.
+  ["runtime:signIn", { runtimeId: "codex" }, { ok: false }, { runtimeId: "../codex" }],
   ["sessions:reopen", { channelId: CH, taskId: "t1" }, { ok: false }],
   // 2026-08-18 (wiring plan Phase 5): the Agents tab's controls on the operator's OWN agent. STOP
   // verbs — `interrupt` and `end` — dispatched through main's own reducer, under the same sender
@@ -137,16 +136,13 @@ export const OPS = [
 // THE MACHINE-WIDE OPS HAVE NO BAD PAYLOAD TO REJECT, WHICH IS WHY THEY ARE LISTED HERE RATHER
 // THAN QUIETLY PASSING. `orchestrator:get/set*Enabled` take no id — `get` has no argument and
 // `set`'s bare boolean is coerced, not refused — so there is no id-shaped rejection for the refusal
-// to be indistinguishable FROM, and the sender binding is the only guard on them. `claude:signIn`
-// joined them 2026-08-25 for the same reason: corrupting a key it does not read would drive a VALID
-// call through the bad-payload arm, which for that op means popping a real native dialog inside the
-// suite. The bad-SENDER half of the loop still runs for all of them, and it is the half that matters.
+// to be indistinguishable FROM, and the sender binding is the only guard on them. The bad-SENDER half of the loop still runs for all of them, and it is the half that matters.
 export const NO_BAD_PAYLOAD = new Set([
   "orchestrator:getLaunchEnabled",
   "orchestrator:setLaunchEnabled",
   "orchestrator:getDirectEnabled",
   "orchestrator:setDirectEnabled",
-  "claude:signIn",
+  // `claude:signIn` left 2026-09-23: `runtime:signIn` carries a runtime id and has a real bad payload.
   // 2026-09-18: `channels:getAgentDefaults` reads NO payload at all — its subject is the
   // machine-user — so there is no bad one to build, and a "corrupted" call to it SUCCEEDS.
   // ⚠ `channels:setAgentDefaults` is NOT exempt and must not become so: it reads `defaults`, and a

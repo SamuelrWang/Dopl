@@ -1,9 +1,9 @@
 // P4-06 — an auth-held session is released by ITS OWN runtime's credential, never another's.
 //
-// A runtime with no in-app sign-in (Codex: the operator runs `codex login` in a terminal) had no
-// release at all: its held agent stayed held forever. Now the next message to it re-probes that
-// runtime's credential and resumes it when the probe no longer says signed out. A runtime WITH an
-// in-app sign-in (Claude) is released only by that sign-in (`claude-signin-recovery.test.mjs`).
+// A runtime whose credential can come back outside Dopl (Codex: `codex login` in a terminal; it
+// declares `credential.reprobeOnWake` beside its in-app sign-in since 2026-09-23) re-probes on the
+// next message and resumes when the probe no longer says signed out. Claude is released only by its
+// in-app sign-in (`claude-signin-recovery.test.mjs`).
 //
 // Drives the REAL `session-auth.js` and the REAL `session-reopen.js › messageByTask`, with the
 // REAL reducer behind a fake dispatch; only the credential probe is stubbed.

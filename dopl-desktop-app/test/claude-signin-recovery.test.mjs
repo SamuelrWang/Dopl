@@ -267,23 +267,28 @@ test("a flow that THROWS still re-probes — the credential may have landed anyw
 // ── 3. THE BOUNDARY: bound, delegated, and inert when refused ────────────────
 
 test("the op is registered, sender-bound, and delegates rather than inlining the body", () => {
-  assert.match(OPS_SRC, /ipcMain\.handle\('claude:signIn', appWindowOnly\('claude:signIn', \{ ok: false \}/,
+  // 2026-09-23: `claude:signIn` became `runtime:signIn`, routed through the registry — Claude's
+  // `credential.signIn` still calls THIS module, so the flow under test above is unchanged.
+  assert.match(OPS_SRC, /ipcMain\.handle\('runtime:signIn', appWindowOnly\('runtime:signIn', \{ ok: false \}/,
     "the wrapper is written LITERALLY at the site — the structural belt in " +
       "channel-ipc-sender.test.mjs reads exactly that shape");
-  assert.match(OPS_SRC, /require\('\.\/claude-signin-op'\)\.signIn\(\)/,
+  assert.match(OPS_SRC, /require\('\.\/runtime-signin-op'\)\.signIn\(runtimeId\)/,
     "the body lives in its own module (§1's cap, the session-launch-op.js precedent)");
+  assert.ok(!/claude:signIn/.test(OPS_SRC), "the Claude-only channel is gone");
   assert.ok(!/startSignInFlow/.test(OPS_SRC), "the IPC layer never drives the flow itself");
+  assert.match(readFileSync(M("runtime/claude/credential.js"), "utf8"), /require\('\.\.\/\.\.\/claude-signin-op'\)\.signIn\(\)/,
+    "Claude's registry entry still drives this op");
 });
 
 test("A REFUSED SENDER REACHES NO FLOW AT ALL — not even the require", async () => {
   // The sharpest assertion available on this op: `_ipc-harness.mjs`'s stub `require` THROWS on
-  // any id it does not know, and it does not know `./claude-signin-op`. So a refusal that
+  // any id it does not know, and it does not know `./runtime-signin-op`. So a refusal that
   // returned the right shape while still having loaded (or run) the sign-in would blow up here
   // instead of passing quietly. The op pops a NATIVE DIALOG once it starts, which is the one
   // side effect a forged call must never be able to buy.
   for (const which of ["foreign", "iframe"]) {
     const ipc = bootIpc();
-    assert.deepEqual(await ipc.handlers["claude:signIn"](ipc[which]), { ok: false }, which);
+    assert.deepEqual(await ipc.handlers["runtime:signIn"](ipc[which], { runtimeId: "claude" }), { ok: false }, which);
     assert.deepEqual(ipc.dialogs, [], `${which}: no native dialog was opened`);
   }
 });

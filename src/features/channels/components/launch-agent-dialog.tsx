@@ -14,6 +14,8 @@ import type { AgentColorKey } from "../types";
 import type { AgentLaunchControls } from "./use-agents-panel";
 import type { AgentLaunchPanel } from "./use-agent-launch";
 import { useLaunchRunner } from "./use-agent-launch-run";
+import { RuntimeSignInButton } from "./runtime-signin-button";
+import { signedOutLaunchCopy } from "../lib/runtime-copy";
 
 /** The blank-agent key: `SegmentedControl` keys are strings; maps to `identityId: null`. */
 const BLANK_IDENTITY = "";
@@ -82,6 +84,7 @@ export function LaunchAgentDialog({
   const {
     runtimes,
     selectedRuntime,
+    launchRuntime,
     runtimeOptions,
     modelRow,
     nativeLine,
@@ -242,11 +245,17 @@ export function LaunchAgentDialog({
           </p>
         )}
 
-        {/* A refusal pushes nothing, so this is the only place it is said. */}
+        {/* A refusal pushes nothing, so this is the only place it is said. A signed-out refusal
+            carries its runtime's sign-in; a sign-in that takes re-runs the launch. */}
         {newAgent?.launchError && (
-          <p role="alert" className="text-caption text-danger">
-            {newAgent.launchError}
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p role="alert" className="text-caption text-danger">
+              {newAgent.launchError}
+            </p>
+            {launchRuntime && newAgent.launchError === signedOutLaunchCopy(launchRuntime) && (
+              <RuntimeSignInButton runtime={launchRuntime} onSignedIn={runner.launch} />
+            )}
+          </div>
         )}
         {/* The agent is already running; the dialog stays open holding the report. */}
         {panel.identityError && (

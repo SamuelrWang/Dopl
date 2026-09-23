@@ -4,6 +4,7 @@
 const { spawn, execFile } = require('child_process');
 const resolveBin = require('./resolve-bin');
 const protocol = require('./protocol');
+const { AUTH_STORE_ARGS } = require('./config-home');
 
 // ── BINARY ───────────────────────────────────────────────────────────────────────────────────
 
@@ -84,7 +85,7 @@ function connect(opts) {
   // Throws now rather than hand `spawn` a bare name that fails later with an unreadable ENOENT.
   const resolved = resolveBin.resolveCodexBin();
   if (!resolved.ok) throw new Error(resolved.reason);
-  const child = spawn(resolved.path, ['app-server'].concat(o.args || []), {
+  const child = spawn(resolved.path, ['app-server'].concat(AUTH_STORE_ARGS, o.args || []), {
     cwd: o.cwd || undefined,
     env: o.env || process.env,
     stdio: ['pipe', 'pipe', 'pipe'],
