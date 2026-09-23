@@ -87,8 +87,7 @@ function bridgeActions(): LoginActions {
       ? (email, password) =>
           passwordSignIn({ mode: "sign-up", email, password }).then(toResult)
       : undefined,
-    // No magic link: `LoginActions` has no such member. Bridge op and main's
-    // `sendMagicLink` handler still exist but nothing in the UI calls them.
+    // No magic link: `LoginActions` has no such member.
     oauth: beginSignIn ? (provider) => beginSignIn(provider).then(toResult) : undefined,
     // No password recovery: it ends on the public site's /auth/reset-password
     // and has no bridge op, so the form's conditional link stays hidden.

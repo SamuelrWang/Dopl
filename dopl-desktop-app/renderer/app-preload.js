@@ -120,21 +120,14 @@ contextBridge.exposeInMainWorld('dopl', {
   // URL.
   beginSignIn: (provider) => ipcRenderer.invoke('dopl:begin-sign-in', provider === 'github' ? 'github' : 'google'),
 
-  // Native email/password + magic link — main runs the GoTrue calls (the renderer has no
-  // network). ⚠ The password crosses once, into one https request body; never stored or
-  // logged.
+  // Native email/password — main runs the GoTrue call (the renderer has no network).
+  // ⚠ The password crosses once, into one https request body; never stored or logged.
   passwordSignIn: (payload) => {
     const p = payload && typeof payload === 'object' ? payload : {};
     return ipcRenderer.invoke('dopl:password-sign-in', {
       mode: p.mode === 'sign-up' ? 'sign-up' : 'sign-in',
       email: String(p.email == null ? '' : p.email),
       password: String(p.password == null ? '' : p.password),
-    });
-  },
-  sendMagicLink: (payload) => {
-    const p = payload && typeof payload === 'object' ? payload : {};
-    return ipcRenderer.invoke('dopl:magic-link', {
-      email: String(p.email == null ? '' : p.email),
     });
   },
 

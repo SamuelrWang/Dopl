@@ -202,8 +202,8 @@ test("BRIDGE: the op is declared in ALL THREE places the preload's surface has t
   const read = (...p) => readFileSync(join(root, ...p), "utf8");
   assert.match(read("src", "shared", "lib", "spa-bridge-sessions.ts"), /answerPermission\?\(/,
     "the shared declaration has the op");
-  assert.match(read("apps", "desktop-ui", "src", "lib", "dopl-bridge.ts"), /answerPermission\?\(/,
-    "…and so does the mirror");
+  assert.match(read("apps", "desktop-ui", "src", "lib", "dopl-bridge.ts"),
+    /interface DoplBridge extends SpaBridgeSurface/, "…which the SPA's bridge type extends");
   assert.match(readFileSync(join(HERE, "..", "renderer", "app-preload.js"), "utf8"),
     /answerPermission: \(channelId, taskId, requestId, allow, agentId\) =>/,
     "…and the preload is the ground truth all three follow");

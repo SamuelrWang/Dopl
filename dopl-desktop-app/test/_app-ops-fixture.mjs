@@ -86,7 +86,6 @@ export const APP_OPS = [
   "orchestratorLaunch.get",
   "orchestratorLaunch.set",
   "passwordSignIn",
-  "sendMagicLink",
   // 2026-08-22 (OQ-3): `sessions.approveIdentity` records THIS MACHINE's first-use approval of
   // ANOTHER member's identity. It starts nothing and grants nothing — it decides only whether a
   // foreign identity's TEXT may become an agent's role here, and a launch from an approved identity
