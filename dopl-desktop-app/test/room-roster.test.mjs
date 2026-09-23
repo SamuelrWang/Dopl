@@ -1,5 +1,5 @@
 // THE ROOM ROSTER — `main/room-roster.js`, and the block it feeds
-// (`prompt-framing-identity.js › roomRosterLines`). 2026-09-18.
+// (`prompt-framing-self.js › roomRosterLines`). 2026-09-18.
 //
 // ⚠ **WHAT THESE CASES ARE ABOUT.** Samuel's rule for the wave is that the agents and recipients
 // an agent must collaborate with are *structurally conveyed* rather than searched for. The risks
@@ -13,7 +13,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const roster = require('../main/room-roster');
-const { roomRosterLines, ROSTER_MAX_CHARS } = require('../main/prompt-framing-identity');
+const { roomRosterLines, ROSTER_MAX_CHARS } = require('../main/prompt-framing-self');
 
 const SELF_USER = 'u-me';
 

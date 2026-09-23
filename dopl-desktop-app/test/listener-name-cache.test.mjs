@@ -32,7 +32,7 @@ import { dirname, join } from "node:path";
 import { fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SRC = readFileSync(join(HERE, "..", "main", "listener-identity.js"), "utf8");
+const SRC = readFileSync(join(HERE, "..", "main", "listener-people.js"), "utf8");
 
 const MAX = Number(/const MAX_CACHED_MEMBERS = (\d+);/.exec(SRC)?.[1]);
 const cacheMember = new Function(

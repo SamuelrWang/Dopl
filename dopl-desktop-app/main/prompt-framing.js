@@ -79,7 +79,7 @@ function counterpartyFraming({ authorName, authorKind, channelName } = {}) {
 // `prompt-framing-ontology.js`, `-agent-identity.js` and `-text.js` already have.
 // ⚠ RE-EXPORTED BELOW, so `prompt-framing.js` stays the import path of record and no caller or
 // suite moved.
-const { agentIdentityFraming } = require('./prompt-framing-identity');
+const { agentSelfFraming } = require('./prompt-framing-self');
 
 // ── THE CHANNEL-LEVEL AGENT (2026-08-21, Samuel's channel-agent ruling) ────────────────────
 //
@@ -386,7 +386,7 @@ function buildFencedTurn({ side, message, context, nonce } = {}) {
       ``,
       ...firstActions('requester', ctx),
       ``,
-      ...agentIdentityFraming(ctx),
+      ...agentSelfFraming(ctx),
       ``,
       ...channelScopeFraming(ctx),
       ``,
@@ -430,7 +430,7 @@ function buildFencedTurn({ side, message, context, nonce } = {}) {
     ``,
     ...firstActions('responder', ctx),
     ``,
-    ...agentIdentityFraming(ctx),
+    ...agentSelfFraming(ctx),
     ``,
     ...channelScopeFraming(ctx),
     ``,
@@ -463,7 +463,7 @@ function buildFencedTurn({ side, message, context, nonce } = {}) {
 
 module.exports = {
   counterpartyFraming,
-  agentIdentityFraming, // 2026-08-21: this agent's id + the multiplayer coordination rule
+  agentSelfFraming, // who this running agent is (id, name) and the room roster
   channelScopeFraming, // 2026-08-21: the CHANNEL-LEVEL agent's scope, delivery and loop brake
   milestoneGuidance,
   sanitizeName,

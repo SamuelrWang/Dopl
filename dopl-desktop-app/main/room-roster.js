@@ -42,7 +42,7 @@ const { agentSlug } = require('./agent-handles');
 const ROSTER_TIMEOUT_MS = 5000;
 
 /** How many of each kind the card names before it points at the tool. ⚠ The cap is what keeps
- *  the block FIXED-SIZE in a room that grows; `prompt-framing-identity.js` renders the pointer. */
+ *  the block FIXED-SIZE in a room that grows; `prompt-framing-self.js` renders the pointer. */
 const MAX_LISTED = 5;
 
 const NAME_MAX = 80; // a display name, at the bound every other prompt label uses

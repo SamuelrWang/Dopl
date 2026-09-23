@@ -117,7 +117,7 @@ function roomRosterLines(roster) {
   return withoutPeople.slice(0, 1 + (roster && roster.agents ? roster.agents.length : 0));
 }
 
-function agentIdentityFraming(ctx) {
+function agentSelfFraming(ctx) {
   const c = ctx || {};
   const mine = AGENT_ID_RE.test(String(c.agentId || '')) ? String(c.agentId) : '';
   if (!mine) return [];
@@ -134,4 +134,4 @@ function agentIdentityFraming(ctx) {
 }
 
 
-module.exports = { agentIdentityFraming, roomRosterLines, ROSTER_MAX_CHARS };
+module.exports = { agentSelfFraming, roomRosterLines, ROSTER_MAX_CHARS };

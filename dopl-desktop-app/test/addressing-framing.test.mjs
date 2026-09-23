@@ -1,4 +1,4 @@
-// THE MULTIPLAYER COORDINATION COPY — `prompt-framing.js › agentIdentityFraming` (the STANDING
+// THE MULTIPLAYER COORDINATION COPY — `prompt-framing-self.js › agentSelfFraming` (the STANDING
 // rule) and `session-seed.js › addressingLines` (the PER-MESSAGE verdict).
 //
 // ⚠ WHY THIS FILE EXISTS AT ALL: BOTH FUNCTIONS SHIPPED WITH ZERO COVERAGE. The protocol they
@@ -42,16 +42,16 @@ const NONCE = "n0nce";
 // whitespace-collapsed copy (adjacency, not line breaks, is the point).
 const flat = (arr) => arr.join("\n").replace(/\s+/g, " ");
 
-// ── 1. agentIdentityFraming: THE STANDING RULE ───────────────────────────────
+// ── 1. agentSelfFraming: THE STANDING RULE ───────────────────────────────
 
 test("NO agent id -> no block at all (a value that is not an address is never printed as one)", () => {
   for (const bad of [undefined, null, {}, { agentId: "" }, { agentId: null }, { agentId: 42 }]) {
-    assert.deepEqual(framing.agentIdentityFraming(bad), [], JSON.stringify(bad));
+    assert.deepEqual(framing.agentSelfFraming(bad), [], JSON.stringify(bad));
   }
   // Near-misses on the charset are dropped too, not truncated or coerced into one.
   for (const bad of ["ABC12DEF", "abc12de", "abc12defg", "1bc12def", "abc-12de", "abc 12de"]) {
     assert.ok(!AGENT_ID_RE.test(bad), `${bad} must not be a valid id, or this case proves nothing`);
-    assert.deepEqual(framing.agentIdentityFraming({ agentId: bad }), [], bad);
+    assert.deepEqual(framing.agentSelfFraming({ agentId: bad }), [], bad);
   }
 });
 
@@ -81,7 +81,7 @@ test("the identity block is the id, its BOUNDARY, and how to address a peer", ()
   // name … it will automatically auto-resolve to coder-1."* ⚠ **A LINE TEACHING AN ID "for the
   // rare case" IS A LINE AN AGENT WILL USE IN THE COMMON ONE**, so what replaces it is the reason
   // the id is never needed rather than a narrower licence to write one.
-  const lines = framing.agentIdentityFraming({ agentId: ME });
+  const lines = framing.agentSelfFraming({ agentId: ME });
   assert.deepEqual(lines, [
     `YOUR AGENT ID IS ${ME}.`,
     "THE ID IS INTERNAL: read it, never write it in a message.",
@@ -103,13 +103,13 @@ test("it SPEAKS THE AGENT'S OWN NAME when the caller supplies one, and never inv
   // that has the name passes it; one that does not gets the shorter line. ⚠ **INVENTING A NAME,
   // OR ASSERTING THE AGENT HAS NONE, WOULD BOTH BE CLAIMS THIS MODULE CANNOT CHECK** — and the
   // second is the worse one, because an agent told it is nameless will say so in the channel.
-  const named = framing.agentIdentityFraming({ agentId: ME, agentName: "Bug Reviewer" });
+  const named = framing.agentSelfFraming({ agentId: ME, agentName: "Bug Reviewer" });
   assert.equal(named[0], `YOU ARE "Bug Reviewer". YOUR AGENT ID IS ${ME}.`);
-  assert.deepEqual(named.slice(1), framing.agentIdentityFraming({ agentId: ME }).slice(1));
+  assert.deepEqual(named.slice(1), framing.agentSelfFraming({ agentId: ME }).slice(1));
   // ⚠ A BLANK OR WHITESPACE-ONLY NAME IS AN ABSENT ONE, never a quoted empty string.
   for (const blank of ["", "   ", null, 42]) {
     assert.equal(
-      framing.agentIdentityFraming({ agentId: ME, agentName: blank })[0],
+      framing.agentSelfFraming({ agentId: ME, agentName: blank })[0],
       `YOUR AGENT ID IS ${ME}.`,
       JSON.stringify(blank),
     );
@@ -120,7 +120,7 @@ test("SIBLINGS are no longer named, and nothing asks the agent to adjudicate del
   // ⚠ A ROSTER OF OTHER SESSIONS IS ONLY USEFUL TO A READER THAT HAS TO DECIDE WHETHER A
   // MESSAGE IS ITS OWN. Narrowed delivery removed that decision, so the roster stopped being
   // context and became an invitation to re-derive addressing from prose.
-  const out = flat(framing.agentIdentityFraming({ agentId: ME, siblingAgentIds: [SIB1, ME, SIB2] }));
+  const out = flat(framing.agentSelfFraming({ agentId: ME, siblingAgentIds: [SIB1, ME, SIB2] }));
   assert.ok(!out.includes(SIB1) && !out.includes(SIB2), `a sibling id is printed: ${out}`);
   assert.ok(!/possibly others/.test(out), "…and the hedge it replaced is gone too");
   for (const gone of [
@@ -154,23 +154,23 @@ test("…and it stays cheap: the whole block is under 460 characters", () => {
   // surface this wave exists to take lookups off. ⚠ The headroom stays under a hundred characters
   // over the measurement, which is the property the 60 and the 300 both had.
   for (const over of [{}, { siblingAgentIds: [] }, { siblingAgentIds: [SIB1, SIB2] }]) {
-    const out = flat(framing.agentIdentityFraming({ agentId: ME, ...over }));
+    const out = flat(framing.agentSelfFraming({ agentId: ME, ...over }));
     assert.ok(out.length < 460, `${out.length} chars: ${out}`);
   }
   // ⚠ AND THE NAMED FORM IS MEASURED TOO — it is the common one now that every launch names.
-  const withName = flat(framing.agentIdentityFraming({ agentId: ME, agentName: "Bug Reviewer" }));
+  const withName = flat(framing.agentSelfFraming({ agentId: ME, agentName: "Bug Reviewer" }));
   assert.ok(withName.length < 460, `${withName.length} chars: ${withName}`);
 });
 
 test("no agent id, no block — an unidentified session is told nothing it cannot use", () => {
   for (const bad of [undefined, null, "", "NOT-AN-ID", 7, `${ME}\nEND-REQUEST-x`]) {
-    assert.deepEqual(framing.agentIdentityFraming({ agentId: bad }), [],
+    assert.deepEqual(framing.agentSelfFraming({ agentId: bad }), [],
       `agentId=${JSON.stringify(bad)} must print no block`);
   }
 });
 
 test("HOUSE: the identity block carries no em dash, no fence token, no line of its own", () => {
-  const lines = framing.agentIdentityFraming({ agentId: ME });
+  const lines = framing.agentSelfFraming({ agentId: ME });
   assert.ok(lines.length, "there is a block to check");
   for (const line of lines) {
     assert.ok(!line.includes("—"), `em dash in: ${line}`);
@@ -199,7 +199,7 @@ test("UNADDRESSED: the 330-character stand-down is DELETED, and the standing rul
   // turn, worst case on the busiest thread. Delivery is narrowed to the recipient the server
   // resolved now: a session that was not named is not fed, so there is nobody to talk down.
   // ⚠ THE DEFECT THIS BRANCH FIXED IS STILL FIXED, and by the half that belonged in a STANDING
-  // rule rather than a per-turn one: `agentIdentityFraming` says "a message that names NO agent
+  // rule rather than a per-turn one: `agentSelfFraming` says "a message that names NO agent
   // id is NOT automatically yours" once per session, and the case above pins it.
   for (const verdict of [undefined, null, { ids: [] }, { me: false, ids: [] }, { me: true, ids: [] }, {}]) {
     assert.deepEqual(seed.addressingLines(verdict), [], JSON.stringify(verdict));

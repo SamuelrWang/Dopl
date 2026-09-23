@@ -27,7 +27,7 @@ const { fetchWithAuthRepair, discardBody } = require('./api-repair');
 const budget = require('./listener-budget'); // poll budgets + what an abort means (split 2026-08-30)
 const { API_BASE, LISTENER, REALTIME } = require('./config');
 const { diag } = require('./diag');
-const identity = require('./listener-identity'); // who the operator is + who the peers are (split 2026-09-22)
+const people = require('./listener-people'); // who the operator is + who the peers are
 
 const store = new Store();
 // ⚠ THE DISPLAY-NAME / AVATAR CACHES AND THEIR NAMED BOUND LEFT FOR `listener-identity.js` ON
@@ -433,10 +433,10 @@ module.exports = {
   listWorkspaces,
   listChannels,
   listChannelsWithRetry,
-  // The four below are listener-identity.js's OWN function objects, never re-spellings (the
+  // The four below are listener-people.js's OWN function objects, never re-spellings (the
   // property test/module-split-identity.test.mjs pins): one instance of the two member caches.
-  resolveIdentity: identity.resolveIdentity,
-  displayNameFor: identity.displayNameFor,
-  avatarUrlFor: identity.avatarUrlFor,
-  refreshNameCache: identity.refreshNameCache,
+  resolveOperatorUserId: people.resolveOperatorUserId,
+  displayNameFor: people.displayNameFor,
+  avatarUrlFor: people.avatarUrlFor,
+  refreshNameCache: people.refreshNameCache,
 };

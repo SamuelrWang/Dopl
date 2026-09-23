@@ -276,7 +276,7 @@ async function reconcileInner() {
   // H2: resolve the operator identity before any loop can evaluate classify().
   if (!myUserId) {
     const firstWs = desired.size ? desired.values().next().value.workspaceId : undefined;
-    myUserId = await io.resolveIdentity(firstWs);
+    myUserId = await io.resolveOperatorUserId(firstWs);
     // Item 1: hand the operator identity to the engine so the self avatar resolves.
     sessionEngine.setSelfIdentity(myUserId);
   }

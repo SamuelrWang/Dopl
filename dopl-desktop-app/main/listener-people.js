@@ -73,7 +73,7 @@ function cacheMember(cache, userId, value) {
 // works for BOTH deep-link sessions (stored JWT) and cookie-only web sign-ins
 // (H2): (1) stored session blob, (2) the Supabase auth cookie's JWT `sub`,
 // (3) the /api/workspaces/me whoami endpoint as a last resort.
-async function resolveIdentity(preferWorkspaceId) {
+async function resolveOperatorUserId(preferWorkspaceId) {
   let id = auth.getUserId();
   diag('identity tier1 (stored blob):', id ? 'hit' : 'miss');
   if (!id) {
@@ -152,7 +152,7 @@ async function refreshNameCache(ws) {
 }
 
 module.exports = {
-  resolveIdentity,
+  resolveOperatorUserId,
   displayNameFor,
   avatarUrlFor,
   refreshNameCache,

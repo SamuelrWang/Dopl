@@ -29,7 +29,7 @@ import { fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
-const IDENTITY = M("listener-identity.js");
+const IDENTITY = M("listener-people.js");
 const LISTENER = M("channel-listener.js");
 const CONTEXT = M("channel-context.js");
 
