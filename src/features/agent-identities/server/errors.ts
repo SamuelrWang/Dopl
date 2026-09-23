@@ -6,21 +6,10 @@ import "server-only";
 /**
  * ⚠ ONE ERROR FOR "no such row" AND "not visible to you" — the 404-never-403
  * rule, so an id cannot be probed.
- *
- * ⚠ `elsewhere` IS THE ONE OPTIONAL FACT, AND IT DOES NOT REOPEN THAT (T35).
- * It is set only where the ref names an identity the CALLER could already list
- * for themselves — their own row, or a `workspace`-visible one, in a workspace
- * they are an active member of — that lives in a DIFFERENT tenancy than the one
- * asked in. `null` therefore still covers both original meanings, and a
- * stranger's private identity produces `null` in every workspace.
- * `service-resolve-ref.ts › classifyMissingIdentityRef` is the only producer.
  */
 export class AgentIdentityNotFoundError extends Error {
   readonly code = "AGENT_IDENTITY_NOT_FOUND";
-  constructor(
-    identifier: string,
-    readonly elsewhere: { name: string; label: string } | null = null
-  ) {
+  constructor(identifier: string) {
     super(`Agent identity not found: ${identifier}`);
     this.name = "AgentIdentityNotFoundError";
   }

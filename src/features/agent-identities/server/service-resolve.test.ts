@@ -299,7 +299,6 @@ describe("the payload, and the door it comes through", () => {
     mockTenancy.resolveResource.mockResolvedValue(null);
     const err = await resolveIdentityForLaunch(ctx(), "tpl-1").catch((e) => e);
     expect(err).toBeInstanceOf(AgentIdentityNotFoundError);
-    expect((err as AgentIdentityNotFoundError).elsewhere).toBeNull();
   });
 
   it("asks with the CALLER'S OWN CONTEXT, so the container LOCK reaches the fence", async () => {
@@ -341,19 +340,6 @@ describe("the payload, and the door it comes through", () => {
 // PRESENCE of a `details` key must not itself be a fact about a row the caller
 // may not see. `HttpError.toResponseBody` omits `undefined` details.
 describe("the 404 the desktop reads", () => {
-  it("carries `details.elsewhere` when the miss was accounted for", () => {
-    const http = mapAgentIdentityError(
-      new AgentIdentityNotFoundError("tpl-1", {
-        name: "Code Auditor",
-        label: "your personal shelf",
-      })
-    );
-    expect(http?.status).toBe(404);
-    expect(http?.details).toEqual({
-      elsewhere: { name: "Code Auditor", label: "your personal shelf" },
-    });
-  });
-
   it("carries no details at all for an ordinary miss", () => {
     const http = mapAgentIdentityError(new AgentIdentityNotFoundError("tpl-1"));
     expect(http?.status).toBe(404);
