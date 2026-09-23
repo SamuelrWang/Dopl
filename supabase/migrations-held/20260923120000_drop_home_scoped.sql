@@ -61,6 +61,7 @@
 DO $$
 DECLARE
   stranded BIGINT;
+  tbl TEXT;
 BEGIN
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
@@ -82,25 +83,28 @@ BEGIN
     END IF;
   END IF;
 
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-     WHERE table_schema = 'public' AND table_name = 'agent_identities'
-       AND column_name = 'home_scoped'
-  ) THEN
-    EXECUTE $q$
-      SELECT count(*) FROM public.agent_identities t
-       WHERE t.home_scoped IS TRUE
-         AND NOT EXISTS (
-           SELECT 1 FROM public.workspaces p
-            WHERE p.id = t.workspace_id AND p.kind = 'personal'
-         )
-    $q$ INTO stranded;
-    IF stranded > 0 THEN
-      RAISE EXCEPTION
-        'drop_home_scoped: % agent_identities still carry home_scoped=true outside a personal container. See the knowledge_bases branch above for the remedy.',
-        stranded;
+  -- Either name: this file sorts before 20261019's agent_templates -> agent_identities rename.
+  FOREACH tbl IN ARRAY ARRAY['agent_templates', 'agent_identities'] LOOP
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = tbl
+         AND column_name = 'home_scoped'
+    ) THEN
+      EXECUTE format($q$
+        SELECT count(*) FROM public.%I t
+         WHERE t.home_scoped IS TRUE
+           AND NOT EXISTS (
+             SELECT 1 FROM public.workspaces p
+              WHERE p.id = t.workspace_id AND p.kind = 'personal'
+           )
+      $q$, tbl) INTO stranded;
+      IF stranded > 0 THEN
+        RAISE EXCEPTION
+          'drop_home_scoped: % % rows still carry home_scoped=true outside a personal container. See the knowledge_bases branch above for the remedy.',
+          stranded, tbl;
+      END IF;
     END IF;
-  END IF;
+  END LOOP;
 END $$;
 
 -- ── 2. The column ───────────────────────────────────────────────────────────
@@ -109,5 +113,6 @@ END $$;
 -- added the column rather than assumed: both say "NO INDEX, AND THE REASON IS
 -- THE READ SHAPE" in as many words. A `DROP COLUMN` cascade would have taken one
 -- silently, which is why this is stated instead of left to the reader.
-ALTER TABLE public.knowledge_bases DROP COLUMN IF EXISTS home_scoped;
-ALTER TABLE public.agent_identities DROP COLUMN IF EXISTS home_scoped;
+ALTER TABLE IF EXISTS public.knowledge_bases DROP COLUMN IF EXISTS home_scoped;
+ALTER TABLE IF EXISTS public.agent_templates DROP COLUMN IF EXISTS home_scoped;
+ALTER TABLE IF EXISTS public.agent_identities DROP COLUMN IF EXISTS home_scoped;
