@@ -4,7 +4,6 @@
 // refuses one that cannot — so, unlike the posture, peer wakes and resumes may inherit it.
 // Fail-closed means the DEFAULT runtime (`''`), never a refusal that would strand the channel.
 
-const { diag } = require('./diag');
 const runtimeRegistry = require('./runtime');
 
 // Lazy: channel-prefs opens an electron-store at load, and plain-node callers must keep working.
