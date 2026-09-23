@@ -61,7 +61,11 @@ function turnInFlight(state) {
  * widening withdrawn on a session nobody had made private. The remaining over-cover for a
  * NON-private turn in flight stands: the alternative failure is a private answer posted in public.
  */
-function openPrivateTurn(s, wasInFlight) {
+// A push into a running turn that the runtime may JOIN to it, remembered by its framed text so the
+// join can pay back the unit opened for the push's own turn. Bounded; stale entries go oldest-first.
+const PRIVATE_JOIN_MAX = 16;
+
+function openPrivateTurn(s, wasInFlight, prompt) {
   if (!s) return 0;
   // THE WINDOW IS OPENED AFTER THE DISPATCH SINCE 2026-08-31, AND `wasInFlight` IS WHAT MAKES THAT
   // POSSIBLE (F-372). A `steer` at a PARKED session makes the reducer emit `resumeQuery` BEFORE
@@ -76,7 +80,27 @@ function openPrivateTurn(s, wasInFlight) {
   const inFlight = wasInFlight === undefined ? turnInFlight(s.state) : wasInFlight === true;
   const add = (inFlight && !isPrivateTurn(s)) ? 2 : 1;
   s.privateDepth = (Number(s.privateDepth) || 0) + add;
+  if (inFlight && typeof prompt === 'string' && prompt) {
+    const list = Array.isArray(s.privateJoinable) ? s.privateJoinable : [];
+    list.push(prompt);
+    while (list.length > PRIVATE_JOIN_MAX) list.shift();
+    s.privateJoinable = list;
+  }
   return s.privateDepth;
+}
+
+/**
+ * The runtime JOINED a push into the running turn (Codex `turn/steer`, Claude's mid-turn fold), so
+ * one `result` answers both and the unit opened for the push's own turn is paid back — else the next
+ * channel turn runs with the out half withdrawn. Either order against that `result` pays back one.
+ */
+function privatePushJoined(s, pushedText) {
+  const list = s && Array.isArray(s.privateJoinable) ? s.privateJoinable : [];
+  const text = typeof pushedText === 'string' ? pushedText : '';
+  const i = text ? list.findIndex((p) => text.includes(p)) : -1;
+  if (i === -1) return Number((s && s.privateDepth) || 0);
+  list.splice(i, 1);
+  return closePrivateTurn(s);
 }
 
 /**
@@ -88,6 +112,7 @@ function openPrivateTurn(s, wasInFlight) {
 function resetPrivateTurn(s) {
   if (!s) return 0;
   s.privateDepth = 0;
+  s.privateJoinable = null;
   return 0;
 }
 
@@ -100,6 +125,7 @@ function closePrivateTurn(s) {
   if (!s) return 0;
   const next = (Number(s.privateDepth) || 0) - 1;
   s.privateDepth = next > 0 ? next : 0;
+  if (!s.privateDepth) s.privateJoinable = null; // no private turn left for a join to belong to
   return s.privateDepth;
 }
 
@@ -297,6 +323,7 @@ function pickForSession(s, axis, asked, pinned) {
 module.exports = {
   turnInFlight,
   openPrivateTurn,
+  privatePushJoined,
   closePrivateTurn,
   resetPrivateTurn, // 2026-08-22: a torn-down query owes no results — the window closes with it
   isPrivateTurn,

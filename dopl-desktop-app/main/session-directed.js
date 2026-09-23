@@ -257,8 +257,11 @@ function observe(s, event) {
   report(closeDirected(s));
 }
 
-/** AN ADAPTER'S HOOK — the runtime joined a push into the running turn. See `noteSteerJoined`. */
+/** AN ADAPTER'S HOOK — the runtime joined a push into the running turn: the private window and the
+ *  directed capture it opened each pay back the push's own turn. Lazy: `session-private` reaches the
+ *  runtime registry, which requires this module. */
 function steerJoined(s, pushedText) {
+  require('./session-private').privatePushJoined(s, pushedText);
   report(noteSteerJoined(s, pushedText));
 }
 

@@ -421,7 +421,7 @@ function messageByTask(a) {
       priority: 'next',
     });
     // 🔒 AFTER THE DISPATCH (F-372) — a wake RESETS both windows. See `openPrivateTurn`.
-    privateTurn.openPrivateTurn(s, inFlight);
+    privateTurn.openPrivateTurn(s, inFlight, framed);
     // ⚠ `framed` rides along so a runtime whose steer JOINS the live turn can say so (CXP-3B).
     if (directed) directedTurn.armAndOpen(s, directed, inFlight, framed);
   } catch (_) {
