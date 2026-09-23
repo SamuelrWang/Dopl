@@ -47,7 +47,7 @@ quoted from the profiler's own output.
 | narration flush | `main/session-narration.js › flush`, `sendToWindows` | `webContents.send('dopl:session-narration', {sessionKey, entries})` — **the whole ring**, per dirty session, per live window, ≤5 Hz |
 | summary flush | `main/session-summary.js › flush`, `sendToWindows` | `webContents.send('dopl:sessions', {sessions})` — **full snapshot of every row**, per live window, ≤5 Hz |
 | preload → SPA | `dopl-desktop-app/renderer/app-preload.js` (`SESSIONS_EVENT`, `NARRATION_EVENT`) | one shared `ipcRenderer.on` fanned to page callbacks |
-| SPA | `apps/desktop-ui/src/lib/dopl-bridge.ts › sessions.onSummaries`, consumed in `apps/desktop-ui/src/pages/agent-window/index.tsx` | full-list replace |
+| SPA | `src/shared/lib/spa-bridge-sessions.ts › onSummaries` (the SPA's `dopl-bridge.ts` type extends the shared surface since 2026-09-23), consumed in `apps/desktop-ui/src/pages/agent-window/index.tsx` | full-list replace |
 
 **Copies of one output token before React sees it:** 4 — (1) pipe buffer → JS string in the
 SDK, (2) `JSON.parse` into an SDK message, (3) normalize into a CoreEvent + ring entry,
@@ -276,12 +276,12 @@ change**, then **measure** before deciding whether step 3 is worth its risk.
 
 ## 4. Prototype — before / after
 
-Shipped behind a kill switch: **`DOPL_NAMES_CACHE=0` restores the old behaviour.**
-Default is ON. **One file: `main/agent-names.js`.**
+The switch that shipped with it (`DOPL_NAMES_CACHE=0`) was deleted once measured (P4-29,
+2026-09-23); the cache is unconditional. **One file: `main/agent-names.js`.**
 
 3 live agents, same harness, same store copies:
 
-| ended records | before (`DOPL_NAMES_CACHE=0`) | after | speedup |
+| ended records | before | after | speedup |
 |---|---|---|---|
 | 65 (today) | 137 reads, 30.5 ms/flush, **15.2%** core | **2 reads, 0.3 ms, 0.1%** | ~100× |
 | 100 | 207 reads, 52.5 ms/flush, **26.2%** core | **2 reads, 0.7 ms, 0.3%** | ~75× |

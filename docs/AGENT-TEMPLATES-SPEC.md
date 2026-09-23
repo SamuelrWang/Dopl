@@ -125,7 +125,7 @@ Everything below is unbuilt.
 
 | surface | anchor | payload |
 |---|---|---|
-| Agents tab "New Agent" button | `channels/components/agents-tab.tsx › launchRow` | `use-agents-panel.ts › launchAgent(threadId)` |
+| Agents tab "New Agent" button | `channels/components/agents-tab.tsx › launchRow` | `use-launch-controls.ts › useLaunchControls` (its `launchAgent(threadId)`; moved out of `use-agents-panel.ts` 2026-09-23) |
 | Composer Bot icon | `channels/components/composer.tsx › ChannelsComposer` | same object, handed down — never a second `useAgentsPanel` mount |
 
 Both funnel through `agents-controls.ts › launchAgentOnThread` → `window.dopl.sessions.launch`.
@@ -194,7 +194,7 @@ Layer-by-layer cost, measured:
 | layer | anchor | change |
 |---|---|---|
 | SPA producer | `agents-controls.ts › launchAgentOnThread` | add `identityId` to the payload type + pass-through |
-| bridge type (desktop-ui) | `apps/desktop-ui/src/lib/dopl-bridge.ts › sessions.launch` | add `identityId?: string \| null` |
+| bridge type (desktop-ui) | `src/shared/lib/spa-bridge-sessions.ts › launch` (since 2026-09-23 `apps/desktop-ui/src/lib/dopl-bridge.ts › DoplBridge` extends the shared surface and declares no `sessions` of its own) | add `identityId?: string \| null` |
 | bridge type (shared) | `src/shared/lib/spa-bridge.ts › sessions.launch` | same declaration |
 | preload | `renderer/app-preload.js › sessions.launch` | **none** — this op forwards the payload raw, the only one that does |
 | IPC handler | `main/session-ipc-ops.js › sessions:launch` | **validate** `isUuid(p.identityId) ? p.identityId : null` |
@@ -243,27 +243,28 @@ Resolve budget: **`IDENTITY_RESOLVE_TIMEOUT_MS = 5000`**, not `launch-directives
 |---|---|---|---|
 | F-1 | template **deleted** between select and spawn → `404` | **REFUSE.** `{ ok: false, reason: 'no-identity' }` | The operator picked an identity. A blank agent silently wearing no identity is worse than nothing, and the operator will not notice for several turns. |
 | F-2 | template **invisible** to the operator (§3e cross-credential case) → `404` | **REFUSE**, same word | The endpoint deliberately cannot distinguish deleted from invisible (404-never-403). The desktop must not try to. |
-| F-3 | resolve **timeout / network** (`status === 0`) | **REFUSE** with the existing word **`busy`** | `busy` renders as *"Busy right now — try again"* (`use-agents-panel.ts › LAUNCH_REFUSALS`) — exactly right for a momentary inability. No new word needed. |
+| F-3 | resolve **timeout / network** (`status === 0`) | **REFUSE** with the existing word **`busy`** | `busy` renders as *"Busy right now — try again"* (`use-launch-controls.ts › LAUNCH_REFUSALS`) — exactly right for a momentary inability. No new word needed. |
 | F-4 | resolve **5xx** | **REFUSE** with `busy` | same class |
-| F-5 | template's `model` unknown to `session-model.js`'s frozen list | **DEGRADE, and say so** | See below. |
+| F-5 | template's `model` unknown to the frozen model list (`main/runtime/claude/model-table.js › MODEL_IDS` since 2026-09-23) | **DEGRADE, and say so** | See below. |
 | F-6 | resolve returns `200` with `instructions: null`, `fields: []`, `knowledgeBases: []` | **LAUNCH.** A name-only template is legal — the role block emits the identity line and nothing else | An empty template is a real configuration, not an error |
 
 **The refusal wire word.** `no-identity` is a **seventh** member of a closed six-word vocabulary
 (`cap`, `busy`, `no-sdk`, `auth-hold`, `no-bridge`, `no-counterparty`), stated in four places:
 
 - `main/launch-directive-wire.js › REFUSAL_REASONS`
-- `src/features/channels/server/service-launch.ts › LAUNCH_REFUSAL_REASONS`
+- `src/features/channels/schema-launch-modes.ts › LAUNCH_REFUSAL_REASONS` (the one server declaration; the `service-launch.ts` copy is deleted)
 - `src/features/channels/schema-launch.ts › LaunchRefusalReasonSchema`
 - the `channel_launch_directives_refusal_reason_check` column CHECK (new migration, §3e)
 
-Plus copy in `use-agents-panel.ts › LAUNCH_REFUSALS` and a sentence in
+Plus copy in `use-launch-controls.ts › LAUNCH_REFUSALS` and a sentence in
 `packages/mcp-server/src/tools/channel-ops-launch.ts › RETRY_ADVICE` (⚠ the per-reason SENTENCES it replaced on 2026-09-02 are now in `channel-doctrine.ts`; the launch result renders the reason KEY plus a retry verdict).
 **Six files. Budget it.** On the button lane, `launchRefusalText` already falls back gracefully,
 so the SPA half is one line: `"no-identity": "That template is gone — reload the list"`.
 
 **F-5, the model fallback, in detail.** ⚠ **REWRITTEN 2026-08-23 (F-285) — THE MECHANISM BELOW
-CHANGED UNDER THIS PARAGRAPH.** Each link of the chain is now `session-model.js › chainModel`,
-which answers the alias a value asks for **or `''` meaning THE CHAIN CONTINUES**; `aliasForModelId`
+CHANGED UNDER THIS PARAGRAPH.** Each link of the chain was then `chainModel` (in the session-model module),
+which answered the alias a value asks for **or `''` meaning THE CHAIN CONTINUES** (since 2026-09-23 the link is
+`main/runtime/selection-vocabulary.js › pickOf`: `''` and `'default'` are no pick, anything else is the pick as given); `aliasForModelId`
 (full ids ONLY) is no longer what a caller-supplied model passes through, because an orchestrator
 writing a legitimate alias such as `opus` was collapsed to `'default'` and had the template's AND
 the channel's picks discarded. The whole tree's rule is still *unknown model
@@ -278,7 +279,7 @@ But do not let it lie. Two mitigations:
 - The operator-only `model` telemetry column already reports the truth
   (`collab-dto.ts › mapOwnSessionStateRow`), so the operator can see the divergence.
 
-> ⚠ `channel-schema.ts › model` (the `model` param on `launch_agent`) says *"An id this machine does
+> ⚠ The `model` param on `launch_agent` (then in `channel-schema.ts`; today `channel-schema-launch-fields.ts › LAUNCH_INPUT_FIELDS`) said *"An id this machine does
 > not recognize is the DESKTOP's to refuse, not this tool's."* The desktop **does not refuse** —
 > it falls back. **UNKNOWN / doc-vs-code disagreement, pre-existing.** This spec does not change
 > the behaviour; it recommends correcting the sentence.
@@ -287,7 +288,7 @@ But do not let it lie. Two mitigations:
 
 #### Where template content enters: **the framing. Not `systemPrompt`.**
 
-Measured: `main/session-query.js › buildSdkOptions` passes
+Measured: `buildSdkOptions` (then in `main/session-query.js`; today `main/runtime/claude/launch-spec.js › buildOptions`) passes
 `cwd, allowedTools, disallowedTools, mcpServers, settingSources: [], permissionMode, env,
 canUseTool, abortController, includePartialMessages` + conditional `tools,
 pathToClaudeCodeExecutable, model, resume`. **`systemPrompt` is not passed and does not appear
@@ -551,9 +552,10 @@ answers `''` for anything it cannot honour, so an unrecognised value FALLS THROU
 link rather than ending the chain at `'default'`. That is what
 `packages/mcp-server/src/tools/channel-schema.ts › CHANNEL_INPUT_SHAPE`'s `model` describe string
 promises the orchestrator in so many words. The existing coercion points are unchanged and none is
-removed; `session-model.js › modelArg` is still the last gate before argv, called from
-`runtime/claude/launch-spec.js › buildOptions` — the option assembly moved to the runtime
-adapter on 2026-08-31 and the coercion travelled with it, unchanged.
+removed; the session-model module's `modelArg` was the last gate before argv. That module is deleted since
+2026-09-23: the gate is the adapter's own `runtime/claude/models.js › launchArg` (over `› resolveLaunchModel`),
+called from `runtime/claude/launch-spec.js › buildOptions` — the option assembly moved to the runtime
+adapter on 2026-08-31 and the coercion travelled with it.
 
 ### 3d. Spawn-idle interplay
 
@@ -762,7 +764,7 @@ row exists. This argument does not depend on the telemetry ruling at all.
 
 **Where the operator sees it:** the agent card's existing chip row, beside the model chip; and
 the `sessionBlockLines` telemetry block returned on every workspace-wide `await` hold
-(`channel-session-render.ts › sessionBlockLines`), which is already operator-scoped.
+(`channel-session-table.ts › sessionBlockLines`), which is already operator-scoped.
 
 ---
 
@@ -814,7 +816,7 @@ read as a procedure; a shared template is **standing configuration for an autono
    only.** One modal, the first time a given foreign template is launched **on this machine**,
    showing `instructions` verbatim with `[Cancel] [Run as this]`. Stored machine-locally in the
    desktop's `electron-store`, alongside `orchestratorLaunchEnabled` — **never server-reachable**,
-   for exactly the reason `channel-prefs.js › ORCHESTRATOR_LAUNCH_KEY` gives for that toggle: a server-writable
+   for exactly the reason `orchestrator-consent.js › ORCHESTRATOR_LAUNCH_KEY` gives for that toggle: a server-writable
    version lets a credential-holding agent pre-approve itself across the fleet.
 
    **On the directive lane there is no human at the keyboard, and the answer is already written
@@ -855,7 +857,7 @@ Inert until Phase 2: a `sessions.launch` with no `identityId` behaves byte-ident
 - `main/prompt-framing.js › buildFencedTurn` — one splice, two lines
 - `src/features/agent-identities/server/service-reads.ts` + `resolve/route.ts` — add
   `authoredByCaller` (**G-1**)
-- `spa-bridge.ts › sessions.launch`, `dopl-bridge.ts › sessions.launch`,
+- `spa-bridge.ts › sessions.launch` (the desktop-ui `dopl-bridge.ts` type inherits it since 2026-09-23),
   `agents-controls.ts › launchAgentOnThread` — payload field
 - The `no-identity` refusal word, **six files** (§3b)
 
@@ -876,7 +878,7 @@ Inert until Phase 2: a `sessions.launch` with no `identityId` behaves byte-ident
 **New:** `features/agent-identities/components/identity-picker.tsx`,
 `…/launch-sheet.tsx`.
 **Changed:** `channels/components/agents-tab.tsx › launchRow`, `channels/components/composer.tsx › ChannelsComposer`,
-`use-agents-panel.ts › launchAgent` signature (`threadId, identityId?, overrides?`),
+`use-launch-controls.ts › LaunchAgentCall` (the `launchAgent` signature: `threadId, identityId?, overrides?`, …),
 `agents-controls.ts › launchAgentOnThread`.
 
 **Tests:** `identity-picker.test.tsx` (blank-first, grouping, search threshold at 8, model chip,

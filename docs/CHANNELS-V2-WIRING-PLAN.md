@@ -374,8 +374,9 @@ end live on the AGENT.
   MAPPING — `spa-bridge.ts › DesktopSessionSummary` over
   `sessions.summaries` / `sessions.onSummaries`, widened with the context/token numbers the
   mock draws. Those numbers already exist inside the desktop:
-  `main/session-model.js › promptTokens` / `› contextEvent` compute them for the session
-  window; `main/session-summary.js › liveSummary` / `› endedSummary` is where they join the
+  `promptTokens` / `contextEvent` in the session-model module computed them for the session
+  window (that module is deleted since 2026-09-23: `main/runtime/claude/model-table.js › promptTokens`,
+  and the gauge is read by `main/session-metrics.js › metrics`); `main/session-summary.js › liveSummary` / `› endedSummary` is where they join the
   wire.
 - ⚠ **THREE PLACES MUST STAY IN SYNC** for that widening, and the file says so:
   `src/shared/lib/spa-bridge.ts › DesktopSessionSummary`,
