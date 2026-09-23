@@ -1,16 +1,14 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { FormDialog, FormSection } from "@/shared/ui/form-dialog";
-import { agentIdentityErrorMessage } from "@/features/agent-identities/client/api";
-import { useAgentIdentityWrites } from "@/features/agent-identities/hooks/use-agent-identity-writes";
-import { BaseNode, type ScopeToggle } from "@/features/agent-identities/components/knowledge-scope-tree";
+import { KnowledgeScopePicker } from "@/features/agent-identities/components/knowledge-scope-picker";
+import { useAttachableBases } from "@/features/agent-identities/hooks/use-attachable-bases";
+import { useIdentitySave } from "@/features/agent-identities/hooks/use-identity-save";
+import { draftFromIdentity } from "@/features/agent-identities/lib/identity-draft";
 import {
   EMPTY_KNOWLEDGE,
   refKey,
-  refToScope,
-  sameScopes,
   scopeChipLabel,
 } from "@/features/agent-identities/lib/knowledge-scopes";
-import { useKnowledgeBaseList } from "@/features/knowledge/client/hooks";
 import type {
   AgentIdentity,
   IdentityKnowledgeRef,
@@ -31,19 +29,16 @@ import type {
  * A per-click attachment would be a fourth place knowledge can come from and the
  * only one nothing can read back.
  *
- * ⚠ **THE TREE IS `knowledge-scope-tree.tsx`'s, UNFORKED**, and so is the
- * add-or-remove-plus-prune rule the toggle applies: two rows where one suffices
- * renders the same attachment twice, and the redundant one survives when the
- * operator unchecks the ancestor. The one thing this surface does NOT reuse is
- * `knowledge-scope-picker.tsx` itself — that control is chips plus a POPOVER
- * anchored to an Add button, and Samuel asked for a popup on the kit's form
- * recipe with the selection rendered as bars.
+ * ⚠ **THE PICKER AND THE SAVE ARE THE EDITOR'S, UNFORKED** (P9-02/03):
+ * `knowledge-scope-picker.tsx` (tree, prune, keyboard) with its selection drawn
+ * as bars, and `use-identity-save.ts` (empty-patch skip, optimistic row, the
+ * version precondition, the 412 sentence).
  *
- * ⚠ **ONE SHELF, ONE CACHE ENTRY.** The write is `useAgentIdentityWrites(
- * homeWorkspaceId, "home")`, which MUST match the shelf the PERSONAL section's
- * read was mounted with (`identity-panels.tsx › HOME_SHELF`) — a mismatch patches a
- * key nobody is subscribed to and the save silently does not appear (F-331 with
- * the shelf as the axis).
+ * ⚠ **ONE SHELF, ONE CACHE ENTRY.** The save is keyed `(homeWorkspaceId, "home")`,
+ * which MUST match the shelf the PERSONAL section's read was mounted with
+ * (`identity-panels.tsx › HOME_SHELF`) — a mismatch patches a key nobody is
+ * subscribed to and the save silently does not appear (F-331 with the shelf as
+ * the axis).
  */
 
 /** One attachment, as a WHITE BAR — the face Samuel named, and the only thing
@@ -112,8 +107,7 @@ export function IdentityKnowledgeDialog({
   workspaceId,
   onClose,
 }: {
-  /** The row being attached to. ⚠ Its `workspaceId` is where its BASES are read
-   *  from — a personal identity's knowledge lives in the same home workspace. */
+  /** The row being attached to. */
   identity: AgentIdentity;
   /** The home workspace the PERSONAL list was read from, so the patch lands on
    *  the entry that list is subscribed to. */
@@ -121,78 +115,17 @@ export function IdentityKnowledgeDialog({
   onClose: () => void;
 }) {
   // ⚠ §8's STALE-CACHE FALLBACK, SPELLED INLINE at the read: `knowledge` was
-  // added to an already-persisted payload, so an entry written by a previous
-  // bundle survives with no such key.
-  const [refs, setRefs] = useState<ReadonlyArray<IdentityKnowledgeRef>>(
-    identity.knowledge ?? EMPTY_KNOWLEDGE
-  );
-  const [error, setError] = useState<string | null>(null);
-  const writes = useAgentIdentityWrites(workspaceId, "home");
-  // ⚠ THE PLAIN WORKSPACE KEY, not the channel-scoped one — the same entry the
-  // authoring modal's picker mounts (`identity-editor.tsx`), so this popup usually
-  // opens on a warm cache and never pulls the grant-bearing entry out from
-  // under the Knowledge pane.
-  const baseList = useKnowledgeBaseList(workspaceId);
-  const bases = useMemo(
-    () => (baseList.data?.bases ?? []).map((b) => ({ id: b.id, name: b.name })),
-    [baseList.data]
-  );
-
-  const selectedKeys = useMemo(() => new Set(refs.map(refKey)), [refs]);
-
-  /** ⚠ ADD-OR-REMOVE PLUS A PRUNE, in one call — `knowledge-scope-picker.tsx`'s
-   *  rule, stated there and applied here. */
-  const toggle: ScopeToggle = (ref, impliedKeys) => {
-    const key = refKey(ref);
-    if (selectedKeys.has(key)) {
-      setRefs(refs.filter((s) => refKey(s) !== key));
-      return;
-    }
-    const pruned = new Set(impliedKeys);
-    setRefs([...refs.filter((s) => !pruned.has(refKey(s))), ref]);
-  };
-
-  const scopes = useMemo(() => refs.map(refToScope), [refs]);
-  const unchanged = useMemo(
-    () => sameScopes(scopes, (identity.knowledge ?? EMPTY_KNOWLEDGE).map(refToScope)),
-    [scopes, identity.knowledge]
-  );
-
-  async function save() {
-    // Nothing moved — a PATCH with a body that changes no column is a round trip
-    // that can only fail, and Save is the operator saying "I'm done".
-    if (unchanged) {
-      onClose();
-      return;
-    }
-    setError(null);
-    try {
-      await writes.update.mutateAsync({
-        identityId: identity.id,
-        // ⚠ `knowledge` IS A REPLACE-SET: `[]` empties it, absent leaves it
-        // alone. This dialog always sends the whole set, which is what the
-        // operator was looking at.
-        body: { knowledge: scopes },
-        optimistic: {
-          ...identity,
-          knowledge: [...refs],
-          // ⚠ THE BASE-LEVEL SLICE, derived the way the server derives it — a
-          // folder scope contributes nothing, because listing its base would
-          // claim the whole base is attached.
-          knowledgeBases: refs
-            .filter((ref) => ref.scope === "base")
-            .map((ref) => ({ id: ref.baseId, name: ref.baseName })),
-        },
-        // 🔒 The `X-Updated-At` precondition (F-747) — the row as the operator
-        // opened it, so a save that lost a race is refused rather than silently
-        // overwriting the other edit.
-        expectedUpdatedAt: identity.updatedAt,
-      });
-      onClose();
-    } catch (err) {
-      setError(agentIdentityErrorMessage(err, "Couldn't save the knowledge."));
-    }
-  }
+  // added to an already-persisted payload.
+  const [refs, setRefs] = useState<IdentityKnowledgeRef[]>(() => [
+    ...(identity.knowledge ?? EMPTY_KNOWLEDGE),
+  ]);
+  const { save, error, saving } = useIdentitySave({
+    workspaceId,
+    shelf: "home",
+    noun: "identity",
+    onDone: onClose,
+  });
+  const attachable = useAttachableBases(workspaceId);
 
   return (
     <FormDialog
@@ -202,44 +135,33 @@ export function IdentityKnowledgeDialog({
       closeLabel="Close add knowledge"
       primary={{
         label: "Save",
-        onClick: () => void save(),
-        busy: writes.update.pending,
+        // The whole set rides the editor's own save: an unchanged set sends nothing.
+        onClick: () => void save({ ...draftFromIdentity(identity), knowledge: refs }, identity),
+        busy: saving,
         hint: "Save",
       }}
     >
       {/* ⚠ **"Knowledge", NOT "Knowledge bases"** (Samuel, 2026-09-08) — the
           label names what may be attached, and bases are the narrower word. */}
       <FormSection label="Knowledge">
-        {refs.length > 0 && (
-          <div className="flex flex-col gap-1 rounded-lg bg-bg-inset p-2">
-            {refs.map((ref) => (
-              <ScopeBar key={refKey(ref)} label={scopeChipLabel(ref)} />
-            ))}
-          </div>
-        )}
-        {bases.length === 0 ? (
-          // ⚠ A FACT ABOUT THE WORKSPACE, and only once the read has ANSWERED —
-          // an emptiness stated against an unresolved list is a false sentence.
-          <p className="text-caption text-text-muted">
-            {baseList.data ? "No knowledge here yet." : "Loading knowledge…"}
-          </p>
-        ) : (
-          <div
-            role="tree"
-            aria-label="Knowledge"
-            className="flex max-h-[320px] flex-col overflow-y-auto"
-          >
-            {bases.map((base) => (
-              <BaseNode
-                key={base.id}
-                base={base}
-                workspaceId={workspaceId}
-                selectedKeys={selectedKeys}
-                onToggle={toggle}
-              />
-            ))}
-          </div>
-        )}
+        <KnowledgeScopePicker
+          workspaceId={workspaceId}
+          bases={attachable.bases}
+          state={attachable.state}
+          onRetry={attachable.retry}
+          selected={refs}
+          onChange={setRefs}
+          emptyLine="No knowledge here yet."
+          renderSelected={(selected) =>
+            selected.length > 0 && (
+              <div className="flex flex-col gap-1 rounded-lg bg-bg-inset p-2">
+                {selected.map((ref) => (
+                  <ScopeBar key={refKey(ref)} label={scopeChipLabel(ref)} />
+                ))}
+              </div>
+            )
+          }
+        />
       </FormSection>
       {error && (
         <p role="alert" className="text-caption text-danger">

@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useRef, type KeyboardEvent } from "react";
+import { useMemo, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { SkeletonLine } from "@/shared/ui/skeleton";
 import type { IdentityKnowledgeRef } from "../client/types";
+import type { AttachableBasesState } from "../hooks/use-attachable-bases";
 import { refKey, scopeChipLabel } from "../lib/knowledge-scopes";
 import { RemovableChip } from "./identity-editor-rows";
 import { BaseNode, type ScopeToggle } from "./knowledge-scope-tree";
@@ -55,6 +57,9 @@ export function KnowledgeScopePicker({
   selected,
   onChange,
   emptyLine,
+  state = "ready",
+  onRetry,
+  renderSelected,
 }: {
   workspaceId: string;
   /** ⚠ WHAT THE CALLER WAS GIVEN. The page supplies these from its own base
@@ -62,9 +67,13 @@ export function KnowledgeScopePicker({
   bases: ReadonlyArray<KnowledgeBaseOption>;
   selected: ReadonlyArray<IdentityKnowledgeRef>;
   onChange: (next: IdentityKnowledgeRef[]) => void;
-  /** ⚠ A FACT about the container, not a loading state — the caller passes `[]`
-   *  only once its own read has answered. */
+  /** Shown only when the base read has ANSWERED with nothing (`state` ready). */
   emptyLine: string;
+  /** The base read's state (`hooks/use-attachable-bases.ts`); pending and failed are not empty. */
+  state?: AttachableBasesState;
+  onRetry?: () => void;
+  /** Replaces the chip row — the /home card popup lists picks as bars. */
+  renderSelected?: (selected: ReadonlyArray<IdentityKnowledgeRef>) => ReactNode;
 }) {
   const treeRef = useRef<HTMLDivElement | null>(null);
 
@@ -124,7 +133,9 @@ export function KnowledgeScopePicker({
           keep their own X: the tree row below is the same attachment and toggles
           it too, but a scope whose base is collapsed (or whose base the operator
           has scrolled past) has no visible row to uncheck. */}
-      {selected.length > 0 && (
+      {renderSelected ? (
+        renderSelected(selected)
+      ) : selected.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
           {selected.map((ref) => {
             const label = scopeChipLabel(ref);
@@ -141,7 +152,18 @@ export function KnowledgeScopePicker({
           })}
         </div>
       )}
-      {bases.length === 0 ? (
+      {state === "pending" ? (
+        <SkeletonLine w="60%" />
+      ) : state === "failed" ? (
+        <p role="alert" className="text-caption text-danger">
+          Couldn&apos;t load knowledge.{" "}
+          {onRetry && (
+            <button type="button" className="underline" onClick={onRetry}>
+              Retry
+            </button>
+          )}
+        </p>
+      ) : bases.length === 0 ? (
         <span className="text-caption text-text-muted">{emptyLine}</span>
       ) : (
         /* 🔒 **THE TREE IS IN THE FORM, NOT BEHIND A BUTTON (Samuel, 2026-09-22:

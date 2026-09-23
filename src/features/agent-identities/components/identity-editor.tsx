@@ -36,6 +36,7 @@ import {
   type PickerOption,
 } from "./identity-editor-rows";
 import { KnowledgeScopePicker } from "./knowledge-scope-picker";
+import type { AttachableBasesState } from "../hooks/use-attachable-bases";
 
 /**
  * CREATE AND EDIT, in ONE surface — and since 2026-09-08 it is a
@@ -95,6 +96,9 @@ export interface IdentityEditorProps {
   /** ⚠ THE BASES ONLY — the ROOTS of the picker's tree. Folders and entries are
    *  read lazily per base by the picker itself. */
   knowledgeBases: ReadonlyArray<PickerOption>;
+  /** The base read's state (`useAttachableBases`); absent = answered. */
+  knowledgeState?: AttachableBasesState;
+  onKnowledgeRetry?: () => void;
   /**
    * Which visibility scopes this mount offers, IN ORDER. Defaults to the
    * workspace page's three (`SECTIONS`); the /home Agents face's container mount
@@ -185,6 +189,8 @@ export function IdentityEditor({
   identity,
   teams,
   knowledgeBases,
+  knowledgeState,
+  onKnowledgeRetry,
   sections = SECTIONS,
   containerKind = "standard",
   defaultVisibility,
@@ -373,6 +379,8 @@ export function IdentityEditor({
           selected={draft.knowledge}
           onChange={(knowledge) => edit({ knowledge })}
           emptyLine="No knowledge here yet."
+          state={knowledgeState}
+          onRetry={onKnowledgeRetry}
         />
         <UnreachableBasesRow count={identity?.unreachableKnowledgeBaseCount ?? 0} />
       </FormSection>
