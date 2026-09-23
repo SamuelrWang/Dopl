@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router";
@@ -110,6 +111,11 @@ describe("app routes", () => {
     );
     await waitFor(() => expect(router.state.location.pathname).toBe("/acme-ab12cd/identities"));
     expect(RENAMED_PAGES).toEqual({ agents: "identities" });
+    // Main's `dopl://` grammar keeps a hand copy; the two maps are one fact.
+    const mainTargets = createRequire(import.meta.url)(
+      "../../../dopl-desktop-app/main/deep-link-target.js"
+    ) as { RENAMED_PAGES: Record<string, string> };
+    expect(mainTargets.RENAMED_PAGES).toEqual(RENAMED_PAGES);
     expect(WORKSPACE_PAGES.map((page) => page.path)).not.toContain("agents");
   });
 

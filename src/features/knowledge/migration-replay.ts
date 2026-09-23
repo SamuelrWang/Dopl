@@ -17,56 +17,10 @@
  * pin a paragraph.
  */
 
-import { readFileSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readMigrations, statementAt } from "@/shared/supabase/migration-files";
 
-import { forwardRenamed } from "@/shared/supabase/migration-renames";
-
-const MIGRATIONS = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "..",
-  "supabase",
-  "migrations"
-);
-
-export function stripLineComments(sql: string): string {
-  return sql
-    .split("\n")
-    .map((line) => {
-      const at = line.indexOf("--");
-      return at === -1 ? line : line.slice(0, at);
-    })
-    .join("\n");
-}
-
-/**
- * Every migration, filename-sorted (= apply order), comments removed — and FORWARD-RENAMED, so an
- * object a later file `ALTER … RENAME`d reads under its final name throughout
- * (`shared/supabase/migration-renames.ts`).
- */
-export const FILES = forwardRenamed(
-  readdirSync(MIGRATIONS)
-    .filter((f) => f.endsWith(".sql"))
-    .sort()
-    .map((name) => ({
-      name,
-      sql: stripLineComments(readFileSync(join(MIGRATIONS, name), "utf8")),
-    }))
-);
-
-/** The statement starting at `from`, up to the first `;` at paren depth 0. */
-export function statementAt(sql: string, from: number): string {
-  let depth = 0;
-  for (let i = from; i < sql.length; i++) {
-    if (sql[i] === "(") depth++;
-    else if (sql[i] === ")") depth--;
-    else if (sql[i] === ";" && depth === 0) return sql.slice(from, i + 1);
-  }
-  return sql.slice(from);
-}
+/** Every migration: filename-sorted (= apply order), comments stripped, forward-renamed. */
+export const FILES = readMigrations();
 
 /**
  * Replay the migrations and answer with the policies live on `table` at the end

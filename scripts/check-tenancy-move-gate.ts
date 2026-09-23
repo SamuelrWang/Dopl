@@ -33,11 +33,7 @@
  * Run: `npx tsx scripts/check-tenancy-move-gate.ts`
  */
 
-import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
-import { forwardRenamed } from "../src/shared/supabase/migration-renames";
-
-const MIGRATIONS = join(process.cwd(), "supabase", "migrations");
+import { readMigrations } from "../src/shared/supabase/migration-files";
 
 /**
  * The tables whose `workspace_id` IS the tenancy — a move of one of these is a
@@ -103,28 +99,9 @@ const REPAIRED_BY: Record<string, string> = {
     "20260924120000_personal_container_child_rows.sql",
 };
 
-const files = readdirSync(MIGRATIONS)
-  .filter((f) => f.endsWith(".sql"))
-  .sort();
-
-function stripComments(sql: string): string {
-  return sql
-    .split("\n")
-    .map((line) => {
-      const at = line.indexOf("--");
-      return at === -1 ? line : line.slice(0, at);
-    })
-    .join("\n");
-}
-
-// ⚠ FORWARD-RENAMED (2026-09-22): a table that was `ALTER … RENAME`d reads under its FINAL
-// name in every file, so `agent_identity_knowledge_bases` is discovered from the file that
-// created it as `agent_template_knowledge_bases` (`shared/supabase/migration-renames.ts`).
-const sources = new Map(
-  forwardRenamed(
-    files.map((name) => ({ name, sql: stripComments(readFileSync(join(MIGRATIONS, name), "utf8")) }))
-  ).map((f) => [f.name, f.sql])
-);
+// Forward-renamed (`shared/supabase/migration-renames.ts`): a renamed table reads under its final
+// name in every file.
+const sources = new Map(readMigrations().map((f) => [f.name, f.sql]));
 
 const problems: string[] = [];
 

@@ -211,7 +211,7 @@ jobs:
             -exec awk 'END { if (NR > 500) print FILENAME, NR }' {} \; \
             | grep -vF "$ALLOW" || true)
           if [ -n "$BAD" ]; then
-            echo "Files over 500 lines (ENGINEERING.md §2):"
+            echo "Files over 500 lines:"
             echo "$BAD"
             exit 1
           fi
@@ -417,31 +417,12 @@ jobs:
             echo "SUPABASE_JWT_SECRET=$(echo "$status" | jq -r .JWT_SECRET)"
           } >> "$GITHUB_ENV"
 
-      # ⚠ NAMED FILES, NOT A GLOB. `RLS_REDTEAM_LIVE=1` changes the behaviour of
-      # exactly these suites; running the whole root suite under it would
-      # spend ten minutes to re-run 5,600 tests that do not read the flag.
-      # ⚠ **SEVEN SINCE 2026-09-14** — the ontology one joined with the home-share
-      # wave (slice S1), and `rls-redteam-personal-container.test.ts` was found
-      # MISSING from this list in the 2026-09-14 review: it landed at `fee04723`
-      # with the 1.26.0 smoke fix, has been on disk ever since, and its live half
-      # had never executed once. A named list means a new suite that is not added
-      # here has a live half that NEVER EXECUTES, which is F-523's whole lesson —
-      # and this is the second time that lesson has been paid for.
-      # ⚠ RE-DERIVE, NEVER TRUST THE NUMBER:
-      #   find src -name 'rls-redteam*.test.ts' | sort
-      # against the list below.
+      # `RLS_REDTEAM_LIVE=1` changes only the redteam suites, so the run is filtered to them: vitest's
+      # path filter picks up every `*rls-redteam*` test file, including a new one (and fails on none).
       - name: Run the redteam suites with the live half ARMED
         env:
           RLS_REDTEAM_LIVE: "1"
-        run: >-
-          npx vitest run
-          src/features/knowledge/server/rls-redteam.test.ts
-          src/features/knowledge/server/rls-redteam-personal-container.test.ts
-          src/features/skills/server/rls-redteam.test.ts
-          src/features/chats/server/rls-redteam.test.ts
-          src/features/agent-identities/server/rls-redteam.test.ts
-          src/features/ontology/server/rls-redteam.test.ts
-          src/shared/supabase/rls-redteam-resource-grants.test.ts
+        run: npx vitest run rls-redteam
 
       - name: Stop Supabase
         if: always()

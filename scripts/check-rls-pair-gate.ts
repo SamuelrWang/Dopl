@@ -227,8 +227,10 @@ function discoverPredicates(): Map<string, string> {
   const found = new Map<string, string>();
   for (const file of walk(join(ROOT, "src"))) {
     const text = readFileSync(file, "utf8");
-    for (const m of text.matchAll(/export function (canSee[A-Za-z0-9_]*)\s*\(/g)) {
-      found.set(m[1], file.slice(ROOT.length + 1));
+    for (const m of text.matchAll(
+      /export\s+(?:async\s+)?function\s+(canSee\w*)\s*[<(]|export\s+const\s+(canSee\w*)\s*[:=]/g
+    )) {
+      found.set(m[1] ?? m[2], file.slice(ROOT.length + 1));
     }
   }
   return found;

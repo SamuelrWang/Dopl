@@ -105,6 +105,8 @@ function extractInterfaces(source: string): Map<string, InterfaceDecl> {
 function checkShelfUnions(read: (rel: string) => string): boolean {
   const REFERENCE_FILE = "src/features/knowledge/types.ts";
   const reference = new Set(extractUnion(read(REFERENCE_FILE), "KbShelf"));
+  // An empty reference would make every site agree with it: a broken parser, not a clean bill.
+  if (reference.size === 0) throw new Error(`${REFERENCE_FILE} › KbShelf parsed to no literals`);
 
   /** The wire literals a `readShelf` guard admits — its `raw === "…"` arms. */
   function readShelfArms(source: string): string[] {
@@ -232,6 +234,11 @@ function main(): void {
       console.error(
         `[drift] ${name} missing from packages/dopl-client/src/knowledge-types.ts`
       );
+      drift = true;
+      continue;
+    }
+    if (a.fields.length === 0 || b.fields.length === 0) {
+      console.error(`[drift] ${name} parsed to zero fields — the extractor no longer reads it`);
       drift = true;
       continue;
     }
