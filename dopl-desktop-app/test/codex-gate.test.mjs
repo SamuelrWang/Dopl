@@ -24,8 +24,7 @@ const profiles = require(join(MAIN, "session-profiles.js"));
 const registry = require(join(MAIN, "runtime", "index.js"));
 const capability = require(join(MAIN, "runtime", "capability.js"));
 const tools = require(join(CODEX, "tools.js"));
-const approval = require(join(CODEX, "approval.js"));
-const axisB = require(join(CODEX, "axis-b.js"));
+const serverRequests = require(join(CODEX, "server-requests.js"));
 const mcp = require(join(CODEX, "mcp.js"));
 const launchSpec = require(join(CODEX, "launch-spec.js"));
 // ⚠ READ-ONLY HERE: the packaging pin is compared against `SUPPORTED_CLI`, which client.js owns.
@@ -95,7 +94,7 @@ test("the WINDOWLESS FLOOR resolves to a CODEX mode that really reaches a tool",
   // ⚠ THE FAILURE THIS DECLARATION EXISTS TO PREVENT: a mode that fail-closes to a vocabulary the
   // runtime does not speak allows NOTHING, and on a surface-less session a gated tool is a silent
   // DENY — including the reads the prompt ORDERS the agent to make.
-  const floor = capability.windowlessToolFloor(D);
+  const floor = D.toolMode.windowlessFloor;
   assert.equal(floor, "on-request");
   assert.ok(!["manual", "auto", "bypass"].includes(floor), "the floor must be this runtime's word");
   assert.equal(RT.axisAAllows(floor, capability.toolTaxonomy(D).auto[0]), true);
@@ -191,17 +190,17 @@ test("a Dopl allow answers `accept`, and NOTHING ever answers `acceptForSession`
   // HAS a native "stop asking for the rest of this session"; sending it would record ONE operator
   // click on TWO ledgers, and the second one's scope is §5 item C4 — unread. One click, one
   // ledger, one scope: the one the operator was shown.
-  assert.deepEqual(approval.answerApproval({}, "allow"), { decision: "accept" });
+  assert.deepEqual(serverRequests.decisionReply("allow"), { decision: "accept" });
   for (const verdict of ["deny", "allow-task", "", null, undefined, 42, {}]) {
-    const answer = approval.answerApproval({ message: "no" }, verdict);
+    const answer = serverRequests.decisionReply(verdict);
     assert.equal(answer.decision, "decline", JSON.stringify(verdict));
   }
   // …and a standing Dopl grant still answers `accept`, never the native session word.
   const key = profiles.grantKeyFor(CHANNEL, { op: "send", body: "hi" }, "chan-1");
   assert.equal(decide({ toolName: CHANNEL, input: { op: "send", body: "hi" }, allowForTask: [key] }), "allow");
-  assert.deepEqual(approval.answerApproval({}, "allow"), { decision: "accept" });
+  assert.deepEqual(serverRequests.decisionReply("allow"), { decision: "accept" });
   // The source itself: every mention of the word is an argument in a comment, never a value.
-  const src = readFileSync(join(CODEX, "approval.js"), "utf8");
+  const src = readFileSync(join(CODEX, "server-requests.js"), "utf8");
   for (const line of src.split("\n")) {
     if (!line.includes("acceptForSession")) continue;
     assert.match(line.trim(), /^(\/\/|\*)/, `a CODE line names acceptForSession: ${line.trim()}`);
@@ -227,15 +226,15 @@ test("THE MOUNT KEY AND THE ELICITATION'S SERVER COMPARISON ARE ONE CONSTANT", (
     "the launch mounts Dopl's server under a key the elicitation comparison does not know");
   // …and the comparison really is identity against THAT key, not a near-match.
   const meta = { codex_approval_kind: "mcp_tool_call", tool_params: { op: "read" } };
-  assert.ok(approval.doplElicitation({ serverName: mounted[0], _meta: meta }));
-  assert.equal(approval.doplElicitation({ serverName: mounted[0] + "x", _meta: meta }), null);
+  assert.ok(serverRequests.doplElicitation({ serverName: mounted[0], _meta: meta }));
+  assert.equal(serverRequests.doplElicitation({ serverName: mounted[0] + "x", _meta: meta }), null);
 });
 
 test("a Dopl elicitation reaches AXIS B with the call's own op — the blocker, end to end", () => {
   // 🔒 ⚠ **THE CASE THAT SAYS A DOPL-LAUNCHED CODEX AGENT CAN POST.** The approval carries no tool
   // name; the name is derived from Dopl's own entry, the arguments ride `_meta.tool_params`, and
   // both are handed to the SAME `grantDecision` every other runtime asks.
-  const target = approval.doplElicitation({
+  const target = serverRequests.doplElicitation({
     serverName: mcp.SERVER_KEY,
     message: 'Allow the dopl MCP server to run tool "dopl_channel"?',
     _meta: { codex_approval_kind: "mcp_tool_call", tool_params: { op: "send", body: "hi" } },
@@ -255,62 +254,20 @@ test("a Dopl elicitation reaches AXIS B with the call's own op — the blocker, 
   }), "gate");
 });
 
-test("a raw approval request becomes one of CODEX's own words, and an unknown one stays raw", () => {
-  assert.equal(approval.toolNameFor({ method: "item/commandExecution/requestApproval" }), "commandExecution");
-  assert.equal(approval.toolNameFor({ method: "item/fileChange/requestApproval" }), "fileChange");
-  assert.equal(approval.toolNameFor({ params: { category: "skill_approval" } }), "skill_approval");
-  assert.equal(approval.toolNameFor({ toolName: "dopl_channel" }), "dopl_channel");
-  // ⚠ AN UNRECOGNISED METHOD ANSWERS ITS OWN STRING, NOT A FALLBACK. A name in no Axis-A list
-  // gates in every mode, so a shape a later CLI adds ASKS instead of inheriting a granted one.
-  assert.equal(approval.toolNameFor({ method: "item/networkAccess/requestApproval" }), "networkAccess");
-  assert.equal(RT.axisAAllows("never", "networkAccess"), false);
-});
-
-// ── THE STAMP ────────────────────────────────────────────────────────────────────────────────
-
-test("the PreToolUse stamp injects the thread tag and NEVER carries a decision", () => {
-  // ⚠ ONE PLACE DECIDES, ONE PLACE STAMPS (design §0.1). A hook that also rendered a verdict would
-  // put the gate in two places, which is the hole each review misses — the F-228 / 1.7.10 lesson.
-  const s = { channelId: "chan-1", taskId: "task-9", agentId: "abcd1234" };
-  const out = axisB.preToolUseStamp(
-    { tool_name: "dopl_channel", tool_input: { op: "send", body: "hi" } }, s
+test("an approval method this build does not know is refused -32601 and never reaches the gate", async () => {
+  // A reply in the wrong shape hangs the turn, so an unknown method gets the method-agnostic error.
+  const asked = [];
+  await assert.rejects(
+    serverRequests.answer({ method: "item/networkAccess/requestApproval", params: {} }, async (n) => { asked.push(n); return "allow"; }),
+    (err) => err.rpcCode === -32601,
   );
-  assert.equal(out.updatedInput.thread, "task-9");
-  assert.equal(out.updatedInput.client_msg_id, "agent-abcd1234-1");
-  assert.ok(!("decision" in out), "a verdict in the hook is a gate in two places");
-  assert.equal(out.updatedInput.body, "hi", "the rest of the call is untouched");
-});
-
-test("…and it rewrites NOTHING it is not entitled to rewrite", () => {
-  const base = { channelId: "chan-1", taskId: "task-9", agentId: "abcd1234" };
-  // A CROSS-channel post is the exfiltration shape and is not ours to rewrite.
-  const cross = axisB.preToolUseStamp(
-    { tool_name: "dopl_channel", tool_input: { op: "send", channel: "other", body: "x" } }, { ...base }
-  );
-  assert.equal(cross.updatedInput.thread, undefined);
-  // A conflict — the agent deliberately named ANOTHER thread — leaves the WHOLE call as written.
-  const conflict = axisB.preToolUseStamp(
-    { tool_name: "dopl_channel", tool_input: { op: "send", thread: "task-other", body: "x" } }, { ...base }
-  );
-  assert.equal(conflict.updatedInput.thread, "task-other");
-  assert.ok(!("client_msg_id" in conflict.updatedInput), "half a rewrite is worse than none");
-  // A non-channel call passes through unchanged.
-  const other = axisB.preToolUseStamp({ tool_name: "commandExecution", tool_input: { command: "ls" } }, { ...base });
-  assert.deepEqual(other.updatedInput, { command: "ls" });
-  // ⚠ NO ID IS MINTED FOR A CALL IT WILL NOT STAMP: `nextOwnPostId` mutates the session's bounded
-  // ring, so spending ids on calls that never post would blunt the fan-out self-filter's lookback.
-  const s = { channelId: "chan-1", taskId: "task-9", agentId: "abcd1234" };
-  axisB.preToolUseStamp({ tool_name: "commandExecution", tool_input: {} }, s);
-  axisB.preToolUseStamp({ tool_name: "dopl_channel", tool_input: { op: "send", body: "a" } }, s);
-  assert.ok(s.ownPostIds.has("agent-abcd1234-1"), "the first STAMPED post is #1");
+  assert.deepEqual(asked, []);
 });
 
 test("Axis B declares a real enforcement point and a MEASURED op scope", () => {
-  assert.equal(capability.axisBEnforcement(D), "held-callback");
-  // `capability.axisBOpScoped` reads anything but `true` as NOT op-scoped (fail-closed).
+  assert.equal(D.axisB.enforcementPoint, "held-callback");
   assert.equal(D.axisB.opScoped, true, "measured 2026-09-22 (CXP-3A): op + args reach the gate");
-  assert.equal(capability.axisBOpScoped(D), true);
-  assert.equal(capability.inputRewrite(D), "hook-updatedInput");
+  assert.equal(D.axisB.inputRewrite, null, "no route carries a rewritten input on this runtime");
 });
 
 // ── THE LAUNCH SHAPE ─────────────────────────────────────────────────────────────────────────
@@ -332,11 +289,12 @@ test("a RESTRICTED profile pins the native pair; `full` rides the operator's own
   );
   assert.deepEqual(full, { approval_policy: "on-request", sandbox_mode: "danger-full-access" },
     "…and at `full` the operator's own pick finally REACHES the launch");
-  // An absent or unrecognised sandbox pick lands on Codex's OWN default, not on the widest.
+  // An UNRECOGNISED sandbox pick fail-closes to the narrowest, the same answer main's record
+  // normalizer gives (X-05); only an ABSENT one takes Codex's own default.
   const bare = launchSpec.nativePair(
     { state: { toolMode: "junk", native: { sandbox_mode: "junk" } } }, RT.toolConfigFor("full")
   );
-  assert.deepEqual(bare, { approval_policy: "untrusted", sandbox_mode: "workspace-write" });
+  assert.deepEqual(bare, { approval_policy: "untrusted", sandbox_mode: "read-only" });
   // ⚠ AND A SESSION STAMPED WITH NO BAG AT ALL IS THE SAME ANSWER — every spawn shape that hands
   // in no posture (a peer wake, a crash resume, a woken shell) keeps exactly today's behaviour.
   assert.deepEqual(launchSpec.nativePair(codexState({ tools: "on-request" }), RT.toolConfigFor("full")),
@@ -451,20 +409,13 @@ test("resume is ALLOWED on the measured baseline, and the adapter's own door ope
   assert.equal(typeof launchSpec.resume, "function");
 });
 
-test("the sign-in button and the deep link are HIDDEN, never grayed; the tool-search verb is MEASURED", () => {
-  // ⚠ THE COST CAP WAS THE FIRST ASSERTION HERE AND IS DELETED WITH THE COLUMN (2026-09-22,
-  // Samuel: *"we dont need cost tracking"*). It read `showsCostCap(D) === false` — a control
-  // hidden because this runtime emits no cost — and there is no control, no predicate and no
-  // `meter.cost` on any descriptor now. The HIDE-NEVER-GRAY rule the case belonged to is still
-  // exercised by the four assertions below it.
-  assert.equal(capability.hasInteractiveSignIn(D), false);
+test("the sign-in button is HIDDEN, never grayed; the tool-search verb is MEASURED", () => {
+  assert.equal(D.credential.interactiveSignIn, null);
   assert.equal(RT.signIn(), null, "a method whose capability is absent still EXISTS and answers null");
-  assert.equal(capability.hasDeepLink(D), false);
   // 🔒 CXP-3A (2026-09-22, 0.155.1): MEASURED, no longer null — Codex defers every MCP tool.
-  assert.equal(capability.toolSearchVerb(D), "tool_search", "the measured verb, never Claude's");
+  assert.equal(D.prose.toolSearchVerb, "tool_search", "the measured verb, never Claude's");
   // …and code-mode models reach the same tool through `exec`'s `ALL_TOOLS` (measured, same day).
   assert.deepEqual(capability.mcpDiscovery(D), { verb: "tool_search", catalog: "ALL_TOOLS" }, "no eager-load flag");
-  assert.equal(capability.entryFile(D), "AGENTS.md");
 });
 
 test("packaging is `bundled`, so the release makes a version claim it can keep", () => {

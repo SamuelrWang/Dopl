@@ -1,20 +1,6 @@
-// THE MODEL ROSTER, AS A CAPABILITY — ⚠ `source: 'live'`, and the ONE field on this runtime that
-// no other adapter sets: `reStampOnResume`.
-//
-// The Claude adapter keeps a FROZEN table because its platform's authoritative roster needs a live
-// query and the picker has to be usable before anything is running. This runtime answers
-// `models.list()` off the same SDK the session already loads (`cursor-research.md`: `Cursor.models
-// .list()`, CLI `--list-models`, API `GET /v1/models`), so the picker is populated from the wire
-// and an id this build has never seen renders raw rather than being dropped.
-//
-// ⚠ A ROSTER CALL MUST NEVER THROW INTO A PICKER, AND MUST NEVER HANG ONE. Bounded by a timeout,
-// cached, and answering an EMPTY roster with a reason on any failure. An empty live roster is a
-// picker that shows the platform's own default and nothing else, which is what every session did
-// before a picker existed; a thrown one is a settings page that will not open.
-//
-// ⚠ AND IT COSTS NO SECOND PROCESS HERE, WHICH IS THE ONE PLACE `in-process` IS CHEAPER RATHER
-// THAN ONLY SAFER. The other live-roster adapter has to spawn a short-lived second `app-server`
-// because the session's connection is busy with a turn; this one asks a library function.
+// THE CURSOR MODEL ROSTER — `models.list()` off the in-process SDK (no second process). Never throws
+// into a picker and never hangs one: bounded, cached once it holds models, and any failure answers an
+// empty roster WITH a reason (`model-catalog.js` reads that as `unavailable`).
 
 const client = require('./client');
 
@@ -22,10 +8,7 @@ const LIST_TIMEOUT_MS = 8000;
 
 let cached = null;
 
-// ⚠ TOLERANT, LIKE EVERY OTHER READER IN THIS ADAPTER. The research names the VERB and the kind of
-// ids it returns (`composer-2.5`, `claude-4-sonnet-thinking`, Grok/Gemini/GPT-5/Kimi/GLM, an
-// `auto-smart` router on Teams/Enterprise) and does not print the result shape, so this takes the
-// ids out of whichever plausible shape arrives and renders them raw. §5 item B1.
+// The result shape is undocumented, so ids are taken from whichever plausible shape arrives.
 function idsFrom(result) {
   const rows = (result && (result.models || result.data || result.items))
     || (Array.isArray(result) ? result : []);
@@ -50,17 +33,9 @@ function listFn(sdk) {
   return null;
 }
 
-// ── ⚠ THE NORMALIZED CATALOG SHAPE (2026-09-21, U6) ──────────────────────────────────────────
-//
-// Every adapter's `models()` answers the same record now, and `main/runtime/model-catalog.js`
-// turns it into the catalog a picker reads. ⚠ **AN EMPTY ROSTER MUST CARRY A REASON** — the
-// catalog reads a reason-carrying empty list as `unavailable` (a measured failure) and a
-// never-read one as `loading`, and collapsing those is a picker that says "no models" about a
-// runtime nobody has asked yet.
-// ⚠ THIS PLATFORM NAMES NOTHING. `models.list()` answers ids, so every entry's `label` is `null`
-// and the picker renders the raw id — which is the honest answer, not a missing one.
+// This platform names nothing: `label` is null and the picker renders the raw id.
 const failure = (reason) =>
-  ({ source: 'live', key: null, ids: [], aliases: [], models: [], defaultId: null, reason, truncated: false });
+  ({ source: 'live', key: null, ids: [], models: [], defaultId: null, reason, truncated: false });
 
 function withTimeout(promise, ms, onTimeout) {
   return new Promise((resolve) => {
@@ -88,20 +63,12 @@ async function fetchRoster() {
     Promise.resolve().then(list).then((result) => {
       const ids = idsFrom(result);
       if (!ids.length) return failure('this runtime answered models.list() with no models Dopl could read');
-      // ⚠ `aliases[0]` IS THE EMPTY STRING AND IT SETS NO MODEL AT ALL — the platform's own pick.
-      // `descriptor.models.defaultMeansAbsent` is the convention the whole launch precedence chain
-      // rests on: a link naming nothing this build knows STEPS ASIDE rather than spending the
-      // platform default and discarding the rest.
       return {
         source: 'live',
-        // ⚠ THE SDK IS LOADED IN-PROCESS, so there is no binary path or CLI version to key on —
-        // `null` says "this roster has no invalidation key", which is a different claim from a
-        // key that never changes. `model-catalog.js › invalidate` is the reconnect hook instead.
+        // In-process SDK: no binary or version to key on.
         key: null,
         ids,
-        aliases: [''].concat(ids),
-        // ⚠ NO `isDefault`: this platform declares none, and marking one would be Dopl inventing
-        // a default it cannot back (INVARIANTS §11 — unknown is not empty).
+        // No `isDefault`: the platform declares none, and Dopl does not invent one.
         models: ids.map((id) => ({ id, label: null, short: null, isDefault: false, hidden: false, dimensions: {} })),
         defaultId: null,
         reason: '',
@@ -113,12 +80,7 @@ async function fetchRoster() {
   );
 }
 
-/**
- * The offerable roster. ⚠ Unknown ids still render raw and round-trip — only the PICKS are closed.
- * ⚠ **ONLY A ROSTER WITH MODELS IN IT IS CACHED** (U6). The old `if (cached) return cached` pinned
- * the FIRST answer — including a failure — for the life of the app, so an operator who repaired
- * their install with Dopl open kept seeing an empty picker until they quit.
- */
+/** The offerable roster. Only a roster with models in it is cached, so a failure is retried. */
 async function models() {
   if (cached) return cached;
   const roster = await fetchRoster();
@@ -126,39 +88,20 @@ async function models() {
   return roster;
 }
 
-/** Drop the cache. ⚠ For tests and for an explicit reconnect re-probe. */
+/** Drop the cache (tests, an explicit re-probe). */
 function forget() { cached = null; }
 
 // Descriptor half.
 const descriptor = {
   source: 'live',
-  // ⚠ null: reasoning-effort variants exist on this runtime but are documented as PLAN-GATED
-  // variants of a model ID (`claude-4-sonnet-thinking`), not as a separate dimension the way the
-  // other live-roster runtime exposes `model_reasoning_effort`. A dimension declared here renders
-  // a control; declaring one whose values are really part of the id would render a control that
-  // multiplies the roster by nothing. Absent, not `[]`, which would render an EMPTY control.
+  // null: effort variants are separate model ids here, not a dimension.
   dimensions: null,
-  defaultMeansAbsent: '',
-  // ⚠ TRUE, AND IT IS THE ONLY `true` IN THIS FIELD ACROSS ALL THREE ADAPTERS. `cursor-research.md`
-  // is explicit: `agent.model` is `undefined` after `Agent.resume(agentId)` unless respecified. So
-  // a resumed session that did not re-stamp would silently run on the platform's default instead
-  // of the model the operator chose — a posture change nobody made. `launch-spec.js › frames`
-  // re-stamps from the session's own pick, and the `dopl/agentCreated` frame carries it so the
-  // meter's denominator and the transcript agree about which model ran.
-  reStampOnResume: true,
-  // ⚠ THE PICK RULE (2026-09-21, U5) — `open`, for the live-roster reason the Codex lane states in
-  // full. Shared storage keeps the operator's pick as an opaque string after a SHAPE check and
-  // interprets nothing; the value becomes an argument to the platform, so the alphabet is a gate.
+  // A shape gate only (the value becomes a platform argument); the live roster decides the rest.
   pick: {
-    kind: 'open',
-    accepted: null,
-    canonical: null,
     absent: '',
     pattern: '^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$',
   },
-  // ⚠ null, matching `dimensions: null` above — no model-scoped second dimension, so nothing
-  // renders and nothing is storable.
   dimensionOptions: null,
 };
 
-module.exports = { models, forget, descriptor, idsFrom, listFn, LIST_TIMEOUT_MS };
+module.exports = { models, forget, descriptor, LIST_TIMEOUT_MS };

@@ -129,7 +129,7 @@
     }
   },
   "doplRequires": {
-    "note": "THIS BLOCK IS NOT A MEASUREMENT — it is Dopl's own requirement, mirrored from `main/runtime/codex/client.js` (REQUIRED_METHODS / REQUIRED_FACTS) so the contract suite can prove the two have not drifted.",
+    "note": "THIS BLOCK IS NOT A MEASUREMENT — it is Dopl's own requirement, mirrored from `main/runtime/codex/protocol.js › REQUIRED_METHODS` so the contract suite can prove the two have not drifted.",
     "methods": [
       "initialize",
       "thread/start",
@@ -138,10 +138,6 @@
       "turn/steer",
       "turn/interrupt",
       "model/list"
-    ],
-    "facts": [
-      "threadId",
-      "modelDefault"
     ]
   }
 }

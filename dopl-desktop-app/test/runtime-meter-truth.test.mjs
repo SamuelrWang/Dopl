@@ -51,7 +51,7 @@ const metrics = new Function(
 const CTX = { channelId: "chan-1", peerName: "Ada", peerId: "peer-1" };
 const first = (list, type) => (list || []).find((e) => e && e.type === type) || null;
 
-// ── 1. `meter.windowSource` — DOES THE RUNTIME REALLY REPORT ITS OWN DENOMINATOR? ────────────
+// ── 1. THE DENOMINATOR — DOES THE RUNTIME REALLY REPORT ITS OWN? ────────────────────────────
 
 /**
  * The one measured Codex breakdown this file drives everything from.
@@ -76,22 +76,16 @@ const codexTurn = (over = {}) => ({
   },
 });
 
-test("`windowSource: 'reported'` is a CLAIM, and the normalizer has to honour it", () => {
-  const d = registry.descriptorFor("codex");
-  assert.equal(d.meter.windowSource, "reported",
-    "it read 'config' until 2026-09-22 and that was stale the moment the fold landed");
+test("Codex reports its own denominator, and the normalizer carries it", () => {
   const ev = first(codexNormalize.normalize(codexTurn(), CTX), "context");
   assert.ok(ev, "a measured turn emits a context event");
   assert.equal(ev.window, WINDOW,
-    "a runtime declaring 'reported' must put a real denominator on the wire, or the word is a lie");
+    "the server's own denominator reaches the context event");
 });
 
 test("the runtimes that report NOTHING say so, and get `null` — never a zero denominator", () => {
   // ⚠ THE OTHER HALF OF THE CLAIM. `'table'` and `null` both mean "this platform does not state
   // its own window", and the proof is that the adapter calls `events.context` with two arguments.
-  for (const id of ["claude", "cursor"]) {
-    assert.notEqual(registry.descriptorFor(id).meter.windowSource, "reported", id);
-  }
   // Driven rather than grepped, on the one of the two whose normalizer takes a plain message.
   const ev = first(claudeNormalize.normalize({
     type: "assistant",
@@ -116,17 +110,7 @@ test("a spelling this build has not seen reads as ABSENT, so the table still ans
   }
 });
 
-// ── 2. `meter.fields` — A LIST IS A CLAIM TO HAVE READ THE PAYLOAD ───────────────────────────
-
-test("`fields: null` means UNMEASURED, and Codex's is no longer null", () => {
-  const d = registry.descriptorFor("codex");
-  assert.deepEqual(d.meter.fields,
-    ["inputTokens", "cachedInputTokens", "outputTokens", "totalTokens"],
-    "three live breakdowns named these four; `null` would still be claiming nobody looked");
-  // ⚠ EVERY DECLARED NAME IS ONE THE NORMALIZER REALLY READS. A list that named a field the
-  // parser ignores would be the same "declared but not applied" failure in the other direction.
-  for (const f of d.meter.fields) assert.ok(LAST[f] !== undefined, f);
-});
+// ── 2. THE CACHE CONVENTIONS ────────────────────────────────────────────────────────────────
 
 test("🔒 `cachedInputTokens` IS A SUBSET OF THE INPUT, and the occupancy proves it", () => {
   // ⚠ THE DEFECT FIXED 2026-09-22, PINNED SO IT CANNOT COME BACK: the cached figure was ADDED ON
@@ -145,8 +129,6 @@ test("the OTHER runtime's cache convention is additive, and the two are never re
   // ⚠ WHY THIS IS A DESCRIPTOR FIELD AND NOT A SHARED HELPER. `cache_read_input_tokens` IS a term
   // beside the input on Claude and `cachedInputTokens` is NOT on Codex; a single "read the cache
   // field" path would have to be wrong for one of them. Each normalizer owns its own arithmetic.
-  assert.deepEqual(registry.descriptorFor("claude").meter.fields,
-    ["input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"]);
   assert.equal(modelTable.promptTokens({
     input_tokens: 1000, cache_read_input_tokens: 500, cache_creation_input_tokens: 100,
   }), 1600, "Claude's occupancy SUMS the cache terms — the opposite convention, declared apart");
@@ -163,7 +145,7 @@ test("🔒 no adapter declares a cost, and no result event carries one", () => {
   // adapter author re-adds from an old example — and one adapter declaring a field the contract
   // does not define is the question deleting it was meant to stop.
   for (const id of registry.ids()) {
-    assert.equal(registry.descriptorFor(id).meter.cost, undefined, id);
+    assert.equal((registry.descriptorFor(id).meter || {}).cost, undefined, id);
   }
   assert.equal(registry.capability.showsCostCap, undefined, "the predicate went with the field");
   for (const [label, ev] of [

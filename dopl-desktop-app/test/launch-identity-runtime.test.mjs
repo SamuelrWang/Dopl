@@ -34,7 +34,7 @@ const cat = (ids, status = "ready") => ({ status, models: ids.map((id) => ({ id,
 const CATALOGS = { claude: cat(CLAUDE_IDS), codex: cat(CODEX_IDS) };
 const fakeRegistry = { resolve: (rid) => ({ descriptor: { id: rid || "claude" } }) };
 const fakeCatalogs = (map = CATALOGS) => ({ settle: async (a) => map[a.descriptor.id] || null });
-const identityOn = (rid, m, map) => LD.identityModelFor(rid, m, fakeCatalogs(map), fakeRegistry);
+const identityOn = (rid, m, own, map) => LD.identityModelFor(rid, m, own, { catalogs: fakeCatalogs(map), registry: fakeRegistry });
 
 // ── 1. THE RULE ──────────────────────────────────────────────────────────────────────────────
 
@@ -49,11 +49,23 @@ test("RULE: a FOREIGN identity model is skipped to the runtime default — never
   assert.equal(await identityOn("claude", "gpt-6-sol"), "", "a Codex model on a Claude launch");
 });
 
-test("RULE: a roster that cannot say leaves the model AS GIVEN (the funnel fails open the same way)", async () => {
-  assert.equal(await identityOn("codex", "claude-opus-5", { codex: cat([], "unavailable") }), "claude-opus-5");
-  assert.equal(await identityOn("codex", "gpt-6-luna", {}), "gpt-6-luna");
+test("RULE: an identity bound to ANOTHER runtime is skipped outright — no catalog needed (X-03)", async () => {
+  let asked = 0;
+  const counting = { settle: async () => { asked += 1; return cat(CODEX_IDS); } };
+  assert.equal(await LD.identityModelFor("codex", "claude-opus-5", "claude", { catalogs: counting, registry: fakeRegistry }), "");
+  assert.equal(asked, 0);
+});
+
+test("RULE: a roster that cannot vouch keeps the model ONLY on the identity's own runtime (X-03)", async () => {
+  const unreadable = { codex: cat([], "unavailable") };
+  assert.equal(await identityOn("codex", "gpt-6-luna", "codex", unreadable), "gpt-6-luna", "its own runtime: kept");
+  assert.equal(await identityOn("codex", "claude-opus-5", "", unreadable), "", "no runtime of its own: skipped");
+  assert.equal(await identityOn("codex", "gpt-6-luna", "", {}), "");
+  // A stale roster (the Claude frozen fallback) labels only; it cannot vouch either way (RC-03).
+  assert.equal(await identityOn("claude", "claude-opus-5[1m]", "claude", { claude: cat(CLAUDE_IDS, "stale") }), "claude-opus-5[1m]");
   const boom = { settle: async () => { throw new Error("wedged"); } };
-  assert.equal(await LD.identityModelFor("codex", "x", boom, fakeRegistry), "x");
+  assert.equal(await LD.identityModelFor("codex", "x", "codex", { catalogs: boom, registry: fakeRegistry }), "x");
+  assert.equal(await LD.identityModelFor("codex", "x", "", { catalogs: boom, registry: fakeRegistry }), "");
 });
 
 test("RULE: no identity model, or the legacy `default` word, is no pick", async () => {
@@ -87,7 +99,7 @@ function bootButton(identityModel) {
       return { launchRequesterSession: async (spec) => { launches.push(spec); return { agentId: "ag-1", sessionId: "s-1" }; } };
     }
     // ⚠ THE REAL RULE, over fake catalogs — not a passthrough.
-    if (id === "./runtime/launch-default") return launchDefaultStub({ identityModelFor: (rid, m) => identityOn(rid, m) });
+    if (id === "./runtime/launch-default") return launchDefaultStub({ identityModelFor: (rid, m, own) => identityOn(rid, m, own) });
     throw new Error("unexpected require: " + id);
   };
   const resolveMod = { exports: {} };

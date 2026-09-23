@@ -128,7 +128,7 @@ test("LAUNCH: the spawn funnel FORWARDS the resolved model — launcher/identity
 test("LAUNCH: every lane's chain is launcher pick > identity model, and nothing below it", () => {
   const OPS = read("session-launch-op.js");
   assert.match(OPS,
-    /const model = overrides\.model \|\| await launchDefault\.identityModelFor\(runtimeId, identity && identity\.model\);/,
+    /const model = overrides\.model\s*\|\| await launchDefault\.identityModelFor\(runtimeId, identity && identity\.model, identity && identity\.runtime\);/,
     "the operator's own Launch: the sheet, then the identity default ON THE LAUNCH RUNTIME — the funnel does the rest");
   const { pickOf } = require(join(MAIN, "runtime", "selection-vocabulary.js"));
   assert.equal(pickOf("claude-opus-6[1m]"), "claude-opus-6[1m]", "a model this build predates commits the chain");
@@ -136,7 +136,7 @@ test("LAUNCH: every lane's chain is launcher pick > identity model, and nothing 
   assert.equal(pickOf("  "), "");
   const DIRECTIVE = read("launch-directive-spawn.js");
   assert.match(DIRECTIVE,
-    /return pickOf\(d\.model\)\s*\|\| require\('\.\/runtime\/launch-default'\)\.identityModelFor\(runtimeId, identity && identity\.model\);/,
+    /return pickOf\(d\.model\)\s*\|\| require\('\.\/runtime\/launch-default'\)\.identityModelFor\(runtimeId, identity && identity\.model, identity && identity\.runtime\);/,
     "the directive lane, ONE path for every runtime: the directive's `model`, then the identity's on the launch runtime");
   // P3-09: no second model check on the directive lane — no roster spawn, no pre-resolved default.
   assert.doesNotMatch(DIRECTIVE, /\.models\(\)|withRuntimeDefault/,

@@ -68,13 +68,12 @@ const OUTPUT_DELTA = { method: "item/commandExecution/outputDelta", params: { it
 // meter"; §3 "usage on turn/completed is tokens" and NO USD figure anywhere (§5 item C11).
 const TURN_DONE = {
   method: "turn/completed",
-  params: { status: "completed", model: "gpt-5.6-terra", usage: { input_tokens: 41000, cached_input_tokens: 9000, output_tokens: 1200, total_tokens: 51200 } },
+  params: { status: "completed", model: "gpt-5.6-terra", usage: { inputTokens: 41000, cachedInputTokens: 9000, outputTokens: 1200, totalTokens: 51200 } },
 };
-// §5 item C12 — the field breakdown is unmeasured, so a payload spelled another way must still
-// meter rather than reading as zero.
-const TURN_DONE_CAMEL = {
+// A breakdown with no `totalTokens`: the parts are summed.
+const TURN_DONE_PARTS = {
   method: "turn/completed",
-  params: { usage: { promptTokens: 2000, completionTokens: 100 } },
+  params: { usage: { inputTokens: 2000, outputTokens: 100 } },
 };
 
 // §1 "an MCP tool call" — Dopl's own channel tool, arriving as an item. The bare short name is
@@ -146,8 +145,8 @@ test("a finished turn meters TOKENS, and there is no other kind of meter to repo
   assert.ok(!("costUsd" in out[1]), "the result event carries no cost field at all");
 });
 
-test("…and an unmeasured usage spelling still meters rather than reading as zero", () => {
-  const out = normalize.normalize(TURN_DONE_CAMEL, CTX);
+test("…and a breakdown with no total still meters rather than reading as zero", () => {
+  const out = normalize.normalize(TURN_DONE_PARTS, CTX);
   assert.equal(out[0].tokens, 2000);
   assert.equal(out[1].sessionTokens, 2100, "no `total`, so the parts are summed");
   // ⚠ AND THE SUM FALLBACK DOES NOT ADD THE CACHED TERM EITHER, for the same measured reason.
@@ -188,23 +187,13 @@ test("a reported WINDOW rides the context event — the server's denominator, ca
   assert.equal(out[0].window, 258400, "the number the platform said it is metering against");
 });
 
-test("…and it is read TOLERANTLY, off whichever carrier the enrichment used", () => {
-  // The raw nesting (`tokenUsage.modelContextWindow`), and the snake twin, both find it. A reader
-  // that knew only one spelling would silently report no denominator on a CLI that moved it.
-  const win = (params) => normalize.normalize({ method: "turn/completed", params }, CTX)[0].window;
-  const usage = { inputTokens: 100, outputTokens: 5, totalTokens: 105 };
-  assert.equal(win({ usage, tokenUsage: { modelContextWindow: 258400 } }), 258400);
-  assert.equal(win({ usage, model_context_window: 400000 }), 400000);
-  assert.equal(win({ usage: { ...usage, modelContextWindow: 272000 } }), 272000);
-});
-
 test("a turn that reports NO window says so with ABSENT, never with a zero", () => {
   // ⚠ THE INVARIANT: unknown must stay distinct from empty. A `0` here would reach a gauge as
   // "0 tokens available" — a full session painted as having no room at all.
   const out = normalize.normalize(TURN_DONE, CTX);
   assert.equal(out[0].window, null);
   assert.notEqual(out[0].window, 0);
-  // Junk and zeroes are absences too, on every carrier.
+  // Junk and zeroes are absences too.
   const win = (params) => normalize.normalize({ method: "turn/completed", params }, CTX)[0].window;
   const usage = { inputTokens: 100, outputTokens: 5, totalTokens: 105 };
   for (const junk of [0, -1, "258400", null, undefined, NaN, {}]) {

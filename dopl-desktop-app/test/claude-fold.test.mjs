@@ -149,5 +149,5 @@ test("the Claude adapter's start() stamps the prompt and watches the stream", ()
   const start = src.slice(src.indexOf("function start(spec) {"), src.indexOf("function resume("));
   assert.match(start, /fold\.makeFoldWatch\(\(text\) => sessionDirected\.steerJoined\(spec\.session, text\)\)/);
   assert.match(start, /fold\.observeQuery\(sdk\.query\(\{ prompt: watch\.stamp\(spec\.prompt\), options: spec\.options \}\), watch\.observe\)/);
-  assert.match(src, /return \{ prompt: s\.pushIterator, options: buildOptions\(s, req\.dispatch, req\.emitQuiet\), session: s \};/);
+  assert.match(src, /return \{ prompt: s\.pushIterator, options: buildOptions\(s, req\.dispatch\), session: s \};/);
 });

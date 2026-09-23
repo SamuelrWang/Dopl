@@ -32,35 +32,11 @@
 // its channel ops in-process must NOT inherit this shadow: every implementation calls
 // `grantDecision` before it acts. Stated here rather than left to be rediscovered.
 
-// ⚠ THE BRIDGE IS LAZY, AND THAT IS A LOAD-ORDER CONTRACT, NOT A STYLE. `session-gate-bridge.js`
-// reads `session-profiles.js`, which asks `main/runtime/index.js` for every gate decision — so a
-// top-level require here would close the loop and hand the gate a half-initialised module whose
-// exports are `undefined` at exactly the moment it asks for a deny list.
-const bridge = () => require('../../session-gate-bridge');
-const approval = require('./approval');
 const agentOps = require('../../agent-self-ops');
 
-/**
- * The held permission callback this runtime's launch spec wires.
- *
- * Pre-approved reads are shadowed by the platform's own allow-list and never reach here; what
- * DOES reach here is the live-gated work tools plus the channel tool. `log` is injected (the
- * engine passes its diag) so nothing on this path reaches electron.
- */
-function makeCanUseTool(s, dispatch, log) {
-  return function canUseTool(name, input, opts) {
-    const decision = bridge().gateCall(s, name, input, opts, dispatch, log);
-    if (decision.settled) {
-      return Promise.resolve(approval.answerApproval(
-        { tag: decision.tag, message: decision.message }, decision.verdict
-      ));
-    }
-    // ⚠ THE PROMISE IS THE MECHANISM, NOT A DETAIL: the platform BLOCKS THE TURN on it, which is
-    // what makes `gate` a real verdict rather than a pre-flight list. `park` hands the bridge
-    // this resolver, wrapped so the forced thread tag rides an operator ALLOW and nothing else.
-    return new Promise((resolve) => decision.park(resolve));
-  };
-}
+// The held permission callback this runtime's launch spec wires (`held-gate.js`). Pre-approved reads
+// are shadowed by the platform's own allow-list and never reach it.
+const makeCanUseTool = require('../held-gate').makeHeldGate;
 
 /**
  * In-process Axis-B tool implementations, or `null`.
@@ -205,4 +181,4 @@ const descriptor = {
   hardDeny: require('../../tool-profiles').UNIVERSAL_HARD_DENY.slice(),
 };
 
-module.exports = { makeCanUseTool, axisBTools, makeAgentOpsServer, applyRename, descriptor };
+module.exports = { makeCanUseTool, axisBTools, makeAgentOpsServer, descriptor };

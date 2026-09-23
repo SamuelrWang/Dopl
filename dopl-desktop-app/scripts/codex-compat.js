@@ -1,22 +1,8 @@
 'use strict';
 
-// THE CODEX COMPATIBILITY / RELEASE COMMAND — `npm run test:codex-compat`.
-//
-// It does the three things the plan's U1 verification bar asks for, in order:
-//
-//   1. PREFLIGHT   refuse to start unless a Codex binary resolves. ⚠ THIS IS THE POINT OF THE
-//                  COMMAND. `npm test` is allowed to skip the live tier; this one is not, and a
-//                  release gate that reports success because nothing ran is the failure mode the
-//                  whole unit exists to remove.
-//   2. SUITES      the full desktop suite with `CODEX_APP_SERVER_LIVE=1` and `CODEX_LIVE_TURN=1`,
-//                  so the unit tiers, the live app-server contract and the real-turn arms execute
-//                  (each turn runs the cheapest model at low effort).
-//   3. LEAKS       every `codex`/`app-server` process that was NOT running before the suites and
-//                  IS running after fails the command by pid and command line.
-//
-// ⚠ IT IS NOT WIRED INTO CI HERE. `.github/**` belongs to another unit; see the report that
-// accompanied this change for the step that should call it.
-//
+// `npm run test:codex-compat`, the Codex release gate: refuses to start unless a Codex binary resolves (a
+// gate that passes because nothing ran is what it exists to prevent), runs the desktop suite with the live
+// tiers armed (cheapest model, low effort), then fails on any leaked app-server. Not wired into CI.
 // Exit codes: 0 pass · 1 suites failed · 2 no usable Codex (preflight) · 3 process leak.
 
 const { spawnSync, execFileSync } = require('node:child_process');
@@ -36,18 +22,14 @@ function die(code, lines) {
   process.exit(code);
 }
 
-// ── 3. THE LEAK CENSUS ───────────────────────────────────────────────────────────────────────
-//
-// ⚠ MATCHED ON THE COMMAND LINE, NOT ON A PID FAMILY. A leaked app-server is orphaned by
-// definition — its parent is gone — so a process-tree walk from this pid would never see it.
-
+// Matched on the command line, not a pid family: a leaked app-server is orphaned, so no tree walk finds it.
 function census() {
   const found = new Map();
   let out = '';
   try {
     out = String(execFileSync('ps', ['-axo', 'pid=,command='], { maxBuffer: 8 * 1024 * 1024 }));
   } catch (_) {
-    return found; // ⚠ a census that could not run reports NOTHING, never a false clean bill
+    return found; // `ps` failed: an empty census, so the leak check cannot fire
   }
   for (const line of out.split('\n')) {
     const m = /^\s*(\d+)\s+(.*)$/.exec(line);

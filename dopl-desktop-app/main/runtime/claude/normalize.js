@@ -1,58 +1,20 @@
-// THE NORMALIZER — one raw platform message in, `CoreEvent[]` out. ⚠ THE LOAD-BEARING FUNCTION.
-//
-// ⚠ IT OWNS ALL THREE RAW-MESSAGE CONSUMERS, and that is the whole point of the seam. Before
-// 2026-08-31 the consume loop called three things on every message and each read the platform's
-// schema directly:
-//   1. the AUTH SENTINEL check, which short-circuited the loop BEFORE anything else saw the
-//      message (`session-auth.js › holdIfAuthMessage`, matching `session-auth-detect.js`);
-//   2. the RENDER MAPPING (`session-io.js › handleSdkMessage` / `› sdkRenderEvents`);
-//   3. the PER-MESSAGE USAGE watcher (`session-model.js › observe`), which sits in the loop on
-//      purpose because it needs the LAST ASSISTANT MESSAGE'S OWN usage, not the turn total.
-// If the normalizer owned only the middle one, the golden fixtures would cover a third of the
-// surface while two platform-shaped parsers stayed in core.
-//
-// ⚠ PURE. No I/O, no dispatch, no session mutation, no clock. It READS a context and RETURNS
-// events; core applies them. That is what makes every later adapter testable from a recorded
-// transcript with nothing installed — which is the only honest answer to "no live installs".
-//
-// ⚠ SO THE STATE THIS USED TO WRITE IS NOW CARRIED ON EVENTS, AND CORE WRITES IT:
-//   `s.sdkSessionId`      -> `launched.sessionId`   (core also persists the durable record)
-//   `s.lastTotalTokens`   -> `result.sessionTokens`, reported CUMULATIVE. The delta arithmetic
-//                            stays in core because it is the twin of the resume baseline reset —
-//                            one assumption, one place. ⚠ The COST twin that rode beside it is
-//                            DELETED (2026-09-22, Samuel: *"we dont need cost tracking"*).
-//   `s.promptTokens`      -> a `context` event per assistant message; core keeps the last one and
-//                            dispatches it when the turn ends. Exactly what `observe` did, on the
-//                            side of the seam that is allowed to have state.
+// THE NORMALIZER — one raw SDK message in, `CoreEvent[]` out. It owns all three raw-message
+// consumers (the auth sentinel, the render mapping, the per-message usage), so nothing in core reads
+// the platform's schema. Pure: it reads a context and returns events; core applies them.
 
 const events = require('../events');
 const io = require('../../session-io');
 const modelTable = require('./model-table');
 
-// ── THE AUTH SENTINELS ───────────────────────────────────────────────────────────────────────
-//
-// ⚠ THE CONSUMER MOVED HERE; THE MATCHERS DELIBERATELY DID NOT (2026-08-31). What the seam needs
-// is that ONE function reads the raw stream — that is what makes the fixtures cover the whole
-// surface — and that is now true: nothing in core touches a platform message any more. The
-// regexes themselves stayed in `main/session-auth-detect.js` beside the operator COPY they
-// belong to, because moving them would have created a second copy of a pattern the headless
-// path already pins against (`test/session-auth-recovery.test.mjs` drives both), for no gain
-// this wave. They move with the rest of the credential lane in the port's step 6, where the
-// banner copy, the five vendor-named modules and the IPC channel are renamed together.
+// The auth-sentinel matchers live beside the operator copy in `session-auth-detect.js`.
 const detect = require('../../session-auth-detect');
 
-// The SYNTHETIC message core mints for a REJECTION rather than a stream item. ⚠ The consume loop
-// has two ways to learn about an auth failure — a message and a thrown error — and both are
-// platform-shaped, so both come through here. Core does not decide which errors mean "no
-// credential"; it hands the text over and reads the answer.
-const ERROR_MESSAGE_TYPE = 'error';
+// Core's synthetic frame for a stream REJECTION: the thrown error's text comes through here too, so
+// core never decides which errors mean "no credential".
+const ERROR_MESSAGE_TYPE = events.ERROR_FRAME;
 
-// ── THE RENDER MAPPING ───────────────────────────────────────────────────────────────────────
-//
-// Only assistant (text turns + tool_use cards + op=post outbound messages) and user (tool_result
-// fills) produce render events. Unknown types -> []. `ctx.channelId` + `ctx.peerName` classify an
-// own-channel post as an `outbound_post` addressed to the peer; `ctx.willGatePost` (optional —
-// absent reads as "never gates") marks that post PENDING so the renderer paints the decision card.
+// Only assistant (text, thinking, tool calls) and user (tool_result) messages render; `ctx` carries
+// the channel and peer that classify an own-channel post (`events.toolCallEvents`).
 function renderEvents(msg, ctx) {
   const out = [];
   const blocks = (msg && msg.message && msg.message.content) || [];
@@ -63,37 +25,7 @@ function renderEvents(msg, ctx) {
       } else if (b && b.type === 'thinking' && b.thinking) {
         out.push(events.thinking(b.thinking)); // work lane, bounded downstream
       } else if (b && b.type === 'tool_use') {
-        if (io.isOutboundPost(b.name, b.input, ctx.channelId)) {
-          // The agent wants to SEND a message to the peer. Emit ONE `outbound_post` and SUPPRESS
-          // the generic tool card for the same tool_use, so a sent message never double-renders
-          // as a tool call. It flows THROUGH the reducer (case 'outbound_post') so it can set
-          // postedThisTurn: recorded optimistically here, un-counted on the two paths that
-          // retract a post — a failing tool_result (FIX F3) and a park (FIX F6). MEDIUM-2: `to`
-          // is the call's REAL addressee when it set one, the bound counterparty otherwise;
-          // `postKind` rides along for a lifecycle-kinded post.
-          const payload = io.withPostSurface({
-            type: 'outbound_post',
-            toolUseId: b.id,
-            text: b.input && b.input.body != null ? String(b.input.body) : '',
-          }, b.input, ctx.peerName, ctx.peerId);
-          // v2.7 L3: the SAME item becomes the inline Send / Deny card while it waits,
-          // then resolves in place. `ownChannel` feeds the card's destination line (the
-          // renderer is fail-suspicious: anything but an explicit true reads as another
-          // channel), and it is a boolean — never another channel's id (§H-9).
-          if (typeof ctx.willGatePost === 'function' && ctx.willGatePost(b.input, b.name) === true) {
-            payload.pending = true;
-            payload.ownChannel = true;
-          }
-          out.push(events.outboundPost(payload));
-        } else {
-          out.push(events.toolUse({
-            type: 'tool_use',
-            toolUseId: b.id,
-            name: b.name,
-            inputSummary: io.summarizeInput(b.input),
-            inputFull: io.safeInput(b.input),
-          }));
-        }
+        out.push(...events.toolCallEvents({ id: b.id, name: b.name, input: b.input }, ctx));
       }
     }
   } else if (msg && msg.type === 'user') {
@@ -111,13 +43,20 @@ function renderEvents(msg, ctx) {
   return out;
 }
 
-/**
- * ONE raw platform message -> the CoreEvents it means.
- *
- * ⚠ THE AUTH SENTINEL IS CHECKED FIRST AND RETURNS ALONE. It short-circuits the consume loop:
- * core stops reading, holds the session and swaps the dead-end bubble for the sign-in action.
- * Emitting render events beside it would paint the very bubble the hold exists to replace.
- */
+// The turn's main model: `SDKResultSuccess` carries no `model`, and `modelUsage` lists every model
+// the turn called (a helper model included), so the one that read the most prompt wins (RC-06).
+function mainModelOf(modelUsage) {
+  let best = null;
+  let most = -1;
+  for (const [id, u] of Object.entries(modelUsage && typeof modelUsage === 'object' ? modelUsage : {})) {
+    const read = ((u && u.inputTokens) || 0) + ((u && u.cacheReadInputTokens) || 0);
+    if (read > most) { best = id; most = read; }
+  }
+  return best;
+}
+
+/** One raw SDK message → the CoreEvents it means. The auth sentinel is checked FIRST and returns
+ *  alone: it short-circuits the consume loop, and a render event beside it would paint the dead end. */
 function normalize(msg, ctx) {
   const context = ctx || {};
   if (!msg || !msg.type) return [];
@@ -132,22 +71,14 @@ function normalize(msg, ctx) {
   if (authText) return [events.authHold(authText)];
 
   if (msg.type === 'system' && msg.subtype === 'init') {
-    // The FIRST honest statement of which model is really running (the picker asked; the platform
-    // decides). It is also the denominator for the very first turn, and it carries the
-    // conversation handle every resume depends on.
-    // ⚠ AND IT CARRIES `mcp_servers` SINCE 2026-09-13 (F-692). This message is where this runtime
-    // states which MCP servers it CONNECTED — `{ name, status }[]`, status one of
-    // connected / connecting / pending / needs-auth / failed / disabled (measured in the bundled
-    // binary) — and nothing read it, so a `dopl` entry that timed out on the CLI's 5s connect
-    // budget produced a session with no delivery path and no complaint. Forwarded RAW: the shape
-    // is this platform's, the DECISION is core's (`main/mcp-connect.js`).
+    // The conversation handle, the model really running, and the raw MCP connect list — the
+    // shape is this platform's, the decision core's (`mcp-connect.js`, F-692).
     return [events.launched(msg.session_id, msg.model, msg.mcp_servers)];
   }
 
   if (msg.type === 'assistant' || msg.type === 'user') {
     const out = renderEvents(msg, context);
-    // ⚠ A SUBAGENT'S MESSAGES STILL RENDER BUT NEVER METER. A delegated run has its own context
-    // window, so counting its prompt as the session's makes the meter jump and then snap back.
+    // A subagent's messages render but never meter: a delegated run has its own window.
     if (msg.type === 'assistant' && msg.parent_tool_use_id == null) {
       const m = msg.message || {};
       const tokens = modelTable.promptTokens(m.usage);
@@ -159,17 +90,8 @@ function normalize(msg, ctx) {
   }
 
   if (msg.type === 'result') {
-    // ⚠ REPORTED CUMULATIVE, DELTA'D IN CORE. `usage` is this QUERY's running total, so a resumed
-    // query restarts it from zero — and summing DELTAS is what makes the figure survive a
-    // park+resume where the raw total would collapse it. The arithmetic and the resume baseline
-    // are one assumption and live together in core.
-    // ⚠ `total_cost_usd` IS ON THIS MESSAGE AND IS DELIBERATELY NOT READ (2026-09-22). It was the
-    // first argument to `events.result` and it fed an accumulator no surface ever showed; Samuel's
-    // ruling deleted the whole column, so the field the platform offers is simply not taken.
-    return [events.result(
-      modelTable.sessionTokens(msg.usage),
-      msg.model || (msg.modelUsage && Object.keys(msg.modelUsage)[0]) || null
-    )];
+    // Cumulative for this QUERY (a resumed query restarts it); core takes the delta. No cost is read.
+    return [events.result(modelTable.sessionTokens(msg.usage), mainModelOf(msg.modelUsage))];
   }
 
   return []; // unknown types ignored

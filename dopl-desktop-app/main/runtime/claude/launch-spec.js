@@ -1,36 +1,11 @@
-// THE LAUNCH SHAPE — ⚠ THE ONE ASSEMBLY POINT FOR EVERY SPAWN ON THIS RUNTIME.
-//
-// ⚠ MOVED HERE FROM `main/session-query.js › buildSdkOptions` ON 2026-08-31 (runtime-adapter
-// port, step 3). What changed is that core no longer knows what is IN the object:
-// `buildLaunchSpec` answers an OPAQUE payload and `start` / `resume` are the only things that
-// open it.
-//
-// ⚠ THIS HEADER CLAIMED "byte-identical to what shipped" AND THE CLAIM WAS RETRACTED 2026-09-01.
-// It was false of this very file: `buildOptions` appended two tool names to `allowedTools` and
-// mounted a second MCP server that DOES NOT EXIST AT HEAD. The honest statement for the port is
-// BEHAVIOUR-PRESERVING WITH SEVEN DECLARED OBSERVABLE DIFFERENCES, and the enumerated list is
-// `docs/INVARIANTS.md` §11.0g — read it before assuming an existing Claude session behaves as it
-// did. ⚠ "byte-identical" IS AN INSTRUCTION NOT TO LOOK, which is exactly why it may not be
-// asserted by a file that has drifted; what IS still true of this file is narrower and is stated
-// below. The pins, the ordering and the gate wiring below really did move unchanged.
-//
-// SECURITY: fresh launch, parked resume, recreated shell and post-sign-in relaunch ALL come
-// through here, so the pre-approval shadow rule, the held gate, the scrubbed env, the deny list,
-// the ambient-config isolation and the pinned permission mode hold identically on all of them.
-// `options.resume` is the only field that ever differs between a cold launch and a resume.
-//
-// ⚠ THE THREE PINS THAT ARE NOT PREFERENCES:
-//   `settingSources: []`      the operator's global allow-list can never shadow a gate. It also
-//                             makes this runtime's own connector kill-switch unreadable, which is
-//                             why the env var below exists — tightening the sandbox removed the
-//                             switch.
-//   `permissionMode: 'default'` any wider mode STOPS THE PLATFORM CALLING THE GATE AT ALL, which
-//                             kills the outbound consent card and the hard-deny path together.
-//                             This is why Dopl's widest Axis-A mode is not the platform's bypass.
-//   `includePartialMessages: false` the outbound card shows the operator the bytes a post will
-//                             send, so a streamed tool input must be the WHOLE, FINAL input. And
-//                             NO input-rewriting hook layer is ever set: a second rewriter could
-//                             change the input the card already painted.
+// THE LAUNCH SHAPE — the one assembly point for every spawn on this runtime (fresh launch, parked
+// resume, post-sign-in relaunch), so every pin below holds on all of them; `options.resume` is the
+// only field that differs. The pins that are not preferences:
+//   `settingSources: []`             the operator's global allow-list can never shadow the gate.
+//   `permissionMode: 'default'`      any wider mode stops the platform calling the gate at all
+//                                    (Dopl's gate implements bypass; deliberate).
+//   `includePartialMessages: false`  the outbound card shows the exact final bytes a post sends,
+//                                    and no input-rewriting hook is ever set.
 
 const loader = require('./loader');
 const tools = require('./tools');
@@ -39,204 +14,78 @@ const agentOps = require('../../agent-self-ops');
 const channelDirs = require('../../channel-dirs');
 const store = require('../../session-store');
 const sessionAuth = require('../../session-auth');
-const sessionOutbound = require('../../session-outbound');
 const models = require('./models');
 const sessionCredential = require('../../session-credential');
 const sessionDirected = require('../../session-directed');
 const fold = require('./fold');
 const { diag } = require('../../diag');
 
-// ── THE LOOP BRAKE — ⚠ ONE CONSTANT, EVERY PROFILE, EVERY SPAWN SHAPE ────────
-//
-// G19 ("respond and loop until the goal is met, then STOP") was prompt-only:
-// every turn framing said it and nothing in the turn path bounded anything. The
-// SDK has exposed `maxTurns` all along and this runtime set it NOWHERE, so a
-// session that stopped producing `result` events had no ceiling at all.
-//
-// ⚠ **IT IS A RUNAWAY BACKSTOP, NOT THE OPERATOR-VISIBLE CAP, AND READING IT AS
-// THE LATTER IS THE MISTAKE TO AVOID.** Dopl's own bound is
-// `main/session-state.js › defaultTurnCap` (200 operator-launched / 24
-// agent-issued, operator-settable via
-// `settings.js › getTurnCap`), enforced by the reducer at every `result` event,
-// which ENDS the session with `turn_cap` and tells the operator so. That one
-// stays the real limit and fires first. This one exists for the case the reducer
-// cannot see: a query that never reaches another `result`.
-//
-// ⚠ **THE NUMBER IS DELIBERATELY ~40× THAT CAP, SO IT CANNOT FIRE IN AN ORDINARY
-// SESSION**, and the reason is that the SDK's own type carries TWO definitions of
-// a "turn" — `Options.maxTurns` says "a user message and assistant response"
-// while `AgentDefinition.maxTurns` says "agentic turns (API round-trips)". Under
-// the first reading the reducer's 24 ends everything long before this; under the
-// second this allows ~40 round-trips per Dopl turn at the default cap. A tighter
-// value would be a guess that KILLS LONG SESSIONS under whichever reading turned
-// out to be right, and the SDK's answer when it fires is `error_max_turns` — a
-// dead session, not a paused one.
-//
-// ⚠ **NOT PER PROFILE, AND THAT IS AN ARGUMENT RATHER THAN A SHORTCUT.** A tool
-// profile bounds what a session may DO; it says nothing about how long it may
-// loop, and a second table keyed on profile would be a permission axis wearing a
-// budget's clothes — a `read_only` session that hit a lower ceiling would end
-// with a message about turns for a reason that was really about tools.
-//
-// ⚠ **IT IS A LITERAL AGAIN, AND THE REASON IS THE WHOLE POINT OF THIS COMMENT**
-// (2026-09-07). It was `MAX_TURNS_FACTOR * OPERATOR_TURN_CAP` — 40 round-trips
-// per Dopl turn, derived so the ratio stayed true at both cap tiers. Samuel then
-// ruled the operator-facing turn and cost caps DELETED, which removes
-// `OPERATOR_TURN_CAP` from `session-state.js` entirely. Left derived, this line
-// would have evaluated to `NaN`, and `maxTurns: NaN` is NO BOUND AT ALL: the one
-// brake the ruling deliberately kept would have been deleted by the deletion,
-// silently, with nothing failing to say so.
-//
-// ⚠ **THIS IS NOT THE CAP THAT WAS REMOVED, AND THE DISTINCTION IS NOW THE ONLY
-// ONE LEFT.** Dopl's operator-visible ceiling is gone — nothing ends a session on
-// turn count or spend any more, by ruling. This is the runaway backstop for the
-// case the reducer never could see: a query that stops producing `result` events.
-// It is not settable, it is not per profile, and it is not a budget. Do not
-// re-expose it as one; the ceiling was removed on purpose and re-adding a knob
-// here would restore it under a different name.
-//
-// ⚠ **8000 IS WHAT THE DERIVATION EVALUATED TO** (40 × the old 200-turn operator
-// default), kept rather than re-picked so the ruling changed exactly one thing.
-// The sizing argument above still holds at this number: ~40 round-trips per Dopl
-// turn under one reading of `maxTurns`, far out of reach under the other, so it
-// cannot fire in an ordinary session. A smaller value would be a guess that kills
-// long sessions with `error_max_turns` — a dead session, not a paused one — which
-// is precisely the harm the deletion was meant to end.
-// ⚠ STILL ONE NUMBER ON EVERY SPAWN SHAPE, NOT A PER-SESSION VALUE: that is what
-// keeps "a park cannot shed the brake" and "every profile gets the same number"
-// true.
+// The runaway backstop for a query that never reaches another `result` — NOT the operator turn cap
+// (deleted by ruling), not per profile, not settable. 8000 = 40 × the old 200-turn default, so it
+// cannot fire in an ordinary session; one number on every spawn shape, so a park cannot shed it.
 const SESSION_MAX_TURNS = 8000;
 
-function buildOptions(s, dispatch, emitQuiet) {
+function buildOptions(s, dispatch) {
   const cfg = tools.buildSessionToolConfig(s.profile);
   const options = {
-    // Item 7: the per-channel folder (else ~/Downloads) as the cwd. Context (§H-9), not a fence.
+    // The per-channel folder (else ~/Downloads): context (§H-9), not a fence.
     cwd: channelDirs.sessionSpawnDir(s.channelId),
-    // ⚠ THE PROFILE'S LIST, WHOLE AND UNEXTENDED. This read `cfg.preApproved.concat(agentOps
-    // .AGENT_OPS_TOOL_NAMES)` until 2026-09-01 (D7.2): the two agent-ops verbs were appended HERE,
-    // downstream of the table, so they were shadowed past `canUseTool` on every profile —
-    // `read_only` included — without appearing in the table the descriptor mirrors, the deepEqual
-    // pins read, or `grantDecision` consults. They are now declared per profile in `tools.js ›
-    // buildSessionToolConfig` (see its AGENT-OPS note), which is where a deny list can refuse one.
-    // ⚠ NOTHING MAY BE ADDED TO THIS LINE. An `allowedTools` entry the profile table does not
-    // declare is a shadow no profile can refuse, which is the whole of the defect above.
-    allowedTools: cfg.preApproved, // pre-approved => SHADOWED, no button (§A.5)
-    // C1: the profile's hard-deny PLUS the credential-path rules — a pre-approved read is SHADOWED
-    // and never reaches the gate, so only this tool-bound layer can fence userData / the CLI's
-    // own config directory.
+    // The profile table's list, whole: pre-approved = shadowed past the gate, so nothing may be
+    // appended here (an entry the table does not declare is a shadow no profile can refuse).
+    allowedTools: cfg.preApproved,
+    // Hard-deny plus the credential-path rules: a shadowed read never reaches the gate, so only this
+    // layer fences userData and the CLI's own config directory.
     disallowedTools: cfg.disallowedTools.concat(loader.buildSecretPathDenyRules()),
-    // v2.x: buildMcpServers PINS this session's workspace (X-Workspace-Id), so a call that omits
-    // `workspace=` auto-targets instead of being refused; a per-call `workspace=` still wins.
-    // 🔒 CONTAINER LOCK (plan §4.4 B1): `sessionBearer(s)` is the child credential
-    // `session-credential.js` stamped on this session at spawn when its workspace is a SHARED
-    // link container, and '' for every other session. It REPLACES the device token, so a locked
-    // session — and anything it shells out to, which inherits the same credential — is refused
-    // every other workspace server-side. The `X-Workspace-Id` pin below it stays a hint that
-    // grants nothing; this is the part that actually refuses.
-    // ⚠ Read HERE rather than minted here: this function is synchronous and is re-entered by
-    // every spawn shape, park/resume included, so the credential must already be on `s`.
+    // `sessionBearer(s)`: the container-locked child credential minted at spawn for a shared link
+    // container ('' otherwise). It replaces the device token and is what refuses other workspaces
+    // server-side; `X-Workspace-Id` is only a hint. Read, not minted: this function is synchronous.
     mcpServers: loader.buildMcpServers(cfg.doplToolsPolicy, s.workspaceId, sessionCredential.sessionBearer(s)),
-    settingSources: [], // ALWAYS — the global allow-list can never shadow a gate
-    permissionMode: 'default', // FIX M2: pin — a wider mode short-circuits the held gate
-    // FIX M2: strip permission-mode env knobs, keep auth (loader). Q6: withStoredCredential adds
-    // this runtime's OAuth token only when our own setup-token is this machine's ONLY credential.
+    settingSources: [],
+    permissionMode: 'default',
+    // Permission knobs scrubbed; the stored OAuth token added only when it is this Mac's only credential.
     env: sessionAuth.withStoredCredential(loader.buildScrubbedEnv()),
-    // C6: the gate is unchanged; the wrapper only resolves the card an ALLOWED post painted.
-    canUseTool: sessionOutbound.wrapGate(s, axisB.makeCanUseTool(s, dispatch, diag), emitQuiet), // diag: the forced-thread-tag conflict log (the bridge stays electron-free)
+    // `diag` is injected so the gate bridge stays electron-free.
+    canUseTool: axisB.makeCanUseTool(s, dispatch, diag),
     abortController: s.abortController,
-    includePartialMessages: false, // LOAD-BEARING for v2.7 L3 (FIX F4) — see the header
-    // THE LOOP BRAKE (G19). ⚠ UNCONDITIONAL: every profile, and every spawn
-    // shape, because a resume re-enters this same assembly point and a bound that
-    // a park could shed would not be one. See SESSION_MAX_TURNS above.
+    includePartialMessages: false,
     maxTurns: SESSION_MAX_TURNS,
   };
-  // F2 — THIS RUN'S SLOT KEY onto the dopl entry (X-Dopl-Session-Id), which the server turns into
-  // the reserved `metadata.session_id`. `store.slotKey` is the ONE definition of a slot — (channel,
-  // agent) for a team session, (channel, thread) for every other shape — so the stamp names exactly
-  // the registry slot this run occupies, and two concurrent sessions of ONE agent handle stamp two
-  // DIFFERENT values (which is the whole point: nothing on the wire could tell them apart). Applied
-  // here rather than inside buildMcpServers because that builder answers "what MCP server does this
-  // app offer", the same answer for every spawn. A LABEL, not a lock: nothing here limits how many
-  // run, and a missing slot stamps nothing.
+  // This run's slot key (X-Dopl-Session-Id → the server's `metadata.session_id`): a label, not a lock.
   loader.withSessionStamp(options.mcpServers, store.slotKey(s));
-  // THIS SESSION'S ROLE onto the same entry (X-Dopl-Tool-Profile), so the server can offer a
-  // narrower tool set than the whole surface. Same seam and the same rules as the stamp above:
-  // applied here rather than inside `buildMcpServers`, because that builder answers "what MCP
-  // server does this app offer" and this is a per-run fact. ⚠ NARROWING-ONLY AND IT GRANTS
-  // NOTHING — `s.profile` is the profile this spawn is already contained at, normalized through
-  // the same fail-closed read, and a value the server does not recognize is served everything.
+  // This run's profile (X-Dopl-Tool-Profile): the server may only narrow the surface; it grants nothing.
   loader.withToolProfileStamp(options.mcpServers, s.profile);
-  // AGENT-DRIVEN AGENT MANAGEMENT (2026-08-31): the in-process rename/end server, mounted
-  // BESIDE the dopl entry (never inside it — the dopl entry is the pinned literal above).
-  // Null (SDK namespace not cached yet, or a harness) mounts nothing and the launch proceeds:
-  // a display/stop verb must never break a spawn. The own-agents-only argument, the shadow
-  // argument and the self-end refusal all live in agent-self-ops.js's header.
+  // The in-process rename/end server, beside the dopl entry; null mounts nothing (never breaks a spawn).
   const agentOpsServer = axisB.makeAgentOpsServer(s);
   if (agentOpsServer) options.mcpServers[agentOps.SERVER_KEY] = agentOpsServer;
-  // ⚠ THE COMMENT USED TO SAY `[] => full offers all`, AND SINCE A5 (2026-09-02)
-  // `full` CARRIES A POSITIVE BOUND LIKE EVERY OTHER PROFILE — an empty array is
-  // now only ever a profile that offers no built-ins at all. What `[]` means to
-  // the SDK is separately disputed (F-427), which is the second reason not to
-  // send one: this line omits `tools` rather than asserting an interpretation.
+  // Omitted when empty: what `[]` means to the SDK is disputed (F-427).
   if (cfg.builtinTools.length) options.tools = cfg.builtinTools;
   const bin = loader.resolveClaudeExecutable();
   if (bin) options.pathToClaudeCodeExecutable = bin;
-  // THE PER-SESSION MODEL. `s.model` survives park/resume and the post-sign-in relaunch for
-  // free, because every one of those shapes re-enters through this one assembly point on the
-  // SAME session object.
-  // ⚠ RESOLVED ON THE LIVE ROSTER SINCE 2026-09-22 (`models.js › launchArg`), not coerced into a
-  // frozen five-alias enum: a pick launches as the row it names, by that row's own `value`, and
-  // absent is the product fallback. An unknown pick never reaches here on a launch — the funnel
-  // refused it (`session-launch.js`); a resumed session's own recorded id is sent as itself.
+  // The row's own launch value on the live roster; absent is the runtime default (`models.js › launchArg`).
   const model = models.launchArg(s.model);
   if (model) options.model = model;
   if (s.resumeSdkId) options.resume = s.resumeSdkId;
   return options;
 }
 
-/**
- * The OPAQUE launch payload core hands straight back to `start` / `resume`.
- *
- * ⚠ THE PROMPT IS PART OF IT. This runtime consumes a push-based async iterable as the live
- * prompt (`session-io.js › makePushIterator`), so the prompt and the options are one launch
- * shape here and could be two calls elsewhere. Core must not hold that difference.
- * ⚠ ONE ARGUMENT, CARRYING THE ENGINE'S TWO INJECTED HANDLES. The held gate needs the dispatch
- * and the replay-aware quiet emitter, and this module must not require the engine back; the
- * contract's single-argument signature is what keeps that a request object rather than a growing
- * parameter list core would have to keep in step per runtime.
- */
+/** The opaque launch payload core hands back to `start` / `resume`; the prompt (a push iterable on
+ *  this runtime) is part of it. */
 function buildLaunchSpec(request) {
   const req = request || {};
   const s = req.session;
-  return { prompt: s.pushIterator, options: buildOptions(s, req.dispatch, req.emitQuiet), session: s };
+  return { prompt: s.pushIterator, options: buildOptions(s, req.dispatch), session: s };
 }
 
-/**
- * Start a run. ⚠ SYNCHRONOUS BY CONTRACT: core assigns the returned handle to the session
- * IMMEDIATELY, and an await between "the child exists" and "something points at it" is how the
- * two-children bug happened — a second child still holding this session's channel access, with
- * nothing left to stop it.
- */
+/** Start a run. SYNCHRONOUS by contract: core assigns the handle at once, and an await between "the
+ *  child exists" and "something points at it" is the two-children bug. */
 function start(spec) {
   const sdk = loader.peekSdk();
-  // A push the CLI folds into the running turn is a join of that turn (`fold.js`, P4-05).
+  // A push the CLI folds into the running turn joins that turn (`fold.js`, P4-05).
   const watch = fold.makeFoldWatch((text) => sessionDirected.steerJoined(spec.session, text));
   return fold.observeQuery(sdk.query({ prompt: watch.stamp(spec.prompt), options: spec.options }), watch.observe);
 }
 
-/**
- * Resume a parked conversation.
- *
- * ⚠ IT IS A NEW CHILD PROCESS, WHICH IS WHY `priorHandle` IS IGNORED HERE. On this runtime a
- * resume differs from a cold launch by exactly one field — the conversation id already written
- * into `spec.options` — so there is no live handle to re-attach to. A runtime that re-attaches
- * uses the second argument; the signature exists for it.
- * ⚠ AND THE COST BASELINES RESET. `session-park.js › resumeParked` zeroes both delta baselines on
- * the assumption that this runtime restarts cumulative usage on a resumed query. That assumption
- * is declared as `descriptor.session.usageResetsOnResume` and is LAUNCH-BLOCKING when
- * unverified — a runtime that CONTINUES the total makes every delta negative, clamps it to zero,
- * and silently stops the cost cap firing.
- */
+/** Resume a parked conversation: a new child with `options.resume` set, so `priorHandle` is unused. */
 function resume(spec, _priorHandle) {
   return start(spec);
 }

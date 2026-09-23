@@ -37,15 +37,12 @@ const d = (id) => registry.descriptorFor(id);
 // ── 1. THE SIGN-IN SENTENCE, PER RUNTIME ─────────────────────────────────────────────────────
 
 test("a signed-out Codex says `Sign in to Codex`; the Claude path still says Claude", () => {
-  assert.equal(copy.signInAction(d("codex")), null, "Codex has no in-app flow — no BUTTON");
-  assert.equal(copy.signedOutLaunchCopy(d("codex")), "Sign in to Codex to start an agent");
+  assert.equal(copy.errorCopy(d("codex"), "runtime-signed-out").action, null, "Codex has no in-app flow — no BUTTON");
   assert.equal(copy.heldToolDenial(d("codex")), "Sign in to Codex to continue");
-  assert.match(copy.signInPointer(d("codex")), /^Sign in to Codex/);
   // ⚠ AND CODEX MUST NOT BE ABLE TO SAY CLAUDE ANYWHERE — the verification bar itself.
   for (const line of [
-    copy.signedOutLaunchCopy(d("codex")), copy.heldToolDenial(d("codex")),
+    copy.heldToolDenial(d("codex")),
     copy.resumeNudge(d("codex")), copy.noRuntimeCopy(d("codex")),
-    copy.authHoldCopy(d("codex"), "error").body, copy.authHoldCopy(d("codex"), "preflight").body,
     copy.errorCopy(d("codex"), "runtime-signed-out").body,
   ]) {
     assert.ok(!/Claude|Anthropic/.test(line), `a Codex sentence named Claude: ${line}`);
@@ -53,13 +50,13 @@ test("a signed-out Codex says `Sign in to Codex`; the Claude path still says Cla
 
   // ⚠ THE OTHER HALF: CLAUDE IS UNTOUCHED. A de-naming that fires on every runtime is a
   // regression, not a feature — and it still says Claude because the DESCRIPTOR does.
-  assert.equal(copy.signInAction(d("claude")), "Sign in to Claude Code");
+  assert.equal(copy.errorCopy(d("claude"), "runtime-signed-out").action, "Sign in to Claude Code");
   assert.match(copy.heldToolDenial(d("claude")), /Claude/);
   assert.match(copy.resumeNudge(d("claude")), /^Claude Code sign-in is restored on this Mac/);
 });
 
 test("three runtimes, three sentences — a copy function that ignored the descriptor would pass one at a time", () => {
-  for (const fn of ["noRuntimeCopy", "signedOutLaunchCopy", "heldToolDenial", "resumeNudge"]) {
+  for (const fn of ["noRuntimeCopy", "heldToolDenial", "resumeNudge"]) {
     const said = registry.ids().map((id) => copy[fn](d(id)));
     assert.equal(new Set(said).size, registry.ids().length, `${fn} answered one string for every runtime`);
   }
@@ -72,11 +69,7 @@ test("hide, never gray: only a runtime with a real in-app flow offers an ACTION"
   // POINTER so the banner never goes silent.
   assert.equal(copy.canSignIn(d("claude")), true);
   assert.equal(copy.canSignIn(d("codex")), false);
-  assert.equal(copy.signInWorking(d("codex")), null);
-  const held = copy.authHoldCopy(d("codex"), "error");
-  assert.equal(held.actionable, false, "no button");
-  assert.match(held.action, /Sign in to Codex/, "…but still a stated remedy");
-  assert.equal(copy.authHoldCopy(d("claude"), "error").actionable, true);
+  assert.match(copy.errorCopy(d("codex"), "runtime-signed-out").body, /signed in to Codex/, "…but the fact is still said");
 });
 
 // ── 2. THE STRUCTURED ERROR CODES ────────────────────────────────────────────────────────────
@@ -123,11 +116,9 @@ test("`detail` is passed through verbatim and is the ONE part allowed to name a 
 test("with no descriptor every sentence names NO vendor, and none of them is a placeholder splice", () => {
   // ⚠ A plain browser and every desktop older than the runtime port send no descriptor. Naming
   // Claude there was the old behaviour and it was wrong whenever Claude was not the runtime.
-  assert.equal(copy.named(null), "", "'' is the UNKNOWN answer, distinct from a label");
   assert.equal(copy.noRuntimeCopy(null), "No agent runtime on this Mac");
-  assert.equal(copy.signedOutLaunchCopy(null), "Sign in to your agent runtime to start an agent");
   for (const line of [
-    copy.noRuntimeCopy(null), copy.signedOutLaunchCopy(null), copy.heldToolDenial(null),
+    copy.noRuntimeCopy(null), copy.heldToolDenial(null),
     copy.resumeNudge(null), copy.errorCopy(null, "runtime-crashed").body,
   ]) {
     assert.ok(!/Claude|Codex|Cursor|Anthropic|OpenAI/.test(line), line);

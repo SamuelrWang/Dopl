@@ -408,3 +408,15 @@ test("a result emits exactly status + scheduleIdle and moves the turn counter", 
 // model picker could not be driven while a consent decision was mid-flight. If a future surface
 // offers a mid-session model switch, that gap is a live requirement and it is currently pinned
 // NOWHERE — this comment is its only remaining trace.
+
+test("RC-06: a turn's result names the model that read the most prompt, not the first key", () => {
+  // `SDKResultSuccess` has no `model`; `modelUsage` lists every model the turn called, helpers too.
+  const ev = normalize(result({
+    modelUsage: {
+      "claude-haiku-4-5-20251001": { inputTokens: 900, cacheReadInputTokens: 0 },
+      "claude-opus-5": { inputTokens: 1200, cacheReadInputTokens: 40000 },
+    },
+  }), {}).find((e) => e.type === "result");
+  assert.equal(ev.model, "claude-opus-5");
+  assert.equal(normalize(result(), {}).find((e) => e.type === "result").model, null, "no usage, no model");
+});

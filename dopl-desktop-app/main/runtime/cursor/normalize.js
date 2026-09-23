@@ -1,54 +1,22 @@
-// THE NORMALIZER — one raw stream event in, `CoreEvent[]` out. ⚠ THE LOAD-BEARING FUNCTION.
-//
-// ⚠ IT OWNS ALL THREE RAW-MESSAGE CONSUMERS, like every adapter's: the AUTH SENTINEL (which
-// short-circuits the consume loop before anything else sees the message), the RENDER MAPPING, and
-// the PER-TURN USAGE. If it owned only the middle one, the fixtures would cover a third of the
-// surface while two platform-shaped parsers stayed in core.
-//
-// ⚠ PURE. No I/O, no dispatch, no session mutation, no clock. It READS a context and RETURNS
-// events. That is what makes this adapter testable from RECORDED events with nothing installed —
-// the only honest answer to "no live installs".
-//
-// ⚠ AND EVERY READER IS TOLERANT BECAUSE THE RESEARCH SAYS TO BE. `cursor-research.md` documents
-// `tool_call.args` / `.result` as "internal-facing and may change" and the SDK as public beta, so
-// a Dopl tool card built on their shape needs a tolerant mapper and a plain fallback rendering.
-// That is a documented instruction, not a defensive habit: §5 item X3 is the volatility check, and
-// a correction from it is a fixture edit rather than a rewrite.
+// THE NORMALIZER — one raw Cursor stream event in, `CoreEvent[]` out: the auth sentinel, the render
+// mapping and the per-turn usage. Pure. Readers are tolerant because the research documents
+// `tool_call.args` / `.result` as internal-facing and the SDK as public beta.
 
 const events = require('../events');
 const io = require('../../session-io');
 
-// ── THE SYNTHETIC FRAMES ─────────────────────────────────────────────────────────────────────
-//
-// ⚠ NAMESPACED `dopl/` SO NOBODY MISTAKES THEM FOR PROTOCOL. Two facts this platform reports
-// OUTSIDE the stream have to reach a pure normalizer somehow, and `launch-spec.js` mints a frame
-// for each rather than core learning to read them:
-//   `dopl/agentCreated`  the agent handle `Agent.resume()` needs, which arrives as the RESULT of
-//                        `Agent.create()`. There is no `created` notification to read.
-//   `dopl/turnCompleted` the turn's TOKEN usage, which `run.usage` carries but which core needs
-//                        as one terminal frame. ⚠ THE COST WAS THE ORIGINAL REASON THIS FRAME
-//                        EXISTED — `agent.getUsage()` is a CALL (`{rawCostCents, chargedCents}`),
-//                        not a stream event, so only a minted frame could carry it — AND THE COST
-//                        COLUMN IS DELETED TREE-WIDE (2026-09-22, Samuel: *"we dont need cost
-//                        tracking"*). The frame stays because the TOKEN half still needs it: a
-//                        pure normalizer cannot reach `run.usage` after the stream has ended.
+// Synthetic frames (namespaced `dopl/`, never protocol) that `launch-spec.js` mints for facts outside
+// the stream: the agent handle (`Agent.create()`'s result) and each turn's usage (`run.usage`).
 const AGENT_CREATED = 'dopl/agentCreated';
 const TURN_COMPLETED = 'dopl/turnCompleted';
-const ERROR_MESSAGE_TYPE = 'error';
+const ERROR_MESSAGE_TYPE = events.ERROR_FRAME;
 
-// ── AUTH SENTINELS ───────────────────────────────────────────────────────────────────────────
-//
-// ⚠ A PATTERN, NOT A SENTENCE, AND DECLARED UNVERIFIED. This runtime's real credential probe is
-// `cursor-agent status` (`credential.js`). What text a signed-out SDK puts in a rejection is not
-// documented anywhere in the research, so this matches the generic shapes an auth failure takes
-// rather than a sentence somebody imagined the library throwing (§5 item X18). ⚠ OVER-MATCHING IS
-// THE SAFE DIRECTION: a false positive parks the session and offers the credential path, which is
-// recoverable; a false negative renders a dead-end bubble the operator cannot act on.
+// A pattern, unverified: the signed-out error text is undocumented. Over-matching is the safe
+// direction (a false positive parks the session recoverably; a false negative is a dead end).
 const AUTH_SHAPED_RE = /\b(401|403)\b|unauthor(?:ised|ized)|not\s+logged\s+in|log\s*in\s+required|login\s+required|authentication\s+(?:failed|required)|invalid\s+(?:api\s+)?(?:key|token)|expired\s+(?:credential|token)|CURSOR_API_KEY/i;
 
 const isAuthShaped = (text) => AUTH_SHAPED_RE.test(String(text == null ? '' : text));
 
-// ── TOLERANT READERS ─────────────────────────────────────────────────────────────────────────
 
 /** The human text on an event, under any of the spellings one might carry it. */
 function textOf(ev) {
@@ -65,7 +33,7 @@ function textOf(ev) {
   return '';
 }
 
-/** The call id a `tool_call` is keyed on. ⚠ The card and its fill join on THIS and nothing else. */
+/** The call id a `tool_call` is keyed on; the card and its fill join on this alone. */
 function callIdOf(ev) {
   const e = ev && typeof ev === 'object' ? ev : {};
   for (const key of ['call_id', 'callId', 'toolCallId', 'id']) {
@@ -91,11 +59,7 @@ const nameOf = (ev) => {
   return '';
 };
 
-// ⚠ THE FIELD NAMES ARE DOCUMENTED HERE, UNLIKE ON THE OTHER RUNTIMES — `cursor-research.md` names
-// `TokenUsage` as `inputTokens` / `outputTokens` / `cacheReadTokens` / `cacheWriteTokens` /
-// `totalTokens` / `reasoningTokens`, which is why `descriptor.meter.fields` is a LIST here and
-// `null` there. The snake_case spellings are belt for a beta SDK, not a guess dressed as a
-// measurement.
+// `TokenUsage` field names are documented; the snake_case twins are belt for a beta SDK.
 const IN_KEYS = ['inputTokens', 'input_tokens'];
 const CACHE_KEYS = ['cacheReadTokens', 'cache_read_tokens'];
 const OUT_KEYS = ['outputTokens', 'output_tokens'];
@@ -127,22 +91,8 @@ function tokensFrom(usage) {
   return { prompt: input + cached, session: total || (input + cached + output) };
 }
 
-// 🔒 ⚠ **`costFrom` IS DELETED (2026-09-22).** It turned `agent.getUsage()`'s `chargedCents` into
-// USD and was the only real cost NORMALISATION in the tree — the other two adapters passed a
-// platform field straight through or passed `null`. It fed `events.result`'s first argument, which
-// fed `state.costUsd`, which fed the durable record and NOTHING ELSE: no projection, no wire
-// field, no renderer. Samuel deleted the column outright (*"there shouldnt be cost? Claude theres
-// no cost tracking. we dont need cost tracking"*), so the reader goes with it rather than becoming
-// a function nobody calls. ⚠ THIS IS NOT A PARITY CHANGE — it is the same deletion applied here
-// as everywhere else; nothing about this runtime's BEHAVIOUR was investigated or altered.
 
-// ── THE RENDER MAPPING ───────────────────────────────────────────────────────────────────────
-//
-// ⚠ A CALL WE CANNOT CLASSIFY STILL RENDERS A PLAIN TOOL CARD. Rendering nothing for a shape a
-// later SDK version adds would make a session look like it did nothing between two turns, which is
-// a worse failure than a card whose summary is thin — and the research warns that these payloads
-// move. Only a call with no id at all is dropped, because a card that can never be filled by its
-// own result is noise.
+// A call that cannot be classified still renders a plain tool card; only a call with no id is dropped.
 const RUNNING = ['running', 'started', 'in_progress', 'pending'];
 const FAILED = ['error', 'failed', 'cancelled', 'canceled'];
 
@@ -152,39 +102,8 @@ function toolCallEvents(ev, ctx) {
   const status = String(ev.status || ev.state || '');
   const name = nameOf(ev) || 'unknown';
   const input = argsOf(ev);
-  if (RUNNING.indexOf(status) !== -1 || !status) {
-    if (io.isOutboundPost(name, input, ctx.channelId)) {
-      // The agent wants to SEND a message to the peer. ONE `outbound_post`, and the generic tool
-      // card for the same call is SUPPRESSED so a sent message never double-renders.
-      const payload = io.withPostSurface({
-        type: 'outbound_post',
-        toolUseId: id,
-        text: input && input.body != null ? String(input.body) : '',
-      }, input, ctx.peerName, ctx.peerId);
-      // v2.7 L3: the SAME item becomes the inline Send / Deny card while it waits, then resolves
-      // in place. ⚠ WHETHER IT REALLY RESOLVES IN PLACE ON THIS RUNTIME IS §5 ITEM X16: the gate's
-      // card is keyed on the id `axis-b.js › execute` was handed, and nothing in the research says
-      // an `execute()` implementation is handed the stream's `call_id`. If it is not, this card is
-      // painted and answered on a SEPARATE card rather than in place. The DECISION is unaffected —
-      // every call still stops at `grantDecision` — but the rendering is, so it is declared.
-      if (typeof ctx.willGatePost === 'function' && ctx.willGatePost(input, name) === true) {
-        payload.pending = true;
-        payload.ownChannel = true;
-      }
-      return [events.outboundPost(payload)];
-    }
-    return [events.toolUse({
-      type: 'tool_use',
-      toolUseId: id,
-      name: name,
-      inputSummary: io.summarizeInput(input),
-      inputFull: io.safeInput(input),
-    })];
-  }
-  // ⚠ `ok` IS FALSE ONLY ON AN EXPLICIT FAILURE. A call that reports an unrecognised status reads
-  // as SUCCESS, because a false negative retracts an `outbound_post` the operator already saw sent
-  // (the reducer un-counts a post on a failing result) — claiming a delivered message failed is
-  // worse than missing a failure.
+  if (RUNNING.indexOf(status) !== -1 || !status) return events.toolCallEvents({ id, name, input }, ctx);
+  // `ok: false` only on an explicit failure: a false negative retracts a post the operator saw sent.
   const ok = FAILED.indexOf(status) === -1 && !ev.error;
   return [events.toolResult({
     type: 'tool_result',
@@ -194,13 +113,7 @@ function toolCallEvents(ev, ctx) {
   })];
 }
 
-/**
- * ONE raw stream event -> the CoreEvents it means.
- *
- * ⚠ THE AUTH SENTINEL IS CHECKED FIRST AND RETURNS ALONE. It short-circuits the consume loop: core
- * stops reading, holds the session and swaps the dead-end bubble for the credential path. Emitting
- * render events beside it would paint the very bubble the hold exists to replace.
- */
+/** One raw stream event → the CoreEvents it means. The auth sentinel is checked first and returns alone. */
 function normalize(msg, ctx) {
   const context = ctx || {};
   if (!msg || typeof msg !== 'object') return [];
@@ -212,10 +125,7 @@ function normalize(msg, ctx) {
   }
 
   if (type === AGENT_CREATED) {
-    // The agent handle every resume depends on, plus the model the platform really picked (the
-    // picker asked; the platform decides). ⚠ `models.reStampOnResume` is `true` on this runtime —
-    // `agent.model` is `undefined` after a resume unless respecified — so this is also the value
-    // `launch-spec.js` re-stamps from.
+    // The agent handle every resume depends on, and the model really running.
     return [events.launched(msg.agentId || msg.id || null, msg.model || null)];
   }
 
@@ -223,11 +133,9 @@ function normalize(msg, ctx) {
     const t = tokensFrom(usageOf(msg));
     const model = msg.model || null;
     const out = [];
-    // ⚠ PER-TURN, NOT PER-MESSAGE, AND THAT IS `descriptor.meter.mode`. `run.usage` is live and
-    // `result.usage` cumulative; the honest context reading rides the turn's end.
+    // Per turn: the context reading rides the turn's end.
     if (t.prompt > 0 || model) out.push(events.context(t.prompt, model));
-    // ⚠ CUMULATIVE BY CONTRACT, DELTA'D IN CORE. Whether a RESUMED agent restarts this total is
-    // §5 item X4, which is why `usageResetsOnResume` is `'unverified'` and a resume is refused.
+    // Cumulative; core takes the delta. Unmeasured across a resume, so resume is refused.
     out.push(events.result(t.session, model));
     return out;
   }
@@ -247,14 +155,8 @@ function normalize(msg, ctx) {
     return t.prompt > 0 ? [events.context(t.prompt, msg.model || null)] : [];
   }
 
-  // ⚠ `system`, `status`, `task`, `user` AND `request` ALL IGNORED, and `request` is the one that
-  // is not merely uninteresting. It is documented as "awaiting approval" with a `request_id` AND
-  // NO RESPONDER API (§5 item X1), so there is nothing this adapter could emit that an operator
-  // could answer — a card with no way to resolve it is worse than none. ⚠ ITS REAL STAKE IS
-  // LIVENESS, NOT A MISSING CONTROL: a run mode that ASKS (`allowlist`) has nobody to ask, so the
-  // turn stalls. `toolMode.windowlessFloor` raising every unattended session to `auto-review` is
-  // what stands between this runtime and that stall, which makes the floor load-bearing for
-  // liveness here and not only for reach. `launch-spec.js` logs each one so a stall is diagnosable.
+  // Everything else is ignored — `request` included: it awaits an approval with no responder API, so
+  // the windowless floor (`auto-review`) is what keeps an unattended turn from stalling on it.
   return [];
 }
 

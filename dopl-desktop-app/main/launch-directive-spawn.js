@@ -70,7 +70,7 @@ function appliedModelId(runtimeId, modelArg) {
  */
 async function resolveModel(runtimeId, d, identity) {
   return pickOf(d.model)
-    || require('./runtime/launch-default').identityModelFor(runtimeId, identity && identity.model);
+    || require('./runtime/launch-default').identityModelFor(runtimeId, identity && identity.model, identity && identity.runtime);
 }
 
 /**

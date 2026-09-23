@@ -42,7 +42,6 @@ const CLAUDE = M("runtime", "claude", "tools.js");
 const CODEX = M("runtime", "codex", "tools.js");
 const CURSOR = M("runtime", "cursor", "tools.js");
 const REGISTRY = M("runtime", "index.js");
-const capability = REGISTRY.capability;
 const parkOnClaim = M("session-park-on-claim.js");
 const WIN = M("targeting-window.js");
 
@@ -240,15 +239,13 @@ test("CODEX: `fileChange` is NOT denied — this is `full` minus the shell, not 
 
 // ── 6. BOTH SHIPPING DESCRIPTORS DECLARE IT; CURSOR IS FROZEN (X0) ───────────────────────────
 
-test("the two SHIPPING runtimes declare the profile, and it is launchable on both", () => {
-  // ⚠ `contract.js › mirrorProblems` already held the declaration equal to what `toolConfigFor`
-  // ENFORCES at seal time — the registry loaded, so that passed. What this adds is that the entry
-  // EXISTS: a profile the descriptor does not name is one `canLaunchProfile` refuses.
+test("the two SHIPPING runtimes declare the profile", () => {
+  // `contract.js › mirrorProblems` held the declaration equal to what `toolConfigFor` ENFORCES at
+  // seal time; this adds that the entry EXISTS, with a non-empty deny list.
   for (const id of ["claude", "codex"]) {
     const d = REGISTRY.descriptorFor(id);
     assert.ok(d.containment.profiles.channel_agent, `${id} declares channel_agent`);
-    assert.equal(capability.canLaunchProfile(d, "channel_agent"), true, id);
-    assert.equal(capability.profileRefusal(d, "channel_agent"), null, id);
+    assert.ok(d.containment.profiles.channel_agent.denyList.length > 0, id);
   }
 });
 
@@ -258,16 +255,6 @@ test("CURSOR is FROZEN at three profiles, and X0 is why", () => {
     "X0: Dopl cannot own a session it cannot stop — this is the hold");
   assert.deepEqual(Object.keys(d.containment.profiles).sort(),
     ["dopl_only", "full", "read_only"], "no fourth profile on a runtime that does not ship");
-});
-
-test("CURSOR refuses a channel_agent launch through the EXISTING contract rule", () => {
-  // ⚠ `contract.js › LAUNCH_BLOCKING[1]` — a profile with no deny list in this runtime's
-  // vocabulary has no enforcement, so it is refused at launch WITH A SENTENCE. No new branch was
-  // added to the frozen adapter; the rule that was already there does the work.
-  const d = REGISTRY.descriptorFor("cursor");
-  assert.equal(capability.canLaunchProfile(d, "channel_agent"), false);
-  assert.match(String(capability.profileRefusal(d, "channel_agent")), /channel_agent/);
-  assert.match(String(capability.profileRefusal(d, "channel_agent")), /no deny list/);
 });
 
 test("CURSOR's table REFUSES channel_agent rather than falling through to full", () => {

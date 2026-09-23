@@ -343,8 +343,7 @@ module.exports = {
   shortDoplName,
   buildSessionToolConfig,
   TOOL_MODES, EDIT_TOOLS, ESCALATION_TOOLS, BYPASS_READS, AUTO_TOOLS, BYPASS_TOOLS,
-  FULL_BUILTIN_BOUND,
-  CHANNEL_AGENT_BUILTIN_BOUND, CHANNEL_AGENT_HARD_DENY, // B7: `full` ∓ the shell, both derived
+  CHANNEL_AGENT_HARD_DENY, // B7: `full` ∓ the shell, both derived
   normalizeToolMode, toolModeAllows, floorWindowlessTool,
   SESSION_HARD_DENY,
 };

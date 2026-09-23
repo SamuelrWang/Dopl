@@ -30,13 +30,12 @@ const catalog = (status, ids) => ({
   status,
   models: ids.map((id) => ({ id, aliases: [] })),
 });
-const catalogs = (c) => ({ settle: async () => c });
-const adapterOf = (descriptor) => ({ descriptor });
+const catalogs = (c) => ({ catalogs: { settle: async () => c } });
+const adapterOf = (descriptor) => ({ descriptor, runtime: REGISTRY.runtimeFor(descriptor.id) });
 
-test("the SHIPPED Codex descriptor prefers gpt-6-sol; Claude declares no preference", () => {
+test("both SHIPPED descriptors declare their default: Codex gpt-6-sol, Claude claude-sonnet-5", () => {
   assert.equal(LD.preferredDefault(CODEX), "gpt-6-sol");
-  assert.equal(LD.preferredDefault(CLAUDE), "",
-    "Claude's default is its adapter's own (`LAUNCH_MODEL_FALLBACK` via `modelArg`)");
+  assert.equal(LD.preferredDefault(CLAUDE), "claude-sonnet-5", "one mechanism for both runtimes (RC-05)");
 });
 
 test("PRESENT: a ready catalog carrying Sol → the launch names Sol", async () => {
@@ -58,24 +57,27 @@ test("UNKNOWN is not ABSENT, and neither names Sol: loading / unavailable / stal
     assert.equal(await LD.withRuntimeDefault(adapterOf(CODEX), "", catalogs(c)), "", status);
   }
   // …and a roster read that throws is the same no-model answer.
-  const boom = { settle: async () => { throw new Error("app-server wedged"); } };
+  const boom = { catalogs: { settle: async () => { throw new Error("app-server wedged"); } } };
   assert.equal(await LD.withRuntimeDefault(adapterOf(CODEX), "", boom), "");
 });
 
 test("an EXPLICIT pick is never replaced — and the roster is not even asked", async () => {
   let asked = 0;
-  const spy = { settle: async () => { asked += 1; return catalog("ready", ["gpt-6-sol"]); } };
+  const spy = { catalogs: { settle: async () => { asked += 1; return catalog("ready", ["gpt-6-sol"]); } } };
   assert.equal(await LD.withRuntimeDefault(adapterOf(CODEX), "gpt-6-luna", spy), "gpt-6-luna");
   assert.equal(asked, 0);
   // `'default'` is the Claude lane's "no opinion", so it IS a no-pick.
   assert.equal(await LD.withRuntimeDefault(adapterOf(CODEX), "default", spy), "gpt-6-sol");
 });
 
-test("a runtime with no declared default is untouched, and never waits on a roster", async () => {
+test("a runtime whose adapter spends its own default never waits on a roster", async () => {
   let asked = 0;
-  const spy = { settle: async () => { asked += 1; return catalog("ready", ["claude-sonnet-5"]); } };
-  assert.equal(await LD.withRuntimeDefault(adapterOf(CLAUDE), "", spy), "");
-  assert.equal(asked, 0, "a Claude launch must never wait on a Codex app-server");
+  const spy = { catalogs: { settle: async () => { asked += 1; return catalog("ready", ["claude-sonnet-5"]); } } };
+  assert.equal(await LD.withRuntimeDefault(adapterOf(CLAUDE), "", spy), "", "Claude resolves '' itself at launch");
+  assert.equal(asked, 0, "a Claude no-pick launch must not wait on a roster probe");
+  const bare = { descriptor: { id: "x", models: {} }, runtime: { modelArg: () => ({ ok: true, arg: "", id: "" }) } };
+  assert.equal(await LD.withRuntimeDefault(bare, "", spy), "", "no declared default: untouched");
+  assert.equal(asked, 0);
 });
 
 test("THE CATALOG SHOWS WHAT A NO-PICK LAUNCH RUNS ON: Sol is the default when the roster carries it", () => {

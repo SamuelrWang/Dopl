@@ -352,7 +352,7 @@ test("the launch spec passes the SESSION's workspace, so every session query is 
 // unchanged.
   const ENGINE = readFileSync(join(HERE, "..", "main", "session-engine.js"), "utf8");
   const SPEC = readFileSync(join(HERE, "..", "main", "runtime", "claude", "launch-spec.js"), "utf8");
-  const opts = SPEC.slice(SPEC.indexOf("function buildOptions(s, dispatch, emitQuiet) {"), SPEC.indexOf("function buildLaunchSpec("));
+  const opts = SPEC.slice(SPEC.indexOf("function buildOptions(s, dispatch) {"), SPEC.indexOf("function buildLaunchSpec("));
   assert.ok(opts.length > 0, "the option assembly slice not found in runtime/claude/launch-spec.js");
   // THE THIRD ARGUMENT IS THE CONTAINER LOCK (2026-08-26, plan §4.4 B1) — the child credential for a
   // session spawned into a SHARED link container, '' for every other session. Pinned INTO this

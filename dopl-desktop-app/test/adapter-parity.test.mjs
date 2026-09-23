@@ -37,43 +37,28 @@ const ARMED = ADAPTERS.length >= 2;
 // ⚠ THE THIRD COLUMN IS `nullable`, AND ITS ABSENCE WAS A DEFECT THIS SUITE COULD NOT SEE AT ONE
 // ADAPTER (repaired 2026-08-31, when the Codex adapter armed it). The second case below asserts
 // that every field is "declared absent somewhere", whose whole purpose is to catch a HIDE-ON-ABSENT
-// branch no runtime exercises. But most fields here HAVE no hide-on-absent branch: `entryFile` is
-// refused as a non-string by `contract.js › descriptorProblems`, `axisB.enforcementPoint` REFUSES
-// REGISTRATION when null, `session.fork` and `approval.heldCallback` are booleans, and
+// branch no runtime exercises. But most fields here HAVE no hide-on-absent branch:
+// `axisB.enforcementPoint` REFUSES REGISTRATION when null, `session.fork` and `approval.heldCallback` are booleans, and
 // `toolMode.options` is a list a runtime cannot lack. Requiring a `null` from one of those is
 // requiring an adapter that could never register. So the case now runs over the NULLABLE subset —
 // the fields §3.2's hide-on-absent table actually lists — and the variance case still runs over
 // all of them.
 const VARIES = [
-  ["entryFile", (d) => d.entryFile, false],
   ["session.fork", (d) => d.session.fork, false],
   ["session.liveModelSwitch", (d) => d.session.liveModelSwitch, false],
   ["axisB.enforcementPoint", (d) => d.axisB.enforcementPoint, false],
   ["axisB.inputRewrite", (d) => d.axisB.inputRewrite, false],
   ["approval.heldCallback", (d) => d.approval.heldCallback, false],
   ["approval.granularity", (d) => d.approval.granularity, true],
-  ["approval.sessionGrant", (d) => d.approval.sessionGrant, false],
   ["toolMode.options", (d) => d.toolMode.options.map((o) => o.value), false],
   ["toolMode.windowlessFloor", (d) => d.toolMode.windowlessFloor, false],
   ["toolMode.secondaryAxis", (d) => d.toolMode.secondaryAxis, true],
   ["containment.mode", (d) => d.containment.mode, false],
-  ["containment.nativeControls", (d) => d.containment.nativeControls, true],
   ["models.source", (d) => d.models.source, false],
   ["models.dimensions", (d) => d.models.dimensions, true],
-  ["meter.mode", (d) => d.meter.mode, false],
-  ["meter.windowSource", (d) => d.meter.windowSource, false],
-  // 🔒 ⚠ **`["meter.cost", …, true]` STOOD HERE AND IS DELETED (2026-09-22, Samuel: *"there
-  // shouldnt be cost? Claude theres no cost tracking. we dont need cost tracking"*).** It was a
-  // genuine VARIES row — Claude `{usd, billed:false}`, Codex `null`, Cursor `{usd, billed:true}`,
-  // three different answers — and that is exactly why deleting the FIELD had to delete the row:
-  // the census reads every path off the live descriptors, so a row naming one that no adapter
-  // declares fails "the VARIES list itself still points at real fields" below. ⚠ IT IS NOT A
-  // PREDICTION EXPIRING UNCHECKED, the thing this file exists to prevent — the field is gone from
-  // the contract, not merely from one runtime, and the column it described reached no surface.
   ["mcp.sessionTransport", (d) => d.mcp.sessionTransport, false],
   ["mcp.hostRegistration", (d) => d.mcp.hostRegistration, false],
   ["mcp.eagerLoadFlag", (d) => d.mcp.eagerLoadFlag, true],
-  ["deepLink", (d) => d.deepLink, true],
   ["prose.toolSearchVerb", (d) => d.prose.toolSearchVerb, true],
   // CXP-3A (2026-09-22): Codex `'ALL_TOOLS'` (measured, code-mode models), Claude/Cursor `null`.
   ["prose.deferredCatalog", (d) => d.prose.deferredCatalog, true],
@@ -100,22 +85,8 @@ const CURSOR_PREDICTIONS = [
   ["mcp.hostRegistration", "inline"],
 ];
 
-// ⚠ THE SIXTH ROW, AND IT IS THE ONE THE PREDICTION GOT WRONG — recorded as a finding with its
-// evidence rather than resolved by conformity. The design's §1.4 predicts Cursor declares
-// `cursor://…/prompt` with an 8,000 ceiling, which would have made `deepLink` describe a
-// difference again. THE SHIPPED ADAPTER DECLARES `null`, so the field is still identical on all
-// three runtimes — for three different reasons, which is why it reads as vestigial without being
-// vestigial:
-//   Claude  the rung was DELETED with the pre-consent session window (F-228)
-//   Codex   the ceiling is unbisected (§5 C14) and the prompt does not auto-send
-//   Cursor  the SAME four-part argument (§5 X5: is 8,000 on `text` or on the whole URL, and does
-//           it TRUNCATE or DROP? neither is answered), plus design §7 shipping no rung for ANY
-//           platform in v1, plus CursorJack making this the one scheme whose overflow behaviour
-//           should be measured before a rung is built rather than after
-// ⚠ SO THIS IS NOT AN EXEMPTION, IT IS A DEFERRAL KEYED TO A MEASUREMENT — the same discipline
-// `core-vocabulary.test.mjs › DEFERRED` runs under. It is keyed to a SMOKE ITEM rather than to an
-// adapter count, because a fourth adapter would not answer it and X5/C14 would. The stale case
-// below fails the moment the field starts varying, so nobody has to remember to come back.
+// Deferred rows: fields that cannot vary yet, each keyed to what would make it vary. The stale case
+// below fails the moment one starts varying.
 const DEFERRED_BY_DESIGN = {
   // ⚠ 2026-09-22: Claude's roster went LIVE (`runtime/claude/roster.js` reads `supportedModels()`
   // off a turn-free handshake), so all three shipped adapters answer `live`. `frozen` stays a
@@ -123,8 +94,6 @@ const DEFERRED_BY_DESIGN = {
   // `runtime-model-catalog.test.mjs` drives that path — for a platform with no roster call.
   "models.source": "live on all three since Claude's roster went live (2026-09-22); `frozen` is "
     + "kept for a platform with no roster call, and its inline-read path has its own suite.",
-  deepLink: "null on all three: §7 ships no rung in v1, and both live ceilings are unbisected "
-    + "(§5 C14 / X5). Answering either is what makes this field describe a difference.",
 };
 
 const at = (read) => ADAPTERS.map(({ descriptor }) => JSON.stringify(read(descriptor)));
@@ -172,7 +141,7 @@ test("…and every NULLABLE one is DECLARED ABSENT somewhere and PRESENT somewhe
   // ⚠ THE HALF THAT CATCHES A HIDE-ON-ABSENT PATH NOBODY EXERCISES. A nullable field that is
   // non-null on every runtime has a `null` branch in the UI that has never rendered, and an
   // untested hide is how a control comes back for a runtime that cannot support it.
-  // ⚠ NULLABLE ONLY — see the VARIES header for why demanding a `null` from `entryFile` or
+  // ⚠ NULLABLE ONLY — see the VARIES header for why demanding a `null` from
   // `axisB.enforcementPoint` would be demanding an adapter that could never register.
   const untested = [];
   for (const [path, read, nullable] of VARIES) {

@@ -48,13 +48,6 @@ const descriptor = {
   // pointer instead of a button (§3.2, hide-on-absent).
   interactiveSignIn: true,
   probe: 'on-disk-marker',
-  // The sentinels that mean "no credential", in the two shapes they arrive in. ⚠ Their
-  // DETECTION lives in `normalize.js`, because they arrive INSIDE the message stream and the
-  // normalizer is the one thing that reads it; this is the declaration, not the matcher.
-  sentinels: ['login-required-text', 'auth-shaped-error'],
-  // The env vars that carry a credential into a spawned child. ⚠ Deliberately PRESERVED by the
-  // env scrub, which drops only the permission knobs — see `loader.js › buildScrubbedEnv`.
-  envKeys: ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN'],
 };
 
 module.exports = { credentialState, signIn, descriptor };

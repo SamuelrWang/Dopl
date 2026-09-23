@@ -1,37 +1,5 @@
-// THE LAUNCH SHAPE — ⚠ THE ONE ASSEMBLY POINT FOR EVERY SPAWN ON THIS RUNTIME.
-//
-// Fresh launch, parked resume, recreated shell and post-sign-in relaunch ALL come through here, so
-// the deny list, the pinned channel-tool approval, the ambient-config isolation and the scrubbed
-// env hold identically on all of them. That discipline is the Claude lane's and it ports verbatim;
-// what changes is the vocabulary.
-//
-// ⚠ THE THREE PINS THAT ARE NOT PREFERENCES ON THIS RUNTIME:
-//   isolated CODEX_HOME      `config-home.js` gives app-server an app-owned root with auth but no
-//                            user config. The previously assumed `--ignore-user-config` flag does
-//                            not exist on app-server and made every real launch fail at clap.
-//   `tools.dopl_channel.approval_mode`  AXIS B'S PIN, set in `mcp.js` and independent of Axis A.
-//                            The operator's tool posture may be as wide as `never`; the channel
-//                            tool must still reach the gate, because no tool posture can send a
-//                            message.
-//   the RESTRICTED PROFILES PIN `sandbox_mode` + `approval_policy`.  `read_only` and `dopl_only`
-//                            are CONTAINMENT: they set the native pair themselves and the
-//                            operator's Axis-A pick does not move them. `full`'s supervision IS
-//                            Axis A plus the sandbox row, so there the operator's choices ride.
-//
-// 🔒 ⚠ AND THE CLAUDE LANE'S "NEVER HAND OVER THE WIDEST MODE" PIN, PORTED (2026-09-22). There,
-// `permissionMode: 'default'` is pinned so a wider platform mode cannot stop the gate being called.
-// Here Codex's native `never` did exactly that to the channel tool — it raised no request and the
-// call FAILED — so the operator's `never` is SENT as a narrower `granular` whose only asking
-// category is MCP elicitation (`policy.js › NEVER_NATIVE`, measured identical to `never` for
-// shell, files, escalation and network). The operator-facing mode and its meaning are unchanged.
-//
-// 🔒 ⚠ AND NATIVE DELEGATION + THE SKILLS CATALOGUE ARE OFF ON EVERY LAUNCH: `features.multi_agent =
-// false` (all profiles), a delegation-free model catalog on argv (`catalog.js`, the only lever a
-// code-mode model obeys), and the skills fence (`skills-fence.js`). Claude's lane removes `Agent`
-// and `Skill` on every profile; these are the same two decisions in Codex's vocabulary.
-// 🔒 SO IS PERSISTENCE (C26): goals, `clock.sleep`, memories and hooks ride `features`
-// (`tools.js › PERSISTENCE_FENCE`) and `notify` is pinned empty — Claude's `CronCreate` /
-// `ScheduleWakeup` removal, in Codex's words.
+// The one assembly point for every Codex spawn (fresh, parked resume, recreated shell, post-sign-in),
+// so the deny list, channel-tool pin, isolated CODEX_HOME, native fences and env scrub hold on all.
 
 const client = require('./client');
 const tools = require('./tools');
@@ -46,85 +14,46 @@ const mcp = require('./mcp');
 const normalizer = require('./normalize');
 const channelDirs = require('../../channel-dirs');
 const store = require('../../session-store');
-const sessionOutbound = require('../../session-outbound');
 const sessionCredential = require('../../session-credential');
 const sessionDirected = require('../../session-directed');
 const capability = require('../capability');
+const cliSpawn = require('../cli-spawn');
 const { diag } = require('../../diag');
 
-// ── THE ENVIRONMENT ──────────────────────────────────────────────────────────────────────────
-//
-// ⚠ A CONSERVATIVE SCRUB OVER THIS VENDOR'S OWN PREFIXES, DECLARED AS UNPROVEN. The Claude lane
-// drops permission-affecting env knobs because it MEASURED which ones exist; `codex-research.md`
-// documents no environment knob for this runtime at all — its escape hatches are CLI FLAGS
-// (`--yolo`, `--dangerously-bypass-approvals-and-sandbox`, `--dangerously-bypass-hook-trust`) and
-// CONFIG, both of which the isolated CODEX_HOME and explicit thread fields above fence.
-// So this is belt with no documented braces: a pattern that can only REMOVE, shaped like the one
-// that was measured on the other runtime, over `CODEX_` / `OPENAI_` keys. §5 item C21 asks whether
-// this runtime reads any permission-affecting env var; a positive answer adds names here, and a
-// negative one leaves a scrub that cost nothing.
-// ⚠ PATH / HOME / the keychain are never removed, and no credential var is dropped: the research
-// names none (`credential.js › descriptor.envKeys` is empty and says why), so dropping by pattern
-// could only take something we did not mean to.
+// ── ENVIRONMENT ──────────────────────────────────────────────────────────────────────────────
+// Remove-only scrub of CODEX_/OPENAI_ permission-shaped keys (no Codex permission env knob is known;
+// its escape hatches are CLI flags and config, fenced elsewhere). PATH, HOME and credentials pass.
 const PERMISSION_ENV_RE = /PERMISSION|BYPASS|APPROVAL|DONT_ASK|SKIP|AUTO_APPROVE|DANGEROUS|YOLO/i;
 
 function buildScrubbedEnv(extra) {
-  const src = process.env || {};
-  const out = {};
-  for (const k of Object.keys(src)) {
-    if (/^(CODEX_|OPENAI_)/.test(k) && PERMISSION_ENV_RE.test(k)) continue;
-    out[k] = src[k];
-  }
-  return Object.assign(out, extra || {});
+  return Object.assign(cliSpawn.scrubPermissionEnv(process.env, /^(CODEX_|OPENAI_)/, PERMISSION_ENV_RE), extra || {});
 }
 
-// ── THE NATIVE PAIR ──────────────────────────────────────────────────────────────────────────
-//
-// ⚠ `workspace-write` IS CODEX'S OWN DEFAULT and its own "auto" pairing with `on-request`
-// (`codex-research.md` §2), so a `full` session with no sandbox pick lands where a Codex user
-// expects. The row that lets an operator move it is `toolMode.secondaryAxis`, which the UI does
-// not render yet; reading it tolerantly here means wiring that control is a UI change and not a
-// launch change.
+// ── NATIVE PAIR ──────────────────────────────────────────────────────────────────────────────
+// `workspace-write` is Codex's own default sandbox (its "auto" pairing with `on-request`).
 const DEFAULT_SANDBOX = 'workspace-write';
 const SANDBOX_MODES = ['read-only', 'workspace-write', 'danger-full-access'];
 
-// The NATIVE policy for the operator's Axis-A pick. ⚠ `never` and `granular` answer OBJECTS
-// (`policy.js`), and a persisted `never` keeps meaning what the picker says — no migration.
 function approvalPolicy(mode) {
   return policy.nativeApprovalPolicy(tools.normalizeToolMode(mode));
 }
 
 function nativePair(s, cfg) {
-  // A restricted profile PINS both values — containment is not the operator's to widen from the
-  // mode picker, on any runtime.
+  // A restricted profile pins both values: containment is not the operator's to widen.
   if (cfg.native) return { approval_policy: cfg.native.approval_policy, sandbox_mode: cfg.native.sandbox_mode };
   const st = (s && s.state) || {};
-  // ⚠ **THE SANDBOX PICK ARRIVES ON `state.native` SINCE 2026-09-21 (U5), AND BEFORE THAT IT
-  // ARRIVED FROM NOWHERE.** This read was `st.sandboxMode`, a field **no producer in the tree ever
-  // set** — so the `toolMode.secondaryAxis` row this adapter declares was rendered as data, could
-  // not be written, and every `full` session launched at `workspace-write` whatever the operator
-  // picked (`docs/REFACTOR-FINDINGS.md` F-390). The bag is validated by
-  // `runtime/selection-vocabulary.js › normalizeNative` against the options THIS descriptor
-  // declares, stamped at spawn by `session-engine.js`, and read here.
-  // ⚠ THE LOCAL RE-CHECK STAYS AND MUST STAY. It is the last step before the value becomes a
-  // launch argument, and every other coercion in this tree is re-run at that step.
+  // Validated by `selection-vocabulary.js › normalizeNative`; re-checked as the last step before argv.
   const native = (st.native && typeof st.native === 'object') ? st.native : {};
   const asked = native.sandbox_mode;
-  const sandbox = SANDBOX_MODES.indexOf(asked) === -1 ? DEFAULT_SANDBOX : asked;
+  // Absent is the platform default; an unrecognised value fail-closes to the narrowest (X-05).
+  const sandbox = asked == null || asked === '' ? DEFAULT_SANDBOX
+    : (SANDBOX_MODES.indexOf(asked) === -1 ? SANDBOX_MODES[0] : asked);
   return { approval_policy: approvalPolicy(st.toolMode), sandbox_mode: sandbox };
 }
 
-// ── THE SPEC ─────────────────────────────────────────────────────────────────────────────────
+// ── SPEC ─────────────────────────────────────────────────────────────────────────────────────
 
-/**
- * The OPAQUE launch payload core hands straight back to `start` / `resume`.
- *
- * ⚠ CORE NEVER LOOKS INSIDE IT. The prompt rides along because on this runtime a turn is a CALL
- * and on another it is a streamed iterable, and core must not hold that difference.
- * ⚠ ONE ARGUMENT, CARRYING THE ENGINE'S TWO INJECTED HANDLES: the held gate needs the dispatch (to
- * paint a card) and the replay-aware quiet emitter (to resolve one an auto-allowed post painted),
- * and this module must not require the engine back.
- */
+/** `{ session, dispatch }` → the opaque payload core hands back to `start` / `resume` unread. */
 function buildLaunchSpec(request) {
   const req = request || {};
   const s = req.session;
@@ -133,66 +62,48 @@ function buildLaunchSpec(request) {
   const server = mcp.buildDoplServerEntry(cfg.doplToolsPolicy, s.profile);
   const wired = mcp.buildMcpEnv(s.workspaceId, sessionCredential.sessionBearer(s), store.slotKey(s));
 
-  // ⚠ NO DOPL SERVER WITHOUT A TOKEN, and the session still launches. A half-built entry that 401s
-  // on every call would tell the agent it HAS a delivery path and let it watch that path fail.
   const threadStart = { sandbox: pair.sandbox_mode };
-  // ⚠ THE `features` FENCE RIDES EVERY LAUNCH, TOKEN OR NOT (`tools.js › ACCOUNT_FENCE`): the
-  // foreign `codex_apps` server mounts from the operator's auth, not from Dopl's entry.
-  // ⚠ …AND THE PROJECT-TRUST FENCE (`config-home.js › projectTrustFence`): without it a
-  // workspace-write thread auto-trusts its cwd, persists that into the private home (refusing the
-  // NEXT launch) and loads `<cwd>/.codex/config.toml` — hooks, MCP servers — from the agent's folder.
   const cwd = channelDirs.sessionSpawnDir(s.channelId);
-  // ⚠ …AND THE SKILLS FENCE (`skills-fence.js`): no personal or bundled skill is listed or mentionable.
   threadStart.config = {
+    // Every launch, token or not: `codex_apps` mounts from operator auth (`tools.js › ACCOUNT_FENCE`).
     features: Object.assign({}, cfg.features),
+    // Without it a workspace-write thread auto-trusts its cwd (`config-home.js › projectTrustFence`).
     projects: configHome.projectTrustFence(cwd),
-    skills: skillsFence.skillsFence({ cwd, codexHome: configHome.privateHome() }),
-    // ⚠ …AND NO `notify` PROGRAM FROM ANY LAYER (`tools.js › NOTIFY_FENCE`, C26): measured, a
-    // thread-level `[]` silences one set lower down.
+    skills: skillsFence.skillsFence({ cwd, codexHome: configHome.privateHome(), log: diag }),
+    // A thread-level `[]` silences a home-layer `notify` (`tools.js › NOTIFY_FENCE`).
     notify: tools.NOTIFY_FENCE.slice(),
     // No Dopl bearer in any shell command's env (`mcp.js › shellEnvironmentPolicy`, CX-03).
     shell_environment_policy: mcp.shellEnvironmentPolicy(),
   };
+  // No token, no Dopl server (the session still launches): an entry that 401s looks like a live path.
   if (wired.usable) threadStart.config.mcp_servers = { [mcp.SERVER_KEY]: server };
   // An OBJECT policy rides `config.approval_policy` (the typed field needs the experimental API).
   policy.placePolicy(threadStart, pair.approval_policy);
   const model = typeof s.model === 'string' ? s.model.trim() : '';
-  // `''` (or anything the roster does not know) sets no field at all — the platform's own pick,
-  // which is `descriptor.models.defaultMeansAbsent`.
+  // No model, no field: the platform picks.
   if (model) threadStart.model = model;
-  // ⚠ SAME STORY AS THE SANDBOX ABOVE: this read was `s.state.reasoningEffort`, which nothing
-  // produced. It rides the validated native bag now, checked against the six efforts
-  // `models.js › REASONING_EFFORTS` declares. An unrecognised one was DROPPED on the way in
-  // (`dimensionOptions.reasoningEffort.fallback: 'absent'`), so no field is set and the platform
-  // picks — there is no narrowest member to floor to on a dimension that is not containment.
+  // Validated upstream (`models.js › REASONING_EFFORTS`); an unrecognised one was dropped: platform picks.
   const effort = (s.state && s.state.native && s.state.native.reasoningEffort) || '';
   const turnStart = effort ? { effort } : {};
 
   return {
     session: s,
     dispatch: req.dispatch,
-    emitQuiet: req.emitQuiet,
     prompt: s.pushIterator,
-    // Current app-server rejects approval_policy/sandbox_mode as process config. They are native
-    // thread fields; MCP config rides thread/start's explicit `config` object.
+    // app-server rejects approval_policy/sandbox_mode as process config; they are thread fields.
     args: [],
     threadStart,
     turnStart,
     env: buildScrubbedEnv(wired.env),
-    // Item 7: the per-channel folder (else ~/Downloads). CONTEXT, not a fence — the sandbox is the
-    // fence. Set on the child AND passed to `thread/start`, because `thread/list` filters by `cwd`
-    // so a thread plainly HAS one, and which of the two the app-server honours is §5 item B2.
+    // The per-channel folder: context, not a fence (the sandbox is). Set on the child and on `thread/start`.
     cwd,
     resumeThreadId: s.resumeSdkId || null,
   };
 }
 
-// ── THE HANDLE ───────────────────────────────────────────────────────────────────────────────
-//
-// An async-iterable of raw app-server frames, plus the three verbs core drives it with. ⚠ IT IS
-// BUILT AND RETURNED SYNCHRONOUSLY: core assigns it to the session IMMEDIATELY, and an await
-// between "the child exists" and "something points at it" is the two-children bug — a second child
-// still holding this session's channel access with nothing left to stop it.
+// ── HANDLE ───────────────────────────────────────────────────────────────────────────────────
+// Returned synchronously: an await between "the child exists" and "the session points at it" is the
+// two-children bug (a second child keeps the session's channel access with nothing to stop it).
 
 function makeFrameQueue() {
   const queue = [];
@@ -208,10 +119,7 @@ function makeFrameQueue() {
   };
   return {
     push(frame) { if (!closed) { queue.push(frame); settle(); } },
-    // An intentional `handle.close()` closes the queue before the child exits. Ignore the later
-    // exit callback in that state; otherwise a normal shutdown is reclassified as a crash on the
-    // consumer's next read.
-    // The FIRST failure is the cause; a later one (the exit that follows it) must not replace it.
+    // Ignored after `close()` (a deliberate shutdown is not a crash) and after a first failure (the cause).
     fail(err) {
       if (closed || failure) return;
       failure = err instanceof Error ? err : new Error(String(err));
@@ -228,39 +136,24 @@ function makeFrameQueue() {
   };
 }
 
-/**
- * The held approval handler, wired to the same gate every runtime uses.
- *
- * ⚠ THE TRANSLATION TO CODEX'S FOUR WORDS HAPPENS HERE AND NOWHERE ELSE. `axis-b.js ›
- * makeCanUseTool` answers in CORE's verdict vocabulary (`{behavior, message}`) because three core
- * modules mint and read that shape — the operator's own click in `session-permissions.js`, the
- * thread tag in `session-outbound-tag.js`, and `session-outbound.js › wrapGate`, which resolves
- * the card an allowed post painted. A Codex-worded answer upstream of `wrapGate` would sail past
- * it and leave that card on screen forever.
- * ⚠ `updatedInput` IS DROPPED HERE, KNOWINGLY. Codex's approval reply has no slot for rewritten
- * arguments, so the forced thread tag travels the `PreToolUse` route instead
- * (`axis-b.js › preToolUseStamp`) — the design's §0.1 split of "one place decides, one place
- * stamps", with §5 items C6/C17/C18 as its open questions.
- */
-function makeApprovalHandler(s, dispatch, emitQuiet) {
-  const gate = sessionOutbound.wrapGate(s, axisB.makeCanUseTool(s, dispatch, diag), emitQuiet);
+// Server requests → the held gate (core `{ behavior }` verdicts, F-382); `server-requests.js › answer`
+// translates to Codex's wire words. `updatedInput` is dropped: Codex's reply has no slot for it.
+function makeApprovalHandler(s, dispatch) {
+  const gate = axisB.makeCanUseTool(s, dispatch, diag);
   return async function onServerRequest(msg) {
     const params = msg && msg.params ? msg.params : {};
     return serverRequests.answer(msg, async (name, input) => {
       const verdict = await gate(name, input, {
         requestId: String(msg.id),
-        toolUseID: params.itemId || params.item_id || null,
+        toolUseID: params.itemId || null,
       });
       return verdict && verdict.behavior === 'allow' ? 'allow' : 'deny';
     });
   };
 }
 
-/**
- * Start a run. Synchronous by contract (see the handle note above). Boot order: the fenced
- * catalog (async, CX-09), `initialize` + `initialized`, `thread/start` | `thread/resume`, then the
- * first push is `turn/start` and every later one `turn/steer`.
- */
+// Start a run. Synchronous by contract (two-children bug). Boot: fenced catalog (async, CX-09),
+// `initialize` + `initialized`, `thread/start|resume`; first push `turn/start`, later ones `turn/steer`.
 function start(spec) {
   const s = spec.session;
   const frames = makeFrameQueue();
@@ -270,7 +163,8 @@ function start(spec) {
   let activeTurnId = null;
   let selectedModel = null;
   let latestUsage = null;
-  // `total` is cumulative per thread; an interrupted turn gets no update, so it carries this (CX-02).
+  // `total` is cumulative per thread and continues across `thread/resume`; an interrupted turn gets
+  // no usage update, so the last total is carried (CX-02).
   let lastTotal = null;
   const failedTurns = new Set();
 
@@ -331,7 +225,8 @@ function start(spec) {
   }
 
   (async () => {
-    // The delegation fence (`catalog.js`): process config, so argv; no catalog fails the launch.
+    // Delegation fence (`catalog.js`): `model_catalog_json` works only as process config (`-c` argv);
+    // the same key in `thread/start.config` is ignored. No catalog fails the launch.
     const fenced = await catalog.writeDelegationFreeCatalog(env.CODEX_HOME, {
       bin: codexBin(), env, model: (spec.threadStart && spec.threadStart.model) || '',
     });
@@ -342,7 +237,7 @@ function start(spec) {
       cwd: spec.cwd,
       log: typeof spec.log === 'function' ? spec.log : diag,
       onNotification,
-      onServerRequest: makeApprovalHandler(s, spec.dispatch, spec.emitQuiet),
+      onServerRequest: makeApprovalHandler(s, spec.dispatch),
       // An exit is never a clean end-of-stream for a live session; the spawn error is the cause.
       onExit: (code, signal, spawnError) => frames.fail(
         spawnError || new Error(`Codex app-server exited (code ${code}, signal ${signal})`)
@@ -363,7 +258,7 @@ function start(spec) {
     threadId = startedId || spec.resumeThreadId;
     selectedModel = (thread && thread.model) || handle.model || null;
     assertPolicyTook(params, thread);
-    // Synthetic `dopl/` frame: the thread id is the only thing a resume has (`launched`).
+    // Dopl's own synthetic frame: carries the thread handle + selected model into core (`launched`).
     frames.push({ method: normalizer.THREAD_STARTED, params: { threadId, model: selectedModel } });
     // A second `turn/start` would open a concurrent turn, so a push during one steers it.
     for await (const m of spec.prompt) {
@@ -381,8 +276,7 @@ function start(spec) {
           threadId, expectedTurnId: activeTurnId, input,
         });
         if (steered && steered.turnId) activeTurnId = String(steered.turnId);
-        // 🔒 A STEER JOINS THE LIVE TURN — ONE `turn/completed` ANSWERS BOTH (CXP-3B). Core's
-        // directed capture over-covered it as a turn of its own; say so, or it never reports.
+        // A steer joins the live turn (one `turn/completed` answers both); tell directed capture.
         sessionDirected.steerJoined(s, text);
       }
     }
@@ -391,8 +285,6 @@ function start(spec) {
   return handleFor(link, frames, () => threadId, () => activeTurnId);
 }
 
-// 🔒 THE POLICY ACTUALLY TOOK — `policy.js › assertPolicyTook`, which since 2026-09-22 compares the
-// `granular` object form too (the operator's `never` travels as one).
 const { assertPolicyTook } = policy;
 
 function codexBin() {
@@ -400,26 +292,9 @@ function codexBin() {
   return r && r.ok ? r.path : null;
 }
 
-// 🔒 ⚠ **`turn/interrupt` IS THE ONE VERB THAT CAN ANSWER NOTHING AT ALL** (MEASURED 2026-09-22,
-// `codex-cli 0.155.1`), and this is the bound that keeps that off Dopl's side of the wire.
-//
-// Three aims, three different answers, all measured on a real app-server:
-//   an ACTIVE turn                   → `{}`, and `turn/completed` follows with `status: interrupted`
-//   a turn that ENDED NORMALLY       → JSON-RPC `-32600` "no active turn to interrupt"
-//   a turn ALREADY INTERRUPTED       → **NO RESPONSE, EVER.** 20s of waiting produced neither a
-//                                      result nor an error; the request simply stays outstanding.
-//
-// `turn/steer` rejects cleanly in every one of those states, so this asymmetry belongs to
-// interrupt alone. Today's blast radius is small — `session-engine.js › runEffect` case
-// `interruptQuery` is fire-and-forget (`.catch(() => {})`) — but the promise it drops never
-// settles and the entry in `client.js`'s `pending` map lives until the child exits. The moment any
-// caller AWAITS this (a graceful shutdown that wants the interrupt to land before closing is the
-// obvious one), an un-bounded version hangs that caller forever.
-//
-// ⚠ IT RESOLVES, IT NEVER REJECTS. An interrupt is a best-effort stop, and its caller has nothing
-// useful to do with a failure — the terminal state arrives on the frame stream either way.
-// ⚠ AND THE TIMER IS `unref`'d, so a pending bound cannot hold a Node process open at exit (the
-// desktop CI runs Node 22, where that is the difference between a green run and a hung one).
+// `turn/interrupt` on an already-interrupted turn never answers (codex-cli 0.155.1), so it is bounded.
+// It resolves, never rejects (the terminal state arrives on the frame stream either way), and the timer
+// is `unref`'d so a pending bound cannot hold Node open at exit (Node 22 CI).
 const INTERRUPT_TIMEOUT_MS = 5000;
 
 function boundedInterrupt(pending) {
@@ -437,18 +312,13 @@ function handleFor(link, frames, threadIdOf, turnIdOf) {
   return {
     [Symbol.asyncIterator]() { return frames[Symbol.asyncIterator](); },
     next() { return frames.next(); },
-    /**
-     * ⚠ WITHOUT THIS, DOPL CANNOT STOP A SESSION IT STARTED. `session-engine.js › runEffect` case
-     * `interruptQuery` is the tree's only interrupt and the reducer's `interrupt` and
-     * `abandon_timeout` effects have no other actuator. `turn/interrupt` is the documented verb.
-     */
+    /** Dopl's only way to stop a running turn (`session-engine.js › runEffect` `interruptQuery`). */
     interrupt() {
       const conn = link.conn;
       if (!conn) return Promise.resolve();
       const threadId = threadIdOf();
       const turnId = turnIdOf();
-      // ⚠ NO ACTIVE TURN, NO REQUEST. `activeTurnId` is cleared on `turn/completed`, which is the
-      // first half of the defence measured below.
+      // No active turn (cleared on `turn/completed`), no request: an interrupted turn never answers one.
       if (!threadId || !turnId) return Promise.resolve();
       return boundedInterrupt(conn.request('turn/interrupt', { threadId, turnId }));
     },
@@ -460,24 +330,7 @@ function handleFor(link, frames, threadIdOf, turnIdOf) {
   };
 }
 
-/**
- * Resume a parked conversation — ⚠ REFUSED ON THIS RUNTIME, AND THE REFUSAL IS THE POINT.
- *
- * `session-park.js › resumeParked` zeroes the TOKEN delta baseline on the explicit ASSUMPTION
- * that a resumed conversation restarts its cumulative total. 🔒 **§5 item C8 IS NOW MEASURED
- * (2026-09-22, `codex-cli 0.155.1`): this runtime CONTINUES the total across `thread/resume` in a
- * fresh child** — one thread read total 18,838 → 42,429 → 71,194 over three turns spanning two
- * app-server processes, each step the previous total plus that turn's `last`. So the baseline
- * reset would re-count the entire thread on the first post-resume `result`, doubling `tokensSpent`
- * on the agent card.
- *
- * ⚠ SO THE ADAPTER STILL REFUSES AT ITS OWN DOOR rather than declaring a block nothing enforces.
- * `descriptor.session.usageResetsOnResume` is `false`, `capability.js › canResume` requires
- * `true`, and this asks that predicate rather than restating it — one declaration, one
- * enforcement. ⚠ WHAT LIFTS IT IS A CORE CHANGE: `resumeParked` must PRESERVE the baseline for a
- * runtime that declares `false`. That is CXP-4's remaining half, in `main/session-park.js`.
- * ⚠ A COLD LAUNCH IS UNAFFECTED, which is the whole design of the field: this refuses a RESUME.
- */
+/** Resume a parked thread. Codex's total continues across `thread/resume`, so core keeps the baseline. */
 function resume(spec, _priorHandle) {
   const descriptor = require('./index').descriptor;
   if (!capability.canResume(descriptor)) {
@@ -490,7 +343,6 @@ const appVersion = () => require('../../app-version').appVersion();
 
 module.exports = {
   buildLaunchSpec, start, resume,
-  buildScrubbedEnv, nativePair, approvalPolicy, makeFrameQueue, makeApprovalHandler,
+  buildScrubbedEnv, nativePair, approvalPolicy, makeFrameQueue,
   assertPolicyTook, boundedInterrupt,
-  DEFAULT_SANDBOX, SANDBOX_MODES, INTERRUPT_TIMEOUT_MS,
 };

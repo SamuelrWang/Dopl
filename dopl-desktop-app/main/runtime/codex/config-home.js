@@ -1,9 +1,5 @@
-// AMBIENT CONFIG ISOLATION.
-//
-// CODEX_HOME is the documented root for app-server config, auth and state. Dopl launches against
-// an app-owned home containing no config files and exposes only the operator's existing auth cache
-// through a symlink. This keeps `~/.codex/config.toml`, profiles, MCP servers and permission
-// defaults out of the child without copying a bearer or putting one on argv.
+// Ambient-config isolation: `CODEX_HOME` and `CODEX_SQLITE_HOME` both point at an app-owned home with no
+// config; only the operator's `auth.json` is linked in, so `~/.codex/config.toml` never reaches the child.
 
 const fs = require('fs');
 const os = require('os');
@@ -35,13 +31,9 @@ function hasAmbientConfig(home) {
   }
 }
 
-// 🔒 ⚠ CODEX WRITES ITS OWN `config.toml` HERE (MEASURED 2026-09-22, codex-cli 0.155.1). A
-// `thread/start` with `sandbox: 'workspace-write'` and no trust decision for its cwd AUTO-TRUSTS
-// that cwd and persists `[projects."<cwd>"] trust_level = "trusted"` into THIS home — after which
-// `isolatedEnv` refused every later launch — and the auto-trust also LOADED `<cwd>/.codex/config.toml`
-// (a hostile `mcp_servers` entry there STARTED). `projectTrustFence` below stops both at the
-// source; this reader retires a file that is ONLY such entries, so a home polluted before the
-// fence shipped launches again. Anything else in it is still refused, unchanged.
+// A `workspace-write` thread auto-trusts its cwd — writing a `[projects]` trust entry into this home and
+// loading `<cwd>/.codex/config.toml` — unless `projectTrustFence` marks it untrusted. A home file holding
+// only trust entries is retired; anything else still refuses the launch.
 const TRUST_TABLE_RE = /^\[projects\."(?:[^"\\]|\\.)*"\]$/;
 const TRUST_VALUE_RE = /^trust_level\s*=\s*"(?:trusted|untrusted)"$/;
 function onlyTrustEntries(text) {
@@ -60,11 +52,8 @@ function retireCodexTrustFile(home) {
   if (onlyTrustEntries(text)) fs.unlinkSync(file);
 }
 
-/**
- * The `thread/start.config.projects` fence: the cwd AND every ancestor marked `untrusted`, so Codex
- * neither persists a trust entry nor loads a project `.codex/config.toml` (ancestors too, because a
- * project root found by marker can sit above the cwd). Thread-scoped; nothing is written.
- */
+// `thread/start.config.projects`: cwd AND every ancestor `untrusted` (a marker-found project root can sit
+// above cwd). Thread-scoped; nothing is written.
 function projectTrustFence(cwd) {
   const out = {};
   if (typeof cwd !== 'string' || !cwd) return out;
@@ -82,7 +71,7 @@ function linkAuth(source, target) {
   try {
     const current = fs.lstatSync(target);
     if (!current.isSymbolicLink()) {
-      throw new Error('Dopl private Codex home contains an unexpected auth.json');
+      throw new Error(`Dopl private Codex home contains an unexpected auth.json (${target})`);
     }
     if (path.resolve(fs.realpathSync(target)) === path.resolve(fs.realpathSync(source))) return;
     // Only the app-owned link is replaced; the credential file it points at is never removed.
@@ -105,7 +94,7 @@ function isolatedEnv(env, userDataRoot) {
   try { fs.chmodSync(target, 0o700); } catch (_) { /* best effort on non-POSIX filesystems */ }
   retireCodexTrustFile(target);
   if (hasAmbientConfig(target)) {
-    throw new Error('Dopl private Codex home contains config.toml; refusing an unisolated launch');
+    throw new Error(`Dopl private Codex home contains config.toml; refusing an unisolated launch (${target})`);
   }
   const auth = path.join(sourceHome(input, target), 'auth.json');
   linkAuth(auth, path.join(target, 'auth.json'));

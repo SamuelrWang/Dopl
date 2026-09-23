@@ -1,18 +1,33 @@
-// SERVER -> CLIENT REQUESTS for the measured app-server v2 surface.
+// SERVER -> CLIENT REQUESTS (the app-server's held approvals): each becomes a name the gate is
+// asked about, and Dopl's verdict becomes that method's own reply. Fails closed everywhere.
 //
-// Each method has its own response schema. Treating all of them as `{ decision }` is not merely
-// imprecise: permissions, MCP elicitation and request_user_input reject that shape and can leave
-// the turn waiting forever. This module owns the translation and always fails closed.
+// Reply shapes differ per method (`{decision}` / `{action}` / `{permissions, scope}` / `{answers}`);
+// a wrong shape leaves the turn waiting forever.
 
-// ⚠ THE NAMING RULE LIVES IN `approval.js`, NOT HERE. That module is the one place a raw request
-// becomes a name the gate can be asked about; this module is the one place a verdict becomes a
-// reply in the method's own vocabulary. Two files, two jobs, and neither repeats the other's.
-const approval = require('./approval');
+const tools = require('./tools');
+// The mount key and the asking table come from the file that builds the entry, so the elicitation
+// comparison and the mount can never be two different words.
+const mcp = require('./mcp');
 
-const DECISION_METHODS = new Set([
-  'item/commandExecution/requestApproval',
-  'item/fileChange/requestApproval',
-]);
+const COMMAND_APPROVAL = 'item/commandExecution/requestApproval';
+const FILE_APPROVAL = 'item/fileChange/requestApproval';
+const PERMISSIONS_APPROVAL = 'item/permissions/requestApproval';
+const MCP_ELICITATION = 'mcpServer/elicitation/request';
+const USER_INPUT = 'item/tool/requestUserInput';
+
+// The gate's name for each approval method: Codex's own item and category words, which the Axis-A
+// lists and the restricted deny lists use. A method not here is answered -32601, never guessed.
+const REQUEST_NAMES = Object.freeze({
+  [COMMAND_APPROVAL]: tools.COMMAND_ITEM,
+  [FILE_APPROVAL]: tools.FILE_ITEM,
+  [PERMISSIONS_APPROVAL]: 'request_permissions',
+});
+
+const MCP_TOOL_CALL_KIND = 'mcp_tool_call';
+
+// A Dopl tool the request did not name and the entry cannot resolve. In no allow-list, so it gates;
+// it must not classify as the channel tool (`session-profiles.js › isChannelTool`, pinned by test).
+const DOPL_TOOL_SURFACE = 'dopl_unnamed_tool';
 
 const EMPTY_PERMISSIONS = Object.freeze({
   fileSystem: null,
@@ -35,20 +50,33 @@ function compact(input) {
 
 function approvalInput(method, params) {
   const p = params && typeof params === 'object' ? params : {};
-  if (method === 'item/commandExecution/requestApproval') {
-    return compact({ command: p.command, cwd: p.cwd, reason: p.reason });
-  }
-  if (method === 'item/fileChange/requestApproval') {
-    return compact({ grantRoot: p.grantRoot, reason: p.reason });
-  }
-  if (method === 'item/permissions/requestApproval') {
+  if (method === COMMAND_APPROVAL) return compact({ command: p.command, cwd: p.cwd, reason: p.reason });
+  if (method === FILE_APPROVAL) return compact({ grantRoot: p.grantRoot, reason: p.reason });
+  if (method === PERMISSIONS_APPROVAL) {
     return (p.permissions && typeof p.permissions === 'object') ? p.permissions : {};
   }
   return {};
 }
 
-// ⚠ ONE ASK, ONE FAIL-CLOSED CATCH. A gate that throws is not an operator who said yes; every
-// caller below routes through this so no request type can grow its own error handling.
+/**
+ * Is this elicitation a tool-call approval from DOPL'S OWN server, and under what name?
+ * `{ name, input, derived }` or `null` (fail closed). The request carries no tool name, so the name
+ * comes from Dopl's own entry (`mcp.soleAskingTool`), never from the operator-facing `message`.
+ */
+function doplElicitation(params) {
+  const p = (params && typeof params === 'object') ? params : {};
+  const meta = (p._meta && typeof p._meta === 'object') ? p._meta : null;
+  // A server's own form or credential prompt is not a tool-call approval.
+  if (!meta || meta.codex_approval_kind !== MCP_TOOL_CALL_KIND) return null;
+  if (typeof p.serverName !== 'string' || p.serverName !== mcp.SERVER_KEY) return null;
+  const sole = mcp.soleAskingTool();
+  const args = meta.tool_params;
+  // Arrays are rejected: the channel classifiers read `input.op`.
+  const input = (args && typeof args === 'object' && !Array.isArray(args)) ? args : {};
+  return { name: sole || DOPL_TOOL_SURFACE, input, derived: !!sole };
+}
+
+// A gate that throws is not an operator who said yes.
 async function ask(decide, name, input) {
   try {
     return await decide(name, input);
@@ -57,50 +85,18 @@ async function ask(decide, name, input) {
   }
 }
 
-async function verdictFor(method, params, decide) {
-  const name = method === 'item/commandExecution/requestApproval' ? 'commandExecution'
-    : method === 'item/fileChange/requestApproval' ? 'fileChange'
-      : 'request_permissions';
-  return ask(decide, name, approvalInput(method, params));
+/**
+ * The `{ decision }` reply. Never `acceptForSession`: that records one click on two ledgers, and
+ * Codex's own grant is scoped by something Dopl cannot read.
+ */
+function decisionReply(verdict) {
+  return { decision: verdict === 'allow' ? 'accept' : 'decline' };
 }
 
-// ── THE MCP ELICITATION — DOPL'S OWN SERVER GETS AN ALLOW PATH, NOBODY ELSE DOES ─────────────
-//
-// 🔒 ⚠ **THIS IS THE FIX FOR "A DOPL-LAUNCHED CODEX AGENT CANNOT POST"** (Samuel's ruling,
-// 2026-09-22: *resolve it by server*). The approval for an MCP tool call arrives as
-// `mcpServer/elicitation/request` carrying NO tool name and no `itemId` to join to the item that
-// has one, so this method used to answer an unconditional `{ action: 'decline' }` — fail-closed,
-// and also a Dopl MCP surface that could never be used at all on this runtime.
-//
-// ⚠ THE RULE, AND IT IS STRUCTURAL RATHER THAN TEXTUAL. `approval.js › doplElicitation` answers
-// non-null ONLY when the request is a tool-call approval (`_meta.codex_approval_kind ===
-// 'mcp_tool_call'`) raised by the server key DOPL ITSELF MOUNTED (`mcp.SERVER_KEY`). Nothing is
-// read out of the operator-facing `message`. The NAME it answers with comes from Dopl's own
-// per-tool approval table — the one tool on that entry configured to ask — and degrades to the
-// un-named Dopl surface (which is in no allow-list, therefore gates) the moment that stops being
-// a single tool.
-//
-// ⚠ IT CONSULTS THE GATE; IT DOES NOT SHORT-CIRCUIT IT. The same `decide` every other request type
-// is answered by, carrying the call's own arguments, so Axis B's channel lanes, the hard-deny
-// list, the audience belt and a standing grant all apply exactly as they do on every other
-// runtime. An elicitation from ANY other server keeps declining without asking anyone — allowing
-// a third party's tool on the strength of Dopl's posture is not a thing this gate was ever asked.
-//
-// ⚠ `action`, NOT `decision`, AND `cancel` IS NOT OURS TO SEND. This method's reply vocabulary is
-// `{ action: 'accept' | 'decline' | 'cancel' }` — measured, and different from the four-word
-// `{ decision }` the `item/*/requestApproval` methods take; answering those two shapes with each
-// other's words leaves the turn waiting forever. Of the three words Dopl only ever sends two:
-//   accept   — the gate allowed the call. Run it.
-//   decline  — an ANSWER, and the answer is no. The turn continues and the model is told it was
-//              refused, which is what Dopl's deny means everywhere else.
-//   cancel   — NOT a verdict about the call: it means the ASK itself was abandoned (the surface
-//              that was going to answer went away, the turn is being torn down). Dopl's gate
-//              always produces a verdict — allow, deny, or a thrown gate which `ask` reads as
-//              deny — so there is no state in which Dopl has no answer to give. Sending `cancel`
-//              would report "nobody answered" for a call somebody DID refuse, and
-//              `test/codex-server-requests.test.mjs` pins that no verdict ever produces it.
+// `{ action }`, not `{ decision }`. Dopl's own server reaches the gate; every other server declines
+// unasked. `cancel` is never sent: it means nobody answered, and the gate always answers.
 async function elicitationAnswer(params, decide) {
-  const target = approval.doplElicitation(params);
+  const target = doplElicitation(params);
   if (!target) return { action: 'decline' };
   const verdict = await ask(decide, target.name, target.input);
   return { action: verdict === 'allow' ? 'accept' : 'decline' };
@@ -112,27 +108,32 @@ async function answer(message, decide) {
   const params = msg.params && typeof msg.params === 'object' ? msg.params : {};
   const gate = typeof decide === 'function' ? decide : async () => 'deny';
 
-  if (DECISION_METHODS.has(method)) {
-    const verdict = await verdictFor(method, params, gate);
-    return { decision: verdict === 'allow' ? 'accept' : 'decline' };
+  if (method === COMMAND_APPROVAL || method === FILE_APPROVAL) {
+    return decisionReply(await ask(gate, REQUEST_NAMES[method], approvalInput(method, params)));
   }
-  if (method === 'item/permissions/requestApproval') {
-    const verdict = await verdictFor(method, params, gate);
-    const requested = params.permissions && typeof params.permissions === 'object'
-      ? params.permissions : {};
-    return {
-      permissions: verdict === 'allow' ? requested : EMPTY_PERMISSIONS,
-      scope: 'turn',
-    };
+  if (method === PERMISSIONS_APPROVAL) {
+    const verdict = await ask(gate, REQUEST_NAMES[method], approvalInput(method, params));
+    const requested = params.permissions && typeof params.permissions === 'object' ? params.permissions : {};
+    return { permissions: verdict === 'allow' ? requested : EMPTY_PERMISSIONS, scope: 'turn' };
   }
-  // ⚠ THE ONE REQUEST WHOSE ANSWER IS `{ action }`. See `elicitationAnswer` — Dopl's own server
-  // reaches the gate, every other server declines, and every malformed shape declines.
-  if (method === approval.MCP_ELICITATION) return elicitationAnswer(params, gate);
-  // Dopl has no surface for a free-form question to the operator. A made-up answer would be an
-  // operator decision the operator never made, so this takes its protocol-valid empty path.
-  if (method === 'item/tool/requestUserInput') return { answers: {} };
+  if (method === MCP_ELICITATION) return elicitationAnswer(params, gate);
+  // Dopl has no surface for a free-form question; this is the protocol-valid empty answer.
+  if (method === USER_INPUT) return { answers: {} };
 
   throw rpcError(-32601, `Unsupported Codex server request: ${method || '(missing method)'}`);
 }
 
-module.exports = { answer, approvalInput, elicitationAnswer, EMPTY_PERMISSIONS, rpcError };
+// Descriptor half — Axis A's answer shape.
+const descriptor = {
+  // The approval requests are server->client JSON-RPC requests that block the turn on our reply.
+  heldCallback: true,
+  // Codex gates a shell command, a file change, an escalation — not a named built-in.
+  granularity: 'category',
+  categories: tools.GRANULAR_CATEGORIES.slice(),
+};
+
+module.exports = {
+  answer, decisionReply, doplElicitation, descriptor,
+  approvalInput, rpcError,
+  DOPL_TOOL_SURFACE,
+};

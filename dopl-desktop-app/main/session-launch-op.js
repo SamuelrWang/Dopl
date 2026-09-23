@@ -83,8 +83,9 @@ async function launchFromButton(payload) {
   }
   const runtimeId = resolved.runtimeId;
   // The sheet's pick (refused by the funnel if unknown), else the identity's model on this runtime (skipped when
-  // absent), else '' — the funnel spends the runtime default.
-  const model = overrides.model || await launchDefault.identityModelFor(runtimeId, identity && identity.model);
+  // absent or bound to another runtime), else '' — the funnel spends the runtime default.
+  const model = overrides.model
+    || await launchDefault.identityModelFor(runtimeId, identity && identity.model, identity && identity.runtime);
 
   const res = await engine.launchRequesterSession({
     channelId: p.channelId,
