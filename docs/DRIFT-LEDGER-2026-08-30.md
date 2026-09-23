@@ -180,7 +180,7 @@ its **own** gate onto a *different* `src/features/channels/components/channels-s
 372px avatar list over a 760px document column. **Load sequence: three columns → two panes → the
 real surface.** Both files concede the shape is wrong in their own docblocks.
 → **Fix:** a `loadingSkeleton` slot on `ChannelsV2Core`, exactly as
-`src/features/agent-templates/components/agent-templates-core.tsx ›
+`src/features/agent-identities/components/agent-identities-core.tsx ›
 AgentTemplatesCoreProps.loadingSkeleton` does it, with a host passing nothing keeping today's
 behaviour. **F-220 covers only half of this** (the two-pane shape) — extend it, do not re-file.
 ⚠ Secondary: the shared ghost uses `DetailPaneSkeleton`, one of the three composites lacking
@@ -230,14 +230,14 @@ six weeks.
 
 | # | Gate | What it must assert | Where the mechanism already is |
 |---|---|---|---|
-| **G1** | `KbShelf` / `TemplateShelf` union — **highest value** | 4 `src` sites + `dist` + MCP vocab + SQL booleans, **no gate**. Drift silently WIDENS an access-shaped filter: a misspelled shelf answers the wider list. | Add a union pass to `scripts/check-knowledge-type-drift.ts`; `scripts/check-role-drift.ts › extractUnion` is the helper. |
+| **G1** | `KbShelf` / `IdentityShelf` union — **highest value** | 4 `src` sites + `dist` + MCP vocab + SQL booleans, **no gate**. Drift silently WIDENS an access-shaped filter: a misspelled shelf answers the wider list. | Add a union pass to `scripts/check-knowledge-type-drift.ts`; `scripts/check-role-drift.ts › extractUnion` is the helper. |
 | **G2** | `TOOL_MODES` / `MESSAGE_MODES` | 5 declarations (3 desktop main, 2 web), no cross-tree gate. A web-side mode the desktop rejects **fails closed silently** to `manual`/`ask` — the supervision setting reads as saved and is not. | ~6 lines in `src/features/channels/components/channels-v2/settings-agent-posture.test.tsx` via the already-imported `desktopSource` harness. `dopl-desktop-app/main/session-profiles.js › TOOL_MODES` wins. |
-| **G3** | Agent-template caps (32768/8192/120/2000/50/1000/80) | Across SQL + `src` + MCP (a **bare literal**) + desktop, no gate. `src/features/agent-templates/schema.test.ts` **claims** the SQL pairing in prose and never reads the migration — a comment claiming a pairing is not a gate. | A new schema-sql test under `src/features/agent-templates/`, on the pattern `src/features/channels/schema-sql.test.ts` and `src/features/knowledge/schema-sql.test.ts` already set; give the MCP copy a named constant. Migration wins. |
+| **G3** | Agent-template caps (32768/8192/120/2000/50/1000/80) | Across SQL + `src` + MCP (a **bare literal**) + desktop, no gate. `src/features/agent-identities/schema.test.ts` **claims** the SQL pairing in prose and never reads the migration — a comment claiming a pairing is not a gate. | A new schema-sql test under `src/features/agent-identities/`, on the pattern `src/features/channels/schema-sql.test.ts` and `src/features/knowledge/schema-sql.test.ts` already set; give the MCP copy a named constant. Migration wins. |
 | **G4** | Plan feature strings | `src/features/billing/plans.ts` and `src/features/marketing/components/pricing-content.tsx › PERSONAL_ROWS` / `WORKSPACE_ROWS` restate `src/features/billing/credits.ts` allowances and the caps **3×**. ⚠ Both names are 2026-09-08 renames: the single `COMPARE_ROWS` split when /pricing grew a second product group, and `MONTHLY_MCP_CREDITS` was deleted for the per-wallet maps (`SEAT_MONTHLY_CREDITS`, `PERSONAL_MONTHLY_CREDITS`). The finding is unchanged — re-anchored, not re-opened. Drift = **public pricing misrepresentation**, invisible to tests. | Interpolate the constants — that deletes the duplicate rather than gating it. `entitlementDeniedBody` already does this. |
 | **G5** | F-295 `isStandardWorkspace` / `WorkspaceKind` | Verified still open: `grep -rn "isStandardWorkspace\|WorkspaceKind" scripts/` → **0**. Bodies are byte-identical today only because both were flipped together on 2026-08-24. Consumers of the package copy went 3 → **6** during the wave, and one of them is now a **confirm gate**. | ~15 lines in `scripts/check-role-drift.ts`, which already opens both files. |
 | **G6** | `WEB_ONLY_ROOTS` subset assertion (closes **D6**) | `WEB_ONLY_ROOTS ⊇ (RESERVED_WORKSPACE_SLUGS ∩ top-level routes)`. | `dopl-desktop-app/test/deep-link-target.test.mjs` already reads across trees. |
 | **G7** | `globals.css` ↔ `tokens.css` token diff | 219 shared tokens, 216 identical, 3 documented deviations. Was a LEAVE — **raise to PORT**, because D5 and D10 are two live proofs that a prose "edit both together" instruction fails. | ~20-line `--*` diff script with an allowlist. New tooling, but 20 lines. |
-| **G8** | Sweep-list hardening | `src/features/agent-templates/components/template-editor-surface.test.tsx › HOME_FILES` is a **hand-typed list of five** (⚠ **the sweep moved file on 2026-09-08**, for the §1 line cap; it was `template-editor.test.tsx` when this was captured). It missed `apps/desktop-ui/src/pages/home/link-out-panel.tsx`, which renders a surface — the stated membership test. **The enforcement mechanism, not the ruling, is what drifted.** | Either derive `HOME_FILES` from a directory scan of `apps/desktop-ui/src/pages/home/*.tsx` with an explicit opt-out list, **or** state the scope limit in the test header so the next reader knows what is not covered. Same shape as `POST /api/boot`, whose floor lives in `src/features/workspaces/server/segment.ts › BOOT_MIN_ROLE` and is structurally invisible to the guest-route sweep (route-file parsing only). |
+| **G8** | Sweep-list hardening | `src/features/agent-identities/components/identity-editor-surface.test.tsx › HOME_FILES` is a **hand-typed list of five** (⚠ **the sweep moved file on 2026-09-08**, for the §1 line cap; it was `template-editor.test.tsx` when this was captured). It missed `apps/desktop-ui/src/pages/home/link-out-panel.tsx`, which renders a surface — the stated membership test. **The enforcement mechanism, not the ruling, is what drifted.** | Either derive `HOME_FILES` from a directory scan of `apps/desktop-ui/src/pages/home/*.tsx` with an explicit opt-out list, **or** state the scope limit in the test header so the next reader knows what is not covered. Same shape as `POST /api/boot`, whose floor lives in `src/features/workspaces/server/segment.ts › BOOT_MIN_ROLE` and is structurally invisible to the guest-route sweep (route-file parsing only). |
 | **G9** | Findings-citation gate | `scripts/check-doc-refs.mjs`'s class (d) catches a **dangling** id, never a **mis-cited** one — and **35 F-ids are cited from source with no live entry** (F-228 in 73 source files, F-212 in 32, F-236 in 16, F-139 in 16, F-142 in 15, F-147 in 15, F-320 in 14, F-233 in 13). `F-031` resolves to nothing at all and 4 source files cite it. **Two heading forms** (105 `###` / 122 `##`) mean every single-form grep under-counts by ~half. The legend says resolved entries are deleted; **58 are kept in place**. | No new tooling for the doc half: fix the legend, unify the heading form, restore the `Status:` line to the 32 prose-format entries. The source-side F-id sweep is 1,210 references currently ungated by anything but existence. |
 
 **A ninth-and-a-half, recorded because it is the same class:** `src/shared/lib/url/safe-redirect.ts ›
@@ -294,7 +294,7 @@ Deduplicated across all seven reports; each item cited once, at the strongest an
    `window.addEventListener("keydown")`, `.bento` (the *inner card* recipe) as the dialog face. No
    focus trap, no `role="dialog"`, no `inert` background, no restore-focus. ⚠ Needs **ASK-19** first
    (its `max-w-4xl` is wider than `StandardDialog` can express).
-5. **`src/features/agent-templates/components/launch-sheet.tsx › TemplateLaunchSheet`** — already
+5. **`src/features/agent-identities/components/launch-sheet.tsx › IdentityLaunchSheet`** — already
    imports `Field` (= `DialogField`) and `RAISED_INPUT`, so the conversion is mechanical: left-aligned
    `<h2>` → `DIALOG_TITLE`, `auth-btn-3d h-10 rounded-[9px]` pair → `DIALOG_BTN_*`. Its `SelectMenu`
    is the **flat** variant inside a dialog while the editor two files over passes `variant="raised"` —
@@ -323,7 +323,7 @@ Deduplicated across all seven reports; each item cited once, at the strongest an
 **LEAVE, verified:** `src/features/channels/components/go-public-dialog.tsx` (already on
 `ConfirmDialog`; appears in the `ModalShell` grep only transitively),
 `src/features/channels/components/channels-v2/posture-warning.tsx`,
-`src/features/agent-templates/components/template-approval.tsx` (its docblock states the ruling: *"It
+`src/features/agent-identities/components/identity-approval.tsx` (its docblock states the ruling: *"It
 is the `ConfirmDialog` idiom, not that component"* — instructions run to 32 KB and need a bounded
 scrolling well), `src/features/workspaces/components/join-request-notices-core.tsx` (a notice queue,
 not a form).
@@ -370,7 +370,7 @@ applied to channels and never back-ported. Chats already has the correct shape.
 
 | # | Item |
 |---|---|
-| **P12** | **The sidebar "Upgrade to Pro" card renders for paying workspaces.** `src/shared/layout/app-shell/app-sidebar-core.tsx › AppSidebarCore` renders it **unconditionally** with no entitlement check and no billing props, on **every workspace page in both trees**. A Pro or Team customer is nagged forever. The hook exists and is exemplary (`useWorkspaceEntitlements` returns `isPaid`). Fix as a **prop or slot** from the host — the component is deliberately Next-free, same idiom as `AgentTemplatesCoreProps.loadingSkeleton`. |
+| **P12** | **The sidebar "Upgrade to Pro" card renders for paying workspaces.** `src/shared/layout/app-shell/app-sidebar-core.tsx › AppSidebarCore` renders it **unconditionally** with no entitlement check and no billing props, on **every workspace page in both trees**. A Pro or Team customer is nagged forever. The hook exists and is exemplary (`useWorkspaceEntitlements` returns `isPaid`). Fix as a **prop or slot** from the host — the component is deliberately Next-free, same idiom as `AgentIdentitiesCoreProps.loadingSkeleton`. |
 | **P13** | **Keyboard-focusable, keyboard-inert tree rows.** `src/features/knowledge/components/knowledge-v2/list/tree-rows.tsx › FolderRow` and `› EntryRow` render `<div role="button" tabIndex={0}>` with **no `onKeyDown`**. A keyboard user Tabs onto every folder and file and Enter/Space does nothing. `src/features/knowledge/components/knowledge-v2/home/base-card.tsx › BaseCard` reasoned this contract out explicitly and got it right (*"ONE keyboard Open action… Tab order: bookmark, then Open"*); the rail never did. ⚠ Same file: `› RowIconBtn`'s docblock is false in **both halves** (*"rendered as a `<span>`: rows are `<button>`"* — it renders a `<button>` and the rows are `<div role="button">`). |
 | **P14** | **`indexByParent` / `indexByFolder` sort the React-Query cache array in place.** Same file. `tree.folders` / `tree.entries` are cached query data. Two sibling files in the same feature get this right and say why (`detail/overview-contents.tsx` uses `[...folders].sort`; `home/knowledge-home.tsx` comments *"`[...bases]` because sort mutates"*). |
 | **P15** | **The workspace bookmark fails silently.** `useToggleBaseStar` and `/home`'s `useStarToggle` have the same body and differ in two ways: the key source, and **`/home` toasts on failure while the workspace one does not**. On the workspace page a failed bookmark flips and flips back with no explanation. PORT the toast at minimum; the two should be one hook. |
@@ -445,7 +445,7 @@ applied to channels and never back-ported. Chats already has the correct shape.
   hand-tuned two-drop shadow where `.bento` is the answer; `› object-hover-card.tsx ›
   ObjectHoverCard`'s `bg-white` (should be `bg-bg-elevated`), `shadow-xl` (a Tailwind preset, not a
   kit elevation) and `z-[9999]`.
-- **`src/features/agent-templates/components/template-editor-rows.tsx › ChipMultiSelect`** is a
+- **`src/features/agent-identities/components/identity-editor-rows.tsx › ChipMultiSelect`** is a
   byte-identical hand-copy of `wells.ts › CHIP` — same border, fill, padding, type and the same
   `rgba(0,0,0,0.05)` literal — in a file that **already imports from `@/shared/ui/wells`**. One
   import.
@@ -510,8 +510,8 @@ applied to channels and never back-ported. Chats already has the correct shape.
   the *inheritance rule*, which the list does not show.
 - **`knowledge-v2/home/knowledge-home.tsx`'s `text-[#e3e3e3]`** — the only raw hex in a knowledge
   `.tsx`, and it sits inside the design system's reference implementation.
-- **Dead fixture typing:** `apps/desktop-ui/src/pages/agents/index.test.tsx › TEMPLATES` carries
-  `teamId: null` — a field `AgentTemplate` does not have — and omits `teamIds` entirely. A
+- **Dead fixture typing:** `apps/desktop-ui/src/pages/identities/index.test.tsx › IDENTITIES` carries
+  `teamId: null` — a field `AgentIdentity` does not have — and omits `teamIds` entirely. A
   single-team-era leftover; the array is unannotated so TS never catches it, and the page test
   therefore never exercises the real DTO.
 
@@ -523,7 +523,7 @@ applied to channels and never back-ported. Chats already has the correct shape.
 
 **Design-system scope**
 - **`SectionBox` is page-scoped, not deprecated.** The no-concave ruling is enforced by exactly one
-  test — `template-editor-surface.test.tsx › no concave surfaces` (`template-editor.test.tsx` when this was captured) — whose sweep is `agent-templates/**` plus
+  test — `identity-editor-surface.test.tsx › no concave surfaces` (`template-editor.test.tsx` when this was captured) — whose sweep is `agent-identities/**` plus
   five hand-listed `/home` files. **Concave surfaces on ontology, members, chats, billing,
   mcp-connect and workspaces are NOT drift.** DESIGN-SYSTEM says there are two section patterns *"and
   picking one is a decision"*. **Do not mass-convert.**
@@ -661,9 +661,9 @@ clean.**
 Raw agent ids: clean, and enforced by a source sweep rather than review (`agent-id-visibility.test.ts`
 reads every `.tsx` in the directory, comments stripped). Native `<select>`: zero in any audited
 territory (3 remain, all ontology). `useApiQuery` divergence in knowledge: reasoned — the layer cannot
-express a predicate invalidation and knowledge needs exactly that. `agent-templates`' §1A compliance at
+express a predicate invalidation and knowledge needs exactly that. `agent-identities`' §1A compliance at
 **both** gates is textbook. The agents territory has no dead exports, no fall-open, no url-sync debt
-(and §5A says the absence of an `agents/:templateId` row is **load-bearing**). `/link/[token]` is a
+(and §5A says the absence of an `agents/:identityId` row is **load-bearing**). `/link/[token]` is a
 model of house style. **There is no MAP or everywhere-SEARCH UI** — `dopl_map` and `dopl_search` are
 MCP-only; the territory item is closed, not open. **The flagged "launch-sheet keeps a concave pill"
 claim is FALSE** — that file has no concave surface and the sweep does see it; the concave pill on a
@@ -880,16 +880,16 @@ auditor's recommendation. **Numbered so they can be answered by number.**
 
 21. **The launch panel lost the authorship security signal.**
     `channels-v2/composer-launch-panel.tsx › AgentLaunchPanelView` (2026-08-27) replaced the composer's
-    template chevron and narrows the list to `› LaunchTemplateOption = {id, name}` — **no
+    template chevron and narrows the list to `› LaunchIdentityOption = {id, name}` — **no
     `authorMarker`, no visibility, nothing in the accessible name.** The picker that carries the signal
     is now mounted from exactly one place. §5A calls the marker *"a SECURITY SIGNAL, NOT DECORATION…
-    the ONLY signal shown to the human BEFORE the choice is made."* `TemplateApprovalDialog` still
+    the ONLY signal shown to the human BEFORE the choice is made."* `IdentityApprovalDialog` still
     fires on first use, so the fence holds — what was lost is the **pre-choice** signal on the surface
     now taking most of the traffic. → **Recommend restoring the marker to the panel.** This is a
     security ruling, not a design one.
     → ✅ **DONE, 2026-08-30 — and it was never a question.** §5A already ruled it; this was
-    enforcement, not a decision. `LaunchTemplateOption` regains `marker`, filled in `ComposerLaunch`
-    by `template-picker.tsx › authorMarker` — **the same function, never a second copy**, so a
+    enforcement, not a decision. `LaunchIdentityOption` regains `marker`, filled in `ComposerLaunch`
+    by `identity-picker.tsx › authorMarker` — **the same function, never a second copy**, so a
     nameless author still reads *"by another member"* rather than losing the marker. It reaches the
     ACCESSIBLE NAME via `MenuItem`'s `description`, which renders inside the `role="menuitem"`
     button — the same two places the picker puts it. `composer.tsx` now hands the panel
@@ -946,7 +946,7 @@ auditor's recommendation. **Numbered so they can be answered by number.**
     pill row and `SegmentedControl` cannot express it. → **Recommend a documented exception** — one
     site does not buy a variant.
 
-28. **Should `.bento` get a hover face?** `agent-templates/components/template-section.tsx ›
+28. **Should `.bento` get a hover face?** `agent-identities/components/identity-section.tsx ›
     TemplateCard` hand-writes a double shadow that is the **tree's only occurrence**; `.bento` has no
     hover state and `.kanban-card` already owns *"a shallow hover lift."* → **Recommend reusing
     `.kanban-card`'s lift** rather than minting a third elevation.
@@ -995,7 +995,7 @@ auditor's recommendation. **Numbered so they can be answered by number.**
     that matter. → **Recommend leaving them** — §1A's own "do not multiply ghosts" rule cuts against
     inventing four more in a 380px column. Recorded because it was raised.
 
-36. **Does the `SECTIONS` literal in `template-picker.tsx › PickerBody` need a `sections` prop?** It
+36. **Does the `SECTIONS` literal in `identity-picker.tsx › PickerBody` need a `sections` prop?** It
     hard-codes Private / Team / **Public** and is mounted inside link containers, where a container's
     `workspace` templates would group under "Public" instead of `lib/visibility.ts ›
     SECTIONS_CONTAINER`'s "Shared in this channel" — against §5A's *"never a literal here… never
@@ -1094,7 +1094,7 @@ during the wave) · `F-055` · `F-108` · `F-112` · `F-144` · `F-178` · `F-20
    to name the **double gate** (D11), which it does not currently describe.
 
 4. **F-342 — record a FOURTH reader and narrow one leg.** The finding enumerates three unfiltered
-   base-list readers; `channels-v2/composer-launch-panel.tsx` calls `useAgentTemplates` unfiltered too,
+   base-list readers; `channels-v2/composer-launch-panel.tsx` calls `useAgentIdentities` unfiltered too,
    added 2026-08-27 (the same day the shelf split shipped). The same answer applies (a container has no
    shelves), but the enumeration is one short. **Narrow the MCP leg:** *"MCP has no shelf concept"* is
    no longer true — `packages/mcp-server/src/tools/agent-ops-write.ts` has a full `ShelfArg` vocabulary
@@ -1128,8 +1128,8 @@ holding one channel and two people"*; the multi-member migration drops the cap, 
 - 🔴 **§7's anchor is wrong and CI cannot see it.** It cites `ui-sync.js › SYNC_TABLES`; the
   definition is in `dopl-desktop-app/main/ui-sync-core.js › SYNC_TABLES` (split out at the 500-line cap
   2026-08-18). `ui-sync.js` re-exports it, so `check-doc-refs` resolves either way.
-- **§5A and `template-picker.tsx`'s docblock both name `channels-v2/composer.tsx`'s Bot icon as a live
-  picker mount.** That picker is **retired** — `composer.tsx` imports only `TemplateApprovalDialog`,
+- **§5A and `identity-picker.tsx`'s docblock both name `channels-v2/composer.tsx`'s Bot icon as a live
+  picker mount.** That picker is **retired** — `composer.tsx` imports only `IdentityApprovalDialog`,
   and `composer-launch-panel.tsx`'s own docblock says so. The "two mounts share one cache entry"
   argument is **load-bearing for a state that no longer exists.**
 - **§5 scopes the info-tab's dead buttons to "the channels page"**; that component has had **two
@@ -1158,7 +1158,7 @@ in `SELF_AUTH_ROUTES` and **not** in `PUBLIC_ROUTES`) and `src/proxy.ts`'s *"exa
 `SELF_AUTH_ROUTES`"* (the matcher excludes six of seven); `create-skill-dialog.tsx`'s *"same
 ModalShell chrome as `CreateBaseDialog`"*; `knowledge-v2/landing-preview-core.tsx`'s *"its only caller
 is …"* (there are **two**, and the second is precisely why `embedded` and `audienceFixed` exist);
-`agent-templates/hooks/use-agent-templates.ts` and `› client/query-keys.ts` both saying *"if a `query`
+`agent-identities/hooks/use-agent-identities.ts` and `› client/query-keys.ts` both saying *"if a `query`
 variant is ever added"* while `shelf` **is** that variant 40 lines down; and
 `base-settings-form.tsx`'s docblock listing six sections over seven rendered.
 
@@ -1188,7 +1188,7 @@ variant is ever added"* while `shelf` **is** that variant 40 lines down; and
   re-learning: F-146, F-106(a), F-109(a), F-296's "measured" half.
 - **The 1.22.0 wave left four docblocks asserting a cap it deleted** — `workspaces/types.ts ›
   WorkspaceKind`, `src/features/home/server/service-writes.ts › mintContainerLink`,
-  `apps/desktop-ui/src/pages/home/agent-panels.tsx`, `agent-templates/lib/visibility.ts ›
+  `apps/desktop-ui/src/pages/home/identity-panels.tsx`, `agent-identities/lib/visibility.ts ›
   SECTIONS_CONTAINER`.
 - **Unverifiable halves** (production-only, per the file's own *"the database is the only witness"*
   doctrine): F-044, F-092 residual 1, F-133, F-169 (local migration files now **190** vs 157 recorded),
@@ -1298,6 +1298,6 @@ Recorded rather than resolved, because each is a judgment Samuel may want to mak
    that a sheet is not a create/edit dialog. → **Recorded as a PORT gated on ASK-13.**
 
 5. **Two auditors independently mis-resolved a basename before catching themselves** — F-220 (web tree
-   vs desktop tree) and the launch-sheet concave claim (`agent-templates` vs `channels`). **Both
+   vs desktop tree) and the launch-sheet concave claim (`agent-identities` vs `channels`). **Both
    corrections are in this file, and both are the report's own thesis biting.** Treat any
    same-named-file-in-two-trees claim as unverified until the tree is named.

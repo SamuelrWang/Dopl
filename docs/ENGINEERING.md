@@ -4309,7 +4309,7 @@ relationship between two objects, and a relationship needs somewhere to live.** 
 `guest_write`, which is a third fact about that same pair.
 
 An agent template has **ONE** consumer: `main`, at spawn. Nothing else resolves a template — not the
-guest lane (Q3: guests see nothing, and §5A refuses even a `hasTemplate` boolean as an existence
+guest lane (Q3: guests see nothing, and §5A refuses even a `hasIdentity` boolean as an existence
 oracle), not a human reader, not an export. So `agent_only` **has no referent** for a template: there
 is no second audience to hold it back from. And inside a `kind='link'` container the remaining axis
 collapses cleanly — a container has no teams, so `visibility` is exactly `private` (me) or
@@ -4317,7 +4317,7 @@ collapses cleanly — a container has no teams, so `visibility` is exactly `priv
 column, and the container makes it total.**
 
 **SO THE ARGUMENT FOR A GRANT TABLE HERE IS AN ARGUMENT FOR WRITING A FACT A THIRD TIME.** §5A already
-records that the visibility matrix is written TWICE — `agent-templates/server/service-shared.ts ›
+records that the visibility matrix is written TWICE — `agent-identities/server/service-shared.ts ›
 canSeeTemplate` and the `agent_templates_member_select` RLS policy — and records what a drift between
 those two cost. A `channel_resource_grants` row would be the third copy, bought to express a scope the
 /home surface does not need. **The real gap is a MULTI-CHANNEL STANDARD workspace**, where `workspace`
@@ -4331,7 +4331,7 @@ One audience is a column. Two audiences that must be addressed separately is a r
 renders both mechanisms side by side under one selector, which is the strongest possible argument for
 unifying them and still not a reason to.
 
-**THE COROLLARY THAT BIT IMMEDIATELY.** Cross-container reuse is a **COPY** (`lib/template-draft.ts ›
+**THE COROLLARY THAT BIT IMMEDIATELY.** Cross-container reuse is a **COPY** (`lib/identity-draft.ts ›
 containerCopyDraft`), because `getTemplateById` is workspace-filtered and the same-workspace trigger
 means a home-workspace template can never be GRANTED into a container's channel — the mechanism the
 knowledge wave used is structurally unavailable here, which is the same asymmetry from the other side.
@@ -4348,7 +4348,7 @@ expires when the thing it measured moves.**
 **TWO SMALLER THINGS THIS WAVE PAID FOR.**
 
 *A cache key that is a PATH is not a key for a two-workspace surface.* All three template writes
-patched `agentTemplateKeys.list().all` — `["/api/agent-templates"]` — and TanStack matches by prefix,
+patched `agentIdentityKeys.list().all` — `["/api/agent-identities"]` — and TanStack matches by prefix,
 so every workspace variant was patched by every write. Harmless for a one-workspace page and broken
 the moment this tab mounts the container list and the home list together: a container-created template
 appeared under "across all channels" until a cold refetch. **The defect was invisible while the
@@ -4357,7 +4357,7 @@ three writes, `coldKeys` kept on create, and a two-list render test that goes re
 reverted (F-331).
 
 *And the dev fixture outlived the migration it was standing in for.* A client/mock.ts module and an
-isMockFallback branch in `src/features/agent-templates/hooks/use-agent-templates.ts` — **both DELETED
+isMockFallback branch in `src/features/agent-identities/hooks/use-agent-identities.ts` — **both DELETED
 in M0, so both are written here without a code span on purpose: a citation is a claim that a path
 resolves, and these two deliberately no longer do** — painted two fabricated templates whenever a
 read errored with no data. On the workspace page that was a dev convenience. On a link container it was a
@@ -4522,7 +4522,7 @@ comment still argues for the opposite behaviour is worse than no test.
 
 Two mechanical notes worth keeping:
 
-- **F-331 came back on a new axis, and its own docblock predicted it.** `agentTemplateKeys`'s
+- **F-331 came back on a new axis, and its own docblock predicted it.** `agentIdentityKeys`'s
   comment said the write/read pairing had to be revisited in the same change if a `query` variant
   ever appeared on that path. `?shelf=` is that variant: the reads moved to
   `[path, ws, {shelf:…}]` while the writes still patched `[path, ws, undefined]` — a silent no-op
@@ -4563,7 +4563,7 @@ turned out to mean, and what it cost to state it once.
   so each variant carries its whole face, padding and font size included, and a caller's `className`
   never has to win a same-layer fight with the base.
 - 🔄 **The no-modal-in-modal ruling was reversed, and the reversal is worth more than the rule was.**
-  `template-editor-rows.tsx` argued that a dialog for one key/value pair puts the operator two
+  `identity-editor-rows.tsx` argued that a dialog for one key/value pair puts the operator two
   Escapes from their draft. True, and it was the right call while a field was two inputs. What
   changed is the FORECAST: a field is about to carry a type, a default and a required flag, and a
   row that grows four controls wide is a form pretending to be a list. Building the standard dialog
@@ -4594,8 +4594,8 @@ and cards directly on it.
   and it is worth noticing what it bought: the divergence was *recorded as a divergence*, so when the
   ruling came the only question left was which direction — not whether anyone had meant it.
 - **Two faces arrived at one rectangle from opposite sides.** Knowledge came down from a concave box;
-  Agents came across from `template-section.tsx`'s flat `bg-card-surface-subtle` card. The shape they
-  now share is `shared/ui/section-panel.tsx › SectionPanel`, and `TemplatePanel` is that component
+  Agents came across from `identity-section.tsx`'s flat `bg-card-surface-subtle` card. The shape they
+  now share is `shared/ui/section-panel.tsx › SectionPanel`, and `IdentityPanel` is that component
   plus a ground — so the workspace Agents page is pixel-unchanged while neither /home face owns a
   copy of the structure.
 - **`SectionPanel` paints nothing, and that is the scoping decision.** The obvious API was
@@ -4608,7 +4608,7 @@ and cards directly on it.
   that always did the work.
 - **The ground is one CSS rule, not a prop at each mount.** `.frame :global([data-section-panel])`
   repaints every panel in the record pane at once. Two arguments, and the second is the real one:
-  (1) the /home Agents face is `agent-panels.tsx`, which another agent was actively restructuring —
+  (1) the /home Agents face is `identity-panels.tsx`, which another agent was actively restructuring —
   an attribute-keyed rule survives that, a prop threaded through their file does not; (2) **two faces
   that merely look settled today drift the moment one is re-tuned.** Stating the ground once means a
   change to it cannot land on one tab only, which is the whole content of "Samuel standardizes".
@@ -4620,7 +4620,7 @@ and cards directly on it.
 - **A behaviour was dropped, deliberately: the drag-to-resize grip.** It was furniture of the concave
   box (`SectionBox` clamps a body height against its scroll height); the Agents face never had one,
   and a resize handle on a section with no frame is a control gripping air.
-- **The sweep grew in the direction of the ruling.** `template-editor.test.tsx › no concave surfaces`
+- **The sweep grew in the direction of the ruling.** `identity-editor.test.tsx › no concave surfaces`
   swept four /home files for the Agents face; `knowledge-panels.tsx` joined them, which quietly
   changes what that sweep MEANS — it is /home's flatness rule now, not one feature's. That is the
   right direction for a list that only grows: the failure mode of a sweep is a file nobody added, not
@@ -5921,7 +5921,7 @@ description and every write-result renderer, so it had to land after the two tie
 it was shrinking — and its ownership was declared BEFORE the merge, which is why the contested
 files resolved in minutes instead of by argument.
 
-**The tiers that never touched each other's files still collided.** P1 rewrote the `no-template`
+**The tiers that never touched each other's files still collided.** P1 rewrote the `no-identity`
 refusal into a facts line and moved its paragraphs to a doctrine module. P3 had, on a different
 branch, added a THIRD cause to that same paragraph — the tenancy one, the only cause a caller can
 act on alone. Neither branch's tests failed. The merged tree compiled, passed, and quietly told
@@ -5959,7 +5959,7 @@ re-deriving it, and the wave that adds a gate is the one that will not think to.
 
 ## 2026-09-02 — The subsystem that was an apology: what an id could not do, explained in four places
 
-`classifyMissingTemplateRef` was one of the tree's better-written functions. It had a real
+`classifyMissingIdentityRef` was one of the tree's better-written functions. It had a real
 property — it named a tenancy without ever becoming an existence oracle — a test suite that drove
 it adversarially, a docblock that argued for every arm, and three careful label shapes. It also
 existed for exactly one reason: **a template read was keyed `(workspace_id, id)`, so a read could
@@ -5976,7 +5976,7 @@ sentence, and no surface could act on it.
 
 A12 made ids resolve their own container (`shared/tenancy/resolve-resource.ts`), and the read
 follows the answer instead of describing it. The classifier survives on the NAME lane, where the
-ambiguity is real — `agent_templates` has no name uniqueness on purpose — and B2 deletes the rest.
+ambiguity is real — `agent_identities` has no name uniqueness on purpose — and B2 deletes the rest.
 
 **Two fence gaps fell out of the move, and both were invisible while the answer was a sentence.**
 The generalised query had to decide what "a container the caller belongs to" means for a READ, and
@@ -5989,7 +5989,7 @@ they would have been reads under the route floor. **The generalisation is what s
 same membership set now answers "may you name this" and "may you read it", so the two questions
 could no longer disagree quietly.**
 
-⚠ **And the pilot is READS only, on purpose.** `getTemplateById` stays keyed to `ctx.workspaceId`
+⚠ **And the pilot is READS only, on purpose.** `getIdentityById` stays keyed to `ctx.workspaceId`
 because `service-writes.ts` funnels through it — a PATCH that followed an id into another container
 would be `workspace=` becoming ignorable on a WRITE, which is a ruling nobody has made. One
 function, two doors, and the split is the whole reason this was safe to build unattended.
@@ -6142,7 +6142,7 @@ RR3 arm 2 — *exactly one live agent in the room answers* — which the server 
 a projection it already holds, and RR3 arm 1, a channel SETTING for the case where there is more
 than one. Twelve rules over "who wakes", spread across three modules that each declared they must not
 read the others, became one predicate. ⚠ The setting stores a HANDLE and not a template id, which is
-not a shortcut: an FK to `agent_templates` from a row every channel member can read is a
+not a shortcut: an FK to `agent_identities` from a row every channel member can read is a
 cross-visibility reference, and `20260823130000_channel_sessions_template_name.sql` had already paid
 for that lesson on its own column.
 
@@ -6262,7 +6262,7 @@ This is F-590's shape read backwards — that finding was about the flag flip HI
 the same window — and it is why the migration's first statement is a `RAISE` rather than a comment.
 
 **Two hand-mirrored fences became one, and the mirrors were the reason.** `resolveHomeScope` and
-`resolveTemplateHomeScope` were one three-condition rule written twice, and their docblocks had
+`resolveIdentityHomeScope` were one three-condition rule written twice, and their docblocks had
 already drifted into arguing about each other (a template's `private` is TERMINAL, a KB's is a
 FLOOR). Both are deleted. Of the three conditions only *a credential that stands for a person*
 survives; `private` was protecting a shelf that sat inside a SHARED workspace, and a container has
@@ -6271,8 +6271,8 @@ one member, while *the caller's own default standard workspace* went with the co
 no feature carries a mapping arm — which is the only way a shared fence stops growing new mirrors.
 
 **One thing shipped incomplete, deliberately, and it is recorded rather than smoothed over.** A
-grant is written and the lent row does not yet appear in the target's list (F-604): `canSeeTemplate`
-and `agent_templates_member_select` are ONE RULE WRITTEN TWICE and may only move together, and that
+grant is written and the lent row does not yet appear in the target's list (F-604): `canSeeIdentity`
+and `agent_identities_member_select` are ONE RULE WRITTEN TWICE and may only move together, and that
 pair belongs to B12/B16 with the redteam suites that prove it. Adding an arm to a predicate this
 slice does not own, whose twin lives in another slice's unapplied migration, is the exact drift
 `20260716150000_chats_team_aware_rls.sql` is the record of.
@@ -6858,3 +6858,26 @@ measurement it is waiting on (usage accounting on resume), with a test asserting
 `declared === 'unverified'` — **so answering that question turns the test red, which is the intended
 trip-wire.** And `› checkProtocol` is additive: it is not yet in the connected-state path, so nothing
 refuses on it today.
+
+## 2026-09-22 — Agent templates become agent identities: a product word, renamed all the way down
+
+**Why.** Samuel is moving the product from "a digital workspace" to "where you have digital twins":
+*"If I took my personality and I separated myself into a coder and turned that into an agent, that's
+what this coder agent identity is."* A template is a thing you stamp copies from; an identity is a
+piece of a person. He asked for the full change (*"rename the internals as well … Dropping the template
+is fine"*), with one fence: the channel page keeps saying **agents**, because what runs there is an
+agent — a session launched FROM an identity. Current state is INVARIANTS §5A's rename bullet.
+
+**How it was done, and the two things worth keeping.**
+- **A token-level rename with a protect list, not a find-and-replace.** "template" has three other
+  meanings in this tree — the ontology object's default fields (`ontology_objects.template`,
+  `set_template_field`), template literals, and Electron's menu/tray templates — so ambiguous bare words
+  were renamed only in files outside the ontology/billing/tray set and only on lines that did not name
+  one of those meanings; compound agent tokens (`AgentTemplate`, `agent_templates`, `canSeeTemplate`)
+  were renamed everywhere. Historical docs kept their prose and had only their CODE REFERENCES moved,
+  so `check-doc-refs.mjs` still resolves every anchor.
+- **The replay gates learned what a RENAME is.** Every text-scanning gate answered "what is live" from
+  `CREATE TABLE` / `CREATE POLICY` / `ADD CONSTRAINT` under a name, so an `ALTER … RENAME` read as the new
+  table never existing and the old one never dying. `shared/supabase/migration-renames.ts ›
+  forwardRenamed` rewrites each migration with the renames LATER files perform; every downstream rule
+  then replays as if the object had always carried its final name, which is the question each gate asks.

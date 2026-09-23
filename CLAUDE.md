@@ -41,6 +41,18 @@ opening the file it names is how a fiction gets promoted into INVARIANTS.**
   from master's `F-403` and produced six entries under three ids. `check-doc-refs.mjs` catches a
   DANGLING id, never a COLLIDING one. The re-derive command is at the top of the findings log.
 
+## Glossary
+
+- **Agent identity** = a ROLE OF THE USER, one piece of their digital twin (a "Coder" identity is the
+  user as a coder). It was called an **agent template** until 2026-09-22; code, API, DB, MCP (`identity=`)
+  and UI ("Identities", "+ Agent Identity") all say identity now. `src/features/agent-identities/`,
+  table `agent_identities`.
+- **Agent** = a RUNNING SESSION in a channel, launched FROM an identity (or blank). The channel page still
+  says "agents" and must keep saying it.
+- Not the same word: the ontology's object `template` (an object's default fields), "template literal",
+  and the older `identity` names that mean a caller or a running agent's id (`CallerIdentity`,
+  `agentIdentityFraming`). Details: docs/INVARIANTS.md §5A.
+
 ## Standing rules for writing docs
 
 1. **A number carries its measurement date**, or it does not go in a doc. Counts, file sizes and table

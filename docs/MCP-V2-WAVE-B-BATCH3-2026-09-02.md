@@ -10,7 +10,7 @@ landed"*.
 **Deletion was the batch, and the ledger is net −3,234 lines.** `workspace=` is a list-and-create
 argument; there is no default workspace; the copy ops and `home_scoped` are gone and the `shelf`
 axis is off the MCP surface (⚠ **not gone** — `GET /api/knowledge/bases?shelf=` and
-`GET /api/agent-templates?shelf=` still take `home | workspace`, INVARIANTS §10);
+`GET /api/agent-identities?shelf=` still take `home | workspace`, INVARIANTS §10);
 the 22 redirect aliases, the `await` lane and the ping lane are retired. Thirteen tools became
 **eleven**.
 
@@ -143,7 +143,7 @@ hold two drops nine versions apart) and the duplicate-version ratchet are both g
   through a different argument. Both read arms agree.
 - **F-620 — ATTEMPTED AND NOT TAKEN, and the reason is not schedule.** It needs a NAME route
   (`packages/mcp-server` cannot import from `src/`), and *"refuse on >1 match, listing the
-  container names"* contradicts `classifyMissingTemplateRef`'s shipped rule that it *"names a
+  container names"* contradicts `classifyMissingIdentityRef`'s shipped rule that it *"names a
   tenancy, never a roster"* (T35/A12). Picking here would overturn A12 silently.
 - **F-662 filed rather than inferred**: the grant arm widens VISIBILITY, not the candidate set. A
   same-container grant works end to end; a cross-container one is admitted by the POLICY and still

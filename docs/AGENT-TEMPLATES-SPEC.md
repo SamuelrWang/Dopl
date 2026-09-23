@@ -24,14 +24,14 @@ Migration: `supabase/migrations/20260822200000_agent_templates.sql` — **writte
 
 | table | key columns | notes |
 |---|---|---|
-| `agent_templates` | `id`, `workspace_id`, `created_by` (SET NULL), `name`, `description`, `instructions`, `model`, `fields JSONB`, `visibility`, `created_at`, `updated_at` | `visibility CHECK IN ('private','team','workspace')` |
-| `agent_template_teams` | PK `(template_id, team_id)`, `workspace_id`, `granted_by`, `granted_at` | dedicated junction, **not** a fifth `team_resource_access.resource_type` |
-| `agent_template_knowledge_bases` | PK `(template_id, knowledge_base_id)`, `workspace_id`, `added_by_user_id`, `added_at` | attachment is a REFERENCE, never a copy |
+| `agent_identities` | `id`, `workspace_id`, `created_by` (SET NULL), `name`, `description`, `instructions`, `model`, `fields JSONB`, `visibility`, `created_at`, `updated_at` | `visibility CHECK IN ('private','team','workspace')` |
+| `agent_template_teams` | PK `(identity_id, team_id)`, `workspace_id`, `granted_by`, `granted_at` | dedicated junction, **not** a fifth `team_resource_access.resource_type` |
+| `agent_identity_knowledge_bases` | PK `(identity_id, knowledge_base_id)`, `workspace_id`, `added_by_user_id`, `added_at` | attachment is a REFERENCE, never a copy |
 
 Bounds: `name` 1–120 charset-bounded label; `model` 1–120 label, nullable, `''` illegal;
 `description` ≤2000 prose; `instructions` ≤32768 prose (newline/tab allowed);
 `fields` `jsonb_typeof = 'array' AND octet_length(fields::text) <= 8192`. Element shape lives
-in zod (`schema.ts › TemplateFieldsSchema`), measured in the same UTF-8 **bytes** the CHECK
+in zod (`schema.ts › IdentityFieldsSchema`), measured in the same UTF-8 **bytes** the CHECK
 measures.
 
 RLS is **SELECT-only on all three**; `INSERT/UPDATE/DELETE` REVOKEd from `authenticated`/`anon`;
@@ -41,8 +41,8 @@ hand-rolled cascade.
 
 ### The visibility matrix is written twice and must move together
 
-`src/features/agent-templates/server/service-shared.ts › canSeeTemplate` and the
-`agent_templates_member_select` policy. Arms, in order — **the order is the rule**:
+`src/features/agent-identities/server/service-shared.ts › canSeeIdentity` and the
+`agent_identities_member_select` policy. Arms, in order — **the order is the rule**:
 
 1. `visibility = 'workspace'` → every member, API keys included
 2. workspace-scoped API key → **nothing further** (M-10)
@@ -58,11 +58,11 @@ enumerates 3 visibilities × 5 caller kinds.
 
 | route | methods | gate |
 |---|---|---|
-| `/api/agent-templates` | `GET`, `POST` | `withWorkspaceAuth`; POST `minRole: "member"` |
-| `/api/agent-templates/[templateId]` | `GET`, `PATCH`, `DELETE` | `DELETE` alone carries `sessionOnly: true` |
-| `/api/agent-templates/[templateId]/resolve` | `GET` | **the launch contract** — flat, unwrapped |
+| `/api/agent-identities` | `GET`, `POST` | `withWorkspaceAuth`; POST `minRole: "member"` |
+| `/api/agent-identities/[identityId]` | `GET`, `PATCH`, `DELETE` | `DELETE` alone carries `sessionOnly: true` |
+| `/api/agent-identities/[identityId]/resolve` | `GET` | **the launch contract** — flat, unwrapped |
 
-`server/service-reads.ts › resolveTemplateForLaunch` composes `getTemplateById`, so resolve
+`server/service-reads.ts › resolveIdentityForLaunch` composes `getIdentityById`, so resolve
 is gated by the same matrix — not a second, weaker door. **404, never 403**, for an invisible
 template. `knowledgeBases` is **viewer-filtered**: two callers resolving the same template can
 legitimately get different arrays.
@@ -81,8 +81,8 @@ requires adding to it.
 |---|---|---|
 | G-1 | ✅ **CLOSED 2026-08-22** (Phase 1). **`/resolve` carried no authorship signal.** The injection design needs to know whether the running operator authored the template, because the security header differs (own → operator posture; foreign → the `UNTRUSTED_SKILL_BODY_HEADER` posture). §3c required adding `authoredByCaller: boolean`; it is on the payload, pinned per caller kind by `server/service-resolve.test.ts`, and the desktop FAILS FOREIGN on anything that is not an explicit `true`. | ~~blocking for §3c~~ |
 | G-2 | ✅ **CLOSED 2026-08-22** (Phase 1, sentence corrected). **`/resolve` route docblock said the desktop calls it "with its device token".** It cannot: `main/api.js › apiFetch` is **cookie**-authed; the device token (`main/mcp-config.js › deviceTokenForSpawn`) is the MCP bearer and nothing else. Both resolve to the same `userId`, so the *behaviour* the docblock describes is right and the *mechanism* is wrong. Fix the sentence. | doc only |
-| G-3 | ✅ **CLOSED 2026-08-22** (Phase 1). `main/template-resolve.js` calls it at spawn and `main/prompt-framing-template.js` is `knowledgeBases`' prompt consumer. | ~~expected~~ |
-| G-4 | `channel_launch_directives` has no `template_id`. New migration required — §3e. | expected |
+| G-3 | ✅ **CLOSED 2026-08-22** (Phase 1). `main/identity-resolve.js` calls it at spawn and `main/prompt-framing-agent-identity.js` is `knowledgeBases`' prompt consumer. | ~~expected~~ |
+| G-4 | `channel_launch_directives` has no `identity_id`. New migration required — §3e. | expected |
 | G-5 | `INVARIANTS.md` §5A is already written and accurate. It needs three amendments after §3 lands (§5). | expected |
 
 Everything else in the product spec is covered: durable named identity ✅, free-text
@@ -93,24 +93,24 @@ three-way visibility ✅, sessions stay ephemeral ✅.
 
 ## 2. Page UX — AS-BUILT (brief)
 
-`apps/desktop-ui/src/pages/agents/index.tsx` is a **seam only** — resolves the workspace, hands
-to `@/features/agent-templates/components/agent-templates-core.tsx`. Router-free, Next-free.
+`apps/desktop-ui/src/pages/identities/index.tsx` is a **seam only** — resolves the workspace, hands
+to `@/features/agent-identities/components/agent-identities-core.tsx`. Router-free, Next-free.
 
-- **Three stacked panels, one read.** `useAgentTemplates` fetches everything the caller may see;
+- **Three stacked panels, one read.** `useAgentIdentities` fetches everything the caller may see;
   `lib/visibility.ts › groupByVisibility` groups it. Panels never fetch per scope.
 - **Order is Private → Team → Public**, declared once in `lib/visibility.ts › SECTIONS`.
   `visibility: "workspace"` is the wire value; **"Public" is the label**, and that mapping exists
   in exactly one module.
-- **Card grid** per panel (`template-section.tsx`), `minmax(196px,1fr)`. Card shows name and a
+- **Card grid** per panel (`identity-section.tsx`), `minmax(196px,1fr)`. Card shows name and a
   model chip via `features/channels/lib/agent-models.ts › agentModelShortLabel`.
 - **One create affordance, at page level** ("New template", header right). A per-section "+"
   would pre-decide the scope that the editor's own control then contradicts.
 - **Editor is a modal, no detail route** → `deep-link-target.js › WORKSPACE_PAGES` wants
   `agents: false`.
 - **No pressed-in surfaces anywhere on this page** (Samuel, 2026-08-22). Flat panel, `.bento`
-  cards, raised wells in the editor. `template-editor-surface.test.tsx › no concave surfaces` enforces it.
+  cards, raised wells in the editor. `identity-editor-surface.test.tsx › no concave surfaces` enforces it.
 - An empty section **keeps its header** and says one quiet line.
-- `agent-templates-core.tsx` states it explicitly: **"NO LAUNCH UI. Selecting a template AT LAUNCH
+- `agent-identities-core.tsx` states it explicitly: **"NO LAUNCH UI. Selecting a template AT LAUNCH
   is a later phase."**
 
 ---
@@ -131,11 +131,11 @@ Everything below is unbuilt.
 Both funnel through `agents-controls.ts › launchAgentOnThread` → `window.dopl.sessions.launch`.
 
 **PROPOSED:** each becomes a popover trigger. One shared component,
-`features/agent-templates/components/template-picker.tsx`, mounted by both.
+`features/agent-identities/components/identity-picker.tsx`, mounted by both.
 
 > ⚠ Both surfaces may mount the picker independently, unlike `useAgentsPanel`. The
 > "don't mount twice" rule there was about a **poll interval** (`PEER_SESSIONS_POLL_MS` — two
-> answers to "how fresh is fresh enough"). `useAgentTemplates` is a react-query read on a stable
+> answers to "how fresh is fresh enough"). `useAgentIdentities` is a react-query read on a stable
 > key; two mounts share one fetch and one cache entry. Different problem, different answer.
 
 **Popover contents, top to bottom:**
@@ -152,8 +152,8 @@ Both funnel through `agents-controls.ts › launchAgentOnThread` → `window.dop
    scroll instead.
 
 **Per row:** `name` · model chip (`agentModelShortLabel(template.model)`, omitted when `model`
-is null) · **an authorship marker on templates the caller did not create** — `AgentTemplate.createdBy`
-is already on the list DTO (`server/dto.ts › mapAgentTemplateRow`), so this needs no server change.
+is null) · **an authorship marker on templates the caller did not create** — `AgentIdentity.createdBy`
+is already on the list DTO (`server/dto.ts › mapAgentIdentityRow`), so this needs no server change.
 Render it as a quiet trailing `by <member>` or a person glyph, and **name it in the row's
 `aria-label`** — it is a security signal (§4, injection surface), not decoration.
 
@@ -187,25 +187,25 @@ Open question OQ-2 covers whether field overrides ship in the first wave or mode
 
 ### 3b. Bridge + desktop
 
-**`sessions.launch` gains `templateId?: string | null`.**
+**`sessions.launch` gains `identityId?: string | null`.**
 
 Layer-by-layer cost, measured:
 
 | layer | anchor | change |
 |---|---|---|
-| SPA producer | `agents-controls.ts › launchAgentOnThread` | add `templateId` to the payload type + pass-through |
-| bridge type (desktop-ui) | `apps/desktop-ui/src/lib/dopl-bridge.ts › sessions.launch` | add `templateId?: string \| null` |
+| SPA producer | `agents-controls.ts › launchAgentOnThread` | add `identityId` to the payload type + pass-through |
+| bridge type (desktop-ui) | `apps/desktop-ui/src/lib/dopl-bridge.ts › sessions.launch` | add `identityId?: string \| null` |
 | bridge type (shared) | `src/shared/lib/spa-bridge.ts › sessions.launch` | same declaration |
 | preload | `renderer/app-preload.js › sessions.launch` | **none** — this op forwards the payload raw, the only one that does |
-| IPC handler | `main/session-ipc-ops.js › sessions:launch` | **validate** `isUuid(p.templateId) ? p.templateId : null` |
+| IPC handler | `main/session-ipc-ops.js › sessions:launch` | **validate** `isUuid(p.identityId) ? p.identityId : null` |
 
 > ⚠ `test/preload-parity.test.mjs` pins **op names, not payload shapes** — adding a field is
 > invisible to it. Nothing in the tree pins this payload's shape. Add a case to
-> `session-preset-start.test.mjs` or a new `session-launch-template.test.mjs`.
+> `session-preset-start.test.mjs` or a new `session-launch-identity.test.mjs`.
 
 #### WHO fetches template content, and WHEN — **the desktop, at spawn.**
 
-**RECOMMENDED: the SPA passes the id; `main` calls `GET /api/agent-templates/{id}/resolve` via
+**RECOMMENDED: the SPA passes the id; `main` calls `GET /api/agent-identities/{id}/resolve` via
 `main/api.js › apiFetch` inside `sessions:launch`, before `launchRequesterSession`.**
 
 Four arguments, in decreasing weight:
@@ -236,19 +236,19 @@ optimistic render is a label; the authoritative resolve is the prompt.
 
 #### Failure modes
 
-Resolve budget: **`TEMPLATE_RESOLVE_TIMEOUT_MS = 5000`**, not `launch-directives.js`'s
+Resolve budget: **`IDENTITY_RESOLVE_TIMEOUT_MS = 5000`**, not `launch-directives.js`'s
 `HTTP_TIMEOUT_MS = 15000` — 15 s is far too long to hold a button click.
 
 | # | condition | behaviour | why |
 |---|---|---|---|
-| F-1 | template **deleted** between select and spawn → `404` | **REFUSE.** `{ ok: false, reason: 'no-template' }` | The operator picked an identity. A blank agent silently wearing no identity is worse than nothing, and the operator will not notice for several turns. |
+| F-1 | template **deleted** between select and spawn → `404` | **REFUSE.** `{ ok: false, reason: 'no-identity' }` | The operator picked an identity. A blank agent silently wearing no identity is worse than nothing, and the operator will not notice for several turns. |
 | F-2 | template **invisible** to the operator (§3e cross-credential case) → `404` | **REFUSE**, same word | The endpoint deliberately cannot distinguish deleted from invisible (404-never-403). The desktop must not try to. |
 | F-3 | resolve **timeout / network** (`status === 0`) | **REFUSE** with the existing word **`busy`** | `busy` renders as *"Busy right now — try again"* (`use-agents-panel.ts › LAUNCH_REFUSALS`) — exactly right for a momentary inability. No new word needed. |
 | F-4 | resolve **5xx** | **REFUSE** with `busy` | same class |
 | F-5 | template's `model` unknown to `session-model.js`'s frozen list | **DEGRADE, and say so** | See below. |
 | F-6 | resolve returns `200` with `instructions: null`, `fields: []`, `knowledgeBases: []` | **LAUNCH.** A name-only template is legal — the role block emits the identity line and nothing else | An empty template is a real configuration, not an error |
 
-**The refusal wire word.** `no-template` is a **seventh** member of a closed six-word vocabulary
+**The refusal wire word.** `no-identity` is a **seventh** member of a closed six-word vocabulary
 (`cap`, `busy`, `no-sdk`, `auth-hold`, `no-bridge`, `no-counterparty`), stated in four places:
 
 - `main/launch-directive-wire.js › REFUSAL_REASONS`
@@ -259,7 +259,7 @@ Resolve budget: **`TEMPLATE_RESOLVE_TIMEOUT_MS = 5000`**, not `launch-directives
 Plus copy in `use-agents-panel.ts › LAUNCH_REFUSALS` and a sentence in
 `packages/mcp-server/src/tools/channel-ops-launch.ts › RETRY_ADVICE` (⚠ the per-reason SENTENCES it replaced on 2026-09-02 are now in `channel-doctrine.ts`; the launch result renders the reason KEY plus a retry verdict).
 **Six files. Budget it.** On the button lane, `launchRefusalText` already falls back gracefully,
-so the SPA half is one line: `"no-template": "That template is gone — reload the list"`.
+so the SPA half is one line: `"no-identity": "That template is gone — reload the list"`.
 
 **F-5, the model fallback, in detail.** ⚠ **REWRITTEN 2026-08-23 (F-285) — THE MECHANISM BELOW
 CHANGED UNDER THIS PARAGRAPH.** Each link of the chain is now `session-model.js › chainModel`,
@@ -313,13 +313,13 @@ Four reasons not to use it:
 
 #### The new block: `TEMPLATE ROLE`
 
-**New module: `dopl-desktop-app/main/prompt-framing-template.js`.** Not a change to
+**New module: `dopl-desktop-app/main/prompt-framing-agent-identity.js`.** Not a change to
 `prompt-framing.js` — that file is at **499 lines against §1's hard 500 cap**, and the
 `prompt-framing-text.js` seam rule is explicit: text that interpolates caller data belongs beside
 `sanitizeName`, in an assembly module, never in the pure-text module
 (`claudeai-connector-lane.test.mjs` scans that file for `${` and fails on a hit).
 
-Exported: `templateRoleFraming(ctx, nonce)` → `string[]`, and **`[]` when
+Exported: `identityRoleFraming(ctx, nonce)` → `string[]`, and **`[]` when
 `ctx.template` is absent** — so the responder lane and every blank launch are byte-identical to
 today (`session-identity.test.mjs › "a responder prompt is NOT changed"` asserts a responder prompt is unchanged by a new context
 field).
@@ -603,7 +603,7 @@ wake where a transcript won.
 `dopl_kb`'s `base` param already accepts either (`knowledge-shared.ts › resolveBase`). Reuse it rather than
 inventing a second convention.
 
-The name risk is real: **`agent_templates` has no name uniqueness, deliberately** — uniqueness
+The name risk is real: **`agent_identities` has no name uniqueness, deliberately** — uniqueness
 across a visibility boundary would leak the existence of a private row through a conflict error,
 and two people may each keep a private "Researcher". So a bare name lookup needs a collision
 rule, and every natural collision rule ("mine wins") is silently surprising.
@@ -613,13 +613,13 @@ rule, and every natural collision rule ("mine wins") is silently surprising.
 1. `template` parses as a UUID → treat as an id, exact match.
 2. Otherwise → case-insensitive exact match on `name` over the caller-visible set.
 3. **More than one match ⇒ REFUSE**, listing each match's id and visibility. Never pick.
-4. Zero matches ⇒ the same 404-shaped `AGENT_TEMPLATE_NOT_FOUND`.
+4. Zero matches ⇒ the same 404-shaped `AGENT_IDENTITY_NOT_FOUND`.
 
-The ambiguity list is not an oracle: it contains only rows `canSeeTemplate` already passed for
+The ambiguity list is not an oracle: it contains only rows `canSeeIdentity` already passed for
 that caller.
 
 **Resolving server-side, not on the desktop, is load-bearing.** The directive stores
-`template_id UUID` only. The MCP layer passes the string through; the service resolves it before
+`identity_id UUID` only. The MCP layer passes the string through; the service resolves it before
 a row is written. That keeps the desktop's contract to *ids in, content resolved locally*, and it
 means **both** visibility fences are applied — see below.
 
@@ -635,7 +635,7 @@ template: z.string().trim().min(1).max(120).optional()
 `20260822200000_agent_templates.sql`; no collision with `…150000` or `…160000`.
 ⚠ **THE PLANNED NAME WAS `20260823120000_channel_launch_directives_template_id.sql` AND IT SHIPPED
 AS THE ABOVE** (corrected 2026-08-23): the version moved to `…140000` and the `_id` suffix went,
-because the file carries `template_name` as well. A bare path is not validated by
+because the file carries `identity_name` as well. A bare path is not validated by
 `scripts/check-doc-refs.mjs` — that is class (a), file-existence only — so this named a file the
 tree does not contain for a day, invisibly.
 
@@ -656,20 +656,20 @@ CREATE INDEX IF NOT EXISTS channel_launch_directives_template_idx
 - **Do not touch `channel_launch_directives_replica_identity_idx`.** Adding a column is safe;
   dropping that index makes every UPDATE on a published table fail.
 - No RLS change — the single owner-only SELECT policy already covers it.
-- `refusal_reason` CHECK is widened here to admit `'no-template'` (§3b).
+- `refusal_reason` CHECK is widened here to admit `'no-identity'` (§3b).
 
 **Wire changes in the same wave** — miss any one and the field silently never arrives:
 
 | file:symbol | change |
 |---|---|
-| `server/repository-launch.ts › LaunchDirectiveRow` | add `template_id` |
-| `› LaunchDirectiveInsert` | add `template_id` (caller-supplied, unlike `operator_user_id`) |
+| `server/repository-launch.ts › LaunchDirectiveRow` | add `identity_id` |
+| `› LaunchDirectiveInsert` | add `identity_id` (caller-supplied, unlike `operator_user_id`) |
 | `server/service-launch.ts › toDirective` | map it |
 | `› CreateLaunchInput` | accept the resolved id |
 | `schema-launch.ts › LaunchCreateSchema` | accept `template` (string) |
 | `packages/mcp-server/src/tools/channel-schema.ts › CHANNEL_INPUT_SHAPE` | the param above |
 | `mcp-server/src/tools/channel-dispatch-agents.ts › dispatchManageAction` | pass it into `opLaunchAgent` (the six agent-lifecycle ops left `channel.ts`'s switch on 2026-09-01, at the 500-line cap) |
-| **`main/launch-directive-wire.js › directiveFrom`** | **narrows unknown keys away — a `template_id` not added here NEVER reaches the desktop** |
+| **`main/launch-directive-wire.js › directiveFrom`** | **narrows unknown keys away — a `identity_id` not added here NEVER reaches the desktop** |
 
 #### Resolve at claim time on the desktop
 
@@ -679,7 +679,7 @@ a refusal here writes a `decide` row rather than returning to a button:
 
 | condition | decision written |
 |---|---|
-| resolve 404 | `{ refused: 'no-template' }` |
+| resolve 404 | `{ refused: 'no-identity' }` |
 | resolve timeout / 5xx | `{ refused: 'busy' }` |
 
 The orchestrator sees these through `opLaunchAgent`'s REFUSED shape and one sentence from
@@ -702,7 +702,7 @@ The claim in the brief is **verified**: the resolve endpoint's caller fence does
 is worth stating precisely, because the two fences are applied by **different credentials**:
 
 - **CREATE fence** — the orchestrator's credential. `createLaunchDirective` resolves `template`
-  through `canSeeTemplate` for the orchestrator's ctx. It cannot name what it cannot see.
+  through `canSeeIdentity` for the orchestrator's ctx. It cannot name what it cannot see.
 - **RESOLVE fence** — the **operator's** credential, on the desktop, at spawn.
 
 Consequences, all fail-closed, all to be stated in the docs rather than debugged:
@@ -710,7 +710,7 @@ Consequences, all fail-closed, all to be stated in the docs rather than debugged
 | case | outcome |
 |---|---|
 | `workspace` template | both see it → works |
-| `team` template, orchestrator in the team, **operator not** | directive is created, resolve 404s on the operator's machine → `refused: no-template` |
+| `team` template, orchestrator in the team, **operator not** | directive is created, resolve 404s on the operator's machine → `refused: no-identity` |
 | orchestrator's **own private** template, operator is someone else | same refusal. **Private templates are unusable over the directive lane unless the orchestrator *is* the operator** — which is the common case (Samuel's own external Claude session holding his own credential), but it is not the only one |
 | template attaches a KB the operator cannot read | the KB is **omitted** from the operator's resolve payload; the launch proceeds with a shorter `knowledgeBases`. A shared template cannot launder access to a private base |
 
@@ -746,7 +746,7 @@ row exists. This argument does not depend on the telemetry ruling at all.
 
 **Mechanics:**
 
-- New additive column `template_name TEXT` on `channel_sessions` (same migration wave as §3e, or
+- New additive column `identity_name TEXT` on `channel_sessions` (same migration wave as §3e, or
   its own). **A denormalized snapshot, not an FK** — the session must report what it *ran as*
   even after the template is renamed or deleted, which is the same rule as "sessions keep their
   spawn-time content" (§3d).
@@ -772,14 +772,14 @@ the `sessionBlockLines` telemetry block returned on every workspace-wide `await`
 |---|---|---|---|
 | E-1 | **template edited while sessions run on it** | **Sessions keep their spawn-time content.** No live update, ever. | Falls out of §3d — resolve happens once at spawn, `context.template` is captured then, `takeFraming` is a one-shot |
 | E-2 | template **deleted mid-flight**, after resolve, before wake | Session runs unchanged. | Same. The content is on the session object, not a pointer |
-| E-3 | template deleted **between directive create and claim** | `refused: 'no-template'`; the directive row survives (`ON DELETE SET NULL` nulls `template_id`, so the desktop sees no template and — see E-4 — must **refuse, not degrade**) | §3e |
-| E-4 | directive arrives with `template_id` **null** because the FK was SET NULL | **Refuse.** The desktop cannot distinguish "no template requested" from "template deleted". **Therefore: `directiveFrom` must preserve a separate signal.** RECOMMENDED: store the template **name** on the directive too (`template_name TEXT`, snapshot at create) so a nulled `template_id` alongside a non-null `template_name` is unambiguously a deletion | new column, same migration |
+| E-3 | template deleted **between directive create and claim** | `refused: 'no-identity'`; the directive row survives (`ON DELETE SET NULL` nulls `identity_id`, so the desktop sees no template and — see E-4 — must **refuse, not degrade**) | §3e |
+| E-4 | directive arrives with `identity_id` **null** because the FK was SET NULL | **Refuse.** The desktop cannot distinguish "no template requested" from "template deleted". **Therefore: `directiveFrom` must preserve a separate signal.** RECOMMENDED: store the template **name** on the directive too (`identity_name TEXT`, snapshot at create) so a nulled `identity_id` alongside a non-null `identity_name` is unambiguously a deletion | new column, same migration |
 | E-5 | **KB detached after spawn** | The agent still holds the base id in its role block and its `dopl_kb` call still succeeds if it can *read* the base. Detaching from a template is not a revocation of KB access | Correct — attachment is a reference, and KB access is the KB's own visibility |
 | E-6 | **KB goes private after spawn** | `dopl_kb` returns `Knowledge base not found: <uuid>`. The agent reports it | Fail-closed at the tool, not the template |
-| E-7 | **team template, creator leaves the team** | Template still resolves — `canSeeTemplate`'s creator arm is unconditional | Intentional |
+| E-7 | **team template, creator leaves the team** | Template still resolves — `canSeeIdentity`'s creator arm is unconditional | Intentional |
 | E-8 | **team template, creator leaves the workspace** | `created_by` → NULL (SET NULL). The row survives; a `team` template stays visible to its linked teams. A `private` template becomes **admin-only** (the `created_by = auth.uid()` arm can never match NULL) | Stated in the migration; fail-closed direction |
 | E-9 | **team is deleted** | Junction rows cascade. A `team` template with zero links is visible to its creator and workspace admins only | Real FK, no trigger |
-| E-10 | **visibility narrowed while a peer's selector is open** | Selector row goes stale; the launch resolves 404 → **refuse** with `no-template`. Copy: *"That template is gone — reload the list"* | Correct: react-query will refetch on the next focus; a stale row cannot launch |
+| E-10 | **visibility narrowed while a peer's selector is open** | Selector row goes stale; the launch resolves 404 → **refuse** with `no-identity`. Copy: *"That template is gone — reload the list"* | Correct: react-query will refetch on the next focus; a stale row cannot launch |
 | E-11 | **fields exceed size bounds** | Rejected at write, in two places: zod (`MAX_FIELDS_BYTES = 8192`, `MAX_FIELD_COUNT = 50`, measured in UTF-8 bytes) and the DB CHECK. Never a launch-time concern | AS-BUILT |
 | E-12 | **instructions at the 32 KB bound land in every wake turn** | Real cost, not a bug. A 32 KB role block on a 200 k-window model is 16 % of context before the first tool call. **RECOMMENDED: no truncation** — silently clipping a system prompt is worse than the cost. Surface it in the editor instead: a character counter that turns amber past ~8 KB | product |
 | E-13 | **template name forges a fence token** | Impossible at write (`SAFE_LABEL_RE`), and stripped again at render (`stripFenceTokens`, fixed-point) | belt + braces, per the existing rule |
@@ -842,61 +842,61 @@ migration is **written, not applied** (§12) — Phase 1 cannot be integration-t
 
 ### Phase 1 — WIRE (lane: `dopl-desktop-app/` + one server field)
 
-Inert until Phase 2: a `sessions.launch` with no `templateId` behaves byte-identically to today.
+Inert until Phase 2: a `sessions.launch` with no `identityId` behaves byte-identically to today.
 
 **New:**
-- `main/prompt-framing-template.js` — `templateRoleFraming(ctx, nonce)`, returns `[]` when absent
+- `main/prompt-framing-agent-identity.js` — `identityRoleFraming(ctx, nonce)`, returns `[]` when absent
 - `main/api.js` caller for `/resolve` (mirror `launch-directives.js › post`, GET variant,
-  `TEMPLATE_RESOLVE_TIMEOUT_MS = 5000`)
+  `IDENTITY_RESOLVE_TIMEOUT_MS = 5000`)
 
 **Changed:**
-- `main/session-ipc-ops.js › sessions:launch` — validate `templateId`, resolve, stash on
+- `main/session-ipc-ops.js › sessions:launch` — validate `identityId`, resolve, stash on
   `context.template`, fold `template.model` into the precedence chain
 - `main/prompt-framing.js › buildFencedTurn` — one splice, two lines
-- `src/features/agent-templates/server/service-reads.ts` + `resolve/route.ts` — add
+- `src/features/agent-identities/server/service-reads.ts` + `resolve/route.ts` — add
   `authoredByCaller` (**G-1**)
 - `spa-bridge.ts › sessions.launch`, `dopl-bridge.ts › sessions.launch`,
   `agents-controls.ts › launchAgentOnThread` — payload field
-- The `no-template` refusal word, **six files** (§3b)
+- The `no-identity` refusal word, **six files** (§3b)
 
 **Tests:**
 
 | file | asserts |
 |---|---|
-| `test/prompt-framing-template.test.mjs` (new) | block absent without a template; present with; fence-token forging stripped in both vocabularies; fields render one line each; `read_only` emits names-without-tool-call |
+| `test/prompt-framing-agent-identity.test.mjs` (new) | block absent without a template; present with; fence-token forging stripped in both vocabularies; fields render one line each; `read_only` emits names-without-tool-call |
 | `test/prompt-framing.test.mjs` | the house scan still passes on the new block — no em dash, no `task=`, no `BEGIN-REQUEST`, no embedded `\n`, no literal `undefined`/`null` |
 | `test/prompt-tool-name.test.mjs` | `FIRST ACTIONS < VOCABULARY < DELIVERY` unmoved; no bare `dopl_channel` |
 | `test/prompt-profile-drift.test.mjs` | a template-built turn orders no hard-denied tool — **this is the containment test** |
-| `test/session-launch-template.test.mjs` (new) | each of F-1…F-6; the model precedence chain; `context.template` survives park/resume |
+| `test/session-launch-identity.test.mjs` (new) | each of F-1…F-6; the model precedence chain; `context.template` survives park/resume |
 | `test/session-identity.test.mjs` | a responder prompt is byte-unchanged |
 | `resolve/route.test.ts` | the pinned key set, now six keys |
 
 ### Phase 2 — SELECTOR (lane: `src/features/` + `apps/desktop-ui/`)
 
-**New:** `features/agent-templates/components/template-picker.tsx`,
+**New:** `features/agent-identities/components/identity-picker.tsx`,
 `…/launch-sheet.tsx`.
 **Changed:** `channels/components/agents-tab.tsx › launchRow`, `channels/components/composer.tsx › ChannelsComposer`,
-`use-agents-panel.ts › launchAgent` signature (`threadId, templateId?, overrides?`),
+`use-agents-panel.ts › launchAgent` signature (`threadId, identityId?, overrides?`),
 `agents-controls.ts › launchAgentOnThread`.
 
-**Tests:** `template-picker.test.tsx` (blank-first, grouping, search threshold at 8, model chip,
+**Tests:** `identity-picker.test.tsx` (blank-first, grouping, search threshold at 8, model chip,
 foreign-authorship marker present and in the accessible name); `composer.test.tsx` +
 `agents-tab.test.tsx` (the popover opens and blank still launches — see OQ-4).
 
 ### Phase 3 — ORCHESTRATOR (lanes: migration + server + MCP + desktop)
 
-Migration `20260823140000_channel_launch_directives_template.sql` (+ `template_name`, E-4;
-+ `'no-template'` in the refusal CHECK). Then the eight wire files in §3e — **`directiveFrom`
+Migration `20260823140000_channel_launch_directives_template.sql` (+ `identity_name`, E-4;
++ `'no-identity'` in the refusal CHECK). Then the eight wire files in §3e — **`directiveFrom`
 last and loudest.**
 
 **Tests:** `channel-session-ops.test.ts` (the `template` param; id path; name path; **ambiguity
-refuses and lists**; invisible → 404); `test/launch-directive-wire.test.mjs` (`template_id` and
-`template_name` survive narrowing; a nulled id with a live name is a deletion, E-4);
+refuses and lists**; invisible → 404); `test/launch-directive-wire.test.mjs` (`identity_id` and
+`identity_name` survive narrowing; a nulled id with a live name is a deletion, E-4);
 `test/channel-launch-posture.test.mjs` (the directive still supplies no containment input).
 
 ### Phase 4 — DISPLAY (lane: server)
 
-`channel_sessions.template_name`; `OPERATOR_ONLY_SESSION_COLUMNS` / `…_FIELDS`;
+`channel_sessions.identity_name`; `OPERATOR_ONLY_SESSION_COLUMNS` / `…_FIELDS`;
 `mapOwnSessionStateRow` only; excluded from the `GRANT SELECT` list.
 `session-visibility.test.ts` covers it with no new case — **that is the test's whole point**.
 
@@ -905,7 +905,7 @@ refuses and lists**; invisible → 404); `test/launch-directive-wire.test.mjs` (
 | file | phase |
 |---|---|
 | `20260822200000_agent_templates.sql` | **AS-BUILT, written, not applied** |
-| `20260823140000_channel_launch_directives_template.sql` | 3 — `template_id`, `template_name`, FK-cover index, `'no-template'` in the refusal CHECK |
+| `20260823140000_channel_launch_directives_template.sql` | 3 — `identity_id`, `identity_name`, FK-cover index, `'no-identity'` in the refusal CHECK |
 | `20260823130000_channel_sessions_template_name.sql` | 4 — additive column + column-privilege GRANT exclusion |
 
 Both new timestamps sort above `…20260822200000` and collide with neither `…150000` nor
@@ -915,9 +915,9 @@ Both new timestamps sort above `…20260822200000` and collide with neither `…
 
 | § | change |
 |---|---|
-| **§5A** Agent templates | add: the launch contract's sixth key; the ROLE-block injection point and its precedence; the *"a template widens prompt content only"* sentence; `template_name` is operator-only; templates address by id-or-name over MCP with ambiguity refusal |
+| **§5A** Agent templates | add: the launch contract's sixth key; the ROLE-block injection point and its precedence; the *"a template widens prompt content only"* sentence; `identity_name` is operator-only; templates address by id-or-name over MCP with ambiguity refusal |
 | **§10** MCP surface / untrusted framing | add the template ROLE header to the untrusted-framing family, beside `UNTRUSTED_SKILL_BODY_HEADER`, with the same authorship gate |
-| **§11** Desktop session rules | add: main resolves templates, the renderer never supplies content; a session keeps its spawn-time template; `no-template` joins the refusal vocabulary (now seven) |
+| **§11** Desktop session rules | add: main resolves templates, the renderer never supplies content; a session keeps its spawn-time template; `no-identity` joins the refusal vocabulary (now seven) |
 | **§12** Migrations | the two new files |
 | **§5** Channels | the two launch surfaces now open a picker |
 
@@ -972,5 +972,5 @@ click-and-hold or the chevron opens the picker.**
 because-the-vocabulary-is-closed ruling, and the fact that a private template's name reaching a
 peer is an existence oracle.
 **Recommendation: operator-only.** If you want peers to see *that* a peer's agent is running a
-template without seeing *which*, the cheap version is a boolean `hasTemplate` on the peer
+template without seeing *which*, the cheap version is a boolean `hasIdentity` on the peer
 projection — but that is itself a small oracle and I would not ship it without you asking for it.

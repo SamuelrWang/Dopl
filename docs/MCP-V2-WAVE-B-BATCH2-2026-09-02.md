@@ -27,8 +27,8 @@ owner membership and a one-per-owner unique index; the `home_scoped` shelf moves
 `created_by`. Dual-write behind `TENANCY_PERSONAL_CONTAINER` (default **off**) — the column still
 carries the truth.
 
-**RLS phase 2 makes the policy the fence for four more tables.** `skills`, `agent_templates`,
-`chats`, `resource_grants` (+ `skill_files`, `chat_messages`, `agent_template_knowledge_bases`,
+**RLS phase 2 makes the policy the fence for four more tables.** `skills`, `agent_identities`,
+`chats`, `resource_grants` (+ `skill_files`, `chat_messages`, `agent_identity_knowledge_bases`,
 `knowledge_entry_chunks` as children), each read rule stated ONCE in a predicate the policies call.
 Four wider-than-fence gaps closed (F-570): skills had no shared-credential arm and said nothing
 about `access_mode='teams'`; `chats_member_select` led with a blanket admin arm that read every
@@ -117,7 +117,7 @@ duplicate-version ratchet are both green (`schema-sql.test.ts`, 18 cases).
   `manage(action="direct")`. Nothing in the tree files a direction for an IDLE recipient, so
   retiring the op on the spec's row would have deleted the private lane rather than moved it.
 - **F-562's split was FORCED, not chosen** — B11 and B12 both grew
-  `agent-templates/server/repository.ts` to 515 and the root lint's `max-lines` went red.
+  `agent-identities/server/repository.ts` to 515 and the root lint's `max-lines` went red.
 
 ## What batch 3 deletes — the exact list from all five slices
 
@@ -125,7 +125,7 @@ duplicate-version ratchet are both green (`schema-sql.test.ts`, 18 cases).
 |---|---|
 | **B13** `workspace=` off — ✅ **LANDED 2026-09-02** | the session-pin module, the home-scopes module, the no-default refusal, the auto-target, both pin ops, `dopl_home`; `current_workspace`+`list_workspaces` → one `dopl_workspaces` (**13 → 11 tools, measured**; served 49,790 → 47,021). Its four `!isStandardWorkspace` sites are closed and out of F-564's map |
 | **B14** default workspace off | `ensureDefaultWorkspace` → `ensurePersonalContainer`; `findDefaultWorkspaceForUser` → `findSoleOwnedStandardWorkspace`, billing-only; both `resolveHomeScope` copies repointed; `20260802200000` + `20260823160000`'s guard dropped; `default_workspace_of()` — ⚠ **NOT "for the revert only": it is a LIVE DEPENDENCY of `ensure_personal_container`**, which mints a container FROM today's default and reads it for the name and `created_at` (corrected 2026-09-02, in review). Dropping it before that mint stops running is a `CREATE OR REPLACE` away from an apply failure, not a tidy-up |
-| **B15** copies off ✅ **DONE 2026-09-02** | the copy ops (681 MCP lines: `knowledge-ops-copy` 377 + `agent-ops-copy` 138 + the shared copy-target 166) + their two test files, the whole MCP shelf module and its argument, both `resolveHomeScope` copies, and `home_scoped` on both tables. ⚠ **`template-draft.ts` AND the deleted /home copy dialog (B15) ARE 490 LINES AND ONLY 240 OF THEM WERE THE COPY** — the deleted /home copy dialog (B15) (194) went whole, `containerCopyDraft` (~46) came out of `template-draft.ts`, and the other 250 are the shared editor draft, which `template-editor.tsx`, `agent-editor.tsx` and `agent-templates-core.tsx` all import |
+| **B15** copies off ✅ **DONE 2026-09-02** | the copy ops (681 MCP lines: `knowledge-ops-copy` 377 + `agent-ops-copy` 138 + the shared copy-target 166) + their two test files, the whole MCP shelf module and its argument, both `resolveHomeScope` copies, and `home_scoped` on both tables. ⚠ **`identity-draft.ts` AND the deleted /home copy dialog (B15) ARE 490 LINES AND ONLY 240 OF THEM WERE THE COPY** — the deleted /home copy dialog (B15) (194) went whole, `containerCopyDraft` (~46) came out of `identity-draft.ts`, and the other 250 are the shared editor draft, which `template-editor.tsx`, `identity-editor.tsx` and `agent-identities-core.tsx` all import |
 | **B16** old ops + TS fences off | the 22 one-line redirects, the `await` lane (AWAITING 3,914 + two handlers + the budget module), the ping lane, the five `canSee*` predicates one at a time behind green redteam tests |
 | **B9/B10 residue** | `channel_resource_grants` + the in-txn mirror, after `repository-audience.ts › listGrantedBaseIdsForChannels` moves (F-460); `agentIdsInChannel` and its two re-exports (F-579); `use-agents-panel.ts`'s duplicate thread-other-party derivation (F-551) |
 

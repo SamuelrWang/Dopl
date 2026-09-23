@@ -89,7 +89,7 @@ any of these before the deploy takes production down.
 
 | File | Drops | Live (master) reader that breaks |
 |---|---|---|
-| `20260915120000_drop_agent_template_teams` | table `agent_template_teams` | `features/agent-templates/server/repository.ts` |
+| `20260915120000_drop_agent_template_teams` | table `agent_template_teams` | `features/agent-identities/server/repository.ts` |
 | `20260916120000_drop_team_resource_access` | table `team_resource_access` + 6 fns | `features/teams/server/repository-{grants,resources}.ts`, `packages/mcp-server/src/tools/members-render.ts` |
 | `20260922120000_drop_default_workspace_rpc` | `default_workspace_of`, `ensure_default_workspace` | `features/workspaces/server/{repository,service}.ts` — **the app entry point** |
 | `20260923130000_drop_channel_resource_grants` | table `channel_resource_grants` | `api/knowledge/bases/[baseId]/channel-grants/route.ts`, `repository-channel-grants.ts` |
@@ -121,7 +121,7 @@ production:
 - **Deploy first** → v2/wave-b reads `resource_grants`, which does not exist
   yet. Every reader spells `if (error) throw error` with **no missing-relation
   fallback** (`shared/tenancy/resource-grant-reach.ts › grantedResourceIds`,
-  `knowledge/server/repository-audience.ts`, `agent-templates/server/repository.ts`,
+  `knowledge/server/repository-audience.ts`, `agent-identities/server/repository.ts`,
   `repository-knowledge-links.ts`, `shared/grants/service.ts`). **500s:** knowledge
   base list, the shared shelf, agent-template list, template team links, and every
   grant write.
@@ -338,8 +338,8 @@ applied to production from that branch.
 **Two corrections to §1/§2, found live:**
 1. **`20260921120000_rls_phase2_policies` belongs to PHASE 2, after
    `20260915120000`.** Its end-check requires every SELECT policy on
-   `agent_templates` / `agent_template_knowledge_bases` to call
-   `can_current_user_read_agent_template`, and that helper and those policies
+   `agent_identities` / `agent_identity_knowledge_bases` to call
+   `can_current_user_read_agent_identity`, and that helper and those policies
    are created by `20260915120000_drop_agent_template_teams` — a contract file.
    Filename-order replays (CI) never see the split, so the dependency was
    invisible. On prod it RAISEd and rolled back cleanly (no history row). The

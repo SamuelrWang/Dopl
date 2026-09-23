@@ -2182,7 +2182,7 @@ The nine were Slack, Figma, Dopl, Attio, Notion, Granola, Google Drive, Google C
 
 ## F-277 — agent-template team sharing is a SECOND grant table beside `team_resource_access` (2026-08-22)
 
-- Location: `supabase/migrations/20260822200000_agent_templates.sql` (`agent_template_teams`); `src/features/agent-templates/server/repository.ts › replaceTeamLinks`, `› listTeamLinksForTemplates`; the union it declined to join is `src/features/teams/access-levels.ts › TeamResourceType`.
+- Location: `supabase/migrations/20260822200000_agent_templates.sql` (`agent_template_teams`); `src/features/agent-identities/server/repository.ts › replaceTeamLinks`, `› listTeamLinksForIdentities`; the union it declined to join is `src/features/teams/access-levels.ts › TeamResourceType`.
 - Found during: building the agent-templates server half.
 - Severity: conflict (two statements of "which teams may see this resource", in two tables).
 - **What was found and what was mirrored.** The brief allowed a `team_id` column or a join table and said to mirror the shipped shape. The shipped shape is a JOIN TABLE — `team_resource_access` (`20260611020000_teams.sql`), polymorphic over `resource_type`, grown to `'chat'`/`'chat_folder'` (`20260707210000`) and `'skill'` (`20260708150001`) — and therefore MANY-teams, not one. That much is mirrored: composite PK, `teams(id) ON DELETE CASCADE`, denormalized `workspace_id`, the same `team_members`-join predicate in RLS. **What is NOT reused is the table itself.**
@@ -2190,45 +2190,45 @@ The nine were Slack, Figma, Dopl, Attio, Notion, Granola, Google Drive, Google C
   1. `team_resource_access` carries a `level` ('read' | 'edit'). Agent templates have no edit-grant concept — team visibility shares the ability to USE an identity, and writes are creator-or-workspace-admin. A column that is always `'read'` is a field somebody will eventually believe.
   2. Joining means widening `TeamResourceType`, which is not a type but a CONTRACT with four consumers outside this lane: `teams/server/repository-resources.ts › RESOURCE_TABLES` (a `satisfies Record<TeamResourceType, …>` whose `getResourceAccessMeta` selects an `access_mode` column this table does not have — it stores a three-value `visibility` instead), `› listTeamsModeResources` (feeds the `my-access` payload the SPA caches), `members/components/member-bits.tsx › RESOURCE_META` (a `Record<TeamResourceType, {label, icon}>`), and the hand-copied mirror in `packages/mcp-server/src/tools/members-render.ts`. A grant row of an unmodelled type reaching the members access matrix renders through an undefined lookup — a runtime failure in a surface this change had no business editing.
 - **What it costs today.** A workspace admin auditing "what is team X allowed to see" must read two tables. The members access matrix does not show agent templates at all — which is a *missing feature*, not a wrong answer, and is the honest state given the union was left alone.
-- Proposed resolution, in preference order: (a) when the members surface is next opened, widen `TeamResourceType` to `'agent_template'`, give `RESOURCE_TABLES` an explicit per-type mode spec (`modeCol` + the value meaning "teams") instead of a hardcoded `access_mode`, add the label/icon in both copies, and migrate `agent_template_teams` rows into `team_resource_access` at `level='read'` — mechanical, and the shapes already line up; (b) keep two tables and make the access matrix read both, which doubles the query and keeps the divergence; (c) leave it and accept that agent templates are invisible to the teams admin surface.
+- Proposed resolution, in preference order: (a) when the members surface is next opened, widen `TeamResourceType` to `'agent_identity'`, give `RESOURCE_TABLES` an explicit per-type mode spec (`modeCol` + the value meaning "teams") instead of a hardcoded `access_mode`, add the label/icon in both copies, and migrate `agent_template_teams` rows into `team_resource_access` at `level='read'` — mechanical, and the shapes already line up; (b) keep two tables and make the access matrix read both, which doubles the query and keeps the divergence; (c) leave it and accept that agent templates are invisible to the teams admin surface.
 - Proposed resolution: defer — needs the members surface to be in scope.
 - Status: open.
 
 ## F-278 — the KB-attach fence is a HAND COPY of the knowledge feature's `canSeeBase`, and the copy is the one that will not notice (2026-08-22)
 
-- Location: `src/features/agent-templates/server/service-shared.ts › canSeeBaseRow` (the copy); `src/features/knowledge/server/service-shared.ts › canSeeBase` + `› assertBaseVisible` (the original).
+- Location: `src/features/agent-identities/server/service-shared.ts › canSeeBaseRow` (the copy); `src/features/knowledge/server/service-shared.ts › canSeeBase` + `› assertBaseVisible` (the original).
 - Found during: building the agent-templates server half.
 - Severity: conflict (one security predicate, two statements) — the same class as F-023.
-- **Why the copy exists.** The rule being restated is "may this caller read this knowledge base": public+workspace → any member; public+teams → creator, admin, or a granted team; private → creator only and never via a workspace-scoped API key. Importing it would mean `agent-templates → knowledge`, which INVARIANTS §1 forbids, and it is exactly what `skills/server/repository.ts` already declines to do — that file re-queries `knowledge_bases` itself (`› knowledgeBaseSlugExists`, `› listWorkspaceKnowledgeBases`) for the same reason. So the precedent for the copy is the tree's own, and following it was the local decision.
+- **Why the copy exists.** The rule being restated is "may this caller read this knowledge base": public+workspace → any member; public+teams → creator, admin, or a granted team; private → creator only and never via a workspace-scoped API key. Importing it would mean `agent-identities → knowledge`, which INVARIANTS §1 forbids, and it is exactly what `skills/server/repository.ts` already declines to do — that file re-queries `knowledge_bases` itself (`› knowledgeBaseSlugExists`, `› listWorkspaceKnowledgeBases`) for the same reason. So the precedent for the copy is the tree's own, and following it was the local decision.
 - **Why it is worth an entry anyway, and this is the part that matters.** The precedent cases copy a LOOKUP; this one copies a SECURITY PREDICATE, and the failure direction is over-permissive. If the knowledge feature ever adds a fourth arm — a per-base deny, an expiry, an agent-visibility flag — a template can keep attaching a base the knowledge surface has stopped showing, and the resulting leak has no error and no log line: it looks like a template that has a knowledge base attached.
-- **What holds it today.** `src/features/agent-templates/server/service-writes.test.ts › KB attach validation` pins each arm separately rather than testing the happy path, so a *change* to the original is at least visible as a difference in what the two files assert. ⚠ **That is a tripwire on the copy, not a link to the original** — nothing fails when `canSeeBase` gains an arm, because nothing compares them.
+- **What holds it today.** `src/features/agent-identities/server/service-writes.test.ts › KB attach validation` pins each arm separately rather than testing the happy path, so a *change* to the original is at least visible as a difference in what the two files assert. ⚠ **That is a tripwire on the copy, not a link to the original** — nothing fails when `canSeeBase` gains an arm, because nothing compares them.
 - Proposed resolution, in preference order: (a) move the predicate to `src/shared/` as the one statement both features import, which is what §1 actually prescribes for a symbol two features need (see also F-275's argument that §1's absolute no-cross-feature-imports rule is already contradicted by the tree, and that the enforceable rule is probably about WHICH layer may be imported); (b) add a cross-feature test that constructs the same row set and asserts `canSeeBase` and `canSeeBaseRow` agree on every cell, which links them without moving either; (c) leave the copy and rely on the comment, which is the state this entry records.
 - Proposed resolution: defer (prefer (a), but it is a knowledge-feature change).
 - Status: open.
 
 ## F-279 — the agent-templates SPA client encodes team sharing as a SINGLE `teamId`; the server ships MANY (2026-08-22)
 
-- Location: `src/features/agent-templates/client/types.ts` (`AgentTemplate.teamId?: string | null`, `AgentTemplateCreateBody.teamId?: string`) vs. `src/features/agent-templates/types.ts › AgentTemplate.teamIds: string[]` and `src/features/agent-templates/schema.ts › AgentTemplateCreateSchema.teamIds`.
+- Location: `src/features/agent-identities/client/types.ts` (`AgentIdentity.teamId?: string | null`, `AgentIdentityCreateBody.teamId?: string`) vs. `src/features/agent-identities/types.ts › AgentIdentity.teamIds: string[]` and `src/features/agent-identities/schema.ts › AgentIdentityCreateSchema.teamIds`.
 - Found during: the agent-templates SERVER build, by reading the client half a parallel builder was writing against the same feature directory at the same time.
 - Severity: bug (a wire mismatch that type-checks on both sides, because the two halves declare the payload independently).
-- **The shape of it.** The client module says so itself, in its own header: *"these types were written against the agreed contract rather than imported from it… when `src/features/agent-templates/types.ts` lands, this module becomes a re-export"*. It has landed. The two disagree on exactly one field and on one nullability:
+- **The shape of it.** The client module says so itself, in its own header: *"these types were written against the agreed contract rather than imported from it… when `src/features/agent-identities/types.ts` lands, this module becomes a re-export"*. It has landed. The two disagree on exactly one field and on one nullability:
   - `teamId?: string | null` (client) vs `teamIds: string[]` (server). The server is MANY-teams because that is what the shipped features do — `team_resource_access` grants are per (team, resource), and skills/chats/KBs all share to a SET (`SkillUpdateSchema.teamIds`, `.max(50)`). A client sending `{visibility:"team", teamId:"…"}` gets a 400: the create schema has no `teamId` key and its refine requires `teamIds` alongside `visibility:"team"`. A client READING `template.teamId` gets `undefined` on every response.
   - `createdBy: string` (client) vs `createdBy: string | null` (server). The column is `ON DELETE SET NULL` so a departed creator's templates survive — `null` is reachable in production and the client type says it is not.
 - **Neither side is "wrong" in isolation, which is why it is filed rather than fixed here.** The client half is another builder's lane and was written before the server types existed; editing their file mid-flight is how two agents produce a merge conflict in a file neither owns. The server shape is the one that matches the DB and the four precedents, so the expected resolution is that the client adopts it.
-- Proposed resolution: (a) delete `client/types.ts`'s duplicate declarations and re-export from `src/features/agent-templates/types.ts`, exactly as that module's own header says it should — the drift then becomes impossible rather than merely fixed, and the compiler reports every call site that assumed one team; (b) if a single-team UI is a deliberate product simplification, keep the UI single-select and still send `teamIds: [id]`, so the WIRE stays the shipped shape and only the affordance is narrow.
+- Proposed resolution: (a) delete `client/types.ts`'s duplicate declarations and re-export from `src/features/agent-identities/types.ts`, exactly as that module's own header says it should — the drift then becomes impossible rather than merely fixed, and the compiler reports every call site that assumed one team; (b) if a single-team UI is a deliberate product simplification, keep the UI single-select and still send `teamIds: [id]`, so the WIRE stays the shipped shape and only the affordance is narrow.
 - Proposed resolution: fix-now — but by the CLIENT lane, not this one.
 - ⚠ **THE "Status: open" LINE BELOW READ EXACTLY THAT UNTIL 2026-08-23, AND IT HAD ALREADY BEEN FALSE**, with the closing sentence — "nothing on the client side was edited by this change" — doing the damage: it is scoped to the SERVER wave that filed the entry, while `Status` is not scoped to anything. A builder picking up open findings opened the named file, found the re-export, and had no way to tell whether the finding was fixed or pointed at a second client module that does not exist. Closed in place per the F-221 / F-280 precedent this file already uses; the entry is kept as the record.
-- **✅ RESOLVED 2026-08-23 — RESOLUTION (a) WAS TAKEN, and the measurement is in the tree.** `src/features/agent-templates/client/types.ts` is now a pure re-export: it `import type`s `AgentTemplate`, `TemplateField`, `TemplateKnowledgeBaseRef` and `TemplateVisibility` from `../types` and `AgentTemplateCreateInput` / `AgentTemplateUpdateInput` from `../schema`, re-exports them under the wire names, and adds only the two response envelopes plus the `…Body` aliases. Its header now opens **"⚠ NOT A SECOND DEFINITION"** rather than the "written against the agreed contract" text quoted above. Both drifts this entry measured are gone: `src/features/agent-templates/types.ts › AgentTemplate` is the single declaration of `teamIds: string[]` and of `createdBy: string | null`, and a repo-wide grep for a singular `teamId` inside the feature returns hits only in `server/repository.ts`, `server/service-shared.ts` and server tests — **zero in `client/`, `lib/` or any component**, so no call site still assumes one team. Resolution (a) is fully taken, not half-taken. **Re-measure, do not quote:** `grep -rn '\bteamId\b' src/features/agent-templates | grep -v '/server/'`.
+- **✅ RESOLVED 2026-08-23 — RESOLUTION (a) WAS TAKEN, and the measurement is in the tree.** `src/features/agent-identities/client/types.ts` is now a pure re-export: it `import type`s `AgentIdentity`, `TemplateField`, `IdentityKnowledgeBaseRef` and `IdentityVisibility` from `../types` and `AgentIdentityCreateInput` / `AgentIdentityUpdateInput` from `../schema`, re-exports them under the wire names, and adds only the two response envelopes plus the `…Body` aliases. Its header now opens **"⚠ NOT A SECOND DEFINITION"** rather than the "written against the agreed contract" text quoted above. Both drifts this entry measured are gone: `src/features/agent-identities/types.ts › AgentIdentity` is the single declaration of `teamIds: string[]` and of `createdBy: string | null`, and a repo-wide grep for a singular `teamId` inside the feature returns hits only in `server/repository.ts`, `server/service-shared.ts` and server tests — **zero in `client/`, `lib/` or any component**, so no call site still assumes one team. Resolution (a) is fully taken, not half-taken. **Re-measure, do not quote:** `grep -rn '\bteamId\b' src/features/agent-identities | grep -v '/server/'`.
 - Status: **closed**; the entry is kept as the record.
 
 ## F-280 — a docblock asserted the existence of a test that had never been written, and three columns were added under it (2026-08-23)
 
 - Location: `src/features/channels/server/repository-sessions.ts › SESSION_DIFF_COLUMNS` (the claim) and `src/features/channels/server/repository-sessions-columns.test.ts` (the pin, written by this change).
-- Found during: Phase 4 of the agent-templates launch integration, while adding `channel_sessions.template_name` to the reconcile's column lists.
+- Found during: Phase 4 of the agent-templates launch integration, while adding `channel_sessions.identity_name` to the reconcile's column lists.
 - Severity: process (a guarantee that was documented, relied on, and did not exist) — the same class as F-233, and found the same way: by measuring instead of reading.
 - **The claim.** `SESSION_DIFF_COLUMNS`' docblock said, in as many words, *"`repository-sessions.test.ts` pins them against `SessionStateUpsert`'s own keys so adding a column to the type and not to these is a red test rather than a silent freeze."* `grep -n SESSION_DIFF_COLUMNS src/features/channels/server/repository-sessions.test.ts` returned nothing, and never had.
 - **What the missing guarantee was protecting.** THREE statements of "what a session row is" that must agree: the SELECT string, `sessionRowMatches`' field-by-field compare, and `SessionStateUpsert`. In the type but not the SELECT → the stored value reads back `undefined`, compares unequal, and every row looks changed on every push (which re-stamps `updated_at`, the read's own `ORDER BY`). In the type but not the COMPARE → a push carrying only that column is discarded as a no-op and the value **freezes at its first write while the row keeps claiming to be current**. Both are silent: no error, no empty result, and the suite stays green.
-- **What it cost.** Eight columns were added to that type under the protection of the sentence — the seven telemetry ones (`20260822150000`) and `template_name` (`20260823130000`). None of them was ever checked against either list by anything. They happen to be correct; nothing established that.
+- **What it cost.** Eight columns were added to that type under the protection of the sentence — the seven telemetry ones (`20260822150000`) and `identity_name` (`20260823130000`). None of them was ever checked against either list by anything. They happen to be correct; nothing established that.
 - **The lesson, which is why this is filed rather than quietly fixed.** ⚠ **A docblock that names a test file is a CITATION, and this repo already has a checker for those** — `scripts/check-doc-refs.mjs` resolves `path › symbol` anchors in `docs/`, and it does not read source docblocks. A claim of the form *"X.test.ts pins this"* is exactly as checkable as a doc anchor and exactly as prone to being aspirational when written. Both times this file's history records a fiction being promoted (ENGINEERING's `withExternalAuth`, `withErrorHandler`), the fix was the same: open the file it names.
 - Resolution: **RESOLVED in the same change.** The pin exists now, in its own file (the behaviour suite was at the 500-line cap), and it is stronger than the sentence promised: the key set is a `Record<keyof SessionStateUpsert, true>`, so TypeScript refuses it if a key is missing OR invented, and both column lists are extracted from the repository's SOURCE TEXT with a case asserting the extraction found something — a regex that stops matching fails loudly rather than making the other three cases vacuously true. The docblock now names the real file and records that it was a fiction until 2026-08-23.
 - Status: closed; the entry is kept as the record, per F-221's precedent.
@@ -2236,10 +2236,10 @@ The nine were Slack, Figma, Dopl, Attio, Notion, Granola, Google Drive, Google C
 
 ## F-281 — `SAFE_LABEL_RE` is unreachable from any renderer surface, because its module imports zod (2026-08-22)
 
-- Location: `src/shared/lib/safe-label.ts` (the module), `src/features/agent-templates/lib/launch-overrides.ts` (the surface that wanted it), `src/features/agent-templates/client/types.ts` (the rule that forbids it).
+- Location: `src/shared/lib/safe-label.ts` (the module), `src/features/agent-identities/lib/launch-overrides.ts` (the surface that wanted it), `src/features/agent-identities/client/types.ts` (the rule that forbids it).
 - Found during: Phase 2 of the agent-templates launch integration, writing the launch sheet's client-side bounds for custom-field overrides.
 - Severity: low-moderate — no live defect, one client-side check weaker than it could be, and a shape that will be hit again by the next client surface that wants an input rule.
-- **The shape.** `@/shared/lib/safe-label` exports TWO kinds of thing from one module: plain regex constants (`SAFE_LABEL_RE`, `SAFE_PROSE_RE`) and zod builders (`safeLabel`, `safeOptionalProse`, …). The builders make the module body `import { z } from "zod"`. `src/features/agent-templates/client/types.ts` states the rule that follows: *"`import type` THROUGHOUT — `../schema.ts` pulls zod, and the desktop SPA bundles this file. A value import would drag the validator into the renderer."* Every client module in the tree obeys it — `src/features/knowledge/client/api.ts` imports its schema types with `import type` and nothing else does a value import of a schema from client code (measured 2026-08-22).
+- **The shape.** `@/shared/lib/safe-label` exports TWO kinds of thing from one module: plain regex constants (`SAFE_LABEL_RE`, `SAFE_PROSE_RE`) and zod builders (`safeLabel`, `safeOptionalProse`, …). The builders make the module body `import { z } from "zod"`. `src/features/agent-identities/client/types.ts` states the rule that follows: *"`import type` THROUGHOUT — `../schema.ts` pulls zod, and the desktop SPA bundles this file. A value import would drag the validator into the renderer."* Every client module in the tree obeys it — `src/features/knowledge/client/api.ts` imports its schema types with `import type` and nothing else does a value import of a schema from client code (measured 2026-08-22).
 - **What that costs.** The rule the module itself states — *"⚠ ONE definition for every name/title a user types and an agent later reads. Two copies of a neutralizer drift, and the copy that drifts is the one that stops neutralizing"* — cannot be honoured on the client side. A renderer wanting the charset rule has exactly two options today, and both are bad: import the module and pull zod into the SPA bundle, or re-type the regex and create the second copy the module exists to prevent.
 - **What Phase 2 did instead**, so the choice is on the record rather than implicit: `launch-overrides.ts` enforces only the NUMBERS (`../schema.ts`'s own 80 / 1000 / 50 / 8192), the sheet's field controls are single-line `<input>` elements which cannot hold a newline by construction, and MAIN re-validates the whole override payload before any of it reaches a prompt. No third copy of the charset rule was created.
 - **The fix, when someone wants it.** Split the constants out of `safe-label.ts` into a zod-free module (`safe-label-re.ts` or similar) and have `safe-label.ts` re-export them, so server schemas keep their single import and client surfaces can reach the regex without the validator. It is a mechanical change across ~10 schema files that currently import the builders, which is why it was not done inside a UI phase — it would have put a shared-module refactor in a lane that owns components.
@@ -2248,7 +2248,7 @@ The nine were Slack, Figma, Dopl, Attio, Notion, Granola, Google Drive, Google C
 ## F-282 — `session-summary.js` and `session-state-push.js` were both AT the 500-line cap, so a one-field wire change cost a prose reflow (2026-08-22)
 
 - Location: `dopl-desktop-app/main/session-summary.js`, `dopl-desktop-app/main/session-state-push.js`, `dopl-desktop-app/test/session-state-push.test.mjs`. Measured with the command in INVARIANTS §1.
-- Found during: Phase 1 of the agent-templates launch integration, adding `templateName` to the session wire row (one projection line in each module, plus the field itself).
+- Found during: Phase 1 of the agent-templates launch integration, adding `identityName` to the session wire row (one projection line in each module, plus the field itself).
 - Severity: low as a defect (nothing is broken), moderate as friction — it is INVARIANTS §1's *"a file at 500 cannot absorb a COMMENT"* arriving in practice, on two files at once, in a lane that had no business splitting either of them.
 - **What happened.** Both modules measured exactly 500 before the change. Adding one key to `reportRow`, one to `liveSummary` and one to `endedSummary` — with the comment each of them needs, because every other field on those objects carries one — put all three files over. **The change that had to be made was two lines of code; what it cost was rewrapping unrelated comment prose to buy the room.** No word was deleted from any of those blocks (the reflow joins wrapped `//` runs at ~118 columns and the files carry no `max-len` rule), but the diff now touches ~130 lines of comment across two shipped modules for a two-line feature, which is exactly the review-noise §1 exists to prevent in the other direction.
 - **Why a reflow rather than a split, and why that choice is debt rather than a fix.** §1's own instruction for a file at the cap is to SPLIT it. Two concurrent builders were landing in adjacent trees at the time, and splitting two 500-line modules that every session-state suite reads by source is not a change to make in that window — it would have put a structural refactor inside a wire-field change and risked a three-way collision. The reflow is the reversible option; the split is the right one.
@@ -2263,7 +2263,7 @@ The nine were Slack, Figma, Dopl, Attio, Notion, Granola, Google Drive, Google C
 - Found during: Phase 3 of the agent-templates launch integration, adding the claim-time template resolve (a ~14-line branch, the E-4 deletion arm, and the template's link in the model chain).
 - Severity: low as a defect — nothing is broken and the file is UNDER the cap — moderate as friction, and it is the same friction **F-282** filed against `session-summary.js` / `session-state-push.js` on 2026-08-22. **Filed separately rather than folded into F-282 because the file is different, the seam is different, and F-282's own "measurement to re-run" command does not find this one** (it scans for ≥490 and this module was at 425 when that entry was written).
 - **What happened.** The feature change was small. The DOCUMENTATION the change owes was not: this module's header is the standing containment argument for the only lane that starts a session without a human click, and a template arriving on it changes three of its sentences (what a directive may supply, the step list, and the `spawn` docblock's field-by-field safety statement). Writing those honestly put the file over 500; the room was bought by **rewrapping prose that was already there**, not by deleting an argument.
-- **Why a reflow and not a split, again.** Same answer F-282 gave and it is still the reversible one: a split of this module inside a feature change would have moved code that `launch-directives.test.mjs`, `launch-directive-template.test.mjs` and `launch-directive-wire.test.mjs` all read by SOURCE, in a wave where two other phases were landing. The TEST side of the same file WAS split (the harness is now `test/_launch-directive-harness.mjs`, per the `_ipc-harness.mjs` precedent), because a test split costs nobody a merge conflict in `main/`.
+- **Why a reflow and not a split, again.** Same answer F-282 gave and it is still the reversible one: a split of this module inside a feature change would have moved code that `launch-directives.test.mjs`, `launch-directive-identity.test.mjs` and `launch-directive-wire.test.mjs` all read by SOURCE, in a wave where two other phases were landing. The TEST side of the same file WAS split (the harness is now `test/_launch-directive-harness.mjs`, per the `_ipc-harness.mjs` precedent), because a test split costs nobody a merge conflict in `main/`.
 - **The seam, when someone takes it.** It is the same one the header already draws: **DELIVERY vs DECISION.** `deliver` / `handle` / `poll` / `pollWorkspace` / `start` / `refresh` / `stop` plus the dedupe ledger are the WATCHER — they move when realtime, the breaker or the toggle moves. `spawn` / `defaultGoal` plus the template resolve and the model chain are WHAT ONE LAUNCH IS — they move when the launch contract moves, which is what happened here and what happened to `session-ipc-ops.js` two days ago (it split into `session-launch-op.js` for exactly this reason, and `spawn` is that file's sibling on the other lane). ⚠ **The `post` / `claim` / `decide` trio goes with the WATCHER**, not with the spawn: they are the authenticated lane, and the claim CAS is the watcher's correctness mechanism.
 - **The general shape, stated once so it is not re-derived a fourth time.** Three modules in three days have hit this, all in `dopl-desktop-app/main/`, all in the agent-templates wave, and in every case the overflow was COMMENT rather than code. That is the cap working as intended on files whose comments carry security arguments — but it means **any wave touching a `main/` module above ~470 should budget a split, not a feature**. The census: `find dopl-desktop-app/{main,renderer,test,scripts} -name node_modules -prune -o -type f \( -name '*.js' -o -name '*.mjs' \) -print | xargs wc -l | awk '$1>=470 && $2!="total"' | sort -rn`.
 - ⚠ **Id note:** taken as the next free number after re-reading this file fresh (F-282 was the highest; its own id note records the same race). If a concurrent wave also claimed 283, renumber this one — the earlier claim wins.
@@ -2296,9 +2296,9 @@ A read-only review wave over the uncommitted agent-templates + launch-over-MCP t
 - Location: `dopl-desktop-app/main/launch-directives.js › spawn` (the model precedence chain); the rule now lives at `dopl-desktop-app/main/session-model.js › chainModel`.
 - Found during: the 2026-08-23 verifier wave (`edges`).
 - Severity: major. A silent wrong-model launch, on the lane with no human watching.
-- **The mechanism.** The chain was a ternary: `d.model ? aliasForModelId(d.model) : templateModel(...) || aliasForModelId(getLaunchModel(...))`. `aliasForModelId` accepts **full ids only** — `MODEL_IDS`, not `MODEL_CHOICES`. An orchestrator calling `dopl_channel(op="launch_agent", model="opus")` is doing the ordinary thing (`packages/mcp-server/src/tools/channel-schema.ts › model` is an unconstrained string that names no vocabulary, and the bundled CLI documents `--model` as an alias OR a full name), but `aliasForModelId('opus')` answered `'default'` — the ternary was already committed, so the template's model and the channel's durable pick were both skipped and the agent ran on the SDK default. Every other caller-supplied-model lane uses `normalizeModel`, which exists precisely so a caller need not know which vocabulary the layer below wants.
+- **The mechanism.** The chain was a ternary: `d.model ? aliasForModelId(d.model) : identityModel(...) || aliasForModelId(getLaunchModel(...))`. `aliasForModelId` accepts **full ids only** — `MODEL_IDS`, not `MODEL_CHOICES`. An orchestrator calling `dopl_channel(op="launch_agent", model="opus")` is doing the ordinary thing (`packages/mcp-server/src/tools/channel-schema.ts › model` is an unconstrained string that names no vocabulary, and the bundled CLI documents `--model` as an alias OR a full name), but `aliasForModelId('opus')` answered `'default'` — the ternary was already committed, so the template's model and the channel's durable pick were both skipped and the agent ran on the SDK default. Every other caller-supplied-model lane uses `normalizeModel`, which exists precisely so a caller need not know which vocabulary the layer below wants.
 - **And the doc half.** `channel-schema.ts › model` promises the orchestrator, in the same uncommitted diff, that an unrecognized id "is NOT refused — it silently FALLS BACK to whatever the channel is set to", and INVARIANTS §10's `launch_agent` bullet records that sentence as the corrected one. The code did not do that: it ended the chain at `'default'`. Doc and code disagreed inside one wave.
-- **✅ RESOLVED, by extracting the rule rather than restating it.** `session-model.js › chainModel(value)` is now the single statement of "one link of a precedence chain: the alias this value asks for, or `''` meaning KEEP GOING". `session-launch-op.js › templateModel` delegates to it (it is now only "which field to read"), and the directive lane spells its chain `chainModel(d.model) || templateModel(…) || aliasForModelId(getLaunchModel(…))`. An alias is honoured; an unknown id falls THROUGH, which is what the schema promises and what F-5's tree-wide rule ("unknown model falls back, never refuses") already required of the other links.
+- **✅ RESOLVED, by extracting the rule rather than restating it.** `session-model.js › chainModel(value)` is now the single statement of "one link of a precedence chain: the alias this value asks for, or `''` meaning KEEP GOING". `session-launch-op.js › identityModel` delegates to it (it is now only "which field to read"), and the directive lane spells its chain `chainModel(d.model) || identityModel(…) || aliasForModelId(getLaunchModel(…))`. An alias is honoured; an unknown id falls THROUGH, which is what the schema promises and what F-5's tree-wide rule ("unknown model falls back, never refuses") already required of the other links.
 - **Pinned by** `dopl-desktop-app/test/launch-directives.test.mjs` (all four aliases honoured; an unknown id reaching the CHANNEL's pick rather than the SDK default; an unknown directive model falling to the TEMPLATE's before the channel's) and `test/agent-model-selection.test.mjs` (the rule lives in `session-model.js`; NEITHER lane restates it).
 - Status: **closed**; entry kept as the record.
 
@@ -2314,17 +2314,17 @@ A read-only review wave over the uncommitted agent-templates + launch-over-MCP t
 
 ## F-287 — a DISPLAY bound was reused as if it were a security bound, and clipped template field values to 8% of their real limit (2026-08-23)
 
-- Location: `dopl-desktop-app/main/prompt-sanitize.js › sanitizeName`, `main/prompt-framing-template.js › fieldLines` and `templateRoleFraming`, `main/template-resolve.js › narrow`, `main/agent-history.js › durableHistory`, `main/session-store.js › durableName`.
+- Location: `dopl-desktop-app/main/prompt-sanitize.js › sanitizeName`, `main/prompt-framing-agent-identity.js › fieldLines` and `identityRoleFraming`, `main/identity-resolve.js › narrow`, `main/agent-history.js › durableHistory`, `main/session-store.js › durableName`.
 - Found during: the 2026-08-23 verifier wave (raised twice — the prompt half as `major`, the agent-history half as `minor`; one root).
 - Severity: major. Silent data loss into a prompt, and an identity reported two different ways on two surfaces.
 - **The mechanism.** `sanitizeName` carries `.slice(0, 80)` because it was written for a counterparty `display_name` — unbounded attacker-controlled text with no server bound of its own, where 80 is a real budget decision. It was then reused as "the belt" by every later consumer, and the 80 came along as if it were the rule. It is not: **the neutralization is the security part (the whitespace collapse and the fence-token strip); the length is a budget that belongs to the field.** Consequences, each measured:
-  - A template custom-field VALUE is bounded at **1000** by `src/features/agent-templates/schema.ts › TemplateFieldSchema` (`.max(1000)`). It was clipped TWICE on the way into the ROLE block — to 200 by `template-resolve.js › narrow`'s single `MAX_LABEL`, then to 80 by `fieldLines`. A 140-character `repo_path` or a 300-character `style_rules` — both legal, both inside the 8 KB fields budget — reached the agent as their first 80 characters. **Nothing reported the clip**: the picker, the launch sheet and the editor all still showed the whole value.
+  - A template custom-field VALUE is bounded at **1000** by `src/features/agent-identities/schema.ts › IdentityFieldSchema` (`.max(1000)`). It was clipped TWICE on the way into the ROLE block — to 200 by `identity-resolve.js › narrow`'s single `MAX_LABEL`, then to 80 by `fieldLines`. A 140-character `repo_path` or a 300-character `style_rules` — both legal, both inside the 8 KB fields budget — reached the agent as their first 80 characters. **Nothing reported the clip**: the picker, the launch sheet and the editor all still showed the whole value.
   - `MAX_LABEL = 200` carried the comment *"names, keys and values are SAFE_LABEL_RE-bounded well inside this"*, which is simply false for `value`.
-  - The template NAME is bounded at **120** (`agent_templates_name_charset_check`). The role line rendered it at 80, so the agent was told `YOUR ROLE FOR THIS RUN IS "<first 80 chars>"` while `channel-session-render.ts › telemetryClauses` and the Agents-tab card reported the same agent's template at its full length — two surfaces disagreeing about one identity.
-  - `agent-history.js › durableHistory` froze `templateName` at 80 **at the write**, under a comment reasoning that "`session-summary.js` re-bounds at 120 on the way out" — exactly backwards: re-bounding an already-clipped string restores nothing, so an ended agent's `read_sessions` line named a template that exists under no such spelling, and §5A's "a stale name here is correct, not drift" rule tells the operator not to read that as an error.
-- **✅ RESOLVED, by making the bound a parameter everywhere it was a hard-coded default.** `prompt-sanitize.js › sanitizeText(value, max)` is the neutralizer; `sanitizeName` is now `sanitizeText(name, 80)` and keeps 80 as its DISPLAY default, correctly, for the one caller that has no server bound. `fieldLines` renders keys at 80 and values at 1000; the role line renders the name at 120. `template-resolve.js › label(value, max)` takes a bound and `narrow` passes one PER FIELD (name 120, key 80, value 1000, model 120, base labels 200) — the false `MAX_LABEL` comment is gone with the constant. `session-store.js › durableName` and `agent-history.js › historyName` both take an optional max, and `templateName` passes 120 in both.
+  - The template NAME is bounded at **120** (`agent_identities_name_charset_check`). The role line rendered it at 80, so the agent was told `YOUR ROLE FOR THIS RUN IS "<first 80 chars>"` while `channel-session-render.ts › telemetryClauses` and the Agents-tab card reported the same agent's template at its full length — two surfaces disagreeing about one identity.
+  - `agent-history.js › durableHistory` froze `identityName` at 80 **at the write**, under a comment reasoning that "`session-summary.js` re-bounds at 120 on the way out" — exactly backwards: re-bounding an already-clipped string restores nothing, so an ended agent's `read_sessions` line named a template that exists under no such spelling, and §5A's "a stale name here is correct, not drift" rule tells the operator not to read that as an error.
+- **✅ RESOLVED, by making the bound a parameter everywhere it was a hard-coded default.** `prompt-sanitize.js › sanitizeText(value, max)` is the neutralizer; `sanitizeName` is now `sanitizeText(name, 80)` and keeps 80 as its DISPLAY default, correctly, for the one caller that has no server bound. `fieldLines` renders keys at 80 and values at 1000; the role line renders the name at 120. `identity-resolve.js › label(value, max)` takes a bound and `narrow` passes one PER FIELD (name 120, key 80, value 1000, model 120, base labels 200) — the false `MAX_LABEL` comment is gone with the constant. `session-store.js › durableName` and `agent-history.js › historyName` both take an optional max, and `identityName` passes 120 in both.
 - ⚠ **THE RULE THIS BUYS, STATED ONCE:** a BOUNDARY bound must MATCH the writer's, never undercut it. Enforcing a smaller number than the far side enforces is not extra caution — it is a limit the operator can neither see nor satisfy, and the disagreement is silent and always resolves against them.
-- **Pinned by** `dopl-desktop-app/test/prompt-framing-template.test.mjs` (the server's three bounds READ OUT of `schema.ts` rather than typed; a 300-char value reaching the rendered line whole; a 1500-char one still cut at 1000; keys still at 80; the role line at 120; and — the case that stops the fix relaxing anything — a LONG value carrying both fence vocabularies still rendering as exactly one line with the tokens stripped), `test/session-launch-template.test.mjs` (the resolved template's per-field bounds), and `test/agent-retention.test.mjs` (the frozen history name at 120, `channelName` still at 80).
+- **Pinned by** `dopl-desktop-app/test/prompt-framing-agent-identity.test.mjs` (the server's three bounds READ OUT of `schema.ts` rather than typed; a 300-char value reaching the rendered line whole; a 1500-char one still cut at 1000; keys still at 80; the role line at 120; and — the case that stops the fix relaxing anything — a LONG value carrying both fence vocabularies still rendering as exactly one line with the tokens stripped), `test/session-launch-identity.test.mjs` (the resolved template's per-field bounds), and `test/agent-retention.test.mjs` (the frozen history name at 120, `channelName` still at 80).
 - Status: **closed**; entry kept as the record.
 
 ## F-288 — a CRASH resume lost the session's template, and the next telemetry push then ERASED the stored name under a running agent (2026-08-23)
@@ -2332,28 +2332,28 @@ A read-only review wave over the uncommitted agent-templates + launch-over-MCP t
 - Location: `dopl-desktop-app/main/session-park.js › contextFromRecord` / `startResume`, `main/session-io.js › baseRecord`, `main/session-store.js › durableSessionRecord`; `docs/INVARIANTS.md` §5A.
 - Found during: the 2026-08-23 verifier wave (raised twice — as a `seams` finding about the durable projection and as an `edges` finding about the erase; one root).
 - Severity: major. Silent, and it corrupts a value another agent is reading.
-- **The mechanism.** `context.template` is a SPAWN-TIME capture that lives only on the in-memory session object. `session-io.js › baseRecord` and `session-store.js › durableSessionRecord` are literal whitelists and neither named it, so nothing on disk carried it. On restart, `session-engine.js › init` offers a resume for any record whose `reloadDisposition` is `'resume'`; the operator's click runs `startResume`, which — unlike `resumeParked`, which works IN PLACE — is a full re-`startSession` building `context` from `contextFromRecord`, a five-key literal with no template. So `session-summary.js › liveSummary` evaluated `templateName: displayText(ctx.template && ctx.template.name, 120)` to **null**, `session-telemetry.js › STATE_FIELDS` contains `templateName` (so the change bypassed `floorAllows`, the cadence floor), the resumed session re-used the SAME `slotKey` (the agent id is persisted), and `repository-sessions.ts › sessionRowMatches` judged the row changed and upserted **NULL over the name**. `session-teardown.js › settle` then froze `null` into `agent-history` — the exact outcome that block's own comment says must not happen.
-- **⚠ AND INVARIANTS §5A SAID IT COULD NOT HAPPEN.** The bullet justified template survival on the grounds that "a park/resume carries it for free because `main/session-park.js › resumeParked` works IN PLACE and never rewrites `s.context`" — true of `resumeParked`, false of `startResume`. **The doc named the one lane where its claim was true**, which is how the gap survived a review; `test/session-launch-template.test.mjs`'s own docblock claimed to cover "`context.template` … survives park/resume" and only asserted the `resumeParked` half.
-- **The agent itself was never affected** — `freshFraming` is false whenever `resumeSdkId` is set, so no framing is rebuilt and the SDK resume carries the original ROLE block. Only the REPORTING lied, which is worse in one specific way: an orchestrator reads `template_name` in `read_sessions` to tell six agents apart.
-- **✅ RESOLVED, per the F-258 precedent** (`ownPostSeq`, the same class of resume regression, fixed the same way): `baseRecord` projects `templateName`, `durableSessionRecord` whitelists it — **at 120, the column's own bound, not `durableName`'s 80 display default** (F-287) — and `contextFromRecord` rehydrates it as a NAME-ONLY STUB, `template: r.templateName ? { name: r.templateName } : null`.
-- ⚠ **WHY THE STUB IS ENOUGH, AND WHAT IT COSTS.** `instructions` / `fields` / `knowledgeBases` have exactly ONE consumer — `prompt-framing-template.js › templateRoleFraming` via the one-shot `session-seed.js › takeFraming` — which a resume never runs. Persisting the body would put another member's prompt text on disk to answer a question nothing asks after spawn. **The cost, stated rather than left to be discovered: a consumer that later reads `template.instructions` off a LIVE session must not assume it is there.** INVARIANTS §5A now says all of this, and names `startResume`.
-- **Pinned by** `dopl-desktop-app/test/session-park-resume-profile.test.mjs` (a crash resume rehydrates the stub, in the exact expression `liveSummary` reads; the body keys are absent; a record with no template resumes `null` rather than `undefined`), `test/session-store.test.mjs` (the whitelist census, the 120 bound, and `channelName` still at 80), and `test/session-launch-template.test.mjs` (**all three files agree** — projection, whitelist and rehydrate — because two out of three is a value written and never read, or read and never written, and the symptom of either is the same null).
+- **The mechanism.** `context.template` is a SPAWN-TIME capture that lives only on the in-memory session object. `session-io.js › baseRecord` and `session-store.js › durableSessionRecord` are literal whitelists and neither named it, so nothing on disk carried it. On restart, `session-engine.js › init` offers a resume for any record whose `reloadDisposition` is `'resume'`; the operator's click runs `startResume`, which — unlike `resumeParked`, which works IN PLACE — is a full re-`startSession` building `context` from `contextFromRecord`, a five-key literal with no template. So `session-summary.js › liveSummary` evaluated `identityName: displayText(ctx.template && ctx.template.name, 120)` to **null**, `session-telemetry.js › STATE_FIELDS` contains `identityName` (so the change bypassed `floorAllows`, the cadence floor), the resumed session re-used the SAME `slotKey` (the agent id is persisted), and `repository-sessions.ts › sessionRowMatches` judged the row changed and upserted **NULL over the name**. `session-teardown.js › settle` then froze `null` into `agent-history` — the exact outcome that block's own comment says must not happen.
+- **⚠ AND INVARIANTS §5A SAID IT COULD NOT HAPPEN.** The bullet justified template survival on the grounds that "a park/resume carries it for free because `main/session-park.js › resumeParked` works IN PLACE and never rewrites `s.context`" — true of `resumeParked`, false of `startResume`. **The doc named the one lane where its claim was true**, which is how the gap survived a review; `test/session-launch-identity.test.mjs`'s own docblock claimed to cover "`context.template` … survives park/resume" and only asserted the `resumeParked` half.
+- **The agent itself was never affected** — `freshFraming` is false whenever `resumeSdkId` is set, so no framing is rebuilt and the SDK resume carries the original ROLE block. Only the REPORTING lied, which is worse in one specific way: an orchestrator reads `identity_name` in `read_sessions` to tell six agents apart.
+- **✅ RESOLVED, per the F-258 precedent** (`ownPostSeq`, the same class of resume regression, fixed the same way): `baseRecord` projects `identityName`, `durableSessionRecord` whitelists it — **at 120, the column's own bound, not `durableName`'s 80 display default** (F-287) — and `contextFromRecord` rehydrates it as a NAME-ONLY STUB, `template: r.identityName ? { name: r.identityName } : null`.
+- ⚠ **WHY THE STUB IS ENOUGH, AND WHAT IT COSTS.** `instructions` / `fields` / `knowledgeBases` have exactly ONE consumer — `prompt-framing-agent-identity.js › identityRoleFraming` via the one-shot `session-seed.js › takeFraming` — which a resume never runs. Persisting the body would put another member's prompt text on disk to answer a question nothing asks after spawn. **The cost, stated rather than left to be discovered: a consumer that later reads `template.instructions` off a LIVE session must not assume it is there.** INVARIANTS §5A now says all of this, and names `startResume`.
+- **Pinned by** `dopl-desktop-app/test/session-park-resume-profile.test.mjs` (a crash resume rehydrates the stub, in the exact expression `liveSummary` reads; the body keys are absent; a record with no template resumes `null` rather than `undefined`), `test/session-store.test.mjs` (the whitelist census, the 120 bound, and `channelName` still at 80), and `test/session-launch-identity.test.mjs` (**all three files agree** — projection, whitelist and rehydrate — because two out of three is a value written and never read, or read and never written, and the symptom of either is the same null).
 - Status: **closed**; entry kept as the record.
 
 ## F-289 — the workspace-key private-visibility fence was enforced on CREATE only, so two calls defeated it (2026-08-23)
 
-- Location: `src/features/agent-templates/server/service-writes.ts › updateTemplate`.
+- Location: `src/features/agent-identities/server/service-writes.ts › updateIdentity`.
 - Found during: the 2026-08-23 verifier wave (`security`).
 - Severity: major.
-- **The mechanism.** `createTemplate` throws `WorkspaceKeyPrivateTemplateError` when `ctx.apiKeyWorkspaceId != null` and the requested visibility is `private` — a workspace-scoped key "may be shared between humans", so a row private to the key means nothing. `updateTemplate` computed `nextVisibility` and wrote it with **no API-key check at all** (`grep -n apiKeyWorkspaceId` over the module returned exactly one hit, in `createTemplate`). So: POST `/api/agent-templates` with `visibility: "workspace"` — accepted, `created_by` stamped with the key's `ctx.userId`; then PATCH `/api/agent-templates/{id}` with `{"visibility":"private"}` — `getTemplateById` passes (the row is still `workspace` at read time), `assertMayWrite` passes (the key IS the creator), and the row commits `private`. The route allows it: `PATCH` is `withWorkspaceAuth(handlePatch, { minRole: "member" })` with no `sessionOnly`, on purpose. The end state is the one the create fence exists to prevent — readable only by the key owner's human session, invisible to the key itself (arm 2 of `canSeeTemplate`) and to every workspace admin (arm 4 precedes arm 5). The final `getTemplateById` 404s the RESPONSE, which is a tell, not a guard: the write has landed.
+- **The mechanism.** `createIdentity` throws `WorkspaceKeyPrivateIdentityError` when `ctx.apiKeyWorkspaceId != null` and the requested visibility is `private` — a workspace-scoped key "may be shared between humans", so a row private to the key means nothing. `updateIdentity` computed `nextVisibility` and wrote it with **no API-key check at all** (`grep -n apiKeyWorkspaceId` over the module returned exactly one hit, in `createIdentity`). So: POST `/api/agent-identities` with `visibility: "workspace"` — accepted, `created_by` stamped with the key's `ctx.userId`; then PATCH `/api/agent-identities/{id}` with `{"visibility":"private"}` — `getIdentityById` passes (the row is still `workspace` at read time), `assertMayWrite` passes (the key IS the creator), and the row commits `private`. The route allows it: `PATCH` is `withWorkspaceAuth(handlePatch, { minRole: "member" })` with no `sessionOnly`, on purpose. The end state is the one the create fence exists to prevent — readable only by the key owner's human session, invisible to the key itself (arm 2 of `canSeeIdentity`) and to every workspace admin (arm 4 precedes arm 5). The final `getIdentityById` 404s the RESPONSE, which is a tell, not a guard: the write has landed.
 - **The sibling precedent.** `knowledge/server/service-base-writes.ts` fences its own update path in one sentence — *"Workspace-scoped keys can't read private rows back, so they may not create this state either."* ⚠ **`skills/server/service-writes.ts` does NOT** — its only throw is on create, i.e. the same gap in a third feature. **Not fixed here (out of this wave's scope) and recorded so it is not lost.**
 - **✅ RESOLVED.** The same guard added immediately after `assertMayWrite`, on **`nextVisibility`** rather than on `patch.visibility` — the state that matters is the one the row LANDS in, so a key cannot keep a private row private by patching something else.
-- **Pinned by** `src/features/agent-templates/server/service-writes.test.ts`, beside the create case and deliberately in the same `describe`, because they are one rule: create-then-patch is refused; a workspace template is still patchable; a human session may still make a template private; and the already-private case is pinned as the **404 it really is** (a workspace key cannot read a private row back, so the re-read refuses before the fence is reached — the fence is the belt behind it).
+- **Pinned by** `src/features/agent-identities/server/service-writes.test.ts`, beside the create case and deliberately in the same `describe`, because they are one rule: create-then-patch is refused; a workspace template is still patchable; a human session may still make a template private; and the already-private case is pinned as the **404 it really is** (a workspace key cannot read a private row back, so the re-read refuses before the fence is reached — the fence is the belt behind it).
 - Status: **closed**; entry kept as the record. ⚠ **The skills-feature half is OPEN** (see above).
 
 ## F-290 — a security docblock cited a test file that has never existed (2026-08-23)
 
-- Location: `src/features/agent-templates/server/service-shared.ts › canSeeBaseRow`.
+- Location: `src/features/agent-identities/server/service-shared.ts › canSeeBaseRow`.
 - Found during: the 2026-08-23 verifier wave (`bloat`). **This is the F-280 class, verbatim, in a second file.**
 - Severity: minor, and the failure mode is a wasted trail in exactly the wrong direction.
 - **The mechanism.** The docblock backing the hand-copied `canSeeBase` predicate ended: *"⚠ IF THAT FILE'S RULE CHANGES, THIS ONE IS THE COPY THAT WILL NOT NOTICE … so the drift is worth a test rather than a comment alone — [`service.test.ts`, then the anchor separator, then "KB attach validation"] pins each arm."* ⚠ **The bad anchor is DESCRIBED, not reproduced** — writing it out here would make `check-doc-refs.mjs` resolve it and this entry would fail the gate it is about, the same reason F-227 spelled its subject out. There is no `service.test.ts` in that directory and there never has been; the real pin is `service-writes.test.ts › "KB attach validation — a base you cannot read, you cannot attach"`, which is also the file F-278 names. A reviewer checking whether the tripwire was actually written greps a path that resolves to nothing and reasonably concludes it was not.
@@ -2378,7 +2378,7 @@ A read-only review wave over the uncommitted agent-templates + launch-over-MCP t
 - Location: `docs/AGENT-TEMPLATES-SPEC.md`, throughout.
 - Found during: the 2026-08-23 verifier wave (`bloat`).
 - Severity: minor by blast radius, but it violates a rule this repo states TWICE in identical words — `CLAUDE.md` standing doc rule 2 and `docs/INVARIANTS.md`'s preamble: *"Code references use symbol anchors — `path › symbolName`, or a grep pattern. **Never a bare line number.**"*
-- **They had already rotted, on day one.** Measured against the tree: `service-launch.ts › LAUNCH_REFUSAL_REASONS` was cited at 35 and is at 56; `schema-launch.ts › LaunchRefusalReasonSchema` at 57, actually 90; `launch-directive-wire.js › REFUSAL_REASONS` at 82, actually 101; and in §3e's own *"miss any one and the field silently never arrives"* wire table, four of five entries were wrong. The worst is the one the spec leans on hardest: `main/session-ipc-ops.js:136`, cited as the `sessions:launch` handler where `templateId` must be UUID-validated, lands **inside the `agents:forgetThread` docblock** — `sessions:launch` is at 110.
+- **They had already rotted, on day one.** Measured against the tree: `service-launch.ts › LAUNCH_REFUSAL_REASONS` was cited at 35 and is at 56; `schema-launch.ts › LaunchRefusalReasonSchema` at 57, actually 90; `launch-directive-wire.js › REFUSAL_REASONS` at 82, actually 101; and in §3e's own *"miss any one and the field silently never arrives"* wire table, four of five entries were wrong. The worst is the one the spec leans on hardest: `main/session-ipc-ops.js:136`, cited as the `sessions:launch` handler where `identityId` must be UUID-validated, lands **inside the `agents:forgetThread` docblock** — `sessions:launch` is at 110.
 - **⚠ AND THE HYBRID FORM IS WORSE THAN A BARE NUMBER.** Several refs were written `path.ext:NN › symbolName`, which READS as a verified anchor. `scripts/check-doc-refs.mjs › SYMBOL_ANCHOR_RE` requires `path.ext` followed by optional whitespace and `›`; the `:NN` in between means the regex never fires, so the string is silently downgraded to a class-(a) file-EXISTENCE ref and the symbol half is discarded. **The doc was green precisely because its anchors were written in a form the checker does not read.**
 - **✅ RESOLVED** — every `path:NN` converted to `path › symbol`, each symbol verified against the file it names, with `node scripts/check-doc-refs.mjs` green afterwards (it now actually validates them) and `grep -nE '\.(ts|tsx|js|mjs|sql|md):[0-9]+' docs/AGENT-TEMPLATES-SPEC.md` returning nothing.
 - ⚠ **The checker ceiling worth knowing:** a bare `path:NN` is not invisible to `check-doc-refs.mjs` — it is seen as a file-exists assertion and passes. That is the script's own documented ceiling, and it is why this class needs the rule rather than the gate.
@@ -3927,9 +3927,9 @@ the former `recordCreditUsageEvent` in `src/features/billing/server/credit-ledge
 
 ### F-331 — ✅ RESOLVED 2026-08-26 — every agent-template write patched the PATH PREFIX, so a template created in one workspace appeared in another workspace's list
 
-- Location: `src/features/agent-templates/hooks/use-agent-template-writes.ts` — all three configs
+- Location: `src/features/agent-identities/hooks/use-agent-identity-writes.ts` — all three configs
   (`› createConfig`'s `reconcile`, `› updateConfig`'s `optimistic` AND `reconcile`, `› deleteConfig`'s
-  `optimistic`) patched `agentTemplateKeys.list().all`, which is `apiPathKey("/api/agent-templates")`
+  `optimistic`) patched `agentIdentityKeys.list().all`, which is `apiPathKey("/api/agent-identities")`
   — the ONE-ELEMENT key. TanStack matches by array PREFIX, so each patch landed on **every workspace
   variant of the list** that any reader had mounted. The hook's own `coldKeys` call carried the same
   key and the same fault.
@@ -3942,7 +3942,7 @@ the former `recordCreditUsageEvent` in `src/features/billing/server/credit-ledge
   default silently answers a question nobody asked: it reaches variants that are not the writer's to
   touch. The docblock and `client/query-keys.ts` both stated the prefix as a virtue.
 - Severity: **latent until a surface mounts two workspaces of this path, then a cross-workspace
-  display leak.** One-workspace pages (`/:workspaceSegment/agents`, the channel `template-picker`)
+  display leak.** One-workspace pages (`/:workspaceSegment/agents`, the channel `identity-picker`)
   cannot observe it — every patched variant is the same variant. The /home Agents tab mounts a
   channel CONTAINER list and the home-workspace list side by side, and there:
   - **CREATE** — `upsertRow` APPENDS when the id is absent from the cache it is handed, so a template
@@ -3956,17 +3956,17 @@ the former `recordCreditUsageEvent` in `src/features/billing/server/credit-ledge
     so one warm workspace beside a cold one answered "warm" for both, and the cold list — whose
     reconcile had nothing to patch — never refetched the row just created in it. On a link container
     the cold half is ORDINARY, not exotic: a 403/404 there leaves the entry data-less.
-  - ⚠ **NOTHING CROSSED A SERVER FENCE.** The server filters every read by `canSeeTemplate` (§5A);
+  - ⚠ **NOTHING CROSSED A SERVER FENCE.** The server filters every read by `canSeeIdentity` (§5A);
     what leaked was a row the client already held, displayed under the wrong heading. A reader who
     refetched saw the truth.
-- Resolution, in this change: all four key sites take `agentTemplateKeys.list().entry({workspaceId})`.
+- Resolution, in this change: all four key sites take `agentIdentityKeys.list().entry({workspaceId})`.
   **The entry key is exactly reproducible on this path and that was verified before relying on it** —
-  `useAgentTemplates` passes `{workspaceId, select}` and NO `query`, so the tuple the read registers
+  `useAgentIdentities` passes `{workspaceId, select}` and NO `query`, so the tuple the read registers
   is `[path, workspaceId, undefined]` and `entry({workspaceId})` builds exactly that. ⚠ **That
   premise is the fix's only load-bearing assumption**: adding a `query` variant on this path splits
   the entry in two and the pairing has to be revisited on BOTH sides in the same change (said in the
   read hook's docblock as well).
-- Pinned by `hooks/use-agent-template-writes.test.ts` — real `QueryClient`, real hooks, mocked
+- Pinned by `hooks/use-agent-identity-writes.test.ts` — real `QueryClient`, real hooks, mocked
   transport, both lists warm, asserting what the OTHER workspace's reader projects.
   **Mutation-verified, 5 reverts:** all four sites → `.all` = 3 failures; create's `reconcile` alone
   = 2; `coldKeys` alone = 1; update's two alone = 1; **delete's alone = 0 — the accident above, and
@@ -3978,18 +3978,18 @@ the former `recordCreditUsageEvent` in `src/features/billing/server/credit-ledge
 
 ### F-332 — ✅ RESOLVED 2026-08-26 — the dev fixture fallback OUTLIVED its migration, and on a link container it would have painted invented agents under a channel that has none
 
-- Location (as filed): `src/features/agent-templates/client/mock.ts` (seven hardcoded `AgentTemplate`
+- Location (as filed): `src/features/agent-templates/client/mock.ts` (seven hardcoded `AgentIdentity`
   rows) and the `isMockFallback` predicate + `isMockData` field in
-  `src/features/agent-templates/hooks/use-agent-templates.ts`, plus the
-  "Sample data" note in `components/agent-templates-core.tsx`. ⚠ **No symbol anchor is written for
+  `src/features/agent-identities/hooks/use-agent-identities.ts`, plus the
+  "Sample data" note in `components/agent-identities-core.tsx`. ⚠ **No symbol anchor is written for
   either — both names are gone from the tree, and an anchor at a deleted symbol is the exact rot
   `check-doc-refs.mjs` class (c) exists to fail.** All three are DELETED in this change and
-  `hooks/use-agent-templates.test.ts` is rewritten down to the properties that survive
+  `hooks/use-agent-identities.test.ts` is rewritten down to the properties that survive
   (INVARIANTS §14 — a mixed test file whose feature is deleted is rewritten, not removed).
 - Found during: **home Agents tab M0, 2026-08-26**, measuring the premise the fallback was built on.
 - **THE PREMISE WAS FALSE BY THEN.** The fixtures were written on 2026-08-23 because
   `20260822200000_agent_templates.sql` was unapplied and the list read 500'd on a missing relation.
-  It is applied — name `agent_templates`, history version `20260823091848`, re-measured 2026-08-26
+  It is applied — name `agent_identities`, history version `20260823091848`, re-measured 2026-08-26
   via MCP `list_migrations` **joined on the NAME** (§12's F-304 re-stamp rule). INVARIANTS §12 had
   recorded all three agent-template migrations as applied since 2026-08-24 while §5A still said
   "WRITTEN — applied is a measurement" for the same three files: **one document disagreeing with
@@ -3998,7 +3998,7 @@ the former `recordCreditUsageEvent` in `src/features/billing/server/credit-ledge
 - ⚠ **AND THE FALLBACK'S SECOND GATE STOPPED MEANING WHAT IT SAID.** The condition is
   `error != null && data === undefined` — i.e. "the fetch failed", chosen deliberately over "the list
   is empty". That was sound while the only way to fail was a missing relation. It is NOT sound now
-  that the same hook reads a link CONTAINER (`/home` → `StandaloneChannelSurface` → `template-picker`),
+  that the same hook reads a link CONTAINER (`/home` → `StandaloneChannelSurface` → `identity-picker`),
   where **a 403/404 is an ORDINARY answer**: a roster change, a stale workspace header, a guest
   opening the tab. So on a dev build the failure mode had inverted — from "show something while the
   table does not exist" to "show two invented agents under a channel that genuinely has none".
@@ -4009,7 +4009,7 @@ the former `recordCreditUsageEvent` in `src/features/billing/server/credit-ledge
   "Sample data" word as the only tell.
 - Resolution, in this change: `client/mock.ts` deleted; the hook returns `query.data ?? []` and the
   `error`, so a failed read renders the plain error state and nothing else, in every build;
-  `isMockData` is off `UseAgentTemplatesResult` (no consumer outside the page kept it);
+  `isMockData` is off `UseAgentIdentitiesResult` (no consumer outside the page kept it);
   INVARIANTS §5A gains the standing 🚫 rule that no fixture fallback may come back on this read, and
   its three migration bullets are amended to APPLIED with the command.
   Status: ✅ **resolved 2026-08-26** — the entry is KEPT rather than deleted because the finding is
@@ -4022,14 +4022,14 @@ the former `recordCreditUsageEvent` in `src/features/billing/server/credit-ledge
   filed.** It is filed now with the thing it was reserved to decide, which turned out to have an
   answer: the audience ceiling's B1 does reach templates, and it reaches them in a direction nobody
   costed. **Nothing here is a behaviour change. This entry states the interaction and asks.**
-- Location: `src/features/agent-templates/server/service-shared.ts › canSeeTemplate` against
-  `src/features/agent-templates/lib/template-draft.ts › containerCopyDraft`, with
-  `› buildAgentTemplateContext` as the join.
+- Location: `src/features/agent-identities/server/service-shared.ts › canSeeIdentity` against
+  `src/features/agent-identities/lib/identity-draft.ts › containerCopyDraft`, with
+  `› buildAgentIdentityContext` as the join.
 - **The trace, in four hops, each re-derivable:**
-  1. `canSeeTemplate` reads, in order: `visibility === "workspace"` → **true**; then
+  1. `canSeeIdentity` reads, in order: `visibility === "workspace"` → **true**; then
      `if (ctx.apiKeyWorkspaceId) return false`. So a caller on a workspace-locked credential sees
      workspace-visible templates and **nothing else** — not its own, not the operator's.
-     `buildAgentTemplateContext` fills that field from `auth.apiKeyWorkspaceId`.
+     `buildAgentIdentityContext` fills that field from `auth.apiKeyWorkspaceId`.
   2. Before the audience ceiling, `apiKeyWorkspaceId` had **no producer** — §4 records that it was
      dead scaffolding for months, so the locked arm was unreachable and this branch had never fired.
   3. **B1 is the producer** (`mcp_tokens.workspace_id` → `validateAccessToken` → `apiKeyWorkspaceId`,
@@ -4043,17 +4043,17 @@ the former `recordCreditUsageEvent` in `src/features/billing/server/credit-ledge
   agent can be used in a channel; post-B1 the only templates an agent in that channel can actually
   see are the ones deliberately SHARED with the peer.
 - 🔒 **WHAT IS *NOT* BROKEN, AND THIS IS THE HALF THAT MATTERS FOR THE RELEASE.** The OPERATOR's own
-  launch is untouched. `dopl-desktop-app/main/template-resolve.js` rides `main/api.js › apiFetch`,
+  launch is untouched. `dopl-desktop-app/main/identity-resolve.js` rides `main/api.js › apiFetch`,
   which is **COOKIE-authed** (`auth.getAuthCookie()`), not MCP-token-authed — so `apiKeyWorkspaceId`
-  is null on that path and `canSeeTemplate`'s locked arm is never reached. The /home Chat face's
-  `TemplateLaunchPicker` → `sessions:launch` → `/resolve` lane is a cookie lane end to end, and a
+  is null on that path and `canSeeIdentity`'s locked arm is never reached. The /home Chat face's
+  `IdentityLaunchPicker` → `sessions:launch` → `/resolve` lane is a cookie lane end to end, and a
   private container template launches from it exactly as M4 shipped it. **The copy works for the
   person who made it. It does not work for an agent asked to pick its own identity.**
 - ⚠ **THE PLAN'S OWN JUSTIFICATION FOR SKIPPING THIS IS NOW FALSE, AND HAS BEEN CORRECTED IN PLACE**
   (`docs/specs/home-agents-tab.plan.md` §5): *"an orchestrator listing the operator's own private
   templates runs on the OPERATOR's credential = operator's own reach, not a peer leak."* That was
   true when it was written and B1 is exactly what unmade it — a container-locked credential is no
-  longer the operator's reach, and `canSeeTemplate` reads it as "an agent: shared templates only".
+  longer the operator's reach, and `canSeeIdentity` reads it as "an agent: shared templates only".
   The sentence is a worked example of the class CLAUDE.md keeps re-learning: a justification is a
   measurement, and it expires when the thing it measured moves.
 - **Severity: not a leak in either direction.** The ceiling errs CLOSED, so the failure mode is an
@@ -4071,21 +4071,21 @@ the former `recordCreditUsageEvent` in `src/features/billing/server/credit-ledge
     do around it. It is not that thing. **The forced `private` is CORRECT and stays a constant** —
     "use" must never publish into a room the peer is standing in — and what changed is arm 2.
 - ✅ **RESOLUTION, IN THIS CHANGE (one change with F-336, as that entry's last line demanded).**
-  `canSeeTemplate` arm 2 now asks `shared/auth/credential-audience.ts › isSharedCredential` instead
+  `canSeeIdentity` arm 2 now asks `shared/auth/credential-audience.ts › isSharedCredential` instead
   of `ctx.apiKeyWorkspaceId`. A **shared** credential — one with no single human behind it — keeps
   the refusal verbatim; a **container-session** credential carries the operator's user id, so arm 3
   (creator) answers for it. The discriminator is the new `mcp_tokens.workspace_lock_kind` column
   (§12), written only by `mcp-container-token.ts › issueContainerToken`, and **an unstated kind reads
   as SHARED**, so nothing widens by omission.
   - **The AGENT lane needed a second edit or the fix would have been half-applied:**
-    `channels/server/service-launch.ts › resolveTemplateForDirective` carries
+    `channels/server/service-launch.ts › resolveIdentityForDirective` carries
     `apiKeyWorkspaceLockKind` alongside `apiKeyWorkspaceId`, or
-    `POST /api/channels/launch-directives` still answers `AGENT_TEMPLATE_NOT_FOUND` for the
-    operator's own private template. Pinned in `channels/server/service-launch-template.test.ts`.
+    `POST /api/channels/launch-directives` still answers `AGENT_IDENTITY_NOT_FOUND` for the
+    operator's own private template. Pinned in `channels/server/service-launch-identity.test.ts`.
   - **Write side moved with the read side, and the reason is that its own comment cited the read.**
-    `agent-templates/server/service-writes.ts`'s create default and its F-289 update fence both read
+    `agent-identities/server/service-writes.ts`'s create default and its F-289 update fence both read
     `isSharedCredential` now: the justification for forcing a key to `workspace` was *"it cannot read
-    a private row back"*, which stopped being true of a container session the moment `canSeeTemplate`
+    a private row back"*, which stopped being true of a container session the moment `canSeeIdentity`
     changed. Leaving them keyed on the lock would have had the operator's agent PUBLISH its templates
     into the peer's room — the exact thing `containerCopyDraft` exists to prevent.
   - **No peer exposure, and it is pinned as a grid rather than argued.**
@@ -4094,10 +4094,10 @@ the former `recordCreditUsageEvent` in `src/features/billing/server/credit-ledge
     same kind, different user id → private stays hidden). ⚠ The `workspaceKey` row is unchanged in
     every cell — that is the M-10 rule surviving intact.
   - **The guest claim was CHECKED, not trusted.** F-333 asserted guests cannot reach templates at
-    all. Verified: every `/api/agent-templates` route and `POST /api/channels/launch-directives` sits
+    all. Verified: every `/api/agent-identities` route and `POST /api/channels/launch-directives` sits
     at `withWorkspaceAuth`'s `viewer` default (writes at `member`), and `guest` ranks below `viewer`
     in `workspaces/types.ts › ROLE_RANK`. Both halves are now asserted —
-    `app/api/agent-templates/route.test.ts` for the floor, and a `meetsMinRole` case in
+    `app/api/agent-identities/route.test.ts` for the floor, and a `meetsMinRole` case in
     `service-visibility.test.ts › the guest floor — why F-333 has no guest arm` for the rank.
   Status: ✅ **resolved 2026-08-27** — the entry is KEPT because the finding is the RULE: **a
   credential's WORKSPACE lock is not an answer to a VISIBILITY question, and a predicate that reads
@@ -4106,7 +4106,7 @@ the former `recordCreditUsageEvent` in `src/features/billing/server/credit-ledge
 
 ### F-334 — sharing a template BEYOND one channel has no mechanism, and the widening is a five-part change nobody has costed
 
-- Location: `src/features/agent-templates/**` against
+- Location: `src/features/agent-identities/**` against
   `supabase/migrations/20260827120000_channel_resource_grants.sql` (the knowledge feature's
   `channel_resource_grants` table) and `src/features/knowledge/server/service-channel-grants.ts`.
 - ⚠ **BOTH CITATIONS ABOVE WERE WRONG AND BOTH PASSED EVERY GATE (corrected 2026-08-26).** The
@@ -4126,14 +4126,14 @@ the former `recordCreditUsageEvent` in `src/features/billing/server/credit-ledge
   (INVARIANTS §5A, Samuel's ruling Q1). **The gap is a MULTI-CHANNEL STANDARD workspace**, where
   `workspace` means every member and there is no way to say "this channel's people only".
 - Why it was NOT built with the /home face: a `channel_resource_grants` row for templates would be a
-  THIRD copy of the visibility matrix (§5A already keeps two — `service-shared.ts › canSeeTemplate`
-  and the `agent_templates_member_select` policy — and records what a drift between two of them
+  THIRD copy of the visibility matrix (§5A already keeps two — `service-shared.ts › canSeeIdentity`
+  and the `agent_identities_member_select` policy — and records what a drift between two of them
   cost). Adding a third to buy a scope the /home surface does not need is the wrong trade at this
   size.
 - ⚠ **The exact widening, so it is not re-derived under time pressure:**
-  1. the `resource_type` CHECK on `channel_resource_grants` gains `'agent_template'`;
-  2. the enforce-trigger gains a branch that resolves the resource against `agent_templates`;
-  3. an **AFTER DELETE GC trigger on `agent_templates`** — templates are HARD-deleted with no
+  1. the `resource_type` CHECK on `channel_resource_grants` gains `'agent_identity'`;
+  2. the enforce-trigger gains a branch that resolves the resource against `agent_identities`;
+  3. an **AFTER DELETE GC trigger on `agent_identities`** — templates are HARD-deleted with no
      tombstone and the grant id is polymorphic, so nothing cascades. This is the same gap
      `20260807130000` was written to fix for another resource; do not assume a FK will cover it;
   4. `ChannelGrantLevel` / `ChannelResourceGrant` move to `src/shared/` types (or are hand-mirrored,
@@ -4264,9 +4264,9 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   | `knowledge/server/service-shared.ts › canSeeBase` | arm 2 → `isSharedCredential` |
   | `chats/server/service-shared.ts › canSeeChat` (+ `grantsForRows`, `requireOwnChat`) | same, all three arms |
   | `skills/server/service-shared.ts › canSeeSkill` (+ `grantsForSkills`) | same |
-  | `agent-templates/server/service-shared.ts › canSeeTemplate` (+ `shareCtxForTemplates`) | same (F-333) |
-  | `agent-templates/server/service-shared.ts › canSeeBaseRow` (+ `resolveVisibleKnowledgeBases`) | same — it is the hand-mirror of `canSeeBase` and its own docblock says it is "the copy that will not notice" |
-  | the `fromWorkspaceKey` branches — `knowledge/server/service-base-writes.ts` (create + update), `skills/server/service-writes.ts`, `agent-templates/server/service-writes.ts` (create + the F-289 update fence) | **same predicate, and NOT optional.** Their stated justification is *"such a credential cannot read a private row back, so it may not create one"* — a measurement that expired for a container session the moment the read side changed. Leaving them keyed on the lock would default the operator's agent to creating **public/`workspace`** rows in a container the peer is standing in, i.e. publish-by-default in the one place that must not. |
+  | `agent-identities/server/service-shared.ts › canSeeIdentity` (+ `shareCtxForIdentities`) | same (F-333) |
+  | `agent-identities/server/service-shared.ts › canSeeBaseRow` (+ `resolveVisibleKnowledgeBases`) | same — it is the hand-mirror of `canSeeBase` and its own docblock says it is "the copy that will not notice" |
+  | the `fromWorkspaceKey` branches — `knowledge/server/service-base-writes.ts` (create + update), `skills/server/service-writes.ts`, `agent-identities/server/service-writes.ts` (create + the F-289 update fence) | **same predicate, and NOT optional.** Their stated justification is *"such a credential cannot read a private row back, so it may not create one"* — a measurement that expired for a container session the moment the read side changed. Leaving them keyed on the lock would default the operator's agent to creating **public/`workspace`** rows in a container the peer is standing in, i.e. publish-by-default in the one place that must not. |
   | the WORKSPACE gates — `with-workspace-auth.ts`'s 403, `workspaces/server/segment.ts › withinKeyLock`, `shared/auth/mcp-transport-pin.ts`, `POST /api/boot`'s provisioning refusal | **UNCHANGED, deliberately.** They read `apiKeyWorkspaceId` and that is the axis they own. Pinned: a CONTAINER-SESSION lock still 403s a contradicting target. |
   | `with-mcp-transport-auth.ts` | **UNCHANGED, deliberately, and this is the one place the two auth families legitimately differ.** It builds no feature context — it forwards the raw credential to the loopback, which re-authenticates through `with-auth.ts` and reads the kind there, once. Its use of `apiKeyWorkspaceId` is the workspace PIN. A second copy of an authorization input with no reader is a liability. |
 - **THE THREE-WAY PIN** (`knowledge/server/service-container-credential.test.ts`) — three refusals,
@@ -4324,12 +4324,12 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   was at the 500-line cap, so `paneToken` and `renderPane` moved to `home-panes.tsx` and the closure
   became parameters. Same code, same fix, same key; only the address moved.
 - **The mechanism.** `Crossfade` renders `{children(shownToken)}` **with no key** — deliberately, it
-  is a fade wrapper and not a router. `renderPane` returned `<HomeAgentPanels …>` at the same
+  is a fade wrapper and not a router. `renderPane` returned `<HomeIdentityPanels …>` at the same
   position for every `agents:<rowId>` token, so React reconciled ONE INSTANCE across a channel
   switch: props moved, `useState` did not. `scope`, `editing: EditorTarget | null` and
-  `copying: AgentTemplate | null` all survived.
+  `copying: AgentIdentity | null` all survived.
 - 🔴 **Why that was a HIGH and not a cosmetic bug: the survivors name a WORKSPACE by PROP.**
-  `ContainerTemplateEditor workspaceId={channel.workspaceId}` and
+  `ContainerIdentityEditor workspaceId={channel.workspaceId}` and
   `CopyToChannelDialog containerWorkspaceId={channel.workspaceId}` silently retarget at the NEW
   container while the operator is looking at a dialog they opened on the OLD one.
   - **CREATE lands in the wrong relationship's container and SUCCEEDS** — the caller is a member of
@@ -4344,7 +4344,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   be holding a dialog over a container they never chose.
 - Found during: the adversarial review of the HOME AGENTS TAB wave, 2026-08-26.
 - ⚠ **THE EXISTING PIN WAS BLIND, AND THAT IS THE LESSON.**
-  `agent-panels.test.tsx › the pane token` asserts on rendered DATA and stayed GREEN through the
+  `identity-panels.test.tsx › the pane token` asserts on rendered DATA and stayed GREEN through the
   whole bug: data is a prop and props move. **A pane's identity cannot be read off the DOM** — the
   honest pin is on SURVIVING STATE, because state can only survive if the instance did.
 - Resolution, in this change: `key={shown}` on the pane, and a test that opens the copy confirm on
@@ -4362,9 +4362,9 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
 ### F-339 — ✅ RESOLVED 2026-08-26 — a failed scope-C read on the /home Agents pane was silent, blank, AND trapped the scope pill
 
 - ⚠ **Id note:** see F-338's; same read, same race.
-- Location: `apps/desktop-ui/src/pages/home/agent-panels.tsx` — `containerList.error` was read,
-  `homeList.error` was not — against `agent-panel-cards.tsx › PrivateAgentSection`.
-- **The mechanism, and it compounds.** `useAgentTemplates` reports `resolved: query.data !== undefined`,
+- Location: `apps/desktop-ui/src/pages/home/identity-panels.tsx` — `containerList.error` was read,
+  `homeList.error` was not — against `identity-panel-cards.tsx › PrivateIdentitySection`.
+- **The mechanism, and it compounds.** `useAgentIdentities` reports `resolved: query.data !== undefined`,
   so a FAILED read is unresolved **forever**. `scopePending` was `!homeList.resolved`, so:
   1. the section body rendered a bare `<div className="h-10" />` — no sentence, no error, no retry;
   2. the scope pill was wrapped in `pendingRow(true)` = `pointer-events-none`, so **the operator
@@ -4376,10 +4376,10 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   nothing at all**, while holding the control that undoes it.
 - Found during: the adversarial review of the HOME AGENTS TAB wave, 2026-08-26.
 - Resolution, in this change: `scopeFailed` is derived from `homeList.error` and **outranks**
-  `scopePending`, so a settled-with-error read is never pending; `PrivateAgentSection` gains a
+  `scopePending`, so a settled-with-error read is never pending; `PrivateIdentitySection` gains a
   `failure: {message, onRetry} | null` state that prints the server's own wording
-  (`agentTemplateErrorMessage`) beside a "Try again"; and the pill stays LIVE. Three tests
-  (`agent-panels.test.tsx › a failed scope-C read`), one of which operates the pill and comes back
+  (`agentIdentityErrorMessage`) beside a "Try again"; and the pill stays LIVE. Three tests
+  (`identity-panels.test.tsx › a failed scope-C read`), one of which operates the pill and comes back
   rather than merely asserting the attribute is absent. Mutation-verified: dropping `scopeFailed`
   turns all three red.
 - ⚠ **The generalizable half, for any surface with a `resolved`-style flag:** `resolved` answers
@@ -4513,7 +4513,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
      leaks for searching. Left unfiltered because `search.ts` has no surface argument to key off and
      threading one is a bigger change than this wave; **and because hiding the operator's own
      content from their own search is a worse failure than the inconsistency.**
-  3. **The /home Agents face's KB picker** (`apps/desktop-ui/src/pages/home/agent-editor.tsx ›
+  3. **The /home Agents face's KB picker** (`apps/desktop-ui/src/pages/home/identity-editor.tsx ›
      useKnowledgeBaseList(workspaceId)`). Deliberate — a template in the home workspace may
      legitimately reference either shelf. ⚠ **BUT IT WARMS `["knowledge", "bases:<homeWs>"]` WITH
      BOTH SHELVES, INSIDE THE SAME PAGE AS SCOPE C.** That is a live cache-collision hazard the
@@ -4522,19 +4522,19 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
      in `pages/home/knowledge-panels-shelf.test.tsx › keeps the workspace shelf out even once the
      DETAIL mount has warmed the unfiltered list`.
 - ⚠ **THE SAME THREE-READER SHAPE NOW EXISTS FOR TEMPLATES (2026-08-27)**, and the answers are the
-  same: MCP and `resolveTemplateForLaunch` ride `listTemplates` unfiltered (**right, and must stay
+  same: MCP and `resolveIdentityForLaunch` ride `listIdentities` unfiltered (**right, and must stay
   right** — a template the operator keeps on their home shelf must still be launchable), and
-  `components/template-picker.tsx › useAgentTemplates(workspaceId)` is unfiltered too (a picker
+  `components/identity-picker.tsx › useAgentIdentities(workspaceId)` is unfiltered too (a picker
   inside a CONTAINER, where shelves do not exist, so the param would be meaningless there). **There
   is no template equivalent of item 2** — templates have no search surface — so that half of this
   finding stays a knowledge-only question.
 - ⚠ **A FOURTH UNFILTERED TEMPLATE READER, ADDED 2026-08-27 — THE SAME DAY THE SHELF SPLIT SHIPPED
   (recorded 2026-08-30).** `src/features/channels/components/composer-launch-panel.tsx`
-  calls `useAgentTemplates(workspaceId, { enabled: panel.open })` with no shelf. **The same answer
+  calls `useAgentIdentities(workspaceId, { enabled: panel.open })` with no shelf. **The same answer
   applies** — the launch panel lives inside a CHANNEL, and a container has no shelves, so the param
   would be meaningless there — but the enumeration above was one short, and an enumeration that
   claims to be complete is the thing a later reader trusts. **Re-derive, never quote:**
-  `grep -rn "useAgentTemplates(" src apps`.
+  `grep -rn "useAgentIdentities(" src apps`.
 - ✅ **AND ONE HALF OF THIS ENTRY IS RESOLVED-AS-RULED, NOT OPEN — the MOVE.** It said *"there is no
   way to MOVE a base OR A TEMPLATE between shelves"* as an unresolved item; the shelf is now REFUSED
   BY NAME on update rather than merely unaccepted, which is the decision rather than the absence of
@@ -4575,7 +4575,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   dialog surfaces as an error. Correct, and ugly: a live button that cannot work. It is shown to
   both because the pane has nothing to branch on.
 - **Consequence 1b — the /home AGENTS face's "New shared agent" button (2026-08-27)** has exactly
-  the same shape: `POST /api/agent-templates` is `minRole: "member"`, a guest peer gets a 403 the
+  the same shape: `POST /api/agent-identities` is `minRole: "member"`, a guest peer gets a 403 the
   editor surfaces, and the pane has nothing to branch on. One fix closes both.
 - **Consequence 2, older and sharper — `containerTarget.role` IS HARDCODED `"owner"`** in the same
   file, with the comment *"a home container is the caller's own (plan §5.3)"*. **That sentence is
@@ -4609,7 +4609,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   - **The four controls, each mirroring the floor the server already applies:** Add person
     (`member`+, `service-writes.ts › mintContainerLink`), the Knowledge face's shared create
     (`POST /api/knowledge/bases`, member+), the Agents face's shared create
-    (`POST /api/agent-templates`, member+) — all three HIDDEN below the floor rather than
+    (`POST /api/agent-identities`, member+) — all three HIDDEN below the floor rather than
     disabled — and the header's click-to-edit, which becomes honest because
     `relationship-record.tsx` now passes the role the surface was defaulting to `"member"`.
   - 🔒 **THE CONTESTED FALLBACK WAS RULED DOWN.** `types.ts › EMPTY_ROLE` is `guest` (rank 0):
@@ -5049,7 +5049,7 @@ abort-churn path rather than by file order. All through the same shared helper; 
 | `main/launch-directives.js › pollWorkspace` / `› post` | `if (!res \|\| !res.ok) return` — and the 404 self-disable does NOT fire for 401 | per workspace per 60s |
 | `main/session-credential.js › findWorkspace` / `ensureContainerCredential` / `releaseContainerCredential` | `!res.ok` | ~3 per session launch + teardown, cumulative for the process lifetime |
 | `main/mcp-config.js › obtainDeviceToken` / `› revokeDeviceToken` | 404 / `!res.ok` / non-JSON / missing-token | per launch, per sign-out |
-| `main/template-resolve.js › resolveTemplate` | 404 → `no-template`, `!res.ok` → `busy` | per agent launch with a template identity |
+| `main/identity-resolve.js › resolveAgentIdentity` | 404 → `no-identity`, `!res.ok` → `busy` | per agent launch with a template identity |
 | `main/avatar-cache.js › fetchDataUri`, `main/channel-dirs.js`, `main/channel-prefs.js`, `main/channel-dir-ipc.js`, `main/auth.js` | assorted `!res.ok` | low |
 
 **⚠ AND ONE THAT IS NOT AN ERROR-BRANCH MISS AT ALL — `main/mcp-config.js › withTimeout`.** On
@@ -5160,7 +5160,7 @@ pressed into the sidebar". This page's group is the identical shape one level do
 the white `.pageCard`.
 
 Two other overview atoms take `--bg-inset` for the same non-reason:
-`› member-load.tsx`'s bar track and `src/features/agent-templates/components/template-section.tsx`'s
+`› member-load.tsx`'s bar track and `src/features/agent-identities/components/identity-section.tsx`'s
 "scope" pill.
 
 **Filed, not fixed, and the skeleton deliberately follows the CODE.**
@@ -5857,7 +5857,7 @@ its name and its signature, and the argument travelled with the code:
 
 | From | To | The seam |
 |---|---|---|
-| `main/channel-prefs.js` 514 → **451** | `main/template-approval.js` (99) | first-use approval of ANOTHER MEMBER'S standing configuration. Keyed by a TEMPLATE id, not a channel — the tell that it was never a channel preference. Same seam and same precedent as the `orchestrator-consent.js` split one wave earlier; re-exported, so no caller moved. |
+| `main/channel-prefs.js` 514 → **451** | `main/identity-approval.js` (99) | first-use approval of ANOTHER MEMBER'S standing configuration. Keyed by a TEMPLATE id, not a channel — the tell that it was never a channel preference. Same seam and same precedent as the `orchestrator-consent.js` split one wave earlier; re-exported, so no caller moved. |
 | `main/session-state-push.js` 508 → **413** | `main/session-state-push-wire.js` (136) | the three client-side refusals (the ad-hoc key, the nameless row, the ended row). They move when the SERVER'S contract for a row moves; the push moves when the digest gate, the cadence floor or the retry does. ⚠ **A FACTORY, not free functions** — `reportable` REMEMBERS what it already said, and the writer's suites evaluate a fresh copy of the push block per case, so a shared set would leak one case's log into the next one's "said once" assertion. |
 | `test/session-state-push.test.mjs` 507 → **325** | `test/session-state-push-wire.test.mjs` (214) | the same seam on the test side, in the same change. |
 
@@ -6497,15 +6497,15 @@ rejects one). And `getBaseTree` lives in `src/features/knowledge/server/service-
 
 `dopl_agent(op="update", knowledge_bases=[…])` failed in every workspace and every home
 container. A junction-only patch names none of the six scalar columns, so the body
-`agent-templates/server/repository.ts › updateTemplateRow` built stayed `{}`; PostgREST cannot emit
+`agent-identities/server/repository.ts › updateIdentityRow` built stayed `{}`; PostgREST cannot emit
 `UPDATE … SET` with no assignments, and the raw driver object thrown had no arm in
 `http-mapping.ts`, so it surfaced as a bare `INTERNAL_ERROR` 500. **The junction write that was the
 entire point of the call never ran** — a valid request lost its write and got back an error naming
 nothing. `teamIds`-only patches hit the same wall.
 
 The docblock above the query asserted *"the service never calls with one"*. It was false:
-`service-writes.ts › updateTemplate` called it unconditionally, and both upstream guards
-(`packages/mcp-server/src/tools/agent-ops-write.ts › opUpdate`, `agent-templates/schema.ts ›
+`service-writes.ts › updateIdentity` called it unconditionally, and both upstream guards
+(`packages/mcp-server/src/tools/agent-ops-write.ts › opUpdate`, `agent-identities/schema.ts ›
 UpdateTemplateSchema`) pass a KB-only patch by design.
 
 **Resolved** in two places, deliberately: the SERVICE skips the row write when no scalar is present
@@ -6513,13 +6513,13 @@ UpdateTemplateSchema`) pass a KB-only patch by design.
 along — and is why `skills` never had the bug, since it always stamps `lastEditedBy`), and the
 REPOSITORY is now TOTAL on the empty patch, reading the row back instead of writing it, so no future
 caller can rediscover this. ⚠ The read path deliberately does NOT fire
-`agent_templates_touch_updated_at`: a no-op UPDATE that bumps `updated_at` is the other thing the
+`agent_identities_touch_updated_at`: a no-op UPDATE that bumps `updated_at` is the other thing the
 old comment wanted to avoid, and it was right about that one.
 
-⚠ **The one test that ran this repro mocked `updateTemplateRow`**, so the empty body never reached
+⚠ **The one test that ran this repro mocked `updateIdentityRow`**, so the empty body never reached
 PostgREST and the suite stayed green through the outage. `repository.test.ts` runs the real function
 against a recording client, which is where the empty body is now actually observed. The service
-guard is typed as `repository.ts › UpdateTemplatePatch` so its emptiness test cannot drift from the
+guard is typed as `repository.ts › UpdateIdentityPatch` so its emptiness test cannot drift from the
 column set it is deciding about.
 
 ⚠ **Id note:** first filed as **F-340**, which is a LIVE and unrelated entry (the channel info
@@ -7053,7 +7053,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-419 — the copy-ownership fence lives ONLY in the MCP package; the REST create routes it composes over have no equivalent (2026-09-02)
 
-- Location: the MCP copy ops' shared ownership fence, spent by the two `op="copy"` handlers; the uncovered doors were `POST /api/agent-templates` and `POST /api/knowledge/bases`.
+- Location: the MCP copy ops' shared ownership fence, spent by the two `op="copy"` handlers; the uncovered doors were `POST /api/agent-identities` and `POST /api/knowledge/bases`.
 - 🔒 **DISPOSED BY DELETION, 2026-09-02 (slice B15, ruling B11 — the spec's §4 row G4 says "DELETED, not fenced", and this is that).** The copy ops, their shared resolver and both test files are gone; `op="grant"` replaces them, and the provenance field option (a) below was never built because there is no longer a client-composed create to attribute. **The gap this entry describes cannot be reached**: a grant does not create a row, so there is no second door to walk through with content you legitimately read. The ownership rule itself SURVIVED on both tiers — `grant.ts › notOwnedRefusal` and `shared/grants/service.ts › assertGrantableResource`, which is the two-layer shape §9 asks for and the thing this finding said must not be lost.
 - Found during: the same audit as F-418, immediately after the app-only-deletion fence landed (`src/shared/auth/app-only-delete-gate.test.ts`).
 - Severity: conflict, and the SAME CLASS the deletion wave just closed — a rule enforced at one layer only, where that layer is not the only door.
@@ -7156,8 +7156,8 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-437 — the scope footers now promise "any you have no grant on", and the only grant mechanism behind that phrase is a table with 5 inert rows (2026-09-02)
 
-- Location: `packages/mcp-server/src/tools/agent-shared.ts › TEMPLATES_SCOPE_NOTE`, `› knowledge-ops-read.ts › BASES_SCOPE_NOTE`, and the `"list_bases"` bullet in `› knowledge.ts`. The ledger row that REQUIRES the phrase is `› tool-scope-claims.test.ts › LEDGER` (`dopl_kb` / `list_bases`, `discloses: [… "no grant on"]`).
-- Found during: A8. The clause used to name the team axis (*"bases scoped to a team you have no grant on"*); A8 removed the axis and kept the disclosure, because the server-side filters (`filterTeamVisibleBases`, `canSeeTemplate`) still run and a footer that claimed a full census would be the exact lie that ledger exists to catch.
+- Location: `packages/mcp-server/src/tools/agent-shared.ts › IDENTITIES_SCOPE_NOTE`, `› knowledge-ops-read.ts › BASES_SCOPE_NOTE`, and the `"list_bases"` bullet in `› knowledge.ts`. The ledger row that REQUIRES the phrase is `› tool-scope-claims.test.ts › LEDGER` (`dopl_kb` / `list_bases`, `discloses: [… "no grant on"]`).
+- Found during: A8. The clause used to name the team axis (*"bases scoped to a team you have no grant on"*); A8 removed the axis and kept the disclosure, because the server-side filters (`filterTeamVisibleBases`, `canSeeIdentity`) still run and a footer that claimed a full census would be the exact lie that ledger exists to catch.
 - Severity: latent staleness, correct today. Grants exist only through `team_resource_access` — 5 rows, all inert, measured in production 2026-09-02.
 - **The shape.** When the axis is retired in the database, the phrase stops describing anything: nothing will be able to drop a row for want of a grant, and the footer will be spending characters on every read to disclose a filter that no longer exists. It will NOT fail any test — the ledger only checks the phrase is PRESENT, never that the filter still bites — so nothing catches it.
 - ⚠ **DO NOT PRE-EMPTIVELY DELETE THE PHRASE.** The filters run today. Removing the disclosure before the filter is what turns an honest footer into a false census claim, which is the direction that ledger was built to prevent.
@@ -7185,7 +7185,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Status: **resolved** — no gate change was needed, and none was made.
 ### F-440 — ✅ RESOLVED 2026-09-02 — INVARIANTS §5A stated the "Use in this channel" copy's visibility BOTH WAYS, six days apart, in one section
 
-- Location: `docs/INVARIANTS.md` §5A — the bullet *"USE IN THIS CHANNEL NOW COPIES AT `workspace`, NOT `private` (2026-08-27)"* and, nineteen bullets later in the same section, *"`visibility` IS FORCED TO `private`, NEVER CARRIED"*. The code is `src/features/agent-templates/lib/template-draft.ts › containerCopyDraft`.
+- Location: `docs/INVARIANTS.md` §5A — the bullet *"USE IN THIS CHANNEL NOW COPIES AT `workspace`, NOT `private` (2026-08-27)"* and, nineteen bullets later in the same section, *"`visibility` IS FORCED TO `private`, NEVER CARRIED"*. The code is `src/features/agent-identities/lib/identity-draft.ts › containerCopyDraft`.
 - Found during: A11 (the MCP/architecture v2 spec's G16 row — that spec is NOT in this tree, so it is named and never cited as a path), reading §5A's copy/publish semantics before adding the `acknowledgeShared` precondition.
 - Severity: doc-vs-doc, resolved in place per `CLAUDE.md` (*"INVARIANTS is wrong → fix INVARIANTS in the same change"*). **No code was touched for it.**
 - **Which side was right, measured not remembered:** `containerCopyDraft` returns `visibility: "workspace"` and says so in a docblock naming the 2026-08-27 reversal; the deleted `containerCopyDraft` block pins it. So the LATER bullet was the stale one — it survived the reversal because the reversal edited the bullet ABOVE it and nothing linked the two.
@@ -7246,23 +7246,23 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-439 — the v2 spec's A10 cell asks for G9 work that shipped on 2026-08-23, and its file list points at the wrong tree (2026-09-02)
 
-- Location: `/Users/samuelwang/Downloads/sie-v2/docs/specs/mcp-v2-architecture.md` §4 (the A10 row) and §2.4 (the G9 row), against `src/features/channels/server/service-launch-template.ts › resolveTemplateForDirective` and `dopl-desktop-app/main/template-resolve.js › resolveTemplate`.
+- Location: `/Users/samuelwang/Downloads/sie-v2/docs/specs/mcp-v2-architecture.md` §4 (the A10 row) and §2.4 (the G9 row), against `src/features/channels/server/service-launch-identity.ts › resolveIdentityForDirective` and `dopl-desktop-app/main/identity-resolve.js › resolveAgentIdentity`.
 - Found during: A10, verifying the slice's second deliverable before writing code.
 - Severity: doc/spec drift. No code defect — the measurement is that the work is DONE, not that it is broken.
-- **What the spec asks for:** *"resolve to an id at request time and store the id; the desktop stops re-resolving a name"*. **What the tree does, at `79b28242`:** the create resolves the caller's ref through the agent-templates visibility matrix and stores `template_id` plus a name SNAPSHOT (asserted by `service-launch-template.test.ts`, *"both columns or the feature does not work"*); the desktop reads CONTENT by that id and refuses anything that is not a UUID (`template-resolve.js › isTemplateId` → `ipc-guards.js › isUuid`), and E-4 refuses a nulled id beside a live name WITHOUT a resolve attempt (`test/launch-directive-template.test.mjs`). Both halves, both pinned.
-- ⚠ **THE RESIDUAL IS NOT A GAP AND MUST NOT BE "FIXED".** Content is still resolved on the DESKTOP, under the OPERATOR's credential, and that is load-bearing rather than tidy: `knowledgeBases` is viewer-filtered, so resolving content server-side at request time would attach the ORCHESTRATOR's reach to the operator's session. `template-resolve.js`'s header holds the four-reason argument. The two-fence outcome the `template` description warns about (a template the caller can see and the operator cannot ⇒ `no-template`) is therefore the DESIGN, and G9's prose remains accurate.
-- ⚠ **THE FILE LIST IS ALSO WRONG IN A WAY THAT COSTS A BUILDER TIME.** The A10 row names `repository-launch.ts`, `service-directions.ts`, `main/launch-posture.js` and `main/template-resolve.js`; the change actually needs `service-launch*.ts`, `schema-launch.ts`, `schema-direction.ts`, both repositories, the two create ROUTES, `packages/dopl-client` (both create types), and `channel-dispatch-agents.ts` — the last of which is assigned to no slice in §4's ownership table while being the only place a new `dopl_channel` param can be plumbed. See F-438 for what that gap already cost.
+- **What the spec asks for:** *"resolve to an id at request time and store the id; the desktop stops re-resolving a name"*. **What the tree does, at `79b28242`:** the create resolves the caller's ref through the agent-templates visibility matrix and stores `identity_id` plus a name SNAPSHOT (asserted by `service-launch-identity.test.ts`, *"both columns or the feature does not work"*); the desktop reads CONTENT by that id and refuses anything that is not a UUID (`identity-resolve.js › isIdentityId` → `ipc-guards.js › isUuid`), and E-4 refuses a nulled id beside a live name WITHOUT a resolve attempt (`test/launch-directive-identity.test.mjs`). Both halves, both pinned.
+- ⚠ **THE RESIDUAL IS NOT A GAP AND MUST NOT BE "FIXED".** Content is still resolved on the DESKTOP, under the OPERATOR's credential, and that is load-bearing rather than tidy: `knowledgeBases` is viewer-filtered, so resolving content server-side at request time would attach the ORCHESTRATOR's reach to the operator's session. `identity-resolve.js`'s header holds the four-reason argument. The two-fence outcome the `template` description warns about (a template the caller can see and the operator cannot ⇒ `no-identity`) is therefore the DESIGN, and G9's prose remains accurate.
+- ⚠ **THE FILE LIST IS ALSO WRONG IN A WAY THAT COSTS A BUILDER TIME.** The A10 row names `repository-launch.ts`, `service-directions.ts`, `main/launch-posture.js` and `main/identity-resolve.js`; the change actually needs `service-launch*.ts`, `schema-launch.ts`, `schema-direction.ts`, both repositories, the two create ROUTES, `packages/dopl-client` (both create types), and `channel-dispatch-agents.ts` — the last of which is assigned to no slice in §4's ownership table while being the only place a new `dopl_channel` param can be plumbed. See F-438 for what that gap already cost.
 - Proposed resolution: (a) mark G9's verdict ENFORCED with the two anchors above, and reduce the A10 cell to `client_msg_id` + `maxTurns`; (b) add `channel-dispatch-agents.ts` to the contested-file list beside `channel-schema.ts`. This log is the record; the spec is read-only from here.
 - Status: open (spec-side).
 ### F-442 — the "it lives elsewhere" classifier answered OUTSIDE the credential's own container lock (2026-09-02, A12) — ✅ RESOLVED in this change
 
-- Location: `src/features/agent-templates/server/service-resolve-ref.ts › classifyMissingTemplateRef`, as it stood at `79b28242` — it read the caller's WHOLE membership set and never looked at `ctx.apiKeyWorkspaceId`.
+- Location: `src/features/agent-identities/server/service-resolve-ref.ts › classifyMissingIdentityRef`, as it stood at `79b28242` — it read the caller's WHOLE membership set and never looked at `ctx.apiKeyWorkspaceId`.
 - Found during: A12, generalising that lane's tenancy repository into `src/shared/tenancy/resolve-resource.ts`.
 - Severity: leak, narrow — a tenancy NAME, never a row, and only over rows the caller could already list for themselves.
 - **The shape, and it is F-336's shape read backwards.** The lock answers WHICH WORKSPACE a credential may act in, and every gate that reads it as a VISIBILITY answer is the defect F-333/F-336 fixed. This is the mirror error: a lane that correctly stopped asking about VISIBILITY forgot that the lock still had a WORKSPACE claim to make. `isSharedCredential` returns `false` for `container_session` — correctly, one human is behind it — so a desktop session locked into a `kind='link'` container was classified normally, and the refusal it produced named a workspace the credential was fenced OUT of. INVARIANTS §4 step 1 says the lock *"OVERRIDES rather than merely validating"*; here a read stepped over it while every WRITE around it was refused.
 - ⚠ **NOTHING WAS 403'd AND NOTHING SHOULD HAVE BEEN.** The 404 was correct in every case; what crossed the fence was the SENTENCE attached to it, so the residual is one tenancy label reaching an agent running under a locked credential.
 - Resolution: the lock is now a clause of the one fence — `resolve-resource.ts › listContainersForCaller` narrows the candidate containers to `apiKeyWorkspaceId` when the credential carries one, so a locked credential resolves inside its lock and nowhere else. Pinned by the `container lock is honoured, and narrows` block in `src/shared/tenancy/resolve-resource.test.ts`, mutation-stated.
-- ⚠ **RESIDUE THIS CHANGE DELIBERATELY LEAVES, FOR B2.** `AgentTemplateNotFoundError.elsewhere` and its `details.elsewhere` mapping now have ONE producer (the MCP name lane) where they had two, and `dopl-desktop-app/main/template-resolve.js` still duck-types a key the desktop's own door can no longer receive. Two SPA docblocks — `apps/desktop-ui/src/pages/home/agent-panels.tsx` and `› agent-copy.tsx` — still say a personal-shelf template *"CANNOT LAUNCH INTO A CONTAINER"* because `getTemplateById` is workspace-filtered; the READ door is `readTemplateById` now and it can, so those two sentences are stale prose over correct code. Left alone on purpose: they are outside this slice's ownership and they die with the classifier.
+- ⚠ **RESIDUE THIS CHANGE DELIBERATELY LEAVES, FOR B2.** `AgentIdentityNotFoundError.elsewhere` and its `details.elsewhere` mapping now have ONE producer (the MCP name lane) where they had two, and `dopl-desktop-app/main/identity-resolve.js` still duck-types a key the desktop's own door can no longer receive. Two SPA docblocks — `apps/desktop-ui/src/pages/home/identity-panels.tsx` and `› agent-copy.tsx` — still say a personal-shelf template *"CANNOT LAUNCH INTO A CONTAINER"* because `getIdentityById` is workspace-filtered; the READ door is `readIdentityById` now and it can, so those two sentences are stale prose over correct code. Left alone on purpose: they are outside this slice's ownership and they die with the classifier.
 - Status: **resolved**; residue named above is B2's.
 
 ### F-443 — the same classifier answered for containers the caller is only a `guest` in, below the floor every template route runs at (2026-09-02, A12) — ✅ RESOLVED in this change
@@ -7270,7 +7270,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Location: the same function, and the `listWorkspaceIdsForUser` it called in agent-templates' tenancy repository, as both stood at `79b28242` — `status='active'` was checked and `role` was not.
 - Found during: A12, deciding what "a container the caller actively belongs to" has to mean once an id can be READ there and not merely named.
 - Severity: leak, narrow — same shape as F-442, different axis.
-- **The shape.** `guest` is a LINK-granted role that ranks below `viewer`, and INVARIANTS §4 records that *"guests never reach a template surface at all"* — every `agent-templates` route sits at `withWorkspaceAuth`'s `viewer` floor. An ACTIVE membership was therefore not the same fact as "may read templates here", and the classifier used the first to answer a question about the second. It could tell a guest that a `visibility='workspace'` template lives in a container whose template surface they cannot open.
+- **The shape.** `guest` is a LINK-granted role that ranks below `viewer`, and INVARIANTS §4 records that *"guests never reach a template surface at all"* — every `agent-identities` route sits at `withWorkspaceAuth`'s `viewer` floor. An ACTIVE membership was therefore not the same fact as "may read templates here", and the classifier used the first to answer a question about the second. It could tell a guest that a `visibility='workspace'` template lives in a container whose template surface they cannot open.
 - ⚠ **IT ONLY BECAME LOAD-BEARING WHEN THE ANSWER STOPPED BEING A SENTENCE.** As a label it leaked a tenancy; as A12's ADDRESS it would have been a read under the route floor — the same membership set now decides both, which is why the floor had to move into it rather than be re-stated at each door.
 - Resolution: `resolve-resource.ts › CONTAINER_READ_FLOOR` (`viewer`), applied in `listContainersForCaller` alongside `status='active'`. Pinned by the `EXCLUDES a container the caller is only a GUEST in` case in `src/shared/tenancy/resolve-resource.test.ts`.
 - ⚠ **THE FLOOR IS THE RESOLVER'S, NOT THE FEATURE'S**, and it is a constant rather than a parameter on purpose: a caller that could pass its own floor is a caller that can pass `guest`.
@@ -7391,7 +7391,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Location: `src/features/channels/server/service-launch-agent.test.ts` › *"reuses the LAUNCH TTL rather than minting a second liveness number"*.
 - Found during: the Wave A review fixes, running `src/features/channels` — it failed with `expected 120001 to be less than or equal to 120000` and passed on an immediate isolated re-run.
 - **THE SHAPE.** The case takes `const before = Date.now()`, calls the service, and asserts `Date.parse(insert.expires_at) - before <= LAUNCH_DIRECTIVE_TTL_MS`. But the service takes its OWN `Date.now()` after that one (`service-launch-agent.ts`, and `service-launch.ts › createLaunchDirective` does the same), so the stored expiry is `serviceNow + TTL` and the measured delta is `TTL + (serviceNow − before)`. **Any millisecond that elapses between the two clock reads fails it.** The lower bound is slack by 5,000 ms; the upper bound has none at all.
-- ⚠ **IT IS NOT ON THE KNOWN-FLAKE LIST.** The wave doc names five (`credits/consume`, `shared/version/latest-release`, `login-form-core`, `agent-authoring`, `billing/credits-link-reroute`) and reports "no flake was hit"; this is a sixth, and unlike the others it fails on machine SPEED rather than on ordering, so it will show up more often in CI than locally.
+- ⚠ **IT IS NOT ON THE KNOWN-FLAKE LIST.** The wave doc names five (`credits/consume`, `shared/version/latest-release`, `login-form-core`, `identity-authoring`, `billing/credits-link-reroute`) and reports "no flake was hit"; this is a sixth, and unlike the others it fails on machine SPEED rather than on ordering, so it will show up more often in CI than locally.
 - ⚠ **THE FIX IS NOT "ADD SLACK TO THE UPPER BOUND"** — that would make the assertion unable to catch a second, longer TTL, which is the whole thing it exists to pin. Inject the clock (both services already take an optional `now`, which is how `service-launch-ceiling.test.ts` drives them) and assert the expiry EXACTLY.
 - Proposed resolution: pass a fixed `now` into `createAgentDirective` from this case and assert `Date.parse(insert.expires_at) === NOW + LAUNCH_DIRECTIVE_TTL_MS`. Left unfixed here because it is outside the 26 findings this pass was scoped to, and a flake fixed in passing is a flake nobody counts.
 - Status: RESOLVED 2026-09-02 (A14). The clock is pinned and the expiry asserted EXACTLY — `expect(Date.parse(insert.expires_at)).toBe(NOW + LAUNCH_DIRECTIVE_TTL_MS)` — so both bounds collapse to one and neither carries slack. ⚠ **THE PROPOSED RESOLUTION'S PREMISE WAS WRONG AND IS CORRECTED HERE**: neither `createAgentDirective` nor `service-launch.ts › createLaunchDirective` takes an optional `now`, and `service-launch-ceiling.test.ts` asserts on no timestamp at all — it drives nothing with a clock. With no injection point and the fix scoped to the one test file, `vi.useFakeTimers({ toFake: ["Date"] })` freezes `Date` alone (timers stay real) and the presence stub is re-stamped under it. One assertion of this shape in the file; no others.
@@ -7429,12 +7429,12 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-463 — `TeamResourceType` names four types, `resource_grants` accepts five, and only one of them may widen (2026-09-02)
 
-- Location: `src/features/teams/access-levels.ts › TeamResourceType` (knowledge_base | chat | chat_folder | skill) against `supabase/migrations/20260914120000_resource_grants.sql`'s `resource_type` CHECK (those four plus `agent_template`).
+- Location: `src/features/teams/access-levels.ts › TeamResourceType` (knowledge_base | chat | chat_folder | skill) against `supabase/migrations/20260914120000_resource_grants.sql`'s `resource_type` CHECK (those four plus `agent_identity`).
 - Found during: B1, folding `agent_template_teams` into the shared table.
 - Severity: **a contract that must NOT be unified, stated so nobody unifies it.** `20260822200000` §2 split the template junction off the polymorphic table precisely to avoid widening this union (F-277), and that reasoning survives the fold.
-- **Why.** `TeamResourceType` has four consumers outside the teams lane — `teams/server/repository-resources.ts › RESOURCE_TABLES` (a `satisfies Record<TeamResourceType, …>` assuming every member has an `access_mode` column; `agent_templates` has `visibility` instead), `listTeamsModeResources`, `members/components/member-bits.tsx › RESOURCE_META`, and the hand-copied mirror in `packages/mcp-server/src/tools/members-render.ts`. A grant row of an unmodelled type reaching the members access matrix renders through an undefined lookup.
-- **Why it is safe as it stands.** The template rows never reach those consumers: `repository-grants.ts` filters `resource_type` on every statement, and the template links are read by `agent-templates/server/repository.ts › listTeamLinksForTemplates` alone. The DB accepts five; each lane asks about its own.
-- Proposed resolution: leave both. If `agent_template` must ever join the union, the same change has to teach all four consumers — that is the work item, not the type edit.
+- **Why.** `TeamResourceType` has four consumers outside the teams lane — `teams/server/repository-resources.ts › RESOURCE_TABLES` (a `satisfies Record<TeamResourceType, …>` assuming every member has an `access_mode` column; `agent_identities` has `visibility` instead), `listTeamsModeResources`, `members/components/member-bits.tsx › RESOURCE_META`, and the hand-copied mirror in `packages/mcp-server/src/tools/members-render.ts`. A grant row of an unmodelled type reaching the members access matrix renders through an undefined lookup.
+- **Why it is safe as it stands.** The template rows never reach those consumers: `repository-grants.ts` filters `resource_type` on every statement, and the template links are read by `agent-identities/server/repository.ts › listTeamLinksForIdentities` alone. The DB accepts five; each lane asks about its own.
+- Proposed resolution: leave both. If `agent_identity` must ever join the union, the same change has to teach all four consumers — that is the work item, not the type edit.
 - Status: closed as recorded.
 
 ### F-464 — the generated `types.ts` still declares a table this wave dropped (2026-09-02)
@@ -7511,10 +7511,10 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-471 — /home's scope-C caption still describes a restriction ruling #18 removed (2026-09-02)
 
-- Location: `apps/desktop-ui/src/pages/home/agent-panels.tsx` (the scope-C section caption) and the deleted /home copy dialog (B15) (the "Use in this channel" affordance).
+- Location: `apps/desktop-ui/src/pages/home/identity-panels.tsx` (the scope-C section caption) and the deleted /home copy dialog (B15) (the "Use in this channel" affordance).
 - Found during: B2, correcting the INVARIANTS bullet that claimed a home-workspace template cannot launch into a home channel.
 - **THE SHAPE.** The caption — *"Yours alone. Use one here to make a copy in this channel."* — is the operator-facing statement of a 404 that no longer happens. Both launch lanes follow an id now, so a scope-C template launches into a container directly; the copy is a workaround for a restriction that is gone, and it still costs a divergent snapshot (no FK, no sync) plus a dropped KB list every time it is used.
-- ⚠ **THE COPY MACHINERY IS NOT THIS FINDING'S TO DELETE.** `lib/template-draft.ts › containerCopyDraft` and the deleted /home copy dialog (B15) are named in Wave B's B15 (`v2/b-copies-off`), which removes the copy ops wholesale. Deleting them here would take a file that slice owns.
+- ⚠ **THE COPY MACHINERY IS NOT THIS FINDING'S TO DELETE.** `lib/identity-draft.ts › containerCopyDraft` and the deleted /home copy dialog (B15) are named in Wave B's B15 (`v2/b-copies-off`), which removes the copy ops wholesale. Deleting them here would take a file that slice owns.
 - ⚠ **AND THE CAPTION IS UI COPY**, which this tree treats as a ruling surface rather than a refactor. It is recorded rather than rewritten.
 - Proposed resolution: B15 deletes the affordance; whoever lands it rewrites the caption in the same change, or the pane keeps explaining a workaround for a problem the product no longer has.
 
@@ -7528,13 +7528,13 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Proposed resolution (B13, one commit): repoint `revokeContainerTokens` onto `container_id`, delete `legacyAxes` + `LEGACY_AXIS_COLS` + `axisColumnsPresent` + the 42703 retry, delete `issueContainerToken`'s two legacy lines, then a migration dropping `mcp_tokens_axes_agree_check`, `workspace_lock_kind`, `workspace_id` and `mcp_tokens_workspace_idx` — code first, columns last.
 - Status: OPEN — deliberate one-release debt, owned by B13.
 
-### F-481 — the Wave B spec names `service-launch.ts` for this slice's lock reads; they are in `service-launch-template.ts` (2026-09-02)
+### F-481 — the Wave B spec names `service-launch.ts` for this slice's lock reads; they are in `service-launch-identity.ts` (2026-09-02)
 
-- Location: `src/features/channels/server/service-launch-template.ts › resolveTemplateForDirective` — the only place in `features/channels` that forwards a credential axis into another feature's visibility matrix. `service-launch.ts` reads neither axis.
+- Location: `src/features/channels/server/service-launch-identity.ts › resolveIdentityForDirective` — the only place in `features/channels` that forwards a credential axis into another feature's visibility matrix. `service-launch.ts` reads neither axis.
 - Found during: wave B slice B3, resolving the slice's ownership row against the tree.
 - **WHY IT MATTERS AND WHY IT IS NOT A CODE BUG.** The ownership rows in the Wave B spec — which lives on the `v2/wave-b-plan` branch and is deliberately not a file on this one — are what keeps parallel slices off each other's files; a row naming the wrong file is a collision the branch protocol cannot see. The code is correct as written — the forward belongs beside the ref resolution, not beside the directive create.
 - Proposed resolution: correct the B3 row's `Owns` column at integration. No code change.
-- Status: **RESOLVED 2026-09-02** at the Wave B batch-1 integration. The spec's B3 `Owns` column now names `src/features/channels/server/service-launch-template.ts` (`docs/specs/mcp-v2-wave-b.md` §5, batch 1), which is where the credential-axis forward really is; `service-launch.ts` reads neither axis and is no longer claimed by that slice. No code change, which is the whole finding.
+- Status: **RESOLVED 2026-09-02** at the Wave B batch-1 integration. The spec's B3 `Owns` column now names `src/features/channels/server/service-launch-identity.ts` (`docs/specs/mcp-v2-wave-b.md` §5, batch 1), which is where the credential-axis forward really is; `service-launch.ts` reads neither axis and is no longer claimed by that slice. No code change, which is the whole finding.
 
 ### F-490 — the wave-B spec calls `src/shared/channels/caps.ts` "A7's module" and it did not exist (2026-09-02)
 
@@ -7717,7 +7717,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - **THERE IS NONE.** No `pglite`, no `pg-mem`, no `pg` client, no `DATABASE_URL` anywhere in the tree (re-derive: `grep -rn 'pglite\|pg-mem\|DATABASE_URL' --include='*.ts' --include='*.json' src packages apps scripts`). The only database client is `@supabase/supabase-js` over PostgREST, and `vitest.setup.ts` states the intent plainly: *"Real DB hits aren't expected"*. So a policy assertion can prove the rule is WRITTEN once and names every arm; it cannot prove Postgres AGREES.
 - ⚠ **THE LIVE HALF HAS NEVER RUN.** It drives the real `callerScopedClient` against a local stack and is `describe.skipIf`-ed off unless `RLS_REDTEAM_LIVE=1`; Docker is down on this machine (`docker info` fails), so `supabase start` could not run. That is a measurement about this machine, not a claim about the tree.
 - ⚠ **AND IT ESTABLISHES A CONVENTION THE REPO DID NOT HAVE**: before this file there were ZERO `describe.skip` / `it.skip` / `.skipIf` in `src/`, `packages/*/src` or `apps/*/src`. The repo's habit for "could not run" was prose in a doc. A skipped test is better — it runs the day the environment exists — but it is a new habit and the next slice should follow it rather than invent a third.
-- Proposed resolution: run the live half once against `supabase start` before the flag is turned on anywhere, and record the run (command + date) in the slice that flips it. B12 inherits the same shape for `skills` / `agent_templates` / `chats`.
+- Proposed resolution: run the live half once against `supabase start` before the flag is turned on anywhere, and record the run (command + date) in the slice that flips it. B12 inherits the same shape for `skills` / `agent_identities` / `chats`.
 - Status: open.
 
 ### F-524 — the AGENT AUDIENCE CEILING is not expressible as a policy, so the slice that deletes `canSeeBase` must not delete it (2026-09-02)
@@ -7788,9 +7788,9 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Resolution owed, OUTSIDE THIS SLICE'S OWNERSHIP: `findMemberWorkspaceBySlug` should compose `isStandardWorkspace` on `matches`, which closes it for both kinds in one line. `workspaces/server/repository.ts` belongs to **B14** (`v2/b-default-workspace-off`) — recorded as a cross-slice request rather than taken here.
 - Status: RESOLVED 2026-09-02 at the batch-2 integration. `findMemberWorkspaceBySlug` filters `isStandardWorkspace` before matching the slug — the POSITIVE form (§4A, F-295), so it closes `link` and `personal` together and every kind after them. ⚠ Taken by the INTEGRATOR rather than by B14 because it is one line, it is safe with the migration unapplied, and B14 is batch 3: leaving it would mean minting a kind whose only fence is a slice that has not run.
 
-### F-562 — `agent-templates/server/repository.ts` sits at 493 of the 500-line cap (2026-09-02)
+### F-562 — `agent-identities/server/repository.ts` sits at 493 of the 500-line cap (2026-09-02)
 
-- Location: `src/features/agent-templates/server/repository.ts`. Re-derive, never quote: `wc -l`.
+- Location: `src/features/agent-identities/server/repository.ts`. Re-derive, never quote: `wc -l`.
 - Found during: B11's dual-write, which pushed the file to 504 and had to be trimmed back rather than shipped.
 - The file already has its split seams marked — three `// ───` sections (Templates · Team links · Knowledge-base attachments) — and the house move at the cap is the one `service-base-gates.ts` made on 2026-09-02: lift a section into a sibling and re-export, exactly as `knowledge/server/repository.ts` is already a barrel over five. Not taken in B11 because **B15** deletes part of this file's shelf lane in batch 3 and a split then would have landed under its feet.
 - Status: RESOLVED 2026-09-02 at the batch-2 integration, and it was FORCED rather than chosen: B11's dual-write and B12's `readClient()` both landed in this file, taking it to 515 and turning the root lint's `max-lines` red. Knowledge-base attachments lifted to `repository-knowledge-links.ts` (142 lines) and re-exported; `repository.ts` is 402. ⚠ The section chosen is the one B15 does NOT touch — the shelf lane stays in `repository.ts`, so batch 3's deletion still lands where its slice expects it.
@@ -7810,7 +7810,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **THIS IS F-295's MIRROR IMAGE, NOT A REPEAT OF IT.** F-295 flipped the LISTING predicate positive so a new kind is kept OUT of the rail; these sites read that same predicate's NEGATION as a positive claim ("therefore a home channel"), so a new kind is silently pulled IN. Fixing one direction never fixed the other, and only a third kind could show it.
 - ⚠ **NOT REACHABLE TODAY** — `20260920120000` is unapplied, so no `personal` row exists anywhere. It becomes reachable the moment that migration runs, and it is a MISLABEL rather than a leak: a personal container advertised as a home channel is the caller's own container, listed to its only member.
 - Resolution, COMPLETE 2026-09-02 at the batch-3 integration: each remaining site asks `kind === "link"` positively, or is declared a FENCE. **B13** repointed `server.ts`, `meta-tools.ts` and `factory.ts` at `packages/mcp-server/src/workspace-directory.ts › containerKind` and deleted its home-scopes module with `dopl_home`; **B15** deleted its copy-target module with the copy ops; **B14** repaired the one fence; **the integration** closed `packages/mcp-server/src/tools/confirm-token.ts › resolveConfirmTarget`, which was in no slice's `Owns` column and was saved only by a member-count term a one-member personal container happens to fail — correct by accident is not correct.
-- ⚠ **B15 ALSO FIXED A NINTH SITE THE GATE COULD NOT SEE** (2026-09-02): `agent-templates/server/service-resolve-ref.ts › tenancyLabel` read the `home_scoped` BOOLEAN first and fell through to `!== "standard"`, so the boolean HID the defect — every personal container would have rendered as "a home channel of yours, container <id>" the moment the column dropped. It reads `containerKind === "personal"` now. **A gate that scans for a predicate cannot see a site the predicate is not reached at**; the drop of `home_scoped` is what made this one reachable and visible in the same change.
+- ⚠ **B15 ALSO FIXED A NINTH SITE THE GATE COULD NOT SEE** (2026-09-02): `agent-identities/server/service-resolve-ref.ts › tenancyLabel` read the `home_scoped` BOOLEAN first and fell through to `!== "standard"`, so the boolean HID the defect — every personal container would have rendered as "a home channel of yours, container <id>" the moment the column dropped. It reads `containerKind === "personal"` now. **A gate that scans for a predicate cannot see a site the predicate is not reached at**; the drop of `home_scoped` is what made this one reachable and visible in the same change.
 - Recorded 2026-09-02 at the batch-2 integration, in the two places an operator would look: the migration's own header (a ⚠⚠ block naming the `grep`, the two acceptable fixes and `confirm-token.ts`'s missing owner) and the wave doc's *"Migrations pending — apply order"* section. The CODE fix is still batch 3's.
 - ⚠ **THE COUNT AND THE COMMAND DISAGREED, AND BOTH ARE REPLACED BY A GATE (2026-09-02, in the batch-2 review).** This entry, the migration header and `@dopl/contracts › WorkspaceKind` all said EIGHT and all told the reader to `grep -rn '!isStandardWorkspace'` — **which answers FOUR**, because half the sites are the ELSE BRANCH of a ternary or an early return and a negation grep sees neither shape. A precondition on an unapplied migration was therefore prose with no way to check it, carrying a number nobody could reproduce. `src/features/workspaces/home-channel-derivation.test.ts` scans all three shapes across all three trees, holds each FILE's disposition (which slice repoints or deletes it), and fails in BOTH directions — a new site, or a fixed one whose record did not leave with it. It also found one the list omits: `src/features/workspaces/server/authz.ts › assertMemberAddable`, where the REFUSAL is right for a personal container and the SENTENCE names the wrong kind.
 - 🔒 **THE GATE'S OPEN MAP IS DELETED, AND THAT DELETION IS THE SIGN-OFF.** `home-channel-derivation.test.ts` now declares only `FENCE_SITES` and asserts the scan EQUALS it, so the property that still earns the file is the inverse one: a new site added tomorrow fails. The migration's header records that a precondition existed and was met, rather than saying nothing — an operator who finds no mention cannot tell "met" from "skipped".
@@ -7818,11 +7818,11 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-570 — the SELECT policies on skills, chats and agent_templates were WIDER than their TS predicates, in four named ways (2026-09-02)
 
-- Location: `supabase/migrations/20260720211005_rls_pin_workspace_member_and_initplan.sql`, `20260916120000_drop_team_resource_access.sql`, `20260915120000_drop_agent_template_teams.sql` (the pre-images); `src/features/skills/server/service-shared.ts › canSeeSkill`, `src/features/chats/server/service-shared.ts › canSeeChat`, `src/features/agent-templates/server/service-shared.ts › canSeeTemplate`.
+- Location: `supabase/migrations/20260720211005_rls_pin_workspace_member_and_initplan.sql`, `20260916120000_drop_team_resource_access.sql`, `20260915120000_drop_agent_template_teams.sql` (the pre-images); `src/features/skills/server/service-shared.ts › canSeeSkill`, `src/features/chats/server/service-shared.ts › canSeeChat`, `src/features/agent-identities/server/service-shared.ts › canSeeIdentity`.
 - Found during: Wave B B12, comparing each predicate against the replayed final policy body before moving its reads.
-- **THE FOUR GAPS.** (1) `skills_member_select` was `is_current_workspace_member(ws,'viewer') AND (visibility='public' OR created_by=auth.uid())` — no **SHARED CREDENTIAL** arm, so a credential standing for nobody in particular read the minter's private skills (M-10/F-336, `canSeeSkill` arm 2). (2) The same policy said nothing about **`access_mode='teams'`**, so a skill narrowed to one team was readable by every viewer; `20260708150001` recorded that in a comment — *"team scoping [is] enforced in the service"* — which was true while the service was the only reader. (3) `chats_member_select` led with a **blanket `is_current_workspace_member(ws,'admin')`**, so a workspace admin read every PRIVATE transcript; `canSeeChat` returns false for `visibility !== "public"` before its admin arm. (4) `chats_owner_select` was an **unfenced `owner_id = auth.uid()`** — no membership floor, no credential axis — and a fifth, adjacent: `can_current_user_read_agent_template()` carried five of `canSeeTemplate`'s six arms and omitted arm 2.
+- **THE FOUR GAPS.** (1) `skills_member_select` was `is_current_workspace_member(ws,'viewer') AND (visibility='public' OR created_by=auth.uid())` — no **SHARED CREDENTIAL** arm, so a credential standing for nobody in particular read the minter's private skills (M-10/F-336, `canSeeSkill` arm 2). (2) The same policy said nothing about **`access_mode='teams'`**, so a skill narrowed to one team was readable by every viewer; `20260708150001` recorded that in a comment — *"team scoping [is] enforced in the service"* — which was true while the service was the only reader. (3) `chats_member_select` led with a **blanket `is_current_workspace_member(ws,'admin')`**, so a workspace admin read every PRIVATE transcript; `canSeeChat` returns false for `visibility !== "public"` before its admin arm. (4) `chats_owner_select` was an **unfenced `owner_id = auth.uid()`** — no membership floor, no credential axis — and a fifth, adjacent: `can_current_user_read_agent_identity()` carried five of `canSeeIdentity`'s six arms and omitted arm 2.
 - ⚠ **NONE WAS A LIVE LEAK, AND THAT IS THE POINT** — the same sentence F-520 ends on. Every read went through `supabaseAdmin()`, so no policy ran. These are the shapes that become leaks the instant a read moves off the service role, which is what this slice does.
-- ⚠ **GAP 3 WAS DELIBERATE AND IS OVERRULED BY B5, NOT BY OPINION.** `20260916120000`'s probe P2 records the blanket admin arm as intended ("the arm this policy has always had — unchanged"), and `20260915120000` calls `agent_templates` "tighter than `chats_member_select` on purpose". Ruling B5 asks the policy to EQUAL the predicate; the templates policy had already made exactly this correction, and its own comment explains why moving an admin arm out of the team branch is a widening.
+- ⚠ **GAP 3 WAS DELIBERATE AND IS OVERRULED BY B5, NOT BY OPINION.** `20260916120000`'s probe P2 records the blanket admin arm as intended ("the arm this policy has always had — unchanged"), and `20260915120000` calls `agent_identities` "tighter than `chats_member_select` on purpose". Ruling B5 asks the policy to EQUAL the predicate; the templates policy had already made exactly this correction, and its own comment explains why moving an admin arm out of the team branch is a widening.
 - Status: RESOLVED 2026-09-02 by `supabase/migrations/20260921120000_rls_phase2_policies.sql`. Each rule is stated once — `dopl_skill_readable()`, `dopl_chat_readable()`, the shared `dopl_public_teams_admits()` — and the policies call it; the template function is replaced in place, so no policy moves. Mutation-verified in six directions by the four redteam suites. ⚠ **NEVER APPLIED** — Docker is down on this machine, replay owed with the rest of Wave B's.
 
 ### F-571 — a child policy that restates its parent's matrix is where the fence goes stale (2026-09-02)
@@ -7838,7 +7838,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 - Location: `src/features/teams/server/repository-resources.ts` and `src/features/teams/server/service.ts` (both `.from("knowledge_bases")` + `.from("skills")`), `src/features/teams/server/repository-grants.ts` (`resource_grants`).
 - Found during: Wave B B12, sweeping for readers of the phase-2 tables outside the slice's ownership.
-- **WHAT IT MEANS.** Phases 1–2 moved the read paths in `knowledge/`, `skills/`, `agent-templates/` and `chats/`. The teams sharing surface reads the SAME rows through its own repository and still does so as the service role, so with the flag ON the tree has one table read two ways: caller-scoped from its owning feature, service-role from `teams/`. That is not a leak the flag introduces — it is today's behaviour, unchanged — but it is the exact residue F-521's unwritten lint rule exists to make visible.
+- **WHAT IT MEANS.** Phases 1–2 moved the read paths in `knowledge/`, `skills/`, `agent-identities/` and `chats/`. The teams sharing surface reads the SAME rows through its own repository and still does so as the service role, so with the flag ON the tree has one table read two ways: caller-scoped from its owning feature, service-role from `teams/`. That is not a leak the flag introduces — it is today's behaviour, unchanged — but it is the exact residue F-521's unwritten lint rule exists to make visible.
 - ⚠ Not fixed here: `teams/server/**` is in no slice's `Owns` column in `docs/specs/mcp-v2-wave-b.md` §5, and a cross-slice edit to a fence is how two branches disagree about one policy.
 - Proposed resolution: fold into B16 with the TS-predicate deletions, or give `teams/` a row of its own in batch 3; either way it lands with the Phase 0 lint rule (F-521) that would have found it.
 - Status: open.
@@ -7992,7 +7992,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Location: `shared/tenancy/personal-container.ts › resolveShelfScope`, against `supabase/migrations/20260920120000_workspace_kind_personal.sql` §5. Re-derive: `grep -n "personalContainerWritesEnabled" src/shared/tenancy/personal-container.ts`.
 - Found during: the wave-B batch-1/2 review.
 - **THE SHAPE, AND IT IS A WINDOW RATHER THAN A STATE.** The migration and the deploy move independently, which the module's own 2x2 says. In the cell *(containers minted, flag still OFF)* — the cell every deployment passes through, for as long as the operator wants — **every new personal row lands in `W`**, and the one-time move in §5 has already run and never runs again. The read then branched on the flag: ON meant `C` ALONE. **So flipping the flag hid every row written in that window** — no error, no log, a personal shelf that silently lost the last N days of work, and nothing anywhere that could notice. The module's claim that *"flipping ON is safe because the migration already moved the existing rows"* was true only of the rows that existed at migration time.
-- Resolution: **the READ stops asking the flag.** `home_scoped` is not cleared by the move (the migration says *"the column still carries the truth"* and the write path never touches it), so every personal row carries it wherever it lives and one predicate over both containers finds all of them. The alternative — re-running the move at flip time — is a migration that has to be scheduled against a flag flip; this is one extra element in a `WHERE … IN (…)`. It does not widen: both arms keep `home_scoped`, `C` has one member, and another member's `home_scoped` row in `W` is still refused by `canSeeBase`/`canSeeTemplate` — this module answers WHERE, never WHO.
+- Resolution: **the READ stops asking the flag.** `home_scoped` is not cleared by the move (the migration says *"the column still carries the truth"* and the write path never touches it), so every personal row carries it wherever it lives and one predicate over both containers finds all of them. The alternative — re-running the move at flip time — is a migration that has to be scheduled against a flag flip; this is one extra element in a `WHERE … IN (…)`. It does not widen: both arms keep `home_scoped`, `C` has one member, and another member's `home_scoped` row in `W` is still refused by `canSeeBase`/`canSeeIdentity` — this module answers WHERE, never WHO.
 - ⚠ `personalContainerReadsEnabled` is renamed `personalContainerWritesEnabled`, because moving writes is now the only thing it decides. The ENV VAR is unchanged: it is a deploy contract.
 - Status: FIXED. The rollback property is now pinned in BOTH directions — what ON writes OFF reads (already there), and what OFF writes ON reads (the half that was false). Four cases red on revert across `personal-container.test.ts` and `personal-shelf-repositories.test.ts`.
 
@@ -8040,11 +8040,11 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Resolution: renamed to `scripts/smoke.js` — the file is an Electron entry point and its NAME was the whole defect. `npm run smoke` and the three docs that name it move with it. Bare `node --test` is now 3,016 / 0.
 - Status: FIXED.
 
-### F-600 — the spec's B15 line count treats `template-draft.ts` as a copy file, and 250 of its 296 lines are the shared editor draft (2026-09-02, RULED)
+### F-600 — the spec's B15 line count treats `identity-draft.ts` as a copy file, and 250 of its 296 lines are the shared editor draft (2026-09-02, RULED)
 
-- Location: `docs/specs/mcp-v2-wave-b.md` §5 row **B15** — *"delete the copy ops (681 MCP lines + 490 draft/UI)"* — against `src/features/agent-templates/lib/template-draft.ts` and the deleted /home copy dialog (B15).
+- Location: `docs/specs/mcp-v2-wave-b.md` §5 row **B15** — *"delete the copy ops (681 MCP lines + 490 draft/UI)"* — against `src/features/agent-identities/lib/identity-draft.ts` and the deleted /home copy dialog (B15).
 - Found during: B15, at the first read of the files the row names.
-- **THE SHAPE.** The MCP half is exact: 377 + 138 + 166 = **681**, and all three files went. The UI half counts two WHOLE files, and only one of them is a copy file. the deleted /home copy dialog (B15) is 194 lines of copy dialog and went whole; `template-draft.ts` is 296 lines of which `containerCopyDraft` plus its docblock is ~46 — the other 250 are `TemplateDraft`, `emptyDraft`, `draftFromTemplate`, `cleanFields`, `isDraftSavable`, `draftToCreateBody`, `draftToPatchBody`, `isEmptyPatch` and `optimisticTemplate`, imported by `template-editor.tsx`, `agent-editor.tsx` and `agent-templates-core.tsx`. **Deleting the file deletes the template editor.**
+- **THE SHAPE.** The MCP half is exact: 377 + 138 + 166 = **681**, and all three files went. The UI half counts two WHOLE files, and only one of them is a copy file. the deleted /home copy dialog (B15) is 194 lines of copy dialog and went whole; `identity-draft.ts` is 296 lines of which `containerCopyDraft` plus its docblock is ~46 — the other 250 are `IdentityDraft`, `emptyDraft`, `draftFromIdentity`, `cleanFields`, `isDraftSavable`, `draftToCreateBody`, `draftToPatchBody`, `isEmptyPatch` and `optimisticIdentity`, imported by `template-editor.tsx`, `identity-editor.tsx` and `agent-identities-core.tsx`. **Deleting the file deletes the template editor.**
 - ⚠ **A COUNT IS NOT A SCOPE, AND THIS IS THE SECOND TIME IN THIS WAVE A WHOLE-FILE FIGURE READ AS AN INSTRUCTION** — `docs/specs/mcp-v2-wave-b.md`'s own header already warns that its numbers are quoted rather than re-derived (F-422).
 - Resolution: **`containerCopyDraft` deleted, the module kept.** ~240 UI lines went, not 490, and the wave doc's batch-3 row now says which. The spec is the loser of this disagreement (CLAUDE.md's precedence: code > INVARIANTS > a spec's arithmetic), and it is corrected rather than followed.
 - Status: RULED — deviation taken deliberately and recorded here and in `docs/MCP-V2-WAVE-B-BATCH2-2026-09-02.md`.
@@ -8053,7 +8053,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 - Location: `docs/INVARIANTS.md` §10 — *"THERE IS NO `op="share"`, DELIBERATELY. A template has no grant table, so sharing into a container IS `visibility: "workspace"` on `op="update"`"* (Samuel's ruling, 2026-08-27).
 - Found during: B15, adding `dopl_agent(op="grant")`.
-- **THE SHAPE.** The ruling's PREMISE died in B1: `20260914120000_resource_grants.sql` accepts `resource_type='agent_template'` and `enforce_resource_grant()` has an arm for it. The ruling's ARGUMENT — *"a second verb would be two doors onto one write"* — also stops holding once the shelf is a container: `visibility: "workspace"` on a row in the caller's PERSONAL container reaches an audience of one, so the two verbs are no longer one write. `visibility` says who inside THIS container may use the identity; a grant lends the row to a scope somewhere else.
+- **THE SHAPE.** The ruling's PREMISE died in B1: `20260914120000_resource_grants.sql` accepts `resource_type='agent_identity'` and `enforce_resource_grant()` has an arm for it. The ruling's ARGUMENT — *"a second verb would be two doors onto one write"* — also stops holding once the shelf is a container: `visibility: "workspace"` on a row in the caller's PERSONAL container reaches an audience of one, so the two verbs are no longer one write. `visibility` says who inside THIS container may use the identity; a grant lends the row to a scope somewhere else.
 - ⚠ **THE COLLISION IS WHY THIS IS A FINDING AND NOT A SILENT ADDITION.** A ruling is not overturned by a slice; what happened is that the fact it rested on changed, twice, in the same wave.
 - Resolution: `op="grant"` shipped, and the §10 bullet now says both things — the two verbs, and which question each answers. **If Samuel wants the single-door rule back, the reversal is deleting the op and its two handlers; `visibility: "workspace"` on a personal-container row would then reach nobody, which is the state the ruling did not anticipate.**
 - Status: RESOLVED, with the ruling's collision recorded rather than papered over.
@@ -8083,12 +8083,12 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-604 — a grant is RECORDED and does not yet make the row appear in the target's list (2026-09-02)
 
-- Locations: `src/features/agent-templates/server/service-shared.ts › canSeeTemplate`, `src/features/knowledge/server/service-shared.ts › canSeeBase`, and their RLS twins.
+- Locations: `src/features/agent-identities/server/service-shared.ts › canSeeIdentity`, `src/features/knowledge/server/service-shared.ts › canSeeBase`, and their RLS twins.
 - Found during: B15, building the op that replaced the copy ops.
-- 🔒 **THE SHAPE, AND IT IS THE ONE INCOMPLETE SEAM IN THIS SLICE.** A lent row still lives in the grantor's container and is `private` + created-by-them. In the TARGET container the reading member hits `canSeeTemplate`'s arm 4 (*private → nobody else, admins included*) and the row is not listed. So `op="grant"` and the /home "Share into this channel" control write a correct row that nothing reads yet.
-- ⚠ **WHY THE READ HALF WAS NOT BUILT HERE.** It is a new arm on a visibility matrix that is *"ONE RULE WRITTEN TWICE"* (§5A) — the predicate and `agent_templates_member_select` must move together, and the pair is proved by the per-table redteam suites B12 owns and the gate B7 shipped. Adding an arm to a predicate this slice does not own, whose twin lives in another slice's unapplied migration, is the drift shape §5A exists to warn about.
+- 🔒 **THE SHAPE, AND IT IS THE ONE INCOMPLETE SEAM IN THIS SLICE.** A lent row still lives in the grantor's container and is `private` + created-by-them. In the TARGET container the reading member hits `canSeeIdentity`'s arm 4 (*private → nobody else, admins included*) and the row is not listed. So `op="grant"` and the /home "Share into this channel" control write a correct row that nothing reads yet.
+- ⚠ **WHY THE READ HALF WAS NOT BUILT HERE.** It is a new arm on a visibility matrix that is *"ONE RULE WRITTEN TWICE"* (§5A) — the predicate and `agent_identities_member_select` must move together, and the pair is proved by the per-table redteam suites B12 owns and the gate B7 shipped. Adding an arm to a predicate this slice does not own, whose twin lives in another slice's unapplied migration, is the drift shape §5A exists to warn about.
 - ⚠ **THE `channel` × `knowledge_base` LANE IS THE EXCEPTION AND ALREADY WORKS**: `knowledge/server/repository-audience.ts` reads the channel grants directly, which is why the /home Knowledge pane's SHARED section has always listed granted bases. Nothing else does.
-- Resolution, TAKEN 2026-09-02 at the batch-3 integration (not B16 — B16 deferred the `canSee*` unification itself, F-650, so the arm was added to the two predicates as they stand). **Both halves in one change**: `src/shared/tenancy/resource-grant-reach.ts › grantedResourceIds` is the TS lookup, `20260923140000_grant_read_arm.sql › dopl_grant_admits()` is the SQL twin, and it is OR-ed onto a CLOSED membership group in `dopl_knowledge_base_readable()` and `can_current_user_read_agent_template()`. No policy moves, so the pair gate keeps finding its twins — the payoff of having made each matrix a function.
+- Resolution, TAKEN 2026-09-02 at the batch-3 integration (not B16 — B16 deferred the `canSee*` unification itself, F-650, so the arm was added to the two predicates as they stand). **Both halves in one change**: `src/shared/tenancy/resource-grant-reach.ts › grantedResourceIds` is the TS lookup, `20260923140000_grant_read_arm.sql › dopl_grant_admits()` is the SQL twin, and it is OR-ed onto a CLOSED membership group in `dopl_knowledge_base_readable()` and `can_current_user_read_agent_identity()`. No policy moves, so the pair gate keeps finding its twins — the payoff of having made each matrix a function.
 - ⚠ **THREE DECISIONS INSIDE THE ARM, EACH RECORDED WHERE IT IS MADE.** (1) It sits BELOW the shared-credential refusal: a credential standing for nobody has no membership of the granted scope to read the grant through. (2) It sits ABOVE the `private` refusal: a lent row IS private, so anywhere lower it would be unreachable. (3) `scope_type='team'` returns FALSE from the helper — that axis is already `dopl_teams_mode_visible()`'s, and two rules for one grant is how the second rots.
 - ⚠ **LEVEL IS TWO VOCABULARIES**: a `container` grant admits at `read` and at `edit`; a `channel` grant admits only at `visible`, because `agent_only` names no HUMAN audience. That is the same split `resource_grants_member_select` makes about the grant row's own existence and the INVERSE of the one `listGrantedBaseIdsForChannels` makes for the AGENT ceiling. Three lanes over one table.
 - Evidence: `shared/tenancy/resource-grant-reach.test.ts` (the level and scope rules, and that the level filter runs before the membership read); `shared/tenancy/grant-read-arm.test.ts` (the prefilter/predicate mirror, over every credential × visibility × author); a live redteam case per table — *granted into a container → visible to its members; revoked → invisible* — which **has not run** (no Docker; the `rls-redteam` CI job is what pays it).
@@ -8096,7 +8096,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-605 — `PersonalContainerMissingError` replaced two wire codes with one, and nothing outside this repo was asked (2026-09-02)
 
-- Location: `src/shared/tenancy/personal-container.ts › PersonalContainerMissingError`; the deleted `HOME_SCOPE_FORBIDDEN` and `TEMPLATE_HOME_SCOPE_FORBIDDEN`.
+- Location: `src/shared/tenancy/personal-container.ts › PersonalContainerMissingError`; the deleted `HOME_SCOPE_FORBIDDEN` and `IDENTITY_HOME_SCOPE_FORBIDDEN`.
 - Found during: B15.
 - **THE SHAPE.** Two features each had an error class, a wire code and a mapping arm for one three-condition fence. With the fence collapsed to one shared function, keeping two codes would have meant two mapping arms over one throw. The new class extends `HttpError`, so `shared/api/http-error-response.ts`'s pass-through carries it at every boundary with no per-feature arm — and both old codes are gone.
 - ⚠ **THE ONLY KNOWN CONSUMER WENT IN THE SAME CHANGE.** The MCP `homeShelfForbidden` mapper read both codes by name and is deleted with the shelf argument. A DESKTOP build pinned to an older server never sees the new code (the server is the one that changed), and the app renders the server's message rather than branching on the code.
@@ -8105,14 +8105,14 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-620 — two MCP-side ref resolvers still narrow to the CURRENT container, so B2's id door is unreachable through them (2026-09-02)
 
-- Locations: `packages/mcp-server/src/tools/knowledge-shared.ts › resolveBaseOr` (over `client.listKbBases()`), `packages/mcp-server/src/tools/agent-shared.ts › resolveTemplateRef` (over `client.listAgentTemplates()`).
+- Locations: `packages/mcp-server/src/tools/knowledge-shared.ts › resolveBaseOr` (over `client.listKbBases()`), `packages/mcp-server/src/tools/agent-shared.ts › resolveIdentityRef` (over `client.listAgentIdentities()`).
 - Found during: B13, deriving `workspace-arg.ts › WORKSPACE_ARG_OPS` — the question "can the server find this op's container from the argument the caller already passed" has to be answered per op, and answering it exposed the two tools where the answer is NO for a reason that is not the server's.
 - **THE SHAPE.** B2 made an id resolve its own tenancy SERVER-side (`src/shared/tenancy/read-resource.ts › readResourceById`), and `dopl_skill(op="get"|"read")` / `dopl_chats(op="get")` reach it because they pass the ref STRAIGHT to a by-id route. These two do not: they list the container's rows first and answer not-found when the ref is not among them, so a base or template that lives in another container is refused before the door is ever knocked on. **The door is open and these two tools do not walk to it.**
 - ⚠ **IT IS WHY `dopl_kb` AND `dopl_agent` KEEP `workspace=` ON MORE THAN `list`/`create` TODAY.** Retiring it there while the resolver is container-local would not move the question to an id — it would delete cross-container reach for those two tools, which is a regression rather than a simplification.
 - Resolution owed, OUTSIDE THIS SLICE'S OWNERSHIP (neither file is in any slice's `Owns` column): on a miss, follow the ref through the by-id route the way skills and chats already do, then narrow `WORKSPACE_ARG_OPS.dopl_kb` to `list_bases`/`create_base`/`search` and `.dopl_agent` to `list`/`create`. `workspace-arg.test.ts` pins the table both ways, so the narrowing is one line and a failing assertion until the resolver moves.
 - 🔒 **ATTEMPTED AND NOT TAKEN AT THE BATCH-3 INTEGRATION (2026-09-02), FOR A REASON THAT IS NOT SCHEDULE.** The integration was asked to resolve a NAME across the caller's containers through `shared/tenancy/resolve-resource.ts › resolveResourcesByName`, refusing on more than one match by listing the container names. **Two things stop that being an integration-sized change, and the second is a decision somebody has to take:**
   1. **There is no route to reach it through.** `resolveResourcesByName` is server-side and `packages/mcp-server` cannot import from `src/` — every crossing is an HTTP method on `@dopl/client`. B2's cross-container door is an ID door (`readResourceById`, behind the existing by-id routes); a NAME door is a new public API surface, a new SDK method, a `PUBLIC_SURFACE` change and a `check-knowledge-type-drift` pass. That is a slice, not a fix.
-  2. ⚠ **AND "REFUSE ON >1, LISTING THE CONTAINER NAMES" CONTRADICTS A SHIPPED RULING.** `agent-templates/server/service-resolve-ref.ts › classifyMissingTemplateRef` is the server's own cross-container name lookup and it deliberately *"NAMES A TENANCY, NEVER A ROSTER — one name and one place, never how many matched, never who else is in that workspace, never the other candidates"* (T35/A12). Listing the containers a name matched in IS that roster. The finding's proposed refusal and the existing resolver's stated rule cannot both be right, and picking here would overturn A12 silently.
+  2. ⚠ **AND "REFUSE ON >1, LISTING THE CONTAINER NAMES" CONTRADICTS A SHIPPED RULING.** `agent-identities/server/service-resolve-ref.ts › classifyMissingIdentityRef` is the server's own cross-container name lookup and it deliberately *"NAMES A TENANCY, NEVER A ROSTER — one name and one place, never how many matched, never who else is in that workspace, never the other candidates"* (T35/A12). Listing the containers a name matched in IS that roster. The finding's proposed refusal and the existing resolver's stated rule cannot both be right, and picking here would overturn A12 silently.
 - **What is needed instead:** Samuel's word on whether a >1-match refusal may name the containers (an existence oracle over container membership the surface currently closes), and then a slice that ships the name door as a route. Until then the deviation is the argument, not a fence: `dopl_kb` and `dopl_agent` keep `workspace=` past `list`/`create`, and nothing regresses.
 - Status: **OPEN — needs Samuel on the roster question before the code question.**
 
@@ -8234,21 +8234,21 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-662 — the grant arm widens VISIBILITY, and a cross-container grant is still not LISTED (2026-09-02)
 
-- Locations: `src/features/knowledge/server/service-bases.ts › listBases` and `src/features/agent-templates/server/service-reads.ts › listTemplates` (both read `WHERE workspace_id = ctx.workspaceId`); `src/shared/tenancy/resolve-resource.ts › listContainersForCaller` (the id lane's clause 3).
+- Locations: `src/features/knowledge/server/service-bases.ts › listBases` and `src/features/agent-identities/server/service-reads.ts › listIdentities` (both read `WHERE workspace_id = ctx.workspaceId`); `src/shared/tenancy/resolve-resource.ts › listContainersForCaller` (the id lane's clause 3).
 - Found during: the batch-3 integration, building F-604's read half.
-- **THE BOUNDARY, STATED SO NOBODY INFERS THE WIDER CLAIM.** F-604 was filed as *"the reading member hits `canSeeTemplate`'s arm 4 and the row is not listed"*, and that framing assumes the row is in the candidate set. It is, for a SAME-container grant — a `private` row lent to a channel of its own container, or to that container — and those now work end to end. It is NOT, for a grant ACROSS containers: the row lives in the grantor's `workspace_id` and both list paths are keyed on the caller's, so the predicate that would admit it is never asked. The id lane refuses one step earlier, in `listContainersForCaller`, which narrows to the caller's own memberships.
+- **THE BOUNDARY, STATED SO NOBODY INFERS THE WIDER CLAIM.** F-604 was filed as *"the reading member hits `canSeeIdentity`'s arm 4 and the row is not listed"*, and that framing assumes the row is in the candidate set. It is, for a SAME-container grant — a `private` row lent to a channel of its own container, or to that container — and those now work end to end. It is NOT, for a grant ACROSS containers: the row lives in the grantor's `workspace_id` and both list paths are keyed on the caller's, so the predicate that would admit it is never asked. The id lane refuses one step earlier, in `listContainersForCaller`, which narrows to the caller's own memberships.
 - ⚠ **SO THE ARM IS NOT DECORATION AND IT IS NOT THE WHOLE FEATURE.** RLS is the layer where the cross-container case already works: the policy has no `workspace_id` term, so a caller-scoped read (`RLS_CALLER_SCOPED_READS`) returns the lent row today. The gap is in the SERVICE-role reads that still do the tenancy filtering themselves — i.e. it closes on its own as B5's phased plan moves reads onto the caller client, which is the argument for not widening the fetch by hand now.
 - ⚠ **WIDENING IT IS A TENANCY CHANGE, NOT A VISIBILITY ONE**, and that is why it is a separate finding rather than an unfinished half of F-604: every downstream composition (entries, folders, attachments, credits) is `ctx.workspaceId`-keyed, and a list that returned rows from two containers would hand each of them a context that is right for one.
 - Proposed resolution: RLS phase 3, with F-650's `canSee*` unification and F-572's service-role reads — or, if a product answer is wanted sooner, a `shelf`-style second leg on the two list paths that returns lent rows under their OWN container id.
 - ⚠ **THE ID LANE CLOSED ON 2026-09-03; THE LIST LANE DID NOT.** `resolve-resource.ts` gained clause 4's third arm as a SECOND query on a miss (a grantee fails the container `.in()` and both `.or()` arms by construction, so an arm inside that group is unreachable), and `listGrantedBaseIdsForChannels` dropped the `workspace_id` term that refused the cross-container lend outright. Both are the TS side catching up with SQL, which has admitted a lent row since `20260923140000`. **This entry's warning about downstream compositions does not apply to the id lane**: `read-resource.ts › readResourceById` re-homes the context into the container the id named, which is exactly the mechanism the warning said was missing.
-- Status: **HALF FIXED.** The reach works — a lent row is nameable and readable by id, wherever it lives. `listBases` / `listTemplates` still do not SURFACE one, and that half is left open deliberately: it needs a product answer on whether an `agent_only` lend belongs in a HUMAN's list and on how a foreign-container row is labelled in a list that has never carried a container column.
+- Status: **HALF FIXED.** The reach works — a lent row is nameable and readable by id, wherever it lives. `listBases` / `listIdentities` still do not SURFACE one, and that half is left open deliberately: it needs a product answer on whether an `agent_only` lend belongs in a HUMAN's list and on how a foreign-container row is labelled in a list that has never carried a container column.
 
 ### F-664 — a container move re-stamped the parents and left every child on the old tenancy (2026-09-03, FIXED)
 
-- Locations: `supabase/migrations/20260920120000_workspace_kind_personal.sql` §5 (the two `UPDATE … SET workspace_id` statements); the children `knowledge_folders`, `knowledge_entries`, `knowledge_entry_chunks`, `agent_template_knowledge_bases`.
+- Locations: `supabase/migrations/20260920120000_workspace_kind_personal.sql` §5 (the two `UPDATE … SET workspace_id` statements); the children `knowledge_folders`, `knowledge_entries`, `knowledge_entry_chunks`, `agent_identity_knowledge_bases`.
 - Found during: the 1.26.0 smoke, tracing why `dopl_kb(op="read_file")` failed on a personal-shelf base after the move.
 - **THE SHAPE, AND IT IS A CLASS.** Four tables denormalise their parent's `workspace_id`. The move changed the parent's and no child's, so a base sat in the personal container while its folders and entries still named the workspace it came from. **Nothing 500s on a mismatched child until something COMPARES the two**, and the only thing that does is `service-shared.ts › assertSameWorkspace`, reached once a caller resolves a PATH inside the moved base — every list read is keyed on `knowledge_base_id` and never noticed. So the move measured clean and one base's contents were unreadable: F-604's shape a second time, one layer up.
-- ⚠ **THE JUNCTION HAS TWO PARENTS AND ONLY ONE IS RIGHT.** `agent_template_knowledge_bases` references both `agent_templates` and `knowledge_bases`; it is the TEMPLATE's attachment list (`repository-knowledge-links.ts` reads it `.eq(workspace_id).in(template_id)`) and an attached base may legitimately live elsewhere, because an attachment is a reference and not a copy. Deriving from the base would re-file the junction under somebody else's tenancy.
+- ⚠ **THE JUNCTION HAS TWO PARENTS AND ONLY ONE IS RIGHT.** `agent_identity_knowledge_bases` references both `agent_identities` and `knowledge_bases`; it is the TEMPLATE's attachment list (`repository-knowledge-links.ts` reads it `.eq(workspace_id).in(identity_id)`) and an attached base may legitimately live elsewhere, because an attachment is a reference and not a copy. Deriving from the base would re-file the junction under somebody else's tenancy.
 - ⚠ **THE REPAIR IS DERIVED FROM THE PARENT, NEVER RECOMPUTED FROM `created_by`** — recomputing "the author's personal container" would drag a base shared into a workspace onto its author's shelf, repairing rows the move never touched.
 - Resolution: `supabase/migrations/20260924120000_personal_container_child_rows.sql` (idempotent, four `UPDATE`s, a `DO` block that fails the replay on any straggler) plus `scripts/check-tenancy-move-gate.ts`, which refuses a migration that re-stamps a parent without re-stamping every declared child and holds the declared child set EQUAL to the one discovered from the `CREATE TABLE` bodies. The applied migration is discharged by a NAMED repair file and the exemption is checked, not trusted.
 - Status: FIXED. ⚠ The gate proves a statement is PRESENT, never that it is correct; the migration's own `DO` block is what asserts zero stragglers after a replay.
@@ -8272,10 +8272,10 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **BLAST RADIUS IS WHY IT IS NOT IN THIS CHANGE**: every route in the `apiFetch` table would flip credential at once, and any route that still needs the cookie session would 401 for every desktop user simultaneously. It wants its own change, with the route inventory checked one at a time.
 ### F-680 — the knowledge READ CEILING is base-keyed, so a FOLDER attachment narrows the pointer and not the reach (2026-09-08)
 
-- Locations: `src/features/knowledge/server/service-audience.ts › resolveAgentAudience` / `› audienceAdmits`, against `src/features/agent-templates/server/service-knowledge-scopes.ts › resolveVisibleKnowledgeScopes` and `supabase/migrations/20260930150000_agent_template_knowledge_scopes.sql`. The fix, if it is ever wanted, lands in `src/features/knowledge/server/service-entries.ts` / `› service-paths.ts`, after `server/path.ts › resolvePath` has produced a folder — that is the one point where a request has both a base and a resolved position inside it.
+- Locations: `src/features/knowledge/server/service-audience.ts › resolveAgentAudience` / `› audienceAdmits`, against `src/features/agent-identities/server/service-knowledge-scopes.ts › resolveVisibleKnowledgeScopes` and `supabase/migrations/20260930150000_agent_template_knowledge_scopes.sql`. The fix, if it is ever wanted, lands in `src/features/knowledge/server/service-entries.ts` / `› service-paths.ts`, after `server/path.ts › resolvePath` has produced a folder — that is the one point where a request has both a base and a resolved position inside it.
 - Found during: the folder/entry attachment wave (Samuel, 2026-09-08: *"right now, you can only select entire bases, but I want to be able to specific folders or entries/files"*). **Declared OUT OF SCOPE for that wave before it started**, and filed here rather than half-built.
-- **THE GAP, EXACTLY.** A template may now attach ONE FOLDER of a base. The desktop's role block honours that — `prompt-framing-template.js › knowledgeLines` renders `op "list_dir"` at that folder's path, not `get_tree` on the base. But the SESSION's knowledge audience is resolved by BASE ID: an agent whose audience already admits that base (because the base is workspace-visible, or because a `resource_grants` row lends the whole base into its channel) can call `get_tree` on it and read every sibling folder. **In a SHARED link container that is the interesting case** — the operator picks one folder believing they scoped the agent, and the agent's reach is unchanged.
-- ⚠ **IT IS NOT A REGRESSION AND NOT A NEW LEAK.** The reach is exactly what it was before scopes existed; what changed is that a surface now SUGGESTS a narrower one. Nothing in the attachment path is a permission — `types.ts › TemplateKnowledgeScopeKind`, the migration header and INVARIANTS §5A each say so in one line, so a reader cannot mistake the column for access control.
+- **THE GAP, EXACTLY.** A template may now attach ONE FOLDER of a base. The desktop's role block honours that — `prompt-framing-agent-identity.js › knowledgeLines` renders `op "list_dir"` at that folder's path, not `get_tree` on the base. But the SESSION's knowledge audience is resolved by BASE ID: an agent whose audience already admits that base (because the base is workspace-visible, or because a `resource_grants` row lends the whole base into its channel) can call `get_tree` on it and read every sibling folder. **In a SHARED link container that is the interesting case** — the operator picks one folder believing they scoped the agent, and the agent's reach is unchanged.
+- ⚠ **IT IS NOT A REGRESSION AND NOT A NEW LEAK.** The reach is exactly what it was before scopes existed; what changed is that a surface now SUGGESTS a narrower one. Nothing in the attachment path is a permission — `types.ts › IdentityKnowledgeScopeKind`, the migration header and INVARIANTS §5A each say so in one line, so a reader cannot mistake the column for access control.
 - ⚠ **WHY IT WAS NOT DONE HERE.** Making the ceiling sub-base aware is a change to the KNOWLEDGE feature's audience model, not to agent templates: `audienceAdmits` is consulted by every `dopl_kb` op, the audience is cached per session, and a path-shaped ceiling has to answer for `get_tree`, `list_dir`, `read_file`, `search` and the chunk reads separately — including what a SEARCH hit outside the granted folder is allowed to reveal. That is its own wave with its own redteam suite, and bolting a partial answer onto the attach path would have produced a ceiling that holds on one op and not the other four, which is worse than a base-keyed one that is honest.
 - Status: OPEN. Needs Samuel's word on whether a folder attachment should NARROW an agent's reach or only its instructions.
 ### F-679 — the composer's dictation CANNOT work in the desktop app: Electron's Chromium ships no Google speech key (2026-09-08)
@@ -8322,7 +8322,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   an unreviewed lane.
 - ✅ **RESOLVED 2026-09-09** — the lane was built as its own slice, in three parts.
   **THE READ IS NEW, NOT FOLDED INTO AN EXISTING ONE**, and the alternatives were measured rather
-  than assumed: `main/template-resolve.js` is per-TEMPLATE (`GET /api/agent-templates/{id}/resolve`),
+  than assumed: `main/identity-resolve.js` is per-TEMPLATE (`GET /api/agent-identities/{id}/resolve`),
   the knowledge fetch that used to sit beside it was per-WORKSPACE and on ONE lane (deleted with
   pinning, 2026-09-18),
   and the reach is a third question on a third axis. It is
@@ -8973,7 +8973,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 - **THE MEASUREMENT.** Samuel's Dopl channel agent `@agent-y1uun32v` (record key
   `bb0f57db-…::y1uun32v`, `phase: "parked"`, `sdkSessionId` present in the resume map,
-  `templateName: "Coder"`) was idle when Electron was hard-restarted. Afterwards it was **NOWHERE**:
+  `identityName: "Coder"`) was idle when Electron was hard-restarted. Afterwards it was **NOWHERE**:
   no card in the Agents tab — not even an **Ended** one — no `agentHistory` entry, and no
   `channel_sessions` row. That row is a LIVE PROJECTION (`main/session-state-push.js` posts a
   whole-set REPLACE), so it is deleted the moment the pill leaves the set, which is why the peer's
@@ -9044,18 +9044,18 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   its counters and its conversation handle; the work lane of the run that was interrupted starts
   empty, which is the honest answer rather than a regression.
 
-### F-695 — a BLANK agent's launch-time instructions are dropped in main: `applyOverrides` has no template to splice them onto, and `templateRoleFraming` emits nothing without a role NAME (found 2026-09-13, OPEN — needs a ruling)
+### F-695 — a BLANK agent's launch-time instructions are dropped in main: `applyOverrides` has no template to splice them onto, and `identityRoleFraming` emits nothing without a role NAME (found 2026-09-13, OPEN — needs a ruling)
 
 **What was measured.** Samuel's 2026-09-13 ruling added an **Instructions** field to the New agent
 popup (*"we should add an Instructions field in the New agent popup. That should be a field under
 description"*), replacing the deleted launch sheet's read-only disclosure. It reaches main as
-`TemplateLaunchOverrides.instructions` and is honoured on a TEMPLATE launch:
-`main/template-resolve.js › narrowOverrides` bounds it at the column's own `MAX_INSTRUCTIONS` and
+`IdentityLaunchOverrides.instructions` and is honoured on a TEMPLATE launch:
+`main/identity-resolve.js › narrowOverrides` bounds it at the column's own `MAX_INSTRUCTIONS` and
 `› applyOverrides` splices it onto the resolved row, after the first-use approval gate.
 
 **On a BLANK launch it is dropped, in silence.** `applyOverrides(null, …)` answers `null` by
 contract — a blank agent has no template to re-point — so `session-launch-op.js` puts no
-`context.template` on the session and `main/prompt-framing-template.js › templateRoleFraming`
+`context.template` on the session and `main/prompt-framing-agent-identity.js › identityRoleFraming`
 emits `[]`. The operator types instructions into a live field and the agent is never told them.
 
 **Why this is a finding and not a fix.** The obvious wiring — synthesize a template from the
@@ -9074,9 +9074,9 @@ disappears when a selector moves is a worse surface than one honoured on one lan
 would also delete the evidence that this disagreement exists.
 
 - **F-695 — RESOLVED 2026-09-13 (ruled).** Samuel: the field starts EMPTY on a blank launch; what
-  is typed is carried. `main/template-resolve.js › applyOverrides` (called with a null template) answers an instructions-only
+  is typed is carried. `main/identity-resolve.js › applyOverrides` (called with a null template) answers an instructions-only
   template (`instructionsOnly: true`, no name, `authoredByCaller: true`), and
-  `prompt-framing-template.js › instructionsOnlyFraming` frames it as the role block minus its role
+  `prompt-framing-agent-identity.js › instructionsOnlyFraming` frames it as the role block minus its role
   line ("YOUR INSTRUCTIONS FOR THIS RUN, written by your operator in the launch form."). Nothing
   typed → still no template.
 
@@ -9262,7 +9262,7 @@ count being what says in one line which of them is the empty one. By-id addressi
 and is the escape hatch the refusal points at; an id is unique workspace-wide and can never be
 ambiguous. No tie-break was added on purpose: "newest wins" picks the same empty shell, and
 "bound container wins" is the rule a caller holding a personal-shelf slug is already violating.
-Same shape as `agent-shared.ts › ambiguousTemplate` for template names.
+Same shape as `agent-shared.ts › ambiguousIdentity` for template names.
 
 ⚠ **THE ID ARM IS SHAPE-AGNOSTIC, AND GATING IT ON `UUID_RE` IS A TRAP THIS FIX FELL INTO ONCE.**
 Matching `id` only for UUID-shaped refs regressed every non-UUID id the old `.find` reached and
@@ -9312,7 +9312,7 @@ carry is the same defect one layer up.
 
 `AGENT_ERRORS` (`packages/mcp-server/src/tools/tool-errors.ts`) declares
 `{ reason: "ambiguous_name", … }`, so `renderErrors` teaches it in `dopl_agent`'s description and
-an agent is invited to string-match it. But `agent-shared.ts › ambiguousTemplate` returns bare
+an agent is invited to string-match it. But `agent-shared.ts › ambiguousIdentity` returns bare
 prose through `err(...)` and never goes through `refusal()`, so **the wire carries no
 `reason=ambiguous_name` anywhere**. `grep -rn "ambiguous_name" packages/mcp-server/src` returns
 the table row and one docblock; nothing else.
@@ -9325,7 +9325,7 @@ rather than a judgement call.
 Noticed while adding `ambiguous_slug` (F-701), which routes through `refusal()` and therefore does
 emit its literal. **Left alone deliberately** — per `CLAUDE.md`, code that looks wrong is filed
 here rather than edited in a change that was not scoped to it. The fix is one line in
-`ambiguousTemplate` (wrap the first line in `refusal(AMBIGUOUS_NAME, …)`), plus a budget re-measure
+`ambiguousIdentity` (wrap the first line in `refusal(AMBIGUOUS_NAME, …)`), plus a budget re-measure
 because the description already sits at its ceiling.
 
 ### F-704 — an agent posts under its OPERATOR'S `author_user_id`, so an agent-to-agent handoff re-pointed its operator's own "last addressed" default (found 2026-09-15, RESOLVED 2026-09-15 — Samuel's FOURTH round on this bug)
@@ -9432,8 +9432,8 @@ addressed) are untouched, and a case pins that a one-agent room still auto-answe
 
 ⚠ **AN ORCHESTRATOR-SHAPED FALLBACK WAS BUILT, GREEN, AND DISCARDED THE SAME DAY — the reason is
 the useful part.** It read the asker's own `Orchestrator` template off the live session row
-(`template_name`, on the row since `20260823130000`) and answered that: no new column, no picker,
-no migration, and it scoped itself for free, because `template_name` is operator-only
+(`identity_name`, on the row since `20260823130000`) and answered that: no new column, no picker,
+no migration, and it scoped itself for free, because `identity_name` is operator-only
 (`collab-dto.ts › OPERATOR_ONLY_SESSION_COLUMNS`) so a peer's candidate could never match. It was
 thrown away on PRODUCT grounds, which nobody in the thread had raised: **"orchestrator" is one
 operator's setup, not a product concept, and this rule ships to every user.** Anyone re-proposing
@@ -9889,7 +9889,7 @@ written before the commit exists is a dangling reference the moment anything reb
 subject — `git log --oneline --grep 'F-716'`.
 
 `src/features/search/server/repository-container-rows.ts` narrows `knowledge_bases`,
-`agent_templates`, `skills` and `chats` with `visibility = <widest> OR <owner> = caller` — exactly
+`agent_identities`, `skills` and `chats` with `visibility = <widest> OR <owner> = caller` — exactly
 the clauses `20260504030000_visibility_private_resources.sql` states as the RLS SELECT policy. Each
 of those tables' real predicate has FURTHER arms that this does not reproduce:
 
@@ -9897,7 +9897,7 @@ of those tables' real predicate has FURTHER arms that this does not reproduce:
 |---|---|
 | `knowledge/server/service-shared.ts › canSeeBase` | the `resource_grants` arm (F-604) |
 | `skills/server/service-shared.ts › canSeeSkill` | workspace-admin, and the team grant |
-| `agent-templates/server/service-shared.ts › canSeeTemplate` | the `resource_grants` arm, workspace-admin, and the team share |
+| `agent-identities/server/service-shared.ts › canSeeIdentity` | the `resource_grants` arm, workspace-admin, and the team share |
 | `chats/server/service-shared.ts › canSeeChat` | the team grant |
 
 **Every one of those can only ADD rows**, so the fence is a strict SUBSET and cannot leak. What it
@@ -9934,7 +9934,7 @@ it is a different predicate.**
 
 **THE FIX IS THAT THE PREDICATE IS CALLED, NOT RESTATED.**
 `search/server/repository-visibility.ts` imports `knowledge › canSeeBase`, `skills › canSeeSkill`,
-`chats › canSeeChat` and `agent-templates › canSeeTemplate` and calls each with a context built for
+`chats › canSeeChat` and `agent-identities › canSeeIdentity` and calls each with a context built for
 the ROW's own container. Each read in `repository-container-rows.ts` now fetches a CANDIDATE page —
 still `WHERE workspace_id IN (<the reach>)` plus the name match, capped at
 `SEARCH_CANDIDATE_ROW_LIMIT` — and the predicate cuts it to the group cap. **The container fence did
@@ -9944,7 +9944,7 @@ not move**; only the visibility clause did, out of SQL and into the feature that
   `teamGrantedResourceIds` — the `scope_type='team'` door, keyed on the caller and a resource-id
   page — beside the existing `grantedResourceIds`. The per-feature readers it stands in for
   (`teams/server/repository-grants.ts › listGrantsForResources`,
-  `agent-templates/server/repository.ts › listTeamLinksForTemplates`) are PER CONTAINER, and account
+  `agent-identities/server/repository.ts › listTeamLinksForIdentities`) are PER CONTAINER, and account
   scope spans every container the caller is in; calling one of them per container is the fan §9
   forbids. It answers MEMBERSHIP only — the rule stays in each `canSee*`.
 - **`repository-reach.ts` now carries the caller's ROLE per container**, off the membership row that
@@ -9958,7 +9958,7 @@ not move**; only the visibility clause did, out of SQL and into the feature that
   smuggled (CLAUDE.md: *never silently pick a side*): a security predicate re-typed in a fifth
   feature is a rule with two answers, which is worse than a layering rule with one recorded
   exception. §1 carries the exception and its limits — predicates only, one way, no foreign
-  repository reached. `agent-templates › canSeeBaseRow` is the tree's standing example of the cost
+  repository reached. `agent-identities › canSeeBaseRow` is the tree's standing example of the cost
   of the other choice.
 - **The pin this entry asked for is `search/server/shared-rows.test.ts`**, in
   `grant-read-arm.test.ts`'s idiom: over every (credential × role × visibility × access mode ×
@@ -10210,7 +10210,7 @@ The claim had been restated in five places from one sentence, which is how it su
 - Proposed resolution: carry `kind: row.kind ?? null` out of the repository and ask positively at both `service.ts` sites (`container.kind === "standard"`), so an unknown kind refuses instead of serving.
 - Status: **RESOLVED 2026-09-18** (Samuel's fail-closed ruling), along the proposed resolution and nothing else. `SearchContainerRef.kind` is `WorkspaceKind | null`, `loadSearchReach` carries `row.kind ?? null`, and both `service.ts` sites ask `container.kind === "standard"` of the raw column; the `isStandardWorkspace` import is gone from that file.
   - ⚠ **THE IDIOM IS NOT RETIRED — ONLY ITS USE WHERE `standard` IS THE PERMISSIVE SIDE.** `(kind ?? "standard") === "standard"` stays in `workspaces/types.ts › isStandardWorkspace` and its `@dopl/client` mirror, which `scripts/check-role-drift.ts` REQUIRES in that exact positive form (F-564/F-295). This entry was never about the default; it was about the polarity of the question it is the default for.
-  - **THE SWEEP, AND WHY EVERY OTHER SITE STAYS.** Re-derive with `grep -rn --include='*.ts' --include='*.tsx' -e 'kind ?? "standard"' src packages apps`. The rest are either that required idiom (`workspaces/types.ts`, `packages/dopl-client/src/types.ts`, and `check-role-drift.ts`'s own assertion of it), a positive `switch` whose `default` arm is the least claim (`packages/mcp-server/src/workspace-directory.ts › containerKind` → `"workspace"`, held against the SQL `CHECK` by `checkContainerKind`), or a LABEL with no gate behind it — `billing/server/status-service.ts` and `billing/components/use-workspace-entitlements.ts` (which plan card to draw), `channels/server/service-list.ts › mapContainers` (whose one consumer, `home-rows.ts`, filters POSITIVELY on `=== "link"`), and `shared/tenancy/resolve-resource.ts › toResolved` (read only by `agent-templates/server/service-resolve-ref.ts › tenancyLabel`, a sentence). **The SQL side already fails closed** — `20261011120000_channel_scope_workspace_fence.sql` spells it `COALESCE(kind,'standard') <> 'standard'`, i.e. absent ⇒ standard ⇒ refuse — and the TS side now matches it in the one place it did not.
+  - **THE SWEEP, AND WHY EVERY OTHER SITE STAYS.** Re-derive with `grep -rn --include='*.ts' --include='*.tsx' -e 'kind ?? "standard"' src packages apps`. The rest are either that required idiom (`workspaces/types.ts`, `packages/dopl-client/src/types.ts`, and `check-role-drift.ts`'s own assertion of it), a positive `switch` whose `default` arm is the least claim (`packages/mcp-server/src/workspace-directory.ts › containerKind` → `"workspace"`, held against the SQL `CHECK` by `checkContainerKind`), or a LABEL with no gate behind it — `billing/server/status-service.ts` and `billing/components/use-workspace-entitlements.ts` (which plan card to draw), `channels/server/service-list.ts › mapContainers` (whose one consumer, `home-rows.ts`, filters POSITIVELY on `=== "link"`), and `shared/tenancy/resolve-resource.ts › toResolved` (read only by `agent-identities/server/service-resolve-ref.ts › tenancyLabel`, a sentence). **The SQL side already fails closed** — `20261011120000_channel_scope_workspace_fence.sql` spells it `COALESCE(kind,'standard') <> 'standard'`, i.e. absent ⇒ standard ⇒ refuse — and the TS side now matches it in the one place it did not.
   - ⚠ **THE ROLE HALF NAMED ABOVE WAS ALREADY FIXED** in the 2026-09-17 review (`?? "guest"`), and this change did not touch it.
   - Cases: `src/features/search/server/fence.test.ts › omits all three on an ABSENT kind`. **ONE case, not two**: `"archive"` is refused by the pre-fix spelling too, so an unrecognised-kind case would survive every mutation of this change and be vacuous — the test says so in place of carrying it. MUTATION-VERIFY: 2 reverts (the repository default, the gate default), 2 failures, 0 vacuous (2026-09-18).
 
@@ -10232,17 +10232,17 @@ The claim had been restated in five places from one sentence, which is how it su
 - Found during: the two-destinations wave, reading the grant lane end to end for `dopl_agent op="grant"`.
 - **FILED, NOT FIXED** — Samuel's ruling of 2026-09-18 is about CREATE destinations, and this is the GRANT lane's reach. Recording it here rather than widening a grant predicate inside a wave that was not about them.
 - The shape: a grant filed on a channel names the channel's container, and the reach read asks for rows in that same container — so a row LENT from the operator's personal container carries a grant the peer's read does not follow. The /home card offers the lend, the server writes the row, and the peer sees nothing; there is no error anywhere.
-- ⚠ **AND THE CARD'S OWN HEADER STILL DESCRIBES THE RETIRED COPY SEMANTICS** in one clause, which is the second half of why the behaviour reads as intended: that deleted card's docblock was written when sharing was a two-leg copy (B11 replaced it with a grant on 2026-09-02, and the Personal caption in `agent-panels.tsx` was corrected then — F-471 — while this file was not; that caption was removed outright on 2026-09-19).
+- ⚠ **AND THE CARD'S OWN HEADER STILL DESCRIBES THE RETIRED COPY SEMANTICS** in one clause, which is the second half of why the behaviour reads as intended: that deleted card's docblock was written when sharing was a two-leg copy (B11 replaced it with a grant on 2026-09-02, and the Personal caption in `identity-panels.tsx` was corrected then — F-471 — while this file was not; that caption was removed outright on 2026-09-19).
 - Proposed resolution: decide whether a `channel` grant reaches ACROSS containers at all. If it does, the reach read follows the grant rather than the tenancy; if it does not, the /home card must not offer the lend for a personal row. **Samuel's call — the two answers are different products.**
 - ⚠ **STATUS RE-DERIVED 2026-09-22 AND IT IS NOT A CLEAN "STILL OPEN".** The grant lane was restructured after this was filed: `repository-channel-grants.ts` now states that the `enforce_resource_grant()` TRIGGER asserts the grantor reaches BOTH containers, the base's and the channel's, and every statement pins both halves. Whether that closes the READ-side reach this entry describes — a peer following a grant into another container — was NOT measured here, and `CLAUDE.md` is explicit that being unable to tell is itself a finding rather than a licence to pick. **Re-measure before acting on this entry; do not assume either answer.** The card that offered the lend is gone, so the second half of the original shape (the /home card offers it) no longer applies as written.
 - Status: OPEN.
 
 ### F-735 — the orphan rows the destination fence does not migrate (2026-09-18)
 
-- Location: `agent_templates` rows with `visibility='private'` in a `kind='link'` workspace; `knowledge_bases` rows in one with no `channel_resource_grants` row. Measured 2026-09-18: **6 templates, 8 bases** (a count, so carry its date, and re-derive before acting).
+- Location: `agent_identities` rows with `visibility='private'` in a `kind='link'` workspace; `knowledge_bases` rows in one with no `channel_resource_grants` row. Measured 2026-09-18: **6 templates, 8 bases** (a count, so carry its date, and re-derive before acting).
 - Found during: the wave that closed the door — `src/features/workspaces/server/home-channel-destination.ts`.
 - **THE DOOR IS SHUT AND THE ROOM IS NOT SWEPT, DELIBERATELY.** Nothing in that change deletes, moves or re-visibilities an existing row: a cleanup is a data migration over rows somebody may still want, and Samuel has not been asked. What the change DOES do is stop them being read as live — `container-destination.ts › DESTINATION_HEADINGS.legacy` files them under *"Legacy — not visible anywhere in the app"* on both list surfaces, so an agent stops treating them as reachable.
-- ⚠ **THEY ARE STILL WRITEABLE-ADJACENT IN ONE DIRECTION**: `updateTemplate` now refuses a patch that LEAVES a template private inside a channel, so the first write to reach one has to move it to a destination that exists. That is the narrow reading of "do not touch them" — no sweep, but no fresh edits filed into the dead slot either.
+- ⚠ **THEY ARE STILL WRITEABLE-ADJACENT IN ONE DIRECTION**: `updateIdentity` now refuses a patch that LEAVES a template private inside a channel, so the first write to reach one has to move it to a destination that exists. That is the narrow reading of "do not touch them" — no sweep, but no fresh edits filed into the dead slot either.
 - Proposed resolution: ask Samuel for one of — move them to the owner's personal container, flip the templates to `visibility='workspace'` and grant the bases into their channel, or delete them. Then one migration, in its own change.
 - Status: OPEN — needs Samuel's word before anything runs.
 
@@ -10361,14 +10361,14 @@ The claim had been restated in five places from one sentence, which is how it su
 - Status: open.
 ### F-747 — agent templates have no optimistic concurrency anywhere on the write path (2026-09-18) — ✅ RESOLVED 2026-09-18
 
-- Location: `src/features/agent-templates/server/repository.ts › updateTemplateRow`, `› service-writes.ts › updateTemplate`, `src/app/api/agent-templates/[templateId]/route.ts`, `packages/dopl-client/src/agent-templates.ts › updateAgentTemplate`, `packages/mcp-server/src/tools/agent.ts` (`expected_version`, `force`) and `› agent-ops-write.ts › opUpdate`.
+- Location: `src/features/agent-identities/server/repository.ts › updateIdentityRow`, `› service-writes.ts › updateIdentity`, `src/app/api/agent-identities/[identityId]/route.ts`, `packages/dopl-client/src/agent-identities.ts › updateAgentIdentity`, `packages/mcp-server/src/tools/agent.ts` (`expected_version`, `force`) and `› agent-ops-write.ts › opUpdate`.
 - Filed on `fix/r1-d-consistency` during the Round 1 fix wave (study S46 / D-c1); built on `fix/r1-leftovers` the same day.
 - ⚠ **THE ID COLLIDES INSIDE THIS WAVE AND THE MERGE AGENT OWNS IT.** A different, unrelated finding was filed under the same number on another Round 1 branch (the `getBaseTree(headings)` per-body read). Two entries under one id makes both unreadable; renumber one of them on the branch, with every reference, before the merge.
-- **WHAT WAS WRONG:** nothing in any of the four layers implemented it. `updateTemplateRow` issued a bare PostgREST update with no precondition, the route carried no header, the SDK had no argument to send one, and `dopl_agent(op="update")` was silent last-writer-wins — on the one resource whose body is a SYSTEM PROMPT that two orchestrators can be editing at once, and with no version or diff anywhere in the result to notice the loss by.
-- **WHAT WAS BUILT:** a real compare-and-swap, not a check-then-act. `.eq("updated_at", …)` on the UPDATE itself (and on the empty-patch SELECT, so a junction-only write honours a stated version too); zero rows ⇒ `TemplateStaleVersionError` ⇒ **412 `AGENT_TEMPLATE_STALE_VERSION`**, raised BEFORE either junction replacement. The SDK is tri-state on `expectedVersion` exactly as `knowledge.ts › writeKbFileByPath` is; the route still accepts an absent header, because the MCP server ships inside the desktop app and a route-level demand would refuse every field build that cannot comply. Full contract: INVARIANTS §5A.
-- ⚠ **THE CHEAP VERSION WAS REFUSED, AND THAT REFUSAL IS THE FINDING'S POINT.** `updateTemplate` already holds `existing` from `getTemplateForWrite`, so a service-level `existing.updatedAt !== expected → 412` is four lines and costs nothing — and a write landing between that read and the UPDATE passes it. Shipping that under the name `expected_version`, on a surface where `dopl_kb`'s identical argument IS atomic, would teach one contract and honour two. `server/repository.test.ts`'s RACE case is what tells the two apart: the fake honours the `updated_at` filter the way Postgres does, so a check-then-act passes every other case in that file and fails that one.
+- **WHAT WAS WRONG:** nothing in any of the four layers implemented it. `updateIdentityRow` issued a bare PostgREST update with no precondition, the route carried no header, the SDK had no argument to send one, and `dopl_agent(op="update")` was silent last-writer-wins — on the one resource whose body is a SYSTEM PROMPT that two orchestrators can be editing at once, and with no version or diff anywhere in the result to notice the loss by.
+- **WHAT WAS BUILT:** a real compare-and-swap, not a check-then-act. `.eq("updated_at", …)` on the UPDATE itself (and on the empty-patch SELECT, so a junction-only write honours a stated version too); zero rows ⇒ `IdentityStaleVersionError` ⇒ **412 `AGENT_IDENTITY_STALE_VERSION`**, raised BEFORE either junction replacement. The SDK is tri-state on `expectedVersion` exactly as `knowledge.ts › writeKbFileByPath` is; the route still accepts an absent header, because the MCP server ships inside the desktop app and a route-level demand would refuse every field build that cannot comply. Full contract: INVARIANTS §5A.
+- ⚠ **THE CHEAP VERSION WAS REFUSED, AND THAT REFUSAL IS THE FINDING'S POINT.** `updateIdentity` already holds `existing` from `getIdentityForWrite`, so a service-level `existing.updatedAt !== expected → 412` is four lines and costs nothing — and a write landing between that read and the UPDATE passes it. Shipping that under the name `expected_version`, on a surface where `dopl_kb`'s identical argument IS atomic, would teach one contract and honour two. `server/repository.test.ts`'s RACE case is what tells the two apart: the fake honours the `updated_at` filter the way Postgres does, so a check-then-act passes every other case in that file and fails that one.
 - ⚠ **IT COST +302 SERVED CHARS**, not the ~150 the finding estimated, because `force` was mirrored alongside `expected_version` rather than leaving the strict arm with no escape. `SCHEMA_CEILINGS.dopl_agent` 5,133 → 5,435 and the served total 48,791 → 49,093, recorded with the argument in `tool-budget.test.ts` — and recorded rather than funded: the only restatement left inside that shape is `confirm_token`'s home-channel clause, which is character-identical to `knowledge.ts`'s, so trimming it here would buy 72 chars by making two tools disagree about one gate.
-- ⚠ **NO MIGRATION** — `agent_templates_touch_updated_at` already stamps the column (§12), which is also why the repository still never writes `updated_at` by hand.
+- ⚠ **NO MIGRATION** — `agent_identities_touch_updated_at` already stamps the column (§12), which is also why the repository still never writes `updated_at` by hand.
 - Status: ✅ RESOLVED.
 ### F-748 — the `#`-heading path LEAF is not entity-decoded, so a decoded title can sit under an escaped address (2026-09-18)
 

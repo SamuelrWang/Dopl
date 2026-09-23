@@ -54,7 +54,7 @@ version `20260901120000` — pre-existing, named in F-526, and now fenced so a s
   it is one predicate.
 - **F-491, to the SPEC.** `kind` stays `message | milestone | decision`; `done|question|blocked` are
   not adopted, the enum was not touched, and the ping fold stays in B8/B16.
-- **F-481.** The spec's B3 ownership row corrected to `service-launch-template.ts`.
+- **F-481.** The spec's B3 ownership row corrected to `service-launch-identity.ts`.
 - **F-500.** INVARIANTS §11 `DOPL_SAFE_TOOLS` 11 → **12**, with the re-derive command beside it.
 
 ## What batch 2 consumes

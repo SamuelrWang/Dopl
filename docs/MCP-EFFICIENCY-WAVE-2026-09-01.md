@@ -2,7 +2,7 @@
 
 Six branches, integrated onto `integration/mcp-efficiency` off `master` `80be1bc6`. Spec:
 the orchestrator check-in loop should be **3 calls**, write results **≤300 chars**, refusals
-explainable without opening the repo, and template/KB reuse **1 call** each.
+explainable without opening the repo, and identity/KB reuse **1 call** each.
 
 ⚠ **NOTHING HERE IS SHIPPED.** The branch is commit-local and unpushed, so **CI has not run** —
 it cannot, without a push. Red CI is a P0; treat every gate figure below as a local measurement.
@@ -55,7 +55,7 @@ Integration commits on top: `f5c045b9` (chain honesty, committed onto tier 5 bef
 - **The `await` untrusted-body banner STAYS on both await lanes**, position-pinned. Its asymmetry
   with `op="read"` is **F-407**, filed and deliberately unresolved. Do not close it by deleting
   the header — that is the cheap direction.
-- **The launch `no-template` refusal names the tenancy FIRST**, as three causes, in the doctrine.
+- **The launch `no-identity` refusal names the tenancy FIRST**, as three causes, in the doctrine.
   P1's restructure had reduced it to two and dropped the tenancy cause the P3 tier added (T35).
 - **`set_agent_mode` and `dopl_status` were re-rendered to `factsLine`.** They arrived in the
   pre-terse style; P1's convention wins, with the verdict as a token and the paragraph in the
@@ -202,4 +202,4 @@ right — no coverage over the real query — is now `src/shared/tenancy/resolve
   regression it exists for.
 - **The refusal vocabulary is TEN words** and `channel_launch_directives_refusal_reason_check` is
   re-created WHOLE in `20260910120000_…_posture.sql` §3A, asserting every earlier word survived and
-  that `template-approval` still cannot be stored.
+  that `identity-approval` still cannot be stored.
