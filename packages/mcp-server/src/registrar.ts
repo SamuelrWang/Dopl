@@ -19,15 +19,8 @@ import {
 import { CONTAINER_ARG_DESCRIPTION } from "./workspace-arg.js";
 import { resolveCallAddress } from "./container-resolve.js";
 
-// Re-exported so tests read the addressing contract through the registrar that injects it.
-export {
-  CONTAINER_ARG_DESCRIPTION,
-  WORKSPACE_ARG_OPS,
-  UNADDRESSED_WRITE_REFUSALS,
-  acceptsWorkspaceArg,
-  refusesUnaddressedWrite,
-  workspaceArgTargets,
-} from "./workspace-arg.js";
+// Re-exported so tests read the injected arg's description through the registrar that injects it.
+export { CONTAINER_ARG_DESCRIPTION } from "./workspace-arg.js";
 import type { CallerIdentity } from "./tools/identity.js";
 import type { Gates } from "./gating.js";
 import {
