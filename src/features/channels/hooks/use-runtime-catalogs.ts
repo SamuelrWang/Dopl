@@ -2,7 +2,7 @@
 
 /**
  * THE PER-RUNTIME MODEL CATALOGS ON A SETTINGS READ — the half of
- * `use-channel-launch-posture.ts` and `use-agent-defaults.ts` that is about the RUNTIME ROSTER
+ * `use-channel-launch-posture.ts` and `use-launch-selection.ts` that is about the RUNTIME ROSTER
  * rather than about a channel or a defaults record (2026-09-21, U6).
  *
  * ⚠ **ONE MODULE BECAUSE IT IS ONE RULE.** Both hooks read the SAME two fields off the SAME
@@ -16,6 +16,13 @@
  * every catalog has settled — a bounded hand-off, not a standing timer. When the budget runs out
  * the status STAYS `loading`, because "nothing came back yet" is the true statement and inventing
  * `unavailable` here would put words in the desktop's mouth (INVARIANTS §11).
+ *
+ * ⚠ **A SETTLED FAILURE IS RE-READ WHEN THE WINDOW COMES BACK, AND THAT IS NOT A POLL EITHER**
+ * (CXP-5, 2026-09-22). `unavailable` / `stale` is routinely the operator's cue to go and install
+ * or sign in to the CLI — in a terminal, outside this window — so the moment they return (window
+ * `focus`, or the document turning visible) is the one moment a re-read can say something new.
+ * Each return re-reads once, with a fresh `loading` budget, because main answers a retry in flight
+ * as `loading` (`main/runtime/model-catalog.js › refresh`). No timer runs while nothing is loading.
  *
  * ⚠ **NOTHING HERE SUBSTITUTES A RUNTIME'S MODELS.** The only fallback in this file is the
  * DEFAULT runtime's frozen list, and only when the desktop said nothing at all
@@ -76,6 +83,27 @@ export function useRuntimeCatalogs(): RuntimeCatalogsState {
     () => Object.values(catalogs).some((c) => c.status === "loading"),
     [catalogs]
   );
+
+  // ⚠ `unavailable` AND `stale` — the two settled statuses a repair can change. See the header.
+  const settledFailure = useMemo(
+    () => Object.values(catalogs).some((c) => c.status === "unavailable" || c.status === "stale"),
+    [catalogs]
+  );
+
+  useEffect(() => {
+    if (!settledFailure || typeof window === "undefined") return;
+    const reread = () => {
+      if (document.visibilityState === "hidden") return;
+      setReloadsLeft(MAX_RELOADS);
+      setReloadToken((n) => n + 1);
+    };
+    window.addEventListener("focus", reread);
+    document.addEventListener("visibilitychange", reread);
+    return () => {
+      window.removeEventListener("focus", reread);
+      document.removeEventListener("visibilitychange", reread);
+    };
+  }, [settledFailure]);
 
   useEffect(() => {
     if (!loading || reloadsLeft <= 0) return;

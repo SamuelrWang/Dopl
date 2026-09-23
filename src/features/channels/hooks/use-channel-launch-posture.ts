@@ -246,7 +246,7 @@ export function useChannelLaunchPosture(
   const [defaultRuntime, setDefaultRuntime] = useState("");
   const [connected, setConnected] = useState<string[]>(EMPTY_CONNECTED);
   const [connectedKnown, setConnectedKnown] = useState(false);
-  // ⚠ U6: the roster half, shared with `use-agent-defaults.ts` because both hooks read the same
+  // ⚠ U6: the roster half, shared with `use-launch-selection.ts` because both hooks read the same
   // two fields off the same main-process assembly and render the same model row.
   const runtimeCatalogs = useRuntimeCatalogs();
   const { adopt: adoptCatalogs, reloadToken } = runtimeCatalogs;

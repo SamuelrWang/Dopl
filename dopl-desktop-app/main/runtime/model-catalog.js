@@ -46,8 +46,14 @@ const STATUS = Object.freeze({
 // ⚠ A FAILED READ IS RETRIED, A SUCCESSFUL ONE IS NOT. The roster changes when the operator
 // upgrades their CLI, which they cannot do while it is running; a FAILURE, though, is routinely
 // the operator fixing an install with Dopl open, so it must not be cached for the life of the
-// process. Sixty seconds is `connectivity.js`'s own sweep interval, deliberately.
-const FAILURE_TTL_MS = 60000;
+// process.
+// ⚠ **FIVE SECONDS, NOT SIXTY (CXP-5, 2026-09-22), BECAUSE THIS IS A FLOOR, NOT A CADENCE.**
+// Nothing here runs on a timer: a failed roster is re-read only at the next LOOK — a picker
+// mounting, or the renderer re-reading when its window regains focus after a settled failure
+// (`use-runtime-catalogs.ts`). Sixty seconds meant an operator who ran `codex login` in a terminal
+// and came straight back saw the old failure and had nothing left to trigger another look. The
+// floor only collapses a burst of looks into one probe.
+const FAILURE_TTL_MS = 5000;
 
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
 
@@ -205,30 +211,79 @@ function catalogFromRoster(runtimeId, descriptor, roster) {
 
 const snapshots = new Map();
 
+// ⚠ SETTLED VERDICTS, PER RUNTIME, FOR THE TRANSITION HOOK BELOW. `loading` is never recorded —
+// it is "no verdict yet", so a retry in flight is not a transition.
+const settledStatus = new Map();
+const listeners = [];
+
+/**
+ * CALL `fn(runtimeId, from, to)` WHEN A RUNTIME'S SETTLED VERDICT CHANGES (CXP-5, 2026-09-22) —
+ * `unavailable` → `ready` after a repair, `ready` → `unavailable` after a loss. The first verdict a
+ * process reaches is not a transition and fires nothing.
+ * ⚠ IT EXISTS SO THIS MODULE CAN STAY REQUIRE-FREE: `channel-runtime-reply.js` subscribes and
+ * expires the connectivity sweep, which is the one layer that knows both halves.
+ * ⚠ A LISTENER THAT THROWS TAKES NOTHING WITH IT — a settings read must not fail over a hook.
+ */
+function onSettled(fn) {
+  if (typeof fn !== 'function') return () => {};
+  listeners.push(fn);
+  return () => {
+    const at = listeners.indexOf(fn);
+    if (at !== -1) listeners.splice(at, 1);
+  };
+}
+
+function noteSettled(id, status) {
+  const from = settledStatus.has(id) ? settledStatus.get(id) : null;
+  settledStatus.set(id, status);
+  if (from === null || from === status) return;
+  for (const fn of listeners.slice()) {
+    try { fn(id, from, status); } catch (_) { /* a hook never fails a read */ }
+  }
+}
+
 function due(entry, now) {
   if (!entry) return true;
   if (entry.inflight) return false;
   if (entry.catalog.status === STATUS.READY) return false; // a good roster is cached for the process
-  if (entry.catalog.status === STATUS.STALE) return true; // invalidated: re-read at the next look
+  // ⚠ `stale` AND `unavailable` SHARE THE FLOOR. `invalidate` stamps `at: 0`, so an invalidated
+  // catalog is due at the very next look; a refresh that FAILED into `stale` is not re-spawned on
+  // every look after it.
   return now - entry.at >= FAILURE_TTL_MS;
 }
+
+const loadingCatalog = (id, declared) => makeCatalog(id, (declared && str(declared.source)) || null, STATUS.LOADING, {
+  dimensions: Array.isArray(declared && declared.dimensions) ? declared.dimensions.slice() : [],
+});
 
 /**
  * ⚠ THE ONLY PLACE A LIVE ROSTER IS CALLED, AND IT IS NEVER AWAITED BY A CALLER. A rejected
  * `models()` becomes an `unavailable` catalog with the thrown message; it never escapes, because
  * every caller of this module is a settings read and a settings page that will not open is a
  * worse answer than a picker that says why it is empty.
+ *
+ * ⚠ **A RETRY OVER A FAILURE READS `loading`, NOT THE OLD FAILURE (CXP-5).** A catalog holding no
+ * models has nothing to label, so while its re-read is in flight the true statement is "nothing
+ * read yet" — and `loading` is the one status the renderer keeps re-reading on. Answering the old
+ * `unavailable` would settle the picker on a verdict the read in flight is about to replace.
+ * A catalog that HOLDS models keeps them (and its status) while it re-reads.
  */
 function refresh(adapter, now) {
   const id = adapter.descriptor.id;
+  const declared = adapter.descriptor.models || {};
   const prior = snapshots.get(id) || null;
-  const entry = prior || { catalog: makeCatalog(id, adapter.descriptor.models && adapter.descriptor.models.source, STATUS.LOADING), at: 0, inflight: null };
+  const holds = !!(prior && prior.catalog && prior.catalog.models.length);
+  const entry = {
+    catalog: holds ? prior.catalog : loadingCatalog(id, declared),
+    at: now,
+    inflight: null,
+    dirty: false,
+  };
   entry.inflight = Promise.resolve()
     .then(() => adapter.runtime.models())
     .then((roster) => catalogFromRoster(id, adapter.descriptor, roster))
-    .catch((err) => makeCatalog(id, adapter.descriptor.models && adapter.descriptor.models.source, STATUS.UNAVAILABLE, {
-      dimensions: Array.isArray(adapter.descriptor.models && adapter.descriptor.models.dimensions)
-        ? adapter.descriptor.models.dimensions.slice() : [],
+    .catch((err) => makeCatalog(id, declared.source, STATUS.UNAVAILABLE, {
+      dimensions: Array.isArray(declared.dimensions) ? declared.dimensions.slice() : [],
       reason: (err && err.message) || 'the model roster could not be read',
     }))
     .then((next) => {
@@ -240,10 +295,14 @@ function refresh(adapter, now) {
       const settled = next.status === STATUS.UNAVAILABLE && kept
         ? Object.assign({}, kept, { status: STATUS.STALE, reason: next.reason })
         : next;
-      snapshots.set(id, { catalog: settled, at: Date.now(), inflight: null });
+      // ⚠ INVALIDATED WHILE IN FLIGHT: this read may have started before the repair it is being
+      // asked about, so a FAILED answer is due again at the very next look rather than after the
+      // floor. A `ready` one is simply kept.
+      const dirty = !!(held && held.dirty);
+      snapshots.set(id, { catalog: settled, at: dirty && settled.status !== STATUS.READY ? 0 : Date.now(), inflight: null, dirty: false });
+      noteSettled(id, settled.status);
       return settled;
     });
-  entry.at = now;
   snapshots.set(id, entry);
   return entry.inflight;
 }
@@ -278,10 +337,7 @@ function snapshot(adapter) {
   const entry = snapshots.get(id) || null;
   if (due(entry, now)) refresh(adapter, now);
   const held = snapshots.get(id);
-  return (held && held.catalog)
-    || makeCatalog(id, str(declared.source) || null, STATUS.LOADING, {
-      dimensions: Array.isArray(declared.dimensions) ? declared.dimensions.slice() : [],
-    });
+  return (held && held.catalog) || loadingCatalog(id, declared);
 }
 
 /**
@@ -303,31 +359,42 @@ function catalogs(adapters) {
 }
 
 /**
- * MARK A RUNTIME'S CATALOG STALE — the reconnect / version-change hook.
+ * MARK A RUNTIME'S CATALOG FOR RE-READ — the reconnect / repair / version-change hook.
  *
- * ⚠ IT KEEPS THE MODELS AND CHANGES THE STATUS, which is the whole difference between this and
- * `forget`. A reconnect does not make the old labels wrong; it makes them unconfirmed. The next
- * `snapshot()` re-reads, and until it answers a stale id still renders and still cannot be picked.
+ * ⚠ A CATALOG THAT HOLDS MODELS BECOMES `stale`: it keeps the models and changes the status,
+ * which is the whole difference between this and `forget`. A reconnect does not make the old
+ * labels wrong; it makes them unconfirmed. Until the re-read answers, a stale id still renders
+ * and still cannot be picked.
+ * ⚠ **A CATALOG THAT HOLDS NONE BECOMES `loading` (CXP-5, 2026-09-22).** An `unavailable` verdict
+ * that has been invalidated is no longer a verdict — the failure it measured is the thing the
+ * operator just changed — and `stale` with no models would be a status with nothing to label.
+ * ⚠ **A READ ALREADY IN FLIGHT IS KEPT, NOT RACED.** Replacing it would spawn a second
+ * `codex app-server` beside the first; instead it is marked dirty, so if IT fails its answer is
+ * due again at the very next look (`refresh`).
  */
 function invalidate(runtimeId, reason) {
   const id = str(runtimeId);
   const held = snapshots.get(id);
   if (!held || !held.catalog) return false;
-  snapshots.set(id, {
-    catalog: Object.assign({}, held.catalog, {
+  if (held.inflight) {
+    held.dirty = true;
+    return true;
+  }
+  const catalog = held.catalog.models.length
+    ? Object.assign({}, held.catalog, {
       status: STATUS.STALE,
       reason: str(reason) || 'this runtime reconnected, so its model list has not been re-read yet',
-    }),
-    at: 0,
-    inflight: null,
-  });
+    })
+    : makeCatalog(id, held.catalog.source, STATUS.LOADING, { dimensions: held.catalog.dimensions.slice() });
+  snapshots.set(id, { catalog, at: 0, inflight: null, dirty: false });
   return true;
 }
 
 /** Drop everything cached. ⚠ For tests and for an explicit operator-driven re-probe only. */
 function forget(runtimeId) {
-  if (runtimeId === undefined) { snapshots.clear(); return; }
+  if (runtimeId === undefined) { snapshots.clear(); settledStatus.clear(); return; }
   snapshots.delete(str(runtimeId));
+  settledStatus.delete(str(runtimeId));
 }
 
 module.exports = {
@@ -341,5 +408,6 @@ module.exports = {
   snapshot,
   catalogs,
   invalidate,
+  onSettled,
   forget,
 };

@@ -99,4 +99,20 @@ function resetConnectivityCache() {
   inflight = null;
 }
 
-module.exports = { connectedIds, resetConnectivityCache, LEASH_MS, TTL_MS };
+/**
+ * EXPIRE THE STANDING SWEEP BECAUSE SOMETHING WAS OBSERVED TO CHANGE (CXP-5, 2026-09-22).
+ *
+ * ⚠ EVENT-DRIVEN, NEVER A TIMER — the one caller is `channel-runtime-reply.js`, when a runtime's
+ * model catalog SETTLES into a different verdict than it last had (a Codex roster that was
+ * `unavailable` came back `ready` because the operator installed or signed in with Dopl open).
+ * That is fresher evidence than a 60s-old "not connected", so the next read re-sweeps instead of
+ * contradicting the picker for up to a minute.
+ * ⚠ IT LEAVES AN IN-FLIGHT SWEEP ALONE, unlike `resetConnectivityCache`: dropping `inflight` would
+ * let a concurrent read start a second probe of every binary, which is the storm the cache exists
+ * to prevent.
+ */
+function expire() {
+  cache = null;
+}
+
+module.exports = { connectedIds, resetConnectivityCache, expire, LEASH_MS, TTL_MS };

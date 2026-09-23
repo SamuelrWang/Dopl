@@ -66,6 +66,43 @@ function adapters() {
   }
 }
 
+// ── ⚠ REPAIR WITHOUT A RESTART (CXP-5, 2026-09-22) — THE TWO CACHES INVALIDATE EACH OTHER ──
+//
+// `connected` (60s sweep) and each catalog (cached `ready`, floored failure) are two caches over
+// ONE fact: can this Mac run that runtime. An operator who installs or signs in to Codex with Dopl
+// open changes that fact, and neither cache would notice on its own for up to a minute — or, for a
+// `ready` roster, ever. So each cache's CHANGE is the other's invalidation, and both are
+// EVENT-DRIVEN: nothing here runs on a timer.
+//   · a runtime ENTERING or LEAVING `connected` invalidates its catalog (re-read at this read);
+//   · a catalog whose SETTLED verdict changes expires the sweep (re-probed at the next read).
+// ⚠ Both hooks are optional on the other end — a stubbed registry or catalog in a suite has
+// neither, and a settings read must never fail over a cache hint.
+
+let lastConnected = null; // Set of ids from the previous read, or null before the first
+
+function noteConnected(ids) {
+  const now = new Set(ids);
+  const before = lastConnected;
+  lastConnected = now;
+  if (!before || typeof modelCatalog.invalidate !== 'function') return;
+  for (const id of new Set([...before, ...now])) {
+    if (before.has(id) === now.has(id)) continue;
+    try {
+      modelCatalog.invalidate(id, now.has(id)
+        ? 'this runtime just connected, so its model list is being re-read'
+        : 'this runtime just disconnected, so its model list could not be confirmed');
+    } catch (_) { /* a cache hint never fails the read */ }
+  }
+}
+
+if (typeof modelCatalog.onSettled === 'function') {
+  modelCatalog.onSettled(() => {
+    try {
+      if (typeof runtimeRegistry.expireConnectivity === 'function') runtimeRegistry.expireConnectivity();
+    } catch (_) { /* a cache hint never fails the read */ }
+  });
+}
+
 /**
  * THE RUNTIME HALF OF A SETTINGS REPLY. ⚠ ALWAYS THE SAME FIVE KEYS, so the SPA's OWN-KEY probes
  * ("does this desktop have a runtime concept at all") answer the same on both ops.
@@ -74,6 +111,7 @@ async function runtimeReply() {
   const connected = await Promise.resolve()
     .then(() => runtimeRegistry.connectedIds())
     .catch(() => []);
+  noteConnected(Array.isArray(connected) ? connected : []);
   let catalogs = {};
   try { catalogs = modelCatalog.catalogs(adapters()); } catch (err) {
     diag('channel runtime reply: model catalogs unavailable —', err && err.message);
