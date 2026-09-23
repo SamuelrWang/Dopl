@@ -236,7 +236,7 @@ test("the server key is ONE constant, and the asking table is read off the ENTRY
     "exactly one tool on Dopl's entry may raise an ask — that singleton IS the name derivation");
   assert.equal(mcp.soleAskingTool(entry), mcp.CHANNEL_TOOL);
   assert.equal(entry.tools[mcp.CHANNEL_TOOL].approval_mode, "prompt");
-  assert.equal(entry.default_tools_approval_mode, "auto",
+  assert.equal(entry.default_tools_approval_mode, "approve",
     "a default that can ask puts every tool in the asking set and makes every ask un-nameable");
   assert.equal(approval.doplElicitation(elicitation().params).name, mcp.soleAskingTool());
 });
@@ -245,7 +245,7 @@ test("a SECOND asking tool degrades to the un-named Dopl surface instead of gues
   // ⚠ THE SET, NOT THE FIRST MEMBER. A future entry that lets two tools ask must stop deriving a
   // name, not pick one — so the derivation is pinned on a synthetic entry rather than trusted.
   const two = mcp.buildDoplServerEntry(null);
-  two.tools = { dopl_channel: { approval_mode: "prompt" }, dopl_kb: { approval_mode: "approve" } };
+  two.tools = { dopl_channel: { approval_mode: "prompt" }, dopl_kb: { approval_mode: "prompt" } };
   assert.deepEqual(mcp.askingToolsIn(two), ["dopl_channel", "dopl_kb"]);
   assert.equal(mcp.soleAskingTool(two), null);
   // …and a default that asks means EVERY tool can, which is not a set Dopl enumerated at all.

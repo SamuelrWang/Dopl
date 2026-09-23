@@ -164,6 +164,21 @@ function axisAAllows(mode, toolName) {
 // `dopl_only` is strictly narrower here than there. That is a capability difference to SHOW, not
 // to close by widening the sandbox: the profile's whole point is "look things up with no shell",
 // and on Codex the Dopl archive is the only lookup surface it gets.
+// 🔒 THE THREAD `features` FENCE (CXP-3A, MEASURED 2026-09-22 on codex-cli 0.155.1). With the
+// operator's ChatGPT auth linked, every thread mounts `codex_apps` — a FOREIGN MCP server whose
+// tools (Sites, document control, …) sit behind the same `tool_search` Dopl now orders — and the
+// multi-agent (delegation) tools ride that search too. `thread/start.config.features.apps = false`
+// removes the apps source (and `request_plugin_install`); `multi_agent = false` removes delegation.
+// ⚠ APPS OFF ON EVERY PROFILE: the twin of Claude's `ENABLE_CLAUDEAI_MCP_SERVERS=0`, which is set
+// unconditionally too — an account connector is ambient authority no profile granted.
+// ⚠ DELEGATION OFF ON THE RESTRICTED TWO ONLY, matching Claude's `DENIED_BUILTINS` (Task/Agent):
+// a subagent is a fresh session that does not inherit the bound. ⚠ IT CLOSES §5 C25 ONLY FOR A
+// NON-CODE-MODE MODEL (gpt-5.5): a `code_mode_only` model (gpt-6-*, gpt-5.6-*) still carries a
+// top-level `collaboration` namespace (`spawn_agent`, …) with `multi_agent`, `multi_agent_v2` and
+// `enable_fanout` all false — measured 2026-09-22, and still OPEN.
+const ACCOUNT_FENCE = Object.freeze({ apps: false, plugins: false });
+const RESTRICTED_FENCE = Object.freeze({ ...ACCOUNT_FENCE, multi_agent: false });
+
 function buildSessionToolConfig(profile) {
   const p = normalizeProfile(profile);
   const channelShort = shortDoplName(DOPL_CHANNEL_TOOL);
@@ -183,6 +198,7 @@ function buildSessionToolConfig(profile) {
         .concat(doplSurfaceDeny, DOPL_SAFE_TOOLS),
       doplToolsPolicy: [channelShort],
       native: { sandbox_mode: 'read-only', approval_policy: 'untrusted' },
+      features: { ...RESTRICTED_FENCE },
     };
   }
 
@@ -197,6 +213,7 @@ function buildSessionToolConfig(profile) {
         .concat(doplSurfaceDeny),
       doplToolsPolicy: DOPL_SAFE_TOOLS.map(shortDoplName).concat([channelShort]),
       native: { sandbox_mode: 'read-only', approval_policy: 'untrusted' },
+      features: { ...RESTRICTED_FENCE },
     };
   }
 
@@ -226,6 +243,7 @@ function buildSessionToolConfig(profile) {
       disallowedTools: UNIVERSAL_HARD_DENY.concat(ESCALATION_ITEMS),
       doplToolsPolicy: null,
       native: null,
+      features: { ...ACCOUNT_FENCE },
     };
   }
 
@@ -238,6 +256,7 @@ function buildSessionToolConfig(profile) {
     disallowedTools: UNIVERSAL_HARD_DENY.slice(),
     doplToolsPolicy: null,
     native: null,
+    features: { ...ACCOUNT_FENCE },
   };
 }
 
@@ -259,6 +278,6 @@ module.exports = {
   buildSessionToolConfig,
   axisAAllows, normalizeToolMode,
   TOOL_MODES, GRANULAR_CATEGORIES, ESCALATION_ITEMS, EDIT_ITEMS,
-  COMMAND_ITEM, FILE_ITEM, WINDOWLESS_FLOOR,
+  COMMAND_ITEM, FILE_ITEM, WINDOWLESS_FLOOR, ACCOUNT_FENCE, RESTRICTED_FENCE,
   UNTRUSTED_TOOLS, ON_REQUEST_TOOLS, NEVER_TOOLS,
 };

@@ -91,14 +91,25 @@ const SERVER_KEY = 'dopl';
 // answers a SET, `soleAskingTool` answers `null` for anything but a singleton, and the caller
 // treats `null` as "the Dopl surface as a whole" rather than as a name. Adding a second asking
 // tool therefore degrades to a gate, loudly, instead of mis-naming a call.
-const DEFAULT_TOOL_APPROVAL_MODE = 'auto';
+// 🔒 ⚠ **AND `'auto'` TURNED OUT TO ASK (MEASURED 2026-09-22, codex-cli 0.155.1, CXP-3A).** A
+// scripted-model call to `dopl_kb` under `approval_policy` `untrusted` or `on-request` with the
+// default at `'auto'` raised `mcpServer/elicitation/request` from `serverName: 'dopl'` (its `_meta`
+// even offered `persist: ['session','always']`) — and `approval.js › doplElicitation` named that
+// ask `dopl_channel`, handing the channel tool's Axis-B lanes a knowledge-base call's arguments.
+// The measured never-ask mode is `'approve'`: the same call ran with NO request under both
+// policies. So the default is `'approve'` — which is what the 2026-09-22 ruling above ASSUMED
+// `'auto'` was ("non-channel tools run without an Axis-A card") — and the singleton premise is
+// now true on the wire, not just in this table. (`test/codex-mcp-discovery.test.mjs` re-measures.)
+const DEFAULT_TOOL_APPROVAL_MODE = 'approve';
 const TOOL_APPROVAL_MODES = Object.freeze({ [CHANNEL_TOOL]: 'prompt' });
 
 // The modes that CAN produce an ask. ⚠ MEMBERSHIP IS THE FAIL-CLOSED DIRECTION: `writes` only asks
 // for non-read-only tools, but "only sometimes" is still "can", and counting it as asking can only
 // make the set BIGGER — which makes `soleAskingTool` answer `null` and the caller fall back to the
 // un-named surface. Counting it as silent would be the unsafe error, so it is not made.
-const ASKING_MODES = Object.freeze(['prompt', 'approve', 'writes']);
+// 🔒 MEASURED 2026-09-22 (C24 answered): `prompt` asks, `auto` asks for a tool with no
+// `readOnlyHint`, `writes` asks; `approve` NEVER asks. So `approve` left this list and `auto` joined.
+const ASKING_MODES = Object.freeze(['prompt', 'auto', 'writes']);
 
 /**
  * The tools on ONE server entry that can raise an approval ask, or `null` when EVERY tool can.
@@ -164,13 +175,12 @@ function doplBearer() {
  * (`session-profiles.js`'s standing invariant). `codex-research.md` §3 documents per-MCP-tool
  * approval as genuinely per-tool and calls it "strictly better than what we have" — this is that
  * lever used for the one thing it must guarantee.
- * ⚠ `'prompt'` RATHER THAN `'approve'`, AND THE CHOICE IS RECORDED: the enum is
- * `auto | prompt | writes | approve`, in which `auto` plainly means "never ask" and `writes` means
- * "ask for non-read-only tools". Which of `prompt` and `approve` is the unconditional ask is NOT
- * disambiguated by the research, and Axis B's whole enforcement point rides on getting it right —
- * §5 item C24. `prompt` is the unambiguous reading of the two.
- * ⚠ `default_tools_approval_mode` IS `'auto'` SINCE 2026-09-22 AND THAT IS A RULING, NOT A
- * DEFAULT. It was `'writes'`. The argument for the change — and what it costs — is written out in
+ * ⚠ `'prompt'` RATHER THAN `'approve'`, AND SINCE 2026-09-22 THAT IS MEASURED (§5 C24): `prompt`
+ * raises the elicitation, `approve` runs the call with no request at all. ⚠ AND UNDER
+ * `approval_policy: 'never'` EVEN `prompt` RAISES NOTHING — the call FAILS (measured), so a Codex
+ * session on the widest Axis-A mode cannot use the channel tool; closed, not open.
+ * ⚠ `default_tools_approval_mode` IS `'approve'` (it was `'writes'`, then `'auto'` on 2026-09-22,
+ * which was measured to ASK — see `DEFAULT_TOOL_APPROVAL_MODE`) AND THAT IS A RULING, NOT A DEFAULT. The argument for the change — and what it costs — is written out in
  * full beside `TOOL_APPROVAL_MODES` above; the short form is that a second asking tool makes every
  * ask un-nameable on this runtime, and an un-nameable ask can only be declined.
  */
@@ -296,9 +306,10 @@ const descriptor = {
   // approval_mode` through `config/read` EVEN UNDER `--strict-config`, which errors on any field
   // this CLI does not recognise. The key is supported; what it produces is the elicitation above.
   perToolApproval: 'tools.<tool>.approval_mode',
-  // ⚠ null: this runtime has no eager-load flag. Claude's `alwaysLoad` exists because its CLI
-  // defers every MCP tool behind a tool-search verb; nothing in the research says Codex defers
-  // tools at all, and `prose.toolSearchVerb` is `null` here for the same reason.
+  // ⚠ null: this runtime has no eager-load flag — MEASURED 2026-09-22 (codex-cli 0.155.1,
+  // CXP-3A). Codex DOES defer every MCP tool behind `tool_search`, and no server key, thread
+  // `config` or `[features]` toggle opts Dopl's entry out, so `prose.toolSearchVerb` names that
+  // verb and `capability.mcpDiscoveryVerb` makes the turn order the search (index.js).
   eagerLoadFlag: null,
   sessionStampHeader: 'X-Dopl-Session-Id',
 };

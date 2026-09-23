@@ -138,7 +138,14 @@ function buildLaunchSpec(request) {
     approvalPolicy: pair.approval_policy,
     sandbox: pair.sandbox_mode,
   };
-  if (wired.usable) threadStart.config = { mcp_servers: { dopl: server } };
+  // ⚠ THE `features` FENCE RIDES EVERY LAUNCH, TOKEN OR NOT (`tools.js › ACCOUNT_FENCE`): the
+  // foreign `codex_apps` server mounts from the operator's auth, not from Dopl's entry.
+  // ⚠ …AND THE PROJECT-TRUST FENCE (`config-home.js › projectTrustFence`): without it a
+  // workspace-write thread auto-trusts its cwd, persists that into the private home (refusing the
+  // NEXT launch) and loads `<cwd>/.codex/config.toml` — hooks, MCP servers — from the agent's folder.
+  const cwd = channelDirs.sessionSpawnDir(s.channelId);
+  threadStart.config = { features: Object.assign({}, cfg.features), projects: configHome.projectTrustFence(cwd) };
+  if (wired.usable) threadStart.config.mcp_servers = { dopl: server };
   const model = typeof s.model === 'string' ? s.model.trim() : '';
   // `''` (or anything the roster does not know) sets no field at all — the platform's own pick,
   // which is `descriptor.models.defaultMeansAbsent`.
@@ -165,7 +172,7 @@ function buildLaunchSpec(request) {
     // Item 7: the per-channel folder (else ~/Downloads). CONTEXT, not a fence — the sandbox is the
     // fence. Set on the child AND passed to `thread/start`, because `thread/list` filters by `cwd`
     // so a thread plainly HAS one, and which of the two the app-server honours is §5 item B2.
-    cwd: channelDirs.sessionSpawnDir(s.channelId),
+    cwd,
     resumeThreadId: s.resumeSdkId || null,
   };
 }

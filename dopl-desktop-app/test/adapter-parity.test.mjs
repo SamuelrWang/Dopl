@@ -75,6 +75,8 @@ const VARIES = [
   ["mcp.eagerLoadFlag", (d) => d.mcp.eagerLoadFlag, true],
   ["deepLink", (d) => d.deepLink, true],
   ["prose.toolSearchVerb", (d) => d.prose.toolSearchVerb, true],
+  // CXP-3A (2026-09-22): Codex `'ALL_TOOLS'` (measured, code-mode models), Claude/Cursor `null`.
+  ["prose.deferredCatalog", (d) => d.prose.deferredCatalog, true],
   ["packaging.delivery", (d) => d.packaging.delivery, false],
 ];
 

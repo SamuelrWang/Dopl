@@ -162,7 +162,7 @@ function harness(cfg = {}) {
       // ⚠ 2026-09-01 (D3): Axis B's collapse WARNING, also injected REAL. Codex declares
       // `opScoped: 'unverified'`, so this really does fire on the shipped tree — which is the
       // point: the predicate had no consumer at all before this.
-      axisBOpScopedWarning: (id) => REAL_PROFILES.axisBOpScopedWarning(id),
+      axisBOpScopedWarning: (id) => (cfg.opScopedWarning !== undefined ? cfg.opScopedWarning : REAL_PROFILES.axisBOpScopedWarning(id)),
     },
     // ⚠ 2026-09-09 (F-681): the ontology-reach PRODUCER, faked — an HTTP read behind a device
     // token this file has neither of. `test/ontology-reach-producer.test.mjs` pins the real
@@ -462,9 +462,10 @@ test("D1: the predicate itself answers a SENTENCE for a null floor and for an un
 // spawn shape this tree has, which is a release decision and not this function's.
 
 test("D3: a runtime whose Axis B is not op-scoped LAUNCHES, and says so", async () => {
-  // Codex declares `axisB.opScoped: 'unverified'` (§5 item C1, unmeasured), so this fires against
-  // the SHIPPED descriptor — no fake, no hypothetical fourth adapter.
-  const h = harness();
+  // ⚠ NO SHIPPED ADAPTER IS UNVERIFIED SINCE CXP-3A (2026-09-22), so the REAL sentence is built
+  // from the frozen Codex descriptor with `opScoped` set back to `'unverified'` and injected.
+  const req = createRequire(import.meta.url), D = req(join(MAIN, "runtime", "index.js")).descriptorFor("codex");
+  const h = harness({ opScopedWarning: req(join(MAIN, "runtime", "capability.js")).axisBOpScopedWarning({ ...D, axisB: { ...D.axisB, opScoped: "unverified" } }) });
   const res = await h.launch(call({ channelId: CH, taskId: TASK, runtime: "codex" }));
   assert.equal(res.skipped, undefined, "it is a WARNING — the launch proceeds");
   assert.equal(h.calls.started.length, 1, "…and the session is really constructed");
@@ -475,7 +476,7 @@ test("D3: a runtime whose Axis B is not op-scoped LAUNCHES, and says so", async 
 });
 
 test("D3: an op-scoped runtime says NOTHING — a warning on every launch is a warning nobody reads", async () => {
-  for (const runtime of ["claude", "cursor"]) {
+  for (const runtime of ["claude", "cursor", "codex"]) {
     const h = harness();
     await h.launch(call({ channelId: CH, taskId: TASK, runtime }));
     assert.deepEqual(h.calls.diag.filter((l) => /Axis B is not op-scoped/.test(l)), [], runtime);

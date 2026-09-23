@@ -251,7 +251,7 @@ test("an absent capability is null — an empty array would render an empty cont
     ["approval.categories", (d) => d.approval.categories],
     ["containment.nativeControls", (d) => d.containment.nativeControls],
     ["deepLink", (d) => d.deepLink],
-    ["prose.toolSearchVerb", (d) => d.prose.toolSearchVerb],
+    ["prose.toolSearchVerb", (d) => d.prose.toolSearchVerb], ["prose.deferredCatalog", (d) => d.prose.deferredCatalog],
     ["mcp.perToolApproval", (d) => d.mcp.perToolApproval],
     ["mcp.eagerLoadFlag", (d) => d.mcp.eagerLoadFlag],
   ];

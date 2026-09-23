@@ -279,9 +279,25 @@ const descriptor = {
   },
 
   prose: {
-    // ⚠ NULL => THE "load it with ToolSearch" SENTENCE IS OMITTED, NEVER TRANSLATED into a verb
-    // that does not exist. Nothing in the research says this runtime defers MCP tools at all.
-    toolSearchVerb: null,
+    // 🔒 MEASURED 2026-09-22, codex-cli 0.155.1 (CXP-3A; `test/codex-mcp-discovery.test.mjs`).
+    // It was `null` on the assumption that Codex does not defer MCP tools. IT DOES, ALWAYS: the
+    // first Responses request of a thread carries NO `mcp__dopl` tool, only a client-executed
+    // `{ type: 'tool_search' }` whose description lists `dopl` as a source. Calling it (query
+    // e.g. "dopl_channel") returns a `tool_search_output` holding namespace `mcp__dopl` with
+    // `dopl_channel` (`defer_loading: true`), after which the model can call it and the call
+    // reaches `mcpServer/elicitation/request` as before. `codex features list` shows
+    // `tool_search_always_defer_mcp_tools` as REMOVED/true, the `[features]` toggles do nothing,
+    // and no `mcp_servers.<name>` key opts a server out — deferral follows the model catalog's
+    // `supports_search_tool`, which Dopl does not own. So the agent is TOLD to search.
+    // ⚠ THAT IS THE NON-CODE-MODE SURFACE (gpt-5.5). Every other listed model in the 2026-09-22
+    // catalog (`gpt-6-*`, `gpt-5.6-*`) is `tool_mode: code_mode_only`: the request carries NO
+    // `tool_search`, only an `exec` tool running JS, and a deferred MCP tool is "omitted from this
+    // description … listed in `ALL_TOOLS`" — measured: `ALL_TOOLS` held `mcp__dopl__dopl_channel`,
+    // and `await tools.mcp__dopl__dopl_channel({ op })` inside `exec` reached the same
+    // `mcpToolCall` item and `mcpServer/elicitation/request`. Hence `deferredCatalog`, and a turn
+    // that names BOTH ways in (`prompt-framing.js › grantLines`).
+    toolSearchVerb: 'tool_search',
+    deferredCatalog: 'ALL_TOOLS',
     // ⚠ `'unverified'`, matching `wake.backgroundsPendingCall`. The guidance an agent is given
     // about awaiting is a claim about what the HOST does with a long-pending call, and this one is
     // unmeasured.

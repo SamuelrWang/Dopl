@@ -185,12 +185,13 @@ function preToolUseStamp(payload, s, log) {
 // Descriptor half.
 const descriptor = {
   enforcementPoint: 'held-callback',
-  // ⚠ `'unverified'` — and since 2026-09-22 this is an UNDER-claim rather than an absence. A
-  // channel call's op and arguments DO reach the gate now (see the header), but by a join through
-  // Dopl's own per-tool approval table whose premise is not yet measured (§5 item C1b).
-  // `capability.js › axisBOpScoped` reads anything but `true` as NOT op-scoped, which over-warns
-  // and never over-grants — the direction to be wrong in.
-  opScoped: 'unverified',
+  // 🔒 `true` SINCE CXP-3A (MEASURED 2026-09-22, codex-cli 0.155.1, §5 C1b answered). A channel
+  // call's FULL arguments ride the elicitation's `_meta.tool_params` (a `send` carried op,
+  // channel, thread, kind and body), and the join through Dopl's per-tool approval table is now
+  // TRUE ON THE WIRE: with the default at `'approve'` a non-channel Dopl tool raises no request at
+  // all, so every elicitation from `serverName: 'dopl'` IS `dopl_channel` (`mcp.js ›
+  // DEFAULT_TOOL_APPROVAL_MODE`; `test/codex-mcp-discovery.test.mjs` re-measures both halves).
+  opScoped: true,
   // The only documented input-rewrite lever this runtime has. ⚠ `null` is not a legal answer for a
   // shipped adapter — without the stamp, agents stop self-filtering their own posts in a shared
   // channel, which is a fan-out/echo failure and not a cosmetic one — so §5 C6 (does a

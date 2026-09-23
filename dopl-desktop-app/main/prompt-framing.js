@@ -44,6 +44,8 @@ const { ontologyReachLines } = require('./prompt-framing-ontology');
 // blank launch and the whole responder lane stay byte-identical to what they were before it
 // existed — which `session-identity.test.mjs` asserts outright.
 const { templateRoleFraming } = require('./prompt-framing-template');
+// CXP-3A (2026-09-22): the grant sentence, per runtime — its own module for the §2 cap, like the ontology lines.
+const { grantLines } = require('./prompt-framing-discovery');
 
 // OUR framing lines, placed OUTSIDE the nonce fence by the caller (session-spawner buildPrompt).
 // Plain-text lines the caller joins with '\n'.
@@ -231,6 +233,7 @@ function deliveryCall(ctx) {
 // read works from spawn zero) and agents took it literally, manufacturing amnesia by refusing to
 // look elsewhere. The imperative survives; the copy now says the read REPEATS.
 function firstActions(side, ctx) {
+  const disc = ctx && ctx.mcpDiscovery && typeof ctx.mcpDiscovery === 'object' ? ctx.mcpDiscovery : null;
   const lines = [
     `FIRST ACTIONS THIS TURN, before you plan or answer anything:`,
     // ⚠ "GRANTED AND OP-SCOPED", not "GRANTED" (G22, 2026-09-02). The tool is offered on every
@@ -239,10 +242,7 @@ function firstActions(side, ctx) {
     // block forbids. The grant is the tool; the posture is the ops.
     `- mcp__dopl__dopl_channel is GRANTED to this session, and OP-SCOPED by your posture: a`,
     `  particular op may still be gated, which is not the tool missing. It is your delivery`,
-    `  path and it is the reason this session exists, so do not go looking for it and do not`,
-    `  test for it: if it is not in a list you can enumerate, that is the list, not the grant.`,
-    `  If mcp__dopl__dopl_channel is not in your tool list, say so in your first reply: the`,
-    `  desktop failed to connect Dopl.`,
+    ...grantLines(disc),
     `  Just make the call in the delivery section below; if a call is genuinely refused, your`,
     `  operator sees the refusal on this window and it is theirs to fix, not the counterparty's.`,
     ...LANE_EXCLUSIVITY,
