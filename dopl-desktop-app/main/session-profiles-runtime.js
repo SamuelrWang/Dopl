@@ -44,25 +44,15 @@ const axisBOpScopedWarning = (runtimeId) => cap.axisBOpScopedWarning(descriptorF
 // question `session-gate-reason.js › toolReason` asks to separate "in no list this build knows"
 // from "known, but not covered by the posture you set" — the conflation that made bypass look
 // broken and bought that whole module.
-const isClassifiedTool = (toolName, runtimeId) =>
-  runtimeFor(runtimeId).axisAAllows(cap.widestToolMode(descriptorFor(runtimeId)), toolName);
-
 // A session's Axis-A words, narrowest first. Every coercion of a SESSION's mode asks this with the
 // session's own runtime (`session-engine.js › startSession` copies it into state at spawn).
 const toolModesFor = (runtimeId) => cap.toolModes(descriptorFor(runtimeId));
-// ⚠ **THE MODEL PICK AND THE NATIVE LAUNCH SETTINGS, DELEGATED THE SAME WAY (2026-09-21, U5).**
-// They are here for the reason every other delegate above is: these questions used to be answered
-// in core by importing the DEFAULT runtime's frozen enums, which meant a Codex launch was
-// validated against another vendor's vocabulary — the exact coupling this file exists to remove.
-// Core asks for a session's runtime and gets back that runtime's own answer; it holds no id and
-// no setting name of its own.
-// ⚠ `launchModelPick` IS THE **STAMP** — what a session starts on. (`storeModelPick`, the RECORD
-// half, is deleted 2026-09-23 with the stored model.) `runtime/selection-vocabulary.js` has more.
-const launchModelPick = (value, runtimeId) => cap.launchModelPick(descriptorFor(runtimeId), value);
-const normalizeNative = (raw, runtimeId) => cap.normalizeNative(descriptorFor(runtimeId), raw);
-// The native launch dimensions this runtime declares AND can spend, or `null` for "no such
-// concept" — never `{}` (INVARIANTS §11: UNKNOWN is not EMPTY).
-const nativeDimensions = (runtimeId) => cap.nativeDimensions(descriptorFor(runtimeId));
+// The widest Axis-A mode this runtime offers (the own-machine lanes' posture).
+const widestToolModeFor = (runtimeId) => cap.widestToolMode(descriptorFor(runtimeId));
+const isClassifiedTool = (toolName, runtimeId) =>
+  runtimeFor(runtimeId).axisAAllows(widestToolModeFor(runtimeId), toolName);
+// The edit-scoped tool names of this runtime (grant keys scope an edit grant to its directory).
+const editToolsFor = (runtimeId) => cap.editScopedTools(descriptorFor(runtimeId));
 
 // ⚠ THE DEFAULT RUNTIME'S MODE LIST, FOR SUITES ONLY. No decision about a session reads it or the
 // taxonomy below: a session's words come from `toolModesFor(s.runtimeId)`, and a gate
@@ -94,6 +84,6 @@ module.exports = {
   runtimeFor, descriptorFor, cap,
   buildSessionToolConfig, toolModeAllows, normalizeToolMode, floorWindowlessTool, toolModesFor,
   windowlessFloorRefusal, axisBOpScopedWarning, isClassifiedTool,
-  launchModelPick, normalizeNative, nativeDimensions, // U5
-  TOOL_MODES, TAXONOMY, AUTO_TOOLS, BYPASS_TOOLS, BYPASS_READS, ESCALATION_TOOLS, EDIT_TOOLS,
+  widestToolModeFor, editToolsFor,
+  TOOL_MODES, AUTO_TOOLS, BYPASS_TOOLS, BYPASS_READS, ESCALATION_TOOLS, EDIT_TOOLS,
 };

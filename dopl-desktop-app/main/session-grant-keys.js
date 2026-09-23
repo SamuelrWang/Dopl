@@ -187,13 +187,14 @@ function stableStringify(value, depth, seen) {
 // task" (session-io -> reducer allowForTask). The channel base is the REAL tool name, so a
 // versioned channel tool cannot inherit the canonical one's grants (and the canonical name
 // still produces the byte-identical `mcp__dopl__dopl_channel#post…` base it always did).
-// `deps` are session-profiles' own classifiers + its accept_edits list (see the header).
+// `deps` are session-profiles' own classifiers + `editToolsFor(runtimeId)`, the SESSION runtime's
+// edit-scoped names (an absent runtime id is the default runtime).
 function makeGrantKeyFor(deps) {
   const d = deps || {};
   const isChannelTool = d.isChannelTool;
   const isOwnChannelPost = d.isOwnChannelPost;
-  const EDIT_TOOLS = d.EDIT_TOOLS || [];
-  return function grantKeyFor(toolName, input, channelId) {
+  const editToolsFor = typeof d.editToolsFor === 'function' ? d.editToolsFor : () => [];
+  return function grantKeyFor(toolName, input, channelId, runtimeId) {
     const i = input || {};
     if (isChannelTool(toolName)) {
       const base = String(toolName);
@@ -209,7 +210,7 @@ function makeGrantKeyFor(deps) {
       const origin = originOf(i.url);
       if (origin) return toolName + '#' + keyToken(origin, SCOPE_CAP) + '#' + shaKey(origin);
     }
-    if (EDIT_TOOLS.indexOf(toolName) !== -1) {
+    if ((editToolsFor(runtimeId) || []).indexOf(toolName) !== -1) {
       const dir = dirOf(i.file_path != null ? i.file_path : i.notebook_path);
       if (dir) return toolName + '#' + keyToken(dir.split('/').slice(-2).join('/'), SCOPE_CAP) + '#' + shaKey(dir);
     }

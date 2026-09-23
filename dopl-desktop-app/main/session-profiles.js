@@ -63,7 +63,7 @@ const { DOPL_READ_TOOLS, DOPL_WRITE_TOOLS, DOPL_READ_REFERENCE } = require('./se
 const {
   runtimeFor,
   buildSessionToolConfig, toolModeAllows, normalizeToolMode, floorWindowlessTool, toolModesFor,
-  windowlessFloorRefusal, axisBOpScopedWarning, isClassifiedTool,
+  windowlessFloorRefusal, axisBOpScopedWarning, isClassifiedTool, editToolsFor,
   TOOL_MODES, AUTO_TOOLS, BYPASS_TOOLS, BYPASS_READS, ESCALATION_TOOLS, EDIT_TOOLS,
 } = require('./session-profiles-runtime');
 const { DOPL_CHANNEL_TOOL } = require('./tool-profiles');
@@ -163,12 +163,9 @@ function isOwnChannelRead(input, sessionChannelId) {
 // by ID, a slug classifying as another channel. The bar an op must clear to earn this lane is
 // written there, not here.
 
-// ⚠ Grant-key machinery (session-grant-keys.js) is BOUND with THIS table's own classifiers, so
-// a key can never disagree with the branch decision about the same call. `EDIT_TOOLS` is the
-// RUNTIME's list (`descriptor`-declared, adapter-owned) and is read off the DEFAULT runtime here
-// for the same reason the re-exports at the bottom exist: a grant key is minted from the shape
-// the operator was SHOWN, and this tree shows one runtime's shapes today.
-const grantKeyFor = makeGrantKeyFor({ isChannelTool, isOwnChannelPost, EDIT_TOOLS });
+// Grant keys are minted with THIS table's own classifiers, so a key cannot disagree with the branch
+// decision about the same call; edit scoping uses the session runtime's own edit-tool names.
+const grantKeyFor = makeGrantKeyFor({ isChannelTool, isOwnChannelPost, editToolsFor });
 
 // ── AXIS B: MESSAGE FLOW (what crosses between machines) ──────────────────────────
 // Per-session, starts `ask`, resets to `ask` on park. INBOUND half enforced at the inbound gate
@@ -290,7 +287,7 @@ function grantDecision(args) {
     if (isAwaitOp(a.input)) return 'deny';
     // ⚠ ONLY a standing grant for THIS EXACT shape allows without a button. No bare-tool-name
     // fallback: that turns one channel grant (even on op=read) into a grant for op=open.
-    if (allowForTask.indexOf(grantKeyFor(a.toolName, a.input, a.channelId)) !== -1) return 'allow';
+    if (allowForTask.indexOf(grantKeyFor(a.toolName, a.input, a.channelId, a.runtime)) !== -1) return 'allow';
     // auto_outbound / auto_both: ONLY an own-channel post — everything else is the exfil
     // surface and gates.
     if (autoOutboundMode(a.messageMode) && isOwnChannelPost(a.input, a.channelId)) return 'allow';
@@ -317,7 +314,7 @@ function grantDecision(args) {
   }
   if (cfg.preApproved.indexOf(name) !== -1) return 'preapproved';
   // 3. Scoped standing grant: keyed on the SHAPE the operator saw, so RAW name here.
-  if (allowForTask.indexOf(grantKeyFor(a.toolName, a.input, a.channelId)) !== -1) return 'allow';
+  if (allowForTask.indexOf(grantKeyFor(a.toolName, a.input, a.channelId, a.runtime)) !== -1) return 'allow';
   // 4. AXIS A, IN THIS RUNTIME'S OWN MODE VOCABULARY. Message flow never consulted here — the
   //    other half of the invariant. Fail-closed per runtime: an unknown mode allows nothing.
   if (rt.axisAAllows(a.toolMode, name)) return 'allow';

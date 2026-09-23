@@ -111,7 +111,7 @@ function makeGateReason(deps) {
   const d = deps || {};
   const grantedFor = function (a) {
     const held = a.allowForTask || [];
-    return held.indexOf(d.grantKeyFor(a.toolName, a.input, a.channelId)) !== -1;
+    return held.indexOf(d.grantKeyFor(a.toolName, a.input, a.channelId, a.runtime)) !== -1;
   };
   // WHY did a CHANNEL call stop? The order MIRRORS grantDecision's own channel branch, which is
   // what keeps the explanation true: malformed first (it gates before anything else is asked),

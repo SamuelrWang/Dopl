@@ -17,7 +17,7 @@
 //   AXIS B, outbound half   the ask LEAVES this machine — all three write a
 //                           `channel_launch_directives` row (`kind: 'rename' | 'end' |
 //                           'set_agent_mode'`), at least as outbound as a post.
-//   AXIS A, `bypass` only   what they reach is the operator's OWN MAC: a live session on it is
+//   AXIS A, widest mode     what they reach is the operator's OWN MAC: a live session on it is
 //                           relabelled, STOPPED or re-postured, and nothing narrower may reach
 //                           another local process.
 // A conjunction only narrows, so the Axis-A/Axis-B invariant holds in the direction that matters.
@@ -49,12 +49,9 @@ const { channelOpKey } = require('./channel-op-key'); // <op>.<action> — the O
 // every posture, so a fourth action joins by being written down here or not at all.
 const OWN_MACHINE_MANAGE_OPS = ['manage.rename', 'manage.end', 'manage.posture'];
 
-// The Axis-A posture that may reach another process on this Mac. Compared as a LITERAL —
-// `session-io.js › grantArgs` has already normalized and floored the axis. Deliberately a third
-// spelling rather than an import of `session-own-launch.js › LAUNCH_TOOL_MODE`: these are separate
-// rulings that happen to agree, and a shared constant would make a future narrowing of one
-// silently narrow the others.
-const MANAGE_TOOL_MODE = 'bypass';
+// The Axis-A posture that may reach another process on this Mac: the SESSION runtime's widest mode.
+// Lazy: the runtime layer requires session modules.
+const widestToolMode = (runtimeId) => require('./session-profiles-runtime').widestToolModeFor(runtimeId);
 
 /**
  * THE AUDIT CODE PER ACTION — three codes, not one, because the grain is the ARGUMENT rather than
@@ -96,7 +93,7 @@ function isOwnMachineManage(input, sessionChannelId) {
  */
 function manageLaneVerdict(args, autoOutbound) {
   const a = args || {};
-  return a.toolMode === MANAGE_TOOL_MODE && autoOutbound === true ? 'allow' : 'gate';
+  return a.toolMode === widestToolMode(a.runtime) && autoOutbound === true ? 'allow' : 'gate';
 }
 
 /**
@@ -111,7 +108,6 @@ function manageAllowReason(input, sessionChannelId) {
 
 module.exports = {
   OWN_MACHINE_MANAGE_OPS,
-  MANAGE_TOOL_MODE,
   MANAGE_ALLOW_REASONS,
   isOwnMachineManage,
   manageLaneVerdict,

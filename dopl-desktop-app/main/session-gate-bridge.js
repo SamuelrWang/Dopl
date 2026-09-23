@@ -151,7 +151,7 @@ function gateCall(s, name, input, opts, dispatch, log) {
   // v2.5 D2: the GRANT KEY (not always the bare tool name) is what an "Allow for this task" click
   // records, so a post grant stays scoped to own-channel posts. The renderer still sees the real
   // tool name in the payload.
-  const grantName = grantKeyFor(name, input, s.channelId);
+  const grantName = grantKeyFor(name, input, s.channelId, s.runtimeId);
   const payload = gatePayload(s, name, input, opts, requestId, verdict);
   return {
     settled: false,
