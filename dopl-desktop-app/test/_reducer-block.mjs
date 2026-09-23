@@ -57,9 +57,8 @@ export function loadReducer() {
   return new Function(
     `${BLOCK}
      return { initialSessionState, sessionReducer, nextIdleMs,
-              gatePhase, gateActivity, endedEmit, endLifecycle, endedStatusText, endEffects, modesEmit, parkEffects,
-              endReasonOf, END_EVENT_REASONS,
-              postureWasReset, POSTURE_RESET_NOTE, INACTIVE_NOTE, AUTH_HELD_NOTE, CLAIMED_NOTE,
+              gatePhase, gateActivity, endedEmit, endLifecycle, endedStatusText, endEffects, parkEffects,
+              endReasonOf, END_EVENT_REASONS, INACTIVE_NOTE, AUTH_HELD_NOTE, CLAIMED_NOTE,
               wakeEffects, inboundAutoAccepted, feedInboundEffects, coerceMode, toolModesOf,
               nextAbandonMs, idleTimeout, AWAITING_PEER_IDLE_MS, ABANDONED_MS, LAUNCHING_MS,
               DEFAULT_IDLE_MS };`

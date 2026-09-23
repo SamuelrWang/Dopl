@@ -78,8 +78,6 @@ test("P4-02: the auth hold resets to THIS runtime's narrowest, and a per-agent p
   assert.equal(r.state.toolMode, "untrusted");
   assert.equal(r.state.messageMode, "ask");
   assert.deepEqual([r.state.toolModeSet, r.state.toolPick], [true, "on-request"], "the narrower ask still holds after");
-  const modes = r.effects.find((e) => e.type === "emit" && e.payload.type === "modes");
-  assert.deepEqual(modes.payload, { type: "modes", tool: "untrusted", message: "ask" }, "the echo names a Codex word");
 });
 
 test("P4-02: the summary's default is the session runtime's narrowest word, never `manual`", () => {

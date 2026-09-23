@@ -342,9 +342,9 @@ test("the CODEX lane end to end: the window on the wire reaches the gauge", () =
 
 const running = () => sessionReducer(initialSessionState({}), { type: "launched", payload: {} }).state;
 
-test("a result emits exactly status + scheduleIdle and moves the turn counter", () => {
+test("a result runs exactly scheduleIdle and moves the turn counter", () => {
   const r = sessionReducer(running(), { type: "result", model: "claude-opus-5" });
-  assert.deepEqual(r.effects.map((e) => e.type), ["emit", "scheduleIdle"]);
+  assert.deepEqual(r.effects.map((e) => e.type), ["scheduleIdle"]);
   assert.equal(r.state.turns, running().turns + 1, "and the turn counter is the one that moves");
   // The reducer holds no meter state (P4-11): the gauge is `session-metrics.js › metrics`.
   for (const gone of ["model", "contextTokens", "contextWindow"]) assert.equal(gone in r.state, false, gone);

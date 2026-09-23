@@ -160,17 +160,12 @@ test("F1: a decision on a LIVE resolver reports true and really resolves the SDK
 test("F1: the SAME decision after a PARK reports FALSE — nothing live was left to decide", async () => {
   const h = harness();
   const { s, settled } = gatedSession(h);
-  // The real park: deny-close every awaited request (denyPending FIRST), then echo
-  // permission_resolved{deny} for it, which is what resolves the decision to "Not sent".
+  // The real park deny-closes every awaited request (denyPending FIRST).
   assert.equal(RED.sessionReducer(s.state, { type: "idle_timeout" }).effects[0].type, "denyPending");
   h.dispatch(s, { type: "idle_timeout" });
   await Promise.resolve();
   assert.equal(s.state.parked, true);
   assert.deepEqual(settled, [{ behavior: "deny", message: "Session paused" }], "the post was already denied");
-  assert.ok(
-    h.emitted.some((e) => e.type === "emit" && e.payload.type === "permission_resolved" && e.payload.decision === "deny"),
-    "and the surface heard about it"
-  );
 
   const ok = h.dispatch(s, { type: "permission_decision", requestId: "r1", decision: "allow-once", name: undefined });
   assert.equal(ok, false, "a Send that raced the park must NOT be reported as taken");

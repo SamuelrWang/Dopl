@@ -136,7 +136,6 @@ function harness(over = {}) {
     // mirrors that, so a re-check sees a session created during a acquireRuntime await.
     startSession: async (spec) => { calls.startSession.push(spec); const sess = { key: spec.key, settled: false, ...spec }; sessions.set(spec.key, sess); return sess; },
     hasLiveSession: (a) => { const s = sessions.get(store.slotKey(a)); return !!(s && !s.settled); },
-    emit: () => {},
   };
 
   // ⚠ `privateTurn` JOINED THE INJECTED SET ON 2026-08-22 (Samuel's private-turn depth ruling):

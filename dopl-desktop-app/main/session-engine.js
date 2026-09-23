@@ -42,11 +42,11 @@ function setSelfIdentity(id) { selfUserId = id || null; }
 // Helpers take the engine's handles by injection (none requires back); read at call time, so order is free.
 sessionPark.bind({
   sessions, acquireRuntime, buildLaunchSpec, consume, dispatch, startSession, hasLiveSession,
-  emit, preflightMcp: sessionQuery.preflightMcp,
+  preflightMcp: sessionQuery.preflightMcp,
 }); sessionBoot.bind({ sessions, runLifecycle, scheduleIdle });
 sessionQuery.bind({ dispatch, scheduleIdle });
-sessionAuth.bind({ sessions, dispatch, emit, denyPending: denyPendingPermissions, teardown: teardownHandles });
-mcpGuard.bind({ acquireRuntime, startQuery, dispatch, emit, denyPending: denyPendingPermissions, resumeParked: sessionPark.resumeParked, abortInFlight: sessionQuery.abortInFlight });
+sessionAuth.bind({ sessions, dispatch, denyPending: denyPendingPermissions, teardown: teardownHandles });
+mcpGuard.bind({ acquireRuntime, startQuery, dispatch, denyPending: denyPendingPermissions, resumeParked: sessionPark.resumeParked, abortInFlight: sessionQuery.abortInFlight });
 sessionGate.bind({ sessions, dispatch });
 sessionReopen.bind({ sessions, refreshTray, dispatch, openAgentWindow: (t) => require('./agent-window').openAgentWindow(t) });
 sessionAnswerPermission.bind({ resolveSession: sessionReopen.resolveSession, dispatch });

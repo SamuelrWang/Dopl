@@ -105,7 +105,6 @@ const DEFERRED = {
   "claude-signin-op.js": "step 6: the sign-in op -> runtime:signIn, with the two test pins",
   "claude-token.js": "step 6: the stored-token keys -> the adapter's credential.js",
   "session-auth.js": "step 6: the credential probe + env keys (the HOLD bookkeeping stays core)",
-  "session-auth-detect.js": "step 6: the sentinels + the operator copy travel with the credential lane",
   "session-ipc-ops.js": "step 6: the `claude:signIn` IPC channel is renamed with its two pins",
   "session-spawner.js": "step 6: the external-CLI facade -> the adapter's credential.js",
   "auth-state.js": "step 6: the stored-credential shape for this runtime",

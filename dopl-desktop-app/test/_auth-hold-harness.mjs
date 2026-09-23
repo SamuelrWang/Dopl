@@ -52,7 +52,7 @@ export const HOLD_BLOCK = sentinelBlock(AUTH_SRC, "SESSION-AUTH-HOLD");
 // await left in the resume, so that is where a re-entrancy race is made now.
 export function harness(over = {}) {
   const cfg = { usable: false, gate: null, ...over };
-  const calls = { emit: [], dispatch: [], effects: [], startQuery: [], denyPending: [], phase: [], sdk: 0, acquired: [] };
+  const calls = { dispatch: [], effects: [], startQuery: [], denyPending: [], phase: [], sdk: 0, acquired: [] };
   const state = { usable: cfg.usable };
   const deps = {
     acquireRuntime: async (id) => { calls.sdk += 1; calls.acquired.push(id); if (cfg.gate) await cfg.gate; return { __runtime: true }; },
@@ -63,7 +63,6 @@ export function harness(over = {}) {
       s.state = next.state;
       for (const e of next.effects) calls.effects.push(e.type);
     },
-    emit: (s, payload) => calls.emit.push(payload),
     denyPending: (s, message) => calls.denyPending.push(message),
     teardown: require(M("session-handles.js")).teardownHandles,
   };

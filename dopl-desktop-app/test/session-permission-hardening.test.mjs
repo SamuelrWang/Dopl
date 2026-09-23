@@ -72,7 +72,7 @@ test("M2: the idle_timeout patch resets NO posture and NO grant", () => {
   for (const field of POSTURE_FIELDS) {
     assert.ok(!patch.includes(field), `the idle park must not write ${field}`);
   }
-  assert.match(patch, /resetPosture: false/, "and it says so at the parkEffects call");
+  assert.match(patch, /parkEffects\(\{ armAbandon: true \}\)/, "and its park effects carry no reset");
   // The two it DOES still clear are not a posture: one-shot resolvers on a query being torn
   // down, and the per-turn post counters whose post the park just deny-closed (FIX F6).
   assert.match(patch, /pendingPermissions: \[\]/);

@@ -99,7 +99,6 @@ function holdMissingCredential(s, state) {
   diag('session-auth: preflight HOLD — no credential on this machine for', runtimeCopy.runtimeLabel(copyFor(s)));
   s.authHold = { kind: 'preflight' };
   dispatchHold(s);
-  deps.emit(s, { type: 'status', phase: 'parked' });
   return true;
 }
 
@@ -128,8 +127,6 @@ function holdIfAuthFailure(s, _text) {
   deps.teardown(s);
   if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; }
   dispatchHold(s);
-  if (already) return true;
-  deps.emit(s, { type: 'status', phase: 'parked' });
   return true;
 }
 

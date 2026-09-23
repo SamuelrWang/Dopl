@@ -220,7 +220,6 @@ function harness(over = {}) {
     dispatch: () => {},
     startSession: async (spec) => { calls.startSession.push(spec); return null; },
     hasLiveSession: () => false,
-    emit: () => {},
   });
 
   return { boot, park, sessions, calls, cfg, storePure };

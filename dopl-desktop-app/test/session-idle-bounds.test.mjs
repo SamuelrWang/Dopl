@@ -23,7 +23,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadReducer } from "./_reducer-block.mjs";
 
-const { initialSessionState, sessionReducer, POSTURE_RESET_NOTE, idleTimeout,
+const { initialSessionState, sessionReducer, idleTimeout,
         AWAITING_PEER_IDLE_MS, ABANDONED_MS } = loadReducer();
 
 
@@ -33,7 +33,6 @@ const { initialSessionState, sessionReducer, POSTURE_RESET_NOTE, idleTimeout,
 // arms the abandonment bound firing `abandon_timeout` (M2), from one arming path with one handle.
 function clock(state) {
   const s = { state };
-  const emitted = [];
   let now = 0;
   let fireAt = null;
   let fireType = null;
@@ -46,7 +45,6 @@ function clock(state) {
         fireAt = now + t.ms;
         fireType = t.type;
       } else if (eff.type === "clearIdle") { fireAt = null; fireType = null; }
-      else if (eff.type === "emit") emitted.push(eff.payload);
     }
     return r;
   }
@@ -54,7 +52,7 @@ function clock(state) {
     now += ms;
     if (fireAt !== null && now >= fireAt) { const t = fireType; fireAt = null; fireType = null; dispatch({ type: t }); }
   }
-  return { s, emitted, dispatch, advance, armed: () => fireAt !== null, armedFor: () => (fireAt === null ? null : fireAt - now), armedType: () => fireType };
+  return { s, dispatch, advance, armed: () => fireAt !== null, armedFor: () => (fireAt === null ? null : fireAt - now), armedType: () => fireType };
 }
 
 const TTL = initialSessionState({}).idleMs;
@@ -113,10 +111,6 @@ test("FIX 3 / M2: NO card and genuinely quiet past the TTL still PARKS, and keep
   assert.equal(c.s.state.messageMode, "auto_both");
   assert.equal(c.s.state.inboundForTask, true, "the standing grants outlive the park too");
   assert.deepEqual(c.s.state.allowForTask, ["Bash"]);
-  // ...and NOTHING is said, because nothing was taken: no modes echo, no reset note.
-  assert.ok(!c.emitted.some((p) => p.type === "modes"), "the header was never dragged back");
-  assert.ok(!c.emitted.some((p) => p.type === "notice" && p.text === POSTURE_RESET_NOTE));
-  assert.doesNotMatch(POSTURE_RESET_NOTE, /—/, "house voice: no em dashes (the AUTH HOLD still uses it)");
 });
 
 test("M2: the park re-arms the ABANDONMENT bound, and reaching it ENDS the session", () => {
@@ -158,27 +152,14 @@ test("M2b: an abandonment KEEPS its window; every watched end still tidies one a
   assert.ok(abandoned.effects.find((e) => e.type === "settle"), "and it settles");
 });
 
-test("FIX 3 / M2: the AUTH HOLD still resets, still says so, and still clears the timer", () => {
-  // The note and the modes echo did not die with the idle park's reset; they moved to the one
-  // park that still revokes. A held session arms nothing: it is waiting on a human.
+test("FIX 3 / M2: the AUTH HOLD still resets and still clears the timer", () => {
+  // A held session arms nothing: it is waiting on a human.
   const c = armedRunning({ toolMode: "bypass", messageMode: "auto_both", allowForTask: ["Bash"] });
   c.dispatch({ type: "launched", payload: {} });
   c.dispatch({ type: "auth_hold" });
   assert.deepEqual({ t: c.s.state.toolMode, m: c.s.state.messageMode }, { t: "manual", m: "ask" });
   assert.deepEqual(c.s.state.allowForTask, []);
-  assert.ok(c.emitted.some((p) => p.type === "modes" && p.tool === "manual" && p.message === "ask"));
-  const note = c.emitted.find((p) => p.type === "notice" && p.text === POSTURE_RESET_NOTE);
-  assert.ok(note && note.level === "info", "the hold says what it took away");
   assert.equal(c.armed(), false, "and it arms no abandonment timer over the Sign in button");
-});
-
-test("FIX 3: a park from an ALREADY restrictive posture says nothing (it took nothing away)", () => {
-  const c = armedRunning({});
-  c.dispatch({ type: "launched", payload: {} });
-  c.advance(TTL);
-  assert.equal(c.s.state.parked, true);
-  assert.ok(!c.emitted.some((p) => p.type === "notice" && p.text === POSTURE_RESET_NOTE),
-    "the line must never claim a change that did not happen");
 });
 
 test("FIX 3 / M2: a parked shell does not re-park on a loop (the re-arm is the far bound)", () => {

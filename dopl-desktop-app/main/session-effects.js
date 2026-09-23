@@ -1,9 +1,6 @@
 // The reducer's effect builders: each returns a side-effect-free descriptor the engine executes. The block
 // is sliced and prepended to the reducer's by test/_reducer-block.mjs, so it may not require anything.
 
-// A hold resets to THIS session's narrowest Axis-A word.
-const { toolModesOf } = require('./session-state');
-
 // ─── BEGIN SESSION-EFFECTS (pure; unit-tested via source extraction) ─────────
 
 // A pending inbound card wins the displayed PHASE ("Message waiting"); `activity` still tells the truth.
@@ -94,27 +91,14 @@ function endEffects(state, outcome, reason, summary) {
     [endedEmit(outcome, reason, summary), { type: 'settle', outcome: outcome }]);
 }
 
-// The posture echo: one shape for both axes.
-function modesEmit(state) {
-  return { type: 'emit', payload: { type: 'modes', tool: state.toolMode, message: state.messageMode } };
-}
-
-// Said only when a park really took a posture away (the auth hold, the only park that resets).
-const POSTURE_RESET_NOTE = 'Paused. Tools and Messages reset to Manual / Ask.';
-function postureWasReset(state) {
-  return !!state && (state.toolMode !== toolModesOf(state)[0] || state.messageMode !== 'ask');
-}
-
 /**
  * PARK, never end: deny held tool calls fail-closed, tear down the query, persist `parked`, keep the
- * conversation id so a lazy wake can resume. `resetPosture` (default, the auth hold) disarms both axes and
- * says so; the idle park passes false (the posture is the operator's for the session). `lifecycle` (hold
- * only) posts the pause note, since a held launch posts nothing else. `armAbandon` (idle only) arms the
- * abandonment bound instead of clearing the timer.
+ * conversation id so a lazy wake can resume. `lifecycle` (the auth hold) posts the pause note, since a
+ * held launch posts nothing else; `armAbandon` (the idle park) arms the abandonment bound instead of
+ * clearing the timer.
  */
-function parkEffects(state, opts) {
+function parkEffects(opts) {
   const o = opts || {};
-  const resetPosture = o.resetPosture !== false;
   const effects = [
     { type: 'denyPending' },
     { type: 'abortQuery' },
@@ -122,18 +106,6 @@ function parkEffects(state, opts) {
     { type: 'persist', phase: 'parked' },
   ];
   if (o.lifecycle === true) effects.push(endLifecycle('auth_hold'));
-  if (resetPosture) {
-    effects.push(modesEmit({ toolMode: toolModesOf(state)[0], messageMode: 'ask' }));
-  }
-  effects.push({ type: 'emit', payload: { type: 'status', phase: gatePhase(state, 'parked') } });
-  effects.push({ type: 'emit', payload: state && state.hasPendingInbound === true ? { type: 'paused', gated: true } : { type: 'paused' } });
-  if (resetPosture && postureWasReset(state)) {
-    effects.push({ type: 'emit', payload: { type: 'notice', level: 'info', text: POSTURE_RESET_NOTE } });
-  }
-  // A query-less session must not keep showing a live-looking prompt.
-  for (const id of (state && state.pendingPermissions) || []) {
-    effects.push({ type: 'emit', payload: { type: 'permission_resolved', requestId: id, decision: 'deny' } });
-  }
   return effects;
 }
 
@@ -150,10 +122,7 @@ module.exports = {
   END_EVENT_REASONS,
   endedStatusText,
   endEffects,
-  modesEmit,
   parkEffects,
-  postureWasReset,
-  POSTURE_RESET_NOTE,
   INACTIVE_NOTE,
   AUTH_HELD_NOTE,
   CLAIMED_NOTE,

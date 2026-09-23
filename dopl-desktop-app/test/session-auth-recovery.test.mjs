@@ -50,7 +50,7 @@ test("the detect block is standalone-evaluable (no electron / fs / require)", ()
   for (const banned of ["require(", "electron", "process.", "child_process", "fs."]) {
     assert.ok(!DETECT_BLOCK.includes(banned), `the pure block must not reference ${banned}`);
   }
-  const api = new Function(`${DETECT_BLOCK}\n return { isAuthShapedError, authFailureText, authNotice };`)();
+  const api = new Function(`${DETECT_BLOCK}\n return { isAuthShapedError, authFailureText };`)();
   assert.equal(typeof api.authFailureText, "function");
 });
 
@@ -96,33 +96,6 @@ test("an ERRORED result is auth-shaped on the loose regex (that text is CLI-sour
   }
 });
 
-test("COPY: names the Claude Code credential on THIS Mac, and never a terminal command", () => {
-  const strings = [detect.AUTH_TITLE, detect.AUTH_PREFLIGHT_BODY, detect.AUTH_ERROR_BODY,
-    detect.AUTH_ACTION, detect.AUTH_WORKING, detect.AUTH_FAILED, detect.AUTH_DONE];
-  assert.match(detect.AUTH_TITLE, /Claude Code sign-in/, "the title names WHICH credential");
-  assert.match(detect.AUTH_TITLE, /this Mac/, "and WHERE it is missing");
-  for (const body of [detect.AUTH_PREFLIGHT_BODY, detect.AUTH_ERROR_BODY]) {
-    assert.match(body, /separate/i, "it says the credential is separate from the other two logins");
-    assert.match(body, /Dopl/, "…naming the Dopl login");
-    assert.match(body, /Claude app/, "…and the Claude app login");
-  }
-  for (const s of strings) {
-    assert.ok(!/\/login/.test(s), `no slash command in: ${s}`);
-    assert.ok(!/terminal|Terminal|setup-token|npm |claude /.test(s), `no terminal instruction in: ${s}`);
-    assert.ok(!/—/.test(s), `no em dash in: ${s}`);
-    assert.ok(!/not logged in/i.test(s), "never the words that started the confusion");
-  }
-});
-
-test("authNotice carries display copy ONLY (no id, path, token or channel)", () => {
-  const n = detect.authNotice("error", { busy: true, note: "x" });
-  assert.deepEqual(Object.keys(n).sort(), ["action", "body", "busy", "kind", "note", "title", "type"].sort());
-  assert.equal(n.type, "auth_required");
-  assert.equal(n.kind, "error");
-  assert.equal(detect.authNotice("anything-else", {}).kind, "preflight", "unknown kind falls back");
-  assert.equal(detect.authNotice("preflight", {}).busy, false);
-});
-
 // ── 2. HOLD: the sliced block, driven with fakes ─────────────────────────────
 
 // ── 2. HOLD: driven through the shared harness ───────────────────────────────
@@ -150,15 +123,12 @@ test("PREFLIGHT: no credential HOLDS the launch — no query, and the session is
   assert.deepEqual(h.calls.effects.slice(0, 4), ["denyPending", "abortQuery", "clearIdle", "persist"],
     "the park teardown really ran: awaited tool promises fail closed BEFORE the abort");
   assert.deepEqual(h.calls.phase, [{ key: "c1:t1", phase: "parked" }], "the durable record is parked, not 'launching'");
-  // ONE emit survives and it is not a paint: the status the pill and the durable record agree on.
-  assert.deepEqual(h.calls.emit, [{ type: "status", phase: "parked" }], "asserted WHOLE — a re-added notice comes back here");
 });
 
 test("PREFLIGHT: a healthy credential changes NOTHING (the launch continues untouched)", () => {
   const h = harness({ usable: true });
   const s = session();
   assert.equal(h.holdIfNoCredential(s), false);
-  assert.deepEqual(h.calls.emit, [], "not one event");
   assert.deepEqual(h.calls.phase, []);
   assert.equal(s.state.phase, "launching");
   assert.equal(s.state.parked, false);
@@ -209,8 +179,6 @@ test("MID-SESSION: an auth-shaped failure parks and HOLDS (never `crash`)", () =
     "NO crash: no settle, no task_failed{interrupted}, no destroyed window — just the hold");
   assert.deepEqual([s.state.parked, s.state.authHeld, s.state.toolMode, s.state.messageMode],
     [true, true, "manual", "ask"], "parked, HELD (no peer wake can resume it), both axes disarmed like a park");
-  assert.deepEqual(h.calls.emit, [{ type: "status", phase: "parked" }],
-    "the ONE surviving emit, asserted whole so a re-added notice comes back through here");
 });
 
 test("MID-SESSION: the RUNTIME decides what is auth — a non-auth failure never reaches the hold", () => {
@@ -247,7 +215,6 @@ test("D7.4: a SETTLED session answers FALSE to an auth-shaped failure — so the
   assert.equal(h.holdIfAuthFailure(s, "API Error: 401 unauthorized"), false,
     "a settled session is not held again — and the answer says so");
   assert.deepEqual(h.calls.dispatch, [], "no hold event");
-  assert.deepEqual(h.calls.emit, [], "nothing painted");
   assert.equal(s.abortController.aborted, false, "nothing was torn down…");
   assert.equal(s.pushIterator.closed, false, "…so there is still a stream to drain");
 });
@@ -262,14 +229,12 @@ test("MID-SESSION: the CLI's own login bubble is CONSUMED, never rendered", () =
 });
 
 test("MID-SESSION: a second failure never stacks a second hold", () => {
-  // ⚠ "(or a second banner)" left the title with the banner (F-228). The emit count is still the
-  // assertion: the ONE surviving emit is a status the pill and the durable record read.
   const h = harness({ usable: true });
   const s = session();
   assert.equal(h.holdIfAuthFailure(s, "401"), true);
-  const emitted = h.calls.emit.length;
   assert.equal(h.holdIfAuthFailure(s, "401 again"), true, "still handled");
-  assert.equal(h.calls.emit.length, emitted, "but nothing is re-emitted");
+  assert.deepEqual(h.calls.dispatch.map((e) => e.type), ["auth_hold", "auth_hold"], "the second converges on the same hold");
+  assert.equal(s.state.authHeld, true);
   assert.equal(h.holdIfAuthFailure({ ...session(), settled: true }, "401"), false, "a settled session is never held");
 });
 
@@ -375,7 +340,7 @@ test("the engine injects its OWN denyPending + teardown (the hold assembles no q
   // the denial-copy ruling) and is destructured at the engine's module scope, so this bind reads
   // exactly as it did. What must stay true is that the auth hold is handed the REAL fail-closed
   // sweep and not a stub — a hold that leaves a resolver dangling blocks the SDK child forever.
-  assert.match(ENGINE, /sessionAuth\.bind\(\{ sessions, dispatch, emit, denyPending: denyPendingPermissions, teardown: teardownHandles \}\)/);
+  assert.match(ENGINE, /sessionAuth\.bind\(\{ sessions, dispatch, denyPending: denyPendingPermissions, teardown: teardownHandles \}\)/);
   assert.match(ENGINE, /const \{ denyPendingPermissions, resolvePerm \} = sessionPermissions;/,
     "…and it is the shared one, not a local re-declaration");
   assert.ok(!/getSessionBySender/.test(ENGINE), "no sender-keyed session lookup survives anywhere in the engine");

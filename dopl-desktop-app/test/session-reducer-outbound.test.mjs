@@ -25,7 +25,6 @@ const { initialSessionState, sessionReducer, nextIdleMs, DEFAULT_IDLE_MS } = loa
 
 const running = (opts) =>
   sessionReducer(initialSessionState(opts), { type: "launched", payload: { type: "init" } }).state;
-const effTypes = (effects) => effects.map((e) => e.type);
 
 const postEv = (id) => ({ type: "outbound_post", payload: { type: "outbound_post", toolUseId: id, to: "Bob", text: "draft" } });
 const resultEv = (id, ok) => ({ type: "tool_result", payload: { type: "tool_result", toolUseId: id, ok } });
@@ -42,7 +41,7 @@ test("FIX F3: a FAILING tool_result for a streamed post clears postedThisTurn", 
   const r = sessionReducer(posted, resultEv("t1", false));
   assert.equal(r.state.postedThisTurn, false, "nothing left this machine");
   assert.deepEqual(r.state.postedToolUseIds, []);
-  assert.deepEqual(effTypes(r.effects), ["emit"], "the renderer still gets the result (it flips the bubble)");
+  assert.deepEqual(r.effects, []);
   // And the turn therefore ends IDLE, never "Waiting for reply".
   const end = sessionReducer(r.state, { type: "result", turnCostUsd: 0 });
   assert.equal(end.state.activity, "idle");
