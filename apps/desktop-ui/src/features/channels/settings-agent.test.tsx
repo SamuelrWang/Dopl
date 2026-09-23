@@ -197,11 +197,14 @@ describe("choosing, inline", () => {
     await waitFor(() => expect(queryPermissions()).not.toBeNull());
     fireEvent.click(permissions());
     fireEvent.click(item(/^Bypass/));
+    // 🔒 ⚠ **OWN-KEYS ONLY — the patch carries the axis that MOVED and nothing else**
+    // (F-754, 2026-09-22). This asserted `{tools, messages}`, i.e. the write restating an
+    // axis the operator did not touch. That is the exact shape that erased stored records:
+    // a bridge that sends a value for an absent field turns "I am not changing this" into
+    // "set this to what I last read", and a runtime-only patch was refused whole because
+    // of it. The untouched axis is not in the call at all.
     await waitFor(() =>
-      expect(b.setLaunchPosture).toHaveBeenCalledWith(CHANNEL, {
-        tools: "bypass",
-        messages: "ask",
-      })
+      expect(b.setLaunchPosture).toHaveBeenCalledWith(CHANNEL, { tools: "bypass" })
     );
     // ⚠ The "does not touch the ARM" pair that stood here is gone with the arm's
     // bridge ops (2026-08-20). There is no second permission record left to
@@ -345,12 +348,14 @@ describe("ONE record, two readers — the merge rule, end to end", () => {
     fireEvent.click(secondSends);
     fireEvent.click(item(/^Automatic/));
 
-    // Both axes survive — the second write merged onto what is STORED.
+    // ⚠ **BOTH AXES STILL SURVIVE — BUT THE MERGE IS THE STORE'S JOB, NOT THE PATCH'S**
+    // (F-754). The property this case is about is unchanged: after two writes from two
+    // surfaces the record holds both values. What changed is WHERE the merge happens —
+    // `main/launch-selection.js` merges the patch onto what is stored, so the second write
+    // names only the axis it moved. A patch restating the first axis would be the bridge
+    // asserting a value it merely last read.
     await waitFor(() =>
-      expect(b.setLaunchPosture).toHaveBeenLastCalledWith(CHANNEL, {
-        tools: "bypass",
-        messages: "auto_both",
-      })
+      expect(b.setLaunchPosture).toHaveBeenLastCalledWith(CHANNEL, { messages: "auto_both" })
     );
   });
 
