@@ -27,6 +27,7 @@ const sessionNarration = require('./session-narration');
 const sessionSummary = require('./session-summary');
 const { diag } = require('./diag');
 const sessionCredential = require('./session-credential'); // the container lock (plan §4.4 B1)
+const { teardownHandles } = require('./session-handles'); // P4-14: abort + iterator + the runtime's handle
 
 let deps = null;
 
@@ -63,11 +64,10 @@ function settle(s, outcome, keepWindow) {
   // parking, so until now every awaited canUseTool promise hung forever (the SDK child blocks on
   // it) and the push iterator kept the prompt stream open: the `claude` process outlived the
   // window and could go on posting into the channel with nothing left to show it. Deny each
-  // awaited request fail-closed, close the iterator, and abort here, so teardown holds whichever
+  // awaited request fail-closed, then tear the query down here, so teardown holds whichever
   // branch reached it (the reducer aborts too).
   deps.denyPendingPermissions(s, 'Session ended');
-  try { if (s.pushIterator) s.pushIterator.close(); } catch (_) { /* best effort */ }
-  try { if (s.abortController) s.abortController.abort(); } catch (_) { /* best effort */ }
+  teardownHandles(s);
   // 🔒 GIVE THE CONTAINER CREDENTIAL BACK (plan §4.4 B1). This session's child token is locked to
   // one workspace and exists only for this session; the row stays valid until its 24h TTL
   // otherwise, and a live credential nobody is using is a credential somebody can use.

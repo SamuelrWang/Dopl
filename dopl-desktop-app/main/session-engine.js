@@ -46,6 +46,7 @@ const { liveOnThread, agentIdsOnThread, sessionOn, noteSiblings } = sessionRegis
 // §2 SPLIT (2026-08-22): the TERMINAL — teardown order, the history freeze, and the read of a
 // dead agent's ring. Injected below like every other engine handle; it never requires back.
 const sessionTeardown = require('./session-teardown');
+const { teardownHandles } = require('./session-handles'); // P4-14: the one abort + iterator + handle close
 const { settle, narrationFor } = sessionTeardown;
 // §2 SPLIT (2026-08-22): how a held `canUseTool` promise is resolved, and — the reason it moved —
 // WHAT THE AGENT IS TOLD when the answer is no. A windowless auto-deny is not a decision.
@@ -80,7 +81,7 @@ sessionQuery.bind({ dispatch, emitQuiet: () => {}, scheduleIdle });
 // Q6: same injection for the preflight + in-window sign-in, and F-692's MCP guard below it on the
 // same terms. `startQuery` is the SHARED deferred launch (session-query), so neither assembles a
 // second query and both inherit H1's supersede-before-relaunch; `denyPending` fail-closes first.
-sessionAuth.bind({ sessions, acquireRuntime, startQuery, dispatch, emit, denyPending: denyPendingPermissions });
+sessionAuth.bind({ sessions, acquireRuntime, startQuery, dispatch, emit, denyPending: denyPendingPermissions, teardown: teardownHandles });
 mcpGuard.bind({ acquireRuntime, startQuery, dispatch, emit, denyPending: denyPendingPermissions, resumeParked: sessionPark.resumeParked, abortInFlight: sessionQuery.abortInFlight }); // F-692: an init message saying the `dopl` MCP server did not connect re-runs the launch ONCE, then ends the session visibly. No registry — it acts on the one session whose stream reported it
 // v2.5 D1/D3: same for the inbound gate + history loader (neither imports back into the engine).
 sessionGate.bind({ sessions, dispatch });
@@ -161,13 +162,7 @@ function runEffect(s, eff) {
     case 'abortQuery':
       sessionPrivate.resetPrivateTurn(s);
       sessionDirected.resetDirected(s); // 2026-08-31: a stray `result` must not report a partial answer
-      try { if (s.abortController) s.abortController.abort(); } catch (_) { /* best effort */ }
-      try { if (s.pushIterator) s.pushIterator.close(); } catch (_) { /* best effort */ }
-      // 🔒 ⚠ **AND THE RUNTIME'S HANDLE: an abort signal kills nothing on an adapter that reads
-      // none** (2026-09-22). Codex ends only on `handle.close()`, so park leaked a child that
-      // still held the thread's writer. Twin: `session-park.js › reapPriorChild`; the pair and the
-      // `typeof` guard's argument are pinned in `test/session-park.test.mjs`.
-      try { if (s.query && typeof s.query.close === 'function') s.query.close(); } catch (_) { /* best effort */ }
+      teardownHandles(s); // the runtime's handle too: Codex ends only on `close()` (P4-14)
       break;
     case 'denyPending': // P1: DENY every awaited canUseTool promise (fail closed) before a
       sessionPrivate.resetPrivateTurn(s);

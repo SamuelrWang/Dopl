@@ -388,7 +388,7 @@ test("the engine injects its OWN startQuery + denyPending (no second query assem
   // the denial-copy ruling) and is destructured at the engine's module scope, so this bind reads
   // exactly as it did. What must stay true is that the auth hold is handed the REAL fail-closed
   // sweep and not a stub — a hold that leaves a resolver dangling blocks the SDK child forever.
-  assert.match(ENGINE, /sessionAuth\.bind\(\{ sessions, acquireRuntime, startQuery, dispatch, emit, denyPending: denyPendingPermissions \}\)/);
+  assert.match(ENGINE, /sessionAuth\.bind\(\{ sessions, acquireRuntime, startQuery, dispatch, emit, denyPending: denyPendingPermissions, teardown: teardownHandles \}\)/);
   assert.match(ENGINE, /const \{ denyPendingPermissions, resolvePerm \} = sessionPermissions;/,
     "…and it is the shared one, not a local re-declaration");
   assert.ok(!/getSessionBySender/.test(ENGINE), "no sender-keyed session lookup survives anywhere in the engine");

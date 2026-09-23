@@ -64,6 +64,7 @@ export function harness(over = {}) {
     },
     emit: (s, payload) => calls.emit.push(payload),
     denyPending: (s, message) => calls.denyPending.push(message),
+    teardown: require(M("session-handles.js")).teardownHandles,
   };
   // ⚠ `floorWindowlessMessage` JOINED THE INJECTED SET ON 2026-08-22 (F-236's last hole). The
   // AUTH HOLD is the one park that RESETS the posture, so `resumeAfterSignIn` has to put AXIS B's

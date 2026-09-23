@@ -226,8 +226,7 @@ function holdIfAuthFailure(s, text) {
   // teardown, so no resolver dangles on a session that is about to stop consuming. (parkEffects
   // denies again via the reducer; both are idempotent.)
   try { if (deps.denyPending) deps.denyPending(s, runtimeCopy.heldToolDenial(copyFor(s))); } catch (_) { /* best effort */ } // U10: the AGENT reads this, and it must name the runtime the AGENT is running on
-  try { if (s.pushIterator) s.pushIterator.close(); } catch (_) { /* best effort */ }
-  try { if (s.abortController) s.abortController.abort(); } catch (_) { /* best effort */ }
+  deps.teardown(s); // `session-handles.js`: the converge case gets no reducer abort, so the handle closes here (P4-14)
   if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; }
   dispatchHold(s);
   if (already) return true; // converged
