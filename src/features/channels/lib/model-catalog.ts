@@ -1,37 +1,11 @@
 /**
- * THE RUNTIME-KEYED MODEL CATALOG, AS THE DESKTOP HANDS IT OVER — the web side's reader for
- * `dopl-desktop-app/main/runtime/model-catalog.js`, and the ONE place a runtime's model choices
- * come from.
- *
- * ⚠ **IT REPLACES `agent-models.ts` AS EVERY RUNTIME'S SOURCE, AND THAT WAS THE BUG.** That file
- * is four Claude ids with four labels, and the New Agent dialog, the channel Settings row, the
- * profile-defaults row and the agent cards all read it whatever runtime was selected — so choosing
- * Codex offered Fable, Opus, Sonnet and Haiku, and submitted one of them. `agent-models.ts` stays
- * as the DEFAULT RUNTIME'S OLDER-DESKTOP FALLBACK and nothing else; every runtime-aware surface
- * reads a catalog.
- *
- * ⚠ **FOUR STATES, AND COLLAPSING ANY TWO IS THE BUG** (INVARIANTS §11 — UNKNOWN is not EMPTY):
- * `loading` (nothing read yet — show the platform default, never "no models"), `ready`,
- * `unavailable` (a read was ATTEMPTED and FAILED, and {@link catalogReason} says why), and
- * `stale` (models read from a binary/version we can no longer confirm — they still LABEL, and they
- * may not be newly SELECTED). An empty `models` list means NOTHING on its own.
- *
- * ⚠ **NO RUNTIME MAY BORROW ANOTHER'S MODELS, EVER.** {@link catalogFor} answers by runtime id or
- * answers `null`; there is no "else" arm, no merge, and no default list in this file. That is what
- * makes "a Codex surface can never render Fable" a structural property rather than a rule someone
- * has to remember.
- *
- * ⚠ NO HOOK, NO BRIDGE, NO REACT — the rule `permission-modes.ts` states and
- * `runtime-capability.ts` follows (INVARIANTS §1: one file, one reason to change). Anything that
- * reaches `window.dopl` belongs in a hook; anything that renders belongs in a component. The ONE
- * reason this file changes is that the desktop's catalog contract changed.
- *
- * ⚠ EVERY FIELD IS OPTIONAL AND EVERY VALUE IS NARROWED RATHER THAN ASSERTED: it crossed a process
- * boundary from a build that may be older OR newer than this bundle.
+ * The runtime-keyed model catalog the desktop hands over (`main/runtime/model-catalog.js`) — the one
+ * place a runtime's model choices come from. Four statuses, never collapsed (INVARIANTS §11):
+ * `loading` (nothing read yet), `ready`, `unavailable` (a read failed; `reason` says why) and `stale`
+ * (still labels, may not be newly selected). An empty `models` list means nothing on its own.
  */
 
-/** The version of the catalog SHAPE this bundle understands. ⚠ A reply declaring any other is
- *  ignored wholesale — a half-understood record is worse than the older-desktop fallback. */
+/** ⚠ A reply declaring any other version is ignored wholesale, never half-read. */
 export const CATALOG_VERSION = 1;
 
 export type CatalogStatus = "ready" | "loading" | "unavailable" | "stale";
@@ -43,7 +17,6 @@ const STATUSES: ReadonlyArray<CatalogStatus> = [
   "stale",
 ];
 
-/** One option of a model-scoped dimension (Codex's reasoning effort today). */
 export interface ModelDimensionOption {
   value: string;
   label: string;
@@ -52,26 +25,22 @@ export interface ModelDimensionOption {
 
 export interface ModelDimension {
   options: ReadonlyArray<ModelDimensionOption>;
-  /** The platform's own pick, or `null` when it declared none. ⚠ NEVER `""`. */
+  /** The platform's own pick, or `null` (never `""`). */
   default: string | null;
 }
 
 export interface CatalogModel {
   id: string;
-  /** The runtime's own display name, or `null` when it does not name its models.
-   *  ⚠ `null` MEANS "RENDER THE RAW ID", never "unnamed". */
+  /** `null` = the runtime does not name it; render the raw id. */
   label: string | null;
-  /** The glance word for a card chip. Falls back to {@link label}, never to a truncation. */
+  /** The chip word; falls back to {@link label}, never a truncation. */
   short: string | null;
   isDefault: boolean;
-  /** ⚠ CARRIED, NOT DROPPED: a session already on a hidden model still has to be LABELLED.
-   *  {@link selectableModels} is what keeps it out of ordinary pickers. */
+  /** Kept so a session already on it is still labelled; {@link selectableModels} never offers it. */
   hidden: boolean;
-  /** `{ reasoningEffort: { options, default } }` — ⚠ PER MODEL, because Codex's supported
-   *  efforts differ BETWEEN models and a runtime-level list would offer one the model refuses. */
+  /** Per model: Codex's supported efforts differ between models. */
   dimensions: Readonly<Record<string, ModelDimension>>;
-  /** Other spellings the runtime accepts for THIS model (2026-09-22) — a legacy stored id, a
-   *  launch alias. ⚠ MATCHED, NEVER OFFERED: {@link findModel} is how an old pick keeps its row. */
+  /** Other spellings of this model (a legacy stored id, a launch alias). Matched, never offered. */
   aliases: ReadonlyArray<string>;
 }
 
@@ -79,12 +48,10 @@ export interface ModelCatalog {
   runtime: string;
   source: string | null;
   status: CatalogStatus;
-  /** Why, in an operator's words. ⚠ NON-EMPTY ON A `ready` CATALOG IS A NOTE, NOT A FAILURE
-   *  (a truncated page run, an absent default marker) — read the STATUS, never this string. */
+  /** Operator-facing words. Non-empty on a `ready` catalog is a note, not a failure: read `status`. */
   reason: string;
   models: ReadonlyArray<CatalogModel>;
-  /** The id the runtime declares as its own default, or `null`. ⚠ DISPLAYED, NEVER PERSISTED
-   *  on its own — see {@link catalogSelection}. */
+  /** The runtime's declared default. Displayed, never persisted on its own. */
   defaultId: string | null;
   dimensions: ReadonlyArray<string>;
   truncated: boolean;
@@ -105,12 +72,7 @@ export const REASONING_EFFORT = "reasoningEffort";
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
-/**
- * NARROW THE WIRE'S `catalogs` MAP.
- *
- * ⚠ A VERSION THIS BUNDLE DOES NOT KNOW IS IGNORED WHOLESALE, not partially read. The version is
- * on the REPLY (one per read) rather than per catalog, so it is passed in.
- */
+/** Narrow the wire's `catalogs` map. The version rides the reply, once per read. */
 export function normalizeCatalogs(
   raw: unknown,
   version: unknown = CATALOG_VERSION
@@ -125,17 +87,13 @@ export function normalizeCatalogs(
   return Object.keys(out).length ? Object.freeze(out) : NO_CATALOGS;
 }
 
-/** One catalog. `null` when the entry carries no usable runtime id or no known status. */
 function normalizeCatalog(id: unknown, raw: unknown): ModelCatalog | null {
   if (!raw || typeof raw !== "object") return null;
   const row = raw as Record<string, unknown>;
   const runtime = str(row.runtime) || str(id);
   if (!runtime) return null;
   const status = str(row.status) as CatalogStatus;
-  // ⚠ AN UNKNOWN STATUS IS NOT COERCED TO `ready`, AND NOT TO `unavailable` EITHER. A newer
-  // desktop with a fifth state is telling this bundle something it cannot act on, and the honest
-  // rendering of that is `loading` — "nothing to offer yet", which persists nothing and refuses
-  // nothing. Coercing to `ready` would offer a list this build cannot vouch for.
+  // ⚠ An unknown status reads as `loading`, never `ready`: it offers nothing and refuses nothing.
   const known = STATUSES.indexOf(status) === -1 ? "loading" : status;
   const models: CatalogModel[] = [];
   for (const entry of Array.isArray(row.models) ? row.models : []) {
@@ -199,8 +157,7 @@ function normalizeModelDimensions(
         description: str(o.description) || null,
       });
     }
-    // ⚠ A DIMENSION WITH NO OPTIONS IS DROPPED, never rendered empty — F-390's shape is a
-    // control that writes nowhere, and INVARIANTS §11 asks for ABSENT rather than blank.
+    // A dimension with no options is dropped, never rendered as an empty control (F-390).
     if (!options.length) continue;
     const fallback = str(row.default);
     out[key] = {
@@ -211,15 +168,7 @@ function normalizeModelDimensions(
   return Object.keys(out).length ? Object.freeze(out) : NO_DIMENSIONS;
 }
 
-// ── READING ONE RUNTIME'S CATALOG ────────────────────────────────────────────
-
-/**
- * THE CATALOG FOR A RUNTIME, OR `null`.
- *
- * ⚠ **THERE IS NO "ELSE" ARM, AND THAT IS THE POINT.** A miss answers `null`, never the default
- * runtime's list — the plan's hardest invariant is that a catalog failure must never substitute
- * another runtime's models, and a fallback here would be exactly that substitution.
- */
+/** One runtime's catalog, or `null`. ⚠ No fallback arm: a miss never answers another runtime's list. */
 export function catalogFor(
   catalogs: ModelCatalogs | null | undefined,
   runtimeId: string | null | undefined
@@ -230,12 +179,8 @@ export function catalogFor(
 }
 
 /**
- * THE ENTRY AN ID NAMES — its own `id`, else one of its `aliases` (2026-09-22).
- *
- * ⚠ **WHY ALIASES EXIST: THE CLAUDE ROSTER WENT LIVE.** Its ids are the CLI's own now
- * (`claude-opus-5[1m]`), so a channel that stored `claude-opus-5` before that must still find the
- * row that IS that model, or its picker would show the stored id as a second, unlabelled option
- * beside the real one. The desktop names the spellings; nothing here knows a vendor's id.
+ * The entry an id names: its own `id`, else one of its `aliases` — so a legacy stored id
+ * (`claude-opus-5`) finds its live-roster row (`claude-opus-5[1m]`).
  */
 export function findModel(
   c: ModelCatalog | null | undefined,
@@ -248,17 +193,11 @@ export function findModel(
     ?? null;
 }
 
-/** `true` only when the catalog is a list an operator may pick from RIGHT NOW. */
+/** `true` only when the catalog is a list an operator may pick from now. */
 export const catalogReady = (c: ModelCatalog | null | undefined): boolean =>
   c?.status === "ready";
 
-/**
- * THE SENTENCE A SURFACE SHOWS, or `null` when there is nothing to say.
- *
- * ⚠ IT IS DRIVEN BY THE STATUS, NEVER BY `models.length`. An empty `loading` catalog has nothing
- * to explain (the platform default is showing and a read is on its way); an empty `unavailable`
- * one has everything to explain, and the desktop's own words are what it says.
- */
+/** The sentence a surface shows, driven by status (never `models.length`); `null` while loading. */
 export function catalogReason(c: ModelCatalog | null | undefined): string | null {
   if (!c) return null;
   if (c.status === "loading") return null;
@@ -266,13 +205,8 @@ export function catalogReason(c: ModelCatalog | null | undefined): string | null
 }
 
 /**
- * THE MODELS AN ORDINARY PICKER MAY OFFER — visible members of a `ready` catalog, in the
- * RUNTIME'S OWN ORDER.
- *
- * ⚠ THE ORDER IS THE SERVER'S AND IS NEVER RE-SORTED: a ranking is something only the platform
- * holds, and Dopl imposing one would teach an operator an order the runtime does not have.
- * ⚠ `stale`, `unavailable` AND `loading` ALL OFFER NOTHING. That is the "a stale/unavailable id
- * cannot be NEWLY selected" rule, and it is one rule rather than three special cases.
+ * The models a picker may offer: visible members of a `ready` catalog, in the runtime's own order
+ * (never re-sorted). `stale`, `unavailable` and `loading` offer nothing.
  */
 export function selectableModels(
   c: ModelCatalog | null | undefined
@@ -282,55 +216,30 @@ export function selectableModels(
   return visible.length ? visible : NO_MODELS;
 }
 
-/**
- * WHAT TO DISPLAY FOR AN ID — the runtime's label, else the RAW ID.
- *
- * ⚠ **A RAW ID IS THE ANSWER, NOT A FALLBACK.** A historical session card naming a model that
- * left the roster after an upgrade must still say WHICH model it ran on; a blank chip there would
- * report "no model" about a session that had one (INVARIANTS §11). This reads a `stale` and an
- * `unavailable` catalog too, deliberately — labelling is not selecting.
- */
+/** The runtime's label for an id, else the raw id (never blank). Reads any status: labelling is not selecting. */
 export function modelLabel(
   c: ModelCatalog | null | undefined,
   id: string | null | undefined
 ): string {
   const wanted = str(id);
   if (!wanted) return "";
-  // ⚠ A MODEL THE RUNTIME DID NOT NAME RENDERS ITS RAW ID — never hidden, never blank.
   return findModel(c, wanted)?.label || wanted;
 }
 
 /**
- * WHAT THE MODEL ROW SHOWS for a stored value — the display-versus-wire discipline, as a pure
- * function.
- *
- * ⚠ **OMISSION IS THE PLATFORM DEFAULT, AND DISPLAYING IT PERSISTS NOTHING.** A channel that
- * never chose SHOWS the runtime's declared default and STORES no model until somebody touches the
- * control; the wire still carries no `model` field, which is what every session did before a
- * picker existed. `agent-models.ts › agentModelSelection` is the same rule for the default runtime
- * on an older desktop.
- * ⚠ AN UNKNOWN STORED ID IS RETURNED AS ITSELF, never replaced by the default — see
- * {@link modelLabel}. The row can render it; {@link selectableModels} is what stops it being
- * re-offered.
+ * What the model row shows: a stored id as the row it names (an unknown one as itself), else the
+ * runtime's declared default. Showing the default persists nothing.
  */
 export function catalogSelection(
   c: ModelCatalog | null | undefined,
   stored: string | null | undefined
 ): string {
   const trimmed = str(stored);
-  // ⚠ A LEGACY SPELLING SHOWS AS THE ROW IT NAMES (2026-09-22); an unknown one as itself.
   if (trimmed) return findModel(c, trimmed)?.id ?? trimmed;
   return c?.defaultId ?? "";
 }
 
-/**
- * THE OPTIONS A SELECT MAY SHOW, given what is currently EFFECTIVE.
- *
- * ⚠ THE EXTRA OPTION IS THE CURRENT VALUE AND NOTHING ELSE — appended, never inserted into the
- * roster, and gone the moment the value is a member again. Without it a `SelectMenu` whose value
- * matches no option renders BLANK, so a channel pinned to a model that left the roster would show
- * an empty control where it has an answer.
- */
+/** A select's options. ⚠ An off-roster current value is appended, or `SelectMenu` renders blank. */
 export function modelOptionsFor(
   c: ModelCatalog | null | undefined,
   effective: string | null | undefined
@@ -344,16 +253,9 @@ export function modelOptionsFor(
   return [...options, { value: trimmed, label: modelLabel(c, trimmed) }];
 }
 
-// ── MODEL-SCOPED DIMENSIONS (REASONING EFFORT) ───────────────────────────────
-
 /**
- * ONE MODEL'S OPTIONS FOR A DIMENSION — empty when this model does not offer it.
- *
- * ⚠ **PER MODEL, NOT PER RUNTIME, AND THE DIFFERENCE IS THE WHOLE CONTROL.** Codex reports
- * `supportedReasoningEfforts` on each model and they DIFFER between models, so a control sourced
- * from the runtime's declared dimension would offer an effort the selected model refuses. The
- * plan's U6 scenario — "effort options change with the selected model" — is only satisfiable here.
- * ⚠ EMPTY ⇒ RENDER NO CONTROL (hide, never gray). It is not an empty dropdown.
+ * One model's options for a dimension. Per model, since Codex's efforts differ between models;
+ * empty means render no control.
  */
 export function dimensionOptionsFor(
   c: ModelCatalog | null | undefined,

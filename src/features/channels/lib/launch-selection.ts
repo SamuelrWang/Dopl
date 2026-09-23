@@ -1,58 +1,35 @@
 /**
- * THE DURABLE LAUNCH SELECTION, AS THE RENDERER READS IT — the web mirror of
- * `dopl-desktop-app/main/launch-selection.js`'s versioned, runtime-keyed record (2026-09-21, U5's
- * contract; consumed by U7/U8).
- *
- * ⚠ **WHY THE RENDERER NEEDS THE WHOLE RECORD AND NOT A PAIR.** Claude's and Codex's settings sit
- * side by side and are never translated: switching Claude → Codex → Claude has to restore BOTH
- * remembered tool settings and BOTH native sets, which one global pair cannot hold. `byRuntime` is
- * that record.
- *
- * ⚠ **IT INTERPRETS NOTHING AND VALIDATES NOTHING.** Every vocabulary belongs to the selected
- * adapter's descriptor (`model-catalog.ts`, `runtime-native.ts`), and main re-validates
- * every write regardless — this module narrows a value that crossed a process boundary and says
- * which keys were present. A renderer that coerced a stored mode here would be a second
- * authority on a vocabulary it does not own.
- *
- * ⚠ NO HOOK, NO BRIDGE, NO REACT (INVARIANTS §1). The ONE reason this file changes is that the
- * stored record's shape changed.
+ * The durable launch selection as the renderer reads it: main's versioned, runtime-keyed record
+ * (`main/launch-selection.js`). Each runtime's settings sit side by side, never translated. This
+ * narrows a value that crossed a process boundary; it validates no vocabulary (main does).
  */
 
-/** One runtime's half of a selection. ⚠ EVERY FIELD IS OMITTED WHEN ABSENT, never `""`/`null` —
- *  main's own rule, so "no pick" and "cleared" are ONE record rather than two states to get
- *  wrong. */
+/** One runtime's half. Absent fields are omitted, never `""`/`null` (main's rule). */
 export interface RuntimeRecord {
   tools?: string;
   native?: Readonly<Record<string, string>>;
 }
 
 export interface LaunchSelection {
-  /** The record version main WROTE. ⚠ A renderer reading a different one must not assume shape. */
+  /** The record version main wrote; echoed back on a defaults write, never invented. */
   v: number;
-  /** `''` = the DEFAULT adapter, never "no runtime". */
+  /** `''` = the default adapter, never "no runtime". */
   runtime: string;
-  /** Dopl's own axis — the one vocabulary that does not move with the runtime. */
+  /** Dopl's own axis; the one vocabulary that does not move with the runtime. */
   messages: string;
   byRuntime: Readonly<Record<string, RuntimeRecord>>;
 }
 
 export interface LaunchSelectionRead {
-  /** The restrictive empty selection when no reply has answered. */
   selection: LaunchSelection;
-  /**
-   * The sentences main attached for a record it could not fully honour — `[]` when there are
-   * none. ⚠ **NEVER A FAILURE OF THE READ**: the settings a review describes are already the
-   * NARROWER ones, so the operator is being told what changed under them, not that something
-   * broke (`channel-dir-ipc.js › channels:getLaunchPosture` states the same rule from main's
-   * side).
-   */
+  /** Main's sentences for a record it narrowed. A note, never a failure of the read. */
   review: ReadonlyArray<string>;
 }
 
 const EMPTY_RECORDS: Readonly<Record<string, RuntimeRecord>> = Object.freeze({});
 const NO_REVIEW: ReadonlyArray<string> = [];
 
-/** The selection a channel nobody has configured resolves to. ⚠ THE RESTRICTIVE ONE. */
+/** The selection an unconfigured channel resolves to: the restrictive one. */
 export function emptySelection(): LaunchSelection {
   return { v: 0, runtime: "", messages: "ask", byRuntime: EMPTY_RECORDS };
 }
@@ -65,8 +42,7 @@ function normalizeRecord(raw: unknown): RuntimeRecord | null {
   const out: RuntimeRecord = {};
   const tools = str(row.tools);
   if (tools) out.tools = tools;
-  // ⚠ NO `model` SINCE 2026-09-23 (Samuel: "We don't need a pin model in the settings") — main
-  // stores none, and one an older desktop still sends is not read.
+  // No `model`: channels store none.
   if (row.native && typeof row.native === "object" && !Array.isArray(row.native)) {
     const native: Record<string, string> = {};
     for (const [key, value] of Object.entries(row.native as Record<string, unknown>)) {
@@ -79,12 +55,8 @@ function normalizeRecord(raw: unknown): RuntimeRecord | null {
 }
 
 /**
- * Read the versioned record off a launch-posture or agent-defaults reply.
- *
- * ⚠ **TWO SHAPES, ONE READER.** The per-channel reply nests the record under `selection`; the
- * defaults reply IS the record (`agent-defaults.js › effectiveDefaults` returns `v` and
- * `byRuntime` at the top level), because that record is a launch selection plus one flag. Reading
- * both here is what keeps the two scopes rendering from one shape — which is U8's whole premise.
+ * The versioned record off a launch-posture or agent-defaults reply. The per-channel reply nests it
+ * under `selection`; the defaults reply IS the record (`agent-defaults.js › effectiveDefaults`).
  */
 export function readLaunchSelection(raw: unknown): LaunchSelectionRead {
   if (!raw || typeof raw !== "object") {
@@ -107,9 +79,7 @@ export function readLaunchSelection(raw: unknown): LaunchSelectionRead {
   if (source && typeof source === "object" && !Array.isArray(source)) {
     for (const [id, value] of Object.entries(source as Record<string, unknown>)) {
       const normalized = normalizeRecord(value);
-      // ⚠ A RECORD FOR A RUNTIME THIS BUILD DOES NOT REGISTER IS KEPT AND NEVER READ — main's own
-      // promise, applied on this side: a downgrade must not destroy what an upgrade stored, and a
-      // row that cannot resolve a descriptor simply never renders.
+      // A record for an unregistered runtime is kept (main's rule) and simply never renders.
       if (normalized) byRuntime[str(id)] = normalized;
     }
   }
@@ -131,10 +101,8 @@ export function readLaunchSelection(raw: unknown): LaunchSelectionRead {
 const EMPTY_RECORD: RuntimeRecord = Object.freeze({});
 
 /**
- * ONE RUNTIME'S RECORD — never null, possibly empty.
- *
- * ⚠ **`''` RESOLVES TO THE DEFAULT ADAPTER'S RECORD**, the key main's `activeRecord` reads for a
- * record with no pick (`launch-selection.js › fromLegacy` also files a migrated `{tools}` there).
+ * One runtime's record, never null. ⚠ `''` resolves to the default adapter's record — the key main's
+ * `activeRecord` reads, where a migrated legacy `{tools}` lives (`launch-selection.js › fromLegacy`).
  */
 export function recordFor(
   selection: LaunchSelection,
