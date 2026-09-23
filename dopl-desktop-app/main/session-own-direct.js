@@ -41,8 +41,8 @@
 //   AXIS B, outbound half   because the ASK LEAVES THIS MACHINE. `direct_agent` writes a row into
 //                           `channel_agent_directions` in the shared workspace, and a BODY this
 //                           session wrote travels with it. That is at least as outbound as a post.
-//   AXIS A, `bypass` only   because what it buys is LOCAL COMPUTE: a direction makes a running
-//                           agent on the operator's Mac take a TURN. `bypass` is the posture that
+//   AXIS A, widest mode     because what it buys is LOCAL COMPUTE: a direction makes a running
+//                           agent on the operator's Mac take a TURN. The runtime's widest mode
 //                           says "my agent may work on this machine without asking me first", and
 //                           nothing narrower may buy a turn any more than it may buy a process.
 //
@@ -105,12 +105,9 @@ const { channelOpKey } = require('./channel-op-key'); // <op>.<action> — the O
 
 const OWN_MACHINE_DIRECT_OPS = ['manage.direct'];
 
-// The Axis-A posture that may buy local compute. ⚠ COMPARED AS A LITERAL, and a value outside the
-// enum is simply not it — `session-io.js › grantArgs` has already normalized and floored the axis
-// by the time this is asked. Deliberately a SECOND spelling of `session-own-launch.js ›
-// LAUNCH_TOOL_MODE` rather than an import of it: these are two rulings that happen to agree, and
-// a shared constant would make a future narrowing of one silently narrow the other.
-const DIRECT_TOOL_MODE = 'bypass';
+// The Axis-A posture that may buy local compute is the SESSION runtime's widest mode, asked
+// separately from the launch lane's (two rulings that happen to agree). Lazy: see session-own-launch.
+const widestToolMode = (runtimeId) => require('./session-profiles-runtime').widestToolModeFor(runtimeId);
 
 /**
  * A `manage(action="direct")` aimed at THIS session's own channel.
@@ -146,12 +143,11 @@ function isOwnMachineDirect(input, sessionChannelId) {
  */
 function directLaneVerdict(args, autoOutbound) {
   const a = args || {};
-  return a.toolMode === DIRECT_TOOL_MODE && autoOutbound === true ? 'allow' : 'gate';
+  return a.toolMode === widestToolMode(a.runtime) && autoOutbound === true ? 'allow' : 'gate';
 }
 
 module.exports = {
   OWN_MACHINE_DIRECT_OPS,
-  DIRECT_TOOL_MODE,
   isOwnMachineDirect,
   directLaneVerdict,
 };

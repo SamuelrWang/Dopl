@@ -60,40 +60,16 @@ test("H1(a) A PEER WAKE CANNOT RESUME A HELD SESSION, even under an auto_both po
   assert.ok(!again.effects.map((e) => e.type).includes("resumeQuery"), "belt: still no spawn");
 });
 
-test("H1(a) A RESUME AFTER A WAKE ALREADY RESUMED IT: one query, never two", async () => {
-  const h = harness({ usable: false });
-  const s = session();
-  h.holdIfNoCredential(s);
-  // Simulate the pre-fix world reaching this point anyway: something resumed the session, so a
-  // query IS live under the hold. The relaunch must SUPERSEDE it, not layer a second one.
-  s.abortController = { aborted: false, abort() { this.aborted = true; } };
-  s.pushIterator = { closed: false, close() { this.closed = true; } };
-  await h.resumeAfterSignIn(s);
-  assert.equal(h.calls.startQuery.length, 1, "exactly ONE relaunch, never one per caller");
-  assert.equal(s.state.authHeld, false, "released before the relaunch");
-});
-
-test("H1(a) TWO CONCURRENT RESUMES: the resume is single-flight", async () => {
-  // ⚠ RE-POINTED FROM "DOUBLE SIGN-IN CLICK" (F-228). The clicks were on the in-window button and the
-  // race was between two `runSignIn` calls, each spawning its own pty — hence the old "one sign-in
-  // flow, not two ptys" assertion. The RACE did not go with the button: whatever notices a credential
-  // calls `resumeAfterSignIn`, and defences 1 and 2 (the `authResuming` latch taken before the first
-  // await, and the CLAIM of `s.authHold` as the ticket) are what stop two callers producing two
-  // claude children. The gate moved to `getSdk`, the only await left in the preflight branch.
-  let release;
-  const gate = new Promise((r) => { release = r; });
-  const h = harness({ usable: false, gate });
-  const s = session();
-  h.holdIfNoCredential(s);
-  const a = h.resumeAfterSignIn(s);
-  const b = h.resumeAfterSignIn(s);
-  release();
-  await Promise.all([a, b]);
-  assert.equal(h.calls.sdk, 1, "the loser returns before it can even ask for the SDK");
-  assert.equal(h.calls.startQuery.length, 1, "and ONE query — this is the two-children bug");
+test("H1(a) TWO CONCURRENT RESUMES: the claim of `s.authHold` is the ticket", async () => {
+  // A resume is a release plus the ordinary lazy wake (a steer); whoever claims the hold proceeds.
+  const h = harness({ usable: true });
+  const s = session({ state: { phase: "running", parked: false, activity: "working" } });
+  h.holdIfAuthFailure(s, "401");
+  await Promise.all([h.resumeAfterSignIn(s), h.resumeAfterSignIn(s)]);
   assert.equal(h.calls.dispatch.filter((e) => e.type === "auth_release").length, 1, "released exactly once");
-  assert.equal(s.authHold, null, "the ticket is claimed, so a third caller finds nothing to resume");
-  assert.equal(s.authResuming, false, "and the latch is released in a finally, not leaked");
+  assert.equal(h.calls.dispatch.filter((e) => e.type === "steer").length, 1, "and woken once");
+  assert.deepEqual(h.calls.startQuery, [], "a resume never assembles a second query");
+  assert.equal(s.authHold, null, "a third caller finds nothing to resume");
 });
 
 test("H1(b) A SECOND AUTH FAILURE CONVERGES TO PARKED — it never leaves a session 'running'", () => {

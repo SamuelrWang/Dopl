@@ -1,71 +1,28 @@
-// WHAT THE OPERATOR CALLS ONE AGENT (2026-08-25, Samuel's ruling).
-//
-// ⚠ IDENTITY LIVES ON THIS MACHINE, WHICH IS WHY THIS FILE IS HERE AND NOT ON THE SERVER. An
-// agent is local runtime state (`session-summary.js`; INVARIANTS §5) — the server's
-// `channel_sessions` is a one-way PROJECTION this machine pushes, so a name written there
-// would be overwritten by the next report and could not pass that column's handle CHECK
-// (`^[a-z][a-z0-9-]{1,30}$`) anyway. The renderer reads the name off the summary, exactly as it
-// reads every other fact about an agent.
-//
-// ⚠ KEYED BY `agentId`, THE INSTANCE ADDRESS (`main/agent-id.js`), not by session key. The
-// session OBJECT is replaced by an idle park, a lazy resume and a crash resume; the operator's
-// mental model — "the one I called Research" — survives all three, and so does the id.
-//
-// ⚠ IT NAMES, IT NEVER ADDRESSES. Nothing resolves an agent by this string: `@<agentId>` in a
-// thread body is still parsed against the id (`session-dispatch.js`), and every op takes the id
-// as its third coordinate. A display name that could address something would let a rename
-// silently re-point a running instruction.
-//
-// ⚠ LOCAL-ONLY DISPLAY, DELIBERATELY (2026-08-25). A peer's card still shows what their machine
-// reports; widening `channel_sessions` with a human-charset column is a separate, additive
-// change and is NOT in this one. Nothing here reaches the network.
+// What the operator calls one agent (and what it is FOR): local display state keyed by the instance `agentId`
+// (it survives parks and resumes). It NAMES, it never ADDRESSES — every op and `@<agentId>` still resolve by id,
+// or a rename could re-point a running instruction. Reaches no network.
 
 const Store = require('electron-store');
 
 const store = new Store();
-const NAMES_KEY = 'agentNames'; // { [agentId]: { name, description, at } }
+// { [agentId]: { name, description, at } }
+const NAMES_KEY = 'agentNames';
 
 // ─── BEGIN AGENT-NAMES-PURE (pure; unit-tested via source extraction) ──────────
+
 // `store` is a free var from here down.
 
-/** The operator types this, so it is bounded for a RENDERER rather than for a column. 60 is
- *  Samuel's; it fits a card's title line at the app's `text-body` without truncating. */
+// Bounded for a card's title line (and the column CHECK the push sanitizes to).
 const MAX_NAME = 60;
 
-/**
- * WHAT THIS AGENT IS FOR, in the operator's own words (2026-08-27, Samuel's launch-panel
- * ruling). Written at launch beside the name and shown wherever the name shows.
- *
- * ⚠ 2000 IS `agent-identities/schema.ts › DescriptionSchema` (`safeOptionalProse("Identity
- * description", 2000)`), DELIBERATELY. An identity's description answers the same question about
- * the same kind of thing — "what is this agent for" — and two caps on one question is how a
- * description that fits in one surface is refused by the next.
- *
- * ⚠ IT IS PROSE, WHERE THE NAME IS A LABEL, and that is the whole difference between the two
- * sanitizers below: a name is one line on a card's title, a description may hold paragraphs.
- */
+// The identity description's own cap (`agent-identities/schema.ts`): one question, one cap.
 const MAX_DESCRIPTION = 2000;
 
-/**
- * A BOUND ON THE SET, because a per-instance key is unbounded in principle: every launch mints
- * a new id, so a busy machine accumulates one entry per agent it ever ran. Drops the OLDEST
- * first. Far above what any real session produces — the CLOCK does not apply here (a name has
- * no expiry the way an ended run does), so a count is the whole bound.
- */
+// A count bound (names do not expire), oldest dropped first.
 const MAX_NAMES = 500;
 
-/**
- * TRIM, COLLAPSE, BOUND, REFUSE THE INVISIBLES — the same discipline every display string on
- * its way to a renderer gets (`session-summary.js › displayText`, and the bounds
- * `20260805120000_channel_sessions.sql` sets on its peer-influenced columns).
- *
- * ⚠ CONTROL, ZERO-WIDTH, BIDI AND LINE-SEPARATOR CHARACTERS ARE REFUSED, NOT STRIPPED. Stripping
- * would silently store something other than what was typed; refusing says the name was not
- * taken. A bidi override in an agent name renders a card that reads backwards, and a
- * zero-width joiner makes two different names look identical.
- *
- * Returns the clean string, or null when there is nothing storable.
- */
+// Trim, collapse, bound; control / zero-width / bidi / line-separator characters are REFUSED, not stripped (stripping
+// would store something other than what was typed). Null when nothing is storable.
 function sanitizeName(value) {
   if (typeof value !== 'string') return null;
   if (/[\x00-\x1f\x7f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/.test(value)) {
@@ -76,20 +33,8 @@ function sanitizeName(value) {
   return clean;
 }
 
-/**
- * The description's twin of {@link sanitizeName}, and the two differ on ONE axis: NEWLINES.
- *
- * ⚠ THE CHARSET IS `shared/lib/safe-label.ts › SAFE_PROSE_RE`, character for character — the
- * same class the server applies to every prose field that reaches a renderer. `\t`, `\n` and
- * `\r` are LEGAL here (a description may hold paragraphs); every control, zero-width, bidi and
- * line-separator character is refused. ⚠ REFUSED, NOT STRIPPED, for the reason `sanitizeName`
- * gives: stripping stores something other than what was typed and says nothing about it.
- *
- * ⚠ AN EMPTY DESCRIPTION IS A LEGITIMATE ANSWER, not a refusal — most launches will carry none
- * — so this returns `''` for it where `sanitizeName` returns null. The CALLER decides what an
- * empty string means (here: clear the field), which is what lets one op both set and unset.
- * Returns null only when the input could not be stored at all.
- */
+// The description's twin, differing on newlines: `SAFE_PROSE_RE`'s charset (`\t\n\r` legal). '' is a legitimate
+// answer (clear the field); null means it could not be stored.
 function sanitizeDescription(value) {
   if (typeof value !== 'string') return null;
   const clean = value.trim();
@@ -100,7 +45,6 @@ function sanitizeDescription(value) {
   return clean.length > MAX_DESCRIPTION ? null : clean;
 }
 
-/** Newest-last insertion order is the store's own; the sweep drops from the front. */
 function sweepable(map, max = MAX_NAMES) {
   const keys = Object.keys(map || {});
   if (keys.length <= max) return [];
@@ -109,8 +53,7 @@ function sweepable(map, max = MAX_NAMES) {
     .slice(0, keys.length - max);
 }
 
-/** The display name for one agent id, or null. ⚠ NULL IS THE ORDINARY ANSWER — most agents are
- *  never renamed, and the caller falls back to the canonical `Agent #<id>`. */
+// Null is the ordinary answer (never renamed): the caller falls back to `Agent #<id>`.
 function nameFrom(map, agentId) {
   const id = String(agentId || '');
   const row = id && map ? map[id] : null;
@@ -118,9 +61,6 @@ function nameFrom(map, agentId) {
   return name || null;
 }
 
-/** {@link nameFrom}'s twin. ⚠ NULL IS THE ORDINARY ANSWER here too — a description is optional
- *  at launch and most agents carry none, so every reader renders its ABSENCE rather than an
- *  empty line (INVARIANTS §11: UNKNOWN is not EMPTY). */
 function descriptionFrom(map, agentId) {
   const id = String(agentId || '');
   const row = id && map ? map[id] : null;
@@ -128,20 +68,8 @@ function descriptionFrom(map, agentId) {
   return value || null;
 }
 
-/**
- * MERGE ONE FIELD ONTO AN AGENT'S ROW, KEEPING THE OTHER — pure, so the merge rule itself is
- * testable without a disk. Returns the next map; the caller writes it.
- *
- * ⚠ IT EXISTS BECAUSE THE ROW GREW A SECOND FIELD (2026-08-27). `rename` wrote
- * `map[id] = { name, at }` — a whole-row REPLACE, which was correct while `name` was the only
- * thing in it and silently destroys the description now that it is not. Two writers, one row,
- * and whichever one forgets the other field wins.
- *
- * ⚠ AN EMPTY FIELD IS DROPPED FROM THE ROW rather than stored as `''`, so {@link nameFrom} and
- * {@link descriptionFrom} keep answering null for "never set" without either having to know
- * which spelling of empty it is looking at. A row left with NEITHER field is deleted outright —
- * an empty object per agent id is exactly the unbounded growth `MAX_NAMES` exists to bound.
- */
+// Merge ONE field onto a row, keeping the other (a whole-row replace would destroy it). An empty field is dropped
+// from the row, and a row with neither field is deleted.
 function patched(map, agentId, field, value) {
   const id = String(agentId || '');
   const next = { ...(map || {}) };
@@ -157,25 +85,12 @@ function patched(map, agentId, field, value) {
 
 // ─── END AGENT-NAMES-PURE ──────────────────────────────────────────────────────
 
-// TICK-SCOPED MEMO OF THE NAME MAP (2026-09-15; measurements in docs/specs/desktop-main-cpu.md).
-//
-// ⚠ **`store.get()` IS A WHOLE-FILE `readFileSync` + `JSON.parse` EVERY TIME** — electron-store's
-// `conf` has no cache — and `all()` is called TWICE PER SESSION ROW by `session-summary.js ›
-// liveSummary` / `endedSummary`, over every live session AND every retained ended record
-// (`agent-history.js › MAX_HISTORY`). At the cap that was 400 parses of a ~200 KB file per
-// projection, against a 200 ms `PUSH_COALESCE_MS` timer.
-//
-// ⚠ **SEMANTICALLY IDENTICAL WITHIN A PROJECTION**, which is what makes it safe: `reportList()`
-// is fully SYNCHRONOUS, so the map cannot change between its first and last read, and a memo that
-// expires on the next macrotask is the same value the old code re-derived N times. The name stays
-// READ LIVE across flushes, which is the property `endedSummary` documents.
-// 🔒 **THIS MODULE IS THE ONLY WRITER OF `NAMES_KEY`** and every one of its writes invalidates
-// below, so a rename is visible to the very next read. A writer added anywhere else must call
-// `invalidateNames()` or names go stale for a tick.
+// A tick-scoped memo of the name map: `store.get()` re-reads and re-parses the file, and the summary asks twice per
+// row. Safe because a projection is synchronous. This module is the ONLY writer of NAMES_KEY and every write
+// invalidates the memo; a writer added elsewhere must call `invalidateNames()`.
 let cachedNames = null;
 let cacheArmed = false;
 
-/** Drop the memo. Called after every write this module makes. */
 function invalidateNames() {
   cachedNames = null;
 }
@@ -193,63 +108,46 @@ function all() {
   return out;
 }
 
-/** The rename write. Returns the stored name, or null when the input was refused —
- *  ⚠ MAIN'S OWN VALUE, never an echo of the ask: a renderer that stamped what it sent would
- *  paint a name this machine did not take. Same rule `setMode` / `setModel` follow.
- *  ⚠ THE DESCRIPTION SURVIVES IT (2026-08-27) — see {@link patched}. */
+/** The rename write: answers MAIN's stored value (never an echo) or null when refused; the description survives. */
 function rename(agentId, value) {
   const id = String(agentId || '');
   if (!id) return null;
   const name = sanitizeName(value);
   if (name === null) return null;
   store.set(NAMES_KEY, patched(all(), id, 'name', name));
-  invalidateNames(); // the only writer of NAMES_KEY is this module — see the memo's header
+  invalidateNames();
   return name;
 }
 
-/**
- * The description write, and its twin. Returns the stored value — `''` when the operator
- * cleared it — or null when the input was refused, on the same never-echo rule as
- * {@link rename}.
- *
- * ⚠ IT IS WRITTEN AT LAUNCH, from the composer's launch panel, in the same breath as the name
- * (`use-agent-launch.ts`). It moves no session, starts no turn and wakes nothing — the registry
- * is not consulted, exactly as `rename`'s own op states.
- */
+/** The description write, rename's twin: '' when cleared, null when refused. */
 function describe(agentId, value) {
   const id = String(agentId || '');
   if (!id) return null;
   const description = sanitizeDescription(value);
   if (description === null) return null;
   store.set(NAMES_KEY, patched(all(), id, 'description', description));
-  invalidateNames(); // see rename()
+  invalidateNames();
   return description;
 }
 
-/** Drop a name — an empty rename is how the operator goes back to `Agent #<id>`.
- *  ⚠ IT CLEARS THE NAME, NOT THE ROW (2026-08-27). It deleted the whole entry while `name` was
- *  the only field in it; doing that now would take the description with it, and "go back to
- *  `Agent #<id>`" says nothing about what the agent is FOR. `patched` drops the row when
- *  nothing is left, so the old behaviour is still what happens to a name-only entry. */
+/** Clear the NAME (not the description): how the operator goes back to `Agent #<id>`. */
 function clear(agentId) {
   const id = String(agentId || '');
   if (!id) return;
   store.set(NAMES_KEY, patched(all(), id, 'name', ''));
-  invalidateNames(); // see rename()
+  invalidateNames();
 }
 
-/** What the summary projects. Reads the whole map once per flush, not once per session. */
+/** What the summary projects. */
 function displayNameFor(agentId) {
   return nameFrom(all(), agentId);
 }
 
-/** {@link displayNameFor}'s twin, projected beside it on every summary. */
 function descriptionForAgent(agentId) {
   return descriptionFrom(all(), agentId);
 }
 
 module.exports = {
-  // pure core (re-exported for the shell + the tests)
   MAX_NAME,
   MAX_DESCRIPTION,
   MAX_NAMES,
@@ -259,7 +157,6 @@ module.exports = {
   nameFrom,
   descriptionFrom,
   patched,
-  // the live half
   rename,
   describe,
   clear,

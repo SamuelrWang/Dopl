@@ -59,7 +59,7 @@ function boot() {
     if (id === "./ipc-guards") return require(join(MAIN, "ipc-guards.js"));
     if (id === "./launch-directive-vocab") return require(join(MAIN, "launch-directive-vocab.js"));
     if (id === "./diag") return { diag: () => {} };
-    if (id === "./session-model") return require(join(MAIN, "session-model.js"));
+    if (id === "./runtime/selection-vocabulary") return require(join(MAIN, "runtime/selection-vocabulary.js"));
     if (id === "./session-telemetry") return require(join(MAIN, "session-telemetry.js"));
     if (id === "./api") {
       return {

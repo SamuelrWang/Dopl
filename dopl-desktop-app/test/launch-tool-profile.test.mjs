@@ -141,12 +141,6 @@ function bootLaunch(entries) {
         launchStartModes: () => ({ tools: "manual", messages: "auto_inbound" }),
       };
     }
-    // ⚠ `chainModel` IS THE ONE LINK OF THE PRECEDENCE CHAIN (`session-model.js`, 2026-08-23) and
-    // `session-launch-op.js › identityModel` delegates to it, so the stub must carry it or this
-    // file's launches throw before they ever reach the profile question it is about.
-    if (id === "./session-model") {
-      return { aliasForModelId: (v) => v, normalizeModel: (v) => v, chainModel: (v) => v || "" };
-    }
     // ⚠ THE BODY IS A SEPARATE MODULE SINCE 2026-08-22, and it is the REAL one: a stub here
     // would make this whole file assert a fake's profile read.
     if (id === "./session-launch-op") return launchOp.exports;

@@ -35,18 +35,18 @@ const MAIN = join(HERE, "..", "main");
 const require_ = createRequire(import.meta.url);
 
 const registry = require_(join(MAIN, "runtime/index.js"));
-const sessionModel = require_(join(MAIN, "session-model.js"));
+const modelTable = require_(join(MAIN, "runtime/claude/model-table.js"));
 const codexNormalize = require_(join(MAIN, "runtime/codex/normalize.js"));
 const claudeNormalize = require_(join(MAIN, "runtime/claude/normalize.js"));
 const events = require_(join(MAIN, "runtime/events.js"));
 
-// The SHIPPED projection, sliced with its two free vars injected — `session-metrics.js`'s own
+// The SHIPPED projection, sliced with its free var injected — `session-metrics.js`'s own
 // PURE-block idiom, so what is under test is the code that runs and not a restatement of it.
 const METRICS = readFileSync(join(MAIN, "session-metrics.js"), "utf8");
 const metrics = new Function(
-  "contextWindowFor", "sessionHealth",
+  "sessionHealth",
   `${fnOf(METRICS, "metricOrNull")}\n${fnOf(METRICS, "reportedWindow")}\n${fnOf(METRICS, "metrics")}\n return metrics;`
-)(sessionModel.contextWindowFor, { health: () => ({}) });
+)({ health: () => ({}) });
 
 const CTX = { channelId: "chan-1", peerName: "Ada", peerId: "peer-1" };
 const first = (list, type) => (list || []).find((e) => e && e.type === type) || null;
@@ -98,7 +98,11 @@ test("the runtimes that report NOTHING say so, and get `null` — never a zero d
     message: { usage: { input_tokens: 1200, output_tokens: 7, cache_read_input_tokens: 300, cache_creation_input_tokens: 0 }, model: "claude-sonnet-5" },
   }, CTX), "context");
   assert.ok(ev, "the Claude lane still meters per assistant message");
-  assert.equal(ev.window, null, "UNKNOWN STAYS DISTINCT FROM EMPTY — null, never 0");
+  assert.equal(ev.window, 1000000, "the adapter puts its own frozen table's window on the reading");
+  const unknown = first(claudeNormalize.normalize({
+    type: "assistant", message: { usage: { input_tokens: 10 }, model: "claude-experimental-9" },
+  }, CTX), "context");
+  assert.equal(unknown.window, null, "UNKNOWN STAYS DISTINCT FROM EMPTY — null, never 0");
 });
 
 test("a spelling this build has not seen reads as ABSENT, so the table still answers", () => {
@@ -143,7 +147,7 @@ test("the OTHER runtime's cache convention is additive, and the two are never re
   // field" path would have to be wrong for one of them. Each normalizer owns its own arithmetic.
   assert.deepEqual(registry.descriptorFor("claude").meter.fields,
     ["input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"]);
-  assert.equal(sessionModel.promptTokens({
+  assert.equal(modelTable.promptTokens({
     input_tokens: 1000, cache_read_input_tokens: 500, cache_creation_input_tokens: 100,
   }), 1600, "Claude's occupancy SUMS the cache terms — the opposite convention, declared apart");
 });
@@ -210,21 +214,17 @@ test("…and a FOURTH runtime that reports NO window gets `null`, not a made-up 
   assert.equal(events.context(10, "borg-3-turbo", "32768").window, null);
 });
 
-test("REGRESSION: the reported window BEATS the table, and Claude's table lookup is untouched", () => {
-  // ⚠ PRECEDENCE, DRIVEN: a runtime that states its own denominator wins over a frozen
-  // transcription of one vendor's registry, because the table is current by MAINTENANCE and the
-  // wire is current by CONSTRUCTION.
+test("core holds no model table: only the window the runtime put on its reading is a denominator", () => {
   assert.equal(metrics({ promptTokens: 10, promptWindow: 12345, liveModel: "claude-sonnet-5" }).contextWindow, 12345);
-  // …and with nothing reported, every Claude session reads exactly what it always did.
-  assert.equal(metrics({ promptTokens: 10, liveModel: "claude-haiku-4-5" }).contextWindow, 200000);
-  assert.equal(metrics({ promptTokens: 10, liveModel: "claude-sonnet-5" }).contextWindow, 1000000);
+  assert.equal(metrics({ promptTokens: 10, liveModel: "claude-haiku-4-5" }).contextWindow, null,
+    "a model name alone is not a window in core; the Claude adapter supplies its table's");
 });
 
 test("the Claude-shaped model rules are never applied to another runtime's id", () => {
   // ⚠ `[1m]` AND THE DATED-ID RULE ARE ONE VENDOR'S SPELLING. They may answer for that vendor's
   // ids and must answer `null` — never a guessed window — for anybody else's.
-  assert.equal(sessionModel.contextWindowFor("claude-sonnet-4-6[1m]"), 1000000);
+  assert.equal(modelTable.contextWindowFor("claude-sonnet-4-6[1m]"), 1000000);
   for (const id of ["gpt-5-codex", "gpt-5", "o4-mini", "borg-3-turbo", "gpt-5-codex[1m]-x", ""]) {
-    assert.equal(sessionModel.contextWindowFor(id), null, id);
+    assert.equal(modelTable.contextWindowFor(id), null, id);
   }
 });

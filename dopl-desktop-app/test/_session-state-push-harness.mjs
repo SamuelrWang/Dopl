@@ -39,7 +39,7 @@ const EXPORTED = [
   "reportedWorkspaces", "rememberWorkspace", "retryable", "send", "cycle", "schedule",
   "start", "kick", "stop",
   // C-2: the client-side refusal to put an ad-hoc (thread-less) session on the wire.
-  "serverReportable", "reportable",
+  "reportable",
   // 2026-08-22: the refusal to put an ENDED session on it. Retention is 7 days and DURABLE now,
   // and `SESSION_REPORT_MAX` bounds the array at 32 — an unfiltered set 400s the whole push.
   "liveForWire",

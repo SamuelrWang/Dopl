@@ -195,12 +195,11 @@ function isSafeLabel(value) {
  */
 function narrowOverrides(overrides) {
   const o = overrides && typeof overrides === 'object' ? overrides : {};
-  const sessionModel = require('./session-model');
   const asked = typeof o.model === 'string' ? o.model.slice(0, MAX_MODEL) : '';
   const instructions = typeof o.instructions === 'string'
     ? o.instructions.slice(0, MAX_INSTRUCTIONS).trim()
     : '';
-  const out = { model: sessionModel.chainModel(asked), instructions, fields: null };
+  const out = { model: require('./runtime/selection-vocabulary').pickOf(asked), instructions, fields: null };
   if (!Array.isArray(o.fields)) return out;
   const kept = [];
   const seen = new Set();

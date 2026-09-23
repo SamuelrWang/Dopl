@@ -1,24 +1,9 @@
-// THE RUNTIME-RESOLVED AXIS-A SURFACE — §2 SPLIT out of `session-profiles.js` (2026-09-14, the
-// 500-line cap). That file still re-exports every name below and holds the gate table these
-// delegate for; nothing here changed shape in the move.
+// The runtime-resolved Axis-A surface: delegates that ask `main/runtime/index.js` for a session's runtime (the
+// ONLY require in core that reaches the runtime layer for a gate decision). Core holds no copy of any tool name
+// or Axis-A mode (core-vocabulary.test). A trailing `runtimeId` is optional; absent is the default runtime.
 
-// ⚠ THE REGISTRY, NOT AN ADAPTER. This is the ONLY require in core that reaches the runtime layer
-// for a gate decision, and it names no vendor: `runtimeFor(id)` answers with the sixteen contract
-// methods and nothing else (`main/runtime/contract.js › RUNTIME_METHODS`).
 const runtimeRegistry = require('./runtime');
 
-// ── THE RUNTIME-RESOLVED AXIS-A SURFACE ──────────────────────────────────────────────────────
-//
-// ⚠ DELEGATES, NOT DEFINITIONS. Each one asks `main/runtime/index.js` for the session's runtime
-// and calls a `contract.js › RUNTIME_METHODS` member or reads a descriptor field. Core holds no
-// copy of any tool name and no copy of any Axis-A mode, which is what
-// `test/core-vocabulary.test.mjs` exists to keep true.
-// ⚠ THE TRAILING `runtimeId` IS OPTIONAL AND ABSENT MEANS THE DEFAULT RUNTIME. Some callers hold
-// a session (the gate; `session-io.js › grantArgs`) and some do not (the durable posture's WRITE
-// validator, which runs before a runtime is chosen). Making the argument required would have
-// forced the second group to invent one, which is worse than resolving the default in one place.
-// ⚠ DECLARED ABOVE THE TABLE, NOT BELOW IT: `grantDecisionDetail` is built at module load and is
-// handed three of them, so a `const` after the block would be a TDZ crash at require time.
 const runtimeFor = (runtimeId) => runtimeRegistry.runtimeFor(runtimeId);
 const descriptorFor = (runtimeId) => runtimeRegistry.descriptorFor(runtimeId);
 const cap = runtimeRegistry.capability;
@@ -27,73 +12,34 @@ const buildSessionToolConfig = (profile, runtimeId) => runtimeFor(runtimeId).too
 const toolModeAllows = (mode, toolName, runtimeId) => runtimeFor(runtimeId).axisAAllows(mode, toolName);
 const normalizeToolMode = (mode, runtimeId) => cap.normalizeToolMode(descriptorFor(runtimeId), mode);
 const floorWindowlessTool = (mode, runtimeId) => cap.floorWindowlessTool(descriptorFor(runtimeId), mode);
-// ⚠ WHY A WINDOWLESS LAUNCH IS REFUSED ON THIS RUNTIME, or `null` (2026-09-01, D1). The twin of
-// `floorWindowlessTool` above: that one answers `null` when there is no orderable floor, and this
-// one is the sentence that goes with it. Read at the LAUNCH (`session-launch.js`) rather than at
-// the gate, because the harm is a session that runs and denies its own reads — a refusal after the
-// spawn is a refusal nobody can act on.
+// Why a windowless launch is refused on this runtime (no orderable floor), or null — asked at the LAUNCH.
 const windowlessFloorRefusal = (runtimeId) => cap.windowlessFloorRefusal(descriptorFor(runtimeId));
-// ⚠ AXIS B'S COLLAPSE WARNING (2026-09-01, D3), or `null`. A WARNING, not a refusal: a runtime
-// whose gate cannot read a channel call's op fails CLOSED (unreadable input -> `gate` -> a
-// windowless deny), so the agent is broken and the boundary is not. Carried at the launch because
-// that is the only moment an operator can act on it.
+// Axis B's collapse WARNING, not a refusal: an unreadable op fails closed at the gate.
 const axisBOpScopedWarning = (runtimeId) => cap.axisBOpScopedWarning(descriptorFor(runtimeId));
-// "In no Axis-A list at all", asked as "not allowed even at the WIDEST mode this runtime offers".
-// ⚠ NOT A COPY OF A LIST: the widest mode is the last entry of `descriptor.toolMode.options`, so
-// a runtime whose widest mode is not spelled `bypass` still answers correctly. This is the
-// question `session-gate-reason.js › toolReason` asks to separate "in no list this build knows"
-// from "known, but not covered by the posture you set" — the conflation that made bypass look
-// broken and bought that whole module.
-const isClassifiedTool = (toolName, runtimeId) =>
-  runtimeFor(runtimeId).axisAAllows(cap.widestToolMode(descriptorFor(runtimeId)), toolName);
-
-// A session's Axis-A words, narrowest first. Every coercion of a SESSION's mode asks this with the
-// session's own runtime (`session-engine.js › startSession` copies it into state at spawn).
+// A session's Axis-A words, narrowest first (copied into state at spawn).
 const toolModesFor = (runtimeId) => cap.toolModes(descriptorFor(runtimeId));
-// ⚠ **THE MODEL PICK AND THE NATIVE LAUNCH SETTINGS, DELEGATED THE SAME WAY (2026-09-21, U5).**
-// They are here for the reason every other delegate above is: these questions used to be answered
-// in core by importing the DEFAULT runtime's frozen enums, which meant a Codex launch was
-// validated against another vendor's vocabulary — the exact coupling this file exists to remove.
-// Core asks for a session's runtime and gets back that runtime's own answer; it holds no id and
-// no setting name of its own.
-// ⚠ `launchModelPick` IS THE **STAMP** — what a session starts on. (`storeModelPick`, the RECORD
-// half, is deleted 2026-09-23 with the stored model.) `runtime/selection-vocabulary.js` has more.
-const launchModelPick = (value, runtimeId) => cap.launchModelPick(descriptorFor(runtimeId), value);
-const normalizeNative = (raw, runtimeId) => cap.normalizeNative(descriptorFor(runtimeId), raw);
-// The native launch dimensions this runtime declares AND can spend, or `null` for "no such
-// concept" — never `{}` (INVARIANTS §11: UNKNOWN is not EMPTY).
-const nativeDimensions = (runtimeId) => cap.nativeDimensions(descriptorFor(runtimeId));
+const widestToolModeFor = (runtimeId) => cap.widestToolMode(descriptorFor(runtimeId));
+// "In any Axis-A list at all", asked as "allowed at the widest mode" rather than by copying a list.
+const isClassifiedTool = (toolName, runtimeId) =>
+  runtimeFor(runtimeId).axisAAllows(widestToolModeFor(runtimeId), toolName);
+const editToolsFor = (runtimeId) => cap.editScopedTools(descriptorFor(runtimeId));
 
-// ⚠ THE DEFAULT RUNTIME'S MODE LIST, FOR SUITES ONLY. No decision about a session reads it or the
-// taxonomy below: a session's words come from `toolModesFor(s.runtimeId)`, and a gate
-// decision asks `toolModeAllows` / `isClassifiedTool` with the session's runtime.
+// The DEFAULT runtime's mode list and taxonomy, as declared data for suites and callers with no session;
+// no gate decision reads them.
 const TOOL_MODES = toolModesFor(null);
 
-// ⚠ THE AXIS-A TAXONOMY, READ OFF THE DEFAULT RUNTIME'S DESCRIPTOR — NOT A COPY AND NOT A
-// MODULE REFERENCE. Every list below is a spelling of ONE runtime's built-in tool names; core
-// must not hold one and must not name the module that defines one, so they arrive as DECLARED
-// DATA through the same frozen descriptor the UI reads. A GATE DECISION never touches them: it
-// asks `toolModeAllows` / `isClassifiedTool`, resolved against the session's own runtime, because
-// only that runtime knows how its modes compose its lists. These exist for the suites that pin a
-// runtime's taxonomy and for a caller with no session in hand.
 const TAXONOMY = cap.toolTaxonomy(descriptorFor(null));
 const AUTO_TOOLS = TAXONOMY.auto;
 const BYPASS_TOOLS = TAXONOMY.bypass;
 const BYPASS_READS = TAXONOMY.bypassReads;
 const ESCALATION_TOOLS = TAXONOMY.escalation;
 
-// ⚠ THE EDIT-SCOPED NAMES, READ OFF THE DESCRIPTOR RATHER THAN LISTED. `session-grant-keys.js ›
-// makeGrantKeyFor` scopes an edit grant to the RESOLVED DIRECTORY of the file it was shown, so it
-// has to know which tool names carry a path — a per-runtime fact. ⚠ That module still names
-// `Bash` and the web tools directly, which is a SECOND core-held built-in vocabulary this wave
-// did not move; it is on the deferred list in `test/core-vocabulary.test.mjs` with the step that
-// owns it, not left as an absence someone re-derives.
 const EDIT_TOOLS = cap.editScopedTools(descriptorFor(null));
 
 module.exports = {
   runtimeFor, descriptorFor, cap,
   buildSessionToolConfig, toolModeAllows, normalizeToolMode, floorWindowlessTool, toolModesFor,
   windowlessFloorRefusal, axisBOpScopedWarning, isClassifiedTool,
-  launchModelPick, normalizeNative, nativeDimensions, // U5
-  TOOL_MODES, TAXONOMY, AUTO_TOOLS, BYPASS_TOOLS, BYPASS_READS, ESCALATION_TOOLS, EDIT_TOOLS,
+  widestToolModeFor, editToolsFor,
+  TOOL_MODES, AUTO_TOOLS, BYPASS_TOOLS, BYPASS_READS, ESCALATION_TOOLS, EDIT_TOOLS,
 };

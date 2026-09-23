@@ -1,117 +1,49 @@
-// Durable session persistence (v1.9 Session Window, Track T1).
-//
-// Two structures, mirroring the durability discipline `consent-watcher.js` used to hold (that
-// module is deleted with the inbound consent lane, 2026-08-22; the DISCIPLINE is what was worth
-// keeping and it is stated here in full):
-//   sessionRecords  { [sessionKey]: durable record }   — one per (channelId,taskId)
-//   sessionIds      { [sessionKey]: sdkSessionId }      — the resume map (the SESSION_KEY analog)
-//
-// A durable record carries only the fields needed to re-post the interrupted echo
-// and offer a resume ({ sessionId, channelId, taskId, workspaceId, side, profile,
-// mode, phase, startedAt, … }; the conversation id lives in the resume map, never
-// here — `durableSessionRecord` is the full list). Live handles (the SDK query, the
-// BrowserWindow, the push iterator) live ONLY in the engine's in-memory registry
-// and are NEVER written here. On restart the engine reads records back and, per
-// reloadDisposition, either ignores a settled one or treats a running/awaiting one
-// as interrupted (§A.8 — no auto-reopen; opt-in resume via options.resume).
-//
-// The pure block below has NO electron / store references so
-// test/session-store.test.mjs slices and evaluates it verbatim (WATCHER-PURE idiom).
+// Durable session persistence: `sessionRecords` (one whitelisted record per session key) and `sessionIds` (the
+// resume map: key -> conversation id). Live handles never reach disk. The PURE block has no electron/store
+// reference and is sliced by three suites with no injected free vars.
 
 const Store = require('electron-store');
-// 2026-09-21 (U10): the RUNTIME-TRUTH whitelist — see `saveRecord`. ⚠ ABOVE the PURE sentinel and
-// consumed only BELOW the closing one, so the sliced block still evaluates with no free vars.
+// The usage-baseline whitelist, consumed only below the PURE block (see `saveRecord`).
 const runtimeTruth = require('./session-runtime-truth');
 
 const store = new Store();
-const RECORDS_KEY = 'sessionRecords'; // { [sessionKey]: durable record }
-const SDK_IDS_KEY = 'sessionIds'; // { [sessionKey]: sdkSessionId } — resume map
+const RECORDS_KEY = 'sessionRecords';
+const SDK_IDS_KEY = 'sessionIds';
 
 // ─── BEGIN SESSION-STORE-PURE (pure; unit-tested via source extraction) ──────
 
-// v3.0 VOCABULARY BOUNDARY (durable record + resume map): wire/storage name `task` ==
-// domain name `thread`. Every `taskId` / `taskTitle` here is the server's `channel_tasks`
-// spelling and is deliberately unchanged; a SESSION is this machine's run on that thread,
-// keyed below. Renaming the storage is a migration, not a copy change.
-//
-// Stable identity of a session = (channel, thread, AGENT INSTANCE).
-//
-// ⚠ THE AGENT SEGMENT JOINED ON 2026-08-21 (Samuel's multiplayer ruling) AND IT IS WHAT MAKES
-// N SESSIONS PER THREAD EXPRESSIBLE. The key was `<channel>:<thread>`, and that pair WAS the
-// de-dupe: one session per thread, `hasLiveSession` answered `{skipped:'busy'}` for the second,
-// and every lookup in the tree was a single `sessions.get(...)`. Multiplayer means one operator
-// may run several agents on one thread at once, so the pair can no longer identify a session —
-// only (channel, thread, agent) can. Every spawn mints an agent id (`main/agent-id.js`), so the
-// third segment is populated on every real session; it is left possible to be empty only so a
-// mid-wave caller or a record written before this wave still produces a well-formed key.
-//
-// FORMAT: `<channelId>:<taskId>:<agentId>`. A responder with no first-class thread still
-// collapses `taskId` to '', which is why the middle segment may be empty. The agent id charset
-// (`^[a-z][a-z0-9]{7}$`) carries no colon, so the key is unambiguously splittable.
-//
-// ⚠ IT CROSSES TO THE SERVER as `channel_sessions.session_key`, whose zod bound
-// (`src/features/channels/schema-sessions.ts › SESSION_KEY_RE`) was widened in the same change
-// to admit the third segment. The DESKTOP owns what a session key IS; the server only bounds
-// what it may look like. Change one, change both.
+// Wire/storage `task` == domain `thread`. A session is (channel, thread, AGENT INSTANCE):
+// `<channelId>:<taskId>:<agentId>`, the middle segment empty for a channel-level agent. It crosses to the server
+// as `channel_sessions.session_key` (`schema-sessions.ts › SESSION_KEY_RE`): change one, change both.
 function sessionKey(channelId, taskId, agentId) {
   return String(channelId || '') + ':' + String(taskId || '') + ':' + String(agentId || '');
 }
 
-// THE SLOT a session occupies in the engine's registry, from a call's own argument object.
-//
-// ⚠ IT BLENDS ALL THREE NOW; `agentId` NO LONGER *REPLACES* `taskId`. The D2 rule this
-// function used to carry was a CHOICE between two key spaces — (channel, thread) for a pair
-// session, (channel, agent) for a summoned room-bound TEAM agent, "never blended, a caller
-// either names an agent or it does not". Summoning is gone (channels rollback §1) and the
-// room-bound shape has had no producer for months, while multiplayer needs exactly the thing
-// that rule forbade: two agents distinguished on the SAME thread. So the choice is deleted and
-// the three parts compose. A team-shaped call (thread '', agent set) still gets a unique slot,
-// which is all the old branch was buying.
+// The slot a call's own argument object names; the three parts compose.
 function slotKey(a) {
   const x = a || {};
   return sessionKey(String(x.channelId || ''), String(x.taskId || ''), String(x.agentId || ''));
 }
 
-// The (channel, thread) PREFIX every session on one thread shares — `<channelId>:<taskId>:`.
-// ⚠ THE TRAILING COLON IS LOAD-BEARING: without it `<channel>:<thread>` would also prefix
-// `<channel>:<threadWithALongerId>`, so a scan would claim sessions from a neighbouring thread.
-// Callers that need "every agent on this thread" scan the registry with this rather than
-// parsing keys apart — the key is COMPARED, never split, so nothing comes to depend on its
-// internal shape. (`session-pool.js`, deleted 2026-08-20 with the headless lane, is where that
-// discipline was first written down; the rule outlived the file.)
+// The prefix every agent on one thread shares. The trailing colon is load-bearing (it stops a neighbouring
+// thread whose id extends this one from matching); keys are compared, never split.
 function threadKeyPrefix(channelId, taskId) {
   return String(channelId || '') + ':' + String(taskId || '') + ':';
 }
 
-// A phase that means the session is finished and must never be resumed or
-// re-echoed. Everything else (launching / running / awaiting_* / interrupted) is a
-// live-or-crashed session that reloadDisposition treats as interrupted.
 function isTerminalPhase(phase) {
   return phase === 'ended';
 }
 
-// What init() does with a record found on disk at startup:
-//   'ignore'  — already terminal (settled); drop it.
-//   'dormant' — P1 (v1.7.4): PARKED when the app died. It is NOT interrupted — it was
-//               intentionally paused and stays resumable, so init() posts NO
-//               task_failed{interrupted:true} echo and leaves the record + resume map
-//               intact for a later reopen (P2). Neither 'ignore' nor 'resume'.
-//   'resume'  — was live/awaiting when the app died; post the interrupted echo and
-//               offer an opt-in resume (never auto-reopen).
+// What init() does with a record at startup: 'ignore' (terminal), 'dormant' (PARKED: no interrupted echo,
+// handled by session-boot), 'resume' (live when the app died: interrupted echo + opt-in resume).
 function reloadDisposition(phase) {
   if (phase === 'parked') return 'dormant';
   return isTerminalPhase(phase) ? 'ignore' : 'resume';
 }
 
-// A durable DISPLAY string: one line, whitespace collapsed, capped at `max` (80 by default), or
-// null when there is nothing usable. Same LENGTH/newline bound sanitizeName applies
-// (not its fence-token strip; these strings never enter a framed prompt, and every
-// framing path re-sanitizes on its own), so an identity field can never grow into a blob.
-// ⚠ THE BOUND IS A PARAMETER SINCE 2026-08-23 (F-287/F-288), and 80 is a DISPLAY default rather
-// than a rule. A field that carries a real server bound passes it — `identityName` is an IDENTITY
-// bounded at 120 by `agent_identities_name_charset_check`, and clipping it to a display default
-// would persist a name no identity has, which is the same defect `session-summary.js ›
-// displayText(value, max)` was parameterized to avoid on the wire half.
+// A durable display string: one line, collapsed, bounded (80 by default; a field with a real server bound
+// passes it), or null. These never enter a framed prompt.
 function durableName(value, max) {
   if (typeof value !== 'string') return null;
   const cap = typeof max === 'number' && max > 0 ? max : 80;
@@ -119,9 +51,8 @@ function durableName(value, max) {
   return s || null;
 }
 
-// Whitelist the durable fields so a live handle can never leak into electron-store
-// even if the caller passes an enriched record. ⚠ It mirrored `consent-watcher.js`'s own
-// `durable()`; that module is deleted (2026-08-22), so this is now the ONE statement of the rule.
+// Whitelist the durable fields (the one statement of the rule). Every field is coerced inline: this function
+// is evaluated standalone by the extraction tests, so it cannot ask another module.
 function durableSessionRecord(rec) {
   const r = rec || {};
   return {
@@ -132,188 +63,57 @@ function durableSessionRecord(rec) {
     workspaceId: r.workspaceId,
     side: r.side,
     profile: r.profile,
-    // ── 2026-09-18 — THE LAUNCH STAMPS (Samuel's ruling; `session-io.js › baseRecord` carries the
-    // reversal and what it was measured on) ──────────────────────────────────────────────────
-    // ⚠ COERCED INLINE, for `model` and `runtimeId` below and their reason: this function is
-    // evaluated STANDALONE by the extraction tests, so it cannot ask `session-own-launch.js` what
-    // the cap is. It bounds the SHAPE only — a real, non-negative whole number of generations, or
-    // `null` — and deliberately does NOT re-spell `MAX_LAUNCH_DEPTH`. `null` is where junk, a
-    // hand-edited store and every record written before this field land, and the gate's own
-    // `normalizeLaunchDepth` reads absent as the CAP, so the fail-closed direction stands and the
-    // cap is still stated in exactly one place.
-    // ⚠ THE ONE WIDENING THIS BUYS, SAID OUT LOUD RATHER THAN DISCOVERED: a hand-edited store can
-    // now write `0` and claim a human started the session. That is inherent in persisting the
-    // stamp at all — clamping the upper bound would not touch it, since `0` is the value that
-    // matters — and it is what the ruling asked for. Every other durable containment field on this
-    // whitelist still fails restrictive.
+    // A whole non-negative number or null; null (junk, old records) reads as the CAP at the gate. A hand-edited
+    // `0` claiming a human start is an accepted widening of persisting the stamp at all.
     launchDepth: typeof r.launchDepth === 'number' && Number.isFinite(r.launchDepth) && r.launchDepth >= 0
       ? Math.floor(r.launchDepth) : null,
-    // ⚠ `=== true` AND NOTHING ELSE — the gate's own spelling (`launchChainEnabled`), so a missing
-    // field, a string, a 1 or a truthy object all keep the ONE-GENERATION bound.
     launchChain: r.launchChain === true,
     mode: r.mode,
     phase: r.phase,
     startedAt: r.startedAt,
-    // ⚠ WHEN THIS RECORD WAS LAST PARKED (2026-09-13, F-694's REGRESSION). `startedAt` is the
-    // only other clock on a durable record and it answers a different question — a record can be
-    // 46 days old and have been parked five minutes ago. `session-boot.js › reparkDormant` needs
-    // the LATTER to decide whether an agent is one the operator still has in mind, so the stamp is
-    // whitelisted here and written by `saveRecord` / `setRecordPhase` below (both of which is why
-    // it is a PASSTHROUGH here: this function is in the PURE block and must stay deterministic).
-    // ⚠ NULL IS **OLD**, NOT UNKNOWN-MEANS-RECENT. Every record written before this field existed
-    // carries no stamp, and treating those as fresh is exactly the revival this field exists to
-    // stop (INVARIANTS §11 — a stale-cache field falls back to its EMPTY meaning, never a
-    // flattering one).
+    // When it was last PARKED (stamped by both park writes; a pure passthrough here). Null is OLD at boot.
     parkedAt: Number(r.parkedAt) > 0 ? Number(r.parkedAt) : null,
-    // FIX L1: the task's OTHER party (responder -> the requester who addressed me;
-    // requester -> the target I addressed). Persisted so a resumed session stays
-    // counterparty-bound and only feeds on that member's replies.
+    // The task's other party, so a resumed session stays bound to it (FIX L1).
     counterpartyId: r.counterpartyId || null,
-    // H2: whether that party's channel is a DIRECT one, i.e. whether the server addresses
-    // this session's unaddressed posts. Persisted with the binding because a recreated
-    // shell posts too, and its approval card must name the same recipient the live one did.
-    // Strict boolean: a hand-edited store can only ever make this FALSE, which understates.
     direct: r.direct === true,
-    // D2 — THE BINDING MODE, persisted. 'pair' fences the inbound feed and the window's
-    // history to ONE counterparty (every session shape that exists today); 'room' opens
-    // both to the whole channel, which is what a summoned TEAM agent needs. Whitelisted
-    // as a strict enum with 'pair' as the fallback, so a hand-edited store, an older
-    // record written before this field existed, or a mid-wave caller can only ever land
-    // on the NARROWER binding — a widened fence must be something a launch asked for.
+    // A strict enum falling back to the NARROWER binding.
     bind: r.bind === 'room' ? 'room' : 'pair',
-    // THE AGENT INSTANCE ID (2026-08-21). It used to name a `channel_agents` ROW a summoned
-    // team session ran as; named agents are gone and this is now the random per-INSTANCE id
-    // `main/agent-id.js` mints at every spawn. It is the third segment of the slot key
-    // (slotKey above), the handle the operator @-mentions to address ONE of several agents on
-    // a thread, and the `name` the state push files — so a record that lost it would re-key
-    // onto a different slot and answer to a different mention.
+    // The instance id: third key segment, @-mention handle, the push's `name` — losing it re-keys the session.
     agentId: r.agentId || null,
-    // v1.7.5 D1: the header identity (peer display name, channel name, task title).
-    // Whitelisted as PLAIN STRINGS so a recreated/resumed shell can rebuild the header
-    // instead of falling back to a bare "Session". Coerced + bounded the same way the
-    // framing bounds a counterparty-controlled display name (80 chars, one line), so a
-    // hand-edited store can never push an unbounded blob back into the renderer.
+    // Header identity as bounded plain strings (a hand-edited store cannot push a blob to a renderer).
     counterpartyName: durableName(r.counterpartyName),
     channelName: durableName(r.channelName),
     taskTitle: durableName(r.taskTitle),
-    // 2026-08-23 (F-288) — THE IDENTITY NAME, and it is whitelisted for a REPORTING reason rather
-    // than a header one. `context.identity` is a spawn-time capture that lives only on the live
-    // session object; nothing on disk carried it, so `session-park.js › startResume` — a full
-    // re-`startSession`, unlike `resumeParked`, which works in place — rebuilt the context without
-    // it. `session-summary.js › liveSummary` then reported `identityName: null`, and `identityName`
-    // is in `session-telemetry.js › STATE_FIELDS`, so the null bypassed the cadence floor and
-    // ERASED `channel_sessions.identity_name` on the next push, under a still-running agent whose
-    // orchestrator was reading that name to tell six agents apart.
-    // ⚠ THE NAME ALONE IS ENOUGH, and only the name is stored. `instructions` / `fields` /
-    // `knowledgeBases` are read by exactly one consumer — `prompt-framing-agent-identity.js ›
-    // identityRoleFraming`, through the one-shot `session-seed.js › takeFraming` — which a resume
-    // never runs (`session-engine.js` sets `freshFraming` false whenever `resumeSdkId` is present,
-    // and the SDK resume carries the original ROLE block anyway). Persisting the body would put
-    // another member's prompt text on disk to answer a question nobody asks after spawn.
-    // ⚠ 120, NOT THE 80 DEFAULT: this is an identity, bounded by the column's own CHECK.
+    // The identity NAME only (F-288), at the column's 120: without it a crash resume erased
+    // `channel_sessions.identity_name`. The body is never persisted (no reader after spawn).
     identityName: durableName(r.identityName, 120),
-    // FIX #9, now a DISPLAY rehydrate rather than a budget one (2026-09-07): this counter
-    // survives a recreate so a reopened session shows what it has already run. It bounds
-    // nothing — the caps are deleted — and it is still coerced to a finite number so a
-    // hand-edited store cannot inject NaN into the reducer.
-    // 🔒 ⚠ **`costUsd` WAS WHITELISTED BESIDE IT AND IS DELETED (2026-09-22, Samuel: *"we dont
-    // need cost tracking"*).** ⚠ AN OLDER RECORD STILL CARRIES THE FIELD AND STILL READS: this is
-    // a WHITELIST, so an unknown key is DROPPED on read rather than migrated or refused — the
-    // identical treatment `turnCap` got when the caps went, and the reason that rule exists.
+    // Display only; a whitelist drops the retired cost/cap fields of an older record on read.
     turns: Number(r.turns) || 0,
-    // 2026-09-07: `turnCap` was whitelisted here so the bound survived with the budget. Deleted
-    // with the caps. A record written by an older build still carries the field; it is dropped on
-    // read rather than migrated, because nothing downstream asks for it.
-    // 2026-08-22 — THE OUTBOUND POST COUNTER, and it is whitelisted for an IDEMPOTENCY reason
-    // rather than a budget one. `session-outbound-tag.js › nextOwnPostId` stamps every post this
-    // instance makes `agent-<agentId>-<n>`; the AGENT ID is persisted just above and re-used by
-    // `session-park.js › startResume`, so a counter that restarted at 0 on resume re-minted
-    // `client_msg_id`s the server had already stored — and the server's idempotency
-    // short-circuit answers the OLD row and silently discards the resumed agent's reply.
-    // ⚠ COERCED HARDER THAN `turns` ABOVE, and deliberately: `Number(x) || 0` lets
-    // `Infinity` through (it is truthy), and this number is CONCATENATED into a client_msg_id
-    // rather than compared against a cap. A non-finite or negative one lands on 0.
+    // The post counter feeds client_msg_ids (idempotency), so it is coerced harder: finite, >= 0, integral.
     ownPostSeq: Number.isFinite(Number(r.ownPostSeq)) ? Math.max(0, Math.floor(Number(r.ownPostSeq))) : 0,
-    // 2026-08-02 — THE MODEL THIS SESSION RUNS ON, whitelisted so a P2 recreate or a crash
-    // resume comes back on the operator's pick instead of silently reverting to the CLI
-    // default. Checked INLINE, the same shape `bind` above uses and for the same reason: this
-    // function is evaluated standalone by the extraction tests.
-    // ⚠ A GRAMMAR SINCE 2026-09-22, NOT THE FROZEN FIVE-ALIAS ENUM, which reset every live-roster id
-    // (`claude-opus-5[1m]`, any Codex id) to 'default' on the first crash resume. It is the pick
-    // grammar (`runtime/claude/models.js › PICK_PATTERN`, restated because this block is pure): no
-    // space, quote, newline or shell metacharacter. Anything else is '' — no pick.
+    // The pick, by shape only (no space, quote, newline or shell metacharacter), else '' (no pick).
     model: typeof r.model === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,109}(\[[A-Za-z0-9]{1,8}\])?$/.test(r.model) ? r.model : '',
-    // ── 2026-08-31 (port wave D) — WHICH RUNTIME THIS SESSION RAN ON ─────────────────────────
-    //
-    // ⚠ WITHOUT IT A CRASH RESUME COMES BACK ON A DIFFERENT VENDOR. `session-park.js ›
-    // startResume` rebuilds the whole session from this record and hands the conversation handle
-    // (`sdkSessionId`, persisted three fields up) to whatever runtime it acquires — so a record
-    // with no runtime resumed onto the DEFAULT adapter, which would be asked to continue another
-    // platform's conversation id, in another platform's tool vocabulary, against another
-    // credential. `session-engine.js › startSession` stamps the live session and this is the
-    // only thing that carries the stamp across a restart.
-    // ⚠ COERCED BY CHARSET, NOT AGAINST THE REGISTRY, and that is forced rather than lazy: this
-    // function is evaluated STANDALONE by the extraction tests (the same constraint `model` above
-    // states), so it cannot ask `main/runtime/index.js` what is registered. The bound here is
-    // "could be an id at all"; `runtime/index.js › resolve` is what turns an id this build does
-    // not know into the DEFAULT runtime, fail-closed toward the one adapter it is certain it
-    // ships. A hand-edited store can therefore only ever select a runtime this build already has.
-    // ⚠ `null` IS A RECORD WRITTEN BEFORE THIS FIELD and reads as the default, which is the
-    // runtime every such session actually ran on.
+    // Which runtime ran it, so a crash resume never lands on another vendor. Coerced by charset only; an unknown
+    // id resolves to the default runtime, and null (an old record) is the default it really ran on.
     runtimeId: typeof r.runtimeId === 'string' && /^[a-z][a-z0-9-]{0,30}$/.test(r.runtimeId) ? r.runtimeId : null,
   };
 }
 
-// THE POST COUNTER A RESUMED SESSION STARTS FROM, and why it is not simply the stored number.
-//
-// ⚠ THE RECORD ALWAYS LAGS. `nextOwnPostId` bumps `s.ownPostSeq` in memory on every post, but a
-// record is only written at the moments `session-io.js › baseRecord` is projected (spawn,
-// system/init, park, settle). A CRASH between a post and the next persist therefore leaves a
-// stored counter BELOW the ids the server already holds — and re-minting one of those is exactly
-// the collision this counter is persisted to avoid, because the server answers the old row and
-// the resumed agent's reply is silently discarded. So a rehydrate jumps the counter clear of the
-// window a crash can hide, rather than resuming from a number that is only a lower bound.
-//
-// SLACK IS FREE HERE. The stamp is `agent-<agentId>-<n>`; `n` is scoped to ONE random instance
-// id, nothing reads it as a count, and `MAX_OWN_POST_IDS` bounds the lookback set regardless. 50
-// is far more posts than the seconds between a persist and a crash can hold.
+// The record lags the in-memory post counter (written only at spawn/init/park/settle), so a resume jumps it
+// clear of the window a crash can hide: re-minting an id the server holds silently discards the reply.
 const RESUME_POST_SEQ_SLACK = 50;
 
-// PURE: a stored counter -> the counter a resumed session starts from. 0 (a fresh spawn, an
-// absent field, a hand-edited store) stays 0 — slack over nothing would only make the first
-// stamp look strange.
+// 0 stays 0 (a fresh spawn or junk).
 function resumedPostSeq(stored) {
   const n = Number(stored);
   if (!Number.isFinite(n) || n <= 0) return 0;
   return Math.floor(n) + RESUME_POST_SEQ_SLACK;
 }
 
-// ── Record pruning (AUDIT D5, closes FOLLOW-UP F8) ───────────────────────────
-// Records used to live forever, so ANY thread that ever ran on this machine stayed
-// peer-resurrectable: the inbound gate creates a shell from an inbound message alone
-// (recreateParkedShell reads the record), which made the durable set an unbounded, growing
-// list of windows a peer could pop. This is the bound.
-//
-// POLICY — deliberately conservative. Two rules, age and count, and a protection list that
-// is checked FIRST, so nothing an operator might still want is dropped:
-//   PROTECTED  (1) a key with a LIVE session on this machine (`keep`, the engine's registry):
-//                  the held/queued inbound cards live only on that in-memory object, so this
-//                  is also what protects an unanswered message;
-//              (2) a key with a RETAINED sdkSessionId — that is a conversation the operator
-//                  can still reopen and resume (the resume map is cleared only when the
-//                  thread closes completed/failed);
-//              (3) any phase that is neither 'ended' nor 'parked', i.e. a record that still
-//                  looks live (launching / running / awaiting_*). Belt for (1).
-//   RULE 1     drop an unprotected record whose session last STARTED more than
-//              RECORD_TTL_MS ago. startedAt is restamped by every startSession for the
-//              thread (launch, resume, recreate), so it reads as last-touched.
-//   RULE 2     if more than MAX_RECORDS survive, drop the oldest unprotected ones (LRU by
-//              startedAt) until the TOTAL is back at MAX_RECORDS. Protected records are
-//              counted, never dropped, so a machine with 200 live threads simply prunes
-//              nothing rather than evicting something reopenable.
-// Pruning a record NEVER touches the resume map: a dropped record's sdkSessionId (if any)
-// would have protected it, so there is nothing to clear.
-const RECORD_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+// Record pruning (AUDIT D5). PROTECTED first: a live key, a key with a retained conversation id, or any
+// non-ended/non-parked phase. Then drop records older than the TTL (by startedAt, restamped per start), then
+// the oldest unprotected ones down to MAX_RECORDS. Pruning never touches the resume map.
+const RECORD_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_RECORDS = 200;
 
 function protectedRecord(key, rec, keep, hasSdkId) {
@@ -322,8 +122,6 @@ function protectedRecord(key, rec, keep, hasSdkId) {
   return rec.phase !== 'ended' && rec.phase !== 'parked';
 }
 
-// PURE: which keys of `all` may be dropped, given the clock, the live-session keys, and a
-// resume-map probe. Returns [] when nothing qualifies.
 function prunableKeys(all, opts) {
   const o = opts || {};
   const now = Number(o.now) || 0;
@@ -335,8 +133,7 @@ function prunableKeys(all, opts) {
   const survivors = [];
   for (const key of keys) {
     const rec = records[key];
-    // Garbage (a null / non-object entry) is never a real record, so it is never protected
-    // by the unknown-phase rule below — it just goes.
+    // Garbage is never protected by the unknown-phase rule.
     if (!rec || typeof rec !== 'object') { drop.push(key); continue; }
     if (protectedRecord(key, rec, keep, hasSdkId)) continue;
     if (now - (Number(rec.startedAt) || 0) > RECORD_TTL_MS) drop.push(key);
@@ -354,28 +151,19 @@ function prunableKeys(all, opts) {
 
 // ─── END SESSION-STORE-PURE ──────────────────────────────────────────────────
 
-// ── Records ──────────────────────────────────────────────────────────────────
 function loadRecords() {
   return store.get(RECORDS_KEY) || {};
 }
 
-// ⚠ THE PARK STAMP IS WRITTEN HERE AND IN `setRecordPhase`, i.e. AT BOTH WRITES THAT CAN LEAVE A
-// RECORD PARKED (`session-engine.js`'s `persist` effect takes the first on a park — FIX #9 — and
-// `session-auth.js`'s sign-out park takes the second). Stamping it in the two CHOKEPOINTS rather
-// than in `session-park.js` is what makes it impossible to add a third park path that forgets it,
-// and `Date.now()` may not live in `durableSessionRecord` anyway (the PURE block).
+// The park stamp is written at BOTH writes that can leave a record parked (here and `setRecordPhase`), so a
+// third park path cannot forget it; `Date.now()` may not live in the PURE block.
 function stampParked(record) {
   if (record.phase === 'parked') record.parkedAt = Date.now();
   return record;
 }
 
-// ⚠ THE RUNTIME-TRUTH FIELDS ARE WHITELISTED HERE AND NOT IN `durableSessionRecord` (2026-09-21,
-// U10), AND THE REASON IS THE PURE BLOCK RATHER THAN THE §1 CAP. That function lives inside
-// SESSION-STORE-PURE, which three suites slice and evaluate with `new Function` and NO injected
-// free vars — so it cannot reach a helper, and a helper it inlined would be a fourth hand-copy of
-// a coercion (`knownProfile`'s warning, one file over). `saveRecord` is outside the block, is the
-// ONE write every record goes through, and is already where `stampParked` applies the other
-// non-pure field. Same discipline: nothing but coerced primitives is ever added.
+// The ONE write every record goes through; the runtime-truth fields are whitelisted here because the PURE
+// block cannot reach a helper.
 function saveRecord(rec) {
   const record = stampParked({
     ...durableSessionRecord(rec),
@@ -391,23 +179,11 @@ function setRecordPhase(key, phase) {
   const all = loadRecords();
   if (!all[key]) return;
   all[key].phase = phase;
-  if (phase === 'parked') all[key].parkedAt = Date.now(); // see stampParked: both park writes stamp
+  if (phase === 'parked') all[key].parkedAt = Date.now();
   store.set(RECORDS_KEY, all);
 }
 
-// ⚠ `getRecord(key)` AND `removeRecord(key)` STOOD HERE AND ARE DELETED (2026-08-20), both
-// with zero callers. `removeRecord`'s caller-lessness is itself a RECORDED FINDING —
-// `test/main-audit-record-prune.test.mjs` opens by naming it ("records were never pruned;
-// session-store.removeRecord existed with no caller"), and the fix that closed it was
-// `pruneRecords`'s LRU sweep, not this function. Keeping a single-key delete beside a sweep is
-// two answers to "how does a record leave", and the one with no callers is the one that would
-// have been reached for first. `getRecord` went the same way: the live readers take
-// `loadRecords()` (the whole map) or `getSdkSessionId(key)` (the one field a resume needs).
-
-// AUDIT D5: apply the policy above. Called ONCE per app start (session-engine.init, AFTER the
-// interrupted-record scan, so a crashed session still gets its echo + resume offer before it can
-// ever age out). `keep` is the live registry's key set. Returns how many were dropped; a store
-// with nothing prunable is not rewritten.
+// Called once per app start, AFTER the interrupted scan and the re-park, with the live keys as `keep`.
 function pruneRecords(opts) {
   const all = loadRecords();
   const ids = store.get(SDK_IDS_KEY) || {};
@@ -422,10 +198,8 @@ function pruneRecords(opts) {
   return keys.length;
 }
 
-// ── Resume map (sdkSessionId per (channelId,taskId)) ─────────────────────────
-// Kept independently of the record so a resume survives a settled record: an
-// interrupted session's record can be dropped while its sdkSessionId stays here
-// for options.resume. Cleared only when the task itself is done.
+// The resume map is kept apart from the record so a conversation survives a settled record; cleared only
+// when the task itself is done.
 function getSdkSessionId(key) {
   const map = store.get(SDK_IDS_KEY) || {};
   return map[key] || null;
@@ -446,17 +220,8 @@ function clearSdkSessionId(key) {
   }
 }
 
-/**
- * DROP a key from BOTH durable structures — the record and the resume map — in one call.
- * The 7-day sweep's cleaner (`main/agent-retention.js`); nothing else has a reason to.
- *
- * ⚠ THE RESUME MAP IS THE HALF THAT MATTERS. `sessionIds[key]` is the `sdkSessionId` a resume
- * re-attaches to, and it is kept INDEPENDENTLY of the record precisely so a conversation
- * survives a settled one. An ended agent past its window must not be resumable, so the two are
- * dropped together here — the one place where "forget this agent" is a single statement.
- * ⚠ `pruneRecords`'s LRU sweep is a DIFFERENT rule (bound the durable set) and is untouched:
- * this is keyed, deliberate and driven by the clock on `endedAt`.
- */
+/** Drop a key from BOTH structures in one call — the 7-day sweep's cleaner (`agent-retention.js`); an ended
+ *  agent past its window must not be resumable. */
 function forgetKeys(keys) {
   const list = Array.isArray(keys) ? keys : [keys];
   const all = loadRecords();
@@ -475,24 +240,21 @@ function forgetKeys(keys) {
 }
 
 module.exports = {
-  // pure core (also re-exported for the shell + tests)
   sessionKey,
-  slotKey, // (channel, thread, agent instance) — the multiplayer slot
-  threadKeyPrefix, // every agent on one thread shares it (registry scans)
+  slotKey,
+  threadKeyPrefix,
   isTerminalPhase,
   reloadDisposition,
   durableName,
   durableSessionRecord,
-  RESUME_POST_SEQ_SLACK, // 2026-08-22: the crash window a rehydrated post counter jumps
+  RESUME_POST_SEQ_SLACK,
   resumedPostSeq,
-  prunableKeys, // AUDIT D5: the pure record-retention policy
-  // records
+  prunableKeys,
   loadRecords,
   saveRecord,
   setRecordPhase,
-  pruneRecords, // AUDIT D5: bound the durable set (called from session-engine.init)
-  forgetKeys, // 2026-08-22: the 7-day sweep's one-call "forget this agent" (record + resume)
-  // resume map
+  pruneRecords,
+  forgetKeys,
   getSdkSessionId,
   setSdkSessionId,
   clearSdkSessionId,

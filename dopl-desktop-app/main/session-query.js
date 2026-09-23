@@ -1,56 +1,28 @@
-// session-query.js — the query LIFECYCLE. ⚠ AND NOTHING ABOUT WHICH PLATFORM IS RUNNING IT.
-//
-// ⚠ THE OPTION ASSEMBLY LEFT ON 2026-08-31 (runtime-adapter port, steps 3–4). `› buildSdkOptions`
-// — every option, every pin, the held gate, the scrubbed env, the deny list — is now the
-// ADAPTER's (`main/runtime/claude/launch-spec.js`), and this file no longer knows what is inside
-// the object it hands back. What stayed is the discipline that was never platform-shaped: the
-// supersede-before-relaunch rule, the loop tagging that makes a superseded consumer inert, the
-// launch watchdog, and the auth-hold short circuit.
-//
-// SECURITY: `buildLaunchSpec` is still the ONE assembly point for every spawn shape (fresh
-// launch, parked resume, recreated shell, post-sign-in relaunch). session-park calls it through
-// `deps.buildLaunchSpec` and session-auth relaunches through the engine's own `startQuery`, so no
-// path anywhere assembles its own spec — which is what makes the pre-approval shadow rule, the
-// held gate, the ambient-config isolation and the pinned permission mode hold identically on all
-// of them. The conversation id is the only thing that ever differs between cold and resumed.
-//
-// Leaf deps (io / store / diag / session-auth / the runtime registry) are required at the top
-// exactly like session-park.js; the two ENGINE-owned handles this file cannot require —
-// `dispatch` and the replay-aware `emitQuiet` — are injected via bind(). None of the modules
-// required here require session-engine back, so there is no cycle.
+// The query lifecycle, and nothing about which platform runs it: supersede-before-relaunch, the loop tag
+// that makes a superseded consumer inert, the launch watchdog and the auth-hold short circuit. The launch
+// spec is the runtime adapter's and core never looks inside it; `buildLaunchSpec` is the one assembly point.
 
 const io = require('./session-io');
 const store = require('./session-store');
 const { diag } = require('./diag');
 const sessionAuth = require('./session-auth');
-// F-692: the ACT on an MCP-connect failure (kill, retry ONCE, then end visibly). Bound by the
-// engine with the same four handles `session-auth.js` takes, and required here for the same
-// reason: this loop is where the runtime's own statement about its MCP servers arrives.
+// F-692: kill / retry once / end visibly when the runtime reports the Dopl MCP server did not connect.
 const mcpGuard = require('./mcp-connect-guard');
-const sessionCredential = require('./session-credential'); // the container lock (plan §4.4 B1)
+const sessionCredential = require('./session-credential');
 const runtimeRegistry = require('./runtime');
-// F-692 (2026-09-13): the Dopl MCP route's PRE-FLIGHT and the CLI's connect-timeout knob. ⚠ CORE's
-// and not the adapter's, because `/api/mcp` is the one server EVERY runtime is pointed at — the
-// adapter owns how a server is MOUNTED, this owns whether the route is awake before a child asks.
+// The Dopl MCP route pre-flight is core's: `/api/mcp` is the one server every runtime is pointed at.
 const mcpConnect = require('./mcp-connect');
 const config = require('./config');
-const { teardownHandles } = require('./session-handles'); // P4-14
+const { teardownHandles } = require('./session-handles');
 
-let deps = null; // { dispatch, emitQuiet, scheduleIdle }
+let deps = null;
 
 function bind(d) {
   deps = d || null;
 }
 
-/**
- * The OPAQUE launch payload for this session's runtime. ⚠ CORE NEVER LOOKS INSIDE IT — that is
- * the seam, and inspecting it here would put a platform's option vocabulary straight back into
- * the module the extraction removed it from.
- *
- * ⚠ THE ENGINE'S TWO HANDLES RIDE THE REQUEST. The held gate needs the dispatch (to paint a
- * card) and the replay-aware quiet emitter (to resolve one an auto-allowed post painted), and the
- * adapter must not require the engine back.
- */
+/** The opaque launch payload for this session's runtime; the engine's handles ride the request so the
+ *  adapter never requires the engine back. */
 function buildLaunchSpec(s) {
   return runtimeRegistry.runtimeFor(s.runtimeId).buildLaunchSpec({
     session: s,
@@ -59,113 +31,51 @@ function buildLaunchSpec(s) {
   });
 }
 
-// H1 — SUPERSEDE the live query handles without touching lifecycle state. The consume
-// loop below is tagged by its own `q`, so nulling `s.query` makes the previous loop inert
-// (`s.query !== q` returns immediately, dropping its tail AND any late rejection). The handle
-// is closed BEFORE it is nulled, or a Codex child outlives the relaunch (P4-14).
-// Safe on a cold session, where every field is already null.
+// H1: supersede the live handles without touching lifecycle state. Nulling `s.query` makes the old loop
+// inert (`s.query !== q`); the handle is closed first or a Codex child outlives the relaunch (P4-14).
 function abortInFlight(s) {
   teardownHandles(s, { supersede: true });
 }
 
 async function startQuery(s, rt) {
-  // H1 (THE TWO-CHILDREN BUG): this used to overwrite s.abortController / s.query with NO
-  // teardown of what was already there. A second call therefore left the FIRST child process
-  // alive — still holding this session's pre-approved channel access, still able to post into
-  // the channel — with nothing left pointing at it to stop it, and s.firstTurn pushed twice.
-  // session-auth.resumeAfterSignIn is what made it reachable: a sign-in that lands on a session
-  // a peer wake had already resumed, or simply a double-click on the sign-in button. Superseding
-  // FIRST makes a relaunch idempotent at this layer, whatever the caller does; a cold launch is
-  // unaffected (abortInFlight is a no-op there).
+  // Supersede first, so a relaunch can never leave a second child holding this session's channel access.
   abortInFlight(s);
-  // 🔒 THE CONTAINER LOCK (plan §4.4 B1), minted before the spec is assembled because
-  // `buildLaunchSpec` is SYNCHRONOUS and reads the stamp off `s`.
-  // ⚠ THERE ARE EXACTLY TWO CALL SITES AND THAT IS NOT AN OVERSIGHT — this one and
-  // `session-park.js › startResumedConsumer`. They are the two places a query STARTS: a woken
-  // SPAWN-IDLE shell never passes through here (`startSession` returns before `startQuery`, and
-  // `wakeEffects` fires `resumeQuery` -> `resumeParked`), so a single site here would leave every
-  // woken shell on the unlocked device token. The call is IDEMPOTENT per session — an already
-  // stamped session mints nothing — so the pair is safe and a resume of a live session is free.
-  // ⚠ `session-audience-ceiling.test.mjs` pins BOTH sites by source scan: deleting either one
-  // is silent otherwise, and the half it deletes is a whole spawn shape.
+  // The container lock, minted before the (synchronous) spec is built. One of exactly two query-start
+  // sites with `session-park.js › startResumedConsumer` (a woken spawn-idle shell never comes here).
   await sessionCredential.ensureContainerCredential(s, diag);
-  // ⚠ THE MCP PRE-FLIGHT (F-692) AND THE SETTLED RE-CHECK IT MADE NECESSARY — `preflightMcp`
-  // below carries both arguments. It is a FUNCTION and not four lines here because the RESUME
-  // lane needs the identical pair (`session-park.js › startResumedConsumer`, through `deps`).
   if (await preflightMcp(s)) return;
   s.abortController = new AbortController();
   s.pushIterator = io.makePushIterator();
-  // ⚠ SYNCHRONOUS BY CONTRACT. The handle is assigned to the session IMMEDIATELY; an await
-  // between "the child exists" and "something points at it" is the two-children bug above,
-  // reintroduced at a different layer.
-  // ⚠ WHICH LANE STARTED THIS STREAM, STAMPED WHERE THE CHILD IS ACTUALLY MADE (F-696,
-  // 2026-09-14). `mcp-connect-guard.js › relaunch` has to retry on the lane that LAUNCHED, and
-  // `s.resumeSdkId` cannot answer that: `session-park.js › startResume` re-enters HERE carrying
-  // one, so the handle says "there is a conversation" and never "this came back by `rt.resume`".
+  // Synchronous by contract: the handle is assigned the moment the child exists. `launchVia` tells the MCP
+  // guard which lane to retry on (F-696).
   s.launchVia = 'start';
   const q = rt.start(buildLaunchSpec(s));
   s.query = q;
   s.pushIterator.push(io.userMessage(s.firstTurn));
-  // C-4 — ARM THE LAUNCH WATCHDOG. The idle timer used to be armed ONLY by reducer effects
-  // that require `launched`, which only the runtime's own init event dispatches — so a child that
-  // booted and never emitted one had no timer of any kind: phase 'launching' forever,
-  // `hasLiveSession` true, every retry `{skipped:'busy'}`, and its slot spent against
-  // MAX_WINDOWS for the life of the process.
-  //
-  // HERE rather than in startSession, and that is the point of the seam: this is the ONE
-  // deferred launch (H1's supersede-before-relaunch), so it covers the cold launch AND
-  // session-auth's post-sign-in relaunch, which re-enters with phase reset to 'launching'
-  // and would otherwise hang exactly the same way. It is the SAME `scheduleIdle` every other
-  // arming site uses — `session-state.idleTimeout` reads the launching phase and answers the
-  // launch bound — so there is no second timer to leak and `launched`'s own scheduleIdle
-  // replaces this one the instant the session really starts.
+  // Arm the launch watchdog here, the one deferred launch: a child that never emits init must still end.
   if (deps && deps.scheduleIdle) deps.scheduleIdle(s);
-  consume(s, q, rt); // fire-and-forget consumer loop
+  consume(s, q, rt);
 }
 
-// The normalizer's read-only context. ⚠ Rebuilt per message on purpose: `willGatePost` asks the
-// LIVE gate, so a posture changed mid-turn applies to the next call, exactly as it always did.
+// The normalizer's read-only context, rebuilt per message: `willGatePost` asks the LIVE gate.
 function normalizeCtx(s) {
   return {
     channelId: s.channelId,
     peerName: s.counterpartyName,
     peerId: s.counterpartyId,
-    // v2.7 L3: the gate PREDICTION, so one artifact starts as the decision card when the post
-    // will stop. It DECIDES nothing.
     willGatePost: (input, toolName) => io.postWillGate(s, input, toolName),
   };
 }
 
 async function consume(s, q, rt) {
   try {
-    // FIX #1b: `q` tags this loop; a park->resume swaps s.query, so s.query !== q => SUPERSEDED (ignore its tail + late rejection).
-    // Q6: an auth failure the runtime reports as CONTENT is consumed here — the dead-end bubble is
-    // REPLACED by the sign-in action, and this loop stops rather than rendering it.
-    // ⚠ ONE CALL PER MESSAGE SINCE 2026-08-31, WHERE THERE WERE THREE. The auth sentinel, the
-    // render mapping and the per-message usage extraction all read the same raw schema and all
-    // three are now the adapter's `normalize`; core applies what comes back. That is what makes
-    // the whole message-handling surface fixture-testable rather than a third of it.
-    // ⚠ THE SENTINEL'S ANSWER IS THE STOP CONDITION — NOT THE FACT THAT IT WAS ASKED (D7.4,
-    // restored 2026-09-01). HEAD read `if (sessionAuth.holdIfAuthMessage(s, msg)) return;`, and
-    // that function answers FALSE without acting in three cases — no bound deps, no session, and
-    // `s.settled`. The port dropped the return value and returned unconditionally, so a SETTLED
-    // session that emits an auth-shaped message stopped draining the stream HEAD kept reading.
-    // That matters because settling does not end the child process: `holdIfAuthFailure` is the
-    // thing that aborts and closes, and it declines to on a settled session precisely because the
-    // teardown already ran. Returning there abandons the iterator mid-stream with nothing left to
-    // consume its tail — the loop's own supersede tag (`s.query !== q`) is the ONLY other exit,
-    // and a settled-but-not-superseded session never trips it.
-    // ⚠ AND IT IS THE SAME SHAPE THE CATCH BELOW ALREADY USES (`held.length &&
-    // holdIfAuthFailure(...)`), which never lost it. The two auth lanes now agree again.
+    // `q` tags this loop: a relaunch swaps `s.query`, so a superseded loop drops its tail and late rejection.
+    // The auth hold's RETURN VALUE is the stop condition — a settled session must keep draining.
     for await (const msg of q) {
       if (s.query !== q) return;
       const signal = io.applyCoreEvents(s, rt.normalize(msg, normalizeCtx(s)), deps.dispatch, store);
-      // ⚠ TWO SIGNALS SHARE THIS RETURN AND ARE BRANCHED APART BY `type` (F-692). The auth hold is
-      // an EVENT (`{type:'auth_hold', text}`); the MCP-connect answer is `{type:'mcp_status',
-      // status}`. Passing the wrong one to `holdIfAuthFailure` would test an undefined against the
-      // auth regexes — harmless today and exactly the kind of accident that stops being harmless.
       if (signal && signal.type === 'mcp_status') {
-        if (mcpGuard.handleMcpStatus(s, signal.status)) return; // retried (this loop is superseded) or ended
+        if (mcpGuard.handleMcpStatus(s, signal.status)) return;
         continue;
       }
       if (signal && signal.type === 'auth_hold' && sessionAuth.holdIfAuthFailure(s, signal.text)) return;
@@ -173,29 +83,14 @@ async function consume(s, q, rt) {
   } catch (err) {
     if (s.query !== q) return;
     if (!isAbortError(err)) {
-      // Q6: an auth-shaped rejection surfaces the in-window sign-in action instead of `crash`
-      // (settle + destroy + task_failed{interrupted}). Every other error keeps that path
-      // unchanged. ⚠ THE RUNTIME DECIDES WHETHER IT IS AUTH-SHAPED, not this loop: a rejection
-      // string is as platform-specific as a message, so it goes through the same normalizer as
-      // a synthetic error message.
       const text = (err && err.message) || err;
+      // The runtime decides whether a rejection is auth-shaped, through the same normalizer as a message.
       const held = rt.normalize({ type: 'error', text: String(text == null ? '' : text) }, normalizeCtx(s));
       const hold = held.find((ev) => ev && ev.type === 'auth_hold');
       if (hold && sessionAuth.holdIfAuthFailure(s, hold.text)) return;
       diag('session-engine: query error', text);
-      // ── ⚠ THE STRUCTURED END CODE (2026-09-21, U10) ───────────────────────────────────────
-      //
-      // ⚠ THE CODE, NOT THE STRING. `text` is one runtime's own error prose; stamping it as the
-      // reason is how a Codex process failure came to be reported as a generic SDK problem —
-      // unbrandable, unbranchable, and un-re-sayable for another runtime. The CODE is
-      // vendor-neutral (`runtime-copy.js › RUNTIME_ERROR_CODES`) and `session-detail.js ›
-      // endReasonFor` rebuilds the sentence from THIS session's descriptor at read time.
-      // ⚠ `launchVia` IS WHAT SPLITS THE TWO, and it is already stamped at both query-start
-      // sites: a stream that died before this session ever launched is a START failure, and one
-      // that died mid-run is a CRASH. 🔒 The runtime's own words stay on the local diag line
-      // above and never on the code.
-      // ⚠ IT SETS A FIELD AND DECIDES NOTHING — `crash` is dispatched exactly as before, so no
-      // terminal path moved.
+      // A vendor-neutral end code (re-said per runtime at read time); a stream that died before launch is a
+      // START failure, mid-run a crash. It sets a field and decides nothing.
       if (!s.endCode) s.endCode = s.sdkSessionId ? 'runtime-crashed' : 'runtime-start-failed';
       if (!s.settled) deps.dispatch(s, { type: 'crash' });
     }
@@ -203,53 +98,20 @@ async function consume(s, q, rt) {
 }
 
 /**
- * THE BEARER THE PRE-FLIGHT WARMS WITH — this session's container-locked child credential when it
- * has one, else the device token. ⚠ THE SAME PRECEDENCE `runtime/claude/launch-spec.js` hands
- * `buildMcpServers`, so the warm call exercises the same auth path the child will: warming as a
- * different principal can compile a different branch. ⚠ '' IS FINE — an unauthenticated POST still
- * compiles the route, which is the whole point, and the launch is never failed over this.
+ * THE BEARER THE PRE-FLIGHT WARMS WITH: this session's container-locked credential, else the device
+ * token — the adapter's precedence, so the warm call takes the child's auth path. '' still compiles it.
  */
 function mcpTokenFor(s) {
   const locked = sessionCredential.sessionBearer(s);
   if (typeof locked === 'string' && locked.trim()) return locked.trim();
-  // ⚠ LAZY, on `runtime/claude/loader.js › doplBearer`'s exact rule: `mcp-config` pulls in
-  // auth/session-spawner, and an unwired harness (or a pre-sign-in launch) must read as "no
-  // token" rather than throw into a launch.
+  // Lazy: `mcp-config` pulls auth; an unwired harness or a pre-sign-in launch reads as no token.
   try { return require('./mcp-config').deviceTokenForSpawn() || ''; } catch (_) { return ''; }
 }
 
 /**
- * WARM THE DOPL MCP ROUTE, THEN SAY WHETHER THE LAUNCH IS STILL WANTED. Answers TRUE when the
- * caller must ABANDON the launch.
- *
- * ── ⚠ THE PRE-FLIGHT (F-692, 2026-09-13) ────────────────────────────────────────────────────
- * MEASURED: `MCP_URL` is `APP_ORIGIN + /api/mcp`, and on a local Next dev server the COLD route
- * answered `POST /api/mcp 200 in 12.4s / 10.0s / 16.2s / 14.7s` — every one of them past the
- * CLI's connect budget, which is `MCP_CONNECT_TIMEOUT_MS` and defaults to 5000. So the child gave
- * up on the `dopl` server before the route had finished COMPILING, and the session ran with no
- * delivery path. The compile is a once-per-route cost that only the first caller pays; this is
- * the desktop volunteering to be that caller, on a request whose timeout it controls.
- *
- * ⚠ IT CANNOT FAIL A LAUNCH — `warmMcpRoute` resolves a word for the log on every outcome, 401
- * and timeout included (its header carries the argument). The ASSERTION is the init message's
- * `mcp_servers`; this is only what makes the assertion usually pass.
- *
- * ⚠ **BOTH LAUNCH LANES CALL IT (F-696, 2026-09-14), AND THE RESUME ONE IS NOT A LUXURY.** This
- * used to say a parked RESUME *"does not need to: its route was warmed by the launch it is
- * resuming"* — **which is false after a restart.** `session-boot.js › reparkDormant` re-parks a
- * record from DISK, so the first thing that session does in this process is resume against a
- * route no launch in this process has ever touched. `session-park.js › startResumedConsumer`
- * reaches this through `deps.preflightMcp`, because its PURE block may not require.
- *
- * ⚠ **AND THE SETTLED RE-CHECK IS PART OF THE SAME FUNCTION, BECAUSE THE WAIT IS WHAT CREATED
- * THE HOLE.** The caller has already torn the old query down, so between its decision to launch
- * and `rt.start` / `rt.resume` there is now up to `WARM_TIMEOUT_MS` (25s) in which an operator
- * interrupt, a delete or an abandonment timeout can settle this session — and `settle` has
- * nothing left to abort, because the handle it would abort does not exist yet. Without this the
- * spawn lands anyway: a child holding this session's PRE-APPROVED channel access, still able to
- * post, with nothing pointing at it to stop it. That is H1's two-children shape reached by
- * waiting instead of by racing. ⚠ `settled` AND NOT `parked`: a park keeps the session and its
- * next wake is a resume, so only the TERMINAL bit may cancel a launch.
+ * Warm the Dopl MCP route (a cold route can outlast the CLI's connect budget), then answer TRUE when
+ * the launch must be abandoned. It never fails a launch; it re-checks `settled` after its up-to-25s
+ * wait because the old query is already torn down and `settle` would have nothing to abort (F-692).
  */
 async function preflightMcp(s) {
   const warm = await mcpConnect.warmMcpRoute({
@@ -274,7 +136,7 @@ module.exports = {
   bind,
   buildLaunchSpec,
   abortInFlight,
-  preflightMcp, // F-696: the RESUME lane reaches it through `session-park.js`'s `deps`
+  preflightMcp,
   startQuery,
   consume,
   isAbortError,

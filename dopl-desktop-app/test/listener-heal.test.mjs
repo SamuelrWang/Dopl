@@ -333,11 +333,10 @@ test("the retry ladder only repairs the session on a 401, not on every failure",
   // A refresh cannot fix a 500, a timeout or a dropped socket. Running it anyway rotated
   // the Supabase refresh token and rewrote the cookie jar on every transient blip.
   const fn = fnOf(IO, "listChannelsWithRetry");
-  assert.match(fn, /const authShaped = lastChannelsAuthFailure;/, "the shape is captured per attempt");
+  assert.match(fn, /const authShaped = outcome\.authFailure === true;/, "the shape is captured per attempt");
   assert.match(fn, /if \(authShaped\) \{[\s\S]*auth\.ensureFresh\(\)/, "…and gates the repair");
   assert.match(fn, /await sleep\(delay\)/, "a non-auth failure still backs off and retries");
   const chans = fnOf(IO, "listChannels");
-  assert.match(chans, /lastChannelsAuthFailure = false;/, "reset on entry, so it never goes stale");
-  assert.match(chans, /res\.status === 401\) \{ discardBody\(res\); lastChannelsAuthFailure = true;/,
+  assert.match(chans, /res\.status === 401\) \{ discardBody\(res\); if \(outcome\) outcome\.authFailure = true;/,
     "set only by a 401 (and the body released ahead of it — see unread-body-seams)");
 });

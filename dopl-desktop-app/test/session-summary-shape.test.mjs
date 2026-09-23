@@ -115,6 +115,7 @@ test("SHAPE: an UNMEASURED metric is null — never a confident zero", () => {
   const m = load();
   const s = session({
     promptTokens: undefined,
+    promptWindow: undefined,
     liveModel: "some-model-from-the-future",
     tokensSpent: undefined,
     startedAt: undefined,
@@ -123,7 +124,7 @@ test("SHAPE: an UNMEASURED metric is null — never a confident zero", () => {
   m.bind({ sessions: new Map([[s.key, s]]) });
   const row = m.list()[0];
   assert.equal(row.contextUsed, null);
-  assert.equal(row.contextWindow, null, "an unknown model gets NO denominator, not 0");
+  assert.equal(row.contextWindow, null, "no reported window is NO denominator, not 0");
   assert.equal(row.tokensSpent, null);
   assert.equal(row.startedAt, null);
   assert.equal(row.lastActivityAt, null);

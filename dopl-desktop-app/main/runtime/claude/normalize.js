@@ -27,7 +27,7 @@
 
 const events = require('../events');
 const io = require('../../session-io');
-const sessionModel = require('../../session-model');
+const modelTable = require('./model-table');
 
 // ── THE AUTH SENTINELS ───────────────────────────────────────────────────────────────────────
 //
@@ -150,9 +150,10 @@ function normalize(msg, ctx) {
     // window, so counting its prompt as the session's makes the meter jump and then snap back.
     if (msg.type === 'assistant' && msg.parent_tool_use_id == null) {
       const m = msg.message || {};
-      const tokens = sessionModel.promptTokens(m.usage);
+      const tokens = modelTable.promptTokens(m.usage);
       const model = typeof m.model === 'string' && m.model ? m.model : null; // mid-session switch
-      if (tokens > 0 || model) out.push(events.context(tokens, model));
+      // The window comes from this adapter's table: the CLI reports none (null when unknown).
+      if (tokens > 0 || model) out.push(events.context(tokens, model, modelTable.contextWindowFor(model)));
     }
     return out;
   }
@@ -166,7 +167,7 @@ function normalize(msg, ctx) {
     // first argument to `events.result` and it fed an accumulator no surface ever showed; Samuel's
     // ruling deleted the whole column, so the field the platform offers is simply not taken.
     return [events.result(
-      sessionModel.sessionTokens(msg.usage),
+      modelTable.sessionTokens(msg.usage),
       msg.model || (msg.modelUsage && Object.keys(msg.modelUsage)[0]) || null
     )];
   }

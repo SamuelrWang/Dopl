@@ -99,36 +99,24 @@ const TASK = "11111111-2222-3333-4444-555555555555";
 function harness(cfg = {}) {
   const calls = { started: [], diag: [], acquired: [] };
   const sessions = new Map();
-  // ⚠ `liveOnThread` IS SLICED IN, NOT FAKED (2026-08-21): it is how `launch` finds the agents
-  // already on a thread for the auth-hold read, and a fake would let this file be green over a
-  // scan that does not match the key format the same test builds keys with.
-  // ⚠ `newAgentId` IS INJECTED DETERMINISTIC. The real one is a CSPRNG, which cannot be
-  // asserted against; what these cases are about is that launch MINTS one and threads it into
-  // the key, the spec and the answer — not about the entropy, which `agent-id` owns.
+  // `newAgentId` is injected deterministic (the real one is a CSPRNG); the cases are about launch
+  // minting one and threading it through the key, the spec and the answer.
   let minted = 0;
   const store = { sessionKey, slotKey, threadKeyPrefix };
-  // ⚠ THE REAL `liveOnThread`, sliced from `main/session-registry.js` (2026-08-21) rather than
-  // faked. It is what the auth-hold read and the framing's sibling list resolve through, and a
-  // fake would let this file be green over a registry scan that does not match the key format
-  // the same test builds keys with.
+  // The REAL `liveOnThread` (session-registry.js), sliced not faked: the auth-hold read resolves
+  // through it, and a fake could pass over a scan that does not match the key format.
   const registry = new Function(
     "deps", "store",
     `${fnOf(REGISTRY_SRC, "liveOnThread")}\n${fnOf(REGISTRY_SRC, "sessionOn")}\n return { liveOnThread, sessionOn };`
   )({ sessions }, store);
   const deps = {
     sessions,
-    // ⚠ 2026-08-31 (runtime-adapter port): `getSdk` became `acquireRuntime` — the same question
-    // ("can this machine load the agent runtime at all?"), the same throw-on-no, in the same
-    // place. The await this file races against did not move.
-    // ⚠ AND IT TAKES THE SESSION'S RUNTIME ID SINCE 2026-08-31 (port wave D). The funnel
-    // FORWARDS `a.runtime` and never invents one, so every lane that passes nothing lands on the
-    // DEFAULT adapter and its launch is byte-identical to what shipped. Recorded so a case can
-    // assert WHICH id the funnel asked for, which is the whole of the selection contract here.
+    // Throws where no runtime can load; records WHICH id the funnel forwarded (it never invents one).
     acquireRuntime: async (runtimeId) => {
       calls.acquired.push(runtimeId);
       if (cfg.sdkThrows) throw new Error("no agent runtime on this machine");
       if (cfg.duringSdk) cfg.duringSdk(sessions);
-      return {};
+      return cfg.rtId ? { id: cfg.rtId } : {};
     },
     startSession: async (spec) => {
       calls.started.push(spec);
@@ -223,6 +211,18 @@ test("AUTH-HOLD: a held agent on the thread is answered honestly, never as busy"
   const res = await h.launch(call({ channelId: CH, taskId: TASK, side: "responder" }));
   assert.deepEqual(res, { skipped: "auth-hold" }, "the caller can post the truth, not a busy lie");
   assert.deepEqual(h.calls.started, []);
+});
+
+test("AUTH-HOLD is scoped to the launch runtime, and any held agent on the thread counts (P4-22)", async () => {
+  const other = harness({ rtId: "claude" });
+  other.sessions.set(...live(slotKey({ channelId: CH, taskId: TASK, agentId: AGENT }), { agentId: AGENT, runtimeId: "codex", state: { authHeld: true } }));
+  const res = await other.launch(call({ channelId: CH, taskId: TASK, side: "responder" }));
+  assert.ok(res.sessionId, "a held Codex agent does not refuse a Claude launch");
+  const second = harness({ rtId: "claude" });
+  second.sessions.set(...live(slotKey({ channelId: CH, taskId: TASK, agentId: "b2c3d4e5" }), { agentId: "b2c3d4e5", runtimeId: "claude", state: {} }));
+  second.sessions.set(...live(slotKey({ channelId: CH, taskId: TASK, agentId: AGENT }), { agentId: AGENT, runtimeId: "claude", state: { authHeld: true } }));
+  assert.deepEqual(await second.launch(call({ channelId: CH, taskId: TASK })), { skipped: "auth-hold" },
+    "a held SECOND agent on the thread is not missed");
 });
 
 test("CHANNEL-LEVEL: a launch with no thread keys on an EMPTY middle segment", async () => {

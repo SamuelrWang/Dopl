@@ -1,70 +1,32 @@
-// WHAT AN ENDED AGENT LEAVES BEHIND, AND FOR HOW LONG (2026-08-22, Samuel's ruling).
-//
-// ⚠ AN ENDED AGENT IS DEAD AND ITS RECORD IS NOT. Nothing here can wake anything: an ended
-// agent is gone from the engine's registry (`settle` deletes it), every wake path resolves
-// against that registry, and this module holds no session object, no query and no handle. What
-// it holds is the READ-ONLY history the operator can still open for SEVEN DAYS — the agent
-// window's narration frames, what it sent, and the 1:1 exchange — plus the identity a card
-// needs to render.
-//
-// ⚠ IT REPLACED AN IN-MEMORY SET THAT DID NOT SURVIVE A RESTART. `session-summary.js` kept
-// retained-ended pills in `endedKept`, bounded by `MAX_ENDED` (12) and gone on quit, and it
-// retained only the ABANDONMENT case (F-234). Both are superseded: retention is now UNIVERSAL
-// (every end keeps a card), DURABLE (a restart keeps it), and bounded by TIME rather than
-// count. The count bound was the honest answer while the set was in memory; a durable set can
-// be swept on the clock, which is what "viewable for seven days" actually asks for.
-//
-// ⚠ CHANNEL MESSAGES ARE NOT IN HERE AND ARE NEVER SWEPT. Everything this agent POSTED is
-// `channel_messages` on the server — the shared record, owned by the channel, seen by both
-// members. This file holds the LOCAL view of how the work happened. Deleting it deletes a
-// window's contents, never a conversation (INVARIANTS §11).
-//
-// ⚠ WRITTEN AT END, NOT PER FRAME, and that is a cost decision. The narration ring is appended
-// on EVERY SDK event (`session-narration.js › note` runs from the engine's one dispatch
-// funnel), so persisting per frame is a disk write per tool call per session, multiplied by
-// MAX_CONCURRENT_SESSIONS. `record()` snapshots the ring once, at `settle`. THE ACCEPTED COST:
-// a hard kill (SIGKILL, power loss) loses the ring for sessions that were live, because nothing
-// settled them. Every ORDINARY end — operator End, cap, crash, abandonment, quit — routes
-// through `settle` and is captured. A restart's interrupted-record scan marks those keys ended
-// with no session object and therefore no ring, which is the honest empty answer.
+// What an ended agent leaves behind: a durable, READ-ONLY history (narration, what it sent, the 1:1 exchange, its
+// identity and final numbers) kept SEVEN DAYS from `endedAt`. Nothing here can wake anything, and channel messages
+// are never in it (they are the server's shared record). Written once at `settle`, never per frame: a hard kill
+// loses the ring of a session that was live.
 
 const Store = require('electron-store');
 const { diag } = require('./diag');
 
 const store = new Store();
-const HISTORY_KEY = 'agentHistory'; // { [sessionKey]: durable ended-agent record }
+// { [sessionKey]: durable ended-agent record }
+const HISTORY_KEY = 'agentHistory';
 
 // ─── BEGIN AGENT-HISTORY-PURE (pure; unit-tested via source extraction) ──────────
+
 // `store` and `diag` are free vars from here down.
 
-/**
- * THE RETENTION WINDOW, IN ONE PLACE. Seven days from `endedAt`.
- * ⚠ Every sweep, every expiry check and every doc that quotes a number reads THIS. A second
- * copy is how a card outlives its history or a history outlives its card.
- */
+// The retention window, in one place.
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
-/**
- * A BOUND ON THE SET AS WELL AS ON ITS AGE, because a time bound alone is not a bound. Seven
- * days of a busy machine at MAX_CONCURRENT_SESSIONS is unbounded in principle; this is the
- * belt, and it drops the OLDEST first (least likely to still matter). Far above what a week
- * realistically produces, so the CLOCK is the rule and this is the guard.
- */
+// A count belt beside the clock (a time bound alone is not a bound); oldest first.
 const MAX_HISTORY = 200;
 
-/** A finite number, or null. ⚠ `null` means UNMEASURED and must never become 0 — see
- *  `durableHistory`'s measurement block. */
+// null means UNMEASURED and never becomes 0.
 function numberOrNull(value) {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
 
-/** Bounded display string, the discipline every counterparty-influenced field here is under
- *  (`session-store.js › durableName`): one line, collapsed, `max` chars (80 by default), or null.
- *  ⚠ THE BOUND IS A PARAMETER SINCE 2026-08-23 (F-287). 80 is a DISPLAY default and the right
- *  number for `channelName` / `threadTitle`; it is the wrong one for a field carrying a real
- *  server bound, and the caller passes that instead — the same shape `session-summary.js ›
- *  displayText(value, max)` and `session-store.js › durableName(value, max)` take. */
+// A bounded display string (80 by default; a field with a real server bound passes it), or null.
 function historyName(value, max) {
   if (typeof value !== 'string') return null;
   const cap = typeof max === 'number' && max > 0 ? max : 80;
@@ -72,14 +34,8 @@ function historyName(value, max) {
   return s || null;
 }
 
-/**
- * Whitelist what a record may carry, so a live handle can never reach the disk even if a
- * caller hands over an enriched object — the same rule `session-store.durableSessionRecord`
- * follows, and for the same reason (`s.query`, `s.win` and the push iterator are not data).
- * ⚠ `entries` is the narration ring, already bounded by `NARRATION_MAX` on the way in and
- * already stripped of `inputFull` by `session-narration.js › entryFor`. Nothing is re-derived
- * here; a shape this file did not build is not one it will invent.
- */
+// Whitelist what a record may carry (a live handle never reaches disk; an unnamed field is DROPPED). `entries`
+// is the narration ring, already bounded and stripped of `inputFull`.
 function durableHistory(rec) {
   const r = rec || {};
   return {
@@ -91,44 +47,16 @@ function durableHistory(rec) {
     workspaceId: String(r.workspaceId || ''),
     channelName: historyName(r.channelName),
     threadTitle: historyName(r.threadTitle),
-    // ⚠ THE IDENTITY IT RAN AS (2026-08-22). A whitelist DROPS what it does not name, so without
-    // this line the frozen name never survives the write.
-    // ⚠ **AT 120, THE COLUMN'S OWN BOUND — NOT `historyName`'s 80 DISPLAY DEFAULT** (F-287,
-    // 2026-08-23). This line used to reason that "`session-summary.js` re-bounds at 120 on the
-    // way out", which is exactly backwards: re-bounding a value already clipped to 80 restores
-    // nothing, and `endedSummary`'s `displayText(e.identityName, IDENTITY_NAME_MAX)` is a no-op
-    // on it. A 100-character name was DESTROYED AT THE WRITE, then reported to the operator as a
-    // spelling no identity has — and §5A's "a stale name here is correct, not drift" rule tells
-    // them not to read that as an error. `channelName` / `threadTitle` above are display strings
-    // and 80 is right for them; `identityName` is the one IDENTITY in this whitelist, which is
-    // why the bound is wrong here and only here.
+    // At the column's 120, not the 80 display default: clipping at the write reports a name no identity has (F-287).
     identityName: historyName(r.identityName, 120),
     endedAt: Number(r.endedAt) || 0,
-    // ⚠ WHY THE RUN STOPPED, when it was not the operator's doing (F-692). `historyName` bounds and
-    // sanitizes it like the display strings above, because it is a sentence a card renders.
-    // ⚠ A WHITELIST DROPS WHAT IT DOES NOT NAME — the same trap `identityName` records — so this
-    // line is what makes `session-summary.js › endedSummary`'s `diag` survive a restart.
+    // Why the run stopped, when not the operator's doing (F-692).
     diag: historyName(r.diag, 200),
-    // ── 2026-09-21 (U10) — THE STRUCTURED END CODE, AND THE RUNTIME IT BELONGS TO ────────────
-    //
-    // ⚠ WHY A CODE AS WELL AS THE SENTENCE. `diag` above is ONE runtime's words, frozen; it cannot
-    // be branched on and it cannot be re-said for another runtime. `endCode` is a member of
-    // `main/runtime/runtime-copy.js › RUNTIME_ERROR_CODES` (vendor-neutral by construction) and
-    // `session-detail.js › endReasonFor` rebuilds the sentence at READ time off `runtimeId`'s own
-    // descriptor — which is what makes a Codex failure read as a Codex failure on a card written
-    // before anyone asked. ⚠ A WHITELIST DROPS WHAT IT DOES NOT NAME, so both lines are what make
-    // either survive a restart. ⚠ COERCED TO A BOUNDED STRING OR `null`: a hand-edited history
-    // file must not put an unbounded blob or a non-string into a projection, and an unrecognised
-    // code renders `errorCopy`'s GENERIC arm rather than a raw key.
+    // The vendor-neutral end code and its runtime (re-said at read time by `session-detail.js › endReasonFor`),
+    // bounded strings or null.
     endCode: historyName(r.endCode, 40),
     runtimeId: historyName(r.runtimeId, 32),
-    // ⚠ THE FINAL MEASUREMENT, FROZEN WITH THE IDENTITY. The session object is gone by the time
-    // anything reads this, so a live read would blank every number at exactly the moment the
-    // operator wants to know what the run cost. `session-summary.js › endedSummary` already
-    // projects these; the durable record is where they now have to survive from, because the
-    // in-memory set that used to hold them does not outlive a restart.
-    // ⚠ `null` is a REAL answer and never zero — an unmeasured run, or a model this build has
-    // no window for, has no denominator (INVARIANTS §11: UNKNOWN is not EMPTY).
+    // The final measurement, frozen: null is a real answer and never zero.
     startedAt: numberOrNull(r.startedAt),
     lastActivityAt: numberOrNull(r.lastActivityAt),
     contextUsed: numberOrNull(r.contextUsed),
@@ -138,20 +66,12 @@ function durableHistory(rec) {
   };
 }
 
-/** Has this record outlived the window? ⚠ Compared on `endedAt`, so a clock that jumped
- *  FORWARD sweeps early and one that jumped BACK sweeps late — both bounded, neither able to
- *  delete something that has not ended. A record with no usable `endedAt` (0) is treated as
- *  ancient and swept: it cannot be rendered with a date and nothing can renew it. */
+// Compared on `endedAt` (a clock jump sweeps early or late, never something live); no usable `endedAt` is ancient.
 function expired(rec, now) {
   return (Number(now) || 0) - (Number(rec && rec.endedAt) || 0) >= RETENTION_MS;
 }
 
-/**
- * PURE: which keys of `all` the sweep drops, given the clock. Age first, then the count belt
- * over whatever survived it (oldest `endedAt` first).
- * ⚠ Garbage (a null / non-object entry) is never a real record and always goes — it can only
- * have arrived from a hand-edited store or a partially-written file.
- */
+// PURE: which keys the sweep drops — age first, then the count belt; garbage always goes.
 function sweepableKeys(all, now) {
   const records = all || {};
   const drop = [];
@@ -190,12 +110,8 @@ function saveAll(all) {
   catch (err) { diag('agent-history: could not persist —', (err && err.message) || String(err)); }
 }
 
-/**
- * A session ENDED: freeze its history. Called from `session-engine.js › settle`, once,
- * BEFORE the registry entry is dropped — that object is the only place the ring lives.
- * ⚠ BEST EFFORT AND IT NEVER THROWS. `settle` is the one teardown path every terminal reaches;
- * a disk failure here must not leave a `claude` child un-aborted.
- */
+/** Freeze an ended session's history, once, from `session-teardown.js › settle` before the registry entry goes.
+ *  Never throws: `settle` must still abort the child. */
 function record(rec) {
   const r = durableHistory(rec);
   if (!r.key || !r.endedAt) return false;
@@ -205,17 +121,12 @@ function record(rec) {
   return true;
 }
 
-/** One agent's frozen history, or null. The agent window's read after the agent is gone. */
 function historyFor(key) {
   const rec = loadAll()[String(key || '')];
   return rec && typeof rec === 'object' ? rec : null;
 }
 
-/**
- * Every retained ended record, oldest first — what `session-summary.js` projects the ENDED
- * cards from. ⚠ It returns records, never sessions: nothing downstream may treat one as
- * something that can be resumed, messaged or fed.
- */
+/** Every retained record, oldest first — the ended cards. Records, never sessions: nothing may resume one. */
 function listEnded() {
   const all = loadAll();
   return Object.keys(all)
@@ -224,12 +135,7 @@ function listEnded() {
     .sort((a, b) => (Number(a.endedAt) || 0) - (Number(b.endedAt) || 0));
 }
 
-/**
- * DROP these keys outright, whatever their age — the explicit removal the THREAD-DELETE
- * cascade needs. A deleted thread takes its agents' histories with it: the statement the
- * history makes is about work on an exchange that no longer exists, which is the same
- * argument `deleteSessionStatesForThread` makes server-side.
- */
+// Drop keys whatever their age: a deleted thread takes its agents' histories with it.
 function forget(keys) {
   const list = Array.isArray(keys) ? keys : [keys];
   const all = loadAll();
@@ -242,18 +148,13 @@ function forget(keys) {
   return dropped;
 }
 
-/** Every retained key whose (channel, thread) prefix matches — the cascade's lookup. */
 function keysForThread(prefix) {
   const p = String(prefix || '');
   if (!p) return [];
   return Object.keys(loadAll()).filter((k) => k.indexOf(p) === 0);
 }
 
-/**
- * THE SWEEP. Drops expired records and returns the keys dropped, so the caller can clean the
- * OTHER stores keyed by the same key in one pass (`main/agent-retention.js` owns that list —
- * this module knows only its own file).
- */
+// Drop expired records and return their keys so `agent-retention.js` can clean the other stores in one pass.
 function sweep(now) {
   const all = loadAll();
   const keys = sweepableKeys(all, Number(now) || Date.now());
@@ -264,7 +165,6 @@ function sweep(now) {
 }
 
 module.exports = {
-  // pure core (re-exported for the shell + the tests)
   RETENTION_MS,
   MAX_HISTORY,
   historyName,
@@ -272,7 +172,6 @@ module.exports = {
   durableHistory,
   expired,
   sweepableKeys,
-  // the live half
   record,
   historyFor,
   listEnded,

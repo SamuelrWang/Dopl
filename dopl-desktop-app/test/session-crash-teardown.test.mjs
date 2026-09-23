@@ -65,13 +65,8 @@ function harness(over = {}) {
     saveRecord: (r) => calls.saved.push(r),
     clearSdkSessionId: (k) => calls.clearedSdk.push(k),
   };
-  // §3.3: settle also hands the ended session to the pill projection, which decides whether
-  // a pill survives it (only where the WINDOW does — the abandonment case). The fake records
-  // the call so the tests below can pin that `keepWindow` is what is passed through.
-  const sessionSummary = {
-    ended: [],
-    noteEnded(s, keepWindow) { this.ended.push({ key: s.key, keepWindow }); return keepWindow; },
-  };
+  // §3.3: settle also tells the pill projection an end happened.
+  const sessionSummary = { ended: [], noteEnded() { this.ended.push(true); } };
   // ⚠ TWO MORE FREE VARS JOINED `settle` ON 2026-08-22 (Samuel's ended-agent ruling): it FREEZES
   // the agent's history before dropping the registry entry, because the narration ring lives on
   // the session object and that is the last moment it exists. Faked here so these cases stay

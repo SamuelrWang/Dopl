@@ -142,13 +142,10 @@ test("ENDED: a main with NO history reader degrades to no ended cards, not a cra
 });
 
 test("ENDED: `noteEnded` no longer decides retention, and the count bound is really gone", () => {
-  // ⚠ THE FLAG SURVIVES AND IS IGNORED. `session-effects.js › endEffects` still sets it for the
-  // abandonment and `settle` still passes it; deleting the parameter would change the engine's
-  // effect vocabulary for a cosmetic gain. What must NOT come back is a branch on it — under
-  // v3 every end is retained, so a `false` here retaining nothing would silently restore v1.
+  // Every end is retained; the durable record decides the card, never a flag on the end.
   const m = load();
   m.bind({ sessions: new Map(), endedRecords: () => [endedRecord()] });
-  assert.equal(m.noteEnded(session(), false), true, "an end is an end, flag or no flag");
+  m.noteEnded();
   assert.equal(m.list().length, 1, "...and the record is what decides the card");
   // Source-level: the deleted rule must not reappear as a second bound in this module.
   // ⚠ COMMENTS STRIPPED, INCLUDING JSDOC CONTINUATIONS (` * `). This module documents its own

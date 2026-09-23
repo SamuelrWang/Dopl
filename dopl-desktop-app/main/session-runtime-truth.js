@@ -1,33 +1,14 @@
-// THE RUNTIME TRUTH A RESUME RECORD CARRIES: whether this conversation's cumulative usage resets
-// on a resume (`usageBaseline`). `session-park.js › resumeParked` decides the token delta baseline
-// from it, and the RECORD's word beats today's descriptor: a record states what was true when the
-// conversation ran. `capability.js › resumeRefusal` still decides whether a resume happens at all.
-//
-// Separate from `session-store.js` because `durableSessionRecord` lives in a pure block that may
-// not require a descriptor reader; `saveRecord` is where the two meet. Requires nothing.
-// The record is written to `electron-store` in the clear: no prompt, token or path joins this shape.
+// The runtime truth a resume record carries: whether this conversation's cumulative usage resets on resume
+// (`usageBaseline`). The RECORD's word beats today's descriptor (a record states what was true when it ran).
+// Requires nothing; the record is stored in the clear, so no prompt, token or path may join this shape.
 
-// ── THE USAGE BASELINE ───────────────────────────────────────────────────────────────────────
-//
-// ⚠ THREE ANSWERS, AND `'unverified'` IS ONE OF THEM RATHER THAN A MISSING VALUE. INVARIANTS §11:
-// UNKNOWN is not EMPTY. A runtime that has not been measured is a different record from one
-// measured to continue its totals, and collapsing them is how a resume comes to be attempted on
-// the strength of an absent field.
+// Three answers; 'unverified' is one of them, not a missing value (unknown is not empty).
 const USAGE_RESETS = 'resets';
 const USAGE_CONTINUES = 'continues';
 const USAGE_UNVERIFIED = 'unverified';
 const USAGE_BASELINES = [USAGE_RESETS, USAGE_CONTINUES, USAGE_UNVERIFIED];
 
-/**
- * How this runtime's cumulative usage behaves across a resume, in the record's own vocabulary.
- *
- * ⚠ IT IS A TRANSLATION OF `descriptor.session.usageResetsOnResume`, NOT A SECOND OPINION ABOUT
- * IT. The descriptor's field is a tri-state (`true` / `false` / `'unverified'`) that
- * `capability.js › canResume` reads as a REFUSAL; this is the same three answers named so a
- * persisted record is readable without a boolean anyone has to remember the polarity of.
- * ⚠ AN ABSENT DECLARATION IS `'unverified'`, which is the fail-closed direction: `canResume`
- * already refuses anything that is not exactly `true`.
- */
+// `descriptor.session.usageResetsOnResume` in the record's words; absent is 'unverified' (fail closed).
 function usageBaseline(descriptor) {
   const declared = descriptor && descriptor.session ? descriptor.session.usageResetsOnResume : null;
   if (declared === true) return USAGE_RESETS;
@@ -35,11 +16,7 @@ function usageBaseline(descriptor) {
   return USAGE_UNVERIFIED;
 }
 
-/**
- * The field a durable record gains, projected off a LIVE session. A session rebuilt from a record
- * carries that record's word (`s.usageBaseline`) and keeps it across every later save; a session
- * this process launched answers off its descriptor.
- */
+// The field a record gains from a LIVE session: a session rebuilt from a record keeps that record's word.
 function runtimeTruthFields(descriptor, session) {
   const recorded = session && session.usageBaseline;
   return {
@@ -47,11 +24,7 @@ function runtimeTruthFields(descriptor, session) {
   };
 }
 
-/**
- * The WHITELIST half: what a durable record may keep. ⚠ FAIL-CLOSED: a baseline this build does not
- * recognise (junk, a hand-edited store, a record from before the field) reads as `'unverified'`,
- * which `capability.js › canResume` refuses on.
- */
+// The whitelist half: an unrecognised baseline reads 'unverified', which `canResume` refuses on.
 function durableRuntimeTruth(rec) {
   const r = rec || {};
   return {

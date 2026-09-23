@@ -144,7 +144,7 @@ test("SPLIT: the listener's identity + name-cache names are re-exported, never r
   const io = read("listener-io.js");
   const moved = read("listener-identity.js");
   assert.match(io, /const identity = require\('\.\/listener-identity'\);/);
-  for (const n of ["resolveIdentity", "displayNameFor", "avatarUrlFor", "refreshNameCache"]) {
+  for (const n of ["resolveIdentity", "displayNameFor", "refreshNameCache"]) {
     assert.match(io, new RegExp(`\\n  ${n}: identity\\.${n},`), `${n} is not re-exported from the split`);
     assert.equal(new RegExp(`function ${n}\\(`).test(io), false,
       `${n}'s body is back in listener-io.js — that is a second answer, not a split`);

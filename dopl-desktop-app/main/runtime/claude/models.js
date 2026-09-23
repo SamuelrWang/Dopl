@@ -21,7 +21,7 @@
 // reached lazily inside `defaultDeps`, so `main/session-profiles.js` — a PURE module two suites
 // evaluate standalone — can still reach this adapter through the registry.
 
-const modelTable = require('../../session-model');
+const modelTable = require('./model-table');
 const roster = require('./roster');
 
 // ── THE FALLBACK'S DISPLAY NAMES — the web twin is `agent-models.ts › AGENT_MODELS` ──────────

@@ -35,7 +35,7 @@ import { loadReducer } from "./_reducer-block.mjs";
 
 const require = createRequire(import.meta.url);
 
-const model = require("../main/session-model.js");
+const model = require("../main/runtime/claude/model-table.js");
 const { initialSessionState, sessionReducer } = loadReducer();
 
 // ── 1. the denominator table, read off the bundled CLI ───────────────────────
@@ -133,7 +133,8 @@ function stream(session, messages) {
 }
 
 const init = (m) => ({ type: "system", subtype: "init", model: m, session_id: "sdk-1" });
-const assistant = (tokens, m, over = {}) => ({
+// The CLI's assistant message always names its model; the adapter's table answers the window from it.
+const assistant = (tokens, m = "claude-opus-5", over = {}) => ({
   type: "assistant", parent_tool_use_id: null,
   message: { role: "assistant", model: m, content: [], usage: { input_tokens: tokens, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, output_tokens: 50 } },
   ...over,
@@ -263,16 +264,26 @@ test("the SERVER's window is the denominator — the table is not even consulted
   assert.equal(model.contextWindowFor("gpt-5.6-terra"), null);
 });
 
-test("a runtime that reports NO window falls back to the table — Claude's path, unchanged", () => {
-  // The regression pin for the whole change: the Claude adapter calls `events.context` with TWO
-  // arguments, so `window` is null on the wire and §1's table is what answers.
+test("core holds no model table: a reading with NO window has no denominator", () => {
+  // The Claude adapter puts its own table's window on the reading (§3's stream drives that); a
+  // bare model name reaching core is not one.
   const { context } = core([
     { type: "context", tokens: 120000, model: "claude-opus-5", window: null },
     { type: "result", sessionTokens: 1, model: "claude-opus-5" },
   ]);
   assert.deepEqual(context, [
-    { type: "context", tokens: 120000, window: 1000000, model: "claude-opus-5" },
+    { type: "context", tokens: 120000, window: null, model: "claude-opus-5" },
   ]);
+});
+
+test("a model switch with no window voids the last model's window", () => {
+  const { context } = core([
+    { type: "context", tokens: 1000, model: "model-a", window: 200000 },
+    { type: "result", sessionTokens: 1, model: "model-a" },
+    { type: "context", tokens: 2000, model: "model-b", window: null },
+    { type: "result", sessionTokens: 2, model: "model-b" },
+  ]);
+  assert.deepEqual(context.map((e) => e.window), [200000, null]);
 });
 
 test("a reported window that is JUNK or ZERO falls through — absent is never a denominator", () => {
@@ -283,9 +294,8 @@ test("a reported window that is JUNK or ZERO falls through — absent is never a
       { type: "context", tokens: 61000, model: "claude-haiku-4-5", window: junk },
       { type: "result", sessionTokens: 1, model: "claude-haiku-4-5" },
     ]);
-    assert.equal(context[0].window, 200000, JSON.stringify(junk));
+    assert.equal(context[0].window, null, JSON.stringify(junk));
   }
-  // …and with no table row either, the answer is null — raw tokens, no percentage.
   const { context } = core([reported(0), RESULT_EV]);
   assert.equal(context[0].window, null);
   assert.notEqual(context[0].window, 0);

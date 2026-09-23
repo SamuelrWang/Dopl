@@ -30,8 +30,8 @@
 //                           into `channel_launch_directives` in the shared workspace; a goal
 //                           another agent wrote travels with it. That is at least as outbound as
 //                           the post the same half already consents to.
-//   AXIS A, `bypass` only   because what it asks for is LOCAL COMPUTE on the operator's own Mac.
-//                           `bypass` is the posture that says "my agent may work on this machine
+//   AXIS A, widest mode     because what it asks for is LOCAL COMPUTE on the operator's own Mac.
+//                           The runtime's widest mode says "my agent may work on this machine
 //                           without asking me first", and nothing narrower may buy a process.
 //
 // Neither axis alone can allow it, so **the Axis-A/Axis-B invariant is intact in the direction
@@ -163,11 +163,10 @@ const { channelOpKey } = require('./channel-op-key'); // <op>.<action> — the O
 
 const OWN_MACHINE_LAUNCH_OPS = ['manage.launch'];
 
-// The Axis-A posture that may buy local compute. ⚠ COMPARED AS A LITERAL, and a value outside
-// the enum is simply not it — `session-io.js › grantArgs` has already normalized and floored the
-// axis by the time this is asked (`floorWindowlessTool` keeps `bypass` and floors everything
-// else to `auto`), so nothing here re-spells that rule.
-const LAUNCH_TOOL_MODE = 'bypass';
+// The Axis-A posture that may buy local compute is the SESSION runtime's widest mode (Claude
+// `bypass`, Codex `never`); `session-io.js › grantArgs` has already floored the axis. Lazy: the
+// runtime layer requires session modules.
+const widestToolMode = (runtimeId) => require('./session-profiles-runtime').widestToolModeFor(runtimeId);
 
 // ONE GENERATION. See the header for why this is 1 and what it would take to make it 2.
 const MAX_LAUNCH_DEPTH = 1;
@@ -232,12 +231,11 @@ function launchLaneVerdict(args, autoOutbound) {
   // generation does, so turning chaining on can never widen a posture. The one thing it changes
   // is whether the depth question is asked at all.
   if (!launchChainEnabled(a.launchChain) && launchDepthExhausted(a.launchDepth)) return 'deny';
-  return a.toolMode === LAUNCH_TOOL_MODE && autoOutbound === true ? 'allow' : 'gate';
+  return a.toolMode === widestToolMode(a.runtime) && autoOutbound === true ? 'allow' : 'gate';
 }
 
 module.exports = {
   OWN_MACHINE_LAUNCH_OPS,
-  LAUNCH_TOOL_MODE,
   MAX_LAUNCH_DEPTH,
   normalizeLaunchDepth,
   launchDepthExhausted,

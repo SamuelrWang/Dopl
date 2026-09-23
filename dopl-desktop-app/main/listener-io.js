@@ -1,46 +1,27 @@
-// Channels listener — I/O layer (persistence + HTTP + workspace/channel enumeration).
-//
-// SPLIT NOTE (§2 refactor): extracted from channel-listener.js so that file
-// could come under the 500-line cap. This module owns the cursor / seed /
-// pending-consent stores and the listener's authenticated fetch + list helpers. It
-// also owns the two HTTP-status flags those helpers set (`featureAvailable`,
-// `staleNotified`) and the stale-session notification, so listWorkspaces /
-// listChannels stay self-contained and this module never has to import back into
-// channel-listener.js (no import cycle).
-//
-// ⚠ SPLIT AGAIN ON 2026-09-22, at the same cap and for the same reason (532 lines): the
-// operator-identity resolution and the requester/target display-name + avatar cache — the
-// two responsibilities here that were about PEOPLE rather than plumbing — moved to
-// `listener-identity.js`. It reaches `apiFetch` / `normalizeList` back through these
-// exports LAZILY, per call, so neither module needs the other at load time and the no-cycle
-// property above still holds. No caller moved; see the pointer where they stood.
-//
-// Auth is via forwarded Supabase cookies (see auth.js for why not a bearer).
+// The channels listener's I/O layer: cursor/seed persistence, the authenticated fetch, and workspace/channel
+// enumeration. It owns the two HTTP-status flags those helpers set and never imports channel-listener.js back;
+// `listener-identity.js` reaches `apiFetch`/`normalizeList` back lazily. Auth is forwarded Supabase cookies.
 
 const { Notification } = require('electron');
 const Store = require('electron-store');
 const auth = require('./auth');
 const appVersion = require('./app-version');
-const sessionStamp = require('./session-id-header'); // which SESSION a post is about (a label, never a lock)
+const sessionStamp = require('./session-id-header');
 const heal = require('./listener-heal');
 const { fetchWithAuthRepair, discardBody } = require('./api-repair');
-const budget = require('./listener-budget'); // poll budgets + what an abort means (split 2026-08-30)
+const budget = require('./listener-budget');
 const { API_BASE, LISTENER, REALTIME } = require('./config');
 const { diag } = require('./diag');
-const identity = require('./listener-identity'); // who the operator is + who the peers are (split 2026-09-22)
+// Who the operator is and who the peers are (display names), re-exported below as its own function objects.
+const identity = require('./listener-identity');
 
 const store = new Store();
-// ⚠ THE DISPLAY-NAME / AVATAR CACHES AND THEIR NAMED BOUND LEFT FOR `listener-identity.js` ON
-// 2026-09-22 (§2, the 500-line cap), with `resolveIdentity` and `refreshNameCache` — see the
-// pointer where those stood, below. `MAX_CACHED_MEMBERS` and the oldest-out argument moved WITH
-// the code they explain; test/listener-name-cache.test.mjs slices them from there now.
 
-let featureAvailable = true; // false once /api/channels 404s (feature not deployed)
-let staleNotified = false; // one-shot guard for the "session expired" notification
+let featureAvailable = true;
+let staleNotified = false;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// ── Cursor + seed persistence ──────────────────────────────────────────────
 function getCursor(channelId) {
   const c = store.get('cursors') || {};
   return c[channelId] || 0;
@@ -60,50 +41,21 @@ function markSeeded(channelId) {
   store.set('seeded', s);
 }
 
-// A PER-CHANNEL TEAM-AGENT COUNT lived here (FIX B1): the last known number of this
-// operator's summoned agents in a channel, persisted beside the cursors because
-// `targeting.classify` gated the "address to act" law on it and a roster read could fail.
-// Summoning is gone (channels rollback §1) and so is the law, the count and its two
-// accessors. Any `teamAgents` key still in the store is inert; nothing reads it.
-
 // ─── BEGIN SEED-DECISION (pure; unit-tested via source extraction) ───────────
-// THE seed-vs-missed decision, isolated as a pure function so
-// test/seed-decision.test.mjs can lock it without electron-store.
-//
-// Returns true → the channel loop starts in SEED mode (drain history quietly,
-// no prompts); false → LIVE mode (every foreign message classified →
-// trigger/fyi).
-//
-// Rule: seed mode is reserved for the VERY FIRST watch of a channel — the
-// persisted `seeded` flag is false. Once the first backlog drain reaches the tip
-// (markSeeded), the channel is NEVER re-seeded, so on a later run — a full
-// quit+relaunch, or a wake after sleep — it starts LIVE and messages that
-// arrived while the app was gone surface as real triggers instead of being
-// swallowed as backlog. This is what makes offline catch-up correct.
-//
-// The persisted cursor deliberately does NOT flip a channel to live on its own:
-// a channel interrupted MID-seed (seeded flag never set, cursor partially
-// advanced through a large first-watch history) must keep seeding so the
-// untouched remainder is not replayed as a burst of consent prompts. Only the
-// seeded flag — set once the drain catches up to the tip — flips it to live.
-// (Second arg is the cursor, accepted and intentionally ignored, so the test can
-// assert cursor-independence.)
-function seedModeFor(seeded /* , cursor */) {
+// SEED mode (drain history quietly) only on the very first watch of a channel; once the first drain reaches the
+// tip the channel is never re-seeded, so messages that arrived while the app was gone surface as triggers. The
+// cursor alone never flips a channel to live: one interrupted MID-seed keeps seeding.
+function seedModeFor(seeded) {
   return !seeded;
 }
 // ─── END SEED-DECISION ───────────────────────────────────────────────────────
 
 // ─── BEGIN CHEAP-AWAIT (pure; unit-tested via source extraction) ─────────────
-// Push-transport loop helpers. When realtime is HEALTHY the loop does a cheap
-// immediate catch-up (a tiny `/await` timeout → the server returns after one DB
-// read, no held function) then a long interruptible idle a wake resolves early.
-// When UNHEALTHY every value collapses to the held long-poll so the fallback
-// path is BYTE-FOR-BYTE today's behavior (see awaitOrCheap / idleAfterAwait).
-// Pure: no electron / store / fetch refs; timers are Node globals (injectable).
 
-// ⚠ WRAPPED, NOT RE-EXPORTED BARE, so a blown budget is OBSERVABLE: "this channel quietly
-// stopped answering" is precisely the failure the 17 GB incident had no log line for. The
-// DECISION stays pure next door; only the diagnostic lives here.
+// Push-transport loop helpers: healthy realtime -> a cheap catch-up await then a long interruptible idle;
+// unhealthy -> the held long-poll, byte-for-byte. Timers are injectable.
+
+// Wrapped so a blown await budget is logged; the classification is `listener-budget.js`'s.
 function isWakeAbort(err, signal, channelId) {
   if (budget.isWakeAbort(err, signal)) return true;
   if (err && err.name === 'AbortError') {
@@ -112,20 +64,12 @@ function isWakeAbort(err, signal, channelId) {
   return false;
 }
 
-// ⚠ THE TWO TIMEOUT SELECTORS + THEIR NAMED FLOORS LEFT FOR `listener-budget.js` ON 2026-08-30
-// (the 17 GB dev incident), with `isWakeAbort` — the one question this loop's catch block has to
-// answer correctly. Read that file for the floors' argument and the abort-classification story;
-// it is dependency-free, so its test `require`s it instead of slicing it out of here.
-// The idle wait AFTER a cycle. Unhealthy → today's short gap between held polls
-// (byte-for-byte). Healthy + still draining a batch → the same short gap (keep
-// paging fast). Healthy + caught up → the LONG idle, which a wake interrupts.
+// Unhealthy or still draining -> the short gap; healthy and caught up -> the long idle a wake interrupts.
 function idleWaitFor(healthy, drained, idleGapMs, longIdleMs) {
   if (!healthy) return idleGapMs;
   return drained ? idleGapMs : longIdleMs;
 }
-// Interruptible sleep: resolves after `ms`, OR early when wakeEntry(entry) is
-// called (a realtime INSERT wake). Stores the resolver on the entry so a wake
-// settles it; clears the timer on either path. `timers` injectable for tests.
+// An interruptible sleep: a realtime wake resolves it early; the timer is cleared on either path.
 function sleepOrWake(entry, ms, timers) {
   const T = timers || { setTimeout, clearTimeout };
   return new Promise((resolve) => {
@@ -141,9 +85,7 @@ function sleepOrWake(entry, ms, timers) {
     entry.sleepWaker = finish;
   });
 }
-// Wake a channel: coalesce a burst to one catch-up (dirty flag), resolve any
-// in-flight idle sleep, and abort any in-flight cheap await so it re-awaits from
-// the cursor immediately. Safe to call whatever the entry is mid-doing.
+// Coalesce a burst to one catch-up: mark dirty, end any idle sleep, abort any in-flight cheap await.
 function wakeEntry(entry) {
   if (!entry) return;
   entry.dirty = true;
@@ -152,21 +94,10 @@ function wakeEntry(entry) {
 }
 // ─── END CHEAP-AWAIT ─────────────────────────────────────────────────────────
 
-// Whether a channel loop should start in seed mode, from persisted state.
 function shouldSeed(channelId) {
-  return seedModeFor(isSeeded(channelId), getCursor(channelId));
+  return seedModeFor(isSeeded(channelId));
 }
 
-// NOTE (Round B): the per-channel `pendingConsent` store + its getPending / setPending /
-// clearPending helpers were removed, and their replacement has now been removed too.
-// ⚠ THE REPLACEMENT WAS `consent-watcher.js`'s `channelWatched` / `channelSettled` stores (a
-// durable inbound consent row plus a no-replay settled set), and the whole inbound lane is
-// DELETED — 2026-08-22, Samuel's ruling; `main/trigger.js`'s header carries it. THREE dead
-// electron-store keys therefore survive on shipped machines and are simply ignored:
-// `pendingConsent`, `channelWatched`, `channelSettled`. Nothing reads any of them; a reader
-// added back would resurrect a decision surface that no longer exists.
-
-// ── Stale-session notification + feature-availability flag ───────────────────
 function notifyStale() {
   if (staleNotified) return;
   staleNotified = true;
@@ -179,7 +110,7 @@ function notifyStale() {
     }
   } catch (_) { /* best-effort */ }
 }
-// channelLoop resets this after a successful await so a later expiry re-notifies.
+// The listen loop resets this after a successful await, so a later expiry notifies again.
 function resetStale() {
   staleNotified = false;
 }
@@ -187,60 +118,21 @@ function isFeatureAvailable() {
   return featureAvailable;
 }
 
-// ── HTTP ────────────────────────────────────────────────────────────────────
-// ONE attempt. Split out of apiFetch so the 401 repair below can run it twice
-// with a jar it repaired in between — every call re-reads `getAuthCookie()`, so
-// the retry genuinely carries a different credential. The request itself is
-// unchanged: same headers, same abort wiring, same timeout semantics the
-// long-poll depends on.
+// ONE attempt, split out so the 401 repair can run it twice with a repaired jar (every call re-reads the
+// cookie). The cookie read is bounded upstream, before the controller arms (F-700).
 async function sendOnce(pathname, opts) {
   const { method = 'GET', workspaceId, body, timeoutMs, signal, sessionId } = opts;
-  const cookie = await auth.getAuthCookie(); // ⚠ BOUNDED UPSTREAM, not by `timeoutMs` — this runs BEFORE the controller arms (F-700; see api.js)
-  // Q10: this build's version rides on the TRANSPORT (see api.js for the same
-  // line, and app-version.js for why the header — not the body — carries it).
-  // channel-post.js posts every task lifecycle event and headless reply through
-  // here, so those are the messages a peer can read a version off. ⚠ The SESSION stamp rides beside it, at the seam and for its reason; `{}` when the caller named none (session-id-header.js).
-  // 🔒 **THE RUNTIME STAMP, AND ITS ABSENCE WAS A BUG** (Samuel, 2026-09-20: *"agents that
-  // were spun in dopl, after they get ended, they are being marked with a badge that says
-  // outside session when they weren't"*).
-  //
-  // ⚠ **CAUSE: THE LABEL IS THE ABSENCE OF THIS HEADER.** The server's one discriminator is
-  // `lib/desktop-handle.ts › isExternalSessionAuthor` — `authorKind === 'agent' && runtime
-  // !== 'desktop-session'` — and it stamps `metadata.external_session` at write time, per
-  // row, forever. `channel-post.js` posts EVERY task lifecycle event and headless reply
-  // through this transport as `authorKind: 'agent'` and sent no runtime at all, so every
-  // `Started working on this request.`, every `Session ended` and every `This session went
-  // inactive.` was recorded as written by a session this product did not spawn. It showed up
-  // on ENDED agents because the end note is the last row they leave.
-  //
-  // ⚠ **`desktop-session` IS THE HONEST VALUE, NOT A WORKAROUND.** These posts are written by
-  // Dopl, about sessions Dopl spawned, on this machine — the exact population the label
-  // exists to EXCLUDE. The MCP lane already sends it for the same sessions' own messages
-  // (`targeting.js`'s DESKTOP_RUNTIMES note), so the two lanes now agree about one fact
-  // instead of disagreeing per row.
-  // ⚠ **NOT THE UI RUNTIME VALUE** — that one means the OPERATOR TYPED IT and belongs to
-  // `ui-bridge.js` alone. Its docblock deliberately leaves this file unstamped for it and is
-  // right to: nothing here is a person typing. This is the SESSION lane, and it says so.
-  // ⚠ **A ROUTING HINT, NOT AUTHORIZATION** (`src/shared/auth/runtime-header.ts`): the header
-  // proves nothing, the server refuses the value to credentials that may not claim it, and
-  // nothing about who may read or write this channel moves.
-  // ⚠ **IT DOES NOT REPAIR ROWS ALREADY WRITTEN.** The flag is stamped at write time, so
-  // every lifecycle row posted before this build keeps its wrong badge; only new ones are
-  // right. There is no read-time fallback to add — an unstamped row already renders as a
-  // plain agent, which is the correct answer for the rows that predate the key entirely.
-  // ⚠ **THE PAIR IS SPELLED INLINE, NOT LIFTED TO A MODULE CONST.** Four suites brace-balance
-  // this function out of the source and evaluate it standalone (`api-auth-retry.test.mjs` and
-  // friends), so a free variable declared at module scope is `undefined` in every one of them —
-  // a green file and a broken header. Same constraint `targeting.js`'s harnesses impose.
+  const cookie = await auth.getAuthCookie();
+  // `X-Dopl-Runtime: desktop-session` marks these posts as written by Dopl about sessions it spawned; without it
+  // the server badged every lifecycle row "outside session". A routing hint, not authorization. Spelled INLINE:
+  // suites brace-extract this function, so a module-scope constant would be undefined there.
   const headers = { Accept: 'application/json', ...appVersion.versionHeaders(), ...sessionStamp.sessionHeaders(sessionId), 'X-Dopl-Runtime': 'desktop-session' };
   if (cookie) headers.Cookie = cookie;
   if (workspaceId) headers['X-Workspace-Id'] = workspaceId;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
-  // One controller aborts the request. It fires on our own timeout AND on an
-  // optional caller signal (the wake kick uses this to cut a healthy long-poll
-  // short so it re-awaits from the persisted cursor immediately). Either way the
-  // fetch rejects with AbortError, which the caller treats as a turnover.
+  // One controller: our own timeout AND the caller's signal (a wake kick cutting a long-poll short) both abort it;
+  // the caller reads the AbortError as a turnover.
   const ctrl = new AbortController();
   const timer = timeoutMs ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
   if (signal) {
@@ -259,26 +151,13 @@ async function sendOnce(pathname, opts) {
   }
 }
 
-// THE REPAIR THE LISTENER NEVER HAD (the 1.8.x Channels outage). This file kept
-// its own bare cookie fetch while api.js was given a 401 repair, so on the
-// bundled SPA — where nothing keeps the Supabase cookie jar fresh and
-// `getAuthCookie()` only repairs an EMPTY jar, never a STALE one — every Channels
-// call died on an expired credential: listWorkspaces, listChannels, the `/await`
-// long-polls, channel-post's lifecycle posts, the roster, threads, consent. It
-// recovered only when some other api.js caller happened to 401 and repair the
-// shared jar first. api-repair.js is now the ONE copy of that rule (force one
-// single-flighted rotation, write it back to the jar, retry EXACTLY once); the
-// send above stays ours, because the abort signal and the timeouts are.
-//
-// An abort between the two attempts (a wake kick, our own timeout) rejects out of
-// here as AbortError exactly as before — channelLoop still reads that as turnover.
+// The shared 401 repair (`api-repair.js`: one single-flighted rotation, written back, retried once); the send
+// stays ours because the abort signal and the timeouts are. An abort between attempts still rejects as AbortError.
 function apiFetch(pathname, opts = {}) {
   return fetchWithAuthRepair('listener', pathname, () => sendOnce(pathname, opts));
 }
 
-// Health-gated await. Healthy → a cheap immediate catch-up (tiny timeoutMs, no
-// held function); unhealthy → today's EXACT held long-poll (same URL + same
-// fetch options, so the fallback is byte-for-byte). See the CHEAP-AWAIT block.
+// Healthy -> a cheap immediate catch-up; unhealthy -> the exact held long-poll.
 function awaitOrCheap(entry, since, healthy, signal) {
   const timeoutMs = budget.awaitTimeoutFor(healthy, REALTIME.CHEAP_AWAIT_TIMEOUT_MS, LISTENER.AWAIT_TIMEOUT_MS);
   const fetchMs = budget.fetchTimeoutFor(healthy, REALTIME.CHEAP_FETCH_TIMEOUT_MS, LISTENER.AWAIT_FETCH_TIMEOUT_MS);
@@ -288,8 +167,6 @@ function awaitOrCheap(entry, since, healthy, signal) {
   );
 }
 
-// The idle wait after a cycle. Healthy + caught up → an interruptible long sleep
-// (a realtime wake resolves it early); otherwise today's plain IDLE_GAP sleep.
 function idleAfterAwait(entry, healthy, drained) {
   const ms = idleWaitFor(healthy, drained, LISTENER.IDLE_GAP_MS, REALTIME.LONG_IDLE_MS);
   if (healthy && !drained) return sleepOrWake(entry, ms);
@@ -303,24 +180,10 @@ function normalizeList(data, key) {
   return [];
 }
 
-// NULL means "could not ask" (401 / non-OK), NOT "you are in no workspaces".
-// reconcile treats null as abort-this-pass and keeps every existing loop; an
-// empty array would prune them all.
-//
-// THE 401 BRANCH LOGGED NOTHING, and that silence is why the 1.8.x outage was
-// invisible for hours. It is the FIRST call of every reconcile pass and its
-// failure returns before presence, realtime, identity resolution and every
-// channel loop — so a subsystem that was entirely dead produced only `reconcile
-// self-heal: retrying …` every 30s, with no line anywhere naming the cause. A
-// subsystem that dies must say so: every exit from this function is now on the
-// record, and the 401 one says what it costs.
+// NULL means "could not ask" (401 / non-OK), never "no workspaces": reconcile keeps every loop on null, and []
+// would prune them all. Every exit logs, and the body is released before every early return (undici pool).
 async function listWorkspaces() {
   const res = await apiFetch('/api/workspaces', { timeoutMs: 15000 });
-  // ⚠ RELEASE BEFORE EVERY EARLY RETURN (2026-08-30). Both exits below abandoned the
-  // `Response`, and an unread undici body counts as IN FLIGHT — socket and TLS state never
-  // return to the pool (api-repair.js › discardBody). The success path reads `res.json()`
-  // and was fine; the 401 branch — the one a stale credential puts EVERY pass on — leaked
-  // once per reconcile, up to twice a minute, for the life of the process.
   if (res.status === 401) {
     discardBody(res);
     notifyStale();
@@ -332,24 +195,11 @@ async function listWorkspaces() {
   return normalizeList(await res.json(), 'workspaces');
 }
 
-// Q4 (b): returns an ARRAY of channels, or NULL when this workspace could NOT be
-// enumerated (401 / 5xx / network / unparseable). The null is load-bearing: the
-// old contract returned [] for every failure, so reconcile could not tell "this
-// workspace has no channels" from "I never got an answer" — and the prune step
-// then silently killed every loop for a workspace whose read failed inside an
-// expired-token window (the 02:18 incident). A 404 is different: it is a real,
-// stable answer meaning the Channels feature is not deployed, so it stays [].
-// FIX S6 — was the LAST listChannels failure AUTH-shaped? The retry ladder used to
-// run the session-refresh dance after EVERY failure, so a 500 or a dropped socket
-// rotated the Supabase refresh token and rewrote the cookie jar for no reason.
-// Combined with the (then) clear-then-set writeback, a transient 5xx across N loops
-// was the amplification path that ended in clearSession(). Set on every call and read
-// immediately by listChannelsWithRetry, which awaits listChannels serially.
-let lastChannelsAuthFailure = false;
-
-async function listChannels(workspaceId) {
+// An ARRAY, or NULL when this workspace could not be enumerated (401 / 5xx / network / parse). A 404 is a real
+// answer (the feature is not deployed) and stays []. `outcome.authFailure` marks a 401 for this call only, so
+// the retry refreshes the session only then (Supabase rotates the refresh token on use) (FIX S6).
+async function listChannels(workspaceId, outcome) {
   const short = String(workspaceId).slice(0, 8);
-  lastChannelsAuthFailure = false;
   let res;
   try {
     res = await apiFetch('/api/channels', { workspaceId, timeoutMs: 15000 });
@@ -357,10 +207,8 @@ async function listChannels(workspaceId) {
     diag('listChannels error ws', short, err && err.message);
     return null;
   }
-  // ⚠ Same rule as listWorkspaces above, and here it is AMPLIFIED: listChannelsWithRetry
-  // runs this up to three times per workspace per pass.
   if (res.status === 404) { discardBody(res); featureAvailable = false; return []; }
-  if (res.status === 401) { discardBody(res); lastChannelsAuthFailure = true; notifyStale(); diag('listChannels 401 ws', short); return null; }
+  if (res.status === 401) { discardBody(res); if (outcome) outcome.authFailure = true; notifyStale(); diag('listChannels 401 ws', short); return null; }
   if (!res.ok) { discardBody(res); diag('listChannels', res.status, 'ws', short); return null; }
   try {
     const list = normalizeList(await res.json(), 'channels');
@@ -372,22 +220,13 @@ async function listChannels(workspaceId) {
   }
 }
 
-// Bounded retry ladder around listChannels (heal.ENUM_RETRY_DELAYS_MS). A
-// transient failure used to drop the workspace for the whole 5-minute reconcile
-// period — or, at 02:18, until the next reboot. Serial and short: at most two
-// extra tries for ONE workspace, never concurrent, so this cannot storm (F-072).
-// An AUTH-shaped retry first repairs the session, because the observed failure WAS an
-// expired-token window and a refresh is exactly what fixes it.
-//
-// FIX S6: only a 401 gets that repair now. A refresh cannot fix a 500, a timeout or a
-// dropped socket, and running it anyway rotated the refresh token (Supabase rotates on
-// use) and rewrote the cookie jar on every transient blip — the write half of the
-// amplification loop this round closes. A non-auth failure just backs off and retries.
+// A bounded, serial retry ladder (never concurrent, F-072); only an auth-shaped failure repairs the session first.
 async function listChannelsWithRetry(workspaceId) {
   for (let attempt = 0; ; attempt += 1) {
-    const chans = await listChannels(workspaceId);
+    const outcome = {};
+    const chans = await listChannels(workspaceId, outcome);
     if (chans !== null) return chans;
-    const authShaped = lastChannelsAuthFailure;
+    const authShaped = outcome.authFailure === true;
     const delay = heal.enumerationRetryDelay(attempt);
     if (delay == null) {
       diag('listChannels gave up ws', String(workspaceId).slice(0, 8), 'after', attempt + 1, 'tries');
@@ -405,13 +244,6 @@ async function listChannelsWithRetry(workspaceId) {
   }
 }
 
-// ── Identity + display names → `listener-identity.js` (§2 split, 2026-09-22) ─
-// ⚠ MOVED, NOT DELETED: `resolveIdentity` (who this operator is, so a loop never self-triggers)
-// and the peer name/avatar cache (`displayNameFor`, `avatarUrlFor`, `refreshNameCache`). They
-// read ONE surface — the workspace members listing, with `/api/workspaces/me` behind it — and
-// change for that DTO's reasons, never the transport's; that is the seam. What they call stays
-// here (`apiFetch`, `normalizeList`), resolved lazily from that side (its docblock says why).
-
 module.exports = {
   sleep,
   getCursor,
@@ -427,16 +259,15 @@ module.exports = {
   idleAfterAwait,
   sleepOrWake,
   wakeEntry,
-  discardBody, // re-exported so channelLoop releases the bodies it never reads (api-repair.js)
-  isWakeAbort, // …and classifies an abort, logging a blown budget (listener-budget.js)
+  // Re-exported so the listen loop releases the bodies it never reads.
+  discardBody,
+  isWakeAbort,
   normalizeList,
   listWorkspaces,
   listChannels,
   listChannelsWithRetry,
-  // The four below are listener-identity.js's OWN function objects, never re-spellings (the
-  // property test/module-split-identity.test.mjs pins): one instance of the two member caches.
+  // listener-identity.js's OWN function objects (one instance of the member caches).
   resolveIdentity: identity.resolveIdentity,
   displayNameFor: identity.displayNameFor,
-  avatarUrlFor: identity.avatarUrlFor,
   refreshNameCache: identity.refreshNameCache,
 };

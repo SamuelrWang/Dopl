@@ -1,35 +1,7 @@
-// THE PER-SESSION MODEL (2026-08-02), rewritten down on 2026-08-20 when the v1 session window
-// went (F-228).
-//
-// It arrived as a third control in the status strip and the one with the sharpest edge in that
-// window: its value becomes `--model <argv>` on a child process. THE PICKER IS GONE — the strip,
-// its <select>, the preload that coerced the click and the IPC that applied it all lived in the
-// deleted window. THE VALUE IS NOT. A session still carries a model, `buildSdkOptions` still
-// spends it on every spawn shape, the durable record still round-trips it, and every one of
-// those is still a boundary a hostile string must not cross.
-//
-// So the rule the file was built on is unchanged and is now the whole file: a FROZEN ENUM,
-// coerced or rejected at every boundary, failing closed to 'default' (which sets no model option
-// at all and leaves the CLI its own pick, i.e. exactly what every session did before this
-// existed).
-//
-// WHAT THIS FILE PROVES, and it drives the shipped code for all of it:
-//   0. the frozen tables evaluate standalone — no require, no electron, no process state
-//   1. the enum and the argv it produces
-//   3. buildSdkOptions carries the model on every spawn shape, from the one assembly point,
-//      and re-coerces there too
-//   4. the durable round trip preserves it, a hostile stored value lands on 'default', and the
-//      one construction site coerces what a spec hands in
-//
-// ⚠ SECTIONS 2, 5 AND 6 END IN COMMENT BLOCKS. §2 pinned the FOUR copies of the enum against
-// each other, two of which were renderer files; §5 drove `session:set-model` from three sender
-// shapes; §6 pinned the diag line every axis change left behind. All three read surfaces that no
-// longer exist — the argument is at each site.
-//
-// METHOD is the directory idiom: slice the REAL functions (helpers/source-probe fnOf/between)
-// and drive them with fakes. No test here asserts on source text where it could assert on
-// behavior; the one pin that remains is about what a CONSTRUCTION SITE passes, which is not
-// observable any other way without booting electron.
+// CLAUDE CODE'S FROZEN MODEL TABLE (`main/runtime/claude/model-table.js`) and the model a session
+// carries: the table stands alone, the fallback id is pinned to its web twin, the launch spec
+// spends the pick on every spawn shape and re-coerces it, and the durable record round-trips it.
+// Drives the shipped code (helpers/source-probe fnOf) with fakes.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -43,7 +15,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 
-const model = require("../main/session-model.js");
+const model = require("../main/runtime/claude/model-table.js");
 const CLAUDE_MODELS = require("../main/runtime/claude/models.js");
 // U10 (2026-09-21): `baseRecord`'s two new free vars — the runtime REGISTRY (for the session's own
 // descriptor) and the runtime-truth projection. Required, never faked: neither pulls electron.
@@ -65,39 +37,20 @@ const ENGINE = M("session-engine.js");
 const JUNK = ["", " ", null, undefined, 0, 1, true, {}, [], "Opus", "opus ", "sonnet;rm -rf /",
   "claude-opus-4-5", "--dangerously-skip-permissions", "opus --print", "haiku\n--model=x"];
 
-// ── 0. the frozen tables stand alone ─────────────────────────────────────────
-// The sentinel block evaluated in a plain Node context with NO require, NO electron and NO
-// process state: the WATCHER-PURE idiom. It is what stops the two tables every other layer
-// coerces against from quietly growing a dependency on app state.
+// ── 0. the frozen table stands alone ─────────────────────────────────────────
 
-test("the frozen tables evaluate standalone, with nothing in scope but themselves", () => {
-  const SRC = M("session-model.js");
-  const from = SRC.indexOf("// ─── BEGIN SESSION-MODEL");
-  const to = SRC.indexOf("// ─── END SESSION-MODEL");
+test("the frozen table evaluates standalone, with nothing in scope but itself", () => {
+  const SRC = M("runtime/claude/model-table.js");
+  const from = SRC.indexOf("// ─── BEGIN CLAUDE-MODEL-TABLE");
+  const to = SRC.indexOf("// ─── END CLAUDE-MODEL-TABLE");
   assert.notEqual(from, -1, "BEGIN sentinel missing");
   assert.ok(to > from, "sentinels out of order");
-  const block = SRC.slice(from, to);
-  assert.ok(!/require\(|electron|process\.|require\b/.test(block), "the block reaches nothing");
-  const pure = new Function(`${block}
-    return { MODEL_CHOICES, normalizeModel, modelArg, contextWindowFor, promptTokens };`)();
-  assert.deepEqual(pure.MODEL_CHOICES, model.MODEL_CHOICES);
-  // 2026-09-06: `modelArg` resolves an unresolvable value through 'default' to the PRODUCT
-  // fallback, so what a shell-shaped string reaches argv as is Sonnet's alias — never itself.
-  assert.equal(pure.modelArg("rm -rf /"), model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK));
+  assert.ok(!/require\(|electron|process\./.test(SRC), "the module reaches nothing");
+  const pure = new Function(`${SRC.slice(from, to)}
+    return { MODEL_IDS, aliasForModelId, contextWindowFor, promptTokens };`)();
+  assert.deepEqual(pure.MODEL_IDS, model.MODEL_IDS);
+  assert.equal(pure.aliasForModelId("rm -rf /"), "default");
   assert.equal(pure.contextWindowFor("claude-opus-5"), 1000000);
-});
-
-// ── 1. the enum, and the argv it produces ────────────────────────────────────
-
-test("the enum offers exactly five choices, with the fail-closed one first", () => {
-  assert.deepEqual(model.MODEL_CHOICES, ["default", "opus", "sonnet", "haiku", "fable"]);
-  assert.equal(model.MODEL_CHOICES[0], "default",
-    "[0] is the coercion target, the same convention 'manual' / 'ask' follow");
-});
-
-test("normalizeModel takes a member and refuses everything else", () => {
-  for (const m of model.MODEL_CHOICES) assert.equal(model.normalizeModel(m), m);
-  for (const junk of JUNK) assert.equal(model.normalizeModel(junk), "default", JSON.stringify(junk));
 });
 
 // ── 1b. THE SECOND VOCABULARY: FULL IDS (2026-08-22, Samuel's model-selection ruling) ────────
@@ -111,91 +64,12 @@ test("the id list is frozen, and the four members are the ruling's four", () => 
     ["claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5-20251001"]);
 });
 
-test("normalizeModelId takes a member and answers '' — ABSENT — for everything else", () => {
-  // ⚠ ABSENT, NOT A MEMBER. There is no 'default' id: an unchosen model is the SDK's own pick,
-  // which is today's behaviour for every channel that has never touched this, and the durable
-  // posture OMITS the key rather than storing a sentinel.
-  for (const id of model.MODEL_IDS) assert.equal(model.normalizeModelId(id), id);
-  for (const junk of JUNK.concat(["opus", "claude-opus-5 ", "CLAUDE-OPUS-5"])) {
-    assert.equal(model.normalizeModelId(junk), "", JSON.stringify(junk));
-  }
-});
-
 test("aliasForModelId is the seam, and it fails closed to 'default'", () => {
   assert.equal(model.aliasForModelId("claude-fable-5"), "fable");
   assert.equal(model.aliasForModelId("claude-opus-5"), "opus");
   assert.equal(model.aliasForModelId("claude-sonnet-5"), "sonnet");
   assert.equal(model.aliasForModelId("claude-haiku-4-5-20251001"), "haiku");
   for (const junk of JUNK) assert.equal(model.aliasForModelId(junk), "default", JSON.stringify(junk));
-});
-
-test("normalizeModel accepts BOTH vocabularies and answers in exactly one", () => {
-  // A caller holding an id (the durable posture) and a caller holding an alias (the per-session
-  // picker) must not have to know which one the layer below wants — that is how a value reaches
-  // argv un-coerced. The ANSWER is always an alias, so `modelArg` below is unchanged.
-  for (const m of model.MODEL_CHOICES) assert.equal(model.normalizeModel(m), m);
-  for (const id of model.MODEL_IDS) {
-    const out = model.normalizeModel(id);
-    assert.notEqual(model.MODEL_CHOICES.indexOf(out), -1, id);
-    assert.equal(out, model.aliasForModelId(id));
-  }
-  for (const junk of JUNK) assert.equal(model.normalizeModel(junk), "default", JSON.stringify(junk));
-});
-
-test("an ID still cannot reach argv as itself — the alias is what argv gets", () => {
-  // The argv gate is unchanged and this is the case that says so: whatever vocabulary went in,
-  // what comes out is one lowercase word from the frozen alias list, or nothing at all.
-  for (const id of model.MODEL_IDS) {
-    const arg = model.modelArg(id);
-    assert.match(arg, /^[a-z]+$/, id);
-    assert.notEqual(model.MODEL_CHOICES.indexOf(arg), -1, id);
-  }
-});
-
-test("modelArg is the argv gate: the PRODUCT FALLBACK for 'default', the bare alias otherwise", () => {
-  // ⚠ **REPOINTED 2026-09-06 (Samuel's back-fill ruling). THIS CASE ASSERTED `null` — "no model
-  // option at all, the CLI's own pick" — AND THAT IS EXACTLY WHAT THE RULING CHANGED.** With
-  // "Default" gone from the dropdown, every channel behaves as though set to a real model; a
-  // chain that ends with no opinion now spends the product's fallback instead of the CLI's.
-  // ⚠ THE OLD ASSERTION IS NAMED RATHER THAN DELETED, because `null` is still reachable (see the
-  // junk case below) and a reader finding one `null` here would otherwise think the ruling only
-  // half-landed.
-  const fallbackAlias = model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK);
-  assert.equal(model.modelArg("default"), fallbackAlias, "no opinion resolves to the fallback");
-  assert.equal(model.modelArg("opus"), "opus");
-  assert.equal(model.modelArg("fable"), "fable");
-  // ⚠ JUNK STILL RESOLVES TO THE FALLBACK, NOT TO `null`, and that is the same statement: junk
-  // normalizes to 'default' and 'default' now names a model. What must never happen is junk
-  // reaching argv as ITSELF, which the shape guard below is for.
-  for (const junk of JUNK) {
-    assert.equal(model.modelArg(junk), fallbackAlias, JSON.stringify(junk));
-  }
-  // A shell-shaped string can never come back out, whatever went in.
-  for (const m of model.MODEL_CHOICES) {
-    const arg = model.modelArg(m);
-    if (arg !== null) assert.match(arg, /^[a-z]+$/, "an alias is one lowercase word or it is nothing");
-  }
-  assert.match(fallbackAlias, /^[a-z]+$/, "the fallback reaches argv as an alias, never as an id");
-});
-
-test("chainModel is UNCHANGED by the fallback — a link with no opinion still steps aside", () => {
-  // ⚠ THE ONE THING THE BACK-FILL RULING MUST NOT BREAK (F-285). Every launch lane spells its
-  // precedence as `chainModel(a) || chainModel(b) || …`. If `'default'` resolved to the fallback
-  // HERE as well as at the argv gate, the first link would always be truthy and every lower link
-  // would be unreachable — a channel's stored model could never beat an identity's, and the
-  // precedence order would invert silently. The fallback belongs at the END of the chain, which
-  // is `modelArg`, and nowhere else.
-  assert.equal(model.chainModel("default"), "", "no opinion keeps going");
-  assert.equal(model.chainModel(""), "", "and so does absent");
-  assert.equal(model.chainModel("opus"), "opus", "a real pick ends the chain");
-  // The end-to-end statement, as a lane spells it: nothing anywhere still lands on the fallback.
-  const resolved = model.chainModel("") || model.chainModel("default") || "";
-  assert.equal(resolved, "", "the chain itself resolves to nothing…");
-  assert.equal(
-    model.modelArg(resolved),
-    model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK),
-    "…and the argv gate is where that becomes a model"
-  );
 });
 
 test("⚠ THE PINNED TWIN: the desktop's fallback and the web's are the same id", () => {
@@ -222,10 +96,8 @@ test("⚠ THE PINNED TWIN: the desktop's fallback and the web's are the same id"
   );
   // ⚠ AND IT MUST BE A MODEL THIS BUILD CAN ACTUALLY SPEND — agreement alone is not enough. A
   // pinned pair that agreed on an id NEITHER side knew would pass the check above and still be
-  // broken: `aliasForModelId` fails closed to `'default'`, so `modelArg` would hand argv the
-  // literal string `default` as though it were an alias. The guard is membership, not spelling.
-  assert.notEqual(model.normalizeModelId(model.LAUNCH_MODEL_FALLBACK), "",
-    "the fallback is a member of MODEL_IDS");
+  // broken: `aliasForModelId` fails closed to `'default'`. The guard is membership, not spelling.
+  assert.ok(model.MODEL_IDS.includes(model.LAUNCH_MODEL_FALLBACK), "the fallback is a member of MODEL_IDS");
   assert.notEqual(model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK), "default",
     "…so it resolves to a real alias rather than the fail-closed one");
 });
