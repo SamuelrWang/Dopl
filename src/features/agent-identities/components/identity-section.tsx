@@ -5,7 +5,6 @@ import { cn } from "@/shared/lib/utils";
 import { agentModelShortLabel } from "@/features/channels/lib/agent-models";
 import { pendingRow } from "@/shared/ui/pending";
 import { SectionPanel } from "@/shared/ui/section-panel";
-import { SECTION_HEADING_TEXT } from "@/shared/ui/section-heading";
 import { CARD_LIFT_CLASS } from "@/shared/ui/card-lift";
 import type { AgentIdentity } from "../client/types";
 import type { IdentitySectionDef } from "../lib/visibility";
@@ -58,45 +57,6 @@ import type { IdentitySectionDef } from "../lib/visibility";
  * font, font size, and font color and apply it"); one constant, two readers.
  */
 export const IDENTITY_NAME_TEXT = "text-title font-medium text-text-primary";
-
-/**
- * THE SAME NAME TYPE, ONE STEP UP THE SCALE AND BOLDER — `text-display` (18px)
- * and `font-semibold`, same ink.
- *
- * 🔒 **SAMUEL, 2026-09-13: *"increase the font size for usage … let's bold it as
- * well"*.** It began as the /home Overview's **Usage** heading alone.
- *
- * ⚠ **IT HAS NO READERS LEFT, AND THAT IS BECAUSE THE TRIAL WAS PROMOTED THE
- * SAME DAY.** Samuel then ruled the face onto EVERY section heading, so it lives
- * in `shared/ui/section-heading.ts › SECTION_HEADING_TEXT` and `SectionPanel`
- * applies it — the Usage heading included. This alias survives only as the NAME
- * three files argue against by (`channels/components/agent-window-frame.ts`,
- * `channels/components/recency-wells.tsx`, `pages/home/overview-usage-filter.tsx` all say
- * "not `IDENTITY_NAME_TEXT_LG`"); delete it together with those references, not
- * before them.
- *
- * ⚠ **IT WAS APPLIED TO FOUR THINGS FOR ONE PASS AND THREE OF THEM WERE A
- * MISREAD — Samuel, same day, rejecting it: *"You changed the font size of the
- * credit spend, all channels, and the date to the super large size, like usage. I
- * did not ask for that. I only asked you to change the usage size to be
- * bigger."*** The scope menu (**All channels**), the month label and the credit
- * card's **Credit spend** heading are on `IDENTITY_NAME_TEXT` — the 14px face —
- * and the month label was RAISED to it rather than to this one, which is the
- * whole of what *"the month switcher as well"* asked for. **The block has two
- * scales on purpose: the panel heading, then everything inside it.** Do not
- * widen this constant's readers without a ruling that names one.
- *
- * ⚠ **A STEP ON THE TOKEN SCALE, NEVER A PX** (`docs/DESIGN-SYSTEM.md` › Type
- * scale): `text-title` → `text-display` is the next utility, and there is
- * nothing between them to pick instead.
- *
- * ⚠ **IT SITS BESIDE `IDENTITY_NAME_TEXT` RATHER THAN OVERRIDING IT AT THE CALL
- * SITE.** The agent identity card keeps the smaller face — a card NAME in a list
- * is not a page heading — and a `cn(IDENTITY_NAME_TEXT, "text-display
- * font-semibold")` at the reader would be a same-layer fight with the constant it
- * is composing, which is how a heading silently keeps 14px.
- */
-export const IDENTITY_NAME_TEXT_LG = SECTION_HEADING_TEXT;
 
 /**
  * THE CARD GRID — FOUR to a row, FIXED (Samuel, 2026-09-13: *"I want to
