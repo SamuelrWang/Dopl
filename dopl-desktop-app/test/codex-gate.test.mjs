@@ -291,11 +291,12 @@ test("a RESTRICTED profile pins the native pair; `full` rides the operator's own
   );
   assert.deepEqual(full, { approval_policy: "on-request", sandbox_mode: "danger-full-access" },
     "…and at `full` the operator's own pick finally REACHES the launch");
-  // An absent or unrecognised sandbox pick lands on Codex's OWN default, not on the widest.
+  // An UNRECOGNISED sandbox pick fail-closes to the narrowest, the same answer main's record
+  // normalizer gives (X-05); only an ABSENT one takes Codex's own default.
   const bare = launchSpec.nativePair(
     { state: { toolMode: "junk", native: { sandbox_mode: "junk" } } }, RT.toolConfigFor("full")
   );
-  assert.deepEqual(bare, { approval_policy: "untrusted", sandbox_mode: "workspace-write" });
+  assert.deepEqual(bare, { approval_policy: "untrusted", sandbox_mode: "read-only" });
   // ⚠ AND A SESSION STAMPED WITH NO BAG AT ALL IS THE SAME ANSWER — every spawn shape that hands
   // in no posture (a peer wake, a crash resume, a woken shell) keeps exactly today's behaviour.
   assert.deepEqual(launchSpec.nativePair(codexState({ tools: "on-request" }), RT.toolConfigFor("full")),

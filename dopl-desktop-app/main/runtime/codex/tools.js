@@ -218,7 +218,9 @@ const NOTIFY_FENCE = Object.freeze([]);
 
 // Every profile's thread `features`: the account fence plus the persistence fence.
 const FEATURE_FENCE = Object.freeze({ ...ACCOUNT_FENCE, ...PERSISTENCE_FENCE });
-const RESTRICTED_FENCE = Object.freeze({ ...FEATURE_FENCE });
+
+// The restricted profiles' floor: local execution, writes and every escalation Codex names.
+const RESTRICTED_DENY = Object.freeze([COMMAND_ITEM, FILE_ITEM, 'sandbox_approval', 'request_permissions', 'skill_approval']);
 
 function buildSessionToolConfig(profile) {
   const p = normalizeProfile(profile);
@@ -234,12 +236,10 @@ function buildSessionToolConfig(profile) {
       preApproved: [],
       // Local execution + writes + every escalation Codex names, plus the whole Dopl surface
       // except the channel tool. The twin of Claude's read_only, in Codex's vocabulary.
-      disallowedTools: [COMMAND_ITEM, FILE_ITEM,
-        'sandbox_approval', 'request_permissions', 'skill_approval']
-        .concat(doplSurfaceDeny, DOPL_SAFE_TOOLS),
+      disallowedTools: RESTRICTED_DENY.concat(doplSurfaceDeny, DOPL_SAFE_TOOLS),
       doplToolsPolicy: [channelShort],
       native: { sandbox_mode: 'read-only', approval_policy: 'untrusted' },
-      features: { ...RESTRICTED_FENCE },
+      features: { ...FEATURE_FENCE },
     };
   }
 
@@ -249,12 +249,10 @@ function buildSessionToolConfig(profile) {
       preApproved: [],
       // Same floor; the non-admin Dopl surface is reachable (each still through the gate, because
       // nothing is pre-approved here — the WRITE half of it gates at every mode but `never`).
-      disallowedTools: [COMMAND_ITEM, FILE_ITEM,
-        'sandbox_approval', 'request_permissions', 'skill_approval']
-        .concat(doplSurfaceDeny),
+      disallowedTools: RESTRICTED_DENY.concat(doplSurfaceDeny),
       doplToolsPolicy: DOPL_SAFE_TOOLS.map(shortDoplName).concat([channelShort]),
       native: { sandbox_mode: 'read-only', approval_policy: 'untrusted' },
-      features: { ...RESTRICTED_FENCE },
+      features: { ...FEATURE_FENCE },
     };
   }
 
@@ -318,7 +316,7 @@ module.exports = {
   buildSessionToolConfig,
   axisAAllows, normalizeToolMode,
   TOOL_MODES, GRANULAR_CATEGORIES, ESCALATION_ITEMS, EDIT_ITEMS,
-  COMMAND_ITEM, FILE_ITEM, WINDOWLESS_FLOOR, ACCOUNT_FENCE, RESTRICTED_FENCE,
+  COMMAND_ITEM, FILE_ITEM, WINDOWLESS_FLOOR, ACCOUNT_FENCE,
   PERSISTENCE_FENCE, FEATURE_FENCE, NOTIFY_FENCE,
   UNTRUSTED_TOOLS, ON_REQUEST_TOOLS, NEVER_TOOLS,
 };

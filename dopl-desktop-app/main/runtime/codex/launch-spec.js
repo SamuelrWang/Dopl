@@ -105,7 +105,9 @@ function nativePair(s, cfg) {
   // launch argument, and every other coercion in this tree is re-run at that step.
   const native = (st.native && typeof st.native === 'object') ? st.native : {};
   const asked = native.sandbox_mode;
-  const sandbox = SANDBOX_MODES.indexOf(asked) === -1 ? DEFAULT_SANDBOX : asked;
+  // Absent is the platform default; an unrecognised value fail-closes to the narrowest (X-05).
+  const sandbox = asked == null || asked === '' ? DEFAULT_SANDBOX
+    : (SANDBOX_MODES.indexOf(asked) === -1 ? SANDBOX_MODES[0] : asked);
   return { approval_policy: approvalPolicy(st.toolMode), sandbox_mode: sandbox };
 }
 
@@ -141,7 +143,7 @@ function buildLaunchSpec(request) {
   threadStart.config = {
     features: Object.assign({}, cfg.features),
     projects: configHome.projectTrustFence(cwd),
-    skills: skillsFence.skillsFence({ cwd, codexHome: configHome.privateHome() }),
+    skills: skillsFence.skillsFence({ cwd, codexHome: configHome.privateHome(), log: diag }),
     // ⚠ …AND NO `notify` PROGRAM FROM ANY LAYER (`tools.js › NOTIFY_FENCE`, C26): measured, a
     // thread-level `[]` silences one set lower down.
     notify: tools.NOTIFY_FENCE.slice(),
@@ -244,7 +246,7 @@ function makeApprovalHandler(s, dispatch, emitQuiet) {
     return serverRequests.answer(msg, async (name, input) => {
       const verdict = await gate(name, input, {
         requestId: String(msg.id),
-        toolUseID: params.itemId || params.item_id || null,
+        toolUseID: params.itemId || null,
       });
       return verdict && verdict.behavior === 'allow' ? 'allow' : 'deny';
     });

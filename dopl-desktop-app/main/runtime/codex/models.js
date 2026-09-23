@@ -52,30 +52,9 @@ let cached = null; // { key, roster }
 
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
 
-// ⚠ TOLERANT, LIKE EVERY OTHER READER IN THIS ADAPTER. Kept and still exported because
-// `launch-directive-spawn.js` and the contract suites read ids off a roster, and because the row
-// shape below is MEASURED from one alpha build (Implementation Log D) rather than from a supported
-// CLI — a reader that accepts only the measured spelling would break on the first public one.
-function idsFrom(result) {
-  const rows = rowsFrom(result);
-  const out = [];
-  for (const row of rows) {
-    if (typeof row === 'string' && row) { out.push(row); continue; }
-    const id = row && (row.id || row.model || row.name);
-    if (typeof id === 'string' && id) out.push(id);
-  }
-  return out;
-}
-
-/**
- * ⚠ `data` FIRST, BECAUSE THAT IS THE ONE THAT WAS MEASURED. Implementation Log D:
- * `model/list` answers `{ data, nextCursor }`. The other spellings stay as tolerance for a
- * supported CLI nobody here has run — they are NOT a claim that any of them is real.
- */
+/** `model/list` answers `{ data, nextCursor }` (measured, codex-cli 0.155.1). */
 function rowsFrom(result) {
-  const rows = (result && (result.data || result.models || result.items))
-    || (Array.isArray(result) ? result : []);
-  return Array.isArray(rows) ? rows : [];
+  return result && Array.isArray(result.data) ? result.data : [];
 }
 
 /**
@@ -93,15 +72,11 @@ function rowsFrom(result) {
  * persist is a control that writes nowhere. The dropped ones are counted, never silently lost.
  */
 function entryFrom(row) {
-  if (typeof row === 'string') {
-    const bare = str(row);
-    return bare ? { id: bare, label: null, short: null, isDefault: false, hidden: false, dimensions: {} } : null;
-  }
   if (!row || typeof row !== 'object') return null;
-  const id = str(row.id) || str(row.model) || str(row.name);
+  const id = str(row.id);
   if (!id) return null;
-  const label = str(row.displayName) || str(row.display_name) || null;
-  const isDefault = row.isDefault === true || row.is_default === true;
+  const label = str(row.displayName) || null;
+  const isDefault = row.isDefault === true;
   const hidden = row.hidden === true;
   const supported = effortsFrom(row);
   const dimensions = {};
@@ -116,10 +91,10 @@ function entryFrom(row) {
 
 /** `supportedReasoningEfforts` → `{ options: [{value,label,description}], fallback }`. */
 function effortsFrom(row) {
-  const raw = row.supportedReasoningEfforts || row.supported_reasoning_efforts || [];
+  const raw = row.supportedReasoningEfforts;
   const options = [];
   for (const item of Array.isArray(raw) ? raw : []) {
-    const value = typeof item === 'string' ? str(item) : str(item && (item.reasoningEffort || item.reasoning_effort || item.value));
+    const value = str(item && item.reasoningEffort);
     // ⚠ THE INTERSECTION IS THE GATE — see `entryFrom`'s note. An effort outside the declared
     // dimension cannot be stored, so offering it would be F-390's shape again.
     if (!value || REASONING_EFFORTS.indexOf(value) === -1) continue;
@@ -127,12 +102,12 @@ function effortsFrom(row) {
     options.push({
       value,
       label: value,
-      description: (item && typeof item === 'object' && str(item.description)) || null,
+      description: str(item.description) || null,
     });
   }
   return {
     options,
-    fallback: str(row.defaultReasoningEffort) || str(row.default_reasoning_effort),
+    fallback: str(row.defaultReasoningEffort),
   };
 }
 
@@ -142,7 +117,7 @@ function cacheKey(gate) {
 }
 
 function failure(key, reason) {
-  return { source: 'live', key, ids: [], aliases: [], models: [], defaultId: null, reason, truncated: false };
+  return { source: 'live', key, ids: [], models: [], defaultId: null, reason, truncated: false };
 }
 
 /**
@@ -173,7 +148,7 @@ async function listPages(conn) {
     const params = cursor ? { cursor } : {};
     const result = await conn.request('model/list', params);
     rows.push(...rowsFrom(result));
-    const next = str(result && (result.nextCursor || result.next_cursor));
+    const next = str(result && result.nextCursor);
     // ⚠ **`truncated` MEANS "DOPL STOPPED", NOT "THE SERVER RAN OUT", AND ONLY THE FIRST ARM IS
     // THE SERVER SAYING SO.** A repeated cursor and the page cap are both Dopl giving up on a
     // list it cannot prove it finished, and reporting either as a complete roster would be a
@@ -239,23 +214,17 @@ function rosterFrom(key, rows, truncated) {
   if (!models.length) {
     return failure(key, 'Codex answered `model/list` with no models Dopl could read.');
   }
-  const gate = client.catalogGate(rows);
   const defaults = models.filter((m) => m.isDefault);
   const ids = models.map((m) => m.id);
   return {
     source: 'live',
     key,
     ids,
-    // ⚠ `aliases[0]` IS THE EMPTY STRING AND IT SETS NO MODEL AT ALL — the platform's own pick.
-    // `descriptor.models.defaultMeansAbsent` is the convention the whole launch precedence chain
-    // rests on: a link naming nothing this build knows STEPS ASIDE rather than spending the
-    // platform default and discarding the rest.
-    aliases: [''].concat(ids),
     models,
     defaultId: defaults.length === 1 ? defaults[0].id : null,
-    // ⚠ A ROSTER THAT ARRIVED BUT DECLARED NO SINGLE DEFAULT IS STILL A ROSTER. The models are
-    // real and pickable; what is missing is the marker, and saying so beats refusing the list.
-    reason: gate.ok ? '' : `Codex's model list is unusual: ${gate.reason}.`,
+    // A roster with no single default is still a roster: the models are real and pickable.
+    reason: defaults.length === 1 ? ''
+      : `Codex's model list is unusual: it declares ${defaults.length} defaults; exactly one is expected.`,
     truncated: truncated === true,
   };
 }
@@ -352,6 +321,6 @@ const descriptor = {
 };
 
 module.exports = {
-  models, forget, descriptor, idsFrom, rowsFrom, entryFrom, rosterFrom, cacheKey,
+  models, forget, descriptor, rowsFrom, entryFrom, rosterFrom, cacheKey,
   REASONING_EFFORTS, DIMENSION, LIST_TIMEOUT_MS, MAX_PAGES,
 };

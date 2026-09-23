@@ -32,6 +32,7 @@ const { execFile } = require('node:child_process');
 
 const client = require('../main/runtime/codex/client.js');
 const resolveBin = require('../main/runtime/codex/resolve-bin.js');
+const configHome = require('../main/runtime/codex/config-home.js');
 
 const FIXTURE = path.join(__dirname, '..', 'test', 'fixtures', 'codex-app-server.json');
 const HANDSHAKE_TIMEOUT_MS = 20000;
@@ -84,31 +85,10 @@ function shapeOf(value, depth) {
   return out;
 }
 
-/**
- * Model rows, reduced to what the picker and the gate actually read.
- * ⚠ TOLERANT over the container key for the same reason `models.js › idsFrom` is: the spelling is
- * what this run is MEASURING, so assuming one would defeat the point. Whatever arrived is recorded
- * in `container`.
- */
-function modelsFrom(result) {
-  for (const key of ['models', 'data', 'items']) {
-    if (result && Array.isArray(result[key])) return { container: key, rows: result[key] };
-  }
-  if (Array.isArray(result)) return { container: '(top-level array)', rows: result };
-  return { container: null, rows: [] };
-}
-
-function modelRow(row) {
-  if (typeof row === 'string') return { id: row, raw: 'string' };
-  if (!row || typeof row !== 'object') return { id: null, raw: typeof row };
-  const flag = row.isDefault !== undefined ? row.isDefault
-    : (row.is_default !== undefined ? row.is_default : row.default);
-  return {
-    id: row.id || row.model || row.name || null,
-    displayName: typeof row.displayName === 'string' ? row.displayName : null,
-    isDefault: flag === true,
-    keys: Object.keys(row).sort(),
-  };
+/** The ids `model/list` marks default (`{ data: [{ id, isDefault }] }`, measured). */
+function defaultModels(list) {
+  const rows = list && Array.isArray(list.data) ? list.data : [];
+  return rows.filter((row) => row && row.isDefault === true).map((row) => row.id || null);
 }
 
 // ── THE GENERATED SCHEMA ─────────────────────────────────────────────────────────────────────
@@ -172,7 +152,8 @@ function run(bin, args, timeout) {
 
 /** One bounded app-server session. ⚠ The child is closed on EVERY path, including a throw. */
 async function withAppServer(fn) {
-  const conn = client.connect({ args: [] });
+  // The app-owned home every product spawn uses, never the operator's own `~/.codex` (CX-34).
+  const conn = client.connect({ args: [], env: configHome.isolatedEnv(process.env) });
   let timer = null;
   const budget = new Promise((_, reject) => {
     timer = setTimeout(
@@ -212,7 +193,7 @@ async function capture() {
   const schema = await generatedSchema(found.path);
 
   const handshake = await withAppServer(async (conn) => {
-    const out = { initialize: null, declaredMethods: null, modelList: null, errors: [] };
+    const out = { initialize: null, declaredMethods: null, modelDefaults: [], errors: [] };
     const init = await conn.request('initialize', client.initializeParams(versionText));
     out.initialize = { shape: shapeOf(init), raw: null };
     // ⚠ THE GENERATED SCHEMA ANSWERS FIRST — it is the CLI's own enumeration of its methods.
@@ -231,15 +212,7 @@ async function capture() {
       }
     }
     try {
-      const list = await conn.request('model/list', {});
-      const { container, rows } = modelsFrom(list);
-      out.modelList = {
-        shape: shapeOf(list),
-        container,
-        count: rows.length,
-        models: rows.map(modelRow),
-        defaults: rows.map(modelRow).filter((r) => r.isDefault).map((r) => r.id),
-      };
+      out.modelDefaults = defaultModels(await conn.request('model/list', {}));
     } catch (err) {
       out.errors.push({ method: 'model/list', message: (err && err.message) || String(err), code: (err && err.code) || null });
     }
@@ -248,7 +221,7 @@ async function capture() {
 
   return {
     fixture: fixtureFrom({ found, versionText, handshake, capturedAt: new Date().toISOString() }),
-    modelDefaults: handshake.modelList ? handshake.modelList.defaults : [],
+    modelDefaults: handshake.modelDefaults,
   };
 }
 
@@ -272,9 +245,8 @@ function fixtureFrom({ found, versionText, handshake, capturedAt }) {
       declaredMethods: handshake.declaredMethods,
     },
     doplRequires: {
-      note: 'THIS BLOCK IS NOT A MEASUREMENT — it is Dopl\'s own requirement, mirrored from `main/runtime/codex/client.js` (REQUIRED_METHODS / REQUIRED_FACTS) so the contract suite can prove the two have not drifted.',
+      note: 'THIS BLOCK IS NOT A MEASUREMENT — it is Dopl\'s own requirement, mirrored from `main/runtime/codex/protocol.js › REQUIRED_METHODS` so the contract suite can prove the two have not drifted.',
       methods: client.REQUIRED_METHODS.slice(),
-      facts: client.REQUIRED_FACTS.map((f) => f.key),
     },
   };
 }
@@ -283,27 +255,14 @@ function fixtureFrom({ found, versionText, handshake, capturedAt }) {
 
 function advise(fixture, modelDefaults) {
   const detected = fixture.cli.version;
-  const pinned = client.SUPPORTED_CLI;
   const lines = ['', `codex:schema — measured ${detected} at ${fixture.cli.path} (${fixture.cli.source}).`];
-  if (!pinned.min && !pinned.max) {
-    const parsed = client.parseVersion(detected);
-    const shown = parsed ? parsed.join('.') : String(detected);
-    lines.push('');
-    lines.push('⚠ `SUPPORTED_CLI` in main/runtime/codex/client.js is still UNPINNED, so the version');
-    lines.push('  gate refuses nothing. Now that a real CLI has been measured, pin it:');
-    lines.push('');
-    lines.push(`      const SUPPORTED_CLI = Object.freeze({ min: '${shown}', max: null, measuredFrom: '${shown}' });`);
-  }
-  // `capture()` has already refused application-bundle paths. Keep this assertion-like warning
-  // as a second fence in case a future capture path stops going through that function.
-  if (excludedFixtureSource(fixture.cli.path)) {
-    lines.push('', '🔒 ⚠ REFUSED SOURCE: a bundled private executable cannot define the fixture.');
-  }
+  const floor = client.versionGate(detected);
+  if (!floor.ok) lines.push('', `⚠ Dopl refuses this CLI: ${floor.reason}`);
   const declared = fixture.handshake.declaredMethods;
   if (!declared) {
     lines.push('');
     lines.push('⚠ This CLI declared NO method list — neither `generate-json-schema` nor `initialize`');
-    lines.push('  produced one, so the gate can only report `unverified-protocol`.');
+    lines.push('  produced one, so the contract suite cannot check the methods Dopl sends.');
   } else {
     const have = new Set(declared.names);
     const absent = client.REQUIRED_METHODS.filter((m) => !have.has(m));

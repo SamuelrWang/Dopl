@@ -23,7 +23,8 @@
 // already by being restated.
 
 const { MCP_URL } = require('../../config');
-const { normalizeProfile } = require('../../tool-profiles');
+const { normalizeProfile, DOPL_CHANNEL_TOOL } = require('../../tool-profiles');
+const { shortDoplName } = require('./tools');
 
 // The env vars the spawned child carries. ⚠ NAMES ONLY IN ARGV; the values are in the child's env.
 // `*_TOKEN` so Codex's own `*TOKEN*` default exclude also matches it where that exclude is on.
@@ -63,7 +64,7 @@ const RUNTIME_HEADERS = {
 const STARTUP_TIMEOUT_SEC = 10;
 
 // The channel tool's bare, server-local name — `enabled_tools` and the per-tool policy both use it.
-const CHANNEL_TOOL = 'dopl_channel';
+const CHANNEL_TOOL = shortDoplName(DOPL_CHANNEL_TOOL);
 
 // ⚠ THE KEY DOPL MOUNTS ITS OWN SERVER UNDER, AND THE ONE DEFINITION OF IT. `launch-spec.js ›
 // buildLaunchSpec` writes `config.mcp_servers.<SERVER_KEY>`, and `server-requests.js` compares an

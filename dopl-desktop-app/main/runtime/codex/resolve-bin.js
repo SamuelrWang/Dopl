@@ -222,13 +222,13 @@ function inspectCandidate(file, io, uid) {
   try {
     resolved = io.realpathSync(file);
   } catch (_) {
-    return { ok: false, reason: 'not found' };
+    return { ok: false, missing: true, reason: 'not found' };
   }
   let st;
   try {
     st = io.statSync(resolved);
   } catch (_) {
-    return { ok: false, reason: 'not found' };
+    return { ok: false, missing: true, reason: 'not found' };
   }
   if (!st.isFile()) return { ok: false, reason: 'not a regular file' };
   try {
@@ -306,7 +306,7 @@ function resolveWith({ env, home, io, uid, execPath, platform, arch, resolvePack
       const found = direct && direct.ok ? direct.path : verdict.path;
       return { ok: true, path: found, source, reason: '', rejected };
     }
-    if (verdict.reason !== 'not found') rejected.push({ path: file, reason: verdict.reason });
+    if (!verdict.missing) rejected.push({ path: file, reason: verdict.reason });
     return null;
   };
 

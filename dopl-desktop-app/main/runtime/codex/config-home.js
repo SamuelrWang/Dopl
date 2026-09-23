@@ -82,7 +82,7 @@ function linkAuth(source, target) {
   try {
     const current = fs.lstatSync(target);
     if (!current.isSymbolicLink()) {
-      throw new Error('Dopl private Codex home contains an unexpected auth.json');
+      throw new Error(`Dopl private Codex home contains an unexpected auth.json (${target})`);
     }
     if (path.resolve(fs.realpathSync(target)) === path.resolve(fs.realpathSync(source))) return;
     // Only the app-owned link is replaced; the credential file it points at is never removed.
@@ -105,7 +105,7 @@ function isolatedEnv(env, userDataRoot) {
   try { fs.chmodSync(target, 0o700); } catch (_) { /* best effort on non-POSIX filesystems */ }
   retireCodexTrustFile(target);
   if (hasAmbientConfig(target)) {
-    throw new Error('Dopl private Codex home contains config.toml; refusing an unisolated launch');
+    throw new Error(`Dopl private Codex home contains config.toml; refusing an unisolated launch (${target})`);
   }
   const auth = path.join(sourceHome(input, target), 'auth.json');
   linkAuth(auth, path.join(target, 'auth.json'));

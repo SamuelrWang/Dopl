@@ -88,6 +88,10 @@ function skillName(file) {
 function skillsFence(opts) {
   const files = [];
   for (const root of skillRoots(opts)) findSkillFiles(root, 0, files);
+  // Past the cap, later skills are unfenced; say so rather than truncate silently (CX-31).
+  if (files.length >= MAX_SKILLS && opts && typeof opts.log === 'function') {
+    opts.log('codex: skills fence hit its cap of', MAX_SKILLS, 'SKILL.md files — any beyond it are not fenced');
+  }
   const paths = new Set();
   const names = new Set();
   for (const f of files) {

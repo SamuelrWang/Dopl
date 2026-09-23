@@ -24,6 +24,8 @@
 
 const { spawn, execFile } = require('child_process');
 const resolveBin = require('./resolve-bin');
+// The compatibility floor + required methods, re-exported below for the schema script and suites.
+const protocol = require('./protocol');
 
 // ── THE BINARY ───────────────────────────────────────────────────────────────────────────────
 
@@ -46,40 +48,32 @@ const PROBE_TIMEOUT_MS = 5000;
  */
 function probe() {
   return new Promise((resolve) => {
-    // ⚠ THE RESOLVER ANSWERS FIRST, and its refusal is the one an operator can act on: "not
-    // installed where Dopl can find it" and "found but group-writable" are different problems, and
-    // an errno from `execFile` is neither.
+    // The resolver answers first: "not installed where Dopl can find it" and "found but
+    // group-writable" are different problems, and an errno from `execFile` is neither.
     const found = resolveBin.resolveCodexBin();
     if (!found.ok) {
       resolve({ ok: false, reason: found.reason, version: null, path: null, source: null });
       return;
     }
-    let done = false;
-    const finish = (value) => {
-      if (!done) { done = true; resolve(Object.assign({ path: found.path, source: found.source }, value)); }
-    };
-    const timer = setTimeout(() => finish({
-      ok: false,
-      reason: `\`${found.path}\` did not answer \`${BIN} --version\` within ${PROBE_TIMEOUT_MS}ms — Dopl cannot start a Codex session on this Mac.`,
-      version: null,
-    }), PROBE_TIMEOUT_MS);
+    const finish = (value) => resolve(Object.assign({ path: found.path, source: found.source }, value));
     try {
       execFile(found.path, ['--version'], { timeout: PROBE_TIMEOUT_MS }, (err, stdout) => {
-        clearTimeout(timer);
         if (err) {
-          // ⚠ IT RESOLVED AND THEN FAILED TO RUN — an unsupported build, a quarantined download, a
-          // broken toolchain shim. Naming the file is the whole value of saying so.
           finish({
             ok: false,
-            reason: `\`${found.path}\` could not answer \`${BIN} --version\`: ${(err && err.message) || err}`,
+            reason: err.killed
+              ? `\`${found.path}\` did not answer \`${BIN} --version\` within ${PROBE_TIMEOUT_MS}ms — Dopl cannot start a Codex session on this Mac.`
+              : `\`${found.path}\` could not answer \`${BIN} --version\`: ${(err && err.message) || err}`,
             version: null,
           });
           return;
         }
-        finish({ ok: true, reason: '', version: String(stdout || '').trim() || null });
+        const version = String(stdout || '').trim() || null;
+        // The measured floor: an older CLI would die at clap or the protocol with an unreadable error.
+        const floor = protocol.versionGate(version);
+        finish({ ok: floor.ok, reason: floor.reason, version });
       });
     } catch (err) {
-      clearTimeout(timer);
       finish({ ok: false, reason: `\`${found.path}\` could not be started: ${(err && err.message) || err}`, version: null });
     }
   });
@@ -112,6 +106,7 @@ function makeLineReader(onLine) {
 // is a real error and is rejected immediately — retrying a refusal is how a gate decision comes to
 // be asked twice.
 const OVERLOADED_CODE = -32001;
+const INTERNAL_ERROR_CODE = -32603;
 // How long after `exit` the stdout tail may still drain before the end is reported anyway.
 const CLOSE_GRACE_MS = 2000;
 const RETRY_BASE_MS = 120;
@@ -185,19 +180,16 @@ function connect(opts) {
     // produce an explicit reply rather than silence.
     if (msg.id != null && typeof msg.method === 'string') {
       Promise.resolve()
-        .then(() => (typeof o.onServerRequest === 'function'
-          ? o.onServerRequest(msg)
-          : { decision: 'decline', message: 'no approval handler on this session' }))
+        .then(() => {
+          if (typeof o.onServerRequest !== 'function') throw new Error('no approval handler on this connection');
+          return o.onServerRequest(msg);
+        })
         .then((answer) => write({ jsonrpc: '2.0', id: msg.id, result: answer }))
         .catch((err) => {
-          log('codex app-server: approval handler threw —', (err && err.message) || err, '(declining)');
-          if (err && Number.isInteger(err.rpcCode)) {
-            write({ jsonrpc: '2.0', id: msg.id, error: { code: err.rpcCode, message: err.message } });
-            return;
-          }
-          // ⚠ FAIL CLOSED. A handler that throws is a gate that did not answer, and the only safe
-          // answer to a question nobody answered is no.
-          write({ jsonrpc: '2.0', id: msg.id, result: { decision: 'decline', message: 'Denied by operator' } });
+          log('codex app-server: server request refused —', (err && err.message) || err);
+          // A JSON-RPC error is valid for every method; a guessed result shape could hang the turn.
+          const code = err && Number.isInteger(err.rpcCode) ? err.rpcCode : INTERNAL_ERROR_CODE;
+          write({ jsonrpc: '2.0', id: msg.id, error: { code, message: (err && err.message) || 'refused' } });
         });
       return;
     }
@@ -312,20 +304,12 @@ function initializeParams(version) {
   };
 }
 
-// ── THE COMPATIBILITY GATE ─── `protocol.js` (the checks); re-exported here for its callers.
-const protocol = require('./protocol');
-
 module.exports = {
-  BIN, probe, connect, initializeParams,
-  makeLineReader, // exported for the framing fixtures
-  CLIENT_NAME, CLIENT_TITLE, OVERLOADED_CODE, PROBE_TIMEOUT_MS,
-  // The compatibility gate (U1), `protocol.js`.
-  PROTOCOL_STATE: protocol.PROTOCOL_STATE,
+  probe, connect, initializeParams,
+  makeLineReader, // the framing fixtures
+  CLIENT_NAME,
   REQUIRED_METHODS: protocol.REQUIRED_METHODS,
-  REQUIRED_FACTS: protocol.REQUIRED_FACTS,
   SUPPORTED_CLI: protocol.SUPPORTED_CLI,
-  checkProtocol: protocol.checkProtocol,
   versionGate: protocol.versionGate,
-  catalogGate: protocol.catalogGate,
   parseVersion: protocol.parseVersion,
 };

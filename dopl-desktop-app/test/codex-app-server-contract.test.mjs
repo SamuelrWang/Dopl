@@ -1,9 +1,9 @@
 // THE CODEX APP-SERVER COMPATIBILITY SUITE — U1's contract, in two tiers.
 //
 // 🔒 ⚠ **TIER 1 (ALWAYS RUNS) MEASURES DOPL. TIER 2 (OPT-IN) MEASURES CODEX.** They are not
-// interchangeable and this file never lets one stand in for the other. Tier 1 proves the GATE's
-// own logic — what `client.js › checkProtocol` does with a declared method list, with no list at
-// all, with extra members — using inputs that are labelled HYPOTHETICAL at every use. Tier 2 is
+// interchangeable and this file never lets one stand in for the other. Tier 1 proves Dopl's own
+// logic — the fixture's provenance, the method list, the version floor — using inputs that are
+// labelled HYPOTHETICAL at every use. Tier 2 is
 // the only thing here that touches a real `codex`, and it is the only thing allowed to say what
 // the protocol IS.
 //
@@ -35,23 +35,9 @@ import {
 
 const GATE = announceGate(liveGate());
 const FIXTURE = readFixture();
-const S = client.PROTOCOL_STATE;
 
-// ⚠ EVERY OBJECT BELOW IS A FUNCTION ARGUMENT, NOT A TRANSCRIPT. `hypothetical()` exists so that
-// nothing in this file can be mistaken for a captured wire shape by a later reader or a grep.
+// ⚠ EVERY OBJECT BELOW IS A FUNCTION ARGUMENT, NOT A TRANSCRIPT.
 const hypothetical = (value) => value;
-
-/**
- * A version the SUPPORTED_CLI floor accepts.
- *
- * ⚠ **THESE CASES ARE ABOUT METHODS AND FACTS, NOT ABOUT VERSIONS.** They used a placeholder
- * `'0.0.0'` while `SUPPORTED_CLI` was unpinned and it did not matter. It does now: pinning the
- * floor to the measured `0.155.1` (2026-09-22) made `0.0.0` fail the VERSION gate first, so seven
- * cases reported `unsupported-protocol` for a reason none of them was testing. Passing the
- * supported version keeps each case measuring the one gate it names — the version gate has its own
- * describe block below.
- */
-const SUPPORTED_VERSION = client.SUPPORTED_CLI.min || '0.0.0';
 
 // ══ TIER 1 — THE GATE'S OWN LOGIC, AND THE FIXTURE'S PROVENANCE ═════════════════════════════
 
@@ -84,128 +70,6 @@ describe('the fixture cannot lie about where it came from', () => {
     // ⚠ NOT A PROTOCOL CLAIM — it is Dopl's own requirement, and the fixture carries a copy so a
     // reviewer reading the fixture alone sees what the suite will demand of their CLI.
     assert.deepEqual(FIXTURE.doplRequires.methods, client.REQUIRED_METHODS.slice());
-    assert.deepEqual(FIXTURE.doplRequires.facts, client.REQUIRED_FACTS.map((f) => f.key));
-  });
-});
-
-describe('the compatibility gate separates missing, signed-out and unsupported', () => {
-  test('the four states are four distinct strings', () => {
-    const values = Object.values(S);
-    assert.equal(new Set(values).size, values.length);
-    assert.equal(S.UNSUPPORTED, 'unsupported-protocol');
-    assert.notEqual(S.UNSUPPORTED, S.MISSING);
-    assert.notEqual(S.UNSUPPORTED, S.SIGNED_OUT);
-  });
-
-  test('a server that declares everything Dopl needs is READY', () => {
-    const verdict = client.checkProtocol(hypothetical({
-      version: SUPPORTED_VERSION,
-      methods: client.REQUIRED_METHODS.slice(),
-      facts: { threadId: 'thread-1', modelDefault: 'a-model' },
-    }));
-    assert.equal(verdict.state, S.READY);
-    assert.equal(verdict.ok, true);
-  });
-
-  test('a MISSING METHOD is `unsupported-protocol`, names the method, and is NOT connected', () => {
-    for (const dropped of client.REQUIRED_METHODS) {
-      const verdict = client.checkProtocol(hypothetical({
-        version: SUPPORTED_VERSION,
-        methods: client.REQUIRED_METHODS.filter((m) => m !== dropped),
-        facts: { threadId: 't', modelDefault: 'm' },
-      }));
-      assert.equal(verdict.ok, false, `${dropped} missing must not be connected`);
-      assert.equal(verdict.state, S.UNSUPPORTED);
-      assert.deepEqual(verdict.missingMethods, [dropped]);
-      assert.match(verdict.reason, new RegExp(dropped.replace('/', '\\/')));
-    }
-  });
-
-  test('a MISSING CRITICAL FIELD is `unsupported-protocol` and says which, and why', () => {
-    for (const fact of client.REQUIRED_FACTS) {
-      const facts = { threadId: 't', modelDefault: 'm' };
-      delete facts[fact.key];
-      const verdict = client.checkProtocol(hypothetical({
-        version: SUPPORTED_VERSION, methods: client.REQUIRED_METHODS.slice(), facts,
-      }));
-      assert.equal(verdict.ok, false);
-      assert.equal(verdict.state, S.UNSUPPORTED);
-      assert.deepEqual(verdict.missingFacts.map((f) => f.key), [fact.key]);
-      assert.match(verdict.reason, new RegExp(fact.why.slice(0, 20)));
-    }
-    // An EMPTY STRING is a missing field, not a present one.
-    const blank = client.checkProtocol(hypothetical({
-      version: SUPPORTED_VERSION, methods: client.REQUIRED_METHODS.slice(), facts: { threadId: '', modelDefault: 'm' },
-    }));
-    assert.equal(blank.state, S.UNSUPPORTED);
-  });
-});
-
-describe('unknown is not empty, and extra is not a failure', () => {
-  test('EXTRA unknown methods are IGNORED — a newer server is not an incompatible one', () => {
-    const verdict = client.checkProtocol(hypothetical({
-      version: SUPPORTED_VERSION,
-      methods: client.REQUIRED_METHODS.concat(['thread/somethingNew', 'account/whatever']),
-      facts: { threadId: 't', modelDefault: 'm' },
-    }));
-    assert.equal(verdict.state, S.READY, 'unknown methods must not refuse a working server');
-  });
-
-  test('EXTRA unknown facts are IGNORED', () => {
-    const verdict = client.checkProtocol(hypothetical({
-      version: SUPPORTED_VERSION,
-      methods: client.REQUIRED_METHODS.slice(),
-      facts: { threadId: 't', modelDefault: 'm', somethingTheSchemaGrew: 42 },
-    }));
-    assert.equal(verdict.state, S.READY);
-  });
-
-  test('UNDECLARED (`null`) is `unverified-protocol`; DECLARED-EMPTY (`[]`) is `unsupported`', () => {
-    // 🔒 `docs/INVARIANTS.md`: unknown capability must stay different from an empty value. Folding
-    // `null` into `[]` refuses working installs; folding it into READY restores false confidence.
-    const undeclared = client.checkProtocol(hypothetical({ version: SUPPORTED_VERSION, methods: null, facts: { threadId: 't', modelDefault: 'm' } }));
-    assert.equal(undeclared.state, S.UNVERIFIED);
-    assert.equal(undeclared.ok, false, 'unverified is never connected');
-    assert.deepEqual(undeclared.missingMethods, []);
-
-    const empty = client.checkProtocol(hypothetical({ version: SUPPORTED_VERSION, methods: [], facts: { threadId: 't', modelDefault: 'm' } }));
-    assert.equal(empty.state, S.UNSUPPORTED);
-    assert.deepEqual(empty.missingMethods, client.REQUIRED_METHODS.slice());
-  });
-
-  test('no handshake at all is `unverified-protocol`, not `ready` and not `unsupported`', () => {
-    const verdict = client.checkProtocol(hypothetical({ version: SUPPORTED_VERSION, methods: client.REQUIRED_METHODS.slice(), facts: null }));
-    assert.equal(verdict.state, S.UNVERIFIED);
-    assert.match(verdict.reason, /no handshake was run/);
-  });
-});
-
-describe('the model catalog must declare exactly one default', () => {
-  const rows = (...flags) => flags.map((isDefault, i) => ({ id: `m-${i}`, isDefault }));
-
-  test('exactly one default is READY and names it', () => {
-    const verdict = client.catalogGate(hypothetical(rows(false, true, false)));
-    assert.equal(verdict.ok, true);
-    assert.deepEqual(verdict.defaults, ['m-1']);
-  });
-
-  test('zero and two defaults are both `unsupported-protocol`, with a countable reason', () => {
-    assert.equal(client.catalogGate(hypothetical(rows(false, false))).state, S.UNSUPPORTED);
-    const two = client.catalogGate(hypothetical(rows(true, true)));
-    assert.equal(two.state, S.UNSUPPORTED);
-    assert.match(two.reason, /declares 2 defaults/);
-  });
-
-  test('NO catalog read is `unverified`, an EMPTY catalog is `unsupported`', () => {
-    assert.equal(client.catalogGate(null).state, S.UNVERIFIED);
-    assert.equal(client.catalogGate([]).state, S.UNSUPPORTED);
-  });
-
-  test('the default flag is read tolerantly, because its spelling is not measured yet', () => {
-    for (const key of ['isDefault', 'is_default', 'default']) {
-      const verdict = client.catalogGate(hypothetical([{ id: 'x', [key]: true }, { id: 'y' }]));
-      assert.equal(verdict.ok, true, key);
-    }
   });
 });
 
@@ -216,6 +80,11 @@ describe('the version gate', () => {
     assert.equal(old.ok, false);
     assert.equal(old.verdict, 'too-old');
     assert.equal(client.versionGate(`codex-cli ${client.SUPPORTED_CLI.min}`).verdict, 'supported');
+  });
+
+  test('an unreadable version is refused, never waved through', () => {
+    assert.equal(client.versionGate(hypothetical('codex-cli nightly')).verdict, 'unreadable');
+    assert.equal(client.versionGate(null).ok, false);
   });
 
   test('a version string is parsed out of whatever the CLI prints around it', () => {
@@ -302,13 +171,12 @@ describe('live Codex app-server contract', () => {
       extra: (conn) => conn.request('model/list', {}),
     });
     assert.ok(result.initialize && typeof result.initialize === 'object', 'initialize returned an object');
-    const rows = (result.extra && (result.extra.models || result.extra.data || result.extra.items))
-      || (Array.isArray(result.extra) ? result.extra : null);
-    const verdict = client.catalogGate(rows);
-    assert.equal(verdict.ok, true, `model/list must declare exactly one default — ${verdict.reason}`);
+    const rows = (result.extra && Array.isArray(result.extra.data)) ? result.extra.data : [];
+    const defaults = rows.filter((row) => row && row.isDefault === true).map((row) => row.id);
+    assert.equal(defaults.length, 1, `model/list must declare exactly one default — got ${JSON.stringify(defaults)}`);
   });
 
-  test('an UNKNOWN METHOD is refused by the server and is NOT connected by the gate', async (t) => {
+  test('an UNKNOWN METHOD is refused by the server', async (t) => {
     if (skipLive(t, GATE)) return;
     const seen = await handshake({
       timeoutMs: 30000,
@@ -318,11 +186,6 @@ describe('live Codex app-server contract', () => {
       ),
     });
     assert.equal(seen.extra.refused, true, 'the app-server must refuse a method it does not have');
-    const verdict = client.checkProtocol({
-      version: GATE.bin.path, methods: ['initialize'], facts: { threadId: 't', modelDefault: 'm' },
-    });
-    assert.equal(verdict.ok, false);
-    assert.equal(verdict.state, client.PROTOCOL_STATE.UNSUPPORTED);
   });
 
   test('EXTRA unknown params in initialize are ignored, not treated as empty', async (t) => {

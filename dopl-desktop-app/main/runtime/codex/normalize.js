@@ -68,16 +68,13 @@ function itemOf(params) {
   return p;
 }
 
-const itemType = (item) => String((item && (item.type || item.item_type || item.itemType)) || '');
-const itemId = (item) => {
-  const id = item && (item.id || item.item_id || item.itemId);
-  return id == null ? '' : String(id);
-};
+const itemType = (item) => String((item && item.type) || '');
+const itemId = (item) => (item && item.id != null ? String(item.id) : '');
 
-/** The human text on an item, under any of the spellings an item might carry it. */
+/** The human text on an item: `text`, or a `content` / `summary` list. */
 function textOf(item, keys) {
   const i = item && typeof item === 'object' ? item : {};
-  for (const key of keys || ['text', 'message', 'content', 'delta']) {
+  for (const key of keys || ['text', 'content']) {
     const v = i[key];
     if (typeof v === 'string' && v) return v;
     if (Array.isArray(v)) {
@@ -94,9 +91,9 @@ function textOf(item, keys) {
 /** The arguments an item carries, if any — the thing a card is painted from. */
 function argsOf(item) {
   const i = item && typeof item === 'object' ? item : {};
-  // A v2 `commandExecution` carries its command line as a STRING (CX-13).
+  // A `commandExecution` carries its command line as a STRING (CX-13).
   if (typeof i.command === 'string' && i.command) return { command: i.command };
-  for (const key of ['arguments', 'args', 'input', 'params', 'command', 'changes']) {
+  for (const key of ['arguments', 'changes']) {
     if (i[key] && typeof i[key] === 'object') return i[key];
   }
   return {};
@@ -105,7 +102,7 @@ function argsOf(item) {
 /** The MCP tool name an item names, or '' — an item that is not a tool call names nothing. */
 function toolNameOf(item) {
   const i = item && typeof item === 'object' ? item : {};
-  for (const key of ['tool', 'toolName', 'tool_name', 'name']) {
+  for (const key of ['tool', 'name']) {
     if (typeof i[key] === 'string' && i[key]) return i[key];
   }
   return '';
@@ -118,15 +115,9 @@ function toolNameOf(item) {
 // ⚠ THE SPELLING SWEEP STAYS even though `descriptor.meter.fields` now names the four measured
 // spellings: the list is what THIS build measured, not a promise about every later CLI, and a
 // renamed field must still meter rather than read as zero.
-const TOTAL_KEYS = ['total_tokens', 'totalTokens', 'total'];
-const IN_KEYS = ['input_tokens', 'inputTokens', 'prompt_tokens', 'promptTokens'];
-const OUT_KEYS = ['output_tokens', 'outputTokens', 'completion_tokens', 'completionTokens'];
-
 function usageOf(params) {
   const p = params && typeof params === 'object' ? params : {};
-  if (p.usage && typeof p.usage === 'object') return p.usage;
-  if (p.turn && p.turn.usage && typeof p.turn.usage === 'object') return p.turn.usage;
-  return null;
+  return p.usage && typeof p.usage === 'object' ? p.usage : null;
 }
 
 function promptUsageOf(params) {
@@ -154,26 +145,14 @@ function promptUsageOf(params) {
 // frame core consumes, so the field can arrive as a `dopl/`-shaped sibling on `params` or still
 // nested on whichever usage block that layer forwards. A spelling this build has not seen reads as
 // ABSENT — `null`, never `0`: a window of zero would paint an empty gauge over a live session.
-const WINDOW_KEYS = ['modelContextWindow', 'model_context_window', 'contextWindow', 'context_window'];
-
 function windowFrom(params) {
-  const p = params && typeof params === 'object' ? params : {};
-  for (const src of [p, p.tokenUsage, p.promptUsage, p.usage, p.turn]) {
-    if (!src || typeof src !== 'object') continue;
-    for (const k of WINDOW_KEYS) {
-      const v = src[k];
-      if (typeof v === 'number' && Number.isFinite(v) && v > 0) return v;
-    }
-  }
-  return null; // this runtime told us nothing — NOT a window of zero
+  const v = params && params.contextWindow;
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null; // null, never a 0 window
 }
 
-function pick(usage, keys) {
-  for (const k of keys) {
-    const v = usage[k];
-    if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return v;
-  }
-  return 0;
+function count(usage, key) {
+  const v = usage[key];
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0;
 }
 
 /**
@@ -197,9 +176,9 @@ function pick(usage, keys) {
  */
 function tokensFrom(usage) {
   if (!usage || typeof usage !== 'object') return { prompt: 0, session: 0 };
-  const input = pick(usage, IN_KEYS);
-  const output = pick(usage, OUT_KEYS);
-  const total = pick(usage, TOTAL_KEYS);
+  const input = count(usage, 'inputTokens');
+  const output = count(usage, 'outputTokens');
+  const total = count(usage, 'totalTokens');
   return { prompt: input, session: total || (input + output) };
 }
 
@@ -209,8 +188,8 @@ function tokensFrom(usage) {
 // item shape a later CLI adds would make a session look like it did nothing between two turns,
 // which is a worse failure than a card whose summary is thin. Only an item with no id at all is
 // dropped, because a card that can never be filled by its own result is noise.
-const MESSAGE_TYPES = ['agentMessage', 'agent_message', 'assistantMessage', 'message'];
-const THINKING_TYPES = ['reasoning', 'thinking', 'agentReasoning', 'agent_reasoning'];
+const MESSAGE_TYPES = ['agentMessage'];
+const THINKING_TYPES = ['reasoning'];
 
 function startedEvents(item, ctx) {
   const id = itemId(item);
@@ -236,7 +215,7 @@ function completedEvents(item, ctx) {
   // SUCCESS, because a false negative here retracts an `outbound_post` the operator already saw
   // sent (the reducer un-counts a post on a failing result) — claiming a delivered message failed
   // is worse than missing a failure. A `declined` command/patch did not run.
-  const status = String((item && (item.status || item.outcome)) || '');
+  const status = String((item && item.status) || '');
   const ok = !(item && item.error) && status !== 'failed' && status !== 'error' && status !== 'declined';
   const errorText = item && item.error && typeof item.error.message === 'string' ? item.error.message : '';
   return [events.toolResult({
@@ -275,7 +254,7 @@ function normalize(msg, ctx) {
   if (method === THREAD_STARTED) {
     // The conversation handle every resume depends on, plus the model the platform really picked
     // (the picker asked; the platform decides).
-    return [events.launched(params.threadId || params.thread_id || null, params.model || null)];
+    return [events.launched(params.threadId || null, params.model || null)];
   }
 
   if (method === 'item/started') return startedEvents(itemOf(params), context);
@@ -285,7 +264,7 @@ function normalize(msg, ctx) {
     const usage = usageOf(params);
     const t = tokensFrom(usage);
     const prompt = tokensFrom(promptUsageOf(params));
-    const model = (params.model || (params.turn && params.turn.model)) || null;
+    const model = params.model || null;
     const out = [];
     // ⚠ PER-TURN, NOT PER-MESSAGE, AND THAT IS `descriptor.meter.mode`. This runtime reports usage
     // once a turn ends (`codex-research.md` §3: "not a live running meter"), so the context event
