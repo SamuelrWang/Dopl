@@ -86,27 +86,33 @@ test("a frozen roster is read INLINE and is never `loading`", () => {
   assert.equal(catalog.snapshot(claude).status, "ready", "a table lookup has no loading state");
 });
 
-test("`invalidate` makes a catalog STALE — models kept, status changed, and it re-reads", async () => {
+test("RC-02: `invalidate` on a READY catalog keeps it READY (still selectable) and re-reads it", async () => {
+  // It used to flip READY to `stale`; the renderer re-polls only `loading`, so the picker stayed
+  // unselectable until the window lost and regained focus. The look that starts the re-read now
+  // answers what it held.
   const catalog = loadCatalog();
   let version = "1.0.0";
-  const codex = adapter(CODEX_DESCRIPTOR, async () =>
-    loadCodexModels(fakeClient([{ data: [row(`gpt-${version}`, { isDefault: true })] }], { version })).models());
+  let reads = 0;
+  const codex = adapter(CODEX_DESCRIPTOR, async () => {
+    reads += 1;
+    return loadCodexModels(fakeClient([{ data: [row(`gpt-${version}`, { isDefault: true })] }], { version })).models();
+  });
   catalog.snapshot(codex);
   await settle();
   assert.equal(catalog.snapshot(codex).status, "ready");
+  assert.equal(reads, 1);
 
   assert.equal(catalog.invalidate("codex", "the Codex CLI was upgraded"), true);
-  const stale = catalog.snapshot(codex);
-  // ⚠ THE MODELS SURVIVE. A stale catalog still LABELS a historical session's model honestly;
-  // what it may not do is offer one for a NEW pick — the renderer's `selectableModels` rule.
-  assert.deepEqual(stale.models.map((m) => m.id), ["gpt-1.0.0"]);
-  assert.match(stale.reason, /upgraded/);
-  assert.equal(["stale", "ready"].includes(stale.status), true);
-
   version = "2.0.0";
+  const during = catalog.snapshot(codex);
+  assert.equal(during.status, "ready", "never `stale` just because a re-read was asked for");
+  assert.deepEqual(during.models.map((m) => m.id), ["gpt-1.0.0"], "the held models keep labelling");
   await settle();
   await settle();
-  assert.deepEqual(catalog.snapshot(codex).models.map((m) => m.id), ["gpt-2.0.0"], "re-read after invalidate");
+  assert.equal(reads, 2, "the invalidation really re-read");
+  const after = catalog.snapshot(codex);
+  assert.equal(after.status, "ready");
+  assert.deepEqual(after.models.map((m) => m.id), ["gpt-2.0.0"], "re-read after invalidate");
 });
 
 test("a REFRESH that fails over a roster we already hold is `stale`, not `unavailable`", async () => {

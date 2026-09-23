@@ -30,6 +30,8 @@ const TTL_MS = 60000;
 let cache = null;
 /** The sweep in flight, so N concurrent posture reads run ONE probe rather than N. */
 let inflight = null;
+/** Bumped by `expire`: a sweep that started before a change stamps its answer due (RC-14). */
+let generation = 0;
 
 /**
  * One adapter's answer, bounded and reduced to a boolean.
@@ -57,6 +59,7 @@ function leashed(call) {
 }
 
 async function sweep(list) {
+  const started = generation;
   // ⚠ `allSettled`, NOT `all`: one adapter that rejects must not decide the answer for the other
   // two. The leash already reduces each entry, so this is the belt for a throw thrown OUTSIDE it.
   const settled = await Promise.allSettled(
@@ -74,7 +77,8 @@ async function sweep(list) {
   }
   // ⚠ STAMPED WHEN THE SWEEP ENDS, not when it began: a sweep that spent its whole leash must
   // still stand for a full TTL rather than expiring the moment it lands.
-  cache = { at: Date.now(), ids: Object.freeze(ids) };
+  // A sweep that began before an `expire` answers its own callers but must not stand for a TTL.
+  cache = { at: generation === started ? Date.now() : 0, ids: Object.freeze(ids) };
   return cache.ids;
 }
 
@@ -97,6 +101,7 @@ function connectedIds(adapters) {
 function resetConnectivityCache() {
   cache = null;
   inflight = null;
+  generation += 1;
 }
 
 /**
@@ -113,6 +118,7 @@ function resetConnectivityCache() {
  */
 function expire() {
   cache = null;
+  generation += 1;
 }
 
 module.exports = { connectedIds, resetConnectivityCache, expire, LEASH_MS, TTL_MS };
