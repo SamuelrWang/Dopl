@@ -43,77 +43,8 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const input = await parseJson(request, LaunchCreateSchema);
     const ctx = buildChannelContext(auth);
-    const result = await createLaunchDirective(ctx, {
-      channel: input.channel,
-      threadId: input.threadId,
-      goal: input.goal,
-      model: input.model,
-      // ⚠ **WHICH RUNTIME, AND IT IS A SEPARATE FIELD FROM `model` ON PURPOSE** (2026-09-21,
-      // U9). `runtime` picks the ADAPTER; `model` picks a model INSIDE it, and neither is ever
-      // derived from the other — a live MCP launch carrying `model: "codex"` was accepted and
-      // started a Claude Sonnet agent, which is the defect the field closes.
-      // ⚠ THE SERVER BOUNDS ITS SHAPE AND DECIDES NOTHING ELSE: the roster is the operator's
-      // desktop registry, so an explicit runtime that machine cannot start is REFUSED there
-      // (`no-sdk`) rather than swapped for another vendor. Absent follows the documented chain.
-      runtime: input.runtime,
-      // ⚠ A REF (id OR exact name), resolved in the service under THIS caller's
-      // visibility. An ambiguous name is a 409 `AGENT_IDENTITY_AMBIGUOUS` whose
-      // `details.matches` lists every row the caller can already see; an
-      // unresolvable one is a 404 `AGENT_IDENTITY_NOT_FOUND`, the same code and
-      // the same shape `/api/agent-identities/[id]/resolve` answers.
-      identity: input.identity,
-      // ⚠ **THE POSTURE IS PASSED THROUGH AND IS NOT A GRANT** (T24, 2026-09-01).
-      // The two axes and the chain are a REQUEST: the operator's machine clamps
-      // each axis to that operator's own stored channel posture and REFUSES a
-      // chain the channel forbids (`main/launch-posture.js › resolveLaunch`).
-      // ⚠ THE SERVER CANNOT VERIFY THAT ANY MORE THAN IT CAN VERIFY THE TOGGLE
-      // ABOVE — the ceiling is an `electron-store` record — which is exactly why
-      // nothing here tries, and why no operator carve-out may be added.
-      tools: input.tools,
-      messages: input.messages,
-      // ⚠ NOT COLLAPSED WITH `||` — the row is a faithful record of what was
-      // sent, and since 2026-09-01 all three states are also HONOURED: `true`
-      // asks chaining on (refused where the channel forbids it), `false` asks it
-      // OFF and wins even over a channel set to ON (narrowing is never refused),
-      // and an omission inherits the channel setting. `schema-launch.ts › chain`
-      // carries the fix, which removed the flattening in
-      // `main/launch-directive-wire.js › directiveFrom`.
-      chain: input.chain,
-      // ⚠ **THE IDEMPOTENCY KEY, AND IT IS THE ONLY REASON A TIMED-OUT LAUNCH IS
-      // RETRYABLE** (2026-09-02, A10/G10). Re-sending it returns the stored
-      // directive — `result.existing` — instead of filing a second row and
-      // starting a second agent on the same work. Absent is the ordinary case and
-      // is the pre-A10 behaviour byte for byte.
-      clientMsgId: input.clientMsgId,
-      // ⚠ **THE COLOUR AND THE NAME, AND THEY ARE HERE BECAUSE THEY WERE NOT**
-      // (F-708, 2026-09-16). This handler enumerates the service input FIELD BY
-      // FIELD, so a field added to `LaunchCreateSchema` and to
-      // `CreateLaunchDirectiveInput` is validated on the way in, typed at the
-      // far end, and DROPPED HERE — silently, because a missing optional
-      // property is not a type error. `color` (2026-09-13) and `agentName`
-      // (2026-09-15) both landed that way.
-      //
-      // ⚠ **WHAT THE OMISSION LOOKED LIKE IN THE FIELD, because it is the
-      // reason this comment is long.** `agentName` reached the zod schema, the
-      // service, the column, the claim DTO, the wire narrowing and the spawn's
-      // `commitRename` — every layer was built — and the row still stored
-      // `NULL`. The desktop therefore applied its older-client fallback,
-      // `New Agent` (`main/launch-directive-spawn.js`), the uniqueness rule
-      // suffixed the second and third of them, and the @-picker minted
-      // `new-agent`, `new-agent-1` FROM THAT — a slug derived from a default
-      // nobody asked for, which is the inversion Samuel's ruling forbids (the
-      // NAME is authoritative, the slug is derived from it, never the reverse).
-      // Meanwhile `channel-ops-launch.ts` reported `name=@dopl-reader-main`,
-      // because its echo falls back to the REQUEST when the machine reports no
-      // applied name — so the launch looked like it had worked.
-      //
-      // ⚠ **THE GUARD IS `launch-directives-route-forwards.test.ts`**, which
-      // reads THIS file's source and fails when a `LaunchCreateSchema` key is
-      // not forwarded. A field list in a handler is a place fields go missing
-      // once; the test is what makes it once.
-      color: input.color,
-      agentName: input.agentName,
-    });
+    // ⚠ PASSED THROUGH WHOLE: a hand-enumerated field list dropped validated fields (F-708).
+    const result = await createLaunchDirective(ctx, input);
     // ⚠ 200 WITH `offline: true`, NOT AN ERROR STATUS. Nothing failed: the
     // server looked, the operator's machine is not listening, and NO ROW WAS
     // CREATED. A 4xx/5xx here would make the MCP op render a fault for the most

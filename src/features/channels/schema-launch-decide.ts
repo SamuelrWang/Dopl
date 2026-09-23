@@ -117,7 +117,7 @@ export const LaunchDecideSchema = z.discriminatedUnion("status", [
       .trim()
       .regex(LAUNCH_RUNTIME_ID_RE, LAUNCH_RUNTIME_ID_MESSAGE)
       .optional(),
-    appliedModel: z.string().trim().min(1).max(120).optional(),
+    appliedModel: safeLabel("Model", 120).optional(),
   }),
   // ⚠ THE NON-LAUNCH KINDS' SUCCESS, 2026-09-01. It carries NO agent id: an end
   // and a rename both NAME their target in the row already (`target_agent_id`),

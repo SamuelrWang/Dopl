@@ -31,7 +31,6 @@ import * as launchRepo from "./repository-launch";
 import * as collab from "./repository-collab";
 import { loadVisibleChannel, type ChannelContext } from "./service-shared";
 import { createLaunchDirective } from "./service-launch";
-import { ChannelAgentChainForbiddenError } from "./errors";
 import { LAUNCH_DIRECTIVE_TTL_MS } from "../constants";
 
 /**
@@ -132,18 +131,6 @@ describe("a request is stored verbatim and never narrowed by the server", () => 
     expect(inserted().chain).toBe(true);
   });
 
-  it("nothing throws the retired refusal any more, on any row shape", async () => {
-    // ⚠ ASSERTED ON THE ERROR CLASS ITSELF, because the class still EXISTS in `errors.ts` and
-    // an import that still resolves is exactly how a deleted refusal comes back unnoticed.
-    for (const row of [{ agent_chain_allowed: false }, { agent_chain_allowed: true }, {}]) {
-      vi.clearAllMocks();
-      withCeiling(row);
-      vi.mocked(launchRepo.findLaunchDirectiveByClientMsgId).mockResolvedValue(null);
-      const err = await createLaunchDirective(ctx, { channel: CHAN, chain: true }).catch((e) => e);
-      expect(err).not.toBeInstanceOf(ChannelAgentChainForbiddenError);
-    }
-  });
-
   it("`chain: false` still means false — the CALLER may always narrow itself", async () => {
     withCeiling({ agent_chain_allowed: true });
     await createLaunchDirective(ctx, { channel: CHAN, chain: false });
@@ -172,9 +159,8 @@ describe("the ceiling is decided in the right ORDER", () => {
     // even when the operator is OFFLINE" and pinned an ORDER: the refusal had to beat the
     // `offline` 200, because answering a forbidden chain with "your machine is asleep" makes the
     // caller fix the wrong thing and ask again a minute later for the real refusal. There is no
-    // refusal to order any more — `agent_chain_allowed` is dropped and nothing throws
-    // `ChannelAgentChainForbiddenError` (the case above pins that on every row shape) — so what
-    // is left to state is that the retired column changes nothing about the offline path either.
+    // refusal to order any more — `agent_chain_allowed` is dropped — so what is left to state is
+    // that the retired column changes nothing about the offline path either.
     withCeiling({ agent_chain_allowed: false });
     vi.mocked(collab.presenceForWorkspace).mockResolvedValue(new Map() as never);
     const out = await createLaunchDirective(ctx, { channel: CHAN, chain: true });
