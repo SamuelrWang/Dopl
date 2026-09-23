@@ -100,7 +100,7 @@ async function turn(o) {
   const cwd = o.cwd || join(home, 'cwd');
   mkdirSync(cwd, { recursive: true });
   const env = { ...process.env, CODEX_HOME: home, [mcp.BEARER_ENV]: 'parity-bearer', [mcp.WORKSPACE_ENV]: 'ws', [mcp.SESSION_ENV]: 'slot', ...(o.env || {}) };
-  const args = o.catalog ? catalog.catalogArgs(catalog.writeDelegationFreeCatalog(home, { bin: resolveBin.resolveCodexBin().path, env })) : [];
+  const args = o.catalog ? catalog.catalogArgs(await catalog.writeDelegationFreeCatalog(home, { bin: resolveBin.resolveCodexBin().path, env })) : [];
   const items = []; const serverReqs = []; const asked = [];
   let started = null; let loaded = null;
   const ts = JSON.parse(JSON.stringify(o.threadStart));
@@ -337,7 +337,7 @@ describe('TIER 2 — a real model on `never` posts through the gate, with the fe
         await conn.request('model/list', {});
       });
       assert.ok(catalog.readCache(env.CODEX_HOME), 'model/list wrote the cache the catalog reads');
-      const args = catalog.catalogArgs(catalog.writeDelegationFreeCatalog(env.CODEX_HOME, { bin, env }));
+      const args = catalog.catalogArgs(await catalog.writeDelegationFreeCatalog(env.CODEX_HOME, { bin, env }));
       await withAppServer({
         timeoutMs: 230000,
         connect: () => client.connect({

@@ -110,7 +110,7 @@ async function turn(o) {
   mkdirSync(cwd, { recursive: true });
   if (o.plant) o.plant(home);
   const env = { ...process.env, CODEX_HOME: home, CODEX_SQLITE_HOME: home, [mcp.BEARER_ENV]: 'c26', [mcp.WORKSPACE_ENV]: 'ws', [mcp.SESSION_ENV]: 'slot' };
-  const args = catalog.catalogArgs(catalog.writeDelegationFreeCatalog(home, { bin: resolveBin.resolveCodexBin().path, env }));
+  const args = catalog.catalogArgs(await catalog.writeDelegationFreeCatalog(home, { bin: resolveBin.resolveCodexBin().path, env }));
   const ts = o.threadStart;
   ts.config.projects = configHome.projectTrustFence(cwd);
   if (ts.config.mcp_servers) ts.config.mcp_servers.dopl.url = dopl.url;

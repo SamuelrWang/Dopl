@@ -34,11 +34,11 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { execFile } = require('child_process');
 
 const CACHE_FILE = 'models_cache.json';
 const CATALOG_FILE = 'dopl-model-catalog.json';
-const BUNDLED_TIMEOUT_MS = 10000;
+const DEBUG_MODELS_TIMEOUT_MS = 10000;
 
 function usableModels(parsed) {
   const models = parsed && Array.isArray(parsed.models) ? parsed.models : null;
@@ -50,16 +50,22 @@ function readCache(home) {
   try { return usableModels(JSON.parse(fs.readFileSync(path.join(home, CACHE_FILE), 'utf8'))); } catch (_) { return null; }
 }
 
+// Asynchronous: a launch runs on the Electron main thread, and two 10s child reads there froze
+// every window (CX-09).
 function readDebug(bin, env, bundled) {
-  if (!bin) return null;
-  try {
-    const out = execFileSync(bin, ['debug', 'models'].concat(bundled ? ['--bundled'] : []), {
-      env, encoding: 'utf8', timeout: BUNDLED_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024,
-    });
-    return usableModels(JSON.parse(out));
-  } catch (_) {
-    return null;
-  }
+  if (!bin) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    try {
+      execFile(bin, ['debug', 'models'].concat(bundled ? ['--bundled'] : []), {
+        env, encoding: 'utf8', timeout: DEBUG_MODELS_TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024,
+      }, (err, out) => {
+        if (err) { resolve(null); return; }
+        try { resolve(usableModels(JSON.parse(out))); } catch (_) { resolve(null); }
+      });
+    } catch (_) {
+      resolve(null);
+    }
+  });
 }
 
 /** Codex's catalog with native delegation removed from every model. */
@@ -67,16 +73,16 @@ function delegationFree(models) {
   return models.map((m) => Object.assign({}, m, { multi_agent_version: null }));
 }
 
-function pickModels(home, o) {
+async function pickModels(home, o) {
   const want = typeof o.model === 'string' ? o.model.trim() : '';
   const has = (ms) => !!ms && (!want || ms.some((m) => m.slug === want));
   const cached = readCache(home);
   if (has(cached)) return cached;
   // Offline before online: the catalog this binary ships knows its own slugs, and a launch should
   // not wait on the network for a model it already describes.
-  const bundled = readDebug(o.bin, o.env, true);
+  const bundled = await readDebug(o.bin, o.env, true);
   if (has(bundled)) return bundled;
-  const fresh = readDebug(o.bin, o.env, false);
+  const fresh = await readDebug(o.bin, o.env, false);
   if (has(fresh)) return fresh;
   // ⚠ **A NAMED MODEL NO SOURCE KNOWS IS REFUSED, NOT DEGRADED (2026-09-22).** This answered
   // `cached || bundled || fresh` — a catalog WITHOUT the session's model — and the override then
@@ -90,13 +96,14 @@ function pickModels(home, o) {
 }
 
 /**
- * Write the fenced catalog into the private home and answer its path.
+ * Write the fenced catalog into the private home and resolve its path; REJECTS when no usable
+ * catalog exists (the launch must fail rather than delegate).
  * `opts.bin` — the resolved codex binary (for the fallbacks); `opts.env` — its environment;
  * `opts.model` — the session's model slug, `''` for the platform's pick.
  */
-function writeDelegationFreeCatalog(home, opts) {
+async function writeDelegationFreeCatalog(home, opts) {
   const o = opts || {};
-  const models = pickModels(home, o);
+  const models = await pickModels(home, o);
   if (models && models.missing) {
     throw new Error(`Codex's own model catalog has no entry for "${models.missing}" (checked its cache, `
       + 'its built-in list and a fresh fetch), so Dopl cannot turn off Codex\'s own sub-agents for it '

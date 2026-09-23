@@ -195,15 +195,15 @@ test("the funnel FAILS OPEN when the roster cannot be read — never a refusal o
 
 // ── 7. CODEX: THE DELEGATION FENCE NEVER DEGRADES A NAMED MODEL ──────────────────────────────
 
-test("Codex: a named model NO catalog source knows REFUSES the launch rather than run on generic defaults", () => {
+test("Codex: a named model NO catalog source knows REFUSES the launch rather than run on generic defaults", async () => {
   const catalog = require("../main/runtime/codex/catalog.js");
   const home = mkdtempSync(join(tmpdir(), "dopl-cat-"));
   try {
     writeFileSync(join(home, catalog.CACHE_FILE), JSON.stringify({ models: [{ slug: "gpt-5.5" }] }));
-    assert.throws(() => catalog.writeDelegationFreeCatalog(home, { bin: null, model: "gpt-7" }),
+    await assert.rejects(catalog.writeDelegationFreeCatalog(home, { bin: null, model: "gpt-7" }),
       /no entry for "gpt-7".*refusing the launch/);
-    assert.ok(catalog.writeDelegationFreeCatalog(home, { bin: null, model: "gpt-5.5" }), "a model the cache knows still launches");
-    assert.ok(catalog.writeDelegationFreeCatalog(home, { bin: null }), "and so does the platform's own pick");
+    assert.ok(await catalog.writeDelegationFreeCatalog(home, { bin: null, model: "gpt-5.5" }), "a model the cache knows still launches");
+    assert.ok(await catalog.writeDelegationFreeCatalog(home, { bin: null }), "and so does the platform's own pick");
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 

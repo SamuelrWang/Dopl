@@ -72,7 +72,7 @@ test("1d: a PERSISTED `never` still launches, still reads as `never` to Dopl's g
 
 function tmp(prefix) { return mkdtempSync(join(tmpdir(), prefix)); }
 
-test("2: the catalog is Codex's OWN cache with multi_agent_version nulled on every model", () => {
+test("2: the catalog is Codex's OWN cache with multi_agent_version nulled on every model", async () => {
   const home = tmp("dopl-cat-");
   try {
     const models = [
@@ -81,7 +81,7 @@ test("2: the catalog is Codex's OWN cache with multi_agent_version nulled on eve
       { slug: "gpt-5.5" },
     ];
     writeFileSync(join(home, catalog.CACHE_FILE), JSON.stringify({ fetched_at: "t", client_version: "0.155.1", models }));
-    const file = catalog.writeDelegationFreeCatalog(home, { bin: null });
+    const file = await catalog.writeDelegationFreeCatalog(home, { bin: null });
     assert.equal(file, join(home, catalog.CATALOG_FILE));
     const out = JSON.parse(readFileSync(file, "utf8"));
     assert.deepEqual(Object.keys(out), ["models"]);
@@ -93,27 +93,27 @@ test("2: the catalog is Codex's OWN cache with multi_agent_version nulled on eve
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 
-test("2: no cache → the binary's bundled catalog; nothing usable → the launch THROWS", () => {
+test("2: no cache → the binary's bundled catalog; nothing usable → the launch THROWS", async () => {
   const home = tmp("dopl-cat-");
   try {
     const bin = join(home, "fake-codex");
     writeFileSync(bin, `#!/bin/sh\n[ "$1 $2 $3" = "debug models --bundled" ] || exit 3\necho '{"models":[{"slug":"gpt-6-astra","multi_agent_version":"v2"}]}'\n`);
     chmodSync(bin, 0o755);
-    const file = catalog.writeDelegationFreeCatalog(home, { bin, env: process.env });
+    const file = await catalog.writeDelegationFreeCatalog(home, { bin, env: process.env });
     assert.deepEqual(JSON.parse(readFileSync(file, "utf8")).models, [{ slug: "gpt-6-astra", multi_agent_version: null }]);
     // A cache that lacks the SESSION'S model loses to Codex's own refresh (`debug models`).
     writeFileSync(join(home, catalog.CACHE_FILE), JSON.stringify({ models: [{ slug: "gpt-5.5" }] }));
     const refresher = join(home, "fake-codex-refresh");
     writeFileSync(refresher, `#!/bin/sh\n[ "$1 $2 $3" = "debug models " ] || exit 3\necho '{"models":[{"slug":"gpt-6-luna","multi_agent_version":"v2"}]}'\n`);
     chmodSync(refresher, 0o755);
-    const fresh = catalog.writeDelegationFreeCatalog(home, { bin: refresher, env: process.env, model: "gpt-6-luna" });
+    const fresh = await catalog.writeDelegationFreeCatalog(home, { bin: refresher, env: process.env, model: "gpt-6-luna" });
     assert.deepEqual(JSON.parse(readFileSync(fresh, "utf8")).models.map((m) => m.slug), ["gpt-6-luna"]);
     // …but a cache that HAS it (or a platform-default launch) never spawns anything.
-    assert.deepEqual(JSON.parse(readFileSync(catalog.writeDelegationFreeCatalog(home, { bin: null, model: "gpt-5.5" }), "utf8")).models.map((m) => m.slug), ["gpt-5.5"]);
+    assert.deepEqual(JSON.parse(readFileSync(await catalog.writeDelegationFreeCatalog(home, { bin: null, model: "gpt-5.5" }), "utf8")).models.map((m) => m.slug), ["gpt-5.5"]);
     writeFileSync(join(home, catalog.CACHE_FILE), "{ not json");
-    assert.throws(() => catalog.writeDelegationFreeCatalog(home, { bin: join(home, "missing") }), /refusing the launch/);
+    await assert.rejects(catalog.writeDelegationFreeCatalog(home, { bin: join(home, "missing") }), /refusing the launch/);
     writeFileSync(join(home, catalog.CACHE_FILE), JSON.stringify({ models: [] }));
-    assert.throws(() => catalog.writeDelegationFreeCatalog(home, { bin: null }), /refusing the launch/);
+    await assert.rejects(catalog.writeDelegationFreeCatalog(home, { bin: null }), /refusing the launch/);
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 
