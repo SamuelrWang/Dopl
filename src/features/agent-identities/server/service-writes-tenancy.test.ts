@@ -86,6 +86,10 @@ function containerKind(kind: string | null) {
 beforeEach(() => {
   vi.clearAllMocks();
   resetRepoMocks(mockRepo);
+  // `clearAllMocks` keeps a case's `mockResolvedValue`, so the defaults are re-installed
+  // here or the order of cases decides which container kind a later case sees (T2-05).
+  containerKind("standard");
+  mockResolve.mockResolvedValue(null);
 });
 
 /**

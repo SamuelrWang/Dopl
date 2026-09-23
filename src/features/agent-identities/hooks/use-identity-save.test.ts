@@ -11,7 +11,7 @@
  * failure case closes the dialog.
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { AgentIdentityApiError } from "../client/api";
 import type { AgentIdentity } from "../client/types";
@@ -27,6 +27,12 @@ vi.mock("./use-agent-identity-writes", () => ({
 }));
 
 import { useIdentitySave } from "./use-identity-save";
+
+// The hoisted mocks outlive a case; without a reset the "no PATCH" cases pass only
+// when they happen to run first (T2-03).
+beforeEach(() => {
+  for (const w of Object.values(writes)) w.mutateAsync.mockReset();
+});
 
 const IDENTITY: AgentIdentity = {
   id: "tpl-1",
@@ -106,7 +112,7 @@ describe("patching", () => {
         IDENTITY
       );
     });
-    const call = writes.update.mutateAsync.mock.calls.at(-1)![0];
+    const call = writes.update.mutateAsync.mock.calls[0][0];
     expect(call.identityId).toBe("tpl-1");
     expect(call.body).toEqual({ name: "Renamed", acknowledgeShared: true });
     expect(call.optimistic).toMatchObject({ id: "tpl-1", name: "Renamed" });
@@ -125,7 +131,7 @@ describe("patching", () => {
         IDENTITY
       );
     });
-    const call = writes.update.mutateAsync.mock.calls.at(-1)![0];
+    const call = writes.update.mutateAsync.mock.calls[0][0];
     expect(call.expectedUpdatedAt).toBe("2026-08-01T00:00:00Z");
   });
 });
