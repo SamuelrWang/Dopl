@@ -262,7 +262,7 @@ test("LIVE: the SDK really supports this — it is a switch, not a deferral", ()
   assert.match(sdk, /setModel\(model\?: string\): Promise<void>;/);
   // 2026-08-31: the call moved to the runtime adapter (`runtime/claude/launch-spec.js › start`).
   // The condition is unchanged: the prompt is the push iterator, never a string.
-  assert.match(read("runtime/claude/launch-spec.js"), /sdk\.query\(\{ prompt: spec\.prompt/,
+  assert.match(read("runtime/claude/launch-spec.js"), /sdk\.query\(\{ prompt: watch\.stamp\(spec\.prompt\)/,
     "streaming input mode, which is the condition on the method");
   assert.match(read("session-query.js"), /s\.pushIterator = io\.makePushIterator\(\);/,
     "…and the prompt core puts on the spec is that iterator");

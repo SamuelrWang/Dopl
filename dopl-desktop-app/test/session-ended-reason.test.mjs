@@ -112,7 +112,8 @@ test("it is NOT inside `emit`, which returns early on the sessions that most nee
   // precisely the sessions nobody was watching, so losing the reason there loses it where it is
   // the only remaining explanation.
   const engine = M("session-engine.js");
-  const emitFn = engine.slice(engine.indexOf("function emit(s, payload)"), engine.indexOf("function emitQuiet("));
+  const emitFn = engine.slice(engine.indexOf("function emit(s, payload)"), engine.indexOf("function scheduleIdle("));
+  assert.ok(emitFn.length > 0 && emitFn.length < 400, "the slice is the emit function alone");
   assert.ok(!/noteEnded/.test(emitFn), "the line must not depend on a live window");
 });
 

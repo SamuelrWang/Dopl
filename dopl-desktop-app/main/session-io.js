@@ -434,12 +434,6 @@ function launchedPayload(s, model) {
     channelName: (s.context && s.context.channelName) || null,
     taskTitle: (s.context && s.context.taskTitle) || null,
     from: s.counterpartyName || null,
-    // Item 1/5/6 (§B.1): bounded data: URIs (or null) — the operator's photo for my-agent/
-    // operator/outbound bubbles, the peer's for counterparty bubbles + the header. Warm here
-    // when the cache is hot; else null + a follow-up `avatars` event from
-    // avatar-cache.resolveForSession. NEVER a remote URL.
-    selfAvatar: s.selfAvatar || null,
-    fromAvatar: s.peerAvatar || null,
     // NEVER the platform's absolute cwd (label-only rule) — emitFolder() feeds the chip its label.
     cwdLabel: null,
   };
@@ -452,8 +446,8 @@ module.exports = {
   shiftInbound,
   // ── re-exported VERBATIM from session-seed.js (the §2 split) ────────────────
   frameContinuation: seed.frameContinuation,
-  frameHistorySeed: seed.frameHistorySeed, // v2.5 D3 (initialRequestPayload is re-exported below,
-  historyTranscript: seed.historyTranscript, // beside the display-only helpers) — the lazy seed, FIX F1
+  frameHistorySeed: seed.frameHistorySeed, // v2.5 D3
+  historyTranscript: seed.historyTranscript, // the lazy seed, FIX F1
   noteGatedBody: seed.noteGatedBody, // FIX F1: a gated message never rides the seed as well
   // FIX F4: session-history dropped those rows from the ENTRIES too; that renderer is deleted,
   isGatedEntry: seed.isGatedEntry, // and the SEED still filters them — the half that mattered.
@@ -471,7 +465,6 @@ module.exports = {
   summarizeInput,
   safeInput,
   summarizeResult,
-  initialRequestPayload: seed.initialRequestPayload, // the initiating ask, display-only (§2 split)
   isOutboundPost,
   baseRecord,
   applyCoreEvents, // 2026-08-31: successor to `handleSdkMessage` — the bookkeeping half

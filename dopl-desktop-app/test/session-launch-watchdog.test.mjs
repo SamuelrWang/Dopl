@@ -205,7 +205,7 @@ test("startQuery arms it, which is what covers the post-sign-in relaunch too", (
   // platform handle held here. The ORDER this pins is unchanged and is the whole point.
   assert.ok(body.indexOf("rt.start(buildLaunchSpec(s))") < body.indexOf("deps.scheduleIdle(s)"),
     "armed AFTER the query exists, so a throwing assembly leaves no orphan timer");
-  assert.match(ENGINE, /sessionQuery\.bind\(\{ dispatch, emitQuiet, scheduleIdle \}\)/,
+  assert.match(ENGINE, /sessionQuery\.bind\(\{ dispatch, emitQuiet: \(\) => \{\}, scheduleIdle \}\)/,
     "and the engine hands its OWN scheduleIdle in — never a second timer implementation");
   assert.match(M("session-auth.js"), /await deps\.startQuery\(s, rt\);/,
     "the sign-in relaunch goes through that same startQuery");

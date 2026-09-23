@@ -3,9 +3,7 @@
 // Owns ONE agent-runtime query per live session and executes the pure session-reducer's
 // side-effect-free effect descriptors. ⚠ WHICH runtime is `main/runtime/index.js`'s answer.
 //
-// Three things this header used to describe are deleted (2026-08-20, F-228): the CONSENT REFLOW,
-// REOPEN (live windows hide-on-close + tray reopen), and the renderer->main IPC in session-ipc.js.
-// Every session is WINDOWLESS; `s.win` is null and every emit no-ops on it.
+// Every session is WINDOWLESS: `emit` reaches only the held-gate bridge (P4-12).
 // SEAM: this file imports NO electron at all. SECURITY: settingSources:[] always, so the global
 // allow-list can never shadow a gated tool; the dopl bearer stays in the in-memory mcpServers
 // object (never logged, never on argv, never on disk since C1).
@@ -15,7 +13,6 @@ const { newAgentId, isAgentId } = require('./agent-id'); // 2026-08-21: one rand
 const { diag } = require('./diag');
 const io = require('./session-io');
 const store = require('./session-store');
-const avatarCache = require('./avatar-cache');
 const sessionReopen = require('./session-reopen');
 const sessionAnswerPermission = require('./session-answer-permission'); // the held-gate answer — a `session-reopen` sibling that file had no room for (2026-09-17)
 const sessionSummary = require('./session-summary'); // §3.3: THE session-pill projection
@@ -65,7 +62,7 @@ const { launch, launchResponderSession, launchRequesterSession, hasLiveSession, 
 const { readCaps, refreshTray, runLifecycle, setLifecycleHandlers } = require('./session-engine-host');
 
 const sessions = new Map(); // sessionKey -> live session object (in-memory only)
-let selfUserId = null; // operator's own user id (item 1: the self avatar); set by channel-listener
+let selfUserId = null; // the operator's own user id — the cross-account stamp below; set by channel-listener
 function setSelfIdentity(id) { selfUserId = id || null; }
 
 // Resume machinery (session-park.js) is fed the engine handles it cannot require: the registry, the
@@ -78,7 +75,8 @@ sessionPark.bind({
   emit, preflightMcp: sessionQuery.preflightMcp, // F-696: the RESUME lane warms `/api/mcp` too — a boot re-park resumes against a route nothing in this process has touched — and the same call carries the settled re-check
 }); sessionBoot.bind({ sessions, runLifecycle, scheduleIdle }); // F-694: the boot pass takes the registry it re-registers into, the lifecycle runner a VISIBLE end needs, and the timer that arms a re-parked session's abandonment bound. It starts no query and acquires no runtime, so it takes neither
 // §3 split: session-query owns the query LIFECYCLE (the assembly is the runtime's since 2026-08-31) and needs the engine's dispatch + replay-aware quiet emit; neither module requires back into the engine.
-sessionQuery.bind({ dispatch, emitQuiet, scheduleIdle }); // C-4: startQuery arms the launch watchdog through the ONE timer
+// C-4: startQuery arms the launch watchdog through the ONE timer. `emitQuiet` has no receiver on a windowless session (P4-12).
+sessionQuery.bind({ dispatch, emitQuiet: () => {}, scheduleIdle });
 // Q6: same injection for the preflight + in-window sign-in, and F-692's MCP guard below it on the
 // same terms. `startQuery` is the SHARED deferred launch (session-query), so neither assembles a
 // second query and both inherit H1's supersede-before-relaunch; `denyPending` fail-closes first.
@@ -184,35 +182,10 @@ function runEffect(s, eff) {
   }
 }
 
-// ⚠ `denyPendingPermissions` MOVED TO `main/session-permissions.js` (2026-08-22, the §2 cap). It
-// is unchanged: fail-close every awaited promise, then drop both maps.
-// A hidden window RESHOWS on anything that needs the operator: a gated tool request, a
-// `counterparty` reply, a HELD inbound, or an outbound post awaiting Send (v2.7 L3).
-const RESHOW_TYPES = new Set(['permission_request', 'counterparty', 'inbound_pending', 'outbound_gate']);
+// A held gate bridges to a consent row or a notification; `session-windowless.js` owns the policy
+// and the denial copy. Nothing else an effect emits has a receiver.
 function emit(s, payload) {
-  // 2026-08-20: a WINDOWLESS session's pending gate bridges to a consent row (outbound post) or denies — session-windowless.js owns the policy.
-  if (sessionWindowless.claimGate(s, payload, (rid, d) => dispatch(s, { type: 'permission_decision', requestId: rid, decision: d }))) {
-    // ⚠ WHICH DENIAL COPY a claimed gate deserves is `session-windowless.js`'s to stamp since
-    // 2026-08-31, not the engine's: a `permission_request` now HOLDS behind a notification, and
-    // only that file knows whether the banner was shown, expired unanswered (`noteGateTimeout`),
-    // or had no surface at all (`noteAutoDenied`) — the engine can no longer tell, so it stamps
-    // nothing. Stamping here again would mislabel a real human decision as never-asked.
-    return;
-  }
-  if (!s.win || s.win.isDestroyed()) return;
-  if (s.windowHidden && payload && RESHOW_TYPES.has(payload.type)) {
-    try { s.win.show(); } catch (_) { /* best effort */ }
-    s.windowHidden = false;
-    refreshTray();
-  }
-  emitQuiet(s, payload);
-}
-
-// The same delivery WITHOUT the reshow check (C6): an auto-allowed post resolves its own card with
-// no operator involvement, so it must never pop a hidden window open.
-function emitQuiet(s, payload) {
-  if (!s.win || s.win.isDestroyed()) return;
-  s.replay.deliver(payload);
+  sessionWindowless.claimGate(s, payload, (rid, d) => dispatch(s, { type: 'permission_decision', requestId: rid, decision: d }));
 }
 function scheduleIdle(s) {
   if (s.idleTimer) clearTimeout(s.idleTimer);
@@ -373,7 +346,7 @@ async function startSession(spec, rt) {
     // answers whether anything may reach the agent at all.
     awaitingDirective: spec.parkedShell === true,
     idleTimer: null,
-    settled: false, windowHidden: false,
+    settled: false,
     lastInboundSeq: Number.isFinite(Number(spec.triggerSeq)) ? Number(spec.triggerSeq) : null,
     // ⚠ THE SELF-FILTER FOR FAN-OUT (2026-08-21). Every `dopl_channel op=post` this session makes
     // is stamped with a client_msg_id naming this instance (`session-outbound-tag.js`) and
@@ -386,7 +359,7 @@ async function startSession(spec, rt) {
     // client_msg_ids the server already holds, whose idempotency short-circuit then discards the
     // resumed agent's replies. `resumedPostSeq` adds slack for the posts a crash hid.
     ownPostSeq: store.resumedPostSeq(spec.ownPostSeq),
-    win: null, query: null, abortController: null, pushIterator: null,
+    query: null, abortController: null, pushIterator: null,
   };
   // WHOSE SESSION THIS IS — the cross-account stamp (adversarial review, 2026-08-31). Written ONCE
   // at registration and never rewritten: the registry is process-lifetime and a sign-out does NOT
@@ -405,16 +378,6 @@ async function startSession(spec, rt) {
     sessions.delete(s.key); sessionSummary.touch(); // ...and a ROLLBACK is one too: the registration above already scheduled a flush
     return null;
   }
-  emit(s, { type: 'modes', tool: state.toolMode, message: state.messageMode }); // v3.1: the header must state the PRESET posture, not the defaults
-  emit(s, { type: 'model', choice: s.model }); // ...and WHICH MODEL, so the third select never claims a pick nothing applied
-  // Item 1/5/6 + C5: avatars reach the renderer ONLY as `avatars` events (the replay ring splits a warm one off `init`).
-  s.selfAvatar = avatarCache.cachedForUser(selfUserId);
-  s.peerAvatar = avatarCache.cachedForUser(s.counterpartyId);
-  avatarCache.resolveForSession(s, { selfUserId, peerUserId: s.counterpartyId }, (p) => emit(s, p));
-  // FIX (v2.x): pin the INITIATING ask at the TOP (display only; io returns null for a
-  // parked/resumed shell). Emitted, NEVER pushed to the iterator; rides the replay ring.
-  const reqItem = io.initialRequestPayload(s.side, spec.firstMessage, s.counterpartyName);
-  if (reqItem) emit(s, reqItem);
   // A WINDOWLESS spawn cannot hold on sign-in (the recovery UI wrote to a window): roll back so
   // launch() reports auth-hold and the caller answers honestly. IT RUNS BEFORE THE SPAWN-IDLE
   // RETURN BELOW, AND THAT ORDER IS THE FIX (2026-08-22): the `parkedShell` branch returned FIRST,
@@ -473,7 +436,7 @@ async function init() {
 module.exports = {
   init,
   setLifecycleHandlers,
-  setSelfIdentity, // item 1: the operator's user id for the self avatar (channel-listener)
+  setSelfIdentity, // the operator's user id for the cross-account stamp (channel-listener)
   launchResponderSession,
   launchRequesterSession,
   hasLiveSession,

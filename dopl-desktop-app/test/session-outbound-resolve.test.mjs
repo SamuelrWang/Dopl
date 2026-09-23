@@ -126,7 +126,6 @@ test("C6: the engine wires the wrapper around the REAL gate and emits QUIETLY", 
   const QUERY = readFileSync(join(HERE, "..", "main", "session-query.js"), "utf8");
   assert.match(QUERY, /dispatch: deps\.dispatch,\n\s*emitQuiet: deps\.emitQuiet,/,
     "…and core is what supplies both, from its own injected deps");
-  // emitQuiet skips the RESHOW check: an auto-allowed post needs nothing from the operator,
-  // so resolving its card must not pop a hidden window open.
-  assert.match(ENGINE, /function emitQuiet\(s, payload\) \{\n\s*if \(!s\.win \|\| s\.win\.isDestroyed\(\)\) return;\n\s*s\.replay\.deliver\(payload\);/);
+  // Every session is windowless, so the quiet emit core hands the adapter has no receiver (P4-12).
+  assert.match(ENGINE, /sessionQuery\.bind\(\{ dispatch, emitQuiet: \(\) => \{\}, scheduleIdle \}\)/);
 });

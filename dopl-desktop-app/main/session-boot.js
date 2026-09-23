@@ -146,8 +146,8 @@ function withinReparkWindow(rec, now) {
  * throw; (2) its windowless credential preflight ROLLS BACK — `sessions.delete(s.key)` — on a
  * signed-out machine, which is the invisibility this module exists to end, arriving by a second
  * door; (3) it mints a fresh `sessionId` and restamps `startedAt`, so the record's own identity
- * and its Agents-tab time bucket would be destroyed by the act of restoring it; (4) it resolves
- * avatars and emits, i.e. network and I/O, per record, at app start.
+ * and its Agents-tab time bucket would be destroyed by the act of restoring it; (4) it writes a
+ * fresh record and probes the runtime credential, per record, at app start.
  *
  * ⚠ SO THE FIELDS ARE COPIED FROM THE RECORD, and the three that cannot be are said out loud:
  *   `nonce`      MINTED FRESH. It is deliberately not persisted, and `startResume` — the other
@@ -272,7 +272,6 @@ function parkedSessionFromRecord(key, rec, sdkId) {
     awaitingDirective: false,
     idleTimer: null,
     settled: false,
-    windowHidden: false,
     lastInboundSeq: null,
     ownPostIds: new Set(),
     // ⚠ SLACK ON TOP OF THE STORED COUNTER. The record is written at spawn / init / park / settle,
@@ -280,7 +279,6 @@ function parkedSessionFromRecord(key, rec, sdkId) {
     // idempotency short-circuit answer the old row and silently discard this agent's reply.
     ownPostSeq: store.resumedPostSeq(rec.ownPostSeq),
     operatorUserId: null, // see the docblock: fail-closed, never invented
-    win: null,
     query: null,
     abortController: null,
     pushIterator: null,
