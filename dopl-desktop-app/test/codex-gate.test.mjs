@@ -491,7 +491,9 @@ test("the sign-in button and the deep link are HIDDEN, never grayed; the tool-se
   // 🔒 CXP-3A (2026-09-22, codex-cli 0.155.1): MEASURED, no longer null — Codex defers every
   // MCP tool behind `tool_search`, and nothing opts Dopl's entry out, so the turn orders it.
   assert.equal(capability.toolSearchVerb(D), "tool_search", "the measured verb, never Claude's");
-  assert.equal(capability.mcpDiscoveryVerb(D), "tool_search", "no eager-load flag, so it is ordered");
+  // …and code-mode models reach the same tool through `exec`'s `ALL_TOOLS` (measured, same day).
+  assert.deepEqual(capability.mcpDiscovery(D), { verb: "tool_search", catalog: "ALL_TOOLS" },
+    "no eager-load flag, so both ways in are ordered");
   assert.equal(capability.entryFile(D), "AGENTS.md");
 });
 

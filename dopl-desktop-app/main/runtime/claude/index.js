@@ -179,6 +179,8 @@ const descriptor = {
     // The verb an agent is told to load a deferred tool with. ⚠ `null` on a runtime without one
     // means the sentence is OMITTED, never translated into a verb that does not exist.
     toolSearchVerb: 'ToolSearch',
+    // The catalog a CODE-MODE model filters for a deferred tool (Codex's `ALL_TOOLS`). None here.
+    deferredCatalog: null,
     awaitGuidance: 'backgrounds',
     entryFile: 'CLAUDE.md',
   },

@@ -172,7 +172,10 @@ function axisAAllows(mode, toolName) {
 // ⚠ APPS OFF ON EVERY PROFILE: the twin of Claude's `ENABLE_CLAUDEAI_MCP_SERVERS=0`, which is set
 // unconditionally too — an account connector is ambient authority no profile granted.
 // ⚠ DELEGATION OFF ON THE RESTRICTED TWO ONLY, matching Claude's `DENIED_BUILTINS` (Task/Agent):
-// a subagent is a fresh session that does not inherit the bound. Closes §5 C25 for them.
+// a subagent is a fresh session that does not inherit the bound. ⚠ IT CLOSES §5 C25 ONLY FOR A
+// NON-CODE-MODE MODEL (gpt-5.5): a `code_mode_only` model (gpt-6-*, gpt-5.6-*) still carries a
+// top-level `collaboration` namespace (`spawn_agent`, …) with `multi_agent`, `multi_agent_v2` and
+// `enable_fanout` all false — measured 2026-09-22, and still OPEN.
 const ACCOUNT_FENCE = Object.freeze({ apps: false, plugins: false });
 const RESTRICTED_FENCE = Object.freeze({ ...ACCOUNT_FENCE, multi_agent: false });
 

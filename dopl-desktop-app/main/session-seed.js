@@ -292,7 +292,7 @@ function pendingTranscript(s) {
 // "not read_only" through `kbReadable`, and the turn would ORDER a hard-denied tool. Both
 // builders spread it now; `prompt-profile-drift.test.mjs` is what fails if one stops.
 // CXP-3A: the SESSION's runtime decides whether the turn orders a Dopl-tool search. ⚠ Lazy: `./runtime` reaches adapters that reach session modules.
-function discoveryVerb(s) { const rt = require('./runtime'); return rt.capability.mcpDiscoveryVerb(rt.descriptorFor((s && s.runtimeId) || null)); }
+function discoveryOf(s) { const rt = require('./runtime'); return rt.capability.mcpDiscovery(rt.descriptorFor((s && s.runtimeId) || null)); }
 function takeFraming(s, transcript) {
   if (!s || s.freshFraming !== true) return '';
   s.freshFraming = false;
@@ -300,7 +300,7 @@ function takeFraming(s, transcript) {
   // (identity + the room model + THE LAW) instead of the pair-bound responder framing.
   return framing.buildFencedTurn({
     side: s.side, bind: s.bind, message: transcript || s.launchGoal || '',
-    context: { ...((s && s.context) || {}), profile: s.profile, mcpDiscovery: discoveryVerb(s) }, nonce: s.nonce,
+    context: { ...((s && s.context) || {}), profile: s.profile, mcpDiscovery: discoveryOf(s) }, nonce: s.nonce,
   });
 }
 

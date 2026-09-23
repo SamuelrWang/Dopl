@@ -17,6 +17,10 @@
 // which Dopl does not own. Hence `descriptor.prose.toolSearchVerb = 'tool_search'` and a turn
 // that ORDERS the search (`prompt-framing.js › grantLines`).
 //
+// ⚠ AND THAT IS ONLY THE NON-CODE-MODE SURFACE. Every other listed model (gpt-6-*, gpt-5.6-*) is
+// `code_mode_only`: no `tool_search`, one `exec` (JS), and a deferred tool is found in `ALL_TOOLS`
+// and called as `tools.mcp__dopl__dopl_channel(...)` — `descriptor.prose.deferredCatalog`.
+//
 // ⚠ THE MODEL SIDE OF TIER 1 IS A SCRIPTED STAND-IN; THE CODEX SIDE IS ENTIRELY REAL. A stub
 // Responses provider (`model_provider = "stub"`) plays the model deterministically — search,
 // then call — so what is measured is the app-server's own catalog, search executor, namespace
@@ -44,12 +48,14 @@ const configHome = require(join(CODEX, 'config-home.js'));
 const serverRequests = require(join(CODEX, 'server-requests.js'));
 const runtime = require(join(HERE, '..', 'main', 'runtime'));
 const framing = require(join(HERE, '..', 'main', 'prompt-framing.js'));
+const profiles = require(join(HERE, '..', 'main', 'session-profiles.js'));
 
 const GATE = announceGate(liveGate());
 const TURN_ENV = 'CODEX_LIVE_TURN';
 const BUDGET_MS = 45000;
 const TURN_BUDGET_MS = 180000;
-const VERB = runtime.capability.mcpDiscoveryVerb(runtime.descriptorFor('codex'));
+const VERB = runtime.capability.toolSearchVerb(runtime.descriptorFor('codex'));
+const DISCOVERY = runtime.capability.mcpDiscovery(runtime.descriptorFor('codex'));
 
 function skipTurn(t) {
   if (skipLive(t, GATE)) return true;
@@ -116,6 +122,16 @@ async function scriptedModel(call) {
     const b = JSON.parse(body);
     requests.push(b);
     const input = b.input || [];
+    // CODE MODE: one `exec` whose JS finds the tool in `ALL_TOOLS` and calls it, then stop.
+    if (call && call.codeMode) {
+      if (input.some((i) => i.type === 'custom_tool_call_output')) {
+        return sse(res, [{ type: 'message', role: 'assistant', id: 'm1', content: [{ type: 'output_text', text: 'done' }] }]);
+      }
+      const js = call.js || `const hits = ALL_TOOLS.filter((t) => /dopl_channel/.test(t.name)).map((t) => t.name);
+text(JSON.stringify(hits));
+await tools.mcp__dopl__dopl_channel(${JSON.stringify(args)});`;
+      return sse(res, [{ type: 'custom_tool_call', id: 'ct_1', call_id: 'ct_call_1', name: 'exec', input: js }]);
+    }
     const out = input.find((i) => i.type === 'tool_search_output');
     if (!out) {
       return sse(res, [{ type: 'tool_search_call', id: 'ts_1', call_id: 'ts_call_1', status: 'completed', execution: 'client', arguments: { query: 'dopl channel', limit: 8 } }]);
@@ -145,7 +161,8 @@ async function scriptedTurn(profile, verdict, opts) {
   const dopl = await standInDopl();
   const home = mkdtempSync(join(tmpdir(), 'dopl-codex-discovery-'));
   writeFileSync(join(home, 'config.toml'), [
-    'model_provider = "stub"', 'model = "gpt-5.5"', '[model_providers.stub]', 'name = "stub"',
+    // ⚠ gpt-5.5 is the catalog's one NON-code-mode model; gpt-6-astra is `code_mode_only` (2026-09-22).
+    'model_provider = "stub"', `model = "${o.call && o.call.codeMode ? 'gpt-6-astra' : 'gpt-5.5'}"`, '[model_providers.stub]', 'name = "stub"',
     `base_url = "http://127.0.0.1:${model.port}/v1"`, 'wire_api = "responses"',
     'requires_openai_auth = false', 'stream_max_retries = 0', 'request_max_retries = 0', '',
   ].join('\n'));
@@ -290,6 +307,36 @@ describe('TIER 1 — the real app-server defers Dopl, and `tool_search` is the w
     assert.equal(runtime.capability.axisBOpScoped(runtime.descriptorFor('codex')), true);
   });
 
+  // 🔒 THE CODE-MODE WAY IN (measured 2026-09-22): no `tool_search` at all — one `exec` tool, and a
+  // deferred MCP tool is listed in `ALL_TOOLS` under its FULL name and callable on `tools`.
+  test('code mode: no tool_search, `ALL_TOOLS` lists mcp__dopl__dopl_channel, and the call is held', async (t) => {
+    if (skipLive(t, GATE)) return;
+    assert.equal(DISCOVERY.catalog, 'ALL_TOOLS');
+    const run = await scriptedTurn('read_only', 'allow', { call: { codeMode: true, args: { op: 'rooms' } } });
+    const [first, second] = run.requests;
+    assert.equal(catalogNames(first).includes(VERB), false, 'a code-mode request carries no tool_search');
+    const extra = (first.input || []).filter((i) => i.type === 'additional_tools').flatMap((i) => i.tools);
+    const nested = extra.flatMap((ns) => (ns.tools || []).map((x) => x.name));
+    assert.ok(nested.includes('exec'), `no exec tool: ${nested}`);
+    assert.equal(JSON.stringify(extra).includes('mcp__dopl__dopl_channel'), false, 'deferred: not in the description');
+    const out = second.input.find((i) => i.type === 'custom_tool_call_output');
+    assert.match(JSON.stringify(out.output), /mcp__dopl__dopl_channel/, 'ALL_TOOLS names it in full');
+    assert.deepEqual(run.asked, [{ name: mcp.CHANNEL_TOOL, input: { op: 'rooms' } }], 'the SAME held approval');
+    assert.equal(run.calls.length, 1, 'allowed, and run once');
+  });
+
+  test('4 (code mode): with the operator\'s auth linked, ALL_TOOLS reaches Dopl\'s MCP server and no other', async (t) => {
+    if (skipLive(t, GATE)) return;
+    if (!existsSync(OPERATOR_AUTH)) { t.diagnostic(`SKIPPED, NOT PASSED — no ${OPERATOR_AUTH}`); t.skip('no operator auth.json'); return; }
+    const js = 'text(JSON.stringify([...new Set(ALL_TOOLS.map((t) => t.name).filter((n) => n.startsWith("mcp__")).map((n) => n.split("__")[1]))].sort()));';
+    const servers = (run) => JSON.parse(run.requests[1].input.find((i) => i.type === 'custom_tool_call_output').output.map((o) => o.text).filter((x) => x.startsWith('['))[0]);
+    const call = { codeMode: true, js };
+    const bare = await scriptedTurn('dopl_only', 'deny', { linkAuth: true, noFence: true, call });
+    assert.ok(servers(bare).includes('codex_apps'), `control: an unfenced signed-in thread reaches codex_apps: ${servers(bare)}`);
+    const run = await scriptedTurn('dopl_only', 'deny', { linkAuth: true, call });
+    assert.deepEqual(servers(run), ['dopl']);
+  });
+
   test('DENY at the held approval prevents execution', async (t) => {
     if (skipLive(t, GATE)) return;
     const run = await scriptedTurn('read_only', 'deny');
@@ -301,7 +348,9 @@ describe('TIER 1 — the real app-server defers Dopl, and `tool_search` is the w
 });
 
 describe('TIER 2 — a real model, given Dopl\'s REAL first turn, searches on its own', () => {
-  test('the Codex framing gets a fresh agent from zero tools to a held dopl_channel call', async (t) => {
+  // ⚠ THE GATE HERE IS THE REAL ONE: `session-profiles.js › grantDecision`, op-scoped, at the posture
+  // a windowless agent is floored to (`auto_outbound` + `on-request`). An own-channel post allows.
+  test('the Codex framing gets a fresh agent from zero tools to ONE marker posted through the gate', async (t) => {
     if (skipTurn(t)) return;
     const dopl = await standInDopl();
     const root = mkdtempSync(join(tmpdir(), 'dopl-codex-discovery-turn-'));
@@ -311,16 +360,18 @@ describe('TIER 2 — a real model, given Dopl\'s REAL first turn, searches on it
     const env = configHome.isolatedEnv({ ...process.env, [mcp.BEARER_ENV]: 'cxp3a-bearer', [mcp.WORKSPACE_ENV]: 'ws', [mcp.SESSION_ENV]: 'slot' }, join(root, 'user-data'));
     const items = [];
     const asked = [];
+    const CH = '11111111-1111-4111-8111-111111111111';
+    const MARKER = `CXP3A-${Date.now().toString(36)}`;
     try {
       const cfg = tools.buildSessionToolConfig('dopl_only');
       const entry = mcp.buildDoplServerEntry(cfg.doplToolsPolicy);
       entry.url = dopl.url;
       const text = framing.buildFencedTurn({
         side: 'responder', nonce: 'cxp3a',
-        message: 'Read the rooms of this channel once (op "rooms", action "list"), then stop. If the call is refused, say so and stop.',
+        message: `Post exactly one message to this channel whose body is ${MARKER}, then stop. Do not retry.`,
         context: {
-          channelId: '11111111-1111-4111-8111-111111111111', workspaceId: '22222222-2222-4222-8222-222222222222',
-          channelName: 'codex-testing', authorName: 'Samuel', profile: 'dopl_only', mcpDiscovery: VERB,
+          channelId: CH, workspaceId: '22222222-2222-4222-8222-222222222222',
+          channelName: 'codex-testing', authorName: 'Samuel', profile: 'dopl_only', mcpDiscovery: DISCOVERY,
         },
       });
       assert.equal(/do not go looking/.test(text), false);
@@ -334,7 +385,11 @@ describe('TIER 2 — a real model, given Dopl\'s REAL first turn, searches on it
             if (m.params && m.params.item) items.push(m.params.item);
             if (/^turn\/(completed|failed|aborted)$/.test(m.method)) finish(m.method);
           },
-          onServerRequest: (m) => serverRequests.answer(m, async (name, input) => { asked.push({ name, input }); return 'deny'; }),
+          onServerRequest: (m) => serverRequests.answer(m, async (name, input) => {
+            asked.push({ name, input });
+            const verdict = profiles.grantDecision({ runtime: 'codex', profile: 'dopl_only', toolMode: 'on-request', messageMode: 'auto_outbound', channelId: CH, allowForTask: [], toolName: name, input });
+            return verdict === 'allow' ? 'allow' : 'deny';
+          }),
         }),
       }, async (conn) => {
         await conn.request('initialize', client.initializeParams('0.0.0-cxp3a'));
@@ -352,8 +407,10 @@ describe('TIER 2 — a real model, given Dopl\'s REAL first turn, searches on it
       const said = items.filter((i) => i.type === 'agentMessage').map((i) => i.text).join(' | ');
       assert.ok(call, `the agent never called Dopl. It said: ${said}`);
       assert.equal(call.tool, mcp.CHANNEL_TOOL);
-      assert.ok(asked.some((a) => a.name === mcp.CHANNEL_TOOL), 'the call reached the held approval');
-      assert.equal(dopl.calls.length, 0, 'declined, so it never executed');
+      assert.ok(asked.some((a) => a.name === mcp.CHANNEL_TOOL && a.input.op === 'send'), `the post reached the held approval: ${JSON.stringify(asked)}`);
+      const posts = dopl.calls.filter((c) => c.name === mcp.CHANNEL_TOOL && c.arguments && c.arguments.op === 'send');
+      assert.equal(posts.length, 1, `exactly one post executed: ${JSON.stringify(dopl.calls)}`);
+      assert.ok(String(posts[0].arguments.body).includes(MARKER));
     } finally {
       await dopl.close();
       rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });

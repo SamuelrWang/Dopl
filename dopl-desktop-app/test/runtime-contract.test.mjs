@@ -252,6 +252,7 @@ test("an absent capability is null — an empty array would render an empty cont
     ["containment.nativeControls", (d) => d.containment.nativeControls],
     ["deepLink", (d) => d.deepLink],
     ["prose.toolSearchVerb", (d) => d.prose.toolSearchVerb],
+    ["prose.deferredCatalog", (d) => d.prose.deferredCatalog], // CXP-3A: code-mode's `ALL_TOOLS`
     ["mcp.perToolApproval", (d) => d.mcp.perToolApproval],
     ["mcp.eagerLoadFlag", (d) => d.mcp.eagerLoadFlag],
   ];

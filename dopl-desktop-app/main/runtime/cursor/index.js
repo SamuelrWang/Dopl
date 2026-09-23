@@ -288,6 +288,7 @@ const descriptor = {
     // that does not exist. Nothing in the research says this runtime defers MCP tools at all — and
     // Dopl's own tools are in-process here, so there is nothing to defer.
     toolSearchVerb: null,
+    deferredCatalog: null, // same reason: nothing is deferred, so there is no catalog to filter
     // ⚠ `'unverified'`, matching `wake.backgroundsPendingCall`. The guidance an agent is given
     // about awaiting is a claim about what the HOST does with a long-pending call, and this one is
     // unmeasured.

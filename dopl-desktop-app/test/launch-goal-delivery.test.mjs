@@ -128,7 +128,7 @@ test("DELIVERY (running): the goal is built into `firstTurn`, fenced, with the p
   assert.match(ENGINE, /const firstTurn = spec\.parkedShell \? ''/);
   assert.match(
     ENGINE,
-    /buildFencedTurn\(\{ side: spec\.side, message: spec\.firstMessage, context: \{ \.\.\.context, profile: spec\.profile, mcpDiscovery: runtimeRegistry\.capability\.mcpDiscoveryVerb\([^}]*\) \}, nonce \}\)/,
+    /buildFencedTurn\(\{ side: spec\.side, message: spec\.firstMessage, context: \{ \.\.\.context, profile: spec\.profile, mcpDiscovery: runtimeRegistry\.capability\.mcpDiscovery\([^}]*\) \}, nonce \}\)/,
     "⚠ the profile rides in: without it `knowledgeLines` orders a `read_only`-denied tool",
   );
   assert.match(ENGINE, /launchGoal: spec\.parkedShell === true \?/, "…and the parked shape still holds its goal");

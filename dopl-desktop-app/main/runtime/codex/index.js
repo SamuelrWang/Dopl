@@ -289,7 +289,15 @@ const descriptor = {
     // `tool_search_always_defer_mcp_tools` as REMOVED/true, the `[features]` toggles do nothing,
     // and no `mcp_servers.<name>` key opts a server out — deferral follows the model catalog's
     // `supports_search_tool`, which Dopl does not own. So the agent is TOLD to search.
+    // ⚠ THAT IS THE NON-CODE-MODE SURFACE (gpt-5.5). Every other listed model in the 2026-09-22
+    // catalog (`gpt-6-*`, `gpt-5.6-*`) is `tool_mode: code_mode_only`: the request carries NO
+    // `tool_search`, only an `exec` tool running JS, and a deferred MCP tool is "omitted from this
+    // description … listed in `ALL_TOOLS`" — measured: `ALL_TOOLS` held `mcp__dopl__dopl_channel`,
+    // and `await tools.mcp__dopl__dopl_channel({ op })` inside `exec` reached the same
+    // `mcpToolCall` item and `mcpServer/elicitation/request`. Hence `deferredCatalog`, and a turn
+    // that names BOTH ways in (`prompt-framing.js › grantLines`).
     toolSearchVerb: 'tool_search',
+    deferredCatalog: 'ALL_TOOLS',
     // ⚠ `'unverified'`, matching `wake.backgroundsPendingCall`. The guidance an agent is given
     // about awaiting is a claim about what the HOST does with a long-pending call, and this one is
     // unmeasured.

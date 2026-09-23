@@ -44,6 +44,8 @@ const { ontologyReachLines } = require('./prompt-framing-ontology');
 // blank launch and the whole responder lane stay byte-identical to what they were before it
 // existed — which `session-identity.test.mjs` asserts outright.
 const { templateRoleFraming } = require('./prompt-framing-template');
+// CXP-3A (2026-09-22): the grant sentence, per runtime — its own module for the §2 cap, like the ontology lines.
+const { grantLines } = require('./prompt-framing-discovery');
 
 // OUR framing lines, placed OUTSIDE the nonce fence by the caller (session-spawner buildPrompt).
 // Plain-text lines the caller joins with '\n'.
@@ -230,33 +232,8 @@ function deliveryCall(ctx) {
 // ⚠ AND THE READ IS NO LONGER "THE ONLY WAY": that clause was false (an UNSCOPED own-channel
 // read works from spawn zero) and agents took it literally, manufacturing amnesia by refusing to
 // look elsewhere. The imperative survives; the copy now says the read REPEATS.
-// ⚠ RUNTIME-AWARE SINCE CXP-3A (2026-09-22). `ctx.mcpDiscovery` is the caller's
-// `capability.mcpDiscoveryVerb` answer: absent/null (Claude — `alwaysLoad`, and ToolSearch is
-// denied) keeps the wording below BYTE-IDENTICAL; a verb (Codex — `tool_search`, which its CLI
-// always puts in front of MCP tools and Dopl's deny list does not gate) swaps ONLY the grant
-// sentence for a discovery order. A spawned Codex agent QUOTED "do not go looking for it" when it
-// refused to search, so that sentence must never reach a runtime whose tools are deferred.
-function grantLines(verb) {
-  if (!verb) {
-    return [
-      `  path and it is the reason this session exists, so do not go looking for it and do not`,
-      `  test for it: if it is not in a list you can enumerate, that is the list, not the grant.`,
-      `  If mcp__dopl__dopl_channel is not in your tool list, say so in your first reply: the`,
-      `  desktop failed to connect Dopl.`,
-    ];
-  }
-  return [
-    `  path and it is the reason this session exists. On this runtime Dopl's tools are DEFERRED:`,
-    `  they are not in your initial tool list, and that is expected. Before your first Dopl call,`,
-    `  call \`${verb}\` with the query "dopl channel". It returns this tool inside the mcp__dopl`,
-    `  namespace, under its short name; that IS mcp__dopl__dopl_channel. That search is the`,
-    `  normal way in, not a test. If it does not return the tool, say so in your first reply:`,
-    `  the desktop failed to connect Dopl.`,
-  ];
-}
-
 function firstActions(side, ctx) {
-  const verb = (ctx && typeof ctx.mcpDiscovery === 'string' && /^[a-z_]+$/i.test(ctx.mcpDiscovery)) ? ctx.mcpDiscovery : null;
+  const disc = ctx && ctx.mcpDiscovery && typeof ctx.mcpDiscovery === 'object' ? ctx.mcpDiscovery : null;
   const lines = [
     `FIRST ACTIONS THIS TURN, before you plan or answer anything:`,
     // ⚠ "GRANTED AND OP-SCOPED", not "GRANTED" (G22, 2026-09-02). The tool is offered on every
@@ -265,7 +242,7 @@ function firstActions(side, ctx) {
     // block forbids. The grant is the tool; the posture is the ops.
     `- mcp__dopl__dopl_channel is GRANTED to this session, and OP-SCOPED by your posture: a`,
     `  particular op may still be gated, which is not the tool missing. It is your delivery`,
-    ...grantLines(verb),
+    ...grantLines(disc),
     `  Just make the call in the delivery section below; if a call is genuinely refused, your`,
     `  operator sees the refusal on this window and it is theirs to fix, not the counterparty's.`,
     ...LANE_EXCLUSIVITY,
