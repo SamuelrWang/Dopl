@@ -8,8 +8,9 @@
 //                  COMMAND. `npm test` is allowed to skip the live tier; this one is not, and a
 //                  release gate that reports success because nothing ran is the failure mode the
 //                  whole unit exists to remove.
-//   2. SUITES      the full desktop suite with `CODEX_APP_SERVER_LIVE=1`, so the unit tiers AND
-//                  the live app-server contract both execute.
+//   2. SUITES      the full desktop suite with `CODEX_APP_SERVER_LIVE=1` and `CODEX_LIVE_TURN=1`,
+//                  so the unit tiers, the live app-server contract and the real-turn arms execute
+//                  (each turn runs the cheapest model at low effort).
 //   3. LEAKS       every `codex`/`app-server` process that was NOT running before the suites and
 //                  IS running after fails the command by pid and command line.
 //
@@ -23,6 +24,7 @@ const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
 const LIVE_ENV = 'CODEX_APP_SERVER_LIVE';
+const TURN_ENV = 'CODEX_LIVE_TURN';
 const bar = '═'.repeat(78);
 
 function say(line) { process.stdout.write(`${line}\n`); }
@@ -78,7 +80,7 @@ async function main() {
   say(`preflight ok — ${gate.bin.path} (${gate.bin.source})`);
 
   const fixture = helper.readFixture();
-  if (!helper.fixtureIsMeasured(fixture)) {
+  if (fixture.status !== 'MEASURED') {
     say('');
     say(`⚠ the compatibility fixture is still ${fixture.status}.`);
     say(`  The live contract test will fail until you run: ${helper.REGENERATE_CMD}`);
@@ -90,11 +92,11 @@ async function main() {
   if (before.size) say(`note: ${before.size} codex app-server process(es) were ALREADY running; they are excluded.`);
 
   // ── 2. THE SUITES ──────────────────────────────────────────────────────────────────────────
-  say(`\n${bar}\nrunning the desktop suites with ${LIVE_ENV}=1\n${bar}`);
-  const run = spawnSync(process.execPath, ['--test', 'test/**/*.mjs'], {
+  say(`\n${bar}\nrunning the desktop suites with ${LIVE_ENV}=1 ${TURN_ENV}=1\n${bar}`);
+  const run = spawnSync(process.execPath, ['--test', 'test/**/*.test.mjs'], {
     cwd: ROOT,
     stdio: 'inherit',
-    env: Object.assign({}, process.env, { [LIVE_ENV]: '1' }),
+    env: Object.assign({}, process.env, { [LIVE_ENV]: '1', [TURN_ENV]: '1' }),
   });
 
   // ── 3. LEAKS ───────────────────────────────────────────────────────────────────────────────

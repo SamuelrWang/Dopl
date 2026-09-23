@@ -4,7 +4,7 @@
 // place in the tree allowed to say what a steer, an interrupt or a resume DOES. U3's test
 // scenarios name three things a fixture can never answer — "steer targets the current turn and is
 // rejected after that turn completes", "interrupt targets the active turn and Dopl receives a
-// terminal interrupted state", and the resume-usage question that gates Codex resume — and each
+// terminal interrupted state", and the resume-usage question (does a resume carry the usage baseline) — and each
 // one needs a turn that a real model actually runs.
 //
 // ⚠ **THE SKIP IS LOUD, THE `_codex-app-server.mjs` WAY.** Banner at import, `t.diagnostic` +
@@ -12,7 +12,7 @@
 // not arm. A skipped tier that reads as a passing one is the exact failure the plan was written
 // about; nothing here may be mistaken for a measurement that did not happen.
 //
-// 💰 ⚠ **THESE SPEND THE OPERATOR'S OPENAI QUOTA — THREE MODEL TURNS PER ARMED RUN**, and that is
+// 💰 ⚠ **THESE SPEND THE OPERATOR'S OPENAI QUOTA — THREE MODEL TURNS PER RUN WITH `CODEX_LIVE_TURN=1`**, and that is
 // the budget: one interrupted turn (steer + interrupt + stale steer), and two trivial turns for
 // the resume measurement, which needs a turn on each side of the resume by construction. Every
 // prompt is a word-length reply or a countdown that is cut short. **Do not add a turn here
@@ -20,8 +20,9 @@
 // `read-only` and the policy is `never` on every thread below, so nothing can.
 //
 //   ordinary unit run   npm test                                (skips, loudly)
-//   armed               CODEX_APP_SERVER_LIVE=1 npm test
-//   the release gate    npm run test:codex-compat               (required to arm)
+//   armed, no turns     CODEX_APP_SERVER_LIVE=1 npm test
+//   armed, with turns   CODEX_APP_SERVER_LIVE=1 CODEX_LIVE_TURN=1 npm test
+//   the release gate    npm run test:codex-compat               (sets both)
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -31,7 +32,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
-  client, liveGate, announceGate, skipLive,
+  client, liveGate, announceGate, skipLive, skipTurn,
   withAppServer, appEnv, terminateConn, leakedPids, RUNTIME_DESCRIPTOR,
   LIVE_THREAD, LIVE_TURN,
 } from './_codex-app-server.mjs';
@@ -100,7 +101,7 @@ const turnFrames = (frames, method, turnId) => frames.filter(
 
 describe('live: steer and interrupt target the ACTIVE turn, and only the active turn', () => {
   test('a steer lands on the current turn; an interrupt ends it; a later steer is refused', { timeout: TURN_BUDGET_MS }, async (t) => {
-    if (skipLive(t, GATE)) return;
+    if (skipLive(t, GATE) || skipTurn(t)) return;
     const frames = [];
     const conn = openSession(t, (m) => frames.push(m));
     {
@@ -176,8 +177,8 @@ describe('live: steer and interrupt target the ACTIVE turn, and only the active 
 // ══ THE RESUME MEASUREMENT — the plan's named open question (§5 item C8 / CXP-4) ═════════════
 
 describe('live: usage accounting across thread/resume', () => {
-  test('`thread/resume` CONTINUES the cumulative total — measured, and it keeps resume refused', { timeout: TURN_BUDGET_MS * 2 }, async (t) => {
-    if (skipLive(t, GATE)) return;
+  test('`thread/resume` CONTINUES the cumulative total, and the descriptor says so', { timeout: TURN_BUDGET_MS * 2 }, async (t) => {
+    if (skipLive(t, GATE) || skipTurn(t)) return;
 
     // ⚠ TWO CHILDREN, DELIBERATELY. Resuming inside the process that started the thread would
     // measure a cache, not a resume; a parked Dopl session resumes in a NEW app-server.
@@ -291,9 +292,7 @@ describe('live: usage accounting across thread/resume', () => {
       );
     }
 
-    // ── AND THE DECLARATION MATCHES WHAT WAS JUST MEASURED. `canResume` requires `true`, so a
-    // runtime that CONTINUES its totals stays refused until `session-park.js › resumeParked`
-    // learns to preserve the baseline instead of zeroing it (CXP-4's remaining half).
+    // ── AND THE DECLARATION MATCHES WHAT WAS JUST MEASURED (`resumeParked` carries the baseline).
     assert.equal(
       RUNTIME_DESCRIPTOR.session.usageResetsOnResume, false,
       'the descriptor must state the measurement this test just made',

@@ -4,8 +4,7 @@
 // module is the TABLE, which moves whenever the bridge gains or loses an op, and that file keeps
 // the CASES, which move when the SECURITY MODEL moves.
 //
-// It is DATA, not a test, and carries no `test()` — hence the `_` prefix that keeps it out of
-// `node --test 'test/**/*.mjs'`.
+// It is DATA, not a test, and carries no `test()`; the runner collects `*.test.mjs` only.
 //
 // THE REVIEW RULE COMES WITH IT: adding a row here means the op's main-process handler was checked
 // to exist and to be `appWindowOnly`-wrapped. `test/preload-parity.test.mjs` pins the other end

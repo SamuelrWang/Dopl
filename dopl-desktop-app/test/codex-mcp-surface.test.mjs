@@ -42,7 +42,7 @@ import { join, dirname } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
-import { client, liveGate, announceGate, skipLive, withAppServer, leakedPids, LIVE_THREAD, LIVE_TURN } from './_codex-app-server.mjs';
+import { client, liveGate, announceGate, skipLive, skipTurn, withAppServer, leakedPids, LIVE_THREAD, LIVE_TURN } from './_codex-app-server.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -54,20 +54,11 @@ const serverRequests = require(join(CODEX, 'server-requests.js'));
 const { canonicalDoplName } = require(join(HERE, '..', 'main', 'mcp-tool-names.js'));
 
 const GATE = announceGate(liveGate());
-const TURN_ENV = 'CODEX_LIVE_TURN';
 const BUDGET_MS = 45000;
 const TURN_BUDGET_MS = 180000;
 
-/** The quota gate, on top of the live gate. ⚠ Loud, for the same reason `skipLive` is. */
-function skipTurn(t) {
-  if (skipLive(t, GATE)) return true;
-  if (String(process.env[TURN_ENV] || '') === '1') return false;
-  const why = `${TURN_ENV} is not 1 — this arm SPENDS THE OPERATOR'S OpenAI QUOTA on a real turn, `
-    + 'so it is opt-in even inside the live tier';
-  t.diagnostic(`SKIPPED, NOT PASSED — ${why}`);
-  t.skip(why);
-  return true;
-}
+/** The quota gate, on top of the live gate. */
+const skipLiveTurn = (t) => skipLive(t, GATE) || skipTurn(t);
 
 // ── THE STAND-IN DOPL ENDPOINT ───────────────────────────────────────────────────────────────
 //
@@ -395,7 +386,7 @@ describe('the real app-server accepts the entry Dopl builds', () => {
   });
 
   test('a MODEL-INITIATED Dopl tool call produces the two measured shapes', async (t) => {
-    if (skipTurn(t)) return;
+    if (skipLiveTurn(t)) return;
     const dopl = standInDopl(CHANNEL_TOOL_SCHEMA);
     const url = await dopl.listen();
     // ⚠ THIS ARM GOES THROUGH `isolatedEnv`, AND IT HAS TO. A bare temp `CODEX_HOME` holds no

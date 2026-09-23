@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-import { liveGate, announceGate, skipLive, appEnv, LIVE_THREAD, LIVE_TURN, LIVE_MODEL } from "./_codex-app-server.mjs";
+import { liveGate, announceGate, skipLive, skipTurn, appEnv, LIVE_THREAD, LIVE_TURN, LIVE_MODEL } from "./_codex-app-server.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -25,12 +25,8 @@ const CODEX = join(HERE, "..", "main", "runtime", "codex");
 const client = require(join(CODEX, "client.js"));
 const launchSpec = require(join(CODEX, "launch-spec.js"));
 
-// 🔒 ⚠ **ONE LIVE FLAG IN THIS TREE, AND IT IS `CODEX_APP_SERVER_LIVE`.** This case used to gate
-// on a SECOND name, `CODEX_ADAPTER_LIVE`, which nothing ever set: not `npm test`, not
-// `scripts/codex-compat.js`, not CI. So the one test that drives the real adapter against a real
-// app-server had never executed anywhere, and it skipped with a bare `skip:` — no banner, no
-// reason, indistinguishable from a pass in the summary. That is precisely the failure U1's helper
-// exists to remove, so it now shares that helper's gate and its loud skip.
+// The LIVE case uses the shared gates: `CODEX_APP_SERVER_LIVE=1` for the app-server, plus
+// `CODEX_LIVE_TURN=1` because it spends a real model turn. Both skip loudly.
 const GATE = announceGate(liveGate());
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
@@ -187,7 +183,7 @@ test("a thread that started at a WIDER policy than Dopl asked for is refused", (
 // 💰 ⚠ ONE MODEL TURN PER ARMED RUN. The prompt asks for a single token and forbids tools; the
 // thread is `read-only`, so nothing it could decide to do can touch this checkout.
 test("LIVE: the adapter completes a real app-server turn", { timeout: 120000 }, async (t) => {
-  if (skipLive(t, GATE)) return;
+  if (skipLive(t, GATE) || skipTurn(t)) return;
   async function* onePrompt() {
     yield { message: { content: "Reply with exactly DOPL_CODEX_OK. Do not use tools." } };
   }

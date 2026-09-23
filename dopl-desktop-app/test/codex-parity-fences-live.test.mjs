@@ -19,7 +19,7 @@ import { join, dirname } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
-import { client, liveGate, announceGate, skipLive, withAppServer, leakedPids } from './_codex-app-server.mjs';
+import { client, liveGate, announceGate, skipLive, skipTurn, withAppServer, leakedPids } from './_codex-app-server.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -296,12 +296,7 @@ describe('3 — no personal skill reaches the prompt, listed or mentioned', () =
 // catalog on argv and the skills fence: the agent must post ONE marker through Dopl's gate.
 describe('TIER 2 — a real model on `never` posts through the gate, with the fences on', () => {
   test('never + fences: a fresh agent posts exactly one marker, auto-allowed by Axis B', { timeout: 240000 }, async (t) => {
-    if (skipLive(t, GATE)) return;
-    if (String(process.env.CODEX_LIVE_TURN || '') !== '1') {
-      t.diagnostic('SKIPPED, NOT PASSED — CODEX_LIVE_TURN is not 1 (this arm spends OpenAI quota)');
-      t.skip('CODEX_LIVE_TURN is not 1');
-      return;
-    }
+    if (skipLive(t, GATE) || skipTurn(t)) return;
     const configHome = require(join(CODEX, 'config-home.js'));
     const framing = require(join(HERE, '..', 'main', 'prompt-framing.js'));
     const runtime = require(join(HERE, '..', 'main', 'runtime'));
