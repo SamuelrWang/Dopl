@@ -46,13 +46,17 @@ import { FormDialog, FormSection, UnderlineField } from "@/shared/ui/form-dialog
 import type { FanOutThreadsDraft } from "../hooks/use-thread-writes";
 import { newClientMsgId } from "../lib/optimistic-cache";
 import { AgentTargetPill } from "./bits";
-import { agentLabel } from "./fixtures";
 import type { ChannelMember } from "../types";
 
 /** The deleted panel's wording, kept — a request nobody receives says so at CREATE time.
  *  ⚠ EXPORTED because INVARIANTS §5 counts the places this rule is stated, and a doc anchor on a
  *  string literal inside a JSX body is not resolvable. */
 export const NO_ADDRESSEE_NOTE = "No agent addressed — this thread reaches nobody.";
+
+/** "Diana Taylor" → "Diana's agent". */
+function agentLabel(displayName: string | null): string {
+  return `${(displayName ?? "Member").split(" ")[0]}'s agent`;
+}
 
 export function NewThreadDialog({
   signal,

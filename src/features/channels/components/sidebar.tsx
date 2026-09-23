@@ -83,7 +83,7 @@ import { IconButton, NewPill, SectionHeader } from "./bits";
 import { NavRow } from "./sidebar-rows";
 import { ChannelBranch } from "./sidebar-branch";
 import { SidebarSearchHeader } from "./sidebar-search";
-import { HARDCODED_NAV_ROWS } from "./fixtures";
+import { HARDCODED_NAV_ROWS } from "./sidebar-nav-rows";
 import {
   channelDisplayName,
   channelDisplayPeerPerson,
