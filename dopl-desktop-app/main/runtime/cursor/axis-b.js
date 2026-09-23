@@ -175,8 +175,8 @@ function buildTool(spec, ctx) {
  *
  * ⚠ IT TAKES THE ENGINE'S REQUEST OBJECT, NOT A BARE SESSION, and the contract's one-argument
  * signature is what makes that legal. The gate PAINTS A CARD and RESOLVES one, so it needs the
- * dispatch and the replay-aware quiet emitter — the same two injected handles `buildLaunchSpec`
- * takes, for the same reason, and this module must not require the engine back.
+ * engine's dispatch — the same injected handle `buildLaunchSpec` takes, for the same reason, and
+ * this module must not require the engine back.
  * ⚠ IT IS ASYNC BECAUSE THE SURFACE IS THE SERVER'S. `listDoplTools` asks `packages/mcp-server`
  * what it offers rather than this file restating it; `launch-spec.js › start` awaits it inside the
  * detached boot so the handle is still returned synchronously.

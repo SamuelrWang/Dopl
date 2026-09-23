@@ -26,7 +26,7 @@ const descriptor = require(join(CODEX, "index.js")).descriptor;
 
 const specFor = (profile, toolMode) => launchSpec.buildLaunchSpec({
   session: { profile, channelId: null, state: { toolMode }, workspaceId: "ws-1", model: "", containerToken: { token: "t" } },
-  dispatch: () => {}, emitQuiet: () => {},
+  dispatch: () => {},
 });
 
 // ── 1. `never` ───────────────────────────────────────────────────────────────────────────────

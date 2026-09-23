@@ -44,7 +44,7 @@ sessionPark.bind({
   sessions, acquireRuntime, buildLaunchSpec, consume, dispatch, startSession, hasLiveSession,
   emit, preflightMcp: sessionQuery.preflightMcp,
 }); sessionBoot.bind({ sessions, runLifecycle, scheduleIdle });
-sessionQuery.bind({ dispatch, emitQuiet: () => {}, scheduleIdle });
+sessionQuery.bind({ dispatch, scheduleIdle });
 sessionAuth.bind({ sessions, dispatch, emit, denyPending: denyPendingPermissions, teardown: teardownHandles });
 mcpGuard.bind({ acquireRuntime, startQuery, dispatch, emit, denyPending: denyPendingPermissions, resumeParked: sessionPark.resumeParked, abortInFlight: sessionQuery.abortInFlight });
 sessionGate.bind({ sessions, dispatch });

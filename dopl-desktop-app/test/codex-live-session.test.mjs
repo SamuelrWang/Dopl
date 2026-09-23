@@ -429,7 +429,7 @@ describe('live: every exit path ends the child', () => {
         session: { key: 'live:codex:shutdown', profile: 'full', channelId: null, state: {} },
         args: [], env: process.env, cwd: WORKDIR, prompt: noPrompts(),
         threadStart: SAFE_THREAD, turnStart: {},
-        dispatch: () => {}, emitQuiet: () => {},
+        dispatch: () => {},
       });
       // ⚠ **`dopl/threadStarted` IS NOT THE FIRST FRAME, AND NOTHING MAY ASSUME IT IS** (MEASURED
       // 2026-09-22): the app-server starts pushing notifications — `remoteControl/status/changed`,

@@ -165,7 +165,6 @@ const DEPS = {
   channelDirs: { sessionSpawnDir: () => "/tmp/ch" },
   store: { slotKey: () => "slot" },
   sessionAuth: { withStoredCredential: (env) => env },
-  sessionOutbound: { wrapGate: (_s, gate) => gate },
   // 2026-09-22: the launch spec resolves the model on the adapter's live roster (`models.js`).
   models: { launchArg: () => "" },
   sessionCredential: { sessionBearer: () => "" },
@@ -187,6 +186,12 @@ const session = (extra) => ({ profile: "full", channelId: "c1", workspaceId: "w1
 
 test("WIRE: the assembled launch options carry the bound as `options.tools`, by name", () => {
   assert.deepEqual(buildOptions(session(), () => {}, () => {}).tools, WIRE);
+});
+
+test("WIRE: the held gate rides `options.canUseTool` unwrapped, on core's injected dispatch", () => {
+  assert.match(SPEC, /canUseTool: axisB\.makeCanUseTool\(s, dispatch, diag\)/);
+  const QUERY = readFileSync(join(MAIN, "session-query.js"), "utf8");
+  assert.match(QUERY, /buildLaunchSpec\(\{\n\s*session: s,\n\s*dispatch: deps\.dispatch,\n\s*\}\)/);
 });
 
 test("WIRE: the restricted profiles carry theirs, and no profile ships an ABSENT `tools`", () => {

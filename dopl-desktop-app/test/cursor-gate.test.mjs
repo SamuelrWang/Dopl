@@ -282,7 +282,7 @@ test("a RESTRICTED profile pins the sandbox; `full` rides the operator's own pic
 test("the launch registers NO MCP server, declares NO subagents, and carries the deny list", () => {
   const spec = launchSpec.buildLaunchSpec({
     session: { profile: "read_only", channelId: null, state: {}, workspaceId: "", model: "" },
-    dispatch: () => {}, emitQuiet: () => {},
+    dispatch: () => {},
   });
   // ⚠ NO `mcpServers`: Dopl's surface is `customTools`, and a third-party server would be the
   // operator's — which the restricted profiles deny outright.

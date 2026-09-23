@@ -15,8 +15,7 @@
 // filename. It has no electron, no I/O and no state — the whole reason it could be unit-tested
 // by evaluating its own source.
 //
-// `session-io.js` re-exports `withPostSurface`, so `io.withPostSurface(...)` keeps working for
-// every existing caller (`session-outbound.js` reaches it that way).
+// `session-io.js` re-exports `withPostSurface`; `runtime/events.js` reaches it as `io.withPostSurface`.
 
 // ─── BEGIN SESSION-IO-POST-SURFACE (pure; unit-tested via source extraction) ───
 // MEDIUM-2 — WHO this post is really addressed to, and WHAT kind it claims to be. The card used

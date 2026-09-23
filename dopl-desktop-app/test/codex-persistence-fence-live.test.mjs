@@ -90,7 +90,7 @@ async function standInDopl() {
 function doplThreadStart(drop) {
   const ts = JSON.parse(JSON.stringify(launchSpec.buildLaunchSpec({
     session: { profile: 'full', channelId: CH, state: { toolMode: 'on-request' }, workspaceId: 'ws', model: '', containerToken: { token: 't' } },
-    dispatch: () => {}, emitQuiet: () => {},
+    dispatch: () => {},
   }).threadStart));
   if (drop) { const [a, b] = drop.split('.'); if (b) delete ts.config[a][b]; else delete ts.config[a]; }
   return ts;

@@ -20,7 +20,7 @@ const configHome = require(join(CODEX, "config-home.js"));
 
 const specFor = (profile, containerToken) => launchSpec.buildLaunchSpec({
   session: { profile, channelId: null, state: {}, workspaceId: "ws-1", model: "", containerToken },
-  dispatch: () => {}, emitQuiet: () => {},
+  dispatch: () => {},
 });
 
 // 🔒 THE WHOLE `features` VALUE, SPELLED ON THE WIRE — never by reading the constants back.
@@ -59,7 +59,7 @@ test("every launch pins `notify` empty and carries the persistence flags, whatev
       for (const token of [{ token: "t" }, null]) {
         const spec = launchSpec.buildLaunchSpec({
           session: { profile, channelId: null, state: { toolMode }, workspaceId: "ws-1", model: "", containerToken: token },
-          dispatch: () => {}, emitQuiet: () => {},
+          dispatch: () => {},
         });
         const c = spec.threadStart.config;
         assert.deepEqual(c.notify, [], `${profile}/${toolMode}`);

@@ -177,7 +177,7 @@ function codexSession(serverOpts = {}) {
   };
   const handle = launchSpec.start({
     session: s, args: [], env: {}, cwd: MAIN, prompt: prompts,
-    dispatch: () => {}, emitQuiet: () => {},
+    dispatch: () => {},
   });
   // The consume loop: the engine's funnel reduced to what the capture reads.
   void (async () => {
