@@ -13,9 +13,22 @@
  * The two tabs are one column and a second card shape would read as a second
  * surface.
  *
- * ⚠ EVERY NUMBER IS OPTIONAL AND EVERY ABSENCE IS RENDERED AS ONE. No meter
- * without a denominator, no "Started" without a stamp, no `0` standing in for
- * "not measured yet" (INVARIANTS §11 — UNKNOWN is not EMPTY).
+ * ⚠ EVERY NUMBER IS OPTIONAL AND EVERY ABSENCE IS RENDERED AS ONE — no "Started"
+ * without a stamp, no `0` standing in for "not measured yet" (INVARIANTS §11 —
+ * UNKNOWN is not EMPTY).
+ *
+ * 🔒 ⚠ **WITH ONE RULED EXCEPTION: THE CONTEXT METER, WHICH DRAWS AT ZERO**
+ * (Samuel, 2026-08-27 *"the bar at zero, always"*, re-affirmed 2026-09-22 when
+ * asked whether an unmeasured readout should print `0` or `—`: *"have it show
+ * 0"*). This card USED TO HIDE the meter whenever either half was null, while
+ * `agent-stats.tsx` drew it at zero — so one spawn-idle agent looked different
+ * depending on which surface you read it on. The two agree now.
+ * ⚠ **IT IS A RENDERING CHOICE, NOT A DATA ONE.** The fact stays `null` the whole
+ * way back: the desktop push, the wire and the DTO all preserve it, and
+ * `schema-sessions.ts` carries no `.default()` on any telemetry field. **Do not
+ * let this `?? 0` leak backwards into a default** — that would make "measured
+ * zero" and "never measured" the same value everywhere, which is the thing
+ * INVARIANTS §11 is about. Here they differ only in what the eye is shown.
  */
 
 import { Bot, CornerDownRight } from "lucide-react";
@@ -279,16 +292,25 @@ export function AgentCard({
         )}
       </div>
 
-      {contextUsed !== null && contextWindow !== null && (
-        <UsageMeter
-          label="Context tokens"
-          used={contextUsed}
-          limit={contextWindow}
-          tone="ramp"
-          formatValue={formatTokens}
-          className="mt-0.5"
-        />
-      )}
+      {/* ⚠ THE BAR AT ZERO, ALWAYS — the SAME rule `agent-stats.tsx` states (Samuel, 2026-08-27,
+          re-affirmed 2026-09-22: *"have it show 0"*). This surface USED TO HIDE the meter whenever
+          either half was null, so the two agent surfaces disagreed about one absence: the card
+          rendered an empty bar and this one rendered nothing, and a spawn-idle agent looked
+          different depending on where you looked at it.
+          ⚠ IT IS NOT A GUESS AT THE DATA. `?? 0` here is a RENDERING choice about an unmeasured
+          fact; the fact itself stays `null` everywhere upstream — the desktop push, the wire and
+          the DTO all preserve it (`schema-sessions.ts` carries no `.default()` on any telemetry
+          field). Do not let this shape leak backwards into a default.
+          ⚠ `UsageMeter` owns the no-denominator case itself — an empty track, never a division —
+          which is what makes one unconditional call safe. */}
+      <UsageMeter
+        label="Context tokens"
+        used={contextUsed ?? 0}
+        limit={contextWindow ?? 0}
+        tone="ramp"
+        formatValue={formatTokens}
+        className="mt-0.5"
+      />
 
       <div className="flex items-center gap-2">
         <span className="min-w-0 flex-1 truncate text-caption text-text-muted">

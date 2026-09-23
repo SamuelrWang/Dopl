@@ -120,11 +120,17 @@ describe("AgentsTab — the cards", () => {
         onOpenAgent={noop}
       />
     );
-    expect(screen.queryByText("Context tokens")).toBeNull();
+    // 🔒 ⚠ **THE METER IS THE RULED EXCEPTION AND IT DRAWS (Samuel, 2026-08-27 *"the bar at zero,
+    // always"*; re-affirmed 2026-09-22, asked directly whether an unmeasured readout should print
+    // `0` or `—`: *"have it show 0"*).** This case asserted the OPPOSITE until then — it required
+    // the meter to be ABSENT — while `agent-stats.tsx` drew it at zero on the other surface, so
+    // one spawn-idle agent looked different depending on where it was read and each surface had a
+    // green test defending its own answer. The same finding as the thread-title case below.
+    expect(screen.getByText("Context tokens")).toBeTruthy();
+    // ⚠ EVERY OTHER ABSENCE IS STILL AN ABSENCE. The ruling is about the BAR, not about inventing
+    // facts: a number with no measurement says so, and a missing stamp renders nothing at all.
     expect(screen.getByText(/Tokens spent: not measured yet/)).toBeTruthy();
     expect(screen.queryByText(/Started/)).toBeNull();
-    // The one thing that must never happen: a fabricated zero.
-    expect(screen.queryByText(/0k/)).toBeNull();
   });
 
   /**
