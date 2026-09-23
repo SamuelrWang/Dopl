@@ -12,6 +12,7 @@ import {
 import { HOME_DEFAULT_TAB, HOME_TABS } from "#/pages/home/home-tabs";
 // ⚠ THE WELL SET THE CHANNEL COLUMN'S GHOST MAPS (2026-09-22) — read, never re-typed.
 import { HOME_CHANNEL_WELLS } from "#/pages/home/channel-wells";
+import { HOME_CARD_FACE } from "@/shared/ui/home-card-marks";
 import { AccountRailSkeleton, ShellChromeSkeleton } from "./shell-skeleton";
 import { sectionSkeleton } from "./section-skeleton";
 
@@ -325,9 +326,10 @@ describe("the /home shapes are /home's own geometry", () => {
     const ghostCode = code("../../pages/home/home-list-skeleton.tsx");
     expect(ghostCode).not.toContain("HOME_CARD_FACE");
     expect(ghostCode).not.toContain("auth-btn-3d");
-    expect(file("../../../../../src/shared/ui/home-channel-row.tsx")).toContain(
-      "auth-btn-3d"
+    expect(code("../../../../../src/shared/ui/home-channel-row.tsx")).toContain(
+      "HOME_CARD_FACE"
     );
+    expect(HOME_CARD_FACE).toContain("auth-btn-3d");
   });
 
   /** ⚠ THE LANDING FACE IS OVERVIEW (`home-tabs.ts › HOME_DEFAULT_TAB`), so the

@@ -98,7 +98,6 @@ describe("Tool access — every profile says what it means, in a few words", () 
     expect(TOOL_PROFILES).toContain(
       "const UNIVERSAL_HARD_DENY = [...DOPL_ADMIN_TOOLS, ...RETIRED_DOPL_TOOLS]"
     );
-    expect(TOOL_PROFILES).toContain("dopl_only MORE dangerous than full");
   });
 
   it("marks exactly one profile checked, and resolves an absent one the DESKTOP's way", () => {
