@@ -19,69 +19,42 @@ import type { Skill } from "@/features/skills/types";
 import type { AgentIdentity } from "@/features/agent-identities/types";
 
 /**
- * F-716 (resolved 2026-09-17): who may see a row is asked of the feature that
- * owns the row. The SQL fence this replaced (`visibility = <widest> OR owner =
- * caller`) both missed lent rows AND leaked `access_mode='teams'` ones, which
- * `canSeeSkill` / `canSeeChat` refuse to a non-granted member.
- *
- * The predicates are imported, never restated — a fifth copy would be a security
- * rule with two answers. That is a deliberate exception to INVARIANTS §1, one-way
- * and predicates only: no feature repository is reached from here.
- *
- * The narrowing moved out of SQL, so reads fetch a candidate page and cut it
- * here, bounded by {@link SEARCH_CANDIDATE_ROW_LIMIT} (over the cap, a container
- * under-counts). The CONTAINER fence did not move: candidate reads are still
- * `WHERE workspace_id IN (<the reach>)`.
- *
- * A shared credential (`ownerUserId === null`) is refused everything but the
- * widest visibility by arm 2 of all four predicates, so no grant table is read.
+ * Search's visibility fence: each row is asked of its owning feature's `canSee*`,
+ * imported never restated — a one-way, predicates-only exception to INVARIANTS §1
+ * (F-716). The container fence stays in SQL; only the per-row cut happens here.
  */
 
-/**
- * Ceiling on the page the predicate is applied to, distinct from the group cap of
- * 50: four times it, so a container needs 150 matching rows the caller cannot see
- * before one they can is dropped.
- */
+/** 4× the group cap, so 150 hidden matches can precede a visible one. */
 export const SEARCH_CANDIDATE_ROW_LIMIT = 200;
 
-/**
- * The caller, as the four predicates need them. `role` is a map because it is per
- * container: the workspace-admin arm is about the row's container, never about
- * "somewhere the caller is an admin".
- */
+/** Role is per container: the workspace-admin arm is about the row's container. */
 export interface SearchCaller {
   userId: string;
-  /** `null` = a credential standing for nobody. Every arm below is skipped. */
+  /** `null` = a credential standing for nobody; no grant table is read for it. */
   ownerUserId: string | null;
   credentialSubjectUserId: string | null;
   roleByContainer: ReadonlyMap<string, Role>;
 }
 
-/** What every predicate's context needs, filled for ONE container. */
 function ctxFor(caller: SearchCaller, workspaceId: string) {
   return {
     workspaceId,
     userId: caller.userId,
     role: caller.roleByContainer.get(workspaceId) ?? null,
     source: "user" as const,
-    // Never `caller.lockedWorkspaceId` — this axis is whose reach, and reading
-    // the container lock for it is F-336 exactly.
+    // Never the container lock: it answers which workspace, not which rows (F-336).
     apiKeyWorkspaceId: null,
     credentialSubjectUserId: caller.credentialSubjectUserId,
   };
 }
 
-/**
- * `KnowledgeContext.role` is non-nullable where the other three accept `null`, so
- * it gets the least-privileged value. `canSeeBase` reads no role at all: this is a
- * type obligation met fail-closed, not a role being asserted.
- */
+/** `KnowledgeContext.role` is required; `canSeeBase` reads none, so `guest` only meets the type. */
 function knowledgeCtxFor(caller: SearchCaller, workspaceId: string) {
   const ctx = ctxFor(caller, workspaceId);
   return { ...ctx, role: ctx.role ?? ("guest" as Role) };
 }
 
-/** The rows a candidate read hands over, before any predicate has spoken. */
+/** A candidate row, before any predicate has run. */
 export interface CandidateRow {
   id: string;
   workspace_id: string;
@@ -92,8 +65,8 @@ export interface CandidateRow {
 }
 
 /**
- * The two grant sets a request needs, read once for the whole candidate page —
- * not once per container. Both readers key on the caller and a resource-id page.
+ * Both grant sets, read once per candidate page rather than per container. None for a
+ * shared credential: every predicate refuses it past the widest visibility anyway.
  */
 async function grantSets(
   caller: SearchCaller,
@@ -115,36 +88,27 @@ async function grantSets(
   return { scoped, team };
 }
 
-/** teamId lists per resource, as the skill/chat/identity contexts spell them. */
+/** Team-grant context in the shape the skill/chat/identity predicates take. */
 function teamCtx(granted: GrantedResourceIds, ids: readonly string[]) {
   const MINE = "granted";
   const byId = new Map<string, string[]>();
   for (const id of ids) if (granted.has(id)) byId.set(id, [MINE]);
-  // One synthetic team id: the predicates only ask whether any team the row is
-  // lent to is one of the caller's, and `teamGrantedResourceIds` already
-  // intersected those sets. Real ids matter only for `grantedTeamIds`, not here.
+  // One synthetic team id suffices: `teamGrantedResourceIds` already intersected
+  // the row's teams with the caller's.
   return { myTeamIds: new Set([MINE]), byId };
 }
 
 /**
- * Ceiling on the one per-container fan here: {@link teamsModeVisible} cannot be
- * batched across containers, and its input page is 500 rows. Containers past this
- * are dropped, which hides rows and never shows one — fail-closed, like every
- * other cap in this file.
+ * Cap on {@link teamsModeVisible}'s per-container fan, which cannot be batched.
+ * Containers past it are dropped: rows hidden, never shown (fail-closed).
  */
 export const SEARCH_TEAMS_CONTAINER_LIMIT = 50;
 
 /**
- * The teams narrowing for knowledge bases — F-716's residual, closed 2026-09-17.
- * Not a second teams rule: `canSeeBase` has no teams arm, so this calls the same
- * `listEffectiveAccess` + `resolveLevel` that `assertBaseVisible` does.
- *
- * A caller with no teams-mode row on the page pays nothing, which is what makes
- * the per-container fan acceptable.
- *
- * Fail-closed both ways: a container the caller holds no role for is skipped
- * without a read (a guessed `viewer` would bypass `listEffectiveAccess`'s own
- * membership check), and a `null` answer drops the rows too.
+ * Teams narrowing for knowledge bases: `canSeeBase` has no teams arm, so this calls
+ * the same `listEffectiveAccess` + `resolveLevel` as `assertBaseVisible` (F-716).
+ * Fail-closed: a container with no caller role is skipped, never guessed as `viewer`
+ * (that bypasses the membership check), and a `null` answer drops its rows.
  */
 async function teamsModeVisible<T extends CandidateRow>(
   caller: SearchCaller,
@@ -180,9 +144,8 @@ async function teamsModeVisible<T extends CandidateRow>(
 }
 
 /**
- * Knowledge bases the caller may see. The order mirrors `assertBaseVisible` —
- * M-10 + grant arm first, then {@link teamsModeVisible}, AND-ed — so a base
- * `canSeeBase` already refuses never costs a teams read.
+ * Knowledge bases the caller may see: `canSeeBase` AND-ed with the teams narrowing,
+ * in `assertBaseVisible`'s order, so a refused base costs no teams read.
  */
 export async function visibleBases<T extends CandidateRow>(
   caller: SearchCaller,

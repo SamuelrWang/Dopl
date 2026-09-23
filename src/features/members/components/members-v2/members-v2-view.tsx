@@ -35,25 +35,15 @@ interface Props {
   currentUserId: string;
   myRole: MemberRole;
   /**
-   * THE HOST'S OWN LOADING SHAPE for the cold roster read below.
-   *
-   * ⚠ A SLOT BECAUSE THIS FILE CANNOT IMPORT ONE. The desktop page's skeleton
-   * lives in `apps/desktop-ui/`, which the shared tree may not reach into —
-   * same idiom as `agent-identities-core.tsx › loadingSkeleton`. It exists
-   * because /members has TWO gates back to back (the seam's workspace resolve,
-   * then this read) and the second one painting a different ghost made one page
-   * swap skeletons mid-load. Omitted, the shared two-pane ghost stands.
+   * The host's loading shape for the cold roster read — a slot because the shared tree
+   * cannot import `apps/desktop-ui/`, and /members' two back-to-back gates need one ghost.
    */
   loadingSkeleton?: ReactNode;
 }
 
 /**
- * Members — the workspace access-control console. Two permanent panes: the
- * roster (or teams) on the left, one member's or one team's detail on the
- * right, opening on the signed-in user.
- *
- * What each surface renders is decided in `visibility.ts`; the matrix and the
- * server counterpart of every rule are in `docs/MEMBERS-AUTHORIZATION.md`.
+ * The workspace access-control console: roster or teams left, one detail right. What each
+ * surface renders is decided in `visibility.ts` (matrix: `docs/MEMBERS-AUTHORIZATION.md`).
  */
 export function MembersV2View({
   workspaceSlug,
@@ -128,10 +118,8 @@ export function MembersV2View({
     role: AssignableRole
   ) => {
     joinRequests.resolve(id, action, role).catch((err: unknown) => {
-      // A legacy Pro row is single-member, so approval is blocked
-      // server-side — offer the in-place Team upgrade rather than a dead-end
-      // toast. ⚠ Pro is retired from sale (2026-09-07); this 402 can only come
-      // from a workspace that already holds one, so the branch stays.
+      // A legacy Pro workspace is single-member: offer the Team upgrade, not a dead-end
+      // toast. Pro is off sale, but a workspace that still holds one can hit this.
       if (err instanceof ApiError && err.code === "SOLO_MEMBER_LIMIT" && workspaceId) {
         setUpgradeOpen(true);
         return;
@@ -153,8 +141,7 @@ export function MembersV2View({
   };
 
   const handleDeleteTeam = (team: TeamView) => {
-    // ⚠ Roster captured at submit: the row leaves the cache the moment the
-    // optimistic patch runs.
+    // Roster captured at submit: the optimistic patch drops the row from the cache.
     teamWrites.remove
       .mutateAsync({ teamId: team.id, memberIds: team.memberIds })
       .then(() => setSelection({ kind: "member", id: currentUserId }))
@@ -163,9 +150,7 @@ export function MembersV2View({
 
   const teamById = (teamId: string) => teamList.find((t) => t.id === teamId) ?? null;
 
-  // ⚠ A FAILED roster read must not fall through to the panes: `members` is
-  // null either way, and the list would render "No members yet." over a
-  // workspace that has members.
+  // A failed read must not fall through: `members` is null, so the list would say "No members yet".
   if (error && members === null) {
     return (
       <div className="page-float flex items-center justify-center antialiased">
@@ -186,9 +171,7 @@ export function MembersV2View({
     );
   }
 
-  // Cold arrival: the roster is the page, so it gets a skeleton rather than
-  // panes over an empty list. ⚠ THE HOST'S SHAPE WHEN IT SUPPLIED ONE — see
-  // `loadingSkeleton`; the shared ghost is the fallback, never the override.
+  // Cold arrival: the host's skeleton when it supplied one, else the shared ghost.
   if (loading && members === null) {
     return (
       loadingSkeleton ?? (

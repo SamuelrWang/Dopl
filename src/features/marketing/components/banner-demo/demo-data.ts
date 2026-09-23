@@ -1,22 +1,10 @@
 /**
- * The banner demo's scripted account surface: real channels data shapes, hand
- * authored, revealed step by step.
- *
- * Nothing here is a UI component. The demo's record pane renders the product's
- * own channels components; this file only builds the `Channel` / `ChannelMember`
- * / `ChannelMessage` / session rows those components are fed everywhere else, so
- * the pane cannot drift from the real surface's face.
- *
- * (2026-08-30) The scene is /home, and the MOCK half of its data lives in
- * `demo-home-rows.ts` instead: /home's chrome is in `apps/desktop-ui/`, which the
- * Next tree cannot import, so it is hand-built marketing markup
- * (`demo-home-chrome.tsx`). Keeping those rows separate is what lets this file
- * stay all-product-shapes.
+ * The banner demo's scripted, hand-authored channel data in real product shapes, so
+ * the record pane renders the product's own channels components. The mock /home rows
+ * live in `demo-home-rows.ts`: the Next tree cannot import `apps/desktop-ui/`.
  */
 
 import { EMPTY_INFO_CARD } from "@/features/channels/info-card";
-// `EMPTY_AGENT_POSTURE` is not imported: `Channel.agentPosture` was deleted with
-// the channel ceiling (2026-09-06).
 import type {
   Channel,
   ChannelMember,
@@ -34,32 +22,22 @@ export const WORKSPACE_ID = "demo-workspace";
 export const CHANNEL_ID = "demo-ch-sales";
 export const CURRENT_USER_ID = "demo-u-samuel";
 
-/**
- * (2026-09-17) The cast is exactly as large as the photographs we ship: three
- * faces, three files in `public/img/avatars/`. Do not add a fourth person without
- * a fourth photo — a nameless member degrades to initials and an `AvatarStack`
- * over four degrades to `+N`.
- */
+/** One member per photo in `public/img/avatars/`; a member without one renders as initials. */
 const U = {
   samuel: CURRENT_USER_ID,
   grace: "demo-u-grace",
   anthony: "demo-u-anthony",
 };
 
-/** The bundled photograph for each of the three. A `public/` path, which
- *  `useBridgedImageSrc` returns verbatim on the web. */
+/** `public/` paths, which `useBridgedImageSrc` returns verbatim on the web. */
 export const FACE = {
   [U.samuel]: "/img/avatars/sam.jpg",
   [U.grace]: "/img/avatars/grace.jpg",
   [U.anthony]: "/img/avatars/anthony.jpg",
 } as const;
 
-/** Anchored once per load so relative stamps stay plausible. Exported so
- *  `demo-home-rows.ts` stamps its rows off the SAME anchor — a second
- *  `Date.now()` would drift the list's timestamps off the transcript's. */
+/** One clock per load; the other demo modules stamp off it so no time drifts. */
 const NOW = Date.now();
-/** The same anchor for modules needing epoch ms rather than an ISO string. One
- *  clock, two presenters. */
 export const NOW_MS = NOW;
 export const minsAgo = (m: number) =>
   new Date(NOW - m * 60_000).toISOString();
@@ -87,7 +65,6 @@ function member(
     joinedAt: minsAgo(60 * 24 * 12),
     displayName,
     email,
-    // Every member has a photograph — see `U`'s docblock.
     avatarUrl: FACE[userId as keyof typeof FACE] ?? null,
   };
 }
@@ -128,37 +105,21 @@ function channel(
     myAgentToolProfile: null,
     myFavoritedAt: null,
     onlineMemberCount: 3,
-    // THE ROW EXTRAS (R-26) — one projection, so a fixture carries them too.
+    // The row extras are one projection, so the fixture carries them too.
     container: { id: "ws-1", kind: "standard", segment: "ws-1-aaaaaa" },
     myWorkspaceRole: "owner",
     peers: [],
     mentionCount: 0,
     linkOut: null,
     infoCard: EMPTY_INFO_CARD,
-    // `defaultResponderAgentName` left this fixture with the field (2026-09-07).
     ...extra,
   };
 }
 
-/**
- * The one channel the scene plays. (2026-08-30) No rooms/DMs split here: the
- * account surface's left column is one flat channel list with no sections
- * (`HOME_ROWS`), and the split is the shape that was rejected.
- */
-/** The `topic` is the scene's Description row: the hero mounts the product's own
- *  `InfoTab`, which reads the column every real channel reads. */
+/** The scene's one channel; `topic` is the Description row of the product's own info tab. */
 export const SALES_CHANNEL = channel(CHANNEL_ID, "q4-outbound", {
   topic: "Q4 outbound push — enrichment, sequences, segments.",
 });
-
-/* ── The thread ───────────────────────────────────────────────────── */
-
-/**
- * (2026-09-17) No thread view: the thread fixture and `THREAD_ID` are deleted.
- * Nothing in this scene carries a `taskId`, which keeps `channelRows` from
- * collapsing the conversation into a card. Do not reintroduce either to "show
- * threads" — the Threads tab reading `0` is the ruling, not a gap.
- */
 
 /* ── Agents — identities as roles, one per member ──────────────────── */
 
@@ -169,8 +130,7 @@ export const AGENT_IDS = {
   analyst: "panalyst",
 } as const;
 
-/** The identity names read as ROLES on a sales team. Fed into
- *  `AuthorIndex.agents` so the transcript's attribution pills name them. */
+/** Identity names as sales-team roles, fed to `AuthorIndex.agents` for attribution pills. */
 export const AGENT_INDEX: ReadonlyMap<string, AgentRosterEntry> = new Map([
   [
     AGENT_IDS.enricher,
@@ -186,12 +146,11 @@ export const AGENT_INDEX: ReadonlyMap<string, AgentRosterEntry> = new Map([
   ],
 ]);
 
-/** MY live agent (Samuel's) — the desktop feed the Agents tab + panel read. */
+/** Samuel's own live agent — the desktop feed the Agents tab and panel read. */
 export const MY_SESSION: DesktopSessionSummary = {
   sessionId: "demo-session-writer",
   channelId: CHANNEL_ID,
-  // `""` is the channel (`agents-model.ts › postDestination`) — the scene has no
-  // thread, so the sent banner reads "Posted to channel".
+  // `""` is the channel (`agents-model.ts › postDestination`): "Posted to channel".
   taskId: "",
   agentId: AGENT_IDS.writer,
   name: AGENT_IDS.writer,
@@ -259,20 +218,15 @@ function msg(
 }
 
 /**
- * (2026-09-17) Every post is channel-level. A `taskId` is what would make one a
- * thread, so there are none: `view-model-rows.ts › channelRows` collapses every
- * threaded post into a single card, which would show three lines and a card
- * instead of the conversation.
+ * Every post is channel-level: a `taskId` would make `view-model-rows.ts › channelRows`
+ * collapse the conversation into a thread card. Threads reading `0` is intended.
  */
 const agentPost = (agentId: string, n: number) => ({
   authorKind: "agent" as const,
   clientMsgId: `agent-${agentId}-${n}`,
 });
 
-/**
- * Every message of the scene, in seq order, each tagged with the step it
- * lands on. `messagesAt(step)` slices the prefix the current beat has earned.
- */
+/** The scene's messages in seq order, each tagged with the step it lands on. */
 const SCRIPT: ReadonlyArray<{ step: StepId; message: ChannelMessage }> = [
   // Channel view.
   msg(
@@ -293,15 +247,14 @@ const SCRIPT: ReadonlyArray<{ step: StepId; message: ChannelMessage }> = [
     "Big quarter push starts today — let's line up outbound.",
     5,
   ),
-  // The request that sets the room going — an ordinary channel post, not a
-  // thread opener (the card it drew put this pane on the workspace's shape).
+  // The kickoff: an ordinary channel post, not a thread opener.
   msg(
     "channel-request",
     U.grace,
     "Kicking off Q4 outbound — enrich the list, draft the sequences, cut the segment. Everyone bring your agent.",
     4,
   ),
-  // Launch lines — the thread narrating itself, one per member.
+  // Launch lines, one per member.
   msg("launch-1", null, "Grace launched Lead Enricher from an identity", 3, {
     kind: "system",
     authorKind: "system",

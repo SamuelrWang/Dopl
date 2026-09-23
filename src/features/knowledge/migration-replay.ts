@@ -1,35 +1,16 @@
 /**
- * Migration replay for the knowledge suites: every migration in filename (=
- * apply) order, and the questions the grant suites ask of the final state —
- * which policies are live, which tables are, and what a function's body and its
- * declaration say. This module is HOW to read the migration directory; the
- * suites that import it are WHAT it says.
- *
- * A plain module, not a `.test.ts`: importing one test file from another
- * registers its `describe` blocks twice.
- *
- * Not `shared/supabase/rls-policy-scan.ts`, and the duplication is known — that
- * module answers the redteam suites' cross-table questions and carries no
- * `tableIsLive` / `liveFunctionHeader`.
- *
- * Comments are stripped line-wise before matching, because these migration
- * headers quote their own SQL at length; a scan that did not strip them would
- * pin a paragraph.
+ * The schema-sql suites' replay questions (live policies, tables, function bodies and headers) over the
+ * shared loader `@/shared/supabase/migration-files` (sorted, `--` comments stripped, forward-renamed).
+ * A plain module, not a `.test.ts`: importing one test file from another registers its describes twice.
  */
 
 import { readMigrations, statementAt } from "@/shared/supabase/migration-files";
 
-/** Every migration: filename-sorted (= apply order), comments stripped, forward-renamed. */
 export const FILES = readMigrations();
 
 /**
- * Replay the migrations and answer with the policies live on `table` at the end
- * — `CREATE POLICY` inserts, `DROP POLICY` removes, `DROP TABLE` takes them all,
- * later wins. That is the only reading that tells "tightened" from "tightened,
- * with the loose one left beside it".
- *
- * The `DROP TABLE` arm is load-bearing: a policy dies with its table silently,
- * and without it a dropped table reports as guarded.
+ * Policies live on `table` after the replay; later wins. `DROP TABLE` takes a table's policies with it,
+ * or a dropped table would report as guarded.
  */
 export function livePolicies(table: string): Map<string, string> {
   const live = new Map<string, string>();
@@ -46,8 +27,7 @@ export function livePolicies(table: string): Map<string, string> {
     "gi"
   );
   for (const { sql } of FILES) {
-    // Order matters within a file too: a tightening migration drops and
-    // re-creates the same policy name in one file.
+    // Order matters within a file: a tightening migration drops and re-creates one policy name.
     const events: Array<{ at: number; kind: "create" | "drop" | "dropTable"; name: string }> = [];
     for (const m of sql.matchAll(create)) {
       if (m.index !== undefined) events.push({ at: m.index, kind: "create", name: m[1] });
@@ -94,10 +74,8 @@ export function tableIsLive(table: string): boolean {
 }
 
 /**
- * The body of the last `CREATE OR REPLACE FUNCTION <name>` in apply order, or
- * `null` if a later `DROP FUNCTION` retired it. The body is dollar-quoted, so it
- * is delimited by its own opening tag rather than by the first `;` — a
- * `RAISE … ;` inside would otherwise truncate it two lines in.
+ * The live body of function `name`, or `null` if dropped. Dollar-quoted, so it is delimited by its tag,
+ * not the first `;` (a `RAISE … ;` inside would truncate it).
  */
 export function liveFunctionBody(name: string): string | null {
   return replayFunction(name, (sql, at) => {
@@ -110,15 +88,8 @@ export function liveFunctionBody(name: string): string | null {
 }
 
 /**
- * Replay every `CREATE OR REPLACE` / `DROP FUNCTION` for `name` in apply order
- * and return what `read` made of the last surviving create — or `null` if a
- * `DROP` came after it.
- *
- * Shared because the two readers disagreed (F-661, 2026-09-02): a header scan
- * that ignores drops makes every "is it gone" assertion green by construction.
- *
- * `read` returning `undefined` means this create is unreadable and the previous
- * answer stands; only a DROP retires a function.
+ * What `read` made of the last surviving create of `name`, or `null` after a `DROP`. Both readers share
+ * it so drops are honoured (F-661). `read` → `undefined` keeps the previous answer.
  */
 function replayFunction(
   name: string,
@@ -154,14 +125,8 @@ function replayFunction(
 }
 
 /**
- * The declaration of `name` as the replay leaves it — everything between
- * `CREATE OR REPLACE FUNCTION` and the body's opening dollar-quote.
- *
- * A different question from {@link liveFunctionBody}, which sees only what is
- * inside the quotes: `SECURITY DEFINER`, `SET search_path` and the return type
- * all live out here, so a later `CREATE OR REPLACE` dropping `SECURITY DEFINER`
- * would leave every body assertion green. Both readers share
- * {@link replayFunction} (F-661), the only copy of the ordering rule.
+ * The live declaration of `name` (up to the body's dollar-quote), where `SECURITY DEFINER`,
+ * `SET search_path` and the return type live — none of which {@link liveFunctionBody} sees.
  */
 export function liveFunctionHeader(name: string): string | null {
   return replayFunction(name, (sql, at) => {

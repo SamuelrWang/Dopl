@@ -1,8 +1,4 @@
-/**
- * THE POPUP'S SECTION MODEL — order, labels, the flat keyboard order, and the
- * snippet sanitiser. Pure functions only: this file renders nothing, so the
- * popup's behaviour can be pinned without mounting it.
- */
+/** The popup's section model as pure functions, so behaviour is pinned without mounting. */
 
 import {
   SEARCH_GROUP_ORDER,
@@ -11,15 +7,7 @@ import {
   type SearchItem,
 } from "../contracts";
 
-/**
- * The order is the contract's: this file declares none of its own. The renderer
- * walks the groups as given and never sorts.
- */
-
-/**
- * The centred label that sits in the hairline above each section. A noun, never a
- * sentence and never a count — the section's size is already visible.
- */
+/** Section labels: a noun, never a sentence or a count. */
 export const GROUP_LABEL: Record<SearchGroupKind, string> = {
   channels: "Channels",
   messages: "Messages",
@@ -33,13 +21,8 @@ export const GROUP_LABEL: Record<SearchGroupKind, string> = {
 };
 
 /**
- * The groups the popup will draw, in payload order. This function DROPS; it never
- * reorders.
- *
- * An empty group is not a section — belt-and-braces over an older or stubbed
- * server, since a labelled hairline with nothing under it claims rows exist.
- * An unknown kind is dropped, not appended: a newer server may grow a group this
- * bundle has no renderer or label for.
+ * Groups to draw, in payload order; drops, never reorders. An empty group would claim
+ * rows exist, and an unknown kind (a newer server's) has no renderer or label.
  */
 export function orderedGroups(groups: readonly SearchGroup[]): SearchGroup[] {
   return groups.filter(
@@ -49,17 +32,12 @@ export function orderedGroups(groups: readonly SearchGroup[]): SearchGroup[] {
   );
 }
 
-/**
- * Every row in the order the eye reads them, which is what the arrow keys walk.
- * One flat list across the groups, not a cursor per section: a reader pressing
- * down at the foot of Channels expects the first Message.
- */
+/** Rows in reading order as one list across groups, so the arrow keys cross sections. */
 export function flatItems(groups: readonly SearchGroup[]): SearchItem[] {
   return orderedGroups(groups).flatMap((group) => group.items);
 }
 
-/** Wrap the active index around the flat list — `move(-1)` at the top lands on
- *  the last row, which is how every menu in the app behaves. */
+/** Wraps around the flat list, as every menu in the app does. */
 export function moveIndex(active: number, delta: number, count: number): number {
   if (count === 0) return 0;
   return (((active + delta) % count) + count) % count;
@@ -73,13 +51,8 @@ const ESCAPES: Record<string, string> = {
 };
 
 /**
- * The snippet sanitiser: escape everything, then let `<mark>` back in.
- *
- * Allow-list by RECONSTRUCTION, never a strip pass — a "remove the tags I dislike"
- * filter is a blocklist and every blocklist has a bypass. Escaping first makes the
- * string inert, and only the two sequences spelled here become markup again, with
- * no attributes possible. The result feeds this feature's only
- * `dangerouslySetInnerHTML`.
+ * Escape everything, then let only bare `<mark>`/`</mark>` back in: an allow-list by
+ * reconstruction, never a strip pass (a blocklist has bypasses). Feeds the only innerHTML.
  */
 export function sanitizeSnippet(snippet: string): string {
   return snippet
